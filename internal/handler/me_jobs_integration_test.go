@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/db"
@@ -144,4 +145,110 @@ func TestListMyJobsEndpoint(t *testing.T) {
 			t.Errorf("closed job must stay in the history with closed_at set (err %v)", err)
 		}
 	})
+}
+
+func TestListMyJobsBoardFilter(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	queries := db.New(pool)
+
+	var userID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (email) VALUES ('boardfilter@example.test') RETURNING id`).Scan(&userID); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+
+	seedJob := func(t *testing.T, ext string) int64 {
+		t.Helper()
+		var id int64
+		if err := pool.QueryRow(ctx,
+			`INSERT INTO jobs (source, external_id, url, title, public_slug)
+			 VALUES ('test', $1, 'http://example.test', 'Job ' || $1, 'board-' || $1)
+			 RETURNING id`, ext).Scan(&id); err != nil {
+			t.Fatalf("seed job %q: %v", ext, err)
+		}
+		return id
+	}
+
+	viewedOnlyJob := seedJob(t, "brd-viewed")
+	savedJob := seedJob(t, "brd-saved")
+	appliedJob := seedJob(t, "brd-applied")
+	stageOnlyJob := seedJob(t, "brd-stage")
+
+	// viewed-only: just a view, no save/apply/stage
+	if _, err := queries.RecordJobView(ctx, db.RecordJobViewParams{UserID: userID, JobID: viewedOnlyJob}); err != nil {
+		t.Fatalf("view: %v", err)
+	}
+	// saved
+	if _, err := queries.SaveJob(ctx, db.SaveJobParams{UserID: userID, JobID: savedJob}); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	// applied
+	if _, err := queries.MarkJobApplied(ctx, db.MarkJobAppliedParams{UserID: userID, JobID: appliedJob}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	// stage-only: TrackJob sets stage without touching applied_at
+	if _, err := queries.TrackJob(ctx, db.TrackJobParams{
+		UserID: userID,
+		JobID:  stageOnlyJob,
+		Stage:  pgtype.Text{String: "interview", Valid: true},
+	}); err != nil {
+		t.Fatalf("track stage: %v", err)
+	}
+
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	token, err := iss.Issue(userID)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+	h := &Handler{pool: pool, queries: queries, issuer: iss}
+	app := fiber.New(fiber.Config{ErrorHandler: ErrorHandler})
+	app.Get("/api/v1/me/jobs", auth.RequireAuth(iss), h.ListMyJobs)
+
+	req := httptest.NewRequest(fiber.MethodGet, "/api/v1/me/jobs?filter=board", nil)
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("GET /api/v1/me/jobs?filter=board: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d, want 200 (body %s)", resp.StatusCode, body)
+	}
+
+	var body struct {
+		Data []struct {
+			Job map[string]json.RawMessage `json:"job"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	// Collect the public_slugs returned
+	got := make(map[string]bool)
+	for _, item := range body.Data {
+		var slug string
+		if err := json.Unmarshal(item.Job["public_slug"], &slug); err != nil {
+			t.Fatalf("unmarshal public_slug: %v", err)
+		}
+		got[slug] = true
+	}
+
+	if got["board-brd-viewed"] {
+		t.Error("board filter must NOT include the viewed-only job")
+	}
+	if !got["board-brd-saved"] {
+		t.Error("board filter must include the saved job")
+	}
+	if !got["board-brd-applied"] {
+		t.Error("board filter must include the applied job")
+	}
+	if !got["board-brd-stage"] {
+		t.Error("board filter must include the stage-only job (stage set, applied_at NULL)")
+	}
+	if len(body.Data) != 3 {
+		t.Errorf("board filter returned %d items, want 3 (saved, applied, stage-only)", len(body.Data))
+	}
 }

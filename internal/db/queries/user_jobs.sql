@@ -60,7 +60,9 @@ WHERE uj.user_id = $1
   AND (sqlc.arg(filter)::text = 'all'
        OR (sqlc.arg(filter)::text = 'viewed' AND uj.saved_at IS NULL AND uj.applied_at IS NULL)
        OR (sqlc.arg(filter)::text = 'saved' AND uj.saved_at IS NOT NULL)
-       OR (sqlc.arg(filter)::text = 'applied' AND uj.applied_at IS NOT NULL))
+       OR (sqlc.arg(filter)::text = 'applied' AND uj.applied_at IS NOT NULL)
+       OR (sqlc.arg(filter)::text = 'board'
+           AND (uj.saved_at IS NOT NULL OR uj.applied_at IS NOT NULL OR uj.stage IS NOT NULL)))
 ORDER BY GREATEST(uj.viewed_at, uj.saved_at, uj.applied_at) DESC, uj.job_id DESC
 LIMIT $2 OFFSET $3;
 

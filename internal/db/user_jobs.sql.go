@@ -51,7 +51,9 @@ WHERE uj.user_id = $1
   AND ($4::text = 'all'
        OR ($4::text = 'viewed' AND uj.saved_at IS NULL AND uj.applied_at IS NULL)
        OR ($4::text = 'saved' AND uj.saved_at IS NOT NULL)
-       OR ($4::text = 'applied' AND uj.applied_at IS NOT NULL))
+       OR ($4::text = 'applied' AND uj.applied_at IS NOT NULL)
+       OR ($4::text = 'board'
+           AND (uj.saved_at IS NOT NULL OR uj.applied_at IS NOT NULL OR uj.stage IS NOT NULL)))
 ORDER BY GREATEST(uj.viewed_at, uj.saved_at, uj.applied_at) DESC, uj.job_id DESC
 LIMIT $2 OFFSET $3
 `
