@@ -40,3 +40,7 @@ export function columnOf(item: MyJob): BoardColumnId {
 // picks which one in the drawer after dropping there.
 export const CLOSED_OUTCOMES = ['accepted', 'rejected', 'withdrawn'] as const;
 export type ClosedOutcome = (typeof CLOSED_OUTCOMES)[number];
+
+// svelte-dnd-action keys each draggable by a top-level `id`; MyJob has none, so
+// the board wraps each row with id = the job's public_slug.
+export type BoardItem = MyJob & { id: string };
