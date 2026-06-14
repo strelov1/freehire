@@ -44,7 +44,10 @@ SELECT count(*)                                        AS "all",
        count(*) FILTER (WHERE saved_at IS NULL
                           AND applied_at IS NULL)      AS viewed,
        count(*) FILTER (WHERE saved_at   IS NOT NULL) AS saved,
-       count(*) FILTER (WHERE applied_at IS NOT NULL) AS applied
+       count(*) FILTER (WHERE applied_at IS NOT NULL) AS applied,
+       count(*) FILTER (WHERE saved_at   IS NOT NULL
+                            OR applied_at IS NOT NULL
+                            OR stage      IS NOT NULL) AS board
 FROM user_jobs
 WHERE user_id = $1
 `
@@ -54,11 +57,13 @@ type CountUserJobsRow struct {
 	Viewed  int64 `json:"viewed"`
 	Saved   int64 `json:"saved"`
 	Applied int64 `json:"applied"`
+	Board   int64 `json:"board"`
 }
 
 // Per-filter row counts for the my-jobs tabs, in one aggregate pass. "all" is
 // every interaction row; "viewed" is the view-only subset (neither saved nor
-// applied), matching the ListUserJobs filter.
+// applied), matching the ListUserJobs filter. "board" counts jobs on the Kanban
+// board (saved, applied, or stage set), matching the ListUserJobs board filter.
 func (q *Queries) CountUserJobs(ctx context.Context, userID int64) (CountUserJobsRow, error) {
 	row := q.db.QueryRow(ctx, countUserJobs, userID)
 	var i CountUserJobsRow
@@ -67,6 +72,7 @@ func (q *Queries) CountUserJobs(ctx context.Context, userID int64) (CountUserJob
 		&i.Viewed,
 		&i.Saved,
 		&i.Applied,
+		&i.Board,
 	)
 	return i, err
 }

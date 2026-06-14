@@ -21,7 +21,7 @@ func TestClearJobProgress(t *testing.T) {
 	uid := seedAPIKeyUser(t, pool, "clearprogress@example.test")
 	jid := insertJob(t, pool, "clear-1")
 
-	// Set up the full pipeline state: saved, applied, stage=interview.
+	// Set up the full pipeline state: saved, applied, stage=interview, notes set.
 	if _, err := q.SaveJob(ctx, SaveJobParams{UserID: uid, JobID: jid}); err != nil {
 		t.Fatalf("SaveJob: %v", err)
 	}
@@ -29,7 +29,9 @@ func TestClearJobProgress(t *testing.T) {
 		t.Fatalf("MarkJobApplied: %v", err)
 	}
 	if _, err := q.TrackJob(ctx, TrackJobParams{
-		UserID: uid, JobID: jid, Stage: pgtype.Text{String: "interview", Valid: true},
+		UserID: uid, JobID: jid,
+		Stage: pgtype.Text{String: "interview", Valid: true},
+		Notes: pgtype.Text{String: "great team", Valid: true},
 	}); err != nil {
 		t.Fatalf("TrackJob: %v", err)
 	}
@@ -47,6 +49,9 @@ func TestClearJobProgress(t *testing.T) {
 	if !row.SavedAt.Valid {
 		t.Error("saved_at was cleared, want it kept")
 	}
+	if !row.Notes.Valid || row.Notes.String != "great team" {
+		t.Errorf("notes = %q (valid=%v), want %q kept", row.Notes.String, row.Notes.Valid, "great team")
+	}
 }
 
 func TestUntrackJob(t *testing.T) {
@@ -57,12 +62,15 @@ func TestUntrackJob(t *testing.T) {
 	uid := seedAPIKeyUser(t, pool, "untrack@example.test")
 	jid := insertJob(t, pool, "untrack-1")
 
-	// Set up the full state: view, save, track.
+	// Set up the full state: view, save, apply, track.
 	if _, err := q.RecordJobView(ctx, RecordJobViewParams{UserID: uid, JobID: jid}); err != nil {
 		t.Fatalf("RecordJobView: %v", err)
 	}
 	if _, err := q.SaveJob(ctx, SaveJobParams{UserID: uid, JobID: jid}); err != nil {
 		t.Fatalf("SaveJob: %v", err)
+	}
+	if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: uid, JobID: jid}); err != nil {
+		t.Fatalf("MarkJobApplied: %v", err)
 	}
 	if _, err := q.TrackJob(ctx, TrackJobParams{
 		UserID: uid, JobID: jid,

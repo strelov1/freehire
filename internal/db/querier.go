@@ -29,6 +29,8 @@ type Querier interface {
 	// worker died (stale claimed_at), so no separate reaper process is needed.
 	// Oldest post first so a backlog drains in posting order.
 	ClaimTelegramPosts(ctx context.Context, arg ClaimTelegramPostsParams) ([]ClaimTelegramPostsRow, error)
+	// Reset a tracked job to the wishlist: drop stage and applied state, keep saved/viewed/notes.
+	ClearJobProgress(ctx context.Context, arg ClearJobProgressParams) (UserJob, error)
 	// Post-ingest sweep (see job-lifecycle spec): close every open job of ONE source not
 	// seen since the cutoff. Scoped by source because ingest runs per provider — a
 	// greenhouse run must not close jobs another provider owns and didn't crawl. The
@@ -41,7 +43,8 @@ type Querier interface {
 	CountJobs(ctx context.Context) (int64, error)
 	// Per-filter row counts for the my-jobs tabs, in one aggregate pass. "all" is
 	// every interaction row; "viewed" is the view-only subset (neither saved nor
-	// applied), matching the ListUserJobs filter.
+	// applied), matching the ListUserJobs filter. "board" counts jobs on the Kanban
+	// board (saved, applied, or stage set), matching the ListUserJobs board filter.
 	CountUserJobs(ctx context.Context, userID int64) (CountUserJobsRow, error)
 	// Create an API key for a user. The caller passes the SHA-256 token_hash and the
 	// display token_prefix; the plaintext token is shown once and never stored.
@@ -200,6 +203,9 @@ type Querier interface {
 	// apply history survive unsaving. No interaction row -> pgx.ErrNoRows; the
 	// handler treats that as "already not saved", never as a failure.
 	UnsaveJob(ctx context.Context, arg UnsaveJobParams) (UserJob, error)
+	// Remove a job from the board: drop every pipeline mark, keep viewed_at so the
+	// job remains in the user's view history.
+	UntrackJob(ctx context.Context, arg UntrackJobParams) (UserJob, error)
 	// One-off backfill for a deliberate slug-builder change (see the UpsertJob note on
 	// why slugs are otherwise immutable). public_slug/company_slug are deterministic
 	// from the row's immutable fields, so recomputing and rewriting them is idempotent.

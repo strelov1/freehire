@@ -22,11 +22,13 @@ type myJobResponse struct {
 }
 
 // ListMyJobs returns the authenticated user's job interactions joined with the
-// jobs, most recently touched first, narrowed by ?filter=all|viewed|saved|applied
-// (default all; viewed is the view-only subset — neither saved nor applied). meta carries total/limit/offset for the active filter plus the
-// per-filter counts for the tab badges — which is also why this writes its own
-// envelope instead of listResponse. Closed jobs stay listed: a user's history
-// must not shrink when a posting closes.
+// jobs, most recently touched first, narrowed by ?filter=all|viewed|saved|applied|board
+// (default all; viewed is the view-only subset — neither saved nor applied;
+// board is the Kanban view — jobs with saved_at, applied_at, or stage set).
+// meta carries total/limit/offset for the active filter plus the per-filter
+// counts for the tab badges — which is also why this writes its own envelope
+// instead of listResponse. Closed jobs stay listed: a user's history must not
+// shrink when a posting closes.
 func (h *Handler) ListMyJobs(c *fiber.Ctx) error {
 	userID, ok := auth.UserID(c)
 	if !ok {
@@ -77,6 +79,8 @@ func (h *Handler) ListMyJobs(c *fiber.Ctx) error {
 		total = counts.Saved
 	case "applied":
 		total = counts.Applied
+	case "board":
+		total = counts.Board
 	}
 
 	return c.JSON(fiber.Map{
@@ -90,6 +94,7 @@ func (h *Handler) ListMyJobs(c *fiber.Ctx) error {
 				"viewed":  counts.Viewed,
 				"saved":   counts.Saved,
 				"applied": counts.Applied,
+				"board":   counts.Board,
 			},
 		},
 	})

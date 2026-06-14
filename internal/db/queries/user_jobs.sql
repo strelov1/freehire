@@ -84,11 +84,15 @@ LIMIT $2 OFFSET $3;
 -- name: CountUserJobs :one
 -- Per-filter row counts for the my-jobs tabs, in one aggregate pass. "all" is
 -- every interaction row; "viewed" is the view-only subset (neither saved nor
--- applied), matching the ListUserJobs filter.
+-- applied), matching the ListUserJobs filter. "board" counts jobs on the Kanban
+-- board (saved, applied, or stage set), matching the ListUserJobs board filter.
 SELECT count(*)                                        AS "all",
        count(*) FILTER (WHERE saved_at IS NULL
                           AND applied_at IS NULL)      AS viewed,
        count(*) FILTER (WHERE saved_at   IS NOT NULL) AS saved,
-       count(*) FILTER (WHERE applied_at IS NOT NULL) AS applied
+       count(*) FILTER (WHERE applied_at IS NOT NULL) AS applied,
+       count(*) FILTER (WHERE saved_at   IS NOT NULL
+                            OR applied_at IS NOT NULL
+                            OR stage      IS NOT NULL) AS board
 FROM user_jobs
 WHERE user_id = $1;

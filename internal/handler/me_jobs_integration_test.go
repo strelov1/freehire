@@ -221,6 +221,16 @@ func TestListMyJobsBoardFilter(t *testing.T) {
 		Data []struct {
 			Job map[string]json.RawMessage `json:"job"`
 		} `json:"data"`
+		Meta struct {
+			Total  int `json:"total"`
+			Counts struct {
+				All     int `json:"all"`
+				Viewed  int `json:"viewed"`
+				Saved   int `json:"saved"`
+				Applied int `json:"applied"`
+				Board   int `json:"board"`
+			} `json:"counts"`
+		} `json:"meta"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -250,5 +260,12 @@ func TestListMyJobsBoardFilter(t *testing.T) {
 	}
 	if len(body.Data) != 3 {
 		t.Errorf("board filter returned %d items, want 3 (saved, applied, stage-only)", len(body.Data))
+	}
+	// meta.total must equal the board count (3), not the all count (4).
+	if body.Meta.Total != 3 {
+		t.Errorf("meta.total = %d, want 3 for board filter", body.Meta.Total)
+	}
+	if body.Meta.Counts.Board != 3 {
+		t.Errorf("meta.counts.board = %d, want 3", body.Meta.Counts.Board)
 	}
 }
