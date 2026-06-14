@@ -10,19 +10,20 @@
   import LoadMore from './LoadMore.svelte';
   import States from './States.svelte';
 
-  const tabs: { value: MyJobsFilter; label: string }[] = [
+  type ListFilter = Exclude<MyJobsFilter, 'board'>;
+  const tabs: { value: ListFilter; label: string }[] = [
     { value: 'all', label: 'All' },
     { value: 'viewed', label: 'Viewed' },
     { value: 'saved', label: 'Saved' },
     { value: 'applied', label: 'Applied' },
   ];
 
-  let filter = $state<MyJobsFilter>('all');
+  let filter = $state<ListFilter>('all');
   // Per-tab counts ride on every listing response, so the badges stay fresh
   // without extra requests.
   let counts = $state.raw<MyJobCounts | null>(null);
 
-  const makePaginator = (f: MyJobsFilter) =>
+  const makePaginator = (f: ListFilter) =>
     new Paginator(async (limit, offset) => {
       const slice = await listMyJobs(f, limit, offset);
       counts = slice.counts;
@@ -31,7 +32,7 @@
 
   let page = $state(makePaginator('all'));
 
-  function selectTab(f: MyJobsFilter) {
+  function selectTab(f: ListFilter) {
     if (f === filter) return;
     filter = f;
     page = makePaginator(f);
@@ -44,7 +45,7 @@
     if (isAuthenticated()) void page.start();
   });
 
-  const emptyMessages: Record<MyJobsFilter, string> = {
+  const emptyMessages: Record<ListFilter, string> = {
     all: 'No activity yet. Jobs you open, save, or apply to will show up here.',
     viewed: 'Nothing here: every job you viewed is already saved or applied to.',
     saved: 'No saved jobs yet. Save a job to find it here.',

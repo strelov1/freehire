@@ -206,7 +206,7 @@ export function createApi(
   /** Call a job-interaction endpoint and return the resulting record. */
   async function jobInteraction(
     slug: string,
-    action: 'view' | 'apply' | 'save',
+    action: 'view' | 'apply' | 'save' | 'stage' | 'track',
     method: 'POST' | 'DELETE' = 'POST',
   ): Promise<UserJob> {
     const res = await request<{ data: UserJob }>(`/api/v1/jobs/${slug}/${action}`, { method });
@@ -243,6 +243,17 @@ export function createApi(
   /** Clear a job's saved mark. Idempotent: "already not saved" is success. */
   function unsaveJob(slug: string): Promise<UserJob> {
     return jobInteraction(slug, 'save', 'DELETE');
+  }
+
+  /** Drop a job's pipeline progress (stage + applied), keeping its saved mark —
+   *  the board's backward "move to Saved" drag. */
+  function clearJobStage(slug: string): Promise<UserJob> {
+    return jobInteraction(slug, 'stage', 'DELETE');
+  }
+
+  /** Remove a job from the board entirely (it stays in view history). */
+  function untrackJob(slug: string): Promise<UserJob> {
+    return jobInteraction(slug, 'track', 'DELETE');
   }
 
   /** The current user's job interactions, newest activity first. Alongside the
@@ -301,6 +312,8 @@ export function createApi(
     markJobApplied,
     saveJob,
     unsaveJob,
+    clearJobStage,
+    untrackJob,
     trackJob,
     listMyJobs,
     listApiKeys,
@@ -309,7 +322,7 @@ export function createApi(
   };
 }
 
-export type MyJobsFilter = 'all' | 'viewed' | 'saved' | 'applied';
+export type MyJobsFilter = 'all' | 'viewed' | 'saved' | 'applied' | 'board';
 
 /** The default browser client: global fetch, same-origin, cookie attached. */
 export type Api = ReturnType<typeof createApi>;
@@ -334,6 +347,8 @@ export const {
   markJobApplied,
   saveJob,
   unsaveJob,
+  clearJobStage,
+  untrackJob,
   trackJob,
   listMyJobs,
   listApiKeys,
