@@ -94,6 +94,15 @@ func (r *QueriesRepository) ClearJobProgress(ctx context.Context, userID, jobID 
 	return toInteraction(row), nil
 }
 
+// UntrackJob removes a job from the board by clearing all pipeline marks except viewed_at.
+func (r *QueriesRepository) UntrackJob(ctx context.Context, userID, jobID int64) (Interaction, error) {
+	row, err := r.q.UntrackJob(ctx, db.UntrackJobParams{UserID: userID, JobID: jobID})
+	if err != nil {
+		return Interaction{}, err
+	}
+	return toInteraction(row), nil
+}
+
 // toInteraction converts a db.UserJob row to the domain Interaction type.
 func toInteraction(r db.UserJob) Interaction {
 	var viewedAt *time.Time

@@ -55,6 +55,10 @@ type Repository interface {
 
 	// ClearJobProgress drops stage and applied_at, keeping saved_at/viewed_at/notes.
 	ClearJobProgress(ctx context.Context, userID, jobID int64) (Interaction, error)
+
+	// UntrackJob removes a job from the board entirely: clears saved_at, applied_at,
+	// stage, and notes, keeping viewed_at so the job stays in view history.
+	UntrackJob(ctx context.Context, userID, jobID int64) (Interaction, error)
 }
 
 // Service implements the per-user job-tracking use cases.
@@ -117,6 +121,16 @@ func (s *Service) ClearProgress(ctx context.Context, userID int64, slug string) 
 		return Interaction{}, err
 	}
 	return s.repo.ClearJobProgress(ctx, userID, jobID)
+}
+
+// Untrack resolves slug → jobID then removes the job from the board by clearing
+// saved_at, applied_at, stage, and notes while keeping viewed_at.
+func (s *Service) Untrack(ctx context.Context, userID int64, slug string) (Interaction, error) {
+	jobID, err := s.repo.JobIDBySlug(ctx, slug)
+	if err != nil {
+		return Interaction{}, err
+	}
+	return s.repo.UntrackJob(ctx, userID, jobID)
 }
 
 // Track validates the request first (before any slug lookup), then resolves
