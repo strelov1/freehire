@@ -111,6 +111,7 @@
     const item = openItem;
     const prevCol = cardCol[item.id];
     item.stage = stage || null;
+    if (!stage) item.applied_at = null; // "No stage" demotes back to the wishlist
     const nextCol = columnOf(item);
     if (prevCol && nextCol !== prevCol) {
       columns[prevCol] = columns[prevCol].filter((i) => i.id !== item.id);
@@ -118,7 +119,14 @@
       cardCol[item.id] = nextCol;
     }
     try {
-      await trackJob(item.id, { stage });
+      // Empty stage is not a vocabulary value — clearing progress is its own
+      // backend path (the same one the drag-to-Saved move uses).
+      if (stage) {
+        await trackJob(item.id, { stage });
+      } else {
+        await saveJob(item.id);
+        await clearJobStage(item.id);
+      }
     } catch {
       await load();
     }
