@@ -11,6 +11,34 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearJobProgress = `-- name: ClearJobProgress :one
+UPDATE user_jobs
+SET stage = NULL, applied_at = NULL
+WHERE user_id = $1 AND job_id = $2
+RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes
+`
+
+type ClearJobProgressParams struct {
+	UserID int64 `json:"user_id"`
+	JobID  int64 `json:"job_id"`
+}
+
+// Reset a tracked job to the wishlist: drop stage and applied state, keep saved/viewed/notes.
+func (q *Queries) ClearJobProgress(ctx context.Context, arg ClearJobProgressParams) (UserJob, error) {
+	row := q.db.QueryRow(ctx, clearJobProgress, arg.UserID, arg.JobID)
+	var i UserJob
+	err := row.Scan(
+		&i.UserID,
+		&i.JobID,
+		&i.ViewedAt,
+		&i.AppliedAt,
+		&i.SavedAt,
+		&i.Stage,
+		&i.Notes,
+	)
+	return i, err
+}
+
 const countUserJobs = `-- name: CountUserJobs :one
 SELECT count(*)                                        AS "all",
        count(*) FILTER (WHERE saved_at IS NULL
@@ -286,6 +314,35 @@ type UnsaveJobParams struct {
 // handler treats that as "already not saved", never as a failure.
 func (q *Queries) UnsaveJob(ctx context.Context, arg UnsaveJobParams) (UserJob, error) {
 	row := q.db.QueryRow(ctx, unsaveJob, arg.UserID, arg.JobID)
+	var i UserJob
+	err := row.Scan(
+		&i.UserID,
+		&i.JobID,
+		&i.ViewedAt,
+		&i.AppliedAt,
+		&i.SavedAt,
+		&i.Stage,
+		&i.Notes,
+	)
+	return i, err
+}
+
+const untrackJob = `-- name: UntrackJob :one
+UPDATE user_jobs
+SET saved_at = NULL, applied_at = NULL, stage = NULL, notes = NULL
+WHERE user_id = $1 AND job_id = $2
+RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes
+`
+
+type UntrackJobParams struct {
+	UserID int64 `json:"user_id"`
+	JobID  int64 `json:"job_id"`
+}
+
+// Remove a job from the board: drop every pipeline mark, keep viewed_at so the
+// job remains in the user's view history.
+func (q *Queries) UntrackJob(ctx context.Context, arg UntrackJobParams) (UserJob, error) {
+	row := q.db.QueryRow(ctx, untrackJob, arg.UserID, arg.JobID)
 	var i UserJob
 	err := row.Scan(
 		&i.UserID,

@@ -52,6 +52,9 @@ type Repository interface {
 	// TrackJob upserts the stage and/or notes for the interaction. A nil pointer
 	// means "leave unchanged".
 	TrackJob(ctx context.Context, userID, jobID int64, stage, notes *string) (Interaction, error)
+
+	// ClearJobProgress drops stage and applied_at, keeping saved_at/viewed_at/notes.
+	ClearJobProgress(ctx context.Context, userID, jobID int64) (Interaction, error)
 }
 
 // Service implements the per-user job-tracking use cases.
@@ -104,6 +107,16 @@ func (s *Service) Unsave(ctx context.Context, userID int64, slug string) (Intera
 		return Interaction{JobID: jobID}, nil
 	}
 	return row, err
+}
+
+// ClearProgress resolves slug → jobID then drops stage and applied state, keeping
+// saved_at/viewed_at/notes intact (the "drag back to Saved" Kanban action).
+func (s *Service) ClearProgress(ctx context.Context, userID int64, slug string) (Interaction, error) {
+	jobID, err := s.repo.JobIDBySlug(ctx, slug)
+	if err != nil {
+		return Interaction{}, err
+	}
+	return s.repo.ClearJobProgress(ctx, userID, jobID)
 }
 
 // Track validates the request first (before any slug lookup), then resolves

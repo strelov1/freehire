@@ -85,6 +85,15 @@ func (r *QueriesRepository) TrackJob(ctx context.Context, userID, jobID int64, s
 	return toInteraction(row), nil
 }
 
+// ClearJobProgress drops stage and applied_at for a user's interaction with a job.
+func (r *QueriesRepository) ClearJobProgress(ctx context.Context, userID, jobID int64) (Interaction, error) {
+	row, err := r.q.ClearJobProgress(ctx, db.ClearJobProgressParams{UserID: userID, JobID: jobID})
+	if err != nil {
+		return Interaction{}, err
+	}
+	return toInteraction(row), nil
+}
+
 // toInteraction converts a db.UserJob row to the domain Interaction type.
 func toInteraction(r db.UserJob) Interaction {
 	var viewedAt *time.Time

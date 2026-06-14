@@ -15,16 +15,20 @@ type fakeRepo struct {
 	slugs map[string]int64
 
 	// per-method canned return (first call wins; subsequent calls return the same)
-	viewResult    jobtracking.Interaction
-	viewErr       error
-	appliedResult jobtracking.Interaction
-	appliedErr    error
-	saveResult    jobtracking.Interaction
-	saveErr       error
-	unsaveResult  jobtracking.Interaction
-	unsaveErr     error
-	trackResult   jobtracking.Interaction
-	trackErr      error
+	viewResult          jobtracking.Interaction
+	viewErr             error
+	appliedResult       jobtracking.Interaction
+	appliedErr          error
+	saveResult          jobtracking.Interaction
+	saveErr             error
+	unsaveResult        jobtracking.Interaction
+	unsaveErr           error
+	trackResult         jobtracking.Interaction
+	trackErr            error
+	clearProgressResult jobtracking.Interaction
+	clearProgressErr    error
+	untrackResult       jobtracking.Interaction
+	untrackErr          error
 
 	// recorded calls
 	slugCalls  int
@@ -61,6 +65,14 @@ func (f *fakeRepo) TrackJob(_ context.Context, _, _ int64, stage, notes *string)
 	f.trackStage = stage
 	f.trackNotes = notes
 	return f.trackResult, f.trackErr
+}
+
+func (f *fakeRepo) ClearJobProgress(_ context.Context, _, _ int64) (jobtracking.Interaction, error) {
+	return f.clearProgressResult, f.clearProgressErr
+}
+
+func (f *fakeRepo) UntrackJob(_ context.Context, _, _ int64) (jobtracking.Interaction, error) {
+	return f.untrackResult, f.untrackErr
 }
 
 // helpers

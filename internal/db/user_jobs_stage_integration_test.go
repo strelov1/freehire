@@ -13,6 +13,86 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+func TestClearJobProgress(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	uid := seedAPIKeyUser(t, pool, "clearprogress@example.test")
+	jid := insertJob(t, pool, "clear-1")
+
+	// Set up the full pipeline state: saved, applied, stage=interview.
+	if _, err := q.SaveJob(ctx, SaveJobParams{UserID: uid, JobID: jid}); err != nil {
+		t.Fatalf("SaveJob: %v", err)
+	}
+	if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: uid, JobID: jid}); err != nil {
+		t.Fatalf("MarkJobApplied: %v", err)
+	}
+	if _, err := q.TrackJob(ctx, TrackJobParams{
+		UserID: uid, JobID: jid, Stage: pgtype.Text{String: "interview", Valid: true},
+	}); err != nil {
+		t.Fatalf("TrackJob: %v", err)
+	}
+
+	row, err := q.ClearJobProgress(ctx, ClearJobProgressParams{UserID: uid, JobID: jid})
+	if err != nil {
+		t.Fatalf("ClearJobProgress: %v", err)
+	}
+	if row.Stage.Valid {
+		t.Errorf("stage = %q, want NULL", row.Stage.String)
+	}
+	if row.AppliedAt.Valid {
+		t.Errorf("applied_at = %v, want NULL", row.AppliedAt.Time)
+	}
+	if !row.SavedAt.Valid {
+		t.Error("saved_at was cleared, want it kept")
+	}
+}
+
+func TestUntrackJob(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	uid := seedAPIKeyUser(t, pool, "untrack@example.test")
+	jid := insertJob(t, pool, "untrack-1")
+
+	// Set up the full state: view, save, track.
+	if _, err := q.RecordJobView(ctx, RecordJobViewParams{UserID: uid, JobID: jid}); err != nil {
+		t.Fatalf("RecordJobView: %v", err)
+	}
+	if _, err := q.SaveJob(ctx, SaveJobParams{UserID: uid, JobID: jid}); err != nil {
+		t.Fatalf("SaveJob: %v", err)
+	}
+	if _, err := q.TrackJob(ctx, TrackJobParams{
+		UserID: uid, JobID: jid,
+		Stage: pgtype.Text{String: "offer", Valid: true},
+		Notes: pgtype.Text{String: "great team", Valid: true},
+	}); err != nil {
+		t.Fatalf("TrackJob: %v", err)
+	}
+
+	row, err := q.UntrackJob(ctx, UntrackJobParams{UserID: uid, JobID: jid})
+	if err != nil {
+		t.Fatalf("UntrackJob: %v", err)
+	}
+	if row.SavedAt.Valid {
+		t.Errorf("saved_at = %v, want NULL", row.SavedAt.Time)
+	}
+	if row.AppliedAt.Valid {
+		t.Errorf("applied_at = %v, want NULL", row.AppliedAt.Time)
+	}
+	if row.Stage.Valid {
+		t.Errorf("stage = %q, want NULL", row.Stage.String)
+	}
+	if row.Notes.Valid {
+		t.Errorf("notes = %q, want NULL", row.Notes.String)
+	}
+	if !row.ViewedAt.Valid {
+		t.Error("viewed_at was cleared, want it kept")
+	}
+}
+
 func TestTrackJobAndStageSeeding(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)

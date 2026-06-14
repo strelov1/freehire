@@ -133,6 +133,7 @@ func Register(app *fiber.App, cfg Config) {
 	api.Post("/jobs/:slug/save", keyAuth, h.SaveJob)
 	api.Delete("/jobs/:slug/save", keyAuth, h.UnsaveJob)
 	api.Patch("/jobs/:slug/track", keyAuth, h.TrackJob)
+	api.Delete("/jobs/:slug/stage", keyAuth, h.ClearStage)
 
 	// Moderator-authored jobs: create a hand-curated vacancy and edit it. Authenticated
 	// by cookie or API key (the CLI uses a key), then gated on the moderator role. The

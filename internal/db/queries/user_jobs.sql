@@ -47,6 +47,21 @@ ON CONFLICT (user_id, job_id) DO UPDATE
       notes = COALESCE(EXCLUDED.notes, user_jobs.notes)
 RETURNING *;
 
+-- name: ClearJobProgress :one
+-- Reset a tracked job to the wishlist: drop stage and applied state, keep saved/viewed/notes.
+UPDATE user_jobs
+SET stage = NULL, applied_at = NULL
+WHERE user_id = $1 AND job_id = $2
+RETURNING *;
+
+-- name: UntrackJob :one
+-- Remove a job from the board: drop every pipeline mark, keep viewed_at so the
+-- job remains in the user's view history.
+UPDATE user_jobs
+SET saved_at = NULL, applied_at = NULL, stage = NULL, notes = NULL
+WHERE user_id = $1 AND job_id = $2
+RETURNING *;
+
 -- name: ListUserJobs :many
 -- A user's job interactions joined with the job rows, most recently touched
 -- first (GREATEST ignores NULLs; viewed_at is always set). filter narrows to

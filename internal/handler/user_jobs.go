@@ -103,6 +103,21 @@ func (h *Handler) UnsaveJob(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": toResponse(interaction)})
 }
 
+// ClearStage drops a job's pipeline progress (stage and applied_at) for the
+// authenticated user while keeping saved_at, viewed_at, and notes intact. Used
+// when dragging a Kanban card back to the "Saved" column.
+func (h *Handler) ClearStage(c *fiber.Ctx) error {
+	userID, ok := auth.UserID(c)
+	if !ok {
+		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	}
+	interaction, err := h.tracking.ClearProgress(c.Context(), userID, c.Params("slug"))
+	if err != nil {
+		return trackingError(err)
+	}
+	return c.JSON(fiber.Map{"data": toResponse(interaction)})
+}
+
 // trackRequest is the track body: an optional stage and/or notes. A nil field is
 // left unchanged by the upsert; at least one must be present.
 type trackRequest struct {
