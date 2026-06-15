@@ -45,7 +45,7 @@ func (f *fakeRepo) ListPending(_ context.Context) ([]db.ListPendingSubmissionsRo
 	return nil, nil
 }
 
-func (f *fakeRepo) ListByUser(_ context.Context, _ int64) ([]db.JobSubmission, error) {
+func (f *fakeRepo) ListByUser(_ context.Context, _ int64) ([]db.ListSubmissionsByUserRow, error) {
 	return nil, nil
 }
 

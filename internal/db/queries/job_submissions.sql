@@ -28,9 +28,13 @@ ORDER BY s.created_at DESC;
 
 -- name: ListSubmissionsByUser :many
 -- "My submissions": one user's submissions, newest first, whatever their status.
-SELECT * FROM job_submissions
-WHERE submitted_by = $1
-ORDER BY created_at DESC;
+-- LEFT JOIN the minted job (present only once approved) to surface its public_slug,
+-- so the UI can link an approved submission straight to its live vacancy page.
+SELECT s.*, j.public_slug AS job_slug
+FROM job_submissions s
+LEFT JOIN jobs j ON j.id = s.job_id
+WHERE s.submitted_by = $1
+ORDER BY s.created_at DESC;
 
 -- name: MarkSubmissionApproved :one
 -- Mark a pending submission approved, recording the deciding moderator and the minted job.

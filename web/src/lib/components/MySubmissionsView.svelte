@@ -67,6 +67,14 @@
               {#if s.status === 'rejected' && s.review_reason}
                 <span class="text-xs text-destructive">Reason: {s.review_reason}</span>
               {/if}
+              {#if s.status === 'approved' && s.job_slug}
+                <a
+                  href={`/jobs/${s.job_slug}`}
+                  class="text-xs font-medium text-foreground hover:underline"
+                >
+                  View vacancy →
+                </a>
+              {/if}
             </div>
             <span class="rounded-md px-2 py-0.5 text-xs font-medium {statusClass[s.status]}">
               {s.status}

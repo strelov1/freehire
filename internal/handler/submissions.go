@@ -31,6 +31,9 @@ type submissionResponse struct {
 	ReviewedAt     *time.Time `json:"reviewed_at,omitempty"`
 	CreatedAt      *time.Time `json:"created_at"`
 	SubmitterEmail string     `json:"submitter_email,omitempty"`
+	// JobSlug is the public slug of the minted live vacancy, set only on an approved
+	// submission in the "my submissions" view, so the UI can link to /jobs/<slug>.
+	JobSlug string `json:"job_slug,omitempty"`
 }
 
 // toSubmissionResponse maps a stored submission to its wire shape (no submitter email).
@@ -69,6 +72,27 @@ func toPendingSubmissionResponse(r db.ListPendingSubmissionsRow) submissionRespo
 		ReviewedAt:     timePtr(r.ReviewedAt),
 		CreatedAt:      timePtr(r.CreatedAt),
 		SubmitterEmail: r.SubmitterEmail,
+	}
+}
+
+// toMySubmissionResponse maps a "my submissions" row, adding the minted job's slug when
+// the submission was approved (job_slug is NULL otherwise).
+func toMySubmissionResponse(r db.ListSubmissionsByUserRow) submissionResponse {
+	return submissionResponse{
+		ID:           r.ID,
+		URL:          r.URL,
+		Source:       r.Source,
+		Title:        r.Title,
+		Company:      r.Company,
+		Location:     r.Location,
+		Remote:       r.Remote,
+		Description:  r.Description,
+		PostedAt:     timePtr(r.PostedAt),
+		Status:       r.Status,
+		ReviewReason: r.ReviewReason,
+		ReviewedAt:   timePtr(r.ReviewedAt),
+		CreatedAt:    timePtr(r.CreatedAt),
+		JobSlug:      r.JobSlug.String,
 	}
 }
 
@@ -125,7 +149,7 @@ func (a *API) ListMySubmissions(c *fiber.Ctx) error {
 	}
 	out := make([]submissionResponse, len(subs))
 	for i, s := range subs {
-		out[i] = toSubmissionResponse(s)
+		out[i] = toMySubmissionResponse(s)
 	}
 	return c.JSON(fiber.Map{"data": out})
 }

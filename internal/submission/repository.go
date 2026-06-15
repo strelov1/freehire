@@ -56,8 +56,8 @@ func (r *QueriesRepository) ListPending(ctx context.Context) ([]db.ListPendingSu
 	return r.q.ListPendingSubmissions(ctx)
 }
 
-// ListByUser returns one user's submissions.
-func (r *QueriesRepository) ListByUser(ctx context.Context, userID int64) ([]db.JobSubmission, error) {
+// ListByUser returns one user's submissions, each with the minted job's slug when approved.
+func (r *QueriesRepository) ListByUser(ctx context.Context, userID int64) ([]db.ListSubmissionsByUserRow, error) {
 	return r.q.ListSubmissionsByUser(ctx, userID)
 }
 

@@ -64,6 +64,9 @@ export interface Submission {
   reviewed_at?: string | null;
   created_at: string | null;
   submitter_email?: string;
+  // Public slug of the minted live vacancy, present on an approved submission in the
+  // caller's own list, so the UI can link to /jobs/<job_slug>.
+  job_slug?: string;
 }
 
 /** The content a user submits for review (mirrors the moderator create body). */

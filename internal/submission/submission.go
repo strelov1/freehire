@@ -40,7 +40,7 @@ type Repository interface {
 	Create(ctx context.Context, p db.CreateSubmissionParams) (db.JobSubmission, error)
 	Get(ctx context.Context, id int64) (db.JobSubmission, error)
 	ListPending(ctx context.Context) ([]db.ListPendingSubmissionsRow, error)
-	ListByUser(ctx context.Context, userID int64) ([]db.JobSubmission, error)
+	ListByUser(ctx context.Context, userID int64) ([]db.ListSubmissionsByUserRow, error)
 	MarkApproved(ctx context.Context, p db.MarkSubmissionApprovedParams) (db.JobSubmission, error)
 	MarkRejected(ctx context.Context, p db.MarkSubmissionRejectedParams) (db.JobSubmission, error)
 }
@@ -77,8 +77,9 @@ func (s *Service) Submit(ctx context.Context, submittedBy int64, in moderation.C
 	})
 }
 
-// ListMine returns the given user's submissions, newest first.
-func (s *Service) ListMine(ctx context.Context, userID int64) ([]db.JobSubmission, error) {
+// ListMine returns the given user's submissions, newest first. Each row carries the
+// minted job's slug (when approved) so the UI can link to the live vacancy.
+func (s *Service) ListMine(ctx context.Context, userID int64) ([]db.ListSubmissionsByUserRow, error) {
 	return s.repo.ListByUser(ctx, userID)
 }
 

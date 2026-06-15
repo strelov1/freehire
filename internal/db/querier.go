@@ -134,7 +134,9 @@ type Querier interface {
 	// email so the moderator can judge provenance.
 	ListPendingSubmissions(ctx context.Context) ([]ListPendingSubmissionsRow, error)
 	// "My submissions": one user's submissions, newest first, whatever their status.
-	ListSubmissionsByUser(ctx context.Context, submittedBy int64) ([]JobSubmission, error)
+	// LEFT JOIN the minted job (present only once approved) to surface its public_slug,
+	// so the UI can link an approved submission straight to its live vacancy page.
+	ListSubmissionsByUser(ctx context.Context, submittedBy int64) ([]ListSubmissionsByUserRow, error)
 	// A user's job interactions joined with the job rows, most recently touched
 	// first (GREATEST ignores NULLs; viewed_at is always set). filter narrows to
 	// viewed-only/saved/applied subsets; 'all' is every interaction, 'viewed' is

@@ -280,8 +280,9 @@ func TestSubmissionsEndToEnd(t *testing.T) {
 		}
 		var out struct {
 			Data []struct {
-				ID     int64  `json:"id"`
-				Status string `json:"status"`
+				ID      int64  `json:"id"`
+				Status  string `json:"status"`
+				JobSlug string `json:"job_slug"`
 			} `json:"data"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
@@ -291,6 +292,10 @@ func TestSubmissionsEndToEnd(t *testing.T) {
 		for _, s := range out.Data {
 			if s.ID == sub1ID {
 				sawOwn = true
+				// sub1 was approved earlier, so it links to the minted live vacancy.
+				if s.Status != "approved" || s.JobSlug == "" {
+					t.Errorf("approved submission missing job_slug: status=%q job_slug=%q", s.Status, s.JobSlug)
+				}
 			}
 			// user1 must never see user2's submission (url2).
 			var owner int64

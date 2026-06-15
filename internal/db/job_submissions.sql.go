@@ -171,21 +171,45 @@ func (q *Queries) ListPendingSubmissions(ctx context.Context) ([]ListPendingSubm
 }
 
 const listSubmissionsByUser = `-- name: ListSubmissionsByUser :many
-SELECT id, submitted_by, url, source, title, company, location, remote, description, posted_at, status, review_reason, reviewed_by, reviewed_at, job_id, created_at FROM job_submissions
-WHERE submitted_by = $1
-ORDER BY created_at DESC
+SELECT s.id, s.submitted_by, s.url, s.source, s.title, s.company, s.location, s.remote, s.description, s.posted_at, s.status, s.review_reason, s.reviewed_by, s.reviewed_at, s.job_id, s.created_at, j.public_slug AS job_slug
+FROM job_submissions s
+LEFT JOIN jobs j ON j.id = s.job_id
+WHERE s.submitted_by = $1
+ORDER BY s.created_at DESC
 `
 
+type ListSubmissionsByUserRow struct {
+	ID           int64              `json:"id"`
+	SubmittedBy  int64              `json:"submitted_by"`
+	URL          string             `json:"url"`
+	Source       string             `json:"source"`
+	Title        string             `json:"title"`
+	Company      string             `json:"company"`
+	Location     string             `json:"location"`
+	Remote       bool               `json:"remote"`
+	Description  string             `json:"description"`
+	PostedAt     pgtype.Timestamptz `json:"posted_at"`
+	Status       string             `json:"status"`
+	ReviewReason string             `json:"review_reason"`
+	ReviewedBy   pgtype.Int8        `json:"reviewed_by"`
+	ReviewedAt   pgtype.Timestamptz `json:"reviewed_at"`
+	JobID        pgtype.Int8        `json:"job_id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	JobSlug      pgtype.Text        `json:"job_slug"`
+}
+
 // "My submissions": one user's submissions, newest first, whatever their status.
-func (q *Queries) ListSubmissionsByUser(ctx context.Context, submittedBy int64) ([]JobSubmission, error) {
+// LEFT JOIN the minted job (present only once approved) to surface its public_slug,
+// so the UI can link an approved submission straight to its live vacancy page.
+func (q *Queries) ListSubmissionsByUser(ctx context.Context, submittedBy int64) ([]ListSubmissionsByUserRow, error) {
 	rows, err := q.db.Query(ctx, listSubmissionsByUser, submittedBy)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []JobSubmission{}
+	items := []ListSubmissionsByUserRow{}
 	for rows.Next() {
-		var i JobSubmission
+		var i ListSubmissionsByUserRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.SubmittedBy,
@@ -203,6 +227,7 @@ func (q *Queries) ListSubmissionsByUser(ctx context.Context, submittedBy int64) 
 			&i.ReviewedAt,
 			&i.JobID,
 			&i.CreatedAt,
+			&i.JobSlug,
 		); err != nil {
 			return nil, err
 		}
