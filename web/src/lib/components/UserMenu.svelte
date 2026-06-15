@@ -8,6 +8,7 @@
 
   const email = $derived(currentUser()?.email ?? '');
   const initial = $derived(email.charAt(0).toUpperCase());
+  const isModerator = $derived(currentUser()?.role === 'moderator');
 
   function onWindowClick(e: MouseEvent) {
     if (open && root && !root.contains(e.target as Node)) open = false;
@@ -59,6 +60,33 @@
       >
         API keys
       </a>
+      <div class="my-1 h-px bg-border"></div>
+      <a
+        href="/submit"
+        role="menuitem"
+        onclick={() => (open = false)}
+        class="block px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+      >
+        Submit a job
+      </a>
+      <a
+        href="/my/submissions"
+        role="menuitem"
+        onclick={() => (open = false)}
+        class="block px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+      >
+        My submissions
+      </a>
+      {#if isModerator}
+        <a
+          href="/moderation"
+          role="menuitem"
+          onclick={() => (open = false)}
+          class="block px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+        >
+          Moderation
+        </a>
+      {/if}
       <div class="my-1 h-px bg-border"></div>
       <button
         type="button"

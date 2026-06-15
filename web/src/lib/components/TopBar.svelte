@@ -15,6 +15,7 @@
   const links = [
     { href: '/jobs', label: 'Jobs' },
     { href: '/companies', label: 'Companies' },
+    { href: '/recruiters', label: 'For recruiters' },
   ];
 
   // A link is active for its own path and any sub-route (e.g. /jobs and

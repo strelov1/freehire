@@ -16,10 +16,13 @@ const minPasswordLen = 8
 // so a longer password would have its tail ignored. Reject rather than mislead.
 const maxPasswordLen = 72
 
-// User is the public representation of a local account.
+// User is the public representation of a local account. Role is the DB-stored
+// authorization role ('user'/'moderator'/'admin'); it rides the wire shape so a client
+// can gate moderator-only UI, while RequireRole still authorizes server-side.
 type User struct {
 	ID        int64
 	Email     string
+	Role      string
 	CreatedAt *time.Time
 }
 

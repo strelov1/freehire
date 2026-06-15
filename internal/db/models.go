@@ -70,6 +70,25 @@ type Job struct {
 	UpdatedBy         pgtype.Int8        `json:"updated_by"`
 }
 
+type JobSubmission struct {
+	ID           int64              `json:"id"`
+	SubmittedBy  int64              `json:"submitted_by"`
+	URL          string             `json:"url"`
+	Source       string             `json:"source"`
+	Title        string             `json:"title"`
+	Company      string             `json:"company"`
+	Location     string             `json:"location"`
+	Remote       bool               `json:"remote"`
+	Description  string             `json:"description"`
+	PostedAt     pgtype.Timestamptz `json:"posted_at"`
+	Status       string             `json:"status"`
+	ReviewReason string             `json:"review_reason"`
+	ReviewedBy   pgtype.Int8        `json:"reviewed_by"`
+	ReviewedAt   pgtype.Timestamptz `json:"reviewed_at"`
+	JobID        pgtype.Int8        `json:"job_id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
 type TelegramPost struct {
 	Channel     string             `json:"channel"`
 	MsgID       int64              `json:"msg_id"`

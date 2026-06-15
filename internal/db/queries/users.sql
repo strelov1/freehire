@@ -1,20 +1,23 @@
 -- name: CreateUser :one
 -- Register a new account. email is stored as given (the handler lowercases it);
--- the unique index on lower(email) rejects duplicates regardless of case.
+-- the unique index on lower(email) rejects duplicates regardless of case. role is
+-- returned so the new account's wire shape carries it (always 'user' at creation).
 INSERT INTO users (email, password_hash)
 VALUES ($1, $2)
-RETURNING id, email, created_at;
+RETURNING id, email, role, created_at;
 
 -- name: GetUserByEmail :one
 -- Login lookup. Case-insensitive on email; returns password_hash so the handler
--- can verify the password (and reject accounts that have none).
-SELECT id, email, password_hash, created_at
+-- can verify the password (and reject accounts that have none). role feeds the
+-- post-login wire shape.
+SELECT id, email, role, password_hash, created_at
 FROM users
 WHERE lower(email) = lower($1);
 
 -- name: GetUserByID :one
--- Profile lookup for the authenticated user. Never selects password_hash.
-SELECT id, email, created_at
+-- Profile lookup for the authenticated user. Never selects password_hash. role is
+-- included so /auth/me can tell a client whether to surface moderator-only UI.
+SELECT id, email, role, created_at
 FROM users
 WHERE id = $1;
 

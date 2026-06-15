@@ -14,7 +14,7 @@ import (
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, password_hash)
 VALUES ($1, $2)
-RETURNING id, email, created_at
+RETURNING id, email, role, created_at
 `
 
 type CreateUserParams struct {
@@ -25,20 +25,27 @@ type CreateUserParams struct {
 type CreateUserRow struct {
 	ID        int64              `json:"id"`
 	Email     string             `json:"email"`
+	Role      string             `json:"role"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 // Register a new account. email is stored as given (the handler lowercases it);
-// the unique index on lower(email) rejects duplicates regardless of case.
+// the unique index on lower(email) rejects duplicates regardless of case. role is
+// returned so the new account's wire shape carries it (always 'user' at creation).
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
 	row := q.db.QueryRow(ctx, createUser, arg.Email, arg.PasswordHash)
 	var i CreateUserRow
-	err := row.Scan(&i.ID, &i.Email, &i.CreatedAt)
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Role,
+		&i.CreatedAt,
+	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, created_at
+SELECT id, email, role, password_hash, created_at
 FROM users
 WHERE lower(email) = lower($1)
 `
@@ -46,18 +53,21 @@ WHERE lower(email) = lower($1)
 type GetUserByEmailRow struct {
 	ID           int64              `json:"id"`
 	Email        string             `json:"email"`
+	Role         string             `json:"role"`
 	PasswordHash pgtype.Text        `json:"password_hash"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
 // Login lookup. Case-insensitive on email; returns password_hash so the handler
-// can verify the password (and reject accounts that have none).
+// can verify the password (and reject accounts that have none). role feeds the
+// post-login wire shape.
 func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (GetUserByEmailRow, error) {
 	row := q.db.QueryRow(ctx, getUserByEmail, lower)
 	var i GetUserByEmailRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
+		&i.Role,
 		&i.PasswordHash,
 		&i.CreatedAt,
 	)
@@ -65,7 +75,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (GetUserByEm
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, created_at
+SELECT id, email, role, created_at
 FROM users
 WHERE id = $1
 `
@@ -73,14 +83,21 @@ WHERE id = $1
 type GetUserByIDRow struct {
 	ID        int64              `json:"id"`
 	Email     string             `json:"email"`
+	Role      string             `json:"role"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
-// Profile lookup for the authenticated user. Never selects password_hash.
+// Profile lookup for the authenticated user. Never selects password_hash. role is
+// included so /auth/me can tell a client whether to surface moderator-only UI.
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error) {
 	row := q.db.QueryRow(ctx, getUserByID, id)
 	var i GetUserByIDRow
-	err := row.Scan(&i.ID, &i.Email, &i.CreatedAt)
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Role,
+		&i.CreatedAt,
+	)
 	return i, err
 }
 

@@ -26,6 +26,21 @@ type createJobRequest struct {
 	PostedAt    *time.Time `json:"posted_at"`
 }
 
+// toCreateInput maps the wire body onto the moderation create input. Shared by the
+// moderator create path and the public submission path, which carry identical content.
+func (r createJobRequest) toCreateInput() moderation.CreateInput {
+	return moderation.CreateInput{
+		URL:         r.URL,
+		Source:      r.Source,
+		Title:       r.Title,
+		Company:     r.Company,
+		Location:    r.Location,
+		Remote:      r.Remote,
+		Description: r.Description,
+		PostedAt:    r.PostedAt,
+	}
+}
+
 // updateJobRequest is the moderator edit body: every field is optional, and a field
 // left out (nil) is unchanged. The source identity (url) is not editable.
 type updateJobRequest struct {
@@ -65,16 +80,7 @@ func (a *API) CreateJob(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
 
-	job, err := a.moderation.Create(c.Context(), actorID, moderation.CreateInput{
-		URL:         in.URL,
-		Source:      in.Source,
-		Title:       in.Title,
-		Company:     in.Company,
-		Location:    in.Location,
-		Remote:      in.Remote,
-		Description: in.Description,
-		PostedAt:    in.PostedAt,
-	})
+	job, err := a.moderation.Create(c.Context(), actorID, in.toCreateInput())
 	if err != nil {
 		return moderationError(err)
 	}

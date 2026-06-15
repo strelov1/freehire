@@ -50,9 +50,11 @@ type CreateInput struct {
 	PostedAt    *time.Time
 }
 
-// validate enforces the required fields and that the URL is an absolute http(s) link
-// (the URL is the dedup key, so it must be well-formed and stable).
-func (in CreateInput) validate() error {
+// Validate enforces the required fields and that the URL is an absolute http(s) link
+// (the URL is the dedup key, so it must be well-formed and stable). It is exported so the
+// submission queue validates contributed content against the same contract a moderator
+// create uses — one source of truth for "what is a valid vacancy".
+func (in CreateInput) Validate() error {
 	if strings.TrimSpace(in.URL) == "" {
 		return fmt.Errorf("%w: url is required", ErrInvalid)
 	}
@@ -118,7 +120,7 @@ func New(repo Repository) *Service {
 // with the acting moderator: created_by is written on insert, updated_by on a re-create of
 // the same URL.
 func (s *Service) Create(ctx context.Context, actorID int64, in CreateInput) (db.Job, error) {
-	if err := in.validate(); err != nil {
+	if err := in.Validate(); err != nil {
 		return db.Job{}, err
 	}
 	source := strings.TrimSpace(in.Source)

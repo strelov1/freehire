@@ -51,8 +51,13 @@ type Querier interface {
 	// expires_at NULL means the key never expires. Returns display fields only, never
 	// the hash.
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (CreateAPIKeyRow, error)
+	// Insert a user-contributed vacancy into the moderation queue as 'pending'. The partial
+	// unique index on lower(url) WHERE status='pending' rejects a second pending submission of
+	// the same URL (the repository maps that unique violation to a 409).
+	CreateSubmission(ctx context.Context, arg CreateSubmissionParams) (JobSubmission, error)
 	// Register a new account. email is stored as given (the handler lowercases it);
-	// the unique index on lower(email) rejects duplicates regardless of case.
+	// the unique index on lower(email) rejects duplicates regardless of case. role is
+	// returned so the new account's wire shape carries it (always 'user' at creation).
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
 	// Link a provider identity to an account (first OAuth sign-in). The composite
 	// primary key rejects a duplicate identity.
@@ -85,10 +90,16 @@ type Querier interface {
 	// columns over the wire on every silent view. GetJobBySlug (SELECT *) stays for the
 	// public detail handler that renders the whole row.
 	GetJobIDBySlug(ctx context.Context, publicSlug string) (int64, error)
+	// Load a single submission by id for the review path. The approve/reject flow guards the
+	// status in the service; the Mark* queries are additionally scoped to status='pending' as
+	// defense-in-depth against a concurrent second decision.
+	GetSubmission(ctx context.Context, id int64) (JobSubmission, error)
 	// Login lookup. Case-insensitive on email; returns password_hash so the handler
-	// can verify the password (and reject accounts that have none).
+	// can verify the password (and reject accounts that have none). role feeds the
+	// post-login wire shape.
 	GetUserByEmail(ctx context.Context, lower string) (GetUserByEmailRow, error)
-	// Profile lookup for the authenticated user. Never selects password_hash.
+	// Profile lookup for the authenticated user. Never selects password_hash. role is
+	// included so /auth/me can tell a client whether to surface moderator-only UI.
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
 	// OAuth sign-in fast path: resolve a provider identity straight to its user.
 	GetUserByIdentity(ctx context.Context, arg GetUserByIdentityParams) (GetUserByIdentityRow, error)
@@ -119,6 +130,11 @@ type Querier interface {
 	// concurrent inserts/updates (which shift posted_at ordering) cannot make the
 	// scan skip or repeat rows the way OFFSET pagination would.
 	ListJobsByIDAfter(ctx context.Context, arg ListJobsByIDAfterParams) ([]Job, error)
+	// The moderator review queue: every pending submission, newest first, with the submitter's
+	// email so the moderator can judge provenance.
+	ListPendingSubmissions(ctx context.Context) ([]ListPendingSubmissionsRow, error)
+	// "My submissions": one user's submissions, newest first, whatever their status.
+	ListSubmissionsByUser(ctx context.Context, submittedBy int64) ([]JobSubmission, error)
 	// A user's job interactions joined with the job rows, most recently touched
 	// first (GREATEST ignores NULLs; viewed_at is always set). filter narrows to
 	// viewed-only/saved/applied subsets; 'all' is every interaction, 'viewed' is
@@ -141,6 +157,13 @@ type Querier interface {
 	// two-strike grace that absorbs a transient death signal. Returns the new strike
 	// count and closed_at so the worker can log the outcome.
 	MarkLivenessExpired(ctx context.Context, arg MarkLivenessExpiredParams) (MarkLivenessExpiredRow, error)
+	// Mark a pending submission approved, recording the deciding moderator and the minted job.
+	// Scoped to status='pending' so a concurrent second decision affects no row (the service
+	// maps 0 rows to ErrAlreadyDecided). The job is minted by the service before this runs.
+	MarkSubmissionApproved(ctx context.Context, arg MarkSubmissionApprovedParams) (JobSubmission, error)
+	// Mark a pending submission rejected with an optional reason, recording the deciding
+	// moderator. Scoped to status='pending' (see MarkSubmissionApproved). No job is created.
+	MarkSubmissionRejected(ctx context.Context, arg MarkSubmissionRejectedParams) (JobSubmission, error)
 	// Completion: the post was processed (jobs written, or no vacancy found). Run in
 	// the same transaction as the extracted jobs' UpsertJob calls.
 	MarkTelegramPostExtracted(ctx context.Context, arg MarkTelegramPostExtractedParams) error

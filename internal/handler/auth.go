@@ -11,10 +11,13 @@ import (
 )
 
 // userResponse is the public shape of a user. It deliberately omits
-// password_hash so the hash never reaches a response.
+// password_hash so the hash never reaches a response. role is included so the SPA can
+// decide whether to surface moderator-only UI; it is an affordance only, as RequireRole
+// re-checks the DB-stored role on every privileged request.
 type userResponse struct {
 	ID        int64      `json:"id"`
 	Email     string     `json:"email"`
+	Role      string     `json:"role"`
 	CreatedAt *time.Time `json:"created_at"`
 }
 
@@ -25,7 +28,7 @@ type credentials struct {
 
 // toUserResponse maps an accounts.User to its public response shape.
 func toUserResponse(u accounts.User) userResponse {
-	return userResponse{ID: u.ID, Email: u.Email, CreatedAt: u.CreatedAt}
+	return userResponse{ID: u.ID, Email: u.Email, Role: u.Role, CreatedAt: u.CreatedAt}
 }
 
 // accountsError maps the accounts service sentinels to HTTP errors, preserving

@@ -29,7 +29,41 @@ export interface ListMeta {
 export interface User {
   id: number;
   email: string;
+  // Authorization role ('user' | 'moderator' | 'admin'). A UI affordance only —
+  // the server re-checks it on every privileged request.
+  role: string;
   created_at: string | null;
+}
+
+/** A job submitted for moderation. `status` is the review lifecycle; `review_reason`
+ *  carries an optional rejection note. `submitter_email` is present only on the
+ *  moderator review queue, never on a submitter's own view. */
+export interface Submission {
+  id: number;
+  url: string;
+  source?: string;
+  title: string;
+  company: string;
+  location?: string;
+  remote: boolean;
+  description?: string;
+  posted_at?: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  review_reason?: string;
+  reviewed_at?: string | null;
+  created_at: string | null;
+  submitter_email?: string;
+}
+
+/** The content a user submits for review (mirrors the moderator create body). */
+export interface SubmissionInput {
+  url: string;
+  title: string;
+  company: string;
+  location?: string;
+  remote?: boolean;
+  description?: string;
+  source?: string;
 }
 
 /** A signed-in user's interaction with one job: when they viewed it, saved it

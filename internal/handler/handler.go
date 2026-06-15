@@ -17,6 +17,7 @@ import (
 	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/moderation"
 	"github.com/strelov1/freehire/internal/search"
+	"github.com/strelov1/freehire/internal/submission"
 )
 
 const (
@@ -47,6 +48,9 @@ type API struct {
 	// moderation owns the moderator-authored job use cases (create/edit a manual
 	// vacancy); the handlers translate wire ↔ domain and delegate to it.
 	moderation *moderation.Service
+	// submission owns the public job-submission queue (submit/list/approve/reject);
+	// approval mints a live job by delegating to moderation.
+	submission *submission.Service
 }
 
 // pageParams reads and clamps the shared limit/offset pagination query params.
@@ -105,6 +109,9 @@ func Register(app *fiber.App, cfg Config) {
 		accounts:       accounts.New(accounts.NewQueriesRepository(queries, cfg.Pool), authHasher{}),
 		moderation:     moderation.New(moderation.NewQueriesRepository(queries, cfg.Pool, enrich.Version)),
 	}
+	// submission approval mints through the same moderation service, so derivation,
+	// dedup, and the enrichment enqueue are reused rather than duplicated.
+	a.submission = submission.New(submission.NewQueriesRepository(queries), a.moderation)
 	// Assign only when configured: a nil *search.Client wrapped in the searcher
 	// interface would be a non-nil interface and defeat the nil check.
 	if cfg.Search != nil {
@@ -143,6 +150,17 @@ func Register(app *fiber.App, cfg Config) {
 	requireModerator := auth.RequireRole(a.queries, "moderator")
 	api.Post("/jobs", keyAuth, requireModerator, a.CreateJob)
 	api.Patch("/jobs/:slug", keyAuth, requireModerator, a.UpdateJob)
+
+	// Public job submissions: any authenticated user submits a vacancy for review
+	// (cookie or API key) and reads their own queue; the review actions (the pending
+	// queue, approve, reject) are moderator-gated. Approval mints a live job — the same
+	// path CreateJob uses — so an approved submission is indistinguishable from a
+	// hand-curated one.
+	api.Post("/submissions", keyAuth, a.CreateSubmission)
+	api.Get("/me/submissions", keyAuth, a.ListMySubmissions)
+	api.Get("/submissions", keyAuth, requireModerator, a.ListPendingSubmissions)
+	api.Post("/submissions/:id/approve", keyAuth, requireModerator, a.ApproveSubmission)
+	api.Post("/submissions/:id/reject", keyAuth, requireModerator, a.RejectSubmission)
 
 	// User-scoped reads live under /me (consistent with /auth/me): the my-jobs
 	// listing joins the caller's interactions with the jobs they touch, and the
