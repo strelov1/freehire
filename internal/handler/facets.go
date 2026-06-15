@@ -18,24 +18,23 @@ type facetCounter interface {
 	FacetCounts(ctx context.Context, p search.FacetParams) (search.FacetResult, error)
 }
 
-// facetExtraParams maps a public query-param to its index attribute for the
-// facetable attributes that are not string-equality facets in searchStringFacets:
-// the boolean visa facet (distribution kept) and the continuous numeric facets
-// (requested for their min/max stats only).
-var facetExtraParams = map[string]string{
-	"visa_sponsorship":     "enrichment.visa_sponsorship",
-	"salary_min":           "enrichment.salary_min",
-	"salary_max":           "enrichment.salary_max",
-	"experience_years_min": "enrichment.experience_years_min",
+// facetExtra describes a facetable attribute that is not a string-equality facet
+// in searchStringFacets. statOnly marks a continuous numeric facet exposed only
+// as min/max stats: Meili always also returns a per-value distribution for a
+// faceted attribute, but a bucket per distinct salary is noise, so it is dropped.
+type facetExtra struct {
+	attr     string
+	statOnly bool
 }
 
-// facetStatParams are the continuous numeric facets exposed only as min/max
-// stats; Meili always also returns a per-value distribution for a faceted
-// attribute, but a bucket per distinct salary is noise, so it is dropped.
-var facetStatParams = map[string]bool{
-	"salary_min":           true,
-	"salary_max":           true,
-	"experience_years_min": true,
+// facetExtraParams maps a public query-param to its facetExtra for the boolean
+// visa facet (distribution kept) and the continuous numeric facets (stats only).
+// Single source of truth for which extras are stat-only.
+var facetExtraParams = map[string]facetExtra{
+	"visa_sponsorship":     {attr: "enrichment.visa_sponsorship"},
+	"salary_min":           {attr: "enrichment.salary_min", statOnly: true},
+	"salary_max":           {attr: "enrichment.salary_max", statOnly: true},
+	"experience_years_min": {attr: "enrichment.experience_years_min", statOnly: true},
 }
 
 // facetAttributes is the full list of index attributes to request facets for:
@@ -48,8 +47,8 @@ func facetAttributes() []string {
 	for _, attr := range searchStringFacets {
 		attrs = append(attrs, attr)
 	}
-	for _, attr := range facetExtraParams {
-		attrs = append(attrs, attr)
+	for _, e := range facetExtraParams {
+		attrs = append(attrs, e.attr)
 	}
 	sort.Strings(attrs)
 	return attrs
@@ -63,8 +62,8 @@ func facetParamByAttr() map[string]string {
 	for param, attr := range searchStringFacets {
 		m[attr] = param
 	}
-	for param, attr := range facetExtraParams {
-		m[attr] = param
+	for param, e := range facetExtraParams {
+		m[e.attr] = param
 	}
 	return m
 }
@@ -94,7 +93,7 @@ func (a *API) JobFacets(c *fiber.Ctx) error {
 	facets := make(map[string]map[string]int64, len(res.Facets))
 	for attr, dist := range res.Facets {
 		p, ok := param[attr]
-		if !ok || facetStatParams[p] {
+		if !ok || facetExtraParams[p].statOnly {
 			continue
 		}
 		facets[p] = dist
