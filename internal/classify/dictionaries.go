@@ -107,7 +107,7 @@ var categoryAliases = map[string]string{
 	"marketing": "marketing", "smm": "marketing", "маркетолог": "marketing", "маркетинг": "marketing",
 	"seo": "marketing", "search engine optimization": "marketing", "social media": "marketing",
 	"контент-маркетолог": "marketing",
-	"sales": "sales", "account executive": "sales",
+	"sales":              "sales", "account executive": "sales",
 	"продажи": "sales", "продаж": "sales", "продажам": "sales",
 	"support": "support", "поддержка": "support", "поддержки": "support",
 	"техподдержка": "support", "техподдержки": "support",
