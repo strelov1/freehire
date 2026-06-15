@@ -101,3 +101,23 @@ func (a *API) ListMyJobs(c *fiber.Ctx) error {
 		},
 	})
 }
+
+// ListViewedSlugs returns the set of public job slugs the authenticated caller
+// has interacted with (every user_jobs row counts as viewed). The SPA reads this
+// to dim already-seen cards in the browse list and search results without
+// authenticating the public job-read path — viewed state is cross-referenced
+// client-side, never joined into ListJobs/SearchJobs. The response is a flat
+// {"data": [slug, ...]} list scoped to the caller.
+func (a *API) ListViewedSlugs(c *fiber.Ctx) error {
+	userID, ok := auth.UserID(c)
+	if !ok {
+		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	}
+
+	slugs, err := a.queries.ListViewedJobSlugs(c.Context(), userID)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(fiber.Map{"data": slugs})
+}

@@ -25,7 +25,7 @@
 {:else}
   <ul class="flex flex-col gap-3">
     {#each page.items as item (item.job.public_slug)}
-      <li><JobRow job={item.job} /></li>
+      <li><JobRow job={item.job} dimViewed={false} /></li>
     {/each}
   </ul>
   {#if page.hasMore}

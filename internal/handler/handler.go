@@ -144,8 +144,11 @@ func Register(app *fiber.App, cfg Config) {
 	api.Patch("/jobs/:slug", keyAuth, requireModerator, a.UpdateJob)
 
 	// User-scoped reads live under /me (consistent with /auth/me): the my-jobs
-	// listing joins the caller's interactions with the jobs they touch.
+	// listing joins the caller's interactions with the jobs they touch, and the
+	// viewed-slugs set lets the SPA dim already-seen cards in the public browse
+	// list without making that list authenticated.
 	api.Get("/me/jobs", keyAuth, a.ListMyJobs)
+	api.Get("/me/jobs/viewed", keyAuth, a.ListViewedSlugs)
 
 	// API-key management is cookie-only (RequireAuth): a leaked key must not be
 	// able to create, list, or revoke keys. The create endpoint returns the

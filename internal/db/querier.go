@@ -125,6 +125,12 @@ type Querier interface {
 	// the passive history (rows neither saved nor applied). Closed jobs stay
 	// listed: a user's history must not shrink when a posting closes.
 	ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]ListUserJobsRow, error)
+	// Every public_slug the user has interacted with (viewed_at is always set, so
+	// any interaction row counts as viewed). Used by the SPA to dim already-seen
+	// cards in the browse list without authenticating the public job-read path.
+	// Closed jobs are included: dimming a closed posting that still shows in a
+	// history surface is correct, and the browse list filters closed jobs itself.
+	ListViewedJobSlugs(ctx context.Context, userID int64) ([]string, error)
 	// Mark a job as applied for a user. Idempotent and independent of a prior view:
 	// it inserts the row (viewed_at defaults) or updates applied_at in place, and
 	// seeds stage='applied' only when the stage is unset (an advanced stage survives

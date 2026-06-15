@@ -2,6 +2,8 @@
   import { onMount, untrack } from 'svelte';
   import { page } from '$app/state';
   import { api, type Slice } from '$lib/api';
+  import { isAuthenticated } from '$lib/auth.svelte';
+  import { ensureViewedLoaded } from '$lib/viewedJobs.svelte';
   import { Paginator } from '$lib/paginated.svelte';
   import { FilterStore, filtersToParams, type SortField } from '$lib/filters.svelte';
   import type { Job } from '$lib/types';
@@ -49,9 +51,13 @@
   let started = false;
   let timer: ReturnType<typeof setTimeout>;
 
-  // Cleanup: a debounce timer left running after unmount would start a fetch for
-  // a component that no longer exists.
-  onMount(() => () => clearTimeout(timer));
+  // For a signed-in user, load the set of already-viewed slugs so JobRow can dim
+  // seen cards (no-op when signed out — the set stays empty). Cleanup: a debounce
+  // timer left running after unmount would start a fetch for a gone component.
+  onMount(() => {
+    if (isAuthenticated()) ensureViewedLoaded();
+    return () => clearTimeout(timer);
+  });
 
   // House select styling, mirrored from ApiKeysView.
   const sortClass =

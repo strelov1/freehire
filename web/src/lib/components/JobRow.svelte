@@ -4,10 +4,17 @@
   import type { Job } from '$lib/types';
   import { Badge } from '$lib/ui';
   import { timeAgo } from '$lib/utils';
+  import { hasViewed } from '$lib/viewedJobs.svelte';
 
   // Single source of truth for how a job appears in any list (jobs list and
   // company detail). The whole card is a link to the job detail.
-  let { job }: { job: Job } = $props();
+  //
+  // `dimViewed` dims the card when the signed-in user has already viewed this
+  // job, so the browse list shows what's been seen. The My Jobs surfaces (where
+  // every card is viewed by definition) pass `dimViewed={false}` to opt out.
+  let { job, dimViewed = true }: { job: Job; dimViewed?: boolean } = $props();
+
+  const isViewed = $derived(dimViewed && hasViewed(job.public_slug));
 
   const tags = $derived(cardTags(job));
   const salary = $derived(job.enrichment ? formatSalary(job.enrichment) : null);
@@ -22,7 +29,8 @@
 
 <a
   href={`/jobs/${job.public_slug}`}
-  class="block rounded-xl border border-border bg-card p-4 transition-colors hover:bg-accent"
+  class="block rounded-xl border border-border bg-card p-4 transition hover:bg-accent hover:opacity-100"
+  class:opacity-60={isViewed}
 >
   <div class="flex items-start justify-between gap-3">
     <div class="flex min-w-0 flex-wrap items-center gap-2">

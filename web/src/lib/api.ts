@@ -269,6 +269,14 @@ export function createApi(
     return { ...toSlice(res, offset), counts: res.meta.counts };
   }
 
+  /** The public slugs of every job the current user has interacted with. The
+   *  browse UI cross-references this set to dim already-viewed cards without
+   *  authenticating the public job list. */
+  async function listViewedSlugs(): Promise<string[]> {
+    const res = await request<{ data: string[] }>('/api/v1/me/jobs/viewed');
+    return res.data;
+  }
+
   // --- API keys -------------------------------------------------------------
   //
   // Personal API keys for non-browser access. Management is cookie-only (these
@@ -316,6 +324,7 @@ export function createApi(
     untrackJob,
     trackJob,
     listMyJobs,
+    listViewedSlugs,
     listApiKeys,
     createApiKey,
     revokeApiKey,
@@ -351,6 +360,7 @@ export const {
   untrackJob,
   trackJob,
   listMyJobs,
+  listViewedSlugs,
   listApiKeys,
   createApiKey,
   revokeApiKey,

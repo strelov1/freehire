@@ -5,6 +5,7 @@
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { filterHref, formatSalary, summaryFacets } from '$lib/enrichment';
+  import { markViewed } from '$lib/viewedJobs.svelte';
   import type { Job, UserJob } from '$lib/types';
   import { Badge, Button } from '$lib/ui';
   import { formatDate } from '$lib/utils';
@@ -39,6 +40,8 @@
     if (!browser || !isAuthenticated()) return;
     recordJobView(slug)
       .then((rec) => {
+        // Mark it locally so its card dims on back-navigation without a reload.
+        markViewed(slug);
         if (job.public_slug === slug) interaction = rec;
       })
       .catch(() => {});

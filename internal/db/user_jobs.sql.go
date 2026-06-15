@@ -172,6 +172,38 @@ func (q *Queries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]L
 	return items, nil
 }
 
+const listViewedJobSlugs = `-- name: ListViewedJobSlugs :many
+SELECT jobs.public_slug
+FROM user_jobs uj
+JOIN jobs ON jobs.id = uj.job_id
+WHERE uj.user_id = $1
+`
+
+// Every public_slug the user has interacted with (viewed_at is always set, so
+// any interaction row counts as viewed). Used by the SPA to dim already-seen
+// cards in the browse list without authenticating the public job-read path.
+// Closed jobs are included: dimming a closed posting that still shows in a
+// history surface is correct, and the browse list filters closed jobs itself.
+func (q *Queries) ListViewedJobSlugs(ctx context.Context, userID int64) ([]string, error) {
+	rows, err := q.db.Query(ctx, listViewedJobSlugs, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var public_slug string
+		if err := rows.Scan(&public_slug); err != nil {
+			return nil, err
+		}
+		items = append(items, public_slug)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markJobApplied = `-- name: MarkJobApplied :one
 INSERT INTO user_jobs (user_id, job_id, applied_at, stage)
 VALUES ($1, $2, now(), 'applied')

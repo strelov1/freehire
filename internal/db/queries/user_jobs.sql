@@ -81,6 +81,17 @@ WHERE uj.user_id = $1
 ORDER BY GREATEST(uj.viewed_at, uj.saved_at, uj.applied_at) DESC, uj.job_id DESC
 LIMIT $2 OFFSET $3;
 
+-- name: ListViewedJobSlugs :many
+-- Every public_slug the user has interacted with (viewed_at is always set, so
+-- any interaction row counts as viewed). Used by the SPA to dim already-seen
+-- cards in the browse list without authenticating the public job-read path.
+-- Closed jobs are included: dimming a closed posting that still shows in a
+-- history surface is correct, and the browse list filters closed jobs itself.
+SELECT jobs.public_slug
+FROM user_jobs uj
+JOIN jobs ON jobs.id = uj.job_id
+WHERE uj.user_id = $1;
+
 -- name: CountUserJobs :one
 -- Per-filter row counts for the my-jobs tabs, in one aggregate pass. "all" is
 -- every interaction row; "viewed" is the view-only subset (neither saved nor
