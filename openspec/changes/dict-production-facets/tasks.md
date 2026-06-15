@@ -23,8 +23,8 @@
 
 ## 5. Ops wiring
 
-- [ ] 5.1 Update the `Dockerfile`: remove the three deleted binaries from the build/COPY list and add `backfill-derive`.
-- [ ] 5.2 Update the `freehire-ops` cron/compose: collapse the three backfill cron entries into one `backfill-derive` run (followed by a single reindex).
+- [x] 5.1 Update the `Dockerfile`: remove the three deleted binaries from the build/COPY list and add `backfill-derive`.
+- [x] 5.2 Update the `freehire-ops` cron/compose: collapse the three backfill cron entries into one `backfill-derive` run (followed by a single reindex).
 
 ## 6. Verify and migrate
 
