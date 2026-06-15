@@ -3,8 +3,8 @@
 
   const GITHUB = 'https://github.com/strelov1/freehire';
   const CLI = 'https://github.com/strelov1/freehire-cli';
-  // Deep-link to the file a contributor edits to add their own source.
-  const SOURCES = `${GITHUB}/blob/main/sources.yml`;
+  // Where a contributor opens a request to have a new source added.
+  const ISSUES = `${GITHUB}/issues`;
 
   // The real adapters behind the pipeline — listed verbatim so the page never
   // overpromises sources the ingest worker can't actually crawl.
@@ -26,6 +26,16 @@
   // Repeated to over-fill the row (the names are short) so the marquee never
   // shows a gap; the -50% loop stays seamless because the copies are identical.
   const sourcesMarquee = [...sources, ...sources, ...sources, ...sources];
+
+  // Illustrative "My jobs" board — decorative, not live data. Mirrors the real
+  // kanban (board.ts BOARD_COLUMNS) so the preview never promises a flow the
+  // product doesn't have: drag a saved job along its stages to the offer.
+  const board = [
+    { label: 'Saved', cards: [{ title: 'Data Engineer', company: 'Datadog' }] },
+    { label: 'Applied', cards: [{ title: 'Staff Frontend Engineer', company: 'Stripe' }] },
+    { label: 'Interview', cards: [{ title: 'Senior Backend Engineer', company: 'Linear' }] },
+    { label: 'Offer', cards: [{ title: 'Platform Engineer', company: 'Grafana' }] },
+  ];
 
   const steps = [
     {
@@ -148,6 +158,71 @@
     </div>
   </section>
 
+  <!-- Track your search — the per-user My jobs board. A polished, hero-style
+       preview of the real kanban; the board data is illustrative, not live. -->
+  <section class="border-t border-border py-16 sm:py-20">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// track your search</p>
+    <div class="mt-6 max-w-2xl">
+      <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">
+        Track every application on your board.
+      </h2>
+      <p class="mt-5 leading-relaxed text-muted-foreground">
+        Save the openings worth a second look, mark the ones you applied to, and drag each card through
+        its stages — Saved → Applied → Interview → Offer. Your
+        <code class="font-mono text-foreground">My jobs</code> board keeps the whole search in one place.
+        Prefer the terminal? The <a href="/cli" class="font-medium text-foreground underline-offset-4 hover:underline">freehire CLI</a>
+        does the same — <code class="font-mono text-foreground">apply</code>,
+        <code class="font-mono text-foreground">save</code>,
+        <code class="font-mono text-foreground">stage</code> and
+        <code class="font-mono text-foreground">note</code> any job from a script or an agent.
+      </p>
+      <div class="mt-8 flex flex-wrap gap-3">
+        <Button href="/my/jobs" variant="primary" size="lg">Open My jobs</Button>
+        <Button href="/cli" variant="ghost" size="lg">Track from the CLI</Button>
+      </div>
+    </div>
+
+    <!-- Board preview: the real kanban columns, hairline-separated (gap-px on a
+         bg-border grid) like the "how it works" tiles. Stacks on mobile. -->
+    <figure
+      class="mt-10 overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+    >
+      <figcaption
+        class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground"
+      >
+        <span class="size-2.5 rounded-full bg-muted-foreground/30"></span>
+        My jobs · Board
+      </figcaption>
+      <div class="grid gap-px bg-border sm:grid-cols-4">
+        {#each board as col (col.label)}
+          <div class="bg-background p-4">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {col.label}
+              </span>
+              <span class="font-mono text-[11px] text-muted-foreground">{col.cards.length}</span>
+            </div>
+            <div class="mt-3 flex flex-col gap-2">
+              {#each col.cards as card (card.title)}
+                <article class="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5">
+                  <div
+                    class="grid size-8 shrink-0 place-items-center rounded-lg border border-border font-mono text-xs font-medium"
+                  >
+                    {card.company.charAt(0)}
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <p class="truncate text-sm font-medium">{card.title}</p>
+                    <p class="truncate text-xs text-muted-foreground">{card.company}</p>
+                  </div>
+                </article>
+              {/each}
+            </div>
+          </div>
+        {/each}
+      </div>
+    </figure>
+  </section>
+
   <!-- CLI / agents — the same API from the terminal. Mirrors the open-source
        section's two-column copy + terminal figure. -->
   <section class="border-t border-border py-16 sm:py-20">
@@ -191,44 +266,25 @@ freehire save <span class="text-foreground">&lt;slug&gt;</span></pre>
     </div>
   </section>
 
-  <!-- Open source / contribute. The sources.yml snippet is the concrete proof
-       that "add a company" really is one line. -->
+  <!-- Open source / contribute. -->
   <section class="border-t border-border py-16 sm:py-20">
     <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// open source</p>
-    <div class="mt-6 grid gap-10 lg:grid-cols-2 lg:items-center">
-      <div>
-        <h2 class="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
-          Built in the open. Add your own source.
-        </h2>
-        <p class="mt-5 max-w-md leading-relaxed text-muted-foreground">
-          Missing a company? Add it yourself — one entry in
-          <code class="font-mono text-foreground">sources.yml</code>. A new ATS platform is one adapter. The
-          backend is Go, the frontend is Svelte, the license is MIT — issues and pull requests welcome.
-        </p>
-        <div class="mt-8 flex flex-wrap gap-3">
-          <Button href={SOURCES} target="_blank" rel="noopener noreferrer" variant="primary" size="lg">
-            Add a source ↗
-          </Button>
-          <Button href={GITHUB} target="_blank" rel="noopener noreferrer" variant="ghost" size="lg">
-            Star on GitHub ↗
-          </Button>
-        </div>
+    <div class="mt-6">
+      <h2 class="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
+        Built in the open. Add your own source.
+      </h2>
+      <p class="mt-5 max-w-md leading-relaxed text-muted-foreground">
+        Missing a company or source? Open an issue and we'll add it. A new ATS platform is one adapter. The
+        backend is Go, the frontend is Svelte, the license is MIT — issues and pull requests welcome.
+      </p>
+      <div class="mt-8 flex flex-wrap gap-3">
+        <Button href={ISSUES} target="_blank" rel="noopener noreferrer" variant="primary" size="lg">
+          Add a source ↗
+        </Button>
+        <Button href={GITHUB} target="_blank" rel="noopener noreferrer" variant="ghost" size="lg">
+          Star on GitHub ↗
+        </Button>
       </div>
-
-      <figure
-        class="overflow-hidden rounded-xl border border-border bg-secondary/60 font-mono text-sm shadow-sm"
-      >
-        <figcaption
-          class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground"
-        >
-          <span class="size-2.5 rounded-full bg-muted-foreground/30"></span>
-          sources.yml
-        </figcaption>
-        <pre class="overflow-x-auto p-4 leading-relaxed"><span class="text-muted-foreground"># add a company in three lines</span>
-- company: <span class="text-foreground">Acme</span>
-  provider: <span class="text-foreground">greenhouse</span>
-  board: <span class="text-foreground">acme</span></pre>
-      </figure>
     </div>
   </section>
 </div>
