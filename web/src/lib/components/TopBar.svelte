@@ -15,6 +15,7 @@
   const links = [
     { href: '/jobs', label: 'Jobs' },
     { href: '/companies', label: 'Companies' },
+    { href: '/analytics', label: 'Analytics' },
     { href: '/recruiters', label: 'For recruiters' },
   ];
 

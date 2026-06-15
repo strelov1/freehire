@@ -25,6 +25,17 @@ export interface ListMeta {
   offset: number;
 }
 
+/** Facet-distribution counts from GET /api/v1/jobs/facets, for the analytics
+ *  page. `total` is the estimated vacancy count under the current filters;
+ *  `facets` maps each facet param (the same name used to filter, e.g. `regions`,
+ *  `seniority`) to a value→count map; `stats` gives numeric facets' min/max
+ *  (e.g. `salary_min`). Continuous numeric facets appear only in `stats`. */
+export interface FacetCounts {
+  total: number;
+  facets: Record<string, Record<string, number>>;
+  stats: Record<string, { min: number; max: number }>;
+}
+
 /** An authenticated account, as returned by the auth endpoints. */
 export interface User {
   id: number;

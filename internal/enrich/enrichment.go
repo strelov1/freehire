@@ -181,6 +181,25 @@ func (e *Enrichment) Sanitize() {
 
 	e.Regions = keepKnown(e.Regions, RegionValues)
 	e.Domains = keepKnown(e.Domains, DomainValues)
+
+	// Drop implausible salary values: a non-positive salary is meaningless, and an
+	// inverted min>max pair is internally inconsistent. There is deliberately no
+	// absolute upper bound — high-denomination currencies (CLP, IDR, HUF, …) make
+	// millions a normal salary, so a numeric ceiling would discard valid data.
+	e.SalaryMin = positiveOrNil(e.SalaryMin)
+	e.SalaryMax = positiveOrNil(e.SalaryMax)
+	if e.SalaryMin != nil && e.SalaryMax != nil && *e.SalaryMin > *e.SalaryMax {
+		e.SalaryMin, e.SalaryMax = nil, nil
+	}
+}
+
+// positiveOrNil drops a non-positive salary figure to nil (an absent salary), so
+// a zero or negative value never persists.
+func positiveOrNil(n *int) *int {
+	if n == nil || *n > 0 {
+		return n
+	}
+	return nil
 }
 
 // keepKnown returns values restricted to those present in vocab, preserving order;

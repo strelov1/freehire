@@ -217,3 +217,44 @@ func TestSanitizeDropsOutOfVocabValues(t *testing.T) {
 		t.Errorf("Validate after Sanitize = %v, want nil", err)
 	}
 }
+
+func TestSanitizeDropsImplausibleSalary(t *testing.T) {
+	t.Run("non-positive salary is dropped", func(t *testing.T) {
+		e := Enrichment{SalaryMin: ptr(-1), SalaryMax: ptr(0)}
+		e.Sanitize()
+		if e.SalaryMin != nil {
+			t.Errorf("SalaryMin = %v, want nil (negative dropped)", *e.SalaryMin)
+		}
+		if e.SalaryMax != nil {
+			t.Errorf("SalaryMax = %v, want nil (zero dropped)", *e.SalaryMax)
+		}
+	})
+
+	t.Run("valid positive salary kept, including high-denomination currencies", func(t *testing.T) {
+		// 58.8M CLP/year (~$61k) is a real salary — no absolute upper clamp.
+		e := Enrichment{SalaryMin: ptr(49_980_000), SalaryMax: ptr(58_800_000), SalaryCurrency: "CLP"}
+		e.Sanitize()
+		if e.SalaryMin == nil || *e.SalaryMin != 49_980_000 {
+			t.Errorf("SalaryMin = %v, want kept", e.SalaryMin)
+		}
+		if e.SalaryMax == nil || *e.SalaryMax != 58_800_000 {
+			t.Errorf("SalaryMax = %v, want kept", e.SalaryMax)
+		}
+	})
+
+	t.Run("inconsistent min > max drops both", func(t *testing.T) {
+		e := Enrichment{SalaryMin: ptr(200_000), SalaryMax: ptr(100_000)}
+		e.Sanitize()
+		if e.SalaryMin != nil || e.SalaryMax != nil {
+			t.Errorf("min>max should drop both, got min=%v max=%v", e.SalaryMin, e.SalaryMax)
+		}
+	})
+
+	t.Run("min alone or max alone is preserved when positive", func(t *testing.T) {
+		e := Enrichment{SalaryMax: ptr(120_000)}
+		e.Sanitize()
+		if e.SalaryMax == nil || *e.SalaryMax != 120_000 {
+			t.Errorf("lone positive SalaryMax = %v, want kept", e.SalaryMax)
+		}
+	})
+}
