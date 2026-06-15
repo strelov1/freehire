@@ -24,6 +24,8 @@ import type {
   CreatedApiKey,
   Submission,
   SubmissionInput,
+  Report,
+  ReportInput,
 } from './types';
 
 /** A page of list items, optionally the total matching the query (endpoints that
@@ -357,6 +359,42 @@ export function createApi(
     return res.data;
   }
 
+  /** Report a problem with a live vacancy (by slug). Returns the pending report. */
+  async function reportJob(slug: string, input: ReportInput): Promise<Report> {
+    const res = await request<{ data: Report }>(`/api/v1/jobs/${slug}/reports`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    return res.data;
+  }
+
+  /** The moderator review queue: pending reports, with reporter email and job fields. */
+  async function listPendingReports(): Promise<Report[]> {
+    const res = await request<{ data: Report[] }>('/api/v1/reports');
+    return res.data;
+  }
+
+  /** Resolve a pending report; optionally soft-close the reported job. */
+  async function resolveReport(id: number, closeJob: boolean): Promise<Report> {
+    const res = await request<{ data: Report }>(`/api/v1/reports/${id}/resolve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ close_job: closeJob }),
+    });
+    return res.data;
+  }
+
+  /** Dismiss a pending report with an optional reason; the job is unchanged. */
+  async function dismissReport(id: number, reason?: string): Promise<Report> {
+    const res = await request<{ data: Report }>(`/api/v1/reports/${id}/dismiss`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason ?? '' }),
+    });
+    return res.data;
+  }
+
   return {
     listJobs,
     getJob,
@@ -386,6 +424,10 @@ export function createApi(
     listPendingSubmissions,
     approveSubmission,
     rejectSubmission,
+    reportJob,
+    listPendingReports,
+    resolveReport,
+    dismissReport,
   };
 }
 
@@ -428,4 +470,8 @@ export const {
   listPendingSubmissions,
   approveSubmission,
   rejectSubmission,
+  reportJob,
+  listPendingReports,
+  resolveReport,
+  dismissReport,
 } = api;

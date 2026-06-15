@@ -49,22 +49,22 @@
 
 ## 4. Web (SvelteKit)
 
-- [ ] 4.1 Add the reports API client to `web/src/lib/api.ts` (`reportJob`,
+- [x] 4.1 Add the reports API client to `web/src/lib/api.ts` (`reportJob`,
   `listPendingReports`, `resolveReport`, `dismissReport`) and a reason→label map mirroring
   the five backend values.
-- [ ] 4.2 Add the "Пожаловаться на вакансию" button + two-step modal to `JobView.svelte`
+- [x] 4.2 Add the "Пожаловаться на вакансию" button + two-step modal to `JobView.svelte`
   (step 1 reason picker, step 2 required details + optional Telegram → `reportJob`);
   signed-out click opens the auth dialog via `openAuthDialog`. Show a success/closed state
   after submit.
-- [ ] 4.3 Add the reports section to the `/moderation` route: pending queue with reporter
+- [x] 4.3 Add the reports section to the `/moderation` route: pending queue with reporter
   email, job link, reason/details, and resolve (with a "close job" toggle) + dismiss
   actions, gated on `user.role === 'moderator'`.
 
 ## 5. Verification
 
-- [ ] 5.1 `go build ./... && go vet ./... && go test ./...`; recompile the build-tagged
+- [x] 5.1 `go build ./... && go vet ./... && go test ./...`; recompile the build-tagged
   handler tests (`go test -tags=integration -run XXNONE ./internal/handler/`) and run the
   report integration test.
-- [ ] 5.2 Web: `npm run check` (svelte-check) + lint; manual smoke of the modal and the
+- [x] 5.2 Web: `npm run check` (svelte-check) + lint; manual smoke of the modal and the
   moderation queue (resolve-with-close removes the job from the list).
-- [ ] 5.3 Run `openspec validate report-job --strict` and confirm it passes.
+- [x] 5.3 Run `openspec validate report-job --strict` and confirm it passes.

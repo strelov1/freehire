@@ -1,6 +1,6 @@
 <script lang="ts">
   import { browser } from '$app/environment';
-  import { ArrowRight, Bookmark, Check } from '@lucide/svelte';
+  import { ArrowRight, Bookmark, Check, Flag } from '@lucide/svelte';
   import { markJobApplied, recordJobView, saveJob, unsaveJob } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
@@ -10,6 +10,7 @@
   import { Badge, Button } from '$lib/ui';
   import { formatDate } from '$lib/utils';
   import CompanyLogo from './CompanyLogo.svelte';
+  import ReportDialog from './ReportDialog.svelte';
 
   // The job is server-rendered: it arrives as a prop from the route's `load`, so
   // the article's content is in the initial HTML. Only the per-user interactions
@@ -20,6 +21,8 @@
   // yet loaded). `showApplyPrompt` is the post-click "Did you apply?" question.
   let interaction = $state.raw<UserJob | null>(null);
   let showApplyPrompt = $state(false);
+  // The report dialog (a problem-with-this-job complaint) opens over the page.
+  let showReport = $state(false);
   const applied = $derived(interaction?.applied_at != null);
   const saved = $derived(interaction?.saved_at != null);
 
@@ -76,6 +79,16 @@
       return;
     }
     toggleSave();
+  }
+
+  // Reporting also requires an account (the report is attributed to the user); a
+  // signed-out click opens sign-in instead of the dialog.
+  function onReportClick() {
+    if (!isAuthenticated()) {
+      openAuthDialog('login');
+      return;
+    }
+    showReport = true;
   }
 
   // The toggle flips on the server's answer, not optimistically: both endpoints
@@ -155,10 +168,19 @@
         </p>
       {/if}
 
-      <div class="border-t border-border pt-4 first:border-t-0 first:pt-0">
+      <div class="flex flex-col gap-2 border-t border-border pt-4 first:border-t-0 first:pt-0">
         <Button variant="outline" onclick={onSaveClick} aria-pressed={saved} class="w-full">
           <Bookmark class={saved ? 'size-4 fill-current' : 'size-4'} />
           {saved ? 'Saved' : 'Save'}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onclick={onReportClick}
+          class="w-full text-muted-foreground"
+        >
+          <Flag class="size-4" />
+          Report this job
         </Button>
       </div>
 
@@ -221,6 +243,10 @@
     {/if}
   </div>
 </article>
+
+{#if showReport}
+  <ReportDialog slug={job.public_slug} onClose={() => (showReport = false)} />
+{/if}
 
 <style>
   .job-description :global(h1),

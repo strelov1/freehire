@@ -80,6 +80,34 @@ export interface SubmissionInput {
   source?: string;
 }
 
+/** Why a job was reported. A closed vocabulary mirroring the backend's
+ *  internal/report reasons; labels live in $lib/reports. */
+export type ReportReason = 'no_response' | 'not_relevant' | 'spam' | 'fraud' | 'other';
+
+/** A user's report of a problem with a live vacancy. `reporter_email` and the
+ *  `job_*` fields are present only on the moderator review queue, never on the
+ *  reporter's own create response (which also never carries the reporter id). */
+export interface Report {
+  id: number;
+  reason: ReportReason;
+  details: string;
+  contact_telegram?: string;
+  status: 'pending' | 'resolved' | 'dismissed';
+  review_reason?: string;
+  reviewed_at?: string | null;
+  created_at: string | null;
+  reporter_email?: string;
+  job_slug?: string;
+  job_title?: string;
+}
+
+/** The content a user submits when reporting a job. */
+export interface ReportInput {
+  reason: ReportReason;
+  details: string;
+  contact_telegram?: string;
+}
+
 /** A signed-in user's interaction with one job: when they viewed it, saved it
  *  for later, and (once they confirm an application) applied. `saved_at` and
  *  `applied_at` are null until then. Returned by the view/apply/save endpoints. */

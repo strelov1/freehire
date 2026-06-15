@@ -4,6 +4,7 @@
   import type { Submission } from '$lib/types';
   import { Button } from '$lib/ui';
   import { timeAgo } from '$lib/utils';
+  import ReportQueue from './ReportQueue.svelte';
   import States from './States.svelte';
 
   const isModerator = $derived(currentUser()?.role === 'moderator');
@@ -121,5 +122,9 @@
         {/each}
       </ul>
     {/if}
+
+    <div class="border-t border-border pt-6">
+      <ReportQueue />
+    </div>
   </div>
 {/if}
