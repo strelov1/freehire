@@ -52,15 +52,21 @@
   }
 
   // Browser back/forward changes the URL externally — pull it into q and
-  // re-query. No-ops on initial mount (q is seeded from the same URL) and while
-  // typing (search() already synced the URL), so it fires only on real navigation.
+  // re-query. Track *only* the URL: reading q reactively here would also fire the
+  // effect on our own search()/replaceState write, against a page.url that hasn't
+  // updated yet (it propagates a tick later), reverting the just-typed value. So
+  // read q under untrack — the effect runs only on real URL changes, when page.url
+  // is current, and no-ops on initial mount (q is seeded from the same URL).
   $effect(() => {
-    const urlQ = page.url.searchParams.get('q') ?? '';
-    if (urlQ !== q) {
-      q = urlQ;
-      clearTimeout(timer);
-      reload();
-    }
+    page.url.search; // track
+    untrack(() => {
+      const urlQ = page.url.searchParams.get('q') ?? '';
+      if (urlQ !== q) {
+        q = urlQ;
+        clearTimeout(timer);
+        reload();
+      }
+    });
   });
 </script>
 
