@@ -5,6 +5,8 @@
 # International single-company sources.
 - company: Uber
   provider: uber
+- company: Amazon
+  provider: amazon
 
 - company: VK
   provider: vk
