@@ -254,6 +254,21 @@ var wordAliases = map[string]string{
 	"jira":       "jira",
 	"confluence": "confluence",
 	"elk":        "elk",
+
+	// methodologies / practices / architecture
+	"agile":         "agile",
+	"scrum":         "scrum",
+	"kanban":        "kanban",
+	"devops":        "devops",
+	"microservices": "microservices",
+	"microservice":  "microservices",
+	"observability": "observability",
+	"restful":       "rest",
+
+	// platforms (Salesforce/SAP/Oracle read unambiguously in IT job text)
+	"salesforce": "salesforce",
+	"sap":        "sap",
+	"oracle":     "oracle",
 }
 
 // phraseAlias is a punctuated or multi-word term matched against the normalized
@@ -281,6 +296,7 @@ var phraseAliases = []phraseAlias{
 	{"c developer", "c"}, {"c programming", "c"}, {"ansi c", "c"},
 	{"machine learning", "machine-learning"},
 	// additional phrases
+	{"rest api", "rest"}, {"rest apis", "rest"},
 	{"github actions", "github-actions"},
 	{"cloudformation", "cloudformation"},
 	{"scikit-learn", "scikit-learn"},
