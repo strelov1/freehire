@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { page } from '$app/state';
   import { createApiKey, listApiKeys, revokeApiKey } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import type { ApiKey, CreatedApiKey } from '$lib/types';
@@ -27,9 +26,12 @@
   let revealed = $state.raw<CreatedApiKey | null>(null);
   let copied = $state(false);
 
-  const curlExample = $derived(
+  // Show the fastest path to actually using the key: hand it to the CLI and
+  // search. The raw Bearer-header call still works (noted in the page intro),
+  // but the CLI is the intended client — see /cli.
+  const cliExample = $derived(
     revealed
-      ? `curl -H "Authorization: Bearer ${revealed.token}" \\\n  ${page.url.origin}/api/v1/jobs/search?q=golang`
+      ? `freehire auth login --token ${revealed.token}\nfreehire search "golang" --remote`
       : '',
   );
 
@@ -108,7 +110,8 @@
       <h1 class="text-2xl font-semibold tracking-tight">API keys</h1>
       <p class="text-sm text-muted-foreground">
         Reach the API without a browser — search, open jobs, and track applications from a script.
-        Send the key as
+        Use the <a href="/cli" class="font-medium text-foreground underline-offset-4 hover:underline">freehire CLI</a>,
+        or send the key directly as
         <code class="rounded bg-muted px-1 py-0.5 font-mono text-xs">Authorization: Bearer &lt;key&gt;</code>.
       </p>
     </div>
@@ -136,7 +139,10 @@
           <Button variant="secondary" size="sm" onclick={copyToken}>{copied ? 'Copied' : 'Copy'}</Button>
         </div>
         <pre
-          class="overflow-x-auto rounded bg-background px-3 py-2 font-mono text-xs text-muted-foreground">{curlExample}</pre>
+          class="overflow-x-auto rounded bg-background px-3 py-2 font-mono text-xs text-muted-foreground">{cliExample}</pre>
+        <p class="text-xs text-muted-foreground">
+          New to the CLI? See the <a href="/cli" class="font-medium text-foreground underline-offset-4 hover:underline">command reference</a>.
+        </p>
       </div>
     {/if}
 
