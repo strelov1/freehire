@@ -2257,3 +2257,25 @@
   board: vtex
 - company: EBANX
   board: ebanx
+- company: IonQ
+  board: ionq
+- company: mthree
+  board: mthreerecruitingportal
+- company: Oklo
+  board: oklo
+- company: Atomicmachines
+  board: atomicmachines
+- company: Redpanda Data
+  board: redpandadata
+- company: Orkes
+  board: orkes
+- company: Nova Credit
+  board: novacredit
+- company: Coast
+  board: coast
+- company: Vivodyne
+  board: vivodyne
+- company: Piramidal
+  board: piramidalinc
+- company: Kinelo
+  board: kinelo

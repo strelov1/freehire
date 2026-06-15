@@ -18,6 +18,7 @@ Only standard library is used; GitHub code search shells out to `gh`.
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import re
 import subprocess
@@ -254,9 +255,107 @@ def run_workday(write: bool, github: bool) -> int:
     return 0
 
 
+# ── Hacker News "Ask HN: Who is hiring?" ─────────────────────────────────────
+# The monthly thread (posted by the `whoishiring` bot) is the densest public feed
+# of direct ATS apply links — one recent month yields 200+ greenhouse/lever/ashby/
+# workable/recruitee/bamboohr boards. Comment text is HTML-escaped (slashes as
+# &#x2F;), so it MUST be unescaped before the slug regex runs.
+HN_API = "https://hn.algolia.com/api/v1"
+
+
+def select_hiring_threads(hits: list[dict], months: int) -> list[str]:
+    """Pick the most recent N 'Who is hiring?' story ids from Algolia hits.
+
+    Filters by title so sibling threads ('Freelancer? Seeking freelancer?',
+    'Who wants to be hired?') from the same author are excluded.
+    """
+    ids = [h["objectID"] for h in hits if "who is hiring" in (h.get("title") or "").lower()]
+    return ids[:months]
+
+
+# Leading tokens that are clearly prose/role lines, not a company name. When the
+# heuristic hits one, the caller falls back to a title-cased slug.
+_NAME_REJECT_PREFIX = ("at ", "we ", "do you", "hiring", "join ", "about ", "our ")
+_NAME_REJECT_ROLE = re.compile(
+    r"(?i)^(senior|staff|principal|lead|software|backend|frontend|full[\s-]?stack|"
+    r"engineer|developer|sr\.?|the )\b"
+)
+
+
+def _slug_title(slug: str) -> str:
+    """Readable fallback name from a slug: 'acme-corp' -> 'Acme Corp'."""
+    return re.sub(r"[-_.]+", " ", slug).strip().title() or slug
+
+
+def hn_company_name(comment: str) -> str:
+    """Best-effort company = leading token before the first separator, tags stripped.
+
+    Who-is-hiring comments conventionally open with 'Company | role | location | …'.
+    Returns "" when the leading token looks like prose/URL/role (caller falls back
+    to the slug) — keeps junk like 'Do you want to work on…' out of the YAML.
+    """
+    text = re.sub(r"<[^>]+>", " ", comment)          # drop HTML tags
+    text = html.unescape(re.sub(r"\s+", " ", text)).strip()
+    head = re.split(r"[|\n\r–—:/]| - ", text, 1)[0].strip(" .,-")
+    low = head.lower()
+    if (not head or len(head) > 40 or "http" in low
+            or low.startswith(_NAME_REJECT_PREFIX) or _NAME_REJECT_ROLE.match(head)):
+        return ""
+    return head
+
+
+def extract_hn_candidates(comments: list[str]) -> dict[tuple[str, str], str]:
+    """Per comment, attribute every ATS slug to that comment's leading company name."""
+    cand: dict[tuple[str, str], str] = {}
+    for c in comments:
+        dec = html.unescape(c)                        # &#x2F; → / before slug regex
+        name = hn_company_name(c)
+        for prov, slug in extract_slugs(dec):
+            cand.setdefault((prov, slug), name or _slug_title(slug))
+    return cand
+
+
+def hn_hiring_threads(months: int) -> list[str]:
+    body = fetch(f"{HN_API}/search_by_date?tags=story,author_whoishiring&query=hiring&hitsPerPage=20")
+    if not body:
+        print("  ! HN thread search failed", file=sys.stderr)
+        return []
+    try:
+        hits = json.loads(body).get("hits", [])
+    except Exception:
+        return []
+    return select_hiring_threads(hits, months)
+
+
+def hn_comment_texts(thread_id: str) -> list[str]:
+    body = fetch(f"{HN_API}/items/{thread_id}", timeout=40)
+    if not body:
+        return []
+    try:
+        data = json.loads(body)
+    except Exception:
+        return []
+    return [c.get("text") or "" for c in data.get("children", []) if c.get("text")]
+
+
+def harvest_hn(months: int = 3) -> dict[tuple[str, str], str]:
+    """Harvest ATS boards from the last `months` 'Who is hiring?' threads."""
+    cand: dict[tuple[str, str], str] = {}
+    for tid in hn_hiring_threads(months):
+        comments = hn_comment_texts(tid)
+        added = extract_hn_candidates(comments)
+        for key, name in added.items():
+            cand.setdefault(key, name)
+        print(f"  HN thread {tid}: {len(comments)} comments -> {len(added)} board candidates",
+              file=sys.stderr)
+    return cand
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--github", action="store_true", help="also sweep GitHub code search")
+    ap.add_argument("--hn", action="store_true", help="also harvest HN 'Who is hiring?' threads")
+    ap.add_argument("--hn-months", type=int, default=3, help="how many recent HN threads to scan")
     ap.add_argument("--workday", action="store_true", help="harvest Workday boards only (host/site, POST validation)")
     ap.add_argument("--write", action="store_true", help="append survivors to sources/<provider>.yml")
     args = ap.parse_args()
@@ -270,6 +369,10 @@ def main() -> int:
         print("== sweeping GitHub code search ==", file=sys.stderr)
         for key in harvest_github():
             cand.setdefault(key, key[1])
+    if args.hn:
+        print(f"== harvesting HN 'Who is hiring?' ({args.hn_months} threads) ==", file=sys.stderr)
+        for key, name in harvest_hn(args.hn_months).items():
+            cand.setdefault(key, name)
 
     emit_survivors(cand, args.write)
     return 0

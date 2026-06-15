@@ -841,3 +841,23 @@
 # LATAM-native employers (added 2026-06-15 to improve LATAM/Brazil coverage)
 - company: CloudWalk
   board: cloudwalk
+- company: Zūm
+  board: ridezum
+- company: Kraken Tech
+  board: kraken123
+- company: Apollo Research
+  board: apolloresearch
+- company: Findigs
+  board: findigs
+- company: Cyngn
+  board: cyngn
+- company: Project Healthy Minds
+  board: project-healthy-minds
+- company: Electric Twin
+  board: electric-twin
+- company: Prolific Machines
+  board: prolific-machines
+- company: UpMetrics
+  board: UpMetrics
+- company: Skysafe
+  board: skysafe

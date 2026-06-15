@@ -42,6 +42,15 @@ func TestParse(t *testing.T) {
 		{"Sales Manager", "", "sales"},
 		{"Support Manager", "", "support"},
 		{"Operations Manager", "", "management"},
+		// AI / GenAI roles fold into ml_ai (research/applied AI share one bucket).
+		{"GenAI Engineer", "", "ml_ai"},
+		{"LLM Engineer", "", "ml_ai"},
+		{"Senior Prompt Engineer", "senior", "ml_ai"},
+		{"Generative AI Researcher", "", "ml_ai"},
+		{"Applied AI Engineer", "", "ml_ai"},
+		// SEO / social fold into marketing; "social media" beats a bare "manager".
+		{"SEO Specialist", "", "marketing"},
+		{"Social Media Manager", "", "marketing"},
 		{"Cat Herder", "", ""},
 		{"", "", ""},
 	}
