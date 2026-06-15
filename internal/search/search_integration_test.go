@@ -76,15 +76,20 @@ func TestIntegration_EnsureIndexIndexAndSearch(t *testing.T) {
 			ID: 1, Title: "Senior Golang Engineer", Company: "Acme", Location: "Berlin",
 			Remote: true, Description: "Build backend services in Go.",
 			PublicSlug: "senior-golang-engineer-acme-aaa",
+			// seniority/category are dictionary columns (served dict-only).
+			Seniority:  "senior",
+			Category:   "backend",
 			PostedAt:   pgtype.Timestamptz{Time: time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC), Valid: true},
-			Enrichment: enrichedJSON(t, enrich.Enrichment{Seniority: "senior", Category: "backend"}),
+			Enrichment: enrichedJSON(t, enrich.Enrichment{}),
 		},
 		{
 			ID: 2, Title: "Junior Frontend Developer", Company: "Beta", Location: "Remote",
 			Remote: true, Description: "React and TypeScript UI work.",
 			PublicSlug: "junior-frontend-developer-beta-bbb",
+			Seniority:  "junior",
+			Category:   "frontend",
 			PostedAt:   pgtype.Timestamptz{Time: time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC), Valid: true},
-			Enrichment: enrichedJSON(t, enrich.Enrichment{Seniority: "junior", Category: "frontend"}),
+			Enrichment: enrichedJSON(t, enrich.Enrichment{}),
 		},
 	}
 

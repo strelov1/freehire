@@ -32,21 +32,29 @@ func TestIntegration_FacetCounts(t *testing.T) {
 	jobs := []db.Job{
 		{
 			ID: 1, Title: "Senior Go Engineer", Company: "Acme", PublicSlug: "a",
-			Skills:     []string{"go"},
+			Skills: []string{"go"},
+			// seniority/category are dictionary columns (served dict-only); salary
+			// stays LLM-only in the enrichment payload.
+			Seniority:  "senior",
+			Category:   "backend",
 			PostedAt:   pgtype.Timestamptz{Time: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC), Valid: true},
-			Enrichment: enrichedJSON(t, enrich.Enrichment{Seniority: "senior", Category: "backend", SalaryMin: money(100000), SalaryMax: money(150000)}),
+			Enrichment: enrichedJSON(t, enrich.Enrichment{SalaryMin: money(100000), SalaryMax: money(150000)}),
 		},
 		{
 			ID: 2, Title: "Senior Backend Dev", Company: "Beta", PublicSlug: "b",
 			Skills:     []string{"go", "kubernetes"},
+			Seniority:  "senior",
+			Category:   "backend",
 			PostedAt:   pgtype.Timestamptz{Time: time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC), Valid: true},
-			Enrichment: enrichedJSON(t, enrich.Enrichment{Seniority: "senior", Category: "backend", SalaryMin: money(120000), SalaryMax: money(200000)}),
+			Enrichment: enrichedJSON(t, enrich.Enrichment{SalaryMin: money(120000), SalaryMax: money(200000)}),
 		},
 		{
 			ID: 3, Title: "Junior Frontend Dev", Company: "Gamma", PublicSlug: "c",
 			Skills:     []string{"react"},
+			Seniority:  "junior",
+			Category:   "frontend",
 			PostedAt:   pgtype.Timestamptz{Time: time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC), Valid: true},
-			Enrichment: enrichedJSON(t, enrich.Enrichment{Seniority: "junior", Category: "frontend", SalaryMin: money(50000), SalaryMax: money(70000)}),
+			Enrichment: enrichedJSON(t, enrich.Enrichment{SalaryMin: money(50000), SalaryMax: money(70000)}),
 		},
 	}
 	docs := make([]JobDocument, 0, len(jobs))
