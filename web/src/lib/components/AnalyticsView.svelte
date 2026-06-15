@@ -63,9 +63,16 @@
     return () => clearTimeout(timer);
   });
 
-  // The salary range across the matched set: the floor of salary_min and the
-  // ceiling of salary_max (numeric facets are exposed as stats, not bars).
+  // The salary range is only meaningful within a single currency — the stats
+  // aggregate across every currency in the matched set, so a cross-currency
+  // min–max would mix e.g. USD and CLP. Show it only when exactly one currency
+  // is selected (include mode), and label it with that currency.
+  const salaryCurrency = $derived.by(() => {
+    const st = filters.facet('salary_currency');
+    return !st.exclude && st.values.length === 1 ? st.values[0] : null;
+  });
   const salary = $derived.by(() => {
+    if (!salaryCurrency) return null;
     const lo = counts.stats.salary_min?.min;
     const hi = counts.stats.salary_max?.max;
     return lo != null && hi != null && hi > 0 ? { lo, hi } : null;
@@ -92,7 +99,7 @@
         </p>
         {#if salary}
           <p class="mt-1 text-xs text-muted-foreground">
-            Salary range: {salary.lo.toLocaleString()}–{salary.hi.toLocaleString()}
+            Salary range ({salaryCurrency}): {salary.lo.toLocaleString()}–{salary.hi.toLocaleString()}
           </p>
         {/if}
       </div>
