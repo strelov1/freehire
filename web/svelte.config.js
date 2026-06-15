@@ -25,6 +25,10 @@ export default {
       mode: 'auto',
       directives: {
         'script-src': ['self', 'sha256-qvzE1AlG+fDQlxleonlMQaOrsjjgE6qfHfnkE0pD/bo='],
+        // Cheap defence-in-depth: pin the document base (no <base> injection) and
+        // forbid legacy plugin/embed vectors.
+        'base-uri': ['self'],
+        'object-src': ['none'],
       },
     },
   },

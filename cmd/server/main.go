@@ -43,12 +43,14 @@ func main() {
 		// single moderator job description, so 1MB bounds a memory-amplification body.
 		BodyLimit:    1 * 1024 * 1024,
 		ErrorHandler: handler.RenderError,
-		// The app sits behind the in-network nginx proxy (web/nginx.conf), which sets
-		// X-Forwarded-For. Trust that header for c.IP() — so the rate limiter keys on
-		// the real client, not the proxy — but ONLY when the immediate peer is in a
-		// private range (the nginx container). A direct public caller is not trusted,
-		// so it cannot spoof XFF to evade the limit.
-		ProxyHeader:             fiber.HeaderXForwardedFor,
+		// The app sits behind the in-network nginx proxy (web/nginx.conf). Key c.IP()
+		// (and thus the rate limiter) on X-Real-IP, which nginx OVERWRITES with the real
+		// peer — a single value the client cannot spoof. X-Forwarded-For is deliberately
+		// NOT used here: Fiber returns the whole (client-appendable) XFF list, so a
+		// spoofed prefix would mint a fresh limiter key per request and evade the limit.
+		// The header is only honoured when the immediate peer is a trusted private range
+		// (the nginx container); a direct public caller is not trusted.
+		ProxyHeader:             "X-Real-IP", // Fiber has no constant for this header
 		EnableTrustedProxyCheck: true,
 		TrustedProxies:          []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.1/32"},
 	})

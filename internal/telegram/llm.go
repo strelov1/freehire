@@ -28,13 +28,13 @@ type LangChainExtractor struct {
 	timeout time.Duration
 }
 
-// truncateRunes returns s clamped to at most max runes, never splitting a rune.
-func truncateRunes(s string, max int) string {
+// truncateRunes returns s clamped to at most limit runes, never splitting a rune.
+func truncateRunes(s string, limit int) string {
 	r := []rune(s)
-	if len(r) <= max {
+	if len(r) <= limit {
 		return s
 	}
-	return string(r[:max])
+	return string(r[:limit])
 }
 
 // NewLangChainExtractor builds an extractor against an OpenAI-compatible endpoint.

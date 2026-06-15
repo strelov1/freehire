@@ -21,13 +21,13 @@ const defaultEnrichTimeout = 90 * time.Second
 // oversized posting from amplifying per-call token cost.
 const maxDescriptionRunes = 24000
 
-// truncateRunes returns s clamped to at most max runes, never splitting a rune.
-func truncateRunes(s string, max int) string {
+// truncateRunes returns s clamped to at most limit runes, never splitting a rune.
+func truncateRunes(s string, limit int) string {
 	r := []rune(s)
-	if len(r) <= max {
+	if len(r) <= limit {
 		return s
 	}
-	return string(r[:max])
+	return string(r[:limit])
 }
 
 // LangChainProvider implements Provider over any OpenAI-compatible endpoint via

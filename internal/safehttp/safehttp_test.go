@@ -22,6 +22,8 @@ func TestBlockedClassifiesAddresses(t *testing.T) {
 		{"192.168.1.1", true},     // RFC1918
 		{"169.254.169.254", true}, // cloud metadata (link-local)
 		{"169.254.1.1", true},     // link-local
+		{"100.64.0.1", true},      // CGNAT / RFC6598 (cloud infra addressing)
+		{"100.127.255.255", true}, // CGNAT upper bound
 		{"0.0.0.0", true},         // unspecified
 		{"fc00::1", true},         // unique local v6
 		{"8.8.8.8", false},        // public

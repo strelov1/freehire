@@ -21,15 +21,25 @@ import (
 	"time"
 )
 
+// cgnat is the RFC6598 shared address space (100.64.0.0/10). IsPrivate does not
+// cover it, but cloud providers (AWS/GCP) use it for internal/infra addressing and
+// it is reachable from instances — so an SSRF guard must block it too.
+var cgnat = func() *net.IPNet {
+	_, n, _ := net.ParseCIDR("100.64.0.0/10")
+	return n
+}()
+
 // blocked reports whether ip must not be dialed: loopback, RFC1918/ULA private,
-// link-local (which includes the 169.254.169.254 cloud-metadata address),
-// multicast, and the unspecified address. nil is treated as blocked (fail closed).
+// CGNAT shared space, link-local (which includes the 169.254.169.254 cloud-metadata
+// address), multicast, and the unspecified address. nil is treated as blocked (fail
+// closed).
 func blocked(ip net.IP) bool {
 	if ip == nil {
 		return true
 	}
 	return ip.IsLoopback() ||
 		ip.IsPrivate() ||
+		cgnat.Contains(ip) ||
 		ip.IsLinkLocalUnicast() ||
 		ip.IsLinkLocalMulticast() ||
 		ip.IsInterfaceLocalMulticast() ||
