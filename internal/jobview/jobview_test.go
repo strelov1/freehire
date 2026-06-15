@@ -37,8 +37,8 @@ func TestFromRow_MapsCoreAndNestedEnrichment(t *testing.T) {
 		Location:    "Berlin",
 		Remote:      true,
 		Description: "Build durable systems",
-		Seniority:   "senior",                  // dictionary
-		Category:    "backend",                 // dictionary
+		Seniority:   "senior",                   // dictionary
+		Category:    "backend",                  // dictionary
 		Skills:      []string{"go", "postgres"}, // dictionary
 		PostedAt:    pgtype.Timestamptz{Time: posted, Valid: true},
 		PublicSlug:  "senior-go-developer-acme-abcd1234",
@@ -92,9 +92,9 @@ func TestFromRow_GeographyAndWorkModeAreDictOnly(t *testing.T) {
 		ID:         1,
 		Title:      "Dev",
 		PublicSlug: "dev-1",
-		Countries:  []string{"us"},  // dictionary
-		Regions:    []string{"us"},  // dictionary
-		WorkMode:   "onsite",        // dictionary — served as-is, LLM ignored
+		Countries:  []string{"us"}, // dictionary
+		Regions:    []string{"us"}, // dictionary
+		WorkMode:   "onsite",       // dictionary — served as-is, LLM ignored
 		Enrichment: raw,
 	})
 	if err != nil {
