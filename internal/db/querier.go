@@ -262,6 +262,16 @@ type Querier interface {
 	// Remove a job from the board: drop every pipeline mark, keep viewed_at so the
 	// job remains in the user's view history.
 	UntrackJob(ctx context.Context, arg UntrackJobParams) (UserJob, error)
+	// One-off backfill (cmd/backfill-derive): rewrite all six deterministic dictionary
+	// facet columns — countries, regions, work_mode, skills, seniority, category — from
+	// the row's raw content (title/location/description) in one pass, replacing the
+	// three separate per-facet backfill writes. The facets are a pure function of the
+	// raw fields, so this is idempotent. updated_at is deliberately left untouched
+	// (like SetJobLocation) so a backfill does not churn every row's timestamp. COALESCE
+	// maps a nil array arg to '{}' for the NOT NULL array columns. work_mode is written
+	// as given by the caller, which preserves an already-set (possibly
+	// adapter-structured) value.
+	UpdateJobFacets(ctx context.Context, arg UpdateJobFacetsParams) error
 	// One-off backfill for a deliberate slug-builder change (see the UpsertJob note on
 	// why slugs are otherwise immutable). public_slug/company_slug are deterministic
 	// from the row's immutable fields, so recomputing and rewriting them is idempotent.

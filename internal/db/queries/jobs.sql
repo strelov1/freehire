@@ -321,3 +321,22 @@ UPDATE jobs
 SET seniority = sqlc.arg(seniority),
     category  = sqlc.arg(category)
 WHERE id = sqlc.arg(id);
+
+-- name: UpdateJobFacets :exec
+-- One-off backfill (cmd/backfill-derive): rewrite all six deterministic dictionary
+-- facet columns — countries, regions, work_mode, skills, seniority, category — from
+-- the row's raw content (title/location/description) in one pass, replacing the
+-- three separate per-facet backfill writes. The facets are a pure function of the
+-- raw fields, so this is idempotent. updated_at is deliberately left untouched
+-- (like SetJobLocation) so a backfill does not churn every row's timestamp. COALESCE
+-- maps a nil array arg to '{}' for the NOT NULL array columns. work_mode is written
+-- as given by the caller, which preserves an already-set (possibly
+-- adapter-structured) value.
+UPDATE jobs
+SET countries = COALESCE(sqlc.arg(countries)::text[], '{}'),
+    regions   = COALESCE(sqlc.arg(regions)::text[], '{}'),
+    work_mode = sqlc.arg(work_mode),
+    skills    = COALESCE(sqlc.arg(skills)::text[], '{}'),
+    seniority = sqlc.arg(seniority),
+    category  = sqlc.arg(category)
+WHERE id = sqlc.arg(id);

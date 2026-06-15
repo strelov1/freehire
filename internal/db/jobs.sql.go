@@ -593,6 +593,49 @@ func (q *Queries) SetJobSkills(ctx context.Context, arg SetJobSkillsParams) erro
 	return err
 }
 
+const updateJobFacets = `-- name: UpdateJobFacets :exec
+UPDATE jobs
+SET countries = COALESCE($1::text[], '{}'),
+    regions   = COALESCE($2::text[], '{}'),
+    work_mode = $3,
+    skills    = COALESCE($4::text[], '{}'),
+    seniority = $5,
+    category  = $6
+WHERE id = $7
+`
+
+type UpdateJobFacetsParams struct {
+	Countries []string `json:"countries"`
+	Regions   []string `json:"regions"`
+	WorkMode  string   `json:"work_mode"`
+	Skills    []string `json:"skills"`
+	Seniority string   `json:"seniority"`
+	Category  string   `json:"category"`
+	ID        int64    `json:"id"`
+}
+
+// One-off backfill (cmd/backfill-derive): rewrite all six deterministic dictionary
+// facet columns — countries, regions, work_mode, skills, seniority, category — from
+// the row's raw content (title/location/description) in one pass, replacing the
+// three separate per-facet backfill writes. The facets are a pure function of the
+// raw fields, so this is idempotent. updated_at is deliberately left untouched
+// (like SetJobLocation) so a backfill does not churn every row's timestamp. COALESCE
+// maps a nil array arg to '{}' for the NOT NULL array columns. work_mode is written
+// as given by the caller, which preserves an already-set (possibly
+// adapter-structured) value.
+func (q *Queries) UpdateJobFacets(ctx context.Context, arg UpdateJobFacetsParams) error {
+	_, err := q.db.Exec(ctx, updateJobFacets,
+		arg.Countries,
+		arg.Regions,
+		arg.WorkMode,
+		arg.Skills,
+		arg.Seniority,
+		arg.Category,
+		arg.ID,
+	)
+	return err
+}
+
 const updateJobSlugs = `-- name: UpdateJobSlugs :exec
 UPDATE jobs
 SET public_slug  = $1,

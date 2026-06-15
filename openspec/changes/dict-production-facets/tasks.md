@@ -7,8 +7,8 @@
 
 ## 2. Unified backfill query (sqlc)
 
-- [ ] 2.1 Add a combined `UpdateJobFacets` query in `internal/db/queries/*.sql` that sets `countries`, `regions`, `work_mode`, `skills`, `seniority`, `category` for one job id (work_mode written as given by the caller, which preserves a set value).
-- [ ] 2.2 Run `make sqlc` (or `sqlc generate`) and commit the regenerated `internal/db`.
+- [x] 2.1 Add a combined `UpdateJobFacets` query in `internal/db/queries/*.sql` that sets `countries`, `regions`, `work_mode`, `skills`, `seniority`, `category` for one job id (work_mode written as given by the caller, which preserves a set value).
+- [x] 2.2 Run `make sqlc` (or `sqlc generate`) and commit the regenerated `internal/db`.
 
 ## 3. cmd/backfill-derive (unified pass)
 
