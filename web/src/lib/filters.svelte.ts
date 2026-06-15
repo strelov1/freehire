@@ -99,6 +99,13 @@ export function activeFilterCount(f: JobFilters): number {
   return n;
 }
 
+/** Normalize a search query string to its canonical form (parse → re-serialize),
+ *  so two filter sets that differ only in param order or stale/unknown params
+ *  compare equal. Used to detect which saved search matches the current filters. */
+export function canonicalQuery(query: string): string {
+  return filtersToParams(filtersFromParams(new URLSearchParams(query))).toString();
+}
+
 /** Reactive filter state mirrored into the URL. Owned by the jobs view; all
  *  mutations go through its methods so every change updates state and URL. */
 export class FilterStore {
@@ -175,6 +182,14 @@ export class FilterStore {
 
   clear() {
     this.value = emptyFilters();
+    this.#commit();
+  }
+
+  /** Replace the entire filter state from a saved query string and mirror it to
+   *  the URL — applies a saved search. Unknown params are ignored by
+   *  filtersFromParams, so a stale save degrades to a partial filter. */
+  apply(query: string) {
+    this.value = filtersFromParams(new URLSearchParams(query));
     this.#commit();
   }
 

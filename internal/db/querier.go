@@ -48,6 +48,9 @@ type Querier interface {
 	// search pagination reports the filtered total.
 	CountCompanies(ctx context.Context, search string) (int64, error)
 	CountJobs(ctx context.Context) (int64, error)
+	// How many saved searches a user has — the per-user cap is enforced against this in
+	// the service before a create.
+	CountSavedSearches(ctx context.Context, userID int64) (int64, error)
 	// Per-filter row counts for the my-jobs tabs, in one aggregate pass. "all" is
 	// every interaction row; "viewed" is the view-only subset (neither saved nor
 	// applied), matching the ListUserJobs filter. "board" counts jobs on the Kanban
@@ -62,6 +65,9 @@ type Querier interface {
 	// unique index on (reported_by, job_id) WHERE status='pending' rejects a second open report
 	// of the same job by the same user (the repository maps that unique violation to a 409).
 	CreateReport(ctx context.Context, arg CreateReportParams) (JobReport, error)
+	// Create a saved search for a user. The UNIQUE (user_id, name) constraint rejects a
+	// duplicate name (surfaced by the repository as a duplicate-name error). Returns the row.
+	CreateSavedSearch(ctx context.Context, arg CreateSavedSearchParams) (SavedSearch, error)
 	// Insert a user-contributed vacancy into the moderation queue as 'pending'. The partial
 	// unique index on lower(url) WHERE status='pending' rejects a second pending submission of
 	// the same URL (the repository maps that unique violation to a 409).
@@ -81,6 +87,10 @@ type Querier interface {
 	// Drop companies no longer referenced by any job — the stale rows left behind
 	// when a slug-builder change re-keys jobs onto new slugs.
 	DeleteOrphanCompanies(ctx context.Context) (int64, error)
+	// Delete a saved search, scoped to its owner so a user can only delete their own.
+	// Returns the affected row count: 0 means it does not exist or is not the caller's
+	// (the handler maps that to 404).
+	DeleteSavedSearch(ctx context.Context, arg DeleteSavedSearchParams) (int64, error)
 	// Transactional-outbox enqueue for the ingest write path: queue this one job for
 	// enrichment, gated on the same condition the backfill uses (unenriched or below the
 	// target schema version), so an already-enriched job is not re-queued. Idempotent via
@@ -151,6 +161,8 @@ type Querier interface {
 	// The moderator review queue: every pending submission, newest first, with the submitter's
 	// email so the moderator can judge provenance.
 	ListPendingSubmissions(ctx context.Context) ([]ListPendingSubmissionsRow, error)
+	// A user's saved searches, most recently updated first (the "My filters" picker order).
+	ListSavedSearches(ctx context.Context, userID int64) ([]SavedSearch, error)
 	// "My submissions": one user's submissions, newest first, whatever their status.
 	// LEFT JOIN the minted job (present only once approved) to surface its public_slug,
 	// so the UI can link an approved submission straight to its live vacancy page.
@@ -279,6 +291,12 @@ type Querier interface {
 	// Reopening a closed posting is the re-create (same-URL UpsertManualJob) path's job, so a
 	// content edit never resurrects a job the sweep/liveness worker closed.
 	UpdateManualJob(ctx context.Context, arg UpdateManualJobParams) (Job, error)
+	// Overwrite a saved search's name and/or query, scoped to its owner, bumping
+	// updated_at. Partial update: a NULL param leaves that column unchanged (COALESCE),
+	// so the caller can rename, overwrite the filters, or both in one call. An empty
+	// query string is a real value (not NULL), so "save the unfiltered view" is honored.
+	// No matching owner-scoped row returns no row (the handler maps that to 404).
+	UpdateSavedSearch(ctx context.Context, arg UpdateSavedSearchParams) (SavedSearch, error)
 	// Single atomic write: upsert the company (only when the slug is non-empty,
 	// via the WHERE on the SELECT) and the job together, keeping the "one write =
 	// one job" property of the pipeline's write path.

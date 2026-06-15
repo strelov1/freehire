@@ -103,6 +103,15 @@ type JobSubmission struct {
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
+type SavedSearch struct {
+	ID        int64              `json:"id"`
+	UserID    int64              `json:"user_id"`
+	Name      string             `json:"name"`
+	Query     string             `json:"query"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 type TelegramPost struct {
 	Channel     string             `json:"channel"`
 	MsgID       int64              `json:"msg_id"`

@@ -17,6 +17,7 @@ import (
 	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/moderation"
 	"github.com/strelov1/freehire/internal/report"
+	"github.com/strelov1/freehire/internal/savedsearch"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/submission"
 )
@@ -59,6 +60,9 @@ type API struct {
 	// report owns the job-report moderation queue (file/list/resolve/dismiss);
 	// resolving may soft-close the reported job through the job-lifecycle close path.
 	report *report.Service
+	// savedSearch owns the per-user saved-search use cases (list/create/update/delete
+	// named filter snapshots); the handlers translate wire ↔ domain and delegate to it.
+	savedSearch *savedsearch.Service
 }
 
 // pageParams reads and clamps the shared limit/offset pagination query params.
@@ -124,6 +128,7 @@ func Register(app *fiber.App, cfg Config) {
 	// job soft-close (it implements report.Repository and report.JobCloser).
 	reportRepo := report.NewQueriesRepository(queries)
 	a.report = report.New(reportRepo, reportRepo)
+	a.savedSearch = savedsearch.New(savedsearch.NewQueriesRepository(queries))
 	// Assign only when configured: a nil *search.Client wrapped in the searcher
 	// interface would be a non-nil interface and defeat the nil check.
 	if cfg.Search != nil {
@@ -197,6 +202,15 @@ func Register(app *fiber.App, cfg Config) {
 	api.Post("/me/api-keys", auth.RequireAuth(a.issuer), a.CreateAPIKey)
 	api.Get("/me/api-keys", auth.RequireAuth(a.issuer), a.ListAPIKeys)
 	api.Delete("/me/api-keys/:id", auth.RequireAuth(a.issuer), a.RevokeAPIKey)
+
+	// Saved searches are cookie-only (RequireAuth) like API-key management: they are a
+	// browser convenience (the "My filters" picker), not a scripting primitive. Each
+	// operation is owner-scoped; an id that is not the caller's is a 404.
+	saved := auth.RequireAuth(a.issuer)
+	api.Get("/me/searches", saved, a.ListSavedSearches)
+	api.Post("/me/searches", saved, a.CreateSavedSearch)
+	api.Patch("/me/searches/:id", saved, a.UpdateSavedSearch)
+	api.Delete("/me/searches/:id", saved, a.DeleteSavedSearch)
 
 	// Auth: register/login/logout are public (logout just clears the cookie).
 	// me is guarded and accepts a session cookie OR an API key, so a non-browser

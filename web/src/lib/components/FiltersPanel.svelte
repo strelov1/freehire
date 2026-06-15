@@ -2,6 +2,7 @@
   import type { FilterStore } from '$lib/filters.svelte';
   import { FACETS } from '$lib/facets';
   import FacetSection from './facets/FacetSection.svelte';
+  import SavedSearches from './SavedSearches.svelte';
 
   // The panel is pure presentation over the store: it iterates the facet
   // registry and renders each section, plus the two special controls (visa,
@@ -22,6 +23,8 @@
 </script>
 
 <div class="flex flex-col gap-4">
+  <SavedSearches {store} />
+
   <div class="flex items-center justify-between">
     <h2 class="text-base font-semibold tracking-tight">Filters</h2>
     {#if store.active > 0}

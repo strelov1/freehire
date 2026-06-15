@@ -22,6 +22,7 @@ import type {
   UserJob,
   ApiKey,
   CreatedApiKey,
+  SavedSearch,
   Submission,
   SubmissionInput,
   Report,
@@ -319,6 +320,43 @@ export function createApi(
     await call(`/api/v1/me/api-keys/${id}`, { method: 'DELETE' });
   }
 
+  // Saved searches: named snapshots of the filter state (cookie-only on the server).
+
+  /** The current user's saved searches, most recently updated first. */
+  async function listSavedSearches(): Promise<SavedSearch[]> {
+    const res = await request<{ data: SavedSearch[] }>('/api/v1/me/searches');
+    return res.data;
+  }
+
+  /** Save the current filter state under a name. `query` is the canonical search
+   *  query string (may be empty). A duplicate name or the per-user cap is a 409. */
+  async function createSavedSearch(name: string, query: string): Promise<SavedSearch> {
+    const res = await request<{ data: SavedSearch }>('/api/v1/me/searches', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, query }),
+    });
+    return res.data;
+  }
+
+  /** Overwrite a saved search's name and/or query; an omitted field is unchanged. */
+  async function updateSavedSearch(
+    id: number,
+    patch: { name?: string; query?: string },
+  ): Promise<SavedSearch> {
+    const res = await request<{ data: SavedSearch }>(`/api/v1/me/searches/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    return res.data;
+  }
+
+  /** Delete a saved search by id. */
+  async function deleteSavedSearch(id: number): Promise<void> {
+    await call(`/api/v1/me/searches/${id}`, { method: 'DELETE' });
+  }
+
   /** Submit a vacancy for moderation. Returns the pending submission. */
   async function submitJob(input: SubmissionInput): Promise<Submission> {
     const res = await request<{ data: Submission }>('/api/v1/submissions', {
@@ -419,6 +457,10 @@ export function createApi(
     listApiKeys,
     createApiKey,
     revokeApiKey,
+    listSavedSearches,
+    createSavedSearch,
+    updateSavedSearch,
+    deleteSavedSearch,
     submitJob,
     listMySubmissions,
     listPendingSubmissions,
@@ -465,6 +507,10 @@ export const {
   listApiKeys,
   createApiKey,
   revokeApiKey,
+  listSavedSearches,
+  createSavedSearch,
+  updateSavedSearch,
+  deleteSavedSearch,
   submitJob,
   listMySubmissions,
   listPendingSubmissions,

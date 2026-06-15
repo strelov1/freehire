@@ -159,3 +159,15 @@ export interface ApiKey {
 export interface CreatedApiKey extends ApiKey {
   token: string;
 }
+
+/** A user's saved search: a named snapshot of the job-search filter state. `query`
+ *  is the canonical search query string (the same the filter URL serializes), so
+ *  applying it reproduces the exact filters. An empty `query` is the "show all" view.
+ *  Timestamps are RFC3339 strings or null. */
+export interface SavedSearch {
+  id: number;
+  name: string;
+  query: string;
+  created_at: string | null;
+  updated_at: string | null;
+}
