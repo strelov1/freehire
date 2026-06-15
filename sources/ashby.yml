@@ -1433,3 +1433,35 @@
   board: checkly
 - company: Mubit
   board: mubit
+
+# --- added from LinkedIn offsite job alerts (2026-06-15) ---
+- company: Acorns
+  board: acorns
+- company: Avra
+  board: avra
+- company: Clipbook
+  board: clipbook
+- company: Flock
+  board: flock
+- company: HavocAI
+  board: havocai
+- company: Kyra
+  board: kyra
+- company: Omaze
+  board: omaze
+- company: Partyhat
+  board: partyhat
+- company: Preply
+  board: preply
+- company: Siro
+  board: siro
+- company: "Solvd, Inc."
+  board: solvd
+- company: Synctera
+  board: synctera
+- company: TELUS Digital
+  board: telus-digital
+- company: tem
+  board: tem
+- company: Thought Machine
+  board: thought-machine

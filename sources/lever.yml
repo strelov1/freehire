@@ -861,3 +861,11 @@
   board: UpMetrics
 - company: Skysafe
   board: skysafe
+
+# --- added from LinkedIn offsite job alerts (2026-06-15) ---
+- company: PPRO
+  board: ppro
+- company: rePurpose Global
+  board: repurposeglobal
+- company: Swile
+  board: swile

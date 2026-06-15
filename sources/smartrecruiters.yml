@@ -923,3 +923,11 @@
   board: Allegro
 - company: Sectigo
   board: Sectigo
+
+# --- added from LinkedIn offsite job alerts (2026-06-15) ---
+- company: Genomics England
+  board: genomicsengland
+- company: pubX
+  board: pubx
+- company: Second Nature
+  board: secondnature
