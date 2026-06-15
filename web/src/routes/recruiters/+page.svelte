@@ -10,6 +10,6 @@
   />
 </svelte:head>
 
-<div class="mx-auto w-full max-w-4xl px-4 py-10">
+<div class="mx-auto w-full max-w-6xl px-4 py-6">
   <RecruitersView />
 </div>

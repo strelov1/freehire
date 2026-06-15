@@ -148,8 +148,7 @@ freehire search <span class="text-foreground">"golang"</span> --remote --region 
   <section class="border-t border-border py-14 sm:py-16">
     <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// moderators</p>
     <p class="mt-6 max-w-2xl leading-relaxed text-muted-foreground">
-      With the <code class="font-mono text-foreground">moderator</code> role you can author postings (a
-      regular key gets <code class="font-mono text-foreground">403</code>):
+      With the <code class="font-mono text-foreground">moderator</code> role you can author postings:
     </p>
     <pre
       class="mt-4 max-w-2xl overflow-x-auto rounded-lg border border-border bg-secondary/60 p-3 font-mono text-sm leading-relaxed">freehire jobs add --url &lt;url&gt; --title "Senior Go Developer" --company Acme
