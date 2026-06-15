@@ -29,6 +29,11 @@ const (
 	// handler — so a large value here costs nothing beyond an accurate total.
 	maxTotalHits = 1000000
 
+	// maxValuesPerFacet raises the per-facet value cap above Meili's default of
+	// 100 so the analytics facet distribution is not truncated for
+	// high-cardinality facets (skills, countries).
+	maxValuesPerFacet = 300
+
 	taskPollInterval = 50 * time.Millisecond
 )
 
@@ -193,6 +198,12 @@ func indexSettings() *meilisearch.Settings {
 		// exist, not specific thresholds. Re-add explicit tuning when the pinned
 		// server and SDK fields align.
 		Pagination: &meilisearch.Pagination{MaxTotalHits: maxTotalHits},
+		// Raise the per-facet value cap above Meili's default of 100 so the
+		// analytics facet distribution is not truncated for high-cardinality
+		// facets. Value ordering is done client-side by count; SortFacetValuesBy is
+		// left unset (see the TypoTolerance note above on the SDK over-serializing
+		// newer fields). Requires a reindex to take effect on an existing index.
+		Faceting: &meilisearch.Faceting{MaxValuesPerFacet: maxValuesPerFacet},
 		Embedders: map[string]meilisearch.Embedder{
 			embedderName: {
 				Source:           "huggingFace",

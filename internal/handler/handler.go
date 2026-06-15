@@ -38,6 +38,10 @@ type API struct {
 	// search is the job-search backend. Nil when Meilisearch is unconfigured —
 	// the search endpoint then reports 503 and the rest of the API is unaffected.
 	search searcher
+	// facets is the analytics (facet-distribution) backend — the same Meilisearch
+	// client viewed through a narrower interface, kept separate from search so the
+	// two concerns stay decoupled. Nil when unconfigured (endpoint reports 503).
+	facets facetCounter
 	// tracking owns the per-user job-interaction use cases (view/apply/save/
 	// unsave/track); the handlers translate wire ↔ domain and delegate to it.
 	tracking *jobtracking.Service
@@ -109,6 +113,7 @@ func Register(app *fiber.App, cfg Config) {
 	// interface would be a non-nil interface and defeat the nil check.
 	if cfg.Search != nil {
 		a.search = cfg.Search
+		a.facets = cfg.Search
 	}
 
 	app.Use(cors.New(cors.Config{AllowOrigins: cfg.FrontendOrigin}))
@@ -117,8 +122,9 @@ func Register(app *fiber.App, cfg Config) {
 
 	api := app.Group("/api/v1")
 	api.Get("/jobs", a.ListJobs)
-	// Literal route before the :slug param route so "search" is not read as a slug.
+	// Literal routes before the :slug param route so they are not read as slugs.
 	api.Get("/jobs/search", a.SearchJobs)
+	api.Get("/jobs/facets", a.JobFacets)
 	api.Get("/jobs/:slug", a.GetJob)
 	api.Get("/companies", a.ListCompanies)
 	api.Get("/companies/:slug", a.GetCompany)

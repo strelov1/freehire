@@ -14,6 +14,7 @@ import type {
   Job,
   Company,
   CompanyListItem,
+  FacetCounts,
   ListMeta,
   MyJob,
   MyJobCounts,
@@ -130,6 +131,15 @@ export function createApi(
     params.set('limit', String(limit));
     params.set('offset', String(offset));
     return toSlice(await request<Page<Job>>(`/api/v1/jobs/search?${params}`), offset);
+  }
+
+  /** Facet-distribution counts for the analytics page. `params` carries the same
+   *  query text and facet filters as `searchJobs` (built by the caller, e.g. via
+   *  `filtersToParams`); the endpoint returns counts instead of a page of jobs.
+   *  Empty `facets`/`stats` are normalized to `{}` so callers never see null. */
+  async function facetCounts(params: URLSearchParams): Promise<FacetCounts> {
+    const res = await request<{ data: FacetCounts }>(`/api/v1/jobs/facets?${params}`);
+    return { total: res.data.total, facets: res.data.facets ?? {}, stats: res.data.stats ?? {} };
   }
 
   /** List companies, optionally filtered by a name query `q` (a case-insensitive
@@ -309,6 +319,7 @@ export function createApi(
     listJobs,
     getJob,
     searchJobs,
+    facetCounts,
     listCompanies,
     getCompany,
     register,
@@ -345,6 +356,7 @@ export const {
   listJobs,
   getJob,
   searchJobs,
+  facetCounts,
   listCompanies,
   getCompany,
   register,
