@@ -177,6 +177,12 @@ func (rn *run) enrich(ctx context.Context, job JobInput) (Enrichment, error) {
 
 func (rn *run) fail(ctx context.Context, entry Claimed, cause error) {
 	dead, err := rn.store.Fail(ctx, entry.OutboxID, cause.Error(), rn.opt.MaxAttempts)
+	if err != nil {
+		// The attempt still counts as a failure below, but log the cause: a
+		// bookkeeping outage (e.g. the DB going unreachable mid-drain) would
+		// otherwise hide behind an opaque Failed tally with no way to diagnose it.
+		log.Printf("enrich: outbox=%d fail-bookkeeping error: %v", entry.OutboxID, err)
+	}
 	rn.mu.Lock()
 	defer rn.mu.Unlock()
 	// Only a recorded dead-letter is distinct; a non-dead attempt and a Fail that

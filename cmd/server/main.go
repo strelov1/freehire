@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"log"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -29,7 +28,13 @@ func main() {
 		log.Fatal("config: JWT_SECRET is required and must be at least 32 bytes")
 	}
 
-	pool, err := database.Connect(context.Background(), cfg.DatabaseURL)
+	// One signal-bound context drives both startup and shutdown: it cancels the pool
+	// connect if a signal arrives mid-startup, and its Done channel is the shutdown
+	// trigger below.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	pool, err := database.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("database: %v", err)
 	}
@@ -89,10 +94,9 @@ func main() {
 	}()
 	log.Printf("hire listening on :%s", cfg.Port)
 
-	// Graceful shutdown on SIGINT/SIGTERM.
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	// Graceful shutdown on SIGINT/SIGTERM: block until the signal-bound context is
+	// cancelled (the signal arrived) or startup cancelled it.
+	<-ctx.Done()
 	log.Println("shutting down...")
 
 	if err := app.ShutdownWithTimeout(10 * time.Second); err != nil {

@@ -17,12 +17,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/strelov1/freehire/internal/config"
-	"github.com/strelov1/freehire/internal/database"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/pipeline"
 	"github.com/strelov1/freehire/internal/sources"
+	"github.com/strelov1/freehire/internal/worker"
 )
 
 // staleAfter is the grace window before an unseen job is closed: many crawl cycles
@@ -31,8 +30,10 @@ import (
 const staleAfter = 48 * time.Hour
 
 func main() {
-	cfg := config.Load()
+	os.Exit(run())
+}
 
+func run() int {
 	// The board file is usually one provider's list (sources/<provider>.yml, provider =
 	// file name), but an entry may name its own provider, so it may be a mixed file
 	// (sources/custom.yml). Accept it as the first argument (cron passes the file) or via
@@ -42,26 +43,28 @@ func main() {
 		path = os.Args[1]
 	}
 	if path == "" {
-		log.Fatal("config: no board file given (pass sources/<provider>.yml as an argument or set SOURCES_FILE)")
+		log.Print("config: no board file given (pass sources/<provider>.yml as an argument or set SOURCES_FILE)")
+		return 1
 	}
 	sourceCfg, err := sources.LoadConfig(path)
 	if err != nil {
-		log.Fatalf("config: %v", err)
+		log.Printf("config: %v", err)
+		return 1
 	}
 
 	registry := sources.All(sources.NewClient())
 	// Fail fast before touching the DB: a misconfigured board should not start a run.
 	if err := sourceCfg.Validate(registry); err != nil {
-		log.Fatalf("config: %v", err)
+		log.Printf("config: %v", err)
+		return 1
 	}
 
-	ctx := context.Background()
-
-	pool, err := database.Connect(ctx, cfg.DatabaseURL)
+	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
-		log.Fatalf("database: %v", err)
+		log.Printf("database: %v", err)
+		return 1
 	}
-	defer pool.Close()
+	defer cleanup()
 
 	runner := pipeline.Runner{
 		Registry: registry,
@@ -70,12 +73,17 @@ func main() {
 
 	runStats, err := runner.Run(ctx, sourceCfg.Sources)
 	if err != nil {
-		log.Fatalf("ingest: %v", err)
+		log.Printf("ingest: %v", err)
+		return 1
 	}
 
 	total := runStats.Total()
 	log.Printf("ingest done: file=%s providers=%d ingested=%d failed=%d skipped=%d",
 		path, len(runStats), total.Ingested, total.Failed, total.Skipped)
+
+	// A failed board is counted in total.Failed; surface it (and any sweep failure
+	// below) through the exit code so cron alerts on a degraded run.
+	failed := total.Failed
 
 	// Post-run sweep (job-lifecycle spec): per provider, close that provider's open jobs
 	// unseen for the whole grace window. Scoped per provider so one provider's run never
@@ -90,10 +98,15 @@ func main() {
 			Cutoff: cutoff,
 		})
 		if err != nil {
-			log.Fatalf("close stale jobs: %v", err)
+			// Count and continue: one provider's sweep failure must not skip the rest,
+			// but the run still exits non-zero.
+			failed++
+			log.Printf("close stale jobs (%s): %v", provider, err)
+			continue
 		}
 		log.Printf("closed %d stale %s jobs (unseen for %s)", closed, provider, staleAfter)
 	}
+	return worker.ExitCode(failed, 0)
 }
 
 // sweepableProviders returns, sorted, the providers in a run that ingested at least one

@@ -7,22 +7,23 @@
 // candidates, probe each over plain HTTP, classify, apply the strike/close/reset
 // update, and exit. Re-running is safe; only a definitive death signal confirmed
 // twice in a row closes a job, biasing toward leaving orphans open over a false
-// close (orphans have no re-ingest to reopen them).
+// close (orphans have no re-ingest to reopen them). It exits non-zero when a probe
+// could not apply its DB update, so cron can alert.
 package main
 
 import (
 	"context"
 	"log"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/strelov1/freehire/internal/config"
-	"github.com/strelov1/freehire/internal/database"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/liveness"
 	"github.com/strelov1/freehire/internal/safehttp"
 	"github.com/strelov1/freehire/internal/sources"
+	"github.com/strelov1/freehire/internal/worker"
 )
 
 const (
@@ -44,14 +45,16 @@ const (
 )
 
 func main() {
-	cfg := config.Load()
-	ctx := context.Background()
+	os.Exit(run())
+}
 
-	pool, err := database.Connect(ctx, cfg.DatabaseURL)
+func run() int {
+	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
-		log.Fatalf("database: %v", err)
+		log.Printf("database: %v", err)
+		return 1
 	}
-	defer pool.Close()
+	defer cleanup()
 	queries := db.New(pool)
 
 	// Single-flight: hold a session-scoped advisory lock on a dedicated connection
@@ -59,17 +62,19 @@ func main() {
 	// twice within one burst. A run that can't take the lock exits cleanly.
 	lockConn, err := pool.Acquire(ctx)
 	if err != nil {
-		log.Fatalf("acquire lock connection: %v", err)
+		log.Printf("acquire lock connection: %v", err)
+		return 1
 	}
 	var locked bool
 	if err := lockConn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", int64(lockKey)).Scan(&locked); err != nil {
 		lockConn.Release()
-		log.Fatalf("liveness lock: %v", err)
+		log.Printf("liveness lock: %v", err)
+		return 1
 	}
 	if !locked {
 		lockConn.Release()
 		log.Print("liveness: another run holds the lock — exiting")
-		return
+		return 0
 	}
 	defer func() {
 		// Best-effort unlock; releasing/closing the connection drops the session lock anyway.
@@ -85,19 +90,21 @@ func main() {
 	// exclusion list would select EVERY open job — including board jobs the ingest
 	// sweep owns. Refuse to run rather than risk URL-closing the whole catalogue.
 	if len(atsProviders) == 0 {
-		log.Fatal("liveness: no ATS providers registered — refusing to run (would probe every open job)")
+		log.Print("liveness: no ATS providers registered — refusing to run (would probe every open job)")
+		return 1
 	}
 
 	candidates, err := queries.SelectOrphanLivenessCandidates(ctx, atsProviders)
 	if err != nil {
-		log.Fatalf("select candidates: %v", err)
+		log.Printf("select candidates: %v", err)
+		return 1
 	}
 	log.Printf("liveness: %d orphan candidates (excluding %d ATS providers)", len(candidates), len(atsProviders))
 
 	// Probe targets are orphan-job URLs that originated from attacker-influenced
 	// sources (telegram posts), so the probe must refuse internal/metadata targets.
 	client := safehttp.NewClient(probeTimeout)
-	var probed, closed, struck int64
+	var probed, closed, struck, failed int64
 
 	sem := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
@@ -113,7 +120,7 @@ func main() {
 			if ferr != nil {
 				// A probe that could not reach the page is Uncertain (status 0), so the
 				// switch below takes no action — a fetch failure never advances or
-				// clears a strike.
+				// clears a strike, and is not counted as a worker failure.
 				log.Printf("liveness: probe %s failed: %v", c.PublicSlug, ferr)
 			}
 
@@ -124,6 +131,9 @@ func main() {
 					Threshold: closeThreshold,
 				})
 				if err != nil {
+					// The verdict was reached but the DB update did not apply — a real
+					// failure the exit code must surface, not a silent log-and-continue.
+					atomic.AddInt64(&failed, 1)
 					log.Printf("liveness: mark expired %s: %v", c.PublicSlug, err)
 					return
 				}
@@ -139,6 +149,7 @@ func main() {
 				// clear so a healthy catalogue does not issue an UPDATE per open job.
 				if c.LivenessStrikes != 0 {
 					if err := queries.ResetLivenessStrikes(ctx, c.ID); err != nil {
+						atomic.AddInt64(&failed, 1)
 						log.Printf("liveness: reset %s: %v", c.PublicSlug, err)
 					}
 				}
@@ -149,7 +160,8 @@ func main() {
 	}
 	wg.Wait()
 
-	log.Printf("liveness done: probed=%d closed=%d struck=%d", probed, closed, struck)
+	log.Printf("liveness done: probed=%d closed=%d struck=%d failed=%d", probed, closed, struck, failed)
+	return worker.ExitCode(int(failed), 0)
 }
 
 // providerKeys returns the registered ATS provider keys — the sources the ingest

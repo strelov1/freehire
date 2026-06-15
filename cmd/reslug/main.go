@@ -9,45 +9,50 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 
-	"github.com/strelov1/freehire/internal/config"
-	"github.com/strelov1/freehire/internal/database"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/normalize"
+	"github.com/strelov1/freehire/internal/worker"
 )
 
 // reslugBatchSize bounds how many jobs are read per keyset page.
 const reslugBatchSize = 500
 
 func main() {
-	cfg := config.Load()
+	os.Exit(run())
+}
 
-	ctx := context.Background()
-
-	pool, err := database.Connect(ctx, cfg.DatabaseURL)
+func run() int {
+	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
-		log.Fatalf("database: %v", err)
+		log.Printf("database: %v", err)
+		return 1
 	}
-	defer pool.Close()
+	defer cleanup()
 
 	queries := db.New(pool)
 
 	scanned, updated, err := reslugAll(ctx, queries)
 	if err != nil {
-		log.Fatalf("reslug: %v", err)
+		log.Printf("reslug: %v", err)
+		return 1
 	}
 
 	// jobs.company_slug now carries the new slugs; re-key the companies catalogue
 	// to match (and drop the rows orphaned by the change) so company pages resolve.
 	if err := queries.SyncCompaniesFromJobs(ctx); err != nil {
-		log.Fatalf("reslug: sync companies: %v", err)
+		log.Printf("reslug: sync companies: %v", err)
+		return 1
 	}
 	orphans, err := queries.DeleteOrphanCompanies(ctx)
 	if err != nil {
-		log.Fatalf("reslug: delete orphan companies: %v", err)
+		log.Printf("reslug: delete orphan companies: %v", err)
+		return 1
 	}
 
 	log.Printf("reslug done: scanned=%d updated=%d companies_orphaned=%d", scanned, updated, orphans)
+	return 0
 }
 
 // reslugAll recomputes every job's slug and rewrites the ones that differ. It

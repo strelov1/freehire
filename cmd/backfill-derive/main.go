@@ -15,12 +15,12 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 	"slices"
 
-	"github.com/strelov1/freehire/internal/config"
-	"github.com/strelov1/freehire/internal/database"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobderive"
+	"github.com/strelov1/freehire/internal/worker"
 )
 
 // backfillBatchSize bounds how many jobs are read per keyset page.
@@ -35,20 +35,24 @@ type facetStore interface {
 }
 
 func main() {
-	cfg := config.Load()
-	ctx := context.Background()
+	os.Exit(run())
+}
 
-	pool, err := database.Connect(ctx, cfg.DatabaseURL)
+func run() int {
+	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
-		log.Fatalf("database: %v", err)
+		log.Printf("database: %v", err)
+		return 1
 	}
-	defer pool.Close()
+	defer cleanup()
 
 	scanned, updated, err := backfillAll(ctx, db.New(pool))
 	if err != nil {
-		log.Fatalf("backfill-derive: %v", err)
+		log.Printf("backfill-derive: %v", err)
+		return 1
 	}
 	log.Printf("backfill-derive done: scanned=%d updated=%d", scanned, updated)
+	return 0
 }
 
 // backfillAll re-derives every job's six facet columns and rewrites the rows whose

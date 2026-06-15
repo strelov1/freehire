@@ -2,7 +2,8 @@
 // configured channels from sources/telegram.yml, fetches each channel's latest posts from
 // the public t.me web preview, prefilters obvious non-vacancies, and stores new
 // posts in the telegram_posts queue for the extraction worker (cmd/tg-extract).
-// Run it on a schedule (e.g. cron); it crawls every channel once and exits.
+// Run it on a schedule (e.g. cron); it crawls every channel once and exits. It
+// exits non-zero when the run finished with any failures, so cron can alert.
 package main
 
 import (
@@ -14,37 +15,39 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/strelov1/freehire/internal/config"
-	"github.com/strelov1/freehire/internal/database"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/linksource"
 	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/telegram"
+	"github.com/strelov1/freehire/internal/worker"
 )
 
 func main() {
-	cfg := config.Load()
+	os.Exit(run())
+}
 
+func run() int {
 	path := os.Getenv("CHANNELS_FILE")
 	if path == "" {
 		path = "sources/telegram.yml"
 	}
 	chanCfg, err := telegram.LoadConfig(path)
 	if err != nil {
-		log.Fatalf("config: %v", err)
+		log.Printf("config: %v", err)
+		return 1
 	}
 	// Fail fast before touching the DB: a misconfigured channel should not start a run.
 	if err := chanCfg.Validate(); err != nil {
-		log.Fatalf("config: %v", err)
+		log.Printf("config: %v", err)
+		return 1
 	}
 
-	ctx := context.Background()
-
-	pool, err := database.Connect(ctx, cfg.DatabaseURL)
+	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
-		log.Fatalf("database: %v", err)
+		log.Printf("database: %v", err)
+		return 1
 	}
-	defer pool.Close()
+	defer cleanup()
 
 	runner := telegram.CrawlRunner{
 		Fetcher: telegram.NewFetcher(),
@@ -55,10 +58,12 @@ func main() {
 
 	stats, err := runner.Run(ctx, chanCfg.Channels)
 	if err != nil {
-		log.Fatalf("crawl: %v", err)
+		log.Printf("crawl: %v", err)
+		return 1
 	}
 	log.Printf("tg-ingest done: stored=%d filtered=%d failed=%d",
 		stats.Stored, stats.Filtered, stats.Failed)
+	return worker.ExitCode(stats.Failed, 0)
 }
 
 // postStore adapts the generated queries to telegram.PostStore.

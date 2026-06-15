@@ -3,7 +3,8 @@
 // and extract its vacancies, validates the payload, and writes the jobs through
 // the canonical upsert — enqueuing them for enrichment in the same transaction as
 // marking the post extracted. Run it on a schedule (e.g. cron); it processes a
-// bounded batch and exits.
+// bounded batch and exits. It exits non-zero when the run finished with any
+// failures, so cron can alert.
 package main
 
 import (
@@ -12,17 +13,23 @@ import (
 	"os"
 
 	"github.com/strelov1/freehire/internal/config"
-	"github.com/strelov1/freehire/internal/database"
 	"github.com/strelov1/freehire/internal/linksource"
 	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/telegram"
+	"github.com/strelov1/freehire/internal/worker"
 )
 
 func main() {
-	cfg := config.Load()
+	os.Exit(run())
+}
+
+func run() int {
+	// LLM and channel config are loaded first so a misconfigured worker fails before
+	// it opens the pool.
 	ecfg, err := config.LoadEnrich()
 	if err != nil {
-		log.Fatalf("config: %v", err)
+		log.Printf("config: %v", err)
+		return 1
 	}
 
 	// sources/telegram.yml supplies each channel's kind, steering the extraction prompt.
@@ -32,27 +39,29 @@ func main() {
 	}
 	chanCfg, err := telegram.LoadConfig(path)
 	if err != nil {
-		log.Fatalf("config: %v", err)
+		log.Printf("config: %v", err)
+		return 1
 	}
 	if err := chanCfg.Validate(); err != nil {
-		log.Fatalf("config: %v", err)
+		log.Printf("config: %v", err)
+		return 1
 	}
 	kinds := make(map[string]telegram.Kind, len(chanCfg.Channels))
 	for _, e := range chanCfg.Channels {
 		kinds[e.Channel] = e.Kind
 	}
 
-	ctx := context.Background()
-
-	pool, err := database.Connect(ctx, cfg.DatabaseURL)
+	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
-		log.Fatalf("database: %v", err)
+		log.Printf("database: %v", err)
+		return 1
 	}
-	defer pool.Close()
+	defer cleanup()
 
 	extractor, err := telegram.NewLangChainExtractor(ecfg.LLMBaseURL, ecfg.LLMAPIKey, ecfg.LLMModel)
 	if err != nil {
-		log.Fatalf("extractor: %v", err)
+		log.Printf("extractor: %v", err)
+		return 1
 	}
 
 	runner := telegram.ExtractRunner{
@@ -64,8 +73,10 @@ func main() {
 
 	stats, err := runner.Run(ctx)
 	if err != nil {
-		log.Fatalf("extract: %v", err)
+		log.Printf("extract: %v", err)
+		return 1
 	}
 	log.Printf("tg-extract done: processed=%d jobs=%d failed=%d",
 		stats.Processed, stats.Jobs, stats.Failed)
+	return worker.ExitCode(stats.Failed, 0)
 }

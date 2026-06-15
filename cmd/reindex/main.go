@@ -7,11 +7,11 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 
-	"github.com/strelov1/freehire/internal/config"
-	"github.com/strelov1/freehire/internal/database"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/search"
+	"github.com/strelov1/freehire/internal/worker"
 )
 
 // reindexBatchSize bounds how many jobs are read from Postgres and pushed to
@@ -19,27 +19,35 @@ import (
 const reindexBatchSize = 500
 
 func main() {
-	cfg := config.Load()
-	if cfg.MeiliKey == "" {
-		log.Fatal("config: MEILI_MASTER_KEY is required")
-	}
+	os.Exit(run())
+}
 
-	ctx := context.Background()
-
-	pool, err := database.Connect(ctx, cfg.DatabaseURL)
+func run() int {
+	ctx, cfg, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
-		log.Fatalf("database: %v", err)
+		log.Printf("database: %v", err)
+		return 1
 	}
-	defer pool.Close()
+	defer cleanup()
+
+	// Bootstrap owns config + pool, so this required-config check lands just after
+	// the pool opens rather than before it. The connect is cheap and cleanup closes
+	// it on this early return, so the only cost of a missing key is one DB handshake.
+	if cfg.MeiliKey == "" {
+		log.Print("config: MEILI_MASTER_KEY is required")
+		return 1
+	}
 
 	client := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
 
 	indexed, deleted, err := reindexAll(ctx, db.New(pool), client)
 	if err != nil {
-		log.Fatalf("reindex: %v", err)
+		log.Printf("reindex: %v", err)
+		return 1
 	}
 
 	log.Printf("reindex done: indexed=%d deleted=%d", indexed, deleted)
+	return 0
 }
 
 // reindexAll ensures the index and streams every job through it in batches,
