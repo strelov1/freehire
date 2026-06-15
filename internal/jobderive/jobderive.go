@@ -41,12 +41,18 @@ type Derived struct {
 // Derive computes the slugs and dictionary facets for a job. Geography, skills, and the
 // title classification (seniority/category) come from the curated dictionaries (which
 // emit nothing for what they cannot resolve); the work-mode precedence is structured
-// signal first, then the location parser's hint.
+// signal first, then the location parser's hint, then a conservative phrase match in
+// the description.
 func Derive(in Input) Derived {
 	geo := location.Parse(in.Location)
+	// Work-mode precedence: structured (ATS) → location marker → description phrase.
+	// Each lower source only fills a value the higher ones left empty.
 	workMode := in.WorkMode
 	if workMode == "" {
 		workMode = geo.WorkMode
+	}
+	if workMode == "" {
+		workMode = location.WorkModeFromDescription(in.Description)
 	}
 	class := classify.Parse(in.Title)
 	return Derived{
