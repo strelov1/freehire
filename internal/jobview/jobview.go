@@ -33,12 +33,12 @@ type Job struct {
 	// and never exposed.
 	ManuallyAdded bool   `json:"manually_added"`
 	ExternalID    string `json:"external_id"`
-	URL         string `json:"url"`
-	Title       string `json:"title"`
-	Company     string `json:"company"`
-	CompanySlug string `json:"company_slug"`
-	Location    string `json:"location"`
-	Description string `json:"description"`
+	URL           string `json:"url"`
+	Title         string `json:"title"`
+	Company       string `json:"company"`
+	CompanySlug   string `json:"company_slug"`
+	Location      string `json:"location"`
+	Description   string `json:"description"`
 	// Countries/Regions/WorkMode are the resolved geography facet: the union of
 	// the ingest-parsed location columns and the enrichment-derived values
 	// (work_mode is the LLM value when present, else the parsed one). They are
