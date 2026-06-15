@@ -6,7 +6,7 @@ require (
 	github.com/gofiber/fiber/v2 v2.52.13
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/gzuidhof/tygo v0.2.21
-	github.com/jackc/pgx/v5 v5.7.2
+	github.com/jackc/pgx/v5 v5.10.0
 	github.com/meilisearch/meilisearch-go v0.36.3
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/mozillazg/go-unidecode v0.2.0
