@@ -68,7 +68,7 @@ go run ./cmd/enrich        # drain the enrichment queue (LLM); needs LLM_* confi
 go run ./cmd/tg-ingest     # crawl the Telegram channels in channels.yml
 go run ./cmd/tg-extract    # LLM-extract vacancies from crawled Telegram posts
 go run ./cmd/reindex       # rebuild the Meilisearch index from Postgres
-go run ./cmd/backfill-geo  # backfill location-derived columns on existing jobs
+go run ./cmd/backfill-derive  # re-derive all six dictionary facets on existing jobs (follow with make reindex)
 ```
 
 ## Layout

@@ -39,10 +39,12 @@ type Job struct {
 	CompanySlug   string `json:"company_slug"`
 	Location      string `json:"location"`
 	Description   string `json:"description"`
-	// Countries/Regions/WorkMode are the resolved geography facet: the union of
-	// the ingest-parsed location columns and the enrichment-derived values
-	// (work_mode is the LLM value when present, else the parsed one). They are
-	// served here, top-level and once; the same fields are folded out of the
+	// Countries/Regions/WorkMode/Skills are served from the jobs dictionary columns
+	// ONLY — the deterministic dictionaries are the sole production source for these
+	// facets. The LLM's enrichment values for them are deliberately excluded from
+	// the served object (they remain raw in the stored enrichment JSONB), so the LLM
+	// can later run free as a discovery signal without corrupting production data.
+	// They are served top-level and once; the same fields are folded out of the
 	// nested Enrichment to avoid duplication.
 	Countries []string `json:"countries"`
 	Regions   []string `json:"regions"`
