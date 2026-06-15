@@ -9,22 +9,22 @@ func TestJobSlug(t *testing.T) {
 		want                         string
 	}{
 		{
-			name: "title company and shortcode",
+			name:  "title company and shortcode",
 			title: "Senior Go Developer", company: "Acme", src: "manual", exticID: "42",
 			want: "senior-go-developer-acme-t35nijto",
 		},
 		{
-			name: "empty company drops the segment, no double hyphen",
+			name:  "empty company drops the segment, no double hyphen",
 			title: "Go Dev", company: "", src: "s", exticID: "1",
 			want: "go-dev-5vsxmqi5",
 		},
 		{
-			name: "empty title and company leaves only the shortcode",
+			name:  "empty title and company leaves only the shortcode",
 			title: "", company: "", src: "s", exticID: "1",
 			want: "5vsxmqi5",
 		},
 		{
-			name: "distinct external_id changes the shortcode",
+			name:  "distinct external_id changes the shortcode",
 			title: "Senior Go Developer", company: "Acme", src: "manual", exticID: "43",
 			want: "senior-go-developer-acme-gnhygrtm",
 		},

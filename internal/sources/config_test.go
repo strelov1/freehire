@@ -143,7 +143,7 @@ func TestParseConfigKeepsPerEntryProvider(t *testing.T) {
 // providers validates each against its own adapter.
 func TestConfigValidateAcceptsMixedPerEntryProviders(t *testing.T) {
 	cfg := Config{Provider: "custom", Sources: []CompanyEntry{
-		{Company: "VK", Provider: "vk"},                      // boardless: empty board ok
+		{Company: "VK", Provider: "vk"},                          // boardless: empty board ok
 		{Company: "Acme", Provider: "greenhouse", Board: "acme"}, // board-based: has board
 	}}
 

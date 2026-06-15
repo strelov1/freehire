@@ -1,0 +1,49 @@
+name: Bug report
+description: Something in freehire behaves incorrectly.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        New-contributor issues are auto-closed by default and reviewed by
+        maintainers. Keep this short, concrete, and reproducible — see
+        CONTRIBUTING.md.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What went wrong, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The exact request, command, or worker run that triggers it.
+      placeholder: |
+        1. curl localhost:8080/api/v1/jobs/search?...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Server/worker logs or error output. Redact any secrets.
+      render: text
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: Release tag or commit SHA you are running.
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Confirmation
+      options:
+        - label: I have read CONTRIBUTING.md and this report is concise and concrete.
+          required: true

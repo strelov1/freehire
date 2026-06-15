@@ -139,3 +139,21 @@ line in `sources.All` — every adapter speaks the same `Source` interface, and
 
 A Svelte SPA lives under `web/` and consumes the API (same-origin; a dev Vite
 proxy forwards `/api` to the backend).
+
+## Contributing
+
+freehire's core is a small pipeline; the extension point is the **source**
+(one entry in `sources.yml`, or a new adapter in `internal/sources`). New
+contributors: open an issue first — issues and PRs from unapproved accounts are
+auto-closed by default. See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow
+and [AGENT.md](AGENT.md) for the architecture and conventions. Questions and
+ideas go in [Discussions](https://github.com/strelov1/freehire/discussions).
+
+## Security
+
+Found a vulnerability? Report it privately — see [SECURITY.md](SECURITY.md). Do
+not open a public issue for security-sensitive reports.
+
+## License
+
+[MIT](LICENSE)

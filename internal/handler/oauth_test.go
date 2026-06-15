@@ -23,7 +23,7 @@ type fakeProvider struct {
 	err      error
 }
 
-func (f *fakeProvider) Name() string                  { return f.name }
+func (f *fakeProvider) Name() string { return f.name }
 func (f *fakeProvider) AuthCodeURL(state string) string {
 	return "https://provider.example/consent?state=" + state
 }

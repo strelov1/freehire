@@ -1,0 +1,41 @@
+name: Feature request
+description: Propose a change or addition that is not a new source.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        freehire's core is intentionally minimal. Features that fit the
+        source/extension shape are most welcome; changes that bloat the core are
+        likely to be declined. New-contributor issues are auto-closed by default
+        — see CONTRIBUTING.md.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem does this solve, and why does it matter?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What you would like to see. Keep it concrete.
+    validations:
+      required: true
+  - type: dropdown
+    id: implement
+    attributes:
+      label: Do you want to implement this yourself?
+      options:
+        - "No"
+        - "Yes, if approved"
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Confirmation
+      options:
+        - label: I have read CONTRIBUTING.md and this stays within the core/extension boundary.
+          required: true

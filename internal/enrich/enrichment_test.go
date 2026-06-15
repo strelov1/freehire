@@ -194,10 +194,10 @@ func TestGlobalReachDistinctFromUnknown(t *testing.T) {
 
 func TestSanitizeDropsOutOfVocabValues(t *testing.T) {
 	e := Enrichment{
-		Seniority: "senior",         // valid -> kept
-		Category:  "astrology",      // invalid scalar -> blanked
+		Seniority: "senior",                     // valid -> kept
+		Category:  "astrology",                  // invalid scalar -> blanked
 		Domains:   []string{"fintech", "bogus"}, // keep only known
-		Regions:   []string{"nope"},            // all unknown -> nil
+		Regions:   []string{"nope"},             // all unknown -> nil
 	}
 	e.Sanitize()
 

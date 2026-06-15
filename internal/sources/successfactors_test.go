@@ -44,9 +44,9 @@ func TestSuccessFactorsProvider(t *testing.T) {
 
 func TestSFJobID(t *testing.T) {
 	cases := map[string]string{
-		"https://jobs.tetrapak.com/job/Munich-Engineer/12345/":        "12345",
+		"https://jobs.tetrapak.com/job/Munich-Engineer/12345/":             "12345",
 		"https://jobs.tetrapak.com/job/Commissioning-Engineer/98012-en_GB": "98012",
-		"https://jobs.tetrapak.com/job/Slug/883999301":                "883999301",
+		"https://jobs.tetrapak.com/job/Slug/883999301":                     "883999301",
 	}
 	for loc, want := range cases {
 		if got := sfJobID(loc); got != want {

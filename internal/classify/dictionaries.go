@@ -21,7 +21,7 @@ var seniorityAliases = map[string]string{
 	"директор": "c_level", "руководитель": "c_level",
 	"principal": "principal",
 	"staff":     "staff",
-	"lead": "lead", "ведущий": "lead", "тимлид": "lead", "teamlead": "lead", "team lead": "lead",
+	"lead":      "lead", "ведущий": "lead", "тимлид": "lead", "teamlead": "lead", "team lead": "lead",
 	"senior": "senior", "sr": "senior", "sr.": "senior",
 	"старший": "senior", "синьор": "senior", "сеньор": "senior",
 	"middle": "middle", "mid": "middle", "mid-level": "middle", "mid level": "middle",

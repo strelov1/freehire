@@ -1,0 +1,51 @@
+name: New source request
+description: Request (or offer to add) a new job source — an ATS board, a Telegram channel, or an outbound link destination.
+labels: [source]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Adding a source is freehire's primary extension point. The cleanest fit
+        is a board behind an already-supported ATS provider (greenhouse / lever
+        / ashby) — that is just an entry in `sources.yml`. See CONTRIBUTING.md
+        and AGENT.md.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Source kind
+      options:
+        - ATS board (existing provider — greenhouse / lever / ashby)
+        - ATS platform (new provider, needs a new adapter)
+        - Telegram channel
+        - Outbound link destination (linksource)
+    validations:
+      required: true
+  - type: input
+    id: target
+    attributes:
+      label: Source identifier
+      description: Company + provider + board id, the channel handle, or the destination host/URL.
+      placeholder: e.g. Acme — greenhouse — acmeco
+    validations:
+      required: true
+  - type: input
+    id: sample
+    attributes:
+      label: Sample listing/API URL
+      description: A public URL proving the board/feed exists and is crawlable.
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Anything relevant — volume, region, whether you want to implement it yourself.
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Confirmation
+      options:
+        - label: I validated that the source is publicly reachable (not behind login/bot-protection).
+          required: true

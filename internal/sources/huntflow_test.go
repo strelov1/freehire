@@ -126,7 +126,7 @@ func TestHuntflowFetchSkipsArchived(t *testing.T) {
 		{"id":10,"slug":11,"position":12,"archived_at":13},200,"gone","Gone Role","2024-01-01"
 	]`
 	fake := (&routedHTTP{}).
-		route(".huntflow.io/_payload.json",list).
+		route(".huntflow.io/_payload.json", list).
 		route("/vacancy/open/_payload.json", hfDetailBody(100, "Open Role", "null", "null", "<p>Hiring.</p>"))
 
 	jobs, err := NewHuntflow(fake).Fetch(context.Background(), CompanyEntry{
@@ -142,7 +142,7 @@ func TestHuntflowFetchSkipsArchived(t *testing.T) {
 
 func TestHuntflowFetchFoldsSalaryIntoDescription(t *testing.T) {
 	fake := (&routedHTTP{}).
-		route(".huntflow.io/_payload.json",hfListBody(1, "lawyer", "Lawyer", "null")).
+		route(".huntflow.io/_payload.json", hfListBody(1, "lawyer", "Lawyer", "null")).
 		route("/vacancy/lawyer/_payload.json",
 			hfDetailBody(1, "Lawyer", "null", `"до 190 000 рублей"`, "<p>Do law.</p>"))
 
@@ -159,7 +159,7 @@ func TestHuntflowFetchFoldsSalaryIntoDescription(t *testing.T) {
 
 func TestHuntflowFetchDetectsRussianRemote(t *testing.T) {
 	fake := (&routedHTTP{}).
-		route(".huntflow.io/_payload.json",hfListBody(1, "dev", "Developer", "null")).
+		route(".huntflow.io/_payload.json", hfListBody(1, "dev", "Developer", "null")).
 		route("/vacancy/dev/_payload.json",
 			hfDetailBody(1, "Developer", `"Москва / удалённо"`, "null", "<p>Code.</p>"))
 
@@ -184,7 +184,7 @@ func TestHuntflowFetchSkipsFailedDetail(t *testing.T) {
 	]`
 	fake := (&routedHTTP{}).
 		route("/vacancy/good/_payload.json", hfDetailBody(1, "Good", "null", "null", "<p>Ok.</p>")).
-		route(".huntflow.io/_payload.json",list)
+		route(".huntflow.io/_payload.json", list)
 
 	jobs, err := NewHuntflow(fake).Fetch(context.Background(), CompanyEntry{
 		Company: "Acme", Provider: "huntflow", Board: "acme",
