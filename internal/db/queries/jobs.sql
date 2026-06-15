@@ -208,6 +208,18 @@ WHERE closed_at IS NULL
   AND source = sqlc.arg(source)
   AND last_seen_at < sqlc.arg(cutoff);
 
+-- name: CloseJobByID :execrows
+-- Soft-close one job now (see job-lifecycle): a moderator resolving a report with
+-- close_job=true. The third writer of closed_at, alongside the ingest sweep and the
+-- liveness probe. WHERE closed_at IS NULL keeps it idempotent — a second close on an
+-- already-closed job is a no-op, never an error, so it never fights the report's own
+-- status guard. A later ingest upsert may legitimately reopen a board job (reopen-on-
+-- reappear); that is the lifecycle's existing behavior, not a conflict.
+UPDATE jobs
+SET closed_at  = now(),
+    updated_at = now()
+WHERE id = sqlc.arg(id) AND closed_at IS NULL;
+
 -- name: SelectOrphanLivenessCandidates :many
 -- Orphan-job liveness (probe-orphan-job-liveness): open jobs whose source is NOT a
 -- registered ATS board provider — the sources no ingest run re-crawls and the sweep

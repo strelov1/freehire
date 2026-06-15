@@ -70,6 +70,20 @@ type Job struct {
 	UpdatedBy         pgtype.Int8        `json:"updated_by"`
 }
 
+type JobReport struct {
+	ID              int64              `json:"id"`
+	ReportedBy      int64              `json:"reported_by"`
+	JobID           int64              `json:"job_id"`
+	Reason          string             `json:"reason"`
+	Details         string             `json:"details"`
+	ContactTelegram string             `json:"contact_telegram"`
+	Status          string             `json:"status"`
+	ReviewReason    string             `json:"review_reason"`
+	ReviewedBy      pgtype.Int8        `json:"reviewed_by"`
+	ReviewedAt      pgtype.Timestamptz `json:"reviewed_at"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
 type JobSubmission struct {
 	ID           int64              `json:"id"`
 	SubmittedBy  int64              `json:"submitted_by"`

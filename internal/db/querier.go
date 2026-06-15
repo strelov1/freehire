@@ -31,6 +31,13 @@ type Querier interface {
 	ClaimTelegramPosts(ctx context.Context, arg ClaimTelegramPostsParams) ([]ClaimTelegramPostsRow, error)
 	// Reset a tracked job to the wishlist: drop stage and applied state, keep saved/viewed/notes.
 	ClearJobProgress(ctx context.Context, arg ClearJobProgressParams) (UserJob, error)
+	// Soft-close one job now (see job-lifecycle): a moderator resolving a report with
+	// close_job=true. The third writer of closed_at, alongside the ingest sweep and the
+	// liveness probe. WHERE closed_at IS NULL keeps it idempotent — a second close on an
+	// already-closed job is a no-op, never an error, so it never fights the report's own
+	// status guard. A later ingest upsert may legitimately reopen a board job (reopen-on-
+	// reappear); that is the lifecycle's existing behavior, not a conflict.
+	CloseJobByID(ctx context.Context, id int64) (int64, error)
 	// Post-ingest sweep (see job-lifecycle spec): close every open job of ONE source not
 	// seen since the cutoff. Scoped by source because ingest runs per provider — a
 	// greenhouse run must not close jobs another provider owns and didn't crawl. The
@@ -51,6 +58,10 @@ type Querier interface {
 	// expires_at NULL means the key never expires. Returns display fields only, never
 	// the hash.
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (CreateAPIKeyRow, error)
+	// File a user complaint about a job into the moderation queue as 'pending'. The partial
+	// unique index on (reported_by, job_id) WHERE status='pending' rejects a second open report
+	// of the same job by the same user (the repository maps that unique violation to a 409).
+	CreateReport(ctx context.Context, arg CreateReportParams) (JobReport, error)
 	// Insert a user-contributed vacancy into the moderation queue as 'pending'. The partial
 	// unique index on lower(url) WHERE status='pending' rejects a second pending submission of
 	// the same URL (the repository maps that unique violation to a 409).
@@ -90,6 +101,10 @@ type Querier interface {
 	// columns over the wire on every silent view. GetJobBySlug (SELECT *) stays for the
 	// public detail handler that renders the whole row.
 	GetJobIDBySlug(ctx context.Context, publicSlug string) (int64, error)
+	// Load a single report by id for the review path. The resolve/dismiss flow guards the
+	// status in the service; the Mark* queries are additionally scoped to status='pending' as
+	// defense-in-depth against a concurrent second decision.
+	GetReport(ctx context.Context, id int64) (JobReport, error)
 	// Load a single submission by id for the review path. The approve/reject flow guards the
 	// status in the service; the Mark* queries are additionally scoped to status='pending' as
 	// defense-in-depth against a concurrent second decision.
@@ -130,6 +145,9 @@ type Querier interface {
 	// concurrent inserts/updates (which shift posted_at ordering) cannot make the
 	// scan skip or repeat rows the way OFFSET pagination would.
 	ListJobsByIDAfter(ctx context.Context, arg ListJobsByIDAfterParams) ([]Job, error)
+	// The moderator review queue: every pending report, newest first, with the reporter's email
+	// and the reported job's slug and title so the moderator can judge it and link to it.
+	ListPendingReports(ctx context.Context) ([]ListPendingReportsRow, error)
 	// The moderator review queue: every pending submission, newest first, with the submitter's
 	// email so the moderator can judge provenance.
 	ListPendingSubmissions(ctx context.Context) ([]ListPendingSubmissionsRow, error)
@@ -159,6 +177,13 @@ type Querier interface {
 	// two-strike grace that absorbs a transient death signal. Returns the new strike
 	// count and closed_at so the worker can log the outcome.
 	MarkLivenessExpired(ctx context.Context, arg MarkLivenessExpiredParams) (MarkLivenessExpiredRow, error)
+	// Mark a pending report dismissed with an optional reason, recording the deciding
+	// moderator. Scoped to status='pending' (see MarkReportResolved). The job is not touched.
+	MarkReportDismissed(ctx context.Context, arg MarkReportDismissedParams) (JobReport, error)
+	// Mark a pending report resolved, recording the deciding moderator. Scoped to
+	// status='pending' so a concurrent second decision affects no row (the service maps 0 rows
+	// to ErrAlreadyDecided). The optional job close is a separate write (CloseJobByID).
+	MarkReportResolved(ctx context.Context, arg MarkReportResolvedParams) (JobReport, error)
 	// Mark a pending submission approved, recording the deciding moderator and the minted job.
 	// Scoped to status='pending' so a concurrent second decision affects no row (the service
 	// maps 0 rows to ErrAlreadyDecided). The job is minted by the service before this runs.

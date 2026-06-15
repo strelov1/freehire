@@ -16,6 +16,7 @@ import (
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/moderation"
+	"github.com/strelov1/freehire/internal/report"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/submission"
 )
@@ -55,6 +56,9 @@ type API struct {
 	// submission owns the public job-submission queue (submit/list/approve/reject);
 	// approval mints a live job by delegating to moderation.
 	submission *submission.Service
+	// report owns the job-report moderation queue (file/list/resolve/dismiss);
+	// resolving may soft-close the reported job through the job-lifecycle close path.
+	report *report.Service
 }
 
 // pageParams reads and clamps the shared limit/offset pagination query params.
@@ -116,6 +120,10 @@ func Register(app *fiber.App, cfg Config) {
 	// submission approval mints through the same moderation service, so derivation,
 	// dedup, and the enrichment enqueue are reused rather than duplicated.
 	a.submission = submission.New(submission.NewQueriesRepository(queries), a.moderation)
+	// The report queue uses one QueriesRepository for both persistence and the
+	// job soft-close (it implements report.Repository and report.JobCloser).
+	reportRepo := report.NewQueriesRepository(queries)
+	a.report = report.New(reportRepo, reportRepo)
 	// Assign only when configured: a nil *search.Client wrapped in the searcher
 	// interface would be a non-nil interface and defeat the nil check.
 	if cfg.Search != nil {
@@ -167,6 +175,14 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/submissions", keyAuth, requireModerator, a.ListPendingSubmissions)
 	api.Post("/submissions/:id/approve", keyAuth, requireModerator, a.ApproveSubmission)
 	api.Post("/submissions/:id/reject", keyAuth, requireModerator, a.RejectSubmission)
+
+	// Job reports: any authenticated user flags a problem with a live vacancy (cookie or
+	// API key), addressed by the job's public slug. The review actions (the pending queue,
+	// resolve, dismiss) are moderator-gated; resolve may soft-close the reported job.
+	api.Post("/jobs/:slug/reports", keyAuth, a.CreateReport)
+	api.Get("/reports", keyAuth, requireModerator, a.ListPendingReports)
+	api.Post("/reports/:id/resolve", keyAuth, requireModerator, a.ResolveReport)
+	api.Post("/reports/:id/dismiss", keyAuth, requireModerator, a.DismissReport)
 
 	// User-scoped reads live under /me (consistent with /auth/me): the my-jobs
 	// listing joins the caller's interactions with the jobs they touch, and the

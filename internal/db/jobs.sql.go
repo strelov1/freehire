@@ -12,6 +12,27 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const closeJobByID = `-- name: CloseJobByID :execrows
+UPDATE jobs
+SET closed_at  = now(),
+    updated_at = now()
+WHERE id = $1 AND closed_at IS NULL
+`
+
+// Soft-close one job now (see job-lifecycle): a moderator resolving a report with
+// close_job=true. The third writer of closed_at, alongside the ingest sweep and the
+// liveness probe. WHERE closed_at IS NULL keeps it idempotent — a second close on an
+// already-closed job is a no-op, never an error, so it never fights the report's own
+// status guard. A later ingest upsert may legitimately reopen a board job (reopen-on-
+// reappear); that is the lifecycle's existing behavior, not a conflict.
+func (q *Queries) CloseJobByID(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.Exec(ctx, closeJobByID, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const closeUnseenJobs = `-- name: CloseUnseenJobs :execrows
 UPDATE jobs
 SET closed_at  = now(),
