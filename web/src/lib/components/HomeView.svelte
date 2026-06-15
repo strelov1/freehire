@@ -3,6 +3,8 @@
 
   const GITHUB = 'https://github.com/strelov1/freehire';
   const CLI = 'https://github.com/strelov1/freehire-cli';
+  // Deep-link to the file a contributor edits to add their own source.
+  const SOURCES = `${GITHUB}/blob/main/sources.yml`;
 
   // The real adapters behind the pipeline — listed verbatim so the page never
   // overpromises sources the ingest worker can't actually crawl.
@@ -51,7 +53,7 @@
     <div class="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
       <div>
         <p class="reveal font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground" style="--d:0ms">
-          // open-source · free forever
+          // open-source · free &amp; transparent
         </p>
 
         <h1
@@ -156,16 +158,16 @@
           Use it from the terminal. Built for agents.
         </h2>
         <p class="mt-5 max-w-md leading-relaxed text-muted-foreground">
-          freehire is also a CLI, so an AI agent or a script can search, open and apply to jobs over the
+          freehire is also a CLI, so an AI agent or a script can search, open and track jobs over the
           same API — no browser. Create an API key and it lives in
           <code class="font-mono text-foreground">~/.freehire/creds.json</code>; add
           <code class="font-mono text-foreground">--json</code> for machine-readable output.
         </p>
         <div class="mt-8 flex flex-wrap gap-3">
-          <Button href={CLI} target="_blank" rel="noopener noreferrer" variant="primary" size="lg">
-            freehire-cli on GitHub ↗
+          <Button href="/cli" variant="primary" size="lg">Explore the CLI</Button>
+          <Button href={CLI} target="_blank" rel="noopener noreferrer" variant="ghost" size="lg">
+            View on GitHub ↗
           </Button>
-          <Button href="/my/api-keys" variant="ghost" size="lg">Get an API key</Button>
         </div>
       </div>
 
@@ -181,10 +183,10 @@
         <pre class="overflow-x-auto p-4 leading-relaxed"><span class="text-muted-foreground"># install — no Go needed</span>
 curl -fsSL <span class="text-foreground">https://freehire.dev/install.sh</span> | sh
 
-<span class="text-muted-foreground"># authenticate once, then search &amp; apply</span>
+<span class="text-muted-foreground"># authenticate once, then search &amp; track</span>
 freehire auth login --token <span class="text-foreground">fhk_…</span>
 freehire search <span class="text-foreground">"golang"</span> --remote --region eu
-freehire apply <span class="text-foreground">&lt;slug&gt;</span></pre>
+freehire save <span class="text-foreground">&lt;slug&gt;</span></pre>
       </figure>
     </div>
   </section>
@@ -196,18 +198,20 @@ freehire apply <span class="text-foreground">&lt;slug&gt;</span></pre>
     <div class="mt-6 grid gap-10 lg:grid-cols-2 lg:items-center">
       <div>
         <h2 class="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
-          Built in the open. Add the company you want to see.
+          Built in the open. Add your own source.
         </h2>
         <p class="mt-5 max-w-md leading-relaxed text-muted-foreground">
-          Adding a company is one entry in <code class="font-mono text-foreground">sources.yml</code>. A
-          new ATS platform is one adapter. The backend is Go, the frontend is Svelte, the license is MIT —
-          issues and pull requests welcome.
+          Missing a company? Add it yourself — one entry in
+          <code class="font-mono text-foreground">sources.yml</code>. A new ATS platform is one adapter. The
+          backend is Go, the frontend is Svelte, the license is MIT — issues and pull requests welcome.
         </p>
         <div class="mt-8 flex flex-wrap gap-3">
-          <Button href={GITHUB} target="_blank" rel="noopener noreferrer" variant="primary" size="lg">
+          <Button href={SOURCES} target="_blank" rel="noopener noreferrer" variant="primary" size="lg">
+            Add a source ↗
+          </Button>
+          <Button href={GITHUB} target="_blank" rel="noopener noreferrer" variant="ghost" size="lg">
             Star on GitHub ↗
           </Button>
-          <Button href="/jobs" variant="ghost" size="lg">Start searching</Button>
         </div>
       </div>
 

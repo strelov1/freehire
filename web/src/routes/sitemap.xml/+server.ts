@@ -66,6 +66,7 @@ export const GET: RequestHandler = async ({ url, fetch }) => {
     { loc: `${origin}/` },
     { loc: `${origin}/jobs` },
     { loc: `${origin}/companies` },
+    { loc: `${origin}/cli` },
     { loc: `${origin}/recruiters` },
   ];
 

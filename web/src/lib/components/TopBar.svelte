@@ -16,6 +16,7 @@
     { href: '/jobs', label: 'Jobs' },
     { href: '/companies', label: 'Companies' },
     { href: '/analytics', label: 'Analytics' },
+    { href: '/cli', label: 'CLI' },
     { href: '/recruiters', label: 'For recruiters' },
   ];
 
