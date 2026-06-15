@@ -1,14 +1,72 @@
 # ashby boards. Provider is the filename; each entry is company + board.
 # board = platform-specific id (see internal/sources/ashby.go).
 
+- company: "Apex Technology, Inc."
+  board: apex-technology-inc
+- company: 0x
+  board: 0x
+- company: 1Password
+  board: 1password
+- company: 80000hours
+  board: 80000hours
+- company: 8VC
+  board: 8vc
+- company: 9-mothers
+  board: 9-mothers
+- company: 9fin
+  board: 9fin
 - company: Abridge
   board: abridge
+- company: Abundant
+  board: abundant
 - company: Aerovect
   board: AeroVect
+- company: AfterQuery
+  board: afterquery
+- company: Agave
+  board: agave
 - company: Agave Games
   board: agavegames
+- company: Agentis Capital
+  board: Agentis-Capital-Advisors
+- company: AgentMail
+  board: agentmail
+- company: AidKit
+  board: aidkit
+- company: AiPrise
+  board: aiprise
+- company: Air Apps
+  board: airapps
+- company: airgarage
+  board: airgarage
+- company: Airgoods
+  board: airgoods
+- company: airops
+  board: airops
+- company: Airspace Intelligence
+  board: airspace-intelligence.com
+- company: airwallex
+  board: airwallex
+- company: Aiwyn
+  board: aiwyn
+- company: Allium
+  board: allium
+- company: ALSO
+  board: ridealso
+- company: ambient.ai
+  board: ambient.ai
+- company: amilabs
+  board: ami
+- company: Anara
+  board: anara
 - company: Andela
   board: andela
+- company: Anima
+  board: anima
+- company: anrok.com
+  board: anrok
+- company: Anterior
+  board: anterior
 - company: Anyscale
   board: anyscale
 - company: April
@@ -19,18 +77,54 @@
   board: arketa
 - company: Armory
   board: armory
+- company: artemisanalytics
+  board: artemisanalytics
+- company: Artie
+  board: artie
+- company: Artisan
+  board: artisan
 - company: Ashby
   board: ashby
+- company: Asimov
+  board: asimov
+- company: Assort Health
+  board: assorthealth
+- company: Assured
+  board: assured
+- company: Astera
+  board: astera
+- company: Astra
+  board: astra
 - company: Astrocade
   board: astrocade
+- company: astronomer
+  board: astronomer
 - company: Atlas
   board: atlas
+- company: atob
+  board: atob
+- company: Atomic
+  board: atomic
+- company: Atomic Semi
+  board: AtomicSemi
+- company: atticus.com
+  board: atticus
 - company: Attio
   board: attio
+- company: Auctor
+  board: auctor
+- company: Aurelian
+  board: aurelian
+- company: aurorasolar
+  board: aurorasolar
 - company: Authzed
   board: authzed
+- company: Aven
+  board: Aven
 - company: Aviator
   board: aviator
+- company: Avoca
+  board: avoca
 - company: Axiom
   board: axiom
 - company: bad robot games
@@ -39,98 +133,374 @@
   board: base-power
 - company: Baseten
   board: baseten
+- company: Basis Research Institute
+  board: basis-research
+- company: basis.ai
+  board: basis-ai
+- company: Bastion
+  board: Bastion
+- company: Bayesian Health
+  board: bayesianhealth
 - company: Benchling
   board: benchling
+- company: Bite
+  board: bite
+- company: Blackbird Labs
+  board: blackbird-labs-inc
+- company: Bland AI
+  board: bland
+- company: block-labs
+  board: block-labs
+- company: blockdaemon
+  board: blockdaemon
+- company: Blockhouse
+  board: blockhouse
+- company: blockstream
+  board: blockstream
+- company: Blockworks
+  board: Blockworks
 - company: Bloxd
   board: bloxd
 - company: BOLD
   board: bold
+- company: Brain Co.
+  board: brainco
 - company: Braintrust
   board: braintrust
+- company: Bree
+  board: bree
 - company: Browserbase
   board: browserbase
+- company: Buffer
+  board: buffer
+- company: Bunkerhill Health
+  board: bunkerhillhealth
+- company: Butter
+  board: butter
+- company: Camber
+  board: camber
+- company: Cambium
+  board: cambium
 - company: Campfire
   board: campfire
+- company: Canals
+  board: canals
+- company: Candid Health
+  board: candidhealth
 - company: Cantina
   board: cantina
 - company: Cape
   board: cape
+- company: Cartesia
+  board: cartesia
 - company: Casium
   board: casium
+- company: Centerfield
+  board: centerfield
+- company: Centre for Effective Altruism
+  board: centreforeffectivealtruism
+- company: chainalysis
+  board: chainalysis-careers
 - company: Character.AI
   board: character
+- company: Charge Robotics
+  board: charge-robotics
 - company: ChartHop
   board: charthop
+- company: chartis
+  board: chartis
+- company: chilipiper
+  board: chilipiper
+- company: choco
+  board: choco
 - company: Chroma
   board: trychroma
+- company: Circleback
+  board: circleback
 - company: CircuitHub
   board: circuithub
+- company: ClaimSorted
+  board: claimsorted
+- company: ClassDojo
+  board: classdojo
 - company: Clay Labs
   board: claylabs
+- company: ClickUp
+  board: clickup
+- company: Clipboard Health
+  board: clipboard
+- company: CloudZero
+  board: CloudZero
+- company: Cluely
+  board: cluely
 - company: CodaMetrix
   board: codametrix
+- company: coderabbit
+  board: coderabbit
+- company: cognition
+  board: cognition
 - company: Cohere
   board: cohere
+- company: Collaborative Robotics
+  board: cobot
+- company: Comena
+  board: comena
+- company: Compa
+  board: compa
+- company: company
+  board: company
+- company: Conductor
+  board: conductor
+- company: conduit
+  board: Conduit
+- company: Confido
+  board: confido
+- company: Confluent
+  board: confluent
+- company: console
+  board: console
 - company: Constructor
   board: constructor
+- company: Context
+  board: context
+- company: Conveo
+  board: conveo
+- company: corti
+  board: corti
+- company: Cosine
+  board: cosine
+- company: Coverdash
+  board: coverdash
+- company: cow-dao
+  board: cow-dao
+- company: cradle.bio
+  board: cradlebio
+- company: Creatify
+  board: embedding-vc
+- company: Creatify Lab
+  board: creatify
 - company: Crusoe
   board: crusoe
+- company: cryptio
+  board: cryptio
+- company: CTGT
+  board: ctgt
 - company: Curri
   board: curri
 - company: Cursor
   board: cursor
+- company: Cyvl
+  board: cyvl
+- company: d-Matrix
+  board: d-Matrix
+- company: Dandy
+  board: dandy
 - company: Dash0
   board: dash0
 - company: Datacurve
   board: datacurve
+- company: Dataleap
+  board: dataleap
+- company: DatologyAI
+  board: DatologyAI
 - company: Decagon
   board: decagon
 - company: Deel
   board: deel
 - company: Deepgram
   board: deepgram
+- company: Deepnote
+  board: deepnote
+- company: Delinea
+  board: delinea
+- company: Deliveroo
+  board: deliveroo
+- company: Dex
+  board: dex
 - company: Dialogue AI
   board: dialogueai
+- company: DiligenceSquared
+  board: diligencesquared
+- company: Ditto AI
+  board: dittoai
+- company: docker
+  board: docker
+- company: Domu Technology Inc.
+  board: domu
+- company: Double
+  board: double
+- company: dourolabs
+  board: dourolabs.xyz
+- company: Dryft
+  board: dryft
+- company: Duffel
+  board: duffel
+- company: dune
+  board: dune
+- company: dust
+  board: dust
+- company: Eigen Labs
+  board: eigen-labs
+- company: Eight Sleep
+  board: eightsleep
 - company: ElevenLabs
   board: elevenlabs
+- company: Eli Health
+  board: eli
+- company: Elicit
+  board: elicit
+- company: eliseai
+  board: eliseai
+- company: Ellipsis Labs
+  board: ellipsislabs
 - company: Ello
   board: ello
+- company: Eloquent AI
+  board: eloquentai
+- company: Elyos AI
+  board: elyos
 - company: EMA
   board: ema
+- company: Empirical Health
+  board: empirical
+- company: Encord
+  board: encord
 - company: Envoy
   board: envoy
+- company: Equip Health
+  board: equip
+- company: Escape
+  board: escape
+- company: Etched
+  board: Etched
+- company: Ether.fi
+  board: ether.fi
+- company: everai
+  board: everai
+- company: Exa Labs
+  board: exa
+- company: extend
+  board: extend
+- company: Eyebot
+  board: eyebot
+- company: Faculty AI
+  board: faculty
+- company: fanvue.com
+  board: fanvue.com
+- company: far.ai
+  board: far.ai
+- company: Farsight
+  board: farsight
+- company: favorited
+  board: favorited
 - company: Felicity
   board: felicity
+- company: Felix
+  board: felix
 - company: Fiddler AI
   board: fiddler-ai
+- company: Fieldguide
+  board: fieldguide
+- company: Filmhub
+  board: filmhub
 - company: Finch
   board: finch
+- company: Finni Health
+  board: finni-health
+- company: Finto
+  board: finto
 - company: Firecrawl
   board: firecrawl
 - company: Fireworks AI
   board: fireworksai
 - company: Flawless
   board: flawless
+- company: Fleek
+  board: fleek
+- company: Fleetline
+  board: fleetline
 - company: FleetWorks
   board: fleetworks
+- company: Flint
+  board: flint
+- company: Flock Safety
+  board: Flock
+- company: Fluidstack
+  board: fluidstack
 - company: Forge
   board: forge
+- company: Formance
+  board: formance
+- company: Fortuna Health
+  board: fortuna-health
+- company: Freed
+  board: freed
+- company: freshpaint
+  board: freshpaint
 - company: FS Studio
   board: fs-studio
+- company: Fundwell
+  board: fundwell
 - company: Further AI
   board: furtherai
+- company: Fuse
+  board: Fuse
+- company: futurefitai
+  board: futurefitai
+- company: fyxer.ai
+  board: fyxer
+- company: G2
+  board: G2
 - company: GameChanger
   board: gamechanger
+- company: Garage
+  board: garage
+- company: Gecko Robotics
+  board: gecko-robotics
+- company: genmo
+  board: genmo
+- company: Giga AI
+  board: gigaml
+- company: Gimlet Labs
+  board: gimlet
 - company: Givebutter
   board: givebutter
+- company: Glimpse
+  board: glimp-se
+- company: goldsky
+  board: goldsky
+- company: GoLinks
+  board: golinks
+- company: Gorgias
+  board: gorgias
+- company: goteleport
+  board: goteleport
+- company: GPTZero
+  board: GPTZero
+- company: granola.ai
+  board: granola
 - company: Granted
   board: granted
+- company: Great Question
+  board: greatquestion
 - company: GT HQ
   board: gt-hq
+- company: Guild
+  board: guild
+- company: H3X Technologies
+  board: h3x-technologies
 - company: HackerOne
   board: hackerone
+- company: Hadrian
+  board: hadrian-automation
+- company: Handshake
+  board: handshake
+- company: harmattan-ai
+  board: harmattan-ai
 - company: Harmonic
   board: harmonic
+- company: harrison
+  board: Harrison.ai
 - company: Harvey
   board: harvey
 - company: Hatch
@@ -139,124 +509,456 @@
   board: hawkeyeinnovations
 - company: Hayden AI
   board: haydenai
+- company: HCompany
+  board: hcompany
+- company: Healthtech 1
+  board: healthtech-1
 - company: Hedra
   board: hedra
+- company: Help Scout
+  board: helpscout
+- company: Heron Data
+  board: herondata
+- company: Heron Power
+  board: heron-power
 - company: Higharc
   board: higharc
 - company: Hightouch
   board: hightouch
+- company: Homebase
+  board: homebase
+- company: Hubstaff
+  board: hubstaff
+- company: hud
+  board: hud
+- company: Human Archive
+  board: humanarchive
+- company: humatahealth
+  board: humatahealth
+- company: Hyperbound
+  board: hyperbound
 - company: Hyperhug
   board: hyperhug
+- company: IA Collaborative
+  board: iacollaborative
 - company: Ideogram
   board: ideogram
 - company: Idler
   board: idler
+- company: Illumio
+  board: illumio
+- company: immersivelabs
+  board: immersivelabs
+- company: Infinite
+  board: infinite
+- company: infisical
+  board: infisical
+- company: Injective
+  board: injective
 - company: Inngest
   board: inngest
+- company: Insitro
+  board: insitro
+- company: Interplay
+  board: interplay
+- company: invert
+  board: invert
+- company: Invopop
+  board: invopop
+- company: inworld-ai
+  board: inworld-ai
+- company: Ironclad
+  board: ironcladhq
+- company: Jerry.ai
+  board: Jerry.ai
 - company: Joyteractive
   board: Joyteractive
+- company: jua.ai
+  board: jua
+- company: Juicebox
+  board: juicebox
+- company: julius.ai
+  board: julius
+- company: Junction
+  board: junction
+- company: Juniper Square
+  board: junipersquare
 - company: Kalshi
   board: kalshi
+- company: Kastle
+  board: kastle
 - company: KAYAK
   board: kayak
 - company: Keycard Labs
   board: keycard-labs
+- company: Keyrock
+  board: keyrock
+- company: kindred
+  board: kindred
+- company: Kira
+  board: kira
 - company: Knock
   board: knock
+- company: knowunity
+  board: knowunity
+- company: Kognitos
+  board: Kognitos
+- company: Kombo
+  board: kombo
+- company: Kong
+  board: kong
+- company: kraken
+  board: kraken.com
+- company: Lago
+  board: lago
+- company: lakera.ai
+  board: lakera.ai
+- company: Lambda
+  board: lambda
 - company: LangChain
   board: langchain
 - company: Langfuse
   board: langfuse
+- company: ledger
+  board: ledger
+- company: Legion Health
+  board: legionhealth
+- company: legora.com
+  board: legora
+- company: Leland
+  board: leland
+- company: letta
+  board: letta
+- company: Level
+  board: level
+- company: li.fi
+  board: li.fi
+- company: Lightdash
+  board: lightdash
 - company: Linear
   board: linear
+- company: LINQ
+  board: linqapp
+- company: litellm
+  board: litellm
+- company: liveflow
+  board: liveflow
 - company: Liven
   board: liven
+- company: llamaindex
+  board: llamaindex
+- company: Lorikeet
+  board: lorikeet
 - company: Lovable
   board: lovable
+- company: Lucis
+  board: lucis
 - company: Lumilens
   board: lumilens
+- company: Lumin Digital
+  board: lumin-digital
 - company: Luminary
   board: luminary
+- company: Luxor
+  board: luxor
+- company: Lydian
+  board: lydian
+- company: Lynk
+  board: Lynk
+- company: m13
+  board: m13
+- company: Mach Industries
+  board: mach
+- company: Mach9
+  board: mach9
+- company: Magic School
+  board: magicschool
+- company: magical
+  board: magical
+- company: magiceden
+  board: magiceden
 - company: Mapbox
   board: mapbox
+- company: Mariana Minerals
+  board: marianaminerals
+- company: Marshmallow
+  board: marshmallow
 - company: Masabi
   board: masabi
 - company: Matic Robots
   board: MaticRobots
+- company: matterlabs
+  board: matter-labs
+- company: Matterworks
+  board: matterworks
+- company: Mechanize
+  board: mechanize
+- company: medal
+  board: medal
+- company: Medra
+  board: medraai
+- company: Melotech
+  board: melotech
+- company: Mem0
+  board: mem0
 - company: Menlo Security Inc.
   board: menlosecurity
 - company: Mentava
   board: mentava
+- company: Mercor
+  board: mercor
+- company: Mercura
+  board: mercura
+- company: Meshy
+  board: meshy
+- company: meticulous
+  board: meticulous
 - company: Mirage
   board: mirage
+- company: miter
+  board: miter
 - company: Modal
   board: modal
 - company: Modern Treasury
   board: moderntreasury
 - company: Mona
   board: mona
+- company: Monarch Money
+  board: monarchmoney
 - company: Moonshot AI
   board: moonshot-ai
+- company: MUBI
+  board: MUBI
+- company: MUI
+  board: MUI
 - company: multiverse
   board: multiverse
+- company: Mutiny
+  board: mutiny
 - company: Mux
   board: mux
+- company: mystenlabs
+  board: mystenlabs
+- company: n1
+  board: n1
 - company: n8n
   board: n8n
+- company: nabucasa
+  board: nabucasa
+- company: Nango
+  board: Nango
+- company: Nash
+  board: Nash
 - company: Neon
   board: neon
+- company: nethermind
+  board: nethermind
+- company: Netic
+  board: netic
 - company: neural concept
   board: neuralconcept
+- company: Nevis
+  board: nevis
+- company: New Lantern
+  board: newlantern
+- company: nexus.xyz
+  board: nexus.xyz
+- company: nomic.foundation
+  board: nomic.foundation
+- company: nooks.ai
+  board: nooks
+- company: NormalComputing
+  board: NormalComputing
+- company: Northwood Space
+  board: NorthwoodSpace
 - company: Notion
   board: notion
+- company: Nuclear Promise X
+  board: NPX
+- company: Numeral
+  board: numeral
+- company: Obvious
+  board: obvious
+- company: OffDeal
+  board: offdeal
+- company: Onebrief
+  board: onebrief
+- company: Oneleet
+  board: oneleet
+- company: onepay.com
+  board: oneapp
+- company: Ontic
+  board: Ontic
+- company: Onyx
+  board: onyx
 - company: OpenAI
   board: openai
 - company: OpenEvidence
   board: openevidence
+- company: openrouter.ai
+  board: openrouter
 - company: OpenSea
   board: opensea
+- company: oplabs
+  board: oplabs
+- company: OpusClip
+  board: opusclip
+- company: orca
+  board: orca
+- company: orchard
+  board: orchard
+- company: Osmo
+  board: osmo
 - company: Outpost
   board: outpost
+- company: Output Biosciences
+  board: output
+- company: outtake
+  board: outtake
+- company: Overview
+  board: overview
+- company: Overview Energy
+  board: overviewenergy
+- company: Owkin
+  board: owkin
+- company: paradigm.xyz
+  board: paradigm
+- company: Parallel Web Systems
+  board: parallel
 - company: parity
   board: parity
+- company: Parspec
+  board: parspec
 - company: Patreon
   board: patreon
+- company: paxoslabs
+  board: paxoslabs
+- company: Peakmetrics
+  board: peakmetrics
+- company: Pebl
+  board: pebl
+- company: Pencil
+  board: pencil
+- company: pennylane
+  board: pennylane
+- company: Perchwell
+  board: Perchwell
 - company: Periodic Labs
   board: periodic-labs
+- company: perk
+  board: perk
+- company: permitflow
+  board: permitflow
 - company: Perplexity
   board: perplexity
+- company: phantom
+  board: phantom
+- company: Phia
+  board: phia
+- company: Phil
+  board: phil
+- company: photoroom
+  board: photoroom
+- company: Physical Intelligence
+  board: physicalintelligence
 - company: Pika
   board: pika
 - company: Pinecone
   board: pinecone
+- company: plaid
+  board: plaid
+- company: Plain
+  board: plain
+- company: plane
+  board: plane
 - company: Planera
   board: planera
 - company: playground
   board: playground
+- company: Playlab
+  board: Playlab
+- company: playson
+  board: playson
+- company: Pocket Worlds
+  board: Pocket%20Worlds
+- company: PointOne
+  board: pointone
 - company: Polygon Labs
   board: polygon-labs
+- company: polymarket
+  board: polymarket
+- company: Polymath Robotics
+  board: polymath
+- company: Popl
+  board: popl
+- company: Posh
+  board: posh
+- company: Poshmark
+  board: poshmark
 - company: PostHog
   board: posthog
+- company: preludesecurity
+  board: preludesecurity
+- company: PrimeIntellect
+  board: primeintellect
+- company: Prior Labs
+  board: prior-labs
+- company: procurementsciences
+  board: procurementsciences
 - company: Profound
   board: profound
 - company: Proof of Play
   board: proofofplay
+- company: Propel
+  board: propel
 - company: Protegrity
   board: protegrity
+- company: Prox
+  board: prox
 - company: Proxima
   board: proxima
+- company: pyth
+  board: pythnetwork
+- company: quiknodeinc
+  board: quicknode
 - company: quora
   board: quora
+- company: radai
+  board: radai
+- company: rain
+  board: rain
+- company: Rally UXR
+  board: rallyuxr
+- company: Ramp
+  board: ramp
+- company: Reacher
+  board: reacher
+- company: ReadMe
+  board: readme
+- company: Ready
+  board: ready
 - company: Reality Defender
   board: realitydefender
+- company: recall.ai
+  board: recall
 - company: Red 6
   board: red6
 - company: Reducto
   board: reducto
 - company: Reedsy
   board: reedsy
+- company: Reflect Orbital
+  board: reflect-orbital
 - company: Reflection AI
   board: reflectionai
+- company: REGENT
+  board: regent
+- company: reka
+  board: reka
+- company: Relay Financial
+  board: relayfi
+- company: relayprotocol
+  board: relayprotocol
 - company: Render
   board: render
 - company: Replit
@@ -265,40 +967,150 @@
   board: resend
 - company: Restream
   board: restream
+- company: retellai
+  board: retell-ai
+- company: revenuecat
+  board: revenuecat
+- company: Revise Robotics
+  board: reviserobotics
+- company: Revive
+  board: revive
+- company: rilla
+  board: rilla
+- company: rillet.com
+  board: rillet
+- company: risklabs
+  board: risklabs
+- company: River Markets
+  board: river
+- company: Rivian and Volkswagen Group Technologies
+  board: rivianvw.tech
+- company: Roboflow
+  board: roboflow
 - company: Rocket Science
   board: rocketsciencegg
+- company: Rollstack
+  board: rollstack
+- company: Root Access
+  board: root-access
+- company: rula
+  board: rula
+- company: Rundoo
+  board: rundoo
+- company: Runway
+  board: runway
+- company: RWA.xyz
+  board: RWA.xyz
+- company: SafetyKit
+  board: safetykit
+- company: Saharaai
+  board: Sahara
+- company: SalesPatriot
+  board: salespatriot
+- company: Salient
+  board: salient
+- company: salmon-group
+  board: salmon-group
+- company: SandboxAQ
+  board: sandboxaq
 - company: Sardine
   board: sardine
+- company: satispay
+  board: satispay
+- company: Saturn
+  board: saturn
+- company: Scientech Research
+  board: scientech-research
+- company: scribe.com
+  board: scribe
 - company: Second Dinner
   board: SecondDinner
+- company: SeiLabs
+  board: sei-labs
+- company: Semgrep
+  board: semgrep
 - company: Seneca
   board: seneca
+- company: Sentra
+  board: sentra
+- company: Sentry
+  board: sentry
+- company: Sereact
+  board: sereact
+- company: Serenis
+  board: serenis
 - company: series ai
   board: seriesai
 - company: Serval
   board: serval
+- company: sesame
+  board: sesame
+- company: sgnl.ai
+  board: sgnlai
+- company: Shadeform
+  board: shadeform
+- company: shiftkey
+  board: ShiftKey
 - company: Sierra
   board: sierra
+- company: Sieve
+  board: sieve
 - company: SIFT
   board: sift
+- company: SigNoz
+  board: signoz
+- company: sigp
+  board: sigp
+- company: Sim
+  board: sim
+- company: Simple AI
+  board: simple-ai
 - company: SimpleClosure
   board: simpleclosure
+- company: Simular
+  board: Simular
 - company: Skydio
   board: skydio
+- company: skyecosystem
+  board: skyecosystem
 - company: Sleeper
   board: sleeper
 - company: Snowflake
   board: snowflake
+- company: Socket
+  board: socket
+- company: Socure
+  board: socure
+- company: Sola
+  board: sola
 - company: Solace
   board: solace
+- company: Solink
+  board: solink
+- company: Solva
+  board: solva
+- company: Solve Intelligence
+  board: solveintelligence
+- company: SonderMind
+  board: sondermind
 - company: Sorare
   board: Sorare
+- company: sound.xyz
+  board: sound.xyz
+- company: South Geeks
+  board: southgeeks
+- company: Span
+  board: span
+- company: Speak
+  board: speak
 - company: Speckle
   board: speckle
 - company: Spellbrush
   board: spellbrush
 - company: SplitMetrics
   board: splitmetrics
+- company: sprig
+  board: sprig
 - company: Stand
   board: stand
 - company: Starbridge
@@ -309,769 +1121,213 @@
   board: stash
 - company: Stealth Startup
   board: stealth-startup
+- company: stellar
+  board: stellar
+- company: Stepful
+  board: stepful
+- company: Sticker Mule
+  board: stickermule
+- company: Stilta
+  board: stilta
+- company: Stream
+  board: stream
 - company: Strella
   board: strella
+- company: Subsets
+  board: subsets
 - company: Substack
   board: substack
+- company: succinct
+  board: succinct
 - company: Suno
   board: suno
 - company: Supabase
   board: supabase
+- company: Super
+  board: super.com
 - company: supercell
   board: supercell
 - company: Survey Monkey
   board: surveymonkey
+- company: swap
+  board: swap
 - company: SweatPals
   board: sweatpals
+- company: Sweep
+  board: sweep
+- company: symbiotic.fi
+  board: Symbiotic
+- company: syndica
+  board: syndica
 - company: Synthesia
   board: synthesia
+- company: Taara
+  board: taaraconnect
+- company: Tailor
+  board: tailor
+- company: Talos
+  board: Talos-Trading
 - company: tapblaze
   board: tapblaze
 - company: Tavus
   board: tavus
+- company: Tekton Dynamics
+  board: tekton-dynamics
+- company: telli
+  board: telli
 - company: tempo
   board: tempo
+- company: TENEX.AI
+  board: tenex
 - company: Tenjin
   board: tenjin
 - company: Tennr
   board: tennr
 - company: TensorWave
   board: tensorwave
+- company: Terminal
+  board: terminal
+- company: Tessera Labs
+  board: tessera-labs
 - company: Thatgamecompany
   board: Thatgamecompany
 - company: The Believer Company
   board: believer
+- company: The Exploration Company
+  board: the-exploration-company
 - company: The Global Talent Co.
   board: the-global-talent-co
+- company: The Voleon Group
+  board: voleon
+- company: Tilde Research
+  board: tilderesearch
+- company: Timely
+  board: timely
+- company: tldr.tech
+  board: tldr.tech
+- company: tldraw
+  board: tldraw
+- company: Tonal
+  board: tonal
+- company: Topline Pro
+  board: topline-pro
+- company: trading212
+  board: trading212
 - company: Transfr
   board: transfr
+- company: traversal
+  board: traversal
+- company: Treefera
+  board: treefera
+- company: Tremendous
+  board: tremendous
+- company: Triumph
+  board: triumph-arcade
+- company: trmlabs
+  board: trm-labs
 - company: Trove
   board: trove
 - company: Trust Wallet
   board: trust-wallet
+- company: Turion Space
+  board: turion-space
+- company: Twenty
+  board: twenty
 - company: Tycho.AI
   board: tycho-ai
+- company: UiPath
+  board: uipath
+- company: Uncountable
+  board: uncountable
+- company: uniswaplabs
+  board: uniswap
 - company: Universe Group
   board: universe-group
+- company: Unlikely AI
+  board: unlikelyai
+- company: Unwrap
+  board: Unwrap
+- company: Uplane
+  board: uplane
+- company: Upvest
+  board: upvest
+- company: v7labs
+  board: v7labs.com
 - company: Valon
   board: valon
 - company: Vanta
   board: vanta
+- company: Vantage
+  board: vantage
 - company: Vapi
   board: vapi
+- company: Vendelux
+  board: vendelux
 - company: Verge Genomics
   board: verge-genomics
+- company: Verse Medical
+  board: versemedical
+- company: vertical-aerospace
+  board: vertical-aerospace
+- company: virtahealth
+  board: virtahealth
+- company: Vital Lyfe
+  board: vital-lyfe
 - company: Voldex
   board: Voldex
+- company: voodoo
+  board: voodoo
+- company: Vooma
+  board: vooma
+- company: Vori
+  board: vori
+- company: Walrus
+  board: walrusfi
+- company: WarpBuild
+  board: warpbuild
 - company: Watershed
   board: watershed
+- company: Wealth.com
+  board: wealth-com
+- company: Wealthsimple
+  board: wealthsimple
 - company: Weaviate
   board: weaviate
+- company: WebAI
+  board: webai
 - company: Welltech
   board: welltech
+- company: WindBorne Systems
+  board: windborne-systems
+- company: Windmill
+  board: windmill
 - company: Windranger
   board: windranger
 - company: wistia
   board: wistia
 - company: WorkOS
   board: workos
+- company: Worldly
+  board: worldly
 - company: Writer
   board: writer
 - company: Yendo
   board: yendo
 - company: yubo
   board: yubo
+- company: Yuma AI
+  board: yumaai
 - company: Zapier
   board: zapier
-- company: Deliveroo
-  board: deliveroo
-- company: legora.com
-  board: legora
-- company: everai
-  board: everai
-- company: Hadrian
-  board: hadrian-automation
-- company: Rivian and Volkswagen Group Technologies
-  board: rivianvw.tech
-- company: harmattan-ai
-  board: harmattan-ai
-- company: Handshake
-  board: handshake
-- company: Ramp
-  board: ramp
-- company: eliseai
-  board: eliseai
-- company: trmlabs
-  board: trm-labs
-- company: The Exploration Company
-  board: the-exploration-company
-- company: "Apex Technology, Inc."
-  board: apex-technology-inc
-- company: Etched
-  board: Etched
-- company: Zip
-  board: zip
-- company: Socure
-  board: socure
-- company: UiPath
-  board: uipath
-- company: Dandy
-  board: dandy
-- company: Kong
-  board: kong
-- company: Mach Industries
-  board: mach
-- company: Illumio
-  board: illumio
-- company: Faculty AI
-  board: faculty
-- company: Delinea
-  board: delinea
-- company: Northwood Space
-  board: NorthwoodSpace
-- company: coderabbit
-  board: coderabbit
-- company: cognition
-  board: cognition
-- company: kraken
-  board: kraken.com
-- company: Mercor
-  board: mercor
-- company: 1Password
-  board: 1password
-- company: TENEX.AI
-  board: tenex
-- company: 9fin
-  board: 9fin
-- company: Giga AI
-  board: gigaml
-- company: The Voleon Group
-  board: voleon
-- company: Mariana Minerals
-  board: marianaminerals
-- company: Confluent
-  board: confluent
-- company: Sentry
-  board: sentry
-- company: Juniper Square
-  board: junipersquare
-- company: polymarket
-  board: polymarket
-- company: blockstream
-  board: blockstream
-- company: ALSO
-  board: ridealso
-- company: Eight Sleep
-  board: eightsleep
-- company: chainalysis
-  board: chainalysis-careers
-- company: Ironclad
-  board: ironcladhq
-- company: d-Matrix
-  board: d-Matrix
-- company: Pebl
-  board: pebl
-- company: Equip Health
-  board: equip
-- company: Sereact
-  board: sereact
-- company: Clipboard Health
-  board: clipboard
-- company: Creatify
-  board: embedding-vc
-- company: rain
-  board: rain
-- company: Lambda
-  board: lambda
-- company: Meshy
-  board: meshy
-- company: Heron Power
-  board: heron-power
-- company: Exa Labs
-  board: exa
-- company: Upvest
-  board: upvest
-- company: Atomic Semi
-  board: AtomicSemi
-- company: Poshmark
-  board: poshmark
-- company: lakera.ai
-  board: lakera.ai
-- company: Relay Financial
-  board: relayfi
-- company: Cartesia
-  board: cartesia
-- company: scribe.com
-  board: scribe
-- company: SandboxAQ
-  board: sandboxaq
-- company: Span
-  board: span
-- company: Wealthsimple
-  board: wealthsimple
-- company: Assort Health
-  board: assorthealth
-- company: Vendelux
-  board: vendelux
-- company: basis.ai
-  board: basis-ai
-- company: HCompany
-  board: hcompany
-- company: Lynk
-  board: Lynk
-- company: trading212
-  board: trading212
-- company: onepay.com
-  board: oneapp
-- company: Super
-  board: super.com
-- company: Brain Co.
-  board: brainco
-- company: Uncountable
-  board: uncountable
-- company: PrimeIntellect
-  board: primeintellect
-- company: nooks.ai
-  board: nooks
-- company: Agentis Capital
-  board: Agentis-Capital-Advisors
-- company: WindBorne Systems
-  board: windborne-systems
-- company: G2
-  board: G2
-- company: sesame
-  board: sesame
-- company: Leland
-  board: leland
-- company: dust
-  board: dust
-- company: rillet.com
-  board: rillet
-- company: Airspace Intelligence
-  board: airspace-intelligence.com
-- company: Physical Intelligence
-  board: physicalintelligence
-- company: Taara
-  board: taaraconnect
-- company: Socket
-  board: socket
-- company: Astera
-  board: astera
-- company: Solink
-  board: solink
-- company: retellai
-  board: retell-ai
-- company: Homebase
-  board: homebase
-- company: Phil
-  board: phil
-- company: Talos
-  board: Talos-Trading
-- company: Nash
-  board: Nash
-- company: anrok.com
-  board: anrok
-- company: WebAI
-  board: webai
-- company: Gorgias
-  board: gorgias
-- company: Netic
-  board: netic
-- company: Turion Space
-  board: turion-space
-- company: Parallel Web Systems
-  board: parallel
-- company: inworld-ai
-  board: inworld-ai
-- company: Scientech Research
-  board: scientech-research
-- company: Nuclear Promise X
-  board: NPX
-- company: Prior Labs
-  board: prior-labs
-- company: Kira
-  board: kira
-- company: Tessera Labs
-  board: tessera-labs
-- company: Triumph
-  board: triumph-arcade
-- company: Basis Research Institute
-  board: basis-research
-- company: Allium
-  board: allium
-- company: Gecko Robotics
-  board: gecko-robotics
-- company: Centerfield
-  board: centerfield
-- company: Blackbird Labs
-  board: blackbird-labs-inc
-- company: Osmo
-  board: osmo
-- company: ambient.ai
-  board: ambient.ai
-- company: Simular
-  board: Simular
-- company: granola.ai
-  board: granola
-- company: shiftkey
-  board: ShiftKey
-- company: Auctor
-  board: auctor
-- company: Gimlet Labs
-  board: gimlet
-- company: radai
-  board: radai
-- company: phantom
-  board: phantom
-- company: Ether.fi
-  board: ether.fi
-- company: REGENT
-  board: regent
-- company: Bree
-  board: bree
-- company: Compa
-  board: compa
-- company: Ellipsis Labs
-  board: ellipsislabs
-- company: Elicit
-  board: elicit
-- company: Insitro
-  board: insitro
-- company: Charge Robotics
-  board: charge-robotics
-- company: Eloquent AI
-  board: eloquentai
-- company: llamaindex
-  board: llamaindex
-- company: console
-  board: console
-- company: Tonal
-  board: tonal
-- company: DatologyAI
-  board: DatologyAI
-- company: Ontic
-  board: Ontic
-- company: Creatify Lab
-  board: creatify
-- company: Cyvl
-  board: cyvl
-- company: outtake
-  board: outtake
-- company: v7labs
-  board: v7labs.com
-- company: Melotech
-  board: melotech
-- company: Interplay
-  board: interplay
-- company: Keyrock
-  board: keyrock
-- company: Overview Energy
-  board: overviewenergy
-- company: Phia
-  board: phia
-- company: H3X Technologies
-  board: h3x-technologies
-- company: Reacher
-  board: reacher
-- company: Mach9
-  board: mach9
-- company: cradle.bio
-  board: cradlebio
-- company: openrouter.ai
-  board: openrouter
-- company: SeiLabs
-  board: sei-labs
-- company: block-labs
-  board: block-labs
-- company: Medra
-  board: medraai
-- company: Monarch Money
-  board: monarchmoney
-- company: Wealth.com
-  board: wealth-com
+- company: Zeit AI
+  board: zeit-ai
 - company: Zello
   board: Zello
-- company: OpusClip
-  board: opusclip
-- company: Parspec
-  board: parspec
-- company: 8VC
-  board: 8vc
-- company: Farsight
-  board: farsight
-- company: Output Biosciences
-  board: output
-- company: harrison
-  board: Harrison.ai
-- company: GPTZero
-  board: GPTZero
-- company: jua.ai
-  board: jua
-- company: mystenlabs
-  board: mystenlabs
-- company: oplabs
-  board: oplabs
-- company: atticus.com
-  board: atticus
-- company: Unwrap
-  board: Unwrap
-- company: Sieve
-  board: sieve
-- company: Anima
-  board: anima
-- company: Reflect Orbital
-  board: reflect-orbital
-- company: Flock Safety
-  board: Flock
-- company: Vantage
-  board: vantage
-- company: Rundoo
-  board: rundoo
-- company: Heron Data
-  board: herondata
-- company: fanvue.com
-  board: fanvue.com
-- company: ledger
-  board: ledger
-- company: Fundwell
-  board: fundwell
-- company: Perchwell
-  board: Perchwell
-- company: Collaborative Robotics
-  board: cobot
-- company: Kognitos
-  board: Kognitos
-- company: reka
-  board: reka
-- company: far.ai
-  board: far.ai
-- company: traversal
-  board: traversal
-- company: Bastion
-  board: Bastion
-- company: Aven
-  board: Aven
-- company: Walrus
-  board: walrusfi
-- company: Unlikely AI
-  board: unlikelyai
-- company: Obvious
-  board: obvious
-- company: MUBI
-  board: MUBI
-- company: blockdaemon
-  board: blockdaemon
-- company: paxoslabs
-  board: paxoslabs
-- company: magiceden
-  board: magiceden
-- company: Anterior
-  board: anterior
-- company: GoLinks
-  board: golinks
-- company: Solva
-  board: solva
-- company: Root Access
-  board: root-access
-- company: Dryft
-  board: dryft
-- company: Vital Lyfe
-  board: vital-lyfe
-- company: Cluely
-  board: cluely
-- company: Context
-  board: context
-- company: Lydian
-  board: lydian
-- company: Mechanize
-  board: mechanize
-- company: LINQ
-  board: linqapp
-- company: julius.ai
-  board: julius
-- company: recall.ai
-  board: recall
-- company: paradigm.xyz
-  board: paradigm
-- company: nethermind
-  board: nethermind
-- company: syndica
-  board: syndica
-- company: li.fi
-  board: li.fi
-- company: Luxor
-  board: luxor
-- company: Treefera
-  board: treefera
-- company: New Lantern
-  board: newlantern
-- company: Sentra
-  board: sentra
-- company: Glimpse
-  board: glimp-se
-- company: Coverdash
-  board: coverdash
-- company: m13
-  board: m13
-- company: Eli Health
-  board: eli
-- company: Tilde Research
-  board: tilderesearch
-- company: Eyebot
-  board: eyebot
-- company: fyxer.ai
-  board: fyxer
-- company: amilabs
-  board: ami
+- company: Zensors
+  board: zensors
+- company: Ziina
+  board: ziina
+- company: Zip
+  board: zip
 - company: zodl
   board: zodl
-- company: Saharaai
-  board: Sahara
-- company: artemisanalytics
-  board: artemisanalytics
-- company: goldsky
-  board: goldsky
-- company: conduit
-  board: Conduit
-- company: tldraw
-  board: tldraw
-- company: Blockhouse
-  board: blockhouse
-- company: Worldly
-  board: worldly
-- company: Ditto AI
-  board: dittoai
-- company: IA Collaborative
-  board: iacollaborative
-- company: Matterworks
-  board: matterworks
-- company: Eigen Labs
-  board: eigen-labs
-- company: airgarage
-  board: airgarage
-- company: sound.xyz
-  board: sound.xyz
-- company: nomic.foundation
-  board: nomic.foundation
-- company: matterlabs
-  board: matter-labs
-- company: quiknodeinc
-  board: quicknode
-- company: Blockworks
-  board: Blockworks
-- company: RWA.xyz
-  board: RWA.xyz
-- company: symbiotic.fi
-  board: Symbiotic
-- company: dune
-  board: dune
-- company: Great Question
-  board: greatquestion
-- company: orca
-  board: orca
-- company: pyth
-  board: pythnetwork
-- company: 0x
-  board: 0x
-- company: cow-dao
-  board: cow-dao
-- company: succinct
-  board: succinct
-- company: airwallex
-  board: airwallex
-- company: pennylane
-  board: pennylane
-- company: voodoo
-  board: voodoo
-- company: plaid
-  board: plaid
-- company: Jerry.ai
-  board: Jerry.ai
-- company: satispay
-  board: satispay
-- company: chartis
-  board: chartis
-- company: docker
-  board: docker
-- company: permitflow
-  board: permitflow
-- company: swap
-  board: swap
-- company: stellar
-  board: stellar
-- company: rula
-  board: rula
-- company: vertical-aerospace
-  board: vertical-aerospace
-- company: revenuecat
-  board: revenuecat
-- company: goteleport
-  board: goteleport
-- company: playson
-  board: playson
-- company: airops
-  board: airops
-- company: CloudZero
-  board: CloudZero
-- company: Fuse
-  board: Fuse
-- company: orchard
-  board: orchard
-- company: photoroom
-  board: photoroom
-- company: virtahealth
-  board: virtahealth
-- company: corti
-  board: corti
-- company: n1
-  board: n1
-- company: immersivelabs
-  board: immersivelabs
-- company: 9-mothers
-  board: 9-mothers
-- company: atob
-  board: atob
-- company: NormalComputing
-  board: NormalComputing
-- company: knowunity
-  board: knowunity
-- company: uniswaplabs
-  board: uniswap
-- company: extend
-  board: extend
-- company: medal
-  board: medal
-- company: Playlab
-  board: Playlab
-- company: magical
-  board: magical
-- company: infisical
-  board: infisical
-- company: tldr.tech
-  board: tldr.tech
-- company: company
-  board: company
-- company: meticulous
-  board: meticulous
-- company: dourolabs
-  board: dourolabs.xyz
-- company: freshpaint
-  board: freshpaint
-- company: invert
-  board: invert
-- company: plane
-  board: plane
-- company: aurorasolar
-  board: aurorasolar
-- company: genmo
-  board: genmo
-- company: relayprotocol
-  board: relayprotocol
-- company: nabucasa
-  board: nabucasa
-- company: litellm
-  board: litellm
-- company: humatahealth
-  board: humatahealth
-- company: kindred
-  board: kindred
-- company: letta
-  board: letta
-- company: nexus.xyz
-  board: nexus.xyz
-- company: chilipiper
-  board: chilipiper
-- company: risklabs
-  board: risklabs
-- company: cryptio
-  board: cryptio
-- company: 80000hours
-  board: 80000hours
-- company: choco
-  board: choco
-- company: sigp
-  board: sigp
-- company: Nango
-  board: Nango
-- company: procurementsciences
-  board: procurementsciences
-- company: skyecosystem
-  board: skyecosystem
-- company: MUI
-  board: MUI
-- company: perk
-  board: perk
-- company: salmon-group
-  board: salmon-group
-- company: AidKit
-  board: aidkit
-- company: Aiwyn
-  board: aiwyn
-- company: Artisan
-  board: artisan
-- company: Assured
-  board: assured
-- company: Astra
-  board: astra
-- company: Bayesian Health
-  board: bayesianhealth
-- company: Cambium
-  board: cambium
-- company: ClickUp
-  board: clickup
-- company: favorited
-  board: favorited
-- company: Felix
-  board: felix
-- company: Fieldguide
-  board: fieldguide
-- company: Filmhub
-  board: filmhub
-- company: Freed
-  board: freed
-- company: Guild
-  board: guild
-- company: Help Scout
-  board: helpscout
-- company: Lorikeet
-  board: lorikeet
-- company: Magic School
-  board: magicschool
-- company: Marshmallow
-  board: marshmallow
-- company: Numeral
-  board: numeral
-- company: Onebrief
-  board: onebrief
-- company: Owkin
-  board: owkin
-- company: Peakmetrics
-  board: peakmetrics
-- company: Plain
-  board: plain
-- company: Pocket Worlds
-  board: Pocket%20Worlds
-- company: Propel
-  board: propel
-- company: ReadMe
-  board: readme
-- company: Runway
-  board: runway
-- company: Semgrep
-  board: semgrep
-- company: sgnl.ai
-  board: sgnlai
-- company: rilla
-  board: rilla
-- company: astronomer
-  board: astronomer
-- company: miter
-  board: miter
-- company: preludesecurity
-  board: preludesecurity
-- company: sprig
-  board: sprig
-- company: futurefitai
-  board: futurefitai
-- company: liveflow
-  board: liveflow
