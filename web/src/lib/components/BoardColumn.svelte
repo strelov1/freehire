@@ -21,6 +21,10 @@
     // which satisfies MyJob. The parent can widen back to BoardItem via cast.
     onopen: (item: MyJob) => void;
   } = $props();
+
+  // Neutral drop-target frame — overrides svelte-dnd-action's default yellow
+  // outline, which clashes with the monochrome palette.
+  const dropTargetStyle = { outline: '2px solid var(--ring)', borderRadius: 'var(--radius-md)' };
 </script>
 
 <section class="flex w-72 shrink-0 flex-col gap-2 rounded-xl bg-secondary/40 p-2">
@@ -30,7 +34,7 @@
   </header>
   <div
     class="flex min-h-24 flex-col gap-2"
-    use:dndzone={{ items, flipDurationMs: 150, type: 'board' }}
+    use:dndzone={{ items, flipDurationMs: 150, type: 'board', dropTargetStyle }}
     onconsider={(e) => onconsider(id, e.detail.items as BoardItem[])}
     onfinalize={(e) => onfinalize(id, e.detail.items as BoardItem[])}
   >

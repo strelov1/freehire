@@ -24,7 +24,20 @@
       <Badge variant="secondary">{humanizeStage(item.stage)}</Badge>
     {/if}
     {#if hasNotes}
-      <span class="text-xs text-muted-foreground" title="Has notes" aria-label="Has notes">📝</span>
+      <svg
+        class="size-3 shrink-0 text-muted-foreground"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        role="img"
+        aria-label="Has notes"
+      >
+        <title>Has notes</title>
+        <path d="M8 7h8M8 12h8M8 17h5" />
+      </svg>
     {/if}
   </span>
 </button>
