@@ -111,3 +111,47 @@ func TestDerive_NoisyDescriptionYieldsNoWorkMode(t *testing.T) {
 		t.Errorf("WorkMode = %q, want empty (noisy description, no real phrase)", got.WorkMode)
 	}
 }
+
+// Seniority source precedence: title dictionary → description. The description
+// only fills a grade the title left empty; category is unaffected.
+func TestDerive_DescriptionFillsSeniorityWhenTitleSilent(t *testing.T) {
+	got := Derive(Input{
+		Title:       "Backend Developer", // no grade word
+		Company:     "Acme",
+		Source:      "greenhouse",
+		ExternalID:  "board:1",
+		Description: "We are looking for a senior engineer to own the platform.",
+	})
+	if got.Seniority != "senior" {
+		t.Errorf("Seniority = %q, want senior (description fills when title silent)", got.Seniority)
+	}
+	if got.Category != "backend" {
+		t.Errorf("Category = %q, want backend (unaffected)", got.Category)
+	}
+}
+
+func TestDerive_TitleSeniorityBeatsDescription(t *testing.T) {
+	got := Derive(Input{
+		Title:       "Lead Backend Engineer", // title → lead
+		Company:     "Acme",
+		Source:      "greenhouse",
+		ExternalID:  "board:1",
+		Description: "You will work with a senior team.", // description → senior, but loses
+	})
+	if got.Seniority != "lead" {
+		t.Errorf("Seniority = %q, want lead (title beats description)", got.Seniority)
+	}
+}
+
+func TestDerive_NoisyDescriptionYieldsNoSeniority(t *testing.T) {
+	got := Derive(Input{
+		Title:       "Backend Developer", // no grade
+		Company:     "Acme",
+		Source:      "greenhouse",
+		ExternalID:  "board:1",
+		Description: "Collaborate with senior management and lead the team to success.",
+	})
+	if got.Seniority != "" {
+		t.Errorf("Seniority = %q, want empty (noisy description, no anchored grade)", got.Seniority)
+	}
+}

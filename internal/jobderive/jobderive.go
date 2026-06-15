@@ -40,9 +40,9 @@ type Derived struct {
 
 // Derive computes the slugs and dictionary facets for a job. Geography, skills, and the
 // title classification (seniority/category) come from the curated dictionaries (which
-// emit nothing for what they cannot resolve); the work-mode precedence is structured
-// signal first, then the location parser's hint, then a conservative phrase match in
-// the description.
+// emit nothing for what they cannot resolve). Two facets fall back to a conservative
+// description phrase match when their primary source is silent: work-mode (structured
+// signal → location hint → description) and seniority (title → description).
 func Derive(in Input) Derived {
 	geo := location.Parse(in.Location)
 	// Work-mode precedence: structured (ATS) → location marker → description phrase.
@@ -55,6 +55,13 @@ func Derive(in Input) Derived {
 		workMode = location.WorkModeFromDescription(in.Description)
 	}
 	class := classify.Parse(in.Title)
+	// Seniority precedence: title dictionary → description phrase. The description
+	// only fills a grade the title left empty. Category stays title-only (its prose
+	// signal is too noisy to derive deterministically).
+	seniority := class.Seniority
+	if seniority == "" {
+		seniority = classify.SeniorityFromDescription(in.Description)
+	}
 	return Derived{
 		CompanySlug: normalize.Slug(in.Company),
 		PublicSlug:  normalize.JobSlug(in.Title, in.Company, in.Source, in.ExternalID),
@@ -62,7 +69,7 @@ func Derive(in Input) Derived {
 		Regions:     geo.Regions,
 		WorkMode:    workMode,
 		Skills:      skilltag.Parse(in.Description),
-		Seniority:   class.Seniority,
+		Seniority:   seniority,
 		Category:    class.Category,
 	}
 }
