@@ -263,21 +263,6 @@ SET public_slug  = sqlc.arg(public_slug),
     company_slug = sqlc.arg(company_slug)
 WHERE id = sqlc.arg(id);
 
--- name: SetJobLocation :exec
--- One-off backfill (cmd/backfill-geo): rewrite the location-derived columns from
--- the row's stored location text. They are deterministic from `location`, so this
--- is idempotent. updated_at is deliberately left untouched (like UpdateJobSlugs)
--- so a backfill does not churn every row's timestamp. COALESCE maps a nil arg to
--- '{}' to satisfy the NOT NULL array columns. work_mode here is parser-derived
--- only (the original structured ATS signal is not available at backfill time);
--- a later re-crawl overwrites it with the structured value where the adapter has
--- one.
-UPDATE jobs
-SET countries = COALESCE(sqlc.arg(countries)::text[], '{}'),
-    regions   = COALESCE(sqlc.arg(regions)::text[], '{}'),
-    work_mode = sqlc.arg(work_mode)
-WHERE id = sqlc.arg(id);
-
 -- name: EnqueueJobEnrichment :execrows
 -- Transactional-outbox enqueue for the ingest write path: queue this one job for
 -- enrichment, gated on the same condition the backfill uses (unenriched or below the
@@ -302,33 +287,13 @@ SET enrichment         = sqlc.arg(enrichment),
     updated_at         = now()
 WHERE id = sqlc.arg(id);
 
--- name: SetJobSkills :exec
--- One-off backfill (cmd/backfill-skills): rewrite the deterministic skills column
--- from the row's stored description. Skills are a pure function of the description,
--- so this is idempotent. updated_at is deliberately left untouched (like
--- SetJobLocation) so a backfill does not churn every row's timestamp. COALESCE maps
--- a nil arg to '{}' to satisfy the NOT NULL array column.
-UPDATE jobs
-SET skills = COALESCE(sqlc.arg(skills)::text[], '{}')
-WHERE id = sqlc.arg(id);
-
--- name: SetJobClassification :exec
--- One-off backfill (cmd/backfill-class): rewrite the title-derived classification
--- columns from the row's stored title. They are deterministic from `title`, so
--- this is idempotent. updated_at is deliberately left untouched (like
--- SetJobLocation) so a backfill does not churn every row's timestamp.
-UPDATE jobs
-SET seniority = sqlc.arg(seniority),
-    category  = sqlc.arg(category)
-WHERE id = sqlc.arg(id);
-
 -- name: UpdateJobFacets :exec
 -- One-off backfill (cmd/backfill-derive): rewrite all six deterministic dictionary
 -- facet columns — countries, regions, work_mode, skills, seniority, category — from
 -- the row's raw content (title/location/description) in one pass, replacing the
 -- three separate per-facet backfill writes. The facets are a pure function of the
 -- raw fields, so this is idempotent. updated_at is deliberately left untouched
--- (like SetJobLocation) so a backfill does not churn every row's timestamp. COALESCE
+-- (like UpdateJobSlugs) so a backfill does not churn every row's timestamp. COALESCE
 -- maps a nil array arg to '{}' for the NOT NULL array columns. work_mode is written
 -- as given by the caller, which preserves an already-set (possibly
 -- adapter-structured) value.

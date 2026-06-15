@@ -488,28 +488,6 @@ func (q *Queries) SelectOrphanLivenessCandidates(ctx context.Context, atsProvide
 	return items, nil
 }
 
-const setJobClassification = `-- name: SetJobClassification :exec
-UPDATE jobs
-SET seniority = $1,
-    category  = $2
-WHERE id = $3
-`
-
-type SetJobClassificationParams struct {
-	Seniority string `json:"seniority"`
-	Category  string `json:"category"`
-	ID        int64  `json:"id"`
-}
-
-// One-off backfill (cmd/backfill-class): rewrite the title-derived classification
-// columns from the row's stored title. They are deterministic from `title`, so
-// this is idempotent. updated_at is deliberately left untouched (like
-// SetJobLocation) so a backfill does not churn every row's timestamp.
-func (q *Queries) SetJobClassification(ctx context.Context, arg SetJobClassificationParams) error {
-	_, err := q.db.Exec(ctx, setJobClassification, arg.Seniority, arg.Category, arg.ID)
-	return err
-}
-
 const setJobEnrichment = `-- name: SetJobEnrichment :exec
 UPDATE jobs
 SET enrichment         = $1,
@@ -539,60 +517,6 @@ func (q *Queries) SetJobEnrichment(ctx context.Context, arg SetJobEnrichmentPara
 	return err
 }
 
-const setJobLocation = `-- name: SetJobLocation :exec
-UPDATE jobs
-SET countries = COALESCE($1::text[], '{}'),
-    regions   = COALESCE($2::text[], '{}'),
-    work_mode = $3
-WHERE id = $4
-`
-
-type SetJobLocationParams struct {
-	Countries []string `json:"countries"`
-	Regions   []string `json:"regions"`
-	WorkMode  string   `json:"work_mode"`
-	ID        int64    `json:"id"`
-}
-
-// One-off backfill (cmd/backfill-geo): rewrite the location-derived columns from
-// the row's stored location text. They are deterministic from `location`, so this
-// is idempotent. updated_at is deliberately left untouched (like UpdateJobSlugs)
-// so a backfill does not churn every row's timestamp. COALESCE maps a nil arg to
-// '{}' to satisfy the NOT NULL array columns. work_mode here is parser-derived
-// only (the original structured ATS signal is not available at backfill time);
-// a later re-crawl overwrites it with the structured value where the adapter has
-// one.
-func (q *Queries) SetJobLocation(ctx context.Context, arg SetJobLocationParams) error {
-	_, err := q.db.Exec(ctx, setJobLocation,
-		arg.Countries,
-		arg.Regions,
-		arg.WorkMode,
-		arg.ID,
-	)
-	return err
-}
-
-const setJobSkills = `-- name: SetJobSkills :exec
-UPDATE jobs
-SET skills = COALESCE($1::text[], '{}')
-WHERE id = $2
-`
-
-type SetJobSkillsParams struct {
-	Skills []string `json:"skills"`
-	ID     int64    `json:"id"`
-}
-
-// One-off backfill (cmd/backfill-skills): rewrite the deterministic skills column
-// from the row's stored description. Skills are a pure function of the description,
-// so this is idempotent. updated_at is deliberately left untouched (like
-// SetJobLocation) so a backfill does not churn every row's timestamp. COALESCE maps
-// a nil arg to '{}' to satisfy the NOT NULL array column.
-func (q *Queries) SetJobSkills(ctx context.Context, arg SetJobSkillsParams) error {
-	_, err := q.db.Exec(ctx, setJobSkills, arg.Skills, arg.ID)
-	return err
-}
-
 const updateJobFacets = `-- name: UpdateJobFacets :exec
 UPDATE jobs
 SET countries = COALESCE($1::text[], '{}'),
@@ -619,7 +543,7 @@ type UpdateJobFacetsParams struct {
 // the row's raw content (title/location/description) in one pass, replacing the
 // three separate per-facet backfill writes. The facets are a pure function of the
 // raw fields, so this is idempotent. updated_at is deliberately left untouched
-// (like SetJobLocation) so a backfill does not churn every row's timestamp. COALESCE
+// (like UpdateJobSlugs) so a backfill does not churn every row's timestamp. COALESCE
 // maps a nil array arg to '{}' for the NOT NULL array columns. work_mode is written
 // as given by the caller, which preserves an already-set (possibly
 // adapter-structured) value.

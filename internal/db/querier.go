@@ -221,30 +221,10 @@ type Querier interface {
 	// ATS provider set from the sources registry; <> ALL excludes them, so a new adapter
 	// never silently becomes a probe target. Closed jobs are skipped (already not open).
 	SelectOrphanLivenessCandidates(ctx context.Context, atsProviders []string) ([]SelectOrphanLivenessCandidatesRow, error)
-	// One-off backfill (cmd/backfill-class): rewrite the title-derived classification
-	// columns from the row's stored title. They are deterministic from `title`, so
-	// this is idempotent. updated_at is deliberately left untouched (like
-	// SetJobLocation) so a backfill does not churn every row's timestamp.
-	SetJobClassification(ctx context.Context, arg SetJobClassificationParams) error
 	// Targeted enrichment write used by the enrichment command: set only the payload
 	// and the provenance stamp, touching no raw source field. Kept separate from
 	// UpsertJob (the ingest full-upsert path) so ingest and enrichment stay decoupled.
 	SetJobEnrichment(ctx context.Context, arg SetJobEnrichmentParams) error
-	// One-off backfill (cmd/backfill-geo): rewrite the location-derived columns from
-	// the row's stored location text. They are deterministic from `location`, so this
-	// is idempotent. updated_at is deliberately left untouched (like UpdateJobSlugs)
-	// so a backfill does not churn every row's timestamp. COALESCE maps a nil arg to
-	// '{}' to satisfy the NOT NULL array columns. work_mode here is parser-derived
-	// only (the original structured ATS signal is not available at backfill time);
-	// a later re-crawl overwrites it with the structured value where the adapter has
-	// one.
-	SetJobLocation(ctx context.Context, arg SetJobLocationParams) error
-	// One-off backfill (cmd/backfill-skills): rewrite the deterministic skills column
-	// from the row's stored description. Skills are a pure function of the description,
-	// so this is idempotent. updated_at is deliberately left untouched (like
-	// SetJobLocation) so a backfill does not churn every row's timestamp. COALESCE maps
-	// a nil arg to '{}' to satisfy the NOT NULL array column.
-	SetJobSkills(ctx context.Context, arg SetJobSkillsParams) error
 	// Rebuild the companies catalogue from jobs. The companies table is derivable
 	// from jobs (slug = company_slug, name = company), so after a slug-builder change
 	// re-keys jobs, this re-keys companies to match. DISTINCT ON collapses a slug's
@@ -267,7 +247,7 @@ type Querier interface {
 	// the row's raw content (title/location/description) in one pass, replacing the
 	// three separate per-facet backfill writes. The facets are a pure function of the
 	// raw fields, so this is idempotent. updated_at is deliberately left untouched
-	// (like SetJobLocation) so a backfill does not churn every row's timestamp. COALESCE
+	// (like UpdateJobSlugs) so a backfill does not churn every row's timestamp. COALESCE
 	// maps a nil array arg to '{}' for the NOT NULL array columns. work_mode is written
 	// as given by the caller, which preserves an already-set (possibly
 	// adapter-structured) value.

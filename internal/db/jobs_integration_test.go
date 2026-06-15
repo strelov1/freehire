@@ -199,7 +199,7 @@ func TestUpsertJobWritesAndRefreshesGeography(t *testing.T) {
 	}
 }
 
-func TestSetJobLocationBackfillsGeography(t *testing.T) {
+func TestUpdateJobFacetsBackfillsAllColumns(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
 	ctx := context.Background()
@@ -213,12 +213,16 @@ func TestSetJobLocationBackfillsGeography(t *testing.T) {
 		t.Fatalf("precondition: want empty geography, got %v", job.Countries)
 	}
 
-	if err := q.SetJobLocation(ctx, SetJobLocationParams{
+	if err := q.UpdateJobFacets(ctx, UpdateJobFacetsParams{
+		ID:        job.ID,
 		Countries: []string{"de"},
 		Regions:   []string{"eu"},
-		ID:        job.ID,
+		WorkMode:  "remote",
+		Skills:    []string{"go"},
+		Seniority: "senior",
+		Category:  "backend",
 	}); err != nil {
-		t.Fatalf("set location: %v", err)
+		t.Fatalf("update facets: %v", err)
 	}
 
 	got, err := q.GetJob(ctx, job.ID)
@@ -227,6 +231,12 @@ func TestSetJobLocationBackfillsGeography(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.Countries, []string{"de"}) || !reflect.DeepEqual(got.Regions, []string{"eu"}) {
 		t.Errorf("after backfill countries=%v regions=%v, want [de]/[eu]", got.Countries, got.Regions)
+	}
+	if got.WorkMode != "remote" || got.Seniority != "senior" || got.Category != "backend" {
+		t.Errorf("scalars = {%q %q %q}, want {remote senior backend}", got.WorkMode, got.Seniority, got.Category)
+	}
+	if !reflect.DeepEqual(got.Skills, []string{"go"}) {
+		t.Errorf("skills = %v, want [go]", got.Skills)
 	}
 }
 

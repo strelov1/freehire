@@ -18,8 +18,8 @@
 
 ## 4. Remove the three per-facet backfill commands
 
-- [ ] 4.1 Delete `cmd/backfill-geo`, `cmd/backfill-skills`, `cmd/backfill-class` and their per-column sqlc queries; run `make sqlc` and commit the regenerated `internal/db`.
-- [ ] 4.2 Confirm no remaining references (`grep -r backfill-geo\|backfill-skills\|backfill-class`); `go build ./...` and `go vet ./...` clean.
+- [x] 4.1 Delete `cmd/backfill-geo`, `cmd/backfill-skills`, `cmd/backfill-class` and their per-column sqlc queries; run `make sqlc` and commit the regenerated `internal/db`.
+- [x] 4.2 Confirm no remaining references (`grep -r backfill-geo\|backfill-skills\|backfill-class`); `go build ./...` and `go vet ./...` clean.
 
 ## 5. Ops wiring
 
