@@ -2,6 +2,10 @@
 # provider (the file name "custom" is not a provider). Multi-tenant board lists
 # (greenhouse.yml, gem.yml, …) keep their own per-provider files.
 
+# International single-company sources.
+- company: Uber
+  provider: uber
+
 - company: VK
   provider: vk
 - company: Ozon
