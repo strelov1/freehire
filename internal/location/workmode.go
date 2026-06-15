@@ -29,8 +29,9 @@ var descriptionWorkModePhrases = []struct {
 	{"onsite", []string{
 		"on-site only", "onsite only", "on site only", "fully on-site", "fully onsite",
 		"100% on-site", "100% onsite", "must be on-site", "must be onsite",
-		"on-site position", "onsite position", "in-office position", "from our office",
-		"in our office", "on-site role", "onsite role",
+		"on-site position", "onsite position", "in-office position",
+		"work from our office", "based in our office", "based in the office",
+		"on-site role", "onsite role",
 	}},
 }
 

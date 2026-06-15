@@ -30,6 +30,7 @@ func TestWorkModeFromDescription(t *testing.T) {
 		{"remote server", "Debug issues on a remote server over SSH.", ""},
 		{"remote team", "Collaborate with a remote team across time zones.", ""},
 		{"bare in office", "Free snacks in office and a great culture.", ""},
+		{"incidental from our office", "Enjoy free lunch from our office cafeteria.", ""},
 		{"no arrangement phrase", "We build payments infrastructure in Go.", ""},
 		{"empty", "", ""},
 	}
