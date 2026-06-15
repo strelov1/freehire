@@ -1,0 +1,112 @@
+// Command backfill-derive re-derives the six deterministic dictionary facets —
+// countries, regions, work_mode, skills, seniority, category — on existing jobs in
+// a single pass, replacing the three separate per-facet backfill commands
+// (backfill-geo/-skills/-class). Ingest fills these on every crawl via
+// jobderive.Derive; rows that predate a dictionary change — and closed jobs that
+// never re-crawl — keep the stale values until this one-off worker rewrites them.
+// It pages the whole table and exits. Idempotent: the facets are a pure function
+// of the title/location/description, so a second run rewrites nothing.
+//
+// Slugs are deliberately not touched (re-slugging stays cmd/reslug). work_mode is
+// preserved when already set: jobderive keeps a row's existing (possibly
+// adapter-structured) work_mode over the parsed-location hint.
+package main
+
+import (
+	"context"
+	"log"
+	"slices"
+
+	"github.com/strelov1/freehire/internal/config"
+	"github.com/strelov1/freehire/internal/database"
+	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/jobderive"
+)
+
+// backfillBatchSize bounds how many jobs are read per keyset page.
+const backfillBatchSize = 500
+
+// facetStore is the slice of the data layer the backfill needs: page the table by
+// keyset and rewrite a row's six facet columns. *db.Queries satisfies it; tests
+// use a fake.
+type facetStore interface {
+	ListJobsByIDAfter(ctx context.Context, arg db.ListJobsByIDAfterParams) ([]db.Job, error)
+	UpdateJobFacets(ctx context.Context, arg db.UpdateJobFacetsParams) error
+}
+
+func main() {
+	cfg := config.Load()
+	ctx := context.Background()
+
+	pool, err := database.Connect(ctx, cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("database: %v", err)
+	}
+	defer pool.Close()
+
+	scanned, updated, err := backfillAll(ctx, db.New(pool))
+	if err != nil {
+		log.Fatalf("backfill-derive: %v", err)
+	}
+	log.Printf("backfill-derive done: scanned=%d updated=%d", scanned, updated)
+}
+
+// backfillAll re-derives every job's six facet columns and rewrites the rows whose
+// derived facets differ from what is stored. It pages by keyset (id > last seen)
+// so concurrent writes cannot skip or repeat rows.
+func backfillAll(ctx context.Context, store facetStore) (scanned, updated int, err error) {
+	var afterID int64
+	for {
+		jobs, err := store.ListJobsByIDAfter(ctx, db.ListJobsByIDAfterParams{
+			AfterID:   afterID,
+			BatchSize: backfillBatchSize,
+		})
+		if err != nil {
+			return scanned, updated, err
+		}
+		if len(jobs) == 0 {
+			break
+		}
+		afterID = jobs[len(jobs)-1].ID
+
+		for _, j := range jobs {
+			scanned++
+			d := jobderive.Derive(jobderive.Input{
+				Title:       j.Title,
+				Company:     j.Company,
+				Source:      j.Source,
+				ExternalID:  j.ExternalID,
+				Location:    j.Location,
+				Description: j.Description,
+				WorkMode:    j.WorkMode, // preserves a set work_mode (jobderive precedence)
+			})
+			unchanged := slices.Equal(d.Countries, j.Countries) &&
+				slices.Equal(d.Regions, j.Regions) &&
+				d.WorkMode == j.WorkMode &&
+				slices.Equal(d.Skills, j.Skills) &&
+				d.Seniority == j.Seniority &&
+				d.Category == j.Category
+			if unchanged {
+				continue
+			}
+			if err := store.UpdateJobFacets(ctx, db.UpdateJobFacetsParams{
+				ID:        j.ID,
+				Countries: d.Countries,
+				Regions:   d.Regions,
+				WorkMode:  d.WorkMode,
+				Skills:    d.Skills,
+				Seniority: d.Seniority,
+				Category:  d.Category,
+			}); err != nil {
+				return scanned, updated, err
+			}
+			updated++
+		}
+
+		if len(jobs) < backfillBatchSize {
+			break
+		}
+	}
+
+	return scanned, updated, nil
+}

@@ -12,9 +12,9 @@
 
 ## 3. cmd/backfill-derive (unified pass)
 
-- [ ] 3.1 Add failing tests for the backfill runner against a fake store: one pass rewrites all six facet columns from `jobderive.Derive`; it is idempotent; a set `work_mode` is preserved when the location yields no hint; slugs are not written.
-- [ ] 3.2 Implement `cmd/backfill-derive/main.go`: iterate existing jobs (including closed), call `jobderive.Derive` on each job's raw fields, fill `work_mode` from the derived value only when the row's `work_mode` is empty, and persist the six columns via `UpdateJobFacets`. Mirror the existing backfill command's pagination/connection pattern.
-- [ ] 3.3 Run the backfill-derive tests green; `go build ./cmd/backfill-derive`.
+- [x] 3.1 Add failing tests for the backfill runner against a fake store: one pass rewrites all six facet columns from `jobderive.Derive`; it is idempotent; a set `work_mode` is preserved when the location yields no hint; slugs are not written.
+- [x] 3.2 Implement `cmd/backfill-derive/main.go`: iterate existing jobs (including closed), call `jobderive.Derive` on each job's raw fields, fill `work_mode` from the derived value only when the row's `work_mode` is empty, and persist the six columns via `UpdateJobFacets`. Mirror the existing backfill command's pagination/connection pattern.
+- [x] 3.3 Run the backfill-derive tests green; `go build ./cmd/backfill-derive`.
 
 ## 4. Remove the three per-facet backfill commands
 

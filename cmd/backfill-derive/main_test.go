@@ -1,0 +1,110 @@
+package main
+
+import (
+	"context"
+	"reflect"
+	"testing"
+
+	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/jobderive"
+)
+
+// fakeStore serves one page of jobs (keyset paging: AfterID 0 returns all, then
+// empty) and records every UpdateJobFacets call.
+type fakeStore struct {
+	jobs    []db.Job
+	updates []db.UpdateJobFacetsParams
+}
+
+func (f *fakeStore) ListJobsByIDAfter(_ context.Context, arg db.ListJobsByIDAfterParams) ([]db.Job, error) {
+	if arg.AfterID != 0 {
+		return nil, nil
+	}
+	return f.jobs, nil
+}
+
+func (f *fakeStore) UpdateJobFacets(_ context.Context, arg db.UpdateJobFacetsParams) error {
+	f.updates = append(f.updates, arg)
+	return nil
+}
+
+// expectedFacets is the UpdateJobFacets the runner should write for a job: the six
+// dictionary facets from jobderive.Derive, and no slug fields.
+func expectedFacets(j db.Job) db.UpdateJobFacetsParams {
+	d := jobderive.Derive(jobderive.Input{
+		Title: j.Title, Company: j.Company, Source: j.Source, ExternalID: j.ExternalID,
+		Location: j.Location, Description: j.Description, WorkMode: j.WorkMode,
+	})
+	return db.UpdateJobFacetsParams{
+		ID: j.ID, Countries: d.Countries, Regions: d.Regions, WorkMode: d.WorkMode,
+		Skills: d.Skills, Seniority: d.Seniority, Category: d.Category,
+	}
+}
+
+func TestBackfill_RewritesAllSixFacetsInOnePass(t *testing.T) {
+	job := db.Job{
+		ID: 7, Title: "Senior Go Developer", Company: "Acme",
+		Source: "manual", ExternalID: "x", Location: "Berlin, Germany",
+		Description: "We use Go, PostgreSQL and Kubernetes.",
+		// facet columns empty → the derived values differ → a write happens.
+	}
+	store := &fakeStore{jobs: []db.Job{job}}
+
+	scanned, updated, err := backfillAll(context.Background(), store)
+	if err != nil {
+		t.Fatalf("backfillAll: %v", err)
+	}
+	if scanned != 1 || updated != 1 {
+		t.Fatalf("scanned=%d updated=%d, want 1/1", scanned, updated)
+	}
+	if len(store.updates) != 1 {
+		t.Fatalf("got %d UpdateJobFacets calls, want 1", len(store.updates))
+	}
+	want := expectedFacets(job)
+	if !reflect.DeepEqual(store.updates[0], want) {
+		t.Errorf("UpdateJobFacets = %+v, want %+v", store.updates[0], want)
+	}
+}
+
+func TestBackfill_IsIdempotent(t *testing.T) {
+	job := db.Job{
+		ID: 7, Title: "Senior Go Developer", Company: "Acme",
+		Source: "manual", ExternalID: "x", Location: "Berlin, Germany",
+		Description: "We use Go, PostgreSQL and Kubernetes.",
+	}
+	// Seed the columns with what the derivation already produces — a second pass
+	// must rewrite nothing.
+	d := expectedFacets(job)
+	job.Countries, job.Regions, job.WorkMode = d.Countries, d.Regions, d.WorkMode
+	job.Skills, job.Seniority, job.Category = d.Skills, d.Seniority, d.Category
+
+	store := &fakeStore{jobs: []db.Job{job}}
+	scanned, updated, err := backfillAll(context.Background(), store)
+	if err != nil {
+		t.Fatalf("backfillAll: %v", err)
+	}
+	if scanned != 1 || updated != 0 {
+		t.Fatalf("scanned=%d updated=%d, want 1/0 (unchanged row skipped)", scanned, updated)
+	}
+	if len(store.updates) != 0 {
+		t.Errorf("expected no writes for an unchanged row, got %d", len(store.updates))
+	}
+}
+
+func TestBackfill_PreservesSetWorkMode(t *testing.T) {
+	// A location with no work-mode hint plus an already-set work_mode: the derived
+	// value must keep the set work_mode, not blank it.
+	job := db.Job{
+		ID: 7, Title: "Developer", Company: "Acme", Source: "manual", ExternalID: "x",
+		Location: "Berlin, Germany", WorkMode: "hybrid",
+	}
+	store := &fakeStore{jobs: []db.Job{job}}
+	if _, _, err := backfillAll(context.Background(), store); err != nil {
+		t.Fatalf("backfillAll: %v", err)
+	}
+	for _, u := range store.updates {
+		if u.WorkMode != "hybrid" {
+			t.Errorf("WorkMode = %q, want hybrid (preserved)", u.WorkMode)
+		}
+	}
+}
