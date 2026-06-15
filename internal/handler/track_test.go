@@ -43,6 +43,13 @@ func (stubTrackingRepo) ClearJobProgress(context.Context, int64, int64) (jobtrac
 func (stubTrackingRepo) UntrackJob(context.Context, int64, int64) (jobtracking.Interaction, error) {
 	return jobtracking.Interaction{JobID: 1}, nil
 }
+func (stubTrackingRepo) ListInteractions(context.Context, int64, jobtracking.Filter, int32, int32) ([]jobtracking.TrackedJob, error) {
+	return nil, nil
+}
+func (stubTrackingRepo) CountInteractions(context.Context, int64) (jobtracking.Counts, error) {
+	return jobtracking.Counts{}, nil
+}
+func (stubTrackingRepo) ViewedSlugs(context.Context, int64) ([]string, error) { return nil, nil }
 
 // trackApp mounts the track route on a handler whose tracking service is backed
 // by a stub repository (no DB). The auth gate and the service's body validation

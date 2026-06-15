@@ -3,6 +3,7 @@ package enrich
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -73,10 +74,16 @@ func (p *LangChainProvider) Enrich(ctx context.Context, job JobInput) (Enrichmen
 		return Enrichment{}, fmt.Errorf("enrich: generate: %w", err)
 	}
 	if len(resp.Choices) == 0 {
-		return Enrichment{}, fmt.Errorf("enrich: model returned no choices")
+		return Enrichment{}, errors.New("enrich: model returned no choices")
 	}
 	return parseEnrichment(resp.Choices[0].Content)
 }
+
+// errUnparseableResponse marks a model response that wasn't valid JSON. It is
+// deterministic for the prompt, so the runner skips its in-process retry on it
+// (the outbox attempts counter still re-tries on the next cron run, drawing a
+// fresh sample). Transport failures, by contrast, are worth an immediate retry.
+var errUnparseableResponse = errors.New("enrich: unparseable model response")
 
 // parseEnrichment unmarshals a model's JSON response into an Enrichment, tolerating
 // a markdown code fence some models add despite JSON mode.
@@ -89,7 +96,7 @@ func parseEnrichment(raw string) (Enrichment, error) {
 
 	var e Enrichment
 	if err := json.Unmarshal([]byte(s), &e); err != nil {
-		return Enrichment{}, fmt.Errorf("enrich: parse response: %w", err)
+		return Enrichment{}, fmt.Errorf("%w: %v", errUnparseableResponse, err)
 	}
 	return e, nil
 }

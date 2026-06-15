@@ -29,9 +29,17 @@ type fakeRepo struct {
 	clearProgressErr    error
 	untrackResult       jobtracking.Interaction
 	untrackErr          error
+	listResult          []jobtracking.TrackedJob
+	listErr             error
+	countResult         jobtracking.Counts
+	countErr            error
+	viewedResult        []string
+	viewedErr           error
 
 	// recorded calls
 	slugCalls  int
+	listCalls  int
+	listFilter jobtracking.Filter
 	trackStage *string
 	trackNotes *string
 }
@@ -73,6 +81,20 @@ func (f *fakeRepo) ClearJobProgress(_ context.Context, _, _ int64) (jobtracking.
 
 func (f *fakeRepo) UntrackJob(_ context.Context, _, _ int64) (jobtracking.Interaction, error) {
 	return f.untrackResult, f.untrackErr
+}
+
+func (f *fakeRepo) ListInteractions(_ context.Context, _ int64, filter jobtracking.Filter, _, _ int32) ([]jobtracking.TrackedJob, error) {
+	f.listCalls++
+	f.listFilter = filter
+	return f.listResult, f.listErr
+}
+
+func (f *fakeRepo) CountInteractions(_ context.Context, _ int64) (jobtracking.Counts, error) {
+	return f.countResult, f.countErr
+}
+
+func (f *fakeRepo) ViewedSlugs(_ context.Context, _ int64) ([]string, error) {
+	return f.viewedResult, f.viewedErr
 }
 
 // helpers
@@ -407,5 +429,78 @@ func TestUntrack_UnknownSlug(t *testing.T) {
 	// The untrack repo method must not be called when slug resolution fails.
 	if repo.untrackErr != nil {
 		t.Error("untrackErr should not be set (repo untrack must not be called)")
+	}
+}
+
+// ---
+// 6. ListTracked — filter validation, default, and total selection
+// ---
+
+func TestListTracked_InvalidFilter_ShortCircuits(t *testing.T) {
+	repo := newRepo()
+	svc := jobtracking.New(repo)
+
+	_, err := svc.ListTracked(ctx(), userID, "bogus", 20, 0)
+	if !errors.Is(err, jobtracking.ErrInvalidFilter) {
+		t.Errorf("err = %v, want ErrInvalidFilter", err)
+	}
+	// A bad filter must be rejected before any DB read.
+	if repo.listCalls != 0 {
+		t.Errorf("listCalls = %d, want 0 (validation should short-circuit before the listing)", repo.listCalls)
+	}
+}
+
+func TestListTracked_EmptyFilterDefaultsToAll(t *testing.T) {
+	repo := newRepo()
+	repo.countResult = jobtracking.Counts{All: 9, Viewed: 4, Saved: 2, Applied: 3, Board: 5}
+	svc := jobtracking.New(repo)
+
+	listing, err := svc.ListTracked(ctx(), userID, "", 20, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if listing.Filter != jobtracking.FilterAll {
+		t.Errorf("Filter = %q, want %q (empty defaults to all)", listing.Filter, jobtracking.FilterAll)
+	}
+	if repo.listFilter != jobtracking.FilterAll {
+		t.Errorf("repo received filter %q, want %q", repo.listFilter, jobtracking.FilterAll)
+	}
+	if listing.Total() != 9 {
+		t.Errorf("Total() = %d, want 9 (the all count)", listing.Total())
+	}
+}
+
+func TestListTracked_BoardFilterSelectsBoardTotal(t *testing.T) {
+	repo := newRepo()
+	repo.countResult = jobtracking.Counts{All: 9, Viewed: 4, Saved: 2, Applied: 3, Board: 5}
+	repo.listResult = []jobtracking.TrackedJob{{Interaction: jobtracking.Interaction{JobID: jobID}}}
+	svc := jobtracking.New(repo)
+
+	listing, err := svc.ListTracked(ctx(), userID, "board", 20, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if repo.listFilter != jobtracking.FilterBoard {
+		t.Errorf("repo received filter %q, want %q", repo.listFilter, jobtracking.FilterBoard)
+	}
+	if listing.Total() != 5 {
+		t.Errorf("Total() = %d, want 5 (the board count, not all)", listing.Total())
+	}
+	if len(listing.Items) != 1 {
+		t.Errorf("Items = %d, want 1 (passed through from the repo)", len(listing.Items))
+	}
+}
+
+func TestViewedSlugs_Passthrough(t *testing.T) {
+	repo := newRepo()
+	repo.viewedResult = []string{"job-a", "job-b"}
+	svc := jobtracking.New(repo)
+
+	slugs, err := svc.ViewedSlugs(ctx(), userID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(slugs) != 2 || slugs[0] != "job-a" {
+		t.Errorf("slugs = %v, want [job-a job-b]", slugs)
 	}
 }

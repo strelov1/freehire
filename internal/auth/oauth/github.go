@@ -2,6 +2,7 @@ package oauth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -38,6 +39,7 @@ func (p *githubProvider) AuthCodeURL(state string) string {
 }
 
 func (p *githubProvider) FetchIdentity(ctx context.Context, code string) (Identity, error) {
+	ctx = guardedOAuthContext(ctx)
 	tok, err := p.cfg.Exchange(ctx, code)
 	if err != nil {
 		return Identity{}, fmt.Errorf("github: exchange code: %w", err)
@@ -51,7 +53,7 @@ func (p *githubProvider) FetchIdentity(ctx context.Context, code string) (Identi
 		return Identity{}, fmt.Errorf("github: user: %w", err)
 	}
 	if user.ID == 0 {
-		return Identity{}, fmt.Errorf("github: user has no id")
+		return Identity{}, errors.New("github: user has no id")
 	}
 
 	var emails []struct {

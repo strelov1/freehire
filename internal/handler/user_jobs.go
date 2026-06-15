@@ -45,6 +45,8 @@ func trackingError(err error) error {
 		return fiber.NewError(fiber.StatusNotFound, "job not found")
 	case errors.Is(err, jobtracking.ErrInvalidStage):
 		return fiber.NewError(fiber.StatusBadRequest, "invalid stage")
+	case errors.Is(err, jobtracking.ErrInvalidFilter):
+		return fiber.NewError(fiber.StatusBadRequest, "filter must be one of: all, viewed, saved, applied, board")
 	case errors.Is(err, jobtracking.ErrEmptyTrack):
 		return fiber.NewError(fiber.StatusBadRequest, "provide stage and/or notes")
 	default:

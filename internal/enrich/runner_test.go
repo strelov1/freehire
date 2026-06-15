@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -157,6 +158,44 @@ func TestRun_providerErrorIsFailed(t *testing.T) {
 	}
 	if stats.Failed != 1 {
 		t.Errorf("stats = %+v, want Failed:1", stats)
+	}
+}
+
+func TestRun_transportErrorIsRetried(t *testing.T) {
+	store := &fakeStore{
+		claims: [][]Claimed{{{OutboxID: 8, JobID: 100, TargetVersion: Version}}},
+		jobs:   map[int64]JobInput{100: {Title: "x"}},
+	}
+	prov := &funcProvider{fn: func(JobInput) (Enrichment, error) {
+		return Enrichment{}, errors.New("gateway timeout")
+	}}
+
+	stats, _ := Runner{Provider: prov, Store: store}.Run(context.Background(), opts())
+	if prov.callCount() != 2 {
+		t.Errorf("provider called %d times, want 2 (a transport error is retried once)", prov.callCount())
+	}
+	if stats.Failed != 1 {
+		t.Errorf("stats = %+v, want Failed:1", stats)
+	}
+}
+
+func TestRun_unparseableResponseIsNotRetried(t *testing.T) {
+	store := &fakeStore{
+		claims: [][]Claimed{{{OutboxID: 4, JobID: 100, TargetVersion: Version}}},
+		jobs:   map[int64]JobInput{100: {Title: "x"}},
+	}
+	prov := &funcProvider{fn: func(JobInput) (Enrichment, error) {
+		// A non-JSON model response is deterministic for the prompt: an in-process
+		// retry would re-send the identical call. The next cron run re-attempts it.
+		return Enrichment{}, fmt.Errorf("%w: trailing garbage", errUnparseableResponse)
+	}}
+
+	stats, _ := Runner{Provider: prov, Store: store}.Run(context.Background(), opts())
+	if prov.callCount() != 1 {
+		t.Errorf("provider called %d times, want 1 (an unparseable response must not be retried in-process)", prov.callCount())
+	}
+	if len(store.failed) != 1 || stats.Failed != 1 {
+		t.Errorf("failed=%v stats=%+v, want one failure", store.failed, stats)
 	}
 }
 

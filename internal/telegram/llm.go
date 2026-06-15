@@ -3,6 +3,7 @@ package telegram
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -68,7 +69,7 @@ func (e *LangChainExtractor) Extract(ctx context.Context, text string, kind Kind
 		return Extraction{}, fmt.Errorf("telegram: generate: %w", err)
 	}
 	if len(resp.Choices) == 0 {
-		return Extraction{}, fmt.Errorf("telegram: model returned no choices")
+		return Extraction{}, errors.New("telegram: model returned no choices")
 	}
 	return parseExtraction(resp.Choices[0].Content)
 }

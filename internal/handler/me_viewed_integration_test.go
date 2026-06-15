@@ -23,6 +23,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/jobtracking"
 )
 
 func TestListViewedSlugsEndpoint(t *testing.T) {
@@ -70,7 +71,7 @@ func TestListViewedSlugsEndpoint(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	h := &API{pool: pool, queries: queries, issuer: iss}
+	h := &API{pool: pool, queries: queries, issuer: iss, tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/me/jobs/viewed", auth.RequireAuthOrKey(iss, queries), h.ListViewedSlugs)
 

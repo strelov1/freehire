@@ -35,6 +35,12 @@ const (
 	// concurrency caps simultaneous probes: orphan postings span many hosts, so this
 	// keeps the worker from hammering any single employer site while staying brisk.
 	concurrency = 8
+	// lockKey is the Postgres advisory-lock key that serializes liveness runs. Cron
+	// offers no host-level guarantee against stacking, and two runs probing the same
+	// orphan seconds apart would collapse the "two consecutive expired reads" grace
+	// into one burst — closing a job on a transient blip. A second run that can't take
+	// the lock exits cleanly. The value is an arbitrary constant unique to this worker.
+	lockKey = 0x66686c76 // "fhlv" — freehire liveness
 )
 
 func main() {
@@ -47,6 +53,29 @@ func main() {
 	}
 	defer pool.Close()
 	queries := db.New(pool)
+
+	// Single-flight: hold a session-scoped advisory lock on a dedicated connection
+	// for the whole run so overlapping cron invocations can't strike the same orphan
+	// twice within one burst. A run that can't take the lock exits cleanly.
+	lockConn, err := pool.Acquire(ctx)
+	if err != nil {
+		log.Fatalf("acquire lock connection: %v", err)
+	}
+	var locked bool
+	if err := lockConn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", int64(lockKey)).Scan(&locked); err != nil {
+		lockConn.Release()
+		log.Fatalf("liveness lock: %v", err)
+	}
+	if !locked {
+		lockConn.Release()
+		log.Print("liveness: another run holds the lock — exiting")
+		return
+	}
+	defer func() {
+		// Best-effort unlock; releasing/closing the connection drops the session lock anyway.
+		_, _ = lockConn.Exec(ctx, "SELECT pg_advisory_unlock($1)", int64(lockKey))
+		lockConn.Release()
+	}()
 
 	// The candidate set is "every open job whose source is not a registered ATS
 	// provider" — the registry keys are the exclusion list, so a new adapter never

@@ -1,7 +1,6 @@
 package oauth
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -49,7 +48,7 @@ func TestGitHub_FetchIdentityPrimaryVerifiedEmail(t *testing.T) {
 		{"email": "old@e.com", "primary": false, "verified": true},
 		{"email": "main@e.com", "primary": true, "verified": true},
 	})
-	got, err := githubForTest(srv).FetchIdentity(context.Background(), "code")
+	got, err := githubForTest(srv).FetchIdentity(testClientCtx(srv), "code")
 	if err != nil {
 		t.Fatalf("FetchIdentity: %v", err)
 	}
@@ -64,7 +63,7 @@ func TestGitHub_FetchIdentityFallsBackToAnyVerified(t *testing.T) {
 		{"email": "unverified@e.com", "primary": true, "verified": false},
 		{"email": "side@e.com", "primary": false, "verified": true},
 	})
-	got, err := githubForTest(srv).FetchIdentity(context.Background(), "code")
+	got, err := githubForTest(srv).FetchIdentity(testClientCtx(srv), "code")
 	if err != nil {
 		t.Fatalf("FetchIdentity: %v", err)
 	}
@@ -77,7 +76,7 @@ func TestGitHub_FetchIdentityNoVerifiedEmail(t *testing.T) {
 	srv := stubGitHub(t, []map[string]any{
 		{"email": "unverified@e.com", "primary": true, "verified": false},
 	})
-	got, err := githubForTest(srv).FetchIdentity(context.Background(), "code")
+	got, err := githubForTest(srv).FetchIdentity(testClientCtx(srv), "code")
 	if err != nil {
 		t.Fatalf("FetchIdentity: %v", err)
 	}

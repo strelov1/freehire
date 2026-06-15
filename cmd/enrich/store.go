@@ -68,7 +68,7 @@ func (s *dbStore) Complete(ctx context.Context, entry enrich.Claimed, payload js
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	qtx := s.q.WithTx(tx)
 	if err := qtx.SetJobEnrichment(ctx, db.SetJobEnrichmentParams{

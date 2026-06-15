@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 
@@ -83,7 +84,7 @@ func (m mts) apiKey(ctx context.Context) (string, error) {
 	}
 	key := mtsExtractAPIKey(root)
 	if key == "" {
-		return "", fmt.Errorf("mts: apiKey not found in site config")
+		return "", errors.New("mts: apiKey not found in site config")
 	}
 	return key, nil
 }

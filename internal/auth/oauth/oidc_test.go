@@ -35,6 +35,13 @@ func stubOIDC(t *testing.T, userinfo map[string]any) *httptest.Server {
 	return srv
 }
 
+// testClientCtx injects the stub server's client so the SSRF guard — which would
+// reject the loopback httptest server — is bypassed in tests. The production code
+// path supplies no client and always gets the guard.
+func testClientCtx(srv *httptest.Server) context.Context {
+	return context.WithValue(context.Background(), oauth2.HTTPClient, srv.Client())
+}
+
 func oidcForTest(srv *httptest.Server) *oidcProvider {
 	return &oidcProvider{
 		name: "google",
@@ -63,7 +70,7 @@ func TestOIDC_FetchIdentity(t *testing.T) {
 		"email":          "User@Example.com",
 		"email_verified": true,
 	})
-	got, err := oidcForTest(srv).FetchIdentity(context.Background(), "code")
+	got, err := oidcForTest(srv).FetchIdentity(testClientCtx(srv), "code")
 	if err != nil {
 		t.Fatalf("FetchIdentity: %v", err)
 	}
@@ -75,7 +82,7 @@ func TestOIDC_FetchIdentity(t *testing.T) {
 
 func TestOIDC_FetchIdentityUnverifiedEmail(t *testing.T) {
 	srv := stubOIDC(t, map[string]any{"sub": "uid-2", "email": "u@e.com", "email_verified": false})
-	got, err := oidcForTest(srv).FetchIdentity(context.Background(), "code")
+	got, err := oidcForTest(srv).FetchIdentity(testClientCtx(srv), "code")
 	if err != nil {
 		t.Fatalf("FetchIdentity: %v", err)
 	}
@@ -86,7 +93,7 @@ func TestOIDC_FetchIdentityUnverifiedEmail(t *testing.T) {
 
 func TestOIDC_FetchIdentityMissingSub(t *testing.T) {
 	srv := stubOIDC(t, map[string]any{"email": "u@e.com"})
-	if _, err := oidcForTest(srv).FetchIdentity(context.Background(), "code"); err == nil {
+	if _, err := oidcForTest(srv).FetchIdentity(testClientCtx(srv), "code"); err == nil {
 		t.Error("want error for userinfo without sub")
 	}
 }

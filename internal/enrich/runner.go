@@ -3,6 +3,7 @@ package enrich
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -144,22 +145,30 @@ func (rn *run) process(ctx context.Context, entry Claimed) {
 	log.Printf("enrich: job=%d ok in %s", entry.JobID, time.Since(start).Round(time.Millisecond))
 }
 
-// enrich asks the provider for a payload and validates it, retrying once. An
-// invalid payload is treated as an error so it is never persisted.
+// enrich asks the provider for a payload and validates it, retrying once on a
+// transient transport failure. An invalid payload is treated as an error so it
+// is never persisted. Deterministic failures (an unparseable response, or a
+// payload that fails validation even after sanitizing) are not retried
+// in-process — an identical re-call would reproduce them; the outbox attempts
+// counter re-tries them on the next cron run, drawing a fresh sample.
 func (rn *run) enrich(ctx context.Context, job JobInput) (Enrichment, error) {
 	var lastErr error
 	for range 2 {
 		enr, err := rn.provider.Enrich(ctx, job)
 		if err != nil {
 			lastErr = err
+			if errors.Is(err, errUnparseableResponse) {
+				break
+			}
 			continue
 		}
 		// Drop any out-of-vocabulary enum values rather than failing the whole
 		// payload over one stray field; Validate is then a guard that should pass.
 		enr.Sanitize()
 		if err := enr.Validate(); err != nil {
-			lastErr = err
-			continue
+			// Sanitize already dropped out-of-vocab values, so a Validate failure
+			// is a structural problem a retry won't fix.
+			return Enrichment{}, err
 		}
 		return enr, nil
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/jobview"
 )
 
 // Compile-time proof that QueriesRepository satisfies Repository.
@@ -110,46 +111,92 @@ func (r *QueriesRepository) UntrackJob(ctx context.Context, userID, jobID int64)
 	return toInteraction(row), nil
 }
 
+// ListInteractions returns the caller's interactions joined with the jobs in the
+// canonical jobview shape, narrowed by the already-validated filter.
+func (r *QueriesRepository) ListInteractions(
+	ctx context.Context,
+	userID int64,
+	filter Filter,
+	limit, offset int32,
+) ([]TrackedJob, error) {
+	rows, err := r.q.ListUserJobs(ctx, db.ListUserJobsParams{
+		UserID: userID,
+		Filter: string(filter),
+		Limit:  limit,
+		Offset: offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]TrackedJob, 0, len(rows))
+	for _, row := range rows {
+		view, err := jobview.FromRow(row.Job)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, TrackedJob{
+			Job: view,
+			Interaction: Interaction{
+				JobID:     row.Job.ID,
+				ViewedAt:  timePtr(row.ViewedAt),
+				SavedAt:   timePtr(row.SavedAt),
+				AppliedAt: timePtr(row.AppliedAt),
+				Stage:     textPtr(row.Stage),
+				Notes:     textPtr(row.Notes),
+			},
+		})
+	}
+	return items, nil
+}
+
+// CountInteractions returns the per-filter counts for the caller in one pass.
+func (r *QueriesRepository) CountInteractions(ctx context.Context, userID int64) (Counts, error) {
+	row, err := r.q.CountUserJobs(ctx, userID)
+	if err != nil {
+		return Counts{}, err
+	}
+	return Counts{
+		All:     row.All,
+		Viewed:  row.Viewed,
+		Saved:   row.Saved,
+		Applied: row.Applied,
+		Board:   row.Board,
+	}, nil
+}
+
+// ViewedSlugs returns every public job slug the caller has interacted with.
+func (r *QueriesRepository) ViewedSlugs(ctx context.Context, userID int64) ([]string, error) {
+	return r.q.ListViewedJobSlugs(ctx, userID)
+}
+
 // toInteraction converts a db.UserJob row to the domain Interaction type.
 func toInteraction(r db.UserJob) Interaction {
-	var viewedAt *time.Time
-	if r.ViewedAt.Valid {
-		t := r.ViewedAt.Time
-		viewedAt = &t
-	}
-
-	var appliedAt *time.Time
-	if r.AppliedAt.Valid {
-		t := r.AppliedAt.Time
-		appliedAt = &t
-	}
-
-	var savedAt *time.Time
-	if r.SavedAt.Valid {
-		t := r.SavedAt.Time
-		savedAt = &t
-	}
-
-	var stage *string
-	if r.Stage.Valid {
-		s := r.Stage.String
-		stage = &s
-	}
-
-	var notes *string
-	if r.Notes.Valid {
-		s := r.Notes.String
-		notes = &s
-	}
-
 	return Interaction{
 		JobID:     r.JobID,
-		ViewedAt:  viewedAt,
-		AppliedAt: appliedAt,
-		SavedAt:   savedAt,
-		Stage:     stage,
-		Notes:     notes,
+		ViewedAt:  timePtr(r.ViewedAt),
+		AppliedAt: timePtr(r.AppliedAt),
+		SavedAt:   timePtr(r.SavedAt),
+		Stage:     textPtr(r.Stage),
+		Notes:     textPtr(r.Notes),
 	}
+}
+
+// timePtr converts a pgtype.Timestamptz to *time.Time (nil when NULL).
+func timePtr(t pgtype.Timestamptz) *time.Time {
+	if !t.Valid {
+		return nil
+	}
+	v := t.Time
+	return &v
+}
+
+// textPtr converts a pgtype.Text to *string (nil when NULL).
+func textPtr(t pgtype.Text) *string {
+	if !t.Valid {
+		return nil
+	}
+	v := t.String
+	return &v
 }
 
 // textFromPtr converts a *string to pgtype.Text. A nil pointer produces an

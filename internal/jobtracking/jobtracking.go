@@ -9,6 +9,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/userjob"
 )
 
@@ -22,11 +23,85 @@ type Interaction struct {
 	Notes     *string
 }
 
+// Filter selects which interactions a listing returns. It is a controlled
+// vocabulary owned here (mirroring userjob.Stage): "all" is every interaction,
+// "viewed" the passive history (neither saved nor applied), "saved"/"applied"
+// the respective subsets, and "board" the Kanban set (saved, applied, or staged).
+type Filter string
+
+const (
+	FilterAll     Filter = "all"
+	FilterViewed  Filter = "viewed"
+	FilterSaved   Filter = "saved"
+	FilterApplied Filter = "applied"
+	FilterBoard   Filter = "board"
+)
+
+// ParseFilter validates a raw filter string against the vocabulary. An empty
+// string defaults to FilterAll, so the whole filter policy (including the default)
+// lives here rather than leaking into the HTTP layer. An unknown value is
+// ErrInvalidFilter.
+func ParseFilter(s string) (Filter, error) {
+	switch Filter(s) {
+	case "", FilterAll:
+		return FilterAll, nil
+	case FilterViewed, FilterSaved, FilterApplied, FilterBoard:
+		return Filter(s), nil
+	}
+	return "", ErrInvalidFilter
+}
+
+// Counts are the per-filter interaction totals for the my-jobs tab badges.
+type Counts struct {
+	All     int64
+	Viewed  int64
+	Saved   int64
+	Applied int64
+	Board   int64
+}
+
+// Total returns the count matching the active filter — the value the listing's
+// meta.total should report.
+func (c Counts) Total(f Filter) int64 {
+	switch f {
+	case FilterViewed:
+		return c.Viewed
+	case FilterSaved:
+		return c.Saved
+	case FilterApplied:
+		return c.Applied
+	case FilterBoard:
+		return c.Board
+	default:
+		return c.All
+	}
+}
+
+// TrackedJob pairs a job in its canonical wire shape with the caller's
+// interaction marks. The job carries identity via its slug; the embedded
+// Interaction's JobID is the internal id, never serialized.
+type TrackedJob struct {
+	Job jobview.Job
+	Interaction
+}
+
+// Listing is the result of ListTracked: a page of tracked jobs for the active
+// filter plus the per-filter counts for the tab badges.
+type Listing struct {
+	Filter Filter
+	Items  []TrackedJob
+	Counts Counts
+}
+
+// Total is the count for the active filter — the listing's meta.total.
+func (l Listing) Total() int64 { return l.Counts.Total(l.Filter) }
+
 // Sentinel errors returned by the Service and Repository.
 var (
-	ErrJobNotFound  = errors.New("jobtracking: job not found")
-	ErrInvalidStage = errors.New("jobtracking: invalid stage")
-	ErrEmptyTrack   = errors.New("jobtracking: provide stage and/or notes")
+	ErrJobNotFound   = errors.New("jobtracking: job not found")
+	ErrInvalidStage  = errors.New("jobtracking: invalid stage")
+	ErrInvalidFilter = errors.New("jobtracking: invalid filter")
+	ErrEmptyTrack    = errors.New("jobtracking: provide stage and/or notes")
 	// ErrNoInteraction is returned by Repository.UnsaveJob when there is no
 	// interaction row to clear. The Service converts it into a zero-interaction
 	// success; it is never surfaced to the caller.
@@ -59,6 +134,16 @@ type Repository interface {
 	// UntrackJob removes a job from the board entirely: clears saved_at, applied_at,
 	// stage, and notes, keeping viewed_at so the job stays in view history.
 	UntrackJob(ctx context.Context, userID, jobID int64) (Interaction, error)
+
+	// ListInteractions returns the caller's interactions joined with the jobs,
+	// narrowed by an already-validated filter, most recently touched first.
+	ListInteractions(ctx context.Context, userID int64, filter Filter, limit, offset int32) ([]TrackedJob, error)
+
+	// CountInteractions returns the per-filter counts for the caller in one pass.
+	CountInteractions(ctx context.Context, userID int64) (Counts, error)
+
+	// ViewedSlugs returns every public job slug the caller has interacted with.
+	ViewedSlugs(ctx context.Context, userID int64) ([]string, error)
 }
 
 // Service implements the per-user job-tracking use cases.
@@ -69,6 +154,31 @@ type Service struct {
 // New creates a Service backed by the given Repository.
 func New(repo Repository) *Service {
 	return &Service{repo: repo}
+}
+
+// ListTracked validates the filter (the vocabulary and its default live in
+// ParseFilter, not the HTTP layer), then reads the caller's interactions and the
+// per-filter counts. The returned Listing knows its active filter, so Total picks
+// the matching count.
+func (s *Service) ListTracked(ctx context.Context, userID int64, filter string, limit, offset int32) (Listing, error) {
+	f, err := ParseFilter(filter)
+	if err != nil {
+		return Listing{}, err
+	}
+	items, err := s.repo.ListInteractions(ctx, userID, f, limit, offset)
+	if err != nil {
+		return Listing{}, err
+	}
+	counts, err := s.repo.CountInteractions(ctx, userID)
+	if err != nil {
+		return Listing{}, err
+	}
+	return Listing{Filter: f, Items: items, Counts: counts}, nil
+}
+
+// ViewedSlugs returns every public job slug the caller has interacted with.
+func (s *Service) ViewedSlugs(ctx context.Context, userID int64) ([]string, error) {
+	return s.repo.ViewedSlugs(ctx, userID)
 }
 
 // RecordView resolves slug → jobID then delegates to the repository.

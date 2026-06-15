@@ -1,11 +1,11 @@
 package handler
 
 import (
+	"time"
+
 	"github.com/gofiber/fiber/v2"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/auth"
-	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobview"
 )
 
@@ -13,12 +13,12 @@ import (
 // jobview wire shape with the caller's interaction timestamps riding alongside
 // (not flattened in — the job shape stays identical to every other job surface).
 type myJobResponse struct {
-	Job       jobview.Job        `json:"job"`
-	ViewedAt  pgtype.Timestamptz `json:"viewed_at"`
-	SavedAt   pgtype.Timestamptz `json:"saved_at"`
-	AppliedAt pgtype.Timestamptz `json:"applied_at"`
-	Stage     pgtype.Text        `json:"stage"`
-	Notes     pgtype.Text        `json:"notes"`
+	Job       jobview.Job `json:"job"`
+	ViewedAt  *time.Time  `json:"viewed_at"`
+	SavedAt   *time.Time  `json:"saved_at"`
+	AppliedAt *time.Time  `json:"applied_at"`
+	Stage     *string     `json:"stage"`
+	Notes     *string     `json:"notes"`
 }
 
 // ListMyJobs returns the authenticated user's job interactions joined with the
@@ -35,68 +35,36 @@ func (a *API) ListMyJobs(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
 	}
 
-	filter := c.Query("filter", "all")
-	switch filter {
-	case "all", "viewed", "saved", "applied", "board":
-	default:
-		return fiber.NewError(fiber.StatusBadRequest, "filter must be one of: all, viewed, saved, applied, board")
-	}
 	limit, offset := pageParams(c)
-
-	rows, err := a.queries.ListUserJobs(c.Context(), db.ListUserJobsParams{
-		UserID: userID,
-		Filter: filter,
-		Limit:  int32(limit),
-		Offset: int32(offset),
-	})
+	listing, err := a.tracking.ListTracked(c.Context(), userID, c.Query("filter"), int32(limit), int32(offset))
 	if err != nil {
-		return err
-	}
-	counts, err := a.queries.CountUserJobs(c.Context(), userID)
-	if err != nil {
-		return err
+		return trackingError(err)
 	}
 
-	items := make([]myJobResponse, 0, len(rows))
-	for _, row := range rows {
-		view, err := jobview.FromRow(row.Job)
-		if err != nil {
-			return err
-		}
+	items := make([]myJobResponse, 0, len(listing.Items))
+	for _, it := range listing.Items {
 		items = append(items, myJobResponse{
-			Job:       view,
-			ViewedAt:  row.ViewedAt,
-			SavedAt:   row.SavedAt,
-			AppliedAt: row.AppliedAt,
-			Stage:     row.Stage,
-			Notes:     row.Notes,
+			Job:       it.Job,
+			ViewedAt:  it.ViewedAt,
+			SavedAt:   it.SavedAt,
+			AppliedAt: it.AppliedAt,
+			Stage:     it.Stage,
+			Notes:     it.Notes,
 		})
-	}
-
-	total := counts.All
-	switch filter {
-	case "viewed":
-		total = counts.Viewed
-	case "saved":
-		total = counts.Saved
-	case "applied":
-		total = counts.Applied
-	case "board":
-		total = counts.Board
 	}
 
 	return c.JSON(fiber.Map{
 		"data": items,
 		"meta": fiber.Map{
-			"total":  total,
+			"total":  listing.Total(),
 			"limit":  limit,
 			"offset": offset,
 			"counts": fiber.Map{
-				"all":     counts.All,
-				"viewed":  counts.Viewed,
-				"saved":   counts.Saved,
-				"applied": counts.Applied,
-				"board":   counts.Board,
+				"all":     listing.Counts.All,
+				"viewed":  listing.Counts.Viewed,
+				"saved":   listing.Counts.Saved,
+				"applied": listing.Counts.Applied,
+				"board":   listing.Counts.Board,
 			},
 		},
 	})
@@ -114,7 +82,7 @@ func (a *API) ListViewedSlugs(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
 	}
 
-	slugs, err := a.queries.ListViewedJobSlugs(c.Context(), userID)
+	slugs, err := a.tracking.ViewedSlugs(c.Context(), userID)
 	if err != nil {
 		return err
 	}
