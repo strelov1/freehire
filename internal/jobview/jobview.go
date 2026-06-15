@@ -71,26 +71,22 @@ func FromRow(j db.Job) (Job, error) {
 		}
 	}
 
-	// Merge the two geography sources into the top-level facet. Countries/regions
-	// union both; work_mode is the richer LLM value when present, else the parsed
-	// one. The folded fields are then cleared on the enrichment copy so the served
-	// object reports them exactly once (the stored JSONB is untouched).
-	countries := mergeSets(j.Countries, e.Countries)
-	regions := mergeSets(j.Regions, e.Regions)
-	workMode := e.WorkMode
-	if workMode == "" {
-		workMode = j.WorkMode
-	}
-	// Seniority/category: the LLM value wins, the deterministic column is the
-	// fallback (the work_mode precedence rule). They stay nested under enrichment,
-	// so the existing enrichment.seniority/category facets are unchanged.
-	if e.Seniority == "" {
-		e.Seniority = j.Seniority
-	}
-	if e.Category == "" {
-		e.Category = j.Category
-	}
-	skills := mergeSets(j.Skills, e.Skills)
+	// The six dictionary-derived facets are sourced from the jobs columns ONLY (the
+	// deterministic dictionaries are the production source); the LLM's values for
+	// them are excluded from the served object so the LLM can later run free as a
+	// discovery signal without corrupting production data. The LLM values stay in
+	// the stored enrichment JSONB (untouched) but are folded out of the served copy
+	// here. normalizeSet lowercases/sorts/dedups each column and guarantees a
+	// non-nil slice so the facet serializes as [] not null.
+	countries := normalizeSet(j.Countries)
+	regions := normalizeSet(j.Regions)
+	workMode := j.WorkMode
+	// Seniority/category are the dictionary column value, always — never the LLM's,
+	// and never a dict-silent fill. They stay nested under enrichment, so the
+	// existing enrichment.seniority/category facets are unchanged.
+	e.Seniority = j.Seniority
+	e.Category = j.Category
+	skills := normalizeSet(j.Skills)
 	e.Countries, e.Regions, e.WorkMode = nil, nil, ""
 	e.Skills = nil
 
@@ -119,18 +115,13 @@ func FromRow(j db.Job) (Job, error) {
 	}, nil
 }
 
-// mergeSets returns the sorted, deduplicated, lowercased union of two string
-// slices. Case-folding is load-bearing: the parser emits country/region codes
-// lowercase, but the LLM emits ISO country codes uppercase ("DE"), so without it
-// the same country splits into two facet buckets ("DE" and "de"). The result is
-// always non-nil so the geography facet serializes as a JSON array (matching the
-// text[] columns' empty-array default) rather than null.
-func mergeSets(a, b []string) []string {
-	set := make(map[string]struct{}, len(a)+len(b))
+// normalizeSet returns the sorted, deduplicated, lowercased form of a facet
+// column. Case-folding keeps the facet in one canonical bucket; the result is
+// always non-nil so the facet serializes as a JSON array (matching the text[]
+// columns' empty-array default) rather than null.
+func normalizeSet(a []string) []string {
+	set := make(map[string]struct{}, len(a))
 	for _, v := range a {
-		set[strings.ToLower(v)] = struct{}{}
-	}
-	for _, v := range b {
 		set[strings.ToLower(v)] = struct{}{}
 	}
 	out := make([]string, 0, len(set))

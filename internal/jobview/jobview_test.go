@@ -16,13 +16,12 @@ func ptr[T any](v T) *T { return &v }
 
 func TestFromRow_MapsCoreAndNestedEnrichment(t *testing.T) {
 	posted := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
+	// LLM-only fields (domains, visa, salary) stay nested; the six dictionary
+	// facets are served from the jobs columns, so they live there in the fixture.
 	raw, err := json.Marshal(enrich.Enrichment{
-		Seniority:       "senior",
-		Category:        "backend",
 		Domains:         []string{"fintech"},
 		VisaSponsorship: ptr(true),
 		SalaryMin:       ptr(100000),
-		Skills:          []string{"go", "postgres"},
 	})
 	if err != nil {
 		t.Fatalf("marshal enrichment: %v", err)
@@ -38,6 +37,9 @@ func TestFromRow_MapsCoreAndNestedEnrichment(t *testing.T) {
 		Location:    "Berlin",
 		Remote:      true,
 		Description: "Build durable systems",
+		Seniority:   "senior",                  // dictionary
+		Category:    "backend",                 // dictionary
+		Skills:      []string{"go", "postgres"}, // dictionary
 		PostedAt:    pgtype.Timestamptz{Time: posted, Valid: true},
 		PublicSlug:  "senior-go-developer-acme-abcd1234",
 		Enrichment:  raw,
@@ -74,14 +76,14 @@ func TestFromRow_MapsCoreAndNestedEnrichment(t *testing.T) {
 	}
 }
 
-// Geography is the union of the parsed-location columns and the enrichment-derived
-// values; work_mode is the LLM value when present, else the parsed one. All three
-// are served top-level and folded out of the enrichment object.
-func TestFromRow_MergesGeographyAndWorkMode(t *testing.T) {
+// Doctrine: the six dictionary facets are served from the jobs columns ONLY. The
+// LLM's geography/work_mode values are not unioned or substituted in — they remain
+// in the stored enrichment JSONB but are folded out of the served object.
+func TestFromRow_GeographyAndWorkModeAreDictOnly(t *testing.T) {
 	raw, err := json.Marshal(enrich.Enrichment{
-		Regions:   []string{"emea"},
-		Countries: []string{"us"},
-		WorkMode:  "remote",
+		Regions:   []string{"emea"}, // LLM-only region — must NOT be unioned in
+		Countries: []string{"de"},   // LLM-only country — must NOT be unioned in
+		WorkMode:  "remote",         // must NOT override the dict value
 	})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -90,9 +92,9 @@ func TestFromRow_MergesGeographyAndWorkMode(t *testing.T) {
 		ID:         1,
 		Title:      "Dev",
 		PublicSlug: "dev-1",
-		Countries:  []string{"us"}, // parsed from location
-		Regions:    []string{"us"}, // parsed from location
-		WorkMode:   "onsite",       // parsed from location (loses to the LLM)
+		Countries:  []string{"us"},  // dictionary
+		Regions:    []string{"us"},  // dictionary
+		WorkMode:   "onsite",        // dictionary — served as-is, LLM ignored
 		Enrichment: raw,
 	})
 	if err != nil {
@@ -100,13 +102,13 @@ func TestFromRow_MergesGeographyAndWorkMode(t *testing.T) {
 	}
 
 	if got := view.Countries; len(got) != 1 || got[0] != "us" {
-		t.Errorf("Countries = %v, want [us] (deduped union)", got)
+		t.Errorf("Countries = %v, want [us] (dict only, no LLM union)", got)
 	}
-	if got := view.Regions; len(got) != 2 || got[0] != "emea" || got[1] != "us" {
-		t.Errorf("Regions = %v, want [emea us] (sorted union)", got)
+	if got := view.Regions; len(got) != 1 || got[0] != "us" {
+		t.Errorf("Regions = %v, want [us] (dict only, no LLM union)", got)
 	}
-	if view.WorkMode != "remote" {
-		t.Errorf("WorkMode = %q, want remote (LLM wins over parsed onsite)", view.WorkMode)
+	if view.WorkMode != "onsite" {
+		t.Errorf("WorkMode = %q, want onsite (dict only, LLM ignored)", view.WorkMode)
 	}
 	// Folded out of enrichment so geography/work_mode are reported once.
 	if len(view.Enrichment.Regions) != 0 || len(view.Enrichment.Countries) != 0 || view.Enrichment.WorkMode != "" {
@@ -114,38 +116,44 @@ func TestFromRow_MergesGeographyAndWorkMode(t *testing.T) {
 	}
 }
 
-// The LLM emits ISO country codes uppercase ("DE"); the parser emits them
-// lowercase ("de"). The merge must case-fold to one canonical form so the facet
-// is not split into duplicate buckets and a lowercase filter matches both.
-func TestFromRow_CountryCaseIsFolded(t *testing.T) {
-	raw, err := json.Marshal(enrich.Enrichment{Countries: []string{"DE", "FR"}})
+// A dictionary-silent facet is served empty, never filled from the LLM — the
+// load-bearing case that lets the LLM later run free without leaking into
+// production facets.
+func TestFromRow_DictSilentFacetsAreEmptyNotLLM(t *testing.T) {
+	raw, err := json.Marshal(enrich.Enrichment{
+		Countries: []string{"fr"},
+		Regions:   []string{"eu"},
+		WorkMode:  "remote",
+		Skills:    []string{"rust"},
+		Seniority: "senior",
+		Category:  "backend",
+	})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	view, err := FromRow(db.Job{
-		ID:         1,
-		Title:      "x",
-		PublicSlug: "x-1",
-		Countries:  []string{"de"}, // parser, lowercase
-		Enrichment: raw,
-	})
+	// jobs columns all empty (the dictionaries resolved nothing).
+	view, err := FromRow(db.Job{ID: 1, Title: "x", PublicSlug: "x-1", Enrichment: raw})
 	if err != nil {
 		t.Fatalf("FromRow: %v", err)
 	}
-	want := []string{"de", "fr"}
-	if len(view.Countries) != 2 || view.Countries[0] != want[0] || view.Countries[1] != want[1] {
-		t.Errorf("Countries = %v, want %v (case-folded, deduped)", view.Countries, want)
+	if len(view.Countries) != 0 || len(view.Regions) != 0 || len(view.Skills) != 0 {
+		t.Errorf("multi-valued facets should be empty, got countries=%v regions=%v skills=%v", view.Countries, view.Regions, view.Skills)
+	}
+	if view.WorkMode != "" {
+		t.Errorf("WorkMode = %q, want empty (dict silent, LLM ignored)", view.WorkMode)
+	}
+	if view.Enrichment.Seniority != "" || view.Enrichment.Category != "" {
+		t.Errorf("seniority/category should be empty, got {%q, %q}", view.Enrichment.Seniority, view.Enrichment.Category)
 	}
 }
 
-func TestFromRow_WorkModeFallsBackToParsed(t *testing.T) {
-	// No enrichment: the parsed-location work_mode surfaces.
+func TestFromRow_WorkModeIsTheDictValue(t *testing.T) {
 	view, err := FromRow(db.Job{ID: 1, Title: "x", PublicSlug: "x-1", WorkMode: "hybrid"})
 	if err != nil {
 		t.Fatalf("FromRow: %v", err)
 	}
 	if view.WorkMode != "hybrid" {
-		t.Errorf("WorkMode = %q, want hybrid (parser fallback when no LLM value)", view.WorkMode)
+		t.Errorf("WorkMode = %q, want hybrid (dict value)", view.WorkMode)
 	}
 }
 
@@ -222,7 +230,9 @@ func TestJobJSON_Enriched(t *testing.T) {
 	fields := marshalToFields(t, db.Job{
 		ID:                2,
 		Title:             "Senior Go Developer",
-		Enrichment:        json.RawMessage(`{"seniority":"senior","work_mode":"remote"}`),
+		Seniority:         "senior", // dictionary — surfaces under enrichment.seniority
+		WorkMode:          "remote", // dictionary — surfaces top-level
+		Enrichment:        json.RawMessage(`{"seniority":"senior","work_mode":"remote","domains":["fintech"]}`),
 		EnrichedAt:        pgtype.Timestamptz{Time: enrichedAt, Valid: true},
 		EnrichmentVersion: 1,
 	})
@@ -231,8 +241,13 @@ func TestJobJSON_Enriched(t *testing.T) {
 	if err := json.Unmarshal(fields["enrichment"], &enrichment); err != nil {
 		t.Fatalf("enrichment is not a JSON object: %v", err)
 	}
-	if enrichment["seniority"] != "senior" {
+	// LLM-only fields survive the typed round-trip.
+	if domains, ok := enrichment["domains"].([]any); !ok || len(domains) != 1 || domains[0] != "fintech" {
 		t.Errorf("enrichment payload not preserved: %v", enrichment)
+	}
+	// seniority is the dictionary value, served nested under enrichment.
+	if enrichment["seniority"] != "senior" {
+		t.Errorf("enrichment.seniority = %v, want senior (dict value)", enrichment["seniority"])
 	}
 	// work_mode is folded into the top-level facet, not duplicated under enrichment.
 	if got := string(fields["work_mode"]); got != `"remote"` {
@@ -268,7 +283,9 @@ func marshalToFields(t *testing.T, job db.Job) map[string]json.RawMessage {
 	return fields
 }
 
-func TestFromRowUnionsSkills(t *testing.T) {
+// Skills are served from the jobs column only; the LLM's extra skills are not
+// unioned in (they remain in the stored enrichment JSONB for later discovery).
+func TestFromRow_SkillsAreDictOnly(t *testing.T) {
 	enr, _ := json.Marshal(enrich.Enrichment{Skills: []string{"go", "docker"}})
 	j := db.Job{
 		ID: 1, Skills: []string{"go", "kubernetes"}, Enrichment: enr,
@@ -277,46 +294,34 @@ func TestFromRowUnionsSkills(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FromRow: %v", err)
 	}
-	want := []string{"docker", "go", "kubernetes"}
+	want := []string{"go", "kubernetes"} // dict column only, lowercased + sorted
 	if !reflect.DeepEqual(got.Skills, want) {
-		t.Fatalf("Skills = %#v, want %#v", got.Skills, want)
+		t.Fatalf("Skills = %#v, want %#v (dict only, no LLM union)", got.Skills, want)
 	}
 	if got.Enrichment.Skills != nil {
 		t.Errorf("enrichment.skills should be folded out, got %#v", got.Enrichment.Skills)
 	}
 }
 
-// Seniority/category follow the work_mode precedence: the LLM value wins when
-// present, the deterministic column is the fallback. Both stay nested under
-// enrichment (not promoted top-level), so the existing facet path is unchanged.
-func TestFromRow_ClassificationLLMWinsElseParsed(t *testing.T) {
-	// LLM present: wins over the parsed column.
+// Seniority/category are the dictionary column value, always — the LLM never wins
+// and never fills a dict-silent field. They stay nested under enrichment so the
+// existing facet path is unchanged.
+func TestFromRow_ClassificationIsDictOnly(t *testing.T) {
+	// LLM present but the dictionary value wins.
 	raw, err := json.Marshal(enrich.Enrichment{Seniority: "lead", Category: "devops"})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
 	view, err := FromRow(db.Job{
 		ID: 1, Title: "x", PublicSlug: "x-1",
-		Seniority: "senior", Category: "backend", // parsed, loses to the LLM
+		Seniority: "senior", Category: "backend", // dictionary — wins
 		Enrichment: raw,
 	})
 	if err != nil {
 		t.Fatalf("FromRow: %v", err)
 	}
-	if view.Enrichment.Seniority != "lead" || view.Enrichment.Category != "devops" {
-		t.Errorf("LLM should win: got {%q, %q}", view.Enrichment.Seniority, view.Enrichment.Category)
-	}
-
-	// No enrichment: the parsed column surfaces as the fallback.
-	fb, err := FromRow(db.Job{
-		ID: 2, Title: "x", PublicSlug: "x-2",
-		Seniority: "senior", Category: "backend",
-	})
-	if err != nil {
-		t.Fatalf("FromRow: %v", err)
-	}
-	if fb.Enrichment.Seniority != "senior" || fb.Enrichment.Category != "backend" {
-		t.Errorf("parsed fallback expected: got {%q, %q}", fb.Enrichment.Seniority, fb.Enrichment.Category)
+	if view.Enrichment.Seniority != "senior" || view.Enrichment.Category != "backend" {
+		t.Errorf("dict should win: got {%q, %q}", view.Enrichment.Seniority, view.Enrichment.Category)
 	}
 }
 

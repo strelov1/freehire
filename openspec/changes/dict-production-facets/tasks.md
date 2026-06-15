@@ -1,9 +1,9 @@
 ## 1. FromRow dict-only (core doctrine)
 
-- [ ] 1.1 Add failing tests in `internal/jobview/jobview_test.go`: for all six facets (countries, regions, work_mode, skills, seniority, category), the served value is the `jobs` column only — including the case where the LLM has a value but the dictionary column is empty (the served facet must be empty, not the LLM value), and the multi-valued case where the LLM has extra members that must NOT be unioned in.
-- [ ] 1.2 Change `jobview.FromRow`: serve `countries`/`regions`/`skills` from `j.*` only (drop `mergeSets` with the enrichment values); serve `work_mode` from `j.WorkMode` only; set `e.Seniority = j.Seniority` and `e.Category = j.Category` unconditionally (dictionary wins). Keep clearing the folded enrichment fields so they are not duplicated; leave the stored JSONB untouched.
-- [ ] 1.3 Remove now-dead merge helpers/branches left by 1.2 (e.g. `mergeSets` if unused), keeping `go build ./...` and `go vet ./...` clean.
-- [ ] 1.4 Run `go test ./internal/jobview/...` green; confirm no other package's tests regressed.
+- [x] 1.1 Add failing tests in `internal/jobview/jobview_test.go`: for all six facets (countries, regions, work_mode, skills, seniority, category), the served value is the `jobs` column only — including the case where the LLM has a value but the dictionary column is empty (the served facet must be empty, not the LLM value), and the multi-valued case where the LLM has extra members that must NOT be unioned in.
+- [x] 1.2 Change `jobview.FromRow`: serve `countries`/`regions`/`skills` from `j.*` only (drop `mergeSets` with the enrichment values); serve `work_mode` from `j.WorkMode` only; set `e.Seniority = j.Seniority` and `e.Category = j.Category` unconditionally (dictionary wins). Keep clearing the folded enrichment fields so they are not duplicated; leave the stored JSONB untouched.
+- [x] 1.3 Remove now-dead merge helpers/branches left by 1.2 (e.g. `mergeSets` if unused), keeping `go build ./...` and `go vet ./...` clean.
+- [x] 1.4 Run `go test ./internal/jobview/...` green; confirm no other package's tests regressed.
 
 ## 2. Unified backfill query (sqlc)
 
