@@ -12,6 +12,10 @@ import (
 
 const minPasswordLen = 8
 
+// maxPasswordLen is bcrypt's input ceiling: it silently truncates beyond 72 bytes,
+// so a longer password would have its tail ignored. Reject rather than mislead.
+const maxPasswordLen = 72
+
 // User is the public representation of a local account.
 type User struct {
 	ID        int64
@@ -42,6 +46,7 @@ var (
 
 	ErrInvalidEmail       = errors.New("accounts: invalid email")
 	ErrPasswordTooShort   = errors.New("accounts: password too short")
+	ErrPasswordTooLong    = errors.New("accounts: password too long")
 	ErrEmailTaken         = errors.New("accounts: email already registered")
 	ErrInvalidCredentials = errors.New("accounts: invalid credentials")
 	ErrUserNotFound       = errors.New("accounts: user not found")
@@ -127,6 +132,9 @@ func (s *Service) Register(ctx context.Context, email, password string) (User, e
 	}
 	if len(password) < minPasswordLen {
 		return User{}, ErrPasswordTooShort
+	}
+	if len(password) > maxPasswordLen {
+		return User{}, ErrPasswordTooLong
 	}
 	hash, err := s.hasher.Hash(password)
 	if err != nil {

@@ -36,6 +36,8 @@ func accountsError(err error) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid email")
 	case errors.Is(err, accounts.ErrPasswordTooShort):
 		return fiber.NewError(fiber.StatusBadRequest, "password must be at least 8 characters")
+	case errors.Is(err, accounts.ErrPasswordTooLong):
+		return fiber.NewError(fiber.StatusBadRequest, "password must be at most 72 characters")
 	case errors.Is(err, accounts.ErrEmailTaken):
 		return fiber.NewError(fiber.StatusConflict, "email already registered")
 	case errors.Is(err, accounts.ErrInvalidCredentials):

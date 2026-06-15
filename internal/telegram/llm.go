@@ -5,16 +5,36 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/openai"
 )
 
+// defaultExtractTimeout bounds a single LLM call, mirroring the enrichment worker.
+// Without it a stalled gateway hangs the run-once worker indefinitely, holding its
+// cron flock open and stalling the whole telegram_posts queue.
+const defaultExtractTimeout = 90 * time.Second
+
+// maxInputRunes caps the post text sent to the model. Channel posts are short; this
+// bounds a hostile/oversized post so it cannot amplify per-call token cost.
+const maxInputRunes = 24000
+
 // LangChainExtractor implements Extractor over any OpenAI-compatible endpoint via
 // langchaingo — the same provider-agnostic setup as the enrichment worker. The
 // model is asked for a JSON object matching the Extraction contract.
 type LangChainExtractor struct {
-	llm llms.Model
+	llm     llms.Model
+	timeout time.Duration
+}
+
+// truncateRunes returns s clamped to at most max runes, never splitting a rune.
+func truncateRunes(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max])
 }
 
 // NewLangChainExtractor builds an extractor against an OpenAI-compatible endpoint.
@@ -28,15 +48,20 @@ func NewLangChainExtractor(baseURL, apiKey, model string) (*LangChainExtractor, 
 	if err != nil {
 		return nil, fmt.Errorf("telegram: build llm client: %w", err)
 	}
-	return &LangChainExtractor{llm: llm}, nil
+	return &LangChainExtractor{llm: llm, timeout: defaultExtractTimeout}, nil
 }
 
 // Extract asks the model to classify the post and extract its vacancies. It does
 // not validate the result — the runner validates before persisting.
 func (e *LangChainExtractor) Extract(ctx context.Context, text string, kind Kind) (Extraction, error) {
+	if e.timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, e.timeout)
+		defer cancel()
+	}
 	messages := []llms.MessageContent{
 		llms.TextParts(llms.ChatMessageTypeSystem, extractSystemPrompt(kind)),
-		llms.TextParts(llms.ChatMessageTypeHuman, text),
+		llms.TextParts(llms.ChatMessageTypeHuman, truncateRunes(text, maxInputRunes)),
 	}
 	resp, err := e.llm.GenerateContent(ctx, messages, llms.WithJSONMode())
 	if err != nil {

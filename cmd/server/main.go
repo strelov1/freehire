@@ -22,9 +22,11 @@ import (
 func main() {
 	cfg := config.Load()
 
-	// Never boot the auth surface with a guessable signing key.
-	if cfg.JWTSecret == "" {
-		log.Fatal("config: JWT_SECRET is required")
+	// Never boot the auth surface with a guessable signing key. HS256 security rests
+	// entirely on secret entropy, so a short secret is brute-forceable offline against
+	// any captured token; require at least 32 bytes.
+	if len(cfg.JWTSecret) < 32 {
+		log.Fatal("config: JWT_SECRET is required and must be at least 32 bytes")
 	}
 
 	pool, err := database.Connect(context.Background(), cfg.DatabaseURL)
@@ -37,7 +39,18 @@ func main() {
 		AppName:      "hire",
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
+		// Cap request bodies well under Fiber's 4MB default: the largest write is a
+		// single moderator job description, so 1MB bounds a memory-amplification body.
+		BodyLimit:    1 * 1024 * 1024,
 		ErrorHandler: handler.RenderError,
+		// The app sits behind the in-network nginx proxy (web/nginx.conf), which sets
+		// X-Forwarded-For. Trust that header for c.IP() — so the rate limiter keys on
+		// the real client, not the proxy — but ONLY when the immediate peer is in a
+		// private range (the nginx container). A direct public caller is not trusted,
+		// so it cannot spoof XFF to evade the limit.
+		ProxyHeader:             fiber.HeaderXForwardedFor,
+		EnableTrustedProxyCheck: true,
+		TrustedProxies:          []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.1/32"},
 	})
 
 	app.Use(recover.New())

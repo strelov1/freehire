@@ -50,6 +50,16 @@ func TestRemoteYeahSanitizesFoldedSalary(t *testing.T) {
 	}
 }
 
+func TestRemoteYeahRejectsRedirectToForeignHost(t *testing.T) {
+	// The link host matches, but the page resolves (via redirect) to an internal
+	// target. The adapter must refuse to ingest a foreign host's HTML.
+	c := (&fakeClient{}).route("/jobs/evil", remoteYeahJobHTML, "http://169.254.169.254/latest/meta-data/")
+	_, ok, err := NewRemoteYeah(c).Resolve(context.Background(), "https://remoteyeah.com/jobs/evil")
+	if err == nil {
+		t.Fatalf("expected rejection of redirect to a foreign host, got ok=%v err=nil", ok)
+	}
+}
+
 func TestRemoteYeahResolvesJobPage(t *testing.T) {
 	const link = "https://remoteyeah.com/jobs/remote-senior-platform-security-engineer-taekus?utm_source=telegram"
 	c := (&fakeClient{}).route("/jobs/remote-senior-platform-security-engineer-taekus", remoteYeahJobHTML, "")

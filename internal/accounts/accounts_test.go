@@ -3,6 +3,7 @@ package accounts
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -294,6 +295,22 @@ func TestRegister_ShortPassword(t *testing.T) {
 	_, err := svc.Register(context.Background(), "user@example.com", "short")
 	if !errors.Is(err, ErrPasswordTooShort) {
 		t.Errorf("want ErrPasswordTooShort, got %v", err)
+	}
+	if len(repo.createUserCalls) != 0 {
+		t.Errorf("CreateUser should NOT be called, got %d calls", len(repo.createUserCalls))
+	}
+}
+
+// Register long password → ErrPasswordTooLong; CreateUser NOT called. bcrypt silently
+// truncates past 72 bytes, so accepting a longer password would ignore its tail.
+func TestRegister_LongPassword(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := New(repo, &fakeHasher{})
+
+	long := strings.Repeat("a", 73)
+	_, err := svc.Register(context.Background(), "user@example.com", long)
+	if !errors.Is(err, ErrPasswordTooLong) {
+		t.Errorf("want ErrPasswordTooLong, got %v", err)
 	}
 	if len(repo.createUserCalls) != 0 {
 		t.Errorf("CreateUser should NOT be called, got %d calls", len(repo.createUserCalls))

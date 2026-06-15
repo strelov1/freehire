@@ -13,7 +13,6 @@ package main
 import (
 	"context"
 	"log"
-	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -22,6 +21,7 @@ import (
 	"github.com/strelov1/freehire/internal/database"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/liveness"
+	"github.com/strelov1/freehire/internal/safehttp"
 	"github.com/strelov1/freehire/internal/sources"
 )
 
@@ -65,7 +65,9 @@ func main() {
 	}
 	log.Printf("liveness: %d orphan candidates (excluding %d ATS providers)", len(candidates), len(atsProviders))
 
-	client := &http.Client{Timeout: probeTimeout}
+	// Probe targets are orphan-job URLs that originated from attacker-influenced
+	// sources (telegram posts), so the probe must refuse internal/metadata targets.
+	client := safehttp.NewClient(probeTimeout)
 	var probed, closed, struck int64
 
 	sem := make(chan struct{}, concurrency)

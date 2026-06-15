@@ -2,6 +2,15 @@
 /bin/
 /out/
 hire
+# Build output of cmd/gen-contracts (regenerated via `make gen-contracts`).
+/gen-contracts
+
+# Local scratch: scraped pages and ad-hoc source dumps used while spiking new
+# adapters. Multi-MB and sometimes carry third-party keys embedded in saved pages —
+# never commit.
+/remoteok.txt
+/workatastartup.html
+/native-boards.md
 
 # Environment
 .env

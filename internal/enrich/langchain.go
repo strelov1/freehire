@@ -16,6 +16,20 @@ import (
 // stalling the whole queue). The lease/retry machinery then reclaims the job.
 const defaultEnrichTimeout = 90 * time.Second
 
+// maxDescriptionRunes caps the job description sent to the model. Descriptions are
+// attacker-influenced (scraped/extracted), so bounding the length keeps a single
+// oversized posting from amplifying per-call token cost.
+const maxDescriptionRunes = 24000
+
+// truncateRunes returns s clamped to at most max runes, never splitting a rune.
+func truncateRunes(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max])
+}
+
 // LangChainProvider implements Provider over any OpenAI-compatible endpoint via
 // langchaingo. The endpoint, credential, and model are injected at construction;
 // the model is asked for a JSON object matching the Enrichment contract.
@@ -137,6 +151,6 @@ func userPrompt(job JobInput) string {
 	// Source-provided remote hint (from the ATS API or the location text) — a
 	// prior for the model, not a guarantee of scope.
 	fmt.Fprintf(&b, "Remote flag: %t\n", job.Remote)
-	fmt.Fprintf(&b, "Description:\n%s\n", job.Description)
+	fmt.Fprintf(&b, "Description:\n%s\n", truncateRunes(job.Description, maxDescriptionRunes))
 	return b.String()
 }

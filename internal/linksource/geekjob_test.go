@@ -21,6 +21,16 @@ const geekjobVacancyHTML = `<html><head>
  "baseSalary":{"@type":"MonetaryAmount","currency":"USD","value":{"@type":"QuantitativeValue","unitText":"MONTH","minValue":4000,"maxValue":5000}}}
 </script></head><body></body></html>`
 
+func TestGeekjobRejectsRedirectToForeignHost(t *testing.T) {
+	// The link host matches, but the page resolves to an internal target; the adapter
+	// must refuse to ingest a foreign host's HTML.
+	c := (&fakeClient{}).route("/vacancy/6a1ebb8520ad023342091661", geekjobVacancyHTML, "http://10.0.0.1/internal")
+	_, ok, err := NewGeekjob(c).Resolve(context.Background(), "https://geekjob.ru/vacancy/6a1ebb8520ad023342091661")
+	if err == nil {
+		t.Fatalf("expected rejection of redirect to a foreign host, got ok=%v err=nil", ok)
+	}
+}
+
 func TestGeekjobResolvesVacancy(t *testing.T) {
 	const link = "https://geekjob.ru/vacancy/6a1ebb8520ad023342091661?utm_source=telegram"
 	c := (&fakeClient{}).route("/vacancy/6a1ebb8520ad023342091661", geekjobVacancyHTML, "")

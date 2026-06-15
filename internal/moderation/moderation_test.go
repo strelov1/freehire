@@ -3,6 +3,7 @@ package moderation_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/db"
@@ -98,6 +99,39 @@ func TestCreate_SourceIsRecordedAndSlugsFromIt(t *testing.T) {
 	// The public slug is minted from the real source, not the literal "manual".
 	if want := normalize.JobSlug("Senior Frontend Engineer", "Dalus", "workatastartup", url); repo.created.PublicSlug != want {
 		t.Errorf("PublicSlug = %q, want %q", repo.created.PublicSlug, want)
+	}
+}
+
+func TestCreate_SanitizesDescription(t *testing.T) {
+	// Moderator descriptions are bulk-imported from scraped pages and rendered with
+	// {@html}, so the service must strip active markup before persisting (stored XSS).
+	repo := &fakeRepo{}
+	_, err := moderation.New(repo).Create(context.Background(), 7, moderation.CreateInput{
+		URL:         "https://acme.example/jobs/1",
+		Title:       "Dev",
+		Company:     "Acme",
+		Description: `<p>Build it.</p><script>alert(document.cookie)</script><img src=x onerror=alert(1)>`,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if got := repo.created.Description; strings.Contains(got, "<script>") || strings.Contains(got, "onerror") {
+		t.Errorf("description not sanitized: %q", got)
+	}
+	if !strings.Contains(repo.created.Description, "Build it.") {
+		t.Errorf("sanitizer dropped legitimate content: %q", repo.created.Description)
+	}
+}
+
+func TestUpdate_SanitizesDescription(t *testing.T) {
+	repo := &fakeRepo{bySlugJob: db.Job{Source: "manual", PublicSlug: "s", Description: "old"}}
+	evil := `<script>alert(1)</script><b>new</b>`
+	_, err := moderation.New(repo).Update(context.Background(), 9, "s", moderation.UpdatePatch{Description: &evil})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if got := repo.updated.Description; strings.Contains(got, "<script>") {
+		t.Errorf("description not sanitized on update: %q", got)
 	}
 }
 

@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
+
+	"github.com/strelov1/freehire/internal/safehttp"
 )
 
 // The capability interfaces below are the narrow transport roles an adapter depends
@@ -68,6 +70,19 @@ type HTTPClient interface {
 	HeaderJSONPoster
 }
 
+// maxResponseBody caps how many bytes a decoder reads from any response. ATS list
+// feeds run to a few MB at most; this generous ceiling bounds a hostile or buggy
+// endpoint returning a multi-GB body (or a gzip bomb the transport transparently
+// inflates) so it cannot exhaust the worker's memory.
+const maxResponseBody = 32 << 20 // 32 MiB
+
+// limitedBody caps how many bytes a decoder reads from a response while preserving
+// the original Closer, so the connection is still released after the bounded read.
+type limitedBody struct {
+	io.Reader
+	io.Closer
+}
+
 // Client is the real HTTPClient: a timeout-bounded GET with a project User-Agent and
 // a bounded retry-with-backoff on transient (5xx / network) failures. A 4xx is not
 // retried — it will not recover on its own.
@@ -81,7 +96,9 @@ type Client struct {
 // NewClient builds the default ingest HTTP client.
 func NewClient() *Client {
 	return &Client{
-		httpClient: &http.Client{Timeout: 15 * time.Second},
+		// Guarded transport: adapters and link-following fetch attacker-influenced
+		// URLs, so the client must refuse internal/metadata targets (SSRF).
+		httpClient: safehttp.NewClient(15 * time.Second),
 		userAgent:  "freehire/0.1 (+https://freehire.dev)",
 		maxRetries: 2,
 		retryDelay: 500 * time.Millisecond,
@@ -237,6 +254,9 @@ func (c *Client) do(ctx context.Context, r request) error {
 
 		switch {
 		case resp.StatusCode >= 200 && resp.StatusCode < 300:
+			// Bound the read so a pathological body cannot OOM the worker; Close still
+			// runs on the underlying body to release the connection.
+			resp.Body = limitedBody{Reader: io.LimitReader(resp.Body, maxResponseBody), Closer: resp.Body}
 			err := r.decode(resp)
 			resp.Body.Close()
 			if err != nil {

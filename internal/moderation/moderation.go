@@ -18,6 +18,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobderive"
+	"github.com/strelov1/freehire/internal/sources"
 )
 
 // Sentinel errors. ErrInvalid wraps every validation failure (the handler maps it to
@@ -124,13 +125,17 @@ func (s *Service) Create(ctx context.Context, actorID int64, in CreateInput) (db
 	if source == "" {
 		source = defaultSource
 	}
+	// Moderator descriptions are bulk-imported from scraped pages and rendered with
+	// {@html}; sanitize to the same allowlist as every other source so no active
+	// markup is ever persisted (stored XSS). Done once and reused for derivation.
+	description := sources.SanitizeHTML(in.Description)
 	d := jobderive.Derive(jobderive.Input{
 		Title:       in.Title,
 		Company:     in.Company,
 		Source:      source,
 		ExternalID:  in.URL,
 		Location:    in.Location,
-		Description: in.Description,
+		Description: description,
 		WorkMode:    remoteWorkMode(in.Remote),
 	})
 	return s.repo.Create(ctx, db.UpsertManualJobParams{
@@ -142,7 +147,7 @@ func (s *Service) Create(ctx context.Context, actorID int64, in CreateInput) (db
 		CompanySlug: d.CompanySlug,
 		Location:    in.Location,
 		Remote:      in.Remote,
-		Description: in.Description,
+		Description: description,
 		PostedAt:    toTimestamptz(in.PostedAt),
 		PublicSlug:  d.PublicSlug,
 		Countries:   d.Countries,
@@ -173,7 +178,9 @@ func (s *Service) Update(ctx context.Context, actorID int64, slug string, p Upda
 	title := stringOr(p.Title, cur.Title)
 	company := stringOr(p.Company, cur.Company)
 	location := stringOr(p.Location, cur.Location)
-	description := stringOr(p.Description, cur.Description)
+	// Sanitize a supplied description before persisting (stored XSS); re-sanitizing the
+	// already-clean current value is idempotent.
+	description := sources.SanitizeHTML(stringOr(p.Description, cur.Description))
 	remote := cur.Remote
 	if p.Remote != nil {
 		remote = *p.Remote

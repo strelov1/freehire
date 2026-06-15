@@ -6,6 +6,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/accounts"
@@ -161,9 +162,13 @@ func Register(app *fiber.App, cfg Config) {
 	// me is guarded and accepts a session cookie OR an API key, so a non-browser
 	// client (e.g. the CLI) can resolve its own identity with its key. It stays a
 	// read of the caller's own user — not key management, which is cookie-only.
+	// Throttle the credential endpoints against online brute-force / credential
+	// stuffing. Keyed on c.IP() (the real client, via the trusted-proxy config); the
+	// per-instance in-memory window is enough friction for a single-node deployment.
+	authLimiter := limiter.New(limiter.Config{Max: 10, Expiration: time.Minute})
 	authGroup := api.Group("/auth")
-	authGroup.Post("/register", a.Register)
-	authGroup.Post("/login", a.Login)
+	authGroup.Post("/register", authLimiter, a.Register)
+	authGroup.Post("/login", authLimiter, a.Login)
 	authGroup.Post("/logout", a.Logout)
 	authGroup.Get("/me", auth.RequireAuthOrKey(a.issuer, a.queries), a.Me)
 

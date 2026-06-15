@@ -51,9 +51,15 @@ func (r remoteYeah) Resolve(ctx context.Context, raw string) (sources.Job, bool,
 		return sources.Job{}, false, nil
 	}
 
-	node, err := r.http.GetHTML(ctx, raw)
+	node, final, err := r.http.GetHTMLResolved(ctx, raw)
 	if err != nil {
 		return sources.Job{}, false, err
+	}
+	// The link came from untrusted post content and the client follows redirects to
+	// any host; only parse the page when it stayed on RemoteYeah, so a hijacked link
+	// or open redirect cannot make us ingest an arbitrary (e.g. internal) host's HTML.
+	if fu, err := url.Parse(final); err != nil || host(fu) != "remoteyeah.com" {
+		return sources.Job{}, false, fmt.Errorf("linksource: remoteyeah link resolved to unexpected host %q", final)
 	}
 	var p remoteYeahPosting
 	if !sources.LDJobPosting(node, &p) {

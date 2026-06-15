@@ -22,6 +22,7 @@ func TestFetcherFetchesAndParses(t *testing.T) {
 
 	f := NewFetcher()
 	f.baseURL = srv.URL
+	f.httpClient = srv.Client() // reach the loopback test server past the SSRF guard
 
 	posts, err := f.Fetch(context.Background(), "hrlunapark")
 	if err != nil {
@@ -43,6 +44,7 @@ func TestFetcherErrorsOnHTTPFailure(t *testing.T) {
 
 	f := NewFetcher()
 	f.baseURL = srv.URL
+	f.httpClient = srv.Client() // reach the loopback test server past the SSRF guard
 
 	if _, err := f.Fetch(context.Background(), "foo"); err == nil {
 		t.Fatal("want error on 429, got nil")
