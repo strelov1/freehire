@@ -67,3 +67,20 @@ func TestSystemPromptIncludesRegionVocabulary(t *testing.T) {
 		}
 	}
 }
+
+// Relax: the prompt permits a novel own-label for the six discovery facets while
+// keeping the strict "exactly one allowed value" instruction for the served fields.
+func TestSystemPromptRelaxesDiscoveryFacets(t *testing.T) {
+	p := buildSystemPrompt()
+	if !strings.Contains(p, "exactly one of the allowed values") {
+		t.Errorf("served enum fields must keep the strict instruction")
+	}
+	if !strings.Contains(p, "concise lowercase label of your own") {
+		t.Errorf("discovery facets must permit a novel own label")
+	}
+	for _, f := range []string{"work_mode", "regions", "seniority", "category"} {
+		if !strings.Contains(p, f) {
+			t.Errorf("discovery instruction should name the facet %q", f)
+		}
+	}
+}

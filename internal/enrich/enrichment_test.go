@@ -115,27 +115,45 @@ func TestValidateAccepts(t *testing.T) {
 }
 
 func TestValidateRejectsScalarEnum(t *testing.T) {
-	err := Enrichment{Seniority: "sr"}.Validate()
+	// A SERVED enum field is still validated (employment_type reaches the wire shape).
+	err := Enrichment{EmploymentType: "seasonal"}.Validate()
 	if err == nil {
-		t.Fatal("expected error for seniority \"sr\"")
+		t.Fatal("expected error for employment_type \"seasonal\"")
 	}
-	if !strings.Contains(err.Error(), "seniority") {
+	if !strings.Contains(err.Error(), "employment_type") {
 		t.Errorf("error must identify the offending field, got: %v", err)
 	}
 }
 
-// When several enum fields are invalid, Validate reports the first one in
-// declaration order (work_mode is checked before seniority).
+// When several SERVED enum fields are invalid, Validate reports the first one in
+// declaration order (employment_type is checked before english_level).
 func TestValidateReportsFirstOffender(t *testing.T) {
-	err := Enrichment{WorkMode: "telepathic", Seniority: "sr"}.Validate()
+	err := Enrichment{EmploymentType: "telepathic", EnglishLevel: "sr"}.Validate()
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !strings.Contains(err.Error(), "work_mode") {
-		t.Errorf("want first offender work_mode, got: %v", err)
+	if !strings.Contains(err.Error(), "employment_type") {
+		t.Errorf("want first offender employment_type, got: %v", err)
 	}
-	if strings.Contains(err.Error(), "seniority") {
+	if strings.Contains(err.Error(), "english_level") {
 		t.Errorf("should report only the first offender, got: %v", err)
+	}
+}
+
+// Relax: the six dict-covered discovery facets are captured raw — an out-of-vocab
+// work_mode/seniority/category and a non-vocab regions element pass Validate (they
+// are unserved, so they cannot corrupt production data).
+func TestValidateAcceptsOutOfVocabDiscoveryFacets(t *testing.T) {
+	discovery := []Enrichment{
+		{Seniority: "staff_plus"},
+		{Category: "ml_platform"},
+		{WorkMode: "remote_first"},
+		{Regions: []string{"eu", "europe"}},
+	}
+	for i, e := range discovery {
+		if err := e.Validate(); err != nil {
+			t.Errorf("case %d: discovery facet should pass Validate, got: %v", i, err)
+		}
 	}
 }
 
@@ -162,16 +180,6 @@ func TestValidateAcceptsRegions(t *testing.T) {
 	}
 }
 
-func TestValidateRejectsRegionElement(t *testing.T) {
-	err := Enrichment{Regions: []string{"eu", "europe"}}.Validate()
-	if err == nil {
-		t.Fatal("expected error for invalid region element")
-	}
-	if !strings.Contains(err.Error(), "regions") {
-		t.Errorf("error must identify the offending field, got: %v", err)
-	}
-}
-
 // Global reach must be distinguishable from unknown reach: an explicit "global"
 // region serializes the key, an unknown (empty regions) payload omits it.
 func TestGlobalReachDistinctFromUnknown(t *testing.T) {
@@ -194,24 +202,34 @@ func TestGlobalReachDistinctFromUnknown(t *testing.T) {
 
 func TestSanitizeDropsOutOfVocabValues(t *testing.T) {
 	e := Enrichment{
-		Seniority: "senior",                     // valid -> kept
-		Category:  "astrology",                  // invalid scalar -> blanked
-		Domains:   []string{"fintech", "bogus"}, // keep only known
-		Regions:   []string{"nope"},             // all unknown -> nil
+		EmploymentType: "seasonal",                   // SERVED invalid scalar -> blanked
+		EnglishLevel:   "b2",                         // SERVED valid -> kept
+		Domains:        []string{"fintech", "bogus"}, // SERVED multi -> keep only known
+		// Discovery facets are captured raw (unserved):
+		Category:  "astrology",      // kept
+		Seniority: "staff_plus",     // kept
+		Regions:   []string{"nope"}, // kept
 	}
 	e.Sanitize()
 
-	if e.Seniority != "senior" {
-		t.Errorf("Seniority = %q, want it kept", e.Seniority)
+	if e.EmploymentType != "" {
+		t.Errorf("EmploymentType = %q, want blanked (served field)", e.EmploymentType)
 	}
-	if e.Category != "" {
-		t.Errorf("Category = %q, want blanked", e.Category)
+	if e.EnglishLevel != "b2" {
+		t.Errorf("EnglishLevel = %q, want kept", e.EnglishLevel)
 	}
 	if len(e.Domains) != 1 || e.Domains[0] != "fintech" {
-		t.Errorf("Domains = %v, want [fintech]", e.Domains)
+		t.Errorf("Domains = %v, want [fintech] (served multi filtered)", e.Domains)
 	}
-	if e.Regions != nil {
-		t.Errorf("Regions = %v, want nil", e.Regions)
+	// Discovery facets survive untouched.
+	if e.Category != "astrology" {
+		t.Errorf("Category = %q, want kept raw (discovery)", e.Category)
+	}
+	if e.Seniority != "staff_plus" {
+		t.Errorf("Seniority = %q, want kept raw (discovery)", e.Seniority)
+	}
+	if len(e.Regions) != 1 || e.Regions[0] != "nope" {
+		t.Errorf("Regions = %v, want kept raw (discovery)", e.Regions)
 	}
 	if err := e.Validate(); err != nil {
 		t.Errorf("Validate after Sanitize = %v, want nil", err)

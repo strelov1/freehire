@@ -101,26 +101,26 @@ var (
 	CompanySizeValues = []string{"1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"}
 )
 
-// Validate checks every enum field against its controlled vocabulary and
+// Validate checks every SERVED enum field against its controlled vocabulary and
 // returns an error identifying the first offending field. Empty (absent) fields
-// pass — every field is optional. Non-enum fields (ISO codes, free text,
-// numbers, skills) are unconstrained here. Multi-value enum fields are checked
-// element by element.
+// pass — every field is optional. Non-enum fields (ISO codes, free text, numbers,
+// skills) are unconstrained here. The six dictionary-covered facets (work_mode,
+// seniority, category, regions, plus the non-enum countries/skills) are
+// deliberately NOT validated: they are served from the deterministic dictionaries
+// (dict-only), so the LLM's values for them are unserved discovery material and an
+// out-of-vocabulary value is captured raw rather than rejected.
 func (e Enrichment) Validate() error {
-	// Single-value enum fields, in declaration order.
+	// Single-value SERVED enum fields, in declaration order.
 	scalars := []struct {
 		field string
 		value string
 		vocab []string
 	}{
-		{"work_mode", e.WorkMode, WorkModeValues},
 		{"employment_type", e.EmploymentType, EmploymentTypeValues},
 		{"relocation", e.Relocation, RelocationValues},
 		{"salary_period", e.SalaryPeriod, SalaryPeriodValues},
-		{"seniority", e.Seniority, SeniorityValues},
 		{"english_level", e.EnglishLevel, EnglishLevelValues},
 		{"education_level", e.EducationLevel, EducationLevelValues},
-		{"category", e.Category, CategoryValues},
 		{"company_type", e.CompanyType, CompanyTypeValues},
 		{"company_size", e.CompanySize, CompanySizeValues},
 	}
@@ -130,13 +130,12 @@ func (e Enrichment) Validate() error {
 		}
 	}
 
-	// Multi-value enum fields, in declaration order.
+	// Multi-value SERVED enum fields (regions is a discovery facet, not validated).
 	multi := []struct {
 		field  string
 		values []string
 		vocab  []string
 	}{
-		{"regions", e.Regions, RegionValues},
 		{"domains", e.Domains, DomainValues},
 	}
 	for _, m := range multi {
@@ -150,26 +149,24 @@ func (e Enrichment) Validate() error {
 	return nil
 }
 
-// Sanitize drops enum values the model emitted outside their controlled
-// vocabulary: a scalar field is blanked, a multi-value field keeps only known
-// members. This salvages the rest of an otherwise-good payload instead of
-// dead-lettering the whole job over one stray value (the model occasionally
-// invents a category/region no matter how the vocabulary grows). The invariant
-// "never persist an out-of-vocabulary value" still holds — the value is dropped,
-// not stored — so Validate passes afterwards.
+// Sanitize drops out-of-vocabulary values from the SERVED enum fields (a scalar is
+// blanked, a multi-value field keeps only known members) so no stray value reaches
+// the served wire shape. The six dictionary-covered facets (work_mode, seniority,
+// category, regions) are deliberately left untouched: they are unserved discovery
+// material under dict-only, so the LLM's raw values — including novel,
+// out-of-vocabulary labels — are kept for later mining. The invariant "never serve
+// an out-of-vocabulary value" still holds for the served fields, and Validate passes
+// afterwards.
 func (e *Enrichment) Sanitize() {
 	scalars := []struct {
 		value *string
 		vocab []string
 	}{
-		{&e.WorkMode, WorkModeValues},
 		{&e.EmploymentType, EmploymentTypeValues},
 		{&e.Relocation, RelocationValues},
 		{&e.SalaryPeriod, SalaryPeriodValues},
-		{&e.Seniority, SeniorityValues},
 		{&e.EnglishLevel, EnglishLevelValues},
 		{&e.EducationLevel, EducationLevelValues},
-		{&e.Category, CategoryValues},
 		{&e.CompanyType, CompanyTypeValues},
 		{&e.CompanySize, CompanySizeValues},
 	}
@@ -179,7 +176,7 @@ func (e *Enrichment) Sanitize() {
 		}
 	}
 
-	e.Regions = keepKnown(e.Regions, RegionValues)
+	// regions is a discovery facet — left raw (not filtered).
 	e.Domains = keepKnown(e.Domains, DomainValues)
 
 	// Drop implausible salary values: a non-positive salary is meaningless, and an

@@ -101,9 +101,12 @@ func parseEnrichment(raw string) (Enrichment, error) {
 	return e, nil
 }
 
-// systemPrompt instructs the model to emit only stated fields and to draw enum
-// values from the controlled vocabularies — the same lists Validate enforces, so
-// the prompt and the validator can never drift.
+// systemPrompt instructs the model to emit only stated fields and to draw the
+// SERVED enum values from the controlled vocabularies — the same lists Validate
+// enforces. The six dictionary-covered discovery facets (work_mode, regions,
+// seniority, category) are deliberately relaxed: the prompt invites a novel label
+// when none fits, and Validate does not reject it (it is unserved discovery
+// material), so prompt and validator diverge there on purpose.
 var systemPrompt = buildSystemPrompt()
 
 func buildSystemPrompt() string {
@@ -128,6 +131,15 @@ func buildSystemPrompt() string {
 	enum("domains (array)", DomainValues)
 	enum("company_type", CompanyTypeValues)
 	enum("company_size", CompanySizeValues)
+
+	// Discovery facets: these four (plus the open countries/skills) are served from
+	// our own dictionaries, not from your value, so they are a discovery signal.
+	// Prefer an allowed value, but emit your own label when none fits — this surfaces
+	// vocabulary we are missing. The other enum fields above stay strict.
+	b.WriteString("\nException for work_mode, regions, seniority, category: prefer an allowed ")
+	b.WriteString("value above, but if none accurately fits, you MAY return a concise lowercase ")
+	b.WriteString("label of your own (e.g. seniority \"staff_plus\", category \"ml_platform\"). ")
+	b.WriteString("Still omit the key when the posting does not state it.\n")
 
 	b.WriteString("\nOther keys (omit when unstated): ")
 	b.WriteString("visa_sponsorship (boolean), countries (array of ISO 3166-1 alpha-2), ")
