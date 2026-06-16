@@ -38,10 +38,12 @@ func (habrCareer) Match(u *url.URL) bool {
 var habrVacancyPath = regexp.MustCompile(`^/vacancies/(\d+)/?$`)
 
 // habrPosting selects the JobPosting ld+json fields Habr publishes on a vacancy page.
+// datePosted is deliberately absent: Habr's ld+json datePosted is unreliable (it runs ~a
+// month ahead of the real publish date), so the posting date is read from the page's
+// <time> element instead — see Resolve.
 type habrPosting struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
-	DatePosted  string `json:"datePosted"`
 	Identifier  struct {
 		Value string `json:"value"`
 	} `json:"identifier"`
@@ -118,7 +120,11 @@ func (h habrCareer) Resolve(ctx context.Context, raw string) (sources.Job, bool,
 		Location:    loc,
 		Description: sources.SanitizeHTML(p.Description),
 		Remote:      sources.IsRemote(loc),
-		PostedAt:    parseDate(p.DatePosted),
+		// Habr's ld+json datePosted is bogus (~a month ahead of the real date, with a later
+		// validThrough), which would pin every Habr job to the top of the freshest-first
+		// browse. The trustworthy publish timestamp is the visible <time class="basic-date"
+		// datetime> element, so read that; a missing element leaves posted_at unset.
+		PostedAt: parseRFC3339(sources.ElementAttr(node, "time", "basic-date", "datetime")),
 	}, true, nil
 }
 

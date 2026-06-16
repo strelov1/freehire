@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/strelov1/freehire/internal/sources"
 )
 
 // monetaryAmount is the schema.org MonetaryAmount shape JobPosting ld+json uses for
@@ -70,7 +72,7 @@ func parseDate(s string) *time.Time {
 	if err != nil {
 		return nil
 	}
-	return &t
+	return sources.NotFuture(&t)
 }
 
 // parseRFC3339 parses an RFC3339 timestamp in UTC, returning nil for an empty or
@@ -85,7 +87,7 @@ func parseRFC3339(s string) *time.Time {
 		return nil
 	}
 	t = t.UTC()
-	return &t
+	return sources.NotFuture(&t)
 }
 
 // humanizeBoard turns an ATS board slug into a display company name ("ruby-labs" → "Ruby

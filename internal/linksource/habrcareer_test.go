@@ -9,18 +9,23 @@ import (
 
 // habrVacancyHTML is a career.habr.com vacancy page reduced to the schema.org JobPosting
 // ld+json block the adapter reads (address is a bare string, as Habr emits it; the
-// description carries an entity and a <script> to prove sanitization).
+// description carries an entity and a <script> to prove sanitization). The ld+json
+// datePosted is intentionally bogus (a month ahead, like Habr's real output) and the
+// trustworthy date lives in the <time class="basic-date" datetime> element — the adapter
+// must read the <time>, not datePosted.
 const habrVacancyHTML = `<html><head>
 <script type="application/ld+json">
 {"@context":"https://schema.org/","@type":"JobPosting",
  "title":"Junior Product Manager (Дистанционный мониторинг)",
- "datePosted":"2026-05-28",
+ "datePosted":"2026-07-14",
+ "validThrough":"2026-08-13",
  "description":"<p>Обязанности &amp; требования</p><script>alert(1)<\/script><ul><li>REST</li></ul>",
  "identifier":{"@type":"PropertyValue","name":"СберЗдоровье","value":"1000166712"},
  "hiringOrganization":{"@type":"Organization","name":"СберЗдоровье"},
  "jobLocation":[{"@type":"Place","address":"Москва"}],
  "employmentType":"FULL_TIME"}
-</script></head><body><h1>Junior Product Manager</h1></body></html>`
+</script></head><body><h1>Junior Product Manager</h1>
+<time class="basic-date" datetime="2026-05-28T12:27:19+03:00">28 мая</time></body></html>`
 
 // habrListingHTML is what u.habr.com/fq3n5 ("Больше вакансий") resolves to: the vacancies
 // index, which carries no single JobPosting.
@@ -56,8 +61,10 @@ func TestHabrCareerResolvesShortLinkToVacancy(t *testing.T) {
 	if strings.Contains(job.Description, "<script>") || !strings.Contains(job.Description, "<li>REST</li>") {
 		t.Errorf("Description not sanitized/decoded: %q", job.Description)
 	}
-	if job.PostedAt == nil || !job.PostedAt.Equal(time.Date(2026, 5, 28, 0, 0, 0, 0, time.UTC)) {
-		t.Errorf("PostedAt = %v, want 2026-05-28", job.PostedAt)
+	// From the <time datetime> (12:27:19+03:00 → 09:27:19 UTC), NOT the bogus ld+json
+	// datePosted (2026-07-14).
+	if job.PostedAt == nil || !job.PostedAt.Equal(time.Date(2026, 5, 28, 9, 27, 19, 0, time.UTC)) {
+		t.Errorf("PostedAt = %v, want 2026-05-28T09:27:19Z from <time>, not ld+json datePosted", job.PostedAt)
 	}
 }
 

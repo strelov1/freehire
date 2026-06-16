@@ -187,6 +187,25 @@ func workplaceTypeMode(t string) string {
 	}
 }
 
+// maxPostedAtSkew is how far past "now" a posted_at may sit before NotFuture treats it as
+// bogus rather than clock skew or a timezone-ahead date-only value (a UTC+14 "today" parses
+// to a UTC instant a few hours ahead). Comfortably larger than any real skew, far smaller
+// than the month-scale errors a misread deadline/validThrough or wrong year produces.
+const maxPostedAtSkew = 48 * time.Hour
+
+// NotFuture drops a posted_at that lies meaningfully in the future: a posting cannot be
+// published after now, so such a value is a source or parse artifact (a deadline misread as
+// the publish date, a wrong year) that would otherwise sort the job to the very top of the
+// "freshest first" browse. It returns nil — the job reads as undated rather than freshest —
+// instead of clamping to now, so a bogus date can't masquerade as fresh. A nil or in-range
+// time passes through unchanged. Every adapter's date parser funnels through it.
+func NotFuture(t *time.Time) *time.Time {
+	if t != nil && t.After(time.Now().Add(maxPostedAtSkew)) {
+		return nil
+	}
+	return t
+}
+
 // parseLayout parses a platform timestamp with the given layout into a posted_at,
 // returning nil on an empty or unparseable value (posted_at is nullable — a missing or
 // malformed date is not an error).
@@ -198,7 +217,7 @@ func parseLayout(layout, s string) *time.Time {
 	if err != nil {
 		return nil
 	}
-	return &t
+	return NotFuture(&t)
 }
 
 // parseRFC3339 parses an RFC3339 timestamp (the common ATS format).
@@ -246,7 +265,7 @@ func parseEpochMillis(ms int64) *time.Time {
 		return nil
 	}
 	t := time.UnixMilli(ms).UTC()
-	return &t
+	return NotFuture(&t)
 }
 
 // parseEpochSeconds converts a Unix-second timestamp into a posted_at, returning nil for
@@ -256,7 +275,7 @@ func parseEpochSeconds(s int64) *time.Time {
 		return nil
 	}
 	t := time.Unix(s, 0).UTC()
-	return &t
+	return NotFuture(&t)
 }
 
 // reg indexes sources by provider key. A duplicate key means two adapters claim the

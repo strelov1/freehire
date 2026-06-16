@@ -93,6 +93,44 @@ func itempropHTML(root *html.Node, prop string) string {
 	return innerHTML(best)
 }
 
+// ElementAttr is the exported form of elementAttr, for sibling packages (e.g.
+// internal/linksource) that read a single attribute off a server-rendered element — e.g.
+// the datetime of a <time class="..."> publish-date element.
+func ElementAttr(root *html.Node, tag, class, name string) string {
+	return elementAttr(root, tag, class, name)
+}
+
+// elementAttr returns the named attribute of the first <tag> element whose class list
+// contains class, or "" when none matches. An empty class matches any element of that tag.
+func elementAttr(root *html.Node, tag, class, name string) string {
+	var found string
+	walk(root, func(n *html.Node) bool {
+		if found != "" {
+			return false
+		}
+		if n.Type == html.ElementNode && n.Data == tag && hasClass(n, class) {
+			found = attr(n, name)
+			return false
+		}
+		return true
+	})
+	return found
+}
+
+// hasClass reports whether n's space-separated class attribute contains class; an empty
+// class matches any element.
+func hasClass(n *html.Node, class string) bool {
+	if class == "" {
+		return true
+	}
+	for _, c := range strings.Fields(attr(n, "class")) {
+		if c == class {
+			return true
+		}
+	}
+	return false
+}
+
 // metaProperty returns the content of <meta property="..."> (e.g. og:title), or "".
 func metaProperty(root *html.Node, property string) string {
 	var found string
