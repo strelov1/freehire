@@ -293,3 +293,40 @@ func TestParseEmitsOnlyKnownVocabulary(t *testing.T) {
 		}
 	}
 }
+
+// TestParseExpandedCoverage exercises the dictionary expansion: trailing ISO
+// country codes, beacon cities, multilingual country names, multilingual
+// open-anywhere markers, and work-mode-word stripping inside a token.
+func TestParseExpandedCoverage(t *testing.T) {
+	tests := []struct {
+		location string
+		want     Geo
+	}{
+		// Trailing bare ISO 3166-1 alpha-2 code ("City, Region, code").
+		{"Shanghai, Shanghai, cn", Geo{Countries: []string{"cn"}, Regions: []string{"apac"}}},
+		{"Riyadh, sa", Geo{Countries: []string{"sa"}, Regions: []string{"mena"}}},
+		{"Lisboa, Lisboa, pt", Geo{Countries: []string{"pt"}, Regions: []string{"eu"}}},
+		{"São Paulo, SP, br", Geo{Countries: []string{"br"}, Regions: []string{"latam"}}},
+		// Beacon cities.
+		{"San Francisco", Geo{Countries: []string{"us"}, Regions: []string{"north_america"}}},
+		{"Athens, Attica, Greece", Geo{Countries: []string{"gr"}, Regions: []string{"eu"}}},
+		{"Seoul, South Korea", Geo{Countries: []string{"kr"}, Regions: []string{"apac"}}},
+		// Country names: English + native + ES/PT/DE.
+		{"China", Geo{Countries: []string{"cn"}, Regions: []string{"apac"}}},
+		{"Brasil", Geo{Countries: []string{"br"}, Regions: []string{"latam"}}},
+		{"España", Geo{Countries: []string{"es"}, Regions: []string{"eu"}}},
+		{"Grécia", Geo{Countries: []string{"gr"}, Regions: []string{"eu"}}},
+		// Open-anywhere markers, multilingual.
+		{"World Wide - Remote", Geo{Regions: []string{"global"}, WorkMode: "remote"}},
+		{"по всему миру", Geo{Regions: []string{"global"}}},
+		{"weltweit", Geo{Regions: []string{"global"}}},
+		// Work-mode word stripped so the place still resolves.
+		{"US Remote", Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, WorkMode: "remote"}},
+	}
+	for _, tt := range tests {
+		got := Parse(tt.location)
+		if !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("Parse(%q) = %+v, want %+v", tt.location, got, tt.want)
+		}
+	}
+}

@@ -53,21 +53,29 @@ func Parse(location string) Geo {
 			continue
 		}
 		tok = stripCityPrefix(tok)
-		if code, ok := nameToCountry[tok]; ok {
-			countrySet[code] = struct{}{}
-			if r, ok := countryToRegion[code]; ok {
-				regionSet[r] = struct{}{}
-			}
+		// Strip embedded work-mode words so the place still resolves ("US Remote" ->
+		// "us"); a token that is ONLY a work-mode marker ("Remote", "On-site") strips
+		// to "" and is skipped — its work mode is detected separately from the whole
+		// string. Skipping also keeps it out of the dash-split below.
+		tok = stripWorkmodeWords(tok)
+		if tok == "" {
 			continue
 		}
-		if r, ok := nameToRegion[tok]; ok {
-			regionSet[r] = struct{}{}
+		if resolveGeoToken(tok, countrySet, regionSet) {
 			continue
 		}
-		if code, ok := resolveSubdivision(tok); ok {
-			countrySet[code] = struct{}{}
-			if r, ok := countryToRegion[code]; ok {
-				regionSet[r] = struct{}{}
+		// Dash-delimited exports carry the geography either first ("United
+		// States-Utah-Roy", "TX-Houston") or last ("Nisku-Alberta-Canada"). The
+		// first segment is resolved fully (a leading bare code like "tx" is a real
+		// signal); every other segment is resolved by NAME only, so a 2-letter code
+		// buried in a hyphenated city name ("stoke-on-trent" -> "on") cannot misfire
+		// while a country/region word ("alberta", "canada", "china") still does.
+		// Tried only after the whole token failed, so "cluj-napoca"/"nur-sultan"
+		// (dictionary keys) still win as a unit.
+		if segs := strings.Split(tok, "-"); len(segs) > 1 {
+			resolveGeoToken(strings.TrimSpace(segs[0]), countrySet, regionSet)
+			for _, seg := range segs[1:] {
+				resolveGeoName(strings.TrimSpace(seg), countrySet, regionSet)
 			}
 		}
 	}
@@ -79,12 +87,99 @@ func Parse(location string) Geo {
 	}
 }
 
+// resolveGeoToken resolves one already-normalized token to a country and/or
+// region, writing into the sets, and reports whether anything matched. Order: a
+// country/city name, a macro-region name, a US/Canada subdivision, then a bare
+// ISO 3166-1 alpha-2 country code (last, so a same-spelled subdivision wins).
+func resolveGeoToken(tok string, countrySet, regionSet map[string]struct{}) bool {
+	if tok == "" {
+		return false
+	}
+	if code, ok := nameToCountry[tok]; ok {
+		countrySet[code] = struct{}{}
+		if r, ok := countryToRegion[code]; ok {
+			regionSet[r] = struct{}{}
+		}
+		return true
+	}
+	if r, ok := nameToRegion[tok]; ok {
+		regionSet[r] = struct{}{}
+		return true
+	}
+	if code, ok := resolveSubdivision(tok); ok {
+		countrySet[code] = struct{}{}
+		if r, ok := countryToRegion[code]; ok {
+			regionSet[r] = struct{}{}
+		}
+		return true
+	}
+	if r, ok := countryToRegion[tok]; ok {
+		countrySet[tok] = struct{}{}
+		regionSet[r] = struct{}{}
+		return true
+	}
+	return false
+}
+
+// resolveGeoName resolves a token by place NAME only — a country/city name, a
+// macro-region name, or a full (len>2) US/Canada subdivision name. It deliberately
+// skips bare 2-letter codes (subdivision or ISO), so it is safe to run on every
+// non-leading dash segment of a hyphenated city ("stoke-on-trent") without "on"
+// or "in" misfiring.
+func resolveGeoName(tok string, countrySet, regionSet map[string]struct{}) bool {
+	if code, ok := nameToCountry[tok]; ok {
+		countrySet[code] = struct{}{}
+		if r, ok := countryToRegion[code]; ok {
+			regionSet[r] = struct{}{}
+		}
+		return true
+	}
+	if r, ok := nameToRegion[tok]; ok {
+		regionSet[r] = struct{}{}
+		return true
+	}
+	if len(tok) > 2 {
+		if code, ok := subdivisionToCountry[tok]; ok {
+			countrySet[code] = struct{}{}
+			if r, ok := countryToRegion[code]; ok {
+				regionSet[r] = struct{}{}
+			}
+			return true
+		}
+	}
+	return false
+}
+
 // cityMarkerPrefixes are the Russian "city" abbreviations that RU-segment ATS
 // data prepends to a bare city name ("г Москва", "город Самара"). Stripped from a
 // token before lookup so the city resolves; checked longest-first so "город "
 // wins over "г ". A city whose name merely starts with "г" ("Грозный") is
 // untouched — every prefix ends in a separator the name doesn't.
 var cityMarkerPrefixes = []string{"город ", "г. ", "г.", "г "}
+
+// noiseTokenWords are dropped from a geography token so an embedded place still
+// resolves: work-mode words ("US Remote" -> "us") and site suffixes ("San
+// Francisco Office" / "... HQ" -> "san francisco"). Matched as whole
+// space-separated words; the work mode is detected separately (detectWorkMode).
+var noiseTokenWords = map[string]struct{}{
+	"remote": {}, "hybrid": {}, "onsite": {}, "on-site": {},
+	"office": {}, "hq": {}, "headquarters": {},
+}
+
+// stripWorkmodeWords drops any noise words from a token, returning the rest
+// (possibly ""). "us remote" -> "us"; "remote" -> ""; "san francisco office" ->
+// "san francisco".
+func stripWorkmodeWords(tok string) string {
+	fields := strings.Fields(tok)
+	kept := fields[:0]
+	for _, f := range fields {
+		if _, drop := noiseTokenWords[f]; drop {
+			continue
+		}
+		kept = append(kept, f)
+	}
+	return strings.Join(kept, " ")
+}
 
 // stripCityPrefix removes a leading Russian city marker from an already-lowercased,
 // trimmed token, returning the bare city name (or the token unchanged).

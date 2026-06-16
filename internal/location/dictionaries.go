@@ -13,13 +13,27 @@ var regionCountries = map[string][]string{
 		"de", "fr", "nl", "es", "se", "pl", "ie", "pt", "it", "be", "dk",
 		"fi", "at", "cz", "ro", "gr", "hu", "bg", "hr", "sk", "si", "lt",
 		"lv", "ee", "lu", "ch", "no", "ua", "is",
+		// Rest of geographic Europe (the Balkans, micro-states, Cyprus/Malta).
+		"rs", "ba", "mk", "al", "me", "xk", "cy", "mt", "li", "mc", "ad", "sm",
 	},
 	"uk":            {"gb"},
 	"north_america": {"us", "ca"},
-	"latam":         {"ar", "br", "mx", "cl", "co", "pe", "uy"},
-	"apac":          {"sg", "jp", "au", "nz", "in", "hk", "tw", "kr", "cn", "my", "th", "ph", "vn", "id"},
-	"mena":          {"ae", "sa", "il", "eg", "tr", "qa"},
-	"africa":        {"za", "ng", "ke"},
+	"latam": {
+		"ar", "br", "mx", "cl", "co", "pe", "uy",
+		"ec", "bo", "py", "ve", "cr", "pa", "gt", "do", "hn", "sv", "ni", "pr",
+	},
+	"apac": {
+		"sg", "jp", "au", "nz", "in", "hk", "tw", "kr", "cn", "my", "th", "ph", "vn", "id",
+		"bd", "pk", "lk", "np", "kh", "la", "mm", "mn", "bn", "mo",
+	},
+	"mena": {
+		"ae", "sa", "il", "eg", "tr", "qa",
+		"kw", "bh", "om", "jo", "lb", "iq", "ir", "ma", "dz", "tn", "ly", "ye", "ps",
+	},
+	"africa": {
+		"za", "ng", "ke",
+		"gh", "et", "tz", "ug", "rw", "sn", "ci", "cm", "ao", "mz", "zm", "zw", "mu",
+	},
 	// CIS — the whole post-Soviet space (the RU-segment geography of the Telegram
 	// sources): Russia, Belarus, Moldova, the Caucasus, and the five Central Asian
 	// republics. Russia is not its own region; ua stays eu.
@@ -125,6 +139,122 @@ var nameToCountry = map[string]string{
 	"алматы": "kz", "астана": "kz", "казахстан": "kz",
 	"ереван": "am", "баку": "az", "бишкек": "kg",
 	"киев": "ua", "київ": "ua",
+
+	// --- Country names: English + native + ES/PT/DE, seeded from the unresolved
+	// production strings. (Names already keyed above are not repeated.)
+	"china": "cn", "greece": "gr", "brasil": "br", "philippines": "ph",
+	"colombia": "co", "cyprus": "cy", "taiwan": "tw", "malaysia": "my",
+	"romania": "ro", "hungary": "hu", "bulgaria": "bg", "thailand": "th",
+	"indonesia": "id", "vietnam": "vn", "south korea": "kr", "korea": "kr",
+	"turkey": "tr", "türkiye": "tr", "egypt": "eg", "saudi arabia": "sa",
+	"lebanon": "lb", "hong kong": "hk", "qatar": "qa", "kuwait": "kw",
+	"bahrain": "bh", "oman": "om", "jordan": "jo", "iraq": "iq", "iran": "ir",
+	"morocco": "ma", "algeria": "dz", "tunisia": "tn", "pakistan": "pk",
+	"bangladesh": "bd", "sri lanka": "lk", "nepal": "np", "peru": "pe",
+	"chile": "cl", "uruguay": "uy", "ecuador": "ec", "bolivia": "bo",
+	"paraguay": "py", "venezuela": "ve", "costa rica": "cr", "panama": "pa",
+	"guatemala": "gt", "dominican republic": "do", "puerto rico": "pr",
+	"nigeria": "ng", "kenya": "ke", "ghana": "gh", "ethiopia": "et",
+	"czech republic": "cz", "czechia": "cz", "serbia": "rs", "croatia": "hr",
+	"slovenia": "si", "slovakia": "sk", "lithuania": "lt", "latvia": "lv",
+	"estonia": "ee", "luxembourg": "lu", "iceland": "is", "malta": "mt",
+	"monaco": "mc", "north macedonia": "mk", "bosnia and herzegovina": "ba",
+	"albania": "al", "montenegro": "me", "kosovo": "xk", "mauritius": "mu",
+	// Spanish.
+	"españa": "es", "alemania": "de", "méxico": "mx", "méjico": "mx",
+	"grecia": "gr", "francia": "fr", "italia": "it", "países bajos": "nl",
+	"reino unido": "gb", "estados unidos": "us", "suiza": "ch", "suecia": "se",
+	"polonia": "pl", "rumanía": "ro", "hungría": "hu", "turquía": "tr",
+	"japón": "jp", "filipinas": "ph", "malasia": "my", "tailandia": "th",
+	"corea del sur": "kr", "emiratos árabes unidos": "ae", "arabia saudita": "sa",
+	"egipto": "eg", "perú": "pe",
+	// Portuguese.
+	"espanha": "es", "alemanha": "de", "frança": "fr", "grécia": "gr",
+	"países baixos": "nl", "suíça": "ch", "polónia": "pl", "roménia": "ro",
+	"hungria": "hu", "turquia": "tr", "japão": "jp", "coreia do sul": "kr",
+	"emirados árabes unidos": "ae", "arábia saudita": "sa", "egito": "eg",
+	// German.
+	"frankreich": "fr", "spanien": "es", "italien": "it", "niederlande": "nl",
+	"vereinigtes königreich": "gb", "vereinigte staaten": "us", "schweiz": "ch",
+	"schweden": "se", "polen": "pl", "rumänien": "ro", "ungarn": "hu",
+	"türkei": "tr", "griechenland": "gr", "philippinen": "ph", "indonesien": "id",
+	"südkorea": "kr", "ägypten": "eg", "österreich": "at", "belgien": "be",
+	"dänemark": "dk", "finnland": "fi", "irland": "ie", "norwegen": "no",
+	"tschechien": "cz", "bulgarien": "bg", "saudi-arabien": "sa",
+	"vereinigte arabische emirate": "ae", "bundesweit": "de",
+
+	// --- Beacon cities (high-frequency, unambiguous), region falls out of the code.
+	// North America (US).
+	"san francisco": "us", "san francisco bay area": "us", "south san francisco": "us",
+	"new york city": "us", "nyc": "us", "brooklyn": "us", "manhattan": "us",
+	"boston": "us", "chicago": "us", "los angeles": "us", "san jose": "us",
+	"austin": "us", "charlotte": "us", "atlanta": "us", "seattle": "us",
+	"houston": "us", "palo alto": "us", "denver": "us", "dallas": "us",
+	"san antonio": "us", "san diego": "us", "menlo park": "us", "san mateo": "us",
+	"indianapolis": "us", "miami": "us", "philadelphia": "us", "phoenix": "us",
+	"raleigh": "us", "durham": "us", "detroit": "us", "minneapolis": "us",
+	"nashville": "us", "pittsburgh": "us", "salt lake city": "us", "baltimore": "us",
+	"sacramento": "us", "irvine": "us", "santa clara": "us", "sunnyvale": "us",
+	"mountain view": "us", "redmond": "us", "bellevue": "us", "washington dc": "us",
+	"washington, d.c.": "us", "kansas city": "us", "st. louis": "us", "cincinnati": "us",
+	// Canada.
+	"ottawa": "ca", "calgary": "ca", "edmonton": "ca", "mississauga": "ca",
+	// LATAM.
+	"são paulo": "br", "sao paulo": "br", "rio de janeiro": "br", "belo horizonte": "br",
+	"brasília": "br", "brasilia": "br", "curitiba": "br", "porto alegre": "br",
+	"campinas": "br", "florianópolis": "br",
+	"mexico city": "mx", "méxico city": "mx", "ciudad de méxico": "mx",
+	"guadalajara": "mx", "monterrey": "mx",
+	"buenos aires": "ar", "bogotá": "co", "bogota": "co", "medellín": "co",
+	"medellin": "co", "lima": "pe", "santiago": "cl", "montevideo": "uy",
+	// APAC — China.
+	"shanghai": "cn", "beijing": "cn", "shenzhen": "cn", "guangzhou": "cn",
+	"suzhou": "cn", "wuxi": "cn", "hangzhou": "cn", "chengdu": "cn",
+	"nanjing": "cn", "tianjin": "cn",
+	"taipei": "tw", "taichung": "tw", "hsinchu": "tw", "kaohsiung": "tw",
+	"seoul": "kr", "pangyo": "kr", "busan": "kr",
+	"osaka": "jp", "kyoto": "jp", "yokohama": "jp", "nagoya": "jp", "fukuoka": "jp",
+	"bangkok": "th", "kuala lumpur": "my", "jakarta": "id",
+	"manila": "ph", "makati": "ph", "taguig": "ph", "cebu": "ph",
+	"chennai": "in", "noida": "in", "gurugram": "in", "gurgaon": "in",
+	"new delhi": "in", "delhi": "in", "kolkata": "in", "ahmedabad": "in",
+	"kochi": "in", "coimbatore": "in", "jaipur": "in", "indore": "in",
+	"chandigarh": "in", "thiruvananthapuram": "in",
+	"ho chi minh city": "vn", "hanoi": "vn",
+	"karachi": "pk", "lahore": "pk", "islamabad": "pk", "dhaka": "bd", "colombo": "lk",
+	// Europe.
+	"athens": "gr", "thessaloniki": "gr",
+	"lisboa": "pt", "porto": "pt",
+	"toulouse": "fr", "lyon": "fr", "nantes": "fr", "bordeaux": "fr", "nice": "fr",
+	"lille": "fr", "villeurbanne": "fr", "courbevoie": "fr", "levallois-perret": "fr",
+	"strasbourg": "fr", "marseille": "fr", "montpellier": "fr", "rennes": "fr", "grenoble": "fr",
+	"prague": "cz", "sofia": "bg", "budapest": "hu",
+	"bucharest": "ro", "bucurești": "ro", "timișoara": "ro", "timisoara": "ro",
+	"cluj-napoca": "ro", "cluj": "ro",
+	"kraków": "pl", "krakow": "pl", "wrocław": "pl", "wroclaw": "pl",
+	"gdańsk": "pl", "gdansk": "pl", "poznań": "pl", "poznan": "pl",
+	"frankfurt": "de", "cologne": "de", "köln": "de", "stuttgart": "de",
+	"düsseldorf": "de", "dusseldorf": "de", "leipzig": "de", "dresden": "de",
+	"geneva": "ch", "genève": "ch", "geneve": "ch", "basel": "ch", "lausanne": "ch",
+	"turin": "it", "naples": "it", "bologna": "it", "florence": "it",
+	"valencia": "es", "sevilla": "es", "seville": "es", "málaga": "es",
+	"malaga": "es", "bilbao": "es", "zaragoza": "es",
+	"antwerp": "be", "ghent": "be",
+	"rotterdam": "nl", "the hague": "nl", "den haag": "nl", "eindhoven": "nl", "utrecht": "nl",
+	"oslo": "no", "bergen": "no", "gothenburg": "se", "göteborg": "se",
+	"malmö": "se", "malmo": "se", "aarhus": "dk", "tampere": "fi", "espoo": "fi",
+	"tallinn": "ee", "riga": "lv", "vilnius": "lt", "ljubljana": "si",
+	"zagreb": "hr", "belgrade": "rs", "beograd": "rs", "bratislava": "sk",
+	"nicosia": "cy", "valletta": "mt", "reykjavik": "is", "reykjavík": "is",
+	// MENA.
+	"riyadh": "sa", "jeddah": "sa", "dammam": "sa", "beirut": "lb",
+	"cairo": "eg", "istanbul": "tr", "ankara": "tr", "izmir": "tr",
+	"doha": "qa", "abu dhabi": "ae", "sharjah": "ae", "kuwait city": "kw",
+	"manama": "bh", "muscat": "om", "amman": "jo",
+	"casablanca": "ma", "rabat": "ma", "tunis": "tn", "algiers": "dz",
+	// Africa.
+	"cape town": "za", "johannesburg": "za", "durban": "za", "pretoria": "za",
+	"nairobi": "ke", "lagos": "ng", "abuja": "ng", "accra": "gh", "addis ababa": "et",
 }
 
 // subdivisionToCountry resolves a US state or Canadian province token — a postal
@@ -182,12 +312,19 @@ var subdivisionToCountry = map[string]string{
 // nameToRegion resolves macro-region names (and explicit open-anywhere markers)
 // directly to a region code, for tokens that name an area rather than a country.
 var nameToRegion = map[string]string{
-	"europe": "eu", "eu": "eu",
+	"europe": "eu", "eu": "eu", "europa": "eu",
 	"apac": "apac", "asia": "apac", "asia pacific": "apac", "asia-pacific": "apac",
 	"north america": "north_america",
 	"latam":         "latam", "latin america": "latam", "south america": "latam",
 	"mena": "mena", "middle east": "mena",
 	"africa": "africa",
 	"cis":    "cis", "central asia": "cis",
-	"anywhere": "global", "worldwide": "global", "global": "global", "remote anywhere": "global",
+	// Open-anywhere markers, multilingual. A bare "remote" stays geography-less
+	// (work mode only); these are explicit "the whole world" phrasings.
+	"anywhere": "global", "worldwide": "global", "global": "global",
+	"remote anywhere": "global", "world wide": "global", "world-wide": "global",
+	"everywhere": "global", "fully distributed": "global",
+	"по всему миру": "global", "весь мир": "global",
+	"en todo el mundo": "global", "todo el mundo": "global",
+	"em todo o mundo": "global", "weltweit": "global",
 }
