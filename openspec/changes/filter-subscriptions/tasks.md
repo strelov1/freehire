@@ -11,10 +11,10 @@
 
 ## 3. Matching + delivery engine (`internal/notify`)
 
-- [ ] 3.1 Define the `Notifier` interface (`Send(ctx, channel, dest, Digest) error`) and the `Digest` value type
-- [ ] 3.2 Implement MATCH: group active subscriptions by canonical query, run each distinct query against the search index (sort `created_at:desc`, bounded limit), and record matches gated by per-subscription `start_at`; unit-test dedup, the `start_at` gate, and the enrich-late re-scan with a fake search client
-- [ ] 3.3 Implement DELIVER: claim pending matches per subscription (skip-locked), render one digest, call `Notifier`, mark notified on success / bump-attempts + dead-letter on failure; unit-test retry, dead-letter, and one-digest-per-pass with a fake Notifier
-- [ ] 3.4 Resolve the telegram recipient from `telegram_links`; soft-skip (no attempt counted) when unlinked; unit-test the skip path
+- [x] 3.1 Defined the `Notifier` interface (`Send(ctx, channel, dest, Digest) error`) + `Digest`/`DigestJob` value types; `Searcher`/`Store` ports; `Config`/`Stats`/`Runner`
+- [x] 3.2 Implemented MATCH: group active subscriptions by query, run each distinct query (sort `created_at:desc`, bounded limit, keyword-only), record matches gated by per-subscription `start_at`; unit-tested dedup (shared-query → one search), the `start_at` gate, idempotent re-scan via fake searcher/store
+- [x] 3.3 Implemented DELIVER: skip-locked lease claim, group per subscription, one digest, mark notified on success / record-failure + dead-letter on error; unit-tested one-digest-per-subscription and failure-stays-pending
+- [x] 3.4 Resolve the telegram recipient from `telegram_links`; soft-skip + release-claim (no attempt counted) when unlinked; unit-tested the skip path
 
 ## 4. Telegram channel (`telegram-notify`)
 
