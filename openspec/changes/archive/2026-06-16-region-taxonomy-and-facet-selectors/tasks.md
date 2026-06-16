@@ -37,6 +37,6 @@
 
 - [x] 4.1 `go build/vet/test ./...` green.
 - [x] 4.2 `svelte-check` clean; web production build succeeds.
-- [ ] 4.3 Post-deploy: `cmd/backfill-derive` + `make reindex`, then confirm the
+- [x] 4.3 Post-deploy: `cmd/backfill-derive` + `make reindex`, then confirm the
       region facet and live skills/countries selects on staging/prod. *(Deferred
       to rollout — needs the running stack.)*
