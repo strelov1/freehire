@@ -64,7 +64,7 @@ func TestWorkdayProbe(t *testing.T) {
 	p := workdayProber{}
 	getter := fakeGetter{
 		"https://aig.wd1.myworkdayjobs.com/wday/cxs/aig/early_careers/jobs": `{"total":9,"jobPostings":[{"title":"x"}]}`,
-		"https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/empty/jobs":        `{"total":0,"jobPostings":[]}`,
+		"https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/empty/jobs":       `{"total":0,"jobPostings":[]}`,
 	}
 	// live: name falls back to tenant, count = total
 	if name, n, err := p.probe(context.Background(), getter, "aig.wd1.myworkdayjobs.com/early_careers"); err != nil || name != "aig" || n != 9 {
