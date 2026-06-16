@@ -18,6 +18,8 @@ channels:
     kind: authored
   - channel: budujobs
     kind: authored
+  - channel: streltsova_anastasiya
+    kind: authored
 
   # --- General IT boards ---
   - channel: it_vakansii_jobs

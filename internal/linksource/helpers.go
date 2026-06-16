@@ -75,6 +75,16 @@ func parseDate(s string) *time.Time {
 	return sources.NotFuture(&t)
 }
 
+// parseEpochMillis converts a Unix-millis timestamp into a posted_at, returning nil for a
+// zero value. Lever dates postings with createdAt in epoch millis.
+func parseEpochMillis(ms int64) *time.Time {
+	if ms == 0 {
+		return nil
+	}
+	t := time.UnixMilli(ms).UTC()
+	return sources.NotFuture(&t)
+}
+
 // parseRFC3339 parses an RFC3339 timestamp in UTC, returning nil for an empty or
 // unparseable value. RFC3339Nano accepts both fractional (Ashby's publishedAt) and plain
 // (RemoteYeah's datePosted) second forms.

@@ -46,6 +46,8 @@ func All(c Client) []Source {
 		NewGeekjob(c),
 		NewGreenhouse(c),
 		NewAshby(c),
+		NewLever(c),
+		NewWorkable(c),
 	}
 }
 
