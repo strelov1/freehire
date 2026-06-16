@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/sources"
@@ -17,11 +18,13 @@ var errMissing = errors.New("not found")
 // which is unexported; this tool lives outside the sources package).
 const greenhouseBoardsAPI = "https://boards-api.greenhouse.io/v1/boards"
 
-// httpClient is the transport a prober needs: most platforms list over GetJSON, but
-// Workday's CXS listing is POST-only. The real *sources.Client implements both.
+// httpClient is the transport a prober needs: most platforms list over GetJSON, Workday's
+// CXS listing is POST-only (PostJSON), and iCIMS reads an XML sitemap (GetXML). The real
+// *sources.Client implements all three.
 type httpClient interface {
 	sources.JSONGetter
 	sources.JSONPoster
+	sources.XMLGetter
 }
 
 // prober checks one candidate board on its ATS platform, returning the company name the
@@ -157,8 +160,41 @@ func (workdayProber) probe(ctx context.Context, c httpClient, boardID string) (s
 	return tenant, n, nil
 }
 
+// icimsProber probes an iCIMS career site by its slug. iCIMS exposes no JSON list API, so
+// liveness is judged from the site's XML sitemap: a live board lists ≥1 job-posting URL
+// (a /jobs/<id>/ entry). This rejects both a missing site (404 → getter error) and a
+// present-but-empty one (200 with only the non-posting /jobs/search and /jobs/intro
+// entries). The sitemap carries no company name, so the name falls back to the slug.
+type icimsProber struct{}
+
+// icimsJobLocPattern matches an iCIMS job-posting URL's /jobs/<id>/ segment, the same shape
+// the adapter keys off. It is duplicated here (a small literal) rather than exported from
+// internal/sources, to avoid widening that package's API for a dev tool.
+var icimsJobLocPattern = regexp.MustCompile(`/jobs/\d+/`)
+
+func (icimsProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
+	var sitemap struct {
+		URLs []struct {
+			Loc string `xml:"loc"`
+		} `xml:"url"`
+	}
+	if err := c.GetXML(ctx, fmt.Sprintf("https://careers-%s.icims.com/sitemap.xml", slug), &sitemap); err != nil {
+		return "", 0, nil
+	}
+	n := 0
+	for _, u := range sitemap.URLs {
+		if icimsJobLocPattern.MatchString(u.Loc) {
+			n++
+		}
+	}
+	if n == 0 {
+		return "", 0, nil
+	}
+	return slug, n, nil
+}
+
 // seedMapper converts a provider's raw seed token into its canonical board id. Providers
-// whose seed token already IS the board id (greenhouse/lever/ashby/bamboohr) do not
+// whose seed token already IS the board id (greenhouse/lever/ashby/bamboohr/icims) do not
 // implement it. Mirrors the optional-marker idiom of sources.boardless.
 type seedMapper interface {
 	boardID(seedToken string) string
@@ -193,4 +229,5 @@ var probers = map[string]prober{
 	"ashby":      ashbyProber{},
 	"bamboohr":   bamboohrProber{},
 	"workday":    workdayProber{},
+	"icims":      icimsProber{},
 }

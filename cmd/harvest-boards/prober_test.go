@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"testing"
 )
 
-// fakeGetter decodes a canned JSON body per URL into v; an unmapped URL is an error,
-// standing in for the real client's response to a missing/moved board.
+// fakeGetter decodes a canned body per URL into v; an unmapped URL is an error, standing
+// in for the real client's response to a missing/moved board. It serves JSON (the API
+// probers), POST-JSON (Workday's CXS listing), and XML (the iCIMS sitemap prober), so it
+// satisfies the wider httpClient.
 type fakeGetter map[string]string
 
 func (f fakeGetter) GetJSON(_ context.Context, url string, v any) error {
@@ -26,6 +29,14 @@ func (f fakeGetter) PostJSON(_ context.Context, url string, _ any, v any) error 
 		return errMissing
 	}
 	return json.Unmarshal([]byte(body), v)
+}
+
+func (f fakeGetter) GetXML(_ context.Context, url string, v any) error {
+	body, ok := f[url]
+	if !ok {
+		return errMissing
+	}
+	return xml.Unmarshal([]byte(body), v)
 }
 
 func TestGreenhouseProbe(t *testing.T) {
@@ -81,6 +92,49 @@ func TestWorkdayProbe(t *testing.T) {
 	// malformed board id => skip
 	if _, n, err := p.probe(context.Background(), getter, "no-slash"); err != nil || n != 0 {
 		t.Errorf("malformed: got (%d,%v), want (0,nil)", n, err)
+	}
+}
+
+// icimsSitemap builds an iCIMS sitemap urlset from the given locs, for prober tests.
+func icimsSitemap(locs ...string) string {
+	s := `<?xml version="1.0" encoding="utf-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`
+	for _, l := range locs {
+		s += `<url><loc>` + l + `</loc></url>`
+	}
+	return s + `</urlset>`
+}
+
+// TestICIMSProbe: the iCIMS prober validates a slug by counting job postings in its
+// sitemap. A sitemap with ≥1 /jobs/<id>/ loc is a live board (name falls back to slug);
+// a sitemap with only the non-posting search/intro entries, or an absent sitemap (404),
+// is a ("",0,nil) skip — covering both observed dead shapes (HTTP 404, and HTTP 200 with
+// zero jobs).
+func TestICIMSProbe(t *testing.T) {
+	p := icimsProber{}
+	getter := fakeGetter{
+		"https://careers-acme.icims.com/sitemap.xml": icimsSitemap(
+			"https://careers-acme.icims.com/jobs/search",
+			"https://careers-acme.icims.com/jobs/intro",
+			"https://careers-acme.icims.com/jobs/101/role-a/job",
+			"https://careers-acme.icims.com/jobs/102/role-b/job",
+		),
+		// 200 but only non-posting entries => zero jobs => skip.
+		"https://careers-empty.icims.com/sitemap.xml": icimsSitemap(
+			"https://careers-empty.icims.com/jobs/search",
+		),
+	}
+
+	// Live board: name == slug, jobs > 0.
+	if name, n, err := p.probe(context.Background(), getter, "acme"); err != nil || name != "acme" || n != 2 {
+		t.Errorf("acme: got (%q,%d,%v), want (acme,2,nil)", name, n, err)
+	}
+	// 200-with-zero-jobs => skip.
+	if name, n, err := p.probe(context.Background(), getter, "empty"); err != nil || name != "" || n != 0 {
+		t.Errorf("empty: got (%q,%d,%v), want (\"\",0,nil)", name, n, err)
+	}
+	// Absent sitemap (404 / getter error) => skip.
+	if name, n, err := p.probe(context.Background(), getter, "gone"); err != nil || name != "" || n != 0 {
+		t.Errorf("gone: got (%q,%d,%v), want (\"\",0,nil)", name, n, err)
 	}
 }
 
