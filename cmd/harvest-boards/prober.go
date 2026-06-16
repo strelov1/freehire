@@ -193,6 +193,15 @@ func (icimsProber) probe(ctx context.Context, c httpClient, slug string) (string
 	return slug, n, nil
 }
 
+// discoverer is the opt-in capability of a prober whose boards are not available as a seed
+// list: it enumerates its own candidate board ids from the platform API. When a provider's
+// prober implements it and the tool is run with no seed file, discovery supplies the
+// candidates that a seed would otherwise provide. Mirrors the optional-marker idiom of
+// seedMapper/dedupKeyer.
+type discoverer interface {
+	discover(ctx context.Context, c httpClient) ([]string, error)
+}
+
 // seedMapper converts a provider's raw seed token into its canonical board id. Providers
 // whose seed token already IS the board id (greenhouse/lever/ashby/bamboohr/icims) do not
 // implement it. Mirrors the optional-marker idiom of sources.boardless.
@@ -230,4 +239,5 @@ var probers = map[string]prober{
 	"bamboohr":   bamboohrProber{},
 	"workday":    workdayProber{},
 	"icims":      icimsProber{},
+	"gupy":       gupyProber{},
 }

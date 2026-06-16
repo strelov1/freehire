@@ -26,11 +26,16 @@ const probeWorkers = 16
 func main() { os.Exit(run()) }
 
 func run() int {
-	if len(os.Args) != 3 {
-		log.Printf("usage: harvest-boards <provider> <seed.json>")
+	// 3 args = seed path; 2 args = discovery (the prober must support it).
+	if len(os.Args) != 2 && len(os.Args) != 3 {
+		log.Printf("usage: harvest-boards <provider> [seed.json]")
 		return 2
 	}
-	provider, seedPath := os.Args[1], os.Args[2]
+	provider := os.Args[1]
+	seedPath := ""
+	if len(os.Args) == 3 {
+		seedPath = os.Args[2]
+	}
 
 	p, ok := probers[provider]
 	if !ok {
@@ -38,7 +43,10 @@ func run() int {
 		return 2
 	}
 
-	seed, err := loadSeed(seedPath)
+	ctx := context.Background()
+	client := sources.NewClient()
+
+	raw, err := resolveCandidates(ctx, p, client, seedPath)
 	if err != nil {
 		log.Printf("harvest-boards: %v", err)
 		return 1
@@ -55,11 +63,11 @@ func run() int {
 		existing[e.Board] = true
 	}
 
-	candidates := newBoards(mapSeeds(p, seed), existing, dedupKeyOf(p))
-	log.Printf("harvest-boards: %s seed=%d existing=%d new-candidates=%d",
-		provider, len(seed), len(existing), len(candidates))
+	candidates := newBoards(raw, existing, dedupKeyOf(p))
+	log.Printf("harvest-boards: %s candidates=%d existing=%d new-candidates=%d",
+		provider, len(raw), len(existing), len(candidates))
 
-	kept := probeAll(context.Background(), p, candidates)
+	kept := probeAll(ctx, client, p, candidates)
 	log.Printf("harvest-boards: live boards found=%d", len(kept))
 	if len(kept) == 0 {
 		return 0
@@ -83,6 +91,26 @@ func run() int {
 	return 0
 }
 
+// resolveCandidates supplies a run's candidate board ids. With no seed file the prober must
+// support discovery and enumerates its own candidates from the platform API; otherwise the
+// candidates come from the seed file, mapped through the prober. This is the only step that
+// differs between a discovery provider and a seed-list one — dedup, probe, and append are
+// shared downstream.
+func resolveCandidates(ctx context.Context, p prober, c httpClient, seedPath string) ([]string, error) {
+	if seedPath == "" {
+		d, ok := p.(discoverer)
+		if !ok {
+			return nil, fmt.Errorf("provider needs a seed file (it has no discovery support)")
+		}
+		return d.discover(ctx, c)
+	}
+	seed, err := loadSeed(seedPath)
+	if err != nil {
+		return nil, err
+	}
+	return mapSeeds(p, seed), nil
+}
+
 // loadSeed reads a JSON array of slug strings.
 func loadSeed(path string) ([]string, error) {
 	data, err := os.ReadFile(path)
@@ -99,8 +127,7 @@ func loadSeed(path string) ([]string, error) {
 // probeAll probes every candidate concurrently (bounded), returning the live boards as
 // emit-ready entries sorted by board. A probe error is logged and the candidate skipped, so
 // one dead board never aborts the harvest.
-func probeAll(ctx context.Context, p prober, candidates []string) []entry {
-	client := sources.NewClient()
+func probeAll(ctx context.Context, client httpClient, p prober, candidates []string) []entry {
 	sem := make(chan struct{}, probeWorkers)
 	var (
 		mu   sync.Mutex
