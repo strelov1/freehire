@@ -339,6 +339,8 @@
   board: dune
 - company: dust
   board: dust
+- company: Edia
+  board: edia
 - company: Eigen Labs
   board: eigen-labs
 - company: Eight Sleep
