@@ -1,8 +1,9 @@
 // Package search provides Meilisearch-backed full-text and hybrid (keyword +
-// semantic) search over jobs. It owns the index document shape, the index
-// settings (including the in-engine huggingFace embedder), and the read/write
-// helpers, so callers (the search handler and the reindex command) never touch
-// the meilisearch-go SDK directly.
+// semantic) search over jobs. It owns the document shape and two index
+// configurations — a facet/keyword index (no embedder, the fast default) and a
+// semantic index that adds the in-engine huggingFace embedder — plus the
+// read/write helpers, so callers (the search handler and the reindex command)
+// never touch the meilisearch-go SDK directly.
 package search
 
 import (
@@ -15,9 +16,17 @@ import (
 )
 
 const (
-	indexUID     = "jobs"
-	primaryKey   = "id"
-	embedderName = "default"
+	// facetIndexUID is the production search index: keyword + facets, NO embedder,
+	// so a full rebuild is ~25x faster than embedding every document. It serves all
+	// default (keyword) traffic and the facet analytics.
+	facetIndexUID = "jobs"
+	// semanticIndexUID is the optional hybrid index: the same documents plus the
+	// in-engine embedder. It is built by a separate, slower pass (reindex
+	// --semantic) and only queried when SemanticRatio > 0, so embedding never
+	// blocks facet/keyword freshness.
+	semanticIndexUID = "jobs_semantic"
+	primaryKey       = "id"
+	embedderName     = "default"
 	// embedderModel runs inside Meilisearch (source huggingFace), so hybrid
 	// search needs no external API key. Multilingual + CPU-friendly.
 	embedderModel = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
@@ -37,32 +46,46 @@ const (
 	taskPollInterval = 50 * time.Millisecond
 )
 
-// Client is a thin wrapper over the Meilisearch service scoped to the jobs index.
+// Client is a thin wrapper over the Meilisearch service scoped to the two job
+// indexes: facet (keyword + facets, no embedder) and semantic (adds the embedder).
 type Client struct {
-	manager meilisearch.ServiceManager
-	index   meilisearch.IndexManager
+	manager  meilisearch.ServiceManager
+	facet    meilisearch.IndexManager
+	semantic meilisearch.IndexManager
 }
 
 // NewClient connects to Meilisearch at url authenticated by key. It does no I/O
 // — the connection is exercised lazily by the first request (or EnsureIndex).
 func NewClient(url, key string) *Client {
 	m := meilisearch.New(url, meilisearch.WithAPIKey(key))
-	return &Client{manager: m, index: m.Index(indexUID)}
+	return &Client{manager: m, facet: m.Index(facetIndexUID), semantic: m.Index(semanticIndexUID)}
 }
 
-// EnsureIndex creates the jobs index (keyed by the internal id) if absent and
-// applies its settings: the searchable/filterable/sortable attributes, ranking
-// rules, typo tolerance, pagination cap, and the hybrid embedder. It is
-// idempotent — safe to call on every reindex.
+// EnsureIndex creates the facet/keyword jobs index (no embedder) and applies its
+// settings. It is idempotent — safe to call on every reindex. This is the fast
+// production index that all default (keyword) traffic and faceting hit.
 func (c *Client) EnsureIndex(ctx context.Context) error {
+	return c.ensure(ctx, c.facet, facetIndexUID, facetSettings())
+}
+
+// EnsureSemanticIndex creates the hybrid jobs index (with the in-engine embedder)
+// and applies its settings. It is built by the separate reindex --semantic pass;
+// querying it embeds documents, so it is kept off the default reindex path.
+func (c *Client) EnsureSemanticIndex(ctx context.Context) error {
+	return c.ensure(ctx, c.semantic, semanticIndexUID, semanticSettings())
+}
+
+// ensure creates the named index (keyed by the internal id) if absent and applies
+// its settings. Shared by the facet and semantic ensure paths.
+func (c *Client) ensure(ctx context.Context, idx meilisearch.IndexManager, uid string, settings *meilisearch.Settings) error {
 	create, err := c.manager.CreateIndexWithContext(ctx, &meilisearch.IndexConfig{
-		Uid:        indexUID,
+		Uid:        uid,
 		PrimaryKey: primaryKey,
 	})
 	if err != nil {
 		return fmt.Errorf("search: create index: %w", err)
 	}
-	created, err := c.index.WaitForTaskWithContext(ctx, create.TaskUID, taskPollInterval)
+	created, err := idx.WaitForTaskWithContext(ctx, create.TaskUID, taskPollInterval)
 	if err != nil {
 		return fmt.Errorf("search: await create index: %w", err)
 	}
@@ -71,31 +94,51 @@ func (c *Client) EnsureIndex(ctx context.Context) error {
 		return fmt.Errorf("search: create index failed: %s", created.Error.Message)
 	}
 
-	settings, err := c.index.UpdateSettingsWithContext(ctx, indexSettings())
+	st, err := idx.UpdateSettingsWithContext(ctx, settings)
 	if err != nil {
 		return fmt.Errorf("search: update settings: %w", err)
 	}
-	return c.awaitTask(ctx, settings.TaskUID)
+	return c.awaitTask(ctx, idx, st.TaskUID)
 }
 
-// IndexJobs upserts a batch of documents by primary key. A re-run with the same
-// data is a no-op upsert, keeping reindex idempotent.
+// IndexJobs upserts a batch of documents into the facet index by primary key. A
+// re-run with the same data is a no-op upsert, keeping reindex idempotent.
 func (c *Client) IndexJobs(ctx context.Context, docs []JobDocument) error {
+	return c.indexInto(ctx, c.facet, docs)
+}
+
+// IndexSemanticJobs upserts a batch into the semantic index (which embeds new or
+// changed documents). Used by the reindex --semantic pass.
+func (c *Client) IndexSemanticJobs(ctx context.Context, docs []JobDocument) error {
+	return c.indexInto(ctx, c.semantic, docs)
+}
+
+func (c *Client) indexInto(ctx context.Context, idx meilisearch.IndexManager, docs []JobDocument) error {
 	if len(docs) == 0 {
 		return nil
 	}
 	pk := primaryKey
-	task, err := c.index.UpdateDocumentsWithContext(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk})
+	task, err := idx.UpdateDocumentsWithContext(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk})
 	if err != nil {
 		return fmt.Errorf("search: index documents: %w", err)
 	}
-	return c.awaitTask(ctx, task.TaskUID)
+	return c.awaitTask(ctx, idx, task.TaskUID)
 }
 
-// DeleteJobs removes documents by primary key. Used by reindex to drop closed
-// jobs from the index; deleting an id that is not indexed is a no-op, keeping
-// re-runs idempotent.
+// DeleteJobs removes documents from the facet index by primary key. Used by
+// reindex to drop closed jobs; deleting an id that is not indexed is a no-op,
+// keeping re-runs idempotent.
 func (c *Client) DeleteJobs(ctx context.Context, ids []int64) error {
+	return c.deleteFrom(ctx, c.facet, ids)
+}
+
+// DeleteSemanticJobs removes documents from the semantic index. Used by the
+// reindex --semantic pass.
+func (c *Client) DeleteSemanticJobs(ctx context.Context, ids []int64) error {
+	return c.deleteFrom(ctx, c.semantic, ids)
+}
+
+func (c *Client) deleteFrom(ctx context.Context, idx meilisearch.IndexManager, ids []int64) error {
 	if len(ids) == 0 {
 		return nil
 	}
@@ -103,11 +146,11 @@ func (c *Client) DeleteJobs(ctx context.Context, ids []int64) error {
 	for i, id := range ids {
 		keys[i] = strconv.FormatInt(id, 10)
 	}
-	task, err := c.index.DeleteDocumentsWithContext(ctx, keys, nil)
+	task, err := idx.DeleteDocumentsWithContext(ctx, keys, nil)
 	if err != nil {
 		return fmt.Errorf("search: delete documents: %w", err)
 	}
-	return c.awaitTask(ctx, task.TaskUID)
+	return c.awaitTask(ctx, idx, task.TaskUID)
 }
 
 // SearchParams is a backend-agnostic search request. Filter is the value built
@@ -137,14 +180,18 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, erro
 		Limit:  int64(p.Limit),
 		Offset: int64(p.Offset),
 	}
+	// Default (keyword) traffic hits the facet index — always fresh, no embedder.
+	// A semantic request routes to the semantic index and engages the embedder.
+	idx := c.facet
 	if p.SemanticRatio > 0 {
+		idx = c.semantic
 		req.Hybrid = &meilisearch.SearchRequestHybrid{
 			Embedder:      embedderName,
 			SemanticRatio: p.SemanticRatio,
 		}
 	}
 
-	resp, err := c.index.SearchWithContext(ctx, p.Query, req)
+	resp, err := idx.SearchWithContext(ctx, p.Query, req)
 	if err != nil {
 		return SearchResult{}, fmt.Errorf("search: query: %w", err)
 	}
@@ -158,8 +205,8 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, erro
 
 // awaitTask blocks until a Meilisearch task settles and reports a failed task as
 // an error.
-func (c *Client) awaitTask(ctx context.Context, taskUID int64) error {
-	t, err := c.index.WaitForTaskWithContext(ctx, taskUID, taskPollInterval)
+func (c *Client) awaitTask(ctx context.Context, idx meilisearch.IndexManager, taskUID int64) error {
+	t, err := idx.WaitForTaskWithContext(ctx, taskUID, taskPollInterval)
 	if err != nil {
 		return fmt.Errorf("search: await task %d: %w", taskUID, err)
 	}
@@ -169,8 +216,11 @@ func (c *Client) awaitTask(ctx context.Context, taskUID int64) error {
 	return nil
 }
 
-// indexSettings is the single source of truth for the jobs index configuration.
-func indexSettings() *meilisearch.Settings {
+// facetSettings is the single source of truth for the facet/keyword index
+// configuration — everything EXCEPT the embedder. Indexing into it costs no
+// per-document embedding, so a full rebuild runs ~25x faster than the semantic
+// index. semanticSettings layers the embedder on top of this.
+func facetSettings() *meilisearch.Settings {
 	return &meilisearch.Settings{
 		SearchableAttributes: []string{"title", "company", "description", "location"},
 		// Enrichment facets are nested, so they are filtered via dot paths. The
@@ -204,12 +254,21 @@ func indexSettings() *meilisearch.Settings {
 		// left unset (see the TypoTolerance note above on the SDK over-serializing
 		// newer fields). Requires a reindex to take effect on an existing index.
 		Faceting: &meilisearch.Faceting{MaxValuesPerFacet: maxValuesPerFacet},
-		Embedders: map[string]meilisearch.Embedder{
-			embedderName: {
-				Source:           "huggingFace",
-				Model:            embedderModel,
-				DocumentTemplate: "{{ doc.title }} at {{ doc.company }}. {{ doc.description }}",
-			},
+	}
+}
+
+// semanticSettings is the hybrid index configuration: the facet/keyword settings
+// plus the in-engine huggingFace embedder. Meilisearch embeds each new or changed
+// document at index time (and skips unchanged ones), so this index is built by the
+// separate, slower reindex --semantic pass and never on the default reindex path.
+func semanticSettings() *meilisearch.Settings {
+	s := facetSettings()
+	s.Embedders = map[string]meilisearch.Embedder{
+		embedderName: {
+			Source:           "huggingFace",
+			Model:            embedderModel,
+			DocumentTemplate: "{{ doc.title }} at {{ doc.company }}. {{ doc.description }}",
 		},
 	}
+	return s
 }

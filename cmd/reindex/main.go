@@ -1,7 +1,15 @@
-// Command reindex rebuilds the Meilisearch jobs index from Postgres. It ensures
-// the index settings exist, then scans jobs in batches and upserts their
-// documents. Run it on a schedule (e.g. cron); it processes the whole table and
-// exits. Indexing is idempotent (upsert by id), so re-runs are safe.
+// Command reindex rebuilds a Meilisearch jobs index from Postgres. It ensures the
+// index settings exist, then scans jobs in batches and upserts their documents.
+// Run it on a schedule (e.g. cron); it processes the whole table and exits.
+// Indexing is idempotent (upsert by id), so re-runs are safe.
+//
+// Two passes share this binary:
+//
+//   - default: the facet/keyword index (no embedder) — the fast, always-fresh
+//     production search. A full rebuild is minutes, not hours.
+//   - reindex --semantic: the hybrid index (adds the in-engine embedder). Slower
+//     (it embeds new/changed documents); run on its own, looser schedule and only
+//     while semantic search is enabled — it never blocks the facet pass.
 package main
 
 import (
@@ -17,8 +25,29 @@ import (
 )
 
 // reindexBatchSize bounds how many jobs are read from Postgres and pushed to
-// Meilisearch per round. A const for now; promote to config if it needs tuning.
-const reindexBatchSize = 500
+// Meilisearch per round. Once the facet index dropped the per-document embedder,
+// the per-batch round-trip became the throughput lever, so the batch is sized up
+// from 500 to amortize it (Postgres read and the ~7KB-doc payload are both cheap
+// at this size). A const for now; promote to config if it needs tuning.
+const reindexBatchSize = 2000
+
+// indexOps is the set of index operations a reindex pass drives. The default pass
+// targets the facet/keyword index; --semantic targets the hybrid index. Selecting
+// ops up front keeps the streaming loop identical for both.
+type indexOps struct {
+	name   string
+	ensure func(context.Context) error
+	index  func(context.Context, []search.JobDocument) error
+	remove func(context.Context, []int64) error
+}
+
+func facetOps(c *search.Client) indexOps {
+	return indexOps{"facet", c.EnsureIndex, c.IndexJobs, c.DeleteJobs}
+}
+
+func semanticOps(c *search.Client) indexOps {
+	return indexOps{"semantic", c.EnsureSemanticIndex, c.IndexSemanticJobs, c.DeleteSemanticJobs}
+}
 
 // progressInterval is how often reindex emits a heartbeat with its running totals.
 // A full reindex pushes hundreds of thousands of docs to Meilisearch and otherwise
@@ -48,22 +77,38 @@ func run() int {
 
 	client := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
 
-	indexed, deleted, err := reindexAll(ctx, db.New(pool), client)
+	ops := facetOps(client)
+	if semanticRequested(os.Args[1:]) {
+		ops = semanticOps(client)
+	}
+	log.Printf("reindex: target=%s index", ops.name)
+
+	indexed, deleted, err := reindexAll(ctx, db.New(pool), ops)
 	if err != nil {
 		log.Printf("reindex: %v", err)
 		return 1
 	}
 
-	log.Printf("reindex done: indexed=%d deleted=%d", indexed, deleted)
+	log.Printf("reindex done: target=%s indexed=%d deleted=%d", ops.name, indexed, deleted)
 	return 0
+}
+
+// semanticRequested reports whether the args ask for the hybrid (embedder) pass.
+func semanticRequested(args []string) bool {
+	for _, a := range args {
+		if a == "--semantic" || a == "semantic" {
+			return true
+		}
+	}
+	return false
 }
 
 // reindexAll ensures the index and streams every job through it in batches,
 // returning how many documents were indexed (open jobs) and deleted (closed
 // jobs). It pages by keyset (id > last seen), so rows inserted or re-ordered
 // during the run cannot be skipped or repeated.
-func reindexAll(ctx context.Context, q *db.Queries, client *search.Client) (int, int, error) {
-	if err := client.EnsureIndex(ctx); err != nil {
+func reindexAll(ctx context.Context, q *db.Queries, ops indexOps) (int, int, error) {
+	if err := ops.ensure(ctx); err != nil {
 		return 0, 0, err
 	}
 
@@ -94,10 +139,10 @@ func reindexAll(ctx context.Context, q *db.Queries, client *search.Client) (int,
 		if err != nil {
 			return int(indexed.Load()), int(deleted.Load()), err
 		}
-		if err := client.IndexJobs(ctx, docs); err != nil {
+		if err := ops.index(ctx, docs); err != nil {
 			return int(indexed.Load()), int(deleted.Load()), err
 		}
-		if err := client.DeleteJobs(ctx, deleteIDs); err != nil {
+		if err := ops.remove(ctx, deleteIDs); err != nil {
 			return int(indexed.Load()), int(deleted.Load()), err
 		}
 		indexed.Add(int64(len(docs)))

@@ -52,9 +52,9 @@ func TestBuildFacetResult(t *testing.T) {
 func TestIndexSettings_FacetingRaisesValueCap(t *testing.T) {
 	// The Meili default of 100 truncates high-cardinality facets (skills,
 	// countries) in the distribution; the analytics page needs the full set.
-	f := indexSettings().Faceting
+	f := facetSettings().Faceting
 	if f == nil {
-		t.Fatal("indexSettings().Faceting is nil; expected maxValuesPerFacet override")
+		t.Fatal("facetSettings().Faceting is nil; expected maxValuesPerFacet override")
 	}
 	if f.MaxValuesPerFacet <= 100 {
 		t.Errorf("MaxValuesPerFacet = %d, want > 100", f.MaxValuesPerFacet)

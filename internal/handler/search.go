@@ -17,10 +17,12 @@ type searcher interface {
 	Search(ctx context.Context, p search.SearchParams) (search.SearchResult, error)
 }
 
-// defaultSemanticRatio blends keyword and semantic ranking by default (hybrid
-// search is the headline feature). Clients can pass semantic_ratio=0 for pure
-// keyword search.
-const defaultSemanticRatio = 0.5
+// defaultSemanticRatio is 0 — pure keyword search against the always-fresh facet
+// index — because semantic search is opt-in: the embedder lives on a separate
+// index built by an optional reindex --semantic pass, so a default of 0 never
+// routes unprepared traffic to a stale or absent semantic index. A client opts in
+// per request with semantic_ratio>0; the SPA already does so explicitly.
+const defaultSemanticRatio = 0
 
 // maxSearchWindow bounds how deep search pagination may reach (offset+limit). It
 // is the explicit pagination guard, decoupled from the index's maxTotalHits

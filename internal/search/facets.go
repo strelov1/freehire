@@ -38,7 +38,7 @@ type FacetStat struct {
 // responsibility from returning ranked hits, so it runs with limit 0 (no
 // documents), no sort, and no hybrid embedder — just the distribution.
 func (c *Client) FacetCounts(ctx context.Context, p FacetParams) (FacetResult, error) {
-	resp, err := c.index.SearchWithContext(ctx, p.Query, &meilisearch.SearchRequest{
+	resp, err := c.facet.SearchWithContext(ctx, p.Query, &meilisearch.SearchRequest{
 		Filter: p.Filter,
 		Facets: p.Facets,
 		Limit:  0,

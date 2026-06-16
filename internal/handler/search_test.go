@@ -128,12 +128,24 @@ func TestSearchJobs_PaginationAtWindowBoundaryAllowed(t *testing.T) {
 	}
 }
 
-func TestSearchJobs_DefaultsToHybridSemanticRatio(t *testing.T) {
+func TestSearchJobs_DefaultsToKeywordSemanticRatio(t *testing.T) {
+	// Semantic search is opt-in: the default routes to the always-fresh facet
+	// index (ratio 0), never the separate, optionally-built semantic index.
 	fake := &fakeSearcher{}
 	app := searchApp(fake)
 	doGet(t, app, "/jobs/search?q=go")
+	if fake.got.SemanticRatio != 0 {
+		t.Errorf("default SemanticRatio = %v, want 0 (keyword)", fake.got.SemanticRatio)
+	}
+}
+
+func TestSearchJobs_SemanticRatioOptIn(t *testing.T) {
+	// An explicit semantic_ratio>0 still reaches the backend (routes to hybrid).
+	fake := &fakeSearcher{}
+	app := searchApp(fake)
+	doGet(t, app, "/jobs/search?q=go&semantic_ratio=0.5")
 	if fake.got.SemanticRatio != 0.5 {
-		t.Errorf("default SemanticRatio = %v, want 0.5", fake.got.SemanticRatio)
+		t.Errorf("opt-in SemanticRatio = %v, want 0.5", fake.got.SemanticRatio)
 	}
 }
 

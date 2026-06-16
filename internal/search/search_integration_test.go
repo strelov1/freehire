@@ -182,7 +182,15 @@ func TestIntegration_EnsureIndexIndexAndSearch(t *testing.T) {
 		}
 	})
 
-	t.Run("hybrid search engages the embedder without error", func(t *testing.T) {
+	t.Run("hybrid search hits the separate semantic index", func(t *testing.T) {
+		// Semantic search rides a second index built by the --semantic pass (the
+		// facet index above carries no embedder), so build and populate it here.
+		if err := c.EnsureSemanticIndex(ctx); err != nil {
+			t.Fatalf("EnsureSemanticIndex: %v", err)
+		}
+		if err := c.IndexSemanticJobs(ctx, docs); err != nil {
+			t.Fatalf("IndexSemanticJobs: %v", err)
+		}
 		res, err := c.Search(ctx, SearchParams{Query: "backend engineering role", SemanticRatio: 0.5, Limit: 10})
 		if err != nil {
 			t.Fatalf("hybrid Search: %v", err)
