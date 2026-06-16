@@ -18,12 +18,13 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/hire ./cmd/server
  && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/tg-extract ./cmd/tg-extract \
  && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/reslug ./cmd/reslug \
  && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/backfill-derive ./cmd/backfill-derive \
- && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/liveness ./cmd/liveness
+ && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/liveness ./cmd/liveness \
+ && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/notify ./cmd/notify
 
 # --- runtime stage ---
 FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /app
-COPY --from=build /out/hire /out/ingest /out/enrich /out/reindex /out/tg-ingest /out/tg-extract /out/reslug /out/backfill-derive /out/liveness /app/
+COPY --from=build /out/hire /out/ingest /out/enrich /out/reindex /out/tg-ingest /out/tg-extract /out/reslug /out/backfill-derive /out/liveness /out/notify /app/
 EXPOSE 8080
 USER nonroot:nonroot
 ENTRYPOINT ["/app/hire"]

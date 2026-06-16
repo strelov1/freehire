@@ -24,8 +24,8 @@
 
 ## 5. `cmd/notify` worker
 
-- [ ] 5.1 Wire `cmd/notify/main.go` via `worker.Bootstrap`: run one MATCH→DELIVER pass and exit; pick the channel `Notifier` from config
-- [ ] 5.2 Add the `notify` binary to the Dockerfile build + COPY list
+- [x] 5.1 Wired `cmd/notify/main.go` via `worker.Bootstrap`: one MATCH→DELIVER pass, telegram Notifier from config, feature-disabled (exit 0) when search/bot unconfigured
+- [x] 5.2 Added the `notify` binary to the Dockerfile build + COPY list
 
 ## 6. HTTP surface
 
