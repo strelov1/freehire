@@ -18,6 +18,16 @@ func (f fakeGetter) GetJSON(_ context.Context, url string, v any) error {
 	return json.Unmarshal([]byte(body), v)
 }
 
+// PostJSON ignores the request body and returns the canned response for url, standing in
+// for Workday's POST-only CXS listing.
+func (f fakeGetter) PostJSON(_ context.Context, url string, _ any, v any) error {
+	body, ok := f[url]
+	if !ok {
+		return errMissing
+	}
+	return json.Unmarshal([]byte(body), v)
+}
+
 func TestGreenhouseProbe(t *testing.T) {
 	g := greenhouseProber{}
 	getter := fakeGetter{

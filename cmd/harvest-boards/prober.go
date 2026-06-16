@@ -16,13 +16,20 @@ var errMissing = errors.New("not found")
 // which is unexported; this tool lives outside the sources package).
 const greenhouseBoardsAPI = "https://boards-api.greenhouse.io/v1/boards"
 
+// httpClient is the transport a prober needs: most platforms list over GetJSON, but
+// Workday's CXS listing is POST-only. The real *sources.Client implements both.
+type httpClient interface {
+	sources.JSONGetter
+	sources.JSONPoster
+}
+
 // prober checks one candidate board on its ATS platform, returning the company name the
 // platform reports and the number of open jobs. A board that is absent, closed, or
 // unreachable yields ("", 0, nil) — a skip, never a fatal error — so one dead candidate
 // cannot abort the harvest. A non-nil error is reserved for failures a prober genuinely
 // wants surfaced (the caller logs and skips those too).
 type prober interface {
-	probe(ctx context.Context, c sources.JSONGetter, slug string) (company string, openJobs int, err error)
+	probe(ctx context.Context, c httpClient, slug string) (company string, openJobs int, err error)
 }
 
 // greenhouseProber probes the Greenhouse public boards API. The jobs endpoint lists only
@@ -30,7 +37,7 @@ type prober interface {
 // board-metadata endpoint, fetched only once a board is known to have jobs.
 type greenhouseProber struct{}
 
-func (greenhouseProber) probe(ctx context.Context, c sources.JSONGetter, slug string) (string, int, error) {
+func (greenhouseProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
 	var jr struct {
 		Jobs []struct {
 			ID int64 `json:"id"`
@@ -60,7 +67,7 @@ func (greenhouseProber) probe(ctx context.Context, c sources.JSONGetter, slug st
 // the name falls back to the slug.
 type leverProber struct{}
 
-func (leverProber) probe(ctx context.Context, c sources.JSONGetter, slug string) (string, int, error) {
+func (leverProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
 	var postings []struct {
 		ID string `json:"id"`
 	}
@@ -78,7 +85,7 @@ func (leverProber) probe(ctx context.Context, c sources.JSONGetter, slug string)
 // slug, which Ashby itself uses as the board identity.
 type ashbyProber struct{}
 
-func (ashbyProber) probe(ctx context.Context, c sources.JSONGetter, slug string) (string, int, error) {
+func (ashbyProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
 	var resp struct {
 		Jobs []struct {
 			ID string `json:"id"`
@@ -97,7 +104,7 @@ func (ashbyProber) probe(ctx context.Context, c sources.JSONGetter, slug string)
 // live board; the name falls back to the slug (the subdomain), as the list carries none.
 type bamboohrProber struct{}
 
-func (bamboohrProber) probe(ctx context.Context, c sources.JSONGetter, slug string) (string, int, error) {
+func (bamboohrProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
 	var list struct {
 		Result []struct {
 			ID string `json:"id"`
