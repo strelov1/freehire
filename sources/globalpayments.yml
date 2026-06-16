@@ -1,0 +1,5 @@
+# globalpayments boards. Provider is the filename; each entry is company + board.
+# board = the careers-site host (see internal/sources/globalpayments.go).
+
+- company: Global Payments
+  board: jobs.globalpayments.com
