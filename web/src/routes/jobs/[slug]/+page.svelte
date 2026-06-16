@@ -9,11 +9,13 @@
 
   const origin = $derived(page.url.origin);
   const canonical = $derived(`${origin}/jobs/${data.job.public_slug}`);
+  // The per-job OG preview lives beside the canonical URL; og:image must be absolute.
+  const ogImage = $derived(`${canonical}/og.png`);
   const description = $derived(metaDescription(data.job.description));
   const jsonLd = $derived(jsonLdScript(jobPostingJsonLd(data.job, origin)));
 </script>
 
-<Seo title={jobPageTitle(data.job)} {description} {canonical} />
+<Seo title={jobPageTitle(data.job)} {description} {canonical} image={ogImage} />
 
 <svelte:head>
   <!-- JobPosting structured data — eligible for Google Jobs. -->

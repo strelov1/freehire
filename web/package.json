@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "og:smoke": "node scripts/og-smoke.mjs",
     "lint": "oxlint && eslint .",
     "lint:fix": "oxlint --fix && eslint . --fix"
   },
@@ -38,7 +39,10 @@
     "vite": "^6.0.0"
   },
   "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "clsx": "^2.1.1",
+    "satori": "^0.26.0",
+    "satori-html": "^0.3.2",
     "svelte-dnd-action": "^0.9.70",
     "tailwind-merge": "^3.6.0"
   }

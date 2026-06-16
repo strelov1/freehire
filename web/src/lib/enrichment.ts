@@ -177,6 +177,11 @@ export function workArrangement(job: Pick<Job, 'work_mode'>): string | null {
   return job.work_mode ? label(WORK_MODE, job.work_mode) : null;
 }
 
+/** The seniority label (e.g. `Senior`, `C-level`), or null when unstated. */
+export function seniorityLabel(e: Pick<Enrichment, 'seniority'>): string | null {
+  return e.seniority ? label(SENIORITY, e.seniority) : null;
+}
+
 /**
  * The job's geographic area as a concise label from the top-level `regions` —
  * e.g. `Global`, `Europe`, `USA`. Meaningful for any work mode (a remote role's
