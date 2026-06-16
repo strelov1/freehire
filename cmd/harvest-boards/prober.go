@@ -164,6 +164,17 @@ type seedMapper interface {
 	boardID(seedToken string) string
 }
 
+// dedupKeyer folds a board id into the key used for dedup against existing boards. A
+// provider whose board ids are case-insensitive (Workday) implements it to fold case; the
+// rest dedup case-sensitively (Ashby slugs differ by case), so they do not implement it.
+type dedupKeyer interface {
+	dedupKey(boardID string) string
+}
+
+// dedupKey folds a Workday board id to lower case: Workday's CXS API is case-insensitive,
+// so "acme.wd1.myworkdayjobs.com/Careers" and ".../careers" are the same board.
+func (workdayProber) dedupKey(boardID string) string { return strings.ToLower(boardID) }
+
 // boardID turns a "tenant|dc|site" seed token into "<tenant>.<dc>.myworkdayjobs.com/<site>".
 // A token that is not exactly three non-empty parts is returned unchanged (probe drops it).
 func (workdayProber) boardID(seedToken string) string {
