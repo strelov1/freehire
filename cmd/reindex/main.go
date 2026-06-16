@@ -8,6 +8,8 @@ import (
 	"context"
 	"log"
 	"os"
+	"sync/atomic"
+	"time"
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/search"
@@ -17,6 +19,12 @@ import (
 // reindexBatchSize bounds how many jobs are read from Postgres and pushed to
 // Meilisearch per round. A const for now; promote to config if it needs tuning.
 const reindexBatchSize = 500
+
+// progressInterval is how often reindex emits a heartbeat with its running totals.
+// A full reindex pushes hundreds of thousands of docs to Meilisearch and otherwise
+// logs only on completion, so the heartbeat distinguishes a slow run from a stalled
+// one (the totals stop advancing).
+const progressInterval = 60 * time.Second
 
 func main() {
 	os.Exit(run())
@@ -54,10 +62,19 @@ func run() int {
 // returning how many documents were indexed (open jobs) and deleted (closed
 // jobs). It pages by keyset (id > last seen), so rows inserted or re-ordered
 // during the run cannot be skipped or repeated.
-func reindexAll(ctx context.Context, q *db.Queries, client *search.Client) (indexed, deleted int, err error) {
+func reindexAll(ctx context.Context, q *db.Queries, client *search.Client) (int, int, error) {
 	if err := client.EnsureIndex(ctx); err != nil {
 		return 0, 0, err
 	}
+
+	// Atomic so the heartbeat goroutine can read the running totals while the loop
+	// advances them. Without the heartbeat a long reindex is silent until "done",
+	// indistinguishable from a stalled push to Meilisearch.
+	var indexed, deleted atomic.Int64
+	stopHeartbeat := worker.Heartbeat(progressInterval, func() {
+		log.Printf("reindex: progress indexed=%d deleted=%d", indexed.Load(), deleted.Load())
+	})
+	defer stopHeartbeat()
 
 	var afterID int64
 	for {
@@ -66,7 +83,7 @@ func reindexAll(ctx context.Context, q *db.Queries, client *search.Client) (inde
 			BatchSize: reindexBatchSize,
 		})
 		if err != nil {
-			return indexed, deleted, err
+			return int(indexed.Load()), int(deleted.Load()), err
 		}
 		if len(jobs) == 0 {
 			break
@@ -75,23 +92,23 @@ func reindexAll(ctx context.Context, q *db.Queries, client *search.Client) (inde
 
 		docs, deleteIDs, err := splitJobs(jobs)
 		if err != nil {
-			return indexed, deleted, err
+			return int(indexed.Load()), int(deleted.Load()), err
 		}
 		if err := client.IndexJobs(ctx, docs); err != nil {
-			return indexed, deleted, err
+			return int(indexed.Load()), int(deleted.Load()), err
 		}
 		if err := client.DeleteJobs(ctx, deleteIDs); err != nil {
-			return indexed, deleted, err
+			return int(indexed.Load()), int(deleted.Load()), err
 		}
-		indexed += len(docs)
-		deleted += len(deleteIDs)
+		indexed.Add(int64(len(docs)))
+		deleted.Add(int64(len(deleteIDs)))
 
 		if len(jobs) < reindexBatchSize {
 			break
 		}
 	}
 
-	return indexed, deleted, nil
+	return int(indexed.Load()), int(deleted.Load()), nil
 }
 
 // splitJobs partitions a batch from the (deliberately unfiltered) reindex feed:

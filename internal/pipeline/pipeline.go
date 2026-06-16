@@ -8,14 +8,21 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/strelov1/freehire/internal/jobderive"
 	"github.com/strelov1/freehire/internal/sources"
+	"github.com/strelov1/freehire/internal/worker"
 )
 
 // defaultConcurrency bounds how many boards are fetched at once.
 const defaultConcurrency = 8
+
+// progressInterval is how often the run emits a heartbeat with the count of boards
+// crawled so far, so a stalled board (one whose fetch hangs) is visible — the count
+// stops advancing — instead of the run going silent until it finishes.
+const progressInterval = 60 * time.Second
 
 // Job is a normalized posting ready to persist: the pipeline has set the platform as
 // source, namespaced the external id by board, derived the company slug, and minted
@@ -98,6 +105,15 @@ func (r Runner) Run(ctx context.Context, entries []sources.CompanyEntry) (RunSta
 		byProv = RunStats{}
 		wg     sync.WaitGroup
 	)
+
+	// Heartbeat the crawl progress: boards run concurrently and a successful board
+	// logs nothing, so without this a run that stalls on one hung board is silent.
+	var crawled atomic.Int64
+	total := len(entries)
+	stopHeartbeat := worker.Heartbeat(progressInterval, func() {
+		log.Printf("ingest: progress %d/%d boards crawled", crawled.Load(), total)
+	})
+	defer stopHeartbeat()
 	sem := make(chan struct{}, defaultConcurrency)
 
 	for _, e := range entries {
@@ -118,6 +134,7 @@ func (r Runner) Run(ctx context.Context, entries []sources.CompanyEntry) (RunSta
 			}
 
 			ingested, failed, skipped := r.ingestBoard(ctx, e)
+			crawled.Add(1)
 
 			mu.Lock()
 			s := byProv[e.Provider]
