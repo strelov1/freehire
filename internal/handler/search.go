@@ -2,7 +2,7 @@ package handler
 
 import (
 	"context"
-	"strconv"
+	"net/url"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -28,31 +28,6 @@ const defaultSemanticRatio = 0.5
 // the true filtered count while deep offset paging — the expensive part — stays
 // refused. ~500 pages at the default limit is far beyond any real browsing.
 const maxSearchWindow = 10000
-
-// searchStringFacets maps an equality-facet query param to its index attribute.
-// Enrichment facets live under the nested "enrichment" object, so they filter on
-// a dot path. Geography (regions/countries) and work_mode are resolved facets
-// served top-level (the union of parsed-location and enrichment values), so they
-// filter on a bare attribute. Repeated params (?seniority=a&seniority=b) are ORed.
-var searchStringFacets = map[string]string{
-	"source":           "source",
-	"company_slug":     "company_slug",
-	"regions":          "regions",
-	"work_mode":        "work_mode",
-	"employment_type":  "enrichment.employment_type",
-	"seniority":        "enrichment.seniority",
-	"category":         "enrichment.category",
-	"domains":          "enrichment.domains",
-	"countries":        "countries",
-	"company_type":     "enrichment.company_type",
-	"company_size":     "enrichment.company_size",
-	"salary_currency":  "enrichment.salary_currency",
-	"salary_period":    "enrichment.salary_period",
-	"skills":           "skills",
-	"relocation":       "enrichment.relocation",
-	"english_level":    "enrichment.english_level",
-	"posting_language": "enrichment.posting_language",
-}
 
 // searchSortable is the allowlist of sort params mapped to their index attribute;
 // anything else is ignored so a bad param cannot make Meilisearch reject the query.
@@ -119,70 +94,11 @@ func searchSort(c *fiber.Ctx) []string {
 	return []string{attr + ":" + order}
 }
 
-// buildSearchFilter turns facet query params into a Meilisearch filter. Within a
-// facet, included values are ORed by default (or ANDed when `<param>_mode=and`);
-// excluded values (`<param>_exclude=...`) become NOT fragments. Facets are ANDed.
-// Returns nil when no facet is set.
+// buildSearchFilter turns the request's facet query params into a Meilisearch
+// filter by delegating to the shared, pure search.FilterFromValues — the same
+// translation the notification matcher applies to a saved search's stored query,
+// so the two cannot drift. Returns nil when no facet is set.
 func buildSearchFilter(c *fiber.Ctx) any {
-	var groups [][]string
-
-	for param, attr := range searchStringFacets {
-		if vals := queryValues(c, param); len(vals) > 0 {
-			if c.Query(param+"_mode") == "and" {
-				// Each value its own AND group: a job must match all of them.
-				for _, v := range vals {
-					groups = append(groups, []string{search.Eq(attr, v)})
-				}
-			} else {
-				group := make([]string, len(vals))
-				for i, v := range vals {
-					group[i] = search.Eq(attr, v)
-				}
-				groups = append(groups, group)
-			}
-		}
-		// Excluded values: each is its own AND group so all are filtered out.
-		for _, v := range queryValues(c, param+"_exclude") {
-			groups = append(groups, []string{search.Neq(attr, v)})
-		}
-	}
-
-	if raw := c.Query("visa_sponsorship"); raw != "" {
-		groups = append(groups, []string{search.EqBool("enrichment.visa_sponsorship", raw == "true")})
-	}
-
-	if n, ok := queryInt(c, "salary_min"); ok {
-		groups = append(groups, []string{search.Gte("enrichment.salary_min", n)})
-	}
-	if n, ok := queryInt(c, "salary_max"); ok {
-		groups = append(groups, []string{search.Lte("enrichment.salary_max", n)})
-	}
-	if n, ok := queryInt(c, "experience_years_min"); ok {
-		groups = append(groups, []string{search.Gte("enrichment.experience_years_min", n)})
-	}
-
-	return search.Filter(groups...)
-}
-
-// queryValues returns all values of a (possibly repeated) query parameter.
-func queryValues(c *fiber.Ctx, key string) []string {
-	multi := c.Context().QueryArgs().PeekMulti(key)
-	out := make([]string, 0, len(multi))
-	for _, v := range multi {
-		if s := string(v); s != "" {
-			out = append(out, s)
-		}
-	}
-	return out
-}
-
-// queryInt reads an integer query param, reporting whether a valid number was
-// given. A missing or non-numeric value reports false so no bogus `>= 0` filter
-// fragment is emitted (Fiber's QueryInt would silently return 0 on parse error).
-func queryInt(c *fiber.Ctx, key string) (int, bool) {
-	n, err := strconv.Atoi(c.Query(key))
-	if err != nil {
-		return 0, false
-	}
-	return n, true
+	vals, _ := url.ParseQuery(string(c.Request().URI().QueryString()))
+	return search.FilterFromValues(vals)
 }

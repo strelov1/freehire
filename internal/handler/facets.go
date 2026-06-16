@@ -19,7 +19,7 @@ type facetCounter interface {
 }
 
 // facetExtra describes a facetable attribute that is not a string-equality facet
-// in searchStringFacets. statOnly marks a continuous numeric facet exposed only
+// in search.StringFacets. statOnly marks a continuous numeric facet exposed only
 // as min/max stats: Meili always also returns a per-value distribution for a
 // faceted attribute, but a bucket per distinct salary is noise, so it is dropped.
 type facetExtra struct {
@@ -38,13 +38,13 @@ var facetExtraParams = map[string]facetExtra{
 }
 
 // facetAttributes is the full list of index attributes to request facets for:
-// every string facet (the same attributes searchStringFacets filters on) plus
+// every string facet (the same attributes search.StringFacets filters on) plus
 // the extras. Sorted for a deterministic request. This is the single source
 // shared with the search filter vocabulary — a new facet added to
-// searchStringFacets is counted here automatically.
+// search.StringFacets is counted here automatically.
 func facetAttributes() []string {
-	attrs := make([]string, 0, len(searchStringFacets)+len(facetExtraParams))
-	for _, attr := range searchStringFacets {
+	attrs := make([]string, 0, len(search.StringFacets)+len(facetExtraParams))
+	for _, attr := range search.StringFacets {
 		attrs = append(attrs, attr)
 	}
 	for _, e := range facetExtraParams {
@@ -58,8 +58,8 @@ func facetAttributes() []string {
 // param) so the response is keyed the way clients filter: "enrichment.seniority"
 // is exposed as "seniority", hiding the index's internal dot-path structure.
 func facetParamByAttr() map[string]string {
-	m := make(map[string]string, len(searchStringFacets)+len(facetExtraParams))
-	for param, attr := range searchStringFacets {
+	m := make(map[string]string, len(search.StringFacets)+len(facetExtraParams))
+	for param, attr := range search.StringFacets {
 		m[attr] = param
 	}
 	for param, e := range facetExtraParams {

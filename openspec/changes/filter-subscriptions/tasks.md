@@ -6,8 +6,8 @@
 
 ## 2. Shared filter builder refactor
 
-- [ ] 2.1 Extract the Meili filter builder from `internal/handler/search.go` into a pure function in `internal/search` taking a query string / `url.Values` and returning a Meili filter; unit-test it
-- [ ] 2.2 Rewire the search handler to call the extracted function; existing search tests stay green
+- [x] 2.1 Extract the Meili filter builder into `internal/search.FilterFromValues(url.Values)` (pure) + move the facet vocabulary to `search.StringFacets`; unit-tested
+- [x] 2.2 Rewire the search + facets handlers to the shared function/vocabulary; build, vet, handler + search unit tests green
 
 ## 3. Matching + delivery engine (`internal/notify`)
 
