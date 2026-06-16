@@ -20,11 +20,16 @@ import (
 	"github.com/strelov1/freehire/internal/savedsearch"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/submission"
+	"github.com/strelov1/freehire/internal/subscription"
+	"github.com/strelov1/freehire/internal/telegramnotify"
 )
 
 const (
 	defaultLimit = 20
 	maxLimit     = 100
+	// telegramLinkTTL bounds how long a deep-link token is valid — long enough to
+	// open Telegram and tap Start, short enough to limit a leaked link's window.
+	telegramLinkTTL = 10 * time.Minute
 )
 
 // API holds dependencies shared across HTTP handlers.
@@ -63,6 +68,18 @@ type API struct {
 	// savedSearch owns the per-user saved-search use cases (list/create/update/delete
 	// named filter snapshots); the handlers translate wire ↔ domain and delegate to it.
 	savedSearch *savedsearch.Service
+	// subscription owns the per-user filter-subscription use cases (subscribe a
+	// saved search to a channel, list/toggle/unsubscribe).
+	subscription *subscription.Service
+	// Telegram notification wiring. All nil/empty when the bot is unconfigured —
+	// the linking endpoints then report the feature off and the webhook is inert.
+	// telegramLinks mints/verifies the deep-link token; telegramBot replies to the
+	// inbound /start; telegramBotUsername builds the t.me URL; telegramWebhookSecret
+	// guards the inbound webhook.
+	telegramLinks         *telegramnotify.LinkTokens
+	telegramBot           *telegramnotify.Client
+	telegramBotUsername   string
+	telegramWebhookSecret string
 }
 
 // pageParams reads and clamps the shared limit/offset pagination query params.
@@ -101,6 +118,13 @@ type Config struct {
 	CookieSecure   bool
 	OAuthProviders map[string]oauth.Provider
 	Search         *search.Client
+	// Telegram bot for notification linking/delivery confirmations. Optional: an
+	// empty TelegramBotToken disables the feature (linking endpoints report off,
+	// webhook inert). TelegramBotUsername builds the deep link; TelegramWebhookSecret
+	// guards the inbound webhook.
+	TelegramBotToken      string
+	TelegramBotUsername   string
+	TelegramWebhookSecret string
 }
 
 // Register wires all routes onto the application from cfg. Auth is same-origin
@@ -129,6 +153,16 @@ func Register(app *fiber.App, cfg Config) {
 	reportRepo := report.NewQueriesRepository(queries)
 	a.report = report.New(reportRepo, reportRepo)
 	a.savedSearch = savedsearch.New(savedsearch.NewQueriesRepository(queries))
+	a.subscription = subscription.New(subscription.NewQueriesRepository(queries))
+	// Telegram notifications are enabled only with both a bot token and a JWT
+	// secret (the link token reuses it). Absent either, the linking endpoints
+	// report the feature off and the webhook is inert (see telegramEnabled).
+	if cfg.TelegramBotToken != "" && cfg.JWTSecret != "" {
+		a.telegramLinks = telegramnotify.NewLinkTokens(cfg.JWTSecret, telegramLinkTTL)
+		a.telegramBot = telegramnotify.NewClient(cfg.TelegramBotToken)
+		a.telegramBotUsername = cfg.TelegramBotUsername
+		a.telegramWebhookSecret = cfg.TelegramWebhookSecret
+	}
 	// Assign only when configured: a nil *search.Client wrapped in the searcher
 	// interface would be a non-nil interface and defeat the nil check.
 	if cfg.Search != nil {
@@ -211,6 +245,20 @@ func Register(app *fiber.App, cfg Config) {
 	api.Post("/me/searches", saved, a.CreateSavedSearch)
 	api.Patch("/me/searches/:id", saved, a.UpdateSavedSearch)
 	api.Delete("/me/searches/:id", saved, a.DeleteSavedSearch)
+
+	// Filter subscriptions + Telegram linking are cookie-only (RequireAuth) like
+	// saved searches: a browser convenience, owner-scoped (a non-owned id is 404).
+	api.Get("/me/subscriptions", saved, a.ListSubscriptions)
+	api.Post("/me/subscriptions", saved, a.CreateSubscription)
+	api.Patch("/me/subscriptions/:id", saved, a.SetSubscriptionActive)
+	api.Delete("/me/subscriptions/:id", saved, a.DeleteSubscription)
+	api.Post("/me/telegram/link", saved, a.LinkTelegram)
+	api.Get("/me/telegram", saved, a.TelegramLinkStatus)
+	api.Delete("/me/telegram", saved, a.UnlinkTelegram)
+
+	// The Telegram webhook is the only unauthenticated POST: it is guarded by the
+	// shared secret token Telegram echoes in a header (see TelegramWebhook).
+	api.Post("/telegram/webhook", a.TelegramWebhook)
 
 	// Auth: register/login/logout are public (logout just clears the cookie).
 	// me is guarded and accepts a session cookie OR an API key, so a non-browser

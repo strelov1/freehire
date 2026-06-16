@@ -83,6 +83,10 @@ func main() {
 		CookieSecure:   cfg.CookieSecure,
 		OAuthProviders: oauthProviders,
 		Search:         searchClient,
+
+		TelegramBotToken:      cfg.TelegramBotToken,
+		TelegramBotUsername:   cfg.TelegramBotUsername,
+		TelegramWebhookSecret: cfg.TelegramWebhookSecret,
 	})
 
 	// Run the server in a goroutine so main can wait for a shutdown signal.

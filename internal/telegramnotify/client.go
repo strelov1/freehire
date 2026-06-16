@@ -23,9 +23,15 @@ type Client struct {
 	http  *http.Client
 }
 
-// NewClient builds a Client for the given bot token.
+// NewClient builds a Client for the given bot token against the public Bot API.
 func NewClient(token string) *Client {
-	return &Client{token: token, base: defaultAPIBase, http: &http.Client{Timeout: 10 * time.Second}}
+	return NewClientWithBase(token, defaultAPIBase)
+}
+
+// NewClientWithBase builds a Client against a custom API base. Used by tests
+// (pointing at a stub server) and would also serve a self-hosted Bot API.
+func NewClientWithBase(token, baseURL string) *Client {
+	return &Client{token: token, base: baseURL, http: &http.Client{Timeout: 10 * time.Second}}
 }
 
 // SendMessage posts an HTML-formatted message to a chat, with web-page previews

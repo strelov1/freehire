@@ -29,10 +29,10 @@
 
 ## 6. HTTP surface
 
-- [ ] 6.1 Telegram linking handlers (`RequireAuth`): `POST /api/v1/me/telegram/link` (returns deep link), `GET /api/v1/me/telegram` (status), `DELETE /api/v1/me/telegram` (unlink); integration-test
-- [ ] 6.2 Webhook handler `POST /api/v1/telegram/webhook` (unauthenticated): verify secret-token header, parse `/start <token>`, store `chat_id`, confirm to the user; integration-test secret rejection + happy path
-- [ ] 6.3 Subscription handlers (`RequireAuth`): list/create/toggle/delete under `/api/v1/me/subscriptions`, owner-scoped, duplicate + cross-user guards; integration-test
-- [ ] 6.4 Expose the bot username / feature-enabled flag in public config for the SPA
+- [x] 6.1 Telegram linking handlers (`RequireAuth`): `POST /me/telegram/link` (deep link), `GET /me/telegram` (status + `enabled`), `DELETE /me/telegram` (unlink); integration-tested
+- [x] 6.2 Webhook handler `POST /telegram/webhook` (unauthenticated): secret-token header verified, `/start <token>` parsed, `chat_id` stored, bot confirms; integration-tested secret rejection + happy path + bogus token
+- [x] 6.3 Subscription service + handlers (`RequireAuth`): list/create/toggle/delete under `/me/subscriptions`, owner-scoped, duplicate/invalid-channel/cross-user guards; integration-tested
+- [x] 6.4 Exposed the feature-`enabled` flag in the authed `GET /me/telegram` status (toggle lives in the authed area; deep-link URL is built server-side, so no public username/config endpoint needed)
 
 ## 7. SPA
 
