@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/strelov1/freehire/internal/sources"
 )
@@ -117,6 +118,43 @@ func (bamboohrProber) probe(ctx context.Context, c httpClient, slug string) (str
 		return "", 0, nil
 	}
 	return slug, len(list.Result), nil
+}
+
+// workdayProber probes Workday's public CXS listing (POST-only). The board id is
+// "<host>/<site>" (e.g. "aig.wd1.myworkdayjobs.com/early_careers"); the tenant is the
+// host's first dot-label. The listing carries no company name, so it falls back to the
+// tenant (slug-fallback doctrine). The CXS site path is case-insensitive, so the seed's
+// lowercased sites work unchanged.
+type workdayProber struct{}
+
+func (workdayProber) probe(ctx context.Context, c httpClient, boardID string) (string, int, error) {
+	host, site, ok := strings.Cut(boardID, "/")
+	if !ok || host == "" || site == "" {
+		return "", 0, nil
+	}
+	tenant, _, ok := strings.Cut(host, ".")
+	if !ok || tenant == "" {
+		return "", 0, nil
+	}
+	url := fmt.Sprintf("https://%s/wday/cxs/%s/%s/jobs", host, tenant, site)
+	body := map[string]any{"appliedFacets": map[string]any{}, "limit": 1, "offset": 0, "searchText": ""}
+	var resp struct {
+		Total       int `json:"total"`
+		JobPostings []struct {
+			Title string `json:"title"`
+		} `json:"jobPostings"`
+	}
+	if err := c.PostJSON(ctx, url, body, &resp); err != nil {
+		return "", 0, nil
+	}
+	n := resp.Total
+	if n == 0 {
+		n = len(resp.JobPostings)
+	}
+	if n == 0 {
+		return "", 0, nil
+	}
+	return tenant, n, nil
 }
 
 // probers maps a provider key to its prober. Adding an ATS is one entry here plus the

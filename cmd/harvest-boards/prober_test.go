@@ -60,6 +60,30 @@ func TestGreenhouseProbe(t *testing.T) {
 	}
 }
 
+func TestWorkdayProbe(t *testing.T) {
+	p := workdayProber{}
+	getter := fakeGetter{
+		"https://aig.wd1.myworkdayjobs.com/wday/cxs/aig/early_careers/jobs": `{"total":9,"jobPostings":[{"title":"x"}]}`,
+		"https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/empty/jobs":        `{"total":0,"jobPostings":[]}`,
+	}
+	// live: name falls back to tenant, count = total
+	if name, n, err := p.probe(context.Background(), getter, "aig.wd1.myworkdayjobs.com/early_careers"); err != nil || name != "aig" || n != 9 {
+		t.Errorf("live: got (%q,%d,%v), want (aig,9,nil)", name, n, err)
+	}
+	// empty board => skip
+	if name, n, err := p.probe(context.Background(), getter, "acme.wd5.myworkdayjobs.com/empty"); err != nil || name != "" || n != 0 {
+		t.Errorf("empty: got (%q,%d,%v), want (\"\",0,nil)", name, n, err)
+	}
+	// absent (getter error) => skip
+	if name, n, err := p.probe(context.Background(), getter, "gone.wd1.myworkdayjobs.com/site"); err != nil || name != "" || n != 0 {
+		t.Errorf("gone: got (%q,%d,%v), want (\"\",0,nil)", name, n, err)
+	}
+	// malformed board id => skip
+	if _, n, err := p.probe(context.Background(), getter, "no-slash"); err != nil || n != 0 {
+		t.Errorf("malformed: got (%d,%v), want (0,nil)", n, err)
+	}
+}
+
 // The lever/ashby/bamboohr provers carry no company name in their payloads, so a live
 // board's name falls back to its slug; an empty or absent board is a ("",0,nil) skip.
 func TestSlugFallbackProbers(t *testing.T) {
