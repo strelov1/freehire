@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { FilterStore } from '$lib/filters.svelte';
+  import type { FacetCounts } from '$lib/types';
   import { FACETS } from '$lib/facets';
   import FacetSection from './facets/FacetSection.svelte';
   import SavedSearches from './SavedSearches.svelte';
@@ -8,7 +9,8 @@
   // registry and renders each section, plus the two special controls (visa,
   // min salary) that aren't multi-value facets. `exclude` hides facets by param
   // (e.g. the company page pins one company, so its Source facet is irrelevant).
-  let { store, exclude = [] }: { store: FilterStore; exclude?: string[] } = $props();
+  // `counts` is the live facet distribution feeding the dynamic selects.
+  let { store, exclude = [], counts = null }: { store: FilterStore; exclude?: string[]; counts?: FacetCounts | null } = $props();
 
   const facets = $derived(FACETS.filter((f) => !exclude.includes(f.param)));
 
@@ -35,7 +37,7 @@
   </div>
 
   {#each facets as def (def.param)}
-    <FacetSection {def} {store} />
+    <FacetSection {def} {store} {counts} />
   {/each}
 
   <div class="border-b border-border pb-4">

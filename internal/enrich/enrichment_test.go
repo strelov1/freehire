@@ -170,8 +170,8 @@ func TestValidateRejectsMultiEnumElement(t *testing.T) {
 func TestValidateAcceptsRegions(t *testing.T) {
 	valid := []Enrichment{
 		{WorkMode: "remote", Regions: []string{"global"}},
-		{WorkMode: "remote", Regions: []string{"eu", "emea"}},
-		{WorkMode: "remote", Regions: []string{"us", "ru"}},
+		{WorkMode: "remote", Regions: []string{"eu", "mena"}},
+		{WorkMode: "remote", Regions: []string{"north_america", "cis"}},
 	}
 	for i, e := range valid {
 		if err := e.Validate(); err != nil {

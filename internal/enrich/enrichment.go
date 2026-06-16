@@ -30,10 +30,11 @@ type Enrichment struct {
 	Relocation      string `json:"relocation,omitempty"`       // enum: RelocationValues
 	VisaSponsorship *bool  `json:"visa_sponsorship,omitempty"` // pointer: false is meaningful
 
-	// Location / eligibility. Regions is a remote role's geographic reach — a flat,
-	// mixed-level vocabulary (global / macro-region / select country). It is
-	// meaningful only when WorkMode is "remote". Empty means *unknown*; "global"
-	// (open anywhere) is an explicit value, never inferred, so global ≠ unknown.
+	// Location / eligibility. Regions is a remote role's geographic reach — a flat
+	// macro-region vocabulary (global / continent-level area; country-level reach
+	// lives in Countries). It is meaningful only when WorkMode is "remote". Empty
+	// means *unknown*; "global" (open anywhere) is an explicit value, never
+	// inferred, so global ≠ unknown.
 	Regions      []string `json:"regions,omitempty"`       // enum[]: RegionValues
 	Countries    []string `json:"countries,omitempty"`     // enum[]: ISO 3166-1 alpha-2
 	Cities       []string `json:"cities,omitempty"`        // free text (not faceted)
@@ -69,15 +70,16 @@ type Enrichment struct {
 // no bundled closed vocabulary here and are not enum-validated in this phase.
 var (
 	WorkModeValues = []string{"remote", "hybrid", "onsite"}
-	// RegionValues is the geographic-area vocabulary: global, macro-regions, and a
-	// few countries treated as area codes (extend as the curated facet grows).
-	// `cis` (post-Soviet space: Belarus, Moldova, the Caucasus) and `central_asia`
-	// (the five Central Asian republics) cover the RU/CIS segment that dominates
-	// the Telegram sources; `ru` stays its own area.
+	// RegionValues is the geographic-area vocabulary: a single, consistent macro
+	// level (continents/macro-regions, plus `global` and the distinct `uk` area).
+	// Country codes are NOT regions — country-level filtering lives in the separate
+	// `countries` facet, so the US collapses into `north_america` and Russia into
+	// `cis`. `cis` covers the whole post-Soviet space (Russia, Belarus, Moldova,
+	// the Caucasus, and the five Central Asian republics) that dominates the
+	// Telegram sources.
 	RegionValues = []string{
-		"global", "eu", "emea", "eea", "uk", "americas",
-		"north_america", "latam", "apac", "mena", "africa", "us", "ru",
-		"cis", "central_asia",
+		"global", "north_america", "latam", "eu", "uk",
+		"mena", "africa", "apac", "cis",
 	}
 	EmploymentTypeValues = []string{"full_time", "part_time", "contract", "internship"}
 	RelocationValues     = []string{"not_supported", "supported", "required"}

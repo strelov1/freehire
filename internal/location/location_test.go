@@ -22,12 +22,12 @@ func TestParse(t *testing.T) {
 		{
 			name:     "country shorthand USA",
 			location: "Remote - USA",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"us"}, WorkMode: "remote"},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, WorkMode: "remote"},
 		},
 		{
 			name:     "plain country name states no work mode",
 			location: "United States",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"us"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}},
 		},
 		{
 			name:     "macro region name yields region without country",
@@ -67,17 +67,17 @@ func TestParse(t *testing.T) {
 		{
 			name:     "country buried among unknown tokens",
 			location: "Burlington, Massachusetts, United States; Remote",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"us"}, WorkMode: "remote"},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, WorkMode: "remote"},
 		},
 		{
 			name:     "Central Asia: Uzbek district, city, country (Uzbek spelling)",
 			location: "Yunusobod, Toshkent, Uzbekistan",
-			want:     Geo{Countries: []string{"uz"}, Regions: []string{"central_asia"}},
+			want:     Geo{Countries: []string{"uz"}, Regions: []string{"cis"}},
 		},
 		{
 			name:     "Central Asia: remote Kazakhstan",
 			location: "Remote - Kazakhstan",
-			want:     Geo{Countries: []string{"kz"}, Regions: []string{"central_asia"}, WorkMode: "remote"},
+			want:     Geo{Countries: []string{"kz"}, Regions: []string{"cis"}, WorkMode: "remote"},
 		},
 		{
 			name:     "CIS: Baku via city and country",
@@ -87,7 +87,7 @@ func TestParse(t *testing.T) {
 		{
 			name:     "country-only Georgia is the US state, not the country (no false ge)",
 			location: "Atlanta, Georgia, United States",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"us"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}},
 		},
 		{
 			name:     "empty location",
@@ -125,32 +125,32 @@ func TestParseNorthAmerica(t *testing.T) {
 		{
 			name:     "US City, ST ZIP",
 			location: "Lake Worth, TX 76135",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"us"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}},
 		},
 		{
 			name:     "US City, ST",
 			location: "Austin, TX",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"us"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}},
 		},
 		{
 			name:     "US state code CA is California, not Canada",
 			location: "San Francisco, CA",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"us"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}},
 		},
 		{
 			name:     "US full state name",
 			location: "Remote - California",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"us"}, WorkMode: "remote"},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, WorkMode: "remote"},
 		},
 		{
 			name:     "US no-comma City ST",
 			location: "Austin TX",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"us"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}},
 		},
 		{
 			name:     "bare US ZIP is a us signal",
 			location: "94105",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"us"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}},
 		},
 		{
 			name:     "Canadian province code maps to north_america",
@@ -165,7 +165,7 @@ func TestParseNorthAmerica(t *testing.T) {
 		{
 			name:     "Washington DC resolves to us",
 			location: "Washington, DC",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"us"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}},
 		},
 		{
 			name:     "country Georgia is never misread as the US state",
@@ -196,37 +196,37 @@ func TestParseCyrillic(t *testing.T) {
 		{
 			name:     "Cyrillic city Moscow",
 			location: "Москва",
-			want:     Geo{Countries: []string{"ru"}, Regions: []string{"ru"}},
+			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}},
 		},
 		{
 			name:     "city marker prefix is stripped",
 			location: "г Москва",
-			want:     Geo{Countries: []string{"ru"}, Regions: []string{"ru"}},
+			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}},
 		},
 		{
 			name:     "hyphenated Cyrillic city",
 			location: "Санкт-Петербург",
-			want:     Geo{Countries: []string{"ru"}, Regions: []string{"ru"}},
+			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}},
 		},
 		{
 			name:     "multi-word Cyrillic city",
 			location: "Нижний Новгород",
-			want:     Geo{Countries: []string{"ru"}, Regions: []string{"ru"}},
+			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}},
 		},
 		{
 			name:     "country token Россия resolves even past an unknown city",
 			location: "Энск, Россия",
-			want:     Geo{Countries: []string{"ru"}, Regions: []string{"ru"}},
+			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}},
 		},
 		{
 			name:     "abbreviation РФ",
 			location: "РФ",
-			want:     Geo{Countries: []string{"ru"}, Regions: []string{"ru"}},
+			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}},
 		},
 		{
 			name:     "Россия with parenthesised remote marker",
 			location: "Россия (удалённо)",
-			want:     Geo{Countries: []string{"ru"}, Regions: []string{"ru"}, WorkMode: "remote"},
+			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, WorkMode: "remote"},
 		},
 		{
 			name:     "bare Удалённо yields remote mode, no geography",
@@ -236,7 +236,7 @@ func TestParseCyrillic(t *testing.T) {
 		{
 			name:     "Cyrillic hybrid marker with city",
 			location: "Москва, гибрид",
-			want:     Geo{Countries: []string{"ru"}, Regions: []string{"ru"}, WorkMode: "hybrid"},
+			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, WorkMode: "hybrid"},
 		},
 		{
 			name:     "CIS: Minsk maps to Belarus / cis",
@@ -246,7 +246,7 @@ func TestParseCyrillic(t *testing.T) {
 		{
 			name:     "Central Asia: Tashkent maps to Uzbekistan",
 			location: "Ташкент",
-			want:     Geo{Countries: []string{"uz"}, Regions: []string{"central_asia"}},
+			want:     Geo{Countries: []string{"uz"}, Regions: []string{"cis"}},
 		},
 		{
 			name:     "Ukrainian spelling Київ maps to Ukraine / eu",

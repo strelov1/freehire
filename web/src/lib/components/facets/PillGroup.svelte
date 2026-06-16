@@ -16,10 +16,19 @@
     exclude?: boolean;
     onToggle: (value: string) => void;
   } = $props();
+
+  // A selected value with no matching option — e.g. a vocabulary value removed
+  // since an old bookmark or saved search was created — still renders as an
+  // active pill so it stays removable instead of becoming an invisible, stuck
+  // filter that silently constrains results.
+  const shown = $derived([
+    ...options,
+    ...selected.filter((v) => !options.some((o) => o.value === v)).map((v) => ({ value: v, label: v })),
+  ]);
 </script>
 
 <div class="flex flex-wrap gap-2">
-  {#each options as opt (opt.value)}
+  {#each shown as opt (opt.value)}
     {@const active = selected.includes(opt.value)}
     <button
       type="button"

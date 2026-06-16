@@ -39,7 +39,7 @@
         onclick={() => onToggle(opt.value)}
         class={pillClass(active, exclude, 'px-2.5 py-1 text-sm')}
       >
-        {opt.label}
+        {opt.label}{#if opt.count !== undefined}<span class="ml-1 opacity-60 tabular-nums">{opt.count.toLocaleString()}</span>{/if}
       </button>
     {/each}
     {#if shown.length === 0}

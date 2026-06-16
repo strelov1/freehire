@@ -19,6 +19,8 @@ import {
 export interface FacetOption {
   value: string;
   label: string;
+  /** Number of matching jobs, for dynamic (distribution-driven) options. */
+  count?: number;
 }
 
 export type FacetControl = 'pills' | 'select' | 'tokens';
@@ -32,6 +34,36 @@ export interface FacetDef {
   /** Show a per-facet AND/OR toggle (match all vs match any) over selected values. */
   hasAndOr?: boolean;
   placeholder?: string;
+  /**
+   * Options come from the live facet distribution (with counts), not a static
+   * `options` list — for open/large vocabularies (skills, countries). The panel
+   * builds them from the facet-counts endpoint at render time.
+   */
+  dynamic?: boolean;
+}
+
+// Resolve an ISO 3166-1 alpha-2 code to an English country name via platform Intl
+// data (no hand-maintained table); fall back to the upper-cased code.
+const regionNames = (() => {
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'region' });
+  } catch {
+    return null;
+  }
+})();
+
+export function countryLabel(code: string): string {
+  const up = code.toUpperCase();
+  try {
+    return regionNames?.of(up) ?? up;
+  } catch {
+    return up;
+  }
+}
+
+/** Display label for a dynamic facet value: country code → name, else the value. */
+export function dynamicLabel(param: string, value: string): string {
+  return param === 'countries' ? countryLabel(value) : value;
 }
 
 /** A title-cased fallback label for a value with no explicit label. */
@@ -57,25 +89,21 @@ const SOURCE: FacetOption[] = options(SOURCE_VALUES, {
   workatastartup: 'Work at a Startup', remoteok: 'RemoteOK', arc: 'Arc',
 });
 
-// The backend's full `regions` reach vocabulary (enrich.RegionValues). Values mix
-// levels by design (global / macro-region / country-as-area); keep this in sync
-// with that list so every tagged region is filterable.
+// The backend's `regions` reach vocabulary (enrich.RegionValues): one consistent
+// macro level (continents/macro-regions, plus `global` and the distinct `uk`).
+// Country-level filtering lives in the Countries facet, so the US sits under
+// `north_america` and Russia under `cis`. Keep this in sync with that list so
+// every tagged region is filterable.
 const REGION: FacetOption[] = [
   { value: 'global', label: 'Global' },
-  { value: 'us', label: 'USA' },
   { value: 'north_america', label: 'North America' },
   { value: 'latam', label: 'LATAM' },
-  { value: 'americas', label: 'Americas' },
   { value: 'eu', label: 'Europe' },
   { value: 'uk', label: 'UK' },
-  { value: 'emea', label: 'EMEA' },
-  { value: 'eea', label: 'EEA' },
   { value: 'mena', label: 'MENA' },
   { value: 'africa', label: 'Africa' },
   { value: 'apac', label: 'APAC' },
-  { value: 'ru', label: 'Russia' },
   { value: 'cis', label: 'CIS' },
-  { value: 'central_asia', label: 'Central Asia' },
 ];
 
 const WORK_MODE: FacetOption[] = options(WORK_MODE_VALUES, { onsite: 'On-site' });
@@ -118,10 +146,10 @@ export const FACETS: FacetDef[] = [
   { param: 'work_mode', label: 'Work format', control: 'pills', options: WORK_MODE, excludable: true },
   { param: 'category', label: 'Specialization', control: 'select', options: CATEGORY, excludable: true, placeholder: 'Search specializations' },
   { param: 'seniority', label: 'Seniority', control: 'pills', options: SENIORITY, excludable: true },
-  { param: 'skills', label: 'Skills', control: 'tokens', excludable: true, hasAndOr: true, placeholder: 'Add a skill, press Enter' },
+  { param: 'skills', label: 'Skills', control: 'select', dynamic: true, excludable: true, hasAndOr: true, placeholder: 'Search skills' },
   { param: 'domains', label: 'Industry', control: 'select', options: DOMAINS, excludable: true, placeholder: 'Search industries' },
   { param: 'company_type', label: 'Company type', control: 'pills', options: COMPANY_TYPE, excludable: true },
-  { param: 'countries', label: 'Countries', control: 'tokens', excludable: true, placeholder: 'ISO code, e.g. DE' },
+  { param: 'countries', label: 'Countries', control: 'select', dynamic: true, excludable: true, placeholder: 'Search countries' },
   { param: 'relocation', label: 'Relocation', control: 'pills', options: RELOCATION, excludable: true },
   { param: 'employment_type', label: 'Employment', control: 'pills', options: EMPLOYMENT, excludable: true },
   { param: 'english_level', label: 'English', control: 'pills', options: ENGLISH, excludable: true },

@@ -173,15 +173,6 @@
           <Bookmark class={saved ? 'size-4 fill-current' : 'size-4'} />
           {saved ? 'Saved' : 'Save'}
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onclick={onReportClick}
-          class="w-full text-muted-foreground"
-        >
-          <Flag class="size-4" />
-          Report this job
-        </Button>
       </div>
 
       {#if facets.length}
@@ -224,6 +215,18 @@
           <Badge variant="secondary">Manually added</Badge>
         {/if}
         {#if posted}<span class="text-xs text-muted-foreground">Posted {posted}</span>{/if}
+      </div>
+
+      <div class="border-t border-border pt-4 first:border-t-0 first:pt-0">
+        <Button
+          variant="ghost"
+          size="sm"
+          onclick={onReportClick}
+          class="w-full text-muted-foreground"
+        >
+          <Flag class="size-4" />
+          Report this job
+        </Button>
       </div>
     </div>
   </aside>

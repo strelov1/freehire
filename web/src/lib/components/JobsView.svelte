@@ -5,8 +5,8 @@
   import { isAuthenticated } from '$lib/auth.svelte';
   import { ensureViewedLoaded } from '$lib/viewedJobs.svelte';
   import { Paginator } from '$lib/paginated.svelte';
-  import { FilterStore, filtersToParams, type SortField } from '$lib/filters.svelte';
-  import type { Job } from '$lib/types';
+  import { FilterStore, filtersToParams } from '$lib/filters.svelte';
+  import type { Job, FacetCounts } from '$lib/types';
   import { Input } from '$lib/ui';
   import FiltersPanel from './FiltersPanel.svelte';
   import States from './States.svelte';
@@ -47,6 +47,24 @@
   seeded.seed(untrack(() => initial));
   let jobs = $state.raw(seeded);
 
+  // The live facet distribution (value → count per facet), feeding the dynamic
+  // selects (skills, countries) so the user sees which values exist and how many
+  // jobs each has under the current filters. A failed fetch leaves the prior
+  // counts — the selects degrade to plain (countless) options, never break.
+  // `countsGen` is a monotonic fetch id so a slow earlier response can't
+  // overwrite a newer one (same guard as AnalyticsView).
+  let counts = $state<FacetCounts | null>(null);
+  let countsGen = 0;
+  const refreshCounts = () => {
+    const gen = ++countsGen;
+    return api
+      .facetCounts(scopedParams())
+      .then((c) => {
+        if (gen === countsGen) counts = c;
+      })
+      .catch(() => {});
+  };
+
   let drawerOpen = $state(false);
   let started = false;
   let timer: ReturnType<typeof setTimeout>;
@@ -56,12 +74,9 @@
   // timer left running after unmount would start a fetch for a gone component.
   onMount(() => {
     if (isAuthenticated()) ensureViewedLoaded();
+    refreshCounts();
     return () => clearTimeout(timer);
   });
-
-  // House select styling, mirrored from ApiKeysView.
-  const sortClass =
-    'h-9 shrink-0 rounded-lg border border-input bg-transparent px-3 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 dark:bg-input/30';
 
   // Browser back/forward changes the URL query — pull it back into the filters.
   // Track only the URL: syncFromUrl reads filters.value internally, so without
@@ -84,6 +99,7 @@
     timer = setTimeout(() => {
       jobs = makePaginator();
       jobs.start();
+      refreshCounts();
     }, 300);
   });
 </script>
@@ -91,7 +107,7 @@
 <div class="flex gap-6">
   <aside class="hidden w-72 shrink-0 md:block">
     <div class="sticky top-6 max-h-[calc(100vh-5rem)] overflow-y-auto rounded-xl border border-border bg-card p-4">
-      <FiltersPanel store={filters} exclude={excludeFacets} />
+      <FiltersPanel store={filters} exclude={excludeFacets} {counts} />
     </div>
   </aside>
 
@@ -105,15 +121,6 @@
         aria-label="Search jobs"
         class="min-w-0 flex-1"
       />
-      <select
-        value={filters.value.sort}
-        onchange={(e) => filters.setSort(e.currentTarget.value as SortField)}
-        aria-label="Sort jobs by"
-        class={sortClass}
-      >
-        <option value="posted_at">Date posted</option>
-        <option value="created_at">Recently added</option>
-      </select>
       <button
         type="button"
         class="h-9 shrink-0 rounded-lg border border-border bg-secondary px-3 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent md:hidden"
@@ -154,7 +161,7 @@
         <span class="text-sm font-semibold tracking-tight">Filters</span>
         <button type="button" class="text-sm text-muted-foreground hover:text-foreground" onclick={() => (drawerOpen = false)}>Done</button>
       </div>
-      <FiltersPanel store={filters} exclude={excludeFacets} />
+      <FiltersPanel store={filters} exclude={excludeFacets} {counts} />
     </div>
   </div>
 {/if}

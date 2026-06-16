@@ -15,10 +15,11 @@ export interface Enrichment {
   relocation?: string; // enum: RelocationValues
   visa_sponsorship?: boolean; // pointer: false is meaningful
   /**
-   * Location / eligibility. Regions is a remote role's geographic reach — a flat,
-   * mixed-level vocabulary (global / macro-region / select country). It is
-   * meaningful only when WorkMode is "remote". Empty means *unknown*; "global"
-   * (open anywhere) is an explicit value, never inferred, so global ≠ unknown.
+   * Location / eligibility. Regions is a remote role's geographic reach — a flat
+   * macro-region vocabulary (global / continent-level area; country-level reach
+   * lives in Countries). It is meaningful only when WorkMode is "remote". Empty
+   * means *unknown*; "global" (open anywhere) is an explicit value, never
+   * inferred, so global ≠ unknown.
    */
   regions?: string[]; // enum[]: RegionValues
   countries?: string[]; // enum[]: ISO 3166-1 alpha-2
@@ -78,10 +79,12 @@ export interface Job {
   location: string;
   description: string;
   /**
-   * Countries/Regions/WorkMode are the resolved geography facet: the union of
-   * the ingest-parsed location columns and the enrichment-derived values
-   * (work_mode is the LLM value when present, else the parsed one). They are
-   * served here, top-level and once; the same fields are folded out of the
+   * Countries/Regions/WorkMode/Skills are served from the jobs dictionary columns
+   * ONLY — the deterministic dictionaries are the sole production source for these
+   * facets. The LLM's enrichment values for them are deliberately excluded from
+   * the served object (they remain raw in the stored enrichment JSONB), so the LLM
+   * can later run free as a discovery signal without corrupting production data.
+   * They are served top-level and once; the same fields are folded out of the
    * nested Enrichment to avoid duplication.
    */
   countries: string[];
@@ -102,7 +105,7 @@ export interface Job {
   enrichment_version: number /* int32 */;
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'ashby', 'bamboohr', 'breezy', 'gem', 'greenhouse', 'huntflow', 'join', 'lever', 'personio', 'pinpoint', 'recruitee', 'rippling', 'smartrecruiters', 'successfactors', 'teamtailor', 'workable', 'workday'] as const;
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'ashby', 'bamboohr', 'breezy', 'gem', 'greenhouse', 'gupy', 'huntflow', 'join', 'lever', 'personio', 'pinpoint', 'recruitee', 'rippling', 'smartrecruiters', 'successfactors', 'teamtailor', 'workable', 'workday'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];

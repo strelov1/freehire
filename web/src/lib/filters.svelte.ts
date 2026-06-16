@@ -17,13 +17,14 @@ export interface FacetState {
   matchAll: boolean;
 }
 
-/** The fields the browse list can be ordered by (both newest-first). `posted_at`
- *  is the source's posting date; `created_at` is when we ingested the job. */
-export type SortField = 'posted_at' | 'created_at';
+/** The fields the browse list can be ordered by. Only `posted_at` (the source's
+ *  posting date, newest-first) is offered today; the type stays a union so a
+ *  future sort (e.g. salary) re-introduces an option without reshaping callers. */
+export type SortField = 'posted_at';
 
-/** Default browse order: freshest by posting date. Kept out of the URL (see
- *  filtersToParams) so the default reads as a clean, sort-less URL and the
- *  backend's own empty-query default stays the single source of truth. */
+/** Default (and currently only) browse order: freshest by posting date. Kept out
+ *  of the URL (see filtersToParams) so the default reads as a clean, sort-less URL
+ *  and the backend's own empty-query default stays the single source of truth. */
 export const DEFAULT_SORT: SortField = 'posted_at';
 
 export interface JobFilters {
@@ -85,8 +86,8 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   f.visa = p.get('visa_sponsorship') === 'true';
   const salary = Number(p.get('salary_min'));
   f.salaryMin = p.get('salary_min') && !Number.isNaN(salary) ? salary : null;
-  // Only `created_at` is a non-default sort; anything else falls back to default.
-  f.sort = p.get('sort') === 'created_at' ? 'created_at' : DEFAULT_SORT;
+  // Sort isn't user-selectable today, so it's never read from the URL — it stays
+  // the default seeded by emptyFilters().
   return f;
 }
 

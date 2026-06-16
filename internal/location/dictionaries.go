@@ -15,18 +15,15 @@ var regionCountries = map[string][]string{
 		"lv", "ee", "lu", "ch", "no", "ua", "is",
 	},
 	"uk":            {"gb"},
-	"us":            {"us"},
-	"north_america": {"ca"},
+	"north_america": {"us", "ca"},
 	"latam":         {"ar", "br", "mx", "cl", "co", "pe", "uy"},
 	"apac":          {"sg", "jp", "au", "nz", "in", "hk", "tw", "kr", "cn", "my", "th", "ph", "vn", "id"},
 	"mena":          {"ae", "sa", "il", "eg", "tr", "qa"},
 	"africa":        {"za", "ng", "ke"},
-	"ru":            {"ru"},
-	// CIS / Central Asia — the RU-segment geography of the Telegram sources.
-	// central_asia is the five republics; cis is the rest of the post-Soviet
-	// space (Belarus, Moldova, the Caucasus). ru keeps its own area; ua stays eu.
-	"central_asia": {"uz", "kz", "kg", "tj", "tm"},
-	"cis":          {"by", "md", "am", "az", "ge"},
+	// CIS — the whole post-Soviet space (the RU-segment geography of the Telegram
+	// sources): Russia, Belarus, Moldova, the Caucasus, and the five Central Asian
+	// republics. Russia is not its own region; ua stays eu.
+	"cis": {"ru", "by", "md", "am", "az", "ge", "uz", "kz", "kg", "tj", "tm"},
 }
 
 // countryToRegion is the inverted regionCountries: ISO code -> region code.
@@ -134,7 +131,7 @@ var nameToCountry = map[string]string{
 // abbreviation ("tx", "on") or full name ("texas", "ontario") — to its ISO 3166-1
 // alpha-2 country code, for the "City, ST ZIP" (US) and "City, Province" (Canada)
 // formats that dominate North American ATS data. The region falls out of
-// countryToRegion (us / north_america).
+// countryToRegion (both us and ca resolve to north_america).
 //
 // Two-letter codes that collide with a country ISO code whose city the parser
 // already keys are deliberately omitted (the country wins, so "Berlin, DE" /
@@ -186,13 +183,11 @@ var subdivisionToCountry = map[string]string{
 // directly to a region code, for tokens that name an area rather than a country.
 var nameToRegion = map[string]string{
 	"europe": "eu", "eu": "eu",
-	"emea": "emea", "eea": "eea",
 	"apac": "apac", "asia": "apac", "asia pacific": "apac", "asia-pacific": "apac",
-	"americas":      "americas",
 	"north america": "north_america",
 	"latam":         "latam", "latin america": "latam", "south america": "latam",
 	"mena": "mena", "middle east": "mena",
 	"africa": "africa",
-	"cis":    "cis", "central asia": "central_asia",
+	"cis":    "cis", "central asia": "cis",
 	"anywhere": "global", "worldwide": "global", "global": "global", "remote anywhere": "global",
 }

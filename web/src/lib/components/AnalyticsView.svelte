@@ -82,7 +82,7 @@
 <div class="flex gap-6">
   <aside class="hidden w-72 shrink-0 md:block">
     <div class="sticky top-6 max-h-[calc(100vh-5rem)] overflow-y-auto rounded-xl border border-border bg-card p-4">
-      <FiltersPanel store={filters} />
+      <FiltersPanel store={filters} {counts} />
     </div>
   </aside>
 
@@ -132,7 +132,7 @@
         <span class="text-sm font-semibold tracking-tight">Filters</span>
         <button type="button" class="text-sm text-muted-foreground hover:text-foreground" onclick={() => (drawerOpen = false)}>Done</button>
       </div>
-      <FiltersPanel store={filters} />
+      <FiltersPanel store={filters} {counts} />
     </div>
   </div>
 {/if}

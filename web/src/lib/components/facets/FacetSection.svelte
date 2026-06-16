@@ -1,7 +1,8 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
-  import type { FacetDef } from '$lib/facets';
+  import { dynamicLabel, type FacetDef, type FacetOption } from '$lib/facets';
   import type { FilterStore } from '$lib/filters.svelte';
+  import type { FacetCounts } from '$lib/types';
   import { cn } from '$lib/utils';
   import PillGroup from './PillGroup.svelte';
   import SearchSelect from './SearchSelect.svelte';
@@ -9,10 +10,24 @@
 
   // One facet section: header (label, optional Any/All match toggle, optional
   // exclude toggle) plus the control the facet declares. All state lives in the
-  // store, keyed by the facet's param.
-  let { def, store }: { def: FacetDef; store: FilterStore } = $props();
+  // store, keyed by the facet's param. `counts` carries the live facet
+  // distribution that drives dynamic (open-vocabulary) selects.
+  let { def, store, counts }: { def: FacetDef; store: FilterStore; counts?: FacetCounts | null } = $props();
 
   const st = $derived(store.facet(def.param));
+
+  // Options for a select facet: static for closed vocabularies, or built from the
+  // live distribution (value → count, busiest first) for dynamic ones. Selected
+  // values absent from the current distribution are still listed so they stay
+  // removable.
+  const selectOptions = $derived.by((): FacetOption[] => {
+    if (!def.dynamic) return def.options ?? [];
+    const dist = counts?.facets?.[def.param] ?? {};
+    const keys = new Set<string>([...Object.keys(dist), ...st.values]);
+    return [...keys]
+      .map((value) => ({ value, label: dynamicLabel(def.param, value), count: dist[value] ?? 0 }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  });
   // The exclude/clear actions only appear once something is selected — so their
   // meaning is clear ("you picked these — hide them, or clear them") rather than
   // abstract controls on an empty section.
@@ -71,7 +86,7 @@
     />
   {:else if def.control === 'select'}
     <SearchSelect
-      options={def.options ?? []}
+      options={selectOptions}
       selected={st.values}
       exclude={st.exclude}
       placeholder={def.placeholder}
