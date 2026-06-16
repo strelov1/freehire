@@ -37,6 +37,16 @@ type Settings struct {
 	// cmd/server), so the requirement is enforced at the call site, not here.
 	MeiliURL string
 	MeiliKey string
+
+	// Telegram bot for outbound notifications (filter subscriptions). Optional:
+	// an empty TelegramBotToken disables the feature — the linking endpoints and
+	// webhook are inert and the notify worker has nothing to deliver through.
+	// TelegramBotUsername builds the t.me deep link the SPA shows; its presence
+	// is what the public config reports as "enabled". TelegramWebhookSecret is the
+	// shared secret verified on the inbound webhook (the bot's secret_token).
+	TelegramBotToken      string
+	TelegramBotUsername   string
+	TelegramWebhookSecret string
 }
 
 // OAuthCredentials is one OAuth provider's client id/secret pair.
@@ -61,6 +71,10 @@ func Load() Settings {
 		OAuth:          loadOAuth(),
 		MeiliURL:       env("MEILI_URL", "http://localhost:7700"),
 		MeiliKey:       os.Getenv("MEILI_MASTER_KEY"),
+
+		TelegramBotToken:      os.Getenv("TELEGRAM_BOT_TOKEN"),
+		TelegramBotUsername:   os.Getenv("TELEGRAM_BOT_USERNAME"),
+		TelegramWebhookSecret: os.Getenv("TELEGRAM_WEBHOOK_SECRET"),
 	}
 }
 

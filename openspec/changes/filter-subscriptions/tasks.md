@@ -18,9 +18,9 @@
 
 ## 4. Telegram channel (`telegram-notify`)
 
-- [ ] 4.1 Implement the signed deep-link token (mint + verify, short TTL, `purpose=tg-link`) reusing `JWT_SECRET`; unit-test mint/verify/expiry/forgery
-- [ ] 4.2 Implement `telegramNotifier` (`Notifier` impl) over the Bot API `sendMessage`; unit-test request shaping and error propagation against a stub HTTP server
-- [ ] 4.3 Add bot config (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`) to `internal/config`; feature treated as disabled when unset
+- [x] 4.1 Implemented the signed deep-link token (`LinkTokens` mint+verify, short TTL, `purpose=tg-link`) reusing `JWT_SECRET`; unit-tested round-trip/expiry/forgery/wrong-purpose
+- [x] 4.2 Implemented the Bot API `Client` (sendMessage/setWebhook over net/http), webhook `Update` parsing + `StartToken`, and `Notifier` (HTML digest render + send); unit-tested render/escaping, request shaping, API-error propagation, `/start` parsing
+- [x] 4.3 Added bot config (`TELEGRAM_BOT_TOKEN`/`_BOT_USERNAME`/`_WEBHOOK_SECRET`) to `internal/config`; feature disabled when token unset
 
 ## 5. `cmd/notify` worker
 
