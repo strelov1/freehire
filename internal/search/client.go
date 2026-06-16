@@ -65,7 +65,19 @@ func NewClient(url, key string) *Client {
 // settings. It is idempotent — safe to call on every reindex. This is the fast
 // production index that all default (keyword) traffic and faceting hit.
 func (c *Client) EnsureIndex(ctx context.Context) error {
-	return c.ensure(ctx, c.facet, facetIndexUID, facetSettings())
+	if err := c.ensure(ctx, c.facet, facetIndexUID, facetSettings()); err != nil {
+		return err
+	}
+	// Meilisearch settings updates MERGE: facetSettings omits the embedder, but an
+	// omitted (nil or empty) embedders map LEAVES any embedder a prior version put
+	// on this index in place — so a `jobs` index that once carried the embedder
+	// would keep embedding on every facet reindex, defeating the split. Reset it
+	// explicitly. On an index that never had one this is a harmless no-op.
+	task, err := c.facet.ResetEmbeddersWithContext(ctx)
+	if err != nil {
+		return fmt.Errorf("search: reset facet embedders: %w", err)
+	}
+	return c.awaitTask(ctx, c.facet, task.TaskUID)
 }
 
 // EnsureSemanticIndex creates the hybrid jobs index (with the in-engine embedder)

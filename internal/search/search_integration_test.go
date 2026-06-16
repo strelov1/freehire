@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/meilisearch/meilisearch-go"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
@@ -199,6 +200,44 @@ func TestIntegration_EnsureIndexIndexAndSearch(t *testing.T) {
 			t.Error("hybrid search returned no hits")
 		}
 	})
+}
+
+// TestIntegration_EnsureIndexResetsExistingEmbedder guards the merge-semantics
+// trap: facetSettings omits the embedder, but a Meilisearch settings update only
+// MERGES, so an embedder a prior version put on the `jobs` index would survive and
+// keep embedding on every facet reindex. EnsureIndex must reset it explicitly.
+func TestIntegration_EnsureIndexResetsExistingEmbedder(t *testing.T) {
+	ctx := context.Background()
+	c := startMeili(t)
+	if err := c.EnsureIndex(ctx); err != nil {
+		t.Fatalf("EnsureIndex: %v", err)
+	}
+
+	// Put an embedder on the facet index. userProvided needs no model download.
+	task, err := c.facet.UpdateEmbeddersWithContext(ctx, map[string]meilisearch.Embedder{
+		"manual": {Source: "userProvided", Dimensions: 3},
+	})
+	if err != nil {
+		t.Fatalf("UpdateEmbedders: %v", err)
+	}
+	if _, err := c.facet.WaitForTaskWithContext(ctx, task.TaskUID, 50*time.Millisecond); err != nil {
+		t.Fatalf("await embedder set: %v", err)
+	}
+	if emb, err := c.facet.GetEmbeddersWithContext(ctx); err != nil || len(emb) == 0 {
+		t.Fatalf("precondition: embedder should be set (emb=%v err=%v)", emb, err)
+	}
+
+	// EnsureIndex must strip it, leaving the facet index embedder-free.
+	if err := c.EnsureIndex(ctx); err != nil {
+		t.Fatalf("EnsureIndex (reset): %v", err)
+	}
+	emb, err := c.facet.GetEmbeddersWithContext(ctx)
+	if err != nil {
+		t.Fatalf("GetEmbedders: %v", err)
+	}
+	if len(emb) != 0 {
+		t.Errorf("EnsureIndex left embedders on the facet index: %v", emb)
+	}
 }
 
 func TestSearchFiltersBySkillsFacet(t *testing.T) {
