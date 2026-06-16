@@ -1,0 +1,5 @@
+# JobStash Web3 job aggregator. Boardless: one global public feed
+# (middleware.jobstash.xyz/jobs/list), so the entry carries no board, and each job's company
+# comes from the posting's organization, not this placeholder.
+- company: JobStash
+  provider: jobstash

@@ -36,6 +36,9 @@ func (tecla) Provider() string { return "tecla" }
 // tecla is a marketplace with one global feed, so its config entries carry no board.
 func (tecla) boardless() {}
 
+// tecla aggregates postings from many companies, so it stays in the source facet.
+func (tecla) aggregator() {}
+
 // teclaResponse is the getPublicJobs response: Data.Jobs is the page, Data.Pagination.CountPages
 // the total page count used to stop pagination.
 type teclaResponse struct {

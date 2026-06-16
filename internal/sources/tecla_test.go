@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -132,5 +133,12 @@ func TestTeclaRegisteredInAllAndBoardless(t *testing.T) {
 	}
 	if _, isBoardless := s.(boardless); !isBoardless {
 		t.Error("tecla should be boardless (one global feed, no board id)")
+	}
+	// tecla aggregates many companies, so it must stay in the source facet.
+	if _, isAggregator := s.(aggregator); !isAggregator {
+		t.Error("tecla should be an aggregator (multi-company marketplace)")
+	}
+	if !slices.Contains(FilterableProviders(), "tecla") {
+		t.Error("FilterableProviders() should include the tecla aggregator")
 	}
 }

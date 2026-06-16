@@ -49,21 +49,33 @@ type Source interface {
 	Fetch(ctx context.Context, e CompanyEntry) ([]Job, error)
 }
 
-// boardless marks an adapter whose source is one company's own API, with no per-tenant
-// board id. Config validation lets a boardless provider's entries omit board. Multi-tenant
-// ATS adapters (greenhouse, lever, …) do not implement it and still require a board.
+// boardless marks an adapter whose API has no per-tenant board id, so config
+// validation lets its entries omit board. A boardless adapter may serve one company
+// (greenhouse/lever and the other multi-tenant ATS adapters are NOT boardless and
+// still require a board) or aggregate many (see aggregator).
 type boardless interface{ boardless() }
 
-// FilterableProviders returns the sorted provider keys of the multi-tenant ATS
-// adapters — those NOT implementing the boardless marker. The source facet filters
-// by platform, and a single-company (boardless) platform is redundant with the
-// company filter, so it is excluded. Passing a nil client is safe: Provider() and
-// the boardless assertion never touch the transport.
-func FilterableProviders() []string {
+// aggregator marks a boardless adapter that aggregates postings from many companies
+// (e.g. jobstash) rather than serving a single company. It keeps such an adapter in
+// the source facet: a single-company boardless platform is redundant with the company
+// filter and excluded, but filtering by an aggregator is not.
+type aggregator interface{ aggregator() }
+
+// FilterableProviders returns the sorted provider keys the source facet offers.
+// Passing a nil client is safe: Provider() and the marker assertions never touch the
+// transport.
+func FilterableProviders() []string { return filterableProviders(All(nil)) }
+
+// filterableProviders selects the source-facet provider keys from a registry. A
+// single-company boardless platform is redundant with the company filter and excluded;
+// a board-based platform or a multi-company aggregator stays listed.
+func filterableProviders(registry map[string]Source) []string {
 	var out []string
-	for key, src := range All(nil) {
+	for key, src := range registry {
 		if _, isBoardless := src.(boardless); isBoardless {
-			continue
+			if _, isAggregator := src.(aggregator); !isAggregator {
+				continue
+			}
 		}
 		out = append(out, key)
 	}
@@ -94,8 +106,9 @@ func All(c HTTPClient) map[string]Source {
 		NewBreezy(c),
 		NewJoin(c),
 		NewGlobalPayments(c),
-		// Marketplace aggregator (boardless): one global feed, company per posting.
+		// Multi-company aggregators (boardless): one global feed, company per posting.
 		NewTecla(c),
+		NewJobStash(c),
 		// International single-company adapters (boardless).
 		NewUber(c),
 		NewAmazon(c),

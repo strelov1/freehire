@@ -105,7 +105,7 @@ export interface Job {
   enrichment_version: number /* int32 */;
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'ashby', 'bamboohr', 'breezy', 'gem', 'greenhouse', 'gupy', 'huntflow', 'join', 'lever', 'personio', 'pinpoint', 'recruitee', 'rippling', 'smartrecruiters', 'successfactors', 'teamtailor', 'workable', 'workday'] as const;
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'ashby', 'bamboohr', 'breezy', 'gem', 'globalpayments', 'greenhouse', 'gupy', 'huntflow', 'jobstash', 'join', 'lever', 'personio', 'pinpoint', 'recruitee', 'rippling', 'smartrecruiters', 'successfactors', 'teamtailor', 'tecla', 'workable', 'workday'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];

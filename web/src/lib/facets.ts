@@ -87,6 +87,7 @@ const SOURCE: FacetOption[] = options(SOURCE_VALUES, {
   telegram: 'Telegram', greenhouse: 'Greenhouse', smartrecruiters: 'SmartRecruiters',
   bamboohr: 'BambooHR', successfactors: 'SuccessFactors',
   workatastartup: 'Work at a Startup', remoteok: 'RemoteOK', arc: 'Arc',
+  jobstash: 'JobStash', globalpayments: 'Global Payments',
 });
 
 // The backend's `regions` reach vocabulary (enrich.RegionValues): one consistent

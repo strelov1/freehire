@@ -22,6 +22,19 @@ func (f fakeBoardlessSource) Fetch(context.Context, CompanyEntry) ([]Job, error)
 
 func (f fakeBoardlessSource) boardless() {}
 
+// fakeAggregatorSource is boardless (no board id) but aggregates many companies,
+// so it declares itself an aggregator and must stay in the source facet.
+type fakeAggregatorSource struct{ provider string }
+
+func (f fakeAggregatorSource) Provider() string { return f.provider }
+
+func (f fakeAggregatorSource) Fetch(context.Context, CompanyEntry) ([]Job, error) {
+	return nil, nil
+}
+
+func (f fakeAggregatorSource) boardless()  {}
+func (f fakeAggregatorSource) aggregator() {}
+
 func TestRegIndexesByProvider(t *testing.T) {
 	r := reg(fakeSource{"greenhouse"}, fakeSource{"lever"})
 
@@ -63,5 +76,23 @@ func TestFilterableProviders(t *testing.T) {
 	}
 	if !slices.IsSorted(got) {
 		t.Errorf("FilterableProviders() not sorted: %v", got)
+	}
+}
+
+func TestFilterableProvidersKeepsAggregatorsDropsSingleCompany(t *testing.T) {
+	got := filterableProviders(reg(
+		fakeSource{"greenhouse"},         // board-based → listed
+		fakeBoardlessSource{"ozon"},      // single-company boardless → excluded
+		fakeAggregatorSource{"jobstash"}, // aggregator boardless → listed
+	))
+
+	if !slices.Contains(got, "greenhouse") {
+		t.Errorf("filterableProviders() missing board-based %q", "greenhouse")
+	}
+	if !slices.Contains(got, "jobstash") {
+		t.Errorf("filterableProviders() should list aggregator %q", "jobstash")
+	}
+	if slices.Contains(got, "ozon") {
+		t.Errorf("filterableProviders() should exclude single-company boardless %q", "ozon")
 	}
 }
