@@ -157,6 +157,23 @@ func (workdayProber) probe(ctx context.Context, c httpClient, boardID string) (s
 	return tenant, n, nil
 }
 
+// seedMapper converts a provider's raw seed token into its canonical board id. Providers
+// whose seed token already IS the board id (greenhouse/lever/ashby/bamboohr) do not
+// implement it. Mirrors the optional-marker idiom of sources.boardless.
+type seedMapper interface {
+	boardID(seedToken string) string
+}
+
+// boardID turns a "tenant|dc|site" seed token into "<tenant>.<dc>.myworkdayjobs.com/<site>".
+// A token that is not exactly three non-empty parts is returned unchanged (probe drops it).
+func (workdayProber) boardID(seedToken string) string {
+	parts := strings.Split(seedToken, "|")
+	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
+		return seedToken
+	}
+	return fmt.Sprintf("%s.%s.myworkdayjobs.com/%s", parts[0], parts[1], parts[2])
+}
+
 // probers maps a provider key to its prober. Adding an ATS is one entry here plus the
 // prober type — the same shape as sources.All.
 var probers = map[string]prober{
@@ -164,4 +181,5 @@ var probers = map[string]prober{
 	"lever":      leverProber{},
 	"ashby":      ashbyProber{},
 	"bamboohr":   bamboohrProber{},
+	"workday":    workdayProber{},
 }

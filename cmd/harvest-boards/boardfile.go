@@ -14,6 +14,20 @@ type entry struct {
 	Board   string `yaml:"board"`
 }
 
+// mapSeeds converts raw seed tokens into canonical board ids using the prober's seedMapper,
+// or returns them unchanged when the provider's token already is its board id.
+func mapSeeds(p prober, seed []string) []string {
+	m, ok := p.(seedMapper)
+	if !ok {
+		return seed
+	}
+	out := make([]string, len(seed))
+	for i, s := range seed {
+		out[i] = m.boardID(s)
+	}
+	return out
+}
+
 // newBoards returns the seed slugs not already present in existing, preserving seed order,
 // de-duplicating within the seed, and matching case-sensitively (Ashby slugs are
 // case-sensitive, and the other platforms' tokens are lowercase already).

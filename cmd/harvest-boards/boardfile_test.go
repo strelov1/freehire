@@ -21,6 +21,29 @@ func TestNewBoards(t *testing.T) {
 	}
 }
 
+func TestWorkdayBoardID(t *testing.T) {
+	w := workdayProber{}
+	if got := w.boardID("aig|wd1|early_careers"); got != "aig.wd1.myworkdayjobs.com/early_careers" {
+		t.Errorf("got %q", got)
+	}
+	// not three parts => unchanged
+	if got := w.boardID("already.wd1.myworkdayjobs.com/Site"); got != "already.wd1.myworkdayjobs.com/Site" {
+		t.Errorf("passthrough got %q", got)
+	}
+}
+
+func TestMapSeeds(t *testing.T) {
+	// a non-mapping prober leaves the seed unchanged
+	if got := mapSeeds(greenhouseProber{}, []string{"a", "b"}); got[0] != "a" || got[1] != "b" {
+		t.Errorf("identity got %v", got)
+	}
+	// workday maps tenant|dc|site -> host/site
+	got := mapSeeds(workdayProber{}, []string{"aig|wd1|early_careers"})
+	if got[0] != "aig.wd1.myworkdayjobs.com/early_careers" {
+		t.Errorf("workday got %v", got)
+	}
+}
+
 func TestAppendEntries(t *testing.T) {
 	existing := "- company: Acme\n  board: acme\n"
 	out, err := appendEntries(existing, []entry{

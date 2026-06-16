@@ -55,7 +55,7 @@ func run() int {
 		existing[e.Board] = true
 	}
 
-	candidates := newBoards(seed, existing)
+	candidates := newBoards(mapSeeds(p, seed), existing)
 	log.Printf("harvest-boards: %s seed=%d existing=%d new-candidates=%d",
 		provider, len(seed), len(existing), len(candidates))
 
