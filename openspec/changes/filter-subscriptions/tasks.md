@@ -40,5 +40,5 @@
 
 ## 8. Verification & ops
 
-- [ ] 8.1 `go build ./... && go vet ./... && go test ./...` green; recompile integration tests after handler/constructor changes
-- [ ] 8.2 Document deploy steps in the change (set env, `setWebhook` with secret, add `notify` cron with flock, no reindex)
+- [x] 8.1 `go build` / `go vet` / `go test ./...` green; gofmt clean across the diff; new db + handler integration tests green; svelte-check clean
+- [x] 8.2 Documented deploy steps in design.md Migration Plan (bot @free_hire_bot, env vars, `setWebhook` curl, flock cron, manual 0022, no reindex, token rotation)

@@ -99,16 +99,32 @@ this document is the OpenSpec-scoped distillation.
 
 ## Migration Plan
 
-1. Apply migration `0022` (verify the number at implementation — local `main`
-   advances live and may take `0022`).
-2. Add the `notify` binary to the Dockerfile build + COPY list.
-3. Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` in the deploy env.
-4. Register the bot webhook (`setWebhook` with `secret_token`).
-5. Add the `notify` cron entry (flock, per the existing cron convention).
-6. No Meili reindex required.
+The bot is **@free_hire_bot** (created in @BotFather; one dedicated bot for
+freehire, not shared with telagon's analytics bot). Secrets live in the deploy
+env only (never in the repo).
 
-Rollback: stop the `notify` cron and unset the webhook; the new tables and
-endpoints are additive and inert without the worker/config.
+1. Apply migration `0022_filter_subscriptions.sql` manually against prod
+   (`make psql` / the documented prod migrate step — no versioned runner yet).
+2. Deploy the image: the `notify` binary is already in the Dockerfile build + COPY
+   list. No Meili reindex required (`created_at` is already indexed).
+3. Set the deploy env (prod `.env` / freehire-ops secrets):
+   - `TELEGRAM_BOT_TOKEN` — the @free_hire_bot token.
+   - `TELEGRAM_BOT_USERNAME=free_hire_bot`.
+   - `TELEGRAM_WEBHOOK_SECRET` — a random 32-byte hex string.
+4. Register the webhook (once), pointing at the public API origin:
+   ```
+   curl -F "url=https://<api-origin>/api/v1/telegram/webhook" \
+        -F "secret_token=$TELEGRAM_WEBHOOK_SECRET" \
+        https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook
+   ```
+5. Add the `notify` cron entry (e.g. every 15–30 min) under flock, as the other
+   workers run: `flock -n /tmp/notify.lock docker compose run --rm app /app/notify`.
+
+Rollback: stop the `notify` cron and `deleteWebhook`; the new tables and endpoints
+are additive and inert without the worker/config.
+
+Token hygiene: a leaked/transcript-exposed token should be rotated in @BotFather
+(`/revoke`), then `TELEGRAM_BOT_TOKEN` updated and the webhook re-registered.
 
 ## Open Questions
 
