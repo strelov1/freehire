@@ -29,4 +29,4 @@
 ## 6. Verify and migrate
 
 - [x] 6.1 `go build ./... && go vet ./... && go test ./...` all green; `gofmt -l` clean on changed files.
-- [ ] 6.2 Deploy tail (documented for the operator): rebuild/deploy the app image from origin/main, run `cmd/backfill-derive` once, then a single `reindex`; spot-check that a previously LLM-only skill/region no longer appears in the served facet.
+- [x] 6.2 Deploy tail (documented for the operator): rebuild/deploy the app image from origin/main, run `cmd/backfill-derive` once, then a single `reindex`; spot-check that a previously LLM-only skill/region no longer appears in the served facet.

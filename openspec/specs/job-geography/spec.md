@@ -82,37 +82,17 @@ empty. A value outside these vocabularies SHALL never be emitted.
   every emitted country is a valid ISO 3166-1 alpha-2 code, and the work_mode is
   a member of the work-mode vocabulary or empty
 
-### Requirement: Job geography is stored on jobs and unioned with enrichment geography at read time
-
-The system SHALL store the parsed geography in `jobs` columns `countries` and
-`regions` (text arrays, default empty) and `work_mode` (text, default empty), as
-source facts — distinct from the AI-derived `enrichment` payload. The public read
-model SHALL compute a job's geography as the union of these columns with the
-`enrichment.regions`/`enrichment.countries` the enrichment worker produced,
-deduplicated. The union SHALL be computed at read time; it SHALL NOT be
-materialized into the database, so the ingest and enrichment write paths stay
-decoupled.
-
-#### Scenario: Ingest-derived and enrichment-derived geography are unioned
-
-- **WHEN** a job has `regions=[eu]` from its parsed location and
-  `enrichment.regions=[emea]` from enrichment, and is read
-- **THEN** its geography regions are the deduplicated union `[eu, emea]`
-
-#### Scenario: A job with only parsed geography still reports it
-
-- **WHEN** an unenriched job has `regions=[us]` from its parsed location and is read
-- **THEN** its geography regions are `[us]`
-
 ### Requirement: Work mode is resolved by precedence across sources
 
-`work_mode` is a scalar, so it SHALL be resolved by precedence, not union. At
-ingest the adapter's STRUCTURED work mode (a workplace-type enum or explicit
-remote flag from the ATS) SHALL take precedence over the parser's free-text
-heuristic, and the result SHALL be stored in `jobs.work_mode`. At read time the
-LLM-derived `enrichment.work_mode` SHALL take precedence over the stored
-`jobs.work_mode`, since the LLM reads the whole description. The net order, most
-authoritative first, is LLM, then adapter-structured, then parsed location.
+`work_mode` is a scalar, so it SHALL be resolved by precedence, not union. It is
+derived at ingest into `jobs.work_mode` from three sources, most authoritative
+first: (1) the adapter's STRUCTURED work mode (a workplace-type enum or explicit
+remote flag from the ATS), (2) a marker in the parsed **location** string, and
+(3) a conservative phrase match in the job **description**. A lower source fills
+`work_mode` only when every higher source left it empty; the parser never guesses,
+so a description with no clear work-arrangement phrase yields nothing. At read time
+the served `work_mode` SHALL be the stored `jobs.work_mode` only; the LLM-derived
+`enrichment.work_mode` SHALL NOT override it.
 
 #### Scenario: Structured adapter work mode beats the parser
 
@@ -120,52 +100,45 @@ authoritative first, is LLM, then adapter-structured, then parsed location.
   location text would parse as `remote`
 - **THEN** the stored `jobs.work_mode` is `hybrid`
 
-#### Scenario: The LLM work mode beats the ingest value at read time
+#### Scenario: The location marker beats the description
+
+- **WHEN** a job has no structured work mode, a location that parses to `remote`,
+  and a description that mentions a hybrid arrangement
+- **THEN** the derived `work_mode` is `remote` (location wins; description only fills)
+
+#### Scenario: The description fills when location is silent
+
+- **WHEN** a job has no structured work mode, a location with no work-mode marker
+  (e.g. a bare city), and a description stating "this is a fully remote position"
+- **THEN** the derived `work_mode` is `remote`
+
+#### Scenario: A noisy description token does not trigger a false positive
+
+- **WHEN** a job's description contains incidental tokens like "distributed
+  systems" or "hybrid cloud" but no actual work-arrangement phrase, and no
+  structured or location signal
+- **THEN** the derived `work_mode` is empty
+
+#### Scenario: The ingest value is served regardless of the LLM
 
 - **WHEN** a job has `jobs.work_mode=onsite` from ingest and
   `enrichment.work_mode=remote` from the LLM, and is read
-- **THEN** the resolved top-level `work_mode` is `remote`
-
-#### Scenario: The ingest value fills when the LLM did not state work mode
-
-- **WHEN** a job has `jobs.work_mode=hybrid` and no enrichment work_mode, and is read
-- **THEN** the resolved top-level `work_mode` is `hybrid`
+- **THEN** the resolved top-level `work_mode` is `onsite`
 
 ### Requirement: The public job object exposes geography and work mode as a top-level facet
 
 The public job object SHALL expose geography as top-level `regions` and
-`countries` fields carrying the union, and `work_mode` as a top-level field
-carrying the resolved value, each reported exactly once. The
-`enrichment.regions`, `enrichment.countries`, and `enrichment.work_mode` fields
-SHALL NOT additionally appear as independent fields in the served object; their
-values fold into the top-level facet. The stored `enrichment` JSONB SHALL be left
-untouched (the enrichment worker's data is preserved).
+`countries` fields carrying the deterministic (jobs-column) values, and
+`work_mode` as a top-level field carrying the deterministic value, each reported
+exactly once. The `enrichment.regions`, `enrichment.countries`, and
+`enrichment.work_mode` fields SHALL NOT additionally appear as independent fields
+in the served object. The stored `enrichment` JSONB SHALL be left untouched (the
+enrichment worker's data is preserved for future discovery use).
 
 #### Scenario: Geography and work mode appear once, at the top level
 
 - **WHEN** a client reads a job whose enrichment contained `regions` and `work_mode`
 - **THEN** the returned object carries top-level `regions`/`countries`/`work_mode`
-  and does not separately repeat those fields under `enrichment`
-
-### Requirement: Existing jobs are backfilled with parsed geography
-
-The system SHALL provide a run-once command that parses the stored `location` of
-every existing job and writes the resulting `countries`/`regions`/`work_mode`, so
-the location-derived facets are populated for rows that predate this change,
-including closed jobs that never re-crawl. The backfill SHALL be idempotent —
-re-running it converges to the same result. Because the original structured ATS
-signal is not available at backfill time, the backfill SHALL fill `work_mode` from
-the parsed location only when the row's `work_mode` is empty, preserving any value
-already set (a later re-crawl refreshes it with the structured value).
-
-#### Scenario: Backfill populates an existing row from its location
-
-- **WHEN** the backfill runs over a job whose `location` is `Remote - USA` and
-  whose geography columns are empty
-- **THEN** the job's `countries` becomes `[us]` and its `regions` include `us`
-
-#### Scenario: Backfill is idempotent
-
-- **WHEN** the backfill is run twice over the same jobs
-- **THEN** the second run produces the same geography as the first
+  from the jobs columns and does not separately repeat those fields under
+  `enrichment`
 
