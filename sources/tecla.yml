@@ -1,0 +1,4 @@
+# tecla marketplace. Boardless: one global public feed (api.tecla.io/getPublicJobs), so the
+# entry carries no board, and each job's company comes from the posting, not this placeholder.
+- company: Tecla
+  provider: tecla

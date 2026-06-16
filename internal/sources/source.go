@@ -94,6 +94,8 @@ func All(c HTTPClient) map[string]Source {
 		NewBreezy(c),
 		NewJoin(c),
 		NewGlobalPayments(c),
+		// Marketplace aggregator (boardless): one global feed, company per posting.
+		NewTecla(c),
 		// International single-company adapters (boardless).
 		NewUber(c),
 		NewAmazon(c),
