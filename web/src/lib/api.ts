@@ -375,6 +375,16 @@ export function createApi(
     return res.data;
   }
 
+  /** Pause or resume a subscription. */
+  async function setSubscriptionActive(id: number, active: boolean): Promise<Subscription> {
+    const res = await request<{ data: Subscription }>(`/api/v1/me/subscriptions/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active }),
+    });
+    return res.data;
+  }
+
   /** Unsubscribe by subscription id. */
   async function deleteSubscription(id: number): Promise<void> {
     await call(`/api/v1/me/subscriptions/${id}`, { method: 'DELETE' });
@@ -503,6 +513,7 @@ export function createApi(
     deleteSavedSearch,
     listSubscriptions,
     createSubscription,
+    setSubscriptionActive,
     deleteSubscription,
     telegramStatus,
     telegramLink,
@@ -559,6 +570,7 @@ export const {
   deleteSavedSearch,
   listSubscriptions,
   createSubscription,
+  setSubscriptionActive,
   deleteSubscription,
   telegramStatus,
   telegramLink,

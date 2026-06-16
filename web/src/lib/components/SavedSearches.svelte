@@ -225,9 +225,15 @@
       <p class="text-sm text-destructive">{error}</p>
     {/if}
 
-    <!-- Telegram notifications for the currently-selected saved set. Shown only
-         when the feature is configured server-side and the current filters match a
-         saved set (so there is a concrete subscription target). -->
+    <!-- Telegram notifications. The toggle needs a concrete saved set to target;
+         when none is active, a one-line hint advertises the feature so it is
+         discoverable from the filters panel (not only after selecting a set). -->
+    {#if telegram.enabled && !naming && activeId == null}
+      <p class="flex items-center gap-1.5 border-t border-border pt-2 text-xs text-muted-foreground">
+        <Bell class="size-3.5" aria-hidden="true" />
+        Save a filter to get its new jobs in Telegram.
+      </p>
+    {/if}
     {#if telegram.enabled && activeId != null && !naming}
       <div class="flex flex-col gap-1 border-t border-border pt-2">
         {#if telegram.linked}

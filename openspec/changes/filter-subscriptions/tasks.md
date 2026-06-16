@@ -37,6 +37,7 @@
 ## 7. SPA
 
 - [x] 7.1 Added a "🔔 Notify on Telegram" toggle to the saved-search picker (shown when the current filters match a saved set), with connect-then-recheck deep-link flow when unlinked; api.ts methods + notifications store; svelte-check clean (0 errors)
+- [x] 7.2 Discoverability: `/my/notifications` management page (connect/disconnect Telegram + pause/resume/remove subscriptions) linked from the user menu; a CTA hint in the filters panel when no saved set is active; a homepage section. setSubscriptionActive api+store method added. svelte-check clean
 
 ## 8. Verification & ops
 

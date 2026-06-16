@@ -11,6 +11,7 @@ import { browser } from '$app/environment';
 import {
   listSubscriptions,
   createSubscription,
+  setSubscriptionActive,
   deleteSubscription,
   telegramStatus,
   telegramLink,
@@ -61,6 +62,12 @@ class Notifications {
   async subscribe(savedSearchId: number): Promise<void> {
     const sub = await createSubscription(savedSearchId);
     this.#subs = [sub, ...this.#subs];
+  }
+
+  /** Pause/resume a subscription in place. */
+  async setActive(id: number, active: boolean): Promise<void> {
+    const row = await setSubscriptionActive(id, active);
+    this.#subs = this.#subs.map((s) => (s.id === id ? { ...s, active: row.active } : s));
   }
 
   /** Unsubscribe and drop it from the list. */

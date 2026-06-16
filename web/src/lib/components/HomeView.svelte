@@ -223,6 +223,25 @@
     </figure>
   </section>
 
+  <!-- Notifications — save a filter, get matching jobs pushed to Telegram. -->
+  <section class="border-t border-border py-16 sm:py-20">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// stay in the loop</p>
+    <div class="mt-6 max-w-2xl">
+      <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">New jobs, straight to Telegram.</h2>
+      <p class="mt-5 leading-relaxed text-muted-foreground">
+        Save a search — your stack, seniority, region, salary — and subscribe to it. When a matching job is
+        added, freehire sends it to you on Telegram as a tidy digest. No inbox clutter, no checking back:
+        connect once from
+        <a href="/my/notifications" class="font-medium text-foreground underline-offset-4 hover:underline">Notifications</a>
+        and the openings come to you.
+      </p>
+      <div class="mt-8 flex flex-wrap gap-3">
+        <Button href="/jobs" variant="primary" size="lg">Find &amp; save a filter</Button>
+        <Button href="/my/notifications" variant="ghost" size="lg">Notification settings</Button>
+      </div>
+    </div>
+  </section>
+
   <!-- CLI / agents — the same API from the terminal. Mirrors the open-source
        section's two-column copy + terminal figure. -->
   <section class="border-t border-border py-16 sm:py-20">
