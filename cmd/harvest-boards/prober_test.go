@@ -49,3 +49,60 @@ func TestGreenhouseProbe(t *testing.T) {
 		}
 	}
 }
+
+// The lever/ashby/bamboohr provers carry no company name in their payloads, so a live
+// board's name falls back to its slug; an empty or absent board is a ("",0,nil) skip.
+func TestSlugFallbackProbers(t *testing.T) {
+	cases := []struct {
+		name   string
+		p      prober
+		getter fakeGetter
+		live   string // a slug that returns jobs
+		empty  string // a slug that returns an empty board
+	}{
+		{
+			name: "lever",
+			p:    leverProber{},
+			getter: fakeGetter{
+				"https://api.lever.co/v0/postings/acme?mode=json":  `[{"id":"a"},{"id":"b"},{"id":"c"}]`,
+				"https://api.lever.co/v0/postings/empty?mode=json": `[]`,
+			},
+			live: "acme", empty: "empty",
+		},
+		{
+			name: "ashby",
+			p:    ashbyProber{},
+			getter: fakeGetter{
+				"https://api.ashbyhq.com/posting-api/job-board/acme":  `{"jobs":[{"id":"a"},{"id":"b"}]}`,
+				"https://api.ashbyhq.com/posting-api/job-board/empty": `{"jobs":[]}`,
+			},
+			live: "acme", empty: "empty",
+		},
+		{
+			name: "bamboohr",
+			p:    bamboohrProber{},
+			getter: fakeGetter{
+				"https://acme.bamboohr.com/careers/list":  `{"result":[{"id":"1"}]}`,
+				"https://empty.bamboohr.com/careers/list": `{"result":[]}`,
+			},
+			live: "acme", empty: "empty",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Live board: name == slug, jobs > 0.
+			name, n, err := tc.p.probe(context.Background(), tc.getter, tc.live)
+			if err != nil || name != tc.live || n == 0 {
+				t.Errorf("live: got (%q,%d,%v), want (%q,>0,nil)", name, n, err, tc.live)
+			}
+			// Empty board.
+			if name, n, err := tc.p.probe(context.Background(), tc.getter, tc.empty); err != nil || name != "" || n != 0 {
+				t.Errorf("empty: got (%q,%d,%v), want (\"\",0,nil)", name, n, err)
+			}
+			// Absent board (getter error) => skip.
+			if name, n, err := tc.p.probe(context.Background(), tc.getter, "gone"); err != nil || name != "" || n != 0 {
+				t.Errorf("gone: got (%q,%d,%v), want (\"\",0,nil)", name, n, err)
+			}
+		})
+	}
+}

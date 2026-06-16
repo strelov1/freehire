@@ -55,8 +55,68 @@ func (greenhouseProber) probe(ctx context.Context, c sources.JSONGetter, slug st
 	return name, len(jr.Jobs), nil
 }
 
+// leverProber probes the Lever postings API. The JSON-mode endpoint returns a bare array
+// of live postings, so a non-empty array is a live board. Lever exposes no company name, so
+// the name falls back to the slug.
+type leverProber struct{}
+
+func (leverProber) probe(ctx context.Context, c sources.JSONGetter, slug string) (string, int, error) {
+	var postings []struct {
+		ID string `json:"id"`
+	}
+	if err := c.GetJSON(ctx, fmt.Sprintf("https://api.lever.co/v0/postings/%s?mode=json", slug), &postings); err != nil {
+		return "", 0, nil
+	}
+	if len(postings) == 0 {
+		return "", 0, nil
+	}
+	return slug, len(postings), nil
+}
+
+// ashbyProber probes the Ashby public job-board API. The list endpoint returns the live
+// postings, so a non-empty list is a live board; the name falls back to the (case-sensitive)
+// slug, which Ashby itself uses as the board identity.
+type ashbyProber struct{}
+
+func (ashbyProber) probe(ctx context.Context, c sources.JSONGetter, slug string) (string, int, error) {
+	var resp struct {
+		Jobs []struct {
+			ID string `json:"id"`
+		} `json:"jobs"`
+	}
+	if err := c.GetJSON(ctx, fmt.Sprintf("https://api.ashbyhq.com/posting-api/job-board/%s", slug), &resp); err != nil {
+		return "", 0, nil
+	}
+	if len(resp.Jobs) == 0 {
+		return "", 0, nil
+	}
+	return slug, len(resp.Jobs), nil
+}
+
+// bamboohrProber probes the BambooHR per-subdomain careers list. A non-empty result is a
+// live board; the name falls back to the slug (the subdomain), as the list carries none.
+type bamboohrProber struct{}
+
+func (bamboohrProber) probe(ctx context.Context, c sources.JSONGetter, slug string) (string, int, error) {
+	var list struct {
+		Result []struct {
+			ID string `json:"id"`
+		} `json:"result"`
+	}
+	if err := c.GetJSON(ctx, fmt.Sprintf("https://%s.bamboohr.com/careers/list", slug), &list); err != nil {
+		return "", 0, nil
+	}
+	if len(list.Result) == 0 {
+		return "", 0, nil
+	}
+	return slug, len(list.Result), nil
+}
+
 // probers maps a provider key to its prober. Adding an ATS is one entry here plus the
 // prober type — the same shape as sources.All.
 var probers = map[string]prober{
 	"greenhouse": greenhouseProber{},
+	"lever":      leverProber{},
+	"ashby":      ashbyProber{},
+	"bamboohr":   bamboohrProber{},
 }
