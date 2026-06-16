@@ -24,6 +24,14 @@ type Querier interface {
 	// lease predicate reclaims entries whose worker died (stale claimed_at), so no
 	// separate reaper process is needed.
 	ClaimEnrichmentBatch(ctx context.Context, arg ClaimEnrichmentBatchParams) ([]ClaimEnrichmentBatchRow, error)
+	// Lease a batch of pending, live matches for active subscriptions by stamping
+	// claimed_at, oldest-claimable first, ordered by subscription so the worker can
+	// group a subscription's matches into one digest. FOR UPDATE OF m locks only match
+	// rows; SKIP LOCKED lets overlapping passes take disjoint rows so a digest is sent
+	// at most once; the lease predicate reclaims rows whose sender died (stale
+	// claimed_at), so no separate reaper is needed. The digest is sent OUTSIDE this
+	// claim's transaction, so no network call is held inside a row lock.
+	ClaimSubscriptionMatches(ctx context.Context, arg ClaimSubscriptionMatchesParams) ([]ClaimSubscriptionMatchesRow, error)
 	// Claim a batch of pending posts by stamping claimed_at. SKIP LOCKED lets
 	// concurrent workers take disjoint rows; the lease predicate reclaims posts whose
 	// worker died (stale claimed_at), so no separate reaper process is needed.
@@ -72,6 +80,12 @@ type Querier interface {
 	// unique index on lower(url) WHERE status='pending' rejects a second pending submission of
 	// the same URL (the repository maps that unique violation to a 409).
 	CreateSubmission(ctx context.Context, arg CreateSubmissionParams) (JobSubmission, error)
+	// Subscribe one of the caller's saved searches to a delivery channel. The SELECT
+	// from saved_searches enforces ownership in the same statement: a saved_search_id
+	// the caller does not own yields no row (sqlc :one returns ErrNoRows, mapped to
+	// 404). A second subscription for the same (saved_search, channel) violates the
+	// UNIQUE constraint (surfaced as a 409). Returns the created row.
+	CreateSubscription(ctx context.Context, arg CreateSubscriptionParams) (Subscription, error)
 	// Register a new account. email is stored as given (the handler lowercases it);
 	// the unique index on lower(email) rejects duplicates regardless of case. role is
 	// returned so the new account's wire shape carries it (always 'user' at creation).
@@ -91,6 +105,12 @@ type Querier interface {
 	// Returns the affected row count: 0 means it does not exist or is not the caller's
 	// (the handler maps that to 404).
 	DeleteSavedSearch(ctx context.Context, arg DeleteSavedSearchParams) (int64, error)
+	// Unsubscribe, scoped to its owner. Returns the affected row count: 0 means it
+	// does not exist or is not the caller's (the handler maps that to 404). The match
+	// ledger cascades away with the subscription.
+	DeleteSubscription(ctx context.Context, arg DeleteSubscriptionParams) (int64, error)
+	// Unlink Telegram. Returns the affected row count: 0 means there was no link.
+	DeleteTelegramLink(ctx context.Context, userID int64) (int64, error)
 	// Transactional-outbox enqueue for the ingest write path: queue this one job for
 	// enrichment, gated on the same condition the backfill uses (unenriched or below the
 	// target schema version), so an already-enriched job is not re-queued. Idempotent via
@@ -111,6 +131,8 @@ type Querier interface {
 	// columns over the wire on every silent view. GetJobBySlug (SELECT *) stays for the
 	// public detail handler that renders the whole row.
 	GetJobIDBySlug(ctx context.Context, publicSlug string) (int64, error)
+	// The display fields for the jobs in a digest, freshest first.
+	GetJobsForDigest(ctx context.Context, jobIds []int64) ([]GetJobsForDigestRow, error)
 	// Load a single report by id for the review path. The resolve/dismiss flow guards the
 	// status in the service; the Mark* queries are additionally scoped to status='pending' as
 	// defense-in-depth against a concurrent second decision.
@@ -119,6 +141,12 @@ type Querier interface {
 	// status in the service; the Mark* queries are additionally scoped to status='pending' as
 	// defense-in-depth against a concurrent second decision.
 	GetSubmission(ctx context.Context, id int64) (JobSubmission, error)
+	// The delivery context for one subscription: channel + destination, the saved
+	// search name (for the digest heading), and the user's linked Telegram chat (NULL
+	// when unlinked → the worker soft-skips telegram delivery rather than failing it).
+	GetSubscriptionForDelivery(ctx context.Context, id int64) (GetSubscriptionForDeliveryRow, error)
+	// The caller's linked Telegram chat (link-status endpoint + delivery resolution).
+	GetTelegramLink(ctx context.Context, userID int64) (TelegramLink, error)
 	// Login lookup. Case-insensitive on email; returns password_hash so the handler
 	// can verify the password (and reject accounts that have none). role feeds the
 	// post-login wire shape.
@@ -139,6 +167,11 @@ type Querier interface {
 	InsertTelegramPost(ctx context.Context, arg InsertTelegramPostParams) (int64, error)
 	// A user's API keys, newest first. Metadata only — never the token_hash.
 	ListAPIKeysByUser(ctx context.Context, userID int64) ([]ListAPIKeysByUserRow, error)
+	// Every active subscription with the data the matching worker needs: the saved
+	// search query to translate into a filter, plus identity/channel for fan-out. The
+	// worker groups these by canonical(query) so each distinct filter hits the search
+	// index once regardless of how many subscriptions share it.
+	ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubscriptionsRow, error)
 	// Catalog page: companies with their job counts. The job count is computed on
 	// the fly (no denormalized counter yet). This is the one acknowledged place a
 	// join to jobs is acceptable; LEFT JOIN keeps companies with zero jobs visible.
@@ -167,6 +200,9 @@ type Querier interface {
 	// LEFT JOIN the minted job (present only once approved) to surface its public_slug,
 	// so the UI can link an approved submission straight to its live vacancy page.
 	ListSubmissionsByUser(ctx context.Context, submittedBy int64) ([]ListSubmissionsByUserRow, error)
+	// The caller's subscriptions joined to each saved search's display name and query,
+	// newest first — the "My subscriptions" view.
+	ListSubscriptions(ctx context.Context, userID int64) ([]ListSubscriptionsRow, error)
 	// A user's job interactions joined with the job rows, most recently touched
 	// first (GREATEST ignores NULLs; viewed_at is always set). filter narrows to
 	// viewed-only/saved/applied subsets; 'all' is every interaction, 'viewed' is
@@ -189,6 +225,9 @@ type Querier interface {
 	// two-strike grace that absorbs a transient death signal. Returns the new strike
 	// count and closed_at so the worker can log the outcome.
 	MarkLivenessExpired(ctx context.Context, arg MarkLivenessExpiredParams) (MarkLivenessExpiredRow, error)
+	// Stamp notified_at on the jobs that were just delivered for a subscription, so
+	// they leave the pending queue and are never sent again.
+	MarkMatchesNotified(ctx context.Context, arg MarkMatchesNotifiedParams) (int64, error)
 	// Mark a pending report dismissed with an optional reason, recording the deciding
 	// moderator. Scoped to status='pending' (see MarkReportResolved). The job is not touched.
 	MarkReportDismissed(ctx context.Context, arg MarkReportDismissedParams) (JobReport, error)
@@ -215,11 +254,25 @@ type Querier interface {
 	// the first view creates the row, a repeat view touches viewed_at. Returns the
 	// row so the caller learns the current applied_at in the same round-trip.
 	RecordJobView(ctx context.Context, arg RecordJobViewParams) (UserJob, error)
+	// Count a failed delivery for a subscription's claimed jobs: bump attempts, record
+	// the error, and dead-letter (set failed_at) once attempts reach the max. claimed_at
+	// is left in place — its expiry gates the retry to a later pass and doubles as the
+	// crash reaper, mirroring enrichment_outbox.
+	RecordMatchDeliveryFailure(ctx context.Context, arg RecordMatchDeliveryFailureParams) error
+	// Record that a job matched a subscription. The PK (subscription_id, job_id) makes
+	// this idempotent — re-scanning an already-recorded match is a no-op — so the
+	// worker can re-scan recent jobs freely without ever delivering twice. Returns the
+	// affected row count (1 = newly recorded, 0 = already known).
+	RecordSubscriptionMatch(ctx context.Context, arg RecordSubscriptionMatchParams) (int64, error)
 	// Count a failed attempt: bump attempts, record the error, and dead-letter (set
 	// failed_at) once attempts reach the max. The lease (claimed_at) is intentionally
 	// left in place — its expiry gates the retry to a later run and doubles as the
 	// crash reaper, so a failed post is never reprocessed within the same run.
 	RecordTelegramPostFailure(ctx context.Context, arg RecordTelegramPostFailureParams) (RecordTelegramPostFailureRow, error)
+	// Release the lease on a subscription's claimed jobs without counting an attempt,
+	// so a soft-skipped delivery (e.g. Telegram not yet linked) is retried promptly on
+	// a later pass instead of waiting out the lease.
+	ReleaseMatchClaim(ctx context.Context, arg ReleaseMatchClaimParams) error
 	// A healthy (not-expired) probe clears any accumulated strikes, so only CONSECUTIVE
 	// expired probes can close a job. Guarded to the non-zero case so probing an
 	// already-clean job does not churn the row.
@@ -237,6 +290,9 @@ type Querier interface {
 	// and the provenance stamp, touching no raw source field. Kept separate from
 	// UpsertJob (the ingest full-upsert path) so ingest and enrichment stay decoupled.
 	SetJobEnrichment(ctx context.Context, arg SetJobEnrichmentParams) error
+	// Pause/resume a subscription, scoped to its owner. No matching owner-scoped row
+	// returns no row (the handler maps that to 404).
+	SetSubscriptionActive(ctx context.Context, arg SetSubscriptionActiveParams) (Subscription, error)
 	// Rebuild the companies catalogue from jobs. The companies table is derivable
 	// from jobs (slug = company_slug, name = company), so after a slug-builder change
 	// re-keys jobs, this re-keys companies to match. DISTINCT ON collapses a slug's
@@ -313,6 +369,9 @@ type Querier interface {
 	// reopens a previously closed posting (closed_at = NULL) since the moderator is
 	// re-asserting it.
 	UpsertManualJob(ctx context.Context, arg UpsertManualJobParams) (Job, error)
+	// Link (or relink) a user's Telegram chat, captured from the inbound /start. One
+	// row per user; relinking from a different chat overwrites the chat_id.
+	UpsertTelegramLink(ctx context.Context, arg UpsertTelegramLinkParams) error
 }
 
 var _ Querier = (*Queries)(nil)

@@ -112,6 +112,34 @@ type SavedSearch struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
+type Subscription struct {
+	ID            int64              `json:"id"`
+	UserID        int64              `json:"user_id"`
+	SavedSearchID int64              `json:"saved_search_id"`
+	Channel       string             `json:"channel"`
+	Destination   pgtype.Text        `json:"destination"`
+	Active        bool               `json:"active"`
+	StartAt       pgtype.Timestamptz `json:"start_at"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
+type SubscriptionMatch struct {
+	SubscriptionID int64              `json:"subscription_id"`
+	JobID          int64              `json:"job_id"`
+	MatchedAt      pgtype.Timestamptz `json:"matched_at"`
+	NotifiedAt     pgtype.Timestamptz `json:"notified_at"`
+	ClaimedAt      pgtype.Timestamptz `json:"claimed_at"`
+	Attempts       int32              `json:"attempts"`
+	FailedAt       pgtype.Timestamptz `json:"failed_at"`
+	LastError      string             `json:"last_error"`
+}
+
+type TelegramLink struct {
+	UserID   int64              `json:"user_id"`
+	ChatID   int64              `json:"chat_id"`
+	LinkedAt pgtype.Timestamptz `json:"linked_at"`
+}
+
 type TelegramPost struct {
 	Channel     string             `json:"channel"`
 	MsgID       int64              `json:"msg_id"`
