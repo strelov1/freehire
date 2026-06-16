@@ -70,7 +70,11 @@ WITH claimable AS (
       AND (m.claimed_at IS NULL
            OR m.claimed_at < now() - make_interval(secs => sqlc.arg(lease_seconds)::int))
       AND s.active
-    ORDER BY m.subscription_id
+    -- Grouped by subscription so the delivery loop can build one digest each.
+    -- The matched_at/job_id tiebreak makes a batch_size cut deterministic (oldest
+    -- matches land in this batch); a subscription with more than batch_size pending
+    -- matches splits across passes into multiple digests — an accepted rare case.
+    ORDER BY m.subscription_id, m.matched_at, m.job_id
     FOR UPDATE OF m SKIP LOCKED
     LIMIT sqlc.arg(batch_size)
 )

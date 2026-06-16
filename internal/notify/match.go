@@ -61,7 +61,11 @@ func (r *Runner) matchQuery(ctx context.Context, query string, subs []db.ListAct
 	for _, hit := range res.Hits {
 		created, ok := hitCreatedAt(hit)
 		if !ok {
-			continue // undated hit: cannot gate against start_at, skip rather than mis-notify
+			// Cannot gate against start_at without a date; skip rather than
+			// mis-notify (jobs.created_at is NOT NULL, so this should not happen —
+			// log it so a future index change that drops created_at is detectable).
+			log.Printf("notify: hit %d has no created_at, skipping", hit.ID)
+			continue
 		}
 		for _, s := range subs {
 			// Only jobs that became matchable at/after the subscription's cutoff.
