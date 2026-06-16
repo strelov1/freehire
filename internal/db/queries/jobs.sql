@@ -18,6 +18,19 @@ WHERE id > sqlc.arg(after_id)
 ORDER BY id
 LIMIT sqlc.arg(batch_size);
 
+-- name: ListJobsUpdatedAfter :many
+-- Incremental keyset scan for `reindex --since`: like ListJobsByIDAfter but only
+-- rows changed at or after the cutoff. Every write path (UpsertJob, the close
+-- sweeps, SetJobEnrichment, UpdateJobFacets) stamps updated_at = now(), so this
+-- captures new, re-crawled, closed, and re-enriched jobs — enough to bring an
+-- index current without re-pushing the whole table. Returns closed rows too, so
+-- the caller deletes a freshly-closed job from the index.
+SELECT *
+FROM jobs
+WHERE id > sqlc.arg(after_id) AND updated_at >= sqlc.arg(since)
+ORDER BY id
+LIMIT sqlc.arg(batch_size);
+
 -- name: GetJob :one
 SELECT *
 FROM jobs

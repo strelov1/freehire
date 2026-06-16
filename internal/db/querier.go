@@ -155,6 +155,13 @@ type Querier interface {
 	// concurrent inserts/updates (which shift posted_at ordering) cannot make the
 	// scan skip or repeat rows the way OFFSET pagination would.
 	ListJobsByIDAfter(ctx context.Context, arg ListJobsByIDAfterParams) ([]Job, error)
+	// Incremental keyset scan for `reindex --since`: like ListJobsByIDAfter but only
+	// rows changed at or after the cutoff. Every write path (UpsertJob, the close
+	// sweeps, SetJobEnrichment, UpdateJobFacets) stamps updated_at = now(), so this
+	// captures new, re-crawled, closed, and re-enriched jobs — enough to bring an
+	// index current without re-pushing the whole table. Returns closed rows too, so
+	// the caller deletes a freshly-closed job from the index.
+	ListJobsUpdatedAfter(ctx context.Context, arg ListJobsUpdatedAfterParams) ([]Job, error)
 	// The moderator review queue: every pending report, newest first, with the reporter's email
 	// and the reported job's slug and title so the moderator can judge it and link to it.
 	ListPendingReports(ctx context.Context) ([]ListPendingReportsRow, error)

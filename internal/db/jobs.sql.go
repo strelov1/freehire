@@ -394,6 +394,75 @@ func (q *Queries) ListJobsByIDAfter(ctx context.Context, arg ListJobsByIDAfterPa
 	return items, nil
 }
 
+const listJobsUpdatedAfter = `-- name: ListJobsUpdatedAfter :many
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by
+FROM jobs
+WHERE id > $1 AND updated_at >= $2
+ORDER BY id
+LIMIT $3
+`
+
+type ListJobsUpdatedAfterParams struct {
+	AfterID   int64              `json:"after_id"`
+	Since     pgtype.Timestamptz `json:"since"`
+	BatchSize int32              `json:"batch_size"`
+}
+
+// Incremental keyset scan for `reindex --since`: like ListJobsByIDAfter but only
+// rows changed at or after the cutoff. Every write path (UpsertJob, the close
+// sweeps, SetJobEnrichment, UpdateJobFacets) stamps updated_at = now(), so this
+// captures new, re-crawled, closed, and re-enriched jobs — enough to bring an
+// index current without re-pushing the whole table. Returns closed rows too, so
+// the caller deletes a freshly-closed job from the index.
+func (q *Queries) ListJobsUpdatedAfter(ctx context.Context, arg ListJobsUpdatedAfterParams) ([]Job, error) {
+	rows, err := q.db.Query(ctx, listJobsUpdatedAfter, arg.AfterID, arg.Since, arg.BatchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Job{}
+	for rows.Next() {
+		var i Job
+		if err := rows.Scan(
+			&i.ID,
+			&i.Source,
+			&i.ExternalID,
+			&i.URL,
+			&i.Title,
+			&i.Company,
+			&i.Location,
+			&i.Remote,
+			&i.Description,
+			&i.PostedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CompanySlug,
+			&i.Enrichment,
+			&i.EnrichedAt,
+			&i.EnrichmentVersion,
+			&i.PublicSlug,
+			&i.LastSeenAt,
+			&i.ClosedAt,
+			&i.Countries,
+			&i.Regions,
+			&i.WorkMode,
+			&i.LivenessStrikes,
+			&i.Skills,
+			&i.Seniority,
+			&i.Category,
+			&i.CreatedBy,
+			&i.UpdatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markLivenessExpired = `-- name: MarkLivenessExpired :one
 UPDATE jobs
 SET liveness_strikes = liveness_strikes + 1,
