@@ -1,9 +1,11 @@
 <script lang="ts">
+  import { Bell } from '@lucide/svelte';
   import { ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { canonicalQuery, filtersToParams, type FilterStore } from '$lib/filters.svelte';
   import { savedSearches } from '$lib/savedSearches.svelte';
+  import { notifications } from '$lib/notifications.svelte';
   import { Button, Input } from '$lib/ui';
 
   // The "My filters" control: select a saved set (applies its filters), save the
@@ -30,6 +32,15 @@
   // The user started from a saved set and then changed the filters.
   const dirty = $derived(base != null && canonicalQuery(base.query) !== current);
 
+  // Notification state for the currently-selected saved set: whether Telegram is
+  // configured + linked, and the subscription (if any) on the active set.
+  const telegram = $derived(notifications.telegram);
+  const activeSub = $derived(activeId != null ? notifications.forSavedSearch(activeId) : undefined);
+  let notifyBusy = $state(false);
+  let notifyError = $state<string | null>(null);
+  // Set after opening the connect link, so the UI can offer a "I've connected" recheck.
+  let connecting = $state(false);
+
   // Load the list once the session is confirmed (boot-time /me may still be in
   // flight); the store no-ops on repeat calls and off the browser. On sign-out,
   // drop the cache so a different user signing in on the same tab can't see the
@@ -37,10 +48,57 @@
   $effect(() => {
     if (isAuthenticated()) {
       void savedSearches.ensureLoaded();
+      void notifications.ensureLoaded();
     } else {
       savedSearches.reset();
+      notifications.reset();
     }
   });
+
+  // Toggle Telegram notifications for the active saved set. If the user hasn't
+  // linked Telegram yet, open the deep link instead of subscribing — they connect
+  // the bot, then flip the toggle.
+  async function toggleNotify() {
+    if (activeId == null || notifyBusy) return;
+    notifyBusy = true;
+    notifyError = null;
+    try {
+      if (!telegram.linked) {
+        await connectTelegram();
+        return;
+      }
+      if (activeSub) {
+        await notifications.unsubscribe(activeSub.id);
+      } else {
+        await notifications.subscribe(activeId);
+      }
+    } catch (e) {
+      notifyError = e instanceof ApiError ? e.message : 'Could not update notifications. Please try again.';
+    } finally {
+      notifyBusy = false;
+    }
+  }
+
+  // Open the one-time deep link in a new tab so the user can tap Start in Telegram.
+  async function connectTelegram() {
+    const url = await notifications.link();
+    window.open(url, '_blank', 'noopener');
+    connecting = true;
+  }
+
+  // After the user reports they tapped Start, re-read the link status.
+  async function recheckLink() {
+    notifyBusy = true;
+    notifyError = null;
+    try {
+      await notifications.refreshTelegram();
+      if (notifications.telegram.linked) connecting = false;
+    } catch {
+      notifyError = 'Could not check the connection. Please try again.';
+    } finally {
+      notifyBusy = false;
+    }
+  }
 
   function onSelect(e: Event) {
     error = null;
@@ -165,6 +223,40 @@
 
     {#if error}
       <p class="text-sm text-destructive">{error}</p>
+    {/if}
+
+    <!-- Telegram notifications for the currently-selected saved set. Shown only
+         when the feature is configured server-side and the current filters match a
+         saved set (so there is a concrete subscription target). -->
+    {#if telegram.enabled && activeId != null && !naming}
+      <div class="flex flex-col gap-1 border-t border-border pt-2">
+        {#if telegram.linked}
+          <label class="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              class="size-4 rounded border-input"
+              checked={!!activeSub}
+              disabled={notifyBusy}
+              onchange={toggleNotify}
+            />
+            <Bell class="size-4" aria-hidden="true" />
+            <span>Notify me on Telegram</span>
+          </label>
+        {:else if connecting}
+          <p class="text-sm text-muted-foreground">Opened Telegram — tap “Start”, then:</p>
+          <Button variant="secondary" size="sm" onclick={recheckLink} disabled={notifyBusy}>
+            {notifyBusy ? 'Checking…' : 'I’ve connected'}
+          </Button>
+        {:else}
+          <Button variant="secondary" size="sm" onclick={connectTelegram} disabled={notifyBusy}>
+            <Bell class="mr-1 size-4" aria-hidden="true" />
+            Connect Telegram for alerts
+          </Button>
+        {/if}
+        {#if notifyError}
+          <p class="text-sm text-destructive">{notifyError}</p>
+        {/if}
+      </div>
     {/if}
   {/if}
 </div>

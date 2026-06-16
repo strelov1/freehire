@@ -23,6 +23,8 @@ import type {
   ApiKey,
   CreatedApiKey,
   SavedSearch,
+  Subscription,
+  TelegramStatus,
   Submission,
   SubmissionInput,
   Report,
@@ -357,6 +359,44 @@ export function createApi(
     await call(`/api/v1/me/searches/${id}`, { method: 'DELETE' });
   }
 
+  /** The caller's notification subscriptions (one per saved search + channel). */
+  async function listSubscriptions(): Promise<Subscription[]> {
+    const res = await request<{ data: Subscription[] }>('/api/v1/me/subscriptions');
+    return res.data;
+  }
+
+  /** Subscribe a saved search to a channel (telegram by default). A duplicate is a 409. */
+  async function createSubscription(savedSearchId: number, channel = 'telegram'): Promise<Subscription> {
+    const res = await request<{ data: Subscription }>('/api/v1/me/subscriptions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ saved_search_id: savedSearchId, channel }),
+    });
+    return res.data;
+  }
+
+  /** Unsubscribe by subscription id. */
+  async function deleteSubscription(id: number): Promise<void> {
+    await call(`/api/v1/me/subscriptions/${id}`, { method: 'DELETE' });
+  }
+
+  /** Whether Telegram notifications are configured and whether this user is linked. */
+  async function telegramStatus(): Promise<TelegramStatus> {
+    const res = await request<{ data: TelegramStatus }>('/api/v1/me/telegram');
+    return res.data;
+  }
+
+  /** Mint a one-time deep link the user opens to connect their Telegram chat. */
+  async function telegramLink(): Promise<string> {
+    const res = await request<{ data: { url: string } }>('/api/v1/me/telegram/link', { method: 'POST' });
+    return res.data.url;
+  }
+
+  /** Disconnect the user's Telegram chat. */
+  async function telegramUnlink(): Promise<void> {
+    await call('/api/v1/me/telegram', { method: 'DELETE' });
+  }
+
   /** Submit a vacancy for moderation. Returns the pending submission. */
   async function submitJob(input: SubmissionInput): Promise<Submission> {
     const res = await request<{ data: Submission }>('/api/v1/submissions', {
@@ -461,6 +501,12 @@ export function createApi(
     createSavedSearch,
     updateSavedSearch,
     deleteSavedSearch,
+    listSubscriptions,
+    createSubscription,
+    deleteSubscription,
+    telegramStatus,
+    telegramLink,
+    telegramUnlink,
     submitJob,
     listMySubmissions,
     listPendingSubmissions,
@@ -511,6 +557,12 @@ export const {
   createSavedSearch,
   updateSavedSearch,
   deleteSavedSearch,
+  listSubscriptions,
+  createSubscription,
+  deleteSubscription,
+  telegramStatus,
+  telegramLink,
+  telegramUnlink,
   submitJob,
   listMySubmissions,
   listPendingSubmissions,

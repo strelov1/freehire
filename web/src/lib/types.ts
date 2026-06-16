@@ -171,3 +171,22 @@ export interface SavedSearch {
   created_at: string | null;
   updated_at: string | null;
 }
+
+/** A notification subscription on a saved search. */
+export interface Subscription {
+  id: number;
+  saved_search_id: number;
+  saved_search_name?: string;
+  channel: string;
+  active: boolean;
+  created_at: string | null;
+}
+
+/** Telegram link status for the current user. `enabled` is whether the feature is
+ *  configured server-side at all (so the UI can hide it); `linked` is whether this
+ *  user has connected their chat. */
+export interface TelegramStatus {
+  enabled: boolean;
+  linked: boolean;
+  chat_id?: number;
+}

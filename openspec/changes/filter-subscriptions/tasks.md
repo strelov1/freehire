@@ -36,7 +36,7 @@
 
 ## 7. SPA
 
-- [ ] 7.1 Add a "Notify on Telegram" toggle per saved search, gated on link status, with a deep-link dialog for first-time linking; verify via svelte-check + lint
+- [x] 7.1 Added a "🔔 Notify on Telegram" toggle to the saved-search picker (shown when the current filters match a saved set), with connect-then-recheck deep-link flow when unlinked; api.ts methods + notifications store; svelte-check clean (0 errors)
 
 ## 8. Verification & ops
 
