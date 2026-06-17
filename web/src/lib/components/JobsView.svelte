@@ -13,9 +13,11 @@
   import JobRow from './JobRow.svelte';
   import LoadMore from './LoadMore.svelte';
 
-  // The first page is server-rendered (route `load`) and arrives as `initial`,
-  // so the rows are in the initial HTML. Filters live in the URL; the list is
-  // driven by the search endpoint (an empty query browses everything).
+  // Filters live in the URL; the route `load` searches by them and returns the
+  // first page as `initial`, so the rows are in the initial HTML. Each filter
+  // change is a real navigation (FilterStore commits via goto), which re-runs
+  // `load` and delivers a fresh `initial` here; "load more" then pages the rest
+  // client-side over the same filters.
   //
   // `scope` pins extra search params that the user can't change (e.g. the company
   // page passes `{ company_slug }`): they're merged into every search but kept out
@@ -66,41 +68,42 @@
   };
 
   let drawerOpen = $state(false);
-  let started = false;
-  let timer: ReturnType<typeof setTimeout>;
+  let primed = false;
 
   // For a signed-in user, load the set of already-viewed slugs so JobRow can dim
-  // seen cards (no-op when signed out — the set stays empty). Cleanup: a debounce
-  // timer left running after unmount would start a fetch for a gone component.
+  // seen cards (no-op when signed out — the set stays empty). Cleanup: cancel any
+  // debounced filter navigation so it can't fire after this view is gone.
   onMount(() => {
     if (isAuthenticated()) ensureViewedLoaded();
-    refreshCounts();
-    return () => clearTimeout(timer);
+    return () => filters.dispose();
   });
 
-  // Browser back/forward changes the URL query — pull it back into the filters.
-  // Track only the URL: syncFromUrl reads filters.value internally, so without
-  // untrack this effect would also fire on our own setQuery/#commit writes and
-  // clobber the just-typed value against a not-yet-updated page.url.
+  // Keep the panel synced with the URL and refresh its facet counts. Runs on
+  // mount and on every URL change — a filter commit (goto) or browser
+  // back/forward. Track only the URL: syncFromUrl reads filters.value internally,
+  // so untrack stops this from looping on its own write. It's a no-op when
+  // already in sync (our own commits) and re-seeds the panel on back/forward;
+  // either way the counts refresh for the new filters.
   $effect(() => {
     page.url.search; // track
-    untrack(() => filters.syncFromUrl());
+    untrack(() => {
+      filters.syncFromUrl();
+      refreshCounts();
+    });
   });
 
-  // Re-run the search when any filter changes, debounced. The first effect run
-  // is the initial mount, already server-rendered/seeded, so skip it.
+  // The list mirrors the route `load`: each filter change navigates and re-runs
+  // it, so a fresh `initial` arrives as this prop — reseed a paginator from it.
+  // The first run is the server-rendered page already seeded above, so skip it.
   $effect(() => {
-    filtersToParams(filters.value).toString(); // track every filter field
-    if (!started) {
-      started = true;
+    const slice = initial; // track the prop
+    if (!primed) {
+      primed = true;
       return;
     }
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      jobs = makePaginator();
-      jobs.start();
-      refreshCounts();
-    }, 300);
+    const next = makePaginator();
+    next.seed(slice);
+    jobs = next;
   });
 </script>
 

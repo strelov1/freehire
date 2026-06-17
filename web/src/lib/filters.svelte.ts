@@ -5,7 +5,7 @@
 // `<param>_mode=and` conventions.
 
 import { page } from '$app/state';
-import { replaceState } from '$app/navigation';
+import { goto } from '$app/navigation';
 import { FACETS } from './facets';
 
 /** One facet's selection: the chosen values, whether it filters by inclusion or
@@ -112,6 +112,12 @@ export function canonicalQuery(query: string): string {
 export class FilterStore {
   value = $state<JobFilters>(emptyFilters());
 
+  // Debounce handle for the continuous inputs (free-text query, salary slider),
+  // which fire on every keystroke / drag tick. Their URL commit — a real
+  // navigation that re-runs `load` — is coalesced so typing doesn't round-trip
+  // per character; `value` still updates synchronously so the input stays live.
+  #navTimer: ReturnType<typeof setTimeout> | undefined;
+
   /** Seed from the current URL params (passed by the view from `page.url`), so
    *  the same filters render on the server and hydrate on the client. */
   constructor(initial?: URLSearchParams) {
@@ -128,7 +134,7 @@ export class FilterStore {
 
   setQuery(q: string) {
     this.value = { ...this.value, q };
-    this.#commit();
+    this.#commitSoon();
   }
 
   setVisa(on: boolean) {
@@ -138,7 +144,7 @@ export class FilterStore {
 
   setSalaryMin(n: number | null) {
     this.value = { ...this.value, salaryMin: n };
-    this.#commit();
+    this.#commitSoon();
   }
 
   setSort(sort: SortField) {
@@ -196,11 +202,17 @@ export class FilterStore {
 
   /** Re-read filters from the current URL (browser back/forward). No-op when
    *  already in sync, which also breaks the write-back loop after our own
-   *  setQuery. */
+   *  commit. */
   syncFromUrl() {
     const current = page.url.searchParams;
     if (current.toString() === filtersToParams(this.value).toString()) return;
     this.value = filtersFromParams(current);
+  }
+
+  /** Cancel any pending debounced navigation — call from the owning view's
+   *  cleanup so a late commit can't navigate after unmount. */
+  dispose() {
+    clearTimeout(this.#navTimer);
   }
 
   #setFacet(param: string, st: FacetState) {
@@ -208,13 +220,24 @@ export class FilterStore {
     this.#commit();
   }
 
-  /** Mirror the current filters into the URL in place — `replaceState` updates
-   *  the address bar and history without re-running `load`, so toggling a facet
-   *  doesn't round-trip to the server; the view re-searches reactively. Called
-   *  synchronously from each mutation (never a separate effect) so a controlled
-   *  input never reverts mid-keystroke. Browser-only (mutations are user events). */
+  /** Mirror the current filters into the URL via a real navigation. `goto` (not
+   *  the shallow `replaceState`) registers the change with the router, so the URL
+   *  and its `load`-produced results are stored on the history entry and restored
+   *  correctly on browser back/forward — shallow routing leaves `page.url` (and
+   *  thus `load`) stale on a back navigation. `replaceState: true` updates in
+   *  place (no per-tweak history entry); `keepFocus`/`noScroll` keep the page
+   *  steady. The route `load` re-runs for the new query and drives the list.
+   *  Browser-only (mutations are user events). */
   #commit() {
+    clearTimeout(this.#navTimer); // a pending debounced nav is now subsumed
     const qs = filtersToParams(this.value).toString();
-    replaceState(page.url.pathname + (qs ? `?${qs}` : ''), {});
+    goto(page.url.pathname + (qs ? `?${qs}` : ''), { replaceState: true, keepFocus: true, noScroll: true });
+  }
+
+  /** Debounced #commit for the continuous inputs, so each keystroke / slider tick
+   *  doesn't trigger its own navigation + `load`. */
+  #commitSoon() {
+    clearTimeout(this.#navTimer);
+    this.#navTimer = setTimeout(() => this.#commit(), 300);
   }
 }
