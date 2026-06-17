@@ -9,6 +9,8 @@
   provider: amazon
 - company: Google
   provider: google
+- company: Lumenalta
+  provider: lumenalta
 
 - company: VK
   provider: vk
