@@ -43,7 +43,9 @@ const (
 	// index size to keep the reported count honest. It is NOT the pagination guard
 	// — deep offset paging is bounded separately by maxSearchWindow in the search
 	// handler — so a large value here costs nothing beyond an accurate total.
-	maxTotalHits = 1000000
+	// Keep it comfortably above the open-job catalogue (which crossed 1M in
+	// 2026-06): once the real total exceeds this cap, every count saturates at it.
+	maxTotalHits = 10000000
 
 	// maxValuesPerFacet raises the per-facet value cap above Meili's default of
 	// 100 so the analytics facet distribution is not truncated for
