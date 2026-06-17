@@ -346,6 +346,20 @@ func TestIntegration_SimilarJobs(t *testing.T) {
 			t.Errorf("limit 2 returned %d hits", len(hits))
 		}
 	})
+
+	// The semantic index is built incrementally, so a job can exist in Postgres
+	// (and thus reach this call) without a vector in the index yet. Meilisearch
+	// answers that with a 400 not_found_similar_id, which must degrade to an empty
+	// list — not a hard error — so the detail page just hides the section.
+	t.Run("source absent from the index yields empty, not an error", func(t *testing.T) {
+		hits, err := c.SimilarJobs(ctx, 9999, 10) // never indexed
+		if err != nil {
+			t.Fatalf("SimilarJobs for an unindexed id must not error: %v", err)
+		}
+		if len(hits) != 0 {
+			t.Errorf("expected no neighbours for an unindexed id, got %d", len(hits))
+		}
+	})
 }
 
 func toDocs(t *testing.T, jobs []db.Job) []JobDocument {

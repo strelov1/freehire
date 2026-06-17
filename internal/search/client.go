@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -373,6 +374,12 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, erro
 	return SearchResult{Hits: hits, Total: resp.EstimatedTotalHits}, nil
 }
 
+// similarSourceMissingCode is the Meilisearch error code for "the similar-query
+// source id is not a document in the index". The semantic index is built
+// incrementally (reindex --semantic), so a job present in Postgres can still lack
+// a vector — its /similar is then "no neighbours", not an error.
+const similarSourceMissingCode = "not_found_similar_id"
+
 // SimilarJobs returns the jobs nearest to job id in embedding space, queried
 // against the semantic index by the document's stored vector (no query text, no
 // re-embedding). The semantic index holds open jobs only, so neighbours are open
@@ -380,6 +387,11 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, erro
 // the source document, but we over-fetch by one and drop it defensively rather
 // than depend on that — and to avoid making the primary key a filterable
 // attribute just to express "id != source".
+//
+// A job with no vector in the semantic index yet (the index lags ingest) yields
+// an empty list, not an error: Meilisearch answers such a source id with
+// not_found_similar_id, which we map to "no neighbours" so the detail-page
+// section simply hides.
 func (c *Client) SimilarJobs(ctx context.Context, id int64, limit int) ([]JobDocument, error) {
 	var resp meilisearch.SimilarDocumentResult
 	err := c.semantic.SearchSimilarDocumentsWithContext(ctx, &meilisearch.SimilarDocumentQuery{
@@ -388,6 +400,10 @@ func (c *Client) SimilarJobs(ctx context.Context, id int64, limit int) ([]JobDoc
 		Limit:    int64(limit) + 1,
 	}, &resp)
 	if err != nil {
+		var meiliErr *meilisearch.Error
+		if errors.As(err, &meiliErr) && meiliErr.MeilisearchApiError.Code == similarSourceMissingCode {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("search: similar: %w", err)
 	}
 
