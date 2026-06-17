@@ -107,6 +107,7 @@ func All(c HTTPClient) map[string]Source {
 		NewTeamtailor(c),
 		NewICIMS(c),
 		NewJibe(c),
+		NewPhenom(c),
 		NewBreezy(c),
 		NewJoin(c),
 		NewGlobalPayments(c),

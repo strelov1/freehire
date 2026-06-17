@@ -1,0 +1,7 @@
+# Phenom People career sites. Provider is the filename; each entry is company + board.
+# board = the site's public host; the adapter POSTs https://<board>/widgets
+# (refineSearch for the list, jobDetail for each posting). See internal/sources/phenom.go.
+# Each board validated live (refineSearch returns postings) before adding.
+
+- company: DHL
+  board: careers.dhl.com
