@@ -243,7 +243,7 @@ func facetSettings() *meilisearch.Settings {
 		FilterableAttributes: []string{
 			"source", "company_slug",
 			"work_mode", "regions", "countries", "skills",
-			"enrichment.employment_type", "enrichment.seniority",
+			"enrichment.employment_type", "enrichment.education_level", "enrichment.seniority",
 			"enrichment.category", "enrichment.domains",
 			"enrichment.company_type", "enrichment.company_size", "enrichment.visa_sponsorship",
 			"enrichment.salary_currency", "enrichment.salary_period",

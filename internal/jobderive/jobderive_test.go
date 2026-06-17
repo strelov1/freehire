@@ -38,6 +38,49 @@ func TestDerive_SlugsAndFacets(t *testing.T) {
 
 // A structured work-mode signal from the caller (e.g. an ATS workplace-type enum)
 // beats the free-text parser hint.
+//
+// The synthetic enrichment facets (posting language, employment type, education
+// level, minimum experience) are derived from the title/description.
+func TestDerive_SyntheticFacets(t *testing.T) {
+	got := Derive(Input{
+		Title:      "Backend Engineering Intern",
+		Company:    "Acme",
+		Source:     "manual",
+		ExternalID: "1",
+		Description: "We are looking for a motivated engineer to join our backend team " +
+			"and build scalable services. A Bachelor's degree in Computer Science is " +
+			"required, along with at least 3 years of hands-on programming experience.",
+	})
+	if got.PostingLanguage != "en" {
+		t.Errorf("PostingLanguage = %q, want en", got.PostingLanguage)
+	}
+	if got.EmploymentType != "internship" {
+		t.Errorf("EmploymentType = %q, want internship", got.EmploymentType)
+	}
+	if got.EducationLevel != "bachelor" {
+		t.Errorf("EducationLevel = %q, want bachelor", got.EducationLevel)
+	}
+	if got.ExperienceYearsMin == nil || *got.ExperienceYearsMin != 3 {
+		t.Errorf("ExperienceYearsMin = %v, want 3", got.ExperienceYearsMin)
+	}
+}
+
+// A description stating none of the synthetic facets leaves them empty/nil — the
+// derivation never guesses.
+func TestDerive_SyntheticFacetsSilent(t *testing.T) {
+	got := Derive(Input{
+		Title:       "Engineer",
+		Company:     "Acme",
+		Source:      "manual",
+		ExternalID:  "2",
+		Description: "Join us.",
+	})
+	if got.EmploymentType != "" || got.EducationLevel != "" || got.ExperienceYearsMin != nil {
+		t.Errorf("expected silent facets, got type=%q edu=%q exp=%v",
+			got.EmploymentType, got.EducationLevel, got.ExperienceYearsMin)
+	}
+}
+
 func TestDerive_StructuredWorkModeWins(t *testing.T) {
 	got := Derive(Input{
 		Title:      "Dev",

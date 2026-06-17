@@ -52,6 +52,14 @@ type Job struct {
 	// internal/classify. Each is "" when the title resolves nothing.
 	Seniority string
 	Category  string
+	// Synthetic enrichment facets derived from Title/Description by jobderive
+	// (internal/lang + internal/jobfacts): the posting language, employment type,
+	// education level, and minimum required experience. Each is empty/nil when
+	// nothing is resolved.
+	PostingLanguage    string
+	EmploymentType     string
+	EducationLevel     string
+	ExperienceYearsMin *int
 }
 
 // Store persists one normalized job and enqueues it for enrichment when needed,
@@ -228,5 +236,10 @@ func normalizeJob(e sources.CompanyEntry, j sources.Job) Job {
 		Skills:      d.Skills,
 		Seniority:   d.Seniority,
 		Category:    d.Category,
+
+		PostingLanguage:    d.PostingLanguage,
+		EmploymentType:     d.EmploymentType,
+		EducationLevel:     d.EducationLevel,
+		ExperienceYearsMin: d.ExperienceYearsMin,
 	}
 }

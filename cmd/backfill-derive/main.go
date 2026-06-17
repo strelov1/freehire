@@ -18,10 +18,21 @@ import (
 	"os"
 	"slices"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobderive"
 	"github.com/strelov1/freehire/internal/worker"
 )
+
+// toInt4 maps an optional int (experience_years_min) to the pgtype the generated
+// params expect; a nil pointer becomes SQL NULL.
+func toInt4(n *int) pgtype.Int4 {
+	if n == nil {
+		return pgtype.Int4{}
+	}
+	return pgtype.Int4{Int32: int32(*n), Valid: true}
+}
 
 // backfillBatchSize bounds how many jobs are read per keyset page.
 const backfillBatchSize = 500
@@ -84,12 +95,17 @@ func backfillAll(ctx context.Context, store facetStore) (scanned, updated int, e
 				Description: j.Description,
 				WorkMode:    j.WorkMode, // preserves a set work_mode (jobderive precedence)
 			})
+			experience := toInt4(d.ExperienceYearsMin)
 			unchanged := slices.Equal(d.Countries, j.Countries) &&
 				slices.Equal(d.Regions, j.Regions) &&
 				d.WorkMode == j.WorkMode &&
 				slices.Equal(d.Skills, j.Skills) &&
 				d.Seniority == j.Seniority &&
-				d.Category == j.Category
+				d.Category == j.Category &&
+				d.PostingLanguage == j.PostingLanguage &&
+				d.EmploymentType == j.EmploymentType &&
+				d.EducationLevel == j.EducationLevel &&
+				experience == j.ExperienceYearsMin
 			if unchanged {
 				continue
 			}
@@ -101,6 +117,11 @@ func backfillAll(ctx context.Context, store facetStore) (scanned, updated int, e
 				Skills:    d.Skills,
 				Seniority: d.Seniority,
 				Category:  d.Category,
+
+				PostingLanguage:    d.PostingLanguage,
+				EmploymentType:     d.EmploymentType,
+				EducationLevel:     d.EducationLevel,
+				ExperienceYearsMin: experience,
 			}); err != nil {
 				return scanned, updated, err
 			}

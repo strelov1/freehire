@@ -12,11 +12,22 @@ import (
 	"github.com/strelov1/freehire/internal/classify"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/jobfacts"
+	"github.com/strelov1/freehire/internal/lang"
 	"github.com/strelov1/freehire/internal/location"
 	"github.com/strelov1/freehire/internal/normalize"
 	"github.com/strelov1/freehire/internal/skilltag"
 	"github.com/strelov1/freehire/internal/telegram"
 )
+
+// toInt4 maps an optional int (experience_years_min) to the pgtype the generated
+// params expect; a nil pointer becomes SQL NULL.
+func toInt4(n *int) pgtype.Int4 {
+	if n == nil {
+		return pgtype.Int4{}
+	}
+	return pgtype.Int4{Int32: int32(*n), Valid: true}
+}
 
 // maxAttempts is the retry budget per post: the first failure leaves the post
 // retryable (after its lease expires), the second dead-letters it.
@@ -101,6 +112,11 @@ func (s *extractStore) Complete(ctx context.Context, post telegram.PendingPost, 
 			Skills:      skilltag.Parse(descHTML),
 			Seniority:   class.Seniority,
 			Category:    class.Category,
+
+			PostingLanguage:    lang.Detect(descHTML),
+			EmploymentType:     jobfacts.EmploymentType(j.Title, descHTML),
+			EducationLevel:     jobfacts.EducationLevel(descHTML),
+			ExperienceYearsMin: toInt4(jobfacts.ExperienceYearsMin(descHTML)),
 		})
 		if err != nil {
 			return fmt.Errorf("upsert job %s: %w", externalID, err)
@@ -167,6 +183,11 @@ func (s *extractStore) CompleteLinks(
 			Skills:      skilltag.Parse(j.Description),
 			Seniority:   class.Seniority,
 			Category:    class.Category,
+
+			PostingLanguage:    lang.Detect(j.Description),
+			EmploymentType:     jobfacts.EmploymentType(j.Title, j.Description),
+			EducationLevel:     jobfacts.EducationLevel(j.Description),
+			ExperienceYearsMin: toInt4(jobfacts.ExperienceYearsMin(j.Description)),
 		})
 		if err != nil {
 			return fmt.Errorf("upsert job %s/%s: %w", j.Source, j.ExternalID, err)

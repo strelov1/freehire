@@ -158,8 +158,14 @@ func (s *Service) Create(ctx context.Context, actorID int64, in CreateInput) (db
 		Skills:      d.Skills,
 		Seniority:   d.Seniority,
 		Category:    d.Category,
-		CreatedBy:   actorID,
-		UpdatedBy:   actorID,
+
+		PostingLanguage:    d.PostingLanguage,
+		EmploymentType:     d.EmploymentType,
+		EducationLevel:     d.EducationLevel,
+		ExperienceYearsMin: toInt4(d.ExperienceYearsMin),
+
+		CreatedBy: actorID,
+		UpdatedBy: actorID,
 	})
 }
 
@@ -218,7 +224,13 @@ func (s *Service) Update(ctx context.Context, actorID int64, slug string, p Upda
 		Skills:      d.Skills,
 		Seniority:   d.Seniority,
 		Category:    d.Category,
-		UpdatedBy:   actorID,
+
+		PostingLanguage:    d.PostingLanguage,
+		EmploymentType:     d.EmploymentType,
+		EducationLevel:     d.EducationLevel,
+		ExperienceYearsMin: toInt4(d.ExperienceYearsMin),
+
+		UpdatedBy: actorID,
 	})
 }
 
@@ -246,4 +258,13 @@ func toTimestamptz(t *time.Time) pgtype.Timestamptz {
 		return pgtype.Timestamptz{}
 	}
 	return pgtype.Timestamptz{Time: *t, Valid: true}
+}
+
+// toInt4 maps an optional int (experience_years_min) to the pgtype the params expect;
+// nil becomes NULL.
+func toInt4(n *int) pgtype.Int4 {
+	if n == nil {
+		return pgtype.Int4{}
+	}
+	return pgtype.Int4{Int32: int32(*n), Valid: true}
 }

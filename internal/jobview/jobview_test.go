@@ -325,6 +325,41 @@ func TestFromRow_ClassificationIsDictOnly(t *testing.T) {
 	}
 }
 
+// The synthetic facets (posting_language/employment_type/education_level/
+// experience_years_min) are dict-only too: the column value wins over the LLM's,
+// and a silent column drops the LLM value rather than falling back to it.
+func TestFromRow_SyntheticFacetsAreDictOnly(t *testing.T) {
+	exp := 8
+	// LLM present with different values; the columns must win (and the silent
+	// experience column must drop the LLM's 8).
+	raw, err := json.Marshal(enrich.Enrichment{
+		PostingLanguage:    "fr",
+		EmploymentType:     "contract",
+		EducationLevel:     "phd",
+		ExperienceYearsMin: &exp,
+	})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	view, err := FromRow(db.Job{
+		ID: 1, Title: "x", PublicSlug: "x-1",
+		PostingLanguage: "en", EmploymentType: "internship", EducationLevel: "bachelor",
+		ExperienceYearsMin: pgtype.Int4{}, // silent column → served as nil, not the LLM's 8
+		Enrichment:         raw,
+	})
+	if err != nil {
+		t.Fatalf("FromRow: %v", err)
+	}
+	if view.Enrichment.PostingLanguage != "en" || view.Enrichment.EmploymentType != "internship" ||
+		view.Enrichment.EducationLevel != "bachelor" {
+		t.Errorf("dict should win: got {%q,%q,%q}", view.Enrichment.PostingLanguage,
+			view.Enrichment.EmploymentType, view.Enrichment.EducationLevel)
+	}
+	if view.Enrichment.ExperienceYearsMin != nil {
+		t.Errorf("silent experience column should drop the LLM value, got %v", *view.Enrichment.ExperienceYearsMin)
+	}
+}
+
 // closed_at rides the wire shape so the SPA can render the closed state on the
 // detail page (lists never serve closed jobs — see the job-lifecycle spec).
 func TestFromRow_CarriesClosedAt(t *testing.T) {

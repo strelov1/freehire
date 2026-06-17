@@ -88,6 +88,14 @@ func FromRow(j db.Job) (Job, error) {
 	// existing enrichment.seniority/category facets are unchanged.
 	e.Seniority = j.Seniority
 	e.Category = j.Category
+	// The synthetic facets (posting_language/employment_type/education_level/
+	// experience_years_min) follow the same dict-only rule: the deterministic column
+	// value always wins (the LLM's stays raw in the JSONB), kept nested under
+	// enrichment so the wire shape is unchanged.
+	e.PostingLanguage = j.PostingLanguage
+	e.EmploymentType = j.EmploymentType
+	e.EducationLevel = j.EducationLevel
+	e.ExperienceYearsMin = int4ToPtr(j.ExperienceYearsMin)
 	skills := normalizeSet(j.Skills)
 	e.Countries, e.Regions, e.WorkMode = nil, nil, ""
 	e.Skills = nil
@@ -155,4 +163,15 @@ func rfc3339(ts pgtype.Timestamptz) *string {
 	}
 	s := ts.Time.UTC().Format(time.RFC3339)
 	return &s
+}
+
+// int4ToPtr renders a nullable Postgres integer (experience_years_min) as *int, or
+// nil when unset — so an unknown value is omitted from the served enrichment rather
+// than reported as 0.
+func int4ToPtr(n pgtype.Int4) *int {
+	if !n.Valid {
+		return nil
+	}
+	v := int(n.Int32)
+	return &v
 }

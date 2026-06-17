@@ -3,6 +3,7 @@ module github.com/strelov1/freehire
 go 1.25.11
 
 require (
+	github.com/abadojack/whatlanggo v1.0.1
 	github.com/gofiber/fiber/v2 v2.52.13
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/gzuidhof/tygo v0.2.21

@@ -51,6 +51,11 @@ func (s *dbStore) Save(ctx context.Context, job pipeline.Job) error {
 		Skills:      job.Skills,
 		Seniority:   job.Seniority,
 		Category:    job.Category,
+
+		PostingLanguage:    job.PostingLanguage,
+		EmploymentType:     job.EmploymentType,
+		EducationLevel:     job.EducationLevel,
+		ExperienceYearsMin: toInt4(job.ExperienceYearsMin),
 	})
 	if err != nil {
 		return fmt.Errorf("upsert job: %w", err)
@@ -73,4 +78,13 @@ func toTimestamptz(t *time.Time) pgtype.Timestamptz {
 		return pgtype.Timestamptz{}
 	}
 	return pgtype.Timestamptz{Time: *t, Valid: true}
+}
+
+// toInt4 maps an optional int (e.g. experience_years_min) to the pgtype the generated
+// params expect; a nil pointer becomes SQL NULL.
+func toInt4(n *int) pgtype.Int4 {
+	if n == nil {
+		return pgtype.Int4{}
+	}
+	return pgtype.Int4{Int32: int32(*n), Valid: true}
 }

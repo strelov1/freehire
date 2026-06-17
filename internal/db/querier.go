@@ -317,9 +317,11 @@ type Querier interface {
 	// Remove a job from the board: drop every pipeline mark, keep viewed_at so the
 	// job remains in the user's view history.
 	UntrackJob(ctx context.Context, arg UntrackJobParams) (UserJob, error)
-	// One-off backfill (cmd/backfill-derive): rewrite all six deterministic dictionary
-	// facet columns — countries, regions, work_mode, skills, seniority, category — from
-	// the row's raw content (title/location/description) in one pass, replacing the
+	// One-off backfill (cmd/backfill-derive): rewrite every deterministic dictionary
+	// facet column — countries, regions, work_mode, skills, seniority, category, plus the
+	// synthetic enrichment facets posting_language, employment_type, education_level,
+	// experience_years_min — from the row's raw content (title/location/description) in one
+	// pass, replacing the
 	// three separate per-facet backfill writes. The facets are a pure function of the
 	// raw fields, so this is idempotent. updated_at is deliberately left untouched
 	// (like UpdateJobSlugs) so a backfill does not churn every row's timestamp. COALESCE

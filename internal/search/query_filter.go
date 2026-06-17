@@ -18,6 +18,7 @@ var StringFacets = map[string]string{
 	"regions":          "regions",
 	"work_mode":        "work_mode",
 	"employment_type":  "enrichment.employment_type",
+	"education_level":  "enrichment.education_level",
 	"seniority":        "enrichment.seniority",
 	"category":         "enrichment.category",
 	"domains":          "enrichment.domains",

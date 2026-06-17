@@ -7,6 +7,8 @@ package jobderive
 
 import (
 	"github.com/strelov1/freehire/internal/classify"
+	"github.com/strelov1/freehire/internal/jobfacts"
+	"github.com/strelov1/freehire/internal/lang"
 	"github.com/strelov1/freehire/internal/location"
 	"github.com/strelov1/freehire/internal/normalize"
 	"github.com/strelov1/freehire/internal/skilltag"
@@ -36,6 +38,13 @@ type Derived struct {
 	Skills      []string
 	Seniority   string
 	Category    string
+	// Synthetic enrichment facets (category B): deterministic stand-ins for fields
+	// the LLM also emits, served dict-only like the facets above. ExperienceYearsMin
+	// is nil when the description states no figure.
+	PostingLanguage    string
+	EmploymentType     string
+	EducationLevel     string
+	ExperienceYearsMin *int
 }
 
 // Derive computes the slugs and dictionary facets for a job. Geography, skills, and the
@@ -63,13 +72,17 @@ func Derive(in Input) Derived {
 		seniority = classify.SeniorityFromDescription(in.Description)
 	}
 	return Derived{
-		CompanySlug: normalize.Slug(in.Company),
-		PublicSlug:  normalize.JobSlug(in.Title, in.Company, in.Source, in.ExternalID),
-		Countries:   geo.Countries,
-		Regions:     geo.Regions,
-		WorkMode:    workMode,
-		Skills:      skilltag.Parse(in.Description),
-		Seniority:   seniority,
-		Category:    class.Category,
+		CompanySlug:        normalize.Slug(in.Company),
+		PublicSlug:         normalize.JobSlug(in.Title, in.Company, in.Source, in.ExternalID),
+		Countries:          geo.Countries,
+		Regions:            geo.Regions,
+		WorkMode:           workMode,
+		Skills:             skilltag.Parse(in.Description),
+		Seniority:          seniority,
+		Category:           class.Category,
+		PostingLanguage:    lang.Detect(in.Description),
+		EmploymentType:     jobfacts.EmploymentType(in.Title, in.Description),
+		EducationLevel:     jobfacts.EducationLevel(in.Description),
+		ExperienceYearsMin: jobfacts.ExperienceYearsMin(in.Description),
 	}
 }

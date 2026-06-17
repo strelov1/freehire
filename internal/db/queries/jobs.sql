@@ -83,14 +83,16 @@ WITH company_upsert AS (
 )
 INSERT INTO jobs (
     source, external_id, url, title, company, company_slug, location, remote, description, posted_at,
-    public_slug, countries, regions, work_mode, skills, seniority, category
+    public_slug, countries, regions, work_mode, skills, seniority, category,
+    posting_language, employment_type, education_level, experience_years_min
 ) VALUES (
     sqlc.arg(source), sqlc.arg(external_id), sqlc.arg(url), sqlc.arg(title),
     sqlc.arg(company), sqlc.arg(company_slug), sqlc.arg(location), sqlc.arg(remote),
     sqlc.arg(description), sqlc.arg(posted_at),
     sqlc.arg(public_slug),
     COALESCE(sqlc.arg(countries)::text[], '{}'), COALESCE(sqlc.arg(regions)::text[], '{}'),
-    sqlc.arg(work_mode), COALESCE(sqlc.arg(skills)::text[], '{}'), sqlc.arg(seniority), sqlc.arg(category)
+    sqlc.arg(work_mode), COALESCE(sqlc.arg(skills)::text[], '{}'), sqlc.arg(seniority), sqlc.arg(category),
+    sqlc.arg(posting_language), sqlc.arg(employment_type), sqlc.arg(education_level), sqlc.arg(experience_years_min)
 )
 -- public_slug is deliberately NOT in the DO UPDATE SET: the slug is minted once
 -- at insert and is the row's stable public identity. Re-ingest of the same
@@ -111,6 +113,10 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     skills       = EXCLUDED.skills,
     seniority    = EXCLUDED.seniority,
     category     = EXCLUDED.category,
+    posting_language     = EXCLUDED.posting_language,
+    employment_type      = EXCLUDED.employment_type,
+    education_level      = EXCLUDED.education_level,
+    experience_years_min = EXCLUDED.experience_years_min,
     -- The crawl saw the posting: refresh liveness and reopen if it was closed.
     last_seen_at = now(),
     closed_at    = NULL,
@@ -138,7 +144,8 @@ WITH company_upsert AS (
 )
 INSERT INTO jobs (
     source, external_id, url, title, company, company_slug, location, remote, description, posted_at,
-    public_slug, countries, regions, work_mode, skills, seniority, category, created_by
+    public_slug, countries, regions, work_mode, skills, seniority, category,
+    posting_language, employment_type, education_level, experience_years_min, created_by
 ) VALUES (
     sqlc.arg(source), sqlc.arg(external_id), sqlc.arg(url), sqlc.arg(title),
     sqlc.arg(company), sqlc.arg(company_slug), sqlc.arg(location), sqlc.arg(remote),
@@ -146,7 +153,9 @@ INSERT INTO jobs (
     sqlc.arg(public_slug),
     COALESCE(sqlc.arg(countries)::text[], '{}'), COALESCE(sqlc.arg(regions)::text[], '{}'),
     sqlc.arg(work_mode), COALESCE(sqlc.arg(skills)::text[], '{}'),
-    sqlc.arg(seniority), sqlc.arg(category), sqlc.arg(created_by)::bigint
+    sqlc.arg(seniority), sqlc.arg(category),
+    sqlc.arg(posting_language), sqlc.arg(employment_type), sqlc.arg(education_level), sqlc.arg(experience_years_min),
+    sqlc.arg(created_by)::bigint
 )
 ON CONFLICT (source, external_id) DO UPDATE SET
     url          = EXCLUDED.url,
@@ -163,6 +172,10 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     skills       = EXCLUDED.skills,
     seniority    = EXCLUDED.seniority,
     category     = EXCLUDED.category,
+    posting_language     = EXCLUDED.posting_language,
+    employment_type      = EXCLUDED.employment_type,
+    education_level      = EXCLUDED.education_level,
+    experience_years_min = EXCLUDED.experience_years_min,
     updated_by   = sqlc.arg(updated_by)::bigint,
     closed_at    = NULL,
     updated_at   = now()
@@ -203,6 +216,10 @@ SET title        = sqlc.arg(title),
     skills       = COALESCE(sqlc.arg(skills)::text[], '{}'),
     seniority    = sqlc.arg(seniority),
     category     = sqlc.arg(category),
+    posting_language     = sqlc.arg(posting_language),
+    employment_type      = sqlc.arg(employment_type),
+    education_level      = sqlc.arg(education_level),
+    experience_years_min = sqlc.arg(experience_years_min),
     updated_by   = sqlc.arg(updated_by)::bigint,
     updated_at   = now()
 WHERE public_slug = sqlc.arg(public_slug) AND created_by IS NOT NULL
@@ -301,9 +318,11 @@ SET enrichment         = sqlc.arg(enrichment),
 WHERE id = sqlc.arg(id);
 
 -- name: UpdateJobFacets :exec
--- One-off backfill (cmd/backfill-derive): rewrite all six deterministic dictionary
--- facet columns — countries, regions, work_mode, skills, seniority, category — from
--- the row's raw content (title/location/description) in one pass, replacing the
+-- One-off backfill (cmd/backfill-derive): rewrite every deterministic dictionary
+-- facet column — countries, regions, work_mode, skills, seniority, category, plus the
+-- synthetic enrichment facets posting_language, employment_type, education_level,
+-- experience_years_min — from the row's raw content (title/location/description) in one
+-- pass, replacing the
 -- three separate per-facet backfill writes. The facets are a pure function of the
 -- raw fields, so this is idempotent. updated_at is deliberately left untouched
 -- (like UpdateJobSlugs) so a backfill does not churn every row's timestamp. COALESCE
@@ -316,5 +335,9 @@ SET countries = COALESCE(sqlc.arg(countries)::text[], '{}'),
     work_mode = sqlc.arg(work_mode),
     skills    = COALESCE(sqlc.arg(skills)::text[], '{}'),
     seniority = sqlc.arg(seniority),
-    category  = sqlc.arg(category)
+    category  = sqlc.arg(category),
+    posting_language     = sqlc.arg(posting_language),
+    employment_type      = sqlc.arg(employment_type),
+    education_level      = sqlc.arg(education_level),
+    experience_years_min = sqlc.arg(experience_years_min)
 WHERE id = sqlc.arg(id);
