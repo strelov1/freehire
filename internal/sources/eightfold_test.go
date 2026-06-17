@@ -34,8 +34,8 @@ func TestParseEightfoldBoard(t *testing.T) {
 	})
 
 	for _, board := range []string{
-		"apply.careers.microsoft.com", // no slash → no domain
-		"/microsoft.com",              // empty host
+		"apply.careers.microsoft.com",  // no slash → no domain
+		"/microsoft.com",               // empty host
 		"apply.careers.microsoft.com/", // empty domain
 		"",
 	} {
