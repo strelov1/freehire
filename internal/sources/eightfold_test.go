@@ -2,10 +2,83 @@ package sources
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 )
+
+// rateLimitedHTTP serves the pcsx list, then fails detail GETs with failErr for the first
+// detailFails attempts before serving detail — mimicking Eightfold's ~290-requests/window
+// per-IP cap (a 403). detailCalls counts detail attempts so a test can assert retry behaviour.
+type rateLimitedHTTP struct {
+	mu          sync.Mutex
+	list        string
+	detail      string
+	failErr     string
+	detailFails int
+	detailCalls int
+}
+
+func (r *rateLimitedHTTP) GetJSON(_ context.Context, url string, v any) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if strings.Contains(url, "/api/pcsx/search") {
+		return json.Unmarshal([]byte(r.list), v)
+	}
+	r.detailCalls++
+	if r.detailFails > 0 {
+		r.detailFails--
+		return fmt.Errorf("sources: GET %s: %s", url, r.failErr)
+	}
+	return json.Unmarshal([]byte(r.detail), v)
+}
+
+// TestEightfoldRetriesRateLimitedDetail verifies a rate-limit (403) detail response is retried
+// with backoff rather than dropped, so the catalogue is not capped at the per-window limit.
+func TestEightfoldRetriesRateLimitedDetail(t *testing.T) {
+	eightfoldRetryBase = 0 // no real sleeping in tests
+	fake := &rateLimitedHTTP{
+		list:        eightfoldList(1, `{"id": 111, "name": "Role", "locations": ["Remote"]}`),
+		detail:      `{"id": 111, "job_description": "<p>desc</p>"}`,
+		failErr:     "status 403",
+		detailFails: 3,
+	}
+	jobs, err := NewEightfold(fake).Fetch(context.Background(), eightfoldEntry)
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1 (a rate-limited detail must retry past the 403)", len(jobs))
+	}
+	if fake.detailCalls != 4 {
+		t.Errorf("detailCalls = %d, want 4 (3 retries then success)", fake.detailCalls)
+	}
+}
+
+// TestEightfoldDoesNotRetryNonRateLimitError verifies a non-rate-limit failure (e.g. 404) is
+// dropped immediately, so retry stays scoped to the rate-limit case.
+func TestEightfoldDoesNotRetryNonRateLimitError(t *testing.T) {
+	eightfoldRetryBase = 0
+	fake := &rateLimitedHTTP{
+		list:        eightfoldList(1, `{"id": 222, "name": "Gone", "locations": ["Remote"]}`),
+		detail:      `{}`,
+		failErr:     "status 404",
+		detailFails: 99,
+	}
+	jobs, err := NewEightfold(fake).Fetch(context.Background(), eightfoldEntry)
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("len(jobs) = %d, want 0 (a 404 detail is dropped)", len(jobs))
+	}
+	if fake.detailCalls != 1 {
+		t.Errorf("detailCalls = %d, want 1 (a 404 must not be retried)", fake.detailCalls)
+	}
+}
 
 // eightfoldEntry is the shared configured board for the Fetch tests.
 var eightfoldEntry = CompanyEntry{

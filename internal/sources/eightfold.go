@@ -5,11 +5,25 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // eightfoldPageLimit is the position-list page size. The Eightfold server caps a page at 10
 // regardless of the requested num, so this is fixed and start is the only pagination lever.
 const eightfoldPageLimit = 10
+
+// eightfoldDetailWorkers bounds the per-board detail fan-out. Eightfold rate-limits an IP to
+// ~290 requests per window (returning 403), so the detail crawl uses a low concurrency — far
+// below the shared defaultDetailWorkers — to keep the burst gentle and lean on backoff retry
+// (getJSONRetrying) for the rest, rather than slamming the cap and dropping postings.
+const eightfoldDetailWorkers = 2
+
+// eightfoldMaxRetries bounds how many times a rate-limited (403/429) request is retried before
+// giving up. eightfoldRetryBase is the first backoff delay (doubled each attempt, capped); it
+// is a var so tests can set it to 0 and not sleep.
+const eightfoldMaxRetries = 6
+
+var eightfoldRetryBase = time.Second
 
 // eightfold adapts Eightfold AI career sites (e.g. apply.careers.microsoft.com). Both
 // endpoints are public GET JSON. Two list-API generations exist and a tenant supports exactly
@@ -88,9 +102,43 @@ func (s eightfold) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		return nil, err
 	}
 
-	return fetchDetails(positions, defaultDetailWorkers, func(p eightfoldPosition) (Job, bool) {
+	return fetchDetails(positions, eightfoldDetailWorkers, func(p eightfoldPosition) (Job, bool) {
 		return s.detail(ctx, e, b, p)
 	}), nil
+}
+
+// getJSONRetrying GETs url, retrying rate-limit responses (403/429) with exponential backoff
+// so the crawl rides out Eightfold's per-IP request cap (~290/window) instead of dropping the
+// postings beyond it. The shared client already retries 429/5xx/network; this adds 403, which
+// Eightfold returns for rate-limiting (not auth) here, and longer waits to clear a full window.
+// A non-rate-limit error (e.g. 404) returns immediately so retry stays scoped.
+func (s eightfold) getJSONRetrying(ctx context.Context, url string, v any) error {
+	delay := eightfoldRetryBase
+	var err error
+	for attempt := 0; attempt <= eightfoldMaxRetries; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+			}
+			if delay < 30*time.Second {
+				delay *= 2
+			}
+		}
+		if err = s.http.GetJSON(ctx, url, v); err == nil || !isRateLimited(err) {
+			return err
+		}
+	}
+	return err
+}
+
+// isRateLimited reports whether err is an Eightfold rate-limit response (HTTP 403 or 429). The
+// shared client formats a status failure as "... status <code>", so the code is matched in the
+// error text — the client does not surface the status any other way.
+func isRateLimited(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "status 403") || strings.Contains(msg, "status 429")
 }
 
 // listPositions returns the board's positions, auto-detecting the list-API generation: it
@@ -139,7 +187,7 @@ func (s eightfold) pcsxPage(ctx context.Context, b eightfoldBoard, start int) ([
 		"https://%s/api/pcsx/search?domain=%s&query=&start=%d&num=%d&sort_by=relevance",
 		b.host, b.domain, start, eightfoldPageLimit)
 	var resp pcsxListResponse
-	if err := s.http.GetJSON(ctx, url, &resp); err != nil {
+	if err := s.getJSONRetrying(ctx, url, &resp); err != nil {
 		return nil, 0, err
 	}
 	return resp.Data.Positions, resp.Data.Count, nil
@@ -151,7 +199,7 @@ func (s eightfold) v2Page(ctx context.Context, b eightfoldBoard, start int) ([]e
 		"https://%s/api/apply/v2/jobs?domain=%s&query=&start=%d&num=%d&sort_by=relevance",
 		b.host, b.domain, start, eightfoldPageLimit)
 	var resp v2ListResponse
-	if err := s.http.GetJSON(ctx, url, &resp); err != nil {
+	if err := s.getJSONRetrying(ctx, url, &resp); err != nil {
 		return nil, 0, err
 	}
 	return resp.Positions, resp.Count, nil
@@ -165,7 +213,7 @@ func (s eightfold) detail(ctx context.Context, e CompanyEntry, b eightfoldBoard,
 	id := strconv.FormatInt(p.ID, 10)
 	url := fmt.Sprintf("https://%s/api/apply/v2/jobs/%s?domain=%s", b.host, id, b.domain)
 	var d eightfoldDetail
-	if err := s.http.GetJSON(ctx, url, &d); err != nil {
+	if err := s.getJSONRetrying(ctx, url, &d); err != nil {
 		return Job{}, false
 	}
 
