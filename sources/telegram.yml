@@ -101,3 +101,90 @@ channels:
     kind: board
   - channel: careers_crypto
     kind: board
+
+  # --- Discovered via telagon 2026-06-16 (top channels by ATS-link volume) ---
+  # All 34 verified to have a live public t.me/s preview at discovery time.
+  # Mostly EN India/global + a few RU/PT/AR/FA/Web3 aggregators — geography the
+  # curated RU/IT tier above did not cover.
+
+  # Global / India tech job boards
+  - channel: dot_aware
+    kind: board
+  - channel: gocareers
+    kind: board
+  - channel: getjobss
+    kind: board
+  - channel: jobs_and_internships_updates
+    kind: board
+  - channel: jobsandinternshipsupdates
+    kind: board
+  - channel: off_campus_jobs_and_internships
+    kind: board
+  - channel: offcampus_phodenge
+    kind: board
+  - channel: freshercareersdotin
+    kind: board
+  - channel: OceanOfJobs
+    kind: board
+  - channel: JobsPur
+    kind: board
+  - channel: jobvila
+    kind: board
+  - channel: hiringdaily
+    kind: board
+  - channel: TorchBearerr
+    kind: board
+  - channel: jobsstation_official
+    kind: board
+  - channel: tamilanjobupdates
+    kind: board
+
+  # India personal-brand / editorial (posts may bundle several vacancies)
+  - channel: arunchauhanofficial
+    kind: authored
+  - channel: jobwithmayra
+    kind: authored
+  - channel: goyalarsh
+    kind: authored
+  - channel: vijaykushal
+    kind: authored
+  - channel: PrepTrain
+    kind: authored
+  - channel: cs_algo
+    kind: authored
+
+  # Data / analytics niche
+  - channel: dataanalyticsbuddy
+    kind: board
+  - channel: cv_2essence
+    kind: board
+
+  # Nigeria
+  - channel: tohire_ng
+    kind: board
+  - channel: jobnetworkng
+    kind: board
+  - channel: dejob_global
+    kind: board
+  - channel: DeJob_official
+    kind: board
+
+  # STEM / students
+  - channel: STEMJobsCR
+    kind: board
+
+  # Other languages (ar / fa / pt / ru)
+  - channel: amalw3amal1
+    kind: board
+  - channel: seekingyourjobs
+    kind: board
+  - channel: cafeinavagas
+    kind: board
+  - channel: youritjob
+    kind: board
+
+  # Web3
+  - channel: worklinketh
+    kind: board
+  - channel: talentatweb3
+    kind: board
