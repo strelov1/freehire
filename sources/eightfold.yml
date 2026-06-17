@@ -1,0 +1,8 @@
+# eightfold (Eightfold AI) career sites. Provider is the filename; board =
+# "<host>/<domain>" (see internal/sources/eightfold.go), where host paths the
+# public API and domain is the Eightfold tenant key required as a query parameter,
+# e.g. apply.careers.microsoft.com/microsoft.com. Each board validated live
+# (/api/pcsx/search returned >0 positions) before adding.
+
+- company: Microsoft
+  board: apply.careers.microsoft.com/microsoft.com

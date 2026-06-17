@@ -1,0 +1,178 @@
+package sources
+
+import (
+	"context"
+	"strconv"
+	"strings"
+	"testing"
+)
+
+// eightfoldEntry is the shared configured board for the Fetch tests.
+var eightfoldEntry = CompanyEntry{
+	Company: "Microsoft", Provider: "eightfold",
+	Board: "apply.careers.microsoft.com/microsoft.com",
+}
+
+func TestEightfoldProvider(t *testing.T) {
+	if got := NewEightfold(nil).Provider(); got != "eightfold" {
+		t.Errorf("Provider() = %q, want %q", got, "eightfold")
+	}
+}
+
+func TestParseEightfoldBoard(t *testing.T) {
+	t.Run("valid host/domain", func(t *testing.T) {
+		b, err := parseEightfoldBoard("apply.careers.microsoft.com/microsoft.com")
+		if err != nil {
+			t.Fatalf("parseEightfoldBoard: %v", err)
+		}
+		if b.host != "apply.careers.microsoft.com" {
+			t.Errorf("host = %q", b.host)
+		}
+		if b.domain != "microsoft.com" {
+			t.Errorf("domain = %q", b.domain)
+		}
+	})
+
+	for _, board := range []string{
+		"apply.careers.microsoft.com", // no slash → no domain
+		"/microsoft.com",              // empty host
+		"apply.careers.microsoft.com/", // empty domain
+		"",
+	} {
+		t.Run("rejects "+board, func(t *testing.T) {
+			if _, err := parseEightfoldBoard(board); err == nil {
+				t.Errorf("parseEightfoldBoard(%q) = nil error, want error", board)
+			}
+		})
+	}
+}
+
+// eightfoldList builds a /api/pcsx/search response body with the given count and raw positions.
+func eightfoldList(count int, positions ...string) string {
+	return `{"data": {"count": ` + strconv.Itoa(count) + `, "positions": [` + strings.Join(positions, ",") + `]}}`
+}
+
+// TestEightfoldFetchListsAndFetchesDetail covers the core path: page the position list, fetch
+// each position's detail for the description and canonical URL, and map every field. The list
+// carries metadata (title, location, postedTs, workLocationOption) while the detail carries the
+// description and canonicalPositionUrl.
+func TestEightfoldFetchListsAndFetchesDetail(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("pcsx/search", eightfoldList(2,
+			`{"id": 111, "displayJobId": "200001", "name": "Backend Engineer",
+			  "locations": ["United States, Washington, Redmond"], "postedTs": 1781691482,
+			  "workLocationOption": "onsite", "atsJobId": "200001"}`,
+			`{"id": 222, "name": "Data Engineer", "locations": ["Remote"], "postedTs": 0,
+			  "workLocationOption": "remote"}`)).
+		route("jobs/111", `{"id": 111, "job_description": "<p>Build the backend.</p>",
+			"canonicalPositionUrl": "https://apply.careers.microsoft.com/careers/job/111"}`).
+		route("jobs/222", `{"id": 222, "job_description": "<p>Crunch data.</p>"}`)
+
+	jobs, err := NewEightfold(fake).Fetch(context.Background(), eightfoldEntry)
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("len(jobs) = %d, want 2", len(jobs))
+	}
+
+	byID := map[string]Job{}
+	for _, j := range jobs {
+		byID[j.ExternalID] = j
+	}
+
+	j, ok := byID["111"]
+	if !ok {
+		t.Fatal("position 111 missing")
+	}
+	if j.Title != "Backend Engineer" {
+		t.Errorf("Title = %q", j.Title)
+	}
+	if j.Company != "Microsoft" {
+		t.Errorf("Company = %q, want the configured company", j.Company)
+	}
+	if j.Location != "United States, Washington, Redmond" {
+		t.Errorf("Location = %q", j.Location)
+	}
+	if j.URL != "https://apply.careers.microsoft.com/careers/job/111" {
+		t.Errorf("URL = %q", j.URL)
+	}
+	if j.WorkMode != "onsite" {
+		t.Errorf("WorkMode = %q, want onsite", j.WorkMode)
+	}
+	if j.Remote {
+		t.Error("Remote = true, want false for an onsite role")
+	}
+	if !strings.Contains(j.Description, "Build the backend.") {
+		t.Errorf("Description = %q", j.Description)
+	}
+	if j.PostedAt == nil || j.PostedAt.Format("2006-01-02") != "2026-06-17" {
+		t.Errorf("PostedAt = %v, want 2026-06-17", j.PostedAt)
+	}
+
+	data := byID["222"]
+	if data.WorkMode != "remote" {
+		t.Errorf("WorkMode = %q, want remote", data.WorkMode)
+	}
+	if !data.Remote {
+		t.Error("Remote = false, want true for a remote role")
+	}
+	// canonicalPositionUrl absent → fall back to the public position page.
+	if data.URL != "https://apply.careers.microsoft.com/careers/job/222" {
+		t.Errorf("URL = %q, want the host/careers/job fallback", data.URL)
+	}
+	if data.PostedAt != nil {
+		t.Errorf("PostedAt = %v, want nil for postedTs=0", data.PostedAt)
+	}
+}
+
+// TestEightfoldPaginatesUntilEmptyPage verifies the lister advances start past the first page
+// and stops on an empty page even when count would not be reached.
+func TestEightfoldPaginatesUntilEmptyPage(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("start=0", eightfoldList(99,
+			`{"id": 1, "name": "Role 1", "locations": ["Remote"]}`,
+			`{"id": 2, "name": "Role 2", "locations": ["Remote"]}`)).
+		route("start=2", eightfoldList(99)).
+		route("jobs/", `{"job_description": "<p>desc</p>"}`)
+
+	jobs, err := NewEightfold(fake).Fetch(context.Background(), eightfoldEntry)
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("len(jobs) = %d, want 2 across the non-empty page", len(jobs))
+	}
+}
+
+// TestEightfoldDropsFailedDetail verifies one position whose detail request fails is skipped
+// while the rest of the board still yields.
+func TestEightfoldDropsFailedDetail(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("pcsx/search", eightfoldList(2,
+			`{"id": 111, "name": "Kept", "locations": ["Remote"]}`,
+			`{"id": 222, "name": "Dropped", "locations": ["Remote"]}`)).
+		route("jobs/111", `{"id": 111, "job_description": "<p>kept</p>"}`)
+	// no route for jobs/222 → its detail GET errors → that posting is dropped.
+
+	jobs, err := NewEightfold(fake).Fetch(context.Background(), eightfoldEntry)
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1 (failed detail dropped)", len(jobs))
+	}
+	if jobs[0].ExternalID != "111" {
+		t.Errorf("kept job = %q, want 111", jobs[0].ExternalID)
+	}
+}
+
+// TestEightfoldFetchRejectsBadBoard verifies a malformed board fails fast before any request.
+func TestEightfoldFetchRejectsBadBoard(t *testing.T) {
+	_, err := NewEightfold(&routedHTTP{}).Fetch(context.Background(), CompanyEntry{
+		Company: "Microsoft", Provider: "eightfold", Board: "apply.careers.microsoft.com",
+	})
+	if err == nil {
+		t.Fatal("Fetch with a board missing the domain half = nil error, want error")
+	}
+}
