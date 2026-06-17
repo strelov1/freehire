@@ -33,3 +33,22 @@ func TestSanitizeHTML(t *testing.T) {
 		t.Errorf("sanitizeHTML should mark links nofollow\ngot: %s", got)
 	}
 }
+
+// Some ATS boards emit descriptions whose words are glued by non-breaking spaces
+// (U+00A0, often as the &nbsp; entity) instead of regular spaces. Rendered with
+// {@html} this becomes one unbreakable line that overflows the page horizontally,
+// so the sanitizer normalizes no-break spaces to regular ones, restoring word-boundary
+// wrapping. bluemonday decodes &nbsp; to the raw U+00A0 rune, so normalizing the
+// sanitized output catches both the entity and raw-character forms.
+func TestSanitizeHTMLNormalizesNoBreakSpaces(t *testing.T) {
+	cases := map[string]struct{ in, want string }{
+		"entity form":   {"<p>Java&nbsp;Spring&nbsp;Boot</p>", "<p>Java Spring Boot</p>"},
+		"raw U+00A0":    {"<p>Java Spring Boot</p>", "<p>Java Spring Boot</p>"},
+		"narrow U+202F": {"<p>5 years</p>", "<p>5 years</p>"},
+	}
+	for name, c := range cases {
+		if got := sanitizeHTML(c.in); got != c.want {
+			t.Errorf("%s: sanitizeHTML(%q) = %q, want %q", name, c.in, got, c.want)
+		}
+	}
+}

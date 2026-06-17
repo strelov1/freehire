@@ -1,6 +1,21 @@
 package sources
 
-import "github.com/microcosm-cc/bluemonday"
+import (
+	"strings"
+
+	"github.com/microcosm-cc/bluemonday"
+)
+
+// noBreakSpaces normalizes the no-break space characters that some ATS boards use
+// in place of regular spaces (commonly the &nbsp; entity, which bluemonday decodes
+// to the raw U+00A0 rune). Left as-is, a description whose every word is glued by
+// U+00A0 renders as one unbreakable line that overflows the page horizontally, so
+// we fold them to a regular space, restoring word-boundary wrapping. Compiled once
+// and safe for concurrent use, like descriptionPolicy.
+var noBreakSpaces = strings.NewReplacer(
+	" ", " ", // NO-BREAK SPACE
+	" ", " ", // NARROW NO-BREAK SPACE
+)
 
 // descriptionPolicy sanitizes source-provided job description HTML. It is compiled
 // once and reused: bluemonday policies are safe for concurrent use.
@@ -33,7 +48,7 @@ func newDescriptionPolicy() *bluemonday.Policy {
 // safe to render directly in a browser. Adapters call it on their assembled description
 // HTML before yielding a job, so the catalogue stores only sanitized markup.
 func sanitizeHTML(s string) string {
-	return descriptionPolicy.Sanitize(s)
+	return noBreakSpaces.Replace(descriptionPolicy.Sanitize(s))
 }
 
 // SanitizeHTML is the exported description sanitizer, for sibling packages that build

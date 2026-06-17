@@ -252,6 +252,12 @@
 {/if}
 
 <style>
+  /* Descriptions are arbitrary scraped HTML: a long URL — or words glued by
+     non-breaking spaces — must wrap instead of forcing a horizontal page scroll. */
+  .job-description {
+    overflow-wrap: break-word;
+  }
+
   .job-description :global(h1),
   .job-description :global(h2),
   .job-description :global(h3),
