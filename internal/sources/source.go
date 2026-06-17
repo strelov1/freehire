@@ -113,6 +113,7 @@ func All(c HTTPClient) map[string]Source {
 		// International single-company adapters (boardless).
 		NewUber(c),
 		NewAmazon(c),
+		NewGoogle(c),
 		// RU-domestic single-company adapters (boardless, except Yandex which selects
 		// host+language by board).
 		NewYandex(c),
