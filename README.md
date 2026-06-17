@@ -1,15 +1,43 @@
+<div align="center">
+
 # freehire
 
-[freehire.dev](https://freehire.dev) — open-source IT job aggregator backend. Many
-source adapters feed a pipeline that normalizes postings into one schema,
-deduplicates them, and enriches them with AI; everything is served over an HTTP
-API with rich filters and full-text search. Fully open and transparent, designed
-to make adding a new source a single entry in a config file.
+### Every IT job, straight from the source.
 
-Currently aggregating **1.1M+ live job postings** from **29,000+ companies**
-across **50+ sources** — pulled directly from company ATS platforms (Workday,
-Greenhouse, Lever, Ashby, iCIMS and a long tail of others), so every listing links
-straight to the original posting. See [Sources](#sources) for the full breakdown.
+**1.1M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**
+
+[**Try it live →**](https://freehire.dev) · [Sources](#sources) · [API](#api) · [Add a source](#adding-a-source) · [Contributing](CONTRIBUTING.md)
+
+[![Live](https://img.shields.io/badge/live-freehire.dev-0a0a0a)](https://freehire.dev)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Go version](https://img.shields.io/github/go-mod/go-version/strelov1/freehire)
+![Last commit](https://img.shields.io/github/last-commit/strelov1/freehire)
+[![Stars](https://img.shields.io/github/stars/strelov1/freehire?style=social)](https://github.com/strelov1/freehire/stargazers)
+
+<br>
+
+<img src="docs/assets/screenshot.png" alt="freehire — the job feed with faceted filters for region, work format, specialization and seniority" width="860">
+
+</div>
+
+## Why freehire?
+
+- **Straight from the source.** Every listing is crawled directly from a company's
+  own ATS — Workday, Greenhouse, Lever, Ashby, iCIMS and a long tail of others — and
+  links to the original posting. No recruiter reposts, no aggregator middlemen, no
+  dead links.
+- **One schema, deduplicated.** The same role posted to three boards collapses into
+  one entry: every posting is normalized into a single shape and deduplicated on a
+  stable key.
+- **Search that understands jobs.** Faceted full-text search over region, work mode,
+  seniority, skills and salary — derived from curated dictionaries, never guessed.
+- **Actually open.** MIT-licensed and self-hostable, pipeline and data both in the
+  open. Adding a company is one line of YAML.
+- **Yours to build on.** A clean HTTP API, a CLI, Telegram digests, and per-user
+  application tracking — use the hosted site, run your own, or build on top.
+
+Aggregating **1.1M+ live postings** from **29,000+ companies** across **50+
+sources** — see [Sources](#sources) for the full breakdown.
 
 ## Stack
 
