@@ -138,8 +138,13 @@ func skipPreamble(lines []string) int {
 // non-adapter sources set by other writers: "telegram" (the tg-extract worker) and the
 // moderator/bulk-import origins ("workatastartup", "remoteok", "arc"). Stages from
 // userjob; the rest from the enrich controlled vocabularies.
+//
+// An origin that started as a manual/bulk-import name can later gain a registered
+// adapter (e.g. remoteok), so it appears in both the hardcoded prefix and
+// FilterableProviders — dedup to keep SOURCE_VALUES a set. A duplicate value
+// otherwise reaches the SPA's keyed Source facet and throws each_key_duplicate.
 func genVocab() string {
-	source := append([]string{"telegram", "workatastartup", "remoteok", "arc"}, sources.FilterableProviders()...)
+	source := dedup(append([]string{"telegram", "workatastartup", "remoteok", "arc"}, sources.FilterableProviders()...))
 
 	var b strings.Builder
 	b.WriteString(emitVocab("Source", "SOURCE_VALUES", source))
@@ -153,4 +158,18 @@ func genVocab() string {
 	b.WriteString(emitVocab("CompanyType", "COMPANY_TYPE_VALUES", enrich.CompanyTypeValues))
 	b.WriteString(emitVocab("Domain", "DOMAIN_VALUES", enrich.DomainValues))
 	return b.String()
+}
+
+// dedup returns the slice with duplicates removed, preserving first-occurrence order.
+func dedup(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	out := values[:0]
+	for _, v := range values {
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
 }

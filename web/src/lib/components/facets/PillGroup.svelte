@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { FacetOption } from '$lib/facets';
+  import { uniqueByValue, type FacetOption } from '$lib/facets';
   import { pillClass } from './pill';
 
   // A wrap of toggle pills for one facet. Selected pills fill with the primary
@@ -21,10 +21,12 @@
   // since an old bookmark or saved search was created — still renders as an
   // active pill so it stays removable instead of becoming an invisible, stuck
   // filter that silently constrains results.
-  const shown = $derived([
-    ...options,
-    ...selected.filter((v) => !options.some((o) => o.value === v)).map((v) => ({ value: v, label: v })),
-  ]);
+  const shown = $derived(
+    uniqueByValue([
+      ...options,
+      ...selected.filter((v) => !options.some((o) => o.value === v)).map((v) => ({ value: v, label: v })),
+    ]),
+  );
 </script>
 
 <div class="flex flex-wrap gap-2">

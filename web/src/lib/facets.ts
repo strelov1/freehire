@@ -66,6 +66,16 @@ export function dynamicLabel(param: string, value: string): string {
   return param === 'countries' ? countryLabel(value) : value;
 }
 
+/** Drop options with a duplicate `value`, keeping the first. The facet controls
+ *  render a keyed `{#each}` on `value`, and Svelte aborts the whole render with
+ *  `each_key_duplicate` on a collision — so a single stray duplicate (e.g. a
+ *  generated-vocabulary regression) would take down every page with a filter
+ *  panel. This makes that failure mode a harmless repeat instead of a crash. */
+export function uniqueByValue(opts: FacetOption[]): FacetOption[] {
+  const seen = new Set<string>();
+  return opts.filter((o) => (seen.has(o.value) ? false : seen.add(o.value)));
+}
+
 /** A title-cased fallback label for a value with no explicit label. */
 function humanize(value: string): string {
   return value

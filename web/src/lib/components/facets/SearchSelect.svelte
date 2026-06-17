@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { FacetOption } from '$lib/facets';
+  import { uniqueByValue, type FacetOption } from '$lib/facets';
   import { Input } from '$lib/ui';
   import { pillClass } from './pill';
 
@@ -23,7 +23,7 @@
   let filter = $state('');
 
   const shown = $derived(
-    options
+    uniqueByValue(options)
       .filter((o) => o.label.toLowerCase().includes(filter.trim().toLowerCase()))
       .sort((a, b) => Number(selected.includes(b.value)) - Number(selected.includes(a.value))),
   );

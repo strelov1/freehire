@@ -105,7 +105,7 @@ export interface Job {
   enrichment_version: number /* int32 */;
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'arbeitnow', 'ashby', 'ashbygraphql', 'bamboohr', 'breezy', 'eightfold', 'gem', 'getonbrd', 'globalpayments', 'greenhouse', 'gupy', 'huntflow', 'icims', 'jazzhr', 'jibe', 'jobicy', 'jobstash', 'join', 'lever', 'mycareersfuture', 'oracle', 'personio', 'phenom', 'pinpoint', 'radancy', 'recruitee', 'remoteok', 'rippling', 'smartrecruiters', 'successfactors', 'teamtailor', 'tecla', 'thehub', 'wantedkr', 'weworkremotely', 'workable', 'workday', 'wpyoast'] as const;
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'arbeitnow', 'ashby', 'ashbygraphql', 'bamboohr', 'breezy', 'eightfold', 'gem', 'getonbrd', 'globalpayments', 'greenhouse', 'gupy', 'huntflow', 'icims', 'jazzhr', 'jibe', 'jobicy', 'jobstash', 'join', 'lever', 'mycareersfuture', 'oracle', 'personio', 'phenom', 'pinpoint', 'radancy', 'recruitee', 'rippling', 'smartrecruiters', 'successfactors', 'teamtailor', 'tecla', 'thehub', 'wantedkr', 'weworkremotely', 'workable', 'workday', 'wpyoast'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];
