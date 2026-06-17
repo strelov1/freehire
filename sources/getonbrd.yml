@@ -1,0 +1,4 @@
+# Get on Board (getonbrd.com) LatAm tech job board. Boardless: one public API enumerated
+# by category, so the entry carries no board; each job's company comes from the API.
+- company: Get on Board
+  provider: getonbrd
