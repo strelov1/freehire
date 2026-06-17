@@ -77,14 +77,26 @@ func (y yandex) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}), nil
 }
 
+// yandexMaxListPages bounds the cursor pagination. Yandex's API tarpits datacenter IPs and
+// under throttling can return a "next" cursor that never empties; without a cap the loop
+// runs forever (it hung a prod custom.yml ingest for ~4h, holding its flock). The bound sits
+// far above the real page count (~1250 jobs total) so it never truncates a legitimate crawl.
+const yandexMaxListPages = 500
+
 // list walks the cursor-paginated publication list. The first request hits the bare
 // endpoint; each response's "next" is an absolute URL on Yandex's internal host carrying a
-// ?cursor= query, which list re-issues against the public host until next is empty.
+// ?cursor= query, which list re-issues against the public host until next is empty. A
+// repeated cursor (the upstream cycling under throttling) or the page cap ends the walk, so
+// a misbehaving feed can never spin the loop forever.
 func (y yandex) list(ctx context.Context, board string) ([]yandexItem, error) {
 	base := fmt.Sprintf(yandexListURL, board)
 	url := base
 	var all []yandexItem
-	for url != "" {
+	seen := make(map[string]bool)
+	for page := 0; url != ""; page++ {
+		if page >= yandexMaxListPages {
+			return nil, fmt.Errorf("yandex: list board %s: exceeded %d pages (runaway cursor)", board, yandexMaxListPages)
+		}
 		var resp struct {
 			Results []yandexItem `json:"results"`
 			Next    string       `json:"next"`
@@ -95,9 +107,10 @@ func (y yandex) list(ctx context.Context, board string) ([]yandexItem, error) {
 		all = append(all, resp.Results...)
 
 		cursor := cursorParam(resp.Next)
-		if cursor == "" {
+		if cursor == "" || seen[cursor] {
 			break
 		}
+		seen[cursor] = true
 		url = base + "?cursor=" + cursor
 	}
 	return all, nil

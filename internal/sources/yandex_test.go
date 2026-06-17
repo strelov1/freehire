@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 )
 
 // yandexListItem builds one list item fragment. cities and workModes are inline JSON
@@ -172,6 +173,29 @@ func TestYandexEmptyListYieldsNoJobsNoError(t *testing.T) {
 	}
 	if len(jobs) != 0 {
 		t.Fatalf("got %d jobs, want 0", len(jobs))
+	}
+}
+
+func TestYandexListBoundsRunawayCursor(t *testing.T) {
+	// Yandex's API tarpits datacenter IPs: under throttling it can return a `next`
+	// cursor that never empties, so the cursor loop appends pages forever. In prod this
+	// hung the whole custom.yml ingest for ~4h, holding its flock (one HTTP/2 keepalive
+	// connection, frozen "16/17 boards crawled"). list() must bound the pagination
+	// instead of trusting the upstream to terminate. The fake always replies with the
+	// same non-empty next cursor, so unbounded code loops indefinitely.
+	loop := yandexListPage("https://yandex.ru/jobs/api/publications?cursor=LOOP")
+	fake := (&routedHTTP{}).route("/jobs/api/publications", loop)
+	y := yandex{http: fake}
+
+	done := make(chan struct{})
+	go func() {
+		_, _ = y.list(context.Background(), "ru")
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("yandex.list did not terminate: runaway cursor pagination is unbounded")
 	}
 }
 
