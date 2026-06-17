@@ -7,8 +7,11 @@
 package search
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -25,8 +28,12 @@ const (
 	// --semantic) and only queried when SemanticRatio > 0, so embedding never
 	// blocks facet/keyword freshness.
 	semanticIndexUID = "jobs_semantic"
-	primaryKey       = "id"
-	embedderName     = "default"
+	// facetRebuildUID / semanticRebuildUID are the throwaway indexes a full rebuild
+	// streams into before atomically swapping over the live index (see Rebuild).
+	facetRebuildUID    = "jobs_rebuild"
+	semanticRebuildUID = "jobs_semantic_rebuild"
+	primaryKey         = "id"
+	embedderName       = "default"
 	// embedderModel runs inside Meilisearch (source huggingFace), so hybrid
 	// search needs no external API key. Multilingual + CPU-friendly.
 	embedderModel = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
@@ -48,17 +55,21 @@ const (
 
 // Client is a thin wrapper over the Meilisearch service scoped to the two job
 // indexes: facet (keyword + facets, no embedder) and semantic (adds the embedder).
+// url/key are kept for the one raw call (swap-indexes) the SDK cannot make against
+// our engine version — see swapIndexes.
 type Client struct {
 	manager  meilisearch.ServiceManager
 	facet    meilisearch.IndexManager
 	semantic meilisearch.IndexManager
+	url      string
+	key      string
 }
 
 // NewClient connects to Meilisearch at url authenticated by key. It does no I/O
 // — the connection is exercised lazily by the first request (or EnsureIndex).
 func NewClient(url, key string) *Client {
 	m := meilisearch.New(url, meilisearch.WithAPIKey(key))
-	return &Client{manager: m, facet: m.Index(facetIndexUID), semantic: m.Index(semanticIndexUID)}
+	return &Client{manager: m, facet: m.Index(facetIndexUID), semantic: m.Index(semanticIndexUID), url: url, key: key}
 }
 
 // EnsureIndex creates the facet/keyword jobs index (no embedder) and applies its
@@ -87,9 +98,143 @@ func (c *Client) EnsureSemanticIndex(ctx context.Context) error {
 	return c.ensure(ctx, c.semantic, semanticIndexUID, semanticSettings())
 }
 
+// Rebuild is a fresh-index build session for a full reindex. Documents are streamed
+// into a throwaway index (Push enqueues each batch WITHOUT waiting, so Meilisearch
+// auto-batches consecutive tasks — the throughput lever), then Promote waits for the
+// pushes, atomically swaps the rebuild index over the live one, and drops the old
+// one. Two properties matter: search keeps serving the live index untouched until
+// the single swap (no half-built window), and indexing stays fast because the
+// rebuild index grows from empty instead of re-merging into an already-full one.
+type Rebuild struct {
+	c              *Client
+	liveUID        string
+	rebuildUID     string
+	settings       *meilisearch.Settings
+	resetEmbedders bool
+	rebuild        meilisearch.IndexManager
+	tasks          []int64
+}
+
+// NewFacetRebuild starts a full rebuild of the facet/keyword production index.
+func (c *Client) NewFacetRebuild() *Rebuild {
+	return &Rebuild{c: c, liveUID: facetIndexUID, rebuildUID: facetRebuildUID, settings: facetSettings(), resetEmbedders: true}
+}
+
+// NewSemanticRebuild starts a full rebuild of the hybrid semantic index.
+func (c *Client) NewSemanticRebuild() *Rebuild {
+	return &Rebuild{c: c, liveUID: semanticIndexUID, rebuildUID: semanticRebuildUID, settings: semanticSettings()}
+}
+
+// Prepare creates a fresh, empty rebuild index with this pass's settings, ready to
+// receive documents. It also ensures the live index exists, since the swap in
+// Promote needs both — on a first-ever run the live index is created empty and the
+// swap replaces its contents and settings wholesale.
+func (r *Rebuild) Prepare(ctx context.Context) error {
+	if err := r.c.createIndex(ctx, r.c.manager.Index(r.liveUID), r.liveUID); err != nil {
+		return err
+	}
+	// Discard any leftover rebuild index from an aborted prior run, then create it
+	// fresh so the build always starts from empty.
+	if err := r.c.dropIndex(ctx, r.rebuildUID); err != nil {
+		return err
+	}
+	r.rebuild = r.c.manager.Index(r.rebuildUID)
+	if err := r.c.ensure(ctx, r.rebuild, r.rebuildUID, r.settings); err != nil {
+		return err
+	}
+	// The facet index carries no embedder; reset it in case a prior version left one
+	// (mirrors EnsureIndex). The semantic rebuild keeps the embedder its settings add.
+	if r.resetEmbedders {
+		task, err := r.rebuild.ResetEmbeddersWithContext(ctx)
+		if err != nil {
+			return fmt.Errorf("search: reset rebuild embedders: %w", err)
+		}
+		return r.c.awaitTask(ctx, r.rebuild, task.TaskUID)
+	}
+	return nil
+}
+
+// Push enqueues a batch into the rebuild index WITHOUT waiting for it to finish —
+// the task uid is kept and awaited in Promote, so Meilisearch auto-batches the
+// consecutive document tasks instead of indexing each in isolation.
+func (r *Rebuild) Push(ctx context.Context, docs []JobDocument) error {
+	if len(docs) == 0 {
+		return nil
+	}
+	pk := primaryKey
+	task, err := r.rebuild.UpdateDocumentsWithContext(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk})
+	if err != nil {
+		return fmt.Errorf("search: rebuild push: %w", err)
+	}
+	r.tasks = append(r.tasks, task.TaskUID)
+	return nil
+}
+
+// Promote waits for every enqueued document batch, then atomically swaps the
+// rebuild index over the live one and drops the now-old index. After this the live
+// uid serves the freshly built data.
+func (r *Rebuild) Promote(ctx context.Context) error {
+	for _, uid := range r.tasks {
+		if err := r.c.awaitTask(ctx, r.rebuild, uid); err != nil {
+			return err
+		}
+	}
+	if err := r.c.swapIndexes(ctx, r.liveUID, r.rebuildUID); err != nil {
+		return err
+	}
+	// After the swap the old data lives under the rebuild uid; drop it.
+	return r.c.dropIndex(ctx, r.rebuildUID)
+}
+
+// swapIndexes atomically swaps two indexes and waits for the swap to finish. It
+// calls POST /swap-indexes directly rather than via the SDK: the pinned
+// meilisearch-go always serializes a `rename` field that our engine version
+// (v1.13) rejects, so the SDK's SwapIndexes is unusable here.
+func (c *Client) swapIndexes(ctx context.Context, a, b string) error {
+	payload := []map[string][]string{{"indexes": {a, b}}}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("search: marshal swap: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url+"/swap-indexes", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("search: swap request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.key)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("search: swap indexes: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		return fmt.Errorf("search: swap indexes: unexpected status %d", resp.StatusCode)
+	}
+	var task struct {
+		TaskUID int64 `json:"taskUid"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&task); err != nil {
+		return fmt.Errorf("search: decode swap task: %w", err)
+	}
+	return c.awaitManagerTask(ctx, task.TaskUID)
+}
+
 // ensure creates the named index (keyed by the internal id) if absent and applies
 // its settings. Shared by the facet and semantic ensure paths.
 func (c *Client) ensure(ctx context.Context, idx meilisearch.IndexManager, uid string, settings *meilisearch.Settings) error {
+	if err := c.createIndex(ctx, idx, uid); err != nil {
+		return err
+	}
+	st, err := idx.UpdateSettingsWithContext(ctx, settings)
+	if err != nil {
+		return fmt.Errorf("search: update settings: %w", err)
+	}
+	return c.awaitTask(ctx, idx, st.TaskUID)
+}
+
+// createIndex creates the index (keyed by the internal id) if absent. An
+// already-existing index is the idempotent happy path, not a failure.
+func (c *Client) createIndex(ctx context.Context, idx meilisearch.IndexManager, uid string) error {
 	create, err := c.manager.CreateIndexWithContext(ctx, &meilisearch.IndexConfig{
 		Uid:        uid,
 		PrimaryKey: primaryKey,
@@ -101,16 +246,27 @@ func (c *Client) ensure(ctx context.Context, idx meilisearch.IndexManager, uid s
 	if err != nil {
 		return fmt.Errorf("search: await create index: %w", err)
 	}
-	// An already-existing index is the idempotent happy path, not a failure.
 	if created.Status == meilisearch.TaskStatusFailed && created.Error.Code != "index_already_exists" {
 		return fmt.Errorf("search: create index failed: %s", created.Error.Message)
 	}
+	return nil
+}
 
-	st, err := idx.UpdateSettingsWithContext(ctx, settings)
+// dropIndex deletes an index, tolerating one that does not exist (idempotent), so
+// it is safe to clear a leftover rebuild index from an aborted prior run.
+func (c *Client) dropIndex(ctx context.Context, uid string) error {
+	task, err := c.manager.DeleteIndexWithContext(ctx, uid)
 	if err != nil {
-		return fmt.Errorf("search: update settings: %w", err)
+		return fmt.Errorf("search: delete index %s: %w", uid, err)
 	}
-	return c.awaitTask(ctx, idx, st.TaskUID)
+	t, err := c.manager.WaitForTaskWithContext(ctx, task.TaskUID, taskPollInterval)
+	if err != nil {
+		return fmt.Errorf("search: await delete index %s: %w", uid, err)
+	}
+	if t.Status == meilisearch.TaskStatusFailed && t.Error.Code != "index_not_found" {
+		return fmt.Errorf("search: delete index %s failed: %s", uid, t.Error.Message)
+	}
+	return nil
 }
 
 // IndexJobs upserts a batch of documents into the facet index by primary key. A
@@ -219,6 +375,19 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, erro
 // an error.
 func (c *Client) awaitTask(ctx context.Context, idx meilisearch.IndexManager, taskUID int64) error {
 	t, err := idx.WaitForTaskWithContext(ctx, taskUID, taskPollInterval)
+	if err != nil {
+		return fmt.Errorf("search: await task %d: %w", taskUID, err)
+	}
+	if t.Status == meilisearch.TaskStatusFailed {
+		return fmt.Errorf("search: task %d failed: %s", taskUID, t.Error.Message)
+	}
+	return nil
+}
+
+// awaitManagerTask waits for an engine-level task (one not scoped to a single
+// index, e.g. swap-indexes) by polling the global task endpoint.
+func (c *Client) awaitManagerTask(ctx context.Context, taskUID int64) error {
+	t, err := c.manager.WaitForTaskWithContext(ctx, taskUID, taskPollInterval)
 	if err != nil {
 		return fmt.Errorf("search: await task %d: %w", taskUID, err)
 	}

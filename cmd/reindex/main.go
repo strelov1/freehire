@@ -107,31 +107,50 @@ func run() int {
 	client := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
 	q := db.New(pool)
 
-	ops := facetOps(client)
-	if semanticRequested(os.Args[1:]) {
-		ops = semanticOps(client)
+	semantic := semanticRequested(os.Args[1:])
+	target := "facet"
+	if semantic {
+		target = "semantic"
 	}
 
-	fetch := fullScan(q)
-	scope := "full"
 	since, incremental, err := sinceFrom(os.Args[1:])
 	if err != nil {
 		log.Printf("reindex: %v", err)
 		return 1
 	}
-	if incremental {
-		fetch = incrementalScan(q, time.Now().Add(-since))
-		scope = "since " + since.String()
-	}
-	log.Printf("reindex: target=%s scope=%s", ops.name, scope)
 
-	indexed, deleted, err := reindexAll(ctx, fetch, ops)
+	// --since is a delta into the LIVE index in place: a partial set cannot be
+	// swapped in wholesale (it would drop everything else). A full pass instead
+	// builds a fresh index and atomically swaps it over the live one, which keeps
+	// merges cheap (the new index grows from empty) and never exposes a half-built
+	// index to search.
+	if incremental {
+		ops := facetOps(client)
+		if semantic {
+			ops = semanticOps(client)
+		}
+		scope := "since " + since.String()
+		log.Printf("reindex: target=%s scope=%s mode=in-place", target, scope)
+		indexed, deleted, err := reindexAll(ctx, incrementalScan(q, time.Now().Add(-since)), ops)
+		if err != nil {
+			log.Printf("reindex: %v", err)
+			return 1
+		}
+		log.Printf("reindex done: target=%s scope=%s indexed=%d deleted=%d", target, scope, indexed, deleted)
+		return 0
+	}
+
+	var b rebuilder = client.NewFacetRebuild()
+	if semantic {
+		b = client.NewSemanticRebuild()
+	}
+	log.Printf("reindex: target=%s scope=full mode=swap", target)
+	indexed, err := reindexFull(ctx, fullScan(q), b)
 	if err != nil {
 		log.Printf("reindex: %v", err)
 		return 1
 	}
-
-	log.Printf("reindex done: target=%s scope=%s indexed=%d deleted=%d", ops.name, scope, indexed, deleted)
+	log.Printf("reindex done: target=%s scope=full indexed=%d", target, indexed)
 	return 0
 }
 
@@ -222,6 +241,68 @@ func reindexAll(ctx context.Context, fetch pageFetcher, ops indexOps) (int, int,
 	}
 
 	return int(indexed.Load()), int(deleted.Load()), nil
+}
+
+// rebuilder builds a brand-new index out of band and atomically swaps it into
+// production. A full reindex uses it instead of mutating the live index in place:
+// Prepare creates a fresh, empty rebuild index; Push streams document batches into
+// it WITHOUT waiting per batch (so Meilisearch auto-batches them — the throughput
+// lever); Promote waits for the pushes to finish, swaps the rebuild index over the
+// live one in a single atomic step, and drops the old one. Search keeps serving the
+// old index untouched until the swap, and merges stay cheap because the rebuild
+// index grows from empty rather than re-merging into a full one.
+type rebuilder interface {
+	Prepare(ctx context.Context) error
+	Push(ctx context.Context, docs []search.JobDocument) error
+	Promote(ctx context.Context) error
+}
+
+// reindexFull rebuilds the index from scratch and swaps it in. It streams ONLY
+// open jobs into the fresh index — closed jobs are simply absent (the rebuild
+// index never held them, so unlike the in-place path there is nothing to delete).
+// fetch pages by keyset (id > last seen) so rows inserted or re-ordered during the
+// run cannot be skipped or repeated. Used for full passes; --since stays in place
+// (reindexAll) since a partial index cannot be swapped in wholesale.
+func reindexFull(ctx context.Context, fetch pageFetcher, b rebuilder) (int, error) {
+	if err := b.Prepare(ctx); err != nil {
+		return 0, err
+	}
+
+	var indexed atomic.Int64
+	stopHeartbeat := worker.Heartbeat(progressInterval, func() {
+		log.Printf("reindex: progress indexed=%d", indexed.Load())
+	})
+	defer stopHeartbeat()
+
+	var afterID int64
+	for {
+		jobs, err := fetch(ctx, afterID)
+		if err != nil {
+			return int(indexed.Load()), err
+		}
+		if len(jobs) == 0 {
+			break
+		}
+		afterID = jobs[len(jobs)-1].ID
+
+		docs, _, err := splitJobs(jobs) // closed jobs (deleteIDs) are dropped, not indexed
+		if err != nil {
+			return int(indexed.Load()), err
+		}
+		if err := b.Push(ctx, docs); err != nil {
+			return int(indexed.Load()), err
+		}
+		indexed.Add(int64(len(docs)))
+
+		if len(jobs) < reindexBatchSize {
+			break
+		}
+	}
+
+	if err := b.Promote(ctx); err != nil {
+		return int(indexed.Load()), err
+	}
+	return int(indexed.Load()), nil
 }
 
 // splitJobs partitions a batch from the (deliberately unfiltered) reindex feed:

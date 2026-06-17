@@ -288,3 +288,75 @@ func TestSearchFiltersBySkillsFacet(t *testing.T) {
 		t.Fatalf("skills facet filter hits = %+v, want only go-engineer-acme-aaa", res.Hits)
 	}
 }
+
+func toDocs(t *testing.T, jobs []db.Job) []JobDocument {
+	t.Helper()
+	docs := make([]JobDocument, 0, len(jobs))
+	for _, j := range jobs {
+		d, err := FromJob(j)
+		if err != nil {
+			t.Fatalf("FromJob: %v", err)
+		}
+		docs = append(docs, d)
+	}
+	return docs
+}
+
+// A full rebuild builds a brand-new index and swaps it over the live one in one
+// atomic step: documents only in the OLD set must vanish (a wholesale replace, not
+// a merge), the fresh set must be searchable, and the throwaway rebuild index must
+// be dropped afterwards.
+func TestIntegration_RebuildSwapsFreshIndexAndDropsOld(t *testing.T) {
+	ctx := context.Background()
+	c := startMeili(t)
+
+	if err := c.EnsureIndex(ctx); err != nil {
+		t.Fatalf("EnsureIndex: %v", err)
+	}
+	// Seed the live index with an OLD set: ids 1 and 2.
+	old := toDocs(t, []db.Job{
+		{ID: 1, Title: "Old One", PublicSlug: "old-one-aaa", Enrichment: enrichedJSON(t, enrich.Enrichment{})},
+		{ID: 2, Title: "Old Two", PublicSlug: "old-two-bbb", Enrichment: enrichedJSON(t, enrich.Enrichment{})},
+	})
+	if err := c.IndexJobs(ctx, old); err != nil {
+		t.Fatalf("IndexJobs (seed): %v", err)
+	}
+
+	// Rebuild with a DIFFERENT set: ids 2 and 3 (id 1 dropped, id 3 new).
+	r := c.NewFacetRebuild()
+	if err := r.Prepare(ctx); err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+	fresh := toDocs(t, []db.Job{
+		{ID: 2, Title: "Two", PublicSlug: "two-bbb", Enrichment: enrichedJSON(t, enrich.Enrichment{})},
+		{ID: 3, Title: "Three", PublicSlug: "three-ccc", Enrichment: enrichedJSON(t, enrich.Enrichment{})},
+	})
+	if err := r.Push(ctx, fresh); err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	if err := r.Promote(ctx); err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+
+	res, err := c.Search(ctx, SearchParams{Limit: 100})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	got := map[int64]bool{}
+	for _, h := range res.Hits {
+		got[h.ID] = true
+	}
+	if got[1] {
+		t.Error("id 1 still present; the swap should have dropped the old-only doc")
+	}
+	if !got[2] || !got[3] {
+		t.Errorf("fresh set missing: got ids %v, want 2 and 3", got)
+	}
+	if len(res.Hits) != 2 {
+		t.Errorf("hit count = %d, want 2 (the fresh set only)", len(res.Hits))
+	}
+
+	if _, err := c.manager.GetIndexWithContext(ctx, "jobs_rebuild"); err == nil {
+		t.Error("jobs_rebuild still exists; Promote should drop it")
+	}
+}
