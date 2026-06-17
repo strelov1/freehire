@@ -1,0 +1,6 @@
+# freshteam boards. Provider is the filename; each entry is company + board.
+# board = the Freshteam tenant subdomain (career site is <board>.freshteam.com;
+# see internal/sources/freshteam.go).
+
+- company: Simera
+  board: simera-talent
