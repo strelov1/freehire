@@ -1,0 +1,6 @@
+# Work at a Startup (workatastartup.com), Y Combinator's job board. Boardless: one
+# Algolia-backed index, so the entry carries no board; each job's company comes from the
+# index. Gated — the ingest worker needs WAAS_ALGOLIA_KEY (a logged-in session's Algolia
+# search key) in its environment, else the run errors (it does not crash other sources).
+- company: Work at a Startup
+  provider: workatastartup

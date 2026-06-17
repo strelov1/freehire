@@ -133,6 +133,7 @@ func All(c HTTPClient) map[string]Source {
 		NewAshbyGraphQL(c),
 		// Multi-company aggregators (boardless): one global feed, company per posting.
 		NewTecla(c),
+		NewWorkAtAStartup(c),
 		NewJobStash(c),
 		NewArbeitnow(c),
 		NewRemoteOK(c),
