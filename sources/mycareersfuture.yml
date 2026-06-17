@@ -1,0 +1,5 @@
+# MyCareersFuture (mycareersfuture.gov.sg) Singapore government job portal. Boardless: one
+# public API, so the entry carries no board; each job's company comes from the API. Large
+# portal (~85k postings, all sectors) — the cron schedule governs crawl frequency.
+- company: MyCareersFuture
+  provider: mycareersfuture

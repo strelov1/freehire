@@ -141,6 +141,7 @@ func All(c HTTPClient) map[string]Source {
 		NewTheHub(c),
 		NewGetonbrd(c),
 		NewWantedKR(c),
+		NewMyCareersFuture(c),
 		// International single-company adapters (boardless).
 		NewUber(c),
 		NewAmazon(c),
