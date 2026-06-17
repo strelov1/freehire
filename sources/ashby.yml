@@ -1175,6 +1175,8 @@
   board: tapblaze
 - company: Tavus
   board: tavus
+- company: TechTorch
+  board: techtorch
 - company: Tekton Dynamics
   board: tekton-dynamics
 - company: telli
