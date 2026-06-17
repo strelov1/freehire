@@ -6,8 +6,13 @@ import (
 	"strings"
 )
 
-// leverBaseURL is the Lever postings API root.
-const leverBaseURL = "https://api.lever.co/v0/postings"
+// leverBaseURL is the Lever postings API root (default/US host). leverEUBaseURL is the
+// EU data-residency host, selected by a board entry's region: eu — boards provisioned
+// in the EU 404 on the default host.
+const (
+	leverBaseURL   = "https://api.lever.co/v0/postings"
+	leverEUBaseURL = "https://api.eu.lever.co/v0/postings"
+)
 
 // lever adapts the Lever postings API. The JSON-mode endpoint returns a bare array of
 // postings whose body is split across HTML description/lists/additional fields, which
@@ -22,7 +27,11 @@ func NewLever(c JSONGetter) Source { return lever{http: c} }
 func (lever) Provider() string { return "lever" }
 
 func (l lever) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	url := fmt.Sprintf("%s/%s?mode=json", leverBaseURL, e.Board)
+	base := leverBaseURL
+	if e.Region == "eu" {
+		base = leverEUBaseURL
+	}
+	url := fmt.Sprintf("%s/%s?mode=json", base, e.Board)
 
 	var postings []struct {
 		ID            string `json:"id"`

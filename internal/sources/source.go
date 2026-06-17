@@ -13,11 +13,13 @@ import (
 
 // CompanyEntry is one configured board from a board file (sources/<provider>.yml): the
 // company whose jobs we crawl, the platform it uses (Provider), and the platform-specific
-// board id.
+// board id. Region is an optional per-entry hint for ATS platforms that host tenants on
+// regional API domains (e.g. Lever's EU data-residency host); empty means the default host.
 type CompanyEntry struct {
 	Company  string `yaml:"company"`
 	Provider string `yaml:"provider"`
 	Board    string `yaml:"board"`
+	Region   string `yaml:"region"`
 }
 
 // Job is a raw posting as an adapter yields it, before the pipeline normalizes it

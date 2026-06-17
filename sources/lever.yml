@@ -3503,3 +3503,9 @@
   board: vedatechlabs
 - company: Smile.io
   board: Smile.io
+- company: XM
+  board: xm
+  region: eu
+- company: Silverfin
+  board: silverfin
+  region: eu

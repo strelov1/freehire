@@ -145,3 +145,30 @@ func TestLeverFetchHandlesEmptyHeadingsAndFields(t *testing.T) {
 		t.Errorf("emitted an empty heading for a blank list title\ngot: %s", got)
 	}
 }
+
+func TestLeverFetchDefaultsToGlobalHost(t *testing.T) {
+	// No region set: the board lives on Lever's default (US) API host.
+	fake := &fakeHTTP{body: `[]`}
+	if _, err := NewLever(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Smile.io", Provider: "lever", Board: "Smile.io",
+	}); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if !strings.HasPrefix(fake.gotURL, "https://api.lever.co/v0/postings/") {
+		t.Errorf("default board should hit api.lever.co, got %q", fake.gotURL)
+	}
+}
+
+func TestLeverFetchEURegionUsesEUHost(t *testing.T) {
+	// region: eu selects Lever's EU data-residency host (e.g. XM, Silverfin live there;
+	// their boards 404 on the default host).
+	fake := &fakeHTTP{body: `[]`}
+	if _, err := NewLever(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "XM", Provider: "lever", Board: "xm", Region: "eu",
+	}); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if !strings.HasPrefix(fake.gotURL, "https://api.eu.lever.co/v0/postings/xm") {
+		t.Errorf("eu-region board should hit api.eu.lever.co, got %q", fake.gotURL)
+	}
+}
