@@ -1,0 +1,9 @@
+# Jibe career sites (the career-site product fronting iCIMS). Provider is the filename;
+# each entry is company + board.
+# board = the site's public host, forming https://<board>/api/jobs (see
+# internal/sources/jibe.go). The listing JSON carries the full description, so there is
+# no per-job detail fetch.
+# Each board validated live (/api/jobs returns postings) before adding.
+
+- company: GitHub
+  board: www.github.careers
