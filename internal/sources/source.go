@@ -51,6 +51,19 @@ type Source interface {
 	Fetch(ctx context.Context, e CompanyEntry) ([]Job, error)
 }
 
+// StreamingSource is a Source that can also stream its postings to a sink as it crawls, so the
+// pipeline persists them incrementally rather than buffering the whole board until Fetch
+// returns. An adapter with an expensive per-posting detail fan-out (eightfold, whose large
+// catalogues take many minutes under the source's rate limit) implements it so a long crawl's
+// progress is saved as it goes — partial work survives an interrupted or rate-limited run, and
+// the catalogue converges across runs. emit is called once per ready posting and may be called
+// concurrently. FetchStream returns an error only for a board-level failure (e.g. the listing
+// failed); a single dropped posting is simply not emitted.
+type StreamingSource interface {
+	Source
+	FetchStream(ctx context.Context, e CompanyEntry, emit func(Job)) error
+}
+
 // boardless marks an adapter whose API has no per-tenant board id, so config
 // validation lets its entries omit board. A boardless adapter may serve one company
 // (greenhouse/lever and the other multi-tenant ATS adapters are NOT boardless and
@@ -177,6 +190,28 @@ func fetchDetails[P any](postings []P, workers int, fetch func(P) (Job, bool)) [
 		}
 	}
 	return out
+}
+
+// fetchDetailsStream maps each posting to a Job via fetch, concurrently with a bounded worker
+// pool, emitting each successful Job to emit as soon as its detail completes (a posting whose
+// fetch returns ok=false is dropped). Unlike fetchDetails it does not buffer or preserve order,
+// so a streaming adapter persists postings incrementally. emit is called from worker goroutines
+// — the caller must make it concurrency-safe. It blocks until every posting has been attempted.
+func fetchDetailsStream[P any](postings []P, workers int, fetch func(P) (Job, bool), emit func(Job)) {
+	sem := make(chan struct{}, workers)
+	var wg sync.WaitGroup
+	for _, p := range postings {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(p P) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			if j, ok := fetch(p); ok {
+				emit(j)
+			}
+		}(p)
+	}
+	wg.Wait()
 }
 
 // isRemote infers a job's remote flag from its location text. Adapters share it so

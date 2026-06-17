@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -91,20 +92,37 @@ type eightfoldDetail struct {
 	CanonicalPositionURL string `json:"canonicalPositionUrl"`
 }
 
+// Fetch buffers the whole board by collecting the streamed postings. The pipeline prefers
+// FetchStream (incremental save); Fetch stays for non-streaming callers and tests.
 func (s eightfold) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+	var (
+		mu   sync.Mutex
+		jobs []Job
+	)
+	err := s.FetchStream(ctx, e, func(j Job) {
+		mu.Lock()
+		jobs = append(jobs, j)
+		mu.Unlock()
+	})
+	return jobs, err
+}
+
+// FetchStream lists the board's positions, then fetches each one's detail concurrently and
+// emits the assembled Job the moment its detail completes — so the pipeline persists a long,
+// rate-limited crawl incrementally. A failed detail is dropped (not emitted); only a listing
+// failure is returned as a board-level error.
+func (s eightfold) FetchStream(ctx context.Context, e CompanyEntry, emit func(Job)) error {
 	b, err := parseEightfoldBoard(e.Board)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
 	positions, err := s.listPositions(ctx, b)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	return fetchDetails(positions, eightfoldDetailWorkers, func(p eightfoldPosition) (Job, bool) {
-		return s.detail(ctx, e, b, p)
-	}), nil
+	fetchDetailsStream(positions, eightfoldDetailWorkers,
+		func(p eightfoldPosition) (Job, bool) { return s.detail(ctx, e, b, p) }, emit)
+	return nil
 }
 
 // getJSONRetrying GETs url, retrying rate-limit responses (403/429) with exponential backoff

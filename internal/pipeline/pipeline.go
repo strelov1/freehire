@@ -169,6 +169,13 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) (ingest
 		return 0, 1, 0
 	}
 
+	// A streaming adapter persists postings as it crawls, so a long rate-limited board's
+	// progress is saved incrementally (and survives an interrupted run) rather than buffered
+	// until the whole board finishes.
+	if ss, streaming := src.(sources.StreamingSource); streaming {
+		return r.ingestStream(ctx, e, ss)
+	}
+
 	raw, err := src.Fetch(ctx, e)
 	if err != nil {
 		// Log the cause so a failed board is diagnosable (the source error carries
@@ -193,6 +200,44 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) (ingest
 	if skipped > 0 {
 		log.Printf("ingest: %s board %q (%s): skipped %d/%d jobs on save error (e.g. %v)",
 			e.Provider, e.Board, e.Company, skipped, len(raw), firstErr)
+	}
+	return ingested, 0, skipped
+}
+
+// ingestStream drives a streaming board: it persists each posting the adapter emits as it is
+// crawled, so progress is durable mid-run. The emit sink normalizes and saves under a mutex
+// (the adapter may emit concurrently) and tallies the same ingested/skipped counts as the
+// buffered path; a board-level FetchStream error counts the board failed but keeps whatever was
+// already saved (the 48h unseen-sweep guards against a short crawl closing the un-reached tail).
+func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sources.StreamingSource) (ingested, failed, skipped int) {
+	var (
+		mu       sync.Mutex
+		firstErr error
+		total    int
+	)
+	emit := func(j sources.Job) {
+		mu.Lock()
+		defer mu.Unlock()
+		total++
+		if err := r.Store.Save(ctx, normalizeJob(e, j)); err != nil {
+			skipped++
+			if firstErr == nil {
+				firstErr = err
+			}
+			return
+		}
+		ingested++
+	}
+
+	err := ss.FetchStream(ctx, e, emit)
+	if skipped > 0 {
+		log.Printf("ingest: %s board %q (%s): skipped %d/%d jobs on save error (e.g. %v)",
+			e.Provider, e.Board, e.Company, skipped, total, firstErr)
+	}
+	if err != nil {
+		log.Printf("ingest: %s board %q (%s) failed after %d saved: %v",
+			e.Provider, e.Board, e.Company, ingested, err)
+		return ingested, 1, skipped
 	}
 	return ingested, 0, skipped
 }

@@ -41,12 +41,87 @@ func (f fakeSource) Fetch(context.Context, sources.CompanyEntry) ([]sources.Job,
 	return f.jobs, f.err
 }
 
+// fakeStreamingSource implements sources.StreamingSource: FetchStream emits jobs through the
+// sink, optionally failing after failAfter jobs (-1 = never), so a test can prove the runner
+// persists incrementally and keeps the jobs emitted before a mid-crawl error. Its Fetch returns
+// ALL jobs with no error, so a test that sees a partial/failed result proves the streaming path
+// (not Fetch) was used.
+type fakeStreamingSource struct {
+	provider  string
+	jobs      []sources.Job
+	failAfter int
+}
+
+func (f fakeStreamingSource) Provider() string { return f.provider }
+
+func (f fakeStreamingSource) Fetch(context.Context, sources.CompanyEntry) ([]sources.Job, error) {
+	return f.jobs, nil
+}
+
+func (f fakeStreamingSource) FetchStream(_ context.Context, _ sources.CompanyEntry, emit func(sources.Job)) error {
+	for i, j := range f.jobs {
+		if f.failAfter >= 0 && i >= f.failAfter {
+			return errors.New("stream failed midway")
+		}
+		emit(j)
+	}
+	return nil
+}
+
 func registry(srcs ...sources.Source) map[string]sources.Source {
 	m := make(map[string]sources.Source)
 	for _, s := range srcs {
 		m[s.Provider()] = s
 	}
 	return m
+}
+
+// TestRunStreamsAndPersistsPartialBeforeError proves the runner consumes a StreamingSource via
+// FetchStream and persists each job as it is emitted: when the stream fails mid-crawl, the jobs
+// emitted before the error stay saved (incremental), and the board is counted failed. Via the
+// old Fetch path this source would save all 3 with no failure, so this result is unique to the
+// streaming path.
+func TestRunStreamsAndPersistsPartialBeforeError(t *testing.T) {
+	src := fakeStreamingSource{provider: "eightfold", failAfter: 2, jobs: []sources.Job{
+		{ExternalID: "1", Title: "A", Company: "C", URL: "u"},
+		{ExternalID: "2", Title: "B", Company: "C", URL: "u"},
+		{ExternalID: "3", Title: "D", Company: "C", URL: "u"},
+	}}
+	store := &fakeStore{}
+	r := Runner{Registry: registry(src), Store: store}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "C", Provider: "eightfold", Board: "host.example/dom"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(store.saved) != 2 {
+		t.Fatalf("len(saved) = %d, want 2 (jobs emitted before the error persist)", len(store.saved))
+	}
+	if stats.Total().Ingested != 2 || stats.Total().Failed != 1 {
+		t.Fatalf("stats = %+v, want Ingested=2 Failed=1", stats.Total())
+	}
+}
+
+// TestRunStreamsAllJobs verifies a clean streaming crawl saves every emitted job.
+func TestRunStreamsAllJobs(t *testing.T) {
+	src := fakeStreamingSource{provider: "eightfold", failAfter: -1, jobs: []sources.Job{
+		{ExternalID: "1", Title: "A", Company: "C", URL: "u"},
+		{ExternalID: "2", Title: "B", Company: "C", URL: "u"},
+	}}
+	store := &fakeStore{}
+	r := Runner{Registry: registry(src), Store: store}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "C", Provider: "eightfold", Board: "host.example/dom"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(store.saved) != 2 || stats.Total().Ingested != 2 || stats.Total().Failed != 0 {
+		t.Fatalf("saved=%d stats=%+v, want 2 saved Ingested=2 Failed=0", len(store.saved), stats.Total())
+	}
 }
 
 func TestRunNormalizesAndNamespaces(t *testing.T) {
