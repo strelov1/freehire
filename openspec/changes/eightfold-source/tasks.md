@@ -23,7 +23,12 @@
   bodies, asserting all positions are yielded once, the loop stops, and a detail-fetch failure
   drops only that one posting.
 - [x] 3.2 Register `NewEightfold(c)` in `sources.All` and add the `sources/eightfold.yml` board
-  file with the Microsoft entry (`board: "apply.careers.microsoft.com/microsoft.com"`).
+  file (Microsoft + Micron on pcsx; Netflix on the legacy list).
+- [x] 3.3 (RED→GREEN) Support the legacy `/api/apply/v2/jobs` list generation with auto-detect:
+  `listPositions` tries pcsx, then falls back to the v2 list (top-level positions/count,
+  `t_create` date, single-string `location`, `work_location_option`). One `eightfoldPosition`
+  decodes both field-name variants; the detail endpoint is shared. Test the fallback with a fake
+  serving no pcsx route + a v2 list, asserting the v2 fields map correctly.
 
 ## 4. Quality & integration
 

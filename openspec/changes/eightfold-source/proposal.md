@@ -24,17 +24,24 @@ board.
   host (for request paths) and the required `domain` query parameter (the tenant key) — so the
   board id is `"host/domain"`, e.g. `"apply.careers.microsoft.com/microsoft.com"`, parsed the
   same way `oracle` splits `"host/site"`.
-- List via `GET /api/pcsx/search`, paging by `start` (page size fixed at 10 by the server)
-  until a page yields no positions or the running count reaches `data.count`. The list omits
-  the description, so each position's detail is fetched (bounded concurrent fan-out via the
-  shared `fetchDetails`) for the `job_description` HTML.
+- Eightfold has **two list-API generations** and a tenant supports exactly one (the other
+  returns `403`): the newer `GET /api/pcsx/search` (positions under `data`, `postedTs` date —
+  e.g. Microsoft, Micron) and the legacy `GET /api/apply/v2/jobs` (top-level positions,
+  `t_create` date — e.g. Netflix). The adapter **auto-detects**: it tries the pcsx list and, on
+  error, falls back to the v2 list, so a board is just `host/domain` for either generation. The
+  detail endpoint `/api/apply/v2/jobs/<id>` is shared by both.
+- List paging is by `start` (page size fixed at 10 by the server) until a page yields no
+  positions or the running count reaches the catalogue total. The list omits the description,
+  so each position's detail is fetched (bounded concurrent fan-out via the shared
+  `fetchDetails`) for the `job_description` HTML.
 - Each posting maps to the normalized job shape: `external_id` = Eightfold's numeric position
   id; `url` = the detail's `canonicalPositionUrl` (falling back to
   `https://<host>/careers/job/<id>`); `title`, `location` (first of the list `locations`), and
   `posted_at` (from the list `postedTs` Unix-epoch) from the list; `work_mode` from the list
   `workLocationOption` via the existing `workplaceTypeMode` helper; `description` = sanitized
   HTML from the detail's `job_description`.
-- Add a `sources/eightfold.yml` board file with the Microsoft entry.
+- Add a `sources/eightfold.yml` board file (Microsoft, Micron on pcsx; Netflix on the legacy
+  list).
 - Regenerate the web TS contracts (`make gen-contracts`): `eightfold` is a non-boardless
   provider, so `sources.FilterableProviders()` adds it to `SOURCE_VALUES` automatically.
 
@@ -53,7 +60,8 @@ board.
 
 - **New code**: `internal/sources/eightfold.go` + `internal/sources/eightfold_test.go`; one
   registration line in `internal/sources/source.go` (`sources.All`).
-- **Config**: a new `sources/eightfold.yml` board file (Microsoft entry). No new env vars.
+- **Config**: a new `sources/eightfold.yml` board file (Microsoft, Micron, Netflix). No new env
+  vars.
 - **DB**: none — reuses `UpsertJob` (`source = "eightfold"`, namespaced `external_id`). No
   migration.
 - **Contracts**: `web/src/lib/generated/contracts.ts` regenerated (adds `eightfold` to

@@ -1,8 +1,14 @@
 # eightfold (Eightfold AI) career sites. Provider is the filename; board =
 # "<host>/<domain>" (see internal/sources/eightfold.go), where host paths the
 # public API and domain is the Eightfold tenant key required as a query parameter,
-# e.g. apply.careers.microsoft.com/microsoft.com. Each board validated live
-# (/api/pcsx/search returned >0 positions) before adding.
+# e.g. apply.careers.microsoft.com/microsoft.com. The adapter auto-detects the
+# list-API generation (newer /api/pcsx/search vs legacy /api/apply/v2/jobs), so a
+# board is just host/domain either way. Each board validated live (one of the two
+# list endpoints returned >0 positions) before adding.
 
 - company: Microsoft
   board: apply.careers.microsoft.com/microsoft.com
+- company: Micron
+  board: careers.micron.com/micron.com
+- company: Netflix
+  board: explore.jobs.netflix.net/netflix.com

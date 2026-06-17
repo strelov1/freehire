@@ -7,10 +7,13 @@ The system SHALL register an `eightfold` adapter so an Eightfold-hosted careers 
 file. The adapter SHALL be **board-based** (not boardless): its board id SHALL be
 `"host/domain"` — the public host used for request paths and the required `domain` query
 parameter (the Eightfold tenant key) — and the adapter SHALL reject a board missing either
-half. It SHALL fetch postings over the shared `HTTPClient` from two public GET-JSON endpoints:
-the position list `GET https://<host>/api/pcsx/search?domain=<domain>&query=&start=<n>&num=10`
-and, because that list omits the description, each position's detail
-`GET https://<host>/api/apply/v2/jobs/<id>?domain=<domain>`. The adapter SHALL yield the
+half. It SHALL fetch postings over the shared `HTTPClient`. Because Eightfold runs two list-API
+generations and a tenant supports exactly one, the adapter SHALL auto-detect: it SHALL try the
+newer position list `GET https://<host>/api/pcsx/search?domain=<domain>&query=&start=<n>&num=10`
+and, if that fails, fall back to the legacy list
+`GET https://<host>/api/apply/v2/jobs?domain=<domain>&query=&start=<n>&num=10`. Because the list
+omits the description, the adapter SHALL fetch each position's detail
+`GET https://<host>/api/apply/v2/jobs/<id>?domain=<domain>` (shared by both generations). The adapter SHALL yield the
 normalized job shape (at least title, url, location, description, and the platform's native
 posting id), with `external_id` set to the position's numeric id, `url` set to the detail's
 `canonicalPositionUrl` (falling back to `https://<host>/careers/job/<id>`), `description` as
@@ -34,6 +37,14 @@ Unix-epoch `postedTs`, and `work_mode` derived from the list position's `workLoc
   `workLocationOption`) come from the list position, whose `url` is the detail's
   `canonicalPositionUrl` (or `https://<host>/careers/job/<id>` when that is absent), and whose
   `description` is sanitized HTML from the detail's `job_description`
+
+#### Scenario: A legacy tenant falls back to the v2 list
+
+- **WHEN** a board's `/api/pcsx/search` request fails (a legacy tenant returns `403`)
+- **THEN** the adapter falls back to `GET https://<host>/api/apply/v2/jobs?domain=<domain>&…`,
+  reads the top-level `positions`/`count`, and maps each position (taking `posted_at` from
+  `t_create`, `location` from the single-string `location` field, and `work_mode` from
+  `work_location_option`) — yielding the same normalized job shape as the pcsx generation
 
 #### Scenario: A failed detail request drops only that posting
 

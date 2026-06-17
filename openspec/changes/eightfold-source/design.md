@@ -38,6 +38,19 @@ This is the same list+detail shape as `oracle`, differing only in the endpoint s
   need not equal the host's registrable domain). So the board carries both explicitly;
   `parseEightfoldBoard` splits on the first `/` and rejects a board missing either half. This
   reuses the established two-part board convention rather than guessing a domain from the host.
+- **Two list-API generations, auto-detected.** Eightfold tenants run one of two list APIs: the
+  newer `/api/pcsx/search` (positions under `data`, `postedTs`, `workLocationOption`; e.g.
+  Microsoft, Micron) or the legacy `/api/apply/v2/jobs` (top-level positions/count, `t_create`,
+  `work_location_option`, and a list-level `canonicalPositionUrl`; e.g. Netflix). A tenant
+  supports exactly one — the other returns `403` — so `listPositions` tries pcsx first and, on
+  any error, falls back to the v2 list (restarting from the first page). This keeps the board id
+  uniform (`host/domain`) for every tenant, which matters for bulk-adding discovered tenants
+  without knowing each one's generation; the cost is one wasted (fast, 403) request per legacy
+  board per crawl. One `eightfoldPosition` struct decodes both shapes (both field-name variants
+  as separate tags, unused ones stay zero); the detail endpoint `/api/apply/v2/jobs/<id>` is
+  shared, so only the list URL + envelope differ. `posted_at` takes `postedTs` else `t_create`;
+  `location` takes the v2 single-string `location` else the first of `locations[]`; `work_mode`
+  takes whichever work-option field is set.
 - **Page by `start`; the server caps `num` at 10.** Requesting `num=200` still returns 10
   positions, so the page size is fixed at 10 and `start` is the only lever. The loop advances
   `start` by the number of positions actually returned and stops when a page is empty OR the

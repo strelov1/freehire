@@ -167,6 +167,69 @@ func TestEightfoldDropsFailedDetail(t *testing.T) {
 	}
 }
 
+// TestEightfoldFetchFallsBackToLegacyV2List covers the old Eightfold generation (e.g.
+// Netflix), whose listing lives at /api/apply/v2/jobs (top-level positions/count, t_create
+// date) instead of /api/pcsx/search. With no pcsx route the pcsx request errors and the
+// adapter falls back to the v2 list; the shared detail endpoint is unchanged.
+func TestEightfoldFetchFallsBackToLegacyV2List(t *testing.T) {
+	fake := (&routedHTTP{}).
+		// note: "apply/v2/jobs?" matches the LIST, "jobs/<id>" matches the DETAIL.
+		route("apply/v2/jobs?", `{"count": 2, "positions": [
+			{"id": 790, "name": "UX Designer", "location": "Helsinki,Finland",
+			 "t_create": 1779926400, "work_location_option": "onsite",
+			 "canonicalPositionUrl": "https://explore.jobs.netflix.net/careers/job/790"},
+			{"id": 791, "name": "Finance Manager", "location": "Sao Paulo,Brazil", "t_create": 0}
+		]}`).
+		route("jobs/790", `{"id": 790, "job_description": "<p>Design.</p>",
+			"canonicalPositionUrl": "https://explore.jobs.netflix.net/careers/job/790?microsite=netflix.com"}`).
+		route("jobs/791", `{"id": 791, "job_description": "<p>Finance.</p>"}`)
+
+	jobs, err := NewEightfold(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Netflix", Provider: "eightfold",
+		Board: "explore.jobs.netflix.net/netflix.com",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("len(jobs) = %d, want 2", len(jobs))
+	}
+	byID := map[string]Job{}
+	for _, j := range jobs {
+		byID[j.ExternalID] = j
+	}
+
+	j := byID["790"]
+	if j.Title != "UX Designer" {
+		t.Errorf("Title = %q", j.Title)
+	}
+	if j.Location != "Helsinki,Finland" {
+		t.Errorf("Location = %q (want the v2 single-string location)", j.Location)
+	}
+	if j.WorkMode != "onsite" {
+		t.Errorf("WorkMode = %q, want onsite", j.WorkMode)
+	}
+	if j.PostedAt == nil {
+		t.Error("PostedAt = nil, want a date from t_create")
+	}
+	// detail's canonicalPositionUrl wins over the list's.
+	if j.URL != "https://explore.jobs.netflix.net/careers/job/790?microsite=netflix.com" {
+		t.Errorf("URL = %q, want the detail canonical url", j.URL)
+	}
+	if !strings.Contains(j.Description, "Design.") {
+		t.Errorf("Description = %q", j.Description)
+	}
+
+	data := byID["791"]
+	// detail lacks a canonical url and the list position lacks one → host/careers/job fallback.
+	if data.URL != "https://explore.jobs.netflix.net/careers/job/791" {
+		t.Errorf("URL = %q, want the host fallback", data.URL)
+	}
+	if data.PostedAt != nil {
+		t.Errorf("PostedAt = %v, want nil for t_create=0", data.PostedAt)
+	}
+}
+
 // TestEightfoldFetchRejectsBadBoard verifies a malformed board fails fast before any request.
 func TestEightfoldFetchRejectsBadBoard(t *testing.T) {
 	_, err := NewEightfold(&routedHTTP{}).Fetch(context.Background(), CompanyEntry{
