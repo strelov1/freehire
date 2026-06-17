@@ -1,0 +1,7 @@
+# radancy boards. Provider is the filename; each entry is company + board.
+- company: Arm
+  board: careers.arm.com
+- company: AstraZeneca
+  board: careers.astrazeneca.com
+- company: ING
+  board: careers.ing.com

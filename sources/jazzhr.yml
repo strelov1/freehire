@@ -1,0 +1,21 @@
+# jazzhr boards. Provider is the filename; each entry is company + board.
+- company: Aramco Services
+  board: aramcoservices
+- company: Collier Simon - Career Page
+  board: colliersimon
+- company: Davies Risk Services
+  board: daviesriskservices
+- company: Illinois Secretary of State
+  board: ilsos
+- company: Local Progress
+  board: localprogress
+- company: NRG Consulting Group
+  board: nrgconsultinggroup
+- company: ProAutomated
+  board: proautomated
+- company: ROUSH
+  board: roush
+- company: Truth Initiative
+  board: truthinitiative
+- company: Waldron Private Wealth
+  board: waldronprivatewealth

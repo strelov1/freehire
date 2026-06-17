@@ -1,0 +1,3 @@
+# wpyoast boards. Provider is the filename; each entry is company + board.
+- company: The Planet Group
+  board: careers.theplanetgroup.com
