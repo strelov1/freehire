@@ -180,6 +180,7 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/jobs/search", a.SearchJobs)
 	api.Get("/jobs/facets", a.JobFacets)
 	api.Get("/jobs/:slug", a.GetJob)
+	api.Get("/jobs/:slug/similar", a.SimilarJobs)
 	api.Get("/companies", a.ListCompanies)
 	api.Get("/companies/:slug", a.GetCompany)
 

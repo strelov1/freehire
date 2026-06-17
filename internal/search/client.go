@@ -371,6 +371,42 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, erro
 	return SearchResult{Hits: hits, Total: resp.EstimatedTotalHits}, nil
 }
 
+// SimilarJobs returns the jobs nearest to job id in embedding space, queried
+// against the semantic index by the document's stored vector (no query text, no
+// re-embedding). The semantic index holds open jobs only, so neighbours are open
+// jobs without any added filter. Meilisearch's similar endpoint already excludes
+// the source document, but we over-fetch by one and drop it defensively rather
+// than depend on that — and to avoid making the primary key a filterable
+// attribute just to express "id != source".
+func (c *Client) SimilarJobs(ctx context.Context, id int64, limit int) ([]JobDocument, error) {
+	var resp meilisearch.SimilarDocumentResult
+	err := c.semantic.SearchSimilarDocumentsWithContext(ctx, &meilisearch.SimilarDocumentQuery{
+		Id:       id,
+		Embedder: embedderName,
+		Limit:    int64(limit) + 1,
+	}, &resp)
+	if err != nil {
+		return nil, fmt.Errorf("search: similar: %w", err)
+	}
+
+	var hits []JobDocument
+	if err := resp.Hits.DecodeInto(&hits); err != nil {
+		return nil, fmt.Errorf("search: decode similar hits: %w", err)
+	}
+
+	out := make([]JobDocument, 0, limit)
+	for _, h := range hits {
+		if h.ID == id {
+			continue
+		}
+		if len(out) == limit {
+			break
+		}
+		out = append(out, h)
+	}
+	return out, nil
+}
+
 // awaitTask blocks until a Meilisearch task settles and reports a failed task as
 // an error.
 func (c *Client) awaitTask(ctx context.Context, idx meilisearch.IndexManager, taskUID int64) error {

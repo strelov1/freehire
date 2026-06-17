@@ -16,11 +16,20 @@ type fakeSearcher struct {
 	got search.SearchParams
 	res search.SearchResult
 	err error
+	// similar-jobs call recording
+	similarLimit int
+	similarHits  []search.JobDocument
+	similarErr   error
 }
 
 func (f *fakeSearcher) Search(_ context.Context, p search.SearchParams) (search.SearchResult, error) {
 	f.got = p
 	return f.res, f.err
+}
+
+func (f *fakeSearcher) SimilarJobs(_ context.Context, _ int64, limit int) ([]search.JobDocument, error) {
+	f.similarLimit = limit
+	return f.similarHits, f.similarErr
 }
 
 func searchApp(s searcher) *fiber.App {

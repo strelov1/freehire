@@ -123,6 +123,14 @@ export function createApi(
     return body.data;
   }
 
+  /** Jobs semantically nearest to the one addressed by `slug` — the "Similar jobs"
+   *  section on the detail page. Same Job wire shape as the list, so the same card
+   *  renders them; the source job is excluded by the backend. */
+  async function getSimilarJobs(slug: string): Promise<Job[]> {
+    const body = await request<{ data: Job[] }>(`/api/v1/jobs/${slug}/similar`);
+    return body.data;
+  }
+
   /** Full-text search over jobs. `facets` carries the query text and any facet
    *  filters (built by the caller); pagination is appended here. Results are the
    *  same Job wire shape as listJobs, so views render them with the same
@@ -486,6 +494,7 @@ export function createApi(
   return {
     listJobs,
     getJob,
+    getSimilarJobs,
     searchJobs,
     facetCounts,
     listCompanies,
@@ -543,6 +552,7 @@ export const api = createApi();
 export const {
   listJobs,
   getJob,
+  getSimilarJobs,
   searchJobs,
   facetCounts,
   listCompanies,

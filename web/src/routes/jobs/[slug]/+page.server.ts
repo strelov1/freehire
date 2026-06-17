@@ -7,13 +7,13 @@ import type { PageServerLoad } from './$types';
 // initial HTML. A 404 from the API becomes a SvelteKit 404 page (not a 200
 // shell); other failures bubble to the 500 page.
 export const load: PageServerLoad = async ({ params, fetch }) => {
-  try {
-    const job = await serverApi(fetch).getJob(params.slug);
-    return { job };
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 404) {
-      error(404, 'Job not found');
-    }
+  const api = serverApi(fetch);
+  const job = await api.getJob(params.slug).catch((e) => {
+    if (e instanceof ApiError && e.status === 404) error(404, 'Job not found');
     throw e;
-  }
+  });
+  // Similar jobs are a non-essential discovery aid: a failure (search disabled,
+  // no neighbours yet) must not break the page, so it degrades to an empty list.
+  const similar = await api.getSimilarJobs(params.slug).catch(() => []);
+  return { job, similar };
 };

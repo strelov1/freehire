@@ -289,6 +289,65 @@ func TestSearchFiltersBySkillsFacet(t *testing.T) {
 	}
 }
 
+// SimilarJobs returns the nearest neighbours of a job from the semantic index:
+// other jobs are returned (ranked by embedding proximity), the source job is never
+// in its own list, and the caller's limit is honoured.
+func TestIntegration_SimilarJobs(t *testing.T) {
+	ctx := context.Background()
+	c := startMeili(t)
+
+	if err := c.EnsureSemanticIndex(ctx); err != nil {
+		t.Fatalf("EnsureSemanticIndex: %v", err)
+	}
+
+	jobs := []db.Job{
+		{ID: 1, Title: "Senior Golang Backend Engineer", Company: "Acme", Location: "Berlin",
+			Description: "Build distributed backend services and APIs in Go.",
+			PublicSlug:  "senior-golang-backend-engineer-acme-aaa",
+			Enrichment:  enrichedJSON(t, enrich.Enrichment{})},
+		{ID: 2, Title: "Backend Software Engineer (Go)", Company: "Beta", Location: "Remote",
+			Description: "Design server-side microservices and REST APIs in Golang.",
+			PublicSlug:  "backend-software-engineer-go-beta-bbb",
+			Enrichment:  enrichedJSON(t, enrich.Enrichment{})},
+		{ID: 3, Title: "Frontend React Developer", Company: "Gamma", Location: "Remote",
+			Description: "Build user interfaces with React and TypeScript.",
+			PublicSlug:  "frontend-react-developer-gamma-ccc",
+			Enrichment:  enrichedJSON(t, enrich.Enrichment{})},
+		{ID: 4, Title: "Data Scientist", Company: "Delta", Location: "London",
+			Description: "Train machine learning models and analyse datasets in Python.",
+			PublicSlug:  "data-scientist-delta-ddd",
+			Enrichment:  enrichedJSON(t, enrich.Enrichment{})},
+	}
+	if err := c.IndexSemanticJobs(ctx, toDocs(t, jobs)); err != nil {
+		t.Fatalf("IndexSemanticJobs: %v", err)
+	}
+
+	t.Run("returns neighbours and excludes the source job", func(t *testing.T) {
+		hits, err := c.SimilarJobs(ctx, 1, 10)
+		if err != nil {
+			t.Fatalf("SimilarJobs: %v", err)
+		}
+		if len(hits) == 0 {
+			t.Fatal("SimilarJobs returned no neighbours")
+		}
+		for _, h := range hits {
+			if h.ID == 1 {
+				t.Errorf("source job id 1 must not appear in its own similar list: %+v", hits)
+			}
+		}
+	})
+
+	t.Run("honours the limit", func(t *testing.T) {
+		hits, err := c.SimilarJobs(ctx, 1, 2)
+		if err != nil {
+			t.Fatalf("SimilarJobs: %v", err)
+		}
+		if len(hits) > 2 {
+			t.Errorf("limit 2 returned %d hits", len(hits))
+		}
+	})
+}
+
 func toDocs(t *testing.T, jobs []db.Job) []JobDocument {
 	t.Helper()
 	docs := make([]JobDocument, 0, len(jobs))

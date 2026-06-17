@@ -15,6 +15,7 @@ import (
 // configured (no MEILI_MASTER_KEY) and the endpoint reports 503.
 type searcher interface {
 	Search(ctx context.Context, p search.SearchParams) (search.SearchResult, error)
+	SimilarJobs(ctx context.Context, id int64, limit int) ([]search.JobDocument, error)
 }
 
 // defaultSemanticRatio is 0 — pure keyword search against the always-fresh facet
