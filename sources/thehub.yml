@@ -1,0 +1,4 @@
+# TheHub (thehub.io) Nordic startup job board. Boardless: one site crawled via its
+# sitemap, so the entry carries no board; each job's company comes from the posting.
+- company: TheHub
+  provider: thehub
