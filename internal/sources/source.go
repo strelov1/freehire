@@ -144,6 +144,10 @@ func All(c HTTPClient) map[string]Source {
 		NewGetonbrd(c),
 		NewWantedKR(c),
 		NewMyCareersFuture(c),
+		NewWorkingNomads(c),
+		NewHimalayas(c),
+		NewRemotive(c),
+		NewJustJoin(c),
 		// International single-company adapters (boardless).
 		NewUber(c),
 		NewAmazon(c),
@@ -246,15 +250,15 @@ func workModeFromRemote(remote bool) string {
 	return ""
 }
 
-// workplaceTypeMode maps an ATS workplace-type enum (as Lever exposes) to our work
-// mode vocabulary; an unspecified/unknown value yields "".
+// workplaceTypeMode maps an ATS workplace-type enum (as Lever and JustJoin expose) to our
+// work mode vocabulary; an unspecified/unknown value yields "".
 func workplaceTypeMode(t string) string {
 	switch strings.ToLower(strings.TrimSpace(t)) {
 	case "remote":
 		return "remote"
 	case "hybrid":
 		return "hybrid"
-	case "on-site", "onsite", "on site":
+	case "on-site", "onsite", "on site", "office":
 		return "onsite"
 	default:
 		return ""

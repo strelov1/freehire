@@ -1,0 +1,5 @@
+# JustJoin.it Polish/CEE IT marketplace. Boardless: one public API
+# (api.justjoin.it/v2/user-panel/offers/by-cursor), so the entry carries no board; each job's
+# company comes from the posting, not this placeholder.
+- company: JustJoin
+  provider: justjoin

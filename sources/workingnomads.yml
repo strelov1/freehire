@@ -1,0 +1,5 @@
+# Working Nomads remote-jobs aggregator. Boardless: one public feed
+# (workingnomads.com/api/exposed_jobs/), so the entry carries no board; each job's company
+# comes from the posting, not this placeholder.
+- company: Working Nomads
+  provider: workingnomads
