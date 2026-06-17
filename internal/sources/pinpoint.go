@@ -34,6 +34,7 @@ func (p pinpoint) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			Location                 struct {
 				City     string `json:"city"`
 				Province string `json:"province"`
+				Name     string `json:"name"`
 			} `json:"location"`
 		} `json:"data"`
 	}
@@ -46,11 +47,14 @@ func (p pinpoint) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		// Pinpoint splits the body across separate HTML sections.
 		body := d.Description + d.KeyResponsibilities + d.SkillsKnowledgeExpertise + d.Benefits
 		jobs = append(jobs, Job{
-			ExternalID:  d.ID,
-			URL:         d.URL,
-			Title:       d.Title,
-			Company:     e.Company,
-			Location:    joinNonEmpty(d.Location.City, d.Location.Province),
+			ExternalID: d.ID,
+			URL:        d.URL,
+			Title:      d.Title,
+			Company:    e.Company,
+			// Prefer the structured city/province; some boards leave both empty and
+			// only fill the human-readable name ("Remote", "Pittsburgh, PA"), so fall
+			// back to it rather than yielding a blank location.
+			Location:    firstNonEmpty(joinNonEmpty(d.Location.City, d.Location.Province), d.Location.Name),
 			Description: sanitizeHTML(body),
 			Remote:      d.WorkplaceType == "remote",
 			PostedAt:    nil, // the postings feed carries no publish date
