@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"fmt"
+	"log"
 )
 
 // mycareersfuture adapts mycareersfuture.gov.sg, the Singapore government job portal.
@@ -57,7 +58,15 @@ func (s mycareersfuture) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, erro
 		}
 		url := fmt.Sprintf(mcfListURL, mcfPageSize, page)
 		if err := s.http.GetJSON(ctx, url, &resp); err != nil {
-			return nil, fmt.Errorf("mycareersfuture: page %d: %w", page, err)
+			if page == 0 {
+				return nil, fmt.Errorf("mycareersfuture: page %d: %w", page, err)
+			}
+			// The portal rate-limits (429) a long paginated sweep partway through. Stop with
+			// the jobs gathered so far rather than discarding the whole crawl — the next run
+			// re-fetches idempotently. Erroring only on the very first page keeps a genuinely
+			// dead board a failure.
+			log.Printf("mycareersfuture: stopping at page %d (%v); keeping %d jobs gathered so far", page, err, len(jobs))
+			break
 		}
 		if len(resp.Results) == 0 {
 			break
