@@ -6,6 +6,11 @@ deduplicates them, and enriches them with AI; everything is served over an HTTP
 API with rich filters and full-text search. Fully open and transparent, designed
 to make adding a new source a single entry in a config file.
 
+Currently aggregating **1.1M+ live job postings** from **29,000+ companies**
+across **50+ sources** — pulled directly from company ATS platforms (Workday,
+Greenhouse, Lever, Ashby, iCIMS and a long tail of others), so every listing links
+straight to the original posting. See [Sources](#sources) for the full breakdown.
+
 ## Stack
 
 - **Go** + [Fiber v2](https://gofiber.io/) — HTTP server
@@ -128,6 +133,67 @@ slug.
 
 Auth legend: **✓** session cookie or API key · **🍪** session cookie only.
 
+## Sources
+
+Live catalogue snapshot — **53 sources**, **29,202 companies**, **1,130,933 open
+postings** (1,154,614 total). Counts are open postings unless noted.
+
+| Source | Companies | Open jobs |
+| --- | ---: | ---: |
+| workday | 3,455 | 377,692 |
+| greenhouse | 4,912 | 168,663 |
+| icims | 3,610 | 158,684 |
+| smartrecruiters | 467 | 81,688 |
+| gupy | 1,429 | 77,454 |
+| lever | 1,757 | 55,538 |
+| bamboohr | 6,593 | 46,914 |
+| jibe | 11 | 44,240 |
+| ashby | 2,399 | 41,742 |
+| oracle | 173 | 14,864 |
+| amazon | 1 | 10,643 |
+| workable | 287 | 10,056 |
+| phenom | 1 | 8,208 |
+| arc | 2,912 | 4,719 |
+| sber | 12 | 3,757 |
+| google | 7 | 3,640 |
+| jobstash | 484 | 3,058 |
+| mts | 12 | 2,601 |
+| alfabank | 1 | 2,389 |
+| workatastartup | 189 | 1,916 |
+| recruitee | 78 | 1,888 |
+| telegram | 845 | 1,564 |
+| breezy | 28 | 1,219 |
+| wantapply | 362 | 1,048 |
+| tbank | 1 | 955 |
+| remoteok | 593 | 911 |
+| yandex | 1 | 891 |
+| uber | 1 | 722 |
+| gem | 33 | 518 |
+| personio | 21 | 473 |
+| rwb | 1 | 430 |
+| teamtailor | 27 | 329 |
+| linkedin | 216 | 282 |
+| successfactors | 1 | 269 |
+| vk | 1 | 264 |
+| lamoda | 1 | 126 |
+| huntflow | 14 | 116 |
+| pinpoint | 8 | 97 |
+| globalpayments | 1 | 54 |
+| tecla | 29 | 54 |
+| rippling | 4 | 42 |
+| habr_career | 30 | 37 |
+| aviasales | 1 | 35 |
+| ashbygraphql | 2 | 30 |
+| domclick | 1 | 25 |
+| ozon | 1 | 23 |
+| dodo | 3 | 19 |
+| lumenalta | 1 | 16 |
+| mtslink | 1 | 8 |
+| join | 3 | 7 |
+| geekjob | 3 | 4 |
+| kuper | 1 | 2 |
+| manual | 1 | 1 |
+
 ## Adding a source
 
 Adding a company is one entry in the provider's board file (`sources/<provider>.yml`,
@@ -136,6 +202,13 @@ entry overrides the file's). Adding an ATS platform is a new adapter in
 `internal/sources` plus one line in `sources.All` — every adapter speaks the same
 `Source` interface, and `cmd/ingest` validates the file against the registry before
 any crawl.
+
+For most companies the platform is already supported, so adding them is just one
+line in the board file. Only when a company runs on an ATS we don't cover yet does
+it need a new provider (a new adapter). Either way, if you want a source added,
+**start by [opening an issue](https://github.com/strelov1/freehire/issues)** — name
+the company and its careers URL, and we'll confirm whether it's a one-line add or a
+new provider before any code.
 
 ## Frontend
 
