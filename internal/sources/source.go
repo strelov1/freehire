@@ -140,6 +140,7 @@ func All(c HTTPClient) map[string]Source {
 		NewWeWorkRemotely(c),
 		NewTheHub(c),
 		NewGetonbrd(c),
+		NewWantedKR(c),
 		// International single-company adapters (boardless).
 		NewUber(c),
 		NewAmazon(c),

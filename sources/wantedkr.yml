@@ -1,0 +1,4 @@
+# Wanted (wanted.co.kr) South-Korean tech job board. Boardless: one public API, so the
+# entry carries no board; each job's company comes from the API. Postings are Korean.
+- company: Wanted Korea
+  provider: wantedkr
