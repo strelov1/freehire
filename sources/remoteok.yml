@@ -1,0 +1,4 @@
+# RemoteOK remote-jobs aggregator. Boardless: one public API (remoteok.com/api), so the
+# entry carries no board; each job's company comes from the posting, not this placeholder.
+- company: RemoteOK
+  provider: remoteok

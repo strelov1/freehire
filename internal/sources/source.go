@@ -134,6 +134,10 @@ func All(c HTTPClient) map[string]Source {
 		// Multi-company aggregators (boardless): one global feed, company per posting.
 		NewTecla(c),
 		NewJobStash(c),
+		NewArbeitnow(c),
+		NewRemoteOK(c),
+		NewJobicy(c),
+		NewWeWorkRemotely(c),
 		// International single-company adapters (boardless).
 		NewUber(c),
 		NewAmazon(c),

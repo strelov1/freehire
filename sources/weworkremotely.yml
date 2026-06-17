@@ -1,0 +1,5 @@
+# WeWorkRemotely remote-jobs board. Boardless: one public RSS feed
+# (weworkremotely.com/remote-jobs.rss), so the entry carries no board; each job's company
+# comes from the posting, not this placeholder.
+- company: WeWorkRemotely
+  provider: weworkremotely

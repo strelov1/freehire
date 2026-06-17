@@ -1,0 +1,4 @@
+# Jobicy remote-jobs aggregator. Boardless: one public API (jobicy.com/api/v2/remote-jobs),
+# so the entry carries no board; each job's company comes from the posting, not this placeholder.
+- company: Jobicy
+  provider: jobicy

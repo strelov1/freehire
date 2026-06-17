@@ -1,0 +1,4 @@
+# arbeitnow.com job board. Boardless: one public API (arbeitnow.com/api/job-board-api),
+# so the entry carries no board; each job's company comes from the posting, not this placeholder.
+- company: Arbeitnow
+  provider: arbeitnow
