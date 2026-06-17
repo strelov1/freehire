@@ -2,6 +2,14 @@
 # provider (the file name "custom" is not a provider). Multi-tenant board lists
 # (greenhouse.yml, gem.yml, …) keep their own per-provider files.
 
+# Ashby boards whose public Posting API is disabled (served via the embed GraphQL adapter).
+- company: Chainlink Labs
+  provider: ashbygraphql
+  board: chainlink-labs
+- company: Toggl
+  provider: ashbygraphql
+  board: toggl
+
 # International single-company sources.
 - company: Uber
   provider: uber
