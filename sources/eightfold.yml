@@ -3,12 +3,113 @@
 # public API and domain is the Eightfold tenant key required as a query parameter,
 # e.g. apply.careers.microsoft.com/microsoft.com. The adapter auto-detects the
 # list-API generation (newer /api/pcsx/search vs legacy /api/apply/v2/jobs), so a
-# board is just host/domain either way. Each board validated live (one of the two
-# list endpoints returned >0 positions) before adding.
+# board is just host/domain either way, and rides out Eightfold's per-IP rate limit
+# with backoff. Each board validated live (one of the two list endpoints returned
+# >0 positions) before adding.
+#
+# NOTE: domain is NOT always the registrable domain — configure it per board, do not
+# derive it (e.g. Match Group → gotinder.com, Keurig Dr Pepper → kdrp.com). Where a
+# tenant has alias hosts, the named/custom host is listed.
 
-- company: Microsoft
-  board: apply.careers.microsoft.com/microsoft.com
+- company: Starbucks
+  board: apply.starbucks.com/starbucks.com
+- company: Citi
+  board: citi.eightfold.ai/citi.com
 - company: Micron
   board: careers.micron.com/micron.com
+- company: Northrop Grumman
+  board: ngc.eightfold.ai/ngc.com
+- company: NVIDIA
+  board: nvidia.eightfold.ai/nvidia.com
+- company: Eaton
+  board: eaton.eightfold.ai/eaton.com
+- company: Applied Materials
+  board: appliedmaterials.eightfold.ai/appliedmaterials.com
+- company: HSBC
+  board: hsbc.eightfold.ai/hsbc.com
+- company: Qualcomm
+  board: qualcomm.eightfold.ai/qualcomm.com
+- company: Vodafone
+  board: vodafone.eightfold.ai/vodafone.com
+- company: Microsoft
+  board: apply.careers.microsoft.com/microsoft.com
+- company: NTT DATA
+  board: nttdata.eightfold.ai/nttdata.com
+- company: Morgan Stanley
+  board: morganstanley.eightfold.ai/morganstanley.com
+- company: Lam Research
+  board: lamresearch.eightfold.ai/lamresearch.com
+- company: Infineon
+  board: infineon.eightfold.ai/infineon.com
+- company: Estée Lauder
+  board: careers.elcompanies.com/elcompanies.com
+- company: AstraZeneca
+  board: astrazeneca.eightfold.ai/astrazeneca.com
+- company: Bristol Myers Squibb
+  board: bms.eightfold.ai/bms.com
+- company: Bayer
+  board: bayer.eightfold.ai/bayer.com
+- company: HP
+  board: hp.eightfold.ai/hp.com
+- company: GlobalFoundries
+  board: globalfoundries.eightfold.ai/globalfoundries.com
+- company: Keurig Dr Pepper
+  board: kdrp.eightfold.ai/kdrp.com
+- company: Boston Scientific
+  board: bostonscientific.eightfold.ai/bostonscientific.com
+- company: Ford
+  board: ford.eightfold.ai/ford.com
 - company: Netflix
   board: explore.jobs.netflix.net/netflix.com
+- company: STMicroelectronics
+  board: stmicroelectronics.eightfold.ai/stmicroelectronics.com
+- company: Ericsson
+  board: ericsson.eightfold.ai/ericsson.com
+- company: dsm-firmenich
+  board: dsm.eightfold.ai/dsm.com
+- company: SLB
+  board: slb.eightfold.ai/slb.com
+- company: Faurecia
+  board: faurecia.eightfold.ai/faurecia.com
+- company: Dexcom
+  board: dexcom.eightfold.ai/dexcom.com
+- company: Softtek
+  board: softtek.eightfold.ai/softtek.com
+- company: Fortive
+  board: fortive.eightfold.ai/fortive.com
+- company: Liberty Mutual
+  board: libertymutual.eightfold.ai/libertymutual.com
+- company: UKG
+  board: ukg.eightfold.ai/ukg.com
+- company: PayPal
+  board: paypal.eightfold.ai/paypal.com
+- company: John Deere
+  board: johndeere.eightfold.ai/johndeere.com
+- company: Whirlpool
+  board: whirlpool.eightfold.ai/whirlpool.com
+- company: PTC
+  board: ptc.eightfold.ai/ptc.com
+- company: Vizient
+  board: careers.vizientinc.com/vizientinc.com
+- company: Insight Enterprises
+  board: insight.eightfold.ai/insight.com
+- company: Vialto Partners
+  board: vialto.eightfold.ai/vialto.com
+- company: Vale
+  board: vale.eightfold.ai/vale.com
+- company: Dolby
+  board: dolby.eightfold.ai/dolby.com
+- company: Amdocs
+  board: amdocs.eightfold.ai/amdocs.com
+- company: Frontier Communications
+  board: ftr.eightfold.ai/ftr.com
+- company: Deutsche Telekom
+  board: telekom.eightfold.ai/telekom.com
+- company: Match Group
+  board: join.matchgroupcareers.com/gotinder.com
+- company: Coca-Cola Europacific Partners
+  board: ccep.eightfold.ai/ccep.com
+- company: Symetra
+  board: symetra.eightfold.ai/symetra.com
+- company: Albemarle
+  board: albemarle.eightfold.ai/albemarle.com
