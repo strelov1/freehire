@@ -1,0 +1,352 @@
+# oracle (Oracle Recruiting Cloud / Fusion) boards. Provider is the filename;
+# board = "<host>/<siteNumber>" (see internal/sources/oracle.go), e.g.
+# fa-evmr-saasfaprod1.fa.ocs.oraclecloud.com/CX_1. Company names come from the
+# SimplifyJobs discovery repos (the ORC host is an opaque tenant code); each board
+# validated live (recruitingCEJobRequisitions returned >0 jobs) before adding.
+
+- company: ACI Worldwide
+  board: ebwg.fa.us2.oraclecloud.com/CX
+- company: ADI Global Distribution
+  board: ehtl.fa.us6.oraclecloud.com/CX_2
+- company: ADT
+  board: fa-erqb-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Adventist Health
+  board: ecvz.fa.us2.oraclecloud.com/CX_1
+- company: Akamai Technologies
+  board: fa-extu-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Albertsons
+  board: eofd.fa.us6.oraclecloud.com/CX_1001
+- company: American Bureau of Shipping
+  board: hbbq.fa.us2.oraclecloud.com/CX_1
+- company: American Express
+  board: egug.fa.us2.oraclecloud.com/CX_1
+- company: American Tower
+  board: hdsn.fa.us6.oraclecloud.com/CX_1
+- company: APL Logistics
+  board: hcut.fa.ap2.oraclecloud.com/CX_1
+- company: Arcadis
+  board: ebcs.fa.em2.oraclecloud.com/CX_1
+- company: Arconic
+  board: hdnn.fa.us6.oraclecloud.com/CX
+- company: Arlington County VA
+  board: fa-exkk-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Arqiva
+  board: ehik.fa.em3.oraclecloud.com/CX
+- company: Ascot
+  board: fa-emkq-saasfaprod1.fa.ocs.oraclecloud.com/CX
+- company: ATCO
+  board: eezy.fa.ca2.oraclecloud.com/CX
+- company: Atlantic Health System
+  board: erqh.fa.us2.oraclecloud.com/CX_1001
+- company: BC Pensions
+  board: fa-exby-saasfaprod1.fa.ocs.oraclecloud.com/CX_1013
+- company: BGIS
+  board: fa-evcg-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Black Box
+  board: eoje.fa.us2.oraclecloud.com/CX_1001
+- company: Blue Cross Blue Shield of Michigan
+  board: ejko.fa.us2.oraclecloud.com/CX_3
+- company: Blue Shield of California
+  board: ecge.fa.us2.oraclecloud.com/CX_1003
+- company: BNY
+  board: eofe.fa.us2.oraclecloud.com/CX_1001
+- company: Boston Properties
+  board: edxn.fa.us2.oraclecloud.com/CX_5001
+- company: Brent Council
+  board: fa-epzg-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Caesars Entertainment
+  board: edmn.fa.us2.oraclecloud.com/CX_1
+- company: Carmeuse
+  board: ekiz.fa.em2.oraclecloud.com/CX
+- company: Cetera Financial Group
+  board: ebhu.fa.us2.oraclecloud.com/CX
+- company: Chubb
+  board: fa-ewgu-saasfaprod1.fa.ocs.oraclecloud.com/CX_2001
+- company: Citco
+  board: fa-euxc-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Citizens Financial Group
+  board: hcgn.fa.us2.oraclecloud.com/CX_1
+- company: City Of Chattanooga
+  board: fa-eqto-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: City of Greeley
+  board: elvp.fa.us2.oraclecloud.com/CX_1001
+- company: City of Oklahoma City
+  board: fa-etyr-saasfaprod1.fa.ocs.oraclecloud.com/CX_2
+- company: Coherent
+  board: hcwp.fa.us2.oraclecloud.com/CX_1
+- company: Cohu
+  board: hcbo.fa.us2.oraclecloud.com/CX_1
+- company: Community Health Systems
+  board: fa-evxo-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Computershare
+  board: fa-evdq-saasfaprod1.fa.ocs.oraclecloud.com/CX_2001
+- company: Conduent
+  board: egua.fa.us2.oraclecloud.com/CX_1
+- company: Consolidated Edison
+  board: ejcu.fa.us6.oraclecloud.com/CX_1033
+- company: Cooper Companies
+  board: hcjy.fa.us2.oraclecloud.com/CX_1
+- company: Corsair
+  board: edix.fa.us2.oraclecloud.com/CX_1
+- company: CSC
+  board: hczw.fa.us2.oraclecloud.com/CX_1001
+- company: CSX
+  board: fa-eowa-saasfaprod1.fa.ocs.oraclecloud.com/CSXCareers
+- company: CTB
+  board: emsl.fa.us2.oraclecloud.com/CX_1001
+- company: Cummins
+  board: fa-espx-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: DC Water
+  board: elxb.fa.us2.oraclecloud.com/CX
+- company: Definity Financial
+  board: hdks.fa.ca2.oraclecloud.com/CX_1
+- company: Denso
+  board: hcwt.fa.us2.oraclecloud.com/CX
+- company: Diebold Nixdorf
+  board: eeug.fa.us6.oraclecloud.com/CX
+- company: Digital Realty
+  board: hdep.fa.us2.oraclecloud.com/CX
+- company: DNV
+  board: ecyq.fa.em2.oraclecloud.com/CX_1
+- company: DP World
+  board: ehpv.fa.em2.oraclecloud.com/CX_1
+- company: DTCC
+  board: ebxr.fa.us2.oraclecloud.com/CX_1
+- company: Duracell
+  board: fa-ewub-saasfaprod1.fa.ocs.oraclecloud.com/CX_26
+- company: Emergent Holdings
+  board: ejko.fa.us2.oraclecloud.com/CX_2
+- company: Emerson Electric
+  board: hdjq.fa.us2.oraclecloud.com/CX_1
+- company: EXL
+  board: fa-ewjt-saasfaprod1.fa.ocs.oraclecloud.com/CX_2
+- company: EXP
+  board: elcn.fa.us2.oraclecloud.com/CX
+- company: Fanatics
+  board: fa-exki-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Fife Council
+  board: ekmu.fa.em3.oraclecloud.com/CX_6009
+- company: First West Credit Union
+  board: fa-eomj-saasfaprod1.fa.ocs.oraclecloud.com/CX_1001
+- company: Ford Motor Company
+  board: efds.fa.em5.oraclecloud.com/CX_1
+- company: Fortinet
+  board: edel.fa.us2.oraclecloud.com/CX_2001
+- company: Fortive
+  board: ejta.fa.us6.oraclecloud.com/CX_2001
+- company: Fujitsu
+  board: edzt.fa.em4.oraclecloud.com/CX
+- company: Garrett Motion
+  board: ehth.fa.em2.oraclecloud.com/CX_2001
+- company: GCI
+  board: edqv.fa.us2.oraclecloud.com/CX
+- company: GHD
+  board: ejov.fa.ca2.oraclecloud.com/CX
+- company: GM financial
+  board: fa-exvu-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Goldman Sachs
+  board: hdpc.fa.us2.oraclecloud.com/LateralHiring
+- company: Grant Thornton
+  board: ehzq.fa.us2.oraclecloud.com/CX_1
+- company: Greenwood Village South
+  board: eexs.fa.us2.oraclecloud.com/GreenwoodVillageSouth
+- company: GuideWell Mutual
+  board: fa-etum-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Hearst
+  board: eevd.fa.us6.oraclecloud.com/CX_1
+- company: Hertz
+  board: fa-evlf-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: HEXAWARE
+  board: fa-etqo-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Hillsborough County
+  board: fa-eqsg-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Hologic
+  board: ebwb.fa.us2.oraclecloud.com/CX
+- company: Honeywell
+  board: ibqbjb.fa.ocs.oraclecloud.com/Honeywell
+- company: Hormel Foods
+  board: ekkh.fa.us2.oraclecloud.com/CX_2002
+- company: Howmet Aerospace
+  board: fa-exty-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Hub Group
+  board: hdat.fa.us2.oraclecloud.com/CX
+- company: Hunt Oil Company
+  board: fa-eqcd-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: IHG
+  board: fa-evax-saasfaprod1.fa.ocs.oraclecloud.com/CX_1001
+- company: INTEGRIS Health
+  board: ertr.fa.us2.oraclecloud.com/CX_3001
+- company: Intertek
+  board: hcog.fa.em2.oraclecloud.com/CX_1
+- company: Jefferies
+  board: hdid.fa.us2.oraclecloud.com/CX_1
+- company: JP Morgan Chase
+  board: jpmc.fa.oraclecloud.com/CX_1001
+- company: Kent
+  board: fa-emqh-saasfaprod1.fa.ocs.oraclecloud.com/CX_1001
+- company: KL Discovery
+  board: ekug.fa.us6.oraclecloud.com/CX_1001
+- company: Kroll
+  board: hcxs.fa.us2.oraclecloud.com/CX_1
+- company: Lifepoint Health
+  board: ibnjjb.fa.ocs.oraclecloud.com/CX_1
+- company: Linamar
+  board: fa-epmd-saasfaprod1.fa.ocs.oraclecloud.com/CX_3001
+- company: "Macy's"
+  board: ebwh.fa.us2.oraclecloud.com/CX_1001
+- company: "Manhattan District Attorney's Office"
+  board: fa-elzs-saasfaprod1.fa.ocs.oraclecloud.com/CX
+- company: Marriott International
+  board: ejwl.fa.us2.oraclecloud.com/CX
+- company: Masimo
+  board: egcu.fa.us6.oraclecloud.com/CX
+- company: Metrolinx
+  board: ehtc.fa.ca2.oraclecloud.com/CX_1
+- company: Michael Baker International
+  board: ebxs.fa.us2.oraclecloud.com/CX_2
+- company: Midmark
+  board: hcor.fa.us2.oraclecloud.com/CX_1
+- company: Molina Healthcare
+  board: hckd.fa.us2.oraclecloud.com/CX_1
+- company: Montenson
+  board: fa-esgu-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Mycronic
+  board: ehtv.fa.em2.oraclecloud.com/CX_1
+- company: Myriad Genetics
+  board: ekgn.fa.us6.oraclecloud.com/CX_2001
+- company: Nevada National Security
+  board: ewij.fa.us8.oraclecloud.com/CX_2
+- company: Newham
+  board: elyq.fa.em3.oraclecloud.com/CX
+- company: Newmark Group
+  board: hdow.fa.us6.oraclecloud.com/CX_1001
+- company: Nokia
+  board: fa-evmr-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Northumbria University
+  board: fa-etnb-saasfaprod1.fa.ocs.oraclecloud.com/CX_1001
+- company: Northwell Health
+  board: eppr.fa.us2.oraclecloud.com/CX_2
+- company: NOV
+  board: egay.fa.us6.oraclecloud.com/CX_4001
+- company: onsemi
+  board: hctz.fa.us2.oraclecloud.com/CX_1001
+- company: Oracle
+  board: eeho.fa.us2.oraclecloud.com/CX_45001
+- company: Pearson
+  board: hccz.fa.em3.oraclecloud.com/CX_2
+- company: Perficient
+  board: fa-etqd-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Phoenix Group
+  board: fa-enor-saasfaprod1.fa.ocs.oraclecloud.com/CX
+- company: Photon
+  board: fa-ertb-saasfaprod1.fa.ocs.oraclecloud.com/CX_2
+- company: Polk County
+  board: fa-eqpz-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Powell
+  board: ekcf.fa.us6.oraclecloud.com/CX_1
+- company: R+L Global Logistics
+  board: erhk.fa.us2.oraclecloud.com/CX_4
+- company: Rheem
+  board: hdde.fa.us2.oraclecloud.com/CX
+- company: Rice University
+  board: emdz.fa.us2.oraclecloud.com/CX_2001
+- company: "S&C Electric Company"
+  board: ejia.fa.us6.oraclecloud.com/CX_1001
+- company: "Sainsbury's"
+  board: hdhe.fa.em3.oraclecloud.com/CX
+- company: Samsonite
+  board: ekkf.fa.em2.oraclecloud.com/CX
+- company: Savannah River National Laboratory
+  board: ewvl.fa.us8.oraclecloud.com/CX_1
+- company: Schroders
+  board: ekbq.fa.em2.oraclecloud.com/CX_2
+- company: SCOR
+  board: fa-errt-saasfaprod1.fa.ocs.oraclecloud.com/CX_2001
+- company: Seaspan
+  board: hckz.fa.us2.oraclecloud.com/CX_1
+- company: Securitas
+  board: ekaw.fa.us2.oraclecloud.com/CX
+- company: SHEIN
+  board: fa-exjq-saasfaprod1.fa.ocs.oraclecloud.com/SHEIN
+- company: Sherwin-Williams
+  board: ejhp.fa.us6.oraclecloud.com/CX_2
+- company: Sinclair
+  board: edyy.fa.us2.oraclecloud.com/CX_2002
+- company: Southern Company
+  board: emje.fa.us6.oraclecloud.com/CX_1001
+- company: Standard Aero
+  board: cva.fa.us1.oraclecloud.com/CX_3
+- company: Stantec
+  board: hdhl.fa.us6.oraclecloud.com/CX_1
+- company: Strathcona County
+  board: fa-erjf-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Subaru
+  board: hcal.fa.us2.oraclecloud.com/CX_1001
+- company: Suffolk County
+  board: eoce.fa.em3.oraclecloud.com/CX_1004
+- company: Sundt
+  board: eewl.fa.us6.oraclecloud.com/CX
+- company: Synlab
+  board: fa-eugp-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Texas Instruments
+  board: ebgj.fa.us2.oraclecloud.com/CX_1
+- company: The State Bar of California
+  board: egsd.fa.us2.oraclecloud.com/CX
+- company: The University of Edinburgh
+  board: elxw.fa.em3.oraclecloud.com/CX_1001
+- company: "Tiffany & Co."
+  board: eljs.fa.us2.oraclecloud.com/CX
+- company: TPI Composites
+  board: fa-elwc-saasfaprod1.fa.ocs.oraclecloud.com/CX
+- company: Tradeweb
+  board: ecnf.fa.us2.oraclecloud.com/CX
+- company: Tri-State Generation and Transmission Association
+  board: fa-exbd-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: TriNet
+  board: fa-etgw-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: UC Health
+  board: eswt.fa.us6.oraclecloud.com/CX_1001
+- company: UL Solutions
+  board: fa-eups-saasfaprod1.fa.ocs.oraclecloud.com/ULSolutionsCareers
+- company: University of Maine System
+  board: fa-ewca-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: University of Wyoming
+  board: eeik.fa.us2.oraclecloud.com/CX_1
+- company: UTHealth Houston
+  board: fa-eomf-saasfaprod1.fa.ocs.oraclecloud.com/CX_1002
+- company: UW Health
+  board: eimy.fa.us6.oraclecloud.com/CX_1
+- company: Vanderbilt University
+  board: ecsr.fa.us2.oraclecloud.com/CX_1
+- company: Verisk
+  board: fa-ewmy-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Vertiv
+  board: egup.fa.us2.oraclecloud.com/CX
+- company: Virginia Department of Transportation
+  board: etgi.fa.us8.oraclecloud.com/CX_4005
+- company: VITAS Healthcare
+  board: ejrz.fa.us2.oraclecloud.com/CX_5001
+- company: Wagner College
+  board: fa-exad-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Wayne County
+  board: emqz.fa.us2.oraclecloud.com/CX_1
+- company: Weatherford
+  board: fa-exmi-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Wells Enterprises
+  board: hcsb.fa.us2.oraclecloud.com/CX_1
+- company: Williams-Sonoma
+  board: ehac.fa.us6.oraclecloud.com/CX_1
+- company: Wood
+  board: ehif.fa.em2.oraclecloud.com/CX_1
+- company: Worthington Enterprises
+  board: fa-eygo-saasfaprod1.fa.ocs.oraclecloud.com/CX_2001
+- company: WSP
+  board: emit.fa.ca3.oraclecloud.com/CX_2001
+- company: WTW
+  board: eedu.fa.em3.oraclecloud.com/CX_1003
+- company: "Yum! Brands"
+  board: eczd.fa.us2.oraclecloud.com/CX_1
+- company: Zachry Group
+  board: fa-evfm-saasfaprod1.fa.ocs.oraclecloud.com/CX_1029
+- company: Zensar
+  board: fa-etvl-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
