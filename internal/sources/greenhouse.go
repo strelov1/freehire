@@ -7,7 +7,9 @@ import (
 	"strconv"
 )
 
-// greenhouseBaseURL is the Greenhouse public boards API root.
+// greenhouseBaseURL is the Greenhouse public boards API root. Unlike Lever, Greenhouse
+// serves EU-hosted boards (job-boards.eu.greenhouse.io front-ends) from this same single
+// API host, so no per-region host selection is needed.
 const greenhouseBaseURL = "https://boards-api.greenhouse.io/v1/boards"
 
 // greenhouse adapts the Greenhouse public boards API. The list endpoint carries the
