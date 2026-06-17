@@ -77,8 +77,12 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   const f = emptyFilters();
   f.q = p.get('q') ?? '';
   for (const def of FACETS) {
-    const exclude = p.getAll(`${def.param}_exclude`);
-    const include = p.getAll(def.param);
+    // URL params aren't guaranteed unique (shared/edited links, crawlers), but a
+    // facet's values are a set — `add`/`toggle` enforce that on user input, so the
+    // URL parse must too. A repeated value otherwise reaches TokenInput, which keys
+    // each chip by its value, and Svelte throws `each_key_duplicate` on hydration.
+    const exclude = [...new Set(p.getAll(`${def.param}_exclude`))];
+    const include = [...new Set(p.getAll(def.param))];
     const matchAll = p.get(`${def.param}_mode`) === 'and';
     if (exclude.length > 0) f.facets[def.param] = { values: exclude, exclude: true, matchAll };
     else if (include.length > 0) f.facets[def.param] = { values: include, exclude: false, matchAll };
