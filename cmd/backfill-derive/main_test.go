@@ -28,8 +28,9 @@ func (f *fakeStore) UpdateJobFacets(_ context.Context, arg db.UpdateJobFacetsPar
 	return nil
 }
 
-// expectedFacets is the UpdateJobFacets the runner should write for a job: the six
-// dictionary facets from jobderive.Derive, and no slug fields.
+// expectedFacets is the UpdateJobFacets the runner should write for a job: every
+// dictionary facet from jobderive.Derive (the six original plus the four synthetic
+// enrichment facets), and no slug fields.
 func expectedFacets(j db.Job) db.UpdateJobFacetsParams {
 	d := jobderive.Derive(jobderive.Input{
 		Title: j.Title, Company: j.Company, Source: j.Source, ExternalID: j.ExternalID,
@@ -38,14 +39,23 @@ func expectedFacets(j db.Job) db.UpdateJobFacetsParams {
 	return db.UpdateJobFacetsParams{
 		ID: j.ID, Countries: d.Countries, Regions: d.Regions, WorkMode: d.WorkMode,
 		Skills: d.Skills, Seniority: d.Seniority, Category: d.Category,
+		PostingLanguage:    d.PostingLanguage,
+		EmploymentType:     d.EmploymentType,
+		EducationLevel:     d.EducationLevel,
+		ExperienceYearsMin: toInt4(d.ExperienceYearsMin),
 	}
 }
 
-func TestBackfill_RewritesAllSixFacetsInOnePass(t *testing.T) {
+// backfillJobDescription triggers both the original facets (skills) and the synthetic
+// ones (English language, full-time, bachelor, 5 years) so the test verifies all of them.
+const backfillJobDescription = "We use Go, PostgreSQL and Kubernetes. This is a " +
+	"full-time role. A Bachelor's degree and 5+ years of experience are required."
+
+func TestBackfill_RewritesAllFacetsInOnePass(t *testing.T) {
 	job := db.Job{
 		ID: 7, Title: "Senior Go Developer", Company: "Acme",
 		Source: "manual", ExternalID: "x", Location: "Berlin, Germany",
-		Description: "We use Go, PostgreSQL and Kubernetes.",
+		Description: backfillJobDescription,
 		// facet columns empty → the derived values differ → a write happens.
 	}
 	store := &fakeStore{jobs: []db.Job{job}}
@@ -64,19 +74,29 @@ func TestBackfill_RewritesAllSixFacetsInOnePass(t *testing.T) {
 	if !reflect.DeepEqual(store.updates[0], want) {
 		t.Errorf("UpdateJobFacets = %+v, want %+v", store.updates[0], want)
 	}
+	// Guard that the synthetic facets were actually derived (so this test can't pass
+	// with everything at zero values).
+	got := store.updates[0]
+	if got.PostingLanguage != "en" || got.EmploymentType != "full_time" ||
+		got.EducationLevel != "bachelor" || !got.ExperienceYearsMin.Valid {
+		t.Errorf("synthetic facets not derived: lang=%q type=%q edu=%q exp=%v",
+			got.PostingLanguage, got.EmploymentType, got.EducationLevel, got.ExperienceYearsMin)
+	}
 }
 
 func TestBackfill_IsIdempotent(t *testing.T) {
 	job := db.Job{
 		ID: 7, Title: "Senior Go Developer", Company: "Acme",
 		Source: "manual", ExternalID: "x", Location: "Berlin, Germany",
-		Description: "We use Go, PostgreSQL and Kubernetes.",
+		Description: backfillJobDescription,
 	}
 	// Seed the columns with what the derivation already produces — a second pass
 	// must rewrite nothing.
 	d := expectedFacets(job)
 	job.Countries, job.Regions, job.WorkMode = d.Countries, d.Regions, d.WorkMode
 	job.Skills, job.Seniority, job.Category = d.Skills, d.Seniority, d.Category
+	job.PostingLanguage, job.EmploymentType = d.PostingLanguage, d.EmploymentType
+	job.EducationLevel, job.ExperienceYearsMin = d.EducationLevel, d.ExperienceYearsMin
 
 	store := &fakeStore{jobs: []db.Job{job}}
 	scanned, updated, err := backfillAll(context.Background(), store)

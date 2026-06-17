@@ -45,10 +45,16 @@ func EmploymentType(title, description string) string {
 // Education-level matchers, highest degree first so "Master's or PhD" resolves to
 // the ceiling actually named. "none" is emitted only on an explicit negation, and
 // only when no positive degree is named (see EducationLevel).
+// These favour precision over recall (it is a faceted field — a wrong value is worse
+// than a missing one): only unambiguous degree forms match. Bare single-letter
+// abbreviations are deliberately excluded — "ms"/"m.s" collide with "MS Office"/
+// "MS SQL" and "bs"/"b.s" with everyday text — and bare "master" is excluded because
+// "scrum master" is not a degree. The "'s" possessive, an explicit "<level> degree",
+// or the -Sc/MBA/PhD tokens are required instead.
 var (
 	rePhD      = regexp.MustCompile(`\b(ph\.?\s?d|phd|doctorate|doctoral)\b`)
-	reMaster   = regexp.MustCompile(`\b(master'?s?|m\.?sc|m\.?s|mba|graduate degree)\b`)
-	reBachelor = regexp.MustCompile(`\b(bachelor'?s?|b\.?sc|b\.?s|undergraduate degree)\b`)
+	reMaster   = regexp.MustCompile(`\b(master'?s|master degree|m\.?sc|mba|graduate degree)\b`)
+	reBachelor = regexp.MustCompile(`\b(bachelor'?s|bachelor degree|b\.?sc|undergraduate degree)\b`)
 	reNoDegree = regexp.MustCompile(`\b(no (?:degree|diploma)|degree not required|without a degree|no degree required)\b`)
 )
 

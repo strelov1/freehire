@@ -41,8 +41,12 @@ func TestEducationLevel(t *testing.T) {
 		{"phd", "PhD in Machine Learning required.", "phd"},
 		{"phd dotted", "Ph.D. or equivalent research experience.", "phd"},
 		{"phd beats bachelor", "Bachelor's required, PhD preferred.", "phd"},
+		{"bachelor degree no apostrophe", "A bachelor degree in CS is required.", "bachelor"},
 		{"explicit none", "No degree required for this role.", "none"},
 		{"degree word alone not enough", "This is a degree of difficulty.", ""},
+		{"MS Office is not a master's", "Proficiency in MS Office and MS SQL Server.", ""},
+		{"scrum master is not a degree", "Experienced scrum master leading the team.", ""},
+		{"bare BS is not bachelor", "This role involves a lot of bs paperwork.", ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
