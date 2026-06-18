@@ -1,0 +1,7 @@
+# Reed (reed.co.uk), the UK's largest job board. Boardless: one Jobseeker API, so the entry
+# carries no board; each job's company is the employer from the posting, not this placeholder.
+# KEYED source — set REED_API_KEY in the environment (the API rejects unauthenticated
+# requests; the key is used as HTTP Basic credentials). The key is a secret, never here.
+# The adapter crawls a curated IT/technology keyword slice (see internal/sources/reed.go).
+- company: Reed
+  provider: reed

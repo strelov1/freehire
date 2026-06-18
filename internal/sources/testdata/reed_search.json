@@ -1,0 +1,40 @@
+{
+    "results": [
+        {
+            "jobId": 56785467,
+            "employerId": 671786,
+            "employerName": "Moorepay",
+            "employerProfileId": null,
+            "employerProfileName": null,
+            "jobTitle": "Software Engineer",
+            "locationName": "Manchester",
+            "minimumSalary": null,
+            "maximumSalary": null,
+            "currency": null,
+            "expirationDate": "23/07/2026",
+            "date": "15/04/2026",
+            "jobDescription": "As a Software Engineer you will be a key contributor within a cross-functional engineering squad, responsible for building secure, scalable, and high-quality software with an increasing emphasis on AI-driven capabilities and intelligent agent development. You will work closely with Senior Engineers, the Engineering Team Leader, and the Architect to implement modern engineering practices, integrate AI models and agent patterns, and contribute to ... ",
+            "applications": 145,
+            "jobUrl": "https://www.reed.co.uk/jobs/software-engineer/56785467"
+        },
+        {
+            "jobId": 57002409,
+            "employerId": 437172,
+            "employerName": "Matchtech ",
+            "employerProfileId": null,
+            "employerProfileName": null,
+            "jobTitle": "Software Developer",
+            "locationName": "Dorking",
+            "minimumSalary": 45000.0,
+            "maximumSalary": 65000.0,
+            "currency": "GBP",
+            "expirationDate": "21/07/2026",
+            "date": "09/06/2026",
+            "jobDescription": "Successful candidate must hold a minimum of SC clearance and be willing to undergo DV (Developed Vetting) clearance. More information can be found here - National security vetting: clearance levels - GOV.UK () Our client, a leading consultancy in the Defence &amp; Security sector, is currently seeking an experienced Software Developer to join their team on a permanent basis, based in Leatherhead. Key Responsibilities: Design, develop, and mainta... ",
+            "applications": 45,
+            "jobUrl": "https://www.reed.co.uk/jobs/software-developer/57002409"
+        }
+    ],
+    "ambiguousLocations": [],
+    "totalResults": 7434
+}

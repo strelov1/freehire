@@ -172,11 +172,14 @@ func All(c HTTPClient) map[string]Source {
 		NewMTS(c),
 		NewVK(c),
 	)
-	// USAJobs is the one keyed source: register it only when its API key is configured, so
-	// unconfigured environments (tests, local dev) leave it absent rather than listing a
-	// provider that cannot crawl. The key is a secret, read from the environment.
+	// USAJobs and Reed are the keyed sources: register each only when its API key is
+	// configured, so unconfigured environments (tests, local dev) leave it absent rather than
+	// listing a provider that cannot crawl. The keys are secrets, read from the environment.
 	if key := os.Getenv("USAJOBS_API_KEY"); key != "" {
 		registry["usajobs"] = NewUSAJobs(c, key)
+	}
+	if key := os.Getenv("REED_API_KEY"); key != "" {
+		registry["reed"] = NewReed(c, key)
 	}
 	return registry
 }
