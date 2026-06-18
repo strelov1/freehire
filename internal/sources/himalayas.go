@@ -19,10 +19,14 @@ const (
 	// advances by the count actually returned (not by this), staying correct even if the
 	// cap changes.
 	himalayasLimit = 20
-	// himalayasMaxPages caps pagination so a runaway/over-reported totalCount cannot loop
-	// indefinitely (the same defensive bound the other paginating adapters carry). Sized for
-	// the small page cap; in practice the API's rate limit ends a run far sooner.
-	himalayasMaxPages = 5000
+	// himalayasMaxPages is a per-run page budget, not just a runaway guard. Himalayas rate-
+	// limits (429) after ~150 rapid requests, so a single run crawling the full ~88k catalogue
+	// would grind for many minutes against the limit. This budget keeps each run under the
+	// limit (≈ himalayasMaxPages × himalayasLimit freshest jobs per run), so the crawl is fast
+	// and never trips the 429; the idempotent upsert plus the cron cadence keep coverage fresh.
+	// (Full back-catalogue coverage would need a persisted offset cursor across runs — a seam,
+	// not built: the feed is recency-ordered, so the freshest slice is what matters.)
+	himalayasMaxPages = 120
 	himalayasListURL  = "https://himalayas.app/jobs/api?limit=%d&offset=%d"
 )
 
