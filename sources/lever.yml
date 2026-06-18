@@ -3776,3 +3776,5 @@
   board: xtb
 - company: zeiss
   board: zeiss
+- company: hypersonica-prod
+  board: hypersonica-prod
