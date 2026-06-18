@@ -27,6 +27,10 @@ Within that payload:
 - The `"$23"` reference resolves to a **text row** elsewhere in the stream:
   `23:T1aef,<…HTML…>` — `T` marks a text chunk, `1aef` is the **byte** length (hex) of the HTML
   that immediately follows the comma.
+- **Row ids are lowercase HEX, not decimal.** A board's references run `…$28, $29, $2a, $2b
+  … $30 …`, so the row matcher must accept `a–f` digits. (Live-smoke caught this: a
+  decimal-only matcher silently resolved only ~60% of a real board's descriptions — every
+  posting whose id contained `a–f` came through with an empty body.)
 
 Deel exposes **no** structured workplace-type / remote field on a posting (verified: zero
 `workplaceType`/`remote`/`onsite` keys in a real board payload). Work mode is therefore left to

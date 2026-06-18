@@ -131,6 +131,7 @@ func All(c HTTPClient) map[string]Source {
 		NewOracle(c),
 		NewEightfold(c),
 		NewFreshteam(c),
+		NewDeel(c),
 		// Ashby boards whose public Posting API is disabled, served via the embed GraphQL.
 		NewAshbyGraphQL(c),
 		// Multi-company aggregators (boardless): one global feed, company per posting.

@@ -1,0 +1,58 @@
+# deel (Deel ATS) career pages — jobs.deel.com/<orgSlug>. Provider is the filename;
+# board = the org's URL slug (see internal/sources/deel.go). The board page is a
+# server-rendered Next.js app that inlines the whole catalogue (titles + full HTML
+# descriptions) in its flight payload, so one GET per board assembles every job with
+# no per-posting detail request — no API key, no headless browser.
+#
+# Slugs are case- and punctuation-sensitive (e.g. Range, QMLCareers, zema.global), and
+# two different orgs can share a stem (dott vs dott-1769520315673). Each board below was
+# validated live: GET /<slug>/sitemap.xml returned an XML job list (a non-tenant slug
+# returns an HTML shell, since the page itself always 200s). Expand by seeding more slugs
+# (Google site:jobs.deel.com) and re-validating against the per-org sitemap.
+
+- company: Deel
+  board: deel
+- company: Klarna
+  board: klarna
+- company: Syone
+  board: syone
+- company: Dott GT
+  board: dott-1769520315673
+- company: Offsec Services
+  board: offsec
+- company: Dott
+  board: dott
+- company: KangarooHealth
+  board: kangaroohealth
+- company: Dfns
+  board: dfns
+- company: Cardo AI
+  board: cardo
+- company: WeSpeak
+  board: wespeak
+- company: Airbase
+  board: airbase
+- company: MAKO
+  board: mako
+- company: Skylink
+  board: skylink
+- company: Range
+  board: Range
+- company: Zema Global
+  board: zema.global
+- company: Dewaynerey Logistics
+  board: dewaynerey-logistics
+- company: Cablex
+  board: cablex
+- company: Liwlig Group
+  board: liwlig-group
+- company: Atreo
+  board: atreo
+- company: Keyway.ai
+  board: keyway-ai
+- company: Quantum Mortgages Limited
+  board: QMLCareers
+- company: Solvento
+  board: solvento
+- company: SetSwap
+  board: setswap

@@ -1,0 +1,233 @@
+package sources
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+
+	"golang.org/x/net/html"
+)
+
+// deel adapts Deel's multi-tenant ATS (jobs.deel.com/<orgSlug>), a board-based source
+// whose board id is the org's URL slug. The board page is a server-rendered Next.js app:
+// it inlines the org's whole catalogue in the React flight stream (a sequence of
+// self.__next_f.push([1,"…"]) chunks), including every posting's full HTML description as
+// a "$N" reference to a length-delimited text row in the same stream. One GET per board
+// therefore assembles every Job with no per-posting detail request — the same
+// embedded-payload shape as the google adapter.
+type deel struct {
+	http HTMLGetter
+}
+
+const (
+	// deelBoardURL is the org's career board page; %s is the org URL slug (the board id).
+	deelBoardURL = "https://jobs.deel.com/%s"
+	// deelJobURL is the public detail page for one posting; the args are the org slug and
+	// the posting id (the same id the org sitemap addresses).
+	deelJobURL = "https://jobs.deel.com/%s/job-details/%s/overview"
+)
+
+// deelPush captures the JS-string body of one self.__next_f.push([1,"…"]) flight chunk
+// (the init push, push([0]), carries no [1,"…"] payload and is ignored). The capture
+// keeps the surrounding quotes so it decodes as a JSON string.
+var deelPush = regexp.MustCompile(`self\.__next_f\.push\(\[1,("(?:[^"\\]|\\.)*")\]\)`)
+
+// NewDeel builds the Deel ATS adapter over the given HTML client.
+func NewDeel(c HTMLGetter) Source { return deel{http: c} }
+
+func (deel) Provider() string { return "deel" }
+
+func (d deel) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+	root, err := d.http.GetHTML(ctx, fmt.Sprintf(deelBoardURL, e.Board))
+	if err != nil {
+		return nil, fmt.Errorf("deel: board %q: %w", e.Board, err)
+	}
+	flight, err := decodeDeelFlight(root)
+	if err != nil {
+		return nil, fmt.Errorf("deel: board %q: %w", e.Board, err)
+	}
+	postings, err := extractDeelPostings(flight)
+	if err != nil {
+		return nil, fmt.Errorf("deel: board %q: %w", e.Board, err)
+	}
+	org := extractDeelOrgName(flight)
+	rows := deelTextRows(flight)
+
+	var jobs []Job
+	for _, p := range postings {
+		if j, ok := d.toJob(e, org, rows, p); ok {
+			jobs = append(jobs, j)
+		}
+	}
+	return jobs, nil
+}
+
+// decodeDeelFlight concatenates and JS-string-decodes every flight chunk embedded in the
+// page's <script> tags into one stream. Decoding each chunk as a JSON string yields
+// correct UTF-8 (the flight escaping — \", \\, \n, \uXXXX, \/ — is JSON string escaping),
+// so multibyte characters survive intact.
+func decodeDeelFlight(root *html.Node) (string, error) {
+	var scripts strings.Builder
+	walk(root, func(n *html.Node) bool {
+		if n.Type == html.ElementNode && n.Data == "script" {
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				if c.Type == html.TextNode {
+					scripts.WriteString(c.Data)
+				}
+			}
+		}
+		return true
+	})
+	matches := deelPush.FindAllStringSubmatch(scripts.String(), -1)
+	if len(matches) == 0 {
+		return "", fmt.Errorf("no flight payload found")
+	}
+	var flight strings.Builder
+	for _, m := range matches {
+		var chunk string
+		if err := json.Unmarshal([]byte(m[1]), &chunk); err != nil {
+			return "", fmt.Errorf("decode flight chunk: %w", err)
+		}
+		flight.WriteString(chunk)
+	}
+	return flight.String(), nil
+}
+
+// deelTextRowMarker matches the start of an RSC text row, "<id>:T<hexlen>,". RSC numbers
+// both the row id and the byte length in lowercase HEX (refs run …$29, $2a, $2b, $30…),
+// so the id is hex, not decimal. The leading non-hex byte anchors the id's left edge (so
+// "a2a:T" is not read as "2a:T") without a lookbehind; a text row is never at offset 0, so
+// requiring one preceding byte is safe.
+var deelTextRowMarker = regexp.MustCompile(`[^0-9a-f]([0-9a-f]+):T([0-9a-f]+),`)
+
+// deelTextRows returns the flight stream's text rows keyed by id. A text row is
+// "<id>:T<hexlen>,<bytes>" whose content is exactly hexlen BYTES (it may itself contain
+// newlines), so each marker's content is sliced by its declared byte length. A posting's
+// "$N" richtextDescription reference resolves to row N's content.
+func deelTextRows(flight string) map[string]string {
+	b := []byte(flight)
+	rows := make(map[string]string)
+	for _, m := range deelTextRowMarker.FindAllSubmatchIndex(b, -1) {
+		id := string(b[m[2]:m[3]])
+		n, err := strconv.ParseInt(string(b[m[4]:m[5]]), 16, 64)
+		if err != nil {
+			continue
+		}
+		start := m[1] // end of the full match = first content byte after the comma
+		end := start + int(n)
+		if end > len(b) {
+			end = len(b)
+		}
+		rows[id] = string(b[start:end])
+	}
+	return rows
+}
+
+// deelPosting is the subset of a jobPostings entry the adapter maps. id is the posting id
+// used in the public URL and the org sitemap; richtextDescription is either a "$N"
+// reference into the flight stream or, defensively, an inline HTML string.
+type deelPosting struct {
+	ID                  string `json:"id"`
+	Title               string `json:"title"`
+	RichtextDescription string `json:"richtextDescription"`
+	CreatedAt           string `json:"createdAt"`
+	Job                 struct {
+		JobLocations []struct {
+			Location struct {
+				Name string `json:"name"`
+			} `json:"location"`
+		} `json:"jobLocations"`
+	} `json:"job"`
+}
+
+// extractDeelPostings decodes the jobPostings array out of the flight stream. A missing
+// array is an error (a markup change must surface loudly rather than silently empty the
+// catalogue); an empty array is valid and yields no postings.
+func extractDeelPostings(flight string) ([]deelPosting, error) {
+	raw, ok := bracketSlice(flight, `"jobPostings":`, '[', ']')
+	if !ok {
+		return nil, fmt.Errorf("jobPostings payload not found")
+	}
+	var postings []deelPosting
+	if err := json.Unmarshal([]byte(raw), &postings); err != nil {
+		return nil, fmt.Errorf("decode jobPostings: %w", err)
+	}
+	return postings, nil
+}
+
+// extractDeelOrgName reads careerPageSettings.preferredOrganizationName from the flight
+// stream, or "" when absent (the caller falls back to the configured company name).
+func extractDeelOrgName(flight string) string {
+	raw, ok := bracketSlice(flight, `"careerPageSettings":`, '{', '}')
+	if !ok {
+		return ""
+	}
+	var settings struct {
+		PreferredOrganizationName string `json:"preferredOrganizationName"`
+	}
+	if err := json.Unmarshal([]byte(raw), &settings); err != nil {
+		return ""
+	}
+	return settings.PreferredOrganizationName
+}
+
+// bracketSlice returns the balanced open..close run that follows the first occurrence of
+// key in s (e.g. the `[ … ]` array or `{ … }` object after a JSON field name), or ok=false
+// when key is absent. It scans for balance only — it does not skip brackets inside string
+// literals — which is sufficient for the flat jobPostings/careerPageSettings payloads here.
+func bracketSlice(s, key string, open, close byte) (string, bool) {
+	at := strings.Index(s, key)
+	if at < 0 {
+		return "", false
+	}
+	start := strings.IndexByte(s[at:], open)
+	if start < 0 {
+		return "", false
+	}
+	start += at
+	depth := 0
+	for i := start; i < len(s); i++ {
+		switch s[i] {
+		case open:
+			depth++
+		case close:
+			depth--
+			if depth == 0 {
+				return s[start : i+1], true
+			}
+		}
+	}
+	return "", false
+}
+
+// toJob maps one posting to a Job. ok is false when the posting carries no id, which would
+// collide on the (source, external_id) dedup key. Deel exposes no structured workplace
+// field, so WorkMode is left empty (the location parser resolves it) and the remote flag
+// comes from the shared heuristic over the title and location.
+func (deel) toJob(e CompanyEntry, org string, rows map[string]string, p deelPosting) (Job, bool) {
+	if p.ID == "" {
+		return Job{}, false
+	}
+	desc := p.RichtextDescription
+	if ref, ok := strings.CutPrefix(desc, "$"); ok {
+		desc = rows[ref]
+	}
+	var locs []string
+	for _, jl := range p.Job.JobLocations {
+		locs = append(locs, jl.Location.Name)
+	}
+	location := joinNonEmpty(locs...)
+	return Job{
+		ExternalID:  p.ID,
+		URL:         fmt.Sprintf(deelJobURL, e.Board, p.ID),
+		Title:       p.Title,
+		Company:     firstNonEmpty(org, e.Company),
+		Location:    location,
+		Description: sanitizeHTML(desc),
+		Remote:      isRemote(p.Title + " " + location),
+		PostedAt:    parseRFC3339(p.CreatedAt),
+	}, true
+}
