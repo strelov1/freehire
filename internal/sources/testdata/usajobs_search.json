@@ -1,0 +1,116 @@
+{
+ "SearchResult": {
+  "SearchResultCount": 2,
+  "SearchResultCountAll": 1621,
+  "SearchResultItems": [
+   {
+    "MatchedObjectId": "871922900",
+    "MatchedObjectDescriptor": {
+     "PositionID": "26-12971621B-ITS-2210-12",
+     "PositionTitle": "Information Technology Specialist (Applications Software)",
+     "PositionURI": "https://www.usajobs.gov:443/job/871922900",
+     "ApplyURI": [
+      "https://www.usajobs.gov:443/job/871922900"
+     ],
+     "PositionLocationDisplay": "Multiple Locations",
+     "PositionLocation": [
+      {
+       "LocationName": "Anchorage, Alaska",
+       "CountryCode": "United States",
+       "CountrySubDivisionCode": "Alaska",
+       "CityName": "Anchorage, Alaska",
+       "AddressLine": "(AK3237) 949 E 36 Ave",
+       "Longitude": -149.82323,
+       "Latitude": 61.198734
+      },
+      {
+       "LocationName": "Birmingham, Alabama",
+       "CountryCode": "United States",
+       "CountrySubDivisionCode": "Alabama",
+       "CityName": "Birmingham, Alabama",
+       "AddressLine": "(AL1213) 417 20th St N",
+       "Longitude": -86.804855,
+       "Latitude": 33.52132
+      }
+     ],
+     "OrganizationName": "Internal Revenue Service",
+     "DepartmentName": "Department of the Treasury",
+     "PositionRemuneration": [
+      {
+       "MinimumRange": "89508",
+       "MaximumRange": "145468",
+       "RateIntervalCode": "PA",
+       "Description": "Per Year"
+      }
+     ],
+     "PositionStartDate": "2026-06-05T00:00:00.0000",
+     "PositionEndDate": "2026-06-18T23:59:59.9970",
+     "QualificationSummary": "Federal experience is not required. The experience may have been gained in the public sector, private sector or Volunteer Service. One year of experience refers to full-time work; part-timework is con",
+     "UserArea": {
+      "Details": {
+       "JobSummary": "Additional jobs may be filled from this announcement or any other source to fill these vacancies. Consider each location carefully when applying. If you are selected for a location, that location will become your official post of duty. In the event that a building is closed due to rent management, new hires may be placed in a local commuting location. REVIEW THE ADDITIONAL INFORMATION BELOW FOR FURTHER DETAILS",
+       "MajorDuties": [
+        "The following are the duties of this position at the full working level. If this vacancy includes more than one grade and you are selected at a lower grade level, you will have the opportunity to learn to perform these duties and receive training to help you grow in this position. Provides technical guidance in designing, coding, testing, debugging, and maintaining programs. Translates and interprets functional requirements. Applies computer assisted software engineering (CASE) tools to the design and development process. Tests, installs, implements, documents, and maintains software. Provides guidance to less experienced coworkers in solving programming problems. STANDARD POSITION DESCRIPTIONS (SPD): PD94353 Visit the IRS SPD Library to access the position descriptions."
+       ],
+       "Requirements": "U.S Citizenship - Must be a U.S. Citizen or National and provide proof of U.S. Citizenship. Selective Service Registration - If you are a male applicant born after December 31, 1959, must certify that",
+       "TeleworkEligible": true,
+       "RemoteIndicator": false
+      }
+     }
+    }
+   },
+   {
+    "MatchedObjectId": "848520700",
+    "MatchedObjectDescriptor": {
+     "PositionID": "ST-12820154-26-JRT",
+     "PositionTitle": "SOFTWARE DEVELOPER",
+     "PositionURI": "https://www.usajobs.gov:443/job/848520700",
+     "ApplyURI": [
+      "https://www.usajobs.gov:443/job/848520700"
+     ],
+     "PositionLocationDisplay": "Dahlgren, Virginia",
+     "PositionLocation": [
+      {
+       "LocationName": "Dahlgren, Virginia",
+       "CountryCode": "United States",
+       "CountrySubDivisionCode": "Virginia",
+       "CityName": "Dahlgren, Virginia",
+       "Longitude": -77.0468,
+       "Latitude": 38.331
+      }
+     ],
+     "OrganizationName": "Naval Sea Systems Command",
+     "DepartmentName": "Department of the Navy",
+     "PositionRemuneration": [
+      {
+       "MinimumRange": "101401",
+       "MaximumRange": "156755",
+       "RateIntervalCode": "PA",
+       "Description": "Per Year"
+      }
+     ],
+     "PositionStartDate": "2025-10-22T00:00:00.0000",
+     "PositionEndDate": "2026-10-21T23:59:59.9970",
+     "QualificationSummary": "Your resume must also demonstrate at least one year of specialized experience at or equivalent to the next lower pay band, ND-03 (GS-09/11 equivalency), in the Federal service or equivalent experience",
+     "UserArea": {
+      "Details": {
+       "JobSummary": "This is a public notice flyer to notify interested applicants of anticipated vacancies. Applications will not be accepted through this flyer. Interested applicants must follow the directions in the \"How to Apply\" section of this flyer to be considered. There may or may not be actual vacancies filled from this flyer. Notice of Result letters will not be sent to applicants who respond to this flyer.",
+       "MajorDuties": [
+        "You will conduct Weapon Control Systems system integration efforts, including but not limited to developing software requirements and design, programming, integration, trouble shooting, and data analysis.",
+        "You will provide leadership through mentoring, supporting the project software development processes and collaborating across all functional areas within the organization and among external stakeholders",
+        "You will develop and write/code new (or modify existing) computer applications, software, or specialized utility programs following software assurance best practices.",
+        "You will analyze user needs and software requirements to determine feasibility of design within time and cost constraints.",
+        "You will confer with systems analysts, engineers, programmers, and others to design application and to obtain information on project limitations and capabilities, performance requirements, and interfaces.",
+        "You will correct errors by making appropriate changes and rechecking the program to ensure desired results are produced.",
+        "You will modify and maintain existing software to correct errors, to adapt it to new hardware, or to upgrade interfaces and improve performance."
+       ],
+       "Requirements": "",
+       "TeleworkEligible": true,
+       "RemoteIndicator": false
+      }
+     }
+    }
+   }
+  ]
+ }
+}

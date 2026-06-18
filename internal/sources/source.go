@@ -5,6 +5,7 @@ package sources
 
 import (
 	"context"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -101,7 +102,7 @@ func filterableProviders(registry map[string]Source) []string {
 // All assembles the registered adapters into a provider-keyed registry, sharing one
 // HTTP client across them. Adding a platform is a new adapter plus one line here.
 func All(c HTTPClient) map[string]Source {
-	return reg(
+	registry := reg(
 		NewGreenhouse(c),
 		NewLever(c),
 		NewAshby(c),
@@ -170,6 +171,13 @@ func All(c HTTPClient) map[string]Source {
 		NewMTS(c),
 		NewVK(c),
 	)
+	// USAJobs is the one keyed source: register it only when its API key is configured, so
+	// unconfigured environments (tests, local dev) leave it absent rather than listing a
+	// provider that cannot crawl. The key is a secret, read from the environment.
+	if key := os.Getenv("USAJOBS_API_KEY"); key != "" {
+		registry["usajobs"] = NewUSAJobs(c, key)
+	}
+	return registry
 }
 
 // defaultDetailWorkers bounds the per-board detail-fetch fan-out for adapters whose

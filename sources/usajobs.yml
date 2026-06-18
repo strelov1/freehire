@@ -1,0 +1,6 @@
+# USAJobs (data.usajobs.gov), the U.S. federal government's official job board. Boardless:
+# one public Search API, so the entry carries no board; each job's company is the hiring
+# agency from the posting, not this placeholder. KEYED source — set USAJOBS_API_KEY in the
+# environment (the API rejects unauthenticated requests); the key is a secret, never here.
+- company: USAJobs
+  provider: usajobs
