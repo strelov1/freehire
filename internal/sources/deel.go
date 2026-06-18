@@ -57,10 +57,24 @@ func (d deel) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	rows := deelTextRows(flight)
 
 	var jobs []Job
+	refs, resolved := 0, 0
 	for _, p := range postings {
+		if ref, ok := strings.CutPrefix(p.RichtextDescription, "$"); ok {
+			refs++
+			if strings.TrimSpace(rows[ref]) != "" {
+				resolved++
+			}
+		}
 		if j, ok := d.toJob(e, org, rows, p); ok {
 			jobs = append(jobs, j)
 		}
+	}
+	// Postings reference their descriptions by id into the flight's text rows. If every
+	// reference fails to resolve, the row parse broke (e.g. the marker format changed) —
+	// fail loudly rather than ship a whole board of empty-bodied jobs. A single unresolved
+	// reference still yields its posting with an empty description (tolerated degradation).
+	if refs > 0 && resolved == 0 {
+		return nil, fmt.Errorf("deel: board %q: %d description references but none resolved", e.Board, refs)
 	}
 	return jobs, nil
 }
@@ -176,9 +190,9 @@ func extractDeelOrgName(flight string) string {
 
 // bracketSlice returns the balanced open..close run that follows the first occurrence of
 // key in s (e.g. the `[ … ]` array or `{ … }` object after a JSON field name), or ok=false
-// when key is absent. It scans for balance only — it does not skip brackets inside string
-// literals — which is sufficient for the flat jobPostings/careerPageSettings payloads here.
-func bracketSlice(s, key string, open, close byte) (string, bool) {
+// when key is absent. It counts depth only outside JSON string literals, so a bracket inside
+// a value — a tenant-controlled title like "[EMEA] Engineer" — does not unbalance the scan.
+func bracketSlice(s, key string, open, closing byte) (string, bool) {
 	at := strings.Index(s, key)
 	if at < 0 {
 		return "", false
@@ -188,12 +202,24 @@ func bracketSlice(s, key string, open, close byte) (string, bool) {
 		return "", false
 	}
 	start += at
-	depth := 0
+	depth, inString := 0, false
 	for i := start; i < len(s); i++ {
-		switch s[i] {
+		c := s[i]
+		if inString {
+			switch c {
+			case '\\':
+				i++ // skip the escaped byte
+			case '"':
+				inString = false
+			}
+			continue
+		}
+		switch c {
+		case '"':
+			inString = true
 		case open:
 			depth++
-		case close:
+		case closing:
 			depth--
 			if depth == 0 {
 				return s[start : i+1], true

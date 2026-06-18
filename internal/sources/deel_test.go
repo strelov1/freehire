@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -9,6 +10,13 @@ import (
 
 	"golang.org/x/net/html"
 )
+
+// deelPage wraps a raw flight stream into a minimal board page: one
+// self.__next_f.push([1,"<json-quoted flight>"]) script, the shape decodeDeelFlight reads.
+func deelPage(flight string) string {
+	q, _ := json.Marshal(flight)
+	return `<html><body><script>self.__next_f.push([1,` + string(q) + `])</script></body></html>`
+}
 
 func deelFixture(t *testing.T, name string) string {
 	t.Helper()
@@ -198,5 +206,36 @@ func TestDeelNoPayloadIsError(t *testing.T) {
 func TestDeelDropsEmptyID(t *testing.T) {
 	if _, ok := (deel{}).toJob(CompanyEntry{Board: "x"}, "Org", nil, deelPosting{ID: "", Title: "x"}); ok {
 		t.Error("toJob yielded a posting with empty id (would collide on the dedup key)")
+	}
+}
+
+// TestDeelTitleWithBrackets pins that a tenant-controlled bracket inside a posting value
+// (e.g. "[EMEA] …") does not unbalance the jobPostings array scan.
+func TestDeelTitleWithBrackets(t *testing.T) {
+	flight := `8:["$","$L1f",null,{"careerPageSettings":{"preferredOrganizationName":"Acme"},` +
+		`"jobPostings":[{"id":"1","title":"[EMEA] Senior Engineer [remote]","richtextDescription":"$a"}]}]` +
+		"\n" + `a:T9,<p>Hi</p>`
+	fake := &fakeHTTP{body: deelPage(flight)}
+	jobs, err := NewDeel(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1 (bracket in title unbalanced the scan)", len(jobs))
+	}
+	if jobs[0].Title != "[EMEA] Senior Engineer [remote]" {
+		t.Errorf("Title = %q, want the bracketed title", jobs[0].Title)
+	}
+}
+
+// TestDeelUnresolvedRefsError pins the loud-failure guard: postings that reference text
+// rows none of which resolve mean the row parse broke, so the board errors rather than
+// shipping every job with an empty description.
+func TestDeelUnresolvedRefsError(t *testing.T) {
+	flight := `8:["$","$L1f",null,{"careerPageSettings":{"preferredOrganizationName":"Acme"},` +
+		`"jobPostings":[{"id":"1","title":"X","richtextDescription":"$ff"}]}]`
+	fake := &fakeHTTP{body: deelPage(flight)}
+	if _, err := NewDeel(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+		t.Error("Fetch with no resolvable description references returned nil error, want an error")
 	}
 }

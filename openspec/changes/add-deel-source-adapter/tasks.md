@@ -1,57 +1,57 @@
 ## 1. Test fixture — trimmed real board page
 
-- [ ] 1.1 Build `internal/sources/testdata/deel_klarna.html` from the real `jobs.deel.com/klarna`
+- [x] 1.1 Build `internal/sources/testdata/deel_klarna.html` from the real `jobs.deel.com/klarna`
   page, trimmed to ~2 postings plus their `$N` text rows and the `careerPageSettings`, keeping
   the flight format intact (faithful `$N`→`T<byte-length>` resolution against real-shaped data)
-- [ ] 1.2 Add a `deel_empty.html` fixture: a board page whose `jobPostings` payload is empty
+- [x] 1.2 Add a `deel_empty.html` fixture: a board page whose `jobPostings` payload is empty
 
 ## 2. Flight payload extraction (TDD)
 
-- [ ] 2.1 Test a helper that concatenates and JS-string-decodes the page's `self.__next_f.push`
+- [x] 2.1 Test a helper that concatenates and JS-string-decodes the page's `self.__next_f.push`
   chunks into one flight stream, asserting a known multibyte description substring decodes as
   correct UTF-8 (no mojibake)
-- [ ] 2.2 Test ref resolution: a `"$N"` reference maps to its `N:T<hexlen>,<html>` row's HTML,
+- [x] 2.2 Test ref resolution: a `"$N"` reference maps to its `N:T<hexlen>,<html>` row's HTML,
   sliced by the declared **byte** length
-- [ ] 2.3 Implement the extractor + ref map over the flight stream
+- [x] 2.3 Implement the extractor + ref map over the flight stream
 
 ## 3. Deel adapter — Provider + Fetch (TDD)
 
-- [ ] 3.1 Test `Provider()` returns `"deel"` and the adapter is NOT boardless (board-based)
-- [ ] 3.2 Test `Fetch` GETs `https://jobs.deel.com/<board>` exactly once (no per-posting detail
+- [x] 3.1 Test `Provider()` returns `"deel"` and the adapter is NOT boardless (board-based)
+- [x] 3.2 Test `Fetch` GETs `https://jobs.deel.com/<board>` exactly once (no per-posting detail
   request) and yields the postings from the embedded payload
-- [ ] 3.3 Implement `deel.go`: `deel` struct over the HTML/HTTP client, `NewDeel`, the single
+- [x] 3.3 Implement `deel.go`: `deel` struct over the HTML/HTTP client, `NewDeel`, the single
   board GET, parse `careerPageSettings` + `jobPostings`, resolve descriptions, map to `Job`
 
 ## 4. Field mapping (TDD)
 
-- [ ] 4.1 Test mapping of one real posting: `ExternalID` = posting `id`; `URL` =
+- [x] 4.1 Test mapping of one real posting: `ExternalID` = posting `id`; `URL` =
   `https://jobs.deel.com/<board>/job-details/<id>/overview`; `Title` = `title`;
   `Company` = `careerPageSettings.preferredOrganizationName`;
   `Location` = joined `job.jobLocations[].location.name`;
   `Description` = `sanitizeHTML(<resolved richtext>)` (structure kept, active content stripped)
-- [ ] 4.2 Test `PostedAt` from `createdAt` via `parseRFC3339`; nil when absent/unparseable
-- [ ] 4.3 Test `Company` falls back to `e.Company` when `preferredOrganizationName` is absent,
+- [x] 4.2 Test `PostedAt` from `createdAt` via `parseRFC3339`; nil when absent/unparseable
+- [x] 4.3 Test `Company` falls back to `e.Company` when `preferredOrganizationName` is absent,
   and `Remote` is set via the shared `isRemote` heuristic (e.g. a "Fully Remote" title)
 
 ## 5. Edge cases (TDD)
 
-- [ ] 5.1 Test an empty board (`deel_empty.html`) yields zero jobs and no error
-- [ ] 5.2 Test a page with no decodable `jobPostings` payload returns an error (loud failure,
+- [x] 5.1 Test an empty board (`deel_empty.html`) yields zero jobs and no error
+- [x] 5.2 Test a page with no decodable `jobPostings` payload returns an error (loud failure,
   not a silent empty catalogue)
-- [ ] 5.3 Test a posting whose `id` is empty is dropped (cannot collide on the dedup key)
+- [x] 5.3 Test a posting whose `id` is empty is dropped (cannot collide on the dedup key)
 
 ## 6. Registration and configuration
 
-- [ ] 6.1 Register `NewDeel(c)` in `sources.All`; confirm `reg`'s duplicate-provider guard passes
+- [x] 6.1 Register `NewDeel(c)` in `sources.All`; confirm `reg`'s duplicate-provider guard passes
   and `deel` appears among the filterable providers (board-based, not boardless)
-- [ ] 6.2 Harvest live tenants into `sources/deel.yml`: seed slugs (Google `site:jobs.deel.com`
+- [x] 6.2 Harvest live tenants into `sources/deel.yml`: seed slugs (Google `site:jobs.deel.com`
   + confirmed brands: klarna, deel, dott, dfns, airbase, mako, cardo, cablex, syone, …),
   validate each via `GET /<slug>/sitemap.xml` (XML = live tenant), keep the live ones with a
   human-readable company name per entry
 
 ## 7. Verification
 
-- [ ] 7.1 `go build ./... && go vet ./... && go test ./internal/sources/...` all green
-- [ ] 7.2 Focused live check: run the adapter (real client) against `klarna` and confirm real
+- [x] 7.1 `go build ./... && go vet ./... && go test ./internal/sources/...` all green
+- [x] 7.2 Focused live check: run the adapter (real client) against `klarna` and confirm real
   postings normalize (title + sanitized-HTML description + id + url + createdAt + location);
   confirm the validated-registry fail-fast still accepts `deel`
