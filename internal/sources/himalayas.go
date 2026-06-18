@@ -14,11 +14,15 @@ type himalayas struct {
 }
 
 const (
-	// himalayasLimit is the page size requested per offset page.
-	himalayasLimit = 100
+	// himalayasLimit is the page size requested per offset page. Himalayas caps the page
+	// size at 20 regardless of the requested value, so this matches the cap; the loop
+	// advances by the count actually returned (not by this), staying correct even if the
+	// cap changes.
+	himalayasLimit = 20
 	// himalayasMaxPages caps pagination so a runaway/over-reported totalCount cannot loop
-	// indefinitely (the same defensive bound the other paginating adapters carry).
-	himalayasMaxPages = 400
+	// indefinitely (the same defensive bound the other paginating adapters carry). Sized for
+	// the small page cap; in practice the API's rate limit ends a run far sooner.
+	himalayasMaxPages = 5000
 	himalayasListURL  = "https://himalayas.app/jobs/api?limit=%d&offset=%d"
 )
 
@@ -51,20 +55,30 @@ type himalayasPosting struct {
 
 func (s himalayas) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 	var jobs []Job
-	for offset, page := 0, 0; page < himalayasMaxPages; offset, page = offset+himalayasLimit, page+1 {
+	for offset, page := 0, 0; page < himalayasMaxPages; page++ {
 		var resp himalayasResponse
 		url := fmt.Sprintf(himalayasListURL, himalayasLimit, offset)
 		if err := s.http.GetJSON(ctx, url, &resp); err != nil {
-			return nil, fmt.Errorf("himalayas: list offset %d: %w", offset, err)
+			// Himalayas rate-limits (429) after a number of rapid pages. Once we have
+			// collected jobs, treat a page failure as the end of what we can fetch this run
+			// and return the partial result (freshest jobs first) rather than discarding
+			// everything; the idempotent upsert means the next run picks up where the rate
+			// limit allows. Only a failure on the very first page is a real board error.
+			if len(jobs) == 0 {
+				return nil, fmt.Errorf("himalayas: list offset %d: %w", offset, err)
+			}
+			return jobs, nil
 		}
 		for _, p := range resp.Jobs {
 			if job, ok := p.toJob(); ok {
 				jobs = append(jobs, job)
 			}
 		}
-		// Stop once this page's offset covers the reported total, or the page came back
-		// empty (defensive against a total that never shrinks).
-		if len(resp.Jobs) == 0 || offset+himalayasLimit >= resp.TotalCount {
+		// Advance by the count actually returned: Himalayas caps the page size below the
+		// requested limit, so a fixed stride would skip postings. Stop on an empty page or
+		// once the offset covers the reported total.
+		offset += len(resp.Jobs)
+		if len(resp.Jobs) == 0 || offset >= resp.TotalCount {
 			break
 		}
 	}
