@@ -6,18 +6,21 @@
   import { ensureViewedLoaded } from '$lib/viewedJobs.svelte';
   import { Paginator } from '$lib/paginated.svelte';
   import { FilterStore, filtersToParams } from '$lib/filters.svelte';
+  import { syncOnNavigation } from '$lib/urlSynced.svelte';
   import type { Job, FacetCounts } from '$lib/types';
   import { Input } from '$lib/ui';
   import FiltersPanel from './FiltersPanel.svelte';
   import States from './States.svelte';
   import JobRow from './JobRow.svelte';
   import LoadMore from './LoadMore.svelte';
+  import InfiniteScroll from './InfiniteScroll.svelte';
 
   // Filters live in the URL; the route `load` searches by them and returns the
-  // first page as `initial`, so the rows are in the initial HTML. Each filter
-  // change is a real navigation (FilterStore commits via goto), which re-runs
-  // `load` and delivers a fresh `initial` here; "load more" then pages the rest
-  // client-side over the same filters.
+  // first page as `initial`, so the rows are in the initial HTML for SSR/share/
+  // reload. After hydration the view is client-driven: FilterStore writes the URL
+  // synchronously and exposes a debounced `applied` snapshot; a filter change
+  // reloads the list + counts client-side off `applied` (no navigation), and
+  // infinite scroll pages the rest.
   //
   // `scope` pins extra search params that the user can't change (e.g. the company
   // page passes `{ company_slug }`): they're merged into every search but kept out
@@ -33,9 +36,10 @@
   // render the same filtered view.
   const filters = new FilterStore(page.url.searchParams);
 
-  // The user's facet filters plus the fixed `scope` params (company_slug, …).
+  // The user's (debounced) facet filters plus the fixed `scope` params
+  // (company_slug, …). Reads `applied` so typing doesn't fetch per keystroke.
   const scopedParams = () => {
-    const p = filtersToParams(filters.value);
+    const p = filtersToParams(filters.applied);
     for (const [k, v] of Object.entries(scope)) p.set(k, v);
     return p;
   };
@@ -68,43 +72,41 @@
   };
 
   let drawerOpen = $state(false);
-  let primed = false;
+  let started = false;
 
   // For a signed-in user, load the set of already-viewed slugs so JobRow can dim
   // seen cards (no-op when signed out — the set stays empty). Cleanup: cancel any
-  // debounced filter navigation so it can't fire after this view is gone.
+  // pending debounced reload so it can't fire after this view is gone.
   onMount(() => {
     if (isAuthenticated()) ensureViewedLoaded();
     return () => filters.dispose();
   });
 
-  // Keep the panel synced with the URL and refresh its facet counts. Runs on
-  // mount and on every URL change — a filter commit (goto) or browser
-  // back/forward. Track only the URL: syncFromUrl reads filters.value internally,
-  // so untrack stops this from looping on its own write. It's a no-op when
-  // already in sync (our own commits) and re-seeds the panel on back/forward;
-  // either way the counts refresh for the new filters.
+  function reloadList() {
+    const next = makePaginator();
+    next.start();
+    jobs = next;
+  }
+
+  // Reload list + counts whenever the debounced filters change — a settled
+  // keystroke, an immediate facet toggle, or a back/forward re-seed. Skip the
+  // first run for the list (the SSR `initial` already seeded page one); still
+  // fetch counts on mount since they aren't server-rendered into this view.
   $effect(() => {
-    page.url.search; // track
+    filters.applied; // track the debounced snapshot
     untrack(() => {
-      filters.syncFromUrl();
       refreshCounts();
+      if (!started) {
+        started = true;
+        return;
+      }
+      reloadList();
     });
   });
 
-  // The list mirrors the route `load`: each filter change navigates and re-runs
-  // it, so a fresh `initial` arrives as this prop — reseed a paginator from it.
-  // The first run is the server-rendered page already seeded above, so skip it.
-  $effect(() => {
-    const slice = initial; // track the prop
-    if (!primed) {
-      primed = true;
-      return;
-    }
-    const next = makePaginator();
-    next.seed(slice);
-    jobs = next;
-  });
+  // Browser back/forward re-seeds the filters from the URL; the resulting
+  // `applied` change drives the reload effect above.
+  syncOnNavigation(filters);
 </script>
 
 <div class="flex gap-6">
@@ -150,6 +152,9 @@
       </div>
 
       {#if jobs.hasMore}
+        <!-- Scroll-to-bottom auto-load; the button stays as the accessible
+             fallback (keyboard/screen-reader, and retry on a failed load). -->
+        <InfiniteScroll onLoad={() => jobs.loadMore()} enabled={!jobs.loadingMore && !jobs.loadMoreError} />
         <LoadMore loading={jobs.loadingMore} error={jobs.loadMoreError} onclick={() => jobs.loadMore()} />
       {/if}
     {/if}

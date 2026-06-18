@@ -4,9 +4,8 @@
 // (GET /api/v1/jobs/search) expects, including the `<param>_exclude` and
 // `<param>_mode=and` conventions.
 
-import { page } from '$app/state';
-import { goto } from '$app/navigation';
 import { FACETS } from './facets';
+import { UrlSyncedState } from './urlSynced.svelte';
 
 /** One facet's selection: the chosen values, whether it filters by inclusion or
  *  exclusion, and (for facets that allow it) whether selected values are ANDed
@@ -111,49 +110,57 @@ export function canonicalQuery(query: string): string {
   return filtersToParams(filtersFromParams(new URLSearchParams(query))).toString();
 }
 
-/** Reactive filter state mirrored into the URL. Owned by the jobs view; all
- *  mutations go through its methods so every change updates state and URL. */
+/** Reactive job filters mirrored into the URL. A thin wrapper over the shared
+ *  `UrlSyncedState` primitive: it owns the job-specific shape (facets/visa/salary/
+ *  sort) and the discrete-vs-continuous policy, while the primitive owns the
+ *  state<->URL transport and the reload debounce. Read `value` to drive inputs and
+ *  `applied` (the debounced snapshot) to drive the data reload. */
 export class FilterStore {
-  value = $state<JobFilters>(emptyFilters());
-
-  // Debounce handle for the continuous inputs (free-text query, salary slider),
-  // which fire on every keystroke / drag tick. Their URL commit — a real
-  // navigation that re-runs `load` — is coalesced so typing doesn't round-trip
-  // per character; `value` still updates synchronously so the input stays live.
-  #navTimer: ReturnType<typeof setTimeout> | undefined;
+  #url: UrlSyncedState<JobFilters>;
 
   /** Seed from the current URL params (passed by the view from `page.url`), so
    *  the same filters render on the server and hydrate on the client. */
   constructor(initial?: URLSearchParams) {
-    this.value = filtersFromParams(initial ?? new URLSearchParams());
+    this.#url = new UrlSyncedState<JobFilters>(initial ?? new URLSearchParams(), {
+      parse: filtersFromParams,
+      serialize: filtersToParams,
+    });
+  }
+
+  /** Live filters — bind inputs to this. */
+  get value(): JobFilters {
+    return this.#url.value;
+  }
+
+  /** Debounced filters — drive the list/counts reload off this. */
+  get applied(): JobFilters {
+    return this.#url.applied;
   }
 
   get active(): number {
-    return activeFilterCount(this.value);
+    return activeFilterCount(this.#url.value);
   }
 
   facet(param: string): FacetState {
-    return this.value.facets[param] ?? emptyFacet();
+    return this.#url.value.facets[param] ?? emptyFacet();
   }
 
+  // Continuous inputs (typed/dragged): debounce the reload via setSoon.
   setQuery(q: string) {
-    this.value = { ...this.value, q };
-    this.#commitSoon();
-  }
-
-  setVisa(on: boolean) {
-    this.value = { ...this.value, visa: on };
-    this.#commit();
+    this.#url.setSoon({ ...this.#url.value, q });
   }
 
   setSalaryMin(n: number | null) {
-    this.value = { ...this.value, salaryMin: n };
-    this.#commitSoon();
+    this.#url.setSoon({ ...this.#url.value, salaryMin: n });
+  }
+
+  // Discrete inputs (clicked/toggled): apply immediately via setNow.
+  setVisa(on: boolean) {
+    this.#url.setNow({ ...this.#url.value, visa: on });
   }
 
   setSort(sort: SortField) {
-    this.value = { ...this.value, sort };
-    this.#commit();
+    this.#url.setNow({ ...this.#url.value, sort });
   }
 
   /** Toggle a facet between match-all (AND) and match-any (OR) of its values. */
@@ -192,56 +199,27 @@ export class FilterStore {
   }
 
   clear() {
-    this.value = emptyFilters();
-    this.#commit();
+    this.#url.setNow(emptyFilters());
   }
 
   /** Replace the entire filter state from a saved query string and mirror it to
    *  the URL — applies a saved search. Unknown params are ignored by
    *  filtersFromParams, so a stale save degrades to a partial filter. */
   apply(query: string) {
-    this.value = filtersFromParams(new URLSearchParams(query));
-    this.#commit();
+    this.#url.setNow(filtersFromParams(new URLSearchParams(query)));
   }
 
-  /** Re-read filters from the current URL (browser back/forward). No-op when
-   *  already in sync, which also breaks the write-back loop after our own
-   *  commit. */
+  /** Re-read filters from the current URL (browser back/forward). */
   syncFromUrl() {
-    const current = page.url.searchParams;
-    if (current.toString() === filtersToParams(this.value).toString()) return;
-    this.value = filtersFromParams(current);
+    this.#url.syncFromUrl();
   }
 
-  /** Cancel any pending debounced navigation — call from the owning view's
-   *  cleanup so a late commit can't navigate after unmount. */
+  /** Cancel any pending debounced reload — call from the owning view's cleanup. */
   dispose() {
-    clearTimeout(this.#navTimer);
+    this.#url.dispose();
   }
 
   #setFacet(param: string, st: FacetState) {
-    this.value = { ...this.value, facets: { ...this.value.facets, [param]: st } };
-    this.#commit();
-  }
-
-  /** Mirror the current filters into the URL via a real navigation. `goto` (not
-   *  the shallow `replaceState`) registers the change with the router, so the URL
-   *  and its `load`-produced results are stored on the history entry and restored
-   *  correctly on browser back/forward — shallow routing leaves `page.url` (and
-   *  thus `load`) stale on a back navigation. `replaceState: true` updates in
-   *  place (no per-tweak history entry); `keepFocus`/`noScroll` keep the page
-   *  steady. The route `load` re-runs for the new query and drives the list.
-   *  Browser-only (mutations are user events). */
-  #commit() {
-    clearTimeout(this.#navTimer); // a pending debounced nav is now subsumed
-    const qs = filtersToParams(this.value).toString();
-    goto(page.url.pathname + (qs ? `?${qs}` : ''), { replaceState: true, keepFocus: true, noScroll: true });
-  }
-
-  /** Debounced #commit for the continuous inputs, so each keystroke / slider tick
-   *  doesn't trigger its own navigation + `load`. */
-  #commitSoon() {
-    clearTimeout(this.#navTimer);
-    this.#navTimer = setTimeout(() => this.#commit(), 300);
+    this.#url.setNow({ ...this.#url.value, facets: { ...this.#url.value.facets, [param]: st } });
   }
 }

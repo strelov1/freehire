@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { page } from '$app/state';
   import { api } from '$lib/api';
   import { FilterStore, filtersToParams } from '$lib/filters.svelte';
+  import { syncOnNavigation } from '$lib/urlSynced.svelte';
   import { FACETS } from '$lib/facets';
   import type { FacetCounts } from '$lib/types';
   import FiltersPanel from './FiltersPanel.svelte';
@@ -24,43 +25,44 @@
   let status = $state<'ready' | 'loading' | 'error'>('ready');
   let drawerOpen = $state(false);
   let started = false;
-  let timer: ReturnType<typeof setTimeout>;
   // Monotonic fetch id: a response only commits if it is still the latest, so a
   // slow fetch that resolves after a newer one can't overwrite fresh counts with
-  // stale data (the debounce alone doesn't cover already-started fetches).
+  // stale data. The reload debounce now lives in FilterStore (value -> applied),
+  // so there is no second timer here.
   let generation = 0;
 
-  // Browser back/forward changes the URL query — pull it back into the filters.
-  // Track only the URL (untrack the sync, which reads filters.value) so this does
-  // not also fire on our own #commit writes. Same pattern as JobsView.
-  $effect(() => {
-    page.url.search; // track
-    untrack(() => filters.syncFromUrl());
-  });
+  // Cancel a pending debounced apply on unmount so it can't fire afterwards.
+  onMount(() => () => filters.dispose());
 
-  // Re-fetch counts when any filter changes, debounced. The first run is the
-  // seeded SSR snapshot, so skip it. The effect's cleanup clears a pending timer
-  // before the next run and on unmount (the debounce).
+  // Browser back/forward re-seeds the filters from the URL; the resulting
+  // `applied` change drives the counts effect below.
+  syncOnNavigation(filters);
+
+  // Re-fetch counts when the debounced filters change. The debounce already
+  // happened in the primitive, so fetch immediately — the `generation` guard (not
+  // a timer) is what protects against an out-of-order response. Skip the first
+  // run: the SSR `initial` counts are already shown.
   $effect(() => {
-    filtersToParams(filters.value).toString(); // track every filter field
-    if (!started) {
-      started = true;
-      return;
-    }
-    status = 'loading';
-    const params = filtersToParams(filters.value);
-    const gen = ++generation;
-    timer = setTimeout(async () => {
-      try {
-        const next = await api.facetCounts(params);
-        if (gen !== generation) return; // a newer fetch superseded this one
-        counts = next;
-        status = 'ready';
-      } catch {
-        if (gen === generation) status = 'error';
+    filters.applied; // track the debounced snapshot
+    untrack(() => {
+      if (!started) {
+        started = true;
+        return;
       }
-    }, 300);
-    return () => clearTimeout(timer);
+      status = 'loading';
+      const params = filtersToParams(filters.applied);
+      const gen = ++generation;
+      api
+        .facetCounts(params)
+        .then((next) => {
+          if (gen !== generation) return; // a newer fetch superseded this one
+          counts = next;
+          status = 'ready';
+        })
+        .catch(() => {
+          if (gen === generation) status = 'error';
+        });
+    });
   });
 
   // The salary range is only meaningful within a single currency — the stats

@@ -1,13 +1,14 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { page } from '$app/state';
-  import { replaceState } from '$app/navigation';
   import { api, type Slice } from '$lib/api';
   import { Paginator } from '$lib/paginated.svelte';
+  import { UrlSyncedState, syncOnNavigation } from '$lib/urlSynced.svelte';
   import type { CompanyListItem } from '$lib/types';
   import { Badge, Input } from '$lib/ui';
   import States from './States.svelte';
   import LoadMore from './LoadMore.svelte';
+  import InfiniteScroll from './InfiniteScroll.svelte';
   import CompanyLogo from './CompanyLogo.svelte';
 
   // The first page is server-rendered (route `load`) for the current ?q, so the
@@ -15,66 +16,56 @@
   let { initial }: { initial: Slice<CompanyListItem> } = $props();
 
   // Search lives in the URL (?q=) so it survives reload, sharing, and
-  // back/forward — the jobs-list pattern scaled down to a single field (no
-  // FilterStore, which models job-only facets). Seeded from the current URL.
-  let q = $state(page.url.searchParams.get('q') ?? '');
+  // back/forward. The shared primitive owns the state<->URL transport and the
+  // reload debounce; here it's a single string (no FilterStore, which models
+  // job-only facets). `value` drives the input, `applied` drives the fetch.
+  const search = new UrlSyncedState<string>(page.url.searchParams, {
+    parse: (p) => p.get('q') ?? '',
+    serialize: (q) => {
+      const p = new URLSearchParams();
+      if (q) p.set('q', q);
+      return p;
+    },
+  });
 
+  // Fetch against the debounced query so typing doesn't issue a request per key.
   const makePaginator = () =>
-    new Paginator<CompanyListItem>((limit, offset) => api.listCompanies(q, limit, offset));
+    new Paginator<CompanyListItem>((limit, offset) => api.listCompanies(search.applied, limit, offset));
 
   const seeded = makePaginator();
   seeded.seed(untrack(() => initial));
   let companies = $state.raw(seeded);
+  let started = false;
 
-  let timer: ReturnType<typeof setTimeout>;
-
-  // A debounce timer left running after unmount would start a fetch for a
-  // component that no longer exists.
-  onMount(() => () => clearTimeout(timer));
+  onMount(() => () => search.dispose());
 
   function reload() {
     companies = makePaginator();
     companies.start();
   }
 
-  // Typing: update q and mirror it to the URL *synchronously* in this handler,
-  // then re-query debounced. Writing the URL here rather than in an effect keeps
-  // q and the URL in lockstep within the same tick, so the back/forward effect
-  // below never runs mid-keystroke against a stale URL and reverts the input.
-  function search(value: string) {
-    q = value;
-    const params = new URLSearchParams();
-    if (q) params.set('q', q);
-    const qs = params.toString();
-    replaceState(page.url.pathname + (qs ? `?${qs}` : ''), {});
-    clearTimeout(timer);
-    timer = setTimeout(reload, 300);
-  }
-
-  // Browser back/forward changes the URL externally — pull it into q and
-  // re-query. Track *only* the URL: reading q reactively here would also fire the
-  // effect on our own search()/replaceState write, against a page.url that hasn't
-  // updated yet (it propagates a tick later), reverting the just-typed value. So
-  // read q under untrack — the effect runs only on real URL changes, when page.url
-  // is current, and no-ops on initial mount (q is seeded from the same URL).
+  // Reload whenever the debounced query changes (typing settled, or back/forward
+  // re-seeded it). Skip the first run: the SSR `initial` already rendered page one.
   $effect(() => {
-    page.url.search; // track
+    search.applied; // track the debounced query
     untrack(() => {
-      const urlQ = page.url.searchParams.get('q') ?? '';
-      if (urlQ !== q) {
-        q = urlQ;
-        clearTimeout(timer);
-        reload();
+      if (!started) {
+        started = true;
+        return;
       }
+      reload();
     });
   });
+
+  // Browser back/forward re-seeds the query from the URL.
+  syncOnNavigation(search);
 </script>
 
 <div class="mb-4">
   <Input
     type="search"
-    value={q}
-    oninput={(e) => search(e.currentTarget.value)}
+    value={search.value}
+    oninput={(e) => search.setSoon(e.currentTarget.value)}
     placeholder="Search companies…"
     aria-label="Search companies"
     class="w-full"
@@ -86,7 +77,7 @@
 {:else if companies.status === 'error'}
   <States state="error" message="Failed to load companies." />
 {:else if companies.items.length === 0}
-  <States state="empty" message={q ? 'No matching companies.' : 'No companies yet.'} />
+  <States state="empty" message={search.value ? 'No matching companies.' : 'No companies yet.'} />
 {:else}
   <p class="mb-3 text-sm text-muted-foreground" aria-live="polite">
     {companies.total.toLocaleString()} {companies.total === 1 ? 'company' : 'companies'}
@@ -107,6 +98,12 @@
   </div>
 
   {#if companies.hasMore}
+    <!-- Scroll-to-bottom auto-load; the button below stays as the accessible
+         fallback (keyboard/screen-reader, and retry on a failed load). -->
+    <InfiniteScroll
+      onLoad={() => companies.loadMore()}
+      enabled={!companies.loadingMore && !companies.loadMoreError}
+    />
     <LoadMore
       loading={companies.loadingMore}
       error={companies.loadMoreError}
