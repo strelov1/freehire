@@ -14,6 +14,50 @@ import (
 
 func ptr[T any](v T) *T { return &v }
 
+func TestFromRow_PostedAtFallsBackToCreatedAtWhenFutureOrMissing(t *testing.T) {
+	created := time.Date(2026, 6, 18, 12, 0, 0, 0, time.UTC)
+	createdTS := pgtype.Timestamptz{Time: created, Valid: true}
+	const wantCreated = "2026-06-18T12:00:00Z"
+	base := db.Job{Source: "workday", ExternalID: "1", PublicSlug: "s", CreatedAt: createdTS, Enrichment: []byte("{}")}
+
+	// A future posted_at (e.g. a Workday startDate set to a go-live date) must not sort the
+	// job to the top of the freshest-first browse — it reads as its ingest time instead.
+	future := base
+	future.PostedAt = pgtype.Timestamptz{Time: time.Now().Add(24 * time.Hour), Valid: true}
+	v, err := FromRow(future)
+	if err != nil {
+		t.Fatalf("FromRow(future): %v", err)
+	}
+	if v.PostedAt == nil || *v.PostedAt != wantCreated {
+		t.Errorf("future posted_at: PostedAt = %v, want created_at %s", v.PostedAt, wantCreated)
+	}
+	if v.CreatedAt == nil || *v.CreatedAt != wantCreated {
+		t.Errorf("CreatedAt should still be exposed raw, got %v", v.CreatedAt)
+	}
+
+	// A missing posted_at (undated source) also falls back to the ingest time.
+	missing := base
+	missing.PostedAt = pgtype.Timestamptz{}
+	v2, err := FromRow(missing)
+	if err != nil {
+		t.Fatalf("FromRow(missing): %v", err)
+	}
+	if v2.PostedAt == nil || *v2.PostedAt != wantCreated {
+		t.Errorf("missing posted_at: PostedAt = %v, want created_at %s", v2.PostedAt, wantCreated)
+	}
+
+	// A real, past posted_at is left untouched.
+	past := base
+	past.PostedAt = pgtype.Timestamptz{Time: time.Date(2026, 6, 10, 9, 0, 0, 0, time.UTC), Valid: true}
+	v3, err := FromRow(past)
+	if err != nil {
+		t.Fatalf("FromRow(past): %v", err)
+	}
+	if v3.PostedAt == nil || *v3.PostedAt != "2026-06-10T09:00:00Z" {
+		t.Errorf("past posted_at should stay unchanged, got %v", v3.PostedAt)
+	}
+}
+
 func TestFromRow_MapsCoreAndNestedEnrichment(t *testing.T) {
 	posted := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
 	// LLM-only fields (domains, visa, salary) stay nested; the six dictionary
