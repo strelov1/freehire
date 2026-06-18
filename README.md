@@ -9,7 +9,7 @@
 
 ### Every IT job, straight from the source.
 
-**1.1M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**
+**1.4M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**
 
 [**Try it live →**](https://freehire.dev) · [Sources](#sources) · [API](#api) · [Add a source](#adding-a-source) · [Contributing](CONTRIBUTING.md)
 
@@ -41,7 +41,7 @@
 - **Yours to build on.** A clean HTTP API, a CLI, Telegram digests, and per-user
   application tracking — use the hosted site, run your own, or build on top.
 
-Aggregating **1.1M+ live postings** from **29,000+ companies** across **50+
+Aggregating **1.4M+ live postings** from **51,000+ companies** across **70+
 sources** — see [Sources](#sources) for the full breakdown.
 
 ## Stack
@@ -168,64 +168,82 @@ Auth legend: **✓** session cookie or API key · **🍪** session cookie only.
 
 ## Sources
 
-Live catalogue snapshot — **53 sources**, **29,202 companies**, **1,130,933 open
-postings** (1,154,614 total). Counts are open postings unless noted.
+Live catalogue snapshot — **71 sources**, **51,329 companies**, **1,433,333 open
+postings** (1,520,966 total). Counts are open postings unless noted.
 
 | Source | Companies | Open jobs |
 | --- | ---: | ---: |
-| workday | 3,455 | 377,692 |
-| greenhouse | 4,912 | 168,663 |
-| icims | 3,610 | 158,684 |
-| smartrecruiters | 467 | 81,688 |
-| gupy | 1,429 | 77,454 |
-| lever | 1,757 | 55,538 |
-| bamboohr | 6,593 | 46,914 |
-| jibe | 11 | 44,240 |
-| ashby | 2,399 | 41,742 |
-| oracle | 173 | 14,864 |
-| amazon | 1 | 10,643 |
-| workable | 287 | 10,056 |
-| phenom | 1 | 8,208 |
-| arc | 2,912 | 4,719 |
-| sber | 12 | 3,757 |
-| google | 7 | 3,640 |
-| jobstash | 484 | 3,058 |
-| mts | 12 | 2,601 |
-| alfabank | 1 | 2,389 |
-| workatastartup | 189 | 1,916 |
-| recruitee | 78 | 1,888 |
-| telegram | 845 | 1,564 |
-| breezy | 28 | 1,219 |
-| wantapply | 362 | 1,048 |
-| tbank | 1 | 955 |
-| remoteok | 593 | 911 |
-| yandex | 1 | 891 |
-| uber | 1 | 722 |
-| gem | 33 | 518 |
-| personio | 21 | 473 |
-| rwb | 1 | 430 |
-| teamtailor | 27 | 329 |
-| linkedin | 216 | 282 |
-| successfactors | 1 | 269 |
-| vk | 1 | 264 |
-| lamoda | 1 | 126 |
-| huntflow | 14 | 116 |
-| pinpoint | 8 | 97 |
-| globalpayments | 1 | 54 |
-| tecla | 29 | 54 |
-| rippling | 4 | 42 |
-| habr_career | 30 | 37 |
-| aviasales | 1 | 35 |
-| ashbygraphql | 2 | 30 |
-| domclick | 1 | 25 |
-| ozon | 1 | 23 |
-| dodo | 3 | 19 |
+| workday | 3,546 | 382,479 |
+| greenhouse | 5,326 | 180,367 |
+| icims | 3,655 | 167,397 |
+| jibe | 14 | 133,756 |
+| smartrecruiters | 467 | 89,887 |
+| mycareersfuture | 14,707 | 86,749 |
+| gupy | 1,435 | 83,543 |
+| lever | 1,881 | 62,335 |
+| ashby | 2,852 | 49,304 |
+| bamboohr | 6,621 | 48,583 |
+| phenom | 26 | 26,946 |
+| oracle | 173 | 20,101 |
+| amazon | 1 | 10,885 |
+| usajobs | 277 | 10,751 |
+| workable | 286 | 10,010 |
+| justjoin | 956 | 9,977 |
+| eightfold | 11 | 7,192 |
+| arc | 2,884 | 4,678 |
+| wantedkr | 1,531 | 4,306 |
+| google | 7 | 3,978 |
+| sber | 12 | 3,841 |
+| jobstash | 540 | 3,370 |
+| himalayas | 1,334 | 2,993 |
+| mts | 12 | 2,611 |
+| alfabank | 1 | 2,367 |
+| recruitee | 94 | 2,064 |
+| telegram | 985 | 1,837 |
+| radancy | 6 | 1,694 |
+| reed | 329 | 1,689 |
+| freshteam | 1 | 1,596 |
+| personio | 111 | 1,385 |
+| breezy | 27 | 1,324 |
+| arbeitnow | 640 | 1,138 |
+| getonbrd | 253 | 1,111 |
+| uber | 1 | 1,052 |
+| thehub | 261 | 1,039 |
+| workatastartup | 998 | 1,024 |
+| wantapply | 262 | 1,018 |
+| yandex | 1 | 942 |
+| tbank | 1 | 863 |
+| jazzhr | 10 | 595 |
+| teamtailor | 65 | 592 |
+| deel | 23 | 499 |
+| gem | 33 | 497 |
+| wpyoast | 1 | 428 |
+| rwb | 1 | 422 |
+| linkedin | 212 | 274 |
+| successfactors | 1 | 271 |
+| vk | 1 | 267 |
+| jobicy | 118 | 199 |
+| remoteok | 154 | 180 |
+| lamoda | 1 | 134 |
+| weworkremotely | 112 | 122 |
+| huntflow | 14 | 114 |
+| pinpoint | 8 | 103 |
+| habr_career | 41 | 58 |
+| tecla | 29 | 55 |
+| workingnomads | 17 | 46 |
+| globalpayments | 1 | 42 |
+| rippling | 4 | 39 |
+| aviasales | 1 | 39 |
+| ashbygraphql | 2 | 34 |
+| remotive | 16 | 30 |
+| domclick | 1 | 24 |
+| ozon | 1 | 21 |
+| dodo | 3 | 18 |
+| geekjob | 15 | 17 |
 | lumenalta | 1 | 16 |
-| mtslink | 1 | 8 |
+| mtslink | 1 | 7 |
 | join | 3 | 7 |
-| geekjob | 3 | 4 |
 | kuper | 1 | 2 |
-| manual | 1 | 1 |
 
 ## Adding a source
 
