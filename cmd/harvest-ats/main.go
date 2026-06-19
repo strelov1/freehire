@@ -31,7 +31,8 @@ import (
 // client handles per-request timeout and 429 backoff, so this stays polite.
 const resolveWorkers = 12
 
-// perPageTimeout bounds a single careers-page fetch so one slow site can't wedge a worker.
+// perPageTimeout is an outer cap on a single careers-page fetch so a worker can't
+// wedge; the sources client's own 15s transport timeout is the tighter, usual cap.
 const perPageTimeout = 20 * time.Second
 
 func main() { os.Exit(run()) }

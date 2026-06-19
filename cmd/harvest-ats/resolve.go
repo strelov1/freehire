@@ -13,8 +13,9 @@ import (
 var careerPaths = []string{"/careers", "/jobs", "/career"}
 
 // anchorRe extracts (href, inner-text) from each <a> tag (case-insensitive, dotall
-// so the text may span lines).
-var anchorRe = regexp.MustCompile(`(?is)<a\b[^>]*\bhref="([^"]*)"[^>]*>(.*?)</a>`)
+// so the text may span lines). Both quote styles are accepted — some sites write
+// href='...'.
+var anchorRe = regexp.MustCompile(`(?is)<a\b[^>]*\bhref=["']([^"']*)["'][^>]*>(.*?)</a>`)
 
 // careersLink returns the first anchor on a homepage that points at a careers/jobs
 // page — matched on either the href or the link text containing "career"/"job" —
