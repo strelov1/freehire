@@ -7,35 +7,89 @@
 package collections
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/strelov1/freehire/internal/normalize"
 )
 
-// Collection is one curated theme: a URL slug plus the display copy rendered on
-// the /collections pages. Membership resolution is deterministic per collection
-// (see the import worker) and not modelled here.
+// Dataset is a remote source of member company names for a collection: a URL the
+// import worker fetches and a pure parser that extracts the company names from the
+// payload (matching to our catalogue happens via normalize.Slug in Match).
+type Dataset struct {
+	URL   string
+	Parse func([]byte) ([]string, error)
+}
+
+// Collection is one curated theme: a URL slug, the display copy rendered on the
+// /collections hub and the job-search facet, and its membership source — exactly
+// one of Slugs (a static hand list of canonical company slugs) or Dataset (a
+// remote list of company names). The import worker resolves the source to a set of
+// member companies.
 type Collection struct {
 	Slug        string
 	Title       string
 	Description string
+	Slugs       []string // static hand list (e.g. bigtech)
+	Dataset     *Dataset // remote company-name dataset (e.g. yc, unicorn)
 }
 
-// All is the fixed v1 registry, in display order. Adding a collection is one
-// entry here (plus a resolver in the import worker).
+// All is the fixed registry, in display order. Adding a collection is one entry
+// here — a static Slugs list or a Dataset; the import worker resolves whichever is
+// set.
 var All = []Collection{
 	{
 		Slug:        "yc",
 		Title:       "Y Combinator",
 		Description: "Open roles at Y Combinator–backed companies, from current batches to graduated unicorns.",
+		Dataset:     &Dataset{URL: ycDatasetURL, Parse: ParseYC},
+	},
+	{
+		Slug:        "mag7",
+		Title:       "Magnificent Seven",
+		Description: "Open roles at the Magnificent Seven — Apple, Microsoft, Alphabet, Amazon, Meta, Nvidia and Tesla.",
+		Slugs:       Mag7Slugs,
 	},
 	{
 		Slug:        "bigtech",
 		Title:       "Big Tech",
 		Description: "Open roles at the largest, most established technology companies.",
+		Slugs:       BigTechSlugs,
 	},
+	{
+		Slug:        "unicorn",
+		Title:       "Unicorns",
+		Description: "Open roles at unicorns — private companies valued at over $1 billion.",
+		Dataset:     &Dataset{URL: unicornDatasetURL, Parse: ParseCompanyCSV},
+	},
+	{
+		Slug:        "fortune500",
+		Title:       "Fortune 500",
+		Description: "Open roles at Fortune 500 companies — the largest US corporations by revenue.",
+		Dataset:     &Dataset{URL: fortune500DatasetURL, Parse: ParseCompanyCSV},
+	},
+}
+
+// Default dataset URLs (overridable per collection via <SLUG>_DATASET_URL in the
+// import worker). yc-oss is the maintained open mirror of the YC company
+// directory; the unicorn and fortune500 CSVs are open snapshots with the company
+// name in a "Company" column (see ParseCompanyCSV).
+const (
+	ycDatasetURL         = "https://yc-oss.github.io/api/companies/all.json"
+	unicornDatasetURL    = "https://raw.githubusercontent.com/elmoallistair/datasets/main/unicorn_startups.csv"
+	fortune500DatasetURL = "https://raw.githubusercontent.com/EatMoreOranges/Fortune-500-Dataset/main/data/2023-fortune-500-data.csv"
+)
+
+// Mag7Slugs is the Magnificent Seven — the 2025 canonical mega-cap tech cohort.
+// Name variants (alphabet/google, meta/facebook) are both listed so a company
+// matches whichever name our adapters use. It is a deliberate subset of
+// BigTechSlugs, surfaced as its own focused collection.
+var Mag7Slugs = []string{
+	"apple", "microsoft", "google", "alphabet",
+	"amazon", "meta", "facebook", "nvidia", "tesla",
 }
 
 // BigTechSlugs is the hand-curated company-slug list for the bigtech collection.
@@ -164,6 +218,42 @@ func ParseYC(data []byte) ([]string, error) {
 	for _, c := range raw {
 		if c.Name != "" {
 			names = append(names, c.Name)
+		}
+	}
+	return names, nil
+}
+
+// ParseCompanyCSV extracts the company names from a CSV that has a "Company"
+// column: it locates that column by header (not a fixed index, so an upstream
+// column reorder doesn't silently read the wrong field) and returns each non-empty
+// value. Shared by the unicorn and fortune500 datasets.
+func ParseCompanyCSV(data []byte) ([]string, error) {
+	r := csv.NewReader(strings.NewReader(string(data)))
+	r.FieldsPerRecord = -1 // tolerate ragged rows rather than aborting the whole parse
+	header, err := r.Read()
+	if err != nil {
+		return nil, fmt.Errorf("collections: read company csv header: %w", err)
+	}
+	col := -1
+	for i, h := range header {
+		if strings.EqualFold(strings.TrimSpace(h), "Company") {
+			col = i
+			break
+		}
+	}
+	if col < 0 {
+		return nil, fmt.Errorf("collections: csv has no Company column")
+	}
+	rows, err := r.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("collections: read company csv: %w", err)
+	}
+	names := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if col < len(row) {
+			if name := strings.TrimSpace(row[col]); name != "" {
+				names = append(names, name)
+			}
 		}
 	}
 	return names, nil

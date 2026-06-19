@@ -115,3 +115,32 @@ func TestParseYC_RejectsGarbage(t *testing.T) {
 		t.Error("ParseYC accepted invalid JSON")
 	}
 }
+
+func TestParseCompanyCSV_ExtractsCompanyColumn(t *testing.T) {
+	// Company is not the first column; the parser must locate it by header, not
+	// index, and tolerate quoted fields with commas (the Investors column).
+	csv := `Updated at,Company,Last Valuation,Investors
+"x",Stripe,95,"[""Sequoia"",""a16z""]"
+"x",Canva,40,"[""Blackbird""]"
+"x",,0,"[]"`
+	names, err := ParseCompanyCSV([]byte(csv))
+	if err != nil {
+		t.Fatalf("ParseCompanyCSV: %v", err)
+	}
+	if !reflect.DeepEqual(names, []string{"Stripe", "Canva"}) { // empty name skipped
+		t.Errorf("names = %#v, want [Stripe Canva]", names)
+	}
+}
+
+func TestParseCompanyCSV_RequiresCompanyColumn(t *testing.T) {
+	if _, err := ParseCompanyCSV([]byte("Name,Valuation\nStripe,95")); err == nil {
+		t.Error("ParseCompanyCSV accepted a CSV without a Company column")
+	}
+}
+
+func TestRegistry_HasUnicorn(t *testing.T) {
+	c, ok := Lookup("unicorn")
+	if !ok || c.Dataset == nil {
+		t.Fatalf("unicorn collection missing or has no dataset: %+v ok=%v", c, ok)
+	}
+}

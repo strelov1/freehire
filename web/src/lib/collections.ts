@@ -18,8 +18,24 @@ export const COLLECTIONS: Collection[] = [
       'Open roles at Y Combinator–backed companies, from current batches to graduated unicorns.',
   },
   {
+    slug: 'mag7',
+    title: 'Magnificent Seven',
+    description:
+      'Open roles at the Magnificent Seven — Apple, Microsoft, Alphabet, Amazon, Meta, Nvidia and Tesla.',
+  },
+  {
     slug: 'bigtech',
     title: 'Big Tech',
     description: 'Open roles at the largest, most established technology companies.',
+  },
+  {
+    slug: 'unicorn',
+    title: 'Unicorns',
+    description: 'Open roles at unicorns — private companies valued at over $1 billion.',
+  },
+  {
+    slug: 'fortune500',
+    title: 'Fortune 500',
+    description: 'Open roles at Fortune 500 companies — the largest US corporations by revenue.',
   },
 ];

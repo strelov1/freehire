@@ -5,14 +5,14 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/strelov1/freehire/internal/collections"
 	"github.com/strelov1/freehire/internal/db"
 )
 
-// plan matches yc names + the bigtech hand list against existing companies and
-// emits a write only for companies whose managed-tag set actually changes,
-// preserving any unmanaged tags. `google` is used as the known bigtech member and
-// `acme-startup` as a yc-only match, so the test does not depend on which exact
-// companies the hand list contains beyond google being present.
+// plan matches each collection's candidates against existing companies and emits a
+// write only for companies whose managed-tag set actually changes, preserving any
+// unmanaged tags. `google` is the known bigtech member and `acme-startup` a yc-only
+// match, so the test does not depend on the exact hand list beyond google being in it.
 func TestPlan(t *testing.T) {
 	rows := []db.ListCompanyCollectionsRow{
 		{Slug: "google", Collections: []string{}},               // bigtech (hand list)
@@ -20,10 +20,13 @@ func TestPlan(t *testing.T) {
 		{Slug: "nytimes", Collections: []string{}},              // matches nothing → no write
 		{Slug: "oldyc", Collections: []string{"yc"}},            // no longer matched → yc dropped
 	}
-	// "Acme Startup" normalizes to acme-startup (yc). "Unknown Co" matches nothing.
-	ycNames := []string{"Acme Startup", "Unknown Co"}
+	resolved := map[string][]string{
+		"yc":      {"Acme Startup", "Unknown Co"}, // "Acme Startup" → acme-startup; "Unknown Co" → none
+		"bigtech": collections.BigTechSlugs,
+		"unicorn": nil,
+	}
 
-	got := plan(rows, ycNames)
+	got := plan(rows, resolved)
 
 	writeBySlug := map[string][]string{}
 	for _, w := range got.writes {
@@ -43,12 +46,11 @@ func TestPlan(t *testing.T) {
 		t.Errorf("nytimes should not be rewritten (no managed match), got %v", writeBySlug["nytimes"])
 	}
 
-	if got.ycMatched != 1 || got.ycUnmatched != 1 {
-		t.Errorf("yc matched/unmatched = %d/%d, want 1/1", got.ycMatched, got.ycUnmatched)
+	if s := got.stats["yc"]; s.matched != 1 || s.unmatched != 1 {
+		t.Errorf("yc stats = %+v, want {matched:1 unmatched:1}", s)
 	}
-	// Only google (of the rows) is in the bigtech hand list.
-	if got.bigMatched != 1 {
-		t.Errorf("bigtech matched = %d, want 1", got.bigMatched)
+	if s := got.stats["bigtech"]; s.matched != 1 { // only google (of the rows) is in the hand list
+		t.Errorf("bigtech matched = %d, want 1", s.matched)
 	}
 }
 
@@ -58,7 +60,8 @@ func TestPlan_PreservesUnmanagedTag(t *testing.T) {
 	rows := []db.ListCompanyCollectionsRow{
 		{Slug: "google", Collections: []string{"custom"}},
 	}
-	got := plan(rows, nil) // no yc names; google gains bigtech from the hand list
+	// google gains bigtech from the hand list; no yc/unicorn candidates.
+	got := plan(rows, map[string][]string{"bigtech": collections.BigTechSlugs})
 	if len(got.writes) != 1 {
 		t.Fatalf("writes = %d, want 1", len(got.writes))
 	}

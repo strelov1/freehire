@@ -1,13 +1,15 @@
 // Command import-collections populates the curated-collection membership defined
-// in internal/collections. For each collection it resolves the member companies
-// (yc from the open yc-oss dataset, matched by normalized name; bigtech from a
-// hand-coded slug list), writes companies.collections — reconciling only the tags
-// it manages so any other tags survive — then denormalizes the result onto
-// jobs.collections. It is a run-once-and-exit worker; a search reindex is required
-// afterwards to surface the changes in the facet index.
+// in internal/collections. For each collection it resolves the member companies —
+// a static hand list (e.g. bigtech) or a remote name dataset (e.g. yc, unicorn),
+// matched to our companies by normalized name — writes companies.collections
+// (reconciling only the tags it manages so any other tags survive), then
+// denormalizes the result onto jobs.collections. It is a run-once-and-exit worker;
+// a search reindex is required afterwards to surface the changes in the facet index.
 //
-// Idempotent: re-running with the same dataset writes the same membership and
-// changes nothing on the second pass.
+// Idempotent: re-running with the same inputs writes the same membership and
+// changes nothing on the second pass. If any collection's dataset cannot be
+// resolved the run aborts before writing — a partial resolve would otherwise drop
+// that collection's tags from every company.
 package main
 
 import (
@@ -18,6 +20,7 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/strelov1/freehire/internal/collections"
@@ -25,11 +28,7 @@ import (
 	"github.com/strelov1/freehire/internal/worker"
 )
 
-// defaultYCDatasetURL is the open yc-oss mirror of the YC company directory (a JSON
-// array of company objects). Overridable via YC_DATASET_URL for pinning or testing.
-const defaultYCDatasetURL = "https://yc-oss.github.io/api/companies/all.json"
-
-// fetchTimeout bounds the dataset download so a stalled endpoint can't hang the run.
+// fetchTimeout bounds each dataset download so a stalled endpoint can't hang the run.
 const fetchTimeout = 60 * time.Second
 
 func main() {
@@ -44,9 +43,13 @@ func run() int {
 	}
 	defer cleanup()
 
-	ycNames, err := fetchYC(ctx, ycDatasetURL())
+	// Resolve every collection's candidate company names/slugs up front. A failure
+	// here aborts before any write: proceeding with a collection missing would
+	// reconcile its tag off every company (a transient fetch error must not wipe
+	// membership).
+	resolved, err := resolveAll(ctx)
 	if err != nil {
-		log.Printf("import-collections: fetch yc dataset: %v", err)
+		log.Printf("import-collections: %v", err)
 		return 1
 	}
 
@@ -57,7 +60,7 @@ func run() int {
 		return 1
 	}
 
-	p := plan(rows, ycNames)
+	p := plan(rows, resolved)
 	for _, w := range p.writes {
 		if err := q.SetCompanyCollections(ctx, w); err != nil {
 			log.Printf("import-collections: set %q: %v", w.Slug, err)
@@ -71,41 +74,66 @@ func run() int {
 		return 1
 	}
 
-	log.Printf("import-collections done: yc matched=%d unmatched=%d, bigtech matched=%d unmatched=%d; companies updated=%d, jobs updated=%d",
-		p.ycMatched, p.ycUnmatched, p.bigMatched, p.bigUnmatched, len(p.writes), propagated)
+	for _, c := range collections.All {
+		s := p.stats[c.Slug]
+		log.Printf("import-collections: %s matched=%d unmatched=%d", c.Slug, s.matched, s.unmatched)
+	}
+	log.Printf("import-collections done: companies updated=%d, jobs updated=%d", len(p.writes), propagated)
 	log.Printf("import-collections: run `make reindex` to surface jobs.collections in the search index")
 	return 0
 }
 
-// planResult is the computed membership change plus the match diagnostics logged
-// at the end of a run.
-type planResult struct {
-	writes       []db.SetCompanyCollectionsParams
-	ycMatched    int
-	ycUnmatched  int
-	bigMatched   int
-	bigUnmatched int
+// resolveAll returns, per collection slug, its candidate company names (or slugs
+// for a hand list). A static-list collection resolves locally; a dataset
+// collection is fetched and parsed. Any resolution failure is returned (the caller
+// aborts rather than write a partial membership).
+func resolveAll(ctx context.Context) (map[string][]string, error) {
+	resolved := make(map[string][]string, len(collections.All))
+	for _, c := range collections.All {
+		switch {
+		case c.Slugs != nil:
+			resolved[c.Slug] = c.Slugs
+		case c.Dataset != nil:
+			names, err := fetchDataset(ctx, datasetURL(c), c.Dataset.Parse)
+			if err != nil {
+				return nil, fmt.Errorf("resolve %q: %w", c.Slug, err)
+			}
+			resolved[c.Slug] = names
+		default:
+			return nil, fmt.Errorf("collection %q has no membership source", c.Slug)
+		}
+	}
+	return resolved, nil
 }
 
-// plan computes the membership change for every company: it matches the yc names
-// and the bigtech slug list against the existing companies, then reconciles each
+// matchStat is the per-collection match outcome, logged at the end of a run.
+type matchStat struct{ matched, unmatched int }
+
+// planResult is the computed membership change plus the per-collection match stats.
+type planResult struct {
+	writes []db.SetCompanyCollectionsParams
+	stats  map[string]matchStat
+}
+
+// plan computes the membership change for every company: it matches each
+// collection's candidates against the existing companies, then reconciles each
 // company's managed tags (preserving any unmanaged ones), emitting a write only for
 // the companies whose set actually changes. It is pure — all I/O lives in run.
-func plan(rows []db.ListCompanyCollectionsRow, ycNames []string) planResult {
+// `resolved` maps a collection slug to its candidate company names/slugs.
+func plan(rows []db.ListCompanyCollectionsRow, resolved map[string][]string) planResult {
 	existing := make(map[string]struct{}, len(rows))
 	for _, r := range rows {
 		existing[r.Slug] = struct{}{}
 	}
 
-	ycMatched, ycUnmatched := collections.Match(ycNames, existing)
-	bigMatched, bigUnmatched := collections.Match(collections.BigTechSlugs, existing)
-
-	want := make(map[string][]string, len(ycMatched)+len(bigMatched))
-	for _, slug := range ycMatched {
-		want[slug] = append(want[slug], "yc")
-	}
-	for _, slug := range bigMatched {
-		want[slug] = append(want[slug], "bigtech")
+	want := make(map[string][]string)
+	stats := make(map[string]matchStat, len(resolved))
+	for _, c := range collections.All {
+		matched, unmatched := collections.Match(resolved[c.Slug], existing)
+		stats[c.Slug] = matchStat{matched: len(matched), unmatched: len(unmatched)}
+		for _, slug := range matched {
+			want[slug] = append(want[slug], c.Slug)
+		}
 	}
 
 	managed := collections.Slugs()
@@ -117,13 +145,7 @@ func plan(rows []db.ListCompanyCollectionsRow, ycNames []string) planResult {
 		}
 	}
 
-	return planResult{
-		writes:       writes,
-		ycMatched:    len(ycMatched),
-		ycUnmatched:  len(ycUnmatched),
-		bigMatched:   len(bigMatched),
-		bigUnmatched: len(bigUnmatched),
-	}
+	return planResult{writes: writes, stats: stats}
 }
 
 // normalizedCurrent sorts a copy of the stored collections so the change check
@@ -135,17 +157,19 @@ func normalizedCurrent(current []string) []string {
 	return cp
 }
 
-// ycDatasetURL returns the dataset URL, honouring a YC_DATASET_URL override.
-func ycDatasetURL() string {
-	if u := os.Getenv("YC_DATASET_URL"); u != "" {
+// datasetURL returns a collection's dataset URL, honouring a <SLUG>_DATASET_URL
+// environment override (e.g. YC_DATASET_URL, UNICORN_DATASET_URL).
+func datasetURL(c collections.Collection) string {
+	env := strings.ToUpper(c.Slug) + "_DATASET_URL"
+	if u := os.Getenv(env); u != "" {
 		return u
 	}
-	return defaultYCDatasetURL
+	return c.Dataset.URL
 }
 
-// fetchYC downloads the yc-oss dataset and extracts the company names. The URL is a
-// constant we control (not user input), so a plain client is appropriate.
-func fetchYC(ctx context.Context, url string) ([]string, error) {
+// fetchDataset downloads a dataset URL and runs its parser. The URLs are constants
+// we control (not user input), so a plain client is appropriate.
+func fetchDataset(ctx context.Context, url string, parse func([]byte) ([]string, error)) ([]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, fetchTimeout)
 	defer cancel()
 
@@ -165,5 +189,5 @@ func fetchYC(ctx context.Context, url string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return collections.ParseYC(body)
+	return parse(body)
 }
