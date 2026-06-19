@@ -54,4 +54,10 @@ export const COLLECTIONS: Collection[] = [
     title: 'Fortune 500',
     description: 'Open roles at Fortune 500 companies — the largest US corporations by revenue.',
   },
+  {
+    slug: 'russian-roots',
+    title: 'Russian Roots',
+    description:
+      'Open roles at globally distributed companies founded by Russian-speaking founders or with Russian-speaking engineering roots.',
+  },
 ];

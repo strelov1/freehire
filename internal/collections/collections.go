@@ -89,6 +89,12 @@ var All = []Collection{
 		Description: "Open roles at Fortune 500 companies — the largest US corporations by revenue.",
 		Dataset:     &Dataset{URL: fortune500DatasetURL, Parse: ParseCompanyCSV},
 	},
+	{
+		Slug:        "russian-roots",
+		Title:       "Russian Roots",
+		Description: "Open roles at globally distributed companies founded by Russian-speaking founders or with Russian-speaking engineering roots.",
+		Slugs:       RussianRootsSlugs,
+	},
 }
 
 // Default dataset URLs (overridable per collection via <SLUG>_DATASET_URL in the
@@ -171,6 +177,27 @@ var BigTechSlugs = []string{
 	"amd",
 	"dell",
 	"servicenow",
+}
+
+// RussianRootsSlugs is a hand-curated list of companies with Russian-speaking
+// founding roots that operate internationally (the idagent.pro "42 companies with
+// Russian-speaking roots" list + RingCentral). "Russian roots" is a fact about the
+// company, so all of its roles belong here. Entries are canonical company slugs (as
+// produced by normalize.Slug), matched against the catalogue at import time; the
+// first group is present today, the second is listed so a company tags in if it ever
+// enters the catalogue. Unmatched entries are simply logged.
+var RussianRootsSlugs = []string{
+	// Present in the catalogue.
+	"abbyy", "acronis", "aviasales", "ciklum", "clickhouse",
+	"codesignal", "dataart", "epam-systems", "epam-systems-pte-ltd", "exante",
+	"group-ib", "indrive", "jetbrains", "joom", "kaspersky",
+	"kaspersky-lab", "lokalise", "luxoft", "macpaw", "miro",
+	"nebius", "pandadoc", "picsart", "plata", "playrix",
+	"preply", "replika", "restream", "revolut", "ringcentral",
+	"semrush", "toloka", "toloka-ai", "veeam", "wallarm",
+	"wargaming", "whitebit", "wirex", "wrike",
+	// Not yet in the catalogue (future-proofing the membership).
+	"bitfury", "grammarly", "nginx", "parallels", "plesk", "telegram",
 }
 
 // Lookup returns the registry entry for a slug, or ok=false when no collection has
