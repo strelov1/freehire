@@ -18,6 +18,12 @@ export const COLLECTIONS: Collection[] = [
       'Open roles at Y Combinator–backed companies, from current batches to graduated unicorns.',
   },
   {
+    slug: 'ai',
+    title: 'AI Companies',
+    description:
+      'Open roles at AI-native companies — foundation-model labs, ML platforms and applied-AI products.',
+  },
+  {
     slug: 'mag7',
     title: 'Magnificent Seven',
     description:

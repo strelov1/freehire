@@ -45,15 +45,18 @@ func TestSlugs_MatchesRegistry(t *testing.T) {
 	}
 }
 
-func TestBigTechSlugs_NonEmptyAndCanonical(t *testing.T) {
-	if len(BigTechSlugs) == 0 {
-		t.Fatal("BigTechSlugs is empty")
-	}
-	// Each entry must already be a canonical slug (idempotent under normalization),
-	// so the hand list matches against our company slugs without surprises.
-	for _, s := range BigTechSlugs {
-		if got := normalize.Slug(s); got != s {
-			t.Errorf("BigTechSlugs entry %q is not canonical (normalizes to %q)", s, got)
+func TestHandListSlugs_AreCanonical(t *testing.T) {
+	// Every hand-list collection (bigtech, mag7, ai, …) must hold canonical slugs
+	// (idempotent under normalization), so the list matches our company slugs
+	// without surprises. Dataset-backed collections (yc, unicorn, …) carry no Slugs.
+	for _, c := range All {
+		if len(c.Slugs) == 0 {
+			continue
+		}
+		for _, s := range c.Slugs {
+			if got := normalize.Slug(s); got != s {
+				t.Errorf("collection %q slug %q is not canonical (normalizes to %q)", c.Slug, s, got)
+			}
 		}
 	}
 }

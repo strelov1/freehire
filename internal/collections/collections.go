@@ -48,6 +48,12 @@ var All = []Collection{
 		Dataset:     &Dataset{URL: ycDatasetURL, Parse: ParseYC},
 	},
 	{
+		Slug:        "ai",
+		Title:       "AI Companies",
+		Description: "Open roles at AI-native companies — foundation-model labs, ML platforms and applied-AI products.",
+		Slugs:       AICompanySlugs,
+	},
+	{
 		Slug:        "mag7",
 		Title:       "Magnificent Seven",
 		Description: "Open roles at the Magnificent Seven — Apple, Microsoft, Alphabet, Amazon, Meta, Nvidia and Tesla.",
@@ -82,6 +88,29 @@ const (
 	unicornDatasetURL    = "https://raw.githubusercontent.com/elmoallistair/datasets/main/unicorn_startups.csv"
 	fortune500DatasetURL = "https://raw.githubusercontent.com/EatMoreOranges/Fortune-500-Dataset/main/data/2023-fortune-500-data.csv"
 )
+
+// AICompanySlugs is a hand-curated list of prominent AI-native companies —
+// foundation-model labs, ML infrastructure/platforms, and applied-AI products.
+// "AI company" is a fact about the company (so all of its roles belong here),
+// distinct from the job-level `enrichment.category = ml_ai` facet (a single ML/AI
+// role at any company). Entries are canonical company slugs (normalize.Slug);
+// where a name is commonly written several ways, the variants are both listed so
+// the match lands whatever name our adapters use. Unmatched entries are logged.
+var AICompanySlugs = []string{
+	// Foundation-model labs.
+	"openai", "anthropic", "mistral", "mistral-ai", "cohere",
+	"ai21-labs", "ai21", "xai", "stability-ai", "inflection-ai",
+	"reka-ai", "contextual-ai", "deepmind",
+	// ML infrastructure / platforms / tooling.
+	"hugging-face", "scale-ai", "weights-biases", "together-ai", "replicate",
+	"pinecone", "anyscale", "baseten", "fireworks-ai", "lambda-labs",
+	"langchain", "llamaindex", "modal-labs",
+	// Applied-AI products.
+	"perplexity", "perplexity-ai", "character-ai", "midjourney", "runway",
+	"runway-ml", "elevenlabs", "eleven-labs", "synthesia", "jasper",
+	"glean", "harvey", "harvey-ai", "suno", "descript", "cresta",
+	"anysphere", "cursor",
+}
 
 // Mag7Slugs is the Magnificent Seven — the 2025 canonical mega-cap tech cohort.
 // Name variants (alphabet/google, meta/facebook) are both listed so a company
