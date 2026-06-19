@@ -77,6 +77,12 @@ func run() int {
 	for _, c := range collections.All {
 		s := p.stats[c.Slug]
 		log.Printf("import-collections: %s matched=%d unmatched=%d", c.Slug, s.matched, s.unmatched)
+		// For a hand list the unmatched entries are actionable (a typo'd slug, or a
+		// marquee company we don't ingest yet), so list them. Datasets have thousands
+		// of unmatched names — only their count is logged, above.
+		if len(s.unmatchedNames) > 0 {
+			log.Printf("import-collections: %s unmatched entries: %s", c.Slug, strings.Join(s.unmatchedNames, ", "))
+		}
 	}
 	log.Printf("import-collections done: companies updated=%d, jobs updated=%d", len(p.writes), propagated)
 	log.Printf("import-collections: run `make reindex` to surface jobs.collections in the search index")
@@ -107,7 +113,13 @@ func resolveAll(ctx context.Context) (map[string][]string, error) {
 }
 
 // matchStat is the per-collection match outcome, logged at the end of a run.
-type matchStat struct{ matched, unmatched int }
+// unmatchedNames holds the verbatim unmatched entries for hand-list collections
+// (small and actionable); it is left empty for datasets (their unmatched set runs
+// to thousands, so only the count is kept).
+type matchStat struct {
+	matched, unmatched int
+	unmatchedNames     []string
+}
 
 // planResult is the computed membership change plus the per-collection match stats.
 type planResult struct {
@@ -130,7 +142,11 @@ func plan(rows []db.ListCompanyCollectionsRow, resolved map[string][]string) pla
 	stats := make(map[string]matchStat, len(resolved))
 	for _, c := range collections.All {
 		matched, unmatched := collections.Match(resolved[c.Slug], existing)
-		stats[c.Slug] = matchStat{matched: len(matched), unmatched: len(unmatched)}
+		s := matchStat{matched: len(matched), unmatched: len(unmatched)}
+		if c.Slugs != nil { // hand list: keep the unmatched entries for diagnostics
+			s.unmatchedNames = unmatched
+		}
+		stats[c.Slug] = s
 		for _, slug := range matched {
 			want[slug] = append(want[slug], c.Slug)
 		}
