@@ -7,6 +7,9 @@ export type { Job, Enrichment } from './generated/contracts';
 export interface Company {
   slug: string;
   name: string;
+  // Curated-collection slugs this company belongs to (e.g. yc, bigtech); empty
+  // when untagged. Served by the company-detail endpoint (GetCompany SELECT *).
+  collections: string[];
   created_at: string | null;
   updated_at: string | null;
 }

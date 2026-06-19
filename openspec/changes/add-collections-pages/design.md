@@ -93,6 +93,10 @@ distribution in one search call.
   caveat as every dictionary facet.
 - **New binary must be wired into the Dockerfile** (build + COPY) or it won't ship
   — known gotcha for every new `cmd/`.
+- **`cmd/reslug` wipes membership** → it re-keys companies via
+  `DeleteOrphanCompanies` + `SyncCompaniesFromJobs`, which recreates rows with
+  `collections = '{}'`. Any reslug run must be followed by `cmd/import-collections`
+  (then a reindex) to restore membership; note this in the reslug runbook.
 
 ## Migration Plan
 
