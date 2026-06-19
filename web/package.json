@@ -10,6 +10,8 @@
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "og:smoke": "node scripts/og-smoke.mjs",
+    "gen:api-docs": "node scripts/gen-api-docs.mjs",
+    "gen:api-docs:smoke": "node scripts/gen-api-docs-smoke.mjs",
     "lint": "oxlint && eslint .",
     "lint:fix": "oxlint --fix && eslint . --fix"
   },

@@ -113,6 +113,8 @@
         Use the <a href="/cli" class="font-medium text-foreground underline-offset-4 hover:underline">freehire CLI</a>,
         or send the key directly as
         <code class="rounded bg-muted px-1 py-0.5 font-mono text-xs">Authorization: Bearer &lt;key&gt;</code>.
+        See the <a href="/docs/api" class="font-medium text-foreground underline-offset-4 hover:underline">API reference</a>
+        for every endpoint and filter.
       </p>
     </div>
 
