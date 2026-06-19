@@ -10,17 +10,18 @@ import (
 
 // plan matches yc names + the bigtech hand list against existing companies and
 // emits a write only for companies whose managed-tag set actually changes,
-// preserving any unmanaged tags.
+// preserving any unmanaged tags. `google` is used as the known bigtech member and
+// `acme-startup` as a yc-only match, so the test does not depend on which exact
+// companies the hand list contains beyond google being present.
 func TestPlan(t *testing.T) {
 	rows := []db.ListCompanyCollectionsRow{
-		{Slug: "stripe", Collections: []string{}},          // becomes yc + bigtech
-		{Slug: "acme", Collections: []string{"custom"}},    // unmanaged tag preserved, no managed match
-		{Slug: "google", Collections: []string{"bigtech"}}, // already correct → no write
-		{Slug: "oldyc", Collections: []string{"yc"}},       // no longer matched → yc dropped
+		{Slug: "google", Collections: []string{}},               // bigtech (hand list)
+		{Slug: "acme-startup", Collections: []string{"custom"}}, // yc match, unmanaged tag preserved
+		{Slug: "nytimes", Collections: []string{}},              // matches nothing → no write
+		{Slug: "oldyc", Collections: []string{"yc"}},            // no longer matched → yc dropped
 	}
-	// "Stripe" matches stripe (yc). bigtech hand list contributes google + stripe.
-	// "Unknown" matches nothing.
-	ycNames := []string{"Stripe", "Unknown Co"}
+	// "Acme Startup" normalizes to acme-startup (yc). "Unknown Co" matches nothing.
+	ycNames := []string{"Acme Startup", "Unknown Co"}
 
 	got := plan(rows, ycNames)
 
@@ -29,26 +30,25 @@ func TestPlan(t *testing.T) {
 		writeBySlug[w.Slug] = w.Collections
 	}
 
-	if c := writeBySlug["stripe"]; !reflect.DeepEqual(c, []string{"bigtech", "yc"}) {
-		t.Errorf("stripe write = %#v, want [bigtech yc]", c)
+	if c := writeBySlug["google"]; !reflect.DeepEqual(c, []string{"bigtech"}) {
+		t.Errorf("google write = %#v, want [bigtech]", c)
+	}
+	if c := writeBySlug["acme-startup"]; !reflect.DeepEqual(c, []string{"custom", "yc"}) {
+		t.Errorf("acme-startup write = %#v, want [custom yc]", c)
 	}
 	if c, ok := writeBySlug["oldyc"]; !ok || len(c) != 0 {
 		t.Errorf("oldyc write = %#v (ok=%v), want [] (yc dropped)", c, ok)
 	}
-	if _, ok := writeBySlug["google"]; ok {
-		t.Errorf("google should not be rewritten (already correct), got %v", writeBySlug["google"])
-	}
-	if _, ok := writeBySlug["acme"]; ok {
-		t.Errorf("acme should not be rewritten (no managed change), got %v", writeBySlug["acme"])
+	if _, ok := writeBySlug["nytimes"]; ok {
+		t.Errorf("nytimes should not be rewritten (no managed match), got %v", writeBySlug["nytimes"])
 	}
 
 	if got.ycMatched != 1 || got.ycUnmatched != 1 {
 		t.Errorf("yc matched/unmatched = %d/%d, want 1/1", got.ycMatched, got.ycUnmatched)
 	}
-	// bigtech hand list matched against existing: google + stripe present.
-	wantBig := 2
-	if got.bigMatched != wantBig {
-		t.Errorf("bigtech matched = %d, want %d", got.bigMatched, wantBig)
+	// Only google (of the rows) is in the bigtech hand list.
+	if got.bigMatched != 1 {
+		t.Errorf("bigtech matched = %d, want 1", got.bigMatched)
 	}
 }
 
@@ -56,16 +56,15 @@ func TestPlan(t *testing.T) {
 // managed one.
 func TestPlan_PreservesUnmanagedTag(t *testing.T) {
 	rows := []db.ListCompanyCollectionsRow{
-		{Slug: "stripe", Collections: []string{"custom"}},
+		{Slug: "google", Collections: []string{"custom"}},
 	}
-	got := plan(rows, []string{"Stripe"})
+	got := plan(rows, nil) // no yc names; google gains bigtech from the hand list
 	if len(got.writes) != 1 {
 		t.Fatalf("writes = %d, want 1", len(got.writes))
 	}
 	c := got.writes[0].Collections
 	sort.Strings(c)
-	// stripe is in the bigtech hand list too, so it gains both managed tags.
-	if !reflect.DeepEqual(c, []string{"bigtech", "custom", "yc"}) {
-		t.Errorf("collections = %#v, want [bigtech custom yc]", c)
+	if !reflect.DeepEqual(c, []string{"bigtech", "custom"}) {
+		t.Errorf("collections = %#v, want [bigtech custom]", c)
 	}
 }

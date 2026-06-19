@@ -39,31 +39,41 @@ var All = []Collection{
 }
 
 // BigTechSlugs is the hand-curated company-slug list for the bigtech collection.
+// "Big Tech" is taken in the broad "tech giants" sense: the canonical Magnificent
+// Seven (the 2025 standard — Apple, Microsoft, Alphabet/Google, Amazon, Meta,
+// Nvidia, Tesla) plus the next tier of large, established public technology
+// companies. It deliberately excludes high-growth startups/unicorns (Stripe,
+// Airbnb, Uber, …) — those are not Big Tech and several are YC, so they surface in
+// the `yc` collection instead. Name variants (alphabet/google, meta/facebook) are
+// both listed so a company matches whichever name our adapters use.
 // Entries are canonical company slugs (as produced by normalize.Slug), matched
-// against the companies present in the catalogue at import time.
+// against the companies present in the catalogue at import time; unmatched entries
+// are simply logged.
 var BigTechSlugs = []string{
-	"google",
-	"alphabet",
-	"meta",
-	"amazon",
+	// Magnificent Seven (+ name variants).
 	"apple",
 	"microsoft",
-	"netflix",
+	"google",
+	"alphabet",
+	"amazon",
+	"meta",
+	"facebook",
 	"nvidia",
+	"tesla",
+	// Established public tech giants.
+	"netflix",
 	"oracle",
-	"ibm",
 	"salesforce",
-	"adobe",
-	"sap",
+	"ibm",
 	"intel",
+	"adobe",
 	"cisco",
+	"sap",
 	"qualcomm",
-	"uber",
-	"airbnb",
-	"stripe",
-	"paypal",
-	"spotify",
-	"snowflake",
+	"broadcom",
+	"amd",
+	"dell",
+	"servicenow",
 }
 
 // Lookup returns the registry entry for a slug, or ok=false when no collection has
