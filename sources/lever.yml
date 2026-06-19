@@ -3778,3 +3778,5 @@
   board: zeiss
 - company: hypersonica-prod
   board: hypersonica-prod
+- company: polleverywhere
+  board: polleverywhere
