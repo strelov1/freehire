@@ -126,6 +126,46 @@
     </div>
   </section>
 
+  <!-- Publish via the API -->
+  <section class="flex flex-col gap-6">
+    <h2 class="text-2xl font-semibold tracking-tight">Or publish via the API</h2>
+    <div class="grid gap-6 lg:grid-cols-2 lg:items-start">
+      <div class="flex flex-col gap-4">
+        <p class="text-sm leading-relaxed text-muted-foreground">
+          Rather push than be pulled? Mint an
+          <a href="/my/api-keys" class="font-medium text-foreground underline-offset-4 hover:underline"
+            >API key</a
+          >
+          and post roles straight to freehire — one call per vacancy, from your own systems or the
+          <a href="/cli" class="font-medium text-foreground underline-offset-4 hover:underline"
+            >freehire CLI</a
+          >. Submissions go through the same moderator review as everything else, then join the
+          catalogue.
+        </p>
+        <p class="text-sm leading-relaxed text-muted-foreground">
+          See the
+          <a href="/docs/api" class="font-medium text-foreground underline-offset-4 hover:underline"
+            >API reference</a
+          >
+          for the full payload and endpoints.
+        </p>
+        <div class="flex flex-wrap gap-3">
+          <Button href="/my/api-keys" variant="outline" size="sm">Get an API key</Button>
+          <Button href="/docs/api" variant="ghost" size="sm">API reference</Button>
+        </div>
+      </div>
+      <pre
+        class="overflow-x-auto rounded-lg border border-border bg-secondary/60 p-3 font-mono text-sm leading-relaxed"><span
+          class="text-muted-foreground"># POST a vacancy — goes to moderation review</span>
+curl -X POST https://freehire.dev/api/v1/submissions \
+  -H <span class="text-foreground">"Authorization: Bearer $FREEHIRE_API_KEY"</span> \
+  -H <span class="text-foreground">"Content-Type: application/json"</span> \
+  -d '&#123;"url": "https://acme.com/careers/go",
+       "title": "Senior Go Engineer",
+       "company": "Acme Corp"&#125;'</pre>
+    </div>
+  </section>
+
   <!-- How it stays fresh -->
   <section class="flex flex-col gap-6">
     <h2 class="text-2xl font-semibold tracking-tight">How it stays fresh</h2>
