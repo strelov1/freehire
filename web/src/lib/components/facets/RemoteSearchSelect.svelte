@@ -74,9 +74,11 @@
         <button
           type="button"
           onclick={() => onToggle(value)}
-          class={pillClass(true, exclude, 'inline-flex items-center px-2.5 py-1 text-sm')}
+          title={labelOf(value)}
+          class={pillClass(true, exclude, 'inline-flex max-w-full items-center px-2.5 py-1 text-sm')}
         >
-          {labelOf(value)}<X class="ml-1 size-3" />
+          <span class="min-w-0 truncate">{labelOf(value)}</span>
+          <X class="ml-1 size-3 shrink-0" />
         </button>
       {/each}
     </div>
