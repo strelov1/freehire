@@ -137,6 +137,32 @@ func (c *Client) GetXML(ctx context.Context, url string, v any) error {
 	})
 }
 
+// maxTextBody caps the raw body GetText reads. Careers pages can be large, but the
+// ATS link we scan for sits in the markup, not megabytes of trailing content; the
+// cap keeps a runaway page from ballooning memory.
+const maxTextBody = 2 << 20 // 2 MiB
+
+// GetText fetches url and returns its raw response body as a string (capped at
+// maxTextBody). Used by the domain-following harvest, which regex-scans a careers
+// page's HTML for an embedded ATS link rather than parsing a DOM.
+func (c *Client) GetText(ctx context.Context, url string) (string, error) {
+	var body string
+	err := c.do(ctx, request{
+		method: http.MethodGet,
+		url:    url,
+		accept: "text/html",
+		decode: func(resp *http.Response) error {
+			b, err := io.ReadAll(io.LimitReader(resp.Body, maxTextBody))
+			if err != nil {
+				return err
+			}
+			body = string(b)
+			return nil
+		},
+	})
+	return body, err
+}
+
 // GetHTML fetches url and returns its parsed HTML tree.
 func (c *Client) GetHTML(ctx context.Context, url string) (*html.Node, error) {
 	node, _, err := c.getHTML(ctx, url)
