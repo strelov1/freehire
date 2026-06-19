@@ -62,9 +62,20 @@ export function countryLabel(code: string): string {
   }
 }
 
-/** Display label for a dynamic facet value: country code → name, else the value. */
+// Company facet values are slugs (group-ib, epam); the live distribution carries
+// no display name, so humanize the slug for a readable label. Imperfect for
+// acronyms (group-ib → "Group Ib") but consistent with the other facets — a real
+// slug→name lookup would need a per-company fetch, which this facet forgoes.
+export function companyLabel(slug: string): string {
+  return humanize(slug.replace(/-/g, '_'));
+}
+
+/** Display label for a dynamic facet value: country code → name, company slug →
+ *  humanized name, else the value. */
 export function dynamicLabel(param: string, value: string): string {
-  return param === 'countries' ? countryLabel(value) : value;
+  if (param === 'countries') return countryLabel(value);
+  if (param === 'company_slug') return companyLabel(value);
+  return value;
 }
 
 /** Drop options with a duplicate `value`, keeping the first. The facet controls
@@ -172,5 +183,6 @@ export const FACETS: FacetDef[] = [
   { param: 'english_level', label: 'English', control: 'pills', options: ENGLISH, excludable: true },
   { param: 'posting_language', label: 'Job language', control: 'pills', options: POSTING_LANGUAGE, excludable: true },
   { param: 'salary_currency', label: 'Currency', control: 'pills', options: CURRENCY, excludable: true },
+  { param: 'company_slug', label: 'Company', control: 'select', dynamic: true, excludable: true, placeholder: 'Search companies' },
   { param: 'source', label: 'Source', control: 'pills', options: SOURCE, excludable: true },
 ];
