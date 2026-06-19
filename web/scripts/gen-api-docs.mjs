@@ -106,16 +106,12 @@ function renderFilters(filters) {
   out.push('');
   out.push('### Facets');
   out.push('');
+  out.push('Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described above.');
+  out.push('');
   out.push(
     table(
-      ['Param', 'Filter', 'Values', 'Exclude', 'AND/OR'],
-      FILTER_FACETS.map((f) => [
-        `\`${f.param}\``,
-        f.label,
-        f.values,
-        f.excludable ? 'yes' : 'no',
-        f.andOr ? 'yes' : 'no',
-      ]),
+      ['Param', 'Filter', 'Values'],
+      FILTER_FACETS.map((f) => [`\`${f.param}\``, f.label, f.values]),
     ),
   );
   out.push('');

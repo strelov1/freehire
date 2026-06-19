@@ -45,9 +45,9 @@ export interface Endpoint {
   responseExample?: string;
 }
 
-/** A group of related endpoints, rendered as one page section. */
+/** A group of related endpoints, rendered as one page section. The anchor is
+ *  derived from the title (slugified) by both renderers, like Overview. */
 export interface Group {
-  id: string;
   title: string;
   intro: string;
   endpoints: Endpoint[];
@@ -124,7 +124,6 @@ export const OVERVIEW: Overview[] = [
 
 export const GROUPS: Group[] = [
   {
-    id: 'jobs',
     title: 'Jobs',
     intro:
       'Public, unauthenticated reads. Jobs are returned in one wire shape ' +
@@ -242,7 +241,6 @@ export const GROUPS: Group[] = [
     ],
   },
   {
-    id: 'companies',
     title: 'Companies',
     intro: 'Public reads. A company detail also returns a page of its open jobs.',
     endpoints: [
@@ -275,7 +273,6 @@ export const GROUPS: Group[] = [
     ],
   },
   {
-    id: 'authentication',
     title: 'Authentication',
     intro:
       'Register/login set the session cookie and return the user. Logout clears ' +
@@ -352,7 +349,6 @@ ${BASE_URL}/auth/oauth/google/start`,
     ],
   },
   {
-    id: 'api-keys',
     title: 'API keys',
     intro:
       'Personal keys for non-browser access. Management is session-only (a leaked ' +
@@ -394,7 +390,6 @@ ${BASE_URL}/auth/oauth/google/start`,
     ],
   },
   {
-    id: 'job-interactions',
     title: 'Job interactions',
     intro:
       'Per-user tracking, addressed by the job slug. All accept the session ' +
@@ -480,12 +475,34 @@ ${BASE_URL}/auth/oauth/google/start`,
         path: '/me/jobs',
         auth: 'cookie-or-key',
         summary: 'Your tracked jobs joined with the job data.',
+        description:
+          'Each item carries the job in the shared wire shape with your interaction ' +
+          'timestamps alongside it. `meta.counts` gives the per-filter totals for tab ' +
+          'badges. Closed jobs stay listed so your history never shrinks.',
         query: [
+          { name: 'filter', type: 'string', description: 'Subset to return: `all`, `viewed`, `saved`, `applied`, or `board` (default `all`; an unknown value is a 400).', example: 'applied' },
           { name: 'limit', type: 'integer', description: 'Page size, 1–100.', example: '20' },
           { name: 'offset', type: 'integer', description: 'Rows to skip.', example: '0' },
         ],
-        curl: `curl "${BASE_URL}/me/jobs" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
-        responseExample: `{ "data": [ { "job": { "public_slug": "...", "...": "..." }, "interaction": { "saved_at": "...", "stage": "interview" } } ], "meta": { "total": 5, "limit": 20, "offset": 0 } }`,
+        curl: `curl "${BASE_URL}/me/jobs?filter=applied" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
+        responseExample: `{
+  "data": [
+    {
+      "job": { "public_slug": "senior-go-engineer-acme-1a2b", "title": "Senior Go Engineer", "...": "..." },
+      "viewed_at": "2026-06-19T10:00:00Z",
+      "saved_at": null,
+      "applied_at": "2026-06-19T11:00:00Z",
+      "stage": "interview",
+      "notes": "call on Friday"
+    }
+  ],
+  "meta": {
+    "total": 5,
+    "limit": 20,
+    "offset": 0,
+    "counts": { "all": 12, "viewed": 12, "saved": 3, "applied": 5, "board": 7 }
+  }
+}`,
       },
       {
         method: 'GET',
@@ -498,7 +515,6 @@ ${BASE_URL}/auth/oauth/google/start`,
     ],
   },
   {
-    id: 'submissions',
     title: 'Job submissions',
     intro:
       'Any signed-in user can submit a vacancy for moderation and read their own ' +
@@ -566,7 +582,6 @@ ${BASE_URL}/auth/oauth/google/start`,
     ],
   },
   {
-    id: 'reports',
     title: 'Job reports',
     intro:
       'Any signed-in user can flag a problem with a live vacancy. Review actions ' +
@@ -626,7 +641,6 @@ ${BASE_URL}/auth/oauth/google/start`,
     ],
   },
   {
-    id: 'moderator-jobs',
     title: 'Moderator jobs',
     intro:
       'Hand-curate a vacancy directly (moderators only). Approved submissions go ' +
@@ -670,7 +684,6 @@ ${BASE_URL}/auth/oauth/google/start`,
     ],
   },
   {
-    id: 'saved-searches',
     title: 'Saved searches & subscriptions',
     intro:
       'Browser conveniences, session-only. A saved search stores a canonical ' +
@@ -772,7 +785,7 @@ ${BASE_URL}/auth/oauth/google/start`,
         auth: 'cookie',
         summary: 'Your Telegram link status (for digests).',
         curl: `curl "${BASE_URL}/me/telegram" -b cookies.txt`,
-        responseExample: `{ "data": { "linked": true } }`,
+        responseExample: `{ "data": { "enabled": true, "linked": true, "chat_id": 123456789 } }`,
       },
       {
         method: 'POST',

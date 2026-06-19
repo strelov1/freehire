@@ -60,31 +60,36 @@ Endpoints marked “Session or API key” accept either; endpoints marked “Ses
 
 These parameters apply to `GET /jobs/search` and `GET /jobs/facets`. Combine any of them with full-text `q`.
 
-- Repeat a facet param to OR its values: `skills=go&skills=rust` matches either.
+- Repeat any facet param to OR its values: `skills=go&skills=rust` matches either.
 - Add `<param>_mode=and` to require all selected values: `skills=go&skills=rust&skills_mode=and` matches both.
 - Add `<param>_exclude=<value>` to exclude matches: `company_type_exclude=outstaff` drops outstaff jobs.
 - Different facets are ANDed together; numeric and boolean filters are ANDed too.
 
 ### Facets
 
-| Param | Filter | Values | Exclude | AND/OR |
-| --- | --- | --- | --- | --- |
-| `collections` | Collection | yc, techstars, european, ai, mag7, bigtech, unicorn, fortune500 | no | no |
-| `regions` | Region | global, north_america, latam, eu, uk, mena, africa, apac, cis | yes | no |
-| `work_mode` | Work format | remote, hybrid, onsite | yes | no |
-| `category` | Specialization | backend, frontend, fullstack, mobile, devops, sre, data_engineering, data_science, data_analytics, ml_ai, qa, security, hardware, embedded, blockchain, design, product, project_management, management, marketing, sales, support, other | yes | no |
-| `seniority` | Seniority | intern, junior, middle, senior, lead, staff, principal, c_level | yes | no |
-| `skills` | Skills | Open vocabulary — call /jobs/facets for live values | yes | yes |
-| `domains` | Industry | fintech, gambling, ecommerce, crypto, healthcare, saas, gamedev, edtech, adtech, govtech, media, travel, logistics, other | yes | no |
-| `company_type` | Company type | product, startup, outsource, outstaff, agency, inhouse, government | yes | no |
-| `countries` | Countries | Open vocabulary — call /jobs/facets for live values | yes | no |
-| `relocation` | Relocation | not_supported, supported, required | yes | no |
-| `employment_type` | Employment | full_time, part_time, contract, internship | yes | no |
-| `english_level` | English | none, a1, a2, b1, b2, c1, c2, native | yes | no |
-| `posting_language` | Job language | en, ru, uk | yes | no |
-| `salary_currency` | Currency | USD, EUR, GBP, RUB | yes | no |
-| `company_slug` | Company | Open vocabulary — call /jobs/facets for live values | yes | no |
-| `source` | Source | telegram, workatastartup, remoteok, arc, arbeitnow, ashby, ashbygraphql, bamboohr, breezy, deel, eightfold, freshteam, gem, getonbrd, globalpayments, greenhouse, gupy, himalayas, huntflow, icims, jazzhr, jibe, jobicy, jobstash, join, justjoin, lever, mycareersfuture, oracle, personio, phenom, pinpoint, radancy, recruitee, remotive, rippling, smartrecruiters, successfactors, teamtailor, tecla, thehub, wantedkr, weworkremotely, workable, workday, workingnomads, wpyoast | yes | no |
+Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described above.
+
+| Param | Filter | Values |
+| --- | --- | --- |
+| `collections` | Collection | yc, techstars, european, ai, mag7, bigtech, unicorn, fortune500 |
+| `regions` | Region | global, north_america, latam, eu, uk, mena, africa, apac, cis |
+| `work_mode` | Work format | remote, hybrid, onsite |
+| `category` | Specialization | backend, frontend, fullstack, mobile, devops, sre, data_engineering, data_science, data_analytics, ml_ai, qa, security, hardware, embedded, blockchain, design, product, project_management, management, marketing, sales, support, other |
+| `seniority` | Seniority | intern, junior, middle, senior, lead, staff, principal, c_level |
+| `skills` | Skills | Open vocabulary — call /jobs/facets for live values |
+| `domains` | Industry | fintech, gambling, ecommerce, crypto, healthcare, saas, gamedev, edtech, adtech, govtech, media, travel, logistics, other |
+| `company_type` | Company type | product, startup, outsource, outstaff, agency, inhouse, government |
+| `countries` | Countries | Open vocabulary — call /jobs/facets for live values |
+| `relocation` | Relocation | not_supported, supported, required |
+| `employment_type` | Employment | full_time, part_time, contract, internship |
+| `english_level` | English | none, a1, a2, b1, b2, c1, c2, native |
+| `posting_language` | Job language | en, ru, uk |
+| `salary_currency` | Currency | USD, EUR, GBP, RUB |
+| `company_slug` | Company | Open vocabulary — call /jobs/facets for live values |
+| `source` | Source | telegram, workatastartup, remoteok, arc, arbeitnow, ashby, ashbygraphql, bamboohr, breezy, deel, eightfold, freshteam, gem, getonbrd, globalpayments, greenhouse, gupy, himalayas, huntflow, icims, jazzhr, jibe, jobicy, jobstash, join, justjoin, lever, mycareersfuture, oracle, personio, phenom, pinpoint, radancy, recruitee, remotive, rippling, smartrecruiters, successfactors, teamtailor, tecla, thehub, wantedkr, weworkremotely, workable, workday, workingnomads, wpyoast |
+| `company_size` | Company size | 1-10, 11-50, 51-200, 201-500, 501-1000, 1000+ |
+| `education_level` | Education level | none, bachelor, master, phd |
+| `salary_period` | Salary period | year, month, day, hour |
 
 ### Numeric & boolean filters
 
@@ -652,19 +657,39 @@ curl -X DELETE "https://freehire.dev/api/v1/jobs/<slug>/track" -H "Authorization
 
 Your tracked jobs joined with the job data.
 
+Each item carries the job in the shared wire shape with your interaction timestamps alongside it. `meta.counts` gives the per-filter totals for tab badges. Closed jobs stay listed so your history never shrinks.
+
 **Query parameters**
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
+| `filter` | string | no | Subset to return: `all`, `viewed`, `saved`, `applied`, or `board` (default `all`; an unknown value is a 400). (e.g. `applied`) |
 | `limit` | integer | no | Page size, 1–100. (e.g. `20`) |
 | `offset` | integer | no | Rows to skip. (e.g. `0`) |
 
 ```bash
-curl "https://freehire.dev/api/v1/me/jobs" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl "https://freehire.dev/api/v1/me/jobs?filter=applied" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
-{ "data": [ { "job": { "public_slug": "...", "...": "..." }, "interaction": { "saved_at": "...", "stage": "interview" } } ], "meta": { "total": 5, "limit": 20, "offset": 0 } }
+{
+  "data": [
+    {
+      "job": { "public_slug": "senior-go-engineer-acme-1a2b", "title": "Senior Go Engineer", "...": "..." },
+      "viewed_at": "2026-06-19T10:00:00Z",
+      "saved_at": null,
+      "applied_at": "2026-06-19T11:00:00Z",
+      "stage": "interview",
+      "notes": "call on Friday"
+    }
+  ],
+  "meta": {
+    "total": 5,
+    "limit": 20,
+    "offset": 0,
+    "counts": { "all": 12, "viewed": 12, "saved": 3, "applied": 5, "board": 7 }
+  }
+}
 ```
 
 ### `GET /me/jobs/viewed`
@@ -1148,7 +1173,7 @@ curl "https://freehire.dev/api/v1/me/telegram" -b cookies.txt
 ```
 
 ```json
-{ "data": { "linked": true } }
+{ "data": { "enabled": true, "linked": true, "chat_id": 123456789 } }
 ```
 
 ### `POST /me/telegram/link`

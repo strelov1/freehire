@@ -18,7 +18,7 @@
   const toc = [
     ...OVERVIEW.map((o) => ({ id: slug(o.title), title: o.title })),
     { id: 'filtering-jobs', title: 'Filtering jobs' },
-    ...GROUPS.map((g) => ({ id: g.id, title: g.title })),
+    ...GROUPS.map((g) => ({ id: slug(g.title), title: g.title })),
   ];
 
   // Public endpoints read as the calmest; everything gated is "outline".
@@ -91,6 +91,10 @@
       </ul>
 
       <h3 class="mt-8 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Facets</h3>
+      <p class="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+        Every facet below supports repeat-OR, <code class="font-mono text-foreground">_mode=and</code>, and
+        <code class="font-mono text-foreground">_exclude</code> as described above.
+      </p>
       <div class="mt-3 overflow-x-auto rounded-lg border border-border">
         <table class="w-full border-collapse text-left text-sm">
           <thead class="bg-secondary/60 text-xs uppercase tracking-wide text-muted-foreground">
@@ -98,8 +102,6 @@
               <th class="px-3 py-2 font-medium">Param</th>
               <th class="px-3 py-2 font-medium">Filter</th>
               <th class="px-3 py-2 font-medium">Values</th>
-              <th class="px-3 py-2 font-medium">Exclude</th>
-              <th class="px-3 py-2 font-medium">AND/OR</th>
             </tr>
           </thead>
           <tbody>
@@ -108,8 +110,6 @@
                 <td class="px-3 py-2"><code class="font-mono text-foreground">{f.param}</code></td>
                 <td class="px-3 py-2 text-muted-foreground">{f.label}</td>
                 <td class="px-3 py-2 text-muted-foreground">{f.values}</td>
-                <td class="px-3 py-2 text-muted-foreground">{f.excludable ? 'yes' : '—'}</td>
-                <td class="px-3 py-2 text-muted-foreground">{f.andOr ? 'yes' : '—'}</td>
               </tr>
             {/each}
           </tbody>
@@ -154,8 +154,8 @@
     </section>
 
     <!-- Endpoint groups. -->
-    {#each GROUPS as group (group.id)}
-      <section id={group.id} class="mb-12 scroll-mt-20 border-t border-border pt-10">
+    {#each GROUPS as group (group.title)}
+      <section id={slug(group.title)} class="mb-12 scroll-mt-20 border-t border-border pt-10">
         <h2 class="text-2xl font-semibold tracking-tight">{group.title}</h2>
         <p class="mt-3 max-w-2xl leading-relaxed text-muted-foreground">{group.intro}</p>
 
