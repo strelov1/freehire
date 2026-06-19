@@ -1,0 +1,6 @@
+# epam board. Provider is the filename; the single entry is company + board.
+# board = the careers-site host (see internal/sources/epam.go). The gzip sitemap
+# enumerates every vacancy; each vacancy page server-renders a JobPosting ld+json.
+
+- company: EPAM Systems
+  board: careers.epam.com

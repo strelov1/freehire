@@ -31,6 +31,12 @@ export default ts.config(
     languageOptions: { globals: { ...globals.node } },
   },
 
+  // Standalone scripts (codegen, smoke tests) run in Node, not the browser.
+  {
+    files: ['scripts/**/*.{js,mjs}'],
+    languageOptions: { globals: { ...globals.node } },
+  },
+
   // Allow intentionally-unused names prefixed with `_` (e.g. `{#each xs as _, i}`).
   {
     rules: {

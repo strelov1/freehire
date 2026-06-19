@@ -140,7 +140,10 @@ freehire search <span class="text-foreground">"golang"</span> --remote --region 
       >, plus <span class="font-mono text-foreground">rejected</span> /
       <span class="font-mono text-foreground">withdrawn</span>. For scripts and agents, add
       <code class="font-mono text-foreground">--json</code> for the raw API payload; results go to stdout,
-      errors to stderr, and a non-zero exit code signals failure.
+      errors to stderr, and a non-zero exit code signals failure. The same endpoints are documented in the
+      <a href="/docs/api" class="font-medium text-foreground underline-offset-4 hover:underline"
+        >API reference</a
+      >.
     </p>
   </section>
 

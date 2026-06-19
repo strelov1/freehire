@@ -35,6 +35,12 @@
           CLI
         </a>
         <a
+          href="/docs/api"
+          class="shrink-0 font-medium text-foreground transition-colors hover:text-muted-foreground"
+        >
+          API
+        </a>
+        <a
           href="https://t.me/freehiredev"
           target="_blank"
           rel="noopener noreferrer"
