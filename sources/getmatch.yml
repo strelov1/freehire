@@ -1,0 +1,4 @@
+# getmatch.ru IT job marketplace. Boardless: one global public feed (getmatch.ru/api/offers),
+# so the entry carries no board, and each job's company comes from the offer, not this placeholder.
+- company: getmatch
+  provider: getmatch
