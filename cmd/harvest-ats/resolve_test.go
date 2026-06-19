@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestCareersLink(t *testing.T) {
 	cases := []struct {
@@ -67,6 +70,23 @@ func TestResolve(t *testing.T) {
 		fetch := func(u string) (string, error) { return `<p>hiring soon</p>`, nil }
 		if _, _, ok := resolve("https://acme.com", fetch); ok {
 			t.Fatal("resolve ok = true, want false")
+		}
+	})
+
+	t.Run("dead homepage skips career-path probes", func(t *testing.T) {
+		var calls int
+		fetch := func(u string) (string, error) {
+			calls++
+			if u == "https://acme.com" {
+				return "", errors.New("dial tcp: no such host")
+			}
+			return `<a href="https://jobs.lever.co/acme">Jobs</a>`, nil // would resolve if probed
+		}
+		if _, _, ok := resolve("https://acme.com", fetch); ok {
+			t.Fatal("resolve ok = true, want false (homepage was dead)")
+		}
+		if calls != 1 {
+			t.Errorf("fetch called %d times, want 1 (no path probes after a dead homepage)", calls)
 		}
 	})
 }

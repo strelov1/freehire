@@ -59,7 +59,13 @@ func resolve(website string, fetch fetchFunc) (provider, slug string, ok bool) {
 		return "", "", false
 	}
 
-	home, _ := fetch(base)
+	home, err := fetch(base)
+	if err != nil {
+		// Homepage unreachable (dead domain, DNS failure, block). The careers paths
+		// live on the same host, so probing them would only burn more timeouts —
+		// give up on this company. (Dead domains dominate the unmatched long tail.)
+		return "", "", false
+	}
 	if p, s, ok := atsdetect.Detect(home); ok {
 		return p, s, true
 	}

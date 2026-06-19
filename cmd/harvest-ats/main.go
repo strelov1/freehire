@@ -29,7 +29,7 @@ import (
 
 // resolveWorkers bounds the concurrent careers-page fetch fan-out. The shared
 // client handles per-request timeout and 429 backoff, so this stays polite.
-const resolveWorkers = 12
+const resolveWorkers = 24
 
 // perPageTimeout is an outer cap on a single careers-page fetch so a worker can't
 // wedge; the sources client's own 15s transport timeout is the tighter, usual cap.
