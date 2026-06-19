@@ -123,6 +123,9 @@ type Querier interface {
 	// (job_id, target_version), so running this every command invocation never duplicates
 	// work.
 	EnqueuePendingJobs(ctx context.Context, targetVersion int32) (int64, error)
+	// SELECT * (not an explicit column list) so the generated row stays db.Company as
+	// the table grows columns (e.g. collections); an explicit subset makes sqlc emit a
+	// distinct row type and breaks the company-detail handler on every new column.
 	GetCompany(ctx context.Context, slug string) (Company, error)
 	GetJob(ctx context.Context, id int64) (Job, error)
 	GetJobBySlug(ctx context.Context, publicSlug string) (Job, error)
@@ -179,6 +182,11 @@ type Querier interface {
 	// serves both the full list and a name search (`search` is a case-insensitive
 	// substring of the name).
 	ListCompanies(ctx context.Context, arg ListCompaniesParams) ([]ListCompaniesRow, error)
+	// All companies with their current collection membership. cmd/import-collections
+	// reads this to know the existing company slugs (the match target) and each
+	// company's current tags (so it can reconcile only the tags it manages, leaving any
+	// others untouched).
+	ListCompanyCollections(ctx context.Context) ([]ListCompanyCollectionsRow, error)
 	// Newest-added first: created_at is when the job entered the catalogue (stable
 	// across re-ingests), so fresh ingests surface on top regardless of how old the
 	// platform's posted_at is. id breaks ties within one ingest batch.
@@ -252,6 +260,12 @@ type Querier interface {
 	// Completion: the post was processed (jobs written, or no vacancy found). Run in
 	// the same transaction as the extracted jobs' UpsertJob calls.
 	MarkTelegramPostExtracted(ctx context.Context, arg MarkTelegramPostExtractedParams) error
+	// Denormalize each company's curated-collection set onto its jobs, so the search
+	// facet (jobs.collections) reflects current membership. Run by cmd/import-collections
+	// after it writes companies.collections. updated_at is bumped so `reindex --since`
+	// picks the changed rows up; the IS DISTINCT FROM guard skips unchanged rows, making
+	// re-runs idempotent and cheap.
+	PropagateCollectionsToJobs(ctx context.Context) (int64, error)
 	// Count a failed attempt: bump attempts, record the error, and dead-letter (set
 	// failed_at) once attempts reach the max. The lease (claimed_at) is intentionally
 	// left in place — its expiry gates the retry to a later run and doubles as the
@@ -293,6 +307,10 @@ type Querier interface {
 	// ATS provider set from the sources registry; <> ALL excludes them, so a new adapter
 	// never silently becomes a probe target. Closed jobs are skipped (already not open).
 	SelectOrphanLivenessCandidates(ctx context.Context, atsProviders []string) ([]SelectOrphanLivenessCandidatesRow, error)
+	// Replace a company's collection set. The import worker computes the full set in Go
+	// (preserving unmanaged tags) and writes it here; updated_at is bumped for parity
+	// with the other write paths.
+	SetCompanyCollections(ctx context.Context, arg SetCompanyCollectionsParams) error
 	// Targeted enrichment write used by the enrichment command: set only the payload
 	// and the provenance stamp, touching no raw source field. Kept separate from
 	// UpsertJob (the ingest full-upsert path) so ingest and enrichment stay decoupled.

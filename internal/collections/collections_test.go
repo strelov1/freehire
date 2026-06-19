@@ -1,0 +1,117 @@
+package collections
+
+import (
+	"reflect"
+	"testing"
+
+	"github.com/strelov1/freehire/internal/normalize"
+)
+
+func TestRegistry_HasV1Set(t *testing.T) {
+	if _, ok := Lookup("yc"); !ok {
+		t.Error("registry missing yc")
+	}
+	if _, ok := Lookup("bigtech"); !ok {
+		t.Error("registry missing bigtech")
+	}
+	if _, ok := Lookup("does-not-exist"); ok {
+		t.Error("Lookup returned ok for unknown slug")
+	}
+}
+
+func TestRegistry_LookupReturnsEntry(t *testing.T) {
+	c, ok := Lookup("yc")
+	if !ok {
+		t.Fatal("yc not found")
+	}
+	if c.Slug != "yc" || c.Title == "" || c.Description == "" {
+		t.Errorf("yc entry incomplete: %+v", c)
+	}
+}
+
+func TestSlugs_MatchesRegistry(t *testing.T) {
+	got := Slugs()
+	if len(got) != len(All) {
+		t.Fatalf("Slugs() len = %d, want %d", len(got), len(All))
+	}
+	set := make(map[string]struct{}, len(got))
+	for _, s := range got {
+		set[s] = struct{}{}
+	}
+	for _, c := range All {
+		if _, ok := set[c.Slug]; !ok {
+			t.Errorf("Slugs() missing %q", c.Slug)
+		}
+	}
+}
+
+func TestBigTechSlugs_NonEmptyAndCanonical(t *testing.T) {
+	if len(BigTechSlugs) == 0 {
+		t.Fatal("BigTechSlugs is empty")
+	}
+	// Each entry must already be a canonical slug (idempotent under normalization),
+	// so the hand list matches against our company slugs without surprises.
+	for _, s := range BigTechSlugs {
+		if got := normalize.Slug(s); got != s {
+			t.Errorf("BigTechSlugs entry %q is not canonical (normalizes to %q)", s, got)
+		}
+	}
+}
+
+func TestMatch_SplitsPresentAndAbsentDedupedSorted(t *testing.T) {
+	existing := map[string]struct{}{"stripe": {}, "airbnb": {}}
+	// "Stripe" and "stripe " both normalize to stripe (dup); "Airbnb" matches;
+	// "Unknown Co" does not.
+	matched, unmatched := Match([]string{"Stripe", "stripe", "Airbnb", "Unknown Co"}, existing)
+
+	if !reflect.DeepEqual(matched, []string{"airbnb", "stripe"}) {
+		t.Errorf("matched = %#v, want [airbnb stripe] (deduped, sorted)", matched)
+	}
+	if !reflect.DeepEqual(unmatched, []string{"Unknown Co"}) {
+		t.Errorf("unmatched = %#v, want [Unknown Co]", unmatched)
+	}
+}
+
+func TestReconcile(t *testing.T) {
+	managed := []string{"yc", "bigtech"}
+	cases := []struct {
+		name    string
+		current []string
+		want    []string
+		out     []string
+	}{
+		{"adds a managed tag", []string{}, []string{"yc"}, []string{"yc"}},
+		{"drops a managed tag no longer wanted", []string{"yc"}, []string{}, []string{}},
+		{"swaps managed tags", []string{"yc"}, []string{"bigtech"}, []string{"bigtech"}},
+		{"preserves an unmanaged tag", []string{"custom", "yc"}, []string{"bigtech"}, []string{"bigtech", "custom"}},
+		{"deduplicates and sorts", []string{"yc", "yc"}, []string{"bigtech", "yc"}, []string{"bigtech", "yc"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Reconcile(tc.current, managed, tc.want)
+			if !reflect.DeepEqual(got, tc.out) {
+				t.Errorf("Reconcile(%v, managed, %v) = %#v, want %#v", tc.current, tc.want, got, tc.out)
+			}
+		})
+	}
+}
+
+func TestParseYC_ExtractsNames(t *testing.T) {
+	payload := []byte(`[
+		{"id": 1, "name": "Stripe", "slug": "stripe", "website": "https://stripe.com", "batch": "S09"},
+		{"id": 2, "name": "Airbnb", "slug": "airbnb", "website": "https://airbnb.com", "batch": "W09"}
+	]`)
+	names, err := ParseYC(payload)
+	if err != nil {
+		t.Fatalf("ParseYC: %v", err)
+	}
+	if !reflect.DeepEqual(names, []string{"Stripe", "Airbnb"}) {
+		t.Errorf("names = %#v, want [Stripe Airbnb]", names)
+	}
+}
+
+func TestParseYC_RejectsGarbage(t *testing.T) {
+	if _, err := ParseYC([]byte("not json")); err == nil {
+		t.Error("ParseYC accepted invalid JSON")
+	}
+}

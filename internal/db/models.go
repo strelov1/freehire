@@ -22,10 +22,11 @@ type ApiKey struct {
 }
 
 type Company struct {
-	Slug      string             `json:"slug"`
-	Name      string             `json:"name"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	Slug        string             `json:"slug"`
+	Name        string             `json:"name"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	Collections []string           `json:"collections"`
 }
 
 type EnrichmentOutbox struct {
@@ -72,6 +73,7 @@ type Job struct {
 	EmploymentType     string             `json:"employment_type"`
 	EducationLevel     string             `json:"education_level"`
 	ExperienceYearsMin pgtype.Int4        `json:"experience_years_min"`
+	Collections        []string           `json:"collections"`
 }
 
 type JobReport struct {

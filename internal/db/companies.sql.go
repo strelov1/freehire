@@ -40,11 +40,14 @@ func (q *Queries) DeleteOrphanCompanies(ctx context.Context) (int64, error) {
 }
 
 const getCompany = `-- name: GetCompany :one
-SELECT slug, name, created_at, updated_at
+SELECT slug, name, created_at, updated_at, collections
 FROM companies
 WHERE slug = $1
 `
 
+// SELECT * (not an explicit column list) so the generated row stays db.Company as
+// the table grows columns (e.g. collections); an explicit subset makes sqlc emit a
+// distinct row type and breaks the company-detail handler on every new column.
 func (q *Queries) GetCompany(ctx context.Context, slug string) (Company, error) {
 	row := q.db.QueryRow(ctx, getCompany, slug)
 	var i Company
@@ -53,6 +56,7 @@ func (q *Queries) GetCompany(ctx context.Context, slug string) (Company, error) 
 		&i.Name,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Collections,
 	)
 	return i, err
 }
@@ -103,6 +107,61 @@ func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const listCompanyCollections = `-- name: ListCompanyCollections :many
+SELECT slug, collections
+FROM companies
+ORDER BY slug
+`
+
+type ListCompanyCollectionsRow struct {
+	Slug        string   `json:"slug"`
+	Collections []string `json:"collections"`
+}
+
+// All companies with their current collection membership. cmd/import-collections
+// reads this to know the existing company slugs (the match target) and each
+// company's current tags (so it can reconcile only the tags it manages, leaving any
+// others untouched).
+func (q *Queries) ListCompanyCollections(ctx context.Context) ([]ListCompanyCollectionsRow, error) {
+	rows, err := q.db.Query(ctx, listCompanyCollections)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCompanyCollectionsRow{}
+	for rows.Next() {
+		var i ListCompanyCollectionsRow
+		if err := rows.Scan(&i.Slug, &i.Collections); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setCompanyCollections = `-- name: SetCompanyCollections :exec
+UPDATE companies
+SET collections = $2,
+    updated_at  = now()
+WHERE slug = $1
+`
+
+type SetCompanyCollectionsParams struct {
+	Slug        string   `json:"slug"`
+	Collections []string `json:"collections"`
+}
+
+// Replace a company's collection set. The import worker computes the full set in Go
+// (preserving unmanaged tags) and writes it here; updated_at is bumped for parity
+// with the other write paths.
+func (q *Queries) SetCompanyCollections(ctx context.Context, arg SetCompanyCollectionsParams) error {
+	_, err := q.db.Exec(ctx, setCompanyCollections, arg.Slug, arg.Collections)
+	return err
 }
 
 const syncCompaniesFromJobs = `-- name: SyncCompaniesFromJobs :exec

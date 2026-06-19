@@ -123,6 +123,19 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     updated_at   = now()
 RETURNING *;
 
+-- name: PropagateCollectionsToJobs :execrows
+-- Denormalize each company's curated-collection set onto its jobs, so the search
+-- facet (jobs.collections) reflects current membership. Run by cmd/import-collections
+-- after it writes companies.collections. updated_at is bumped so `reindex --since`
+-- picks the changed rows up; the IS DISTINCT FROM guard skips unchanged rows, making
+-- re-runs idempotent and cheap.
+UPDATE jobs
+SET collections = c.collections,
+    updated_at  = now()
+FROM companies c
+WHERE jobs.company_slug = c.slug
+  AND jobs.collections IS DISTINCT FROM c.collections;
+
 -- name: UpsertManualJob :one
 -- Moderator-authored write: the hand-curated analogue of UpsertJob. source is the
 -- posting's real origin (e.g. 'workatastartup'), supplied by the moderator and

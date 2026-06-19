@@ -28,6 +28,7 @@ var StringFacets = map[string]string{
 	"salary_currency":  "enrichment.salary_currency",
 	"salary_period":    "enrichment.salary_period",
 	"skills":           "skills",
+	"collections":      "collections",
 	"relocation":       "enrichment.relocation",
 	"english_level":    "enrichment.english_level",
 	"posting_language": "enrichment.posting_language",

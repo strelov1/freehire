@@ -71,6 +71,14 @@ func TestFilterFromValues_RepeatedFacetIsORed(t *testing.T) {
 	}
 }
 
+func TestFilterFromValues_Collections(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("collections=yc")))
+	want := [][]string{{`collections = "yc"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
 func TestFilterFromValues_AndMode(t *testing.T) {
 	// skills_mode=and → each value its own AND group (a job must have both).
 	got := normalizeGroups(t, FilterFromValues(vals("skills=go&skills=rust&skills_mode=and")))

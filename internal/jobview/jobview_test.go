@@ -347,6 +347,31 @@ func TestFromRow_SkillsAreDictOnly(t *testing.T) {
 	}
 }
 
+// Collections is a top-level facet served straight from the jobs column (a
+// denormalized copy of the owning company's membership). There is no LLM
+// counterpart, so it is simply normalized (lowercased, sorted, deduped) and
+// always non-nil so it serializes as [] not null.
+func TestFromRow_CollectionsFromColumn(t *testing.T) {
+	got, err := FromRow(db.Job{ID: 1, Collections: []string{"YC", "bigtech", "yc"}})
+	if err != nil {
+		t.Fatalf("FromRow: %v", err)
+	}
+	want := []string{"bigtech", "yc"} // lowercased, sorted, deduped
+	if !reflect.DeepEqual(got.Collections, want) {
+		t.Fatalf("Collections = %#v, want %#v", got.Collections, want)
+	}
+}
+
+func TestFromRow_CollectionsEmptyIsNonNil(t *testing.T) {
+	got, err := FromRow(db.Job{ID: 1})
+	if err != nil {
+		t.Fatalf("FromRow: %v", err)
+	}
+	if got.Collections == nil {
+		t.Fatalf("Collections should be non-nil empty slice, got nil")
+	}
+}
+
 // Seniority/category are the dictionary column value, always — the LLM never wins
 // and never fills a dict-silent field. They stay nested under enrichment so the
 // existing facet path is unchanged.

@@ -289,6 +289,65 @@ func TestSearchFiltersBySkillsFacet(t *testing.T) {
 	}
 }
 
+// A job carries its company's curated collections as a top-level facet: filtering
+// on collections returns only the tagged jobs, and a facet distribution over
+// collections reports their counts.
+func TestSearchFiltersByCollectionsFacet(t *testing.T) {
+	ctx := context.Background()
+	c := startMeili(t)
+
+	if err := c.EnsureIndex(ctx); err != nil {
+		t.Fatalf("EnsureIndex: %v", err)
+	}
+
+	jobs := []db.Job{
+		{
+			ID: 20, Title: "Founding Engineer", Company: "Stripe", Location: "Remote",
+			PublicSlug:  "founding-engineer-stripe-aaa",
+			Collections: []string{"yc", "bigtech"},
+			PostedAt:    pgtype.Timestamptz{Time: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC), Valid: true},
+			Enrichment:  enrichedJSON(t, enrich.Enrichment{}),
+		},
+		{
+			ID: 21, Title: "Backend Engineer", Company: "Acme", Location: "Remote",
+			PublicSlug: "backend-engineer-acme-bbb",
+			PostedAt:   pgtype.Timestamptz{Time: time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC), Valid: true},
+			Enrichment: enrichedJSON(t, enrich.Enrichment{}),
+		},
+	}
+
+	docs := make([]JobDocument, 0, len(jobs))
+	for _, j := range jobs {
+		d, err := FromJob(j)
+		if err != nil {
+			t.Fatalf("FromJob: %v", err)
+		}
+		docs = append(docs, d)
+	}
+	if err := c.IndexJobs(ctx, docs); err != nil {
+		t.Fatalf("IndexJobs: %v", err)
+	}
+
+	res, err := c.Search(ctx, SearchParams{
+		Filter: Filter([]string{Eq("collections", "yc")}),
+		Limit:  10,
+	})
+	if err != nil {
+		t.Fatalf("Search with collections filter: %v", err)
+	}
+	if len(res.Hits) != 1 || res.Hits[0].PublicSlug != "founding-engineer-stripe-aaa" {
+		t.Fatalf("collections facet filter hits = %+v, want only founding-engineer-stripe-aaa", res.Hits)
+	}
+
+	fres, err := c.FacetCounts(ctx, FacetParams{Facets: []string{"collections"}})
+	if err != nil {
+		t.Fatalf("FacetCounts: %v", err)
+	}
+	if fres.Facets["collections"]["yc"] != 1 || fres.Facets["collections"]["bigtech"] != 1 {
+		t.Errorf("collections dist = %v, want yc:1 bigtech:1", fres.Facets["collections"])
+	}
+}
+
 // SimilarJobs returns the nearest neighbours of a job from the semantic index:
 // other jobs are returned (ranked by embedding proximity), the source job is never
 // in its own list, and the caller's limit is honoured.

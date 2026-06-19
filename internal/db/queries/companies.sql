@@ -21,8 +21,29 @@ FROM companies
 WHERE sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%';
 
 -- name: GetCompany :one
-SELECT slug, name, created_at, updated_at
+-- SELECT * (not an explicit column list) so the generated row stays db.Company as
+-- the table grows columns (e.g. collections); an explicit subset makes sqlc emit a
+-- distinct row type and breaks the company-detail handler on every new column.
+SELECT *
 FROM companies
+WHERE slug = $1;
+
+-- name: ListCompanyCollections :many
+-- All companies with their current collection membership. cmd/import-collections
+-- reads this to know the existing company slugs (the match target) and each
+-- company's current tags (so it can reconcile only the tags it manages, leaving any
+-- others untouched).
+SELECT slug, collections
+FROM companies
+ORDER BY slug;
+
+-- name: SetCompanyCollections :exec
+-- Replace a company's collection set. The import worker computes the full set in Go
+-- (preserving unmanaged tags) and writes it here; updated_at is bumped for parity
+-- with the other write paths.
+UPDATE companies
+SET collections = $2,
+    updated_at  = now()
 WHERE slug = $1;
 
 -- name: SyncCompaniesFromJobs :exec

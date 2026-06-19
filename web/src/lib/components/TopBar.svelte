@@ -14,13 +14,14 @@
   const path = $derived(page.url.pathname);
 
   // The nav links collapse behind a hamburger below the `sm` breakpoint, where
-  // five inline links would overflow the bar. The panel closes on link tap,
+  // the inline links would overflow the bar. The panel closes on link tap,
   // Escape, and whenever the route changes.
   let mobileOpen = $state(false);
 
   const links = [
     { href: '/jobs', label: 'Jobs' },
     { href: '/companies', label: 'Companies' },
+    { href: '/collections', label: 'Collections' },
     { href: '/analytics', label: 'Analytics' },
     { href: '/cli', label: 'CLI' },
     { href: '/recruiters', label: 'For recruiters' },

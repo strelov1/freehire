@@ -50,9 +50,14 @@ type Job struct {
 	Regions   []string `json:"regions"`
 	WorkMode  string   `json:"work_mode,omitempty"`
 	Skills    []string `json:"skills"`
-	PostedAt  *string  `json:"posted_at"`
-	CreatedAt *string  `json:"created_at"`
-	UpdatedAt *string  `json:"updated_at"`
+	// Collections is the set of curated-collection slugs (e.g. yc, bigtech) the
+	// job's company belongs to, denormalized from the company onto the job. It is a
+	// deterministic source fact (no LLM counterpart) served straight from the jobs
+	// column; an untagged job serializes it as [].
+	Collections []string `json:"collections"`
+	PostedAt    *string  `json:"posted_at"`
+	CreatedAt   *string  `json:"created_at"`
+	UpdatedAt   *string  `json:"updated_at"`
 	// ClosedAt is non-null when the posting is no longer open. Lists and the
 	// search index never contain closed jobs; only the detail endpoint serves
 	// them, and the SPA renders the closed state from this field.
@@ -97,6 +102,9 @@ func FromRow(j db.Job) (Job, error) {
 	e.EducationLevel = j.EducationLevel
 	e.ExperienceYearsMin = int4ToPtr(j.ExperienceYearsMin)
 	skills := normalizeSet(j.Skills)
+	// Collections is denormalized from the company onto the job; it has no LLM
+	// counterpart to fold out, so it is simply normalized like the other facets.
+	collections := normalizeSet(j.Collections)
 	e.Countries, e.Regions, e.WorkMode = nil, nil, ""
 	e.Skills = nil
 
@@ -115,6 +123,7 @@ func FromRow(j db.Job) (Job, error) {
 		Regions:           regions,
 		WorkMode:          workMode,
 		Skills:            skills,
+		Collections:       collections,
 		PostedAt:          rfc3339(effectivePostedAt(j.PostedAt, j.CreatedAt)),
 		CreatedAt:         rfc3339(j.CreatedAt),
 		UpdatedAt:         rfc3339(j.UpdatedAt),
