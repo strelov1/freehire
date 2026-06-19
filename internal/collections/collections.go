@@ -197,7 +197,7 @@ var RussianRootsSlugs = []string{
 	"semrush", "toloka", "toloka-ai", "veeam", "wallarm",
 	"wargaming", "whitebit", "wirex", "wrike",
 	// Not yet in the catalogue (future-proofing the membership).
-	"bitfury", "grammarly", "nginx", "parallels", "plesk", "telegram",
+	"bitfury", "grammarly", "nginx", "parallels", "plesk", "telegram", "vention",
 }
 
 // Lookup returns the registry entry for a slug, or ok=false when no collection has

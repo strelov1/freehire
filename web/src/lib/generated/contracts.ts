@@ -112,7 +112,7 @@ export interface Job {
   enrichment_version: number /* int32 */;
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'arbeitnow', 'ashby', 'ashbygraphql', 'bamboohr', 'breezy', 'deel', 'eightfold', 'epam', 'freshteam', 'gem', 'getonbrd', 'globalpayments', 'greenhouse', 'gupy', 'himalayas', 'huntflow', 'icims', 'jazzhr', 'jibe', 'jobicy', 'jobstash', 'join', 'justjoin', 'lever', 'luxoft', 'mycareersfuture', 'oracle', 'personio', 'phenom', 'pinpoint', 'radancy', 'recruitee', 'remotive', 'rippling', 'smartrecruiters', 'successfactors', 'teamtailor', 'tecla', 'thehub', 'wantedkr', 'weworkremotely', 'workable', 'workday', 'workingnomads', 'wpyoast'] as const;
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'adp', 'arbeitnow', 'ashby', 'ashbygraphql', 'bamboohr', 'breezy', 'deel', 'eightfold', 'epam', 'freshteam', 'gem', 'getonbrd', 'globalpayments', 'greenhouse', 'gupy', 'himalayas', 'huntflow', 'icims', 'itechart', 'jazzhr', 'jibe', 'jobicy', 'jobstash', 'join', 'justjoin', 'lever', 'luxoft', 'mycareersfuture', 'oracle', 'personio', 'phenom', 'pinpoint', 'radancy', 'recruitee', 'remotive', 'rippling', 'smartrecruiters', 'successfactors', 'teamtailor', 'tecla', 'thehub', 'vention', 'wantedkr', 'weworkremotely', 'workable', 'workday', 'workingnomads', 'wpyoast'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];

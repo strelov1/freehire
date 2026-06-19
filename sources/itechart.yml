@@ -1,0 +1,7 @@
+# itechart board. Provider is the filename; board = the careers-site host (sitemap +
+# JobPosting ld+json, see internal/sources/itechart.go). NOTE: itechartgroup.by refuses
+# the prod datacenter IP (connection reset), so it is NOT crawlable from prod and has no
+# cron — kept for completeness / crawling from a non-blocked egress.
+
+- company: iTechArt
+  board: itechartgroup.by

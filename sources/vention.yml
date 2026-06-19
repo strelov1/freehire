@@ -1,0 +1,5 @@
+# vention board. Provider is the filename; board = the careers-site host. The Wagtail
+# /api/v2/pages/ API carries the full posting (see internal/sources/vention.go).
+
+- company: Vention
+  board: join.ventionteams.com

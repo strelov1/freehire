@@ -1,0 +1,5 @@
+# ADP Workforce Now boards. Provider is the filename; board = the tenant's
+# "cid:ccId" pair (both carried in the recruitment.html URL — see internal/sources/adp.go).
+
+- company: Alludo
+  board: 8a680274-0b2e-46cf-b2cc-49bd2ef0c20f:9201289910657_2
