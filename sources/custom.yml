@@ -19,6 +19,8 @@
   provider: google
 - company: Lumenalta
   provider: lumenalta
+- company: Telegram
+  provider: telegramcareers
 
 - company: VK
   provider: vk
