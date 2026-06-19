@@ -28,11 +28,12 @@ sourced from external datasets and matched onto our `companies`.
 
 **Non-Goals:**
 - Collection CRUD UI / per-collection cover art / arbitrary user-defined
-  collections. The set is small and fixed in code for v1.
-- Domain-based company matching (v1 matches by normalized name only).
+  collections. The set is curated and fixed in code (one registry entry each).
+- Domain-based company matching (matches by normalized name only).
 - Stamping `jobs.collections` at ingest time (relies on periodic propagation +
   reindex, like every other dictionary facet).
-- Collections beyond `yc` and `bigtech` (added later by a one-line registry entry).
+- A harvest pass over the unmatched collection companies to discover new ATS
+  boards (a high-value follow-up: the datasets double as a coverage worklist).
 
 ## Decisions
 
@@ -53,12 +54,14 @@ jobs.company_slug = c.slug`), run by the import worker after it writes membershi
 This is simpler than a re-derive and keeps `jobderive` purely text-driven.
 
 **3. Static registry, not a DB table.** `internal/collections` holds the fixed
-set: each entry is `{slug, title, description, resolver}`. v1 = `yc`, `bigtech`.
-A `company_collections` join table or a `collections` definition table would be
-over-engineering for a hand-curated, code-owned set; `companies.collections` as a
-`TEXT[]` mirrors `jobs.skills` and needs no extra schema. The web side mirrors the
-registry as a small contracts list (noted seam: later generated via
-`gen-contracts`).
+set: each entry is `{slug, title, description, source}` where the source is either
+a static slug list or a `Dataset{URL, Parse}`. The current set is `yc`,
+`techstars`, `european`, `ai`, `mag7`, `bigtech`, `unicorn`, `fortune500`; adding
+one is a single entry. A `company_collections` join table or a `collections`
+definition table would be over-engineering for a hand-curated, code-owned set;
+`companies.collections` as a `TEXT[]` mirrors `jobs.skills` and needs no extra
+schema. The web side mirrors the registry as a small contracts list (noted seam:
+later generated via `gen-contracts`).
 
 **4. Import worker resolves, writes, propagates.** `cmd/import-collections` is a
 run-once-and-exit worker (same shape as the other `cmd/` workers). Per collection:

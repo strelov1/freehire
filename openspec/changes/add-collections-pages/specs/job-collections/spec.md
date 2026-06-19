@@ -4,22 +4,24 @@
 
 The system SHALL model a curated collection as a company-level fact: each company
 MAY belong to zero or more collections, stored as a set of collection slugs on the
-company. A collection slug SHALL come from a fixed, code-owned registry; the v1
-registry SHALL define exactly `yc` and `bigtech`. Each registry entry SHALL carry
-a `slug`, a human `title`, a `description`, and a member resolver. Membership SHALL
-NOT be derivable from a job's text or its ATS source — it is an editorial fact
-about the company and is populated only from the registry's resolvers.
+company. A collection slug SHALL come from a fixed, code-owned registry. Each
+registry entry SHALL carry a `slug`, a human `title`, a `description`, and a
+membership source — exactly one of a static hand list of canonical company slugs
+or a remote dataset (a URL plus a parser that yields company names). Adding a
+collection SHALL be a single registry entry. Membership SHALL NOT be derivable
+from a job's text or its ATS source — it is an editorial fact about the company,
+populated only from the registry's sources.
 
 #### Scenario: A company belongs to multiple collections
 
-- **WHEN** a company is a member of both the `yc` and `bigtech` collections
-- **THEN** the company's collection set contains both `yc` and `bigtech`
+- **WHEN** a company qualifies for two collections (e.g. `yc` and `bigtech`)
+- **THEN** the company's collection set contains both slugs
 
-#### Scenario: Only registry slugs are valid
+#### Scenario: The registry defines each collection's display copy and source
 
 - **WHEN** the collection registry is read
-- **THEN** it lists exactly the defined collections (`yc`, `bigtech` in v1), each
-  with a slug, title, description, and resolver
+- **THEN** each entry exposes a slug, title, description, and exactly one
+  membership source (a static slug list or a dataset)
 
 ### Requirement: Collection membership is propagated onto jobs for the search facet
 
@@ -44,33 +46,41 @@ empty `collections` set. Propagation is a deterministic copy, distinct from
 ### Requirement: The import worker resolves and populates membership idempotently
 
 The system SHALL provide a run-once-and-exit import worker that, for each
-collection in the registry, resolves the member companies, writes
-`companies.collections` for the tags it manages, and propagates the result onto
-`jobs.collections`. The worker SHALL be idempotent and re-runnable (re-running
-with the same inputs yields the same membership). The `yc` resolver SHALL match an
-external YC company dataset onto existing companies by **normalized name** (using
-the same normalization as company slugs); companies it cannot match SHALL be
-omitted and logged, never guessed. The `bigtech` resolver SHALL use a hand-coded
-slug list from the registry. The worker SHALL only modify the collection tags it
-manages, leaving any other tags on a company untouched. After propagation the
-worker SHALL signal that a search reindex is required.
+collection in the registry, resolves its member companies — a dataset collection
+is fetched and parsed to company names, a static-list collection uses its slugs —
+matches them onto existing companies by **normalized name** (the same
+normalization as company slugs; unmatched candidates are omitted and logged, never
+guessed), writes `companies.collections` for the tags it manages, and propagates
+the result onto `jobs.collections`. The worker SHALL be idempotent and re-runnable
+(re-running with the same inputs yields the same membership) and SHALL only modify
+the collection tags it manages, leaving any other tags on a company untouched. If
+any collection's source cannot be resolved (e.g. a dataset fetch fails) the worker
+SHALL abort before writing — a partial resolve would reconcile a collection's tag
+off every company. After propagation the worker SHALL signal that a search reindex
+is required.
 
 #### Scenario: Re-running the import is idempotent
 
-- **WHEN** the import worker runs twice with the same external dataset
+- **WHEN** the import worker runs twice with the same inputs
 - **THEN** the resulting `companies.collections` and `jobs.collections` are
   identical after each run
 
-#### Scenario: Unmatched YC companies are omitted and logged
+#### Scenario: Unmatched dataset companies are omitted and logged
 
-- **WHEN** a YC dataset entry has no company whose normalized name matches
-- **THEN** no company is tagged for that entry and the unmatched entry is logged
+- **WHEN** a dataset entry has no company whose normalized name matches
+- **THEN** no company is tagged for that entry and the unmatched count is logged
 
-#### Scenario: Big Tech membership comes from the hand list
+#### Scenario: A failed dataset resolve aborts before writing
 
-- **WHEN** the `bigtech` resolver runs
-- **THEN** exactly the companies whose slugs are in the registry's hand list are
-  tagged `bigtech`
+- **WHEN** a collection's dataset cannot be fetched or parsed
+- **THEN** the worker aborts without writing any membership (no collection is
+  reconciled off existing companies)
+
+#### Scenario: Static-list membership comes from the hand list
+
+- **WHEN** a static-list collection (e.g. `bigtech`) is resolved
+- **THEN** exactly the existing companies whose slugs are in the registry's hand
+  list are tagged with that collection
 
 ### Requirement: Collections are a job-search facet plus a discovery hub
 
