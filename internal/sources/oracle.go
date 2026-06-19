@@ -78,10 +78,13 @@ func (s oracle) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 func (s oracle) listRequisitions(ctx context.Context, b oracleBoard) ([]oracleRequisition, error) {
 	var reqs []oracleRequisition
 	for offset := 0; ; {
+		// offset must sit INSIDE the finder clause (next to limit). Oracle ignores a
+		// top-level &offset= query param, so a misplaced offset silently re-fetches the
+		// first page every iteration and only the newest page of jobs is ever collected.
 		url := fmt.Sprintf(
 			"https://%s/hcmRestApi/resources/latest/recruitingCEJobRequisitions"+
 				"?onlyData=true&expand=requisitionList.secondaryLocations,requisitionList.workLocation"+
-				"&finder=findReqs;siteNumber=%s,limit=%d,sortBy=POSTING_DATES_DESC&offset=%d",
+				"&finder=findReqs;siteNumber=%s,limit=%d,offset=%d,sortBy=POSTING_DATES_DESC",
 			b.host, b.site, oraclePageLimit, offset)
 		var resp oracleListResponse
 		if err := s.http.GetJSON(ctx, url, &resp); err != nil {

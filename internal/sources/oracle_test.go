@@ -98,6 +98,36 @@ func TestOracleFetchListsAndFetchesDetail(t *testing.T) {
 	}
 }
 
+// TestOracleOffsetIsInsideFinder guards the pagination fix: Oracle ignores a top-level
+// &offset= query param (it only honors offset INSIDE the finder clause, alongside limit),
+// so a top-level offset silently re-fetches the first page forever. The fake routes each
+// page on ",offset=N" — the comma prefix matches only when offset sits inside the
+// finder list — so a regression to a top-level "&offset=N" leaves page two unrouted and
+// fails the run.
+func TestOracleOffsetIsInsideFinder(t *testing.T) {
+	page := func(ids ...string) string {
+		var items []string
+		for _, id := range ids {
+			items = append(items, `{"Id": "`+id+`", "Title": "Role `+id+`", "PrimaryLocation": "Remote", "WorkplaceTypeCode": "ORA_REMOTE"}`)
+		}
+		return `{"items": [{"TotalJobsCount": 3, "requisitionList": [` + strings.Join(items, ",") + `]}]}`
+	}
+	fake := (&routedHTTP{}).
+		route(",offset=0", page("1", "2")).
+		route(",offset=2", page("3")).
+		route("ById", `{"items": [{"ExternalDescriptionStr": "<p>desc</p>"}]}`)
+
+	jobs, err := NewOracle(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "oracle", Board: "fa-test.fa.ocs.oraclecloud.com/CX_1",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 3 {
+		t.Fatalf("len(jobs) = %d, want 3 (offset must be inside the finder so page two advances)", len(jobs))
+	}
+}
+
 // TestOraclePaginatesByTotal verifies the lister keeps requesting pages until it has
 // gathered TotalJobsCount requisitions, not just the first page.
 func TestOraclePaginatesByTotal(t *testing.T) {
