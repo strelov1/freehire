@@ -164,6 +164,12 @@ func TestClosedJobsLeaveListSurfacesButResolveOnDetail(t *testing.T) {
 		t.Fatalf("company jobs must contain only the open job, got %d rows", len(byCompany))
 	}
 
+	// companies.job_count is denormalized: UpsertJob does not maintain it,
+	// cmd/recount-companies does. Recompute before asserting on the column.
+	if _, err := q.RecountCompanyJobCounts(ctx); err != nil {
+		t.Fatalf("recount company job counts: %v", err)
+	}
+
 	companies, err := q.ListCompanies(ctx, ListCompaniesParams{Search: "", Limit: 10, Offset: 0})
 	if err != nil {
 		t.Fatalf("list companies: %v", err)
