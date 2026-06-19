@@ -350,3 +350,5 @@
   board: fa-evfm-saasfaprod1.fa.ocs.oraclecloud.com/CX_1029
 - company: Zensar
   board: fa-etvl-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Ciklum
+  board: ialmme.fa.ocs.oraclecloud.com/CX_1001
