@@ -1,0 +1,5 @@
+# luxoft board. Provider is the filename; the single entry is company + board.
+# board = the careers-site host (see internal/sources/luxoft.go).
+
+- company: Luxoft
+  board: career.luxoft.com

@@ -91,6 +91,13 @@ export interface Job {
   regions: string[];
   work_mode?: string;
   skills: string[];
+  /**
+   * Collections is the set of curated-collection slugs (e.g. yc, bigtech) the
+   * job's company belongs to, denormalized from the company onto the job. It is a
+   * deterministic source fact (no LLM counterpart) served straight from the jobs
+   * column; an untagged job serializes it as [].
+   */
+  collections: string[];
   posted_at?: string;
   created_at?: string;
   updated_at?: string;
@@ -105,7 +112,7 @@ export interface Job {
   enrichment_version: number /* int32 */;
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'arbeitnow', 'ashby', 'ashbygraphql', 'bamboohr', 'breezy', 'deel', 'eightfold', 'freshteam', 'gem', 'getonbrd', 'globalpayments', 'greenhouse', 'gupy', 'himalayas', 'huntflow', 'icims', 'jazzhr', 'jibe', 'jobicy', 'jobstash', 'join', 'justjoin', 'lever', 'mycareersfuture', 'oracle', 'personio', 'phenom', 'pinpoint', 'radancy', 'recruitee', 'remotive', 'rippling', 'smartrecruiters', 'successfactors', 'teamtailor', 'tecla', 'thehub', 'wantedkr', 'weworkremotely', 'workable', 'workday', 'workingnomads', 'wpyoast'] as const;
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'arbeitnow', 'ashby', 'ashbygraphql', 'bamboohr', 'breezy', 'deel', 'eightfold', 'freshteam', 'gem', 'getonbrd', 'globalpayments', 'greenhouse', 'gupy', 'himalayas', 'huntflow', 'icims', 'jazzhr', 'jibe', 'jobicy', 'jobstash', 'join', 'justjoin', 'lever', 'luxoft', 'mycareersfuture', 'oracle', 'personio', 'phenom', 'pinpoint', 'radancy', 'recruitee', 'remotive', 'rippling', 'smartrecruiters', 'successfactors', 'teamtailor', 'tecla', 'thehub', 'wantedkr', 'weworkremotely', 'workable', 'workday', 'workingnomads', 'wpyoast'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];
