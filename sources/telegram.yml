@@ -188,3 +188,51 @@ channels:
     kind: board
   - channel: talentatweb3
     kind: board
+
+  # --- Added 2026-06-19 from a user-supplied list (t.me + LinkedIn-wrapped lnkd.in
+  # links that resolved to t.me channels). All verified to have a live public
+  # t.me/s preview at add time. Skew RU and toward executive / top-management /
+  # marketing roles rather than pure IT, unlike the curated tier above.
+  # career_ru dropped (302, no public preview). young_relocate already listed above.
+
+  # Executive / top-management (RU)
+  - channel: work_for_top
+    kind: board
+  - channel: workfortop      # same "Work For Top" brand as work_for_top — may cross-post
+    kind: board
+  - channel: forchiefs
+    kind: board
+  - channel: xCareers
+    kind: board
+  - channel: middle_top_vacancies
+    kind: board
+  - channel: cgrowthcareer
+    kind: authored
+
+  # General RU job boards
+  - channel: vacanciesbest
+    kind: board
+  - channel: morejobs
+    kind: board
+  - channel: moskovskayarabota
+    kind: authored
+  - channel: digital_hr
+    kind: board
+  - channel: huggabletalents
+    kind: board
+
+  # Remote / relocation
+  - channel: evacuatejobs
+    kind: board
+  - channel: remotegeekjob
+    kind: board
+  - channel: zarubezhom_jobs
+    kind: board
+
+  # Marketing niche
+  - channel: marketing_jobs
+    kind: board
+  - channel: forallmarketing
+    kind: board
+  - channel: wantapply_marketing
+    kind: board
