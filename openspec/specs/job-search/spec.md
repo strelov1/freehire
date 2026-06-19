@@ -15,10 +15,17 @@ The index SHALL declare:
 - **searchable attributes**: title, company, description, location.
 - **filterable attributes**: source, company_slug, work_mode, employment_type,
   seniority, category, domains, regions, countries, company_type, company_size,
-  visa_sponsorship, salary_currency, salary_period, skills, salary_min,
-  salary_max, experience_years_min. The raw `remote` flag SHALL NOT be a
-  filterable attribute (work_mode subsumes it).
+  visa_sponsorship, salary_currency, salary_period, skills, collections,
+  salary_min, salary_max, experience_years_min. The raw `remote` flag SHALL NOT be
+  a filterable attribute (work_mode subsumes it).
 - **sortable attributes**: posted_at, salary_min, salary_max.
+
+The document SHALL carry a top-level `collections` field: the set of curated
+collection slugs the job's company belongs to, denormalized from the company onto
+the job. It is a deterministic source fact (not derived from the job's text or
+enrichment); a job whose company has no collections SHALL carry an empty
+`collections` set. `collections` SHALL be a filterable facet and the corresponding
+query parameter SHALL filter the feed.
 
 Geography and work mode are filtered through the document's **top-level**
 `regions`, `countries`, and `work_mode` fields — the resolved union/precedence of
@@ -50,6 +57,12 @@ parsed from its location.
 
 - **WHEN** a job whose unioned geography includes `eu` is indexed
 - **THEN** it is returned by a filter on `regions = "eu"`
+
+#### Scenario: Collections are filterable via the collections facet
+
+- **WHEN** a job whose company belongs to collection `yc` is indexed
+- **THEN** it is returned by a filter on `collections = "yc"`, and a search
+  faceted on `collections` reports its count under `yc`
 
 ### Requirement: Hybrid keyword and semantic search
 
