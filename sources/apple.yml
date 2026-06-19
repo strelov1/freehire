@@ -1,0 +1,7 @@
+# Apple (jobs.apple.com). Boardless: one careers API (provider: apple), so the entry
+# carries no board. Kept in its own file — not in custom.yml — because the adapter fetches
+# each posting's full description from a per-job detail endpoint, so a full crawl of the
+# ~6.5k listing rows (~5k unique roles) takes ~30 min. It runs on its own daily cron slot
+# so its long crawl never blocks the small single-company boards in custom.yml.
+- company: Apple
+  provider: apple
