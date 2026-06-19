@@ -17,8 +17,11 @@
   provider: amazon
 - company: Google
   provider: google
-- company: Apple
-  provider: apple
+# Apple (provider: apple) is held out of the crawl: the adapter works (verified by
+# curl from the prod host — search/detail both 200), but a full ingest run hangs in
+# the detail-fetch phase from the prod host (the Go client stalls under sustained load
+# while serial curl does not — root cause still under investigation). Re-add this entry
+# once the hang is fixed; the adapter stays registered in sources.All meanwhile.
 - company: Lumenalta
   provider: lumenalta
 - company: Telegram
