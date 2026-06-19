@@ -1,0 +1,26 @@
+{
+  "list": [
+    {
+      "id": 1000166598,
+      "href": "/vacancies/1000166598",
+      "title": "Специалист по работе с документами",
+      "remoteWork": false,
+      "publishedDate": { "date": "2026-05-29T10:00:00+03:00", "title": "29 мая" },
+      "company": { "id": 1000121509, "title": "ИТ Контакт" },
+      "locations": [{ "title": "Санкт-Петербург", "href": "/vacancies?city_id=679" }],
+      "skills": [{ "title": "Английский язык" }]
+    },
+    {
+      "id": 1000167078,
+      "href": "/vacancies/1000167078",
+      "title": "Пентестер/кодер C++",
+      "remoteWork": true,
+      "publishedDate": { "date": "2026-06-19T21:03:53+03:00", "title": "19 июня" },
+      "company": { "id": 1000100777, "title": "SecureCo" },
+      "locations": [{ "title": "Минск" }, { "title": "Удалённо" }],
+      "skills": [{ "title": "C++" }, { "title": "Reverse Engineering" }]
+    }
+  ],
+  "meta": { "totalResults": 3, "perPage": 2, "currentPage": 1, "totalPages": 2 },
+  "recommendedQuickVacancies": []
+}

@@ -1,0 +1,6 @@
+# Habr Career (career.habr.com), a Russian-language IT job board. Boardless aggregator: one
+# public listing API (career.habr.com/api/frontend/vacancies), so the entry carries no board,
+# and each job's company comes from the listing item, not this placeholder. The crawl fetches a
+# detail page per vacancy for the description, so it gets its own cron slot (like getmatch).
+- company: Habr Career
+  provider: habr_career

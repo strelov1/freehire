@@ -2,7 +2,6 @@ package linksource
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -37,45 +36,6 @@ func (habrCareer) Match(u *url.URL) bool {
 // habrVacancyPath matches the canonical vacancy path, capturing the numeric id.
 var habrVacancyPath = regexp.MustCompile(`^/vacancies/(\d+)/?$`)
 
-// habrPosting selects the JobPosting ld+json fields Habr publishes on a vacancy page.
-// datePosted is deliberately absent: Habr's ld+json datePosted is unreliable (it runs ~a
-// month ahead of the real publish date), so the posting date is read from the page's
-// <time> element instead — see Resolve.
-type habrPosting struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Identifier  struct {
-		Value string `json:"value"`
-	} `json:"identifier"`
-	HiringOrganization struct {
-		Name string `json:"name"`
-	} `json:"hiringOrganization"`
-	JobLocation []struct {
-		Address habrAddress `json:"address"`
-	} `json:"jobLocation"`
-}
-
-// habrAddress reads jobLocation.address, which Habr emits as a bare string but schema.org
-// types as a PostalAddress object — so it accepts either shape.
-type habrAddress struct{ Text string }
-
-func (a *habrAddress) UnmarshalJSON(b []byte) error {
-	var s string
-	if json.Unmarshal(b, &s) == nil {
-		a.Text = s
-		return nil
-	}
-	var o struct {
-		AddressLocality string `json:"addressLocality"`
-		AddressCountry  string `json:"addressCountry"`
-	}
-	if json.Unmarshal(b, &o) == nil {
-		a.Text = strings.TrimPrefix(strings.TrimSpace(o.AddressLocality+", "+o.AddressCountry), ", ")
-		a.Text = strings.TrimSuffix(a.Text, ", ")
-	}
-	return nil
-}
-
 // Resolve follows the link to its career.habr.com landing, and when that is a single
 // vacancy parses its JobPosting ld+json into a job. A matched link that lands somewhere
 // other than /vacancies/<id> (e.g. the "Больше вакансий" index) is skipped (ok=false).
@@ -100,26 +60,24 @@ func (h habrCareer) Resolve(ctx context.Context, raw string) (sources.Job, bool,
 	}
 	id := m[1]
 
-	var p habrPosting
-	if !sources.LDJobPosting(node, &p) {
+	// The detail-page JobPosting parse is shared with the habr_career board adapter so the two
+	// read a Habr vacancy identically.
+	p, ok := sources.ParseHabrPosting(node)
+	if !ok {
 		return sources.Job{}, false, fmt.Errorf("linksource: habr vacancy %s has no JobPosting ld+json", id)
 	}
-	if p.Identifier.Value != "" {
-		id = p.Identifier.Value
+	if p.Identifier != "" {
+		id = p.Identifier
 	}
 
-	var loc string
-	if len(p.JobLocation) > 0 {
-		loc = p.JobLocation[0].Address.Text
-	}
 	return sources.Job{
 		ExternalID:  id,
 		URL:         "https://career.habr.com/vacancies/" + id,
 		Title:       p.Title,
-		Company:     p.HiringOrganization.Name,
-		Location:    loc,
+		Company:     p.Company,
+		Location:    p.Location,
 		Description: sources.SanitizeHTML(p.Description),
-		Remote:      sources.IsRemote(loc),
+		Remote:      sources.IsRemote(p.Location),
 		// Habr's ld+json datePosted is bogus (~a month ahead of the real date, with a later
 		// validThrough), which would pin every Habr job to the top of the freshest-first
 		// browse. The trustworthy publish timestamp is the visible <time class="basic-date"

@@ -1,0 +1,16 @@
+{
+  "list": [
+    {
+      "id": 1000160000,
+      "href": "/vacancies/1000160000",
+      "title": "QA Engineer",
+      "remoteWork": false,
+      "publishedDate": { "date": "2026-05-01T09:00:00+03:00", "title": "1 мая" },
+      "company": { "id": 1000100999, "title": "" },
+      "locations": [],
+      "skills": []
+    }
+  ],
+  "meta": { "totalResults": 3, "perPage": 2, "currentPage": 2, "totalPages": 2 },
+  "recommendedQuickVacancies": []
+}
