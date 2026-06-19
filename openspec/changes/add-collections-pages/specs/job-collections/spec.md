@@ -72,30 +72,27 @@ worker SHALL signal that a search reindex is required.
 - **THEN** exactly the companies whose slugs are in the registry's hand list are
   tagged `bigtech`
 
-### Requirement: Collection landing pages serve a pre-filtered job feed
+### Requirement: Collections are a job-search facet plus a discovery hub
 
-The system SHALL expose a web index page at `/collections` listing the registry's
-collections, each with its title, description, and a count of its open jobs (read
-from the `collections` search-facet distribution). The system SHALL expose a page
-at `/collections/<slug>` that renders the existing faceted job feed pre-filtered to
-that collection (the `collections=<slug>` filter is locked on), with the remaining
-facet sidebar, search, and pagination behaving as on the main job search. An
-unknown collection slug SHALL render a not-found result. The first page SHALL be
-server-rendered.
+The system SHALL expose `collections` as a selectable facet in the main job-search
+filter sidebar (`/jobs`), rendering one option per registry collection, so a user
+can filter the job feed by collection — composably with every other facet — and the
+filter is reflected in the URL (`/jobs?collections=<slug>`). The system SHALL also
+expose a discovery hub at `/collections` listing the registry's collections, each
+with its title, description, and a count of its open jobs (read from the
+`collections` search-facet distribution); each entry SHALL link into the filtered
+job feed (`/jobs?collections=<slug>`). The hub's first render SHALL be
+server-rendered. There SHALL NOT be a separate per-collection page — the facet on
+`/jobs` is the single rendering of a collection's jobs.
 
-#### Scenario: The index lists collections with open-job counts
+#### Scenario: Collection is a facet on the job search
+
+- **WHEN** a user opens `/jobs` and selects the `yc` collection in the sidebar
+- **THEN** the URL carries `collections=yc` and the feed contains only open jobs
+  whose `collections` include `yc`, composable with the other facets
+
+#### Scenario: The hub lists collections with open-job counts
 
 - **WHEN** a user opens `/collections`
 - **THEN** the page lists `yc` and `bigtech`, each with its title, description, and
-  the number of its open jobs
-
-#### Scenario: A collection page shows only that collection's jobs
-
-- **WHEN** a user opens `/collections/yc`
-- **THEN** the feed contains only open jobs whose `collections` include `yc`, with
-  the standard facet sidebar and pagination
-
-#### Scenario: An unknown collection is not found
-
-- **WHEN** a user opens `/collections/does-not-exist`
-- **THEN** the page renders a not-found result
+  the number of its open jobs, linking to `/jobs?collections=<slug>`

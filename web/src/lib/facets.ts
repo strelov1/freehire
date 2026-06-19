@@ -15,6 +15,7 @@ import {
   EMPLOYMENT_TYPE_VALUES, RELOCATION_VALUES, ENGLISH_LEVEL_VALUES,
   COMPANY_TYPE_VALUES, DOMAIN_VALUES,
 } from './generated/contracts';
+import { COLLECTIONS } from './collections';
 
 export interface FacetOption {
   value: string;
@@ -152,7 +153,12 @@ const CURRENCY: FacetOption[] = [
   { value: 'RUB', label: 'RUB' },
 ];
 
+// Curated collections (yc, bigtech, …) as pill options, sourced from the same
+// registry the /collections hub renders so the label/slug pairs never drift.
+const COLLECTION: FacetOption[] = COLLECTIONS.map((c) => ({ value: c.slug, label: c.title }));
+
 export const FACETS: FacetDef[] = [
+  { param: 'collections', label: 'Collection', control: 'pills', options: COLLECTION, excludable: false },
   { param: 'regions', label: 'Region', control: 'pills', options: REGION, excludable: true },
   { param: 'work_mode', label: 'Work format', control: 'pills', options: WORK_MODE, excludable: true },
   { param: 'category', label: 'Specialization', control: 'select', options: CATEGORY, excludable: true, placeholder: 'Search specializations' },

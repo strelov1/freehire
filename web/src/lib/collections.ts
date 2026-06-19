@@ -23,7 +23,3 @@ export const COLLECTIONS: Collection[] = [
     description: 'Open roles at the largest, most established technology companies.',
   },
 ];
-
-export function findCollection(slug: string): Collection | undefined {
-  return COLLECTIONS.find((c) => c.slug === slug);
-}

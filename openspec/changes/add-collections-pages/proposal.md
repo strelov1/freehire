@@ -9,7 +9,7 @@ The catalogue is browsable only by deterministic facets (skills, geography, seni
 - Index `collections` as a filterable Meilisearch facet so a collection page reuses the existing faceted job search unchanged.
 - Add a static collection registry (slug, title, description, member resolver) starting with `yc` and `bigtech`; adding a collection is one registry entry.
 - Add `cmd/import-collections`: an idempotent run-once worker that resolves each collection's members (YC from the open `yc-oss` dataset matched by normalized name; Big Tech from a hand-coded slug list), writes `companies.collections`, propagates to `jobs.collections`, and prompts a reindex.
-- Add web pages: `/collections` (index of the fixed set with open-job counts) and `/collections/[slug]` (the existing faceted job feed pre-filtered to that collection), plus a nav link.
+- Expose `collections` as a selectable facet in the `/jobs` filter sidebar (composable with every other facet) and add a `/collections` discovery hub (the fixed set with open-job counts) that links into `/jobs?collections=<slug>`, plus a nav link. There is no separate per-collection page — the facet is the single rendering of a collection's jobs.
 
 ## Capabilities
 

@@ -18,8 +18,7 @@
 
 <div class="mx-auto w-full max-w-6xl px-4 py-6">
   <header class="mb-8">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// collections</p>
-    <h1 class="mt-3 text-2xl font-semibold tracking-tight">Collections</h1>
+    <h1 class="text-2xl font-semibold tracking-tight">Collections</h1>
     <p class="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
       Curated groups of companies, with their open roles in one feed.
     </p>
@@ -28,7 +27,7 @@
   <div class="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
     {#each data.collections as collection (collection.slug)}
       <a
-        href={`/collections/${collection.slug}`}
+        href={`/jobs?collections=${collection.slug}`}
         class="group flex flex-col bg-background p-6 transition-colors hover:bg-secondary/40"
       >
         <div class="flex items-baseline justify-between gap-3">
