@@ -17,6 +17,8 @@
   provider: amazon
 - company: Google
   provider: google
+- company: Apple
+  provider: apple
 - company: Lumenalta
   provider: lumenalta
 - company: Telegram
