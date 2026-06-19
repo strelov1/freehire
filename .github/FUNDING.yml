@@ -1,1 +1,10 @@
-buy_me_a_coffee: i_strelov
+# These are supported funding model platforms
+
+buy_me_a_coffee: i_strelov # Buy Me a Coffee username
+# github: i_strelov # Enable after creating a GitHub Sponsors profile at https://github.com/sponsors (up to 4 usernames)
+patreon: # A single Patreon username
+open_collective: # A single Open Collective username
+ko_fi: # A single Ko-fi username
+liberapay: # A single Liberapay username
+polar: # A single Polar username
+custom: # Up to 4 custom sponsorship URLs e.g., ['link1', 'link2']
