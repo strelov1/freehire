@@ -141,6 +141,21 @@ func TestParseCompanyCSV_RequiresCompanyColumn(t *testing.T) {
 	}
 }
 
+func TestParseTechstarsCSV_SemicolonNameColumn(t *testing.T) {
+	// Techstars CSV is semicolon-separated with the company in a "name" column.
+	csv := "name;urls;description\n" +
+		"Sentry;https://sentry.io;Error monitoring\n" +
+		"DigitalOcean;https://do.com;Cloud\n" +
+		";;empty name skipped"
+	names, err := ParseTechstarsCSV([]byte(csv))
+	if err != nil {
+		t.Fatalf("ParseTechstarsCSV: %v", err)
+	}
+	if !reflect.DeepEqual(names, []string{"Sentry", "DigitalOcean"}) {
+		t.Errorf("names = %#v, want [Sentry DigitalOcean]", names)
+	}
+}
+
 func TestRegistry_HasUnicorn(t *testing.T) {
 	c, ok := Lookup("unicorn")
 	if !ok || c.Dataset == nil {

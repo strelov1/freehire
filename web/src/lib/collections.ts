@@ -18,6 +18,11 @@ export const COLLECTIONS: Collection[] = [
       'Open roles at Y Combinator–backed companies, from current batches to graduated unicorns.',
   },
   {
+    slug: 'techstars',
+    title: 'Techstars',
+    description: 'Open roles at Techstars-backed companies.',
+  },
+  {
     slug: 'ai',
     title: 'AI Companies',
     description:

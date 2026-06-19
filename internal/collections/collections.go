@@ -48,6 +48,12 @@ var All = []Collection{
 		Dataset:     &Dataset{URL: ycDatasetURL, Parse: ParseYC},
 	},
 	{
+		Slug:        "techstars",
+		Title:       "Techstars",
+		Description: "Open roles at Techstars-backed companies.",
+		Dataset:     &Dataset{URL: techstarsDatasetURL, Parse: ParseTechstarsCSV},
+	},
+	{
 		Slug:        "ai",
 		Title:       "AI Companies",
 		Description: "Open roles at AI-native companies — foundation-model labs, ML platforms and applied-AI products.",
@@ -87,6 +93,7 @@ const (
 	ycDatasetURL         = "https://yc-oss.github.io/api/companies/all.json"
 	unicornDatasetURL    = "https://raw.githubusercontent.com/elmoallistair/datasets/main/unicorn_startups.csv"
 	fortune500DatasetURL = "https://raw.githubusercontent.com/EatMoreOranges/Fortune-500-Dataset/main/data/2023-fortune-500-data.csv"
+	techstarsDatasetURL  = "https://raw.githubusercontent.com/ark-storzhv/techstars-parser/main/TechStars.csv"
 )
 
 // AICompanySlugs is a hand-curated list of prominent AI-native companies —
@@ -252,30 +259,42 @@ func ParseYC(data []byte) ([]string, error) {
 	return names, nil
 }
 
-// ParseCompanyCSV extracts the company names from a CSV that has a "Company"
-// column: it locates that column by header (not a fixed index, so an upstream
-// column reorder doesn't silently read the wrong field) and returns each non-empty
-// value. Shared by the unicorn and fortune500 datasets.
+// ParseCompanyCSV extracts company names from a comma-separated CSV with a
+// "Company" column. Shared by the unicorn and fortune500 datasets.
 func ParseCompanyCSV(data []byte) ([]string, error) {
+	return parseCSVColumn(data, ',', "Company")
+}
+
+// ParseTechstarsCSV extracts company names from the Techstars portfolio CSV, which
+// is semicolon-separated with the company in a "name" column.
+func ParseTechstarsCSV(data []byte) ([]string, error) {
+	return parseCSVColumn(data, ';', "name")
+}
+
+// parseCSVColumn extracts the named column from a CSV with the given delimiter: it
+// locates the column by header (not a fixed index, so an upstream column reorder
+// doesn't silently read the wrong field) and returns each non-empty value.
+func parseCSVColumn(data []byte, delim rune, colName string) ([]string, error) {
 	r := csv.NewReader(strings.NewReader(string(data)))
+	r.Comma = delim
 	r.FieldsPerRecord = -1 // tolerate ragged rows rather than aborting the whole parse
 	header, err := r.Read()
 	if err != nil {
-		return nil, fmt.Errorf("collections: read company csv header: %w", err)
+		return nil, fmt.Errorf("collections: read csv header: %w", err)
 	}
 	col := -1
 	for i, h := range header {
-		if strings.EqualFold(strings.TrimSpace(h), "Company") {
+		if strings.EqualFold(strings.TrimSpace(h), colName) {
 			col = i
 			break
 		}
 	}
 	if col < 0 {
-		return nil, fmt.Errorf("collections: csv has no Company column")
+		return nil, fmt.Errorf("collections: csv has no %q column", colName)
 	}
 	rows, err := r.ReadAll()
 	if err != nil {
-		return nil, fmt.Errorf("collections: read company csv: %w", err)
+		return nil, fmt.Errorf("collections: read csv: %w", err)
 	}
 	names := make([]string, 0, len(rows))
 	for _, row := range rows {
