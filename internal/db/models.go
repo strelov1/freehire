@@ -27,6 +27,7 @@ type Company struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	Collections []string           `json:"collections"`
+	JobCount    int32              `json:"job_count"`
 }
 
 type EnrichmentOutbox struct {

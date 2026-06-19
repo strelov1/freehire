@@ -40,7 +40,7 @@ func (q *Queries) DeleteOrphanCompanies(ctx context.Context) (int64, error) {
 }
 
 const getCompany = `-- name: GetCompany :one
-SELECT slug, name, created_at, updated_at, collections
+SELECT slug, name, created_at, updated_at, collections, job_count
 FROM companies
 WHERE slug = $1
 `
@@ -57,17 +57,16 @@ func (q *Queries) GetCompany(ctx context.Context, slug string) (Company, error) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Collections,
+		&i.JobCount,
 	)
 	return i, err
 }
 
 const listCompanies = `-- name: ListCompanies :many
-SELECT c.slug, c.name, count(j.company_slug) AS job_count
-FROM companies c
-LEFT JOIN jobs j ON j.company_slug = c.slug AND j.closed_at IS NULL
-WHERE $1::text = '' OR c.name ILIKE '%' || $1 || '%'
-GROUP BY c.slug, c.name
-ORDER BY c.name
+SELECT slug, name, job_count
+FROM companies
+WHERE $1::text = '' OR name ILIKE '%' || $1 || '%'
+ORDER BY job_count DESC, name
 LIMIT $3 OFFSET $2
 `
 
@@ -80,15 +79,16 @@ type ListCompaniesParams struct {
 type ListCompaniesRow struct {
 	Slug     string `json:"slug"`
 	Name     string `json:"name"`
-	JobCount int64  `json:"job_count"`
+	JobCount int32  `json:"job_count"`
 }
 
-// Catalog page: companies with their job counts. The job count is computed on
-// the fly (no denormalized counter yet). This is the one acknowledged place a
-// join to jobs is acceptable; LEFT JOIN keeps companies with zero jobs visible.
-// An empty `search` short-circuits the ILIKE, so the same prepared statement
-// serves both the full list and a name search (`search` is a case-insensitive
-// substring of the name).
+// Catalog page: companies with their job counts, most active first. The job count
+// is read from the denormalized companies.job_count column (maintained by
+// cmd/recount-companies), so this read does not join jobs. Ordered by job_count
+// DESC, name — the same ordering the sidebar company typeahead consumes. An empty
+// `search` short-circuits the ILIKE, so the same prepared statement serves both
+// the full list and a name search (`search` is a case-insensitive substring of the
+// name).
 func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([]ListCompaniesRow, error) {
 	rows, err := q.db.Query(ctx, listCompanies, arg.Search, arg.Offset, arg.Limit)
 	if err != nil {
@@ -142,6 +142,34 @@ func (q *Queries) ListCompanyCollections(ctx context.Context) ([]ListCompanyColl
 		return nil, err
 	}
 	return items, nil
+}
+
+const recountCompanyJobCounts = `-- name: RecountCompanyJobCounts :execrows
+UPDATE companies c
+SET job_count = COALESCE(o.cnt, 0)
+FROM companies c2
+LEFT JOIN (
+    SELECT company_slug, count(*) AS cnt
+    FROM jobs
+    WHERE closed_at IS NULL AND company_slug <> ''
+    GROUP BY company_slug
+) o ON o.company_slug = c2.slug
+WHERE c.slug = c2.slug
+  AND c.job_count IS DISTINCT FROM COALESCE(o.cnt, 0)
+`
+
+// Recompute every company's denormalized open-job count in one set-based pass:
+// aggregate open jobs (closed_at IS NULL) once by company_slug, LEFT JOIN it onto
+// companies so a company with no open jobs is zeroed (COALESCE), and write the
+// result. The `IS DISTINCT FROM` guard skips rows whose count is already correct,
+// so re-running rewrites nothing and the affected-rows count reports real churn.
+// This is cmd/recount-companies' whole job; run periodically (eventual consistency).
+func (q *Queries) RecountCompanyJobCounts(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, recountCompanyJobCounts)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const setCompanyCollections = `-- name: SetCompanyCollections :exec

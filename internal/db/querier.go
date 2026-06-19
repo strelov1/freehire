@@ -175,12 +175,13 @@ type Querier interface {
 	// worker groups these by canonical(query) so each distinct filter hits the search
 	// index once regardless of how many subscriptions share it.
 	ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubscriptionsRow, error)
-	// Catalog page: companies with their job counts. The job count is computed on
-	// the fly (no denormalized counter yet). This is the one acknowledged place a
-	// join to jobs is acceptable; LEFT JOIN keeps companies with zero jobs visible.
-	// An empty `search` short-circuits the ILIKE, so the same prepared statement
-	// serves both the full list and a name search (`search` is a case-insensitive
-	// substring of the name).
+	// Catalog page: companies with their job counts, most active first. The job count
+	// is read from the denormalized companies.job_count column (maintained by
+	// cmd/recount-companies), so this read does not join jobs. Ordered by job_count
+	// DESC, name — the same ordering the sidebar company typeahead consumes. An empty
+	// `search` short-circuits the ILIKE, so the same prepared statement serves both
+	// the full list and a name search (`search` is a case-insensitive substring of the
+	// name).
 	ListCompanies(ctx context.Context, arg ListCompaniesParams) ([]ListCompaniesRow, error)
 	// All companies with their current collection membership. cmd/import-collections
 	// reads this to know the existing company slugs (the match target) and each
@@ -290,6 +291,13 @@ type Querier interface {
 	// left in place — its expiry gates the retry to a later run and doubles as the
 	// crash reaper, so a failed post is never reprocessed within the same run.
 	RecordTelegramPostFailure(ctx context.Context, arg RecordTelegramPostFailureParams) (RecordTelegramPostFailureRow, error)
+	// Recompute every company's denormalized open-job count in one set-based pass:
+	// aggregate open jobs (closed_at IS NULL) once by company_slug, LEFT JOIN it onto
+	// companies so a company with no open jobs is zeroed (COALESCE), and write the
+	// result. The `IS DISTINCT FROM` guard skips rows whose count is already correct,
+	// so re-running rewrites nothing and the affected-rows count reports real churn.
+	// This is cmd/recount-companies' whole job; run periodically (eventual consistency).
+	RecountCompanyJobCounts(ctx context.Context) (int64, error)
 	// Release the lease on a subscription's claimed jobs without counting an attempt,
 	// so a soft-skipped delivery (e.g. Telegram not yet linked) is retried promptly on
 	// a later pass instead of waiting out the lease.

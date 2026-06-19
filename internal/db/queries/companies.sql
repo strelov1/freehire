@@ -1,16 +1,15 @@
 -- name: ListCompanies :many
--- Catalog page: companies with their job counts. The job count is computed on
--- the fly (no denormalized counter yet). This is the one acknowledged place a
--- join to jobs is acceptable; LEFT JOIN keeps companies with zero jobs visible.
--- An empty `search` short-circuits the ILIKE, so the same prepared statement
--- serves both the full list and a name search (`search` is a case-insensitive
--- substring of the name).
-SELECT c.slug, c.name, count(j.company_slug) AS job_count
-FROM companies c
-LEFT JOIN jobs j ON j.company_slug = c.slug AND j.closed_at IS NULL
-WHERE sqlc.arg('search')::text = '' OR c.name ILIKE '%' || sqlc.arg('search') || '%'
-GROUP BY c.slug, c.name
-ORDER BY c.name
+-- Catalog page: companies with their job counts, most active first. The job count
+-- is read from the denormalized companies.job_count column (maintained by
+-- cmd/recount-companies), so this read does not join jobs. Ordered by job_count
+-- DESC, name — the same ordering the sidebar company typeahead consumes. An empty
+-- `search` short-circuits the ILIKE, so the same prepared statement serves both
+-- the full list and a name search (`search` is a case-insensitive substring of the
+-- name).
+SELECT slug, name, job_count
+FROM companies
+WHERE sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%'
+ORDER BY job_count DESC, name
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: CountCompanies :one
@@ -65,3 +64,22 @@ ON CONFLICT (slug) DO UPDATE SET
 -- when a slug-builder change re-keys jobs onto new slugs.
 DELETE FROM companies c
 WHERE NOT EXISTS (SELECT 1 FROM jobs j WHERE j.company_slug = c.slug);
+
+-- name: RecountCompanyJobCounts :execrows
+-- Recompute every company's denormalized open-job count in one set-based pass:
+-- aggregate open jobs (closed_at IS NULL) once by company_slug, LEFT JOIN it onto
+-- companies so a company with no open jobs is zeroed (COALESCE), and write the
+-- result. The `IS DISTINCT FROM` guard skips rows whose count is already correct,
+-- so re-running rewrites nothing and the affected-rows count reports real churn.
+-- This is cmd/recount-companies' whole job; run periodically (eventual consistency).
+UPDATE companies c
+SET job_count = COALESCE(o.cnt, 0)
+FROM companies c2
+LEFT JOIN (
+    SELECT company_slug, count(*) AS cnt
+    FROM jobs
+    WHERE closed_at IS NULL AND company_slug <> ''
+    GROUP BY company_slug
+) o ON o.company_slug = c2.slug
+WHERE c.slug = c2.slug
+  AND c.job_count IS DISTINCT FROM COALESCE(o.cnt, 0);

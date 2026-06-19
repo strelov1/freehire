@@ -5,6 +5,7 @@
   import type { FacetCounts } from '$lib/types';
   import { cn } from '$lib/utils';
   import PillGroup from './PillGroup.svelte';
+  import RemoteSearchSelect from './RemoteSearchSelect.svelte';
   import SearchSelect from './SearchSelect.svelte';
   import TokenInput from './TokenInput.svelte';
 
@@ -91,6 +92,15 @@
       exclude={st.exclude}
       placeholder={def.placeholder}
       onToggle={(v) => store.toggle(def.param, v)}
+    />
+  {:else if def.control === 'remote' && def.remote}
+    <RemoteSearchSelect
+      search={def.remote}
+      selected={st.values}
+      exclude={st.exclude}
+      placeholder={def.placeholder}
+      onToggle={(v) => store.toggle(def.param, v)}
+      fallbackLabel={(v) => dynamicLabel(def.param, v)}
     />
   {:else}
     <TokenInput

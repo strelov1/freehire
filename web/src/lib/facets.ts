@@ -16,6 +16,7 @@ import {
   COMPANY_TYPE_VALUES, DOMAIN_VALUES,
 } from './generated/contracts';
 import { COLLECTIONS } from './collections';
+import { api } from './api';
 
 export interface FacetOption {
   value: string;
@@ -24,7 +25,7 @@ export interface FacetOption {
   count?: number;
 }
 
-export type FacetControl = 'pills' | 'select' | 'tokens';
+export type FacetControl = 'pills' | 'select' | 'tokens' | 'remote';
 
 export interface FacetDef {
   param: string;
@@ -41,6 +42,13 @@ export interface FacetDef {
    * builds them from the facet-counts endpoint at render time.
    */
   dynamic?: boolean;
+  /**
+   * Server-backed option source for a `'remote'` control: a debounced query
+   * function returning matching options with counts. Used for an entity facet too
+   * large to ship as a distribution (company), whose options are fetched from a
+   * dedicated endpoint instead of the Meili facet counts.
+   */
+  remote?: (query: string) => Promise<FacetOption[]>;
 }
 
 // Resolve an ISO 3166-1 alpha-2 code to an English country name via platform Intl
@@ -68,6 +76,16 @@ export function countryLabel(code: string): string {
 // slug→name lookup would need a per-company fetch, which this facet forgoes.
 export function companyLabel(slug: string): string {
   return humanize(slug.replace(/-/g, '_'));
+}
+
+// Option source for the Company facet's 'remote' control: the count-ordered
+// companies endpoint (real names + open-job counts), not the Meili facet
+// distribution (which Meili caps at 300 values and returns alphabetically — so
+// popular employers never surface). An empty query returns the most active
+// companies (the endpoint's first page).
+async function companySearch(query: string): Promise<FacetOption[]> {
+  const { items } = await api.listCompanies(query, 20, 0);
+  return items.map((c) => ({ value: c.slug, label: c.name, count: c.job_count }));
 }
 
 /** Display label for a dynamic facet value: country code → name, company slug →
@@ -183,6 +201,6 @@ export const FACETS: FacetDef[] = [
   { param: 'english_level', label: 'English', control: 'pills', options: ENGLISH, excludable: true },
   { param: 'posting_language', label: 'Job language', control: 'pills', options: POSTING_LANGUAGE, excludable: true },
   { param: 'salary_currency', label: 'Currency', control: 'pills', options: CURRENCY, excludable: true },
-  { param: 'company_slug', label: 'Company', control: 'select', dynamic: true, excludable: true, placeholder: 'Search companies' },
+  { param: 'company_slug', label: 'Company', control: 'remote', excludable: true, placeholder: 'Search companies', remote: companySearch },
   { param: 'source', label: 'Source', control: 'pills', options: SOURCE, excludable: true },
 ];

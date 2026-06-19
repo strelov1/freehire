@@ -20,12 +20,13 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/hire ./cmd/server
  && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/backfill-derive ./cmd/backfill-derive \
  && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/liveness ./cmd/liveness \
  && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/notify ./cmd/notify \
- && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/import-collections ./cmd/import-collections
+ && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/import-collections ./cmd/import-collections \
+ && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/recount-companies ./cmd/recount-companies
 
 # --- runtime stage ---
 FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /app
-COPY --from=build /out/hire /out/ingest /out/enrich /out/reindex /out/tg-ingest /out/tg-extract /out/reslug /out/backfill-derive /out/liveness /out/notify /out/import-collections /app/
+COPY --from=build /out/hire /out/ingest /out/enrich /out/reindex /out/tg-ingest /out/tg-extract /out/reslug /out/backfill-derive /out/liveness /out/notify /out/import-collections /out/recount-companies /app/
 EXPOSE 8080
 USER nonroot:nonroot
 ENTRYPOINT ["/app/hire"]

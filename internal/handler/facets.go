@@ -37,14 +37,25 @@ var facetExtraParams = map[string]facetExtra{
 	"experience_years_min": {attr: "enrichment.experience_years_min", statOnly: true},
 }
 
-// facetAttributes is the full list of index attributes to request facets for:
-// every string facet (the same attributes search.StringFacets filters on) plus
-// the extras. Sorted for a deterministic request. This is the single source
-// shared with the search filter vocabulary — a new facet added to
-// search.StringFacets is counted here automatically.
+// facetsNoDistribution are string facets we filter on but never request a value
+// distribution for. company_slug has thousands of values; the sidebar company
+// filter is a server-backed typeahead (GET /api/v1/companies, count-ordered), not
+// a facet distribution — and Meili would only return a capped, alphabetical slice
+// anyway. It stays in search.StringFacets so `?company_slug=` filtering still
+// works; we just stop computing a distribution the UI no longer reads.
+var facetsNoDistribution = map[string]bool{"company_slug": true}
+
+// facetAttributes is the list of index attributes to request facets for: every
+// string facet (the same attributes search.StringFacets filters on), minus the
+// ones in facetsNoDistribution, plus the extras. Sorted for a deterministic
+// request. This is the single source shared with the search filter vocabulary —
+// a new facet added to search.StringFacets is counted here automatically.
 func facetAttributes() []string {
 	attrs := make([]string, 0, len(search.StringFacets)+len(facetExtraParams))
-	for _, attr := range search.StringFacets {
+	for param, attr := range search.StringFacets {
+		if facetsNoDistribution[param] {
+			continue
+		}
 		attrs = append(attrs, attr)
 	}
 	for _, e := range facetExtraParams {
