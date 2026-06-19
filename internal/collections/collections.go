@@ -54,6 +54,12 @@ var All = []Collection{
 		Dataset:     &Dataset{URL: techstarsDatasetURL, Parse: ParseTechstarsCSV},
 	},
 	{
+		Slug:        "european",
+		Title:       "European Startups",
+		Description: "Open roles at European startups across the continent's tech hubs.",
+		Dataset:     &Dataset{URL: europeanDatasetURL, Parse: ParseEUStartups},
+	},
+	{
 		Slug:        "ai",
 		Title:       "AI Companies",
 		Description: "Open roles at AI-native companies — foundation-model labs, ML platforms and applied-AI products.",
@@ -94,6 +100,7 @@ const (
 	unicornDatasetURL    = "https://raw.githubusercontent.com/elmoallistair/datasets/main/unicorn_startups.csv"
 	fortune500DatasetURL = "https://raw.githubusercontent.com/EatMoreOranges/Fortune-500-Dataset/main/data/2023-fortune-500-data.csv"
 	techstarsDatasetURL  = "https://raw.githubusercontent.com/ark-storzhv/techstars-parser/main/TechStars.csv"
+	europeanDatasetURL   = "https://raw.githubusercontent.com/nickbiird/icp-radar/main/public/data/startups_processed.json"
 )
 
 // AICompanySlugs is a hand-curated list of prominent AI-native companies —
@@ -240,6 +247,28 @@ func Reconcile(current, managed, want []string) []string {
 // which we match by normalized name against our companies.
 type ycCompany struct {
 	Name string `json:"name"`
+}
+
+// euStartup is the subset of an icp-radar dataset entry we consume (the company
+// name lives in a capitalised "Name" field, unlike yc-oss's lowercase "name").
+type euStartup struct {
+	Name string `json:"Name"`
+}
+
+// ParseEUStartups extracts the company names from the icp-radar European-startups
+// dataset (a JSON array of company objects with a "Name" field).
+func ParseEUStartups(data []byte) ([]string, error) {
+	var raw []euStartup
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("collections: parse european dataset: %w", err)
+	}
+	names := make([]string, 0, len(raw))
+	for _, c := range raw {
+		if c.Name != "" {
+			names = append(names, c.Name)
+		}
+	}
+	return names, nil
 }
 
 // ParseYC extracts the company names from a yc-oss dataset payload (a JSON array of

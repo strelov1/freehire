@@ -23,6 +23,11 @@ export const COLLECTIONS: Collection[] = [
     description: 'Open roles at Techstars-backed companies.',
   },
   {
+    slug: 'european',
+    title: 'European Startups',
+    description: "Open roles at European startups across the continent's tech hubs.",
+  },
+  {
     slug: 'ai',
     title: 'AI Companies',
     description:

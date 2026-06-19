@@ -156,6 +156,18 @@ func TestParseTechstarsCSV_SemicolonNameColumn(t *testing.T) {
 	}
 }
 
+func TestParseEUStartups_ExtractsNameField(t *testing.T) {
+	// icp-radar uses a capitalised "Name" field.
+	payload := []byte(`[{"Name":"Revolut","Country":"UK"},{"Name":"Spotify","Country":"Sweden"},{"Name":""}]`)
+	names, err := ParseEUStartups(payload)
+	if err != nil {
+		t.Fatalf("ParseEUStartups: %v", err)
+	}
+	if !reflect.DeepEqual(names, []string{"Revolut", "Spotify"}) {
+		t.Errorf("names = %#v, want [Revolut Spotify]", names)
+	}
+}
+
 func TestRegistry_HasUnicorn(t *testing.T) {
 	c, ok := Lookup("unicorn")
 	if !ok || c.Dataset == nil {
