@@ -1,6 +1,10 @@
 package classify
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/strelov1/freehire/internal/wordmatch"
+)
 
 // descriptionSeniorityPhrases maps a seniority grade to intent-anchored phrases
 // that signal it in a job description, checked in precedence order (highest grade
@@ -8,7 +12,7 @@ import "strings"
 // safe as bare whole words — these are tuned for PRECISION in long prose: a bare
 // "senior"/"lead"/"head of"/"staff" matches incidental text ("senior management",
 // "lead the team", "report to the head of product", "our staff"), so every phrase
-// is anchored to an unambiguous grade statement. Matching uses containsWord, so a
+// is anchored to an unambiguous grade statement. Matching uses wordmatch, so a
 // phrase only fires on word boundaries ("as a lead" never matches "as a leading
 // provider", "technical lead" never matches "technical leadership"). The detector
 // emits nothing on a weak signal and never infers a grade from a years figure.
@@ -58,7 +62,7 @@ func SeniorityFromDescription(desc string) string {
 	lower := strings.ToLower(desc)
 	for _, g := range descriptionSeniorityPhrases {
 		for _, p := range g.phrases {
-			if containsWord(lower, p) {
+			if wordmatch.Contains(lower, p, wordmatch.UnicodeBoundary) {
 				return g.grade
 			}
 		}

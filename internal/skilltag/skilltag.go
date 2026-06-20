@@ -13,6 +13,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/strelov1/freehire/internal/wordmatch"
 )
 
 // htmlTagRE matches an HTML tag; descriptions are raw ATS HTML, so tags are
@@ -44,7 +46,7 @@ func Parse(text string) []string {
 	set := map[string]struct{}{}
 
 	for _, p := range phraseAliases {
-		if containsTerm(norm, p.alias) {
+		if wordmatch.Contains(norm, p.alias, wordmatch.ASCIIBoundary) {
 			set[p.canonical] = struct{}{}
 		}
 	}
@@ -54,51 +56,6 @@ func Parse(text string) []string {
 		}
 	}
 	return sortedKeys(set)
-}
-
-// containsTerm reports whether term occurs in norm bounded by a non-alphanumeric
-// character (or string edge) on each side, so "c++" does not match inside "abc++x"
-// and "react native" matches only as a whole phrase. term's own internal
-// punctuation/spaces are matched literally.
-func containsTerm(norm, term string) bool {
-	from := 0
-	for {
-		i := strings.Index(norm[from:], term)
-		if i < 0 {
-			return false
-		}
-		i += from
-		if isBounded(norm, i, i+len(term)) {
-			return true
-		}
-		from = i + 1
-	}
-}
-
-// isBounded reports whether the [start,end) span in s is a standalone term: each
-// side is a string edge or a separating (non-alphanumeric) character, with one
-// asymmetry — a LEADING '.' is not a valid left boundary. A leading dot means the
-// term is the suffix of a larger dotted token (a domain like "foo.asp.net" or
-// "use.c#"), which must not match; a TRAILING dot, by contrast, is a sentence
-// period ("We use C#.") and is a valid right boundary.
-func isBounded(s string, start, end int) bool {
-	if alnumAt(s, start-1) || byteAt(s, start-1) == '.' {
-		return false
-	}
-	return !alnumAt(s, end)
-}
-
-// byteAt returns s[i], or 0 when i is out of range.
-func byteAt(s string, i int) byte {
-	if i < 0 || i >= len(s) {
-		return 0
-	}
-	return s[i]
-}
-
-func alnumAt(s string, i int) bool {
-	c := byteAt(s, i)
-	return c >= 'a' && c <= 'z' || c >= '0' && c <= '9'
 }
 
 // sortedKeys returns the set's keys ascending, or nil when empty so an absent tag

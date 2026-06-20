@@ -9,8 +9,8 @@ package classify
 
 import (
 	"strings"
-	"unicode"
-	"unicode/utf8"
+
+	"github.com/strelov1/freehire/internal/wordmatch"
 )
 
 // Classification is the seniority and role category parsed from a job title.
@@ -36,49 +36,9 @@ func Parse(title string) Classification {
 // carrying several grade words ("Lead Senior") resolves the stronger one.
 func matchOrdered(title string, order []string, aliases map[string]string) string {
 	for _, alias := range order {
-		if containsWord(title, alias) {
+		if wordmatch.Contains(title, alias, wordmatch.UnicodeBoundary) {
 			return aliases[alias]
 		}
 	}
 	return ""
-}
-
-// containsWord reports whether needle occurs in haystack bounded by non-word
-// runes on both sides, so "lead" does not match inside "leading" and "react"
-// does not match inside "reactor". Word runes are Unicode letters/digits, so
-// Cyrillic boundaries are handled the same as Latin.
-func containsWord(haystack, needle string) bool {
-	if needle == "" {
-		return false
-	}
-	for from := 0; ; {
-		i := strings.Index(haystack[from:], needle)
-		if i < 0 {
-			return false
-		}
-		start := from + i
-		end := start + len(needle)
-		if boundaryOK(haystack, start, end) {
-			return true
-		}
-		from = start + 1
-	}
-}
-
-func boundaryOK(s string, start, end int) bool {
-	if start > 0 {
-		if r, _ := utf8.DecodeLastRuneInString(s[:start]); isWordRune(r) {
-			return false
-		}
-	}
-	if end < len(s) {
-		if r, _ := utf8.DecodeRuneInString(s[end:]); isWordRune(r) {
-			return false
-		}
-	}
-	return true
-}
-
-func isWordRune(r rune) bool {
-	return unicode.IsLetter(r) || unicode.IsDigit(r)
 }
