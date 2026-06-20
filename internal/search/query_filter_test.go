@@ -1,10 +1,12 @@
 package search
 
 import (
+	"fmt"
 	"net/url"
 	"reflect"
 	"sort"
 	"testing"
+	"time"
 )
 
 // normalizeGroups makes a Filter result order-insensitive for comparison: the
@@ -106,6 +108,39 @@ func TestFilterFromValues_VisaBoolAndNumeric(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestFilterFromValues_PostedWithinDays(t *testing.T) {
+	// now is injected so the cutoff is deterministic. posted_within_days=N restricts
+	// to posted_ts >= now - N*86400 (posted within the last N days).
+	now := time.Date(2026, 6, 19, 0, 0, 0, 0, time.UTC)
+	cutoff := now.Unix() - 7*86400
+
+	got := normalizeGroups(t, filterFromValues(vals("posted_within_days=7"), now))
+	want := [][]string{{fmt.Sprintf("posted_ts >= %d", cutoff)}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("posted_within_days=7: got %v, want %v", got, want)
+	}
+
+	// It ANDs with other facets as its own group.
+	got = normalizeGroups(t, filterFromValues(vals("seniority=senior&posted_within_days=7"), now))
+	want = [][]string{
+		{`enrichment.seniority = "senior"`},
+		{fmt.Sprintf("posted_ts >= %d", cutoff)},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("composed: got %v, want %v", got, want)
+	}
+}
+
+func TestFilterFromValues_PostedWithinDaysInvalidIgnored(t *testing.T) {
+	// Absent, empty, zero, negative, and non-numeric values impose no date restriction.
+	now := time.Date(2026, 6, 19, 0, 0, 0, 0, time.UTC)
+	for _, q := range []string{"", "posted_within_days=", "posted_within_days=0", "posted_within_days=-3", "posted_within_days=soon"} {
+		if got := filterFromValues(vals(q), now); got != nil {
+			t.Errorf("filterFromValues(%q) = %v, want nil (no date filter)", q, got)
+		}
 	}
 }
 

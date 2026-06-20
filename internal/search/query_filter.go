@@ -3,6 +3,7 @@ package search
 import (
 	"net/url"
 	"strconv"
+	"time"
 )
 
 // StringFacets maps an equality-facet query param to its index attribute. It is
@@ -43,6 +44,14 @@ var StringFacets = map[string]string{
 // build identical filters from the same canonical query string — the handler
 // parses the request query, the matcher parses a saved search's stored query.
 func FilterFromValues(v url.Values) any {
+	return filterFromValues(v, time.Now())
+}
+
+// filterFromValues is FilterFromValues with the reference time injected, so the
+// relative `posted_within_days` cutoff is deterministic under test. The exported
+// wrapper supplies time.Now(); only this inner form is unit-tested for the date
+// branch.
+func filterFromValues(v url.Values, now time.Time) any {
 	var groups [][]string
 
 	for param, attr := range StringFacets {
@@ -78,6 +87,14 @@ func FilterFromValues(v url.Values) any {
 	}
 	if n, ok := atoiOK(v.Get("experience_years_min")); ok {
 		groups = append(groups, []string{Gte("enrichment.experience_years_min", n)})
+	}
+
+	// Freshness: posted_within_days=N restricts to jobs posted in the last N days,
+	// i.e. whose effective posting date (posted_ts, unix seconds) is at or after
+	// now - N*86400. A non-positive or non-numeric value imposes no restriction.
+	if n, ok := atoiOK(v.Get("posted_within_days")); ok && n > 0 {
+		cutoff := now.Add(-time.Duration(n) * 24 * time.Hour).Unix()
+		groups = append(groups, []string{Gte("posted_ts", int(cutoff))})
 	}
 
 	return Filter(groups...)

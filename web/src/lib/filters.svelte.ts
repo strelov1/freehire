@@ -32,6 +32,10 @@ export interface JobFilters {
   facets: Record<string, FacetState>;
   visa: boolean;
   salaryMin: number | null;
+  /** Freshness: keep only jobs posted within the last N days (null = any age).
+   *  Serialized as `posted_within_days`; the backend turns it into a posted_ts
+   *  range filter relative to request time. */
+  postedWithinDays: number | null;
   sort: SortField;
 }
 
@@ -46,7 +50,7 @@ function emptyFacets(): Record<string, FacetState> {
 }
 
 export function emptyFilters(): JobFilters {
-  return { q: '', facets: emptyFacets(), visa: false, salaryMin: null, sort: DEFAULT_SORT };
+  return { q: '', facets: emptyFacets(), visa: false, salaryMin: null, postedWithinDays: null, sort: DEFAULT_SORT };
 }
 
 /** Serialize filters to URL query params (the shape the search API reads). */
@@ -65,6 +69,7 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   }
   if (f.visa) p.set('visa_sponsorship', 'true');
   if (f.salaryMin != null) p.set('salary_min', String(f.salaryMin));
+  if (f.postedWithinDays != null) p.set('posted_within_days', String(f.postedWithinDays));
   // Omit the default sort: a clean URL leans on the backend's empty-query default.
   if (f.sort !== DEFAULT_SORT) p.set('sort', f.sort);
   return p;
@@ -89,6 +94,10 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   f.visa = p.get('visa_sponsorship') === 'true';
   const salary = Number(p.get('salary_min'));
   f.salaryMin = p.get('salary_min') && !Number.isNaN(salary) ? salary : null;
+  // Freshness is a positive whole number of days; anything else (absent, zero,
+  // negative, non-numeric) reads as "any age", matching the backend's own guard.
+  const days = Number(p.get('posted_within_days'));
+  f.postedWithinDays = Number.isInteger(days) && days > 0 ? days : null;
   // Sort isn't user-selectable today, so it's never read from the URL — it stays
   // the default seeded by emptyFilters().
   return f;
@@ -100,6 +109,7 @@ export function activeFilterCount(f: JobFilters): number {
   for (const def of FACETS) n += f.facets[def.param]?.values.length ?? 0;
   if (f.visa) n += 1;
   if (f.salaryMin != null) n += 1;
+  if (f.postedWithinDays != null) n += 1;
   return n;
 }
 
@@ -152,6 +162,12 @@ export class FilterStore {
 
   setSalaryMin(n: number | null) {
     this.#url.setSoon({ ...this.#url.value, salaryMin: n });
+  }
+
+  // Dragged like the salary slider (a continuous gesture across snap points), so
+  // it debounces the reload via setSoon — the URL still updates immediately.
+  setPostedWithinDays(n: number | null) {
+    this.#url.setSoon({ ...this.#url.value, postedWithinDays: n });
   }
 
   // Discrete inputs (clicked/toggled): apply immediately via setNow.

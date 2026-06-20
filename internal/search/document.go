@@ -29,6 +29,12 @@ const maxIndexedDescriptionRunes = 1000
 type JobDocument struct {
 	ID int64 `json:"id"`
 	jobview.Job
+	// PostedTS is the job's effective posting date in unix seconds — the numeric
+	// encoding of the same date jobview.Job.PostedAt renders as an RFC3339 string.
+	// It exists only to back the Meilisearch range filter for "posted within N days"
+	// (Meili range operators need a number, not a string); it is declared on the
+	// document, not on jobview.Job, so it is filterable but never served to clients.
+	PostedTS int64 `json:"posted_ts"`
 }
 
 // FromJob maps a database job row to its index document. An empty or absent
@@ -45,7 +51,11 @@ func FromJob(j db.Job) (JobDocument, error) {
 	// the search document — the detail endpoint serves the full description from
 	// its own jobview.FromRow, unaffected by this local copy.
 	view.Description = truncateRunes(view.Description, maxIndexedDescriptionRunes)
-	return JobDocument{ID: j.ID, Job: view}, nil
+	doc := JobDocument{ID: j.ID, Job: view}
+	if eff := jobview.EffectivePostedAt(j.PostedAt, j.CreatedAt); eff.Valid {
+		doc.PostedTS = eff.Time.Unix()
+	}
+	return doc, nil
 }
 
 // truncateRunes returns the first n runes of s (UTF-8 safe), backed off to the

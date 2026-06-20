@@ -34,6 +34,34 @@
     const n = Number((e.currentTarget as HTMLInputElement).value);
     store.setSalaryMin(n === 0 ? null : n);
   }
+
+  // Freshness presets, oldest-to-newest left→right with "Any" as the rightmost
+  // (max) stop. The range input drives this by index, so the bounds are 0..last.
+  const FRESHNESS_PRESETS: { days: number | null; label: string }[] = [
+    { days: 1, label: 'Today' },
+    { days: 3, label: '3 days' },
+    { days: 7, label: '1 week' },
+    { days: 14, label: '2 weeks' },
+    { days: 30, label: '1 month' },
+    { days: 90, label: '3 months' },
+    { days: null, label: 'Any' },
+  ];
+  const ANY_INDEX = FRESHNESS_PRESETS.length - 1;
+
+  // Map the current filter value to a slider index. A non-preset value from a
+  // hand-edited URL has no exact stop, so it shows as "Any" until the user drags.
+  const freshnessIndex = $derived.by(() => {
+    const i = FRESHNESS_PRESETS.findIndex((p) => p.days === store.value.postedWithinDays);
+    return i < 0 ? ANY_INDEX : i;
+  });
+  const freshnessLabel = $derived(
+    FRESHNESS_PRESETS.find((p) => p.days === store.value.postedWithinDays)?.label ?? 'Any',
+  );
+
+  function onFreshnessInput(e: Event) {
+    const i = Number((e.currentTarget as HTMLInputElement).value);
+    store.setPostedWithinDays(FRESHNESS_PRESETS[i]?.days ?? null);
+  }
 </script>
 
 <div class="flex flex-col gap-4">
@@ -46,6 +74,30 @@
         Reset all
       </button>
     {/if}
+  </div>
+
+  <div class="border-b border-border pb-4">
+    <div class="mb-2 flex items-center justify-between">
+      <h3 class="text-sm font-semibold tracking-tight">Posted</h3>
+      <span class="text-xs font-medium text-muted-foreground">
+        {freshnessLabel}
+      </span>
+    </div>
+    <input
+      type="range"
+      min="0"
+      max={ANY_INDEX}
+      step="1"
+      value={freshnessIndex}
+      oninput={onFreshnessInput}
+      aria-label="Posted within"
+      aria-valuetext={freshnessLabel}
+      class="w-full accent-primary"
+    />
+    <div class="mt-1 flex justify-between text-[10px] text-muted-foreground">
+      <span>Today</span>
+      <span>Any</span>
+    </div>
   </div>
 
   {#each orderedFacets as def (def.param)}

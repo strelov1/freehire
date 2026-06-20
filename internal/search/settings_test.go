@@ -26,6 +26,28 @@ func TestSemanticSettingsHasEmbedder(t *testing.T) {
 	}
 }
 
+func TestPostedTSIsFilterableNotSortable(t *testing.T) {
+	// posted_ts backs the "posted within N days" range filter, so it must be a
+	// filterable attribute. Sorting still uses the string posted_at, so posted_ts
+	// is deliberately NOT added to the sortable attributes.
+	s := facetSettings()
+	if !contains(s.FilterableAttributes, "posted_ts") {
+		t.Errorf("posted_ts must be filterable, got %v", s.FilterableAttributes)
+	}
+	if contains(s.SortableAttributes, "posted_ts") {
+		t.Errorf("posted_ts must not be sortable (sort uses posted_at), got %v", s.SortableAttributes)
+	}
+}
+
+func contains(xs []string, want string) bool {
+	for _, x := range xs {
+		if x == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestFacetAndSemanticShareKeywordSettings(t *testing.T) {
 	f, s := facetSettings(), semanticSettings()
 	if !reflect.DeepEqual(f.FilterableAttributes, s.FilterableAttributes) {

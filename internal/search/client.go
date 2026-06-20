@@ -472,6 +472,10 @@ func facetSettings() *meilisearch.Settings {
 			"enrichment.salary_currency", "enrichment.salary_period",
 			"enrichment.salary_min", "enrichment.salary_max", "enrichment.experience_years_min",
 			"enrichment.relocation", "enrichment.english_level", "enrichment.posting_language",
+			// posted_ts is the effective posting date in unix seconds — the numeric
+			// field the "posted within N days" range filter needs (Meili range operators
+			// require a number; the string posted_at below is sort-only).
+			"posted_ts",
 		},
 		// posted_at / created_at are RFC3339 UTC strings and sort chronologically as text.
 		SortableAttributes: []string{"posted_at", "created_at", "enrichment.salary_min", "enrichment.salary_max"},

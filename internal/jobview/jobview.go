@@ -124,7 +124,7 @@ func FromRow(j db.Job) (Job, error) {
 		WorkMode:          workMode,
 		Skills:            skills,
 		Collections:       collections,
-		PostedAt:          rfc3339(effectivePostedAt(j.PostedAt, j.CreatedAt)),
+		PostedAt:          rfc3339(EffectivePostedAt(j.PostedAt, j.CreatedAt)),
 		CreatedAt:         rfc3339(j.CreatedAt),
 		UpdatedAt:         rfc3339(j.UpdatedAt),
 		ClosedAt:          rfc3339(j.ClosedAt),
@@ -164,13 +164,16 @@ func FromRows(jobs []db.Job) ([]Job, error) {
 	return out, nil
 }
 
-// effectivePostedAt is the timestamp a job reads as "posted" for both display and the
+// EffectivePostedAt is the timestamp a job reads as "posted" for both display and the
 // freshest-first sort: the source's posted_at when present and not in the future, otherwise
 // the ingest time (created_at). A missing posted_at (undated source) or a future one (e.g. a
 // Workday startDate set to a future go-live) would otherwise leave the job undated or sort it
 // above genuinely recent postings; falling back to created_at gives an honest, recent
 // freshness. The raw created_at stays exposed separately, so the substitution is visible.
-func effectivePostedAt(posted, created pgtype.Timestamptz) pgtype.Timestamptz {
+//
+// It is exported so the search document derives its numeric posted_ts (epoch) from the same
+// definition the display posted_at (RFC3339) uses — one fallback rule, two encodings.
+func EffectivePostedAt(posted, created pgtype.Timestamptz) pgtype.Timestamptz {
 	if !posted.Valid || posted.Time.After(time.Now()) {
 		return created
 	}

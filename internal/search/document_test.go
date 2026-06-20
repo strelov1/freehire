@@ -4,9 +4,13 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/jobview"
 )
 
 func TestFromJob_DocumentFlattensIDAndViewToTopLevelJSON(t *testing.T) {
@@ -34,6 +38,52 @@ func TestFromJob_DocumentFlattensIDAndViewToTopLevelJSON(t *testing.T) {
 	}
 	if _, ok := m["enrichment"]; !ok {
 		t.Errorf("enrichment should be a nested object in %s", raw)
+	}
+}
+
+func TestFromJob_PostedTSIsEffectiveDateEpoch(t *testing.T) {
+	// posted_ts is the numeric (unix-seconds) encoding of the SAME effective posting
+	// date the display posted_at reflects, so the Meilisearch range filter agrees with
+	// what the user sees. A past posted_at is used directly; a future one falls back to
+	// created_at (mirroring jobview.EffectivePostedAt).
+	created := pgtype.Timestamptz{Time: time.Date(2026, 6, 18, 12, 0, 0, 0, time.UTC), Valid: true}
+	past := pgtype.Timestamptz{Time: time.Date(2026, 6, 10, 9, 0, 0, 0, time.UTC), Valid: true}
+
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", CreatedAt: created, PostedAt: past})
+	if err != nil {
+		t.Fatalf("FromJob: %v", err)
+	}
+	if doc.PostedTS != past.Time.Unix() {
+		t.Errorf("posted_ts = %d, want %d (past posted_at)", doc.PostedTS, past.Time.Unix())
+	}
+
+	future := pgtype.Timestamptz{Time: time.Now().Add(48 * time.Hour), Valid: true}
+	docFuture, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", CreatedAt: created, PostedAt: future})
+	if err != nil {
+		t.Fatalf("FromJob future: %v", err)
+	}
+	if docFuture.PostedTS != created.Time.Unix() {
+		t.Errorf("posted_ts = %d, want %d (future posted_at falls back to created_at)", docFuture.PostedTS, created.Time.Unix())
+	}
+
+	// posted_ts is an index-only field: it must be present on the document JSON (so
+	// Meilisearch can filter on it) but absent from the public job wire shape served
+	// to clients (jobview.Job).
+	rawDoc, _ := json.Marshal(doc)
+	var docMap map[string]json.RawMessage
+	if err := json.Unmarshal(rawDoc, &docMap); err != nil {
+		t.Fatalf("unmarshal doc: %v", err)
+	}
+	if _, ok := docMap["posted_ts"]; !ok {
+		t.Errorf("posted_ts missing from index document: %s", rawDoc)
+	}
+	rawView, _ := json.Marshal(jobview.Job{PublicSlug: "s"})
+	var viewMap map[string]json.RawMessage
+	if err := json.Unmarshal(rawView, &viewMap); err != nil {
+		t.Fatalf("unmarshal view: %v", err)
+	}
+	if _, ok := viewMap["posted_ts"]; ok {
+		t.Errorf("posted_ts leaked into the public job wire shape: %s", rawView)
 	}
 }
 

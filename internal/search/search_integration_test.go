@@ -289,6 +289,55 @@ func TestSearchFiltersBySkillsFacet(t *testing.T) {
 	}
 }
 
+// The "posted within N days" freshness filter works end-to-end: posted_ts is
+// indexed as a numeric, filterable attribute, so a Meilisearch range filter built
+// from posted_within_days returns only the recent posting and drops the stale one.
+func TestSearchFiltersByPostedWithinDays(t *testing.T) {
+	ctx := context.Background()
+	c := startMeili(t)
+
+	if err := c.EnsureIndex(ctx); err != nil {
+		t.Fatalf("EnsureIndex: %v", err)
+	}
+
+	now := time.Now()
+	jobs := []db.Job{
+		{
+			ID: 20, Title: "Fresh Role", Company: "Acme", PublicSlug: "fresh-role-acme",
+			PostedAt:   pgtype.Timestamptz{Time: now.Add(-24 * time.Hour), Valid: true},
+			Enrichment: enrichedJSON(t, enrich.Enrichment{}),
+		},
+		{
+			ID: 21, Title: "Stale Role", Company: "Beta", PublicSlug: "stale-role-beta",
+			PostedAt:   pgtype.Timestamptz{Time: now.Add(-60 * 24 * time.Hour), Valid: true},
+			Enrichment: enrichedJSON(t, enrich.Enrichment{}),
+		},
+	}
+
+	docs := make([]JobDocument, 0, len(jobs))
+	for _, j := range jobs {
+		d, err := FromJob(j)
+		if err != nil {
+			t.Fatalf("FromJob: %v", err)
+		}
+		docs = append(docs, d)
+	}
+	if err := c.IndexJobs(ctx, docs); err != nil {
+		t.Fatalf("IndexJobs: %v", err)
+	}
+
+	res, err := c.Search(ctx, SearchParams{
+		Filter: FilterFromValues(vals("posted_within_days=7")),
+		Limit:  10,
+	})
+	if err != nil {
+		t.Fatalf("Search with posted_within_days filter: %v", err)
+	}
+	if len(res.Hits) != 1 || res.Hits[0].PublicSlug != "fresh-role-acme" {
+		t.Fatalf("freshness filter hits = %+v, want only fresh-role-acme", res.Hits)
+	}
+}
+
 // A job carries its company's curated collections as a top-level facet: filtering
 // on collections returns only the tagged jobs, and a facet distribution over
 // collections reports their counts.
