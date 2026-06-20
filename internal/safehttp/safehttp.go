@@ -47,10 +47,12 @@ func blocked(ip net.IP) bool {
 		ip.IsUnspecified()
 }
 
-// guardedDialer returns a net.Dialer whose Control hook rejects a connection to any
+// GuardedDialer returns a net.Dialer whose Control hook rejects a connection to any
 // non-public resolved address. The hook receives the post-resolution IP:port, so it
-// defeats both direct-IP targets and DNS-rebinding.
-func guardedDialer(timeout time.Duration) *net.Dialer {
+// defeats both direct-IP targets and DNS-rebinding. It is exported so a transport that
+// cannot use NewClient/NewTransport (e.g. a tls-client fingerprint client, which accepts
+// a net.Dialer via WithDialer) can still dial through the same SSRF guard.
+func GuardedDialer(timeout time.Duration) *net.Dialer {
 	return &net.Dialer{
 		Timeout:   timeout,
 		KeepAlive: 30 * time.Second,
@@ -70,7 +72,7 @@ func guardedDialer(timeout time.Duration) *net.Dialer {
 // NewTransport returns an *http.Transport that dials through the SSRF guard, with
 // sane handshake/idle timeouts so a stalled peer cannot pin a connection open.
 func NewTransport(dialTimeout time.Duration) *http.Transport {
-	d := guardedDialer(dialTimeout)
+	d := GuardedDialer(dialTimeout)
 	return &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			return d.DialContext(ctx, network, addr)

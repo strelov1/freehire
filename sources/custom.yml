@@ -17,6 +17,8 @@
   provider: amazon
 - company: Google
   provider: google
+- company: Meta
+  provider: meta
 # Apple (provider: apple) lives in its own sources/apple.yml on a daily cron slot: its
 # per-posting detail fan-out makes a full crawl ~30 min, too slow to share this hourly
 # custom slot (it would block the small providers below and overrun the hour).

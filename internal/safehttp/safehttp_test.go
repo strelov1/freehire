@@ -66,9 +66,34 @@ func TestClientReachesPublicViaControl(t *testing.T) {
 	defer cancel()
 	// Dial a public, non-routable-in-test address: it should fail with a network
 	// error (timeout/unreachable), NOT the safehttp block error.
-	d := guardedDialer(200 * time.Millisecond)
+	d := GuardedDialer(200 * time.Millisecond)
 	_, err := d.DialContext(ctx, "tcp", "8.8.8.8:9")
 	if err != nil && strings.Contains(err.Error(), "blocked") {
 		t.Errorf("public address was blocked: %v", err)
+	}
+}
+
+// TestGuardedDialerRefusesLoopback covers the exported GuardedDialer directly: it is the
+// SSRF seam reused by transports that bypass NewClient (e.g. the Meta tls-client client,
+// which dials through it via WithDialer). A loopback target must be refused at connect time.
+func TestGuardedDialerRefusesLoopback(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	_, port, err := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
+	if err != nil {
+		t.Fatalf("parse test server addr: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	_, err = GuardedDialer(200*time.Millisecond).DialContext(ctx, "tcp", net.JoinHostPort("127.0.0.1", port))
+	if err == nil {
+		t.Fatal("expected GuardedDialer to refuse a loopback target, got nil error")
+	}
+	if !strings.Contains(err.Error(), "blocked") {
+		t.Errorf("error %q does not mention the block", err)
 	}
 }

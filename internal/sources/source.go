@@ -190,6 +190,18 @@ func All(c HTTPClient) map[string]Source {
 	if key := os.Getenv("REED_API_KEY"); key != "" {
 		registry["reed"] = NewReed(c, key)
 	}
+	// meta is the one adapter NOT served by the shared client: Meta's edge 400s the default Go
+	// TLS+HTTP/2 fingerprint, so it needs a Chrome-fingerprint transport (metaHTTP). Build it
+	// only when there is a real client to serve (the c == nil marker/listing path — e.g.
+	// FilterableProviders — must stay transport-free, so meta registers with a nil client there;
+	// Provider()/boardless() never touch it). If the deterministic transport build ever fails,
+	// meta is left unregistered so config validation fails fast on the "meta" entry, rather than
+	// registering a client guaranteed to be rejected by Meta's edge.
+	if c == nil {
+		registry["meta"] = NewMetaCareers(nil)
+	} else if mc, err := newMetaHTTP(); err == nil {
+		registry["meta"] = NewMetaCareers(mc)
+	}
 	return registry
 }
 
