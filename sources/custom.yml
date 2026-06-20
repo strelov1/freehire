@@ -29,6 +29,8 @@
   provider: vk
 - company: Ozon
   provider: ozon
+- company: Avito
+  provider: avito
 - company: Sber
   provider: sber
 - company: Alfa-Bank

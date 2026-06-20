@@ -167,6 +167,7 @@ func All(c HTTPClient) map[string]Source {
 		// host+language by board).
 		NewYandex(c),
 		NewOzon(c),
+		NewAvito(c),
 		NewRWB(c),
 		NewSber(c),
 		NewAlfaBank(c),
