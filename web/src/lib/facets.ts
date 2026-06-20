@@ -15,6 +15,10 @@ import {
   EMPLOYMENT_TYPE_VALUES, RELOCATION_VALUES, ENGLISH_LEVEL_VALUES,
   COMPANY_TYPE_VALUES, DOMAIN_VALUES,
 } from './generated/contracts';
+import {
+  REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
+  CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS,
+} from './labels';
 import { COLLECTIONS } from './collections';
 import { api } from './api';
 
@@ -133,41 +137,22 @@ const SOURCE: FacetOption[] = options(SOURCE_VALUES, {
 // The backend's `regions` reach vocabulary (enrich.RegionValues): one consistent
 // macro level (continents/macro-regions, plus `global` and the distinct `uk`).
 // Country-level filtering lives in the Countries facet, so the US sits under
-// `north_america` and Russia under `cis`. Keep this in sync with that list so
-// every tagged region is filterable.
-const REGION: FacetOption[] = [
-  { value: 'global', label: 'Global' },
-  { value: 'north_america', label: 'North America' },
-  { value: 'latam', label: 'LATAM' },
-  { value: 'eu', label: 'Europe' },
-  { value: 'uk', label: 'UK' },
-  { value: 'mena', label: 'MENA' },
-  { value: 'africa', label: 'Africa' },
-  { value: 'apac', label: 'APAC' },
-  { value: 'cis', label: 'CIS' },
-];
+// `north_america` and Russia under `cis`. Built from the shared REGION_LABELS
+// whose insertion order is the curated display order.
+const REGION: FacetOption[] = options(Object.keys(REGION_LABELS), REGION_LABELS);
 
-const WORK_MODE: FacetOption[] = options(WORK_MODE_VALUES, { onsite: 'On-site' });
-const SENIORITY: FacetOption[] = options(SENIORITY_VALUES, { c_level: 'C-level' });
-const COMPANY_TYPE: FacetOption[] = options(COMPANY_TYPE_VALUES, { inhouse: 'In-house' });
-const EMPLOYMENT: FacetOption[] = options(EMPLOYMENT_TYPE_VALUES, {
-  full_time: 'Full-time', part_time: 'Part-time',
-});
+const WORK_MODE: FacetOption[] = options(WORK_MODE_VALUES, WORK_MODE_LABELS);
+const SENIORITY: FacetOption[] = options(SENIORITY_VALUES, SENIORITY_LABELS);
+const COMPANY_TYPE: FacetOption[] = options(COMPANY_TYPE_VALUES, COMPANY_TYPE_LABELS);
+const EMPLOYMENT: FacetOption[] = options(EMPLOYMENT_TYPE_VALUES, EMPLOYMENT_LABELS);
 const RELOCATION: FacetOption[] = options(RELOCATION_VALUES, {
   not_supported: 'None', supported: 'Supported', required: 'Required',
 });
 const ENGLISH: FacetOption[] = options(ENGLISH_LEVEL_VALUES, {
   a1: 'A1', a2: 'A2', b1: 'B1', b2: 'B2', c1: 'C1', c2: 'C2', native: 'Native', none: 'None',
 });
-const CATEGORY: FacetOption[] = options(CATEGORY_VALUES, {
-  ml_ai: 'ML / AI', data_engineering: 'Data Engineering', data_science: 'Data Science',
-  data_analytics: 'Data Analytics', qa: 'QA', devops: 'DevOps', sre: 'SRE',
-  project_management: 'Project Management',
-});
-const DOMAINS: FacetOption[] = options(DOMAIN_VALUES, {
-  ecommerce: 'E-commerce', saas: 'SaaS', edtech: 'Edtech', adtech: 'Adtech',
-  govtech: 'Govtech', fintech: 'Fintech', gamedev: 'Gamedev', healthcare: 'Healthcare',
-});
+const CATEGORY: FacetOption[] = options(CATEGORY_VALUES, CATEGORY_LABELS);
+const DOMAINS: FacetOption[] = options(DOMAIN_VALUES, DOMAIN_LABELS);
 
 const POSTING_LANGUAGE: FacetOption[] = [
   { value: 'en', label: 'EN' },

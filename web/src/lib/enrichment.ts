@@ -4,6 +4,10 @@
 // never renders blank — the SPA never re-validates, it only formats.
 
 import type { Enrichment, Job } from './types';
+import {
+  REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
+  CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS,
+} from './labels';
 
 /** One value within a facet row: its display text and, when the facet maps to a
  *  job-search filter, the /jobs URL that applies it. */
@@ -20,49 +24,6 @@ export interface Facet {
   values: FacetValue[];
 }
 
-const SENIORITY: Record<string, string> = {
-  intern: 'Intern',
-  junior: 'Junior',
-  middle: 'Middle',
-  senior: 'Senior',
-  lead: 'Lead',
-  staff: 'Staff',
-  principal: 'Principal',
-  c_level: 'C-level',
-};
-
-const EMPLOYMENT: Record<string, string> = {
-  full_time: 'Full-time',
-  part_time: 'Part-time',
-  contract: 'Contract',
-  internship: 'Internship',
-};
-
-const WORK_MODE: Record<string, string> = {
-  remote: 'Remote',
-  hybrid: 'Hybrid',
-  onsite: 'On-site',
-};
-
-// Region codes (the top-level `regions` facet) → readable labels. Unmapped codes humanize.
-const REGION: Record<string, string> = {
-  global: 'Global',
-  eu: 'Europe',
-  emea: 'EMEA',
-  eea: 'EEA',
-  uk: 'UK',
-  americas: 'Americas',
-  north_america: 'North America',
-  latam: 'LATAM',
-  apac: 'APAC',
-  mena: 'MENA',
-  africa: 'Africa',
-  us: 'USA',
-  ru: 'Russia',
-  cis: 'CIS',
-  central_asia: 'Central Asia',
-};
-
 const RELOCATION: Record<string, string> = {
   not_supported: 'Not supported',
   supported: 'Supported',
@@ -77,37 +38,6 @@ const ENGLISH_LEVEL: Record<string, string> = {
   c1: 'C1',
   c2: 'C2',
   native: 'Native',
-};
-
-// Only the acronym/compound domains need a label; the rest (Crypto, Healthcare,
-// Media…) humanize cleanly, so they fall through to `humanize` like CATEGORY.
-const DOMAINS: Record<string, string> = {
-  fintech: 'FinTech',
-  ecommerce: 'E-commerce',
-  saas: 'SaaS',
-  gamedev: 'GameDev',
-  edtech: 'EdTech',
-  adtech: 'AdTech',
-  govtech: 'GovTech',
-};
-
-const CATEGORY: Record<string, string> = {
-  ml_ai: 'ML / AI',
-  qa: 'QA',
-  devops: 'DevOps',
-  data_engineering: 'Data engineering',
-  data_science: 'Data science',
-  project_management: 'Project management',
-};
-
-const COMPANY_TYPE: Record<string, string> = {
-  product: 'Product',
-  startup: 'Startup',
-  outsource: 'Outsource',
-  outstaff: 'Outstaff',
-  agency: 'Agency',
-  inhouse: 'In-house',
-  government: 'Government',
 };
 
 const CURRENCY_SYMBOL: Record<string, string> = { USD: '$', EUR: '€', GBP: '£' };
@@ -174,12 +104,12 @@ export function formatSalary(e: Enrichment): string | null {
  * null when neither stated it.
  */
 export function workArrangement(job: Pick<Job, 'work_mode'>): string | null {
-  return job.work_mode ? label(WORK_MODE, job.work_mode) : null;
+  return job.work_mode ? label(WORK_MODE_LABELS, job.work_mode) : null;
 }
 
 /** The seniority label (e.g. `Senior`, `C-level`), or null when unstated. */
 export function seniorityLabel(e: Pick<Enrichment, 'seniority'>): string | null {
-  return e.seniority ? label(SENIORITY, e.seniority) : null;
+  return e.seniority ? label(SENIORITY_LABELS, e.seniority) : null;
 }
 
 /**
@@ -190,7 +120,7 @@ export function seniorityLabel(e: Pick<Enrichment, 'seniority'>): string | null 
  */
 export function regionLabel(job: Pick<Job, 'regions'>): string | null {
   if (!job.regions?.length) return null;
-  return job.regions.map((r) => label(REGION, r)).join(', ');
+  return job.regions.map((r) => label(REGION_LABELS, r)).join(', ');
 }
 
 /**
@@ -206,8 +136,8 @@ export function cardTags(job: Job): string[] {
   if (arrangement) tags.push(arrangement);
   const region = regionLabel(job);
   if (region) tags.push(region);
-  if (e?.employment_type) tags.push(label(EMPLOYMENT, e.employment_type));
-  if (e?.seniority) tags.push(label(SENIORITY, e.seniority));
+  if (e?.employment_type) tags.push(label(EMPLOYMENT_LABELS, e.employment_type));
+  if (e?.seniority) tags.push(label(SENIORITY_LABELS, e.seniority));
 
   return tags;
 }
@@ -248,24 +178,24 @@ export function summaryFacets(job: Job): Facet[] {
     if (text) facets.push({ label: name, values: [{ text }] });
   };
 
-  link('Work format', 'work_mode', job.work_mode, WORK_MODE);
+  link('Work format', 'work_mode', job.work_mode, WORK_MODE_LABELS);
   plain('Location', job.location);
-  links('Region', 'regions', job.regions, (r) => label(REGION, r));
-  link('Work type', 'employment_type', e.employment_type, EMPLOYMENT);
-  link('Grade', 'seniority', e.seniority, SENIORITY);
+  links('Region', 'regions', job.regions, (r) => label(REGION_LABELS, r));
+  link('Work type', 'employment_type', e.employment_type, EMPLOYMENT_LABELS);
+  link('Grade', 'seniority', e.seniority, SENIORITY_LABELS);
   plain('Experience', e.experience_years_min != null ? `${e.experience_years_min}+ yrs` : null);
   // english_level carries a 'none' sentinel that must not render as a facet.
   const english = e.english_level && e.english_level !== 'none' ? e.english_level : null;
   link('English', 'english_level', english, ENGLISH_LEVEL);
-  link('Category', 'category', e.category, CATEGORY);
+  link('Category', 'category', e.category, CATEGORY_LABELS);
   links('Country', 'countries', job.countries, (c) => c.toUpperCase());
   link('Relocation', 'relocation', e.relocation, RELOCATION);
   if (e.visa_sponsorship === true) {
     facets.push({ label: 'Visa', values: [{ text: 'Sponsored', href: filterHref('visa_sponsorship', 'true') }] });
   }
-  link('Company', 'company_type', e.company_type, COMPANY_TYPE);
+  link('Company', 'company_type', e.company_type, COMPANY_TYPE_LABELS);
   plain('Size', e.company_size);
-  links('Domains', 'domains', e.domains, (d) => label(DOMAINS, d));
+  links('Domains', 'domains', e.domains, (d) => label(DOMAIN_LABELS, d));
 
   return facets;
 }
