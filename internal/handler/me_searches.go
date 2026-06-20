@@ -6,7 +6,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/savedsearch"
 )
@@ -70,9 +69,9 @@ type updateSavedSearchRequest struct {
 // RequireAuth (cookie-only): saved searches are a browser feature, not a scripting
 // primitive. A bad name is a 400, a duplicate name or the per-user cap is a 409.
 func (a *API) CreateSavedSearch(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 
 	var in createSavedSearchRequest
@@ -90,9 +89,9 @@ func (a *API) CreateSavedSearch(c *fiber.Ctx) error {
 // ListSavedSearches returns the authenticated user's saved searches, most recently updated
 // first. Owner-scoped, so it never reveals another user's. Cookie-only.
 func (a *API) ListSavedSearches(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 
 	rows, err := a.savedSearch.List(c.Context(), userID)
@@ -109,13 +108,13 @@ func (a *API) ListSavedSearches(c *fiber.Ctx) error {
 // UpdateSavedSearch overwrites a saved search's name and/or query (partial), scoped to its
 // owner. A missing or non-owned id is a 404; a bad name is a 400; a name collision is a 409.
 func (a *API) UpdateSavedSearch(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
-	}
-	id, err := c.ParamsInt("id")
+	userID, err := requireUserID(c)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid saved-search id")
+		return err
+	}
+	id, err := pathID(c)
+	if err != nil {
+		return err
 	}
 
 	var in updateSavedSearchRequest
@@ -123,7 +122,7 @@ func (a *API) UpdateSavedSearch(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
 
-	saved, err := a.savedSearch.Update(c.Context(), userID, int64(id), in.Name, in.Query)
+	saved, err := a.savedSearch.Update(c.Context(), userID, id, in.Name, in.Query)
 	if err != nil {
 		return savedSearchError(err)
 	}
@@ -133,16 +132,16 @@ func (a *API) UpdateSavedSearch(c *fiber.Ctx) error {
 // DeleteSavedSearch removes one of the authenticated user's saved searches by id.
 // Owner-scoped: an id that does not exist or belongs to another user is a 404. Cookie-only.
 func (a *API) DeleteSavedSearch(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
-	}
-	id, err := c.ParamsInt("id")
+	userID, err := requireUserID(c)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid saved-search id")
+		return err
+	}
+	id, err := pathID(c)
+	if err != nil {
+		return err
 	}
 
-	if err := a.savedSearch.Delete(c.Context(), userID, int64(id)); err != nil {
+	if err := a.savedSearch.Delete(c.Context(), userID, id); err != nil {
 		return savedSearchError(err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)

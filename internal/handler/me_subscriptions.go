@@ -6,7 +6,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/subscription"
 )
@@ -77,9 +76,9 @@ type setSubscriptionActiveRequest struct {
 // ListSubscriptions returns the authenticated user's subscriptions, newest first.
 // Cookie-only (RequireAuth), owner-scoped.
 func (a *API) ListSubscriptions(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 	rows, err := a.subscription.List(c.Context(), userID)
 	if err != nil {
@@ -95,9 +94,9 @@ func (a *API) ListSubscriptions(c *fiber.Ctx) error {
 // CreateSubscription subscribes one of the caller's saved searches to a channel.
 // A non-owned saved search is a 404, a duplicate is a 409. Cookie-only.
 func (a *API) CreateSubscription(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 	var in createSubscriptionRequest
 	if err := c.BodyParser(&in); err != nil {
@@ -117,19 +116,19 @@ func (a *API) CreateSubscription(c *fiber.Ctx) error {
 // SetSubscriptionActive pauses/resumes a subscription, scoped to its owner. A
 // missing or non-owned id is a 404. Cookie-only.
 func (a *API) SetSubscriptionActive(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
-	}
-	id, err := c.ParamsInt("id")
+	userID, err := requireUserID(c)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid subscription id")
+		return err
+	}
+	id, err := pathID(c)
+	if err != nil {
+		return err
 	}
 	var in setSubscriptionActiveRequest
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	sub, err := a.subscription.SetActive(c.Context(), userID, int64(id), in.Active)
+	sub, err := a.subscription.SetActive(c.Context(), userID, id, in.Active)
 	if err != nil {
 		return subscriptionError(err)
 	}
@@ -139,15 +138,15 @@ func (a *API) SetSubscriptionActive(c *fiber.Ctx) error {
 // DeleteSubscription unsubscribes by id, scoped to its owner. A missing or
 // non-owned id is a 404. Cookie-only.
 func (a *API) DeleteSubscription(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
-	}
-	id, err := c.ParamsInt("id")
+	userID, err := requireUserID(c)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid subscription id")
+		return err
 	}
-	if err := a.subscription.Delete(c.Context(), userID, int64(id)); err != nil {
+	id, err := pathID(c)
+	if err != nil {
+		return err
+	}
+	if err := a.subscription.Delete(c.Context(), userID, id); err != nil {
 		return subscriptionError(err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)

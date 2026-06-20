@@ -41,9 +41,9 @@ type createAPIKeyRequest struct {
 // plaintext token exactly once. Behind RequireAuth (cookie-only): a leaked key
 // must not be able to mint more keys.
 func (a *API) CreateAPIKey(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 
 	var in createAPIKeyRequest
@@ -94,9 +94,9 @@ func (a *API) CreateAPIKey(c *fiber.Ctx) error {
 // ListAPIKeys returns the authenticated user's keys, newest first, as metadata only
 // (never the token or its hash). Cookie-only.
 func (a *API) ListAPIKeys(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 
 	rows, err := a.queries.ListAPIKeysByUser(c.Context(), userID)
@@ -124,16 +124,16 @@ func (a *API) ListAPIKeys(c *fiber.Ctx) error {
 // id that does not exist or belongs to another user deletes nothing and is a 404,
 // revealing nothing about it. Cookie-only.
 func (a *API) RevokeAPIKey(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
-	}
-	id, err := c.ParamsInt("id")
+	userID, err := requireUserID(c)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid key id")
+		return err
+	}
+	id, err := pathID(c)
+	if err != nil {
+		return err
 	}
 
-	affected, err := a.queries.DeleteAPIKey(c.Context(), db.DeleteAPIKeyParams{ID: int64(id), UserID: userID})
+	affected, err := a.queries.DeleteAPIKey(c.Context(), db.DeleteAPIKeyParams{ID: id, UserID: userID})
 	if err != nil {
 		return err
 	}

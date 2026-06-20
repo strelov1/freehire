@@ -6,7 +6,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/report"
 )
@@ -91,9 +90,9 @@ type createReportRequest struct {
 // any write, the content is validated by the service (a bad body is a 400), and a second
 // open report of the same job by the same user is a 409. Returns the pending report with 201.
 func (a *API) CreateReport(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 
 	jobID, err := a.queries.GetJobIDBySlug(c.Context(), c.Params("slug"))
@@ -140,19 +139,19 @@ type resolveReportRequest struct {
 // Role-gated. An unknown id is a 404; a report already decided is a 409. The body is
 // optional (a parse failure leaves close_job false).
 func (a *API) ResolveReport(c *fiber.Ctx) error {
-	reviewerID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
-	}
-	id, err := c.ParamsInt("id")
+	reviewerID, err := requireUserID(c)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid report id")
+		return err
+	}
+	id, err := pathID(c)
+	if err != nil {
+		return err
 	}
 
 	var in resolveReportRequest
 	_ = c.BodyParser(&in)
 
-	rep, err := a.report.Resolve(c.Context(), reviewerID, int64(id), in.CloseJob)
+	rep, err := a.report.Resolve(c.Context(), reviewerID, id, in.CloseJob)
 	if err != nil {
 		return reportError(err)
 	}
@@ -167,19 +166,19 @@ type dismissReportRequest struct {
 // DismissReport marks a pending report dismissed with an optional reason, leaving the job
 // unchanged. Role-gated. The reason body is optional, so a parse failure leaves it blank.
 func (a *API) DismissReport(c *fiber.Ctx) error {
-	reviewerID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
-	}
-	id, err := c.ParamsInt("id")
+	reviewerID, err := requireUserID(c)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid report id")
+		return err
+	}
+	id, err := pathID(c)
+	if err != nil {
+		return err
 	}
 
 	var in dismissReportRequest
 	_ = c.BodyParser(&in)
 
-	rep, err := a.report.Dismiss(c.Context(), reviewerID, int64(id), in.Reason)
+	rep, err := a.report.Dismiss(c.Context(), reviewerID, id, in.Reason)
 	if err != nil {
 		return reportError(err)
 	}

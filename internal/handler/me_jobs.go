@@ -5,7 +5,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/jobview"
 )
 
@@ -30,9 +29,9 @@ type myJobResponse struct {
 // instead of listResponse. Closed jobs stay listed: a user's history must not
 // shrink when a posting closes.
 func (a *API) ListMyJobs(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 
 	limit, offset := pageParams(c)
@@ -77,9 +76,9 @@ func (a *API) ListMyJobs(c *fiber.Ctx) error {
 // client-side, never joined into ListJobs/SearchJobs. The response is a flat
 // {"data": [slug, ...]} list scoped to the caller.
 func (a *API) ListViewedSlugs(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 
 	slugs, err := a.tracking.ViewedSlugs(c.Context(), userID)

@@ -6,7 +6,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/jobtracking"
 )
 
@@ -57,9 +56,9 @@ func trackingError(err error) error {
 // RecordView records that the authenticated user viewed a job and returns the
 // resulting interaction, including whether they have already applied.
 func (a *API) RecordView(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 	interaction, err := a.tracking.RecordView(c.Context(), userID, c.Params("slug"))
 	if err != nil {
@@ -71,9 +70,9 @@ func (a *API) RecordView(c *fiber.Ctx) error {
 // MarkApplied marks a job as applied for the authenticated user and returns the
 // updated interaction.
 func (a *API) MarkApplied(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 	interaction, err := a.tracking.MarkApplied(c.Context(), userID, c.Params("slug"))
 	if err != nil {
@@ -85,9 +84,9 @@ func (a *API) MarkApplied(c *fiber.Ctx) error {
 // SaveJob saves (bookmarks) a job for the authenticated user and returns the
 // updated interaction.
 func (a *API) SaveJob(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 	interaction, err := a.tracking.SaveJob(c.Context(), userID, c.Params("slug"))
 	if err != nil {
@@ -101,9 +100,9 @@ func (a *API) SaveJob(c *fiber.Ctx) error {
 // that answers with the zero interaction state — DELETE is idempotent, so "already
 // not saved" is success, not an error (the service resolves that case).
 func (a *API) UnsaveJob(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 	interaction, err := a.tracking.Unsave(c.Context(), userID, c.Params("slug"))
 	if err != nil {
@@ -116,9 +115,9 @@ func (a *API) UnsaveJob(c *fiber.Ctx) error {
 // authenticated user while keeping saved_at, viewed_at, and notes intact. Used
 // when dragging a Kanban card back to the "Saved" column.
 func (a *API) ClearStage(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 	interaction, err := a.tracking.ClearProgress(c.Context(), userID, c.Params("slug"))
 	if err != nil {
@@ -131,9 +130,9 @@ func (a *API) ClearStage(c *fiber.Ctx) error {
 // saved_at, applied_at, stage, and notes while keeping viewed_at so the job
 // stays in the user's view history.
 func (a *API) Untrack(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 	interaction, err := a.tracking.Untrack(c.Context(), userID, c.Params("slug"))
 	if err != nil {
@@ -148,9 +147,9 @@ func (a *API) Untrack(c *fiber.Ctx) error {
 // empty body or an unknown stage is a 400. A nil field is left unchanged by the
 // upsert. Returns the updated interaction.
 func (a *API) TrackJob(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 
 	var in trackRequest

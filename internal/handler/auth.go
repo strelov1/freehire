@@ -107,9 +107,9 @@ func (a *API) setSession(c *fiber.Ctx, userID int64) error {
 // Me returns the authenticated user. It runs behind auth.RequireAuth, which has
 // already resolved and stored the user id.
 func (a *API) Me(c *fiber.Ctx) error {
-	id, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	id, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 	user, err := a.accounts.UserByID(c.Context(), id)
 	if err != nil {

@@ -5,7 +5,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/telegramnotify"
 )
@@ -20,9 +19,9 @@ func (a *API) telegramEnabled() bool {
 // LinkTelegram mints a one-time deep-link token and returns the t.me URL the user
 // opens to link their chat. Cookie-only. 503 when the feature is unconfigured.
 func (a *API) LinkTelegram(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 	if !a.telegramEnabled() {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "telegram notifications are not configured")
@@ -38,9 +37,9 @@ func (a *API) LinkTelegram(c *fiber.Ctx) error {
 // TelegramLinkStatus reports whether the caller has linked a Telegram chat, and
 // whether the feature is enabled at all (so the SPA can show/hide the UI).
 func (a *API) TelegramLinkStatus(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 	out := fiber.Map{"enabled": a.telegramEnabled(), "linked": false}
 	link, err := a.queries.GetTelegramLink(c.Context(), userID)
@@ -54,9 +53,9 @@ func (a *API) TelegramLinkStatus(c *fiber.Ctx) error {
 // UnlinkTelegram removes the caller's Telegram link. Cookie-only. Idempotent: no
 // existing link still returns 204.
 func (a *API) UnlinkTelegram(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 	if _, err := a.queries.DeleteTelegramLink(c.Context(), userID); err != nil {
 		return err

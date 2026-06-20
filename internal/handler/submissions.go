@@ -7,7 +7,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/moderation"
 	"github.com/strelov1/freehire/internal/submission"
@@ -118,9 +117,9 @@ func submissionError(err error) error {
 // cookie or API key; the content is validated by the service (a bad body is a 400 before
 // any write), and a duplicate pending URL is a 409. Returns the pending submission with 201.
 func (a *API) CreateSubmission(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 
 	var in createJobRequest
@@ -138,9 +137,9 @@ func (a *API) CreateSubmission(c *fiber.Ctx) error {
 // ListMySubmissions returns the caller's own submissions with their status and any
 // rejection reason. Scoped to the authenticated user, so it never reveals another user's.
 func (a *API) ListMySubmissions(c *fiber.Ctx) error {
-	userID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 
 	subs, err := a.submission.ListMine(c.Context(), userID)
@@ -171,16 +170,16 @@ func (a *API) ListPendingSubmissions(c *fiber.Ctx) error {
 // ApproveSubmission mints a live vacancy from a pending submission and marks it approved.
 // Role-gated. An unknown id is a 404; a submission already decided is a 409.
 func (a *API) ApproveSubmission(c *fiber.Ctx) error {
-	reviewerID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
-	}
-	id, err := c.ParamsInt("id")
+	reviewerID, err := requireUserID(c)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid submission id")
+		return err
+	}
+	id, err := pathID(c)
+	if err != nil {
+		return err
 	}
 
-	sub, err := a.submission.Approve(c.Context(), reviewerID, int64(id))
+	sub, err := a.submission.Approve(c.Context(), reviewerID, id)
 	if err != nil {
 		return submissionError(err)
 	}
@@ -196,19 +195,19 @@ type rejectRequest struct {
 // The reason body is optional, so a parse failure (e.g. empty body) leaves the reason blank
 // rather than rejecting the request.
 func (a *API) RejectSubmission(c *fiber.Ctx) error {
-	reviewerID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
-	}
-	id, err := c.ParamsInt("id")
+	reviewerID, err := requireUserID(c)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid submission id")
+		return err
+	}
+	id, err := pathID(c)
+	if err != nil {
+		return err
 	}
 
 	var in rejectRequest
 	_ = c.BodyParser(&in)
 
-	sub, err := a.submission.Reject(c.Context(), reviewerID, int64(id), in.Reason)
+	sub, err := a.submission.Reject(c.Context(), reviewerID, id, in.Reason)
 	if err != nil {
 		return submissionError(err)
 	}

@@ -6,7 +6,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/moderation"
 )
@@ -70,9 +69,9 @@ func moderationError(err error) error {
 // service, so a missing required field or a bad URL is a 400 before any DB write. Returns
 // the created job in the public wire shape with 201.
 func (a *API) CreateJob(c *fiber.Ctx) error {
-	actorID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	actorID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 
 	var in createJobRequest
@@ -95,9 +94,9 @@ func (a *API) CreateJob(c *fiber.Ctx) error {
 // UpdateJob partially edits a manual vacancy (moderator only), addressed by public slug.
 // A non-manual or unknown slug is a 404. Returns the updated job in the public wire shape.
 func (a *API) UpdateJob(c *fiber.Ctx) error {
-	actorID, ok := auth.UserID(c)
-	if !ok {
-		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	actorID, err := requireUserID(c)
+	if err != nil {
+		return err
 	}
 
 	var in updateJobRequest
