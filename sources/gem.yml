@@ -64,6 +64,8 @@
   board: supio
 - company: TensorStax
   board: tensorstax-com
+- company: Tractian
+  board: tractian-technologies-inc-
 - company: Transluce
   board: transluce
 - company: UP.Labs
