@@ -141,27 +141,7 @@ type ttPlace struct {
 // its title and apply button). A link is a job exactly when it carries a parseable native
 // id, so enumeration keys off the stable public permalink shape rather than CSS classes.
 func ttJobLinks(base *url.URL, root *html.Node) []string {
-	var out []string
-	seen := make(map[string]bool)
-	walk(root, func(n *html.Node) bool {
-		if n.Type == html.ElementNode && n.Data == "a" {
-			href := attr(n, "href")
-			if ttJobID(href) == "" {
-				return true
-			}
-			ref, err := url.Parse(href)
-			if err != nil {
-				return true // unparseable href → not a usable job link
-			}
-			abs := base.ResolveReference(ref).String()
-			if !seen[abs] {
-				seen[abs] = true
-				out = append(out, abs)
-			}
-		}
-		return true
-	})
-	return out
+	return jobLinks(base, root, func(href string) bool { return ttJobID(href) != "" })
 }
 
 // ttJobPosting decodes the first application/ld+json JobPosting on the page, returning

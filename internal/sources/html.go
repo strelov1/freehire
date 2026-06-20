@@ -1,6 +1,7 @@
 package sources
 
 import (
+	"net/url"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -129,6 +130,35 @@ func hasClass(n *html.Node, class string) bool {
 		}
 	}
 	return false
+}
+
+// jobLinks walks the listing DOM and returns the absolute, deduplicated href of
+// every anchor the isJob predicate accepts, resolved against base. First-seen
+// order is preserved. It is the shared body of the per-adapter *JobLinks helpers,
+// which differ only in their isJob test.
+func jobLinks(base *url.URL, root *html.Node, isJob func(href string) bool) []string {
+	var out []string
+	seen := map[string]struct{}{}
+	walk(root, func(n *html.Node) bool {
+		if n.Type != html.ElementNode || n.Data != "a" {
+			return true
+		}
+		href := attr(n, "href")
+		if href == "" || !isJob(href) {
+			return true
+		}
+		ref, err := url.Parse(href)
+		if err != nil {
+			return true // unparseable href → not a usable job link
+		}
+		abs := base.ResolveReference(ref).String()
+		if _, ok := seen[abs]; !ok {
+			seen[abs] = struct{}{}
+			out = append(out, abs)
+		}
+		return true
+	})
+	return out
 }
 
 // metaProperty returns the content of <meta property="..."> (e.g. og:title), or "".

@@ -147,25 +147,5 @@ type ftPosting struct {
 // fetchable URLs, de-duplicated in first-seen order (a card links the same job from its
 // title and apply button).
 func ftJobLinks(base *url.URL, root *html.Node) []string {
-	var out []string
-	seen := make(map[string]bool)
-	walk(root, func(n *html.Node) bool {
-		if n.Type == html.ElementNode && n.Data == "a" {
-			href := attr(n, "href")
-			if ftJobID(href) == "" {
-				return true
-			}
-			ref, err := url.Parse(href)
-			if err != nil {
-				return true // unparseable href → not a usable job link
-			}
-			abs := base.ResolveReference(ref).String()
-			if !seen[abs] {
-				seen[abs] = true
-				out = append(out, abs)
-			}
-		}
-		return true
-	})
-	return out
+	return jobLinks(base, root, func(href string) bool { return ftJobID(href) != "" })
 }

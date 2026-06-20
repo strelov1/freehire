@@ -113,25 +113,5 @@ func jazzhrJobID(u string) string {
 // when it carries a parseable token, so enumeration keys off the public permalink shape
 // rather than CSS classes.
 func jazzhrJobLinks(base *url.URL, root *html.Node) []string {
-	var out []string
-	seen := make(map[string]bool)
-	walk(root, func(n *html.Node) bool {
-		if n.Type == html.ElementNode && n.Data == "a" {
-			href := attr(n, "href")
-			if jazzhrJobID(href) == "" {
-				return true
-			}
-			ref, err := url.Parse(href)
-			if err != nil {
-				return true
-			}
-			abs := base.ResolveReference(ref).String()
-			if !seen[abs] {
-				seen[abs] = true
-				out = append(out, abs)
-			}
-		}
-		return true
-	})
-	return out
+	return jobLinks(base, root, func(href string) bool { return jazzhrJobID(href) != "" })
 }

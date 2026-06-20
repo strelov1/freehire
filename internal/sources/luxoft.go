@@ -116,27 +116,7 @@ func (l luxoft) detail(ctx context.Context, e CompanyEntry, jobURL string) (Job,
 // de-duplicated in first-seen order (a card links the same job more than once). A link is a
 // job exactly when it carries a parseable native id (the trailing numeric slug segment).
 func lxJobLinks(base *url.URL, root *html.Node) []string {
-	var out []string
-	seen := make(map[string]bool)
-	walk(root, func(n *html.Node) bool {
-		if n.Type == html.ElementNode && n.Data == "a" {
-			href := attr(n, "href")
-			if lxJobID(href) == "" {
-				return true
-			}
-			ref, err := url.Parse(href)
-			if err != nil {
-				return true // unparseable href → not a usable job link
-			}
-			abs := base.ResolveReference(ref).String()
-			if !seen[abs] {
-				seen[abs] = true
-				out = append(out, abs)
-			}
-		}
-		return true
-	})
-	return out
+	return jobLinks(base, root, func(href string) bool { return lxJobID(href) != "" })
 }
 
 // lxJobIDPattern captures the posting id from a job URL's /jobs/<slug>-<id> path. The slug
