@@ -78,7 +78,7 @@ func (w workable) Resolve(ctx context.Context, raw string) (sources.Job, bool, e
 			Location:    joinNonEmpty(j.City, j.State, j.Country),
 			Description: sources.SanitizeHTML(j.Description),
 			Remote:      j.Telecommuting,
-			PostedAt:    parseDate(j.PublishedOn),
+			PostedAt:    sources.ParseDate(j.PublishedOn),
 		}, true, nil
 	}
 	return sources.Job{}, false, nil // shortcode not on the board — closed/removed

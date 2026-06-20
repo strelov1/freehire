@@ -93,6 +93,6 @@ func (l lever) Resolve(ctx context.Context, raw string) (sources.Job, bool, erro
 		Location:    p.Categories.Location,
 		Description: sources.SanitizeHTML(body.String()),
 		Remote:      sources.IsRemote(p.Categories.Location),
-		PostedAt:    parseEpochMillis(p.CreatedAt),
+		PostedAt:    sources.ParseEpochMillis(p.CreatedAt),
 	}, true, nil
 }

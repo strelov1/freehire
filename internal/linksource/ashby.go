@@ -77,7 +77,7 @@ func (a ashby) Resolve(ctx context.Context, raw string) (sources.Job, bool, erro
 			Location:    j.Location,
 			Description: sources.SanitizeHTML(j.DescriptionHTML),
 			Remote:      j.IsRemote || sources.IsRemote(j.Location),
-			PostedAt:    parseRFC3339(j.PublishedAt),
+			PostedAt:    sources.ParseRFC3339(j.PublishedAt),
 		}, true, nil
 	}
 	return sources.Job{}, false, nil // not on the board anymore (delisted) — skip

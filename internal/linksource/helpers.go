@@ -3,9 +3,6 @@ package linksource
 import (
 	"fmt"
 	"strings"
-	"time"
-
-	"github.com/strelov1/freehire/internal/sources"
 )
 
 // monetaryAmount is the schema.org MonetaryAmount shape JobPosting ld+json uses for
@@ -60,44 +57,6 @@ func salaryUnit(u string) string {
 	default:
 		return ""
 	}
-}
-
-// parseDate parses a date-only timestamp ("2006-01-02", as Habr's datePosted emits),
-// returning nil for an empty or unparseable value (posted_at is nullable).
-func parseDate(s string) *time.Time {
-	if s == "" {
-		return nil
-	}
-	t, err := time.Parse("2006-01-02", s)
-	if err != nil {
-		return nil
-	}
-	return sources.NotFuture(&t)
-}
-
-// parseEpochMillis converts a Unix-millis timestamp into a posted_at, returning nil for a
-// zero value. Lever dates postings with createdAt in epoch millis.
-func parseEpochMillis(ms int64) *time.Time {
-	if ms == 0 {
-		return nil
-	}
-	t := time.UnixMilli(ms).UTC()
-	return sources.NotFuture(&t)
-}
-
-// parseRFC3339 parses an RFC3339 timestamp in UTC, returning nil for an empty or
-// unparseable value. RFC3339Nano accepts both fractional (Ashby's publishedAt) and plain
-// (RemoteYeah's datePosted) second forms.
-func parseRFC3339(s string) *time.Time {
-	if s == "" {
-		return nil
-	}
-	t, err := time.Parse(time.RFC3339Nano, s)
-	if err != nil {
-		return nil
-	}
-	t = t.UTC()
-	return sources.NotFuture(&t)
 }
 
 // humanizeBoard turns an ATS board slug into a display company name ("ruby-labs" → "Ruby

@@ -81,6 +81,6 @@ func (g greenhouse) Resolve(ctx context.Context, raw string) (sources.Job, bool,
 		Location:    j.Location.Name,
 		Description: sources.SanitizeHTML(html.UnescapeString(j.Content)),
 		Remote:      sources.IsRemote(j.Location.Name),
-		PostedAt:    parseRFC3339(j.UpdatedAt),
+		PostedAt:    sources.ParseRFC3339(j.UpdatedAt),
 	}, true, nil
 }

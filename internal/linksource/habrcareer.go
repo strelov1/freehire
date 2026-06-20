@@ -124,7 +124,7 @@ func (h habrCareer) Resolve(ctx context.Context, raw string) (sources.Job, bool,
 		// validThrough), which would pin every Habr job to the top of the freshest-first
 		// browse. The trustworthy publish timestamp is the visible <time class="basic-date"
 		// datetime> element, so read that; a missing element leaves posted_at unset.
-		PostedAt: parseRFC3339(sources.ElementAttr(node, "time", "basic-date", "datetime")),
+		PostedAt: sources.ParseRFC3339(sources.ElementAttr(node, "time", "basic-date", "datetime")),
 	}, true, nil
 }
 

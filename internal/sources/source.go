@@ -318,11 +318,20 @@ func parseLayout(layout, s string) *time.Time {
 	return NotFuture(&t)
 }
 
-// parseRFC3339 parses an RFC3339 timestamp (the common ATS format).
-func parseRFC3339(s string) *time.Time { return parseLayout(time.RFC3339, s) }
+// parseRFC3339 parses an RFC3339 timestamp (the common ATS format). RFC3339Nano
+// accepts both fractional and plain-second forms, a strict superset of RFC3339.
+func parseRFC3339(s string) *time.Time { return parseLayout(time.RFC3339Nano, s) }
 
 // parseDate parses a date-only timestamp ("2006-01-02", as Workable emits).
 func parseDate(s string) *time.Time { return parseLayout("2006-01-02", s) }
+
+// ParseDate, ParseEpochMillis, and ParseRFC3339 are the exported forms used by
+// sibling packages (internal/linksource) that resolve a single posting and need
+// the same posted_at funnel — date-only, epoch-millis, and RFC3339 inputs all
+// pass through NotFuture.
+func ParseDate(s string) *time.Time        { return parseDate(s) }
+func ParseEpochMillis(ms int64) *time.Time { return parseEpochMillis(ms) }
+func ParseRFC3339(s string) *time.Time     { return parseRFC3339(s) }
 
 // parseSpaceTime parses a space-separated, zone-named timestamp ("2006-01-02 15:04:05
 // MST", as Recruitee emits). Recruitee emits UTC; an unrecognized zone abbreviation
