@@ -103,6 +103,30 @@ var (
 	CompanySizeValues = []string{"1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"}
 )
 
+// scalarEnum pairs a served scalar enum field (by pointer) with its vocabulary.
+type scalarEnum struct {
+	field string
+	ptr   *string
+	vocab []string
+}
+
+// servedScalarEnums lists the served single-value enum fields, in declaration
+// order. It is the ONE place the served-scalar set is defined; Validate reads it,
+// Sanitize blanks through it. The dictionary-covered facets (work_mode, seniority,
+// category, regions) are deliberately absent — they are unserved discovery
+// material under dict-only.
+func (e *Enrichment) servedScalarEnums() []scalarEnum {
+	return []scalarEnum{
+		{"employment_type", &e.EmploymentType, EmploymentTypeValues},
+		{"relocation", &e.Relocation, RelocationValues},
+		{"salary_period", &e.SalaryPeriod, SalaryPeriodValues},
+		{"english_level", &e.EnglishLevel, EnglishLevelValues},
+		{"education_level", &e.EducationLevel, EducationLevelValues},
+		{"company_type", &e.CompanyType, CompanyTypeValues},
+		{"company_size", &e.CompanySize, CompanySizeValues},
+	}
+}
+
 // Validate checks every SERVED enum field against its controlled vocabulary and
 // returns an error identifying the first offending field. Empty (absent) fields
 // pass — every field is optional. Non-enum fields (ISO codes, free text, numbers,
@@ -112,23 +136,12 @@ var (
 // (dict-only), so the LLM's values for them are unserved discovery material and an
 // out-of-vocabulary value is captured raw rather than rejected.
 func (e Enrichment) Validate() error {
-	// Single-value SERVED enum fields, in declaration order.
-	scalars := []struct {
-		field string
-		value string
-		vocab []string
-	}{
-		{"employment_type", e.EmploymentType, EmploymentTypeValues},
-		{"relocation", e.Relocation, RelocationValues},
-		{"salary_period", e.SalaryPeriod, SalaryPeriodValues},
-		{"english_level", e.EnglishLevel, EnglishLevelValues},
-		{"education_level", e.EducationLevel, EducationLevelValues},
-		{"company_type", e.CompanyType, CompanyTypeValues},
-		{"company_size", e.CompanySize, CompanySizeValues},
-	}
-	for _, s := range scalars {
-		if s.value != "" && !slices.Contains(s.vocab, s.value) {
-			return fmt.Errorf("enrich: invalid %s %q", s.field, s.value)
+	// Single-value SERVED enum fields. Value receiver, so take the address of the
+	// local copy to reuse the shared field set.
+	ev := e
+	for _, s := range ev.servedScalarEnums() {
+		if *s.ptr != "" && !slices.Contains(s.vocab, *s.ptr) {
+			return fmt.Errorf("enrich: invalid %s %q", s.field, *s.ptr)
 		}
 	}
 
@@ -160,21 +173,9 @@ func (e Enrichment) Validate() error {
 // an out-of-vocabulary value" still holds for the served fields, and Validate passes
 // afterwards.
 func (e *Enrichment) Sanitize() {
-	scalars := []struct {
-		value *string
-		vocab []string
-	}{
-		{&e.EmploymentType, EmploymentTypeValues},
-		{&e.Relocation, RelocationValues},
-		{&e.SalaryPeriod, SalaryPeriodValues},
-		{&e.EnglishLevel, EnglishLevelValues},
-		{&e.EducationLevel, EducationLevelValues},
-		{&e.CompanyType, CompanyTypeValues},
-		{&e.CompanySize, CompanySizeValues},
-	}
-	for _, s := range scalars {
-		if *s.value != "" && !slices.Contains(s.vocab, *s.value) {
-			*s.value = ""
+	for _, s := range e.servedScalarEnums() {
+		if *s.ptr != "" && !slices.Contains(s.vocab, *s.ptr) {
+			*s.ptr = ""
 		}
 	}
 
