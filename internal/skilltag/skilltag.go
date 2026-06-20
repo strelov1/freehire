@@ -11,9 +11,9 @@ package skilltag
 
 import (
 	"regexp"
-	"sort"
 	"strings"
 
+	"github.com/strelov1/freehire/internal/stringset"
 	"github.com/strelov1/freehire/internal/wordmatch"
 )
 
@@ -55,19 +55,5 @@ func Parse(text string) []string {
 			set[c] = struct{}{}
 		}
 	}
-	return sortedKeys(set)
-}
-
-// sortedKeys returns the set's keys ascending, or nil when empty so an absent tag
-// list omits cleanly and matches the text[] column default '{}'.
-func sortedKeys(set map[string]struct{}) []string {
-	if len(set) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(set))
-	for k := range set {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
+	return stringset.Sorted(set)
 }

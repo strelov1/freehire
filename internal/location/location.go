@@ -13,8 +13,9 @@
 package location
 
 import (
-	"sort"
 	"strings"
+
+	"github.com/strelov1/freehire/internal/stringset"
 )
 
 // Geo is the geography parsed from a location string: zero or more country codes
@@ -81,8 +82,8 @@ func Parse(location string) Geo {
 	}
 
 	return Geo{
-		Countries: sortedKeys(countrySet),
-		Regions:   sortedKeys(regionSet),
+		Countries: stringset.Sorted(countrySet),
+		Regions:   stringset.Sorted(regionSet),
 		WorkMode:  detectWorkMode(lower),
 	}
 }
@@ -273,18 +274,4 @@ func detectWorkMode(lower string) string {
 		}
 	}
 	return ""
-}
-
-// sortedKeys returns the set's keys sorted ascending, or nil when empty so an
-// absent facet omits cleanly (and matches the text[] default '{}').
-func sortedKeys(set map[string]struct{}) []string {
-	if len(set) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(set))
-	for k := range set {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
 }
