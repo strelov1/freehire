@@ -1,0 +1,9 @@
+# ClinchTalent / career-pages.com career sites. Provider is the filename; each entry is
+# company + board. board = the career-site host (see internal/sources/clinch.go); the
+# adapter reads https://<board>/sitemap.xml and reconstructs each posting from its URL slug.
+# The job detail pages are AWS-WAF-blocked, so these jobs carry title + location only (no
+# description) — enrichment and the description-derived facets stay blank for them.
+# Each board validated live (sitemap lists >0 /jobs/ URLs) before adding.
+
+- company: Waymo
+  board: careers.withwaymo.com
