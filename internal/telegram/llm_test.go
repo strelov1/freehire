@@ -20,9 +20,10 @@ func TestParseExtractionRepairsRawNewlines(t *testing.T) {
 	}
 }
 
-// Already-valid escapes and a surrounding markdown fence must survive untouched.
-func TestParseExtractionToleratesFenceAndEscapes(t *testing.T) {
-	raw := "```json\n{\"jobs\":[{\"title\":\"QA\",\"description\":\"a\\nb\"}]}\n```"
+// Already-valid escapes must survive the control-character repair untouched.
+// (Markdown-fence stripping is the shared llm client's job, tested there.)
+func TestParseExtractionPreservesValidEscapes(t *testing.T) {
+	raw := "{\"jobs\":[{\"title\":\"QA\",\"description\":\"a\\nb\"}]}"
 
 	got, err := parseExtraction(raw)
 	if err != nil {

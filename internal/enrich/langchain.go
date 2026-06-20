@@ -6,77 +6,40 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
-	"github.com/tmc/langchaingo/llms"
-	"github.com/tmc/langchaingo/llms/openai"
+	"github.com/strelov1/freehire/internal/llm"
 )
-
-// defaultEnrichTimeout bounds a single LLM call. Without it a stalled gateway hangs
-// the worker indefinitely (a run-once worker holding its cron flock open forever,
-// stalling the whole queue). The lease/retry machinery then reclaims the job.
-const defaultEnrichTimeout = 90 * time.Second
 
 // maxDescriptionRunes caps the job description sent to the model. Descriptions are
 // attacker-influenced (scraped/extracted), so bounding the length keeps a single
 // oversized posting from amplifying per-call token cost.
 const maxDescriptionRunes = 24000
 
-// truncateRunes returns s clamped to at most limit runes, never splitting a rune.
-func truncateRunes(s string, limit int) string {
-	r := []rune(s)
-	if len(r) <= limit {
-		return s
-	}
-	return string(r[:limit])
-}
-
 // LangChainProvider implements Provider over any OpenAI-compatible endpoint via
-// langchaingo. The endpoint, credential, and model are injected at construction;
-// the model is asked for a JSON object matching the Enrichment contract.
+// the shared llm client. The model is asked for a JSON object matching the
+// Enrichment contract.
 type LangChainProvider struct {
-	llm     llms.Model
-	timeout time.Duration
+	client *llm.Client
 }
 
 // NewLangChainProvider builds a provider against an OpenAI-compatible endpoint.
-// baseURL points at the gateway/provider (e.g. a LiteLLM endpoint), apiKey is the
-// bearer credential, model is the model id to call. No provider is hard-coded —
-// any OpenAI-compatible backend works.
+// No provider is hard-coded — any OpenAI-compatible backend works.
 func NewLangChainProvider(baseURL, apiKey, model string) (*LangChainProvider, error) {
-	llm, err := openai.New(
-		openai.WithBaseURL(baseURL),
-		openai.WithToken(apiKey),
-		openai.WithModel(model),
-	)
+	c, err := llm.New(baseURL, apiKey, model)
 	if err != nil {
-		return nil, fmt.Errorf("enrich: build llm client: %w", err)
+		return nil, fmt.Errorf("enrich: %w", err)
 	}
-	return &LangChainProvider{llm: llm, timeout: defaultEnrichTimeout}, nil
+	return &LangChainProvider{client: c}, nil
 }
 
 // Enrich asks the model for a structured Enrichment for the job and parses the JSON
 // response. It does not validate the result — the caller validates before persisting.
-// The LLM call is bounded by the provider timeout so a stalled gateway cannot hang
-// the worker.
 func (p *LangChainProvider) Enrich(ctx context.Context, job JobInput) (Enrichment, error) {
-	if p.timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, p.timeout)
-		defer cancel()
-	}
-	messages := []llms.MessageContent{
-		llms.TextParts(llms.ChatMessageTypeSystem, systemPrompt),
-		llms.TextParts(llms.ChatMessageTypeHuman, userPrompt(job)),
-	}
-	resp, err := p.llm.GenerateContent(ctx, messages, llms.WithJSONMode())
+	raw, err := p.client.GenerateJSON(ctx, systemPrompt, userPrompt(job))
 	if err != nil {
-		return Enrichment{}, fmt.Errorf("enrich: generate: %w", err)
+		return Enrichment{}, fmt.Errorf("enrich: %w", err)
 	}
-	if len(resp.Choices) == 0 {
-		return Enrichment{}, errors.New("enrich: model returned no choices")
-	}
-	return parseEnrichment(resp.Choices[0].Content)
+	return parseEnrichment(raw)
 }
 
 // errUnparseableResponse marks a model response that wasn't valid JSON. It is
@@ -85,17 +48,10 @@ func (p *LangChainProvider) Enrich(ctx context.Context, job JobInput) (Enrichmen
 // fresh sample). Transport failures, by contrast, are worth an immediate retry.
 var errUnparseableResponse = errors.New("enrich: unparseable model response")
 
-// parseEnrichment unmarshals a model's JSON response into an Enrichment, tolerating
-// a markdown code fence some models add despite JSON mode.
+// parseEnrichment unmarshals a model's already-fence-stripped JSON response.
 func parseEnrichment(raw string) (Enrichment, error) {
-	s := strings.TrimSpace(raw)
-	s = strings.TrimPrefix(s, "```json")
-	s = strings.TrimPrefix(s, "```")
-	s = strings.TrimSuffix(s, "```")
-	s = strings.TrimSpace(s)
-
 	var e Enrichment
-	if err := json.Unmarshal([]byte(s), &e); err != nil {
+	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &e); err != nil {
 		return Enrichment{}, fmt.Errorf("%w: %v", errUnparseableResponse, err)
 	}
 	return e, nil
@@ -170,6 +126,6 @@ func userPrompt(job JobInput) string {
 	// Source-provided remote hint (from the ATS API or the location text) — a
 	// prior for the model, not a guarantee of scope.
 	fmt.Fprintf(&b, "Remote flag: %t\n", job.Remote)
-	fmt.Fprintf(&b, "Description:\n%s\n", truncateRunes(job.Description, maxDescriptionRunes))
+	fmt.Fprintf(&b, "Description:\n%s\n", llm.TruncateRunes(job.Description, maxDescriptionRunes))
 	return b.String()
 }

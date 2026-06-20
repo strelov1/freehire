@@ -3,92 +3,52 @@ package telegram
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
-	"time"
 
-	"github.com/tmc/langchaingo/llms"
-	"github.com/tmc/langchaingo/llms/openai"
+	"github.com/strelov1/freehire/internal/llm"
 )
-
-// defaultExtractTimeout bounds a single LLM call, mirroring the enrichment worker.
-// Without it a stalled gateway hangs the run-once worker indefinitely, holding its
-// cron flock open and stalling the whole telegram_posts queue.
-const defaultExtractTimeout = 90 * time.Second
 
 // maxInputRunes caps the post text sent to the model. Channel posts are short; this
 // bounds a hostile/oversized post so it cannot amplify per-call token cost.
 const maxInputRunes = 24000
 
 // LangChainExtractor implements Extractor over any OpenAI-compatible endpoint via
-// langchaingo — the same provider-agnostic setup as the enrichment worker. The
-// model is asked for a JSON object matching the Extraction contract.
+// the shared llm client. The model is asked for a JSON object matching the
+// Extraction contract.
 type LangChainExtractor struct {
-	llm     llms.Model
-	timeout time.Duration
-}
-
-// truncateRunes returns s clamped to at most limit runes, never splitting a rune.
-func truncateRunes(s string, limit int) string {
-	r := []rune(s)
-	if len(r) <= limit {
-		return s
-	}
-	return string(r[:limit])
+	client *llm.Client
 }
 
 // NewLangChainExtractor builds an extractor against an OpenAI-compatible endpoint.
 // No provider is hard-coded — any OpenAI-compatible backend works.
 func NewLangChainExtractor(baseURL, apiKey, model string) (*LangChainExtractor, error) {
-	llm, err := openai.New(
-		openai.WithBaseURL(baseURL),
-		openai.WithToken(apiKey),
-		openai.WithModel(model),
-	)
+	c, err := llm.New(baseURL, apiKey, model)
 	if err != nil {
-		return nil, fmt.Errorf("telegram: build llm client: %w", err)
+		return nil, fmt.Errorf("telegram: %w", err)
 	}
-	return &LangChainExtractor{llm: llm, timeout: defaultExtractTimeout}, nil
+	return &LangChainExtractor{client: c}, nil
 }
 
 // Extract asks the model to classify the post and extract its vacancies. It does
 // not validate the result — the runner validates before persisting.
 func (e *LangChainExtractor) Extract(ctx context.Context, text string, kind Kind) (Extraction, error) {
-	if e.timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, e.timeout)
-		defer cancel()
-	}
-	messages := []llms.MessageContent{
-		llms.TextParts(llms.ChatMessageTypeSystem, extractSystemPrompt(kind)),
-		llms.TextParts(llms.ChatMessageTypeHuman, truncateRunes(text, maxInputRunes)),
-	}
-	resp, err := e.llm.GenerateContent(ctx, messages, llms.WithJSONMode())
+	raw, err := e.client.GenerateJSON(ctx, extractSystemPrompt(kind), llm.TruncateRunes(text, maxInputRunes))
 	if err != nil {
-		return Extraction{}, fmt.Errorf("telegram: generate: %w", err)
+		return Extraction{}, fmt.Errorf("telegram: %w", err)
 	}
-	if len(resp.Choices) == 0 {
-		return Extraction{}, errors.New("telegram: model returned no choices")
-	}
-	return parseExtraction(resp.Choices[0].Content)
+	return parseExtraction(raw)
 }
 
-// parseExtraction unmarshals the model's JSON response, tolerating a markdown
-// code fence some models add despite JSON mode.
+// parseExtraction unmarshals the model's already-fence-stripped JSON response,
+// first repairing raw control characters some models emit inside string literals.
 func parseExtraction(raw string) (Extraction, error) {
-	s := strings.TrimSpace(raw)
-	s = strings.TrimPrefix(s, "```json")
-	s = strings.TrimPrefix(s, "```")
-	s = strings.TrimSuffix(s, "```")
-	s = strings.TrimSpace(s)
-	s = repairJSONControlChars(s)
-
-	var e Extraction
-	if err := json.Unmarshal([]byte(s), &e); err != nil {
+	s := repairJSONControlChars(strings.TrimSpace(raw))
+	var ex Extraction
+	if err := json.Unmarshal([]byte(s), &ex); err != nil {
 		return Extraction{}, fmt.Errorf("telegram: parse response: %w", err)
 	}
-	return e, nil
+	return ex, nil
 }
 
 // repairJSONControlChars escapes raw control characters that appear inside JSON

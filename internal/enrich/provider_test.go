@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/tmc/langchaingo/llms"
+
+	"github.com/strelov1/freehire/internal/llm"
 )
 
 // fakeLLM is a stub llms.Model that returns a canned response, letting us test the
@@ -40,7 +42,7 @@ func TestEnrich_mapsStatedFields(t *testing.T) {
 	raw := `{"seniority":"senior","work_mode":"remote","salary_min":70000,` +
 		`"salary_max":90000,"salary_currency":"EUR","salary_period":"year",` +
 		`"skills":["go","postgresql"]}`
-	p := &LangChainProvider{llm: &fakeLLM{resp: raw}}
+	p := &LangChainProvider{client: llm.NewWithModel(&fakeLLM{resp: raw})}
 
 	got, err := p.Enrich(context.Background(), JobInput{
 		Title:       "Senior Go Engineer",
@@ -73,7 +75,7 @@ func TestEnrich_mapsStatedFields(t *testing.T) {
 }
 
 func TestEnrich_omitsUnstatedFields(t *testing.T) {
-	p := &LangChainProvider{llm: &fakeLLM{resp: `{"seniority":"junior"}`}}
+	p := &LangChainProvider{client: llm.NewWithModel(&fakeLLM{resp: `{"seniority":"junior"}`})}
 
 	got, err := p.Enrich(context.Background(), JobInput{Description: "Junior dev wanted"})
 	if err != nil {
@@ -93,7 +95,7 @@ func TestEnrich_omitsUnstatedFields(t *testing.T) {
 func TestEnrich_stripsCodeFences(t *testing.T) {
 	// Some models wrap JSON in a markdown fence despite JSON mode.
 	fenced := "```json\n{\"work_mode\":\"hybrid\"}\n```"
-	p := &LangChainProvider{llm: &fakeLLM{resp: fenced}}
+	p := &LangChainProvider{client: llm.NewWithModel(&fakeLLM{resp: fenced})}
 
 	got, err := p.Enrich(context.Background(), JobInput{Description: "x"})
 	if err != nil {
@@ -105,7 +107,7 @@ func TestEnrich_stripsCodeFences(t *testing.T) {
 }
 
 func TestEnrich_propagatesModelError(t *testing.T) {
-	p := &LangChainProvider{llm: &fakeLLM{err: context.DeadlineExceeded}}
+	p := &LangChainProvider{client: llm.NewWithModel(&fakeLLM{err: context.DeadlineExceeded})}
 	if _, err := p.Enrich(context.Background(), JobInput{Description: "x"}); err == nil {
 		t.Fatal("expected error from model, got nil")
 	}
@@ -113,7 +115,7 @@ func TestEnrich_propagatesModelError(t *testing.T) {
 
 func TestEnrich_sendsSystemAndUserMessages(t *testing.T) {
 	f := &fakeLLM{resp: `{}`}
-	p := &LangChainProvider{llm: f}
+	p := &LangChainProvider{client: llm.NewWithModel(f)}
 	if _, err := p.Enrich(context.Background(), JobInput{Title: "Go dev"}); err != nil {
 		t.Fatalf("Enrich: %v", err)
 	}
