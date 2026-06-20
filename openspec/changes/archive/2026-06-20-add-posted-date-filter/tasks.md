@@ -14,7 +14,7 @@
 
 ## 3. Index declares `posted_ts` filterable
 
-- [ ] 3.1 Add `"posted_ts"` to `FilterableAttributes` in
+- [x] 3.1 Add `"posted_ts"` to `FilterableAttributes` in
   `internal/search/client.go` (leave `SortableAttributes` unchanged).
 
 ## 4. Filter builder parses `posted_within_days`

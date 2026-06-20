@@ -15,17 +15,19 @@ The index SHALL declare:
 - **searchable attributes**: title, company, description, location.
 - **filterable attributes**: source, company_slug, work_mode, employment_type,
   seniority, category, domains, regions, countries, company_type, company_size,
-  visa_sponsorship, salary_currency, salary_period, skills, collections,
-  salary_min, salary_max, experience_years_min. The raw `remote` flag SHALL NOT be
-  a filterable attribute (work_mode subsumes it).
+  visa_sponsorship, salary_currency, salary_period, skills, salary_min,
+  salary_max, experience_years_min, and `posted_ts`. The raw `remote` flag SHALL
+  NOT be a filterable attribute (work_mode subsumes it).
 - **sortable attributes**: posted_at, salary_min, salary_max.
 
-The document SHALL carry a top-level `collections` field: the set of curated
-collection slugs the job's company belongs to, denormalized from the company onto
-the job. It is a deterministic source fact (not derived from the job's text or
-enrichment); a job whose company has no collections SHALL carry an empty
-`collections` set. `collections` SHALL be a filterable facet and the corresponding
-query parameter SHALL filter the feed.
+Each document SHALL carry a derived numeric `posted_ts` field: the unix-seconds
+value of the job's **effective** posting date — the source's `posted_at` when
+present and not in the future, otherwise the ingest time (`created_at`) — the
+same value, in epoch form, that the document's display `posted_at` reflects.
+`posted_ts` is an index-only field: it SHALL be filterable but SHALL NOT appear
+in the public job wire shape returned by the job read endpoints. Because
+`posted_ts` is derived at index time, no Postgres column or backfill is
+required; a reindex SHALL populate it on existing jobs.
 
 Geography and work mode are filtered through the document's **top-level**
 `regions`, `countries`, and `work_mode` fields — the resolved union/precedence of
@@ -58,11 +60,19 @@ parsed from its location.
 - **WHEN** a job whose unioned geography includes `eu` is indexed
 - **THEN** it is returned by a filter on `regions = "eu"`
 
-#### Scenario: Collections are filterable via the collections facet
+#### Scenario: Document carries the effective posting date as an epoch
 
-- **WHEN** a job whose company belongs to collection `yc` is indexed
-- **THEN** it is returned by a filter on `collections = "yc"`, and a search
-  faceted on `collections` reports its count under `yc`
+- **WHEN** a job whose effective posting date is a given instant is indexed
+- **THEN** its document carries `posted_ts` equal to that instant in unix
+  seconds, and a job with a null or future `posted_at` carries the `created_at`
+  instant instead — matching its display `posted_at`
+
+#### Scenario: posted_ts is filterable but not in the public job shape
+
+- **WHEN** a job document is indexed and the same job is read through a public
+  job endpoint
+- **THEN** the document is filterable by a `posted_ts` numeric range, while the
+  public job wire shape does not include a `posted_ts` field
 
 ### Requirement: Hybrid keyword and semantic search
 
@@ -97,6 +107,13 @@ the matched job documents and `meta` carries at least the estimated total hit
 count and the applied `limit`/`offset`. The existing `GET /api/v1/jobs` list
 endpoint SHALL be unchanged.
 
+The endpoint SHALL additionally accept a `posted_within_days` parameter. When it
+is a positive integer `N`, the search SHALL be restricted to jobs whose
+`posted_ts` is at or after `now - N*86400` (i.e. posted within the last `N`
+days), where `now` is the time the request is served. When the parameter is
+absent, empty, zero, negative, or not a valid integer, it SHALL impose no date
+restriction. The filter SHALL compose with the other facet filters (AND).
+
 Each result SHALL identify its job by `public_slug` and SHALL NOT include the
 internal numeric `id`, consistent with the public-identity contract used by the
 other public job reads.
@@ -130,6 +147,18 @@ other public job reads.
 - **WHEN** a job is returned by `GET /api/v1/jobs/search`
 - **THEN** the result carries the job's `public_slug` and omits the internal
   numeric `id`
+
+#### Scenario: Freshness filter restricts to recent postings
+
+- **WHEN** a client requests `GET /api/v1/jobs/search?posted_within_days=7`
+- **THEN** only jobs whose effective posting date is within the last 7 days are
+  returned
+
+#### Scenario: Invalid freshness value imposes no restriction
+
+- **WHEN** a client requests `GET /api/v1/jobs/search` with `posted_within_days`
+  absent, zero, negative, or non-numeric
+- **THEN** the result is not restricted by posting date
 
 ### Requirement: Batch reindex keeps the index in sync
 
