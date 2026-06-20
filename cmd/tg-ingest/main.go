@@ -27,17 +27,8 @@ func main() {
 }
 
 func run() int {
-	path := os.Getenv("CHANNELS_FILE")
-	if path == "" {
-		path = "sources/telegram.yml"
-	}
-	chanCfg, err := telegram.LoadConfig(path)
+	chanCfg, err := telegram.LoadChannels()
 	if err != nil {
-		log.Printf("config: %v", err)
-		return 1
-	}
-	// Fail fast before touching the DB: a misconfigured channel should not start a run.
-	if err := chanCfg.Validate(); err != nil {
 		log.Printf("config: %v", err)
 		return 1
 	}

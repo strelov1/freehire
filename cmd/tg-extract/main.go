@@ -33,23 +33,12 @@ func run() int {
 	}
 
 	// sources/telegram.yml supplies each channel's kind, steering the extraction prompt.
-	path := os.Getenv("CHANNELS_FILE")
-	if path == "" {
-		path = "sources/telegram.yml"
-	}
-	chanCfg, err := telegram.LoadConfig(path)
+	chanCfg, err := telegram.LoadChannels()
 	if err != nil {
 		log.Printf("config: %v", err)
 		return 1
 	}
-	if err := chanCfg.Validate(); err != nil {
-		log.Printf("config: %v", err)
-		return 1
-	}
-	kinds := make(map[string]telegram.Kind, len(chanCfg.Channels))
-	for _, e := range chanCfg.Channels {
-		kinds[e.Channel] = e.Kind
-	}
+	kinds := chanCfg.Kinds()
 
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {

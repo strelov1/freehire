@@ -31,6 +31,34 @@ type Config struct {
 	Channels []ChannelEntry `yaml:"channels"`
 }
 
+// LoadChannels resolves the channel file from CHANNELS_FILE (default
+// sources/telegram.yml), loads it, and validates it — the load+validate the crawl
+// and extract workers both need. It fails fast so a misconfigured channel never
+// starts a run.
+func LoadChannels() (Config, error) {
+	path := os.Getenv("CHANNELS_FILE")
+	if path == "" {
+		path = "sources/telegram.yml"
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		return Config{}, err
+	}
+	if err := cfg.Validate(); err != nil {
+		return Config{}, err
+	}
+	return cfg, nil
+}
+
+// Kinds maps each configured channel name to its kind, for the extraction prompt.
+func (c Config) Kinds() map[string]Kind {
+	m := make(map[string]Kind, len(c.Channels))
+	for _, e := range c.Channels {
+		m[e.Channel] = e.Kind
+	}
+	return m
+}
+
 // LoadConfig reads and parses a sources/telegram.yml file.
 func LoadConfig(path string) (Config, error) {
 	data, err := os.ReadFile(path)
