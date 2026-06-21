@@ -6,3 +6,699 @@
   board: involves
 - company: Neoway
   board: neoway
+
+# --- harvested via Wayback CDX + live API validation 2026-06-21 ---
+- company: "V4 Company"
+  board: v4company
+- company: "Vitru Educação"
+  board: vitru
+- company: "Grupo Comolatti"
+  board: grupocomolatti
+- company: "Priner"
+  board: priner
+- company: "Essencial Nutrição"
+  board: essencialnutricao
+- company: "Grupo Lider"
+  board: grupolider
+- company: "Saúde do TEA"
+  board: tela
+- company: "Deloitte"
+  board: deloitte
+- company: "Grupo Protege "
+  board: grupoprotege
+- company: "KPMG"
+  board: kpmg
+- company: "mazzatech"
+  board: mazzatech
+- company: "Pantheon"
+  board: pantheon
+- company: "Infotec Brasil"
+  board: infotecbrasil
+- company: "BRQ"
+  board: brq
+- company: "ICON Solutions do Brasil"
+  board: iconit
+- company: "Intertechne"
+  board: intertechne
+- company: "Grupo Taking"
+  board: grupotaking
+- company: "AGROSearch"
+  board: agrosearch
+- company: "Radix"
+  board: radix
+- company: "Gogroup"
+  board: gogroup
+- company: "Grupo LOS"
+  board: grupolos
+- company: "Contabilizei"
+  board: contabilizei
+- company: "Orbia Amanco Wavin"
+  board: wavin
+- company: "Mottu"
+  board: mottu
+- company: "Share People Hub"
+  board: sharepeoplehub
+- company: "Lyncas"
+  board: lyncas
+- company: "Viseu Secondment"
+  board: viseu
+- company: "MJV INNOVATION"
+  board: mjv
+- company: "vocedm"
+  board: vocedm
+- company: "DUX Company"
+  board: duxcompany
+- company: "Pedra Agroindustrial"
+  board: pedraagroindustrial
+- company: "ASA"
+  board: asa
+- company: "GEX"
+  board: gex
+- company: "Zerezes"
+  board: zerezes
+- company: "Insider Store"
+  board: insiderstore
+- company: "Grupo UNINTER"
+  board: uninter
+- company: "IPNET by Vivo"
+  board: ipnet
+- company: "Nomad"
+  board: nomadglobal
+- company: "DB1 Group"
+  board: db1
+- company: "EQI"
+  board: eqi
+- company: "SRM"
+  board: gruposrm
+- company: "Westwing Brasil"
+  board: westwing
+- company: "QI Tech"
+  board: qitech
+- company: "Clam"
+  board: clam
+- company: "Premiersoft"
+  board: premiersoft
+- company: "Qeevo"
+  board: queroeducacao
+- company: "Pravaler"
+  board: pravaler
+- company: "Framework"
+  board: frameworkdigital
+- company: "iHunters"
+  board: ihunters
+- company: "Magna Executive Search"
+  board: magnasearch
+- company: "Sanar"
+  board: sanar
+- company: "Sympla"
+  board: sympla
+- company: "Venturus"
+  board: venturus
+- company: "Oliveira & Antunes Advogados Associados"
+  board: oliveiraeantunes
+- company: "Paytrack"
+  board: paytrack
+- company: "frete.com"
+  board: frete
+- company: "Appmax"
+  board: appmax
+- company: "Magazine Luiza"
+  board: magazineluiza
+- company: "Movecta"
+  board: movecta
+- company: "Ável "
+  board: avel
+- company: "Brivia"
+  board: brivia
+- company: "Melnick"
+  board: melnick
+- company: "Poliedro Educação"
+  board: poliedroeducacao
+- company: "Seu Estágio"
+  board: seuestagio
+- company: "TalentX Digital"
+  board: talentx
+- company: "Cielo"
+  board: cielo
+- company: "FiberHome Brasil"
+  board: fiberhome
+- company: "Nuvemshop"
+  board: nuvemshop-tiendanube
+- company: "tecer"
+  board: tecer
+- company: "Asper"
+  board: asper
+- company: "Ligga"
+  board: liggatelecom
+- company: "Zig"
+  board: zig
+- company: "Betha"
+  board: betha
+- company: "FIAP/Alura/PM3"
+  board: alun
+- company: "AMcom"
+  board: amcom
+- company: "Reclame AQUI"
+  board: reclameaqui
+- company: "Guaracamp"
+  board: guaracamp
+- company: "Schulze"
+  board: schulze
+- company: "Trinnus RH"
+  board: trinnus
+- company: "Vórtx"
+  board: vortx
+- company: "CashMe"
+  board: cashme
+- company: "Deal Group"
+  board: deal
+- company: "Fitting"
+  board: fitting
+- company: "IDG"
+  board: idg
+- company: "LiveMode"
+  board: livemode
+- company: "RH Lótus Solution"
+  board: lotussolution
+- company: "Auvo Tecnologia"
+  board: auvotecnologia
+- company: "CredAluga"
+  board: credaluga
+- company: "DBServices"
+  board: dbservices
+- company: "Kstack"
+  board: kstack
+- company: "Orizon "
+  board: orizon
+- company: "CTC"
+  board: ctctech
+- company: "Resid Club"
+  board: residclub
+- company: "Zallpy Digital"
+  board: zallpy
+- company: "ASCAS"
+  board: ascasconsultoria
+- company: "Carbigdata"
+  board: carbigdata
+- company: "Cescon Barrieu"
+  board: cesconbarrieu
+- company: "e-Core"
+  board: ecore
+- company: "Grupo AG Capital"
+  board: grupoagcapital
+- company: "Magazord"
+  board: magazord
+- company: "Skyone"
+  board: skyone
+- company: "Superlógica Tecnologias"
+  board: superlogica
+- company: "Sylvamo"
+  board: sylvamo
+- company: "TQI"
+  board: tqi
+- company: "Turbi"
+  board: turbi
+- company: "Wilson Sons Offshore"
+  board: wsut
+- company: "Alice"
+  board: alice
+- company: " Grupo Central"
+  board: grupocentral
+- company: "GCB"
+  board: grupogcb
+- company: "Indicium"
+  board: indicium
+- company: "Luby"
+  board: luby
+- company: "Solfácil"
+  board: solfacil
+- company: "Solutis"
+  board: solutis
+- company: "Zappts"
+  board: zappts
+- company: "Aarin Techfin"
+  board: aarin
+- company: "FIAP"
+  board: alura-fiap-pm3
+- company: "Cayena "
+  board: cayena
+- company: "Eclipseworks"
+  board: eclipseworks
+- company: "IVENTIS"
+  board: iventis
+- company: "Octafy"
+  board: octafy
+- company: "Alelo"
+  board: alelo
+- company: "BIX Tecnologia - Consultoria de Dados"
+  board: bixtecnologia
+- company: "Bridge & Co."
+  board: bridge
+- company: "CERC"
+  board: cerc
+- company: "Construtora Elevação"
+  board: construtoraelevacao
+- company: "CrediPronto"
+  board: credipronto
+- company: "Cubos Tecnologia"
+  board: cubos
+- company: "EVEO"
+  board: eveo
+- company: "Extreme Digital Solutions"
+  board: extremegroup
+- company: "Objective"
+  board: objective
+- company: "Turbo"
+  board: turbo
+- company: "Yolo Recruit"
+  board: yolo
+- company: "DOT Group"
+  board: dotgroup
+- company: "FIT Energia"
+  board: fitenergia
+- company: "Flutter Brazil"
+  board: flutterbrazil
+- company: "Infleet"
+  board: infleet
+- company: "Listo"
+  board: listo
+- company: "Yandeh"
+  board: yandeh
+- company: "Grupo Autoglass"
+  board: autoglass
+- company: "idwall"
+  board: idwall
+- company: "InstaCarro"
+  board: instacarro
+- company: "Leader & Talent"
+  board: leaderetalent
+- company: "MK Solutions"
+  board: mksolutions
+- company: "Olist"
+  board: olist
+- company: "Rentcars"
+  board: rentcars
+- company: "Tecsul"
+  board: tecsul
+- company: "WINDCRAFT"
+  board: windcraft
+- company: "Avenue"
+  board: avenue
+- company: "Azos"
+  board: azos
+- company: "Elements"
+  board: elements
+- company: "Final Level "
+  board: finallevel
+- company: "FSB Holding"
+  board: fsbholding
+- company: "Harpia"
+  board: harpia
+- company: "Lemon Energia"
+  board: lemonenergia
+- company: "Matera"
+  board: matera
+- company: "Medway"
+  board: medway
+- company: "Miner Tecnologia"
+  board: minertecnologia
+- company: "Pitang"
+  board: pitang
+- company: "Praso"
+  board: praso
+- company: "Banco Toyota do Brasil"
+  board: bancotoyota
+- company: "dti digital"
+  board: dtidigital
+- company: "GoFlow Consultoria"
+  board: goflow
+- company: "Think IT"
+  board: grupothink
+- company: "Heads"
+  board: heads
+- company: "Mercado Bitcoin"
+  board: mb
+- company: "M7 Soluções Financeiras"
+  board: multi7
+- company: "Procfit"
+  board: procfit
+- company: "Stoque"
+  board: stoque
+- company: "Warren"
+  board: warren
+- company: "Wevy"
+  board: wevy-cloud
+- company: "aTip"
+  board: atip
+- company: "Brasil Paralelo"
+  board: brasilparalelo
+- company: "Cidadania Já"
+  board: cidadaniaja
+- company: "coaktion"
+  board: coaktion
+- company: "DQR Tech"
+  board: dqrtech
+- company: "EXA"
+  board: exa
+- company: "Global System"
+  board: globalsystem
+- company: "Grupo GCB"
+  board: grupogcbinvestimentos
+- company: "MATH"
+  board: mathgroup
+- company: "Media Hero"
+  board: mediahero
+- company: "Petit.RH"
+  board: petitrh
+- company: "Pipo Saúde"
+  board: piposaude
+- company: "Qive"
+  board: qive
+- company: "RankMyApp"
+  board: rankmyapp
+- company: "Sancor Seguros"
+  board: sancorsegurosbrasil
+- company: "Seazone"
+  board: seazone
+- company: "Segura®"
+  board: segura
+- company: "Telavita"
+  board: telavita
+- company: "Vatto"
+  board: vatto
+- company: "Bankme."
+  board: bankme
+- company: "Dartz Ideal Recruitment"
+  board: dartz
+- company: "Digix"
+  board: digix
+- company: "EDGE"
+  board: edge
+- company: "Essence"
+  board: essenceit
+- company: "J.Assy"
+  board: jassy
+- company: "Luzandreya Consultoria e Assessoria de RH"
+  board: luzandreyaconsultoria
+- company: "Platform Builders"
+  board: platformbuilders
+- company: "Programmers - AI, Data & Software"
+  board: programmers
+- company: "QuickSoft"
+  board: quicksoft
+- company: "TownSq"
+  board: townsq
+- company: "TPGROUP"
+  board: tpgroup
+- company: "Ubots"
+  board: ubots
+- company: "V360"
+  board: v360
+- company: "Vertigo Tecnologia"
+  board: vertigo
+- company: "Grupo 3C"
+  board: 3cplusnow
+- company: "Atlântico"
+  board: atlantico
+- company: "CAF"
+  board: caf
+- company: "Celcoin"
+  board: celcoin
+- company: "CAF"
+  board: certta
+- company: "Construtora Patriani"
+  board: construtorapatriani
+- company: "Cora"
+  board: cora
+- company: "EloGroup"
+  board: elogroup
+- company: "Farmtech"
+  board: farmtech
+- company: "Fretadão"
+  board: fretadao
+- company: "Vem ser GX2"
+  board: gx2
+- company: "Intera"
+  board: intera
+- company: "IORQ"
+  board: iorq
+- company: "Jeitto"
+  board: jeitto
+- company: "MOTIM"
+  board: motim
+- company: "NTS Brasil"
+  board: nts
+- company: "Querodelivery"
+  board: querodelivery
+- company: "RIOgaleão"
+  board: riogaleao
+- company: "Sotran"
+  board: sotran
+- company: "Tempest"
+  board: tempest
+- company: "Tinnova"
+  board: tinnova
+- company: "Tripla"
+  board: tripla
+- company: "Ume"
+  board: ume
+- company: "AltoQi"
+  board: altoqi
+- company: "Atlas"
+  board: atlastechnol
+- company: "Barros & Advogados"
+  board: barrosadvogados
+- company: "BR Media Group"
+  board: brmediagroup
+- company: "InHire"
+  board: carreiras
+- company: "ecx"
+  board: ecx
+- company: "erural"
+  board: erural
+- company: "Exati"
+  board: exati
+- company: "Fleming Educação"
+  board: flemingeducacao
+- company: "iSystems"
+  board: isystems
+- company: "Kanastra"
+  board: kanastra
+- company: "Labi Saúde"
+  board: labisaude
+- company: "Pier Seguradora"
+  board: pier
+- company: "Qeevo"
+  board: qeevo
+- company: "VerticalRH"
+  board: verticalrh
+- company: "wehandle"
+  board: wehandle
+- company: "A.Dias"
+  board: adias
+- company: "Aiko"
+  board: aiko
+- company: "Autopass"
+  board: autopass
+- company: "Grupo Ciranda Cultural"
+  board: cirandacultural
+- company: "Emerge Ventures"
+  board: emergeventures
+- company: "EstrelaBet"
+  board: estrelabet
+- company: "GEO3D ENGENHARIA DE MAPEAMENTO"
+  board: geo3d
+- company: "Jaé"
+  board: jae
+- company: "Kobe Apps"
+  board: kobe
+- company: "Lima Consulting Group"
+  board: limaconsulting
+- company: "Paipe "
+  board: paipe
+- company: "Prizma Mídia"
+  board: prizmamidia
+- company: "Shape Digital"
+  board: shapedigital
+- company: "Silicon"
+  board: silicon
+- company: "Instituto Alana"
+  board: alana
+- company: "Automind"
+  board: automind
+- company: "Avivatec"
+  board: avivatec
+- company: "BetMGM Brasil"
+  board: betmgm
+- company: "Cinga Tech"
+  board: cinga
+- company: "Estapar"
+  board: estapar-trial
+- company: "FacilitaPay"
+  board: facilitapay
+- company: "Genyo"
+  board: genyo
+- company: "Grupo Food Nation"
+  board: grupofoodnation
+- company: "Imaflora"
+  board: imaflora
+- company: "JOTA"
+  board: jota
+- company: "Kife"
+  board: kife
+- company: "klavi"
+  board: klavi
+- company: "Ocean Drop"
+  board: oceandrop
+- company: "Quero Passagem"
+  board: queropassagem
+- company: "Remessa Online"
+  board: remessaonline
+- company: "Rentbrella"
+  board: rentbrella
+- company: "Samsung"
+  board: samsung
+- company: "Sunne"
+  board: sunne
+- company: "Tera"
+  board: tera
+- company: "Unimar"
+  board: unimar
+- company: "UpFlux"
+  board: upflux
+- company: "Vixtra"
+  board: vixtra
+- company: "Votorantim"
+  board: votorantim
+- company: "180 Seguros"
+  board: 180seguros
+- company: "Alloyal"
+  board: alloyal
+- company: "Aprix"
+  board: aprix
+- company: "Banni"
+  board: banni
+- company: "benup"
+  board: benup
+- company: "Cobli"
+  board: cobli
+- company: "dtLabs"
+  board: dtlabs
+- company: "Escola DNC"
+  board: escoladnc
+- company: "Eyxo Content Co."
+  board: eyxo
+- company: "FindUP"
+  board: findup
+- company: "fluke"
+  board: fluke
+- company: "Grupo Eximio"
+  board: grupoeximio
+- company: "Uello"
+  board: hh-uello
+- company: "iNNOVEA HUB"
+  board: innoveahub
+- company: "Kamino"
+  board: kamino
+- company: "Laboclin"
+  board: laboclin
+- company: "Lumine"
+  board: lumine
+- company: "match.mt"
+  board: match-mt
+- company: "Midhaus"
+  board: midhaus
+- company: "VEM PRA TURMA"
+  board: mspestudios
+- company: "Nuvidio"
+  board: nuvidio
+- company: "Raro Labs"
+  board: rarolabs
+- company: "Rhitmo Tech"
+  board: rhitmotech
+- company: "Same Engenharia"
+  board: same-engenharia
+- company: "Softvaro"
+  board: softvaro
+- company: "SuperFrete"
+  board: superfrete
+- company: "Trampay"
+  board: trampay
+- company: "UPDA"
+  board: upda
+- company: "Vinta"
+  board: vinta
+- company: "Vockan"
+  board: vockan
+- company: "Autom"
+  board: autom
+- company: "Bipa"
+  board: bipa
+- company: "Eiti Gestão de Ti"
+  board: eiti
+- company: "Fintalk"
+  board: fintalk
+- company: "floraconsultoria"
+  board: floraconsultoria
+- company: "Grupo Boticário"
+  board: grupoboticario
+- company: "Grupo Permaneo"
+  board: grupopermaneo
+- company: "ImpulsoGov"
+  board: impulsogov
+- company: "Lastlink"
+  board: lastlink
+- company: "Líber"
+  board: liber
+- company: "Lightfarm"
+  board: lightfarmstudios
+- company: "Mirum"
+  board: mirum
+- company: "Nexaas"
+  board: nexaas
+- company: "Nibo"
+  board: nibo
+- company: "Transfero"
+  board: transfero
+- company: "Via"
+  board: via
+- company: "Wellz by Wellhub"
+  board: wellz
+- company: "Allintra"
+  board: allintra
+- company: "Big Data"
+  board: bigdata
+- company: "Brange Media"
+  board: brangemedia
+- company: "Breezy Seguros"
+  board: breezyseguros
+- company: "Trinuscool"
+  board: centraldevagas
+- company: "Crown"
+  board: crown
+- company: "Ocean Health"
+  board: dhg
+- company: "Foxbit"
+  board: foxbit
+- company: "Escola Conquer"
+  board: hh-escolaconquer
+- company: "Lello Condomínios"
+  board: hh-lello
+- company: "Kiwify"
+  board: kiwify
+- company: "CTA Smart"
+  board: link2pump
+- company: "Monkey"
+  board: monkey
+- company: "sim.digital"
+  board: simdigital
+- company: "Strm Music"
+  board: strm-music
+- company: "TC"
+  board: tc
+- company: "Ticket360"
+  board: ticket360
+- company: "Toro Investimentos"
+  board: toroinvestimentos
+- company: "Voltta"
+  board: volttaenergy
