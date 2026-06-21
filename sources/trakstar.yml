@@ -1,0 +1,8 @@
+# trakstar (Trakstar Hire / Recruiterbox) boards. Provider is the filename; each
+# entry is company + board. board = the tenant slug (RSS feed is
+# <board>.hire.trakstar.com/jobfeeds/<board>; see internal/sources/trakstar.go).
+
+- company: Cheesecake Labs
+  board: cheesecakelabs
+- company: Way2
+  board: way2
