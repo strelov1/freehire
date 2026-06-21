@@ -1,0 +1,559 @@
+# UKG Pro Recruiting (formerly UltiPro) boards. Provider is the filename; each entry is
+# company + board. board = "<host>/<tenant>/<guid>" (see internal/sources/ukg.go); the
+# host carries the data-residency TLD. Each board validated live (>0 open postings) before adding.
+- company: ALPLA
+  board: alpla.rec.pro.ukg.net/alp1505apnc/4b4f22b7-1a92-48fc-86e5-8d2d15a4b89e
+- company: Cardone Ventures
+  board: cardoneventures.rec.pro.ukg.net/car1508cven/2e50fbf2-8e6e-4c50-b106-e5f325d720b8
+- company: The Chemico Group
+  board: chemico1989.rec.pro.ukg.net/che1502chcl/e784eb20-4541-4dee-a492-905e1211f316
+- company: Dennis Group
+  board: dennisgroup.rec.pro.ukg.net/den1505tdnng/ef5e95c8-7a6d-4793-be73-214e3aed46ef
+- company: Dometic
+  board: edometic.rec.pro.ukg.net/dom1500doco/259a411f-7310-4bb9-8028-2a0ef1ea43ac
+- company: eProductivity Software
+  board: epack.rec.pro.ukg.net/eps1500epsp/99876882-5314-40ba-9044-904ae76a629c
+- company: Eventus WholeHealth
+  board: eventus.rec.pro.ukg.net/eve1500evew/477175d5-314e-4f47-9310-11848f9cd31b
+- company: Dassault Falcon Jet
+  board: falconjet.rec.pro.ukg.net/das1003dass/e029f427-8251-41cd-8df5-a3bcab602a51
+- company: Friend Health
+  board: friendhealth.rec.pro.ukg.net/fri1007ffhc/2c5fbf56-2d5c-4d3d-a89b-f57fd5173d18
+- company: Archer
+  board: gusea1p01.rec.pro.ukg.net/arc1037archt/7b869dcd-0d1e-4fe4-be7d-df83dc5a593a
+- company: Dometic
+  board: gusea1p01.rec.pro.ukg.net/dom1500doco/1883c52c-7f1b-4c5d-97a8-113c61f2f7ad
+- company: i-PRO
+  board: gusea1p01.rec.pro.ukg.net/ipr1003ipai/6ff850eb-dca2-4394-a619-bf04d0edd417
+- company: Polyplex
+  board: gusea1p01.rec.pro.ukg.net/pol1501polyp/14cf8026-61bd-45e2-9845-ef6b6efdd780
+- company: i-PRO
+  board: iproainc.rec.pro.ukg.net/ipr1003ipai/6ff850eb-dca2-4394-a619-bf04d0edd417
+- company: JSW Steel
+  board: jswsteel.rec.pro.ukg.net/jsw1500jsws/ab2a921b-dd4a-43c2-b8a5-762469d9ff68
+- company: Kingspan
+  board: kingspan.rec.pro.ukg.net/kin1011kipi/0389c77e-409b-4207-b41e-bb4d718fee38
+- company: Kingspan
+  board: kingspan.rec.pro.ukg.net/kin1011kipi/2752b435-aa11-4549-a53b-a9f9e96e115a
+- company: Kingspan
+  board: kingspan.rec.pro.ukg.net/kin1011kipi/47e1d234-075b-4615-9123-828b4aeaa2c5
+- company: Kingspan
+  board: kingspan.rec.pro.ukg.net/kin1011kipi/4a6ca075-d8f3-4616-b5e2-8d03bfab14dc
+- company: Kingspan
+  board: kingspan.rec.pro.ukg.net/kin1011kipi/dbf22176-1545-4e2c-afdd-01482b400da4
+- company: Läderach
+  board: laderach.rec.pro.ukg.net/lad1500lade/a1dd9d5f-b336-4e5b-b7b8-bdb3238d4d46
+- company: Lark Hotels
+  board: larkhotels.rec.pro.ukg.net/lar1004lhllc/1a94c5b6-153c-4554-8884-83fb420f9e30
+- company: Mazak
+  board: mazakcorp.rec.pro.ukg.net/maz1002maza/7a892018-173e-47fc-9cec-f6b15f1caa67
+- company: Nelson Global
+  board: nelsonglobal.rec.pro.ukg.net/nel1500nsgp/954ec2a6-92c8-4885-bf49-40326e75952d
+- company: Catholic Charities New Hampshire
+  board: newhamcci.rec.pro.ukg.net/new1515nhcc/5e33de7f-1fde-41a7-8d1b-7dc0f63bc06f
+- company: Polyplex
+  board: polyplex.rec.pro.ukg.net/pol1501polyp/14cf8026-61bd-45e2-9845-ef6b6efdd780
+- company: Abell Pest Control
+  board: recruiting.ultipro.ca/abe5000ablp/b6a28b65-512b-400f-b5c4-4c82084a4831
+- company: Active Care Youth and Adult Services
+  board: recruiting.ultipro.ca/act5100acty/3c575249-376e-46d5-9015-dd11f9a3a916
+- company: Tokyo Smoke
+  board: recruiting.ultipro.ca/alb5000albt/a5843871-4bf2-4616-b157-cd55b63a807e
+- company: Alterna Savings and Credit Union
+  board: recruiting.ultipro.ca/alt5000ascul/5cf23382-2cd5-42f4-8a95-48fc4c5822db
+- company: Altea Active
+  board: recruiting.ultipro.ca/alt5002alac/64f43a81-1bfa-4f30-b19e-24ad4f7ebe1e
+- company: Arrow Machine and Fabrication Group
+  board: recruiting.ultipro.ca/arr5001amfg/e3606402-dc8c-458e-855b-d6cd867e57fc
+- company: Assiniboine Credit Union
+  board: recruiting.ultipro.ca/ass5000acul/9396fe2a-bb59-4d60-9067-2bc2be5427c3
+- company: Bandstra Transportation
+  board: recruiting.ultipro.ca/ban5001bants/5e421ec4-7170-44ea-ada9-2de64b1233e4
+- company: Bayshore HealthCare
+  board: recruiting.ultipro.ca/bay5100byhc/4d5ef638-0526-453a-83c2-8f398f7f5ac2
+- company: Bayshore HealthCare
+  board: recruiting.ultipro.ca/bay5100byhc/6fb75ed7-dc24-46db-bdc6-7d06b4d73e61
+- company: Carecor Health Services
+  board: recruiting.ultipro.ca/bay5100byhc/c921bbcc-c132-45c9-86e9-3d15aa0bca3a
+- company: Castlemain
+  board: recruiting.ultipro.ca/bel5100bepa/b44a8739-bcde-47a6-93b5-416258e3a1e1
+- company: Castlemain
+  board: recruiting.ultipro.ca/bel5100bepa/bcbe8e53-aa77-400f-88b7-aad7187e2920
+- company: BGO
+  board: recruiting.ultipro.ca/ben5000bentk/6f7f3dc0-d599-4e78-9ee5-fa1703eb67ac
+- company: BFL CANADA
+  board: recruiting.ultipro.ca/bfl5000bflca/f11088c0-b19d-40ef-8140-c553b5ed8fb8
+- company: BioScript Solutions
+  board: recruiting.ultipro.ca/bio5000bios/84b6fcd6-8994-4eef-b83b-3debe9cdc52b
+- company: Canadian North
+  board: recruiting.ultipro.ca/bra50007f/2ea5e84a-bfc4-4167-88ba-20d03547d410
+- company: Technical Safety BC
+  board: recruiting.ultipro.ca/bri5000/70d2813a-3f44-e8eb-07c7-d55d82a0f98a
+- company: Bruyère Health
+  board: recruiting.ultipro.ca/bru5000bruy/bf6abcdc-2bbf-472f-8c62-848c50be4082
+- company: Bruyère Health
+  board: recruiting.ultipro.ca/bru5000bruy/d485ea59-94a8-4100-a215-59665a6a8d44
+- company: BURNCO
+  board: recruiting.ultipro.ca/bur5000burn/3fa0ebc6-9755-41a2-ad6b-3582c72bb807
+- company: Burnbrae Farms
+  board: recruiting.ultipro.ca/bur5100brnf/65450eb1-478c-4780-8abd-f21432a6dcb6
+- company: Aquilini Group
+  board: recruiting.ultipro.ca/can5003aqg/5c6d9d30-6280-4162-8fd3-84de66235ad9
+- company: Canadian Mental Health Association Waterloo Wellington
+  board: recruiting.ultipro.ca/can5011cwwb/f98fecfa-f3d3-4327-8f2a-b0bac8005c76
+- company: Cargojet
+  board: recruiting.ultipro.ca/car5000cjt/3bdb0a52-04dc-4fa4-91cd-d80afd88843d
+- company: CBI Health
+  board: recruiting.ultipro.ca/cbi5000cbhig/b6cc01eb-4234-4adb-b72c-f0025c8879b6
+- company: CBI Health
+  board: recruiting.ultipro.ca/cbi5100cbih/2283e39b-0f5a-4099-9ae1-d73296c1c782
+- company: CareRx
+  board: recruiting.ultipro.ca/cen5000chcor/5b9ed2f9-0924-4553-b3e3-308134ef4174
+- company: Certarus
+  board: recruiting.ultipro.ca/cer5000cerr/0e7f387f-8b9f-44cc-b47f-a564d9fb994a
+- company: Certarus
+  board: recruiting.ultipro.ca/cer5000cerr/2a117baa-b760-47ab-979c-c9759af78790
+- company: CPA Alberta
+  board: recruiting.ultipro.ca/cha5001cpaa/1ac8dbb9-cfdd-4e4f-bb32-48f8eb1164d5
+- company: Karis Disability Services
+  board: recruiting.ultipro.ca/chr5001crhz/5a4ed119-429c-4d7a-9302-5abc442a5d65
+- company: Community Living Society
+  board: recruiting.ultipro.ca/com5001cmlv/4c808be7-517d-4338-8496-782c50f709cd
+- company: ESS Support Services
+  board: recruiting.ultipro.ca/com5100cgcl/7b75436d-260e-4ae7-88a1-fd678a1d5072
+- company: Concorde Entertainment Group
+  board: recruiting.ultipro.ca/con5100cnpd/14f6bfd5-47bb-479f-b7bd-c7e5c8b1a206
+- company: Town of Caledon
+  board: recruiting.ultipro.ca/cor5003caled/55e2803a-385b-47b1-b911-51dd7ed81d1e
+- company: City of Sarnia
+  board: recruiting.ultipro.ca/cor5004clmb/6b014206-1003-40c3-98a0-b2340f1971da
+- company: Municipality of Chatham-Kent
+  board: recruiting.ultipro.ca/cor5101comch/99e5515b-9ffb-4d3b-a84e-95f953a5c0f2
+- company: Hastings County
+  board: recruiting.ultipro.ca/cor5104ccoh/3bc4a2fd-51ca-4ae2-a6c0-8aabfc0f6788
+- company: CWB Group
+  board: recruiting.ultipro.ca/cwb5000cwbg/45a3be9f-75f1-477a-a9f4-e722acab65f8
+- company: Decor-Rest Furniture
+  board: recruiting.ultipro.ca/dec5000decc/b2905755-71f1-46ed-884d-6b706751e628
+- company: Kyndred Community Living Society
+  board: recruiting.ultipro.ca/del5000dcls/8b08dc74-f666-4772-916e-469a9920eb32
+- company: Dream Unlimited
+  board: recruiting.ultipro.ca/dre5000domc/641409c4-22a9-4262-b1c5-14ed9a4d73fb
+- company: East Coast Credit Union
+  board: recruiting.ultipro.ca/eas5000estc/184bad9e-1835-4436-9461-74f4f7cdb0ce
+- company: Edison Properties
+  board: recruiting.ultipro.ca/edi5000edip/7e78e810-1e37-41da-9a8b-ee9b70d74c46
+- company: EllisDon
+  board: recruiting.ultipro.ca/ell5000/fa7dd324-0b16-f8cb-f544-f46b499e5db7
+- company: Federated Co-operatives Limited
+  board: recruiting.ultipro.ca/fed5000crs/659f2725-1fb8-4f25-9cb4-4a03072b96e9
+- company: Servus Credit Union
+  board: recruiting.ultipro.ca/fir5000/e90b0fac-de2c-3e69-7b8f-e78a83d7a4a0
+- company: Fasken
+  board: recruiting.ultipro.ca/fmd5000fmd/ffa183b1-98fc-4f2f-8b3a-964fe70f1167
+- company: Formations
+  board: recruiting.ultipro.ca/for5101fmtn/4cf4f1ed-aba6-4de8-bebb-c4277d023366
+- company: Fraserway RV
+  board: recruiting.ultipro.ca/fra5000frw/70ae0032-77af-4110-a645-9a6229a18643
+- company: Friesens Corporation
+  board: recruiting.ultipro.ca/fri5000frie/01929014-a5d7-4ba6-aec7-4844301ca26a
+- company: FYidoctors
+  board: recruiting.ultipro.ca/fyi5000fyid/3d8debde-b43d-451a-9d95-37584008133f
+- company: FYidoctors
+  board: recruiting.ultipro.ca/fyi5000fyid/b81f30de-9885-4462-86ed-00416681fcab
+- company: Ainsworth
+  board: recruiting.ultipro.ca/gdi5000gdfs/3afe5771-0bd0-401e-b3e7-55f7d6aad783
+- company: GDI Integrated Facility Services
+  board: recruiting.ultipro.ca/gdi5000gdfs/b2c47b9f-5e35-4296-a397-8ef4f9597822
+- company: Goway Travel
+  board: recruiting.ultipro.ca/gow5000gowt/30cfb287-d992-42ab-8128-0c113578d2be
+- company: Groupe Robert
+  board: recruiting.ultipro.ca/gro5003gror/a7174d1f-1807-4371-b6ce-a1a27dbc7d71
+- company: Groupe Touchette
+  board: recruiting.ultipro.ca/gro5004gtou/725a44ac-2d84-4079-97a5-e64f4eab2f40
+- company: Germain Hotels
+  board: recruiting.ultipro.ca/gro5006grgei/c725386f-f3f1-4e11-803c-94583205f547
+- company: Haisla Nation
+  board: recruiting.ultipro.ca/hai5100hais/6b5edb16-54c7-4197-83f6-f48851876d52
+- company: Hammond Power Solutions
+  board: recruiting.ultipro.ca/ham5000hamm/b3ce6486-55fe-4764-b2f7-2138c65ae81e
+- company: Hammond Power Solutions
+  board: recruiting.ultipro.ca/ham5000hamm/d886e470-2a21-498f-9532-54d7b09cb302
+- company: Héroux-Devtek
+  board: recruiting.ultipro.ca/her5001hero/e5ac0ff2-938c-46f6-8143-8edb3cf5527b
+- company: Homewood Health
+  board: recruiting.ultipro.ca/hom5002hohc/f118bd9c-ace7-44de-914c-725450541f72
+- company: SickKids Foundation
+  board: recruiting.ultipro.ca/hos5100hspk/f9d03a40-74a4-4ab6-a1d8-5db8078f6901
+- company: Huron Perth Healthcare Alliance
+  board: recruiting.ultipro.ca/hur5100hpha/068df24b-093c-4c48-aec2-10de56726ce4
+- company: Hypertec
+  board: recruiting.ultipro.ca/hyp5001hygi/ecb46a16-1a69-4e02-990e-0d1eb10c17e9
+- company: Info-Tech Research Group
+  board: recruiting.ultipro.ca/inf5000iftc/1cffe7b2-1234-4d4c-9533-76e0d034f72a
+- company: Innovation Federal Credit Union
+  board: recruiting.ultipro.ca/inn5001inncu/6acc2e42-f7e6-4394-af00-00454129caad
+- company: InnVest Hotels
+  board: recruiting.ultipro.ca/inn5003ivhg/33f54055-5e8b-4629-84fb-f532112f562a
+- company: Canadian Investment Regulatory Organization
+  board: recruiting.ultipro.ca/inv5000iiro/794be965-00dd-4119-bd51-c4257eccf3b2
+- company: Italian Centre Shop
+  board: recruiting.ultipro.ca/ita5100icsl/bdd1ca5b-6c14-4de5-a728-1cc23349de0a
+- company: JSI
+  board: recruiting.ultipro.ca/jat5000jat/df50e66e-c710-4410-afdb-88066904e063
+- company: Kawartha Financial Services
+  board: recruiting.ultipro.ca/kaw5000kcul/11eb6b56-0104-4053-8a6a-3fa7629fcf5d
+- company: Kinetic Construction
+  board: recruiting.ultipro.ca/kin5100kinc/a0c01216-4fd3-471e-b88b-7fc5b660019c
+- company: Sienna Senior Living
+  board: recruiting.ultipro.ca/lei5000/60909611-5282-868b-2bae-d6740b1c3866
+- company: The Narmco Group
+  board: recruiting.ultipro.ca/mar5100mare/6e9840eb-2b86-416d-835a-e758c70a4e0c
+- company: Mastronardi Produce
+  board: recruiting.ultipro.ca/mas5000mplgp/784a20dc-d81b-43c1-a64a-53bdb2f7b335
+- company: Mastronardi Produce
+  board: recruiting.ultipro.ca/mas5000mplgp/99e1797e-3f87-42c4-83c5-9657bd30c646
+- company: Medisca
+  board: recruiting.ultipro.ca/med5000mepq/09f37d43-ad16-4871-8446-a6648f57a5f9
+- company: Meridian Credit Union
+  board: recruiting.ultipro.ca/mer5001mcul/6c1f133f-d0ac-48cd-a17d-bc54fe044ce3
+- company: MNP
+  board: recruiting.ultipro.ca/mnp5000mnpl/062c8fba-7371-4cd7-9e8a-94a0b8019ffc
+- company: MNP
+  board: recruiting.ultipro.ca/mnp5000mnpl/368e28ff-d47f-4fa1-aa28-013882ae1938
+- company: Movati Athletic
+  board: recruiting.ultipro.ca/mov5000mova/a3eb4794-3747-4b87-b8a8-27bb2a58da9d
+- company: The Mustard Seed
+  board: recruiting.ultipro.ca/mus5000thms/20f5e498-20ae-43e8-b155-0174b9e2e627
+- company: Beem Credit Union
+  board: recruiting.ultipro.ca/nor5001/e96c300a-1c00-4c51-ac8c-e8752ddc3993
+- company: Nortera
+  board: recruiting.ultipro.ca/nor5100nofd/e3ce2e8a-b8fc-42c9-97cf-ea17f4d5dd1d
+- company: Quantrics
+  board: recruiting.ultipro.ca/nor5102nodv/2e65f020-d966-460c-9106-2e6c49afd36c
+- company: NQX
+  board: recruiting.ultipro.ca/nor5102nodv/3b76f134-1951-4930-9245-393b65ab75a3
+- company: OEG Sports & Entertainment
+  board: recruiting.ultipro.ca/oil5000/012f2064-daf6-15a9-2927-856421fab603
+- company: OEG Sports & Entertainment
+  board: recruiting.ultipro.ca/oil5000/901ac2ab-4e82-49a2-8b28-1f9791164a95
+- company: Patrick Morin
+  board: recruiting.ultipro.ca/pat5101ptrk/82626854-ac9e-4565-92e7-ef18ea4c9589
+- company: Pinchin
+  board: recruiting.ultipro.ca/pin5100pinch/9a8366c3-1176-4a5a-a975-6d3d69566f75
+- company: Pliteq
+  board: recruiting.ultipro.ca/pli5100plit/39c1fc77-5771-4cd2-ba26-f8ec4d199ce3
+- company: Polycor
+  board: recruiting.ultipro.ca/pol5100pyco/4a0ff5d7-20b0-4794-977f-2dd2bdc3b1f8
+- company: Propel
+  board: recruiting.ultipro.ca/pro5004proph/385f656b-0bbd-4ae7-b936-f2983728cf6e
+- company: Psycho Bunny
+  board: recruiting.ultipro.ca/psy5000psych/55b5b45c-3918-417a-b1a3-e45306b31ac6
+- company: Pure Flavor
+  board: recruiting.ultipro.ca/pur5001prfl/5289b3a4-6e39-414f-b71a-0172cef9f575
+- company: RJC Engineers
+  board: recruiting.ultipro.ca/rea5000rjc/4e6c3563-6fd9-46b3-8409-372fb641b293
+- company: Responsive Health Management
+  board: recruiting.ultipro.ca/res5100repgi/6bfabc4a-6640-4d63-9c52-91807e48307f
+- company: Wellington Park Care Centre
+  board: recruiting.ultipro.ca/res5100repgi/6d3f8bd7-f3b4-49d0-966d-6e0378db8a98
+- company: Rygiel Supports for Community Living
+  board: recruiting.ultipro.ca/ryg5100rscl/3dde0773-9ee7-4429-8df2-c077ad33b22e
+- company: Schlegel Villages
+  board: recruiting.ultipro.ca/sch5000svia/eb652459-5c2f-4009-91d3-8f54e2778eca
+- company: Schroeder Ambulatory Centre
+  board: recruiting.ultipro.ca/sch5100scha/11c32e37-1507-4320-917c-d89a3cadf3d3
+- company: Sherweb
+  board: recruiting.ultipro.ca/she5001sher/167a1750-904f-40d0-baae-97445bab89ea
+- company: Sioux Lookout First Nations Health Authority
+  board: recruiting.ultipro.ca/sio5000siol/95ef5c5b-da87-42c9-9e91-60e84e21c807
+- company: Southmedic
+  board: recruiting.ultipro.ca/sou5000sthi/c43bed41-1663-4b92-82f0-b450099efe8e
+- company: Source Energy Services
+  board: recruiting.ultipro.ca/sou5001soes/28ae0286-18de-437d-8ede-6d77325af5f0
+- company: Steinbach Credit Union
+  board: recruiting.ultipro.ca/ste5001stcu/34acf94b-ced1-4eba-8618-dcffd5610a6b
+- company: Steele Auto Group
+  board: recruiting.ultipro.ca/ste5002sagl/e2794117-8328-4f04-89e6-81160179438f
+- company: Strive Living Society
+  board: recruiting.ultipro.ca/str5003svlv/d09326d7-a1df-48c1-a890-e11b14b207bb
+- company: Sunrise Soya Foods
+  board: recruiting.ultipro.ca/sun5100sunr/cbbf9313-0709-4232-b754-4e521782908b
+- company: Tandia Financial
+  board: recruiting.ultipro.ca/tan5000tanf/20421908-f62c-41f1-b097-201bc223f210
+- company: The Dufresne Group
+  board: recruiting.ultipro.ca/tdg5000tdgf/1640ad21-0f38-4ff8-af47-8cf6bfac9381
+- company: The Dufresne Group
+  board: recruiting.ultipro.ca/tdg5000tdgf/63457c25-625c-4096-b5ed-790027dd3c14
+- company: Teknion
+  board: recruiting.ultipro.ca/tek5000teknl/83cf78c5-f7fa-4e96-8fb5-29010b0bfa28
+- company: Titanium Transportation Group
+  board: recruiting.ultipro.ca/tit5000ttg/78b7a01b-cbed-4d4b-93ab-0a635eaebefb
+- company: Tolko Industries
+  board: recruiting.ultipro.ca/tol5000/a371167d-d0c1-0982-5dd6-b31a75098002
+- company: Toromont Industries
+  board: recruiting.ultipro.ca/tor5001til/24cbbe4b-86ee-4afa-9385-92863afdf1bd
+- company: Battlefield Equipment Rentals
+  board: recruiting.ultipro.ca/tor5001til/32be29ef-2204-47a4-a0cc-a8aed97783ec
+- company: University of Toronto Press
+  board: recruiting.ultipro.ca/uni5101utpi/a68055f2-1df3-42bc-a916-204638d6fe43
+- company: Vidir Solutions
+  board: recruiting.ultipro.ca/vid5000vidir/3f2894ee-41cb-4d95-b910-ad4ce9bbf444
+- company: Wajax
+  board: recruiting.ultipro.ca/waj5000/6ad8af81-3d19-6c66-9749-fa640267ce98
+- company: Wellington-Altus Financial
+  board: recruiting.ultipro.ca/wel5000wlap/7ec8ee0e-5cdd-4b4d-b008-fe41c13ddc8b
+- company: Prospera Credit Union
+  board: recruiting.ultipro.ca/wes5000wescu/1c521f28-04a8-453e-b6c8-1e59b094736c
+- company: West Fraser
+  board: recruiting.ultipro.ca/wes5001wfml/0a498053-7ed9-e62f-75be-4ea1cdd9e382
+- company: Westbank First Nation
+  board: recruiting.ultipro.ca/wes5002wfn/bda6c545-2c72-4983-8cf5-53b0bd43a40d
+- company: Western Canada Lottery Corporation
+  board: recruiting.ultipro.ca/wes5004wclc/e765749f-ec9a-4c6a-986d-b037c80b4cae
+- company: WinSport
+  board: recruiting.ultipro.ca/win5001wnsp/0ee2c49f-be5a-4fb6-9069-5c834c672fd0
+- company: Wing Kei
+  board: recruiting.ultipro.ca/win5102wkcc/b35c1e98-23d1-421e-a22e-e51b01bbe21e
+- company: Napoleon
+  board: recruiting.ultipro.ca/wol5000wolst/04ea2512-24d7-45cd-8a92-6a11befd2fa1
+- company: YMCA of Greater Toronto
+  board: recruiting.ultipro.ca/ymc5001ymgt/7fde8f3e-7920-4d9d-8394-87bd44cc2330
+- company: Aalberts
+  board: recruiting.ultipro.com/aal1000aipsa/90e3e14e-26e3-46c0-affc-329a34699e20
+- company: AFL
+  board: recruiting.ultipro.com/afl1002/d535bad2-e3ea-c8c8-2fb2-63621892e293
+- company: Alchemy
+  board: recruiting.ultipro.com/alc1004telco/e3a8eb11-96c0-4968-9120-a910524a61db
+- company: Amada
+  board: recruiting.ultipro.com/ama1000amai/5e5a1f03-7baa-4f11-f6e9-efaa3e3bd82e
+- company: Anritsu
+  board: recruiting.ultipro.com/anr1000/dde9d29f-8779-9c0f-5a64-1a23aaa827cb
+- company: Itaú Unibanco
+  board: recruiting.ultipro.com/ban1018bint/980e35bf-5bad-4e4f-843c-f4fa92966a79
+- company: Bell Flavors & Fragrances
+  board: recruiting.ultipro.com/bel1002/a959899d-f27a-8c4a-8199-ac3705946d70
+- company: Berlitz
+  board: recruiting.ultipro.com/ber1010berla/e29139b4-d372-4d70-a3ff-bd197b49e894
+- company: Levare
+  board: recruiting.ultipro.com/bor1000boret/3e5dc174-a1f9-41f3-80db-92742b0b75c4
+- company: Concord Hospitality
+  board: recruiting.ultipro.com/con1029chec/1d42a8b7-7823-4daa-bbbd-97ab3ca103de
+- company: Co-operators
+  board: recruiting.ultipro.com/coo5000coop/163383cc-cbae-4201-956e-c5e437bbfeb3
+- company: Co-operators
+  board: recruiting.ultipro.com/coo5000coop/609ec056-be55-474e-9859-a522bc040aca
+- company: Sovereign Insurance
+  board: recruiting.ultipro.com/coo5000coop/a9ad5b45-c1f4-4989-ad4d-d2d1de087176
+- company: James Hardie
+  board: recruiting.ultipro.com/cpg1000cpgin/253dc3cc-aea8-42ff-86ba-cdc25366d931
+- company: CTI Clinical Trial and Consulting Services
+  board: recruiting.ultipro.com/cti1000ctic/a3dbbc6d-3274-40c4-b0a6-1188df489f67
+- company: CAI Software
+  board: recruiting.ultipro.com/epr1000epsus/10653576-f6a1-4d69-8a9c-a0a96124abda
+- company: Eulen
+  board: recruiting.ultipro.com/eul1000eulen/45fa4ac4-7b3b-4c21-bd22-2f25c1a89b0b
+- company: Grupo Eulen
+  board: recruiting.ultipro.com/eul1000eulen/7f63c405-6579-4eb2-954a-482585dd4149
+- company: Flightstar
+  board: recruiting.ultipro.com/fli1001/84caedd4-2ba0-4290-3454-a9090e8ffa1b
+- company: Goodwill of North Georgia
+  board: recruiting.ultipro.com/goo1027goong/f1445c2c-01be-cb73-a8d4-b23ebac08fbd
+- company: JACK Entertainment
+  board: recruiting.ultipro.com/gre1028gtc/0cd3dfa3-f51e-49fc-a786-ad89fc7c8ed1
+- company: Hays
+  board: recruiting.ultipro.com/hay1004haus/bebb31cb-327e-46b6-80a7-e0033ffa4653
+- company: High Liner Foods
+  board: recruiting.ultipro.com/hig5000/1759e4e9-be78-e7e5-a0d6-292be61bb45e
+- company: Kaneka
+  board: recruiting.ultipro.com/kan1004kantc/6f4f9fe8-72cf-0786-9a1e-32e71f81a30f
+- company: Keolis
+  board: recruiting.ultipro.com/keo1000kcs/1e6b743f-ed4b-4dd4-9c03-44d18e048af1
+- company: Keolis
+  board: recruiting.ultipro.com/keo1000kcs/26c06e21-23a2-4055-83b6-dbe9df2b18fd
+- company: Cattron
+  board: recruiting.ultipro.com/lai1003lchi/3be07688-9bb4-488e-8dea-28c399b45530
+- company: Lesaffre
+  board: recruiting.ultipro.com/les1000/41bd77f2-d43c-46c4-9c13-968db20ca9e2
+- company: Lesaffre
+  board: recruiting.ultipro.com/les1000/87d55ea6-bafc-28a6-4e3d-01bba711f8aa
+- company: Merz Aesthetics
+  board: recruiting.ultipro.com/mer1020merz/84f5dbc2-c467-5a9e-3a37-6174c98926eb
+- company: Merz Aesthetics
+  board: recruiting.ultipro.com/mer1020merz/cddb7f9e-3a4a-4c24-9942-ecec85aacc19
+- company: Micro Center
+  board: recruiting.ultipro.com/mic1003mei/e3674ed3-2699-442b-aa28-c0b8436281b9
+- company: Micro Matic
+  board: recruiting.ultipro.com/mic1012micr/323b9249-2e14-4de7-9df5-5d8dc3332c1b
+- company: Nichiha
+  board: recruiting.ultipro.com/nic1007nich/183508db-663e-488e-88ad-de81b94b9516
+- company: Nichiha
+  board: recruiting.ultipro.com/nic1007nich/43ea306e-3317-41b3-9d83-29818c970fcd
+- company: NSK
+  board: recruiting.ultipro.com/nsk1001nska/96964bb4-da3b-4f74-9ed5-7d1aa469d3e8
+- company: Ollie's Bargain Outlet
+  board: recruiting.ultipro.com/oll1000ollie/355913c1-206d-48a4-bb34-020064efe845
+- company: Paradies Lagardère
+  board: recruiting.ultipro.com/par1026pars/b9883763-2d52-4511-a00a-57166395312c
+- company: Park Place Technologies
+  board: recruiting.ultipro.com/par1035pptl/e104637a-c3c6-4682-96d2-d7cc2662dc13
+- company: Pilkington
+  board: recruiting.ultipro.com/pil1003pnai/ecc5a57c-c01e-4b36-8a43-28799ce3b53d
+- company: Rainforest Alliance
+  board: recruiting.ultipro.com/rai1015fores/82609d43-a7fe-4523-abd0-0237b1a37596
+- company: Refresco
+  board: recruiting.ultipro.com/ref1001rbus/9dc59b6d-6dab-454e-883b-4c8c6d36d52d
+- company: Regal
+  board: recruiting.ultipro.com/reg1000regal/1bbca4e6-7b2d-4f4f-bb34-681fc9385364
+- company: ETRIA
+  board: recruiting.ultipro.com/ric1010riel/80948392-1e61-423d-ac6d-a479c63d3dfb
+- company: Rite of Passage
+  board: recruiting.ultipro.com/rit1002ropi/040523ed-1df5-4621-a3f6-14ed3728dfa4
+- company: Northern Digital
+  board: recruiting.ultipro.com/rop1001roper/fe143739-d521-4f49-a596-553671cff63b
+- company: Alpha Technologies
+  board: recruiting.ultipro.com/rop1002ripic/2cb20e0d-7389-4289-a67e-00059b8fd55b
+- company: Struers
+  board: recruiting.ultipro.com/rop1002ripic/c90ba72c-379b-4938-8b3b-98703d45c637
+- company: Hansen Technologies
+  board: recruiting.ultipro.com/rop1002ripic/e03bb5f8-2850-4afe-bcfc-a4d0b7638a33
+- company: RREMC Restaurants
+  board: recruiting.ultipro.com/rre1000rrem/25a0b7a8-95bc-443d-a68b-961f19c3525c
+- company: RREMC Restaurants
+  board: recruiting.ultipro.com/rre1000rrem/a200390b-db5c-47d3-bae2-7853539bd5b5
+- company: Park Lawn Corporation
+  board: recruiting.ultipro.com/sig1005sigm/25f0a774-289e-4deb-a0c0-2982887ab0ba
+- company: TenCate Protective Fabrics
+  board: recruiting.ultipro.com/sou1012soumi/b08917bf-438c-49fa-9ec0-a6327fe09241
+- company: IKS Health
+  board: recruiting.ultipro.com/sph1000sph/02436283-3813-424c-8564-250b38d25a1f
+- company: IKS Health
+  board: recruiting.ultipro.com/sph1000sph/81899a1f-d5dd-4f00-a632-9039b4112cdd
+- company: Student Transportation of Canada
+  board: recruiting.ultipro.com/stu1002stoa/5542e1ff-6a37-4f0d-a893-f42d053f0b11
+- company: Welser Profile
+  board: recruiting.ultipro.com/sup1007srfl/077e30d9-4a48-4da5-ace2-4021ddb80892
+- company: Trelleborg
+  board: recruiting.ultipro.com/tre1005trlb/25baced4-b853-459a-a0a7-aacf4f4871bd
+- company: Trelleborg
+  board: recruiting.ultipro.com/tre1005trlb/e29d2cd1-2e41-4fb7-99cf-4974ca632ddb
+- company: Bally's
+  board: recruiting.ultipro.com/twi1006trwh/b9cc79c4-75a2-4800-8508-16504f7a2d90
+- company: U.S. Pharmacopeial Convention
+  board: recruiting.ultipro.com/uni1066/7edcf3b7-2288-c99a-0ece-44b0a1e5cfe9
+- company: Vancity
+  board: recruiting.ultipro.com/van5000vcscu/a46cbdaa-ca2c-49b6-8d2b-e0ceaafa0e25
+- company: Vancity
+  board: recruiting.ultipro.com/van5000vcscu/a46cbdaaca2c49b68d2be0ceaafa0e25
+- company: Vesuvius
+  board: recruiting.ultipro.com/ves1002vesuv/ad3dbd53-34c3-49df-91cb-ff99585f0d7c
+- company: Vallourec
+  board: recruiting.ultipro.com/vms1001vms/9388a390-4cce-4189-9528-ced5c42967a6
+- company: WellStreet Urgent Care
+  board: recruiting.ultipro.com/wel1014wels/0a27819a-b0e7-4ea6-98ef-adf211f6333d
+- company: WellStreet Urgent Care
+  board: recruiting.ultipro.com/wel1014wels/1f36c97e-3c6d-4595-a2d7-c816db2b3ea3
+- company: WellStreet
+  board: recruiting.ultipro.com/wel1014wels/87890a9f-5f77-470c-9dd6-0c78a11fb4e7
+- company: WellStreet Urgent Care
+  board: recruiting.ultipro.com/wel1014wels/f7d57595-9140-408f-8a1b-fc9ca6631fad
+- company: ALMACO
+  board: recruiting2.ultipro.com/alm1001almai/b3833b48-abea-45ee-a553-02bba0941189
+- company: Align Precision
+  board: recruiting2.ultipro.com/arc1030arps/93a73d54-1df5-4256-89d3-8ee150075066
+- company: Align Precision
+  board: recruiting2.ultipro.com/arc1030arps/a1326bab-b0cf-46dd-9b5d-b33962a7b712
+- company: Bunzl
+  board: recruiting2.ultipro.com/bun1000bunzl/c019e5ac-5ff4-4af6-ad98-2a52f7888239
+- company: Bunzl
+  board: recruiting2.ultipro.com/bun1000bunzl/f890d5d0-ad5c-4cf4-8b26-dc09c95f1ef6
+- company: Superior Energy Services
+  board: recruiting2.ultipro.com/com1027spn/fcff7b7b-9c89-44f1-8187-dfa567a9da9c
+- company: Cosentino's Food Stores
+  board: recruiting2.ultipro.com/cos1003cosen/fbc80577-cdce-4300-9e27-76aca7a1371e
+- company: Cove Communities
+  board: recruiting2.ultipro.com/cov1008cove/0ead2ffd-5ae5-4371-b435-8ecd887783ed
+- company: Cove Communities
+  board: recruiting2.ultipro.com/cov1008cove/93e17994-2468-4f78-ab51-eea9cdcf2577
+- company: Crane Worldwide Logistics
+  board: recruiting2.ultipro.com/cra1009crwl/755fc3a5-077f-4395-ad9a-01ffdc6dea89
+- company: Goodwill of Colorado
+  board: recruiting2.ultipro.com/dis1007/08caf206-1236-731a-787b-c3376bc8c99f
+- company: Pacsun
+  board: recruiting2.ultipro.com/edd1000ebllc/6fb5a475-cea1-435e-89f4-fdc9d00253c1
+- company: Eskaton
+  board: recruiting2.ultipro.com/esk1000eskt/96056445-c716-45ab-b48d-7b682513f1f8
+- company: Frasier
+  board: recruiting2.ultipro.com/fra1011fmmi/e4cf4cac-ffee-42b9-836e-45322edd99d9
+- company: Frontier Airlines
+  board: recruiting2.ultipro.com/fro1003ftair/1efcf859-1b48-4a31-b014-ef62bdcab988
+- company: Daikin Comfort Technologies
+  board: recruiting2.ultipro.com/goo1038gomn/75022464-9dbd-43d2-af44-2840603d5823
+- company: Herschend Enterprises
+  board: recruiting2.ultipro.com/her1021hefe/7029c352-41fb-45ce-8bb1-7e9dc7268a31
+- company: Herschend
+  board: recruiting2.ultipro.com/her1021hefe/d687235c-cb19-4675-b75c-7c6a0b525916
+- company: Hunting
+  board: recruiting2.ultipro.com/hun1010hunte/5a1dc1fd-b4db-451e-843c-40bf217bd5b1
+- company: FB Society
+  board: recruiting2.ultipro.com/inf1006fbso/83bf45de-931e-4ccf-aa2b-a9895b7a474a
+- company: FB Society
+  board: recruiting2.ultipro.com/inf1006fbso/8cabb510-7738-43c7-91d2-abbf8138dca8
+- company: FB Society
+  board: recruiting2.ultipro.com/inf1006fbso/bcce553a-9ae4-4d34-8bc2-d0e7809c425e
+- company: FB Society
+  board: recruiting2.ultipro.com/inf1006fbso/e49c86fc-4d98-4221-9532-0f22b1228ef5
+- company: Magic Memories
+  board: recruiting2.ultipro.com/mag1009mgml/e95385f8-102c-45ea-b809-d7f932a46924
+- company: Mark Anthony Group
+  board: recruiting2.ultipro.com/mar5000mag/038671a7-9651-4e9a-9c7b-65353309e549
+- company: Mark Anthony Group
+  board: recruiting2.ultipro.com/mar5000mag/052bb00a-c036-49cb-b5e2-af12f9c69c2f
+- company: Mark Anthony Group
+  board: recruiting2.ultipro.com/mar5000mag/2cd59b9a-2cb9-476b-99e0-ba08610a51b9
+- company: Mark Anthony Group
+  board: recruiting2.ultipro.com/mar5000mag/8febf0ae-8776-428e-b625-2faa005b7fc1
+- company: Mark Anthony Group
+  board: recruiting2.ultipro.com/mar5000mag/c61d24e7-4c9b-4d2e-9a1c-310a7eb51014
+- company: Mark Anthony Group
+  board: recruiting2.ultipro.com/mar5000mag/d9fb1a77-3cfb-4c83-ad48-0dc346e5e331
+- company: Mark Anthony Group
+  board: recruiting2.ultipro.com/mar5000mag/f7c0bc34-5aa0-4b3d-b363-73a2e544ae23
+- company: Meetings & Incentives Worldwide
+  board: recruiting2.ultipro.com/mee1000micw/a5d5635b-de7c-468f-8300-d438b2adec8a
+- company: Menzies Aviation
+  board: recruiting2.ultipro.com/men1002menzi/c62dfe4d-64ad-4642-8cd0-17a30715a697
+- company: Fleet Farm
+  board: recruiting2.ultipro.com/mil1013mlsc/5bc917b0-472e-447d-b652-3599543b6e78
+- company: Mitutoyo
+  board: recruiting2.ultipro.com/mit1004mta/bb216e86-609a-4fdb-8eda-111fd9e9c1c6
+- company: Long-Lewis Auto Group
+  board: recruiting2.ultipro.com/oai1000oand/d6079860-21a1-4f94-97c6-f6905dec5056
+- company: Odom Corporation
+  board: recruiting2.ultipro.com/odo1000odom/343868f2-0f38-4d99-bb1a-4bc2f76779b9
+- company: Schmidt Hammer Lassen
+  board: recruiting2.ultipro.com/per1007pwill/b6d12c54-7c9b-4f73-8e31-ab8f1a07fcfe
+- company: AppLogic Networks
+  board: recruiting2.ultipro.com/pro1053proc/e0dd7310-4f0b-40f4-9433-19dd80cb1ea7
+- company: The Salvation Army
+  board: recruiting2.ultipro.com/sal1002/bcc2e2d1-d94c-2041-4126-28086417eb0a
+- company: Propelis
+  board: recruiting2.ultipro.com/sgs1000sgsi/97ca74c0-a912-49a2-94d9-461835a67db8
+- company: Propelis
+  board: recruiting2.ultipro.com/sgs1000sgsi/b74103b0-5721-43b2-97b3-8fc53a34cbe4
+- company: Northview Hotel Group
+  board: recruiting2.ultipro.com/sir1003sfan/50beb79d-01f6-4abf-a966-b5ed139ea859
+- company: Sub-Zero Group
+  board: recruiting2.ultipro.com/sub1000subz/ffaa667e-61b4-4b38-b427-2cb6982a41a3
+- company: Torchy's Tacos
+  board: recruiting2.ultipro.com/suc1002sfmg/d523ca84-ee9d-40e1-9838-78388610ec79
+- company: Vistex
+  board: recruiting2.ultipro.com/vis1012visx/23e64b4e-ff01-4579-9e5a-835480ac7a51
+- company: Rider Levett Bucknall
+  board: riderlb.rec.pro.ukg.net/rid1501rlbn/fb627056-6d5f-4205-b420-441e429de2ba
+- company: Toshiba
+  board: toshibausa.rec.pro.ukg.net/tos1004tshb/985ab92d-ad02-4ef9-9448-e9a00602001a
+- company: WebPros
+  board: webpros.rec.pro.ukg.net/web1501webp/1c6cf7c0-2d14-4575-906b-78213c1ced24
+- company: Witham Health Services
+  board: witham.rec.pro.ukg.net/wit1500whmh/47727cde-3d32-4129-bef1-ef796414651d

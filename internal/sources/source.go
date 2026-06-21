@@ -144,6 +144,7 @@ func All(c HTTPClient) map[string]Source {
 		NewEightfold(c),
 		NewFreshteam(c),
 		NewDeel(c),
+		NewUKG(c),
 		NewSenior(c),
 		NewTrakstar(c),
 		// Ashby boards whose public Posting API is disabled, served via the embed GraphQL.
