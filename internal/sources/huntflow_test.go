@@ -82,6 +82,55 @@ func hfDetailBody(id int, position, city, money, body string) string {
 	]`
 }
 
+// hfDetailBodyWithDivision builds a detail payload that includes the division breadcrumb,
+// used to test a community hub's per-vacancy employer resolution.
+func hfDetailBodyWithDivision(id int, position, division, body string) string {
+	return `[
+		{"data":1},{"vacancy":2},
+		{"id":3,"position":4,"city":5,"money":5,"division":6,"intro":5,"body":7,"requirements":8,"conditions":8,"is_archived":9},
+		` + strconv.Itoa(id) + `,"` + position + `",null,"` + division + `","` + body + `","",false
+	]`
+}
+
+func TestHuntflowFetchHubResolvesEmployerFromDivision(t *testing.T) {
+	detail := hfDetailBodyWithDivision(27611, "Senior Fullstack Engineer",
+		"Fluently • Partners • Vacancies", "<p>Build.</p>")
+	fake := (&routedHTTP{}).
+		route("/vacancy/eng/_payload.json", detail).
+		route(".huntflow.io/_payload.json", hfListBody(27611, "eng", "Senior Fullstack Engineer", "null"))
+
+	jobs, err := NewHuntflow(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "AlumniHub", Provider: "huntflow", Board: "alumnihub-career", Hub: true,
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1", len(jobs))
+	}
+	if jobs[0].Company != "Fluently" {
+		t.Errorf("Company = %q, want Fluently (resolved from division on a hub board)", jobs[0].Company)
+	}
+}
+
+func TestHuntflowFetchNonHubKeepsConfiguredCompany(t *testing.T) {
+	// A division is present, but a non-hub board still attributes to the configured company.
+	detail := hfDetailBodyWithDivision(1, "Role", "Fluently • Partners • Vacancies", "<p>x</p>")
+	fake := (&routedHTTP{}).
+		route("/vacancy/r/_payload.json", detail).
+		route(".huntflow.io/_payload.json", hfListBody(1, "r", "Role", "null"))
+
+	jobs, _ := NewHuntflow(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Banki.ru", Provider: "huntflow", Board: "banki",
+	})
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1", len(jobs))
+	}
+	if jobs[0].Company != "Banki.ru" {
+		t.Errorf("Company = %q, want Banki.ru (a non-hub board keeps the configured company)", jobs[0].Company)
+	}
+}
+
 func TestHuntflowFetchMapsListAndDetail(t *testing.T) {
 	fake := (&routedHTTP{}).
 		route("/vacancy/senior-backend-developer-2/_payload.json",
@@ -115,6 +164,30 @@ func TestHuntflowFetchMapsListAndDetail(t *testing.T) {
 	}
 	if j.PostedAt != nil {
 		t.Errorf("PostedAt = %v, want nil (feed has no date)", j.PostedAt)
+	}
+}
+
+func TestHuntflowCompanyFromDivision(t *testing.T) {
+	const fallback = "AlumniHub"
+	tests := []struct {
+		name     string
+		division string
+		want     string
+	}{
+		{"three segments", "Mirai · Partners · Vacancies", "Mirai"},
+		{"sub-team before company", "Remote · Sparkland · Partners · Vacancies", "Sparkland"},
+		{"bullet separator", "Fluently • Partners • Vacancies", "Fluently"},
+		{"company with punctuation", "NDA (Hedge Fund) · Partners · Vacancies", "NDA (Hedge Fund)"},
+		{"empty falls back", "", fallback},
+		{"no partners folder falls back", "Engineering · Acme", fallback},
+		{"partners first falls back", "Partners · Vacancies", fallback},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := companyFromDivision(tt.division, fallback); got != tt.want {
+				t.Errorf("companyFromDivision(%q) = %q, want %q", tt.division, got, tt.want)
+			}
+		})
 	}
 }
 

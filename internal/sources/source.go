@@ -16,11 +16,16 @@ import (
 // company whose jobs we crawl, the platform it uses (Provider), and the platform-specific
 // board id. Region is an optional per-entry hint for ATS platforms that host tenants on
 // regional API domains (e.g. Lever's EU data-residency host); empty means the default host.
+// Hub is an optional per-entry flag marking a board as a community/agency hub whose vacancies
+// belong to many partner companies; an adapter that honours it resolves each job's employer from
+// the posting and uses Company only as the hub name and per-vacancy fallback (e.g. huntflow's
+// AlumniHub). It is ignored by adapters that do not implement hub resolution.
 type CompanyEntry struct {
 	Company  string `yaml:"company"`
 	Provider string `yaml:"provider"`
 	Board    string `yaml:"board"`
 	Region   string `yaml:"region"`
+	Hub      bool   `yaml:"hub"`
 }
 
 // Job is a raw posting as an adapter yields it, before the pipeline normalizes it

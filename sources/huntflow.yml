@@ -1,9 +1,12 @@
 # huntflow boards. Provider is the filename; each entry is company + board.
 # board = the <board>.huntflow.io subdomain (see internal/sources/huntflow.go).
 # Each subdomain validated live (>0 open vacancies via _payload.json) before adding.
+# hub: true marks a community/agency board whose real employer is per-vacancy (from the
+# division breadcrumb); company then names the hub and is the fallback employer.
 
 - company: AlumniHub
   board: alumnihub-career
+  hub: true
 - company: Banki.ru
   board: banki
 - company: Coffeemania

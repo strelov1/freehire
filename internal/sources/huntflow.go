@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 // huntflow adapts the public career sites Huntflow hosts at <board>.huntflow.io. Those
@@ -21,6 +22,10 @@ const (
 	huntflowDetailURL  = "https://%s.huntflow.io/vacancy/%s/_payload.json"
 	huntflowVacancyURL = "https://%s.huntflow.io/vacancy/%s"
 )
+
+// huntflowHubFolder is the division-breadcrumb folder a community hub nests every partner
+// company under (see companyFromDivision).
+const huntflowHubFolder = "Partners"
 
 // NewHuntflow builds the Huntflow adapter over the given HTTP client.
 func NewHuntflow(c JSONGetter) Source { return huntflow{http: c} }
@@ -87,6 +92,7 @@ func (h huntflow) detail(ctx context.Context, e CompanyEntry, it hfItem) (Job, b
 	var d struct {
 		City         string `json:"city"`
 		Money        string `json:"money"`
+		Division     string `json:"division"`
 		Intro        string `json:"intro"`
 		Body         string `json:"body"`
 		Requirements string `json:"requirements"`
@@ -103,16 +109,43 @@ func (h huntflow) detail(ctx context.Context, e CompanyEntry, it hfItem) (Job, b
 		body = "<p>" + d.Money + "</p>" + body
 	}
 
+	// On a community hub the real employer lives in the vacancy's division breadcrumb, not in
+	// the configured (hub) company; an ordinary board keeps its configured company.
+	company := e.Company
+	if e.Hub {
+		company = companyFromDivision(d.Division, e.Company)
+	}
+
 	return Job{
 		ExternalID:  strconv.FormatInt(it.ID, 10),
 		URL:         fmt.Sprintf(huntflowVacancyURL, e.Board, it.Slug),
 		Title:       it.Position,
-		Company:     e.Company,
+		Company:     company,
 		Location:    d.City,
 		Description: sanitizeHTML(body),
 		Remote:      isRemote(d.City),
 		PostedAt:    nil, // the public career feed carries no publish date
 	}, true
+}
+
+// companyFromDivision resolves a hub board's per-vacancy employer from Huntflow's division
+// breadcrumb. Huntflow encodes division leaf-first as
+// "<sub-team> · … · <Company> · Partners · Vacancies", where the huntflowHubFolder holds every
+// partner company, so the employer is the segment immediately before that folder; deeper
+// segments are the company's own sub-teams. The separator is "·" (U+00B7) in the list payload
+// and "•" (U+2022) in the detail payload. Falls back to the given company when the division has
+// no such structure (e.g. the hub's own internal roles).
+func companyFromDivision(division, fallback string) string {
+	segments := strings.Split(strings.ReplaceAll(division, "•", "·"), "·")
+	for i, seg := range segments {
+		if i > 0 && strings.TrimSpace(seg) == huntflowHubFolder {
+			if company := strings.TrimSpace(segments[i-1]); company != "" {
+				return company
+			}
+			break
+		}
+	}
+	return fallback
 }
 
 // payload fetches a Nuxt _payload.json and resolves its devalue references into a plain
