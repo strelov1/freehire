@@ -1,0 +1,8 @@
+# InHire boards. Provider is the filename; each entry is company + board.
+# board = the InHire tenant slug, sent as the X-Tenant header (see internal/sources/inhire.go).
+- company: Conta Azul
+  board: contaazul
+- company: Involves
+  board: involves
+- company: Neoway
+  board: neoway

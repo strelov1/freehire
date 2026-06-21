@@ -115,12 +115,14 @@ func All(c HTTPClient) map[string]Source {
 		NewRecruitee(c),
 		NewSmartRecruiters(c),
 		NewGupy(c),
+		NewSolides(c),
 		NewPersonio(c),
 		NewPinpoint(c),
 		NewRippling(c),
 		NewBambooHR(c),
 		NewWorkday(c),
 		NewHuntflow(c),
+		NewInhire(c),
 		NewGem(c),
 		NewSuccessFactors(c),
 		NewTeamtailor(c),
@@ -143,6 +145,7 @@ func All(c HTTPClient) map[string]Source {
 		NewFreshteam(c),
 		NewDeel(c),
 		NewSenior(c),
+		NewTrakstar(c),
 		// Ashby boards whose public Posting API is disabled, served via the embed GraphQL.
 		NewAshbyGraphQL(c),
 		// Multi-company aggregators (boardless): one global feed, company per posting.

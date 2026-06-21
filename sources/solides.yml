@@ -1,0 +1,6 @@
+# Solides ATS boards (apigw.solides.com.br). board = the tenant subdomain slug
+# (<board>.vagas.solides.com.br). Broad Brazilian ATS; description is inline in the listing.
+- company: Dynamox
+  board: dynamox
+- company: Reivax
+  board: reivax
