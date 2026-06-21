@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/sources"
+	"golang.org/x/net/html"
 )
 
 // errMissing is the sentinel a test getter returns for an unmapped URL. In production the
@@ -19,12 +20,14 @@ var errMissing = errors.New("not found")
 const greenhouseBoardsAPI = "https://boards-api.greenhouse.io/v1/boards"
 
 // httpClient is the transport a prober needs: most platforms list over GetJSON, Workday's
-// CXS listing is POST-only (PostJSON), and iCIMS reads an XML sitemap (GetXML). The real
-// *sources.Client implements all three.
+// CXS listing is POST-only (PostJSON), iCIMS/Deel read an XML sitemap (GetXML), and
+// Freshteam has no API so its prober reads the listing HTML (GetHTML). The real
+// *sources.Client implements all four.
 type httpClient interface {
 	sources.JSONGetter
 	sources.JSONPoster
 	sources.XMLGetter
+	sources.HTMLGetter
 }
 
 // prober checks one candidate board on its ATS platform, returning the company name the
@@ -230,14 +233,331 @@ func (workdayProber) boardID(seedToken string) string {
 	return fmt.Sprintf("%s.%s.myworkdayjobs.com/%s", parts[0], parts[1], parts[2])
 }
 
+// orSlug applies the slug-fallback doctrine the API probers share: the platform-reported
+// company name when present, else the slug (board id) itself.
+func orSlug(name, slug string) string {
+	if name != "" {
+		return name
+	}
+	return slug
+}
+
+// workableProber probes the Workable public widget API. A board is the account subdomain;
+// the widget endpoint returns the account name and its open jobs, so a non-empty jobs list
+// is a live board.
+type workableProber struct{}
+
+func (workableProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
+	var resp struct {
+		Name string `json:"name"`
+		Jobs []struct {
+			Shortcode string `json:"shortcode"`
+		} `json:"jobs"`
+	}
+	if err := c.GetJSON(ctx, fmt.Sprintf("https://apply.workable.com/api/v1/widget/accounts/%s?details=true", slug), &resp); err != nil {
+		return "", 0, nil
+	}
+	if len(resp.Jobs) == 0 {
+		return "", 0, nil
+	}
+	return orSlug(resp.Name, slug), len(resp.Jobs), nil
+}
+
+// smartRecruitersProber probes the SmartRecruiters public postings API. The listing carries
+// totalFound, so one limit=1 page settles liveness; the company name comes from the
+// company-metadata endpoint, fetched only once a board is known to have jobs.
+type smartRecruitersProber struct{}
+
+func (smartRecruitersProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
+	var page struct {
+		TotalFound int `json:"totalFound"`
+		Content    []struct {
+			ID string `json:"id"`
+		} `json:"content"`
+	}
+	if err := c.GetJSON(ctx, fmt.Sprintf("https://api.smartrecruiters.com/v1/companies/%s/postings?limit=1", slug), &page); err != nil {
+		return "", 0, nil
+	}
+	n := page.TotalFound
+	if n == 0 {
+		n = len(page.Content)
+	}
+	if n == 0 {
+		return "", 0, nil
+	}
+	var meta struct {
+		Name string `json:"name"`
+	}
+	_ = c.GetJSON(ctx, fmt.Sprintf("https://api.smartrecruiters.com/v1/companies/%s", slug), &meta)
+	return orSlug(meta.Name, slug), n, nil
+}
+
+// recruiteeProber probes the Recruitee per-subdomain offers API. A non-empty offers array
+// is a live board; the list carries no company name, so it falls back to the slug.
+type recruiteeProber struct{}
+
+func (recruiteeProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
+	var resp struct {
+		Offers []struct {
+			ID int64 `json:"id"`
+		} `json:"offers"`
+	}
+	if err := c.GetJSON(ctx, fmt.Sprintf("https://%s.recruitee.com/api/offers/", slug), &resp); err != nil {
+		return "", 0, nil
+	}
+	if len(resp.Offers) == 0 {
+		return "", 0, nil
+	}
+	return slug, len(resp.Offers), nil
+}
+
+// pinpointProber probes the Pinpoint public postings API. A non-empty data array is a live
+// board; the list carries no company name, so it falls back to the slug.
+type pinpointProber struct{}
+
+func (pinpointProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
+	var resp struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := c.GetJSON(ctx, fmt.Sprintf("https://%s.pinpointhq.com/postings.json", slug), &resp); err != nil {
+		return "", 0, nil
+	}
+	if len(resp.Data) == 0 {
+		return "", 0, nil
+	}
+	return slug, len(resp.Data), nil
+}
+
+// breezyProber probes the Breezy per-subdomain JSON list (a bare array of postings). A
+// non-empty array is a live board; the list carries no company name, so it falls back to
+// the slug.
+type breezyProber struct{}
+
+func (breezyProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
+	var postings []struct {
+		ID string `json:"id"`
+	}
+	if err := c.GetJSON(ctx, fmt.Sprintf("https://%s.breezy.hr/json", slug), &postings); err != nil {
+		return "", 0, nil
+	}
+	if len(postings) == 0 {
+		return "", 0, nil
+	}
+	return slug, len(postings), nil
+}
+
+// teamtailorProber probes a Teamtailor career site. The board is the site host, and its
+// /jobs listing serves a JSON Feed (title + items) to a JSON Accept header, so a non-empty
+// items array is a live board and the feed title is the company name.
+type teamtailorProber struct{}
+
+func (teamtailorProber) probe(ctx context.Context, c httpClient, host string) (string, int, error) {
+	var feed struct {
+		Title string `json:"title"`
+		Items []struct {
+			ID string `json:"id"`
+		} `json:"items"`
+	}
+	if err := c.GetJSON(ctx, fmt.Sprintf("https://%s/jobs?page=1", host), &feed); err != nil {
+		return "", 0, nil
+	}
+	if len(feed.Items) == 0 {
+		return "", 0, nil
+	}
+	return orSlug(feed.Title, host), len(feed.Items), nil
+}
+
+// trakstarProber probes the Trakstar Hire per-subdomain RSS feed. A non-empty channel of
+// items is a live board; the feed carries no company name, so it falls back to the slug.
+type trakstarProber struct{}
+
+func (trakstarProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
+	var feed struct {
+		Items []struct{} `xml:"channel>item"`
+	}
+	if err := c.GetXML(ctx, fmt.Sprintf("https://%s.hire.trakstar.com/jobfeeds/%s", slug, slug), &feed); err != nil {
+		return "", 0, nil
+	}
+	if len(feed.Items) == 0 {
+		return "", 0, nil
+	}
+	return slug, len(feed.Items), nil
+}
+
+// personioProber probes the Personio public XML feed on the .com host (the host the adapter
+// crawls). A non-empty positions list is a live board; a tenant served only on a regional
+// TLD (.de/.es) 404s here and is skipped — correctly, since the adapter could not crawl it
+// either. The feed carries no company name, so it falls back to the slug.
+type personioProber struct{}
+
+func (personioProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
+	var resp struct {
+		Positions []struct{} `xml:"position"`
+	}
+	if err := c.GetXML(ctx, fmt.Sprintf("https://%s.jobs.personio.com/xml", slug), &resp); err != nil {
+		return "", 0, nil
+	}
+	if len(resp.Positions) == 0 {
+		return "", 0, nil
+	}
+	return slug, len(resp.Positions), nil
+}
+
+// gemProbeQuery is the minimal list query (extId only) the Gem prober uses for liveness — a
+// trimmed sibling of the adapter's gemListQuery.
+const gemProbeQuery = `query JobBoardList($boardId: String!) { oatsExternalJobPostings(boardId: $boardId) { jobPostings { extId } } }`
+
+// gemProber probes the Gem public job-board GraphQL API. A non-empty jobPostings list is a
+// live board; the query exposes no company name, so it falls back to the slug.
+type gemProber struct{}
+
+func (gemProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
+	body := map[string]any{
+		"operationName": "JobBoardList",
+		"query":         gemProbeQuery,
+		"variables":     map[string]any{"boardId": slug},
+	}
+	var resp struct {
+		Data struct {
+			Postings struct {
+				JobPostings []struct {
+					ExtID string `json:"extId"`
+				} `json:"jobPostings"`
+			} `json:"oatsExternalJobPostings"`
+		} `json:"data"`
+	}
+	if err := c.PostJSON(ctx, "https://jobs.gem.com/api/public/graphql", body, &resp); err != nil {
+		return "", 0, nil
+	}
+	n := len(resp.Data.Postings.JobPostings)
+	if n == 0 {
+		return "", 0, nil
+	}
+	return slug, n, nil
+}
+
+// deelJobLocPattern matches a Deel sitemap entry that is a job-detail page (the same shape
+// the adapter keys off), distinguishing a live board from the board's empty shell sitemap.
+var deelJobLocPattern = regexp.MustCompile(`/job-details/`)
+
+// deelProber probes a Deel ATS tenant by its per-board sitemap (the adapter's own tenant
+// validation): a sitemap listing ≥1 /job-details/ URL is a live board. The sitemap carries
+// no company name, so it falls back to the slug.
+type deelProber struct{}
+
+func (deelProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
+	var sitemap struct {
+		URLs []struct {
+			Loc string `xml:"loc"`
+		} `xml:"url"`
+	}
+	if err := c.GetXML(ctx, fmt.Sprintf("https://jobs.deel.com/%s/sitemap.xml", slug), &sitemap); err != nil {
+		return "", 0, nil
+	}
+	n := 0
+	for _, u := range sitemap.URLs {
+		if deelJobLocPattern.MatchString(u.Loc) {
+			n++
+		}
+	}
+	if n == 0 {
+		return "", 0, nil
+	}
+	return slug, n, nil
+}
+
+// freshteamJobPattern matches a Freshteam job permalink's /jobs/<12-char-id> segment, the
+// same id shape the adapter keys off. It anchors to a path boundary so non-job paths
+// (/jobs, /jobs/search) do not match.
+var freshteamJobPattern = regexp.MustCompile(`/jobs/[A-Za-z0-9_-]{12}(?:[/?#]|$)`)
+
+// freshteamProber probes a Freshteam career site. Freshteam exposes no public JSON list
+// (its API is auth-gated), so liveness is judged from the listing HTML: a live board links
+// ≥1 job permalink. The page carries no reliable company name, so it falls back to the slug.
+type freshteamProber struct{}
+
+func (freshteamProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
+	root, err := c.GetHTML(ctx, fmt.Sprintf("https://%s.freshteam.com/jobs", slug))
+	if err != nil {
+		return "", 0, nil
+	}
+	n := countMatchingLinks(root, freshteamJobPattern)
+	if n == 0 {
+		return "", 0, nil
+	}
+	return slug, n, nil
+}
+
+// countMatchingLinks counts the <a href> values in the tree whose value matches pat. It is
+// the prober's own minimal anchor walk (the sources package's link helpers are unexported),
+// used only for liveness, so a duplicate link inflating the count is harmless.
+func countMatchingLinks(root *html.Node, pat *regexp.Regexp) int {
+	n := 0
+	var walk func(*html.Node)
+	walk = func(node *html.Node) {
+		if node.Type == html.ElementNode && node.Data == "a" {
+			for _, a := range node.Attr {
+				if a.Key == "href" && pat.MatchString(a.Val) {
+					n++
+					break
+				}
+			}
+		}
+		for ch := node.FirstChild; ch != nil; ch = ch.NextSibling {
+			walk(ch)
+		}
+	}
+	walk(root)
+	return n
+}
+
+// joinProber probes a Join.com company by its numeric company id (the board id the adapter
+// stores — the slug path returns empty). A non-zero rowCount is a live board; the company
+// name comes from the company endpoint, fetched only once the board is known to have jobs.
+// The seed is numeric ids: a slug is resolved to its id during seed building, not here.
+type joinProber struct{}
+
+func (joinProber) probe(ctx context.Context, c httpClient, id string) (string, int, error) {
+	var jobs struct {
+		Pagination struct {
+			RowCount int `json:"rowCount"`
+		} `json:"pagination"`
+	}
+	if err := c.GetJSON(ctx, fmt.Sprintf("https://join.com/api/public/companies/%s/jobs?page=1&pageSize=1", id), &jobs); err != nil {
+		return "", 0, nil
+	}
+	if jobs.Pagination.RowCount == 0 {
+		return "", 0, nil
+	}
+	var meta struct {
+		Name string `json:"name"`
+	}
+	_ = c.GetJSON(ctx, fmt.Sprintf("https://join.com/api/public/companies/%s", id), &meta)
+	return orSlug(meta.Name, id), jobs.Pagination.RowCount, nil
+}
+
 // probers maps a provider key to its prober. Adding an ATS is one entry here plus the
 // prober type — the same shape as sources.All.
 var probers = map[string]prober{
-	"greenhouse": greenhouseProber{},
-	"lever":      leverProber{},
-	"ashby":      ashbyProber{},
-	"bamboohr":   bamboohrProber{},
-	"workday":    workdayProber{},
-	"icims":      icimsProber{},
-	"gupy":       gupyProber{},
+	"greenhouse":      greenhouseProber{},
+	"lever":           leverProber{},
+	"ashby":           ashbyProber{},
+	"bamboohr":        bamboohrProber{},
+	"workday":         workdayProber{},
+	"icims":           icimsProber{},
+	"gupy":            gupyProber{},
+	"workable":        workableProber{},
+	"smartrecruiters": smartRecruitersProber{},
+	"recruitee":       recruiteeProber{},
+	"pinpoint":        pinpointProber{},
+	"breezy":          breezyProber{},
+	"teamtailor":      teamtailorProber{},
+	"trakstar":        trakstarProber{},
+	"personio":        personioProber{},
+	"gem":             gemProber{},
+	"deel":            deelProber{},
+	"freshteam":       freshteamProber{},
+	"join":            joinProber{},
 }
