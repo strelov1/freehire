@@ -1,0 +1,5 @@
+# Senior "Portal de Talentos" boards. Board = the tenant subdomain.
+- company: Intelbras
+  board: intelbras
+- company: Senior Sistemas
+  board: vemprasenior
