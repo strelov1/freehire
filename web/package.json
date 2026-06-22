@@ -19,7 +19,7 @@
     "@eslint/js": "^10.0.1",
     "@lucide/svelte": "^1.16.0",
     "@sveltejs/adapter-node": "^5.5.4",
-    "@sveltejs/kit": "^2.65.0",
+    "@sveltejs/kit": "^2.66.0",
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
     "@tailwindcss/vite": "^4.3.1",
     "@tsconfig/svelte": "^5.0.4",
