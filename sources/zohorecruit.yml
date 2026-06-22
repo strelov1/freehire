@@ -1,6 +1,6 @@
 # Zoho Recruit career sites. Provider is the filename; each entry is company + board.
 # board = the careers host (see internal/sources/zoho.go); the TLD varies by data region.
-# Each board validated live (careers page embeds an #jobs openings list) before adding.
+# Each board validated live (/jobs/Careers returns 200) before adding.
 - company: 2Base Technologies
   board: 2basetechnologies.zohorecruit.in
 - company: Two Roads Trading
@@ -9,12 +9,16 @@
   board: 360recruit.zohorecruit.com
 - company: 367 Agency
   board: 367.zohorecruit.in
+- company: 48 Hour Film Project
+  board: 48hourfilm.zohorecruit.com
 - company: AAJ Supply Chain Management
   board: aajenterprises.zohorecruit.in
 - company: Abia State Government
   board: abiastate.zohorecruit.com
 - company: Abmiro
   board: abmiro.zohorecruit.eu
+- company: Absolute App Labs
+  board: absoluteapplabs.zohorecruit.in
 - company: Accio Robotics
   board: acciorobotics.zohorecruit.com
 - company: Accounting Baba
@@ -57,6 +61,8 @@
   board: agsuitetech.zohorecruit.in
 - company: AHA Centre
   board: ahacentre.zohorecruit.com
+- company: Ahli Bank
+  board: ahlibank.zohorecruit.com
 - company: Aifa Consulting
   board: aifaconsulting.zohorecruit.com
 - company: Airdit
@@ -81,6 +87,8 @@
   board: almulla.zohorecruit.com
 - company: Altera Consulting
   board: alteraconsulting-altera.zohorecruit.com
+- company: AltF Coworking
+  board: altfcoworking.zohorecruit.com
 - company: Amardeep Aggregates
   board: amardeepaggregates.zohorecruit.in
 - company: Ambuce Rescue Team
@@ -99,6 +107,8 @@
   board: ankurlighting.zohorecruit.com
 - company: Annova Solutions
   board: annovasolutions.zohorecruit.in
+- company: Ansata Computer Systems
+  board: ansata.zohorecruit.com
 - company: ANSCER Robotics
   board: anscer.zohorecruit.com
 - company: AOSIS
@@ -163,6 +173,8 @@
   board: atease.zohorecruit.com.au
 - company: Atlanta Systems
   board: atlantasys.zohorecruit.com
+- company: Atlas OT
+  board: atlas-ot.zohorecruit.com
 - company: Atlas Advisors
   board: atlasadvisors.zohorecruit.com
 - company: AuditorsDesk
@@ -177,6 +189,8 @@
   board: auzin.zohorecruit.in
 - company: Avana Medical
   board: avanamedical.zohorecruit.in
+- company: Avana Surgical Systems
+  board: avanasurgical.zohorecruit.in
 - company: Seacoast Service Partners
   board: avantihires.zohorecruit.com
 - company: Aventa
@@ -283,6 +297,8 @@
   board: brandarbor.zohorecruit.in
 - company: BrandCrest Holdings
   board: brandcrest.zohorecruit.in
+- company: BrightChamps
+  board: brightchamps.zohorecruit.in
 - company: Browns Jewellers
   board: brownsjewellers.zohorecruit.com
 - company: Bublishing
@@ -295,10 +311,14 @@
   board: cable-services.zohorecruit.com
 - company: CADOpt Technologies
   board: cadopt.zohorecruit.in
+- company: CA Krishna
+  board: cakrishna.zohorecruit.in
 - company: Vellux Africa
   board: callvellux.zohorecruit.com
 - company: Campbell Property Management
   board: campbellpropertymanagement.zohorecruit.com
+- company: CanKids KidsCan
+  board: cankidsindia.zohorecruit.in
 - company: CAPACITI
   board: capaciti.zohorecruit.com
 - company: Chubb
@@ -309,6 +329,8 @@
   board: captainfresh.zohorecruit.com
 - company: Zoho Corporation
   board: careers.zohorecruit.in
+- company: Caregivers Home Health Services
+  board: caregivershhs.zohorecruit.com
 - company: Caribe Bay
   board: caribebay.zohorecruit.eu
 - company: Carrier Wheels Private Limited
@@ -335,6 +357,8 @@
   board: ceew.zohorecruit.in
 - company: Community Empowerment Lab
   board: celworld.zohorecruit.com
+- company: CEPRES
+  board: cepres.zohorecruit.com
 - company: Cessna Lifeline
   board: cessnalifeline.zohorecruit.in
 - company: CHAJI
@@ -351,6 +375,8 @@
   board: cigmotors.zohorecruit.com
 - company: Confederation of Indian Industry
   board: cii.zohorecruit.in
+- company: Cirrus Aviation Services
+  board: cirrusav.zohorecruit.com
 - company: City Greens
   board: citygreens.zohorecruit.in
 - company: CivicDataLab
@@ -407,6 +433,8 @@
   board: contoureducation.zohorecruit.in
 - company: CoorB
   board: coorb.zohorecruit.com
+- company: Cordial Health
+  board: cordialhealthpc.zohorecruit.com
 - company: Cox Consulting Network
   board: coxconsultingnetwork.zohorecruit.com
 - company: Combustion Research Associates
@@ -429,6 +457,8 @@
   board: crossbowlabs.zohorecruit.com
 - company: Crowe DNA
   board: crowedna.zohorecruit.com
+- company: CSO Architects
+  board: csoinc.zohorecruit.com
 - company: Cube Payment
   board: cubepayment.zohorecruit.com
 - company: Cuidar Sénior
@@ -463,6 +493,8 @@
   board: delcen.zohorecruit.com
 - company: Deliberate AI
   board: deliberate.zohorecruit.com
+- company: Delmar & Attalla Pharmacies
+  board: delmar-attalla.zohorecruit.com
 - company: Deloitte
   board: deloitte.zohorecruit.eu
 - company: Delta Infosoft
@@ -477,6 +509,8 @@
   board: developmenthub.zohorecruit.com
 - company: DevMantra
   board: devmantra.zohorecruit.in
+- company: Devoir Software Solutions
+  board: devoir.zohorecruit.in
 - company: dhk Architects
   board: dhk.zohorecruit.com
 - company: Diadem Technologies
@@ -521,6 +555,8 @@
   board: dubimed.zohorecruit.com
 - company: E2logy
   board: e2logy.zohorecruit.com
+- company: EarthSense Labs
+  board: earthsenselabs.zohorecruit.in
 - company: Easmed
   board: easmed.zohorecruit.com
 - company: Ennis Ford
@@ -543,8 +579,12 @@
   board: edubureau.zohorecruit.com
 - company: Parikshak.ai
   board: edunova.zohorecruit.in
+- company: E Edge Technology
+  board: eedgetechnology.zohorecruit.in
 - company: EDI Effetti Digitali Italiani
   board: effettidigitali.zohorecruit.eu
+- company: East Houston Medical Center
+  board: ehmct.zohorecruit.com
 - company: ekincare
   board: ekincare.zohorecruit.in
 - company: EKONID
@@ -553,12 +593,16 @@
   board: eleinterior.zohorecruit.com
 - company: Elephant Design
   board: elephantdesign.zohorecruit.com
+- company: Elevate Claims Solutions
+  board: elevateclaims.zohorecruit.com
 - company: Elfonze Technologies
   board: elfonze.zohorecruit.in
 - company: EllBee Hotels
   board: ellbeehotels.zohorecruit.in
 - company: Embark GCC
   board: embarkgcc.zohorecruit.in
+- company: Executive Mental Health
+  board: emhla.zohorecruit.com
 - company: emt Distribution
   board: emtmeta.zohorecruit.com
 - company: Encalm Hospitality
@@ -569,12 +613,16 @@
   board: enflux.zohorecruit.com
 - company: ENH iSecure
   board: enhisecure.zohorecruit.in
+- company: EnKing International
+  board: enkingint.zohorecruit.com
 - company: ERP League
   board: erpleague.zohorecruit.in
 - company: eSparkBiz
   board: esparkinfo.zohorecruit.in
 - company: Esyasoft
   board: esyasoft.zohorecruit.in
+- company: Ethnus
+  board: ethnus.zohorecruit.in
 - company: Eton Institute
   board: etoninstitute.zohorecruit.com
 - company: Evercam
@@ -591,10 +639,14 @@
   board: excellium.zohorecruit.com
 - company: Excelsoft Technologies
   board: excelsoftcorp.zohorecruit.com
+- company: Exito
+  board: exito-e.zohorecruit.com
 - company: Exotic Colors
   board: exoticcolors.zohorecruit.com
 - company: Fabiant
   board: fabiantsrl.zohorecruit.eu
+- company: Facility Innovations Group
+  board: facilityig.zohorecruit.com
 - company: Facts N Fiction Creative Studio
   board: factsnfiction.zohorecruit.in
 - company: Famyo
@@ -635,6 +687,8 @@
   board: firstdirectinc.zohorecruit.com
 - company: FIVE Holdings
   board: fivehotelsandresorts.zohorecruit.com
+- company: Floema
+  board: floema.zohorecruit.eu
 - company: Fluid Codes
   board: fluidcodes.zohorecruit.com
 - company: Foundation for MSME Clusters
@@ -649,6 +703,8 @@
   board: fouresssynergy.zohorecruit.com
 - company: Insight Therapy Solutions
   board: freeaccinsighttherapysolutions.zohorecruit.com
+- company: Fresco Web Services
+  board: frescowebservices.zohorecruit.in
 - company: Fresh Serve International Agroallied
   board: freshserveint.zohorecruit.com
 - company: Freyr Energy
@@ -683,8 +739,12 @@
   board: gbda.zohorecruit.com
 - company: Guardian Capital Investment Advisory
   board: gcia.zohorecruit.in
+- company: GC Solar
+  board: gcsolar.zohorecruit.com
 - company: GDCC
   board: gdcc.zohorecruit.eu
+- company: Global Development Network
+  board: gdn.zohorecruit.in
 - company: GEC Media Group
   board: gecmediagroup.zohorecruit.com
 - company: Genebra Seguros
@@ -741,6 +801,8 @@
   board: group-ips.zohorecruit.eu
 - company: Groupe Deric
   board: groupederic.zohorecruit.com
+- company: Groupe Steva
+  board: groupesteva.zohorecruit.eu
 - company: Groupsoft
   board: groupsoftus.zohorecruit.in
 - company: Grupo Almedina
@@ -755,6 +817,8 @@
   board: gtcoplc.zohorecruit.com
 - company: GxP Technologies India
   board: gxp-technologies-india.zohorecruit.in
+- company: Haldren
+  board: haldren.zohorecruit.com
 - company: Halogen Engineering Group
   board: halogeneng.zohorecruit.com
 - company: Harvest International School
@@ -775,6 +839,8 @@
   board: helenhayeshospital.zohorecruit.com
 - company: Helios Tech Labs
   board: heliostechlabs.zohorecruit.com
+- company: HelloHero
+  board: hellohero.zohorecruit.com
 - company: HelpAge India
   board: helpageindia.zohorecruit.com
 - company: Herfurth Group
@@ -811,12 +877,16 @@
   board: icschools.zohorecruit.com
 - company: ICT Academy of Kerala
   board: ictkerala.zohorecruit.com
+- company: Infrastructure Development Corporation (Karnataka) Limited (iDeCK)
+  board: ideck.zohorecruit.in
 - company: Idex Media
   board: idexmedia.zohorecruit.in
 - company: ID Tech Solutions
   board: idsolutionsindia.zohorecruit.in
 - company: IFIRMA
   board: ifirma.zohorecruit.eu
+- company: International French School
+  board: ifs.zohorecruit.com
 - company: IFZA
   board: ifza.zohorecruit.com
 - company: Indbank Global Support Services Limited
@@ -825,10 +895,14 @@
   board: iide.zohorecruit.in
 - company: Immunity Networks
   board: immunitynetworks.zohorecruit.com
+- company: Incquet Solutions
+  board: incquet.zohorecruit.in
 - company: Increff
   board: increff.zohorecruit.com
 - company: IncubXperts
   board: incubxperts.zohorecruit.com
+- company: Incubyte
+  board: incubyte-incubyte.zohorecruit.in
 - company: Indea Design Systems
   board: indeadesignsystems.zohorecruit.com
 - company: Index InfoTech
@@ -839,6 +913,10 @@
   board: indiamarketentry.zohorecruit.in
 - company: Indian Designs
   board: indian-designs.zohorecruit.in
+- company: Indra Shakti Ventures
+  board: indra.zohorecruit.in
+- company: Indus Action
+  board: indusaction.zohorecruit.com
 - company: Indus Systems and Services
   board: indussystem.zohorecruit.com
 - company: Industry Pro
@@ -869,10 +947,14 @@
   board: inospace.zohorecruit.com
 - company: Inphase Power Technologies
   board: inphase.zohorecruit.com
+- company: INS Global
+  board: ins-globalconsulting.zohorecruit.com
 - company: Inspiria Knowledge Campus
   board: inspiria.zohorecruit.com
 - company: InstaSafe
   board: instasafe.zohorecruit.com
+- company: Integrated Design 360
+  board: integrateddesign360.zohorecruit.com
 - company: Integrated Language Solutions
   board: integratedlanguages.zohorecruit.com
 - company: Intelex
@@ -915,6 +997,10 @@
   board: izo.zohorecruit.com
 - company: iZooto
   board: izooto.zohorecruit.in
+- company: Integra Packaging
+  board: jamesvale.zohorecruit.com
+- company: Jasya Consultancy
+  board: jasya.zohorecruit.in
 - company: Jersey Mode
   board: jerseymode.zohorecruit.eu
 - company: JGC Corporation
@@ -961,10 +1047,14 @@
   board: kn-uae.zohorecruit.com
 - company: Koantek
   board: koantek.zohorecruit.com
+- company: KODE Labs
+  board: kodelabs.zohorecruit.com
 - company: Kontur
   board: kontur.zohorecruit.com
 - company: KOTS
   board: kots.zohorecruit.in
+- company: KraftPixel
+  board: kraftpixel.zohorecruit.in
 - company: Kraftshala
   board: kraftshala.zohorecruit.in
 - company: KS Bakers
@@ -1021,6 +1111,8 @@
   board: lotustechnicals.zohorecruit.in
 - company: Sugino Corp
   board: lucasjamestalent.zohorecruit.com
+- company: Lucky International
+  board: luckyinternational.zohorecruit.com
 - company: Ludic
   board: ludic.zohorecruit.in
 - company: Lukhozi Consulting Engineers
@@ -1111,12 +1203,16 @@
   board: mnrtechnologies.zohorecruit.in
 - company: Mobavenue
   board: mobavenue.zohorecruit.in
+- company: MOBY Robotics
+  board: mobyrobotics.zohorecruit.com
 - company: Money Forward
   board: moneyforward.zohorecruit.in
 - company: Morphogenesis
   board: morphogenesis.zohorecruit.in
 - company: Motionmatics
   board: motionmatics.zohorecruit.in
+- company: Motivate Media Group
+  board: motivatemedia.zohorecruit.com
 - company: Médecins Sans Frontières India
   board: msfindia.zohorecruit.in
 - company: MTAB Technology Center
@@ -1147,6 +1243,10 @@
   board: nanyukicotthosp.zohorecruit.com
 - company: Nathan and Associates
   board: nathanandassociates.zohorecruit.com
+- company: Natlex Technologies
+  board: natlextech.zohorecruit.in
+- company: Natural Support Services
+  board: naturalsupportservices.zohorecruit.com
 - company: Navatech
   board: navatechgroup.zohorecruit.com
 - company: Nathan Claire Africa
@@ -1157,6 +1257,10 @@
   board: ncp.zohorecruit.com
 - company: NeevIQ Technologies
   board: neeviq-org60059055319.zohorecruit.in
+- company: Nemeton
+  board: nemeton.zohorecruit.eu
+- company: NetBramha Studios
+  board: netbramha.zohorecruit.in
 - company: NetForemost
   board: netforemost.zohorecruit.com
 - company: The Neurodiversity Centre
@@ -1173,6 +1277,8 @@
   board: nextyachtgroup.zohorecruit.eu
 - company: Nexus Power
   board: nexuspower.zohorecruit.com
+- company: Norman Goodfellows
+  board: ngf.zohorecruit.com
 - company: NIIT Foundation
   board: niitfoundation.zohorecruit.in
 - company: Nisade
@@ -1217,6 +1323,8 @@
   board: oberoilawchambers.zohorecruit.com
 - company: Orbit International Survey Services
   board: obitiss.zohorecruit.com
+- company: Obsidian Capital
+  board: obsidiancapital.zohorecruit.in
 - company: Ode Spa
   board: odespa.zohorecruit.in
 - company: Odisha Television Network
@@ -1239,6 +1347,8 @@
   board: oneworldpediatrics.zohorecruit.com
 - company: Ontec
   board: ontec.zohorecruit.com
+- company: Operisoft Technologies
+  board: operisoft.zohorecruit.in
 - company: Oppam
   board: oppam.zohorecruit.in
 - company: Optimum Brew
@@ -1251,6 +1361,8 @@
   board: orchidsluxhome.zohorecruit.com
 - company: Ordrio
   board: ordrio.zohorecruit.in
+- company: OSCO Industries
+  board: oscoind.zohorecruit.com
 - company: OSF Digital
   board: osf-global.zohorecruit.com
 - company: Oulton College
@@ -1291,6 +1403,8 @@
   board: peepulindia.zohorecruit.in
 - company: Peerless Group
   board: peerless.zohorecruit.in
+- company: PeopleLink Unified Communications
+  board: peoplelinkvc.zohorecruit.in
 - company: Perceptive Analytics
   board: perceptive-analytics.zohorecruit.com
 - company: Perry Street Software
@@ -1321,6 +1435,8 @@
   board: pixstone.zohorecruit.in
 - company: Plastics for Change
   board: plasticsforchange.zohorecruit.in
+- company: Platos Health
+  board: platoshealth.zohorecruit.com
 - company: Plax
   board: plax.zohorecruit.com
 - company: PlaySimple Games
@@ -1345,6 +1461,8 @@
   board: powerwithinpsychology.zohorecruit.in
 - company: PP Techniq
   board: pptechniq.zohorecruit.eu
+- company: Prabhatkiran Saur Urja
+  board: prabhatkiran.zohorecruit.in
 - company: Presta Technologies
   board: presta.zohorecruit.com
 - company: Prime Response, Inc.
@@ -1361,6 +1479,8 @@
   board: promotionpix.zohorecruit.com
 - company: ProofOps
   board: proofops.zohorecruit.com
+- company: Property First
+  board: property-first.zohorecruit.in
 - company: Prop Solutions4u
   board: propsolutions4u.zohorecruit.in
 - company: ProScore Technologies
@@ -1371,6 +1491,8 @@
   board: proxpc.zohorecruit.in
 - company: MEAWW
   board: pubninja.zohorecruit.in
+- company: SAPIHUM
+  board: puntoempresarios.zohorecruit.com
 - company: Puragain Water
   board: puragainwater.zohorecruit.com
 - company: Puzzle Studio
@@ -1385,6 +1507,8 @@
   board: quadeye.zohorecruit.in
 - company: Quawd
   board: quawd.zohorecruit.in
+- company: Qued
+  board: qued.zohorecruit.com
 - company: Quest Alliance
   board: questalliance.zohorecruit.com
 - company: Quicko
@@ -1397,6 +1521,8 @@
   board: raaz.zohorecruit.in
 - company: Radcube
   board: radcube.zohorecruit.in
+- company: RadiantBiz
+  board: radiantbiz.zohorecruit.com
 - company: Rainforest
   board: rainforest.zohorecruit.com
 - company: Rapyder Cloud Solutions
@@ -1449,6 +1575,8 @@
   board: ridhirazen.zohorecruit.com
 - company: RIFF Distribution Services
   board: riffds.zohorecruit.eu
+- company: Rio Clays
+  board: rioclays.zohorecruit.in
 - company: Rise Agro Infra
   board: riseagroinfra.zohorecruit.com
 - company: Rishihood University
@@ -1477,6 +1605,8 @@
   board: roomigroup.zohorecruit.com
 - company: Roots Group of Companies
   board: rootsindia.zohorecruit.in
+- company: Rootstock Wine Company
+  board: rootstockwineco.zohorecruit.com
 - company: RoshanSpace
   board: roshanspace.zohorecruit.in
 - company: Routely
@@ -1487,6 +1617,8 @@
   board: roxonn.zohorecruit.in
 - company: Royal Cyber
   board: royalcyber.zohorecruit.com
+- company: Rhydburg Biotech
+  board: rplglobal.zohorecruit.com
 - company: Ruhe Global Resources
   board: ruheglobalresources.zohorecruit.com
 - company: Saahas Zero Waste
@@ -1503,6 +1635,12 @@
   board: sakarrobotics.zohorecruit.in
 - company: SalaryBox
   board: salarybox.zohorecruit.in
+- company: Salvador Caetano
+  board: salvadorcaetano.zohorecruit.eu
+- company: Salvatori
+  board: salvatori.zohorecruit.com
+- company: Sanchit Art
+  board: sanchitart-careers.zohorecruit.in
 - company: Sankore Investments
   board: sankoreglobal.zohorecruit.com
 - company: Sapir Projects
@@ -1519,6 +1657,10 @@
   board: sav.zohorecruit.com
 - company: Savanchi Home Care
   board: savanchihomecare.zohorecruit.com
+- company: Sayantrik Engineers
+  board: sayantrik.zohorecruit.in
+- company: Silver Bay Seafoods
+  board: sbswork.zohorecruit.com
 - company: ScaleUp Ally
   board: scaleupally.zohorecruit.com
 - company: scanO
@@ -1563,18 +1705,24 @@
   board: shikhashikz.zohorecruit.in
 - company: Shine Solutions
   board: shinesolutions.zohorecruit.com
+- company: Shivam Stock Broking
+  board: shivamstockbroking.zohorecruit.in
 - company: Shravas Technologies
   board: shravas.zohorecruit.in
 - company: Shubhashish Homes
   board: shubhashishhomes.zohorecruit.com
 - company: Sidvin Core-Tech
   board: sidvin.zohorecruit.in
+- company: Signature Companies
+  board: signatureappraisals.zohorecruit.com
 - company: simAbs
   board: simabs.zohorecruit.eu
 - company: Simple Education Foundation
   board: simpleeducationfoundation.zohorecruit.in
 - company: Simpliigence
   board: simpliigence.zohorecruit.in
+- company: Simply Innovative Therapies
+  board: simplyinnovativetherapies.zohorecruit.com
 - company: Simran Boparai Archtelier
   board: simranboparai.zohorecruit.in
 - company: Singarajan VFX
@@ -1593,12 +1741,16 @@
   board: smartstart.zohorecruit.com
 - company: SMG Engineering Automotive Company
   board: smgeac.zohorecruit.com
+- company: Strategic Management Solutions
+  board: smsicorp.zohorecruit.com
 - company: SNS India
   board: snsin.zohorecruit.in
 - company: Sociowash
   board: sociowash.zohorecruit.com
 - company: SOCL
   board: socl.zohorecruit.com
+- company: SoftTech Engineers
+  board: softtech-engr.zohorecruit.in
 - company: Solar Works Energy
   board: solarworksenergy.zohorecruit.com
 - company: Solid Systems
@@ -1613,10 +1765,14 @@
   board: soundandvisionstudios.zohorecruit.in
 - company: Spacefinish
   board: spacefinish.zohorecruit.com
+- company: SPARC
+  board: sparc-cannabis.zohorecruit.com
 - company: SparkNova Tech Solutions
   board: sparknovatech.zohorecruit.in
 - company: SPEC Finance
   board: specfinance.zohorecruit.in
+- company: Spectra Technovision
+  board: spectra-vision.zohorecruit.in
 - company: Spikewell
   board: spikewell.zohorecruit.in
 - company: Absolute Sports
@@ -1633,14 +1789,20 @@
   board: srmtech.zohorecruit.com
 - company: SRV Media
   board: srvmedia.zohorecruit.in
+- company: S.S. White Technologies
+  board: sswhite.zohorecruit.com
 - company: STAGE
   board: stage.zohorecruit.in
 - company: Stanser
   board: stanser.zohorecruit.com
+- company: STAR Enterprises
+  board: star-enterprises.zohorecruit.com
 - company: StarClinch
   board: starclinch.zohorecruit.in
 - company: Static America
   board: staticamerica.zohorecruit.com
+- company: Station Satcom
+  board: stationsatcom.zohorecruit.com
 - company: Stella Stays
   board: stellastays.zohorecruit.com
 - company: STEM Learning
@@ -1669,6 +1831,8 @@
   board: suffescom.zohorecruit.in
 - company: Sumo Tech
   board: sumotech.zohorecruit.com
+- company: Town of Hilton Head Island
+  board: sumterlocalgovconsulting.zohorecruit.com
 - company: Sun360
   board: sun360.zohorecruit.com
 - company: Sunday Design
@@ -1683,8 +1847,12 @@
   board: suryacipta.zohorecruit.com
 - company: Suvidha Group of Companies
   board: suvidha-org60067168902.zohorecruit.in
+- company: Suzega
+  board: suzega.zohorecruit.com
 - company: Swaniti Initiative
   board: swaniti.zohorecruit.in
+- company: SwasthiQ
+  board: swasthiq.zohorecruit.in
 - company: Softworld (India)
   board: swindia.zohorecruit.com
 - company: Sydler Electronics
@@ -1737,6 +1905,8 @@
   board: technobraingroup.zohorecruit.in
 - company: Techsec Digital Global
   board: techsecdigital.zohorecruit.in
+- company: Adult & Teen Challenge USA
+  board: teenchallengeusa.zohorecruit.com
 - company: TekFriday
   board: tekfriday.zohorecruit.in
 - company: Teleradiology Solutions
@@ -1747,6 +1917,8 @@
   board: tequity.zohorecruit.in
 - company: Test Triangle
   board: testtriangle.zohorecruit.eu
+- company: TGO Corp
+  board: tgocorp.zohorecruit.com
 - company: Thanal
   board: thanal.zohorecruit.in
 - company: The Auraved School
@@ -1781,6 +1953,8 @@
   board: tinymind.zohorecruit.in
 - company: TIS Labs
   board: tislabs.zohorecruit.com
+- company: Snider Fleet Solutions
+  board: tkostaffpros.zohorecruit.com
 - company: Tkxel
   board: tkxel.zohorecruit.com
 - company: Tokiye Integrated Medical Services
@@ -1791,6 +1965,8 @@
   board: touracle.zohorecruit.in
 - company: Schweiger & Partners
   board: trademarks-patents.zohorecruit.eu
+- company: Training Basket
+  board: trainingbasket.zohorecruit.com
 - company: Tranquility Promo
   board: tranquilitypromo.zohorecruit.com
 - company: Travala
@@ -1803,6 +1979,8 @@
   board: tricog.zohorecruit.com
 - company: Trigya Innovations
   board: trigya.zohorecruit.com
+- company: Trinity Rehab
+  board: trinityrehab.zohorecruit.com
 - company: Tristone Strategic Partners
   board: tristone-partners.zohorecruit.in
 - company: Truck World Studio
@@ -1819,6 +1997,8 @@
   board: tubber.zohorecruit.eu
 - company: UAV Marketplace
   board: uavmarketplace.zohorecruit.in
+- company: UCAM
+  board: ucamind.zohorecruit.in
 - company: Altriane
   board: udsma.zohorecruit.eu
 - company: Uliza Group
@@ -1839,6 +2019,8 @@
   board: unvs.zohorecruit.com
 - company: Uplus
   board: uplus.zohorecruit.eu
+- company: Zoho Corporation
+  board: us-careers.zohorecruit.in
 - company: Bruno
   board: usebruno.zohorecruit.in
 - company: Flex Finance
@@ -1883,6 +2065,8 @@
   board: vrisva.zohorecruit.in
 - company: Vurin Group
   board: vuringroup.zohorecruit.com
+- company: Wadhwani AI
+  board: wadhwaniai.zohorecruit.in
 - company: Walls to Home Interiors
   board: wallstohomeinteriors.zohorecruit.com
 - company: Augustus Media
@@ -1901,6 +2085,12 @@
   board: welcome2africaint.zohorecruit.com
 - company: Wellness Warehouse
   board: wellnesswarehouse.zohorecruit.com
+- company: Wenodo
+  board: wenodo.zohorecruit.eu
+- company: Wes Carver Electric
+  board: wescarverelectric.zohorecruit.com
+- company: Weya AI
+  board: weya.zohorecruit.in
 - company: Wadhwani Foundation
   board: wfglobal.zohorecruit.com
 - company: Woolworths Financial Services
