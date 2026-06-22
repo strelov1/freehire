@@ -15,8 +15,14 @@
   board: a2secure.factorialhr.com
 - company: AB-Biotics
   board: ab-biotics.factorial.es
+- company: Acerbis
+  board: acerbis.factorial.it
 - company: Automóvel Club de Portugal
   board: acp.factorialhr.pt
+- company: Acrylicize
+  board: acrylicize.factorialhr.com
+- company: Adapting Social
+  board: adaptingsocial.factorialhr.com
 - company: AEB Group
   board: aebgroup.factorialhr.com
 - company: Afaplan
@@ -63,6 +69,8 @@
   board: apreciarte.factorialhr.pt
 - company: Apter
   board: apter.factorialhr.com.br
+- company: AQ Acentor
+  board: aq-acentor.factorial.es
 - company: Aqui a tua Remodelação
   board: aquiatuaremodelacao.factorialhr.pt
 - company: Arboris Capital
@@ -79,6 +87,10 @@
   board: atlanta.factorialhr.com.br
 - company: Autocar Tecnologie
   board: autocar-tecnologie.factorial.it
+- company: Autoingros
+  board: autoingros.factorial.it
+- company: Avvoka
+  board: avvoka.factorialhr.com
 - company: Axyon AI
   board: axyonai.factorialhr.com
 - company: B-Parts
@@ -103,6 +115,8 @@
   board: biorius.factorialhr.com
 - company: Brasmar
   board: brasmar.factorialhr.com
+- company: Bridge
+  board: bridge-srl.factorial.it
 - company: BR Multas
   board: brmultas.factorialhr.com.br
 - company: Polen
@@ -115,6 +129,8 @@
   board: bwv.factorialhr.pt
 - company: CADE Soluciones de Ingeniería
   board: cadesoluciones.factorial.es
+- company: Caffeina
+  board: caffeina.factorial.it
 - company: Calvi
   board: calvi.factorial.it
 - company: Campmany Abogados
@@ -143,6 +159,10 @@
   board: casavo.factorial.it
 - company: Cascioli Group
   board: cascioligroup.factorial.it
+- company: Casco
+  board: cascospa.factorial.it
+- company: CAUTO
+  board: cauto.factorial.it
 - company: Cavalariça
   board: cavalarica.factorialhr.pt
 - company: CDLAN
@@ -177,6 +197,8 @@
   board: coralgardeners.factorialhr.com
 - company: Oasis Hotels & Resorts
   board: corporativooasis.factorial.mx
+- company: Costruzioni Iannini
+  board: costruzioni-iannini.factorial.it
 - company: CP Pieter
   board: cppieter.factorialhr.com.br
 - company: CREAF
@@ -185,6 +207,8 @@
   board: criaforma.factorialhr.pt
 - company: Cristalmax
   board: cristalmax.factorialhr.pt
+- company: Cubbo
+  board: cubbo.factorialhr.com.br
 - company: Cuideo
   board: cuideo.factorial.es
 - company: Daken
@@ -193,10 +217,16 @@
   board: deale.factorial.es
 - company: De Luca & Partners
   board: delucahrcapital.factorial.it
+- company: Dierre Dimensione Ricambi
+  board: dierredimensionericambi.factorial.it
 - company: Digibéria Information Technologies
   board: digiberia.factorialhr.pt
+- company: Digitail
+  board: digitail.factorialhr.com
 - company: Fundación Dignidade
   board: dignidade.factorial.es
+- company: Diram
+  board: diram.factorial.mx
 - company: Domino Infissi
   board: dominoinfissi.factorial.it
 - company: D-Orbit
@@ -273,6 +303,8 @@
   board: fkslogistics.factorialhr.com.br
 - company: Floponor
   board: floponor.factorialhr.pt
+- company: Fondazione Opera San Francesco per i Poveri
+  board: fondazioneoperasanfrancesco.factorial.it
 - company: Fondazione San Michele Arcangelo
   board: fondazionesanmichelearcangelo.factorial.it
 - company: Fractal Engenharia e Sistemas
@@ -299,6 +331,8 @@
   board: generys.factorial.fr
 - company: GetBlock
   board: getblock.factorialhr.com
+- company: GFL Cosmetics
+  board: gflcosmetics.factorialhr.com
 - company: Gigas
   board: gigas.factorial.es
 - company: Giocamondo
@@ -323,6 +357,8 @@
   board: grup-gepork.factorial.es
 - company: Fundació Formació i Treball
   board: grupfit.factorial.es
+- company: Grupo Bramam
+  board: grupo-bramam.factorialhr.com.br
 - company: Grupo Noria
   board: grupo-noria.factorial.es
 - company: Grupo Stosberg
@@ -383,6 +419,8 @@
   board: grupotrc.factorial.es
 - company: Banca Più
   board: gruppobancapiu.factorial.it
+- company: Gruppo Di.Ba.
+  board: gruppodiba.factorial.it
 - company: Reda
   board: grupporeda.factorial.it
 - company: Gruppo Sapir
@@ -391,6 +429,8 @@
   board: gruppostorti.factorial.it
 - company: Gualini Lamiere
   board: gualini.factorial.it
+- company: Guerri Energia
+  board: guerrienergia.factorial.it
 - company: GuinotPrunera
   board: guinot-prunera-s.factorial.es
 - company: Gunni & Trentino
@@ -421,6 +461,8 @@
   board: iberogroup.factorialhr.com.br
 - company: iBrowse Consultoria e Informática
   board: ibrowse.factorialhr.com.br
+- company: ICAPE Group
+  board: icape-group.factorial.fr
 - company: iCliGo
   board: icligo.factorialhr.pt
 - company: Idesam
@@ -429,6 +471,8 @@
   board: idibgi.factorial.es
 - company: Il Sicomoro
   board: il-sicomoro.factorial.it
+- company: ILPRA
+  board: ilpra.factorial.it
 - company: IMA Health
   board: ima.factorialhr.com
 - company: Improving Logistics
@@ -465,6 +509,8 @@
   board: itnig.factorialhr.co
 - company: Itnig
   board: itnigcoworking.factorial.es
+- company: IVF-Life
+  board: ivflife.factorial.es
 - company: IZZON Lab
   board: izzonlab.factorial.es
 - company: Jacobsen Arquitetura
@@ -474,9 +520,13 @@
 - company: Tendencys Innovations
   board: jobs-tendencys-br.factorialhr.com
 - company: Tendencys Innovations
+  board: jobs-tendencys-co.factorialhr.com
+- company: Tendencys Innovations
   board: jobs-tendencys-es.factorial.es
 - company: Tendencys Innovations
   board: jobs-tendencys-in.factorialhr.com
+- company: Tendencys Innovations
+  board: jobs-tendencys.factorialhr.com
 - company: JTA
   board: jta.factorialhr.pt
 - company: Jumbo Group
@@ -509,6 +559,8 @@
   board: lefebvre-el-derecho.factorial.es
 - company: Lina Open X
   board: lina.factorialhr.com.br
+- company: Logifrio
+  board: logifrio.factorialhr.com
 - company: Logitek Fast & Smart Logistics
   board: logitek.factorial.it
 - company: Lookiero Outfittery Group
@@ -529,12 +581,18 @@
   board: maf-careers.factorial.it
 - company: Magazzini Bracchi
   board: magazzinobracchi.factorial.it
+- company: Magicmotorsport
+  board: magicmotorsport.factorial.it
 - company: Magis5
   board: magis5.factorialhr.com.br
+- company: Magnaghi Aeronautica
+  board: magnaghi-aeronautica-do-brasil.factorialhr.com.br
 - company: MaisMei
   board: maismei.factorialhr.com.br
 - company: Makko
   board: makko.factorial.fr
+- company: Maldarizzi Automotive
+  board: maldarizzi.factorial.it
 - company: MALEO
   board: maleo.factorialhr.pt
 - company: Mapit
@@ -583,6 +641,8 @@
   board: morgado-ca.factorialhr.pt
 - company: MRS Estudos Ambientais
   board: mrsambiental.factorialhr.com.br
+- company: Muffin
+  board: muffin.factorial.it
 - company: Multipagamentos
   board: multipagamentos.factorialhr.com.br
 - company: Muñoz Bosch
@@ -607,6 +667,10 @@
   board: niko.factorial.mx
 - company: Nippon Sanso Homecare
   board: nipponsansohomecare.factorial.es
+- company: NMDP México
+  board: nmdpmx.factorial.mx
+- company: NTE Process
+  board: nte.factorial.it
 - company: O Baratão das Embalagens
   board: obarataodasembalagens.factorialhr.com.br
 - company: Ocasa
@@ -625,6 +689,8 @@
   board: oni.factorialhr.pt
 - company: On The Road
   board: ontheroad.factorialhr.pt
+- company: Ontime
+  board: ontime.factorial.es
 - company: Oplium
   board: oplium.factorial.es
 - company: Grupo Pampling
@@ -717,8 +783,12 @@
   board: roit-vagas.factorialhr.com.br
 - company: Roman
   board: romanrm.factorial.es
+- company: Rosa Clará
+  board: rosa-clara.factorial.es
 - company: Rothelec
   board: rothelec.factorial.fr
+- company: RSM Italy
+  board: rsm-italy.factorial.it
 - company: Rueda & Rueda Advogados
   board: ruedaerueda.factorialhr.com.br
 - company: SAEA
@@ -739,10 +809,14 @@
   board: seekers.factorialhr.pt
 - company: Seriana
   board: serianaspa.factorial.it
+- company: Serveco
+  board: serveco.factorial.it
 - company: Grupo Sevilla Control
   board: sevilla-control.factorial.es
 - company: Shiadu
   board: shiadurbe.factorialhr.pt
+- company: ShippyPro
+  board: shippypro.factorialhr.com
 - company: SIDN Digital Thinking
   board: sidn.factorialhr.com
 - company: Silva Vitor, Faria & Ribeiro Advogados
@@ -809,14 +883,20 @@
   board: trendsrl.factorial.it
 - company: TUMO Portugal
   board: tumo.factorialhr.pt
+- company: Momento Seguros
+  board: tumomento.factorial.mx
 - company: Ulisancas
   board: ulisancas.factorialhr.pt
+- company: UNGUESS
+  board: unguess.factorial.it
 - company: UNICEF Portugal
   board: unicef-pessoas-pt.factorialhr.pt
 - company: Unicredix
   board: unicredix.factorial.mx
 - company: Unimed Dourados
   board: unimeddourados.factorialhr.com.br
+- company: Uniting Group
+  board: uniting.factorial.it
 - company: Universiis
   board: universiis.factorial.it
 - company: Univet
@@ -829,6 +909,12 @@
   board: valeria-careers.factorial.es
 - company: Venuu
   board: venuu.factorialhr.com
+- company: Ve.Ra. Group Srl
+  board: veragroupsrl.factorial.it
+- company: Vermeiren
+  board: vermeiren.factorialhr.de
+- company: vLex
+  board: vlex.factorial.es
 - company: OneTurn
   board: volcom.factorialhr.com
 - company: Voxcity Tecnologia
@@ -865,6 +951,8 @@
   board: yomali.factorialhr.com
 - company: Storebox
   board: yourstorebox.factorialhr.com
+- company: Ysabel Mora
+  board: ysabel-mora.factorial.es
 - company: Laboratorios Ysonut
   board: ysonut.factorialhr.com
 - company: Zafex Telecomunicações
