@@ -52,6 +52,24 @@ func (f fakeGetter) GetHTML(_ context.Context, url string) (*html.Node, error) {
 	return html.Parse(strings.NewReader(body))
 }
 
+// GetText serves the canned body as raw text (the Paycom prober reads the session JWT out
+// of the portal page).
+func (f fakeGetter) GetText(_ context.Context, url string) (string, error) {
+	body, ok := f[url]
+	if !ok {
+		return "", errMissing
+	}
+	return body, nil
+}
+
+func (f fakeGetter) GetJSONWithHeaders(_ context.Context, url string, _ map[string]string, v any) error {
+	return f.GetJSON(context.Background(), url, v)
+}
+
+func (f fakeGetter) PostJSONWithHeaders(_ context.Context, url string, _ map[string]string, body, v any) error {
+	return f.PostJSON(context.Background(), url, body, v)
+}
+
 func TestGreenhouseProbe(t *testing.T) {
 	g := greenhouseProber{}
 	getter := fakeGetter{

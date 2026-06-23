@@ -81,6 +81,11 @@ func TestFromURL(t *testing.T) {
 			url:      "https://golden-corral-careers.careerplug.com/jobs/1334156?utm_source=Role",
 			provider: "careerplug", board: "golden-corral-careers", ok: true,
 		},
+		{
+			name:     "paycom",
+			url:      "https://www.paycomonline.net/v4/ats/web.php/portal/3b4555a93baac45919556b5f901f7b83/jobs/383852?utm_source=Role",
+			provider: "paycom", board: "3b4555a93baac45919556b5f901f7b83", ok: true,
+		},
 		// iCIMS: board is the tenant in careers-<board>.icims.com.
 		{
 			name:     "icims careers prefix",

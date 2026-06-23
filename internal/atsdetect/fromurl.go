@@ -77,6 +77,11 @@ func FromURL(rawurl string) (provider, board string, ok bool) {
 		if site := segAfter(segs, "sites"); site != "" {
 			return "oracle", host + "/" + site, true
 		}
+	case host == "www.paycomonline.net", host == "paycomonline.net":
+		// board is the 32-hex client key in /v4/ats/web.php/portal/<clientkey>/...
+		if key := segAfter(segs, "portal"); key != "" {
+			return "paycom", key, true
+		}
 	}
 	return "", "", false
 }

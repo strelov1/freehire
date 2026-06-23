@@ -28,6 +28,9 @@ type httpClient interface {
 	sources.JSONPoster
 	sources.XMLGetter
 	sources.HTMLGetter
+	sources.TextGetter
+	sources.HeaderJSONGetter
+	sources.HeaderJSONPoster
 }
 
 // prober checks one candidate board on its ATS platform, returning the company name the
@@ -563,4 +566,5 @@ var probers = map[string]prober{
 	"oracle":          oracleProber{},
 	"jazzhr":          jazzhrProber{},
 	"careerplug":      careerplugProber{},
+	"paycom":          paycomProber{},
 }
