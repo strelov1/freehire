@@ -1,0 +1,8 @@
+# Avature career sites. Provider is the filename; each entry is company + board.
+# board = the career-site host (see internal/sources/avature.go); the adapter reads
+# https://<board>/careers/sitemap_index.xml, crawls the en_US locale sitemap, and parses
+# each JobDetail page's og:title + article__content__view__field blocks (no JSON-LD).
+# Each board validated live (en_US sitemap lists JobDetail postings) before adding.
+
+- company: Electronic Arts
+  board: jobs.ea.com
