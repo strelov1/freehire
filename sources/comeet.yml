@@ -6,3 +6,9 @@
 
 - company: Overwolf
   board: overwolf/B1.001
+- company: CrazyLabs
+  board: crazylabs/32.00E
+- company: Ludeo
+  board: ludeo/D7.008
+- company: Moon Active
+  board: moonactive/A2.00C
