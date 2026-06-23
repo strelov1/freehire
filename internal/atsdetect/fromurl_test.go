@@ -76,6 +76,11 @@ func TestFromURL(t *testing.T) {
 			url:      "https://therapymgmt.pinpointhq.com/en/postings/88dfb239-bb43",
 			provider: "pinpoint", board: "therapymgmt", ok: true,
 		},
+		{
+			name:     "careerplug",
+			url:      "https://golden-corral-careers.careerplug.com/jobs/1334156?utm_source=Role",
+			provider: "careerplug", board: "golden-corral-careers", ok: true,
+		},
 		// iCIMS: board is the tenant in careers-<board>.icims.com.
 		{
 			name:     "icims careers prefix",

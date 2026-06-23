@@ -562,4 +562,5 @@ var probers = map[string]prober{
 	"join":            joinProber{},
 	"oracle":          oracleProber{},
 	"jazzhr":          jazzhrProber{},
+	"careerplug":      careerplugProber{},
 }

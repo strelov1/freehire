@@ -61,6 +61,10 @@ func FromURL(rawurl string) (provider, board string, ok bool) {
 		if sub := subdomain(host, ".pinpointhq.com"); sub != "" {
 			return "pinpoint", sub, true
 		}
+	case strings.HasSuffix(host, ".careerplug.com"):
+		if sub := subdomain(host, ".careerplug.com"); sub != "" {
+			return "careerplug", sub, true
+		}
 	case strings.HasSuffix(host, ".icims.com"):
 		// Our icims adapter builds the host "careers-<board>.icims.com", so only a
 		// careers-prefixed subdomain yields a crawlable board.

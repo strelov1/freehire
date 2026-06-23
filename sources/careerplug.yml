@@ -1,0 +1,464 @@
+# careerplug boards. Provider is the filename; each entry is company + board.
+# board = the account subdomain in <board>.careerplug.com (see internal/sources/careerplug.go).
+- company: 1-800 WATER DAMAGE
+  board: 1-800-water-damage-careers
+- company: 360clean | Complete Facility Care
+  board: 360clean-careers
+- company: Abita Roasting Company
+  board: abita-roasting
+- company: Air Conditioning Contractors of America (ACCA)
+  board: acca-careers
+- company: Ace Handyman Services
+  board: acehandymanservicescareers
+- company: Assisting Hands Home Care, LLC
+  board: ahhc-careers
+- company: AKIVA AI
+  board: akiva-technologies-llc
+- company: AlphaGraphics
+  board: alphagraphics-careers
+- company: American Family Care
+  board: american-family-care-careers
+- company: Anatomy
+  board: anatomy-fitness
+- company: Andy's Frozen Custard
+  board: andysfrozencustard
+- company: Golden Corral Corporation
+  board: annettes-corral-llc-dba-golden-corral
+- company: Any Lab Test Now
+  board: anylabtestnowcareers
+- company: Anytime Fitness
+  board: anytime-fitness-careers
+- company: Art of Drawers
+  board: art-of-drawers-careers
+- company: At Your Side Home Care
+  board: ayscareers
+- company: Woodhouse
+  board: batonrougeneworleansslidellwoodhousespas
+- company: Beef 'O'​ Brady's
+  board: beef-o-bradys-careers
+- company: Benjamin Franklin Plumbing, LLC
+  board: benjamin-franklin-plumbing-careers
+- company: Big Red F Restaurant Group
+  board: big-red-f-jobs
+- company: Big Sandy Superstore
+  board: big-sandy-distribution-inc
+- company: Big O Tires
+  board: bigotires-careers
+- company: Blake's Lotaburger
+  board: blakes-lotaburger
+- company: BODY20
+  board: body20-careers
+- company: BODYBAR Pilates
+  board: bodybar-pilates-careers
+- company: BODYROK
+  board: bodyrok
+- company: BODYROK
+  board: bodyrok-careers
+- company: BODYROK
+  board: bodyrok-east-bay-north-bay-peninsula
+- company: Bird Rock Coffee Roasters, Inc
+  board: brcr
+- company: Bridge Marina, Inc.
+  board: bridge-marina-inc
+- company: British Swim School - Hudson Waterfront
+  board: britishswimschool-careers
+- company: The Brothers that just do Gutters
+  board: brothersgutterscareers
+- company: Capital Ale House
+  board: capital-ale-house
+- company: Capriotti's Sandwich Shop
+  board: capriottis-careers
+- company: CertaPro Painters
+  board: certapro-careers
+- company: Subway
+  board: cgi-subway
+- company: ChargeTronix
+  board: chargetronix
+- company: Charleston Hospitality Group
+  board: charleston-hospitality-group
+- company: Chick-fil-A Restaurants
+  board: chick-fil-a-at-north-hills-in-line
+- company: Chick-fil-A Restaurants
+  board: chick-fil-a-charlotte-pike---nashville
+- company: COASTAL HOME REHABILITATION
+  board: coastal-home-rehabilitaton
+- company: Code Ninjas
+  board: code-ninjas-careers
+- company: ComForCare
+  board: comforcare-careerdays
+- company: ComForCare
+  board: comforcarecareers
+- company: Comfort Keepers
+  board: comfort-keepers
+- company: Cooper Tacia General Contracting Company
+  board: cooper-tacia-general-contracting-company
+- company: Creative World School
+  board: creative-world-school-rivercrest
+- company: Crunch Fitness - Fitness Holdings North America, LLC.
+  board: crunch
+- company: Culinary Khancepts
+  board: culinary-khancepts
+- company: Culinary Khancepts
+  board: culinary-khancepts-star-cinema-grill-careers
+- company: Culligan International
+  board: culligan-careers
+- company: D1 TRAINING
+  board: d1-training-careers
+- company: Daiquiri Deck
+  board: daiquiri-deck
+- company: Dinges Fire Company
+  board: dingesfire
+- company: Discovery Point
+  board: discovery-point-careers
+- company: Discovery Point
+  board: discovery-point-post-road
+- company: Diverse Lynx
+  board: diverse-lynx-llc
+- company: Do it Best
+  board: do-it-best-careers
+- company: Easy Tiger Bake Shop & Beer Garden
+  board: easy-tiger-careers
+- company: Ellie Mental Health
+  board: ellie-careers
+- company: Emagine Entertainment
+  board: emagine-entertainment
+- company: Evergreen Life Services
+  board: evergreenls
+- company: Evergreen Life Services
+  board: evergreenlstx
+- company: EverLine Coatings and Services - USA
+  board: everline-coatings-usa-careers
+- company: EVTKS
+  board: evotek-llc
+- company: Executive Home Care
+  board: executive-care-careers
+- company: Fairfield Property Management
+  board: fairfieldmanagement
+- company: FASTSIGNS®
+  board: fastsigns-careers
+- company: Federal American Grill
+  board: federal-american-grill
+- company: Fish Window Cleaning
+  board: fishwindowcleaningcareers
+- company: Five Star Painting®
+  board: fivestarpaintingcareers
+- company: Flippers Pizzeria
+  board: flippers-pizzeria
+- company: Floor Coverings International
+  board: floor-coverings-international-careers
+- company: Frenchies Modern Nail Care
+  board: frenchies-careers
+- company: Frontall USA
+  board: frontall-usa-llc
+- company: Generator Supercenter
+  board: generator-supercenter-careers
+- company: Golden Corral Corporation
+  board: golden-corral-careers
+- company: Golden Corral Corporation
+  board: golden-corral-zeal-group
+- company: Golden Heart Senior Care Corporate
+  board: golden-heart-clermont
+- company: Goldfish Swim School Franchising, LLC
+  board: goldfish-careers
+- company: Gold's Gym
+  board: goldscareers
+- company: Grease Monkey International, LLC
+  board: grease-monkey-843
+- company: Grease Monkey International, LLC
+  board: grease-monkey-careers
+- company: Golden Corral Corporation
+  board: great-western-restaurants-inc-dba-golden-corral
+- company: Golden Corral Corporation
+  board: guyer-corral-ventures-llc-dba-golden-corral
+- company: GVCS Inc.
+  board: gvcs
+- company: Gymboree Play & Music
+  board: gymboreeplaymusic-careers
+- company: GYMGUYZ
+  board: gymguyz-careers
+- company: Hand & Stone Massage and Facial Spa
+  board: handandstonecareers
+- company: Handyman Connection
+  board: handyman-connection-careers
+- company: Home Care Association of America
+  board: hcaoa-careers
+- company: Home Care Evolution
+  board: hce-careers
+- company: HCOA Fitness
+  board: hcoa-fitness
+- company: Healthtrax Fitness & Wellness
+  board: healthtrax-fitness-wellness
+- company: Home Helpers Home Care
+  board: home-helpers-careers
+- company: HTE (home technology experts)
+  board: home-technology-experts-inc
+- company: HomeWell Care Services
+  board: homewell-care-services-careers
+- company: HOPE MONTESSORI ACADEMY
+  board: hope-montessori-academy
+- company: Huddle House
+  board: huddle-house
+- company: Huddle House
+  board: huddle-house-careers
+- company: Synergen
+  board: hydrolinellc-careers
+- company: i9 Sports
+  board: i9-sports-careers
+- company: IICRC
+  board: iicrc-careers
+- company: InMotion Wellness Studio
+  board: inmotion-wellness-studio-careers
+- company: (ISSA) International Sports Sciences Association
+  board: issa-fitness-careers
+- company: Jackson Hewitt Tax Service Inc.
+  board: jackson-hewitt-careers
+- company: Jeremiah's Italian Ice
+  board: jeremiahs-italian-ice
+- company: Jet Enterprises, LLC
+  board: jjs-grill
+- company: The Junkluggers
+  board: junkluggers-careers
+- company: Kaskaid Hospitality
+  board: kaskaid-careers
+- company: Kidcreate Studio
+  board: kidcreate-studio-careers
+- company: KidStrong
+  board: kidstrong-plantation
+- company: KidStrong
+  board: kidstrong-raleigh
+- company: KidStrong
+  board: kidstrongcareers
+- company: Kid to Kid
+  board: kidtokidcareers
+- company: Kitchen Tune-Up Franchise System
+  board: kitchentuneupcareers
+- company: La Farm Bakery
+  board: la-farm-bakery
+- company: The Lash Lounge
+  board: lash-lounge-careers
+- company: Lil' Kickers Franchising
+  board: lil-kickers-careers
+- company: LIQUISERVE, LLC
+  board: liquiserve-llc
+- company: The Little Gym International
+  board: little-gym-careers
+- company: London Drugs
+  board: london-drugs-internal
+- company: Maryhill Winery
+  board: maryhillwinery
+- company: Heights Wellness Retreat
+  board: massageheightscareers
+- company: Mathnasium - The Math Learning Center
+  board: mathnasium-careers
+- company: Meadowbrook
+  board: meadowbrook-restaurant-company-inc
+- company: Meineke Car Care Centers, Inc.
+  board: meineke-careers
+- company: Merry Maids®
+  board: merrymaidscareers
+- company: Wenco Industries Inc- Midas and Big O Tires
+  board: midas-careers
+- company: Wenco Industries Inc- Midas and Big O Tires
+  board: midas-tire-auto-experts
+- company: Mister Sparky Electric
+  board: mister-sparky-careers
+- company: Golden Corral Corporation
+  board: mohave-gc-llc-dba-golden-corral
+- company: Molly Maid USA
+  board: molly-maid-of-southern-miami-palmetto-bay
+- company: The Mosquito Authority
+  board: mosquito-authority-careers
+- company: Mr. Appliance
+  board: mr-appliance-of-brooklyn
+- company: Mugshots Grill & Bar
+  board: mugshots-grill
+- company: MÜV Fitness
+  board: muv-fitness
+- company: My Gym
+  board: mygymcareers
+- company: NerdsToGo
+  board: nerdstogo-careers
+- company: Nino Salvaggio International Marketplace
+  board: nino-salvaggio
+- company: Nothing Bundt Cakes
+  board: nothing-bundt-cakes-careers
+- company: Nudy's Cafes
+  board: nudys-cafe
+- company: Office Pride Commercial Cleaning Services
+  board: office-pride-careers
+- company: One Hour Heating & Air Conditioning
+  board: one-hour-careers
+- company: OnePack Hospitality Group
+  board: onepack-hospitality-careers
+- company: Orangetheory Fitness
+  board: orangetheory-fitness-careers
+- company: Orangetheory Fitness
+  board: orangetheory-franchise-0318
+- company: Original Roadhouse Grill
+  board: original-roadhouse-grill
+- company: Owais Construction Group
+  board: owais-construction-group
+- company: P. Terry's Burger Stand
+  board: p-terry-s-burger-stand
+- company: Palm Beach Tan
+  board: palm-beach-tan-lst-austin-i-ltd
+- company: Parrish Medical Center
+  board: parrishhealthcare
+- company: Paul Davis Restoration, Inc.
+  board: pauldaviscareers
+- company: Palm Beach Tan
+  board: pbt-careers
+- company: Vellum Health
+  board: peak-mobile-holdings-inc
+- company: Perkins American Food Co.
+  board: perkins-careers
+- company: Taymax Group
+  board: pfcareers
+- company: PIRTEK USA
+  board: pirtek-careers
+- company: PJ's Coffee of New Orleans
+  board: pjs-coffee-careers
+- company: Polly's Pies
+  board: polly-pies
+- company: PostNet International Franchise Corporation
+  board: postnet-careers
+- company: Primrose Schools
+  board: primrose-school-woburn
+- company: ProSource
+  board: prosource-careers
+- company: PuroClean
+  board: puroclean
+- company: The Purple Cow Restaurants
+  board: purple-cow
+- company: Rainbow Restoration
+  board: rainbowintlcareers
+- company: Ramirez Hospitality Group
+  board: ramirez-hospitality-group-careers
+- company: redbox+ Dumpsters
+  board: redbox-plus-dumpsters-careers
+- company: Resource Metrix
+  board: resource-metrix
+- company: Restaurant 604
+  board: restaurant-604
+- company: Restore Hyper Wellness
+  board: restore-hyper-wellness-careers
+- company: Retro Fitness
+  board: retro-fitness-careers
+- company: Retro Fitness
+  board: retrofitnesscareers
+- company: Reunion Kitchen + Drink
+  board: reunion-kitchen-drink
+- company: Right at Home
+  board: right-at-home-central-orange-county-ca
+- company: Right at Home
+  board: right-at-home-indianapolis-southeast-in
+- company: Right at Home
+  board: right-at-home-miami-metro-fl
+- company: Right at Home
+  board: right-at-home-modesto-ca
+- company: Right at Home
+  board: right-at-home-peachtree-city
+- company: Right at Home
+  board: right-at-home-san-jose-ca
+- company: R.Salerno Restaurant Group
+  board: salernos-hospitality-careers
+- company: Save A Lot
+  board: save-a-lot-raj-al-moultrie-llc
+- company: Saver Group, Inc
+  board: saver-group-careers
+- company: Buffalo Wild Wings
+  board: sc-wings-block-llc
+- company: Scenthound
+  board: scenthound-careers
+- company: Scratch Restaurants Group
+  board: scratchrestaurants
+- company: Steel Erectors Association of America
+  board: seaa-careers
+- company: ServiceMaster Clean®
+  board: servicemaster-clean-careers
+- company: ServiceMaster Restore®
+  board: servicemaster-restore-usa-careers
+- company: SERVPRO
+  board: servpro-careers
+- company: Sharkey's Franchising Company
+  board: sharkeys-careers
+- company: Shine Window Care and Holiday Lighting of Cedar Park
+  board: shinecareers
+- company: Sizzler USA
+  board: sizzler
+- company: Snapology
+  board: snapology-careers
+- company: So Hospitality Group
+  board: so-hospitality-careers
+- company: Soccer Shots Franchising
+  board: soccershotscareers
+- company: Soulman's Bar-B-Que
+  board: soulmans-bar-b-que
+- company: Special Strong
+  board: special-strong-careers
+- company: Spectrum Resorts
+  board: spectrum-resorts
+- company: SPENGA
+  board: spenga-careers
+- company: Sport Clips Haircuts
+  board: sportclipshv
+- company: Storm Guard Roofing
+  board: storm-guard-careers
+- company: StretchLab Franchise
+  board: stretchlab-north-dallas
+- company: Stretch Zone
+  board: stretchzonecareers
+- company: Sun Tan City
+  board: sun-tan-city-careers
+- company: Surface Experts
+  board: surface-experts-careers
+- company: Taco Boy
+  board: taco-boy-1
+- company: Talem Home Care & Placement Services
+  board: talem-home-care-careers
+- company: Taziki's Mediterranean Cafe
+  board: tazikis
+- company: TeamLogic IT
+  board: teamlogic-it-careers
+- company: The Goddard School
+  board: the-goddard-school-careers
+- company: The Little Gym International
+  board: the-little-gym-of-fresno-and-clovis
+- company: Titan Brands Hospitality Group
+  board: titan-brands-inc
+- company: The Learning Experience
+  board: tle-careers
+- company: The Tuckey Companies
+  board: tuckey
+- company: Tuffy Tire & Auto Service
+  board: tuffy-careers
+- company: Two Maids
+  board: two-maids-careers
+- company: United Appliance Servicers Association
+  board: uasa-careers
+- company: UFC GYM
+  board: ufc-gym-careers
+- company: Uptown Cheapskate
+  board: uptowncheapskatecareers
+- company: US Swim School Association
+  board: usssa-careers
+- company: Village Inn
+  board: village-inn-walker-group
+- company: Visiting Angels
+  board: visiting-angels
+- company: Visiting Angels
+  board: visiting-angels-lenoir-nc
+- company: Whataburger
+  board: whataburger
+- company: Window Hero Franchising
+  board: window-hero-careers
+- company: Window World
+  board: window-world-of-southwest-florida
+- company: Workout Anytime Franchising Systems, LLC
+  board: woacareers
+- company: Woodbury Corporation
+  board: woodburycareers
+- company: Woodhouse
+  board: woodhousecareers
+- company: Precision Scans Inc.
+  board: www-precisionscans-net
