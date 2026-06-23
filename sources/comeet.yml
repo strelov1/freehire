@@ -1,0 +1,8 @@
+# Comeet career sites. Provider is the filename; each entry is company + board.
+# board = "<slug>/<companyUID>" taken from a public job URL
+# (comeet.com/jobs/<slug>/<companyUID>); see internal/sources/comeet.go. The adapter
+# scrapes the page's public read token, then one careers-api call returns every position.
+# Each board validated live (positions API returned >0) before adding.
+
+- company: Overwolf
+  board: overwolf/B1.001
