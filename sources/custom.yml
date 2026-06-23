@@ -9,6 +9,9 @@
 - company: Toggl
   provider: ashbygraphql
   board: toggl
+- company: Whatnot
+  provider: ashbygraphql
+  board: whatnot
 
 # International single-company sources.
 - company: Uber
