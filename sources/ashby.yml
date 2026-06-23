@@ -585,6 +585,8 @@
   board: junction
 - company: Juniper Square
   board: junipersquare
+- company: JustPlay GmbH
+  board: justplay-gmbh
 - company: Kalshi
   board: kalshi
 - company: Kastle
