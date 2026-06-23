@@ -146,6 +146,7 @@ func All(c HTTPClient) map[string]Source {
 		NewEightfold(c),
 		NewFreshteam(c),
 		NewDeel(c),
+		NewRecruitingSolutions(c),
 		NewUKG(c),
 		NewSenior(c),
 		NewTrakstar(c),
