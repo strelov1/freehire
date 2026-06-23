@@ -4,6 +4,8 @@
 # several operating companies, so the company below is just the tenant's display name — each
 # posting carries its own employer.
 
-# Bertelsmann group, Riverty/BFS financial-services customer (createyourowncareer.com).
-- company: Riverty
-  board: riv-prod
+# Bertelsmann group (createyourowncareer.com). rtl-prod is the portal's master Azure index —
+# it spans all ~39 group brands (Arvato, RTL, Riverty, Penguin Random House, BMG, Relias,
+# TERRITORY, …), each posting carrying its own operating company. One board covers the group.
+- company: Bertelsmann
+  board: rtl-prod
