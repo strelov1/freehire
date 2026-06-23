@@ -9,7 +9,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -46,7 +45,7 @@ func run() int {
 	ctx := context.Background()
 	client := sources.NewClient()
 
-	raw, err := resolveCandidates(ctx, p, client, seedPath)
+	raw, companyByBoard, err := resolveCandidates(ctx, p, client, seedPath)
 	if err != nil {
 		log.Printf("harvest-boards: %v", err)
 		return 1
@@ -67,7 +66,7 @@ func run() int {
 	log.Printf("harvest-boards: %s candidates=%d existing=%d new-candidates=%d",
 		provider, len(raw), len(existing), len(candidates))
 
-	kept := probeAll(ctx, client, p, candidates)
+	kept := probeAll(ctx, client, p, candidates, companyByBoard)
 	log.Printf("harvest-boards: live boards found=%d", len(kept))
 	if len(kept) == 0 {
 		return 0
@@ -96,38 +95,38 @@ func run() int {
 // candidates come from the seed file, mapped through the prober. This is the only step that
 // differs between a discovery provider and a seed-list one — dedup, probe, and append are
 // shared downstream.
-func resolveCandidates(ctx context.Context, p prober, c httpClient, seedPath string) ([]string, error) {
+func resolveCandidates(ctx context.Context, p prober, c httpClient, seedPath string) ([]string, map[string]string, error) {
 	if seedPath == "" {
 		d, ok := p.(discoverer)
 		if !ok {
-			return nil, fmt.Errorf("provider needs a seed file (it has no discovery support)")
+			return nil, nil, fmt.Errorf("provider needs a seed file (it has no discovery support)")
 		}
-		return d.discover(ctx, c)
+		boards, err := d.discover(ctx, c)
+		return boards, nil, err
 	}
-	seed, err := loadSeed(seedPath)
+	items, err := loadSeedItems(seedPath)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return mapSeeds(p, seed), nil
-}
-
-// loadSeed reads a JSON array of slug strings.
-func loadSeed(path string) ([]string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read seed %s: %w", path, err)
+	tokens := make([]string, len(items))
+	for i, it := range items {
+		tokens[i] = it.Board
 	}
-	var slugs []string
-	if err := json.Unmarshal(data, &slugs); err != nil {
-		return nil, fmt.Errorf("parse seed %s: %w", path, err)
+	boards := mapSeeds(p, tokens)
+	companyByBoard := make(map[string]string)
+	for i, b := range boards {
+		if items[i].Company != "" {
+			companyByBoard[b] = items[i].Company
+		}
 	}
-	return slugs, nil
+	return boards, companyByBoard, nil
 }
 
 // probeAll probes every candidate concurrently (bounded), returning the live boards as
 // emit-ready entries sorted by board. A probe error is logged and the candidate skipped, so
-// one dead board never aborts the harvest.
-func probeAll(ctx context.Context, client httpClient, p prober, candidates []string) []entry {
+// one dead board never aborts the harvest. companyByBoard supplies a fallback employer name
+// for boards whose own API exposes none (see chooseCompany).
+func probeAll(ctx context.Context, client httpClient, p prober, candidates []string, companyByBoard map[string]string) []entry {
 	sem := make(chan struct{}, probeWorkers)
 	var (
 		mu   sync.Mutex
@@ -149,7 +148,7 @@ func probeAll(ctx context.Context, client httpClient, p prober, candidates []str
 				return
 			}
 			mu.Lock()
-			kept = append(kept, entry{Company: name, Board: slug})
+			kept = append(kept, entry{Company: chooseCompany(name, companyByBoard[slug], slug), Board: slug})
 			mu.Unlock()
 		}(slug)
 	}

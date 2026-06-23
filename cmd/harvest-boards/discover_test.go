@@ -18,7 +18,7 @@ func (f fakeDiscoverer) discover(context.Context, httpClient) ([]string, error) 
 }
 
 func TestResolveCandidatesDiscoversWhenNoSeed(t *testing.T) {
-	got, err := resolveCandidates(context.Background(), fakeDiscoverer{ids: []string{"316", "89896"}}, nil, "")
+	got, _, err := resolveCandidates(context.Background(), fakeDiscoverer{ids: []string{"316", "89896"}}, nil, "")
 	if err != nil {
 		t.Fatalf("resolveCandidates: %v", err)
 	}
@@ -28,7 +28,7 @@ func TestResolveCandidatesDiscoversWhenNoSeed(t *testing.T) {
 }
 
 func TestResolveCandidatesNonDiscovererNeedsSeed(t *testing.T) {
-	_, err := resolveCandidates(context.Background(), greenhouseProber{}, nil, "")
+	_, _, err := resolveCandidates(context.Background(), greenhouseProber{}, nil, "")
 	if err == nil {
 		t.Error("a non-discoverer prober with no seed file should error, not silently no-op")
 	}

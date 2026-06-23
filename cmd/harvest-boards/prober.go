@@ -560,4 +560,6 @@ var probers = map[string]prober{
 	"deel":            deelProber{},
 	"freshteam":       freshteamProber{},
 	"join":            joinProber{},
+	"oracle":          oracleProber{},
+	"jazzhr":          jazzhrProber{},
 }
