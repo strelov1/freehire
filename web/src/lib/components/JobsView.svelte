@@ -5,7 +5,7 @@
   import { isAuthenticated } from '$lib/auth.svelte';
   import { ensureViewedLoaded } from '$lib/viewedJobs.svelte';
   import { Paginator } from '$lib/paginated.svelte';
-  import { FilterStore, filtersToParams } from '$lib/filters.svelte';
+  import { FilterStore, filtersToParams } from '$lib/filters';
   import { syncOnNavigation } from '$lib/urlSynced.svelte';
   import type { Job, FacetCounts } from '$lib/types';
   import { Input } from '$lib/ui';
@@ -93,7 +93,7 @@
   // first run for the list (the SSR `initial` already seeded page one); still
   // fetch counts on mount since they aren't server-rendered into this view.
   $effect(() => {
-    filters.applied; // track the debounced snapshot
+    void filters.applied; // track the debounced snapshot
     untrack(() => {
       refreshCounts();
       if (!started) {

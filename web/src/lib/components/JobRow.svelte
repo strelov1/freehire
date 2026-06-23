@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import CompanyLogo from './CompanyLogo.svelte';
   import { cardTags, formatSalary } from '$lib/enrichment';
   import type { Job } from '$lib/types';
@@ -28,7 +29,7 @@
 </script>
 
 <a
-  href={`/jobs/${job.public_slug}`}
+  href={resolve('/jobs/[slug]', { slug: job.public_slug })}
   class="block rounded-xl border border-border bg-card p-4 transition hover:bg-accent hover:opacity-100"
   class:opacity-60={isViewed}
 >

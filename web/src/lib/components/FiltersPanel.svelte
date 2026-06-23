@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { FilterStore } from '$lib/filters.svelte';
+  import type { FilterStore } from '$lib/filters';
   import type { FacetCounts } from '$lib/types';
   import { FACETS, type FacetDef } from '$lib/facets';
   import FacetSection from './facets/FacetSection.svelte';

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/state';
+  import { resolve } from '$app/paths';
   import { replaceState } from '$app/navigation';
   import { Menu, X } from '@lucide/svelte';
   import { isAuthenticated } from '$lib/auth.svelte';
@@ -26,7 +27,7 @@
     { href: '/cli', label: 'CLI' },
     { href: '/recruiters', label: 'For recruiters' },
     { href: '/for-companies', label: 'For companies' },
-  ];
+  ] as const;
 
   // A link is active for its own path and any sub-route (e.g. /jobs and
   // /jobs/:slug). Order-independent: /companies never matches /jobs.
@@ -41,6 +42,7 @@
   onMount(() => {
     if (page.url.searchParams.has('auth_error')) {
       openAuthDialog('login', 'Sign-in failed. Please try again.');
+      // eslint-disable-next-line svelte/no-navigation-without-resolve -- shallow same-page URL clean-up to the current pathname; nothing to resolve
       replaceState(page.url.pathname, {});
     }
   });
@@ -50,7 +52,7 @@
 
 <header class="border-b border-border">
   <div class="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:gap-6">
-    <a href="/" class="flex items-center gap-2 text-sm font-semibold tracking-tight">
+    <a href={resolve('/')} class="flex items-center gap-2 text-sm font-semibold tracking-tight">
       <!-- The mark inherits text colour via currentColor, so it tracks the theme
            (light/dark) exactly like the wordmark beside it. aria-hidden: the
            "FreeHire" text already names the link. -->
@@ -74,7 +76,7 @@
     <nav class="hidden items-center gap-4 text-sm sm:flex">
       {#each links as link (link.href)}
         <a
-          href={link.href}
+          href={resolve(link.href)}
           class={cn(
             'whitespace-nowrap transition-colors hover:text-foreground',
             isActive(link.href) ? 'text-foreground' : 'text-muted-foreground',
@@ -115,7 +117,7 @@
     <nav class="flex flex-col border-t border-border px-4 py-1 sm:hidden">
       {#each links as link (link.href)}
         <a
-          href={link.href}
+          href={resolve(link.href)}
           onclick={() => (mobileOpen = false)}
           class={cn(
             'rounded-md px-2 py-2.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground',

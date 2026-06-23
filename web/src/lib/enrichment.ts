@@ -61,7 +61,7 @@ function label(map: Record<string, string>, value: string): string {
 }
 
 /** The /jobs URL that filters by a single facet value. Param names match the
- *  search API (see facets.ts / filters.svelte.ts). */
+ *  search API (see facets.ts / filters.ts). */
 export function filterHref(param: string, value: string): string {
   return `/jobs?${param}=${encodeURIComponent(value)}`;
 }

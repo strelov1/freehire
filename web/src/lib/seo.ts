@@ -141,5 +141,5 @@ export function organizationJsonLd(company: Company, origin: string): Record<str
  *  break out of the tag — a correctness and XSS guard. */
 export function jsonLdScript(data: unknown): string {
   const json = JSON.stringify(data).replace(/</g, '\\u003c');
-  return `<script type="application/ld+json">${json}<\/script>`;
+  return `<script type="application/ld+json">${json}</script>`;
 }

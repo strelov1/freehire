@@ -5,7 +5,10 @@ import oxlint from 'eslint-plugin-oxlint';
 import globals from 'globals';
 
 export default ts.config(
-  { ignores: ['dist/', 'node_modules/'] },
+  // Generated output is not source — never lint it. `.svelte-kit/` holds the
+  // SvelteKit-synced types and the build artifacts, which otherwise flood the
+  // report with no-undef/no-explicit-any from machine-written code.
+  { ignores: ['dist/', 'node_modules/', '.svelte-kit/', 'build/'] },
 
   js.configs.recommended,
   ...ts.configs.recommended,

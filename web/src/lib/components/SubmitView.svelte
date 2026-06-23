@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { ApiError, submitJob } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import type { Submission } from '$lib/types';
@@ -72,7 +73,7 @@
         Thanks — <span class="font-medium">{submitted.title}</span> at
         <span class="font-medium">{submitted.company}</span> was submitted and is awaiting review.
         You can track it under
-        <a href="/my/submissions" class="underline">My submissions</a>.
+        <a href={resolve('/my/submissions')} class="underline">My submissions</a>.
       </div>
     {/if}
 

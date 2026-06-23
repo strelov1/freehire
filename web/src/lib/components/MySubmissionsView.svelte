@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { listMySubmissions } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import type { Submission } from '$lib/types';
@@ -38,7 +39,7 @@
     <div class="flex flex-col gap-1">
       <h1 class="text-2xl font-semibold tracking-tight">My submissions</h1>
       <p class="text-sm text-muted-foreground">
-        Jobs you submitted for review. <a href="/submit" class="underline">Submit another</a>.
+        Jobs you submitted for review. <a href={resolve('/submit')} class="underline">Submit another</a>.
       </p>
     </div>
 
@@ -53,8 +54,8 @@
         {#each submissions as s (s.id)}
           <li class="flex items-start justify-between gap-3 px-4 py-3">
             <div class="flex min-w-0 flex-col gap-0.5">
-              <a
-                href={s.url}
+              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external posting URL, opened in a new tab; not an internal route -->
+              <a href={s.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 class="truncate text-sm font-medium hover:underline"
@@ -69,7 +70,7 @@
               {/if}
               {#if s.status === 'approved' && s.job_slug}
                 <a
-                  href={`/jobs/${s.job_slug}`}
+                  href={resolve('/jobs/[slug]', { slug: s.job_slug })}
                   class="text-xs font-medium text-foreground hover:underline"
                 >
                   View vacancy →

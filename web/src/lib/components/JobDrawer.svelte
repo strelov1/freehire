@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { Button } from '$lib/ui';
   import { STAGES, humanizeStage } from '$lib/stages';
   import { CLOSED_OUTCOMES, type ClosedOutcome } from '$lib/board';
@@ -23,13 +24,10 @@
     onclose: () => void;
   } = $props();
 
-  // Derive the notes string reactively so the local draft stays in sync when
-  // the parent swaps to a different item. $derived keeps the reference live.
-  let notes = $state('');
-  const _notesSync = $derived(item.notes ?? '');
-  $effect(() => {
-    notes = _notesSync;
-  });
+  // Local notes draft, reactively re-seeded from the item: a writable $derived
+  // tracks `item.notes` (so it resets when the parent swaps to a different item)
+  // while still accepting local edits until the next swap.
+  let notes = $derived(item.notes ?? '');
 </script>
 
 <div
@@ -55,7 +53,7 @@
     <button type="button" onclick={onclose} class="text-muted-foreground hover:text-foreground" aria-label="Close">✕</button>
   </div>
 
-  <a href={`/jobs/${item.job.public_slug}`} class="text-sm font-medium underline underline-offset-4">Open job →</a>
+  <a href={resolve('/jobs/[slug]', { slug: item.job.public_slug })} class="text-sm font-medium underline underline-offset-4">Open job →</a>
 
   {#if pendingOutcome}
     <div class="flex flex-col gap-2 rounded-lg border border-border p-3">

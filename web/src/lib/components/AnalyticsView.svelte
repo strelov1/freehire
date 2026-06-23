@@ -2,7 +2,7 @@
   import { onMount, untrack } from 'svelte';
   import { page } from '$app/state';
   import { api } from '$lib/api';
-  import { FilterStore, filtersToParams } from '$lib/filters.svelte';
+  import { FilterStore, filtersToParams } from '$lib/filters';
   import { syncOnNavigation } from '$lib/urlSynced.svelte';
   import { FACETS } from '$lib/facets';
   import type { FacetCounts } from '$lib/types';
@@ -43,7 +43,7 @@
   // a timer) is what protects against an out-of-order response. Skip the first
   // run: the SSR `initial` counts are already shown.
   $effect(() => {
-    filters.applied; // track the debounced snapshot
+    void filters.applied; // track the debounced snapshot
     untrack(() => {
       if (!started) {
         started = true;

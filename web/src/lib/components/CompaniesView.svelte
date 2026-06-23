@@ -1,9 +1,11 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { page } from '$app/state';
+  import { resolve } from '$app/paths';
   import { api, type Slice } from '$lib/api';
   import { Paginator } from '$lib/paginated.svelte';
   import { UrlSyncedState, syncOnNavigation } from '$lib/urlSynced.svelte';
+  import { SvelteURLSearchParams } from 'svelte/reactivity';
   import type { CompanyListItem } from '$lib/types';
   import { Badge, Input } from '$lib/ui';
   import States from './States.svelte';
@@ -22,7 +24,7 @@
   const search = new UrlSyncedState<string>(page.url.searchParams, {
     parse: (p) => p.get('q') ?? '',
     serialize: (q) => {
-      const p = new URLSearchParams();
+      const p = new SvelteURLSearchParams();
       if (q) p.set('q', q);
       return p;
     },
@@ -47,7 +49,7 @@
   // Reload whenever the debounced query changes (typing settled, or back/forward
   // re-seeded it). Skip the first run: the SSR `initial` already rendered page one.
   $effect(() => {
-    search.applied; // track the debounced query
+    void search.applied; // track the debounced query
     untrack(() => {
       if (!started) {
         started = true;
@@ -85,7 +87,7 @@
   <div class="flex flex-col gap-3">
     {#each companies.items as company (company.slug)}
       <a
-        href={`/companies/${company.slug}`}
+        href={resolve('/companies/[slug]', { slug: company.slug })}
         class="flex items-center justify-between rounded-lg border border-border px-4 py-3 transition-colors hover:bg-accent"
       >
         <span class="flex min-w-0 items-center gap-2.5">

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { Button } from '$lib/ui';
 
   const repoUrl = 'https://github.com/strelov1/freehire';
@@ -72,7 +73,7 @@
     </p>
     <div class="flex flex-wrap items-center gap-3">
       <Button href={repoUrl} variant="primary" size="lg">Add your board on GitHub</Button>
-      <Button href="/companies" variant="outline" size="lg">Browse companies</Button>
+      <Button href={resolve('/companies')} variant="outline" size="lg">Browse companies</Button>
     </div>
   </section>
 
@@ -133,25 +134,25 @@
       <div class="flex flex-col gap-4">
         <p class="text-sm leading-relaxed text-muted-foreground">
           Rather push than be pulled? Mint an
-          <a href="/my/api-keys" class="font-medium text-foreground underline-offset-4 hover:underline"
+          <a href={resolve('/my/api-keys')} class="font-medium text-foreground underline-offset-4 hover:underline"
             >API key</a
           >
           and post roles straight to freehire — one call per vacancy, from your own systems or the
-          <a href="/cli" class="font-medium text-foreground underline-offset-4 hover:underline"
+          <a href={resolve('/cli')} class="font-medium text-foreground underline-offset-4 hover:underline"
             >freehire CLI</a
           >. Submissions go through the same moderator review as everything else, then join the
           catalogue.
         </p>
         <p class="text-sm leading-relaxed text-muted-foreground">
           See the
-          <a href="/docs/api" class="font-medium text-foreground underline-offset-4 hover:underline"
+          <a href={resolve('/docs/api')} class="font-medium text-foreground underline-offset-4 hover:underline"
             >API reference</a
           >
           for the full payload and endpoints.
         </p>
         <div class="flex flex-wrap gap-3">
-          <Button href="/my/api-keys" variant="outline" size="sm">Get an API key</Button>
-          <Button href="/docs/api" variant="ghost" size="sm">API reference</Button>
+          <Button href={resolve('/my/api-keys')} variant="outline" size="sm">Get an API key</Button>
+          <Button href={resolve('/docs/api')} variant="ghost" size="sm">API reference</Button>
         </div>
       </div>
       <pre

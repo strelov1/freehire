@@ -2,6 +2,7 @@
   import { X } from '@lucide/svelte';
   import type { FacetOption } from '$lib/facets';
   import { Input } from '$lib/ui';
+  import { SvelteMap } from 'svelte/reactivity';
   import { pillClass } from './pill';
 
   // A server-backed multi-select: as the user types we query `search` (debounced)
@@ -30,10 +31,10 @@
   let results = $state<FacetOption[]>([]);
   let loading = $state(false);
   // value → display label, accumulated from every result we have rendered, so a
-  // selected company shows its real name. Reactive (reassigned, not mutated) so a
-  // chip rendered from the URL fallback upgrades to the real name once a later
-  // search reveals it.
-  let seen = $state(new Map<string, string>());
+  // selected company shows its real name. A reactive SvelteMap so a chip rendered
+  // from the URL fallback upgrades to the real name once a later search reveals it
+  // — direct mutation triggers the update, no copy-and-reassign needed.
+  let seen = new SvelteMap<string, string>();
   // Monotonic request id: a slow earlier query must not overwrite a newer one.
   let gen = 0;
 
@@ -43,9 +44,7 @@
     try {
       const opts = await search(q);
       if (mine !== gen) return;
-      const next = new Map(seen);
-      for (const o of opts) next.set(o.value, o.label);
-      seen = next;
+      for (const o of opts) seen.set(o.value, o.label);
       results = opts;
     } catch {
       if (mine === gen) results = [];

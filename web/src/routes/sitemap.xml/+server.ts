@@ -11,8 +11,6 @@ const PAGE = 500;
 const JOB_CAP = 5000;
 const COMPANY_CAP = 5000;
 
-type Api = ReturnType<typeof serverApi>;
-
 interface Entry {
   loc: string;
   lastmod?: string;

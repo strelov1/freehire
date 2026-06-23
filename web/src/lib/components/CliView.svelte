@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { Button } from '$lib/ui';
 
   const CLI_REPO = 'https://github.com/strelov1/freehire-cli';
@@ -61,7 +62,7 @@
         </p>
 
         <div class="reveal mt-9 flex flex-wrap items-center gap-3" style="--d:240ms">
-          <Button href="/my/api-keys" variant="primary" size="lg">Get an API key</Button>
+          <Button href={resolve('/my/api-keys')} variant="primary" size="lg">Get an API key</Button>
           <Button href={CLI_REPO} target="_blank" rel="noopener noreferrer" variant="outline" size="lg">
             Source ↗
           </Button>
@@ -132,7 +133,7 @@ freehire search <span class="text-foreground">"golang"</span> --remote --region 
     </div>
     <p class="mt-8 max-w-2xl text-sm leading-relaxed text-muted-foreground">
       Everything you save, apply to and stage shows up on your
-      <a href="/my/jobs" class="font-medium text-foreground underline-offset-4 hover:underline">My jobs</a>
+      <a href={resolve('/my/jobs')} class="font-medium text-foreground underline-offset-4 hover:underline">My jobs</a>
       board.
       <code class="font-mono text-foreground">stage</code> takes a controlled value:
       <span class="font-mono text-foreground"
@@ -141,7 +142,7 @@ freehire search <span class="text-foreground">"golang"</span> --remote --region 
       <span class="font-mono text-foreground">withdrawn</span>. For scripts and agents, add
       <code class="font-mono text-foreground">--json</code> for the raw API payload; results go to stdout,
       errors to stderr, and a non-zero exit code signals failure. The same endpoints are documented in the
-      <a href="/docs/api" class="font-medium text-foreground underline-offset-4 hover:underline"
+      <a href={resolve('/docs/api')} class="font-medium text-foreground underline-offset-4 hover:underline"
         >API reference</a
       >.
     </p>

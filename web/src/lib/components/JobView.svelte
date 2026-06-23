@@ -1,5 +1,6 @@
 <script lang="ts">
   import { browser } from '$app/environment';
+  import { resolve } from '$app/paths';
   import { ArrowRight, Bookmark, Check, Flag } from '@lucide/svelte';
   import { markJobApplied, recordJobView, saveJob, unsaveJob } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
@@ -111,7 +112,7 @@
     <CompanyLogo name={job.company} size="size-8" />
     <p class="text-sm text-muted-foreground">
       {#if job.company_slug}
-        <a href={`/companies/${job.company_slug}`} class="hover:text-foreground hover:underline">
+        <a href={resolve('/companies/[slug]', { slug: job.company_slug })} class="hover:text-foreground hover:underline">
           {job.company || 'Unknown company'}
         </a>
       {:else}
@@ -181,7 +182,7 @@
             <div class="flex items-baseline justify-between gap-3">
               <dt class="shrink-0 text-muted-foreground">{facet.label}</dt>
               <dd class="min-w-0 break-words text-right font-medium"
-                >{#each facet.values as v, i (v.text)}{#if i > 0}, {/if}{#if v.href}<a
+                >{#each facet.values as v, i (v.text)}{#if i > 0}, {/if}{#if v.href}<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal filter link from filterHref; query-only, no route to resolve --><a
                       href={v.href}
                       class="hover:text-foreground hover:underline">{v.text}</a
                     >{:else}{v.text}{/if}{/each}</dd
@@ -193,8 +194,9 @@
 
       {#if e.skills?.length}
         <ul class="flex flex-wrap gap-1.5 border-t border-border pt-4 first:border-t-0 first:pt-0">
-          {#each e.skills as skill}
+          {#each e.skills as skill (skill)}
             <li>
+              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
               <a href={filterHref('skills', skill)}>
                 <Badge variant="secondary" class="transition-colors hover:bg-accent">{skill}</Badge>
               </a>
@@ -206,6 +208,7 @@
       <div
         class="flex flex-wrap items-center gap-2 border-t border-border pt-4 first:border-t-0 first:pt-0"
       >
+<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
         <a href={filterHref('source', job.source)}>
           <Badge variant="outline" class="transition-colors hover:bg-accent hover:text-foreground">
             {job.source}
@@ -242,6 +245,7 @@
 
     {#if job.description}
       <!-- Description is server-sanitized HTML (see internal/sources), safe to render. -->
+      <!-- eslint-disable-next-line svelte/no-at-html-tags -- server-sanitized; the rule flags every {@html} regardless -->
       <div class="job-description text-sm leading-relaxed">{@html job.description}</div>
     {/if}
   </div>

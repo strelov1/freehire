@@ -25,7 +25,7 @@
   const shown = $derived(
     uniqueByValue(options)
       .filter((o) => o.label.toLowerCase().includes(filter.trim().toLowerCase()))
-      .sort((a, b) => Number(selected.includes(b.value)) - Number(selected.includes(a.value))),
+      .toSorted((a, b) => Number(selected.includes(b.value)) - Number(selected.includes(a.value))),
   );
 </script>
 

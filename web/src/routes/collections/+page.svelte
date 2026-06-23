@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { resolve } from '$app/paths';
   import Seo from '$lib/components/Seo.svelte';
   import type { PageData } from './$types';
 
@@ -27,7 +28,7 @@
   <div class="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
     {#each data.collections as collection (collection.slug)}
       <a
-        href={`/jobs?collections=${collection.slug}`}
+        href={resolve(`/jobs?collections=${collection.slug}`)}
         class="group flex flex-col bg-background p-6 transition-colors hover:bg-secondary/40"
       >
         <div class="flex items-baseline justify-between gap-3">

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { onMount } from 'svelte';
   import { initTheme } from '$lib/theme.svelte';
   import TopBar from '$lib/components/TopBar.svelte';
@@ -29,13 +30,13 @@
       <p>Free, open-source IT job aggregator.</p>
       <div class="flex shrink-0 items-center gap-4">
         <a
-          href="/cli"
+          href={resolve('/cli')}
           class="shrink-0 font-medium text-foreground transition-colors hover:text-muted-foreground"
         >
           CLI
         </a>
         <a
-          href="/docs/api"
+          href={resolve('/docs/api')}
           class="shrink-0 font-medium text-foreground transition-colors hover:text-muted-foreground"
         >
           API

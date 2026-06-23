@@ -95,8 +95,8 @@
         {#each queue as s (s.id)}
           <li class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
             <div class="flex min-w-0 flex-col gap-0.5">
-              <a
-                href={s.url}
+              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external posting URL, opened in a new tab; not an internal route -->
+              <a href={s.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 class="truncate text-sm font-medium hover:underline"

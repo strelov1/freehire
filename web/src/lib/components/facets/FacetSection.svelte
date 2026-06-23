@@ -1,7 +1,7 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
   import { dynamicLabel, type FacetDef, type FacetOption } from '$lib/facets';
-  import type { FilterStore } from '$lib/filters.svelte';
+  import type { FilterStore } from '$lib/filters';
   import type { FacetCounts } from '$lib/types';
   import { cn } from '$lib/utils';
   import PillGroup from './PillGroup.svelte';
@@ -27,7 +27,7 @@
     const keys = new Set<string>([...Object.keys(dist), ...st.values]);
     return [...keys]
       .map((value) => ({ value, label: dynamicLabel(def.param, value), count: dist[value] ?? 0 }))
-      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+      .toSorted((a, b) => b.count - a.count || a.label.localeCompare(b.label));
   });
   // The exclude/clear actions only appear once something is selected — so their
   // meaning is clear ("you picked these — hide them, or clear them") rather than

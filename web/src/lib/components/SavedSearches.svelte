@@ -3,7 +3,7 @@
   import { ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
-  import { canonicalQuery, filtersToParams, type FilterStore } from '$lib/filters.svelte';
+  import { canonicalQuery, filtersToParams, type FilterStore } from '$lib/filters';
   import { savedSearches } from '$lib/savedSearches.svelte';
   import { notifications } from '$lib/notifications.svelte';
   import { Button, Input } from '$lib/ui';

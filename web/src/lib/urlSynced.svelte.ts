@@ -28,7 +28,7 @@ export interface UrlCodec<T> {
  *  resulting `applied` change is what a consumer's reload effect then watches. */
 export function syncOnNavigation(state: { syncFromUrl: () => void }): void {
   $effect(() => {
-    page.url.search; // track
+    void page.url.search; // track
     untrack(() => state.syncFromUrl());
   });
 }
@@ -104,6 +104,7 @@ export class UrlSyncedState<T> {
     const qs = this.#codec.serialize(next).toString();
     // Shallow routing: updates the URL in place without a navigation or load, so the
     // write is cheap and synchronous. Browser-only (mutations are user events).
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- in-place query write to the current pathname; there is no route to resolve
     replaceState(page.url.pathname + (qs ? `?${qs}` : ''), {});
   }
 }

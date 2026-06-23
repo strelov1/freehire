@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { currentUser, logout as doLogout } from '$lib/auth.svelte';
 
   // The dropdown closes on outside click (window listener checks containment),
@@ -45,7 +46,7 @@
       <p class="truncate px-3 py-2 text-sm text-muted-foreground" title={email}>{email}</p>
       <div class="my-1 h-px bg-border"></div>
       <a
-        href="/my/jobs"
+        href={resolve('/my/jobs')}
         role="menuitem"
         onclick={() => (open = false)}
         class="block px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
@@ -53,7 +54,7 @@
         My jobs
       </a>
       <a
-        href="/my/notifications"
+        href={resolve('/my/notifications')}
         role="menuitem"
         onclick={() => (open = false)}
         class="block px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
@@ -61,7 +62,7 @@
         Notifications
       </a>
       <a
-        href="/my/api-keys"
+        href={resolve('/my/api-keys')}
         role="menuitem"
         onclick={() => (open = false)}
         class="block px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
@@ -70,7 +71,7 @@
       </a>
       <div class="my-1 h-px bg-border"></div>
       <a
-        href="/submit"
+        href={resolve('/submit')}
         role="menuitem"
         onclick={() => (open = false)}
         class="block px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
@@ -78,7 +79,7 @@
         Submit a job
       </a>
       <a
-        href="/my/submissions"
+        href={resolve('/my/submissions')}
         role="menuitem"
         onclick={() => (open = false)}
         class="block px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
@@ -87,7 +88,7 @@
       </a>
       {#if isModerator}
         <a
-          href="/moderation"
+          href={resolve('/moderation')}
           role="menuitem"
           onclick={() => (open = false)}
           class="block px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"

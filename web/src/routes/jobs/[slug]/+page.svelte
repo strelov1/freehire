@@ -20,6 +20,7 @@
 
 <svelte:head>
   <!-- JobPosting structured data — eligible for Google Jobs. -->
+  <!-- eslint-disable-next-line svelte/no-at-html-tags -- non-executable JSON-LD built by jsonLdScript, which escapes `<`; raw injection is the only way to emit a structured-data <script> -->
   {@html jsonLd}
 </svelte:head>
 

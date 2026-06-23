@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { Button } from '$lib/ui';
 
   const GITHUB = 'https://github.com/strelov1/freehire';
@@ -79,7 +80,7 @@
         </p>
 
         <div class="reveal mt-9 flex flex-wrap items-center gap-3" style="--d:240ms">
-          <Button href="/jobs" variant="primary" size="lg">Browse jobs</Button>
+          <Button href={resolve('/jobs')} variant="primary" size="lg">Browse jobs</Button>
           <Button href={GITHUB} target="_blank" rel="noopener noreferrer" variant="outline" size="lg">
             View on GitHub ↗
           </Button>
@@ -170,15 +171,15 @@
         Save the openings worth a second look, mark the ones you applied to, and drag each card through
         its stages — Saved → Applied → Interview → Offer. Your
         <code class="font-mono text-foreground">My jobs</code> board keeps the whole search in one place.
-        Prefer the terminal? The <a href="/cli" class="font-medium text-foreground underline-offset-4 hover:underline">freehire CLI</a>
+        Prefer the terminal? The <a href={resolve('/cli')} class="font-medium text-foreground underline-offset-4 hover:underline">freehire CLI</a>
         does the same — <code class="font-mono text-foreground">apply</code>,
         <code class="font-mono text-foreground">save</code>,
         <code class="font-mono text-foreground">stage</code> and
         <code class="font-mono text-foreground">note</code> any job from a script or an agent.
       </p>
       <div class="mt-8 flex flex-wrap gap-3">
-        <Button href="/my/jobs" variant="primary" size="lg">Open My jobs</Button>
-        <Button href="/cli" variant="ghost" size="lg">Track from the CLI</Button>
+        <Button href={resolve('/my/jobs')} variant="primary" size="lg">Open My jobs</Button>
+        <Button href={resolve('/cli')} variant="ghost" size="lg">Track from the CLI</Button>
       </div>
     </div>
 
@@ -232,12 +233,12 @@
         Save a search — your stack, seniority, region, salary — and subscribe to it. When a matching job is
         added, freehire sends it to you on Telegram as a tidy digest. No inbox clutter, no checking back:
         connect once from
-        <a href="/my/notifications" class="font-medium text-foreground underline-offset-4 hover:underline">Notifications</a>
+        <a href={resolve('/my/notifications')} class="font-medium text-foreground underline-offset-4 hover:underline">Notifications</a>
         and the openings come to you.
       </p>
       <div class="mt-8 flex flex-wrap gap-3">
-        <Button href="/jobs" variant="primary" size="lg">Find &amp; save a filter</Button>
-        <Button href="/my/notifications" variant="ghost" size="lg">Notification settings</Button>
+        <Button href={resolve('/jobs')} variant="primary" size="lg">Find &amp; save a filter</Button>
+        <Button href={resolve('/my/notifications')} variant="ghost" size="lg">Notification settings</Button>
       </div>
     </div>
   </section>
@@ -258,7 +259,7 @@
           <code class="font-mono text-foreground">--json</code> for machine-readable output.
         </p>
         <div class="mt-8 flex flex-wrap gap-3">
-          <Button href="/cli" variant="primary" size="lg">Explore the CLI</Button>
+          <Button href={resolve('/cli')} variant="primary" size="lg">Explore the CLI</Button>
           <Button href={CLI} target="_blank" rel="noopener noreferrer" variant="ghost" size="lg">
             View on GitHub ↗
           </Button>

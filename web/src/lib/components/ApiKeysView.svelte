@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { createApiKey, listApiKeys, revokeApiKey } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import type { ApiKey, CreatedApiKey } from '$lib/types';
@@ -110,10 +111,10 @@
       <h1 class="text-2xl font-semibold tracking-tight">API keys</h1>
       <p class="text-sm text-muted-foreground">
         Reach the API without a browser — search, open jobs, and track applications from a script.
-        Use the <a href="/cli" class="font-medium text-foreground underline-offset-4 hover:underline">freehire CLI</a>,
+        Use the <a href={resolve('/cli')} class="font-medium text-foreground underline-offset-4 hover:underline">freehire CLI</a>,
         or send the key directly as
         <code class="rounded bg-muted px-1 py-0.5 font-mono text-xs">Authorization: Bearer &lt;key&gt;</code>.
-        See the <a href="/docs/api" class="font-medium text-foreground underline-offset-4 hover:underline">API reference</a>
+        See the <a href={resolve('/docs/api')} class="font-medium text-foreground underline-offset-4 hover:underline">API reference</a>
         for every endpoint and filter.
       </p>
     </div>
@@ -143,7 +144,7 @@
         <pre
           class="overflow-x-auto rounded bg-background px-3 py-2 font-mono text-xs text-muted-foreground">{cliExample}</pre>
         <p class="text-xs text-muted-foreground">
-          New to the CLI? See the <a href="/cli" class="font-medium text-foreground underline-offset-4 hover:underline">command reference</a>.
+          New to the CLI? See the <a href={resolve('/cli')} class="font-medium text-foreground underline-offset-4 hover:underline">command reference</a>.
         </p>
       </div>
     {/if}

@@ -49,6 +49,7 @@
 </script>
 
 {#if href}
+  <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- generic link primitive; href may be external — e.g. a job's apply URL — so the caller owns resolving internal routes -->
   <a {href} class={cn(buttonVariants({ variant, size }), className)} {...rest}>
     {@render children()}
   </a>

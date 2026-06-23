@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { listMyJobs, trackJob, markJobApplied, saveJob, clearJobStage, untrackJob } from '$lib/api';
+  import { listMyJobs, trackJob, saveJob, clearJobStage, untrackJob } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import type { MyJob } from '$lib/types';
   import { BOARD_COLUMNS, columnOf, type BoardColumnId, type BoardItem, type ClosedOutcome } from '$lib/board';

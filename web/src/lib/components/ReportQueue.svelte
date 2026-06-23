@@ -1,4 +1,6 @@
 <script lang="ts">
+  // Aliased: this component already has a local `resolve(report, …)` action.
+  import { resolve as resolveRoute } from '$app/paths';
   import { dismissReport, listPendingReports, resolveReport } from '$lib/api';
   import { reportReasonLabel } from '$lib/reports';
   import type { Report } from '$lib/types';
@@ -91,7 +93,7 @@
           <div class="flex flex-col gap-1">
             <div class="flex flex-wrap items-center gap-2">
               {#if r.job_slug}
-                <a href={`/jobs/${r.job_slug}`} class="text-sm font-medium hover:underline">
+                <a href={resolveRoute('/jobs/[slug]', { slug: r.job_slug })} class="text-sm font-medium hover:underline">
                   {r.job_title || r.job_slug}
                 </a>
               {:else}
