@@ -1,0 +1,8 @@
+# Cornerstone OnDemand (CSOD) career sites. Provider is the filename; each entry is
+# company + board. board = the tenant subdomain (forming <board>.csod.com); see
+# internal/sources/cornerstone.go. The adapter scrapes the careersite home shell for the
+# regional API base + JWT read token, then pages rec-job-search/external/jobs (description
+# inline). Each board validated live (search returned >0 requisitions) before adding.
+
+- company: Nintendo of Europe
+  board: nintendoeurope

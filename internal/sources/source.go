@@ -131,6 +131,7 @@ func All(c HTTPClient) map[string]Source {
 		NewPhenom(c),
 		NewAvature(c),
 		NewComeet(c),
+		NewCornerstone(c),
 		NewRadancy(c),
 		NewJazzHR(c),
 		NewWPYoast(c),

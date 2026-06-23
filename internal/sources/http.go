@@ -41,6 +41,12 @@ type HTMLGetter interface {
 	GetHTML(ctx context.Context, url string) (*html.Node, error)
 }
 
+// TextGetter fetches a URL and returns its raw response body, for adapters that regex a
+// token or config blob out of a page rather than parsing its DOM (e.g. Cornerstone).
+type TextGetter interface {
+	GetText(ctx context.Context, url string) (string, error)
+}
+
 // JSONPoster sends a JSON request body and decodes the JSON response (platforms whose
 // listing API is POST-only, e.g. Workday).
 type JSONPoster interface {
@@ -65,6 +71,7 @@ type HTTPClient interface {
 	JSONGetter
 	XMLGetter
 	HTMLGetter
+	TextGetter
 	JSONPoster
 	HeaderJSONGetter
 	HeaderJSONPoster
