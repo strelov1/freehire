@@ -28,7 +28,7 @@
     "eslint-plugin-oxlint": "^1.70.0",
     "eslint-plugin-svelte": "^3.19.0",
     "globals": "^17.7.0",
-    "oxlint": "^1.70.0",
+    "oxlint": "^1.71.0",
     "svelte": "^5.56.3",
     "svelte-check": "^4.0.0",
     "svelte-eslint-parser": "^1.8.0",
