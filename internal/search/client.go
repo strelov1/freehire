@@ -380,6 +380,12 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, erro
 // a vector — its /similar is then "no neighbours", not an error.
 const similarSourceMissingCode = "not_found_similar_id"
 
+// semanticIndexMissingCode is Meilisearch's code when the semantic index itself
+// is absent (e.g. it was dropped to reclaim disk and its rebuild is paused). Like
+// a missing source document, this degrades to "no neighbours" so the detail page
+// hides the section instead of erroring.
+const semanticIndexMissingCode = "index_not_found"
+
 // SimilarJobs returns the jobs nearest to job id in embedding space, queried
 // against the semantic index by the document's stored vector (no query text, no
 // re-embedding). The semantic index holds open jobs only, so neighbours are open
@@ -391,7 +397,8 @@ const similarSourceMissingCode = "not_found_similar_id"
 // A job with no vector in the semantic index yet (the index lags ingest) yields
 // an empty list, not an error: Meilisearch answers such a source id with
 // not_found_similar_id, which we map to "no neighbours" so the detail-page
-// section simply hides.
+// section simply hides. A wholly absent semantic index (index_not_found, e.g.
+// dropped to reclaim disk) degrades the same way.
 func (c *Client) SimilarJobs(ctx context.Context, id int64, limit int) ([]JobDocument, error) {
 	var resp meilisearch.SimilarDocumentResult
 	err := c.semantic.SearchSimilarDocumentsWithContext(ctx, &meilisearch.SimilarDocumentQuery{
@@ -401,8 +408,11 @@ func (c *Client) SimilarJobs(ctx context.Context, id int64, limit int) ([]JobDoc
 	}, &resp)
 	if err != nil {
 		var meiliErr *meilisearch.Error
-		if errors.As(err, &meiliErr) && meiliErr.MeilisearchApiError.Code == similarSourceMissingCode {
-			return nil, nil
+		if errors.As(err, &meiliErr) {
+			switch meiliErr.MeilisearchApiError.Code {
+			case similarSourceMissingCode, semanticIndexMissingCode:
+				return nil, nil
+			}
 		}
 		return nil, fmt.Errorf("search: similar: %w", err)
 	}

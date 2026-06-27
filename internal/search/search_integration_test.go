@@ -468,6 +468,23 @@ func TestIntegration_SimilarJobs(t *testing.T) {
 			t.Errorf("expected no neighbours for an unindexed id, got %d", len(hits))
 		}
 	})
+
+	// The semantic index may be dropped entirely to reclaim disk while its rebuild
+	// is paused. Meilisearch then answers with index_not_found, which must degrade
+	// to an empty list — exactly like a missing source — so the detail page hides
+	// the section rather than 500ing. Runs last: it removes the shared index.
+	t.Run("absent semantic index yields empty, not an error", func(t *testing.T) {
+		if err := c.dropIndex(ctx, semanticIndexUID); err != nil {
+			t.Fatalf("dropIndex: %v", err)
+		}
+		hits, err := c.SimilarJobs(ctx, 1, 10)
+		if err != nil {
+			t.Fatalf("SimilarJobs against an absent index must not error: %v", err)
+		}
+		if len(hits) != 0 {
+			t.Errorf("expected no neighbours when the index is absent, got %d", len(hits))
+		}
+	})
 }
 
 func toDocs(t *testing.T, jobs []db.Job) []JobDocument {
