@@ -125,8 +125,12 @@ func (b tbank) detail(ctx context.Context, e CompanyEntry, it tbankVacancyItem) 
 
 	return Job{
 		ExternalID: it.URLSlug,
-		// SPA route UNCONFIRMED — best-effort from seoSlug; verify against the live careers UI.
-		URL:         fmt.Sprintf("https://www.tbank.ru/career/vacancy/%s/", it.SeoSlug),
+		// The careers SPA addresses a vacancy solely by its urlSlug (a UUID) in the final path
+		// segment — the section/city/seoSlug segments are cosmetic (any non-empty value resolves
+		// the same vacancy), but the route's five-segment shape must be intact or the server
+		// 404s. "it" is a real, universally-rendering section; "all" is a neutral city; the real
+		// seoSlug keeps the URL readable. (Verified against the live careers UI, 2026-06.)
+		URL:         fmt.Sprintf("https://www.tbank.ru/career/it/vacancy/all/%s/%s/", it.SeoSlug, it.URLSlug),
 		Title:       it.Title,
 		Company:     e.Company,
 		Location:    it.Subtitle,
