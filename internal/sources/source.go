@@ -47,6 +47,11 @@ type Job struct {
 	// location string. Provenance stays clean: this carries structured signal only,
 	// never the location heuristic.
 	WorkMode string
+	// Removed marks a posting the source reports as taken down (e.g. an item flagged
+	// removed in JobStream's incremental feed). A streaming, self-closing source emits
+	// these so the pipeline closes the job by identity instead of upserting it; all other
+	// adapters leave it false and only ever emit live postings.
+	Removed bool
 }
 
 // Source adapts one job-source platform. Provider is the platform key that selects
@@ -81,6 +86,26 @@ type boardless interface{ boardless() }
 // the source facet: a single-company boardless platform is redundant with the company
 // filter and excluded, but filtering by an aggregator is not.
 type aggregator interface{ aggregator() }
+
+// selfClosing marks an adapter that closes its own removed postings (via a Job with
+// Removed set, emitted from its stream) and therefore must be excluded from the post-run
+// unseen sweep. Such a source re-reports only changed postings each run, so the sweep's
+// last_seen_at cutoff would wrongly close every still-open posting it did not touch; the
+// stream's removal events are the authoritative close signal instead. See SelfClosingProviders.
+type selfClosing interface{ selfClosing() }
+
+// SelfClosingProviders returns the provider names in reg that manage their own closes and
+// must be skipped by the post-run unseen sweep (see selfClosing). cmd/ingest consults this
+// when deciding which providers to sweep.
+func SelfClosingProviders(reg map[string]Source) []string {
+	var out []string
+	for name, src := range reg {
+		if _, ok := src.(selfClosing); ok {
+			out = append(out, name)
+		}
+	}
+	return out
+}
 
 // FilterableProviders returns the sorted provider keys the source facet offers.
 // Passing a nil client is safe: Provider() and the marker assertions never touch the
@@ -176,6 +201,7 @@ func All(c HTTPClient) map[string]Source {
 		NewHimalayas(c),
 		NewRemotive(c),
 		NewJustJoin(c),
+		NewJobtech(c),
 		// International single-company adapters (boardless).
 		NewTelegramCareers(c),
 		NewUber(c),

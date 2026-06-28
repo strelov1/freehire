@@ -71,6 +71,20 @@ func (s *dbStore) Save(ctx context.Context, job pipeline.Job) error {
 	return tx.Commit(ctx)
 }
 
+// Close soft-closes a posting by its (source, external_id) identity — the stream-driven
+// close path a self-closing source (jobtech) uses for ads its incremental feed reports
+// removed. Idempotent (the query no-ops on an already-closed or absent row), so a re-sent
+// removal in the trailing window costs nothing.
+func (s *dbStore) Close(ctx context.Context, source, externalID string) error {
+	if _, err := s.q.CloseJobBySourceExternalID(ctx, db.CloseJobBySourceExternalIDParams{
+		Source:     source,
+		ExternalID: externalID,
+	}); err != nil {
+		return fmt.Errorf("close job %s/%s: %w", source, externalID, err)
+	}
+	return nil
+}
+
 // toTimestamptz maps an optional posted_at to the pgtype the generated params expect;
 // a nil time becomes SQL NULL.
 func toTimestamptz(t *time.Time) pgtype.Timestamptz {

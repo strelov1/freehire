@@ -29,6 +29,14 @@ type JSONGetter interface {
 	GetJSON(ctx context.Context, url string, v any) error
 }
 
+// StreamGetter issues a GET and hands the raw response body to fn for streaming decode.
+// Unlike GetJSON it uses a long timeout and neither buffers nor size-caps the body, so it
+// suits large, slow feeds (e.g. the throttled JobStream) that a 15s, size-capped GetJSON
+// cannot read.
+type StreamGetter interface {
+	GetStream(ctx context.Context, url, accept string, fn func(io.Reader) error) error
+}
+
 // XMLGetter fetches a URL and decodes its XML body into v (platforms publishing an XML
 // feed, e.g. Personio).
 type XMLGetter interface {
@@ -69,6 +77,7 @@ type HeaderJSONPoster interface {
 // narrows it to the role(s) it actually uses.
 type HTTPClient interface {
 	JSONGetter
+	StreamGetter
 	XMLGetter
 	HTMLGetter
 	TextGetter
@@ -95,9 +104,13 @@ type limitedBody struct {
 // retried — it will not recover on its own.
 type Client struct {
 	httpClient *http.Client
-	userAgent  string
-	maxRetries int
-	retryDelay time.Duration
+	// streamClient is a long-timeout transport for GetStream. The bulk feeds it serves
+	// (JobStream) throttle to a trickle, so a full window read takes minutes — far past the
+	// 15s httpClient timeout. Same SSRF-guarded transport, just patient.
+	streamClient *http.Client
+	userAgent    string
+	maxRetries   int
+	retryDelay   time.Duration
 }
 
 // NewClient builds the default ingest HTTP client.
@@ -105,11 +118,42 @@ func NewClient() *Client {
 	return &Client{
 		// Guarded transport: adapters and link-following fetch attacker-influenced
 		// URLs, so the client must refuse internal/metadata targets (SSRF).
-		httpClient: safehttp.NewClient(15 * time.Second),
-		userAgent:  "freehire/0.1 (+https://freehire.dev)",
-		maxRetries: 2,
-		retryDelay: 500 * time.Millisecond,
+		httpClient:   safehttp.NewClient(15 * time.Second),
+		streamClient: safehttp.NewClient(streamTimeout),
+		userAgent:    "freehire/0.1 (+https://freehire.dev)",
+		maxRetries:   2,
+		retryDelay:   500 * time.Millisecond,
 	}
+}
+
+// streamTimeout bounds a GetStream read. Generous because the throttled bulk feeds it
+// serves trickle in over many minutes; the per-run page/window budget keeps the actual
+// transfer well under this ceiling, which is only a stuck-connection backstop.
+const streamTimeout = 15 * time.Minute
+
+// GetStream issues a guarded GET and hands the raw response body to fn for streaming
+// decode. It uses the long-timeout transport and does NOT buffer or size-cap the body, so
+// it suits large, slow feeds that GetJSON cannot read. There is no retry: a streamed body
+// cannot be safely replayed once fn has begun consuming it.
+func (c *Client) GetStream(ctx context.Context, url, accept string, fn func(io.Reader) error) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("sources: build request %s: %w", url, err)
+	}
+	if c.userAgent != "" {
+		req.Header.Set("User-Agent", c.userAgent)
+	}
+	req.Header.Set("Accept", accept)
+
+	resp, err := c.streamClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("sources: get %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("sources: get %s: status %d", url, resp.StatusCode)
+	}
+	return fn(resp.Body)
 }
 
 // GetJSON fetches url and decodes its JSON body into v.

@@ -251,6 +251,20 @@ WHERE closed_at IS NULL
   AND source = sqlc.arg(source)
   AND last_seen_at < sqlc.arg(cutoff);
 
+-- name: CloseJobBySourceExternalID :execrows
+-- Stream-driven close (see job-lifecycle): a self-closing feed source (e.g. jobtech)
+-- learns of a removed posting from its incremental stream and closes it by identity,
+-- rather than relying on the post-run unseen sweep (which it opts out of, since an
+-- incremental stream re-reports only changed ads and so never refreshes last_seen_at
+-- for the still-open ones). WHERE closed_at IS NULL keeps it idempotent; a later
+-- upsert of the same (source, external_id) reopens it if the posting reappears.
+UPDATE jobs
+SET closed_at  = now(),
+    updated_at = now()
+WHERE closed_at IS NULL
+  AND source = sqlc.arg(source)
+  AND external_id = sqlc.arg(external_id);
+
 -- name: CloseJobByID :execrows
 -- Soft-close one job now (see job-lifecycle): a moderator resolving a report with
 -- close_job=true. The third writer of closed_at, alongside the ingest sweep and the

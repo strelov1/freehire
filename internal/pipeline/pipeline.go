@@ -69,6 +69,14 @@ type Store interface {
 	Save(ctx context.Context, job Job) error
 }
 
+// closer is the optional Store capability a self-closing streaming source needs: closing a
+// posting by its (source, external_id) identity when the feed reports it removed. Only the
+// ingest dbStore implements it; ingestStream type-asserts for it and skips removals when a
+// Store lacks it, so other Store implementations (and test fakes) are unaffected.
+type closer interface {
+	Close(ctx context.Context, source, externalID string) error
+}
+
 // Stats reports what a run did: Ingested counts saved jobs, Failed counts boards that
 // errored (unknown provider or a fetch failure), and Skipped counts jobs that fetched
 // fine but failed to persist. Skipped is surfaced so a run whose every save fails (e.g.
@@ -219,6 +227,25 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 		mu.Lock()
 		defer mu.Unlock()
 		total++
+		// A self-closing source emits removed postings: close by identity instead of
+		// upserting. The Store must implement closer (the ingest dbStore does); a Store
+		// without it simply drops the removal (e.g. a test fake that never sees them).
+		if j.Removed {
+			c, ok := r.Store.(closer)
+			if !ok {
+				return
+			}
+			source, externalID := jobIdentity(e, j)
+			if err := c.Close(ctx, source, externalID); err != nil {
+				skipped++
+				if firstErr == nil {
+					firstErr = err
+				}
+				return
+			}
+			ingested++
+			return
+		}
 		if err := r.Store.Save(ctx, normalizeJob(e, j)); err != nil {
 			skipped++
 			if firstErr == nil {
@@ -242,14 +269,21 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 	return ingested, 0, skipped
 }
 
+// jobIdentity is the dedup key a posting persists under: the provider is the source, and the
+// external id is namespaced by board so two companies on one platform cannot collide. Both
+// the upsert (via normalizeJob) and the stream-driven close derive identity here, so a
+// removal closes exactly the row a live emit would have upserted.
+func jobIdentity(e sources.CompanyEntry, j sources.Job) (source, externalID string) {
+	return e.Provider, fmt.Sprintf("%s:%s", e.Board, j.ExternalID)
+}
+
 // normalizeJob turns a raw posting into a persistable Job: the platform becomes the
 // source, the external id is namespaced by board so two companies on one platform
 // cannot collide, the company slug is derived with the shared normalizer, and the
 // public slug is minted from the same (source, external_id) identity so it is stable
 // across re-ingests and deterministic with the dedup key.
 func normalizeJob(e sources.CompanyEntry, j sources.Job) Job {
-	source := e.Provider
-	externalID := fmt.Sprintf("%s:%s", e.Board, j.ExternalID)
+	source, externalID := jobIdentity(e, j)
 	// The slugs and dictionary facets (geography/work-mode/skills/classification) are
 	// derived by the shared jobderive helper, so ingest and the moderator write path
 	// produce identical facets. Work-mode precedence (structured signal over the parser

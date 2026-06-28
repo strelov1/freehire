@@ -11,11 +11,13 @@ import (
 	"github.com/strelov1/freehire/internal/sources"
 )
 
-// fakeStore records every saved job. It is safe for the runner's concurrent Save calls.
+// fakeStore records every saved job and every (source, external_id) closed. It implements
+// the optional closer capability, so it is safe for the runner's concurrent Save/Close calls.
 type fakeStore struct {
-	mu    sync.Mutex
-	saved []Job
-	err   error
+	mu     sync.Mutex
+	saved  []Job
+	closed [][2]string
+	err    error
 }
 
 func (s *fakeStore) Save(_ context.Context, job Job) error {
@@ -25,6 +27,16 @@ func (s *fakeStore) Save(_ context.Context, job Job) error {
 		return s.err
 	}
 	s.saved = append(s.saved, job)
+	return nil
+}
+
+func (s *fakeStore) Close(_ context.Context, source, externalID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.err != nil {
+		return s.err
+	}
+	s.closed = append(s.closed, [2]string{source, externalID})
 	return nil
 }
 
@@ -101,6 +113,36 @@ func TestRunStreamsAndPersistsPartialBeforeError(t *testing.T) {
 	}
 	if stats.Total().Ingested != 2 || stats.Total().Failed != 1 {
 		t.Fatalf("stats = %+v, want Ingested=2 Failed=1", stats.Total())
+	}
+}
+
+// TestRunStreamClosesRemovedJobs proves the runner routes a removed posting to the Store's
+// close path (by identity) instead of upserting it: a self-closing stream emits one live ad
+// and one removed ad, and the runner saves the first and closes the second. The closed
+// identity is the same (source, external_id) the live upsert would use — board-namespaced,
+// here with an empty board (jobtech is boardless), so external_id is ":<id>".
+func TestRunStreamClosesRemovedJobs(t *testing.T) {
+	src := fakeStreamingSource{provider: "jobtech", failAfter: -1, jobs: []sources.Job{
+		{ExternalID: "1", Title: "A", Company: "C", URL: "u"},
+		{ExternalID: "2", Removed: true},
+	}}
+	store := &fakeStore{}
+	r := Runner{Registry: registry(src), Store: store}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "C", Provider: "jobtech", Board: ""},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(store.saved) != 1 || store.saved[0].ExternalID != ":1" {
+		t.Fatalf("saved = %+v, want 1 live job with external_id \":1\"", store.saved)
+	}
+	if len(store.closed) != 1 || store.closed[0] != [2]string{"jobtech", ":2"} {
+		t.Fatalf("closed = %v, want one close of (jobtech, :2)", store.closed)
+	}
+	if stats.Total().Ingested != 2 || stats.Total().Failed != 0 {
+		t.Fatalf("stats = %+v, want Ingested=2 Failed=0 (one save + one close)", stats.Total())
 	}
 }
 

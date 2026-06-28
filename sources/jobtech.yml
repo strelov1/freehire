@@ -1,0 +1,5 @@
+# JobTech / Platsbanken (Arbetsförmedlingen, the Swedish Public Employment Service).
+# Boardless: one public, keyless national API (jobsearch.api.jobtechdev.se), so the entry
+# carries no board; each job's employer comes from the posting, not this placeholder.
+- company: Platsbanken
+  provider: jobtech

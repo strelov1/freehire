@@ -92,7 +92,17 @@ func run() int {
 	// even when several providers share one run (e.g. custom.yml).
 	queries := db.New(pool)
 	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-staleAfter), Valid: true}
+	// A self-closing source (e.g. jobtech) manages its own closes from its stream, so the
+	// unseen sweep must skip it: it re-reports only changed ads, and the cutoff would wrongly
+	// close every still-open ad it did not touch this run.
+	selfClosing := make(map[string]bool)
+	for _, p := range sources.SelfClosingProviders(registry) {
+		selfClosing[p] = true
+	}
 	for _, provider := range sweepableProviders(runStats) {
+		if selfClosing[provider] {
+			continue
+		}
 		closed, err := queries.CloseUnseenJobs(ctx, db.CloseUnseenJobsParams{
 			Source: provider,
 			Cutoff: cutoff,

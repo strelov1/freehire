@@ -33,6 +33,34 @@ func (q *Queries) CloseJobByID(ctx context.Context, id int64) (int64, error) {
 	return result.RowsAffected(), nil
 }
 
+const closeJobBySourceExternalID = `-- name: CloseJobBySourceExternalID :execrows
+UPDATE jobs
+SET closed_at  = now(),
+    updated_at = now()
+WHERE closed_at IS NULL
+  AND source = $1
+  AND external_id = $2
+`
+
+type CloseJobBySourceExternalIDParams struct {
+	Source     string `json:"source"`
+	ExternalID string `json:"external_id"`
+}
+
+// Stream-driven close (see job-lifecycle): a self-closing feed source (e.g. jobtech)
+// learns of a removed posting from its incremental stream and closes it by identity,
+// rather than relying on the post-run unseen sweep (which it opts out of, since an
+// incremental stream re-reports only changed ads and so never refreshes last_seen_at
+// for the still-open ones). WHERE closed_at IS NULL keeps it idempotent; a later
+// upsert of the same (source, external_id) reopens it if the posting reappears.
+func (q *Queries) CloseJobBySourceExternalID(ctx context.Context, arg CloseJobBySourceExternalIDParams) (int64, error) {
+	result, err := q.db.Exec(ctx, closeJobBySourceExternalID, arg.Source, arg.ExternalID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const closeUnseenJobs = `-- name: CloseUnseenJobs :execrows
 UPDATE jobs
 SET closed_at  = now(),

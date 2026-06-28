@@ -46,6 +46,13 @@ type Querier interface {
 	// status guard. A later ingest upsert may legitimately reopen a board job (reopen-on-
 	// reappear); that is the lifecycle's existing behavior, not a conflict.
 	CloseJobByID(ctx context.Context, id int64) (int64, error)
+	// Stream-driven close (see job-lifecycle): a self-closing feed source (e.g. jobtech)
+	// learns of a removed posting from its incremental stream and closes it by identity,
+	// rather than relying on the post-run unseen sweep (which it opts out of, since an
+	// incremental stream re-reports only changed ads and so never refreshes last_seen_at
+	// for the still-open ones). WHERE closed_at IS NULL keeps it idempotent; a later
+	// upsert of the same (source, external_id) reopens it if the posting reappears.
+	CloseJobBySourceExternalID(ctx context.Context, arg CloseJobBySourceExternalIDParams) (int64, error)
 	// Post-ingest sweep (see job-lifecycle spec): close every open job of ONE source not
 	// seen since the cutoff. Scoped by source because ingest runs per provider — a
 	// greenhouse run must not close jobs another provider owns and didn't crawl. The
