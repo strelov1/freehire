@@ -35,6 +35,13 @@ func TestParse(t *testing.T) {
 			want:     Geo{Regions: []string{"eu"}, WorkMode: "remote"},
 		},
 		{
+			// JobTech/Platsbanken ads end in ", Sverige" with an unknown municipality; the
+			// native country word must resolve so they are not left geography-less.
+			name:     "swedish native country word with unknown city",
+			location: "Hallstahammar, Västmanlands län, Sverige",
+			want:     Geo{Countries: []string{"se"}, Regions: []string{"eu"}},
+		},
+		{
 			name:     "multiple locations union and dedup",
 			location: "Remote - UK or Europe",
 			want:     Geo{Countries: []string{"gb"}, Regions: []string{"eu", "uk"}, WorkMode: "remote"},
