@@ -89,7 +89,7 @@ var (
 	EducationLevelValues = []string{"none", "bachelor", "master", "phd"}
 	CategoryValues       = []string{
 		"backend", "frontend", "fullstack", "mobile", "devops", "sre",
-		"data_engineering", "data_science", "data_analytics", "ml_ai",
+		"data_engineering", "data_science", "data_analytics", "ml_ai", "ai_engineering",
 		"qa", "security", "hardware", "embedded", "blockchain",
 		"design", "product", "project_management", "management",
 		"marketing", "sales", "support", "other",

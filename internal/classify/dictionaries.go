@@ -41,8 +41,11 @@ var categoryOrder = []string{
 	"data engineer", "data engineering", "дата-инженер", "инженер данных",
 	"data scientist", "data science", "data scien", "дата-сайентист",
 	"data analyst", "data analytics", "аналитик данных", "data аналитик",
-	"machine learning", "deep learning", "ml engineer", "ai engineer", "ml/ai",
-	"generative ai", "genai", "llm engineer", "prompt engineer", "applied ai", "llm",
+	// Classic ML and explicitly ML-carrying combined forms first, so a mixed
+	// "ML/AI Engineer" resolves to ml_ai before the bare AI terms below can claim it.
+	"machine learning", "deep learning", "ml engineer", "ml/ai", "ai/ml",
+	// AI-application terms (RAG/agents/LLM/prompt/applied AI) → ai_engineering.
+	"generative ai", "genai", "llm engineer", "prompt engineer", "applied ai", "rag engineer", "ai engineer", "llm",
 	"devops", "девопс",
 	"sre", "site reliability",
 	"backend", "back-end", "back end", "бэкенд", "бекенд",
@@ -78,9 +81,10 @@ var categoryAliases = map[string]string{
 	"data analyst": "data_analytics", "data analytics": "data_analytics",
 	"аналитик данных": "data_analytics", "data аналитик": "data_analytics",
 	"machine learning": "ml_ai", "deep learning": "ml_ai", "ml engineer": "ml_ai",
-	"ai engineer": "ml_ai", "ml/ai": "ml_ai",
-	"generative ai": "ml_ai", "genai": "ml_ai", "llm engineer": "ml_ai",
-	"prompt engineer": "ml_ai", "applied ai": "ml_ai", "llm": "ml_ai",
+	"ml/ai": "ml_ai", "ai/ml": "ml_ai",
+	"ai engineer": "ai_engineering", "generative ai": "ai_engineering", "genai": "ai_engineering",
+	"llm engineer": "ai_engineering", "prompt engineer": "ai_engineering", "applied ai": "ai_engineering",
+	"rag engineer": "ai_engineering", "llm": "ai_engineering",
 	"devops": "devops", "девопс": "devops",
 	"sre": "sre", "site reliability": "sre",
 	"backend": "backend", "back-end": "backend", "back end": "backend",

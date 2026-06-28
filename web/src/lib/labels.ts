@@ -29,6 +29,7 @@ export const WORK_MODE_LABELS: Record<string, string> = { onsite: 'On-site' };
 
 export const CATEGORY_LABELS: Record<string, string> = {
   ml_ai: 'ML / AI',
+  ai_engineering: 'AI Engineer',
   data_engineering: 'Data Engineering',
   data_science: 'Data Science',
   data_analytics: 'Data Analytics',

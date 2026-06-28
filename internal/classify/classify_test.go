@@ -42,12 +42,21 @@ func TestParse(t *testing.T) {
 		{"Sales Manager", "", "sales"},
 		{"Support Manager", "", "support"},
 		{"Operations Manager", "", "management"},
-		// AI / GenAI roles fold into ml_ai (research/applied AI share one bucket).
-		{"GenAI Engineer", "", "ml_ai"},
-		{"LLM Engineer", "", "ml_ai"},
-		{"Senior Prompt Engineer", "senior", "ml_ai"},
-		{"Generative AI Researcher", "", "ml_ai"},
-		{"Applied AI Engineer", "", "ml_ai"},
+		// AI-application roles (RAG/agents/LLM/prompt/applied AI) are their own
+		// category; classic ML and explicitly ML-carrying titles stay ml_ai.
+		{"AI Engineer", "", "ai_engineering"},
+		{"GenAI Engineer", "", "ai_engineering"},
+		{"LLM Engineer", "", "ai_engineering"},
+		{"Senior Prompt Engineer", "senior", "ai_engineering"},
+		{"Generative AI Researcher", "", "ai_engineering"},
+		{"Applied AI Engineer", "", "ai_engineering"},
+		{"RAG Engineer", "", "ai_engineering"},
+		{"Machine Learning Engineer", "", "ml_ai"},
+		{"Deep Learning Engineer", "", "ml_ai"},
+		{"ML Engineer", "", "ml_ai"},
+		// A combined ML-carrying form keeps the ML bucket (explicit ML beats bare AI).
+		{"ML/AI Engineer", "", "ml_ai"},
+		{"AI/ML Engineer", "", "ml_ai"},
 		// SEO / social fold into marketing; "social media" beats a bare "manager".
 		{"SEO Specialist", "", "marketing"},
 		{"Social Media Manager", "", "marketing"},

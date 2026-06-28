@@ -112,7 +112,7 @@ export interface Job {
   enrichment_version: number /* int32 */;
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'adp', 'arbeitnow', 'ashby', 'ashbygraphql', 'bamboohr', 'breezy', 'deel', 'eightfold', 'epam', 'freshteam', 'gem', 'getonbrd', 'globalpayments', 'greenhouse', 'gupy', 'himalayas', 'huntflow', 'icims', 'itechart', 'jazzhr', 'jibe', 'jobicy', 'jobstash', 'join', 'justjoin', 'lever', 'luxoft', 'mycareersfuture', 'oracle', 'personio', 'phenom', 'pinpoint', 'radancy', 'recruitee', 'remotive', 'rippling', 'smartrecruiters', 'successfactors', 'teamtailor', 'tecla', 'thehub', 'vention', 'wantedkr', 'weworkremotely', 'workable', 'workday', 'workingnomads', 'wpyoast'] as const;
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'adp', 'arbeitnow', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'breezy', 'careerplug', 'clinch', 'comeet', 'cornerstone', 'deel', 'eightfold', 'epam', 'factorial', 'freshteam', 'gem', 'getmatch', 'getonbrd', 'globalpayments', 'greenhouse', 'gupy', 'habr_career', 'himalayas', 'huntflow', 'icims', 'inhire', 'itechart', 'jazzhr', 'jibe', 'jobicy', 'jobstash', 'jobtech', 'join', 'justjoin', 'lever', 'luxoft', 'mycareersfuture', 'oracle', 'paycom', 'personio', 'phenom', 'pinpoint', 'radancy', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'solides', 'successfactors', 'teamtailor', 'tecla', 'thehub', 'trakstar', 'ukg', 'vention', 'wantedkr', 'weworkremotely', 'workable', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];
@@ -120,7 +120,7 @@ export const WORK_MODE_VALUES = ['remote', 'hybrid', 'onsite'] as const;
 export type WorkMode = (typeof WORK_MODE_VALUES)[number];
 export const SENIORITY_VALUES = ['intern', 'junior', 'middle', 'senior', 'lead', 'staff', 'principal', 'c_level'] as const;
 export type Seniority = (typeof SENIORITY_VALUES)[number];
-export const CATEGORY_VALUES = ['backend', 'frontend', 'fullstack', 'mobile', 'devops', 'sre', 'data_engineering', 'data_science', 'data_analytics', 'ml_ai', 'qa', 'security', 'hardware', 'embedded', 'blockchain', 'design', 'product', 'project_management', 'management', 'marketing', 'sales', 'support', 'other'] as const;
+export const CATEGORY_VALUES = ['backend', 'frontend', 'fullstack', 'mobile', 'devops', 'sre', 'data_engineering', 'data_science', 'data_analytics', 'ml_ai', 'ai_engineering', 'qa', 'security', 'hardware', 'embedded', 'blockchain', 'design', 'product', 'project_management', 'management', 'marketing', 'sales', 'support', 'other'] as const;
 export type Category = (typeof CATEGORY_VALUES)[number];
 export const EMPLOYMENT_TYPE_VALUES = ['full_time', 'part_time', 'contract', 'internship'] as const;
 export type EmploymentType = (typeof EMPLOYMENT_TYPE_VALUES)[number];
