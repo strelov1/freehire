@@ -1,0 +1,7 @@
+# rapyd board. Provider is the filename; the single entry is company + board.
+# board = the Rapyd careers-site host (see internal/sources/rapyd.go); the adapter reads
+# https://<board>/company/careers-search/ and follows each /company/careers/positions/<slug>/.
+# Validated live (>0 positions in the listing) before adding.
+
+- company: Rapyd
+  board: www.rapyd.net
