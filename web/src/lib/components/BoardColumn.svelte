@@ -32,8 +32,14 @@
     <span>{label}</span>
     <span class="text-xs tabular-nums text-muted-foreground">{items.length}</span>
   </header>
+  <!-- Each column's card list is its own bounded scroll container. svelte-dnd-action
+       auto-scrolls a scrollable *container* correctly during a drag, but mis-places
+       the drop once the *window* auto-scrolls (a card dropped low in a long column
+       would snap back near the top). Capping the height and scrolling here keeps the
+       drag inside a container the library handles, so a card lands where it's
+       dropped — and the column header/count stay put. -->
   <div
-    class="flex min-h-24 flex-col gap-2"
+    class="flex max-h-[calc(100dvh-14rem)] min-h-24 flex-col gap-2 overflow-y-auto"
     use:dndzone={{ items, flipDurationMs: 150, type: 'board', dropTargetStyle }}
     onconsider={(e) => onconsider(id, e.detail.items as BoardItem[])}
     onfinalize={(e) => onfinalize(id, e.detail.items as BoardItem[])}

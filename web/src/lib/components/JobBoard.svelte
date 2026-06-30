@@ -178,11 +178,7 @@
 {:else if status === 'error'}
   <States state="error" message="Couldn't load your board." />
 {:else}
-  <!-- Bounded-height scroll container (not just overflow-x): so a long column
-       scrolls inside the board and svelte-dnd-action auto-scrolls it while
-       dragging, letting a card drop anywhere in the column — not only near the
-       top. The max-height leaves room for the header + tabs above. -->
-  <div class="flex max-h-[calc(100dvh-12rem)] gap-3 overflow-auto pb-2">
+  <div class="flex gap-3 overflow-x-auto pb-2">
     {#each BOARD_COLUMNS as col (col.id)}
       <BoardColumn
         id={col.id}
