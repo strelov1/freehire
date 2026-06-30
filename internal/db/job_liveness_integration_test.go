@@ -25,7 +25,7 @@ func TestLivenessClosesAfterTwoConsecutiveExpiredProbes(t *testing.T) {
 	ctx := context.Background()
 	truncate(t, pool)
 
-	job, err := q.UpsertJob(ctx, orphanParams("tg:1", "Orphan"))
+	job, err := ingestUpsert(ctx, q, orphanParams("tg:1", "Orphan"))
 	if err != nil {
 		t.Fatalf("upsert orphan: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestLivenessHealthyProbeResetsStrikes(t *testing.T) {
 	ctx := context.Background()
 	truncate(t, pool)
 
-	job, err := q.UpsertJob(ctx, orphanParams("tg:1", "Orphan"))
+	job, err := ingestUpsert(ctx, q, orphanParams("tg:1", "Orphan"))
 	if err != nil {
 		t.Fatalf("upsert orphan: %v", err)
 	}
@@ -91,17 +91,17 @@ func TestSelectOrphanLivenessCandidatesExcludesBoardAndClosed(t *testing.T) {
 	ctx := context.Background()
 	truncate(t, pool)
 
-	orphan, err := q.UpsertJob(ctx, orphanParams("tg:1", "Orphan"))
+	orphan, err := ingestUpsert(ctx, q, orphanParams("tg:1", "Orphan"))
 	if err != nil {
 		t.Fatalf("upsert orphan: %v", err)
 	}
 	// A board (ATS) job: same shape but source = greenhouse, which the ingest sweep
 	// already owns — it must not be a liveness candidate.
-	if _, err := q.UpsertJob(ctx, ingestParams("gh:1", "Board")); err != nil {
+	if _, err := ingestUpsert(ctx, q, ingestParams("gh:1", "Board")); err != nil {
 		t.Fatalf("upsert board: %v", err)
 	}
 	// A closed orphan: already closed, so it is not re-probed.
-	closedOrphan, err := q.UpsertJob(ctx, orphanParams("tg:2", "ClosedOrphan"))
+	closedOrphan, err := ingestUpsert(ctx, q, orphanParams("tg:2", "ClosedOrphan"))
 	if err != nil {
 		t.Fatalf("upsert closed orphan: %v", err)
 	}

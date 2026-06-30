@@ -123,7 +123,7 @@ func (s *extractStore) Complete(ctx context.Context, post telegram.PendingPost, 
 		}
 		if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
 			TargetVersion: int32(enrich.Version),
-			JobID:         saved.ID,
+			JobID:         saved.Job.ID,
 		}); err != nil {
 			return fmt.Errorf("enqueue enrichment %s: %w", externalID, err)
 		}
@@ -194,7 +194,7 @@ func (s *extractStore) CompleteLinks(
 		}
 		if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
 			TargetVersion: int32(enrich.Version),
-			JobID:         saved.ID,
+			JobID:         saved.Job.ID,
 		}); err != nil {
 			return fmt.Errorf("enqueue enrichment %s/%s: %w", j.Source, j.ExternalID, err)
 		}

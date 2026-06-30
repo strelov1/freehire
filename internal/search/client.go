@@ -296,6 +296,24 @@ func (c *Client) indexInto(ctx context.Context, idx meilisearch.IndexManager, do
 	return c.awaitTask(ctx, idx, task.TaskUID)
 }
 
+// SubmitJobs upserts a batch into the live facet index WITHOUT awaiting the
+// indexing task. The incremental ingest indexer uses this instead of IndexJobs so
+// it never blocks the crawl on Meilisearch's per-batch indexing (which the reindex
+// passes do await); Meilisearch auto-batches the submitted tasks and processes them
+// even after the worker exits. The submission (HTTP) error is returned and tallied;
+// the async task result is not awaited — best-effort, the batch reindex reconciles
+// a task that fails server-side.
+func (c *Client) SubmitJobs(ctx context.Context, docs []JobDocument) error {
+	if len(docs) == 0 {
+		return nil
+	}
+	pk := primaryKey
+	if _, err := c.facet.UpdateDocumentsWithContext(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk}); err != nil {
+		return fmt.Errorf("search: submit documents: %w", err)
+	}
+	return nil
+}
+
 // DeleteJobs removes documents from the facet index by primary key. Used by
 // reindex to drop closed jobs; deleting an id that is not indexed is a no-op,
 // keeping re-runs idempotent.

@@ -39,7 +39,7 @@ func TestUpsertJobRefreshesLivenessAndReopens(t *testing.T) {
 	ctx := context.Background()
 	truncate(t, pool)
 
-	job, err := q.UpsertJob(ctx, ingestParams("acme:1", "Engineer"))
+	job, err := ingestUpsert(ctx, q, ingestParams("acme:1", "Engineer"))
 	if err != nil {
 		t.Fatalf("initial upsert: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestUpsertJobRefreshesLivenessAndReopens(t *testing.T) {
 	}
 
 	// The posting reappears in a crawl: liveness refreshes, the job reopens.
-	reingested, err := q.UpsertJob(ctx, ingestParams("acme:1", "Engineer"))
+	reingested, err := ingestUpsert(ctx, q, ingestParams("acme:1", "Engineer"))
 	if err != nil {
 		t.Fatalf("re-ingest: %v", err)
 	}
@@ -76,11 +76,11 @@ func TestCloseUnseenJobsClosesOnlyStaleJobs(t *testing.T) {
 	ctx := context.Background()
 	truncate(t, pool)
 
-	stale, err := q.UpsertJob(ctx, ingestParams("acme:stale", "Stale"))
+	stale, err := ingestUpsert(ctx, q, ingestParams("acme:stale", "Stale"))
 	if err != nil {
 		t.Fatalf("upsert stale: %v", err)
 	}
-	fresh, err := q.UpsertJob(ctx, ingestParams("acme:fresh", "Fresh"))
+	fresh, err := ingestUpsert(ctx, q, ingestParams("acme:fresh", "Fresh"))
 	if err != nil {
 		t.Fatalf("upsert fresh: %v", err)
 	}
@@ -126,11 +126,11 @@ func TestClosedJobsLeaveListSurfacesButResolveOnDetail(t *testing.T) {
 	ctx := context.Background()
 	truncate(t, pool)
 
-	open, err := q.UpsertJob(ctx, ingestParams("acme:open", "Open"))
+	open, err := ingestUpsert(ctx, q, ingestParams("acme:open", "Open"))
 	if err != nil {
 		t.Fatalf("upsert open: %v", err)
 	}
-	closed, err := q.UpsertJob(ctx, ingestParams("acme:closed", "Closed"))
+	closed, err := ingestUpsert(ctx, q, ingestParams("acme:closed", "Closed"))
 	if err != nil {
 		t.Fatalf("upsert closed: %v", err)
 	}

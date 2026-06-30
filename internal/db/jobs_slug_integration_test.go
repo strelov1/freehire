@@ -24,7 +24,7 @@ func TestJobPublicSlug(t *testing.T) {
 
 	slug := normalize.JobSlug("Senior Go Developer", "Acme", "manual", "42")
 	upsert := func(description string) (Job, error) {
-		return q.UpsertJob(ctx, UpsertJobParams{
+		return ingestUpsert(ctx, q, UpsertJobParams{
 			Source:      "manual",
 			ExternalID:  "42",
 			URL:         "http://example.test/42",
@@ -84,7 +84,7 @@ func TestGetJobIDBySlug(t *testing.T) {
 	truncate(t, pool)
 
 	slug := normalize.JobSlug("Staff Engineer", "Globex", "manual", "7")
-	job, err := q.UpsertJob(ctx, UpsertJobParams{
+	job, err := ingestUpsert(ctx, q, UpsertJobParams{
 		Source:      "manual",
 		ExternalID:  "7",
 		URL:         "http://example.test/7",

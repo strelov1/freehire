@@ -131,7 +131,7 @@ func TestUpdateManualJobScopedByCreatedBy(t *testing.T) {
 	// An automated-source (ingested) job has created_by NULL, so it is invisible to the
 	// moderator update — no row matches the created_by IS NOT NULL scope, and the moderator
 	// path can never rewrite an ATS vacancy.
-	ats, err := q.UpsertJob(ctx, ingestParams("gh:1", "ATS Job"))
+	ats, err := ingestUpsert(ctx, q, ingestParams("gh:1", "ATS Job"))
 	if err != nil {
 		t.Fatalf("create ats: %v", err)
 	}

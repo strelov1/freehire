@@ -6,6 +6,12 @@
 // file can cover several single-source providers. After the run each provider that
 // ingested at least one job has its stale jobs swept. Run on a schedule (e.g. cron); it
 // processes its boards once and exits.
+//
+// When a search engine is configured (MEILI_MASTER_KEY set), each crawl's new or
+// content-changed jobs are pushed to the live facet search index, batched, so they
+// are searchable within one crawl cycle instead of waiting for the next full
+// reindex. The push is best-effort — a search-engine failure is logged and never
+// fails the run — and the batch reindex stays the index's source of truth.
 package main
 
 import (
@@ -20,6 +26,7 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/pipeline"
+	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/worker"
 )
@@ -59,22 +66,42 @@ func run() int {
 		return 1
 	}
 
-	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
+	ctx, cfg, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
 		log.Printf("database: %v", err)
 		return 1
 	}
 	defer cleanup()
 
+	// Incremental search indexing is wired only when the search engine is
+	// configured for this worker (MEILI_MASTER_KEY set, mirroring the server's
+	// search-enabled gate). Absent it, the store gets a nil indexer and ingest runs
+	// exactly as before. The full batch reindex stays the index's source of truth.
+	var indexer *batchIndexer
+	var storeIndexer jobIndexer
+	if cfg.MeiliKey != "" {
+		client := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
+		indexer = newBatchIndexer(client.SubmitJobs, indexChunkSize)
+		storeIndexer = indexer
+	}
+
 	runner := pipeline.Runner{
 		Registry: registry,
-		Store:    newDBStore(pool, enrich.Version),
+		Store:    newDBStore(pool, enrich.Version, storeIndexer),
 	}
 
 	runStats, err := runner.Run(ctx, sourceCfg.Sources)
 	if err != nil {
 		log.Printf("ingest: %v", err)
 		return 1
+	}
+
+	// Flush whatever new/changed documents the crawl buffered into the live index.
+	// Best-effort: failures are already logged per batch and never affect the run.
+	if indexer != nil {
+		indexer.Flush(ctx)
+		st := indexer.Stats()
+		log.Printf("ingest index: indexed=%d failed=%d", st.Indexed, st.Failed)
 	}
 
 	total := runStats.Total()

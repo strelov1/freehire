@@ -73,7 +73,17 @@ LIMIT $2 OFFSET $3;
 -- countries/regions ARE written here: they are source facts parsed from the
 -- location, not enrichment. COALESCE maps a nil arg to '{}', so a location that
 -- yields no geography stores empty arrays (the columns are NOT NULL).
-WITH company_upsert AS (
+-- content_hash is the incremental-index change signal (internal/jobhash): the
+-- `existing` CTE captures the row's pre-update hash (snapshot from before this
+-- statement), so RETURNING can report whether the write inserted a new row
+-- (`inserted`) or changed its searchable content (`changed`, true on insert and
+-- for a legacy NULL hash). A re-ingest that only bumps last_seen_at reports both
+-- false and needs no re-push to the search index.
+WITH existing AS (
+    SELECT content_hash AS old_hash, true AS existed FROM jobs
+    WHERE source = sqlc.arg(source) AND external_id = sqlc.arg(external_id)
+),
+company_upsert AS (
     INSERT INTO companies (slug, name)
     SELECT sqlc.arg(company_slug), sqlc.arg(company)
     WHERE sqlc.arg(company_slug) <> ''
@@ -84,7 +94,7 @@ WITH company_upsert AS (
 INSERT INTO jobs (
     source, external_id, url, title, company, company_slug, location, remote, description, posted_at,
     public_slug, countries, regions, work_mode, skills, seniority, category,
-    posting_language, employment_type, education_level, experience_years_min
+    posting_language, employment_type, education_level, experience_years_min, content_hash
 ) VALUES (
     sqlc.arg(source), sqlc.arg(external_id), sqlc.arg(url), sqlc.arg(title),
     sqlc.arg(company), sqlc.arg(company_slug), sqlc.arg(location), sqlc.arg(remote),
@@ -92,7 +102,8 @@ INSERT INTO jobs (
     sqlc.arg(public_slug),
     COALESCE(sqlc.arg(countries)::text[], '{}'), COALESCE(sqlc.arg(regions)::text[], '{}'),
     sqlc.arg(work_mode), COALESCE(sqlc.arg(skills)::text[], '{}'), sqlc.arg(seniority), sqlc.arg(category),
-    sqlc.arg(posting_language), sqlc.arg(employment_type), sqlc.arg(education_level), sqlc.arg(experience_years_min)
+    sqlc.arg(posting_language), sqlc.arg(employment_type), sqlc.arg(education_level), sqlc.arg(experience_years_min),
+    sqlc.arg(content_hash)
 )
 -- public_slug is deliberately NOT in the DO UPDATE SET: the slug is minted once
 -- at insert and is the row's stable public identity. Re-ingest of the same
@@ -117,11 +128,14 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     employment_type      = EXCLUDED.employment_type,
     education_level      = EXCLUDED.education_level,
     experience_years_min = EXCLUDED.experience_years_min,
+    content_hash = EXCLUDED.content_hash,
     -- The crawl saw the posting: refresh liveness and reopen if it was closed.
     last_seen_at = now(),
     closed_at    = NULL,
     updated_at   = now()
-RETURNING *;
+RETURNING sqlc.embed(jobs),
+    NOT COALESCE((SELECT existed FROM existing), false) AS inserted,
+    ((SELECT old_hash FROM existing) IS DISTINCT FROM sqlc.arg(content_hash)) AS changed;
 
 -- name: PropagateCollectionsToJobs :execrows
 -- Denormalize each company's curated-collection set onto its jobs, so the search

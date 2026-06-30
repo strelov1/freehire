@@ -395,11 +395,17 @@ type Querier interface {
 	// countries/regions ARE written here: they are source facts parsed from the
 	// location, not enrichment. COALESCE maps a nil arg to '{}', so a location that
 	// yields no geography stores empty arrays (the columns are NOT NULL).
+	// content_hash is the incremental-index change signal (internal/jobhash): the
+	// `existing` CTE captures the row's pre-update hash (snapshot from before this
+	// statement), so RETURNING can report whether the write inserted a new row
+	// (`inserted`) or changed its searchable content (`changed`, true on insert and
+	// for a legacy NULL hash). A re-ingest that only bumps last_seen_at reports both
+	// false and needs no re-push to the search index.
 	// public_slug is deliberately NOT in the DO UPDATE SET: the slug is minted once
 	// at insert and is the row's stable public identity. Re-ingest of the same
 	// (source, external_id) must not rewrite it, so external links stay valid even
 	// if the slug builder changes later (that would be a deliberate migration).
-	UpsertJob(ctx context.Context, arg UpsertJobParams) (Job, error)
+	UpsertJob(ctx context.Context, arg UpsertJobParams) (UpsertJobRow, error)
 	// Moderator-authored write: the hand-curated analogue of UpsertJob. source is the
 	// posting's real origin (e.g. 'workatastartup'), supplied by the moderator and
 	// defaulting to 'manual'; the dedup key is (source, external_id = url), so re-POSTing

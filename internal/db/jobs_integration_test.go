@@ -52,7 +52,7 @@ func TestUpsertJobPreservesEnrichmentOnReingest(t *testing.T) {
 	ctx := context.Background()
 	truncate(t, pool)
 
-	first, err := q.UpsertJob(ctx, ingestParams("acme:1", "Old Title"))
+	first, err := ingestUpsert(ctx, q, ingestParams("acme:1", "Old Title"))
 	if err != nil {
 		t.Fatalf("initial upsert: %v", err)
 	}
@@ -69,7 +69,7 @@ func TestUpsertJobPreservesEnrichmentOnReingest(t *testing.T) {
 	}
 
 	// Re-ingest the same job (same source+external_id) with an edited title.
-	second, err := q.UpsertJob(ctx, ingestParams("acme:1", "New Title"))
+	second, err := ingestUpsert(ctx, q, ingestParams("acme:1", "New Title"))
 	if err != nil {
 		t.Fatalf("re-ingest upsert: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestEnqueueJobEnrichmentGating(t *testing.T) {
 
 	t.Run("unenriched job is enqueued, idempotently", func(t *testing.T) {
 		truncate(t, pool)
-		job, err := q.UpsertJob(ctx, ingestParams("acme:1", "A Job"))
+		job, err := ingestUpsert(ctx, q, ingestParams("acme:1", "A Job"))
 		if err != nil {
 			t.Fatalf("upsert: %v", err)
 		}
@@ -130,7 +130,7 @@ func TestEnqueueJobEnrichmentGating(t *testing.T) {
 
 	t.Run("already-enriched job is not enqueued", func(t *testing.T) {
 		truncate(t, pool)
-		job, err := q.UpsertJob(ctx, ingestParams("acme:2", "Enriched Job"))
+		job, err := ingestUpsert(ctx, q, ingestParams("acme:2", "Enriched Job"))
 		if err != nil {
 			t.Fatalf("upsert: %v", err)
 		}
@@ -165,7 +165,7 @@ func TestUpsertJobWritesAndRefreshesGeography(t *testing.T) {
 	p := ingestParams("acme:geo", "Geo Job")
 	p.Countries = []string{"us"}
 	p.Regions = []string{"us"}
-	first, err := q.UpsertJob(ctx, p)
+	first, err := ingestUpsert(ctx, q, p)
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestUpsertJobWritesAndRefreshesGeography(t *testing.T) {
 	p2 := ingestParams("acme:geo", "Geo Job")
 	p2.Countries = []string{"gb"}
 	p2.Regions = []string{"uk"}
-	second, err := q.UpsertJob(ctx, p2)
+	second, err := ingestUpsert(ctx, q, p2)
 	if err != nil {
 		t.Fatalf("re-upsert: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestUpsertJobWritesAndRefreshesGeography(t *testing.T) {
 
 	// A posting with no parsed geography (nil args) stores empty arrays via
 	// COALESCE, not NULL — and reads back as empty (emit_empty_slices), not nil.
-	nilJob, err := q.UpsertJob(ctx, ingestParams("acme:nilgeo", "No Geo"))
+	nilJob, err := ingestUpsert(ctx, q, ingestParams("acme:nilgeo", "No Geo"))
 	if err != nil {
 		t.Fatalf("upsert nil geo: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestUpdateJobFacetsBackfillsAllColumns(t *testing.T) {
 	ctx := context.Background()
 	truncate(t, pool)
 
-	job, err := q.UpsertJob(ctx, ingestParams("acme:backfill", "Backfill Job"))
+	job, err := ingestUpsert(ctx, q, ingestParams("acme:backfill", "Backfill Job"))
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
@@ -250,12 +250,12 @@ func TestListJobsOrdersByNewestAdded(t *testing.T) {
 	// "newer" — under posted_at ordering it would wrongly stay on top.
 	older := ingestParams("order-a", "Older addition")
 	older.PostedAt = pgtype.Timestamptz{Time: time.Now(), Valid: true}
-	if _, err := q.UpsertJob(ctx, older); err != nil {
+	if _, err := ingestUpsert(ctx, q, older); err != nil {
 		t.Fatal(err)
 	}
 	newer := ingestParams("order-b", "Newer addition")
 	newer.PostedAt = pgtype.Timestamptz{Time: time.Now().Add(-30 * 24 * time.Hour), Valid: true}
-	if _, err := q.UpsertJob(ctx, newer); err != nil {
+	if _, err := ingestUpsert(ctx, q, newer); err != nil {
 		t.Fatal(err)
 	}
 

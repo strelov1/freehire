@@ -129,7 +129,7 @@ func (q *Queries) EnqueueJobEnrichment(ctx context.Context, arg EnqueueJobEnrich
 }
 
 const getJob = `-- name: GetJob :one
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash
 FROM jobs
 WHERE id = $1
 `
@@ -171,12 +171,13 @@ func (q *Queries) GetJob(ctx context.Context, id int64) (Job, error) {
 		&i.EducationLevel,
 		&i.ExperienceYearsMin,
 		&i.Collections,
+		&i.ContentHash,
 	)
 	return i, err
 }
 
 const getJobBySlug = `-- name: GetJobBySlug :one
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash
 FROM jobs
 WHERE public_slug = $1
 `
@@ -218,6 +219,7 @@ func (q *Queries) GetJobBySlug(ctx context.Context, publicSlug string) (Job, err
 		&i.EducationLevel,
 		&i.ExperienceYearsMin,
 		&i.Collections,
+		&i.ContentHash,
 	)
 	return i, err
 }
@@ -240,7 +242,7 @@ func (q *Queries) GetJobIDBySlug(ctx context.Context, publicSlug string) (int64,
 }
 
 const listJobs = `-- name: ListJobs :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash
 FROM jobs
 WHERE closed_at IS NULL
 ORDER BY created_at DESC, id DESC
@@ -298,6 +300,7 @@ func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, erro
 			&i.EducationLevel,
 			&i.ExperienceYearsMin,
 			&i.Collections,
+			&i.ContentHash,
 		); err != nil {
 			return nil, err
 		}
@@ -310,7 +313,7 @@ func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, erro
 }
 
 const listJobsByCompany = `-- name: ListJobsByCompany :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash
 FROM jobs
 WHERE company_slug = $1 AND closed_at IS NULL
 ORDER BY created_at DESC, id DESC
@@ -366,6 +369,7 @@ func (q *Queries) ListJobsByCompany(ctx context.Context, arg ListJobsByCompanyPa
 			&i.EducationLevel,
 			&i.ExperienceYearsMin,
 			&i.Collections,
+			&i.ContentHash,
 		); err != nil {
 			return nil, err
 		}
@@ -378,7 +382,7 @@ func (q *Queries) ListJobsByCompany(ctx context.Context, arg ListJobsByCompanyPa
 }
 
 const listJobsByIDAfter = `-- name: ListJobsByIDAfter :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash
 FROM jobs
 WHERE id > $1
 ORDER BY id
@@ -436,6 +440,7 @@ func (q *Queries) ListJobsByIDAfter(ctx context.Context, arg ListJobsByIDAfterPa
 			&i.EducationLevel,
 			&i.ExperienceYearsMin,
 			&i.Collections,
+			&i.ContentHash,
 		); err != nil {
 			return nil, err
 		}
@@ -448,7 +453,7 @@ func (q *Queries) ListJobsByIDAfter(ctx context.Context, arg ListJobsByIDAfterPa
 }
 
 const listJobsUpdatedAfter = `-- name: ListJobsUpdatedAfter :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash
 FROM jobs
 WHERE id > $1 AND updated_at >= $2
 ORDER BY id
@@ -510,6 +515,7 @@ func (q *Queries) ListJobsUpdatedAfter(ctx context.Context, arg ListJobsUpdatedA
 			&i.EducationLevel,
 			&i.ExperienceYearsMin,
 			&i.Collections,
+			&i.ContentHash,
 		); err != nil {
 			return nil, err
 		}
@@ -774,7 +780,7 @@ SET title        = $1,
     updated_by   = $18::bigint,
     updated_at   = now()
 WHERE public_slug = $19 AND created_by IS NOT NULL
-RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections
+RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash
 `
 
 type UpdateManualJobParams struct {
@@ -868,12 +874,17 @@ func (q *Queries) UpdateManualJob(ctx context.Context, arg UpdateManualJobParams
 		&i.EducationLevel,
 		&i.ExperienceYearsMin,
 		&i.Collections,
+		&i.ContentHash,
 	)
 	return i, err
 }
 
 const upsertJob = `-- name: UpsertJob :one
-WITH company_upsert AS (
+WITH existing AS (
+    SELECT content_hash AS old_hash, true AS existed FROM jobs
+    WHERE source = $1 AND external_id = $2
+),
+company_upsert AS (
     INSERT INTO companies (slug, name)
     SELECT $6, $5
     WHERE $6 <> ''
@@ -884,7 +895,7 @@ WITH company_upsert AS (
 INSERT INTO jobs (
     source, external_id, url, title, company, company_slug, location, remote, description, posted_at,
     public_slug, countries, regions, work_mode, skills, seniority, category,
-    posting_language, employment_type, education_level, experience_years_min
+    posting_language, employment_type, education_level, experience_years_min, content_hash
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6, $7, $8,
@@ -892,7 +903,8 @@ INSERT INTO jobs (
     $11,
     COALESCE($12::text[], '{}'), COALESCE($13::text[], '{}'),
     $14, COALESCE($15::text[], '{}'), $16, $17,
-    $18, $19, $20, $21
+    $18, $19, $20, $21,
+    $22
 )
 ON CONFLICT (source, external_id) DO UPDATE SET
     url          = EXCLUDED.url,
@@ -913,11 +925,14 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     employment_type      = EXCLUDED.employment_type,
     education_level      = EXCLUDED.education_level,
     experience_years_min = EXCLUDED.experience_years_min,
+    content_hash = EXCLUDED.content_hash,
     -- The crawl saw the posting: refresh liveness and reopen if it was closed.
     last_seen_at = now(),
     closed_at    = NULL,
     updated_at   = now()
-RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections
+RETURNING jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.company, jobs.location, jobs.remote, jobs.description, jobs.posted_at, jobs.created_at, jobs.updated_at, jobs.company_slug, jobs.enrichment, jobs.enriched_at, jobs.enrichment_version, jobs.public_slug, jobs.last_seen_at, jobs.closed_at, jobs.countries, jobs.regions, jobs.work_mode, jobs.liveness_strikes, jobs.skills, jobs.seniority, jobs.category, jobs.created_by, jobs.updated_by, jobs.posting_language, jobs.employment_type, jobs.education_level, jobs.experience_years_min, jobs.collections, jobs.content_hash,
+    NOT COALESCE((SELECT existed FROM existing), false) AS inserted,
+    ((SELECT old_hash FROM existing) IS DISTINCT FROM $22) AS changed
 `
 
 type UpsertJobParams struct {
@@ -942,6 +957,13 @@ type UpsertJobParams struct {
 	EmploymentType     string             `json:"employment_type"`
 	EducationLevel     string             `json:"education_level"`
 	ExperienceYearsMin pgtype.Int4        `json:"experience_years_min"`
+	ContentHash        pgtype.Text        `json:"content_hash"`
+}
+
+type UpsertJobRow struct {
+	Job      Job         `json:"job"`
+	Inserted pgtype.Bool `json:"inserted"`
+	Changed  bool        `json:"changed"`
 }
 
 // Single atomic write: upsert the company (only when the slug is non-empty,
@@ -954,11 +976,17 @@ type UpsertJobParams struct {
 // countries/regions ARE written here: they are source facts parsed from the
 // location, not enrichment. COALESCE maps a nil arg to '{}', so a location that
 // yields no geography stores empty arrays (the columns are NOT NULL).
+// content_hash is the incremental-index change signal (internal/jobhash): the
+// `existing` CTE captures the row's pre-update hash (snapshot from before this
+// statement), so RETURNING can report whether the write inserted a new row
+// (`inserted`) or changed its searchable content (`changed`, true on insert and
+// for a legacy NULL hash). A re-ingest that only bumps last_seen_at reports both
+// false and needs no re-push to the search index.
 // public_slug is deliberately NOT in the DO UPDATE SET: the slug is minted once
 // at insert and is the row's stable public identity. Re-ingest of the same
 // (source, external_id) must not rewrite it, so external links stay valid even
 // if the slug builder changes later (that would be a deliberate migration).
-func (q *Queries) UpsertJob(ctx context.Context, arg UpsertJobParams) (Job, error) {
+func (q *Queries) UpsertJob(ctx context.Context, arg UpsertJobParams) (UpsertJobRow, error) {
 	row := q.db.QueryRow(ctx, upsertJob,
 		arg.Source,
 		arg.ExternalID,
@@ -981,42 +1009,46 @@ func (q *Queries) UpsertJob(ctx context.Context, arg UpsertJobParams) (Job, erro
 		arg.EmploymentType,
 		arg.EducationLevel,
 		arg.ExperienceYearsMin,
+		arg.ContentHash,
 	)
-	var i Job
+	var i UpsertJobRow
 	err := row.Scan(
-		&i.ID,
-		&i.Source,
-		&i.ExternalID,
-		&i.URL,
-		&i.Title,
-		&i.Company,
-		&i.Location,
-		&i.Remote,
-		&i.Description,
-		&i.PostedAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.CompanySlug,
-		&i.Enrichment,
-		&i.EnrichedAt,
-		&i.EnrichmentVersion,
-		&i.PublicSlug,
-		&i.LastSeenAt,
-		&i.ClosedAt,
-		&i.Countries,
-		&i.Regions,
-		&i.WorkMode,
-		&i.LivenessStrikes,
-		&i.Skills,
-		&i.Seniority,
-		&i.Category,
-		&i.CreatedBy,
-		&i.UpdatedBy,
-		&i.PostingLanguage,
-		&i.EmploymentType,
-		&i.EducationLevel,
-		&i.ExperienceYearsMin,
-		&i.Collections,
+		&i.Job.ID,
+		&i.Job.Source,
+		&i.Job.ExternalID,
+		&i.Job.URL,
+		&i.Job.Title,
+		&i.Job.Company,
+		&i.Job.Location,
+		&i.Job.Remote,
+		&i.Job.Description,
+		&i.Job.PostedAt,
+		&i.Job.CreatedAt,
+		&i.Job.UpdatedAt,
+		&i.Job.CompanySlug,
+		&i.Job.Enrichment,
+		&i.Job.EnrichedAt,
+		&i.Job.EnrichmentVersion,
+		&i.Job.PublicSlug,
+		&i.Job.LastSeenAt,
+		&i.Job.ClosedAt,
+		&i.Job.Countries,
+		&i.Job.Regions,
+		&i.Job.WorkMode,
+		&i.Job.LivenessStrikes,
+		&i.Job.Skills,
+		&i.Job.Seniority,
+		&i.Job.Category,
+		&i.Job.CreatedBy,
+		&i.Job.UpdatedBy,
+		&i.Job.PostingLanguage,
+		&i.Job.EmploymentType,
+		&i.Job.EducationLevel,
+		&i.Job.ExperienceYearsMin,
+		&i.Job.Collections,
+		&i.Job.ContentHash,
+		&i.Inserted,
+		&i.Changed,
 	)
 	return i, err
 }
@@ -1067,7 +1099,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     updated_by   = $23::bigint,
     closed_at    = NULL,
     updated_at   = now()
-RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections
+RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash
 `
 
 type UpsertManualJobParams struct {
@@ -1167,6 +1199,7 @@ func (q *Queries) UpsertManualJob(ctx context.Context, arg UpsertManualJobParams
 		&i.EducationLevel,
 		&i.ExperienceYearsMin,
 		&i.Collections,
+		&i.ContentHash,
 	)
 	return i, err
 }

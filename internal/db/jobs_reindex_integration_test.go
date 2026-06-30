@@ -21,11 +21,11 @@ func TestListJobsUpdatedAfter(t *testing.T) {
 	ctx := context.Background()
 	truncate(t, pool)
 
-	old, err := q.UpsertJob(ctx, ingestParams("acme:old", "Old"))
+	old, err := ingestUpsert(ctx, q, ingestParams("acme:old", "Old"))
 	if err != nil {
 		t.Fatalf("upsert old: %v", err)
 	}
-	recent, err := q.UpsertJob(ctx, ingestParams("acme:recent", "Recent"))
+	recent, err := ingestUpsert(ctx, q, ingestParams("acme:recent", "Recent"))
 	if err != nil {
 		t.Fatalf("upsert recent: %v", err)
 	}
