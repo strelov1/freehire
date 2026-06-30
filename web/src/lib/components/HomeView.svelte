@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Button } from '$lib/ui';
+  import HomeFunnel from '$lib/components/HomeFunnel.svelte';
 
   const GITHUB = 'https://github.com/strelov1/freehire';
   const CLI = 'https://github.com/strelov1/freehire-cli';
@@ -36,6 +37,23 @@
     { label: 'Interview', cards: [{ title: 'Senior Backend Engineer', company: 'Linear' }] },
     { label: 'Offer', cards: [{ title: 'Platform Engineer', company: 'Grafana' }] },
   ];
+
+  // Illustrative application-pipeline snapshot for the funnel below — decorative,
+  // not live data. Counts sum to `applications`; the shape mirrors the real
+  // My-jobs Pipeline (PipelineBuckets), so the preview never promises a flow the
+  // product doesn't have.
+  const funnel = {
+    applications: 42,
+    buckets: {
+      no_answer: 12,
+      in_progress: 5,
+      interviewing: 9,
+      offer: 4,
+      accepted: 2,
+      rejected: 9,
+      declined: 1,
+    },
+  };
 
   const steps = [
     {
@@ -219,6 +237,37 @@
             </div>
           </div>
         {/each}
+      </div>
+    </figure>
+  </section>
+
+  <!-- Your pipeline — the analytical view of the same My jobs board: a static
+       Sankey snapshot of where applications land. The counts are illustrative,
+       not live data (see `funnel` above). -->
+  <section class="border-t border-border py-16 sm:py-20">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// your pipeline</p>
+    <div class="mt-6 max-w-2xl">
+      <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">
+        See where every application lands.
+      </h2>
+      <p class="mt-5 leading-relaxed text-muted-foreground">
+        As jobs move through your board, freehire rolls them into a pipeline snapshot — how many
+        applications are still waiting on an answer, in progress, interviewing, or turned into an offer.
+        One glance shows what's working and where things stall.
+      </p>
+    </div>
+
+    <!-- Funnel figure, capped to the copy width: the SVG scales with its viewBox,
+         so a full-bleed card would blow the diagram (and its labels) out of scale. -->
+    <figure class="mt-10 max-w-2xl overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <figcaption
+        class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground"
+      >
+        <span class="size-2.5 rounded-full bg-muted-foreground/30"></span>
+        My jobs · Pipeline
+      </figcaption>
+      <div class="p-5 sm:p-8">
+        <HomeFunnel applications={funnel.applications} buckets={funnel.buckets} />
       </div>
     </figure>
   </section>
