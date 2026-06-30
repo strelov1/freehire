@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/strelov1/freehire/internal/jobtracking"
+	"github.com/strelov1/freehire/internal/userjob"
 )
 
 // fakeRepo is an in-memory fake satisfying Repository.
@@ -35,6 +36,8 @@ type fakeRepo struct {
 	countErr            error
 	viewedResult        []string
 	viewedErr           error
+	pipelineResult      []userjob.StageCount
+	pipelineErr         error
 
 	// recorded calls
 	slugCalls  int
@@ -95,6 +98,10 @@ func (f *fakeRepo) CountInteractions(_ context.Context, _ int64) (jobtracking.Co
 
 func (f *fakeRepo) ViewedSlugs(_ context.Context, _ int64) ([]string, error) {
 	return f.viewedResult, f.viewedErr
+}
+
+func (f *fakeRepo) PipelineCounts(_ context.Context, _ int64) ([]userjob.StageCount, error) {
+	return f.pipelineResult, f.pipelineErr
 }
 
 // helpers
@@ -502,5 +509,36 @@ func TestViewedSlugs_Passthrough(t *testing.T) {
 	}
 	if len(slugs) != 2 || slugs[0] != "job-a" {
 		t.Errorf("slugs = %v, want [job-a job-b]", slugs)
+	}
+}
+
+func TestPipelineAggregates(t *testing.T) {
+	repo := &fakeRepo{pipelineResult: []userjob.StageCount{
+		{Stage: "applied", Count: 5},
+		{Stage: "interview", Count: 3},
+		{Stage: "", Count: 2}, // applied with no explicit stage
+	}}
+	svc := jobtracking.New(repo)
+
+	got, err := svc.Pipeline(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("Pipeline: %v", err)
+	}
+	if got.Applications != 10 {
+		t.Errorf("Applications = %d, want 10", got.Applications)
+	}
+	if got.Buckets.NoAnswer != 7 { // applied 5 + null-stage 2
+		t.Errorf("NoAnswer = %d, want 7", got.Buckets.NoAnswer)
+	}
+	if got.Buckets.Interviewing != 3 {
+		t.Errorf("Interviewing = %d, want 3", got.Buckets.Interviewing)
+	}
+}
+
+func TestPipelinePropagatesRepoError(t *testing.T) {
+	repo := &fakeRepo{pipelineErr: errors.New("boom")}
+	svc := jobtracking.New(repo)
+	if _, err := svc.Pipeline(context.Background(), 1); err == nil {
+		t.Fatal("expected error, got nil")
 	}
 }

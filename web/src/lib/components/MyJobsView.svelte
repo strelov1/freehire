@@ -3,10 +3,12 @@
   import { cn } from '$lib/utils';
   import JobBoard from './JobBoard.svelte';
   import JobHistory from './JobHistory.svelte';
+  import PipelineView from './PipelineView.svelte';
 
-  type View = 'board' | 'history';
+  type View = 'board' | 'pipeline' | 'history';
   const tabs: { value: View; label: string }[] = [
     { value: 'board', label: 'Board' },
+    { value: 'pipeline', label: 'Pipeline' },
     { value: 'history', label: 'History' },
   ];
   let view = $state<View>('board');
@@ -41,6 +43,8 @@
 
     {#if view === 'board'}
       <JobBoard />
+    {:else if view === 'pipeline'}
+      <PipelineView />
     {:else}
       <JobHistory />
     {/if}

@@ -18,6 +18,7 @@ import type {
   ListMeta,
   MyJob,
   MyJobCounts,
+  PipelineStats,
   User,
   UserJob,
   ApiKey,
@@ -294,6 +295,13 @@ export function createApi(
     return { ...toSlice(res, offset), counts: res.meta.counts };
   }
 
+  /** The current user's application-pipeline snapshot: per-bucket application
+   *  counts aggregated server-side, for the Pipeline tab's Sankey and rate cards. */
+  async function getMyPipeline(): Promise<PipelineStats> {
+    const res = await request<{ data: PipelineStats }>('/api/v1/me/jobs/pipeline');
+    return res.data;
+  }
+
   /** The public slugs of every job the current user has interacted with. The
    *  browse UI cross-references this set to dim already-viewed cards without
    *  authenticating the public job list. */
@@ -512,6 +520,7 @@ export function createApi(
     untrackJob,
     trackJob,
     listMyJobs,
+    getMyPipeline,
     listViewedSlugs,
     listApiKeys,
     createApiKey,
@@ -570,6 +579,7 @@ export const {
   untrackJob,
   trackJob,
   listMyJobs,
+  getMyPipeline,
   listViewedSlugs,
   listApiKeys,
   createApiKey,

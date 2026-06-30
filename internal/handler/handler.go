@@ -230,6 +230,7 @@ func Register(app *fiber.App, cfg Config) {
 	// list without making that list authenticated.
 	api.Get("/me/jobs", keyAuth, a.ListMyJobs)
 	api.Get("/me/jobs/viewed", keyAuth, a.ListViewedSlugs)
+	api.Get("/me/jobs/pipeline", keyAuth, a.MyPipeline)
 
 	// API-key management is cookie-only (RequireAuth): a leaked key must not be
 	// able to create, list, or revoke keys. The create endpoint returns the

@@ -142,6 +142,10 @@ type Repository interface {
 	// CountInteractions returns the per-filter counts for the caller in one pass.
 	CountInteractions(ctx context.Context, userID int64) (Counts, error)
 
+	// PipelineCounts returns the caller's per-stage application counts (saved-only
+	// rows excluded; an applied row with no stage carries an empty Stage).
+	PipelineCounts(ctx context.Context, userID int64) ([]userjob.StageCount, error)
+
 	// ViewedSlugs returns every public job slug the caller has interacted with.
 	ViewedSlugs(ctx context.Context, userID int64) ([]string, error)
 }
@@ -179,6 +183,17 @@ func (s *Service) ListTracked(ctx context.Context, userID int64, filter string, 
 // ViewedSlugs returns every public job slug the caller has interacted with.
 func (s *Service) ViewedSlugs(ctx context.Context, userID int64) ([]string, error) {
 	return s.repo.ViewedSlugs(ctx, userID)
+}
+
+// Pipeline returns the caller's application-pipeline snapshot: the per-stage
+// counts folded into the buckets and application total. The stage→bucket mapping
+// lives in userjob.Aggregate.
+func (s *Service) Pipeline(ctx context.Context, userID int64) (userjob.Pipeline, error) {
+	counts, err := s.repo.PipelineCounts(ctx, userID)
+	if err != nil {
+		return userjob.Pipeline{}, err
+	}
+	return userjob.Aggregate(counts), nil
 }
 
 // RecordView resolves slug → jobID then delegates to the repository.

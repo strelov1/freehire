@@ -39,6 +39,43 @@ func (q *Queries) ClearJobProgress(ctx context.Context, arg ClearJobProgressPara
 	return i, err
 }
 
+const countMyJobsByStage = `-- name: CountMyJobsByStage :many
+SELECT stage, count(*) AS count
+FROM user_jobs
+WHERE user_id = $1
+  AND (applied_at IS NOT NULL OR stage IS NOT NULL)
+GROUP BY stage
+`
+
+type CountMyJobsByStageRow struct {
+	Stage pgtype.Text `json:"stage"`
+	Count int64       `json:"count"`
+}
+
+// Per-stage application counts for the Pipeline snapshot. An application is any
+// row the user applied to or staged (saved-only rows are excluded); a row with
+// applied_at set but no stage groups under a NULL stage. The Go layer folds these
+// rows into the pipeline buckets.
+func (q *Queries) CountMyJobsByStage(ctx context.Context, userID int64) ([]CountMyJobsByStageRow, error) {
+	rows, err := q.db.Query(ctx, countMyJobsByStage, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountMyJobsByStageRow{}
+	for rows.Next() {
+		var i CountMyJobsByStageRow
+		if err := rows.Scan(&i.Stage, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countUserJobs = `-- name: CountUserJobs :one
 SELECT count(*)                                        AS "all",
        count(*) FILTER (WHERE saved_at IS NULL

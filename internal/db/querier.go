@@ -63,6 +63,11 @@ type Querier interface {
 	// search pagination reports the filtered total.
 	CountCompanies(ctx context.Context, search string) (int64, error)
 	CountJobs(ctx context.Context) (int64, error)
+	// Per-stage application counts for the Pipeline snapshot. An application is any
+	// row the user applied to or staged (saved-only rows are excluded); a row with
+	// applied_at set but no stage groups under a NULL stage. The Go layer folds these
+	// rows into the pipeline buckets.
+	CountMyJobsByStage(ctx context.Context, userID int64) ([]CountMyJobsByStageRow, error)
 	// How many saved searches a user has — the per-user cap is enforced against this in
 	// the service before a create.
 	CountSavedSearches(ctx context.Context, userID int64) (int64, error)

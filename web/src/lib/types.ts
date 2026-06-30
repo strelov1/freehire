@@ -144,6 +144,25 @@ export interface MyJobCounts {
   applied: number;
 }
 
+/** A snapshot of the caller's applications across the seven pipeline buckets.
+ *  Buckets always sum to the application total. */
+export interface PipelineBuckets {
+  no_answer: number;
+  in_progress: number;
+  interviewing: number;
+  offer: number;
+  accepted: number;
+  rejected: number;
+  declined: number;
+}
+
+/** The application-pipeline snapshot for the Pipeline tab: the caller's total
+ *  application count and its distribution across the status buckets. */
+export interface PipelineStats {
+  applications: number;
+  buckets: PipelineBuckets;
+}
+
 /** An API key as returned by the management endpoints — metadata only; the
  *  plaintext token is never part of this shape. `token_prefix` is a short,
  *  non-secret leading slice (e.g. "fhk_Ab12cd") shown so the user can tell keys

@@ -107,3 +107,14 @@ SELECT count(*)                                        AS "all",
                             OR stage      IS NOT NULL) AS board
 FROM user_jobs
 WHERE user_id = $1;
+
+-- name: CountMyJobsByStage :many
+-- Per-stage application counts for the Pipeline snapshot. An application is any
+-- row the user applied to or staged (saved-only rows are excluded); a row with
+-- applied_at set but no stage groups under a NULL stage. The Go layer folds these
+-- rows into the pipeline buckets.
+SELECT stage, count(*) AS count
+FROM user_jobs
+WHERE user_id = $1
+  AND (applied_at IS NOT NULL OR stage IS NOT NULL)
+GROUP BY stage;

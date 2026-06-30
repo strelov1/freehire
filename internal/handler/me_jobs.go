@@ -69,6 +69,24 @@ func (a *API) ListMyJobs(c *fiber.Ctx) error {
 	})
 }
 
+// MyPipeline returns the authenticated caller's application-pipeline snapshot:
+// the total application count and its distribution across the seven status
+// buckets, aggregated server-side over all of the caller's applications. The SPA
+// Pipeline tab renders the Sankey and the interview/offer rate cards from this.
+func (a *API) MyPipeline(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+
+	pipeline, err := a.tracking.Pipeline(c.Context(), userID)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(fiber.Map{"data": pipeline})
+}
+
 // ListViewedSlugs returns the set of public job slugs the authenticated caller
 // has interacted with (every user_jobs row counts as viewed). The SPA reads this
 // to dim already-seen cards in the browse list and search results without

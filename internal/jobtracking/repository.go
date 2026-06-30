@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobview"
+	"github.com/strelov1/freehire/internal/userjob"
 )
 
 // Compile-time proof that QueriesRepository satisfies Repository.
@@ -167,6 +168,21 @@ func (r *QueriesRepository) CountInteractions(ctx context.Context, userID int64)
 // ViewedSlugs returns every public job slug the caller has interacted with.
 func (r *QueriesRepository) ViewedSlugs(ctx context.Context, userID int64) ([]string, error) {
 	return r.q.ListViewedJobSlugs(ctx, userID)
+}
+
+// PipelineCounts returns the caller's per-stage application counts. A NULL stage
+// (an applied row with no explicit stage) becomes an empty Stage, which
+// userjob.Aggregate folds into the no_answer bucket.
+func (r *QueriesRepository) PipelineCounts(ctx context.Context, userID int64) ([]userjob.StageCount, error) {
+	rows, err := r.q.CountMyJobsByStage(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	counts := make([]userjob.StageCount, 0, len(rows))
+	for _, row := range rows {
+		counts = append(counts, userjob.StageCount{Stage: row.Stage.String, Count: row.Count})
+	}
+	return counts, nil
 }
 
 // toInteraction converts a db.UserJob row to the domain Interaction type.
