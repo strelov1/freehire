@@ -289,7 +289,7 @@ func TestDerive_SourceSkillsUnionWithDictionary(t *testing.T) {
 		Company:     "Acme",
 		Source:      "getmatch",
 		ExternalID:  "1",
-		Skills:      []string{"go"},               // structured source signal
+		Skills:      []string{"go"},              // structured source signal
 		Description: "We use Kubernetes and Go.", // dictionary → go, kubernetes
 	})
 	if !reflect.DeepEqual(got.Skills, []string{"go", "kubernetes"}) {

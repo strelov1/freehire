@@ -4,12 +4,21 @@
 // (backfill-geo/-skills/-class). Ingest fills these on every crawl via
 // jobderive.Derive; rows that predate a dictionary change — and closed jobs that
 // never re-crawl — keep the stale values until this one-off worker rewrites them.
-// It pages the whole table and exits. Idempotent: the facets are a pure function
-// of the title/location/description, so a second run rewrites nothing.
+// It pages the whole table and exits. Idempotent for jobs whose facets come from
+// the title/location/description dictionaries alone: re-deriving is a pure function
+// of those fields, so a second run rewrites nothing.
 //
 // Slugs are deliberately not touched (re-slugging stays cmd/reslug). work_mode is
 // preserved when already set: jobderive keeps a row's existing (possibly
-// adapter-structured) work_mode over the parsed-location hint.
+// adapter-structured) work_mode over the parsed-location hint. The other
+// structured-source facets are NOT preserved: an adapter that emits a grade,
+// category, skills, or required-experience directly (e.g. getmatch) supplies those
+// only at ingest, and this command re-derives seniority/category/skills/
+// experience_years_min from the stored description columns — so running it
+// overwrites such structured values with the dictionary's. This is intentional:
+// the command's job is to propagate dictionary changes, which must keep updating
+// those facets for the dictionary-derived majority. A boardless adapter like
+// getmatch re-supplies the structured facets on its next full crawl.
 package main
 
 import (
