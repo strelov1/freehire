@@ -38,17 +38,19 @@
   <States state="empty" message="You haven't applied to any jobs yet. Applications you track will show up here." />
 {:else}
   <div class="flex flex-col gap-3">
-    <div class="flex flex-col items-center gap-6 rounded-lg border bg-card p-5 md:flex-row md:items-center">
-      <div class="min-w-0 flex-1">
-        <p class="mb-2 text-sm text-muted-foreground">
+    <div class="rounded-lg border bg-card p-5">
+      <!-- Rate donuts ride on top as a two-up row; the funnel below spans the full
+           card width. -->
+      <div class="mb-5 flex flex-wrap items-start justify-between gap-4">
+        <p class="text-sm text-muted-foreground">
           {stats.applications} application{stats.applications === 1 ? '' : 's'}
         </p>
-        <PipelineFunnel applications={stats.applications} buckets={stats.buckets} />
+        <div class="flex shrink-0 gap-6">
+          <RateDonut percent={iv} label="Interview Rate" sublabel="reached interview" />
+          <RateDonut percent={offer} label="Offer Rate" sublabel="reached offer" />
+        </div>
       </div>
-      <div class="flex shrink-0 gap-4">
-        <RateDonut percent={iv} label="Interview Rate" sublabel="reached interview" />
-        <RateDonut percent={offer} label="Offer Rate" sublabel="reached offer" />
-      </div>
+      <PipelineFunnel applications={stats.applications} buckets={stats.buckets} />
     </div>
     <p class="text-xs text-muted-foreground">
       A snapshot of where your applications stand now. Rates are a lower bound — a job rejected after
