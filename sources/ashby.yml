@@ -1089,6 +1089,8 @@
   board: sola
 - company: Solace
   board: solace
+- company: solidgate
+  board: solidgate
 - company: Solink
   board: solink
 - company: Solva
@@ -5781,3 +5783,7 @@
   board: vitable
 - company: whop
   board: whop
+- company: keystone
+  board: keystone
+- company: Taxfix
+  board: taxfix.com

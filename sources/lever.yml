@@ -1569,6 +1569,8 @@
   board: dulcedo
 - company: dutch
   board: dutch
+- company: dwolla
+  board: dwolla
 - company: dynamiccatholic
   board: dynamiccatholic
 - company: dzen
@@ -3780,3 +3782,9 @@
   board: hypersonica-prod
 - company: polleverywhere
   board: polleverywhere
+- company: akicita-cyber
+  board: akicita-cyber
+- company: givinghhc
+  board: givinghhc
+- company: momentshospice-2
+  board: momentshospice-2
