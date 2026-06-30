@@ -286,16 +286,21 @@ func normalizeJob(e sources.CompanyEntry, j sources.Job) Job {
 	source, externalID := jobIdentity(e, j)
 	// The slugs and dictionary facets (geography/work-mode/skills/classification) are
 	// derived by the shared jobderive helper, so ingest and the moderator write path
-	// produce identical facets. Work-mode precedence (structured signal over the parser
-	// hint) lives there.
+	// produce identical facets. The adapter's structured facet signals (work-mode,
+	// seniority, category, skills, experience) take precedence over the dictionary
+	// there; an unset signal lets the dictionary decide.
 	d := jobderive.Derive(jobderive.Input{
-		Title:       j.Title,
-		Company:     j.Company,
-		Source:      source,
-		ExternalID:  externalID,
-		Location:    j.Location,
-		Description: j.Description,
-		WorkMode:    j.WorkMode,
+		Title:              j.Title,
+		Company:            j.Company,
+		Source:             source,
+		ExternalID:         externalID,
+		Location:           j.Location,
+		Description:        j.Description,
+		WorkMode:           j.WorkMode,
+		Seniority:          j.Seniority,
+		Category:           j.Category,
+		Skills:             j.Skills,
+		ExperienceYearsMin: j.ExperienceYearsMin,
 	})
 	return Job{
 		Source:      source,

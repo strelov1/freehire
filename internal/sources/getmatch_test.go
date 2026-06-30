@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/strelov1/freehire/internal/enrich"
 )
 
 // getmatchHTTP is a route-aware test JSONGetter. getmatch has two endpoints: a paged list
@@ -227,6 +229,119 @@ func TestGetmatchLaterPageErrorEndsEnumeration(t *testing.T) {
 	}
 	if len(jobs) != 1 {
 		t.Fatalf("got %d jobs, want 1 (gathered before the failing page)", len(jobs))
+	}
+}
+
+func TestGetmatchSeniority(t *testing.T) {
+	tests := []struct {
+		grade string
+		want  string
+	}{
+		{"senior", "senior"},
+		{"middle", "middle"},
+		{"lead", "lead"},
+		{"c_level", "c_level"},
+		{"Senior", "senior"}, // case/space tolerant
+		{"trainee", ""},      // not in freehire's vocabulary → dropped
+		{"", ""},
+	}
+	for _, tc := range tests {
+		if got := getmatchSeniority(tc.grade); got != tc.want {
+			t.Errorf("getmatchSeniority(%q) = %q, want %q", tc.grade, got, tc.want)
+		}
+	}
+}
+
+func TestGetmatchCategory(t *testing.T) {
+	tests := []struct {
+		name  string
+		specs []string
+		want  string
+	}{
+		{"single mapped", []string{"python"}, "backend"},
+		{"android to mobile", []string{"android"}, "mobile"},
+		{"data engineering passthrough", []string{"data_engineering"}, "data_engineering"},
+		{"duplicate same category", []string{"python", "golang"}, "backend"},
+		{"conflict drops", []string{"python", "android"}, ""},
+		{"unmappable drops", []string{"business_analyst"}, ""},
+		{"unmappable mixed with mapped keeps mapped", []string{"business_analyst", "python"}, "backend"},
+		{"none", nil, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := getmatchCategory(tc.specs); got != tc.want {
+				t.Errorf("getmatchCategory(%v) = %q, want %q", tc.specs, got, tc.want)
+			}
+		})
+	}
+}
+
+// Every category the specialization map targets must be a real CategoryValues member,
+// so the map cannot drift out of the controlled vocabulary.
+func TestGetmatchCategoryMapTargetsAreValid(t *testing.T) {
+	for code, cat := range getmatchSpecializationCategory {
+		if !slices.Contains(enrich.CategoryValues, cat) {
+			t.Errorf("specialization %q maps to %q, not in enrich.CategoryValues", code, cat)
+		}
+	}
+}
+
+func TestGetmatchSkills(t *testing.T) {
+	// Known technologies are canonicalized through skilltag; noise tokens are dropped.
+	got := getmatchSkills([]getmatchSkill{{Name: "Golang"}, {Name: "Kiss"}, {Name: "Docker"}})
+	if !slices.Equal(got, []string{"docker", "go"}) {
+		t.Errorf("getmatchSkills = %v, want [docker go] (canonical, noise dropped)", got)
+	}
+	if got := getmatchSkills(nil); len(got) != 0 {
+		t.Errorf("getmatchSkills(nil) = %v, want empty", got)
+	}
+}
+
+func TestGetmatchFetchSetsStructuredFacets(t *testing.T) {
+	fake := &getmatchHTTP{
+		pages: map[int]string{0: `{"meta":{"total":1,"offset":0,"limit":100},"offers":[
+			{"id":700,"position":"Разработчик","url":"/vacancies/700-x","company":{"name":"C"},
+			 "offer_description":"s","location_items":[{"label":"Москва","format":"remote"}]}
+		]}`},
+		details: map[int]string{700: `{"id":700,"description":"<p>body</p>",
+			"seniority":"senior","specializations":["python"],
+			"skills_objects":[{"name":"Golang"},{"name":"Kiss"}],
+			"required_years_of_experience":4}`},
+	}
+	jobs, err := NewGetmatch(fake).Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	j := jobs[0]
+	if j.Seniority != "senior" {
+		t.Errorf("Seniority = %q, want senior", j.Seniority)
+	}
+	if j.Category != "backend" {
+		t.Errorf("Category = %q, want backend (python)", j.Category)
+	}
+	if !slices.Equal(j.Skills, []string{"go"}) {
+		t.Errorf("Skills = %v, want [go] (Golang canonical, Kiss dropped)", j.Skills)
+	}
+	if j.ExperienceYearsMin == nil || *j.ExperienceYearsMin != 4 {
+		t.Errorf("ExperienceYearsMin = %v, want 4", j.ExperienceYearsMin)
+	}
+}
+
+// A detail that fails (or omits the structured fields) leaves the facets empty/nil —
+// the adapter never guesses.
+func TestGetmatchFetchStructuredFacetsAbsentOnDetailError(t *testing.T) {
+	fake := &getmatchHTTP{
+		pages: map[int]string{0: `{"meta":{"total":1,"offset":0,"limit":100},"offers":[
+			{"id":701,"position":"Backend Developer","url":"/vacancies/701-x","company":{"name":"C"},
+			 "offer_description":"s","location_items":[{"label":"L","format":"remote"}]}
+		]}`},
+		detailErr: map[int]bool{701: true},
+	}
+	jobs, _ := NewGetmatch(fake).Fetch(context.Background(), CompanyEntry{})
+	j := jobs[0]
+	if j.Seniority != "" || j.Category != "" || len(j.Skills) != 0 || j.ExperienceYearsMin != nil {
+		t.Errorf("structured facets should be empty on detail error, got sen=%q cat=%q skills=%v exp=%v",
+			j.Seniority, j.Category, j.Skills, j.ExperienceYearsMin)
 	}
 }
 

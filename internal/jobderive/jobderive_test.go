@@ -198,3 +198,101 @@ func TestDerive_NoisyDescriptionYieldsNoSeniority(t *testing.T) {
 		t.Errorf("Seniority = %q, want empty (noisy description, no anchored grade)", got.Seniority)
 	}
 }
+
+// A structured seniority from the source (e.g. a marketplace's grade field) wins
+// over both the title dictionary and the description.
+func TestDerive_StructuredSeniorityWins(t *testing.T) {
+	got := Derive(Input{
+		Title:       "Lead Backend Engineer", // title → lead
+		Company:     "Acme",
+		Source:      "getmatch",
+		ExternalID:  "1",
+		Seniority:   "senior", // structured source signal
+		Description: "We want a junior to grow.",
+	})
+	if got.Seniority != "senior" {
+		t.Errorf("Seniority = %q, want senior (structured source wins)", got.Seniority)
+	}
+}
+
+// When the source carries no structured seniority, the dictionary fills it.
+func TestDerive_DictionaryFillsSeniorityWhenSourceSilent(t *testing.T) {
+	got := Derive(Input{
+		Title:      "Lead Backend Engineer", // title → lead
+		Company:    "Acme",
+		Source:     "getmatch",
+		ExternalID: "1",
+	})
+	if got.Seniority != "lead" {
+		t.Errorf("Seniority = %q, want lead (dictionary fills when source silent)", got.Seniority)
+	}
+}
+
+// A structured category from the source wins over the title dictionary; when the
+// source is silent the dictionary fills it.
+func TestDerive_StructuredCategoryWinsAndDictionaryFills(t *testing.T) {
+	withSource := Derive(Input{
+		Title:      "Backend Developer", // title → backend
+		Company:    "Acme",
+		Source:     "getmatch",
+		ExternalID: "1",
+		Category:   "data_engineering", // structured source signal
+	})
+	if withSource.Category != "data_engineering" {
+		t.Errorf("Category = %q, want data_engineering (structured source wins)", withSource.Category)
+	}
+
+	silent := Derive(Input{
+		Title:      "Backend Developer", // title → backend
+		Company:    "Acme",
+		Source:     "getmatch",
+		ExternalID: "2",
+	})
+	if silent.Category != "backend" {
+		t.Errorf("Category = %q, want backend (dictionary fills when source silent)", silent.Category)
+	}
+}
+
+// A structured minimum-experience from the source wins over the jobfacts text
+// parse; when the source is nil the text parse fills it.
+func TestDerive_StructuredExperienceWinsAndTextFills(t *testing.T) {
+	src := 7
+	withSource := Derive(Input{
+		Title:              "Dev",
+		Company:            "Acme",
+		Source:             "getmatch",
+		ExternalID:         "1",
+		ExperienceYearsMin: &src,
+		Description:        "at least 3 years of experience required",
+	})
+	if withSource.ExperienceYearsMin == nil || *withSource.ExperienceYearsMin != 7 {
+		t.Errorf("ExperienceYearsMin = %v, want 7 (structured source wins)", withSource.ExperienceYearsMin)
+	}
+
+	silent := Derive(Input{
+		Title:       "Dev",
+		Company:     "Acme",
+		Source:      "getmatch",
+		ExternalID:  "2",
+		Description: "at least 3 years of experience required",
+	})
+	if silent.ExperienceYearsMin == nil || *silent.ExperienceYearsMin != 3 {
+		t.Errorf("ExperienceYearsMin = %v, want 3 (text fills when source nil)", silent.ExperienceYearsMin)
+	}
+}
+
+// Skills is a set: the structured source skills are UNIONED with the dictionary
+// skills (deduped, sorted), neither replacing the other.
+func TestDerive_SourceSkillsUnionWithDictionary(t *testing.T) {
+	got := Derive(Input{
+		Title:       "Dev",
+		Company:     "Acme",
+		Source:      "getmatch",
+		ExternalID:  "1",
+		Skills:      []string{"go"},               // structured source signal
+		Description: "We use Kubernetes and Go.", // dictionary → go, kubernetes
+	})
+	if !reflect.DeepEqual(got.Skills, []string{"go", "kubernetes"}) {
+		t.Errorf("Skills = %v, want [go kubernetes] (source ∪ dictionary, deduped+sorted)", got.Skills)
+	}
+}
