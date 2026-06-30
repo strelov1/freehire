@@ -36,6 +36,50 @@ func TestDerive_SlugsAndFacets(t *testing.T) {
 	}
 }
 
+// RemoteUnspecified flags a remote job whose geography did not resolve to any
+// country or region — the "remote, region not specified" bucket. It is true only
+// when work_mode is remote AND both countries and regions are empty.
+func TestDerive_RemoteUnspecified(t *testing.T) {
+	tests := []struct {
+		name string
+		in   Input
+		want bool
+	}{
+		{
+			name: "bare remote with no geography is flagged",
+			in:   Input{Title: "Dev", Company: "Acme", Source: "manual", ExternalID: "1", Location: "Remote"},
+			want: true,
+		},
+		{
+			name: "remote with a resolved region is not flagged",
+			in:   Input{Title: "Dev", Company: "Acme", Source: "manual", ExternalID: "2", Location: "Remote - Europe"},
+			want: false,
+		},
+		{
+			name: "remote anywhere (global) is not flagged",
+			in:   Input{Title: "Dev", Company: "Acme", Source: "manual", ExternalID: "3", Location: "Remote - Anywhere"},
+			want: false,
+		},
+		{
+			name: "onsite with no geography is not flagged",
+			in:   Input{Title: "Dev", Company: "Acme", Source: "manual", ExternalID: "4", Location: "On-site"},
+			want: false,
+		},
+		{
+			name: "no location at all is not flagged",
+			in:   Input{Title: "Dev", Company: "Acme", Source: "manual", ExternalID: "5"},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Derive(tt.in).RemoteUnspecified; got != tt.want {
+				t.Errorf("RemoteUnspecified = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // A structured work-mode signal from the caller (e.g. an ATS workplace-type enum)
 // beats the free-text parser hint.
 //

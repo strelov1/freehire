@@ -57,6 +57,11 @@ func TestParse(t *testing.T) {
 			want:     Geo{Regions: []string{"global"}, WorkMode: "remote"},
 		},
 		{
+			name:     "international marker yields global and remote",
+			location: "Remote - International",
+			want:     Geo{Regions: []string{"global"}, WorkMode: "remote"},
+		},
+		{
 			name:     "hybrid marker with city",
 			location: "Hybrid - London",
 			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, WorkMode: "hybrid"},

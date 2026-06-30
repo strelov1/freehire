@@ -396,6 +396,25 @@ func TestFromRow_CollectionsEmptyIsNonNil(t *testing.T) {
 	}
 }
 
+// remote_unspecified is served straight from the jobs column (a deterministic
+// source fact), like the other dictionary facets.
+func TestFromRow_RemoteUnspecifiedFromColumn(t *testing.T) {
+	on, err := FromRow(db.Job{ID: 1, RemoteUnspecified: true})
+	if err != nil {
+		t.Fatalf("FromRow: %v", err)
+	}
+	if !on.RemoteUnspecified {
+		t.Fatalf("RemoteUnspecified = false, want true (from column)")
+	}
+	off, err := FromRow(db.Job{ID: 2})
+	if err != nil {
+		t.Fatalf("FromRow: %v", err)
+	}
+	if off.RemoteUnspecified {
+		t.Fatalf("RemoteUnspecified = true, want false (default)")
+	}
+}
+
 // Seniority/category are the dictionary column value, always — the LLM never wins
 // and never fills a dict-silent field. They stay nested under enrichment so the
 // existing facet path is unchanged.

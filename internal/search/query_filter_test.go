@@ -111,6 +111,25 @@ func TestFilterFromValues_VisaBoolAndNumeric(t *testing.T) {
 	}
 }
 
+func TestFilterFromValues_RemoteUnspecified(t *testing.T) {
+	// remote_unspecified=true restricts to the facet; it ANDs as its own group.
+	got := normalizeGroups(t, FilterFromValues(vals("remote_unspecified=true&seniority=senior")))
+	want := [][]string{
+		{`enrichment.seniority = "senior"`},
+		{`remote_unspecified = true`},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+
+	// The toggle only adds a positive constraint: unset, empty, or false emit nothing.
+	for _, q := range []string{"", "remote_unspecified=", "remote_unspecified=false"} {
+		if got := FilterFromValues(vals(q)); got != nil {
+			t.Errorf("FilterFromValues(%q) = %v, want nil", q, got)
+		}
+	}
+}
+
 func TestFilterFromValues_PostedWithinDays(t *testing.T) {
 	// now is injected so the cutoff is deterministic. posted_within_days=N restricts
 	// to posted_ts >= now - N*86400 (posted within the last N days).

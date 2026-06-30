@@ -79,6 +79,13 @@ func filterFromValues(v url.Values, now time.Time) any {
 		groups = append(groups, []string{EqBool("enrichment.visa_sponsorship", raw == "true")})
 	}
 
+	// remote_unspecified is a one-way toggle: setting it true restricts to remote
+	// jobs whose geography did not resolve. It adds only a positive constraint, so a
+	// false/empty value emits nothing (filtering OUT that bucket is not a use case).
+	if v.Get("remote_unspecified") == "true" {
+		groups = append(groups, []string{EqBool("remote_unspecified", true)})
+	}
+
 	if n, ok := atoiOK(v.Get("salary_min")); ok {
 		groups = append(groups, []string{Gte("enrichment.salary_min", n)})
 	}

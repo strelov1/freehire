@@ -117,6 +117,7 @@ func (s *extractStore) Complete(ctx context.Context, post telegram.PendingPost, 
 			EmploymentType:     jobfacts.EmploymentType(j.Title, descHTML),
 			EducationLevel:     jobfacts.EducationLevel(descHTML),
 			ExperienceYearsMin: toInt4(jobfacts.ExperienceYearsMin(descHTML)),
+			RemoteUnspecified:  location.IsRemoteUnspecified(geo.WorkMode, geo),
 		})
 		if err != nil {
 			return fmt.Errorf("upsert job %s: %w", externalID, err)
@@ -188,6 +189,7 @@ func (s *extractStore) CompleteLinks(
 			EmploymentType:     jobfacts.EmploymentType(j.Title, j.Description),
 			EducationLevel:     jobfacts.EducationLevel(j.Description),
 			ExperienceYearsMin: toInt4(jobfacts.ExperienceYearsMin(j.Description)),
+			RemoteUnspecified:  location.IsRemoteUnspecified(workMode, geo),
 		})
 		if err != nil {
 			return fmt.Errorf("upsert job %s/%s: %w", j.Source, j.ExternalID, err)

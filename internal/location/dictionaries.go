@@ -322,6 +322,7 @@ var nameToRegion = map[string]string{
 	// Open-anywhere markers, multilingual. A bare "remote" stays geography-less
 	// (work mode only); these are explicit "the whole world" phrasings.
 	"anywhere": "global", "worldwide": "global", "global": "global",
+	"international": "global", "international remote": "global", "globally": "global",
 	"remote anywhere": "global", "world wide": "global", "world-wide": "global",
 	"everywhere": "global", "fully distributed": "global",
 	"по всему миру": "global", "весь мир": "global",

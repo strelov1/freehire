@@ -51,6 +51,11 @@ export const FILTER_FACETS: FilterRow[] = [
 export const FILTER_EXTRAS: FilterRow[] = [
   { param: 'visa_sponsorship', label: 'Visa sponsorship', values: 'true, false' },
   {
+    param: 'remote_unspecified',
+    label: 'Remote, location-flexible',
+    values: 'true — remote jobs whose geography resolved to no country or region',
+  },
+  {
     param: 'salary_min',
     label: 'Minimum salary',
     values: 'integer — jobs whose minimum salary is at least this (pair with salary_currency)',

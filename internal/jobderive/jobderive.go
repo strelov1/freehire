@@ -59,6 +59,9 @@ type Derived struct {
 	EmploymentType     string
 	EducationLevel     string
 	ExperienceYearsMin *int
+	// RemoteUnspecified is true when the job is remote but its geography did not
+	// resolve to any country or region — the "remote, region not specified" facet.
+	RemoteUnspecified bool
 }
 
 // Derive computes the slugs and dictionary facets for a job. Geography, skills, and the
@@ -115,6 +118,7 @@ func Derive(in Input) Derived {
 		EmploymentType:     jobfacts.EmploymentType(in.Title, in.Description),
 		EducationLevel:     jobfacts.EducationLevel(in.Description),
 		ExperienceYearsMin: experience,
+		RemoteUnspecified:  location.IsRemoteUnspecified(workMode, geo),
 	}
 }
 

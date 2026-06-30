@@ -76,6 +76,7 @@ func (s *dbStore) Save(ctx context.Context, job pipeline.Job) error {
 		EmploymentType:     job.EmploymentType,
 		EducationLevel:     job.EducationLevel,
 		ExperienceYearsMin: toInt4(job.ExperienceYearsMin),
+		RemoteUnspecified:  job.RemoteUnspecified,
 	}
 	// Fingerprint the indexed fields so the upsert can report whether this write
 	// changed searchable content (drives incremental indexing below).
