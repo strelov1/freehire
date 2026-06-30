@@ -1,0 +1,9 @@
+# recruiting-solutions.org (Career Site Builder) boards. Provider is the filename; each
+# entry is company + board. board = the platform tenant key, sent as the customerId header
+# to the Azure search API (see internal/sources/recruitingsolutions.go). One tenant can host
+# several operating companies, so the company below is just the tenant's display name — each
+# posting carries its own employer.
+
+# Bertelsmann group, Riverty/BFS financial-services customer (createyourowncareer.com).
+- company: Riverty
+  board: riv-prod
