@@ -25,6 +25,7 @@
     { href: '/analytics', label: 'Analytics' },
     { href: '/cli', label: 'CLI' },
     { href: '/recruiters', label: 'For recruiters' },
+    { href: '/for-companies', label: 'For companies' },
   ];
 
   // A link is active for its own path and any sub-route (e.g. /jobs and
