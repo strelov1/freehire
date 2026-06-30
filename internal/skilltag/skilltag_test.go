@@ -93,3 +93,62 @@ func TestParse_NewTechVocab(t *testing.T) {
 		})
 	}
 }
+
+// AI/LLM engineering vocabulary (ai-skills-gaps): vector DBs, LLM frameworks,
+// model providers, and serving/inference tools resolve from realistic text.
+// Ambiguous bare words are deliberately NOT tagged (RAG project status, the word
+// "bedrock", the "needle in a haystack" idiom) — those collide with non-AI jobs.
+func TestParse_AIVocab(t *testing.T) {
+	contains := func(hay []string, needle string) bool {
+		for _, h := range hay {
+			if h == needle {
+				return true
+			}
+		}
+		return false
+	}
+	cases := []struct {
+		name   string
+		in     string
+		want   []string
+		absent []string
+	}{
+		{"vector dbs", "Vector search over Pinecone, Weaviate, Qdrant, Milvus, pgvector, FAISS and ChromaDB.",
+			[]string{"pinecone", "weaviate", "qdrant", "milvus", "pgvector", "faiss", "chromadb"}, nil},
+		{"chroma db spaced", "We store embeddings in Chroma DB.", []string{"chromadb"}, nil},
+		{"llm frameworks", "Orchestrate agents with LangGraph, LangSmith, LlamaIndex, CrewAI and AutoGen.",
+			[]string{"langgraph", "langsmith", "llamaindex", "crewai", "autogen"}, nil},
+		{"framework spacing", "Built on Llama Index and Crew AI.", []string{"llamaindex", "crewai"}, nil},
+		{"semantic kernel", "Microsoft Semantic Kernel experience.", []string{"semantic-kernel"}, nil},
+		{"providers", "Integrate Anthropic, Cohere, Mistral and Ollama models.",
+			[]string{"anthropic", "cohere", "mistral", "ollama"}, nil},
+		{"clouds", "Deploy on Databricks, AWS SageMaker, Vertex AI and AWS Bedrock.",
+			[]string{"databricks", "sagemaker", "vertex-ai", "aws-bedrock"}, nil},
+		{"amazon bedrock", "Using Amazon Bedrock for inference.", []string{"aws-bedrock"}, nil},
+		{"serving", "Serve models with vLLM, Triton, TensorRT, ONNX and BentoML.",
+			[]string{"vllm", "triton", "tensorrt", "onnx", "bentoml"}, nil},
+		{"training", "Fine-tuning with DeepSpeed and PEFT; sentence-transformers for embeddings.",
+			[]string{"deepspeed", "peft", "sentence-transformers"}, nil},
+		{"cv model", "Object detection with YOLO.", []string{"yolo"}, nil},
+		{"rag phrase", "Build retrieval augmented generation pipelines.", []string{"rag"}, nil},
+		// ambiguity guards: these must NOT tag (skilltag runs on ALL jobs).
+		{"rag status trap", "We report project health as RAG status weekly.", nil, []string{"rag"}},
+		{"bedrock word trap", "Trust is the bedrock of our company culture.", nil, []string{"aws-bedrock"}},
+		{"haystack idiom trap", "Finding signal is a needle in a haystack.", nil, []string{"haystack"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := Parse(c.in)
+			for _, w := range c.want {
+				if !contains(got, w) {
+					t.Errorf("Parse(%q) = %v, missing %q", c.in, got, w)
+				}
+			}
+			for _, a := range c.absent {
+				if contains(got, a) {
+					t.Errorf("Parse(%q) = %v, must NOT contain %q", c.in, got, a)
+				}
+			}
+		})
+	}
+}
