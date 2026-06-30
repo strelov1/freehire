@@ -134,7 +134,7 @@ func TestTBankFetchPaginatesAndMapsMixedBlocks(t *testing.T) {
 	if j1.Company != "T-Bank" {
 		t.Errorf("Company = %q, want T-Bank", j1.Company)
 	}
-	if want := "https://www.tbank.ru/career/vacancy/backend-engineer/"; j1.URL != want {
+	if want := "https://www.tbank.ru/career/it/vacancy/all/backend-engineer/slug-1/"; j1.URL != want {
 		t.Errorf("URL = %q, want %q", j1.URL, want)
 	}
 	if j1.Location != "Москва" {
