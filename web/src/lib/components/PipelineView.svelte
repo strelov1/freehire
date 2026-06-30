@@ -38,18 +38,17 @@
   <States state="empty" message="You haven't applied to any jobs yet. Applications you track will show up here." />
 {:else}
   <div class="flex flex-col gap-3">
+    <!-- Rates and the funnel are two separate views, each in its own card. -->
     <div class="rounded-lg border bg-card p-5">
-      <!-- Rate donuts ride on top as a two-up row; the funnel below spans the full
-           card width. -->
-      <div class="mb-5 flex flex-wrap items-start justify-between gap-4">
-        <p class="text-sm text-muted-foreground">
-          {stats.applications} application{stats.applications === 1 ? '' : 's'}
-        </p>
-        <div class="flex shrink-0 gap-6">
-          <RateDonut percent={iv} label="Interview Rate" sublabel="reached interview" />
-          <RateDonut percent={offer} label="Offer Rate" sublabel="reached offer" />
-        </div>
+      <div class="flex flex-wrap items-center justify-center gap-10">
+        <RateDonut percent={iv} label="Interview Rate" sublabel="reached interview" />
+        <RateDonut percent={offer} label="Offer Rate" sublabel="reached offer" />
       </div>
+    </div>
+    <div class="rounded-lg border bg-card p-5">
+      <p class="mb-3 text-sm text-muted-foreground">
+        {stats.applications} application{stats.applications === 1 ? '' : 's'}
+      </p>
       <PipelineFunnel applications={stats.applications} buckets={stats.buckets} />
     </div>
     <p class="text-xs text-muted-foreground">

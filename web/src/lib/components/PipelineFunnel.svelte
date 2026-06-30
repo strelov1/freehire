@@ -11,13 +11,18 @@
   // SVG geometry, in viewBox units (the element scales to its container width).
   // The left source bar fills HH; the right nodes share the same heights but are
   // spread with a gap between them, so the ribbons fan out instead of running flat.
-  const W = 460;
-  const PAD = 10;
-  const GAP = 8;
-  const HH = 224;
-  const LX = 6;
-  const LW = 16;
-  const RX = 250;
+  // The viewBox is deliberately WIDE (W ≫ height): the element renders at the full
+  // card width, so a wide box keeps the scale factor ≈1 — the funnel stays a
+  // reasonable height and the labels read at their intended size rather than
+  // ballooning. Right nodes sit near the right edge with just enough room reserved
+  // for the labels, so the ribbons span almost the full width.
+  const W = 940;
+  const PAD = 12;
+  const GAP = 10;
+  const HH = 230;
+  const LX = 8;
+  const LW = 18;
+  const RX = 760;
   const RW = 14;
   const MID = (LX + LW + RX) / 2;
 
@@ -76,8 +81,8 @@
   {#each model.ribbons as r (r.key)}
     <path d={r.path} fill={r.color} fill-opacity="0.5" />
     <rect x={RX} y={r.nodeY} width={RW} height={Math.max(r.nodeH, 1)} rx="2" fill={r.color} />
-    <text x={RX + RW + 8} y={r.labelY} dy="0.32em" class="fill-foreground text-[0.72rem]">
-      {r.label}<tspan class="fill-muted-foreground"> {r.count}</tspan>
+    <text x={RX + RW + 10} y={r.labelY} dy="0.32em" class="fill-foreground text-[0.72rem]">
+      {r.label}<tspan dx="6" class="fill-muted-foreground">{r.count}</tspan>
     </text>
   {/each}
 </svg>
