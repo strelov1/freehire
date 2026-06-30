@@ -16,11 +16,14 @@ import (
 // Employment-type matchers, checked in precedence order: a "full-time internship"
 // is an internship, a part-time contract is part-time, etc. "temporary" / "fixed
 // term" map to contract (the closest vocabulary member). Bare \bintern\b is safe —
-// the boundary keeps it out of "internal"/"international".
+// the boundary keeps it out of "internal"/"international". The contract matcher also
+// covers the US-market shorthands for an independent contractor: 1099 (the tax form),
+// C2C and "corp-to-corp". "consultant" is deliberately excluded — it is as often a
+// full-time title as a contract arrangement.
 var (
 	reInternship = regexp.MustCompile(`\b(internship|intern|co-?op|working student|praktikum|werkstudent)\b`)
 	rePartTime   = regexp.MustCompile(`\bpart[\s-]?time\b`)
-	reContract   = regexp.MustCompile(`\b(contractor|contract|freelancer|freelance|fixed[\s-]?term|temporary|b2b)\b`)
+	reContract   = regexp.MustCompile(`\b(contractor|contract|freelancer|freelance|fixed[\s-]?term|temporary|b2b|c2c|1099|corp[\s-]?to[\s-]?corp)\b`)
 	reFullTime   = regexp.MustCompile(`\b(full[\s-]?time|permanent)\b`)
 )
 

@@ -19,6 +19,10 @@ func TestEmploymentType(t *testing.T) {
 		{"contractor", "Dev", "We hire a contractor for this.", "contract"},
 		{"freelance", "Designer", "Freelance, remote.", "contract"},
 		{"temporary -> contract", "Picker", "Temporary seasonal position.", "contract"},
+		{"1099 -> contract", "Dev", "This is a 1099 position.", "contract"},
+		{"c2c -> contract", "Dev", "Open to C2C candidates.", "contract"},
+		{"corp-to-corp -> contract", "Dev", "W2 or corp-to-corp accepted.", "contract"},
+		{"corp to corp spaced -> contract", "Dev", "Corp to corp engagement.", "contract"},
 		{"full time", "Engineer", "Full-time, permanent position.", "full_time"},
 		{"internship beats full-time", "Intern", "A full-time internship for students.", "internship"},
 	}
