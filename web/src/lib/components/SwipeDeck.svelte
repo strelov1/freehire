@@ -95,8 +95,13 @@
 
     const send = kind === 'save' ? api.saveJob(job.public_slug) : api.dismissJob(job.public_slug);
     send.catch(() => {
-      queue = [job, ...queue];
-      if (last?.job.public_slug === job.public_slug) last = null;
+      // Restore the card only if it hasn't since been undone (undo() clears `last`)
+      // or superseded by a later judge() — re-queuing unconditionally would put back
+      // a card the user already restored, leaving a permanent duplicate in the deck.
+      if (last?.job.public_slug === job.public_slug) {
+        queue = [job, ...queue];
+        last = null;
+      }
     });
 
     // After the fly-off, drop the card. The next one is a fresh DOM node (keyed by
@@ -112,7 +117,11 @@
 
   // Undo the last decision: clear its server mark and put the card back on top.
   function undo() {
-    if (!last) return;
+    // Bail during the fly-off: `last` is set for the whole FLY_MS animation window,
+    // so without the `exiting` gate an undo mid-flight would re-queue the card while
+    // judge()'s deferred slice and failed-send restore are still pending — leaving a
+    // duplicate. Undo is available once the card has settled (exiting=false).
+    if (!last || exiting) return;
     const { job, kind } = last;
     last = null;
     queue = [job, ...queue];
