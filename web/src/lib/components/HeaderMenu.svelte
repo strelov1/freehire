@@ -90,7 +90,15 @@
     aria-label="Menu"
     aria-haspopup="menu"
     aria-expanded={open}
-    onclick={() => (open = !open)}
+    onclick={(e) => {
+      // Stop the toggle's own click from reaching the window outside-handler.
+      // Without this, opening detaches the clicked icon (the {#if open} Menu/X
+      // swap) from the DOM, so onWindowClick's root.contains(e.target) reads
+      // false and immediately re-closes the just-opened menu — the "center of
+      // the button doesn't open, only the edge does" bug.
+      e.stopPropagation();
+      open = !open;
+    }}
     class="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
   >
     {#if open}
