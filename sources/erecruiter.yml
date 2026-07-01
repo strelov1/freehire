@@ -1,0 +1,14 @@
+# eRecruiter Polska career boards ("Strona Kariera") on skk.erecruiter.pl. Provider is the
+# filename; each entry is company + board. board = the company's cfg (32-hex config token
+# embedded in its careers page as Code.ashx?cfg=<hex>); see internal/sources/erecruiter.go.
+# The keyless list endpoint (skk.erecruiter.pl/GetHtml.ashx?cfg=<cfg>&grid=rows&pn=<n>)
+# returns offer rows; the adapter fetches each Offer.aspx detail for the body. eRecruiter is
+# a Polish ATS, so most postings are in Polish and boards carry all roles (incl. non-IT) —
+# the classify/skilltag dictionaries derive facets downstream. Each board validated live
+# (list endpoint returned >0 offers) before adding; cmd/harvest-erecruiter resolves and
+# re-validates a company's cfg from its careers page.
+
+- company: Echo Investment
+  board: 4D3DD27FCA3D40C79E01BEE9745902B7
+- company: Centrum Nauki Kopernik
+  board: d9f100d80dcc4d9895201c2993c46816
