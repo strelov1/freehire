@@ -46,8 +46,11 @@ func (r *QueriesRepository) UserIDByIdentity(ctx context.Context, provider, prov
 
 // LinkOrCreateByEmail links the given identity to the account with the
 // supplied (already-lowercased) email, creating a passwordless account when
-// none exists. The operation runs in a single transaction. It returns
-// ErrIdentityConflict on a unique-violation (concurrent callback race).
+// none exists. The operation runs in a single transaction. A concurrent-callback
+// race surfaces as one of two distinct errors: ErrEmailRace when the account was
+// created first under the same email (our CreateUser lost the email index, so our
+// identity was never inserted), or ErrIdentityConflict when our exact identity was
+// inserted first. The service recovers from each differently.
 func (r *QueriesRepository) LinkOrCreateByEmail(
 	ctx context.Context,
 	provider, providerUserID, email string,
@@ -73,7 +76,9 @@ func (r *QueriesRepository) LinkOrCreateByEmail(
 		})
 		if err != nil {
 			if isUniqueViolation(err) {
-				return 0, ErrIdentityConflict
+				// users has a single unique index (lower(email)), so this can only be
+				// a concurrent account creation for the same email — not our identity.
+				return 0, ErrEmailRace
 			}
 			return 0, err
 		}

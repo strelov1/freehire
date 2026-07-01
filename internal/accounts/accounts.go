@@ -42,6 +42,14 @@ var (
 	// callback already inserted the same identity row (unique violation).
 	ErrIdentityConflict = errors.New("accounts: identity already exists")
 
+	// ErrEmailRace is returned by the repository when link-or-create lost a race on
+	// the user email index: a concurrent callback created the account under the same
+	// verified email (but a different identity) first, so our identity was never
+	// inserted. Distinct from ErrIdentityConflict because the recovery differs — the
+	// service retries the link to attach our identity to the now-existing account,
+	// rather than looking up an identity that does not exist.
+	ErrEmailRace = errors.New("accounts: email create race")
+
 	// ErrNoVerifiedEmail is returned by the service when the caller does not
 	// supply a verified, non-empty email — a hard requirement before linking or
 	// creating an account (unverified email is an account-takeover vector).
@@ -116,12 +124,27 @@ func (s *Service) ResolveOAuthAccount(
 
 	// 3. link existing account by email or create a new passwordless account.
 	id, err = s.repo.LinkOrCreateByEmail(ctx, provider, providerUserID, normalized)
-	if errors.Is(err, ErrIdentityConflict) {
-		// 4. lost a race with a concurrent callback — the identity now exists;
-		// return whichever goroutine won.
+	switch {
+	case err == nil:
+		return id, nil
+	case errors.Is(err, ErrIdentityConflict):
+		// 4a. lost a race with a concurrent callback for the SAME identity — it now
+		// exists; return whichever goroutine won.
 		return s.repo.UserIDByIdentity(ctx, provider, providerUserID)
+	case errors.Is(err, ErrEmailRace):
+		// 4b. lost a race with a concurrent callback that created the account under
+		// the same verified email but a DIFFERENT identity, so our identity was never
+		// inserted. Retry the link now that the account exists, so our identity
+		// attaches to it (a bare UserIDByIdentity retry would miss — it isn't there).
+		id, err = s.repo.LinkOrCreateByEmail(ctx, provider, providerUserID, normalized)
+		if errors.Is(err, ErrIdentityConflict) {
+			// A further concurrent callback inserted our identity in the meantime.
+			return s.repo.UserIDByIdentity(ctx, provider, providerUserID)
+		}
+		return id, err
+	default:
+		return 0, err
 	}
-	return id, err
 }
 
 // Register creates a new account with the given email and password.

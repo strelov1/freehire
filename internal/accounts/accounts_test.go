@@ -267,6 +267,35 @@ func TestResolveOAuthAccount_Race_RetryFails(t *testing.T) {
 	}
 }
 
+// (g) email race: a concurrent callback for the SAME verified email under a
+// DIFFERENT identity created the account first, so our LinkOrCreateByEmail lost on
+// the user email index (ErrEmailRace) and never inserted our identity. The service
+// retries the link — which now finds the account by email and attaches our identity
+// — instead of failing the callback with ?auth_error=oauth.
+func TestResolveOAuthAccount_EmailRace_LinksToWinner(t *testing.T) {
+	repo := &fakeRepo{
+		identityResults: []idResult{
+			{id: 0, err: ErrIdentityNotFound}, // first identity lookup misses
+		},
+		linkResults: []linkResult{
+			{id: 0, err: ErrEmailRace}, // lost the email-create race
+			{id: 7, err: nil},          // retry links our identity to the winner's account
+		},
+	}
+	svc := New(repo, &fakeHasher{})
+
+	id, err := svc.ResolveOAuthAccount(context.Background(), "github", "ghid-9", "shared@example.com", true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if id != 7 {
+		t.Errorf("want id=7 (identity linked to the winner's account), got %d", id)
+	}
+	if len(repo.linkCalls) != 2 {
+		t.Errorf("want 2 LinkOrCreateByEmail calls (initial + retry), got %d", len(repo.linkCalls))
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Register tests
 // ---------------------------------------------------------------------------
