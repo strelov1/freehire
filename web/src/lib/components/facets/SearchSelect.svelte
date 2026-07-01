@@ -12,15 +12,25 @@
     exclude = false,
     placeholder,
     onToggle,
+    clearOnSelect = false,
   }: {
     options: FacetOption[];
     selected: string[];
     exclude?: boolean;
     placeholder?: string;
     onToggle: (value: string) => void;
+    // When set, the filter field is cleared after each toggle — suited to a
+    // build-a-set form (search → pick → search the next), not the filter panel
+    // where you toggle several visible pills after one search.
+    clearOnSelect?: boolean;
   } = $props();
 
   let filter = $state('');
+
+  function toggle(value: string) {
+    onToggle(value);
+    if (clearOnSelect) filter = '';
+  }
 
   const shown = $derived(
     uniqueByValue(options)
@@ -36,7 +46,7 @@
       {@const active = selected.includes(opt.value)}
       <button
         type="button"
-        onclick={() => onToggle(opt.value)}
+        onclick={() => toggle(opt.value)}
         class={pillClass(active, exclude, 'px-2.5 py-1 text-sm')}
       >
         {opt.label}{#if opt.count !== undefined}<span class="ml-1 opacity-60 tabular-nums">{opt.count.toLocaleString()}</span>{/if}

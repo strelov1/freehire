@@ -174,6 +174,7 @@
           selected={specializations}
           placeholder="Search specializations"
           onToggle={toggleSpecialization}
+          clearOnSelect
         />
       </div>
 
@@ -185,6 +186,7 @@
           placeholder="Search skills"
           onToggle={toggleSkill}
           fallbackLabel={(v) => v}
+          clearOnSelect
         />
       </div>
 

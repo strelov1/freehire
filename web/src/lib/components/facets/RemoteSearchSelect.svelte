@@ -18,6 +18,7 @@
     placeholder,
     onToggle,
     fallbackLabel,
+    clearOnSelect = false,
   }: {
     search: (query: string) => Promise<FacetOption[]>;
     selected: string[];
@@ -25,6 +26,9 @@
     placeholder?: string;
     onToggle: (value: string) => void;
     fallbackLabel: (value: string) => string;
+    // When set, the search field is cleared after picking an option (search →
+    // pick a chip → search the next), suited to a build-a-set form.
+    clearOnSelect?: boolean;
   } = $props();
 
   let query = $state('');
@@ -61,6 +65,13 @@
     return () => clearTimeout(t);
   });
 
+  // Pick an option from the results; optionally reset the search so the field is
+  // ready for the next one (chip removal keeps the query, so it is not routed here).
+  function pick(value: string) {
+    onToggle(value);
+    if (clearOnSelect) query = '';
+  }
+
   const labelOf = (value: string) => seen.get(value) ?? fallbackLabel(value);
   // Don't list an already-selected option in the picker — it's shown as a chip.
   const pickable = $derived(results.filter((o) => !selected.includes(o.value)));
@@ -89,7 +100,7 @@
     {#each pickable as opt (opt.value)}
       <button
         type="button"
-        onclick={() => onToggle(opt.value)}
+        onclick={() => pick(opt.value)}
         class="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-accent"
       >
         <span class="truncate">{opt.label}</span>
