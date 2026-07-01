@@ -40,18 +40,23 @@
   let dragging = $state(false);
   let startX = 0;
   // exiting: the active card is mid fly-off (guards re-entry, drives opacity).
-  // resetting: the one frame where we snap dragX back to 0 for the incoming card
-  // with the transition suppressed, so it doesn't slide in from the edge.
+  // resetting: the one frame where we snap the incoming card into its start pose
+  // (dragX 0, scaled down) with the transition suppressed, so it doesn't slide in
+  // from the edge and its grow-in doesn't fire on the wrong frame.
+  // entering: the incoming card's grow-from-center intro (scale + fade up).
   let exiting = $state(false);
   let resetting = $state(false);
+  let entering = $state(false);
 
-  // The card animates (springs back or flies off) whenever it isn't tracking the
-  // finger and isn't being snapped back to center for the next card.
+  // The card animates (springs back, flies off, or grows in) whenever it isn't
+  // tracking the finger and isn't being snapped into its start pose for a frame.
   const animate = $derived(!dragging && !resetting);
-  // Tilt tracks the drag but is capped so the fly-off doesn't spin wildly; the
-  // card fades out as it leaves.
+  // Tilt tracks the drag but is capped so the fly-off doesn't spin wildly. The
+  // card fades out as it leaves, and the next one grows in from the center
+  // (0.95→1, dimmed→full) so it reads as emerging rather than snapping.
   const rotation = $derived(Math.max(-18, Math.min(18, dragX / 24)));
-  const cardOpacity = $derived(exiting ? 0 : 1);
+  const cardScale = $derived(entering ? 0.95 : 1);
+  const cardOpacity = $derived(exiting ? 0 : entering ? 0.6 : 1);
 
   const current = $derived(queue[0] ?? null);
   const next = $derived(queue[1] ?? null);
@@ -101,14 +106,20 @@
       if (last?.job.public_slug === job.public_slug) last = null;
     });
 
-    // After the fly-off, swap in the next card: snap dragX back to 0 with the
-    // transition suppressed for one frame so the incoming card doesn't slide in.
+    // After the fly-off, swap in the next card. Frame 0: snap it into its start
+    // pose (centered, scaled down) with the transition suppressed — no slide from
+    // the edge, no scale animation yet. Frame 1: release both, so it grows from
+    // the center into place.
     setTimeout(() => {
       resetting = true;
+      entering = true;
       queue = queue.slice(1);
       dragX = 0;
       exiting = false;
-      requestAnimationFrame(() => (resetting = false));
+      requestAnimationFrame(() => {
+        resetting = false;
+        entering = false;
+      });
       prefetchIfLow();
     }, FLY_MS);
   }
@@ -202,7 +213,7 @@
         aria-label={`Job: ${current.title} at ${current.company || 'unknown company'}`}
         class="absolute inset-0 flex touch-none flex-col gap-3 rounded-2xl border border-border bg-card p-5 shadow-lg duration-300 ease-out"
         class:transition={animate}
-        style={`transform: translateX(${dragX}px) rotate(${rotation}deg); opacity: ${cardOpacity};`}
+        style={`transform: translateX(${dragX}px) rotate(${rotation}deg) scale(${cardScale}); opacity: ${cardOpacity};`}
         onpointerdown={onPointerDown}
         onpointermove={onPointerMove}
         onpointerup={onPointerUp}
