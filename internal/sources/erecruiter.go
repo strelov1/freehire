@@ -198,9 +198,8 @@ func erecruiterOfferRow(tr *html.Node) (erecruiterRow, bool) {
 }
 
 // parseErecruiterDetail reads an Offer.aspx detail tree: the #JobTitle heading, the
-// #WorkPlace line (stripping its "Miejsce pracy:" label), and the body assembled from the
-// #t1 / #Opportunities / #CompanyDescription sections (sanitized). A field absent from the
-// markup comes back empty for the caller to fall back on the list row or skip.
+// #WorkPlace line (stripping its "Miejsce pracy:" label), and the sanitized body. A field
+// absent from the markup comes back empty for the caller to fall back on the list row or skip.
 func parseErecruiterDetail(root *html.Node) (title, location, description string) {
 	title = erecruiterIDText(root, "JobTitle")
 	location = strings.TrimSpace(erecruiterIDText(root, "WorkPlace"))
@@ -209,14 +208,40 @@ func parseErecruiterDetail(root *html.Node) (title, location, description string
 	if _, city, ok := strings.Cut(location, ":"); ok {
 		location = strings.TrimSpace(city)
 	}
+	return title, location, sanitizeHTML(erecruiterBody(root))
+}
 
+// erecruiterBodyExcludeIDs are the offer-container sections that are not the job body: the
+// header (already captured as title/location) and the GDPR consent clause.
+var erecruiterBodyExcludeIDs = map[string]bool{"JobTitle": true, "WorkPlace": true, "Clause": true}
+
+// erecruiterBody returns the offer's HTML body. Company career-page templates render the body
+// under different ids (#t1, or #opis/#description/#Notes/…), so it takes the whole offer
+// container (#offCont) minus the header and consent-clause sections — template-agnostic —
+// rather than a fixed list of section ids. It falls back to the known section ids for a page
+// without the standard container, and returns "" when neither yields anything.
+func erecruiterBody(root *html.Node) string {
+	if cont := elementByID(root, "offCont"); cont != nil {
+		var drop []*html.Node
+		walk(cont, func(n *html.Node) bool {
+			if n.Type == html.ElementNode && erecruiterBodyExcludeIDs[attr(n, "id")] {
+				drop = append(drop, n)
+				return false
+			}
+			return true
+		})
+		for _, n := range drop {
+			n.Parent.RemoveChild(n)
+		}
+		return innerHTML(cont)
+	}
 	var body strings.Builder
 	for _, id := range []string{"t1", "Opportunities", "CompanyDescription"} {
 		if n := elementByID(root, id); n != nil {
 			body.WriteString(innerHTML(n))
 		}
 	}
-	return title, location, sanitizeHTML(body.String())
+	return body.String()
 }
 
 // erecruiterIDText returns the trimmed text of the element with the given id, or "".

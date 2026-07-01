@@ -188,6 +188,43 @@ func TestErecruiterFetchSkipsUnparseableDetail(t *testing.T) {
 	}
 }
 
+func TestErecruiterDetailTemplateAgnostic(t *testing.T) {
+	// A company whose detail renders the body under #opis/#description (not #t1) inside the
+	// standard #offCont container, plus a GDPR #Clause. The body must be captured across the
+	// varied template, and the header (#JobTitle/#WorkPlace) and clause dropped.
+	detail := `<html><body><div id="offCont">` +
+		`<div id="JobTitle">DevOps Engineer</div>` +
+		`<div id="WorkPlace">Miejsce pracy: Łódź</div>` +
+		`<div id="opis"><p>Company intro paragraph.</p></div>` +
+		`<div id="description"><p>Run the Kubernetes fleet.</p></div>` +
+		`<div id="Clause"><p>Zgoda na przetwarzanie danych osobowych.</p></div>` +
+		`</div></body></html>`
+	rows := `<tr offerId='500' externalJobOfferId='60' externalJobOfferRegionId='70' comId='9' skkResult='offer'><td class='skk_positionName'>DevOps Engineer</td><td>Łódź</td></tr>` +
+		`<tr tp='2' tr='1' pn='1' ps='15'></tr>`
+	fake := &erecruiterFake{
+		list:   map[string]string{"pn=1": jsonp(rows)},
+		detail: map[string]string{"oid=500": detail},
+	}
+
+	jobs, err := NewErecruiter(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Board: "cfg"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1 (a non-#t1 template must still yield a body)", len(jobs))
+	}
+	d := jobs[0].Description
+	if !strings.Contains(d, "Kubernetes fleet") || !strings.Contains(d, "Company intro") {
+		t.Errorf("Description = %q, want the #opis/#description body", d)
+	}
+	if strings.Contains(d, "przetwarzanie danych") {
+		t.Errorf("Description must drop the GDPR #Clause: %q", d)
+	}
+	if strings.Contains(d, "DevOps Engineer") {
+		t.Errorf("Description must drop the #JobTitle header: %q", d)
+	}
+}
+
 func TestErecruiterFetchStopsOnEmptyPage(t *testing.T) {
 	// The marker over-reports the total (tr=999) but the board runs out on page 2. An empty
 	// page must end the walk instead of spinning to the page cap.
