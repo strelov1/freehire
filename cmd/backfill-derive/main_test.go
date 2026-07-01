@@ -37,7 +37,7 @@ func expectedFacets(j db.Job) db.UpdateJobFacetsParams {
 		Location: j.Location, Description: j.Description, WorkMode: j.WorkMode,
 	})
 	return db.UpdateJobFacetsParams{
-		ID: j.ID, Countries: d.Countries, Regions: d.Regions, WorkMode: d.WorkMode,
+		ID: j.ID, Countries: d.Countries, Regions: d.Regions, Cities: d.Cities, WorkMode: d.WorkMode,
 		Skills: d.Skills, Seniority: d.Seniority, Category: d.Category,
 		PostingLanguage:    d.PostingLanguage,
 		EmploymentType:     d.EmploymentType,
@@ -94,6 +94,7 @@ func TestBackfill_IsIdempotent(t *testing.T) {
 	// must rewrite nothing.
 	d := expectedFacets(job)
 	job.Countries, job.Regions, job.WorkMode = d.Countries, d.Regions, d.WorkMode
+	job.Cities = d.Cities
 	job.Skills, job.Seniority, job.Category = d.Skills, d.Seniority, d.Category
 	job.PostingLanguage, job.EmploymentType = d.PostingLanguage, d.EmploymentType
 	job.EducationLevel, job.ExperienceYearsMin = d.EducationLevel, d.ExperienceYearsMin

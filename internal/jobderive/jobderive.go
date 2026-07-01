@@ -48,6 +48,7 @@ type Derived struct {
 	PublicSlug  string
 	Countries   []string
 	Regions     []string
+	Cities      []string
 	WorkMode    string
 	Skills      []string
 	Seniority   string
@@ -106,6 +107,7 @@ func Derive(in Input) Derived {
 		PublicSlug:  normalize.JobSlug(in.Title, in.Company, in.Source, in.ExternalID),
 		Countries:   geo.Countries,
 		Regions:     geo.Regions,
+		Cities:      geo.Cities,
 		WorkMode:    workMode,
 		// Skills is a set: the structured source skills are unioned with the
 		// dictionary skills, neither replacing the other.

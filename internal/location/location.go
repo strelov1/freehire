@@ -24,7 +24,8 @@ import (
 type Geo struct {
 	Countries []string
 	Regions   []string
-	WorkMode  string // "", "remote", "hybrid", or "onsite" — only on an explicit marker
+	Cities    []string // canonical city names for resolved beacon cities; empty when none
+	WorkMode  string   // "", "remote", "hybrid", or "onsite" — only on an explicit marker
 }
 
 // separatorReplacer normalizes every token separator to a comma in one pass so a
@@ -48,6 +49,7 @@ func Parse(location string) Geo {
 
 	countrySet := map[string]struct{}{}
 	regionSet := map[string]struct{}{}
+	citySet := map[string]struct{}{}
 	for _, tok := range strings.Split(s, ",") {
 		tok = strings.TrimSpace(tok)
 		if tok == "" {
@@ -61,6 +63,13 @@ func Parse(location string) Geo {
 		tok = stripWorkmodeWords(tok)
 		if tok == "" {
 			continue
+		}
+		// Beacon-city facet: a recognized city alias emits its canonical display name
+		// (independent of the country/region resolution below, which also fires for a
+		// city via nameToCountry). Unknown cities fall through — the served city facet
+		// backfills them from the LLM at serve time (jobview), never from a guess here.
+		if c, ok := nameToCity[tok]; ok {
+			citySet[c] = struct{}{}
 		}
 		if resolveGeoToken(tok, countrySet, regionSet) {
 			continue
@@ -93,6 +102,7 @@ func Parse(location string) Geo {
 	return Geo{
 		Countries: stringset.Sorted(countrySet),
 		Regions:   stringset.Sorted(regionSet),
+		Cities:    stringset.Sorted(citySet),
 		WorkMode:  detectWorkMode(lower),
 	}
 }

@@ -24,6 +24,7 @@ var StringFacets = map[string]string{
 	"category":         "enrichment.category",
 	"domains":          "enrichment.domains",
 	"countries":        "countries",
+	"cities":           "cities",
 	"company_type":     "enrichment.company_type",
 	"company_size":     "enrichment.company_size",
 	"salary_currency":  "enrichment.salary_currency",

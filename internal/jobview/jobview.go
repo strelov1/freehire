@@ -50,6 +50,13 @@ type Job struct {
 	Regions   []string `json:"regions"`
 	WorkMode  string   `json:"work_mode,omitempty"`
 	Skills    []string `json:"skills"`
+	// Cities is a HYBRID facet (the one deliberate dict+LLM exception): the
+	// deterministic jobs.cities column when it resolved a beacon city, otherwise a
+	// normalized fallback to the LLM's enrichment.cities — cities are high-cardinality
+	// and the dictionary is only a beacon list, so a pure-dict facet would be too
+	// sparse. Values are canonical display names (Title case); the LLM copy is folded
+	// out of the nested Enrichment like the other geography facets.
+	Cities []string `json:"cities"`
 	// Collections is the set of curated-collection slugs (e.g. yc, bigtech) the
 	// job's company belongs to, denormalized from the company onto the job. It is a
 	// deterministic source fact (no LLM counterpart) served straight from the jobs
@@ -106,8 +113,13 @@ func FromRow(j db.Job) (Job, error) {
 	// Collections is denormalized from the company onto the job; it has no LLM
 	// counterpart to fold out, so it is simply normalized like the other facets.
 	collections := normalizeSet(j.Collections)
+	// Cities is the hybrid facet: the deterministic column when it resolved a beacon
+	// city, else a normalized fallback to the LLM's cities (the one dict+LLM exception).
+	// Kept case-preserving (values are display names), unlike the lowercased facets.
+	cities := cityFacet(j.Cities, e.Cities)
 	e.Countries, e.Regions, e.WorkMode = nil, nil, ""
 	e.Skills = nil
+	e.Cities = nil
 
 	return Job{
 		PublicSlug:        j.PublicSlug,
@@ -124,6 +136,7 @@ func FromRow(j db.Job) (Job, error) {
 		Regions:           regions,
 		WorkMode:          workMode,
 		Skills:            skills,
+		Cities:            cities,
 		Collections:       collections,
 		PostedAt:          rfc3339(EffectivePostedAt(j.PostedAt, j.CreatedAt)),
 		CreatedAt:         rfc3339(j.CreatedAt),
@@ -146,6 +159,45 @@ func normalizeSet(a []string) []string {
 	}
 	out := make([]string, 0, len(set))
 	for v := range set {
+		out = append(out, v)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// cityFacet builds the served city facet: the deterministic dictionary cities when
+// present (canonical display names), otherwise a normalized fallback to the LLM's
+// enrichment.cities. Case is preserved (the value is its own display label); the
+// fallback trims each value, drops a ", Country" suffix, and dedupes.
+func cityFacet(dict, llm []string) []string {
+	if len(dict) > 0 {
+		return dedupeSortedPreserveCase(dict)
+	}
+	cleaned := make([]string, 0, len(llm))
+	for _, c := range llm {
+		c = strings.TrimSpace(c)
+		if i := strings.IndexByte(c, ','); i >= 0 {
+			c = strings.TrimSpace(c[:i])
+		}
+		if c != "" {
+			cleaned = append(cleaned, c)
+		}
+	}
+	return dedupeSortedPreserveCase(cleaned)
+}
+
+// dedupeSortedPreserveCase sorts and dedupes case-insensitively while keeping the
+// first-seen spelling, returning a non-nil slice so the facet serializes as [] not
+// null. Used for cities, whose values are display names (not lowercased codes).
+func dedupeSortedPreserveCase(a []string) []string {
+	seen := make(map[string]struct{}, len(a))
+	out := make([]string, 0, len(a))
+	for _, v := range a {
+		k := strings.ToLower(v)
+		if _, ok := seen[k]; ok {
+			continue
+		}
+		seen[k] = struct{}{}
 		out = append(out, v)
 	}
 	sort.Strings(out)

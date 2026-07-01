@@ -497,7 +497,7 @@ func facetSettings() *meilisearch.Settings {
 			// reindex first on deploy, or /jobs 500s on the new attribute.
 			"id",
 			"source", "company_slug",
-			"work_mode", "regions", "countries", "skills", "collections",
+			"work_mode", "regions", "countries", "cities", "skills", "collections",
 			"enrichment.employment_type", "enrichment.education_level", "enrichment.seniority",
 			"enrichment.category", "enrichment.domains",
 			"enrichment.company_type", "enrichment.company_size", "enrichment.visa_sponsorship",

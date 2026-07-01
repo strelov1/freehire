@@ -309,6 +309,54 @@ var subdivisionToCountry = map[string]string{
 	"yukon": "ca", "nunavut": "ca",
 }
 
+// nameToCity resolves a lowercase city alias (English, native, and Cyrillic forms)
+// to a single canonical English display name, feeding the `cities` search facet.
+// Seeded with the high-frequency beacon cities; grow by observation. Unknown cities
+// are NOT guessed here — the served facet backfills them from the LLM (jobview), so
+// this map only needs the cities where a clean canonical value matters most.
+var nameToCity = map[string]string{
+	// Western / Central Europe
+	"london": "London",
+	"berlin": "Berlin", "münchen": "Munich", "munich": "Munich", "hamburg": "Hamburg",
+	"frankfurt": "Frankfurt", "cologne": "Cologne", "köln": "Cologne", "stuttgart": "Stuttgart",
+	"düsseldorf": "Düsseldorf", "dusseldorf": "Düsseldorf", "leipzig": "Leipzig", "dresden": "Dresden",
+	"paris": "Paris", "amsterdam": "Amsterdam",
+	"madrid": "Madrid", "barcelona": "Barcelona", "valencia": "Valencia", "sevilla": "Seville", "seville": "Seville",
+	"stockholm": "Stockholm", "dublin": "Dublin", "lisbon": "Lisbon",
+	"milan": "Milan", "rome": "Rome", "turin": "Turin", "naples": "Naples", "bologna": "Bologna", "florence": "Florence",
+	"brussels": "Brussels", "copenhagen": "Copenhagen", "helsinki": "Helsinki", "vienna": "Vienna",
+	"zurich": "Zurich", "geneva": "Geneva", "genève": "Geneva", "geneve": "Geneva", "basel": "Basel",
+	"prague": "Prague", "sofia": "Sofia", "budapest": "Budapest", "bucharest": "Bucharest",
+	// Poland
+	"warsaw": "Warsaw", "warszawa": "Warsaw", "kraków": "Kraków", "krakow": "Kraków",
+	"wrocław": "Wrocław", "wroclaw": "Wrocław", "gdańsk": "Gdańsk", "gdansk": "Gdańsk",
+	"poznań": "Poznań", "poznan": "Poznań", "łódź": "Łódź", "lodz": "Łódź", "katowice": "Katowice", "gliwice": "Gliwice",
+	// UK
+	"manchester": "Manchester", "edinburgh": "Edinburgh", "glasgow": "Glasgow",
+	"bristol": "Bristol", "liverpool": "Liverpool", "leeds": "Leeds",
+	// North America
+	"toronto": "Toronto", "vancouver": "Vancouver", "montreal": "Montreal", "montréal": "Montreal",
+	"cupertino": "Cupertino",
+	// APAC
+	"sydney": "Sydney", "melbourne": "Melbourne", "brisbane": "Brisbane", "perth": "Perth", "adelaide": "Adelaide",
+	"auckland": "Auckland", "wellington": "Wellington", "tokyo": "Tokyo", "singapore": "Singapore",
+	"bangalore": "Bengaluru", "bengaluru": "Bengaluru", "mumbai": "Mumbai", "hyderabad": "Hyderabad", "pune": "Pune",
+	// MENA
+	"tel aviv": "Tel Aviv", "dubai": "Dubai",
+	// RU / CIS (canonical English forms; Cyrillic aliases collapse to the same value)
+	"moscow": "Moscow", "москва": "Moscow",
+	"saint petersburg": "Saint Petersburg", "st petersburg": "Saint Petersburg",
+	"санкт-петербург": "Saint Petersburg", "спб": "Saint Petersburg", "питер": "Saint Petersburg",
+	"novosibirsk": "Novosibirsk", "новосибирск": "Novosibirsk",
+	"ekaterinburg": "Yekaterinburg", "екатеринбург": "Yekaterinburg",
+	"kazan": "Kazan", "казань": "Kazan",
+	"kyiv": "Kyiv", "kiev": "Kyiv", "киев": "Kyiv", "київ": "Kyiv",
+	"minsk": "Minsk", "минск": "Minsk",
+	"tashkent": "Tashkent", "ташкент": "Tashkent", "almaty": "Almaty", "алматы": "Almaty",
+	"astana": "Astana", "tbilisi": "Tbilisi", "yerevan": "Yerevan", "ереван": "Yerevan",
+	"baku": "Baku", "баку": "Baku", "bishkek": "Bishkek",
+}
+
 // nameToRegion resolves macro-region names (and explicit open-anywhere markers)
 // directly to a region code, for tokens that name an area rather than a country.
 var nameToRegion = map[string]string{

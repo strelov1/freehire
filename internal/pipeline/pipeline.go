@@ -43,6 +43,7 @@ type Job struct {
 	// nothing the parser can resolve.
 	Countries []string
 	Regions   []string
+	Cities    []string
 	WorkMode  string
 	// Skills are the deterministic technology tags parsed from Description by
 	// internal/skilltag. Empty when the description resolves no known skill.
@@ -316,6 +317,7 @@ func normalizeJob(e sources.CompanyEntry, j sources.Job) Job {
 		PostedAt:    j.PostedAt,
 		Countries:   d.Countries,
 		Regions:     d.Regions,
+		Cities:      d.Cities,
 		WorkMode:    d.WorkMode,
 		Skills:      d.Skills,
 		Seniority:   d.Seniority,

@@ -82,6 +82,7 @@ type Job struct {
 	Collections        []string           `json:"collections"`
 	ContentHash        pgtype.Text        `json:"content_hash"`
 	EnglishLevel       string             `json:"english_level"`
+	Cities             []string           `json:"cities"`
 }
 
 type JobReport struct {

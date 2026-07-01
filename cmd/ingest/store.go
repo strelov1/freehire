@@ -67,6 +67,7 @@ func (s *dbStore) Save(ctx context.Context, job pipeline.Job) error {
 		PostedAt:    toTimestamptz(job.PostedAt),
 		Countries:   job.Countries,
 		Regions:     job.Regions,
+		Cities:      job.Cities,
 		WorkMode:    job.WorkMode,
 		Skills:      job.Skills,
 		Seniority:   job.Seniority,

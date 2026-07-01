@@ -114,6 +114,10 @@ func TestDerive_DescriptionFillsWorkModeWhenLocationSilent(t *testing.T) {
 	if got.WorkMode != "remote" {
 		t.Errorf("WorkMode = %q, want remote (description fills when location silent)", got.WorkMode)
 	}
+	// The beacon city is forwarded from location.Parse to the cities facet.
+	if len(got.Cities) != 1 || got.Cities[0] != "Berlin" {
+		t.Errorf("Cities = %v, want [Berlin]", got.Cities)
+	}
 }
 
 func TestDerive_LocationWorkModeBeatsDescription(t *testing.T) {

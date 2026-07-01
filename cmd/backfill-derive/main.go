@@ -107,6 +107,7 @@ func backfillAll(ctx context.Context, store facetStore) (scanned, updated int, e
 			experience := toInt4(d.ExperienceYearsMin)
 			unchanged := slices.Equal(d.Countries, j.Countries) &&
 				slices.Equal(d.Regions, j.Regions) &&
+				slices.Equal(d.Cities, j.Cities) &&
 				d.WorkMode == j.WorkMode &&
 				slices.Equal(d.Skills, j.Skills) &&
 				d.Seniority == j.Seniority &&
@@ -123,6 +124,7 @@ func backfillAll(ctx context.Context, store facetStore) (scanned, updated int, e
 				ID:        j.ID,
 				Countries: d.Countries,
 				Regions:   d.Regions,
+				Cities:    d.Cities,
 				WorkMode:  d.WorkMode,
 				Skills:    d.Skills,
 				Seniority: d.Seniority,

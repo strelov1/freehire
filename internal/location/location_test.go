@@ -64,17 +64,17 @@ func TestParse(t *testing.T) {
 		{
 			name:     "hybrid marker with city",
 			location: "Hybrid - London",
-			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, WorkMode: "hybrid"},
+			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, Cities: []string{"London"}, WorkMode: "hybrid"},
 		},
 		{
 			name:     "onsite marker in parentheses keeps the city",
 			location: "Berlin (On-site)",
-			want:     Geo{Countries: []string{"de"}, Regions: []string{"eu"}, WorkMode: "onsite"},
+			want:     Geo{Countries: []string{"de"}, Regions: []string{"eu"}, Cities: []string{"Berlin"}, WorkMode: "onsite"},
 		},
 		{
 			name:     "hybrid wins over a remote marker in the same string",
 			location: "Hybrid / Remote - London",
-			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, WorkMode: "hybrid"},
+			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, Cities: []string{"London"}, WorkMode: "hybrid"},
 		},
 		{
 			name:     "country buried among unknown tokens",
@@ -94,7 +94,7 @@ func TestParse(t *testing.T) {
 		{
 			name:     "CIS: Baku via city and country",
 			location: "Baku, Azerbaijan",
-			want:     Geo{Countries: []string{"az"}, Regions: []string{"cis"}},
+			want:     Geo{Countries: []string{"az"}, Regions: []string{"cis"}, Cities: []string{"Baku"}},
 		},
 		{
 			name:     "country-only Georgia is the US state, not the country (no false ge)",
@@ -200,12 +200,12 @@ func TestParseNorthAmerica(t *testing.T) {
 		{
 			name:     "Canadian province code maps to north_america",
 			location: "Toronto, ON",
-			want:     Geo{Countries: []string{"ca"}, Regions: []string{"north_america"}},
+			want:     Geo{Countries: []string{"ca"}, Regions: []string{"north_america"}, Cities: []string{"Toronto"}},
 		},
 		{
 			name:     "Canadian full province name",
 			location: "Vancouver, British Columbia",
-			want:     Geo{Countries: []string{"ca"}, Regions: []string{"north_america"}},
+			want:     Geo{Countries: []string{"ca"}, Regions: []string{"north_america"}, Cities: []string{"Vancouver"}},
 		},
 		{
 			name:     "Washington DC resolves to us",
@@ -215,7 +215,7 @@ func TestParseNorthAmerica(t *testing.T) {
 		{
 			name:     "country Georgia is never misread as the US state",
 			location: "Tbilisi, Georgia",
-			want:     Geo{Countries: []string{"ge"}, Regions: []string{"cis"}},
+			want:     Geo{Countries: []string{"ge"}, Regions: []string{"cis"}, Cities: []string{"Tbilisi"}},
 		},
 	}
 
@@ -241,17 +241,17 @@ func TestParseCyrillic(t *testing.T) {
 		{
 			name:     "Cyrillic city Moscow",
 			location: "Москва",
-			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}},
+			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, Cities: []string{"Moscow"}},
 		},
 		{
 			name:     "city marker prefix is stripped",
 			location: "г Москва",
-			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}},
+			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, Cities: []string{"Moscow"}},
 		},
 		{
 			name:     "hyphenated Cyrillic city",
 			location: "Санкт-Петербург",
-			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}},
+			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, Cities: []string{"Saint Petersburg"}},
 		},
 		{
 			name:     "multi-word Cyrillic city",
@@ -281,22 +281,22 @@ func TestParseCyrillic(t *testing.T) {
 		{
 			name:     "Cyrillic hybrid marker with city",
 			location: "Москва, гибрид",
-			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, WorkMode: "hybrid"},
+			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, Cities: []string{"Moscow"}, WorkMode: "hybrid"},
 		},
 		{
 			name:     "CIS: Minsk maps to Belarus / cis",
 			location: "Минск",
-			want:     Geo{Countries: []string{"by"}, Regions: []string{"cis"}},
+			want:     Geo{Countries: []string{"by"}, Regions: []string{"cis"}, Cities: []string{"Minsk"}},
 		},
 		{
 			name:     "Central Asia: Tashkent maps to Uzbekistan",
 			location: "Ташкент",
-			want:     Geo{Countries: []string{"uz"}, Regions: []string{"cis"}},
+			want:     Geo{Countries: []string{"uz"}, Regions: []string{"cis"}, Cities: []string{"Tashkent"}},
 		},
 		{
 			name:     "Ukrainian spelling Київ maps to Ukraine / eu",
 			location: "Київ",
-			want:     Geo{Countries: []string{"ua"}, Regions: []string{"eu"}},
+			want:     Geo{Countries: []string{"ua"}, Regions: []string{"eu"}, Cities: []string{"Kyiv"}},
 		},
 		{
 			name:     "city starting with г is not mistaken for the marker",

@@ -454,6 +454,46 @@ func TestFromRow_SyntheticFacetsAreDictOnly(t *testing.T) {
 	}
 }
 
+// Cities is the one hybrid facet: the deterministic column wins, but a dict-silent
+// job falls back to the LLM's enrichment.cities (normalized), and the LLM value is
+// folded out of the nested enrichment either way.
+func TestFromRow_CitiesHybrid(t *testing.T) {
+	t.Run("dict column wins over the LLM", func(t *testing.T) {
+		raw, _ := json.Marshal(enrich.Enrichment{Cities: []string{"Springfield"}})
+		view, err := FromRow(db.Job{ID: 1, PublicSlug: "x-1", Cities: []string{"Berlin"}, Enrichment: raw})
+		if err != nil {
+			t.Fatalf("FromRow: %v", err)
+		}
+		if len(view.Cities) != 1 || view.Cities[0] != "Berlin" {
+			t.Errorf("Cities = %v, want [Berlin] (dict wins)", view.Cities)
+		}
+		if view.Enrichment.Cities != nil {
+			t.Errorf("LLM cities must be folded out, got %v", view.Enrichment.Cities)
+		}
+	})
+	t.Run("dict-silent falls back to normalized LLM cities", func(t *testing.T) {
+		raw, _ := json.Marshal(enrich.Enrichment{Cities: []string{"Kyiv, Ukraine", " kyiv ", "Lviv"}})
+		view, err := FromRow(db.Job{ID: 2, PublicSlug: "x-2", Cities: nil, Enrichment: raw})
+		if err != nil {
+			t.Fatalf("FromRow: %v", err)
+		}
+		// ", Ukraine" suffix dropped, "kyiv"/"Kyiv, Ukraine" deduped, sorted.
+		want := []string{"Kyiv", "Lviv"}
+		if !reflect.DeepEqual(view.Cities, want) {
+			t.Errorf("Cities = %v, want %v (LLM fallback normalized)", view.Cities, want)
+		}
+	})
+	t.Run("neither dict nor LLM yields an empty array, not null", func(t *testing.T) {
+		view, err := FromRow(db.Job{ID: 3, PublicSlug: "x-3"})
+		if err != nil {
+			t.Fatalf("FromRow: %v", err)
+		}
+		if view.Cities == nil {
+			t.Errorf("Cities must be non-nil ([] not null)")
+		}
+	})
+}
+
 // closed_at rides the wire shape so the SPA can render the closed state on the
 // detail page (lists never serve closed jobs — see the job-lifecycle spec).
 func TestFromRow_CarriesClosedAt(t *testing.T) {

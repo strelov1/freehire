@@ -108,7 +108,7 @@ company_upsert AS (
 )
 INSERT INTO jobs (
     source, external_id, url, title, company, company_slug, location, remote, description, posted_at,
-    public_slug, countries, regions, work_mode, skills, seniority, category,
+    public_slug, countries, regions, cities, work_mode, skills, seniority, category,
     posting_language, employment_type, education_level, english_level, experience_years_min,
     content_hash
 ) VALUES (
@@ -116,7 +116,7 @@ INSERT INTO jobs (
     sqlc.arg(company), sqlc.arg(company_slug), sqlc.arg(location), sqlc.arg(remote),
     sqlc.arg(description), sqlc.arg(posted_at),
     sqlc.arg(public_slug),
-    COALESCE(sqlc.arg(countries)::text[], '{}'), COALESCE(sqlc.arg(regions)::text[], '{}'),
+    COALESCE(sqlc.arg(countries)::text[], '{}'), COALESCE(sqlc.arg(regions)::text[], '{}'), COALESCE(sqlc.arg(cities)::text[], '{}'),
     sqlc.arg(work_mode), COALESCE(sqlc.arg(skills)::text[], '{}'), sqlc.arg(seniority), sqlc.arg(category),
     sqlc.arg(posting_language), sqlc.arg(employment_type), sqlc.arg(education_level), sqlc.arg(english_level), sqlc.arg(experience_years_min),
     sqlc.arg(content_hash)
@@ -136,6 +136,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     posted_at    = EXCLUDED.posted_at,
     countries    = EXCLUDED.countries,
     regions      = EXCLUDED.regions,
+    cities       = EXCLUDED.cities,
     work_mode    = EXCLUDED.work_mode,
     skills       = EXCLUDED.skills,
     seniority    = EXCLUDED.seniority,
@@ -191,7 +192,7 @@ WITH company_upsert AS (
 )
 INSERT INTO jobs (
     source, external_id, url, title, company, company_slug, location, remote, description, posted_at,
-    public_slug, countries, regions, work_mode, skills, seniority, category,
+    public_slug, countries, regions, cities, work_mode, skills, seniority, category,
     posting_language, employment_type, education_level, english_level, experience_years_min,
     created_by
 ) VALUES (
@@ -199,7 +200,7 @@ INSERT INTO jobs (
     sqlc.arg(company), sqlc.arg(company_slug), sqlc.arg(location), sqlc.arg(remote),
     sqlc.arg(description), sqlc.arg(posted_at),
     sqlc.arg(public_slug),
-    COALESCE(sqlc.arg(countries)::text[], '{}'), COALESCE(sqlc.arg(regions)::text[], '{}'),
+    COALESCE(sqlc.arg(countries)::text[], '{}'), COALESCE(sqlc.arg(regions)::text[], '{}'), COALESCE(sqlc.arg(cities)::text[], '{}'),
     sqlc.arg(work_mode), COALESCE(sqlc.arg(skills)::text[], '{}'),
     sqlc.arg(seniority), sqlc.arg(category),
     sqlc.arg(posting_language), sqlc.arg(employment_type), sqlc.arg(education_level), sqlc.arg(english_level), sqlc.arg(experience_years_min),
@@ -216,6 +217,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     posted_at    = EXCLUDED.posted_at,
     countries    = EXCLUDED.countries,
     regions      = EXCLUDED.regions,
+    cities       = EXCLUDED.cities,
     work_mode    = EXCLUDED.work_mode,
     skills       = EXCLUDED.skills,
     seniority    = EXCLUDED.seniority,
@@ -264,6 +266,7 @@ SET title        = sqlc.arg(title),
     posted_at    = sqlc.arg(posted_at),
     countries    = COALESCE(sqlc.arg(countries)::text[], '{}'),
     regions      = COALESCE(sqlc.arg(regions)::text[], '{}'),
+    cities       = COALESCE(sqlc.arg(cities)::text[], '{}'),
     work_mode    = sqlc.arg(work_mode),
     skills       = COALESCE(sqlc.arg(skills)::text[], '{}'),
     seniority    = sqlc.arg(seniority),
@@ -400,6 +403,7 @@ WHERE id = sqlc.arg(id);
 UPDATE jobs
 SET countries = COALESCE(sqlc.arg(countries)::text[], '{}'),
     regions   = COALESCE(sqlc.arg(regions)::text[], '{}'),
+    cities    = COALESCE(sqlc.arg(cities)::text[], '{}'),
     work_mode = sqlc.arg(work_mode),
     skills    = COALESCE(sqlc.arg(skills)::text[], '{}'),
     seniority = sqlc.arg(seniority),
