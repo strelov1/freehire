@@ -174,3 +174,38 @@ func TestRegistry_HasUnicorn(t *testing.T) {
 		t.Fatalf("unicorn collection missing or has no dataset: %+v ok=%v", c, ok)
 	}
 }
+
+func TestParseSlugList_SkipsBlanksAndComments(t *testing.T) {
+	data := []byte("# header comment\n\nabbyy\n  jetbrains  \n# mid comment\nrevolut\n")
+	got, err := ParseSlugList(data)
+	if err != nil {
+		t.Fatalf("ParseSlugList: %v", err)
+	}
+	if !reflect.DeepEqual(got, []string{"abbyy", "jetbrains", "revolut"}) {
+		t.Errorf("got = %#v, want [abbyy jetbrains revolut]", got)
+	}
+}
+
+func TestRussianRoots_EmbeddedDatasetResolves(t *testing.T) {
+	c, ok := Lookup("russian-roots")
+	if !ok || c.Dataset == nil {
+		t.Fatalf("russian-roots collection missing or has no dataset: %+v ok=%v", c, ok)
+	}
+	if len(c.Dataset.Data) == 0 {
+		t.Fatal("russian-roots dataset has no embedded data")
+	}
+	names, err := c.Dataset.Parse(c.Dataset.Data)
+	if err != nil {
+		t.Fatalf("parse embedded russian-roots: %v", err)
+	}
+	if len(names) < 50 {
+		t.Errorf("russian-roots slugs = %d, want a substantial list", len(names))
+	}
+	// The embedded slugs must be canonical (Match normalizes them, but a
+	// non-canonical entry signals a bad edit to the committed file).
+	for _, s := range names {
+		if got := normalize.Slug(s); got != s {
+			t.Errorf("non-canonical slug %q (normalizes to %q)", s, got)
+		}
+	}
+}

@@ -7,6 +7,7 @@
 package collections
 
 import (
+	_ "embed"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -16,11 +17,15 @@ import (
 	"github.com/strelov1/freehire/internal/normalize"
 )
 
-// Dataset is a remote source of member company names for a collection: a URL the
-// import worker fetches and a pure parser that extracts the company names from the
-// payload (matching to our catalogue happens via normalize.Slug in Match).
+// Dataset is a source of member company names for a collection, resolved by the
+// import worker into a name list its pure Parse extracts (matching to our catalogue
+// happens via normalize.Slug in Match). The payload is either fetched from URL (an
+// external dataset we control) or supplied inline via Data (a file embedded in the
+// binary, for a list that is our own curated fact rather than a third-party feed) —
+// exactly one is set.
 type Dataset struct {
 	URL   string
+	Data  []byte
 	Parse func([]byte) ([]string, error)
 }
 
@@ -93,7 +98,7 @@ var All = []Collection{
 		Slug:        "russian-roots",
 		Title:       "Russian Roots",
 		Description: "Open roles at globally distributed companies founded by Russian-speaking founders or with Russian-speaking engineering roots.",
-		Slugs:       RussianRootsSlugs,
+		Dataset:     &Dataset{Data: russianRootsData, Parse: ParseSlugList},
 	},
 }
 
@@ -179,25 +184,30 @@ var BigTechSlugs = []string{
 	"servicenow",
 }
 
-// RussianRootsSlugs is a hand-curated list of companies with Russian-speaking
-// founding roots that operate internationally (the idagent.pro "42 companies with
-// Russian-speaking roots" list + RingCentral). "Russian roots" is a fact about the
-// company, so all of its roles belong here. Entries are canonical company slugs (as
-// produced by normalize.Slug), matched against the catalogue at import time; the
-// first group is present today, the second is listed so a company tags in if it ever
-// enters the catalogue. Unmatched entries are simply logged.
-var RussianRootsSlugs = []string{
-	// Present in the catalogue.
-	"abbyy", "acronis", "aviasales", "ciklum", "clickhouse",
-	"codesignal", "dataart", "epam-systems", "epam-systems-pte-ltd", "exante",
-	"group-ib", "indrive", "jetbrains", "joom", "kaspersky",
-	"kaspersky-lab", "lokalise", "luxoft", "macpaw", "miro",
-	"nebius", "pandadoc", "picsart", "plata", "playrix",
-	"preply", "replika", "restream", "revolut", "ringcentral",
-	"semrush", "toloka", "toloka-ai", "veeam", "wallarm",
-	"wargaming", "whitebit", "wirex", "wrike",
-	// Not yet in the catalogue (future-proofing the membership).
-	"bitfury", "grammarly", "nginx", "parallels", "plesk", "telegram", "vention",
+// russianRootsData is the embedded membership file for the russian-roots collection:
+// companies with Russian-speaking founding roots that operate internationally (a
+// hand-curated seed plus the larger eastern-roots company list). "Russian roots" is
+// a fact about the company, so all of its roles belong here. It is our own curated
+// fact, not a third-party feed, so it is committed to the repo and embedded rather
+// than fetched. One canonical company slug (normalize.Slug) per line; the list is
+// matched against the catalogue at import time and unmatched slugs are simply logged.
+//
+//go:embed russian_roots.txt
+var russianRootsData []byte
+
+// ParseSlugList parses a newline-delimited slug list (the embedded russian-roots
+// file): one entry per line, blank lines and #-comment lines skipped, surrounding
+// whitespace trimmed. Entries are returned verbatim (Match normalizes them).
+func ParseSlugList(data []byte) ([]string, error) {
+	var out []string
+	for _, line := range strings.Split(string(data), "\n") {
+		s := strings.TrimSpace(line)
+		if s == "" || strings.HasPrefix(s, "#") {
+			continue
+		}
+		out = append(out, s)
+	}
+	return out, nil
 }
 
 // Lookup returns the registry entry for a slug, or ok=false when no collection has

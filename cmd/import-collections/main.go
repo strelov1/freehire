@@ -100,7 +100,17 @@ func resolveAll(ctx context.Context) (map[string][]string, error) {
 		case c.Slugs != nil:
 			resolved[c.Slug] = c.Slugs
 		case c.Dataset != nil:
-			names, err := fetchDataset(ctx, datasetURL(c), c.Dataset.Parse)
+			var (
+				names []string
+				err   error
+			)
+			if len(c.Dataset.Data) > 0 {
+				// Embedded, in-repo dataset (e.g. russian-roots): parse the bundled
+				// bytes directly, no network fetch.
+				names, err = c.Dataset.Parse(c.Dataset.Data)
+			} else {
+				names, err = fetchDataset(ctx, datasetURL(c), c.Dataset.Parse)
+			}
 			if err != nil {
 				return nil, fmt.Errorf("resolve %q: %w", c.Slug, err)
 			}

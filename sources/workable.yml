@@ -1052,3 +1052,7 @@
   board: optiwatt
 - company: NATILUS
   board: natilus
+- company: Clay
+  board: clayglobal
+- company: ZeroAvia
+  board: zeroavia
