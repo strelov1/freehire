@@ -27,6 +27,9 @@ class SavedSearches {
   #loaded = false;
   // The in-flight load, shared so concurrent callers issue one request.
   #loading: Promise<void> | null = null;
+  // Bumped by reset(); a load resolving after a reset (a same-tab user handoff) is
+  // discarded instead of repopulating the list with the previous user's searches.
+  #generation = 0;
 
   get items(): SavedSearch[] {
     return this.#items;
@@ -37,8 +40,10 @@ class SavedSearches {
   async ensureLoaded(): Promise<void> {
     if (!browser || this.#loaded) return;
     if (this.#loading) return this.#loading;
+    const gen = this.#generation;
     this.#loading = listSavedSearches()
       .then((rows) => {
+        if (gen !== this.#generation) return; // reset() ran mid-load — discard stale rows.
         this.#items = rows;
         this.#loaded = true;
       })
@@ -46,7 +51,7 @@ class SavedSearches {
         // best-effort: a failed load just means the picker is empty.
       })
       .finally(() => {
-        this.#loading = null;
+        if (gen === this.#generation) this.#loading = null;
       });
     return this.#loading;
   }
@@ -93,6 +98,7 @@ class SavedSearches {
    *  session ends, so a different user signing in on the same tab loads their own
    *  searches instead of seeing the previous user's (the list is per-user). */
   reset() {
+    this.#generation++;
     this.#items = [];
     this.#loaded = false;
     this.#loading = null;

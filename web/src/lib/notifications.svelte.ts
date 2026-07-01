@@ -26,6 +26,9 @@ class Notifications {
   #subs = $state.raw<Subscription[]>([]);
   #loaded = false;
   #loading: Promise<void> | null = null;
+  // Bumped by reset(); a load resolving after a reset (a same-tab user handoff) is
+  // discarded instead of repopulating with the previous user's telegram + subs.
+  #generation = 0;
 
   get telegram(): TelegramStatus {
     return this.#telegram;
@@ -45,15 +48,17 @@ class Notifications {
   async ensureLoaded(): Promise<void> {
     if (!browser || this.#loaded) return;
     if (this.#loading) return this.#loading;
+    const gen = this.#generation;
     this.#loading = Promise.all([telegramStatus(), listSubscriptions()])
       .then(([tg, subs]) => {
+        if (gen !== this.#generation) return; // reset() ran mid-load — discard stale state.
         this.#telegram = tg;
         this.#subs = subs;
         this.#loaded = true;
       })
       .catch(() => {})
       .finally(() => {
-        this.#loading = null;
+        if (gen === this.#generation) this.#loading = null;
       });
     return this.#loading;
   }
@@ -94,6 +99,7 @@ class Notifications {
 
   /** Drop cached state on sign-out so the next user loads their own. */
   reset() {
+    this.#generation++;
     this.#telegram = disabled;
     this.#subs = [];
     this.#loaded = false;

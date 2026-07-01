@@ -24,6 +24,9 @@ class SearchProfiles {
   #loaded = false;
   // The in-flight load, shared so concurrent callers issue one request.
   #loading: Promise<void> | null = null;
+  // Bumped by reset(); a load resolving after a reset (a same-tab user handoff) is
+  // discarded instead of repopulating the list with the previous user's profiles.
+  #generation = 0;
 
   get items(): SearchProfile[] {
     return this.#items;
@@ -34,8 +37,10 @@ class SearchProfiles {
   async ensureLoaded(): Promise<void> {
     if (!browser || this.#loaded) return;
     if (this.#loading) return this.#loading;
+    const gen = this.#generation;
     this.#loading = listSearchProfiles()
       .then((rows) => {
+        if (gen !== this.#generation) return; // reset() ran mid-load — discard stale rows.
         this.#items = rows;
         this.#loaded = true;
       })
@@ -43,7 +48,7 @@ class SearchProfiles {
         // best-effort: a failed load just means the list is empty.
       })
       .finally(() => {
-        this.#loading = null;
+        if (gen === this.#generation) this.#loading = null;
       });
     return this.#loading;
   }
@@ -76,6 +81,7 @@ class SearchProfiles {
   /** Drop the cached list and the loaded flag. The view calls this when the session
    *  ends, so a different user signing in on the same tab loads their own profiles. */
   reset() {
+    this.#generation++;
     this.#items = [];
     this.#loaded = false;
     this.#loading = null;
