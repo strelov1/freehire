@@ -13,7 +13,7 @@
 // languageLabel.
 
 import {
-  SOURCE_VALUES, WORK_MODE_VALUES, SENIORITY_VALUES, CATEGORY_VALUES,
+  WORK_MODE_VALUES, SENIORITY_VALUES, CATEGORY_VALUES,
   EMPLOYMENT_TYPE_VALUES, RELOCATION_VALUES, ENGLISH_LEVEL_VALUES,
   COMPANY_TYPE_VALUES, DOMAIN_VALUES,
 } from './generated/contracts';
@@ -143,6 +143,7 @@ export function dynamicLabel(param: string, value: string): string {
   if (param === 'countries') return countryLabel(value);
   if (param === 'posting_language') return languageLabel(value);
   if (param === 'company_slug') return companyLabel(value);
+  if (param === 'source') return sourceLabel(value);
   return value;
 }
 
@@ -169,16 +170,23 @@ function options(values: readonly string[], labels: Record<string, string> = {})
   return values.map((value) => ({ value, label: labels[value] ?? humanize(value) }));
 }
 
-// Values come from the generated SOURCE_VALUES (sources.All adapter registry +
-// "telegram" from the tg-extract worker). A new ATS adapter appears here
-// automatically; only add a label override below when the label differs from
-// the title-cased fallback (e.g. "smartrecruiters" → "SmartRecruiters").
-const SOURCE: FacetOption[] = options(SOURCE_VALUES, {
+// Label overrides for the source facet, where the display name differs from the
+// title-cased fallback (e.g. "smartrecruiters" → "SmartRecruiters"). A new ATS
+// adapter needs no entry unless its casing is special. Used by sourceLabel for the
+// dynamic (distribution-driven) source select, so a source with a real job count
+// renders with its proper name.
+const SOURCE_LABELS: Record<string, string> = {
   telegram: 'Telegram', greenhouse: 'Greenhouse', smartrecruiters: 'SmartRecruiters',
   bamboohr: 'BambooHR', successfactors: 'SuccessFactors',
   workatastartup: 'Work at a Startup', remoteok: 'RemoteOK', arc: 'Arc',
   jobstash: 'JobStash', globalpayments: 'Global Payments',
-});
+};
+
+/** Display label for a source slug (e.g. smartrecruiters → "SmartRecruiters"),
+ *  used by the dynamic source select; falls back to the humanized slug. */
+export function sourceLabel(value: string): string {
+  return SOURCE_LABELS[value] ?? humanize(value);
+}
 
 // The backend's `regions` reach vocabulary (enrich.RegionValues): one consistent
 // macro level (continents/macro-regions, plus `global` and the distinct `uk`).
@@ -298,5 +306,5 @@ export const FACETS: FacetDef[] = [
   { param: 'posting_language', label: 'Job language', control: 'select', dynamic: true, excludable: true, placeholder: 'Search languages' },
   { param: 'salary_currency', label: 'Currency', control: 'pills', options: CURRENCY, excludable: true },
   { param: 'company_slug', label: 'Company', control: 'remote', excludable: true, placeholder: 'Search companies', remote: companySearch },
-  { param: 'source', label: 'Source', control: 'pills', options: SOURCE, excludable: true },
+  { param: 'source', label: 'Source', control: 'select', dynamic: true, excludable: true, placeholder: 'Search sources' },
 ];
