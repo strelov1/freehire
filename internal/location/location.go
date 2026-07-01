@@ -76,17 +76,26 @@ func Parse(location string) Geo {
 			continue
 		}
 		// Dash-delimited exports carry the geography either first ("United
-		// States-Utah-Roy", "TX-Houston") or last ("Nisku-Alberta-Canada"). The
-		// first segment is resolved fully (a leading bare code like "tx" is a real
-		// signal); every other segment is resolved by NAME only, so a 2-letter code
-		// buried in a hyphenated city name ("stoke-on-trent" -> "on") cannot misfire
-		// while a country/region word ("alberta", "canada", "china") still does.
+		// States-Utah-Roy", "TX-Houston") or last ("Nisku-Alberta-Canada"). Every
+		// non-leading segment is resolved by NAME only, so a 2-letter code buried in a
+		// hyphenated city name ("stoke-on-trent" -> "on") cannot misfire while a
+		// country/region word ("alberta", "canada", "china") still does. The leading
+		// segment gets the same name-only treatment first; a bare 2-letter code there
+		// ("tx" in "TX-Houston") is accepted only when a following segment also
+		// resolved — i.e. a real geographic dash-export, not a hyphenated common word
+		// ("in-house", "de-witt") whose first segment merely happens to be a code.
 		// Tried only after the whole token failed, so "cluj-napoca"/"nur-sultan"
 		// (dictionary keys) still win as a unit.
 		if segs := strings.Split(tok, "-"); len(segs) > 1 {
-			resolveGeoToken(strings.TrimSpace(segs[0]), countrySet, regionSet)
+			tailResolved := false
 			for _, seg := range segs[1:] {
-				resolveGeoName(strings.TrimSpace(seg), countrySet, regionSet)
+				if resolveGeoName(strings.TrimSpace(seg), countrySet, regionSet) {
+					tailResolved = true
+				}
+			}
+			lead := strings.TrimSpace(segs[0])
+			if !resolveGeoName(lead, countrySet, regionSet) && tailResolved {
+				resolveGeoToken(lead, countrySet, regionSet)
 			}
 		}
 	}

@@ -111,6 +111,39 @@ func TestParse(t *testing.T) {
 			location: "Atlantis",
 			want:     Geo{},
 		},
+		{
+			// A hyphenated word whose first segment happens to be a 2-letter code
+			// ("in") must not emit a phantom country: no other segment is geography.
+			name:     "hyphenated word is not a leading bare code",
+			location: "Remote or in-house",
+			want:     Geo{WorkMode: "remote"},
+		},
+		{
+			// "De-Witt" (a place, but not a geo dash-export) must not add a phantom
+			// "de" country; the real "NY" token still resolves.
+			name:     "hyphenated place name keeps only the resolvable token",
+			location: "De-Witt, NY",
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}},
+		},
+		{
+			// A real dash-export with a bare leading code stays resolvable because a
+			// following segment ("houston") is geography that corroborates it.
+			name:     "geographic dash-export with bare leading code preserved",
+			location: "TX-Houston",
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}},
+		},
+		{
+			// Name-leading dash-export is unaffected by the bare-code gate.
+			name:     "geographic dash-export with name leading segment preserved",
+			location: "United States-Utah-Roy",
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}},
+		},
+		{
+			// A hyphenated city whose inner segment is a bare code ("on") never misfires.
+			name:     "hyphenated city does not misfire",
+			location: "stoke-on-trent",
+			want:     Geo{},
+		},
 	}
 
 	for _, tt := range tests {
