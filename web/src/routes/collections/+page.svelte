@@ -7,8 +7,6 @@
   let { data }: { data: PageData } = $props();
 
   const canonical = $derived(`${page.url.origin}/collections`);
-
-  const count = (slug: string) => data.counts[slug] ?? 0;
 </script>
 
 <Seo
@@ -21,23 +19,25 @@
   <header class="mb-8">
     <h1 class="text-2xl font-semibold tracking-tight">Collections</h1>
     <p class="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-      Curated groups of companies, with their open roles in one feed.
+      Curated groups of roles and companies, with their open jobs in one feed.
     </p>
   </header>
 
   <div class="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
-    {#each data.collections as collection (collection.slug)}
+    {#each data.cards as card (card.href)}
       <a
-        href={resolve(`/jobs?collections=${collection.slug}`)}
+        href={resolve(card.href)}
         class="group flex flex-col bg-background p-6 transition-colors hover:bg-secondary/40"
       >
         <div class="flex items-baseline justify-between gap-3">
-          <h2 class="text-lg font-semibold tracking-tight">{collection.title}</h2>
-          <span class="shrink-0 font-mono text-xs text-muted-foreground">
-            {count(collection.slug).toLocaleString()} jobs
-          </span>
+          <h2 class="text-lg font-semibold tracking-tight">{card.title}</h2>
+          {#if card.count !== null}
+            <span class="shrink-0 font-mono text-xs text-muted-foreground">
+              {card.count.toLocaleString()} jobs
+            </span>
+          {/if}
         </div>
-        <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{collection.description}</p>
+        <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{card.description}</p>
       </a>
     {/each}
   </div>

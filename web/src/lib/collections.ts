@@ -10,6 +10,45 @@ export type Collection = {
   description: string;
 };
 
+// A filter collection is the second kind of collection: a curated card that maps
+// to an arbitrary /jobs facet filter rather than company membership. Unlike
+// COLLECTIONS it is frontend-only — no Go registry, no `collections` search-facet
+// value, no company/job membership. Adding one is a single entry below.
+export type FilterCollection = {
+  slug: string;
+  title: string;
+  description: string;
+  // Job-search facet params this collection maps to — the same param names the
+  // /jobs feed accepts (see search.StringFacets). A value may be a single string
+  // or a list; a list expands into repeated query keys (OR semantics), matching
+  // the /jobs filter contract.
+  params: Record<string, string | string[]>;
+};
+
+export const FILTER_COLLECTIONS: FilterCollection[] = [
+  {
+    slug: 'remote-worldwide',
+    title: 'Remote Worldwide',
+    description:
+      'Fully remote roles open to candidates anywhere in the world, not tied to a country or region.',
+    params: { work_mode: 'remote', regions: 'global' },
+  },
+];
+
+// toQuery expands a filter collection's params into a URL query string, repeating a
+// key once per value for list params (OR semantics). It is the single source for
+// both a card's link (`/jobs?<query>`) and its open-job count request, so the two
+// can never disagree.
+export function toQuery(params: Record<string, string | string[]>): string {
+  const q = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    for (const v of Array.isArray(value) ? value : [value]) {
+      q.append(key, v);
+    }
+  }
+  return q.toString();
+}
+
 export const COLLECTIONS: Collection[] = [
   {
     slug: 'yc',

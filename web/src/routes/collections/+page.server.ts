@@ -1,17 +1,54 @@
 import { serverApi } from '$lib/server/api';
-import { COLLECTIONS } from '$lib/collections';
+import { COLLECTIONS, FILTER_COLLECTIONS, toQuery } from '$lib/collections';
 import type { PageServerLoad } from './$types';
 
-// Server-render the collection index. Per-collection open-job counts come from the
-// `collections` facet distribution over all open jobs (one search call). The counts
-// are decorative, so a failed facet fetch degrades to no counts rather than a 500.
+// One card on the /collections hub, normalized across both kinds of collection so
+// the page can render them uniformly. `href` is a bare `/jobs?…` path (the component
+// wraps it with `resolve`) and doubles as the card's identity; `count` is the
+// open-job count, or null when it could not be fetched — counts are decorative, so a
+// failed fetch degrades to no count.
+export type CollectionCard = {
+  title: string;
+  description: string;
+  href: `/jobs?${string}`;
+  count: number | null;
+};
+
+// Server-render the collection index. Company-collection counts come from the
+// `collections` facet distribution over all open jobs (one call); filter-collection
+// counts are one job-search total each (in parallel). Every count is decorative, so
+// a failed fetch degrades to no count rather than a 500. Filter collections render
+// first — they are the broad "browse by attribute" entries.
 export const load: PageServerLoad = async ({ fetch }) => {
-  let counts: Record<string, number> = {};
+  const api = serverApi(fetch);
+
+  let facetCounts: Record<string, number> | null = null;
   try {
-    const facets = await serverApi(fetch).facetCounts(new URLSearchParams());
-    counts = facets.facets.collections ?? {};
+    const facets = await api.facetCounts(new URLSearchParams());
+    facetCounts = facets.facets.collections ?? {};
   } catch {
-    // Counts are decorative; leave the empty default rather than failing the page.
+    // Whole facet call failed → company counts are unknown, not zero.
   }
-  return { collections: COLLECTIONS, counts };
+
+  const filterCards: CollectionCard[] = await Promise.all(
+    FILTER_COLLECTIONS.map(async (fc): Promise<CollectionCard> => {
+      const query = toQuery(fc.params);
+      let count: number | null = null;
+      try {
+        count = (await api.searchJobs(new URLSearchParams(query), 0, 0)).total ?? null;
+      } catch {
+        // Count is decorative — leave it null on failure.
+      }
+      return { title: fc.title, description: fc.description, href: `/jobs?${query}`, count };
+    }),
+  );
+
+  const companyCards: CollectionCard[] = COLLECTIONS.map((c) => ({
+    title: c.title,
+    description: c.description,
+    href: `/jobs?collections=${c.slug}`,
+    count: facetCounts ? (facetCounts[c.slug] ?? 0) : null,
+  }));
+
+  return { cards: [...filterCards, ...companyCards] };
 };
