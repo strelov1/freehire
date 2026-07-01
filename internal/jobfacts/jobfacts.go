@@ -17,14 +17,21 @@ import (
 // is an internship, a part-time contract is part-time, etc. "temporary" / "fixed
 // term" map to contract (the closest vocabulary member). Bare \bintern\b is safe —
 // the boundary keeps it out of "internal"/"international". The contract matcher also
-// covers the US-market shorthands for an independent contractor: 1099 (the tax form),
-// C2C and "corp-to-corp". "consultant" is deliberately excluded — it is as often a
-// full-time title as a contract arrangement.
+// covers the unambiguous US-market shorthands for an independent contractor: 1099
+// (the tax form) and "corp-to-corp". "consultant" is deliberately excluded — it is as
+// often a full-time title as a contract arrangement.
+//
+// b2b/c2c also denote an independent-contractor arrangement in some markets, but the
+// bare tokens collide with ubiquitous business-model prose ("B2B SaaS", "C2C
+// marketplace") — so, like the bare "ms"/"bs" degree abbreviations below, they favour
+// precision: reContractShorthand matches them only when an employment-context word
+// sits right after ("C2C candidates", "B2B contract", "C2C only"), never standalone.
 var (
-	reInternship = regexp.MustCompile(`\b(internship|intern|co-?op|working student|praktikum|werkstudent)\b`)
-	rePartTime   = regexp.MustCompile(`\bpart[\s-]?time\b`)
-	reContract   = regexp.MustCompile(`\b(contractor|contract|freelancer|freelance|fixed[\s-]?term|temporary|b2b|c2c|1099|corp[\s-]?to[\s-]?corp)\b`)
-	reFullTime   = regexp.MustCompile(`\b(full[\s-]?time|permanent)\b`)
+	reInternship        = regexp.MustCompile(`\b(internship|intern|co-?op|working student|praktikum|werkstudent)\b`)
+	rePartTime          = regexp.MustCompile(`\bpart[\s-]?time\b`)
+	reContract          = regexp.MustCompile(`\b(contractor|contract|freelancer|freelance|fixed[\s-]?term|temporary|1099|corp[\s-]?to[\s-]?corp)\b`)
+	reContractShorthand = regexp.MustCompile(`\b(b2b|c2c)\b[\s:/.-]*(only|contract|contractor|candidates?|welcome|accepted|basis|engagement|employment|position|arrangement|w2)\b`)
+	reFullTime          = regexp.MustCompile(`\b(full[\s-]?time|permanent)\b`)
 )
 
 // EmploymentType resolves the work arrangement from the title and description,
@@ -37,7 +44,7 @@ func EmploymentType(title, description string) string {
 		return "internship"
 	case rePartTime.MatchString(s):
 		return "part_time"
-	case reContract.MatchString(s):
+	case reContract.MatchString(s) || reContractShorthand.MatchString(s):
 		return "contract"
 	case reFullTime.MatchString(s):
 		return "full_time"

@@ -23,6 +23,11 @@ func TestEmploymentType(t *testing.T) {
 		{"c2c -> contract", "Dev", "Open to C2C candidates.", "contract"},
 		{"corp-to-corp -> contract", "Dev", "W2 or corp-to-corp accepted.", "contract"},
 		{"corp to corp spaced -> contract", "Dev", "Corp to corp engagement.", "contract"},
+		// b2b/c2c are business-model prose far more often than an employment type, so the
+		// bare token must not override an explicit full-time or mislabel an ordinary posting.
+		{"b2b saas business model does not beat full-time", "Backend Engineer", "We build B2B SaaS for enterprises. Full-time, permanent.", "full_time"},
+		{"b2b product prose is not contract", "Engineer", "Join us building a b2b product for enterprises.", ""},
+		{"c2c marketplace is not contract", "Engineer", "We run a C2C marketplace for hobbyists.", ""},
 		{"full time", "Engineer", "Full-time, permanent position.", "full_time"},
 		{"internship beats full-time", "Intern", "A full-time internship for students.", "internship"},
 	}
