@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
+  import { browser } from '$app/environment';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { api, type Slice } from '$lib/api';
@@ -39,6 +40,10 @@
   let companies = $state.raw(seeded);
   let started = false;
 
+  // `initial` was searched for page.url; if a shallow-routing back/forward left
+  // page.url lagging the address bar, it's stale — reload on the first run instead.
+  const initialStale = browser && page.url.search !== location.search;
+
   onMount(() => () => search.dispose());
 
   function reload() {
@@ -53,7 +58,7 @@
     untrack(() => {
       if (!started) {
         started = true;
-        return;
+        if (!initialStale) return;
       }
       reload();
     });

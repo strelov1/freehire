@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
+  import { browser } from '$app/environment';
   import { page } from '$app/state';
   import { api } from '$lib/api';
   import { FilterStore, filtersToParams } from '$lib/filters';
@@ -25,6 +26,9 @@
   let status = $state<'ready' | 'loading' | 'error'>('ready');
   let drawerOpen = $state(false);
   let started = false;
+  // `initial` counts were fetched for page.url; if a shallow-routing back/forward
+  // left page.url lagging the address bar, they're stale — re-fetch on the first run.
+  const initialStale = browser && page.url.search !== location.search;
   // Monotonic fetch id: a response only commits if it is still the latest, so a
   // slow fetch that resolves after a newer one can't overwrite fresh counts with
   // stale data. The reload debounce now lives in FilterStore (value -> applied),
@@ -47,7 +51,7 @@
     untrack(() => {
       if (!started) {
         started = true;
-        return;
+        if (!initialStale) return;
       }
       status = 'loading';
       const params = filtersToParams(filters.applied);

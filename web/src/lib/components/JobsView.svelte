@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
+  import { browser } from '$app/environment';
   import { page } from '$app/state';
   import { api, type Slice } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
@@ -74,6 +75,12 @@
   let drawerOpen = $state(false);
   let started = false;
 
+  // The server-rendered `initial` was searched for `page.url`. After a back/forward
+  // onto a shallow-routing entry that lags page.url behind the address bar, `initial`
+  // is stale (it holds the pre-filter page) while the filters seed from the real URL.
+  // Detect that mismatch so the first effect run reloads instead of keeping `initial`.
+  const initialStale = browser && page.url.search !== location.search;
+
   // For a signed-in user, load the set of already-viewed slugs so JobRow can dim
   // seen cards (no-op when signed out — the set stays empty). Cleanup: cancel any
   // pending debounced reload so it can't fire after this view is gone.
@@ -98,7 +105,9 @@
       refreshCounts();
       if (!started) {
         started = true;
-        return;
+        // Keep the SSR `initial` page unless it was loaded for a different URL than
+        // the address bar (stale shallow-routing restore) — then reload to match.
+        if (!initialStale) return;
       }
       reloadList();
     });

@@ -12,6 +12,7 @@
 // structural fix for the dropped-character race the goto+debounce design had.
 
 import { untrack } from 'svelte';
+import { browser } from '$app/environment';
 import { page } from '$app/state';
 import { replaceState } from '$app/navigation';
 
@@ -52,8 +53,15 @@ export class UrlSyncedState<T> {
     this.#codec = codec;
     this.#debounceMs = debounceMs;
     // The field initializers above are typed placeholders; both are seeded here
-    // from the URL params, which only arrive as a constructor argument.
-    const seeded = codec.parse(initial);
+    // from the URL params. On the client the browser's address bar
+    // (location.search) is the authoritative filter state: after a back/forward
+    // onto a shallow-routing (replaceState) entry, SvelteKit's page.url — which the
+    // view reads to pass `initial` — can lag to the pre-filter URL while the address
+    // bar still shows the filter. Seeding from location makes a restored view mirror
+    // the real URL. On the server location is unavailable; the passed page.url params
+    // are correct there and match the client for every non-shallow navigation.
+    const params = browser ? new URLSearchParams(location.search) : initial;
+    const seeded = codec.parse(params);
     this.value = seeded;
     this.applied = seeded;
   }
@@ -84,7 +92,10 @@ export class UrlSyncedState<T> {
    *  writes are synchronous, a mismatch here is a genuine external navigation — never
    *  a stale-our-own-commit, so reseeding can't eat in-flight typing. */
   syncFromUrl() {
-    const current = page.url.searchParams;
+    // Read the browser's address bar, not page.url: after a shallow-routing (replaceState)
+    // back/forward, page.url lags to the pre-filter URL while location.search is correct.
+    // Reading page.url here would revert the constructor's location-seeded value to empty.
+    const current = browser ? new URLSearchParams(location.search) : page.url.searchParams;
     if (current.toString() === this.#codec.serialize(this.value).toString()) return;
     clearTimeout(this.#timer);
     this.#timer = undefined;
