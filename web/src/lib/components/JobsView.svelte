@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
+  import { Layers } from '@lucide/svelte';
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -150,7 +151,7 @@
     <div class="mb-4 flex items-center gap-2">
       {#if standalone}
         <!-- The header search is this page's text filter (see HeaderListSearch);
-             the spacer keeps Swipe/Filters right-aligned. -->
+             the spacer keeps the Filters button right-aligned. -->
         <div class="flex-1"></div>
       {:else}
         <Input
@@ -162,13 +163,6 @@
           class="min-w-0 flex-1"
         />
       {/if}
-      <button
-        type="button"
-        class="h-9 shrink-0 rounded-lg border border-border bg-secondary px-3 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent"
-        onclick={openSwipe}
-      >
-        Swipe
-      </button>
       <button
         type="button"
         class="h-9 shrink-0 rounded-lg border border-border bg-secondary px-3 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent md:hidden"
@@ -203,6 +197,22 @@
     {/if}
   </div>
 </div>
+
+{#if standalone}
+  <!-- Swipe-mode entry: a tab pinned to the right viewport edge, showing only the
+       card-stack icon until hover/focus slides it out to reveal the label. Fixed,
+       so it only exists while the standalone jobs list is mounted (never on the
+       embedded company view). Kept below the z-40 mobile overlays. -->
+  <button
+    type="button"
+    onclick={openSwipe}
+    aria-label="Swipe mode"
+    class="fixed right-0 top-1/2 z-30 flex -translate-y-1/2 translate-x-[calc(100%-2.75rem)] items-center gap-2 rounded-l-lg border border-r-0 border-border bg-secondary py-3 pl-3 pr-4 text-sm font-medium text-secondary-foreground shadow-sm transition-transform hover:translate-x-0 hover:bg-accent focus-visible:translate-x-0"
+  >
+    <Layers class="h-5 w-5 shrink-0" />
+    <span class="whitespace-nowrap">Swipe</span>
+  </button>
+{/if}
 
 {#if drawerOpen}
   <div class="fixed inset-0 z-40 md:hidden">
