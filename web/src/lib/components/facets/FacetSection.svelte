@@ -1,7 +1,6 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
-  import { dynamicLabel, type FacetDef, type FacetOption } from '$lib/facets';
-  import type { FilterStore } from '$lib/filters';
+  import { dynamicLabel, type FacetDef, type FacetOption, type FacetStore } from '$lib/facets';
   import type { FacetCounts } from '$lib/types';
   import { cn } from '$lib/utils';
   import PillGroup from './PillGroup.svelte';
@@ -13,7 +12,7 @@
   // exclude toggle) plus the control the facet declares. All state lives in the
   // store, keyed by the facet's param. `counts` carries the live facet
   // distribution that drives dynamic (open-vocabulary) selects.
-  let { def, store, counts }: { def: FacetDef; store: FilterStore; counts?: FacetCounts | null } = $props();
+  let { def, store, counts }: { def: FacetDef; store: FacetStore; counts?: FacetCounts | null } = $props();
 
   const st = $derived(store.facet(def.param));
 

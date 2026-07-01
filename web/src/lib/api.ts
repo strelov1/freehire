@@ -162,8 +162,16 @@ export function createApi(
   /** List companies, optionally filtered by a name query `q` (a case-insensitive
    *  substring match; an empty `q` lists everything). `meta.total` reflects the
    *  filtered count, so the Paginator pages over the matches. */
-  async function listCompanies(q: string, limit: number, offset: number): Promise<Slice<CompanyListItem>> {
-    const params = new URLSearchParams();
+  // `facets` carries the sidebar's filter params (regions/collections/…, and `q`
+  // when it lives in the filter model); the count-ordered typeahead just passes a
+  // bare `q`. Both funnel through here so the endpoint stays one call site.
+  async function listCompanies(
+    q: string,
+    limit: number,
+    offset: number,
+    facets?: URLSearchParams,
+  ): Promise<Slice<CompanyListItem>> {
+    const params = new URLSearchParams(facets);
     if (q) params.set('q', q);
     params.set('limit', String(limit));
     params.set('offset', String(offset));

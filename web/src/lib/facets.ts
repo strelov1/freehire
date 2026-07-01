@@ -33,6 +33,28 @@ export interface FacetOption {
 
 export type FacetControl = 'pills' | 'select' | 'tokens' | 'remote';
 
+/** One facet's live selection, as FacetSection reads it. */
+export interface FacetSelection {
+  values: string[];
+  exclude: boolean;
+  matchAll: boolean;
+}
+
+/** The narrow store contract FacetSection drives — the subset of FilterStore's
+ *  surface a facet control touches. Both the job FilterStore and the company
+ *  filter store satisfy it, so the same section/control components render either.
+ *  (setExclude/setMatchAll are only invoked for excludable/hasAndOr facets, which
+ *  the company registry doesn't use.) */
+export interface FacetStore {
+  facet(param: string): FacetSelection;
+  toggle(param: string, v: string): void;
+  add(param: string, raw: string): void;
+  remove(param: string, v: string): void;
+  clearFacet(param: string): void;
+  setExclude(param: string, exclude: boolean): void;
+  setMatchAll(param: string, on: boolean): void;
+}
+
 export interface FacetDef {
   param: string;
   label: string;
@@ -198,6 +220,55 @@ const CURRENCY: FacetOption[] = [
 // Curated collections (yc, bigtech, …) as pill options, sourced from the same
 // registry the /collections hub renders so the label/slug pairs never drift.
 const COLLECTION: FacetOption[] = COLLECTIONS.map((c) => ({ value: c.slug, label: c.title }));
+
+// Company-size buckets — the enrich.CompanySizeValues vocabulary. Not exported as
+// a generated values array (it's a scalar enrichment field, not a search facet on
+// jobs), so the closed set is spelled out here like CURRENCY; the values are
+// already display-ready.
+const COMPANY_SIZE: FacetOption[] = ['1-10', '11-50', '51-200', '201-500', '501-1000', '1000+'].map(
+  (value) => ({ value, label: value }),
+);
+
+// The ISO 3166-1 alpha-2 code set — the country vocabulary the location dictionary
+// draws from. The company country facet is a static searchable select over this
+// (labelled via countryLabel), not a live distribution: the companies list is plain
+// SQL with no facet-count endpoint yet, so options carry no counts.
+const ISO_COUNTRY_CODES = [
+  'ad', 'ae', 'af', 'ag', 'ai', 'al', 'am', 'ao', 'aq', 'ar', 'as', 'at', 'au', 'aw', 'ax', 'az',
+  'ba', 'bb', 'bd', 'be', 'bf', 'bg', 'bh', 'bi', 'bj', 'bl', 'bm', 'bn', 'bo', 'bq', 'br', 'bs',
+  'bt', 'bv', 'bw', 'by', 'bz', 'ca', 'cc', 'cd', 'cf', 'cg', 'ch', 'ci', 'ck', 'cl', 'cm', 'cn',
+  'co', 'cr', 'cu', 'cv', 'cw', 'cx', 'cy', 'cz', 'de', 'dj', 'dk', 'dm', 'do', 'dz', 'ec', 'ee',
+  'eg', 'eh', 'er', 'es', 'et', 'fi', 'fj', 'fk', 'fm', 'fo', 'fr', 'ga', 'gb', 'gd', 'ge', 'gf',
+  'gg', 'gh', 'gi', 'gl', 'gm', 'gn', 'gp', 'gq', 'gr', 'gs', 'gt', 'gu', 'gw', 'gy', 'hk', 'hm',
+  'hn', 'hr', 'ht', 'hu', 'id', 'ie', 'il', 'im', 'in', 'io', 'iq', 'ir', 'is', 'it', 'je', 'jm',
+  'jo', 'jp', 'ke', 'kg', 'kh', 'ki', 'km', 'kn', 'kp', 'kr', 'kw', 'ky', 'kz', 'la', 'lb', 'lc',
+  'li', 'lk', 'lr', 'ls', 'lt', 'lu', 'lv', 'ly', 'ma', 'mc', 'md', 'me', 'mf', 'mg', 'mh', 'mk',
+  'ml', 'mm', 'mn', 'mo', 'mp', 'mq', 'mr', 'ms', 'mt', 'mu', 'mv', 'mw', 'mx', 'my', 'mz', 'na',
+  'nc', 'ne', 'nf', 'ng', 'ni', 'nl', 'no', 'np', 'nr', 'nu', 'nz', 'om', 'pa', 'pe', 'pf', 'pg',
+  'ph', 'pk', 'pl', 'pm', 'pn', 'pr', 'ps', 'pt', 'pw', 'py', 'qa', 're', 'ro', 'rs', 'ru', 'rw',
+  'sa', 'sb', 'sc', 'sd', 'se', 'sg', 'sh', 'si', 'sj', 'sk', 'sl', 'sm', 'sn', 'so', 'sr', 'ss',
+  'st', 'sv', 'sx', 'sy', 'sz', 'tc', 'td', 'tf', 'tg', 'th', 'tj', 'tk', 'tl', 'tm', 'tn', 'to',
+  'tr', 'tt', 'tv', 'tw', 'tz', 'ua', 'ug', 'um', 'us', 'uy', 'uz', 'va', 'vc', 've', 'vg', 'vi',
+  'vn', 'vu', 'wf', 'ws', 'ye', 'yt', 'za', 'zm', 'zw',
+];
+const COUNTRY: FacetOption[] = ISO_COUNTRY_CODES.map((value) => ({
+  value,
+  label: countryLabel(value),
+})).toSorted((a, b) => a.label.localeCompare(b.label));
+
+// The company catalog's filter facets: a subset of the job facets whose values are
+// derivable from a company's open jobs and denormalized onto the companies row
+// (collections + the RefreshCompanyFacets arrays). No exclude/AND-OR modes — the
+// companies list endpoint filters by plain array overlap. Reuses the same option
+// vocabularies as the job facets so labels never drift.
+export const COMPANY_FACETS: FacetDef[] = [
+  { param: 'collections', label: 'Collection', control: 'pills', options: COLLECTION, excludable: false },
+  { param: 'regions', label: 'Region', control: 'pills', options: REGION, excludable: false },
+  { param: 'countries', label: 'Country', control: 'select', options: COUNTRY, excludable: false, placeholder: 'Search countries' },
+  { param: 'domains', label: 'Industry', control: 'select', options: DOMAINS, excludable: false, placeholder: 'Search industries' },
+  { param: 'company_type', label: 'Company type', control: 'pills', options: COMPANY_TYPE, excludable: false },
+  { param: 'company_size', label: 'Company size', control: 'pills', options: COMPANY_SIZE, excludable: false },
+];
 
 export const FACETS: FacetDef[] = [
   { param: 'collections', label: 'Collection', control: 'pills', options: COLLECTION, excludable: false },

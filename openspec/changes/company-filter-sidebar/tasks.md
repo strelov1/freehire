@@ -41,25 +41,25 @@
 
 ## 4. Frontend: companies filter sidebar
 
-- [ ] 4.1 Add a `COMPANY_FACETS` registry (subset of the `FacetDef` shape in
+- [x] 4.1 Add a `COMPANY_FACETS` registry (subset of the `FacetDef` shape in
   `web/src/lib/facets.ts`) covering collection/region/country/industry/company
   type/company size, reusing the existing option vocabularies; country as a
   searchable select.
-- [ ] 4.2 Add `CompanyFiltersPanel.svelte` that iterates `COMPANY_FACETS` and
+- [x] 4.2 Add `CompanyFiltersPanel.svelte` that iterates `COMPANY_FACETS` and
   renders each via the existing `FacetSection`, with a clear-all action.
-- [ ] 4.3 Wire a `FilterStore` into `CompaniesView.svelte`: render the sidebar
+- [x] 4.3 Wire a `FilterStore` into `CompaniesView.svelte`: render the sidebar
   next to the list (mobile = toggle-opened panel), subscribe the list reload to the
   debounced `applied` snapshot, and keep the existing `?q` search composed with the
   facets.
-- [ ] 4.4 Extend `listCompanies` in `web/src/lib/api.ts` to pass facet params, and
+- [x] 4.4 Extend `listCompanies` in `web/src/lib/api.ts` to pass facet params, and
   forward them from `/companies/+page.server.ts` for SSR/deep-linking.
-- [ ] 4.5 Verify the web changes with `svelte-check` (no test runner in `web/`) and
+- [x] 4.5 Verify the web changes with `svelte-check` (no test runner in `web/`) and
   a manual browse: filter by region/collection, reload a filtered URL, back/forward,
   clear-all.
 
 ## 5. Verify & ops
 
-- [ ] 5.1 `go build ./... && go vet ./... && go test ./...` and the integration
+- [x] 5.1 `go build ./... && go vet ./... && go test ./...` and the integration
   tests green.
 - [ ] 5.2 Document the prod rollout in the change/PR: apply the migration manually
   via psql, then run `cmd/recount-companies` once to backfill the arrays (no
