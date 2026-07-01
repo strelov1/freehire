@@ -55,26 +55,20 @@
       return;
     }
     loading = true;
-    try {
-      const [jr, cr] = await Promise.all([
-        api.searchJobs(new URLSearchParams({ q }), JOBS_LIMIT, 0),
-        api.listCompanies(q, COMPANIES_LIMIT, 0),
-      ]);
-      if (mine !== reqToken) return; // superseded by a newer query
-      jobs = jr.items;
-      companies = cr.items;
-      noResults = jobs.length === 0 && companies.length === 0;
-      activeIndex = -1;
-      open = true;
-    } catch {
-      if (mine !== reqToken) return;
-      jobs = [];
-      companies = [];
-      noResults = true;
-      open = true;
-    } finally {
-      if (mine === reqToken) loading = false;
-    }
+    // allSettled, not all: the two sections are independent, so one endpoint
+    // failing (e.g. search down while the companies list is up) still shows the
+    // section that succeeded instead of wiping the whole dropdown.
+    const [jr, cr] = await Promise.allSettled([
+      api.searchJobs(new URLSearchParams({ q }), JOBS_LIMIT, 0),
+      api.listCompanies(q, COMPANIES_LIMIT, 0),
+    ]);
+    if (mine !== reqToken) return; // superseded by a newer query
+    jobs = jr.status === 'fulfilled' ? jr.value.items : [];
+    companies = cr.status === 'fulfilled' ? cr.value.items : [];
+    noResults = jobs.length === 0 && companies.length === 0;
+    activeIndex = -1;
+    open = true;
+    loading = false;
   }
 
   // Debounce: re-armed on every keystroke; the cleanup cancels a pending run so
