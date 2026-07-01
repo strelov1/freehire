@@ -19,6 +19,20 @@ type Enrich struct {
 	Concurrency  int // LLM calls in flight; also the claim wave size (keeps each wave's lease window short)
 	LeaseSeconds int // how long a claim is held before it can be reclaimed
 	MaxAttempts  int // failed attempts before an entry is dead-lettered
+
+	// Langfuse LLM tracing is optional observability, shared by both LLM workers.
+	// Unlike the LLM settings it is never required: all three empty simply means
+	// tracing is off (LangfuseEnabled reports false) and the worker runs unchanged.
+	LangfuseBaseURL   string
+	LangfusePublicKey string
+	LangfuseSecretKey string
+}
+
+// LangfuseEnabled reports whether LLM tracing should be wired: true only when all
+// three Langfuse settings are present. A partial configuration is treated as off,
+// mirroring how a missing MEILI_MASTER_KEY disables search.
+func (e Enrich) LangfuseEnabled() bool {
+	return e.LangfuseBaseURL != "" && e.LangfusePublicKey != "" && e.LangfuseSecretKey != ""
 }
 
 // LoadEnrich reads enrichment configuration from the environment. It fails fast,
@@ -31,6 +45,10 @@ func LoadEnrich() (Enrich, error) {
 		Concurrency:  envInt("ENRICH_CONCURRENCY", 4),
 		LeaseSeconds: envInt("ENRICH_LEASE_SECONDS", 300),
 		MaxAttempts:  envInt("ENRICH_MAX_ATTEMPTS", 3),
+
+		LangfuseBaseURL:   os.Getenv("LANGFUSE_BASE_URL"),
+		LangfusePublicKey: os.Getenv("LANGFUSE_PUBLIC_KEY"),
+		LangfuseSecretKey: os.Getenv("LANGFUSE_SECRET_KEY"),
 	}
 
 	// A non-positive concurrency would make the claim's LIMIT 0 (silently no-op) or

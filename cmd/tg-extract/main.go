@@ -14,6 +14,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/config"
 	"github.com/strelov1/freehire/internal/linksource"
+	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/telegram"
 	"github.com/strelov1/freehire/internal/worker"
@@ -40,6 +41,11 @@ func run() int {
 	}
 	kinds := chanCfg.Kinds()
 
+	// Optional Langfuse tracing: nil (no-op) unless LANGFUSE_* are set. flush drains
+	// buffered generations at the end of the run.
+	tracer, flush := worker.Tracing(ecfg)
+	defer flush()
+
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
 		log.Printf("database: %v", err)
@@ -47,7 +53,7 @@ func run() int {
 	}
 	defer cleanup()
 
-	extractor, err := telegram.NewLangChainExtractor(ecfg.LLMBaseURL, ecfg.LLMAPIKey, ecfg.LLMModel)
+	extractor, err := telegram.NewLangChainExtractor(ecfg.LLMBaseURL, ecfg.LLMAPIKey, ecfg.LLMModel, llm.WithTracer(tracer, "telegram"))
 	if err != nil {
 		log.Printf("extractor: %v", err)
 		return 1

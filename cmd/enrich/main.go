@@ -12,6 +12,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/config"
 	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/worker"
 )
 
@@ -28,6 +29,11 @@ func run() int {
 		return 1
 	}
 
+	// Optional Langfuse tracing: nil (no-op) unless LANGFUSE_* are set. flush drains
+	// buffered generations at the end of the run.
+	tracer, flush := worker.Tracing(ecfg)
+	defer flush()
+
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
 		log.Printf("database: %v", err)
@@ -35,7 +41,7 @@ func run() int {
 	}
 	defer cleanup()
 
-	provider, err := enrich.NewLangChainProvider(ecfg.LLMBaseURL, ecfg.LLMAPIKey, ecfg.LLMModel)
+	provider, err := enrich.NewLangChainProvider(ecfg.LLMBaseURL, ecfg.LLMAPIKey, ecfg.LLMModel, llm.WithTracer(tracer, "enrich"))
 	if err != nil {
 		log.Printf("provider: %v", err)
 		return 1

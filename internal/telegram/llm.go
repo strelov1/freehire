@@ -21,9 +21,10 @@ type LangChainExtractor struct {
 }
 
 // NewLangChainExtractor builds an extractor against an OpenAI-compatible endpoint.
-// No provider is hard-coded — any OpenAI-compatible backend works.
-func NewLangChainExtractor(baseURL, apiKey, model string) (*LangChainExtractor, error) {
-	c, err := llm.New(baseURL, apiKey, model)
+// No provider is hard-coded — any OpenAI-compatible backend works. Optional
+// llm.Options (e.g. llm.WithTracer) are passed through to the client.
+func NewLangChainExtractor(baseURL, apiKey, model string, opts ...llm.Option) (*LangChainExtractor, error) {
+	c, err := llm.New(baseURL, apiKey, model, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("telegram: %w", err)
 	}

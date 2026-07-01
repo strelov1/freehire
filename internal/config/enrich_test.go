@@ -38,6 +38,50 @@ func TestLoadEnrich_namesOnlyTheMissingOne(t *testing.T) {
 	}
 }
 
+func TestLoadEnrich_langfuseOptionalAndGated(t *testing.T) {
+	// Langfuse tracing is optional: the required LLM_* must still be set, but the
+	// worker must load fine with no Langfuse vars and report tracing disabled.
+	t.Setenv("LLM_BASE_URL", "http://gateway:4000/v1")
+	t.Setenv("LLM_API_KEY", "sk-test")
+	t.Setenv("LLM_MODEL", "qwen2.5-72b")
+
+	t.Setenv("LANGFUSE_BASE_URL", "")
+	t.Setenv("LANGFUSE_PUBLIC_KEY", "")
+	t.Setenv("LANGFUSE_SECRET_KEY", "")
+	got, err := LoadEnrich()
+	if err != nil {
+		t.Fatalf("LoadEnrich with no Langfuse vars: %v", err)
+	}
+	if got.LangfuseEnabled() {
+		t.Error("LangfuseEnabled() = true with no vars set, want false")
+	}
+
+	// Only two of three set is still disabled — all three are required.
+	t.Setenv("LANGFUSE_BASE_URL", "https://us.cloud.langfuse.com")
+	t.Setenv("LANGFUSE_PUBLIC_KEY", "pk-lf-x")
+	got, err = LoadEnrich()
+	if err != nil {
+		t.Fatalf("LoadEnrich: %v", err)
+	}
+	if got.LangfuseEnabled() {
+		t.Error("LangfuseEnabled() = true with secret key missing, want false")
+	}
+
+	// All three set: fields populated and tracing enabled.
+	t.Setenv("LANGFUSE_SECRET_KEY", "sk-lf-y")
+	got, err = LoadEnrich()
+	if err != nil {
+		t.Fatalf("LoadEnrich: %v", err)
+	}
+	if !got.LangfuseEnabled() {
+		t.Fatal("LangfuseEnabled() = false with all three set, want true")
+	}
+	if got.LangfuseBaseURL != "https://us.cloud.langfuse.com" ||
+		got.LangfusePublicKey != "pk-lf-x" || got.LangfuseSecretKey != "sk-lf-y" {
+		t.Errorf("Langfuse fields not populated: %+v", got)
+	}
+}
+
 func TestLoadEnrich_defaultsAndOverrides(t *testing.T) {
 	t.Setenv("LLM_BASE_URL", "http://gateway:4000/v1")
 	t.Setenv("LLM_API_KEY", "sk-test")
