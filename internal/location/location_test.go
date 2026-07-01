@@ -46,6 +46,37 @@ func TestParse(t *testing.T) {
 			location: "Remote - UK or Europe",
 			want:     Geo{Countries: []string{"gb"}, Regions: []string{"eu", "uk"}, WorkMode: "remote"},
 		},
+		// LLM-mined city gaps: city-only strings the dict previously left geography-less.
+		{
+			name:     "polish spelling of warsaw resolves to PL",
+			location: "Warszawa",
+			want:     Geo{Countries: []string{"pl"}, Regions: []string{"eu"}},
+		},
+		{
+			name:     "polish city with diacritics",
+			location: "Łódź, Poland",
+			want:     Geo{Countries: []string{"pl"}, Regions: []string{"eu"}},
+		},
+		{
+			name:     "unambiguous UK city",
+			location: "Manchester",
+			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}},
+		},
+		{
+			name:     "accented montreal resolves to CA",
+			location: "Montréal, QC",
+			want:     Geo{Countries: []string{"ca"}, Regions: []string{"north_america"}},
+		},
+		{
+			name:     "australian beacon city",
+			location: "Brisbane",
+			want:     Geo{Countries: []string{"au"}, Regions: []string{"apac"}},
+		},
+		{
+			name:     "new zealand beacon city",
+			location: "Auckland",
+			want:     Geo{Countries: []string{"nz"}, Regions: []string{"apac"}},
+		},
 		{
 			name:     "bare remote yields work mode but no geography",
 			location: "Remote",
