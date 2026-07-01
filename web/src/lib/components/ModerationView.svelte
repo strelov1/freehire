@@ -3,11 +3,18 @@
   import { currentUser } from '$lib/auth.svelte';
   import type { Submission } from '$lib/types';
   import { Button } from '$lib/ui';
-  import { timeAgo } from '$lib/utils';
+  import { cn, timeAgo } from '$lib/utils';
   import ReportQueue from './ReportQueue.svelte';
   import States from './States.svelte';
 
   const isModerator = $derived(currentUser()?.role === 'moderator');
+
+  type View = 'queue' | 'reports';
+  const tabs: { value: View; label: string }[] = [
+    { value: 'queue', label: 'Moderation queue' },
+    { value: 'reports', label: 'Reported jobs' },
+  ];
+  let view = $state<View>('queue');
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   let queue = $state.raw<Submission[]>([]);
@@ -73,58 +80,78 @@
   </p>
 {:else}
   <div class="flex flex-col gap-6">
-    <div class="flex flex-col gap-1">
-      <h1 class="text-2xl font-semibold tracking-tight">Moderation queue</h1>
-      <p class="text-sm text-muted-foreground">
-        Submissions awaiting review. Approving mints a live vacancy; rejecting records a reason.
-      </p>
+    <h1 class="text-2xl font-semibold tracking-tight">Moderation</h1>
+
+    <div role="tablist" aria-label="Moderation view" class="flex items-center gap-1">
+      {#each tabs as tab (tab.value)}
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === tab.value}
+          onclick={() => (view = tab.value)}
+          class={cn(
+            'rounded-md px-3 py-1.5 text-sm transition-colors',
+            view === tab.value
+              ? 'bg-secondary font-medium text-secondary-foreground'
+              : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+          )}
+        >
+          {tab.label}
+        </button>
+      {/each}
     </div>
 
-    {#if actionError}
-      <p class="text-sm text-destructive">{actionError}</p>
-    {/if}
+    {#if view === 'queue'}
+      <div class="flex flex-col gap-6">
+        <p class="text-sm text-muted-foreground">
+          Submissions awaiting review. Approving mints a live vacancy; rejecting records a reason.
+        </p>
 
-    {#if status === 'loading'}
-      <States state="loading" />
-    {:else if status === 'error'}
-      <States state="error" message="Couldn't load the queue." />
-    {:else if queue.length === 0}
-      <States state="empty" message="Nothing to review — the queue is empty." />
+        {#if actionError}
+          <p class="text-sm text-destructive">{actionError}</p>
+        {/if}
+
+        {#if status === 'loading'}
+          <States state="loading" />
+        {:else if status === 'error'}
+          <States state="error" message="Couldn't load the queue." />
+        {:else if queue.length === 0}
+          <States state="empty" message="Nothing to review — the queue is empty." />
+        {:else}
+          <ul class="flex flex-col divide-y divide-border rounded-lg border border-border">
+            {#each queue as s (s.id)}
+              <li class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+                <div class="flex min-w-0 flex-col gap-0.5">
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="truncate text-sm font-medium hover:underline"
+                  >
+                    {s.title}
+                  </a>
+                  <span class="truncate text-xs text-muted-foreground">
+                    {s.company}{s.location ? ` · ${s.location}` : ''}{s.remote ? ' · remote' : ''}
+                  </span>
+                  <span class="truncate text-xs text-muted-foreground">
+                    by {s.submitter_email ?? 'unknown'} · {timeAgo(s.created_at)}
+                  </span>
+                </div>
+                <div class="flex shrink-0 gap-2">
+                  <Button variant="primary" size="sm" disabled={acting !== null} onclick={() => approve(s)}>
+                    Approve
+                  </Button>
+                  <Button variant="ghost" size="sm" disabled={acting !== null} onclick={() => reject(s)}>
+                    Reject
+                  </Button>
+                </div>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </div>
     {:else}
-      <ul class="flex flex-col divide-y divide-border rounded-lg border border-border">
-        {#each queue as s (s.id)}
-          <li class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
-            <div class="flex min-w-0 flex-col gap-0.5">
-              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external posting URL, opened in a new tab; not an internal route -->
-              <a href={s.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="truncate text-sm font-medium hover:underline"
-              >
-                {s.title}
-              </a>
-              <span class="truncate text-xs text-muted-foreground">
-                {s.company}{s.location ? ` · ${s.location}` : ''}{s.remote ? ' · remote' : ''}
-              </span>
-              <span class="truncate text-xs text-muted-foreground">
-                by {s.submitter_email ?? 'unknown'} · {timeAgo(s.created_at)}
-              </span>
-            </div>
-            <div class="flex shrink-0 gap-2">
-              <Button variant="primary" size="sm" disabled={acting !== null} onclick={() => approve(s)}>
-                Approve
-              </Button>
-              <Button variant="ghost" size="sm" disabled={acting !== null} onclick={() => reject(s)}>
-                Reject
-              </Button>
-            </div>
-          </li>
-        {/each}
-      </ul>
-    {/if}
-
-    <div class="border-t border-border pt-6">
       <ReportQueue />
-    </div>
+    {/if}
   </div>
 {/if}
