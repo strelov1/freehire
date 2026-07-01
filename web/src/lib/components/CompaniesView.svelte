@@ -15,6 +15,7 @@
   import InfiniteScroll from './InfiniteScroll.svelte';
   import CompanyLogo from './CompanyLogo.svelte';
   import CompanyFiltersPanel from './CompanyFiltersPanel.svelte';
+  import FilterEdgeTab from './FilterEdgeTab.svelte';
 
   // The first page is server-rendered (route `load`) for the current filters, so
   // the rows are in the initial HTML.
@@ -84,19 +85,6 @@
   </aside>
 
   <div class="min-w-0 flex-1">
-    <div class="mb-4 flex items-center gap-2">
-      <!-- The header search is this page's text filter (see HeaderListSearch);
-           the spacer keeps the mobile Filters button right-aligned. -->
-      <div class="flex-1"></div>
-      <button
-        type="button"
-        class="h-9 shrink-0 rounded-lg border border-border bg-secondary px-3 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent md:hidden"
-        onclick={() => (drawerOpen = true)}
-      >
-        Filters{#if filters.active > 0}&nbsp;({filters.active}){/if}
-      </button>
-    </div>
-
     {#if companies.status === 'loading'}
       <States state="loading" />
     {:else if companies.status === 'error'}
@@ -107,7 +95,8 @@
         message={filters.value.q || filters.active > 0 ? 'No matching companies.' : 'No companies yet.'}
       />
     {:else}
-      <p class="mb-3 text-sm text-muted-foreground" aria-live="polite">
+      <!-- Clear the left-edge filters tab on mobile (see FilterEdgeTab below). -->
+      <p class="mb-3 pl-12 text-sm text-muted-foreground md:pl-0" aria-live="polite">
         {companies.total.toLocaleString()} {companies.total === 1 ? 'company' : 'companies'}
       </p>
       <div class="flex flex-col gap-3">
@@ -141,6 +130,9 @@
     {/if}
   </div>
 </div>
+
+<!-- Mobile filters entry (the desktop aside is always visible). -->
+<FilterEdgeTab active={filters.active} onclick={() => (drawerOpen = true)} />
 
 {#if drawerOpen}
   <div class="fixed inset-0 z-40 md:hidden">

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { Layers, SlidersHorizontal } from '@lucide/svelte';
+  import { Layers } from '@lucide/svelte';
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -15,6 +15,7 @@
   import type { Job, FacetCounts } from '$lib/types';
   import { Input } from '$lib/ui';
   import FiltersPanel from './FiltersPanel.svelte';
+  import FilterEdgeTab from './FilterEdgeTab.svelte';
   import States from './States.svelte';
   import JobRow from './JobRow.svelte';
   import LoadMore from './LoadMore.svelte';
@@ -150,15 +151,25 @@
   <div class="min-w-0 flex-1">
     {#if !standalone}
       <!-- Company embed: the text filter lives inline (the header search is the
-           standalone list's filter). Mobile filter access is the left-edge tab below. -->
-      <Input
-        type="search"
-        value={filters.value.q}
-        oninput={(e) => filters.setQuery(e.currentTarget.value)}
-        placeholder="Search jobs…"
-        aria-label="Search jobs"
-        class="mb-4 w-full"
-      />
+           standalone list's filter), with the Filters button beside it. No fixed
+           edge tab here — it would overlap the company hero above this list. -->
+      <div class="mb-4 flex items-center gap-2">
+        <Input
+          type="search"
+          value={filters.value.q}
+          oninput={(e) => filters.setQuery(e.currentTarget.value)}
+          placeholder="Search jobs…"
+          aria-label="Search jobs"
+          class="min-w-0 flex-1"
+        />
+        <button
+          type="button"
+          class="h-9 shrink-0 rounded-lg border border-border bg-secondary px-3 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent md:hidden"
+          onclick={() => (drawerOpen = true)}
+        >
+          Filters{#if filters.active > 0}&nbsp;({filters.active}){/if}
+        </button>
+      </div>
     {/if}
 
     {#if jobs.status === 'loading'}
@@ -168,8 +179,11 @@
     {:else if jobs.items.length === 0}
       <States state="empty" message="No matching jobs." />
     {:else}
-      <!-- Clear the left-edge filters tab (top-20, level with this first line) on mobile. -->
-      <p class="mb-3 pl-12 text-sm text-muted-foreground md:pl-0" aria-live="polite">
+      <!-- On the standalone list, clear the left-edge filters tab on mobile. -->
+      <p
+        class={['mb-3 text-sm text-muted-foreground', standalone && 'pl-12 md:pl-0']}
+        aria-live="polite"
+      >
         {jobs.total.toLocaleString()} {jobs.total === 1 ? 'job' : 'jobs'}
       </p>
       <div class="flex flex-col gap-3">
@@ -188,39 +202,22 @@
   </div>
 </div>
 
-<!-- Mobile filters entry: an icon-only tab pinned to the left viewport edge,
-     mirroring the swipe tab on the right (header h-14 + page py-6 = top-20). Fixed
-     so it stays reachable while scrolling; hidden on desktop where the aside panel
-     is always visible. The active-filter count rides as a corner badge. -->
-<button
-  type="button"
-  onclick={() => (drawerOpen = true)}
-  aria-label="Filters"
-  title="Filters"
-  class="fixed left-0 top-20 z-30 flex items-center rounded-r-lg border border-l-0 border-border bg-secondary p-3 text-secondary-foreground shadow-sm transition-colors hover:bg-accent md:hidden"
->
-  <SlidersHorizontal class="h-5 w-5 shrink-0" />
-  {#if filters.active > 0}
-    <span
-      class="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground"
-    >
-      {filters.active}
-    </span>
-  {/if}
-</button>
-
 {#if standalone}
+  <!-- Standalone list only: the fixed edge tabs sit over the top of the viewport,
+       where this page's content starts. The embedded company view keeps its inline
+       Filters button (above) so nothing overlaps the company hero. -->
+  <FilterEdgeTab active={filters.active} onclick={() => (drawerOpen = true)} />
+
   <!-- Swipe-mode entry: an icon-only button pinned to the right viewport edge,
-       level with the top of the filters panel (header h-14 + page py-6 = top-20).
-       Fixed, so it only exists while the standalone jobs list is mounted (never on
-       the embedded company view) and stays reachable while scrolling; kept below
-       the z-40 mobile overlays. -->
+       level with the left filters tab (top-16). Fixed, so it only exists while the
+       standalone jobs list is mounted (never on the embedded company view) and
+       stays reachable while scrolling; kept below the z-40 mobile overlays. -->
   <button
     type="button"
     onclick={openSwipe}
     aria-label="Swipe mode"
     title="Swipe mode"
-    class="fixed right-0 top-20 z-30 flex items-center rounded-l-lg border border-r-0 border-border bg-secondary p-3 text-secondary-foreground shadow-sm transition-colors hover:bg-accent"
+    class="fixed right-0 top-16 z-30 flex items-center rounded-l-lg border border-r-0 border-border bg-secondary p-3 text-secondary-foreground shadow-sm transition-colors hover:bg-accent"
   >
     <Layers class="h-5 w-5 shrink-0" />
   </button>
