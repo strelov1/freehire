@@ -10,12 +10,12 @@
 
 ## 3. Frontend: sitemap index + sub-sitemaps
 
-- [ ] 3.1 Add slim API-client methods (job/company sitemap slice + boundaries) in `web/src/lib/api.ts`
-- [ ] 3.2 Extract the shared XML escaping / `<url>` builders and rewrite `web/src/routes/sitemap.xml/+server.ts` to emit a `<sitemapindex>` built from the boundary cursors + a static-pages entry
-- [ ] 3.3 Add sub-sitemap routes: `sitemap-pages.xml`, `sitemap-jobs/[cursor].xml`, `sitemap-companies/[cursor].xml` (each a `<urlset>` chunk)
-- [ ] 3.4 Verify frontend: `svelte-check` clean + `npm run build`; manual `curl` of the index and one job/company chunk against a running stack (no test runner in `web/` — verification is build + curl)
+- [x] 3.1 Add slim API-client methods (job/company sitemap slice + boundaries) in `web/src/lib/api.ts`
+- [x] 3.2 Extract the shared XML escaping / `<url>` builders and rewrite `web/src/routes/sitemap.xml/+server.ts` to emit a `<sitemapindex>` built from the boundary cursors + a static-pages entry
+- [x] 3.3 Add sub-sitemap routes: `sitemap-pages.xml`, `sitemap-jobs/[cursor].xml`, `sitemap-companies/[cursor].xml` (each a `<urlset>` chunk)
+- [x] 3.4 Verify frontend: `svelte-check` clean + `npm run build`; manual `curl` of the index and one job/company chunk against a running stack (no test runner in `web/` — verification is build + curl)
 
 ## 4. Cleanup + full verification
 
-- [ ] 4.1 Remove the old 5,000-row caps and truncation warnings; confirm no orphaned helpers remain
-- [ ] 4.2 Full pass: `go build ./... && go vet ./...`, unit + integration tests, `svelte-check`, and an end-to-end fetch of `/sitemap.xml` → a sub-sitemap chunk
+- [x] 4.1 Remove the old 5,000-row caps and truncation warnings; confirm no orphaned helpers remain
+- [x] 4.2 Full pass: `go build ./... && go vet ./...`, unit + integration tests, `svelte-check`, and an end-to-end fetch of `/sitemap.xml` → a sub-sitemap chunk

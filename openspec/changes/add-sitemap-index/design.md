@@ -70,11 +70,13 @@ $cursor`), first chunk keyed by the empty string.
 ### Frontend route shape
 - `sitemap.xml/+server.ts` → `<sitemapindex>` (rewrite of the existing file).
 - `sitemap-pages.xml/+server.ts` → static URLs.
-- `sitemap-jobs/[cursor].xml/+server.ts` and
-  `sitemap-companies/[cursor].xml/+server.ts` → per-chunk `<urlset>`.
-  SvelteKit supports a `[param]` embedded in a segment name with a static
-  suffix. XML escaping and the `<url>`/`<loc>`/`<lastmod>` builders are shared
-  helpers (extracted from the current file).
+- `sitemap-jobs.xml/+server.ts` and `sitemap-companies.xml/+server.ts` →
+  per-chunk `<urlset>`, addressed by a **`?after=<cursor>` query param** (id for
+  jobs, slug for companies). *Chosen over a `[cursor].xml` path param:* the first
+  company chunk's cursor is the empty string (sorts before every slug), which a
+  path segment cannot carry (`/…/.xml` won't match `[cursor].xml`); a query param
+  represents it cleanly as `?after=`. XML escaping and the `<url>`/`<lastmod>`
+  builders live in a shared `$lib/sitemap.ts` (extracted from the current file).
 
 ## Risks / Trade-offs
 

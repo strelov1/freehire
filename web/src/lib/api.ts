@@ -47,6 +47,13 @@ interface Page<T> {
   meta: ListMeta;
 }
 
+/** One entry in a sitemap sub-file: the public slug and its lastmod. Kept slim
+ *  on purpose — the sitemap never needs the full job/company row. */
+export interface SitemapEntry {
+  slug: string;
+  updated_at: string;
+}
+
 /** A non-2xx API response. Carries the HTTP status so callers can branch on it
  *  (e.g. 401 invalid credentials, 409 email taken) instead of parsing strings.
  *  `message` is the backend's `{ "error": msg }` text when present, so logs and
@@ -198,6 +205,39 @@ export function createApi(
       `/api/v1/companies/${slug}${query(limit, offset)}`,
     );
     return body.data;
+  }
+
+  // --- Sitemap --------------------------------------------------------------
+  //
+  // Slim, keyset-paginated feeds behind the sitemap index (server routes only).
+  // The slice endpoints return one chunk after a cursor; the boundary endpoints
+  // return the cursor ending each chunk, so the index can enumerate sub-sitemaps
+  // without walking the catalogue.
+
+  /** One chunk of open-job sitemap entries with id > `after` (0 for the first). */
+  async function sitemapJobs(after: number, limit: number): Promise<SitemapEntry[]> {
+    const res = await request<{ data: SitemapEntry[] }>(`/api/v1/jobs/sitemap?after=${after}&limit=${limit}`);
+    return res.data;
+  }
+
+  /** The job-id cursor ending each `chunk`-sized page of open jobs. */
+  async function sitemapJobBoundaries(chunk: number): Promise<number[]> {
+    const res = await request<{ data: number[] }>(`/api/v1/jobs/sitemap/boundaries?chunk=${chunk}`);
+    return res.data;
+  }
+
+  /** One chunk of company sitemap entries with slug > `after` ('' for the first). */
+  async function sitemapCompanies(after: string, limit: number): Promise<SitemapEntry[]> {
+    const res = await request<{ data: SitemapEntry[] }>(
+      `/api/v1/companies/sitemap?after=${encodeURIComponent(after)}&limit=${limit}`,
+    );
+    return res.data;
+  }
+
+  /** The slug cursor ending each `chunk`-sized page of companies. */
+  async function sitemapCompanyBoundaries(chunk: number): Promise<string[]> {
+    const res = await request<{ data: string[] }>(`/api/v1/companies/sitemap/boundaries?chunk=${chunk}`);
+    return res.data;
   }
 
   // --- Auth -----------------------------------------------------------------
@@ -607,6 +647,10 @@ export function createApi(
     facetCounts,
     listCompanies,
     getCompany,
+    sitemapJobs,
+    sitemapJobBoundaries,
+    sitemapCompanies,
+    sitemapCompanyBoundaries,
     register,
     login,
     oauthProviders,
