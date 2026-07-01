@@ -185,9 +185,13 @@ func Register(app *fiber.App, cfg Config) {
 	// Literal routes before the :slug param route so they are not read as slugs.
 	api.Get("/jobs/search", a.SearchJobs)
 	api.Get("/jobs/facets", a.JobFacets)
+	api.Get("/jobs/sitemap", a.JobSitemap)
+	api.Get("/jobs/sitemap/boundaries", a.JobSitemapBoundaries)
 	api.Get("/jobs/:slug", a.GetJob)
 	api.Get("/jobs/:slug/similar", a.SimilarJobs)
 	api.Get("/companies", a.ListCompanies)
+	api.Get("/companies/sitemap", a.CompanySitemap)
+	api.Get("/companies/sitemap/boundaries", a.CompanySitemapBoundaries)
 	api.Get("/companies/:slug", a.GetCompany)
 
 	// Public read of a shared saved-search "board" by its slug — unauthenticated, like

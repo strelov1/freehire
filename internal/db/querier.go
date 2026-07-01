@@ -65,6 +65,10 @@ type Querier interface {
 	// caller owns the grace window (cutoff = now() - window) and the "run ingested
 	// something" guard, so a failed crawl never mass-closes that source's catalogue.
 	CloseUnseenJobs(ctx context.Context, arg CloseUnseenJobsParams) (int64, error)
+	// The slug ending every full chunk of `chunk_size` companies (ordered by slug),
+	// excluding the final row, so the sitemap index can list each company sub-sitemap's
+	// keyset cursor.
+	CompanySitemapBoundaries(ctx context.Context, chunkSize int64) ([]string, error)
 	// Total companies matching the same optional name + facet filters as ListCompanies,
 	// so search/filter pagination reports the filtered total. Keep this WHERE identical
 	// to ListCompanies.
@@ -216,6 +220,10 @@ type Querier interface {
 	// never reset. extracted_at is non-NULL when the ingest prefilter already
 	// decided the post holds no vacancy, so it is recorded but never queued.
 	InsertTelegramPost(ctx context.Context, arg InsertTelegramPostParams) (int64, error)
+	// The id ending every full chunk of `chunk_size` open jobs (ordered by id),
+	// excluding the final row, so the sitemap index can list each sub-sitemap's keyset
+	// cursor without the client walking the whole catalogue.
+	JobSitemapBoundaries(ctx context.Context, chunkSize int64) ([]int64, error)
 	// A user's API keys, newest first. Metadata only — never the token_hash.
 	ListAPIKeysByUser(ctx context.Context, userID int64) ([]ListAPIKeysByUserRow, error)
 	// Every active subscription with the data the matching worker needs: the saved
@@ -239,6 +247,13 @@ type Querier interface {
 	// company's current tags (so it can reconcile only the tags it manages, leaving any
 	// others untouched).
 	ListCompanyCollections(ctx context.Context) ([]ListCompanyCollectionsRow, error)
+	// Slim keyset page of companies for the sitemap, cursored by the slug primary key
+	// (first chunk keyed by the empty string, which sorts before every slug).
+	ListCompanySitemap(ctx context.Context, arg ListCompanySitemapParams) ([]ListCompanySitemapRow, error)
+	// Slim keyset page for the sitemap: only the fields a sitemap URL needs, open jobs
+	// only, cursored by the immutable primary key so a chunk is a bounded index scan
+	// (never a deep OFFSET over millions of rows).
+	ListJobSitemap(ctx context.Context, arg ListJobSitemapParams) ([]ListJobSitemapRow, error)
 	// Newest-added first: created_at is when the job entered the catalogue (stable
 	// across re-ingests), so fresh ingests surface on top regardless of how old the
 	// platform's posted_at is. id breaks ties within one ingest batch.

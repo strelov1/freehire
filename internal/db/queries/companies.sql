@@ -35,6 +35,28 @@ WHERE (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || 
   AND (coalesce(cardinality(sqlc.arg('company_types')::text[]), 0) = 0 OR company_types && sqlc.arg('company_types')::text[])
   AND (coalesce(cardinality(sqlc.arg('company_sizes')::text[]), 0) = 0 OR company_sizes && sqlc.arg('company_sizes')::text[]);
 
+-- name: ListCompanySitemap :many
+-- Slim keyset page of companies for the sitemap, cursored by the slug primary key
+-- (first chunk keyed by the empty string, which sorts before every slug).
+SELECT slug, updated_at
+FROM companies
+WHERE slug > sqlc.arg(after_slug)
+ORDER BY slug
+LIMIT sqlc.arg(batch_size);
+
+-- name: CompanySitemapBoundaries :many
+-- The slug ending every full chunk of `chunk_size` companies (ordered by slug),
+-- excluding the final row, so the sitemap index can list each company sub-sitemap's
+-- keyset cursor.
+SELECT slug FROM (
+  SELECT slug,
+         row_number() OVER (ORDER BY slug) AS rn,
+         count(*) OVER () AS total
+  FROM companies
+) t
+WHERE rn % sqlc.arg(chunk_size)::bigint = 0 AND rn < total
+ORDER BY slug;
+
 -- name: GetCompany :one
 -- SELECT * (not an explicit column list) so the generated row stays db.Company as
 -- the table grows columns (e.g. collections); an explicit subset makes sqlc emit a

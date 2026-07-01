@@ -7,7 +7,43 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const companySitemapBoundaries = `-- name: CompanySitemapBoundaries :many
+SELECT slug FROM (
+  SELECT slug,
+         row_number() OVER (ORDER BY slug) AS rn,
+         count(*) OVER () AS total
+  FROM companies
+) t
+WHERE rn % $1::bigint = 0 AND rn < total
+ORDER BY slug
+`
+
+// The slug ending every full chunk of `chunk_size` companies (ordered by slug),
+// excluding the final row, so the sitemap index can list each company sub-sitemap's
+// keyset cursor.
+func (q *Queries) CompanySitemapBoundaries(ctx context.Context, chunkSize int64) ([]string, error) {
+	rows, err := q.db.Query(ctx, companySitemapBoundaries, chunkSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			return nil, err
+		}
+		items = append(items, slug)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
 
 const countCompanies = `-- name: CountCompanies :one
 SELECT count(*)
@@ -189,6 +225,46 @@ func (q *Queries) ListCompanyCollections(ctx context.Context) ([]ListCompanyColl
 	for rows.Next() {
 		var i ListCompanyCollectionsRow
 		if err := rows.Scan(&i.Slug, &i.Collections); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCompanySitemap = `-- name: ListCompanySitemap :many
+SELECT slug, updated_at
+FROM companies
+WHERE slug > $1
+ORDER BY slug
+LIMIT $2
+`
+
+type ListCompanySitemapParams struct {
+	AfterSlug string `json:"after_slug"`
+	BatchSize int32  `json:"batch_size"`
+}
+
+type ListCompanySitemapRow struct {
+	Slug      string             `json:"slug"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Slim keyset page of companies for the sitemap, cursored by the slug primary key
+// (first chunk keyed by the empty string, which sorts before every slug).
+func (q *Queries) ListCompanySitemap(ctx context.Context, arg ListCompanySitemapParams) ([]ListCompanySitemapRow, error) {
+	rows, err := q.db.Query(ctx, listCompanySitemap, arg.AfterSlug, arg.BatchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCompanySitemapRow{}
+	for rows.Next() {
+		var i ListCompanySitemapRow
+		if err := rows.Scan(&i.Slug, &i.UpdatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

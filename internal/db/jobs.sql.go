@@ -243,6 +243,83 @@ func (q *Queries) GetJobIDBySlug(ctx context.Context, publicSlug string) (int64,
 	return id, err
 }
 
+const jobSitemapBoundaries = `-- name: JobSitemapBoundaries :many
+SELECT id FROM (
+  SELECT id,
+         row_number() OVER (ORDER BY id) AS rn,
+         count(*) OVER () AS total
+  FROM jobs
+  WHERE closed_at IS NULL
+) t
+WHERE rn % $1::bigint = 0 AND rn < total
+ORDER BY id
+`
+
+// The id ending every full chunk of `chunk_size` open jobs (ordered by id),
+// excluding the final row, so the sitemap index can list each sub-sitemap's keyset
+// cursor without the client walking the whole catalogue.
+func (q *Queries) JobSitemapBoundaries(ctx context.Context, chunkSize int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, jobSitemapBoundaries, chunkSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listJobSitemap = `-- name: ListJobSitemap :many
+SELECT id, public_slug, updated_at
+FROM jobs
+WHERE closed_at IS NULL AND id > $1
+ORDER BY id
+LIMIT $2
+`
+
+type ListJobSitemapParams struct {
+	AfterID   int64 `json:"after_id"`
+	BatchSize int32 `json:"batch_size"`
+}
+
+type ListJobSitemapRow struct {
+	ID         int64              `json:"id"`
+	PublicSlug string             `json:"public_slug"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Slim keyset page for the sitemap: only the fields a sitemap URL needs, open jobs
+// only, cursored by the immutable primary key so a chunk is a bounded index scan
+// (never a deep OFFSET over millions of rows).
+func (q *Queries) ListJobSitemap(ctx context.Context, arg ListJobSitemapParams) ([]ListJobSitemapRow, error) {
+	rows, err := q.db.Query(ctx, listJobSitemap, arg.AfterID, arg.BatchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListJobSitemapRow{}
+	for rows.Next() {
+		var i ListJobSitemapRow
+		if err := rows.Scan(&i.ID, &i.PublicSlug, &i.UpdatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listJobs = `-- name: ListJobs :many
 SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, remote_unspecified
 FROM jobs

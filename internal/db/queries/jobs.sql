@@ -55,6 +55,30 @@ SELECT count(*)
 FROM jobs
 WHERE closed_at IS NULL;
 
+-- name: ListJobSitemap :many
+-- Slim keyset page for the sitemap: only the fields a sitemap URL needs, open jobs
+-- only, cursored by the immutable primary key so a chunk is a bounded index scan
+-- (never a deep OFFSET over millions of rows).
+SELECT id, public_slug, updated_at
+FROM jobs
+WHERE closed_at IS NULL AND id > sqlc.arg(after_id)
+ORDER BY id
+LIMIT sqlc.arg(batch_size);
+
+-- name: JobSitemapBoundaries :many
+-- The id ending every full chunk of `chunk_size` open jobs (ordered by id),
+-- excluding the final row, so the sitemap index can list each sub-sitemap's keyset
+-- cursor without the client walking the whole catalogue.
+SELECT id FROM (
+  SELECT id,
+         row_number() OVER (ORDER BY id) AS rn,
+         count(*) OVER () AS total
+  FROM jobs
+  WHERE closed_at IS NULL
+) t
+WHERE rn % sqlc.arg(chunk_size)::bigint = 0 AND rn < total
+ORDER BY id;
+
 -- name: ListJobsByCompany :many
 SELECT *
 FROM jobs
