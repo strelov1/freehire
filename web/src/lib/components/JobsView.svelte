@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { Layers } from '@lucide/svelte';
+  import { Layers, SlidersHorizontal } from '@lucide/svelte';
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -148,29 +148,18 @@
   </aside>
 
   <div class="min-w-0 flex-1">
-    <div class="mb-4 flex items-center gap-2">
-      {#if standalone}
-        <!-- The header search is this page's text filter (see HeaderListSearch);
-             the spacer keeps the Filters button right-aligned. -->
-        <div class="flex-1"></div>
-      {:else}
-        <Input
-          type="search"
-          value={filters.value.q}
-          oninput={(e) => filters.setQuery(e.currentTarget.value)}
-          placeholder="Search jobs…"
-          aria-label="Search jobs"
-          class="min-w-0 flex-1"
-        />
-      {/if}
-      <button
-        type="button"
-        class="h-9 shrink-0 rounded-lg border border-border bg-secondary px-3 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent md:hidden"
-        onclick={() => (drawerOpen = true)}
-      >
-        Filters{#if filters.active > 0}&nbsp;({filters.active}){/if}
-      </button>
-    </div>
+    {#if !standalone}
+      <!-- Company embed: the text filter lives inline (the header search is the
+           standalone list's filter). Mobile filter access is the left-edge tab below. -->
+      <Input
+        type="search"
+        value={filters.value.q}
+        oninput={(e) => filters.setQuery(e.currentTarget.value)}
+        placeholder="Search jobs…"
+        aria-label="Search jobs"
+        class="mb-4 w-full"
+      />
+    {/if}
 
     {#if jobs.status === 'loading'}
       <States state="loading" />
@@ -179,7 +168,8 @@
     {:else if jobs.items.length === 0}
       <States state="empty" message="No matching jobs." />
     {:else}
-      <p class="mb-3 text-sm text-muted-foreground" aria-live="polite">
+      <!-- Clear the left-edge filters tab (top-20, level with this first line) on mobile. -->
+      <p class="mb-3 pl-12 text-sm text-muted-foreground md:pl-0" aria-live="polite">
         {jobs.total.toLocaleString()} {jobs.total === 1 ? 'job' : 'jobs'}
       </p>
       <div class="flex flex-col gap-3">
@@ -197,6 +187,27 @@
     {/if}
   </div>
 </div>
+
+<!-- Mobile filters entry: an icon-only tab pinned to the left viewport edge,
+     mirroring the swipe tab on the right (header h-14 + page py-6 = top-20). Fixed
+     so it stays reachable while scrolling; hidden on desktop where the aside panel
+     is always visible. The active-filter count rides as a corner badge. -->
+<button
+  type="button"
+  onclick={() => (drawerOpen = true)}
+  aria-label="Filters"
+  title="Filters"
+  class="fixed left-0 top-20 z-30 flex items-center rounded-r-lg border border-l-0 border-border bg-secondary p-3 text-secondary-foreground shadow-sm transition-colors hover:bg-accent md:hidden"
+>
+  <SlidersHorizontal class="h-5 w-5 shrink-0" />
+  {#if filters.active > 0}
+    <span
+      class="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground"
+    >
+      {filters.active}
+    </span>
+  {/if}
+</button>
 
 {#if standalone}
   <!-- Swipe-mode entry: an icon-only button pinned to the right viewport edge,
