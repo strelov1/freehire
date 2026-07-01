@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     UNIQUE (source, external_id)
 );
 
--- Composite index matches the ListJobs ORDER BY (posted_at DESC NULLS LAST, id DESC)
--- and still serves queries that filter/sort on posted_at alone (leading column).
+-- Composite index for posted_at-ordered access and queries that filter/sort on posted_at
+-- alone (leading column). NOTE: ListJobs now orders by created_at, served by the partial
+-- jobs_open_created_at_id_idx in migration 0033 — not this index.
 CREATE INDEX IF NOT EXISTS jobs_posted_at_id_idx ON jobs (posted_at DESC NULLS LAST, id DESC);
 CREATE INDEX IF NOT EXISTS jobs_source_idx ON jobs (source);
