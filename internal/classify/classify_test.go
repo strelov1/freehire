@@ -67,6 +67,14 @@ func TestParse(t *testing.T) {
 		// SEO / social fold into marketing; "social media" beats a bare "manager".
 		{"SEO Specialist", "", "marketing"},
 		{"Social Media Manager", "", "marketing"},
+		// LLM-mined alias gaps for existing categories: whole-word matching missed
+		// these common IT titles (e.g. "security" does not match inside "cybersecurity").
+		{"Cybersecurity Engineer", "", "security"},
+		{"Senior Cyber Security Analyst", "senior", "security"},
+		{"Firmware Engineer", "", "embedded"},
+		{"Scrum Master", "", "project_management"},
+		{"Program Manager", "", "project_management"},
+		{"Скрам-мастер", "", "project_management"},
 		{"Cat Herder", "", ""},
 		{"", "", ""},
 	}
