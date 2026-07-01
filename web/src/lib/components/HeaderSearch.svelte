@@ -42,6 +42,13 @@
     ...companies.map((company): Flat => ({ kind: 'company', company })),
   ]);
 
+  // Shared classes for a result row; the keyboard/hover-active row is highlighted.
+  const itemClass = (active: boolean) =>
+    cn(
+      'flex items-center gap-3 px-3 py-2 text-sm transition-colors',
+      active ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50',
+    );
+
   async function runSearch(q: string) {
     // Bump the token on every call — including the empty-query dismissal — so a
     // request still in flight from a prior keystroke is marked stale and can't
@@ -178,7 +185,7 @@
       bind:value={query}
       onkeydown={onKeydown}
       onfocus={() => {
-        if (jobs.length > 0 || companies.length > 0 || noResults) open = true;
+        if (flat.length || noResults) open = true;
       }}
       type="text"
       placeholder="Search jobs and companies…"
@@ -236,10 +243,7 @@
               href={resolve('/jobs/[slug]', { slug: job.public_slug })}
               onclick={reset}
               onmouseenter={() => (activeIndex = i)}
-              class={cn(
-                'flex items-center gap-3 px-3 py-2 text-sm transition-colors',
-                activeIndex === i ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50',
-              )}
+              class={itemClass(activeIndex === i)}
             >
               <CompanyLogo name={job.company} size="size-5" />
               <span class="min-w-0 flex-1">
@@ -262,10 +266,7 @@
               href={resolve('/companies/[slug]', { slug: company.slug })}
               onclick={reset}
               onmouseenter={() => (activeIndex = idx)}
-              class={cn(
-                'flex items-center gap-3 px-3 py-2 text-sm transition-colors',
-                activeIndex === idx ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50',
-              )}
+              class={itemClass(activeIndex === idx)}
             >
               <CompanyLogo name={company.name} size="size-5" />
               <span class="min-w-0 flex-1 truncate font-medium">{company.name}</span>
