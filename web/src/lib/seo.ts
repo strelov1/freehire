@@ -5,6 +5,13 @@
 import type { Company, Enrichment, Job } from './types';
 
 const SITE = 'freehire';
+// Site-level facts reused across the homepage WebSite/Organization schema.
+const SITE_DESCRIPTION =
+  'FreeHire aggregates tech jobs straight from company career boards, deduplicates them, and tags each with stack, seniority and location. Free and open source.';
+const SITE_GITHUB = 'https://github.com/strelov1/freehire';
+
+/** One question/answer pair; the shape shared by the visible FAQ and its schema. */
+export type FaqItem = { question: string; answer: string };
 
 /** Plain-text, length-capped description for `<meta name="description">` and OG,
  *  derived from the job's sanitized HTML body. */
@@ -133,6 +140,69 @@ export function organizationJsonLd(company: Company, origin: string): Record<str
     '@type': 'Organization',
     name: company.name,
     url: `${origin}/companies/${company.slug}`,
+  };
+}
+
+/** schema.org WebSite for the homepage. The SearchAction advertises the job
+ *  search so engines can offer a sitelinks search box straight into /jobs?q=. */
+export function websiteJsonLd(origin: string): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: SITE,
+    url: `${origin}/`,
+    description: SITE_DESCRIPTION,
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: {
+        '@type': 'EntryPoint',
+        urlTemplate: `${origin}/jobs?q={search_term_string}`,
+      },
+      'query-input': 'required name=search_term_string',
+    },
+  };
+}
+
+/** schema.org Organization for freehire itself (the publisher) — names the entity
+ *  for search/AI engines. Distinct from `organizationJsonLd`, which describes a
+ *  hiring company on its own page. */
+export function siteOrganizationJsonLd(origin: string): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: SITE,
+    url: `${origin}/`,
+    logo: `${origin}/apple-touch-icon.png`,
+    description: SITE_DESCRIPTION,
+    sameAs: [SITE_GITHUB],
+  };
+}
+
+/** schema.org BreadcrumbList from an ordered list of trail steps. */
+export function breadcrumbJsonLd(items: { name: string; url: string }[]): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items.map((item, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: item.name,
+      item: item.url,
+    })),
+  };
+}
+
+/** schema.org FAQPage. The questions must also appear as visible text on the page
+ *  (Google's requirement), so it is built from the same source as the rendered FAQ. */
+export function faqPageJsonLd(faqs: FaqItem[]): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faqs.map((f) => ({
+      '@type': 'Question',
+      name: f.question,
+      acceptedAnswer: { '@type': 'Answer', text: f.answer },
+    })),
   };
 }
 

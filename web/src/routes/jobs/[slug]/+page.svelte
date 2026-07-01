@@ -3,7 +3,13 @@
   import JobRow from '$lib/components/JobRow.svelte';
   import JobView from '$lib/components/JobView.svelte';
   import Seo from '$lib/components/Seo.svelte';
-  import { jobPageTitle, jobPostingJsonLd, jsonLdScript, metaDescription } from '$lib/seo';
+  import {
+    breadcrumbJsonLd,
+    jobPageTitle,
+    jobPostingJsonLd,
+    jsonLdScript,
+    metaDescription,
+  } from '$lib/seo';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -13,7 +19,16 @@
   // The per-job OG preview lives beside the canonical URL; og:image must be absolute.
   const ogImage = $derived(`${canonical}/og.png`);
   const description = $derived(metaDescription(data.job.description));
-  const jsonLd = $derived(jsonLdScript(jobPostingJsonLd(data.job, origin)));
+  const jsonLd = $derived(
+    jsonLdScript([
+      jobPostingJsonLd(data.job, origin),
+      breadcrumbJsonLd([
+        { name: 'freehire', url: `${origin}/` },
+        { name: 'Jobs', url: `${origin}/jobs` },
+        { name: data.job.title, url: canonical },
+      ]),
+    ])
+  );
 </script>
 
 <Seo title={jobPageTitle(data.job)} {description} {canonical} image={ogImage} />

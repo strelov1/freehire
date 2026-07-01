@@ -2,6 +2,7 @@
   import { resolve } from '$app/paths';
   import { Button } from '$lib/ui';
   import HomeFunnel from '$lib/components/HomeFunnel.svelte';
+  import { HOME_FAQ } from '$lib/homeFaq';
 
   const GITHUB = 'https://github.com/strelov1/freehire';
   const CLI = 'https://github.com/strelov1/freehire-cli';
@@ -355,6 +356,23 @@ freehire save <span class="text-foreground">&lt;slug&gt;</span></pre>
         </Button>
       </div>
     </div>
+  </section>
+
+  <!-- FAQ. Visible answers mirror the FAQPage JSON-LD (see homeFaq.ts) so the
+       structured data always matches what's on the page. -->
+  <section class="border-t border-border py-16 sm:py-20">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// faq</p>
+    <h2 class="mt-6 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
+      Frequently asked questions.
+    </h2>
+    <dl class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
+      {#each HOME_FAQ as item (item.question)}
+        <div class="bg-background p-6 sm:p-7">
+          <dt class="text-lg font-semibold tracking-tight">{item.question}</dt>
+          <dd class="mt-2 text-sm leading-relaxed text-muted-foreground">{item.answer}</dd>
+        </div>
+      {/each}
+    </dl>
   </section>
 </div>
 
