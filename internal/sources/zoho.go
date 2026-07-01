@@ -105,29 +105,88 @@ func (z zoho) description(ctx context.Context, url string) (string, bool) {
 	return body, true
 }
 
-// zohoHexEscape matches a \xNN JS hex escape, which Zoho uses for every non-alphanumeric
-// byte of the embedded record (quotes, angle brackets, …).
-var zohoHexEscape = regexp.MustCompile(`\\x[0-9a-fA-F]{2}`)
-
-// zohoUnescape decodes the JS string escaping of an embedded Zoho value: \xNN hex escapes to
-// their byte first (turning \x22 into a quote, \x3C into '<', …), then the standard
-// backslash escapes. The result is HTML, which the caller sanitizes.
+// zohoUnescape decodes the JS string escaping of an embedded Zoho value into HTML, which the
+// caller sanitizes. The record is serialized into the page as a JS string whose richtext field
+// values are themselves already escaped, so markup arrives escaped twice: a closing tag's slash
+// as \\\/ (an escaped backslash followed by an escaped slash) and a bullet as \\u2022. A single
+// pass would peel only the outer layer, leaving a stray backslash that makes <\/span> an invalid
+// tag the sanitizer emits as visible &lt;\/span&gt; text. We therefore decode one level per pass
+// and repeat until the string stabilizes; this terminates because every changing pass removes at
+// least one (finite) backslash, and leaves single-escaped values (which stabilize after one pass)
+// untouched.
 func zohoUnescape(s string) string {
-	s = zohoHexEscape.ReplaceAllStringFunc(s, func(m string) string {
-		b, err := strconv.ParseUint(m[2:], 16, 8)
-		if err != nil {
-			return m
+	for range zohoMaxUnescapePasses {
+		next := zohoUnescapeOnce(s)
+		if next == s {
+			break
 		}
-		return string(rune(b))
-	})
-	return strings.NewReplacer(
-		`\/`, `/`,
-		`\n`, "\n",
-		`\t`, "\t",
-		`\r`, "",
-		`\"`, `"`,
-		`\\`, `\`,
-	).Replace(s)
+		s = next
+	}
+	return s
+}
+
+// zohoMaxUnescapePasses caps the decode loop as a guard; the observed nesting is two levels, so
+// this is slack, not a functional bound.
+const zohoMaxUnescapePasses = 8
+
+// zohoUnescapeOnce decodes one level of JS string escaping in a single left-to-right pass, so an
+// escaped backslash (\\) is consumed as one unit before the following character is read — the
+// ordering that lets \\\/ collapse to / across two passes. \xNN and \uNNNN decode to their rune;
+// \n\t\r\"\/ are the standard escapes; an unknown \X yields X (matching JS, and folding Zoho's
+// stray \- back to -).
+func zohoUnescapeOnce(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); {
+		if s[i] != '\\' || i+1 >= len(s) {
+			b.WriteByte(s[i])
+			i++
+			continue
+		}
+		switch c := s[i+1]; c {
+		case '\\':
+			b.WriteByte('\\')
+			i += 2
+		case '/':
+			b.WriteByte('/')
+			i += 2
+		case 'n':
+			b.WriteByte('\n')
+			i += 2
+		case 't':
+			b.WriteByte('\t')
+			i += 2
+		case 'r':
+			i += 2
+		case '"':
+			b.WriteByte('"')
+			i += 2
+		case 'x':
+			if i+4 <= len(s) {
+				if v, err := strconv.ParseUint(s[i+2:i+4], 16, 8); err == nil {
+					b.WriteRune(rune(v))
+					i += 4
+					continue
+				}
+			}
+			b.WriteByte(c)
+			i += 2
+		case 'u':
+			if i+6 <= len(s) {
+				if v, err := strconv.ParseUint(s[i+2:i+6], 16, 16); err == nil {
+					b.WriteRune(rune(v))
+					i += 6
+					continue
+				}
+			}
+			b.WriteByte(c)
+			i += 2
+		default:
+			b.WriteByte(c)
+			i += 2
+		}
+	}
+	return b.String()
 }
 
 // elementAttrByID returns the named attribute of the first element with the given tag and id,

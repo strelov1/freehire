@@ -13,6 +13,13 @@ func TestZohoUnescape(t *testing.T) {
 		`line\nbreak`:              "line\nbreak",  // backslash-n
 		`path\/to`:                 "path/to",      // escaped slash
 		`plain`:                    "plain",        // nothing to do
+		// The richtext field is escaped twice, so markup arrives double-escaped: a
+		// single pass would leave a stray backslash. Decoding to a fixpoint resolves it.
+		`<\\\/span>`:    "</span>",    // double-escaped closing tag
+		`<\\\/p>`:       "</p>",       // double-escaped closing tag
+		`\\u2022`:       "•",          // double-escaped unicode bullet
+		`\\\x22q\\\x22`: `"q"`,        // double-escaped quotes
+		`margin\-top`:   "margin-top", // stray backslash-hyphen folds to hyphen
 	}
 	for in, want := range cases {
 		if got := zohoUnescape(in); got != want {
@@ -36,6 +43,29 @@ func TestZohoElementAttrByID(t *testing.T) {
 func zohoDetailHTML(description string) string {
 	return `<html><body><script>var rec = "{\x22id\x22:\x221\x22,\x22Job_Description\x22:\x22` +
 		description + `\x22,\x22Country\x22:null}";</script></body></html>`
+}
+
+// TestZohoDescriptionDoubleEscaped guards the real-world case where the detail record
+// escapes the richtext value twice: closing tags arrive as <\\\/p> and bullets as \\u2022.
+// Before the fixpoint decode these reached storage as visible &lt;\/p&gt; / • text.
+func TestZohoDescriptionDoubleEscaped(t *testing.T) {
+	desc := `<p style=\\\x22margin\-top:0px\\\x22>Duties\\u2022audit files.<br\/><\\\/p>`
+	http := (&routedHTTP{}).route("/jobs/Careers/1", zohoDetailHTML(desc))
+
+	got, ok := zoho{http: http}.description(context.Background(), "https://acme.zohorecruit.com/jobs/Careers/1")
+	if !ok {
+		t.Fatal("description: not found")
+	}
+	// A leftover backslash (e.g. •, <\/p>) or an entity-escaped tag (&lt;) means the
+	// nested escaping was not fully peeled.
+	if strings.Contains(got, "&lt;") || strings.Contains(got, `\`) {
+		t.Errorf("description leaks escaped markup: %q", got)
+	}
+	for _, want := range []string{"</p>", "•", "Duties", "audit files"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("description = %q, missing %q", got, want)
+		}
+	}
 }
 
 func TestZohoFetch(t *testing.T) {
