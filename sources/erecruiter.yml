@@ -1,0 +1,14 @@
+# eRecruiter Polska career boards ("Strona Kariera"). Provider is the filename; each entry
+# is company + board. board = the company's cfg config token (32-hex), embedded in its
+# careers page as skk.erecruiter.pl/Code.ashx?cfg=<hex>; see internal/sources/erecruiter.go.
+# The keyless list endpoint (skk.erecruiter.pl/GetHtml.ashx?cfg=<board>&grid=rows) returns a
+# JSONP row table (the server returns 20 rows per page), and each posting's description comes
+# from its Offer.aspx detail page. eRecruiter is a Polish ATS, so most postings are in Polish
+# and a board carries all of a company's jobs (IT and non-IT); the pipeline's classify/skilltag
+# dictionaries derive facets and IT filtering happens downstream.
+#
+# Each board is validated live (list endpoint returned offer rows) before adding. Discover a
+# company's cfg with: go run ./cmd/harvest-erecruiter <careers-urls.txt>
+
+- company: Atalian Poland
+  board: eac02250aa184ed4bf4950e74948549a
