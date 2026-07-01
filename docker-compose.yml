@@ -35,9 +35,9 @@ services:
     environment:
       PORT: "8080"
       DATABASE_URL: "postgres://hire:hire@db:5432/hire?sslmode=disable"
-      # Required by the auth surface (server fails fast if empty). Dev default —
-      # set a real JWT_SECRET in any non-local deployment.
-      JWT_SECRET: "${JWT_SECRET:-dev-insecure-secret-change-me}"
+      # Required by the auth surface (server fails fast if unset or under 32 bytes).
+      # Dev default — set a real, random JWT_SECRET in any non-local deployment.
+      JWT_SECRET: "${JWT_SECRET:-dev-insecure-secret-change-me-0123456789}"
       # OAuth callbacks redirect the browser back to this origin; it also
       # derives the per-provider callback URL registered at each provider.
       FRONTEND_ORIGIN: "${FRONTEND_ORIGIN:-http://localhost:5173}"
