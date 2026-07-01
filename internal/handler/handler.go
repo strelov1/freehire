@@ -276,6 +276,11 @@ func Register(app *fiber.App, cfg Config) {
 	api.Patch("/me/profiles/:id", saved, a.UpdateSearchProfile)
 	api.Delete("/me/profiles/:id", saved, a.DeleteSearchProfile)
 
+	// Resume skill extraction is cookie-only (RequireAuth): it feeds the profile
+	// picker (extracted skills merge into a profile). Stateless — the resume is
+	// parsed and discarded; only canonical slugs are returned.
+	api.Post("/me/resume/extract", saved, a.ExtractResumeSkills)
+
 	// Filter subscriptions + Telegram linking are cookie-only (RequireAuth) like
 	// saved searches: a browser convenience, owner-scoped (a non-owned id is 404).
 	api.Get("/me/subscriptions", saved, a.ListSubscriptions)

@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { ApiError, facetCounts } from '$lib/api';
+  import { ApiError, extractResumeSkills, facetCounts } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { CATEGORY_OPTIONS, categoryLabel, type FacetOption } from '$lib/facets';
   import { searchProfiles } from '$lib/searchProfiles.svelte';
+  import { categoryParams, computeGap, sortSkillsByCount, type SkillGap } from '$lib/skillGap';
   import type { SearchProfile } from '$lib/types';
   import { Button, Input } from '$lib/ui';
   import RemoteSearchSelect from './facets/RemoteSearchSelect.svelte';
@@ -30,6 +31,21 @@
   let skills = $state.raw<string[]>([]);
   let formError = $state<string | null>(null);
   let busy = $state(false);
+
+  // Résumé upload → skill extraction. The file/text is parsed server-side and discarded;
+  // the returned slugs merge (union) into the skills field without wiping manual entries.
+  let resumeBusy = $state(false);
+  let resumeText = $state('');
+  let resumeError = $state<string | null>(null);
+  let resumeNote = $state<string | null>(null);
+  let fileInput = $state<HTMLInputElement | null>(null);
+
+  // Per-profile market skill-gap, keyed by profile id. Market skills are cached by the
+  // sorted specialization set, so profiles sharing specializations reuse one facet fetch.
+  // gapGeneration guards against out-of-order async runs: only the latest loadGaps commits.
+  let gaps = $state.raw<Record<number, SkillGap>>({});
+  const marketCache = new Map<string, string[]>();
+  let gapGeneration = 0;
 
   const canSubmit = $derived(
     name.trim() !== '' && specializations.length > 0 && skills.length > 0,
@@ -67,6 +83,72 @@
     }
   }
 
+  // Extract skills from a résumé (a PDF File or pasted text) and merge them into the
+  // skills field as a deduplicated union, preserving anything already entered.
+  async function analyzeResume(input: File | string) {
+    resumeBusy = true;
+    resumeError = null;
+    resumeNote = null;
+    try {
+      const extracted = await extractResumeSkills(input);
+      if (extracted.length === 0) {
+        resumeNote = 'No known skills found in the résumé.';
+        return;
+      }
+      const before = skills.length;
+      skills = [...new Set([...skills, ...extracted])];
+      const added = skills.length - before;
+      resumeNote =
+        added > 0
+          ? `Added ${added} skill${added === 1 ? '' : 's'} from your résumé.`
+          : 'All résumé skills were already listed.';
+    } catch (err) {
+      resumeError =
+        err instanceof ApiError ? err.message : 'Could not read the résumé. Please try again.';
+    } finally {
+      resumeBusy = false;
+    }
+  }
+
+  function onResumeFile(e: Event) {
+    const target = e.currentTarget as HTMLInputElement;
+    const file = target.files?.[0];
+    target.value = ''; // clear so re-selecting the same file fires change again
+    if (file) void analyzeResume(file);
+  }
+
+  // For each profile with a specialization, fetch its market skills (cached by spec set)
+  // and compute the gap against the profile's skills. Best-effort: a failed facet fetch
+  // simply omits that profile's gap block.
+  async function loadGaps(list: SearchProfile[]) {
+    const gen = ++gapGeneration;
+    const next: Record<number, SkillGap> = {};
+    for (const p of list) {
+      if (p.specializations.length === 0) continue;
+      const key = [...p.specializations].toSorted().join(',');
+      let market = marketCache.get(key);
+      if (!market) {
+        try {
+          const counts = await facetCounts(categoryParams(p.specializations));
+          market = sortSkillsByCount(counts.facets?.skills ?? {});
+          marketCache.set(key, market);
+        } catch {
+          continue;
+        }
+      }
+      next[p.id] = computeGap(market, p.skills);
+    }
+    // Discard a stale run: a newer loadGaps started while we awaited, so it owns `gaps`.
+    if (gen === gapGeneration) gaps = next;
+  }
+
+  // Build a /jobs link filtered to a profile's specialization(s) plus one missing skill.
+  function jobsHref(specializations: string[], skill: string): string {
+    const params = categoryParams(specializations);
+    params.append('skills', skill);
+    return `/jobs?${params}`;
+  }
+
   // Load once the session is confirmed (the boot-time /me resolution may still be in
   // flight when the page is opened directly), mirroring ApiKeysView. Reset the per-user
   // cache on sign-out so a different user does not see the previous one's profiles.
@@ -77,6 +159,13 @@
     } else {
       searchProfiles.reset();
     }
+  });
+
+  // Recompute gaps whenever the profile list changes (create/edit/delete reassigns items).
+  $effect(() => {
+    const list = profiles;
+    if (list.length) void loadGaps(list);
+    else gaps = {};
   });
 
   function resetForm() {
@@ -190,6 +279,56 @@
         />
       </div>
 
+      <div class="flex flex-col gap-1.5">
+        <span class="text-sm font-medium">Add skills from your résumé</span>
+        <div class="flex flex-wrap items-center gap-2">
+          <input
+            type="file"
+            accept="application/pdf,.pdf"
+            class="hidden"
+            bind:this={fileInput}
+            onchange={onResumeFile}
+          />
+          <Button
+            variant="secondary"
+            size="sm"
+            type="button"
+            onclick={() => fileInput?.click()}
+            disabled={resumeBusy}
+          >
+            {resumeBusy ? 'Analyzing…' : 'Upload résumé (PDF)'}
+          </Button>
+          <span class="text-xs text-muted-foreground">extracts your skills into the field above</span>
+        </div>
+        <details class="text-xs">
+          <summary class="cursor-pointer text-muted-foreground">or paste résumé text</summary>
+          <div class="mt-2 flex flex-col gap-2">
+            <textarea
+              bind:value={resumeText}
+              rows="4"
+              placeholder="Paste your résumé here…"
+              class="w-full rounded-md border border-border bg-background p-2 text-sm"
+            ></textarea>
+            <div>
+              <Button
+                variant="secondary"
+                size="sm"
+                type="button"
+                onclick={() => analyzeResume(resumeText)}
+                disabled={resumeBusy || resumeText.trim() === ''}
+              >
+                Extract skills
+              </Button>
+            </div>
+          </div>
+        </details>
+        {#if resumeError}
+          <p class="text-sm text-destructive">{resumeError}</p>
+        {:else if resumeNote}
+          <p class="text-xs text-muted-foreground">{resumeNote}</p>
+        {/if}
+      </div>
+
       {#if formError}
         <p class="text-sm text-destructive">{formError}</p>
       {/if}
@@ -213,6 +352,7 @@
     {:else}
       <ul class="flex flex-col divide-y divide-border rounded-lg border border-border">
         {#each profiles as profile (profile.id)}
+          {@const gap = gaps[profile.id]}
           <li class="flex items-start justify-between gap-3 px-4 py-3">
             <div class="flex min-w-0 flex-col gap-1">
               <span class="truncate text-sm font-medium">{profile.name}</span>
@@ -224,6 +364,29 @@
                   <span class="rounded bg-secondary px-1.5 py-0.5 text-xs text-secondary-foreground">{skill}</span>
                 {/each}
               </div>
+              {#if gap && gap.total > 0}
+                <div class="mt-1 flex flex-col gap-1">
+                  <div class="flex items-center gap-2">
+                    <span class="whitespace-nowrap text-xs text-muted-foreground">
+                      Market fit {gap.coverage}/{gap.total}
+                    </span>
+                    <div class="h-1.5 flex-1 overflow-hidden rounded bg-secondary">
+                      <div class="h-full rounded bg-primary" style="width: {(gap.coverage / gap.total) * 100}%"></div>
+                    </div>
+                  </div>
+                  {#if gap.missing.length > 0}
+                    <div class="flex flex-wrap items-center gap-1">
+                      <span class="text-xs text-muted-foreground">Missing:</span>
+                      {#each gap.missing as skill (skill)}
+                        <a
+                          href={jobsHref(profile.specializations, skill)}
+                          class="rounded border border-dashed border-border px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
+                        >{skill}</a>
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
+              {/if}
             </div>
             <div class="flex shrink-0 items-center gap-1">
               <Button variant="ghost" size="sm" onclick={() => startEdit(profile)}>Edit</Button>

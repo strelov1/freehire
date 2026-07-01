@@ -514,6 +514,26 @@ export function createApi(
     await call(`/api/v1/me/profiles/${id}`, { method: 'DELETE' });
   }
 
+  /** Extract canonical skill slugs from a resume — a PDF `File` (sent as multipart) or
+   *  pasted text (sent as JSON). The resume is parsed server-side and discarded; only the
+   *  slugs come back, ready to merge into a profile's skills. */
+  async function extractResumeSkills(input: File | string): Promise<string[]> {
+    let init: RequestInit;
+    if (typeof input === 'string') {
+      init = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: input }),
+      };
+    } else {
+      const form = new FormData();
+      form.append('file', input);
+      init = { method: 'POST', body: form };
+    }
+    const res = await request<{ data: { skills: string[] } }>('/api/v1/me/resume/extract', init);
+    return res.data.skills;
+  }
+
   /** The caller's notification subscriptions (one per saved search + channel). */
   async function listSubscriptions(): Promise<Subscription[]> {
     const res = await request<{ data: Subscription[] }>('/api/v1/me/subscriptions');
@@ -682,6 +702,7 @@ export function createApi(
     createSearchProfile,
     updateSearchProfile,
     deleteSearchProfile,
+    extractResumeSkills,
     listSubscriptions,
     createSubscription,
     setSubscriptionActive,
@@ -751,6 +772,7 @@ export const {
   createSearchProfile,
   updateSearchProfile,
   deleteSearchProfile,
+  extractResumeSkills,
   listSubscriptions,
   createSubscription,
   setSubscriptionActive,
