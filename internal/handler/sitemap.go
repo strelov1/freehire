@@ -10,17 +10,18 @@ import (
 
 // sitemapMaxURLs is the sitemap-protocol per-file cap. It bounds the company slice
 // and the chunk size the company index uses for keyset boundaries, so a served
-// chunk can never exceed the protocol limit. It is also the ceiling for the job
-// feed, which ships only its freshest slice (see jobSitemapFreshest).
+// chunk can never exceed the protocol limit.
 const sitemapMaxURLs = 50000
 
 // jobSitemapFreshest is how many of the newest open jobs the sitemap ships. The
 // jobs table is far too large (millions of rows) to enumerate per request without
 // a heap-bound scan that also evicts the buffer cache, so the sitemap covers the
 // freshest slice (ordered by id DESC, a cache-warm scan); fuller coverage would
-// need a precomputed narrow table. Kept at the protocol per-file cap so it fits one
-// sub-sitemap with no chunking.
-const jobSitemapFreshest = sitemapMaxURLs
+// need a precomputed narrow table. Held below the 50k protocol cap so that even
+// during the periodic reindex's I/O contention the one file builds well under the
+// 60s proxy timeout (50k measured ~30-40s under load; 25k halves that), while still
+// fitting a single sub-sitemap with no chunking.
+const jobSitemapFreshest = 25000
 
 // sitemapEntry is the slim wire shape a sitemap URL needs — the public slug and a
 // lastmod. Nothing wider (no full job row, no search engine) crosses the wire.
