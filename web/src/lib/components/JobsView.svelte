@@ -217,9 +217,9 @@
     onclick={openSwipe}
     aria-label="Swipe mode"
     title="Swipe mode"
-    class="fixed right-0 top-16 z-30 flex items-center rounded-l-lg border border-r-0 border-border bg-secondary p-3 text-secondary-foreground shadow-sm transition-colors hover:bg-accent"
+    class="fixed right-0 top-16 z-30 flex items-center rounded-l-lg border border-r-0 border-border bg-secondary py-2.5 pl-2 pr-1.5 text-secondary-foreground shadow-sm transition-colors hover:bg-accent"
   >
-    <Layers class="h-5 w-5 shrink-0" />
+    <Layers class="size-4 shrink-0" />
   </button>
 {/if}
 

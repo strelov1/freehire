@@ -15,9 +15,9 @@
   {onclick}
   aria-label="Filters"
   title="Filters"
-  class="fixed left-0 top-16 z-30 flex items-center rounded-r-lg border border-l-0 border-border bg-secondary p-3 text-secondary-foreground shadow-sm transition-colors hover:bg-accent md:hidden"
+  class="fixed left-0 top-16 z-30 flex items-center rounded-r-lg border border-l-0 border-border bg-secondary py-2.5 pl-1.5 pr-2 text-secondary-foreground shadow-sm transition-colors hover:bg-accent md:hidden"
 >
-  <SlidersHorizontal class="h-5 w-5 shrink-0" />
+  <SlidersHorizontal class="size-4 shrink-0" />
   {#if active > 0}
     <span
       class="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground"

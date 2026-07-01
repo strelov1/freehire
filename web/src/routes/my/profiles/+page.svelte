@@ -3,7 +3,7 @@
 </script>
 
 <svelte:head>
-  <title>Search profiles — freehire</title>
+  <title>Profiles — freehire</title>
   <!-- Personal page: keep it out of search results. -->
   <meta name="robots" content="noindex" />
 </svelte:head>

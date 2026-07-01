@@ -44,7 +44,7 @@
 
   const accountLinks = [
     { href: '/my/jobs', label: 'My jobs' },
-    { href: '/my/profiles', label: 'Search profiles' },
+    { href: '/my/profiles', label: 'Profiles' },
     { href: '/my/searches', label: 'Saved searches' },
     { href: '/my/notifications', label: 'Notifications' },
     { href: '/my/api-keys', label: 'API keys' },
