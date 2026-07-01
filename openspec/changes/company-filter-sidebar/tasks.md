@@ -61,6 +61,6 @@
 
 - [x] 5.1 `go build ./... && go vet ./... && go test ./...` and the integration
   tests green.
-- [ ] 5.2 Document the prod rollout in the change/PR: apply the migration manually
+- [x] 5.2 Document the prod rollout in the change/PR: apply the migration manually
   via psql, then run `cmd/recount-companies` once to backfill the arrays (no
   reindex needed).

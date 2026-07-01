@@ -73,23 +73,32 @@ compares deterministically (element order is significant to array equality).
 and split a single logical "refresh the company's derived state" into two passes
 that can disagree between runs. One pass, one guard, one cron entry.
 
-### D3: Reuse `FilterStore` + `FacetSection`; add a `COMPANY_FACETS` subset
+### D3: Extract a `FacetStore` interface; add `COMPANY_FACETS` + a thin store & panel
 
 Introduce a `COMPANY_FACETS` registry (a subset of the jobs `FacetDef` shape:
 `collections`, `regions`, `countries`, `domains`, `company_type`, `company_size`,
-reusing the existing `COLLECTION` / `REGION` / `DOMAIN` / company-type / -size
-option lists) and a thin `CompanyFiltersPanel` that iterates it and renders each
-via the existing `FacetSection`. `CompaniesView.svelte` gains the sidebar next to
-the list; `FilterStore` provides URL sync + the debounced `applied` snapshot the
-list reload subscribes to. `country` uses the searchable-select control over the
-static ISO country list (no live counts).
+reusing the existing `COLLECTION` / `REGION` / `DOMAIN` / company-type option lists,
+plus a static `COMPANY_SIZE` list and a static ISO `COUNTRY` list) and a thin
+`CompanyFiltersPanel` that iterates it and renders each via the existing
+`FacetSection`. `CompaniesView.svelte` gains the sidebar next to the list.
 
-*Why over a bespoke panel:* `FacetSection` already renders pills/selects, handles
-clear, and is closed-vocabulary-aware; `FilterStore` already solves URL sync and
-back/forward restoration (the exact bug class fixed in PR#309). Building a second
-implementation would re-introduce those hazards. We deliberately do **not** reuse
-the jobs `FiltersPanel` wholesale because it hard-codes job-only controls (salary
-slider, freshness, remote/visa checkboxes).
+The job `FilterStore` is **not** reused directly — it is coupled to the global jobs
+`FACETS` registry and the job-only shape (`visa`/`salary`/`sort`), and it serializes
+the `_exclude`/`_mode` conventions the companies endpoint doesn't understand.
+Instead, extract the narrow `FacetStore` interface `FacetSection` actually depends on
+(`facet`/`toggle`/`add`/`remove`/`clearFacet`/`setExclude`/`setMatchAll`), retype
+`FacetSection` to it, and add a dedicated `CompanyFilterStore` — a thin wrapper over
+the same shared `UrlSyncedState` primitive with plain repeated-param
+(de)serialization (no exclude/mode). Both stores satisfy `FacetStore`, so the same
+section/control components render either.
+
+*Why:* `FacetSection` already renders pills/selects, handles clear, and is
+closed-vocabulary-aware; the `UrlSyncedState` primitive already solves URL sync and
+back/forward restoration (the exact bug class fixed in PR#309). Reusing them via a
+shared interface keeps one implementation of those hazards. We deliberately do **not**
+reuse the jobs `FiltersPanel` wholesale because it hard-codes job-only controls
+(salary slider, freshness, remote/visa checkboxes). `country` uses the
+searchable-select control over the static ISO country list (no live counts).
 
 ### D4: SSR forwards facet params
 
