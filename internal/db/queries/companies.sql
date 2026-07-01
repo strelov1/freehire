@@ -12,12 +12,12 @@
 SELECT slug, name, job_count
 FROM companies
 WHERE (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%')
-  AND (cardinality(sqlc.arg('collections')::text[]) = 0 OR collections && sqlc.arg('collections')::text[])
-  AND (cardinality(sqlc.arg('regions')::text[]) = 0 OR regions && sqlc.arg('regions')::text[])
-  AND (cardinality(sqlc.arg('countries')::text[]) = 0 OR countries && sqlc.arg('countries')::text[])
-  AND (cardinality(sqlc.arg('domains')::text[]) = 0 OR domains && sqlc.arg('domains')::text[])
-  AND (cardinality(sqlc.arg('company_types')::text[]) = 0 OR company_types && sqlc.arg('company_types')::text[])
-  AND (cardinality(sqlc.arg('company_sizes')::text[]) = 0 OR company_sizes && sqlc.arg('company_sizes')::text[])
+  AND (coalesce(cardinality(sqlc.arg('collections')::text[]), 0) = 0 OR collections && sqlc.arg('collections')::text[])
+  AND (coalesce(cardinality(sqlc.arg('regions')::text[]), 0) = 0 OR regions && sqlc.arg('regions')::text[])
+  AND (coalesce(cardinality(sqlc.arg('countries')::text[]), 0) = 0 OR countries && sqlc.arg('countries')::text[])
+  AND (coalesce(cardinality(sqlc.arg('domains')::text[]), 0) = 0 OR domains && sqlc.arg('domains')::text[])
+  AND (coalesce(cardinality(sqlc.arg('company_types')::text[]), 0) = 0 OR company_types && sqlc.arg('company_types')::text[])
+  AND (coalesce(cardinality(sqlc.arg('company_sizes')::text[]), 0) = 0 OR company_sizes && sqlc.arg('company_sizes')::text[])
 ORDER BY job_count DESC, name
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
@@ -28,12 +28,12 @@ LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 SELECT count(*)
 FROM companies
 WHERE (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%')
-  AND (cardinality(sqlc.arg('collections')::text[]) = 0 OR collections && sqlc.arg('collections')::text[])
-  AND (cardinality(sqlc.arg('regions')::text[]) = 0 OR regions && sqlc.arg('regions')::text[])
-  AND (cardinality(sqlc.arg('countries')::text[]) = 0 OR countries && sqlc.arg('countries')::text[])
-  AND (cardinality(sqlc.arg('domains')::text[]) = 0 OR domains && sqlc.arg('domains')::text[])
-  AND (cardinality(sqlc.arg('company_types')::text[]) = 0 OR company_types && sqlc.arg('company_types')::text[])
-  AND (cardinality(sqlc.arg('company_sizes')::text[]) = 0 OR company_sizes && sqlc.arg('company_sizes')::text[]);
+  AND (coalesce(cardinality(sqlc.arg('collections')::text[]), 0) = 0 OR collections && sqlc.arg('collections')::text[])
+  AND (coalesce(cardinality(sqlc.arg('regions')::text[]), 0) = 0 OR regions && sqlc.arg('regions')::text[])
+  AND (coalesce(cardinality(sqlc.arg('countries')::text[]), 0) = 0 OR countries && sqlc.arg('countries')::text[])
+  AND (coalesce(cardinality(sqlc.arg('domains')::text[]), 0) = 0 OR domains && sqlc.arg('domains')::text[])
+  AND (coalesce(cardinality(sqlc.arg('company_types')::text[]), 0) = 0 OR company_types && sqlc.arg('company_types')::text[])
+  AND (coalesce(cardinality(sqlc.arg('company_sizes')::text[]), 0) = 0 OR company_sizes && sqlc.arg('company_sizes')::text[]);
 
 -- name: GetCompany :one
 -- SELECT * (not an explicit column list) so the generated row stays db.Company as

@@ -13,12 +13,12 @@ const countCompanies = `-- name: CountCompanies :one
 SELECT count(*)
 FROM companies
 WHERE ($1::text = '' OR name ILIKE '%' || $1 || '%')
-  AND (cardinality($2::text[]) = 0 OR collections && $2::text[])
-  AND (cardinality($3::text[]) = 0 OR regions && $3::text[])
-  AND (cardinality($4::text[]) = 0 OR countries && $4::text[])
-  AND (cardinality($5::text[]) = 0 OR domains && $5::text[])
-  AND (cardinality($6::text[]) = 0 OR company_types && $6::text[])
-  AND (cardinality($7::text[]) = 0 OR company_sizes && $7::text[])
+  AND (coalesce(cardinality($2::text[]), 0) = 0 OR collections && $2::text[])
+  AND (coalesce(cardinality($3::text[]), 0) = 0 OR regions && $3::text[])
+  AND (coalesce(cardinality($4::text[]), 0) = 0 OR countries && $4::text[])
+  AND (coalesce(cardinality($5::text[]), 0) = 0 OR domains && $5::text[])
+  AND (coalesce(cardinality($6::text[]), 0) = 0 OR company_types && $6::text[])
+  AND (coalesce(cardinality($7::text[]), 0) = 0 OR company_sizes && $7::text[])
 `
 
 type CountCompaniesParams struct {
@@ -96,12 +96,12 @@ const listCompanies = `-- name: ListCompanies :many
 SELECT slug, name, job_count
 FROM companies
 WHERE ($1::text = '' OR name ILIKE '%' || $1 || '%')
-  AND (cardinality($2::text[]) = 0 OR collections && $2::text[])
-  AND (cardinality($3::text[]) = 0 OR regions && $3::text[])
-  AND (cardinality($4::text[]) = 0 OR countries && $4::text[])
-  AND (cardinality($5::text[]) = 0 OR domains && $5::text[])
-  AND (cardinality($6::text[]) = 0 OR company_types && $6::text[])
-  AND (cardinality($7::text[]) = 0 OR company_sizes && $7::text[])
+  AND (coalesce(cardinality($2::text[]), 0) = 0 OR collections && $2::text[])
+  AND (coalesce(cardinality($3::text[]), 0) = 0 OR regions && $3::text[])
+  AND (coalesce(cardinality($4::text[]), 0) = 0 OR countries && $4::text[])
+  AND (coalesce(cardinality($5::text[]), 0) = 0 OR domains && $5::text[])
+  AND (coalesce(cardinality($6::text[]), 0) = 0 OR company_types && $6::text[])
+  AND (coalesce(cardinality($7::text[]), 0) = 0 OR company_sizes && $7::text[])
 ORDER BY job_count DESC, name
 LIMIT $9 OFFSET $8
 `

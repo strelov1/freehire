@@ -11,6 +11,7 @@ package db
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"testing"
 
@@ -41,18 +42,6 @@ func companyTextArray(t *testing.T, pool *pgxpool.Pool, slug, column string) []s
 	}
 	sort.Strings(got)
 	return got
-}
-
-func eqStrings(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 func TestRefreshCompanyFacets(t *testing.T) {
@@ -87,25 +76,25 @@ func TestRefreshCompanyFacets(t *testing.T) {
 		if _, err := q.RefreshCompanyFacets(ctx); err != nil {
 			t.Fatalf("refresh: %v", err)
 		}
-		if got := companyTextArray(t, pool, "acme", "regions"); !eqStrings(got, []string{"asia", "europe"}) {
+		if got := companyTextArray(t, pool, "acme", "regions"); !slices.Equal(got, []string{"asia", "europe"}) {
 			t.Errorf("acme regions = %v, want [asia europe] (closed africa excluded)", got)
 		}
-		if got := companyTextArray(t, pool, "acme", "countries"); !eqStrings(got, []string{"de", "sg"}) {
+		if got := companyTextArray(t, pool, "acme", "countries"); !slices.Equal(got, []string{"de", "sg"}) {
 			t.Errorf("acme countries = %v, want [de sg] (closed ng excluded)", got)
 		}
-		if got := companyTextArray(t, pool, "acme", "domains"); !eqStrings(got, []string{"ecommerce", "fintech"}) {
+		if got := companyTextArray(t, pool, "acme", "domains"); !slices.Equal(got, []string{"ecommerce", "fintech"}) {
 			t.Errorf("acme domains = %v, want [ecommerce fintech] (closed gaming excluded)", got)
 		}
-		if got := companyTextArray(t, pool, "acme", "company_types"); !eqStrings(got, []string{"product", "startup"}) {
+		if got := companyTextArray(t, pool, "acme", "company_types"); !slices.Equal(got, []string{"product", "startup"}) {
 			t.Errorf("acme company_types = %v, want [product startup]", got)
 		}
-		if got := companyTextArray(t, pool, "acme", "company_sizes"); !eqStrings(got, []string{"11-50"}) {
+		if got := companyTextArray(t, pool, "acme", "company_sizes"); !slices.Equal(got, []string{"11-50"}) {
 			t.Errorf("acme company_sizes = %v, want [11-50]", got)
 		}
 	})
 
 	t.Run("unenriched job contributes no enrichment facets", func(t *testing.T) {
-		if got := companyTextArray(t, pool, "plain", "regions"); !eqStrings(got, []string{"north_america"}) {
+		if got := companyTextArray(t, pool, "plain", "regions"); !slices.Equal(got, []string{"north_america"}) {
 			t.Errorf("plain regions = %v, want [north_america]", got)
 		}
 		if got := companyTextArray(t, pool, "plain", "domains"); len(got) != 0 {

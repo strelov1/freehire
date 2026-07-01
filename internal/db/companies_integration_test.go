@@ -61,14 +61,14 @@ func TestListCompaniesSearch(t *testing.T) {
 	})
 
 	t.Run("count reflects the filter", func(t *testing.T) {
-		got, err := q.CountCompanies(ctx, "acme")
+		got, err := q.CountCompanies(ctx, CountCompaniesParams{Search: "acme"})
 		if err != nil {
 			t.Fatalf("count: %v", err)
 		}
 		if got != 2 {
 			t.Errorf("count(acme) = %d, want 2", got)
 		}
-		all, err := q.CountCompanies(ctx, "")
+		all, err := q.CountCompanies(ctx, CountCompaniesParams{Search: ""})
 		if err != nil {
 			t.Fatalf("count all: %v", err)
 		}
