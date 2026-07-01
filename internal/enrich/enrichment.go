@@ -113,15 +113,14 @@ type scalarEnum struct {
 // servedScalarEnums lists the served single-value enum fields, in declaration
 // order. It is the ONE place the served-scalar set is defined; Validate reads it,
 // Sanitize blanks through it. The dictionary-covered facets (work_mode, seniority,
-// category, regions) are deliberately absent — they are unserved discovery
-// material under dict-only.
+// category, regions, employment_type, education_level) are deliberately absent —
+// jobview serves them from the deterministic dictionaries, so the LLM's values are
+// unserved discovery material under dict-only.
 func (e *Enrichment) servedScalarEnums() []scalarEnum {
 	return []scalarEnum{
-		{"employment_type", &e.EmploymentType, EmploymentTypeValues},
 		{"relocation", &e.Relocation, RelocationValues},
 		{"salary_period", &e.SalaryPeriod, SalaryPeriodValues},
 		{"english_level", &e.EnglishLevel, EnglishLevelValues},
-		{"education_level", &e.EducationLevel, EducationLevelValues},
 		{"company_type", &e.CompanyType, CompanyTypeValues},
 		{"company_size", &e.CompanySize, CompanySizeValues},
 	}
@@ -130,11 +129,12 @@ func (e *Enrichment) servedScalarEnums() []scalarEnum {
 // Validate checks every SERVED enum field against its controlled vocabulary and
 // returns an error identifying the first offending field. Empty (absent) fields
 // pass — every field is optional. Non-enum fields (ISO codes, free text, numbers,
-// skills) are unconstrained here. The six dictionary-covered facets (work_mode,
-// seniority, category, regions, plus the non-enum countries/skills) are
-// deliberately NOT validated: they are served from the deterministic dictionaries
-// (dict-only), so the LLM's values for them are unserved discovery material and an
-// out-of-vocabulary value is captured raw rather than rejected.
+// skills) are unconstrained here. The dictionary-covered facets (work_mode,
+// seniority, category, regions, employment_type, education_level, plus the
+// non-enum countries/skills) are deliberately NOT validated: they are served from
+// the deterministic dictionaries (dict-only), so the LLM's values for them are
+// unserved discovery material and an out-of-vocabulary value is captured raw
+// rather than rejected.
 func (e Enrichment) Validate() error {
 	// Single-value SERVED enum fields. Value receiver, so take the address of the
 	// local copy to reuse the shared field set.
@@ -166,12 +166,12 @@ func (e Enrichment) Validate() error {
 
 // Sanitize drops out-of-vocabulary values from the SERVED enum fields (a scalar is
 // blanked, a multi-value field keeps only known members) so no stray value reaches
-// the served wire shape. The six dictionary-covered facets (work_mode, seniority,
-// category, regions) are deliberately left untouched: they are unserved discovery
-// material under dict-only, so the LLM's raw values — including novel,
-// out-of-vocabulary labels — are kept for later mining. The invariant "never serve
-// an out-of-vocabulary value" still holds for the served fields, and Validate passes
-// afterwards.
+// the served wire shape. The dictionary-covered facets (work_mode, seniority,
+// category, regions, employment_type, education_level) are deliberately left
+// untouched: they are unserved discovery material under dict-only, so the LLM's raw
+// values — including novel, out-of-vocabulary labels — are kept for later mining.
+// The invariant "never serve an out-of-vocabulary value" still holds for the served
+// fields, and Validate passes afterwards.
 func (e *Enrichment) Sanitize() {
 	for _, s := range e.servedScalarEnums() {
 		if *s.ptr != "" && !slices.Contains(s.vocab, *s.ptr) {

@@ -115,40 +115,43 @@ func TestValidateAccepts(t *testing.T) {
 }
 
 func TestValidateRejectsScalarEnum(t *testing.T) {
-	// A SERVED enum field is still validated (employment_type reaches the wire shape).
-	err := Enrichment{EmploymentType: "seasonal"}.Validate()
+	// A SERVED enum field is still validated (relocation reaches the wire shape).
+	err := Enrichment{Relocation: "seasonal"}.Validate()
 	if err == nil {
-		t.Fatal("expected error for employment_type \"seasonal\"")
+		t.Fatal("expected error for relocation \"seasonal\"")
 	}
-	if !strings.Contains(err.Error(), "employment_type") {
+	if !strings.Contains(err.Error(), "relocation") {
 		t.Errorf("error must identify the offending field, got: %v", err)
 	}
 }
 
 // When several SERVED enum fields are invalid, Validate reports the first one in
-// declaration order (employment_type is checked before english_level).
+// declaration order (relocation is checked before english_level).
 func TestValidateReportsFirstOffender(t *testing.T) {
-	err := Enrichment{EmploymentType: "telepathic", EnglishLevel: "sr"}.Validate()
+	err := Enrichment{Relocation: "telepathic", EnglishLevel: "sr"}.Validate()
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !strings.Contains(err.Error(), "employment_type") {
-		t.Errorf("want first offender employment_type, got: %v", err)
+	if !strings.Contains(err.Error(), "relocation") {
+		t.Errorf("want first offender relocation, got: %v", err)
 	}
 	if strings.Contains(err.Error(), "english_level") {
 		t.Errorf("should report only the first offender, got: %v", err)
 	}
 }
 
-// Relax: the six dict-covered discovery facets are captured raw — an out-of-vocab
-// work_mode/seniority/category and a non-vocab regions element pass Validate (they
-// are unserved, so they cannot corrupt production data).
+// Relax: the dict-covered discovery facets are captured raw — an out-of-vocab
+// work_mode/seniority/category/employment_type/education_level and a non-vocab
+// regions element pass Validate (they are unserved, so they cannot corrupt
+// production data).
 func TestValidateAcceptsOutOfVocabDiscoveryFacets(t *testing.T) {
 	discovery := []Enrichment{
 		{Seniority: "staff_plus"},
 		{Category: "ml_platform"},
 		{WorkMode: "remote_first"},
 		{Regions: []string{"eu", "europe"}},
+		{EmploymentType: "freelance"},
+		{EducationLevel: "associate"},
 	}
 	for i, e := range discovery {
 		if err := e.Validate(); err != nil {
@@ -202,18 +205,20 @@ func TestGlobalReachDistinctFromUnknown(t *testing.T) {
 
 func TestSanitizeDropsOutOfVocabValues(t *testing.T) {
 	e := Enrichment{
-		EmploymentType: "seasonal",                   // SERVED invalid scalar -> blanked
-		EnglishLevel:   "b2",                         // SERVED valid -> kept
-		Domains:        []string{"fintech", "bogus"}, // SERVED multi -> keep only known
+		Relocation:   "seasonal",                   // SERVED invalid scalar -> blanked
+		EnglishLevel: "b2",                         // SERVED valid -> kept
+		Domains:      []string{"fintech", "bogus"}, // SERVED multi -> keep only known
 		// Discovery facets are captured raw (unserved):
-		Category:  "astrology",      // kept
-		Seniority: "staff_plus",     // kept
-		Regions:   []string{"nope"}, // kept
+		Category:       "astrology",      // kept
+		Seniority:      "staff_plus",     // kept
+		Regions:        []string{"nope"}, // kept
+		EmploymentType: "freelance",      // kept
+		EducationLevel: "associate",      // kept
 	}
 	e.Sanitize()
 
-	if e.EmploymentType != "" {
-		t.Errorf("EmploymentType = %q, want blanked (served field)", e.EmploymentType)
+	if e.Relocation != "" {
+		t.Errorf("Relocation = %q, want blanked (served field)", e.Relocation)
 	}
 	if e.EnglishLevel != "b2" {
 		t.Errorf("EnglishLevel = %q, want kept", e.EnglishLevel)
@@ -230,6 +235,12 @@ func TestSanitizeDropsOutOfVocabValues(t *testing.T) {
 	}
 	if len(e.Regions) != 1 || e.Regions[0] != "nope" {
 		t.Errorf("Regions = %v, want kept raw (discovery)", e.Regions)
+	}
+	if e.EmploymentType != "freelance" {
+		t.Errorf("EmploymentType = %q, want kept raw (discovery)", e.EmploymentType)
+	}
+	if e.EducationLevel != "associate" {
+		t.Errorf("EducationLevel = %q, want kept raw (discovery)", e.EducationLevel)
 	}
 	if err := e.Validate(); err != nil {
 		t.Errorf("Validate after Sanitize = %v, want nil", err)
