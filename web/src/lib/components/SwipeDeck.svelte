@@ -16,6 +16,8 @@
   const LIMIT = 12;
   const PREFETCH_AT = 4;
   const COMMIT_PX = 100;
+  // How long the judged card takes to fly off-screen before it's dropped.
+  const FLY_MS = 300;
 
   // The deck honors the /jobs filters carried in the URL; unknown params (there
   // are none here beyond facets) are ignored by the endpoint. Captured once —
@@ -37,6 +39,19 @@
   let dragX = $state(0);
   let dragging = $state(false);
   let startX = 0;
+  // exiting: the active card is mid fly-off (guards re-entry, drives opacity).
+  // resetting: the one frame where we snap dragX back to 0 for the incoming card
+  // with the transition suppressed, so it doesn't slide in from the edge.
+  let exiting = $state(false);
+  let resetting = $state(false);
+
+  // The card animates (springs back or flies off) whenever it isn't tracking the
+  // finger and isn't being snapped back to center for the next card.
+  const animate = $derived(!dragging && !resetting);
+  // Tilt tracks the drag but is capped so the fly-off doesn't spin wildly; the
+  // card fades out as it leaves.
+  const rotation = $derived(Math.max(-18, Math.min(18, dragX / 24)));
+  const cardOpacity = $derived(exiting ? 0 : 1);
 
   const current = $derived(queue[0] ?? null);
   const next = $derived(queue[1] ?? null);
@@ -65,22 +80,37 @@
     if (queue.length <= PREFETCH_AT && !exhausted && !loading) void loadBatch();
   }
 
-  // Judge the active card: drop it from the queue optimistically, remember it for
-  // undo, and persist. A failed write restores the card at the front so the
-  // decision isn't silently lost.
+  // Judge the active card: fly it off toward its side, then drop it from the queue
+  // and persist optimistically. A failed write restores the card at the front so
+  // the decision isn't silently lost. Guarded against re-entry mid-flight.
   function judge(kind: Judgement) {
     const job = queue[0];
-    if (!job) return;
-    dragX = 0;
+    if (!job || exiting) return;
+
+    // Fling the card off toward its side. dragging=false lets the transition run;
+    // dragX past the viewport width carries it fully off-screen.
+    const dir = kind === 'save' ? 1 : -1;
+    exiting = true;
     dragging = false;
-    queue = queue.slice(1);
+    dragX = dir * (window.innerWidth + 200);
     last = { job, kind };
+
     const send = kind === 'save' ? api.saveJob(job.public_slug) : api.dismissJob(job.public_slug);
     send.catch(() => {
       queue = [job, ...queue];
       if (last?.job.public_slug === job.public_slug) last = null;
     });
-    prefetchIfLow();
+
+    // After the fly-off, swap in the next card: snap dragX back to 0 with the
+    // transition suppressed for one frame so the incoming card doesn't slide in.
+    setTimeout(() => {
+      resetting = true;
+      queue = queue.slice(1);
+      dragX = 0;
+      exiting = false;
+      requestAnimationFrame(() => (resetting = false));
+      prefetchIfLow();
+    }, FLY_MS);
   }
 
   // Undo the last decision: clear its server mark and put the card back on top.
@@ -99,7 +129,7 @@
 
   // --- Pointer drag on the active card (touch + mouse) ---------------------
   function onPointerDown(e: PointerEvent) {
-    if (!current) return;
+    if (!current || exiting) return;
     // Let clicks on links/buttons inside the card through — capturing the pointer
     // for a drag would swallow their click (e.g. "Open full details").
     if ((e.target as HTMLElement).closest('a, button')) return;
@@ -170,9 +200,9 @@
       <div
         role="group"
         aria-label={`Job: ${current.title} at ${current.company || 'unknown company'}`}
-        class="absolute inset-0 flex touch-none flex-col gap-3 rounded-2xl border border-border bg-card p-5 shadow-lg"
-        class:transition-transform={!dragging}
-        style={`transform: translateX(${dragX}px) rotate(${dragX / 24}deg);`}
+        class="absolute inset-0 flex touch-none flex-col gap-3 rounded-2xl border border-border bg-card p-5 shadow-lg duration-300 ease-out"
+        class:transition={animate}
+        style={`transform: translateX(${dragX}px) rotate(${rotation}deg); opacity: ${cardOpacity};`}
         onpointerdown={onPointerDown}
         onpointermove={onPointerMove}
         onpointerup={onPointerUp}
@@ -211,7 +241,13 @@
         </div>
 
         {#if current.description}
-          <p class="line-clamp-4 text-sm text-muted-foreground">{current.description}</p>
+          <!-- Description is server-sanitized HTML (see internal/sources), safe to render.
+               Fills the leftover space above the link and clips, with a fade cueing more. -->
+          <div class="job-teaser relative min-h-0 flex-1 overflow-hidden text-sm leading-relaxed text-muted-foreground">
+            <!-- eslint-disable-next-line svelte/no-at-html-tags -- server-sanitized; the rule flags every {@html} regardless -->
+            {@html current.description}
+            <div class="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-card to-transparent"></div>
+          </div>
         {/if}
 
         <!-- Opens in a new tab so the deck (and your place in it) is preserved —
@@ -279,3 +315,50 @@
     </div>
   {/if}
 </div>
+
+<style>
+  /* Scraped HTML: long URLs or nbsp-glued words must wrap, not force a scroll. */
+  .job-teaser {
+    overflow-wrap: break-word;
+  }
+
+  /* Flush the teaser's top with the card's gap — drop the first block's margin. */
+  .job-teaser > :global(:first-child) {
+    margin-top: 0;
+  }
+
+  /* Headings would be oversized in a teaser — render them as plain emphasis. */
+  .job-teaser :global(h1),
+  .job-teaser :global(h2),
+  .job-teaser :global(h3),
+  .job-teaser :global(h4) {
+    margin: 0.5rem 0 0.25rem;
+    font-weight: 600;
+  }
+
+  .job-teaser :global(p) {
+    margin: 0.5rem 0;
+  }
+
+  .job-teaser :global(ul),
+  .job-teaser :global(ol) {
+    margin: 0.5rem 0;
+    padding-left: 1.25rem;
+  }
+
+  .job-teaser :global(li) {
+    display: list-item;
+    list-style: disc outside;
+    margin: 0.25rem 0;
+  }
+
+  /* Some boards wrap each <li> in a <p>; collapse it so the bullet sits inline. */
+  .job-teaser :global(li) > :global(p) {
+    margin: 0;
+  }
+
+  .job-teaser :global(b),
+  .job-teaser :global(strong) {
+    font-weight: 600;
+  }
+</style>
