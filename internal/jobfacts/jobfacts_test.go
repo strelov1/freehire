@@ -139,6 +139,8 @@ func TestEnglishLevel(t *testing.T) {
 		{"advanced degree is not english", "An advanced degree in CS is required.", ""},
 		{"native app is not native english", "Build native iOS apps. English docs provided.", ""},
 		// Phrase levels (RU).
+		{"english conversational -> b1", "Conversational English is enough.", "b1"},
+		{"russian native speaker -> native", "Требуется носитель английского языка.", "native"},
 		{"russian fluent -> c1", "Свободный английский обязателен.", "c1"},
 		{"russian conversational -> b1", "Нужен разговорный английский.", "b1"},
 		{"russian above-average -> b2", "Английский выше среднего.", "b2"},

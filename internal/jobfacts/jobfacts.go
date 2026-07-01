@@ -146,11 +146,11 @@ var (
 	// Level phrases (checked for English proximity via near). The intermediate family
 	// carries its prefix so "upper-intermediate"→b2 and "pre-intermediate"→a2 resolve
 	// without a lookbehind (RE2 has none); the Russian "средн" family mirrors it.
-	reNative     = regexp.MustCompile(`\bnative\b|родн\w*`)
+	reNative     = regexp.MustCompile(`\bnative\b|родн\w*|носител\w*`)
 	reFluentAdv  = regexp.MustCompile(`fluen\w*|\badvanced\b|свободн\w*|продвинут\w*`)
 	reInterFam   = regexp.MustCompile(`\b(upper[\s-]?|pre[\s-]?)?intermediate\b`)
 	reRuMidFam   = regexp.MustCompile(`(выше\s+)?средн\w*`)
-	reConversRu  = regexp.MustCompile(`разговорн\w*`)
+	reConvers    = regexp.MustCompile(`\bconversational\b|разговорн\w*`)
 	reElementary = regexp.MustCompile(`\belementary\b|\bbeginner\b|начальн\w*`)
 	reBasic      = regexp.MustCompile(`\bbasic\b|базов\w*`)
 	reNoEnglish  = regexp.MustCompile(`no english|english (?:is )?not required|without english|без английск\w*`)
@@ -187,7 +187,7 @@ func EnglishLevel(description string) string {
 	if near(s, reEnglishKw, reFluentAdv) {
 		levels["c1"] = true
 	}
-	if near(s, reEnglishKw, reConversRu) {
+	if near(s, reEnglishKw, reConvers) {
 		levels["b1"] = true
 	}
 	if near(s, reEnglishKw, reElementary) {
