@@ -15,7 +15,8 @@ the controlled vocabularies (see below), deduplicated, and SHALL emit nothing fo
 tokens it cannot resolve (it never guesses). A bare remote marker (e.g. `Remote`)
 with no geographic token SHALL yield empty geography; the `global` region SHALL be
 emitted only from an explicit open-anywhere marker (e.g. `Anywhere`, `Worldwide`,
-`Global`), never inferred from a bare `Remote`.
+`Global`, `International`), never inferred from a bare `Remote`. The open-anywhere
+marker set SHALL include `International` and its close worldwide synonyms.
 
 The parser SHALL also derive a `work_mode` hint from an explicit marker in the
 location string — `remote`, `hybrid`, or `onsite` — checked in priority order
@@ -59,6 +60,12 @@ geography tokens, so a bare `Remote` yields `work_mode=remote` with empty geogra
 
 - **WHEN** the location `Remote - Anywhere` is parsed
 - **THEN** the regions are `[global]`
+
+#### Scenario: The International marker yields global
+
+- **WHEN** the location `Remote - International` (or a close worldwide synonym) is
+  parsed
+- **THEN** the regions are `[global]` and the work_mode is `remote`
 
 #### Scenario: An unresolvable location yields no geography
 
