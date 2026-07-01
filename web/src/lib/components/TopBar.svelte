@@ -12,6 +12,13 @@
   // viewport. Nav links, the account items, the theme toggle, and the auth
   // action all live in HeaderMenu; instant search lives in HeaderSearch.
 
+  // The list pages (/jobs, /companies) already have their own text search, so
+  // hide the header launcher there to avoid two stacked search boxes; an empty
+  // spacer keeps the menu right-aligned. Detail pages and everywhere else keep it.
+  const showSearch = $derived(
+    page.url.pathname !== '/jobs' && page.url.pathname !== '/companies',
+  );
+
   // The auth dialog lives at the layout level but its open state is a shared
   // singleton (see auth-dialog.svelte), so deep components — like a job's Save
   // button — can prompt sign-in through the same dialog this header renders.
@@ -61,7 +68,11 @@
       <span class="hidden sm:inline">FreeHire</span>
     </a>
 
-    <HeaderSearch />
+    {#if showSearch}
+      <HeaderSearch />
+    {:else}
+      <div class="flex-1"></div>
+    {/if}
 
     <HeaderMenu />
   </div>
