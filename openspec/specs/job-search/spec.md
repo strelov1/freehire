@@ -104,8 +104,9 @@ index's filterable attributes, an optional sort, an optional semantic ratio, and
 facet) and SHALL NOT include the removed raw `remote` filter. The response SHALL
 use the standard list envelope `{"data": [...], "meta": {...}}`, where `data` is
 the matched job documents and `meta` carries at least the estimated total hit
-count and the applied `limit`/`offset`. The existing `GET /api/v1/jobs` list
-endpoint SHALL be unchanged.
+count and the applied `limit`/`offset`. The separate DB-backed `GET /api/v1/jobs`
+list endpoint is governed by its own requirement (see "DB-backed jobs list is
+index-served with an approximate total").
 
 The endpoint SHALL additionally accept a `posted_within_days` parameter. When it
 is a positive integer `N`, the search SHALL be restricted to jobs whose
@@ -159,6 +160,33 @@ other public job reads.
 - **WHEN** a client requests `GET /api/v1/jobs/search` with `posted_within_days`
   absent, zero, negative, or non-numeric
 - **THEN** the result is not restricted by posting date
+
+### Requirement: DB-backed jobs list is index-served with an approximate total
+
+The DB-backed `GET /api/v1/jobs` list endpoint SHALL return open jobs
+(`closed_at IS NULL`) ordered newest-added first (`created_at` descending, `id`
+descending) with `limit`/`offset` pagination, using the standard list envelope
+`{"data": [...], "meta": {...}}`. The ordered page SHALL be served through a
+partial index matching that order (no full-table sort at request time), so the
+endpoint stays responsive at catalogue scale (millions of open jobs).
+
+The `meta.total` for this endpoint SHALL be an **approximate** estimate of the
+open-job count, not an exact `count(*)` over the whole open set — mirroring how
+`/jobs/search` already reports an *estimated* total. The endpoint SHALL NOT run a
+query whose cost grows linearly with the catalogue size on each request.
+
+#### Scenario: List returns a page ordered newest-added first
+
+- **WHEN** a client requests `GET /api/v1/jobs?limit=20&offset=0`
+- **THEN** up to 20 open jobs are returned ordered by `created_at` descending
+  (ties broken by `id` descending), in the `{"data": [...], "meta": {...}}`
+  envelope
+
+#### Scenario: Meta carries an approximate total and the applied pagination
+
+- **WHEN** a client requests `GET /api/v1/jobs?limit=20&offset=0`
+- **THEN** `meta` reports the applied `limit` and `offset` and a `total` that is
+  an approximate open-job count (not required to equal an exact `count(*)`)
 
 ### Requirement: Batch reindex keeps the index in sync
 
