@@ -196,6 +196,9 @@ type Querier interface {
 	// or mint a new one. No matching row (wrong id or another user's) returns no row (the
 	// service maps that to ErrNotFound).
 	GetSavedSearch(ctx context.Context, arg GetSavedSearchParams) (SavedSearch, error)
+	// One profile scoped to its owner, so a user can only read their own. No matching row
+	// (wrong id or another user's) returns no row (the handler maps that to 404).
+	GetSearchProfile(ctx context.Context, arg GetSearchProfileParams) (SearchProfile, error)
 	// Load a single submission by id for the review path. The approve/reject flow guards the
 	// status in the service; the Mark* queries are additionally scoped to status='pending' as
 	// defense-in-depth against a concurrent second decision.
@@ -406,6 +409,11 @@ type Querier interface {
 	// author_label is set verbatim (NULL clears it → anonymous). No matching owner-scoped
 	// row returns no row (→ ErrNotFound).
 	SetSavedSearchPublicSlug(ctx context.Context, arg SetSavedSearchPublicSlugParams) (SavedSearch, error)
+	// Persist the derived résumé-analysis JSON (coherence + advice + analyzed_at) on a
+	// profile, scoped to its owner. Never stores the résumé text — only this derived blob.
+	// Does not bump updated_at (the profile's own fields are unchanged). Returns the affected
+	// row count: 0 means missing or not the caller's (the handler maps that to 404).
+	SetSearchProfileResumeAnalysis(ctx context.Context, arg SetSearchProfileResumeAnalysisParams) (int64, error)
 	// Pause/resume a subscription, scoped to its owner. No matching owner-scoped row
 	// returns no row (the handler maps that to 404).
 	SetSubscriptionActive(ctx context.Context, arg SetSubscriptionActiveParams) (Subscription, error)

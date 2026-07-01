@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -28,7 +29,7 @@ func (q *Queries) CountSearchProfiles(ctx context.Context, userID int64) (int64,
 const createSearchProfile = `-- name: CreateSearchProfile :one
 INSERT INTO search_profiles (user_id, name, specializations, skills)
 VALUES ($1, $2, $3, $4)
-RETURNING id, user_id, name, skills, created_at, updated_at, specializations
+RETURNING id, user_id, name, skills, created_at, updated_at, specializations, resume_analysis
 `
 
 type CreateSearchProfileParams struct {
@@ -57,6 +58,7 @@ func (q *Queries) CreateSearchProfile(ctx context.Context, arg CreateSearchProfi
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Specializations,
+		&i.ResumeAnalysis,
 	)
 	return i, err
 }
@@ -82,8 +84,36 @@ func (q *Queries) DeleteSearchProfile(ctx context.Context, arg DeleteSearchProfi
 	return result.RowsAffected(), nil
 }
 
+const getSearchProfile = `-- name: GetSearchProfile :one
+SELECT id, user_id, name, skills, created_at, updated_at, specializations, resume_analysis FROM search_profiles
+WHERE id = $1 AND user_id = $2
+`
+
+type GetSearchProfileParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+// One profile scoped to its owner, so a user can only read their own. No matching row
+// (wrong id or another user's) returns no row (the handler maps that to 404).
+func (q *Queries) GetSearchProfile(ctx context.Context, arg GetSearchProfileParams) (SearchProfile, error) {
+	row := q.db.QueryRow(ctx, getSearchProfile, arg.ID, arg.UserID)
+	var i SearchProfile
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.Skills,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Specializations,
+		&i.ResumeAnalysis,
+	)
+	return i, err
+}
+
 const listSearchProfiles = `-- name: ListSearchProfiles :many
-SELECT id, user_id, name, skills, created_at, updated_at, specializations FROM search_profiles
+SELECT id, user_id, name, skills, created_at, updated_at, specializations, resume_analysis FROM search_profiles
 WHERE user_id = $1
 ORDER BY updated_at DESC
 `
@@ -106,6 +136,7 @@ func (q *Queries) ListSearchProfiles(ctx context.Context, userID int64) ([]Searc
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Specializations,
+			&i.ResumeAnalysis,
 		); err != nil {
 			return nil, err
 		}
@@ -117,6 +148,30 @@ func (q *Queries) ListSearchProfiles(ctx context.Context, userID int64) ([]Searc
 	return items, nil
 }
 
+const setSearchProfileResumeAnalysis = `-- name: SetSearchProfileResumeAnalysis :execrows
+UPDATE search_profiles
+SET resume_analysis = $3
+WHERE id = $1 AND user_id = $2
+`
+
+type SetSearchProfileResumeAnalysisParams struct {
+	ID             int64           `json:"id"`
+	UserID         int64           `json:"user_id"`
+	ResumeAnalysis json.RawMessage `json:"resume_analysis"`
+}
+
+// Persist the derived résumé-analysis JSON (coherence + advice + analyzed_at) on a
+// profile, scoped to its owner. Never stores the résumé text — only this derived blob.
+// Does not bump updated_at (the profile's own fields are unchanged). Returns the affected
+// row count: 0 means missing or not the caller's (the handler maps that to 404).
+func (q *Queries) SetSearchProfileResumeAnalysis(ctx context.Context, arg SetSearchProfileResumeAnalysisParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setSearchProfileResumeAnalysis, arg.ID, arg.UserID, arg.ResumeAnalysis)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateSearchProfile = `-- name: UpdateSearchProfile :one
 UPDATE search_profiles
 SET name            = COALESCE($1, name),
@@ -124,7 +179,7 @@ SET name            = COALESCE($1, name),
     skills          = COALESCE($3, skills),
     updated_at      = now()
 WHERE id = $4 AND user_id = $5
-RETURNING id, user_id, name, skills, created_at, updated_at, specializations
+RETURNING id, user_id, name, skills, created_at, updated_at, specializations, resume_analysis
 `
 
 type UpdateSearchProfileParams struct {
@@ -157,6 +212,7 @@ func (q *Queries) UpdateSearchProfile(ctx context.Context, arg UpdateSearchProfi
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Specializations,
+		&i.ResumeAnalysis,
 	)
 	return i, err
 }

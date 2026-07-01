@@ -61,6 +61,7 @@ func genStructs() (string, error) {
 
 	enrichTS := filepath.Join(tmp, "enrich.ts")
 	jobviewTS := filepath.Join(tmp, "jobview.ts")
+	verdictTS := filepath.Join(tmp, "verdict.ts")
 
 	cfg := &tygo.Config{
 		Packages: []*tygo.PackageConfig{
@@ -74,6 +75,13 @@ func genStructs() (string, error) {
 				OutputPath:   jobviewTS,
 				IncludeFiles: []string{"jobview.go"},
 				TypeMappings: map[string]string{"enrich.Enrichment": "Enrichment"},
+			},
+			{
+				// The résumé-verdict wire shape (Verdict + Skill). Self-contained —
+				// only primitives and []Skill, no cross-package references.
+				Path:         "github.com/strelov1/freehire/internal/verdict",
+				OutputPath:   verdictTS,
+				IncludeFiles: []string{"verdict.go"},
 			},
 		},
 	}
@@ -89,7 +97,11 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return enrichBody + "\n" + jobviewBody, nil
+	verdictBody, err := readBody(verdictTS)
+	if err != nil {
+		return "", err
+	}
+	return enrichBody + "\n" + jobviewBody + "\n" + verdictBody, nil
 }
 
 // readBody returns a tygo output file's body with its leading preamble removed, so

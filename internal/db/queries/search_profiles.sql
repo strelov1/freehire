@@ -32,6 +32,21 @@ SET name            = COALESCE(sqlc.narg('name'), name),
 WHERE id = sqlc.arg('id') AND user_id = sqlc.arg('user_id')
 RETURNING *;
 
+-- name: GetSearchProfile :one
+-- One profile scoped to its owner, so a user can only read their own. No matching row
+-- (wrong id or another user's) returns no row (the handler maps that to 404).
+SELECT * FROM search_profiles
+WHERE id = $1 AND user_id = $2;
+
+-- name: SetSearchProfileResumeAnalysis :execrows
+-- Persist the derived résumé-analysis JSON (coherence + advice + analyzed_at) on a
+-- profile, scoped to its owner. Never stores the résumé text — only this derived blob.
+-- Does not bump updated_at (the profile's own fields are unchanged). Returns the affected
+-- row count: 0 means missing or not the caller's (the handler maps that to 404).
+UPDATE search_profiles
+SET resume_analysis = $3
+WHERE id = $1 AND user_id = $2;
+
 -- name: DeleteSearchProfile :execrows
 -- Delete a profile, scoped to its owner so a user can only delete their own. Returns
 -- the affected row count: 0 means it does not exist or is not the caller's (the

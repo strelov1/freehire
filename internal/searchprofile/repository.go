@@ -77,6 +77,32 @@ func (r *QueriesRepository) Delete(ctx context.Context, p db.DeleteSearchProfile
 	return nil
 }
 
+// Get returns a profile scoped to its owner, mapping no matching row (wrong id or another
+// user's) to ErrNotFound.
+func (r *QueriesRepository) Get(ctx context.Context, p db.GetSearchProfileParams) (db.SearchProfile, error) {
+	row, err := r.q.GetSearchProfile(ctx, p)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return db.SearchProfile{}, ErrNotFound
+	}
+	if err != nil {
+		return db.SearchProfile{}, err
+	}
+	return row, nil
+}
+
+// SetResumeAnalysis persists the derived analysis blob scoped to the owner, mapping
+// "no row affected" (missing or non-owned) to ErrNotFound.
+func (r *QueriesRepository) SetResumeAnalysis(ctx context.Context, p db.SetSearchProfileResumeAnalysisParams) error {
+	affected, err := r.q.SetSearchProfileResumeAnalysis(ctx, p)
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // isUniqueViolation reports whether err is a Postgres unique-constraint violation (23505).
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError

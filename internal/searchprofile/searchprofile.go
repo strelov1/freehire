@@ -9,6 +9,7 @@ package searchprofile
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
@@ -63,6 +64,8 @@ type Repository interface {
 	Create(ctx context.Context, p db.CreateSearchProfileParams) (db.SearchProfile, error)
 	Update(ctx context.Context, p db.UpdateSearchProfileParams) (db.SearchProfile, error)
 	Delete(ctx context.Context, p db.DeleteSearchProfileParams) error
+	Get(ctx context.Context, p db.GetSearchProfileParams) (db.SearchProfile, error)
+	SetResumeAnalysis(ctx context.Context, p db.SetSearchProfileResumeAnalysisParams) error
 }
 
 // Service implements the search-profile use cases.
@@ -148,6 +151,23 @@ func (s *Service) Update(ctx context.Context, userID, id int64, name *string, sp
 // ErrNotFound (mapped by the repository).
 func (s *Service) Delete(ctx context.Context, userID, id int64) error {
 	return s.repo.Delete(ctx, db.DeleteSearchProfileParams{ID: id, UserID: userID})
+}
+
+// Get returns one of the user's profiles by id, scoped to its owner. A missing or
+// non-owned row surfaces as ErrNotFound (mapped by the repository).
+func (s *Service) Get(ctx context.Context, userID, id int64) (db.SearchProfile, error) {
+	return s.repo.Get(ctx, db.GetSearchProfileParams{ID: id, UserID: userID})
+}
+
+// SetResumeAnalysis persists the derived résumé-analysis JSON on one of the user's
+// profiles, scoped to its owner. The blob is the coherence score + advice + timestamp
+// only — never the résumé text. A missing or non-owned row surfaces as ErrNotFound.
+func (s *Service) SetResumeAnalysis(ctx context.Context, userID, id int64, analysis json.RawMessage) error {
+	return s.repo.SetResumeAnalysis(ctx, db.SetSearchProfileResumeAnalysisParams{
+		ID:             id,
+		UserID:         userID,
+		ResumeAnalysis: analysis,
+	})
 }
 
 // validName trims the name and enforces the 1..maxNameLen bound (counted in runes, to

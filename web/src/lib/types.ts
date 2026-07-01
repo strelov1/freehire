@@ -2,7 +2,7 @@
 // Timestamps marshal as RFC3339 strings when present, or null.
 
 import type { Job } from './generated/contracts';
-export type { Job, Enrichment } from './generated/contracts';
+export type { Job, Enrichment, Verdict, Skill } from './generated/contracts';
 
 export interface Company {
   slug: string;

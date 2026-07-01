@@ -15,6 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/config"
 	"github.com/strelov1/freehire/internal/database"
 	"github.com/strelov1/freehire/internal/handler"
+	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/search"
 )
 
@@ -70,6 +71,18 @@ func main() {
 		searchClient = search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
 	}
 
+	// The LLM is optional: only when all three settings are present do we build a
+	// client for the résumé-verdict coherence analysis. Absent it, the client stays
+	// nil and the verdict serves its deterministic core (no coherence). A build error
+	// on a configured endpoint is fatal — a misconfigured gateway should not boot silently.
+	var llmClient *llm.Client
+	if cfg.LLMBaseURL != "" && cfg.LLMAPIKey != "" && cfg.LLMModel != "" {
+		llmClient, err = llm.New(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModel)
+		if err != nil {
+			log.Fatalf("llm: %v", err)
+		}
+	}
+
 	// OAuth sign-in is optional: only providers with full credentials are
 	// enabled; the registry may be empty and the server still serves password
 	// auth. Redirect URLs derive from the same-origin frontend origin.
@@ -83,6 +96,7 @@ func main() {
 		CookieSecure:   cfg.CookieSecure,
 		OAuthProviders: oauthProviders,
 		Search:         searchClient,
+		LLM:            llmClient,
 
 		TelegramBotToken:      cfg.TelegramBotToken,
 		TelegramBotUsername:   cfg.TelegramBotUsername,

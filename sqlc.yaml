@@ -20,3 +20,7 @@ sql:
           # response (an empty payload stays {}); a plain []byte would base64-encode.
           - column: "jobs.enrichment"
             go_type: "encoding/json.RawMessage"
+          # Same reasoning for the profile's derived résumé analysis: keep the JSONB
+          # blob as raw bytes that marshal straight through (nil → null), not base64.
+          - column: "search_profiles.resume_analysis"
+            go_type: "encoding/json.RawMessage"

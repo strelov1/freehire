@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Pencil, Plus, Trash2 } from '@lucide/svelte';
+  import { Pencil, Plus, Sparkles, Trash2 } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { facetCounts } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
@@ -17,6 +17,7 @@
 
   const newHref = resolve('/my/profiles/new');
   const editHref = (id: number) => resolve('/my/profiles/[id]/edit', { id: String(id) });
+  const verdictHref = (id: number) => resolve('/my/profiles/[id]/verdict', { id: String(id) });
 
   // Per-profile market skill-gap, keyed by profile id. Market skills are cached by the
   // sorted specialization set, so profiles sharing specializations reuse one facet fetch.
@@ -164,8 +165,11 @@
               {#if gap && gap.total > 0}
                 <div class="mt-1 flex flex-col gap-1">
                   <div class="flex items-center gap-2">
-                    <span class="whitespace-nowrap text-xs text-muted-foreground">
-                      Market fit {gap.coverage}/{gap.total}
+                    <span
+                      class="whitespace-nowrap text-xs text-muted-foreground"
+                      title="{gap.coverage} of {gap.total} top market skills"
+                    >
+                      Market fit {Math.round((gap.coverage / gap.total) * 100)}%
                     </span>
                     <div class="h-1.5 flex-1 overflow-hidden rounded bg-secondary">
                       <div class="h-full rounded bg-primary" style="width: {(gap.coverage / gap.total) * 100}%"></div>
@@ -186,6 +190,14 @@
               {/if}
             </div>
             <div class="flex shrink-0 items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                href={verdictHref(profile.id)}
+                aria-label="Résumé verdict"
+              >
+                <Sparkles class="size-4" />
+              </Button>
               <Button variant="ghost" size="icon" href={editHref(profile.id)} aria-label="Edit profile">
                 <Pencil class="size-4" />
               </Button>

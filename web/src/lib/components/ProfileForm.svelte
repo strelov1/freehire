@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowLeft, X } from '@lucide/svelte';
+  import { ArrowLeft, ArrowUp, X } from '@lucide/svelte';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { ApiError, extractResumeSkills, facetCounts } from '$lib/api';
@@ -33,10 +33,11 @@
   // Résumé upload → skill extraction. The file/text is parsed server-side and discarded;
   // the returned slugs merge (union) into the skills field without wiping manual entries.
   let resumeBusy = $state(false);
-  let resumeText = $state('');
   let resumeError = $state<string | null>(null);
   let resumeNote = $state<string | null>(null);
   let fileInput = $state<HTMLInputElement | null>(null);
+  let dragActive = $state(false);
+  let fileName = $state<string | null>(null);
 
   // The universe of skills (canonical tokens with job counts) for the typeahead, from
   // the facet-distribution endpoint — the same source the filter panel uses. Empty
@@ -74,14 +75,15 @@
     void loadSkills();
   });
 
-  // Extract skills from a résumé (a PDF File or pasted text) and merge them into the
-  // skills field as a deduplicated union, preserving anything already entered.
-  async function analyzeResume(input: File | string) {
+  // Extract skills from a résumé PDF and merge them into the skills field as a
+  // deduplicated union, preserving anything already entered.
+  async function analyzeResume(file: File) {
     resumeBusy = true;
     resumeError = null;
     resumeNote = null;
+    fileName = file.name;
     try {
-      const extracted = await extractResumeSkills(input);
+      const extracted = await extractResumeSkills(file);
       if (extracted.length === 0) {
         resumeNote = 'No known skills found in the résumé.';
         return;
@@ -106,6 +108,34 @@
     const file = target.files?.[0];
     target.value = ''; // clear so re-selecting the same file fires change again
     if (file) void analyzeResume(file);
+  }
+
+  function isPdf(file: File): boolean {
+    return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  }
+
+  // The file input's `accept` filters the picker, but a drop bypasses it — so the
+  // drop path validates the type itself before touching the extractor.
+  function onDrop(e: DragEvent) {
+    e.preventDefault();
+    dragActive = false;
+    const file = e.dataTransfer?.files?.[0];
+    if (!file) return;
+    if (!isPdf(file)) {
+      resumeError = 'Please drop a PDF file.';
+      return;
+    }
+    void analyzeResume(file);
+  }
+
+  function onDragOver(e: DragEvent) {
+    e.preventDefault();
+    dragActive = true;
+  }
+
+  function onDragLeave(e: DragEvent) {
+    e.preventDefault();
+    dragActive = false;
   }
 
   // Multi-select with a cap: toggling off is always allowed; toggling on is refused
@@ -223,49 +253,46 @@
         clearOnSelect
       />
 
-      <div class="flex flex-col gap-1.5 rounded-lg border border-dashed border-border p-3">
+      <div class="flex flex-col gap-1.5">
         <span class="text-sm font-medium">Add skills from your résumé</span>
-        <div class="flex flex-wrap items-center gap-2">
-          <input
-            type="file"
-            accept="application/pdf,.pdf"
-            class="hidden"
-            bind:this={fileInput}
-            onchange={onResumeFile}
-          />
-          <Button
-            variant="secondary"
-            size="sm"
-            type="button"
-            onclick={() => fileInput?.click()}
-            disabled={resumeBusy}
+        <input
+          type="file"
+          accept="application/pdf,.pdf"
+          class="hidden"
+          bind:this={fileInput}
+          onchange={onResumeFile}
+        />
+        <button
+          type="button"
+          onclick={() => fileInput?.click()}
+          ondragover={onDragOver}
+          ondragleave={onDragLeave}
+          ondrop={onDrop}
+          disabled={resumeBusy}
+          class="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors disabled:opacity-70 {dragActive
+            ? 'border-primary bg-primary/5'
+            : 'border-border hover:border-primary/60'}"
+        >
+          <span
+            class="flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground"
           >
-            {resumeBusy ? 'Analyzing…' : 'Upload résumé (PDF)'}
-          </Button>
-          <span class="text-xs text-muted-foreground">extracts your skills into the field above</span>
-        </div>
-        <details class="text-xs">
-          <summary class="cursor-pointer text-muted-foreground">or paste résumé text</summary>
-          <div class="mt-2 flex flex-col gap-2">
-            <textarea
-              bind:value={resumeText}
-              rows="4"
-              placeholder="Paste your résumé here…"
-              class="w-full rounded-md border border-border bg-background p-2 text-sm"
-            ></textarea>
-            <div>
-              <Button
-                variant="secondary"
-                size="sm"
-                type="button"
-                onclick={() => analyzeResume(resumeText)}
-                disabled={resumeBusy || resumeText.trim() === ''}
-              >
-                Extract skills
-              </Button>
-            </div>
-          </div>
-        </details>
+            <ArrowUp class="size-5" />
+          </span>
+          <span class="flex flex-col gap-0.5">
+            <span class="text-sm font-semibold">{resumeBusy ? 'Analyzing…' : 'Drop PDF here'}</span>
+            {#if !resumeBusy}
+              <span class="text-xs text-muted-foreground">
+                or <span class="text-primary underline">choose from disk</span>
+              </span>
+            {/if}
+          </span>
+          {#if fileName}
+            <span class="text-xs text-primary">✓ {fileName}</span>
+          {/if}
+        </button>
+        <span class="text-xs text-muted-foreground">
+          Extracts your skills into the field above · parsed on the server and discarded.
+        </span>
         {#if resumeError}
           <p class="text-sm text-destructive">{resumeError}</p>
         {:else if resumeNote}

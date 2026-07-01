@@ -92,6 +92,15 @@ export interface Job {
   work_mode?: string;
   skills: string[];
   /**
+   * Cities is a HYBRID facet (the one deliberate dict+LLM exception): the
+   * deterministic jobs.cities column when it resolved a beacon city, otherwise a
+   * normalized fallback to the LLM's enrichment.cities — cities are high-cardinality
+   * and the dictionary is only a beacon list, so a pure-dict facet would be too
+   * sparse. Values are canonical display names (Title case); the LLM copy is folded
+   * out of the nested Enrichment like the other geography facets.
+   */
+  cities: string[];
+  /**
    * Collections is the set of curated-collection slugs (e.g. yc, bigtech) the
    * job's company belongs to, denormalized from the company onto the job. It is a
    * deterministic source fact (no LLM counterpart) served straight from the jobs
@@ -110,6 +119,52 @@ export interface Job {
   enrichment: Enrichment;
   enriched_at?: string;
   enrichment_version: number /* int32 */;
+}
+
+/**
+ * TopN is how many of the market's most in-demand skills define the breakdown
+ * (the "expected" set). Mirrors GAP_TOP_N in skillGap.ts.
+ */
+export const TopN = 20;
+/**
+ * MustHaveShare is the demand-share cutoff for a "must-have" skill: a skill that
+ * appears in at least this fraction of the role's open postings is treated as a
+ * non-negotiable. Deterministic and self-explanatory in the UI ("asked for by
+ * 40%+ of postings"); tunable in one place. Calibrate against real facet data.
+ */
+export const MustHaveShare = 0.40;
+/**
+ * MarketSkills is the facet distribution for a role: canonical skill slug → count
+ * of open postings that list it, plus Total open postings in the role (the
+ * denominator for the demand share and the unlock percentage).
+ */
+export interface MarketSkills {
+  Counts: { [key: string]: number /* int64 */};
+  Total: number /* int64 */;
+}
+/**
+ * Verdict is the full result. Coherence/AnalyzedAt are set only when an LLM
+ * analysis is present (see coherence.go); nil renders no coherence card. JSON is
+ * the wire contract shared with the frontend (generated to TS via cmd/gen-contracts).
+ */
+export interface Verdict {
+  stack_match: number /* int */; // 0-100: share of the top-N the candidate has
+  must_have_covered: number /* int */;
+  must_have_total: number /* int */;
+  coherence?: number /* int */; // 0-100, LLM-derived
+  analyzed_at?: string; // RFC3339, when the résumé was last analyzed
+  skills: Skill[]; // exactly the top-N, in demand order
+}
+/**
+ * Skill is one row of the breakdown.
+ */
+export interface Skill {
+  rank: number /* int */;
+  name: string; // canonical slug; the UI humanizes it
+  must_have: boolean;
+  have: boolean;
+  unlock?: number /* int */; // gaps only: % of the role's postings this skill touches
+  advice?: string; // LLM-derived, attached to must-have gaps when available
 }
 
 export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'adp', 'arbeitnow', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'breezy', 'careerplug', 'clinch', 'comeet', 'cornerstone', 'deel', 'eightfold', 'epam', 'erecruiter', 'factorial', 'freshteam', 'gem', 'getmatch', 'getonbrd', 'globalpayments', 'greenhouse', 'gupy', 'habr_career', 'himalayas', 'huntflow', 'icims', 'inhire', 'itechart', 'jazzhr', 'jibe', 'jobicy', 'jobstash', 'jobtech', 'join', 'justjoin', 'lever', 'luxoft', 'mycareersfuture', 'oracle', 'paycom', 'personio', 'phenom', 'pinpoint', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'solides', 'successfactors', 'teamtailor', 'tecla', 'thehub', 'traffit', 'trakstar', 'ukg', 'vention', 'wantedkr', 'weworkremotely', 'workable', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;

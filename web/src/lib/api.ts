@@ -32,6 +32,7 @@ import type {
   SubmissionInput,
   Report,
   ReportInput,
+  Verdict,
 } from './types';
 
 /** A page of list items, optionally the total matching the query (endpoints that
@@ -527,6 +528,33 @@ export function createApi(
     return res.data.skills;
   }
 
+  /** The résumé verdict for a profile: the deterministic market comparison plus any
+   *  previously stored coherence/advice. Owner-scoped (404 for another user's profile). */
+  async function getProfileVerdict(id: number): Promise<Verdict> {
+    const res = await request<{ data: Verdict }>(`/api/v1/me/profiles/${id}/verdict`);
+    return res.data;
+  }
+
+  /** Analyze a résumé (a PDF `File` sent as multipart, or pasted text sent as JSON)
+   *  against a profile: the server runs the LLM coherence/advice over the text (never
+   *  persisting it) and returns the full verdict with coherence attached. */
+  async function analyzeProfileResume(id: number, input: File | string): Promise<Verdict> {
+    let init: RequestInit;
+    if (typeof input === 'string') {
+      init = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: input }),
+      };
+    } else {
+      const form = new FormData();
+      form.append('file', input);
+      init = { method: 'POST', body: form };
+    }
+    const res = await request<{ data: Verdict }>(`/api/v1/me/profiles/${id}/verdict`, init);
+    return res.data;
+  }
+
   /** The caller's notification subscriptions (one per saved search + channel). */
   async function listSubscriptions(): Promise<Subscription[]> {
     const res = await request<{ data: Subscription[] }>('/api/v1/me/subscriptions');
@@ -695,6 +723,8 @@ export function createApi(
     updateSearchProfile,
     deleteSearchProfile,
     extractResumeSkills,
+    getProfileVerdict,
+    analyzeProfileResume,
     listSubscriptions,
     createSubscription,
     setSubscriptionActive,
@@ -765,6 +795,8 @@ export const {
   updateSearchProfile,
   deleteSearchProfile,
   extractResumeSkills,
+  getProfileVerdict,
+  analyzeProfileResume,
   listSubscriptions,
   createSubscription,
   setSubscriptionActive,

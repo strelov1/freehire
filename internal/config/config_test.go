@@ -5,6 +5,28 @@ import (
 	"time"
 )
 
+func TestLoad_LLMFromEnv(t *testing.T) {
+	t.Setenv("LLM_BASE_URL", "https://gw.example/v1")
+	t.Setenv("LLM_API_KEY", "key-123")
+	t.Setenv("LLM_MODEL", "some-model")
+
+	s := Load()
+	if s.LLMBaseURL != "https://gw.example/v1" || s.LLMAPIKey != "key-123" || s.LLMModel != "some-model" {
+		t.Errorf("LLM settings = %q/%q/%q, want the env values", s.LLMBaseURL, s.LLMAPIKey, s.LLMModel)
+	}
+}
+
+func TestLoad_LLMEmptyWhenUnset(t *testing.T) {
+	t.Setenv("LLM_BASE_URL", "")
+	t.Setenv("LLM_API_KEY", "")
+	t.Setenv("LLM_MODEL", "")
+
+	s := Load()
+	if s.LLMBaseURL != "" || s.LLMAPIKey != "" || s.LLMModel != "" {
+		t.Errorf("LLM settings should be empty when unset, got %q/%q/%q", s.LLMBaseURL, s.LLMAPIKey, s.LLMModel)
+	}
+}
+
 func TestLoad_JWTSecretFromEnv(t *testing.T) {
 	t.Setenv("JWT_SECRET", "s3cret")
 

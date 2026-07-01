@@ -15,6 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/jobtracking"
+	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/moderation"
 	"github.com/strelov1/freehire/internal/report"
 	"github.com/strelov1/freehire/internal/savedsearch"
@@ -23,6 +24,7 @@ import (
 	"github.com/strelov1/freehire/internal/submission"
 	"github.com/strelov1/freehire/internal/subscription"
 	"github.com/strelov1/freehire/internal/telegramnotify"
+	"github.com/strelov1/freehire/internal/verdict"
 )
 
 const (
@@ -76,6 +78,10 @@ type API struct {
 	// delete a named specialization + skills); the handlers translate wire ↔ domain
 	// and delegate to it.
 	searchProfile *searchprofile.Service
+	// verdictAnalyzer runs the LLM coherence analysis for the résumé verdict. Its
+	// client is nil when the LLM is unconfigured; Analyze then degrades to a no-op
+	// and the verdict serves its deterministic core only.
+	verdictAnalyzer *verdict.Analyzer
 	// Telegram notification wiring. All nil/empty when the bot is unconfigured —
 	// the linking endpoints then report the feature off and the webhook is inert.
 	// telegramLinks mints/verifies the deep-link token; telegramBot replies to the
@@ -123,6 +129,9 @@ type Config struct {
 	CookieSecure   bool
 	OAuthProviders map[string]oauth.Provider
 	Search         *search.Client
+	// LLM backs the résumé-verdict coherence analysis. Nil disables the AI layer:
+	// the verdict still renders deterministically (the coherence card is hidden).
+	LLM *llm.Client
 	// Telegram bot for notification linking/delivery confirmations. Optional: an
 	// empty TelegramBotToken disables the feature (linking endpoints report off,
 	// webhook inert). TelegramBotUsername builds the deep link; TelegramWebhookSecret
@@ -160,6 +169,9 @@ func Register(app *fiber.App, cfg Config) {
 	a.savedSearch = savedsearch.New(savedsearch.NewQueriesRepository(queries))
 	a.subscription = subscription.New(subscription.NewQueriesRepository(queries))
 	a.searchProfile = searchprofile.New(searchprofile.NewQueriesRepository(queries))
+	// Nil-safe: NewAnalyzer(nil) yields an analyzer whose Analyze is a no-op, so the
+	// verdict endpoint works whether or not the LLM is configured.
+	a.verdictAnalyzer = verdict.NewAnalyzer(cfg.LLM)
 	// Telegram notifications are enabled only with both a bot token and a JWT
 	// secret (the link token reuses it). Absent either, the linking endpoints
 	// report the feature off and the webhook is inert (see telegramEnabled).
@@ -274,6 +286,11 @@ func Register(app *fiber.App, cfg Config) {
 	api.Post("/me/profiles", saved, a.CreateSearchProfile)
 	api.Patch("/me/profiles/:id", saved, a.UpdateSearchProfile)
 	api.Delete("/me/profiles/:id", saved, a.DeleteSearchProfile)
+	// The résumé verdict is a per-profile sub-resource: GET computes it live, POST
+	// analyzes an uploaded résumé and persists only the derived AI layer. Cookie-only
+	// and owner-scoped, like the profile routes it hangs off.
+	api.Get("/me/profiles/:id/verdict", saved, a.GetResumeVerdict)
+	api.Post("/me/profiles/:id/verdict", saved, a.ResumeVerdict)
 
 	// Resume skill extraction is cookie-only (RequireAuth): it feeds the profile
 	// picker (extracted skills merge into a profile). Stateless — the resume is

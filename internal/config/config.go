@@ -38,6 +38,15 @@ type Settings struct {
 	MeiliURL string
 	MeiliKey string
 
+	// LLM backs the résumé-verdict coherence analysis on the HTTP server (the enrich
+	// worker reads its own LLM settings via config.Enrich). Optional: any empty field
+	// disables the AI layer — the server builds no LLM client and the verdict still
+	// renders deterministically (enforced at the cmd/server call site, not here).
+	// Provider-agnostic: any OpenAI-compatible endpoint.
+	LLMBaseURL string
+	LLMAPIKey  string
+	LLMModel   string
+
 	// Telegram bot for outbound notifications (filter subscriptions). Optional:
 	// an empty TelegramBotToken disables the feature — the linking endpoints and
 	// webhook are inert and the notify worker has nothing to deliver through.
@@ -71,6 +80,10 @@ func Load() Settings {
 		OAuth:          loadOAuth(),
 		MeiliURL:       env("MEILI_URL", "http://localhost:7700"),
 		MeiliKey:       os.Getenv("MEILI_MASTER_KEY"),
+
+		LLMBaseURL: os.Getenv("LLM_BASE_URL"),
+		LLMAPIKey:  os.Getenv("LLM_API_KEY"),
+		LLMModel:   os.Getenv("LLM_MODEL"),
 
 		TelegramBotToken:      os.Getenv("TELEGRAM_BOT_TOKEN"),
 		TelegramBotUsername:   os.Getenv("TELEGRAM_BOT_USERNAME"),
