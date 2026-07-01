@@ -32,11 +32,11 @@ func TestLeverResolvesAlignedIdentity(t *testing.T) {
 	if !ok {
 		t.Fatal("ok=false, want the vacancy resolved")
 	}
-	// Lever posting ids are globally unique, so the ingest adapter keys external_id on the
-	// bare id; the link-source must match that exactly to dedup against an ingested board
-	// rather than write a thin telegram-source duplicate.
-	if job.ExternalID != "52c01c91-582c-42fc-8722-82c3eeb9ed24" {
-		t.Errorf("ExternalID = %q, want the bare posting id", job.ExternalID)
+	// The ingest pipeline namespaces every posting's external_id by board (the URL's company
+	// slug is Lever's board), so the link-source must produce the same "<board>:<id>" key to
+	// dedup against an ingested board rather than write a thin telegram-source duplicate.
+	if job.ExternalID != "offchainlabs:52c01c91-582c-42fc-8722-82c3eeb9ed24" {
+		t.Errorf("ExternalID = %q, want the board-namespaced posting id", job.ExternalID)
 	}
 	if job.URL != "https://jobs.lever.co/offchainlabs/52c01c91-582c-42fc-8722-82c3eeb9ed24" {
 		t.Errorf("URL = %q", job.URL)

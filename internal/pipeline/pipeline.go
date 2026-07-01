@@ -5,7 +5,6 @@ package pipeline
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -277,7 +276,7 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 // the upsert (via normalizeJob) and the stream-driven close derive identity here, so a
 // removal closes exactly the row a live emit would have upserted.
 func jobIdentity(e sources.CompanyEntry, j sources.Job) (source, externalID string) {
-	return e.Provider, fmt.Sprintf("%s:%s", e.Board, j.ExternalID)
+	return e.Provider, sources.NamespaceExternalID(e.Board, j.ExternalID)
 }
 
 // normalizeJob turns a raw posting into a persistable Job: the platform becomes the

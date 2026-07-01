@@ -13,7 +13,9 @@ import (
 // habrCareer resolves Habr Career vacancies. Channels link them through the u.habr.com
 // shortener, which 301s to career.habr.com/vacancies/<id>; the canonical id and URL come
 // from the resolved location, so the same vacancy linked from several channels dedups to
-// one row.
+// one row. Habr is a boardless source, so the ingest pipeline namespaces its external_id
+// with an empty board (":<id>"); the adapter produces the same key via
+// sources.NamespaceExternalID so a linked vacancy dedups against the board crawl too.
 type habrCareer struct {
 	http Client
 }
@@ -71,7 +73,7 @@ func (h habrCareer) Resolve(ctx context.Context, raw string) (sources.Job, bool,
 	}
 
 	return sources.Job{
-		ExternalID:  id,
+		ExternalID:  sources.NamespaceExternalID("", id),
 		URL:         "https://career.habr.com/vacancies/" + id,
 		Title:       p.Title,
 		Company:     p.Company,

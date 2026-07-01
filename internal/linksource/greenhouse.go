@@ -74,7 +74,7 @@ func (g greenhouse) Resolve(ctx context.Context, raw string) (sources.Job, bool,
 	}
 
 	return sources.Job{
-		ExternalID:  board + ":" + id,
+		ExternalID:  sources.NamespaceExternalID(board, id),
 		URL:         j.AbsoluteURL,
 		Title:       j.Title,
 		Company:     j.CompanyName,

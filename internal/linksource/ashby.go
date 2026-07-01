@@ -70,7 +70,7 @@ func (a ashby) Resolve(ctx context.Context, raw string) (sources.Job, bool, erro
 			jobURL = "https://jobs.ashbyhq.com/" + board + "/" + id
 		}
 		return sources.Job{
-			ExternalID:  board + ":" + id,
+			ExternalID:  sources.NamespaceExternalID(board, id),
 			URL:         jobURL,
 			Title:       j.Title,
 			Company:     humanizeBoard(board),

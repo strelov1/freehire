@@ -12,8 +12,9 @@ import (
 
 // lever resolves Lever-hosted vacancies. Lever is multi-tenant, so a TG link points at an
 // arbitrary company's board — many of which sources/lever.yml does not list. The adapter
-// writes the SAME identity the ingest pipeline would (source="lever", external_id=<posting
-// id>), so UpsertJob's ON CONFLICT dedups against an already-crawled company and a
+// writes the SAME identity the ingest pipeline would (source="lever", external_id
+// "<board>:<posting id>" via sources.NamespaceExternalID, the URL's company slug being the
+// board), so UpsertJob's ON CONFLICT dedups against an already-crawled company and a
 // not-yet-crawled one is added under the canonical key rather than a thin telegram dup.
 type lever struct {
 	http Client
@@ -35,8 +36,8 @@ func (lever) Match(u *url.URL) bool {
 }
 
 // Resolve reads the public per-posting API for the linked company+id and maps it exactly as
-// the ingest lever adapter does. The posting id is globally unique, so external_id is the
-// bare id (no board prefix), matching the ingest key.
+// the ingest lever adapter does, namespacing external_id by board (the URL's company slug) to
+// match the pipeline's dedup key.
 func (l lever) Resolve(ctx context.Context, raw string) (sources.Job, bool, error) {
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -86,7 +87,7 @@ func (l lever) Resolve(ctx context.Context, raw string) (sources.Job, bool, erro
 	body.WriteString(p.Additional)
 
 	return sources.Job{
-		ExternalID:  p.ID,
+		ExternalID:  sources.NamespaceExternalID(company, p.ID),
 		URL:         p.HostedURL,
 		Title:       p.Text,
 		Company:     humanizeBoard(company), // the per-posting API carries no company name

@@ -27,10 +27,11 @@ func TestWorkableResolvesNamedShortcode(t *testing.T) {
 	if !ok {
 		t.Fatal("ok=false, want the named vacancy resolved")
 	}
-	// external_id is the shortcode, matching what the ingest workable adapter writes, so the
-	// same vacancy crawled directly dedups instead of duplicating.
-	if job.ExternalID != "915C6E469E" {
-		t.Errorf("ExternalID = %q, want 915C6E469E", job.ExternalID)
+	// The ingest pipeline namespaces external_id by board (the URL's account is Workable's
+	// board), so the link-source must produce the same "<account>:<shortcode>" key for the
+	// same vacancy crawled directly to dedup instead of duplicating.
+	if job.ExternalID != "jobhire:915C6E469E" {
+		t.Errorf("ExternalID = %q, want jobhire:915C6E469E", job.ExternalID)
 	}
 	if job.Title != "Lead AI Product Manager" {
 		t.Errorf("Title = %q (picked wrong shortcode?)", job.Title)

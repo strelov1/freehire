@@ -29,8 +29,8 @@ func TestResolveLinksReturnsMatchedVacanciesAndSkipsRest(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("resolved = %d (%+v), want 1", len(got), got)
 	}
-	if got[0].Source != "habr_career" || got[0].Job.ExternalID != "1000166712" {
-		t.Errorf("resolved = %+v, want habr_career/1000166712", got[0])
+	if got[0].Source != "habr_career" || got[0].Job.ExternalID != ":1000166712" {
+		t.Errorf("resolved = %+v, want habr_career/:1000166712", got[0])
 	}
 }
 

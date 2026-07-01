@@ -43,8 +43,10 @@ func TestHabrCareerResolvesShortLinkToVacancy(t *testing.T) {
 	if !ok {
 		t.Fatal("ok=false, want the vacancy resolved")
 	}
-	if job.ExternalID != "1000166712" {
-		t.Errorf("ExternalID = %q, want 1000166712", job.ExternalID)
+	// Habr is boardless, so the ingest pipeline namespaces its external_id with an empty board
+	// (":<id>"); the link-source must produce the same key to dedup against the board crawl.
+	if job.ExternalID != ":1000166712" {
+		t.Errorf("ExternalID = %q, want :1000166712 (boardless namespace)", job.ExternalID)
 	}
 	if job.URL != "https://career.habr.com/vacancies/1000166712" {
 		t.Errorf("URL = %q, want canonical vacancy URL without utm", job.URL)
@@ -76,7 +78,7 @@ func TestHabrCareerResolvesDirectVacancyLink(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	if !ok || job.ExternalID != "1000166712" {
+	if !ok || job.ExternalID != ":1000166712" {
 		t.Fatalf("direct link not resolved: ok=%v id=%q", ok, job.ExternalID)
 	}
 }
