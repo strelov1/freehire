@@ -12,3 +12,5 @@
   board: ludeo/D7.008
 - company: Moon Active
   board: moonactive/A2.00C
+- company: Jazz
+  board: jazz/6A.009
