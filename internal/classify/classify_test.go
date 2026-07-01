@@ -36,7 +36,14 @@ func TestParse(t *testing.T) {
 		{"Специалист по продажам", "", "sales"},
 		{"Специалист технической поддержки", "", "support"},
 		{"Lead Senior Engineer", "lead", ""},
-		{"Leading Solutions Architect", "", ""},
+		// Architecture and network engineering are their own categories.
+		{"Solutions Architect", "", "architecture"},
+		{"Senior Software Architect", "senior", "architecture"},
+		{"Cloud Architect", "", "architecture"},
+		{"Системный архитектор", "", "architecture"},
+		{"Network Engineer", "", "network_engineering"},
+		{"Senior Network Administrator", "senior", "network_engineering"},
+		{"Сетевой инженер", "", "network_engineering"},
 		{"Reactor Operations Manager", "", "management"},
 		// A functional prefix wins over a bare "manager" (consistent precedence).
 		{"Sales Manager", "", "sales"},
