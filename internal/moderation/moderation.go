@@ -163,7 +163,6 @@ func (s *Service) Create(ctx context.Context, actorID int64, in CreateInput) (db
 		EmploymentType:     d.EmploymentType,
 		EducationLevel:     d.EducationLevel,
 		ExperienceYearsMin: toInt4(d.ExperienceYearsMin),
-		RemoteUnspecified:  d.RemoteUnspecified,
 
 		CreatedBy: actorID,
 		UpdatedBy: actorID,
@@ -230,7 +229,6 @@ func (s *Service) Update(ctx context.Context, actorID int64, slug string, p Upda
 		EmploymentType:     d.EmploymentType,
 		EducationLevel:     d.EducationLevel,
 		ExperienceYearsMin: toInt4(d.ExperienceYearsMin),
-		RemoteUnspecified:  d.RemoteUnspecified,
 
 		UpdatedBy: actorID,
 	})

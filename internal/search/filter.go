@@ -28,6 +28,19 @@ func EqBool(attr string, v bool) string {
 	return attr + " = " + strconv.FormatBool(v)
 }
 
+// IsEmpty builds an `attr IS EMPTY` fragment, matching documents whose array (or
+// string) attribute is empty. It backs the regions "not specified" sentinel —
+// selecting jobs whose geography did not resolve — without a materialized column.
+func IsEmpty(attr string) string {
+	return attr + " IS EMPTY"
+}
+
+// IsNotEmpty builds `attr IS NOT EMPTY`, the exclude form of IsEmpty (jobs that DO
+// carry a value for the attribute).
+func IsNotEmpty(attr string) string {
+	return attr + " IS NOT EMPTY"
+}
+
 // Gte builds a `attr >= n` numeric fragment.
 func Gte(attr string, n int) string {
 	return attr + " >= " + strconv.Itoa(n)

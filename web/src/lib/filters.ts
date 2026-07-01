@@ -31,10 +31,6 @@ export interface JobFilters {
   /** Facet state keyed by the facet's query param (see FACETS). */
   facets: Record<string, FacetState>;
   visa: boolean;
-  /** Remote jobs whose geography did not resolve to any country or region — the
-   *  "remote, region not specified" bucket. Serialized as `remote_unspecified=true`;
-   *  a one-way toggle (false is never serialized), distinct from the `global` region. */
-  remoteUnspecified: boolean;
   salaryMin: number | null;
   /** Freshness: keep only jobs posted within the last N days (null = any age).
    *  Serialized as `posted_within_days`; the backend turns it into a posted_ts
@@ -54,7 +50,7 @@ function emptyFacets(): Record<string, FacetState> {
 }
 
 export function emptyFilters(): JobFilters {
-  return { q: '', facets: emptyFacets(), visa: false, remoteUnspecified: false, salaryMin: null, postedWithinDays: null, sort: DEFAULT_SORT };
+  return { q: '', facets: emptyFacets(), visa: false, salaryMin: null, postedWithinDays: null, sort: DEFAULT_SORT };
 }
 
 /** Serialize filters to URL query params (the shape the search API reads). */
@@ -72,7 +68,6 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
     }
   }
   if (f.visa) p.set('visa_sponsorship', 'true');
-  if (f.remoteUnspecified) p.set('remote_unspecified', 'true');
   if (f.salaryMin != null) p.set('salary_min', String(f.salaryMin));
   if (f.postedWithinDays != null) p.set('posted_within_days', String(f.postedWithinDays));
   // Omit the default sort: a clean URL leans on the backend's empty-query default.
@@ -97,7 +92,6 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
     else if (include.length > 0) f.facets[def.param] = { values: include, exclude: false, matchAll };
   }
   f.visa = p.get('visa_sponsorship') === 'true';
-  f.remoteUnspecified = p.get('remote_unspecified') === 'true';
   const salary = Number(p.get('salary_min'));
   f.salaryMin = p.get('salary_min') && !Number.isNaN(salary) ? salary : null;
   // Freshness is a positive whole number of days; anything else (absent, zero,
@@ -114,7 +108,6 @@ export function activeFilterCount(f: JobFilters): number {
   let n = 0;
   for (const def of FACETS) n += f.facets[def.param]?.values.length ?? 0;
   if (f.visa) n += 1;
-  if (f.remoteUnspecified) n += 1;
   if (f.salaryMin != null) n += 1;
   if (f.postedWithinDays != null) n += 1;
   return n;
@@ -180,10 +173,6 @@ export class FilterStore {
   // Discrete inputs (clicked/toggled): apply immediately via setNow.
   setVisa(on: boolean) {
     this.#url.setNow({ ...this.#url.value, visa: on });
-  }
-
-  setRemoteUnspecified(on: boolean) {
-    this.#url.setNow({ ...this.#url.value, remoteUnspecified: on });
   }
 
   setSort(sort: SortField) {

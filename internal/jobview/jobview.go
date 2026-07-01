@@ -50,11 +50,6 @@ type Job struct {
 	Regions   []string `json:"regions"`
 	WorkMode  string   `json:"work_mode,omitempty"`
 	Skills    []string `json:"skills"`
-	// RemoteUnspecified is a deterministic source fact served straight from the jobs
-	// column: true when the job is remote but its geography resolved to no country
-	// and no region — the "remote, region not specified" facet. Served top-level like
-	// the other dictionary facets; indexed as a Meilisearch filterable attribute.
-	RemoteUnspecified bool `json:"remote_unspecified"`
 	// Collections is the set of curated-collection slugs (e.g. yc, bigtech) the
 	// job's company belongs to, denormalized from the company onto the job. It is a
 	// deterministic source fact (no LLM counterpart) served straight from the jobs
@@ -128,7 +123,6 @@ func FromRow(j db.Job) (Job, error) {
 		Regions:           regions,
 		WorkMode:          workMode,
 		Skills:            skills,
-		RemoteUnspecified: j.RemoteUnspecified,
 		Collections:       collections,
 		PostedAt:          rfc3339(EffectivePostedAt(j.PostedAt, j.CreatedAt)),
 		CreatedAt:         rfc3339(j.CreatedAt),

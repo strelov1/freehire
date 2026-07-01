@@ -187,6 +187,18 @@ const SOURCE: FacetOption[] = options(SOURCE_VALUES, {
 // whose insertion order is the curated display order.
 const REGION: FacetOption[] = options(Object.keys(REGION_LABELS), REGION_LABELS);
 
+// Reserved `regions` value selecting jobs with no resolved geography (an empty
+// regions array) — the "region not specified" bucket — rather than a real region
+// code. The backend maps it to Meilisearch's IS EMPTY (see search.RegionUnspecified),
+// so it ORs with real regions and supports exclude like any region pill. Only the
+// job facet offers it; the company facet omits it (companies filter by SQL array
+// overlap, which has no empty-set sentinel).
+export const REGION_UNSPECIFIED = 'none';
+
+// Job region options: the macro-regions plus the "Not specified" sentinel chip,
+// appended last so it reads after the real regions.
+const JOB_REGION: FacetOption[] = [...REGION, { value: REGION_UNSPECIFIED, label: 'Not specified' }];
+
 const WORK_MODE: FacetOption[] = options(WORK_MODE_VALUES, WORK_MODE_LABELS);
 const SENIORITY: FacetOption[] = options(SENIORITY_VALUES, SENIORITY_LABELS);
 const COMPANY_TYPE: FacetOption[] = options(COMPANY_TYPE_VALUES, COMPANY_TYPE_LABELS);
@@ -272,7 +284,7 @@ export const COMPANY_FACETS: FacetDef[] = [
 
 export const FACETS: FacetDef[] = [
   { param: 'collections', label: 'Collection', control: 'pills', options: COLLECTION, excludable: false },
-  { param: 'regions', label: 'Region', control: 'pills', options: REGION, excludable: true },
+  { param: 'regions', label: 'Region', control: 'pills', options: JOB_REGION, excludable: true },
   { param: 'work_mode', label: 'Work format', control: 'pills', options: WORK_MODE, excludable: true },
   { param: 'category', label: 'Specialization', control: 'select', options: CATEGORY, excludable: true, placeholder: 'Search specializations' },
   { param: 'seniority', label: 'Seniority', control: 'pills', options: SENIORITY, excludable: true },

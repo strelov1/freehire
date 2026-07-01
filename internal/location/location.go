@@ -27,16 +27,6 @@ type Geo struct {
 	WorkMode  string // "", "remote", "hybrid", or "onsite" — only on an explicit marker
 }
 
-// IsRemoteUnspecified reports whether a job is remote but its geography resolved to
-// no country and no region — the "remote, region not specified" facet. The work mode
-// is passed in (rather than read from geo) because callers resolve it through their
-// own precedence (structured signal → location hint → description); geo carries only
-// the parsed country/region sets. It is the single definition of the rule, shared by
-// jobderive and the Telegram extract path.
-func IsRemoteUnspecified(workMode string, geo Geo) bool {
-	return workMode == "remote" && len(geo.Countries) == 0 && len(geo.Regions) == 0
-}
-
 // separatorReplacer normalizes every token separator to a comma in one pass so a
 // single Split yields the geography tokens. The multi-character forms (" - ",
 // " or ") and parentheses are included, so "Berlin (On-site)" -> "berlin",

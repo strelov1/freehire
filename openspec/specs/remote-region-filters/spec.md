@@ -1,87 +1,74 @@
 # remote-region-filters Specification
 
 ## Purpose
-TBD - created by syncing change add-remote-region-filters. Update Purpose after archive.
+Let users filter jobs to the "geography not specified" bucket — postings whose
+derived region set is empty — without materializing a redundant column. Combined
+with the existing `work_mode=remote` filter it reproduces the former
+"remote, location-flexible" bucket, and on its own it is the orthogonal
+"region unspecified" filter.
 
 ## Requirements
-### Requirement: The remote_unspecified facet is derived deterministically
+### Requirement: The regions facet accepts an "unspecified" sentinel value
 
-The system SHALL derive a boolean facet `remote_unspecified` for each job from
-its already-derived geography facets, with no LLM involvement. The facet SHALL be
-`true` when, and only when, the derived `work_mode` is `remote` AND the derived
-`countries` set is empty AND the derived `regions` set is empty; otherwise it
-SHALL be `false`. The facet SHALL be computed by `jobderive.Derive` from the same
-inputs that produce the geography facets, so the ingest pipeline and the moderator
-write path produce identical results, and a re-derive is idempotent.
+The search API SHALL treat a reserved `regions` facet value (`none`) as a request
+for jobs whose derived `regions` set is empty, rather than an equality against a
+literal region code. The predicate SHALL be expressed as the search engine's
+empty-array test (`regions IS EMPTY`) so it composes with real region values (ORed
+within the facet) and requires no stored per-job column. The sentinel SHALL be
+built by the same pure filter builder shared by the HTTP search handler and the
+saved-search/notification matcher, so both produce an identical filter.
 
-#### Scenario: A bare remote job is flagged
+#### Scenario: The sentinel selects jobs with no resolved region
 
-- **WHEN** a job's geography derives to `work_mode=remote`, empty countries, and
-  empty regions (e.g. location `Remote`)
-- **THEN** `remote_unspecified` is `true`
+- **WHEN** a search request sets `regions=none`
+- **THEN** only jobs whose derived `regions` set is empty are returned (via
+  `regions IS EMPTY`)
 
-#### Scenario: A remote job with a resolved region is not flagged
+#### Scenario: The sentinel ORs with real regions
 
-- **WHEN** a job derives to `work_mode=remote` with a non-empty region (e.g.
-  location `Remote - Europe` → `[eu]`, or `Remote - Anywhere` → `[global]`)
-- **THEN** `remote_unspecified` is `false`
+- **WHEN** a search request sets `regions=none` alongside a real region (e.g.
+  `regions=none&regions=eu`)
+- **THEN** jobs are returned that have region `eu` OR no region at all, as a single
+  ORed facet group
 
-#### Scenario: A non-remote job with no geography is not flagged
+#### Scenario: Excluding the sentinel keeps only located jobs
 
-- **WHEN** a job derives to an empty `work_mode` (or `hybrid`/`onsite`) with empty
-  countries and regions
-- **THEN** `remote_unspecified` is `false`
+- **WHEN** a search request excludes the sentinel (`regions_exclude=none`)
+- **THEN** only jobs whose derived `regions` set is non-empty are returned (via
+  `regions IS NOT EMPTY`)
 
-### Requirement: The remote_unspecified facet is stored, served, and indexed
+#### Scenario: The sentinel is scoped to the regions facet
 
-The system SHALL persist `remote_unspecified` as a `jobs` table column written on
-every upsert and re-derive, alongside the other deterministic facets and NOT
-inside the `enrichment` JSONB. The public read model (`jobview`) SHALL serve the
-column value. The search index SHALL register `remote_unspecified` as a
-filterable attribute, sourced from the served read model, so existing rows reflect
-the facet only after a re-derive and reindex.
+- **WHEN** the reserved value appears on a different facet (e.g. `relocation=none`,
+  where `none` is a real vocabulary value)
+- **THEN** it is treated as an ordinary equality, never as an empty-set test
 
-#### Scenario: The facet is served from the jobs column
+### Requirement: The "region not specified" filter needs no stored facet
 
-- **WHEN** a job with `remote_unspecified=true` is read through the public model
-- **THEN** the served object reports the facet as `true`
+The system SHALL NOT persist a materialized boolean for the "remote, region not
+specified" bucket. The bucket SHALL be derivable at query time from the existing
+`regions` search attribute (empty array) combined with the existing `work_mode`
+filter, so no `jobs` column, read-model field, or dedicated filterable attribute
+is required for it.
 
-#### Scenario: The facet is a filterable search attribute
+#### Scenario: The former bucket is reproduced by composition
 
-- **WHEN** the search index is configured
-- **THEN** `remote_unspecified` is among the index's filterable attributes
+- **WHEN** a search request combines `work_mode=remote` with `regions=none`
+- **THEN** it returns exactly the remote jobs whose geography did not resolve — the
+  bucket formerly served by a stored `remote_unspecified` facet
 
-### Requirement: Jobs can be filtered by remote_unspecified
+### Requirement: The SPA exposes the sentinel as a Region chip
 
-The search API SHALL accept a `remote_unspecified` boolean filter param that,
-when set to `true`, restricts results to jobs whose `remote_unspecified` facet is
-`true`. The param SHALL be built by the same pure filter builder shared by the
-HTTP search handler and the saved-search/notification matcher, so both produce an
-identical filter. An unset or empty param SHALL emit no filter fragment.
+The web frontend SHALL present the "region not specified" option as a pill within
+the jobs filter sidebar's Region facet (labelled `Not specified`), appended after
+the real macro-region pills, so it selects, ORs, and excludes like any region. The
+filter model SHALL serialize the selected chip to `regions=none`, parse it back
+from the URL, and count it toward the active-filter total like any facet value. The
+company filter's Region facet SHALL NOT offer the sentinel (the companies list
+filters by array overlap, which has no empty-set test).
 
-#### Scenario: Filtering by remote_unspecified narrows results
+#### Scenario: The chip is shown inside the Region facet
 
-- **WHEN** a search request sets `remote_unspecified=true`
-- **THEN** only jobs whose `remote_unspecified` facet is `true` are returned
-
-#### Scenario: An unset param emits no filter
-
-- **WHEN** a search request omits `remote_unspecified` (or passes it empty)
-- **THEN** no `remote_unspecified` fragment is added to the search filter
-
-### Requirement: The SPA exposes remote_unspecified as a sidebar toggle
-
-The web frontend SHALL present `remote_unspecified` as a boolean toggle control in
-the jobs filter sidebar (mirroring the existing boolean filters such as visa
-sponsorship), labelled to convey location-flexible remote work (no specific country
-or region) and kept distinct from the `Global` region option. Enabling it SHALL
-drive the `remote_unspecified` search param; the filter model SHALL serialize the
-enabled state to `remote_unspecified=true`, parse it back from the URL, and count it
-as one active filter.
-
-#### Scenario: The toggle is shown and drives the param
-
-- **WHEN** the user opens the jobs filter sidebar
-- **THEN** a location-flexible remote toggle appears, distinct from the `Global`
-  region option, and enabling it sets the `remote_unspecified` search param to
-  `true`
+- **WHEN** the user opens the jobs filter sidebar's Region facet
+- **THEN** a `Not specified` pill appears among the region pills, and selecting it
+  sets the `regions=none` search param

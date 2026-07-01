@@ -111,22 +111,36 @@ func TestFilterFromValues_VisaBoolAndNumeric(t *testing.T) {
 	}
 }
 
-func TestFilterFromValues_RemoteUnspecified(t *testing.T) {
-	// remote_unspecified=true restricts to the facet; it ANDs as its own group.
-	got := normalizeGroups(t, FilterFromValues(vals("remote_unspecified=true&seniority=senior")))
-	want := [][]string{
-		{`enrichment.seniority = "senior"`},
-		{`remote_unspecified = true`},
-	}
+func TestFilterFromValues_RegionUnspecifiedSentinel(t *testing.T) {
+	// The reserved `regions=none` value selects jobs with no resolved geography
+	// via Meili's IS EMPTY, not an equality against a literal "none" region.
+	got := normalizeGroups(t, FilterFromValues(vals("regions=none")))
+	want := [][]string{{`regions IS EMPTY`}}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %v, want %v", got, want)
+		t.Errorf("regions=none: got %v, want %v", got, want)
 	}
 
-	// The toggle only adds a positive constraint: unset, empty, or false emit nothing.
-	for _, q := range []string{"", "remote_unspecified=", "remote_unspecified=false"} {
-		if got := FilterFromValues(vals(q)); got != nil {
-			t.Errorf("FilterFromValues(%q) = %v, want nil", q, got)
-		}
+	// It ORs with real region values inside the same facet group, so "Europe or
+	// unspecified" is a single OR of an equality and IS EMPTY.
+	got = normalizeGroups(t, FilterFromValues(vals("regions=none&regions=eu")))
+	want = [][]string{{`regions = "eu"`, `regions IS EMPTY`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("regions=none&eu: got %v, want %v", got, want)
+	}
+
+	// Excluding the sentinel keeps only jobs that DO have a region (IS NOT EMPTY).
+	got = normalizeGroups(t, FilterFromValues(vals("regions_exclude=none")))
+	want = [][]string{{`regions IS NOT EMPTY`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("regions_exclude=none: got %v, want %v", got, want)
+	}
+
+	// The sentinel is scoped to the regions facet — "none" is a real value
+	// everywhere else and stays an equality (never IS EMPTY).
+	got = normalizeGroups(t, FilterFromValues(vals("relocation=none")))
+	want = [][]string{{`enrichment.relocation = "none"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("relocation=none: got %v, want %v", got, want)
 	}
 }
 

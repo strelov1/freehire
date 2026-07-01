@@ -81,7 +81,6 @@ type Job struct {
 	ExperienceYearsMin pgtype.Int4        `json:"experience_years_min"`
 	Collections        []string           `json:"collections"`
 	ContentHash        pgtype.Text        `json:"content_hash"`
-	RemoteUnspecified  bool               `json:"remote_unspecified"`
 }
 
 type JobReport struct {

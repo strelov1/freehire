@@ -47,7 +47,6 @@ func Of(p db.UpsertJobParams) string {
 	write(p.EmploymentType)
 	write(p.EducationLevel)
 	write(nullableInt(p.ExperienceYearsMin))
-	write(strconv.FormatBool(p.RemoteUnspecified))
 
 	sum := sha256.Sum256([]byte(b.String()))
 	return hex.EncodeToString(sum[:])

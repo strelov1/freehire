@@ -35,6 +35,32 @@ var StringFacets = map[string]string{
 	"posting_language": "enrichment.posting_language",
 }
 
+// RegionUnspecified is the reserved value of the `regions` facet that selects
+// jobs with no resolved geography (an empty regions array) rather than a real
+// region code. The SPA's "Not specified" region chip serializes to it. It maps to
+// Meilisearch's IS EMPTY (IS NOT EMPTY when excluded), so it ORs with real region
+// values in the same facet group and supports exclude like any region — replacing
+// the former materialized `remote_unspecified` boolean with a query-time predicate.
+const RegionUnspecified = "none"
+
+// facetEq builds a facet's include fragment: an equality, except the regions
+// unspecified sentinel, which becomes IS EMPTY.
+func facetEq(param, attr, val string) string {
+	if param == "regions" && val == RegionUnspecified {
+		return IsEmpty(attr)
+	}
+	return Eq(attr, val)
+}
+
+// facetNeq builds a facet's exclude fragment: an inequality, except the regions
+// unspecified sentinel, which becomes IS NOT EMPTY.
+func facetNeq(param, attr, val string) string {
+	if param == "regions" && val == RegionUnspecified {
+		return IsNotEmpty(attr)
+	}
+	return Neq(attr, val)
+}
+
 // FilterFromValues turns the facet params of a parsed search query into a
 // Meilisearch filter. Within a facet, included values are ORed by default (or
 // ANDed when `<param>_mode=and`); excluded values (`<param>_exclude=...`) become
@@ -59,31 +85,24 @@ func filterFromValues(v url.Values, now time.Time) any {
 			if v.Get(param+"_mode") == "and" {
 				// Each value its own AND group: a job must match all of them.
 				for _, val := range included {
-					groups = append(groups, []string{Eq(attr, val)})
+					groups = append(groups, []string{facetEq(param, attr, val)})
 				}
 			} else {
 				group := make([]string, len(included))
 				for i, val := range included {
-					group[i] = Eq(attr, val)
+					group[i] = facetEq(param, attr, val)
 				}
 				groups = append(groups, group)
 			}
 		}
 		// Excluded values: each is its own AND group so all are filtered out.
 		for _, val := range nonEmpty(v[param+"_exclude"]) {
-			groups = append(groups, []string{Neq(attr, val)})
+			groups = append(groups, []string{facetNeq(param, attr, val)})
 		}
 	}
 
 	if raw := v.Get("visa_sponsorship"); raw != "" {
 		groups = append(groups, []string{EqBool("enrichment.visa_sponsorship", raw == "true")})
-	}
-
-	// remote_unspecified is a one-way toggle: setting it true restricts to remote
-	// jobs whose geography did not resolve. It adds only a positive constraint, so a
-	// false/empty value emits nothing (filtering OUT that bucket is not a use case).
-	if v.Get("remote_unspecified") == "true" {
-		groups = append(groups, []string{EqBool("remote_unspecified", true)})
 	}
 
 	if n, ok := atoiOK(v.Get("salary_min")); ok {

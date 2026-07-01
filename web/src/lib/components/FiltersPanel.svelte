@@ -127,19 +127,6 @@
     </div>
   </div>
 
-  <div class="border-b border-border pb-4">
-    <h3 class="mb-2 text-sm font-semibold tracking-tight">Remote</h3>
-    <label class="flex cursor-pointer items-center gap-2 text-sm">
-      <input
-        type="checkbox"
-        class="size-4 rounded border-border"
-        checked={store.value.remoteUnspecified}
-        onchange={(e) => store.setRemoteUnspecified(e.currentTarget.checked)}
-      />
-      <span>Remote · location-flexible</span>
-    </label>
-  </div>
-
   <div>
     <h3 class="mb-2 text-sm font-semibold tracking-tight">Visa</h3>
     <label class="flex cursor-pointer items-center gap-2 text-sm">

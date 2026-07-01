@@ -59,9 +59,6 @@ type Job struct {
 	EmploymentType     string
 	EducationLevel     string
 	ExperienceYearsMin *int
-	// RemoteUnspecified is true when the job is remote but its geography resolved to
-	// no country and no region — the "remote, region not specified" facet.
-	RemoteUnspecified bool
 }
 
 // Store persists one normalized job and enqueues it for enrichment when needed,
@@ -327,6 +324,5 @@ func normalizeJob(e sources.CompanyEntry, j sources.Job) Job {
 		EmploymentType:     d.EmploymentType,
 		EducationLevel:     d.EducationLevel,
 		ExperienceYearsMin: d.ExperienceYearsMin,
-		RemoteUnspecified:  d.RemoteUnspecified,
 	}
 }
