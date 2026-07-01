@@ -39,24 +39,17 @@
   let dragX = $state(0);
   let dragging = $state(false);
   let startX = 0;
-  // exiting: the active card is mid fly-off (guards re-entry, drives opacity).
-  // resetting: the one frame where we snap the incoming card into its start pose
-  // (dragX 0, scaled down) with the transition suppressed, so it doesn't slide in
-  // from the edge and its grow-in doesn't fire on the wrong frame.
-  // entering: the incoming card's grow-from-center intro (scale + fade up).
+  // The active card is mid fly-off: guards re-entry and drives the fade-out.
   let exiting = $state(false);
-  let resetting = $state(false);
-  let entering = $state(false);
 
-  // The card animates (springs back, flies off, or grows in) whenever it isn't
-  // tracking the finger and isn't being snapped into its start pose for a frame.
-  const animate = $derived(!dragging && !resetting);
-  // Tilt tracks the drag but is capped so the fly-off doesn't spin wildly. The
-  // card fades out as it leaves, and the next one grows in from the center
-  // (0.95→1, dimmed→full) so it reads as emerging rather than snapping.
+  // The card transitions (springs back or flies off) whenever it isn't tracking
+  // the finger. The grow-in intro is a CSS keyframe on mount, not a transition —
+  // see the `.swipe-card` animation below — so no frame-timing dance is needed.
+  const animate = $derived(!dragging);
+  // Tilt tracks the drag but is capped so the fly-off doesn't spin wildly; the
+  // card fades out as it leaves.
   const rotation = $derived(Math.max(-18, Math.min(18, dragX / 24)));
-  const cardScale = $derived(entering ? 0.95 : 1);
-  const cardOpacity = $derived(exiting ? 0 : entering ? 0.6 : 1);
+  const cardOpacity = $derived(exiting ? 0 : 1);
 
   const current = $derived(queue[0] ?? null);
   const next = $derived(queue[1] ?? null);
@@ -106,20 +99,13 @@
       if (last?.job.public_slug === job.public_slug) last = null;
     });
 
-    // After the fly-off, swap in the next card. Frame 0: snap it into its start
-    // pose (centered, scaled down) with the transition suppressed — no slide from
-    // the edge, no scale animation yet. Frame 1: release both, so it grows from
-    // the center into place.
+    // After the fly-off, drop the card. The next one is a fresh DOM node (keyed by
+    // slug), so it mounts centered at dragX 0 — no slide from the edge — and plays
+    // the grow-in keyframe on mount.
     setTimeout(() => {
-      resetting = true;
-      entering = true;
       queue = queue.slice(1);
       dragX = 0;
       exiting = false;
-      requestAnimationFrame(() => {
-        resetting = false;
-        entering = false;
-      });
       prefetchIfLow();
     }, FLY_MS);
   }
@@ -208,17 +194,18 @@
         ></div>
       {/if}
 
-      <div
-        role="group"
-        aria-label={`Job: ${current.title} at ${current.company || 'unknown company'}`}
-        class="absolute inset-0 flex touch-none flex-col gap-3 rounded-2xl border border-border bg-card p-5 shadow-lg duration-300 ease-out"
-        class:transition={animate}
-        style={`transform: translateX(${dragX}px) rotate(${rotation}deg) scale(${cardScale}); opacity: ${cardOpacity};`}
-        onpointerdown={onPointerDown}
-        onpointermove={onPointerMove}
-        onpointerup={onPointerUp}
-        onpointercancel={onPointerUp}
-      >
+      {#key current.public_slug}
+        <div
+          role="group"
+          aria-label={`Job: ${current.title} at ${current.company || 'unknown company'}`}
+          class="swipe-card absolute inset-0 flex touch-none flex-col gap-3 rounded-2xl border border-border bg-card p-5 shadow-lg duration-300 ease-out"
+          class:transition={animate}
+          style={`transform: translateX(${dragX}px) rotate(${rotation}deg); opacity: ${cardOpacity};`}
+          onpointerdown={onPointerDown}
+          onpointermove={onPointerMove}
+          onpointerup={onPointerUp}
+          onpointercancel={onPointerUp}
+        >
         <!-- Swipe-direction cues. -->
         {#if dragX > 20}
           <span class="absolute right-4 top-4 rounded-md border-2 border-emerald-500 px-2 py-0.5 text-sm font-bold text-emerald-500">SAVE</span>
@@ -272,6 +259,7 @@
           Open full details →
         </a>
       </div>
+      {/key}
     </div>
 
     <!-- Action buttons (desktop + a tap alternative to swiping). -->
@@ -328,6 +316,24 @@
 </div>
 
 <style>
+  /* Grow-in intro for each incoming card. Uses the independent `scale` property
+     (not transform: scale) so it composes with the drag/fly-off translate+rotate
+     on `transform` instead of fighting it. Re-triggers per card via {#key slug}. */
+  .swipe-card {
+    animation: card-in 300ms ease-out;
+  }
+
+  @keyframes card-in {
+    from {
+      scale: 0.95;
+      opacity: 0.6;
+    }
+    to {
+      scale: 1;
+      opacity: 1;
+    }
+  }
+
   /* Scraped HTML: long URLs or nbsp-glued words must wrap, not force a scroll. */
   .job-teaser {
     overflow-wrap: break-word;
