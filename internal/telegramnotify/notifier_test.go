@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"unicode/utf16"
 
 	"github.com/strelov1/freehire/internal/notify"
 )
@@ -50,6 +51,36 @@ func TestNotifier_RenderSingularNoOverflow(t *testing.T) {
 	got := n.render(notify.Digest{SavedSearchName: "x", Total: 1, Jobs: []notify.DigestJob{{Title: "A", Slug: "a"}}})
 	if !strings.Contains(got, "<b>1</b> new job for") || strings.Contains(got, "more") {
 		t.Errorf("singular render wrong: %q", got)
+	}
+}
+
+// A digest of many long-title jobs must stay within Telegram's 4096-code-unit
+// sendMessage limit — otherwise the send fails deterministically, every retry
+// re-fails, and the whole batch is dead-lettered (the user loses all of it). The
+// jobs that don't fit fall into the "+ N more" tail, and none are lost.
+func TestNotifier_RenderCapsAtTelegramLimit(t *testing.T) {
+	n := NewNotifier(NewClient("t"), "https://freehire.dev")
+	const total = 20                                                              // DigestCap
+	longTitle := strings.Repeat("Senior Staff Platform Reliability Engineer ", 6) // ~258 chars
+	jobs := make([]notify.DigestJob, total)
+	for i := range jobs {
+		jobs[i] = notify.DigestJob{
+			Title:   longTitle,
+			Company: "A Rather Long Company Name Incorporated",
+			Slug:    strings.Repeat("some-long-job-slug-", 5),
+		}
+	}
+	got := n.render(notify.Digest{SavedSearchName: "big search", Total: total, Jobs: jobs})
+
+	if n16 := len(utf16.Encode([]rune(got))); n16 > 4096 {
+		t.Errorf("rendered %d UTF-16 units, want <= 4096 (Telegram sendMessage limit)", n16)
+	}
+	shown := strings.Count(got, "• ")
+	if shown == 0 || shown >= total {
+		t.Errorf("shown = %d, want some-but-not-all of %d jobs listed", shown, total)
+	}
+	if !strings.Contains(got, "more") {
+		t.Errorf("dropped jobs must be summarized by a '+ N more' tail: %q", got)
 	}
 }
 
