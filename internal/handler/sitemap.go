@@ -8,10 +8,19 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 )
 
-// sitemapMaxURLs is the sitemap-protocol per-file cap. It doubles as the default
-// and hard limit for a slice request and the chunk size the index uses to compute
-// keyset boundaries, so a served chunk can never exceed the protocol limit.
+// sitemapMaxURLs is the sitemap-protocol per-file cap. It bounds the company slice
+// and the chunk size the company index uses for keyset boundaries, so a served
+// chunk can never exceed the protocol limit. It is also the ceiling for the job
+// feed, which ships only its freshest slice (see jobSitemapFreshest).
 const sitemapMaxURLs = 50000
+
+// jobSitemapFreshest is how many of the newest open jobs the sitemap ships. The
+// jobs table is far too large (millions of rows) to enumerate per request without
+// a heap-bound scan that also evicts the buffer cache, so the sitemap covers the
+// freshest slice (ordered by id DESC, a cache-warm scan); fuller coverage would
+// need a precomputed narrow table. Kept at the protocol per-file cap so it fits one
+// sub-sitemap with no chunking.
+const jobSitemapFreshest = sitemapMaxURLs
 
 // sitemapEntry is the slim wire shape a sitemap URL needs — the public slug and a
 // lastmod. Nothing wider (no full job row, no search engine) crosses the wire.
@@ -31,12 +40,9 @@ func sitemapChunk(c *fiber.Ctx) int64 {
 	return int64(min(max(c.QueryInt("chunk", sitemapMaxURLs), 1), sitemapMaxURLs))
 }
 
-// JobSitemap serves one keyset page of open-job sitemap entries after ?after=<id>.
+// JobSitemap serves the freshest open-job sitemap entries (newest id first).
 func (a *API) JobSitemap(c *fiber.Ctx) error {
-	rows, err := a.queries.ListJobSitemap(c.Context(), db.ListJobSitemapParams{
-		AfterID:   int64(c.QueryInt("after", 0)),
-		BatchSize: sitemapLimit(c),
-	})
+	rows, err := a.queries.ListJobSitemapFreshest(c.Context(), jobSitemapFreshest)
 	if err != nil {
 		return err
 	}
@@ -45,16 +51,6 @@ func (a *API) JobSitemap(c *fiber.Ctx) error {
 		entries[i] = sitemapEntry{Slug: r.PublicSlug, UpdatedAt: r.UpdatedAt.Time}
 	}
 	return c.JSON(fiber.Map{"data": entries})
-}
-
-// JobSitemapBoundaries returns the keyset cursor (job id) ending each ?chunk=<n> of
-// open jobs, for building the sitemap index.
-func (a *API) JobSitemapBoundaries(c *fiber.Ctx) error {
-	cursors, err := a.queries.JobSitemapBoundaries(c.Context(), sitemapChunk(c))
-	if err != nil {
-		return err
-	}
-	return c.JSON(fiber.Map{"data": cursors})
 }
 
 // CompanySitemap serves one keyset page of company sitemap entries after ?after=<slug>.

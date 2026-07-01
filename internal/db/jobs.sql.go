@@ -243,73 +243,35 @@ func (q *Queries) GetJobIDBySlug(ctx context.Context, publicSlug string) (int64,
 	return id, err
 }
 
-const jobSitemapBoundaries = `-- name: JobSitemapBoundaries :many
-SELECT id FROM (
-  SELECT id,
-         row_number() OVER (ORDER BY id) AS rn,
-         count(*) OVER () AS total
-  FROM jobs
-  WHERE closed_at IS NULL
-) t
-WHERE rn % $1::bigint = 0 AND rn < total
-ORDER BY id
-`
-
-// The id ending every full chunk of `chunk_size` open jobs (ordered by id),
-// excluding the final row, so the sitemap index can list each sub-sitemap's keyset
-// cursor without the client walking the whole catalogue.
-func (q *Queries) JobSitemapBoundaries(ctx context.Context, chunkSize int64) ([]int64, error) {
-	rows, err := q.db.Query(ctx, jobSitemapBoundaries, chunkSize)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []int64{}
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listJobSitemap = `-- name: ListJobSitemap :many
-SELECT id, public_slug, updated_at
+const listJobSitemapFreshest = `-- name: ListJobSitemapFreshest :many
+SELECT public_slug, updated_at
 FROM jobs
-WHERE closed_at IS NULL AND id > $1
-ORDER BY id
-LIMIT $2
+WHERE closed_at IS NULL
+ORDER BY id DESC
+LIMIT $1
 `
 
-type ListJobSitemapParams struct {
-	AfterID   int64 `json:"after_id"`
-	BatchSize int32 `json:"batch_size"`
-}
-
-type ListJobSitemapRow struct {
-	ID         int64              `json:"id"`
+type ListJobSitemapFreshestRow struct {
 	PublicSlug string             `json:"public_slug"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
-// Slim keyset page for the sitemap: only the fields a sitemap URL needs, open jobs
-// only, cursored by the immutable primary key so a chunk is a bounded index scan
-// (never a deep OFFSET over millions of rows).
-func (q *Queries) ListJobSitemap(ctx context.Context, arg ListJobSitemapParams) ([]ListJobSitemapRow, error) {
-	rows, err := q.db.Query(ctx, listJobSitemap, arg.AfterID, arg.BatchSize)
+// The freshest open jobs for the sitemap: only the fields a URL needs, newest id
+// first. Ordering by id DESC (served by jobs_open_id_idx) reads the most recently
+// inserted rows, which sit at the physical end of the heap — a sequential, cache-warm
+// scan. Enumerating the whole 2.5M-row catalogue per request is heap-bound and far
+// too slow (and pollutes the buffer cache), so the sitemap ships the freshest slice;
+// fuller coverage needs a precomputed narrow table, not a live scan.
+func (q *Queries) ListJobSitemapFreshest(ctx context.Context, rowLimit int32) ([]ListJobSitemapFreshestRow, error) {
+	rows, err := q.db.Query(ctx, listJobSitemapFreshest, rowLimit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListJobSitemapRow{}
+	items := []ListJobSitemapFreshestRow{}
 	for rows.Next() {
-		var i ListJobSitemapRow
-		if err := rows.Scan(&i.ID, &i.PublicSlug, &i.UpdatedAt); err != nil {
+		var i ListJobSitemapFreshestRow
+		if err := rows.Scan(&i.PublicSlug, &i.UpdatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

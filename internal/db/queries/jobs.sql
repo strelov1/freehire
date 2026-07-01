@@ -55,29 +55,18 @@ SELECT count(*)
 FROM jobs
 WHERE closed_at IS NULL;
 
--- name: ListJobSitemap :many
--- Slim keyset page for the sitemap: only the fields a sitemap URL needs, open jobs
--- only, cursored by the immutable primary key so a chunk is a bounded index scan
--- (never a deep OFFSET over millions of rows).
-SELECT id, public_slug, updated_at
+-- name: ListJobSitemapFreshest :many
+-- The freshest open jobs for the sitemap: only the fields a URL needs, newest id
+-- first. Ordering by id DESC (served by jobs_open_id_idx) reads the most recently
+-- inserted rows, which sit at the physical end of the heap — a sequential, cache-warm
+-- scan. Enumerating the whole 2.5M-row catalogue per request is heap-bound and far
+-- too slow (and pollutes the buffer cache), so the sitemap ships the freshest slice;
+-- fuller coverage needs a precomputed narrow table, not a live scan.
+SELECT public_slug, updated_at
 FROM jobs
-WHERE closed_at IS NULL AND id > sqlc.arg(after_id)
-ORDER BY id
-LIMIT sqlc.arg(batch_size);
-
--- name: JobSitemapBoundaries :many
--- The id ending every full chunk of `chunk_size` open jobs (ordered by id),
--- excluding the final row, so the sitemap index can list each sub-sitemap's keyset
--- cursor without the client walking the whole catalogue.
-SELECT id FROM (
-  SELECT id,
-         row_number() OVER (ORDER BY id) AS rn,
-         count(*) OVER () AS total
-  FROM jobs
-  WHERE closed_at IS NULL
-) t
-WHERE rn % sqlc.arg(chunk_size)::bigint = 0 AND rn < total
-ORDER BY id;
+WHERE closed_at IS NULL
+ORDER BY id DESC
+LIMIT sqlc.arg(row_limit);
 
 -- name: ListJobsByCompany :many
 SELECT *

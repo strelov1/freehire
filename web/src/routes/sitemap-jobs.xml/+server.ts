@@ -1,12 +1,12 @@
 import { serverApi } from '$lib/server/api';
-import { SITEMAP_CHUNK, urlsetXml, xmlResponse } from '$lib/sitemap';
+import { urlsetXml, xmlResponse } from '$lib/sitemap';
 import type { RequestHandler } from './$types';
 
-// One keyset chunk of open-job URLs, addressed by ?after=<job id> (0 for the
-// first chunk). The sitemap index lists these; each fetches exactly one chunk.
+// The freshest open-job URLs (newest first), one file. The jobs table is too large
+// to enumerate per request without a heap-bound scan that evicts the buffer cache,
+// so the sitemap ships the freshest slice; the backend caps the count.
 export const GET: RequestHandler = async ({ url, fetch }) => {
-  const after = Number(url.searchParams.get('after') ?? '0') || 0;
-  const jobs = await serverApi(fetch).sitemapJobs(after, SITEMAP_CHUNK);
+  const jobs = await serverApi(fetch).sitemapJobs();
   const entries = jobs.map((j) => ({ loc: `${url.origin}/jobs/${j.slug}`, lastmod: j.updated_at }));
   return xmlResponse(urlsetXml(entries));
 };

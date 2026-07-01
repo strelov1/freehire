@@ -49,7 +49,6 @@ func TestSitemapEndpoints(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	// Sitemap routes are registered BEFORE the :slug catch-alls, mirroring wiring.
 	app.Get("/api/v1/jobs/sitemap", h.JobSitemap)
-	app.Get("/api/v1/jobs/sitemap/boundaries", h.JobSitemapBoundaries)
 	app.Get("/api/v1/companies/sitemap", h.CompanySitemap)
 	app.Get("/api/v1/companies/sitemap/boundaries", h.CompanySitemapBoundaries)
 	app.Get("/api/v1/jobs/:slug", h.GetJob)
@@ -84,25 +83,14 @@ func TestSitemapEndpoints(t *testing.T) {
 		return d.Data
 	}
 
-	t.Run("job slice is slim, keyset-paged, and not captured by :slug", func(t *testing.T) {
-		got := decodeEntries(t, get(t, "/api/v1/jobs/sitemap?after=0&limit=2"))
-		if len(got) != 2 || got[0].Slug != "job-01" || got[1].Slug != "job-02" {
-			t.Fatalf("page = %+v, want [job-01 job-02]", got)
+	t.Run("job sitemap is slim, freshest-first, and not captured by :slug", func(t *testing.T) {
+		got := decodeEntries(t, get(t, "/api/v1/jobs/sitemap"))
+		// Seeded job-01..job-05 with ascending ids -> newest id first.
+		if len(got) != 5 || got[0].Slug != "job-05" || got[4].Slug != "job-01" {
+			t.Fatalf("page = %+v, want job-05..job-01", got)
 		}
 		if got[0].UpdatedAt == "" {
 			t.Fatalf("entry missing updated_at: %+v", got[0])
-		}
-	})
-
-	t.Run("job boundaries drive the index cursors", func(t *testing.T) {
-		var d struct {
-			Data []int64 `json:"data"`
-		}
-		if err := json.Unmarshal(get(t, "/api/v1/jobs/sitemap/boundaries?chunk=2"), &d); err != nil {
-			t.Fatalf("decode boundaries: %v", err)
-		}
-		if len(d.Data) != 2 {
-			t.Fatalf("boundaries = %v, want 2 cursors for 5 jobs at chunk 2", d.Data)
 		}
 	})
 

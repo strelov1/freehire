@@ -220,10 +220,6 @@ type Querier interface {
 	// never reset. extracted_at is non-NULL when the ingest prefilter already
 	// decided the post holds no vacancy, so it is recorded but never queued.
 	InsertTelegramPost(ctx context.Context, arg InsertTelegramPostParams) (int64, error)
-	// The id ending every full chunk of `chunk_size` open jobs (ordered by id),
-	// excluding the final row, so the sitemap index can list each sub-sitemap's keyset
-	// cursor without the client walking the whole catalogue.
-	JobSitemapBoundaries(ctx context.Context, chunkSize int64) ([]int64, error)
 	// A user's API keys, newest first. Metadata only — never the token_hash.
 	ListAPIKeysByUser(ctx context.Context, userID int64) ([]ListAPIKeysByUserRow, error)
 	// Every active subscription with the data the matching worker needs: the saved
@@ -250,10 +246,13 @@ type Querier interface {
 	// Slim keyset page of companies for the sitemap, cursored by the slug primary key
 	// (first chunk keyed by the empty string, which sorts before every slug).
 	ListCompanySitemap(ctx context.Context, arg ListCompanySitemapParams) ([]ListCompanySitemapRow, error)
-	// Slim keyset page for the sitemap: only the fields a sitemap URL needs, open jobs
-	// only, cursored by the immutable primary key so a chunk is a bounded index scan
-	// (never a deep OFFSET over millions of rows).
-	ListJobSitemap(ctx context.Context, arg ListJobSitemapParams) ([]ListJobSitemapRow, error)
+	// The freshest open jobs for the sitemap: only the fields a URL needs, newest id
+	// first. Ordering by id DESC (served by jobs_open_id_idx) reads the most recently
+	// inserted rows, which sit at the physical end of the heap — a sequential, cache-warm
+	// scan. Enumerating the whole 2.5M-row catalogue per request is heap-bound and far
+	// too slow (and pollutes the buffer cache), so the sitemap ships the freshest slice;
+	// fuller coverage needs a precomputed narrow table, not a live scan.
+	ListJobSitemapFreshest(ctx context.Context, rowLimit int32) ([]ListJobSitemapFreshestRow, error)
 	// Newest-added first: created_at is when the job entered the catalogue (stable
 	// across re-ingests), so fresh ingests surface on top regardless of how old the
 	// platform's posted_at is. id breaks ties within one ingest batch.

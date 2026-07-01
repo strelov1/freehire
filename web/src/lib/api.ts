@@ -209,20 +209,13 @@ export function createApi(
 
   // --- Sitemap --------------------------------------------------------------
   //
-  // Slim, keyset-paginated feeds behind the sitemap index (server routes only).
-  // The slice endpoints return one chunk after a cursor; the boundary endpoints
-  // return the cursor ending each chunk, so the index can enumerate sub-sitemaps
-  // without walking the catalogue.
+  // Feeds behind the sitemap index (server routes only). Jobs ship their freshest
+  // slice (one file); companies are keyset-paginated across chunks, with a boundary
+  // endpoint returning the cursor ending each chunk so the index can enumerate them.
 
-  /** One chunk of open-job sitemap entries with id > `after` (0 for the first). */
-  async function sitemapJobs(after: number, limit: number): Promise<SitemapEntry[]> {
-    const res = await request<{ data: SitemapEntry[] }>(`/api/v1/jobs/sitemap?after=${after}&limit=${limit}`);
-    return res.data;
-  }
-
-  /** The job-id cursor ending each `chunk`-sized page of open jobs. */
-  async function sitemapJobBoundaries(chunk: number): Promise<number[]> {
-    const res = await request<{ data: number[] }>(`/api/v1/jobs/sitemap/boundaries?chunk=${chunk}`);
+  /** The freshest open-job sitemap entries (newest first), one file. */
+  async function sitemapJobs(): Promise<SitemapEntry[]> {
+    const res = await request<{ data: SitemapEntry[] }>('/api/v1/jobs/sitemap');
     return res.data;
   }
 
@@ -648,7 +641,6 @@ export function createApi(
     listCompanies,
     getCompany,
     sitemapJobs,
-    sitemapJobBoundaries,
     sitemapCompanies,
     sitemapCompanyBoundaries,
     register,

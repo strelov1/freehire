@@ -1,10 +1,10 @@
 //go:build integration
 
-// Integration tests for the sitemap keyset read path: the slim slice queries page
-// by an id/slug cursor (never OFFSET) and skip closed jobs, and the boundary
-// queries return the cursor at each Nth row so the sitemap index can enumerate
-// chunks without walking the catalogue. SQL behaviors, verifiable only against a
-// real Postgres. Run with: go test -tags=integration ./internal/db/
+// Integration tests for the sitemap read path: the job feed returns the freshest
+// open jobs (newest id first, closed excluded); the company slice pages by a slug
+// cursor and the boundary query returns the cursor at each Nth row so the company
+// sitemap index can enumerate chunks without walking the table. SQL behaviors,
+// verifiable only against a real Postgres. Run with: go test -tags=integration ./internal/db/
 package db
 
 import (
@@ -27,7 +27,7 @@ func seedOpenJob(ctx context.Context, t *testing.T, q *Queries, n int) Job {
 	return j
 }
 
-func TestJobSitemapKeyset(t *testing.T) {
+func TestJobSitemapFreshest(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
 	ctx := context.Background()
@@ -35,72 +35,37 @@ func TestJobSitemapKeyset(t *testing.T) {
 
 	var jobs []Job
 	for i := 1; i <= 5; i++ {
-		jobs = append(jobs, seedOpenJob(ctx, t, q, i))
+		jobs = append(jobs, seedOpenJob(ctx, t, q, i)) // ascending ids
 	}
-	// A closed job must never appear in the sitemap slice nor shift the cursor math.
+	// A closed job must never appear in the sitemap.
 	closed := seedOpenJob(ctx, t, q, 6)
 	if _, err := pool.Exec(ctx, `UPDATE jobs SET closed_at = now() WHERE id = $1`, closed.ID); err != nil {
 		t.Fatalf("close job: %v", err)
 	}
 
-	t.Run("slice pages by id cursor and skips closed jobs", func(t *testing.T) {
-		first, err := q.ListJobSitemap(ctx, ListJobSitemapParams{AfterID: 0, BatchSize: 2})
+	t.Run("returns the freshest open jobs, newest id first", func(t *testing.T) {
+		got, err := q.ListJobSitemapFreshest(ctx, 3)
 		if err != nil {
-			t.Fatalf("ListJobSitemap: %v", err)
+			t.Fatalf("ListJobSitemapFreshest: %v", err)
 		}
-		if len(first) != 2 || first[0].ID != jobs[0].ID || first[1].ID != jobs[1].ID {
-			t.Fatalf("first page = %v, want [%d %d]", jobSitemapIDs(first), jobs[0].ID, jobs[1].ID)
-		}
-		if first[0].PublicSlug != jobs[0].PublicSlug {
-			t.Fatalf("public_slug = %q, want %q", first[0].PublicSlug, jobs[0].PublicSlug)
-		}
-
-		// Drain the rest via the keyset cursor: it must stop at the 5 open jobs and
-		// never surface the closed one.
-		var seen []int64
-		cursor := int64(0)
-		for {
-			page, err := q.ListJobSitemap(ctx, ListJobSitemapParams{AfterID: cursor, BatchSize: 2})
-			if err != nil {
-				t.Fatalf("ListJobSitemap page: %v", err)
-			}
-			if len(page) == 0 {
-				break
-			}
-			for _, r := range page {
-				seen = append(seen, r.ID)
-			}
-			cursor = page[len(page)-1].ID
-		}
-		if len(seen) != 5 {
-			t.Fatalf("drained %d open jobs, want 5 (ids %v)", len(seen), seen)
-		}
-		for _, id := range seen {
-			if id == closed.ID {
-				t.Fatalf("closed job %d leaked into sitemap slice", closed.ID)
-			}
+		want := []string{jobs[4].PublicSlug, jobs[3].PublicSlug, jobs[2].PublicSlug}
+		if fmt.Sprint(freshestSlugs(got)) != fmt.Sprint(want) {
+			t.Fatalf("freshest 3 = %v, want %v", freshestSlugs(got), want)
 		}
 	})
 
-	t.Run("boundaries return the id at each Nth open job, excluding the last", func(t *testing.T) {
-		// 5 open jobs, chunk size 2 -> cursors after rows 2 and 4 (row 6=EOF excluded).
-		got, err := q.JobSitemapBoundaries(ctx, 2)
+	t.Run("caps at the limit and excludes closed jobs", func(t *testing.T) {
+		got, err := q.ListJobSitemapFreshest(ctx, 100)
 		if err != nil {
-			t.Fatalf("JobSitemapBoundaries: %v", err)
+			t.Fatalf("ListJobSitemapFreshest: %v", err)
 		}
-		want := []int64{jobs[1].ID, jobs[3].ID}
-		if fmt.Sprint(got) != fmt.Sprint(want) {
-			t.Fatalf("boundaries = %v, want %v", got, want)
+		if len(got) != 5 {
+			t.Fatalf("got %d open jobs, want 5 (%v)", len(got), freshestSlugs(got))
 		}
-	})
-
-	t.Run("boundaries empty when a single chunk covers everything", func(t *testing.T) {
-		got, err := q.JobSitemapBoundaries(ctx, 50)
-		if err != nil {
-			t.Fatalf("JobSitemapBoundaries: %v", err)
-		}
-		if len(got) != 0 {
-			t.Fatalf("boundaries = %v, want none", got)
+		for _, r := range got {
+			if r.PublicSlug == closed.PublicSlug {
+				t.Fatalf("closed job %q leaked into sitemap", closed.PublicSlug)
+			}
 		}
 	})
 }
@@ -144,10 +109,10 @@ func TestCompanySitemapKeyset(t *testing.T) {
 	})
 }
 
-func jobSitemapIDs(rows []ListJobSitemapRow) []int64 {
-	out := make([]int64, len(rows))
+func freshestSlugs(rows []ListJobSitemapFreshestRow) []string {
+	out := make([]string, len(rows))
 	for i, r := range rows {
-		out[i] = r.ID
+		out[i] = r.PublicSlug
 	}
 	return out
 }
