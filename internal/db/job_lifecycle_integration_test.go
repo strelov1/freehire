@@ -166,7 +166,7 @@ func TestClosedJobsLeaveListSurfacesButResolveOnDetail(t *testing.T) {
 
 	// companies.job_count is denormalized: UpsertJob does not maintain it,
 	// cmd/recount-companies does. Recompute before asserting on the column.
-	if _, err := q.RecountCompanyJobCounts(ctx); err != nil {
+	if _, err := q.RefreshCompanyFacets(ctx); err != nil {
 		t.Fatalf("recount company job counts: %v", err)
 	}
 

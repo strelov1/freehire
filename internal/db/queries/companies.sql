@@ -5,19 +5,35 @@
 -- DESC, name — the same ordering the sidebar company typeahead consumes. An empty
 -- `search` short-circuits the ILIKE, so the same prepared statement serves both
 -- the full list and a name search (`search` is a case-insensitive substring of the
--- name).
+-- name). Each facet param is a text[] filtered by array overlap (&&): an empty
+-- array short-circuits to no constraint, non-empty values are OR-ed within the
+-- facet, and the facets AND together (and with the name search). CountCompanies
+-- MUST keep an identical WHERE so the filtered total matches the page.
 SELECT slug, name, job_count
 FROM companies
-WHERE sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%'
+WHERE (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%')
+  AND (cardinality(sqlc.arg('collections')::text[]) = 0 OR collections && sqlc.arg('collections')::text[])
+  AND (cardinality(sqlc.arg('regions')::text[]) = 0 OR regions && sqlc.arg('regions')::text[])
+  AND (cardinality(sqlc.arg('countries')::text[]) = 0 OR countries && sqlc.arg('countries')::text[])
+  AND (cardinality(sqlc.arg('domains')::text[]) = 0 OR domains && sqlc.arg('domains')::text[])
+  AND (cardinality(sqlc.arg('company_types')::text[]) = 0 OR company_types && sqlc.arg('company_types')::text[])
+  AND (cardinality(sqlc.arg('company_sizes')::text[]) = 0 OR company_sizes && sqlc.arg('company_sizes')::text[])
 ORDER BY job_count DESC, name
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: CountCompanies :one
--- Total companies matching the same optional name filter as ListCompanies, so
--- search pagination reports the filtered total.
+-- Total companies matching the same optional name + facet filters as ListCompanies,
+-- so search/filter pagination reports the filtered total. Keep this WHERE identical
+-- to ListCompanies.
 SELECT count(*)
 FROM companies
-WHERE sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%';
+WHERE (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%')
+  AND (cardinality(sqlc.arg('collections')::text[]) = 0 OR collections && sqlc.arg('collections')::text[])
+  AND (cardinality(sqlc.arg('regions')::text[]) = 0 OR regions && sqlc.arg('regions')::text[])
+  AND (cardinality(sqlc.arg('countries')::text[]) = 0 OR countries && sqlc.arg('countries')::text[])
+  AND (cardinality(sqlc.arg('domains')::text[]) = 0 OR domains && sqlc.arg('domains')::text[])
+  AND (cardinality(sqlc.arg('company_types')::text[]) = 0 OR company_types && sqlc.arg('company_types')::text[])
+  AND (cardinality(sqlc.arg('company_sizes')::text[]) = 0 OR company_sizes && sqlc.arg('company_sizes')::text[]);
 
 -- name: GetCompany :one
 -- SELECT * (not an explicit column list) so the generated row stays db.Company as
@@ -65,21 +81,75 @@ ON CONFLICT (slug) DO UPDATE SET
 DELETE FROM companies c
 WHERE NOT EXISTS (SELECT 1 FROM jobs j WHERE j.company_slug = c.slug);
 
--- name: RecountCompanyJobCounts :execrows
--- Recompute every company's denormalized open-job count in one set-based pass:
--- aggregate open jobs (closed_at IS NULL) once by company_slug, LEFT JOIN it onto
--- companies so a company with no open jobs is zeroed (COALESCE), and write the
--- result. The `IS DISTINCT FROM` guard skips rows whose count is already correct,
--- so re-running rewrites nothing and the affected-rows count reports real churn.
--- This is cmd/recount-companies' whole job; run periodically (eventual consistency).
-UPDATE companies c
-SET job_count = COALESCE(o.cnt, 0)
-FROM companies c2
-LEFT JOIN (
-    SELECT company_slug, count(*) AS cnt
+-- name: RefreshCompanyFacets :execrows
+-- Recompute every company's denormalized state in one set-based pass: the open-job
+-- count plus the facet arrays derived from those open jobs — regions/countries from
+-- the jobs geography columns, and domains/company_types/company_sizes from the
+-- jobs.enrichment JSONB. Each array is the distinct union across the company's open
+-- jobs (closed_at IS NULL), aggregated with a stable ORDER BY so the guard below
+-- compares deterministically. A company with no open jobs (or no enriched jobs) is
+-- zeroed/emptied via COALESCE. The per-column `IS DISTINCT FROM` guard skips rows
+-- already current, so re-running rewrites nothing and the affected-rows count reports
+-- real churn. This is cmd/recount-companies' whole job; run periodically (eventual
+-- consistency). The facet aggregates are each their own non-correlated GROUP BY so
+-- the row-multiplying unnest of one array never distorts another's count.
+WITH oj AS (
+    SELECT company_slug, regions, countries, enrichment
     FROM jobs
     WHERE closed_at IS NULL AND company_slug <> ''
+),
+counts AS (
+    SELECT company_slug, count(*) AS cnt FROM oj GROUP BY company_slug
+),
+reg AS (
+    SELECT company_slug, array_agg(DISTINCT r ORDER BY r) AS arr
+    FROM oj CROSS JOIN LATERAL unnest(oj.regions) AS r
     GROUP BY company_slug
-) o ON o.company_slug = c2.slug
+),
+cty AS (
+    SELECT company_slug, array_agg(DISTINCT c ORDER BY c) AS arr
+    FROM oj CROSS JOIN LATERAL unnest(oj.countries) AS c
+    GROUP BY company_slug
+),
+dom AS (
+    SELECT company_slug, array_agg(DISTINCT d ORDER BY d) AS arr
+    FROM oj CROSS JOIN LATERAL jsonb_array_elements_text(
+        CASE WHEN jsonb_typeof(oj.enrichment->'domains') = 'array'
+             THEN oj.enrichment->'domains' ELSE '[]'::jsonb END) AS d
+    GROUP BY company_slug
+),
+ctype AS (
+    SELECT company_slug,
+           array_agg(DISTINCT (enrichment->>'company_type') ORDER BY (enrichment->>'company_type')) AS arr
+    FROM oj
+    WHERE COALESCE(enrichment->>'company_type', '') <> ''
+    GROUP BY company_slug
+),
+csize AS (
+    SELECT company_slug,
+           array_agg(DISTINCT (enrichment->>'company_size') ORDER BY (enrichment->>'company_size')) AS arr
+    FROM oj
+    WHERE COALESCE(enrichment->>'company_size', '') <> ''
+    GROUP BY company_slug
+)
+UPDATE companies c
+SET job_count     = COALESCE(counts.cnt, 0),
+    regions       = COALESCE(reg.arr, '{}'),
+    countries     = COALESCE(cty.arr, '{}'),
+    domains       = COALESCE(dom.arr, '{}'),
+    company_types = COALESCE(ctype.arr, '{}'),
+    company_sizes = COALESCE(csize.arr, '{}')
+FROM companies c2
+LEFT JOIN counts ON counts.company_slug = c2.slug
+LEFT JOIN reg    ON reg.company_slug    = c2.slug
+LEFT JOIN cty    ON cty.company_slug    = c2.slug
+LEFT JOIN dom    ON dom.company_slug    = c2.slug
+LEFT JOIN ctype  ON ctype.company_slug  = c2.slug
+LEFT JOIN csize  ON csize.company_slug  = c2.slug
 WHERE c.slug = c2.slug
-  AND c.job_count IS DISTINCT FROM COALESCE(o.cnt, 0);
+  AND (c.job_count     IS DISTINCT FROM COALESCE(counts.cnt, 0)
+    OR c.regions       IS DISTINCT FROM COALESCE(reg.arr, '{}')
+    OR c.countries     IS DISTINCT FROM COALESCE(cty.arr, '{}')
+    OR c.domains       IS DISTINCT FROM COALESCE(dom.arr, '{}')
+    OR c.company_types IS DISTINCT FROM COALESCE(ctype.arr, '{}')
+    OR c.company_sizes IS DISTINCT FROM COALESCE(csize.arr, '{}'));

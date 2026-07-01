@@ -59,9 +59,10 @@ type Querier interface {
 	// caller owns the grace window (cutoff = now() - window) and the "run ingested
 	// something" guard, so a failed crawl never mass-closes that source's catalogue.
 	CloseUnseenJobs(ctx context.Context, arg CloseUnseenJobsParams) (int64, error)
-	// Total companies matching the same optional name filter as ListCompanies, so
-	// search pagination reports the filtered total.
-	CountCompanies(ctx context.Context, search string) (int64, error)
+	// Total companies matching the same optional name + facet filters as ListCompanies,
+	// so search/filter pagination reports the filtered total. Keep this WHERE identical
+	// to ListCompanies.
+	CountCompanies(ctx context.Context, arg CountCompaniesParams) (int64, error)
 	CountJobs(ctx context.Context) (int64, error)
 	// Per-stage application counts for the Pipeline snapshot. An application is any
 	// row the user applied to or staged (saved-only rows are excluded); a row with
@@ -204,7 +205,10 @@ type Querier interface {
 	// DESC, name — the same ordering the sidebar company typeahead consumes. An empty
 	// `search` short-circuits the ILIKE, so the same prepared statement serves both
 	// the full list and a name search (`search` is a case-insensitive substring of the
-	// name).
+	// name). Each facet param is a text[] filtered by array overlap (&&): an empty
+	// array short-circuits to no constraint, non-empty values are OR-ed within the
+	// facet, and the facets AND together (and with the name search). CountCompanies
+	// MUST keep an identical WHERE so the filtered total matches the page.
 	ListCompanies(ctx context.Context, arg ListCompaniesParams) ([]ListCompaniesRow, error)
 	// All companies with their current collection membership. cmd/import-collections
 	// reads this to know the existing company slugs (the match target) and each
@@ -316,13 +320,18 @@ type Querier interface {
 	// left in place — its expiry gates the retry to a later run and doubles as the
 	// crash reaper, so a failed post is never reprocessed within the same run.
 	RecordTelegramPostFailure(ctx context.Context, arg RecordTelegramPostFailureParams) (RecordTelegramPostFailureRow, error)
-	// Recompute every company's denormalized open-job count in one set-based pass:
-	// aggregate open jobs (closed_at IS NULL) once by company_slug, LEFT JOIN it onto
-	// companies so a company with no open jobs is zeroed (COALESCE), and write the
-	// result. The `IS DISTINCT FROM` guard skips rows whose count is already correct,
-	// so re-running rewrites nothing and the affected-rows count reports real churn.
-	// This is cmd/recount-companies' whole job; run periodically (eventual consistency).
-	RecountCompanyJobCounts(ctx context.Context) (int64, error)
+	// Recompute every company's denormalized state in one set-based pass: the open-job
+	// count plus the facet arrays derived from those open jobs — regions/countries from
+	// the jobs geography columns, and domains/company_types/company_sizes from the
+	// jobs.enrichment JSONB. Each array is the distinct union across the company's open
+	// jobs (closed_at IS NULL), aggregated with a stable ORDER BY so the guard below
+	// compares deterministically. A company with no open jobs (or no enriched jobs) is
+	// zeroed/emptied via COALESCE. The per-column `IS DISTINCT FROM` guard skips rows
+	// already current, so re-running rewrites nothing and the affected-rows count reports
+	// real churn. This is cmd/recount-companies' whole job; run periodically (eventual
+	// consistency). The facet aggregates are each their own non-correlated GROUP BY so
+	// the row-multiplying unnest of one array never distorts another's count.
+	RefreshCompanyFacets(ctx context.Context) (int64, error)
 	// Release the lease on a subscription's claimed jobs without counting an attempt,
 	// so a soft-skipped delivery (e.g. Telegram not yet linked) is retried promptly on
 	// a later pass instead of waiting out the lease.

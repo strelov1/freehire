@@ -1,11 +1,12 @@
-// Command recount-companies recomputes the denormalized companies.job_count for
-// every company in one set-based pass and exits. The list endpoint and the
-// sidebar company typeahead read that column and order by it (most active first),
-// instead of joining and counting jobs on every request. The count changes both
-// when jobs are ingested and when they are closed (closed_at set by the ingest
-// sweep / liveness worker), so it is maintained by this periodic recompute rather
-// than a write-path trigger — eventually consistent within the cron interval.
-// Idempotent: re-running rewrites only the rows whose count actually changed.
+// Command recount-companies recomputes each company's denormalized state — the
+// open-job count and the facet arrays (regions/countries/domains/company_types/
+// company_sizes) derived from its open jobs — in one set-based pass and exits. The
+// list endpoint reads and filters on these columns (and orders by job_count, most
+// active first) instead of joining jobs on every request. They change both when
+// jobs are ingested and when they are closed (closed_at set by the ingest sweep /
+// liveness worker), so they are maintained by this periodic recompute rather than a
+// write-path trigger — eventually consistent within the cron interval. Idempotent:
+// re-running rewrites only the rows whose state actually changed.
 package main
 
 import (
@@ -29,7 +30,7 @@ func run() int {
 	}
 	defer cleanup()
 
-	updated, err := db.New(pool).RecountCompanyJobCounts(ctx)
+	updated, err := db.New(pool).RefreshCompanyFacets(ctx)
 	if err != nil {
 		log.Printf("recount-companies: %v", err)
 		return 1

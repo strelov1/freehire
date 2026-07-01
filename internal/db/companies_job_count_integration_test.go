@@ -1,6 +1,6 @@
 //go:build integration
 
-// Integration tests for the denormalized companies.job_count: RecountCompanyJobCounts
+// Integration tests for the denormalized companies.job_count: RefreshCompanyFacets
 // recomputes each company's OPEN-job count (closed_at IS NULL) in one set-based pass
 // and zeroes a company whose jobs all closed, and ListCompanies orders by that count
 // descending (tie-broken by name) while still honoring the name filter. This is SQL
@@ -35,7 +35,7 @@ func companyJobCount(t *testing.T, pool *pgxpool.Pool, slug string) int {
 	return n
 }
 
-func TestRecountCompanyJobCounts(t *testing.T) {
+func TestRefreshCompanyFacetsJobCount(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
 	ctx := context.Background()
@@ -58,7 +58,7 @@ func TestRecountCompanyJobCounts(t *testing.T) {
 	insertJobForCompany(t, pool, "globex:1", "globex")
 
 	t.Run("counts only open jobs", func(t *testing.T) {
-		if _, err := q.RecountCompanyJobCounts(ctx); err != nil {
+		if _, err := q.RefreshCompanyFacets(ctx); err != nil {
 			t.Fatalf("recount: %v", err)
 		}
 		if got := companyJobCount(t, pool, "acme"); got != 3 {
@@ -76,7 +76,7 @@ func TestRecountCompanyJobCounts(t *testing.T) {
 		closeJobByExtID(t, pool, "acme:1")
 		closeJobByExtID(t, pool, "acme:2")
 		closeJobByExtID(t, pool, "acme:3")
-		if _, err := q.RecountCompanyJobCounts(ctx); err != nil {
+		if _, err := q.RefreshCompanyFacets(ctx); err != nil {
 			t.Fatalf("recount: %v", err)
 		}
 		if got := companyJobCount(t, pool, "acme"); got != 0 {
@@ -85,7 +85,7 @@ func TestRecountCompanyJobCounts(t *testing.T) {
 	})
 
 	t.Run("re-running rewrites nothing", func(t *testing.T) {
-		rows, err := q.RecountCompanyJobCounts(ctx)
+		rows, err := q.RefreshCompanyFacets(ctx)
 		if err != nil {
 			t.Fatalf("recount: %v", err)
 		}
@@ -116,7 +116,7 @@ func TestListCompaniesOrdersByJobCount(t *testing.T) {
 		insertJobForCompany(t, pool, ext, "gamma")
 	}
 	insertJobForCompany(t, pool, "alpha:1", "alpha")
-	if _, err := q.RecountCompanyJobCounts(ctx); err != nil {
+	if _, err := q.RefreshCompanyFacets(ctx); err != nil {
 		t.Fatalf("recount: %v", err)
 	}
 

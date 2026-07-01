@@ -12,13 +12,38 @@ import (
 const countCompanies = `-- name: CountCompanies :one
 SELECT count(*)
 FROM companies
-WHERE $1::text = '' OR name ILIKE '%' || $1 || '%'
+WHERE ($1::text = '' OR name ILIKE '%' || $1 || '%')
+  AND (cardinality($2::text[]) = 0 OR collections && $2::text[])
+  AND (cardinality($3::text[]) = 0 OR regions && $3::text[])
+  AND (cardinality($4::text[]) = 0 OR countries && $4::text[])
+  AND (cardinality($5::text[]) = 0 OR domains && $5::text[])
+  AND (cardinality($6::text[]) = 0 OR company_types && $6::text[])
+  AND (cardinality($7::text[]) = 0 OR company_sizes && $7::text[])
 `
 
-// Total companies matching the same optional name filter as ListCompanies, so
-// search pagination reports the filtered total.
-func (q *Queries) CountCompanies(ctx context.Context, search string) (int64, error) {
-	row := q.db.QueryRow(ctx, countCompanies, search)
+type CountCompaniesParams struct {
+	Search       string   `json:"search"`
+	Collections  []string `json:"collections"`
+	Regions      []string `json:"regions"`
+	Countries    []string `json:"countries"`
+	Domains      []string `json:"domains"`
+	CompanyTypes []string `json:"company_types"`
+	CompanySizes []string `json:"company_sizes"`
+}
+
+// Total companies matching the same optional name + facet filters as ListCompanies,
+// so search/filter pagination reports the filtered total. Keep this WHERE identical
+// to ListCompanies.
+func (q *Queries) CountCompanies(ctx context.Context, arg CountCompaniesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countCompanies,
+		arg.Search,
+		arg.Collections,
+		arg.Regions,
+		arg.Countries,
+		arg.Domains,
+		arg.CompanyTypes,
+		arg.CompanySizes,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -40,7 +65,7 @@ func (q *Queries) DeleteOrphanCompanies(ctx context.Context) (int64, error) {
 }
 
 const getCompany = `-- name: GetCompany :one
-SELECT slug, name, created_at, updated_at, collections, job_count
+SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes
 FROM companies
 WHERE slug = $1
 `
@@ -58,6 +83,11 @@ func (q *Queries) GetCompany(ctx context.Context, slug string) (Company, error) 
 		&i.UpdatedAt,
 		&i.Collections,
 		&i.JobCount,
+		&i.Regions,
+		&i.Countries,
+		&i.Domains,
+		&i.CompanyTypes,
+		&i.CompanySizes,
 	)
 	return i, err
 }
@@ -65,15 +95,27 @@ func (q *Queries) GetCompany(ctx context.Context, slug string) (Company, error) 
 const listCompanies = `-- name: ListCompanies :many
 SELECT slug, name, job_count
 FROM companies
-WHERE $1::text = '' OR name ILIKE '%' || $1 || '%'
+WHERE ($1::text = '' OR name ILIKE '%' || $1 || '%')
+  AND (cardinality($2::text[]) = 0 OR collections && $2::text[])
+  AND (cardinality($3::text[]) = 0 OR regions && $3::text[])
+  AND (cardinality($4::text[]) = 0 OR countries && $4::text[])
+  AND (cardinality($5::text[]) = 0 OR domains && $5::text[])
+  AND (cardinality($6::text[]) = 0 OR company_types && $6::text[])
+  AND (cardinality($7::text[]) = 0 OR company_sizes && $7::text[])
 ORDER BY job_count DESC, name
-LIMIT $3 OFFSET $2
+LIMIT $9 OFFSET $8
 `
 
 type ListCompaniesParams struct {
-	Search string `json:"search"`
-	Offset int32  `json:"offset"`
-	Limit  int32  `json:"limit"`
+	Search       string   `json:"search"`
+	Collections  []string `json:"collections"`
+	Regions      []string `json:"regions"`
+	Countries    []string `json:"countries"`
+	Domains      []string `json:"domains"`
+	CompanyTypes []string `json:"company_types"`
+	CompanySizes []string `json:"company_sizes"`
+	Offset       int32    `json:"offset"`
+	Limit        int32    `json:"limit"`
 }
 
 type ListCompaniesRow struct {
@@ -88,9 +130,22 @@ type ListCompaniesRow struct {
 // DESC, name — the same ordering the sidebar company typeahead consumes. An empty
 // `search` short-circuits the ILIKE, so the same prepared statement serves both
 // the full list and a name search (`search` is a case-insensitive substring of the
-// name).
+// name). Each facet param is a text[] filtered by array overlap (&&): an empty
+// array short-circuits to no constraint, non-empty values are OR-ed within the
+// facet, and the facets AND together (and with the name search). CountCompanies
+// MUST keep an identical WHERE so the filtered total matches the page.
 func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([]ListCompaniesRow, error) {
-	rows, err := q.db.Query(ctx, listCompanies, arg.Search, arg.Offset, arg.Limit)
+	rows, err := q.db.Query(ctx, listCompanies,
+		arg.Search,
+		arg.Collections,
+		arg.Regions,
+		arg.Countries,
+		arg.Domains,
+		arg.CompanyTypes,
+		arg.CompanySizes,
+		arg.Offset,
+		arg.Limit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -144,28 +199,82 @@ func (q *Queries) ListCompanyCollections(ctx context.Context) ([]ListCompanyColl
 	return items, nil
 }
 
-const recountCompanyJobCounts = `-- name: RecountCompanyJobCounts :execrows
-UPDATE companies c
-SET job_count = COALESCE(o.cnt, 0)
-FROM companies c2
-LEFT JOIN (
-    SELECT company_slug, count(*) AS cnt
+const refreshCompanyFacets = `-- name: RefreshCompanyFacets :execrows
+WITH oj AS (
+    SELECT company_slug, regions, countries, enrichment
     FROM jobs
     WHERE closed_at IS NULL AND company_slug <> ''
+),
+counts AS (
+    SELECT company_slug, count(*) AS cnt FROM oj GROUP BY company_slug
+),
+reg AS (
+    SELECT company_slug, array_agg(DISTINCT r ORDER BY r) AS arr
+    FROM oj CROSS JOIN LATERAL unnest(oj.regions) AS r
     GROUP BY company_slug
-) o ON o.company_slug = c2.slug
+),
+cty AS (
+    SELECT company_slug, array_agg(DISTINCT c ORDER BY c) AS arr
+    FROM oj CROSS JOIN LATERAL unnest(oj.countries) AS c
+    GROUP BY company_slug
+),
+dom AS (
+    SELECT company_slug, array_agg(DISTINCT d ORDER BY d) AS arr
+    FROM oj CROSS JOIN LATERAL jsonb_array_elements_text(
+        CASE WHEN jsonb_typeof(oj.enrichment->'domains') = 'array'
+             THEN oj.enrichment->'domains' ELSE '[]'::jsonb END) AS d
+    GROUP BY company_slug
+),
+ctype AS (
+    SELECT company_slug,
+           array_agg(DISTINCT (enrichment->>'company_type') ORDER BY (enrichment->>'company_type')) AS arr
+    FROM oj
+    WHERE COALESCE(enrichment->>'company_type', '') <> ''
+    GROUP BY company_slug
+),
+csize AS (
+    SELECT company_slug,
+           array_agg(DISTINCT (enrichment->>'company_size') ORDER BY (enrichment->>'company_size')) AS arr
+    FROM oj
+    WHERE COALESCE(enrichment->>'company_size', '') <> ''
+    GROUP BY company_slug
+)
+UPDATE companies c
+SET job_count     = COALESCE(counts.cnt, 0),
+    regions       = COALESCE(reg.arr, '{}'),
+    countries     = COALESCE(cty.arr, '{}'),
+    domains       = COALESCE(dom.arr, '{}'),
+    company_types = COALESCE(ctype.arr, '{}'),
+    company_sizes = COALESCE(csize.arr, '{}')
+FROM companies c2
+LEFT JOIN counts ON counts.company_slug = c2.slug
+LEFT JOIN reg    ON reg.company_slug    = c2.slug
+LEFT JOIN cty    ON cty.company_slug    = c2.slug
+LEFT JOIN dom    ON dom.company_slug    = c2.slug
+LEFT JOIN ctype  ON ctype.company_slug  = c2.slug
+LEFT JOIN csize  ON csize.company_slug  = c2.slug
 WHERE c.slug = c2.slug
-  AND c.job_count IS DISTINCT FROM COALESCE(o.cnt, 0)
+  AND (c.job_count     IS DISTINCT FROM COALESCE(counts.cnt, 0)
+    OR c.regions       IS DISTINCT FROM COALESCE(reg.arr, '{}')
+    OR c.countries     IS DISTINCT FROM COALESCE(cty.arr, '{}')
+    OR c.domains       IS DISTINCT FROM COALESCE(dom.arr, '{}')
+    OR c.company_types IS DISTINCT FROM COALESCE(ctype.arr, '{}')
+    OR c.company_sizes IS DISTINCT FROM COALESCE(csize.arr, '{}'))
 `
 
-// Recompute every company's denormalized open-job count in one set-based pass:
-// aggregate open jobs (closed_at IS NULL) once by company_slug, LEFT JOIN it onto
-// companies so a company with no open jobs is zeroed (COALESCE), and write the
-// result. The `IS DISTINCT FROM` guard skips rows whose count is already correct,
-// so re-running rewrites nothing and the affected-rows count reports real churn.
-// This is cmd/recount-companies' whole job; run periodically (eventual consistency).
-func (q *Queries) RecountCompanyJobCounts(ctx context.Context) (int64, error) {
-	result, err := q.db.Exec(ctx, recountCompanyJobCounts)
+// Recompute every company's denormalized state in one set-based pass: the open-job
+// count plus the facet arrays derived from those open jobs — regions/countries from
+// the jobs geography columns, and domains/company_types/company_sizes from the
+// jobs.enrichment JSONB. Each array is the distinct union across the company's open
+// jobs (closed_at IS NULL), aggregated with a stable ORDER BY so the guard below
+// compares deterministically. A company with no open jobs (or no enriched jobs) is
+// zeroed/emptied via COALESCE. The per-column `IS DISTINCT FROM` guard skips rows
+// already current, so re-running rewrites nothing and the affected-rows count reports
+// real churn. This is cmd/recount-companies' whole job; run periodically (eventual
+// consistency). The facet aggregates are each their own non-correlated GROUP BY so
+// the row-multiplying unnest of one array never distorts another's count.
+func (q *Queries) RefreshCompanyFacets(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, refreshCompanyFacets)
 	if err != nil {
 		return 0, err
 	}

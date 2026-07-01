@@ -131,3 +131,93 @@ func TestListCompaniesSearchEndpoint(t *testing.T) {
 		}
 	})
 }
+
+func TestListCompaniesFacetFilterEndpoint(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+
+	// Seed the denormalized facet arrays directly — this exercises the endpoint's
+	// array-overlap filter independently of how the arrays get derived.
+	seed := func(slug, name string, collections, regions, companyTypes []string) {
+		t.Helper()
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO companies (slug, name, collections, regions, company_types)
+			 VALUES ($1, $2, $3, $4, $5)`,
+			slug, name, collections, regions, companyTypes); err != nil {
+			t.Fatalf("seed %q: %v", slug, err)
+		}
+	}
+	seed("euro-lab", "Euro Lab", []string{"yc"}, []string{"europe"}, []string{"startup"})
+	seed("asia-co", "Asia Co", []string{}, []string{"asia"}, []string{"product"})
+	seed("euro-corp", "Euro Corp", []string{"bigtech"}, []string{"europe"}, []string{"enterprise"})
+	seed("global-lab", "Global Lab", []string{"yc"}, []string{"north_america"}, []string{"enterprise"})
+
+	h := &API{pool: pool, queries: db.New(pool)}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/api/v1/companies", h.ListCompanies)
+
+	doList := func(t *testing.T, url string) (slugs []string, total float64) {
+		t.Helper()
+		resp, err := app.Test(httptest.NewRequest("GET", url, nil))
+		if err != nil {
+			t.Fatalf("request %q: %v", url, err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != fiber.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("status = %d, want 200 (body %s)", resp.StatusCode, body)
+		}
+		var body struct {
+			Data []struct {
+				Slug string `json:"slug"`
+			} `json:"data"`
+			Meta struct {
+				Total float64 `json:"total"`
+			} `json:"meta"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		for _, c := range body.Data {
+			slugs = append(slugs, c.Slug)
+		}
+		sort.Strings(slugs)
+		return slugs, body.Meta.Total
+	}
+
+	assertSlugs := func(t *testing.T, url string, want []string) {
+		t.Helper()
+		got, total := doList(t, url)
+		sort.Strings(want)
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("%s → slugs %v, want %v", url, got, want)
+		}
+		if int(total) != len(want) {
+			t.Errorf("%s → meta.total %v, want %d", url, total, len(want))
+		}
+	}
+
+	t.Run("single facet filters by array membership", func(t *testing.T) {
+		assertSlugs(t, "/api/v1/companies?regions=europe", []string{"euro-corp", "euro-lab"})
+	})
+
+	t.Run("multiple values within a facet are OR-ed", func(t *testing.T) {
+		assertSlugs(t, "/api/v1/companies?regions=europe&regions=asia",
+			[]string{"asia-co", "euro-corp", "euro-lab"})
+	})
+
+	t.Run("different facets are AND-ed", func(t *testing.T) {
+		assertSlugs(t, "/api/v1/companies?collections=yc&company_type=startup",
+			[]string{"euro-lab"})
+	})
+
+	t.Run("facets compose with the name search", func(t *testing.T) {
+		assertSlugs(t, "/api/v1/companies?collections=yc&q=lab",
+			[]string{"euro-lab", "global-lab"})
+	})
+
+	t.Run("no facet params returns the full list", func(t *testing.T) {
+		assertSlugs(t, "/api/v1/companies",
+			[]string{"asia-co", "euro-corp", "euro-lab", "global-lab"})
+	})
+}

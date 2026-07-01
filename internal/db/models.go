@@ -22,12 +22,17 @@ type ApiKey struct {
 }
 
 type Company struct {
-	Slug        string             `json:"slug"`
-	Name        string             `json:"name"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	Collections []string           `json:"collections"`
-	JobCount    int32              `json:"job_count"`
+	Slug         string             `json:"slug"`
+	Name         string             `json:"name"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	Collections  []string           `json:"collections"`
+	JobCount     int32              `json:"job_count"`
+	Regions      []string           `json:"regions"`
+	Countries    []string           `json:"countries"`
+	Domains      []string           `json:"domains"`
+	CompanyTypes []string           `json:"company_types"`
+	CompanySizes []string           `json:"company_sizes"`
 }
 
 type EnrichmentOutbox struct {
