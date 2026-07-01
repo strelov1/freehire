@@ -26,6 +26,20 @@ restriction is purely a frontend artifact of the select-only picker.
 multi-select. Product decision keeps skills dictionary-only, so the "nothing found" case is
 shown explicitly rather than silently dead-ending.
 
+## Verification (task 7.2) — real-Postgres E2E
+
+Brought up the worktree's Postgres on a fresh volume (migration 0029 ran automatically:
+`\d search_profiles` shows `specializations text[]`, no `specialization` column, and the
+`cardinality BETWEEN 1 AND 5` CHECK) and ran the Go server on host. Round-trip via the API
+with a cookie session:
+- create `{"specializations":["backend","devops"],"skills":["Go","Docker","go"]}` → 201,
+  stored `["backend","devops"]` + normalized `["go","docker"]`.
+- rename-only PATCH `{"name":...}` → 200, **specializations/skills unchanged** (empirically
+  refutes review #1: a nil `[]string` param encodes as SQL NULL, so COALESCE keeps the
+  stored array — same proven pattern as the pre-existing `skills`).
+- specs-only PATCH → 200, skills unchanged.
+- empty `[]` → 400; six specializations → 400; unknown category → 400.
+
 ## Prod migration reminder (task 7.3)
 
 Apply `migrations/0029_search_profiles_specializations.sql` via manual `psql` **before**

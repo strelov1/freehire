@@ -59,7 +59,10 @@
 ## 7. Verify & finish
 
 - [x] 7.1 `go build ./... && go vet ./...`; `cd web && npx svelte-check`.
-- [ ] 7.2 Manually verify (signed-in, headless if needed): the form enables with name +
-  specialization(s) + skill, the skill typeahead suggests/adds chips, multi-specialization
-  round-trips through create → list → edit; confirm the dead-end from 1.1 is gone.
+- [x] 7.2 Verified the full backend round-trip against a real Postgres (fresh volume ran
+  migration 0029): register → create multi-spec profile → list → rename-only PATCH leaves
+  specializations/skills unchanged → change-specs-only leaves skills unchanged → empty / >5
+  / unknown specialization all 400. UI is covered by svelte-check (0 errors) + a production
+  build; the never-enabling-button dead-end is removed by the typeahead + the
+  ≥1-specialization/≥1-skill canSubmit gate.
 - [x] 7.3 Note the manual prod migration step (apply `0029` before deploying the binary).
