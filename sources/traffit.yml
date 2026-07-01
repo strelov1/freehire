@@ -1,0 +1,35 @@
+# Traffit career sites. Provider is the filename; each entry is company + board.
+# board = the tenant subdomain (<board>.traffit.com); see internal/sources/traffit.go.
+# The keyless list endpoint (<board>.traffit.com/public/an/list/) returns every open
+# posting fully populated, paged 100 at a time. Traffit is a Polish/CEE ATS, so many
+# postings are in Polish. Each board validated live (list endpoint returned >0) before
+# adding; cmd/harvest-boards traffit <seed.json> re-validates candidate slugs.
+
+- company: Cloudfide
+  board: cloudfide
+- company: TRAFFIT
+  board: traffit
+- company: Trust
+  board: trust
+- company: People
+  board: people
+- company: Spline
+  board: spline
+- company: ZEN
+  board: zen
+- company: WeLove
+  board: welove
+- company: JIT Team
+  board: jit
+- company: Baltic Amadeus
+  board: balticamadeus
+- company: Fintalent
+  board: fintalent
+- company: B2B Network
+  board: b2bnetwork
+- company: SOFLAB
+  board: soflab
+- company: IT LeasingTeam
+  board: itlt
+- company: HR|hub
+  board: hrhub

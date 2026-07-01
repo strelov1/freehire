@@ -193,6 +193,7 @@ func All(c HTTPClient) map[string]Source {
 		NewTrakstar(c),
 		NewFactorial(c),
 		NewZoho(c),
+		NewTraffit(c),
 		// Ashby boards whose public Posting API is disabled, served via the embed GraphQL.
 		NewAshbyGraphQL(c),
 		// Multi-company aggregators (boardless): one global feed, company per posting.
