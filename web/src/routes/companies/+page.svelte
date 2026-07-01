@@ -15,6 +15,6 @@
   {canonical}
 />
 
-<div class="mx-auto w-full max-w-3xl px-4 py-6">
+<div class="mx-auto w-full max-w-6xl px-4 py-6">
   <CompaniesView initial={data.initial} />
 </div>
