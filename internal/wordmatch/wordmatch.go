@@ -1,7 +1,7 @@
 // Package wordmatch reports whether a term occurs as a standalone token in a
 // string. The scan is shared; the notion of a token boundary is supplied by the
 // caller (Unicode letters/digits for title classification, ASCII alphanumerics —
-// with a leading-dot guard — for skill tags), so the two dictionaries that need
+// with a leading dot/hyphen guard — for skill tags), so the two dictionaries that need
 // whole-word matching no longer hand-roll the same loop.
 package wordmatch
 
@@ -64,11 +64,12 @@ func isWordRune(r rune) bool {
 }
 
 // ASCIIBoundary treats ASCII alphanumerics as word bytes, with one asymmetry: a
-// LEADING '.' is not a valid left boundary (the term is the suffix of a larger
-// dotted token, e.g. "asp.net" must not match ".net"), while a TRAILING '.' is a
-// sentence period and is a valid right boundary ("We use C#.").
+// LEADING '.' or '-' is not a valid left boundary (the term is the suffix of a
+// larger punctuated token — "asp.net" must not match ".net", "objective-c" must not
+// match "c developer"), while a TRAILING '.' is a sentence period and is a valid
+// right boundary ("We use C#.").
 func ASCIIBoundary(s string, start, end int) bool {
-	if alnumAt(s, start-1) || byteAt(s, start-1) == '.' {
+	if alnumAt(s, start-1) || byteAt(s, start-1) == '.' || byteAt(s, start-1) == '-' {
 		return false
 	}
 	return !alnumAt(s, end)

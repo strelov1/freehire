@@ -35,6 +35,8 @@ func TestParse(t *testing.T) {
 		{"multiword", "React Native and CI/CD pipelines", []string{"ci-cd", "react", "react-native"}},
 		{"ambiguous word rejected", "Please go to the careers page in C.", nil},
 		{"ambiguous via qualifier", "5y as a C developer", []string{"c"}},
+		{"objective-c does not leak bare c", "Objective-C developer", []string{"objective-c"}},
+		{"objective-c alongside real C still tags both", "Objective-C and C developer", []string{"c", "objective-c"}},
 		{"word boundary", "a reaction to going rusty", nil},
 		{"html stripped", "<p>Kubernetes</p><a href='k8s'>k8s</a>", []string{"kubernetes"}},
 		{"empty", "", nil},
