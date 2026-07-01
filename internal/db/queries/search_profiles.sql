@@ -12,23 +12,23 @@ WHERE user_id = $1;
 
 -- name: CreateSearchProfile :one
 -- Create a profile for a user. The UNIQUE (user_id, name) constraint rejects a
--- duplicate name (surfaced by the repository as a duplicate-name error). Skills are
--- already normalized by the service. Returns the row.
-INSERT INTO search_profiles (user_id, name, specialization, skills)
+-- duplicate name (surfaced by the repository as a duplicate-name error). Specializations
+-- and skills are already normalized by the service. Returns the row.
+INSERT INTO search_profiles (user_id, name, specializations, skills)
 VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: UpdateSearchProfile :one
--- Overwrite a profile's name, specialization, and/or skills, scoped to its owner,
+-- Overwrite a profile's name, specializations, and/or skills, scoped to its owner,
 -- bumping updated_at. Partial update: a NULL param leaves that column unchanged
 -- (COALESCE), so the caller can rename, re-specialize, replace skills, or any
 -- combination in one call. No matching owner-scoped row returns no row (the handler
 -- maps that to 404).
 UPDATE search_profiles
-SET name           = COALESCE(sqlc.narg('name'), name),
-    specialization = COALESCE(sqlc.narg('specialization'), specialization),
-    skills         = COALESCE(sqlc.narg('skills'), skills),
-    updated_at     = now()
+SET name            = COALESCE(sqlc.narg('name'), name),
+    specializations = COALESCE(sqlc.narg('specializations'), specializations),
+    skills          = COALESCE(sqlc.narg('skills'), skills),
+    updated_at      = now()
 WHERE id = sqlc.arg('id') AND user_id = sqlc.arg('user_id')
 RETURNING *;
 

@@ -384,27 +384,27 @@ export function createApi(
     return res.data;
   }
 
-  /** Create a profile from a name, a specialization (one category), and a non-empty
-   *  set of skills. A duplicate name or the per-user cap is a 409; a bad
+  /** Create a profile from a name, a non-empty set of specializations (job categories),
+   *  and a non-empty set of skills. A duplicate name or the per-user cap is a 409; a bad
    *  specialization or empty skills is a 400. */
   async function createSearchProfile(
     name: string,
-    specialization: string,
+    specializations: string[],
     skills: string[],
   ): Promise<SearchProfile> {
     const res = await request<{ data: SearchProfile }>('/api/v1/me/profiles', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, specialization, skills }),
+      body: JSON.stringify({ name, specializations, skills }),
     });
     return res.data;
   }
 
-  /** Overwrite a profile's name, specialization, and/or skills; an omitted field is
+  /** Overwrite a profile's name, specializations, and/or skills; an omitted field is
    *  unchanged. */
   async function updateSearchProfile(
     id: number,
-    patch: { name?: string; specialization?: string; skills?: string[] },
+    patch: { name?: string; specializations?: string[]; skills?: string[] },
   ): Promise<SearchProfile> {
     const res = await request<{ data: SearchProfile }>(`/api/v1/me/profiles/${id}`, {
       method: 'PATCH',

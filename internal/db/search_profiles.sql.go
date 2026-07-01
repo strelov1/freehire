@@ -26,26 +26,26 @@ func (q *Queries) CountSearchProfiles(ctx context.Context, userID int64) (int64,
 }
 
 const createSearchProfile = `-- name: CreateSearchProfile :one
-INSERT INTO search_profiles (user_id, name, specialization, skills)
+INSERT INTO search_profiles (user_id, name, specializations, skills)
 VALUES ($1, $2, $3, $4)
-RETURNING id, user_id, name, specialization, skills, created_at, updated_at
+RETURNING id, user_id, name, skills, created_at, updated_at, specializations
 `
 
 type CreateSearchProfileParams struct {
-	UserID         int64    `json:"user_id"`
-	Name           string   `json:"name"`
-	Specialization string   `json:"specialization"`
-	Skills         []string `json:"skills"`
+	UserID          int64    `json:"user_id"`
+	Name            string   `json:"name"`
+	Specializations []string `json:"specializations"`
+	Skills          []string `json:"skills"`
 }
 
 // Create a profile for a user. The UNIQUE (user_id, name) constraint rejects a
-// duplicate name (surfaced by the repository as a duplicate-name error). Skills are
-// already normalized by the service. Returns the row.
+// duplicate name (surfaced by the repository as a duplicate-name error). Specializations
+// and skills are already normalized by the service. Returns the row.
 func (q *Queries) CreateSearchProfile(ctx context.Context, arg CreateSearchProfileParams) (SearchProfile, error) {
 	row := q.db.QueryRow(ctx, createSearchProfile,
 		arg.UserID,
 		arg.Name,
-		arg.Specialization,
+		arg.Specializations,
 		arg.Skills,
 	)
 	var i SearchProfile
@@ -53,10 +53,10 @@ func (q *Queries) CreateSearchProfile(ctx context.Context, arg CreateSearchProfi
 		&i.ID,
 		&i.UserID,
 		&i.Name,
-		&i.Specialization,
 		&i.Skills,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Specializations,
 	)
 	return i, err
 }
@@ -83,7 +83,7 @@ func (q *Queries) DeleteSearchProfile(ctx context.Context, arg DeleteSearchProfi
 }
 
 const listSearchProfiles = `-- name: ListSearchProfiles :many
-SELECT id, user_id, name, specialization, skills, created_at, updated_at FROM search_profiles
+SELECT id, user_id, name, skills, created_at, updated_at, specializations FROM search_profiles
 WHERE user_id = $1
 ORDER BY updated_at DESC
 `
@@ -102,10 +102,10 @@ func (q *Queries) ListSearchProfiles(ctx context.Context, userID int64) ([]Searc
 			&i.ID,
 			&i.UserID,
 			&i.Name,
-			&i.Specialization,
 			&i.Skills,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Specializations,
 		); err != nil {
 			return nil, err
 		}
@@ -119,23 +119,23 @@ func (q *Queries) ListSearchProfiles(ctx context.Context, userID int64) ([]Searc
 
 const updateSearchProfile = `-- name: UpdateSearchProfile :one
 UPDATE search_profiles
-SET name           = COALESCE($1, name),
-    specialization = COALESCE($2, specialization),
-    skills         = COALESCE($3, skills),
-    updated_at     = now()
+SET name            = COALESCE($1, name),
+    specializations = COALESCE($2, specializations),
+    skills          = COALESCE($3, skills),
+    updated_at      = now()
 WHERE id = $4 AND user_id = $5
-RETURNING id, user_id, name, specialization, skills, created_at, updated_at
+RETURNING id, user_id, name, skills, created_at, updated_at, specializations
 `
 
 type UpdateSearchProfileParams struct {
-	Name           pgtype.Text `json:"name"`
-	Specialization pgtype.Text `json:"specialization"`
-	Skills         []string    `json:"skills"`
-	ID             int64       `json:"id"`
-	UserID         int64       `json:"user_id"`
+	Name            pgtype.Text `json:"name"`
+	Specializations []string    `json:"specializations"`
+	Skills          []string    `json:"skills"`
+	ID              int64       `json:"id"`
+	UserID          int64       `json:"user_id"`
 }
 
-// Overwrite a profile's name, specialization, and/or skills, scoped to its owner,
+// Overwrite a profile's name, specializations, and/or skills, scoped to its owner,
 // bumping updated_at. Partial update: a NULL param leaves that column unchanged
 // (COALESCE), so the caller can rename, re-specialize, replace skills, or any
 // combination in one call. No matching owner-scoped row returns no row (the handler
@@ -143,7 +143,7 @@ type UpdateSearchProfileParams struct {
 func (q *Queries) UpdateSearchProfile(ctx context.Context, arg UpdateSearchProfileParams) (SearchProfile, error) {
 	row := q.db.QueryRow(ctx, updateSearchProfile,
 		arg.Name,
-		arg.Specialization,
+		arg.Specializations,
 		arg.Skills,
 		arg.ID,
 		arg.UserID,
@@ -153,10 +153,10 @@ func (q *Queries) UpdateSearchProfile(ctx context.Context, arg UpdateSearchProfi
 		&i.ID,
 		&i.UserID,
 		&i.Name,
-		&i.Specialization,
 		&i.Skills,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Specializations,
 	)
 	return i, err
 }

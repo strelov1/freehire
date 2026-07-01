@@ -194,14 +194,14 @@ export interface SavedSearch {
   updated_at: string | null;
 }
 
-/** A user's search profile: a named professional self — one `specialization` (a job
- *  category) and a non-empty set of canonical skill tokens. The foundation for finding
- *  relevant work; how a profile is consumed (match scoring, feeds) is a later feature.
- *  Timestamps are RFC3339 strings or null. */
+/** A user's search profile: a named professional self — a non-empty set of
+ *  `specializations` (job categories) and a non-empty set of canonical skill tokens. The
+ *  foundation for finding relevant work; how a profile is consumed (match scoring, feeds)
+ *  is a later feature. Timestamps are RFC3339 strings or null. */
 export interface SearchProfile {
   id: number;
   name: string;
-  specialization: string;
+  specializations: string[];
   skills: string[];
   created_at: string | null;
   updated_at: string | null;

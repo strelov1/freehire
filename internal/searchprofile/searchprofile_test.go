@@ -58,11 +58,12 @@ func (f *fakeRepo) Delete(_ context.Context, p db.DeleteSearchProfileParams) err
 
 func ptr(s string) *string { return &s }
 
-func TestCreate_PersistsWithOwnerTrimmedNameAndNormalizedSkills(t *testing.T) {
+func TestCreate_PersistsWithOwnerTrimmedNameNormalizedSpecializationsAndSkills(t *testing.T) {
 	repo := &fakeRepo{createRet: db.SearchProfile{ID: 1}}
 	svc := searchprofile.New(repo)
 
-	_, err := svc.Create(context.Background(), 7, "  Go backend  ", "backend", []string{"Go", " PostgreSQL ", "go"})
+	_, err := svc.Create(context.Background(), 7, "  Go backend  ",
+		[]string{" backend ", "devops", "backend"}, []string{"Go", " PostgreSQL ", "go"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -75,12 +76,13 @@ func TestCreate_PersistsWithOwnerTrimmedNameAndNormalizedSkills(t *testing.T) {
 	if repo.created.Name != "Go backend" {
 		t.Errorf("Name = %q, want trimmed %q", repo.created.Name, "Go backend")
 	}
-	if repo.created.Specialization != "backend" {
-		t.Errorf("Specialization = %q, want backend", repo.created.Specialization)
+	wantSpec := []string{"backend", "devops"}
+	if strings.Join(repo.created.Specializations, ",") != strings.Join(wantSpec, ",") {
+		t.Errorf("Specializations = %v, want trimmed/deduped %v", repo.created.Specializations, wantSpec)
 	}
-	want := []string{"go", "postgresql"}
-	if strings.Join(repo.created.Skills, ",") != strings.Join(want, ",") {
-		t.Errorf("Skills = %v, want lowercased/trimmed/deduped %v", repo.created.Skills, want)
+	wantSkills := []string{"go", "postgresql"}
+	if strings.Join(repo.created.Skills, ",") != strings.Join(wantSkills, ",") {
+		t.Errorf("Skills = %v, want lowercased/trimmed/deduped %v", repo.created.Skills, wantSkills)
 	}
 }
 
@@ -96,7 +98,7 @@ func TestCreate_RejectsInvalidName(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &fakeRepo{}
-			_, err := searchprofile.New(repo).Create(context.Background(), 7, tc.in, "backend", []string{"go"})
+			_, err := searchprofile.New(repo).Create(context.Background(), 7, tc.in, []string{"backend"}, []string{"go"})
 			if !errors.Is(err, searchprofile.ErrInvalidName) {
 				t.Errorf("err = %v, want ErrInvalidName", err)
 			}
@@ -109,7 +111,7 @@ func TestCreate_RejectsInvalidName(t *testing.T) {
 
 func TestCreate_NameLengthCountsRunes(t *testing.T) {
 	repo := &fakeRepo{createRet: db.SearchProfile{ID: 1}}
-	if _, err := searchprofile.New(repo).Create(context.Background(), 7, strings.Repeat("я", 100), "backend", []string{"go"}); err != nil {
+	if _, err := searchprofile.New(repo).Create(context.Background(), 7, strings.Repeat("я", 100), []string{"backend"}, []string{"go"}); err != nil {
 		t.Errorf("100-rune name: err = %v, want nil", err)
 	}
 	if !repo.createCalled {
@@ -117,19 +119,54 @@ func TestCreate_NameLengthCountsRunes(t *testing.T) {
 	}
 
 	repo = &fakeRepo{}
-	if _, err := searchprofile.New(repo).Create(context.Background(), 7, strings.Repeat("я", 101), "backend", []string{"go"}); !errors.Is(err, searchprofile.ErrInvalidName) {
+	if _, err := searchprofile.New(repo).Create(context.Background(), 7, strings.Repeat("я", 101), []string{"backend"}, []string{"go"}); !errors.Is(err, searchprofile.ErrInvalidName) {
 		t.Errorf("101-rune name: err = %v, want ErrInvalidName", err)
 	}
 }
 
 func TestCreate_RejectsUnknownSpecialization(t *testing.T) {
 	repo := &fakeRepo{}
-	_, err := searchprofile.New(repo).Create(context.Background(), 7, "Bad", "wizardry", []string{"go"})
+	_, err := searchprofile.New(repo).Create(context.Background(), 7, "Bad", []string{"backend", "wizardry"}, []string{"go"})
 	if !errors.Is(err, searchprofile.ErrInvalidSpecialization) {
 		t.Errorf("err = %v, want ErrInvalidSpecialization", err)
 	}
 	if repo.createCalled {
 		t.Error("repo.Create should not be called on an unknown specialization")
+	}
+}
+
+func TestCreate_RejectsEmptySpecializations(t *testing.T) {
+	cases := []struct {
+		name string
+		in   []string
+	}{
+		{"nil", nil},
+		{"empty slice", []string{}},
+		{"only blanks", []string{"  ", ""}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &fakeRepo{}
+			_, err := searchprofile.New(repo).Create(context.Background(), 7, "Empty", tc.in, []string{"go"})
+			if !errors.Is(err, searchprofile.ErrEmptySpecializations) {
+				t.Errorf("err = %v, want ErrEmptySpecializations", err)
+			}
+			if repo.createCalled {
+				t.Error("repo.Create should not be called on empty specializations")
+			}
+		})
+	}
+}
+
+func TestCreate_RejectsTooManySpecializations(t *testing.T) {
+	repo := &fakeRepo{}
+	six := []string{"backend", "frontend", "fullstack", "mobile", "devops", "sre"}
+	_, err := searchprofile.New(repo).Create(context.Background(), 7, "Too many", six, []string{"go"})
+	if !errors.Is(err, searchprofile.ErrTooManySpecializations) {
+		t.Errorf("err = %v, want ErrTooManySpecializations", err)
+	}
+	if repo.createCalled {
+		t.Error("repo.Create should not be called past the specialization cap")
 	}
 }
 
@@ -145,7 +182,7 @@ func TestCreate_RejectsEmptySkills(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &fakeRepo{}
-			_, err := searchprofile.New(repo).Create(context.Background(), 7, "Empty", "backend", tc.in)
+			_, err := searchprofile.New(repo).Create(context.Background(), 7, "Empty", []string{"backend"}, tc.in)
 			if !errors.Is(err, searchprofile.ErrEmptySkills) {
 				t.Errorf("err = %v, want ErrEmptySkills", err)
 			}
@@ -158,7 +195,7 @@ func TestCreate_RejectsEmptySkills(t *testing.T) {
 
 func TestCreate_EnforcesCap(t *testing.T) {
 	repo := &fakeRepo{count: 50} // already at the cap
-	_, err := searchprofile.New(repo).Create(context.Background(), 7, "One more", "backend", []string{"go"})
+	_, err := searchprofile.New(repo).Create(context.Background(), 7, "One more", []string{"backend"}, []string{"go"})
 	if !errors.Is(err, searchprofile.ErrCapExceeded) {
 		t.Errorf("err = %v, want ErrCapExceeded", err)
 	}
@@ -169,7 +206,7 @@ func TestCreate_EnforcesCap(t *testing.T) {
 
 func TestCreate_PropagatesDuplicateName(t *testing.T) {
 	repo := &fakeRepo{createErr: searchprofile.ErrDuplicateName}
-	_, err := searchprofile.New(repo).Create(context.Background(), 7, "Dup", "backend", []string{"go"})
+	_, err := searchprofile.New(repo).Create(context.Background(), 7, "Dup", []string{"backend"}, []string{"go"})
 	if !errors.Is(err, searchprofile.ErrDuplicateName) {
 		t.Errorf("err = %v, want ErrDuplicateName", err)
 	}
@@ -192,11 +229,23 @@ func TestUpdate_PartialRename_LeavesOtherFieldsUnchanged(t *testing.T) {
 	if !repo.updated.Name.Valid || repo.updated.Name.String != "Renamed" {
 		t.Errorf("Name param = %+v, want trimmed valid %q", repo.updated.Name, "Renamed")
 	}
-	if repo.updated.Specialization.Valid {
-		t.Error("Specialization param should be NULL (unchanged) when not provided")
+	if repo.updated.Specializations != nil {
+		t.Error("Specializations param should be nil (unchanged) when not provided")
 	}
 	if repo.updated.Skills != nil {
 		t.Error("Skills param should be nil (unchanged) when not provided")
+	}
+}
+
+func TestUpdate_ReplaceSpecializations_Normalized(t *testing.T) {
+	repo := &fakeRepo{updateRet: db.SearchProfile{ID: 5}}
+	_, err := searchprofile.New(repo).Update(context.Background(), 7, 5, nil, []string{" devops ", "sre", "devops"}, nil)
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	want := []string{"devops", "sre"}
+	if strings.Join(repo.updated.Specializations, ",") != strings.Join(want, ",") {
+		t.Errorf("Specializations param = %v, want %v", repo.updated.Specializations, want)
 	}
 }
 
@@ -225,12 +274,35 @@ func TestUpdate_RejectsInvalidName(t *testing.T) {
 
 func TestUpdate_RejectsUnknownSpecialization(t *testing.T) {
 	repo := &fakeRepo{}
-	_, err := searchprofile.New(repo).Update(context.Background(), 7, 5, nil, ptr("wizardry"), nil)
+	_, err := searchprofile.New(repo).Update(context.Background(), 7, 5, nil, []string{"wizardry"}, nil)
 	if !errors.Is(err, searchprofile.ErrInvalidSpecialization) {
 		t.Errorf("err = %v, want ErrInvalidSpecialization", err)
 	}
 	if repo.updateCalled {
 		t.Error("repo.Update should not be called on an unknown specialization")
+	}
+}
+
+func TestUpdate_RejectsEmptySpecializationsWhenProvided(t *testing.T) {
+	repo := &fakeRepo{}
+	_, err := searchprofile.New(repo).Update(context.Background(), 7, 5, nil, []string{"  ", ""}, nil)
+	if !errors.Is(err, searchprofile.ErrEmptySpecializations) {
+		t.Errorf("err = %v, want ErrEmptySpecializations", err)
+	}
+	if repo.updateCalled {
+		t.Error("repo.Update should not be called when provided specializations reduce to empty")
+	}
+}
+
+func TestUpdate_RejectsTooManySpecializations(t *testing.T) {
+	repo := &fakeRepo{}
+	six := []string{"backend", "frontend", "fullstack", "mobile", "devops", "sre"}
+	_, err := searchprofile.New(repo).Update(context.Background(), 7, 5, nil, six, nil)
+	if !errors.Is(err, searchprofile.ErrTooManySpecializations) {
+		t.Errorf("err = %v, want ErrTooManySpecializations", err)
+	}
+	if repo.updateCalled {
+		t.Error("repo.Update should not be called past the specialization cap")
 	}
 }
 

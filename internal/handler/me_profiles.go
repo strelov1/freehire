@@ -11,26 +11,26 @@ import (
 )
 
 // searchProfileResponse is the public shape of a search profile. user_id is omitted
-// (ownership, internal). specialization is one job category; skills are canonical
-// lowercase tokens.
+// (ownership, internal). specializations are one or more job categories; skills are
+// canonical lowercase tokens.
 type searchProfileResponse struct {
-	ID             int64      `json:"id"`
-	Name           string     `json:"name"`
-	Specialization string     `json:"specialization"`
-	Skills         []string   `json:"skills"`
-	CreatedAt      *time.Time `json:"created_at"`
-	UpdatedAt      *time.Time `json:"updated_at"`
+	ID              int64      `json:"id"`
+	Name            string     `json:"name"`
+	Specializations []string   `json:"specializations"`
+	Skills          []string   `json:"skills"`
+	CreatedAt       *time.Time `json:"created_at"`
+	UpdatedAt       *time.Time `json:"updated_at"`
 }
 
 // toSearchProfileResponse maps a stored profile to its wire shape (no user id).
 func toSearchProfileResponse(p db.SearchProfile) searchProfileResponse {
 	return searchProfileResponse{
-		ID:             p.ID,
-		Name:           p.Name,
-		Specialization: p.Specialization,
-		Skills:         p.Skills,
-		CreatedAt:      timePtr(p.CreatedAt),
-		UpdatedAt:      timePtr(p.UpdatedAt),
+		ID:              p.ID,
+		Name:            p.Name,
+		Specializations: p.Specializations,
+		Skills:          p.Skills,
+		CreatedAt:       timePtr(p.CreatedAt),
+		UpdatedAt:       timePtr(p.UpdatedAt),
 	}
 }
 
@@ -44,6 +44,10 @@ func searchProfileError(err error) error {
 		return fiber.NewError(fiber.StatusBadRequest, "name must be 1-100 characters")
 	case errors.Is(err, searchprofile.ErrInvalidSpecialization):
 		return fiber.NewError(fiber.StatusBadRequest, "specialization is not a known category")
+	case errors.Is(err, searchprofile.ErrEmptySpecializations):
+		return fiber.NewError(fiber.StatusBadRequest, "at least one specialization is required")
+	case errors.Is(err, searchprofile.ErrTooManySpecializations):
+		return fiber.NewError(fiber.StatusBadRequest, "too many specializations (max 5)")
 	case errors.Is(err, searchprofile.ErrEmptySkills):
 		return fiber.NewError(fiber.StatusBadRequest, "at least one skill is required")
 	case errors.Is(err, searchprofile.ErrDuplicateName):
@@ -57,21 +61,22 @@ func searchProfileError(err error) error {
 	}
 }
 
-// createSearchProfileRequest is the create body: a required display name, a specialization
-// (one job category), and a non-empty set of skills.
+// createSearchProfileRequest is the create body: a required display name, a non-empty set
+// of specializations (job categories), and a non-empty set of skills.
 type createSearchProfileRequest struct {
-	Name           string   `json:"name"`
-	Specialization string   `json:"specialization"`
-	Skills         []string `json:"skills"`
+	Name            string   `json:"name"`
+	Specializations []string `json:"specializations"`
+	Skills          []string `json:"skills"`
 }
 
-// updateSearchProfileRequest is the partial-update body: a nil name/specialization or an
-// omitted skills field is left unchanged, so a caller can rename, re-specialize, replace
-// skills, or any combination. A provided-but-empty skills array is rejected (400).
+// updateSearchProfileRequest is the partial-update body: a nil name or an omitted
+// specializations/skills field is left unchanged, so a caller can rename, re-specialize,
+// replace skills, or any combination. A provided-but-empty specializations/skills array is
+// rejected (400).
 type updateSearchProfileRequest struct {
-	Name           *string  `json:"name"`
-	Specialization *string  `json:"specialization"`
-	Skills         []string `json:"skills"`
+	Name            *string  `json:"name"`
+	Specializations []string `json:"specializations"`
+	Skills          []string `json:"skills"`
 }
 
 // CreateSearchProfile stores a named profile (specialization + skills) for the
@@ -88,7 +93,7 @@ func (a *API) CreateSearchProfile(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
 
-	profile, err := a.searchProfile.Create(c.Context(), userID, in.Name, in.Specialization, in.Skills)
+	profile, err := a.searchProfile.Create(c.Context(), userID, in.Name, in.Specializations, in.Skills)
 	if err != nil {
 		return searchProfileError(err)
 	}
@@ -132,7 +137,7 @@ func (a *API) UpdateSearchProfile(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
 
-	profile, err := a.searchProfile.Update(c.Context(), userID, id, in.Name, in.Specialization, in.Skills)
+	profile, err := a.searchProfile.Update(c.Context(), userID, id, in.Name, in.Specializations, in.Skills)
 	if err != nil {
 		return searchProfileError(err)
 	}

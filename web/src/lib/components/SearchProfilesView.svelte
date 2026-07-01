@@ -6,36 +6,43 @@
   import { searchProfiles } from '$lib/searchProfiles.svelte';
   import type { SearchProfile } from '$lib/types';
   import { Button, Input } from '$lib/ui';
+  import RemoteSearchSelect from './facets/RemoteSearchSelect.svelte';
   import SearchSelect from './facets/SearchSelect.svelte';
   import States from './States.svelte';
+
+  // Mirror of the server's specialization cap (searchprofile.maxSpecializations).
+  const MAX_SPECIALIZATIONS = 5;
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   const profiles = $derived(searchProfiles.items);
 
-  // The universe of skills (canonical tokens with job counts) for the picker, fetched
+  // The universe of skills (canonical tokens with job counts) for the typeahead, fetched
   // from the facet-distribution endpoint — the same source the filter panel's dynamic
   // skills facet uses. Empty params = the whole catalogue's skill distribution.
   let skillDist = $state.raw<FacetOption[]>([]);
 
-  // Form doubles as create (editingId null) and edit (editingId set). specialization is
-  // single-valued; skills is a set. A profile needs a name, a specialization, and at
-  // least one skill — the same invariants the server enforces.
+  // Form doubles as create (editingId null) and edit (editingId set). A profile needs a
+  // name, at least one specialization, and at least one skill — the same invariants the
+  // server enforces.
   let editingId = $state<number | null>(null);
   let name = $state('');
-  let specialization = $state('');
+  let specializations = $state.raw<string[]>([]);
   let skills = $state.raw<string[]>([]);
   let formError = $state<string | null>(null);
   let busy = $state(false);
 
-  const canSubmit = $derived(name.trim() !== '' && specialization !== '' && skills.length > 0);
+  const canSubmit = $derived(
+    name.trim() !== '' && specializations.length > 0 && skills.length > 0,
+  );
 
-  // The picker options: the distribution plus any selected skills not in it (so an
-  // edited profile's skills stay visible and removable even if they have no live count).
-  const skillOptions = $derived.by((): FacetOption[] => {
-    const known = new Set(skillDist.map((o) => o.value));
-    const extra = skills.filter((s) => !known.has(s)).map((s) => ({ value: s, label: s }));
-    return [...skillDist, ...extra];
-  });
+  // The skills typeahead: filter the loaded distribution locally (dictionary-only, so only
+  // known skills are addable) and cap the visible matches. Reads the current distribution
+  // at call time, so a slightly-late load is reflected on the next keystroke.
+  function searchSkills(query: string): Promise<FacetOption[]> {
+    const q = query.trim().toLowerCase();
+    const matches = q ? skillDist.filter((o) => o.label.toLowerCase().includes(q)) : skillDist;
+    return Promise.resolve(matches.slice(0, 50));
+  }
 
   async function loadProfiles() {
     status = 'loading';
@@ -55,8 +62,8 @@
         .map(([value, count]) => ({ value, label: value, count }))
         .toSorted((a, b) => b.count - a.count || a.label.localeCompare(b.label));
     } catch {
-      // best-effort: an empty distribution still lets the user type-and-pick nothing,
-      // but selected skills (on edit) remain visible via skillOptions.
+      // best-effort: an empty distribution still lets an edited profile's skills show as
+      // chips (seeded via fallbackLabel); the typeahead just has nothing to suggest.
     }
   }
 
@@ -75,7 +82,7 @@
   function resetForm() {
     editingId = null;
     name = '';
-    specialization = '';
+    specializations = [];
     skills = [];
     formError = null;
   }
@@ -83,14 +90,24 @@
   function startEdit(p: SearchProfile) {
     editingId = p.id;
     name = p.name;
-    specialization = p.specialization;
+    specializations = [...p.specializations];
     skills = [...p.skills];
     formError = null;
   }
 
-  // Single-select: clicking the chosen specialization clears it, any other replaces it.
+  // Multi-select with a cap: toggling off is always allowed; toggling on is refused past
+  // MAX_SPECIALIZATIONS (with a hint) so the form matches the server's limit.
   function toggleSpecialization(value: string) {
-    specialization = specialization === value ? '' : value;
+    if (specializations.includes(value)) {
+      specializations = specializations.filter((s) => s !== value);
+      return;
+    }
+    if (specializations.length >= MAX_SPECIALIZATIONS) {
+      formError = `You can pick at most ${MAX_SPECIALIZATIONS} specializations.`;
+      return;
+    }
+    specializations = [...specializations, value];
+    formError = null;
   }
 
   function toggleSkill(value: string) {
@@ -103,11 +120,10 @@
     busy = true;
     formError = null;
     try {
-      const patch = { name: name.trim(), specialization, skills };
       if (editingId === null) {
-        await searchProfiles.create(patch.name, specialization, skills);
+        await searchProfiles.create(name.trim(), specializations, skills);
       } else {
-        await searchProfiles.update(editingId, patch);
+        await searchProfiles.update(editingId, { name: name.trim(), specializations, skills });
       }
       resetForm();
     } catch (err) {
@@ -138,7 +154,8 @@
     <div class="flex flex-col gap-1">
       <h1 class="text-2xl font-semibold tracking-tight">Search profiles</h1>
       <p class="text-sm text-muted-foreground">
-        Describe what you do — a specialization and your skills — and reuse it to find relevant work.
+        Describe what you do — one or more specializations and your skills — and reuse it to
+        find relevant work.
       </p>
     </div>
 
@@ -151,10 +168,10 @@
       </label>
 
       <div class="flex flex-col gap-1.5">
-        <span class="text-sm font-medium">Specialization</span>
+        <span class="text-sm font-medium">Specializations</span>
         <SearchSelect
           options={CATEGORY_OPTIONS}
-          selected={specialization ? [specialization] : []}
+          selected={specializations}
           placeholder="Search specializations"
           onToggle={toggleSpecialization}
         />
@@ -162,11 +179,12 @@
 
       <div class="flex flex-col gap-1.5">
         <span class="text-sm font-medium">Skills</span>
-        <SearchSelect
-          options={skillOptions}
+        <RemoteSearchSelect
+          search={searchSkills}
           selected={skills}
           placeholder="Search skills"
           onToggle={toggleSkill}
+          fallbackLabel={(v) => v}
         />
       </div>
 
@@ -196,7 +214,9 @@
           <li class="flex items-start justify-between gap-3 px-4 py-3">
             <div class="flex min-w-0 flex-col gap-1">
               <span class="truncate text-sm font-medium">{profile.name}</span>
-              <span class="text-xs text-muted-foreground">{categoryLabel(profile.specialization)}</span>
+              <span class="text-xs text-muted-foreground">
+                {profile.specializations.map(categoryLabel).join(', ')}
+              </span>
               <div class="flex flex-wrap gap-1">
                 {#each profile.skills as skill (skill)}
                   <span class="rounded bg-secondary px-1.5 py-0.5 text-xs text-secondary-foreground">{skill}</span>

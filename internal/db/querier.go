@@ -92,8 +92,8 @@ type Querier interface {
 	// duplicate name (surfaced by the repository as a duplicate-name error). Returns the row.
 	CreateSavedSearch(ctx context.Context, arg CreateSavedSearchParams) (SavedSearch, error)
 	// Create a profile for a user. The UNIQUE (user_id, name) constraint rejects a
-	// duplicate name (surfaced by the repository as a duplicate-name error). Skills are
-	// already normalized by the service. Returns the row.
+	// duplicate name (surfaced by the repository as a duplicate-name error). Specializations
+	// and skills are already normalized by the service. Returns the row.
 	CreateSearchProfile(ctx context.Context, arg CreateSearchProfileParams) (SearchProfile, error)
 	// Insert a user-contributed vacancy into the moderation queue as 'pending'. The partial
 	// unique index on lower(url) WHERE status='pending' rejects a second pending submission of
@@ -404,7 +404,7 @@ type Querier interface {
 	// query string is a real value (not NULL), so "save the unfiltered view" is honored.
 	// No matching owner-scoped row returns no row (the handler maps that to 404).
 	UpdateSavedSearch(ctx context.Context, arg UpdateSavedSearchParams) (SavedSearch, error)
-	// Overwrite a profile's name, specialization, and/or skills, scoped to its owner,
+	// Overwrite a profile's name, specializations, and/or skills, scoped to its owner,
 	// bumping updated_at. Partial update: a NULL param leaves that column unchanged
 	// (COALESCE), so the caller can rename, re-specialize, replace skills, or any
 	// combination in one call. No matching owner-scoped row returns no row (the handler

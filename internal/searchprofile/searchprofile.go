@@ -1,10 +1,10 @@
 // Package searchprofile is the per-user search-profile use case: a signed-in user names a
-// record of their professional self — one specialization (a job category) and a non-empty
-// set of skills — and can list, create, overwrite, and delete those profiles. It owns
-// validation (name bounds, the specialization vocabulary, skill normalization, the
-// per-user cap); the Repository owns persistence and maps the relevant Postgres conditions
-// (unique violation, no row) onto the package sentinels. How a profile is consumed (match
-// scoring, ranked feeds, notifications) lives outside this package.
+// record of their professional self — a non-empty set of specializations (job categories)
+// and a non-empty set of skills — and can list, create, overwrite, and delete those
+// profiles. It owns validation (name bounds, the specialization vocabulary and cap, skill
+// normalization, the per-user cap); the Repository owns persistence and maps the relevant
+// Postgres conditions (unique violation, no row) onto the package sentinels. How a profile
+// is consumed (match scoring, ranked feeds, notifications) lives outside this package.
 package searchprofile
 
 import (
@@ -27,6 +27,11 @@ var (
 	// ErrInvalidSpecialization is a specialization outside the category vocabulary
 	// (mapped to 400).
 	ErrInvalidSpecialization = errors.New("searchprofile: specialization is not a known category")
+	// ErrEmptySpecializations is a profile whose specializations are empty after
+	// normalization (mapped to 400).
+	ErrEmptySpecializations = errors.New("searchprofile: at least one specialization is required")
+	// ErrTooManySpecializations is a specialization set past maxSpecializations (mapped to 400).
+	ErrTooManySpecializations = errors.New("searchprofile: too many specializations")
 	// ErrEmptySkills is a profile whose skills are empty after normalization (mapped to 400).
 	ErrEmptySkills = errors.New("searchprofile: at least one skill is required")
 	// ErrDuplicateName is a name the user already uses (the UNIQUE (user_id, name)
@@ -43,6 +48,9 @@ const (
 	maxNameLen = 100
 	// maxPerUser caps how many profiles a single user may keep.
 	maxPerUser = 50
+	// maxSpecializations caps how many specializations one profile may combine; the
+	// migration's cardinality CHECK is the backstop.
+	maxSpecializations = 5
 )
 
 // Repository is the persistence contract for search profiles. Every method is
@@ -73,15 +81,15 @@ func (s *Service) List(ctx context.Context, userID int64) ([]db.SearchProfile, e
 }
 
 // Create validates and stores a profile for the user. The name is trimmed and bounded; the
-// specialization must be a known category; the skills are normalized and must be non-empty;
-// the per-user cap is checked before the insert; a duplicate name surfaces as
-// ErrDuplicateName (mapped by the repository).
-func (s *Service) Create(ctx context.Context, userID int64, name, specialization string, skills []string) (db.SearchProfile, error) {
+// specializations are normalized (each a known category, deduped, non-empty, capped); the
+// skills are normalized and must be non-empty; the per-user cap is checked before the
+// insert; a duplicate name surfaces as ErrDuplicateName (mapped by the repository).
+func (s *Service) Create(ctx context.Context, userID int64, name string, specializations, skills []string) (db.SearchProfile, error) {
 	name, err := validName(name)
 	if err != nil {
 		return db.SearchProfile{}, err
 	}
-	specialization, err = validSpecialization(specialization)
+	specs, err := normalizeSpecializations(specializations)
 	if err != nil {
 		return db.SearchProfile{}, err
 	}
@@ -97,19 +105,20 @@ func (s *Service) Create(ctx context.Context, userID int64, name, specialization
 		return db.SearchProfile{}, ErrCapExceeded
 	}
 	return s.repo.Create(ctx, db.CreateSearchProfileParams{
-		UserID:         userID,
-		Name:           name,
-		Specialization: specialization,
-		Skills:         normalized,
+		UserID:          userID,
+		Name:            name,
+		Specializations: specs,
+		Skills:          normalized,
 	})
 }
 
-// Update overwrites a profile's name, specialization, and/or skills, scoped to its owner.
-// A nil name/specialization pointer or a nil skills slice leaves that column unchanged
-// (partial update). A provided name is validated; a provided specialization must be a
-// known category; provided skills are normalized and must be non-empty. A missing or
-// non-owned row surfaces as ErrNotFound (mapped by the repository).
-func (s *Service) Update(ctx context.Context, userID, id int64, name, specialization *string, skills []string) (db.SearchProfile, error) {
+// Update overwrites a profile's name, specializations, and/or skills, scoped to its owner.
+// A nil name pointer or a nil specializations/skills slice leaves that column unchanged
+// (partial update). A provided name is validated; provided specializations must each be a
+// known category and are deduped, non-empty, and capped; provided skills are normalized and
+// must be non-empty. A missing or non-owned row surfaces as ErrNotFound (mapped by the
+// repository).
+func (s *Service) Update(ctx context.Context, userID, id int64, name *string, specializations, skills []string) (db.SearchProfile, error) {
 	p := db.UpdateSearchProfileParams{ID: id, UserID: userID}
 	if name != nil {
 		valid, err := validName(*name)
@@ -118,12 +127,12 @@ func (s *Service) Update(ctx context.Context, userID, id int64, name, specializa
 		}
 		p.Name = pgtype.Text{String: valid, Valid: true}
 	}
-	if specialization != nil {
-		valid, err := validSpecialization(*specialization)
+	if specializations != nil {
+		specs, err := normalizeSpecializations(specializations)
 		if err != nil {
 			return db.SearchProfile{}, err
 		}
-		p.Specialization = pgtype.Text{String: valid, Valid: true}
+		p.Specializations = specs
 	}
 	if skills != nil {
 		normalized, err := normalizeSkills(skills)
@@ -152,15 +161,35 @@ func validName(name string) (string, error) {
 	return name, nil
 }
 
-// validSpecialization trims the value and checks membership in the controlled category
-// vocabulary (the same enum the rest of the app validates against), returning the trimmed
-// value or ErrInvalidSpecialization.
-func validSpecialization(specialization string) (string, error) {
-	specialization = strings.TrimSpace(specialization)
-	if !slices.Contains(enrich.CategoryValues, specialization) {
-		return "", ErrInvalidSpecialization
+// normalizeSpecializations trims each value, drops blanks, deduplicates (preserving
+// first-seen order), and checks membership in the controlled category vocabulary (the same
+// enum the rest of the app validates against). It returns ErrEmptySpecializations if nothing
+// remains, ErrInvalidSpecialization for an unknown category, and ErrTooManySpecializations
+// past maxSpecializations — mirroring normalizeSkills.
+func normalizeSpecializations(specializations []string) ([]string, error) {
+	out := make([]string, 0, len(specializations))
+	seen := make(map[string]struct{}, len(specializations))
+	for _, raw := range specializations {
+		spec := strings.TrimSpace(raw)
+		if spec == "" {
+			continue
+		}
+		if _, dup := seen[spec]; dup {
+			continue
+		}
+		if !slices.Contains(enrich.CategoryValues, spec) {
+			return nil, ErrInvalidSpecialization
+		}
+		seen[spec] = struct{}{}
+		out = append(out, spec)
 	}
-	return specialization, nil
+	if len(out) == 0 {
+		return nil, ErrEmptySpecializations
+	}
+	if len(out) > maxSpecializations {
+		return nil, ErrTooManySpecializations
+	}
+	return out, nil
 }
 
 // normalizeSkills lowercases, trims, and deduplicates the skills (preserving first-seen

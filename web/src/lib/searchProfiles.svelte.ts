@@ -50,17 +50,17 @@ class SearchProfiles {
 
   /** Create a profile and prepend it (newest-first). Throws on a duplicate name, the
    *  per-user cap, a bad specialization, or empty skills (the caller shows the error). */
-  async create(name: string, specialization: string, skills: string[]): Promise<SearchProfile> {
-    const row = await createSearchProfile(name, specialization, skills);
+  async create(name: string, specializations: string[], skills: string[]): Promise<SearchProfile> {
+    const row = await createSearchProfile(name, specializations, skills);
     this.#items = [row, ...this.#items];
     return row;
   }
 
-  /** Overwrite a profile's name, specialization, and/or skills; move it to the front
+  /** Overwrite a profile's name, specializations, and/or skills; move it to the front
    *  (it is now the most recently updated, matching the server's ordering). */
   async update(
     id: number,
-    patch: { name?: string; specialization?: string; skills?: string[] },
+    patch: { name?: string; specializations?: string[]; skills?: string[] },
   ): Promise<SearchProfile> {
     const row = await updateSearchProfile(id, patch);
     this.#items = [row, ...this.#items.filter((p) => p.id !== id)];
