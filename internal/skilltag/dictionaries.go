@@ -298,6 +298,42 @@ var wordAliases = map[string]string{
 	"salesforce": "salesforce",
 	"sap":        "sap",
 	"oracle":     "oracle",
+
+	// LLM-mined gaps: high-frequency tokens the enrichment discovery signal emitted
+	// (jobs.enrichment->skills) that the seed list lacked. Only distinctive tokens are
+	// bare aliases here; ambiguous ones (plc↔"… plc", temporal↔the adjective,
+	// embedded↔"embedded in", dax↔the index) are deliberately omitted, and R stays a
+	// phrase-only route (see below).
+	"github":        "github",
+	"servicenow":    "servicenow",
+	"sharepoint":    "sharepoint",
+	"hubspot":       "hubspot",
+	"nosql":         "nosql",
+	"etl":           "etl",
+	"itil":          "itil",
+	"cybersecurity": "cybersecurity",
+	"opensearch":    "opensearch",
+	"solr":          "solr",
+	// BI / analytics / statistics tooling
+	"qlik":       "qlik",
+	"sas":        "sas",
+	"spss":       "spss",
+	"stata":      "stata",
+	"vba":        "vba",
+	"xgboost":    "xgboost",
+	"matplotlib": "matplotlib",
+	"seaborn":    "seaborn",
+	"plotly":     "plotly",
+	"jupyter":    "jupyter",
+	// hardware / CAD
+	"autocad": "autocad",
+	"revit":   "revit",
+	"cad":     "cad",
+	"fpga":    "fpga",
+	"verilog": "verilog",
+	// web3
+	"web3":     "web3",
+	"ethereum": "ethereum",
 }
 
 // phraseAlias is a punctuated or multi-word term matched against the normalized
@@ -347,4 +383,17 @@ var phraseAliases = []phraseAlias{
 	{"aws bedrock", "aws-bedrock"}, {"amazon bedrock", "aws-bedrock"},
 	{"sentence transformers", "sentence-transformers"}, {"sentence-transformers", "sentence-transformers"},
 	{"retrieval augmented generation", "rag"}, {"retrieval-augmented generation", "rag"},
+	// LLM-mined multi-word gaps (jobs.enrichment->skills). Multi-word or ambiguous
+	// terms routed as phrases so the bare token can't misfire on non-tech jobs.
+	// ("spring boot" needs no entry — the "spring" word alias already tags it.)
+	{"azure devops", "azure-devops"},
+	{"power apps", "powerapps"}, {"powerapps", "powerapps"},
+	{"power automate", "power-automate"},
+	{"distributed systems", "distributed-systems"},
+	{"data modeling", "data-modeling"}, {"data modelling", "data-modeling"},
+	{"data visualization", "data-visualization"}, {"data visualisation", "data-visualization"},
+	{"prompt engineering", "prompt-engineering"},
+	{"generative ai", "generative-ai"}, {"gen ai", "generative-ai"},
+	{"deep learning", "deep-learning"},
+	{"six sigma", "six-sigma"},
 }

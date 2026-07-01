@@ -96,6 +96,66 @@ func TestParse_NewTechVocab(t *testing.T) {
 	}
 }
 
+// LLM-mined vocabulary (skilltag-llm-mined): high-frequency gaps found by mining
+// the enrichment discovery signal (jobs.enrichment->skills). Each resolves from
+// realistic text; the ambiguity guards confirm the tokens we deliberately did NOT
+// add (plc, temporal, embedded, nomad) never tag on their common non-tech uses.
+func TestParse_LLMMinedVocab(t *testing.T) {
+	contains := func(hay []string, needle string) bool {
+		for _, h := range hay {
+			if h == needle {
+				return true
+			}
+		}
+		return false
+	}
+	cases := []struct {
+		name   string
+		in     string
+		want   []string
+		absent []string
+	}{
+		{"data tooling", "ETL into NoSQL stores; dashboards in Qlik with SAS and SPSS.",
+			[]string{"etl", "nosql", "qlik", "sas", "spss"}, nil},
+		{"saas platforms", "Administer ServiceNow, SharePoint, HubSpot and GitHub.",
+			[]string{"servicenow", "sharepoint", "hubspot", "github"}, nil},
+		{"search engines", "Full-text search over OpenSearch and Solr.", []string{"opensearch", "solr"}, nil},
+		{"cad + hardware", "AutoCAD and Revit for CAD; FPGA design in Verilog.",
+			[]string{"autocad", "revit", "cad", "fpga", "verilog"}, nil},
+		{"python viz/ml", "Plotting with Matplotlib, Seaborn and Plotly in Jupyter; XGBoost models; VBA macros.",
+			[]string{"matplotlib", "seaborn", "plotly", "jupyter", "xgboost", "vba"}, nil},
+		{"web3", "Smart contracts on Ethereum with a modern Web3 stack.", []string{"ethereum", "web3"}, nil},
+		{"phrases", "Azure DevOps pipelines, distributed systems, deep learning and prompt engineering.",
+			[]string{"azure-devops", "distributed-systems", "deep-learning", "prompt-engineering"}, nil},
+		{"spring boot via word", "Spring Boot microservices.", []string{"spring"}, nil},
+		{"ms low-code", "Automate with Power Apps and Power Automate.", []string{"powerapps", "power-automate"}, nil},
+		{"data phrases", "Strong data modeling and data visualization skills.", []string{"data-modeling", "data-visualization"}, nil},
+		{"generative ai", "Experience with Generative AI tooling.", []string{"generative-ai"}, nil},
+		{"itil + six sigma", "ITIL service management and Six Sigma.", []string{"itil", "six-sigma"}, nil},
+		{"security", "Cybersecurity and incident response.", []string{"cybersecurity"}, nil},
+		// ambiguity guards: deliberately-omitted tokens must not tag on common non-tech uses.
+		{"plc company suffix trap", "Join Barclays PLC, a FTSE-100 firm.", nil, []string{"plc"}},
+		{"temporal adjective trap", "Analyze temporal trends in the data.", nil, []string{"temporal"}},
+		{"embedded phrase trap", "You will be embedded in a cross-functional team.", nil, []string{"embedded"}},
+		{"nomad trap", "A remote-first company hiring digital nomads.", nil, []string{"nomad"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := Parse(c.in)
+			for _, w := range c.want {
+				if !contains(got, w) {
+					t.Errorf("Parse(%q) = %v, missing %q", c.in, got, w)
+				}
+			}
+			for _, a := range c.absent {
+				if contains(got, a) {
+					t.Errorf("Parse(%q) = %v, must NOT contain %q", c.in, got, a)
+				}
+			}
+		})
+	}
+}
+
 // AI/LLM engineering vocabulary (ai-skills-gaps): vector DBs, LLM frameworks,
 // model providers, and serving/inference tools resolve from realistic text.
 // Ambiguous bare words are deliberately NOT tagged (RAG project status, the word
