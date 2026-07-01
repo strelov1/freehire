@@ -65,9 +65,9 @@ func TestErecruiterFetchMapsFieldsAndPaginates(t *testing.T) {
 		byID[j.ExternalID] = j
 	}
 
-	full, ok := byID["587372"]
+	full, ok := byID["4893718"]
 	if !ok {
-		t.Fatal("job 587372 missing — ExternalID must be the externalJobOfferId")
+		t.Fatal("job 4893718 missing — ExternalID must be the offerId")
 	}
 	if full.Title != "Senior Go Engineer" {
 		t.Errorf("Title = %q, want %q", full.Title, "Senior Go Engineer")
@@ -90,12 +90,74 @@ func TestErecruiterFetchMapsFieldsAndPaginates(t *testing.T) {
 		t.Errorf("URL = %q, want the Offer.aspx detail URL with oid+cfg", full.URL)
 	}
 
-	if _, dropped := byID["591483"]; dropped {
-		t.Error("posting 591483 has no detail page and must be dropped")
+	if _, dropped := byID["4893487"]; dropped {
+		t.Error("posting 4893487 has no detail page and must be dropped")
 	}
 
-	if _, ok := byID["599999"]; !ok {
-		t.Error("job 599999 from page 2 missing — pagination must fetch the second page")
+	if _, ok := byID["4899999"]; !ok {
+		t.Error("job 4899999 from page 2 missing — pagination must fetch the second page")
+	}
+}
+
+func TestErecruiterMultiCityKeptDistinct(t *testing.T) {
+	// One posting spread over two cities: same externalJobOfferId, distinct offerId + city. The
+	// adapter must key on offerId so both survive the (source, external_id) dedup instead of
+	// collapsing into one job.
+	page := erecruiterPage("2",
+		erecruiterRow("8001", "700", "900", "Kurier", "Warszawa"),
+		erecruiterRow("8002", "700", "901", "Kurier", "Kraków"),
+	)
+	fake := (&routedHTTP{}).
+		route("grid=rows&pn=1", page).
+		route("oid=8001", erecruiterDetail("Kurier", "<p>Deliver in Warszawa</p>")).
+		route("oid=8002", erecruiterDetail("Kurier", "<p>Deliver in Kraków</p>"))
+
+	jobs, err := NewErecruiter(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Board: "brd"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("len(jobs) = %d, want 2 (city variants of one externalJobOfferId must stay distinct)", len(jobs))
+	}
+	byID := map[string]Job{}
+	for _, j := range jobs {
+		byID[j.ExternalID] = j
+	}
+	if byID["8001"].Location != "Warszawa" || byID["8002"].Location != "Kraków" {
+		t.Errorf("city variants mismapped: %q / %q", byID["8001"].Location, byID["8002"].Location)
+	}
+}
+
+func TestErecruiterDescriptionTemplateAgnostic(t *testing.T) {
+	// Company career-page templates differ: this one renders the body in id="opis"/"description"
+	// (not id="t1") and appends a GDPR consent clause. The description must capture the body,
+	// drop the title/workplace header and the clause, and survive the varied template.
+	detail := `<html><body><div id="offCont">` +
+		`<div id="JobTitle">DevOps Engineer</div>` +
+		`<div id="WorkPlace">Miejsce pracy: Łódź</div>` +
+		`<div id="opis"><p>Company intro paragraph.</p></div>` +
+		`<div id="description"><p>Run the Kubernetes fleet.</p></div>` +
+		`<div id="Clause"><p>Consent to processing personal data...</p></div>` +
+		`</div></body></html>`
+	page := erecruiterPage("1", erecruiterRow("500", "600", "700", "DevOps Engineer", "Łódź"))
+	fake := (&routedHTTP{}).route("grid=rows&pn=1", page).route("oid=500", detail)
+
+	jobs, err := NewErecruiter(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Board: "brd"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1 (non-t1 template must still yield a body)", len(jobs))
+	}
+	d := jobs[0].Description
+	if !strings.Contains(d, "Kubernetes fleet") || !strings.Contains(d, "Company intro") {
+		t.Errorf("Description = %q, want the opis/description body", d)
+	}
+	if strings.Contains(d, "Consent to processing") {
+		t.Errorf("Description must drop the GDPR clause, got %q", d)
+	}
+	if strings.Contains(d, "DevOps Engineer") {
+		t.Errorf("Description must drop the JobTitle header, got %q", d)
 	}
 }
 

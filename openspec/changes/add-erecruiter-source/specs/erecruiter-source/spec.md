@@ -18,8 +18,15 @@ board-based (it requires a board id) and appears in the source facet.
 #### Scenario: Stable dedup identity
 
 - **WHEN** the adapter maps a board row to a `Job`
-- **THEN** the `ExternalID` is the posting's stable `externalJobOfferId`, so re-crawling
-  the same company board dedups to the same catalogue row
+- **THEN** the `ExternalID` is the posting's `offerId`, so re-crawling the same company board
+  dedups to the same catalogue row
+
+#### Scenario: Multi-city posting kept distinct
+
+- **WHEN** one posting is spread over several cities — its per-city rows share an
+  `externalJobOfferId` but each has a distinct `offerId`, location, and detail page
+- **THEN** keying on `offerId` keeps each city variant a distinct job, rather than collapsing
+  them under the `(source, external_id)` dedup key
 
 ### Requirement: Two-step list then detail fetch
 

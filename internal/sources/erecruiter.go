@@ -88,10 +88,15 @@ func (s erecruiter) listRows(ctx context.Context, board string) ([]erecruiterRow
 }
 
 // toJob fetches a row's detail page and maps it to a Job, returning ok=false when the row
-// lacks the ids needed to address the detail (would break dedup), when the detail page is
-// gone (a closed posting), or when it carries no description.
+// lacks the offer id needed to address the detail and dedup, when the detail page is gone (a
+// closed posting), or when it carries no description.
+//
+// ExternalID is the offerId, not the externalJobOfferId: one posting spread over several
+// cities shares an externalJobOfferId across its per-city rows (each a distinct offerId with
+// its own detail page and location), so keying on externalJobOfferId would collapse the
+// city variants into a single job under the (source, external_id) dedup key.
 func (s erecruiter) toJob(ctx context.Context, r erecruiterRowData, e CompanyEntry) (Job, bool) {
-	if r.ejoID == "" || r.offerID == "" {
+	if r.offerID == "" {
 		return Job{}, false
 	}
 	detailURL := fmt.Sprintf(erecruiterDetailURL, r.offerID, e.Board, r.ejoID, r.ejorID, r.comID)
@@ -104,7 +109,7 @@ func (s erecruiter) toJob(ctx context.Context, r erecruiterRowData, e CompanyEnt
 		return Job{}, false
 	}
 	return Job{
-		ExternalID:  r.ejoID,
+		ExternalID:  r.offerID,
 		URL:         detailURL,
 		Title:       r.title,
 		Company:     e.Company,
@@ -181,16 +186,30 @@ func erecruiterCells(tr *html.Node) []string {
 	return cells
 }
 
-// erecruiterDescription concatenates the inner HTML of the detail page's content blocks
-// (eRecruiter renders each as a <div id="t1">), for sanitizing into the job body.
+// erecruiterSkipIDs are the offer-container sections that are not the job body: the header
+// (title/workplace, already carried as structured Job fields) and the GDPR consent clause.
+var erecruiterSkipIDs = map[string]bool{"JobTitle": true, "WorkPlace": true, "Clause": true}
+
+// erecruiterDescription returns the detail page's job body as HTML. Company career-page
+// templates vary (some render the body in a <div id="t1">, others in id="opis"/"description"/
+// …), so rather than target specific blocks it takes the whole offer container (<div
+// id="offCont">) minus the header and consent-clause sections. Returns "" when the container
+// is absent, so the posting is dropped.
 func erecruiterDescription(doc *html.Node) string {
-	var b strings.Builder
-	walk(doc, func(n *html.Node) bool {
-		if n.Type == html.ElementNode && n.Data == "div" && attr(n, "id") == "t1" {
-			b.WriteString(innerHTML(n))
+	root := elementByID(doc, "offCont")
+	if root == nil {
+		return ""
+	}
+	var drop []*html.Node
+	walk(root, func(n *html.Node) bool {
+		if n.Type == html.ElementNode && erecruiterSkipIDs[attr(n, "id")] {
+			drop = append(drop, n)
 			return false
 		}
 		return true
 	})
-	return b.String()
+	for _, n := range drop {
+		n.Parent.RemoveChild(n)
+	}
+	return innerHTML(root)
 }
