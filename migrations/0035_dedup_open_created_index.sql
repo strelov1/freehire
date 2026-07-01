@@ -1,0 +1,13 @@
+-- Deduplicate the open-jobs "newest-first" index. Two migrations landed independently
+-- creating an IDENTICAL btree on (created_at DESC, id DESC) WHERE closed_at IS NULL:
+--   jobs_open_created_at_id_idx   — 0033_job_list_indexes.sql        (#333)
+--   jobs_open_created_idx         — 0033_jobs_open_created_index.sql (#345, the canonical
+--                                    GET /api/v1/jobs fix)
+-- Keep #345's and drop the #333 duplicate so the catalogue doesn't carry two identical
+-- indexes (double write cost + disk on ~2.5M rows) for one query. The other two indexes
+-- from 0033_job_list_indexes are NOT duplicated and stay: jobs_open_company_created_at_id_idx
+-- (ListJobsByCompany) and jobs_open_enrich_freshness_idx (ClaimEnrichmentBatch).
+--
+-- Prod note: on the live table drop it without blocking writes with
+--   DROP INDEX CONCURRENTLY IF EXISTS jobs_open_created_at_id_idx;
+DROP INDEX IF EXISTS jobs_open_created_at_id_idx;
