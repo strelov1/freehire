@@ -10,6 +10,7 @@
   import { Paginator } from '$lib/paginated.svelte';
   import { FilterStore, filtersToParams } from '$lib/filters';
   import { syncOnNavigation } from '$lib/urlSynced.svelte';
+  import { setListSearchTarget } from '$lib/listSearch.svelte';
   import type { Job, FacetCounts } from '$lib/types';
   import { Input } from '$lib/ui';
   import FiltersPanel from './FiltersPanel.svelte';
@@ -38,6 +39,10 @@
   // Seed filters from the current URL so the server and the hydrated client
   // render the same filtered view.
   const filters = new FilterStore(page.url.searchParams);
+
+  // Standalone /jobs (no fixed scope) hands its text search to the header; an
+  // embedded, scoped instance (e.g. a company page) keeps its own inline input.
+  const standalone = $derived(Object.keys(scope).length === 0);
 
   // The user's (debounced) facet filters plus the fixed `scope` params
   // (company_slug, …). Reads `applied` so typing doesn't fetch per keystroke.
@@ -88,7 +93,12 @@
   // pending debounced reload so it can't fire after this view is gone.
   onMount(() => {
     if (isAuthenticated()) ensureViewedLoaded();
-    return () => filters.dispose();
+    // Register this page's store so the header search drives it (standalone only).
+    if (standalone) setListSearchTarget(filters);
+    return () => {
+      if (standalone) setListSearchTarget(null);
+      filters.dispose();
+    };
   });
 
   function reloadList() {
@@ -138,14 +148,20 @@
 
   <div class="min-w-0 flex-1">
     <div class="mb-4 flex items-center gap-2">
-      <Input
-        type="search"
-        value={filters.value.q}
-        oninput={(e) => filters.setQuery(e.currentTarget.value)}
-        placeholder="Search jobs…"
-        aria-label="Search jobs"
-        class="min-w-0 flex-1"
-      />
+      {#if standalone}
+        <!-- The header search is this page's text filter (see HeaderListSearch);
+             the spacer keeps Swipe/Filters right-aligned. -->
+        <div class="flex-1"></div>
+      {:else}
+        <Input
+          type="search"
+          value={filters.value.q}
+          oninput={(e) => filters.setQuery(e.currentTarget.value)}
+          placeholder="Search jobs…"
+          aria-label="Search jobs"
+          class="min-w-0 flex-1"
+        />
+      {/if}
       <button
         type="button"
         class="h-9 shrink-0 rounded-lg border border-border bg-secondary px-3 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent"

@@ -1,6 +1,5 @@
 <script lang="ts">
   import { goto, afterNavigate } from '$app/navigation';
-  import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { Search, X } from '@lucide/svelte';
   import { api } from '$lib/api';
@@ -9,15 +8,10 @@
   import { cn } from '$lib/utils';
   import CompanyLogo from './CompanyLogo.svelte';
 
-  // A launcher, not a filter: the header search jumps straight to a job/company
-  // or hands a free-text query to /jobs. It does NOT own the catalogue's query
-  // state — /jobs keeps its own URL-synced `q` input.
-
-  // On the list pages that already have their own text search (/jobs, /companies)
-  // the header input would duplicate it, so hide it there and leave an empty
-  // flex spacer that keeps the menu right-aligned. Detail pages (/jobs/:slug,
-  // /companies/:slug) and everywhere else keep the launcher.
-  const hidden = $derived(page.url.pathname === '/jobs' || page.url.pathname === '/companies');
+  // The global launcher: jumps straight to a job/company or hands a free-text
+  // query to /jobs. TopBar renders it on every page EXCEPT the list pages
+  // (/jobs, /companies), which swap in HeaderListSearch — a thin proxy that
+  // filters that page's list instead.
 
   const JOBS_LIMIT = 6;
   const COMPANIES_LIMIT = 4;
@@ -182,8 +176,7 @@
 <svelte:window onkeydown={onWindowKeydown} onclick={onWindowClick} />
 
 <div bind:this={wrapEl} class="relative flex-1">
-  {#if !hidden}
-    <!-- Search box -->
+  <!-- Search box -->
   <div
     class="flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm focus-within:ring-2 focus-within:ring-ring"
   >
@@ -296,6 +289,5 @@
         </button>
       {/if}
     </div>
-  {/if}
   {/if}
 </div>

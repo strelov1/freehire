@@ -6,11 +6,20 @@
   import { authDialog, openAuthDialog, closeAuthDialog } from '$lib/auth-dialog.svelte';
   import AuthDialog from './AuthDialog.svelte';
   import HeaderSearch from './HeaderSearch.svelte';
+  import HeaderListSearch from './HeaderListSearch.svelte';
   import HeaderMenu from './HeaderMenu.svelte';
 
   // The header is three slots — logo | search | menu — identical on every
   // viewport. Nav links, the account items, the theme toggle, and the auth
-  // action all live in HeaderMenu; instant search lives in HeaderSearch.
+  // action all live in HeaderMenu.
+  //
+  // The middle slot is one text field that adapts to context: on the list pages
+  // (/jobs, /companies) it IS that page's filter (HeaderListSearch drives the
+  // list, so there's no duplicate box); everywhere else it's the global launcher
+  // with the instant dropdown (HeaderSearch).
+  const listKind = $derived(
+    page.url.pathname === '/jobs' ? 'jobs' : page.url.pathname === '/companies' ? 'companies' : null,
+  );
 
   // The auth dialog lives at the layout level but its open state is a shared
   // singleton (see auth-dialog.svelte), so deep components — like a job's Save
@@ -61,7 +70,13 @@
       <span class="hidden sm:inline">FreeHire</span>
     </a>
 
-    <HeaderSearch />
+    {#if listKind === 'jobs'}
+      <HeaderListSearch placeholder="Search jobs…" />
+    {:else if listKind === 'companies'}
+      <HeaderListSearch placeholder="Search companies…" />
+    {:else}
+      <HeaderSearch />
+    {/if}
 
     <HeaderMenu />
   </div>
