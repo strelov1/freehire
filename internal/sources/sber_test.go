@@ -7,8 +7,9 @@ import (
 )
 
 // sberVacancy builds one inline vacancy fragment (body fields included — no detail call).
-func sberVacancy(reqID, title, company, city, pubDate, intro, duties, requirements, conditions string) string {
-	return `{"requisitionId":"` + reqID + `","title":"` + title + `","company":"` + company +
+func sberVacancy(reqID string, internalID int, title, company, city, pubDate, intro, duties, requirements, conditions string) string {
+	return `{"requisitionId":"` + reqID + `","internalId":` + itoa(internalID) +
+		`,"title":"` + title + `","company":"` + company +
 		`","city":"` + city + `","publicationDate":"` + pubDate +
 		`","introduction":"` + intro + `","duties":"` + duties +
 		`","requirements":"` + requirements + `","conditions":"` + conditions + `"}`
@@ -37,12 +38,12 @@ func TestSberSkipTakePaginatesAndMapsInline(t *testing.T) {
 	// skip+200=400 >= 300, so the loop stops. Bodies are inline — no detail call.
 	fake := (&routedHTTP{}).
 		route("skip=0", sberListPage(300,
-			sberVacancy("uuid-111", "Senior C++", `АО \"СберТех\"`, "г Москва",
+			sberVacancy("uuid-111", 4522762, "Senior C++", `АО \"СберТех\"`, "г Москва",
 				"2026-06-11T16:17:34.000Z",
 				"intro text", "### Duties", "### Requirements", "### Conditions"),
 		)).
 		route("skip=200", sberListPage(300,
-			sberVacancy("uuid-222", "Backend", "", "г Санкт-Петербург",
+			sberVacancy("uuid-222", 555, "Backend", "", "г Санкт-Петербург",
 				"2026-04-01T09:00:00.000Z", "i2", "d2", "r2", "c2"),
 		))
 
@@ -69,8 +70,13 @@ func TestSberSkipTakePaginatesAndMapsInline(t *testing.T) {
 	if j.Company != `АО "СберТех"` {
 		t.Errorf("Company = %q, want vacancy company", j.Company)
 	}
-	if want := "https://rabota.sber.ru/search/uuid-111"; j.URL != want {
+	// URL is built from the numeric internalId (the id the public page resolves), not the
+	// requisitionId GUID (which 404s); the requisitionId stays the dedup ExternalID.
+	if want := "https://rabota.sber.ru/search/4522762"; j.URL != want {
 		t.Errorf("URL = %q, want %q", j.URL, want)
+	}
+	if j.ExternalID != "uuid-111" {
+		t.Errorf("ExternalID = %q, want requisitionId uuid-111", j.ExternalID)
 	}
 	if j.Location != "г Москва" {
 		t.Errorf("Location = %q, want city", j.Location)

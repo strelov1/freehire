@@ -16,7 +16,7 @@ type sber struct {
 
 const (
 	sberListURL  = "https://rabota.sber.ru/public/app-candidate-public-api-gateway/api/v1/publications?skip=%d&take=%d"
-	sberVacURL   = "https://rabota.sber.ru/search/%s"
+	sberVacURL   = "https://rabota.sber.ru/search/%d"
 	sberPageSize = 200
 )
 
@@ -31,6 +31,7 @@ func (sber) boardless() {}
 // sberVac is one publication with its body inline (no detail call).
 type sberVac struct {
 	RequisitionID   string `json:"requisitionId"`
+	InternalID      int64  `json:"internalId"`
 	Title           string `json:"title"`
 	Company         string `json:"company"`
 	City            string `json:"city"`
@@ -79,13 +80,16 @@ func (s sber) list(ctx context.Context) ([]sberVac, error) {
 
 // toJob maps an inline vacancy to a Job. The body is assembled from the four text fields
 // (any may be empty); the employer company falls back to the configured entry when blank.
+// The two ids play distinct roles: the public vacancy page resolves the numeric internalId
+// (the requisitionId GUID route 404s), so the URL uses internalId, while the stable
+// requisitionId stays the dedup ExternalID.
 func (s sber) toJob(e CompanyEntry, v sberVac) Job {
 	company := firstNonEmpty(v.Company, e.Company)
 	body := v.Introduction + v.Duties + v.Requirements + v.Conditions
 
 	return Job{
 		ExternalID:  v.RequisitionID,
-		URL:         fmt.Sprintf(sberVacURL, v.RequisitionID),
+		URL:         fmt.Sprintf(sberVacURL, v.InternalID),
 		Title:       v.Title,
 		Company:     company,
 		Location:    v.City,
