@@ -146,12 +146,15 @@ func TestClosedJobsLeaveListSurfacesButResolveOnDetail(t *testing.T) {
 		t.Fatalf("list must contain only the open job, got %d rows", len(jobs))
 	}
 
-	total, err := q.CountJobs(ctx)
-	if err != nil {
-		t.Fatalf("count jobs: %v", err)
+	// Assert the closed job is excluded from the open count. Use an exact count
+	// here (not the production EstimateOpenJobs, which is an approximate planner
+	// estimate) so this data invariant is tested deterministically.
+	var total int64
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM jobs WHERE closed_at IS NULL").Scan(&total); err != nil {
+		t.Fatalf("count open jobs: %v", err)
 	}
 	if total != 1 {
-		t.Fatalf("count = %d, want 1", total)
+		t.Fatalf("open count = %d, want 1 (closed excluded)", total)
 	}
 
 	byCompany, err := q.ListJobsByCompany(ctx, ListJobsByCompanyParams{

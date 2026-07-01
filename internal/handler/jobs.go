@@ -9,7 +9,10 @@ import (
 
 // ListJobs returns a page of jobs using limit/offset pagination. Jobs are
 // served in the shared jobview wire shape (public_slug, no internal id) — the
-// same shape the detail and search endpoints use.
+// same shape the detail and search endpoints use. The page rides the partial
+// index jobs_open_created_idx (no full-table sort) and meta.total is an
+// approximate planner estimate (EstimateOpenJobs), so neither query scans the
+// whole open-job set at catalogue scale.
 func (a *API) ListJobs(c *fiber.Ctx) error {
 	limit, offset := pageParams(c)
 
@@ -21,7 +24,7 @@ func (a *API) ListJobs(c *fiber.Ctx) error {
 		return err
 	}
 
-	total, err := a.queries.CountJobs(c.Context())
+	total, err := a.queries.EstimateOpenJobs(c.Context())
 	if err != nil {
 		return err
 	}

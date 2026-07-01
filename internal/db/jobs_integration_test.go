@@ -271,3 +271,54 @@ func TestListJobsOrdersByNewestAdded(t *testing.T) {
 			jobs[0].ExternalID, jobs[1].ExternalID)
 	}
 }
+
+// TestListJobsOpenOnlyAndEstimate covers the DB-backed /jobs list contract after
+// the index+estimate change: ListJobs returns only open jobs (closed_at IS NULL)
+// newest-added first, and EstimateOpenJobs returns a non-negative approximate
+// open-job total (the Postgres planner estimate, meaningful once stats exist).
+func TestListJobsOpenOnlyAndEstimate(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	// Three open jobs, ingested oldest-first so newest-added is est-c.
+	for _, id := range []string{"est-a", "est-b", "est-c"} {
+		if _, err := ingestUpsert(ctx, q, ingestParams(id, "Title "+id)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// One closed job: it must be excluded from both the list and the estimate.
+	closed, err := ingestUpsert(ctx, q, ingestParams("est-closed", "Closed one"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = now() WHERE id = $1", closed.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	jobs, err := q.ListJobs(ctx, ListJobsParams{Limit: 10, Offset: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// len 3 of 4 total (3 open + 1 closed) proves the closed job is excluded.
+	if len(jobs) != 3 {
+		t.Fatalf("ListJobs len = %d, want 3 (closed excluded)", len(jobs))
+	}
+	if jobs[0].ExternalID != "est-c" || jobs[2].ExternalID != "est-a" {
+		t.Errorf("order = [%s..%s], want newest-added first (est-c..est-a)",
+			jobs[0].ExternalID, jobs[2].ExternalID)
+	}
+
+	// The planner estimate is only meaningful once the table has statistics.
+	if _, err := pool.Exec(ctx, "ANALYZE jobs"); err != nil {
+		t.Fatal(err)
+	}
+	est, err := q.EstimateOpenJobs(ctx)
+	if err != nil {
+		t.Fatalf("EstimateOpenJobs: %v", err)
+	}
+	if est < 1 {
+		t.Errorf("EstimateOpenJobs = %d, want >= 1 (open jobs present)", est)
+	}
+}

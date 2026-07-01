@@ -73,7 +73,6 @@ type Querier interface {
 	// so search/filter pagination reports the filtered total. Keep this WHERE identical
 	// to ListCompanies.
 	CountCompanies(ctx context.Context, arg CountCompaniesParams) (int64, error)
-	CountJobs(ctx context.Context) (int64, error)
 	// Per-stage application counts for the Pipeline snapshot. An application is any
 	// row the user applied to or staged (saved-only rows are excluded); a row with
 	// applied_at set but no stage groups under a NULL stage. The Go layer folds these
@@ -161,6 +160,11 @@ type Querier interface {
 	// (job_id, target_version), so running this every command invocation never duplicates
 	// work.
 	EnqueuePendingJobs(ctx context.Context, targetVersion int32) (int64, error)
+	// Fast approximate open-job total for the DB-backed /jobs list's meta.total. An
+	// exact count(*) over ~millions of open rows was a per-request full scan; the
+	// planner's estimate (see estimate_open_jobs(), migration 0033) is O(1) and
+	// tracks the closed_at IS NULL filter. The total is approximate by design.
+	EstimateOpenJobs(ctx context.Context) (int64, error)
 	// Job ids the user has already judged (saved or dismissed) — the swipe deck's
 	// exclusion set. Ordered most-recently-judged first and capped ($2) so the deck's
 	// `id NOT IN (...)` search filter stays bounded; the overflow risk is only an

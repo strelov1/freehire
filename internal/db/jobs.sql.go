@@ -88,19 +88,6 @@ func (q *Queries) CloseUnseenJobs(ctx context.Context, arg CloseUnseenJobsParams
 	return result.RowsAffected(), nil
 }
 
-const countJobs = `-- name: CountJobs :one
-SELECT count(*)
-FROM jobs
-WHERE closed_at IS NULL
-`
-
-func (q *Queries) CountJobs(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countJobs)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const enqueueJobEnrichment = `-- name: EnqueueJobEnrichment :execrows
 INSERT INTO enrichment_outbox (job_id, target_version)
 SELECT id, $1::int
@@ -126,6 +113,21 @@ func (q *Queries) EnqueueJobEnrichment(ctx context.Context, arg EnqueueJobEnrich
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const estimateOpenJobs = `-- name: EstimateOpenJobs :one
+SELECT estimate_open_jobs()::bigint
+`
+
+// Fast approximate open-job total for the DB-backed /jobs list's meta.total. An
+// exact count(*) over ~millions of open rows was a per-request full scan; the
+// planner's estimate (see estimate_open_jobs(), migration 0033) is O(1) and
+// tracks the closed_at IS NULL filter. The total is approximate by design.
+func (q *Queries) EstimateOpenJobs(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, estimateOpenJobs)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const getJob = `-- name: GetJob :one
