@@ -3,6 +3,7 @@
   import type { Company, Job } from '$lib/types';
   import JobsView from './JobsView.svelte';
   import CompanyLogo from './CompanyLogo.svelte';
+  import CompanyFollowButton from './CompanyFollowButton.svelte';
 
   // The company and its first page of search results are server-rendered (route
   // `load`), so the header and rows are in the initial HTML. The job list reuses
@@ -12,9 +13,12 @@
   let { company, initial, slug }: { company: Company; initial: Slice<Job>; slug: string } = $props();
 </script>
 
-<div class="flex items-center gap-3">
+<div class="flex flex-wrap items-center gap-3">
   <CompanyLogo name={company.name} size="size-8" />
   <h1 class="text-xl font-semibold tracking-tight">{company.name}</h1>
+  <div class="ml-auto">
+    <CompanyFollowButton {slug} companyName={company.name} />
+  </div>
 </div>
 
 <div class="mt-6">
