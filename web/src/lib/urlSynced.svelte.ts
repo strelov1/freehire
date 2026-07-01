@@ -51,7 +51,8 @@ export class UrlSyncedState<T> {
   constructor(initial: URLSearchParams, codec: UrlCodec<T>, debounceMs = 300) {
     this.#codec = codec;
     this.#debounceMs = debounceMs;
-    // Fields above are placeholders; the real seed lands before any consumer reads.
+    // The field initializers above are typed placeholders; both are seeded here
+    // from the URL params, which only arrive as a constructor argument.
     const seeded = codec.parse(initial);
     this.value = seeded;
     this.applied = seeded;
