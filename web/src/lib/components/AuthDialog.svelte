@@ -1,6 +1,8 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { goto } from '$app/navigation';
   import { login, register } from '$lib/auth.svelte';
+  import { authDialog } from '$lib/auth-dialog.svelte';
   import { ApiError, oauthProviders } from '$lib/api';
   import { Button } from '$lib/ui';
   import ProviderIcon from './ProviderIcon.svelte';
@@ -39,10 +41,12 @@
 
   const title = $derived(mode === 'login' ? 'Sign in' : 'Create account');
 
-  // OAuth leaves the SPA entirely, so the page to return to after sign-in is
-  // passed to the backend (which echoes it back, sanitized, on the callback).
-  // Password login stays in this dialog, so it needs no redirect.
-  const returnTo = $derived(page.url.pathname + page.url.search);
+  // Where to go after sign-in. When a guarded page bounced the user here to sign
+  // in (e.g. a shared /jobs/swipe?filter link), `redirectTo` is that deep link;
+  // otherwise stay on the current page (in-place prompts like a job's Save
+  // button). OAuth passes this to the backend, which echoes it back sanitized;
+  // password login navigates to it here after success.
+  const returnTo = $derived(authDialog.redirectTo ?? page.url.pathname + page.url.search);
 
   function messageFor(e: unknown): string {
     if (e instanceof ApiError) {
@@ -57,9 +61,15 @@
     e.preventDefault();
     error = null;
     submitting = true;
+    // Capture before onClose(), which clears the dialog's redirectTo.
+    const target = returnTo;
     try {
       await (mode === 'login' ? login : register)(email, password);
       onClose();
+      if (target !== page.url.pathname + page.url.search) {
+        // eslint-disable-next-line svelte/no-navigation-without-resolve -- a validated same-origin path from the guard, not a typed route
+        await goto(target);
+      }
     } catch (err) {
       error = messageFor(err);
     } finally {

@@ -41,6 +41,14 @@
   // ?auth_error: a failed OAuth callback. ?auth=required: a guarded page (e.g.
   // /my/jobs) bounced a signed-out visitor here to sign in. In onMount so it
   // never runs during SSR.
+  // Only accept a same-origin rooted path as the post-login redirect — never a
+  // scheme-relative "//host" or absolute URL — mirroring the backend's
+  // SafeReturnPath, so a crafted link can't bounce the user off-site.
+  function safeRedirect(raw: string | null): string | null {
+    if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return null;
+    return raw;
+  }
+
   onMount(() => {
     const params = page.url.searchParams;
     if (params.has('auth_error')) {
@@ -48,7 +56,9 @@
       openAuthDialog('login', 'Sign-in failed. Please try again.');
     } else if (params.get('auth') === 'required') {
       // Just a sign-in gate, not an error — open the dialog with no error banner.
-      openAuthDialog('login');
+      // ?redirect (set by a guarded page) is the deep link to return to after
+      // sign-in; stash it before the URL is cleaned below.
+      openAuthDialog('login', null, safeRedirect(params.get('redirect')));
     } else {
       return;
     }
