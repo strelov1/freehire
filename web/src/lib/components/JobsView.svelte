@@ -199,18 +199,19 @@
 </div>
 
 {#if standalone}
-  <!-- Swipe-mode entry: a tab pinned to the right viewport edge, showing only the
-       card-stack icon until hover/focus slides it out to reveal the label. Fixed,
-       so it only exists while the standalone jobs list is mounted (never on the
-       embedded company view). Kept below the z-40 mobile overlays. -->
+  <!-- Swipe-mode entry: an icon-only button pinned to the right viewport edge,
+       level with the top of the filters panel (header h-14 + page py-6 = top-20).
+       Fixed, so it only exists while the standalone jobs list is mounted (never on
+       the embedded company view) and stays reachable while scrolling; kept below
+       the z-40 mobile overlays. -->
   <button
     type="button"
     onclick={openSwipe}
     aria-label="Swipe mode"
-    class="fixed right-0 top-1/2 z-30 flex -translate-y-1/2 translate-x-[calc(100%-2.75rem)] items-center gap-2 rounded-l-lg border border-r-0 border-border bg-secondary py-3 pl-3 pr-4 text-sm font-medium text-secondary-foreground shadow-sm transition-transform hover:translate-x-0 hover:bg-accent focus-visible:translate-x-0"
+    title="Swipe mode"
+    class="fixed right-0 top-20 z-30 flex items-center rounded-l-lg border border-r-0 border-border bg-secondary p-3 text-secondary-foreground shadow-sm transition-colors hover:bg-accent"
   >
     <Layers class="h-5 w-5 shrink-0" />
-    <span class="whitespace-nowrap">Swipe</span>
   </button>
 {/if}
 
