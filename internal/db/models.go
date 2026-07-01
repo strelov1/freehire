@@ -81,6 +81,7 @@ type Job struct {
 	ExperienceYearsMin pgtype.Int4        `json:"experience_years_min"`
 	Collections        []string           `json:"collections"`
 	ContentHash        pgtype.Text        `json:"content_hash"`
+	EnglishLevel       string             `json:"english_level"`
 }
 
 type JobReport struct {

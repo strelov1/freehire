@@ -114,6 +114,7 @@ func backfillAll(ctx context.Context, store facetStore) (scanned, updated int, e
 				d.PostingLanguage == j.PostingLanguage &&
 				d.EmploymentType == j.EmploymentType &&
 				d.EducationLevel == j.EducationLevel &&
+				d.EnglishLevel == j.EnglishLevel &&
 				experience == j.ExperienceYearsMin
 			if unchanged {
 				continue
@@ -130,6 +131,7 @@ func backfillAll(ctx context.Context, store facetStore) (scanned, updated int, e
 				PostingLanguage:    d.PostingLanguage,
 				EmploymentType:     d.EmploymentType,
 				EducationLevel:     d.EducationLevel,
+				EnglishLevel:       d.EnglishLevel,
 				ExperienceYearsMin: experience,
 			}); err != nil {
 				return scanned, updated, err

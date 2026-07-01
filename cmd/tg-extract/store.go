@@ -116,6 +116,7 @@ func (s *extractStore) Complete(ctx context.Context, post telegram.PendingPost, 
 			PostingLanguage:    lang.Detect(descHTML),
 			EmploymentType:     jobfacts.EmploymentType(j.Title, descHTML),
 			EducationLevel:     jobfacts.EducationLevel(descHTML),
+			EnglishLevel:       jobfacts.EnglishLevel(descHTML),
 			ExperienceYearsMin: toInt4(jobfacts.ExperienceYearsMin(descHTML)),
 		})
 		if err != nil {
@@ -187,6 +188,7 @@ func (s *extractStore) CompleteLinks(
 			PostingLanguage:    lang.Detect(j.Description),
 			EmploymentType:     jobfacts.EmploymentType(j.Title, j.Description),
 			EducationLevel:     jobfacts.EducationLevel(j.Description),
+			EnglishLevel:       jobfacts.EnglishLevel(j.Description),
 			ExperienceYearsMin: toInt4(jobfacts.ExperienceYearsMin(j.Description)),
 		})
 		if err != nil {

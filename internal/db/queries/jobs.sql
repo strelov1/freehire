@@ -109,7 +109,7 @@ company_upsert AS (
 INSERT INTO jobs (
     source, external_id, url, title, company, company_slug, location, remote, description, posted_at,
     public_slug, countries, regions, work_mode, skills, seniority, category,
-    posting_language, employment_type, education_level, experience_years_min,
+    posting_language, employment_type, education_level, english_level, experience_years_min,
     content_hash
 ) VALUES (
     sqlc.arg(source), sqlc.arg(external_id), sqlc.arg(url), sqlc.arg(title),
@@ -118,7 +118,7 @@ INSERT INTO jobs (
     sqlc.arg(public_slug),
     COALESCE(sqlc.arg(countries)::text[], '{}'), COALESCE(sqlc.arg(regions)::text[], '{}'),
     sqlc.arg(work_mode), COALESCE(sqlc.arg(skills)::text[], '{}'), sqlc.arg(seniority), sqlc.arg(category),
-    sqlc.arg(posting_language), sqlc.arg(employment_type), sqlc.arg(education_level), sqlc.arg(experience_years_min),
+    sqlc.arg(posting_language), sqlc.arg(employment_type), sqlc.arg(education_level), sqlc.arg(english_level), sqlc.arg(experience_years_min),
     sqlc.arg(content_hash)
 )
 -- public_slug is deliberately NOT in the DO UPDATE SET: the slug is minted once
@@ -143,6 +143,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     posting_language     = EXCLUDED.posting_language,
     employment_type      = EXCLUDED.employment_type,
     education_level      = EXCLUDED.education_level,
+    english_level        = EXCLUDED.english_level,
     experience_years_min = EXCLUDED.experience_years_min,
     content_hash = EXCLUDED.content_hash,
     -- The crawl saw the posting: refresh liveness and reopen if it was closed. A
@@ -191,7 +192,7 @@ WITH company_upsert AS (
 INSERT INTO jobs (
     source, external_id, url, title, company, company_slug, location, remote, description, posted_at,
     public_slug, countries, regions, work_mode, skills, seniority, category,
-    posting_language, employment_type, education_level, experience_years_min,
+    posting_language, employment_type, education_level, english_level, experience_years_min,
     created_by
 ) VALUES (
     sqlc.arg(source), sqlc.arg(external_id), sqlc.arg(url), sqlc.arg(title),
@@ -201,7 +202,7 @@ INSERT INTO jobs (
     COALESCE(sqlc.arg(countries)::text[], '{}'), COALESCE(sqlc.arg(regions)::text[], '{}'),
     sqlc.arg(work_mode), COALESCE(sqlc.arg(skills)::text[], '{}'),
     sqlc.arg(seniority), sqlc.arg(category),
-    sqlc.arg(posting_language), sqlc.arg(employment_type), sqlc.arg(education_level), sqlc.arg(experience_years_min),
+    sqlc.arg(posting_language), sqlc.arg(employment_type), sqlc.arg(education_level), sqlc.arg(english_level), sqlc.arg(experience_years_min),
     sqlc.arg(created_by)::bigint
 )
 ON CONFLICT (source, external_id) DO UPDATE SET
@@ -222,6 +223,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     posting_language     = EXCLUDED.posting_language,
     employment_type      = EXCLUDED.employment_type,
     education_level      = EXCLUDED.education_level,
+    english_level        = EXCLUDED.english_level,
     experience_years_min = EXCLUDED.experience_years_min,
     updated_by   = sqlc.arg(updated_by)::bigint,
     -- A moderator re-create reopens the job; reset the strike count too so the
@@ -269,6 +271,7 @@ SET title        = sqlc.arg(title),
     posting_language     = sqlc.arg(posting_language),
     employment_type      = sqlc.arg(employment_type),
     education_level      = sqlc.arg(education_level),
+    english_level        = sqlc.arg(english_level),
     experience_years_min = sqlc.arg(experience_years_min),
     updated_by   = sqlc.arg(updated_by)::bigint,
     updated_at   = now()
@@ -385,7 +388,7 @@ WHERE id = sqlc.arg(id);
 -- One-off backfill (cmd/backfill-derive): rewrite every deterministic dictionary
 -- facet column — countries, regions, work_mode, skills, seniority, category, plus the
 -- synthetic enrichment facets posting_language, employment_type, education_level,
--- and experience_years_min — from the row's raw content
+-- english_level, and experience_years_min — from the row's raw content
 -- (title/location/description) in one
 -- pass, replacing the
 -- three separate per-facet backfill writes. The facets are a pure function of the
@@ -404,5 +407,6 @@ SET countries = COALESCE(sqlc.arg(countries)::text[], '{}'),
     posting_language     = sqlc.arg(posting_language),
     employment_type      = sqlc.arg(employment_type),
     education_level      = sqlc.arg(education_level),
+    english_level        = sqlc.arg(english_level),
     experience_years_min = sqlc.arg(experience_years_min)
 WHERE id = sqlc.arg(id);

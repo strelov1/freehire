@@ -75,6 +75,7 @@ func (s *dbStore) Save(ctx context.Context, job pipeline.Job) error {
 		PostingLanguage:    job.PostingLanguage,
 		EmploymentType:     job.EmploymentType,
 		EducationLevel:     job.EducationLevel,
+		EnglishLevel:       job.EnglishLevel,
 		ExperienceYearsMin: toInt4(job.ExperienceYearsMin),
 	}
 	// Fingerprint the indexed fields so the upsert can report whether this write

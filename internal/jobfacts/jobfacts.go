@@ -128,3 +128,150 @@ func ExperienceYearsMin(description string) *int {
 	}
 	return &best
 }
+
+// English-level detection. Precision-first like the matchers above: it resolves an
+// explicit CEFR code or a well-known level phrase (EN + RU, since the Telegram
+// sources are Russian-heavy) and emits "" when nothing is stated. Every signal must
+// sit near an English keyword, so a bare "B2"/"advanced"/"native" is not misread out
+// of context ("B2B SaaS", "advanced degree", "native macOS app"). Values are members
+// of enrich.EnglishLevelValues.
+var (
+	// reEnglishKw gates the whole parse and anchors every phrase: english_level is
+	// about English, so a description that never names it yields nothing.
+	reEnglishKw = regexp.MustCompile(`english|английск`)
+	// A CEFR code counts only adjacent (either order) to an English keyword.
+	reCEFRForward = regexp.MustCompile(`(?:english|английск\w*)[^.\n]{0,20}\b([abc][12])\b`)
+	reCEFRBack    = regexp.MustCompile(`\b([abc][12])\b[^.\n]{0,20}(?:english|английск\w*)`)
+
+	// Level phrases (checked for English proximity via near). The intermediate family
+	// carries its prefix so "upper-intermediate"→b2 and "pre-intermediate"→a2 resolve
+	// without a lookbehind (RE2 has none); the Russian "средн" family mirrors it.
+	reNative     = regexp.MustCompile(`\bnative\b|родн\w*`)
+	reFluentAdv  = regexp.MustCompile(`fluen\w*|\badvanced\b|свободн\w*|продвинут\w*`)
+	reInterFam   = regexp.MustCompile(`\b(upper[\s-]?|pre[\s-]?)?intermediate\b`)
+	reRuMidFam   = regexp.MustCompile(`(выше\s+)?средн\w*`)
+	reConversRu  = regexp.MustCompile(`разговорн\w*`)
+	reElementary = regexp.MustCompile(`\belementary\b|\bbeginner\b|начальн\w*`)
+	reBasic      = regexp.MustCompile(`\bbasic\b|базов\w*`)
+	reNoEnglish  = regexp.MustCompile(`no english|english (?:is )?not required|without english|без английск\w*`)
+)
+
+// englishRank orders the vocabulary lowest→highest so the minimum named level is
+// returned — the conservative floor, matching "minimum English level required".
+var englishRank = map[string]int{"a1": 1, "a2": 2, "b1": 3, "b2": 4, "c1": 5, "c2": 6, "native": 7}
+
+// englishWindow is the byte gap allowed between an English keyword and a level word
+// for the two to count as one signal. Sized for Russian (2 bytes/rune), so ~15 runes.
+const englishWindow = 30
+
+// EnglishLevel resolves the required English level from the description, returning
+// one of enrich.EnglishLevelValues or "" when nothing is stated. When several levels
+// are named it returns the lowest (the minimum requirement); an explicit "no English"
+// phrase resolves to "none" only when no positive level is present.
+func EnglishLevel(description string) string {
+	s := strings.ToLower(description)
+	if !reEnglishKw.MatchString(s) {
+		return ""
+	}
+
+	levels := map[string]bool{}
+	for _, m := range reCEFRForward.FindAllStringSubmatch(s, -1) {
+		levels[m[1]] = true
+	}
+	for _, m := range reCEFRBack.FindAllStringSubmatch(s, -1) {
+		levels[m[1]] = true
+	}
+	if near(s, reEnglishKw, reNative) {
+		levels["native"] = true
+	}
+	if near(s, reEnglishKw, reFluentAdv) {
+		levels["c1"] = true
+	}
+	if near(s, reEnglishKw, reConversRu) {
+		levels["b1"] = true
+	}
+	if near(s, reEnglishKw, reElementary) {
+		levels["a1"] = true
+	}
+	if near(s, reEnglishKw, reBasic) {
+		levels["a2"] = true
+	}
+	for _, m := range reInterFam.FindAllStringSubmatchIndex(s, -1) {
+		if !spanNearEnglish(s, m[0], m[1]) {
+			continue
+		}
+		switch {
+		case m[2] < 0: // no prefix group — plain "intermediate"
+			levels["b1"] = true
+		case strings.HasPrefix(s[m[2]:m[3]], "upper"):
+			levels["b2"] = true
+		case strings.HasPrefix(s[m[2]:m[3]], "pre"):
+			levels["a2"] = true
+		default:
+			levels["b1"] = true
+		}
+	}
+	for _, m := range reRuMidFam.FindAllStringSubmatchIndex(s, -1) {
+		if !spanNearEnglish(s, m[0], m[1]) {
+			continue
+		}
+		if m[2] >= 0 { // "выше средн..." — above intermediate
+			levels["b2"] = true
+		} else {
+			levels["b1"] = true
+		}
+	}
+
+	if len(levels) == 0 {
+		if reNoEnglish.MatchString(s) {
+			return "none"
+		}
+		return ""
+	}
+	best := ""
+	for lv := range levels {
+		if best == "" || englishRank[lv] < englishRank[best] {
+			best = lv
+		}
+	}
+	return best
+}
+
+// near reports whether any match of kw and any match of phrase in s lie within
+// englishWindow bytes of each other without a sentence boundary between them.
+func near(s string, kw, phrase *regexp.Regexp) bool {
+	kws := kw.FindAllStringIndex(s, -1)
+	for _, p := range phrase.FindAllStringIndex(s, -1) {
+		if spanNear(s, kws, p[0], p[1]) {
+			return true
+		}
+	}
+	return false
+}
+
+// spanNearEnglish reports whether the [start,end) span sits near an English keyword.
+func spanNearEnglish(s string, start, end int) bool {
+	return spanNear(s, reEnglishKw.FindAllStringIndex(s, -1), start, end)
+}
+
+// spanNear reports whether [start,end) is within englishWindow bytes of any span,
+// with no sentence boundary (. or newline) in the gap — so a level word and an
+// English keyword in different sentences ("native iOS apps. English docs") don't
+// bind. An overlap always counts.
+func spanNear(s string, spans [][]int, start, end int) bool {
+	for _, m := range spans {
+		var lo, hi int
+		switch {
+		case start >= m[1]:
+			lo, hi = m[1], start
+		case m[0] >= end:
+			lo, hi = end, m[0]
+		default:
+			return true // overlap
+		}
+		if hi-lo <= englishWindow && !strings.ContainsAny(s[lo:hi], ".\n") {
+			return true
+		}
+	}
+	return false
+}

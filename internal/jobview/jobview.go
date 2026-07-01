@@ -94,12 +94,13 @@ func FromRow(j db.Job) (Job, error) {
 	e.Seniority = j.Seniority
 	e.Category = j.Category
 	// The synthetic facets (posting_language/employment_type/education_level/
-	// experience_years_min) follow the same dict-only rule: the deterministic column
-	// value always wins (the LLM's stays raw in the JSONB), kept nested under
-	// enrichment so the wire shape is unchanged.
+	// english_level/experience_years_min) follow the same dict-only rule: the
+	// deterministic column value always wins (the LLM's stays raw in the JSONB), kept
+	// nested under enrichment so the wire shape is unchanged.
 	e.PostingLanguage = j.PostingLanguage
 	e.EmploymentType = j.EmploymentType
 	e.EducationLevel = j.EducationLevel
+	e.EnglishLevel = j.EnglishLevel
 	e.ExperienceYearsMin = int4ToPtr(j.ExperienceYearsMin)
 	skills := normalizeSet(j.Skills)
 	// Collections is denormalized from the company onto the job; it has no LLM

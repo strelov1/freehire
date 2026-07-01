@@ -434,7 +434,7 @@ type Querier interface {
 	// One-off backfill (cmd/backfill-derive): rewrite every deterministic dictionary
 	// facet column — countries, regions, work_mode, skills, seniority, category, plus the
 	// synthetic enrichment facets posting_language, employment_type, education_level,
-	// and experience_years_min — from the row's raw content
+	// english_level, and experience_years_min — from the row's raw content
 	// (title/location/description) in one
 	// pass, replacing the
 	// three separate per-facet backfill writes. The facets are a pure function of the

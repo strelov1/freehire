@@ -110,4 +110,50 @@ func TestValuesAreInVocabulary(t *testing.T) {
 			t.Errorf("education_level %q not in enrich.EducationLevelValues", v)
 		}
 	}
+	for _, v := range []string{"none", "a1", "a2", "b1", "b2", "c1", "native"} {
+		if !slices.Contains(enrich.EnglishLevelValues, v) {
+			t.Errorf("english_level %q not in enrich.EnglishLevelValues", v)
+		}
+	}
+}
+
+func TestEnglishLevel(t *testing.T) {
+	cases := []struct{ name, desc, want string }{
+		{"unstated", "Strong coding skills required.", ""},
+		{"english mentioned, no level", "You will write docs in English.", ""},
+		// CEFR codes, only in English context.
+		{"cefr b2", "English level B2 required.", "b2"},
+		{"cefr c1 code before english", "C1 English is a must.", "c1"},
+		{"cefr russian context", "Английский язык на уровне B2.", "b2"},
+		{"b2b is not b2", "We build B2B SaaS. English is used daily.", ""},
+		{"a1 out of context ignored", "Experience with the Audi A1 platform.", ""},
+		// Phrase levels (EN).
+		{"native", "Native English speaker required.", "native"},
+		{"fluent -> c1", "Fluent English is required.", "c1"},
+		{"advanced -> c1", "Advanced English, written and spoken.", "c1"},
+		{"upper-intermediate -> b2", "Upper-intermediate English or higher.", "b2"},
+		{"intermediate -> b1", "Intermediate English is enough.", "b1"},
+		{"pre-intermediate -> a2", "Pre-intermediate English acceptable.", "a2"},
+		{"elementary -> a1", "Elementary English is fine.", "a1"},
+		{"basic -> a2", "Basic English required.", "a2"},
+		{"advanced degree is not english", "An advanced degree in CS is required.", ""},
+		{"native app is not native english", "Build native iOS apps. English docs provided.", ""},
+		// Phrase levels (RU).
+		{"russian fluent -> c1", "Свободный английский обязателен.", "c1"},
+		{"russian conversational -> b1", "Нужен разговорный английский.", "b1"},
+		{"russian above-average -> b2", "Английский выше среднего.", "b2"},
+		{"russian average -> b1", "Английский на среднем уровне.", "b1"},
+		{"russian basic -> a2", "Базовый английский достаточно.", "a2"},
+		// Minimum-of-several and explicit none.
+		{"range takes the floor", "English from intermediate to advanced.", "b1"},
+		{"explicit no english -> none", "No English required for this role.", "none"},
+		{"positive beats no-english phrase", "B2 English; no advanced English needed.", "b2"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := EnglishLevel(c.desc); got != c.want {
+				t.Errorf("EnglishLevel(%q) = %q, want %q", c.desc, got, c.want)
+			}
+		})
+	}
 }

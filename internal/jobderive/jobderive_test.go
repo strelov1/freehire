@@ -49,7 +49,8 @@ func TestDerive_SyntheticFacets(t *testing.T) {
 		ExternalID: "1",
 		Description: "We are looking for a motivated engineer to join our backend team " +
 			"and build scalable services. A Bachelor's degree in Computer Science is " +
-			"required, along with at least 3 years of hands-on programming experience.",
+			"required, along with at least 3 years of hands-on programming experience. " +
+			"Fluent English is required.",
 	})
 	if got.PostingLanguage != "en" {
 		t.Errorf("PostingLanguage = %q, want en", got.PostingLanguage)
@@ -59,6 +60,9 @@ func TestDerive_SyntheticFacets(t *testing.T) {
 	}
 	if got.EducationLevel != "bachelor" {
 		t.Errorf("EducationLevel = %q, want bachelor", got.EducationLevel)
+	}
+	if got.EnglishLevel != "c1" {
+		t.Errorf("EnglishLevel = %q, want c1", got.EnglishLevel)
 	}
 	if got.ExperienceYearsMin == nil || *got.ExperienceYearsMin != 3 {
 		t.Errorf("ExperienceYearsMin = %v, want 3", got.ExperienceYearsMin)
@@ -75,9 +79,9 @@ func TestDerive_SyntheticFacetsSilent(t *testing.T) {
 		ExternalID:  "2",
 		Description: "Join us.",
 	})
-	if got.EmploymentType != "" || got.EducationLevel != "" || got.ExperienceYearsMin != nil {
-		t.Errorf("expected silent facets, got type=%q edu=%q exp=%v",
-			got.EmploymentType, got.EducationLevel, got.ExperienceYearsMin)
+	if got.EmploymentType != "" || got.EducationLevel != "" || got.EnglishLevel != "" || got.ExperienceYearsMin != nil {
+		t.Errorf("expected silent facets, got type=%q edu=%q eng=%q exp=%v",
+			got.EmploymentType, got.EducationLevel, got.EnglishLevel, got.ExperienceYearsMin)
 	}
 }
 

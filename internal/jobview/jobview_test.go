@@ -419,8 +419,8 @@ func TestFromRow_ClassificationIsDictOnly(t *testing.T) {
 }
 
 // The synthetic facets (posting_language/employment_type/education_level/
-// experience_years_min) are dict-only too: the column value wins over the LLM's,
-// and a silent column drops the LLM value rather than falling back to it.
+// english_level/experience_years_min) are dict-only too: the column value wins over
+// the LLM's, and a silent column drops the LLM value rather than falling back to it.
 func TestFromRow_SyntheticFacetsAreDictOnly(t *testing.T) {
 	exp := 8
 	// LLM present with different values; the columns must win (and the silent
@@ -429,6 +429,7 @@ func TestFromRow_SyntheticFacetsAreDictOnly(t *testing.T) {
 		PostingLanguage:    "fr",
 		EmploymentType:     "contract",
 		EducationLevel:     "phd",
+		EnglishLevel:       "b1",
 		ExperienceYearsMin: &exp,
 	})
 	if err != nil {
@@ -436,7 +437,7 @@ func TestFromRow_SyntheticFacetsAreDictOnly(t *testing.T) {
 	}
 	view, err := FromRow(db.Job{
 		ID: 1, Title: "x", PublicSlug: "x-1",
-		PostingLanguage: "en", EmploymentType: "internship", EducationLevel: "bachelor",
+		PostingLanguage: "en", EmploymentType: "internship", EducationLevel: "bachelor", EnglishLevel: "c1",
 		ExperienceYearsMin: pgtype.Int4{}, // silent column → served as nil, not the LLM's 8
 		Enrichment:         raw,
 	})
@@ -444,9 +445,9 @@ func TestFromRow_SyntheticFacetsAreDictOnly(t *testing.T) {
 		t.Fatalf("FromRow: %v", err)
 	}
 	if view.Enrichment.PostingLanguage != "en" || view.Enrichment.EmploymentType != "internship" ||
-		view.Enrichment.EducationLevel != "bachelor" {
-		t.Errorf("dict should win: got {%q,%q,%q}", view.Enrichment.PostingLanguage,
-			view.Enrichment.EmploymentType, view.Enrichment.EducationLevel)
+		view.Enrichment.EducationLevel != "bachelor" || view.Enrichment.EnglishLevel != "c1" {
+		t.Errorf("dict should win: got {%q,%q,%q,%q}", view.Enrichment.PostingLanguage,
+			view.Enrichment.EmploymentType, view.Enrichment.EducationLevel, view.Enrichment.EnglishLevel)
 	}
 	if view.Enrichment.ExperienceYearsMin != nil {
 		t.Errorf("silent experience column should drop the LLM value, got %v", *view.Enrichment.ExperienceYearsMin)

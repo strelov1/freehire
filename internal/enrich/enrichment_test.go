@@ -126,23 +126,23 @@ func TestValidateRejectsScalarEnum(t *testing.T) {
 }
 
 // When several SERVED enum fields are invalid, Validate reports the first one in
-// declaration order (relocation is checked before english_level).
+// declaration order (relocation is checked before company_size).
 func TestValidateReportsFirstOffender(t *testing.T) {
-	err := Enrichment{Relocation: "telepathic", EnglishLevel: "sr"}.Validate()
+	err := Enrichment{Relocation: "telepathic", CompanySize: "huge"}.Validate()
 	if err == nil {
 		t.Fatal("expected error")
 	}
 	if !strings.Contains(err.Error(), "relocation") {
 		t.Errorf("want first offender relocation, got: %v", err)
 	}
-	if strings.Contains(err.Error(), "english_level") {
+	if strings.Contains(err.Error(), "company_size") {
 		t.Errorf("should report only the first offender, got: %v", err)
 	}
 }
 
 // Relax: the dict-covered discovery facets are captured raw — an out-of-vocab
-// work_mode/seniority/category/employment_type/education_level and a non-vocab
-// regions element pass Validate (they are unserved, so they cannot corrupt
+// work_mode/seniority/category/employment_type/education_level/english_level and a
+// non-vocab regions element pass Validate (they are unserved, so they cannot corrupt
 // production data).
 func TestValidateAcceptsOutOfVocabDiscoveryFacets(t *testing.T) {
 	discovery := []Enrichment{
@@ -152,6 +152,7 @@ func TestValidateAcceptsOutOfVocabDiscoveryFacets(t *testing.T) {
 		{Regions: []string{"eu", "europe"}},
 		{EmploymentType: "freelance"},
 		{EducationLevel: "associate"},
+		{EnglishLevel: "toefl_110"},
 	}
 	for i, e := range discovery {
 		if err := e.Validate(); err != nil {
@@ -205,23 +206,24 @@ func TestGlobalReachDistinctFromUnknown(t *testing.T) {
 
 func TestSanitizeDropsOutOfVocabValues(t *testing.T) {
 	e := Enrichment{
-		Relocation:   "seasonal",                   // SERVED invalid scalar -> blanked
-		EnglishLevel: "b2",                         // SERVED valid -> kept
-		Domains:      []string{"fintech", "bogus"}, // SERVED multi -> keep only known
+		Relocation:  "seasonal",                   // SERVED invalid scalar -> blanked
+		CompanyType: "product",                    // SERVED valid -> kept
+		Domains:     []string{"fintech", "bogus"}, // SERVED multi -> keep only known
 		// Discovery facets are captured raw (unserved):
 		Category:       "astrology",      // kept
 		Seniority:      "staff_plus",     // kept
 		Regions:        []string{"nope"}, // kept
 		EmploymentType: "freelance",      // kept
 		EducationLevel: "associate",      // kept
+		EnglishLevel:   "toefl_110",      // kept
 	}
 	e.Sanitize()
 
 	if e.Relocation != "" {
 		t.Errorf("Relocation = %q, want blanked (served field)", e.Relocation)
 	}
-	if e.EnglishLevel != "b2" {
-		t.Errorf("EnglishLevel = %q, want kept", e.EnglishLevel)
+	if e.CompanyType != "product" {
+		t.Errorf("CompanyType = %q, want kept", e.CompanyType)
 	}
 	if len(e.Domains) != 1 || e.Domains[0] != "fintech" {
 		t.Errorf("Domains = %v, want [fintech] (served multi filtered)", e.Domains)
@@ -241,6 +243,9 @@ func TestSanitizeDropsOutOfVocabValues(t *testing.T) {
 	}
 	if e.EducationLevel != "associate" {
 		t.Errorf("EducationLevel = %q, want kept raw (discovery)", e.EducationLevel)
+	}
+	if e.EnglishLevel != "toefl_110" {
+		t.Errorf("EnglishLevel = %q, want kept raw (discovery)", e.EnglishLevel)
 	}
 	if err := e.Validate(); err != nil {
 		t.Errorf("Validate after Sanitize = %v, want nil", err)

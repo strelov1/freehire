@@ -162,6 +162,7 @@ func (s *Service) Create(ctx context.Context, actorID int64, in CreateInput) (db
 		PostingLanguage:    d.PostingLanguage,
 		EmploymentType:     d.EmploymentType,
 		EducationLevel:     d.EducationLevel,
+		EnglishLevel:       d.EnglishLevel,
 		ExperienceYearsMin: toInt4(d.ExperienceYearsMin),
 
 		CreatedBy: actorID,
@@ -228,6 +229,7 @@ func (s *Service) Update(ctx context.Context, actorID int64, slug string, p Upda
 		PostingLanguage:    d.PostingLanguage,
 		EmploymentType:     d.EmploymentType,
 		EducationLevel:     d.EducationLevel,
+		EnglishLevel:       d.EnglishLevel,
 		ExperienceYearsMin: toInt4(d.ExperienceYearsMin),
 
 		UpdatedBy: actorID,

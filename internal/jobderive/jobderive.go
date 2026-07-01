@@ -58,6 +58,7 @@ type Derived struct {
 	PostingLanguage    string
 	EmploymentType     string
 	EducationLevel     string
+	EnglishLevel       string
 	ExperienceYearsMin *int
 }
 
@@ -114,6 +115,7 @@ func Derive(in Input) Derived {
 		PostingLanguage:    lang.Detect(in.Description),
 		EmploymentType:     jobfacts.EmploymentType(in.Title, in.Description),
 		EducationLevel:     jobfacts.EducationLevel(in.Description),
+		EnglishLevel:       jobfacts.EnglishLevel(in.Description),
 		ExperienceYearsMin: experience,
 	}
 }
