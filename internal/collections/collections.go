@@ -95,10 +95,10 @@ var All = []Collection{
 		Dataset:     &Dataset{URL: fortune500DatasetURL, Parse: ParseCompanyCSV},
 	},
 	{
-		Slug:        "russian-roots",
-		Title:       "Russian Roots",
-		Description: "Open roles at globally distributed companies founded by Russian-speaking founders or with Russian-speaking engineering roots.",
-		Dataset:     &Dataset{Data: russianRootsData, Parse: ParseSlugList},
+		Slug:        "eastern-roots",
+		Title:       "Eastern Roots",
+		Description: "Open roles at globally distributed companies founded by Eastern European (incl. Russian-speaking) founders or with Eastern European engineering roots.",
+		Dataset:     &Dataset{Data: easternRootsData, Parse: ParseSlugList},
 	},
 }
 
@@ -184,16 +184,17 @@ var BigTechSlugs = []string{
 	"servicenow",
 }
 
-// russianRootsData is the embedded membership file for the russian-roots collection:
-// companies with Russian-speaking founding roots that operate internationally (a
-// hand-curated seed plus the larger eastern-roots company list). "Russian roots" is
-// a fact about the company, so all of its roles belong here. It is our own curated
-// fact, not a third-party feed, so it is committed to the repo and embedded rather
-// than fetched. One canonical company slug (normalize.Slug) per line; the list is
-// matched against the catalogue at import time and unmatched slugs are simply logged.
+// easternRootsData is the embedded membership file for the eastern-roots collection:
+// companies with Eastern European / Russian-speaking founding roots that operate
+// internationally (a hand-curated seed plus the larger eastern-roots company list).
+// "Eastern roots" is a fact about the company, so all of its roles belong here. It is
+// our own curated fact, not a third-party feed, so it is committed to the repo and
+// embedded rather than fetched. One canonical company slug (normalize.Slug) per line;
+// the list is matched against the catalogue at import time and unmatched slugs are
+// simply logged.
 //
-//go:embed russian_roots.txt
-var russianRootsData []byte
+//go:embed eastern_roots.txt
+var easternRootsData []byte
 
 // ParseSlugList parses a newline-delimited slug list (the embedded russian-roots
 // file): one entry per line, blank lines and #-comment lines skipped, surrounding
@@ -230,6 +231,13 @@ func Slugs() []string {
 	}
 	return out
 }
+
+// RetiredSlugs are collection slugs no longer in All but that may still be tagged on
+// companies from a past run — e.g. after a rename (russian-roots → eastern-roots).
+// import-collections adds them to the managed set so Reconcile strips them on the next
+// run (they have no wanted members), a self-healing cleanup that needs no manual SQL.
+// An entry is safe to drop once a production import has run and cleared the tag.
+var RetiredSlugs = []string{"russian-roots"}
 
 // Match maps each candidate (a company name or slug) to a canonical company slug
 // via normalize.Slug and splits the candidates into those whose slug is present in

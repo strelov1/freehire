@@ -94,9 +94,9 @@ export const COLLECTIONS: Collection[] = [
     description: 'Open roles at Fortune 500 companies — the largest US corporations by revenue.',
   },
   {
-    slug: 'russian-roots',
-    title: 'Russian Roots',
+    slug: 'eastern-roots',
+    title: 'Eastern Roots',
     description:
-      'Open roles at globally distributed companies founded by Russian-speaking founders or with Russian-speaking engineering roots.',
+      'Open roles at globally distributed companies founded by Eastern European (incl. Russian-speaking) founders or with Eastern European engineering roots.',
   },
 ];
