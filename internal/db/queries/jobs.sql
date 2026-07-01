@@ -155,9 +155,12 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     experience_years_min = EXCLUDED.experience_years_min,
     remote_unspecified   = EXCLUDED.remote_unspecified,
     content_hash = EXCLUDED.content_hash,
-    -- The crawl saw the posting: refresh liveness and reopen if it was closed.
+    -- The crawl saw the posting: refresh liveness and reopen if it was closed. A
+    -- reopen (the row was closed) resets the strike count so a single later expired
+    -- probe can't immediately re-close it — the two-strike grace survives a reopen.
     last_seen_at = now(),
     closed_at    = NULL,
+    liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE jobs.liveness_strikes END,
     updated_at   = now()
 RETURNING sqlc.embed(jobs),
     NOT COALESCE((SELECT existed FROM existing), false) AS inserted,
@@ -232,7 +235,10 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     experience_years_min = EXCLUDED.experience_years_min,
     remote_unspecified   = EXCLUDED.remote_unspecified,
     updated_by   = sqlc.arg(updated_by)::bigint,
+    -- A moderator re-create reopens the job; reset the strike count too so the
+    -- two-strike liveness grace survives a reopen (see UpsertJob).
     closed_at    = NULL,
+    liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE jobs.liveness_strikes END,
     updated_at   = now()
 RETURNING *;
 
