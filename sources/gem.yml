@@ -252,3 +252,9 @@
   board: wyzecam-com
 - company: zensors-com
   board: zensors-com
+- company: Littlebird
+  board: littlebird
+- company: Inception
+  board: inception
+- company: Afori
+  board: afori

@@ -14,3 +14,25 @@
   board: moonactive/A2.00C
 - company: Jazz
   board: jazz/6A.009
+- company: Backslash Security
+  board: backslash/98.004
+- company: Adaptive6
+  board: adaptive6/AA.000
+- company: SENAI
+  board: senai/CA.004
+- company: Cyera
+  board: cyera/17.008
+- company: Sett
+  board: sett/4A.00B
+- company: Notch
+  board: notch/CA.003
+- company: Aidoc
+  board: Aidoc/B4.007
+- company: Tenzai
+  board: tenzai/1B.002
+- company: OX Security
+  board: ox_security/f8.006
+- company: WINN.AI
+  board: winn_ai/4A.00F
+- company: DealHub.ai
+  board: dealhub/86.005
