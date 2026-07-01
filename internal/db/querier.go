@@ -6,6 +6,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
@@ -39,6 +41,10 @@ type Querier interface {
 	ClaimTelegramPosts(ctx context.Context, arg ClaimTelegramPostsParams) ([]ClaimTelegramPostsRow, error)
 	// Reset a tracked job to the wishlist: drop stage and applied state, keep saved/viewed/notes.
 	ClearJobProgress(ctx context.Context, arg ClearJobProgressParams) (UserJob, error)
+	// Unpublish a board: clear the slug and author label, owner-scoped. Returns the
+	// affected row count: 1 for an owned row (whether or not it was shared — unshare is an
+	// idempotent no-op when already private), 0 when missing or not the caller's (→ 404).
+	ClearSavedSearchPublicSlug(ctx context.Context, arg ClearSavedSearchPublicSlugParams) (int64, error)
 	// Soft-close one job now (see job-lifecycle): a moderator resolving a report with
 	// close_job=true. The third writer of closed_at, alongside the ingest sweep and the
 	// liveness probe. WHERE closed_at IS NULL keeps it idempotent — a second close on an
@@ -169,10 +175,19 @@ type Querier interface {
 	GetJobIDBySlug(ctx context.Context, publicSlug string) (int64, error)
 	// The display fields for the jobs in a digest, freshest first.
 	GetJobsForDigest(ctx context.Context, jobIds []int64) ([]GetJobsForDigestRow, error)
+	// Public read of a shared board by its slug — no auth, no owner-scoping. Exposes only
+	// the board's display fields; owner columns (user_id) are never selected. A NULL slug
+	// never equals the param, so private sets are unreachable. No row → 404.
+	GetPublicBoardBySlug(ctx context.Context, publicSlug pgtype.Text) (GetPublicBoardBySlugRow, error)
 	// Load a single report by id for the review path. The resolve/dismiss flow guards the
 	// status in the service; the Mark* queries are additionally scoped to status='pending' as
 	// defense-in-depth against a concurrent second decision.
 	GetReport(ctx context.Context, id int64) (JobReport, error)
+	// Fetch one of a user's saved searches, owner-scoped. Used by the share use case to
+	// read the current name/public_slug before deciding whether to keep an existing slug
+	// or mint a new one. No matching row (wrong id or another user's) returns no row (the
+	// service maps that to ErrNotFound).
+	GetSavedSearch(ctx context.Context, arg GetSavedSearchParams) (SavedSearch, error)
 	// Load a single submission by id for the review path. The approve/reject flow guards the
 	// status in the service; the Mark* queries are additionally scoped to status='pending' as
 	// defense-in-depth against a concurrent second decision.
@@ -366,6 +381,13 @@ type Querier interface {
 	// and the provenance stamp, touching no raw source field. Kept separate from
 	// UpsertJob (the ingest full-upsert path) so ingest and enrichment stay decoupled.
 	SetJobEnrichment(ctx context.Context, arg SetJobEnrichmentParams) error
+	// Publish a saved search as a board: set its public slug and (optional) author label,
+	// owner-scoped, bumping updated_at. The service decides the slug (keeping an existing
+	// one on re-share, minting a fresh one otherwise), so this sets it verbatim; a
+	// collision with another board's slug raises a UNIQUE violation the service retries.
+	// author_label is set verbatim (NULL clears it → anonymous). No matching owner-scoped
+	// row returns no row (→ ErrNotFound).
+	SetSavedSearchPublicSlug(ctx context.Context, arg SetSavedSearchPublicSlugParams) (SavedSearch, error)
 	// Pause/resume a subscription, scoped to its owner. No matching owner-scoped row
 	// returns no row (the handler maps that to 404).
 	SetSubscriptionActive(ctx context.Context, arg SetSubscriptionActiveParams) (Subscription, error)

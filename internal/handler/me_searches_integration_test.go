@@ -151,6 +151,132 @@ func TestSavedSearchesEndToEnd(t *testing.T) {
 	}
 }
 
+func TestSavedSearchBoardsEndToEnd(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+
+	var ownerID, otherID int64
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('boards@example.test') RETURNING id`).Scan(&ownerID); err != nil {
+		t.Fatalf("seed owner: %v", err)
+	}
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('other-boards@example.test') RETURNING id`).Scan(&otherID); err != nil {
+		t.Fatalf("seed other user: %v", err)
+	}
+
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	ownerCookie, _ := iss.Issue(ownerID)
+	otherCookie, _ := iss.Issue(otherID)
+	queries := db.New(pool)
+	h := &API{pool: pool, queries: queries, issuer: iss, savedSearch: savedsearch.New(savedsearch.NewQueriesRepository(queries))}
+
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	guard := auth.RequireAuth(iss)
+	app.Post("/api/v1/me/searches", guard, h.CreateSavedSearch)
+	app.Post("/api/v1/me/searches/:id/share", guard, h.ShareSavedSearch)
+	app.Delete("/api/v1/me/searches/:id/share", guard, h.UnshareSavedSearch)
+	app.Get("/api/v1/boards/:slug", h.GetBoard) // public, no guard
+
+	req := func(method, p, cookie, body string) *http.Request {
+		var r io.Reader
+		if body != "" {
+			r = bytes.NewBufferString(body)
+		}
+		rq := httptest.NewRequest(method, p, r)
+		if body != "" {
+			rq.Header.Set("Content-Type", "application/json")
+		}
+		if cookie != "" {
+			rq.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+		}
+		return rq
+	}
+	do := func(rq *http.Request) (*http.Response, map[string]any) {
+		res, err := app.Test(rq, -1)
+		if err != nil {
+			t.Fatalf("app.Test: %v", err)
+		}
+		var env map[string]any
+		b, _ := io.ReadAll(res.Body)
+		if len(b) > 0 {
+			_ = json.Unmarshal(b, &env)
+		}
+		return res, env
+	}
+
+	// Create a saved search to publish.
+	_, env := do(req(http.MethodPost, "/api/v1/me/searches", ownerCookie, `{"name":"Remote Go","query":"q=go&work_mode=remote"}`))
+	id := int64(env["data"].(map[string]any)["id"].(float64))
+	sharePath := fmt.Sprintf("/api/v1/me/searches/%d/share", id)
+
+	// Unauthenticated share → 401.
+	if res, _ := do(req(http.MethodPost, sharePath, "", "")); res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated share status = %d, want 401", res.StatusCode)
+	}
+
+	// Over-long author label → 400, nothing published.
+	longLabel := strings.Repeat("x", 61)
+	if res, _ := do(req(http.MethodPost, sharePath, ownerCookie, fmt.Sprintf(`{"author_label":%q}`, longLabel))); res.StatusCode != http.StatusBadRequest {
+		t.Errorf("over-long-label share status = %d, want 400", res.StatusCode)
+	}
+
+	// Cross-user share → 404.
+	if res, _ := do(req(http.MethodPost, sharePath, otherCookie, `{}`)); res.StatusCode != http.StatusNotFound {
+		t.Errorf("cross-user share status = %d, want 404", res.StatusCode)
+	}
+
+	// Owner shares with an author label → 200, gets a public slug.
+	res, env := do(req(http.MethodPost, sharePath, ownerCookie, `{"author_label":"strelov"}`))
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("share status = %d, want 200", res.StatusCode)
+	}
+	shared := env["data"].(map[string]any)
+	slug, _ := shared["public_slug"].(string)
+	if slug == "" || !strings.HasPrefix(slug, "remote-go-") {
+		t.Fatalf("public_slug = %q, want readable non-empty slug", slug)
+	}
+	if shared["author_label"] != "strelov" {
+		t.Errorf("author_label = %v, want %q", shared["author_label"], "strelov")
+	}
+
+	// Re-share keeps the same slug.
+	_, env = do(req(http.MethodPost, sharePath, ownerCookie, `{"author_label":"strelov"}`))
+	if env["data"].(map[string]any)["public_slug"] != slug {
+		t.Errorf("re-share slug = %v, want kept %q", env["data"].(map[string]any)["public_slug"], slug)
+	}
+
+	// Public read of the board → 200, only display fields, no owner identity.
+	boardPath := "/api/v1/boards/" + slug
+	res, env = do(req(http.MethodGet, boardPath, "", ""))
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("board read status = %d, want 200", res.StatusCode)
+	}
+	board := env["data"].(map[string]any)
+	if board["name"] != "Remote Go" || board["query"] != "q=go&work_mode=remote" || board["author_label"] != "strelov" {
+		t.Errorf("board body = %+v, want name/query/author carried", board)
+	}
+	for _, leaked := range []string{"user_id", "id", "email"} {
+		if _, ok := board[leaked]; ok {
+			t.Errorf("board response leaks owner field %q: %+v", leaked, board)
+		}
+	}
+
+	// Unshare → 204, then the board 404s.
+	if res, _ := do(req(http.MethodDelete, sharePath, ownerCookie, "")); res.StatusCode != http.StatusNoContent {
+		t.Errorf("unshare status = %d, want 204", res.StatusCode)
+	}
+	if res, _ := do(req(http.MethodGet, boardPath, "", "")); res.StatusCode != http.StatusNotFound {
+		t.Errorf("board read after unshare status = %d, want 404", res.StatusCode)
+	}
+	// Unshare again (already private) is an idempotent 204.
+	if res, _ := do(req(http.MethodDelete, sharePath, ownerCookie, "")); res.StatusCode != http.StatusNoContent {
+		t.Errorf("idempotent unshare status = %d, want 204", res.StatusCode)
+	}
+	// Unknown slug → 404.
+	if res, _ := do(req(http.MethodGet, "/api/v1/boards/does-not-exist", "", "")); res.StatusCode != http.StatusNotFound {
+		t.Errorf("unknown-slug status = %d, want 404", res.StatusCode)
+	}
+}
+
 func TestSavedSearchesCapEnforced(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()

@@ -118,12 +118,14 @@ type JobSubmission struct {
 }
 
 type SavedSearch struct {
-	ID        int64              `json:"id"`
-	UserID    int64              `json:"user_id"`
-	Name      string             `json:"name"`
-	Query     string             `json:"query"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID          int64              `json:"id"`
+	UserID      int64              `json:"user_id"`
+	Name        string             `json:"name"`
+	Query       string             `json:"query"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	PublicSlug  pgtype.Text        `json:"public_slug"`
+	AuthorLabel pgtype.Text        `json:"author_label"`
 }
 
 type SearchProfile struct {

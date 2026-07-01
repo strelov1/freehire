@@ -190,6 +190,10 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/companies", a.ListCompanies)
 	api.Get("/companies/:slug", a.GetCompany)
 
+	// Public read of a shared saved-search "board" by its slug — unauthenticated, like
+	// the job/company reads above. Owner identity is never exposed (see boardResponse).
+	api.Get("/boards/:slug", a.GetBoard)
+
 	// Per-user job interactions and the user-scoped reads accept either the
 	// session cookie or an API key (RequireAuthOrKey), so a script holding a key
 	// can drive the same flow as the browser. The public job reads above stay
@@ -256,6 +260,10 @@ func Register(app *fiber.App, cfg Config) {
 	api.Post("/me/searches", saved, a.CreateSavedSearch)
 	api.Patch("/me/searches/:id", saved, a.UpdateSavedSearch)
 	api.Delete("/me/searches/:id", saved, a.DeleteSavedSearch)
+	// Publish/unpublish a saved search as a public board. Cookie-only (same as the rest
+	// of /me/searches); the public read is GET /boards/:slug above.
+	api.Post("/me/searches/:id/share", saved, a.ShareSavedSearch)
+	api.Delete("/me/searches/:id/share", saved, a.UnshareSavedSearch)
 
 	// Search profiles are cookie-only (RequireAuth) like saved searches: a browser
 	// feature (the profile picker), owner-scoped (a non-owned id is a 404).

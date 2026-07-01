@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
 )
@@ -76,6 +77,62 @@ func (r *QueriesRepository) Delete(ctx context.Context, p db.DeleteSavedSearchPa
 		return ErrNotFound
 	}
 	return nil
+}
+
+// Get reads one of a user's saved searches, owner-scoped, mapping "no row" (missing or
+// another user's) to ErrNotFound.
+func (r *QueriesRepository) Get(ctx context.Context, p db.GetSavedSearchParams) (db.SavedSearch, error) {
+	row, err := r.q.GetSavedSearch(ctx, p)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return db.SavedSearch{}, ErrNotFound
+	}
+	if err != nil {
+		return db.SavedSearch{}, err
+	}
+	return row, nil
+}
+
+// SetPublicSlug publishes a board scoped to its owner, mapping a slug UNIQUE collision to
+// ErrSlugTaken (retried by the service) and "no row" (missing or non-owned) to ErrNotFound.
+func (r *QueriesRepository) SetPublicSlug(ctx context.Context, p db.SetSavedSearchPublicSlugParams) (db.SavedSearch, error) {
+	row, err := r.q.SetSavedSearchPublicSlug(ctx, p)
+	if isUniqueViolation(err) {
+		return db.SavedSearch{}, ErrSlugTaken
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return db.SavedSearch{}, ErrNotFound
+	}
+	if err != nil {
+		return db.SavedSearch{}, err
+	}
+	return row, nil
+}
+
+// ClearPublicSlug unpublishes a board scoped to its owner, mapping "no row affected"
+// (missing or non-owned) to ErrNotFound. Clearing an already-private owned row still
+// matches (row count 1), so unshare is an idempotent no-op.
+func (r *QueriesRepository) ClearPublicSlug(ctx context.Context, p db.ClearSavedSearchPublicSlugParams) error {
+	affected, err := r.q.ClearSavedSearchPublicSlug(ctx, p)
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// GetPublicBoard reads a shared board by slug (no auth, no owner-scoping), mapping "no row"
+// (unknown or unshared slug) to ErrNotFound.
+func (r *QueriesRepository) GetPublicBoard(ctx context.Context, slug string) (db.GetPublicBoardBySlugRow, error) {
+	row, err := r.q.GetPublicBoardBySlug(ctx, pgtype.Text{String: slug, Valid: true})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return db.GetPublicBoardBySlugRow{}, ErrNotFound
+	}
+	if err != nil {
+		return db.GetPublicBoardBySlugRow{}, err
+	}
+	return row, nil
 }
 
 // isUniqueViolation reports whether err is a Postgres unique-constraint violation (23505).

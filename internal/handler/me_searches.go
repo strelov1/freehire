@@ -14,21 +14,27 @@ import (
 // (ownership, internal); query is the canonical search query string the SPA replays
 // into the filter URL.
 type savedSearchResponse struct {
-	ID        int64      `json:"id"`
-	Name      string     `json:"name"`
-	Query     string     `json:"query"`
-	CreatedAt *time.Time `json:"created_at"`
-	UpdatedAt *time.Time `json:"updated_at"`
+	ID          int64      `json:"id"`
+	Name        string     `json:"name"`
+	Query       string     `json:"query"`
+	PublicSlug  string     `json:"public_slug"`  // empty when the set is private (not shared)
+	AuthorLabel string     `json:"author_label"` // empty when the board is anonymous
+	CreatedAt   *time.Time `json:"created_at"`
+	UpdatedAt   *time.Time `json:"updated_at"`
 }
 
 // toSavedSearchResponse maps a stored saved search to its wire shape (no user id).
+// PublicSlug/AuthorLabel are empty strings when their columns are NULL (private /
+// anonymous), since pgtype.Text zero-values its String to "".
 func toSavedSearchResponse(s db.SavedSearch) savedSearchResponse {
 	return savedSearchResponse{
-		ID:        s.ID,
-		Name:      s.Name,
-		Query:     s.Query,
-		CreatedAt: timePtr(s.CreatedAt),
-		UpdatedAt: timePtr(s.UpdatedAt),
+		ID:          s.ID,
+		Name:        s.Name,
+		Query:       s.Query,
+		PublicSlug:  s.PublicSlug.String,
+		AuthorLabel: s.AuthorLabel.String,
+		CreatedAt:   timePtr(s.CreatedAt),
+		UpdatedAt:   timePtr(s.UpdatedAt),
 	}
 }
 
@@ -45,6 +51,8 @@ func savedSearchError(err error) error {
 		return fiber.NewError(fiber.StatusConflict, "saved-search limit reached")
 	case errors.Is(err, savedsearch.ErrNotFound):
 		return fiber.NewError(fiber.StatusNotFound, "saved search not found")
+	case errors.Is(err, savedsearch.ErrInvalidAuthorLabel):
+		return fiber.NewError(fiber.StatusBadRequest, "author label must be at most 60 characters")
 	default:
 		return err
 	}
@@ -142,6 +150,57 @@ func (a *API) DeleteSavedSearch(c *fiber.Ctx) error {
 	}
 
 	if err := a.savedSearch.Delete(c.Context(), userID, id); err != nil {
+		return savedSearchError(err)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// shareSavedSearchRequest is the share body: an optional author label shown on the public
+// board (blank/omitted renders the board anonymously).
+type shareSavedSearchRequest struct {
+	AuthorLabel string `json:"author_label"`
+}
+
+// ShareSavedSearch publishes one of the authenticated user's saved searches as a public
+// board, minting (or keeping) its slug and setting the optional author label. Owner-scoped
+// and cookie-only: a missing/non-owned id is a 404, an over-long label is a 400. Returns the
+// updated saved search (now carrying public_slug).
+func (a *API) ShareSavedSearch(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	id, err := pathID(c)
+	if err != nil {
+		return err
+	}
+
+	var in shareSavedSearchRequest
+	if err := c.BodyParser(&in); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+
+	saved, err := a.savedSearch.Share(c.Context(), userID, id, in.AuthorLabel)
+	if err != nil {
+		return savedSearchError(err)
+	}
+	return c.JSON(fiber.Map{"data": toSavedSearchResponse(saved)})
+}
+
+// UnshareSavedSearch makes one of the authenticated user's shared boards private again.
+// Owner-scoped and cookie-only; idempotent (already-private is a no-op), a missing/non-owned
+// id is a 404.
+func (a *API) UnshareSavedSearch(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	id, err := pathID(c)
+	if err != nil {
+		return err
+	}
+
+	if err := a.savedSearch.Unshare(c.Context(), userID, id); err != nil {
 		return savedSearchError(err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)

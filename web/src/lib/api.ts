@@ -24,6 +24,7 @@ import type {
   ApiKey,
   CreatedApiKey,
   SavedSearch,
+  Board,
   SearchProfile,
   Subscription,
   TelegramStatus,
@@ -406,6 +407,30 @@ export function createApi(
     await call(`/api/v1/me/searches/${id}`, { method: 'DELETE' });
   }
 
+  /** Publish a saved search as a public board (cookie-only). Returns the updated set,
+   *  now carrying `public_slug`. An optional `authorLabel` is shown on the board; blank
+   *  renders it anonymously. Re-sharing keeps the existing slug. */
+  async function shareSavedSearch(id: number, authorLabel = ''): Promise<SavedSearch> {
+    const res = await request<{ data: SavedSearch }>(`/api/v1/me/searches/${id}/share`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ author_label: authorLabel }),
+    });
+    return res.data;
+  }
+
+  /** Make a shared board private again (cookie-only). Idempotent. */
+  async function unshareSavedSearch(id: number): Promise<void> {
+    await call(`/api/v1/me/searches/${id}/share`, { method: 'DELETE' });
+  }
+
+  /** Public read of a shared board by slug — unauthenticated. Returns only display
+   *  fields (name, query, author_label). An unknown/unshared slug throws (404). */
+  async function getBoard(slug: string): Promise<Board> {
+    const res = await request<{ data: Board }>(`/api/v1/boards/${encodeURIComponent(slug)}`);
+    return res.data;
+  }
+
   // Search profiles: named specialization + skills sets (cookie-only on the server).
 
   /** The current user's search profiles, most recently updated first. */
@@ -606,6 +631,9 @@ export function createApi(
     createSavedSearch,
     updateSavedSearch,
     deleteSavedSearch,
+    shareSavedSearch,
+    unshareSavedSearch,
+    getBoard,
     listSearchProfiles,
     createSearchProfile,
     updateSearchProfile,
@@ -672,6 +700,9 @@ export const {
   createSavedSearch,
   updateSavedSearch,
   deleteSavedSearch,
+  shareSavedSearch,
+  unshareSavedSearch,
+  getBoard,
   listSearchProfiles,
   createSearchProfile,
   updateSearchProfile,

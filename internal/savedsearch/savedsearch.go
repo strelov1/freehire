@@ -27,6 +27,11 @@ var (
 	ErrCapExceeded = errors.New("savedsearch: saved-search limit reached")
 	// ErrNotFound is a missing or non-owned target (mapped to 404).
 	ErrNotFound = errors.New("savedsearch: not found")
+	// ErrInvalidAuthorLabel is an over-long board author label (mapped to 400).
+	ErrInvalidAuthorLabel = errors.New("savedsearch: author label must be at most 60 characters")
+	// ErrSlugTaken is a public-slug UNIQUE collision on share. It is an internal retry
+	// signal (Share regenerates the suffix and tries again), not a client-facing status.
+	ErrSlugTaken = errors.New("savedsearch: public slug already taken")
 )
 
 const (
@@ -34,6 +39,8 @@ const (
 	maxNameLen = 100
 	// maxPerUser caps how many saved searches a single user may keep.
 	maxPerUser = 50
+	// maxAuthorLabelLen bounds a board's optional author label.
+	maxAuthorLabelLen = 60
 )
 
 // Repository is the persistence contract for saved searches. Every method is
@@ -46,6 +53,15 @@ type Repository interface {
 	Create(ctx context.Context, p db.CreateSavedSearchParams) (db.SavedSearch, error)
 	Update(ctx context.Context, p db.UpdateSavedSearchParams) (db.SavedSearch, error)
 	Delete(ctx context.Context, p db.DeleteSavedSearchParams) error
+	// Get reads one of a user's saved searches, owner-scoped; no row → ErrNotFound.
+	Get(ctx context.Context, p db.GetSavedSearchParams) (db.SavedSearch, error)
+	// SetPublicSlug publishes a board (owner-scoped); a slug UNIQUE collision →
+	// ErrSlugTaken (the service retries), no owner-scoped row → ErrNotFound.
+	SetPublicSlug(ctx context.Context, p db.SetSavedSearchPublicSlugParams) (db.SavedSearch, error)
+	// ClearPublicSlug unpublishes a board (owner-scoped); no owner-scoped row → ErrNotFound.
+	ClearPublicSlug(ctx context.Context, p db.ClearSavedSearchPublicSlugParams) error
+	// GetPublicBoard reads a shared board by slug (no auth, no owner-scoping); no row → ErrNotFound.
+	GetPublicBoard(ctx context.Context, slug string) (db.GetPublicBoardBySlugRow, error)
 }
 
 // Service implements the saved-search use cases.

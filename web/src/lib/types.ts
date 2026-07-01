@@ -192,8 +192,22 @@ export interface SavedSearch {
   id: number;
   name: string;
   query: string;
+  /** Public board slug when the set is shared, or "" when private. Shared boards are
+   *  readable by anyone at /b/<public_slug>. */
+  public_slug: string;
+  /** Optional attribution shown on the public board; "" renders the board anonymously. */
+  author_label: string;
   created_at: string | null;
   updated_at: string | null;
+}
+
+/** A public "board": a shared saved search readable by anyone at /b/<slug>. Carries only
+ *  display fields — no owner identity. `query` is the canonical search query string, applied
+ *  to the jobs list to render the board's results. `author_label` is "" when anonymous. */
+export interface Board {
+  name: string;
+  query: string;
+  author_label: string;
 }
 
 /** A user's search profile: a named professional self — a non-empty set of

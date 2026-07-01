@@ -11,6 +11,28 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearSavedSearchPublicSlug = `-- name: ClearSavedSearchPublicSlug :execrows
+UPDATE saved_searches
+SET public_slug = NULL, author_label = NULL, updated_at = now()
+WHERE id = $1 AND user_id = $2
+`
+
+type ClearSavedSearchPublicSlugParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+// Unpublish a board: clear the slug and author label, owner-scoped. Returns the
+// affected row count: 1 for an owned row (whether or not it was shared — unshare is an
+// idempotent no-op when already private), 0 when missing or not the caller's (→ 404).
+func (q *Queries) ClearSavedSearchPublicSlug(ctx context.Context, arg ClearSavedSearchPublicSlugParams) (int64, error) {
+	result, err := q.db.Exec(ctx, clearSavedSearchPublicSlug, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const countSavedSearches = `-- name: CountSavedSearches :one
 SELECT count(*) FROM saved_searches
 WHERE user_id = $1
@@ -28,7 +50,7 @@ func (q *Queries) CountSavedSearches(ctx context.Context, userID int64) (int64, 
 const createSavedSearch = `-- name: CreateSavedSearch :one
 INSERT INTO saved_searches (user_id, name, query)
 VALUES ($1, $2, $3)
-RETURNING id, user_id, name, query, created_at, updated_at
+RETURNING id, user_id, name, query, created_at, updated_at, public_slug, author_label
 `
 
 type CreateSavedSearchParams struct {
@@ -49,6 +71,8 @@ func (q *Queries) CreateSavedSearch(ctx context.Context, arg CreateSavedSearchPa
 		&i.Query,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PublicSlug,
+		&i.AuthorLabel,
 	)
 	return i, err
 }
@@ -74,8 +98,60 @@ func (q *Queries) DeleteSavedSearch(ctx context.Context, arg DeleteSavedSearchPa
 	return result.RowsAffected(), nil
 }
 
+const getPublicBoardBySlug = `-- name: GetPublicBoardBySlug :one
+SELECT name, query, author_label
+FROM saved_searches
+WHERE public_slug = $1
+`
+
+type GetPublicBoardBySlugRow struct {
+	Name        string      `json:"name"`
+	Query       string      `json:"query"`
+	AuthorLabel pgtype.Text `json:"author_label"`
+}
+
+// Public read of a shared board by its slug — no auth, no owner-scoping. Exposes only
+// the board's display fields; owner columns (user_id) are never selected. A NULL slug
+// never equals the param, so private sets are unreachable. No row → 404.
+func (q *Queries) GetPublicBoardBySlug(ctx context.Context, publicSlug pgtype.Text) (GetPublicBoardBySlugRow, error) {
+	row := q.db.QueryRow(ctx, getPublicBoardBySlug, publicSlug)
+	var i GetPublicBoardBySlugRow
+	err := row.Scan(&i.Name, &i.Query, &i.AuthorLabel)
+	return i, err
+}
+
+const getSavedSearch = `-- name: GetSavedSearch :one
+SELECT id, user_id, name, query, created_at, updated_at, public_slug, author_label FROM saved_searches
+WHERE id = $1 AND user_id = $2
+`
+
+type GetSavedSearchParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+// Fetch one of a user's saved searches, owner-scoped. Used by the share use case to
+// read the current name/public_slug before deciding whether to keep an existing slug
+// or mint a new one. No matching row (wrong id or another user's) returns no row (the
+// service maps that to ErrNotFound).
+func (q *Queries) GetSavedSearch(ctx context.Context, arg GetSavedSearchParams) (SavedSearch, error) {
+	row := q.db.QueryRow(ctx, getSavedSearch, arg.ID, arg.UserID)
+	var i SavedSearch
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.Query,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PublicSlug,
+		&i.AuthorLabel,
+	)
+	return i, err
+}
+
 const listSavedSearches = `-- name: ListSavedSearches :many
-SELECT id, user_id, name, query, created_at, updated_at FROM saved_searches
+SELECT id, user_id, name, query, created_at, updated_at, public_slug, author_label FROM saved_searches
 WHERE user_id = $1
 ORDER BY updated_at DESC
 `
@@ -97,6 +173,8 @@ func (q *Queries) ListSavedSearches(ctx context.Context, userID int64) ([]SavedS
 			&i.Query,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PublicSlug,
+			&i.AuthorLabel,
 		); err != nil {
 			return nil, err
 		}
@@ -108,13 +186,56 @@ func (q *Queries) ListSavedSearches(ctx context.Context, userID int64) ([]SavedS
 	return items, nil
 }
 
+const setSavedSearchPublicSlug = `-- name: SetSavedSearchPublicSlug :one
+UPDATE saved_searches
+SET public_slug  = $1,
+    author_label = $2,
+    updated_at   = now()
+WHERE id = $3 AND user_id = $4
+RETURNING id, user_id, name, query, created_at, updated_at, public_slug, author_label
+`
+
+type SetSavedSearchPublicSlugParams struct {
+	PublicSlug  pgtype.Text `json:"public_slug"`
+	AuthorLabel pgtype.Text `json:"author_label"`
+	ID          int64       `json:"id"`
+	UserID      int64       `json:"user_id"`
+}
+
+// Publish a saved search as a board: set its public slug and (optional) author label,
+// owner-scoped, bumping updated_at. The service decides the slug (keeping an existing
+// one on re-share, minting a fresh one otherwise), so this sets it verbatim; a
+// collision with another board's slug raises a UNIQUE violation the service retries.
+// author_label is set verbatim (NULL clears it → anonymous). No matching owner-scoped
+// row returns no row (→ ErrNotFound).
+func (q *Queries) SetSavedSearchPublicSlug(ctx context.Context, arg SetSavedSearchPublicSlugParams) (SavedSearch, error) {
+	row := q.db.QueryRow(ctx, setSavedSearchPublicSlug,
+		arg.PublicSlug,
+		arg.AuthorLabel,
+		arg.ID,
+		arg.UserID,
+	)
+	var i SavedSearch
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.Query,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PublicSlug,
+		&i.AuthorLabel,
+	)
+	return i, err
+}
+
 const updateSavedSearch = `-- name: UpdateSavedSearch :one
 UPDATE saved_searches
 SET name       = COALESCE($1, name),
     query      = COALESCE($2, query),
     updated_at = now()
 WHERE id = $3 AND user_id = $4
-RETURNING id, user_id, name, query, created_at, updated_at
+RETURNING id, user_id, name, query, created_at, updated_at, public_slug, author_label
 `
 
 type UpdateSavedSearchParams struct {
@@ -144,6 +265,8 @@ func (q *Queries) UpdateSavedSearch(ctx context.Context, arg UpdateSavedSearchPa
 		&i.Query,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PublicSlug,
+		&i.AuthorLabel,
 	)
 	return i, err
 }

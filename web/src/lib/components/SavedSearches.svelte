@@ -168,6 +168,50 @@
     }
   }
 
+  // Share/unshare the currently-selected set as a public board. The panel keeps this
+  // lightweight (shares anonymously); the author label is set from the Saved searches
+  // account page (/my/searches).
+  const activeSet = $derived(activeId != null ? (items.find((s) => s.id === activeId) ?? null) : null);
+  let shareBusy = $state(false);
+  let copied = $state(false);
+
+  async function shareActive() {
+    if (!activeSet || shareBusy) return;
+    shareBusy = true;
+    error = null;
+    try {
+      await savedSearches.share(activeSet.id);
+    } catch (e) {
+      error = e instanceof ApiError ? e.message : 'Could not share. Please try again.';
+    } finally {
+      shareBusy = false;
+    }
+  }
+
+  async function unshareActive() {
+    if (!activeSet || shareBusy) return;
+    shareBusy = true;
+    error = null;
+    try {
+      await savedSearches.unshare(activeSet.id);
+    } catch {
+      error = 'Could not unshare. Please try again.';
+    } finally {
+      shareBusy = false;
+    }
+  }
+
+  async function copyBoardLink() {
+    if (!activeSet?.public_slug) return;
+    try {
+      await navigator.clipboard.writeText(`${location.origin}/b/${activeSet.public_slug}`);
+      copied = true;
+      setTimeout(() => (copied = false), 1500);
+    } catch {
+      error = 'Could not copy the link.';
+    }
+  }
+
   const selectClass =
     'h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 dark:bg-input/30';
 </script>
@@ -217,6 +261,30 @@
         <Button variant="secondary" size="sm" onclick={startSave} disabled={busy}>Save as new</Button>
         {#if activeId != null}
           <Button variant="ghost" size="sm" onclick={remove} disabled={busy}>Delete</Button>
+        {/if}
+      </div>
+    {/if}
+
+    <!-- Share the selected set as a public board (link-shareable). -->
+    {#if activeSet && !naming}
+      <div class="flex flex-wrap items-center gap-2">
+        {#if activeSet.public_slug}
+          <a
+            href={`/b/${activeSet.public_slug}`}
+            class="min-w-0 truncate text-xs text-primary underline-offset-4 hover:underline"
+          >
+            /b/{activeSet.public_slug}
+          </a>
+          <Button variant="ghost" size="sm" onclick={copyBoardLink}>
+            {copied ? 'Copied' : 'Copy link'}
+          </Button>
+          <Button variant="ghost" size="sm" onclick={unshareActive} disabled={shareBusy}>
+            Unshare
+          </Button>
+        {:else}
+          <Button variant="secondary" size="sm" onclick={shareActive} disabled={shareBusy}>
+            {shareBusy ? 'Sharing…' : 'Share as board'}
+          </Button>
         {/if}
       </div>
     {/if}
