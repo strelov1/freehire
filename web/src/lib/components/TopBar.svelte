@@ -3,35 +3,14 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { replaceState } from '$app/navigation';
-  import { Menu, X } from '@lucide/svelte';
-  import { isAuthenticated } from '$lib/auth.svelte';
   import { authDialog, openAuthDialog, closeAuthDialog } from '$lib/auth-dialog.svelte';
-  import { cn } from '$lib/utils';
-  import { Button } from '$lib/ui';
-  import ThemeToggle from './ThemeToggle.svelte';
   import AuthDialog from './AuthDialog.svelte';
-  import UserMenu from './UserMenu.svelte';
+  import HeaderSearch from './HeaderSearch.svelte';
+  import HeaderMenu from './HeaderMenu.svelte';
 
-  const path = $derived(page.url.pathname);
-
-  // The nav links collapse behind a hamburger below the `sm` breakpoint, where
-  // the inline links would overflow the bar. The panel closes on link tap,
-  // Escape, and whenever the route changes.
-  let mobileOpen = $state(false);
-
-  const links = [
-    { href: '/jobs', label: 'Jobs' },
-    { href: '/companies', label: 'Companies' },
-    { href: '/collections', label: 'Collections' },
-    { href: '/analytics', label: 'Analytics' },
-    { href: '/cli', label: 'CLI' },
-    { href: '/recruiters', label: 'For recruiters' },
-    { href: '/for-companies', label: 'For companies' },
-  ] as const;
-
-  // A link is active for its own path and any sub-route (e.g. /jobs and
-  // /jobs/:slug). Order-independent: /companies never matches /jobs.
-  const isActive = (href: string) => path === href || path.startsWith(`${href}/`);
+  // The header is three slots — logo | search | menu — identical on every
+  // viewport. Nav links, the account items, the theme toggle, and the auth
+  // action all live in HeaderMenu; instant search lives in HeaderSearch.
 
   // The auth dialog lives at the layout level but its open state is a shared
   // singleton (see auth-dialog.svelte), so deep components — like a job's Save
@@ -57,11 +36,12 @@
   });
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && (mobileOpen = false)} />
-
 <header class="border-b border-border">
-  <div class="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:gap-6">
-    <a href={resolve('/')} class="flex items-center gap-2 text-sm font-semibold tracking-tight">
+  <div class="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:gap-4">
+    <a
+      href={resolve('/')}
+      class="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-tight"
+    >
       <!-- The mark inherits text colour via currentColor, so it tracks the theme
            (light/dark) exactly like the wordmark beside it. aria-hidden: the
            "FreeHire" text already names the link. -->
@@ -78,66 +58,13 @@
           d="M256 56C366.457 56 456 145.543 456 256C456 366.457 366.457 456 256 456C145.543 456 56 366.457 56 256C56 145.543 145.543 56 256 56ZM256 166L346 256L256 346L166 256L256 166Z"
         />
       </svg>
-      FreeHire
+      <span class="hidden sm:inline">FreeHire</span>
     </a>
 
-    <!-- Desktop nav: inline links from `sm` up. -->
-    <nav class="hidden items-center gap-4 text-sm sm:flex">
-      {#each links as link (link.href)}
-        <a
-          href={resolve(link.href)}
-          class={cn(
-            'whitespace-nowrap transition-colors hover:text-foreground',
-            isActive(link.href) ? 'text-foreground' : 'text-muted-foreground',
-          )}
-        >
-          {link.label}
-        </a>
-      {/each}
-    </nav>
+    <HeaderSearch />
 
-    <div class="ml-auto flex items-center gap-2 sm:gap-3">
-      {#if isAuthenticated()}
-        <UserMenu />
-      {:else}
-        <Button variant="primary" size="sm" onclick={() => openAuthDialog('login')}>Sign in</Button>
-      {/if}
-      <ThemeToggle />
-
-      <!-- Mobile nav toggle: only below `sm`. -->
-      <button
-        type="button"
-        onclick={() => (mobileOpen = !mobileOpen)}
-        aria-label="Toggle navigation menu"
-        aria-expanded={mobileOpen}
-        class="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground sm:hidden"
-      >
-        {#if mobileOpen}
-          <X class="size-5" />
-        {:else}
-          <Menu class="size-5" />
-        {/if}
-      </button>
-    </div>
+    <HeaderMenu />
   </div>
-
-  <!-- Mobile nav panel: stacked links, shown when the hamburger is open. -->
-  {#if mobileOpen}
-    <nav class="flex flex-col border-t border-border px-4 py-1 sm:hidden">
-      {#each links as link (link.href)}
-        <a
-          href={resolve(link.href)}
-          onclick={() => (mobileOpen = false)}
-          class={cn(
-            'rounded-md px-2 py-2.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground',
-            isActive(link.href) ? 'text-foreground' : 'text-muted-foreground',
-          )}
-        >
-          {link.label}
-        </a>
-      {/each}
-    </nav>
-  {/if}
 </header>
 
 {#if authDialog.open}

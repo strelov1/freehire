@@ -2,7 +2,7 @@
 // tracks the OS preference. Persisted in localStorage under `hire.theme`.
 // The root layout calls `initTheme()` on mount; components read `themeStore` and
 // call `setMode(...)`. SSR-safe: every browser API is guarded by `browser`, so
-// importing this module on the server (via TopBar → ThemeToggle) never touches
+// importing this module on the server (via the header menu) never touches
 // window/localStorage. A no-FOUC inline script in app.html applies the class
 // before paint (see task 4.2).
 
