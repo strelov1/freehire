@@ -1,11 +1,12 @@
 <script lang="ts">
   import { goto, afterNavigate } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import { Search, X, Briefcase, Building2 } from '@lucide/svelte';
+  import { Search, X } from '@lucide/svelte';
   import { api } from '$lib/api';
   import type { Job, CompanyListItem } from '$lib/types';
   import { lockScroll, unlockScroll } from '$lib/scrollLock';
   import { cn } from '$lib/utils';
+  import CompanyLogo from './CompanyLogo.svelte';
 
   // A launcher, not a filter: the header search jumps straight to a job/company
   // or hands a free-text query to /jobs. It does NOT own the catalogue's query
@@ -240,7 +241,7 @@
                 activeIndex === i ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50',
               )}
             >
-              <Briefcase class="size-4 shrink-0 text-muted-foreground" />
+              <CompanyLogo name={job.company} size="size-5" />
               <span class="min-w-0 flex-1">
                 <span class="block truncate font-medium">{job.title}</span>
                 <span class="block truncate text-xs text-muted-foreground">
@@ -266,7 +267,7 @@
                 activeIndex === idx ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50',
               )}
             >
-              <Building2 class="size-4 shrink-0 text-muted-foreground" />
+              <CompanyLogo name={company.name} size="size-5" />
               <span class="min-w-0 flex-1 truncate font-medium">{company.name}</span>
               <span class="shrink-0 text-xs text-muted-foreground">
                 {company.job_count}
