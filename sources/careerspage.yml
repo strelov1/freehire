@@ -1,0 +1,8 @@
+# careers-page.com career sites. Provider is the filename; each entry is company + board.
+# board = the tenant subdomain (<board>.careers-page.com); see internal/sources/careerspage.go.
+# The listing is server-rendered HTML paged via ?page=N; each job's canonical /jobs/<uuid>
+# detail page carries a schema.org JobPosting ld+json the adapter maps into a posting.
+# Each board validated live (listing lists >0 job postings) before adding.
+
+- company: David Joseph & Company
+  board: davidjoseph-co
