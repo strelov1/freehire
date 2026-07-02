@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { resolve } from '$app/paths';
   import { navigating } from '$app/state';
   import { onMount } from 'svelte';
   import { initTheme } from '$lib/theme.svelte';
@@ -9,7 +8,7 @@
   import { searchProfiles } from '$lib/searchProfiles.svelte';
   import { notifications } from '$lib/notifications.svelte';
   import TopBar from '$lib/components/TopBar.svelte';
-  import ProviderIcon from '$lib/components/ProviderIcon.svelte';
+  import Footer from '$lib/components/Footer.svelte';
   import '../app.css';
 
   let { children } = $props();
@@ -59,43 +58,7 @@
     {@render children()}
   </main>
 
-  <footer class="border-t border-border">
-    <div
-      class="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3 text-xs text-muted-foreground"
-    >
-      <p>Free, open-source IT job aggregator.</p>
-      <div class="flex shrink-0 items-center gap-4">
-        <a
-          href={resolve('/cli')}
-          class="shrink-0 font-medium text-foreground transition-colors hover:text-muted-foreground"
-        >
-          CLI
-        </a>
-        <a
-          href={resolve('/docs/api')}
-          class="shrink-0 font-medium text-foreground transition-colors hover:text-muted-foreground"
-        >
-          API
-        </a>
-        <a
-          href="https://t.me/freehiredev"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="inline-flex shrink-0 items-center gap-1.5 font-medium text-foreground transition-colors hover:text-muted-foreground"
-        >
-          <ProviderIcon provider="telegram" /> Ask a question
-        </a>
-        <a
-          href="https://github.com/strelov1/freehire"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="inline-flex shrink-0 items-center gap-1.5 font-medium text-foreground transition-colors hover:text-muted-foreground"
-        >
-          <ProviderIcon provider="github" /> GitHub
-        </a>
-      </div>
-    </div>
-  </footer>
+  <Footer />
 </div>
 
 <style>
