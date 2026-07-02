@@ -1,10 +1,14 @@
 package llm
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -67,10 +71,18 @@ func TestEncodeBatch_successGeneration(t *testing.T) {
 	if genBody["level"] != "DEFAULT" {
 		t.Errorf("level = %v, want DEFAULT for success", genBody["level"])
 	}
-	// input carries both prompts.
-	input, _ := genBody["input"].(map[string]any)
-	if input["system"] != "system prompt" || input["user"] != "user prompt" {
-		t.Errorf("input = %v, want both prompts", genBody["input"])
+	// input is a chat-message array so Langfuse renders a transcript.
+	input, _ := genBody["input"].([]any)
+	if len(input) != 2 {
+		t.Fatalf("input = %v, want 2 chat messages", genBody["input"])
+	}
+	sys, _ := input[0].(map[string]any)
+	usr, _ := input[1].(map[string]any)
+	if sys["role"] != "system" || sys["content"] != "system prompt" {
+		t.Errorf("input[0] = %v, want system message", input[0])
+	}
+	if usr["role"] != "user" || usr["content"] != "user prompt" {
+		t.Errorf("input[1] = %v, want user message", input[1])
 	}
 	if genBody["output"] != `{"seniority":"senior"}` {
 		t.Errorf("output = %v, want raw response", genBody["output"])
@@ -159,6 +171,29 @@ func TestSend_postsToIngestionWithAuth(t *testing.T) {
 	}
 	if gotBatchLen != 2 { // one generation → trace-create + generation-create
 		t.Errorf("batch len = %d, want 2", gotBatchLen)
+	}
+}
+
+func TestSend_207PartialErrorsAreLoggedNotFailed(t *testing.T) {
+	// Langfuse returns 207 for per-event validation errors, hiding them in the
+	// body — not the status. We must surface them (log) but not treat 207 as a
+	// transport failure.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusMultiStatus)
+		w.Write([]byte(`{"successes":[],"errors":[{"id":"abc","status":400,"message":"trace name too long"}]}`))
+	}))
+	defer srv.Close()
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	tr := newTestTracer(srv.URL, "pk", "sk")
+	if err := tr.send(context.Background(), []Generation{{Source: "enrich"}}); err != nil {
+		t.Errorf("207 must not be a transport error, got %v", err)
+	}
+	if !strings.Contains(buf.String(), "trace name too long") {
+		t.Errorf("expected a warning naming the rejected event, got %q", buf.String())
 	}
 }
 
@@ -257,7 +292,6 @@ func TestObserve_doesNotBlockWhenBufferFull(t *testing.T) {
 		<-release
 	}))
 	defer srv.Close()
-	defer close(release)
 
 	tr := NewTracer(srv.URL, "pk", "sk")
 	done := make(chan struct{})
@@ -272,6 +306,13 @@ func TestObserve_doesNotBlockWhenBufferFull(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("Observe blocked when buffer was full, want non-blocking drop")
 	}
+
+	// Release the server and drain the tracer so its background goroutine doesn't
+	// outlive the test (a leaked goroutine writing to the global log races other tests).
+	close(release)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	tr.Shutdown(ctx)
 }
 
 // newTestTracer builds a tracer pointing at a test server, with no async loop.

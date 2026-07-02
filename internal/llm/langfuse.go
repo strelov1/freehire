@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"sync"
@@ -144,7 +145,27 @@ func (t *langfuseTracer) send(ctx context.Context, gens []Generation) error {
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("langfuse: ingestion returned %s", resp.Status)
 	}
+	// Ingestion answers 207 with per-event validation errors in the body, not the
+	// status. Surface them (best-effort log) so silently dropped events are visible.
+	if resp.StatusCode == http.StatusMultiStatus {
+		logIngestionErrors(resp.Body)
+	}
 	return nil
+}
+
+// logIngestionErrors logs any per-event errors carried in a 207 response body.
+func logIngestionErrors(body io.Reader) {
+	var r struct {
+		Errors []struct {
+			ID      string `json:"id"`
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	if err := json.NewDecoder(body).Decode(&r); err != nil || len(r.Errors) == 0 {
+		return
+	}
+	log.Printf("langfuse: %d event(s) rejected by ingestion, first: %s (id %s)",
+		len(r.Errors), r.Errors[0].Message, r.Errors[0].ID)
 }
 
 // Generation is one observed LLM call, handed to a Tracer. A non-nil Err records
@@ -177,7 +198,7 @@ func encodeBatch(gens []Generation) ([]byte, error) {
 	events := make([]ingestionEvent, 0, len(gens)*2)
 	for _, g := range gens {
 		traceID := uuid.NewString()
-		now := time.Now().UTC().Format(time.RFC3339Nano)
+		now := rfc3339(time.Now())
 
 		events = append(events, ingestionEvent{
 			ID:        uuid.NewString(),
@@ -186,7 +207,7 @@ func encodeBatch(gens []Generation) ([]byte, error) {
 			Body: traceBody{
 				ID:        traceID,
 				Name:      g.Source,
-				Timestamp: g.Start.UTC().Format(time.RFC3339Nano),
+				Timestamp: rfc3339(g.Start),
 			},
 		})
 		events = append(events, ingestionEvent{
@@ -199,16 +220,19 @@ func encodeBatch(gens []Generation) ([]byte, error) {
 	return json.Marshal(ingestionRequest{Batch: events})
 }
 
+// rfc3339 formats a time as the UTC RFC3339 timestamp Langfuse expects.
+func rfc3339(t time.Time) string { return t.UTC().Format(time.RFC3339Nano) }
+
 // newGenerationBody maps a Generation onto the Langfuse generation observation.
 func newGenerationBody(g Generation, traceID string) generationBody {
 	b := generationBody{
 		ID:        uuid.NewString(),
 		TraceID:   traceID,
 		Name:      g.Source,
-		StartTime: g.Start.UTC().Format(time.RFC3339Nano),
-		EndTime:   g.End.UTC().Format(time.RFC3339Nano),
+		StartTime: rfc3339(g.Start),
+		EndTime:   rfc3339(g.End),
 		Model:     g.Model,
-		Input:     promptInput{System: g.System, User: g.User},
+		Input:     []chatMessage{{Role: "system", Content: g.System}, {Role: "user", Content: g.User}},
 		Output:    g.Output,
 		Level:     "DEFAULT",
 		Metadata:  map[string]string{"source": g.Source},
@@ -254,7 +278,7 @@ type generationBody struct {
 	StartTime     string            `json:"startTime"`
 	EndTime       string            `json:"endTime"`
 	Model         string            `json:"model"`
-	Input         promptInput       `json:"input"`
+	Input         []chatMessage     `json:"input"`
 	Output        string            `json:"output"`
 	Usage         *usageBody        `json:"usage,omitempty"`
 	Level         string            `json:"level"`
@@ -262,9 +286,10 @@ type generationBody struct {
 	Metadata      map[string]string `json:"metadata"`
 }
 
-type promptInput struct {
-	System string `json:"system"`
-	User   string `json:"user"`
+// chatMessage is one entry of the chat-transcript input Langfuse renders.
+type chatMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
 }
 
 type usageBody struct {
