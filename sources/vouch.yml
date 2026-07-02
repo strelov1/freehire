@@ -1,0 +1,8 @@
+# vouch.careers companies. Provider is the filename; each entry is company + board.
+# board = the URL company cuid (vouch.careers/companies/<board>); see internal/sources/vouch.go.
+# The company page is a Next.js app that inlines every live posting in its RSC flight as a
+# "listings" array — one GET assembles the whole board, no per-job fetch.
+# Each board validated live (page listed >0 live postings) before adding.
+
+- company: Laine
+  board: cmghojtua00p5et0dvusuxx5o

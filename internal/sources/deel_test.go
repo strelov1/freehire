@@ -12,7 +12,7 @@ import (
 )
 
 // deelPage wraps a raw flight stream into a minimal board page: one
-// self.__next_f.push([1,"<json-quoted flight>"]) script, the shape decodeDeelFlight reads.
+// self.__next_f.push([1,"<json-quoted flight>"]) script, the shape decodeNextFlight reads.
 func deelPage(flight string) string {
 	q, _ := json.Marshal(flight)
 	return `<html><body><script>self.__next_f.push([1,` + string(q) + `])</script></body></html>`
@@ -52,9 +52,9 @@ func TestDeelIsBoardBased(t *testing.T) {
 // decode into one stream carrying the postings payload, with multibyte text decoded as
 // correct UTF-8 (no mojibake).
 func TestDeelDecodeFlight(t *testing.T) {
-	flight, err := decodeDeelFlight(deelParse(t, "deel_klarna.html"))
+	flight, err := decodeNextFlight(deelParse(t, "deel_klarna.html"))
 	if err != nil {
-		t.Fatalf("decodeDeelFlight: %v", err)
+		t.Fatalf("decodeNextFlight: %v", err)
 	}
 	if !strings.Contains(flight, `"jobPostings":`) {
 		t.Error("flight stream missing jobPostings payload")
@@ -67,9 +67,9 @@ func TestDeelDecodeFlight(t *testing.T) {
 // TestDeelTextRows pins reference resolution: a posting's "$N" reference resolves to its
 // length-delimited text row's HTML.
 func TestDeelTextRows(t *testing.T) {
-	flight, err := decodeDeelFlight(deelParse(t, "deel_klarna.html"))
+	flight, err := decodeNextFlight(deelParse(t, "deel_klarna.html"))
 	if err != nil {
-		t.Fatalf("decodeDeelFlight: %v", err)
+		t.Fatalf("decodeNextFlight: %v", err)
 	}
 	rows := deelTextRows(flight)
 	html23, ok := rows["23"]
