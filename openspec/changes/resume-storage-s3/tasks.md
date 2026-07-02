@@ -32,7 +32,7 @@
 ## 6. Ops (freehire-ops)
 
 - [x] 6.1 Bucket `freehire-resumes` created (hel1, private, live round-trip verified via minio-go integration test); documented in `freehire-ops` README
-- [~] 6.2 Add `S3_*` to `.env.example` (hire + freehire-ops) **done**; prod `/opt/freehire/.env` real creds pending (needs the bucket key)
+- [x] 6.2 `S3_*` in `.env.example` (hire + freehire-ops) **and** prod `/opt/freehire/.env` (hel1 creds, freehire-resumes bucket); migration 0039 applied to prod DB
 
 ## 7. Verification
 
