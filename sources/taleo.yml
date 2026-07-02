@@ -4,12 +4,14 @@
 # scrape its portal code, then POSTs searchjobs. Each board was validated live (searchjobs
 # returned >0 jobs and descriptions decoded) before adding.
 #
-# Onboarding a tenant is manual: find its public careersection host + number (the section
-# that renders a real Job Search page, not the recruiter login) — the number is not
-# guessable and varies per tenant. Known seams (do not re-add blindly): tenants that front
-# Taleo behind their own domain (no *.taleo.net careersection — uhg/hilton/textron/jacobs),
-# tenants whose searchjobs returns "An Error Occurred in TEE", and very large boards whose
-# per-job detail fan-out is slow (hyatt.taleo.net/1 lists ~3k jobs).
+# Onboarding a tenant is manual: find its public careersection host + section (the one that
+# renders a real Job Search page, not the recruiter login) — the section (a number like "2"
+# or a name like "ex") is not guessable and varies per tenant. Known seams (do not re-add
+# blindly): tenants whose *.taleo.net host is up but expose no public careersection under a
+# guessable path — they front the candidate portal on their own domain (uhg/hilton/textron/
+# cognizant/praxair/rossstores/kearney); tenants whose searchjobs returns "An Error Occurred
+# in TEE"; and very large boards whose per-job detail fan-out is slow (hyatt.taleo.net/1 lists
+# ~3k jobs — excluded; hdr below at ~1.8k takes ~100s and is the practical size ceiling).
 
 - company: Valero
   board: valero.taleo.net/2
@@ -19,3 +21,9 @@
   board: schneider.taleo.net/1
 - company: D.R. Horton
   board: drhorton.taleo.net/2
+- company: Mercedes-Benz
+  board: daimler.taleo.net/ex
+- company: Jacobs
+  board: jacobs.taleo.net/ex
+- company: HDR
+  board: hdr.taleo.net/ex
