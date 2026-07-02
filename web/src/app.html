@@ -19,6 +19,24 @@
         } catch (e) {}
       })();
     </script>
+    <!-- Google Analytics (gtag.js). Skipped on localhost so dev traffic stays
+    out of the property; the measurement ID is public by design. -->
+    <script>
+      (function () {
+        if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=G-6P1PZ719T0';
+        document.head.appendChild(s);
+        window.dataLayer = window.dataLayer || [];
+        function gtag() {
+          dataLayer.push(arguments);
+        }
+        window.gtag = gtag;
+        gtag('js', new Date());
+        gtag('config', 'G-6P1PZ719T0');
+      })();
+    </script>
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover">
