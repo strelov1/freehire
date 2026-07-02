@@ -2,7 +2,7 @@
 
 - [x] 1.1 Add `minio-go` to `go.mod`; write tests for the `blobstore` config/nil-guard (unconfigured → nil) and key derivation (`resumes/<userID>`)
 - [x] 1.2 Implement `Store` interface (`Put`/`Get`/`Delete`) + a `minio.Client`-backed impl built from `S3_ENDPOINT/S3_BUCKET/S3_ACCESS_KEY/S3_SECRET_KEY`; `New` returns nil when unconfigured
-- [ ] 1.3 Integration-style test (build-tagged, MinIO testcontainer or skipped when no Docker) for a real Put/Get/Delete round-trip — DEFERRED to the live-bucket smoke (7.2)
+- [x] 1.3 Integration-style test (build-tagged, MinIO testcontainer or skipped when no Docker) for a real Put/Get/Delete round-trip — DEFERRED to the live-bucket smoke (7.2)
 
 ## 2. Persistence (`users` résumé pointer)
 
@@ -31,10 +31,10 @@
 
 ## 6. Ops (freehire-ops)
 
-- [ ] 6.1 Create the Hetzner Object Storage bucket `freehire-resumes` (hel1, private); document in `freehire-ops` README
+- [x] 6.1 Bucket `freehire-resumes` created (hel1, private, live round-trip verified via minio-go integration test); documented in `freehire-ops` README
 - [~] 6.2 Add `S3_*` to `.env.example` (hire + freehire-ops) **done**; prod `/opt/freehire/.env` real creds pending (needs the bucket key)
 
 ## 7. Verification
 
 - [x] 7.1 `go build/vet/test`; `make sqlc` committed; `go mod tidy` committed
-- [ ] 7.2 Local end-to-end with a MinIO/hel1 test bucket: upload once → skills + stored; verdict re-runs coherence from storage; delete; degradation with S3 unset; `npm run check`
+- [~] 7.2 S3 layer verified live (blobstore integration test, real hel1 bucket) + `npm run check` clean; full HTTP e2e (upload→verdict re-run→delete) pending prod deploy
