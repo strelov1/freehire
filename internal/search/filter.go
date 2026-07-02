@@ -89,6 +89,22 @@ func Filter(groups ...[]string) any {
 	return out
 }
 
+// AndNotSkills narrows a base filter (as built by FilterFromValues, either a
+// [][]string or nil) to documents whose `skills` array contains none of the given
+// skills — one `skills != "<skill>"` AND group per skill, since array
+// non-membership is per-value. It backs the verdict's "uncovered vacancies" query
+// (a role's jobs listing none of the candidate's skills). Empty skills leave the
+// base unchanged; a nil base with no skills stays nil (no filter).
+func AndNotSkills(base any, skills []string) any {
+	groups, _ := base.([][]string)
+	for _, s := range skills {
+		if s != "" {
+			groups = append(groups, []string{Neq("skills", s)})
+		}
+	}
+	return Filter(groups...)
+}
+
 // quote wraps a value in a Meilisearch string literal, backslash-escaping the
 // double-quote and backslash characters.
 func quote(value string) string {

@@ -1,13 +1,13 @@
 <script lang="ts">
   import { Pencil, Plus, Sparkles, Trash2 } from '@lucide/svelte';
   import { resolve } from '$app/paths';
-  import { facetCounts } from '$lib/api';
+  import { getProfileVerdict } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { categoryLabel } from '$lib/facets';
   import { searchProfiles } from '$lib/searchProfiles.svelte';
-  import { categoryParams, computeGap, sortSkillsByCount, type SkillGap } from '$lib/skillGap';
-  import type { SearchProfile } from '$lib/types';
+  import { categoryParams } from '$lib/skillGap';
+  import type { SearchProfile, Verdict } from '$lib/types';
   import { Button } from '$lib/ui';
   import States from './States.svelte';
 
@@ -19,12 +19,10 @@
   const editHref = (id: number) => resolve('/my/profiles/[id]/edit', { id: String(id) });
   const verdictHref = (id: number) => resolve('/my/profiles/[id]/verdict', { id: String(id) });
 
-  // Per-profile market skill-gap, keyed by profile id. Market skills are cached by the
-  // sorted specialization set, so profiles sharing specializations reuse one facet fetch.
-  // gapGeneration guards against out-of-order async runs: only the latest loadGaps commits.
-  let gaps = $state.raw<Record<number, SkillGap>>({});
-  const marketCache = new Map<string, string[]>();
-  let gapGeneration = 0;
+  // Per-profile market coverage headline, keyed by profile id. coverageGeneration guards
+  // against out-of-order async runs: only the latest loadCoverage commits.
+  let coverage = $state.raw<Record<number, Verdict>>({});
+  let coverageGeneration = 0;
 
   async function loadProfiles() {
     status = 'loading';
@@ -36,29 +34,21 @@
     }
   }
 
-  // For each profile with a specialization, fetch its market skills (cached by spec set)
-  // and compute the gap against the profile's skills. Best-effort: a failed facet fetch
-  // simply omits that profile's gap block.
-  async function loadGaps(list: SearchProfile[]) {
-    const gen = ++gapGeneration;
-    const next: Record<number, SkillGap> = {};
+  // Fetch each profile's coverage verdict (over its own specializations). Best-effort:
+  // a failed fetch simply omits that profile's coverage block.
+  async function loadCoverage(list: SearchProfile[]) {
+    const gen = ++coverageGeneration;
+    const next: Record<number, Verdict> = {};
     for (const p of list) {
       if (p.specializations.length === 0) continue;
-      const key = [...p.specializations].toSorted().join(',');
-      let market = marketCache.get(key);
-      if (!market) {
-        try {
-          const counts = await facetCounts(categoryParams(p.specializations));
-          market = sortSkillsByCount(counts.facets?.skills ?? {});
-          marketCache.set(key, market);
-        } catch {
-          continue;
-        }
+      try {
+        next[p.id] = await getProfileVerdict(p.id);
+      } catch {
+        continue;
       }
-      next[p.id] = computeGap(market, p.skills);
     }
-    // Discard a stale run: a newer loadGaps started while we awaited, so it owns `gaps`.
-    if (gen === gapGeneration) gaps = next;
+    // Discard a stale run: a newer loadCoverage started while we awaited, so it owns state.
+    if (gen === coverageGeneration) coverage = next;
   }
 
   // Build a /jobs link filtered to a profile's specialization(s) plus one missing skill.
@@ -79,11 +69,11 @@
     }
   });
 
-  // Recompute gaps whenever the profile list changes (create/edit/delete reassigns items).
+  // Recompute coverage whenever the profile list changes (create/edit/delete reassigns items).
   $effect(() => {
     const list = profiles;
-    if (list.length) void loadGaps(list);
-    else gaps = {};
+    if (list.length) void loadCoverage(list);
+    else coverage = {};
   });
 
   async function remove(p: SearchProfile) {
@@ -138,7 +128,7 @@
     {:else}
       <ul class="flex flex-col gap-3">
         {#each profiles as profile (profile.id)}
-          {@const gap = gaps[profile.id]}
+          {@const cov = coverage[profile.id]}
           <li
             class="flex items-start justify-between gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:border-foreground/20"
           >
@@ -162,27 +152,28 @@
                   </span>
                 {/each}
               </div>
-              {#if gap && gap.total > 0}
+              {#if cov && cov.total > 0}
                 <div class="mt-1 flex flex-col gap-1">
                   <div class="flex items-center gap-2">
                     <span
                       class="whitespace-nowrap text-xs text-muted-foreground"
-                      title="{gap.coverage} of {gap.total} top market skills"
+                      title="{cov.covered} of {cov.total} open vacancies"
                     >
-                      Market fit {Math.round((gap.coverage / gap.total) * 100)}%
+                      Coverage {cov.coverage_percent}% · {cov.covered.toLocaleString('en-US')}/{cov.total.toLocaleString('en-US')}
                     </span>
                     <div class="h-1.5 flex-1 overflow-hidden rounded bg-secondary">
-                      <div class="h-full rounded bg-primary" style="width: {(gap.coverage / gap.total) * 100}%"></div>
+                      <div class="h-full rounded bg-primary" style="width: {cov.coverage_percent}%"></div>
                     </div>
                   </div>
-                  {#if gap.missing.length > 0}
+                  {#if cov.gaps.length > 0}
                     <div class="flex flex-wrap items-center gap-1">
-                      <span class="text-xs text-muted-foreground">Missing:</span>
-                      {#each gap.missing as skill (skill)}
+                      <span class="text-xs text-muted-foreground">Add:</span>
+                      {#each cov.gaps.slice(0, 5) as gap (gap.name)}
                         <a
-                          href={jobsHref(profile.specializations, skill)}
+                          href={jobsHref(profile.specializations, gap.name)}
                           class="rounded border border-dashed border-border px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
-                        >{skill}</a>
+                          title="+{gap.new_vacancies.toLocaleString('en-US')} vacancies"
+                        >{gap.name}</a>
                       {/each}
                     </div>
                   {/if}
@@ -194,7 +185,7 @@
                 variant="ghost"
                 size="icon"
                 href={verdictHref(profile.id)}
-                aria-label="Résumé verdict"
+                aria-label="Market coverage"
               >
                 <Sparkles class="size-4" />
               </Button>

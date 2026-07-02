@@ -137,7 +137,6 @@ type SearchProfile struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 	Specializations []string           `json:"specializations"`
-	ResumeAnalysis  json.RawMessage    `json:"resume_analysis"`
 }
 
 type Subscription struct {

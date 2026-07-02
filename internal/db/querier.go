@@ -423,11 +423,6 @@ type Querier interface {
 	// author_label is set verbatim (NULL clears it → anonymous). No matching owner-scoped
 	// row returns no row (→ ErrNotFound).
 	SetSavedSearchPublicSlug(ctx context.Context, arg SetSavedSearchPublicSlugParams) (SavedSearch, error)
-	// Persist the derived résumé-analysis JSON (coherence + advice + analyzed_at) on a
-	// profile, scoped to its owner. Never stores the résumé text — only this derived blob.
-	// Does not bump updated_at (the profile's own fields are unchanged). Returns the affected
-	// row count: 0 means missing or not the caller's (the handler maps that to 404).
-	SetSearchProfileResumeAnalysis(ctx context.Context, arg SetSearchProfileResumeAnalysisParams) (int64, error)
 	// Pause/resume a subscription, scoped to its owner. No matching owner-scoped row
 	// returns no row (the handler maps that to 404).
 	SetSubscriptionActive(ctx context.Context, arg SetSubscriptionActiveParams) (Subscription, error)

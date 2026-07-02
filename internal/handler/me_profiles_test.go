@@ -27,9 +27,6 @@ type fakeProfileRepo struct {
 
 	getRet db.SearchProfile
 	getErr error
-
-	setAnalysis    db.SetSearchProfileResumeAnalysisParams
-	setAnalysisErr error
 }
 
 func (f *fakeProfileRepo) List(context.Context, int64) ([]db.SearchProfile, error) {
@@ -46,10 +43,6 @@ func (f *fakeProfileRepo) Update(_ context.Context, p db.UpdateSearchProfilePara
 func (f *fakeProfileRepo) Delete(context.Context, db.DeleteSearchProfileParams) error { return nil }
 func (f *fakeProfileRepo) Get(_ context.Context, _ db.GetSearchProfileParams) (db.SearchProfile, error) {
 	return f.getRet, f.getErr
-}
-func (f *fakeProfileRepo) SetResumeAnalysis(_ context.Context, p db.SetSearchProfileResumeAnalysisParams) error {
-	f.setAnalysis = p
-	return f.setAnalysisErr
 }
 
 // profilesApp mounts the create/update endpoints behind RequireAuth on a handler whose

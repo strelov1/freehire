@@ -2,7 +2,7 @@
 // Timestamps marshal as RFC3339 strings when present, or null.
 
 import type { Job } from './generated/contracts';
-export type { Job, Enrichment, Verdict, Skill } from './generated/contracts';
+export type { Job, Enrichment, Verdict, Gap } from './generated/contracts';
 
 export interface Company {
   slug: string;
@@ -221,16 +221,6 @@ export interface SearchProfile {
   skills: string[];
   created_at: string | null;
   updated_at: string | null;
-}
-
-/** The caller's stored-résumé status. `enabled` is whether résumé storage is configured
- *  server-side at all (when false, the UI falls back to per-request upload on the verdict
- *  page); `present` is whether this user has a résumé stored; `uploaded_at` is when
- *  (RFC3339, null when absent). */
-export interface ResumeStatus {
-  enabled: boolean;
-  present: boolean;
-  uploaded_at: string | null;
 }
 
 /** A notification subscription on a saved search. */

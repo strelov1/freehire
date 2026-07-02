@@ -5,28 +5,6 @@ import (
 	"time"
 )
 
-func TestLoad_LLMFromEnv(t *testing.T) {
-	t.Setenv("LLM_BASE_URL", "https://gw.example/v1")
-	t.Setenv("LLM_API_KEY", "key-123")
-	t.Setenv("LLM_MODEL", "some-model")
-
-	s := Load()
-	if s.LLMBaseURL != "https://gw.example/v1" || s.LLMAPIKey != "key-123" || s.LLMModel != "some-model" {
-		t.Errorf("LLM settings = %q/%q/%q, want the env values", s.LLMBaseURL, s.LLMAPIKey, s.LLMModel)
-	}
-}
-
-func TestLoad_LLMEmptyWhenUnset(t *testing.T) {
-	t.Setenv("LLM_BASE_URL", "")
-	t.Setenv("LLM_API_KEY", "")
-	t.Setenv("LLM_MODEL", "")
-
-	s := Load()
-	if s.LLMBaseURL != "" || s.LLMAPIKey != "" || s.LLMModel != "" {
-		t.Errorf("LLM settings should be empty when unset, got %q/%q/%q", s.LLMBaseURL, s.LLMAPIKey, s.LLMModel)
-	}
-}
-
 func TestLoad_S3FromEnv(t *testing.T) {
 	t.Setenv("S3_ENDPOINT", "https://hel1.your-objectstorage.com")
 	t.Setenv("S3_BUCKET", "freehire-resumes")
@@ -51,30 +29,6 @@ func TestLoad_S3EmptyWhenUnset(t *testing.T) {
 	if s.S3Endpoint != "" || s.S3Bucket != "" || s.S3AccessKey != "" || s.S3SecretKey != "" {
 		t.Errorf("S3 settings should be empty when unset, got %q/%q/%q/%q",
 			s.S3Endpoint, s.S3Bucket, s.S3AccessKey, s.S3SecretKey)
-	}
-}
-
-func TestLoad_LangfuseFromEnv(t *testing.T) {
-	t.Setenv("LANGFUSE_BASE_URL", "https://us.cloud.langfuse.com")
-	t.Setenv("LANGFUSE_PUBLIC_KEY", "pk-1")
-	t.Setenv("LANGFUSE_SECRET_KEY", "sk-1")
-
-	s := Load()
-	if s.LangfuseBaseURL != "https://us.cloud.langfuse.com" || s.LangfusePublicKey != "pk-1" || s.LangfuseSecretKey != "sk-1" {
-		t.Errorf("Langfuse settings = %q/%q/%q, want the env values",
-			s.LangfuseBaseURL, s.LangfusePublicKey, s.LangfuseSecretKey)
-	}
-}
-
-func TestLoad_LangfuseEmptyWhenUnset(t *testing.T) {
-	t.Setenv("LANGFUSE_BASE_URL", "")
-	t.Setenv("LANGFUSE_PUBLIC_KEY", "")
-	t.Setenv("LANGFUSE_SECRET_KEY", "")
-
-	s := Load()
-	if s.LangfuseBaseURL != "" || s.LangfusePublicKey != "" || s.LangfuseSecretKey != "" {
-		t.Errorf("Langfuse settings should be empty when unset, got %q/%q/%q",
-			s.LangfuseBaseURL, s.LangfusePublicKey, s.LangfuseSecretKey)
 	}
 }
 

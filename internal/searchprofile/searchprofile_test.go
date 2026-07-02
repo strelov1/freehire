@@ -34,21 +34,12 @@ type fakeRepo struct {
 	getRet    db.SearchProfile
 	getErr    error
 
-	setAnalysis       db.SetSearchProfileResumeAnalysisParams
-	setAnalysisCalled bool
-	setAnalysisErr    error
-
 	listRet []db.SearchProfile
 }
 
 func (f *fakeRepo) Get(_ context.Context, p db.GetSearchProfileParams) (db.SearchProfile, error) {
 	f.getParams = p
 	return f.getRet, f.getErr
-}
-
-func (f *fakeRepo) SetResumeAnalysis(_ context.Context, p db.SetSearchProfileResumeAnalysisParams) error {
-	f.setAnalysis, f.setAnalysisCalled = p, true
-	return f.setAnalysisErr
 }
 
 func (f *fakeRepo) List(_ context.Context, _ int64) ([]db.SearchProfile, error) {
@@ -379,32 +370,6 @@ func TestGet_ScopedToOwner(t *testing.T) {
 func TestGet_NotFound(t *testing.T) {
 	repo := &fakeRepo{getErr: searchprofile.ErrNotFound}
 	_, err := searchprofile.New(repo).Get(context.Background(), 7, 999)
-	if !errors.Is(err, searchprofile.ErrNotFound) {
-		t.Errorf("err = %v, want ErrNotFound", err)
-	}
-}
-
-func TestSetResumeAnalysis_ScopedToOwner(t *testing.T) {
-	repo := &fakeRepo{}
-	blob := []byte(`{"coherence":80}`)
-	err := searchprofile.New(repo).SetResumeAnalysis(context.Background(), 7, 5, blob)
-	if err != nil {
-		t.Fatalf("SetResumeAnalysis: %v", err)
-	}
-	if !repo.setAnalysisCalled {
-		t.Fatal("repo.SetResumeAnalysis not called")
-	}
-	if repo.setAnalysis.ID != 5 || repo.setAnalysis.UserID != 7 {
-		t.Errorf("set scope = id %d user %d, want id 5 user 7", repo.setAnalysis.ID, repo.setAnalysis.UserID)
-	}
-	if string(repo.setAnalysis.ResumeAnalysis) != string(blob) {
-		t.Errorf("stored analysis = %s, want %s", repo.setAnalysis.ResumeAnalysis, blob)
-	}
-}
-
-func TestSetResumeAnalysis_NotFound(t *testing.T) {
-	repo := &fakeRepo{setAnalysisErr: searchprofile.ErrNotFound}
-	err := searchprofile.New(repo).SetResumeAnalysis(context.Background(), 7, 999, []byte(`{}`))
 	if !errors.Is(err, searchprofile.ErrNotFound) {
 		t.Errorf("err = %v, want ErrNotFound", err)
 	}

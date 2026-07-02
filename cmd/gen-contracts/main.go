@@ -77,8 +77,8 @@ func genStructs() (string, error) {
 				TypeMappings: map[string]string{"enrich.Enrichment": "Enrichment"},
 			},
 			{
-				// The résumé-verdict wire shape (Verdict + Skill). Self-contained —
-				// only primitives and []Skill, no cross-package references.
+				// The market-coverage verdict wire shape (Verdict + Gap). Self-contained —
+				// only primitives and []Gap, no cross-package references.
 				Path:         "github.com/strelov1/freehire/internal/verdict",
 				OutputPath:   verdictTS,
 				IncludeFiles: []string{"verdict.go"},

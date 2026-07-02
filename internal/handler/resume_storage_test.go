@@ -17,10 +17,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/resume"
-	"github.com/strelov1/freehire/internal/searchprofile"
-	"github.com/strelov1/freehire/internal/verdict"
 )
 
 // fakeResumeBlobs is an in-memory blobstore.Store for handler tests.
@@ -163,54 +160,5 @@ func TestResume_Unauthenticated(t *testing.T) {
 	app, _ := resumeStorageApp(t, resume.New(newFakeResumeBlobs(), &fakeResumeRepo{}))
 	if status, _ := resumeReq(t, app, fiber.MethodGet, "", ""); status != fiber.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", status)
-	}
-}
-
-// verdictAppWithResume mounts POST verdict on a handler whose résumé service is seeded,
-// so the coherence path reads the stored résumé (no request upload).
-func verdictAppWithResume(t *testing.T, store *resume.Store, analyzer *verdict.Analyzer) (*fiber.App, string) {
-	t.Helper()
-	iss := auth.NewIssuer("test-secret", time.Hour)
-	token, err := iss.Issue(1)
-	if err != nil {
-		t.Fatalf("issue token: %v", err)
-	}
-	h := &API{
-		issuer:          iss,
-		searchProfile:   searchprofile.New(ownedProfile()),
-		facets:          marketFacets(),
-		verdictAnalyzer: analyzer,
-		resume:          store,
-	}
-	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Post("/me/profiles/:id/verdict", auth.RequireAuth(iss), h.ResumeVerdict)
-	return app, token
-}
-
-func TestPostVerdict_ReadsStoredResume(t *testing.T) {
-	store := resume.New(newFakeResumeBlobs(), &fakeResumeRepo{})
-	if _, err := store.Put(context.Background(), 1, "text/plain", []byte("Python and Go experience")); err != nil {
-		t.Fatalf("seed résumé: %v", err)
-	}
-	analyzer := verdict.NewAnalyzer(llm.NewWithModel(fakeLLM{resp: `{"coherence":91,"advice":{}}`}))
-	app, token := verdictAppWithResume(t, store, analyzer)
-
-	// No request body: the coherence must come from the stored résumé.
-	status, body := doVerdict(t, app, fiber.MethodPost, "/me/profiles/5/verdict", "", token)
-	if status != fiber.StatusOK {
-		t.Fatalf("status = %d, want 200", status)
-	}
-	if dataOf(t, body)["coherence"].(float64) != 91 {
-		t.Errorf("coherence = %v, want 91 (from stored résumé)", dataOf(t, body)["coherence"])
-	}
-}
-
-func TestPostVerdict_NoStoredResume409(t *testing.T) {
-	store := resume.New(newFakeResumeBlobs(), &fakeResumeRepo{}) // enabled but empty
-	app, token := verdictAppWithResume(t, store, verdict.NewAnalyzer(nil))
-
-	status, _ := doVerdict(t, app, fiber.MethodPost, "/me/profiles/5/verdict", "", token)
-	if status != fiber.StatusConflict {
-		t.Fatalf("status = %d, want 409 (no résumé stored)", status)
 	}
 }

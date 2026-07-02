@@ -16,7 +16,6 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/jobtracking"
-	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/moderation"
 	"github.com/strelov1/freehire/internal/report"
 	"github.com/strelov1/freehire/internal/resume"
@@ -26,7 +25,6 @@ import (
 	"github.com/strelov1/freehire/internal/submission"
 	"github.com/strelov1/freehire/internal/subscription"
 	"github.com/strelov1/freehire/internal/telegramnotify"
-	"github.com/strelov1/freehire/internal/verdict"
 )
 
 const (
@@ -84,10 +82,6 @@ type API struct {
 	// text for the verdict). Its blob store is nil when S3 is unconfigured; Enabled()
 	// then reports false and callers degrade to per-request résumé upload.
 	resume *resume.Store
-	// verdictAnalyzer runs the LLM coherence analysis for the résumé verdict. Its
-	// client is nil when the LLM is unconfigured; Analyze then degrades to a no-op
-	// and the verdict serves its deterministic core only.
-	verdictAnalyzer *verdict.Analyzer
 	// Telegram notification wiring. All nil/empty when the bot is unconfigured —
 	// the linking endpoints then report the feature off and the webhook is inert.
 	// telegramLinks mints/verifies the deep-link token; telegramBot replies to the
@@ -135,12 +129,8 @@ type Config struct {
 	CookieSecure   bool
 	OAuthProviders map[string]oauth.Provider
 	Search         *search.Client
-	// LLM backs the résumé-verdict coherence analysis. Nil disables the AI layer:
-	// the verdict still renders deterministically (the coherence card is hidden).
-	LLM *llm.Client
 	// Blob backs résumé storage (internal/blobstore). Nil disables storage: résumé
-	// upload only extracts skills in-request and the verdict falls back to a per-request
-	// upload (no regression).
+	// upload only extracts skills in-request (no regression).
 	Blob blobstore.Store
 	// Telegram bot for notification linking/delivery confirmations. Optional: an
 	// empty TelegramBotToken disables the feature (linking endpoints report off,
@@ -182,9 +172,6 @@ func Register(app *fiber.App, cfg Config) {
 	// Résumé storage is nil-safe: a nil Blob (S3 unconfigured) yields a disabled service
 	// whose Enabled() is false, so the upload/verdict paths degrade to in-request parsing.
 	a.resume = resume.New(cfg.Blob, resume.NewQueriesRepository(queries))
-	// Nil-safe: NewAnalyzer(nil) yields an analyzer whose Analyze is a no-op, so the
-	// verdict endpoint works whether or not the LLM is configured.
-	a.verdictAnalyzer = verdict.NewAnalyzer(cfg.LLM)
 	// Telegram notifications are enabled only with both a bot token and a JWT
 	// secret (the link token reuses it). Absent either, the linking endpoints
 	// report the feature off and the webhook is inert (see telegramEnabled).
@@ -299,11 +286,10 @@ func Register(app *fiber.App, cfg Config) {
 	api.Post("/me/profiles", saved, a.CreateSearchProfile)
 	api.Patch("/me/profiles/:id", saved, a.UpdateSearchProfile)
 	api.Delete("/me/profiles/:id", saved, a.DeleteSearchProfile)
-	// The résumé verdict is a per-profile sub-resource: GET computes it live, POST
-	// analyzes an uploaded résumé and persists only the derived AI layer. Cookie-only
-	// and owner-scoped, like the profile routes it hangs off.
+	// The résumé verdict is a per-profile sub-resource: GET computes the live
+	// market-coverage verdict from the profile's skills against the selected role.
+	// Cookie-only and owner-scoped, like the profile routes it hangs off.
 	api.Get("/me/profiles/:id/verdict", saved, a.GetResumeVerdict)
-	api.Post("/me/profiles/:id/verdict", saved, a.ResumeVerdict)
 
 	// Resume skill extraction is cookie-only (RequireAuth): it feeds the profile
 	// picker (extracted skills merge into a profile). When S3 storage is configured it

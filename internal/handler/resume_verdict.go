@@ -1,34 +1,22 @@
 package handler
 
 import (
-	"encoding/json"
-	"errors"
-	"log"
 	"net/url"
-	"strings"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/verdict"
 )
 
-// storedAnalysis is the derived résumé-analysis blob persisted on a profile
-// (search_profiles.resume_analysis JSONB): the coherence score, per-gap advice, and
-// when it was produced. The raw résumé text is deliberately never part of it.
-type storedAnalysis struct {
-	Coherence  int               `json:"coherence"`
-	Advice     map[string]string `json:"advice"`
-	AnalyzedAt string            `json:"analyzed_at"`
-}
-
-// GetResumeVerdict serves the résumé verdict for one of the caller's profiles: the
-// deterministic market comparison computed live from the profile's skills +
-// specializations, merged with any previously stored coherence/advice. Cookie-only,
-// owner-scoped (missing/non-owned profile → 404); 503 when search is unconfigured.
+// GetResumeVerdict serves the market-coverage verdict for one of the caller's
+// profiles: how many of the selected role's open vacancies the profile's skills
+// reach, and which missing skill unlocks the most new vacancies. The role is the
+// request's facet params (defaulting to the profile's specializations when no
+// category is given); the profile's skills are always the measured set, never a
+// filter. Cookie-only, owner-scoped (missing/non-owned profile → 404); 503 when
+// search is unconfigured.
 func (a *API) GetResumeVerdict(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -43,135 +31,61 @@ func (a *API) GetResumeVerdict(c *fiber.Ctx) error {
 	if err != nil {
 		return searchProfileError(err)
 	}
-
-	v, err := a.computeVerdict(c, profile)
-	if err != nil {
-		return err
-	}
-	applyStoredAnalysis(&v, profile.ResumeAnalysis)
-	return c.JSON(fiber.Map{"data": v})
-}
-
-// ResumeVerdict runs the coherence analysis for one of the caller's profiles: it computes
-// the deterministic verdict, asks the LLM for a coherence score + gap advice over the
-// résumé text, persists ONLY that derived analysis (the derived-only invariant — the raw
-// text is never stored in Postgres), and returns the full verdict. The résumé text comes
-// from the once-stored résumé (S3) when storage is configured — so re-running coherence
-// needs no upload; a caller with no stored résumé gets 409 (the SPA prompts a single
-// upload). When storage is unconfigured it falls back to a per-request upload (PDF
-// multipart "file" or JSON {text}), the pre-storage behavior. Best-effort AI: an
-// unconfigured or failing model degrades to the deterministic verdict (still 200).
-// Cookie-only, owner-scoped.
-func (a *API) ResumeVerdict(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	id, err := pathID(c)
-	if err != nil {
-		return err
-	}
-
-	profile, err := a.searchProfile.Get(c.Context(), userID, id)
-	if err != nil {
-		return searchProfileError(err)
-	}
-
-	text, err := a.resumeVerdictText(c, userID)
-	if err != nil {
-		return err
-	}
-	if strings.TrimSpace(text) == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "resume is empty")
-	}
-
-	v, err := a.computeVerdict(c, profile)
-	if err != nil {
-		return err
-	}
-
-	analysis, err := a.verdictAnalyzer.Analyze(c.Context(), text, v.MustHaveGaps())
-	if err != nil {
-		// Best-effort: log the error (never the résumé text) and serve the deterministic
-		// verdict. The AI layer is an enhancement, not a gate.
-		log.Printf("verdict: résumé analysis failed for profile %d: %v", id, err)
-		return c.JSON(fiber.Map{"data": v})
-	}
-	if analysis != nil {
-		blob, err := json.Marshal(storedAnalysis{
-			Coherence:  analysis.Coherence,
-			Advice:     analysis.Advice,
-			AnalyzedAt: time.Now().UTC().Format(time.RFC3339),
-		})
-		if err != nil {
-			return err
-		}
-		if err := a.searchProfile.SetResumeAnalysis(c.Context(), userID, id, blob); err != nil {
-			return searchProfileError(err)
-		}
-		applyStoredAnalysis(&v, blob)
-	}
-	return c.JSON(fiber.Map{"data": v})
-}
-
-// resumeVerdictText resolves the résumé text the coherence analysis runs over. With
-// storage configured it reads the once-stored résumé (409 when none is stored); without
-// it, it parses a per-request upload (the degraded, pre-storage path).
-func (a *API) resumeVerdictText(c *fiber.Ctx, userID int64) (string, error) {
-	if a.resume.Enabled() {
-		text, err := a.resume.Text(c.Context(), userID)
-		if errors.Is(err, resume.ErrNotStored) {
-			return "", fiber.NewError(fiber.StatusConflict, "no résumé stored")
-		}
-		return text, err
-	}
-	up, err := readResumeUpload(c)
-	if err != nil {
-		return "", err
-	}
-	return up.Text, nil
-}
-
-// computeVerdict builds the deterministic verdict from a profile's skills against the
-// market facet distribution for its specialization(s). 503 when search is unconfigured
-// — the market data is the verdict's one hard dependency.
-func (a *API) computeVerdict(c *fiber.Ctx, profile db.SearchProfile) (verdict.Verdict, error) {
 	if a.facets == nil {
-		return verdict.Verdict{}, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
+		return fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
-	filter := search.FilterFromValues(url.Values{"category": profile.Specializations})
-	res, err := a.facets.FacetCounts(c.Context(), search.FacetParams{
-		Filter: filter,
+
+	v, err := a.computeCoverage(c, profile)
+	if err != nil {
+		return err
+	}
+	return c.JSON(fiber.Map{"data": v})
+}
+
+// computeCoverage runs the two facet queries behind the coverage verdict and folds
+// them through the pure verdict.Compute. Query A is the role's open-vacancy total;
+// query B is the "uncovered" set — the same role filtered to vacancies listing
+// none of the profile's skills — whose total and skill distribution give the
+// covered count and the per-skill new-vacancy unlock.
+func (a *API) computeCoverage(c *fiber.Ctx, profile db.SearchProfile) (verdict.Verdict, error) {
+	roleFilter := search.FilterFromValues(roleValues(c, profile))
+
+	role, err := a.facets.FacetCounts(c.Context(), search.FacetParams{Filter: roleFilter})
+	if err != nil {
+		return verdict.Verdict{}, err
+	}
+	uncovered, err := a.facets.FacetCounts(c.Context(), search.FacetParams{
+		Filter: search.AndNotSkills(roleFilter, profile.Skills),
 		Facets: []string{"skills"},
 	})
 	if err != nil {
 		return verdict.Verdict{}, err
 	}
-	market := verdict.MarketSkills{Counts: res.Facets["skills"], Total: res.Total}
-	return verdict.Compute(market, profile.Skills), nil
+	return verdict.Compute(role.Total, uncovered.Total, uncovered.Facets["skills"]), nil
 }
 
-// applyStoredAnalysis merges a persisted analysis blob into a verdict: the coherence
-// score, the analysis timestamp, and advice attached to matching skill rows. A nil,
-// empty, or unparseable blob leaves the verdict deterministic-only.
-func applyStoredAnalysis(v *verdict.Verdict, blob json.RawMessage) {
-	if len(blob) == 0 {
-		return
+// roleValues builds the facet query for the coverage role from the request. It
+// strips the `skills` facet (the profile's skills are the measured set, not a role
+// filter) and defaults `category` to the profile's specializations when the caller
+// selected no category — so an unfiltered verdict scores the profile's own role.
+func roleValues(c *fiber.Ctx, profile db.SearchProfile) url.Values {
+	vals, _ := url.ParseQuery(string(c.Request().URI().QueryString()))
+	delete(vals, "skills")
+	delete(vals, "skills_exclude")
+	delete(vals, "skills_mode")
+	if !hasNonEmpty(vals["category"]) {
+		vals["category"] = profile.Specializations
 	}
-	var stored storedAnalysis
-	if err := json.Unmarshal(blob, &stored); err != nil {
-		return
-	}
-	coherence := stored.Coherence
-	v.Coherence = &coherence
-	if stored.AnalyzedAt != "" {
-		at := stored.AnalyzedAt
-		v.AnalyzedAt = &at
-	}
-	for i := range v.Skills {
-		if adv, ok := stored.Advice[v.Skills[i].Name]; ok && adv != "" {
-			text := adv
-			v.Skills[i].Advice = &text
+	return vals
+}
+
+// hasNonEmpty reports whether a query-param slice carries at least one non-empty
+// value, so a bare `?category=` counts as "no category selected".
+func hasNonEmpty(vals []string) bool {
+	for _, v := range vals {
+		if v != "" {
+			return true
 		}
 	}
+	return false
 }

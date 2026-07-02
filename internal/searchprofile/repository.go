@@ -90,19 +90,6 @@ func (r *QueriesRepository) Get(ctx context.Context, p db.GetSearchProfileParams
 	return row, nil
 }
 
-// SetResumeAnalysis persists the derived analysis blob scoped to the owner, mapping
-// "no row affected" (missing or non-owned) to ErrNotFound.
-func (r *QueriesRepository) SetResumeAnalysis(ctx context.Context, p db.SetSearchProfileResumeAnalysisParams) error {
-	affected, err := r.q.SetSearchProfileResumeAnalysis(ctx, p)
-	if err != nil {
-		return err
-	}
-	if affected == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
 // isUniqueViolation reports whether err is a Postgres unique-constraint violation (23505).
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
