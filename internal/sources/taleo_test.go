@@ -107,6 +107,48 @@ func TestTaleoFetch(t *testing.T) {
 	}
 }
 
+// TestTaleoImplementsStreaming pins the compile-time contract: taleo is a StreamingSource so
+// the pipeline persists a long crawl incrementally instead of buffering the whole board.
+func TestTaleoImplementsStreaming(t *testing.T) {
+	var _ StreamingSource = taleo{}
+}
+
+// TestTaleoFetchStreamEmitsAll checks FetchStream emits every job (order-independent), the
+// same set Fetch returns.
+func TestTaleoFetchStreamEmitsAll(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("careersection/2/jobsearch.ftl", taleoCareersection).
+		route("searchjobs", `{
+			"requisitionList": [
+				{"jobId": "1", "contestNo": "c1", "locationsColumns": [1],
+				 "column": ["Role A", "[\"US\"]", "Jul 2, 2026"]},
+				{"jobId": "2", "contestNo": "c2", "locationsColumns": [1],
+				 "column": ["Role B", "[\"US\"]", "Jul 1, 2026"]}
+			],
+			"pagingData": {"totalCount": 2}
+		}`).
+		route("jobdetail.ftl", taleoJobDetail("%3Cp%3Ex%3C%2Fp%3E"))
+
+	s := NewTaleo(fake).(StreamingSource)
+	var mu sync.Mutex
+	var got []Job
+	err := s.FetchStream(context.Background(), CompanyEntry{Company: "Valero", Board: "valero.taleo.net/2"}, func(j Job) {
+		mu.Lock()
+		got = append(got, j)
+		mu.Unlock()
+	})
+	if err != nil {
+		t.Fatalf("FetchStream: %v", err)
+	}
+	ids := map[string]bool{}
+	for _, j := range got {
+		ids[j.ExternalID] = true
+	}
+	if len(got) != 2 || !ids["c1"] || !ids["c2"] {
+		t.Fatalf("emitted %d jobs %v, want c1+c2", len(got), ids)
+	}
+}
+
 // TestTaleoFields locks the varying column layout across tenants: location is read from the
 // API's locationsColumns index (never guessed), and the posted date only from a column that
 // parses as "Jan 2, 2006". A tenant whose listing omits location/date (schneider/baesystems

@@ -10,9 +10,9 @@
 # appears in the careersection link on the company's own careers page. Known dead ends (host
 # is up but no keyless REST feed, do not re-try blindly): UnitedHealth (careersection now
 # 302s to their Phenom site), Hilton (searchjobs returns totalCount=0 — feed walled), Praxair
-# and A.T. Kearney (legacy joblist.ftl/moresearch.ftl skin with no inline portalNo). Also
-# excluded: very large boards whose per-job detail fan-out is slow (hyatt.taleo.net/1 lists
-# ~3k jobs; hdr below at ~1.8k takes ~100s and is the practical size ceiling).
+# and A.T. Kearney (legacy joblist.ftl/moresearch.ftl skin with no inline portalNo). Large
+# boards are fine: the adapter is a StreamingSource, so a slow detail fan-out (hyatt ~3.2k
+# jobs, ~3.7min) persists incrementally rather than buffering — no per-board size ceiling.
 
 - company: Valero
   board: valero.taleo.net/2
@@ -34,3 +34,5 @@
   board: cognizant.taleo.net/naukri
 - company: Ross Stores
   board: rossstores.taleo.net/rstrcs1.1
+- company: Hyatt
+  board: hyatt.taleo.net/1

@@ -86,10 +86,31 @@ type taleoListResponse struct {
 	} `json:"pagingData"`
 }
 
+// Fetch buffers the whole board by collecting the streamed jobs. The pipeline prefers
+// FetchStream (incremental save); Fetch stays for non-streaming callers and tests.
 func (s taleo) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+	var (
+		mu   sync.Mutex
+		jobs []Job
+	)
+	err := s.FetchStream(ctx, e, func(j Job) {
+		mu.Lock()
+		jobs = append(jobs, j)
+		mu.Unlock()
+	})
+	return jobs, err
+}
+
+// FetchStream opens the careersection, pages the requisition list, then fetches each
+// requisition's detail concurrently and emits the assembled Job the moment its detail
+// completes — so the pipeline persists a long, detail-heavy crawl incrementally rather than
+// buffering the whole board (large tenants run to thousands of requisitions). Only a listing
+// failure is returned as a board-level error; a per-requisition detail miss still emits the
+// job with an empty description (best-effort — the listing already yields a valid job).
+func (s taleo) FetchStream(ctx context.Context, e CompanyEntry, emit func(Job)) error {
 	b, err := parseTaleoBoard(e.Board)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Hold the host lock across the whole session (careersection GET → searchjobs → detail
@@ -98,20 +119,17 @@ func (s taleo) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 
 	portal, err := s.openSection(ctx, b)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	reqs, err := s.listRequisitions(ctx, b, portal)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	// Description is best-effort: the listing already yields a valid job (title, location,
-	// date), so a failed detail fetch leaves the job with an empty description rather than
-	// dropping it.
-	return fetchDetails(reqs, defaultDetailWorkers, func(r taleoRequisition) (Job, bool) {
-		return s.toJob(ctx, e, b, r), true
-	}), nil
+	fetchDetailsStream(reqs, defaultDetailWorkers,
+		func(r taleoRequisition) (Job, bool) { return s.toJob(ctx, e, b, r), true }, emit)
+	return nil
 }
 
 // openSection GETs the careersection to establish the session cookie and returns the portal
