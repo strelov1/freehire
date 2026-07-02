@@ -8,6 +8,7 @@ import (
 func TestNormalizeStripsHTMLAndLowercases(t *testing.T) {
 	got := normalize("<div><p>Senior <b>Go</b> Engineer</p></div>")
 	// Two spaces between words: each surrounding tag is replaced by one space.
+	// Separators are NOT collapsed here — the phrase matcher handles that.
 	want := "senior  go  engineer"
 	if got != want {
 		t.Fatalf("normalize = %q, want %q", got, want)
@@ -50,6 +51,72 @@ func TestParse(t *testing.T) {
 				t.Fatalf("Parse(%q) = %#v, want %#v", tc.in, got, tc.want)
 			}
 		})
+	}
+}
+
+// Separator-insensitive matching (skilltag-matching-fixes): '-'/'_' between
+// alphanumerics are equivalent to a space, so hyphenated/underscored multi-word
+// terms resolve like their space form — without touching punctuated canonicals.
+func TestParse_SeparatorInsensitive(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{"hyphen multiword", "Experience with distributed-systems at scale.", []string{"distributed-systems"}},
+		{"underscore multiword", "distributed_systems everywhere", []string{"distributed-systems"}},
+		{"space still resolves", "distributed systems everywhere", []string{"distributed-systems"}},
+		{"hyphen and space dedup to one", "distributed-systems and distributed systems", []string{"distributed-systems"}},
+		{"machine-learning hyphen", "machine-learning pipelines", []string{"machine-learning"}},
+		{"ci-cd hyphen", "CI-CD pipeline", []string{"ci-cd"}},
+		{"react-native hyphen", "React-Native apps", []string{"react", "react-native"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Parse(tc.in)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("Parse(%q) = %#v, want %#v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// Case-preserving acronym pass (skilltag-matching-fixes): a curated shared tier
+// (ML) resolves everywhere; a résumé-scoped tier (RAG) resolves only under the
+// résumé option so it never tags job facets ("RAG status").
+func TestParse_Acronyms(t *testing.T) {
+	has := func(hay []string, needle string) bool {
+		for _, h := range hay {
+			if h == needle {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Shared acronym ML → machine-learning, applied by the default Parse.
+	if got := Parse("Senior ML Engineer with Python"); !has(got, "machine-learning") {
+		t.Errorf("Parse ML = %v, want machine-learning", got)
+	}
+	// Whole-word only: ML embedded in HTML/HTMl must not fire; lowercase ml must not.
+	if got := Parse("We write HTML and CSS"); has(got, "machine-learning") {
+		t.Errorf("Parse HTML = %v, must not emit machine-learning", got)
+	}
+	if got := Parse("Mix 500 ml of solution"); has(got, "machine-learning") {
+		t.Errorf("Parse 'ml' lowercase = %v, must not emit machine-learning", got)
+	}
+
+	// Résumé-scoped acronym RAG → rag, ONLY under WithResumeAcronyms.
+	if got := Parse("Built RAG pipelines over pgvector", WithResumeAcronyms()); !has(got, "rag") {
+		t.Errorf("Parse RAG (resume) = %v, want rag", got)
+	}
+	// Default (job) parsing must NOT tag RAG — this is what protects the existing
+	// "RAG status" job guard and keeps job facets unchanged.
+	if got := Parse("Built RAG pipelines over pgvector"); has(got, "rag") {
+		t.Errorf("Parse RAG (default) = %v, must not emit rag", got)
+	}
+	if got := Parse("We report RAG status weekly"); has(got, "rag") {
+		t.Errorf("Parse 'RAG status' (default) = %v, must not emit rag", got)
 	}
 }
 

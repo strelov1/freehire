@@ -50,7 +50,9 @@ func (a *API) ExtractResumeSkills(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "resume is empty")
 	}
 
-	skills := skilltag.Parse(up.Text)
+	// Résumé path: enable the résumé-scoped acronym tier (e.g. RAG), which stays off
+	// for job parsing so it never tags job facets ("RAG status").
+	skills := skilltag.Parse(up.Text, skilltag.WithResumeAcronyms())
 	if skills == nil {
 		skills = []string{}
 	}

@@ -381,8 +381,11 @@ var phraseAliases = []phraseAlias{
 	{"semantic kernel", "semantic-kernel"},
 	{"vertex ai", "vertex-ai"},
 	{"aws bedrock", "aws-bedrock"}, {"amazon bedrock", "aws-bedrock"},
-	{"sentence transformers", "sentence-transformers"}, {"sentence-transformers", "sentence-transformers"},
-	{"retrieval augmented generation", "rag"}, {"retrieval-augmented generation", "rag"},
+	// Hyphen/space variants collapse to one matcher (see phraseMatchers), so only the
+	// space form is listed — "sentence-transformers"/"retrieval-augmented generation"
+	// resolve via the separator-insensitive phrase match.
+	{"sentence transformers", "sentence-transformers"},
+	{"retrieval augmented generation", "rag"},
 	// LLM-mined multi-word gaps (jobs.enrichment->skills). Multi-word or ambiguous
 	// terms routed as phrases so the bare token can't misfire on non-tech jobs.
 	// ("spring boot" needs no entry — the "spring" word alias already tags it.)
@@ -396,4 +399,22 @@ var phraseAliases = []phraseAlias{
 	{"generative ai", "generative-ai"}, {"gen ai", "generative-ai"},
 	{"deep learning", "deep-learning"},
 	{"six sigma", "six-sigma"},
+}
+
+// sharedAcronyms resolve in ALL text (jobs and résumés). They are matched by their
+// exact UPPERCASE surface form as a whole word (case-preserved pass), because their
+// lowercase form is deliberately excluded as ambiguous (`ml` = millilitre). The
+// uppercase form is unambiguous even in job descriptions. Each value is a canonical
+// that already exists in the vocabulary — an acronym is another alias, never a new
+// facet value.
+var sharedAcronyms = map[string]string{
+	"ML": "machine-learning",
+}
+
+// resumeAcronyms resolve ONLY when parsing résumés (Parse with WithResumeAcronyms).
+// Their uppercase form collides with a non-tech meaning in JOB text — "RAG status"
+// (red/amber/green project health) — so tagging them on jobs would corrupt facets;
+// in résumés that collision is near-absent. Each value is an existing canonical.
+var resumeAcronyms = map[string]string{
+	"RAG": "rag",
 }

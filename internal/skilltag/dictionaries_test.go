@@ -22,6 +22,24 @@ func TestDictionaryInvariants(t *testing.T) {
 			t.Errorf("ambiguous word %q must not be a wordAliases key", w)
 		}
 	}
+
+	// Acronym canonicals must be valid slugs AND already reachable via an existing
+	// alias — an acronym is another route to a known canonical, never a new facet value.
+	existing := map[string]bool{}
+	for _, c := range wordAliases {
+		existing[c] = true
+	}
+	for _, p := range phraseAliases {
+		existing[p.canonical] = true
+	}
+	for tier, acr := range map[string]map[string]string{"sharedAcronyms": sharedAcronyms, "resumeAcronyms": resumeAcronyms} {
+		for surface, c := range acr {
+			assertSlug(t, tier+"["+surface+"]", c)
+			if !existing[c] {
+				t.Errorf("%s[%q] → %q is not an existing canonical (would create a new facet value)", tier, surface, c)
+			}
+		}
+	}
 }
 
 func assertSlug(t *testing.T, what, s string) {
