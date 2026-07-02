@@ -17,7 +17,9 @@ The system SHALL let an authenticated user record that they viewed a job, keyed
 by `(user, job)`, idempotently. The first view creates the interaction; a repeat
 view refreshes its timestamp without creating a duplicate. The endpoint SHALL
 return the interaction record, including whether the job has been saved and
-applied to.
+applied to. When — and only when — the first view row is created for a
+`(user, job)` pair, the system SHALL increment that job's materialized
+`view_count` by one, in the same statement, so repeat views never inflate it.
 
 #### Scenario: First view by a signed-in user
 
@@ -27,6 +29,7 @@ applied to.
   `saved_at` null, and `applied_at` null
 - **AND** responds `200` with
   `{"data": {job_id, viewed_at, saved_at: null, applied_at: null}}`
+- **AND** the job's `view_count` is incremented by one
 
 #### Scenario: Repeat view does not duplicate
 
@@ -35,6 +38,7 @@ applied to.
 - **AND** no second row is created
 - **AND** the response carries the existing `saved_at` and `applied_at` values
   unchanged
+- **AND** the job's `view_count` is not incremented again
 
 #### Scenario: View requires authentication
 
@@ -55,7 +59,9 @@ already-set stage is left untouched). Authentication MAY be by session cookie or
 by API key; either identifies the acting user identically. Marking applied sets
 `applied_at`; it works whether or not a view was recorded first, and repeating it
 does not create a duplicate or error. The endpoint SHALL return the updated
-interaction record.
+interaction record. When — and only when — `applied_at` transitions from unset to
+set for a `(user, job)` pair, the system SHALL increment that job's materialized
+`applied_count` by one, in the same statement, so repeat applies never inflate it.
 
 #### Scenario: Mark applied after viewing
 
@@ -64,12 +70,15 @@ interaction record.
 - **THEN** the job's `applied_at` is set
 - **AND** the response is `200` with `{"data": {job_id, viewed_at, applied_at}}`
   where `applied_at` is non-null
+- **AND** the job's `applied_count` is incremented by one
 
 #### Scenario: Mark applied is idempotent
 
 - **WHEN** an authenticated user marks the same job applied twice
 - **THEN** the row is updated in place each time
 - **AND** no duplicate row is created and no error is returned
+- **AND** the job's `applied_count` is incremented only on the first apply, not
+  the second
 
 #### Scenario: Applying seeds the initial stage
 
