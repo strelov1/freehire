@@ -253,6 +253,15 @@ type Querier interface {
 	// Slim keyset page of companies for the sitemap, cursored by the slug primary key
 	// (first chunk keyed by the empty string, which sorts before every slug).
 	ListCompanySitemap(ctx context.Context, arg ListCompanySitemapParams) ([]ListCompanySitemapRow, error)
+	// Id-only projection of ListJobsByIDAfter, used as the corruption-degrade path:
+	// when a full SELECT * batch faults on a corrupted TOAST value (SQLSTATE XX001),
+	// the scan re-reads the same window as bare ids (id is never toasted, so this
+	// never faults) and then fetches each row individually to isolate and skip the
+	// unreadable one.
+	ListJobIDsAfter(ctx context.Context, arg ListJobIDsAfterParams) ([]int64, error)
+	// Id-only projection of ListJobsUpdatedAfter — the corruption-degrade path for the
+	// incremental (`reindex --since`) scan, mirroring ListJobIDsAfter.
+	ListJobIDsUpdatedAfter(ctx context.Context, arg ListJobIDsUpdatedAfterParams) ([]int64, error)
 	// The freshest open jobs for the sitemap: only the fields a URL needs, newest id
 	// first. Ordering by id DESC (served by jobs_open_id_idx) reads the most recently
 	// inserted rows, which sit at the physical end of the heap — a sequential, cache-warm

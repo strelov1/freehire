@@ -247,6 +247,80 @@ func (q *Queries) GetJobIDBySlug(ctx context.Context, publicSlug string) (int64,
 	return id, err
 }
 
+const listJobIDsAfter = `-- name: ListJobIDsAfter :many
+SELECT id
+FROM jobs
+WHERE id > $1
+ORDER BY id
+LIMIT $2
+`
+
+type ListJobIDsAfterParams struct {
+	AfterID   int64 `json:"after_id"`
+	BatchSize int32 `json:"batch_size"`
+}
+
+// Id-only projection of ListJobsByIDAfter, used as the corruption-degrade path:
+// when a full SELECT * batch faults on a corrupted TOAST value (SQLSTATE XX001),
+// the scan re-reads the same window as bare ids (id is never toasted, so this
+// never faults) and then fetches each row individually to isolate and skip the
+// unreadable one.
+func (q *Queries) ListJobIDsAfter(ctx context.Context, arg ListJobIDsAfterParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listJobIDsAfter, arg.AfterID, arg.BatchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listJobIDsUpdatedAfter = `-- name: ListJobIDsUpdatedAfter :many
+SELECT id
+FROM jobs
+WHERE id > $1 AND updated_at >= $2
+ORDER BY id
+LIMIT $3
+`
+
+type ListJobIDsUpdatedAfterParams struct {
+	AfterID   int64              `json:"after_id"`
+	Since     pgtype.Timestamptz `json:"since"`
+	BatchSize int32              `json:"batch_size"`
+}
+
+// Id-only projection of ListJobsUpdatedAfter — the corruption-degrade path for the
+// incremental (`reindex --since`) scan, mirroring ListJobIDsAfter.
+func (q *Queries) ListJobIDsUpdatedAfter(ctx context.Context, arg ListJobIDsUpdatedAfterParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listJobIDsUpdatedAfter, arg.AfterID, arg.Since, arg.BatchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listJobSitemapFreshest = `-- name: ListJobSitemapFreshest :many
 SELECT public_slug, updated_at
 FROM jobs
