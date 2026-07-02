@@ -225,6 +225,19 @@ func TestFromRow_WorkModeIsTheDictValue(t *testing.T) {
 	}
 }
 
+func TestFromRow_CopiesEngagementCounts(t *testing.T) {
+	view, err := FromRow(db.Job{ID: 1, Title: "x", PublicSlug: "x-1", ViewCount: 42, AppliedCount: 7})
+	if err != nil {
+		t.Fatalf("FromRow: %v", err)
+	}
+	if view.ViewCount != 42 {
+		t.Errorf("ViewCount = %d, want 42", view.ViewCount)
+	}
+	if view.AppliedCount != 7 {
+		t.Errorf("AppliedCount = %d, want 7", view.AppliedCount)
+	}
+}
+
 func TestFromRow_EmptyEnrichmentIsZero(t *testing.T) {
 	// An unenriched job's column arrives as "{}" (the table default) or, in
 	// edge cases, a nil byte slice. Both must decode to the zero Enrichment,
@@ -258,6 +271,19 @@ func TestJobJSON_HidesIDExposesSlug(t *testing.T) {
 	}
 	if got := string(fields["public_slug"]); got != `"go-developer-acme-t35nijto"` {
 		t.Errorf("public_slug: want the slug, got %s", got)
+	}
+}
+
+// The engagement counters are part of the public wire contract (served on every
+// job read, displayed on the detail page) and serialize as plain integers.
+func TestJobJSON_ExposesEngagementCounts(t *testing.T) {
+	fields := marshalToFields(t, db.Job{ID: 1, Title: "x", PublicSlug: "x-1", ViewCount: 12, AppliedCount: 3})
+
+	if got := string(fields["view_count"]); got != "12" {
+		t.Errorf("view_count: want 12, got %s", got)
+	}
+	if got := string(fields["applied_count"]); got != "3" {
+		t.Errorf("applied_count: want 3, got %s", got)
 	}
 }
 

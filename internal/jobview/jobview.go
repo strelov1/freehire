@@ -72,6 +72,11 @@ type Job struct {
 	Enrichment        enrich.Enrichment `json:"enrichment"`
 	EnrichedAt        *string           `json:"enriched_at"`
 	EnrichmentVersion int32             `json:"enrichment_version"`
+	// ViewCount/AppliedCount are the job's materialized engagement counters —
+	// distinct signed-in users who viewed and who marked applied — served straight
+	// from the jobs columns (no read-time counting). Displayed on the detail page.
+	ViewCount    int32 `json:"view_count"`
+	AppliedCount int32 `json:"applied_count"`
 }
 
 // FromRow maps a database job row to the public wire shape. The enrichment
@@ -145,6 +150,8 @@ func FromRow(j db.Job) (Job, error) {
 		Enrichment:        e,
 		EnrichedAt:        rfc3339(j.EnrichedAt),
 		EnrichmentVersion: j.EnrichmentVersion,
+		ViewCount:         j.ViewCount,
+		AppliedCount:      j.AppliedCount,
 	}, nil
 }
 

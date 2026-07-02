@@ -119,6 +119,13 @@ export interface Job {
   enrichment: Enrichment;
   enriched_at?: string;
   enrichment_version: number /* int32 */;
+  /**
+   * ViewCount/AppliedCount are the job's materialized engagement counters —
+   * distinct signed-in users who viewed and who marked applied — served straight
+   * from the jobs columns (no read-time counting). Displayed on the detail page.
+   */
+  view_count: number /* int32 */;
+  applied_count: number /* int32 */;
 }
 
 /**

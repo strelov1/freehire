@@ -2,21 +2,43 @@
 -- Record (or refresh) a user's view of a job. Idempotent on (user_id, job_id):
 -- the first view creates the row, a repeat view touches viewed_at. Returns the
 -- row so the caller learns the current applied_at in the same round-trip.
-INSERT INTO user_jobs (user_id, job_id)
-VALUES ($1, $2)
-ON CONFLICT (user_id, job_id) DO UPDATE SET viewed_at = now()
-RETURNING *;
+-- When (and only when) the row is created for the first time — no prior
+-- interaction existed — bump the job's materialized view_count in the same
+-- statement. All WITH sub-statements see one snapshot, so `prior` reflects the
+-- pre-upsert state regardless of execution order; a repeat view never re-bumps.
+WITH prior AS (
+    SELECT 1 AS existed FROM user_jobs uj WHERE uj.user_id = $1 AND uj.job_id = $2
+), upsert AS (
+    INSERT INTO user_jobs (user_id, job_id)
+    VALUES ($1, $2)
+    ON CONFLICT (user_id, job_id) DO UPDATE SET viewed_at = now()
+    RETURNING *
+), bump AS (
+    UPDATE jobs SET view_count = view_count + 1
+    WHERE id = $2 AND NOT EXISTS (SELECT 1 FROM prior)
+)
+SELECT * FROM upsert;
 
 -- name: MarkJobApplied :one
 -- Mark a job as applied for a user. Idempotent and independent of a prior view:
 -- it inserts the row (viewed_at defaults) or updates applied_at in place, and
 -- seeds stage='applied' only when the stage is unset (an advanced stage survives
--- a re-apply, via COALESCE).
-INSERT INTO user_jobs (user_id, job_id, applied_at, stage)
-VALUES ($1, $2, now(), 'applied')
-ON CONFLICT (user_id, job_id) DO UPDATE
-  SET applied_at = now(), stage = COALESCE(user_jobs.stage, 'applied')
-RETURNING *;
+-- a re-apply, via COALESCE). When (and only when) applied_at transitions from
+-- unset to set, bump the job's materialized applied_count in the same statement;
+-- `prior` sees the pre-upsert applied_at, so a re-apply never re-bumps.
+WITH prior AS (
+    SELECT uj.applied_at FROM user_jobs uj WHERE uj.user_id = $1 AND uj.job_id = $2
+), upsert AS (
+    INSERT INTO user_jobs (user_id, job_id, applied_at, stage)
+    VALUES ($1, $2, now(), 'applied')
+    ON CONFLICT (user_id, job_id) DO UPDATE
+      SET applied_at = now(), stage = COALESCE(user_jobs.stage, 'applied')
+    RETURNING *
+), bump AS (
+    UPDATE jobs SET applied_count = applied_count + 1
+    WHERE id = $2 AND NOT EXISTS (SELECT 1 FROM prior WHERE prior.applied_at IS NOT NULL)
+)
+SELECT * FROM upsert;
 
 -- name: SaveJob :one
 -- Save (bookmark) a job for a user. Idempotent and independent of a prior view:

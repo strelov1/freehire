@@ -1,7 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { resolve } from '$app/paths';
-  import { ArrowRight, Bookmark, Check, Flag } from '@lucide/svelte';
+  import { ArrowRight, Bookmark, Check, Eye, Flag } from '@lucide/svelte';
   import { markJobApplied, recordJobView, saveJob, unsaveJob } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
@@ -34,6 +34,10 @@
   const e = $derived(job.enrichment ?? {});
   const salary = $derived(formatSalary(e));
   const facets = $derived(summaryFacets(job));
+  // Engagement counters (distinct signed-in viewers / applicants), served on the
+  // job. A zero metric is omitted so the line never reads as a dead "0 views".
+  const views = $derived(job.view_count ?? 0);
+  const applies = $derived(job.applied_count ?? 0);
 
   // Record a view for signed-in users once the page hydrates (browser only).
   // Silent history that also tells us whether they
@@ -253,6 +257,17 @@
           <Badge variant="secondary">Manually added</Badge>
         {/if}
         {#if posted}<span class="text-xs text-muted-foreground">Posted {posted}</span>{/if}
+        {#if views > 0}
+          <span class="flex items-center gap-1 text-xs text-muted-foreground">
+            <Eye class="size-3.5" />{views}
+            {views === 1 ? 'view' : 'views'}
+          </span>
+        {/if}
+        {#if applies > 0}
+          <span class="flex items-center gap-1 text-xs text-muted-foreground">
+            <Check class="size-3.5" />{applies} applied
+          </span>
+        {/if}
       </div>
 
       <div class="border-t border-border pt-4 first:border-t-0 first:pt-0">

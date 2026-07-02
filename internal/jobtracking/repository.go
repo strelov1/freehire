@@ -42,7 +42,9 @@ func (r *QueriesRepository) RecordView(ctx context.Context, userID, jobID int64)
 	if err != nil {
 		return Interaction{}, err
 	}
-	return toInteraction(row), nil
+	// The CTE that bumps view_count makes sqlc emit a bespoke row type with the
+	// same shape as db.UserJob; convert so the interaction mapping stays shared.
+	return toInteraction(db.UserJob(row)), nil
 }
 
 // MarkApplied marks a job as applied for a user.
@@ -51,7 +53,8 @@ func (r *QueriesRepository) MarkApplied(ctx context.Context, userID, jobID int64
 	if err != nil {
 		return Interaction{}, err
 	}
-	return toInteraction(row), nil
+	// See RecordView: the applied_count CTE yields a bespoke row of db.UserJob shape.
+	return toInteraction(db.UserJob(row)), nil
 }
 
 // SaveJob saves (bookmarks) a job for a user.

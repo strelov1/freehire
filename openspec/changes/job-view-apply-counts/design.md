@@ -105,6 +105,17 @@ Shown to all visitors, muted, near the title/metadata on the detail page.
   save-without-open would be counted by the backfill but not by a later view.
   This drift is at most ±1 per such user and immaterial for a social-proof
   number; not worth extra write-path touch points.
+- **Concurrent first-interaction over-count** → the `prior` snapshot CTE detects
+  the transition per-transaction, not across concurrent ones: two simultaneous
+  first-views (or first-applies) of the *same* `(user, job)` both read an empty
+  `prior` from their pre-write snapshots and both bump, yielding +2 for one
+  distinct user. Requires the same user hitting the same job in two overlapping
+  requests (double tab / double-click) inside the commit window — rare, and the
+  effect is a cosmetic +1 on a metric already framed as approximate social proof.
+  Accepted, not serialized: row locks / `xmax` insert-detection would harden it
+  but add complexity disproportionate to a ±1 drift on an approximate count, and
+  would not fully cover the apply case anyway. Documented so it isn't mistaken
+  for an oversight.
 - **Counter can't go negative / no decrement** → applies/views are monotonic
   here (no "un-apply" decrements the count). `applied_count` is not decremented
   by `ClearJobProgress`/`UntrackJob`; accepted — the counter is cumulative

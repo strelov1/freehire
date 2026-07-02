@@ -185,7 +185,7 @@ func (q *Queries) ExcludedJobIDs(ctx context.Context, arg ExcludedJobIDsParams) 
 }
 
 const listUserJobs = `-- name: ListUserJobs :many
-SELECT jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.company, jobs.location, jobs.remote, jobs.description, jobs.posted_at, jobs.created_at, jobs.updated_at, jobs.company_slug, jobs.enrichment, jobs.enriched_at, jobs.enrichment_version, jobs.public_slug, jobs.last_seen_at, jobs.closed_at, jobs.countries, jobs.regions, jobs.work_mode, jobs.liveness_strikes, jobs.skills, jobs.seniority, jobs.category, jobs.created_by, jobs.updated_by, jobs.posting_language, jobs.employment_type, jobs.education_level, jobs.experience_years_min, jobs.collections, jobs.content_hash, jobs.english_level, jobs.cities, uj.viewed_at, uj.saved_at, uj.applied_at, uj.stage, uj.notes
+SELECT jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.company, jobs.location, jobs.remote, jobs.description, jobs.posted_at, jobs.created_at, jobs.updated_at, jobs.company_slug, jobs.enrichment, jobs.enriched_at, jobs.enrichment_version, jobs.public_slug, jobs.last_seen_at, jobs.closed_at, jobs.countries, jobs.regions, jobs.work_mode, jobs.liveness_strikes, jobs.skills, jobs.seniority, jobs.category, jobs.created_by, jobs.updated_by, jobs.posting_language, jobs.employment_type, jobs.education_level, jobs.experience_years_min, jobs.collections, jobs.content_hash, jobs.english_level, jobs.cities, jobs.view_count, jobs.applied_count, uj.viewed_at, uj.saved_at, uj.applied_at, uj.stage, uj.notes
 FROM user_jobs uj
 JOIN jobs ON jobs.id = uj.job_id
 WHERE uj.user_id = $1
@@ -271,6 +271,8 @@ func (q *Queries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]L
 			&i.Job.ContentHash,
 			&i.Job.EnglishLevel,
 			&i.Job.Cities,
+			&i.Job.ViewCount,
+			&i.Job.AppliedCount,
 			&i.ViewedAt,
 			&i.SavedAt,
 			&i.AppliedAt,
@@ -320,11 +322,19 @@ func (q *Queries) ListViewedJobSlugs(ctx context.Context, userID int64) ([]strin
 }
 
 const markJobApplied = `-- name: MarkJobApplied :one
-INSERT INTO user_jobs (user_id, job_id, applied_at, stage)
-VALUES ($1, $2, now(), 'applied')
-ON CONFLICT (user_id, job_id) DO UPDATE
-  SET applied_at = now(), stage = COALESCE(user_jobs.stage, 'applied')
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at
+WITH prior AS (
+    SELECT uj.applied_at FROM user_jobs uj WHERE uj.user_id = $1 AND uj.job_id = $2
+), upsert AS (
+    INSERT INTO user_jobs (user_id, job_id, applied_at, stage)
+    VALUES ($1, $2, now(), 'applied')
+    ON CONFLICT (user_id, job_id) DO UPDATE
+      SET applied_at = now(), stage = COALESCE(user_jobs.stage, 'applied')
+    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at
+), bump AS (
+    UPDATE jobs SET applied_count = applied_count + 1
+    WHERE id = $2 AND NOT EXISTS (SELECT 1 FROM prior WHERE prior.applied_at IS NOT NULL)
+)
+SELECT user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at FROM upsert
 `
 
 type MarkJobAppliedParams struct {
@@ -332,13 +342,26 @@ type MarkJobAppliedParams struct {
 	JobID  int64 `json:"job_id"`
 }
 
+type MarkJobAppliedRow struct {
+	UserID      int64              `json:"user_id"`
+	JobID       int64              `json:"job_id"`
+	ViewedAt    pgtype.Timestamptz `json:"viewed_at"`
+	AppliedAt   pgtype.Timestamptz `json:"applied_at"`
+	SavedAt     pgtype.Timestamptz `json:"saved_at"`
+	Stage       pgtype.Text        `json:"stage"`
+	Notes       pgtype.Text        `json:"notes"`
+	DismissedAt pgtype.Timestamptz `json:"dismissed_at"`
+}
+
 // Mark a job as applied for a user. Idempotent and independent of a prior view:
 // it inserts the row (viewed_at defaults) or updates applied_at in place, and
 // seeds stage='applied' only when the stage is unset (an advanced stage survives
-// a re-apply, via COALESCE).
-func (q *Queries) MarkJobApplied(ctx context.Context, arg MarkJobAppliedParams) (UserJob, error) {
+// a re-apply, via COALESCE). When (and only when) applied_at transitions from
+// unset to set, bump the job's materialized applied_count in the same statement;
+// `prior` sees the pre-upsert applied_at, so a re-apply never re-bumps.
+func (q *Queries) MarkJobApplied(ctx context.Context, arg MarkJobAppliedParams) (MarkJobAppliedRow, error) {
 	row := q.db.QueryRow(ctx, markJobApplied, arg.UserID, arg.JobID)
-	var i UserJob
+	var i MarkJobAppliedRow
 	err := row.Scan(
 		&i.UserID,
 		&i.JobID,
@@ -353,10 +376,18 @@ func (q *Queries) MarkJobApplied(ctx context.Context, arg MarkJobAppliedParams) 
 }
 
 const recordJobView = `-- name: RecordJobView :one
-INSERT INTO user_jobs (user_id, job_id)
-VALUES ($1, $2)
-ON CONFLICT (user_id, job_id) DO UPDATE SET viewed_at = now()
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at
+WITH prior AS (
+    SELECT 1 AS existed FROM user_jobs uj WHERE uj.user_id = $1 AND uj.job_id = $2
+), upsert AS (
+    INSERT INTO user_jobs (user_id, job_id)
+    VALUES ($1, $2)
+    ON CONFLICT (user_id, job_id) DO UPDATE SET viewed_at = now()
+    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at
+), bump AS (
+    UPDATE jobs SET view_count = view_count + 1
+    WHERE id = $2 AND NOT EXISTS (SELECT 1 FROM prior)
+)
+SELECT user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at FROM upsert
 `
 
 type RecordJobViewParams struct {
@@ -364,12 +395,27 @@ type RecordJobViewParams struct {
 	JobID  int64 `json:"job_id"`
 }
 
+type RecordJobViewRow struct {
+	UserID      int64              `json:"user_id"`
+	JobID       int64              `json:"job_id"`
+	ViewedAt    pgtype.Timestamptz `json:"viewed_at"`
+	AppliedAt   pgtype.Timestamptz `json:"applied_at"`
+	SavedAt     pgtype.Timestamptz `json:"saved_at"`
+	Stage       pgtype.Text        `json:"stage"`
+	Notes       pgtype.Text        `json:"notes"`
+	DismissedAt pgtype.Timestamptz `json:"dismissed_at"`
+}
+
 // Record (or refresh) a user's view of a job. Idempotent on (user_id, job_id):
 // the first view creates the row, a repeat view touches viewed_at. Returns the
 // row so the caller learns the current applied_at in the same round-trip.
-func (q *Queries) RecordJobView(ctx context.Context, arg RecordJobViewParams) (UserJob, error) {
+// When (and only when) the row is created for the first time — no prior
+// interaction existed — bump the job's materialized view_count in the same
+// statement. All WITH sub-statements see one snapshot, so `prior` reflects the
+// pre-upsert state regardless of execution order; a repeat view never re-bumps.
+func (q *Queries) RecordJobView(ctx context.Context, arg RecordJobViewParams) (RecordJobViewRow, error) {
 	row := q.db.QueryRow(ctx, recordJobView, arg.UserID, arg.JobID)
-	var i UserJob
+	var i RecordJobViewRow
 	err := row.Scan(
 		&i.UserID,
 		&i.JobID,
