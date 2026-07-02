@@ -1,0 +1,21 @@
+# taleo (Oracle Taleo Enterprise) boards. Provider is the filename; board =
+# "<host>/<careersection>" (see internal/sources/taleo.go), e.g. valero.taleo.net/2.
+# Taleo is session-bound: the adapter GETs the careersection to set the JSESSIONID and
+# scrape its portal code, then POSTs searchjobs. Each board was validated live (searchjobs
+# returned >0 jobs and descriptions decoded) before adding.
+#
+# Onboarding a tenant is manual: find its public careersection host + number (the section
+# that renders a real Job Search page, not the recruiter login) — the number is not
+# guessable and varies per tenant. Known seams (do not re-add blindly): tenants that front
+# Taleo behind their own domain (no *.taleo.net careersection — uhg/hilton/textron/jacobs),
+# tenants whose searchjobs returns "An Error Occurred in TEE", and very large boards whose
+# per-job detail fan-out is slow (hyatt.taleo.net/1 lists ~3k jobs).
+
+- company: Valero
+  board: valero.taleo.net/2
+- company: BAE Systems
+  board: baesystems.taleo.net/1
+- company: Schneider National
+  board: schneider.taleo.net/1
+- company: D.R. Horton
+  board: drhorton.taleo.net/2

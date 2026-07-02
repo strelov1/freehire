@@ -250,6 +250,15 @@ func All(c HTTPClient) map[string]Source {
 	if key := os.Getenv("REED_API_KEY"); key != "" {
 		registry["reed"] = NewReed(c, key)
 	}
+	// taleo needs a cookie-persisting client (its searchjobs POST requires the session cookie
+	// a careersection GET sets), so it cannot use the shared jar-less client. Build a dedicated
+	// one for a real crawl; on the transport-free listing path (c == nil) register a bare adapter
+	// — Provider()/marker assertions never touch the transport.
+	if c == nil {
+		registry["taleo"] = NewTaleo(nil)
+	} else {
+		registry["taleo"] = NewTaleo(newCookieClient())
+	}
 	// meta is the one adapter NOT served by the shared client: Meta's edge 400s the default Go
 	// TLS+HTTP/2 fingerprint, so it needs a Chrome-fingerprint transport (metaHTTP). Build it
 	// only when there is a real client to serve (the c == nil marker/listing path — e.g.

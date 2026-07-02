@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"strconv"
 	"strings"
 	"time"
@@ -124,6 +125,17 @@ func NewClient() *Client {
 		maxRetries:   2,
 		retryDelay:   500 * time.Millisecond,
 	}
+}
+
+// newCookieClient builds an HTTP client that persists cookies across calls, for the one
+// adapter (Taleo) whose session-bound API needs the JSESSIONID a careersection GET sets to
+// carry into the searchjobs POST. The jar is host-scoped, so a single client segregates
+// cookies across tenants without per-tenant sessions. cookiejar.New(nil) never errors.
+func newCookieClient() *Client {
+	c := NewClient()
+	jar, _ := cookiejar.New(nil)
+	c.httpClient.Jar = jar
+	return c
 }
 
 // streamTimeout bounds a GetStream read. Generous because the throttled bulk feeds it
