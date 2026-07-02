@@ -20,15 +20,10 @@ type LangChainExtractor struct {
 	client *llm.Client
 }
 
-// NewLangChainExtractor builds an extractor against an OpenAI-compatible endpoint.
-// No provider is hard-coded — any OpenAI-compatible backend works. Optional
-// llm.Options (e.g. llm.WithTracer) are passed through to the client.
-func NewLangChainExtractor(baseURL, apiKey, model string, opts ...llm.Option) (*LangChainExtractor, error) {
-	c, err := llm.New(baseURL, apiKey, model, opts...)
-	if err != nil {
-		return nil, fmt.Errorf("telegram: %w", err)
-	}
-	return &LangChainExtractor{client: c}, nil
+// NewLangChainExtractor wraps a prebuilt llm.Client (constructed once via
+// llm.NewClient, which also wires optional tracing) as a telegram Extractor.
+func NewLangChainExtractor(c *llm.Client) *LangChainExtractor {
+	return &LangChainExtractor{client: c}
 }
 
 // Extract asks the model to classify the post and extract its vacancies. It does

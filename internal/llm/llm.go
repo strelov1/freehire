@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -20,6 +21,10 @@ import (
 // run-once worker indefinitely, holding its cron flock open and stalling the
 // whole queue. The caller's lease/retry machinery then reclaims the work.
 const DefaultTimeout = 90 * time.Second
+
+// tracerShutdownTimeout bounds the final trace flush so a stuck Langfuse endpoint
+// cannot hold a shutting-down process open.
+const tracerShutdownTimeout = 15 * time.Second
 
 // Client is a thin wrapper over a langchaingo model with a per-call timeout. An
 // optional tracer observes each call; modelID and source label those observations.
@@ -62,6 +67,59 @@ func New(baseURL, apiKey, model string, opts ...Option) (*Client, error) {
 		o(c)
 	}
 	return c, nil
+}
+
+// Settings is the full configuration to build a (optionally traced) LLM client: the
+// OpenAI-compatible endpoint plus optional Langfuse credentials. It is the one shape
+// every entrypoint (the HTTP server and both LLM workers) maps its env config into,
+// so client construction and tracing live in exactly one place.
+type Settings struct {
+	BaseURL string
+	APIKey  string
+	Model   string
+
+	// Langfuse tracing is optional: all three set ⇒ every call is traced under the
+	// caller's source label; otherwise the client runs untraced.
+	LangfuseBaseURL   string
+	LangfusePublicKey string
+	LangfuseSecretKey string
+}
+
+// Enabled reports whether an LLM client can be built (all three core fields set).
+func (s Settings) Enabled() bool {
+	return s.BaseURL != "" && s.APIKey != "" && s.Model != ""
+}
+
+// NewClient is the single construction path for an LLM client. It builds the client
+// from s and, when the Langfuse fields are set, attaches a tracer labelled source
+// ("verdict"/"enrich"/"telegram"). It returns a flush func that drains buffered
+// traces — always defer it (a no-op when tracing is off). When the LLM is
+// unconfigured (!s.Enabled()) it returns (nil, no-op, nil) so callers degrade
+// uniformly. Because every caller goes through here, no entrypoint can build a
+// client and forget to wire tracing.
+func NewClient(s Settings, source string) (*Client, func(), error) {
+	noop := func() {}
+	if !s.Enabled() {
+		return nil, noop, nil
+	}
+	var opts []Option
+	flush := noop
+	if tracer := NewTracer(s.LangfuseBaseURL, s.LangfusePublicKey, s.LangfuseSecretKey); tracer != nil {
+		opts = append(opts, WithTracer(tracer, source))
+		flush = func() {
+			ctx, cancel := context.WithTimeout(context.Background(), tracerShutdownTimeout)
+			defer cancel()
+			if err := tracer.Shutdown(ctx); err != nil {
+				log.Printf("llm: tracer shutdown: %v", err)
+			}
+		}
+	}
+	c, err := New(s.BaseURL, s.APIKey, s.Model, opts...)
+	if err != nil {
+		flush() // don't leak the tracer goroutine when the client fails to build
+		return nil, noop, err
+	}
+	return c, flush, nil
 }
 
 // NewWithModel wraps an already-constructed langchaingo model with the default

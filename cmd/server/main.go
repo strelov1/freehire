@@ -72,16 +72,22 @@ func main() {
 		searchClient = search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
 	}
 
-	// The LLM is optional: only when all three settings are present do we build a
-	// client for the résumé-verdict coherence analysis. Absent it, the client stays
-	// nil and the verdict serves its deterministic core (no coherence). A build error
-	// on a configured endpoint is fatal — a misconfigured gateway should not boot silently.
-	var llmClient *llm.Client
-	if cfg.LLMBaseURL != "" && cfg.LLMAPIKey != "" && cfg.LLMModel != "" {
-		llmClient, err = llm.New(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModel)
-		if err != nil {
-			log.Fatalf("llm: %v", err)
-		}
+	// The LLM is optional and built through one construction path shared with the
+	// enrich/tg-extract workers: llm.NewClient builds the client for the résumé-verdict
+	// coherence analysis, wires Langfuse tracing (source "verdict") when LANGFUSE_* are
+	// set, and returns a flush func for shutdown. Nil client when the LLM is
+	// unconfigured — the verdict serves its deterministic core (no coherence). A build
+	// error on a configured endpoint is fatal — a misconfigured gateway must not boot silently.
+	llmClient, tracerShutdown, err := llm.NewClient(llm.Settings{
+		BaseURL:           cfg.LLMBaseURL,
+		APIKey:            cfg.LLMAPIKey,
+		Model:             cfg.LLMModel,
+		LangfuseBaseURL:   cfg.LangfuseBaseURL,
+		LangfusePublicKey: cfg.LangfusePublicKey,
+		LangfuseSecretKey: cfg.LangfuseSecretKey,
+	}, "verdict")
+	if err != nil {
+		log.Fatalf("llm: %v", err)
 	}
 
 	// Résumé storage is optional: only when all four S3 settings are present does
@@ -136,4 +142,8 @@ func main() {
 	if err := app.ShutdownWithTimeout(10 * time.Second); err != nil {
 		log.Printf("shutdown: %v", err)
 	}
+
+	// Flush any buffered Langfuse traces after the HTTP server has drained (no-op
+	// when tracing is unconfigured).
+	tracerShutdown()
 }

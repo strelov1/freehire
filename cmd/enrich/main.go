@@ -29,9 +29,21 @@ func run() int {
 		return 1
 	}
 
-	// Optional Langfuse tracing: nil (no-op) unless LANGFUSE_* are set. flush drains
-	// buffered generations at the end of the run.
-	tracer, flush := worker.Tracing(ecfg)
+	// One construction path: llm.NewClient builds the client and, when LANGFUSE_* are
+	// set, wires tracing (source "enrich"). flush drains buffered traces at run end
+	// (no-op when tracing is off). LoadEnrich already required the LLM settings.
+	client, flush, err := llm.NewClient(llm.Settings{
+		BaseURL:           ecfg.LLMBaseURL,
+		APIKey:            ecfg.LLMAPIKey,
+		Model:             ecfg.LLMModel,
+		LangfuseBaseURL:   ecfg.LangfuseBaseURL,
+		LangfusePublicKey: ecfg.LangfusePublicKey,
+		LangfuseSecretKey: ecfg.LangfuseSecretKey,
+	}, "enrich")
+	if err != nil {
+		log.Printf("llm: %v", err)
+		return 1
+	}
 	defer flush()
 
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
@@ -41,11 +53,7 @@ func run() int {
 	}
 	defer cleanup()
 
-	provider, err := enrich.NewLangChainProvider(ecfg.LLMBaseURL, ecfg.LLMAPIKey, ecfg.LLMModel, llm.WithTracer(tracer, "enrich"))
-	if err != nil {
-		log.Printf("provider: %v", err)
-		return 1
-	}
+	provider := enrich.NewLangChainProvider(client)
 
 	runner := enrich.Runner{Provider: provider, Store: newDBStore(pool)}
 

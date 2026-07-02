@@ -41,9 +41,21 @@ func run() int {
 	}
 	kinds := chanCfg.Kinds()
 
-	// Optional Langfuse tracing: nil (no-op) unless LANGFUSE_* are set. flush drains
-	// buffered generations at the end of the run.
-	tracer, flush := worker.Tracing(ecfg)
+	// One construction path: llm.NewClient builds the client and, when LANGFUSE_* are
+	// set, wires tracing (source "telegram"). flush drains buffered traces at run end
+	// (no-op when tracing is off). LoadEnrich already required the LLM settings.
+	client, flush, err := llm.NewClient(llm.Settings{
+		BaseURL:           ecfg.LLMBaseURL,
+		APIKey:            ecfg.LLMAPIKey,
+		Model:             ecfg.LLMModel,
+		LangfuseBaseURL:   ecfg.LangfuseBaseURL,
+		LangfusePublicKey: ecfg.LangfusePublicKey,
+		LangfuseSecretKey: ecfg.LangfuseSecretKey,
+	}, "telegram")
+	if err != nil {
+		log.Printf("llm: %v", err)
+		return 1
+	}
 	defer flush()
 
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
@@ -53,11 +65,7 @@ func run() int {
 	}
 	defer cleanup()
 
-	extractor, err := telegram.NewLangChainExtractor(ecfg.LLMBaseURL, ecfg.LLMAPIKey, ecfg.LLMModel, llm.WithTracer(tracer, "telegram"))
-	if err != nil {
-		log.Printf("extractor: %v", err)
-		return 1
-	}
+	extractor := telegram.NewLangChainExtractor(client)
 
 	runner := telegram.ExtractRunner{
 		Extractor: extractor,

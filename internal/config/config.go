@@ -47,6 +47,14 @@ type Settings struct {
 	LLMAPIKey  string
 	LLMModel   string
 
+	// Langfuse traces the server's LLM calls (the résumé-verdict coherence analysis),
+	// mirroring the enrich/tg-extract workers (config.Enrich). Optional observability:
+	// tracing is wired only when all three are set (LangfuseEnabled) — otherwise the LLM
+	// client runs untraced. Enforced at the cmd/server call site, not here.
+	LangfuseBaseURL   string
+	LangfusePublicKey string
+	LangfuseSecretKey string
+
 	// S3 backs résumé storage (internal/blobstore). Optional and provider-agnostic:
 	// any S3-compatible endpoint works, and no bucket/host/provider is baked into code —
 	// freehire-ops owns those. All four must be set to enable storage; any empty field
@@ -74,6 +82,13 @@ type OAuthCredentials struct {
 	ClientSecret string
 }
 
+// LangfuseEnabled reports whether the server should trace its LLM calls: true only
+// when all three Langfuse settings are present (a partial config is treated as off),
+// mirroring config.Enrich.LangfuseEnabled.
+func (s Settings) LangfuseEnabled() bool {
+	return s.LangfuseBaseURL != "" && s.LangfusePublicKey != "" && s.LangfuseSecretKey != ""
+}
+
 // oauthProviders are the providers whose credentials Load reads from the
 // environment (OAUTH_<PROVIDER>_CLIENT_ID / OAUTH_<PROVIDER>_CLIENT_SECRET).
 var oauthProviders = []string{"google", "github", "linkedin"}
@@ -94,6 +109,10 @@ func Load() Settings {
 		LLMBaseURL: os.Getenv("LLM_BASE_URL"),
 		LLMAPIKey:  os.Getenv("LLM_API_KEY"),
 		LLMModel:   os.Getenv("LLM_MODEL"),
+
+		LangfuseBaseURL:   os.Getenv("LANGFUSE_BASE_URL"),
+		LangfusePublicKey: os.Getenv("LANGFUSE_PUBLIC_KEY"),
+		LangfuseSecretKey: os.Getenv("LANGFUSE_SECRET_KEY"),
 
 		S3Endpoint:  os.Getenv("S3_ENDPOINT"),
 		S3Bucket:    os.Getenv("S3_BUCKET"),

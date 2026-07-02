@@ -54,6 +54,31 @@ func TestLoad_S3EmptyWhenUnset(t *testing.T) {
 	}
 }
 
+func TestLoad_LangfuseFromEnv(t *testing.T) {
+	t.Setenv("LANGFUSE_BASE_URL", "https://us.cloud.langfuse.com")
+	t.Setenv("LANGFUSE_PUBLIC_KEY", "pk-1")
+	t.Setenv("LANGFUSE_SECRET_KEY", "sk-1")
+
+	s := Load()
+	if s.LangfuseBaseURL != "https://us.cloud.langfuse.com" || s.LangfusePublicKey != "pk-1" || s.LangfuseSecretKey != "sk-1" {
+		t.Errorf("Langfuse settings = %q/%q/%q, want the env values",
+			s.LangfuseBaseURL, s.LangfusePublicKey, s.LangfuseSecretKey)
+	}
+	if !s.LangfuseEnabled() {
+		t.Error("LangfuseEnabled should be true when all three are set")
+	}
+}
+
+func TestLoad_LangfuseDisabledWhenPartial(t *testing.T) {
+	t.Setenv("LANGFUSE_BASE_URL", "https://us.cloud.langfuse.com")
+	t.Setenv("LANGFUSE_PUBLIC_KEY", "pk-1")
+	t.Setenv("LANGFUSE_SECRET_KEY", "") // missing → disabled
+
+	if Load().LangfuseEnabled() {
+		t.Error("LangfuseEnabled should be false when a setting is missing")
+	}
+}
+
 func TestLoad_JWTSecretFromEnv(t *testing.T) {
 	t.Setenv("JWT_SECRET", "s3cret")
 
