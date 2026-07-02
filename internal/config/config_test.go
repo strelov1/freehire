@@ -64,18 +64,17 @@ func TestLoad_LangfuseFromEnv(t *testing.T) {
 		t.Errorf("Langfuse settings = %q/%q/%q, want the env values",
 			s.LangfuseBaseURL, s.LangfusePublicKey, s.LangfuseSecretKey)
 	}
-	if !s.LangfuseEnabled() {
-		t.Error("LangfuseEnabled should be true when all three are set")
-	}
 }
 
-func TestLoad_LangfuseDisabledWhenPartial(t *testing.T) {
-	t.Setenv("LANGFUSE_BASE_URL", "https://us.cloud.langfuse.com")
-	t.Setenv("LANGFUSE_PUBLIC_KEY", "pk-1")
-	t.Setenv("LANGFUSE_SECRET_KEY", "") // missing → disabled
+func TestLoad_LangfuseEmptyWhenUnset(t *testing.T) {
+	t.Setenv("LANGFUSE_BASE_URL", "")
+	t.Setenv("LANGFUSE_PUBLIC_KEY", "")
+	t.Setenv("LANGFUSE_SECRET_KEY", "")
 
-	if Load().LangfuseEnabled() {
-		t.Error("LangfuseEnabled should be false when a setting is missing")
+	s := Load()
+	if s.LangfuseBaseURL != "" || s.LangfusePublicKey != "" || s.LangfuseSecretKey != "" {
+		t.Errorf("Langfuse settings should be empty when unset, got %q/%q/%q",
+			s.LangfuseBaseURL, s.LangfusePublicKey, s.LangfuseSecretKey)
 	}
 }
 

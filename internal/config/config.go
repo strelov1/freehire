@@ -49,8 +49,8 @@ type Settings struct {
 
 	// Langfuse traces the server's LLM calls (the résumé-verdict coherence analysis),
 	// mirroring the enrich/tg-extract workers (config.Enrich). Optional observability:
-	// tracing is wired only when all three are set (LangfuseEnabled) — otherwise the LLM
-	// client runs untraced. Enforced at the cmd/server call site, not here.
+	// llm.NewClient wires tracing only when all three are set — otherwise the client
+	// runs untraced. Handled at the cmd/server call site, not here.
 	LangfuseBaseURL   string
 	LangfusePublicKey string
 	LangfuseSecretKey string
@@ -80,13 +80,6 @@ type Settings struct {
 type OAuthCredentials struct {
 	ClientID     string
 	ClientSecret string
-}
-
-// LangfuseEnabled reports whether the server should trace its LLM calls: true only
-// when all three Langfuse settings are present (a partial config is treated as off),
-// mirroring config.Enrich.LangfuseEnabled.
-func (s Settings) LangfuseEnabled() bool {
-	return s.LangfuseBaseURL != "" && s.LangfusePublicKey != "" && s.LangfuseSecretKey != ""
 }
 
 // oauthProviders are the providers whose credentials Load reads from the
