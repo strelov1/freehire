@@ -153,7 +153,15 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     company_slug = EXCLUDED.company_slug,
     location     = EXCLUDED.location,
     remote       = EXCLUDED.remote,
-    description  = EXCLUDED.description,
+    -- description comes from a separate, best-effort detail fetch (some adapters,
+    -- e.g. habr_career, load it from a per-vacancy page that an anti-bot layer can
+    -- intermittently fail). A failed fetch yields an empty description but still
+    -- upserts the job, so writing EXCLUDED unconditionally would let a transient
+    -- failure wipe a good description. Keep the stored value when the incoming one is
+    -- empty; a non-empty description still overwrites, so real edits propagate.
+    -- (content_hash below stays the incoming fingerprint; the incremental indexer
+    -- rebuilds its doc from the RETURNING row, which carries this preserved value.)
+    description  = COALESCE(NULLIF(EXCLUDED.description, ''), jobs.description),
     posted_at    = EXCLUDED.posted_at,
     countries    = EXCLUDED.countries,
     regions      = EXCLUDED.regions,

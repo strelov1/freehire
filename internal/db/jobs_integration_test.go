@@ -156,6 +156,51 @@ func TestEnqueueJobEnrichmentGating(t *testing.T) {
 	})
 }
 
+// A failed detail fetch makes an adapter yield a job with an empty description while
+// still upserting it (the vacancy must not be dropped). UpsertJob must treat an empty
+// incoming description as "no new value" and keep the stored one, so a transient
+// detail-fetch failure (e.g. an anti-bot challenge on a Habr detail page) cannot wipe a
+// good description. A non-empty description still overwrites, so real edits propagate.
+func TestUpsertJobPreservesDescriptionWhenReingestEmpty(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	first, err := ingestUpsert(ctx, q, ingestParams("acme:desc", "Job"))
+	if err != nil {
+		t.Fatalf("initial upsert: %v", err)
+	}
+	if first.Description != "Build things." {
+		t.Fatalf("precondition: description = %q, want the seeded value", first.Description)
+	}
+
+	// Re-crawl whose detail fetch failed: empty description, same identity.
+	empty := ingestParams("acme:desc", "Job")
+	empty.Description = ""
+	second, err := ingestUpsert(ctx, q, empty)
+	if err != nil {
+		t.Fatalf("re-ingest with empty description: %v", err)
+	}
+	if second.ID != first.ID {
+		t.Fatalf("re-ingest created a new row — dedup broken")
+	}
+	if second.Description != "Build things." {
+		t.Errorf("Description = %q, want preserved %q (empty re-ingest wiped it)", second.Description, "Build things.")
+	}
+
+	// A non-empty re-ingest still overwrites, so a genuine content edit propagates.
+	updated := ingestParams("acme:desc", "Job")
+	updated.Description = "Updated description."
+	third, err := ingestUpsert(ctx, q, updated)
+	if err != nil {
+		t.Fatalf("re-ingest with new description: %v", err)
+	}
+	if third.Description != "Updated description." {
+		t.Errorf("Description = %q, want overwritten with the new value", third.Description)
+	}
+}
+
 func TestUpsertJobWritesAndRefreshesGeography(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
