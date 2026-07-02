@@ -62,6 +62,7 @@ func genStructs() (string, error) {
 	enrichTS := filepath.Join(tmp, "enrich.ts")
 	jobviewTS := filepath.Join(tmp, "jobview.ts")
 	verdictTS := filepath.Join(tmp, "verdict.ts")
+	atscheckTS := filepath.Join(tmp, "atscheck.ts")
 
 	cfg := &tygo.Config{
 		Packages: []*tygo.PackageConfig{
@@ -83,6 +84,13 @@ func genStructs() (string, error) {
 				OutputPath:   verdictTS,
 				IncludeFiles: []string{"verdict.go"},
 			},
+			{
+				// The CV ATS-readiness report wire shape (Report + Check + Status).
+				// Self-contained — only primitives and []Check.
+				Path:         "github.com/strelov1/freehire/internal/atscheck",
+				OutputPath:   atscheckTS,
+				IncludeFiles: []string{"atscheck.go"},
+			},
 		},
 	}
 	if err := tygo.New(cfg).Generate(); err != nil {
@@ -101,7 +109,11 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return enrichBody + "\n" + jobviewBody + "\n" + verdictBody, nil
+	atscheckBody, err := readBody(atscheckTS)
+	if err != nil {
+		return "", err
+	}
+	return enrichBody + "\n" + jobviewBody + "\n" + verdictBody + "\n" + atscheckBody, nil
 }
 
 // readBody returns a tygo output file's body with its leading preamble removed, so

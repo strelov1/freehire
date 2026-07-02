@@ -1,8 +1,17 @@
 // Wire types mirroring the backend JSON (internal/db models and query rows).
 // Timestamps marshal as RFC3339 strings when present, or null.
 
-import type { Job } from './generated/contracts';
+import type { Job, Report as ATSReportContract } from './generated/contracts';
 export type { Job, Enrichment, Verdict, Gap } from './generated/contracts';
+// atscheck's Report/Check are aliased (a local Report — job reports — already exists).
+export type { Report as ATSReport, Check as ATSCheck } from './generated/contracts';
+
+/** The CV ATS report response: `has_cv` is false when the caller has no stored CV
+ *  (the page prompts an upload); `report` is present only when `has_cv` is true. */
+export interface ATSResponse {
+  has_cv: boolean;
+  report: ATSReportContract | null;
+}
 
 export interface Company {
   slug: string;

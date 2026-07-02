@@ -290,6 +290,9 @@ func Register(app *fiber.App, cfg Config) {
 	// market-coverage verdict from the profile's skills against the selected role.
 	// Cookie-only and owner-scoped, like the profile routes it hangs off.
 	api.Get("/me/profiles/:id/verdict", saved, a.GetResumeVerdict)
+	// The CV ATS-readiness report is a sibling per-profile sub-resource: GET scores
+	// the caller's stored CV (structure + role keyword-match). Owner-scoped, cookie-only.
+	api.Get("/me/profiles/:id/ats-report", saved, a.GetATSReport)
 
 	// Resume skill extraction is cookie-only (RequireAuth): it feeds the profile
 	// picker (extracted skills merge into a profile). When S3 storage is configured it

@@ -33,6 +33,7 @@ import type {
   Report,
   ReportInput,
   Verdict,
+  ATSResponse,
 } from './types';
 
 /** A page of list items, optionally the total matching the query (endpoints that
@@ -546,6 +547,18 @@ export function createApi(
     return res.data;
   }
 
+  /** The CV ATS-readiness report for a profile: structural checks over the caller's
+   *  stored CV plus a keyword-match against the selected role's top skills. `params`
+   *  carries the same facet filters as the verdict. `has_cv` is false (report null)
+   *  when no CV is stored — the page then prompts an upload. Owner-scoped. */
+  async function getATSReport(id: number, params?: URLSearchParams): Promise<ATSResponse> {
+    const qs = params?.toString();
+    const res = await request<{ data: ATSResponse }>(
+      `/api/v1/me/profiles/${id}/ats-report${qs ? `?${qs}` : ''}`,
+    );
+    return res.data;
+  }
+
   /** The caller's notification subscriptions (one per saved search + channel). */
   async function listSubscriptions(): Promise<Subscription[]> {
     const res = await request<{ data: Subscription[] }>('/api/v1/me/subscriptions');
@@ -715,6 +728,7 @@ export function createApi(
     deleteSearchProfile,
     extractResumeSkills,
     getProfileVerdict,
+    getATSReport,
     listSubscriptions,
     createSubscription,
     setSubscriptionActive,
@@ -786,6 +800,7 @@ export const {
   deleteSearchProfile,
   extractResumeSkills,
   getProfileVerdict,
+  getATSReport,
   listSubscriptions,
   createSubscription,
   setSubscriptionActive,

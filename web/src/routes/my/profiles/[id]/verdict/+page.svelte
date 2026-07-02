@@ -1,16 +1,18 @@
 <script lang="ts">
+  import { ArrowUp, FileText, RefreshCw } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { facetCounts, getProfileVerdict } from '$lib/api';
+  import { ApiError, extractResumeSkills, facetCounts, getATSReport, getProfileVerdict } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { categoryLabel } from '$lib/facets';
   import { FilterStore, filtersToParams } from '$lib/filters';
+  import ATSReportView from '$lib/components/ATSReportView.svelte';
   import FiltersPanel from '$lib/components/FiltersPanel.svelte';
   import States from '$lib/components/States.svelte';
   import VerdictView from '$lib/components/VerdictView.svelte';
   import { searchProfiles } from '$lib/searchProfiles.svelte';
-  import type { FacetCounts, Verdict } from '$lib/types';
+  import type { ATSResponse, FacetCounts, Verdict } from '$lib/types';
   import { Button } from '$lib/ui';
 
   const id = $derived(Number(page.params.id));
@@ -24,7 +26,14 @@
   let filters = $state<FilterStore | null>(null);
   let verdict = $state<Verdict | null>(null);
   let counts = $state<FacetCounts | null>(null);
+  let ats = $state<ATSResponse | null>(null);
   let loadError = $state(false);
+
+  // CV upload state (the ATS report needs a stored CV).
+  let cvBusy = $state(false);
+  let cvError = $state<string | null>(null);
+  let fileInput = $state<HTMLInputElement | null>(null);
+  let dragActive = $state(false);
 
   // Build the filter store once the profile is known, seeding its role from the
   // profile's specializations when the URL carries no category — so the panel opens on
@@ -64,11 +73,53 @@
     if (!filters) return;
     const params = filtersToParams(filters.applied);
     try {
-      [verdict, counts] = await Promise.all([getProfileVerdict(id, params), facetCounts(params)]);
+      [verdict, counts, ats] = await Promise.all([
+        getProfileVerdict(id, params),
+        facetCounts(params),
+        getATSReport(id, params),
+      ]);
       loadError = false;
     } catch {
       loadError = true;
     }
+  }
+
+  function isPdf(file: File): boolean {
+    return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  }
+
+  // Store the CV (via the skill-extract path, which also stores it when storage is on),
+  // then reload so the ATS report scores it.
+  async function uploadCV(file: File) {
+    cvBusy = true;
+    cvError = null;
+    try {
+      await extractResumeSkills(file);
+      await reload();
+    } catch (err) {
+      cvError = err instanceof ApiError ? err.message : 'Could not read the CV. Please try again.';
+    } finally {
+      cvBusy = false;
+    }
+  }
+
+  function onCVFile(e: Event) {
+    const target = e.currentTarget as HTMLInputElement;
+    const file = target.files?.[0];
+    target.value = '';
+    if (file) void uploadCV(file);
+  }
+
+  function onDrop(e: DragEvent) {
+    e.preventDefault();
+    dragActive = false;
+    const file = e.dataTransfer?.files?.[0];
+    if (!file) return;
+    if (!isPdf(file)) {
+      cvError = 'Please drop a PDF file.';
+      return;
+    }
+    void uploadCV(file);
   }
 
   // Humanized role label: the selected categories, falling back to the profile's own
@@ -119,7 +170,77 @@
         {:else if verdict === null}
           <States state="loading" />
         {:else}
-          <VerdictView {verdict} name={profile.name} {role} {gapHref} />
+          <div class="flex flex-col gap-10">
+            <VerdictView {verdict} name={profile.name} {role} {gapHref} />
+
+            <!-- CV readiness (ATS report). Needs a stored CV; prompt an upload when absent. -->
+            <div class="border-t border-border pt-8">
+              <input
+                type="file"
+                accept="application/pdf,.pdf"
+                class="hidden"
+                bind:this={fileInput}
+                onchange={onCVFile}
+              />
+              {#if ats?.has_cv && ats.report}
+                <div class="flex flex-col gap-4">
+                  <ATSReportView report={ats.report} />
+                  <Button variant="ghost" onclick={() => fileInput?.click()} disabled={cvBusy}>
+                    <RefreshCw class="size-4 {cvBusy ? 'animate-spin' : ''}" />
+                    {cvBusy ? 'Uploading…' : 'Replace CV'}
+                  </Button>
+                </div>
+              {:else}
+                <div class="flex flex-col gap-2">
+                  <h2 class="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    CV readiness
+                  </h2>
+                  <button
+                    type="button"
+                    onclick={() => fileInput?.click()}
+                    ondragover={(e) => {
+                      e.preventDefault();
+                      dragActive = true;
+                    }}
+                    ondragleave={(e) => {
+                      e.preventDefault();
+                      dragActive = false;
+                    }}
+                    ondrop={onDrop}
+                    disabled={cvBusy}
+                    class="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors disabled:opacity-70 {dragActive
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/60'}"
+                  >
+                    <span class="flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                      {#if cvBusy}
+                        <FileText class="size-5" />
+                      {:else}
+                        <ArrowUp class="size-5" />
+                      {/if}
+                    </span>
+                    <span class="flex flex-col gap-0.5">
+                      <span class="text-sm font-semibold">
+                        {cvBusy ? 'Reading your CV…' : 'Upload your CV to score it'}
+                      </span>
+                      {#if !cvBusy}
+                        <span class="text-xs text-muted-foreground">
+                          Drop a PDF here, or <span class="text-primary underline">choose from disk</span>
+                        </span>
+                      {/if}
+                    </span>
+                  </button>
+                  <span class="text-xs text-muted-foreground">
+                    Checks ATS readability + this role's keywords. Parsed on the server; CV text is
+                    not stored.
+                  </span>
+                </div>
+              {/if}
+              {#if cvError}
+                <p class="mt-2 text-sm text-destructive">{cvError}</p>
+              {/if}
+            </div>
+          </div>
         {/if}
       </main>
     </div>

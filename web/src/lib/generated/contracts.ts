@@ -152,7 +152,34 @@ export interface Gap {
   unlock_percent: number /* int */; // round(new_vacancies / total × 100)
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'adp', 'arbeitnow', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'breezy', 'careerplug', 'clinch', 'comeet', 'cornerstone', 'deel', 'eightfold', 'epam', 'erecruiter', 'factorial', 'freshteam', 'gem', 'getmatch', 'getonbrd', 'globalpayments', 'greenhouse', 'gupy', 'habr_career', 'himalayas', 'huntflow', 'icims', 'inhire', 'itechart', 'jazzhr', 'jibe', 'jobicy', 'jobstash', 'jobtech', 'join', 'justjoin', 'lever', 'luxoft', 'mycareersfuture', 'oracle', 'paycom', 'personio', 'phenom', 'pinpoint', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'solides', 'successfactors', 'teamtailor', 'tecla', 'thehub', 'traffit', 'trakstar', 'ukg', 'vention', 'wantedkr', 'weworkremotely', 'workable', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
+/**
+ * Status is a check outcome.
+ */
+export type Status = string;
+export const StatusPass: Status = "pass";
+export const StatusWarn: Status = "warn";
+export const StatusFail: Status = "fail";
+/**
+ * Check is one line of the readiness checklist.
+ */
+export interface Check {
+  id: string;
+  status: Status;
+  label: string;
+  fix?: string;
+}
+/**
+ * Report is the full ATS-readiness result. JSON is the wire contract shared with
+ * the frontend (an optional LLM layer sets content-quality on top; see analyzer.go).
+ */
+export interface Report {
+  overall: number /* int */; // 0-100 blended
+  readability: number /* int */; // 0-100 structural pass-rate
+  keyword_match: number /* int */; // 0-100 role skills present in the CV text
+  checks: Check[];
+}
+
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'adp', 'arbeitnow', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'breezy', 'careerplug', 'clinch', 'comeet', 'cornerstone', 'deel', 'eightfold', 'epam', 'erecruiter', 'factorial', 'freshteam', 'gem', 'getmatch', 'getonbrd', 'globalpayments', 'greenhouse', 'gupy', 'habr_career', 'himalayas', 'huntflow', 'icims', 'inhire', 'itechart', 'jazzhr', 'jibe', 'jobicy', 'jobstash', 'jobtech', 'join', 'justjoin', 'lever', 'luxoft', 'mycareersfuture', 'oracle', 'paycom', 'personio', 'phenom', 'pinpoint', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'solides', 'successfactors', 'taleo', 'teamtailor', 'tecla', 'thehub', 'traffit', 'trakstar', 'ukg', 'vention', 'wantedkr', 'weworkremotely', 'workable', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];
