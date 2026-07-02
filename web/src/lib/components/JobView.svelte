@@ -22,6 +22,8 @@
   // yet loaded). `showApplyPrompt` is the post-click "Did you apply?" question.
   let interaction = $state.raw<UserJob | null>(null);
   let showApplyPrompt = $state(false);
+  // Signed-out gate: the "Show" click offers sign-in before opening the posting.
+  let showSignInPrompt = $state(false);
   // The report dialog (a problem-with-this-job complaint) opens over the page.
   let showReport = $state(false);
   const applied = $derived(interaction?.applied_at != null);
@@ -41,6 +43,7 @@
     const slug = job.public_slug; // track the current job
     interaction = null;
     showApplyPrompt = false;
+    showSignInPrompt = false;
     if (!browser || !isAuthenticated()) return;
     recordJobView(slug)
       .then((rec) => {
@@ -53,8 +56,28 @@
 
   // The Apply link opens the external posting; once the user has gone to apply,
   // offer the "Did you apply?" choice (only when signed in and not already applied).
-  function onApplyClick() {
-    if (isAuthenticated() && !applied) showApplyPrompt = true;
+  // Signed-out visitors are gated first: the click is intercepted (the link does
+  // not open) and a sign-in offer is shown instead — the posting opens only via
+  // "View without signing in" below.
+  function onApplyClick(e: MouseEvent) {
+    if (!isAuthenticated()) {
+      e.preventDefault();
+      showSignInPrompt = true;
+      return;
+    }
+    if (!applied) showApplyPrompt = true;
+  }
+
+  // Gate — "Sign up" routes to the register dialog; "View without signing in"
+  // opens the posting in a new tab (the navigation the click was holding back).
+  function signUpFromGate() {
+    showSignInPrompt = false;
+    openAuthDialog('register');
+  }
+
+  function viewWithoutSignIn() {
+    showSignInPrompt = false;
+    window.open(job.url, '_blank', 'noopener,noreferrer');
   }
 
   async function confirmApplied() {
@@ -154,6 +177,18 @@
         <div class="flex items-center gap-2">
           <Button variant="primary" size="sm" onclick={confirmApplied}>Yes, save</Button>
           <Button variant="ghost" size="sm" onclick={dismissApplyPrompt}>No</Button>
+        </div>
+      </div>
+    {/if}
+
+    {#if showSignInPrompt}
+      <div
+        class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-secondary px-4 py-3"
+      >
+        <span class="text-sm">Sign in to keep track of the jobs you apply to.</span>
+        <div class="flex items-center gap-2">
+          <Button variant="primary" size="sm" onclick={signUpFromGate}>Sign up</Button>
+          <Button variant="ghost" size="sm" onclick={viewWithoutSignIn}>View without signing in</Button>
         </div>
       </div>
     {/if}
