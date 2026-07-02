@@ -38,7 +38,7 @@ type MarketSkills struct {
 // analysis is present (see coherence.go); nil renders no coherence card. JSON is
 // the wire contract shared with the frontend (generated to TS via cmd/gen-contracts).
 type Verdict struct {
-	StackMatch      int     `json:"stack_match"`      // 0-100: share of the top-N the candidate has
+	StackMatch      int     `json:"stack_match"` // 0-100: share of the top-N the candidate has
 	MustHaveCovered int     `json:"must_have_covered"`
 	MustHaveTotal   int     `json:"must_have_total"`
 	Coherence       *int    `json:"coherence,omitempty"`   // 0-100, LLM-derived
@@ -49,7 +49,7 @@ type Verdict struct {
 // Skill is one row of the breakdown.
 type Skill struct {
 	Rank     int     `json:"rank"`
-	Name     string  `json:"name"`             // canonical slug; the UI humanizes it
+	Name     string  `json:"name"` // canonical slug; the UI humanizes it
 	MustHave bool    `json:"must_have"`
 	Have     bool    `json:"have"`
 	Unlock   *int    `json:"unlock,omitempty"` // gaps only: % of the role's postings this skill touches

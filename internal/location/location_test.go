@@ -50,32 +50,32 @@ func TestParse(t *testing.T) {
 		{
 			name:     "polish spelling of warsaw resolves to PL",
 			location: "Warszawa",
-			want:     Geo{Countries: []string{"pl"}, Regions: []string{"eu"}},
+			want:     Geo{Countries: []string{"pl"}, Regions: []string{"eu"}, Cities: []string{"Warsaw"}},
 		},
 		{
 			name:     "polish city with diacritics",
 			location: "Łódź, Poland",
-			want:     Geo{Countries: []string{"pl"}, Regions: []string{"eu"}},
+			want:     Geo{Countries: []string{"pl"}, Regions: []string{"eu"}, Cities: []string{"Łódź"}},
 		},
 		{
 			name:     "unambiguous UK city",
 			location: "Manchester",
-			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}},
+			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, Cities: []string{"Manchester"}},
 		},
 		{
 			name:     "accented montreal resolves to CA",
 			location: "Montréal, QC",
-			want:     Geo{Countries: []string{"ca"}, Regions: []string{"north_america"}},
+			want:     Geo{Countries: []string{"ca"}, Regions: []string{"north_america"}, Cities: []string{"Montreal"}},
 		},
 		{
 			name:     "australian beacon city",
 			location: "Brisbane",
-			want:     Geo{Countries: []string{"au"}, Regions: []string{"apac"}},
+			want:     Geo{Countries: []string{"au"}, Regions: []string{"apac"}, Cities: []string{"Brisbane"}},
 		},
 		{
 			name:     "new zealand beacon city",
 			location: "Auckland",
-			want:     Geo{Countries: []string{"nz"}, Regions: []string{"apac"}},
+			want:     Geo{Countries: []string{"nz"}, Regions: []string{"apac"}, Cities: []string{"Auckland"}},
 		},
 		{
 			name:     "bare remote yields work mode but no geography",

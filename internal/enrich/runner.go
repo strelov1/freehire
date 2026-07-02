@@ -8,6 +8,8 @@ import (
 	"log"
 	"sync"
 	"time"
+
+	"github.com/strelov1/freehire/internal/worker"
 )
 
 // Claimed is one outbox entry leased to this run.
@@ -115,6 +117,14 @@ func (rn *run) process(ctx context.Context, entry Claimed) {
 
 	job, err := rn.store.Job(ctx, entry.JobID)
 	if err != nil {
+		// A corrupted row (XX001) is permanently unreadable — retrying across cron
+		// runs would only burn the attempt budget on a job that can never load, so
+		// dead-letter it immediately (maxAttempts=1) instead.
+		if worker.IsCorruptedRow(err) {
+			rn.failN(ctx, entry, fmt.Errorf("load job: %w", err), 1)
+			log.Printf("enrich: job=%d dead-lettered (corrupted row) in %s: %v", entry.JobID, time.Since(start).Round(time.Millisecond), err)
+			return
+		}
 		rn.fail(ctx, entry, fmt.Errorf("load job: %w", err))
 		log.Printf("enrich: job=%d load failed in %s: %v", entry.JobID, time.Since(start).Round(time.Millisecond), err)
 		return
@@ -176,7 +186,14 @@ func (rn *run) enrich(ctx context.Context, job JobInput) (Enrichment, error) {
 }
 
 func (rn *run) fail(ctx context.Context, entry Claimed, cause error) {
-	dead, err := rn.store.Fail(ctx, entry.OutboxID, cause.Error(), rn.opt.MaxAttempts)
+	rn.failN(ctx, entry, cause, rn.opt.MaxAttempts)
+}
+
+// failN records a failure with an explicit attempt ceiling. fail uses the run's
+// configured MaxAttempts; the corrupted-row path passes 1 to force an immediate
+// dead-letter (an unreadable row will never succeed on retry).
+func (rn *run) failN(ctx context.Context, entry Claimed, cause error, maxAttempts int) {
+	dead, err := rn.store.Fail(ctx, entry.OutboxID, cause.Error(), maxAttempts)
 	if err != nil {
 		// The attempt still counts as a failure below, but log the cause: a
 		// bookkeeping outage (e.g. the DB going unreachable mid-drain) would

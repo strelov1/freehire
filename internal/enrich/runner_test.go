@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // --- fakes ------------------------------------------------------------------
@@ -47,6 +49,7 @@ type fakeStore struct {
 	enqueued  bool
 	completed []int64
 	failed    []int64
+	failMax   []int
 }
 
 func (s *fakeStore) Enqueue(_ context.Context, _ int) (int64, error) {
@@ -74,11 +77,13 @@ func (s *fakeStore) Complete(_ context.Context, entry Claimed, _ json.RawMessage
 	return nil
 }
 
-func (s *fakeStore) Fail(_ context.Context, outboxID int64, _ string, _ int) (bool, error) {
+func (s *fakeStore) Fail(_ context.Context, outboxID int64, _ string, maxAttempts int) (bool, error) {
 	s.mu.Lock()
 	s.failed = append(s.failed, outboxID)
+	s.failMax = append(s.failMax, maxAttempts)
 	s.mu.Unlock()
-	return s.deadFor[outboxID], nil
+	// maxAttempts == 1 forces immediate dead-letter (the corrupted-row path).
+	return s.deadFor[outboxID] || maxAttempts == 1, nil
 }
 
 func opts() RunOptions {
@@ -86,6 +91,33 @@ func opts() RunOptions {
 }
 
 // --- tests ------------------------------------------------------------------
+
+// A job whose row read faults with data corruption (XX001) must be dead-lettered
+// immediately — not retried across cron runs — and the LLM must never be called
+// for an unreadable job.
+func TestRun_corruptedJobDeadLettersImmediately(t *testing.T) {
+	store := &fakeStore{
+		claims: [][]Claimed{{{OutboxID: 7, JobID: 100, TargetVersion: Version}}},
+		jobErr: map[int64]error{100: &pgconn.PgError{Code: "XX001"}},
+	}
+	prov := &funcProvider{fn: func(JobInput) (Enrichment, error) {
+		return Enrichment{Seniority: "senior", WorkMode: "remote"}, nil
+	}}
+
+	stats, err := Runner{Provider: prov, Store: store}.Run(context.Background(), opts())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if prov.callCount() != 0 {
+		t.Errorf("provider called %d times for a corrupted job, want 0", prov.callCount())
+	}
+	if len(store.failMax) != 1 || store.failMax[0] != 1 {
+		t.Errorf("Fail maxAttempts = %v, want [1] (immediate dead-letter)", store.failMax)
+	}
+	if stats.DeadLettered != 1 {
+		t.Errorf("DeadLettered = %d, want 1", stats.DeadLettered)
+	}
+}
 
 func TestRun_validIsWrittenAndDequeued(t *testing.T) {
 	store := &fakeStore{

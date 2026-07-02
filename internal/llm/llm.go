@@ -21,16 +21,34 @@ import (
 // whole queue. The caller's lease/retry machinery then reclaims the work.
 const DefaultTimeout = 90 * time.Second
 
-// Client is a thin wrapper over a langchaingo model with a per-call timeout.
+// Client is a thin wrapper over a langchaingo model with a per-call timeout. An
+// optional tracer observes each call; modelID and source label those observations.
 type Client struct {
 	model   llms.Model
+	modelID string
 	timeout time.Duration
+	tracer  Tracer
+	source  string
+}
+
+// Option configures a Client at construction. Options keep tracing opt-in without
+// changing the constructors' required parameters, so existing call sites compile
+// unchanged.
+type Option func(*Client)
+
+// WithTracer attaches a tracer and the source label recorded on each observation.
+// A nil tracer is fine — the client simply performs no tracing.
+func WithTracer(t Tracer, source string) Option {
+	return func(c *Client) {
+		c.tracer = t
+		c.source = source
+	}
 }
 
 // New builds a Client against an OpenAI-compatible endpoint. baseURL points at
 // the gateway/provider, apiKey is the bearer credential, model is the model id.
 // No provider is hard-coded — any OpenAI-compatible backend works.
-func New(baseURL, apiKey, model string) (*Client, error) {
+func New(baseURL, apiKey, model string, opts ...Option) (*Client, error) {
 	m, err := openai.New(
 		openai.WithBaseURL(baseURL),
 		openai.WithToken(apiKey),
@@ -39,14 +57,22 @@ func New(baseURL, apiKey, model string) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("llm: build client: %w", err)
 	}
-	return &Client{model: m, timeout: DefaultTimeout}, nil
+	c := &Client{model: m, modelID: model, timeout: DefaultTimeout}
+	for _, o := range opts {
+		o(c)
+	}
+	return c, nil
 }
 
 // NewWithModel wraps an already-constructed langchaingo model with the default
 // timeout. It is the seam for callers' tests that inject a fake model instead of
 // dialing a real endpoint.
-func NewWithModel(m llms.Model) *Client {
-	return &Client{model: m, timeout: DefaultTimeout}
+func NewWithModel(m llms.Model, opts ...Option) *Client {
+	c := &Client{model: m, timeout: DefaultTimeout}
+	for _, o := range opts {
+		o(c)
+	}
+	return c
 }
 
 // GenerateJSON sends a system+user prompt in JSON mode and returns the model's
@@ -63,14 +89,72 @@ func (c *Client) GenerateJSON(ctx context.Context, system, user string) (string,
 		llms.TextParts(llms.ChatMessageTypeSystem, system),
 		llms.TextParts(llms.ChatMessageTypeHuman, user),
 	}
+
+	start := time.Now()
+	// gen builds an observation with the fields common to every outcome, stamping
+	// the end time at call. The caller fills in output/usage or the error.
+	gen := func() Generation {
+		return Generation{Model: c.modelID, System: system, User: user, Start: start, End: time.Now(), Source: c.source}
+	}
+
 	resp, err := c.model.GenerateContent(ctx, messages, llms.WithJSONMode())
 	if err != nil {
-		return "", fmt.Errorf("llm: generate: %w", err)
+		wrapped := fmt.Errorf("llm: generate: %w", err)
+		g := gen()
+		g.Err = wrapped
+		c.observe(g)
+		return "", wrapped
 	}
 	if len(resp.Choices) == 0 {
-		return "", errors.New("llm: model returned no choices")
+		err := errors.New("llm: model returned no choices")
+		g := gen()
+		g.Err = err
+		c.observe(g)
+		return "", err
 	}
-	return StripJSONFence(resp.Choices[0].Content), nil
+
+	out := StripJSONFence(resp.Choices[0].Content)
+	g := gen()
+	g.Output = out
+	g.Usage = usageFrom(resp.Choices[0])
+	c.observe(g)
+	return out, nil
+}
+
+// observe reports a generation when a tracer is attached; a nil tracer makes this
+// a no-op, so an unconfigured client is unchanged.
+func (c *Client) observe(g Generation) {
+	if c.tracer == nil {
+		return
+	}
+	c.tracer.Observe(g)
+}
+
+// usageFrom pulls token counts out of langchaingo's per-choice GenerationInfo.
+// Providers vary, so it reads defensively and returns nil when no counts are
+// present — an absent usage is reported as absent, never as zeros.
+func usageFrom(choice *llms.ContentChoice) *Usage {
+	in, ok1 := intFrom(choice.GenerationInfo["PromptTokens"])
+	out, ok2 := intFrom(choice.GenerationInfo["CompletionTokens"])
+	total, ok3 := intFrom(choice.GenerationInfo["TotalTokens"])
+	if !ok1 && !ok2 && !ok3 {
+		return nil
+	}
+	return &Usage{Input: in, Output: out, Total: total}
+}
+
+// intFrom coerces a GenerationInfo value (int, int64, or float64 depending on the
+// provider/serialization) to an int.
+func intFrom(v any) (int, bool) {
+	switch n := v.(type) {
+	case int:
+		return n, true
+	case int64:
+		return int(n), true
+	case float64:
+		return int(n), true
+	}
+	return 0, false
 }
 
 // StripJSONFence trims surrounding whitespace and a leading/trailing markdown

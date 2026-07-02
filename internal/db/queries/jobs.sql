@@ -31,6 +31,27 @@ WHERE id > sqlc.arg(after_id) AND updated_at >= sqlc.arg(since)
 ORDER BY id
 LIMIT sqlc.arg(batch_size);
 
+-- name: ListJobIDsAfter :many
+-- Id-only projection of ListJobsByIDAfter, used as the corruption-degrade path:
+-- when a full SELECT * batch faults on a corrupted TOAST value (SQLSTATE XX001),
+-- the scan re-reads the same window as bare ids (id is never toasted, so this
+-- never faults) and then fetches each row individually to isolate and skip the
+-- unreadable one.
+SELECT id
+FROM jobs
+WHERE id > sqlc.arg(after_id)
+ORDER BY id
+LIMIT sqlc.arg(batch_size);
+
+-- name: ListJobIDsUpdatedAfter :many
+-- Id-only projection of ListJobsUpdatedAfter — the corruption-degrade path for the
+-- incremental (`reindex --since`) scan, mirroring ListJobIDsAfter.
+SELECT id
+FROM jobs
+WHERE id > sqlc.arg(after_id) AND updated_at >= sqlc.arg(since)
+ORDER BY id
+LIMIT sqlc.arg(batch_size);
+
 -- name: GetJob :one
 SELECT *
 FROM jobs

@@ -26,8 +26,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/worker"
@@ -56,26 +54,6 @@ func facetOps(c *search.Client) indexOps {
 
 func semanticOps(c *search.Client) indexOps {
 	return indexOps{"semantic", c.EnsureSemanticIndex, c.IndexSemanticJobs, c.DeleteSemanticJobs}
-}
-
-// pageFetcher returns the next keyset page of jobs after the given id (empty when
-// the scan is exhausted). The full scan returns every job; the incremental scan
-// (reindex --since) returns only those changed at or after a cutoff.
-type pageFetcher func(ctx context.Context, afterID int64) ([]db.Job, error)
-
-func fullScan(q *db.Queries) pageFetcher {
-	return func(ctx context.Context, afterID int64) ([]db.Job, error) {
-		return q.ListJobsByIDAfter(ctx, db.ListJobsByIDAfterParams{AfterID: afterID, BatchSize: reindexBatchSize})
-	}
-}
-
-func incrementalScan(q *db.Queries, since time.Time) pageFetcher {
-	cutoff := pgtype.Timestamptz{Time: since, Valid: true}
-	return func(ctx context.Context, afterID int64) ([]db.Job, error) {
-		return q.ListJobsUpdatedAfter(ctx, db.ListJobsUpdatedAfterParams{
-			AfterID: afterID, Since: cutoff, BatchSize: reindexBatchSize,
-		})
-	}
 }
 
 // progressInterval is how often reindex emits a heartbeat with its running totals.
@@ -131,12 +109,12 @@ func run() int {
 		}
 		scope := "since " + since.String()
 		log.Printf("reindex: target=%s scope=%s mode=in-place", target, scope)
-		indexed, deleted, err := reindexAll(ctx, incrementalScan(q, time.Now().Add(-since)), ops)
+		indexed, deleted, skipped, err := reindexAll(ctx, worker.NewIncrementalReader(q, time.Now().Add(-since)), ops)
 		if err != nil {
 			log.Printf("reindex: %v", err)
 			return 1
 		}
-		log.Printf("reindex done: target=%s scope=%s indexed=%d deleted=%d", target, scope, indexed, deleted)
+		log.Printf("reindex done: target=%s scope=%s indexed=%d deleted=%d skipped=%d", target, scope, indexed, deleted, skipped)
 		return 0
 	}
 
@@ -145,12 +123,12 @@ func run() int {
 		b = client.NewSemanticRebuild()
 	}
 	log.Printf("reindex: target=%s scope=full mode=swap", target)
-	indexed, err := reindexFull(ctx, fullScan(q), b)
+	indexed, skipped, err := reindexFull(ctx, worker.NewFullScanReader(q), b)
 	if err != nil {
 		log.Printf("reindex: %v", err)
 		return 1
 	}
-	log.Printf("reindex done: target=%s scope=full indexed=%d", target, indexed)
+	log.Printf("reindex done: target=%s scope=full indexed=%d skipped=%d", target, indexed, skipped)
 	return 0
 }
 
@@ -197,9 +175,9 @@ func semanticRequested(args []string) bool {
 // how many documents were indexed (open jobs) and deleted (closed jobs). fetch
 // pages by keyset (id > last seen) — full or incremental (--since) — so rows
 // inserted or re-ordered during the run cannot be skipped or repeated.
-func reindexAll(ctx context.Context, fetch pageFetcher, ops indexOps) (int, int, error) {
+func reindexAll(ctx context.Context, reader worker.PageReader, ops indexOps) (int, int, int, error) {
 	if err := ops.ensure(ctx); err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
 	// Atomic so the heartbeat goroutine can read the running totals while the loop
@@ -212,35 +190,37 @@ func reindexAll(ctx context.Context, fetch pageFetcher, ops indexOps) (int, int,
 	defer stopHeartbeat()
 
 	var afterID int64
+	var skipped int
 	for {
-		jobs, err := fetch(ctx, afterID)
+		jobs, lastID, corrupted, err := worker.ResilientPage(ctx, reader, afterID, reindexBatchSize)
 		if err != nil {
-			return int(indexed.Load()), int(deleted.Load()), err
+			return int(indexed.Load()), int(deleted.Load()), skipped, err
 		}
-		if len(jobs) == 0 {
+		skipped += len(corrupted)
+
+		if len(jobs) > 0 {
+			docs, deleteIDs, err := splitJobs(jobs)
+			if err != nil {
+				return int(indexed.Load()), int(deleted.Load()), skipped, err
+			}
+			if err := ops.index(ctx, docs); err != nil {
+				return int(indexed.Load()), int(deleted.Load()), skipped, err
+			}
+			if err := ops.remove(ctx, deleteIDs); err != nil {
+				return int(indexed.Load()), int(deleted.Load()), skipped, err
+			}
+			indexed.Add(int64(len(docs)))
+			deleted.Add(int64(len(deleteIDs)))
+		}
+
+		// Keyset progress is the exhaustion signal (see reindexFull).
+		if lastID == afterID {
 			break
 		}
-		afterID = jobs[len(jobs)-1].ID
-
-		docs, deleteIDs, err := splitJobs(jobs)
-		if err != nil {
-			return int(indexed.Load()), int(deleted.Load()), err
-		}
-		if err := ops.index(ctx, docs); err != nil {
-			return int(indexed.Load()), int(deleted.Load()), err
-		}
-		if err := ops.remove(ctx, deleteIDs); err != nil {
-			return int(indexed.Load()), int(deleted.Load()), err
-		}
-		indexed.Add(int64(len(docs)))
-		deleted.Add(int64(len(deleteIDs)))
-
-		if len(jobs) < reindexBatchSize {
-			break
-		}
+		afterID = lastID
 	}
 
-	return int(indexed.Load()), int(deleted.Load()), nil
+	return int(indexed.Load()), int(deleted.Load()), skipped, nil
 }
 
 // rebuilder builds a brand-new index out of band and atomically swaps it into
@@ -263,9 +243,9 @@ type rebuilder interface {
 // fetch pages by keyset (id > last seen) so rows inserted or re-ordered during the
 // run cannot be skipped or repeated. Used for full passes; --since stays in place
 // (reindexAll) since a partial index cannot be swapped in wholesale.
-func reindexFull(ctx context.Context, fetch pageFetcher, b rebuilder) (int, error) {
+func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder) (int, int, error) {
 	if err := b.Prepare(ctx); err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 
 	var indexed atomic.Int64
@@ -275,34 +255,38 @@ func reindexFull(ctx context.Context, fetch pageFetcher, b rebuilder) (int, erro
 	defer stopHeartbeat()
 
 	var afterID int64
+	var skipped int
 	for {
-		jobs, err := fetch(ctx, afterID)
+		jobs, lastID, corrupted, err := worker.ResilientPage(ctx, reader, afterID, reindexBatchSize)
 		if err != nil {
-			return int(indexed.Load()), err
+			return int(indexed.Load()), skipped, err
 		}
-		if len(jobs) == 0 {
+		skipped += len(corrupted)
+
+		if len(jobs) > 0 {
+			docs, _, err := splitJobs(jobs) // closed jobs (deleteIDs) are dropped, not indexed
+			if err != nil {
+				return int(indexed.Load()), skipped, err
+			}
+			if err := b.Push(ctx, docs); err != nil {
+				return int(indexed.Load()), skipped, err
+			}
+			indexed.Add(int64(len(docs)))
+		}
+
+		// Keyset progress is the exhaustion signal: ResilientPage advances lastID
+		// past a skipped (corrupted) row, so a short page from the degrade path does
+		// not end the scan early the way a "< batchSize" check would.
+		if lastID == afterID {
 			break
 		}
-		afterID = jobs[len(jobs)-1].ID
-
-		docs, _, err := splitJobs(jobs) // closed jobs (deleteIDs) are dropped, not indexed
-		if err != nil {
-			return int(indexed.Load()), err
-		}
-		if err := b.Push(ctx, docs); err != nil {
-			return int(indexed.Load()), err
-		}
-		indexed.Add(int64(len(docs)))
-
-		if len(jobs) < reindexBatchSize {
-			break
-		}
+		afterID = lastID
 	}
 
 	if err := b.Promote(ctx); err != nil {
-		return int(indexed.Load()), err
+		return int(indexed.Load()), skipped, err
 	}
-	return int(indexed.Load()), nil
+	return int(indexed.Load()), skipped, nil
 }
 
 // splitJobs partitions a batch from the (deliberately unfiltered) reindex feed:

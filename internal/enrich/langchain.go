@@ -23,9 +23,10 @@ type LangChainProvider struct {
 }
 
 // NewLangChainProvider builds a provider against an OpenAI-compatible endpoint.
-// No provider is hard-coded — any OpenAI-compatible backend works.
-func NewLangChainProvider(baseURL, apiKey, model string) (*LangChainProvider, error) {
-	c, err := llm.New(baseURL, apiKey, model)
+// No provider is hard-coded — any OpenAI-compatible backend works. Optional
+// llm.Options (e.g. llm.WithTracer) are passed through to the client.
+func NewLangChainProvider(baseURL, apiKey, model string, opts ...llm.Option) (*LangChainProvider, error) {
+	c, err := llm.New(baseURL, apiKey, model, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("enrich: %w", err)
 	}
