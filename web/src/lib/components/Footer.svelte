@@ -32,8 +32,7 @@
   ];
 
   // External profiles: open in a new tab, each rendered with its ProviderIcon brand
-  // mark. github/telegram follow the text colour (so hover works); linkedin keeps
-  // its brand blue by design.
+  // mark. All three follow the muted text colour (so they match and hover works).
   const socials = [
     { provider: 'github', label: 'GitHub', href: 'https://github.com/strelov1/freehire' },
     { provider: 'linkedin', label: 'LinkedIn', href: 'https://linkedin.com/company/freehire-dev/' },
@@ -44,8 +43,8 @@
 </script>
 
 <footer class="border-t border-border">
-  <div class="mx-auto max-w-6xl px-4 py-10 sm:py-12">
-    <div class="grid grid-cols-2 gap-8 sm:grid-cols-4 sm:gap-6">
+  <div class="mx-auto max-w-6xl px-4 py-8 sm:py-12">
+    <div class="grid grid-cols-2 gap-x-6 gap-y-7 sm:grid-cols-4 sm:gap-6">
       <!-- Brand block: full width on mobile, one column on wide viewports. -->
       <div class="col-span-2 sm:col-span-1 sm:pr-4">
         <a

@@ -244,29 +244,28 @@
         </ul>
       {/if}
 
-      <div
-        class="flex flex-wrap items-center gap-2 border-t border-border pt-4 first:border-t-0 first:pt-0"
-      >
+      <div class="flex flex-col gap-2 border-t border-border pt-4 first:border-t-0 first:pt-0">
+        <div class="flex flex-wrap items-center gap-2">
 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
-        <a href={filterHref('source', job.source)}>
-          <Badge variant="outline" class="transition-colors hover:bg-accent hover:text-foreground">
-            {job.source}
-          </Badge>
-        </a>
-        {#if job.manually_added}
-          <Badge variant="secondary">Manually added</Badge>
-        {/if}
-        {#if posted}<span class="text-xs text-muted-foreground">Posted {posted}</span>{/if}
-        {#if views > 0}
-          <span class="flex items-center gap-1 text-xs text-muted-foreground">
-            <Eye class="size-3.5" />{views}
-            {views === 1 ? 'view' : 'views'}
-          </span>
-        {/if}
-        {#if applies > 0}
-          <span class="flex items-center gap-1 text-xs text-muted-foreground">
-            <Check class="size-3.5" />{applies} applied
-          </span>
+          <a href={filterHref('source', job.source)}>
+            <Badge variant="outline" class="transition-colors hover:bg-accent hover:text-foreground">
+              {job.source}
+            </Badge>
+          </a>
+          {#if job.manually_added}
+            <Badge variant="secondary">Manually added</Badge>
+          {/if}
+          {#if posted}<span class="text-xs text-muted-foreground">Posted {posted}</span>{/if}
+        </div>
+        {#if views > 0 || applies > 0}
+          <div class="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+            {#if views > 0}
+              <span class="flex items-center gap-1"><Eye class="size-3.5" />{views} {views === 1 ? 'view' : 'views'}</span>
+            {/if}
+            {#if applies > 0}
+              <span class="flex items-center gap-1"><Check class="size-3.5" />{applies} applied</span>
+            {/if}
+          </div>
         {/if}
       </div>
 
