@@ -13,8 +13,9 @@ import (
 // TestStore_RoundTrip exercises a real S3-compatible endpoint through the production
 // minio-go path (Put → Get → Delete). It is skipped unless all four S3_* env vars are
 // set, so it can run against a live bucket or a local MinIO without failing an offline
-// suite. Run: S3_ENDPOINT=… S3_BUCKET=… S3_ACCESS_KEY=… S3_SECRET_KEY=… \
-//	go test -tags=integration ./internal/blobstore/
+//
+//	suite. Run: S3_ENDPOINT=… S3_BUCKET=… S3_ACCESS_KEY=… S3_SECRET_KEY=… \
+//		go test -tags=integration ./internal/blobstore/
 func TestStore_RoundTrip(t *testing.T) {
 	store, err := New(Config{
 		Endpoint:  os.Getenv("S3_ENDPOINT"),

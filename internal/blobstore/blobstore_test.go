@@ -11,9 +11,9 @@ func TestResumeKey_DerivedFromUserID(t *testing.T) {
 func TestNew_UnconfiguredReturnsNilStore(t *testing.T) {
 	cases := []Config{
 		{},
-		{Endpoint: "https://hel1.example.com"},                                  // missing the rest
-		{Endpoint: "https://hel1.example.com", Bucket: "b"},                     // missing keys
-		{Endpoint: "https://hel1.example.com", Bucket: "b", AccessKey: "ak"},    // missing secret
+		{Endpoint: "https://hel1.example.com"}, // missing the rest
+		{Endpoint: "https://hel1.example.com", Bucket: "b"},                  // missing keys
+		{Endpoint: "https://hel1.example.com", Bucket: "b", AccessKey: "ak"}, // missing secret
 	}
 	for i, c := range cases {
 		store, err := New(c)
