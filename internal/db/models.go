@@ -183,11 +183,13 @@ type TelegramPost struct {
 }
 
 type User struct {
-	ID           int64              `json:"id"`
-	Email        string             `json:"email"`
-	PasswordHash pgtype.Text        `json:"password_hash"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	Role         string             `json:"role"`
+	ID               int64              `json:"id"`
+	Email            string             `json:"email"`
+	PasswordHash     pgtype.Text        `json:"password_hash"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	Role             string             `json:"role"`
+	ResumeObjectKey  pgtype.Text        `json:"resume_object_key"`
+	ResumeUploadedAt pgtype.Timestamptz `json:"resume_uploaded_at"`
 }
 
 type UserIdentity struct {

@@ -11,6 +11,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearUserResume = `-- name: ClearUserResume :exec
+UPDATE users
+SET resume_object_key = NULL, resume_uploaded_at = NULL
+WHERE id = $1
+`
+
+// Clear the user's résumé pointer (after deleting the object from storage).
+func (q *Queries) ClearUserResume(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, clearUserResume, id)
+	return err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, password_hash)
 VALUES ($1, $2)
@@ -101,6 +113,26 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, er
 	return i, err
 }
 
+const getUserResume = `-- name: GetUserResume :one
+SELECT resume_object_key, resume_uploaded_at
+FROM users
+WHERE id = $1
+`
+
+type GetUserResumeRow struct {
+	ResumeObjectKey  pgtype.Text        `json:"resume_object_key"`
+	ResumeUploadedAt pgtype.Timestamptz `json:"resume_uploaded_at"`
+}
+
+// The authenticated user's résumé pointer (object key + upload time), or NULLs when
+// no résumé is stored. The blob lives in S3 under the key; this is just the pointer.
+func (q *Queries) GetUserResume(ctx context.Context, id int64) (GetUserResumeRow, error) {
+	row := q.db.QueryRow(ctx, getUserResume, id)
+	var i GetUserResumeRow
+	err := row.Scan(&i.ResumeObjectKey, &i.ResumeUploadedAt)
+	return i, err
+}
+
 const getUserRole = `-- name: GetUserRole :one
 SELECT role
 FROM users
@@ -115,4 +147,22 @@ func (q *Queries) GetUserRole(ctx context.Context, id int64) (string, error) {
 	var role string
 	err := row.Scan(&role)
 	return role, err
+}
+
+const setUserResume = `-- name: SetUserResume :exec
+UPDATE users
+SET resume_object_key = $2, resume_uploaded_at = now()
+WHERE id = $1
+`
+
+type SetUserResumeParams struct {
+	ID              int64       `json:"id"`
+	ResumeObjectKey pgtype.Text `json:"resume_object_key"`
+}
+
+// Record (or replace) the user's stored-résumé pointer, stamping the upload time.
+// Owner-scoped by id; the object key is derived from the id, never client input.
+func (q *Queries) SetUserResume(ctx context.Context, arg SetUserResumeParams) error {
+	_, err := q.db.Exec(ctx, setUserResume, arg.ID, arg.ResumeObjectKey)
+	return err
 }

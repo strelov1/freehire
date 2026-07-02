@@ -21,6 +21,26 @@ SELECT id, email, role, created_at
 FROM users
 WHERE id = $1;
 
+-- name: GetUserResume :one
+-- The authenticated user's résumé pointer (object key + upload time), or NULLs when
+-- no résumé is stored. The blob lives in S3 under the key; this is just the pointer.
+SELECT resume_object_key, resume_uploaded_at
+FROM users
+WHERE id = $1;
+
+-- name: SetUserResume :exec
+-- Record (or replace) the user's stored-résumé pointer, stamping the upload time.
+-- Owner-scoped by id; the object key is derived from the id, never client input.
+UPDATE users
+SET resume_object_key = $2, resume_uploaded_at = now()
+WHERE id = $1;
+
+-- name: ClearUserResume :exec
+-- Clear the user's résumé pointer (after deleting the object from storage).
+UPDATE users
+SET resume_object_key = NULL, resume_uploaded_at = NULL
+WHERE id = $1;
+
 -- name: GetUserRole :one
 -- Slim role lookup for the RequireRole authorization middleware: it runs on every
 -- request to a role-gated endpoint and needs only the role, so it does not drag the

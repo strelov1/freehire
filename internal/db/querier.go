@@ -45,6 +45,8 @@ type Querier interface {
 	// affected row count: 1 for an owned row (whether or not it was shared — unshare is an
 	// idempotent no-op when already private), 0 when missing or not the caller's (→ 404).
 	ClearSavedSearchPublicSlug(ctx context.Context, arg ClearSavedSearchPublicSlugParams) (int64, error)
+	// Clear the user's résumé pointer (after deleting the object from storage).
+	ClearUserResume(ctx context.Context, id int64) error
 	// Soft-close one job now (see job-lifecycle): a moderator resolving a report with
 	// close_job=true. The third writer of closed_at, alongside the ingest sweep and the
 	// liveness probe. WHERE closed_at IS NULL keeps it idempotent — a second close on an
@@ -218,6 +220,9 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
 	// OAuth sign-in fast path: resolve a provider identity straight to its user.
 	GetUserByIdentity(ctx context.Context, arg GetUserByIdentityParams) (GetUserByIdentityRow, error)
+	// The authenticated user's résumé pointer (object key + upload time), or NULLs when
+	// no résumé is stored. The blob lives in S3 under the key; this is just the pointer.
+	GetUserResume(ctx context.Context, id int64) (GetUserResumeRow, error)
 	// Slim role lookup for the RequireRole authorization middleware: it runs on every
 	// request to a role-gated endpoint and needs only the role, so it does not drag the
 	// full user row (the GetJobIDBySlug precedent for a hot-path read).
@@ -417,6 +422,9 @@ type Querier interface {
 	// Pause/resume a subscription, scoped to its owner. No matching owner-scoped row
 	// returns no row (the handler maps that to 404).
 	SetSubscriptionActive(ctx context.Context, arg SetSubscriptionActiveParams) (Subscription, error)
+	// Record (or replace) the user's stored-résumé pointer, stamping the upload time.
+	// Owner-scoped by id; the object key is derived from the id, never client input.
+	SetUserResume(ctx context.Context, arg SetUserResumeParams) error
 	// Rebuild the companies catalogue from jobs. The companies table is derivable
 	// from jobs (slug = company_slug, name = company), so after a slug-builder change
 	// re-keys jobs, this re-keys companies to match. DISTINCT ON collapses a slug's
