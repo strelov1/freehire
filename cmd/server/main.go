@@ -12,6 +12,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
 	"github.com/strelov1/freehire/internal/auth/oauth"
+	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/config"
 	"github.com/strelov1/freehire/internal/database"
 	"github.com/strelov1/freehire/internal/handler"
@@ -83,6 +84,20 @@ func main() {
 		}
 	}
 
+	// Résumé storage is optional: only when all four S3 settings are present does
+	// blobstore.New build a client (it returns nil otherwise). Nil disables storage —
+	// résumé upload still extracts skills in-request and the verdict falls back to a
+	// per-request upload. A build error on a configured endpoint is fatal.
+	blobStore, err := blobstore.New(blobstore.Config{
+		Endpoint:  cfg.S3Endpoint,
+		Bucket:    cfg.S3Bucket,
+		AccessKey: cfg.S3AccessKey,
+		SecretKey: cfg.S3SecretKey,
+	})
+	if err != nil {
+		log.Fatalf("blobstore: %v", err)
+	}
+
 	// OAuth sign-in is optional: only providers with full credentials are
 	// enabled; the registry may be empty and the server still serves password
 	// auth. Redirect URLs derive from the same-origin frontend origin.
@@ -97,6 +112,7 @@ func main() {
 		OAuthProviders: oauthProviders,
 		Search:         searchClient,
 		LLM:            llmClient,
+		Blob:           blobStore,
 
 		TelegramBotToken:      cfg.TelegramBotToken,
 		TelegramBotUsername:   cfg.TelegramBotUsername,

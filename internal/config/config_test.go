@@ -27,6 +27,33 @@ func TestLoad_LLMEmptyWhenUnset(t *testing.T) {
 	}
 }
 
+func TestLoad_S3FromEnv(t *testing.T) {
+	t.Setenv("S3_ENDPOINT", "https://hel1.your-objectstorage.com")
+	t.Setenv("S3_BUCKET", "freehire-resumes")
+	t.Setenv("S3_ACCESS_KEY", "ak")
+	t.Setenv("S3_SECRET_KEY", "sk")
+
+	s := Load()
+	if s.S3Endpoint != "https://hel1.your-objectstorage.com" || s.S3Bucket != "freehire-resumes" ||
+		s.S3AccessKey != "ak" || s.S3SecretKey != "sk" {
+		t.Errorf("S3 settings = %q/%q/%q/%q, want the env values",
+			s.S3Endpoint, s.S3Bucket, s.S3AccessKey, s.S3SecretKey)
+	}
+}
+
+func TestLoad_S3EmptyWhenUnset(t *testing.T) {
+	t.Setenv("S3_ENDPOINT", "")
+	t.Setenv("S3_BUCKET", "")
+	t.Setenv("S3_ACCESS_KEY", "")
+	t.Setenv("S3_SECRET_KEY", "")
+
+	s := Load()
+	if s.S3Endpoint != "" || s.S3Bucket != "" || s.S3AccessKey != "" || s.S3SecretKey != "" {
+		t.Errorf("S3 settings should be empty when unset, got %q/%q/%q/%q",
+			s.S3Endpoint, s.S3Bucket, s.S3AccessKey, s.S3SecretKey)
+	}
+}
+
 func TestLoad_JWTSecretFromEnv(t *testing.T) {
 	t.Setenv("JWT_SECRET", "s3cret")
 

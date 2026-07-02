@@ -47,6 +47,16 @@ type Settings struct {
 	LLMAPIKey  string
 	LLMModel   string
 
+	// S3 backs résumé storage (internal/blobstore). Optional and provider-agnostic:
+	// any S3-compatible endpoint works, and no bucket/host/provider is baked into code —
+	// freehire-ops owns those. All four must be set to enable storage; any empty field
+	// disables it (résumé upload then only extracts skills in-request, no regression).
+	// Enforced at the cmd/server call site, not here.
+	S3Endpoint  string
+	S3Bucket    string
+	S3AccessKey string
+	S3SecretKey string
+
 	// Telegram bot for outbound notifications (filter subscriptions). Optional:
 	// an empty TelegramBotToken disables the feature — the linking endpoints and
 	// webhook are inert and the notify worker has nothing to deliver through.
@@ -84,6 +94,11 @@ func Load() Settings {
 		LLMBaseURL: os.Getenv("LLM_BASE_URL"),
 		LLMAPIKey:  os.Getenv("LLM_API_KEY"),
 		LLMModel:   os.Getenv("LLM_MODEL"),
+
+		S3Endpoint:  os.Getenv("S3_ENDPOINT"),
+		S3Bucket:    os.Getenv("S3_BUCKET"),
+		S3AccessKey: os.Getenv("S3_ACCESS_KEY"),
+		S3SecretKey: os.Getenv("S3_SECRET_KEY"),
 
 		TelegramBotToken:      os.Getenv("TELEGRAM_BOT_TOKEN"),
 		TelegramBotUsername:   os.Getenv("TELEGRAM_BOT_USERNAME"),

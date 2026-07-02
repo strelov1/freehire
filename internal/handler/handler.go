@@ -12,12 +12,14 @@ import (
 	"github.com/strelov1/freehire/internal/accounts"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/auth/oauth"
+	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/moderation"
 	"github.com/strelov1/freehire/internal/report"
+	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/savedsearch"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/searchprofile"
@@ -78,6 +80,10 @@ type API struct {
 	// delete a named specialization + skills); the handlers translate wire ↔ domain
 	// and delegate to it.
 	searchProfile *searchprofile.Service
+	// resume owns the per-user stored-résumé use cases (store/status/delete + derive
+	// text for the verdict). Its blob store is nil when S3 is unconfigured; Enabled()
+	// then reports false and callers degrade to per-request résumé upload.
+	resume *resume.Store
 	// verdictAnalyzer runs the LLM coherence analysis for the résumé verdict. Its
 	// client is nil when the LLM is unconfigured; Analyze then degrades to a no-op
 	// and the verdict serves its deterministic core only.
@@ -132,6 +138,10 @@ type Config struct {
 	// LLM backs the résumé-verdict coherence analysis. Nil disables the AI layer:
 	// the verdict still renders deterministically (the coherence card is hidden).
 	LLM *llm.Client
+	// Blob backs résumé storage (internal/blobstore). Nil disables storage: résumé
+	// upload only extracts skills in-request and the verdict falls back to a per-request
+	// upload (no regression).
+	Blob blobstore.Store
 	// Telegram bot for notification linking/delivery confirmations. Optional: an
 	// empty TelegramBotToken disables the feature (linking endpoints report off,
 	// webhook inert). TelegramBotUsername builds the deep link; TelegramWebhookSecret
@@ -169,6 +179,9 @@ func Register(app *fiber.App, cfg Config) {
 	a.savedSearch = savedsearch.New(savedsearch.NewQueriesRepository(queries))
 	a.subscription = subscription.New(subscription.NewQueriesRepository(queries))
 	a.searchProfile = searchprofile.New(searchprofile.NewQueriesRepository(queries))
+	// Résumé storage is nil-safe: a nil Blob (S3 unconfigured) yields a disabled service
+	// whose Enabled() is false, so the upload/verdict paths degrade to in-request parsing.
+	a.resume = resume.New(cfg.Blob, resume.NewQueriesRepository(queries))
 	// Nil-safe: NewAnalyzer(nil) yields an analyzer whose Analyze is a no-op, so the
 	// verdict endpoint works whether or not the LLM is configured.
 	a.verdictAnalyzer = verdict.NewAnalyzer(cfg.LLM)
@@ -293,9 +306,18 @@ func Register(app *fiber.App, cfg Config) {
 	api.Post("/me/profiles/:id/verdict", saved, a.ResumeVerdict)
 
 	// Resume skill extraction is cookie-only (RequireAuth): it feeds the profile
-	// picker (extracted skills merge into a profile). Stateless — the resume is
-	// parsed and discarded; only canonical slugs are returned.
+	// picker (extracted skills merge into a profile). When S3 storage is configured it
+	// also stores the résumé once (the single upload point); when not, it stays stateless
+	// (parsed and discarded, only canonical slugs returned).
 	api.Post("/me/resume/extract", saved, a.ExtractResumeSkills)
+
+	// Résumé storage (cookie-only): store the résumé once so the verdict's coherence can
+	// reuse it without a second upload. PUT stores/replaces, GET reports status (enabled +
+	// present + uploaded_at), DELETE removes it. 501 from PUT/DELETE when S3 is
+	// unconfigured — the SPA then falls back to per-request upload on the verdict page.
+	api.Put("/me/resume", saved, a.PutResume)
+	api.Get("/me/resume", saved, a.GetResume)
+	api.Delete("/me/resume", saved, a.DeleteResume)
 
 	// Filter subscriptions + Telegram linking are cookie-only (RequireAuth) like
 	// saved searches: a browser convenience, owner-scoped (a non-owned id is 404).

@@ -32,6 +32,7 @@ import type {
   SubmissionInput,
   Report,
   ReportInput,
+  ResumeStatus,
   Verdict,
 } from './types';
 
@@ -508,24 +509,52 @@ export function createApi(
     await call(`/api/v1/me/profiles/${id}`, { method: 'DELETE' });
   }
 
-  /** Extract canonical skill slugs from a resume — a PDF `File` (sent as multipart) or
-   *  pasted text (sent as JSON). The resume is parsed server-side and discarded; only the
-   *  slugs come back, ready to merge into a profile's skills. */
-  async function extractResumeSkills(input: File | string): Promise<string[]> {
-    let init: RequestInit;
+  /** Build the request init for a résumé payload: pasted text goes as JSON, a `File`
+   *  goes as multipart. Shared by the extract/store/analyze endpoints so they stay in
+   *  sync on how a résumé is sent. */
+  function resumeInit(method: string, input: File | string): RequestInit {
     if (typeof input === 'string') {
-      init = {
-        method: 'POST',
+      return {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: input }),
       };
-    } else {
-      const form = new FormData();
-      form.append('file', input);
-      init = { method: 'POST', body: form };
     }
-    const res = await request<{ data: { skills: string[] } }>('/api/v1/me/resume/extract', init);
+    const form = new FormData();
+    form.append('file', input);
+    return { method, body: form };
+  }
+
+  /** Extract canonical skill slugs from a resume — a PDF `File` (sent as multipart) or
+   *  pasted text (sent as JSON). Skills come back ready to merge into a profile; when
+   *  résumé storage is configured the server also keeps the résumé (the single upload
+   *  point), so the verdict's coherence can reuse it without a second upload. */
+  async function extractResumeSkills(input: File | string): Promise<string[]> {
+    const res = await request<{ data: { skills: string[] } }>(
+      '/api/v1/me/resume/extract',
+      resumeInit('POST', input),
+    );
     return res.data.skills;
+  }
+
+  /** Store (or replace) the caller's résumé in object storage, returning its status.
+   *  501 when storage is unconfigured (the caller then falls back to per-request upload
+   *  on the verdict page). */
+  async function putResume(input: File | string): Promise<ResumeStatus> {
+    const res = await request<{ data: ResumeStatus }>('/api/v1/me/resume', resumeInit('PUT', input));
+    return res.data;
+  }
+
+  /** Whether résumé storage is enabled, whether the caller has a résumé stored, and when
+   *  it was uploaded. Always succeeds (unconfigured/absent is a normal state). */
+  async function getResumeStatus(): Promise<ResumeStatus> {
+    const res = await request<{ data: ResumeStatus }>('/api/v1/me/resume');
+    return res.data;
+  }
+
+  /** Delete the caller's stored résumé (object + pointer). */
+  async function deleteResume(): Promise<void> {
+    await call('/api/v1/me/resume', { method: 'DELETE' });
   }
 
   /** The résumé verdict for a profile: the deterministic market comparison plus any
@@ -535,23 +564,25 @@ export function createApi(
     return res.data;
   }
 
+  /** Re-run the coherence analysis for a profile against the caller's once-stored résumé
+   *  (no upload). The server reads the stored résumé, scores coherence, and returns the
+   *  full verdict. 409 when no résumé is stored (the caller should prompt an upload). */
+  async function rerunProfileCoherence(id: number): Promise<Verdict> {
+    const res = await request<{ data: Verdict }>(`/api/v1/me/profiles/${id}/verdict`, {
+      method: 'POST',
+    });
+    return res.data;
+  }
+
   /** Analyze a résumé (a PDF `File` sent as multipart, or pasted text sent as JSON)
-   *  against a profile: the server runs the LLM coherence/advice over the text (never
-   *  persisting it) and returns the full verdict with coherence attached. */
+   *  against a profile — the degraded path when storage is unconfigured: the server runs
+   *  the LLM coherence/advice over the uploaded text (never persisting it) and returns the
+   *  full verdict with coherence attached. */
   async function analyzeProfileResume(id: number, input: File | string): Promise<Verdict> {
-    let init: RequestInit;
-    if (typeof input === 'string') {
-      init = {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: input }),
-      };
-    } else {
-      const form = new FormData();
-      form.append('file', input);
-      init = { method: 'POST', body: form };
-    }
-    const res = await request<{ data: Verdict }>(`/api/v1/me/profiles/${id}/verdict`, init);
+    const res = await request<{ data: Verdict }>(
+      `/api/v1/me/profiles/${id}/verdict`,
+      resumeInit('POST', input),
+    );
     return res.data;
   }
 
@@ -723,7 +754,11 @@ export function createApi(
     updateSearchProfile,
     deleteSearchProfile,
     extractResumeSkills,
+    putResume,
+    getResumeStatus,
+    deleteResume,
     getProfileVerdict,
+    rerunProfileCoherence,
     analyzeProfileResume,
     listSubscriptions,
     createSubscription,
@@ -795,7 +830,11 @@ export const {
   updateSearchProfile,
   deleteSearchProfile,
   extractResumeSkills,
+  putResume,
+  getResumeStatus,
+  deleteResume,
   getProfileVerdict,
+  rerunProfileCoherence,
   analyzeProfileResume,
   listSubscriptions,
   createSubscription,

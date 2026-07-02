@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/url"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/verdict"
 )
@@ -50,12 +52,16 @@ func (a *API) GetResumeVerdict(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": v})
 }
 
-// ResumeVerdict analyzes an uploaded résumé (PDF multipart "file" or JSON {text})
-// against one of the caller's profiles: it computes the deterministic verdict, asks the
-// LLM for a coherence score + gap advice over the résumé text, persists ONLY that
-// derived analysis (never the text — the privacy invariant from resume.go), and returns
-// the full verdict. Best-effort AI: an unconfigured or failing model degrades to the
-// deterministic verdict (still 200). Cookie-only, owner-scoped.
+// ResumeVerdict runs the coherence analysis for one of the caller's profiles: it computes
+// the deterministic verdict, asks the LLM for a coherence score + gap advice over the
+// résumé text, persists ONLY that derived analysis (the derived-only invariant — the raw
+// text is never stored in Postgres), and returns the full verdict. The résumé text comes
+// from the once-stored résumé (S3) when storage is configured — so re-running coherence
+// needs no upload; a caller with no stored résumé gets 409 (the SPA prompts a single
+// upload). When storage is unconfigured it falls back to a per-request upload (PDF
+// multipart "file" or JSON {text}), the pre-storage behavior. Best-effort AI: an
+// unconfigured or failing model degrades to the deterministic verdict (still 200).
+// Cookie-only, owner-scoped.
 func (a *API) ResumeVerdict(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -71,7 +77,7 @@ func (a *API) ResumeVerdict(c *fiber.Ctx) error {
 		return searchProfileError(err)
 	}
 
-	text, err := resumeText(c)
+	text, err := a.resumeVerdictText(c, userID)
 	if err != nil {
 		return err
 	}
@@ -106,6 +112,24 @@ func (a *API) ResumeVerdict(c *fiber.Ctx) error {
 		applyStoredAnalysis(&v, blob)
 	}
 	return c.JSON(fiber.Map{"data": v})
+}
+
+// resumeVerdictText resolves the résumé text the coherence analysis runs over. With
+// storage configured it reads the once-stored résumé (409 when none is stored); without
+// it, it parses a per-request upload (the degraded, pre-storage path).
+func (a *API) resumeVerdictText(c *fiber.Ctx, userID int64) (string, error) {
+	if a.resume.Enabled() {
+		text, err := a.resume.Text(c.Context(), userID)
+		if errors.Is(err, resume.ErrNotStored) {
+			return "", fiber.NewError(fiber.StatusConflict, "no résumé stored")
+		}
+		return text, err
+	}
+	up, err := readResumeUpload(c)
+	if err != nil {
+		return "", err
+	}
+	return up.Text, nil
 }
 
 // computeVerdict builds the deterministic verdict from a profile's skills against the
