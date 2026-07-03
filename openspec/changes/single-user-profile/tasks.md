@@ -1,6 +1,6 @@
 ## 1. Database schema & generated access
 
-- [ ] 1.1 Add migration `migrations/0041_collapse_search_profiles.sql`: in a transaction, delete all but each user's most-recently-updated row, drop the `name` column and its unique index, rename `search_profiles` → `user_profiles`, and make `user_id` the primary key (`UNIQUE (user_id)` invariant)
+- [ ] 1.1 Add migration `migrations/0043_collapse_search_profiles.sql` (0042 is the latest existing): in a transaction, delete all but each user's most-recently-updated row, drop the `name` column and its unique index, rename `search_profiles` → `user_profiles`, and make `user_id` the primary key (`UNIQUE (user_id)` invariant)
 - [ ] 1.2 Rewrite `internal/db/queries/search_profiles.sql` → `user_profiles.sql` as singleton queries: `GetUserProfile` (by user_id), `UpsertUserProfile` (insert … on conflict (user_id) do update), `DeleteUserProfile`; remove list/create-by-id/update-by-id queries
 - [ ] 1.3 Run `make sqlc` and commit regenerated `internal/db`
 
@@ -10,21 +10,23 @@
 - [ ] 2.2 Rename `internal/handler/me_profiles.go` → `me_profile.go`: implement `GET /me/profile` (profile or `{"data": null}`), `PUT /me/profile` (upsert), `DELETE /me/profile` (204, idempotent); drop list/create/update/delete-by-id handlers
 - [ ] 2.3 Update `internal/handler/handler.go` route wiring to the singleton paths (remove `/me/profiles` and `/me/profiles/:id`)
 
-## 3. Backend verdict endpoint
+## 3. Backend profile sub-resource endpoints (verdict + ATS report)
 
 - [ ] 3.1 Move the verdict handler to `GET /me/profile/verdict`: resolve the caller's single profile from the session (no `:id`), return 404 when the user has no profile
+- [ ] 3.2 Move the ATS-report handlers to `GET`/`POST /me/profile/ats-report` (`internal/handler/ats_report.go`, `atsContext`): resolve the profile from the session, drop `pathID`, 404 when the user has no profile
 
 ## 4. Frontend data layer
 
 - [ ] 4.1 Update `web/src/lib/types.ts`: `SearchProfile`/profile type drops `id` and `name` (keep `specializations`, `skills`, timestamps)
 - [ ] 4.2 Replace `web/src/lib/searchProfiles.svelte.ts` with a single-profile store `profile.svelte.ts`: holds one `profile | null`, `ensureLoaded()` (GET), `save()` (PUT), `clear()` (DELETE), `reset()` on sign-out
+- [ ] 4.3 Update `web/src/lib/api.ts` profile/verdict/ats-report helpers to the singleton paths (`/me/profile`, `/me/profile/verdict`, `/me/profile/ats-report`); drop id params
 
 ## 5. Frontend profile route, form & view
 
 - [ ] 5.1 Replace routes `/my/profiles`, `/my/profiles/new`, `/my/profiles/[id]/edit` with a single `/my/profile` page that views + edits the one profile (anonymous → sign-in prompt)
 - [ ] 5.2 Update `ProfileForm.svelte`: remove the `name` field and the create-vs-edit distinction; Save enabled when ≥1 specialization and ≥1 skill; keep CV upload + skill typeahead; wire to store `save()`
 - [ ] 5.3 Remove `SearchProfilesView.svelte` (list); render the skill-gap block for the single profile in the profile view
-- [ ] 5.4 Move the verdict page to `/my/profile/verdict` (no `[id]`), pointing at `GET /me/profile/verdict`
+- [ ] 5.4 Move the verdict page (which also hosts the ATS report via `ATSReportView.svelte`) to `/my/profile/verdict` (no `[id]`), pointing at `GET /me/profile/verdict` and `/me/profile/ats-report`
 
 ## 6. Header avatar & menu
 
