@@ -13,7 +13,6 @@
   import { syncOnNavigation } from '$lib/urlSynced.svelte';
   import { setListSearchTarget } from '$lib/listSearch.svelte';
   import type { Job, FacetCounts } from '$lib/types';
-  import { Input } from '$lib/ui';
   import FilterSummary from './filters/FilterSummary.svelte';
   import FilterModal from './filters/FilterModal.svelte';
   import FilterEdgeTab from './FilterEdgeTab.svelte';
@@ -112,10 +111,13 @@
   // pending debounced reload so it can't fire after this view is gone.
   onMount(() => {
     if (isAuthenticated()) ensureViewedLoaded();
-    // Register this page's store so the header search drives it (standalone only).
-    if (standalone) setListSearchTarget(filters);
+    // Register this page's store so the header search drives it. This holds for the
+    // standalone /jobs list AND the company page's embedded, scoped list — on
+    // /companies/:slug the header search filters that company's postings (there's
+    // no inline box), so both modes route their text search through the header.
+    setListSearchTarget(filters);
     return () => {
-      if (standalone) setListSearchTarget(null);
+      setListSearchTarget(null);
       filters.dispose();
     };
   });
@@ -170,21 +172,14 @@
 
   <div class="min-w-0 flex-1">
     {#if !standalone}
-      <!-- Company embed: the text filter lives inline (the header search is the
-           standalone list's filter), with the Filters button beside it. No fixed
-           edge tab here — it would overlap the company hero above this list. -->
-      <div class="mb-4 flex items-center gap-2">
-        <Input
-          type="search"
-          value={filters.value.q}
-          oninput={(e) => filters.setQuery(e.currentTarget.value)}
-          placeholder="Search jobs…"
-          aria-label="Search jobs"
-          class="min-w-0 flex-1"
-        />
+      <!-- Company embed: the text search now lives in the header (contextual to
+           this company), so there's no inline box here. Keep a mobile-only Filters
+           button — the fixed edge tab is suppressed on this view (it would overlap
+           the company hero) and desktop opens the modal from the sidebar summary. -->
+      <div class="mb-4 md:hidden">
         <button
           type="button"
-          class="h-9 shrink-0 rounded-lg border border-border bg-secondary px-3 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent md:hidden"
+          class="h-9 shrink-0 rounded-lg border border-border bg-secondary px-3 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent"
           onclick={() => (modalOpen = true)}
         >
           Filters{#if filters.active > 0}&nbsp;({filters.active}){/if}

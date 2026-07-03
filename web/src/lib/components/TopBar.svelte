@@ -15,11 +15,19 @@
   // action all live in HeaderMenu.
   //
   // The middle slot is one text field that adapts to context: on the list pages
-  // (/jobs, /companies) it IS that page's filter (HeaderListSearch drives the
-  // list, so there's no duplicate box); everywhere else it's the global launcher
-  // with the instant dropdown (HeaderSearch).
+  // (/jobs, /companies, and a company's own /companies/:slug jobs list) it IS that
+  // page's filter (HeaderListSearch drives the list, so there's no duplicate box);
+  // everywhere else it's the global launcher with the instant dropdown
+  // (HeaderSearch). A company detail page is a jobs list scoped to that company, so
+  // the header search filters its postings — hence 'company' shares the jobs proxy.
   const listKind = $derived(
-    page.url.pathname === '/jobs' ? 'jobs' : page.url.pathname === '/companies' ? 'companies' : null,
+    page.url.pathname === '/jobs'
+      ? 'jobs'
+      : page.url.pathname === '/companies'
+        ? 'companies'
+        : /^\/companies\/[^/]+$/.test(page.url.pathname)
+          ? 'company'
+          : null,
   );
 
   // Jobs/Companies are also surfaced as inline links here — left-aligned beside
@@ -97,7 +105,7 @@
       <a href={resolve('/companies')} class={navLinkClass('/companies')}>Companies</a>
     </nav>
 
-    {#if listKind === 'jobs'}
+    {#if listKind === 'jobs' || listKind === 'company'}
       <HeaderListSearch placeholder="Search jobs…" />
     {:else if listKind === 'companies'}
       <HeaderListSearch placeholder="Search companies…" />
