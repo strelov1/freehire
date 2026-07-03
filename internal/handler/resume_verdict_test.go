@@ -14,7 +14,7 @@ import (
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/search"
-	"github.com/strelov1/freehire/internal/searchprofile"
+	"github.com/strelov1/freehire/internal/userprofile"
 )
 
 // twoQueryFacets returns canned results in call order (query A = role total, query
@@ -48,8 +48,8 @@ func coverageFacets() *twoQueryFacets {
 }
 
 func ownedProfile() *fakeProfileRepo {
-	return &fakeProfileRepo{getRet: db.SearchProfile{
-		ID: 5, UserID: 1, Specializations: []string{"backend"}, Skills: []string{"go"},
+	return &fakeProfileRepo{getRet: db.UserProfile{
+		UserID: 1, Specializations: []string{"backend"}, Skills: []string{"go"},
 	}}
 }
 
@@ -60,9 +60,9 @@ func verdictApp(t *testing.T, repo *fakeProfileRepo, fc facetCounter) (*fiber.Ap
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
-	h := &API{issuer: iss, searchProfile: searchprofile.New(repo), facets: fc}
+	h := &API{issuer: iss, userProfile: userprofile.New(repo), facets: fc}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/me/profiles/:id/verdict", auth.RequireAuth(iss), h.GetResumeVerdict)
+	app.Get("/me/profile/verdict", auth.RequireAuth(iss), h.GetResumeVerdict)
 	return app, token
 }
 
@@ -93,16 +93,16 @@ func dataOf(t *testing.T, body map[string]any) map[string]any {
 
 func TestGetVerdict_FacetsUnconfigured503(t *testing.T) {
 	app, token := verdictApp(t, ownedProfile(), nil)
-	status, _ := getVerdict(t, app, "/me/profiles/5/verdict", token)
+	status, _ := getVerdict(t, app, "/me/profile/verdict", token)
 	if status != fiber.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503", status)
 	}
 }
 
 func TestGetVerdict_ProfileNotFound404(t *testing.T) {
-	repo := &fakeProfileRepo{getErr: searchprofile.ErrNotFound}
+	repo := &fakeProfileRepo{getErr: userprofile.ErrNotFound}
 	app, token := verdictApp(t, repo, coverageFacets())
-	status, _ := getVerdict(t, app, "/me/profiles/999/verdict", token)
+	status, _ := getVerdict(t, app, "/me/profile/verdict", token)
 	if status != fiber.StatusNotFound {
 		t.Fatalf("status = %d, want 404", status)
 	}
@@ -110,7 +110,7 @@ func TestGetVerdict_ProfileNotFound404(t *testing.T) {
 
 func TestGetVerdict_CoverageFromFacets(t *testing.T) {
 	app, token := verdictApp(t, ownedProfile(), coverageFacets())
-	status, body := getVerdict(t, app, "/me/profiles/5/verdict", token)
+	status, body := getVerdict(t, app, "/me/profile/verdict", token)
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -131,7 +131,7 @@ func TestGetVerdict_CoverageFromFacets(t *testing.T) {
 func TestGetVerdict_DefaultsToProfileSpecializations(t *testing.T) {
 	fc := coverageFacets()
 	app, token := verdictApp(t, ownedProfile(), fc)
-	if status, _ := getVerdict(t, app, "/me/profiles/5/verdict", token); status != fiber.StatusOK {
+	if status, _ := getVerdict(t, app, "/me/profile/verdict", token); status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
 	want := [][]string{{`enrichment.category = "backend"`}}
@@ -143,7 +143,7 @@ func TestGetVerdict_DefaultsToProfileSpecializations(t *testing.T) {
 func TestGetVerdict_FilterOverridesRole(t *testing.T) {
 	fc := coverageFacets()
 	app, token := verdictApp(t, ownedProfile(), fc)
-	if status, _ := getVerdict(t, app, "/me/profiles/5/verdict?category=data", token); status != fiber.StatusOK {
+	if status, _ := getVerdict(t, app, "/me/profile/verdict?category=data", token); status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
 	want := [][]string{{`enrichment.category = "data"`}}
@@ -157,7 +157,7 @@ func TestGetVerdict_RequestSkillsAreNotAFilter(t *testing.T) {
 	app, token := verdictApp(t, ownedProfile(), fc)
 	// ?skills=rust must not filter the role by rust, and rust is not an owned skill:
 	// the role stays the profile's default and the uncovered query excludes only "go".
-	if status, _ := getVerdict(t, app, "/me/profiles/5/verdict?skills=rust", token); status != fiber.StatusOK {
+	if status, _ := getVerdict(t, app, "/me/profile/verdict?skills=rust", token); status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
 	roleWant := [][]string{{`enrichment.category = "backend"`}}

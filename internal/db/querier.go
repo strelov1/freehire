@@ -88,9 +88,6 @@ type Querier interface {
 	// How many saved searches a user has — the per-user cap is enforced against this in
 	// the service before a create.
 	CountSavedSearches(ctx context.Context, userID int64) (int64, error)
-	// How many profiles a user has — the per-user cap is enforced against this in the
-	// service before a create.
-	CountSearchProfiles(ctx context.Context, userID int64) (int64, error)
 	// Per-filter row counts for the my-jobs tabs, in one aggregate pass. "all" is
 	// every interaction row; "viewed" is the view-only subset (neither saved nor
 	// applied), matching the ListUserJobs filter. "board" counts jobs on the Kanban
@@ -108,10 +105,6 @@ type Querier interface {
 	// Create a saved search for a user. The UNIQUE (user_id, name) constraint rejects a
 	// duplicate name (surfaced by the repository as a duplicate-name error). Returns the row.
 	CreateSavedSearch(ctx context.Context, arg CreateSavedSearchParams) (SavedSearch, error)
-	// Create a profile for a user. The UNIQUE (user_id, name) constraint rejects a
-	// duplicate name (surfaced by the repository as a duplicate-name error). Specializations
-	// and skills are already normalized by the service. Returns the row.
-	CreateSearchProfile(ctx context.Context, arg CreateSearchProfileParams) (SearchProfile, error)
 	// Insert a user-contributed vacancy into the moderation queue as 'pending'. The partial
 	// unique index on lower(url) WHERE status='pending' rejects a second pending submission of
 	// the same URL (the repository maps that unique violation to a 409).
@@ -143,16 +136,15 @@ type Querier interface {
 	// Returns the affected row count: 0 means it does not exist or is not the caller's
 	// (the handler maps that to 404).
 	DeleteSavedSearch(ctx context.Context, arg DeleteSavedSearchParams) (int64, error)
-	// Delete a profile, scoped to its owner so a user can only delete their own. Returns
-	// the affected row count: 0 means it does not exist or is not the caller's (the
-	// handler maps that to 404).
-	DeleteSearchProfile(ctx context.Context, arg DeleteSearchProfileParams) (int64, error)
 	// Unsubscribe, scoped to its owner. Returns the affected row count: 0 means it
 	// does not exist or is not the caller's (the handler maps that to 404). The match
 	// ledger cascades away with the subscription.
 	DeleteSubscription(ctx context.Context, arg DeleteSubscriptionParams) (int64, error)
 	// Unlink Telegram. Returns the affected row count: 0 means there was no link.
 	DeleteTelegramLink(ctx context.Context, userID int64) (int64, error)
+	// Remove the caller's profile. Returns the affected row count (0 when none existed); the
+	// handler treats delete as idempotent (204 either way).
+	DeleteUserProfile(ctx context.Context, userID int64) (int64, error)
 	// Dismiss (swipe away) a job for a user in the swipe deck. Idempotent and
 	// independent of a prior view: it inserts the row (viewed_at defaults) or
 	// refreshes dismissed_at in place.
@@ -211,9 +203,6 @@ type Querier interface {
 	// or mint a new one. No matching row (wrong id or another user's) returns no row (the
 	// service maps that to ErrNotFound).
 	GetSavedSearch(ctx context.Context, arg GetSavedSearchParams) (SavedSearch, error)
-	// One profile scoped to its owner, so a user can only read their own. No matching row
-	// (wrong id or another user's) returns no row (the handler maps that to 404).
-	GetSearchProfile(ctx context.Context, arg GetSearchProfileParams) (SearchProfile, error)
 	// Load a single submission by id for the review path. The approve/reject flow guards the
 	// status in the service; the Mark* queries are additionally scoped to status='pending' as
 	// defense-in-depth against a concurrent second decision.
@@ -236,6 +225,9 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
 	// OAuth sign-in fast path: resolve a provider identity straight to its user.
 	GetUserByIdentity(ctx context.Context, arg GetUserByIdentityParams) (GetUserByIdentityRow, error)
+	// The caller's single profile, keyed by user_id. No matching row means the user has not
+	// saved a profile yet (the handler maps that to a null payload / 404 on sub-resources).
+	GetUserProfile(ctx context.Context, userID int64) (UserProfile, error)
 	// The authenticated user's résumé pointer (object key + upload time), or NULLs when
 	// no résumé is stored. The blob lives in S3 under the key; this is just the pointer.
 	GetUserResume(ctx context.Context, id int64) (GetUserResumeRow, error)
@@ -314,8 +306,6 @@ type Querier interface {
 	ListPendingSubmissions(ctx context.Context) ([]ListPendingSubmissionsRow, error)
 	// A user's saved searches, most recently updated first (the "My filters" picker order).
 	ListSavedSearches(ctx context.Context, userID int64) ([]SavedSearch, error)
-	// A user's search profiles, most recently updated first (the profile picker order).
-	ListSearchProfiles(ctx context.Context, userID int64) ([]SearchProfile, error)
 	// "My submissions": one user's submissions, newest first, whatever their status.
 	// LEFT JOIN the minted job (present only once approved) to surface its public_slug,
 	// so the UI can link an approved submission straight to its live vacancy page.
@@ -512,12 +502,6 @@ type Querier interface {
 	// query string is a real value (not NULL), so "save the unfiltered view" is honored.
 	// No matching owner-scoped row returns no row (the handler maps that to 404).
 	UpdateSavedSearch(ctx context.Context, arg UpdateSavedSearchParams) (SavedSearch, error)
-	// Overwrite a profile's name, specializations, and/or skills, scoped to its owner,
-	// bumping updated_at. Partial update: a NULL param leaves that column unchanged
-	// (COALESCE), so the caller can rename, re-specialize, replace skills, or any
-	// combination in one call. No matching owner-scoped row returns no row (the handler
-	// maps that to 404).
-	UpdateSearchProfile(ctx context.Context, arg UpdateSearchProfileParams) (SearchProfile, error)
 	// Apply one external-dataset company-info record, matched by slug. A new slug is
 	// inserted as a reference row (is_reference = true) with no jobs; an existing slug
 	// (job-backed or a prior reference) has only its company-info columns refreshed —
@@ -559,6 +543,10 @@ type Querier interface {
 	// Link (or relink) a user's Telegram chat, captured from the inbound /start. One
 	// row per user; relinking from a different chat overwrites the chat_id.
 	UpsertTelegramLink(ctx context.Context, arg UpsertTelegramLinkParams) error
+	// Create-or-replace the user's one profile. The PRIMARY KEY (user_id) makes this an
+	// idempotent upsert: first save inserts, later saves overwrite specializations/skills and
+	// bump updated_at. Specializations and skills are already normalized by the service.
+	UpsertUserProfile(ctx context.Context, arg UpsertUserProfileParams) (UserProfile, error)
 }
 
 var _ Querier = (*Queries)(nil)

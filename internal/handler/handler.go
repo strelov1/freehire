@@ -23,10 +23,10 @@ import (
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/savedsearch"
 	"github.com/strelov1/freehire/internal/search"
-	"github.com/strelov1/freehire/internal/searchprofile"
 	"github.com/strelov1/freehire/internal/submission"
 	"github.com/strelov1/freehire/internal/subscription"
 	"github.com/strelov1/freehire/internal/telegramnotify"
+	"github.com/strelov1/freehire/internal/userprofile"
 )
 
 const (
@@ -79,10 +79,10 @@ type API struct {
 	// subscription owns the per-user filter-subscription use cases (subscribe a
 	// saved search to a channel, list/toggle/unsubscribe).
 	subscription *subscription.Service
-	// searchProfile owns the per-user search-profile use cases (list/create/update/
-	// delete a named specialization + skills); the handlers translate wire ↔ domain
-	// and delegate to it.
-	searchProfile *searchprofile.Service
+	// userProfile owns the single-per-user profile use cases (fetch/save/clear a
+	// specialization + skills set); the handlers translate wire ↔ domain and delegate
+	// to it.
+	userProfile *userprofile.Service
 	// resume owns the per-user stored-résumé use cases (store/status/delete + derive
 	// text for the verdict). Its blob store is nil when S3 is unconfigured; Enabled()
 	// then reports false and callers degrade to per-request résumé upload.
@@ -183,7 +183,7 @@ func Register(app *fiber.App, cfg Config) {
 	a.report = report.New(reportRepo, reportRepo)
 	a.savedSearch = savedsearch.New(savedsearch.NewQueriesRepository(queries))
 	a.subscription = subscription.New(subscription.NewQueriesRepository(queries))
-	a.searchProfile = searchprofile.New(searchprofile.NewQueriesRepository(queries))
+	a.userProfile = userprofile.New(userprofile.NewQueriesRepository(queries))
 	// Résumé storage is nil-safe: a nil Blob (S3 unconfigured) yields a disabled service
 	// whose Enabled() is false, so the upload/verdict paths degrade to in-request parsing.
 	a.resume = resume.New(cfg.Blob, resume.NewQueriesRepository(queries))
@@ -299,21 +299,21 @@ func Register(app *fiber.App, cfg Config) {
 	api.Post("/me/searches/:id/share", saved, a.ShareSavedSearch)
 	api.Delete("/me/searches/:id/share", saved, a.UnshareSavedSearch)
 
-	// Search profiles are cookie-only (RequireAuth) like saved searches: a browser
-	// feature (the profile picker), owner-scoped (a non-owned id is a 404).
-	api.Get("/me/profiles", saved, a.ListSearchProfiles)
-	api.Post("/me/profiles", saved, a.CreateSearchProfile)
-	api.Patch("/me/profiles/:id", saved, a.UpdateSearchProfile)
-	api.Delete("/me/profiles/:id", saved, a.DeleteSearchProfile)
-	// The résumé verdict is a per-profile sub-resource: GET computes the live
+	// The user profile is a cookie-only (RequireAuth) singleton — one per user, keyed
+	// by the session, no id in the path. GET returns the profile or null; PUT upserts
+	// (create-or-replace); DELETE clears it (idempotent).
+	api.Get("/me/profile", saved, a.GetProfile)
+	api.Put("/me/profile", saved, a.PutProfile)
+	api.Delete("/me/profile", saved, a.DeleteProfile)
+	// The résumé verdict is a profile sub-resource: GET computes the live
 	// market-coverage verdict from the profile's skills against the selected role.
-	// Cookie-only and owner-scoped, like the profile routes it hangs off.
-	api.Get("/me/profiles/:id/verdict", saved, a.GetResumeVerdict)
-	// The CV ATS-readiness report is a sibling per-profile sub-resource: GET scores
-	// the caller's stored CV (structure + role keyword-match). Owner-scoped, cookie-only.
-	api.Get("/me/profiles/:id/ats-report", saved, a.GetATSReport)
-	// POST runs the optional LLM qualitative review over the stored CV and caches it.
-	api.Post("/me/profiles/:id/ats-report", saved, a.PostATSReport)
+	// Cookie-only and session-scoped, like the profile it hangs off (no profile → 404).
+	api.Get("/me/profile/verdict", saved, a.GetResumeVerdict)
+	// The CV ATS-readiness report is a sibling profile sub-resource: GET scores the
+	// caller's stored CV (structure + role keyword-match); POST runs the optional LLM
+	// qualitative review over it and caches it. Cookie-only, session-scoped.
+	api.Get("/me/profile/ats-report", saved, a.GetATSReport)
+	api.Post("/me/profile/ats-report", saved, a.PostATSReport)
 
 	// Resume skill extraction is cookie-only (RequireAuth): it feeds the profile
 	// picker (extracted skills merge into a profile). When S3 storage is configured it

@@ -10,26 +10,21 @@ import (
 	"github.com/strelov1/freehire/internal/verdict"
 )
 
-// GetResumeVerdict serves the market-coverage verdict for one of the caller's
-// profiles: how many of the selected role's open vacancies the profile's skills
-// reach, and which missing skill unlocks the most new vacancies. The role is the
-// request's facet params (defaulting to the profile's specializations when no
-// category is given); the profile's skills are always the measured set, never a
-// filter. Cookie-only, owner-scoped (missing/non-owned profile → 404); 503 when
-// search is unconfigured.
+// GetResumeVerdict serves the market-coverage verdict for the caller's profile:
+// how many of the selected role's open vacancies the profile's skills reach, and
+// which missing skill unlocks the most new vacancies. The role is the request's
+// facet params (defaulting to the profile's specializations when no category is
+// given); the profile's skills are always the measured set, never a filter.
+// Cookie-only, session-scoped (no profile → 404); 503 when search is unconfigured.
 func (a *API) GetResumeVerdict(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	id, err := pathID(c)
-	if err != nil {
-		return err
-	}
 
-	profile, err := a.searchProfile.Get(c.Context(), userID, id)
+	profile, err := a.userProfile.Get(c.Context(), userID)
 	if err != nil {
-		return searchProfileError(err)
+		return profileError(err)
 	}
 	if a.facets == nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
@@ -47,7 +42,7 @@ func (a *API) GetResumeVerdict(c *fiber.Ctx) error {
 // query B is the "uncovered" set — the same role filtered to vacancies listing
 // none of the profile's skills — whose total and skill distribution give the
 // covered count and the per-skill new-vacancy unlock.
-func (a *API) computeCoverage(c *fiber.Ctx, profile db.SearchProfile) (verdict.Verdict, error) {
+func (a *API) computeCoverage(c *fiber.Ctx, profile db.UserProfile) (verdict.Verdict, error) {
 	roleFilter := search.FilterFromValues(roleValues(c, profile))
 
 	role, err := a.facets.FacetCounts(c.Context(), search.FacetParams{Filter: roleFilter})
@@ -68,7 +63,7 @@ func (a *API) computeCoverage(c *fiber.Ctx, profile db.SearchProfile) (verdict.V
 // strips the `skills` facet (the profile's skills are the measured set, not a role
 // filter) and defaults `category` to the profile's specializations when the caller
 // selected no category — so an unfiltered verdict scores the profile's own role.
-func roleValues(c *fiber.Ctx, profile db.SearchProfile) url.Values {
+func roleValues(c *fiber.Ctx, profile db.UserProfile) url.Values {
 	vals, _ := url.ParseQuery(string(c.Request().URI().QueryString()))
 	delete(vals, "skills")
 	delete(vals, "skills_exclude")

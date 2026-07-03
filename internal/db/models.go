@@ -140,16 +140,6 @@ type SavedSearch struct {
 	AuthorLabel pgtype.Text        `json:"author_label"`
 }
 
-type SearchProfile struct {
-	ID              int64              `json:"id"`
-	UserID          int64              `json:"user_id"`
-	Name            string             `json:"name"`
-	Skills          []string           `json:"skills"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
-	Specializations []string           `json:"specializations"`
-}
-
 type Subscription struct {
 	ID            int64              `json:"id"`
 	UserID        int64              `json:"user_id"`
@@ -219,4 +209,12 @@ type UserJob struct {
 	Stage       pgtype.Text        `json:"stage"`
 	Notes       pgtype.Text        `json:"notes"`
 	DismissedAt pgtype.Timestamptz `json:"dismissed_at"`
+}
+
+type UserProfile struct {
+	UserID          int64              `json:"user_id"`
+	Skills          []string           `json:"skills"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	Specializations []string           `json:"specializations"`
 }

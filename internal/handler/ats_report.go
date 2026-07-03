@@ -94,23 +94,19 @@ func (a *API) PostATSReport(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": atsResponse{HasCV: true, Report: report}})
 }
 
-// atsContext resolves the authenticated caller, the owner-scoped profile (404), and
+// atsContext resolves the authenticated caller, their profile (404 when none), and
 // enforces that search is configured (503).
-func (a *API) atsContext(c *fiber.Ctx) (int64, db.SearchProfile, error) {
+func (a *API) atsContext(c *fiber.Ctx) (int64, db.UserProfile, error) {
 	userID, err := requireUserID(c)
 	if err != nil {
-		return 0, db.SearchProfile{}, err
+		return 0, db.UserProfile{}, err
 	}
-	id, err := pathID(c)
+	profile, err := a.userProfile.Get(c.Context(), userID)
 	if err != nil {
-		return 0, db.SearchProfile{}, err
-	}
-	profile, err := a.searchProfile.Get(c.Context(), userID, id)
-	if err != nil {
-		return 0, db.SearchProfile{}, searchProfileError(err)
+		return 0, db.UserProfile{}, profileError(err)
 	}
 	if a.facets == nil {
-		return 0, db.SearchProfile{}, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
+		return 0, db.UserProfile{}, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
 	return userID, profile, nil
 }
@@ -118,7 +114,7 @@ func (a *API) atsContext(c *fiber.Ctx) (int64, db.SearchProfile, error) {
 // deterministicReport builds the live deterministic report from the stored CV and
 // the selected role. hasCV is false (no error) when no CV is stored; cvText is
 // returned for the LLM path.
-func (a *API) deterministicReport(c *fiber.Ctx, userID int64, profile db.SearchProfile) (*atscheck.Report, string, bool, error) {
+func (a *API) deterministicReport(c *fiber.Ctx, userID int64, profile db.UserProfile) (*atscheck.Report, string, bool, error) {
 	cvText, ok, err := a.storedCVText(c, userID)
 	if err != nil || !ok {
 		return nil, "", ok, err

@@ -17,7 +17,7 @@ import (
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/search"
-	"github.com/strelov1/freehire/internal/searchprofile"
+	"github.com/strelov1/freehire/internal/userprofile"
 )
 
 // fakeATSCache is an in-memory atsReviewStore for the DB-less handler tests.
@@ -63,7 +63,7 @@ func atsAppWith(t *testing.T, repo *fakeProfileRepo, fc facetCounter, store *res
 	}
 	h := &API{
 		issuer:        iss,
-		searchProfile: searchprofile.New(repo),
+		userProfile: userprofile.New(repo),
 		facets:        fc,
 		resume:        store,
 		atsAnalyzer:   analyzer,
@@ -71,8 +71,8 @@ func atsAppWith(t *testing.T, repo *fakeProfileRepo, fc facetCounter, store *res
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	g := auth.RequireAuth(iss)
-	app.Get("/me/profiles/:id/ats-report", g, h.GetATSReport)
-	app.Post("/me/profiles/:id/ats-report", g, h.PostATSReport)
+	app.Get("/me/profile/ats-report", g, h.GetATSReport)
+	app.Post("/me/profile/ats-report", g, h.PostATSReport)
 	return app, token
 }
 
@@ -119,15 +119,15 @@ func storeWithCV(t *testing.T, text string) *resume.Store {
 
 func TestGetATS_FacetsUnconfigured503(t *testing.T) {
 	app, token := atsApp(t, ownedProfile(), nil, storeWithCV(t, "x"))
-	if status, _ := getATS(t, app, "/me/profiles/5/ats-report", token); status != fiber.StatusServiceUnavailable {
+	if status, _ := getATS(t, app, "/me/profile/ats-report", token); status != fiber.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503", status)
 	}
 }
 
 func TestGetATS_NotOwned404(t *testing.T) {
-	repo := &fakeProfileRepo{getErr: searchprofile.ErrNotFound}
+	repo := &fakeProfileRepo{getErr: userprofile.ErrNotFound}
 	app, token := atsApp(t, repo, atsFacets(), storeWithCV(t, "x"))
-	if status, _ := getATS(t, app, "/me/profiles/9/ats-report", token); status != fiber.StatusNotFound {
+	if status, _ := getATS(t, app, "/me/profile/ats-report", token); status != fiber.StatusNotFound {
 		t.Fatalf("status = %d, want 404", status)
 	}
 }
@@ -136,7 +136,7 @@ func TestGetATS_NoCVStored(t *testing.T) {
 	// Storage enabled but nothing stored → 200 with has_cv=false.
 	store := resume.New(newFakeResumeBlobs(), &fakeResumeRepo{})
 	app, token := atsApp(t, ownedProfile(), atsFacets(), store)
-	status, body := getATS(t, app, "/me/profiles/5/ats-report", token)
+	status, body := getATS(t, app, "/me/profile/ats-report", token)
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -160,7 +160,7 @@ Senior Backend Engineer (2021 - 2026)
 Skills
 Golang, Kafka, Kubernetes, PostgreSQL`
 	app, token := atsApp(t, ownedProfile(), atsFacets(), storeWithCV(t, cv))
-	status, body := getATS(t, app, "/me/profiles/5/ats-report", token)
+	status, body := getATS(t, app, "/me/profile/ats-report", token)
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -189,7 +189,7 @@ func TestPostATS_RunsLLMReviewAndCaches(t *testing.T) {
 	}))
 	app, token := atsAppWith(t, ownedProfile(), atsFacets(), storeWithCV(t, "some cv text here"), analyzer, cache)
 
-	status, body := postATS(t, app, "/me/profiles/5/ats-report", token)
+	status, body := postATS(t, app, "/me/profile/ats-report", token)
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -210,7 +210,7 @@ func TestPostATS_NoLLMDegrades(t *testing.T) {
 	cache := newFakeATSCache()
 	app, token := atsAppWith(t, ownedProfile(), atsFacets(), storeWithCV(t, "some cv text here"),
 		atscheck.NewAnalyzer(nil), cache)
-	status, body := postATS(t, app, "/me/profiles/5/ats-report", token)
+	status, body := postATS(t, app, "/me/profile/ats-report", token)
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}

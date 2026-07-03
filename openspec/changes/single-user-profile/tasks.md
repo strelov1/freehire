@@ -1,19 +1,19 @@
 ## 1. Database schema & generated access
 
-- [ ] 1.1 Add migration `migrations/0043_collapse_search_profiles.sql` (0042 is the latest existing): in a transaction, delete all but each user's most-recently-updated row, drop the `name` column and its unique index, rename `search_profiles` → `user_profiles`, and make `user_id` the primary key (`UNIQUE (user_id)` invariant)
-- [ ] 1.2 Rewrite `internal/db/queries/search_profiles.sql` → `user_profiles.sql` as singleton queries: `GetUserProfile` (by user_id), `UpsertUserProfile` (insert … on conflict (user_id) do update), `DeleteUserProfile`; remove list/create-by-id/update-by-id queries
-- [ ] 1.3 Run `make sqlc` and commit regenerated `internal/db`
+- [x] 1.1 Add migration `migrations/0043_collapse_search_profiles.sql` (0042 is the latest existing): in a transaction, delete all but each user's most-recently-updated row, drop the `name` column and its unique index, rename `search_profiles` → `user_profiles`, and make `user_id` the primary key (`UNIQUE (user_id)` invariant)
+- [x] 1.2 Rewrite `internal/db/queries/search_profiles.sql` → `user_profiles.sql` as singleton queries: `GetUserProfile` (by user_id), `UpsertUserProfile` (insert … on conflict (user_id) do update), `DeleteUserProfile`; remove list/create-by-id/update-by-id queries
+- [x] 1.3 Run `make sqlc` and commit regenerated `internal/db`
 
 ## 2. Backend singleton profile API
 
-- [ ] 2.1 Rename package `internal/searchprofile` → `internal/userprofile`; collapse `Create`/`Update` into a single `Save`/`Upsert` (validate specializations 1–5 against `enrich.CategoryValues`, normalize skills, drop `name` and `maxPerUser`); keep `Get`/`Delete`
-- [ ] 2.2 Rename `internal/handler/me_profiles.go` → `me_profile.go`: implement `GET /me/profile` (profile or `{"data": null}`), `PUT /me/profile` (upsert), `DELETE /me/profile` (204, idempotent); drop list/create/update/delete-by-id handlers
-- [ ] 2.3 Update `internal/handler/handler.go` route wiring to the singleton paths (remove `/me/profiles` and `/me/profiles/:id`)
+- [x] 2.1 Rename package `internal/searchprofile` → `internal/userprofile`; collapse `Create`/`Update` into a single `Save`/`Upsert` (validate specializations 1–5 against `enrich.CategoryValues`, normalize skills, drop `name` and `maxPerUser`); keep `Get`/`Delete`
+- [x] 2.2 Rename `internal/handler/me_profiles.go` → `me_profile.go`: implement `GET /me/profile` (profile or `{"data": null}`), `PUT /me/profile` (upsert), `DELETE /me/profile` (204, idempotent); drop list/create/update/delete-by-id handlers
+- [x] 2.3 Update `internal/handler/handler.go` route wiring to the singleton paths (remove `/me/profiles` and `/me/profiles/:id`)
 
 ## 3. Backend profile sub-resource endpoints (verdict + ATS report)
 
-- [ ] 3.1 Move the verdict handler to `GET /me/profile/verdict`: resolve the caller's single profile from the session (no `:id`), return 404 when the user has no profile
-- [ ] 3.2 Move the ATS-report handlers to `GET`/`POST /me/profile/ats-report` (`internal/handler/ats_report.go`, `atsContext`): resolve the profile from the session, drop `pathID`, 404 when the user has no profile
+- [x] 3.1 Move the verdict handler to `GET /me/profile/verdict`: resolve the caller's single profile from the session (no `:id`), return 404 when the user has no profile
+- [x] 3.2 Move the ATS-report handlers to `GET`/`POST /me/profile/ats-report` (`internal/handler/ats_report.go`, `atsContext`): resolve the profile from the session, drop `pathID`, 404 when the user has no profile
 
 ## 4. Frontend data layer
 
