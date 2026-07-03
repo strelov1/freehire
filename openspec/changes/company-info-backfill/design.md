@@ -43,13 +43,13 @@ gain, and a provenance string would name the source (disallowed).
 
 **Slug-only matching in v1.** The loader normalizes each record's company name via
 `internal/normalize` (the catalogue's slug rule) and matches on `slug`. *Alternative —
-secondary domain match (`homepage_uri` ↔ `domains[]`)* — deferred until the miss rate is
-measured; the loader logs matched-existing vs inserted-reference counts to inform that.
+secondary domain match (the record's website ↔ `domains[]`)* — deferred until the miss rate
+is measured; the loader logs matched-existing vs inserted-reference counts to inform that.
 
-**Low-fill extras in JSONB.** `parent_company`, `subsidiaries`, `activities`, funding,
-stock, and `homepage_uri` (~10–20%, homepage ~99%) go into a `company_info` JSONB rather
-than sparse columns. `homepage_uri` goes to the JSONB — not the job-derived `domains[]` that
-`RefreshCompanyFacets` owns — so it is available without clobbering.
+**Low-fill extras in JSONB.** parent, subsidiaries, activities, funding, stock, and the
+website (~10–20%, website ~99%) go into a `company_info` JSONB rather than sparse columns.
+The website goes to the JSONB — not the job-derived `domains[]` that `RefreshCompanyFacets`
+owns — so it is available without clobbering.
 
 **Run-once host worker, not the moderator API.** `cmd/backfill-company-info <file.jsonl>`
 follows the `cmd/backfill-derive` shape (needs `DATABASE_URL`), streaming the file and
