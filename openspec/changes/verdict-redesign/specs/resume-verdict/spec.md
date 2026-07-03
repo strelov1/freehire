@@ -57,3 +57,27 @@ role facets and the CV's parsed skill sets.
 #### Scenario: Coherence with no declared skills
 - **WHEN** the CV has no Skills section (`declared` is empty)
 - **THEN** `coherence_percent` = 0
+
+### Requirement: Unified profile and coverage page
+
+The signed-in profile SHALL live on a single `/my/profile` page that combines inline profile editing, market coverage, and CV readiness; the separate `/my/profile/verdict` route SHALL be removed and its content folded into this page. The page SHALL edit the profile inline (no modal): a CV drop-zone, a skills selector, and a specializations selector, saved together by an explicit Save action. A left filter sidebar (the same `/jobs` filter surface, with the `skills` facet excluded) SHALL scope the market comparison by role and other facets; its role selection SHALL be seeded from the profile's specializations but SHALL be independent of the saved profile, so refining the comparison role never mutates the profile.
+
+#### Scenario: Setup shows only the form
+- **WHEN** a signed-in user with no saved profile opens `/my/profile`
+- **THEN** the page shows the inline editing form (with the CV upload) and no coverage or CV-readiness tabs
+
+#### Scenario: Editing is inline, not a modal
+- **WHEN** a user with a saved profile changes their skills or specializations
+- **THEN** they edit the fields directly on the page and persist them with a single Save action — no separate edit modal is opened
+
+#### Scenario: Filter refines comparison without touching the profile
+- **WHEN** the user changes the sidebar role/facet filter
+- **THEN** the coverage and CV-readiness numbers recompute for the filtered market while the saved profile's specializations are unchanged
+
+#### Scenario: CV already uploaded is indicated
+- **WHEN** the user has a stored CV (`has_cv` is true)
+- **THEN** the CV drop-zone shows an "uploaded" state offering to update it, rather than an empty upload prompt
+
+#### Scenario: Results are tabbed
+- **WHEN** a user with a saved profile views the page
+- **THEN** market coverage and CV readiness are presented as two tabs under the editing form

@@ -1,28 +1,80 @@
 <script lang="ts">
-  import { Pencil, Sparkles, Trash2 } from '@lucide/svelte';
-  import { resolve } from '$app/paths';
-  import { getProfileVerdict } from '$lib/api';
+  import { untrack } from 'svelte';
+  import { Sparkles, Trash2 } from '@lucide/svelte';
+  import { page } from '$app/state';
+  import { facetCounts, getATSReport, getProfileVerdict, runATSReview } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
-  import { categoryLabel } from '$lib/facets';
-  import { profileStore } from '$lib/profile.svelte';
-  import { categoryParams } from '$lib/skillGap';
-  import type { Verdict } from '$lib/types';
-  import { Button } from '$lib/ui';
-  import ProfileEditModal from '$lib/components/ProfileEditModal.svelte';
+  import { FilterStore, filtersToParams } from '$lib/filters';
+  import ATSReportView from '$lib/components/ATSReportView.svelte';
+  import FilterSummary from '$lib/components/filters/FilterSummary.svelte';
+  import FilterModal from '$lib/components/filters/FilterModal.svelte';
+  import FilterEdgeTab from '$lib/components/FilterEdgeTab.svelte';
+  import ProfileForm from '$lib/components/ProfileForm.svelte';
   import States from '$lib/components/States.svelte';
-
-  let status = $state<'loading' | 'error' | 'ready'>('loading');
-  let editing = $state(false);
-  let actionError = $state<string | null>(null);
+  import VerdictView from '$lib/components/VerdictView.svelte';
+  import { profileStore } from '$lib/profile.svelte';
+  import type { ATSResponse, FacetCounts, Verdict } from '$lib/types';
+  import { Button } from '$lib/ui';
 
   const profile = $derived(profileStore.profile);
-  const verdictHref = resolve('/my/profile/verdict');
 
-  // Market-coverage headline over the profile's own role. Best-effort: a failed fetch
-  // (or a profile with no specialization) simply omits the coverage block.
-  let coverage = $state.raw<Verdict | null>(null);
-  let coverageGeneration = 0;
+  // Skills are the measured set (from the profile), never a market filter — hide the
+  // skills facet so the sidebar can't turn them into one.
+  const excludeFacets = ['skills'];
+
+  let status = $state<'loading' | 'error' | 'ready'>('loading');
+  let filters = $state<FilterStore | null>(null);
+  let verdict = $state<Verdict | null>(null);
+  let counts = $state<FacetCounts | null>(null);
+  let ats = $state<ATSResponse | null>(null);
+  let loadError = $state(false);
+  let tab = $state<'coverage' | 'cv'>('coverage');
+  let modalOpen = $state(false);
+  let actionError = $state<string | null>(null);
+
+  // Optimistic CV flag: a résumé upload stores the CV server-side before the next ATS
+  // fetch resolves (and before any profile exists during set-up), so reflect it at once.
+  let cvUploaded = $state(false);
+  const hasCv = $derived((ats?.has_cv ?? false) || cvUploaded);
+
+  // Job-count preview for the modal's staged filters — the same facet call, total only.
+  const previewCount = (params: URLSearchParams) => facetCounts(params).then((c) => c.total);
+
+  // AI review state.
+  let reviewBusy = $state(false);
+  let reviewUnavailable = $state(false);
+
+  // Run the optional LLM review over the stored CV; folds content-quality + suggestions
+  // into the report. When the server has no LLM the report comes back unreviewed — flag
+  // that so the UI stops offering the button.
+  async function runReview() {
+    reviewBusy = true;
+    reviewUnavailable = false;
+    try {
+      const params = filters ? filtersToParams(filters.applied) : undefined;
+      const next = await runATSReview(params);
+      ats = next;
+      if (next.has_cv && next.report && !next.report.reviewed) {
+        reviewUnavailable = true;
+      }
+    } catch {
+      reviewUnavailable = true;
+    } finally {
+      reviewBusy = false;
+    }
+  }
+
+  // Seed the comparison filter from the profile's specializations (unless the URL already
+  // carries a category) — so it opens on the profile's own role, which the user can then
+  // change to compare against another position without touching the saved profile.
+  function buildFilters(specializations: string[]): FilterStore {
+    const seed = new URLSearchParams(page.url.searchParams);
+    if (!seed.getAll('category').some((c) => c !== '')) {
+      for (const spec of specializations) seed.append('category', spec);
+    }
+    return new FilterStore(seed);
+  }
 
   async function load() {
     status = 'loading';
@@ -34,36 +86,59 @@
     }
   }
 
-  async function loadCoverage() {
-    const gen = ++coverageGeneration;
-    if (!profile || profile.specializations.length === 0) {
-      coverage = null;
-      return;
-    }
-    try {
-      const v = await getProfileVerdict();
-      if (gen === coverageGeneration) coverage = v;
-    } catch {
-      if (gen === coverageGeneration) coverage = null;
-    }
-  }
-
-  // Load once the session is confirmed (the boot-time /me resolution may still be in
-  // flight when the page is opened directly). Sign-out reset is handled centrally in the
-  // root layout, so this only needs to (re)load when authenticated.
+  // (Re)load once the session resolves.
   $effect(() => {
     if (isAuthenticated()) void load();
   });
 
-  // Recompute coverage whenever the profile changes (save/clear reassigns it).
+  // Build the filter only on the profile null↔exists transition, never on a plain edit —
+  // so refining the comparison role survives a skills/role save. Delete drops it back to
+  // the set-up form.
   $effect(() => {
-    void profile;
-    void loadCoverage();
+    const p = profile;
+    untrack(() => {
+      if (p && !filters) {
+        filters = buildFilters(p.specializations);
+      } else if (!p && filters) {
+        filters.dispose();
+        filters = null;
+      }
+    });
   });
 
-  // Link a missing skill to the job search under the profile's role plus that skill.
-  function jobsHref(specializations: string[], skill: string): string {
-    const params = categoryParams(specializations);
+  // Reload the verdict + facet counts + ATS report whenever the applied (debounced)
+  // filters change. No filter (no profile) → nothing to compute.
+  $effect(() => {
+    const f = filters;
+    if (!f) return;
+    void f.applied;
+    void reload();
+  });
+
+  // reloadGeneration guards against out-of-order responses: fast filter changes can have
+  // an older request resolve after a newer one, so only the latest reload commits.
+  let reloadGeneration = 0;
+  async function reload() {
+    if (!filters) return;
+    const gen = ++reloadGeneration;
+    const params = filtersToParams(filters.applied);
+    try {
+      const [v, c, a] = await Promise.all([
+        getProfileVerdict(params),
+        facetCounts(params),
+        getATSReport(params),
+      ]);
+      if (gen !== reloadGeneration) return; // a newer reload started — discard stale results.
+      [verdict, counts, ats] = [v, c, a];
+      loadError = false;
+    } catch {
+      if (gen === reloadGeneration) loadError = true;
+    }
+  }
+
+  // Link a gap skill to the job search under the current comparison role plus that skill.
+  function gapHref(skill: string): string {
+    const params = filters ? filtersToParams(filters.applied) : new URLSearchParams();
     params.append('skills', skill);
     return `/jobs?${params}`;
   }
@@ -73,6 +148,7 @@
     actionError = null;
     try {
       await profileStore.clear();
+      cvUploaded = false;
     } catch {
       actionError = 'Could not delete the profile. Please try again.';
     }
@@ -96,92 +172,134 @@
   {:else if status === 'error'}
     <States state="error" message="Couldn't load your profile." />
   {:else}
-    <div class="flex flex-col gap-6">
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div class="flex flex-col gap-1">
-          <h1 class="text-2xl font-semibold tracking-tight">Profile</h1>
-          <p class="text-sm text-muted-foreground">
-            Your specializations and skills — reuse them to find relevant work.
-          </p>
-        </div>
-        {#if profile}
-          <div class="flex items-center gap-1">
-            <Button variant="ghost" size="icon" href={verdictHref} aria-label="Market coverage">
-              <Sparkles class="size-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onclick={() => (editing = true)} aria-label="Edit profile">
-              <Pencil class="size-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onclick={remove} aria-label="Delete profile">
-              <Trash2 class="size-4" />
-            </Button>
-          </div>
-        {/if}
+    <!-- Header -->
+    <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
+      <div class="flex flex-col gap-1">
+        <h1 class="text-2xl font-semibold tracking-tight">Profile</h1>
+        <p class="text-sm text-muted-foreground">
+          Your CV, skills and role — measured against live market demand.
+        </p>
       </div>
-
-      {#if actionError}
-        <p class="text-sm text-destructive">{actionError}</p>
-      {/if}
-
-      {#if !profile}
-        <div
-          class="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border py-14 text-center"
-        >
-          <p class="text-sm text-muted-foreground">You haven't set up your profile yet.</p>
-          <Button variant="primary" onclick={() => (editing = true)}>Set up your profile</Button>
-        </div>
-      {:else}
-        <div class="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
-          <div class="flex flex-col gap-2">
-            <span class="text-sm font-medium">Specializations</span>
-            <div class="flex flex-wrap gap-1.5">
-              {#each profile.specializations as spec (spec)}
-                <span class="rounded-full border border-border px-2.5 py-1 text-sm text-muted-foreground">
-                  {categoryLabel(spec)}
-                </span>
-              {/each}
-            </div>
-          </div>
-          <div class="flex flex-col gap-2">
-            <span class="text-sm font-medium">Skills</span>
-            <div class="flex flex-wrap gap-1.5">
-              {#each profile.skills as skill (skill)}
-                <span class="rounded bg-secondary px-1.5 py-0.5 text-xs text-secondary-foreground">{skill}</span>
-              {/each}
-            </div>
-          </div>
-
-          {#if coverage && coverage.total > 0}
-            <div class="mt-1 flex flex-col gap-2 border-t border-border pt-4">
-              <div class="flex flex-col gap-1">
-                <span class="text-xs text-muted-foreground">
-                  <span class="font-semibold text-foreground">{coverage.coverage_percent}% coverage</span>
-                  · {coverage.covered.toLocaleString('en-US')} of {coverage.total.toLocaleString('en-US')} open vacancies
-                </span>
-                <div class="h-1.5 overflow-hidden rounded bg-secondary">
-                  <div class="h-full rounded bg-primary" style="width: {coverage.coverage_percent}%"></div>
-                </div>
-              </div>
-              {#if coverage.gaps.length > 0}
-                <div class="flex flex-wrap items-center gap-1">
-                  <span class="text-xs text-muted-foreground">Add to reach more:</span>
-                  {#each coverage.gaps.slice(0, 5) as gap (gap.name)}
-                    <a
-                      href={jobsHref(profile.specializations, gap.name)}
-                      class="rounded border border-dashed border-border px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
-                      title="+{gap.new_vacancies.toLocaleString('en-US')} vacancies"
-                    >{gap.name}</a>
-                  {/each}
-                </div>
-              {/if}
-            </div>
-          {/if}
-        </div>
+      {#if profile}
+        <Button variant="ghost" size="icon" onclick={remove} aria-label="Delete profile">
+          <Trash2 class="size-4" />
+        </Button>
       {/if}
     </div>
+
+    {#if actionError}
+      <p class="mb-4 text-sm text-destructive">{actionError}</p>
+    {/if}
+
+    {#if profile === null}
+      <!-- Set-up: the inline form only; coverage appears once a profile exists. -->
+      <div class="mx-auto w-full max-w-2xl">
+        <ProfileForm
+          profile={null}
+          {hasCv}
+          onSaved={() => void reload()}
+          onCvUploaded={() => (cvUploaded = true)}
+        />
+      </div>
+    {:else}
+      <div class="flex gap-6">
+        <aside class="hidden w-72 shrink-0 md:block">
+          <div class="sticky top-6 flex max-h-[calc(100vh-5rem)] flex-col gap-4 overflow-y-auto">
+            {#if filters}
+              <div class="rounded-xl border border-border bg-card p-4">
+                <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} />
+              </div>
+            {/if}
+          </div>
+        </aside>
+
+        <main class="flex min-w-0 flex-1 flex-col gap-6">
+          {#key profile.updated_at}
+            <ProfileForm
+              {profile}
+              {hasCv}
+              onSaved={() => void reload()}
+              onCvUploaded={() => {
+                cvUploaded = true;
+                void reload();
+              }}
+            />
+          {/key}
+
+          <!-- Tabs -->
+          <div class="flex gap-5 border-b border-border">
+            <button
+              type="button"
+              onclick={() => (tab = 'coverage')}
+              class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'coverage'
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'}"
+            >
+              Market coverage
+            </button>
+            <button
+              type="button"
+              onclick={() => (tab = 'cv')}
+              class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'cv'
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'}"
+            >
+              CV readiness
+            </button>
+          </div>
+
+          <!-- Body -->
+          {#if loadError}
+            <States state="error" message="Couldn't load the report." />
+          {:else if verdict === null}
+            <States state="loading" />
+          {:else if tab === 'coverage'}
+            <VerdictView {verdict} {gapHref} />
+          {:else if ats?.has_cv && ats.report}
+            <!-- CV readiness -->
+            <div class="flex flex-col gap-5">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <p class="text-sm text-muted-foreground">How ATS-ready your CV is for this role.</p>
+                {#if !ats.report.reviewed && !reviewUnavailable}
+                  <Button variant="primary" onclick={runReview} disabled={reviewBusy}>
+                    <Sparkles class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
+                    {reviewBusy ? 'Reviewing…' : 'Run AI review'}
+                  </Button>
+                {:else if ats.report.reviewed}
+                  <Button variant="ghost" onclick={runReview} disabled={reviewBusy}>
+                    <Sparkles class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
+                    {reviewBusy ? 'Reviewing…' : 'Re-run AI review'}
+                  </Button>
+                {/if}
+              </div>
+              {#if reviewUnavailable}
+                <p class="text-xs text-muted-foreground">AI review is not available right now.</p>
+              {/if}
+              <ATSReportView report={ats.report} />
+            </div>
+          {:else}
+            <!-- No CV yet: uploaded via the form above. -->
+            <div class="flex flex-col items-start gap-2 rounded-xl border border-dashed border-border p-6">
+              <p class="text-sm font-medium">Add your CV to score its ATS readiness</p>
+              <p class="text-sm text-muted-foreground">
+                Upload your CV in the form above to check ATS readability and this role's keywords.
+              </p>
+            </div>
+          {/if}
+        </main>
+      </div>
+
+      <FilterEdgeTab active={filters?.active ?? 0} onclick={() => (modalOpen = true)} />
+      {#if filters}
+        <FilterModal
+          store={filters}
+          {counts}
+          exclude={excludeFacets}
+          open={modalOpen}
+          onClose={() => (modalOpen = false)}
+          {previewCount}
+        />
+      {/if}
+    {/if}
   {/if}
 </div>
-
-{#if editing}
-  <ProfileEditModal {profile} onClose={() => (editing = false)} />
-{/if}
