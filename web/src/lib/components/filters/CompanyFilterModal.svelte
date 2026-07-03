@@ -23,9 +23,9 @@
   }));
   const sections: RailSection[] = ['FILTERS'];
 
+  // Company facets are include-only, so the badge is just the selected count.
   function entryCount(e: RailEntry): number {
-    const st = staged.facet(e.facetParam ?? e.key);
-    return st.include.length + st.exclude.length;
+    return staged.facet(e.facetParam ?? e.key).include.length;
   }
 
   function seed() {
