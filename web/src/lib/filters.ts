@@ -39,7 +39,7 @@ export interface JobFilters {
   sort: SortField;
 }
 
-function emptyFacet(): FacetState {
+export function emptyFacet(): FacetState {
   return { values: [], exclude: false, matchAll: false };
 }
 

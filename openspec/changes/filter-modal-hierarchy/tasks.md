@@ -7,10 +7,10 @@
 
 ## 2. Frontend: staging store + facet registry metadata
 
-- [ ] 2.1 Add a `StagedFilterStore` (clone-on-open over `JobFilters`, same facet mutators as `FilterStore`, `commit()` → `FilterStore.apply()`, `discard()`), with unit-testable pure logic for clone/mutate/commit
-- [ ] 2.2 Extend `FacetDef` with a `section` (rail grouping) field and assign every facet to `ROLE` / `PAY & BENEFITS` / `REQUIREMENTS & ELIGIBILITY`
-- [ ] 2.3 Add the static `category → section` map (Engineering; Data & AI; Quality & Security; Design; Product & Management; Go-to-market & Support) with a test asserting it covers every `CATEGORY_VALUES` value exactly once
-- [ ] 2.4 Merge `salary_currency` + the salary-min control into one `salary` facet definition; drop the standalone Currency facet from the registry
+- [x] 2.1 Add a `StagedFilters` store (`stagedFilters.svelte.ts`): clone-on-open (`seed`) over `JobFilters`, same `FacetStore` mutators as `FilterStore`, `commit(live)` → `FilterStore.apply()`; type-checked
+- [x] 2.2 Add the modal rail registry (`filterSections.ts`: `RAIL` entries + `RAIL_SECTIONS`) grouping facets under `ROLE` / `PAY & BENEFITS` / `REQUIREMENTS & ELIGIBILITY`, with composite `location`/`salary` entries (a rail model rather than a per-facet `section`, since Location/Salary fold several params)
+- [x] 2.3 Add the static `category → section` map (`CATEGORY_GROUP`, a `Record<Category,…>` so svelte-check fails if a category is unassigned) + ordered `CATEGORY_GROUPS`
+- [x] 2.4 Realize the salary/currency merge via the rail: a single `salary` entry renders currency + min-salary; no standalone Currency entry (no `FACETS`/search-param change)
 
 ## 3. Frontend: modal shell (two-pane, deferred apply)
 
