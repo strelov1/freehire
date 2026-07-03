@@ -5,6 +5,7 @@
   import States from './States.svelte';
   import CompanyLogo from './CompanyLogo.svelte';
   import CompanyFollowButton from './CompanyFollowButton.svelte';
+  import CompanyInfoCard from './CompanyInfoCard.svelte';
 
   // The company entity is server-rendered (route `load`), so the header is in the
   // initial HTML. The job list is *streamed*: `initial` is a promise the route
@@ -24,6 +25,8 @@
     <CompanyFollowButton {slug} companyName={company.name} />
   </div>
 </div>
+
+<CompanyInfoCard {company} />
 
 <div class="mt-6">
   {#await initial}

@@ -13,6 +13,25 @@ export interface ATSResponse {
   report: ATSReportContract | null;
 }
 
+/** The lower-coverage extras stored in the company's `company_info` JSONB. Every
+ *  field is optional — the loader omits what the source doesn't provide. */
+export interface CompanyInfo {
+  homepage?: string;
+  parent?: string;
+  subsidiaries?: string[];
+  activities?: string[];
+  funding?: {
+    type?: string;
+    amount?: number;
+    year?: number;
+    investors?: string[];
+  };
+  stock?: {
+    symbol?: string;
+    exchange?: string;
+  };
+}
+
 export interface Company {
   slug: string;
   name: string;
@@ -21,6 +40,15 @@ export interface Company {
   collections: string[];
   created_at: string | null;
   updated_at: string | null;
+  // Authoritative company-info facts (populated by the company-info backfill;
+  // absent/empty on unenriched rows). GetCompany is SELECT *, so these ride along.
+  industries?: string[];
+  year_founded?: number | null;
+  employee_count?: number | null;
+  hq_country?: string | null;
+  organization_type?: string | null;
+  tagline?: string | null;
+  company_info?: CompanyInfo;
 }
 
 /** A row of the companies catalog: company plus its computed job count. */
