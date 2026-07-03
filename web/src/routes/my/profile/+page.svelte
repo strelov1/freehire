@@ -136,6 +136,15 @@
     }
   }
 
+  // ProfileForm callbacks: a save re-fetches coverage; a CV upload also refreshes the
+  // stored-CV state. During set-up both reloads are no-ops (reload bails without a
+  // filter), but cvUploaded still flips so the drop-zone shows the uploaded state at once.
+  const handleSaved = () => void reload();
+  function handleCvUploaded() {
+    cvUploaded = true;
+    void reload();
+  }
+
   // Link a gap skill to the job search under the current comparison role plus that skill.
   function gapHref(skill: string): string {
     const params = filters ? filtersToParams(filters.applied) : new URLSearchParams();
@@ -194,12 +203,7 @@
     {#if profile === null}
       <!-- Set-up: the inline form only; coverage appears once a profile exists. -->
       <div class="mx-auto w-full max-w-2xl">
-        <ProfileForm
-          profile={null}
-          {hasCv}
-          onSaved={() => void reload()}
-          onCvUploaded={() => (cvUploaded = true)}
-        />
+        <ProfileForm profile={null} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
       </div>
     {:else}
       <div class="flex gap-6">
@@ -215,15 +219,7 @@
 
         <main class="flex min-w-0 flex-1 flex-col gap-6">
           {#key profile.updated_at}
-            <ProfileForm
-              {profile}
-              {hasCv}
-              onSaved={() => void reload()}
-              onCvUploaded={() => {
-                cvUploaded = true;
-                void reload();
-              }}
-            />
+            <ProfileForm {profile} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
           {/key}
 
           <!-- Tabs -->
