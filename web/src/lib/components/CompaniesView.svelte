@@ -15,7 +15,8 @@
   import LoadMore from './LoadMore.svelte';
   import InfiniteScroll from './InfiniteScroll.svelte';
   import CompanyLogo from './CompanyLogo.svelte';
-  import CompanyFiltersPanel from './CompanyFiltersPanel.svelte';
+  import CompanyFilterSummary from './filters/CompanyFilterSummary.svelte';
+  import CompanyFilterModal from './filters/CompanyFilterModal.svelte';
   import FilterEdgeTab from './FilterEdgeTab.svelte';
 
   // The first page is server-rendered (route `load`) for the current filters, so
@@ -39,7 +40,7 @@
   seeded.seed(untrack(() => initial));
   let companies = $state.raw(seeded);
   let started = false;
-  let drawerOpen = $state(false);
+  let modalOpen = $state(false);
 
   // `initial` was fetched for page.url; if a shallow-routing back/forward left
   // page.url lagging the address bar, it's stale — reload on the first run instead.
@@ -81,7 +82,7 @@
 <div class="flex gap-6">
   <aside class="hidden w-72 shrink-0 md:block">
     <div class="sticky top-6 max-h-[calc(100vh-5rem)] overflow-y-auto rounded-xl border border-border bg-card p-4">
-      <CompanyFiltersPanel store={filters} />
+      <CompanyFilterSummary store={filters} onOpen={() => (modalOpen = true)} />
     </div>
   </aside>
 
@@ -145,18 +146,7 @@
   </div>
 </div>
 
-<!-- Mobile filters entry (the desktop aside is always visible). -->
-<FilterEdgeTab active={filters.active} onclick={() => (drawerOpen = true)} />
+<!-- Mobile filters entry (the desktop aside hosts the summary + All-filters button). -->
+<FilterEdgeTab active={filters.active} onclick={() => (modalOpen = true)} />
 
-{#if drawerOpen}
-  <div class="fixed inset-0 z-40 md:hidden">
-    <button class="absolute inset-0 bg-black/40" aria-label="Close filters" onclick={() => (drawerOpen = false)}></button>
-    <div class="absolute left-0 top-0 flex h-full w-80 max-w-[85%] flex-col overflow-y-auto bg-background p-4 shadow-xl">
-      <div class="mb-3 flex items-center justify-between">
-        <span class="text-sm font-semibold tracking-tight">Filters</span>
-        <button type="button" class="text-sm text-muted-foreground hover:text-foreground" onclick={() => (drawerOpen = false)}>Done</button>
-      </div>
-      <CompanyFiltersPanel store={filters} />
-    </div>
-  </div>
-{/if}
+<CompanyFilterModal store={filters} open={modalOpen} onClose={() => (modalOpen = false)} />

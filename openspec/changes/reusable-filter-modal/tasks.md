@@ -23,9 +23,9 @@
 
 ## 5. Companies on the jobs pattern
 
-- [ ] 5.1 Add `CompanyFilterModal.svelte`: wraps the shell with `StagedCompanyFilters`, a `COMPANY_FACETS`-derived rail (single section, `facet`-kind), a `FacetSection` pane, and `staged.facet(param).values.length` counts.
-- [ ] 5.2 Add `CompanyFilterSummary.svelte`: compute flat per-facet chip groups from `COMPANY_FACETS`, render `FilterSummaryShell`, open `CompanyFilterModal`.
-- [ ] 5.3 Rewire `CompaniesView.svelte`: desktop `CompanyFilterSummary` + `FilterEdgeTab` (mobile) opening `CompanyFilterModal`; remove the bespoke mobile drawer. Delete `CompanyFiltersPanel.svelte`.
+- [x] 5.1 Add `CompanyFilterModal.svelte`: wraps the shell with `StagedCompanyFilters`, a `COMPANY_FACETS`-derived rail (single section, `facet`-kind), a `FacetSection` pane, and `staged.facet(param).values.length` counts.
+- [x] 5.2 Add `CompanyFilterSummary.svelte`: compute flat per-facet chip groups from `COMPANY_FACETS`, render `FilterSummaryShell`, open `CompanyFilterModal`.
+- [x] 5.3 Rewire `CompaniesView.svelte`: desktop `CompanyFilterSummary` + `FilterEdgeTab` (mobile) opening `CompanyFilterModal`; remove the bespoke mobile drawer. Delete `CompanyFiltersPanel.svelte`.
 
 ## 6. Profile filter gating
 
