@@ -54,6 +54,39 @@ type record struct {
 	StockSymbol      string   `json:"stock_symbol"`
 }
 
+// clean strips NUL bytes (0x00) from every string field — scalars and slice
+// elements — so a stray NUL in a dump record can't abort the load. Postgres rejects
+// NUL in both text columns and jsonb values, so this must run before the record
+// reaches either the text params or the company_info JSONB.
+func (r *record) clean() {
+	r.Name = stripNUL(r.Name)
+	r.HomepageURI = stripNUL(r.HomepageURI)
+	r.HQCountry = stripNUL(r.HQCountry)
+	r.ParentCompany = stripNUL(r.ParentCompany)
+	r.Tagline = stripNUL(r.Tagline)
+	r.OrganizationType = stripNUL(r.OrganizationType)
+	r.FundingType = stripNUL(r.FundingType)
+	r.StockExchange = stripNUL(r.StockExchange)
+	r.StockSymbol = stripNUL(r.StockSymbol)
+	stripNULSlice(r.Subsidiaries)
+	stripNULSlice(r.Industries)
+	stripNULSlice(r.Activities)
+	stripNULSlice(r.FundingInvestors)
+}
+
+// stripNUL removes NUL bytes from s. ReplaceAll returns s unchanged (no allocation)
+// when there is no NUL, so the common clean case stays cheap.
+func stripNUL(s string) string {
+	return strings.ReplaceAll(s, "\x00", "")
+}
+
+// stripNULSlice removes NUL bytes from each element of a in place.
+func stripNULSlice(a []string) {
+	for i := range a {
+		a[i] = stripNUL(a[i])
+	}
+}
+
 // store is the slice of the data layer the loader needs; *db.Queries satisfies it and
 // tests use a fake.
 type store interface {
@@ -113,6 +146,11 @@ func load(ctx context.Context, s store, r io.Reader) (loadStats, error) {
 			stats.skipped++
 			continue
 		}
+		// Strip stray NUL bytes: the dump carries the occasional 0x00 (raw or a
+		// unicode escape) inside a string, and Postgres rejects NUL in both text
+		// and jsonb values (SQLSTATE 22021), which would otherwise abort the whole
+		// load on one bad record.
+		rec.clean()
 		params, ok := recordToParams(rec)
 		if !ok {
 			stats.skipped++

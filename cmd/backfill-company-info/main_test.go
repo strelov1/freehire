@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -86,6 +87,33 @@ func TestRecordToParams_EmptyValuesBecomeNullAndEmptyJSON(t *testing.T) {
 	}
 	if string(p.CompanyInfo) != "{}" {
 		t.Errorf("company_info = %s, want {}", p.CompanyInfo)
+	}
+}
+
+func TestRecordClean_StripsNUL(t *testing.T) {
+	// A stray NUL in any string field must be gone after clean, so neither the text
+	// params nor the company_info JSONB can trip Postgres' NUL rejection.
+	rec := record{
+		Name:          "Ac\x00me",
+		Tagline:       "we\x00do",
+		Industries:    []string{"Soft\x00ware"},
+		ParentCompany: "Hold\x00ings",
+	}
+	rec.clean()
+
+	if rec.Name != "Acme" || rec.Tagline != "wedo" || rec.Industries[0] != "Software" {
+		t.Fatalf("clean left NUL: name=%q tagline=%q industries=%q", rec.Name, rec.Tagline, rec.Industries[0])
+	}
+
+	p, ok := recordToParams(rec)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+	if strings.ContainsRune(p.Name, 0) || strings.ContainsRune(p.Industries[0], 0) {
+		t.Error("params still carry a NUL byte")
+	}
+	if strings.ContainsRune(string(p.CompanyInfo), 0) {
+		t.Errorf("company_info JSONB still carries a NUL byte: %q", p.CompanyInfo)
 	}
 }
 
