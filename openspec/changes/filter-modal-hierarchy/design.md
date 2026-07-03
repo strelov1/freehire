@@ -88,6 +88,17 @@ params).total`, debounced per toggle. No new endpoint.
   the extracted `FacetSection`, so control behavior is unchanged; only the container
   moves.
 
+## Resolved During Implementation
+
+- **City nesting dropped.** The `cities` facet turned out to be an LLM-open vocabulary
+  (jobview backfills city names far beyond the location dictionary), so the beacon-only
+  `city→country` map couldn't nest most cities and produced a confusing "some nested,
+  the rest in Other cities" split. Resolved to a **region→country tree + one flat,
+  searchable Cities section** (busiest-first + type-to-search). The `city→country`
+  contract export is kept as a dormant seam for a future gazetteer.
+- **Work format + Employment merged** into one "Work & employment" rail entry (one
+  pane, two chip groups), mirroring the salary/currency merge.
+
 ## Migration Plan
 
 Frontend-only deploy plus a `gen-contracts` regeneration at build time (the two new
