@@ -30,3 +30,6 @@ docs/superpowers/
 __pycache__/
 *.pyc
 /backfill-derive
+
+# Superpowers visual brainstorm scratch
+.superpowers/

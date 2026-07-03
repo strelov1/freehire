@@ -3,9 +3,7 @@
   import type { Company, Job } from '$lib/types';
   import JobsView from './JobsView.svelte';
   import States from './States.svelte';
-  import CompanyLogo from './CompanyLogo.svelte';
-  import CompanyFollowButton from './CompanyFollowButton.svelte';
-  import CompanyInfoCard from './CompanyInfoCard.svelte';
+  import CompanyHeader from './CompanyHeader.svelte';
 
   // The company entity is server-rendered (route `load`), so the header is in the
   // initial HTML. The job list is *streamed*: `initial` is a promise the route
@@ -18,15 +16,7 @@
     $props();
 </script>
 
-<div class="flex flex-wrap items-center gap-3">
-  <CompanyLogo name={company.name} size="size-8" />
-  <h1 class="text-xl font-semibold tracking-tight">{company.name}</h1>
-  <div class="ml-auto">
-    <CompanyFollowButton {slug} companyName={company.name} />
-  </div>
-</div>
-
-<CompanyInfoCard {company} />
+<CompanyHeader {company} {slug} />
 
 <div class="mt-6">
   {#await initial}
