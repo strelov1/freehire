@@ -76,6 +76,10 @@ func (f *flexInt) UnmarshalJSON(b []byte) error {
 // tolerates the model's shape slips. It is a distinct type from Enrichment, so
 // Enrichment.UnmarshalJSON does not recurse.
 type enrichmentJSON struct {
+	// Summary is plain free text — no shape coercion, but it must be listed here (and
+	// copied below) or the tolerant decode silently drops it.
+	Summary string `json:"summary,omitempty"`
+
 	WorkMode        flexString `json:"work_mode,omitempty"`
 	EmploymentType  flexString `json:"employment_type,omitempty"`
 	Relocation      flexString `json:"relocation,omitempty"`
@@ -113,6 +117,7 @@ func (e *Enrichment) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*e = Enrichment{
+		Summary:            s.Summary,
 		WorkMode:           string(s.WorkMode),
 		EmploymentType:     string(s.EmploymentType),
 		Relocation:         string(s.Relocation),

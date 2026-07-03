@@ -4,6 +4,7 @@
   import JobsView from './JobsView.svelte';
   import States from './States.svelte';
   import CompanyHeader from './CompanyHeader.svelte';
+  import CompanyFacts from './CompanyFacts.svelte';
 
   // The company entity is server-rendered (route `load`), so the header is in the
   // initial HTML. The job list is *streamed*: `initial` is a promise the route
@@ -18,11 +19,22 @@
 
 <CompanyHeader {company} {slug} />
 
+<!-- Company facts sit atop the jobs sidebar on desktop (passed into JobsView as
+     `sidebarTop`); the sidebar is hidden on mobile, so mirror them here as a card
+     under the header. CompanyFacts renders nothing when there are no facts. -->
+<div class="mt-4 md:hidden">
+  <CompanyFacts {company} />
+</div>
+
 <div class="mt-6">
   {#await initial}
     <States state="loading" />
   {:then slice}
-    <JobsView initial={slice} scope={{ company_slug: slug }} excludeFacets={['source']} />
+    <JobsView initial={slice} scope={{ company_slug: slug }} excludeFacets={['source']}>
+      {#snippet sidebarTop()}
+        <CompanyFacts {company} />
+      {/snippet}
+    </JobsView>
   {:catch}
     <States state="error" message="Couldn't load jobs for this company." />
   {/await}

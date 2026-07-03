@@ -10,6 +10,7 @@
   import { setListSearchTarget } from '$lib/listSearch.svelte';
   import type { CompanyListItem } from '$lib/types';
   import { Badge } from '$lib/ui';
+  import { countryLabel } from '$lib/facets';
   import States from './States.svelte';
   import LoadMore from './LoadMore.svelte';
   import InfiniteScroll from './InfiniteScroll.svelte';
@@ -101,15 +102,28 @@
       </p>
       <div class="flex flex-col gap-3">
         {#each companies.items as company (company.slug)}
+          {@const industry = company.industries?.[0]}
+          {@const hq = company.hq_country ? countryLabel(company.hq_country) : null}
           <a
             href={resolve('/companies/[slug]', { slug: company.slug })}
-            class="flex items-center justify-between rounded-lg border border-border px-4 py-3 transition-colors hover:bg-accent"
+            class="flex items-start gap-2.5 rounded-lg border border-border px-4 py-3 transition-colors hover:bg-accent"
           >
-            <span class="flex min-w-0 items-center gap-2.5">
-              <CompanyLogo name={company.name} size="size-6" />
-              <span class="truncate font-medium">{company.name}</span>
-            </span>
-            <Badge variant="outline">{company.job_count} jobs</Badge>
+            <span class="mt-0.5"><CompanyLogo name={company.name} size="size-6" /></span>
+            <div class="flex min-w-0 flex-1 flex-col gap-1">
+              <div class="flex items-center justify-between gap-2">
+                <span class="truncate font-medium">{company.name}</span>
+                <Badge variant="outline" class="shrink-0">{company.job_count} jobs</Badge>
+              </div>
+              {#if company.tagline}
+                <p class="line-clamp-1 text-sm text-muted-foreground">{company.tagline}</p>
+              {/if}
+              {#if industry || hq}
+                <div class="flex flex-wrap gap-1.5">
+                  {#if industry}<Badge variant="secondary">{industry}</Badge>{/if}
+                  {#if hq}<Badge variant="secondary">{hq}</Badge>{/if}
+                </div>
+              {/if}
+            </div>
           </a>
         {/each}
       </div>

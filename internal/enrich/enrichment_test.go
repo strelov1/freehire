@@ -14,6 +14,7 @@ func ptr[T any](v T) *T { return &v }
 // pointed-to value.
 func TestRoundTripFidelity(t *testing.T) {
 	original := Enrichment{
+		Summary:            "Senior backend role building Go services on PostgreSQL.",
 		WorkMode:           "remote",
 		EmploymentType:     "full_time",
 		Relocation:         "supported",

@@ -9,7 +9,7 @@
 -- array short-circuits to no constraint, non-empty values are OR-ed within the
 -- facet, and the facets AND together (and with the name search). CountCompanies
 -- MUST keep an identical WHERE so the filtered total matches the page.
-SELECT slug, name, job_count
+SELECT slug, name, job_count, tagline, industries, hq_country
 FROM companies
 WHERE (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%')
   AND (coalesce(cardinality(sqlc.arg('collections')::text[]), 0) = 0 OR collections && sqlc.arg('collections')::text[])
