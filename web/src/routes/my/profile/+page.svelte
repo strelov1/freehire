@@ -29,7 +29,7 @@
   let counts = $state<FacetCounts | null>(null);
   let ats = $state<ATSResponse | null>(null);
   let loadError = $state(false);
-  let tab = $state<'coverage' | 'cv'>('coverage');
+  let tab = $state<'profile' | 'coverage' | 'readiness'>('profile');
   let modalOpen = $state(false);
   let actionError = $state<string | null>(null);
 
@@ -218,12 +218,17 @@
         </aside>
 
         <main class="flex min-w-0 flex-1 flex-col gap-6">
-          {#key profile.updated_at}
-            <ProfileForm {profile} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
-          {/key}
-
           <!-- Tabs -->
           <div class="flex gap-5 border-b border-border">
+            <button
+              type="button"
+              onclick={() => (tab = 'profile')}
+              class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'profile'
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'}"
+            >
+              Your CV
+            </button>
             <button
               type="button"
               onclick={() => (tab = 'coverage')}
@@ -235,8 +240,8 @@
             </button>
             <button
               type="button"
-              onclick={() => (tab = 'cv')}
-              class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'cv'
+              onclick={() => (tab = 'readiness')}
+              class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'readiness'
                 ? 'border-primary text-foreground'
                 : 'border-transparent text-muted-foreground hover:text-foreground'}"
             >
@@ -245,7 +250,11 @@
           </div>
 
           <!-- Body -->
-          {#if loadError}
+          {#if tab === 'profile'}
+            {#key profile.updated_at}
+              <ProfileForm {profile} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
+            {/key}
+          {:else if loadError}
             <States state="error" message="Couldn't load the report." />
           {:else if verdict === null}
             <States state="loading" />
@@ -274,11 +283,11 @@
               <ATSReportView report={ats.report} />
             </div>
           {:else}
-            <!-- No CV yet: uploaded via the form above. -->
+            <!-- No CV yet: uploaded via the Your CV tab. -->
             <div class="flex flex-col items-start gap-2 rounded-xl border border-dashed border-border p-6">
               <p class="text-sm font-medium">Add your CV to score its ATS readiness</p>
               <p class="text-sm text-muted-foreground">
-                Upload your CV in the form above to check ATS readability and this role's keywords.
+                Upload your CV in the <button type="button" class="font-medium text-foreground underline underline-offset-2" onclick={() => (tab = 'profile')}>Your CV</button> tab to check ATS readability and this role's keywords.
               </p>
             </div>
           {/if}

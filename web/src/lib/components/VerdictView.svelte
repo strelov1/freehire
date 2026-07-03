@@ -21,6 +21,10 @@
   const bundles = $derived(verdict.bundles ?? []);
   const uncovered = $derived(Math.max(verdict.total - verdict.covered, 0));
 
+  // The two detail lists (gaps to add vs the role's top skills) are tabbed so only one
+  // shows at a time — keeps the coverage view compact under the headline + stats.
+  let sub = $state<'gaps' | 'skills'>('gaps');
+
   // Status → badge styling (STRONG green / HIDDEN amber / ADJACENT blue / MISSING red).
   const statusStyle: Record<string, string> = {
     strong: 'bg-primary/10 text-primary',
@@ -91,49 +95,63 @@
     </div>
   {/if}
 
-  <!-- Biggest wins -->
-  {#if gaps.length > 0}
-    <div class="flex flex-col gap-3">
-      <div class="flex items-center gap-2">
-        <TrendingUp class="size-4 text-muted-foreground" />
-        <h2 class="text-base font-semibold tracking-tight">Add a skill to reach more vacancies</h2>
-      </div>
-      <ul class="flex flex-col gap-2">
-        {#each gaps as gap, i (gap.name)}
-          <li
-            class="flex items-center gap-3 rounded-lg border border-border bg-card p-3 sm:p-4 animate-in fade-in slide-in-from-bottom-1 duration-300"
-            style="animation-delay: {Math.min(i * 30, 400)}ms"
-          >
-            <span class="w-6 shrink-0 text-sm tabular-nums text-muted-foreground">{i + 1}</span>
-            <div class="flex min-w-0 flex-1 flex-col">
-              {#if gapHref}
-                <a href={gapHref(gap.name)} class="truncate text-sm font-medium hover:underline">{gap.name}</a>
-              {:else}
-                <span class="truncate text-sm font-medium">{gap.name}</span>
-              {/if}
-            </div>
-            <div class="flex shrink-0 flex-col items-end">
-              <span class="inline-flex items-center gap-1 text-sm font-semibold tabular-nums">
-                <TrendingUp class="size-3.5" />
-                +{gap.new_vacancies.toLocaleString('en-US')}
-              </span>
-              <span class="text-xs text-muted-foreground">+{gap.unlock_percent}% of the role</span>
-            </div>
-          </li>
-        {/each}
-      </ul>
+  <!-- Detail lists, tabbed to stay compact -->
+  <div class="flex flex-col gap-3">
+    <div class="flex gap-5 border-b border-border">
+      <button
+        type="button"
+        onclick={() => (sub = 'gaps')}
+        class="-mb-px flex items-center gap-1.5 border-b-2 px-1 pb-2 text-sm font-medium transition-colors {sub === 'gaps'
+          ? 'border-primary text-foreground'
+          : 'border-transparent text-muted-foreground hover:text-foreground'}"
+      >
+        <TrendingUp class="size-4" />
+        Add a skill
+      </button>
+      <button
+        type="button"
+        onclick={() => (sub = 'skills')}
+        class="-mb-px border-b-2 px-1 pb-2 text-sm font-medium transition-colors {sub === 'skills'
+          ? 'border-primary text-foreground'
+          : 'border-transparent text-muted-foreground hover:text-foreground'}"
+      >
+        Top market skills
+      </button>
     </div>
-  {:else}
-    <div class="flex items-center gap-2 rounded-lg border border-border bg-card/50 p-4 text-sm text-muted-foreground">
-      <Check class="size-4 text-primary" />
-      No in-demand skills left to add for this role — your stack already reaches its open vacancies.
-    </div>
-  {/if}
 
-  <!-- Top market skills breakdown -->
-  {#if skills.length > 0}
-    <div class="flex flex-col gap-3">
-      <h2 class="text-base font-semibold tracking-tight">Top market skills for this role</h2>
+    {#if sub === 'gaps'}
+      {#if gaps.length > 0}
+        <ul class="flex flex-col gap-2">
+          {#each gaps as gap, i (gap.name)}
+            <li
+              class="flex items-center gap-3 rounded-lg border border-border bg-card p-3 sm:p-4 animate-in fade-in slide-in-from-bottom-1 duration-300"
+              style="animation-delay: {Math.min(i * 30, 400)}ms"
+            >
+              <span class="w-6 shrink-0 text-sm tabular-nums text-muted-foreground">{i + 1}</span>
+              <div class="flex min-w-0 flex-1 flex-col">
+                {#if gapHref}
+                  <a href={gapHref(gap.name)} class="truncate text-sm font-medium hover:underline">{gap.name}</a>
+                {:else}
+                  <span class="truncate text-sm font-medium">{gap.name}</span>
+                {/if}
+              </div>
+              <div class="flex shrink-0 flex-col items-end">
+                <span class="inline-flex items-center gap-1 text-sm font-semibold tabular-nums">
+                  <TrendingUp class="size-3.5" />
+                  +{gap.new_vacancies.toLocaleString('en-US')}
+                </span>
+                <span class="text-xs text-muted-foreground">+{gap.unlock_percent}% of the role</span>
+              </div>
+            </li>
+          {/each}
+        </ul>
+      {:else}
+        <div class="flex items-center gap-2 rounded-lg border border-border bg-card/50 p-4 text-sm text-muted-foreground">
+          <Check class="size-4 text-primary" />
+          No in-demand skills left to add for this role — your stack already reaches its open vacancies.
+        </div>
+      {/if}
+    {:else if skills.length > 0}
       <ul class="flex flex-col gap-2">
         {#each skills as skill, i (skill.name)}
           <li class="flex flex-col gap-1.5 rounded-lg border border-border bg-card p-3 sm:p-4">
@@ -168,6 +186,6 @@
           </li>
         {/each}
       </ul>
-    </div>
-  {/if}
+    {/if}
+  </div>
 </div>
