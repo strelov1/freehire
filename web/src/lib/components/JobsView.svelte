@@ -14,7 +14,8 @@
   import { setListSearchTarget } from '$lib/listSearch.svelte';
   import type { Job, FacetCounts } from '$lib/types';
   import { Input } from '$lib/ui';
-  import FiltersPanel from './FiltersPanel.svelte';
+  import FilterSummary from './filters/FilterSummary.svelte';
+  import FilterModal from './filters/FilterModal.svelte';
   import FilterEdgeTab from './FilterEdgeTab.svelte';
   import States from './States.svelte';
   import JobRow from './JobRow.svelte';
@@ -81,8 +82,16 @@
       .catch(() => {});
   };
 
-  let drawerOpen = $state(false);
+  let modalOpen = $state(false);
   let started = false;
+
+  // The job count for a staged filter set (built by the modal), merged with the fixed
+  // scope params (e.g. company_slug) so the "Show N jobs" preview matches the list.
+  const previewCount = (params: URLSearchParams) => {
+    const p = new URLSearchParams(params);
+    for (const [k, v] of Object.entries(scope)) p.set(k, v);
+    return api.facetCounts(p).then((c) => c.total);
+  };
 
   // The server-rendered `initial` was searched for `page.url`. After a back/forward
   // onto a shallow-routing entry that lags page.url behind the address bar, `initial`
@@ -144,7 +153,7 @@
 <div class="flex gap-6">
   <aside class="hidden w-72 shrink-0 md:block">
     <div class="sticky top-6 max-h-[calc(100vh-5rem)] overflow-y-auto rounded-xl border border-border bg-card p-4">
-      <FiltersPanel store={filters} exclude={excludeFacets} {counts} />
+      <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} />
     </div>
   </aside>
 
@@ -165,7 +174,7 @@
         <button
           type="button"
           class="h-9 shrink-0 rounded-lg border border-border bg-secondary px-3 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent md:hidden"
-          onclick={() => (drawerOpen = true)}
+          onclick={() => (modalOpen = true)}
         >
           Filters{#if filters.active > 0}&nbsp;({filters.active}){/if}
         </button>
@@ -206,7 +215,7 @@
   <!-- Standalone list only: the fixed edge tabs sit over the top of the viewport,
        where this page's content starts. The embedded company view keeps its inline
        Filters button (above) so nothing overlaps the company hero. -->
-  <FilterEdgeTab active={filters.active} onclick={() => (drawerOpen = true)} />
+  <FilterEdgeTab active={filters.active} onclick={() => (modalOpen = true)} />
 
   <!-- Swipe-mode entry: an icon-only button pinned to the right viewport edge,
        level with the left filters tab (top-16). Fixed, so it only exists while the
@@ -223,15 +232,11 @@
   </button>
 {/if}
 
-{#if drawerOpen}
-  <div class="fixed inset-0 z-40 md:hidden">
-    <button class="absolute inset-0 bg-black/40" aria-label="Close filters" onclick={() => (drawerOpen = false)}></button>
-    <div class="absolute left-0 top-0 flex h-full w-80 max-w-[85%] flex-col overflow-y-auto bg-background p-4 shadow-xl">
-      <div class="mb-3 flex items-center justify-between">
-        <span class="text-sm font-semibold tracking-tight">Filters</span>
-        <button type="button" class="text-sm text-muted-foreground hover:text-foreground" onclick={() => (drawerOpen = false)}>Done</button>
-      </div>
-      <FiltersPanel store={filters} exclude={excludeFacets} {counts} />
-    </div>
-  </div>
-{/if}
+<FilterModal
+  store={filters}
+  {counts}
+  exclude={excludeFacets}
+  open={modalOpen}
+  onClose={() => (modalOpen = false)}
+  {previewCount}
+/>

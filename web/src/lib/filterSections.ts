@@ -9,7 +9,7 @@
 // silently fall out of the modal.
 
 import { CATEGORY_VALUES, type Category } from './generated/contracts';
-import { CATEGORY_LABELS } from './labels';
+import { categoryLabel } from './facets';
 
 export type RailSection = 'ROLE' | 'PAY & BENEFITS' | 'REQUIREMENTS & ELIGIBILITY';
 
@@ -73,7 +73,7 @@ export const CATEGORY_GROUPS: CategorySection[] = CATEGORY_GROUP_ORDER.map((name
   name,
   options: CATEGORY_VALUES.filter((v) => CATEGORY_GROUP[v] === name).map((value) => ({
     value,
-    label: CATEGORY_LABELS[value] ?? value,
+    label: categoryLabel(value),
   })),
 })).filter((s) => s.options.length > 0);
 
