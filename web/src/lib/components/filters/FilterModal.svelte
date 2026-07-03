@@ -57,6 +57,7 @@
       return (f.facets.regions?.values.length ?? 0) + (f.facets.countries?.values.length ?? 0) + (f.facets.cities?.values.length ?? 0);
     if (e.kind === 'salary') return (f.facets.salary_currency?.values.length ?? 0) + (f.salaryMin != null ? 1 : 0);
     if (e.kind === 'work') return (f.facets.work_mode?.values.length ?? 0) + (f.facets.employment_type?.values.length ?? 0);
+    if (e.kind === 'industry') return (f.facets.domains?.values.length ?? 0) + (f.facets.company_type?.values.length ?? 0);
     if (e.kind === 'visa') return f.visa ? 1 : 0;
     if (e.kind === 'posted') return f.postedWithinDays != null ? 1 : 0;
     return f.facets[e.facetParam ?? e.key]?.values.length ?? 0;
@@ -66,6 +67,8 @@
   const currencyOptions = FACETS.find((d) => d.param === 'salary_currency')?.options ?? [];
   const workModeOptions = FACETS.find((d) => d.param === 'work_mode')?.options ?? [];
   const employmentOptions = FACETS.find((d) => d.param === 'employment_type')?.options ?? [];
+  const domainOptions = FACETS.find((d) => d.param === 'domains')?.options ?? [];
+  const companyTypeOptions = FACETS.find((d) => d.param === 'company_type')?.options ?? [];
 
   // Debounced live count for the staged filters — the same cheap facet call the panel
   // already makes, keyed by a monotonic gen so a slow response can't overwrite a newer.
@@ -202,6 +205,19 @@
               options={employmentOptions}
               selected={staged.facet('employment_type').values}
               onToggle={(v) => staged.toggle('employment_type', v)}
+            />
+          {:else if activeEntry?.kind === 'industry'}
+            <h3 class="mb-2 text-sm font-semibold tracking-tight">Industry</h3>
+            <PillGroup
+              options={domainOptions}
+              selected={staged.facet('domains').values}
+              onToggle={(v) => staged.toggle('domains', v)}
+            />
+            <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Company type</h3>
+            <PillGroup
+              options={companyTypeOptions}
+              selected={staged.facet('company_type').values}
+              onToggle={(v) => staged.toggle('company_type', v)}
             />
           {:else if activeEntry?.kind === 'visa'}
             <label class="flex cursor-pointer items-center gap-2 text-sm">

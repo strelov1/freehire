@@ -87,7 +87,7 @@ export const CATEGORY_GROUPS: CategorySection[] = CATEGORY_GROUP_ORDER.map((name
 
 export const RAIL_SECTIONS: RailSection[] = ['ROLE', 'PAY & BENEFITS', 'REQUIREMENTS & ELIGIBILITY'];
 
-export type RailKind = 'facet' | 'category' | 'location' | 'salary' | 'work' | 'visa' | 'posted';
+export type RailKind = 'facet' | 'category' | 'location' | 'salary' | 'work' | 'industry' | 'visa' | 'posted';
 
 export interface RailEntry {
   /** Stable pane id (also the URL-hashable key). */
@@ -105,8 +105,7 @@ export const RAIL: RailEntry[] = [
   { key: 'seniority', label: 'Seniority', section: 'ROLE', kind: 'facet', facetParam: 'seniority' },
   { key: 'work', label: 'Work & employment', section: 'ROLE', kind: 'work' },
   { key: 'skills', label: 'Skills', section: 'ROLE', kind: 'facet', facetParam: 'skills' },
-  { key: 'domains', label: 'Industry', section: 'ROLE', kind: 'facet', facetParam: 'domains' },
-  { key: 'company_type', label: 'Company type', section: 'ROLE', kind: 'facet', facetParam: 'company_type' },
+  { key: 'industry', label: 'Industry & type', section: 'ROLE', kind: 'industry' },
   { key: 'collections', label: 'Collection', section: 'ROLE', kind: 'facet', facetParam: 'collections' },
   { key: 'company_slug', label: 'Company', section: 'ROLE', kind: 'facet', facetParam: 'company_slug' },
   { key: 'source', label: 'Source', section: 'ROLE', kind: 'facet', facetParam: 'source' },
