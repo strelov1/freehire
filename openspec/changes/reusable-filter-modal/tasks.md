@@ -11,15 +11,15 @@
 
 ## 3. My filters as a deferred modal tab
 
-- [ ] 3.1 Add `StagedFilters.apply(query)` and a canonical-current getter (from `params()`), so `SavedSearches` can read/seed the staged state.
-- [ ] 3.2 Remove board sharing from `SavedSearches.svelte`: delete `shareActive`/`unshareActive`/`copyBoardLink` + their UI; keep select/save/update/delete + Telegram notify.
-- [ ] 3.3 Point `SavedSearches` at the staged store (prop), so select seeds staged and save persists staged.
-- [ ] 3.4 Add the "My filters" rail entry (first, `SAVED` section) in the job `FilterModal`, rendering `SavedSearches` in the pane; omit it when `railKeys` restricts the rail (profile).
+- [x] 3.1 Add `StagedFilters.apply(query)` and a canonical-current getter (from `params()`), so `SavedSearches` can read/seed the staged state.
+- [x] 3.2 Remove board sharing from `SavedSearches.svelte`: delete `shareActive`/`unshareActive`/`copyBoardLink` + their UI; keep select/save/update/delete + Telegram notify.
+- [x] 3.3 Point `SavedSearches` at the staged store (prop), so select seeds staged and save persists staged.
+- [x] 3.4 Add the "My filters" rail entry (first, `SAVED` section) in the job `FilterModal`, rendering `SavedSearches` in the pane; omit it when `railKeys` restricts the rail (profile).
 
 ## 4. Summary shell + job summary
 
-- [ ] 4.1 Add `FilterSummaryShell.svelte`: heading + Reset all, All-filters button (active badge), empty state, chip-group rendering; props `groups`/`active`/`onReset`/`onOpen`.
-- [ ] 4.2 Refactor `FilterSummary.svelte` (job) to compute its chip groups and render the shell; remove the embedded `<SavedSearches>`.
+- [x] 4.1 Add `FilterSummaryShell.svelte`: heading + Reset all, All-filters button (active badge), empty state, chip-group rendering; props `groups`/`active`/`onReset`/`onOpen`.
+- [x] 4.2 Refactor `FilterSummary.svelte` (job) to compute its chip groups and render the shell; remove the embedded `<SavedSearches>`.
 
 ## 5. Companies on the jobs pattern
 

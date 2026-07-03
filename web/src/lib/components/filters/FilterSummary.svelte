@@ -1,24 +1,14 @@
 <script lang="ts">
-  import { SlidersHorizontal, X } from '@lucide/svelte';
   import { dynamicLabel, FACETS } from '$lib/facets';
   import type { FilterStore } from '$lib/filters';
   import { freshnessLabel } from '$lib/filterControls';
-  import SavedSearches from '../SavedSearches.svelte';
+  import FilterSummaryShell, { type SummaryChip, type SummaryGroup } from './FilterSummaryShell.svelte';
 
-  // The sidebar: a summary of the *applied* filters as chips grouped by facet, plus
-  // the All-filters button (opening the modal) and Reset all. Removing a chip edits
-  // the live store directly — the sidebar applies immediately; only the modal defers.
+  // The job filters sidebar: a summary of the *applied* filters as chips grouped by
+  // facet, over the reusable FilterSummaryShell. Removing a chip edits the live store
+  // directly — the sidebar applies immediately; only the modal defers. Saved searches
+  // ("My filters") now live in the modal's first tab, not here.
   let { store, exclude = [], onOpen }: { store: FilterStore; exclude?: string[]; onOpen: () => void } = $props();
-
-  interface Chip {
-    text: string;
-    exclude: boolean;
-    remove: () => void;
-  }
-  interface Group {
-    label: string;
-    chips: Chip[];
-  }
 
   function valueLabel(param: string, value: string): string {
     const def = FACETS.find((d) => d.param === param);
@@ -26,14 +16,14 @@
     return o ? o.label : dynamicLabel(param, value);
   }
 
-  const groups = $derived.by((): Group[] => {
+  const groups = $derived.by((): SummaryGroup[] => {
     const f = store.value;
-    const out: Group[] = [];
-    const push = (label: string, chips: Chip[]) => {
+    const out: SummaryGroup[] = [];
+    const push = (label: string, chips: SummaryChip[]) => {
       if (chips.length) out.push({ label, chips });
     };
     // Chips for one facet: included values first, then excluded (destructive style).
-    const facetChips = (param: string): Chip[] => {
+    const facetChips = (param: string): SummaryChip[] => {
       const st = f.facets[param];
       if (!st) return [];
       return [
@@ -63,7 +53,7 @@
     facetGroup('relocation', 'Relocation');
 
     // Salary: currency + minimum.
-    const salary: Chip[] = facetChips('salary_currency');
+    const salary: SummaryChip[] = facetChips('salary_currency');
     if (f.salaryMin != null) salary.push({ text: `${f.salaryMin.toLocaleString('en-US')}+`, exclude: false, remove: () => store.setSalaryMin(null) });
     push('Salary', salary);
 
@@ -74,52 +64,4 @@
   });
 </script>
 
-<div class="flex flex-col gap-4">
-  <SavedSearches {store} />
-
-  <div class="flex items-center justify-between">
-    <h2 class="text-base font-semibold tracking-tight">Filters</h2>
-    {#if store.active > 0}
-      <button type="button" class="text-xs text-muted-foreground transition-colors hover:text-foreground" onclick={() => store.clear()}>Reset all</button>
-    {/if}
-  </div>
-
-  <button
-    type="button"
-    onclick={onOpen}
-    class="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-background text-sm font-medium transition-colors hover:bg-accent"
-  >
-    <SlidersHorizontal class="size-4" />
-    <span>All filters</span>
-    {#if store.active > 0}
-      <span class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">{store.active}</span>
-    {/if}
-  </button>
-
-  {#if groups.length === 0}
-    <div class="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-      No filters yet.<br />Open <b>All filters</b> to refine.
-    </div>
-  {:else}
-    {#each groups as g (g.label)}
-      <div class="flex flex-col gap-2">
-        <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{g.label}</span>
-        <div class="flex flex-wrap gap-1.5">
-          {#each g.chips as c (c.text)}
-            <span
-              class={[
-                'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium',
-                c.exclude ? 'border-destructive/30 bg-destructive/15 text-destructive line-through' : 'border-border bg-secondary text-secondary-foreground',
-              ]}
-            >
-              {c.text}
-              <button type="button" aria-label="Remove {c.text}" onclick={c.remove} class="text-muted-foreground transition-colors hover:text-foreground">
-                <X class="size-3" />
-              </button>
-            </span>
-          {/each}
-        </div>
-      </div>
-    {/each}
-  {/if}
-</div>
+<FilterSummaryShell {groups} active={store.active} onReset={() => store.clear()} {onOpen} />

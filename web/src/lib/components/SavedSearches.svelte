@@ -3,16 +3,19 @@
   import { ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
-  import { canonicalQuery, filtersToParams, type FilterStore } from '$lib/filters';
+  import { canonicalQuery, filtersToParams } from '$lib/filters';
+  import type { StagedFilters } from '$lib/stagedFilters.svelte';
   import { savedSearches } from '$lib/savedSearches.svelte';
   import { notifications } from '$lib/notifications.svelte';
   import { Button, Input } from '$lib/ui';
 
-  // The "My filters" control: select a saved set (applies its filters), save the
-  // current filters under a name, overwrite the selected set, or delete it. Mounted
-  // at the top of the filters panel, so it rides into both the desktop sidebar and
-  // the mobile drawer. Signed-out users see a sign-in prompt instead.
-  let { store }: { store: FilterStore } = $props();
+  // The "My filters" control: select a saved set (seeds the filters), save the current
+  // filters under a name, overwrite the selected set, or delete it. It is the first tab
+  // of the filter modal and drives the modal's *staged* copy — selecting/saving act on
+  // the staged edits and reach the live list only on the modal's Show-results action.
+  // Board sharing lives on the /my/searches account page, not here. Signed-out users
+  // see a sign-in prompt instead.
+  let { store }: { store: StagedFilters } = $props();
 
   // The set the user is working from (selected or just saved). Distinct from the
   // derived `activeId` so we can offer "Update <name>" after the filters are edited
@@ -168,55 +171,11 @@
     }
   }
 
-  // Share/unshare the currently-selected set as a public board. The panel keeps this
-  // lightweight (shares anonymously); the author label is set from the Saved searches
-  // account page (/my/searches).
-  const activeSet = $derived(activeId != null ? (items.find((s) => s.id === activeId) ?? null) : null);
-  let shareBusy = $state(false);
-  let copied = $state(false);
-
-  async function shareActive() {
-    if (!activeSet || shareBusy) return;
-    shareBusy = true;
-    error = null;
-    try {
-      await savedSearches.share(activeSet.id);
-    } catch (e) {
-      error = e instanceof ApiError ? e.message : 'Could not share. Please try again.';
-    } finally {
-      shareBusy = false;
-    }
-  }
-
-  async function unshareActive() {
-    if (!activeSet || shareBusy) return;
-    shareBusy = true;
-    error = null;
-    try {
-      await savedSearches.unshare(activeSet.id);
-    } catch {
-      error = 'Could not unshare. Please try again.';
-    } finally {
-      shareBusy = false;
-    }
-  }
-
-  async function copyBoardLink() {
-    if (!activeSet?.public_slug) return;
-    try {
-      await navigator.clipboard.writeText(`${location.origin}/b/${activeSet.public_slug}`);
-      copied = true;
-      setTimeout(() => (copied = false), 1500);
-    } catch {
-      error = 'Could not copy the link.';
-    }
-  }
-
   const selectClass =
     'h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 dark:bg-input/30';
 </script>
 
-<div class="flex flex-col gap-2 border-b border-border pb-4">
+<div class="flex flex-col gap-2">
   <h3 class="text-sm font-semibold tracking-tight">My filters</h3>
 
   {#if !isAuthenticated()}
@@ -261,30 +220,6 @@
         <Button variant="secondary" size="sm" onclick={startSave} disabled={busy}>Save as new</Button>
         {#if activeId != null}
           <Button variant="ghost" size="sm" onclick={remove} disabled={busy}>Delete</Button>
-        {/if}
-      </div>
-    {/if}
-
-    <!-- Share the selected set as a public board (link-shareable). -->
-    {#if activeSet && !naming}
-      <div class="flex flex-wrap items-center gap-2">
-        {#if activeSet.public_slug}
-          <a
-            href={`/b/${activeSet.public_slug}`}
-            class="min-w-0 truncate text-xs text-primary underline-offset-4 hover:underline"
-          >
-            /b/{activeSet.public_slug}
-          </a>
-          <Button variant="ghost" size="sm" onclick={copyBoardLink}>
-            {copied ? 'Copied' : 'Copy link'}
-          </Button>
-          <Button variant="ghost" size="sm" onclick={unshareActive} disabled={shareBusy}>
-            Unshare
-          </Button>
-        {:else}
-          <Button variant="secondary" size="sm" onclick={shareActive} disabled={shareBusy}>
-            {shareBusy ? 'Sharing…' : 'Share as board'}
-          </Button>
         {/if}
       </div>
     {/if}

@@ -91,6 +91,13 @@ export class StagedFilters implements FacetStore {
     this.#f = emptyFilters();
   }
 
+  /** Replace the staged filters from a saved query string — the "My filters" tab
+   *  seeds the staged copy so selecting a set previews (and applies on Show results)
+   *  rather than committing to the live URL immediately. */
+  apply(query: string): void {
+    this.#f = filtersFromParams(new URLSearchParams(query));
+  }
+
   /** Staged filters as URL params — for the count preview and commit. */
   params(): URLSearchParams {
     return filtersToParams(this.#f);

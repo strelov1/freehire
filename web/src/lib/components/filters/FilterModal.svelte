@@ -3,7 +3,7 @@
   import { FACETS } from '$lib/facets';
   import { emptyFilters, type FilterStore, type JobFilters } from '$lib/filters';
   import { StagedFilters } from '$lib/stagedFilters.svelte';
-  import { RAIL, RAIL_SECTIONS, type RailEntry } from '$lib/filterSections';
+  import { RAIL, RAIL_SECTIONS, type RailEntry, type RailSection } from '$lib/filterSections';
   import type { FacetCounts } from '$lib/types';
   import { FRESHNESS_PRESETS, SALARY_MAX, SALARY_STEP, freshnessLabel } from '$lib/filterControls';
   import FacetSection from '../facets/FacetSection.svelte';
@@ -11,6 +11,7 @@
   import CategoryPane from './CategoryPane.svelte';
   import LocationPane from './LocationPane.svelte';
   import FilterModalShell from './FilterModalShell.svelte';
+  import SavedSearches from '../SavedSearches.svelte';
 
   // The job-search filter modal: a thin wrapper over FilterModalShell that supplies the
   // job rail, the staged job filters, and the pane controls. The shell owns the chrome
@@ -57,12 +58,19 @@
 
   const staged = new StagedFilters();
 
+  // The "My filters" (saved searches) tab. It heads the rail on the full job modal, but
+  // not when the caller restricts the rail to a facet subset (e.g. the profile modal),
+  // which has no saved-search context.
+  const SAVED_ENTRY: RailEntry = { key: 'saved', label: 'My filters', section: 'SAVED', kind: 'saved' };
+  const SECTIONS: RailSection[] = ['SAVED', ...RAIL_SECTIONS];
+
   // Rail entries visible under the current scope: restricted to `railKeys` when given,
   // and a 'facet' entry is hidden when its param is excluded (e.g. Company on a company
   // page).
-  const visibleRail = $derived(
-    RAIL.filter((e) => (!railKeys || railKeys.includes(e.key)) && !(e.facetParam && exclude.includes(e.facetParam))),
-  );
+  const visibleRail = $derived([
+    ...(railKeys ? [] : [SAVED_ENTRY]),
+    ...RAIL.filter((e) => (!railKeys || railKeys.includes(e.key)) && !(e.facetParam && exclude.includes(e.facetParam))),
+  ]);
 
   // Values selected for one facet — included plus excluded — so the rail count reflects
   // any staged selection regardless of sign.
@@ -120,7 +128,7 @@
   {onClose}
   {title}
   rail={visibleRail}
-  sections={RAIL_SECTIONS}
+  sections={SECTIONS}
   {staged}
   {entryCount}
   seed={seedStaged}
@@ -137,7 +145,9 @@
 {/snippet}
 
 {#snippet pane(entry: RailEntry)}
-  {#if entry.kind === 'category'}
+  {#if entry.kind === 'saved'}
+    <SavedSearches store={staged} />
+  {:else if entry.kind === 'category'}
     {#if !exclude.includes('seniority')}
       <ChipFacet store={staged} param="seniority" label="Seniority" />
       <div class="mt-6"><CategoryPane store={staged} {plain} /></div>
