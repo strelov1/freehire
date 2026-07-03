@@ -1,7 +1,7 @@
 ## 1. Company staging primitive (pure logic, TDD)
 
-- [ ] 1.1 Add `web/src/lib/stagedCompanyFilters.svelte.ts`: `StagedCompanyFilters` implementing `FacetStore` + `value`/`active`/`seed`/`params`/`commit`/`clear`, mirroring `StagedFilters` over the `CompanyFilters` shape.
-- [ ] 1.2 Unit test (vitest): seed from `CompanyFilters` → toggle/add/remove → `params()` matches `companyFiltersToParams`; `commit(store)` applies to a `CompanyFilterStore`; `active` counts selected values; `clear()` empties.
+- [x] 1.1 Extract the pure company model into `web/src/lib/companyFacetModel.ts` (`$app`-free: types, serialization, `activeCompanyFilterCount`, pure mutators `toggleCompanyFacet`/`addCompanyFacet`/`removeCompanyFacet`/`clearCompanyFacet`), mirroring `facetModel.ts`; re-point `companyFilters.ts` at it and add `CompanyFilterStore.apply(query)`. Add `stagedCompanyFilters.svelte.ts` (`StagedCompanyFilters`: `FacetStore` + `value`/`active`/`seed`/`params`/`commit`/`clear`), a thin `$state` wrapper over the model like `StagedFilters`.
+- [x] 1.2 Unit test (vitest) `companyFacetModel.test.ts`: serialization round-trip + dedup, pure mutators (toggle/add/remove/clearFacet, no-mutation), `activeCompanyFilterCount`. (The `.svelte.ts` staged wrapper is a thin delegation covered by `svelte-check`, matching the untested `StagedFilters` convention — runes files can't import the `$app`-bound store under node vitest.)
 
 ## 2. Reusable modal shell
 

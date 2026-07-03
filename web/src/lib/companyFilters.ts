@@ -1,58 +1,29 @@
-// Company-catalog filters: the model, its URL <-> state (de)serialization, and a
-// reactive store mirrored into the URL query so a filtered view survives reloads,
-// sharing, and back/forward. Param names match GET /api/v1/companies (`q` plus one
-// repeatable param per facet). Unlike the job FilterStore there are no
-// `_exclude`/`_mode` conventions — the companies endpoint filters by plain array
-// overlap (OR within a facet, AND across facets), so a facet is just a value set.
+// Reactive company-catalog filters mirrored into the URL. The pure model (types,
+// serialization, mutators) lives in companyFacetModel.ts (unit-testable, $app-free);
+// this module owns only the reactive UrlSyncedState wrapper. Re-exports the model's
+// public surface so existing `$lib/companyFilters` importers are unchanged.
 
 import { COMPANY_FACETS, type FacetSelection, type FacetStore } from './facets';
+import {
+  activeCompanyFilterCount,
+  addCompanyFacet,
+  clearCompanyFacet,
+  companyFiltersFromParams,
+  companyFiltersToParams,
+  emptyCompanyFilters,
+  removeCompanyFacet,
+  toggleCompanyFacet,
+  type CompanyFilters,
+} from './companyFacetModel';
 import { UrlSyncedState } from './urlSynced.svelte';
 
-export interface CompanyFilters {
-  q: string;
-  /** Selected values keyed by facet param (see COMPANY_FACETS). */
-  facets: Record<string, string[]>;
-}
-
-function emptyFacets(): Record<string, string[]> {
-  const out: Record<string, string[]> = {};
-  for (const f of COMPANY_FACETS) out[f.param] = [];
-  return out;
-}
-
-export function emptyCompanyFilters(): CompanyFilters {
-  return { q: '', facets: emptyFacets() };
-}
-
-/** Serialize to the query shape GET /api/v1/companies reads. */
-export function companyFiltersToParams(f: CompanyFilters): URLSearchParams {
-  const p = new URLSearchParams();
-  if (f.q) p.set('q', f.q);
-  for (const def of COMPANY_FACETS) {
-    for (const v of f.facets[def.param] ?? []) p.append(def.param, v);
-  }
-  return p;
-}
-
-/** Parse back from URL params. Facet values are a set, so duplicates from a
- *  shared/edited link are collapsed (the keyed {#each} in the controls throws on a
- *  repeat), mirroring the job filters' guard. */
-export function companyFiltersFromParams(p: URLSearchParams): CompanyFilters {
-  const f = emptyCompanyFilters();
-  f.q = p.get('q') ?? '';
-  for (const def of COMPANY_FACETS) {
-    const values = [...new Set(p.getAll(def.param))];
-    if (values.length > 0) f.facets[def.param] = values;
-  }
-  return f;
-}
-
-/** Total selected facet values — drives the mobile "Filters (N)" badge. */
-export function activeCompanyFilterCount(f: CompanyFilters): number {
-  let n = 0;
-  for (const def of COMPANY_FACETS) n += f.facets[def.param]?.length ?? 0;
-  return n;
-}
+export {
+  activeCompanyFilterCount,
+  companyFiltersFromParams,
+  companyFiltersToParams,
+  emptyCompanyFilters,
+  type CompanyFilters,
+};
 
 /** Reactive company filters mirrored into the URL — a thin wrapper over the shared
  *  UrlSyncedState primitive, satisfying the FacetStore contract so the same
@@ -93,35 +64,26 @@ export class CompanyFilterStore implements FacetStore {
     this.#url.setSoon({ ...this.#url.value, q });
   }
 
-  // Add the value if absent, remove it if present. Company facets never exclude, so
-  // `cycle` (excludable facets' off → include → exclude) collapses to this plain
-  // include toggle, same as `pick`.
-  #toggleInclude(param: string, v: string) {
-    const values = this.facet(param).include;
-    this.#setFacet(param, values.includes(v) ? values.filter((x) => x !== v) : [...values, v]);
-  }
-
+  // Companies never exclude, so both the pills' `cycle` (off → include → exclude) and
+  // the select's `pick` collapse to the same plain include toggle.
   cycle(param: string, v: string) {
-    this.#toggleInclude(param, v);
+    this.#url.setNow(toggleCompanyFacet(this.#url.value, param, v));
   }
 
   pick(param: string, v: string) {
-    this.#toggleInclude(param, v);
+    this.#url.setNow(toggleCompanyFacet(this.#url.value, param, v));
   }
 
   add(param: string, raw: string) {
-    const v = raw.trim();
-    const values = this.facet(param).include;
-    if (!v || values.includes(v)) return;
-    this.#setFacet(param, [...values, v]);
+    this.#url.setNow(addCompanyFacet(this.#url.value, param, raw));
   }
 
   remove(param: string, v: string) {
-    this.#setFacet(param, this.facet(param).include.filter((x) => x !== v));
+    this.#url.setNow(removeCompanyFacet(this.#url.value, param, v));
   }
 
   clearFacet(param: string) {
-    this.#setFacet(param, []);
+    this.#url.setNow(clearCompanyFacet(this.#url.value, param));
   }
 
   // The companies endpoint has no exclude/AND-OR modes and no company facet opts
@@ -133,15 +95,17 @@ export class CompanyFilterStore implements FacetStore {
     this.#url.setNow(emptyCompanyFilters());
   }
 
+  /** Replace the entire filter state from a query string and mirror it to the URL —
+   *  the commit target for the deferred filter modal (mirrors FilterStore.apply). */
+  apply(query: string) {
+    this.#url.setNow(companyFiltersFromParams(new URLSearchParams(query)));
+  }
+
   syncFromUrl() {
     this.#url.syncFromUrl();
   }
 
   dispose() {
     this.#url.dispose();
-  }
-
-  #setFacet(param: string, values: string[]) {
-    this.#url.setNow({ ...this.#url.value, facets: { ...this.#url.value.facets, [param]: values } });
   }
 }
