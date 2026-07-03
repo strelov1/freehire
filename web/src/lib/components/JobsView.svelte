@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack } from 'svelte';
+  import { onMount, untrack, type Snippet } from 'svelte';
   import { Layers } from '@lucide/svelte';
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
@@ -33,11 +33,19 @@
   // page passes `{ company_slug }`): they're merged into every search but kept out
   // of `filters`/the URL, so they're not user-selectable facets. `excludeFacets`
   // hides facets that are redundant under that scope (e.g. Source on a company).
+  // `sidebarTop` renders above the filter summary in the desktop sidebar (e.g. the
+  // company page's facts card); the standalone /jobs list omits it.
   let {
     initial,
     scope = {},
     excludeFacets = [],
-  }: { initial: Slice<Job>; scope?: Record<string, string>; excludeFacets?: string[] } = $props();
+    sidebarTop,
+  }: {
+    initial: Slice<Job>;
+    scope?: Record<string, string>;
+    excludeFacets?: string[];
+    sidebarTop?: Snippet;
+  } = $props();
 
   // Seed filters from the current URL so the server and the hydrated client
   // render the same filtered view.
@@ -152,8 +160,11 @@
 
 <div class="flex gap-6">
   <aside class="hidden w-72 shrink-0 md:block">
-    <div class="sticky top-6 max-h-[calc(100vh-5rem)] overflow-y-auto rounded-xl border border-border bg-card p-4">
-      <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} />
+    <div class="sticky top-6 flex max-h-[calc(100vh-5rem)] flex-col gap-4 overflow-y-auto">
+      {@render sidebarTop?.()}
+      <div class="rounded-xl border border-border bg-card p-4">
+        <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} />
+      </div>
     </div>
   </aside>
 
