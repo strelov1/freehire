@@ -43,6 +43,9 @@ type API struct {
 	queries      *db.Queries
 	issuer       *auth.Issuer
 	cookieSecure bool
+	// cookieDomain scopes the session cookie so freehire.dev and apply.freehire.dev
+	// share it (empty = host-only, for dev).
+	cookieDomain string
 	// oauth maps enabled OAuth provider names to their implementations; empty
 	// when no provider is configured (the routes then 404 / list empty).
 	oauth map[string]oauth.Provider
@@ -134,6 +137,7 @@ type Config struct {
 	JWTSecret      string
 	JWTTTL         time.Duration
 	CookieSecure   bool
+	CookieDomain   string
 	OAuthProviders map[string]oauth.Provider
 	Search         *search.Client
 	// Blob backs résumé storage (internal/blobstore). Nil disables storage: résumé
@@ -163,6 +167,7 @@ func Register(app *fiber.App, cfg Config) {
 		queries:        queries,
 		issuer:         auth.NewIssuer(cfg.JWTSecret, cfg.JWTTTL),
 		cookieSecure:   cfg.CookieSecure,
+		cookieDomain:   cfg.CookieDomain,
 		oauth:          cfg.OAuthProviders,
 		frontendOrigin: cfg.FrontendOrigin,
 		tracking:       jobtracking.New(jobtracking.NewQueriesRepository(queries)),

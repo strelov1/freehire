@@ -25,6 +25,11 @@ type Settings struct {
 	// any HTTPS deployment.
 	CookieSecure bool
 
+	// CookieDomain scopes the session cookie via its Domain attribute. Empty in
+	// dev (host-only). In prod set COOKIE_DOMAIN=.freehire.dev so a session minted
+	// on freehire.dev is also sent to apply.freehire.dev (unified SSO).
+	CookieDomain string
+
 	// OAuth holds per-provider client credentials keyed by provider name
 	// (google, github, linkedin). OAuth sign-in is optional: a provider with
 	// incomplete credentials is simply disabled (enforced where the provider
@@ -98,6 +103,7 @@ func Load() Settings {
 		JWTSecret:      os.Getenv("JWT_SECRET"),
 		JWTTTL:         envDuration("JWT_TTL", 30*24*time.Hour),
 		CookieSecure:   envBool("COOKIE_SECURE", false),
+		CookieDomain:   os.Getenv("COOKIE_DOMAIN"),
 		OAuth:          loadOAuth(),
 		MeiliURL:       env("MEILI_URL", "http://localhost:7700"),
 		MeiliKey:       os.Getenv("MEILI_MASTER_KEY"),

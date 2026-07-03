@@ -141,6 +141,7 @@ func main() {
 		JWTSecret:      cfg.JWTSecret,
 		JWTTTL:         cfg.JWTTTL,
 		CookieSecure:   cfg.CookieSecure,
+		CookieDomain:   cfg.CookieDomain,
 		OAuthProviders: oauthProviders,
 		Search:         searchClient,
 		Blob:           blobStore,
