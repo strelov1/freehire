@@ -66,15 +66,9 @@
     return f.facets[e.facetParam ?? e.key]?.values.length ?? 0;
   }
 
+  // Panes that reuse FacetSection (dynamic controls); ChipFacet resolves its own
+  // options from the registry, so composite panes only name the facet param.
   const facetDef = $derived(activeEntry?.kind === 'facet' ? FACETS.find((d) => d.param === activeEntry!.facetParam) : undefined);
-  const currencyOptions = FACETS.find((d) => d.param === 'salary_currency')?.options ?? [];
-  const seniorityOptions = FACETS.find((d) => d.param === 'seniority')?.options ?? [];
-  const workModeOptions = FACETS.find((d) => d.param === 'work_mode')?.options ?? [];
-  const employmentOptions = FACETS.find((d) => d.param === 'employment_type')?.options ?? [];
-  const domainOptions = FACETS.find((d) => d.param === 'domains')?.options ?? [];
-  const companyTypeOptions = FACETS.find((d) => d.param === 'company_type')?.options ?? [];
-  const collectionOptions = FACETS.find((d) => d.param === 'collections')?.options ?? [];
-  const relocationOptions = FACETS.find((d) => d.param === 'relocation')?.options ?? [];
   const englishDef = FACETS.find((d) => d.param === 'english_level');
   const postingDef = FACETS.find((d) => d.param === 'posting_language');
 
@@ -176,14 +170,14 @@
         <!-- pane -->
         <section class="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
           {#if activeEntry?.kind === 'category'}
-            <ChipFacet store={staged} param="seniority" label="Seniority" options={seniorityOptions} />
+            <ChipFacet store={staged} param="seniority" label="Seniority" />
             <div class="mt-6"><CategoryPane store={staged} /></div>
           {:else if activeEntry?.kind === 'location'}
             <LocationPane store={staged} {counts} />
           {:else if activeEntry?.kind === 'facet' && facetDef}
             <FacetSection def={facetDef} store={staged} {counts} expand />
           {:else if activeEntry?.kind === 'salary'}
-            <ChipFacet store={staged} param="salary_currency" label="Currency" options={currencyOptions} />
+            <ChipFacet store={staged} param="salary_currency" label="Currency" />
             <div class="mb-2 mt-6 flex items-center justify-between">
               <h3 class="text-sm font-semibold tracking-tight">Minimum salary</h3>
               <span class="text-xs font-medium text-muted-foreground"
@@ -201,17 +195,17 @@
               class="w-full accent-primary"
             />
           {:else if activeEntry?.kind === 'work'}
-            <ChipFacet store={staged} param="work_mode" label="Work format" options={workModeOptions} />
-            <div class="mt-6"><ChipFacet store={staged} param="employment_type" label="Employment type" options={employmentOptions} /></div>
+            <ChipFacet store={staged} param="work_mode" label="Work format" />
+            <div class="mt-6"><ChipFacet store={staged} param="employment_type" label="Employment type" /></div>
           {:else if activeEntry?.kind === 'industry'}
-            <ChipFacet store={staged} param="domains" label="Industry" options={domainOptions} />
-            <div class="mt-6"><ChipFacet store={staged} param="company_type" label="Company type" options={companyTypeOptions} /></div>
-            <div class="mt-6"><ChipFacet store={staged} param="collections" label="Collection" options={collectionOptions} /></div>
+            <ChipFacet store={staged} param="domains" label="Industry" />
+            <div class="mt-6"><ChipFacet store={staged} param="company_type" label="Company type" /></div>
+            <div class="mt-6"><ChipFacet store={staged} param="collections" label="Collection" /></div>
           {:else if activeEntry?.kind === 'language'}
             {#if englishDef}<FacetSection def={englishDef} store={staged} {counts} expand />{/if}
             <div class="mt-4">{#if postingDef}<FacetSection def={postingDef} store={staged} {counts} expand />{/if}</div>
           {:else if activeEntry?.kind === 'relocation'}
-            <ChipFacet store={staged} param="relocation" label="Relocation" options={relocationOptions} />
+            <ChipFacet store={staged} param="relocation" label="Relocation" />
             <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Visa</h3>
             <label class="flex cursor-pointer items-center gap-2 text-sm">
               <input

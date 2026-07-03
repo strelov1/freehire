@@ -1,8 +1,7 @@
 <script lang="ts">
   import { SlidersHorizontal, X } from '@lucide/svelte';
-  import { countryLabel, dynamicLabel, FACETS } from '$lib/facets';
+  import { dynamicLabel, FACETS } from '$lib/facets';
   import type { FilterStore } from '$lib/filters';
-  import { REGION_LABELS } from '$lib/labels';
   import { freshnessLabel } from '$lib/filterControls';
   import SavedSearches from '../SavedSearches.svelte';
 
@@ -43,9 +42,11 @@
     facetGroup('category', 'Specialization');
     // Location: regions + countries + cities under one heading.
     const loc: Chip[] = [];
-    for (const v of f.facets.regions?.values ?? []) loc.push({ text: REGION_LABELS[v] ?? v, exclude: f.facets.regions!.exclude, remove: () => store.remove('regions', v) });
-    for (const v of f.facets.countries?.values ?? []) loc.push({ text: countryLabel(v), exclude: f.facets.countries!.exclude, remove: () => store.remove('countries', v) });
-    for (const v of f.facets.cities?.values ?? []) loc.push({ text: v, exclude: f.facets.cities!.exclude, remove: () => store.remove('cities', v) });
+    for (const param of ['regions', 'countries', 'cities'] as const) {
+      const geo = f.facets[param];
+      if (!geo) continue;
+      for (const v of geo.values) loc.push({ text: valueLabel(param, v), exclude: geo.exclude, remove: () => store.remove(param, v) });
+    }
     push('Location', loc);
 
     facetGroup('seniority', 'Seniority');
