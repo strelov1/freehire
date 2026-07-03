@@ -2,138 +2,131 @@
 
 ## Purpose
 
-A user-owned search profile is a named record of who the user is professionally — a non-empty set of specializations (job categories) and a non-empty set of skills. It is the foundation for finding relevant work. This capability covers only the profile entity and its management (create/list/update/delete); how a profile is consumed (match scoring, ranked feeds, notifications) is out of scope here.
-## Requirements
-### Requirement: Create a search profile
-A signed-in user SHALL be able to create a named search profile capturing a non-empty set of `specializations` (one or more job categories) and a non-empty set of `skills`. Both sets are stored trimmed and deduplicated; skills are canonical lowercase tokens.
+A user profile is the user's single professional self — a non-empty set of specializations (job categories) and a non-empty set of skills. One per user (keyed by the session, no id, no name); the foundation for finding relevant work. This capability covers only the profile entity and its management (fetch/save/clear); how a profile is consumed (match scoring, ranked feeds, notifications) is out of scope here.
 
-#### Scenario: Create a profile
-- **WHEN** an authenticated user sends `POST /api/v1/me/profiles` with a valid `name`, a non-empty `specializations` array drawn from the category vocabulary, and a non-empty `skills` array
-- **THEN** the system stores the profile scoped to that user and responds `201` with `{"data": {id, name, specializations, skills, updated_at}}`
+## Requirements
+
+### Requirement: Retrieve the profile
+
+A signed-in user SHALL be able to fetch their single profile via
+`GET /api/v1/me/profile`. When the user has saved a profile the system responds
+`200` with `{"data": {specializations, skills, created_at, updated_at}}`; when
+the user has no profile yet it responds `200` with `{"data": null}`.
+
+#### Scenario: Fetch an existing profile
+- **WHEN** an authenticated user who has a saved profile sends `GET /api/v1/me/profile`
+- **THEN** the system responds `200` with `{"data": {...}}` containing that user's `specializations`, `skills`, and timestamps
+
+#### Scenario: Fetch when no profile exists
+- **WHEN** an authenticated user who has never saved a profile sends `GET /api/v1/me/profile`
+- **THEN** the system responds `200` with `{"data": null}`
+
+### Requirement: Save the profile
+
+A signed-in user SHALL be able to create-or-replace their single profile via
+`PUT /api/v1/me/profile` with a non-empty set of `specializations` (job
+categories) and a non-empty set of `skills`. The write is an upsert keyed by the
+calling user: it creates the profile if none exists and overwrites it otherwise.
+Both sets are stored trimmed and deduplicated; skills are canonical lowercase
+tokens. The system does NOT create an empty profile — a profile exists only once
+saved with valid content.
+
+#### Scenario: Create the profile on first save
+- **WHEN** an authenticated user with no profile sends `PUT /api/v1/me/profile` with a non-empty `specializations` array drawn from the category vocabulary and a non-empty `skills` array
+- **THEN** the system stores the profile for that user and responds `200` with `{"data": {specializations, skills, updated_at}}`
+
+#### Scenario: Overwrite an existing profile
+- **WHEN** an authenticated user who already has a profile sends `PUT /api/v1/me/profile` with new valid `specializations` and `skills`
+- **THEN** the system replaces the stored values, bumps `updated_at`, and responds `200`
 
 #### Scenario: Specializations are deduplicated
-- **WHEN** an authenticated user creates a profile whose `specializations` contain duplicate categories
+- **WHEN** an authenticated user saves a profile whose `specializations` contain duplicate categories
 - **THEN** the system stores each category once, preserving first-seen order
 
 #### Scenario: Skills are normalized
-- **WHEN** an authenticated user creates a profile with skills containing mixed case, surrounding whitespace, or duplicates
+- **WHEN** an authenticated user saves a profile with skills containing mixed case, surrounding whitespace, or duplicates
 - **THEN** the system stores each skill lowercased, trimmed, and deduplicated
 
+### Requirement: Clear the profile
+
+A signed-in user SHALL be able to delete their profile via
+`DELETE /api/v1/me/profile`. The operation is idempotent.
+
+#### Scenario: Delete an existing profile
+- **WHEN** an authenticated user who has a profile sends `DELETE /api/v1/me/profile`
+- **THEN** the system removes the row and responds `204`
+
+#### Scenario: Delete when no profile exists
+- **WHEN** an authenticated user with no profile sends `DELETE /api/v1/me/profile`
+- **THEN** the system responds `204` and changes nothing
+
+### Requirement: Session-scoped single profile
+
+Every profile operation SHALL be scoped to the calling user via the session, and
+each user SHALL have at most one profile. There is no profile id in any path;
+the session user is the key.
+
 #### Scenario: Unauthenticated request is rejected
-- **WHEN** a request without a valid session cookie hits any `/api/v1/me/profiles` endpoint
+- **WHEN** a request without a valid session cookie hits any `/api/v1/me/profile` endpoint
 - **THEN** the system responds `401` and stores nothing
+
+#### Scenario: One profile per user
+- **WHEN** an authenticated user who already has a profile saves again
+- **THEN** the system still holds exactly one profile for that user (the saved values replace the previous ones)
 
 ### Requirement: Specializations validation
 A profile's `specializations` SHALL be a non-empty set of values drawn from the controlled category vocabulary (`enrich.CategoryValues`), each trimmed, with duplicates removed, and the set capped at 5 entries.
 
 #### Scenario: Unknown specialization rejected
-- **WHEN** an authenticated user creates or updates a profile whose `specializations` contain a value that is not in the category vocabulary
+- **WHEN** an authenticated user saves a profile whose `specializations` contain a value that is not in the category vocabulary
 - **THEN** the system responds `400` and stores nothing
 
 #### Scenario: Empty specializations rejected
-- **WHEN** an authenticated user creates a profile with no specializations, or updates one with a provided-but-empty `specializations` array
+- **WHEN** an authenticated user saves a profile with no specializations
 - **THEN** the system responds `400` and stores nothing
 
 #### Scenario: Too many specializations rejected
-- **WHEN** an authenticated user creates or updates a profile with more than 5 distinct specializations
+- **WHEN** an authenticated user saves a profile with more than 5 distinct specializations
 - **THEN** the system responds `400` and stores nothing
 
 ### Requirement: Skills validation
 A profile's `skills` set SHALL be non-empty after normalization.
 
 #### Scenario: Empty skills rejected
-- **WHEN** an authenticated user creates or updates a profile whose `skills` are absent, empty, or reduce to empty after trimming
+- **WHEN** an authenticated user saves a profile whose `skills` are absent, empty, or reduce to empty after trimming
 - **THEN** the system responds `400` and stores nothing
-
-### Requirement: Name validation
-A profile name SHALL be trimmed and contain between 1 and 100 characters, and SHALL be unique per user (case-sensitive after trim).
-
-#### Scenario: Blank name rejected
-- **WHEN** an authenticated user creates or renames a profile with a name that is empty or only whitespace
-- **THEN** the system responds `400` and stores nothing
-
-#### Scenario: Over-long name rejected
-- **WHEN** the trimmed name exceeds 100 characters
-- **THEN** the system responds `400` and stores nothing
-
-#### Scenario: Duplicate name rejected
-- **WHEN** an authenticated user creates or renames a profile to a name they already use
-- **THEN** the system responds `409` and does not create or modify a row
-
-### Requirement: Per-user cap
-The system SHALL allow at most 50 search profiles per user.
-
-#### Scenario: Cap exceeded on create
-- **WHEN** an authenticated user who already has 50 profiles sends a create request
-- **THEN** the system responds `409` and stores nothing
-
-### Requirement: List search profiles
-A signed-in user SHALL be able to list their own profiles, most recently updated first.
-
-#### Scenario: List own profiles
-- **WHEN** an authenticated user sends `GET /api/v1/me/profiles`
-- **THEN** the system responds `200` with `{"data": [...]}` containing only that user's profiles ordered by `updated_at` descending
-
-### Requirement: Update a search profile
-A signed-in user SHALL be able to overwrite a profile's `name`, `specializations`, and/or `skills`. A field omitted from the request is left unchanged; a provided `specializations` or `skills` field MUST be non-empty after normalization.
-
-#### Scenario: Overwrite skills
-- **WHEN** an authenticated user sends `PATCH /api/v1/me/profiles/:id` with a new non-empty `skills` array
-- **THEN** the system replaces the stored skills (normalized), bumps `updated_at`, and responds `200` with the updated row
-
-#### Scenario: Change specializations
-- **WHEN** an authenticated user sends `PATCH /api/v1/me/profiles/:id` with a new non-empty, valid `specializations` array
-- **THEN** the system replaces the stored specializations and responds `200`
-
-#### Scenario: Rename
-- **WHEN** an authenticated user sends `PATCH /api/v1/me/profiles/:id` with a new `name`
-- **THEN** the system replaces the stored name (subject to name validation) and responds `200`
-
-### Requirement: Delete a search profile
-A signed-in user SHALL be able to delete one of their own profiles.
-
-#### Scenario: Delete own profile
-- **WHEN** an authenticated user sends `DELETE /api/v1/me/profiles/:id` for a profile they own
-- **THEN** the system removes the row and responds `204`
-
-### Requirement: User-scoped access
-Every profile operation SHALL be scoped to the calling user; one user MUST NOT be able to read, modify, or delete another user's profile.
-
-#### Scenario: Cannot touch another user's profile
-- **WHEN** an authenticated user sends `PATCH` or `DELETE` for a profile id owned by a different user
-- **THEN** the system responds `404` and the target row is unchanged
 
 ### Requirement: Profile management UI
-The web app SHALL present signed-in users a view to create, rename, edit, and delete their search profiles, and SHALL prompt anonymous users to sign in instead. The specialization input SHALL be a searchable multi-select over the category vocabulary; the skills input SHALL be a dictionary-backed typeahead that suggests matching canonical skills (with job counts) as the user types and adds each as a removable chip. The Create/Save control SHALL be enabled exactly when a name, at least one specialization, and at least one skill are present.
+The web app SHALL present signed-in users a single view at `/my/profile` that shows their one profile (specialization and skill chips) and lets them edit or clear it, and SHALL prompt anonymous users to sign in instead. There is no profile name and no list of profiles. Editing SHALL happen in a modal that REUSES the job-search facet components (`FacetSection`) — the same specialization and skills controls the jobs filters use, sourcing the skills distribution from the live facet endpoint — rather than bespoke profile-only pickers. The profile facets SHALL disable the search-only exclude/match-any-or-all toggles (a profile value is neither excluded nor match-mode). The specialization selection SHALL be capped at 5. The Save control SHALL be enabled exactly when at least one specialization and at least one skill are present.
 
-#### Scenario: Create a profile from the UI
-- **WHEN** a signed-in user fills in a name, picks one or more specializations, adds one or more skills via the typeahead, and saves
-- **THEN** the app calls `POST /api/v1/me/profiles` and shows the new profile in the list
+#### Scenario: Save the profile from the UI
+- **WHEN** a signed-in user opens the edit modal, picks one or more specializations and skills via the shared facet controls, and saves
+- **THEN** the app calls `PUT /api/v1/me/profile` and shows the saved profile
 
-#### Scenario: Skill typeahead suggests dictionary matches
-- **WHEN** a signed-in user types into the skills field
-- **THEN** the field lists matching canonical skills (with their job counts) and adds the chosen one as a removable chip; a non-matching query shows a "nothing found" hint rather than silently accepting an unknown skill
+#### Scenario: Edit the existing profile
+- **WHEN** a signed-in user who already has a profile opens the edit modal
+- **THEN** the facet controls are pre-seeded with their current specializations and skills
 
-#### Scenario: Create control reflects completeness
-- **WHEN** a signed-in user has entered a name, at least one specialization, and at least one skill
-- **THEN** the Create/Save control is enabled; when any of the three is missing it is disabled
+#### Scenario: Skills use the shared job-search facet control
+- **WHEN** a signed-in user edits skills in the profile modal
+- **THEN** the control is the same `FacetSection` skills control as the jobs filters, listing canonical skills with their live job counts (not a separate profile-only typeahead)
 
-#### Scenario: Delete a profile from the UI
-- **WHEN** a signed-in user deletes a profile from the list
-- **THEN** the app calls `DELETE /api/v1/me/profiles/:id` and removes it from the list
+#### Scenario: Save control reflects completeness
+- **WHEN** a signed-in user has entered at least one specialization and at least one skill
+- **THEN** the Save control is enabled; when either is missing it is disabled
 
 #### Scenario: Anonymous prompt
-- **WHEN** an anonymous (signed-out) user opens the profiles view
-- **THEN** the view shows a "sign in" affordance instead of a profile list
+- **WHEN** an anonymous (signed-out) user opens `/my/profile`
+- **THEN** the view shows a "sign in" affordance instead of the profile
 
 ### Requirement: Populate profile skills from a resume
 
-The search-profile create/edit form SHALL let a user upload a resume (PDF or pasted text) and
+The profile form SHALL let a user upload a resume (PDF or pasted text) and
 merge the extracted skills into the form's skills field. Extraction SHALL use the
 `resume-skill-extraction` capability. Merging SHALL be a union with the skills already present
 in the form (deduplicated); it SHALL NOT remove or overwrite skills the user already entered.
 The user SHALL be able to edit or remove any skill chip before saving. Skills persist through
-the existing profile create/update endpoints; no new persistence path is introduced.
+the profile save endpoint; no new persistence path is introduced.
 
 #### Scenario: Merge extracted skills into an empty form
 
@@ -154,7 +147,7 @@ the existing profile create/update endpoints; no new persistence path is introdu
 
 ### Requirement: Display market skill-gap on a profile
 
-Each saved profile that has at least one specialization SHALL display a skill-gap analysis
+The saved profile, when it has at least one specialization, SHALL display a skill-gap analysis
 computed on the frontend against live market data. The frontend SHALL query
 `GET /api/v1/jobs/facets` with the profile's specialization(s) as `category` filters (OR across
 values), sort the returned `skills` facet by descending job count, and take the top N (N = 20)
@@ -163,24 +156,23 @@ skills the profile already has. The skills in the expected set that the profile 
 shown as "missing" chips. The gap computation SHALL be a pure function
 `computeGap(marketSkills, profileSkills, n)`.
 
-#### Scenario: Coverage and missing skills for a profile
+#### Scenario: Coverage and missing skills for the profile
 
-- **WHEN** a profile's specialization market top-20 skills are known and the profile has 13 of them
-- **THEN** the card shows coverage `13/20` and lists the 7 missing skills as chips
+- **WHEN** the profile's specialization market top-20 skills are known and the profile has 13 of them
+- **THEN** the view shows coverage `13/20` and lists the 7 missing skills as chips
 
 #### Scenario: Multiple specializations combine markets
 
-- **WHEN** a profile has specializations `[backend, devops]`
+- **WHEN** the profile has specializations `[backend, devops]`
 - **THEN** the expected skill set is derived from `/jobs/facets?category=backend&category=devops`
   (jobs in either category) taken as one combined top-20
 
 #### Scenario: Profile without a specialization shows no gap block
 
-- **WHEN** a profile has an empty specializations list
-- **THEN** no skill-gap block is rendered for that profile
+- **WHEN** the profile has an empty specializations list
+- **THEN** no skill-gap block is rendered
 
 #### Scenario: Full coverage
 
 - **WHEN** the profile already contains all top-20 expected skills
-- **THEN** the card shows coverage `20/20` and lists no missing skills
-
+- **THEN** the view shows coverage `20/20` and lists no missing skills
