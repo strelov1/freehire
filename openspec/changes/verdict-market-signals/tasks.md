@@ -1,7 +1,7 @@
 ## 1. Skill bundles (new pure package)
 
-- [ ] 1.1 Add `internal/skillbundle` — curated bundle dict (genai-core, cloud-ops, web-stack, data, ml) + `Coverage(cvSkills) []Bundle{name,label,covered,total,covered_bool}`; `BundleCoveredPct` const
-- [ ] 1.2 Table-driven tests: full/partial/threshold coverage, determinism
+- [x] 1.1 Add `internal/skillbundle` — curated bundle dict (genai-core, cloud-ops, web-stack, data, ml) + `Coverage(cvSkills) []Bundle{name,label,covered,total,covered_bool}`; `BundleCoveredPct` const
+- [x] 1.2 Table-driven tests: full/partial/threshold coverage, determinism
 
 ## 2. Adjacent status + advice (verdict)
 
