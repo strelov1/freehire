@@ -12,11 +12,11 @@
 
 ## 3. Restructured CV ATS score (backend)
 
-- [ ] 3.1 Replace `atscheck.Report` shape with categories/line-items + `overall`/`potential` + strong/recommended keyword lists; keep `Score` pure
-- [ ] 3.2 Map the existing structural checks into Format/Section/Length line items with point attribution; Keyword Strength from the role top-N match
-- [ ] 3.3 Content Quality deterministic proxy (action verbs + quantified results) as the no-LLM fallback; `ApplyReview` sets it from the LLM score and re-sums `overall`
-- [ ] 3.4 Rename `Review.Findings` → `Suggestions`; update analyzer prompt/sanitize and `PostATSReport`/`GetATSReport` wiring
-- [ ] 3.5 `atscheck` tests: category scores, overall=sum, potential, strong/recommended split, proxy vs LLM content-quality, determinism
+- [x] 3.1 Replace `atscheck.Report` shape with categories/line-items + `overall`/`potential` + strong/recommended keyword lists; keep `Score` pure
+- [x] 3.2 Map the existing structural checks into Format/Section/Length line items with point attribution; Keyword Strength from the role top-N match
+- [x] 3.3 Content Quality deterministic proxy (action verbs + quantified results) as the no-LLM fallback; `ApplyReview` sets it from the LLM score and re-sums `overall`
+- [x] 3.4 Rename `Review.Findings` → `Suggestions`; update analyzer prompt/sanitize and `PostATSReport`/`GetATSReport` wiring
+- [x] 3.5 `atscheck` tests: category scores, overall=sum, potential, strong/recommended split, proxy vs LLM content-quality, determinism
 
 ## 4. Contracts + frontend
 

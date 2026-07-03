@@ -31,7 +31,7 @@ func TestAnalyze_NilClientIsNoOp(t *testing.T) {
 }
 
 func TestAnalyze_ParsesAndSanitizes(t *testing.T) {
-	model := fakeModel{resp: `{"content_quality":150,"findings":["  Use stronger action verbs.  ","",  "Quantify your impact."]}`}
+	model := fakeModel{resp: `{"content_quality":150,"suggestions":["  Use stronger action verbs.  ","",  "Quantify your impact."]}`}
 	a := NewAnalyzer(llm.NewWithModel(model))
 	got, err := a.Analyze(context.Background(), "cv text")
 	if err != nil {
@@ -40,11 +40,11 @@ func TestAnalyze_ParsesAndSanitizes(t *testing.T) {
 	if got.ContentQuality != 100 {
 		t.Errorf("ContentQuality = %d, want clamped to 100", got.ContentQuality)
 	}
-	if len(got.Findings) != 2 {
-		t.Errorf("Findings = %v, want 2 (empty dropped)", got.Findings)
+	if len(got.Suggestions) != 2 {
+		t.Errorf("Suggestions = %v, want 2 (empty dropped)", got.Suggestions)
 	}
-	if got.Findings[0] != "Use stronger action verbs." {
-		t.Errorf("Findings[0] = %q, want trimmed", got.Findings[0])
+	if got.Suggestions[0] != "Use stronger action verbs." {
+		t.Errorf("Suggestions[0] = %q, want trimmed", got.Suggestions[0])
 	}
 }
 

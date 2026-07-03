@@ -1,14 +1,16 @@
 // Package atscheck computes a deterministic ATS-readiness score for a CV from its
-// plain text: structural checks (machine-readable, contact, sections, dates,
-// length, bullets) plus a role keyword-match. It is pure and I/O-free (mirrors
-// internal/verdict) — the handler supplies the CV text, the CV's parsed skills,
-// and the role's top in-demand skills; an optional LLM layer (see analyzer.go)
-// blends a content-quality score on top.
+// plain text as five weighted categories (Keyword Strength, Format Compliance,
+// Section Completeness, Content Quality, Length & Density) whose maxima sum to 100.
+// Each category carries per-item point attribution; the overall score is the sum of
+// the category scores, and the potential score adds back every recoverable point.
+// It is pure and I/O-free (mirrors internal/verdict) — the handler supplies the CV
+// text, the CV's parsed skills, and the role's top in-demand skills; an optional LLM
+// layer (see analyzer.go) refines the Content Quality category on top.
 //
-// The CV text comes from a plain-text PDF extractor, so layout facts
-// (multi-column, tables, images) are NOT detectable here — only what text allows.
-// The strongest signal we can read is emptiness: a scanned/image CV yields almost
-// no text and fails machine_readable, the single biggest ATS killer.
+// The CV text comes from a plain-text PDF extractor, so layout facts (multi-column,
+// tables, images) are NOT detectable here — only what text allows. The strongest
+// signal we can read is emptiness: a scanned/image CV yields almost no text and
+// fails machine_readable, the single biggest ATS killer.
 package atscheck
 
 import (
@@ -27,49 +29,55 @@ const (
 	StatusFail Status = "fail"
 )
 
-// Check is one line of the readiness checklist.
-type Check struct {
-	ID     string `json:"id"`
+// Category IDs.
+const (
+	categoryKeyword  = "keyword_strength"
+	categoryFormat   = "format_compliance"
+	categorySections = "section_completeness"
+	categoryContent  = "content_quality"
+	categoryLength   = "length_density"
+)
+
+// Category maxima. Keyword and Content are named; Format (8+6+3+3=20), Sections
+// (5+4+3+3=15), and Length (5+5=10) are the sums of their item weights below. All
+// five sum to 100.
+const (
+	keywordMax = 40
+	contentMax = 15
+)
+
+// keywordRecommendMax caps how many missing role skills are surfaced as recommended
+// keywords.
+const keywordRecommendMax = 20
+
+// LineItem is one attributed reason inside a category: awarded points when it
+// passed, recoverable points when it did not.
+type LineItem struct {
+	Points int    `json:"points"`
+	Text   string `json:"text"`
 	Status Status `json:"status"`
-	Label  string `json:"label"`
-	Fix    string `json:"fix,omitempty"`
+}
+
+// Category is one weighted scoring dimension.
+type Category struct {
+	ID    string     `json:"id"`
+	Label string     `json:"label"`
+	Score int        `json:"score"` // Max − recoverable points
+	Max   int        `json:"max"`
+	Items []LineItem `json:"items"`
 }
 
 // Report is the full ATS-readiness result. JSON is the wire contract shared with
-// the frontend (an optional LLM layer sets content-quality on top; see analyzer.go).
+// the frontend (an optional LLM layer refines Content Quality; see analyzer.go).
 type Report struct {
-	Overall      int     `json:"overall"`       // 0-100 blended
-	Readability  int     `json:"readability"`   // 0-100 structural pass-rate
-	KeywordMatch int     `json:"keyword_match"` // 0-100 role skills present in the CV text
-	Checks       []Check `json:"checks"`
-	// ContentQuality/Findings are set only when the optional LLM review ran (see
-	// ApplyReview); nil/empty renders no AI section.
-	ContentQuality *int     `json:"content_quality,omitempty"`
-	Findings       []string `json:"findings,omitempty"`
-}
-
-// Three-way Overall weights when the LLM content-quality is present (sum to 1).
-const (
-	weightReadabilityQ = 0.45
-	weightKeywordQ     = 0.30
-	weightQualityQ     = 0.25
-)
-
-// ApplyReview folds an optional LLM review into the report: it attaches the
-// content-quality + findings and re-blends Overall to include content-quality. A
-// nil review leaves the deterministic report untouched.
-func (r *Report) ApplyReview(rv *Review) {
-	if rv == nil {
-		return
-	}
-	cq := rv.ContentQuality
-	r.ContentQuality = &cq
-	r.Findings = rv.Findings
-	r.Overall = clamp(int(math.Round(
-		weightReadabilityQ*float64(r.Readability) +
-			weightKeywordQ*float64(r.KeywordMatch) +
-			weightQualityQ*float64(cq),
-	)))
+	Overall             int        `json:"overall"`   // sum of category scores, 0-100
+	Potential           int        `json:"potential"` // overall + recoverable points, capped 100
+	Categories          []Category `json:"categories"`
+	StrongKeywords      []string   `json:"strong_keywords"`
+	RecommendedKeywords []string   `json:"recommended_keywords"`
+	// Suggestions is set only when the optional LLM review ran (see ApplyReview);
+	// empty renders no suggestions section.
+	Suggestions []string `json:"suggestions,omitempty"`
 }
 
 // Tunable scoring constants (calibrate against real CVs).
@@ -77,11 +85,9 @@ const (
 	minReadableWords = 30   // below this the CV is treated as a scan/parse failure
 	lengthMin        = 150  // healthy CV word band
 	lengthMax        = 1200 //
-	keywordPassPct   = 70   // keyword-match ≥ this → pass
-	keywordWarnPct   = 40   // ≥ this → warn, else fail
-
-	weightReadability = 0.6 // Overall = round(wR·Readability + wK·KeywordMatch)
-	weightKeyword     = 0.4
+	minActionVerbs   = 3    // bullet lines starting with a strong verb → Content passes
+	minQuantified    = 2    // quantified results → Content passes
+	minDensitySkills = 3    // distinct parsed skills → Density passes
 )
 
 var (
@@ -89,12 +95,24 @@ var (
 	phoneRE  = regexp.MustCompile(`(?:\+\d[\d\s().\-]{7,}\d)|(?:\(\d{3}\)\s?\d{3}[\s.\-]?\d{4})|(?:\b\d{3}[\s.\-]\d{3}[\s.\-]\d{4}\b)`)
 	dateRE   = regexp.MustCompile(`\b(?:19|20)\d{2}\b|\b\d{1,2}[/.\-]\d{4}\b`)
 	bulletRE = regexp.MustCompile(`(?m)^[ \t]*[-*•‣●·][ \t]+\S`)
+	quantRE  = regexp.MustCompile(`\d+(?:\.\d+)?\s?%|\$\s?\d|\b\d+x\b`)
 )
 
 var sectionKeywords = map[string][]string{
 	"experience": {"experience", "employment", "work history", "опыт работы", "опыт"},
 	"skills":     {"skills", "навыки", "технолог"},
+	"education":  {"education", "образование"},
+	"summary":    {"summary", "profile", "objective", "о себе"},
 }
+
+// actionVerbs are strong résumé openers checked at the start of bullet lines.
+var actionVerbs = set(
+	"built", "led", "shipped", "designed", "developed", "improved", "reduced",
+	"scaled", "launched", "migrated", "architected", "delivered", "increased",
+	"decreased", "cut", "drove", "owned", "created", "implemented", "optimized",
+	"automated", "established", "spearheaded", "managed", "mentored", "introduced",
+	"rebuilt", "streamlined", "accelerated",
+)
 
 // Score builds the deterministic report. cvSkills are the CV's parsed skill slugs
 // (the caller runs skilltag.Parse); roleTopSkills are the role's top in-demand
@@ -103,155 +121,178 @@ func Score(cvText string, cvSkills, roleTopSkills []string) Report {
 	words := len(strings.Fields(cvText))
 	lower := strings.ToLower(cvText)
 
-	structural := []Check{
-		machineReadable(words),
-		contact(cvText),
-		sections(lower),
-		dates(cvText),
-		length(words),
-		bullets(cvText),
+	keyword, strong, recommended := keywordCategory(cvSkills, roleTopSkills)
+	r := Report{
+		Categories: []Category{
+			keyword,
+			formatCategory(cvText, words),
+			sectionsCategory(lower),
+			contentCategory(cvText),
+			lengthCategory(words, cvSkills),
+		},
+		StrongKeywords:      strong,
+		RecommendedKeywords: recommended,
 	}
-
-	sum := 0.0
-	for _, c := range structural {
-		sum += statusScore(c.Status)
-	}
-	readability := int(math.Round(sum / float64(len(structural)) * 100))
-
-	kwCheck, keyword := keywordMatch(cvSkills, roleTopSkills)
-
-	overall := int(math.Round(weightReadability*float64(readability) + weightKeyword*float64(keyword)))
-	return Report{
-		Overall:      clamp(overall),
-		Readability:  clamp(readability),
-		KeywordMatch: clamp(keyword),
-		Checks:       append(structural, kwCheck),
-	}
+	r.recompute()
+	return r
 }
 
-func statusScore(s Status) float64 {
-	switch s {
-	case StatusPass:
-		return 1
-	case StatusWarn:
-		return 0.5
-	default:
-		return 0
-	}
-}
-
-func machineReadable(words int) Check {
-	if words < minReadableWords {
-		return Check{ID: "machine_readable", Status: StatusFail, Label: "Text is machine-readable",
-			Fix: "Export a text-based PDF (not a scan or image) so an ATS can read it."}
-	}
-	return Check{ID: "machine_readable", Status: StatusPass, Label: "Text is machine-readable"}
-}
-
-func contact(cv string) Check {
-	c := Check{ID: "contact", Label: "Contact info (email and phone)"}
-	hasEmail := emailRE.MatchString(cv)
-	hasPhone := phoneRE.MatchString(cv)
-	switch {
-	case hasEmail && hasPhone:
-		c.Status = StatusPass
-	case hasEmail || hasPhone:
-		c.Status = StatusWarn
-		c.Fix = "Add both an email and a phone number near the top."
-	default:
-		c.Status = StatusFail
-		c.Fix = "Add an email and a phone number so recruiters can reach you."
-	}
-	return c
-}
-
-func sections(lower string) Check {
-	c := Check{ID: "sections", Label: "Standard sections (Experience, Skills)"}
-	var missing []string
-	for _, name := range []string{"experience", "skills"} {
-		if !hasAny(lower, sectionKeywords[name]) {
-			missing = append(missing, name)
+// recompute derives each category's Score/Max from its items and the report's
+// Overall (sum of scores) and Potential (Overall + recoverable points).
+func (r *Report) recompute() {
+	overall, recoverable := 0, 0
+	for i := range r.Categories {
+		score, max := 0, 0
+		for _, it := range r.Categories[i].Items {
+			max += it.Points
+			if it.Status == StatusPass {
+				score += it.Points
+			} else {
+				recoverable += it.Points
+			}
 		}
+		r.Categories[i].Score = score
+		r.Categories[i].Max = max
+		overall += score
 	}
-	switch len(missing) {
-	case 0:
-		c.Status = StatusPass
-	case 1:
-		c.Status = StatusWarn
-		c.Fix = fmt.Sprintf("Add a clearly labelled %s section.", missing[0])
-	default:
-		c.Status = StatusFail
-		c.Fix = "Add clearly labelled Experience and Skills sections."
-	}
-	return c
+	r.Overall = clamp(overall)
+	r.Potential = clamp(overall + recoverable)
 }
 
-func dates(cv string) Check {
-	if dateRE.MatchString(cv) {
-		return Check{ID: "dates", Status: StatusPass, Label: "Dated work history"}
-	}
-	return Check{ID: "dates", Status: StatusWarn, Label: "Dated work history",
-		Fix: "Add start/end dates (years) to each role so tenure is parseable."}
-}
-
-func length(words int) Check {
-	c := Check{ID: "length", Label: "Reasonable length"}
-	switch {
-	case words < lengthMin:
-		c.Status = StatusWarn
-		c.Fix = "The CV looks short — expand your experience with concrete detail."
-	case words > lengthMax:
-		c.Status = StatusWarn
-		c.Fix = "The CV looks long — trim to the most relevant one to two pages."
-	default:
-		c.Status = StatusPass
-	}
-	return c
-}
-
-func bullets(cv string) Check {
-	if len(bulletRE.FindAllString(cv, -1)) >= 2 {
-		return Check{ID: "bullets", Status: StatusPass, Label: "Bulleted achievements"}
-	}
-	return Check{ID: "bullets", Status: StatusWarn, Label: "Bulleted achievements",
-		Fix: "Use bullet points for your achievements instead of dense paragraphs."}
-}
-
-// keywordMatch scores how many of the role's top skills appear in the CV's parsed
-// skills, and names the top missing ones.
-func keywordMatch(cvSkills, roleTopSkills []string) (Check, int) {
-	c := Check{ID: "keyword_match", Label: "Role keywords present in the CV"}
+// keywordCategory scores how many of the role's top skills appear in the CV's
+// parsed skills, and splits them into strong (present) and recommended (missing).
+func keywordCategory(cvSkills, roleTopSkills []string) (Category, []string, []string) {
+	c := Category{ID: categoryKeyword, Label: "Keyword Strength"}
 	if len(roleTopSkills) == 0 {
-		c.Status = StatusWarn
-		c.Fix = "Select a target role to score keyword match."
-		return c, 0
+		c.Items = []LineItem{{Points: keywordMax, Text: "Select a target role to score keyword match", Status: StatusWarn}}
+		return c, nil, nil
 	}
-	owned := make(map[string]bool, len(cvSkills))
-	for _, s := range cvSkills {
-		owned[s] = true
-	}
-	matched := 0
-	var missing []string
+	owned := set(cvSkills...)
+	var strong, missing []string
 	for _, s := range roleTopSkills {
 		if owned[s] {
-			matched++
+			strong = append(strong, s)
 		} else {
 			missing = append(missing, s)
 		}
 	}
-	pct := int(math.Round(float64(matched) / float64(len(roleTopSkills)) * 100))
-	switch {
-	case pct >= keywordPassPct:
-		c.Status = StatusPass
-	case pct >= keywordWarnPct:
-		c.Status = StatusWarn
-	default:
-		c.Status = StatusFail
+	score := int(math.Round(float64(len(strong)) / float64(len(roleTopSkills)) * keywordMax))
+	if len(strong) > 0 {
+		c.Items = append(c.Items, LineItem{
+			Points: score,
+			Text:   fmt.Sprintf("%d of %d in-demand role keywords present", len(strong), len(roleTopSkills)),
+			Status: StatusPass,
+		})
 	}
 	if len(missing) > 0 {
-		c.Fix = "Spell out these in-demand skills where you've used them: " + strings.Join(topN(missing, 5), ", ") + "."
+		c.Items = append(c.Items, LineItem{
+			Points: keywordMax - score,
+			Text:   "Add the recommended keywords where you've genuinely used them",
+			Status: StatusWarn,
+		})
 	}
-	return c, pct
+	return c, strong, topN(missing, keywordRecommendMax)
+}
+
+func formatCategory(cv string, words int) Category {
+	return Category{ID: categoryFormat, Label: "Format Compliance", Items: []LineItem{
+		item(words >= minReadableWords, 8, "Text is machine-readable",
+			"Export a text-based PDF (not a scan or image) so an ATS can read it", StatusFail),
+		item(emailRE.MatchString(cv) && phoneRE.MatchString(cv), 6, "Contact info present (email and phone)",
+			"Add both an email and a phone number near the top", StatusWarn),
+		item(len(bulletRE.FindAllString(cv, -1)) >= 2, 3, "Bulleted achievements",
+			"Use bullet points for your achievements instead of dense paragraphs", StatusWarn),
+		item(dateRE.MatchString(cv), 3, "Dated work history",
+			"Add start/end dates (years) to each role so tenure is parseable", StatusWarn),
+	}}
+}
+
+func sectionsCategory(lower string) Category {
+	return Category{ID: categorySections, Label: "Section Completeness", Items: []LineItem{
+		item(hasAny(lower, sectionKeywords["experience"]), 5, "Experience section",
+			"Add a clearly labelled Experience section", StatusWarn),
+		item(hasAny(lower, sectionKeywords["skills"]), 4, "Skills section",
+			"Add a clearly labelled Skills section", StatusWarn),
+		item(hasAny(lower, sectionKeywords["education"]), 3, "Education section",
+			"Add an Education section", StatusWarn),
+		item(hasAny(lower, sectionKeywords["summary"]), 3, "Professional summary",
+			"Add a short professional summary at the top", StatusWarn),
+	}}
+}
+
+// contentCategory is the deterministic Content Quality proxy used when no LLM review
+// is present (see ApplyReview for the LLM path).
+func contentCategory(cv string) Category {
+	return Category{ID: categoryContent, Label: "Content Quality", Items: []LineItem{
+		item(actionVerbLines(cv) >= minActionVerbs, 8, "Bullets lead with strong action verbs",
+			"Start bullets with strong action verbs (Built, Led, Shipped…)", StatusWarn),
+		item(len(quantRE.FindAllString(cv, -1)) >= minQuantified, 7, "Quantified, measurable results",
+			"Quantify achievements with concrete numbers (%, ×, $)", StatusWarn),
+	}}
+}
+
+func lengthCategory(words int, cvSkills []string) Category {
+	return Category{ID: categoryLength, Label: "Length & Density", Items: []LineItem{
+		item(words >= lengthMin && words <= lengthMax, 5, "Reasonable length",
+			lengthFix(words), StatusWarn),
+		item(len(set(cvSkills...)) >= minDensitySkills, 5, "Good keyword density",
+			"Surface more concrete skills tied to your work", StatusWarn),
+	}}
+}
+
+// ApplyReview folds an optional LLM review into the report: it replaces the Content
+// Quality category with the LLM's content-quality score, attaches the suggestions,
+// and re-sums Overall/Potential. A nil review leaves the report untouched.
+func (r *Report) ApplyReview(rv *Review) {
+	if rv == nil {
+		return
+	}
+	score := int(math.Round(float64(clamp(rv.ContentQuality)) / 100 * contentMax))
+	for i := range r.Categories {
+		if r.Categories[i].ID != categoryContent {
+			continue
+		}
+		items := []LineItem{{Points: score, Text: "AI-assessed content quality", Status: StatusPass}}
+		if score < contentMax {
+			items = append(items, LineItem{Points: contentMax - score, Text: "Apply the suggestions below to raise content quality", Status: StatusWarn})
+		}
+		r.Categories[i].Items = items
+	}
+	r.Suggestions = rv.Suggestions
+	r.recompute()
+}
+
+// actionVerbLines counts lines whose first word (after any bullet marker) is a
+// strong action verb.
+func actionVerbLines(cv string) int {
+	n := 0
+	for _, line := range strings.Split(cv, "\n") {
+		line = strings.TrimLeft(strings.TrimSpace(line), "-*•‣●· \t")
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		if actionVerbs[strings.ToLower(fields[0])] {
+			n++
+		}
+	}
+	return n
+}
+
+func lengthFix(words int) string {
+	if words < lengthMin {
+		return "The CV looks short — expand your experience with concrete detail"
+	}
+	return "The CV looks long — trim to the most relevant one to two pages"
+}
+
+// item builds a line item: a pass awards its weight, otherwise the weight is
+// recoverable and the failText/failStatus applies.
+func item(ok bool, weight int, passText, failText string, failStatus Status) LineItem {
+	if ok {
+		return LineItem{Points: weight, Text: passText, Status: StatusPass}
+	}
+	return LineItem{Points: weight, Text: failText, Status: failStatus}
 }
 
 func hasAny(lower string, keywords []string) bool {
@@ -261,6 +302,14 @@ func hasAny(lower string, keywords []string) bool {
 		}
 	}
 	return false
+}
+
+func set(items ...string) map[string]bool {
+	m := make(map[string]bool, len(items))
+	for _, s := range items {
+		m[s] = true
+	}
+	return m
 }
 
 func topN(in []string, n int) []string {

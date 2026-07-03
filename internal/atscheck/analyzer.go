@@ -12,10 +12,10 @@ import (
 const (
 	// maxCVRunes bounds the CV text sent to the model (user-supplied → cap token cost).
 	maxCVRunes = 24000
-	// maxFindingRunes / maxFindings bound the model's advice so a verbose answer can't
-	// blow up the stored/served payload.
-	maxFindingRunes = 240
-	maxFindings     = 5
+	// maxSuggestionRunes / maxSuggestions bound the model's advice so a verbose answer
+	// can't blow up the stored/served payload.
+	maxSuggestionRunes = 240
+	maxSuggestions     = 6
 )
 
 // Analyzer runs the optional LLM qualitative review of a CV. A nil client (LLM
@@ -31,16 +31,16 @@ func NewAnalyzer(client *llm.Client) *Analyzer {
 }
 
 // Review is the LLM's qualitative answer: a content-quality score and short,
-// actionable findings. JSON is the wire contract (generated to TS + persisted).
+// actionable suggestions. JSON is the wire contract (generated to TS + persisted).
 type Review struct {
 	ContentQuality int      `json:"content_quality"`
-	Findings       []string `json:"findings"`
+	Suggestions    []string `json:"suggestions"`
 }
 
 // Analyze asks the model, over the CV text, for a content-quality score (0-100)
-// and a few concrete improvement findings. Returns (nil, nil) when unconfigured so
-// callers degrade. The model is untrusted output — the score is clamped and
-// findings are trimmed, length-bounded, and capped.
+// and a few concrete improvement suggestions. Returns (nil, nil) when unconfigured
+// so callers degrade. The model is untrusted output — the score is clamped and
+// suggestions are trimmed, length-bounded, and capped.
 func (a *Analyzer) Analyze(ctx context.Context, cvText string) (*Review, error) {
 	if a == nil || a.client == nil {
 		return nil, nil
@@ -57,20 +57,20 @@ func (a *Analyzer) Analyze(ctx context.Context, cvText string) (*Review, error) 
 	return &out, nil
 }
 
-// sanitize clamps the score and trims/bounds/caps the findings.
+// sanitize clamps the score and trims/bounds/caps the suggestions.
 func (r *Review) sanitize() {
 	r.ContentQuality = clamp(r.ContentQuality)
-	cleaned := make([]string, 0, len(r.Findings))
-	for _, f := range r.Findings {
-		if f = strings.TrimSpace(f); f == "" {
+	cleaned := make([]string, 0, len(r.Suggestions))
+	for _, s := range r.Suggestions {
+		if s = strings.TrimSpace(s); s == "" {
 			continue
 		}
-		cleaned = append(cleaned, llm.TruncateRunes(f, maxFindingRunes))
-		if len(cleaned) >= maxFindings {
+		cleaned = append(cleaned, llm.TruncateRunes(s, maxSuggestionRunes))
+		if len(cleaned) >= maxSuggestions {
 			break
 		}
 	}
-	r.Findings = cleaned
+	r.Suggestions = cleaned
 }
 
 // reviewSystemPrompt pins the JSON contract. Kept as a function (mirrors enrich's
@@ -84,9 +84,10 @@ func reviewSystemPrompt() string {
 	b.WriteString("action verbs over passive phrasing, quantified achievements over responsibility lists, ")
 	b.WriteString("and clean readable structure. Penalise garbled/interleaved text (a sign of a multi-column ")
 	b.WriteString("or table layout an ATS may scramble). 100 = excellent; low = weak/garbled.\n")
-	b.WriteString("- \"findings\": an array of 2 to 4 short, concrete, actionable improvement sentences ")
-	b.WriteString("(e.g. replace a weak verb, quantify a bullet, fix a section that reads as garbled). ")
-	b.WriteString("Each ≤ 200 characters. Base every judgement only on the CV text provided; do not invent facts.\n")
+	b.WriteString("- \"suggestions\": an array of 3 to 6 short, concrete, actionable improvement sentences ")
+	b.WriteString("(e.g. replace a weak verb, quantify a bullet, fix a section that reads as garbled, ")
+	b.WriteString("flag a date inconsistency). Each ≤ 200 characters. Base every judgement only on the CV ")
+	b.WriteString("text provided; do not invent facts.\n")
 	return b.String()
 }
 

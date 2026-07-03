@@ -169,23 +169,23 @@ Golang, Kafka, Kubernetes, PostgreSQL`
 		t.Fatalf("has_cv = %v, want true", d["has_cv"])
 	}
 	report := d["report"].(map[string]any)
-	// CV has go+kafka+kubernetes; role top skills are the same three → keyword_match 100.
-	if report["keyword_match"].(float64) != 100 {
-		t.Errorf("keyword_match = %v, want 100", report["keyword_match"])
+	// CV has go+kafka+kubernetes; role top skills are the same three → all three strong.
+	if strong := report["strong_keywords"].([]any); len(strong) != 3 {
+		t.Errorf("strong_keywords = %v, want 3", strong)
 	}
 	if report["overall"].(float64) <= 0 {
 		t.Errorf("overall = %v, want > 0", report["overall"])
 	}
-	// Phase 1 (no LLM review): no content-quality field.
-	if _, ok := report["content_quality"]; ok {
-		t.Errorf("content_quality present without an LLM review")
+	// Phase 1 (no LLM review): no suggestions (omitempty ⇒ absent).
+	if _, ok := report["suggestions"]; ok {
+		t.Errorf("suggestions present without an LLM review")
 	}
 }
 
 func TestPostATS_RunsLLMReviewAndCaches(t *testing.T) {
 	cache := newFakeATSCache()
 	analyzer := atscheck.NewAnalyzer(llm.NewWithModel(atsModel{
-		resp: `{"content_quality":80,"findings":["Quantify your impact."]}`,
+		resp: `{"content_quality":80,"suggestions":["Quantify your impact."]}`,
 	}))
 	app, token := atsAppWith(t, ownedProfile(), atsFacets(), storeWithCV(t, "some cv text here"), analyzer, cache)
 
@@ -194,15 +194,29 @@ func TestPostATS_RunsLLMReviewAndCaches(t *testing.T) {
 		t.Fatalf("status = %d, want 200", status)
 	}
 	report := dataOf(t, body)["report"].(map[string]any)
-	if report["content_quality"].(float64) != 80 {
-		t.Errorf("content_quality = %v, want 80", report["content_quality"])
+	if len(report["suggestions"].([]any)) != 1 {
+		t.Errorf("suggestions = %v, want 1", report["suggestions"])
 	}
-	if len(report["findings"].([]any)) != 1 {
-		t.Errorf("findings = %v, want 1", report["findings"])
+	// content_quality 80 → the content_quality category scores round(80/100×15) = 12.
+	if got := contentScore(t, report); got != 12 {
+		t.Errorf("content_quality category score = %d, want 12", got)
 	}
 	if len(cache.blob[1]) == 0 {
 		t.Errorf("review was not cached for the user")
 	}
+}
+
+// contentScore digs the content_quality category's score out of the JSON report.
+func contentScore(t *testing.T, report map[string]any) int {
+	t.Helper()
+	for _, c := range report["categories"].([]any) {
+		cat := c.(map[string]any)
+		if cat["id"] == "content_quality" {
+			return int(cat["score"].(float64))
+		}
+	}
+	t.Fatalf("no content_quality category in %v", report["categories"])
+	return 0
 }
 
 func TestPostATS_NoLLMDegrades(t *testing.T) {
@@ -214,8 +228,8 @@ func TestPostATS_NoLLMDegrades(t *testing.T) {
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
-	if _, ok := dataOf(t, body)["report"].(map[string]any)["content_quality"]; ok {
-		t.Errorf("content_quality present with LLM off")
+	if _, ok := dataOf(t, body)["report"].(map[string]any)["suggestions"]; ok {
+		t.Errorf("suggestions present with LLM off")
 	}
 	if len(cache.blob[1]) != 0 {
 		t.Errorf("nothing should be cached with LLM off")
