@@ -38,8 +38,9 @@
           .join(' · ')
       : ''
   );
+  // "NASDAQ: ACME", or just "ACME" when the exchange is unknown.
   const stockLine = $derived(
-    info.stock?.symbol ? (info.stock.exchange ? `${info.stock.exchange}: ${info.stock.symbol}` : info.stock.symbol) : ''
+    info.stock?.symbol ? [info.stock.exchange, info.stock.symbol].filter(Boolean).join(': ') : ''
   );
   const websiteHref = $derived(website ? (website.startsWith('http') ? website : `https://${website}`) : '');
 
