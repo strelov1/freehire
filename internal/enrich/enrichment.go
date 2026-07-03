@@ -95,7 +95,15 @@ var (
 		"design", "product", "project_management", "management",
 		"marketing", "sales", "support", "other",
 	}
-	DomainValues = []string{
+	// NonTechCategories are the CategoryValues for confidently non-technical roles
+	// that are excluded from AI enrichment: the derived category is a source fact
+	// (internal/classify, from the title), so gating the enrichment enqueue on it
+	// keeps LLM budget off jobs no engineer will see. It is a blacklist, not a
+	// whitelist — only categories we are sure are non-technical are dropped; an
+	// empty/"other"/unrecognized category still enqueues, so a tech job the title
+	// dictionary could not place is never silently skipped.
+	NonTechCategories = []string{"marketing", "sales", "support", "management"}
+	DomainValues      = []string{
 		"fintech", "gambling", "ecommerce", "crypto", "healthcare",
 		"saas", "gamedev", "edtech", "adtech", "govtech",
 		"media", "travel", "logistics", "other",

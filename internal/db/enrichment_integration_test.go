@@ -89,6 +89,35 @@ func setPostedAt(t *testing.T, pool *pgxpool.Pool, jobID int64, posted string) {
 	}
 }
 
+// setCategory stamps a job's derived category so the non-tech enqueue gate can be tested.
+func setCategory(t *testing.T, pool *pgxpool.Pool, jobID int64, category string) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(),
+		"UPDATE jobs SET category = $1 WHERE id = $2", category, jobID); err != nil {
+		t.Fatalf("set category: %v", err)
+	}
+}
+
+// enqueuedJobIDs returns the outbox's job_ids in ascending order for assertions.
+func enqueuedJobIDs(t *testing.T, pool *pgxpool.Pool) []int64 {
+	t.Helper()
+	rows, err := pool.Query(context.Background(),
+		"SELECT job_id FROM enrichment_outbox ORDER BY job_id")
+	if err != nil {
+		t.Fatalf("select outbox: %v", err)
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			t.Fatalf("scan job_id: %v", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 // closeJob soft-closes a job (sets closed_at) so claim/enqueue exclusion can be tested.
 func closeJob(t *testing.T, pool *pgxpool.Pool, jobID int64) {
 	t.Helper()
@@ -111,7 +140,7 @@ func TestEnrichmentClaimPriority(t *testing.T) {
 		newer := insertJob(t, pool, "newer")
 		setPostedAt(t, pool, older, "2024-01-01T00:00:00Z")
 		setPostedAt(t, pool, newer, "2024-06-01T00:00:00Z")
-		if _, err := q.EnqueuePendingJobs(ctx, targetVersion); err != nil {
+		if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -133,7 +162,7 @@ func TestEnrichmentClaimPriority(t *testing.T) {
 		dated := insertJob(t, pool, "dated")
 		setPostedAt(t, pool, dated, "2024-01-01T00:00:00Z")
 		undated := insertJob(t, pool, "undated") // posted_at NULL, created_at = now()
-		if _, err := q.EnqueuePendingJobs(ctx, targetVersion); err != nil {
+		if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -152,7 +181,7 @@ func TestEnrichmentClaimPriority(t *testing.T) {
 		open := insertJob(t, pool, "open")
 		gone := insertJob(t, pool, "closed")
 		closeJob(t, pool, gone)
-		if _, err := q.EnqueuePendingJobs(ctx, targetVersion); err != nil {
+		if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -178,7 +207,7 @@ func TestEnrichmentClaimPriority(t *testing.T) {
 		truncate(t, pool)
 		open := insertJob(t, pool, "open")
 		gone := insertJob(t, pool, "gone")
-		if _, err := q.EnqueuePendingJobs(ctx, targetVersion); err != nil {
+		if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion}); err != nil {
 			t.Fatal(err)
 		}
 		// Close one job after it was queued: the claim-time filter must skip it.
@@ -204,7 +233,7 @@ func TestEnrichmentQueue(t *testing.T) {
 		insertJob(t, pool, "idem")
 
 		for i := 0; i < 2; i++ {
-			if _, err := q.EnqueuePendingJobs(ctx, targetVersion); err != nil {
+			if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion}); err != nil {
 				t.Fatalf("enqueue: %v", err)
 			}
 		}
@@ -221,7 +250,7 @@ func TestEnrichmentQueue(t *testing.T) {
 		truncate(t, pool)
 		insertJob(t, pool, "j1")
 		insertJob(t, pool, "j2")
-		if _, err := q.EnqueuePendingJobs(ctx, targetVersion); err != nil {
+		if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -245,7 +274,7 @@ func TestEnrichmentQueue(t *testing.T) {
 	t.Run("a stale lease is reclaimable", func(t *testing.T) {
 		truncate(t, pool)
 		insertJob(t, pool, "stale")
-		if _, err := q.EnqueuePendingJobs(ctx, targetVersion); err != nil {
+		if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -265,7 +294,7 @@ func TestEnrichmentQueue(t *testing.T) {
 	t.Run("attempts reaching max dead-letters the entry", func(t *testing.T) {
 		truncate(t, pool)
 		insertJob(t, pool, "dead")
-		if _, err := q.EnqueuePendingJobs(ctx, targetVersion); err != nil {
+		if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion}); err != nil {
 			t.Fatal(err)
 		}
 		claimed, err := q.ClaimEnrichmentBatch(ctx, ClaimEnrichmentBatchParams{LeaseSeconds: 3600, BatchSize: 10})
@@ -291,6 +320,83 @@ func TestEnrichmentQueue(t *testing.T) {
 		// Dead-lettered → never claimed again, even with an expired lease.
 		if c, err := q.ClaimEnrichmentBatch(ctx, ClaimEnrichmentBatchParams{LeaseSeconds: 0, BatchSize: 10}); err != nil || len(c) != 0 {
 			t.Errorf("claim after dead-letter: rows=%d, want 0", len(c))
+		}
+	})
+}
+
+// TestEnqueueGatesNonTechCategory covers the AI-budget gate: both enqueue paths skip a
+// job whose derived category is blacklisted (enrich.NonTechCategories), while tech and
+// empty/unrecognized categories still enqueue. The empty string (” — the NOT NULL
+// column default for a title the classify dictionary could not place) must pass the
+// `<> ALL` gate, so a tech job with an unrecognized title is never silently dropped.
+func TestEnqueueGatesNonTechCategory(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	nonTech := []string{"marketing", "sales", "support", "management"}
+
+	t.Run("backfill enqueue skips only blacklisted categories", func(t *testing.T) {
+		truncate(t, pool)
+		tech := insertJob(t, pool, "tech")
+		setCategory(t, pool, tech, "backend")
+		sales := insertJob(t, pool, "sales")
+		setCategory(t, pool, sales, "sales")
+		empty := insertJob(t, pool, "empty") // category keeps the '' default
+		other := insertJob(t, pool, "other")
+		setCategory(t, pool, other, "other")
+
+		if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{
+			TargetVersion:     targetVersion,
+			ExcludeCategories: nonTech,
+		}); err != nil {
+			t.Fatal(err)
+		}
+
+		got := enqueuedJobIDs(t, pool)
+		want := []int64{tech, empty, other} // sales excluded; keep tech + empty + other
+		sort.Slice(want, func(i, j int) bool { return want[i] < want[j] })
+		if len(got) != len(want) {
+			t.Fatalf("enqueued = %v, want %v (sales excluded, empty/other kept)", got, want)
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatalf("enqueued = %v, want %v (sales excluded, empty/other kept)", got, want)
+			}
+		}
+	})
+
+	t.Run("transactional enqueue skips a blacklisted job", func(t *testing.T) {
+		truncate(t, pool)
+		mgmt := insertJob(t, pool, "mgmt")
+		setCategory(t, pool, mgmt, "management")
+
+		n, err := q.EnqueueJobEnrichment(ctx, EnqueueJobEnrichmentParams{
+			TargetVersion:     targetVersion,
+			JobID:             mgmt,
+			ExcludeCategories: nonTech,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n != 0 {
+			t.Errorf("enqueued rows = %d, want 0 for a management job", n)
+		}
+		if got := enqueuedJobIDs(t, pool); len(got) != 0 {
+			t.Errorf("outbox = %v, want empty", got)
+		}
+	})
+
+	t.Run("nil exclude list gates nothing", func(t *testing.T) {
+		truncate(t, pool)
+		sales := insertJob(t, pool, "sales")
+		setCategory(t, pool, sales, "sales")
+		// A nil arg becomes NULL; COALESCE(..., '{}') makes `<> ALL` gate nothing, so a
+		// caller that forgets the exclude list keeps the pre-gate behavior (enqueue all).
+		if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion}); err != nil {
+			t.Fatal(err)
+		}
+		if got := enqueuedJobIDs(t, pool); len(got) != 1 || got[0] != sales {
+			t.Errorf("enqueued = %v, want [%d] (nil exclude → no gating)", got, sales)
 		}
 	})
 }

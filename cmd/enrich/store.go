@@ -26,7 +26,10 @@ func newDBStore(pool *pgxpool.Pool) *dbStore {
 }
 
 func (s *dbStore) Enqueue(ctx context.Context, targetVersion int) (int64, error) {
-	return s.q.EnqueuePendingJobs(ctx, int32(targetVersion))
+	return s.q.EnqueuePendingJobs(ctx, db.EnqueuePendingJobsParams{
+		TargetVersion:     int32(targetVersion),
+		ExcludeCategories: enrich.NonTechCategories,
+	})
 }
 
 func (s *dbStore) Claim(ctx context.Context, batch, leaseSeconds int) ([]enrich.Claimed, error) {

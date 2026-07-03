@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/enrich"
 )
 
 // Compile-time proof that QueriesRepository satisfies Repository.
@@ -44,8 +45,9 @@ func (r *QueriesRepository) Create(ctx context.Context, p db.UpsertManualJobPara
 		return db.Job{}, fmt.Errorf("upsert manual job: %w", err)
 	}
 	if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
-		TargetVersion: r.targetVersion,
-		JobID:         job.ID,
+		TargetVersion:     r.targetVersion,
+		JobID:             job.ID,
+		ExcludeCategories: enrich.NonTechCategories,
 	}); err != nil {
 		return db.Job{}, fmt.Errorf("enqueue enrichment: %w", err)
 	}

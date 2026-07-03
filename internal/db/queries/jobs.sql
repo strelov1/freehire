@@ -394,15 +394,19 @@ WHERE id = sqlc.arg(id);
 
 -- name: EnqueueJobEnrichment :execrows
 -- Transactional-outbox enqueue for the ingest write path: queue this one job for
--- enrichment, gated on the same condition the backfill uses (unenriched or below the
--- target schema version), so an already-enriched job is not re-queued. Idempotent via
--- the outbox's UNIQUE (job_id, target_version). Run in the same transaction as the
+-- enrichment, gated on the same conditions the backfill uses (unenriched or below the
+-- target schema version, and a non-blacklisted category), so an already-enriched job
+-- is not re-queued and a confidently non-technical role (exclude_categories =
+-- enrich.NonTechCategories) never consumes LLM budget. category is NOT NULL DEFAULT '',
+-- so an empty/unrecognized category still enqueues (empty string <> ALL). Idempotent
+-- via the outbox's UNIQUE (job_id, target_version). Run in the same transaction as the
 -- job's UpsertJob so a newly ingested job is queued atomically with its write.
 INSERT INTO enrichment_outbox (job_id, target_version)
 SELECT id, sqlc.arg(target_version)::int
 FROM jobs
 WHERE id = sqlc.arg(job_id)::bigint
   AND (enriched_at IS NULL OR enrichment_version < sqlc.arg(target_version)::int)
+  AND category <> ALL(COALESCE(sqlc.arg(exclude_categories)::text[], '{}'))
 ON CONFLICT (job_id, target_version) DO NOTHING;
 
 -- name: SetJobEnrichment :exec

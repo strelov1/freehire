@@ -88,16 +88,25 @@ SELECT id, $1::int
 FROM jobs
 WHERE closed_at IS NULL
   AND (enriched_at IS NULL OR enrichment_version < $1::int)
+  AND category <> ALL(COALESCE($2::text[], '{}'))
 ON CONFLICT (job_id, target_version) DO NOTHING
 `
 
+type EnqueuePendingJobsParams struct {
+	TargetVersion     int32    `json:"target_version"`
+	ExcludeCategories []string `json:"exclude_categories"`
+}
+
 // Idempotent backfill: enqueue every OPEN job that is unenriched or below the target
 // schema version. Closed jobs (closed_at IS NOT NULL) are skipped — a dead posting no
-// user will see should not consume LLM budget. ON CONFLICT keeps exactly one entry per
-// (job_id, target_version), so running this every command invocation never duplicates
-// work.
-func (q *Queries) EnqueuePendingJobs(ctx context.Context, targetVersion int32) (int64, error) {
-	result, err := q.db.Exec(ctx, enqueuePendingJobs, targetVersion)
+// user will see should not consume LLM budget. Jobs whose derived category is in
+// exclude_categories (enrich.NonTechCategories) are skipped too, so LLM budget stays
+// on technical roles; category is NOT NULL DEFAULT ”, so an empty/unrecognized
+// category is never excluded (empty string <> ALL keeps the row). ON CONFLICT keeps
+// exactly one entry per (job_id, target_version), so running this every command
+// invocation never duplicates work.
+func (q *Queries) EnqueuePendingJobs(ctx context.Context, arg EnqueuePendingJobsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, enqueuePendingJobs, arg.TargetVersion, arg.ExcludeCategories)
 	if err != nil {
 		return 0, err
 	}

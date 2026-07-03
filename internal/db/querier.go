@@ -152,17 +152,23 @@ type Querier interface {
 	// refreshes dismissed_at in place.
 	DismissJob(ctx context.Context, arg DismissJobParams) (UserJob, error)
 	// Transactional-outbox enqueue for the ingest write path: queue this one job for
-	// enrichment, gated on the same condition the backfill uses (unenriched or below the
-	// target schema version), so an already-enriched job is not re-queued. Idempotent via
-	// the outbox's UNIQUE (job_id, target_version). Run in the same transaction as the
+	// enrichment, gated on the same conditions the backfill uses (unenriched or below the
+	// target schema version, and a non-blacklisted category), so an already-enriched job
+	// is not re-queued and a confidently non-technical role (exclude_categories =
+	// enrich.NonTechCategories) never consumes LLM budget. category is NOT NULL DEFAULT '',
+	// so an empty/unrecognized category still enqueues (empty string <> ALL). Idempotent
+	// via the outbox's UNIQUE (job_id, target_version). Run in the same transaction as the
 	// job's UpsertJob so a newly ingested job is queued atomically with its write.
 	EnqueueJobEnrichment(ctx context.Context, arg EnqueueJobEnrichmentParams) (int64, error)
 	// Idempotent backfill: enqueue every OPEN job that is unenriched or below the target
 	// schema version. Closed jobs (closed_at IS NOT NULL) are skipped — a dead posting no
-	// user will see should not consume LLM budget. ON CONFLICT keeps exactly one entry per
-	// (job_id, target_version), so running this every command invocation never duplicates
-	// work.
-	EnqueuePendingJobs(ctx context.Context, targetVersion int32) (int64, error)
+	// user will see should not consume LLM budget. Jobs whose derived category is in
+	// exclude_categories (enrich.NonTechCategories) are skipped too, so LLM budget stays
+	// on technical roles; category is NOT NULL DEFAULT '', so an empty/unrecognized
+	// category is never excluded (empty string <> ALL keeps the row). ON CONFLICT keeps
+	// exactly one entry per (job_id, target_version), so running this every command
+	// invocation never duplicates work.
+	EnqueuePendingJobs(ctx context.Context, arg EnqueuePendingJobsParams) (int64, error)
 	// Fast approximate open-job total for the DB-backed /jobs list's meta.total. An
 	// exact count(*) over ~millions of open rows was a per-request full scan; the
 	// planner's estimate (see estimate_open_jobs(), migration 0033) is O(1) and
