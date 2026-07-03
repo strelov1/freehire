@@ -3,8 +3,12 @@ package sources
 import (
 	"context"
 	"fmt"
+	"html"
 	"strconv"
 	"strings"
+	"unicode"
+
+	"github.com/microcosm-cc/bluemonday"
 )
 
 // gupyBaseURL is the Gupy public portal jobs API. Gupy is the dominant Brazilian
@@ -21,6 +25,13 @@ const gupyPageLimit = 100
 // misbehaving API that always returned a full page would otherwise loop forever, so
 // this caps the walk at 5000 postings — well above any single company's openings.
 const gupyMaxPages = 50
+
+// gupyDetailURL is Gupy's richer public job endpoint, keyed by the same numeric job id as
+// the listing. The portal listing (gupyBaseURL) flattens a posting's sections into one
+// tag-less description blob — headings glued to sentences, list items separated only by
+// ";" — so its description renders as an unstructured wall of text. This endpoint returns
+// the original per-section HTML instead; it is what the public career page itself consumes.
+const gupyDetailURL = "https://private-api.gupy.io/job-publication/public/jobs"
 
 // gupy adapts the Gupy portal API. Its list endpoint carries the description inline,
 // so — like Greenhouse — it needs no per-posting detail request. The board id is the
@@ -66,7 +77,7 @@ func (g gupy) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			Title:       strings.TrimSpace(p.Name),
 			Company:     e.Company,
 			Location:    joinNonEmpty(p.City, p.State, p.Country),
-			Description: sanitizeHTML(p.Description),
+			Description: g.description(ctx, p.ID, p.Description),
 			Remote:      p.IsRemoteWork,
 			WorkMode:    workplaceTypeMode(p.WorkplaceType),
 			PostedAt:    parseRFC3339(p.PublishedDate),
@@ -100,4 +111,56 @@ func (g gupy) list(ctx context.Context, board string) ([]gupyJob, error) {
 		offset += len(resp.Data)
 	}
 	return postings, nil
+}
+
+// gupyDetail is a posting's structured detail. Gupy splits a job into fixed sections;
+// concatenating them in board order reproduces the full description with its original
+// markup (paragraphs, lists, emphasis) that the flat listing description discards.
+type gupyDetail struct {
+	Description         string `json:"description"`         // intro / "about the role"
+	Responsibilities    string `json:"responsibilities"`    // Responsabilidades e atribuições
+	Prerequisites       string `json:"prerequisites"`       // Requisitos e qualificações
+	RelevantExperiences string `json:"relevantExperiences"` // Informações adicionais / benefits
+}
+
+// description fetches the posting's structured detail and assembles its sections into one
+// sanitized HTML document. The flat listing description is the fallback when the detail
+// endpoint is unreachable or yields nothing usable, so a detail hiccup degrades to the old
+// behaviour rather than dropping the body.
+func (g gupy) description(ctx context.Context, id int64, flat string) string {
+	var d gupyDetail
+	if err := g.http.GetJSON(ctx, fmt.Sprintf("%s/%d", gupyDetailURL, id), &d); err == nil {
+		if assembled := gupySections(d); assembled != "" {
+			return sanitizeHTML(assembled)
+		}
+	}
+	return sanitizeHTML(flat)
+}
+
+// gupySections concatenates the detail's section fragments in display order, skipping any
+// that carry no real text (Gupy commonly emits a "<p>.</p>" placeholder intro). It returns
+// "" when every section is empty, signalling the caller to fall back to the flat listing.
+func gupySections(d gupyDetail) string {
+	var b strings.Builder
+	for _, section := range []string{d.Description, d.Responsibilities, d.Prerequisites, d.RelevantExperiences} {
+		if gupyHasText(section) {
+			b.WriteString(section)
+		}
+	}
+	return b.String()
+}
+
+// gupyTextPolicy strips all markup, leaving only text — used to tell a real section from a
+// placeholder like "<p>.</p>" or "<p>&nbsp;</p>". Compiled once, safe for concurrent use.
+var gupyTextPolicy = bluemonday.StrictPolicy()
+
+// gupyHasText reports whether an HTML fragment contains any letter or digit once tags and
+// entities are stripped, so whitespace/punctuation-only sections are treated as empty.
+func gupyHasText(fragment string) bool {
+	for _, r := range html.UnescapeString(gupyTextPolicy.Sanitize(fragment)) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return true
+		}
+	}
+	return false
 }

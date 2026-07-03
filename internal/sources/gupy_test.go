@@ -110,6 +110,72 @@ func TestGupyFetchMapsFieldsAndPaginates(t *testing.T) {
 
 // itoa is provided by ozon_test.go in this package.
 
+func TestGupyFetchAssemblesRichDescription(t *testing.T) {
+	// The portal listing flattens a posting's sections into one tag-less blob; the richer
+	// public detail endpoint returns them as separate HTML fields. Fetch must pull the
+	// detail and assemble the sections into structured HTML, not serve the flat listing text.
+	fake := (&routedHTTP{}).
+		route("offset=0", `{"data":[
+			{"id":500,"name":"Backend Engineer","jobUrl":"https://acme.gupy.io/job/500",
+			 "description":"Do stuff;Ship it;Be a Go expert","workplaceType":"remote"}
+		]}`).
+		route("job-publication/public/jobs/500", `{
+			"description":"<p>.</p>",
+			"responsibilities":"<p>O profissional:</p><ul><li>Ship it;</li></ul>",
+			"prerequisites":"<ul><li>Be a Go expert</li></ul>",
+			"relevantExperiences":"<p>Free lunch</p>"
+		}`)
+
+	jobs, err := NewGupy(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "gupy", Board: "42",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1", len(jobs))
+	}
+	desc := jobs[0].Description
+
+	// Structure from the detail is preserved: list markup survives sanitization.
+	if !strings.Contains(desc, "<li>") || !strings.Contains(desc, "<ul>") {
+		t.Errorf("Description dropped list structure, got %q", desc)
+	}
+	// Every section's body is present.
+	for _, want := range []string{"Ship it", "Go expert", "Free lunch"} {
+		if !strings.Contains(desc, want) {
+			t.Errorf("Description missing %q section body, got %q", want, desc)
+		}
+	}
+	// The empty "<p>.</p>" intro placeholder must not leak a stray leading dot.
+	if strings.HasPrefix(strings.TrimSpace(desc), ".") {
+		t.Errorf("Description leaked the placeholder intro, got %q", desc)
+	}
+}
+
+func TestGupyFetchFallsBackToFlatDescription(t *testing.T) {
+	// When the detail endpoint is unreachable (no route → GetJSON error), Fetch degrades to
+	// the listing's own description rather than dropping the body.
+	fake := (&routedHTTP{}).
+		route("offset=0", `{"data":[
+			{"id":600,"name":"Role","jobUrl":"https://acme.gupy.io/job/600",
+			 "description":"<p>flat body</p>","workplaceType":"remote"}
+		]}`)
+
+	jobs, err := NewGupy(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "gupy", Board: "42",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1", len(jobs))
+	}
+	if !strings.Contains(jobs[0].Description, "flat body") {
+		t.Errorf("Description = %q, want fallback to flat listing body", jobs[0].Description)
+	}
+}
+
 func TestGupyFetchStopsOnEmptyPage(t *testing.T) {
 	// A short first page ends the walk immediately — no offset=100 request is made.
 	fake := (&routedHTTP{}).
@@ -126,8 +192,10 @@ func TestGupyFetchStopsOnEmptyPage(t *testing.T) {
 	if len(jobs) != 1 {
 		t.Fatalf("len(jobs) = %d, want 1 from the single short page", len(jobs))
 	}
-	if fake.calls != 1 {
-		t.Errorf("made %d HTTP calls, want 1 (short page must stop the walk)", fake.calls)
+	// One listing call (the short page stops the walk — no offset=100 request) plus one
+	// per-posting detail call for the single posting.
+	if fake.calls != 2 {
+		t.Errorf("made %d HTTP calls, want 2 (one listing that stops the walk + one detail)", fake.calls)
 	}
 }
 
