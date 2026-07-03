@@ -570,6 +570,8 @@ var probers = map[string]prober{
 	"traffit":         traffitProber{},
 	"isolvedhire":     isolvedProber{host: "isolvedhire.com"},
 	"applicantpro":    isolvedProber{host: "applicantpro.com"},
+	"apploi":          apploiProber{},
+	"paylocity":       paylocityProber{},
 }
 
 // isolvedSitemapJobID captures the numeric posting id from a /jobs/<id> URL in an iSolved
@@ -591,4 +593,42 @@ func (p isolvedProber) probe(ctx context.Context, c httpClient, slug string) (st
 		ids[m[1]] = struct{}{}
 	}
 	return "", len(ids), nil
+}
+
+// apploiProber probes an apploi employer board (slug = numeric employer id) via the public
+// api.apploi.com/v1/jobs?employer=<id> list; a non-zero count of live (published, non-archived)
+// postings means a live board. The employer name comes from the seed.
+type apploiProber struct{}
+
+func (apploiProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
+	var resp struct {
+		Data []struct {
+			Published bool `json:"published"`
+			Archived  bool `json:"archived"`
+		} `json:"data"`
+	}
+	if err := c.GetJSON(ctx, fmt.Sprintf("https://api.apploi.com/v1/jobs?employer=%s&limit=100", slug), &resp); err != nil {
+		return "", 0, nil
+	}
+	live := 0
+	for _, j := range resp.Data {
+		if j.Published && !j.Archived {
+			live++
+		}
+	}
+	return "", live, nil
+}
+
+// paylocityProber probes a recruiting.paylocity.com company board (slug = company GUID). The
+// listing page embeds the openings in window.pageData's Jobs[] array; counting the JobId keys
+// is enough to tell a live board (>=1 job) from an empty/dead one without a full parse. The
+// employer name comes from the seed (the listing exposes none the prober bothers to read).
+type paylocityProber struct{}
+
+func (paylocityProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
+	body, err := c.GetText(ctx, fmt.Sprintf("https://recruiting.paylocity.com/Recruiting/Jobs/All/%s", slug))
+	if err != nil {
+		return "", 0, nil
+	}
+	return "", strings.Count(body, `"JobId":`), nil
 }
