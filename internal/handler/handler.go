@@ -10,12 +10,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/accounts"
+	"github.com/strelov1/freehire/internal/atscheck"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/auth/oauth"
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/jobtracking"
+	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/moderation"
 	"github.com/strelov1/freehire/internal/report"
 	"github.com/strelov1/freehire/internal/resume"
@@ -82,6 +84,11 @@ type API struct {
 	// text for the verdict). Its blob store is nil when S3 is unconfigured; Enabled()
 	// then reports false and callers degrade to per-request résumé upload.
 	resume *resume.Store
+	// atsAnalyzer runs the optional LLM qualitative review for the CV ATS report.
+	// Its client is nil when the LLM is unconfigured; Analyze then degrades to a no-op.
+	atsAnalyzer *atscheck.Analyzer
+	// atsCache reads/writes the per-user cached CV ATS review (backed by *db.Queries).
+	atsCache atsReviewStore
 	// Telegram notification wiring. All nil/empty when the bot is unconfigured —
 	// the linking endpoints then report the feature off and the webhook is inert.
 	// telegramLinks mints/verifies the deep-link token; telegramBot replies to the
@@ -132,6 +139,9 @@ type Config struct {
 	// Blob backs résumé storage (internal/blobstore). Nil disables storage: résumé
 	// upload only extracts skills in-request (no regression).
 	Blob blobstore.Store
+	// LLM backs the optional CV ATS qualitative review. Nil disables the AI layer:
+	// the ATS score stays deterministic (the report just omits content-quality).
+	LLM *llm.Client
 	// Telegram bot for notification linking/delivery confirmations. Optional: an
 	// empty TelegramBotToken disables the feature (linking endpoints report off,
 	// webhook inert). TelegramBotUsername builds the deep link; TelegramWebhookSecret
@@ -172,6 +182,10 @@ func Register(app *fiber.App, cfg Config) {
 	// Résumé storage is nil-safe: a nil Blob (S3 unconfigured) yields a disabled service
 	// whose Enabled() is false, so the upload/verdict paths degrade to in-request parsing.
 	a.resume = resume.New(cfg.Blob, resume.NewQueriesRepository(queries))
+	// Nil-safe: NewAnalyzer(nil) is a no-op analyzer, so the ATS report works whether
+	// or not the LLM is configured.
+	a.atsAnalyzer = atscheck.NewAnalyzer(cfg.LLM)
+	a.atsCache = queries
 	// Telegram notifications are enabled only with both a bot token and a JWT
 	// secret (the link token reuses it). Absent either, the linking endpoints
 	// report the feature off and the webhook is inert (see telegramEnabled).
@@ -293,6 +307,8 @@ func Register(app *fiber.App, cfg Config) {
 	// The CV ATS-readiness report is a sibling per-profile sub-resource: GET scores
 	// the caller's stored CV (structure + role keyword-match). Owner-scoped, cookie-only.
 	api.Get("/me/profiles/:id/ats-report", saved, a.GetATSReport)
+	// POST runs the optional LLM qualitative review over the stored CV and caches it.
+	api.Post("/me/profiles/:id/ats-report", saved, a.PostATSReport)
 
 	// Resume skill extraction is cookie-only (RequireAuth): it feeds the profile
 	// picker (extracted skills merge into a profile). When S3 storage is configured it

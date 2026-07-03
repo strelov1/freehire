@@ -8,6 +8,14 @@
   let { report }: { report: ATSReport } = $props();
 
   const checks = $derived(report.checks ?? []);
+  const findings = $derived(report.findings ?? []);
+
+  // Sub-scores: the AI content-quality bar appears only after an AI review has run.
+  const subScores = $derived([
+    { label: 'Readability', value: report.readability },
+    { label: 'Keyword match', value: report.keyword_match },
+    ...(report.content_quality != null ? [{ label: 'AI content', value: report.content_quality }] : []),
+  ]);
 
   function tone(score: number): string {
     if (score >= 75) return 'text-primary';
@@ -34,7 +42,7 @@
       <p class="text-sm font-medium">Overall ATS score</p>
     </div>
     <div class="grid gap-3">
-      {#each [{ label: 'Readability', value: report.readability }, { label: 'Keyword match', value: report.keyword_match }] as s (s.label)}
+      {#each subScores as s (s.label)}
         <div class="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
           <div class="flex items-baseline justify-between">
             <span class="text-3xl font-semibold tabular-nums leading-none">{s.value}%</span>
@@ -70,4 +78,19 @@
       </li>
     {/each}
   </ul>
+
+  <!-- AI findings (only after an AI review) -->
+  {#if findings.length > 0}
+    <div class="flex flex-col gap-2">
+      <h3 class="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">AI suggestions</h3>
+      <ul class="flex flex-col gap-1.5">
+        {#each findings as f, i (i)}
+          <li class="flex items-start gap-2 text-sm text-muted-foreground">
+            <span class="mt-1 size-1.5 shrink-0 rounded-full bg-primary"></span>
+            <span class="leading-relaxed">{f}</span>
+          </li>
+        {/each}
+      </ul>
+    </div>
+  {/if}
 </div>

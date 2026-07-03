@@ -45,7 +45,8 @@ type Querier interface {
 	// affected row count: 1 for an owned row (whether or not it was shared — unshare is an
 	// idempotent no-op when already private), 0 when missing or not the caller's (→ 404).
 	ClearSavedSearchPublicSlug(ctx context.Context, arg ClearSavedSearchPublicSlugParams) (int64, error)
-	// Clear the user's résumé pointer (after deleting the object from storage).
+	// Clear the user's résumé pointer (after deleting the object from storage) and any
+	// cached ATS review.
 	ClearUserResume(ctx context.Context, id int64) error
 	// Soft-close one job now (see job-lifecycle): a moderator resolving a report with
 	// close_job=true. The third writer of closed_at, alongside the ingest sweep and the
@@ -211,6 +212,9 @@ type Querier interface {
 	GetSubscriptionForDelivery(ctx context.Context, id int64) (GetSubscriptionForDeliveryRow, error)
 	// The caller's linked Telegram chat (link-status endpoint + delivery resolution).
 	GetTelegramLink(ctx context.Context, userID int64) (TelegramLink, error)
+	// The user's cached CV ATS qualitative review (content-quality + findings), or NULL
+	// when none has been computed. Derived only — never the raw CV text.
+	GetUserATSAnalysis(ctx context.Context, id int64) ([]byte, error)
 	// Login lookup. Case-insensitive on email; returns password_hash so the handler
 	// can verify the password (and reject accounts that have none). role feeds the
 	// post-login wire shape.
@@ -432,8 +436,11 @@ type Querier interface {
 	// Pause/resume a subscription, scoped to its owner. No matching owner-scoped row
 	// returns no row (the handler maps that to 404).
 	SetSubscriptionActive(ctx context.Context, arg SetSubscriptionActiveParams) (Subscription, error)
+	// Cache the derived CV ATS review for the user (keyed to their stored CV).
+	SetUserATSAnalysis(ctx context.Context, arg SetUserATSAnalysisParams) error
 	// Record (or replace) the user's stored-résumé pointer, stamping the upload time.
 	// Owner-scoped by id; the object key is derived from the id, never client input.
+	// Also clears any cached ATS review so a new CV is never scored with a stale one.
 	SetUserResume(ctx context.Context, arg SetUserResumeParams) error
 	// Rebuild the companies catalogue from jobs. The companies table is derivable
 	// from jobs (slug = company_slug, name = company), so after a slug-builder change

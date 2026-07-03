@@ -13,11 +13,12 @@ import (
 
 const clearUserResume = `-- name: ClearUserResume :exec
 UPDATE users
-SET resume_object_key = NULL, resume_uploaded_at = NULL
+SET resume_object_key = NULL, resume_uploaded_at = NULL, resume_ats_analysis = NULL
 WHERE id = $1
 `
 
-// Clear the user's résumé pointer (after deleting the object from storage).
+// Clear the user's résumé pointer (after deleting the object from storage) and any
+// cached ATS review.
 func (q *Queries) ClearUserResume(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, clearUserResume, id)
 	return err
@@ -54,6 +55,21 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const getUserATSAnalysis = `-- name: GetUserATSAnalysis :one
+SELECT resume_ats_analysis
+FROM users
+WHERE id = $1
+`
+
+// The user's cached CV ATS qualitative review (content-quality + findings), or NULL
+// when none has been computed. Derived only — never the raw CV text.
+func (q *Queries) GetUserATSAnalysis(ctx context.Context, id int64) ([]byte, error) {
+	row := q.db.QueryRow(ctx, getUserATSAnalysis, id)
+	var resume_ats_analysis []byte
+	err := row.Scan(&resume_ats_analysis)
+	return resume_ats_analysis, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
@@ -149,9 +165,26 @@ func (q *Queries) GetUserRole(ctx context.Context, id int64) (string, error) {
 	return role, err
 }
 
+const setUserATSAnalysis = `-- name: SetUserATSAnalysis :exec
+UPDATE users
+SET resume_ats_analysis = $2
+WHERE id = $1
+`
+
+type SetUserATSAnalysisParams struct {
+	ID                int64  `json:"id"`
+	ResumeAtsAnalysis []byte `json:"resume_ats_analysis"`
+}
+
+// Cache the derived CV ATS review for the user (keyed to their stored CV).
+func (q *Queries) SetUserATSAnalysis(ctx context.Context, arg SetUserATSAnalysisParams) error {
+	_, err := q.db.Exec(ctx, setUserATSAnalysis, arg.ID, arg.ResumeAtsAnalysis)
+	return err
+}
+
 const setUserResume = `-- name: SetUserResume :exec
 UPDATE users
-SET resume_object_key = $2, resume_uploaded_at = now()
+SET resume_object_key = $2, resume_uploaded_at = now(), resume_ats_analysis = NULL
 WHERE id = $1
 `
 
@@ -162,6 +195,7 @@ type SetUserResumeParams struct {
 
 // Record (or replace) the user's stored-résumé pointer, stamping the upload time.
 // Owner-scoped by id; the object key is derived from the id, never client input.
+// Also clears any cached ATS review so a new CV is never scored with a stale one.
 func (q *Queries) SetUserResume(ctx context.Context, arg SetUserResumeParams) error {
 	_, err := q.db.Exec(ctx, setUserResume, arg.ID, arg.ResumeObjectKey)
 	return err

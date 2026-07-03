@@ -38,6 +38,19 @@ type Settings struct {
 	MeiliURL string
 	MeiliKey string
 
+	// LLM backs the optional CV ATS qualitative review on the HTTP server (the enrich
+	// worker reads its own LLM settings via config.Enrich). Optional and provider-
+	// agnostic: any empty field disables the AI layer — the server builds no LLM client
+	// and the ATS score stays deterministic (enforced at the cmd/server call site, not
+	// here). Langfuse tracing is optional observability, wired only when all three set.
+	LLMBaseURL string
+	LLMAPIKey  string
+	LLMModel   string
+
+	LangfuseBaseURL   string
+	LangfusePublicKey string
+	LangfuseSecretKey string
+
 	// S3 backs résumé storage (internal/blobstore). Optional and provider-agnostic:
 	// any S3-compatible endpoint works, and no bucket/host/provider is baked into code —
 	// freehire-ops owns those. All four must be set to enable storage; any empty field
@@ -88,6 +101,14 @@ func Load() Settings {
 		OAuth:          loadOAuth(),
 		MeiliURL:       env("MEILI_URL", "http://localhost:7700"),
 		MeiliKey:       os.Getenv("MEILI_MASTER_KEY"),
+
+		LLMBaseURL: os.Getenv("LLM_BASE_URL"),
+		LLMAPIKey:  os.Getenv("LLM_API_KEY"),
+		LLMModel:   os.Getenv("LLM_MODEL"),
+
+		LangfuseBaseURL:   os.Getenv("LANGFUSE_BASE_URL"),
+		LangfusePublicKey: os.Getenv("LANGFUSE_PUBLIC_KEY"),
+		LangfuseSecretKey: os.Getenv("LANGFUSE_SECRET_KEY"),
 
 		S3Endpoint:  os.Getenv("S3_ENDPOINT"),
 		S3Bucket:    os.Getenv("S3_BUCKET"),

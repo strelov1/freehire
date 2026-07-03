@@ -17,6 +17,7 @@ import (
 	"github.com/strelov1/freehire/internal/config"
 	"github.com/strelov1/freehire/internal/database"
 	"github.com/strelov1/freehire/internal/handler"
+	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/observability"
 	"github.com/strelov1/freehire/internal/search"
 )
@@ -110,6 +111,25 @@ func main() {
 		log.Fatalf("blobstore: %v", err)
 	}
 
+	// The LLM is optional and built through the shared construction path
+	// (llm.NewClient): it powers the CV ATS qualitative review, wires Langfuse
+	// tracing (source "cv-ats") when LANGFUSE_* are set, and returns a flush func for
+	// shutdown. Nil client when unconfigured — the ATS score stays deterministic. A
+	// build error on a configured endpoint is fatal (a misconfigured gateway must not
+	// boot silently).
+	llmClient, llmFlush, err := llm.NewClient(llm.Settings{
+		BaseURL:           cfg.LLMBaseURL,
+		APIKey:            cfg.LLMAPIKey,
+		Model:             cfg.LLMModel,
+		LangfuseBaseURL:   cfg.LangfuseBaseURL,
+		LangfusePublicKey: cfg.LangfusePublicKey,
+		LangfuseSecretKey: cfg.LangfuseSecretKey,
+	}, "cv-ats")
+	if err != nil {
+		log.Fatalf("llm: %v", err)
+	}
+	defer llmFlush()
+
 	// OAuth sign-in is optional: only providers with full credentials are
 	// enabled; the registry may be empty and the server still serves password
 	// auth. Redirect URLs derive from the same-origin frontend origin.
@@ -124,6 +144,7 @@ func main() {
 		OAuthProviders: oauthProviders,
 		Search:         searchClient,
 		Blob:           blobStore,
+		LLM:            llmClient,
 
 		TelegramBotToken:      cfg.TelegramBotToken,
 		TelegramBotUsername:   cfg.TelegramBotUsername,

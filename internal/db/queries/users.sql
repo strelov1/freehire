@@ -31,14 +31,29 @@ WHERE id = $1;
 -- name: SetUserResume :exec
 -- Record (or replace) the user's stored-résumé pointer, stamping the upload time.
 -- Owner-scoped by id; the object key is derived from the id, never client input.
+-- Also clears any cached ATS review so a new CV is never scored with a stale one.
 UPDATE users
-SET resume_object_key = $2, resume_uploaded_at = now()
+SET resume_object_key = $2, resume_uploaded_at = now(), resume_ats_analysis = NULL
 WHERE id = $1;
 
 -- name: ClearUserResume :exec
--- Clear the user's résumé pointer (after deleting the object from storage).
+-- Clear the user's résumé pointer (after deleting the object from storage) and any
+-- cached ATS review.
 UPDATE users
-SET resume_object_key = NULL, resume_uploaded_at = NULL
+SET resume_object_key = NULL, resume_uploaded_at = NULL, resume_ats_analysis = NULL
+WHERE id = $1;
+
+-- name: GetUserATSAnalysis :one
+-- The user's cached CV ATS qualitative review (content-quality + findings), or NULL
+-- when none has been computed. Derived only — never the raw CV text.
+SELECT resume_ats_analysis
+FROM users
+WHERE id = $1;
+
+-- name: SetUserATSAnalysis :exec
+-- Cache the derived CV ATS review for the user (keyed to their stored CV).
+UPDATE users
+SET resume_ats_analysis = $2
 WHERE id = $1;
 
 -- name: GetUserRole :one

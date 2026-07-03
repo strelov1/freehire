@@ -559,6 +559,18 @@ export function createApi(
     return res.data;
   }
 
+  /** Run the optional LLM qualitative review over the caller's stored CV; returns the
+   *  ATS report with content-quality + findings folded in (cached server-side). With no
+   *  LLM configured this is just the deterministic report. */
+  async function runATSReview(id: number, params?: URLSearchParams): Promise<ATSResponse> {
+    const qs = params?.toString();
+    const res = await request<{ data: ATSResponse }>(
+      `/api/v1/me/profiles/${id}/ats-report${qs ? `?${qs}` : ''}`,
+      { method: 'POST' },
+    );
+    return res.data;
+  }
+
   /** The caller's notification subscriptions (one per saved search + channel). */
   async function listSubscriptions(): Promise<Subscription[]> {
     const res = await request<{ data: Subscription[] }>('/api/v1/me/subscriptions');
@@ -729,6 +741,7 @@ export function createApi(
     extractResumeSkills,
     getProfileVerdict,
     getATSReport,
+    runATSReview,
     listSubscriptions,
     createSubscription,
     setSubscriptionActive,
@@ -801,6 +814,7 @@ export const {
   extractResumeSkills,
   getProfileVerdict,
   getATSReport,
+  runATSReview,
   listSubscriptions,
   createSubscription,
   setSubscriptionActive,

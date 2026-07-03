@@ -1,8 +1,15 @@
 <script lang="ts">
-  import { ArrowUp, FileText, RefreshCw } from '@lucide/svelte';
+  import { ArrowUp, FileText, RefreshCw, Sparkles } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { ApiError, extractResumeSkills, facetCounts, getATSReport, getProfileVerdict } from '$lib/api';
+  import {
+    ApiError,
+    extractResumeSkills,
+    facetCounts,
+    getATSReport,
+    getProfileVerdict,
+    runATSReview,
+  } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { categoryLabel } from '$lib/facets';
@@ -34,6 +41,30 @@
   let cvError = $state<string | null>(null);
   let fileInput = $state<HTMLInputElement | null>(null);
   let dragActive = $state(false);
+
+  // AI review state.
+  let reviewBusy = $state(false);
+  let reviewUnavailable = $state(false);
+
+  // Run the optional LLM review over the stored CV; folds content-quality + findings
+  // into the report. When the server has no LLM the report comes back unchanged — flag
+  // that so the UI stops offering the button.
+  async function runReview() {
+    reviewBusy = true;
+    reviewUnavailable = false;
+    try {
+      const params = filters ? filtersToParams(filters.applied) : undefined;
+      const next = await runATSReview(id, params);
+      ats = next;
+      if (next.has_cv && next.report && next.report.content_quality == null) {
+        reviewUnavailable = true;
+      }
+    } catch {
+      reviewUnavailable = true;
+    } finally {
+      reviewBusy = false;
+    }
+  }
 
   // Build the filter store once the profile is known, seeding its role from the
   // profile's specializations when the URL carries no category — so the panel opens on
@@ -185,10 +216,26 @@
               {#if ats?.has_cv && ats.report}
                 <div class="flex flex-col gap-4">
                   <ATSReportView report={ats.report} />
-                  <Button variant="ghost" onclick={() => fileInput?.click()} disabled={cvBusy}>
-                    <RefreshCw class="size-4 {cvBusy ? 'animate-spin' : ''}" />
-                    {cvBusy ? 'Uploading…' : 'Replace CV'}
-                  </Button>
+                  <div class="flex flex-wrap items-center gap-2">
+                    {#if ats.report.content_quality == null && !reviewUnavailable}
+                      <Button variant="primary" onclick={runReview} disabled={reviewBusy}>
+                        <Sparkles class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
+                        {reviewBusy ? 'Reviewing…' : 'Run AI review'}
+                      </Button>
+                    {:else if ats.report.content_quality != null}
+                      <Button variant="ghost" onclick={runReview} disabled={reviewBusy}>
+                        <Sparkles class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
+                        {reviewBusy ? 'Reviewing…' : 'Re-run AI review'}
+                      </Button>
+                    {/if}
+                    <Button variant="ghost" onclick={() => fileInput?.click()} disabled={cvBusy}>
+                      <RefreshCw class="size-4 {cvBusy ? 'animate-spin' : ''}" />
+                      {cvBusy ? 'Uploading…' : 'Replace CV'}
+                    </Button>
+                  </div>
+                  {#if reviewUnavailable}
+                    <p class="text-xs text-muted-foreground">AI review is not available right now.</p>
+                  {/if}
                 </div>
               {:else}
                 <div class="flex flex-col gap-2">

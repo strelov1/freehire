@@ -26,18 +26,18 @@
 
 ## 5. Server LLM client (re-added, nil-safe)
 
-- [ ] 5.1 Re-add `config.Config` LLM/Langfuse fields + `config.Load`; re-add `cmd/server` `llm.NewClient` construction (nil-safe, gated on `LLM_*`) + Langfuse flush on shutdown; pass the client into `handler.Config`. Tests: config load; nil when unset.
+- [x] 5.1 Re-add `config.Config` LLM/Langfuse fields + `config.Load`; re-add `cmd/server` `llm.NewClient` construction (nil-safe, gated on `LLM_*`) + Langfuse flush on shutdown; pass the client into `handler.Config`. Tests: config load; nil when unset.
 
 ## 6. LLM analyzer + cache
 
-- [ ] 6.1 RED+GREEN: `atscheck.Analyzer` (mirrors old `coherence.go`) — `Analyze(ctx, cvText) → *Review{ContentQuality, Findings[]}` via `llm.Client` (nil ⇒ (nil,nil)); `GenerateJSON` + Sanitize (clamp 0-100, bound strings). Unit tests with a fake model.
-- [ ] 6.2 Migration `migrations/00NN_users_resume_ats_analysis.sql` — `ALTER TABLE users ADD COLUMN resume_ats_analysis JSONB;` (manual-apply BEFORE the Phase-2 binary; `SELECT *` users query). Add queries to set/clear/read it; `make sqlc`. Invalidate (clear) in `resume.Put`/`Delete`.
-- [ ] 6.3 GREEN: `POST /me/profiles/:id/ats-report` — read stored CV, `Analyze`, cache to `users.resume_ats_analysis`, return merged report (best-effort: LLM error ⇒ 200 deterministic). `GET` merges the cached review + folds `content_quality` into `Overall`.
+- [x] 6.1 RED+GREEN: `atscheck.Analyzer` (mirrors old `coherence.go`) — `Analyze(ctx, cvText) → *Review{ContentQuality, Findings[]}` via `llm.Client` (nil ⇒ (nil,nil)); `GenerateJSON` + Sanitize (clamp 0-100, bound strings). Unit tests with a fake model.
+- [x] 6.2 Migration `migrations/00NN_users_resume_ats_analysis.sql` — `ALTER TABLE users ADD COLUMN resume_ats_analysis JSONB;` (manual-apply BEFORE the Phase-2 binary; `SELECT *` users query). Add queries to set/clear/read it; `make sqlc`. Invalidate (clear) in `resume.Put`/`Delete`.
+- [x] 6.3 GREEN: `POST /me/profiles/:id/ats-report` — read stored CV, `Analyze`, cache to `users.resume_ats_analysis`, return merged report (best-effort: LLM error ⇒ 200 deterministic). `GET` merges the cached review + folds `content_quality` into `Overall`.
 
 ## 7. Frontend (AI review)
 
-- [ ] 7.1 Web: "Run AI review" button (POST) when LLM is enabled; render content-quality + findings/fixes; hide cleanly when no LLM. Update contracts/types.
+- [x] 7.1 Web: "Run AI review" button (POST) when LLM is enabled; render content-quality + findings/fixes; hide cleanly when no LLM. Update contracts/types.
 
 ## 8. Verify + ops
 
-- [ ] 8.1 `go build ./... && go vet ./... && go test ./...`; `svelte-check`; validate the LLM path with a fake + (locally) a real CV. Ops: apply the `users` migration before deploy; ensure `LLM_*` present in the app env to enable the AI layer (else deterministic-only). No reindex.
+- [x] 8.1 `go build ./... && go vet ./... && go test ./...`; `svelte-check`; validate the LLM path with a fake + (locally) a real CV. Ops: apply the `users` migration before deploy; ensure `LLM_*` present in the app env to enable the AI layer (else deterministic-only). No reindex.

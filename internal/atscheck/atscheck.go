@@ -42,6 +42,34 @@ type Report struct {
 	Readability  int     `json:"readability"`   // 0-100 structural pass-rate
 	KeywordMatch int     `json:"keyword_match"` // 0-100 role skills present in the CV text
 	Checks       []Check `json:"checks"`
+	// ContentQuality/Findings are set only when the optional LLM review ran (see
+	// ApplyReview); nil/empty renders no AI section.
+	ContentQuality *int     `json:"content_quality,omitempty"`
+	Findings       []string `json:"findings,omitempty"`
+}
+
+// Three-way Overall weights when the LLM content-quality is present (sum to 1).
+const (
+	weightReadabilityQ = 0.45
+	weightKeywordQ     = 0.30
+	weightQualityQ     = 0.25
+)
+
+// ApplyReview folds an optional LLM review into the report: it attaches the
+// content-quality + findings and re-blends Overall to include content-quality. A
+// nil review leaves the deterministic report untouched.
+func (r *Report) ApplyReview(rv *Review) {
+	if rv == nil {
+		return
+	}
+	cq := rv.ContentQuality
+	r.ContentQuality = &cq
+	r.Findings = rv.Findings
+	r.Overall = clamp(int(math.Round(
+		weightReadabilityQ*float64(r.Readability) +
+			weightKeywordQ*float64(r.KeywordMatch) +
+			weightQualityQ*float64(cq),
+	)))
 }
 
 // Tunable scoring constants (calibrate against real CVs).
