@@ -2,9 +2,14 @@
 // Timestamps marshal as RFC3339 strings when present, or null.
 
 import type { Job, Report as ATSReportContract } from './generated/contracts';
-export type { Job, Enrichment, Verdict, Gap } from './generated/contracts';
-// atscheck's Report/Check are aliased (a local Report — job reports — already exists).
-export type { Report as ATSReport, Check as ATSCheck } from './generated/contracts';
+export type { Job, Enrichment, Verdict, Gap, SkillRow } from './generated/contracts';
+// atscheck's Report is aliased ATSReport (a local Report — job reports — already exists);
+// its category/line-item shapes come along for the report view.
+export type {
+  Report as ATSReport,
+  ScoreCategory as ATSCategory,
+  LineItem as ATSLineItem,
+} from './generated/contracts';
 
 /** The CV ATS report response: `has_cv` is false when the caller has no stored CV
  *  (the page prompts an upload); `report` is present only when `has_cv` is true. */

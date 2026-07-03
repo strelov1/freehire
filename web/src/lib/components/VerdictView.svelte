@@ -4,9 +4,10 @@
   import { Badge } from '$lib/ui';
 
   // The verdict is the backend's market-coverage computation for the selected role:
-  // how many of the role's open vacancies the profile's skills reach, and which missing
-  // skill unlocks the most new vacancies. `gapHref`, when given, links a gap skill to
-  // the matching job search. The page owns the header/tabs; this renders the body.
+  // how many of the role's open vacancies the profile's skills reach, which missing
+  // skill unlocks the most new vacancies, and a breakdown of the role's top in-demand
+  // skills scored against the CV. `gapHref`, when given, links a gap skill to the
+  // matching job search. The page owns the header/tabs; this renders the body.
   let {
     verdict,
     gapHref,
@@ -16,7 +17,15 @@
   } = $props();
 
   const gaps = $derived(verdict.gaps ?? []);
+  const skills = $derived(verdict.skills ?? []);
   const uncovered = $derived(Math.max(verdict.total - verdict.covered, 0));
+
+  // Status → badge styling (STRONG green / HIDDEN amber / MISSING red).
+  const statusStyle: Record<string, string> = {
+    strong: 'bg-primary/10 text-primary',
+    hidden: 'bg-amber-500/10 text-amber-600 dark:text-amber-500',
+    missing: 'bg-destructive/10 text-destructive',
+  };
 </script>
 
 <div class="flex flex-col gap-8">
@@ -40,6 +49,24 @@
       Vacancies for this role that mention at least one of your skills. Add the skills below to
       reach more.
     </p>
+  </div>
+
+  <!-- Market-anchored stats -->
+  <div class="grid gap-3 sm:grid-cols-3">
+    <div class="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">
+      <span class="text-3xl font-semibold tabular-nums leading-none">
+        {verdict.must_have_covered}<span class="text-lg text-muted-foreground">/{verdict.must_have_total}</span>
+      </span>
+      <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Must-have skills covered</span>
+    </div>
+    <div class="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">
+      <span class="text-3xl font-semibold tabular-nums leading-none">{verdict.stack_match_percent}%</span>
+      <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Stack match</span>
+    </div>
+    <div class="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">
+      <span class="text-3xl font-semibold tabular-nums leading-none">{verdict.coherence_percent}%</span>
+      <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Coherence</span>
+    </div>
   </div>
 
   <!-- Biggest wins -->
@@ -78,6 +105,47 @@
     <div class="flex items-center gap-2 rounded-lg border border-border bg-card/50 p-4 text-sm text-muted-foreground">
       <Check class="size-4 text-primary" />
       No in-demand skills left to add for this role — your stack already reaches its open vacancies.
+    </div>
+  {/if}
+
+  <!-- Top market skills breakdown -->
+  {#if skills.length > 0}
+    <div class="flex flex-col gap-3">
+      <h2 class="text-base font-semibold tracking-tight">Top market skills for this role</h2>
+      <ul class="flex flex-col gap-2">
+        {#each skills as skill, i (skill.name)}
+          <li class="flex flex-col gap-1.5 rounded-lg border border-border bg-card p-3 sm:p-4">
+            <div class="flex items-center gap-3">
+              <span class="w-6 shrink-0 text-sm tabular-nums text-muted-foreground">{i + 1}</span>
+              <div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                {#if gapHref && skill.status !== 'strong'}
+                  <a href={gapHref(skill.name)} class="truncate text-sm font-medium hover:underline">{skill.name}</a>
+                {:else}
+                  <span class="truncate text-sm font-medium">{skill.name}</span>
+                {/if}
+                {#if skill.must_have}
+                  <span
+                    class="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                  >
+                    Must-have
+                  </span>
+                {/if}
+                <span class="text-xs text-muted-foreground">{skill.market_frequency}% of roles</span>
+              </div>
+              <span
+                class="shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide {statusStyle[
+                  skill.status
+                ]}"
+              >
+                {skill.status}
+              </span>
+            </div>
+            {#if skill.advice}
+              <p class="pl-9 text-xs leading-relaxed text-muted-foreground">{skill.advice}</p>
+            {/if}
+          </li>
+        {/each}
+      </ul>
     </div>
   {/if}
 </div>

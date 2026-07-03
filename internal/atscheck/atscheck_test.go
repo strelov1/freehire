@@ -36,7 +36,7 @@ Go, Kafka, PostgreSQL, Docker, Kubernetes, AWS, Terraform, Redis, gRPC, Python`
 
 var cleanSkills = []string{"go", "kafka", "postgresql", "docker", "kubernetes"}
 
-func catByID(t *testing.T, r Report, id string) Category {
+func catByID(t *testing.T, r Report, id string) ScoreCategory {
 	t.Helper()
 	for _, c := range r.Categories {
 		if c.ID == id {
@@ -44,7 +44,7 @@ func catByID(t *testing.T, r Report, id string) Category {
 		}
 	}
 	t.Fatalf("no category %q in %+v", id, r.Categories)
-	return Category{}
+	return ScoreCategory{}
 }
 
 func sumScores(r Report) int {

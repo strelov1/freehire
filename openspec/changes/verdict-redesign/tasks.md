@@ -20,12 +20,12 @@
 
 ## 4. Contracts + frontend
 
-- [ ] 4.1 Regenerate TS contracts via `cmd/gen-contracts`; update `web/src/lib/types.ts` re-exports if needed
-- [ ] 4.2 Rewrite `VerdictView.svelte`: coverage headline + must-have/stack/coherence stat row + top-20 breakdown with status badges (green/amber/red) and advice
-- [ ] 4.3 Rewrite `ATSReportView.svelte`: 5 category cards with per-item attribution, strong-keyword list, recommended-keyword chips, overall + potential, numbered suggestions
-- [ ] 4.4 Reconcile `verdict/+page.svelte` glue (review button state, no-CV state) with the new shapes; verify via `svelte-check`
+- [x] 4.1 Regenerate TS contracts via `cmd/gen-contracts`; update `web/src/lib/types.ts` re-exports if needed
+- [x] 4.2 Rewrite `VerdictView.svelte`: coverage headline + must-have/stack/coherence stat row + top-20 breakdown with status badges (green/amber/red) and advice
+- [x] 4.3 Rewrite `ATSReportView.svelte`: 5 category cards with per-item attribution, strong-keyword list, recommended-keyword chips, overall + potential, numbered suggestions
+- [x] 4.4 Reconcile `verdict/+page.svelte` glue (review button state, no-CV state) with the new shapes; verify via `svelte-check`
 
 ## 5. Verify
 
-- [ ] 5.1 `go build ./... && go vet ./... && go test ./...` green
-- [ ] 5.2 Manual/visual check of both tabs with and without an LLM configured
+- [x] 5.1 `go build ./... && go vet ./... && go test ./...` green
+- [ ] 5.2 Manual/visual check of both tabs with and without an LLM configured (needs the running stack: DB + Meili + LLM — not run in the worktree; covered indirectly by handler tests + `svelte-check` + `vite build`)

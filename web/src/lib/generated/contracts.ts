@@ -138,9 +138,46 @@ export interface Job {
 
 /**
  * MaxGaps caps how many gap skills the verdict carries — the biggest wins, not an
- * exhaustive list.
+ * exhaustive list. TopSkills caps the role-skill breakdown at the most in-demand.
  */
 export const MaxGaps = 20;
+/**
+ * MaxGaps caps how many gap skills the verdict carries — the biggest wins, not an
+ * exhaustive list. TopSkills caps the role-skill breakdown at the most in-demand.
+ */
+export const TopSkills = 20;
+/**
+ * MustHavePct is the vacancy-frequency threshold (percent of the role's open
+ * vacancies) at or above which a skill is flagged must-have. Tunable — calibrate
+ * against real role distributions.
+ */
+export const MustHavePct = 50;
+/**
+ * Skill statuses relative to the CV's parsed skill sets.
+ */
+export const StatusStrong = "strong"; // declared in the CV's Skills section
+/**
+ * Skill statuses relative to the CV's parsed skill sets.
+ */
+export const StatusHidden = "hidden"; // used in the body but not declared
+/**
+ * Skill statuses relative to the CV's parsed skill sets.
+ */
+export const StatusMissing = "missing"; // absent from the CV
+/**
+ * Input carries everything Compute needs, all derived from real data: the role's
+ * open-vacancy total, the uncovered set (total + per-skill distribution), the full
+ * role skill distribution (skill slug → vacancies listing it), and the CV's parsed
+ * declared/body skill sets.
+ */
+export interface Input {
+  Total: number /* int64 */;
+  UncoveredTotal: number /* int64 */;
+  UncoveredSkills: { [key: string]: number /* int64 */};
+  RoleSkills: { [key: string]: number /* int64 */};
+  Declared: string[];
+  Body: string[];
+}
 /**
  * Verdict is the coverage result. JSON is the wire contract shared with the
  * frontend (generated to TS via cmd/gen-contracts).
@@ -150,6 +187,14 @@ export interface Verdict {
   covered: number /* int64 */; // vacancies listing ≥1 of the candidate's skills
   coverage_percent: number /* int */; // round(covered / total × 100)
   gaps: Gap[]; // missing skills, biggest win first
+  /**
+   * Market-anchored role-skill breakdown (all deterministic).
+   */
+  skills: SkillRow[];
+  must_have_total: number /* int */;
+  must_have_covered: number /* int */;
+  stack_match_percent: number /* int */;
+  coherence_percent: number /* int */;
 }
 /**
  * Gap is one missing in-demand skill and the new vacancies it would unlock.
@@ -158,6 +203,16 @@ export interface Gap {
   name: string;
   new_vacancies: number /* int64 */; // uncovered vacancies listing this skill
   unlock_percent: number /* int */; // round(new_vacancies / total × 100)
+}
+/**
+ * SkillRow is one of the role's top in-demand skills scored against the CV.
+ */
+export interface SkillRow {
+  name: string;
+  market_frequency: number /* int */; // round(vacancies listing it / total × 100)
+  must_have: boolean;
+  status: string; // strong | hidden | missing
+  advice: string; // empty for strong
 }
 
 /**
@@ -168,29 +223,44 @@ export const StatusPass: Status = "pass";
 export const StatusWarn: Status = "warn";
 export const StatusFail: Status = "fail";
 /**
- * Check is one line of the readiness checklist.
+ * LineItem is one attributed reason inside a category: awarded points when it
+ * passed, recoverable points when it did not.
  */
-export interface Check {
-  id: string;
+export interface LineItem {
+  points: number /* int */;
+  text: string;
   status: Status;
+}
+/**
+ * ScoreCategory is one weighted scoring dimension.
+ */
+export interface ScoreCategory {
+  id: string;
   label: string;
-  fix?: string;
+  score: number /* int */; // Max − recoverable points
+  max: number /* int */;
+  items: LineItem[];
 }
 /**
  * Report is the full ATS-readiness result. JSON is the wire contract shared with
- * the frontend (an optional LLM layer sets content-quality on top; see analyzer.go).
+ * the frontend (an optional LLM layer refines Content Quality; see analyzer.go).
  */
 export interface Report {
-  overall: number /* int */; // 0-100 blended
-  readability: number /* int */; // 0-100 structural pass-rate
-  keyword_match: number /* int */; // 0-100 role skills present in the CV text
-  checks: Check[];
+  overall: number /* int */; // sum of category scores, 0-100
+  potential: number /* int */; // overall + recoverable points, capped 100
+  categories: ScoreCategory[];
+  strong_keywords: string[];
+  recommended_keywords: string[];
   /**
-   * ContentQuality/Findings are set only when the optional LLM review ran (see
-   * ApplyReview); nil/empty renders no AI section.
+   * Reviewed is true once an LLM review has been folded in (see ApplyReview) — the
+   * SPA reads it to switch the "Run" button to "Re-run".
    */
-  content_quality?: number /* int */;
-  findings?: string[];
+  reviewed: boolean;
+  /**
+   * Suggestions is set only when the optional LLM review ran (see ApplyReview);
+   * empty renders no suggestions section.
+   */
+  suggestions?: string[];
 }
 
 export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'breezy', 'careerplug', 'careerspage', 'clinch', 'comeet', 'cornerstone', 'deel', 'eightfold', 'epam', 'erecruiter', 'factorial', 'freshteam', 'gem', 'getmatch', 'getonbrd', 'globalpayments', 'greenhouse', 'gupy', 'habr_career', 'himalayas', 'hireology', 'huntflow', 'icims', 'inhire', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobicy', 'jobstash', 'jobtech', 'join', 'justjoin', 'lever', 'luxoft', 'mycareersfuture', 'oracle', 'paycom', 'paylocity', 'personio', 'phenom', 'pinpoint', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'solides', 'successfactors', 'taleo', 'teamtailor', 'tecla', 'thehub', 'traffit', 'trakstar', 'ukg', 'vention', 'vouch', 'wantedkr', 'weworkremotely', 'workable', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;

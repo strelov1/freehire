@@ -58,8 +58,8 @@ type LineItem struct {
 	Status Status `json:"status"`
 }
 
-// Category is one weighted scoring dimension.
-type Category struct {
+// ScoreCategory is one weighted scoring dimension.
+type ScoreCategory struct {
 	ID    string     `json:"id"`
 	Label string     `json:"label"`
 	Score int        `json:"score"` // Max − recoverable points
@@ -70,11 +70,14 @@ type Category struct {
 // Report is the full ATS-readiness result. JSON is the wire contract shared with
 // the frontend (an optional LLM layer refines Content Quality; see analyzer.go).
 type Report struct {
-	Overall             int        `json:"overall"`   // sum of category scores, 0-100
-	Potential           int        `json:"potential"` // overall + recoverable points, capped 100
-	Categories          []Category `json:"categories"`
-	StrongKeywords      []string   `json:"strong_keywords"`
-	RecommendedKeywords []string   `json:"recommended_keywords"`
+	Overall             int             `json:"overall"`   // sum of category scores, 0-100
+	Potential           int             `json:"potential"` // overall + recoverable points, capped 100
+	Categories          []ScoreCategory `json:"categories"`
+	StrongKeywords      []string        `json:"strong_keywords"`
+	RecommendedKeywords []string        `json:"recommended_keywords"`
+	// Reviewed is true once an LLM review has been folded in (see ApplyReview) — the
+	// SPA reads it to switch the "Run" button to "Re-run".
+	Reviewed bool `json:"reviewed"`
 	// Suggestions is set only when the optional LLM review ran (see ApplyReview);
 	// empty renders no suggestions section.
 	Suggestions []string `json:"suggestions,omitempty"`
@@ -123,7 +126,7 @@ func Score(cvText string, cvSkills, roleTopSkills []string) Report {
 
 	keyword, strong, recommended := keywordCategory(cvSkills, roleTopSkills)
 	r := Report{
-		Categories: []Category{
+		Categories: []ScoreCategory{
 			keyword,
 			formatCategory(cvText, words),
 			sectionsCategory(lower),
@@ -161,8 +164,8 @@ func (r *Report) recompute() {
 
 // keywordCategory scores how many of the role's top skills appear in the CV's
 // parsed skills, and splits them into strong (present) and recommended (missing).
-func keywordCategory(cvSkills, roleTopSkills []string) (Category, []string, []string) {
-	c := Category{ID: categoryKeyword, Label: "Keyword Strength"}
+func keywordCategory(cvSkills, roleTopSkills []string) (ScoreCategory, []string, []string) {
+	c := ScoreCategory{ID: categoryKeyword, Label: "Keyword Strength"}
 	if len(roleTopSkills) == 0 {
 		c.Items = []LineItem{{Points: keywordMax, Text: "Select a target role to score keyword match", Status: StatusWarn}}
 		return c, nil, nil
@@ -194,8 +197,8 @@ func keywordCategory(cvSkills, roleTopSkills []string) (Category, []string, []st
 	return c, strong, topN(missing, keywordRecommendMax)
 }
 
-func formatCategory(cv string, words int) Category {
-	return Category{ID: categoryFormat, Label: "Format Compliance", Items: []LineItem{
+func formatCategory(cv string, words int) ScoreCategory {
+	return ScoreCategory{ID: categoryFormat, Label: "Format Compliance", Items: []LineItem{
 		item(words >= minReadableWords, 8, "Text is machine-readable",
 			"Export a text-based PDF (not a scan or image) so an ATS can read it", StatusFail),
 		item(emailRE.MatchString(cv) && phoneRE.MatchString(cv), 6, "Contact info present (email and phone)",
@@ -207,8 +210,8 @@ func formatCategory(cv string, words int) Category {
 	}}
 }
 
-func sectionsCategory(lower string) Category {
-	return Category{ID: categorySections, Label: "Section Completeness", Items: []LineItem{
+func sectionsCategory(lower string) ScoreCategory {
+	return ScoreCategory{ID: categorySections, Label: "Section Completeness", Items: []LineItem{
 		item(hasAny(lower, sectionKeywords["experience"]), 5, "Experience section",
 			"Add a clearly labelled Experience section", StatusWarn),
 		item(hasAny(lower, sectionKeywords["skills"]), 4, "Skills section",
@@ -222,8 +225,8 @@ func sectionsCategory(lower string) Category {
 
 // contentCategory is the deterministic Content Quality proxy used when no LLM review
 // is present (see ApplyReview for the LLM path).
-func contentCategory(cv string) Category {
-	return Category{ID: categoryContent, Label: "Content Quality", Items: []LineItem{
+func contentCategory(cv string) ScoreCategory {
+	return ScoreCategory{ID: categoryContent, Label: "Content Quality", Items: []LineItem{
 		item(actionVerbLines(cv) >= minActionVerbs, 8, "Bullets lead with strong action verbs",
 			"Start bullets with strong action verbs (Built, Led, Shipped…)", StatusWarn),
 		item(len(quantRE.FindAllString(cv, -1)) >= minQuantified, 7, "Quantified, measurable results",
@@ -231,8 +234,8 @@ func contentCategory(cv string) Category {
 	}}
 }
 
-func lengthCategory(words int, cvSkills []string) Category {
-	return Category{ID: categoryLength, Label: "Length & Density", Items: []LineItem{
+func lengthCategory(words int, cvSkills []string) ScoreCategory {
+	return ScoreCategory{ID: categoryLength, Label: "Length & Density", Items: []LineItem{
 		item(words >= lengthMin && words <= lengthMax, 5, "Reasonable length",
 			lengthFix(words), StatusWarn),
 		item(len(set(cvSkills...)) >= minDensitySkills, 5, "Good keyword density",
@@ -258,6 +261,7 @@ func (r *Report) ApplyReview(rv *Review) {
 		}
 		r.Categories[i].Items = items
 	}
+	r.Reviewed = true
 	r.Suggestions = rv.Suggestions
 	r.recompute()
 }

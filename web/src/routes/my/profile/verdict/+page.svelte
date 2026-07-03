@@ -40,8 +40,8 @@
   let reviewBusy = $state(false);
   let reviewUnavailable = $state(false);
 
-  // Run the optional LLM review over the stored CV; folds content-quality + findings
-  // into the report. When the server has no LLM the report comes back unchanged — flag
+  // Run the optional LLM review over the stored CV; folds content-quality + suggestions
+  // into the report. When the server has no LLM the report comes back unreviewed — flag
   // that so the UI stops offering the button.
   async function runReview() {
     reviewBusy = true;
@@ -50,7 +50,7 @@
       const params = filters ? filtersToParams(filters.applied) : undefined;
       const next = await runATSReview(params);
       ats = next;
-      if (next.has_cv && next.report && next.report.content_quality == null) {
+      if (next.has_cv && next.report && !next.report.reviewed) {
         reviewUnavailable = true;
       }
     } catch {
@@ -220,12 +220,12 @@
           <div class="flex flex-col gap-5">
             <div class="flex flex-wrap items-center justify-between gap-3">
               <p class="text-sm text-muted-foreground">How ATS-ready your CV is for this role.</p>
-              {#if ats.report.content_quality == null && !reviewUnavailable}
+              {#if !ats.report.reviewed && !reviewUnavailable}
                 <Button variant="primary" onclick={runReview} disabled={reviewBusy}>
                   <Sparkles class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
                   {reviewBusy ? 'Reviewing…' : 'Run AI review'}
                 </Button>
-              {:else if ats.report.content_quality != null}
+              {:else if ats.report.reviewed}
                 <Button variant="ghost" onclick={runReview} disabled={reviewBusy}>
                   <Sparkles class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
                   {reviewBusy ? 'Reviewing…' : 'Re-run AI review'}
