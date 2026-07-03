@@ -18,11 +18,11 @@
 
 ## 4. Contracts + frontend
 
-- [ ] 4.1 Regenerate TS contracts (`Bundle`; status vocab additive)
-- [ ] 4.2 `VerdictView.svelte`: `adjacent` badge colour + advice; compact "Skill bundles" section (covered vs partial)
-- [ ] 4.3 `svelte-check` clean + `vite build` green
+- [x] 4.1 Regenerate TS contracts (`Bundle`; status vocab additive)
+- [x] 4.2 `VerdictView.svelte`: `adjacent` badge colour + advice; compact "Skill bundles" section (covered vs partial)
+- [x] 4.3 `svelte-check` clean + `vite build` green
 
 ## 5. Verify
 
-- [ ] 5.1 `go build ./... && go vet ./... && go test ./...` green
-- [ ] 5.2 Calibrate bundle/adjacency seeds against the real CV (throwaway harness); confirm sane output
+- [x] 5.1 `go build ./... && go vet ./... && go test ./...` green
+- [x] 5.2 Calibrate bundle/adjacency seeds against the real CV (throwaway harness); confirm sane output
