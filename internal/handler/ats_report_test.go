@@ -62,12 +62,12 @@ func atsAppWith(t *testing.T, repo *fakeProfileRepo, fc facetCounter, store *res
 		t.Fatalf("issue token: %v", err)
 	}
 	h := &API{
-		issuer:        iss,
+		issuer:      iss,
 		userProfile: userprofile.New(repo),
-		facets:        fc,
-		resume:        store,
-		atsAnalyzer:   analyzer,
-		atsCache:      cache,
+		facets:      fc,
+		resume:      store,
+		atsAnalyzer: analyzer,
+		atsCache:    cache,
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	g := auth.RequireAuth(iss)
