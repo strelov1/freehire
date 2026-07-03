@@ -13,8 +13,8 @@
 
 ## 3. ATS summary keyword-density (atscheck)
 
-- [ ] 3.1 Summary-section extractor + a keyword-density line item; re-balance the host category's item weights so Σmax stays 100
-- [ ] 3.2 `atscheck` tests: dense summary passes, generic summary recoverable, Σmax == 100
+- [x] 3.1 Summary-section extractor + a keyword-density line item; re-balance the host category's item weights so Σmax stays 100
+- [x] 3.2 `atscheck` tests: dense summary passes, generic summary recoverable, Σmax == 100
 
 ## 4. Contracts + frontend
 

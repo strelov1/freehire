@@ -2,8 +2,54 @@ package atscheck
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
+
+func sectionItem(t *testing.T, r Report, substr string) (LineItem, bool) {
+	t.Helper()
+	for _, it := range catByID(t, r, "section_completeness").Items {
+		if strings.Contains(strings.ToLower(it.Text), substr) {
+			return it, true
+		}
+	}
+	return LineItem{}, false
+}
+
+func TestScore_SummaryKeywordDensity_Dense(t *testing.T) {
+	cv := "Jane Roe\njane@example.com  +1 415 555 0134\n\nSummary\nBackend engineer. Core stack: Golang, Kafka, Kubernetes, PostgreSQL.\n\nExperience\n- Built services\n\nSkills\nGolang, Kafka"
+	r := Score(cv, []string{"go", "kafka"}, nil)
+	it, ok := sectionItem(t, r, "keyword")
+	if !ok {
+		t.Fatalf("no summary keyword-density item in %+v", catByID(t, r, "section_completeness").Items)
+	}
+	if it.Status != StatusPass {
+		t.Errorf("density = %s, want pass for a keyword-dense summary", it.Status)
+	}
+}
+
+func TestScore_SummaryKeywordDensity_Generic(t *testing.T) {
+	cv := "Jane Roe\njane@example.com  +1 415 555 0134\n\nSummary\nExperienced engineer passionate about building great products.\n\nExperience\n- Built services\n\nSkills\nGolang"
+	r := Score(cv, []string{"go"}, nil)
+	it, ok := sectionItem(t, r, "keyword")
+	if !ok {
+		t.Fatal("no summary keyword-density item")
+	}
+	if it.Status == StatusPass {
+		t.Errorf("density = pass, want recoverable for a generic summary")
+	}
+}
+
+func TestScore_CategoryMaximaSumTo100(t *testing.T) {
+	r := Score(cleanCV, cleanSkills, []string{"go", "kafka"})
+	sum := 0
+	for _, c := range r.Categories {
+		sum += c.Max
+	}
+	if sum != 100 {
+		t.Errorf("Σ category max = %d, want 100", sum)
+	}
+}
 
 // cleanCV is a realistic plain-text CV that should pass every deterministic check
 // (kept > the length floor so the length check passes honestly).

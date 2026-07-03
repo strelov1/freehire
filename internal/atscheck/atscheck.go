@@ -18,6 +18,8 @@ import (
 	"math"
 	"regexp"
 	"strings"
+
+	"github.com/strelov1/freehire/internal/skilltag"
 )
 
 // Status is a check outcome.
@@ -91,6 +93,7 @@ const (
 	minActionVerbs   = 3    // bullet lines starting with a strong verb → Content passes
 	minQuantified    = 2    // quantified results → Content passes
 	minDensitySkills = 3    // distinct parsed skills → Density passes
+	minSummarySkills = 2    // skill tags in the summary section → Summary keyword-density passes
 )
 
 var (
@@ -129,7 +132,7 @@ func Score(cvText string, cvSkills, roleTopSkills []string) Report {
 		Categories: []ScoreCategory{
 			keyword,
 			formatCategory(cvText, words),
-			sectionsCategory(lower),
+			sectionsCategory(lower, cvText),
 			contentCategory(cvText),
 			lengthCategory(words, cvSkills),
 		},
@@ -210,17 +213,62 @@ func formatCategory(cv string, words int) ScoreCategory {
 	}}
 }
 
-func sectionsCategory(lower string) ScoreCategory {
+func sectionsCategory(lower, cvText string) ScoreCategory {
+	// Weights re-balanced to fit the summary keyword-density item while keeping the
+	// category maximum at 15 (and the five-category total at 100).
 	return ScoreCategory{ID: categorySections, Label: "Section Completeness", Items: []LineItem{
-		item(hasAny(lower, sectionKeywords["experience"]), 5, "Experience section",
+		item(hasAny(lower, sectionKeywords["experience"]), 4, "Experience section",
 			"Add a clearly labelled Experience section", StatusWarn),
 		item(hasAny(lower, sectionKeywords["skills"]), 4, "Skills section",
 			"Add a clearly labelled Skills section", StatusWarn),
 		item(hasAny(lower, sectionKeywords["education"]), 3, "Education section",
 			"Add an Education section", StatusWarn),
-		item(hasAny(lower, sectionKeywords["summary"]), 3, "Professional summary",
+		item(hasAny(lower, sectionKeywords["summary"]), 2, "Professional summary",
 			"Add a short professional summary at the top", StatusWarn),
+		summaryDensityItem(cvText, 2),
 	}}
+}
+
+// summaryDensityItem rewards a keyword-dense professional summary — recruiters scan
+// it in ~6 seconds, so it should carry the CV's concrete skills.
+func summaryDensityItem(cvText string, weight int) LineItem {
+	n := len(skilltag.Parse(summaryText(cvText), skilltag.WithResumeAcronyms()))
+	return item(n >= minSummarySkills, weight, "Summary carries role keywords",
+		"Add a few role keywords to your professional summary", StatusWarn)
+}
+
+// summaryText returns the text under the CV's summary heading, up to the next section
+// heading (or "" when there is no summary section).
+func summaryText(cvText string) string {
+	var out []string
+	in := false
+	for _, line := range strings.Split(cvText, "\n") {
+		if section, ok := headingSection(line); ok {
+			in = section == "summary"
+			continue
+		}
+		if in {
+			out = append(out, line)
+		}
+	}
+	return strings.Join(out, "\n")
+}
+
+// headingSection reports which section a line heads, matching a heading line whose
+// normalized text equals one of a section's keywords.
+func headingSection(line string) (string, bool) {
+	norm := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(strings.ToLower(line)), ":"))
+	if norm == "" {
+		return "", false
+	}
+	for section, kws := range sectionKeywords {
+		for _, k := range kws {
+			if norm == k {
+				return section, true
+			}
+		}
+	}
+	return "", false
 }
 
 // contentCategory is the deterministic Content Quality proxy used when no LLM review
