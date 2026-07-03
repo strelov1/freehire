@@ -157,7 +157,7 @@
   <section class="py-16 sm:py-20">
     <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// mission</p>
     <p class="mt-6 max-w-3xl text-2xl font-medium leading-snug tracking-tight sm:text-3xl">
-      A job board that works for you, not for recruiters. No paywalls, no sponsored listings, no résumé
+      A job board that works for you, not for recruiters. No paywalls, no sponsored listings, no CV
       harvesting. Free to use, and free to fork.
     </p>
   </section>

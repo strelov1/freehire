@@ -1,15 +1,8 @@
 <script lang="ts">
-  import { ArrowLeft, ArrowUp, FileText, Sparkles } from '@lucide/svelte';
+  import { ArrowLeft, Pencil, Sparkles } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import {
-    ApiError,
-    extractResumeSkills,
-    facetCounts,
-    getATSReport,
-    getProfileVerdict,
-    runATSReview,
-  } from '$lib/api';
+  import { facetCounts, getATSReport, getProfileVerdict, runATSReview } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { categoryLabel } from '$lib/facets';
@@ -37,11 +30,8 @@
   let loadError = $state(false);
   let tab = $state<'coverage' | 'cv'>('coverage');
 
-  // CV upload state (the ATS report needs a stored CV).
-  let cvBusy = $state(false);
-  let cvError = $state<string | null>(null);
-  let fileInput = $state<HTMLInputElement | null>(null);
-  let dragActive = $state(false);
+  // CV upload/replace lives on the profile edit form; the report links there.
+  const editHref = $derived(resolve('/my/profiles/[id]/edit', { id: String(id) }));
 
   // AI review state.
   let reviewBusy = $state(false);
@@ -114,44 +104,6 @@
     } catch {
       loadError = true;
     }
-  }
-
-  function isPdf(file: File): boolean {
-    return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-  }
-
-  // Store the CV (via the skill-extract path, which also stores it when storage is on),
-  // then reload so the ATS report scores it.
-  async function uploadCV(file: File) {
-    cvBusy = true;
-    cvError = null;
-    try {
-      await extractResumeSkills(file);
-      await reload();
-    } catch (err) {
-      cvError = err instanceof ApiError ? err.message : 'Could not read the CV. Please try again.';
-    } finally {
-      cvBusy = false;
-    }
-  }
-
-  function onCVFile(e: Event) {
-    const target = e.currentTarget as HTMLInputElement;
-    const file = target.files?.[0];
-    target.value = '';
-    if (file) void uploadCV(file);
-  }
-
-  function onDrop(e: DragEvent) {
-    e.preventDefault();
-    dragActive = false;
-    const file = e.dataTransfer?.files?.[0];
-    if (!file) return;
-    if (!isPdf(file)) {
-      cvError = 'Please drop a PDF file.';
-      return;
-    }
-    void uploadCV(file);
   }
 
   // Humanized role label: the selected categories, falling back to the profile's own
@@ -241,90 +193,46 @@
           <States state="loading" />
         {:else if tab === 'coverage'}
           <VerdictView {verdict} {gapHref} />
-        {:else}
+        {:else if ats?.has_cv && ats.report}
           <!-- CV readiness -->
-          <input
-            type="file"
-            accept="application/pdf,.pdf"
-            class="hidden"
-            bind:this={fileInput}
-            onchange={onCVFile}
-          />
-          {#if ats?.has_cv && ats.report}
-            <div class="flex flex-col gap-5">
-              <div class="flex flex-wrap items-center justify-between gap-3">
-                <p class="text-sm text-muted-foreground">How ATS-ready your CV is for this role.</p>
-                {#if ats.report.content_quality == null && !reviewUnavailable}
-                  <Button variant="primary" onclick={runReview} disabled={reviewBusy}>
-                    <Sparkles class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
-                    {reviewBusy ? 'Reviewing…' : 'Run AI review'}
-                  </Button>
-                {:else if ats.report.content_quality != null}
-                  <Button variant="ghost" onclick={runReview} disabled={reviewBusy}>
-                    <Sparkles class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
-                    {reviewBusy ? 'Reviewing…' : 'Re-run AI review'}
-                  </Button>
-                {/if}
-              </div>
-              {#if reviewUnavailable}
-                <p class="text-xs text-muted-foreground">AI review is not available right now.</p>
+          <div class="flex flex-col gap-5">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <p class="text-sm text-muted-foreground">How ATS-ready your CV is for this role.</p>
+              {#if ats.report.content_quality == null && !reviewUnavailable}
+                <Button variant="primary" onclick={runReview} disabled={reviewBusy}>
+                  <Sparkles class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
+                  {reviewBusy ? 'Reviewing…' : 'Run AI review'}
+                </Button>
+              {:else if ats.report.content_quality != null}
+                <Button variant="ghost" onclick={runReview} disabled={reviewBusy}>
+                  <Sparkles class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
+                  {reviewBusy ? 'Reviewing…' : 'Re-run AI review'}
+                </Button>
               {/if}
-              <ATSReportView report={ats.report} />
-              <button
-                type="button"
-                onclick={() => fileInput?.click()}
-                disabled={cvBusy}
-                class="w-fit text-xs text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline disabled:opacity-70"
-              >
-                {cvBusy ? 'Uploading…' : 'Replace CV'}
-              </button>
             </div>
-          {:else}
-            <div class="flex flex-col gap-2">
-              <button
-                type="button"
-                onclick={() => fileInput?.click()}
-                ondragover={(e) => {
-                  e.preventDefault();
-                  dragActive = true;
-                }}
-                ondragleave={(e) => {
-                  e.preventDefault();
-                  dragActive = false;
-                }}
-                ondrop={onDrop}
-                disabled={cvBusy}
-                class="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors disabled:opacity-70 {dragActive
-                  ? 'border-primary bg-primary/5'
-                  : 'border-border hover:border-primary/60'}"
-              >
-                <span class="flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                  {#if cvBusy}
-                    <FileText class="size-5" />
-                  {:else}
-                    <ArrowUp class="size-5" />
-                  {/if}
-                </span>
-                <span class="flex flex-col gap-0.5">
-                  <span class="text-sm font-semibold">
-                    {cvBusy ? 'Reading your CV…' : 'Upload your CV to score it'}
-                  </span>
-                  {#if !cvBusy}
-                    <span class="text-xs text-muted-foreground">
-                      Drop a PDF here, or <span class="text-primary underline">choose from disk</span>
-                    </span>
-                  {/if}
-                </span>
-              </button>
-              <span class="text-xs text-muted-foreground">
-                Checks ATS readability + this role's keywords. Parsed on the server; CV text is not
-                stored.
-              </span>
-            </div>
-          {/if}
-          {#if cvError}
-            <p class="mt-2 text-sm text-destructive">{cvError}</p>
-          {/if}
+            {#if reviewUnavailable}
+              <p class="text-xs text-muted-foreground">AI review is not available right now.</p>
+            {/if}
+            <ATSReportView report={ats.report} />
+            <a
+              href={editHref}
+              class="w-fit text-xs text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline"
+            >
+              Update your CV in profile settings
+            </a>
+          </div>
+        {:else}
+          <!-- No CV yet: managed on the profile edit form. -->
+          <div class="flex flex-col items-start gap-3 rounded-xl border border-dashed border-border p-6">
+            <p class="text-sm font-medium">Add your CV to score its ATS readiness</p>
+            <p class="text-sm text-muted-foreground">
+              Upload your CV on the profile to check ATS readability and this role's keywords.
+            </p>
+            <Button variant="primary" href={editHref}>
+              <Pencil class="size-4" />
+              Edit profile
+            </Button>
+          </div>
         {/if}
       </main>
     </div>

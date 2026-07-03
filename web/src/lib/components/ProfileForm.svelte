@@ -85,7 +85,7 @@
     try {
       const extracted = await extractResumeSkills(file);
       if (extracted.length === 0) {
-        resumeNote = 'No known skills found in the résumé.';
+        resumeNote = 'No known skills found in the CV.';
         return;
       }
       const before = skills.length;
@@ -93,11 +93,11 @@
       const added = skills.length - before;
       resumeNote =
         added > 0
-          ? `Added ${added} skill${added === 1 ? '' : 's'} from your résumé.`
-          : 'All résumé skills were already listed.';
+          ? `Added ${added} skill${added === 1 ? '' : 's'} from your CV.`
+          : 'All CV skills were already listed.';
     } catch (err) {
       resumeError =
-        err instanceof ApiError ? err.message : 'Could not read the résumé. Please try again.';
+        err instanceof ApiError ? err.message : 'Could not read the CV. Please try again.';
     } finally {
       resumeBusy = false;
     }
@@ -254,7 +254,7 @@
       />
 
       <div class="flex flex-col gap-1.5">
-        <span class="text-sm font-medium">Add skills from your résumé</span>
+        <span class="text-sm font-medium">Add skills from your CV</span>
         <input
           type="file"
           accept="application/pdf,.pdf"
