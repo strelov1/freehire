@@ -29,7 +29,7 @@
 
 ## 6. Profile filter gating
 
-- [ ] 6.1 In `routes/my/profile/+page.svelte`, render the filter summary sidebar, `FilterEdgeTab`, and `FilterModal` only when `tab === 'coverage'`; ensure no "My filters" tab appears (railKeys-restricted).
+- [x] 6.1 In `routes/my/profile/+page.svelte`, render the filter summary sidebar, `FilterEdgeTab`, and `FilterModal` only when `tab === 'coverage'`; ensure no "My filters" tab appears (railKeys-restricted).
 
 ## 7. Verification
 

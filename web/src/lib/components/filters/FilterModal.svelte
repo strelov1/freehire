@@ -31,6 +31,7 @@
     onApply,
     canApply,
     plain = false,
+    savedSearches = false,
     open = false,
     onClose,
     previewCount,
@@ -41,6 +42,9 @@
     counts?: FacetCounts | null;
     exclude?: string[];
     railKeys?: string[];
+    // Show the "My filters" (saved searches) tab. Opt-in: the standalone job list and
+    // analytics enable it; reuse like the profile comparison modal leaves it off.
+    savedSearches?: boolean;
     title?: string;
     applyLabel?: string;
     onApply?: (staged: StagedFilters) => void | Promise<void>;
@@ -68,7 +72,7 @@
   // and a 'facet' entry is hidden when its param is excluded (e.g. Company on a company
   // page).
   const visibleRail = $derived([
-    ...(railKeys ? [] : [SAVED_ENTRY]),
+    ...(savedSearches && !railKeys ? [SAVED_ENTRY] : []),
     ...RAIL.filter((e) => (!railKeys || railKeys.includes(e.key)) && !(e.facetParam && exclude.includes(e.facetParam))),
   ]);
 

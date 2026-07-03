@@ -207,15 +207,17 @@
       </div>
     {:else}
       <div class="flex gap-6">
-        <aside class="hidden w-72 shrink-0 md:block">
-          <div class="sticky top-6 flex max-h-[calc(100vh-5rem)] flex-col gap-4 overflow-y-auto">
-            {#if filters}
+        <!-- Filters refine the Market coverage comparison only, so the summary sidebar
+             shows on that tab alone; the other tabs get the full width. -->
+        {#if filters && tab === 'coverage'}
+          <aside class="hidden w-72 shrink-0 md:block">
+            <div class="sticky top-6 flex max-h-[calc(100vh-5rem)] flex-col gap-4 overflow-y-auto">
               <div class="rounded-xl border border-border bg-card p-4">
                 <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} />
               </div>
-            {/if}
-          </div>
-        </aside>
+            </div>
+          </aside>
+        {/if}
 
         <main class="flex min-w-0 flex-1 flex-col gap-6">
           <!-- Tabs -->
@@ -297,8 +299,8 @@
         </main>
       </div>
 
-      <FilterEdgeTab active={filters?.active ?? 0} onclick={() => (modalOpen = true)} />
-      {#if filters}
+      {#if filters && tab === 'coverage'}
+        <FilterEdgeTab active={filters.active} onclick={() => (modalOpen = true)} />
         <FilterModal
           store={filters}
           {counts}
