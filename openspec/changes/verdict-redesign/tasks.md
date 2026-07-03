@@ -29,3 +29,11 @@
 
 - [x] 5.1 `go build ./... && go vet ./... && go test ./...` green
 - [x] 5.2 Visual check of both tabs — verified via a throwaway `_verify` route rendering both components with representative new-contract data + headless-Chrome screenshot (both tabs render correctly with the STRONG/HIDDEN/MISSING status colours, 5 category cards, keyword chips, and suggestions). Full data-path (live LLM + Meili + DB) covered by handler tests rather than a live run.
+
+## 6. Unified profile page (IA + inline editing)
+
+- [ ] 6.1 New `ProfileForm.svelte`: inline single-profile editor — specializations via `SearchSelect` (≤5), skills via `RemoteSearchSelect`, CV drop-zone that shows an "uploaded · update" state when `has_cv`; Save via `profileStore.save`; `canSubmit` = ≥1 specialization & ≥1 skill
+- [ ] 6.2 Rewrite `my/profile/+page.svelte` to the `/jobs` layout: filter sidebar (`FilterStore`/`FilterSummary`/`FilterModal`/`FilterEdgeTab`, `skills` excluded) + main column = `ProfileForm` + Market-coverage/CV-readiness tabs; fold in the verdict page's init/reload/runReview; keep the delete button, drop the edit + sparkles buttons
+- [ ] 6.3 Filter drives the comparison role independently of the saved profile (category seeded from specializations; changing it never mutates the profile); re-fetch verdict + ATS after a save/upload so the numbers track edits, and drive `ProfileForm`'s CV state from `has_cv`
+- [ ] 6.4 Delete `my/profile/verdict/+page.svelte` and `ProfileEditModal.svelte`; drop the `verdictHref` route reference
+- [ ] 6.5 Verify: `svelte-check` clean + `vite build` green
