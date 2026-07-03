@@ -81,18 +81,23 @@
 
   const activeEntry = $derived(visibleRail.find((e) => e.key === active) ?? visibleRail[0]);
 
+  // Values selected for one facet — included plus excluded — so the rail count
+  // reflects any staged selection regardless of sign.
+  function selCount(f: JobFilters, param: string): number {
+    const st = f.facets[param];
+    return st ? st.include.length + st.exclude.length : 0;
+  }
+
   function entryCount(e: RailEntry, f: JobFilters): number {
-    if (e.kind === 'category') return (f.facets.category?.values.length ?? 0) + (f.facets.seniority?.values.length ?? 0);
-    if (e.kind === 'location')
-      return (f.facets.regions?.values.length ?? 0) + (f.facets.countries?.values.length ?? 0) + (f.facets.cities?.values.length ?? 0);
-    if (e.kind === 'salary') return (f.facets.salary_currency?.values.length ?? 0) + (f.salaryMin != null ? 1 : 0);
-    if (e.kind === 'work') return (f.facets.work_mode?.values.length ?? 0) + (f.facets.employment_type?.values.length ?? 0);
-    if (e.kind === 'industry')
-      return (f.facets.domains?.values.length ?? 0) + (f.facets.company_type?.values.length ?? 0) + (f.facets.collections?.values.length ?? 0);
-    if (e.kind === 'language') return (f.facets.english_level?.values.length ?? 0) + (f.facets.posting_language?.values.length ?? 0);
-    if (e.kind === 'relocation') return (f.facets.relocation?.values.length ?? 0) + (f.visa ? 1 : 0);
+    if (e.kind === 'category') return selCount(f, 'category') + selCount(f, 'seniority');
+    if (e.kind === 'location') return selCount(f, 'regions') + selCount(f, 'countries') + selCount(f, 'cities');
+    if (e.kind === 'salary') return selCount(f, 'salary_currency') + (f.salaryMin != null ? 1 : 0);
+    if (e.kind === 'work') return selCount(f, 'work_mode') + selCount(f, 'employment_type');
+    if (e.kind === 'industry') return selCount(f, 'domains') + selCount(f, 'company_type') + selCount(f, 'collections');
+    if (e.kind === 'language') return selCount(f, 'english_level') + selCount(f, 'posting_language');
+    if (e.kind === 'relocation') return selCount(f, 'relocation') + (f.visa ? 1 : 0);
     if (e.kind === 'posted') return f.postedWithinDays != null ? 1 : 0;
-    return f.facets[e.facetParam ?? e.key]?.values.length ?? 0;
+    return selCount(f, e.facetParam ?? e.key);
   }
 
   // Panes that reuse FacetSection (dynamic controls); ChipFacet resolves its own

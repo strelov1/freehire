@@ -12,3 +12,12 @@ export function pillClass(active: boolean, exclude: boolean, extra = ''): string
     extra,
   );
 }
+
+// Tooltip hint for a three-state facet pill, naming the state its next click
+// produces. Excludable facets cycle off → include → exclude → off; non-excludable
+// ones just toggle off ↔ include, so they never advertise an exclude step.
+export function pillTitle(included: boolean, excluded: boolean, excludable: boolean): string | undefined {
+  if (excluded) return 'Click to remove';
+  if (included) return excludable ? 'Click to exclude' : 'Click to remove';
+  return excludable ? 'Click to include' : undefined;
+}

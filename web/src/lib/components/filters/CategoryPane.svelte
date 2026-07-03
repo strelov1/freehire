@@ -4,17 +4,20 @@
   import type { FacetStore } from '$lib/facets';
   import { CATEGORY_GROUPS } from '$lib/filterSections';
   import FacetHeader from './FacetHeader.svelte';
-  import { pillClass } from '../facets/pill';
+  import { pillClass, pillTitle } from '../facets/pill';
 
   // Specialization pane: category chips grouped into collapsible sections, with a
-  // facet-local search filtering the visible options. Toggles the `category` facet.
-  // `plain` hides the search-only Exclude toggle (a profile category is a plain choice).
+  // facet-local search filtering the visible options. In the job filter it toggles
+  // the excludable `category` facet (each chip cycles off → include → exclude → off);
+  // `plain` makes it an include-only choice (e.g. a profile category is not a filter
+  // to exclude).
   let { store, plain = false }: { store: FacetStore; plain?: boolean } = $props();
 
+  const excludable = $derived(!plain);
   let query = $state('');
   const collapsed = new SvelteSet<string>();
   const st = $derived(store.facet('category'));
-  const selected = $derived(st.values);
+  const onToggle = (v: string) => (excludable ? store.cycle('category', v) : store.pick('category', v));
 
   const groups = $derived.by(() => {
     const q = query.trim().toLowerCase();
@@ -25,7 +28,7 @@
   });
 </script>
 
-<FacetHeader {store} param="category" label="Specialization" noExclude={plain} />
+<FacetHeader {store} param="category" label="Specialization" />
 
 <div class="mb-4 flex items-center gap-2 rounded-lg border border-input px-3">
   <Search class="size-4 shrink-0 text-muted-foreground" />
@@ -50,10 +53,13 @@
     {#if !isCollapsed}
       <div class="flex flex-wrap gap-2 pb-3">
         {#each g.options as o (o.value)}
+          {@const excluded = st.exclude.includes(o.value)}
+          {@const included = st.include.includes(o.value)}
           <button
             type="button"
-            onclick={() => store.toggle('category', o.value)}
-            class={pillClass(selected.includes(o.value), st.exclude, 'px-3 py-1.5 text-sm')}
+            onclick={() => onToggle(o.value)}
+            title={pillTitle(included, excluded, excludable)}
+            class={pillClass(included || excluded, excluded, 'px-3 py-1.5 text-sm')}
           >
             {o.label}
           </button>

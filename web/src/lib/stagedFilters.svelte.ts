@@ -13,6 +13,11 @@ import {
   emptyFilters,
   filtersFromParams,
   filtersToParams,
+  facetCycle,
+  facetPick,
+  facetToggleSign,
+  facetAdd,
+  facetRemove,
   type FacetState,
   type FilterStore,
   type JobFilters,
@@ -41,30 +46,28 @@ export class StagedFilters implements FacetStore {
     return this.#f.facets[param] ?? emptyFacet();
   }
 
-  toggle(param: string, v: string): void {
-    const st = this.facet(param);
-    const has = st.values.includes(v);
-    this.#setFacet(param, { ...st, values: has ? st.values.filter((x) => x !== v) : [...st.values, v] });
+  cycle(param: string, v: string): void {
+    this.#setFacet(param, facetCycle(this.facet(param), v));
+  }
+
+  pick(param: string, v: string): void {
+    this.#setFacet(param, facetPick(this.facet(param), v));
+  }
+
+  toggleSign(param: string, v: string): void {
+    this.#setFacet(param, facetToggleSign(this.facet(param), v));
   }
 
   add(param: string, raw: string): void {
-    const v = raw.trim();
-    const st = this.facet(param);
-    if (!v || st.values.includes(v)) return;
-    this.#setFacet(param, { ...st, values: [...st.values, v] });
+    this.#setFacet(param, facetAdd(this.facet(param), raw));
   }
 
   remove(param: string, v: string): void {
-    const st = this.facet(param);
-    this.#setFacet(param, { ...st, values: st.values.filter((x) => x !== v) });
+    this.#setFacet(param, facetRemove(this.facet(param), v));
   }
 
   clearFacet(param: string): void {
     this.#setFacet(param, emptyFacet());
-  }
-
-  setExclude(param: string, exclude: boolean): void {
-    this.#setFacet(param, { ...this.facet(param), exclude });
   }
 
   setMatchAll(param: string, on: boolean): void {

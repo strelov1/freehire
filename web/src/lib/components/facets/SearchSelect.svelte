@@ -1,23 +1,28 @@
 <script lang="ts">
   import { uniqueByValue, type FacetOption } from '$lib/facets';
   import { Input } from '$lib/ui';
-  import { pillClass } from './pill';
+  import { pillClass, pillTitle } from './pill';
 
   // A searchable multi-select: a filter field over the options rendered as a
-  // scrollable pill list. Selected options sort to the front. Used for the larger
-  // enum facets (specialization, industry).
+  // scrollable list of three-state pills (off / include / exclude). Selected options
+  // sort to the front. Used for the larger enum facets (specialization, industry,
+  // skills) and, in plain mode (excludable=false), the profile's specialization
+  // picker. Clicking calls `onToggle`, which the parent wires to cycle or to a plain
+  // include toggle.
   let {
     options,
-    selected,
-    exclude = false,
+    include,
+    exclude = [],
+    excludable = false,
     placeholder,
     onToggle,
     clearOnSelect = false,
     expand = false,
   }: {
     options: FacetOption[];
-    selected: string[];
-    exclude?: boolean;
+    include: string[];
+    exclude?: string[];
+    excludable?: boolean;
     placeholder?: string;
     onToggle: (value: string) => void;
     // When set, the filter field is cleared after each toggle — suited to a
@@ -36,10 +41,12 @@
     if (clearOnSelect) filter = '';
   }
 
+  const isSelected = (v: string) => include.includes(v) || exclude.includes(v);
+
   const shown = $derived(
     uniqueByValue(options)
       .filter((o) => o.label.toLowerCase().includes(filter.trim().toLowerCase()))
-      .toSorted((a, b) => Number(selected.includes(b.value)) - Number(selected.includes(a.value))),
+      .toSorted((a, b) => Number(isSelected(b.value)) - Number(isSelected(a.value))),
   );
 </script>
 
@@ -47,11 +54,13 @@
   <Input bind:value={filter} {placeholder} class="w-full" />
   <div class={expand ? 'flex flex-wrap gap-1.5' : 'flex max-h-44 flex-wrap gap-1.5 overflow-y-auto'}>
     {#each shown as opt (opt.value)}
-      {@const active = selected.includes(opt.value)}
+      {@const excluded = exclude.includes(opt.value)}
+      {@const included = include.includes(opt.value)}
       <button
         type="button"
         onclick={() => toggle(opt.value)}
-        class={pillClass(active, exclude, 'px-2.5 py-1 text-sm')}
+        title={pillTitle(included, excluded, excludable)}
+        class={pillClass(included || excluded, excluded, 'px-2.5 py-1 text-sm')}
       >
         {opt.label}{#if opt.count !== undefined}<span class="ml-1 opacity-60 tabular-nums">{opt.count.toLocaleString()}</span>{/if}
       </button>

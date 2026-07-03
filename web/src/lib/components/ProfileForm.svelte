@@ -237,7 +237,7 @@
     </div>
     <RemoteSearchSelect
       search={searchSkills}
-      selected={skills}
+      include={skills}
       placeholder="Search skills"
       onToggle={toggleSkill}
       fallbackLabel={(v) => v}
@@ -269,7 +269,7 @@
     {/if}
     <SearchSelect
       options={CATEGORY_OPTIONS}
-      selected={specializations}
+      include={specializations}
       placeholder="Search specializations"
       onToggle={toggleSpecialization}
       clearOnSelect

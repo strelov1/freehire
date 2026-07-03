@@ -76,11 +76,12 @@
 
   // The salary range is only meaningful within a single currency — the stats
   // aggregate across every currency in the matched set, so a cross-currency
-  // min–max would mix e.g. USD and CLP. Show it only when exactly one currency
-  // is selected (include mode), and label it with that currency.
+  // min–max would mix e.g. USD and CLP. Exactly one *included* currency pins the
+  // matched set to it (the include filter ORs to just that currency), so show the
+  // range then, labelled with that currency, regardless of any excluded currencies.
   const salaryCurrency = $derived.by(() => {
     const st = filters.facet('salary_currency');
-    return !st.exclude && st.values.length === 1 ? st.values[0] : null;
+    return st.include.length === 1 ? st.include[0] : null;
   });
   const salary = $derived.by(() => {
     if (!salaryCurrency) return null;

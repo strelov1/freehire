@@ -5,7 +5,7 @@
   import { REGION_LABELS } from '$lib/labels';
   import { COUNTRY_REGION_MAP } from '$lib/generated/contracts';
   import type { FacetCounts } from '$lib/types';
-  import { pillClass } from '../facets/pill';
+  import { pillClass, pillTitle } from '../facets/pill';
 
   // Location pane: a region → country tree plus a flat, searchable Cities list.
   // The country tree is built from the exported country→region map, scoped to what
@@ -22,9 +22,15 @@
   const countryCounts = $derived(counts?.facets?.countries ?? {});
   const cityCounts = $derived(counts?.facets?.cities ?? {});
 
-  const regionSel = $derived(store.facet('regions').values);
-  const countrySel = $derived(store.facet('countries').values);
-  const citySel = $derived(store.facet('cities').values);
+  // regions/countries/cities are excludable: each pill cycles off → include →
+  // exclude → off. The `*Sel` unions drive the "kept visible / has selection" logic;
+  // the per-facet include/exclude sets drive each pill's state and style.
+  const regionF = $derived(store.facet('regions'));
+  const countryF = $derived(store.facet('countries'));
+  const cityF = $derived(store.facet('cities'));
+  const regionSel = $derived([...regionF.include, ...regionF.exclude]);
+  const countrySel = $derived([...countryF.include, ...countryF.exclude]);
+  const citySel = $derived([...cityF.include, ...cityF.exclude]);
 
   // region code → countries to show, busiest first. Built from the live distribution
   // plus any currently-selected country, so a selected country stays visible (and
@@ -110,19 +116,25 @@
     </button>
 
     {#if isOpen}
+      {@const rExc = regionF.exclude.includes(region)}
+      {@const rInc = regionF.include.includes(region)}
       <div class="flex flex-wrap gap-2 pb-3">
         <button
           type="button"
-          onclick={() => store.toggle('regions', region)}
-          class={pillClass(regionSel.includes(region), false, 'px-3 py-1.5 text-sm')}
+          onclick={() => store.cycle('regions', region)}
+          title={pillTitle(rInc, rExc, true)}
+          class={pillClass(rInc || rExc, rExc, 'px-3 py-1.5 text-sm')}
         >
           All {REGION_LABELS[region] ?? region}
         </button>
         {#each countryCodes as code (code)}
+          {@const cExc = countryF.exclude.includes(code)}
+          {@const cInc = countryF.include.includes(code)}
           <button
             type="button"
-            onclick={() => store.toggle('countries', code)}
-            class={pillClass(countrySel.includes(code), false, 'px-3 py-1.5 text-sm')}
+            onclick={() => store.cycle('countries', code)}
+            title={pillTitle(cInc, cExc, true)}
+            class={pillClass(cInc || cExc, cExc, 'px-3 py-1.5 text-sm')}
           >
             {countryLabel(code)}
           </button>
@@ -137,7 +149,14 @@
     <div class="mb-2 text-sm font-semibold tracking-tight">Cities</div>
     <div class="flex flex-wrap gap-2">
       {#each citiesShown as city (city)}
-        <button type="button" onclick={() => store.toggle('cities', city)} class={pillClass(citySel.includes(city), false, 'px-3 py-1.5 text-sm')}>
+        {@const ctExc = cityF.exclude.includes(city)}
+        {@const ctInc = cityF.include.includes(city)}
+        <button
+          type="button"
+          onclick={() => store.cycle('cities', city)}
+          title={pillTitle(ctInc, ctExc, true)}
+          class={pillClass(ctInc || ctExc, ctExc, 'px-3 py-1.5 text-sm')}
+        >
           {city}
         </button>
       {/each}

@@ -82,8 +82,10 @@ export class CompanyFilterStore implements FacetStore {
     return activeCompanyFilterCount(this.#url.value);
   }
 
+  // Company facets are include-only (no `_exclude` on the companies endpoint), so the
+  // selection maps its value set to `include` and leaves `exclude` empty.
   facet(param: string): FacetSelection {
-    return { values: this.#url.value.facets[param] ?? [], exclude: false, matchAll: false };
+    return { include: this.#url.value.facets[param] ?? [], exclude: [], matchAll: false };
   }
 
   // Free text debounces the reload (setSoon); the URL still updates synchronously.
@@ -91,22 +93,31 @@ export class CompanyFilterStore implements FacetStore {
     this.#url.setSoon({ ...this.#url.value, q });
   }
 
-  /** Add the value to a facet if absent, remove it if present (pills/select). */
-  toggle(param: string, v: string) {
-    const values = this.facet(param).values;
-    const next = values.includes(v) ? values.filter((x) => x !== v) : [...values, v];
-    this.#setFacet(param, next);
+  // Add the value if absent, remove it if present. Company facets never exclude, so
+  // `cycle` (excludable facets' off → include → exclude) collapses to this plain
+  // include toggle, same as `pick`.
+  #toggleInclude(param: string, v: string) {
+    const values = this.facet(param).include;
+    this.#setFacet(param, values.includes(v) ? values.filter((x) => x !== v) : [...values, v]);
+  }
+
+  cycle(param: string, v: string) {
+    this.#toggleInclude(param, v);
+  }
+
+  pick(param: string, v: string) {
+    this.#toggleInclude(param, v);
   }
 
   add(param: string, raw: string) {
     const v = raw.trim();
-    const values = this.facet(param).values;
+    const values = this.facet(param).include;
     if (!v || values.includes(v)) return;
     this.#setFacet(param, [...values, v]);
   }
 
   remove(param: string, v: string) {
-    this.#setFacet(param, this.facet(param).values.filter((x) => x !== v));
+    this.#setFacet(param, this.facet(param).include.filter((x) => x !== v));
   }
 
   clearFacet(param: string) {
@@ -115,7 +126,7 @@ export class CompanyFilterStore implements FacetStore {
 
   // The companies endpoint has no exclude/AND-OR modes and no company facet opts
   // into them, so these are inert — present only to satisfy the FacetStore contract.
-  setExclude() {}
+  toggleSign() {}
   setMatchAll() {}
 
   clear() {

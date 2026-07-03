@@ -32,22 +32,23 @@
     const push = (label: string, chips: Chip[]) => {
       if (chips.length) out.push({ label, chips });
     };
+    // Chips for one facet: included values first, then excluded (destructive style).
+    const facetChips = (param: string): Chip[] => {
+      const st = f.facets[param];
+      if (!st) return [];
+      return [
+        ...st.include.map((v) => ({ text: valueLabel(param, v), exclude: false, remove: () => store.remove(param, v) })),
+        ...st.exclude.map((v) => ({ text: valueLabel(param, v), exclude: true, remove: () => store.remove(param, v) })),
+      ];
+    };
     const facetGroup = (param: string, label: string) => {
       if (exclude.includes(param)) return;
-      const st = f.facets[param];
-      if (!st?.values.length) return;
-      push(label, st.values.map((v) => ({ text: valueLabel(param, v), exclude: st.exclude, remove: () => store.remove(param, v) })));
+      push(label, facetChips(param));
     };
 
     facetGroup('category', 'Specialization');
     // Location: regions + countries + cities under one heading.
-    const loc: Chip[] = [];
-    for (const param of ['regions', 'countries', 'cities'] as const) {
-      const geo = f.facets[param];
-      if (!geo) continue;
-      for (const v of geo.values) loc.push({ text: valueLabel(param, v), exclude: geo.exclude, remove: () => store.remove(param, v) });
-    }
-    push('Location', loc);
+    push('Location', [...facetChips('regions'), ...facetChips('countries'), ...facetChips('cities')]);
 
     facetGroup('seniority', 'Seniority');
     facetGroup('work_mode', 'Work format');
@@ -62,8 +63,7 @@
     facetGroup('relocation', 'Relocation');
 
     // Salary: currency + minimum.
-    const salary: Chip[] = [];
-    for (const v of f.facets.salary_currency?.values ?? []) salary.push({ text: v, exclude: f.facets.salary_currency!.exclude, remove: () => store.remove('salary_currency', v) });
+    const salary: Chip[] = facetChips('salary_currency');
     if (f.salaryMin != null) salary.push({ text: `${f.salaryMin.toLocaleString('en-US')}+`, exclude: false, remove: () => store.setSalaryMin(null) });
     push('Salary', salary);
 

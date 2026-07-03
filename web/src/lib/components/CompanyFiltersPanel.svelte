@@ -9,7 +9,7 @@
   // their denormalized facet arrays.
   let { store }: { store: CompanyFilterStore } = $props();
 
-  const isActive = (param: string) => store.facet(param).values.length > 0;
+  const isActive = (param: string) => store.facet(param).include.length > 0;
 
   // Facets with a current selection float to the top; the rest keep registry order.
   // Keyed by param so Svelte moves the node rather than re-creating it (an open

@@ -33,25 +33,30 @@ export interface FacetOption {
 
 export type FacetControl = 'pills' | 'select' | 'tokens' | 'remote';
 
-/** One facet's live selection, as FacetSection reads it. */
+/** One facet's live selection, as FacetSection reads it: the included and excluded
+ *  values (a value is in at most one set), plus the include-set match mode. */
 export interface FacetSelection {
-  values: string[];
-  exclude: boolean;
+  include: string[];
+  exclude: string[];
   matchAll: boolean;
 }
 
 /** The narrow store contract FacetSection drives — the subset of FilterStore's
  *  surface a facet control touches. Both the job FilterStore and the company
  *  filter store satisfy it, so the same section/control components render either.
- *  (setExclude/setMatchAll are only invoked for excludable/hasAndOr facets, which
- *  the company registry doesn't use.) */
+ *  (cycle/toggleSign move a value between include and exclude; the company registry
+ *  has no excludable facets, so pick/add/remove only ever land values in include.) */
 export interface FacetStore {
   facet(param: string): FacetSelection;
-  toggle(param: string, v: string): void;
+  /** Pills: cycle a value off → include → exclude → off. */
+  cycle(param: string, v: string): void;
+  /** Select dropdown: add a value to include, or clear it if already selected. */
+  pick(param: string, v: string): void;
+  /** Per-chip toggle: flip a value between include and exclude. */
+  toggleSign(param: string, v: string): void;
   add(param: string, raw: string): void;
   remove(param: string, v: string): void;
   clearFacet(param: string): void;
-  setExclude(param: string, exclude: boolean): void;
   setMatchAll(param: string, on: boolean): void;
 }
 

@@ -25,7 +25,7 @@
   const hidden = $derived(entries.length - shown.length);
   const max = $derived(shown[0]?.[1] ?? 0);
 
-  const selected = $derived(new Set(store.facet(def.param).values));
+  const selected = $derived(new Set(store.facet(def.param).include));
 </script>
 
 <section class="rounded-xl border border-border bg-card p-4">
@@ -38,7 +38,7 @@
         <li>
           <button
             type="button"
-            onclick={() => store.toggle(def.param, value)}
+            onclick={() => store.pick(def.param, value)}
             aria-pressed={selected.has(value)}
             class={[
               'group relative flex w-full items-center justify-between gap-2 overflow-hidden rounded-md px-2 py-1 text-left text-sm transition-colors',

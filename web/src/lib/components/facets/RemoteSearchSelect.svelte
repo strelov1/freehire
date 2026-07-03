@@ -8,13 +8,15 @@
   // A server-backed multi-select: as the user types we query `search` (debounced)
   // and list the matching options with counts; an empty query lists the popular
   // first page. Used for entity facets too large to ship as a distribution
-  // (company). Selected values render as removable chips above the search — they
-  // stay visible even when absent from the current results — labelled from what
-  // we have seen, falling back to `fallbackLabel` for a value restored from the URL.
+  // (company). Selected values render as chips above the search — they stay visible
+  // even when absent from the current results — labelled from what we have seen,
+  // falling back to `fallbackLabel` for a value restored from the URL. A chip is
+  // included or excluded; clicking it calls `onToggle` (cycle for excludable facets,
+  // plain include toggle otherwise).
   let {
     search,
-    selected,
-    exclude = false,
+    include,
+    exclude = [],
     placeholder,
     onToggle,
     fallbackLabel,
@@ -22,8 +24,8 @@
     expand = false,
   }: {
     search: (query: string) => Promise<FacetOption[]>;
-    selected: string[];
-    exclude?: boolean;
+    include: string[];
+    exclude?: string[];
     placeholder?: string;
     onToggle: (value: string) => void;
     fallbackLabel: (value: string) => string;
@@ -75,6 +77,7 @@
     if (clearOnSelect) query = '';
   }
 
+  const selected = $derived([...include, ...exclude]);
   const labelOf = (value: string) => seen.get(value) ?? fallbackLabel(value);
   // Don't list an already-selected option in the picker — it's shown as a chip.
   const pickable = $derived(results.filter((o) => !selected.includes(o.value)));
@@ -84,11 +87,12 @@
   {#if selected.length > 0}
     <div class="flex flex-wrap gap-1.5">
       {#each selected as value (value)}
+        {@const excluded = exclude.includes(value)}
         <button
           type="button"
           onclick={() => onToggle(value)}
           title={labelOf(value)}
-          class={pillClass(true, exclude, 'inline-flex max-w-full items-center px-2.5 py-1 text-sm')}
+          class={pillClass(true, excluded, 'inline-flex max-w-full items-center px-2.5 py-1 text-sm')}
         >
           <span class="min-w-0 truncate">{labelOf(value)}</span>
           <X class="ml-1 size-3 shrink-0" />

@@ -2,19 +2,23 @@
   import { X } from '@lucide/svelte';
   import { dynamicLabel, type FacetDef, type FacetOption, type FacetStore } from '$lib/facets';
   import type { FacetCounts } from '$lib/types';
-  import { cn } from '$lib/utils';
   import PillGroup from './PillGroup.svelte';
   import RemoteSearchSelect from './RemoteSearchSelect.svelte';
   import SearchSelect from './SearchSelect.svelte';
   import TokenInput from './TokenInput.svelte';
 
-  // One facet section: header (label, optional Any/All match toggle, optional
-  // exclude toggle) plus the control the facet declares. All state lives in the
-  // store, keyed by the facet's param. `counts` carries the live facet
-  // distribution that drives dynamic (open-vocabulary) selects.
+  // One facet section: header (label, optional Any/All match toggle, Clear) plus the
+  // control the facet declares. Each value is off / included / excluded; clicking a
+  // control cycles an excludable facet (off → include → exclude → off) or plainly
+  // toggles a non-excludable one (off ↔ include). All state lives in the store, keyed
+  // by the facet's param. `counts` carries the live facet distribution that drives
+  // dynamic (open-vocabulary) selects.
   let { def, store, counts, expand = false }: { def: FacetDef; store: FacetStore; counts?: FacetCounts | null; expand?: boolean } = $props();
 
   const st = $derived(store.facet(def.param));
+  const total = $derived(st.include.length + st.exclude.length);
+  // Excludable facets cycle through the exclude state; the rest only toggle include.
+  const onToggle = (v: string) => (def.excludable ? store.cycle(def.param, v) : store.pick(def.param, v));
 
   // Options for a select facet: static for closed vocabularies, or built from the
   // live distribution (value → count, busiest first) for dynamic ones. Selected
@@ -23,15 +27,15 @@
   const selectOptions = $derived.by((): FacetOption[] => {
     if (!def.dynamic) return def.options ?? [];
     const dist = counts?.facets?.[def.param] ?? {};
-    const keys = new Set<string>([...Object.keys(dist), ...st.values]);
+    const keys = new Set<string>([...Object.keys(dist), ...st.include, ...st.exclude]);
     return [...keys]
       .map((value) => ({ value, label: dynamicLabel(def.param, value), count: dist[value] ?? 0 }))
       .toSorted((a, b) => b.count - a.count || a.label.localeCompare(b.label));
   });
-  // The exclude/clear actions only appear once something is selected — so their
-  // meaning is clear ("you picked these — hide them, or clear them") rather than
-  // abstract controls on an empty section.
-  const showMatch = $derived(def.hasAndOr && !st.exclude && st.values.length > 1);
+  // The match/clear actions only appear once something is selected — so their
+  // meaning is clear ("you picked these — match all, or clear them") rather than
+  // abstract controls on an empty section. Match-all applies to the include set.
+  const showMatch = $derived(def.hasAndOr && st.include.length > 1);
 </script>
 
 <div class="border-b border-border pb-4">
@@ -42,70 +46,57 @@
         <button
           type="button"
           onclick={() => store.setMatchAll(def.param, !st.matchAll)}
-          title="Match any of / all of the selected values"
+          title="Match any of / all of the included values"
           class="rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           Match: {st.matchAll ? 'All' : 'Any'}
         </button>
       {/if}
     </div>
-    {#if st.values.length > 0}
-      <div class="flex items-center gap-1">
-        {#if def.excludable}
-          <button
-            type="button"
-            onclick={() => store.setExclude(def.param, !st.exclude)}
-            title="Hide jobs that match the selected options"
-            class={cn(
-              'rounded-full px-2 py-0.5 text-xs font-medium transition-colors',
-              st.exclude ? 'bg-destructive/15 text-destructive' : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {st.exclude ? 'Excluding' : 'Exclude'}
-          </button>
-        {/if}
-        <button
-          type="button"
-          onclick={() => store.clearFacet(def.param)}
-          title="Clear {def.label}"
-          aria-label="Clear {def.label}"
-          class="flex size-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <X class="size-3.5" />
-        </button>
-      </div>
+    {#if total > 0}
+      <button
+        type="button"
+        onclick={() => store.clearFacet(def.param)}
+        title="Clear {def.label}"
+        aria-label="Clear {def.label}"
+        class="flex size-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+      >
+        <X class="size-3.5" />
+      </button>
     {/if}
   </div>
 
   {#if def.control === 'pills'}
     <PillGroup
       options={def.options ?? []}
-      selected={st.values}
+      include={st.include}
       exclude={st.exclude}
-      onToggle={(v) => store.toggle(def.param, v)}
+      excludable={def.excludable}
+      {onToggle}
     />
   {:else if def.control === 'select'}
     <SearchSelect
       options={selectOptions}
-      selected={st.values}
+      include={st.include}
       exclude={st.exclude}
+      excludable={def.excludable}
       placeholder={def.placeholder}
-      onToggle={(v) => store.toggle(def.param, v)}
+      {onToggle}
       {expand}
     />
   {:else if def.control === 'remote' && def.remote}
     <RemoteSearchSelect
       search={def.remote}
-      selected={st.values}
+      include={st.include}
       exclude={st.exclude}
       placeholder={def.placeholder}
-      onToggle={(v) => store.toggle(def.param, v)}
+      {onToggle}
       fallbackLabel={(v) => dynamicLabel(def.param, v)}
       {expand}
     />
   {:else}
     <TokenInput
-      tokens={st.values}
+      tokens={st.include}
       onAdd={(v) => store.add(def.param, v)}
       onRemove={(v) => store.remove(def.param, v)}
       placeholder={def.placeholder}
