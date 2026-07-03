@@ -1,0 +1,393 @@
+# paylocity boards. Provider is the filename; each entry is company + board.
+# board = the company GUID in recruiting.paylocity.com/Recruiting/Jobs/All/<board>
+# (see internal/sources/paylocity.go).
+- company: Paquin & Carroll Insurance
+  board: 0074dae6-e7c6-4b3e-80b7-5006355028a4
+- company: Allan Aircraft Supply
+  board: 016098f9-c98e-41ee-9aa5-1055278531e7
+- company: Housing Authority of Paducah
+  board: 019e0fd0-433c-4ea0-b0bb-7d4e011c9aaa
+- company: AC Nelsen RV
+  board: 04307a79-8190-4735-8d73-2f4d012b9621
+- company: LPK Chrysler Dodge Jeep RAM of Defiance
+  board: 068bd1cf-cd8a-491a-979c-b0ad333ac8f0
+- company: Mercury GSE
+  board: 0885a5d4-3813-487a-b14c-6f6f48835c9e
+- company: Mental Health Association of Rochester/Monroe County
+  board: 0a10cc4a-15e3-4572-b6d2-2c9c64947dc3
+- company: Nova Law Group
+  board: 0aff0ca3-f6a7-4e29-8ff5-212d45f7d7e2
+- company: Children's Home Society of Idaho
+  board: 0c310a56-b26b-44b9-9826-337f883226e4
+- company: Urban Veterinary Associates
+  board: 0c817e94-6297-442b-9324-e9fba5cbac3f
+- company: Saco Valley Credit Union
+  board: 0f437cde-0ab3-4180-9cb6-55be4b2ba569
+- company: ACLU of Illinois
+  board: 10ea2514-0bc7-4d36-a9dd-27f82303a839
+- company: Action Overhead Garage Door
+  board: 12adb76e-7ca0-4334-9a4a-e066296df377
+- company: Weitz Investment Management
+  board: 14ba9723-c56c-4c4e-815e-48051aea127e
+- company: United Way of Greater New Haven
+  board: 167c50cc-4a19-4ab3-aeeb-d331d725e19e
+- company: U.S. Spice Mills
+  board: 17288e95-fa2b-481c-814f-cefacb6b3aa2
+- company: Willis Klein Safe, Lock & Decorative Hardware
+  board: 190fe4cf-638e-4cd5-9fdc-f9e70263b97a
+- company: Daniel's Meat Market
+  board: 19714270-a712-49d2-94bf-4275a58632c0
+- company: Clover Basin Animal Hospital
+  board: 1a06dc72-45ee-4c90-a268-fe881bbeb577
+- company: Consumer Healthcare Products Association
+  board: 1c2363ee-6e8c-4e16-b9d6-e666ee2e5e1e
+- company: Cascade Crest Insurance
+  board: 1cd3a275-ba58-4379-a48b-6b50965ab36c
+- company: Shearer Printing & Office Solutions
+  board: 1e363c42-21ca-409b-8fc0-a0d1ff75b45e
+- company: Blind Children's Center
+  board: 211fa828-2c86-4d8f-a981-4cd4eafd170a
+- company: B&B Harvesting
+  board: 21618859-b64d-40fc-96e1-a62764c54f2a
+- company: Valley Agencies
+  board: 2517b8a6-ea70-416b-844e-489541401e44
+- company: Big Brothers Big Sisters of New Mexico
+  board: 28594eab-e626-49d9-b2aa-15c11519feb7
+- company: PATH Foundation
+  board: 287a1987-ec4d-4d12-828c-5ff1194c03ae
+- company: Pella Windows & Doors of Eastern Iowa
+  board: 28f63f61-ae90-4262-877a-f42ba5c957ad
+- company: Barnstable County Mutual Insurance Company
+  board: 2d0f17e3-7dc9-43d9-b15d-be1d3494ec82
+- company: Masterbilt
+  board: 2d364a59-c887-41bc-84a2-c0a7f3497408
+- company: Sloan Lubrication Systems
+  board: 2d3e2fef-f4c9-407a-81af-aa8d0ed7e109
+- company: Saint Philip Catholic Church
+  board: 3169f6c3-cfa1-441c-b5f7-edb2217a09d5
+- company: Better Living Components
+  board: 31f5aac7-18d6-47cf-8f9f-22aec1f36866
+- company: Mosher Medical
+  board: 3299ccbc-5d4d-433b-8ba4-9b9332401140
+- company: Cathedral Basilica of the Immaculate Conception
+  board: 35d43cb0-f862-40fe-b2c5-6fb5739a0675
+- company: Everman
+  board: 362bc5ba-dc70-4ac1-ae50-c226ba1dca8c
+- company: Montana Hospital Association
+  board: 38a73732-bbb2-4a42-969a-43b131775818
+- company: Three Rivers Community Health Group
+  board: 3ac07414-3aa2-4ad7-819d-a0a4ac3c70ba
+- company: PrivateFlite Aviation
+  board: 3adc4e49-d152-4daa-a20c-880c299a470e
+- company: Midwest Compressor Systems
+  board: 3bb40afe-feb4-439c-bf24-647c51a7827a
+- company: Gate Golf Club
+  board: 3c895cb6-3b30-4496-9383-31cda607897b
+- company: The Ironman Foundation
+  board: 3d3c12d8-f730-4fb6-bedf-dd72e5ead7aa
+- company: Jenkins Electric
+  board: 4224641c-d0db-4bfa-9714-a2d687da593f
+- company: Ivex Specialty Paper
+  board: 44b1fcb7-ec28-430a-890a-d5bad004e735
+- company: North Carolina Justice Center
+  board: 47be28c3-a5c7-4b34-b6b4-89ec95cd3c0d
+- company: Van Delden Wastewater Systems
+  board: 47fce337-047b-46a1-b984-b91c17312710
+- company: VB Blue Insurance Management Corporation
+  board: 4a5765db-e81f-4dbe-94ef-ce9b619442e5
+- company: Tidewater Veterinary Hospital
+  board: 4a929bf2-b95c-4f12-8f31-f0d32e2aef94
+- company: Jaquith Industries
+  board: 4c75e091-5b24-4f59-90c2-8b9b2b1f5089
+- company: Martin Inderman Development
+  board: 4d0b327e-68ba-4dc2-99e0-c93565b1d632
+- company: Lithos Paleontology and Cultural Resource Consultants
+  board: 4d779ad9-8180-4f82-8b28-ee941bdeba89
+- company: Detroit Sound Conservancy
+  board: 4dea0669-eb5e-4252-a148-02e677c6b98c
+- company: Blue Ridge Farmers Cooperative
+  board: 51b3c18d-77f8-4aeb-8d97-e03a904b87d3
+- company: T & J Heating & Air Conditioning
+  board: 52764df4-4888-4cf2-9330-29b45cf58b30
+- company: Advanced Industries
+  board: 5561a85d-1246-4026-98a4-aee69bbbee57
+- company: New Leaf Growers
+  board: 56d80b4a-4ca9-4b64-8cb2-e86e721f1a40
+- company: Cavitch Familo & Durkin
+  board: 5764acd8-9874-44a6-b647-04b4f3385b8f
+- company: WarrenBuilds
+  board: 5819dc5b-32ce-4e72-98ba-9ed18653d91b
+- company: The Metropolitan Club
+  board: 5b5bd584-e09e-4f9f-93ab-748e95318738
+- company: Lancaster Plumbing & Heating
+  board: 61661c75-cb8e-49ab-9ba6-08830c5fef54
+- company: Five Little Monkeys
+  board: 61d03ac6-1af5-457c-b404-f5bfa01fed05
+- company: St. Vincent de Paul Society of Marin County
+  board: 61d07134-3efb-45f4-b9fe-7c6899486430
+- company: Berkeley City Club
+  board: 62c22c46-1ce1-4f4b-8818-1c3ff3dfc526
+- company: GHS Federal Credit Union
+  board: 64344050-f386-479b-8895-a8a85b8de4c6
+- company: PostCity Financial
+  board: 65a06cf1-cfe7-4ae8-8607-10cfa538191e
+- company: Oral Surgery Associates
+  board: 667b7e09-0f25-49e8-9e38-d4d667234108
+- company: Meals on Wheels of Rhode Island
+  board: 66ba5840-2cee-475b-a14b-13bf94eeb6eb
+- company: St. John the Evangelist Catholic School
+  board: 683e0c78-9e22-4853-a12e-f558c805ae76
+- company: Children's Developmental Center
+  board: 69f9f262-c3f6-4cd4-b3c9-87f4d8d373cc
+- company: BK Corrosion
+  board: 6abe4775-e673-4722-9db3-30f2316cf1a4
+- company: Franklin VNA & Hospice
+  board: 6aebb69c-2770-4ff4-86d8-b1d874ebd931
+- company: Magnolia State Bank
+  board: 6b9b4bd3-5bee-460b-b1e8-8436f92ba196
+- company: West Suburban Special Recreation Association
+  board: 6d9a6c5c-9131-432c-ac06-604741cefebb
+- company: Gembala, McLaughlin & Pecora
+  board: 6da61818-61cb-42ec-bab2-9cb65834764f
+- company: Older Americans Housing
+  board: 6e5198cf-7793-43b4-802f-2afca44f22e9
+- company: Flagstaff Bone & Joint
+  board: 6fd0cff2-8fdf-4f71-9296-5d6aad3ac5ff
+- company: Fremont Public Library District
+  board: 7318af60-46e7-42f6-9af8-fb83ed8971d7
+- company: Farmers State Bank
+  board: 741d4757-583d-4cb9-9235-45e8c928354d
+- company: Aerospace Industries Association
+  board: 7427913b-f7d5-4ac7-8624-3aa0e446f3ff
+- company: University of Oregon Foundation
+  board: 750b6486-d2d8-4e94-bd94-dbd7a47aef35
+- company: Le Grand Marketing
+  board: 77e50aac-96ae-411d-a615-f3833cc7d868
+- company: Barry McTiernan & Moore
+  board: 78cfa9c9-b01b-49df-bde6-0a4bf86e45c4
+- company: Sturges Property Group
+  board: 78f4604e-2334-4490-9c53-fdf4e7256fff
+- company: Diverse Pipeline Services
+  board: 7c0bde36-209a-4256-b554-a29c18c99f78
+- company: Cayuga Lake National Bank
+  board: 7c67d5d5-18f9-4acb-8a46-57512425e672
+- company: Wichita Federal Credit Union
+  board: 7cbcd891-5993-45e4-b01c-d047524dee49
+- company: Industrial Tent Systems
+  board: 7cd67aae-5835-421f-a9d1-43aa2e8c672e
+- company: Monroe Harding
+  board: 7d624a66-0264-4b0c-a841-a8ea78397c45
+- company: Saint Rose of Lima Catholic Academy
+  board: 7daa20fd-20a5-4f32-8164-4a6ea54e6acf
+- company: Fravert
+  board: 7dd49e2a-c9b3-4361-b854-a2eca0f5f925
+- company: Baton Rouge Machine Works
+  board: 80229fe6-c3ee-464a-a8e2-3af081e33c23
+- company: YWCA Northeastern Massachusetts
+  board: 807d4406-bdf0-4790-80af-2779644d9c11
+- company: Four Points Federal Credit Union
+  board: 8159a427-4813-484b-9218-a462e2dfc507
+- company: JetRx
+  board: 8292da78-4ceb-4a20-9165-80a9efc31eca
+- company: Tuffaloy Products
+  board: 8325dfc7-5cef-443d-b15f-7b2b25513c45
+- company: North Country Savings Bank
+  board: 843bf4fa-a5b0-48bf-a231-3db23516f74f
+- company: Harlan Global Manufacturing
+  board: 85b2a1a3-343a-4d5e-91fa-0017a7ef6d0e
+- company: Meteor Crater Enterprises
+  board: 8733babe-4790-4ada-afbd-a649a14b4d18
+- company: Bob Wallace Appliance Sales
+  board: 899bcaa4-93dc-4f5c-ad68-7e695ef6cf65
+- company: Boyce Thompson Arboretum
+  board: 8b589eda-2014-454f-b0ac-b13369ee53ee
+- company: YWCA Greater Flint
+  board: 8ce4f49e-cd70-4901-9bab-4fd21c5eecc2
+- company: NW Priority Credit Union
+  board: 8e855a42-3e72-4b6b-b0b7-78229f766f88
+- company: Catholic Foundation of Northeast Kansas
+  board: 8ff11cd5-450b-49ce-a54d-de5514fb3435
+- company: St. Matthew Roman Catholic Parish
+  board: 90f088f6-1efa-4098-9d3f-fe7b054f3e56
+- company: Whitman Family Development
+  board: 94b610ee-1fe2-4117-9da5-f33bad17dab1
+- company: A/C Contractors
+  board: 991f0397-0de8-4538-955e-a2d05884c5f3
+- company: Randolph Engineering
+  board: 99ae5bc1-cf15-4809-aa7b-d85021f92b72
+- company: First State Bank
+  board: 9cb8623f-98d9-47ef-ba6e-c13aa691bc40
+- company: YWCA Rock County
+  board: 9f2e0e00-4972-4b60-8e0f-62b5554dd565
+- company: Women's Lunch Place
+  board: 9fdebd80-ab69-4e30-b0c2-1156c8086203
+- company: Washington Performing Arts
+  board: a0ef958e-1ef4-4860-a9c6-d705830f6ef7
+- company: Baker Thermal Solutions
+  board: a2a893ea-6e0b-4cce-8e2d-29ea050fc738
+- company: St. Catherine of Siena Healthcare
+  board: a2aa6435-645e-4d0d-b7b3-68941695fc3c
+- company: Andover State Bank
+  board: a406a686-5bb4-41c4-9886-5b2c10945a3b
+- company: Casa Serena
+  board: a48e9691-1e78-40aa-90ca-164a0a5c6f5d
+- company: Tourmaline Enterprises
+  board: a50e7bba-a2c9-4a55-bef2-44ebe84a3cde
+- company: Knightdale Animal Hospital
+  board: a5408d11-bbca-4717-bca3-be62a81d9d6a
+- company: Dynamic Air Engineering
+  board: a5ad144f-d08a-41a5-b0ec-aeab2cf6d0fc
+- company: CalNonprofits Insurance Services
+  board: a7ccad79-d9f9-4c88-ae10-4e0d91f629c4
+- company: St. John the Baptist Catholic Parish
+  board: a7e8fa0a-201d-4d40-a4dd-c5622246bd48
+- company: SHARE Equity
+  board: a835bfa3-75d8-49ab-b714-4ac3c75154aa
+- company: Fishermen's Source
+  board: a9684fb1-4a9a-4d49-8b77-f276b336c08b
+- company: Georgia Heritage Federal Credit Union
+  board: a9cb6e4b-c750-4a3a-8830-06fcd9c2dabc
+- company: Jusczak Trucking
+  board: aadfeae3-5308-4c6e-b380-5da8fac98363
+- company: Martinsville First Savings Bank
+  board: ab7f0561-20cb-460b-b3c6-6f434433c0df
+- company: Berthoud Fire Protection District
+  board: ac27d9f2-44f2-4c0c-8c7d-e2ab041ff0d3
+- company: South Portland Housing Authority
+  board: ac285497-aad4-4499-bf6f-b605fa912606
+- company: Drill Cool Systems
+  board: ac6c3f4a-f152-4edc-86b0-072093bbc473
+- company: Advanced Underground Solutions
+  board: afe6c871-dfed-4e30-a7b7-93eac822b811
+- company: Seventh Wave Refreshments
+  board: b06233ad-bbe5-421c-bf2c-b607d0ab1ec5
+- company: Friendly House
+  board: b0a4aaeb-42e9-461a-b2c1-1b55a08ba36e
+- company: Bippus State Bank
+  board: b10dea59-5b32-419f-91c4-caec6569a3e3
+- company: Noelay LLLC
+  board: b383f89e-c384-414a-a468-2904ae8b4916
+- company: Mid-City Scrap
+  board: b40714fd-5c91-4d93-b50d-777b24b5c9ec
+- company: St. Patrick School
+  board: b4176004-696a-4baa-8678-aeb4c1a64a0c
+- company: National Fire Sprinkler Association
+  board: b5270dd6-65f8-4147-8967-f81fa9d65017
+- company: New Lisbon Broadband and Communications
+  board: b5e27673-0f5f-44c6-b2fd-01335580073b
+- company: Mary's Tack & Feed
+  board: b630cc0f-86c2-41ca-9341-b8eaa9ab7fb1
+- company: Dairy Queen
+  board: b6e8fd3a-94ff-4046-9350-bc27bc4c15f3
+- company: Wilson's Petroleum Equipment
+  board: bd75a245-a084-470f-9207-b8878cf3e35d
+- company: Electromedical Products International
+  board: bd7e9f99-ee79-4953-9fb7-4ed9210f47a6
+- company: Charles E. Gillman
+  board: bddb2e91-13d1-4383-9a0d-8dff10563bce
+- company: Jusczak Repair
+  board: bea112ef-88c6-4edf-b983-461ca835458f
+- company: The Arc Los Angeles and Orange Counties
+  board: bf0ec0bc-c9af-4a0b-ac6e-f8eab49616fc
+- company: Edlen & Co.
+  board: bfef1aeb-5efe-4581-99dd-b5f233616bff
+- company: Twelve Corners Orthodontics & Pediatric Dentistry
+  board: c27565d6-f7c3-47dc-bc76-fad0edcabdc1
+- company: K&N Appliance Gallery
+  board: c326ee7d-025a-42d1-9cc9-48671a74dbcf
+- company: The Part Works
+  board: c6d78b39-c56a-4bf6-8f9a-933e2018b0ec
+- company: Brighton Marine
+  board: c7e593ae-075e-4838-9c18-87a03c21ca3a
+- company: Fred F. Collis & Sons
+  board: c80fc6b9-fd87-4ba4-847b-1fce92c05e9c
+- company: Safeway Sign Company
+  board: c81e8c6a-928b-45e3-b5ee-c297d97a6da0
+- company: Bennett Hospitality
+  board: cb4c98d5-7764-43ae-bd9f-a7ffe287bd27
+- company: ACLU of Indiana
+  board: cd411d01-f59e-4f23-9331-47357925616b
+- company: Feather River Food Cooperative
+  board: ceee14e6-5ad1-4e5a-8327-6ec2ab45da18
+- company: Fair Share Housing Development
+  board: cfeaa87c-9108-40a8-a3f6-8fd49d530e81
+- company: Forward Financial Credit Union
+  board: d15ec67e-d750-42be-a22f-a116a7082172
+- company: Lawson Drayage
+  board: d26dc57b-21ee-4cc3-9a76-764aad9e2366
+- company: JAG Interiors
+  board: d2dc4993-2e98-4d5b-b92a-c0bdc063dced
+- company: Pillar Bank
+  board: d482ac10-f31f-475b-a042-5b2705c5d9e2
+- company: Findlay-Hancock County Public Library
+  board: d4dd0740-c6eb-41ce-9f95-7397c7fd83e4
+- company: Benson Young & Downs
+  board: d51d6ade-4b0c-4a0f-93a2-d8e279c16938
+- company: Excel Underground
+  board: d52a255e-9829-431b-9ba2-374280473f54
+- company: Peltram Plumbing
+  board: d6da53b2-2d72-433b-b28d-afbc1e4d1c0a
+- company: Highlands Recreation District
+  board: d7b3d2fb-ed4c-4105-a699-fe3cf20a0384
+- company: National Runaway Safeline
+  board: d87a7736-f431-4eeb-89af-e7beeb8aece2
+- company: Corpro Visual
+  board: d943bc7f-9273-41b6-8390-7af7339cb5eb
+- company: Houghton State Bank
+  board: da2f2273-87b5-4e76-b5ee-6aaad3f5fc3e
+- company: Oak Park Township
+  board: dab7fabd-deb8-491c-b08d-ab0e4afcf78c
+- company: Exodus Management Group
+  board: dae8adfc-14fa-4e1c-b101-b487c07bc72a
+- company: Baron Blakeslee
+  board: dba9ade5-cc38-4b94-87b5-f07772045721
+- company: Healthline Medical Group
+  board: dbde2ac0-dcf3-4321-8f35-db7f08056c2d
+- company: Charlesgate
+  board: ddbaa017-42ff-40ec-8c6e-536644b5e2b1
+- company: Wescom Solutions
+  board: dfc5bfbe-d5b0-4f83-8d6a-2237b53781e7
+- company: PROTEOR Print
+  board: e04d09ac-3838-4f5e-95f5-25d5120cfc5f
+- company: Thermo-Vac
+  board: e0a1b5db-9880-4f1a-a299-43518aba55b5
+- company: Town of Bennett
+  board: e44cad21-4908-43b6-be04-0b5d526adbdb
+- company: Total Community Credit Union
+  board: e47a4855-e1d8-4913-b792-271f7fb73bc0
+- company: Borg Design
+  board: e65eb96c-6d46-4e3c-836f-a4d5db46be4f
+- company: The Delaware National Bank of Delhi
+  board: e6cd8ef8-845f-4086-ad4d-abaa9f024089
+- company: Retirement Income Source SFG
+  board: e8983422-7fae-40bf-a75f-fda05981e553
+- company: Loesel-Schaaf Insurance Agency
+  board: ebb162ae-fc06-4f3b-8169-006a22340e60
+- company: Pathway Bank
+  board: ed3d04a9-c2d2-4183-ab60-7b689f8a4000
+- company: Streamline Glass
+  board: eec2371c-dc18-41e3-ad11-c5fad6689c53
+- company: North Tahoe Community Alliance
+  board: f16895d9-0547-4bce-88fd-ab8bdff0534e
+- company: St. John Vianney Catholic Parish
+  board: f36495b5-0925-46ff-91ce-6bdb88008937
+- company: HCA Asset Management
+  board: f486fd2e-14a7-4cc8-82ca-c4b9e08a5c91
+- company: Wasik Associates
+  board: f540ebc4-0122-4c96-9fa6-2fa9d5748441
+- company: WCDC
+  board: f6602816-5682-4157-84ee-1c0d25b3da5e
+- company: The Chatham Inn
+  board: f68888f3-c421-4484-8553-b7c8300ca17d
+- company: Woodlands Academy of the Sacred Heart
+  board: f73b3f4b-2ef1-40f9-83f5-214dd976bdf0
+- company: Green Energy Technical Services Group
+  board: f8f4632b-076b-4b30-8dba-ba423f3b9be1
+- company: Clarity
+  board: fb6c5c81-8583-481a-8943-d40f016f3e84
+- company: Fenner Melstrom & Dooling
+  board: fca1a160-2060-4141-9b3c-ab5800e814cf
+- company: Rapids Reproductions
+  board: fd455c2d-8c6f-463a-b993-c3562df263be
+- company: Alan Baird Industries
+  board: fe6597c6-9c0c-4ef1-991d-308d003df9b2
