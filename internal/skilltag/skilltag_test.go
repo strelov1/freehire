@@ -281,3 +281,42 @@ func TestParse_AIVocab(t *testing.T) {
 		})
 	}
 }
+
+// TestParse_ExpansionBatch1 covers the security/qa/data skill additions (diffed
+// against the Lightcast ATS taxonomy). Positives assert the new canonicals tag;
+// negatives assert the ambiguous-word skills route ONLY via a qualifying phrase,
+// so a bare English use ("a druid", "a burp") never misfires — the precision-first
+// doctrine the dictionary already applies to c/r/go.
+func TestParse_ExpansionBatch1(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		// security
+		{"scanners", "We run Metasploit, Nmap and Wireshark.", []string{"metasploit", "nmap", "wireshark"}},
+		{"appsec tools", "OWASP guidelines, Nessus scans, Burp Suite pentest.", []string{"burp-suite", "nessus", "owasp"}},
+		{"auth stack", "Auth: OAuth2, SAML, JWT, Keycloak, OpenID Connect.", []string{"jwt", "keycloak", "oauth", "openid", "saml"}},
+		// qa
+		{"load + browser + frameworks", "Load: k6, Gatling, JMeter. Browser: Puppeteer, Appium. Frameworks: TestNG, Robot Framework, SoapUI.",
+			[]string{"appium", "gatling", "jmeter", "k6", "puppeteer", "robot-framework", "soapui", "testng"}},
+		// data — ELT/warehouse
+		{"elt pipeline", "Airbyte, Fivetran, Dagster, Debezium into Metabase; HBase, Apache NiFi.",
+			[]string{"airbyte", "dagster", "debezium", "fivetran", "hbase", "metabase", "nifi"}},
+		// data — query engines routed via phrase (bare token is ambiguous)
+		{"query engines via phrase", "Apache Druid, Apache Pinot, PrestoDB, Delta Lake, Apache Iceberg.",
+			[]string{"delta-lake", "druid", "iceberg", "pinot", "presto"}},
+
+		// precision negatives — ambiguous words must NOT tag without their qualifier
+		{"bare ambiguous words do not tag", "The druid drank pinot noir, said presto, and admired the iceberg.", nil},
+		{"burp is not a skill", "He let out a loud burp.", nil},
+		{"jasmine and karma are not added", "Jasmine watered the plants with good karma.", nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Parse(tc.in); !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("Parse(%q) = %#v, want %#v", tc.in, got, tc.want)
+			}
+		})
+	}
+}

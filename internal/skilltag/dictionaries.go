@@ -334,6 +334,35 @@ var wordAliases = map[string]string{
 	// web3
 	"web3":     "web3",
 	"ethereum": "ethereum",
+	// security (unambiguous tokens; ambiguous "burp" routes via a phrase below)
+	"nmap":       "nmap",
+	"wireshark":  "wireshark",
+	"metasploit": "metasploit",
+	"owasp":      "owasp",
+	"nessus":     "nessus",
+	"keycloak":   "keycloak",
+	"oauth":      "oauth",
+	"oauth2":     "oauth",
+	"saml":       "saml",
+	"openid":     "openid",
+	"oidc":       "openid",
+	"jwt":        "jwt",
+	// qa / testing
+	"puppeteer": "puppeteer",
+	"appium":    "appium",
+	"k6":        "k6",
+	"gatling":   "gatling",
+	"jmeter":    "jmeter",
+	"testng":    "testng",
+	"soapui":    "soapui",
+	// data — ELT / warehouse (unambiguous; ambiguous engines route via phrases below)
+	"metabase": "metabase",
+	"dagster":  "dagster",
+	"airbyte":  "airbyte",
+	"fivetran": "fivetran",
+	"debezium": "debezium",
+	"hbase":    "hbase",
+	"nifi":     "nifi",
 }
 
 // phraseAlias is a punctuated or multi-word term matched against the normalized
@@ -399,6 +428,17 @@ var phraseAliases = []phraseAlias{
 	{"generative ai", "generative-ai"}, {"gen ai", "generative-ai"},
 	{"deep learning", "deep-learning"},
 	{"six sigma", "six-sigma"},
+	// Lightcast-diffed gaps (security/qa/data). Ambiguous English words (burp, druid,
+	// pinot, presto, iceberg) are emitted ONLY via a qualifying phrase, so a bare
+	// non-tech use ("a druid", "pinot noir", "a loud burp") never tags — same doctrine
+	// as c/r above.
+	{"burp suite", "burp-suite"},
+	{"robot framework", "robot-framework"},
+	{"apache druid", "druid"},
+	{"apache pinot", "pinot"},
+	{"prestodb", "presto"}, {"presto db", "presto"},
+	{"delta lake", "delta-lake"},
+	{"apache iceberg", "iceberg"},
 }
 
 // sharedAcronyms resolve in ALL text (jobs and résumés). They are matched by their
