@@ -261,6 +261,66 @@ func TestDerive_StructuredCategoryWinsAndDictionaryFills(t *testing.T) {
 	}
 }
 
+// The description fills a non-technical category when the source and title are both
+// silent — the lowest tier of the category precedence, feeding the enrichment gate.
+func TestDerive_DescriptionFillsNonTechCategoryWhenTitleSilent(t *testing.T) {
+	got := Derive(Input{
+		Title:       "Join Our Team", // no category word
+		Company:     "Acme",
+		Source:      "greenhouse",
+		ExternalID:  "board:1",
+		Description: "We are hiring a sales representative for our growing team.",
+	})
+	if got.Category != "sales" {
+		t.Errorf("Category = %q, want sales (description fills when title silent)", got.Category)
+	}
+}
+
+// The title dictionary beats the description tier: a resolvable title is never
+// overwritten by a non-tech phrase in the prose.
+func TestDerive_TitleCategoryBeatsDescription(t *testing.T) {
+	got := Derive(Input{
+		Title:       "Backend Developer", // title → backend
+		Company:     "Acme",
+		Source:      "greenhouse",
+		ExternalID:  "board:1",
+		Description: "You will support our sales representative onboarding.",
+	})
+	if got.Category != "backend" {
+		t.Errorf("Category = %q, want backend (title beats description)", got.Category)
+	}
+}
+
+// The description tier resolves only non-technical categories: a title-silent job
+// whose prose describes a technical role stays empty (never enriched-then-gated).
+func TestDerive_TechDescriptionYieldsNoCategory(t *testing.T) {
+	got := Derive(Input{
+		Title:       "Join Our Team", // no category word
+		Company:     "Acme",
+		Source:      "greenhouse",
+		ExternalID:  "board:1",
+		Description: "Build resilient backend systems in Go and mentor the team.",
+	})
+	if got.Category != "" {
+		t.Errorf("Category = %q, want empty (description resolves no technical category)", got.Category)
+	}
+}
+
+// A structured category from the source wins over the description tier too.
+func TestDerive_StructuredCategoryBeatsDescription(t *testing.T) {
+	got := Derive(Input{
+		Title:       "Join Our Team", // no category word
+		Company:     "Acme",
+		Source:      "getmatch",
+		ExternalID:  "1",
+		Category:    "frontend", // structured source signal
+		Description: "We are hiring a sales representative.",
+	})
+	if got.Category != "frontend" {
+		t.Errorf("Category = %q, want frontend (structured source wins over description)", got.Category)
+	}
+}
+
 // A structured minimum-experience from the source wins over the jobfacts text
 // parse; when the source is nil the text parse fills it.
 func TestDerive_StructuredExperienceWinsAndTextFills(t *testing.T) {

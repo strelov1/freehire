@@ -91,11 +91,16 @@ func Derive(in Input) Derived {
 	if seniority == "" {
 		seniority = classify.SeniorityFromDescription(in.Description)
 	}
-	// Category precedence: structured source signal → title dictionary. (Description
-	// prose is too noisy to derive a category deterministically.)
+	// Category precedence: structured source signal → title dictionary → a
+	// non-tech match in the description (NonTechFromDescription resolves only
+	// non-technical categories, feeding the enrichment cost gate; a title-silent
+	// tech job stays empty). Each lower source only fills what the higher left empty.
 	category := in.Category
 	if category == "" {
 		category = class.Category
+	}
+	if category == "" {
+		category = classify.NonTechFromDescription(in.Description)
 	}
 	// Experience precedence: structured source signal → description text parse.
 	experience := in.ExperienceYearsMin

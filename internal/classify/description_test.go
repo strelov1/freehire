@@ -46,3 +46,58 @@ func TestSeniorityFromDescription(t *testing.T) {
 		})
 	}
 }
+
+func TestNonTechFromDescription(t *testing.T) {
+	tests := []struct {
+		name string
+		desc string
+		want string
+	}{
+		// Positives — anchored non-technical role statements.
+		{"sales representative", "We are hiring a sales representative for the DACH region.", "sales"},
+		{"account executive", "This is an account executive role selling to enterprise.", "sales"},
+		{"business development rep", "Join us as a business development representative.", "sales"},
+		{"marketing manager", "We are looking for a marketing manager.", "marketing"},
+		{"content marketing", "A content marketing specialist opening.", "marketing"},
+		{"social media manager", "Hiring a social media manager for our brand.", "marketing"},
+		{"seo specialist", "We need an SEO specialist to grow organic traffic.", "marketing"},
+		{"customer support", "We are hiring a customer support representative.", "support"},
+		{"customer success", "This customer success manager owns renewals.", "support"},
+		{"help desk", "We are hiring a help desk technician.", "support"},
+		{"office manager", "We are hiring an office manager for our Berlin HQ.", "management"},
+		{"operations manager", "This is an operations manager position.", "management"},
+		{"general manager", "Seeking a general manager for the new market.", "management"},
+		{"hr manager", "Hiring an HR manager to build the people team.", "management"},
+
+		// Trap negatives — incidental prose that must NOT set a category.
+		{"sales team incidental", "Collaborate with our sales team on integrations.", ""},
+		{"support engineers incidental", "Work closely with our support engineers.", ""},
+		{"marketing org incidental", "Join our marketing org as a backend engineer.", ""},
+		{"bare support", "We offer great support and a strong culture.", ""},
+
+		// Tech-adjacent roles are explicitly excluded (never mislabel a tech job).
+		{"sales engineer excluded", "We are hiring a sales engineer.", ""},
+		{"solutions engineer excluded", "This is a solutions engineer role.", ""},
+		{"engineering manager excluded", "We are hiring an engineering manager.", ""},
+		{"product manager excluded", "Join us as a product manager.", ""},
+		{"project manager excluded", "Seeking a project manager for the platform.", ""},
+		{"data engineering manager excluded", "We are hiring a data engineering manager.", ""},
+
+		// Topic mentions (a skill/outcome/tool, not a role) must NOT set a category —
+		// they appear in the prose of unrelated roles.
+		{"digital marketing skill mention", "Familiarity with digital marketing tools is a plus.", ""},
+		{"customer success outcome", "You will drive customer success across our platform.", ""},
+		{"help desk software mention", "Integrate with popular help desk software like Zendesk.", ""},
+
+		// The detector resolves no technical category, and empty is empty.
+		{"tech role stays empty", "Build resilient backend systems in Go.", ""},
+		{"empty", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := NonTechFromDescription(tt.desc); got != tt.want {
+				t.Errorf("NonTechFromDescription(%q) = %q, want %q", tt.desc, got, tt.want)
+			}
+		})
+	}
+}
