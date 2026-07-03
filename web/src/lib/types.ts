@@ -51,11 +51,15 @@ export interface Company {
   company_info?: CompanyInfo;
 }
 
-/** A row of the companies catalog: company plus its computed job count. */
+/** A row of the companies catalog: company plus its computed job count and a few
+ *  company-info facts for the card (present-only — absent on unenriched rows). */
 export interface CompanyListItem {
   slug: string;
   name: string;
   job_count: number;
+  tagline?: string | null;
+  industries?: string[] | null;
+  hq_country?: string | null;
 }
 
 /** Pagination metadata returned alongside list responses. */

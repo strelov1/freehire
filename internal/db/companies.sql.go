@@ -156,7 +156,7 @@ func (q *Queries) GetCompany(ctx context.Context, slug string) (Company, error) 
 }
 
 const listCompanies = `-- name: ListCompanies :many
-SELECT slug, name, job_count
+SELECT slug, name, job_count, tagline, industries, hq_country
 FROM companies
 WHERE ($1::text = '' OR name ILIKE '%' || $1 || '%')
   AND (coalesce(cardinality($2::text[]), 0) = 0 OR collections && $2::text[])
@@ -182,9 +182,12 @@ type ListCompaniesParams struct {
 }
 
 type ListCompaniesRow struct {
-	Slug     string `json:"slug"`
-	Name     string `json:"name"`
-	JobCount int32  `json:"job_count"`
+	Slug       string      `json:"slug"`
+	Name       string      `json:"name"`
+	JobCount   int32       `json:"job_count"`
+	Tagline    pgtype.Text `json:"tagline"`
+	Industries []string    `json:"industries"`
+	HqCountry  pgtype.Text `json:"hq_country"`
 }
 
 // Catalog page: companies with their job counts, most active first. The job count
@@ -216,7 +219,14 @@ func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([
 	items := []ListCompaniesRow{}
 	for rows.Next() {
 		var i ListCompaniesRow
-		if err := rows.Scan(&i.Slug, &i.Name, &i.JobCount); err != nil {
+		if err := rows.Scan(
+			&i.Slug,
+			&i.Name,
+			&i.JobCount,
+			&i.Tagline,
+			&i.Industries,
+			&i.HqCountry,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
