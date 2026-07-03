@@ -5,6 +5,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/cvsection"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/verdict"
@@ -30,7 +31,7 @@ func (a *API) GetResumeVerdict(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
 
-	v, err := a.computeCoverage(c, profile)
+	v, err := a.computeCoverage(c, userID, profile)
 	if err != nil {
 		return err
 	}
@@ -42,10 +43,15 @@ func (a *API) GetResumeVerdict(c *fiber.Ctx) error {
 // query B is the "uncovered" set — the same role filtered to vacancies listing
 // none of the profile's skills — whose total and skill distribution give the
 // covered count and the per-skill new-vacancy unlock.
-func (a *API) computeCoverage(c *fiber.Ctx, profile db.UserProfile) (verdict.Verdict, error) {
+func (a *API) computeCoverage(c *fiber.Ctx, userID int64, profile db.UserProfile) (verdict.Verdict, error) {
 	roleFilter := search.FilterFromValues(roleValues(c, profile))
 
-	role, err := a.facets.FacetCounts(c.Context(), search.FacetParams{Filter: roleFilter})
+	// The role query now also reads the full role skill distribution (Facets:skills)
+	// so the breakdown can rank the role's top in-demand skills and flag must-haves.
+	role, err := a.facets.FacetCounts(c.Context(), search.FacetParams{
+		Filter: roleFilter,
+		Facets: []string{"skills"},
+	})
 	if err != nil {
 		return verdict.Verdict{}, err
 	}
@@ -56,7 +62,28 @@ func (a *API) computeCoverage(c *fiber.Ctx, profile db.UserProfile) (verdict.Ver
 	if err != nil {
 		return verdict.Verdict{}, err
 	}
-	return verdict.Compute(role.Total, uncovered.Total, uncovered.Facets["skills"]), nil
+	declared, body := a.cvSkillSets(c, userID)
+	return verdict.Compute(verdict.Input{
+		Total:           role.Total,
+		UncoveredTotal:  uncovered.Total,
+		UncoveredSkills: uncovered.Facets["skills"],
+		RoleSkills:      role.Facets["skills"],
+		Declared:        declared,
+		Body:            body,
+	}), nil
+}
+
+// cvSkillSets parses the caller's stored CV into its declared (Skills-section) and
+// body skill sets for the role breakdown. Best-effort: with no CV stored (or a read
+// error) it returns empty sets so the breakdown degrades to all-missing rather than
+// failing the verdict.
+func (a *API) cvSkillSets(c *fiber.Ctx, userID int64) (declared, body []string) {
+	text, ok, err := a.storedCVText(c, userID)
+	if err != nil || !ok {
+		return nil, nil
+	}
+	declared, body, _ = cvsection.Parse(text)
+	return declared, body
 }
 
 // roleValues builds the facet query for the coverage role from the request. It

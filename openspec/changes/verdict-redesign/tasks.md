@@ -5,10 +5,10 @@
 
 ## 2. Enriched market-coverage verdict (backend)
 
-- [ ] 2.1 Add `Facets:["skills"]` to the role facet query in `computeCoverage` and thread the CV-section sets in from the stored CV
-- [ ] 2.2 Extend `verdict.Verdict`/`verdict.Compute`: top-20 `SkillRow`s (name, market_frequency, must_have, status, advice), `must_have_total`/`must_have_covered`, `stack_match_percent`, `coherence_percent`; add `MustHavePct` const
-- [ ] 2.3 Deterministic status classification (strong/hidden/missing) and status-keyed advice templates
-- [ ] 2.4 Table-driven `verdict` tests: status derivation, must-have threshold, stack-match, coherence (incl. empty declared), unchanged coverage headline
+- [x] 2.1 Add `Facets:["skills"]` to the role facet query in `computeCoverage` and thread the CV-section sets in from the stored CV
+- [x] 2.2 Extend `verdict.Verdict`/`verdict.Compute`: top-20 `SkillRow`s (name, market_frequency, must_have, status, advice), `must_have_total`/`must_have_covered`, `stack_match_percent`, `coherence_percent`; add `MustHavePct` const
+- [x] 2.3 Deterministic status classification (strong/hidden/missing) and status-keyed advice templates
+- [x] 2.4 Table-driven `verdict` tests: status derivation, must-have threshold, stack-match, coherence (incl. empty declared), unchanged coverage headline
 
 ## 3. Restructured CV ATS score (backend)
 
