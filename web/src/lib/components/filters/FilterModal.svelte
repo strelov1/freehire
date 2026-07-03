@@ -53,6 +53,7 @@
   const activeEntry = $derived(visibleRail.find((e) => e.key === active) ?? visibleRail[0]);
 
   function entryCount(e: RailEntry, f: JobFilters): number {
+    if (e.kind === 'category') return (f.facets.category?.values.length ?? 0) + (f.facets.seniority?.values.length ?? 0);
     if (e.kind === 'location')
       return (f.facets.regions?.values.length ?? 0) + (f.facets.countries?.values.length ?? 0) + (f.facets.cities?.values.length ?? 0);
     if (e.kind === 'salary') return (f.facets.salary_currency?.values.length ?? 0) + (f.salaryMin != null ? 1 : 0);
@@ -67,6 +68,7 @@
 
   const facetDef = $derived(activeEntry?.kind === 'facet' ? FACETS.find((d) => d.param === activeEntry!.facetParam) : undefined);
   const currencyOptions = FACETS.find((d) => d.param === 'salary_currency')?.options ?? [];
+  const seniorityOptions = FACETS.find((d) => d.param === 'seniority')?.options ?? [];
   const workModeOptions = FACETS.find((d) => d.param === 'work_mode')?.options ?? [];
   const employmentOptions = FACETS.find((d) => d.param === 'employment_type')?.options ?? [];
   const domainOptions = FACETS.find((d) => d.param === 'domains')?.options ?? [];
@@ -171,6 +173,13 @@
         <!-- pane -->
         <section class="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
           {#if activeEntry?.kind === 'category'}
+            <h3 class="mb-2 text-sm font-semibold tracking-tight">Seniority</h3>
+            <PillGroup
+              options={seniorityOptions}
+              selected={staged.facet('seniority').values}
+              onToggle={(v) => staged.toggle('seniority', v)}
+            />
+            <h3 class="mb-3 mt-6 text-sm font-semibold tracking-tight">Specialization</h3>
             <CategoryPane store={staged} />
           {:else if activeEntry?.kind === 'location'}
             <LocationPane store={staged} {counts} />

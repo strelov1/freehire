@@ -101,6 +101,7 @@
       placeholder={def.placeholder}
       onToggle={(v) => store.toggle(def.param, v)}
       fallbackLabel={(v) => dynamicLabel(def.param, v)}
+      {expand}
     />
   {:else}
     <TokenInput

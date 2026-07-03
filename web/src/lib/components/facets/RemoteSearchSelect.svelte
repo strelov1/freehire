@@ -19,6 +19,7 @@
     onToggle,
     fallbackLabel,
     clearOnSelect = false,
+    expand = false,
   }: {
     search: (query: string) => Promise<FacetOption[]>;
     selected: string[];
@@ -29,6 +30,8 @@
     // When set, the search field is cleared after picking an option (search →
     // pick a chip → search the next), suited to a build-a-set form.
     clearOnSelect?: boolean;
+    // Drop the scroll cap on the results list — for the roomy modal pane.
+    expand?: boolean;
   } = $props();
 
   let query = $state('');
@@ -96,7 +99,7 @@
 
   <Input bind:value={query} {placeholder} class="w-full" />
 
-  <div class="flex max-h-44 flex-col gap-0.5 overflow-y-auto">
+  <div class={expand ? 'flex flex-col gap-0.5' : 'flex max-h-44 flex-col gap-0.5 overflow-y-auto'}>
     {#each pickable as opt (opt.value)}
       <button
         type="button"
