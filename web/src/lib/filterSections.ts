@@ -87,7 +87,16 @@ export const CATEGORY_GROUPS: CategorySection[] = CATEGORY_GROUP_ORDER.map((name
 
 export const RAIL_SECTIONS: RailSection[] = ['ROLE', 'PAY & BENEFITS', 'REQUIREMENTS & ELIGIBILITY'];
 
-export type RailKind = 'facet' | 'category' | 'location' | 'salary' | 'work' | 'industry' | 'visa' | 'posted';
+export type RailKind =
+  | 'facet'
+  | 'category'
+  | 'location'
+  | 'salary'
+  | 'work'
+  | 'industry'
+  | 'language'
+  | 'relocation'
+  | 'posted';
 
 export interface RailEntry {
   /** Stable pane id (also the URL-hashable key). */
@@ -105,14 +114,11 @@ export const RAIL: RailEntry[] = [
   { key: 'seniority', label: 'Seniority', section: 'ROLE', kind: 'facet', facetParam: 'seniority' },
   { key: 'work', label: 'Work & employment', section: 'ROLE', kind: 'work' },
   { key: 'skills', label: 'Skills', section: 'ROLE', kind: 'facet', facetParam: 'skills' },
-  { key: 'industry', label: 'Industry & type', section: 'ROLE', kind: 'industry' },
-  { key: 'collections', label: 'Collection', section: 'ROLE', kind: 'facet', facetParam: 'collections' },
+  { key: 'industry', label: 'Industry & collection', section: 'ROLE', kind: 'industry' },
   { key: 'company_slug', label: 'Company', section: 'ROLE', kind: 'facet', facetParam: 'company_slug' },
   { key: 'source', label: 'Source', section: 'ROLE', kind: 'facet', facetParam: 'source' },
   { key: 'salary', label: 'Salary', section: 'PAY & BENEFITS', kind: 'salary' },
-  { key: 'english_level', label: 'English', section: 'REQUIREMENTS & ELIGIBILITY', kind: 'facet', facetParam: 'english_level' },
-  { key: 'posting_language', label: 'Job language', section: 'REQUIREMENTS & ELIGIBILITY', kind: 'facet', facetParam: 'posting_language' },
-  { key: 'relocation', label: 'Relocation', section: 'REQUIREMENTS & ELIGIBILITY', kind: 'facet', facetParam: 'relocation' },
-  { key: 'visa', label: 'Visa sponsorship', section: 'REQUIREMENTS & ELIGIBILITY', kind: 'visa' },
+  { key: 'language', label: 'Language', section: 'REQUIREMENTS & ELIGIBILITY', kind: 'language' },
+  { key: 'relocation', label: 'Relocation', section: 'REQUIREMENTS & ELIGIBILITY', kind: 'relocation' },
   { key: 'posted', label: 'Posted', section: 'REQUIREMENTS & ELIGIBILITY', kind: 'posted' },
 ];

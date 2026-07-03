@@ -13,6 +13,7 @@
     placeholder,
     onToggle,
     clearOnSelect = false,
+    expand = false,
   }: {
     options: FacetOption[];
     selected: string[];
@@ -23,6 +24,9 @@
     // build-a-set form (search → pick → search the next), not the filter panel
     // where you toggle several visible pills after one search.
     clearOnSelect?: boolean;
+    // Drop the scroll cap on the pill list — used in the roomy modal pane where the
+    // full list should show, unlike the compact sidebar (which caps + scrolls).
+    expand?: boolean;
   } = $props();
 
   let filter = $state('');
@@ -41,7 +45,7 @@
 
 <div class="flex flex-col gap-2">
   <Input bind:value={filter} {placeholder} class="w-full" />
-  <div class="flex max-h-44 flex-wrap gap-1.5 overflow-y-auto">
+  <div class={expand ? 'flex flex-wrap gap-1.5' : 'flex max-h-44 flex-wrap gap-1.5 overflow-y-auto'}>
     {#each shown as opt (opt.value)}
       {@const active = selected.includes(opt.value)}
       <button

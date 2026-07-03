@@ -57,8 +57,10 @@
       return (f.facets.regions?.values.length ?? 0) + (f.facets.countries?.values.length ?? 0) + (f.facets.cities?.values.length ?? 0);
     if (e.kind === 'salary') return (f.facets.salary_currency?.values.length ?? 0) + (f.salaryMin != null ? 1 : 0);
     if (e.kind === 'work') return (f.facets.work_mode?.values.length ?? 0) + (f.facets.employment_type?.values.length ?? 0);
-    if (e.kind === 'industry') return (f.facets.domains?.values.length ?? 0) + (f.facets.company_type?.values.length ?? 0);
-    if (e.kind === 'visa') return f.visa ? 1 : 0;
+    if (e.kind === 'industry')
+      return (f.facets.domains?.values.length ?? 0) + (f.facets.company_type?.values.length ?? 0) + (f.facets.collections?.values.length ?? 0);
+    if (e.kind === 'language') return (f.facets.english_level?.values.length ?? 0) + (f.facets.posting_language?.values.length ?? 0);
+    if (e.kind === 'relocation') return (f.facets.relocation?.values.length ?? 0) + (f.visa ? 1 : 0);
     if (e.kind === 'posted') return f.postedWithinDays != null ? 1 : 0;
     return f.facets[e.facetParam ?? e.key]?.values.length ?? 0;
   }
@@ -69,6 +71,10 @@
   const employmentOptions = FACETS.find((d) => d.param === 'employment_type')?.options ?? [];
   const domainOptions = FACETS.find((d) => d.param === 'domains')?.options ?? [];
   const companyTypeOptions = FACETS.find((d) => d.param === 'company_type')?.options ?? [];
+  const collectionOptions = FACETS.find((d) => d.param === 'collections')?.options ?? [];
+  const relocationOptions = FACETS.find((d) => d.param === 'relocation')?.options ?? [];
+  const englishDef = FACETS.find((d) => d.param === 'english_level');
+  const postingDef = FACETS.find((d) => d.param === 'posting_language');
 
   // Debounced live count for the staged filters — the same cheap facet call the panel
   // already makes, keyed by a monotonic gen so a slow response can't overwrite a newer.
@@ -169,7 +175,7 @@
           {:else if activeEntry?.kind === 'location'}
             <LocationPane store={staged} {counts} />
           {:else if activeEntry?.kind === 'facet' && facetDef}
-            <FacetSection def={facetDef} store={staged} {counts} />
+            <FacetSection def={facetDef} store={staged} {counts} expand />
           {:else if activeEntry?.kind === 'salary'}
             <h3 class="mb-2 text-sm font-semibold tracking-tight">Currency</h3>
             <PillGroup
@@ -219,7 +225,23 @@
               selected={staged.facet('company_type').values}
               onToggle={(v) => staged.toggle('company_type', v)}
             />
-          {:else if activeEntry?.kind === 'visa'}
+            <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Collection</h3>
+            <PillGroup
+              options={collectionOptions}
+              selected={staged.facet('collections').values}
+              onToggle={(v) => staged.toggle('collections', v)}
+            />
+          {:else if activeEntry?.kind === 'language'}
+            {#if englishDef}<FacetSection def={englishDef} store={staged} {counts} expand />{/if}
+            <div class="mt-4">{#if postingDef}<FacetSection def={postingDef} store={staged} {counts} expand />{/if}</div>
+          {:else if activeEntry?.kind === 'relocation'}
+            <h3 class="mb-2 text-sm font-semibold tracking-tight">Relocation</h3>
+            <PillGroup
+              options={relocationOptions}
+              selected={staged.facet('relocation').values}
+              onToggle={(v) => staged.toggle('relocation', v)}
+            />
+            <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Visa</h3>
             <label class="flex cursor-pointer items-center gap-2 text-sm">
               <input
                 type="checkbox"

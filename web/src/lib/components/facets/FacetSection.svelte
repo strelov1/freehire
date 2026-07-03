@@ -12,7 +12,7 @@
   // exclude toggle) plus the control the facet declares. All state lives in the
   // store, keyed by the facet's param. `counts` carries the live facet
   // distribution that drives dynamic (open-vocabulary) selects.
-  let { def, store, counts }: { def: FacetDef; store: FacetStore; counts?: FacetCounts | null } = $props();
+  let { def, store, counts, expand = false }: { def: FacetDef; store: FacetStore; counts?: FacetCounts | null; expand?: boolean } = $props();
 
   const st = $derived(store.facet(def.param));
 
@@ -91,6 +91,7 @@
       exclude={st.exclude}
       placeholder={def.placeholder}
       onToggle={(v) => store.toggle(def.param, v)}
+      {expand}
     />
   {:else if def.control === 'remote' && def.remote}
     <RemoteSearchSelect
