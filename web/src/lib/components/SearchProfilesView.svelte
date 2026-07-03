@@ -143,31 +143,34 @@
                   </span>
                 {/each}
               </div>
-              <div class="flex flex-wrap gap-1">
-                {#each profile.skills as skill (skill)}
+              <div class="flex flex-wrap items-center gap-1">
+                {#each profile.skills.slice(0, 12) as skill (skill)}
                   <span
                     class="rounded bg-secondary px-1.5 py-0.5 text-xs text-secondary-foreground"
                   >
                     {skill}
                   </span>
                 {/each}
+                {#if profile.skills.length > 12}
+                  <span class="px-1 text-xs text-muted-foreground">
+                    +{profile.skills.length - 12} more
+                  </span>
+                {/if}
               </div>
               {#if cov && cov.total > 0}
-                <div class="mt-1 flex flex-col gap-1">
-                  <div class="flex items-center gap-2">
-                    <span
-                      class="whitespace-nowrap text-xs text-muted-foreground"
-                      title="{cov.covered} of {cov.total} open vacancies"
-                    >
-                      Coverage {cov.coverage_percent}% · {cov.covered.toLocaleString('en-US')}/{cov.total.toLocaleString('en-US')}
+                <div class="mt-2 flex flex-col gap-2">
+                  <div class="flex flex-col gap-1">
+                    <span class="text-xs text-muted-foreground">
+                      <span class="font-semibold text-foreground">{cov.coverage_percent}% coverage</span>
+                      · {cov.covered.toLocaleString('en-US')} of {cov.total.toLocaleString('en-US')} open vacancies
                     </span>
-                    <div class="h-1.5 flex-1 overflow-hidden rounded bg-secondary">
+                    <div class="h-1.5 overflow-hidden rounded bg-secondary">
                       <div class="h-full rounded bg-primary" style="width: {cov.coverage_percent}%"></div>
                     </div>
                   </div>
                   {#if cov.gaps.length > 0}
                     <div class="flex flex-wrap items-center gap-1">
-                      <span class="text-xs text-muted-foreground">Add:</span>
+                      <span class="text-xs text-muted-foreground">Add to reach more:</span>
                       {#each cov.gaps.slice(0, 5) as gap (gap.name)}
                         <a
                           href={jobsHref(profile.specializations, gap.name)}

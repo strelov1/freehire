@@ -1,21 +1,17 @@
 <script lang="ts">
-  import { ArrowLeft, Check, TrendingUp } from '@lucide/svelte';
+  import { Check, TrendingUp } from '@lucide/svelte';
   import type { Verdict } from '$lib/types';
   import { Badge } from '$lib/ui';
 
   // The verdict is the backend's market-coverage computation for the selected role:
   // how many of the role's open vacancies the profile's skills reach, and which missing
-  // skill unlocks the most new vacancies. `role` is a humanized label for the header;
-  // `gapHref`, when given, links a gap skill to the matching job search.
+  // skill unlocks the most new vacancies. `gapHref`, when given, links a gap skill to
+  // the matching job search. The page owns the header/tabs; this renders the body.
   let {
     verdict,
-    name,
-    role,
     gapHref,
   }: {
     verdict: Verdict;
-    name: string;
-    role: string;
     gapHref?: (skill: string) => string;
   } = $props();
 
@@ -24,21 +20,6 @@
 </script>
 
 <div class="flex flex-col gap-8">
-  <!-- Header -->
-  <div class="flex flex-col gap-3">
-    <a
-      href="/my/profiles"
-      class="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-    >
-      <ArrowLeft class="size-4" />
-      Profiles
-    </a>
-    <div class="flex flex-col gap-1">
-      <h1 class="text-3xl font-semibold tracking-tight">Your market coverage</h1>
-      <p class="text-sm text-muted-foreground">{name}{role ? ` · ${role}` : ''}</p>
-    </div>
-  </div>
-
   <!-- Coverage headline -->
   <div class="flex flex-col gap-4 rounded-xl border border-border bg-card p-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
     <div class="flex flex-wrap items-end justify-between gap-2">
@@ -66,9 +47,7 @@
     <div class="flex flex-col gap-3">
       <div class="flex items-center gap-2">
         <TrendingUp class="size-4 text-muted-foreground" />
-        <h2 class="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-          Add a skill · what unlocks the most vacancies
-        </h2>
+        <h2 class="text-base font-semibold tracking-tight">Add a skill to reach more vacancies</h2>
       </div>
       <ul class="flex flex-col gap-2">
         {#each gaps as gap, i (gap.name)}
