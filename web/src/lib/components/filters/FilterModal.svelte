@@ -1,6 +1,5 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { X } from '@lucide/svelte';
   import { FACETS } from '$lib/facets';
   import { emptyFilters, type FilterStore, type JobFilters } from '$lib/filters';
   import { StagedFilters } from '$lib/stagedFilters.svelte';
@@ -11,16 +10,15 @@
   import ChipFacet from './ChipFacet.svelte';
   import CategoryPane from './CategoryPane.svelte';
   import LocationPane from './LocationPane.svelte';
+  import FilterModalShell from './FilterModalShell.svelte';
 
-  // The two-pane filter modal. It edits a StagedFilters copy (seeded from the live
-  // store on open) and applies it only on the footer button — the live store/URL is
-  // untouched until then. `previewCount(params)` (optional) returns the job count for a
-  // staged filter set, driving the default "Show N jobs" button.
+  // The job-search filter modal: a thin wrapper over FilterModalShell that supplies the
+  // job rail, the staged job filters, and the pane controls. The shell owns the chrome
+  // (rail, footer, deferred apply); this file owns only what's job-specific.
   //
-  // Reusable beyond job search: pass `railKeys` to restrict which rail panes show
-  // (e.g. just Specialization + Skills for a profile), `applyLabel`/`onApply` to give
-  // the footer button a custom label and action (e.g. "Save" → persist a profile
-  // instead of committing to the URL), and `canApply` to gate that button.
+  // Reusable beyond the standalone list: `railKeys` restricts which rail panes show
+  // (e.g. Specialization + Skills for a profile); `applyLabel`/`onApply` give the footer
+  // a custom label and action (e.g. "Save" → persist a profile); `canApply` gates it.
   let {
     store,
     seed,
@@ -59,36 +57,22 @@
 
   const staged = new StagedFilters();
 
-  // Rail entries visible under the current scope: restricted to `railKeys` when given
-  // (a caller reusing the modal for a subset of facets), and a 'facet' entry is hidden
-  // when its param is excluded (e.g. Source/Company on a company page).
+  // Rail entries visible under the current scope: restricted to `railKeys` when given,
+  // and a 'facet' entry is hidden when its param is excluded (e.g. Company on a company
+  // page).
   const visibleRail = $derived(
     RAIL.filter((e) => (!railKeys || railKeys.includes(e.key)) && !(e.facetParam && exclude.includes(e.facetParam))),
   );
 
-  let active = $state<string>('category');
-
-  // Seed staged from the applied filters each time the modal opens, and land on the
-  // first visible rail entry.
-  let wasOpen = false;
-  $effect(() => {
-    if (open && !wasOpen) {
-      staged.seed(seed ?? store?.value ?? emptyFilters());
-      if (!visibleRail.some((e) => e.key === active)) active = visibleRail[0]?.key ?? 'category';
-    }
-    wasOpen = open;
-  });
-
-  const activeEntry = $derived(visibleRail.find((e) => e.key === active) ?? visibleRail[0]);
-
-  // Values selected for one facet — included plus excluded — so the rail count
-  // reflects any staged selection regardless of sign.
+  // Values selected for one facet — included plus excluded — so the rail count reflects
+  // any staged selection regardless of sign.
   function selCount(f: JobFilters, param: string): number {
     const st = f.facets[param];
     return st ? st.include.length + st.exclude.length : 0;
   }
 
-  function entryCount(e: RailEntry, f: JobFilters): number {
+  function entryCount(e: RailEntry): number {
+    const f = staged.value;
     if (e.kind === 'category') return selCount(f, 'category') + selCount(f, 'seniority');
     if (e.kind === 'location') return selCount(f, 'regions') + selCount(f, 'countries') + selCount(f, 'cities');
     if (e.kind === 'salary') return selCount(f, 'salary_currency') + (f.salaryMin != null ? 1 : 0);
@@ -100,231 +84,125 @@
     return selCount(f, e.facetParam ?? e.key);
   }
 
-  // Panes that reuse FacetSection (dynamic controls); ChipFacet resolves its own
-  // options from the registry, so composite panes only name the facet param.
-  const facetDef = $derived.by(() => {
-    if (activeEntry?.kind !== 'facet') return undefined;
-    const d = FACETS.find((x) => x.param === activeEntry!.facetParam);
-    // In plain mode strip the search-only exclude/match toggles from the facet control.
-    return d && plain ? { ...d, excludable: false, hasAndOr: false } : d;
-  });
   const englishDef = FACETS.find((d) => d.param === 'english_level');
   const postingDef = FACETS.find((d) => d.param === 'posting_language');
 
-  // Debounced live count for the staged filters — the same cheap facet call the panel
-  // already makes, keyed by a monotonic gen so a slow response can't overwrite a newer.
-  let showCount = $state<number | null>(null);
-  let countGen = 0;
-  $effect(() => {
-    if (!open || !previewCount) return;
-    const params = staged.params(); // tracks staged.value
-    const gen = ++countGen;
-    const pc = previewCount;
-    const t = setTimeout(() => {
-      pc(params)
-        .then((n) => {
-          if (gen === countGen) showCount = n;
-        })
-        .catch(() => {});
-    }, 200);
-    return () => clearTimeout(t);
-  });
+  // In plain mode strip the search-only exclude/match toggles from a facet control.
+  function facetDefFor(param: string | undefined) {
+    const d = FACETS.find((x) => x.param === param);
+    return d && plain ? { ...d, excludable: false, hasAndOr: false } : d;
+  }
 
-  // Apply: by default commit the staged filters to the live store/URL. When `onApply`
-  // is given (a reuse like the profile editor), delegate to it instead — surfacing any
-  // error and keeping the modal open so the user can fix it.
-  let applyBusy = $state(false);
-  let applyError = $state<string | null>(null);
-  const applyDisabled = $derived(applyBusy || (canApply ? !canApply(staged.value) : false));
+  function seedStaged() {
+    staged.seed(seed ?? store?.value ?? emptyFilters());
+  }
 
   async function apply() {
-    if (applyDisabled) return;
-    if (!onApply) {
-      if (store) staged.commit(store);
-      onClose();
+    if (onApply) {
+      await onApply(staged);
       return;
     }
-    applyBusy = true;
-    applyError = null;
-    try {
-      await onApply(staged);
-      onClose();
-    } catch (e) {
-      applyError = e instanceof Error ? e.message : 'Something went wrong. Please try again.';
-      applyBusy = false;
-    }
+    if (store) staged.commit(store);
   }
 
-  function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') onClose();
-  }
+  const applyDisabled = $derived(canApply ? !canApply(staged.value) : false);
 
   // A non-preset value (hand-edited URL) has no exact stop, so it reads as "Any"
-  // (the rightmost stop) — matching the label — rather than snapping to "Today".
+  // (the rightmost stop) rather than snapping to "Today".
   const freshnessIndex = $derived.by(() => {
     const i = FRESHNESS_PRESETS.findIndex((p) => p.days === staged.value.postedWithinDays);
     return i < 0 ? FRESHNESS_PRESETS.length - 1 : i;
   });
 </script>
 
-<svelte:window onkeydown={open ? onKeydown : undefined} />
+<FilterModalShell
+  {open}
+  {onClose}
+  {title}
+  rail={visibleRail}
+  sections={RAIL_SECTIONS}
+  {staged}
+  {entryCount}
+  seed={seedStaged}
+  {apply}
+  {applyDisabled}
+  {applyLabel}
+  {previewCount}
+  {pane}
+  extra={extra ? extraStaged : undefined}
+/>
 
-{#if open}
-  <div class="fixed inset-0 z-50 flex items-stretch justify-center sm:items-center sm:p-6">
-    <!-- backdrop -->
-    <button class="absolute inset-0 bg-foreground/35" aria-label="Close filters" onclick={onClose}></button>
+{#snippet extraStaged()}
+  {@render extra?.(staged)}
+{/snippet}
 
-    <div
-      class="relative flex h-full w-full flex-col overflow-hidden bg-background shadow-2xl sm:h-auto sm:max-h-[calc(100vh-3rem)] sm:max-w-4xl sm:rounded-2xl sm:border sm:border-border"
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-    >
-      <!-- header -->
-      <div class="flex items-center gap-3 border-b border-border px-4 py-3">
-        <h2 class="flex-1 text-base font-semibold tracking-tight">{title}</h2>
-        <button
-          type="button"
-          onclick={onClose}
-          aria-label="Close"
-          class="flex size-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <X class="size-4" />
-        </button>
-      </div>
-
-      <div class="flex min-h-0 flex-1">
-        <!-- rail -->
-        <nav class="w-40 shrink-0 overflow-y-auto border-r border-border py-2 sm:w-56">
-          {#each RAIL_SECTIONS as section (section)}
-            {@const entries = visibleRail.filter((e) => e.section === section)}
-            {#if entries.length}
-              <div class="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{section}</div>
-              {#each entries as e (e.key)}
-                {@const n = entryCount(e, staged.value)}
-                <button
-                  type="button"
-                  onclick={() => (active = e.key)}
-                  class={[
-                    'flex w-full items-center justify-between gap-2 border-l-2 px-3 py-2 text-left text-sm transition-colors',
-                    active === e.key
-                      ? 'border-foreground bg-accent font-semibold'
-                      : 'border-transparent font-medium hover:bg-accent',
-                  ]}
-                >
-                  <span class="truncate">{e.label}</span>
-                  {#if n > 0}
-                    <span
-                      class={[
-                        'shrink-0 rounded-full px-1.5 text-[11px] font-semibold',
-                        active === e.key ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground',
-                      ]}>{n}</span
-                    >
-                  {/if}
-                </button>
-              {/each}
-            {/if}
-          {/each}
-        </nav>
-
-        <!-- pane -->
-        <section class="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
-          {#if extra}<div class="mb-6">{@render extra(staged)}</div>{/if}
-          {#if activeEntry?.kind === 'category'}
-            {#if !exclude.includes('seniority')}
-              <ChipFacet store={staged} param="seniority" label="Seniority" />
-              <div class="mt-6"><CategoryPane store={staged} {plain} /></div>
-            {:else}
-              <CategoryPane store={staged} {plain} />
-            {/if}
-          {:else if activeEntry?.kind === 'location'}
-            <LocationPane store={staged} {counts} />
-          {:else if activeEntry?.kind === 'facet' && facetDef}
-            <FacetSection def={facetDef} store={staged} {counts} expand />
-          {:else if activeEntry?.kind === 'salary'}
-            <ChipFacet store={staged} param="salary_currency" label="Currency" />
-            <div class="mb-2 mt-6 flex items-center justify-between">
-              <h3 class="text-sm font-semibold tracking-tight">Minimum salary</h3>
-              <span class="text-xs font-medium text-muted-foreground"
-                >{staged.value.salaryMin ? `${staged.value.salaryMin.toLocaleString('en-US')}+` : 'Any'}</span
-              >
-            </div>
-            <input
-              type="range"
-              min="0"
-              max={SALARY_MAX}
-              step={SALARY_STEP}
-              value={staged.value.salaryMin ?? 0}
-              oninput={(e) => staged.setSalaryMin(Number(e.currentTarget.value) || null)}
-              aria-label="Minimum salary"
-              class="w-full accent-primary"
-            />
-          {:else if activeEntry?.kind === 'work'}
-            <ChipFacet store={staged} param="work_mode" label="Work format" />
-            <div class="mt-6"><ChipFacet store={staged} param="employment_type" label="Employment type" /></div>
-          {:else if activeEntry?.kind === 'industry'}
-            <ChipFacet store={staged} param="domains" label="Industry" />
-            <div class="mt-6"><ChipFacet store={staged} param="company_type" label="Company type" /></div>
-            <div class="mt-6"><ChipFacet store={staged} param="collections" label="Collection" /></div>
-          {:else if activeEntry?.kind === 'language'}
-            {#if englishDef}<FacetSection def={englishDef} store={staged} {counts} expand />{/if}
-            <div class="mt-4">{#if postingDef}<FacetSection def={postingDef} store={staged} {counts} expand />{/if}</div>
-          {:else if activeEntry?.kind === 'relocation'}
-            <ChipFacet store={staged} param="relocation" label="Relocation" />
-            <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Visa</h3>
-            <label class="flex cursor-pointer items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                class="size-4 rounded border-border"
-                checked={staged.value.visa}
-                onchange={(e) => staged.setVisa(e.currentTarget.checked)}
-              />
-              <span>Offers visa sponsorship</span>
-            </label>
-          {:else if activeEntry?.kind === 'posted'}
-            <div class="mb-2 flex items-center justify-between">
-              <h3 class="text-sm font-semibold tracking-tight">Posted within</h3>
-              <span class="text-xs font-medium text-muted-foreground">{freshnessLabel(staged.value.postedWithinDays)}</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max={FRESHNESS_PRESETS.length - 1}
-              step="1"
-              value={freshnessIndex}
-              oninput={(e) => staged.setPostedWithinDays(FRESHNESS_PRESETS[Number(e.currentTarget.value)]?.days ?? null)}
-              aria-label="Posted within"
-              class="w-full accent-primary"
-            />
-          {/if}
-        </section>
-      </div>
-
-      <!-- footer -->
-      <div class="flex flex-col gap-2 border-t border-border px-4 py-3">
-        {#if applyError}
-          <p class="text-sm text-destructive">{applyError}</p>
-        {/if}
-        <div class="flex items-center justify-between">
-          <button
-            type="button"
-            onclick={() => staged.clear()}
-            class="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">Clear all</button
-          >
-          <button
-            type="button"
-            onclick={apply}
-            disabled={applyDisabled}
-            class="inline-flex h-11 items-center gap-1.5 rounded-lg bg-primary px-6 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {#if applyLabel}
-              {applyBusy ? 'Saving…' : applyLabel}
-            {:else}
-              Show {showCount != null ? showCount.toLocaleString('en-US') : ''} {showCount === 1 ? 'job' : 'jobs'}
-            {/if}
-          </button>
-        </div>
-      </div>
+{#snippet pane(entry: RailEntry)}
+  {#if entry.kind === 'category'}
+    {#if !exclude.includes('seniority')}
+      <ChipFacet store={staged} param="seniority" label="Seniority" />
+      <div class="mt-6"><CategoryPane store={staged} {plain} /></div>
+    {:else}
+      <CategoryPane store={staged} {plain} />
+    {/if}
+  {:else if entry.kind === 'location'}
+    <LocationPane store={staged} {counts} />
+  {:else if entry.kind === 'facet'}
+    {@const def = facetDefFor(entry.facetParam)}
+    {#if def}<FacetSection {def} store={staged} {counts} expand />{/if}
+  {:else if entry.kind === 'salary'}
+    <ChipFacet store={staged} param="salary_currency" label="Currency" />
+    <div class="mb-2 mt-6 flex items-center justify-between">
+      <h3 class="text-sm font-semibold tracking-tight">Minimum salary</h3>
+      <span class="text-xs font-medium text-muted-foreground"
+        >{staged.value.salaryMin ? `${staged.value.salaryMin.toLocaleString('en-US')}+` : 'Any'}</span
+      >
     </div>
-  </div>
-{/if}
+    <input
+      type="range"
+      min="0"
+      max={SALARY_MAX}
+      step={SALARY_STEP}
+      value={staged.value.salaryMin ?? 0}
+      oninput={(e) => staged.setSalaryMin(Number(e.currentTarget.value) || null)}
+      aria-label="Minimum salary"
+      class="w-full accent-primary"
+    />
+  {:else if entry.kind === 'work'}
+    <ChipFacet store={staged} param="work_mode" label="Work format" />
+    <div class="mt-6"><ChipFacet store={staged} param="employment_type" label="Employment type" /></div>
+  {:else if entry.kind === 'industry'}
+    <ChipFacet store={staged} param="domains" label="Industry" />
+    <div class="mt-6"><ChipFacet store={staged} param="company_type" label="Company type" /></div>
+    <div class="mt-6"><ChipFacet store={staged} param="collections" label="Collection" /></div>
+  {:else if entry.kind === 'language'}
+    {#if englishDef}<FacetSection def={englishDef} store={staged} {counts} expand />{/if}
+    <div class="mt-4">{#if postingDef}<FacetSection def={postingDef} store={staged} {counts} expand />{/if}</div>
+  {:else if entry.kind === 'relocation'}
+    <ChipFacet store={staged} param="relocation" label="Relocation" />
+    <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Visa</h3>
+    <label class="flex cursor-pointer items-center gap-2 text-sm">
+      <input
+        type="checkbox"
+        class="size-4 rounded border-border"
+        checked={staged.value.visa}
+        onchange={(e) => staged.setVisa(e.currentTarget.checked)}
+      />
+      <span>Offers visa sponsorship</span>
+    </label>
+  {:else if entry.kind === 'posted'}
+    <div class="mb-2 flex items-center justify-between">
+      <h3 class="text-sm font-semibold tracking-tight">Posted within</h3>
+      <span class="text-xs font-medium text-muted-foreground">{freshnessLabel(staged.value.postedWithinDays)}</span>
+    </div>
+    <input
+      type="range"
+      min="0"
+      max={FRESHNESS_PRESETS.length - 1}
+      step="1"
+      value={freshnessIndex}
+      oninput={(e) => staged.setPostedWithinDays(FRESHNESS_PRESETS[Number(e.currentTarget.value)]?.days ?? null)}
+      aria-label="Posted within"
+      class="w-full accent-primary"
+    />
+  {/if}
+{/snippet}

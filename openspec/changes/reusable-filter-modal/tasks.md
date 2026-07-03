@@ -5,9 +5,9 @@
 
 ## 2. Reusable modal shell
 
-- [ ] 2.1 Add `FilterModalShell.svelte`: backdrop/header/rail (from `rail` + `sections` props)/footer (Clear all / Apply / preview) / seed-on-open / Escape+backdrop close / error handling, depending on the minimal staging contract (`active`/`seed`/`params`/`commit`/`clear`), `entryCount(entry)`, and a `pane` snippet.
-- [ ] 2.2 Refactor `FilterModal.svelte` (job) into a thin wrapper over the shell: create `StagedFilters`, pass job `RAIL` + job `entryCount` + the existing pane if/else as the `pane` snippet; preserve all current public props and behavior.
-- [ ] 2.3 Verify `JobsView`, `AnalyticsView`, and `my/profile` still open/apply the job modal unchanged (`svelte-check`).
+- [x] 2.1 Add `FilterModalShell.svelte`: backdrop/header/rail (from `rail` + `sections` props)/footer (Clear all / Apply / preview) / seed-on-open / Escape+backdrop close / error handling, depending on the minimal staging contract (`active`/`seed`/`params`/`commit`/`clear`), `entryCount(entry)`, and a `pane` snippet.
+- [x] 2.2 Refactor `FilterModal.svelte` (job) into a thin wrapper over the shell: create `StagedFilters`, pass job `RAIL` + job `entryCount` + the existing pane if/else as the `pane` snippet; preserve all current public props and behavior.
+- [x] 2.3 Verify `JobsView`, `AnalyticsView`, and `my/profile` still open/apply the job modal unchanged (`svelte-check`).
 
 ## 3. My filters as a deferred modal tab
 

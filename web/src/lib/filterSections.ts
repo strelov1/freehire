@@ -11,7 +11,9 @@
 import { CATEGORY_VALUES, type Category } from './generated/contracts';
 import { categoryLabel } from './facets';
 
-export type RailSection = 'ROLE' | 'PAY & BENEFITS' | 'REQUIREMENTS & ELIGIBILITY';
+// `SAVED` heads the job modal's "My filters" tab; `FILTERS` heads the (single-section)
+// company modal rail. Both ride the same shell as the job sections below.
+export type RailSection = 'SAVED' | 'ROLE' | 'PAY & BENEFITS' | 'REQUIREMENTS & ELIGIBILITY' | 'FILTERS';
 
 /** Display order of the specialization section headings. */
 export const CATEGORY_GROUP_ORDER = [
@@ -96,7 +98,9 @@ export type RailKind =
   | 'industry'
   | 'language'
   | 'relocation'
-  | 'posted';
+  | 'posted'
+  // The job modal's "My filters" (saved searches) tab — renders SavedSearches, not a facet control.
+  | 'saved';
 
 export interface RailEntry {
   /** Stable pane id (also the URL-hashable key). */
