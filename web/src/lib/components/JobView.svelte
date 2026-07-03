@@ -292,6 +292,15 @@
       </div>
     {/if}
 
+    {#if e.summary}
+      <!-- Model-written synopsis (only on enriched jobs). Plain text, capped at
+           400 chars server-side — the headline above the full description. -->
+      <section class="flex flex-col gap-2">
+        <h2 class="text-base font-semibold">Summary</h2>
+        <p class="text-sm leading-relaxed text-muted-foreground">{e.summary}</p>
+      </section>
+    {/if}
+
     {#if job.description}
       <!-- Description is server-sanitized HTML (see internal/sources), safe to render. -->
       <!-- eslint-disable-next-line svelte/no-at-html-tags -- server-sanitized; the rule flags every {@html} regardless -->

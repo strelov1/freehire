@@ -18,12 +18,26 @@ package enrich
 import (
 	"fmt"
 	"slices"
+	"strings"
 )
+
+// maxSummaryRunes bounds the model-written Summary. It is synthesized free text
+// derived from the (attacker-influenced) description, so Sanitize clips a rambling
+// or oversized value to keep the served payload small; the prompt already asks for
+// 1–2 sentences, so a normal value never reaches this cap.
+const maxSummaryRunes = 400
 
 // Enrichment is the typed view of a job's enrichment JSONB payload. JSON keys
 // are snake_case to match the existing jobs JSON tags. The blob maps 1:1 to the
 // future search document.
 type Enrichment struct {
+	// Summary is a short, model-written synopsis of the role (1–2 sentences): what
+	// the job involves and its core stack. Unlike every other field — which is
+	// extracted and omitted when the posting does not state it — this one is
+	// SYNTHESIZED, so the prompt asks the model to always produce it. It is served
+	// free text (no controlling dictionary), bounded by Sanitize.
+	Summary string `json:"summary,omitempty"`
+
 	// Work arrangement.
 	WorkMode        string `json:"work_mode,omitempty"`        // enum: WorkModeValues
 	EmploymentType  string `json:"employment_type,omitempty"`  // enum: EmploymentTypeValues
@@ -181,6 +195,11 @@ func (e Enrichment) Validate() error {
 // The invariant "never serve an out-of-vocabulary value" still holds for the served
 // fields, and Validate passes afterwards.
 func (e *Enrichment) Sanitize() {
+	// Summary is synthesized free text; trim and clip an over-long value so the
+	// served payload stays bounded (guards a runaway model; the prompt asks for
+	// 1–2 sentences).
+	e.Summary = truncateRunes(strings.TrimSpace(e.Summary), maxSummaryRunes)
+
 	for _, s := range e.servedScalarEnums() {
 		if *s.ptr != "" && !slices.Contains(s.vocab, *s.ptr) {
 			*s.ptr = ""
@@ -208,6 +227,17 @@ func positiveOrNil(n *int) *int {
 		return n
 	}
 	return nil
+}
+
+// truncateRunes clips s to at most max runes, trimming a trailing space left by a
+// mid-word cut so the served value never ends on whitespace. It counts runes (not
+// bytes) so a multibyte summary is bounded by visible length.
+func truncateRunes(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return strings.TrimRight(string(r[:max]), " ")
 }
 
 // keepKnown returns values restricted to those present in vocab, preserving order;

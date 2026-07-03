@@ -292,3 +292,30 @@ func TestSanitizeDropsImplausibleSalary(t *testing.T) {
 		}
 	})
 }
+
+func TestSanitizeSummary(t *testing.T) {
+	t.Run("normal summary is trimmed but kept", func(t *testing.T) {
+		e := Enrichment{Summary: "  Backend role building a payments API in Go.  "}
+		e.Sanitize()
+		if want := "Backend role building a payments API in Go."; e.Summary != want {
+			t.Errorf("Summary = %q, want %q", e.Summary, want)
+		}
+	})
+
+	t.Run("over-long summary is clipped to maxSummaryRunes", func(t *testing.T) {
+		e := Enrichment{Summary: strings.Repeat("a", maxSummaryRunes+50)}
+		e.Sanitize()
+		if got := len([]rune(e.Summary)); got != maxSummaryRunes {
+			t.Errorf("clipped length = %d runes, want %d", got, maxSummaryRunes)
+		}
+	})
+
+	t.Run("rune count, not byte count, bounds a multibyte summary", func(t *testing.T) {
+		// Cyrillic runes are multibyte; a summary of exactly the cap must survive whole.
+		e := Enrichment{Summary: strings.Repeat("я", maxSummaryRunes)}
+		e.Sanitize()
+		if got := len([]rune(e.Summary)); got != maxSummaryRunes {
+			t.Errorf("length = %d runes, want %d (must count runes, not bytes)", got, maxSummaryRunes)
+		}
+	})
+}

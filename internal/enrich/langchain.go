@@ -110,6 +110,14 @@ func buildSystemPrompt() string {
 	b.WriteString("the role covers, from the allowed values. Omit when unstated (unknown is not global).\n")
 	b.WriteString("\nIf the Location field is empty, the URL path may still encode the location ")
 	b.WriteString("(e.g. a city as the first slug segment); read it as a location signal.\n")
+
+	// summary is the one SYNTHESIZED field: every other key is extracted-or-omitted,
+	// but the model always writes summary. It backs a headline shown above the job
+	// description and in the swipe cards.
+	b.WriteString("\nAlways include summary (string): a 1-2 sentence, plain-English synopsis of the ")
+	b.WriteString("role — what the person would do day to day and the core technologies. This is ")
+	b.WriteString("the ONE field you synthesize rather than copy; keep it under 400 characters, ")
+	b.WriteString("neutral and specific, and never invent facts the posting does not support.\n")
 	return b.String()
 }
 

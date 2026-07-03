@@ -186,6 +186,9 @@
   const salary = $derived(current?.enrichment ? formatSalary(current.enrichment) : null);
   const tags = $derived(current ? cardTags(current) : []);
   const skills = $derived(current?.skills?.slice(0, 6) ?? []);
+  // The model-written one-line synopsis (only on enriched jobs); shown as the card's
+  // lead, with the full description kept below as the fallback / detail.
+  const summary = $derived(current?.enrichment?.summary ?? '');
 </script>
 
 <svelte:window onkeydown={onKeydown} />
@@ -246,6 +249,11 @@
             <Badge variant="secondary">{skill}</Badge>
           {/each}
         </div>
+
+        {#if summary}
+          <!-- Model-written synopsis: the card's lead. Short (≤400 chars), plain text. -->
+          <p class="text-sm leading-relaxed text-foreground">{summary}</p>
+        {/if}
 
         {#if current.description}
           <!-- Description is server-sanitized HTML (see internal/sources), safe to render.

@@ -8,6 +8,14 @@
  */
 export interface Enrichment {
   /**
+   * Summary is a short, model-written synopsis of the role (1–2 sentences): what
+   * the job involves and its core stack. Unlike every other field — which is
+   * extracted and omitted when the posting does not state it — this one is
+   * SYNTHESIZED, so the prompt asks the model to always produce it. It is served
+   * free text (no controlling dictionary), bounded by Sanitize.
+   */
+  summary?: string;
+  /**
    * Work arrangement.
    */
   work_mode?: string; // enum: WorkModeValues
@@ -185,7 +193,7 @@ export interface Report {
   findings?: string[];
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'adp', 'arbeitnow', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'breezy', 'careerplug', 'careerspage', 'clinch', 'comeet', 'cornerstone', 'deel', 'eightfold', 'epam', 'erecruiter', 'factorial', 'freshteam', 'gem', 'getmatch', 'getonbrd', 'globalpayments', 'greenhouse', 'gupy', 'habr_career', 'himalayas', 'huntflow', 'icims', 'inhire', 'itechart', 'jazzhr', 'jibe', 'jobicy', 'jobstash', 'jobtech', 'join', 'justjoin', 'lever', 'luxoft', 'mycareersfuture', 'oracle', 'paycom', 'personio', 'phenom', 'pinpoint', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'solides', 'successfactors', 'taleo', 'teamtailor', 'tecla', 'thehub', 'traffit', 'trakstar', 'ukg', 'vention', 'vouch', 'wantedkr', 'weworkremotely', 'workable', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'breezy', 'careerplug', 'careerspage', 'clinch', 'comeet', 'cornerstone', 'deel', 'eightfold', 'epam', 'erecruiter', 'factorial', 'freshteam', 'gem', 'getmatch', 'getonbrd', 'globalpayments', 'greenhouse', 'gupy', 'habr_career', 'himalayas', 'hireology', 'huntflow', 'icims', 'inhire', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobicy', 'jobstash', 'jobtech', 'join', 'justjoin', 'lever', 'luxoft', 'mycareersfuture', 'oracle', 'paycom', 'paylocity', 'personio', 'phenom', 'pinpoint', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'solides', 'successfactors', 'taleo', 'teamtailor', 'tecla', 'thehub', 'traffit', 'trakstar', 'ukg', 'vention', 'vouch', 'wantedkr', 'weworkremotely', 'workable', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];
