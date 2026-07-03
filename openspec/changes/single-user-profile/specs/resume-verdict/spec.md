@@ -2,12 +2,12 @@
 
 ### Requirement: Verdict endpoint authentication and ownership
 
-The profile sub-resource endpoints — the market-coverage verdict and the CV
-ATS-readiness report — SHALL require an authenticated session (cookie-only) and
-SHALL operate only on the caller's own single profile. They SHALL be addressed
-without a profile id in the path: the verdict as `GET /me/profile/verdict`, the
-ATS report as `GET`/`POST /me/profile/ats-report`. When the caller has no
-profile, these endpoints SHALL respond 404.
+The profile sub-resource endpoints SHALL require an authenticated session
+(cookie-only) and SHALL operate only on the caller's own single profile. These
+endpoints are the market-coverage verdict and the CV ATS-readiness report, and
+SHALL be addressed without a profile id in the path: the verdict as
+`GET /me/profile/verdict`, the ATS report as `GET`/`POST /me/profile/ats-report`.
+When the caller has no profile, these endpoints SHALL respond 404.
 
 #### Scenario: Owner reads their verdict
 - **WHEN** a signed-in user who has a profile requests `GET /me/profile/verdict`
