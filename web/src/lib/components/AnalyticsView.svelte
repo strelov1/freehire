@@ -7,7 +7,9 @@
   import { syncOnNavigation } from '$lib/urlSynced.svelte';
   import { FACETS } from '$lib/facets';
   import type { FacetCounts } from '$lib/types';
-  import FiltersPanel from './FiltersPanel.svelte';
+  import FilterSummary from './filters/FilterSummary.svelte';
+  import FilterModal from './filters/FilterModal.svelte';
+  import FilterEdgeTab from './FilterEdgeTab.svelte';
   import FacetBreakdown from './FacetBreakdown.svelte';
   import States from './States.svelte';
 
@@ -24,8 +26,11 @@
   // prop (untrack marks it an intentional snapshot, not a live binding).
   let counts = $state.raw<FacetCounts>(untrack(() => initial));
   let status = $state<'ready' | 'loading' | 'error'>('ready');
-  let drawerOpen = $state(false);
+  let modalOpen = $state(false);
   let started = false;
+
+  // Job-count preview for the modal's staged filters — the same facet call, total only.
+  const previewCount = (params: URLSearchParams) => api.facetCounts(params).then((c) => c.total);
   // `initial` counts were fetched for page.url; if a shallow-routing back/forward
   // left page.url lagging the address bar, they're stale — re-fetch on the first run.
   const initialStale = browser && page.url.search !== location.search;
@@ -88,7 +93,7 @@
 <div class="flex gap-6">
   <aside class="hidden w-72 shrink-0 md:block">
     <div class="sticky top-6 max-h-[calc(100vh-5rem)] overflow-y-auto rounded-xl border border-border bg-card p-4">
-      <FiltersPanel store={filters} {counts} />
+      <FilterSummary store={filters} onOpen={() => (modalOpen = true)} />
     </div>
   </aside>
 
@@ -112,7 +117,7 @@
       <button
         type="button"
         class="h-9 shrink-0 rounded-lg border border-border bg-secondary px-3 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent md:hidden"
-        onclick={() => (drawerOpen = true)}
+        onclick={() => (modalOpen = true)}
       >
         Filters{#if filters.active > 0}&nbsp;({filters.active}){/if}
       </button>
@@ -130,15 +135,7 @@
   </div>
 </div>
 
-{#if drawerOpen}
-  <div class="fixed inset-0 z-40 md:hidden">
-    <button class="absolute inset-0 bg-black/40" aria-label="Close filters" onclick={() => (drawerOpen = false)}></button>
-    <div class="absolute left-0 top-0 flex h-full w-80 max-w-[85%] flex-col overflow-y-auto bg-background p-4 shadow-xl">
-      <div class="mb-3 flex items-center justify-between">
-        <span class="text-sm font-semibold tracking-tight">Filters</span>
-        <button type="button" class="text-sm text-muted-foreground hover:text-foreground" onclick={() => (drawerOpen = false)}>Done</button>
-      </div>
-      <FiltersPanel store={filters} {counts} />
-    </div>
-  </div>
-{/if}
+<!-- Mobile: edge tab opens the same full-screen modal as the header button. -->
+<FilterEdgeTab active={filters.active} onclick={() => (modalOpen = true)} />
+
+<FilterModal store={filters} {counts} open={modalOpen} onClose={() => (modalOpen = false)} {previewCount} />

@@ -85,7 +85,7 @@
   <meta name="robots" content="noindex" />
 </svelte:head>
 
-<div class="mx-auto w-full max-w-3xl px-4 py-6">
+<div class="mx-auto w-full max-w-6xl px-4 py-6">
   {#if !isAuthenticated()}
     <div class="flex flex-col items-center gap-3 py-12 text-center">
       <p class="text-sm text-muted-foreground">Sign in to set up your profile.</p>

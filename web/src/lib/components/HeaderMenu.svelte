@@ -57,7 +57,6 @@
 
   const accountLinks = [
     { href: '/my/jobs', label: 'My jobs' },
-    { href: '/my/profile', label: 'Profile' },
     { href: '/my/searches', label: 'Saved searches' },
     { href: '/my/notifications', label: 'Notifications' },
     { href: '/my/api-keys', label: 'API keys' },
@@ -140,10 +139,24 @@
 {/snippet}
 
 <div class="relative flex items-center gap-1" bind:this={root}>
-  <!-- Desktop only: GitHub stars on the left, theme toggle on the right — the
-       menu button sits between them, giving three controls on the bar. On mobile
-       both collapse into the drawer (below), leaving just the menu button here. -->
+  <!-- Desktop bar order: GitHub stars, then the theme toggle (second), then the
+       menu button pinned to the far right. On mobile both GitHub and theme collapse
+       into the drawer (below), leaving just the menu button here. -->
   <GithubStars class="hidden sm:inline-flex" />
+
+  <!-- Desktop only: theme toggle sits second, before the menu button. -->
+  <button
+    type="button"
+    aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+    onclick={() => themeStore.toggle()}
+    class={cn('hidden sm:inline-flex', iconButton)}
+  >
+    {#if isDark}
+      <Moon class="size-5" />
+    {:else}
+      <Sun class="size-5" />
+    {/if}
+  </button>
 
   <button
     type="button"
@@ -259,18 +272,4 @@
       </div>
     </div>
   {/if}
-
-  <!-- Desktop only: theme toggle pinned to the far right of the bar. -->
-  <button
-    type="button"
-    aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
-    onclick={() => themeStore.toggle()}
-    class={cn('hidden sm:inline-flex', iconButton)}
-  >
-    {#if isDark}
-      <Moon class="size-5" />
-    {:else}
-      <Sun class="size-5" />
-    {/if}
-  </button>
 </div>

@@ -1,7 +1,8 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import { X } from '@lucide/svelte';
   import { FACETS } from '$lib/facets';
-  import type { FilterStore, JobFilters } from '$lib/filters';
+  import { emptyFilters, type FilterStore, type JobFilters } from '$lib/filters';
   import { StagedFilters } from '$lib/stagedFilters.svelte';
   import { RAIL, RAIL_SECTIONS, type RailEntry } from '$lib/filterSections';
   import type { FacetCounts } from '$lib/types';
@@ -12,30 +13,54 @@
   import LocationPane from './LocationPane.svelte';
 
   // The two-pane filter modal. It edits a StagedFilters copy (seeded from the live
-  // store on open) and applies it only on "Show results" — the live store/URL is
-  // untouched until then. `previewCount(params)` returns the job count for a staged
-  // filter set (merged with any fixed scope by the caller), driving the button.
+  // store on open) and applies it only on the footer button — the live store/URL is
+  // untouched until then. `previewCount(params)` (optional) returns the job count for a
+  // staged filter set, driving the default "Show N jobs" button.
+  //
+  // Reusable beyond job search: pass `railKeys` to restrict which rail panes show
+  // (e.g. just Specialization + Skills for a profile), `applyLabel`/`onApply` to give
+  // the footer button a custom label and action (e.g. "Save" → persist a profile
+  // instead of committing to the URL), and `canApply` to gate that button.
   let {
     store,
+    seed,
     counts = null,
     exclude = [],
+    railKeys,
+    title = 'All filters',
+    applyLabel,
+    onApply,
+    canApply,
     open = false,
     onClose,
     previewCount,
+    extra,
   }: {
-    store: FilterStore;
+    store?: FilterStore;
+    seed?: JobFilters;
     counts?: FacetCounts | null;
     exclude?: string[];
+    railKeys?: string[];
+    title?: string;
+    applyLabel?: string;
+    onApply?: (staged: StagedFilters) => void | Promise<void>;
+    canApply?: (f: JobFilters) => boolean;
     open?: boolean;
     onClose: () => void;
-    previewCount: (params: URLSearchParams) => Promise<number>;
+    previewCount?: (params: URLSearchParams) => Promise<number>;
+    // Extra content rendered above the pane, handed the staged store so it can edit it
+    // (e.g. the profile editor's "import skills from CV").
+    extra?: Snippet<[StagedFilters]>;
   } = $props();
 
   const staged = new StagedFilters();
 
-  // Rail entries visible under the current scope: a 'facet' entry is hidden when its
-  // param is excluded (e.g. Source/Company on a company page). Composite entries stay.
-  const visibleRail = $derived(RAIL.filter((e) => !(e.facetParam && exclude.includes(e.facetParam))));
+  // Rail entries visible under the current scope: restricted to `railKeys` when given
+  // (a caller reusing the modal for a subset of facets), and a 'facet' entry is hidden
+  // when its param is excluded (e.g. Source/Company on a company page).
+  const visibleRail = $derived(
+    RAIL.filter((e) => (!railKeys || railKeys.includes(e.key)) && !(e.facetParam && exclude.includes(e.facetParam))),
+  );
 
   let active = $state<string>('category');
 
@@ -44,7 +69,7 @@
   let wasOpen = false;
   $effect(() => {
     if (open && !wasOpen) {
-      staged.seed(store.value);
+      staged.seed(seed ?? store?.value ?? emptyFilters());
       if (!visibleRail.some((e) => e.key === active)) active = visibleRail[0]?.key ?? 'category';
     }
     wasOpen = open;
@@ -77,11 +102,12 @@
   let showCount = $state<number | null>(null);
   let countGen = 0;
   $effect(() => {
-    if (!open) return;
+    if (!open || !previewCount) return;
     const params = staged.params(); // tracks staged.value
     const gen = ++countGen;
+    const pc = previewCount;
     const t = setTimeout(() => {
-      previewCount(params)
+      pc(params)
         .then((n) => {
           if (gen === countGen) showCount = n;
         })
@@ -90,9 +116,29 @@
     return () => clearTimeout(t);
   });
 
-  function apply() {
-    staged.commit(store);
-    onClose();
+  // Apply: by default commit the staged filters to the live store/URL. When `onApply`
+  // is given (a reuse like the profile editor), delegate to it instead — surfacing any
+  // error and keeping the modal open so the user can fix it.
+  let applyBusy = $state(false);
+  let applyError = $state<string | null>(null);
+  const applyDisabled = $derived(applyBusy || (canApply ? !canApply(staged.value) : false));
+
+  async function apply() {
+    if (applyDisabled) return;
+    if (!onApply) {
+      if (store) staged.commit(store);
+      onClose();
+      return;
+    }
+    applyBusy = true;
+    applyError = null;
+    try {
+      await onApply(staged);
+      onClose();
+    } catch (e) {
+      applyError = e instanceof Error ? e.message : 'Something went wrong. Please try again.';
+      applyBusy = false;
+    }
   }
 
   function onKeydown(e: KeyboardEvent) {
@@ -118,11 +164,11 @@
       class="relative flex h-full w-full flex-col overflow-hidden bg-background shadow-2xl sm:h-auto sm:max-h-[calc(100vh-3rem)] sm:max-w-4xl sm:rounded-2xl sm:border sm:border-border"
       role="dialog"
       aria-modal="true"
-      aria-label="All filters"
+      aria-label={title}
     >
       <!-- header -->
       <div class="flex items-center gap-3 border-b border-border px-4 py-3">
-        <h2 class="flex-1 text-base font-semibold tracking-tight">All filters</h2>
+        <h2 class="flex-1 text-base font-semibold tracking-tight">{title}</h2>
         <button
           type="button"
           onclick={onClose}
@@ -169,9 +215,14 @@
 
         <!-- pane -->
         <section class="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
+          {#if extra}<div class="mb-6">{@render extra(staged)}</div>{/if}
           {#if activeEntry?.kind === 'category'}
-            <ChipFacet store={staged} param="seniority" label="Seniority" />
-            <div class="mt-6"><CategoryPane store={staged} /></div>
+            {#if !exclude.includes('seniority')}
+              <ChipFacet store={staged} param="seniority" label="Seniority" />
+              <div class="mt-6"><CategoryPane store={staged} /></div>
+            {:else}
+              <CategoryPane store={staged} />
+            {/if}
           {:else if activeEntry?.kind === 'location'}
             <LocationPane store={staged} {counts} />
           {:else if activeEntry?.kind === 'facet' && facetDef}
@@ -236,19 +287,29 @@
       </div>
 
       <!-- footer -->
-      <div class="flex items-center justify-between border-t border-border px-4 py-3">
-        <button
-          type="button"
-          onclick={() => staged.clear()}
-          class="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">Clear all</button
-        >
-        <button
-          type="button"
-          onclick={apply}
-          class="inline-flex h-11 items-center gap-1.5 rounded-lg bg-primary px-6 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-        >
-          Show {showCount != null ? showCount.toLocaleString('en-US') : ''} {showCount === 1 ? 'job' : 'jobs'}
-        </button>
+      <div class="flex flex-col gap-2 border-t border-border px-4 py-3">
+        {#if applyError}
+          <p class="text-sm text-destructive">{applyError}</p>
+        {/if}
+        <div class="flex items-center justify-between">
+          <button
+            type="button"
+            onclick={() => staged.clear()}
+            class="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">Clear all</button
+          >
+          <button
+            type="button"
+            onclick={apply}
+            disabled={applyDisabled}
+            class="inline-flex h-11 items-center gap-1.5 rounded-lg bg-primary px-6 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {#if applyLabel}
+              {applyBusy ? 'Saving…' : applyLabel}
+            {:else}
+              Show {showCount != null ? showCount.toLocaleString('en-US') : ''} {showCount === 1 ? 'job' : 'jobs'}
+            {/if}
+          </button>
+        </div>
       </div>
     </div>
   </div>

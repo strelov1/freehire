@@ -1,5 +1,5 @@
-// Shared bounds/presets for the salary and freshness sliders, used by both the
-// legacy FiltersPanel sidebar and the new filter modal so the two never drift.
+// Shared bounds/presets for the salary and freshness sliders, used by the filter
+// modal (and the analytics facet breakdowns) so the controls never drift.
 
 export const SALARY_MAX = 300000;
 export const SALARY_STEP = 5000;

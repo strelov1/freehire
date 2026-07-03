@@ -8,7 +8,9 @@
   import { categoryLabel } from '$lib/facets';
   import { FilterStore, filtersToParams } from '$lib/filters';
   import ATSReportView from '$lib/components/ATSReportView.svelte';
-  import FiltersPanel from '$lib/components/FiltersPanel.svelte';
+  import FilterSummary from '$lib/components/filters/FilterSummary.svelte';
+  import FilterModal from '$lib/components/filters/FilterModal.svelte';
+  import FilterEdgeTab from '$lib/components/FilterEdgeTab.svelte';
   import States from '$lib/components/States.svelte';
   import VerdictView from '$lib/components/VerdictView.svelte';
   import { profileStore } from '$lib/profile.svelte';
@@ -29,6 +31,10 @@
   let ats = $state<ATSResponse | null>(null);
   let loadError = $state(false);
   let tab = $state<'coverage' | 'cv'>('coverage');
+  let modalOpen = $state(false);
+
+  // Job-count preview for the modal's staged filters — the same facet call, total only.
+  const previewCount = (params: URLSearchParams) => facetCounts(params).then((c) => c.total);
 
   // AI review state.
   let reviewBusy = $state(false);
@@ -149,9 +155,20 @@
       <Button variant="primary" href={profileHref}>Go to profile</Button>
     </div>
   {:else}
+    <FilterEdgeTab active={filters.active} onclick={() => (modalOpen = true)} />
+    <FilterModal
+      store={filters}
+      {counts}
+      exclude={excludeFacets}
+      open={modalOpen}
+      onClose={() => (modalOpen = false)}
+      {previewCount}
+    />
     <div class="grid gap-6 md:grid-cols-[260px_1fr]">
       <aside class="md:sticky md:top-6 md:self-start">
-        <FiltersPanel store={filters} exclude={excludeFacets} {counts} />
+        <div class="rounded-xl border border-border bg-card p-4">
+          <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} />
+        </div>
       </aside>
       <main class="flex flex-col gap-6">
         <!-- Page header -->
