@@ -35,6 +35,6 @@
 
 ## 7. Verification
 
-- [ ] 7.1 Backend: `go build ./... && go vet ./... && go test ./...`
+- [x] 7.1 Backend: `go build ./... && go vet ./... && go test ./...`
 - [x] 7.2 Frontend: `svelte-check` clean for touched files (no unit runner in repo)
 - [x] 7.3 Confirm no dangling references to `/me/profiles`, profile `id`, or `name` across `internal/` and `web/src/`
