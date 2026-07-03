@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Check, TriangleAlert, X } from '@lucide/svelte';
+  import { Check, Copy, TriangleAlert, X } from '@lucide/svelte';
   import type { ATSReport } from '$lib/types';
 
   // The CV ATS-readiness report from the backend: an overall score out of 100 built
@@ -16,6 +16,22 @@
     if (score >= 75) return 'text-primary';
     if (score >= 50) return 'text-amber-500';
     return 'text-destructive';
+  }
+
+  // Copy the suggestions as an LLM-ready prompt so the user can paste them into a
+  // chat and have the model apply them to the CV.
+  let copied = $state(false);
+  async function copySuggestions() {
+    const text =
+      'Please improve my CV by applying these suggestions:\n\n' +
+      suggestions.map((s, i) => `${i + 1}. ${s}`).join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      copied = true;
+      setTimeout(() => (copied = false), 1500);
+    } catch {
+      // Clipboard unavailable (e.g. insecure context) — silently skip.
+    }
   }
 </script>
 
@@ -118,7 +134,20 @@
   <!-- AI suggestions (only after a review) -->
   {#if suggestions.length > 0}
     <div class="flex flex-col gap-2">
-      <h3 class="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Suggestions</h3>
+      <div class="flex items-center justify-between gap-3">
+        <h3 class="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Suggestions</h3>
+        <button
+          type="button"
+          onclick={copySuggestions}
+          class="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+        >
+          {#if copied}
+            <Check class="size-3.5 text-primary" /> Copied
+          {:else}
+            <Copy class="size-3.5" /> Copy for AI chat
+          {/if}
+        </button>
+      </div>
       <ol class="flex flex-col gap-1.5">
         {#each suggestions as s, i (i)}
           <li class="flex items-start gap-2 text-sm text-muted-foreground">

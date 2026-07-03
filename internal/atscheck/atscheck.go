@@ -298,14 +298,15 @@ func (r *Report) ApplyReview(rv *Review) {
 	if rv == nil {
 		return
 	}
-	score := int(math.Round(float64(clamp(rv.ContentQuality)) / 100 * contentMax))
+	cq := clamp(rv.ContentQuality)
+	score := int(math.Round(float64(cq) / 100 * contentMax))
 	for i := range r.Categories {
 		if r.Categories[i].ID != categoryContent {
 			continue
 		}
-		items := []LineItem{{Points: score, Text: "AI-assessed content quality", Status: StatusPass}}
+		items := []LineItem{{Points: score, Text: fmt.Sprintf("AI-assessed content quality: %d/100", cq), Status: StatusPass}}
 		if score < contentMax {
-			items = append(items, LineItem{Points: contentMax - score, Text: "Apply the suggestions below to raise content quality", Status: StatusWarn})
+			items = append(items, LineItem{Points: contentMax - score, Text: "Apply the numbered Suggestions below to close the gap", Status: StatusWarn})
 		}
 		r.Categories[i].Items = items
 	}

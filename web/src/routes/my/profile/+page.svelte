@@ -219,34 +219,51 @@
 
         <main class="flex min-w-0 flex-1 flex-col gap-6">
           <!-- Tabs -->
-          <div class="flex gap-5 border-b border-border">
-            <button
-              type="button"
-              onclick={() => (tab = 'profile')}
-              class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'profile'
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground'}"
-            >
-              Your CV
-            </button>
-            <button
-              type="button"
-              onclick={() => (tab = 'coverage')}
-              class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'coverage'
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground'}"
-            >
-              Market coverage
-            </button>
-            <button
-              type="button"
-              onclick={() => (tab = 'readiness')}
-              class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'readiness'
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground'}"
-            >
-              CV readiness
-            </button>
+          <div class="flex items-center justify-between gap-3 border-b border-border">
+            <div class="flex gap-5">
+              <button
+                type="button"
+                onclick={() => (tab = 'profile')}
+                class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'profile'
+                  ? 'border-primary text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'}"
+              >
+                Your CV
+              </button>
+              <button
+                type="button"
+                onclick={() => (tab = 'coverage')}
+                class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'coverage'
+                  ? 'border-primary text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'}"
+              >
+                Market coverage
+              </button>
+              <button
+                type="button"
+                onclick={() => (tab = 'readiness')}
+                class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'readiness'
+                  ? 'border-primary text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'}"
+              >
+                CV readiness
+              </button>
+            </div>
+            {#if tab === 'readiness' && ats?.has_cv && ats.report}
+              <div class="pb-1.5">
+                {#if !ats.report.reviewed && !reviewUnavailable}
+                  <Button variant="primary" onclick={runReview} disabled={reviewBusy}>
+                    <Sparkles class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
+                    {reviewBusy ? 'Reviewing…' : 'Run AI review'}
+                  </Button>
+                {:else if ats.report.reviewed}
+                  <Button variant="ghost" onclick={runReview} disabled={reviewBusy}>
+                    <Sparkles class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
+                    {reviewBusy ? 'Reviewing…' : 'Re-run AI review'}
+                  </Button>
+                {/if}
+              </div>
+            {/if}
           </div>
 
           <!-- Body -->
@@ -263,20 +280,6 @@
           {:else if ats?.has_cv && ats.report}
             <!-- CV readiness -->
             <div class="flex flex-col gap-5">
-              <div class="flex flex-wrap items-center justify-between gap-3">
-                <p class="text-sm text-muted-foreground">How ATS-ready your CV is for this role.</p>
-                {#if !ats.report.reviewed && !reviewUnavailable}
-                  <Button variant="primary" onclick={runReview} disabled={reviewBusy}>
-                    <Sparkles class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
-                    {reviewBusy ? 'Reviewing…' : 'Run AI review'}
-                  </Button>
-                {:else if ats.report.reviewed}
-                  <Button variant="ghost" onclick={runReview} disabled={reviewBusy}>
-                    <Sparkles class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
-                    {reviewBusy ? 'Reviewing…' : 'Re-run AI review'}
-                  </Button>
-                {/if}
-              </div>
               {#if reviewUnavailable}
                 <p class="text-xs text-muted-foreground">AI review is not available right now.</p>
               {/if}
