@@ -93,19 +93,19 @@ A profile's `skills` set SHALL be non-empty after normalization.
 - **THEN** the system responds `400` and stores nothing
 
 ### Requirement: Profile management UI
-The web app SHALL present signed-in users a single view at `/my/profile` to fill in, edit, and clear their one profile, and SHALL prompt anonymous users to sign in instead. There is no profile name and no list of profiles. The specialization input SHALL be a searchable multi-select over the category vocabulary; the skills input SHALL be a dictionary-backed typeahead that suggests matching canonical skills (with job counts) as the user types and adds each as a removable chip. The Save control SHALL be enabled exactly when at least one specialization and at least one skill are present.
+The web app SHALL present signed-in users a single view at `/my/profile` that shows their one profile (specialization and skill chips) and lets them edit or clear it, and SHALL prompt anonymous users to sign in instead. There is no profile name and no list of profiles. Editing SHALL happen in a modal that REUSES the job-search facet components (`FacetSection`) — the same specialization and skills controls the jobs filters use, sourcing the skills distribution from the live facet endpoint — rather than bespoke profile-only pickers. The profile facets SHALL disable the search-only exclude/match-any-or-all toggles (a profile value is neither excluded nor match-mode). The specialization selection SHALL be capped at 5. The Save control SHALL be enabled exactly when at least one specialization and at least one skill are present.
 
 #### Scenario: Save the profile from the UI
-- **WHEN** a signed-in user picks one or more specializations, adds one or more skills via the typeahead, and saves
+- **WHEN** a signed-in user opens the edit modal, picks one or more specializations and skills via the shared facet controls, and saves
 - **THEN** the app calls `PUT /api/v1/me/profile` and shows the saved profile
 
 #### Scenario: Edit the existing profile
-- **WHEN** a signed-in user who already has a profile opens `/my/profile`
-- **THEN** the view shows their current specializations and skills pre-filled for editing
+- **WHEN** a signed-in user who already has a profile opens the edit modal
+- **THEN** the facet controls are pre-seeded with their current specializations and skills
 
-#### Scenario: Skill typeahead suggests dictionary matches
-- **WHEN** a signed-in user types into the skills field
-- **THEN** the field lists matching canonical skills (with their job counts) and adds the chosen one as a removable chip; a non-matching query shows a "nothing found" hint rather than silently accepting an unknown skill
+#### Scenario: Skills use the shared job-search facet control
+- **WHEN** a signed-in user edits skills in the profile modal
+- **THEN** the control is the same `FacetSection` skills control as the jobs filters, listing canonical skills with their live job counts (not a separate profile-only typeahead)
 
 #### Scenario: Save control reflects completeness
 - **WHEN** a signed-in user has entered at least one specialization and at least one skill
@@ -113,7 +113,7 @@ The web app SHALL present signed-in users a single view at `/my/profile` to fill
 
 #### Scenario: Anonymous prompt
 - **WHEN** an anonymous (signed-out) user opens `/my/profile`
-- **THEN** the view shows a "sign in" affordance instead of a profile form
+- **THEN** the view shows a "sign in" affordance instead of the profile
 
 ### Requirement: Populate profile skills from a resume
 

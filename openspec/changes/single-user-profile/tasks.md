@@ -21,11 +21,11 @@
 - [ ] 4.2 Replace `web/src/lib/searchProfiles.svelte.ts` with a single-profile store `profile.svelte.ts`: holds one `profile | null`, `ensureLoaded()` (GET), `save()` (PUT), `clear()` (DELETE), `reset()` on sign-out
 - [ ] 4.3 Update `web/src/lib/api.ts` profile/verdict/ats-report helpers to the singleton paths (`/me/profile`, `/me/profile/verdict`, `/me/profile/ats-report`); drop id params
 
-## 5. Frontend profile route, form & view
+## 5. Frontend profile route, view & edit modal
 
-- [ ] 5.1 Replace routes `/my/profiles`, `/my/profiles/new`, `/my/profiles/[id]/edit` with a single `/my/profile` page that views + edits the one profile (anonymous → sign-in prompt)
-- [ ] 5.2 Update `ProfileForm.svelte`: remove the `name` field and the create-vs-edit distinction; Save enabled when ≥1 specialization and ≥1 skill; keep CV upload + skill typeahead; wire to store `save()`
-- [ ] 5.3 Remove `SearchProfilesView.svelte` (list); render the skill-gap block for the single profile in the profile view
+- [ ] 5.1 Replace routes `/my/profiles`, `/my/profiles/new`, `/my/profiles/[id]/edit` with a single `/my/profile` page: shows the profile (specialization + skill chips, skill-gap block, verdict link) or an empty state, with an Edit button; anonymous → sign-in prompt
+- [ ] 5.2 Build the profile edit modal reusing the jobs facet machinery: render `FacetSection` for `category` (cap 5) and `skills` (dynamic, live `counts.facets.skills`) via profile-scoped `FacetDef`s with `excludable:false`/`hasAndOr:false`, backed by a staging store seeded from the profile; Save (enabled when ≥1 specialization and ≥1 skill) calls store `save()` → `PUT /me/profile`. Keep CV upload (merges into the skills facet). Remove the bespoke `SearchSelect`/`RemoteSearchSelect` pickers
+- [ ] 5.3 Remove `ProfileForm.svelte` + `SearchProfilesView.svelte` (superseded by the page + modal); render the skill-gap block for the single profile in the profile view
 - [ ] 5.4 Move the verdict page (which also hosts the ATS report via `ATSReportView.svelte`) to `/my/profile/verdict` (no `[id]`), pointing at `GET /me/profile/verdict` and `/me/profile/ats-report`
 
 ## 6. Header avatar & menu
