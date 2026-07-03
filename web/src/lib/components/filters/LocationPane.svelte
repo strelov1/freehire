@@ -22,33 +22,42 @@
   const countryCounts = $derived(counts?.facets?.countries ?? {});
   const cityCounts = $derived(counts?.facets?.cities ?? {});
 
-  // region code → countries present in the distribution, busiest first
+  const regionSel = $derived(store.facet('regions').values);
+  const countrySel = $derived(store.facet('countries').values);
+  const citySel = $derived(store.facet('cities').values);
+
+  // region code → countries to show, busiest first. Built from the live distribution
+  // plus any currently-selected country, so a selected country stays visible (and
+  // deselectable) even when the current filters give it a zero count.
   const countriesByRegion = $derived.by(() => {
     const out: Record<string, string[]> = {};
-    for (const code of Object.keys(countryCounts)) {
+    const add = (code: string) => {
       const r = (COUNTRY_REGION_MAP as Record<string, string>)[code];
-      if (!r) continue;
+      if (!r) return;
       (out[r] ??= []).push(code);
-    }
+    };
+    for (const code of Object.keys(countryCounts)) add(code);
+    for (const code of countrySel) if (!countryCounts[code]) add(code);
     for (const arr of Object.values(out)) arr.sort((a, b) => (countryCounts[b] ?? 0) - (countryCounts[a] ?? 0));
     return out;
   });
 
-  const regions = $derived(
-    Object.keys(REGION_LABELS).filter((code) => regionCount(code) > 0 || (countriesByRegion[code]?.length ?? 0) > 0),
-  );
+  // The macro-regions are always shown (a stable list, like the old region facet), so
+  // the pane is never empty — even before the first facet-count fetch resolves.
+  const regions = Object.keys(REGION_LABELS);
 
-  // All cities in the distribution, busiest first.
-  const allCities = $derived(Object.keys(cityCounts).sort((a, b) => (cityCounts[b] ?? 0) - (cityCounts[a] ?? 0)));
+  // Cities to show: the distribution plus any selected city (kept visible at zero
+  // count), busiest first.
+  const allCities = $derived.by(() => {
+    const set = new Set([...Object.keys(cityCounts), ...citySel]);
+    return [...set].sort((a, b) => (cityCounts[b] ?? 0) - (cityCounts[a] ?? 0));
+  });
   const CITY_LIMIT = 18;
 
   const q = $derived(query.trim().toLowerCase());
   const matchCountry = (code: string) => !q || countryLabel(code).toLowerCase().includes(q);
   const matchCity = (city: string) => !q || city.toLowerCase().includes(q);
 
-  const regionSel = $derived(store.facet('regions').values);
-  const countrySel = $derived(store.facet('countries').values);
-  const citySel = $derived(store.facet('cities').values);
   const fmt = (n: number) => n.toLocaleString('en-US');
 
   const cityMatches = $derived(allCities.filter(matchCity));

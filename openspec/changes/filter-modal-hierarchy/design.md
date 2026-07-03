@@ -95,7 +95,8 @@ params).total`, debounced per toggle. No new endpoint.
   `city→country` map couldn't nest most cities and produced a confusing "some nested,
   the rest in Other cities" split. Resolved to a **region→country tree + one flat,
   searchable Cities section** (busiest-first + type-to-search). The `city→country`
-  contract export is kept as a dormant seam for a future gazetteer.
+  map and its contract export were **removed** (YAGNI — no consumer); a future
+  gazetteer can reintroduce them.
 - **Work format + Employment merged** into one "Work & employment" rail entry (one
   pane, two chip groups), mirroring the salary/currency merge.
 

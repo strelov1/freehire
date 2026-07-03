@@ -105,9 +105,12 @@
     if (e.key === 'Escape') onClose();
   }
 
-  const freshnessIndex = $derived(
-    Math.max(0, FRESHNESS_PRESETS.findIndex((p) => p.days === staged.value.postedWithinDays)),
-  );
+  // A non-preset value (hand-edited URL) has no exact stop, so it reads as "Any"
+  // (the rightmost stop) — matching the label — rather than snapping to "Today".
+  const freshnessIndex = $derived.by(() => {
+    const i = FRESHNESS_PRESETS.findIndex((p) => p.days === staged.value.postedWithinDays);
+    return i < 0 ? FRESHNESS_PRESETS.length - 1 : i;
+  });
 </script>
 
 <svelte:window onkeydown={open ? onKeydown : undefined} />

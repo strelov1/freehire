@@ -4,6 +4,7 @@
   import type { FilterStore } from '$lib/filters';
   import { REGION_LABELS } from '$lib/labels';
   import { freshnessLabel } from '$lib/filterControls';
+  import SavedSearches from '../SavedSearches.svelte';
 
   // The sidebar: a summary of the *applied* filters as chips grouped by facet, plus
   // the All-filters button (opening the modal) and Reset all. Removing a chip edits
@@ -73,6 +74,8 @@
 </script>
 
 <div class="flex flex-col gap-4">
+  <SavedSearches {store} />
+
   <div class="flex items-center justify-between">
     <h2 class="text-base font-semibold tracking-tight">Filters</h2>
     {#if store.active > 0}

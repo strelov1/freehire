@@ -45,10 +45,16 @@ func emitMap(typeName, constName string, m map[string]string) string {
 	} else {
 		b.WriteString("export const " + constName + " = {\n")
 		for _, k := range keys {
-			b.WriteString("  '" + k + "': '" + m[k] + "',\n")
+			b.WriteString("  " + quoteTS(k) + ": " + quoteTS(m[k]) + ",\n")
 		}
 		b.WriteString("} as const;\n")
 	}
 	b.WriteString("export type " + typeName + " = typeof " + constName + ";\n")
 	return b.String()
+}
+
+// quoteTS renders a string as a single-quoted TS literal, escaping backslashes and
+// single quotes so a value like "N'Djamena" can't break the generated file.
+func quoteTS(s string) string {
+	return "'" + strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(s) + "'"
 }

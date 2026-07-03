@@ -182,10 +182,9 @@ func genVocab() string {
 	b.WriteString(emitVocab("EnglishLevel", "ENGLISH_LEVEL_VALUES", enrich.EnglishLevelValues))
 	b.WriteString(emitVocab("CompanyType", "COMPANY_TYPE_VALUES", enrich.CompanyTypeValues))
 	b.WriteString(emitVocab("Domain", "DOMAIN_VALUES", enrich.DomainValues))
-	// Geography grouping maps for the hierarchical location filter: country→region
-	// and canonical-city→country, both derived from the location dictionary.
+	// Country→region grouping for the hierarchical location filter, derived from the
+	// location dictionary.
 	b.WriteString(emitMap("CountryRegionMap", "COUNTRY_REGION_MAP", location.CountryToRegion()))
-	b.WriteString(emitMap("CityCountryMap", "CITY_COUNTRY_MAP", location.CityToCountry()))
 	return b.String()
 }
 
