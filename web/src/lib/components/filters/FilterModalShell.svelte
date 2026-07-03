@@ -34,7 +34,7 @@
     applyDisabled = false,
     applyLabel,
     previewCount,
-    previewNoun = ['job', 'jobs'],
+    initialKey,
     pane,
     extra,
   }: {
@@ -53,8 +53,9 @@
     /** Custom footer label (e.g. "Save"); when absent the button shows the live preview. */
     applyLabel?: string;
     previewCount?: (params: URLSearchParams) => Promise<number>;
-    /** [singular, plural] noun for the "Show N …" preview button. */
-    previewNoun?: [string, string];
+    /** Rail entry to land on when the modal opens (defaults to the first entry) — lets a
+     *  caller keep a lead tab (e.g. "My filters") in the rail without opening on it. */
+    initialKey?: string;
     /** Renders the active entry's controls into the right pane. */
     pane: Snippet<[RailEntry]>;
     /** Optional content above the pane (e.g. the profile editor's "import from CV"). */
@@ -66,12 +67,14 @@
   let active = $state<string>('');
 
   // Seed the staged copy from the live state each time the modal opens, and land on the
-  // first rail entry when the current one isn't in this rail.
+  // `initialKey` entry (falling back to the first) when the current one isn't in this rail.
   let wasOpen = false;
   $effect(() => {
     if (open && !wasOpen) {
       seed();
-      if (!rail.some((e) => e.key === active)) active = rail[0]?.key ?? '';
+      if (!rail.some((e) => e.key === active)) {
+        active = (initialKey && rail.some((e) => e.key === initialKey) ? initialKey : rail[0]?.key) ?? '';
+      }
     }
     wasOpen = open;
   });
@@ -207,7 +210,7 @@
               {applyBusy ? 'Saving…' : applyLabel}
             {:else}
               Show {showCount != null ? showCount.toLocaleString('en-US') : ''}
-              {showCount === 1 ? previewNoun[0] : previewNoun[1]}
+              {showCount === 1 ? 'job' : 'jobs'}
             {/if}
           </button>
         </div>

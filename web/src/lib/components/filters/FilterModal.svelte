@@ -42,8 +42,8 @@
     counts?: FacetCounts | null;
     exclude?: string[];
     railKeys?: string[];
-    // Show the "My filters" (saved searches) tab. Opt-in: the standalone job list and
-    // analytics enable it; reuse like the profile comparison modal leaves it off.
+    // Show the "My filters" (saved searches) tab. Opt-in: the standalone job list enables
+    // it; reuse like the profile comparison modal leaves it off.
     savedSearches?: boolean;
     title?: string;
     applyLabel?: string;
@@ -136,6 +136,7 @@
   {staged}
   {entryCount}
   seed={seedStaged}
+  initialKey={RAIL[0]?.key}
   {apply}
   {applyDisabled}
   {applyLabel}
