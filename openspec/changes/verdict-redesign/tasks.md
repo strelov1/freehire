@@ -1,7 +1,7 @@
 ## 1. Section-aware CV parsing (new pure package)
 
-- [ ] 1.1 Add `internal/cvsection` with a `Parse(cvText) (declared, body, all []string)` that heading-splits the CV (Skills section vs body, EN+RU) and skill-tags each segment
-- [ ] 1.2 Table-driven tests: declared+body split, skill in both, skill only in body, no Skills heading ⇒ declared empty, determinism
+- [x] 1.1 Add `internal/cvsection` with a `Parse(cvText) (declared, body, all []string)` that heading-splits the CV (Skills section vs body, EN+RU) and skill-tags each segment
+- [x] 1.2 Table-driven tests: declared+body split, skill in both, skill only in body, no Skills heading ⇒ declared empty, determinism
 
 ## 2. Enriched market-coverage verdict (backend)
 
