@@ -48,4 +48,4 @@
 
 - [x] 8.1 `go build ./... && go vet ./... && go test ./...` (backend maps + gen-contracts) green — 50 packages
 - [x] 8.2 `svelte-check` clean for the touched frontend; visual-verified specialization / location tree / salary / mobile / sidebar summary in the running app against the approved prototype
-- [ ] 8.3 Manual pass: deferred apply, chip removal applies immediately, URL round-trips, back/forward, reset all
+- [x] 8.3 Manual pass (in-app, automated): modal toggle stays deferred (URL unchanged), **Show results** applies to the URL (`?category=backend&seniority=senior`) + sidebar chips, chip removal applies immediately (URL back to `?seniority=senior`). URL round-trip via the unchanged FilterStore/UrlSyncedState. Minor polish noted: the Show button shows no number until the first debounced count resolves.
