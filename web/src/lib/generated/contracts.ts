@@ -165,20 +165,6 @@ export const StatusHidden = "hidden"; // used in the body but not declared
  */
 export const StatusMissing = "missing"; // absent from the CV
 /**
- * Input carries everything Compute needs, all derived from real data: the role's
- * open-vacancy total, the uncovered set (total + per-skill distribution), the full
- * role skill distribution (skill slug → vacancies listing it), and the CV's parsed
- * declared/body skill sets.
- */
-export interface Input {
-  Total: number /* int64 */;
-  UncoveredTotal: number /* int64 */;
-  UncoveredSkills: { [key: string]: number /* int64 */};
-  RoleSkills: { [key: string]: number /* int64 */};
-  Declared: string[];
-  Body: string[];
-}
-/**
  * Verdict is the coverage result. JSON is the wire contract shared with the
  * frontend (generated to TS via cmd/gen-contracts).
  */
