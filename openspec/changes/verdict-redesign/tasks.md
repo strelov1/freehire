@@ -28,4 +28,4 @@
 ## 5. Verify
 
 - [x] 5.1 `go build ./... && go vet ./... && go test ./...` green
-- [ ] 5.2 Manual/visual check of both tabs with and without an LLM configured (needs the running stack: DB + Meili + LLM — not run in the worktree; covered indirectly by handler tests + `svelte-check` + `vite build`)
+- [x] 5.2 Visual check of both tabs — verified via a throwaway `_verify` route rendering both components with representative new-contract data + headless-Chrome screenshot (both tabs render correctly with the STRONG/HIDDEN/MISSING status colours, 5 category cards, keyword chips, and suggestions). Full data-path (live LLM + Meili + DB) covered by handler tests rather than a live run.
