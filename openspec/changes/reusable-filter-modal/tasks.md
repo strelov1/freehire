@@ -33,5 +33,5 @@
 
 ## 7. Verification
 
-- [ ] 7.1 `pnpm --dir web svelte-check` and vitest green.
-- [ ] 7.2 Visual verify (headless Chrome): mobile "My filters" tab reachable; `/companies` modal parity; profile filters only on Market coverage; board sharing absent from the panel but present on `/my/searches`.
+- [x] 7.1 `pnpm --dir web svelte-check` and vitest green.
+- [x] 7.2 Visual verify (headless Chrome): mobile "My filters" tab reachable; `/companies` modal parity; profile filters only on Market coverage; board sharing absent from the panel but present on `/my/searches`.
