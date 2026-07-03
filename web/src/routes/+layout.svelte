@@ -5,7 +5,7 @@
   import { isAuthenticated } from '$lib/auth.svelte';
   import { resetViewedJobs } from '$lib/viewedJobs.svelte';
   import { savedSearches } from '$lib/savedSearches.svelte';
-  import { searchProfiles } from '$lib/searchProfiles.svelte';
+  import { profileStore } from '$lib/profile.svelte';
   import { notifications } from '$lib/notifications.svelte';
   import TopBar from '$lib/components/TopBar.svelte';
   import Footer from '$lib/components/Footer.svelte';
@@ -28,7 +28,7 @@
     if (!isAuthenticated()) {
       resetViewedJobs();
       savedSearches.reset();
-      searchProfiles.reset();
+      profileStore.reset();
       notifications.reset();
     }
   });

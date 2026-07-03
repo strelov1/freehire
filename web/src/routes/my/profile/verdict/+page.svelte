@@ -11,12 +11,12 @@
   import FiltersPanel from '$lib/components/FiltersPanel.svelte';
   import States from '$lib/components/States.svelte';
   import VerdictView from '$lib/components/VerdictView.svelte';
-  import { searchProfiles } from '$lib/searchProfiles.svelte';
+  import { profileStore } from '$lib/profile.svelte';
   import type { ATSResponse, FacetCounts, Verdict } from '$lib/types';
   import { Button } from '$lib/ui';
 
-  const id = $derived(Number(page.params.id));
-  const profile = $derived(searchProfiles.items.find((p) => p.id === id));
+  const profileHref = resolve('/my/profile');
+  const profile = $derived(profileStore.profile);
 
   // Skills are the measured set (from the profile), never a role filter — hide the
   // skills facet so the sidebar can't turn them into one.
@@ -30,9 +30,6 @@
   let loadError = $state(false);
   let tab = $state<'coverage' | 'cv'>('coverage');
 
-  // CV upload/replace lives on the profile edit form; the report links there.
-  const editHref = $derived(resolve('/my/profiles/[id]/edit', { id: String(id) }));
-
   // AI review state.
   let reviewBusy = $state(false);
   let reviewUnavailable = $state(false);
@@ -45,7 +42,7 @@
     reviewUnavailable = false;
     try {
       const params = filters ? filtersToParams(filters.applied) : undefined;
-      const next = await runATSReview(id, params);
+      const next = await runATSReview(params);
       ats = next;
       if (next.has_cv && next.report && next.report.content_quality == null) {
         reviewUnavailable = true;
@@ -63,8 +60,8 @@
   async function init() {
     status = 'loading';
     try {
-      await searchProfiles.ensureLoaded();
-      const p = searchProfiles.items.find((x) => x.id === id);
+      await profileStore.ensureLoaded();
+      const p = profileStore.profile;
       const seed = new URLSearchParams(page.url.searchParams);
       if (p && !seed.getAll('category').some((c) => c !== '')) {
         for (const spec of p.specializations) seed.append('category', spec);
@@ -77,9 +74,7 @@
   }
 
   $effect(() => {
-    // Re-init when the session resolves or the profile id changes (SvelteKit may reuse
-    // this component across [id] navigations).
-    void id;
+    // Re-init when the session resolves.
     if (isAuthenticated()) void init();
   });
 
@@ -96,9 +91,9 @@
     const params = filtersToParams(filters.applied);
     try {
       [verdict, counts, ats] = await Promise.all([
-        getProfileVerdict(id, params),
+        getProfileVerdict(params),
         facetCounts(params),
-        getATSReport(id, params),
+        getATSReport(params),
       ]);
       loadError = false;
     } catch {
@@ -138,10 +133,10 @@
     <States state="loading" />
   {:else if status === 'error'}
     <States state="error" message="Couldn't load the verdict." />
-  {:else if profile === undefined || filters === null}
+  {:else if profile === null || filters === null}
     <div class="flex flex-col items-center gap-3 py-12 text-center">
-      <p class="text-sm text-muted-foreground">This profile no longer exists.</p>
-      <Button variant="primary" href={resolve('/my/profiles')}>Back to profiles</Button>
+      <p class="text-sm text-muted-foreground">Set up your profile to see market coverage.</p>
+      <Button variant="primary" href={profileHref}>Go to profile</Button>
     </div>
   {:else}
     <div class="grid gap-6 md:grid-cols-[260px_1fr]">
@@ -152,14 +147,14 @@
         <!-- Page header -->
         <div class="flex flex-col gap-3">
           <a
-            href="/my/profiles"
+            href={profileHref}
             class="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft class="size-4" />
-            Profiles
+            Profile
           </a>
           <div class="flex flex-col gap-1">
-            <h1 class="text-3xl font-semibold tracking-tight">{profile.name}</h1>
+            <h1 class="text-3xl font-semibold tracking-tight">Market coverage</h1>
             {#if role}<p class="text-sm text-muted-foreground">{role}</p>{/if}
           </div>
         </div>
@@ -215,22 +210,22 @@
             {/if}
             <ATSReportView report={ats.report} />
             <a
-              href={editHref}
+              href={profileHref}
               class="w-fit text-xs text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline"
             >
-              Update your CV in profile settings
+              Update your CV in your profile
             </a>
           </div>
         {:else}
-          <!-- No CV yet: managed on the profile edit form. -->
+          <!-- No CV yet: managed on the profile. -->
           <div class="flex flex-col items-start gap-3 rounded-xl border border-dashed border-border p-6">
             <p class="text-sm font-medium">Add your CV to score its ATS readiness</p>
             <p class="text-sm text-muted-foreground">
               Upload your CV on the profile to check ATS readability and this role's keywords.
             </p>
-            <Button variant="primary" href={editHref}>
+            <Button variant="primary" href={profileHref}>
               <Pencil class="size-4" />
-              Edit profile
+              Go to profile
             </Button>
           </div>
         {/if}

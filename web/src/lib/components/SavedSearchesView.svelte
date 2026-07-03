@@ -11,7 +11,7 @@
   const items = $derived(savedSearches.items);
 
   // Share flow: clicking "Share" on a row reveals an optional author-label input for that
-  // row (mirrors the SearchProfilesView editingId pattern); confirming publishes the board.
+  // row (an inline per-row edit id); confirming publishes the board.
   let shareEditId = $state<number | null>(null);
   let authorLabel = $state('');
   let busyId = $state<number | null>(null);
@@ -30,7 +30,7 @@
   }
 
   // Load once the session is confirmed; reset the per-user cache on sign-out so a different
-  // user does not see the previous one's searches (mirrors SearchProfilesView).
+  // user does not see the previous one's searches.
   $effect(() => {
     if (isAuthenticated()) {
       void load();

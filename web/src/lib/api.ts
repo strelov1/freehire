@@ -25,7 +25,7 @@ import type {
   CreatedApiKey,
   SavedSearch,
   Board,
-  SearchProfile,
+  UserProfile,
   Subscription,
   TelegramStatus,
   Submission,
@@ -466,47 +466,29 @@ export function createApi(
     return res.data;
   }
 
-  // Search profiles: named specialization + skills sets (cookie-only on the server).
+  // The single per-user profile: a specialization + skills set (cookie-only on the server).
 
-  /** The current user's search profiles, most recently updated first. */
-  async function listSearchProfiles(): Promise<SearchProfile[]> {
-    const res = await request<{ data: SearchProfile[] }>('/api/v1/me/profiles');
+  /** The current user's profile, or null when they have not saved one yet. */
+  async function getProfile(): Promise<UserProfile | null> {
+    const res = await request<{ data: UserProfile | null }>('/api/v1/me/profile');
     return res.data;
   }
 
-  /** Create a profile from a name, a non-empty set of specializations (job categories),
-   *  and a non-empty set of skills. A duplicate name or the per-user cap is a 409; a bad
-   *  specialization or empty skills is a 400. */
-  async function createSearchProfile(
-    name: string,
-    specializations: string[],
-    skills: string[],
-  ): Promise<SearchProfile> {
-    const res = await request<{ data: SearchProfile }>('/api/v1/me/profiles', {
-      method: 'POST',
+  /** Create-or-replace the user's profile from a non-empty set of specializations (job
+   *  categories) and a non-empty set of skills. A bad specialization or empty skills is a
+   *  400. */
+  async function saveProfile(specializations: string[], skills: string[]): Promise<UserProfile> {
+    const res = await request<{ data: UserProfile }>('/api/v1/me/profile', {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, specializations, skills }),
+      body: JSON.stringify({ specializations, skills }),
     });
     return res.data;
   }
 
-  /** Overwrite a profile's name, specializations, and/or skills; an omitted field is
-   *  unchanged. */
-  async function updateSearchProfile(
-    id: number,
-    patch: { name?: string; specializations?: string[]; skills?: string[] },
-  ): Promise<SearchProfile> {
-    const res = await request<{ data: SearchProfile }>(`/api/v1/me/profiles/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    });
-    return res.data;
-  }
-
-  /** Delete a profile by id. */
-  async function deleteSearchProfile(id: number): Promise<void> {
-    await call(`/api/v1/me/profiles/${id}`, { method: 'DELETE' });
+  /** Clear the user's profile. Idempotent. */
+  async function deleteProfile(): Promise<void> {
+    await call('/api/v1/me/profile', { method: 'DELETE' });
   }
 
   /** Build the request init for a résumé payload: pasted text goes as JSON, a `File`
@@ -534,27 +516,27 @@ export function createApi(
     return res.data.skills;
   }
 
-  /** The market-coverage verdict for a profile: how many open vacancies the profile's
-   *  skills reach for the selected role, and which missing skill unlocks the most new
-   *  ones. `params` carries the same facet filters as job search, so the caller can
-   *  recompute for an ad-hoc role; absent a `category` the server defaults to the
-   *  profile's specializations. Owner-scoped (404 for another user's profile). */
-  async function getProfileVerdict(id: number, params?: URLSearchParams): Promise<Verdict> {
+  /** The market-coverage verdict for the caller's profile: how many open vacancies the
+   *  profile's skills reach for the selected role, and which missing skill unlocks the
+   *  most new ones. `params` carries the same facet filters as job search, so the caller
+   *  can recompute for an ad-hoc role; absent a `category` the server defaults to the
+   *  profile's specializations. Session-scoped (404 when no profile). */
+  async function getProfileVerdict(params?: URLSearchParams): Promise<Verdict> {
     const qs = params?.toString();
     const res = await request<{ data: Verdict }>(
-      `/api/v1/me/profiles/${id}/verdict${qs ? `?${qs}` : ''}`,
+      `/api/v1/me/profile/verdict${qs ? `?${qs}` : ''}`,
     );
     return res.data;
   }
 
-  /** The CV ATS-readiness report for a profile: structural checks over the caller's
+  /** The CV ATS-readiness report for the caller's profile: structural checks over the
    *  stored CV plus a keyword-match against the selected role's top skills. `params`
    *  carries the same facet filters as the verdict. `has_cv` is false (report null)
-   *  when no CV is stored — the page then prompts an upload. Owner-scoped. */
-  async function getATSReport(id: number, params?: URLSearchParams): Promise<ATSResponse> {
+   *  when no CV is stored — the page then prompts an upload. Session-scoped. */
+  async function getATSReport(params?: URLSearchParams): Promise<ATSResponse> {
     const qs = params?.toString();
     const res = await request<{ data: ATSResponse }>(
-      `/api/v1/me/profiles/${id}/ats-report${qs ? `?${qs}` : ''}`,
+      `/api/v1/me/profile/ats-report${qs ? `?${qs}` : ''}`,
     );
     return res.data;
   }
@@ -562,10 +544,10 @@ export function createApi(
   /** Run the optional LLM qualitative review over the caller's stored CV; returns the
    *  ATS report with content-quality + findings folded in (cached server-side). With no
    *  LLM configured this is just the deterministic report. */
-  async function runATSReview(id: number, params?: URLSearchParams): Promise<ATSResponse> {
+  async function runATSReview(params?: URLSearchParams): Promise<ATSResponse> {
     const qs = params?.toString();
     const res = await request<{ data: ATSResponse }>(
-      `/api/v1/me/profiles/${id}/ats-report${qs ? `?${qs}` : ''}`,
+      `/api/v1/me/profile/ats-report${qs ? `?${qs}` : ''}`,
       { method: 'POST' },
     );
     return res.data;
@@ -734,10 +716,9 @@ export function createApi(
     shareSavedSearch,
     unshareSavedSearch,
     getBoard,
-    listSearchProfiles,
-    createSearchProfile,
-    updateSearchProfile,
-    deleteSearchProfile,
+    getProfile,
+    saveProfile,
+    deleteProfile,
     extractResumeSkills,
     getProfileVerdict,
     getATSReport,
@@ -807,10 +788,9 @@ export const {
   shareSavedSearch,
   unshareSavedSearch,
   getBoard,
-  listSearchProfiles,
-  createSearchProfile,
-  updateSearchProfile,
-  deleteSearchProfile,
+  getProfile,
+  saveProfile,
+  deleteProfile,
   extractResumeSkills,
   getProfileVerdict,
   getATSReport,

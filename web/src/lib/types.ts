@@ -247,13 +247,11 @@ export interface Board {
   author_label: string;
 }
 
-/** A user's search profile: a named professional self — a non-empty set of
- *  `specializations` (job categories) and a non-empty set of canonical skill tokens. The
- *  foundation for finding relevant work; how a profile is consumed (match scoring, feeds)
- *  is a later feature. Timestamps are RFC3339 strings or null. */
-export interface SearchProfile {
-  id: number;
-  name: string;
+/** A user's single profile: their professional self — a non-empty set of
+ *  `specializations` (job categories) and a non-empty set of canonical skill tokens. One
+ *  per user (no id, no name); the foundation for finding relevant work. Timestamps are
+ *  RFC3339 strings or null. */
+export interface UserProfile {
   specializations: string[];
   skills: string[];
   created_at: string | null;

@@ -8,6 +8,7 @@
   import { themeStore } from '$lib/theme.svelte';
   import { lockScroll, unlockScroll } from '$lib/scrollLock';
   import { cn } from '$lib/utils';
+  import Avatar from './Avatar.svelte';
   import GithubStars from './GithubStars.svelte';
 
   // The single menu absorbs the site nav, the signed-in account items, the theme
@@ -56,7 +57,7 @@
 
   const accountLinks = [
     { href: '/my/jobs', label: 'My jobs' },
-    { href: '/my/profiles', label: 'Profiles' },
+    { href: '/my/profile', label: 'Profile' },
     { href: '/my/searches', label: 'Saved searches' },
     { href: '/my/notifications', label: 'Notifications' },
     { href: '/my/api-keys', label: 'API keys' },
@@ -199,7 +200,17 @@
       <!-- Middle: scrollable, sectioned links. -->
       <div class="max-sm:flex-1 max-sm:overflow-y-auto max-sm:px-2 max-sm:pb-3">
         {#if isAuthenticated()}
-          <p class="truncate px-4 py-2 text-sm text-muted-foreground sm:px-3" title={email}>{email}</p>
+          <!-- Identity row: avatar + email, a single link to the profile. -->
+          <a
+            href={resolve('/my/profile')}
+            role="menuitem"
+            onclick={() => (open = false)}
+            class={cn(rowBase, 'text-muted-foreground')}
+            title={email}
+          >
+            <Avatar {email} />
+            <span class="truncate">{email}</span>
+          </a>
           <div class="my-1 hidden h-px bg-border sm:block"></div>
         {/if}
 

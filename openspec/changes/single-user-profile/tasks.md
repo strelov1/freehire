@@ -17,24 +17,24 @@
 
 ## 4. Frontend data layer
 
-- [ ] 4.1 Update `web/src/lib/types.ts`: `SearchProfile`/profile type drops `id` and `name` (keep `specializations`, `skills`, timestamps)
-- [ ] 4.2 Replace `web/src/lib/searchProfiles.svelte.ts` with a single-profile store `profile.svelte.ts`: holds one `profile | null`, `ensureLoaded()` (GET), `save()` (PUT), `clear()` (DELETE), `reset()` on sign-out
-- [ ] 4.3 Update `web/src/lib/api.ts` profile/verdict/ats-report helpers to the singleton paths (`/me/profile`, `/me/profile/verdict`, `/me/profile/ats-report`); drop id params
+- [x] 4.1 Update `web/src/lib/types.ts`: `SearchProfile`/profile type drops `id` and `name` (keep `specializations`, `skills`, timestamps)
+- [x] 4.2 Replace `web/src/lib/searchProfiles.svelte.ts` with a single-profile store `profile.svelte.ts`: holds one `profile | null`, `ensureLoaded()` (GET), `save()` (PUT), `clear()` (DELETE), `reset()` on sign-out
+- [x] 4.3 Update `web/src/lib/api.ts` profile/verdict/ats-report helpers to the singleton paths (`/me/profile`, `/me/profile/verdict`, `/me/profile/ats-report`); drop id params
 
 ## 5. Frontend profile route, view & edit modal
 
-- [ ] 5.1 Replace routes `/my/profiles`, `/my/profiles/new`, `/my/profiles/[id]/edit` with a single `/my/profile` page: shows the profile (specialization + skill chips, skill-gap block, verdict link) or an empty state, with an Edit button; anonymous → sign-in prompt
-- [ ] 5.2 Build the profile edit modal reusing the jobs facet machinery: render `FacetSection` for `category` (cap 5) and `skills` (dynamic, live `counts.facets.skills`) via profile-scoped `FacetDef`s with `excludable:false`/`hasAndOr:false`, backed by a staging store seeded from the profile; Save (enabled when ≥1 specialization and ≥1 skill) calls store `save()` → `PUT /me/profile`. Keep CV upload (merges into the skills facet). Remove the bespoke `SearchSelect`/`RemoteSearchSelect` pickers
-- [ ] 5.3 Remove `ProfileForm.svelte` + `SearchProfilesView.svelte` (superseded by the page + modal); render the skill-gap block for the single profile in the profile view
-- [ ] 5.4 Move the verdict page (which also hosts the ATS report via `ATSReportView.svelte`) to `/my/profile/verdict` (no `[id]`), pointing at `GET /me/profile/verdict` and `/me/profile/ats-report`
+- [x] 5.1 Replace routes `/my/profiles`, `/my/profiles/new`, `/my/profiles/[id]/edit` with a single `/my/profile` page: shows the profile (specialization + skill chips, skill-gap block, verdict link) or an empty state, with an Edit button; anonymous → sign-in prompt
+- [x] 5.2 Build the profile edit modal reusing the jobs facet machinery: render `FacetSection` for `category` (cap 5) and `skills` (dynamic, live `counts.facets.skills`) via profile-scoped `FacetDef`s with `excludable:false`/`hasAndOr:false`, backed by a staging store seeded from the profile; Save (enabled when ≥1 specialization and ≥1 skill) calls store `save()` → `PUT /me/profile`. Keep CV upload (merges into the skills facet). Remove the bespoke `SearchSelect`/`RemoteSearchSelect` pickers
+- [x] 5.3 Remove `ProfileForm.svelte` + `SearchProfilesView.svelte` (superseded by the page + modal); render the skill-gap block for the single profile in the profile view
+- [x] 5.4 Move the verdict page (which also hosts the ATS report via `ATSReportView.svelte`) to `/my/profile/verdict` (no `[id]`), pointing at `GET /me/profile/verdict` and `/me/profile/ats-report`
 
 ## 6. Header avatar & menu
 
-- [ ] 6.1 Add `web/src/lib/components/Avatar.svelte`: circle with the email's first character on a colour deterministically derived from the email
-- [ ] 6.2 Update `HeaderMenu.svelte`: render the avatar + email as a single clickable identity row linking to `/my/profile` (signed-in only); rename the account item "Search profiles" → "Profile" targeting `/my/profile`
+- [x] 6.1 Add `web/src/lib/components/Avatar.svelte`: circle with the email's first character on a colour deterministically derived from the email
+- [x] 6.2 Update `HeaderMenu.svelte`: render the avatar + email as a single clickable identity row linking to `/my/profile` (signed-in only); rename the account item "Search profiles" → "Profile" targeting `/my/profile`
 
 ## 7. Verification
 
 - [ ] 7.1 Backend: `go build ./... && go vet ./... && go test ./...`
-- [ ] 7.2 Frontend: `svelte-check` clean for touched files (no unit runner in repo)
-- [ ] 7.3 Confirm no dangling references to `/me/profiles`, profile `id`, or `name` across `internal/` and `web/src/`
+- [x] 7.2 Frontend: `svelte-check` clean for touched files (no unit runner in repo)
+- [x] 7.3 Confirm no dangling references to `/me/profiles`, profile `id`, or `name` across `internal/` and `web/src/`
