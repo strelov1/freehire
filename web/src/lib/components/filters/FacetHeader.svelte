@@ -6,9 +6,11 @@
   // A single-param facet header: the label plus the Exclude toggle (when the facet is
   // excludable and has a selection) and a Clear button. Shared by the chip facets and
   // the Specialization pane so the per-facet controls read identically everywhere.
-  let { store, param, label }: { store: FacetStore; param: string; label: string } = $props();
+  // `noExclude` forces the Exclude toggle off for a plain-select reuse (e.g. the profile
+  // editor, where a value is a plain choice, not a filter to exclude).
+  let { store, param, label, noExclude = false }: { store: FacetStore; param: string; label: string; noExclude?: boolean } = $props();
 
-  const excludable = FACETS.find((d) => d.param === param)?.excludable ?? false;
+  const excludable = $derived(!noExclude && (FACETS.find((d) => d.param === param)?.excludable ?? false));
   const st = $derived(store.facet(param));
 </script>
 

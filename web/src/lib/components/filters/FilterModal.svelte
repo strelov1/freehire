@@ -31,6 +31,7 @@
     applyLabel,
     onApply,
     canApply,
+    plain = false,
     open = false,
     onClose,
     previewCount,
@@ -45,6 +46,9 @@
     applyLabel?: string;
     onApply?: (staged: StagedFilters) => void | Promise<void>;
     canApply?: (f: JobFilters) => boolean;
+    // Plain-select reuse (e.g. the profile editor): drop the search-only exclude/match
+    // toggles so a facet value reads as a plain choice, not a filter.
+    plain?: boolean;
     open?: boolean;
     onClose: () => void;
     previewCount?: (params: URLSearchParams) => Promise<number>;
@@ -93,7 +97,12 @@
 
   // Panes that reuse FacetSection (dynamic controls); ChipFacet resolves its own
   // options from the registry, so composite panes only name the facet param.
-  const facetDef = $derived(activeEntry?.kind === 'facet' ? FACETS.find((d) => d.param === activeEntry!.facetParam) : undefined);
+  const facetDef = $derived.by(() => {
+    if (activeEntry?.kind !== 'facet') return undefined;
+    const d = FACETS.find((x) => x.param === activeEntry!.facetParam);
+    // In plain mode strip the search-only exclude/match toggles from the facet control.
+    return d && plain ? { ...d, excludable: false, hasAndOr: false } : d;
+  });
   const englishDef = FACETS.find((d) => d.param === 'english_level');
   const postingDef = FACETS.find((d) => d.param === 'posting_language');
 
@@ -219,9 +228,9 @@
           {#if activeEntry?.kind === 'category'}
             {#if !exclude.includes('seniority')}
               <ChipFacet store={staged} param="seniority" label="Seniority" />
-              <div class="mt-6"><CategoryPane store={staged} /></div>
+              <div class="mt-6"><CategoryPane store={staged} {plain} /></div>
             {:else}
-              <CategoryPane store={staged} />
+              <CategoryPane store={staged} {plain} />
             {/if}
           {:else if activeEntry?.kind === 'location'}
             <LocationPane store={staged} {counts} />

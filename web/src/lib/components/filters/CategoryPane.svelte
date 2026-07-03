@@ -8,7 +8,8 @@
 
   // Specialization pane: category chips grouped into collapsible sections, with a
   // facet-local search filtering the visible options. Toggles the `category` facet.
-  let { store }: { store: FacetStore } = $props();
+  // `plain` hides the search-only Exclude toggle (a profile category is a plain choice).
+  let { store, plain = false }: { store: FacetStore; plain?: boolean } = $props();
 
   let query = $state('');
   const collapsed = new SvelteSet<string>();
@@ -24,7 +25,7 @@
   });
 </script>
 
-<FacetHeader {store} param="category" label="Specialization" />
+<FacetHeader {store} param="category" label="Specialization" noExclude={plain} />
 
 <div class="mb-4 flex items-center gap-2 rounded-lg border border-input px-3">
   <Search class="size-4 shrink-0 text-muted-foreground" />

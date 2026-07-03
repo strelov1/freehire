@@ -143,6 +143,7 @@
   {railKeys}
   {exclude}
   {canApply}
+  plain
   title="Edit profile"
   applyLabel="Save"
   onApply={save}
