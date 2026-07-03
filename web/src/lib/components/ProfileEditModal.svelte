@@ -58,11 +58,8 @@
   const store: FacetStore = {
     facet: (p) => staged.facet(p),
     toggle: (p, v) => {
-      if (
-        p === 'category' &&
-        !staged.facet('category').values.includes(v) &&
-        staged.facet('category').values.length >= MAX_SPECIALIZATIONS
-      ) {
+      const cat = staged.facet('category');
+      if (p === 'category' && !cat.values.includes(v) && cat.values.length >= MAX_SPECIALIZATIONS) {
         capHit = true;
         return;
       }
