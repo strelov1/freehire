@@ -55,7 +55,6 @@
     facetGroup('employment_type', 'Employment');
     facetGroup('collections', 'Collection');
     facetGroup('company_slug', 'Company');
-    facetGroup('source', 'Source');
     facetGroup('english_level', 'English');
     facetGroup('posting_language', 'Job language');
     facetGroup('relocation', 'Relocation');

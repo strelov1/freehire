@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronDown, Search } from '@lucide/svelte';
+  import { ChevronDown, Search, X } from '@lucide/svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import { countryLabel, type FacetStore } from '$lib/facets';
   import { REGION_LABELS } from '$lib/labels';
@@ -53,7 +53,29 @@
 
   const cityMatches = $derived(allCities.filter(matchCity));
   const citiesShown = $derived(q ? cityMatches : cityMatches.slice(0, CITY_LIMIT));
+
+  const hasGeo = $derived(regionSel.length + countrySel.length + citySel.length > 0);
+  function clearGeo() {
+    store.clearFacet('regions');
+    store.clearFacet('countries');
+    store.clearFacet('cities');
+  }
 </script>
+
+<div class="mb-2 flex min-h-6 items-center justify-between gap-2">
+  <h3 class="text-sm font-semibold tracking-tight">Location</h3>
+  {#if hasGeo}
+    <button
+      type="button"
+      onclick={clearGeo}
+      title="Clear Location"
+      aria-label="Clear Location"
+      class="flex size-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+    >
+      <X class="size-3.5" />
+    </button>
+  {/if}
+</div>
 
 <div class="mb-4 flex items-center gap-2 rounded-lg border border-input px-3">
   <Search class="size-4 shrink-0 text-muted-foreground" />

@@ -7,7 +7,7 @@
   import type { FacetCounts } from '$lib/types';
   import { FRESHNESS_PRESETS, SALARY_MAX, SALARY_STEP, freshnessLabel } from '$lib/filterControls';
   import FacetSection from '../facets/FacetSection.svelte';
-  import PillGroup from '../facets/PillGroup.svelte';
+  import ChipFacet from './ChipFacet.svelte';
   import CategoryPane from './CategoryPane.svelte';
   import LocationPane from './LocationPane.svelte';
 
@@ -173,25 +173,14 @@
         <!-- pane -->
         <section class="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
           {#if activeEntry?.kind === 'category'}
-            <h3 class="mb-2 text-sm font-semibold tracking-tight">Seniority</h3>
-            <PillGroup
-              options={seniorityOptions}
-              selected={staged.facet('seniority').values}
-              onToggle={(v) => staged.toggle('seniority', v)}
-            />
-            <h3 class="mb-3 mt-6 text-sm font-semibold tracking-tight">Specialization</h3>
-            <CategoryPane store={staged} />
+            <ChipFacet store={staged} param="seniority" label="Seniority" options={seniorityOptions} />
+            <div class="mt-6"><CategoryPane store={staged} /></div>
           {:else if activeEntry?.kind === 'location'}
             <LocationPane store={staged} {counts} />
           {:else if activeEntry?.kind === 'facet' && facetDef}
             <FacetSection def={facetDef} store={staged} {counts} expand />
           {:else if activeEntry?.kind === 'salary'}
-            <h3 class="mb-2 text-sm font-semibold tracking-tight">Currency</h3>
-            <PillGroup
-              options={currencyOptions}
-              selected={staged.facet('salary_currency').values}
-              onToggle={(v) => staged.toggle('salary_currency', v)}
-            />
+            <ChipFacet store={staged} param="salary_currency" label="Currency" options={currencyOptions} />
             <div class="mb-2 mt-6 flex items-center justify-between">
               <h3 class="text-sm font-semibold tracking-tight">Minimum salary</h3>
               <span class="text-xs font-medium text-muted-foreground"
@@ -209,47 +198,17 @@
               class="w-full accent-primary"
             />
           {:else if activeEntry?.kind === 'work'}
-            <h3 class="mb-2 text-sm font-semibold tracking-tight">Work format</h3>
-            <PillGroup
-              options={workModeOptions}
-              selected={staged.facet('work_mode').values}
-              onToggle={(v) => staged.toggle('work_mode', v)}
-            />
-            <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Employment type</h3>
-            <PillGroup
-              options={employmentOptions}
-              selected={staged.facet('employment_type').values}
-              onToggle={(v) => staged.toggle('employment_type', v)}
-            />
+            <ChipFacet store={staged} param="work_mode" label="Work format" options={workModeOptions} />
+            <div class="mt-6"><ChipFacet store={staged} param="employment_type" label="Employment type" options={employmentOptions} /></div>
           {:else if activeEntry?.kind === 'industry'}
-            <h3 class="mb-2 text-sm font-semibold tracking-tight">Industry</h3>
-            <PillGroup
-              options={domainOptions}
-              selected={staged.facet('domains').values}
-              onToggle={(v) => staged.toggle('domains', v)}
-            />
-            <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Company type</h3>
-            <PillGroup
-              options={companyTypeOptions}
-              selected={staged.facet('company_type').values}
-              onToggle={(v) => staged.toggle('company_type', v)}
-            />
-            <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Collection</h3>
-            <PillGroup
-              options={collectionOptions}
-              selected={staged.facet('collections').values}
-              onToggle={(v) => staged.toggle('collections', v)}
-            />
+            <ChipFacet store={staged} param="domains" label="Industry" options={domainOptions} />
+            <div class="mt-6"><ChipFacet store={staged} param="company_type" label="Company type" options={companyTypeOptions} /></div>
+            <div class="mt-6"><ChipFacet store={staged} param="collections" label="Collection" options={collectionOptions} /></div>
           {:else if activeEntry?.kind === 'language'}
             {#if englishDef}<FacetSection def={englishDef} store={staged} {counts} expand />{/if}
             <div class="mt-4">{#if postingDef}<FacetSection def={postingDef} store={staged} {counts} expand />{/if}</div>
           {:else if activeEntry?.kind === 'relocation'}
-            <h3 class="mb-2 text-sm font-semibold tracking-tight">Relocation</h3>
-            <PillGroup
-              options={relocationOptions}
-              selected={staged.facet('relocation').values}
-              onToggle={(v) => staged.toggle('relocation', v)}
-            />
+            <ChipFacet store={staged} param="relocation" label="Relocation" options={relocationOptions} />
             <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Visa</h3>
             <label class="flex cursor-pointer items-center gap-2 text-sm">
               <input

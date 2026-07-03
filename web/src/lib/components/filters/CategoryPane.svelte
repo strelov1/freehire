@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { ChevronDown, Search } from '@lucide/svelte';
+  import { ChevronDown, Search, X } from '@lucide/svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import type { FacetStore } from '$lib/facets';
   import { CATEGORY_GROUPS } from '$lib/filterSections';
+  import { cn } from '$lib/utils';
   import { pillClass } from '../facets/pill';
 
   // Specialization pane: category chips grouped into collapsible sections, with a
@@ -11,7 +12,8 @@
 
   let query = $state('');
   const collapsed = new SvelteSet<string>();
-  const selected = $derived(store.facet('category').values);
+  const st = $derived(store.facet('category'));
+  const selected = $derived(st.values);
 
   const groups = $derived.by(() => {
     const q = query.trim().toLowerCase();
@@ -21,6 +23,34 @@
     })).filter((g) => g.options.length > 0);
   });
 </script>
+
+<div class="mb-2 flex min-h-6 items-center justify-between gap-2">
+  <h3 class="text-sm font-semibold tracking-tight">Specialization</h3>
+  {#if selected.length > 0}
+    <div class="flex items-center gap-1">
+      <button
+        type="button"
+        onclick={() => store.setExclude('category', !st.exclude)}
+        title="Hide jobs that match the selected specializations"
+        class={cn(
+          'rounded-full px-2 py-0.5 text-xs font-medium transition-colors',
+          st.exclude ? 'bg-destructive/15 text-destructive' : 'text-muted-foreground hover:text-foreground',
+        )}
+      >
+        {st.exclude ? 'Excluding' : 'Exclude'}
+      </button>
+      <button
+        type="button"
+        onclick={() => store.clearFacet('category')}
+        title="Clear Specialization"
+        aria-label="Clear Specialization"
+        class="flex size-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+      >
+        <X class="size-3.5" />
+      </button>
+    </div>
+  {/if}
+</div>
 
 <div class="mb-4 flex items-center gap-2 rounded-lg border border-input px-3">
   <Search class="size-4 shrink-0 text-muted-foreground" />
@@ -48,7 +78,7 @@
           <button
             type="button"
             onclick={() => store.toggle('category', o.value)}
-            class={pillClass(selected.includes(o.value), false, 'px-3 py-1.5 text-sm')}
+            class={pillClass(selected.includes(o.value), st.exclude, 'px-3 py-1.5 text-sm')}
           >
             {o.label}
           </button>
