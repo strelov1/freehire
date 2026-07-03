@@ -6,9 +6,7 @@ The job-search filters are edited in a two-pane modal ("All filters") that group
 facets into sections and gives each facet room for hierarchy and search, while the
 sidebar shows only what is currently selected. Selections in the modal are deferred and
 applied on a single **Show results** action; the sidebar edits apply immediately.
-
 ## Requirements
-
 ### Requirement: The job filters are edited in a two-pane modal grouped into sections
 
 The web client SHALL provide a filter modal opened from an **All filters** control.
@@ -102,22 +100,57 @@ than facet controls. The sidebar SHALL also retain the saved-search controls
 ### Requirement: Filter options are selected as chips with per-facet Exclude and Clear
 
 Every multi-value facet control in the modal SHALL render its options as chips (the
-shared pill primitive), not checkboxes or radio buttons. A selected chip SHALL use the
-active (filled) style and an unselected chip the inactive style. Each facet with a
-selection SHALL offer a Clear control, and each excludable facet SHALL offer an Exclude
-toggle that switches the facet to exclusion (matching the sidebar's per-facet controls).
+shared pill primitive), not checkboxes or radio buttons, and SHALL let a single facet
+hold included and excluded values at the same time. Each facet value carries one of
+three states — unselected, included, or excluded — held in the facet's separate
+`include` and `exclude` sets. A pills facet SHALL cycle a value through
+unselected → included → excluded → unselected on successive activations, showing the
+active (filled) style when included and the destructive (red) style when excluded. A
+select (searchable) facet SHALL add a picked value to the include set, render each
+selected value as a chip carrying a control that toggles it between include and
+exclude, and group excluded chips under the destructive style. Included values within
+a facet SHALL be ORed by default, with an optional match-all (AND) toggle shown once
+more than one value is included; excluded values SHALL always be ANDed (a job matches
+only if it has none of them). Each facet with a selection SHALL offer a Clear control
+that resets both sets. These per-value controls SHALL match the sidebar's facet
+controls, and the whole-facet Exclude toggle SHALL be removed.
 
 #### Scenario: Options render as chips
 
 - **WHEN** a facet with a fixed option set is shown in the modal
-- **THEN** its options render as chips, and a selected option shows the active chip
-  style
+- **THEN** its options render as chips, and an included option shows the active chip
+  style while an excluded option shows the destructive (red) style
 
-#### Scenario: A facet with a selection offers Exclude and Clear
+#### Scenario: A pills value cycles through include and exclude
 
-- **WHEN** an excludable facet has at least one selected value
-- **THEN** an Exclude toggle and a Clear control are shown for that facet, and Exclude
-  switches the selection to the excluded (struck-through) style
+- **WHEN** the user activates the same pills-facet value three times in a row
+- **THEN** the value moves unselected → included → excluded → unselected, and the chip
+  style tracks each state
+
+#### Scenario: A select value toggles between include and exclude
+
+- **WHEN** a select facet has a value staged in its include set and the user activates
+  that chip's include/exclude toggle
+- **THEN** the value moves from the include set to the exclude set (and renders under
+  the destructive style), without being removed from the facet
+
+#### Scenario: Include and exclude coexist in one facet
+
+- **WHEN** the user includes one value and excludes another in the same facet (e.g.
+  include `nodejs`, exclude `php`)
+- **THEN** both selections are retained and serialize to `?<param>=nodejs` and
+  `?<param>_exclude=php` in the same request
+
+#### Scenario: Match-all toggle applies to included values only
+
+- **WHEN** a facet has two or more included values
+- **THEN** a match-all (AND) toggle is shown for the include set, and excluded values
+  are unaffected by it (always ANDed)
+
+#### Scenario: Clear resets both sets
+
+- **WHEN** a facet has both included and excluded values and the user activates Clear
+- **THEN** the facet's include and exclude sets are both emptied
 
 ### Requirement: Specialization is grouped into collapsible sections
 
@@ -217,3 +250,4 @@ stays a single **Show results** action.
 - **WHEN** the modal is opened on a small viewport
 - **THEN** it fills the screen, every facet is reachable, and **Show results** applies
   and closes
+
