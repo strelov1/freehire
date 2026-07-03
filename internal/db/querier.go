@@ -68,6 +68,10 @@ type Querier interface {
 	// caller owns the grace window (cutoff = now() - window) and the "run ingested
 	// something" guard, so a failed crawl never mass-closes that source's catalogue.
 	CloseUnseenJobs(ctx context.Context, arg CloseUnseenJobsParams) (int64, error)
+	// Whether a company row already exists for the slug. The backfill checks this
+	// before upserting to log matched-existing vs inserted-reference counts — the
+	// upsert itself is blind to which path (insert or update) it took.
+	CompanyExists(ctx context.Context, slug string) (bool, error)
 	// The slug ending every full chunk of `chunk_size` companies (ordered by slug),
 	// excluding the final row, so the sitemap index can list each company sub-sitemap's
 	// keyset cursor.
@@ -131,7 +135,9 @@ type Querier interface {
 	DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) (int64, error)
 	DeleteEnrichmentEntry(ctx context.Context, id int64) error
 	// Drop companies no longer referenced by any job — the stale rows left behind
-	// when a slug-builder change re-keys jobs onto new slugs.
+	// when a slug-builder change re-keys jobs onto new slugs. Reference rows imported
+	// by the company-info backfill are preserved: they intentionally have no job, so
+	// the NOT is_reference guard keeps the backfill directory from being swept away.
 	DeleteOrphanCompanies(ctx context.Context) (int64, error)
 	// Delete a saved search, scoped to its owner so a user can only delete their own.
 	// Returns the affected row count: 0 means it does not exist or is not the caller's
@@ -506,6 +512,12 @@ type Querier interface {
 	// combination in one call. No matching owner-scoped row returns no row (the handler
 	// maps that to 404).
 	UpdateSearchProfile(ctx context.Context, arg UpdateSearchProfileParams) (SearchProfile, error)
+	// Apply one external-dataset company-info record, matched by slug. A new slug is
+	// inserted as a reference row (is_reference = true) with no jobs; an existing slug
+	// (job-backed or a prior reference) has only its company-info columns refreshed —
+	// name, job_count, collections, is_reference, and the job-derived facet arrays are
+	// left untouched. Idempotent: re-running the same record rewrites the same values.
+	UpsertCompanyInfo(ctx context.Context, arg UpsertCompanyInfoParams) error
 	// Single atomic write: upsert the company (only when the slug is non-empty,
 	// via the WHERE on the SELECT) and the job together, keeping the "one write =
 	// one job" property of the pipeline's write path.

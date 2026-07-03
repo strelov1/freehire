@@ -99,9 +99,43 @@ ON CONFLICT (slug) DO UPDATE SET
 
 -- name: DeleteOrphanCompanies :execrows
 -- Drop companies no longer referenced by any job — the stale rows left behind
--- when a slug-builder change re-keys jobs onto new slugs.
+-- when a slug-builder change re-keys jobs onto new slugs. Reference rows imported
+-- by the company-info backfill are preserved: they intentionally have no job, so
+-- the NOT is_reference guard keeps the backfill directory from being swept away.
 DELETE FROM companies c
-WHERE NOT EXISTS (SELECT 1 FROM jobs j WHERE j.company_slug = c.slug);
+WHERE NOT c.is_reference
+  AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.company_slug = c.slug);
+
+-- name: CompanyExists :one
+-- Whether a company row already exists for the slug. The backfill checks this
+-- before upserting to log matched-existing vs inserted-reference counts — the
+-- upsert itself is blind to which path (insert or update) it took.
+SELECT EXISTS(SELECT 1 FROM companies WHERE slug = $1);
+
+-- name: UpsertCompanyInfo :exec
+-- Apply one external-dataset company-info record, matched by slug. A new slug is
+-- inserted as a reference row (is_reference = true) with no jobs; an existing slug
+-- (job-backed or a prior reference) has only its company-info columns refreshed —
+-- name, job_count, collections, is_reference, and the job-derived facet arrays are
+-- left untouched. Idempotent: re-running the same record rewrites the same values.
+INSERT INTO companies (
+    slug, name, industries, year_founded, employee_count, hq_country,
+    organization_type, tagline, company_info, is_reference, company_info_at
+) VALUES (
+    sqlc.arg(slug), sqlc.arg(name), sqlc.arg(industries), sqlc.arg(year_founded),
+    sqlc.arg(employee_count), sqlc.arg(hq_country), sqlc.arg(organization_type),
+    sqlc.arg(tagline), sqlc.arg(company_info), true, now()
+)
+ON CONFLICT (slug) DO UPDATE SET
+    industries        = EXCLUDED.industries,
+    year_founded      = EXCLUDED.year_founded,
+    employee_count    = EXCLUDED.employee_count,
+    hq_country        = EXCLUDED.hq_country,
+    organization_type = EXCLUDED.organization_type,
+    tagline           = EXCLUDED.tagline,
+    company_info      = EXCLUDED.company_info,
+    company_info_at   = now(),
+    updated_at        = now();
 
 -- name: RefreshCompanyFacets :execrows
 -- Recompute every company's denormalized state in one set-based pass: the open-job

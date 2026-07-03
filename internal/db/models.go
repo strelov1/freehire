@@ -22,17 +22,26 @@ type ApiKey struct {
 }
 
 type Company struct {
-	Slug         string             `json:"slug"`
-	Name         string             `json:"name"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-	Collections  []string           `json:"collections"`
-	JobCount     int32              `json:"job_count"`
-	Regions      []string           `json:"regions"`
-	Countries    []string           `json:"countries"`
-	Domains      []string           `json:"domains"`
-	CompanyTypes []string           `json:"company_types"`
-	CompanySizes []string           `json:"company_sizes"`
+	Slug             string             `json:"slug"`
+	Name             string             `json:"name"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	Collections      []string           `json:"collections"`
+	JobCount         int32              `json:"job_count"`
+	Regions          []string           `json:"regions"`
+	Countries        []string           `json:"countries"`
+	Domains          []string           `json:"domains"`
+	CompanyTypes     []string           `json:"company_types"`
+	CompanySizes     []string           `json:"company_sizes"`
+	Industries       []string           `json:"industries"`
+	YearFounded      pgtype.Int4        `json:"year_founded"`
+	EmployeeCount    pgtype.Int4        `json:"employee_count"`
+	HqCountry        pgtype.Text        `json:"hq_country"`
+	OrganizationType pgtype.Text        `json:"organization_type"`
+	Tagline          pgtype.Text        `json:"tagline"`
+	CompanyInfo      json.RawMessage    `json:"company_info"`
+	IsReference      bool               `json:"is_reference"`
+	CompanyInfoAt    pgtype.Timestamptz `json:"company_info_at"`
 }
 
 type EnrichmentOutbox struct {

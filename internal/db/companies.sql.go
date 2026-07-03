@@ -7,9 +7,24 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const companyExists = `-- name: CompanyExists :one
+SELECT EXISTS(SELECT 1 FROM companies WHERE slug = $1)
+`
+
+// Whether a company row already exists for the slug. The backfill checks this
+// before upserting to log matched-existing vs inserted-reference counts — the
+// upsert itself is blind to which path (insert or update) it took.
+func (q *Queries) CompanyExists(ctx context.Context, slug string) (bool, error) {
+	row := q.db.QueryRow(ctx, companyExists, slug)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
 
 const companySitemapBoundaries = `-- name: CompanySitemapBoundaries :many
 SELECT slug FROM (
@@ -87,11 +102,14 @@ func (q *Queries) CountCompanies(ctx context.Context, arg CountCompaniesParams) 
 
 const deleteOrphanCompanies = `-- name: DeleteOrphanCompanies :execrows
 DELETE FROM companies c
-WHERE NOT EXISTS (SELECT 1 FROM jobs j WHERE j.company_slug = c.slug)
+WHERE NOT c.is_reference
+  AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.company_slug = c.slug)
 `
 
 // Drop companies no longer referenced by any job — the stale rows left behind
-// when a slug-builder change re-keys jobs onto new slugs.
+// when a slug-builder change re-keys jobs onto new slugs. Reference rows imported
+// by the company-info backfill are preserved: they intentionally have no job, so
+// the NOT is_reference guard keeps the backfill directory from being swept away.
 func (q *Queries) DeleteOrphanCompanies(ctx context.Context) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteOrphanCompanies)
 	if err != nil {
@@ -101,7 +119,7 @@ func (q *Queries) DeleteOrphanCompanies(ctx context.Context) (int64, error) {
 }
 
 const getCompany = `-- name: GetCompany :one
-SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes
+SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes, industries, year_founded, employee_count, hq_country, organization_type, tagline, company_info, is_reference, company_info_at
 FROM companies
 WHERE slug = $1
 `
@@ -124,6 +142,15 @@ func (q *Queries) GetCompany(ctx context.Context, slug string) (Company, error) 
 		&i.Domains,
 		&i.CompanyTypes,
 		&i.CompanySizes,
+		&i.Industries,
+		&i.YearFounded,
+		&i.EmployeeCount,
+		&i.HqCountry,
+		&i.OrganizationType,
+		&i.Tagline,
+		&i.CompanyInfo,
+		&i.IsReference,
+		&i.CompanyInfoAt,
 	)
 	return i, err
 }
@@ -394,5 +421,58 @@ ON CONFLICT (slug) DO UPDATE SET
 // name variants; ON CONFLICT folds collisions and refreshes existing rows.
 func (q *Queries) SyncCompaniesFromJobs(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, syncCompaniesFromJobs)
+	return err
+}
+
+const upsertCompanyInfo = `-- name: UpsertCompanyInfo :exec
+INSERT INTO companies (
+    slug, name, industries, year_founded, employee_count, hq_country,
+    organization_type, tagline, company_info, is_reference, company_info_at
+) VALUES (
+    $1, $2, $3, $4,
+    $5, $6, $7,
+    $8, $9, true, now()
+)
+ON CONFLICT (slug) DO UPDATE SET
+    industries        = EXCLUDED.industries,
+    year_founded      = EXCLUDED.year_founded,
+    employee_count    = EXCLUDED.employee_count,
+    hq_country        = EXCLUDED.hq_country,
+    organization_type = EXCLUDED.organization_type,
+    tagline           = EXCLUDED.tagline,
+    company_info      = EXCLUDED.company_info,
+    company_info_at   = now(),
+    updated_at        = now()
+`
+
+type UpsertCompanyInfoParams struct {
+	Slug             string          `json:"slug"`
+	Name             string          `json:"name"`
+	Industries       []string        `json:"industries"`
+	YearFounded      pgtype.Int4     `json:"year_founded"`
+	EmployeeCount    pgtype.Int4     `json:"employee_count"`
+	HqCountry        pgtype.Text     `json:"hq_country"`
+	OrganizationType pgtype.Text     `json:"organization_type"`
+	Tagline          pgtype.Text     `json:"tagline"`
+	CompanyInfo      json.RawMessage `json:"company_info"`
+}
+
+// Apply one external-dataset company-info record, matched by slug. A new slug is
+// inserted as a reference row (is_reference = true) with no jobs; an existing slug
+// (job-backed or a prior reference) has only its company-info columns refreshed —
+// name, job_count, collections, is_reference, and the job-derived facet arrays are
+// left untouched. Idempotent: re-running the same record rewrites the same values.
+func (q *Queries) UpsertCompanyInfo(ctx context.Context, arg UpsertCompanyInfoParams) error {
+	_, err := q.db.Exec(ctx, upsertCompanyInfo,
+		arg.Slug,
+		arg.Name,
+		arg.Industries,
+		arg.YearFounded,
+		arg.EmployeeCount,
+		arg.HqCountry,
+		arg.OrganizationType,
+		arg.Tagline,
+		arg.CompanyInfo,
+	)
 	return err
 }

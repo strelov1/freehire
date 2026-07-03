@@ -71,7 +71,7 @@ HTTP moderator API would be needlessly slow for a one-time job with direct DB ac
 
 ## Migration Plan
 
-1. Ship migration `0041_company_info.sql` (additive columns + GIN index on
+1. Ship migration `0042_company_info.sql` (additive columns + GIN index on
    `industries`); apply to the persistent DB before deploying code that reads the columns
    (no versioned runner — manual `psql`, per project ops).
 2. Regenerate `internal/db` with `make sqlc`; deploy the binary carrying

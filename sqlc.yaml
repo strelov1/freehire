@@ -24,3 +24,7 @@ sql:
           # blob as raw bytes that marshal straight through (nil → null), not base64.
           - column: "search_profiles.resume_analysis"
             go_type: "encoding/json.RawMessage"
+          # Same reasoning for the company-info extras JSONB: raw bytes marshal
+          # straight through to the company-detail response ({} stays {}), not base64.
+          - column: "companies.company_info"
+            go_type: "encoding/json.RawMessage"
