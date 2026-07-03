@@ -32,6 +32,13 @@ LLM — so the report is both more useful and still honest and testable.
 - **Frontend:** rewrite `VerdictView.svelte` and `ATSReportView.svelte` against the
   new contracts using existing design-system tokens (status colours
   green/amber/red, no bespoke theme); regenerate the TS contracts.
+- **Profile-page merge (IA):** fold `/my/profile/verdict` into `/my/profile` as one
+  page on the `/jobs` layout (left filter sidebar + main column). Bring profile
+  editing back inline as a `ProfileForm` (CV drop-zone with a "already uploaded ·
+  update" state, skills + specializations selectors, one Save) — replacing the
+  edit modal. The filter scopes the market comparison by role/facets, seeded from
+  the profile's specializations but independent of it. Delete the `verdict` route
+  and `ProfileEditModal`; drop the edit + sparkles header buttons (keep delete).
 - **Deferred (out of scope):** a `(stack)/(methodology)` per-skill tag; a purple
   page theme.
 
@@ -45,7 +52,9 @@ LLM — so the report is both more useful and still honest and testable.
 ### Modified Capabilities
 - `resume-verdict`: add a market-anchored top-20 skill breakdown (per-skill
   status, must-have flag, advice) plus must-have-covered, stack-match, and
-  coherence headline stats to the verdict.
+  coherence headline stats to the verdict; surface the whole feature on a single
+  `/my/profile` page with inline editing and a role/facet comparison filter,
+  removing the separate `/my/profile/verdict` route.
 - `cv-ats-score`: replace the flat structural checklist score with five weighted
   categories carrying per-item point attribution, an additive `overall`, a
   `potential` score, and explicit strong/recommended keyword lists; the LLM
@@ -60,7 +69,8 @@ LLM — so the report is both more useful and still honest and testable.
   (extra role-skills facet query, CV-section wiring).
 - **Contracts:** `cmd/gen-contracts` → `web/src/lib/generated/contracts.ts`
   (breaking shape change).
-- **Frontend:** `VerdictView.svelte`, `ATSReportView.svelte`, and the verdict
-  `+page.svelte` glue.
+- **Frontend:** `VerdictView.svelte`, `ATSReportView.svelte`; new
+  `ProfileForm.svelte`; rewritten `my/profile/+page.svelte`; deleted
+  `my/profile/verdict/+page.svelte` and `ProfileEditModal.svelte`.
 - **No DB migration:** reuses the stored CV text and the existing
   `users.resume_ats_analysis` cache column.
