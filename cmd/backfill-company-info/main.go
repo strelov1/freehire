@@ -36,20 +36,20 @@ import (
 // the mapping treats as "unknown".
 type record struct {
 	Name             string   `json:"name"`
-	HomepageURI      string   `json:"homepage_uri"`
-	HQCountry        string   `json:"hq_country"`
-	ParentCompany    string   `json:"parent_company"`
+	HomepageURI      string   `json:"website"`
+	HQCountry        string   `json:"country"`
+	ParentCompany    string   `json:"parent"`
 	Subsidiaries     []string `json:"subsidiaries"`
 	Industries       []string `json:"industries"`
 	Activities       []string `json:"activities"`
-	NbEmployees      int      `json:"nb_employees"`
-	YearFounded      int      `json:"year_founded"`
+	NbEmployees      int      `json:"employees"`
+	YearFounded      int      `json:"founded"`
 	Tagline          string   `json:"tagline"`
-	OrganizationType string   `json:"organization_type"`
-	FundingInvestors []string `json:"latest_funding_investors"`
-	FundingType      string   `json:"latest_funding_type"`
-	FundingYear      int      `json:"latest_funding_year"`
-	FundingAmount    int64    `json:"latest_funding_amount"`
+	OrganizationType string   `json:"org_type"`
+	FundingInvestors []string `json:"funding_investors"`
+	FundingType      string   `json:"funding_type"`
+	FundingYear      int      `json:"funding_year"`
+	FundingAmount    int64    `json:"funding_amount"`
 	StockExchange    string   `json:"stock_exchange"`
 	StockSymbol      string   `json:"stock_symbol"`
 }
