@@ -99,3 +99,40 @@ func TestCanonicalValuesAreInVocabulary(t *testing.T) {
 		}
 	}
 }
+
+// TestParse_RoleExpansionBatch covers the categoryAliases expansion: non-tech role
+// titles that feed the enrichment gate (higher-precision than the description tier)
+// plus a few tech-role synonyms. Precision cases confirm the bare-"manager" fallback
+// and unrelated roles are unaffected.
+func TestParse_RoleExpansionBatch(t *testing.T) {
+	cases := []struct{ title, wantCategory string }{
+		// non-tech titles (feed the gate) — new forms not previously matched
+		{"SDR", "sales"},
+		{"Business Development Manager", "sales"},
+		{"Account Manager", "sales"},
+		{"Customer Success Manager", "support"},
+		{"Help Desk Technician", "support"},
+		{"Customer Service Specialist", "support"},
+		{"Copywriter", "marketing"},
+		{"Content Writer", "marketing"},
+		{"Brand Manager", "marketing"},
+		// tech-role synonyms (facet quality)
+		{"Platform Engineer", "devops"},
+		{"Cloud Engineer", "devops"},
+		{"Infrastructure Engineer", "devops"},
+		{"System Administrator", "devops"},
+		{"SDET", "qa"},
+		{"Test Automation Engineer", "qa"},
+
+		// precision — existing behavior must be unchanged
+		{"Cloud Architect", "architecture"},  // not devops
+		{"Operations Manager", "management"}, // bare-manager fallback intact
+		{"Sales Manager", "sales"},           // functional prefix still wins
+		{"Growth Engineer", ""},              // "growth" deliberately not added (ambiguous)
+	}
+	for _, c := range cases {
+		if got := Parse(c.title).Category; got != c.wantCategory {
+			t.Errorf("Parse(%q).Category = %q, want %q", c.title, got, c.wantCategory)
+		}
+	}
+}

@@ -46,13 +46,13 @@ var categoryOrder = []string{
 	"machine learning", "deep learning", "ml engineer", "ml/ai", "ai/ml",
 	// AI-application terms (RAG/agents/LLM/prompt/applied AI) → ai_engineering.
 	"generative ai", "genai", "llm engineer", "prompt engineer", "applied ai", "rag engineer", "ai engineer", "llm",
-	"devops", "девопс",
+	"devops", "девопс", "platform engineer", "infrastructure engineer", "cloud engineer", "system administrator", "sysadmin",
 	"sre", "site reliability",
 	"network engineer", "network engineering", "network administrator", "сетевой инженер", "сетевой администратор",
 	"backend", "back-end", "back end", "бэкенд", "бекенд",
 	"frontend", "front-end", "front end", "фронтенд", "фронт",
 	"mobile", "android", "ios", "мобильный", "мобильная", "мобильных",
-	"qa", "quality assurance", "tester", "test engineer", "тестировщик", "тестирование",
+	"qa", "quality assurance", "tester", "test engineer", "test automation", "sdet", "тестировщик", "тестирование",
 	"security", "infosec", "appsec", "cybersecurity", "cyber security", "безопасность", "безопасности", "кибербезопасность",
 	"embedded", "firmware", "встраиваемые", "встраиваемых",
 	"blockchain", "блокчейн",
@@ -63,9 +63,9 @@ var categoryOrder = []string{
 	"project manager", "delivery manager", "program manager", "programme manager", "scrum master", "scrum-master", "проджект", "проект-менеджер", "скрам-мастер", "скрам мастер",
 	"engineering manager", "team manager",
 	"marketing", "smm", "маркетолог", "маркетинг",
-	"seo", "search engine optimization", "social media", "контент-маркетолог",
-	"sales", "account executive", "продажи", "продаж", "продажам",
-	"support", "поддержка", "поддержки", "техподдержка", "техподдержки",
+	"seo", "search engine optimization", "social media", "контент-маркетолог", "copywriter", "content writer", "brand manager", "public relations",
+	"sales", "account executive", "business development", "account manager", "sdr", "bdr", "продажи", "продаж", "продажам",
+	"support", "customer success", "customer service", "help desk", "поддержка", "поддержки", "техподдержка", "техподдержки",
 	// Bare "manager" resolves last so a functional prefix wins ("Sales Manager"
 	// → sales, "Support Manager" → support); a manager title with no function
 	// ("Operations Manager") falls through to management.
@@ -128,4 +128,13 @@ var categoryAliases = map[string]string{
 	"support": "support", "поддержка": "support", "поддержки": "support",
 	"техподдержка": "support", "техподдержки": "support",
 	"analyst": "data_analytics", "аналитик": "data_analytics",
+	// role-alias expansion (Lightcast/title diff). Non-tech titles feed the enrichment
+	// gate from the title (higher-precision than the description tier); the multi-word
+	// "* manager" forms are ordered before bare "manager" so they win their function.
+	"business development": "sales", "account manager": "sales", "sdr": "sales", "bdr": "sales",
+	"customer success": "support", "customer service": "support", "help desk": "support",
+	"copywriter": "marketing", "content writer": "marketing", "brand manager": "marketing", "public relations": "marketing",
+	"platform engineer": "devops", "infrastructure engineer": "devops", "cloud engineer": "devops",
+	"system administrator": "devops", "sysadmin": "devops",
+	"sdet": "qa", "test automation": "qa",
 }
