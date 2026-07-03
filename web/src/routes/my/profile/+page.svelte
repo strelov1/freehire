@@ -49,11 +49,10 @@
   }
 
   // Load once the session is confirmed (the boot-time /me resolution may still be in
-  // flight when the page is opened directly). Reset on sign-out so a different user does
-  // not see the previous one's profile.
+  // flight when the page is opened directly). Sign-out reset is handled centrally in the
+  // root layout, so this only needs to (re)load when authenticated.
   $effect(() => {
     if (isAuthenticated()) void load();
-    else profileStore.reset();
   });
 
   // Recompute coverage whenever the profile changes (save/clear reassigns it).

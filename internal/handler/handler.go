@@ -315,8 +315,8 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/me/profile/ats-report", saved, a.GetATSReport)
 	api.Post("/me/profile/ats-report", saved, a.PostATSReport)
 
-	// Resume skill extraction is cookie-only (RequireAuth): it feeds the profile
-	// picker (extracted skills merge into a profile). When S3 storage is configured it
+	// Resume skill extraction is cookie-only (RequireAuth): it feeds the profile edit
+	// modal (extracted skills merge into the profile). When S3 storage is configured it
 	// also stores the résumé once (the single upload point); when not, it stays stateless
 	// (parsed and discarded, only canonical slugs returned).
 	api.Post("/me/resume/extract", saved, a.ExtractResumeSkills)

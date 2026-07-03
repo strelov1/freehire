@@ -50,6 +50,9 @@
   seed.facets['skills'] = seedFacet(profile?.skills ?? []);
   staged.seed(seed);
 
+  // Set when a toggle is refused for hitting the specialization cap (drives the hint).
+  let capHit = $state(false);
+
   // Cap the specialization count at the server limit by intercepting only category
   // toggles; everything else passes straight through to the staged store.
   const store: FacetStore = {
@@ -73,7 +76,6 @@
     setMatchAll: (p, o) => staged.setMatchAll(p, o),
   };
 
-  let capHit = $state(false);
   let counts = $state<FacetCounts | null>(null);
   let saveError = $state<string | null>(null);
   let busy = $state(false);

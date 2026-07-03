@@ -57,16 +57,20 @@
   // Build the filter store once the profile is known, seeding its role from the
   // profile's specializations when the URL carries no category — so the panel opens on
   // the profile's own role, which the user can then change without touching the profile.
+  // With no profile, leave `filters` null so the page shows the set-up prompt instead of
+  // firing verdict/ATS requests that would 404.
   async function init() {
     status = 'loading';
     try {
       await profileStore.ensureLoaded();
       const p = profileStore.profile;
-      const seed = new URLSearchParams(page.url.searchParams);
-      if (p && !seed.getAll('category').some((c) => c !== '')) {
-        for (const spec of p.specializations) seed.append('category', spec);
+      if (p) {
+        const seed = new URLSearchParams(page.url.searchParams);
+        if (!seed.getAll('category').some((c) => c !== '')) {
+          for (const spec of p.specializations) seed.append('category', spec);
+        }
+        filters = new FilterStore(seed);
       }
-      filters = new FilterStore(seed);
       status = 'ready';
     } catch {
       status = 'error';
@@ -86,18 +90,24 @@
     void reload();
   });
 
+  // reloadGeneration guards against out-of-order responses: fast filter changes can have
+  // an older request resolve after a newer one, so only the latest reload commits.
+  let reloadGeneration = 0;
   async function reload() {
     if (!filters) return;
+    const gen = ++reloadGeneration;
     const params = filtersToParams(filters.applied);
     try {
-      [verdict, counts, ats] = await Promise.all([
+      const [v, c, a] = await Promise.all([
         getProfileVerdict(params),
         facetCounts(params),
         getATSReport(params),
       ]);
+      if (gen !== reloadGeneration) return; // a newer reload started — discard stale results.
+      [verdict, counts, ats] = [v, c, a];
       loadError = false;
     } catch {
-      loadError = true;
+      if (gen === reloadGeneration) loadError = true;
     }
   }
 
