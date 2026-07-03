@@ -93,6 +93,12 @@ func (s *extractStore) Complete(ctx context.Context, post telegram.PendingPost, 
 		externalID := base + "/" + strconv.Itoa(i)
 		geo := location.Parse(j.Location)
 		class := classify.Parse(j.Title)
+		// Category precedence mirrors jobderive: title dictionary → non-tech
+		// description fallback (tg-extract derives inline, not via jobderive).
+		category := class.Category
+		if category == "" {
+			category = classify.NonTechFromDescription(j.Description)
+		}
 		descHTML := telegram.TextToHTML(j.Description)
 		saved, err := qtx.UpsertJob(ctx, db.UpsertJobParams{
 			Source:      "telegram",
@@ -112,7 +118,7 @@ func (s *extractStore) Complete(ctx context.Context, post telegram.PendingPost, 
 			WorkMode:    geo.WorkMode,
 			Skills:      skilltag.Parse(descHTML),
 			Seniority:   class.Seniority,
-			Category:    class.Category,
+			Category:    category,
 
 			PostingLanguage:    lang.Detect(descHTML),
 			EmploymentType:     jobfacts.EmploymentType(j.Title, descHTML),
@@ -160,6 +166,12 @@ func (s *extractStore) CompleteLinks(
 	for _, j := range jobs {
 		geo := location.Parse(j.Location)
 		class := classify.Parse(j.Title)
+		// Category precedence mirrors jobderive: title dictionary → non-tech
+		// description fallback (tg-extract derives inline, not via jobderive).
+		category := class.Category
+		if category == "" {
+			category = classify.NonTechFromDescription(j.Description)
+		}
 		workMode := j.WorkMode
 		if workMode == "" {
 			workMode = geo.WorkMode
@@ -186,7 +198,7 @@ func (s *extractStore) CompleteLinks(
 			WorkMode:    workMode,
 			Skills:      skilltag.Parse(j.Description),
 			Seniority:   class.Seniority,
-			Category:    class.Category,
+			Category:    category,
 
 			PostingLanguage:    lang.Detect(j.Description),
 			EmploymentType:     jobfacts.EmploymentType(j.Title, j.Description),
