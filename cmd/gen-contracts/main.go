@@ -62,6 +62,7 @@ func genStructs() (string, error) {
 
 	enrichTS := filepath.Join(tmp, "enrich.ts")
 	jobviewTS := filepath.Join(tmp, "jobview.ts")
+	bundleTS := filepath.Join(tmp, "bundle.ts")
 	verdictTS := filepath.Join(tmp, "verdict.ts")
 	atscheckTS := filepath.Join(tmp, "atscheck.ts")
 
@@ -79,11 +80,18 @@ func genStructs() (string, error) {
 				TypeMappings: map[string]string{"enrich.Enrichment": "Enrichment"},
 			},
 			{
-				// The market-coverage verdict wire shape (Verdict + Gap). Self-contained —
-				// only primitives and []Gap, no cross-package references.
+				// The curated skill bundles the verdict reports coverage of.
+				Path:         "github.com/strelov1/freehire/internal/skillbundle",
+				OutputPath:   bundleTS,
+				IncludeFiles: []string{"skillbundle.go"},
+			},
+			{
+				// The market-coverage verdict wire shape (Verdict + Gap + SkillRow +
+				// []skillbundle.Bundle → Bundle).
 				Path:         "github.com/strelov1/freehire/internal/verdict",
 				OutputPath:   verdictTS,
 				IncludeFiles: []string{"verdict.go"},
+				TypeMappings: map[string]string{"skillbundle.Bundle": "Bundle"},
 			},
 			{
 				// The CV ATS-readiness report wire shape (Report + Check + Status).
@@ -106,6 +114,10 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	bundleBody, err := readBody(bundleTS)
+	if err != nil {
+		return "", err
+	}
 	verdictBody, err := readBody(verdictTS)
 	if err != nil {
 		return "", err
@@ -114,7 +126,7 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return enrichBody + "\n" + jobviewBody + "\n" + verdictBody + "\n" + atscheckBody, nil
+	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody, nil
 }
 
 // readBody returns a tygo output file's body with its leading preamble removed, so

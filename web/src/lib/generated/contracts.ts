@@ -137,6 +137,22 @@ export interface Job {
 }
 
 /**
+ * BundleCoveredPct is the share of a bundle's member skills a CV must hold for the
+ * bundle to count as covered. Tunable.
+ */
+export const BundleCoveredPct = 50;
+/**
+ * Bundle is one market skill combination and a CV's coverage of it.
+ */
+export interface Bundle {
+  name: string;
+  label: string;
+  covered: number /* int */; // member skills the CV holds
+  total: number /* int */; // bundle size
+  has: boolean; // Covered/Total ≥ BundleCoveredPct
+}
+
+/**
  * MaxGaps caps how many gap skills the verdict carries — the biggest wins, not an
  * exhaustive list. TopSkills caps the role-skill breakdown at the most in-demand.
  */
@@ -163,7 +179,11 @@ export const StatusHidden = "hidden"; // used in the body but not declared
 /**
  * Skill statuses relative to the CV's parsed skill sets.
  */
-export const StatusMissing = "missing"; // absent from the CV
+export const StatusAdjacent = "adjacent"; // not held, but a substitutable/transferable skill is
+/**
+ * Skill statuses relative to the CV's parsed skill sets.
+ */
+export const StatusMissing = "missing"; // absent from the CV, no close skill held
 /**
  * Verdict is the coverage result. JSON is the wire contract shared with the
  * frontend (generated to TS via cmd/gen-contracts).
@@ -181,6 +201,7 @@ export interface Verdict {
   must_have_covered: number /* int */;
   stack_match_percent: number /* int */;
   coherence_percent: number /* int */;
+  bundles: Bundle[]; // market skill-combination coverage
 }
 /**
  * Gap is one missing in-demand skill and the new vacancies it would unlock.
@@ -197,7 +218,8 @@ export interface SkillRow {
   name: string;
   market_frequency: number /* int */; // round(vacancies listing it / total × 100)
   must_have: boolean;
-  status: string; // strong | hidden | missing
+  status: string; // strong | hidden | adjacent | missing
+  adjacent?: string; // the close skill held, when status is adjacent
   advice: string; // empty for strong
 }
 

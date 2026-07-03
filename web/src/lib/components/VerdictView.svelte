@@ -18,12 +18,14 @@
 
   const gaps = $derived(verdict.gaps ?? []);
   const skills = $derived(verdict.skills ?? []);
+  const bundles = $derived(verdict.bundles ?? []);
   const uncovered = $derived(Math.max(verdict.total - verdict.covered, 0));
 
-  // Status → badge styling (STRONG green / HIDDEN amber / MISSING red).
+  // Status → badge styling (STRONG green / HIDDEN amber / ADJACENT blue / MISSING red).
   const statusStyle: Record<string, string> = {
     strong: 'bg-primary/10 text-primary',
     hidden: 'bg-amber-500/10 text-amber-600 dark:text-amber-500',
+    adjacent: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
     missing: 'bg-destructive/10 text-destructive',
   };
 </script>
@@ -68,6 +70,26 @@
       <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Coherence</span>
     </div>
   </div>
+
+  <!-- Skill bundles: the market expects combinations, not isolated skills -->
+  {#if bundles.length > 0}
+    <div class="flex flex-col gap-2">
+      <h2 class="text-base font-semibold tracking-tight">Skill bundles the market expects</h2>
+      <div class="flex flex-wrap gap-2">
+        {#each bundles as b (b.name)}
+          <span
+            class="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm {b.has
+              ? 'bg-primary/5 text-foreground'
+              : 'bg-card text-muted-foreground'}"
+          >
+            {#if b.has}<Check class="size-3.5 text-primary" />{/if}
+            <span class="font-medium">{b.label}</span>
+            <span class="tabular-nums text-xs text-muted-foreground">{b.covered}/{b.total}</span>
+          </span>
+        {/each}
+      </div>
+    </div>
+  {/if}
 
   <!-- Biggest wins -->
   {#if gaps.length > 0}
