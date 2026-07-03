@@ -1,9 +1,9 @@
 ## 1. Backend: geography mappings + contract export
 
-- [ ] 1.1 Add a canonical `city → country` map in `internal/location` over the beacon-city set (`nameToCity` / `nameToCountry`), plus a test asserting every emittable beacon city resolves to exactly one ISO country code
-- [ ] 1.2 Expose the `country → region` grouping (inverse of `regionCountries`) as a package-accessible map with a test asserting every grouped country maps to exactly one controlled region value
-- [ ] 1.3 Add an `emitMap` helper to `cmd/gen-contracts` (emit a frozen TS `Record<string,string>` / `Record<string,readonly string[]>`) with a unit test on its output shape
-- [ ] 1.4 Wire `gen-contracts` to emit `COUNTRY_REGION_MAP` (country→region) and `CITY_COUNTRY_MAP` (city→country); regenerate `web/src/lib/generated/contracts.ts` and commit
+- [x] 1.1 Add a canonical `city → country` map in `internal/location` over the beacon-city set (`nameToCity` / `nameToCountry`), plus a test asserting every emittable beacon city resolves to exactly one ISO country code
+- [x] 1.2 Expose the `country → region` grouping (inverse of `regionCountries`) as a package-accessible map with a test asserting every grouped country maps to exactly one controlled region value
+- [x] 1.3 Add an `emitMap` helper to `cmd/gen-contracts` (emit a frozen TS `Record<string,string>` / `Record<string,readonly string[]>`) with a unit test on its output shape
+- [x] 1.4 Wire `gen-contracts` to emit `COUNTRY_REGION_MAP` (country→region) and `CITY_COUNTRY_MAP` (city→country); regenerate `web/src/lib/generated/contracts.ts` and commit
 
 ## 2. Frontend: staging store + facet registry metadata
 
