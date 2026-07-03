@@ -5,11 +5,11 @@
 
 ## 2. Adjacent status + advice (verdict)
 
-- [ ] 2.1 Curated adjacency dictionary (roleSkill → close candidate skills), conservative AI/backend seed
-- [ ] 2.2 Add `StatusAdjacent`; extend `classify` precedence strong→hidden→adjacent→missing; adjacent excluded from must-have/stack counts; carry the matched close skill
-- [ ] 2.3 Typed advice: adjacent names the close skill (reframe/ramp), hidden=surface, missing=learn+evidence
-- [ ] 2.4 Add `Bundle` rows to `Verdict` (thread CV `all` skills through `Compute`)
-- [ ] 2.5 Table-driven `verdict` tests: adjacent classification, adjacent not inflating coverage, advice text, bundle rows
+- [x] 2.1 Curated adjacency dictionary (roleSkill → close candidate skills), conservative AI/backend seed
+- [x] 2.2 Add `StatusAdjacent`; extend `classify` precedence strong→hidden→adjacent→missing; adjacent excluded from must-have/stack counts; carry the matched close skill
+- [x] 2.3 Typed advice: adjacent names the close skill (reframe/ramp), hidden=surface, missing=learn+evidence
+- [x] 2.4 Add `Bundle` rows to `Verdict` (thread CV `all` skills through `Compute`)
+- [x] 2.5 Table-driven `verdict` tests: adjacent classification, adjacent not inflating coverage, advice text, bundle rows
 
 ## 3. ATS summary keyword-density (atscheck)
 

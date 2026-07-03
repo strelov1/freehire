@@ -62,7 +62,7 @@ func (a *API) computeCoverage(c *fiber.Ctx, userID int64, profile db.UserProfile
 	if err != nil {
 		return verdict.Verdict{}, err
 	}
-	declared, body := a.cvSkillSets(c, userID)
+	declared, body, all := a.cvSkillSets(c, userID)
 	return verdict.Compute(verdict.Input{
 		Total:           role.Total,
 		UncoveredTotal:  uncovered.Total,
@@ -70,20 +70,20 @@ func (a *API) computeCoverage(c *fiber.Ctx, userID int64, profile db.UserProfile
 		RoleSkills:      role.Facets["skills"],
 		Declared:        declared,
 		Body:            body,
+		All:             all,
 	}), nil
 }
 
-// cvSkillSets parses the caller's stored CV into its declared (Skills-section) and
-// body skill sets for the role breakdown. Best-effort: with no CV stored (or a read
-// error) it returns empty sets so the breakdown degrades to all-missing rather than
-// failing the verdict.
-func (a *API) cvSkillSets(c *fiber.Ctx, userID int64) (declared, body []string) {
+// cvSkillSets parses the caller's stored CV into its declared (Skills-section), body,
+// and union skill sets for the role breakdown and bundle coverage. Best-effort: with
+// no CV stored (or a read error) it returns empty sets so the breakdown degrades to
+// all-missing rather than failing the verdict.
+func (a *API) cvSkillSets(c *fiber.Ctx, userID int64) (declared, body, all []string) {
 	text, ok, err := a.storedCVText(c, userID)
 	if err != nil || !ok {
-		return nil, nil
+		return nil, nil, nil
 	}
-	declared, body, _ = cvsection.Parse(text)
-	return declared, body
+	return cvsection.Parse(text)
 }
 
 // roleValues builds the facet query for the coverage role from the request. It

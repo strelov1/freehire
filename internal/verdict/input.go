@@ -15,4 +15,5 @@ type Input struct {
 	RoleSkills      map[string]int64
 	Declared        []string
 	Body            []string
+	All             []string // declared ∪ body — the CV's full parsed skill set (for bundles)
 }

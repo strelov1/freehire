@@ -12,6 +12,8 @@ package verdict
 import (
 	"math"
 	"sort"
+
+	"github.com/strelov1/freehire/internal/skillbundle"
 )
 
 // MaxGaps caps how many gap skills the verdict carries — the biggest wins, not an
@@ -28,9 +30,10 @@ const MustHavePct = 50
 
 // Skill statuses relative to the CV's parsed skill sets.
 const (
-	StatusStrong  = "strong"  // declared in the CV's Skills section
-	StatusHidden  = "hidden"  // used in the body but not declared
-	StatusMissing = "missing" // absent from the CV
+	StatusStrong   = "strong"   // declared in the CV's Skills section
+	StatusHidden   = "hidden"   // used in the body but not declared
+	StatusAdjacent = "adjacent" // not held, but a substitutable/transferable skill is
+	StatusMissing  = "missing"  // absent from the CV, no close skill held
 )
 
 // Verdict is the coverage result. JSON is the wire contract shared with the
@@ -42,11 +45,12 @@ type Verdict struct {
 	Gaps            []Gap `json:"gaps"`             // missing skills, biggest win first
 
 	// Market-anchored role-skill breakdown (all deterministic).
-	Skills            []SkillRow `json:"skills"`
-	MustHaveTotal     int        `json:"must_have_total"`
-	MustHaveCovered   int        `json:"must_have_covered"`
-	StackMatchPercent int        `json:"stack_match_percent"`
-	CoherencePercent  int        `json:"coherence_percent"`
+	Skills            []SkillRow           `json:"skills"`
+	MustHaveTotal     int                  `json:"must_have_total"`
+	MustHaveCovered   int                  `json:"must_have_covered"`
+	StackMatchPercent int                  `json:"stack_match_percent"`
+	CoherencePercent  int                  `json:"coherence_percent"`
+	Bundles           []skillbundle.Bundle `json:"bundles"` // market skill-combination coverage
 }
 
 // Gap is one missing in-demand skill and the new vacancies it would unlock.
@@ -61,8 +65,9 @@ type SkillRow struct {
 	Name            string `json:"name"`
 	MarketFrequency int    `json:"market_frequency"` // round(vacancies listing it / total × 100)
 	MustHave        bool   `json:"must_have"`
-	Status          string `json:"status"` // strong | hidden | missing
-	Advice          string `json:"advice"` // empty for strong
+	Status          string `json:"status"`             // strong | hidden | adjacent | missing
+	Adjacent        string `json:"adjacent,omitempty"` // the close skill held, when status is adjacent
+	Advice          string `json:"advice"`             // empty for strong
 }
 
 // Compute builds the coverage verdict and the role-skill breakdown. Pure and
@@ -88,17 +93,18 @@ func addBreakdown(v *Verdict, in Input) {
 	declared := toSet(in.Declared)
 	body := toSet(in.Body)
 
-	held := 0 // top skills the CV holds (strong or hidden)
+	held := 0 // top skills the CV holds (strong or hidden — adjacent does NOT count)
 	for _, name := range topRoleSkills(in.RoleSkills) {
 		freq := percent(in.RoleSkills[name], in.Total)
 		mustHave := freq >= MustHavePct
-		status := classify(name, declared, body)
+		status, closeSkill := classify(name, declared, body)
 		v.Skills = append(v.Skills, SkillRow{
 			Name:            name,
 			MarketFrequency: freq,
 			MustHave:        mustHave,
 			Status:          status,
-			Advice:          advice(name, status),
+			Adjacent:        closeSkill,
+			Advice:          advice(name, status, closeSkill),
 		})
 
 		covered := status == StatusStrong || status == StatusHidden
@@ -116,26 +122,33 @@ func addBreakdown(v *Verdict, in Input) {
 		v.StackMatchPercent = int(math.Round(float64(held) / float64(n) * 100))
 	}
 	v.CoherencePercent = coherence(declared, body)
+	v.Bundles = skillbundle.Coverage(in.All)
 }
 
-// classify returns a skill's status relative to the CV: strong when declared in the
-// Skills section, hidden when only used in the body, missing when absent.
-func classify(name string, declared, body map[string]bool) string {
+// classify returns a skill's status relative to the CV and, for adjacent, the close
+// skill held: strong when declared, hidden when only in the body, adjacent when a
+// substitutable skill is held, missing otherwise.
+func classify(name string, declared, body map[string]bool) (status, closeSkill string) {
 	switch {
 	case declared[name]:
-		return StatusStrong
+		return StatusStrong, ""
 	case body[name]:
-		return StatusHidden
-	default:
-		return StatusMissing
+		return StatusHidden, ""
 	}
+	if adj := adjacentHeld(name, declared, body); adj != "" {
+		return StatusAdjacent, adj
+	}
+	return StatusMissing, ""
 }
 
-// advice is a deterministic status-keyed guidance line (empty for strong).
-func advice(name, status string) string {
+// advice is a deterministic status-keyed guidance line (empty for strong). For
+// adjacent it names the close skill to reframe around.
+func advice(name, status, closeSkill string) string {
 	switch status {
 	case StatusHidden:
 		return name + " shows up in your experience but not your Skills section — list it explicitly so a reviewer spots it fast."
+	case StatusAdjacent:
+		return "You already have " + closeSkill + ", which is close to " + name + " — reframe the overlap, or ramp up the difference."
 	case StatusMissing:
 		return "You haven't shown " + name + " — learn it hands-on, add it to your Skills section, and back it with a project in Experience."
 	default:
