@@ -36,6 +36,16 @@ var StringFacets = map[string]string{
 	"posting_language": "enrichment.posting_language",
 }
 
+// locationFacets are the geography params that describe one user-facing concept
+// ("where"), so their included values OR into a single group rather than ANDing
+// across facets — selecting the "Global" region and "Brazil" widens the results
+// (Global OR Brazil) instead of intersecting them to zero. They share the SPA's
+// one Location pane. Excludes stay per-value AND groups like every other facet,
+// and a non-location facet (e.g. work_mode) still ANDs with the whole group, so
+// "remote AND (Europe OR Brazil)" holds. Geographic AND is nonsensical ("in
+// Europe AND in LATAM" is empty), so the `_mode=and` override does not apply here.
+var locationFacets = map[string]bool{"regions": true, "countries": true, "cities": true}
+
 // RegionUnspecified is the reserved value of the `regions` facet that selects
 // jobs with no resolved geography (an empty regions array) rather than a real
 // region code. The SPA's "Not specified" region chip serializes to it. It maps to
@@ -65,7 +75,9 @@ func facetNeq(param, attr, val string) string {
 // FilterFromValues turns the facet params of a parsed search query into a
 // Meilisearch filter. Within a facet, included values are ORed by default (or
 // ANDed when `<param>_mode=and`); excluded values (`<param>_exclude=...`) become
-// NOT fragments. Facets are ANDed. Returns nil when no facet is set.
+// NOT fragments. Facets are ANDed, except the location facets (regions/countries/
+// cities), whose includes OR into one shared group (see locationFacets). Returns
+// nil when no facet is set.
 //
 // It is pure (no *fiber.Ctx), so the HTTP handler and the notification matcher
 // build identical filters from the same canonical query string — the handler
@@ -80,26 +92,36 @@ func FilterFromValues(v url.Values) any {
 // branch.
 func filterFromValues(v url.Values, now time.Time) any {
 	var groups [][]string
+	// Included geography fragments across regions/countries/cities collect here and
+	// are appended as one OR group (see locationFacets).
+	var locationGroup []string
 
 	for param, attr := range StringFacets {
-		if included := nonEmpty(v[param]); len(included) > 0 {
-			if v.Get(param+"_mode") == "and" {
-				// Each value its own AND group: a job must match all of them.
-				for _, val := range included {
-					groups = append(groups, []string{facetEq(param, attr, val)})
-				}
-			} else {
-				group := make([]string, len(included))
-				for i, val := range included {
-					group[i] = facetEq(param, attr, val)
-				}
-				groups = append(groups, group)
+		included := nonEmpty(v[param])
+		switch {
+		case locationFacets[param]:
+			for _, val := range included {
+				locationGroup = append(locationGroup, facetEq(param, attr, val))
 			}
+		case len(included) > 0 && v.Get(param+"_mode") == "and":
+			// Each value its own AND group: a job must match all of them.
+			for _, val := range included {
+				groups = append(groups, []string{facetEq(param, attr, val)})
+			}
+		case len(included) > 0:
+			group := make([]string, len(included))
+			for i, val := range included {
+				group[i] = facetEq(param, attr, val)
+			}
+			groups = append(groups, group)
 		}
 		// Excluded values: each is its own AND group so all are filtered out.
 		for _, val := range nonEmpty(v[param+"_exclude"]) {
 			groups = append(groups, []string{facetNeq(param, attr, val)})
 		}
+	}
+	if len(locationGroup) > 0 {
+		groups = append(groups, locationGroup)
 	}
 
 	if raw := v.Get("visa_sponsorship"); raw != "" {

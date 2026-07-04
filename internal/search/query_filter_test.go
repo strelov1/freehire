@@ -144,6 +144,54 @@ func TestFilterFromValues_RegionUnspecifiedSentinel(t *testing.T) {
 	}
 }
 
+func TestFilterFromValues_LocationFacetsORTogether(t *testing.T) {
+	// regions, countries and cities describe one user concept ("where"), so their
+	// included values OR into a single group instead of ANDing across facets:
+	// selecting the "Global" region and "Brazil" must widen the results
+	// (Global OR Brazil), not intersect them to zero.
+	got := normalizeGroups(t, FilterFromValues(vals("regions=global&countries=BR")))
+	want := [][]string{{`countries = "BR"`, `regions = "global"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("regions+countries: got %v, want %v", got, want)
+	}
+
+	// Cities join the same OR group.
+	got = normalizeGroups(t, FilterFromValues(vals("regions=eu&countries=BR&cities=Berlin")))
+	want = [][]string{{`cities = "Berlin"`, `countries = "BR"`, `regions = "eu"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("regions+countries+cities: got %v, want %v", got, want)
+	}
+
+	// A non-location facet still ANDs with the location group as its own group:
+	// "remote AND (Europe OR Brazil)".
+	got = normalizeGroups(t, FilterFromValues(vals("regions=eu&countries=BR&work_mode=remote")))
+	want = [][]string{
+		{`countries = "BR"`, `regions = "eu"`},
+		{`work_mode = "remote"`},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("location OR, work_mode AND: got %v, want %v", got, want)
+	}
+
+	// The regions-unspecified sentinel also joins the location OR group.
+	got = normalizeGroups(t, FilterFromValues(vals("regions=none&countries=BR")))
+	want = [][]string{{`countries = "BR"`, `regions IS EMPTY`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("sentinel + country: got %v, want %v", got, want)
+	}
+
+	// Location excludes stay their own AND groups, independent of the include OR:
+	// "(Europe OR Brazil) AND never Russia".
+	got = normalizeGroups(t, FilterFromValues(vals("regions=eu&countries=BR&countries_exclude=RU")))
+	want = [][]string{
+		{`countries != "RU"`},
+		{`countries = "BR"`, `regions = "eu"`},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("location OR with exclude: got %v, want %v", got, want)
+	}
+}
+
 func TestFilterFromValues_PostedWithinDays(t *testing.T) {
 	// now is injected so the cutoff is deterministic. posted_within_days=N restricts
 	// to posted_ts >= now - N*86400 (posted within the last N days).
