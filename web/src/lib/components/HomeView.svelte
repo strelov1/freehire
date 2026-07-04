@@ -4,6 +4,45 @@
   import HomeFunnel from '$lib/components/HomeFunnel.svelte';
   import { HOME_FAQ } from '$lib/homeFaq';
 
+  // Live catalogue totals from the page's server load; either may be null on an
+  // API hiccup, so each has a static fallback (see `figures`).
+  const { stats }: { stats: { jobs: number | null; companies: number | null } } = $props();
+
+  // Compact display for the live figures (2,939,967 → "2.9M+"). The fallbacks
+  // stay truthful because the catalogue only grows — a stale build never
+  // overstates the count.
+  const nf = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+  const compact = (n: number | null, fallback: string) => (n == null ? fallback : `${nf.format(n)}+`);
+
+  // The under-the-fold stats strip: two live totals, then the two constants —
+  // ATS breadth and licensing — that don't need a query.
+  const figures = $derived([
+    { value: compact(stats.jobs, '2.9M+'), label: 'open jobs' },
+    { value: compact(stats.companies, '188K+'), label: 'companies' },
+    { value: '50+', label: 'ATS platforms' },
+    { value: '100%', label: 'open source' },
+  ]);
+
+  // "Straight from the source" — the value prop that separates freehire from an
+  // aggregator. Mirrors the README "Why freehire?" points.
+  const sourced = [
+    {
+      n: '01',
+      title: 'Straight from the source',
+      body: "Every listing is crawled from a company's own ATS and links to the original posting — no recruiter reposts, no aggregator middlemen.",
+    },
+    {
+      n: '02',
+      title: 'One schema, deduplicated',
+      body: 'The same role posted to three boards collapses into one entry — normalized into a single shape and deduped on a stable key.',
+    },
+    {
+      n: '03',
+      title: 'No dead links',
+      body: 'A liveness sweep probes open postings and closes the ones that 404 or expire, so what you open is still open.',
+    },
+  ];
+
   const GITHUB = 'https://github.com/strelov1/freehire';
   const CLI = 'https://github.com/strelov1/freehire-cli';
   // Where a contributor opens a request to have a new source added.
@@ -135,6 +174,36 @@
           {/each}
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- Catalogue scale, right under the fold: two live totals (server-loaded, with
+       a static "+" fallback) and two constants. The first proof of the hero's claim. -->
+  <section class="py-10 sm:py-12">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// the catalogue</p>
+    <dl class="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">
+      {#each figures as f (f.label)}
+        <div class="bg-background p-5 sm:p-6">
+          <dt class="font-mono text-xs uppercase tracking-wide text-muted-foreground">{f.label}</dt>
+          <dd class="mt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">{f.value}</dd>
+        </div>
+      {/each}
+    </dl>
+  </section>
+
+  <!-- Straight from the source — what separates freehire from an aggregator. -->
+  <section class="border-t border-border py-16 sm:py-20">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// straight from the source</p>
+    <div class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
+      {#each sourced as item (item.n)}
+        <div class="group bg-background p-6 transition-colors hover:bg-secondary/40 sm:p-7">
+          <span class="font-mono text-sm text-muted-foreground transition-colors group-hover:text-foreground">
+            {item.n}
+          </span>
+          <h3 class="mt-4 text-lg font-semibold tracking-tight">{item.title}</h3>
+          <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{item.body}</p>
+        </div>
+      {/each}
     </div>
   </section>
 

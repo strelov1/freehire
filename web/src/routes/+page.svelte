@@ -4,6 +4,9 @@
   import Seo from '$lib/components/Seo.svelte';
   import { HOME_FAQ } from '$lib/homeFaq';
   import { faqPageJsonLd, jsonLdScript, siteOrganizationJsonLd, websiteJsonLd } from '$lib/seo';
+  import type { PageData } from './$types';
+
+  const { data }: { data: PageData } = $props();
 
   const origin = $derived(page.url.origin);
   const canonical = $derived(`${origin}/`);
@@ -26,5 +29,5 @@
 </svelte:head>
 
 <div class="mx-auto w-full max-w-6xl px-4 py-6">
-  <HomeView />
+  <HomeView stats={data.stats} />
 </div>
