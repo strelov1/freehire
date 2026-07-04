@@ -136,9 +136,11 @@
         onclick={toggle}
         disabled={busy}
         aria-pressed={subscribed}
+        aria-label={subscribed ? 'Subscribed' : 'Subscribe to updates'}
       >
         <Bell class="size-4" aria-hidden="true" />
-        {subscribed ? 'Subscribed' : 'Subscribe to updates'}
+        <!-- Icon-only on mobile to keep the company header compact; label from sm up. -->
+        <span class="hidden sm:inline">{subscribed ? 'Subscribed' : 'Subscribe to updates'}</span>
       </Button>
     {/if}
     {#if error}

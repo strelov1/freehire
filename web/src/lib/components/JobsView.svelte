@@ -163,6 +163,19 @@
 <div class="flex gap-6">
   <aside class="hidden w-72 shrink-0 md:block">
     <div class="sticky top-6 flex max-h-[calc(100vh-5rem)] flex-col gap-4 overflow-y-auto">
+      {#if !standalone && jobs.status === 'ready'}
+        <!-- Company view: the (filtered) open-job count as the sidebar's lead stat.
+             The inline count above the list is hidden on desktop (shown only on
+             mobile, where there's no sidebar), so it lives here instead. -->
+        <div class="rounded-xl border border-border bg-card px-4 py-3">
+          <p class="text-3xl font-semibold leading-none tracking-tight tabular-nums">
+            {jobs.total.toLocaleString()}
+          </p>
+          <p class="mt-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {jobs.total === 1 ? 'open job' : 'open jobs'}
+          </p>
+        </div>
+      {/if}
       {@render sidebarTop?.()}
       <div class="rounded-xl border border-border bg-card p-4">
         <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} />
@@ -171,22 +184,6 @@
   </aside>
 
   <div class="min-w-0 flex-1">
-    {#if !standalone}
-      <!-- Company embed: the text search now lives in the header (contextual to
-           this company), so there's no inline box here. Keep a mobile-only Filters
-           button — the fixed edge tab is suppressed on this view (it would overlap
-           the company hero) and desktop opens the modal from the sidebar summary. -->
-      <div class="mb-4 md:hidden">
-        <button
-          type="button"
-          class="h-9 shrink-0 rounded-lg border border-border bg-secondary px-3 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent"
-          onclick={() => (modalOpen = true)}
-        >
-          Filters{#if filters.active > 0}&nbsp;({filters.active}){/if}
-        </button>
-      </div>
-    {/if}
-
     {#if jobs.status === 'loading'}
       <States state="loading" />
     {:else if jobs.status === 'error'}
@@ -194,9 +191,15 @@
     {:else if jobs.items.length === 0}
       <States state="empty" message="No matching jobs." />
     {:else}
-      <!-- On the standalone list, clear the left-edge filters tab on mobile. -->
+      <!-- Standalone: the count is the topmost element, level with the fixed edge
+           tab, so pl-12 clears it (reset at md). Company embed: the count sits well
+           below the header/facts, clear of the tab, so it aligns with the cards; it
+           also moves to the sidebar on desktop, hence mobile-only and a touch bolder. -->
       <p
-        class={['mb-3 text-sm text-muted-foreground', standalone && 'pl-12 md:pl-0']}
+        class={[
+          'mb-3 text-sm',
+          standalone ? 'pl-12 text-muted-foreground md:pl-0' : 'font-medium text-foreground md:hidden',
+        ]}
         aria-live="polite"
       >
         {jobs.total.toLocaleString()} {jobs.total === 1 ? 'job' : 'jobs'}
@@ -217,12 +220,12 @@
   </div>
 </div>
 
-{#if standalone}
-  <!-- Standalone list only: the fixed edge tabs sit over the top of the viewport,
-       where this page's content starts. The embedded company view keeps its inline
-       Filters button (above) so nothing overlaps the company hero. -->
-  <FilterEdgeTab active={filters.active} onclick={() => (modalOpen = true)} />
+<!-- Mobile left-edge Filters tab, for both the standalone list and the embedded
+     company view (parity with /jobs) — it floats over the left edge of the content
+     the same way on either page. -->
+<FilterEdgeTab active={filters.active} onclick={() => (modalOpen = true)} />
 
+{#if standalone}
   <!-- Swipe-mode entry: an icon-only button pinned to the right viewport edge,
        level with the left filters tab (top-16). Fixed, so it only exists while the
        standalone jobs list is mounted (never on the embedded company view) and

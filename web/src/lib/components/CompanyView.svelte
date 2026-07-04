@@ -26,7 +26,7 @@
   <CompanyFacts {company} />
 </div>
 
-<div class="mt-6">
+<div class="mt-4">
   {#await initial}
     <States state="loading" />
   {:then slice}
