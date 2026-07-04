@@ -243,6 +243,8 @@ func Register(app *fiber.App, cfg Config) {
 	api.Patch("/jobs/:slug/track", keyAuth, a.TrackJob)
 	api.Delete("/jobs/:slug/stage", keyAuth, a.ClearStage)
 	api.Delete("/jobs/:slug/track", keyAuth, a.Untrack)
+	// Read-only per-job skill match against the caller's profile (no writes).
+	api.Get("/jobs/:slug/match", keyAuth, a.JobMatch)
 
 	// Moderator-authored jobs: create a hand-curated vacancy and edit it. Authenticated
 	// by cookie or API key (the CLI uses a key), then gated on the moderator role. The

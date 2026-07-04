@@ -11,6 +11,7 @@
   import { Badge, Button } from '$lib/ui';
   import { formatDate } from '$lib/utils';
   import CompanyLogo from './CompanyLogo.svelte';
+  import JobMatch from './JobMatch.svelte';
   import ReportDialog from './ReportDialog.svelte';
 
   // The job is server-rendered: it arrives as a prop from the route's `load`, so
@@ -200,6 +201,8 @@
 
   <aside class="w-full shrink-0 lg:col-start-1 lg:row-span-3 lg:row-start-1">
     <div class="sticky top-6 flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
+      <JobMatch {job} />
+
       {#if salary}
         <p
           class="border-t border-border pt-4 text-xl font-semibold tabular-nums tracking-tight first:border-t-0 first:pt-0"

@@ -3,6 +3,8 @@
 
 import type { Job, Report as ATSReportContract } from './generated/contracts';
 export type { Job, Enrichment, Verdict, Gap, SkillRow } from './generated/contracts';
+// Per-job profile match (how well a job's skills are covered by the caller's profile).
+export type { JobMatch, AdjacentSkill } from './generated/contracts';
 // atscheck's Report is aliased ATSReport (a local Report — job reports — already exists);
 // its category/line-item shapes come along for the report view.
 export type {

@@ -34,6 +34,7 @@ import type {
   ReportInput,
   Verdict,
   ATSResponse,
+  JobMatch,
 } from './types';
 
 /** A page of list items, optionally the total matching the query (endpoints that
@@ -140,6 +141,15 @@ export function createApi(
    *  renders them; the source job is excluded by the backend. */
   async function getSimilarJobs(slug: string): Promise<Job[]> {
     const body = await request<{ data: Job[] }>(`/api/v1/jobs/${slug}/similar`);
+    return body.data;
+  }
+
+  /** How well the job addressed by `slug` is covered by the caller's profile skills:
+   *  each job skill classified exact/adjacent/missing plus a coverage percent.
+   *  Requires a signed-in caller with a profile (404 otherwise); the sidebar only
+   *  calls it in that state. */
+  async function getJobMatch(slug: string): Promise<JobMatch> {
+    const body = await request<{ data: JobMatch }>(`/api/v1/jobs/${slug}/match`);
     return body.data;
   }
 
@@ -681,6 +691,7 @@ export function createApi(
     listJobs,
     getJob,
     getSimilarJobs,
+    getJobMatch,
     searchJobs,
     swipeDeck,
     facetCounts,
@@ -756,6 +767,7 @@ export const {
   listJobs,
   getJob,
   getSimilarJobs,
+  getJobMatch,
   searchJobs,
   swipeDeck,
   facetCounts,

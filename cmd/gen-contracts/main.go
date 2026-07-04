@@ -65,6 +65,7 @@ func genStructs() (string, error) {
 	bundleTS := filepath.Join(tmp, "bundle.ts")
 	verdictTS := filepath.Join(tmp, "verdict.ts")
 	atscheckTS := filepath.Join(tmp, "atscheck.ts")
+	jobmatchTS := filepath.Join(tmp, "jobmatch.ts")
 
 	cfg := &tygo.Config{
 		Packages: []*tygo.PackageConfig{
@@ -100,6 +101,12 @@ func genStructs() (string, error) {
 				OutputPath:   atscheckTS,
 				IncludeFiles: []string{"atscheck.go"},
 			},
+			{
+				// The per-job profile-match wire shape (JobMatch + AdjacentSkill).
+				Path:         "github.com/strelov1/freehire/internal/jobmatch",
+				OutputPath:   jobmatchTS,
+				IncludeFiles: []string{"jobmatch.go"},
+			},
 		},
 	}
 	if err := tygo.New(cfg).Generate(); err != nil {
@@ -126,7 +133,11 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody, nil
+	jobmatchBody, err := readBody(jobmatchTS)
+	if err != nil {
+		return "", err
+	}
+	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + jobmatchBody, nil
 }
 
 // readBody returns a tygo output file's body with its leading preamble removed, so

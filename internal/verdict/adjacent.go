@@ -32,6 +32,19 @@ var adjacentTo = map[string][]string{
 	"nestjs":  {"express", "fastify"},
 }
 
+// AdjacentVia returns the first neighbour of `required` present in `held` — the
+// close skill that makes `required` count as adjacent rather than missing — or
+// ("", false) when none. `held` is a canonical skill-slug set (a flat set of the
+// caller's skills), keeping this usable outside the CV declared/body split.
+func AdjacentVia(required string, held map[string]bool) (string, bool) {
+	for _, adj := range adjacentTo[required] {
+		if held[adj] {
+			return adj, true
+		}
+	}
+	return "", false
+}
+
 // adjacentHeld returns the first neighbour of `roleSkill` that the CV holds (in
 // declared or body), or "" when none — i.e. the close skill to reframe around.
 func adjacentHeld(roleSkill string, declared, body map[string]bool) string {
