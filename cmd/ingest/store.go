@@ -32,10 +32,11 @@ type dbStore struct {
 	q             *db.Queries
 	targetVersion int32
 	indexer       jobIndexer
+	crawled       *crawledSet
 }
 
-func newDBStore(pool *pgxpool.Pool, targetVersion int, indexer jobIndexer) *dbStore {
-	return &dbStore{pool: pool, q: db.New(pool), targetVersion: int32(targetVersion), indexer: indexer}
+func newDBStore(pool *pgxpool.Pool, targetVersion int, indexer jobIndexer, crawled *crawledSet) *dbStore {
+	return &dbStore{pool: pool, q: db.New(pool), targetVersion: int32(targetVersion), indexer: indexer, crawled: crawled}
 }
 
 // needsIndex reports whether a persisted write changed what search would show: a
@@ -100,6 +101,14 @@ func (s *dbStore) Save(ctx context.Context, job pipeline.Job) error {
 
 	if err := tx.Commit(ctx); err != nil {
 		return err
+	}
+
+	// Record this (provider, company) as crawled so the post-run stale sweep only
+	// closes jobs of companies this run actually wrote — never a provider's whole
+	// catalogue when a run crawled only some of its boards. Uses the persisted row so
+	// aggregator sources (one board, per-job companies) scope by their real companies.
+	if s.crawled != nil {
+		s.crawled.record(saved.Job.Source, saved.Job.CompanySlug)
 	}
 
 	// Best-effort incremental indexing of the now-committed row: only when the

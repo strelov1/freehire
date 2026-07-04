@@ -312,16 +312,20 @@ RETURNING *;
 
 -- name: CloseUnseenJobs :execrows
 -- Post-ingest sweep (see job-lifecycle spec): close every open job of ONE source not
--- seen since the cutoff. Scoped by source because ingest runs per provider — a
--- greenhouse run must not close jobs another provider owns and didn't crawl. The
--- caller owns the grace window (cutoff = now() - window) and the "run ingested
--- something" guard, so a failed crawl never mass-closes that source's catalogue.
+-- seen since the cutoff, scoped to the company slugs the run actually crawled. Scoped
+-- by source because ingest runs per provider (a greenhouse run must not close jobs
+-- another provider owns), and by company_slug because a run may crawl only a SUBSET of
+-- a provider's boards — a partial or targeted run (or a full crawl of a huge provider
+-- that times out and only completes some boards) must not close the companies it never
+-- touched. The caller passes the crawled slugs and owns the grace window (cutoff =
+-- now() - window), so neither a failed nor a partial crawl mass-closes a catalogue.
 UPDATE jobs
 SET closed_at  = now(),
     updated_at = now()
 WHERE closed_at IS NULL
   AND source = sqlc.arg(source)
-  AND last_seen_at < sqlc.arg(cutoff);
+  AND last_seen_at < sqlc.arg(cutoff)
+  AND company_slug = ANY(sqlc.arg(company_slugs)::text[]);
 
 -- name: CloseJobBySourceExternalID :execrows
 -- Stream-driven close (see job-lifecycle): a self-closing feed source (e.g. jobtech)

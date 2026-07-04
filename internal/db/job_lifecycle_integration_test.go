@@ -87,7 +87,7 @@ func TestCloseUnseenJobsClosesOnlyStaleJobs(t *testing.T) {
 	ageJob(t, pool, stale.ID, 49*time.Hour)
 	ageJob(t, pool, fresh.ID, 6*time.Hour)
 
-	closed, err := q.CloseUnseenJobs(ctx, CloseUnseenJobsParams{Source: "greenhouse", Cutoff: pgTimestamptz(time.Now().Add(-48 * time.Hour))})
+	closed, err := q.CloseUnseenJobs(ctx, CloseUnseenJobsParams{Source: "greenhouse", Cutoff: pgTimestamptz(time.Now().Add(-48 * time.Hour)), CompanySlugs: []string{"acme"}})
 	if err != nil {
 		t.Fatalf("sweep: %v", err)
 	}
@@ -111,12 +111,80 @@ func TestCloseUnseenJobsClosesOnlyStaleJobs(t *testing.T) {
 	}
 
 	// Idempotent: a second sweep with the same cutoff closes nothing.
-	again, err := q.CloseUnseenJobs(ctx, CloseUnseenJobsParams{Source: "greenhouse", Cutoff: pgTimestamptz(time.Now().Add(-48 * time.Hour))})
+	again, err := q.CloseUnseenJobs(ctx, CloseUnseenJobsParams{Source: "greenhouse", Cutoff: pgTimestamptz(time.Now().Add(-48 * time.Hour)), CompanySlugs: []string{"acme"}})
 	if err != nil {
 		t.Fatalf("second sweep: %v", err)
 	}
 	if again != 0 {
 		t.Fatalf("second sweep closed %d jobs, want 0", again)
+	}
+}
+
+// TestCloseUnseenJobsScopedToCrawledCompanies pins the sweep-scoping contract: a run
+// closes stale jobs only for the company slugs it actually crawled, never a provider's
+// whole catalogue. This is the guard against a partial/targeted run mass-closing a
+// provider whose full crawl times out (see cmd/ingest crawledSet).
+func TestCloseUnseenJobsScopedToCrawledCompanies(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	acmeP := ingestParams("acme:1", "Acme Eng")
+	acmeP.CompanySlug = "acme"
+	globexP := ingestParams("globex:1", "Globex Eng")
+	globexP.CompanySlug = "globex"
+	acme, err := ingestUpsert(ctx, q, acmeP)
+	if err != nil {
+		t.Fatalf("upsert acme: %v", err)
+	}
+	globex, err := ingestUpsert(ctx, q, globexP)
+	if err != nil {
+		t.Fatalf("upsert globex: %v", err)
+	}
+	// Both jobs are stale, but this run crawled only acme's board.
+	ageJob(t, pool, acme.ID, 49*time.Hour)
+	ageJob(t, pool, globex.ID, 49*time.Hour)
+
+	closed, err := q.CloseUnseenJobs(ctx, CloseUnseenJobsParams{
+		Source:       "greenhouse",
+		Cutoff:       pgTimestamptz(time.Now().Add(-48 * time.Hour)),
+		CompanySlugs: []string{"acme"},
+	})
+	if err != nil {
+		t.Fatalf("scoped sweep: %v", err)
+	}
+	if closed != 1 {
+		t.Fatalf("scoped sweep closed %d jobs, want 1 (only acme)", closed)
+	}
+
+	acmeAfter, err := q.GetJob(ctx, acme.ID)
+	if err != nil {
+		t.Fatalf("get acme: %v", err)
+	}
+	if !acmeAfter.ClosedAt.Valid {
+		t.Fatal("acme (crawled this run, stale) must be closed")
+	}
+	globexAfter, err := q.GetJob(ctx, globex.ID)
+	if err != nil {
+		t.Fatalf("get globex: %v", err)
+	}
+	if globexAfter.ClosedAt.Valid {
+		t.Fatal("globex (not crawled this run) must stay open despite being stale")
+	}
+
+	// A run that recorded no companies (empty scope) closes nothing — the guard against
+	// a zero-company run mass-closing a provider.
+	none, err := q.CloseUnseenJobs(ctx, CloseUnseenJobsParams{
+		Source:       "greenhouse",
+		Cutoff:       pgTimestamptz(time.Now().Add(-48 * time.Hour)),
+		CompanySlugs: nil,
+	})
+	if err != nil {
+		t.Fatalf("empty-scope sweep: %v", err)
+	}
+	if none != 0 {
+		t.Fatalf("empty-scope sweep closed %d jobs, want 0", none)
 	}
 }
 

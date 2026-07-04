@@ -85,9 +85,12 @@ func run() int {
 		storeIndexer = indexer
 	}
 
+	// crawled records the company slugs each provider actually wrote this run, so the
+	// post-run sweep scopes its closes to them (see the sweep below and crawledSet).
+	crawled := newCrawledSet()
 	runner := pipeline.Runner{
 		Registry: registry,
-		Store:    newDBStore(pool, enrich.Version, storeIndexer),
+		Store:    newDBStore(pool, enrich.Version, storeIndexer, crawled),
 	}
 
 	runStats, err := runner.Run(ctx, sourceCfg.Sources)
@@ -113,10 +116,13 @@ func run() int {
 	failed := total.Failed
 
 	// Post-run sweep (job-lifecycle spec): per provider, close that provider's open jobs
-	// unseen for the whole grace window. Scoped per provider so one provider's run never
-	// closes another's jobs, and guarded per provider (only those that ingested at least
-	// one job) so a total crawl outage for one provider cannot mass-close its catalogue —
-	// even when several providers share one run (e.g. custom.yml).
+	// unseen for the whole grace window — but only for the companies this run actually
+	// crawled (crawled.slugs). Scoped per provider so one provider's run never closes
+	// another's jobs; guarded per provider (only those that ingested at least one job) so
+	// a total crawl outage cannot mass-close a catalogue; and scoped per company so a
+	// PARTIAL run (a subset of a provider's boards — a targeted run, or a full crawl of a
+	// huge provider that timed out mid-way) closes only what it saw, never the boards it
+	// never reached.
 	queries := db.New(pool)
 	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-staleAfter), Valid: true}
 	// A self-closing source (e.g. jobtech) manages its own closes from its stream, so the
@@ -131,8 +137,9 @@ func run() int {
 			continue
 		}
 		closed, err := queries.CloseUnseenJobs(ctx, db.CloseUnseenJobsParams{
-			Source: provider,
-			Cutoff: cutoff,
+			Source:       provider,
+			Cutoff:       cutoff,
+			CompanySlugs: crawled.slugs(provider),
 		})
 		if err != nil {
 			// Count and continue: one provider's sweep failure must not skip the rest,
