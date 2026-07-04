@@ -13,17 +13,11 @@
 //
 // Rendered PNGs are written to /tmp/og-smoke/ for visual inspection.
 
-import { readFile, mkdir, writeFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
-import { createServer } from 'vite';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { createOgVite, isValidPng, loadFonts } from './og-render.mjs';
 
-const here = dirname(fileURLToPath(import.meta.url));
-const webRoot = resolve(here, '..');
-const fontsDir = resolve(webRoot, 'src/lib/server/og/fonts');
 const outDir = '/tmp/og-smoke';
-
-const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 // A complete-enough Job; per-fixture overrides tweak the fields the card reads.
 function job(overrides = {}) {
@@ -84,47 +78,58 @@ const fixtures = {
   }),
 };
 
-async function loadFonts() {
-  const files = [
-    ['Inter-Regular.ttf', 400],
-    ['Inter-SemiBold.ttf', 600],
-    ['Inter-Bold.ttf', 700],
-  ];
-  return Promise.all(
-    files.map(async ([file, weight]) => ({
-      name: 'Inter',
-      data: await readFile(resolve(fontsDir, file)),
-      weight,
-      style: 'normal',
-    })),
-  );
+// A company entity; per-fixture overrides tweak the fields the company card reads.
+function company(overrides = {}) {
+  return {
+    slug: 'smoke',
+    name: 'Acme Corp',
+    collections: [],
+    created_at: null,
+    updated_at: null,
+    ...overrides,
+  };
 }
 
+// [entity, openJobs] pairs covering the degradation cases the company card handles.
+const companyFixtures = {
+  companyFull: [
+    company({
+      name: 'Supabase',
+      tagline: 'The open source Firebase alternative',
+      industries: ['Developer Tools'],
+      hq_country: 'US',
+    }),
+    128,
+  ],
+  companyNoChips: [company({ name: 'Zzz Obscure Holdings' }), 3],
+  companyOneJob: [company({ name: 'Solo Studio', hq_country: 'DE' }), 1],
+  companyZeroJobs: [company({ name: 'Dormant Inc', tagline: 'Nothing open right now' }), 0],
+};
+
 async function main() {
-  const vite = await createServer({
-    configFile: false,
-    root: webRoot,
-    logLevel: 'error',
-    resolve: { alias: { $lib: resolve(webRoot, 'src/lib') } },
-    ssr: { external: ['@resvg/resvg-js'] },
-  });
+  const vite = await createOgVite();
 
   let failed = 0;
   try {
-    const { renderCardPng } = await vite.ssrLoadModule('/src/lib/server/og/render.ts');
+    const { renderCardPng, renderMarkupPng } = await vite.ssrLoadModule('/src/lib/server/og/render.ts');
+    const { buildCompanyCard } = await vite.ssrLoadModule('/src/lib/server/og/company.ts');
     const fonts = await loadFonts();
     await mkdir(outDir, { recursive: true });
 
-    for (const [name, fixture] of Object.entries(fixtures)) {
-      const png = Buffer.from(await renderCardPng(fixture, { fonts, logo: null }));
-      const okSig = png.subarray(0, 8).equals(PNG_SIGNATURE);
-      const okSize = png.length > 2000;
-      const ok = okSig && okSize;
+    const assertPng = async (name, png) => {
+      const ok = isValidPng(png);
       if (!ok) failed++;
       await writeFile(resolve(outDir, `${name}.png`), png);
-      console.log(
-        `${ok ? 'PASS' : 'FAIL'}  ${name.padEnd(10)} ${png.length} bytes  sig=${okSig} size=${okSize}  -> ${outDir}/${name}.png`,
-      );
+      console.log(`${ok ? 'PASS' : 'FAIL'}  ${name.padEnd(14)} ${png.length} bytes  -> ${outDir}/${name}.png`);
+    };
+
+    for (const [name, fixture] of Object.entries(fixtures)) {
+      await assertPng(name, Buffer.from(await renderCardPng(fixture, { fonts, logo: null })));
+    }
+
+    for (const [name, [entity, openJobs]] of Object.entries(companyFixtures)) {
+      const markup = buildCompanyCard(entity, { logo: null, openJobs });
+      await assertPng(name, Buffer.from(await renderMarkupPng(markup, fonts)));
     }
   } finally {
     await vite.close();

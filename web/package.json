@@ -11,6 +11,7 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
     "og:smoke": "node scripts/og-smoke.mjs",
+    "og:gen": "node scripts/gen-og.mjs",
     "gen:api-docs": "node scripts/gen-api-docs.mjs",
     "gen:api-docs:smoke": "node scripts/gen-api-docs-smoke.mjs",
     "lint": "oxlint && eslint .",

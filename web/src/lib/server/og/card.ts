@@ -5,44 +5,18 @@
 //
 // All display strings are reused from $lib/enrichment (the same labels/salary the
 // site shows), and every interpolated value is HTML-escaped before it reaches the
-// markup.
+// markup. Shared brand primitives (mark, escaping, logo tile, chips, footer) live
+// in ./shared so the job/company/brand cards cannot drift.
 //
 // satori constraint: layout is flexbox only (no CSS grid), and any element with
 // more than one child declares `display: flex`.
 
 import type { Job } from '$lib/generated/contracts';
 import { formatSalary, seniorityLabel, workArrangement } from '$lib/enrichment';
-
-export const OG_WIDTH = 1200;
-export const OG_HEIGHT = 630;
+import { OG_HEIGHT, OG_WIDTH, brandFooter, chipMarkup, esc, logoBox, type Chip } from './shared';
 
 const SKILL_LIMIT = 3;
-
-// The freehire brand mark (a circle with a diamond cut-out), inlined as a base64
-// data-URI so satori embeds it with no network fetch (satori cannot fetch remote
-// images). Coloured #0a0a0a to match the footer wordmark beside it.
-const MARK_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">' +
-  '<path fill-rule="evenodd" clip-rule="evenodd" d="M256 56C366.457 56 456 145.543 456 256C456 366.457 366.457 456 256 456C145.543 456 56 366.457 56 256C56 145.543 145.543 56 256 56ZM256 166L346 256L256 346L166 256L256 166Z" fill="#0a0a0a"/>' +
-  '</svg>';
-const MARK_DATA_URI = `data:image/svg+xml;base64,${Buffer.from(MARK_SVG).toString('base64')}`;
-
-function esc(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-/** One or two uppercase initials from the company name, for the logo fallback. */
-function monogram(company: string): string {
-  const words = company.trim().split(/\s+/).filter(Boolean);
-  const first = words[0];
-  if (!first) return '?';
-  if (words.length === 1) return first.slice(0, 2).toUpperCase();
-  return (first.charAt(0) + (words[1] ?? '').charAt(0)).toUpperCase();
-}
+const LOGO_SIZE = 96;
 
 /** Title font size shrinks as the title grows; a 3-line clamp catches the rest. */
 function titleFontSize(title: string): number {
@@ -53,8 +27,6 @@ function titleFontSize(title: string): number {
   if (n <= 90) return 34;
   return 30;
 }
-
-type Chip = { text: string; muted?: boolean };
 
 /** The facet chips, in fixed priority order, with absent facets omitted. */
 function chips(job: Job): Chip[] {
@@ -74,25 +46,6 @@ function chips(job: Job): Chip[] {
   return out;
 }
 
-function logoMarkup(job: Job, logo: string | null): string {
-  if (logo) {
-    // satori reads image dimensions from style, not the width/height HTML attributes.
-    return `<img src="${esc(logo)}" style="width:72px;height:72px;border-radius:14px;object-fit:contain" />`;
-  }
-  return (
-    `<div style="display:flex;align-items:center;justify-content:center;width:72px;height:72px;` +
-    `border-radius:14px;background:#f4f4f4;color:#525252;font-size:30px;font-weight:700">` +
-    `${esc(monogram(job.company))}</div>`
-  );
-}
-
-function chipMarkup(chip: Chip): string {
-  const style = chip.muted
-    ? 'display:flex;align-items:center;color:#a3a3a3;font-size:24px;font-weight:500;padding:8px 4px'
-    : 'display:flex;align-items:center;background:#f4f4f4;color:#171717;font-size:24px;font-weight:500;border-radius:999px;padding:9px 18px';
-  return `<div style="${style}">${esc(chip.text)}</div>`;
-}
-
 /** Builds the card HTML for `job`, with `logo` as a data-URI or null (monogram). */
 export function buildCard(job: Job, opts: { logo: string | null }): string {
   const titleSize = titleFontSize(job.title);
@@ -103,17 +56,11 @@ export function buildCard(job: Job, opts: { logo: string | null }): string {
   return `
 <div style="display:flex;flex-direction:column;justify-content:space-between;width:${OG_WIDTH}px;height:${OG_HEIGHT}px;padding:64px 72px;background:#ffffff;color:#0a0a0a;font-family:Inter">
   <div style="display:flex;align-items:center;gap:20px">
-    ${logoMarkup(job, opts.logo)}
+    ${logoBox(opts.logo, job.company, LOGO_SIZE)}
     <div style="display:flex;font-size:28px;font-weight:600;color:#404040;overflow:hidden">${esc(job.company)}</div>
   </div>
   <div style="display:flex;font-size:${titleSize}px;font-weight:700;letter-spacing:-0.03em;line-height:1.05;overflow:hidden">${esc(job.title)}</div>
   <div style="display:flex;flex-wrap:wrap;gap:12px">${chipRow}</div>
-  <div style="display:flex;align-items:center;justify-content:space-between">
-    <div style="display:flex;align-items:center;gap:14px">
-      <img src="${MARK_DATA_URI}" style="width:34px;height:34px" />
-      <div style="display:flex;font-size:30px;font-weight:700;letter-spacing:-0.03em">freehire</div>
-    </div>
-    <div style="display:flex;font-size:22px;color:#a3a3a3">freehire.dev</div>
-  </div>
+  ${brandFooter()}
 </div>`.trim();
 }
