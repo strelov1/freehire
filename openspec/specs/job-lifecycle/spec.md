@@ -16,19 +16,20 @@ persists the job.
 
 ### Requirement: Jobs unseen beyond a grace window are closed after a run
 
-After an ingest run, the system SHALL run the unseen-job sweep **per provider**: for each
-provider that ingested at least one job during the run, it SHALL stamp `closed_at` on every
-open job of that provider whose `last_seen_at` is older than a 48-hour grace window. A
-provider that ingested nothing in the run SHALL NOT have its jobs swept, so a total crawl
-failure — for one provider in a multi-provider run, or for a whole single-provider run —
-cannot mass-close that provider's catalogue. The sweep of one provider never touches
-another provider's jobs.
+After an ingest run, the system SHALL run the unseen-job sweep **per provider, scoped to the companies that run wrote**: for each provider that ingested at least one job during the run, it SHALL stamp `closed_at` on every open job of that provider whose `last_seen_at` is older than a 48-hour grace window **and whose `company_slug` the run wrote a job for**. A provider that ingested nothing SHALL NOT have its jobs swept, and a company the run did not write (its board was not in this run, returned no postings, or was removed from the board file) SHALL NOT be swept — so a partial or targeted run, or a full crawl of a large provider that times out before completing, cannot mass-close the boards it never reached. The sweep of one provider never touches another provider's jobs. The trade-off is deliberate: a board that empties out or is removed leaks its open jobs (they reopen or close on a later crawl) rather than risk over-closing live jobs the run simply did not reach.
 
 #### Scenario: Stale job is closed
 
 - **WHEN** a sweep runs after a provider ingested at least one job and an open job of that
-  provider was last seen 49 hours ago
+  provider — belonging to a company the run wrote — was last seen 49 hours ago
 - **THEN** that job's `closed_at` is set and the job stops appearing in list surfaces
+
+#### Scenario: A company the run did not crawl is not swept
+
+- **WHEN** a run ingests jobs for company A of a provider but does not write any job for
+  company B of the same provider (B's board was not in this run, or returned no postings)
+  and B has an open job last seen 49 hours ago
+- **THEN** the sweep closes A's stale jobs but leaves B's stale job open
 
 #### Scenario: Recently seen job survives the sweep
 

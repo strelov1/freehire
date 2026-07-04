@@ -123,6 +123,13 @@ func run() int {
 	// PARTIAL run (a subset of a provider's boards — a targeted run, or a full crawl of a
 	// huge provider that timed out mid-way) closes only what it saw, never the boards it
 	// never reached.
+	//
+	// Trade-off (deliberate under-close): a company is swept only when the run wrote a job
+	// for it, so a board that fetched but returned zero postings, or a company removed from
+	// the board file, is NOT retired here — its open jobs leak until a later crawl reopens
+	// or closes them. Board sources have no liveness backstop (the liveness probe skips
+	// registered providers), so this is accepted to avoid the far worse over-close: closing
+	// live jobs of boards a partial/timed-out run never reached.
 	queries := db.New(pool)
 	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-staleAfter), Valid: true}
 	// A self-closing source (e.g. jobtech) manages its own closes from its stream, so the
