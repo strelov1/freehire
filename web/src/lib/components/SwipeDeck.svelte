@@ -11,6 +11,7 @@
   import { Badge } from '$lib/ui';
   import CompanyLogo from './CompanyLogo.svelte';
   import FilterModal from './filters/FilterModal.svelte';
+  import JobMatch from './JobMatch.svelte';
   import States from './States.svelte';
 
   type Judgement = 'save' | 'dismiss';
@@ -185,19 +186,48 @@
   }
 
   // --- Pointer drag on the active card (touch + mouse) ---------------------
+  // The card now both swipes horizontally AND scrolls its content vertically, so a
+  // gesture's axis is locked on first movement: a mostly-vertical drag is left to
+  // native scroll (touch-action: pan-y on the scroll area), a horizontal one drives
+  // the swipe. We therefore defer setPointerCapture/dragging until we know it's a
+  // horizontal swipe — capturing up front would swallow every vertical scroll.
+  let startY = 0;
+  let axis: 'none' | 'x' | 'y' = 'none';
+  let activePointer = -1;
+  const AXIS_LOCK_PX = 8;
+
   function onPointerDown(e: PointerEvent) {
     if (!current || exiting) return;
     // Let clicks on links/buttons inside the card through — capturing the pointer
     // for a drag would swallow their click (e.g. "Open full details").
     if ((e.target as HTMLElement).closest('a, button')) return;
-    dragging = true;
     startX = e.clientX;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    startY = e.clientY;
+    axis = 'none';
+    activePointer = e.pointerId;
   }
   function onPointerMove(e: PointerEvent) {
-    if (dragging) dragX = e.clientX - startX;
+    if (e.pointerId !== activePointer || axis === 'y') return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    if (axis === 'none') {
+      // Wait for enough travel to reveal intent before committing to an axis.
+      const adx = Math.abs(dx);
+      const ady = Math.abs(dy);
+      if (adx < AXIS_LOCK_PX && ady < AXIS_LOCK_PX) return;
+      if (ady > adx) {
+        axis = 'y'; // vertical intent — hand off to native scroll, never swipe
+        return;
+      }
+      axis = 'x';
+      dragging = true;
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    }
+    dragX = dx;
   }
   function onPointerUp() {
+    activePointer = -1;
+    axis = 'none';
     if (!dragging) return;
     if (dragX > COMMIT_PX) judge('save');
     else if (dragX < -COMMIT_PX) judge('dismiss');
@@ -322,7 +352,7 @@
           <div
             role="group"
             aria-label={`Job: ${current.title} at ${current.company || 'unknown company'}`}
-            class="swipe-card absolute inset-0 flex touch-none flex-col gap-3 overflow-hidden rounded-3xl border border-border bg-card p-5 shadow-xl duration-300 ease-out"
+            class="swipe-card absolute inset-0 flex flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-xl duration-300 ease-out"
             class:transition={animate}
             style={`transform: translate3d(${dragX}px, 0, 0) rotate(${rotation}deg); opacity: ${cardOpacity};`}
             onpointerdown={onPointerDown}
@@ -330,7 +360,9 @@
             onpointerup={onPointerUp}
             onpointercancel={onPointerUp}
           >
-            <!-- Swipe-direction stamps (Tinder-style), fading in with drag distance. -->
+            <!-- Swipe-direction stamps (Tinder-style), fading in with drag distance.
+                 They anchor to the non-scrolling frame so they stay put as the content
+                 below scrolls. -->
             {#if dragX > 20}
               <span
                 class="pointer-events-none absolute left-5 top-5 z-10 rotate-[-12deg] rounded-lg border-4 border-emerald-500 px-3 py-1 text-2xl font-extrabold uppercase tracking-wider text-emerald-500"
@@ -347,62 +379,69 @@
               </span>
             {/if}
 
-            <div class="flex items-center gap-3">
-              <CompanyLogo name={current.company} />
-              <div class="min-w-0">
-                <div class="truncate font-semibold">{current.company || 'Unknown company'}</div>
-                {#if current.location}
-                  <div class="truncate text-sm text-muted-foreground">{current.location}</div>
-                {/if}
-              </div>
-            </div>
-
-            <h2 class="line-clamp-3 text-2xl font-bold tracking-tight">{current.title}</h2>
-
-            {#if salary}
-              <div class="text-lg font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
-                {salary}
-              </div>
-            {/if}
-
-            <div class="flex flex-wrap gap-1.5">
-              {#each tags as tag (tag)}
-                <Badge variant="secondary">{tag}</Badge>
-              {/each}
-              {#each skills as skill (skill)}
-                <Badge variant="secondary">{skill}</Badge>
-              {/each}
-            </div>
-
-            {#if summary}
-              <!-- Model-written synopsis: the card's lead. Short (≤400 chars), plain text. -->
-              <p class="text-sm leading-relaxed text-foreground">{summary}</p>
-            {/if}
-
-            {#if current.description}
-              <!-- Description is server-sanitized HTML (see internal/sources), safe to render.
-                   Fills the leftover space above the link and clips, with a fade cueing more. -->
-              <div
-                class="job-teaser relative min-h-0 flex-1 overflow-hidden text-sm leading-relaxed text-muted-foreground"
-              >
-                <!-- eslint-disable-next-line svelte/no-at-html-tags -- server-sanitized; the rule flags every {@html} regardless -->
-                {@html current.description}
-                <div
-                  class="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-card to-transparent"
-                ></div>
-              </div>
-            {/if}
-
-            <!-- Opens in a new tab so the deck (and your place in it) is preserved —
-                 return by closing/switching back to this tab. -->
-            <a
-              href={resolve('/jobs/[slug]', { slug: current.public_slug })}
-              target="_blank"
-              rel="noopener"
-              class="mt-auto text-left text-sm font-medium text-foreground underline-offset-4 hover:underline"
+            <!-- Scroll container holds the whole card. touch-action: pan-y lets the
+                 browser own vertical scrolling while onPointerMove's axis-lock keeps
+                 horizontal drags as swipes; overscroll-contain stops the scroll from
+                 chaining to the page behind the overlay. -->
+            <div
+              class="swipe-scroll flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain p-5"
             >
-              Open full details →
-            </a>
+              <div class="flex items-center gap-3">
+                <CompanyLogo name={current.company} />
+                <div class="min-w-0">
+                  <div class="truncate font-semibold">{current.company || 'Unknown company'}</div>
+                  {#if current.location}
+                    <div class="truncate text-sm text-muted-foreground">{current.location}</div>
+                  {/if}
+                </div>
+              </div>
+
+              <h2 class="line-clamp-3 text-2xl font-bold tracking-tight">{current.title}</h2>
+
+              {#if salary}
+                <div class="text-lg font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
+                  {salary}
+                </div>
+              {/if}
+
+              <div class="flex flex-wrap gap-1.5">
+                {#each tags as tag (tag)}
+                  <Badge variant="secondary">{tag}</Badge>
+                {/each}
+                {#each skills as skill (skill)}
+                  <Badge variant="secondary">{skill}</Badge>
+                {/each}
+              </div>
+
+              {#if summary}
+                <!-- Model-written synopsis: the card's lead. Short (≤400 chars), plain text. -->
+                <p class="text-sm leading-relaxed text-foreground">{summary}</p>
+              {/if}
+
+              <!-- Personal profile-match block (reuses the detail-page component). Keyed
+                   by slug via the {#key} above, so a fresh instance fetches per card. -->
+              <JobMatch job={current} />
+
+              {#if current.description}
+                <!-- Description is server-sanitized HTML (see internal/sources), safe to
+                     render. Now scrolls in full with the rest of the card. -->
+                <div class="job-teaser text-sm leading-relaxed text-muted-foreground">
+                  <!-- eslint-disable-next-line svelte/no-at-html-tags -- server-sanitized; the rule flags every {@html} regardless -->
+                  {@html current.description}
+                </div>
+              {/if}
+
+              <!-- Opens in a new tab so the deck (and your place in it) is preserved —
+                   return by closing/switching back to this tab. -->
+              <a
+                href={resolve('/jobs/[slug]', { slug: current.public_slug })}
+                target="_blank"
+                rel="noopener"
+                class="pt-1 text-left text-sm font-medium text-foreground underline-offset-4 hover:underline"
+              >
+                Open full details →
+              </a>
+            </div>
           </div>
         {/key}
       </div>
