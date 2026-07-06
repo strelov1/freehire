@@ -97,6 +97,20 @@ func run() int {
 		return 1
 	}
 
+	postedWithin, scoped, err := postedWithinFrom(os.Args[1:])
+	if err != nil {
+		log.Printf("reindex: %v", err)
+		return 1
+	}
+	// --posted-within scopes the fresh window the semantic swap rebuild embeds; it is
+	// meaningless for the facet index (which holds the whole catalogue) and for the
+	// in-place --since delta (which cannot be swapped in). Reject those combos loudly
+	// rather than silently ignoring the flag.
+	if scoped && (!semantic || incremental) {
+		log.Print("reindex: --posted-within applies only to a full --semantic rebuild")
+		return 1
+	}
+
 	// --since is a delta into the LIVE index in place: a partial set cannot be
 	// swapped in wholesale (it would drop everything else). A full pass instead
 	// builds a fresh index and atomically swaps it over the live one, which keeps
@@ -122,8 +136,17 @@ func run() int {
 	if semantic {
 		b = client.NewSemanticRebuild()
 	}
-	log.Printf("reindex: target=%s scope=full mode=swap", target)
-	indexed, skipped, err := reindexFull(ctx, worker.NewFullScanReader(q), b)
+	// The semantic rebuild optionally scopes to a fresh posting window (--posted-within);
+	// every other full pass scans the whole table. A scoped reader returns open jobs only,
+	// which the swap rebuild wants anyway (closed jobs are simply absent).
+	reader := worker.NewFullScanReader(q)
+	scope := "full"
+	if scoped {
+		reader = worker.NewPostedSinceReader(q, time.Now().Add(-postedWithin))
+		scope = "posted-within " + postedWithin.String()
+	}
+	log.Printf("reindex: target=%s scope=%s mode=swap", target, scope)
+	indexed, skipped, err := reindexFull(ctx, reader, b)
 	if err != nil {
 		log.Printf("reindex: %v", err)
 		return 1
@@ -155,6 +178,37 @@ func sinceFrom(args []string) (time.Duration, bool, error) {
 		}
 		if d <= 0 {
 			return 0, false, fmt.Errorf("--since must be positive, got %q", raw)
+		}
+		return d, true, nil
+	}
+	return 0, false, nil
+}
+
+// postedWithinFrom parses an optional --posted-within <duration> / --posted-within=<duration>
+// flag (e.g. "168h" for 7 days). It scopes a full --semantic rebuild to jobs posted
+// within that window, since the in-engine embedder cannot embed the whole catalogue in
+// reasonable time. Reports (duration, true, nil) when present, (0, false, nil) when
+// absent, and an error for a missing or unparseable value. Mirrors sinceFrom.
+func postedWithinFrom(args []string) (time.Duration, bool, error) {
+	for i, a := range args {
+		var raw string
+		switch {
+		case a == "--posted-within":
+			if i+1 >= len(args) {
+				return 0, false, fmt.Errorf("--posted-within needs a duration (e.g. 168h)")
+			}
+			raw = args[i+1]
+		case strings.HasPrefix(a, "--posted-within="):
+			raw = strings.TrimPrefix(a, "--posted-within=")
+		default:
+			continue
+		}
+		d, err := time.ParseDuration(raw)
+		if err != nil {
+			return 0, false, fmt.Errorf("--posted-within %q: %w", raw, err)
+		}
+		if d <= 0 {
+			return 0, false, fmt.Errorf("--posted-within must be positive, got %q", raw)
 		}
 		return d, true, nil
 	}

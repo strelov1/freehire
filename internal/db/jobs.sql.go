@@ -676,6 +676,123 @@ func (q *Queries) ListJobsUpdatedAfter(ctx context.Context, arg ListJobsUpdatedA
 	return items, nil
 }
 
+const listOpenJobIDsPostedAfter = `-- name: ListOpenJobIDsPostedAfter :many
+SELECT id
+FROM jobs
+WHERE id > $1 AND closed_at IS NULL AND COALESCE(posted_at, created_at) >= $2
+ORDER BY id
+LIMIT $3
+`
+
+type ListOpenJobIDsPostedAfterParams struct {
+	AfterID     int64              `json:"after_id"`
+	PostedSince pgtype.Timestamptz `json:"posted_since"`
+	BatchSize   int32              `json:"batch_size"`
+}
+
+// Id-only projection of ListOpenJobsPostedAfter — the corruption-degrade path for the
+// freshness-scoped semantic scan, mirroring ListJobIDsAfter.
+func (q *Queries) ListOpenJobIDsPostedAfter(ctx context.Context, arg ListOpenJobIDsPostedAfterParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listOpenJobIDsPostedAfter, arg.AfterID, arg.PostedSince, arg.BatchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOpenJobsPostedAfter = `-- name: ListOpenJobsPostedAfter :many
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count
+FROM jobs
+WHERE id > $1 AND closed_at IS NULL AND COALESCE(posted_at, created_at) >= $2
+ORDER BY id
+LIMIT $3
+`
+
+type ListOpenJobsPostedAfterParams struct {
+	AfterID     int64              `json:"after_id"`
+	PostedSince pgtype.Timestamptz `json:"posted_since"`
+	BatchSize   int32              `json:"batch_size"`
+}
+
+// Freshness-scoped keyset scan for `reindex --semantic --posted-within`: open jobs
+// whose effective posting date (COALESCE(posted_at, created_at) — the same date
+// jobview derives and the search doc's posted_ts encodes) is at or after the cutoff.
+// The in-engine embedder cannot embed the whole open catalogue in reasonable time, so
+// the semantic index covers only this fresh window; being a swap rebuild it also drops
+// jobs that have since aged out. Open-only (closed_at IS NULL): a swap rebuild never
+// holds closed jobs, so unlike ListJobsUpdatedAfter there is nothing to delete. Served
+// by jobs_open_enrich_freshness_idx (COALESCE(posted_at, created_at) DESC WHERE open).
+func (q *Queries) ListOpenJobsPostedAfter(ctx context.Context, arg ListOpenJobsPostedAfterParams) ([]Job, error) {
+	rows, err := q.db.Query(ctx, listOpenJobsPostedAfter, arg.AfterID, arg.PostedSince, arg.BatchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Job{}
+	for rows.Next() {
+		var i Job
+		if err := rows.Scan(
+			&i.ID,
+			&i.Source,
+			&i.ExternalID,
+			&i.URL,
+			&i.Title,
+			&i.Company,
+			&i.Location,
+			&i.Remote,
+			&i.Description,
+			&i.PostedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CompanySlug,
+			&i.Enrichment,
+			&i.EnrichedAt,
+			&i.EnrichmentVersion,
+			&i.PublicSlug,
+			&i.LastSeenAt,
+			&i.ClosedAt,
+			&i.Countries,
+			&i.Regions,
+			&i.WorkMode,
+			&i.LivenessStrikes,
+			&i.Skills,
+			&i.Seniority,
+			&i.Category,
+			&i.CreatedBy,
+			&i.UpdatedBy,
+			&i.PostingLanguage,
+			&i.EmploymentType,
+			&i.EducationLevel,
+			&i.ExperienceYearsMin,
+			&i.Collections,
+			&i.ContentHash,
+			&i.EnglishLevel,
+			&i.Cities,
+			&i.ViewCount,
+			&i.AppliedCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markLivenessExpired = `-- name: MarkLivenessExpired :one
 UPDATE jobs
 SET liveness_strikes = liveness_strikes + 1,

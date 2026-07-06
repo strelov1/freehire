@@ -511,7 +511,14 @@ func facetSettings() *meilisearch.Settings {
 		},
 		// posted_at / created_at are RFC3339 UTC strings and sort chronologically as text.
 		SortableAttributes: []string{"posted_at", "created_at", "enrichment.salary_min", "enrichment.salary_max"},
-		RankingRules:       []string{"words", "sort", "typo", "proximity", "attribute", "exactness"},
+		// posted_ts:desc is a freshness tie-breaker appended AFTER exactness: relevance
+		// (and any explicit sort) always decides first, and among results otherwise tied
+		// on every relevance rule the fresher posting wins. It uses the numeric
+		// effective-posting field (posted_ts, unix seconds) — the reliable date jobview
+		// derives, not the raw posted_at — and needs no sortable declaration (custom
+		// ranking rules are independent of SortableAttributes). Flows into the semantic
+		// index too, since semanticSettings builds on these rules.
+		RankingRules: []string{"words", "sort", "typo", "proximity", "attribute", "exactness", "posted_ts:desc"},
 		// Typo tolerance is left at Meilisearch's defaults (on, with sensible min
 		// word sizes). We deliberately do not send a TypoTolerance struct: the SDK
 		// always serializes newer fields (e.g. disableOnNumbers) that older

@@ -44,6 +44,8 @@ type jobQueries interface {
 	ListJobIDsAfter(context.Context, db.ListJobIDsAfterParams) ([]int64, error)
 	ListJobsUpdatedAfter(context.Context, db.ListJobsUpdatedAfterParams) ([]db.Job, error)
 	ListJobIDsUpdatedAfter(context.Context, db.ListJobIDsUpdatedAfterParams) ([]int64, error)
+	ListOpenJobsPostedAfter(context.Context, db.ListOpenJobsPostedAfterParams) ([]db.Job, error)
+	ListOpenJobIDsPostedAfter(context.Context, db.ListOpenJobIDsPostedAfterParams) ([]int64, error)
 	GetJob(context.Context, int64) (db.Job, error)
 }
 
@@ -81,6 +83,30 @@ func (r incrementalReader) IDs(ctx context.Context, afterID int64, bs int32) ([]
 	return r.q.ListJobIDsUpdatedAfter(ctx, db.ListJobIDsUpdatedAfterParams{AfterID: afterID, Since: r.since, BatchSize: bs})
 }
 func (r incrementalReader) Row(ctx context.Context, id int64) (db.Job, error) {
+	return r.q.GetJob(ctx, id)
+}
+
+type postedSinceReader struct {
+	q     jobQueries
+	since pgtype.Timestamptz
+}
+
+// NewPostedSinceReader adapts *db.Queries to a PageReader over OPEN jobs whose
+// effective posting date (COALESCE(posted_at, created_at)) is at or after since —
+// the freshness window `reindex --semantic --posted-within` embeds. Keyset by id.
+// Unlike the incremental reader it returns open jobs only, since the semantic swap
+// rebuild it feeds never holds closed jobs (nothing to delete).
+func NewPostedSinceReader(q jobQueries, since time.Time) PageReader {
+	return postedSinceReader{q: q, since: pgtype.Timestamptz{Time: since, Valid: true}}
+}
+
+func (r postedSinceReader) Batch(ctx context.Context, afterID int64, bs int32) ([]db.Job, error) {
+	return r.q.ListOpenJobsPostedAfter(ctx, db.ListOpenJobsPostedAfterParams{AfterID: afterID, PostedSince: r.since, BatchSize: bs})
+}
+func (r postedSinceReader) IDs(ctx context.Context, afterID int64, bs int32) ([]int64, error) {
+	return r.q.ListOpenJobIDsPostedAfter(ctx, db.ListOpenJobIDsPostedAfterParams{AfterID: afterID, PostedSince: r.since, BatchSize: bs})
+}
+func (r postedSinceReader) Row(ctx context.Context, id int64) (db.Job, error) {
 	return r.q.GetJob(ctx, id)
 }
 

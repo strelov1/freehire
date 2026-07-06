@@ -52,6 +52,30 @@ WHERE id > sqlc.arg(after_id) AND updated_at >= sqlc.arg(since)
 ORDER BY id
 LIMIT sqlc.arg(batch_size);
 
+-- name: ListOpenJobsPostedAfter :many
+-- Freshness-scoped keyset scan for `reindex --semantic --posted-within`: open jobs
+-- whose effective posting date (COALESCE(posted_at, created_at) — the same date
+-- jobview derives and the search doc's posted_ts encodes) is at or after the cutoff.
+-- The in-engine embedder cannot embed the whole open catalogue in reasonable time, so
+-- the semantic index covers only this fresh window; being a swap rebuild it also drops
+-- jobs that have since aged out. Open-only (closed_at IS NULL): a swap rebuild never
+-- holds closed jobs, so unlike ListJobsUpdatedAfter there is nothing to delete. Served
+-- by jobs_open_enrich_freshness_idx (COALESCE(posted_at, created_at) DESC WHERE open).
+SELECT *
+FROM jobs
+WHERE id > sqlc.arg(after_id) AND closed_at IS NULL AND COALESCE(posted_at, created_at) >= sqlc.arg(posted_since)
+ORDER BY id
+LIMIT sqlc.arg(batch_size);
+
+-- name: ListOpenJobIDsPostedAfter :many
+-- Id-only projection of ListOpenJobsPostedAfter — the corruption-degrade path for the
+-- freshness-scoped semantic scan, mirroring ListJobIDsAfter.
+SELECT id
+FROM jobs
+WHERE id > sqlc.arg(after_id) AND closed_at IS NULL AND COALESCE(posted_at, created_at) >= sqlc.arg(posted_since)
+ORDER BY id
+LIMIT sqlc.arg(batch_size);
+
 -- name: GetJob :one
 SELECT *
 FROM jobs

@@ -41,6 +41,34 @@ func TestSinceFrom(t *testing.T) {
 	}
 }
 
+func TestPostedWithinFrom(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantDur time.Duration
+		wantOK  bool
+		wantErr bool
+	}{
+		{"absent", []string{"--semantic"}, 0, false, false},
+		{"space form", []string{"--semantic", "--posted-within", "168h"}, 168 * time.Hour, true, false},
+		{"equals form", []string{"--posted-within=720h"}, 720 * time.Hour, true, false},
+		{"missing value", []string{"--posted-within"}, 0, false, true},
+		{"unparseable", []string{"--posted-within", "7d"}, 0, false, true},
+		{"non-positive", []string{"--posted-within", "0h"}, 0, false, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dur, ok, err := postedWithinFrom(tt.args)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
+			}
+			if ok != tt.wantOK || dur != tt.wantDur {
+				t.Errorf("got (%v, %v), want (%v, %v)", dur, ok, tt.wantDur, tt.wantOK)
+			}
+		})
+	}
+}
+
 func TestSemanticRequested(t *testing.T) {
 	if !semanticRequested([]string{"--since", "50h", "--semantic"}) {
 		t.Error("--semantic should be detected among other args")
