@@ -16,6 +16,11 @@ import (
 type searcher interface {
 	Search(ctx context.Context, p search.SearchParams) (search.SearchResult, error)
 	SimilarJobs(ctx context.Context, id int64, limit int) ([]search.JobDocument, error)
+	// EmbedText returns a vector for text in the jobs' embedding space plus the
+	// embedder identity that produced it (used to embed a CV on upload).
+	EmbedText(ctx context.Context, key, text string) ([]float64, string, error)
+	// RecommendByVector ranks open jobs by similarity to a raw vector (the CV feed).
+	RecommendByVector(ctx context.Context, vector []float64, limit, offset int) (search.SearchResult, error)
 }
 
 // defaultSemanticRatio is 0 — pure keyword search against the always-fresh facet

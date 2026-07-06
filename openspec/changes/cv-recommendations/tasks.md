@@ -10,14 +10,14 @@
 
 ## 3. Compute the CV vector on upload
 
-- [ ] 3.1 Write a failing handler test: `PutResume` with a CV → the persisted vector + model are set via a fake embedder; on embedder/storage failure the upload still succeeds and leaves no vector (best-effort, degrade-not-error).
-- [ ] 3.2 Implement the hook in `PutResume`: after the blob is stored and text extracted (reuse `pdfText`), call `EmbedText` and persist via `SetUserResumeEmbedding`; swallow+log errors so the upload never fails on the embedding step.
+- [x] 3.1 Write a failing handler test: `PutResume` with a CV → the persisted vector + model are set via a fake embedder; on embedder/storage failure the upload still succeeds and leaves no vector (best-effort, degrade-not-error).
+- [x] 3.2 Implement the hook in `PutResume`: after the blob is stored and text extracted (reuse `pdfText`), call `EmbedText` and persist via `SetUserResumeEmbedding`; swallow+log errors so the upload never fails on the embedding step. — routed persistence through `resume.Store.SetEmbedding` (repo interface) so the hook is unit-testable; clears the vector on embed failure.
 
 ## 4. Recommendations endpoint
 
-- [ ] 4.1 Write a failing handler test (fake searcher): `GET /me/recommendations` with a fresh vector → the searcher is asked to vector-rank `jobs_semantic` and job views are returned; no/stale vector (model mismatch) → successful empty list; unauthenticated → 401.
-- [ ] 4.2 Implement a `search.Client` vector search over `jobs_semantic` (rank open jobs by a raw provided vector, `limit`/`offset`).
-- [ ] 4.3 Implement the `Recommendations` handler: read the CV vector + model, ignore it when the model does not match the current embedder identity (stale) or is absent → empty list; otherwise vector-search and return the standard envelope. Wire `GET /api/v1/me/recommendations` behind `RequireAuthOrKey`.
+- [x] 4.1 Write a failing handler test (fake searcher): `GET /me/recommendations` with a fresh vector → the searcher is asked to vector-rank `jobs_semantic` and job views are returned; no/stale vector (model mismatch) → successful empty list; unauthenticated → 401.
+- [x] 4.2 Implement a `search.Client` vector search over `jobs_semantic` (rank open jobs by a raw provided vector, `limit`/`offset`). — `RecommendByVector` (added in group 2), absent-index degrades to empty.
+- [x] 4.3 Implement the `Recommendations` handler: read the CV vector + model, ignore it when the model does not match the current embedder identity (stale) or is absent → empty list; otherwise vector-search and return the standard envelope. Wire `GET /api/v1/me/recommendations` behind `RequireAuthOrKey`.
 
 ## 5. Frontend `/my/recommendations` page
 

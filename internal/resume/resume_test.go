@@ -41,9 +41,27 @@ func (f *fakeBlobs) Delete(_ context.Context, key string) error {
 }
 
 // fakeRepo is an in-memory Repository (one pointer per user).
-type fakeRepo struct{ ptr map[int64]string }
+type fakeRepo struct {
+	ptr      map[int64]string
+	embVec   map[int64][]float64
+	embModel map[int64]string
+}
 
-func newFakeRepo() *fakeRepo { return &fakeRepo{ptr: map[int64]string{}} }
+func newFakeRepo() *fakeRepo {
+	return &fakeRepo{ptr: map[int64]string{}, embVec: map[int64][]float64{}, embModel: map[int64]string{}}
+}
+
+func (r *fakeRepo) SetEmbedding(_ context.Context, userID int64, vec []float64, model string) error {
+	r.embVec[userID], r.embModel[userID] = vec, model
+	return nil
+}
+
+func (r *fakeRepo) GetEmbedding(_ context.Context, userID int64) (db.GetUserResumeEmbeddingRow, error) {
+	return db.GetUserResumeEmbeddingRow{
+		ResumeEmbedding:      r.embVec[userID],
+		ResumeEmbeddingModel: pgtype.Text{String: r.embModel[userID], Valid: r.embModel[userID] != ""},
+	}, nil
+}
 
 func (r *fakeRepo) Get(_ context.Context, userID int64) (db.GetUserResumeRow, error) {
 	key, ok := r.ptr[userID]

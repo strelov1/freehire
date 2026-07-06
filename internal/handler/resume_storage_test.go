@@ -50,8 +50,10 @@ func (f *fakeResumeBlobs) Delete(_ context.Context, key string) error {
 // fakeResumeRepo is an in-memory résumé-pointer Repository. Set stamps a timestamp,
 // mirroring the SQL now().
 type fakeResumeRepo struct {
-	key string
-	set bool
+	key      string
+	set      bool
+	embVec   []float64
+	embModel string
 }
 
 func (r *fakeResumeRepo) Get(_ context.Context, _ int64) (db.GetUserResumeRow, error) {
@@ -72,6 +74,18 @@ func (r *fakeResumeRepo) Set(_ context.Context, _ int64, key string) error {
 func (r *fakeResumeRepo) Clear(_ context.Context, _ int64) error {
 	r.key, r.set = "", false
 	return nil
+}
+
+func (r *fakeResumeRepo) SetEmbedding(_ context.Context, _ int64, vec []float64, model string) error {
+	r.embVec, r.embModel = vec, model
+	return nil
+}
+
+func (r *fakeResumeRepo) GetEmbedding(_ context.Context, _ int64) (db.GetUserResumeEmbeddingRow, error) {
+	return db.GetUserResumeEmbeddingRow{
+		ResumeEmbedding:      r.embVec,
+		ResumeEmbeddingModel: pgtype.Text{String: r.embModel, Valid: r.embModel != ""},
+	}, nil
 }
 
 func resumeStorageApp(t *testing.T, store *resume.Store) (*fiber.App, string) {

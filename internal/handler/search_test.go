@@ -20,6 +20,15 @@ type fakeSearcher struct {
 	similarLimit int
 	similarHits  []search.JobDocument
 	similarErr   error
+	// embed-text call recording + canned result
+	gotEmbedText string
+	embedVec     []float64
+	embedModel   string
+	embedErr     error
+	// recommend-by-vector call recording + canned result
+	gotRecVec []float64
+	recRes    search.SearchResult
+	recErr    error
 }
 
 func (f *fakeSearcher) Search(_ context.Context, p search.SearchParams) (search.SearchResult, error) {
@@ -30,6 +39,16 @@ func (f *fakeSearcher) Search(_ context.Context, p search.SearchParams) (search.
 func (f *fakeSearcher) SimilarJobs(_ context.Context, _ int64, limit int) ([]search.JobDocument, error) {
 	f.similarLimit = limit
 	return f.similarHits, f.similarErr
+}
+
+func (f *fakeSearcher) EmbedText(_ context.Context, _, text string) ([]float64, string, error) {
+	f.gotEmbedText = text
+	return f.embedVec, f.embedModel, f.embedErr
+}
+
+func (f *fakeSearcher) RecommendByVector(_ context.Context, v []float64, _, _ int) (search.SearchResult, error) {
+	f.gotRecVec = v
+	return f.recRes, f.recErr
 }
 
 func searchApp(s searcher) *fiber.App {

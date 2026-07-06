@@ -2,8 +2,10 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -106,7 +108,30 @@ func (a *API) PutResume(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	a.embedResume(c.Context(), userID, up.Text)
 	return c.JSON(fiber.Map{"data": newResumeMeta(true, meta)})
+}
+
+// embedResume computes and persists the user's CV embedding through the same embedder
+// as jobs (so it shares their vector space), best-effort: any failure — no search
+// backend, embed error, or persist error — is logged and swallowed so it never breaks
+// the upload. On an embed failure the prior vector is cleared so the new CV is never
+// matched by a stale one. The scratch id is the user id.
+func (a *API) embedResume(ctx context.Context, userID int64, text string) {
+	if a.search == nil {
+		return
+	}
+	vec, model, err := a.search.EmbedText(ctx, strconv.FormatInt(userID, 10), text)
+	if err != nil {
+		log.Printf("resume embed: user %d: %v", userID, err)
+		if err := a.resume.SetEmbedding(ctx, userID, nil, ""); err != nil {
+			log.Printf("resume embed clear: user %d: %v", userID, err)
+		}
+		return
+	}
+	if err := a.resume.SetEmbedding(ctx, userID, vec, model); err != nil {
+		log.Printf("resume embed persist: user %d: %v", userID, err)
+	}
 }
 
 // GetResume reports whether the caller has a stored résumé (and when). Always 200:
