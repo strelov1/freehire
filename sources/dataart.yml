@@ -1,0 +1,5 @@
+# DataArt careers (www.dataart.team). Boardless single-company source: one fixed host with no
+# per-tenant board id, so the entry carries no board. Unlike the aggregators, the job's company
+# is this entry's `company` (DataArt), not read per posting. See internal/sources/dataart.go.
+- company: DataArt
+  provider: dataart

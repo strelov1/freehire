@@ -230,6 +230,7 @@ func All(c HTTPClient) map[string]Source {
 		NewGoogle(c),
 		NewApple(c),
 		NewLumenalta(c),
+		NewDataArt(c),
 		// RU-domestic single-company adapters (boardless, except Yandex which selects
 		// host+language by board).
 		NewYandex(c),
