@@ -21,9 +21,9 @@
 
 ## 5. Frontend `/my/recommendations` page
 
-- [ ] 5.1 Add an API client method `getRecommendations(limit, offset)`.
-- [ ] 5.2 Add the `/my/recommendations` SvelteKit route rendering the feed of job views, with a non-error empty state and an "upload your CV" prompt when the user has no CV vector.
-- [ ] 5.3 Add a signed-in navigation entry to the page.
+- [x] 5.1 Add an API client method `getRecommendations(limit, offset)`. — `api.recommendations(limit, offset)` (Slice<Job>).
+- [x] 5.2 Add the `/my/recommendations` SvelteKit route rendering the feed of job views, with a non-error empty state and an "upload your CV" prompt when the user has no CV vector. — `RecommendationsView.svelte` (Paginator + JobRow) + thin page; empty state links to `/my/profile`.
+- [x] 5.3 Add a signed-in navigation entry to the page. — `HeaderMenu.svelte` account links.
 
 ## 6. Verification
 
