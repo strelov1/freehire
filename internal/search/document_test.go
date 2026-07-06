@@ -2,6 +2,7 @@ package search
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,50 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobview"
 )
+
+func TestFromJob_RolesDerivedButIndexOnly(t *testing.T) {
+	// Composite from resolved seniority+category.
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Seniority: "senior", Category: "backend", Title: "Senior Backend Engineer"})
+	if err != nil {
+		t.Fatalf("FromJob: %v", err)
+	}
+	if !slices.Contains(doc.Roles, "senior_backend") {
+		t.Errorf("roles = %v, want to contain senior_backend", doc.Roles)
+	}
+	// Named role from the title even with an empty grid.
+	named, err := FromJob(db.Job{ID: 2, PublicSlug: "s2", Title: "Founding Engineer"})
+	if err != nil {
+		t.Fatalf("FromJob: %v", err)
+	}
+	if !slices.Contains(named.Roles, "founding_engineer") {
+		t.Errorf("roles = %v, want to contain founding_engineer", named.Roles)
+	}
+
+	// roles rides the document top level (like posted_ts) so it is filterable...
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatalf("marshal doc: %v", err)
+	}
+	var full map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &full); err != nil {
+		t.Fatalf("unmarshal doc: %v", err)
+	}
+	if _, ok := full["roles"]; !ok {
+		t.Errorf("document should carry a top-level roles field: %s", raw)
+	}
+	// ...but it must NOT be part of the public wire shape (the served jobview.Job).
+	viewRaw, err := json.Marshal(doc.Job)
+	if err != nil {
+		t.Fatalf("marshal view: %v", err)
+	}
+	var view map[string]json.RawMessage
+	if err := json.Unmarshal(viewRaw, &view); err != nil {
+		t.Fatalf("unmarshal view: %v", err)
+	}
+	if _, ok := view["roles"]; ok {
+		t.Errorf("roles leaked into the public job wire shape: %s", viewRaw)
+	}
+}
 
 func TestFromJob_DocumentFlattensIDAndViewToTopLevelJSON(t *testing.T) {
 	// Meilisearch reads the primary key "id" from the top level of the document,

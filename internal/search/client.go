@@ -498,6 +498,9 @@ func facetSettings() *meilisearch.Settings {
 			"id",
 			"source", "company_slug",
 			"work_mode", "regions", "countries", "cities", "skills", "collections",
+			// roles is derived at index time (roletag) and served top-level like the
+			// other bare facets, so it filters on the plain attribute, not a dot path.
+			"roles",
 			"enrichment.employment_type", "enrichment.education_level", "enrichment.seniority",
 			"enrichment.category", "enrichment.domains",
 			"enrichment.company_type", "enrichment.company_size", "enrichment.visa_sponsorship",

@@ -5,6 +5,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobview"
+	"github.com/strelov1/freehire/internal/roletag"
 )
 
 // maxIndexedDescriptionRunes caps the description text stored in the search
@@ -35,6 +36,11 @@ type JobDocument struct {
 	// (Meili range operators need a number, not a string); it is declared on the
 	// document, not on jobview.Job, so it is filterable but never served to clients.
 	PostedTS int64 `json:"posted_ts"`
+	// Roles are the job's natural role slugs derived at index time by roletag from
+	// its seniority, category, and title. Like PostedTS, Roles is declared on the
+	// document (not jobview.Job), so it backs the `roles` facet but is never part
+	// of the served public wire shape.
+	Roles []string `json:"roles"`
 }
 
 // FromJob maps a database job row to its index document. An empty or absent
@@ -51,7 +57,7 @@ func FromJob(j db.Job) (JobDocument, error) {
 	// the search document — the detail endpoint serves the full description from
 	// its own jobview.FromRow, unaffected by this local copy.
 	view.Description = truncateRunes(view.Description, maxIndexedDescriptionRunes)
-	doc := JobDocument{ID: j.ID, Job: view}
+	doc := JobDocument{ID: j.ID, Job: view, Roles: roletag.Derive(j.Seniority, j.Category, j.Title)}
 	if eff := jobview.EffectivePostedAt(j.PostedAt, j.CreatedAt); eff.Valid {
 		doc.PostedTS = eff.Time.Unix()
 	}

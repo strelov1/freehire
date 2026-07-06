@@ -56,10 +56,35 @@ func TestJobFacets_PassesFiltersAndRequestsFacets(t *testing.T) {
 	}
 	// The handler must request a distribution for the facetable attributes,
 	// including the boolean and numeric-stat ones.
-	for _, want := range []string{"regions", "enrichment.seniority", "enrichment.visa_sponsorship", "enrichment.salary_min"} {
+	for _, want := range []string{"regions", "roles", "enrichment.seniority", "enrichment.visa_sponsorship", "enrichment.salary_min"} {
 		if !contains(fake.got.Facets, want) {
 			t.Errorf("Facets requested = %v, missing %q", fake.got.Facets, want)
 		}
+	}
+}
+
+func TestJobFacets_RoleFilterAndDistribution(t *testing.T) {
+	// The public `role` param filters on the bare `roles` attribute, and a `roles`
+	// distribution returned by the backend is re-keyed to the public `role` param.
+	fake := &fakeFacetCounter{res: search.FacetResult{
+		Total:  5,
+		Facets: map[string]map[string]int64{"roles": {"senior_backend": 3, "founding_engineer": 2}},
+	}}
+	app := facetsApp(fake)
+
+	_, body := doGet(t, app, "/jobs/facets?role=senior_backend")
+
+	groups, ok := fake.got.Filter.([][]string)
+	if !ok || !filterHas(groups, `roles = "senior_backend"`) {
+		t.Errorf("Filter missing role facet: %#v", fake.got.Filter)
+	}
+	facets := body["data"].(map[string]any)["facets"].(map[string]any)
+	role, present := facets["role"].(map[string]any)
+	if !present {
+		t.Fatalf("roles distribution should be re-keyed to public param role, got %v", facets)
+	}
+	if role["senior_backend"].(float64) != 3 {
+		t.Errorf("facets.role.senior_backend = %v, want 3", role["senior_backend"])
 	}
 }
 

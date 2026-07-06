@@ -16,6 +16,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/location"
+	"github.com/strelov1/freehire/internal/roletag"
 	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/userjob"
 )
@@ -208,6 +209,9 @@ func genVocab() string {
 	// Country→region grouping for the hierarchical location filter, derived from the
 	// location dictionary.
 	b.WriteString(emitMap("CountryRegionMap", "COUNTRY_REGION_MAP", location.CountryToRegion()))
+	// Role slug→label catalog for the role picker — the source of truth for role
+	// labels, derived from the roletag dictionary (composite + named roles).
+	b.WriteString(emitMap("RoleLabels", "ROLE_LABELS", roletag.Catalog()))
 	return b.String()
 }
 

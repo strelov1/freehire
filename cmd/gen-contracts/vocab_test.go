@@ -1,6 +1,21 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestGenVocabEmitsRoleLabels(t *testing.T) {
+	got := genVocab()
+	if !strings.Contains(got, "export const ROLE_LABELS = {") {
+		t.Errorf("genVocab() missing ROLE_LABELS map:\n%s", got)
+	}
+	// The catalog is the source of truth for picker labels — a named role must
+	// carry its human label.
+	if !strings.Contains(got, "'founding_engineer': 'Founding Engineer'") {
+		t.Errorf("genVocab() ROLE_LABELS missing founding_engineer label")
+	}
+}
 
 func TestEmitVocab(t *testing.T) {
 	got := emitVocab("Seniority", "SENIORITY_VALUES", []string{"junior", "senior"})

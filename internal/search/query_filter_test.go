@@ -81,6 +81,27 @@ func TestFilterFromValues_Collections(t *testing.T) {
 	}
 }
 
+func TestFilterFromValues_Role(t *testing.T) {
+	// The role facet maps the public `role` param to the bare `roles` attribute
+	// and behaves exactly like skills: repeated values OR within the facet.
+	got := normalizeGroups(t, FilterFromValues(vals("role=senior_backend&role=lead_frontend")))
+	want := [][]string{{`roles = "lead_frontend"`, `roles = "senior_backend"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("role OR: got %v, want %v", got, want)
+	}
+
+	// role_exclude is its own AND group; role ANDs with a non-role facet.
+	got = normalizeGroups(t, FilterFromValues(vals("role=founding_engineer&role_exclude=fractional_cto&regions=eu")))
+	want = [][]string{
+		{`regions = "eu"`},
+		{`roles != "fractional_cto"`},
+		{`roles = "founding_engineer"`},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("role exclude+AND: got %v, want %v", got, want)
+	}
+}
+
 func TestFilterFromValues_AndMode(t *testing.T) {
 	// skills_mode=and → each value its own AND group (a job must have both).
 	got := normalizeGroups(t, FilterFromValues(vals("skills=go&skills=rust&skills_mode=and")))

@@ -39,6 +39,15 @@ func TestPostedTSIsFilterableNotSortable(t *testing.T) {
 	}
 }
 
+func TestRolesIsFilterable(t *testing.T) {
+	// The role facet filters on a bare top-level `roles` attribute (derived at
+	// index time), so it must be declared filterable for `role=` to take effect.
+	s := facetSettings()
+	if !contains(s.FilterableAttributes, "roles") {
+		t.Errorf("roles must be filterable for the role facet, got %v", s.FilterableAttributes)
+	}
+}
+
 func TestIDIsFilterable(t *testing.T) {
 	// The swipe deck excludes the caller's already-judged jobs via an
 	// `id NOT IN [...]` filter, which requires id to be a filterable attribute.
