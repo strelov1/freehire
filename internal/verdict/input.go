@@ -13,7 +13,13 @@ type Input struct {
 	UncoveredTotal  int64
 	UncoveredSkills map[string]int64
 	RoleSkills      map[string]int64
-	Declared        []string
-	Body            []string
-	All             []string // declared ∪ body — the CV's full parsed skill set (for bundles)
+	// SkilledTotal is the role's open vacancies that list at least one tagged skill.
+	// Skill frequency (and the must-have flag it drives) is measured against it, not
+	// Total: a posting the tagger left skill-less is missing data, not evidence a
+	// skill is absent, so counting it in the denominator deflates every frequency.
+	// Zero means "not supplied" and frequency falls back to Total (see addBreakdown).
+	SkilledTotal int64
+	Declared     []string
+	Body         []string
+	All          []string // declared ∪ body — the CV's full parsed skill set (for bundles)
 }

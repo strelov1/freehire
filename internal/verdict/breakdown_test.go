@@ -73,6 +73,47 @@ func TestCompute_MustHaveCoverage(t *testing.T) {
 	}
 }
 
+func TestCompute_FrequencyUsesSkilledTotalWhenSet(t *testing.T) {
+	// Frequency is measured against skill-bearing vacancies, not all vacancies:
+	// react is tagged in 350 of 1000 role vacancies but 350 of the 500 that list
+	// any skill → 70%, clearing the must-have threshold that a raw 35% would miss.
+	// This removes the deflation caused by postings the tagger left skill-less.
+	v := Compute(Input{
+		Total:        1000,
+		SkilledTotal: 500,
+		RoleSkills:   map[string]int64{"react": 350},
+	})
+	r, ok := rowByName(v.Skills, "react")
+	if !ok {
+		t.Fatal("no skill row for react")
+	}
+	if r.MarketFrequency != 70 {
+		t.Errorf("react market_frequency = %d, want 70 (350/500)", r.MarketFrequency)
+	}
+	if !r.MustHave {
+		t.Error("react must_have = false, want true (70% ≥ threshold)")
+	}
+	if v.MustHaveTotal != 1 {
+		t.Errorf("MustHaveTotal = %d, want 1", v.MustHaveTotal)
+	}
+}
+
+func TestCompute_FrequencyFallsBackToTotalWithoutSkilledTotal(t *testing.T) {
+	// No SkilledTotal (0) → frequency falls back to the all-vacancy Total, so
+	// behaviour is unchanged for callers that don't supply it.
+	v := Compute(Input{
+		Total:      1000,
+		RoleSkills: map[string]int64{"react": 350},
+	})
+	r, _ := rowByName(v.Skills, "react")
+	if r.MarketFrequency != 35 {
+		t.Errorf("react market_frequency = %d, want 35 (350/1000 fallback)", r.MarketFrequency)
+	}
+	if r.MustHave {
+		t.Error("react must_have = true, want false (35% < threshold under fallback)")
+	}
+}
+
 func TestCompute_StackMatchBreadth(t *testing.T) {
 	// a strong, b hidden, c & d missing → 2 of 4 held → 50%.
 	v := Compute(Input{

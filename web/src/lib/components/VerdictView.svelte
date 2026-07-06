@@ -60,9 +60,20 @@
   <!-- Market-anchored stats -->
   <div class="grid gap-3 sm:grid-cols-3">
     <div class="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">
-      <span class="text-3xl font-semibold tabular-nums leading-none">
-        {verdict.must_have_covered}<span class="text-lg text-muted-foreground">/{verdict.must_have_total}</span>
-      </span>
+      {#if verdict.must_have_total > 0}
+        <span class="text-3xl font-semibold tabular-nums leading-none">
+          {verdict.must_have_covered}<span class="text-lg text-muted-foreground">/{verdict.must_have_total}</span>
+        </span>
+      {:else}
+        <!-- No skill clears the must-have frequency threshold for this role, so the
+             covered/total ratio is undefined — show a dash instead of a broken "0/0". -->
+        <span
+          class="text-3xl font-semibold leading-none text-muted-foreground"
+          title="No single skill appears in the majority of this role's vacancies, so there's no must-have to measure."
+        >
+          —
+        </span>
+      {/if}
       <span class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Must-have skills covered</span>
     </div>
     <div class="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">

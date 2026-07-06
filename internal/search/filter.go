@@ -105,6 +105,17 @@ func AndNotSkills(base any, skills []string) any {
 	return Filter(groups...)
 }
 
+// AndSkillsPresent narrows a base filter (as built by FilterFromValues) to
+// documents whose `skills` array is non-empty. It backs the verdict's
+// skill-bearing count: skill frequency is measured against vacancies that list
+// at least one tagged skill, not the whole role, so postings the tagger left
+// skill-less don't deflate every frequency.
+func AndSkillsPresent(base any) any {
+	groups, _ := base.([][]string)
+	groups = append(groups, []string{IsNotEmpty("skills")})
+	return Filter(groups...)
+}
+
 // quote wraps a value in a Meilisearch string literal, backslash-escaping the
 // double-quote and backslash characters.
 func quote(value string) string {

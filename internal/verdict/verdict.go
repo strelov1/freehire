@@ -93,9 +93,16 @@ func addBreakdown(v *Verdict, in Input) {
 	declared := toSet(in.Declared)
 	body := toSet(in.Body)
 
+	// Measure skill frequency against skill-bearing vacancies, falling back to the
+	// all-vacancy Total when the caller doesn't supply SkilledTotal (see Input).
+	freqTotal := in.SkilledTotal
+	if freqTotal <= 0 {
+		freqTotal = in.Total
+	}
+
 	held := 0 // top skills the CV holds (strong or hidden — adjacent does NOT count)
 	for _, name := range topRoleSkills(in.RoleSkills) {
-		freq := percent(in.RoleSkills[name], in.Total)
+		freq := percent(in.RoleSkills[name], freqTotal)
 		mustHave := freq >= MustHavePct
 		status, closeSkill := classify(name, declared, body)
 		v.Skills = append(v.Skills, SkillRow{

@@ -62,9 +62,19 @@ func (a *API) computeCoverage(c *fiber.Ctx, userID int64, profile db.UserProfile
 	if err != nil {
 		return verdict.Verdict{}, err
 	}
+	// Skill-bearing total: the role's vacancies that list at least one tagged skill.
+	// Skill frequency (and the must-have flag) is measured against this, not the raw
+	// role total, so postings the tagger left skill-less don't deflate frequencies.
+	skilled, err := a.facets.FacetCounts(c.Context(), search.FacetParams{
+		Filter: search.AndSkillsPresent(roleFilter),
+	})
+	if err != nil {
+		return verdict.Verdict{}, err
+	}
 	declared, body, all := a.cvSkillSets(c, userID)
 	return verdict.Compute(verdict.Input{
 		Total:           role.Total,
+		SkilledTotal:    skilled.Total,
 		UncoveredTotal:  uncovered.Total,
 		UncoveredSkills: uncovered.Facets["skills"],
 		RoleSkills:      role.Facets["skills"],
