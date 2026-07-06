@@ -4304,3 +4304,7 @@
   board: world-view-enterprises-inc.
 - company: Worldscape
   board: worldscape-technology
+# Zerion (web3 wallet, zerion.io). Live Lever board, currently 0 open postings — ingests
+# nothing until they post; the eastern-roots `zerion` slug tags it once it has jobs.
+- company: Zerion
+  board: zerion
