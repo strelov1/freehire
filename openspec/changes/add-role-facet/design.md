@@ -47,10 +47,10 @@ retire the old facets, promoting to a column is a clean follow-up.
 **Derivation rules (`internal/roletag`).** `Derive(seniority, category, title)
 []string`:
 - the **bare category role** `{category}` whenever the category resolves (any
-  `enrich.CategoryValues` except `other`) — this is the dominant case: a sample
-  of ~9.6k live prod titles showed only 32% carry a grade, so requiring a
-  seniority would leave most jobs role-less. Bare category alone lifts coverage
-  of that sample from 32% → 85%;
+  `enrich.CategoryValues` except `other`) — this is the dominant case: on the
+  live prod catalogue only ~18% of open jobs carry a seniority, so requiring one
+  (as the composite does) leaves most jobs role-less. Bare category roughly
+  doubles role coverage, up to the ceiling set by `classify`;
 - the composite `{seniority}_{category}` **in addition** when the seniority also
   resolves — the graded role layered on the bare one;
 - at most one named-role alias match from the title via whole-word matching
@@ -85,13 +85,16 @@ keep working; a post-deploy reindex lights up the new facet.
   Backend job is reachable via `role=senior_backend` and via
   `seniority=senior`+`category=backend`. That's the intended transition state,
   not a bug.
-- **Role facet is now the primary role axis.** With bare category roles, the
-  `roles` facet covers ~85% of the catalogue and subsumes the category facet at
-  the any-seniority level (a bare "Data Scientist" → `data_science`). It stays
-  additive (old seniority/category controls remain), but the picker is now
-  self-sufficient rather than a niche layer — matching the original goal. "Any
-  seniority across all categories" is still served by the retained seniority
-  facet.
+- **Role facet is the primary role axis, bounded by `classify`.** With bare
+  category roles the `roles` facet subsumes the category facet at the
+  any-seniority level (a bare "Data Scientist" → `data_science`) and stays
+  additive. But its coverage ceiling is `classify`'s category resolution: on the
+  live catalogue only ~30% of open jobs (899k / 2.98M) get a category, so the
+  role facet tags roughly a third of jobs, not most of them. Raising that further
+  is a `classify` dictionary-expansion effort (the title mining feeds it), not a
+  `roletag` change. (An earlier "85%" figure was a stratified-sampling artifact —
+  the sample was drawn via `category=` filters, so it was categorized by
+  construction; corrected here.)
 - **Reindex dependency.** The facet is empty until the post-deploy reindex
   completes; the old controls cover the gap. Standard "dictionary change →
   reindex" caveat.

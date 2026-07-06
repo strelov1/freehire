@@ -14,9 +14,10 @@ familiar roles directly and get precise results.
   `skilltag`) that derives a job's `roles []string` from its `(seniority,
   category, title)`:
   - the **bare category role** `{category}` (e.g. `backend`, `data_science`)
-    whenever the category resolves — the dominant case (mining ~9.6k live prod
-    titles showed only 32% carry a grade; bare category lifts role coverage of
-    that sample to 85%);
+    whenever the category resolves — the dominant case (only ~18% of live prod
+    jobs carry a seniority, so the composite's both-axes rule left most jobs
+    role-less; bare category roughly doubles coverage, up to `classify`'s ~30%
+    category-resolution ceiling);
   - the composite `{seniority}_{category}` (e.g. `senior_backend`) in addition
     when the seniority also resolves;
   - named-role alias matches from the title for roles that don't fit the grid — a
