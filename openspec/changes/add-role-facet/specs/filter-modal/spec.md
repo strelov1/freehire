@@ -7,9 +7,9 @@ more natural roles from the derived `role` facet. The control SHALL be
 count-driven (dynamic): its options come from the live facet distribution,
 ordered busiest-first, with a facet-local typeahead for high cardinality, reusing
 the same dynamic facet-section path as the `skills` control. Each role SHALL
-render its catalog label (not the raw slug) and be grouped by its catalog group.
-The control SHALL support per-facet Exclude and an AND/OR mode, consistent with
-the other high-cardinality facets. The Role control SHALL be **additive**: the
+render its catalog label (not the raw slug). The control SHALL support per-facet
+Exclude and an AND/OR mode, consistent with the other high-cardinality facets.
+The Role control SHALL be **additive**: the
 existing seniority and specialization controls remain available and unchanged in
 this change.
 

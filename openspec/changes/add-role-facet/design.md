@@ -50,7 +50,8 @@ retire the old facets, promoting to a column is a clean follow-up.
 - named-role alias matches from the title via whole-word matching
   (`wordmatch.Contains`, unicode boundary — same as `classify`), for roles that
   don't fit the grid;
-- dedupe; never guess. The package also exports the catalog (slug→label,group).
+- dedupe; never guess. The package also exports the catalog (slug → label). No
+  display group — the picker is a flat busiest-first typeahead like `skills`.
 
 **Catalog is the source of truth, emitted to contracts.** `roletag` owns the
 canonical list (composite labels like "Senior Backend Engineer" are generated

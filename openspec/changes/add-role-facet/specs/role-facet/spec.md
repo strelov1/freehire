@@ -67,22 +67,23 @@ read endpoints.
 
 ### Requirement: The role catalog is the source of truth for picker labels
 
-`roletag` SHALL expose a curated role catalog: for each canonical role slug, a
-human label and a display group. `cmd/gen-contracts` SHALL emit this catalog
-(slug, label, group) into the web contracts, so the frontend renders role labels
-and grouping from the generated catalog rather than a hand-maintained list. Every
-slug `roletag` can derive SHALL be present in the catalog.
+`roletag` SHALL expose a curated role catalog mapping each canonical role slug to
+a human label (e.g. `senior_backend` → "Senior Backend Engineer",
+`founding_engineer` → "Founding Engineer"). `cmd/gen-contracts` SHALL emit this
+catalog (slug → label) into the web contracts, so the frontend renders role
+labels from the generated catalog rather than a hand-maintained list or the raw
+slug. Every slug `roletag` can derive SHALL be present in the catalog.
 
 #### Scenario: The catalog is emitted to the web contracts
 
 - **WHEN** `cmd/gen-contracts` runs
-- **THEN** the generated web contracts include the role catalog with each role's
-  slug, label, and group
+- **THEN** the generated web contracts include the role catalog mapping each
+  role's slug to its label
 
 #### Scenario: Every derivable role has a catalog entry
 
 - **WHEN** `roletag` can derive a role slug (composite or named)
-- **THEN** that slug has a corresponding label and group in the catalog
+- **THEN** that slug has a corresponding label in the catalog
 
 ### Requirement: Roles are served with live facet counts
 

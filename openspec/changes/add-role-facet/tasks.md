@@ -1,9 +1,10 @@
 ## 1. Role dictionary (`internal/roletag`)
 
-- [ ] 1.1 Define the role catalog: canonical slug → {label, group} for composite
-  roles (generated from the seniority×category label pairs) and curated named
-  roles (`founding_engineer`, `fractional_cto`, `cloud_solutions_engineer`,
-  `staff_engineer`, plus the obvious first batch). Export it for reuse.
+- [ ] 1.1 Define the role catalog: canonical slug → label for composite roles
+  (generated from a seniority-label map × a category role-noun map, e.g.
+  `senior_backend` → "Senior Backend Engineer") and curated named roles
+  (`founding_engineer`, `fractional_cto`, `cloud_solutions_engineer`,
+  `solutions_engineer`, `staff_engineer`, `technical_lead`). Export it for reuse.
 - [ ] 1.2 Implement `Derive(seniority, category, title) []string`: composite
   `{seniority}_{category}` only when both non-empty; named-role whole-word alias
   matches from the title (`wordmatch.Contains`, unicode boundary); dedupe; never
@@ -35,16 +36,17 @@
 
 ## 4. Contracts codegen (`cmd/gen-contracts`)
 
-- [ ] 4.1 Emit the role catalog (slug/label/group) from `roletag` into the web
-  contracts (`web/src/lib/contracts.ts`), matching the `CATEGORY_VALUES` pattern.
+- [ ] 4.1 Emit the role catalog (slug → label map) from `roletag` into the web
+  contracts (`web/src/lib/contracts.ts`), matching the `emitMap` pattern used for
+  `COUNTRY_REGION_MAP`.
 - [ ] 4.2 Regenerate contracts and verify the generated role catalog is present
   and well-formed.
 
 ## 5. Frontend role picker (`web/`)
 
 - [ ] 5.1 Add a `role` entry to `FACETS` (`web/src/lib/facets.ts`): control
-  `select`, `dynamic:true`, `hasAndOr`, excludable; labels/grouping from the
-  generated catalog (via `labels.ts` if overrides are needed).
+  `select`, `dynamic:true`, `hasAndOr`, excludable; labels from the generated
+  catalog map (flat, busiest-first — no grouping, same as `skills`).
 - [ ] 5.2 Add the Role control to the ROLE rail section (`filterSections.ts` /
   `FilterModal.svelte`) alongside seniority and specialization; wire it to the
   live `counts.facets.role` path (reuse `FacetSection`).
