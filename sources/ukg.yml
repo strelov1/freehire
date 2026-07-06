@@ -6081,3 +6081,8 @@
   board: yoshinoya.rec.pro.ukg.net/yos1000yosh/bdb01443-3761-41d4-8820-dc825c271823
 - company: Zynex
   board: zynexmed.rec.pro.ukg.net/zyn1500zyxm/95f96ec9-5d7c-4c1f-b2d7-44b718da86ad
+# Plesk hires under its parent WebPros (Plesk/cPanel/WHMCS) on this shared UKG board. Validated
+# live (endpoint 200) but currently 0 open postings — the lone exception to the ">0" rule above;
+# ingests nothing until WebPros posts. Labelled Plesk so the eastern-roots `plesk` slug tags it.
+- company: Plesk
+  board: webpros.rec.pro.ukg.net/WEB1501WEBP/1c6cf7c0-2d14-4575-906b-78213c1ced24
