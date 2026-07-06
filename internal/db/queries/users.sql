@@ -37,10 +37,26 @@ SET resume_object_key = $2, resume_uploaded_at = now(), resume_ats_analysis = NU
 WHERE id = $1;
 
 -- name: ClearUserResume :exec
--- Clear the user's résumé pointer (after deleting the object from storage) and any
--- cached ATS review.
+-- Clear the user's résumé pointer (after deleting the object from storage), any
+-- cached ATS review, and the derived CV embedding (no CV → no recommendations).
 UPDATE users
-SET resume_object_key = NULL, resume_uploaded_at = NULL, resume_ats_analysis = NULL
+SET resume_object_key = NULL, resume_uploaded_at = NULL, resume_ats_analysis = NULL,
+    resume_embedding = NULL, resume_embedding_model = NULL
+WHERE id = $1;
+
+-- name: SetUserResumeEmbedding :exec
+-- Persist the user's derived CV embedding vector plus the identity of the embedder
+-- that produced it (so a model change can mark the vector stale). Never the raw CV text.
+UPDATE users
+SET resume_embedding = $2, resume_embedding_model = $3
+WHERE id = $1;
+
+-- name: GetUserResumeEmbedding :one
+-- The user's persisted CV embedding and the embedder identity that produced it, or
+-- NULLs when none is stored. The caller ignores a vector whose model no longer matches
+-- the current embedder (stale) — see the cv-recommendations change.
+SELECT resume_embedding, resume_embedding_model
+FROM users
 WHERE id = $1;
 
 -- name: GetUserATSAnalysis :one

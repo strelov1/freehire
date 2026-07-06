@@ -39,6 +39,13 @@ const (
 	// search needs no external API key. Multilingual + CPU-friendly.
 	embedderModel = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
+	// resumeVectorIndexUID is the scratch index EmbedText round-trips a CV through to
+	// obtain a vector in the jobs' space: the in-engine embedder exposes no direct
+	// "embed this text" call, so the text is indexed here (with the SAME embedder as
+	// the semantic index), its vector read back, and the doc deleted. Never a
+	// persistent store of CV text — see EmbedText.
+	resumeVectorIndexUID = "resume_vectors"
+
 	// maxTotalHits caps how high a search counts its results: below it,
 	// estimatedTotalHits is the true filtered total, so it is set well above the
 	// index size to keep the reported count honest. It is NOT the pagination guard
@@ -453,6 +460,129 @@ func (c *Client) SimilarJobs(ctx context.Context, id int64, limit int) ([]JobDoc
 	return out, nil
 }
 
+// EmbedText embeds text through the SAME embedder that embeds jobs and returns the
+// vector plus the embedder identity that produced it. Meilisearch's in-engine embedder
+// has no "embed this text" endpoint, so the vector is obtained by round-tripping: the
+// text is indexed as one scratch document (in resumeVectorIndexUID, which carries an
+// identical embedder), its vector is read back, and the document is deleted so no
+// source text lingers in the engine. key is a caller-unique scratch id (e.g. the user
+// id) so concurrent callers do not collide. The text goes in the same field the jobs
+// document template reads, so the embedding pipeline — and thus the vector space — is
+// identical to the jobs'.
+func (c *Client) EmbedText(ctx context.Context, key, text string) ([]float64, string, error) {
+	idx := c.manager.Index(resumeVectorIndexUID)
+	if err := c.ensure(ctx, idx, resumeVectorIndexUID, resumeVectorSettings()); err != nil {
+		return nil, "", err
+	}
+	pk := primaryKey
+	doc := map[string]any{primaryKey: key, "description": text}
+	task, err := idx.UpdateDocumentsWithContext(ctx, []map[string]any{doc}, &meilisearch.DocumentOptions{PrimaryKey: &pk})
+	if err != nil {
+		return nil, "", fmt.Errorf("search: embed upsert: %w", err)
+	}
+	if err := c.awaitTask(ctx, idx, task.TaskUID); err != nil {
+		return nil, "", err
+	}
+
+	vec, readErr := c.readDocumentVector(ctx, resumeVectorIndexUID, key)
+	// Always delete the scratch doc, even on read failure, so no CV text persists.
+	if delTask, err := idx.DeleteDocumentWithContext(ctx, key, nil); err == nil {
+		_ = c.awaitTask(ctx, idx, delTask.TaskUID)
+	}
+	if readErr != nil {
+		return nil, "", readErr
+	}
+	return vec, embedderModel, nil
+}
+
+// readDocumentVector fetches one document's embedding via retrieveVectors, using a raw
+// request (the pinned SDK's typed document fetch does not surface _vectors).
+func (c *Client) readDocumentVector(ctx context.Context, uid, key string) ([]float64, error) {
+	u := fmt.Sprintf("%s/indexes/%s/documents/%s?retrieveVectors=true", c.url, uid, key)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, fmt.Errorf("search: vector request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.key)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("search: read vector: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("search: read vector: unexpected status %d", resp.StatusCode)
+	}
+	var doc struct {
+		Vectors map[string]json.RawMessage `json:"_vectors"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&doc); err != nil {
+		return nil, fmt.Errorf("search: decode vector: %w", err)
+	}
+	raw, ok := doc.Vectors[embedderName]
+	if !ok {
+		return nil, fmt.Errorf("search: document has no %q embedding", embedderName)
+	}
+	return decodeEmbedding(raw)
+}
+
+// decodeEmbedding pulls a single vector out of a Meili _vectors.<name> payload,
+// tolerating both the object form ({"embeddings": ..., "regenerate": ...}) and a bare
+// array, and both an array-of-vectors and a single vector.
+func decodeEmbedding(raw json.RawMessage) ([]float64, error) {
+	payload := raw
+	var obj struct {
+		Embeddings json.RawMessage `json:"embeddings"`
+	}
+	if err := json.Unmarshal(raw, &obj); err == nil && len(obj.Embeddings) > 0 {
+		payload = obj.Embeddings
+	}
+	var multi [][]float64
+	if err := json.Unmarshal(payload, &multi); err == nil && len(multi) > 0 {
+		return multi[0], nil
+	}
+	var single []float64
+	if err := json.Unmarshal(payload, &single); err == nil && len(single) > 0 {
+		return single, nil
+	}
+	return nil, fmt.Errorf("search: empty embedding")
+}
+
+// RecommendByVector ranks open jobs in the semantic index by similarity to a raw
+// vector (the caller's persisted CV embedding), the shared ranking rules breaking
+// ties toward fresher jobs. An empty vector or an absent semantic index yields no
+// results — the caller treats "no usable CV vector" as an empty feed, not an error.
+func (c *Client) RecommendByVector(ctx context.Context, vector []float64, limit, offset int) (SearchResult, error) {
+	if len(vector) == 0 {
+		return SearchResult{}, nil
+	}
+	vf := make([]float32, len(vector))
+	for i, v := range vector {
+		vf[i] = float32(v)
+	}
+	resp, err := c.semantic.SearchWithContext(ctx, "", &meilisearch.SearchRequest{
+		Limit:  int64(limit),
+		Offset: int64(offset),
+		Vector: vf,
+		Hybrid: &meilisearch.SearchRequestHybrid{Embedder: embedderName, SemanticRatio: 1},
+	})
+	if err != nil {
+		var meiliErr *meilisearch.Error
+		if errors.As(err, &meiliErr) && meiliErr.MeilisearchApiError.Code == semanticIndexMissingCode {
+			return SearchResult{}, nil
+		}
+		return SearchResult{}, fmt.Errorf("search: recommend: %w", err)
+	}
+	var hits []JobDocument
+	if err := resp.Hits.DecodeInto(&hits); err != nil {
+		return SearchResult{}, fmt.Errorf("search: decode recommend hits: %w", err)
+	}
+	return SearchResult{Hits: hits, Total: resp.EstimatedTotalHits}, nil
+}
+
+// CurrentEmbedderModel is the identity of the embedder currently embedding jobs.
+// Persisted alongside a CV vector so a model change marks the vector stale.
+func CurrentEmbedderModel() string { return embedderModel }
+
 // awaitTask blocks until a Meilisearch task settles and reports a failed task as
 // an error.
 func (c *Client) awaitTask(ctx context.Context, idx meilisearch.IndexManager, taskUID int64) error {
@@ -549,4 +679,12 @@ func semanticSettings() *meilisearch.Settings {
 		},
 	}
 	return s
+}
+
+// resumeVectorSettings configures the EmbedText scratch index with ONLY the semantic
+// index's embedder — same source, model, and document template — so a CV embedded
+// here lands in the exact same vector space as the jobs. No facets/filters: the
+// index holds one transient document at a time and is never searched.
+func resumeVectorSettings() *meilisearch.Settings {
+	return &meilisearch.Settings{Embedders: semanticSettings().Embedders}
 }

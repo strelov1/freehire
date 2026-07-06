@@ -13,12 +13,13 @@ import (
 
 const clearUserResume = `-- name: ClearUserResume :exec
 UPDATE users
-SET resume_object_key = NULL, resume_uploaded_at = NULL, resume_ats_analysis = NULL
+SET resume_object_key = NULL, resume_uploaded_at = NULL, resume_ats_analysis = NULL,
+    resume_embedding = NULL, resume_embedding_model = NULL
 WHERE id = $1
 `
 
-// Clear the user's résumé pointer (after deleting the object from storage) and any
-// cached ATS review.
+// Clear the user's résumé pointer (after deleting the object from storage), any
+// cached ATS review, and the derived CV embedding (no CV → no recommendations).
 func (q *Queries) ClearUserResume(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, clearUserResume, id)
 	return err
@@ -149,6 +150,27 @@ func (q *Queries) GetUserResume(ctx context.Context, id int64) (GetUserResumeRow
 	return i, err
 }
 
+const getUserResumeEmbedding = `-- name: GetUserResumeEmbedding :one
+SELECT resume_embedding, resume_embedding_model
+FROM users
+WHERE id = $1
+`
+
+type GetUserResumeEmbeddingRow struct {
+	ResumeEmbedding      []float64   `json:"resume_embedding"`
+	ResumeEmbeddingModel pgtype.Text `json:"resume_embedding_model"`
+}
+
+// The user's persisted CV embedding and the embedder identity that produced it, or
+// NULLs when none is stored. The caller ignores a vector whose model no longer matches
+// the current embedder (stale) — see the cv-recommendations change.
+func (q *Queries) GetUserResumeEmbedding(ctx context.Context, id int64) (GetUserResumeEmbeddingRow, error) {
+	row := q.db.QueryRow(ctx, getUserResumeEmbedding, id)
+	var i GetUserResumeEmbeddingRow
+	err := row.Scan(&i.ResumeEmbedding, &i.ResumeEmbeddingModel)
+	return i, err
+}
+
 const getUserRole = `-- name: GetUserRole :one
 SELECT role
 FROM users
@@ -198,5 +220,24 @@ type SetUserResumeParams struct {
 // Also clears any cached ATS review so a new CV is never scored with a stale one.
 func (q *Queries) SetUserResume(ctx context.Context, arg SetUserResumeParams) error {
 	_, err := q.db.Exec(ctx, setUserResume, arg.ID, arg.ResumeObjectKey)
+	return err
+}
+
+const setUserResumeEmbedding = `-- name: SetUserResumeEmbedding :exec
+UPDATE users
+SET resume_embedding = $2, resume_embedding_model = $3
+WHERE id = $1
+`
+
+type SetUserResumeEmbeddingParams struct {
+	ID                   int64       `json:"id"`
+	ResumeEmbedding      []float64   `json:"resume_embedding"`
+	ResumeEmbeddingModel pgtype.Text `json:"resume_embedding_model"`
+}
+
+// Persist the user's derived CV embedding vector plus the identity of the embedder
+// that produced it (so a model change can mark the vector stale). Never the raw CV text.
+func (q *Queries) SetUserResumeEmbedding(ctx context.Context, arg SetUserResumeEmbeddingParams) error {
+	_, err := q.db.Exec(ctx, setUserResumeEmbedding, arg.ID, arg.ResumeEmbedding, arg.ResumeEmbeddingModel)
 	return err
 }

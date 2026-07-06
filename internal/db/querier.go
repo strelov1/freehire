@@ -45,8 +45,8 @@ type Querier interface {
 	// affected row count: 1 for an owned row (whether or not it was shared — unshare is an
 	// idempotent no-op when already private), 0 when missing or not the caller's (→ 404).
 	ClearSavedSearchPublicSlug(ctx context.Context, arg ClearSavedSearchPublicSlugParams) (int64, error)
-	// Clear the user's résumé pointer (after deleting the object from storage) and any
-	// cached ATS review.
+	// Clear the user's résumé pointer (after deleting the object from storage), any
+	// cached ATS review, and the derived CV embedding (no CV → no recommendations).
 	ClearUserResume(ctx context.Context, id int64) error
 	// Soft-close one job now (see job-lifecycle): a moderator resolving a report with
 	// close_job=true. The third writer of closed_at, alongside the ingest sweep and the
@@ -237,6 +237,10 @@ type Querier interface {
 	// The authenticated user's résumé pointer (object key + upload time), or NULLs when
 	// no résumé is stored. The blob lives in S3 under the key; this is just the pointer.
 	GetUserResume(ctx context.Context, id int64) (GetUserResumeRow, error)
+	// The user's persisted CV embedding and the embedder identity that produced it, or
+	// NULLs when none is stored. The caller ignores a vector whose model no longer matches
+	// the current embedder (stale) — see the cv-recommendations change.
+	GetUserResumeEmbedding(ctx context.Context, id int64) (GetUserResumeEmbeddingRow, error)
 	// Slim role lookup for the RequireRole authorization middleware: it runs on every
 	// request to a role-gated endpoint and needs only the role, so it does not drag the
 	// full user row (the GetJobIDBySlug precedent for a hot-path read).
@@ -462,6 +466,9 @@ type Querier interface {
 	// Owner-scoped by id; the object key is derived from the id, never client input.
 	// Also clears any cached ATS review so a new CV is never scored with a stale one.
 	SetUserResume(ctx context.Context, arg SetUserResumeParams) error
+	// Persist the user's derived CV embedding vector plus the identity of the embedder
+	// that produced it (so a model change can mark the vector stale). Never the raw CV text.
+	SetUserResumeEmbedding(ctx context.Context, arg SetUserResumeEmbeddingParams) error
 	// Rebuild the companies catalogue from jobs. The companies table is derivable
 	// from jobs (slug = company_slug, name = company), so after a slug-builder change
 	// re-keys jobs, this re-keys companies to match. DISTINCT ON collapses a slug's
