@@ -44,18 +44,18 @@
 
 ## 5. Frontend role picker (`web/`)
 
-- [ ] 5.1 Add a `role` entry to `FACETS` (`web/src/lib/facets.ts`): control
+- [x] 5.1 Add a `role` entry to `FACETS` (`web/src/lib/facets.ts`): control
   `select`, `dynamic:true`, `hasAndOr`, excludable; labels from the generated
   catalog map (flat, busiest-first — no grouping, same as `skills`).
-- [ ] 5.2 Add the Role control to the ROLE rail section (`filterSections.ts` /
+- [x] 5.2 Add the Role control to the ROLE rail section (`filterSections.ts` /
   `FilterModal.svelte`) alongside seniority and specialization; wire it to the
   live `counts.facets.role` path (reuse `FacetSection`).
-- [ ] 5.3 Verify `role` / `role_exclude` / `role_mode` round-trip through
+- [x] 5.3 Verify `role` / `role_exclude` / `role_mode` round-trip through
   `filtersToParams` / `filtersFromParams` (generic path — add a vitest case).
-- [ ] 5.4 Visual check of the picker (busiest-first counts, typeahead, exclude,
+- [x] 5.4 Visual check of the picker (busiest-first counts, typeahead, exclude,
   labels) via svelte-check + a screenshot pass.
 
 ## 6. Rollout
 
-- [ ] 6.1 `go build ./... && go vet ./... && go test ./...`; run the web unit
+- [x] 6.1 `go build ./... && go vet ./... && go test ./...`; run the web unit
   tests. Note the post-deploy reindex step (the facet is empty until reindex).

@@ -15,7 +15,7 @@
 import {
   WORK_MODE_VALUES, SENIORITY_VALUES, CATEGORY_VALUES,
   EMPLOYMENT_TYPE_VALUES, RELOCATION_VALUES, ENGLISH_LEVEL_VALUES,
-  COMPANY_TYPE_VALUES, DOMAIN_VALUES,
+  COMPANY_TYPE_VALUES, DOMAIN_VALUES, ROLE_LABELS,
 } from './generated/contracts';
 import {
   REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
@@ -142,6 +142,14 @@ async function companySearch(query: string): Promise<FacetOption[]> {
   return items.map((c) => ({ value: c.slug, label: c.name, count: c.job_count }));
 }
 
+// Role facet values are canonical slugs (senior_backend, founding_engineer); the
+// live distribution carries no display name, so map them through the generated
+// ROLE_LABELS catalog (the roletag dictionary is the source of truth), falling
+// back to a humanized slug for a value the catalog somehow lacks.
+export function roleLabel(slug: string): string {
+  return (ROLE_LABELS as Record<string, string>)[slug] ?? humanize(slug);
+}
+
 /** Display label for a dynamic facet value: country code → name, company slug →
  *  humanized name, else the value. */
 export function dynamicLabel(param: string, value: string): string {
@@ -149,6 +157,7 @@ export function dynamicLabel(param: string, value: string): string {
   if (param === 'posting_language') return languageLabel(value);
   if (param === 'company_slug') return companyLabel(value);
   if (param === 'source') return sourceLabel(value);
+  if (param === 'role') return roleLabel(value);
   return value;
 }
 
@@ -299,6 +308,7 @@ export const FACETS: FacetDef[] = [
   { param: 'collections', label: 'Collection', control: 'pills', options: COLLECTION, excludable: false },
   { param: 'regions', label: 'Region', control: 'pills', options: JOB_REGION, excludable: true },
   { param: 'work_mode', label: 'Work format', control: 'pills', options: WORK_MODE, excludable: true },
+  { param: 'role', label: 'Role', control: 'select', dynamic: true, excludable: true, hasAndOr: true, placeholder: 'Search roles' },
   { param: 'category', label: 'Specialization', control: 'select', options: CATEGORY, excludable: true, placeholder: 'Search specializations' },
   { param: 'seniority', label: 'Seniority', control: 'pills', options: SENIORITY, excludable: true },
   { param: 'skills', label: 'Skills', control: 'select', dynamic: true, excludable: true, hasAndOr: true, placeholder: 'Search skills' },

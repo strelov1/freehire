@@ -76,6 +76,24 @@ describe('filtersFromParams', () => {
   });
 });
 
+describe('role facet round-trips through the generic param path', () => {
+  it('serializes include/exclude/mode and reads them back', () => {
+    const f = emptyFilters();
+    // role is a registered FACET, so emptyFilters seeds it.
+    f.facets.role = { include: ['senior_backend', 'lead_frontend'], exclude: ['fractional_cto'], matchAll: true };
+
+    const p = filtersToParams(f);
+    expect(p.getAll('role')).toEqual(['senior_backend', 'lead_frontend']);
+    expect(p.getAll('role_exclude')).toEqual(['fractional_cto']);
+    expect(p.get('role_mode')).toBe('and');
+
+    const back = filtersFromParams(p);
+    expect(back.facets.role!.include).toEqual(['senior_backend', 'lead_frontend']);
+    expect(back.facets.role!.exclude).toEqual(['fractional_cto']);
+    expect(back.facets.role!.matchAll).toBe(true);
+  });
+});
+
 describe('canonicalQuery', () => {
   it('is idempotent for a mixed include/exclude query', () => {
     const q = 'skills=nodejs&skills_exclude=php';

@@ -113,6 +113,7 @@ export interface RailEntry {
 }
 
 export const RAIL: RailEntry[] = [
+  { key: 'role', label: 'Role', section: 'ROLE', kind: 'facet', facetParam: 'role' },
   { key: 'category', label: 'Specialization', section: 'ROLE', kind: 'category' },
   { key: 'location', label: 'Location', section: 'ROLE', kind: 'location' },
   { key: 'work', label: 'Work & employment', section: 'ROLE', kind: 'work' },
