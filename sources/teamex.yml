@@ -1,0 +1,5 @@
+# teamex.io global talent marketplace. Boardless: one global public feed
+# (api.teamex.io/api/jts/global/filter), so the entry carries no board, and each job's
+# company comes from the posting (or a marketplace fallback when anonymized), not this placeholder.
+- company: TeamEx
+  provider: teamex

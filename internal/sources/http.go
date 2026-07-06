@@ -56,6 +56,14 @@ type TextGetter interface {
 	GetText(ctx context.Context, url string) (string, error)
 }
 
+// HeaderTextGetter behaves like TextGetter but attaches extra request headers, for a raw-body
+// endpoint gated behind a non-secret header (e.g. a Next.js App Router RSC data endpoint, which
+// returns its flight payload only when the request carries the "RSC: 1" header). The custom
+// headers never override the standard User-Agent/Accept.
+type HeaderTextGetter interface {
+	GetTextWithHeaders(ctx context.Context, url string, headers map[string]string) (string, error)
+}
+
 // JSONPoster sends a JSON request body and decodes the JSON response (platforms whose
 // listing API is POST-only, e.g. Workday).
 type JSONPoster interface {
@@ -82,6 +90,7 @@ type HTTPClient interface {
 	XMLGetter
 	HTMLGetter
 	TextGetter
+	HeaderTextGetter
 	JSONPoster
 	HeaderJSONGetter
 	HeaderJSONPoster
@@ -209,11 +218,19 @@ const maxTextBody = 2 << 20 // 2 MiB
 // maxTextBody). Used by the domain-following harvest, which regex-scans a careers
 // page's HTML for an embedded ATS link rather than parsing a DOM.
 func (c *Client) GetText(ctx context.Context, url string) (string, error) {
+	return c.GetTextWithHeaders(ctx, url, nil)
+}
+
+// GetTextWithHeaders behaves like GetText but attaches extra request headers, for a raw-body
+// endpoint gated behind a non-secret header (e.g. a Next.js RSC data endpoint reached with
+// "RSC: 1").
+func (c *Client) GetTextWithHeaders(ctx context.Context, url string, headers map[string]string) (string, error) {
 	var body string
 	err := c.do(ctx, request{
-		method: http.MethodGet,
-		url:    url,
-		accept: "text/html",
+		method:  http.MethodGet,
+		url:     url,
+		accept:  "text/html",
+		headers: headers,
 		decode: func(resp *http.Response) error {
 			b, err := io.ReadAll(io.LimitReader(resp.Body, maxTextBody))
 			if err != nil {

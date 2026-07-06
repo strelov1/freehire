@@ -68,3 +68,12 @@ func (f *fakeHTTP) GetHTML(_ context.Context, url string) (*html.Node, error) {
 	}
 	return html.Parse(strings.NewReader(f.body))
 }
+
+func (f *fakeHTTP) GetTextWithHeaders(_ context.Context, url string, headers map[string]string) (string, error) {
+	f.gotURL = url
+	f.gotHeaders = headers
+	if f.err != nil {
+		return "", f.err
+	}
+	return f.body, nil
+}
