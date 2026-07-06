@@ -70,6 +70,13 @@ export interface FacetDef {
   hasAndOr?: boolean;
   placeholder?: string;
   /**
+   * Cap the number of options rendered when the facet-local search is empty, to
+   * keep a very large distribution (role, with hundreds of values) readable: the
+   * top `cap` busiest options show, the rest are reachable by typing. Unset =
+   * render all (the default for smaller selects).
+   */
+  cap?: number;
+  /**
    * Options come from the live facet distribution (with counts), not a static
    * `options` list — for open/large vocabularies (skills, countries). The panel
    * builds them from the facet-counts endpoint at render time.
@@ -308,7 +315,7 @@ export const FACETS: FacetDef[] = [
   { param: 'collections', label: 'Collection', control: 'pills', options: COLLECTION, excludable: false },
   { param: 'regions', label: 'Region', control: 'pills', options: JOB_REGION, excludable: true },
   { param: 'work_mode', label: 'Work format', control: 'pills', options: WORK_MODE, excludable: true },
-  { param: 'role', label: 'Role', control: 'select', dynamic: true, excludable: true, hasAndOr: true, placeholder: 'Search roles' },
+  { param: 'role', label: 'Role', control: 'select', dynamic: true, excludable: true, hasAndOr: true, placeholder: 'Search roles', cap: 24 },
   { param: 'category', label: 'Specialization', control: 'select', options: CATEGORY, excludable: true, placeholder: 'Search specializations' },
   { param: 'seniority', label: 'Seniority', control: 'pills', options: SENIORITY, excludable: true },
   { param: 'skills', label: 'Skills', control: 'select', dynamic: true, excludable: true, hasAndOr: true, placeholder: 'Search skills' },

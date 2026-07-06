@@ -105,7 +105,7 @@
 
   function entryCount(e: RailEntry): number {
     const f = staged.value;
-    if (e.kind === 'category') return selCount(f, 'category') + selCount(f, 'seniority');
+    if (e.kind === 'category') return selCount(f, 'role') + selCount(f, 'category') + selCount(f, 'seniority');
     if (e.kind === 'location') return selCount(f, 'regions') + selCount(f, 'countries') + selCount(f, 'cities');
     if (e.kind === 'salary') return selCount(f, 'salary_currency') + (f.salaryMin != null ? 1 : 0);
     if (e.kind === 'work') return selCount(f, 'work_mode') + selCount(f, 'employment_type');
@@ -192,6 +192,10 @@
   {#if entry.kind === 'saved'}
     <SavedSearches store={staged} />
   {:else if entry.kind === 'category'}
+    {@const roleDef = facetDefFor('role')}
+    {#if roleDef && !exclude.includes('role')}
+      <div class="mb-6"><FacetSection def={roleDef} store={staged} {counts} expand /></div>
+    {/if}
     {#if !exclude.includes('seniority')}
       <ChipFacet store={staged} param="seniority" label="Seniority" />
       <div class="mt-6"><CategoryPane store={staged} {plain} /></div>

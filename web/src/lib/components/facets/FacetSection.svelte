@@ -81,6 +81,7 @@
       exclude={st.exclude}
       excludable={def.excludable}
       placeholder={def.placeholder}
+      cap={def.cap}
       {onToggle}
       {expand}
     />

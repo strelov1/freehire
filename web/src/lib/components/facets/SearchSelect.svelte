@@ -18,6 +18,7 @@
     onToggle,
     clearOnSelect = false,
     expand = false,
+    cap,
   }: {
     options: FacetOption[];
     include: string[];
@@ -32,6 +33,10 @@
     // Drop the scroll cap on the pill list — used in the roomy modal pane where the
     // full list should show, unlike the compact sidebar (which caps + scrolls).
     expand?: boolean;
+    // Show at most `cap` options while the search field is empty, so a huge
+    // distribution (role: hundreds of values) stays readable — the rest surface
+    // as you type. Selected options always show. Unset = no cap.
+    cap?: number;
   } = $props();
 
   let filter = $state('');
@@ -43,11 +48,19 @@
 
   const isSelected = (v: string) => include.includes(v) || exclude.includes(v);
 
-  const shown = $derived(
+  const matched = $derived(
     uniqueByValue(options)
       .filter((o) => o.label.toLowerCase().includes(filter.trim().toLowerCase()))
       .toSorted((a, b) => Number(isSelected(b.value)) - Number(isSelected(a.value))),
   );
+
+  // While unfiltered, cap the list to the top `cap` (already busiest-first) plus
+  // any selected options, so nothing selected is hidden. Typing lifts the cap.
+  const capped = $derived(cap && !filter.trim() && matched.length > cap);
+  const shown = $derived(
+    capped ? matched.filter((o, i) => i < cap! || isSelected(o.value)) : matched,
+  );
+  const hiddenCount = $derived(capped ? matched.length - shown.length : 0);
 </script>
 
 <div class="flex flex-col gap-2">
@@ -69,4 +82,7 @@
       <span class="px-1 py-1 text-xs text-muted-foreground">Nothing found</span>
     {/if}
   </div>
+  {#if hiddenCount > 0}
+    <span class="px-1 text-xs text-muted-foreground">+{hiddenCount.toLocaleString()} more — type to search</span>
+  {/if}
 </div>

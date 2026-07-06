@@ -113,7 +113,8 @@ export interface RailEntry {
 }
 
 export const RAIL: RailEntry[] = [
-  { key: 'role', label: 'Role', section: 'ROLE', kind: 'facet', facetParam: 'role' },
+  // Role rides inside the Specialization pane (rendered at its top), not as its
+  // own rail entry — the two are one "what role" concept.
   { key: 'category', label: 'Specialization', section: 'ROLE', kind: 'category' },
   { key: 'location', label: 'Location', section: 'ROLE', kind: 'location' },
   { key: 'work', label: 'Work & employment', section: 'ROLE', kind: 'work' },
