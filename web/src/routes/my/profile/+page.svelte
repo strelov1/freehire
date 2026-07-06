@@ -182,23 +182,32 @@
     <States state="error" message="Couldn't load your profile." />
   {:else}
     <!-- Header -->
-    <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
-      <div class="flex flex-col gap-1">
-        <h1 class="text-2xl font-semibold tracking-tight">Profile</h1>
-        <p class="text-sm text-muted-foreground">
-          Your CV, skills and role — measured against live market demand.
-        </p>
-      </div>
-      {#if profile}
-        <Button variant="ghost" size="icon" onclick={remove} aria-label="Delete profile">
-          <Trash2 class="size-4" />
-        </Button>
-      {/if}
+    <div class="mb-6 flex flex-col gap-1">
+      <h1 class="text-2xl font-semibold tracking-tight">Profile</h1>
+      <p class="text-sm text-muted-foreground">
+        Your CV, skills and role — measured against live market demand.
+      </p>
     </div>
 
     {#if actionError}
       <p class="mb-4 text-sm text-destructive">{actionError}</p>
     {/if}
+
+    <!-- Run / Re-run AI review control, rendered inside the CV-readiness section header
+         (via ATSReportView's `action` slot) rather than crammed into the tab row. -->
+    {#snippet reviewAction()}
+      {#if ats?.report && !ats.report.reviewed && !reviewUnavailable}
+        <Button variant="primary" onclick={runReview} disabled={reviewBusy}>
+          <Sparkles class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
+          {reviewBusy ? 'Reviewing…' : 'Run AI review'}
+        </Button>
+      {:else if ats?.report?.reviewed}
+        <Button variant="ghost" onclick={runReview} disabled={reviewBusy}>
+          <Sparkles class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
+          {reviewBusy ? 'Reviewing…' : 'Re-run AI review'}
+        </Button>
+      {/if}
+    {/snippet}
 
     {#if profile === null}
       <!-- Set-up: the inline form only; coverage appears once a profile exists. -->
@@ -221,51 +230,34 @@
 
         <main class="flex min-w-0 flex-1 flex-col gap-6">
           <!-- Tabs -->
-          <div class="flex items-center justify-between gap-3 border-b border-border">
-            <div class="flex gap-5">
-              <button
-                type="button"
-                onclick={() => (tab = 'profile')}
-                class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'profile'
-                  ? 'border-primary text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'}"
-              >
-                Your CV
-              </button>
-              <button
-                type="button"
-                onclick={() => (tab = 'coverage')}
-                class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'coverage'
-                  ? 'border-primary text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'}"
-              >
-                Market coverage
-              </button>
-              <button
-                type="button"
-                onclick={() => (tab = 'readiness')}
-                class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'readiness'
-                  ? 'border-primary text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'}"
-              >
-                CV readiness
-              </button>
-            </div>
-            {#if tab === 'readiness' && ats?.has_cv && ats.report}
-              <div class="pb-1.5">
-                {#if !ats.report.reviewed && !reviewUnavailable}
-                  <Button variant="primary" onclick={runReview} disabled={reviewBusy}>
-                    <Sparkles class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
-                    {reviewBusy ? 'Reviewing…' : 'Run AI review'}
-                  </Button>
-                {:else if ats.report.reviewed}
-                  <Button variant="ghost" onclick={runReview} disabled={reviewBusy}>
-                    <Sparkles class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
-                    {reviewBusy ? 'Reviewing…' : 'Re-run AI review'}
-                  </Button>
-                {/if}
-              </div>
-            {/if}
+          <div class="flex gap-5 border-b border-border">
+            <button
+              type="button"
+              onclick={() => (tab = 'profile')}
+              class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'profile'
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'}"
+            >
+              Your CV
+            </button>
+            <button
+              type="button"
+              onclick={() => (tab = 'coverage')}
+              class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'coverage'
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'}"
+            >
+              Market coverage
+            </button>
+            <button
+              type="button"
+              onclick={() => (tab = 'readiness')}
+              class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'readiness'
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'}"
+            >
+              CV readiness
+            </button>
           </div>
 
           <!-- Body -->
@@ -273,6 +265,19 @@
             {#key profile.updated_at}
               <ProfileForm {profile} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
             {/key}
+            <!-- Destructive action lives at the foot of the profile-management tab, out of
+                 the page header (where it crowded the title on narrow viewports). -->
+            <div class="mt-2 flex justify-end border-t border-border pt-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onclick={remove}
+                class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 class="size-4" />
+                Delete profile
+              </Button>
+            </div>
           {:else if loadError}
             <States state="error" message="Couldn't load the report." />
           {:else if verdict === null}
@@ -285,7 +290,7 @@
               {#if reviewUnavailable}
                 <p class="text-xs text-muted-foreground">AI review is not available right now.</p>
               {/if}
-              <ATSReportView report={ats.report} />
+              <ATSReportView report={ats.report} action={reviewAction} />
             </div>
           {:else}
             <!-- No CV yet: uploaded via the Your CV tab. -->

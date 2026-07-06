@@ -1,11 +1,14 @@
 <script lang="ts">
   import { Check, Copy, TriangleAlert, X } from '@lucide/svelte';
+  import type { Snippet } from 'svelte';
   import type { ATSReport } from '$lib/types';
 
   // The CV ATS-readiness report from the backend: an overall score out of 100 built
   // from five weighted categories, each with per-item point attribution, plus the
   // role's strong/recommended keywords and (after an AI review) numbered suggestions.
-  let { report }: { report: ATSReport } = $props();
+  // `action` is an optional control (the Run/Re-run AI review button) rendered in the
+  // section header so it stays beside the title on every viewport.
+  let { report, action }: { report: ATSReport; action?: Snippet } = $props();
 
   const categories = $derived(report.categories ?? []);
   const strong = $derived(report.strong_keywords ?? []);
@@ -36,11 +39,16 @@
 </script>
 
 <div class="flex flex-col gap-6">
-  <div class="flex flex-col gap-1">
-    <h2 class="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">CV readiness</h2>
-    <p class="text-sm text-muted-foreground">
-      How well an ATS reads your CV and whether it carries this role's keywords.
-    </p>
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div class="flex min-w-0 flex-col gap-1">
+      <h2 class="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">CV readiness</h2>
+      <p class="text-sm text-muted-foreground">
+        How well an ATS reads your CV and whether it carries this role's keywords.
+      </p>
+    </div>
+    {#if action}
+      {@render action()}
+    {/if}
   </div>
 
   <!-- Scoreboard: overall now, potential if you apply the fixes -->
