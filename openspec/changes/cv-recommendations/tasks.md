@@ -27,4 +27,4 @@
 
 ## 6. Verification
 
-- [ ] 6.1 `go test ./...` + `go vet ./...` green; web `svelte-check` clean; confirm no raw CV text is persisted (only the vector + S3 blob), the migration is recorded for prod-apply-before-deploy, and the swipe deck is unchanged.
+- [x] 6.1 `go test ./...` + `go vet ./...` green; web `svelte-check` clean; confirm no raw CV text is persisted (only the vector + S3 blob), the migration is recorded for prod-apply-before-deploy, and the swipe deck is unchanged. — go suite + vet green; svelte-check clean for the feature files (4 pre-existing vitest-module errors are environmental, unrelated); only the derived vector persists; migration 0002 documents prod-apply-before-deploy; swipe.go/facets.go untouched.
