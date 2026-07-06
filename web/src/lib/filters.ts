@@ -4,6 +4,7 @@
 // owns only the SvelteKit-bound FilterStore.
 
 import { UrlSyncedState } from './urlSynced.svelte';
+import { saveJobFilters } from './filterStorage';
 import {
   type FacetState,
   type JobFilters,
@@ -33,12 +34,19 @@ export class FilterStore {
   #url: UrlSyncedState<JobFilters>;
 
   /** Seed from the current URL params (passed by the view from `page.url`), so
-   *  the same filters render on the server and hydrate on the client. */
-  constructor(initial?: URLSearchParams) {
-    this.#url = new UrlSyncedState<JobFilters>(initial ?? new URLSearchParams(), {
-      parse: filtersFromParams,
-      serialize: filtersToParams,
-    });
+   *  the same filters render on the server and hydrate on the client. With
+   *  `persist`, every explicit change is mirrored to localStorage (an empty set
+   *  clears the key), so the standalone /jobs list can restore it after a
+   *  navigation back to a bare URL — see JobsView. Navigation re-seeds don't
+   *  trigger it (the primitive's `onWrite` fires only on explicit writes), so a
+   *  bare URL never wipes the stored set. */
+  constructor(initial?: URLSearchParams, persist = false) {
+    this.#url = new UrlSyncedState<JobFilters>(
+      initial ?? new URLSearchParams(),
+      { parse: filtersFromParams, serialize: filtersToParams },
+      undefined,
+      persist ? (_value, serialized) => saveJobFilters(serialized) : undefined,
+    );
   }
 
   /** Live filters — bind inputs to this. */

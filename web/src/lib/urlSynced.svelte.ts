@@ -46,12 +46,26 @@ export class UrlSyncedState<T> {
   // reload per keystroke. `undefined` means no reload is queued (back/forward relies
   // on this being truthful — see syncFromUrl).
   #timer: ReturnType<typeof setTimeout> | undefined;
+  // Fired on every explicit user write (setNow/setSoon), never on syncFromUrl. A
+  // generic hook — the primitive stays storage-agnostic; a consumer uses it to
+  // mirror the change (FilterStore persists it to localStorage). Because it skips
+  // the navigation path, an incoming empty URL never overwrites what was persisted.
+  // Receives the same serialized query string written to the URL, so a persisted
+  // mirror is identical to the URL by construction (no second serialization).
+  #onWrite?: (value: T, serialized: string) => void;
 
   /** Seed from the current URL params (passed by the view from `page.url`), so the
-   *  same state renders on the server and hydrates on the client. */
-  constructor(initial: URLSearchParams, codec: UrlCodec<T>, debounceMs = 300) {
+   *  same state renders on the server and hydrates on the client. `onWrite`, if
+   *  given, is called on each explicit change (see the field note). */
+  constructor(
+    initial: URLSearchParams,
+    codec: UrlCodec<T>,
+    debounceMs = 300,
+    onWrite?: (value: T, serialized: string) => void,
+  ) {
     this.#codec = codec;
     this.#debounceMs = debounceMs;
+    this.#onWrite = onWrite;
     // The field initializers above are typed placeholders; both are seeded here
     // from the URL params. On the client the browser's address bar
     // (location.search) is the authoritative filter state: after a back/forward
@@ -118,5 +132,6 @@ export class UrlSyncedState<T> {
     // write is cheap and synchronous. Browser-only (mutations are user events).
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- in-place query write to the current pathname; there is no route to resolve
     replaceState(page.url.pathname + (qs ? `?${qs}` : ''), {});
+    this.#onWrite?.(next, qs);
   }
 }
