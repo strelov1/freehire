@@ -175,10 +175,13 @@ type Querier interface {
 	// planner's estimate (see estimate_open_jobs(), migration 0033) is O(1) and
 	// tracks the closed_at IS NULL filter. The total is approximate by design.
 	EstimateOpenJobs(ctx context.Context) (int64, error)
-	// Job ids the user has already judged (saved or dismissed) — the swipe deck's
-	// exclusion set. Ordered most-recently-judged first and capped ($2) so the deck's
-	// `id NOT IN (...)` search filter stays bounded; the overflow risk is only an
-	// occasional re-shown long-ago-judged job, never a correctness problem.
+	// Job ids the user has already interacted with (viewed, saved, applied, or
+	// dismissed) — the swipe deck's exclusion set, so a card is shown at most once
+	// across sessions. viewed_at is set on every interaction row, so any row for the
+	// user counts (the deck records a view the moment a card is shown). Ordered
+	// most-recently-touched first and capped ($2) so the deck's `id NOT IN (...)`
+	// search filter stays bounded; the overflow risk is only an occasional re-shown
+	// long-ago-seen job, never a correctness problem.
 	ExcludedJobIDs(ctx context.Context, arg ExcludedJobIDsParams) ([]int64, error)
 	// SELECT * (not an explicit column list) so the generated row stays db.Company as
 	// the table grows columns (e.g. collections); an explicit subset makes sqlc emit a

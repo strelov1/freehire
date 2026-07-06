@@ -171,13 +171,16 @@ export function createApi(
   }
 
   /** The swipe-deck batch: open jobs matching the same facets/query as
-   *  `searchJobs`, minus the caller's already-judged (saved or dismissed) jobs,
-   *  excluded server-side. Authenticated; batched via limit/offset for prefetch. */
-  async function swipeDeck(facets: URLSearchParams, limit: number, offset: number): Promise<Slice<Job>> {
+   *  `searchJobs`, minus every job the caller has already interacted with
+   *  (viewed/saved/applied/dismissed), excluded server-side. The deck records a
+   *  view the moment a card is shown, so exclusion drives pagination: each fetch
+   *  returns the head of the un-seen deck (offset 0) and the caller dedups held
+   *  cards client-side. Authenticated. */
+  async function swipeDeck(facets: URLSearchParams, limit: number): Promise<Slice<Job>> {
     const params = new URLSearchParams(facets);
     params.set('limit', String(limit));
-    params.set('offset', String(offset));
-    return toSlice(await request<Page<Job>>(`/api/v1/me/jobs/swipe?${params}`), offset);
+    params.set('offset', '0');
+    return toSlice(await request<Page<Job>>(`/api/v1/me/jobs/swipe?${params}`), 0);
   }
 
   /** Facet-distribution counts for the analytics page. `params` carries the same

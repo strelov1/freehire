@@ -5,10 +5,12 @@
   import { resolve } from '$app/paths';
   import { Heart, RotateCcw, SlidersHorizontal, X } from '@lucide/svelte';
   import { api } from '$lib/api';
+  import { isAuthenticated } from '$lib/auth.svelte';
   import { cardTags, formatSalary } from '$lib/enrichment';
   import { FilterStore, filtersToParams } from '$lib/filters';
   import type { Job, FacetCounts } from '$lib/types';
   import { Badge } from '$lib/ui';
+  import { markViewed } from '$lib/viewedJobs.svelte';
   import CompanyLogo from './CompanyLogo.svelte';
   import FilterModal from './filters/FilterModal.svelte';
   import JobMatch from './JobMatch.svelte';
@@ -91,14 +93,16 @@
     error = false;
     const myGen = gen;
     try {
-      // offset = held-unjudged count: judged cards are already excluded
-      // server-side, so this returns the page right after what we hold.
-      const slice = await api.swipeDeck(deckParams(), LIMIT, queue.length);
+      // Exclusion-driven pagination: every shown card is recorded as viewed and
+      // thus excluded server-side, so each fetch returns the head of the un-seen
+      // deck (offset 0). Held-but-unshown cards aren't excluded yet, so they can
+      // reappear in the page — `seen` dedups them client-side.
+      const slice = await api.swipeDeck(deckParams(), LIMIT);
       if (myGen !== gen) return; // filters changed mid-flight — discard this page
       const fresh = slice.items.filter((j) => !seen.has(j.public_slug));
       for (const j of fresh) seen.add(j.public_slug);
       queue = [...queue, ...fresh];
-      // A page with no rows at all means the undecided set is drained.
+      // A page with no rows at all means the un-seen set is drained.
       if (slice.items.length === 0) exhausted = true;
     } catch {
       if (myGen === gen) error = true;
@@ -289,6 +293,20 @@
 
   // Cancel the store's pending debounce when the deck unmounts.
   onMount(() => () => filters.dispose());
+
+  // Record a view the moment a card becomes the active one — silent, best-effort
+  // history (a failed write must never break the deck). This marks the card viewed
+  // for the browse-list dimming and, with the server-side deck exclusion, keeps a
+  // card from re-appearing across sessions. Re-firing on undo (which restores a
+  // judged card to the front) just touches viewed_at again — idempotent.
+  $effect(() => {
+    const slug = current?.public_slug;
+    if (!slug || !isAuthenticated()) return;
+    api
+      .recordJobView(slug)
+      .then(() => markViewed(slug))
+      .catch(() => {});
+  });
 
   const salary = $derived(current?.enrichment ? formatSalary(current.enrichment) : null);
   const tags = $derived(current ? cardTags(current) : []);

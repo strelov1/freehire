@@ -158,14 +158,14 @@ type Repository interface {
 	// ViewedSlugs returns every public job slug the caller has interacted with.
 	ViewedSlugs(ctx context.Context, userID int64) ([]string, error)
 
-	// ExcludedJobIDs returns up to limit job ids the caller has already judged
-	// (saved or dismissed), most-recently-judged first.
+	// ExcludedJobIDs returns up to limit job ids the caller has already interacted
+	// with (viewed, saved, applied, or dismissed), most-recently-touched first.
 	ExcludedJobIDs(ctx context.Context, userID int64, limit int32) ([]int64, error)
 }
 
 // excludedJobsCap bounds the swipe deck's exclusion set so the search
 // `id NOT IN (...)` filter stays small; a heavy triager past this cap may
-// occasionally re-see a long-ago-judged job, which is acceptable.
+// occasionally re-see a long-ago-seen job, which is acceptable.
 const excludedJobsCap int32 = 1000
 
 // Service implements the per-user job-tracking use cases.
@@ -203,8 +203,9 @@ func (s *Service) ViewedSlugs(ctx context.Context, userID int64) ([]string, erro
 	return s.repo.ViewedSlugs(ctx, userID)
 }
 
-// ExcludedJobIDs returns the job ids the caller has already judged (saved or
-// dismissed) — the swipe deck's exclusion set, capped at excludedJobsCap.
+// ExcludedJobIDs returns the job ids the caller has already interacted with
+// (viewed, saved, applied, or dismissed) — the swipe deck's exclusion set, so a
+// card is shown at most once across sessions, capped at excludedJobsCap.
 func (s *Service) ExcludedJobIDs(ctx context.Context, userID int64) ([]int64, error) {
 	return s.repo.ExcludedJobIDs(ctx, userID, excludedJobsCap)
 }

@@ -77,15 +77,17 @@ WHERE user_id = $1 AND job_id = $2
 RETURNING *;
 
 -- name: ExcludedJobIDs :many
--- Job ids the user has already judged (saved or dismissed) — the swipe deck's
--- exclusion set. Ordered most-recently-judged first and capped ($2) so the deck's
--- `id NOT IN (...)` search filter stays bounded; the overflow risk is only an
--- occasional re-shown long-ago-judged job, never a correctness problem.
+-- Job ids the user has already interacted with (viewed, saved, applied, or
+-- dismissed) — the swipe deck's exclusion set, so a card is shown at most once
+-- across sessions. viewed_at is set on every interaction row, so any row for the
+-- user counts (the deck records a view the moment a card is shown). Ordered
+-- most-recently-touched first and capped ($2) so the deck's `id NOT IN (...)`
+-- search filter stays bounded; the overflow risk is only an occasional re-shown
+-- long-ago-seen job, never a correctness problem.
 SELECT job_id
 FROM user_jobs
 WHERE user_id = $1
-  AND (saved_at IS NOT NULL OR dismissed_at IS NOT NULL)
-ORDER BY GREATEST(saved_at, dismissed_at) DESC
+ORDER BY GREATEST(viewed_at, saved_at, applied_at, dismissed_at) DESC
 LIMIT $2;
 
 -- name: TrackJob :one

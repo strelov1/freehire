@@ -170,9 +170,10 @@ func TestDismissUndismissEndpoints(t *testing.T) {
 	})
 }
 
-// TestExcludedJobIDs covers the swipe deck's exclusion query: it returns the
-// user's saved and dismissed job ids (not merely-viewed ones), and respects the
-// cap. The deck feeds these into an `id NOT IN [...]` search filter.
+// TestExcludedJobIDs covers the swipe deck's exclusion query: it returns every
+// job the user has interacted with — saved, dismissed, AND merely-viewed — so a
+// card is shown at most once, and respects the cap. The deck feeds these into an
+// `id NOT IN [...]` search filter.
 func TestExcludedJobIDs(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
@@ -212,13 +213,11 @@ func TestExcludedJobIDs(t *testing.T) {
 	for _, id := range ids {
 		got[id] = true
 	}
-	if !got[savedID] || !got[dismissedID] {
-		t.Errorf("excluded = %v, want it to contain saved (%d) and dismissed (%d)", ids, savedID, dismissedID)
+	if !got[savedID] || !got[dismissedID] || !got[viewedID] {
+		t.Errorf("excluded = %v, want it to contain saved (%d), dismissed (%d), and viewed (%d)",
+			ids, savedID, dismissedID, viewedID)
 	}
-	if got[viewedID] {
-		t.Errorf("excluded = %v, must NOT contain the merely-viewed job (%d)", ids, viewedID)
-	}
-	if len(ids) != 2 {
-		t.Errorf("len(excluded) = %d, want 2", len(ids))
+	if len(ids) != 3 {
+		t.Errorf("len(excluded) = %d, want 3", len(ids))
 	}
 }
