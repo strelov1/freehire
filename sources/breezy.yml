@@ -2361,7 +2361,7 @@
   board: gci-security-inc
 - company: GCU UK
   board: gcu-uk-ltd
-- company: Genesis
+- company: Genesis Tech
   board: gen-tech
 - company: George F. Young
   board: george-f-young
@@ -3565,3 +3565,5 @@
   board: zwitterco
 - company: Step Up Team
   board: step-up-team
+- company: Chatfuel
+  board: chatfuel

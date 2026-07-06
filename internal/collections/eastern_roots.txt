@@ -4,6 +4,7 @@
 # Matched to our catalogue via normalize.Slug at import (cmd/import-collections);
 # unmatched slugs are simply logged. Lines starting with # are comments.
 10web
+1inch
 1password
 3commas
 abbyy
@@ -56,6 +57,7 @@ cattle-care
 centro-ortnec
 chainlink-labs
 chainstack
+chatfuel
 chattermill
 ciklum
 cindicator
@@ -113,6 +115,7 @@ fundraise-up
 fxpro
 g5-games
 garage-it
+genesis-tech
 gismart
 gitlab
 glam-ai
@@ -125,6 +128,7 @@ grammarly
 grid-dynamics
 group-ib
 haut-ai
+headway-inc
 helio-games
 hexens
 higgsfield-ai
@@ -145,16 +149,20 @@ instories
 intellias
 investengine
 inworld-ai
+itechart
 jet-admin
 jetbrains
+jooble
 joom
 kadmos
 kaspersky
 kaspersky-lab
 kevin
 kodland
+kommo
 krisp
 legionfarm
+let-s-enhance
 lifemost
 lokalise
 luminai
@@ -164,6 +172,7 @@ manychat
 mapbox
 medvidi
 mellow
+mercuryo
 mgid
 mirantis
 miratech
@@ -227,6 +236,7 @@ readymag
 recraft
 red
 redtrack
+reface
 remofirst
 replika
 restream
