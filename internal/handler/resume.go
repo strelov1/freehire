@@ -63,6 +63,10 @@ func (a *API) ExtractResumeSkills(c *fiber.Ctx) error {
 		if _, err := a.resume.Put(c.Context(), userID, up.ContentType, up.Data); err != nil {
 			// Best-effort: log (never the résumé bytes) and still return the skills.
 			log.Printf("resume: store on extract failed for user %d: %v", userID, err)
+		} else {
+			// This is the résumé-upload path the app actually uses, so it is where the CV
+			// gets embedded for /my/recommendations (background, best-effort — see embedResume).
+			go a.embedResume(userID, up.Text)
 		}
 	}
 	return c.JSON(fiber.Map{"data": fiber.Map{"skills": skills}})
