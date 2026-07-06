@@ -46,12 +46,24 @@ retire the old facets, promoting to a column is a clean follow-up.
 
 **Derivation rules (`internal/roletag`).** `Derive(seniority, category, title)
 []string`:
-- composite `{seniority}_{category}` iff both inputs are non-empty;
-- named-role alias matches from the title via whole-word matching
-  (`wordmatch.Contains`, unicode boundary — same as `classify`), for roles that
-  don't fit the grid;
-- dedupe; never guess. The package also exports the catalog (slug → label). No
-  display group — the picker is a flat busiest-first typeahead like `skills`.
+- the **bare category role** `{category}` whenever the category resolves (any
+  `enrich.CategoryValues` except `other`) — this is the dominant case: a sample
+  of ~9.6k live prod titles showed only 32% carry a grade, so requiring a
+  seniority would leave most jobs role-less. Bare category alone lifts coverage
+  of that sample from 32% → 85%;
+- the composite `{seniority}_{category}` **in addition** when the seniority also
+  resolves — the graded role layered on the bare one;
+- at most one named-role alias match from the title via whole-word matching
+  (`wordmatch.Contains`, unicode boundary — same as `classify`), longest alias
+  first so the most specific wins, for roles that don't fit the grid (incl. the
+  `software_engineer` catch-all, the largest category-less bucket in the sample);
+- distinct slug namespaces so no dedup step is needed; never guess. The package
+  also exports the catalog (slug → label). No display group — the picker is a
+  flat busiest-first typeahead like `skills`.
+
+The named-role set was curated from that same prod-title mining (throwaway tool),
+not guessed: bare category covers the generic roles across every department, and
+named roles fill the distinctive titles the grid flattens.
 
 **Catalog is the source of truth, emitted to contracts.** `roletag` owns the
 canonical list (composite labels like "Senior Backend Engineer" are generated
@@ -73,10 +85,13 @@ keep working; a post-deploy reindex lights up the new facet.
   Backend job is reachable via `role=senior_backend` and via
   `seniority=senior`+`category=backend`. That's the intended transition state,
   not a bug.
-- **Broad single-axis roles.** "Any senior across categories" is not a `roles`
-  value in this change; it stays served by the retained seniority facet. If the
-  old facets are later removed, the catalog must add broad roles or the picker
-  must special-case them — deferred.
+- **Role facet is now the primary role axis.** With bare category roles, the
+  `roles` facet covers ~85% of the catalogue and subsumes the category facet at
+  the any-seniority level (a bare "Data Scientist" → `data_science`). It stays
+  additive (old seniority/category controls remain), but the picker is now
+  self-sufficient rather than a niche layer — matching the original goal. "Any
+  seniority across all categories" is still served by the retained seniority
+  facet.
 - **Reindex dependency.** The facet is empty until the post-deploy reindex
   completes; the old controls cover the gap. Standard "dictionary change →
   reindex" caveat.

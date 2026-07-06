@@ -13,11 +13,17 @@ familiar roles directly and get precise results.
 - Add `internal/roletag`, a deterministic dictionary (mirroring `classify`/
   `skilltag`) that derives a job's `roles []string` from its `(seniority,
   category, title)`:
-  - the composite `{seniority}_{category}` when **both** the seniority and
-    category columns are resolved (e.g. `senior_backend`);
-  - named-role alias matches from the title for roles that don't fit the
-    seniority×category grid (`founding_engineer`, `fractional_cto`,
-    `cloud_solutions_engineer`, `staff_engineer`, …);
+  - the **bare category role** `{category}` (e.g. `backend`, `data_science`)
+    whenever the category resolves — the dominant case (mining ~9.6k live prod
+    titles showed only 32% carry a grade; bare category lifts role coverage of
+    that sample to 85%);
+  - the composite `{seniority}_{category}` (e.g. `senior_backend`) in addition
+    when the seniority also resolves;
+  - named-role alias matches from the title for roles that don't fit the grid — a
+    `software_engineer` catch-all plus a set curated from the same prod-title
+    mining across departments (`founding_engineer`, `fractional_cto/cfo/cmo/…`,
+    `cloud_solutions_engineer`, `sdr`, `bdr`, `product_marketing_manager`,
+    `developer_advocate`, `technical_recruiter`, …);
   - nothing for what it can't resolve (never guesses).
 - Compute `roles` **at index time** in `search.FromJob` — no `jobs.roles`
   column, no migration, no backfill; a reindex populates it (same pattern as the
@@ -27,8 +33,8 @@ familiar roles directly and get precise results.
   facet like `skills`, with `role_exclude` / `role_mode=and` support; expose
   `roles` in the `/api/v1/jobs/facets` distribution so the picker gets live
   busiest-first counts.
-- `cmd/gen-contracts` emits the role catalog (slug / label / group) from
-  `roletag` into the web contracts, the source of truth for picker labels.
+- `cmd/gen-contracts` emits the role catalog (slug → label) from `roletag` into
+  the web contracts, the source of truth for picker labels.
 - Frontend adds a **dynamic** `role` facet control (typeahead, live counts,
   `hasAndOr`, excludable) reusing the existing `skills` `FacetSection` path. The
   existing seniority and category controls **stay** for now — the picker is

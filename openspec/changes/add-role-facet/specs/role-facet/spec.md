@@ -7,40 +7,48 @@ The system SHALL provide `internal/roletag`, a curated deterministic dictionary
 `roles` — a list of canonical role slugs — from its resolved seniority, resolved
 category, and title. It SHALL emit:
 
-- the composite role `{seniority}_{category}` (e.g. `senior_backend`) **only when
-  both** the seniority and category inputs are non-empty;
+- the **bare category role** `{category}` (e.g. `backend`, `data_science`)
+  whenever the category resolves (to a category with a natural role noun — all of
+  `enrich.CategoryValues` except `other`), regardless of seniority — this is the
+  dominant real-world case, since most titles carry no grade;
+- the composite role `{seniority}_{category}` (e.g. `senior_backend`) **in
+  addition** when the seniority also resolves — the graded role on top of the
+  bare one;
 - one canonical slug per **named role** whose alias occurs as a whole word in the
   title, for roles that do not decompose into the seniority×category grid
-  (e.g. `founding engineer` → `founding_engineer`, `fractional cto` →
-  `fractional_cto`, `cloud solutions engineer` → `cloud_solutions_engineer`,
-  `staff engineer` → `staff_engineer`).
+  (e.g. `software engineer` → `software_engineer`, `founding engineer` →
+  `founding_engineer`, `fractional cto` → `fractional_cto`). When several named
+  aliases match, the longest (most specific) wins and at most one named role is
+  emitted.
 
 It SHALL never guess: an input it cannot resolve contributes no slug, and a job
-the dictionary resolves nothing for yields an empty `roles`. The result SHALL be
-deduplicated and every emitted slug SHALL exist in the role catalog.
+the dictionary resolves nothing for (no category and no named-alias match) yields
+an empty `roles`. The three sources occupy distinct slug namespaces, so the
+result carries no duplicates, and every emitted slug SHALL exist in the role
+catalog.
 
-#### Scenario: Composite role from both resolved axes
+#### Scenario: Bare category role without a grade
+
+- **WHEN** `roletag` derives roles for a job with an empty seniority, category
+  `data_science`, and title "Data Scientist"
+- **THEN** the derived `roles` include `data_science` and no composite role
+
+#### Scenario: A grade adds the composite on top of the bare role
 
 - **WHEN** `roletag` derives roles for a job with seniority `senior`, category
   `backend`, and title "Senior Backend Engineer"
-- **THEN** the derived `roles` include `senior_backend`
-
-#### Scenario: Composite requires both axes
-
-- **WHEN** `roletag` derives roles for a job with seniority `senior`, an empty
-  category, and a title that matches no named role
-- **THEN** the derived `roles` do not include any composite role and are empty
+- **THEN** the derived `roles` include both `backend` and `senior_backend`
 
 #### Scenario: Named role from the title regardless of the grid
 
 - **WHEN** `roletag` derives roles for a job titled "Founding Engineer" whose
-  category column is empty
+  category is empty
 - **THEN** the derived `roles` include `founding_engineer`
 
 #### Scenario: Nothing resolvable yields empty roles
 
-- **WHEN** `roletag` derives roles for a job whose seniority and category are
-  empty and whose title matches no named-role alias
+- **WHEN** `roletag` derives roles for a job whose category is empty (or `other`)
+  and whose title matches no named-role alias
 - **THEN** the derived `roles` are empty
 
 ### Requirement: Roles are derived at index time, not stored or backfilled
