@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ChevronDown, Search, X } from '@lucide/svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import { countryLabel, type FacetStore } from '$lib/facets';
+  import { countryLabel, REGION_UNSPECIFIED, type FacetStore } from '$lib/facets';
   import { REGION_LABELS } from '$lib/labels';
   import { COUNTRY_REGION_MAP } from '$lib/generated/contracts';
   import type { FacetCounts } from '$lib/types';
@@ -49,8 +49,15 @@
   });
 
   // The macro-regions are always shown (a stable list, like the old region facet), so
-  // the pane is never empty — even before the first facet-count fetch resolves.
-  const regions = Object.keys(REGION_LABELS);
+  // the pane is never empty — even before the first facet-count fetch resolves. `global`
+  // is pulled out: no country maps to it, so it has nothing to drill into and renders as
+  // a flat pill (see flatRegions) rather than an empty accordion.
+  const regions = Object.keys(REGION_LABELS).filter((r) => r !== 'global');
+
+  // Country-less region pills shown flat above the tree: the "anywhere" macro-bucket
+  // (global) and the "no resolved geography" sentinel (REGION_UNSPECIFIED → "Not
+  // specified"). Neither drills into countries, so both stay as one-click pills.
+  const flatRegions = ['global', REGION_UNSPECIFIED];
 
   // Cities to show: the distribution plus any selected city (kept visible at zero
   // count), busiest first.
@@ -61,7 +68,7 @@
   const CITY_LIMIT = 18;
 
   const q = $derived(query.trim().toLowerCase());
-  const regionLabel = (code: string) => REGION_LABELS[code] ?? code;
+  const regionLabel = (code: string) => (code === REGION_UNSPECIFIED ? 'Not specified' : (REGION_LABELS[code] ?? code));
   const matchRegion = (code: string) => !q || regionLabel(code).toLowerCase().includes(q);
   const matchCountry = (code: string) => !q || countryLabel(code).toLowerCase().includes(q);
   const matchCity = (city: string) => !q || city.toLowerCase().includes(q);
@@ -79,6 +86,9 @@
       .map((region) => ({ region, countryCodes: (countriesByRegion[region] ?? []).filter(matchCountry), nameMatch: matchRegion(region) }))
       .filter((r) => r.nameMatch || r.countryCodes.length),
   );
+
+  // Flat pills hide during a search unless their own label matches the query.
+  const visibleFlatRegions = $derived(flatRegions.filter(matchRegion));
 
   // Selected-location chips, shown above the tree: included first, then excluded,
   // across regions → countries → cities. Each chip removes its value outright (not a
@@ -145,6 +155,23 @@
           <X class="size-3" />
         </button>
       </span>
+    {/each}
+  </div>
+{/if}
+
+{#if visibleFlatRegions.length}
+  <div class="mb-1 flex flex-wrap gap-2 border-b border-border pb-3">
+    {#each visibleFlatRegions as code (code)}
+      {@const rExc = regionF.exclude.includes(code)}
+      {@const rInc = regionF.include.includes(code)}
+      <button
+        type="button"
+        onclick={() => store.cycle('regions', code)}
+        title={pillTitle(rInc, rExc, true)}
+        class={pillClass(rInc || rExc, rExc, 'px-3 py-1.5 text-sm')}
+      >
+        {regionLabel(code)}
+      </button>
     {/each}
   </div>
 {/if}

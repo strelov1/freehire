@@ -37,6 +37,7 @@
     initialKey,
     pane,
     extra,
+    footerNote,
   }: {
     open?: boolean;
     onClose: () => void;
@@ -60,6 +61,10 @@
     pane: Snippet<[RailEntry]>;
     /** Optional content above the pane (e.g. the profile editor's "import from CV"). */
     extra?: Snippet;
+    /** Optional footer nudge above the action row, handed a `jumpTo` to switch panes and
+     *  the current `activeKey` — lets a domain wrapper add copy (e.g. "save this search")
+     *  that jumps to another tab without the shell knowing what the tabs mean. */
+    footerNote?: Snippet<[{ jumpTo: (key: string) => void; activeKey: string }]>;
   } = $props();
 
   // Set on the first open (see the seed effect); until then activeEntry falls back to
@@ -194,6 +199,7 @@
         {#if applyError}
           <p class="text-sm text-destructive">{applyError}</p>
         {/if}
+        {#if footerNote}{@render footerNote({ jumpTo: (k) => (active = k), activeKey: active })}{/if}
         <div class="flex items-center justify-between">
           <button
             type="button"

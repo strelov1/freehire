@@ -7,7 +7,7 @@
 // in sync with the backend vocabulary.
 
 export const REGION_LABELS: Record<string, string> = {
-  global: 'Global',
+  global: 'Global/Worldwide',
   north_america: 'North America',
   latam: 'LATAM',
   eu: 'Europe',

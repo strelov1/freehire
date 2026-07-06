@@ -1,6 +1,9 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { Bell } from '@lucide/svelte';
   import { FACETS } from '$lib/facets';
+  import { isAuthenticated } from '$lib/auth.svelte';
+  import { notifications } from '$lib/notifications.svelte';
   import { emptyFilters, type FilterStore, type JobFilters } from '$lib/filters';
   import { StagedFilters } from '$lib/stagedFilters.svelte';
   import { RAIL, RAIL_SECTIONS, type RailEntry, type RailSection } from '$lib/filterSections';
@@ -62,6 +65,23 @@
 
   const staged = new StagedFilters();
 
+  // The "My filters" tab is present only on the full job modal — the caller enables saved
+  // searches and doesn't restrict the rail to a facet subset (as the profile modal does).
+  // Gates the tab itself (visibleRail), its data warm-up, and the footer nudge that jumps
+  // to it, so the jump never lands on a missing tab.
+  const hasSavedTab = $derived(savedSearches && !railKeys);
+
+  // Warm the Telegram feature flag when the modal opens for a signed-in user, so the
+  // footer "save for TG alerts" nudge can gate on it before the My-filters tab (which
+  // otherwise triggers the load) is ever opened. No-op off the browser / once loaded.
+  $effect(() => {
+    if (open && hasSavedTab && isAuthenticated()) void notifications.ensureLoaded();
+  });
+
+  // The footer nudge shows only when the My-filters tab exists (so the jump lands
+  // somewhere), Telegram alerts are available, and there's a search worth saving.
+  const showSaveNudge = $derived(hasSavedTab && notifications.telegram.enabled && staged.active > 0);
+
   // The "My filters" (saved searches) tab. It heads the rail on the full job modal, but
   // not when the caller restricts the rail to a facet subset (e.g. the profile modal),
   // which has no saved-search context.
@@ -72,7 +92,7 @@
   // and a 'facet' entry is hidden when its param is excluded (e.g. Company on a company
   // page).
   const visibleRail = $derived([
-    ...(savedSearches && !railKeys ? [SAVED_ENTRY] : []),
+    ...(hasSavedTab ? [SAVED_ENTRY] : []),
     ...RAIL.filter((e) => (!railKeys || railKeys.includes(e.key)) && !(e.facetParam && exclude.includes(e.facetParam))),
   ]);
 
@@ -143,10 +163,29 @@
   {previewCount}
   {pane}
   extra={extra ? extraStaged : undefined}
+  {footerNote}
 />
 
 {#snippet extraStaged()}
   {@render extra?.(staged)}
+{/snippet}
+
+{#snippet footerNote({ jumpTo, activeKey }: { jumpTo: (key: string) => void; activeKey: string })}
+  {#if showSaveNudge && activeKey !== 'saved'}
+    <p class="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <Bell class="size-3.5 shrink-0" aria-hidden="true" />
+      <span>
+        Want new jobs for this search in Telegram?
+        <button
+          type="button"
+          onclick={() => jumpTo('saved')}
+          class="font-medium text-foreground underline underline-offset-2 hover:opacity-80"
+        >
+          Save it to My filters
+        </button>.
+      </span>
+    </p>
+  {/if}
 {/snippet}
 
 {#snippet pane(entry: RailEntry)}

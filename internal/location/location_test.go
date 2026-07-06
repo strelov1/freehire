@@ -78,13 +78,23 @@ func TestParse(t *testing.T) {
 			want:     Geo{Countries: []string{"nz"}, Regions: []string{"apac"}, Cities: []string{"Auckland"}},
 		},
 		{
-			name:     "bare remote yields work mode but no geography",
+			// A remote job that resolves no geography at all is open-anywhere: it joins the
+			// global bucket (its remoteness is still carried by WorkMode, which the separate
+			// work-type facet filters on — the global region never displaces it).
+			name:     "bare remote with no geography yields global",
 			location: "Remote",
-			want:     Geo{WorkMode: "remote"},
+			want:     Geo{Regions: []string{"global"}, WorkMode: "remote"},
 		},
 		{
 			name:     "explicit anywhere yields global and remote",
 			location: "Remote - Anywhere",
+			want:     Geo{Regions: []string{"global"}, WorkMode: "remote"},
+		},
+		{
+			// The global fallback is driven by the detected work mode, not the literal word
+			// "remote": a WFH marker with no place resolves the same way.
+			name:     "work-from-home marker with no place yields global",
+			location: "Work from home",
 			want:     Geo{Regions: []string{"global"}, WorkMode: "remote"},
 		},
 		{
@@ -145,9 +155,10 @@ func TestParse(t *testing.T) {
 		{
 			// A hyphenated word whose first segment happens to be a 2-letter code
 			// ("in") must not emit a phantom country: no other segment is geography.
+			// It resolves no country, so the remote fallback puts it in global.
 			name:     "hyphenated word is not a leading bare code",
 			location: "Remote or in-house",
-			want:     Geo{WorkMode: "remote"},
+			want:     Geo{Regions: []string{"global"}, WorkMode: "remote"},
 		},
 		{
 			// "De-Witt" (a place, but not a geo dash-export) must not add a phantom
@@ -305,9 +316,9 @@ func TestParseCyrillic(t *testing.T) {
 			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, WorkMode: "remote"},
 		},
 		{
-			name:     "bare Удалённо yields remote mode, no geography",
+			name:     "bare Удалённо yields remote mode and global",
 			location: "Удалённо",
-			want:     Geo{WorkMode: "remote"},
+			want:     Geo{Regions: []string{"global"}, WorkMode: "remote"},
 		},
 		{
 			name:     "Cyrillic hybrid marker with city",

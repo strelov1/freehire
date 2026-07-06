@@ -172,6 +172,18 @@ func normalizeSet(a []string) []string {
 	return out
 }
 
+// nonCityFallback are LLM-emitted "city" values that are really work-mode or
+// open-anywhere markers, not places. The deterministic dictionary never produces
+// these (it emits only real beacon cities); they leak in only through the
+// enrichment.cities fallback, so they are dropped there. A bare-remote job's
+// geography is carried by regions=global instead (see location.Parse), and its
+// remoteness by the work_mode facet.
+var nonCityFallback = map[string]struct{}{
+	"remote": {}, "remote-first": {}, "fully remote": {}, "worldwide": {},
+	"anywhere": {}, "global": {}, "distributed": {}, "hybrid": {},
+	"onsite": {}, "on-site": {}, "work from home": {}, "wfh": {},
+}
+
 // cityFacet builds the served city facet: the deterministic dictionary cities when
 // present (canonical display names), otherwise a normalized fallback to the LLM's
 // enrichment.cities. Case is preserved (the value is its own display label); the
@@ -186,9 +198,13 @@ func cityFacet(dict, llm []string) []string {
 		if i := strings.IndexByte(c, ','); i >= 0 {
 			c = strings.TrimSpace(c[:i])
 		}
-		if c != "" {
-			cleaned = append(cleaned, c)
+		if c == "" {
+			continue
 		}
+		if _, bad := nonCityFallback[strings.ToLower(c)]; bad {
+			continue
+		}
+		cleaned = append(cleaned, c)
 	}
 	return dedupeSortedPreserveCase(cleaned)
 }

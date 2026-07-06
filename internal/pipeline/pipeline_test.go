@@ -215,10 +215,11 @@ func TestNormalizeJobParsesGeographyFromLocation(t *testing.T) {
 		t.Errorf("geography = %v/%v, want [de]/[eu]", geo.Countries, geo.Regions)
 	}
 
-	// A location with no resolvable place leaves geography empty (never guessed).
+	// A bare "Remote" resolves no country, so it falls into the open-anywhere global
+	// region (its remoteness stays on WorkMode; see location.Parse).
 	bare := normalizeJob(e, sources.Job{ExternalID: "2", Title: "Dev", Company: "Acme", Location: "Remote"})
-	if len(bare.Countries) != 0 || len(bare.Regions) != 0 {
-		t.Errorf("bare remote geography = %v/%v, want empty", bare.Countries, bare.Regions)
+	if len(bare.Countries) != 0 || !reflect.DeepEqual(bare.Regions, []string{"global"}) {
+		t.Errorf("bare remote geography = %v/%v, want []/[global]", bare.Countries, bare.Regions)
 	}
 }
 

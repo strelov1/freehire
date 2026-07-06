@@ -509,6 +509,16 @@ func TestFromRow_CitiesHybrid(t *testing.T) {
 			t.Errorf("Cities = %v, want %v (LLM fallback normalized)", view.Cities, want)
 		}
 	})
+	t.Run("work-mode markers leaked as LLM cities are dropped", func(t *testing.T) {
+		raw, _ := json.Marshal(enrich.Enrichment{Cities: []string{"Remote", "Berlin", "Worldwide", "Anywhere"}})
+		view, err := FromRow(db.Job{ID: 4, PublicSlug: "x-4", Cities: nil, Enrichment: raw})
+		if err != nil {
+			t.Fatalf("FromRow: %v", err)
+		}
+		if !reflect.DeepEqual(view.Cities, []string{"Berlin"}) {
+			t.Errorf("Cities = %v, want [Berlin] (work-mode markers filtered)", view.Cities)
+		}
+	})
 	t.Run("neither dict nor LLM yields an empty array, not null", func(t *testing.T) {
 		view, err := FromRow(db.Job{ID: 3, PublicSlug: "x-3"})
 		if err != nil {
