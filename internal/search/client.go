@@ -475,7 +475,13 @@ func (c *Client) EmbedText(ctx context.Context, key, text string) ([]float64, st
 		return nil, "", err
 	}
 	pk := primaryKey
-	doc := map[string]any{primaryKey: key, "description": text}
+	// The CV goes in the same `description` field the jobs document template reads, so
+	// the embedding pipeline — and thus the vector space — is identical to the jobs'.
+	// title/company must be present too: the shared template references them and
+	// Meilisearch's Liquid is STRICT — a missing referenced field fails the document
+	// (`invalid_document_fields`), not renders empty. Empty strings render as a job with
+	// no title/company would, keeping the space identical.
+	doc := map[string]any{primaryKey: key, "title": "", "company": "", "description": text}
 	task, err := idx.UpdateDocumentsWithContext(ctx, []map[string]any{doc}, &meilisearch.DocumentOptions{PrimaryKey: &pk})
 	if err != nil {
 		return nil, "", fmt.Errorf("search: embed upsert: %w", err)
