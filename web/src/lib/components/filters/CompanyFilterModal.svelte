@@ -3,6 +3,7 @@
   import type { CompanyFilterStore } from '$lib/companyFilters';
   import { StagedCompanyFilters } from '$lib/stagedCompanyFilters.svelte';
   import type { RailEntry, RailSection } from '$lib/filterSections';
+  import type { FacetCounts } from '$lib/types';
   import FacetSection from '../facets/FacetSection.svelte';
   import FilterModalShell from './FilterModalShell.svelte';
 
@@ -51,7 +52,7 @@
   {pane}
 />
 
-{#snippet pane(entry: RailEntry)}
+{#snippet pane(entry: RailEntry, _live: FacetCounts | null)}
   {@const def = COMPANY_FACETS.find((d) => d.param === entry.facetParam)}
   {#if def}<FacetSection {def} store={staged} expand />{/if}
 {/snippet}

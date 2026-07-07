@@ -10,14 +10,33 @@ import (
 )
 
 type fakeFacetCounter struct {
-	got search.FacetParams
-	res search.FacetResult
-	err error
+	got      search.FacetParams
+	gotReqs  []search.FacetReq
+	gotTotal any
+	res      search.FacetResult
+	err      error
 }
 
 func (f *fakeFacetCounter) FacetCounts(_ context.Context, p search.FacetParams) (search.FacetResult, error) {
 	f.got = p
 	return f.res, f.err
+}
+
+func (f *fakeFacetCounter) DisjunctiveFacetCounts(_ context.Context, _ string, reqs []search.FacetReq, totalFilter any) (search.FacetResult, error) {
+	f.gotReqs = reqs
+	f.gotTotal = totalFilter
+	return f.res, f.err
+}
+
+// reqFilter returns the reduced filter the disjunctive path built for one index
+// attribute (nil if absent).
+func (f *fakeFacetCounter) reqFilter(attr string) any {
+	for _, r := range f.gotReqs {
+		if r.Attr == attr {
+			return r.Filter
+		}
+	}
+	return nil
 }
 
 func facetsApp(fc facetCounter) *fiber.App {
@@ -32,6 +51,43 @@ func TestJobFacets_DisabledReturns503(t *testing.T) {
 	status, _ := doGet(t, app, "/jobs/facets")
 	if status != fiber.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503", status)
+	}
+}
+
+func TestJobFacets_DisjunctiveReducesEachFacetsOwnFilter(t *testing.T) {
+	fake := &fakeFacetCounter{}
+	app := facetsApp(fake)
+
+	status, _ := doGet(t, app, "/jobs/facets?disjunctive=1&seniority=senior&regions=eu")
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+
+	// The seniority facet is counted WITHOUT its own selection, but WITH the others.
+	senGroups, ok := fake.reqFilter("enrichment.seniority").([][]string)
+	if !ok {
+		t.Fatalf("no reduced filter for enrichment.seniority: %#v", fake.gotReqs)
+	}
+	if filterHas(senGroups, `enrichment.seniority = "senior"`) {
+		t.Errorf("seniority facet should drop its own selection, got %#v", senGroups)
+	}
+	if !filterHas(senGroups, `regions = "eu"`) {
+		t.Errorf("seniority facet should keep other facets (regions), got %#v", senGroups)
+	}
+
+	// A different facet keeps seniority in its own reduced filter.
+	regGroups, _ := fake.reqFilter("regions").([][]string)
+	if !filterHas(regGroups, `enrichment.seniority = "senior"`) {
+		t.Errorf("regions facet should keep seniority, got %#v", regGroups)
+	}
+	if filterHas(regGroups, `regions = "eu"`) {
+		t.Errorf("regions facet should drop its own selection, got %#v", regGroups)
+	}
+
+	// The grand total uses the full filter (both facets).
+	totalGroups, _ := fake.gotTotal.([][]string)
+	if !filterHas(totalGroups, `enrichment.seniority = "senior"`) || !filterHas(totalGroups, `regions = "eu"`) {
+		t.Errorf("total filter should include all facets, got %#v", totalGroups)
 	}
 }
 

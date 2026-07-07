@@ -1,12 +1,77 @@
 package search
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/meilisearch/meilisearch-go"
 )
+
+func TestDisjunctiveFacetCounts(t *testing.T) {
+	type call struct {
+		filter any
+		facets []string
+	}
+	var mu sync.Mutex
+	var calls []call
+	searcher := func(_ context.Context, _ string, filter any, facets []string) (*meilisearch.SearchResponse, error) {
+		mu.Lock()
+		calls = append(calls, call{filter, facets})
+		mu.Unlock()
+		if len(facets) == 0 { // total-only query under the full filter
+			return &meilisearch.SearchResponse{EstimatedTotalHits: 1234}, nil
+		}
+		attr := facets[0]
+		dist, _ := json.Marshal(map[string]map[string]int64{attr: {"x": 10, "y": 5}})
+		return &meilisearch.SearchResponse{FacetDistribution: dist, EstimatedTotalHits: 99}, nil
+	}
+
+	reqs := []FacetReq{{Attr: "seniority", Filter: "F_sen"}, {Attr: "category", Filter: "F_cat"}}
+	got, err := disjunctiveFacetCounts(context.Background(), "go", reqs, "FULL", searcher)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	// Total comes from the total-only query (the full filter), not any facet subtotal.
+	if got.Total != 1234 {
+		t.Errorf("Total = %d, want 1234", got.Total)
+	}
+	// Each facet carries its own disjunctive distribution.
+	if got.Facets["seniority"]["x"] != 10 || got.Facets["category"]["y"] != 5 {
+		t.Errorf("Facets = %v", got.Facets)
+	}
+	// One query per facet (facets=[attr], reduced filter) + one total-only (full filter).
+	if len(calls) != 3 {
+		t.Fatalf("calls = %d, want 3", len(calls))
+	}
+	var total, sen *call
+	for i := range calls {
+		switch {
+		case len(calls[i].facets) == 0:
+			total = &calls[i]
+		case calls[i].facets[0] == "seniority":
+			sen = &calls[i]
+		}
+	}
+	if total == nil || total.filter != "FULL" {
+		t.Errorf("total query filter = %v, want FULL with no facets", total)
+	}
+	if sen == nil || sen.filter != "F_sen" {
+		t.Errorf("seniority query filter = %v, want F_sen", sen)
+	}
+}
+
+func TestDisjunctiveFacetCounts_ErrorPropagates(t *testing.T) {
+	searcher := func(context.Context, string, any, []string) (*meilisearch.SearchResponse, error) {
+		return nil, errors.New("boom")
+	}
+	if _, err := disjunctiveFacetCounts(context.Background(), "", []FacetReq{{Attr: "a", Filter: "f"}}, "full", searcher); err == nil {
+		t.Fatal("expected error to propagate")
+	}
+}
 
 func TestBuildFacetResult(t *testing.T) {
 	t.Run("assembles total, facets and stats", func(t *testing.T) {

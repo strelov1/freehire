@@ -38,6 +38,7 @@
     open = false,
     onClose,
     previewCount,
+    stagedCounts,
     extra,
   }: {
     store?: FilterStore;
@@ -58,6 +59,10 @@
     open?: boolean;
     onClose: () => void;
     previewCount?: (params: URLSearchParams) => Promise<number>;
+    // Live disjunctive facet counts for the staged selection — when supplied, every
+    // control shows counts that recompute as you pick (the job list). Absent for the
+    // analytics/swipe reuse, which keep the applied `counts` + total-only preview.
+    stagedCounts?: (params: URLSearchParams) => Promise<FacetCounts>;
     // Extra content rendered above the pane, handed the staged store so it can edit it
     // (e.g. the profile editor's "import skills from CV").
     extra?: Snippet<[StagedFilters]>;
@@ -161,6 +166,7 @@
   {applyDisabled}
   {applyLabel}
   {previewCount}
+  countsFetch={stagedCounts}
   {pane}
   extra={extra ? extraStaged : undefined}
   {footerNote}
@@ -188,27 +194,28 @@
   {/if}
 {/snippet}
 
-{#snippet pane(entry: RailEntry)}
+{#snippet pane(entry: RailEntry, live: FacetCounts | null)}
+  {@const c = live ?? counts}
   {#if entry.kind === 'saved'}
     <SavedSearches store={staged} />
   {:else if entry.kind === 'category'}
     {@const roleDef = facetDefFor('role')}
     {#if roleDef && !exclude.includes('role')}
-      <div class="mb-6"><FacetSection def={roleDef} store={staged} {counts} expand /></div>
+      <div class="mb-6"><FacetSection def={roleDef} store={staged} counts={c} expand /></div>
     {/if}
     {#if !exclude.includes('seniority')}
-      <ChipFacet store={staged} param="seniority" label="Seniority" {counts} />
-      <div class="mt-6"><CategoryPane store={staged} {plain} {counts} /></div>
+      <ChipFacet store={staged} param="seniority" label="Seniority" counts={c} />
+      <div class="mt-6"><CategoryPane store={staged} {plain} counts={c} /></div>
     {:else}
-      <CategoryPane store={staged} {plain} {counts} />
+      <CategoryPane store={staged} {plain} counts={c} />
     {/if}
   {:else if entry.kind === 'location'}
-    <LocationPane store={staged} {counts} />
+    <LocationPane store={staged} counts={c} />
   {:else if entry.kind === 'facet'}
     {@const def = facetDefFor(entry.facetParam)}
-    {#if def}<FacetSection {def} store={staged} {counts} expand />{/if}
+    {#if def}<FacetSection {def} store={staged} counts={c} expand />{/if}
   {:else if entry.kind === 'salary'}
-    <ChipFacet store={staged} param="salary_currency" label="Currency" />
+    <ChipFacet store={staged} param="salary_currency" label="Currency" counts={c} />
     <div class="mb-2 mt-6 flex items-center justify-between">
       <h3 class="text-sm font-semibold tracking-tight">Minimum salary</h3>
       <span class="text-xs font-medium text-muted-foreground"
@@ -226,17 +233,17 @@
       class="w-full accent-primary"
     />
   {:else if entry.kind === 'work'}
-    <ChipFacet store={staged} param="work_mode" label="Work format" />
-    <div class="mt-6"><ChipFacet store={staged} param="employment_type" label="Employment type" /></div>
+    <ChipFacet store={staged} param="work_mode" label="Work format" counts={c} />
+    <div class="mt-6"><ChipFacet store={staged} param="employment_type" label="Employment type" counts={c} /></div>
   {:else if entry.kind === 'industry'}
-    <ChipFacet store={staged} param="domains" label="Industry" />
-    <div class="mt-6"><ChipFacet store={staged} param="company_type" label="Company type" /></div>
-    <div class="mt-6"><ChipFacet store={staged} param="collections" label="Collection" /></div>
+    <ChipFacet store={staged} param="domains" label="Industry" counts={c} />
+    <div class="mt-6"><ChipFacet store={staged} param="company_type" label="Company type" counts={c} /></div>
+    <div class="mt-6"><ChipFacet store={staged} param="collections" label="Collection" counts={c} /></div>
   {:else if entry.kind === 'language'}
-    {#if englishDef}<FacetSection def={englishDef} store={staged} {counts} expand />{/if}
-    <div class="mt-4">{#if postingDef}<FacetSection def={postingDef} store={staged} {counts} expand />{/if}</div>
+    {#if englishDef}<FacetSection def={englishDef} store={staged} counts={c} expand />{/if}
+    <div class="mt-4">{#if postingDef}<FacetSection def={postingDef} store={staged} counts={c} expand />{/if}</div>
   {:else if entry.kind === 'relocation'}
-    <ChipFacet store={staged} param="relocation" label="Relocation" />
+    <ChipFacet store={staged} param="relocation" label="Relocation" counts={c} />
     <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Visa</h3>
     <label class="flex cursor-pointer items-center gap-2 text-sm">
       <input

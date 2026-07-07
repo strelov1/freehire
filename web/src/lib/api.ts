@@ -196,8 +196,12 @@ export function createApi(
    *  query text and facet filters as `searchJobs` (built by the caller, e.g. via
    *  `filtersToParams`); the endpoint returns counts instead of a page of jobs.
    *  Empty `facets`/`stats` are normalized to `{}` so callers never see null. */
-  async function facetCounts(params: URLSearchParams): Promise<FacetCounts> {
-    const res = await request<{ data: FacetCounts }>(`/api/v1/jobs/facets?${params}`);
+  // `disjunctive` asks the endpoint to count each facet under the filter minus its
+  // own selection (so a selected facet still shows its siblings) — the live-modal mode.
+  async function facetCounts(params: URLSearchParams, opts?: { disjunctive?: boolean }): Promise<FacetCounts> {
+    const p = new URLSearchParams(params);
+    if (opts?.disjunctive) p.set('disjunctive', '1');
+    const res = await request<{ data: FacetCounts }>(`/api/v1/jobs/facets?${p}`);
     return { total: res.data.total, facets: res.data.facets ?? {}, stats: res.data.stats ?? {} };
   }
 

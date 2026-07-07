@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { X } from '@lucide/svelte';
+  import { LoaderCircle, X } from '@lucide/svelte';
   import type { RailEntry, RailSection } from '$lib/filterSections';
+  import type { FacetCounts } from '$lib/types';
 
   // The reusable two-pane filter-modal chrome: backdrop, header, the sectioned left
   // rail, and the deferred footer (Clear all / Apply / live preview). It knows nothing
@@ -34,6 +35,7 @@
     applyDisabled = false,
     applyLabel,
     previewCount,
+    countsFetch,
     initialKey,
     pane,
     extra,
@@ -53,12 +55,18 @@
     applyDisabled?: boolean;
     /** Custom footer label (e.g. "Save"); when absent the button shows the live preview. */
     applyLabel?: string;
+    /** Legacy total-only preview: the footer count. Used when `countsFetch` is absent. */
     previewCount?: (params: URLSearchParams) => Promise<number>;
+    /** Live disjunctive facet counts for the staged selection. When set, the shell fetches
+     *  the full distribution (debounced), drives the footer total + a loading spinner, and
+     *  hands the distribution to the `pane` snippet — so every control shows live counts. */
+    countsFetch?: (params: URLSearchParams) => Promise<FacetCounts>;
     /** Rail entry to land on when the modal opens (defaults to the first entry) — lets a
      *  caller keep a lead tab (e.g. "My filters") in the rail without opening on it. */
     initialKey?: string;
-    /** Renders the active entry's controls into the right pane. */
-    pane: Snippet<[RailEntry]>;
+    /** Renders the active entry's controls into the right pane, given the live staged
+     *  facet counts (null until the first fetch resolves or when `countsFetch` is absent). */
+    pane: Snippet<[RailEntry, FacetCounts | null]>;
     /** Optional content above the pane (e.g. the profile editor's "import from CV"). */
     extra?: Snippet;
     /** Optional footer nudge above the action row, handed a `jumpTo` to switch panes and
@@ -87,23 +95,49 @@
   const activeEntry = $derived(rail.find((e) => e.key === active) ?? rail[0]);
 
   // Debounced live preview for the staged filters, keyed by a monotonic gen so a slow
-  // response can't overwrite a newer one.
+  // response can't overwrite a newer one. With `countsFetch` the shell holds the full
+  // distribution (`liveCounts`) + a `loading` flag driving the footer spinner; otherwise
+  // it falls back to the total-only `previewCount`.
   let showCount = $state<number | null>(null);
+  let liveCounts = $state<FacetCounts | null>(null);
+  let loading = $state(false);
   let countGen = 0;
   $effect(() => {
-    if (!open || !previewCount) return;
+    if (!open) return;
     const params = staged.params(); // tracks the staged edits
     const gen = ++countGen;
-    const pc = previewCount;
-    const t = setTimeout(() => {
-      pc(params)
-        .then((n) => {
-          if (gen === countGen) showCount = n;
-        })
-        .catch(() => {});
-    }, 200);
+    let t: ReturnType<typeof setTimeout> | undefined;
+    if (countsFetch) {
+      const cf = countsFetch;
+      loading = true;
+      t = setTimeout(() => {
+        cf(params)
+          .then((c) => {
+            if (gen === countGen) {
+              liveCounts = c;
+              loading = false;
+            }
+          })
+          .catch(() => {
+            if (gen === countGen) loading = false;
+          });
+      }, 200);
+    } else if (previewCount) {
+      const pc = previewCount;
+      t = setTimeout(() => {
+        pc(params)
+          .then((n) => {
+            if (gen === countGen) showCount = n;
+          })
+          .catch(() => {});
+      }, 200);
+    }
     return () => clearTimeout(t);
   });
+
+  // The footer total: the live distribution's total when count-fetching, else the
+  // legacy preview number.
+  const total = $derived(countsFetch ? liveCounts?.total ?? null : showCount);
 
   let applyBusy = $state(false);
   let applyError = $state<string | null>(null);
@@ -190,7 +224,7 @@
         <!-- pane -->
         <section class="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
           {#if extra}<div class="mb-6">{@render extra()}</div>{/if}
-          {#if activeEntry}{@render pane(activeEntry)}{/if}
+          {#if activeEntry}{@render pane(activeEntry, liveCounts)}{/if}
         </section>
       </div>
 
@@ -214,9 +248,11 @@
           >
             {#if applyLabel}
               {applyBusy ? 'Saving…' : applyLabel}
+            {:else if loading}
+              Show <LoaderCircle class="size-4 animate-spin" /> jobs
             {:else}
-              Show {showCount != null ? showCount.toLocaleString('en-US') : ''}
-              {showCount === 1 ? 'job' : 'jobs'}
+              Show {total != null ? total.toLocaleString('en-US') : ''}
+              {total === 1 ? 'job' : 'jobs'}
             {/if}
           </button>
         </div>

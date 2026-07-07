@@ -95,12 +95,14 @@
   let modalOpen = $state(false);
   let started = false;
 
-  // The job count for a staged filter set (built by the modal), merged with the fixed
-  // scope params (e.g. company_slug) so the "Show N jobs" preview matches the list.
-  const previewCount = (params: URLSearchParams) => {
+  // Live disjunctive facet counts for the staged filter set (built by the modal),
+  // merged with the fixed scope params (e.g. company_slug) so every control's counts —
+  // and the "Show N jobs" total — match the list. Disjunctive so a selected facet
+  // still shows its siblings' counts.
+  const stagedCounts = (params: URLSearchParams) => {
     const p = new URLSearchParams(params);
     for (const [k, v] of Object.entries(scope)) p.set(k, v);
-    return api.facetCounts(p).then((c) => c.total);
+    return api.facetCounts(p, { disjunctive: true });
   };
 
   // The server-rendered `initial` was searched for `page.url`. After a back/forward
@@ -274,5 +276,5 @@
   savedSearches={standalone}
   open={modalOpen}
   onClose={() => (modalOpen = false)}
-  {previewCount}
+  {stagedCounts}
 />

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/meilisearch/meilisearch-go"
 )
@@ -47,6 +48,91 @@ func (c *Client) FacetCounts(ctx context.Context, p FacetParams) (FacetResult, e
 		return FacetResult{}, fmt.Errorf("search: facet query: %w", err)
 	}
 	return buildFacetResult(resp)
+}
+
+// FacetReq is one facet's disjunctive request: the attribute to distribute and
+// the filter to count it under — the full filter with that facet's own selection
+// removed, so its own selection does not zero out its sibling values.
+type FacetReq struct {
+	Attr   string
+	Filter any
+}
+
+// facetSearcher runs one Limit:0 facet query. It is injected so
+// disjunctiveFacetCounts is unit-testable without a live engine.
+type facetSearcher func(ctx context.Context, query string, filter any, facets []string) (*meilisearch.SearchResponse, error)
+
+// DisjunctiveFacetCounts computes each facet's distribution under its own reduced
+// filter (so a selected facet still shows its siblings' counts) plus the grand
+// total under the full filter. All queries run concurrently, so the latency is
+// that of the slowest single facet query, not their sum.
+func (c *Client) DisjunctiveFacetCounts(ctx context.Context, query string, reqs []FacetReq, totalFilter any) (FacetResult, error) {
+	return disjunctiveFacetCounts(ctx, query, reqs, totalFilter, func(ctx context.Context, q string, filter any, facets []string) (*meilisearch.SearchResponse, error) {
+		return c.facet.SearchWithContext(ctx, q, &meilisearch.SearchRequest{Filter: filter, Facets: facets, Limit: 0})
+	})
+}
+
+func disjunctiveFacetCounts(ctx context.Context, query string, reqs []FacetReq, totalFilter any, search facetSearcher) (FacetResult, error) {
+	res := FacetResult{Facets: map[string]map[string]int64{}, Stats: map[string]FacetStat{}}
+	var (
+		mu       sync.Mutex
+		wg       sync.WaitGroup
+		firstErr error
+	)
+	run := func(fn func() error) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := fn(); err != nil {
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = err
+				}
+				mu.Unlock()
+			}
+		}()
+	}
+
+	// The grand total under the full filter — the number "Show N results" reflects.
+	run(func() error {
+		resp, err := search(ctx, query, totalFilter, nil)
+		if err != nil {
+			return fmt.Errorf("search: disjunctive total: %w", err)
+		}
+		mu.Lock()
+		res.Total = resp.EstimatedTotalHits
+		mu.Unlock()
+		return nil
+	})
+	// Each facet under its own reduced filter, keeping only its own distribution.
+	for _, r := range reqs {
+		r := r
+		run(func() error {
+			resp, err := search(ctx, query, r.Filter, []string{r.Attr})
+			if err != nil {
+				return fmt.Errorf("search: disjunctive facet %s: %w", r.Attr, err)
+			}
+			fr, err := buildFacetResult(resp)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			if d, ok := fr.Facets[r.Attr]; ok {
+				res.Facets[r.Attr] = d
+			}
+			for k, v := range fr.Stats {
+				res.Stats[k] = v
+			}
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	wg.Wait()
+	if firstErr != nil {
+		return FacetResult{}, firstErr
+	}
+	return res, nil
 }
 
 // buildFacetResult assembles a FacetResult from a Meilisearch response, decoding

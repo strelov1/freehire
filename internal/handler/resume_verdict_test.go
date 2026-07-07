@@ -38,6 +38,11 @@ func (f *twoQueryFacets) FacetCounts(_ context.Context, p search.FacetParams) (s
 	return search.FacetResult{}, nil
 }
 
+// The verdict path never uses disjunctive counts; satisfy the interface.
+func (f *twoQueryFacets) DisjunctiveFacetCounts(context.Context, string, []search.FacetReq, any) (search.FacetResult, error) {
+	return search.FacetResult{}, nil
+}
+
 // coverageFacets: role has 1000 open vacancies (query A), 370 uncovered (query B)
 // with kubernetes the biggest gap.
 func coverageFacets() *twoQueryFacets {
