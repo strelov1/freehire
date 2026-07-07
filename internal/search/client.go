@@ -35,9 +35,20 @@ const (
 	semanticRebuildUID = "jobs_semantic_rebuild"
 	primaryKey         = "id"
 	embedderName       = "default"
-	// embedderModel runs inside Meilisearch (source huggingFace), so hybrid
-	// search needs no external API key. Multilingual + CPU-friendly.
-	embedderModel = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+	// embedderModel is the identity of the embedding model, stored beside a CV vector
+	// so a model change marks it stale (see CurrentEmbedderModel). Embedding runs on a
+	// self-hosted Text-Embeddings-Inference (TEI) service — NOT in-engine and NOT
+	// OpenAI — reached over TEI's OpenAI-compatible endpoint (embedderURL). Multilingual
+	// e5 gives far sharper skill matching than the old in-engine MiniLM, and offloading
+	// the compute keeps it off Meilisearch's single task queue.
+	embedderModel = "intfloat/multilingual-e5-base"
+	// embedderURL is the TEI OpenAI-compatible embeddings endpoint. A const (like
+	// embedderModel) — both prod and dev run TEI on localhost:8090; promote to config
+	// if a deployment needs to point elsewhere.
+	embedderURL = "http://127.0.0.1:8090/v1/embeddings"
+	// embedderDimensions is the e5-base output width; declared so Meilisearch validates
+	// vectors and the userProvided CV vector matches.
+	embedderDimensions = 768
 
 	// resumeVectorIndexUID is the scratch index EmbedText round-trips a CV through to
 	// obtain a vector in the jobs' space: the in-engine embedder exposes no direct
@@ -674,26 +685,40 @@ func facetSettings() *meilisearch.Settings {
 	}
 }
 
-// semanticSettings is the hybrid index configuration: the facet/keyword settings
-// plus the in-engine huggingFace embedder. Meilisearch embeds each new or changed
-// document at index time (and skips unchanged ones), so this index is built by the
-// separate, slower reindex --semantic pass and never on the default reindex path.
+// semanticSettings is the hybrid index configuration: the facet/keyword settings plus
+// the embedder. Meilisearch embeds each new or changed document at index time (and
+// skips unchanged ones), so this index is built by the separate reindex --semantic
+// pass and never on the default reindex path. Embedding is offloaded to TEI (see
+// jobEmbedder) rather than run in-engine, so it never blocks Meilisearch's task queue.
 func semanticSettings() *meilisearch.Settings {
 	s := facetSettings()
-	s.Embedders = map[string]meilisearch.Embedder{
-		embedderName: {
-			Source:           "huggingFace",
-			Model:            embedderModel,
-			DocumentTemplate: "{{ doc.title }} at {{ doc.company }}. {{ doc.description }}",
-		},
-	}
+	s.Embedders = map[string]meilisearch.Embedder{embedderName: jobEmbedder()}
 	return s
 }
 
-// resumeVectorSettings configures the EmbedText scratch index with ONLY the semantic
-// index's embedder — same source, model, and document template — so a CV embedded
-// here lands in the exact same vector space as the jobs. No facets/filters: the
-// index holds one transient document at a time and is never searched.
+// jobEmbedder is the shared TEI embedder for jobs, reached over TEI's OpenAI-compatible
+// endpoint (so Meilisearch needs no request/response template). Jobs are the corpus, so
+// their text carries the e5 "passage:" prefix — the CV, the query side, uses "query:"
+// (see resumeVectorSettings). apiKey is a placeholder: TEI runs without auth, but the
+// openAi source expects the field set.
+func jobEmbedder() meilisearch.Embedder {
+	return meilisearch.Embedder{
+		Source:           "openAi",
+		URL:              embedderURL,
+		APIKey:           "tei-local",
+		Model:            embedderModel,
+		Dimensions:       embedderDimensions,
+		DocumentTemplate: "passage: {{ doc.title }} at {{ doc.company }}. {{ doc.description }}",
+	}
+}
+
+// resumeVectorSettings configures the EmbedText scratch index with the SAME TEI embedder
+// as jobs — same model + endpoint, so the CV vector lands in the jobs' space — but the
+// CV text carries the e5 "query:" prefix: recommendations search the job corpus
+// (passages) with the CV as the query, e5's asymmetric-retrieval convention. No
+// facets/filters: the index holds one transient document at a time and is never searched.
 func resumeVectorSettings() *meilisearch.Settings {
-	return &meilisearch.Settings{Embedders: semanticSettings().Embedders}
+	e := jobEmbedder()
+	e.DocumentTemplate = "query: {{ doc.description }}"
+	return &meilisearch.Settings{Embedders: map[string]meilisearch.Embedder{embedderName: e}}
 }
