@@ -36,8 +36,8 @@ apply the filter to the live list; only the footer Apply action does.
 
 ### Requirement: The preview shows a loading state during recompute
 
-While a staged-count recompute is in flight, the modal's "Show N results" footer
-SHALL show a loading indicator instead of a stale number, and the option counts
+The modal's "Show N results" footer SHALL show a loading indicator instead of a
+stale number while a staged-count recompute is in flight, and the option counts
 MAY be dimmed; when the recompute resolves, the number (and counts) SHALL appear.
 
 #### Scenario: Spinner while recomputing
