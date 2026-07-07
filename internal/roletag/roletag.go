@@ -82,7 +82,7 @@ var namedRoleTable = []struct {
 }{
 	// Generic engineering catch-all (classify assigns no category to a bare
 	// "Software Engineer"): the largest category-less bucket in the catalogue.
-	{"software_engineer", "Software Engineer", []string{"software engineer", "software developer", "software development engineer", "web developer", "sde"}},
+	{"software_engineer", "Software Engineer", []string{"software engineer", "software developer", "software development engineer", "web developer", "sde", "swe"}},
 
 	// Startup / cross-cutting engineering.
 	{"founding_engineer", "Founding Engineer", []string{"founding engineer"}},
@@ -105,6 +105,15 @@ var namedRoleTable = []struct {
 	// specific title pickable).
 	{"android_developer", "Android Developer", []string{"android developer", "android engineer", "android software engineer"}},
 	{"ios_developer", "iOS Developer", []string{"ios developer", "ios engineer", "ios software engineer"}},
+	{"react_native_developer", "React Native Developer", []string{"react native", "react-native"}},
+	{"flutter_developer", "Flutter Developer", []string{"flutter"}},
+	{"solutions_consultant", "Solutions Consultant", []string{"solutions consultant", "solution consultant"}},
+	{"scrum_master", "Scrum Master", []string{"scrum master"}},
+
+	// Explicit gaps found in prod: "Team Lead" (classify only gives grade lead),
+	// "Director" (frequent, no category) — kept non-gradeable below.
+	{"team_lead", "Team Lead", []string{"team lead", "teamlead"}},
+	{"director", "Director", []string{"director"}},
 	{"platform_engineer", "Platform Engineer", []string{"platform engineer"}},
 	{"cloud_engineer", "Cloud Engineer", []string{"cloud engineer"}},
 	{"infrastructure_engineer", "Infrastructure Engineer", []string{"infrastructure engineer"}},
@@ -212,6 +221,8 @@ var nonGradeable = map[string]bool{
 	"founder": true, "founding_engineer": true, "founding_designer": true, "founding_pm": true,
 	"staff_engineer": true, "technical_lead": true, "vp_engineering": true, "chief_of_staff": true,
 	"head_of_product": true, "head_of_growth": true, "head_of_design": true, "head_of_marketing": true,
+	// team_lead already implies the lead grade; director is exec-level.
+	"team_lead": true, "director": true,
 }
 
 func buildNamedAliases() []namedAlias {

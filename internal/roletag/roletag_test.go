@@ -59,6 +59,13 @@ func TestDerive(t *testing.T) {
 		{"fractional cto does not compose", "c_level", "", "Fractional CTO", []string{"c_level", "fractional_cto"}},
 		{"staff engineer does not compose", "staff", "", "Staff Engineer", []string{"staff", "staff_engineer"}},
 
+		// Prod-gap additions.
+		{"swe alias resolves software engineer", "senior", "", "Senior SWE", []string{"senior", "software_engineer", "senior_software_engineer"}},
+		{"team lead named role", "lead", "", "Team Lead", []string{"lead", "team_lead"}},
+		{"react native named + graded", "senior", "", "Senior React Native Developer", []string{"senior", "react_native_developer", "senior_react_native_developer"}},
+		{"flutter named", "", "", "Flutter Developer", []string{"flutter_developer"}},
+		{"director non-gradeable", "lead", "", "Director", []string{"lead", "director"}},
+
 		// Never guesses: no seniority, no category, no named alias.
 		{"nothing resolvable", "", "", "Rockstar Ninja Guru", nil},
 	}
