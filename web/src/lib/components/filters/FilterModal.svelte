@@ -11,6 +11,7 @@
   import { FRESHNESS_PRESETS, SALARY_MAX, SALARY_STEP, freshnessLabel } from '$lib/filterControls';
   import FacetSection from '../facets/FacetSection.svelte';
   import ChipFacet from './ChipFacet.svelte';
+  import CategoryPane from './CategoryPane.svelte';
   import LocationPane from './LocationPane.svelte';
   import FilterModalShell from './FilterModalShell.svelte';
   import SavedSearches from '../SavedSearches.svelte';
@@ -104,6 +105,7 @@
 
   function entryCount(e: RailEntry): number {
     const f = staged.value;
+    if (e.kind === 'category') return selCount(f, 'role') + selCount(f, 'category') + selCount(f, 'seniority');
     if (e.kind === 'location') return selCount(f, 'regions') + selCount(f, 'countries') + selCount(f, 'cities');
     if (e.kind === 'salary') return selCount(f, 'salary_currency') + (f.salaryMin != null ? 1 : 0);
     if (e.kind === 'work') return selCount(f, 'work_mode') + selCount(f, 'employment_type');
@@ -189,6 +191,17 @@
 {#snippet pane(entry: RailEntry)}
   {#if entry.kind === 'saved'}
     <SavedSearches store={staged} />
+  {:else if entry.kind === 'category'}
+    {@const roleDef = facetDefFor('role')}
+    {#if roleDef && !exclude.includes('role')}
+      <div class="mb-6"><FacetSection def={roleDef} store={staged} {counts} expand /></div>
+    {/if}
+    {#if !exclude.includes('seniority')}
+      <ChipFacet store={staged} param="seniority" label="Seniority" />
+      <div class="mt-6"><CategoryPane store={staged} {plain} /></div>
+    {:else}
+      <CategoryPane store={staged} {plain} />
+    {/if}
   {:else if entry.kind === 'location'}
     <LocationPane store={staged} {counts} />
   {:else if entry.kind === 'facet'}
