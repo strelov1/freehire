@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { uniqueByValue, type FacetOption } from '$lib/facets';
+  import { Plus } from '@lucide/svelte';
+  import { relatedOptions, uniqueByValue, type FacetOption } from '$lib/facets';
   import { fuzzyMatch } from '$lib/fuzzy';
   import { Input } from '$lib/ui';
   import { pillClass, pillTitle } from './pill';
@@ -20,6 +21,7 @@
     clearOnSelect = false,
     expand = false,
     cap,
+    related,
   }: {
     options: FacetOption[];
     include: string[];
@@ -38,6 +40,10 @@
     // distribution (role: hundreds of values) stays readable — the rest surface
     // as you type. Selected options always show. Unset = no cap.
     cap?: number;
+    // Curated base-slug → related-slug map. When set (role facet), a "Related"
+    // chip row appears under the list once a search narrows it, suggesting
+    // siblings the text search can't name (type "mobile" → iOS/Android chips).
+    related?: Record<string, string[]>;
   } = $props();
 
   let filter = $state('');
@@ -65,6 +71,21 @@
     capped ? matched.filter((o, i) => i < cap! || isSelected(o.value)) : matched,
   );
   const hiddenCount = $derived(capped ? matched.length - shown.length : 0);
+
+  // "Related" suggestions: only once a search narrows the list (an unfiltered
+  // picker would suggest everything). Sourced from what the search surfaced
+  // (`shown`), excluding anything already shown or selected — so the chips are
+  // specifically the siblings the text search couldn't reach.
+  const suggestions = $derived(
+    related && filter.trim()
+      ? relatedOptions(
+          uniqueByValue(options),
+          shown.map((o) => o.value),
+          [...include, ...exclude],
+          related,
+        )
+      : [],
+  );
 </script>
 
 <div class="flex flex-col gap-2">
@@ -88,5 +109,20 @@
   </div>
   {#if hiddenCount > 0}
     <span class="px-1 text-xs text-muted-foreground">+{hiddenCount.toLocaleString()} more — type to search</span>
+  {/if}
+  {#if suggestions.length > 0}
+    <div class="mt-1 flex flex-wrap items-center gap-1.5 border-t border-dashed border-border pt-2">
+      <span class="text-xs font-medium text-muted-foreground">Related</span>
+      {#each suggestions as opt (opt.value)}
+        <button
+          type="button"
+          onclick={() => toggle(opt.value)}
+          title="Add {opt.label}"
+          class="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1 text-sm text-muted-foreground transition-colors hover:border-solid hover:bg-accent hover:text-foreground"
+        >
+          <Plus class="size-3" />{opt.label}{#if opt.count !== undefined}<span class="opacity-60 tabular-nums">{opt.count.toLocaleString()}</span>{/if}
+        </button>
+      {/each}
+    </div>
   {/if}
 </div>

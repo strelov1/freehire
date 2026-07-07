@@ -22,6 +22,7 @@ import {
   CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS,
 } from './labels';
 import { COLLECTIONS } from './collections';
+import { ROLE_RELATED } from './roleRelated';
 import { api } from './api';
 
 export interface FacetOption {
@@ -89,6 +90,13 @@ export interface FacetDef {
    * dedicated endpoint instead of the Meili facet counts.
    */
   remote?: (query: string) => Promise<FacetOption[]>;
+  /**
+   * Curated adjacency map (base slug → related base slugs) driving a "Related"
+   * suggestion row under the picker — for surfacing siblings the text search
+   * can't name (typing "mobile" won't match "iOS Developer"). Only the role facet
+   * sets it; see relatedOptions / ROLE_RELATED.
+   */
+  related?: Record<string, string[]>;
 }
 
 // Resolve an ISO 3166-1 alpha-2 code to an English country name via platform Intl
@@ -176,6 +184,53 @@ export function dynamicLabel(param: string, value: string): string {
 export function uniqueByValue(opts: FacetOption[]): FacetOption[] {
   const seen = new Set<string>();
   return opts.filter((o) => (seen.has(o.value) ? false : seen.add(o.value)));
+}
+
+// Role slugs carry an optional seniority grade prefix (senior_backend); the
+// related-role map is keyed by the ungraded base (backend), so one entry serves
+// every grade. Longest prefix first is unnecessary — the grades share no
+// prefix among themselves — but drawing them from SENIORITY_VALUES keeps this in
+// lockstep with the roletag vocabulary.
+const gradePrefixes = SENIORITY_VALUES.map((s) => s + '_');
+
+/** Strip a leading seniority grade from a role slug: senior_mobile → mobile. An
+ *  ungraded slug (mobile, ios_developer, or a bare seniority like c_level) is
+ *  returned unchanged. */
+export function baseRole(slug: string): string {
+  for (const p of gradePrefixes) {
+    if (slug.startsWith(p)) return slug.slice(p.length);
+  }
+  return slug;
+}
+
+/** Suggestions for the role picker's "Related" row: for each currently-surfaced
+ *  role (`matched`), look up its base's curated relatives, keep only those that
+ *  have jobs in the current distribution (present in `options`) and aren't already
+ *  shown or selected, dedupe, and cap at `limit`. Pure so it's unit-testable; the
+ *  point is to surface siblings the text search can't ("mobile" never matches
+ *  "iOS Developer"). */
+export function relatedOptions(
+  options: FacetOption[],
+  matched: string[],
+  selected: string[],
+  related: Record<string, string[]>,
+  limit = 8,
+): FacetOption[] {
+  const byValue = new Map(options.map((o) => [o.value, o]));
+  const skip = new Set([...matched, ...selected]);
+  const seen = new Set<string>();
+  const out: FacetOption[] = [];
+  for (const v of matched) {
+    for (const slug of related[baseRole(v)] ?? []) {
+      if (skip.has(slug) || seen.has(slug)) continue;
+      const o = byValue.get(slug);
+      if (!o) continue;
+      seen.add(slug);
+      out.push(o);
+      if (out.length >= limit) return out;
+    }
+  }
+  return out;
 }
 
 /** A title-cased fallback label for a value with no explicit label. */
@@ -315,7 +370,7 @@ export const FACETS: FacetDef[] = [
   { param: 'collections', label: 'Collection', control: 'pills', options: COLLECTION, excludable: false },
   { param: 'regions', label: 'Region', control: 'pills', options: JOB_REGION, excludable: true },
   { param: 'work_mode', label: 'Work format', control: 'pills', options: WORK_MODE, excludable: true },
-  { param: 'role', label: 'Role', control: 'select', dynamic: true, excludable: true, hasAndOr: true, placeholder: 'Search roles', cap: 24 },
+  { param: 'role', label: 'Role', control: 'select', dynamic: true, excludable: true, hasAndOr: true, placeholder: 'Search roles', cap: 24, related: ROLE_RELATED },
   { param: 'category', label: 'Specialization', control: 'select', options: CATEGORY, excludable: true, placeholder: 'Search specializations' },
   { param: 'seniority', label: 'Seniority', control: 'pills', options: SENIORITY, excludable: true },
   { param: 'skills', label: 'Skills', control: 'select', dynamic: true, excludable: true, hasAndOr: true, placeholder: 'Search skills' },

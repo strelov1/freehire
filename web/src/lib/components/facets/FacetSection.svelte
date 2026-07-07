@@ -82,6 +82,7 @@
       excludable={def.excludable}
       placeholder={def.placeholder}
       cap={def.cap}
+      related={def.related}
       {onToggle}
       {expand}
     />
