@@ -91,6 +91,38 @@ func TestJobFacets_DisjunctiveReducesEachFacetsOwnFilter(t *testing.T) {
 	}
 }
 
+func TestJobFacets_DisjunctiveDropsWholeLocationGroup(t *testing.T) {
+	// regions/countries/cities share one OR group, so a location facet's reduced
+	// filter must drop the WHOLE group — else selecting a country zeroes sibling
+	// regions.
+	fake := &fakeFacetCounter{}
+	app := facetsApp(fake)
+
+	status, _ := doGet(t, app, "/jobs/facets?disjunctive=1&countries=BR&seniority=senior")
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+
+	// The regions facet is counted with the entire location group removed (no BR),
+	// but keeps the non-location seniority selection.
+	regGroups, ok := fake.reqFilter("regions").([][]string)
+	if !ok {
+		t.Fatalf("no reduced filter for regions: %#v", fake.gotReqs)
+	}
+	if filterHas(regGroups, `countries = "BR"`) {
+		t.Errorf("regions facet should drop the whole location group, got %#v", regGroups)
+	}
+	if !filterHas(regGroups, `enrichment.seniority = "senior"`) {
+		t.Errorf("regions facet should keep seniority, got %#v", regGroups)
+	}
+
+	// A non-location facet keeps the country selection.
+	senGroups, _ := fake.reqFilter("enrichment.seniority").([][]string)
+	if !filterHas(senGroups, `countries = "BR"`) {
+		t.Errorf("seniority facet should keep the country selection, got %#v", senGroups)
+	}
+}
+
 func TestJobFacets_PassesFiltersAndRequestsFacets(t *testing.T) {
 	fake := &fakeFacetCounter{}
 	app := facetsApp(fake)

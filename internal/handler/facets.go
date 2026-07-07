@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"net/url"
+	"slices"
 	"sort"
 
 	"github.com/gofiber/fiber/v2"
@@ -69,28 +70,45 @@ func facetAttributes() []string {
 	return attrs
 }
 
+// locationFacetParams are the geography facets that share ONE OR-group in
+// FilterFromValues (their included values widen the results together, not
+// intersect). Disjunctive counting of any one of them must drop the whole group's
+// contribution, not just that param — otherwise selecting a country would zero
+// every sibling region (the reverse of what disjunctive mode is for).
+var locationFacetParams = []string{"regions", "countries", "cities"}
+
 // facetReqs builds one disjunctive request per distribution attribute: each
 // counted under the filter with its own facet's params removed, so a facet's
-// selection doesn't hide its alternatives.
+// selection doesn't hide its alternatives. For a location facet, the whole
+// location OR-group is removed (see locationFacetParams).
 func facetReqs(vals url.Values) []search.FacetReq {
 	param := facetParamByAttr()
 	attrs := facetAttributes()
 	reqs := make([]search.FacetReq, 0, len(attrs))
 	for _, attr := range attrs {
+		drop := []string{param[attr]}
+		if slices.Contains(locationFacetParams, param[attr]) {
+			drop = locationFacetParams
+		}
 		reqs = append(reqs, search.FacetReq{
 			Attr:   attr,
-			Filter: search.FilterFromValues(withoutParam(vals, param[attr])),
+			Filter: search.FilterFromValues(withoutParams(vals, drop)),
 		})
 	}
 	return reqs
 }
 
-// withoutParam returns a copy of vals with a facet's own params dropped (the bare
-// param plus its `_exclude` / `_mode` variants), leaving every other facet intact.
-func withoutParam(vals url.Values, param string) url.Values {
+// withoutParams returns a copy of vals with each named facet's params dropped (the
+// bare param plus its `_exclude` / `_mode` variants), leaving every other facet
+// intact.
+func withoutParams(vals url.Values, params []string) url.Values {
+	drop := make(map[string]bool, len(params)*3)
+	for _, p := range params {
+		drop[p], drop[p+"_exclude"], drop[p+"_mode"] = true, true, true
+	}
 	out := make(url.Values, len(vals))
 	for k, v := range vals {
-		if k == param || k == param+"_exclude" || k == param+"_mode" {
+		if drop[k] {
 			continue
 		}
 		out[k] = v
