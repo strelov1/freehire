@@ -3,13 +3,30 @@
 // is an index that points at chunked sub-sitemaps (static pages, job chunks,
 // company chunks). Each chunk is one keyset page fetched by cursor.
 
+import { collectionSlugs } from './collections';
+
 // Must equal the backend's sitemapMaxURLs — the chunk size the boundary cursors
 // are computed with — so each sub-sitemap holds exactly one keyset chunk and
 // never exceeds the protocol limit.
 export const SITEMAP_CHUNK = 50000;
 
 /** The site's static, always-present pages (relative paths). */
-export const STATIC_PATHS = ['/', '/jobs', '/companies', '/cli', '/recruiters'];
+export const STATIC_PATHS = [
+  '/',
+  '/jobs',
+  '/companies',
+  '/collections',
+  '/for-companies',
+  '/cli',
+  '/recruiters',
+];
+
+/** The curated collection landing pages (`/collections/:slug`), one per collection.
+ *  A small, fixed set, so they ride in the static-pages sub-sitemap alongside
+ *  STATIC_PATHS rather than needing their own chunked file. */
+export function collectionPaths(): string[] {
+  return collectionSlugs().map((slug) => `/collections/${slug}`);
+}
 
 export interface UrlEntry {
   loc: string;

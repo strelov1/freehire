@@ -3,14 +3,14 @@ import { COLLECTIONS, FILTER_COLLECTIONS, toQuery } from '$lib/collections';
 import type { PageServerLoad } from './$types';
 
 // One card on the /collections hub, normalized across both kinds of collection so
-// the page can render them uniformly. `href` is a bare `/jobs?…` path (the component
-// wraps it with `resolve`) and doubles as the card's identity; `count` is the
-// open-job count, or null when it could not be fetched — counts are decorative, so a
-// failed fetch degrades to no count.
+// the page can render them uniformly. `href` is the collection's own landing page
+// (`/collections/:slug`, the component wraps it with `resolve`) and doubles as the
+// card's identity; `count` is the open-job count, or null when it could not be
+// fetched — counts are decorative, so a failed fetch degrades to no count.
 export type CollectionCard = {
   title: string;
   description: string;
-  href: `/jobs?${string}`;
+  href: `/collections/${string}`;
   count: number | null;
 };
 
@@ -39,14 +39,14 @@ export const load: PageServerLoad = async ({ fetch }) => {
       } catch {
         // Count is decorative — leave it null on failure.
       }
-      return { title: fc.title, description: fc.description, href: `/jobs?${query}`, count };
+      return { title: fc.title, description: fc.description, href: `/collections/${fc.slug}`, count };
     }),
   );
 
   const companyCards: CollectionCard[] = COLLECTIONS.map((c) => ({
     title: c.title,
     description: c.description,
-    href: `/jobs?collections=${c.slug}`,
+    href: `/collections/${c.slug}`,
     count: facetCounts ? (facetCounts[c.slug] ?? 0) : null,
   }));
 
