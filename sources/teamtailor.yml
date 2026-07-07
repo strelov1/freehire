@@ -3,6 +3,8 @@
 # reads https://<board>/jobs and follows pagination, then each job page's JobPosting ld+json.
 # Each board validated live (>0 jobs in its listing, full normalized sample) before adding.
 
+- company: BRYTER
+  board: bryter.teamtailor.com
 - company: Tibber
   board: jobs.tibber.com
 

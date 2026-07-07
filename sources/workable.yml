@@ -31,6 +31,8 @@
   board: coolgames
 - company: DataVisor
   board: datavisor-jobs
+- company: Detroit Labs
+  board: detroitlabs
 - company: Devoted Studios
   board: devoted-studios-1
 - company: Double Eleven
@@ -109,6 +111,10 @@
   board: nextgen-clearing
 - company: Nuvei
   board: nuvei
+- company: Peaksware
+  board: peaksware
+- company: Persado
+  board: persado
 - company: PikPok
   board: pikpok
 - company: powtoon
