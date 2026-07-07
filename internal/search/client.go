@@ -697,18 +697,21 @@ func semanticSettings() *meilisearch.Settings {
 }
 
 // jobEmbedder is the shared TEI embedder for jobs, reached over TEI's OpenAI-compatible
-// endpoint (so Meilisearch needs no request/response template). Jobs are the corpus, so
-// their text carries the e5 "passage:" prefix — the CV, the query side, uses "query:"
-// (see resumeVectorSettings). apiKey is a placeholder: TEI runs without auth, but the
-// openAi source expects the field set.
+// /v1/embeddings. It is the `rest` source, NOT `openAi`: Meilisearch's openAi source
+// hard-validates the model name against OpenAI's own models and rejects e5, so we drive
+// the same endpoint via rest with explicit request/response templates. The request
+// batches (`{{..}}`) inputs into OpenAI's `input` array; the response pulls each vector
+// from `data[].embedding`. Jobs are the corpus, so their text carries the e5 "passage:"
+// prefix — the CV, the query side, uses "query:" (see resumeVectorSettings). No apiKey:
+// TEI runs without auth.
 func jobEmbedder() meilisearch.Embedder {
 	return meilisearch.Embedder{
-		Source:           "openAi",
+		Source:           "rest",
 		URL:              embedderURL,
-		APIKey:           "tei-local",
-		Model:            embedderModel,
 		Dimensions:       embedderDimensions,
 		DocumentTemplate: "passage: {{ doc.title }} at {{ doc.company }}. {{ doc.description }}",
+		Request:          map[string]interface{}{"input": []interface{}{"{{text}}", "{{..}}"}, "model": embedderModel},
+		Response:         map[string]interface{}{"data": []interface{}{map[string]interface{}{"embedding": "{{embedding}}"}, "{{..}}"}},
 	}
 }
 
