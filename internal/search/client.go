@@ -67,9 +67,13 @@ const (
 	maxTotalHits = 10000000
 
 	// maxValuesPerFacet raises the per-facet value cap above Meili's default of
-	// 100 so the analytics facet distribution is not truncated for
-	// high-cardinality facets (skills, countries).
-	maxValuesPerFacet = 300
+	// 100 so the analytics facet distribution is not truncated for high-cardinality
+	// facets (skills, countries, and especially roles — ~800 graded/named values).
+	// Meili truncates to this cap ALPHABETICALLY (sortFacetValuesBy defaults to
+	// "alpha") BEFORE the client sorts by count, so a cap below the value count
+	// silently drops the busiest values past the alphabetical cut (e.g. "senior_*"
+	// roles). Keep it comfortably above the role catalogue.
+	maxValuesPerFacet = 1200
 
 	taskPollInterval = 50 * time.Millisecond
 )
