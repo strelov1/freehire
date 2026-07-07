@@ -1,9 +1,9 @@
 // Package search provides Meilisearch-backed full-text and hybrid (keyword +
 // semantic) search over jobs. It owns the document shape and two index
 // configurations — a facet/keyword index (no embedder, the fast default) and a
-// semantic index that adds the in-engine huggingFace embedder — plus the
-// read/write helpers, so callers (the search handler and the reindex command)
-// never touch the meilisearch-go SDK directly.
+// semantic index with a userProvided embedder whose vectors this package computes
+// against TEI (see embed.go) — plus the read/write helpers, so callers (the search
+// handler and the reindex command) never touch the meilisearch-go SDK directly.
 package search
 
 import (
@@ -50,13 +50,6 @@ const (
 	// vectors and the userProvided CV vector matches.
 	embedderDimensions = 768
 
-	// resumeVectorIndexUID is the scratch index EmbedText round-trips a CV through to
-	// obtain a vector in the jobs' space: the in-engine embedder exposes no direct
-	// "embed this text" call, so the text is indexed here (with the SAME embedder as
-	// the semantic index), its vector read back, and the doc deleted. Never a
-	// persistent store of CV text — see EmbedText.
-	resumeVectorIndexUID = "resume_vectors"
-
 	// maxTotalHits caps how high a search counts its results: below it,
 	// estimatedTotalHits is the true filtered total, so it is set well above the
 	// index size to keep the reported count honest. It is NOT the pagination guard
@@ -88,13 +81,16 @@ type Client struct {
 	semantic meilisearch.IndexManager
 	url      string
 	key      string
+	// embedURL is the TEI /v1/embeddings endpoint this client embeds against (jobs
+	// and CVs alike). It defaults to embedderURL; tests point it at a stub server.
+	embedURL string
 }
 
 // NewClient connects to Meilisearch at url authenticated by key. It does no I/O
 // — the connection is exercised lazily by the first request (or EnsureIndex).
 func NewClient(url, key string) *Client {
 	m := meilisearch.New(url, meilisearch.WithAPIKey(key))
-	return &Client{manager: m, facet: m.Index(facetIndexUID), semantic: m.Index(semanticIndexUID), url: url, key: key}
+	return &Client{manager: m, facet: m.Index(facetIndexUID), semantic: m.Index(semanticIndexUID), url: url, key: key, embedURL: embedderURL}
 }
 
 // EnsureIndex creates the facet/keyword jobs index (no embedder) and applies its
@@ -116,9 +112,9 @@ func (c *Client) EnsureIndex(ctx context.Context) error {
 	return c.awaitTask(ctx, c.facet, task.TaskUID)
 }
 
-// EnsureSemanticIndex creates the hybrid jobs index (with the in-engine embedder)
-// and applies its settings. It is built by the separate reindex --semantic pass;
-// querying it embeds documents, so it is kept off the default reindex path.
+// EnsureSemanticIndex creates the hybrid jobs index (with the userProvided embedder)
+// and applies its settings. It is built by the separate reindex --semantic pass, which
+// computes the vectors against TEI, so it is kept off the default reindex path.
 func (c *Client) EnsureSemanticIndex(ctx context.Context) error {
 	return c.ensure(ctx, c.semantic, semanticIndexUID, semanticSettings())
 }
@@ -136,8 +132,11 @@ type Rebuild struct {
 	rebuildUID     string
 	settings       *meilisearch.Settings
 	resetEmbedders bool
-	rebuild        meilisearch.IndexManager
-	tasks          []int64
+	// semantic marks this a hybrid-index rebuild: Push embeds each batch (via TEI) and
+	// attaches the vectors, since the semantic index uses a userProvided embedder.
+	semantic bool
+	rebuild  meilisearch.IndexManager
+	tasks    []int64
 }
 
 // NewFacetRebuild starts a full rebuild of the facet/keyword production index.
@@ -147,7 +146,7 @@ func (c *Client) NewFacetRebuild() *Rebuild {
 
 // NewSemanticRebuild starts a full rebuild of the hybrid semantic index.
 func (c *Client) NewSemanticRebuild() *Rebuild {
-	return &Rebuild{c: c, liveUID: semanticIndexUID, rebuildUID: semanticRebuildUID, settings: semanticSettings()}
+	return &Rebuild{c: c, liveUID: semanticIndexUID, rebuildUID: semanticRebuildUID, settings: semanticSettings(), semantic: true}
 }
 
 // Prepare creates a fresh, empty rebuild index with this pass's settings, ready to
@@ -186,8 +185,19 @@ func (r *Rebuild) Push(ctx context.Context, docs []JobDocument) error {
 	if len(docs) == 0 {
 		return nil
 	}
+	// The semantic index stores userProvided vectors, so a semantic rebuild embeds each
+	// batch (via TEI) and pushes documents carrying their vectors; the facet rebuild
+	// pushes the plain documents.
+	var payload any = docs
+	if r.semantic {
+		sdocs, err := r.c.embedDocs(ctx, docs)
+		if err != nil {
+			return err
+		}
+		payload = sdocs
+	}
 	pk := primaryKey
-	task, err := r.rebuild.UpdateDocumentsWithContext(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk})
+	task, err := r.rebuild.UpdateDocumentsWithContext(ctx, payload, &meilisearch.DocumentOptions{PrimaryKey: &pk})
 	if err != nil {
 		return fmt.Errorf("search: rebuild push: %w", err)
 	}
@@ -300,10 +310,23 @@ func (c *Client) IndexJobs(ctx context.Context, docs []JobDocument) error {
 	return c.indexInto(ctx, c.facet, docs)
 }
 
-// IndexSemanticJobs upserts a batch into the semantic index (which embeds new or
-// changed documents). Used by the reindex --semantic pass.
+// IndexSemanticJobs embeds a batch (via TEI) and upserts it into the semantic index
+// with each document's vector, since that index uses a userProvided embedder. Used by
+// the incremental reindex --semantic pass.
 func (c *Client) IndexSemanticJobs(ctx context.Context, docs []JobDocument) error {
-	return c.indexInto(ctx, c.semantic, docs)
+	if len(docs) == 0 {
+		return nil
+	}
+	sdocs, err := c.embedDocs(ctx, docs)
+	if err != nil {
+		return err
+	}
+	pk := primaryKey
+	task, err := c.semantic.UpdateDocumentsWithContext(ctx, sdocs, &meilisearch.DocumentOptions{PrimaryKey: &pk})
+	if err != nil {
+		return fmt.Errorf("search: index semantic documents: %w", err)
+	}
+	return c.awaitTask(ctx, c.semantic, task.TaskUID)
 }
 
 func (c *Client) indexInto(ctx context.Context, idx meilisearch.IndexManager, docs []JobDocument) error {
@@ -396,6 +419,14 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, erro
 	idx := c.facet
 	if p.SemanticRatio > 0 {
 		idx = c.semantic
+		// The semantic index uses a userProvided embedder, so Meilisearch cannot embed
+		// the query text itself — we embed it here (TEI, "query:" prefix for e5's
+		// asymmetric retrieval) and pass the vector for the semantic half of the blend.
+		qv, err := c.embedBatch(ctx, []string{"query: " + p.Query})
+		if err != nil {
+			return SearchResult{}, err
+		}
+		req.Vector = toFloat32(qv[0])
 		req.Hybrid = &meilisearch.SearchRequestHybrid{
 			Embedder:      embedderName,
 			SemanticRatio: p.SemanticRatio,
@@ -475,97 +506,21 @@ func (c *Client) SimilarJobs(ctx context.Context, id int64, limit int) ([]JobDoc
 	return out, nil
 }
 
-// EmbedText embeds text through the SAME embedder that embeds jobs and returns the
-// vector plus the embedder identity that produced it. Meilisearch's in-engine embedder
-// has no "embed this text" endpoint, so the vector is obtained by round-tripping: the
-// text is indexed as one scratch document (in resumeVectorIndexUID, which carries an
-// identical embedder), its vector is read back, and the document is deleted so no
-// source text lingers in the engine. key is a caller-unique scratch id (e.g. the user
-// id) so concurrent callers do not collide. The text goes in the same field the jobs
-// document template reads, so the embedding pipeline — and thus the vector space — is
-// identical to the jobs'.
-func (c *Client) EmbedText(ctx context.Context, key, text string) ([]float64, string, error) {
-	idx := c.manager.Index(resumeVectorIndexUID)
-	if err := c.ensure(ctx, idx, resumeVectorIndexUID, resumeVectorSettings()); err != nil {
+// EmbedText embeds text through the SAME path (TEI, same model) that embeds jobs and
+// returns the vector plus the embedder identity that produced it, so a CV vector is
+// directly comparable to the job corpus. The CV is the query side of e5's asymmetric
+// retrieval, so it carries the "query:" prefix (jobs carry "passage:", see jobPassage).
+// The key parameter is unused now that no scratch document is round-tripped through
+// Meilisearch; it is kept for interface compatibility.
+func (c *Client) EmbedText(ctx context.Context, _, text string) ([]float64, string, error) {
+	vecs, err := c.embedBatch(ctx, []string{"query: " + text})
+	if err != nil {
 		return nil, "", err
 	}
-	pk := primaryKey
-	// The CV goes in the same `description` field the jobs document template reads, so
-	// the embedding pipeline — and thus the vector space — is identical to the jobs'.
-	// title/company must be present too: the shared template references them and
-	// Meilisearch's Liquid is STRICT — a missing referenced field fails the document
-	// (`invalid_document_fields`), not renders empty. Empty strings render as a job with
-	// no title/company would, keeping the space identical.
-	doc := map[string]any{primaryKey: key, "title": "", "company": "", "description": text}
-	task, err := idx.UpdateDocumentsWithContext(ctx, []map[string]any{doc}, &meilisearch.DocumentOptions{PrimaryKey: &pk})
-	if err != nil {
-		return nil, "", fmt.Errorf("search: embed upsert: %w", err)
+	if len(vecs) == 0 || len(vecs[0]) == 0 {
+		return nil, "", fmt.Errorf("search: empty embedding")
 	}
-	if err := c.awaitTask(ctx, idx, task.TaskUID); err != nil {
-		return nil, "", err
-	}
-
-	vec, readErr := c.readDocumentVector(ctx, resumeVectorIndexUID, key)
-	// Always delete the scratch doc, even on read failure, so no CV text persists.
-	if delTask, err := idx.DeleteDocumentWithContext(ctx, key, nil); err == nil {
-		_ = c.awaitTask(ctx, idx, delTask.TaskUID)
-	}
-	if readErr != nil {
-		return nil, "", readErr
-	}
-	return vec, embedderModel, nil
-}
-
-// readDocumentVector fetches one document's embedding via retrieveVectors, using a raw
-// request (the pinned SDK's typed document fetch does not surface _vectors).
-func (c *Client) readDocumentVector(ctx context.Context, uid, key string) ([]float64, error) {
-	u := fmt.Sprintf("%s/indexes/%s/documents/%s?retrieveVectors=true", c.url, uid, key)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return nil, fmt.Errorf("search: vector request: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+c.key)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("search: read vector: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("search: read vector: unexpected status %d", resp.StatusCode)
-	}
-	var doc struct {
-		Vectors map[string]json.RawMessage `json:"_vectors"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&doc); err != nil {
-		return nil, fmt.Errorf("search: decode vector: %w", err)
-	}
-	raw, ok := doc.Vectors[embedderName]
-	if !ok {
-		return nil, fmt.Errorf("search: document has no %q embedding", embedderName)
-	}
-	return decodeEmbedding(raw)
-}
-
-// decodeEmbedding pulls a single vector out of a Meili _vectors.<name> payload,
-// tolerating both the object form ({"embeddings": ..., "regenerate": ...}) and a bare
-// array, and both an array-of-vectors and a single vector.
-func decodeEmbedding(raw json.RawMessage) ([]float64, error) {
-	payload := raw
-	var obj struct {
-		Embeddings json.RawMessage `json:"embeddings"`
-	}
-	if err := json.Unmarshal(raw, &obj); err == nil && len(obj.Embeddings) > 0 {
-		payload = obj.Embeddings
-	}
-	var multi [][]float64
-	if err := json.Unmarshal(payload, &multi); err == nil && len(multi) > 0 {
-		return multi[0], nil
-	}
-	var single []float64
-	if err := json.Unmarshal(payload, &single); err == nil && len(single) > 0 {
-		return single, nil
-	}
-	return nil, fmt.Errorf("search: empty embedding")
+	return vecs[0], embedderModel, nil
 }
 
 // RecommendByVector ranks open jobs in the semantic index by similarity to a raw
@@ -690,42 +645,26 @@ func facetSettings() *meilisearch.Settings {
 }
 
 // semanticSettings is the hybrid index configuration: the facet/keyword settings plus
-// the embedder. Meilisearch embeds each new or changed document at index time (and
-// skips unchanged ones), so this index is built by the separate reindex --semantic
-// pass and never on the default reindex path. Embedding is offloaded to TEI (see
-// jobEmbedder) rather than run in-engine, so it never blocks Meilisearch's task queue.
+// the userProvided embedder (see jobEmbedder). Vectors are computed in Go against TEI
+// and pushed with each document, so this index is built by the separate reindex
+// --semantic pass and never on the default reindex path, and embedding never touches
+// Meilisearch's task queue.
 func semanticSettings() *meilisearch.Settings {
 	s := facetSettings()
 	s.Embedders = map[string]meilisearch.Embedder{embedderName: jobEmbedder()}
 	return s
 }
 
-// jobEmbedder is the shared TEI embedder for jobs, reached over TEI's OpenAI-compatible
-// /v1/embeddings. It is the `rest` source, NOT `openAi`: Meilisearch's openAi source
-// hard-validates the model name against OpenAI's own models and rejects e5, so we drive
-// the same endpoint via rest with explicit request/response templates. The request
-// batches (`{{..}}`) inputs into OpenAI's `input` array; the response pulls each vector
-// from `data[].embedding`. Jobs are the corpus, so their text carries the e5 "passage:"
-// prefix — the CV, the query side, uses "query:" (see resumeVectorSettings). No apiKey:
-// TEI runs without auth.
+// jobEmbedder is the semantic index's embedder. It is `userProvided`: Meilisearch
+// stores and searches the vectors but never computes them. We embed in Go against TEI
+// (see embedBatch/embedDocs) and push each document with its vector, instead of the
+// `rest` source that has Meili call TEI itself — the engine rejects the loopback TEI
+// URI, and owning the embedding keeps jobs and CVs on one identical path (one model,
+// one server → one vector space). Dimensions must match what TEI returns so Meili
+// validates the vectors.
 func jobEmbedder() meilisearch.Embedder {
 	return meilisearch.Embedder{
-		Source:           "rest",
-		URL:              embedderURL,
-		Dimensions:       embedderDimensions,
-		DocumentTemplate: "passage: {{ doc.title }} at {{ doc.company }}. {{ doc.description }}",
-		Request:          map[string]interface{}{"input": []interface{}{"{{text}}", "{{..}}"}, "model": embedderModel},
-		Response:         map[string]interface{}{"data": []interface{}{map[string]interface{}{"embedding": "{{embedding}}"}, "{{..}}"}},
+		Source:     "userProvided",
+		Dimensions: embedderDimensions,
 	}
-}
-
-// resumeVectorSettings configures the EmbedText scratch index with the SAME TEI embedder
-// as jobs — same model + endpoint, so the CV vector lands in the jobs' space — but the
-// CV text carries the e5 "query:" prefix: recommendations search the job corpus
-// (passages) with the CV as the query, e5's asymmetric-retrieval convention. No
-// facets/filters: the index holds one transient document at a time and is never searched.
-func resumeVectorSettings() *meilisearch.Settings {
-	e := jobEmbedder()
-	e.DocumentTemplate = "query: {{ doc.description }}"
-	return &meilisearch.Settings{Embedders: map[string]meilisearch.Embedder{embedderName: e}}
 }

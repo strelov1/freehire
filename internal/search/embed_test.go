@@ -1,44 +1,95 @@
 package search
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 )
 
-// decodeEmbedding must pull one vector out of every shape Meilisearch's
-// _vectors.<name> payload takes across versions: the object form with an
-// array-of-vectors, the object form with a single vector, and a bare array — so the
-// CV read-back does not break on a Meili upgrade.
-func TestDecodeEmbedding(t *testing.T) {
-	tests := []struct {
-		name    string
-		raw     string
-		want    []float64
-		wantErr bool
-	}{
-		{"object array-of-vectors", `{"embeddings": [[1, 2, 3]], "regenerate": true}`, []float64{1, 2, 3}, false},
-		{"object single vector", `{"embeddings": [1, 2, 3]}`, []float64{1, 2, 3}, false},
-		{"bare array-of-vectors", `[[0.5, -0.5]]`, []float64{0.5, -0.5}, false},
-		{"object empty embeddings", `{"embeddings": []}`, nil, true},
-		{"empty object", `{}`, nil, true},
+// jobPassage must prefix the corpus side with e5's "passage:" marker and weave in the
+// title/company/description, so it stays comparable to the "query:"-prefixed CV.
+func TestJobPassage(t *testing.T) {
+	var d JobDocument
+	d.Title = "Backend Engineer"
+	d.Company = "Acme"
+	d.Description = "Go and Postgres"
+	got := jobPassage(d)
+	want := "passage: Backend Engineer at Acme. Go and Postgres"
+	if got != want {
+		t.Fatalf("jobPassage = %q, want %q", got, want)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := decodeEmbedding(json.RawMessage(tt.raw))
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
-			}
-			if tt.wantErr {
-				return
-			}
-			if len(got) != len(tt.want) {
-				t.Fatalf("len = %d, want %d (%v)", len(got), len(tt.want), got)
-			}
-			for i := range got {
-				if got[i] != tt.want[i] {
-					t.Errorf("got[%d] = %v, want %v", i, got[i], tt.want[i])
-				}
-			}
+}
+
+// teiEcho is a stub TEI /v1/embeddings that returns, for each input, a one-element
+// vector holding the integer the input text parses to — so a test can assert both that
+// every input got its own vector and that order is preserved across chunk boundaries.
+func teiEcho(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Input []string `json:"input"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		type item struct {
+			Embedding []float64 `json:"embedding"`
+		}
+		out := struct {
+			Data []item `json:"data"`
+		}{}
+		for _, s := range in.Input {
+			n, _ := strconv.Atoi(strings.TrimSpace(s))
+			out.Data = append(out.Data, item{Embedding: []float64{float64(n)}})
+		}
+		_ = json.NewEncoder(w).Encode(out)
+	}))
+}
+
+// embedBatch must chunk inputs past TEI's per-call limit and stitch the vectors back in
+// input order — otherwise a reindex batch (2000) would either be rejected by TEI or
+// scramble which vector belongs to which job.
+func TestEmbedBatchChunksAndPreservesOrder(t *testing.T) {
+	srv := teiEcho(t)
+	defer srv.Close()
+	c := &Client{embedURL: srv.URL}
+
+	n := teiMaxBatch*2 + 3 // spans three chunks
+	inputs := make([]string, n)
+	for i := range inputs {
+		inputs[i] = strconv.Itoa(i)
+	}
+	vecs, err := c.embedBatch(context.Background(), inputs)
+	if err != nil {
+		t.Fatalf("embedBatch: %v", err)
+	}
+	if len(vecs) != n {
+		t.Fatalf("got %d vectors, want %d", len(vecs), n)
+	}
+	for i, v := range vecs {
+		if len(v) != 1 || v[0] != float64(i) {
+			t.Fatalf("vecs[%d] = %v, want [%d]", i, v, i)
+		}
+	}
+}
+
+// A TEI reply with a different vector count than inputs is corruption we must reject,
+// not silently misalign vectors to jobs.
+func TestEmbedBatchRejectsCountMismatch(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{{"embedding": []float64{1}}}, // one vector regardless of input count
 		})
+	}))
+	defer srv.Close()
+	c := &Client{embedURL: srv.URL}
+
+	if _, err := c.embedBatch(context.Background(), []string{"a", "b"}); err == nil {
+		t.Fatal("expected an error on vector/input count mismatch, got nil")
 	}
 }

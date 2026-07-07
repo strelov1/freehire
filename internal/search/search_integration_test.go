@@ -6,15 +6,21 @@
 //
 //	go test -tags=integration ./internal/search/
 //
-// Requires Docker (testcontainers spins up a throwaway Meilisearch). The first
-// run is slow: the huggingFace embedder downloads its model at index time.
+// Requires Docker (testcontainers spins up a throwaway Meilisearch). The semantic
+// index uses a userProvided embedder, so no model download happens in-engine; the
+// vectors come from a stub TEI (fakeTEI) the client is pointed at.
 package search
 
 import (
 	"context"
 	"encoding/json"
+	"hash/fnv"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+	"unicode"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/meilisearch/meilisearch-go"
@@ -24,6 +30,50 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 )
+
+// fakeTEI stands in for the TEI embedding server: an OpenAI-compatible
+// /v1/embeddings that returns a deterministic bag-of-words vector per input, so texts
+// sharing tokens land near each other under cosine similarity. That is enough for the
+// semantic assertions (a query hits jobs whose text it overlaps) without a real model,
+// and keeps the userProvided vector width at embedderDimensions so Meili accepts it.
+func fakeTEI(t *testing.T) string {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Input []string `json:"input"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		type item struct {
+			Embedding []float64 `json:"embedding"`
+		}
+		var out struct {
+			Data []item `json:"data"`
+		}
+		for _, s := range in.Input {
+			out.Data = append(out.Data, item{Embedding: bagOfWords(s)})
+		}
+		_ = json.NewEncoder(w).Encode(out)
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+// bagOfWords hashes each token into a fixed-width count vector — a crude but
+// deterministic embedding whose cosine similarity tracks token overlap.
+func bagOfWords(s string) []float64 {
+	v := make([]float64, embedderDimensions)
+	for _, tok := range strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	}) {
+		h := fnv.New32a()
+		_, _ = h.Write([]byte(tok))
+		v[h.Sum32()%embedderDimensions]++
+	}
+	return v
+}
 
 func startMeili(t *testing.T) *Client {
 	t.Helper()
@@ -52,7 +102,9 @@ func startMeili(t *testing.T) *Client {
 	if err != nil {
 		t.Fatalf("port: %v", err)
 	}
-	return NewClient("http://"+host+":"+port.Port(), key)
+	c := NewClient("http://"+host+":"+port.Port(), key)
+	c.embedURL = fakeTEI(t)
+	return c
 }
 
 func enrichedJSON(t *testing.T, e enrich.Enrichment) []byte {
@@ -485,6 +537,79 @@ func TestIntegration_SimilarJobs(t *testing.T) {
 			t.Errorf("expected no neighbours when the index is absent, got %d", len(hits))
 		}
 	})
+}
+
+// TestIntegration_EmbedTextAndRecommend covers the whole /my/recommendations path
+// end-to-end against a real engine: a CV is embedded (EmbedText, the query side) into
+// the same space as the indexed jobs (the passage side), and RecommendByVector ranks
+// the corpus by that vector. This is the path a unit test cannot reach — the PR that
+// shipped EmbedText broke on exactly this gap — so it must hit real Meili + the stub
+// embedder. A backend-flavoured CV must surface the backend jobs, not the frontend one.
+func TestIntegration_EmbedTextAndRecommend(t *testing.T) {
+	ctx := context.Background()
+	c := startMeili(t)
+
+	if err := c.EnsureSemanticIndex(ctx); err != nil {
+		t.Fatalf("EnsureSemanticIndex: %v", err)
+	}
+	jobs := []db.Job{
+		{ID: 1, Title: "Senior Golang Backend Engineer", Company: "Acme", Location: "Berlin",
+			Description: "Build distributed backend services and REST APIs in Go.",
+			PublicSlug:  "senior-golang-backend-engineer-acme-aaa",
+			Enrichment:  enrichedJSON(t, enrich.Enrichment{})},
+		{ID: 2, Title: "Backend Software Engineer", Company: "Beta", Location: "Remote",
+			Description: "Design server-side backend microservices and REST APIs.",
+			PublicSlug:  "backend-software-engineer-beta-bbb",
+			Enrichment:  enrichedJSON(t, enrich.Enrichment{})},
+		{ID: 3, Title: "Frontend React Developer", Company: "Gamma", Location: "Remote",
+			Description: "Build user interfaces with React and TypeScript.",
+			PublicSlug:  "frontend-react-developer-gamma-ccc",
+			Enrichment:  enrichedJSON(t, enrich.Enrichment{})},
+	}
+	if err := c.IndexSemanticJobs(ctx, toDocs(t, jobs)); err != nil {
+		t.Fatalf("IndexSemanticJobs: %v", err)
+	}
+
+	vec, model, err := c.EmbedText(ctx, "user-1", "Backend engineer building Go services and REST APIs.")
+	if err != nil {
+		t.Fatalf("EmbedText: %v", err)
+	}
+	if len(vec) != embedderDimensions {
+		t.Fatalf("EmbedText vector width = %d, want %d", len(vec), embedderDimensions)
+	}
+	if model != embedderModel {
+		t.Errorf("EmbedText model = %q, want %q", model, embedderModel)
+	}
+
+	res, err := c.RecommendByVector(ctx, vec, 10, 0)
+	if err != nil {
+		t.Fatalf("RecommendByVector: %v", err)
+	}
+	if len(res.Hits) == 0 {
+		t.Fatal("RecommendByVector returned no hits for a CV that overlaps indexed jobs")
+	}
+	// The backend CV must rank a backend job first, ahead of the React job.
+	if top := res.Hits[0].ID; top != 1 && top != 2 {
+		t.Errorf("top recommendation id = %d, want a backend job (1 or 2); hits=%+v", top, ids(res.Hits))
+	}
+
+	t.Run("empty vector yields empty feed, not an error", func(t *testing.T) {
+		empty, err := c.RecommendByVector(ctx, nil, 10, 0)
+		if err != nil {
+			t.Fatalf("RecommendByVector(nil): %v", err)
+		}
+		if len(empty.Hits) != 0 {
+			t.Errorf("expected empty feed for an empty vector, got %d hits", len(empty.Hits))
+		}
+	})
+}
+
+func ids(docs []JobDocument) []int64 {
+	out := make([]int64, len(docs))
+	for i, d := range docs {
+		out[i] = d.ID
+	}
+	return out
 }
 
 func toDocs(t *testing.T, jobs []db.Job) []JobDocument {
