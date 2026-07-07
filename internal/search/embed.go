@@ -17,11 +17,20 @@ const teiMaxBatch = 32
 // jobPassage renders a job document into the text embedded for semantic retrieval.
 // e5 is asymmetric: the corpus side carries the "passage:" prefix and the query side
 // carries "query:" (see EmbedText), so they must be embedded the same way to be
-// comparable. This mirrors the document template Meilisearch used to render, now that
-// embedding runs in Go (see embedBatch). doc.Description is already capped at index
-// time (maxIndexedDescriptionRunes), so this stays within e5's token window.
+// comparable.
+//
+// It prefers the enrichment summary over the raw description: the summary is a short,
+// model-written synopsis (capped well under e5's 512-token window) that captures the
+// whole role — including requirements a long description buries past the truncation
+// point — so it embeds the job more faithfully than the head-truncated description, and
+// its distilled form is closer to a CV query. Unenriched jobs fall back to the
+// description (already capped at maxIndexedDescriptionRunes).
 func jobPassage(d JobDocument) string {
-	return "passage: " + d.Title + " at " + d.Company + ". " + d.Description
+	body := d.Description
+	if s := d.Enrichment.Summary; s != "" {
+		body = s
+	}
+	return "passage: " + d.Title + " at " + d.Company + ". " + body
 }
 
 // embedBatch turns texts into vectors by calling TEI's OpenAI-compatible

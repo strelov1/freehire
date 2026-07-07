@@ -11,16 +11,21 @@ import (
 )
 
 // jobPassage must prefix the corpus side with e5's "passage:" marker and weave in the
-// title/company/description, so it stays comparable to the "query:"-prefixed CV.
+// title/company/body, so it stays comparable to the "query:"-prefixed CV. It embeds the
+// description by default but prefers the enrichment summary when present.
 func TestJobPassage(t *testing.T) {
 	var d JobDocument
 	d.Title = "Backend Engineer"
 	d.Company = "Acme"
 	d.Description = "Go and Postgres"
-	got := jobPassage(d)
-	want := "passage: Backend Engineer at Acme. Go and Postgres"
-	if got != want {
-		t.Fatalf("jobPassage = %q, want %q", got, want)
+
+	if got, want := jobPassage(d), "passage: Backend Engineer at Acme. Go and Postgres"; got != want {
+		t.Fatalf("jobPassage (description) = %q, want %q", got, want)
+	}
+
+	d.Enrichment.Summary = "Senior Go role building payment APIs"
+	if got, want := jobPassage(d), "passage: Backend Engineer at Acme. Senior Go role building payment APIs"; got != want {
+		t.Fatalf("jobPassage (summary preferred) = %q, want %q", got, want)
 	}
 }
 
