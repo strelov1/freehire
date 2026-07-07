@@ -67,6 +67,156 @@ export const FILTER_COLLECTIONS: FilterCollection[] = [
     description: 'Fully remote roles open to candidates across Asia-Pacific.',
     params: { work_mode: 'remote', regions: 'apac' },
   },
+  // Language & framework landings — the classic "<lang> jobs" search pattern, one
+  // per canonical `skills` facet value. `slug`/`params.skills` MUST be the exact
+  // skilltag canonical (e.g. `go` not `golang`, `nodejs` not `node`, `cpp`/`csharp`
+  // not `c++`/`c#`) or the feed comes back empty. Each was confirmed to have a live
+  // count before shipping; the few low-count ones (clojure/elixir/svelte) are kept
+  // deliberately — low-competition "<lang> jobs" terms with hundreds of real roles.
+  {
+    slug: 'python',
+    title: 'Python',
+    description: 'Open roles that use Python — backend, data, ML and automation.',
+    params: { skills: 'python' },
+  },
+  {
+    slug: 'javascript',
+    title: 'JavaScript',
+    description: 'Open roles that use JavaScript across web and backend.',
+    params: { skills: 'javascript' },
+  },
+  {
+    slug: 'typescript',
+    title: 'TypeScript',
+    description: 'Open roles that use TypeScript for typed JavaScript at scale.',
+    params: { skills: 'typescript' },
+  },
+  {
+    slug: 'java',
+    title: 'Java',
+    description: 'Open roles that use Java — enterprise backends, Android and big data.',
+    params: { skills: 'java' },
+  },
+  {
+    slug: 'csharp',
+    title: 'C#',
+    description: 'Open roles that use C# and the .NET ecosystem.',
+    params: { skills: 'csharp' },
+  },
+  {
+    slug: 'cpp',
+    title: 'C++',
+    description: 'Open roles that use C++ — systems, games and performance-critical code.',
+    params: { skills: 'cpp' },
+  },
+  {
+    slug: 'go',
+    title: 'Go',
+    description: 'Open roles that use Go for backends, infra and cloud-native services.',
+    params: { skills: 'go' },
+  },
+  {
+    slug: 'rust',
+    title: 'Rust',
+    description: 'Open roles that use Rust for safe, high-performance systems.',
+    params: { skills: 'rust' },
+  },
+  {
+    slug: 'ruby',
+    title: 'Ruby',
+    description: 'Open roles that use Ruby, from web apps to tooling.',
+    params: { skills: 'ruby' },
+  },
+  {
+    slug: 'php',
+    title: 'PHP',
+    description: 'Open roles that use PHP for web backends and platforms.',
+    params: { skills: 'php' },
+  },
+  {
+    slug: 'kotlin',
+    title: 'Kotlin',
+    description: 'Open roles that use Kotlin for Android and JVM backends.',
+    params: { skills: 'kotlin' },
+  },
+  {
+    slug: 'swift',
+    title: 'Swift',
+    description: 'Open roles that use Swift for iOS, macOS and Apple platforms.',
+    params: { skills: 'swift' },
+  },
+  {
+    slug: 'scala',
+    title: 'Scala',
+    description: 'Open roles that use Scala for JVM backends and data engineering.',
+    params: { skills: 'scala' },
+  },
+  {
+    slug: 'nodejs',
+    title: 'Node.js',
+    description: 'Open roles that use Node.js for JavaScript backends and APIs.',
+    params: { skills: 'nodejs' },
+  },
+  {
+    slug: 'clojure',
+    title: 'Clojure',
+    description: 'Open roles that use Clojure and functional JVM development.',
+    params: { skills: 'clojure' },
+  },
+  {
+    slug: 'elixir',
+    title: 'Elixir',
+    description: 'Open roles that use Elixir and the BEAM for scalable backends.',
+    params: { skills: 'elixir' },
+  },
+  {
+    slug: 'react',
+    title: 'React',
+    description: 'Open roles that use React to build web interfaces.',
+    params: { skills: 'react' },
+  },
+  {
+    slug: 'angular',
+    title: 'Angular',
+    description: 'Open roles that use Angular for web applications.',
+    params: { skills: 'angular' },
+  },
+  {
+    slug: 'vue',
+    title: 'Vue',
+    description: 'Open roles that use Vue.js for web interfaces.',
+    params: { skills: 'vue' },
+  },
+  {
+    slug: 'nextjs',
+    title: 'Next.js',
+    description: 'Open roles that use Next.js for full-stack React apps.',
+    params: { skills: 'nextjs' },
+  },
+  {
+    slug: 'spring',
+    title: 'Spring',
+    description: 'Open roles that use Spring for Java backends.',
+    params: { skills: 'spring' },
+  },
+  {
+    slug: 'rails',
+    title: 'Rails',
+    description: 'Open roles that use Ruby on Rails for web applications.',
+    params: { skills: 'rails' },
+  },
+  {
+    slug: 'django',
+    title: 'Django',
+    description: 'Open roles that use Django for Python web backends.',
+    params: { skills: 'django' },
+  },
+  {
+    slug: 'svelte',
+    title: 'Svelte',
+    description: 'Open roles that use Svelte and SvelteKit for web interfaces.',
+    params: { skills: 'svelte' },
+  },
 ];
 
 // toQuery expands a filter collection's params into a URL query string, repeating a

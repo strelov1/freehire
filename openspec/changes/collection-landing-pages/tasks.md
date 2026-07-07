@@ -20,6 +20,7 @@
 - [x] 4.1 Add regional remote entries to `FILTER_COLLECTIONS` with validated facet params: Remote Latam (`regions: latam`), Remote Brasil (`countries: br`), Remote US (`countries: us`), each with `work_mode: remote`
 - [x] 4.2 Verify each new collection returns a healthy, non-empty count against the live search API; drop or defer any that are thin
 - [x] 4.3 (Optional) add Remote Europe (`regions: eu`) / Remote APAC (`regions: apac`) if counts warrant — both shipped (29k / 15k live counts)
+- [x] 4.4 Add language/framework collections (the "<lang> jobs" pattern) mapping to the `skills` facet, using exact skilltag canonicals (`go`/`nodejs`/`cpp`/`csharp`, not `golang`/`node`/`c++`/`c#`); 16 languages + 8 frameworks, each count-verified against the live `/jobs/facets` distribution
 
 ## 5. Sitemap
 

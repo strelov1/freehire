@@ -16,8 +16,10 @@ collection its own server-rendered, self-canonical landing page.
   for `company_slug`) to pin the collection's facet params — no new filtering code.
 - Point the `/collections` hub cards at `/collections/:slug` instead of `/jobs?…`.
 - Expand `FILTER_COLLECTIONS` with regional remote landings (e.g. Remote Latam,
-  Remote Brasil, Remote US) — additive data entries, each validated against the
-  live facet vocabulary and shipped only when it has a healthy, non-empty count.
+  Remote Brasil, Remote US) and language/framework landings (the "<lang> jobs"
+  search pattern: Python, Go, Rust, Ruby, Node.js, React, … mapping to the `skills`
+  facet) — additive data entries, each validated against the live facet vocabulary
+  and shipped only when it has a healthy, non-empty count.
 - List the `/collections` hub, each collection landing, and `/for-companies` in
   the sitemap.
 - Add a visible `<h1>` to the `/jobs` and `/companies` list pages (currently
