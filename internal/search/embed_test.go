@@ -24,28 +24,24 @@ func TestJobPassage(t *testing.T) {
 	}
 }
 
-// teiEcho is a stub TEI /v1/embeddings that returns, for each input, a one-element
-// vector holding the integer the input text parses to — so a test can assert both that
-// every input got its own vector and that order is preserved across chunk boundaries.
+// teiEcho is a stub TEI /embed that returns, for each input, a one-element vector
+// holding the integer the input text parses to — so a test can assert both that every
+// input got its own vector and that order is preserved across chunk boundaries. It
+// replies with the bare-array shape (as the host2 TEI /embed does).
 func teiEcho(t *testing.T) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
-			Input []string `json:"input"`
+			Inputs []string `json:"inputs"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		type item struct {
-			Embedding []float64 `json:"embedding"`
-		}
-		out := struct {
-			Data []item `json:"data"`
-		}{}
-		for _, s := range in.Input {
+		out := make([][]float64, 0, len(in.Inputs))
+		for _, s := range in.Inputs {
 			n, _ := strconv.Atoi(strings.TrimSpace(s))
-			out.Data = append(out.Data, item{Embedding: []float64{float64(n)}})
+			out = append(out, []float64{float64(n)})
 		}
 		_ = json.NewEncoder(w).Encode(out)
 	}))
@@ -82,9 +78,9 @@ func TestEmbedBatchChunksAndPreservesOrder(t *testing.T) {
 // not silently misalign vectors to jobs.
 func TestEmbedBatchRejectsCountMismatch(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"data": []map[string]any{{"embedding": []float64{1}}}, // one vector regardless of input count
-		})
+		// One vector regardless of input count (wrapped/HF shape), to exercise the
+		// count-mismatch guard.
+		_ = json.NewEncoder(w).Encode(map[string]any{"embeddings": [][]float64{{1}}})
 	}))
 	defer srv.Close()
 	c := &Client{embedURL: srv.URL}

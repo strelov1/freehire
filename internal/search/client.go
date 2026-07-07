@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -42,10 +43,11 @@ const (
 	// e5 gives far sharper skill matching than the old in-engine MiniLM, and offloading
 	// the compute keeps it off Meilisearch's single task queue.
 	embedderModel = "intfloat/multilingual-e5-base"
-	// embedderURL is the TEI OpenAI-compatible embeddings endpoint. A const (like
-	// embedderModel) — both prod and dev run TEI on localhost:8090; promote to config
-	// if a deployment needs to point elsewhere.
-	embedderURL = "http://127.0.0.1:8090/v1/embeddings"
+	// embedderURL is the default embedding backend: the host2 TEI's native /embed route
+	// (see embedChunk). A worker can override it with EMBED_URL to point at a faster
+	// backend serving the same e5 model — e.g. an HF Inference Endpoint for a bulk
+	// reindex — without changing the vector space.
+	embedderURL = "http://127.0.0.1:8090/embed"
 	// embedderDimensions is the e5-base output width; declared so Meilisearch validates
 	// vectors and the userProvided CV vector matches.
 	embedderDimensions = 768
@@ -82,15 +84,34 @@ type Client struct {
 	url      string
 	key      string
 	// embedURL is the TEI /v1/embeddings endpoint this client embeds against (jobs
-	// and CVs alike). It defaults to embedderURL; tests point it at a stub server.
+	// and CVs alike). It defaults to embedderURL (the host2 TEI) but EMBED_URL can
+	// point a worker at a faster backend — e.g. a GPU endpoint for a bulk reindex —
+	// as long as it serves the SAME e5 model (same vector space). Tests set it directly.
 	embedURL string
+	// embedKey is the optional bearer token for embedURL (EMBED_API_KEY). Empty for
+	// the authless host2 TEI; set when pointing at an authenticated endpoint (HF, etc.).
+	embedKey string
 }
 
 // NewClient connects to Meilisearch at url authenticated by key. It does no I/O
-// — the connection is exercised lazily by the first request (or EnsureIndex).
+// — the connection is exercised lazily by the first request (or EnsureIndex). The
+// embedding backend defaults to the host2 TEI but is overridable via EMBED_URL /
+// EMBED_API_KEY (see the embedURL field).
 func NewClient(url, key string) *Client {
 	m := meilisearch.New(url, meilisearch.WithAPIKey(key))
-	return &Client{manager: m, facet: m.Index(facetIndexUID), semantic: m.Index(semanticIndexUID), url: url, key: key, embedURL: embedderURL}
+	embedURL := embedderURL
+	if v := os.Getenv("EMBED_URL"); v != "" {
+		embedURL = v
+	}
+	return &Client{
+		manager:  m,
+		facet:    m.Index(facetIndexUID),
+		semantic: m.Index(semanticIndexUID),
+		url:      url,
+		key:      key,
+		embedURL: embedURL,
+		embedKey: os.Getenv("EMBED_API_KEY"),
+	}
 }
 
 // EnsureIndex creates the facet/keyword jobs index (no embedder) and applies its

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 )
 
@@ -45,9 +46,14 @@ func (c *Client) embedBatch(ctx context.Context, inputs []string) ([][]float64, 
 	return out, nil
 }
 
-// embedChunk embeds one TEI-sized batch and returns the vectors in input order.
+// embedChunk embeds one TEI-sized batch and returns the vectors in input order. It
+// speaks TEI's native `/embed` shape — `{"inputs": [...]}` in, an array of vectors out
+// — which every backend we target accepts: the host2 TEI (/embed, bare array) and an
+// HF Inference Endpoint (root, `{"embeddings": [...]}`). Over-long inputs (e5 caps at
+// 512 tokens) are truncated server-side (host2 TEI's --auto-truncate; HF truncates by
+// default), so no per-input length handling is needed here.
 func (c *Client) embedChunk(ctx context.Context, inputs []string) ([][]float64, error) {
-	body, err := json.Marshal(map[string]any{"input": inputs, "model": embedderModel})
+	body, err := json.Marshal(map[string]any{"inputs": inputs})
 	if err != nil {
 		return nil, fmt.Errorf("search: embed marshal: %w", err)
 	}
@@ -56,6 +62,9 @@ func (c *Client) embedChunk(ctx context.Context, inputs []string) ([][]float64, 
 		return nil, fmt.Errorf("search: embed request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if c.embedKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.embedKey)
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("search: embed call: %w", err)
@@ -64,25 +73,35 @@ func (c *Client) embedChunk(ctx context.Context, inputs []string) ([][]float64, 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("search: embed: unexpected status %d", resp.StatusCode)
 	}
-	var out struct {
-		Data []struct {
-			Embedding []float64 `json:"embedding"`
-		} `json:"data"`
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("search: embed read: %w", err)
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, fmt.Errorf("search: embed decode: %w", err)
+	vecs, err := parseEmbeddings(raw)
+	if err != nil {
+		return nil, err
 	}
-	if len(out.Data) != len(inputs) {
-		return nil, fmt.Errorf("search: embed: got %d vectors for %d inputs", len(out.Data), len(inputs))
-	}
-	vecs := make([][]float64, len(out.Data))
-	for i, d := range out.Data {
-		if len(d.Embedding) == 0 {
-			return nil, fmt.Errorf("search: embed: empty vector at %d", i)
-		}
-		vecs[i] = d.Embedding
+	if len(vecs) != len(inputs) {
+		return nil, fmt.Errorf("search: embed: got %d vectors for %d inputs", len(vecs), len(inputs))
 	}
 	return vecs, nil
+}
+
+// parseEmbeddings decodes a TEI-style embeddings response, tolerating both the bare
+// array of vectors (`[[...], ...]`, TEI /embed) and the object form
+// (`{"embeddings": [[...], ...]}`, HF Inference Endpoints).
+func parseEmbeddings(raw []byte) ([][]float64, error) {
+	var bare [][]float64
+	if err := json.Unmarshal(raw, &bare); err == nil && len(bare) > 0 {
+		return bare, nil
+	}
+	var wrapped struct {
+		Embeddings [][]float64 `json:"embeddings"`
+	}
+	if err := json.Unmarshal(raw, &wrapped); err == nil && len(wrapped.Embeddings) > 0 {
+		return wrapped.Embeddings, nil
+	}
+	return nil, fmt.Errorf("search: embed: unrecognized response shape")
 }
 
 // semanticDocument is a JobDocument carrying its precomputed embedding for the

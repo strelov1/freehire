@@ -31,29 +31,27 @@ import (
 	"github.com/strelov1/freehire/internal/enrich"
 )
 
-// fakeTEI stands in for the TEI embedding server: an OpenAI-compatible
-// /v1/embeddings that returns a deterministic bag-of-words vector per input, so texts
-// sharing tokens land near each other under cosine similarity. That is enough for the
-// semantic assertions (a query hits jobs whose text it overlaps) without a real model,
-// and keeps the userProvided vector width at embedderDimensions so Meili accepts it.
+// fakeTEI stands in for the embedding server, replying in the wrapped
+// {"embeddings": [...]} shape an HF Inference Endpoint uses. It returns a deterministic
+// bag-of-words vector per input, so texts sharing tokens land near each other under
+// cosine similarity — enough for the semantic assertions (a query hits jobs whose text
+// it overlaps) without a real model, and it keeps the vector width at
+// embedderDimensions so Meili accepts the userProvided vectors.
 func fakeTEI(t *testing.T) string {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
-			Input []string `json:"input"`
+			Inputs []string `json:"inputs"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		type item struct {
-			Embedding []float64 `json:"embedding"`
-		}
-		var out struct {
-			Data []item `json:"data"`
-		}
-		for _, s := range in.Input {
-			out.Data = append(out.Data, item{Embedding: bagOfWords(s)})
+		out := struct {
+			Embeddings [][]float64 `json:"embeddings"`
+		}{}
+		for _, s := range in.Inputs {
+			out.Embeddings = append(out.Embeddings, bagOfWords(s))
 		}
 		_ = json.NewEncoder(w).Encode(out)
 	}))
