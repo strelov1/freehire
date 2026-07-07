@@ -1,0 +1,11 @@
+# earcu boards. Provider is the filename; each entry is company + board.
+# board = the full eArcu careers host (feed is https://<board>/jobs/rss;
+# see internal/sources/earcu.go). eArcu clients run on custom domains, so the
+# board is the host itself, not a subdomain slug.
+#
+# Add a host only after validating it live: https://<host>/jobs/rss must return
+# 200 with items carrying the "eArcu Vacancy Reference" marker. Harvesting the
+# wider eArcu customer roster is follow-up discovery work.
+
+- company: Cambridge University Press & Assessment
+  board: careers.cambridge.org
