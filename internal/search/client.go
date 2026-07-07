@@ -531,14 +531,10 @@ func (c *Client) RecommendByVector(ctx context.Context, vector []float64, limit,
 	if len(vector) == 0 {
 		return SearchResult{}, nil
 	}
-	vf := make([]float32, len(vector))
-	for i, v := range vector {
-		vf[i] = float32(v)
-	}
 	resp, err := c.semantic.SearchWithContext(ctx, "", &meilisearch.SearchRequest{
 		Limit:  int64(limit),
 		Offset: int64(offset),
-		Vector: vf,
+		Vector: toFloat32(vector),
 		Hybrid: &meilisearch.SearchRequestHybrid{Embedder: embedderName, SemanticRatio: 1},
 	})
 	if err != nil {
