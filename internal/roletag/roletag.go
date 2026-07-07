@@ -4,14 +4,16 @@
 // internal/skilltag: it emits canonical role slugs for what it can resolve and
 // nothing for what it cannot (it never guesses).
 //
-// A job's roles are, in order:
+// A job's roles are:
+//   - the seniority-only role ({seniority}, e.g. "senior") whenever the grade
+//     resolves — so "any senior across functions" stays filterable;
 //   - the bare category role ({category}, e.g. "backend") whenever the category
 //     resolves — the dominant real-world case, since most titles carry no grade;
-//   - the composite {seniority}_{category} (e.g. "senior_backend") when the
-//     seniority also resolves — the graded role on top of the bare one;
-//   - at most one named role matched from the title, for roles that do not
-//     decompose into the seniority×category grid (founding_engineer,
-//     fractional_cto, software_engineer, …).
+//   - the composite {seniority}_{category} (e.g. "senior_backend") when both
+//     resolve — the graded role on top of the bare one;
+//   - at most one named role from the title, for roles that do not decompose into
+//     the seniority×category grid (founding_engineer, software_engineer, …), plus
+//     its graded composite {seniority}_{named} unless the role is nonGradeable.
 //
 // The package also owns the catalog (slug → human label), the source of truth
 // for the picker labels emitted into the web contracts.
@@ -232,10 +234,13 @@ func buildNamedLabels() map[string]string {
 }
 
 // Derive returns a job's canonical role slugs from its resolved seniority,
-// resolved category, and title: the bare category role when the category
-// resolves, the composite {seniority}_{category} when the seniority also
-// resolves, and at most one named role matched whole-word in the title. The
-// three sources occupy distinct slug namespaces, so the result carries no
+// resolved category, and title:
+//   - the seniority-only role ({seniority}) when the grade resolves;
+//   - the bare category role ({category}) and its composite {seniority}_{category};
+//   - at most one named role matched whole-word in the title, plus its composite
+//     {seniority}_{named} when the named role is gradeable.
+//
+// The sources occupy distinct slug namespaces, so the result carries no
 // duplicates. Every slug exists in Catalog; an unresolved input contributes
 // nothing.
 func Derive(seniority, category, title string) []string {
@@ -278,21 +283,26 @@ func Derive(seniority, category, title string) []string {
 // the curated named roles. It is the source of truth for picker labels.
 func Catalog() map[string]string {
 	cat := make(map[string]string, len(categoryNoun)*(len(seniorityLabel)+1)+len(seniorityLabel)+len(namedLabel))
+	// addGraded registers a role and every seniority-graded variant of it (the
+	// bare slug plus "{Senior} {label}" for each grade) — the shape a category or
+	// a gradeable named role takes.
+	addGraded := func(slug, label string) {
+		cat[slug] = label
+		for sen, senLabel := range seniorityLabel {
+			cat[sen+"_"+slug] = senLabel + " " + label
+		}
+	}
 	for sen, senLabel := range seniorityLabel {
 		cat[sen] = senLabel // seniority-only role
 	}
 	for c, noun := range categoryNoun {
-		cat[c] = noun
-		for sen, senLabel := range seniorityLabel {
-			cat[sen+"_"+c] = senLabel + " " + noun
-		}
+		addGraded(c, noun)
 	}
 	for slug, label := range namedLabel {
-		cat[slug] = label
-		if !nonGradeable[slug] {
-			for sen, senLabel := range seniorityLabel {
-				cat[sen+"_"+slug] = senLabel + " " + label
-			}
+		if nonGradeable[slug] {
+			cat[slug] = label
+		} else {
+			addGraded(slug, label)
 		}
 	}
 	return cat
