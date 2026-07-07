@@ -113,9 +113,12 @@ export interface RailEntry {
 }
 
 export const RAIL: RailEntry[] = [
-  // Role rides inside the Specialization pane (rendered at its top), not as its
-  // own rail entry — the two are one "what role" concept.
-  { key: 'category', label: 'Specialization', section: 'ROLE', kind: 'category' },
+  // The role picker replaces the standalone Seniority and Specialization controls:
+  // its values are seniority-only, bare-category (= specialization), composite
+  // (seniority × specialization), and named roles — one control for "what role".
+  // The seniority/category facets still exist for backward-compatible URLs/saved
+  // searches; they just have no dedicated pane anymore.
+  { key: 'role', label: 'Role', section: 'ROLE', kind: 'facet', facetParam: 'role' },
   { key: 'location', label: 'Location', section: 'ROLE', kind: 'location' },
   { key: 'work', label: 'Work & employment', section: 'ROLE', kind: 'work' },
   { key: 'skills', label: 'Skills', section: 'ROLE', kind: 'facet', facetParam: 'skills' },

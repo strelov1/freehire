@@ -15,33 +15,43 @@ func TestDerive(t *testing.T) {
 		title     string
 		want      []string
 	}{
-		// A resolved category always yields the bare role; the composite is added on
-		// top when seniority is also resolved. Order: bare, composite, named.
-		{"composite adds bare + graded", "senior", "backend", "Senior Backend Engineer", []string{"backend", "senior_backend"}},
-		{"composite mid frontend", "middle", "frontend", "Middle Frontend Developer", []string{"frontend", "middle_frontend"}},
-		{"composite lead devops", "lead", "devops", "Lead DevOps Engineer", []string{"devops", "lead_devops"}},
+		// Emission order: seniority-only, bare category, composite, named.
+		{"seniority + category + graded", "senior", "backend", "Senior Backend Engineer", []string{"senior", "backend", "senior_backend"}},
+		{"middle frontend", "middle", "frontend", "Middle Frontend Developer", []string{"middle", "frontend", "middle_frontend"}},
+		{"lead devops", "lead", "devops", "Lead DevOps Engineer", []string{"lead", "devops", "lead_devops"}},
+
+		// Seniority-only role: a grade with no category and no named match still
+		// filters by seniority (this is what replaces the standalone seniority facet).
+		{"seniority only", "senior", "", "Senior Specialist", []string{"senior"}},
 
 		// Bare category role with no seniority — the dominant real-world case.
 		{"bare category, no seniority", "", "data_science", "Data Scientist", []string{"data_science"}},
 		{"bare category product", "", "product", "Product Manager", []string{"product"}},
 
-		// Category "other" yields no bare role (no natural role noun).
-		{"category other yields nothing", "", "other", "Coordinator", nil},
+		// Category "other" yields no bare/composite role (no natural role noun); a
+		// seniority still emits its seniority-only role.
+		{"category other, no seniority", "", "other", "Coordinator", nil},
+		{"category other with seniority", "lead", "other", "Lead Coordinator", []string{"lead"}},
 
 		// Named roles come from the title regardless of the grid.
 		{"software engineer catch-all", "", "", "Software Engineer", []string{"software_engineer"}},
 		{"founding engineer, empty grid", "", "", "Founding Engineer", []string{"founding_engineer"}},
 		{"cloud solutions engineer beats adjacency gap", "", "", "Cloud Solutions Engineer", []string{"cloud_solutions_engineer"}},
-		{"technical lead", "lead", "", "Technical Lead", []string{"technical_lead"}},
-		{"tech lead alias", "lead", "", "Tech Lead", []string{"technical_lead"}},
-		{"fractional cto", "c_level", "", "Fractional CTO", []string{"fractional_cto"}},
+		{"technical lead adds seniority-only", "lead", "", "Technical Lead", []string{"lead", "technical_lead"}},
+		{"fractional cto", "c_level", "", "Fractional CTO", []string{"c_level", "fractional_cto"}},
 		// Length-ordered aliases: the longer, more specific phrase wins.
 		{"technical account manager beats account manager", "", "sales", "Technical Account Manager", []string{"sales", "technical_account_manager"}},
 
-		// Bare category + composite + one named coexist without duplicates.
-		{"bare + composite + named", "senior", "backend", "Senior Backend Founding Engineer", []string{"backend", "senior_backend", "founding_engineer"}},
+		// Mined granular tech roles co-exist with their coarse bare category.
+		{"android developer + mobile", "", "mobile", "Android Developer", []string{"mobile", "android_developer"}},
+		{"senior ios engineer", "senior", "mobile", "Senior iOS Engineer", []string{"senior", "mobile", "senior_mobile", "ios_developer"}},
+		{"platform engineer + devops", "", "devops", "Platform Engineer", []string{"devops", "platform_engineer"}},
+		{"solutions architect", "", "architecture", "Solution Architect", []string{"architecture", "solutions_architect"}},
 
-		// Never guesses: no category and no named alias.
+		// Seniority + bare + composite + one named coexist without duplicates.
+		{"all four sources", "senior", "backend", "Senior Backend Founding Engineer", []string{"senior", "backend", "senior_backend", "founding_engineer"}},
+
+		// Never guesses: no seniority, no category, no named alias.
 		{"nothing resolvable", "", "", "Rockstar Ninja Guru", nil},
 	}
 
@@ -118,6 +128,20 @@ func TestEveryNamedRoleHasALabelAndAlias(t *testing.T) {
 	for _, r := range namedRoleTable {
 		if len(r.aliases) == 0 {
 			t.Errorf("named role %q has no aliases", r.slug)
+		}
+	}
+}
+
+// Every seniority MUST produce a seniority-only role present in the catalog, so
+// the role facet subsumes the standalone seniority filter it replaces.
+func TestSeniorityOnlyRoleForEveryGrade(t *testing.T) {
+	cat := Catalog()
+	for _, s := range enrich.SeniorityValues {
+		if got := Derive(s, "", "Some Title"); !slices.Contains(got, s) {
+			t.Errorf("Derive(%q,\"\") = %v, missing seniority-only role %q", s, got, s)
+		}
+		if _, ok := cat[s]; !ok {
+			t.Errorf("seniority-only role %q missing from catalog", s)
 		}
 	}
 }

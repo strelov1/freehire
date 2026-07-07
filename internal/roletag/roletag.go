@@ -98,6 +98,47 @@ var namedRoleTable = []struct {
 	{"business_analyst", "Business Analyst", []string{"business analyst"}},
 	{"systems_administrator", "Systems Administrator", []string{"systems administrator"}},
 
+	// Granular tech specializations (mined from prod titles — they collapse into a
+	// coarse category like mobile/devops/architecture, so a named role keeps the
+	// specific title pickable).
+	{"android_developer", "Android Developer", []string{"android developer", "android engineer", "android software engineer"}},
+	{"ios_developer", "iOS Developer", []string{"ios developer", "ios engineer", "ios software engineer"}},
+	{"platform_engineer", "Platform Engineer", []string{"platform engineer"}},
+	{"cloud_engineer", "Cloud Engineer", []string{"cloud engineer"}},
+	{"infrastructure_engineer", "Infrastructure Engineer", []string{"infrastructure engineer"}},
+	{"firmware_engineer", "Firmware Engineer", []string{"firmware engineer"}},
+	{"fpga_engineer", "FPGA Engineer", []string{"fpga engineer"}},
+	{"qa_automation_engineer", "QA Automation Engineer", []string{"qa automation engineer", "test automation engineer", "automation qa engineer", "sdet"}},
+	{"data_platform_engineer", "Data Platform Engineer", []string{"data platform engineer"}},
+	{"deep_learning_engineer", "Deep Learning Engineer", []string{"deep learning engineer"}},
+	{"genai_engineer", "GenAI Engineer", []string{"genai engineer", "generative ai engineer"}},
+
+	// Architects (named, distinct from the bare "architecture" role).
+	{"solutions_architect", "Solutions Architect", []string{"solutions architect", "solution architect"}},
+	{"software_architect", "Software Architect", []string{"software architect"}},
+	{"enterprise_architect", "Enterprise Architect", []string{"enterprise architect"}},
+	{"cloud_architect", "Cloud Architect", []string{"cloud architect"}},
+	{"data_architect", "Data Architect", []string{"data architect"}},
+
+	// Security specializations.
+	{"security_officer", "Security Officer", []string{"security officer"}},
+	{"cybersecurity_engineer", "Cybersecurity Engineer", []string{"cybersecurity engineer", "cyber security engineer"}},
+	{"information_security_engineer", "Information Security Engineer", []string{"information security engineer"}},
+
+	// Design specializations.
+	{"product_designer", "Product Designer", []string{"product designer"}},
+	{"ux_designer", "UX Designer", []string{"ux designer", "ui designer", "ui/ux designer"}},
+	{"graphic_designer", "Graphic Designer", []string{"graphic designer"}},
+	{"interior_designer", "Interior Designer", []string{"interior designer"}},
+
+	// Non-software professions the catalogue carries (broad scope).
+	{"electrical_engineer", "Electrical Engineer", []string{"electrical engineer"}},
+	{"mechanical_engineer", "Mechanical Engineer", []string{"mechanical engineer"}},
+	{"accountant", "Accountant", []string{"accountant"}},
+	{"financial_analyst", "Financial Analyst", []string{"financial analyst"}},
+	{"tax_manager", "Tax Manager", []string{"tax manager"}},
+	{"program_manager", "Program Manager", []string{"program manager"}},
+
 	// Customer-facing / pre-sales engineering.
 	{"cloud_solutions_engineer", "Cloud Solutions Engineer", []string{"cloud solutions engineer"}},
 	{"solutions_engineer", "Solutions Engineer", []string{"solutions engineer"}},
@@ -187,6 +228,13 @@ func buildNamedLabels() map[string]string {
 func Derive(seniority, category, title string) []string {
 	var roles []string
 
+	// Seniority-only role: the grade as its own facet value, so "any senior across
+	// functions" (and a graded but category-less title) stays filterable through
+	// the role picker — the role facet subsumes the standalone seniority filter.
+	if _, ok := seniorityLabel[seniority]; ok {
+		roles = append(roles, seniority)
+	}
+
 	// categoryNoun membership is the decomposable-category set (excludes "other",
 	// where "{Seniority} Other" would be meaningless).
 	if _, ok := categoryNoun[category]; ok {
@@ -211,7 +259,10 @@ func Derive(seniority, category, title string) []string {
 // human label: the bare category roles, the seniority × category composites, and
 // the curated named roles. It is the source of truth for picker labels.
 func Catalog() map[string]string {
-	cat := make(map[string]string, len(categoryNoun)*(len(seniorityLabel)+1)+len(namedLabel))
+	cat := make(map[string]string, len(categoryNoun)*(len(seniorityLabel)+1)+len(seniorityLabel)+len(namedLabel))
+	for sen, senLabel := range seniorityLabel {
+		cat[sen] = senLabel // seniority-only role
+	}
 	for c, noun := range categoryNoun {
 		cat[c] = noun
 		for sen, senLabel := range seniorityLabel {
