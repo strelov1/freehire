@@ -134,6 +134,30 @@ export interface Job {
    */
   view_count: number /* int32 */;
   applied_count: number /* int32 */;
+  /**
+   * Reality is the job-reality signal (fresh/stale/likely-evergreen + evidence),
+   * computed at index/read time and attached by ClassifyReality — never stored, as
+   * it is time-dependent. Nil when not computed (e.g. a plain FromRow without counts).
+   */
+  reality?: Reality;
+}
+
+//////////
+// source: reality.go
+
+/**
+ * Reality is the served job-reality signal: the class plus the observable facts that
+ * produced it, so the UI states facts ("open 240 days · reposted 6×") rather than a
+ * bare accusation. It is computed at index/read time (never stored — it is
+ * time-dependent) and attached via ClassifyReality; a job with no computed signal
+ * omits the field.
+ */
+export interface Reality {
+  class: string;
+  age_days: number /* int */;
+  repost_count: number /* int */;
+  mass_posting_count: number /* int */;
+  fake_freshness: boolean;
 }
 
 /**

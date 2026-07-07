@@ -47,7 +47,10 @@ type JobDocument struct {
 // enrichment payload yields the zero Enrichment (the job is still fully
 // searchable by its text). Geography (regions/countries) and work_mode ride the
 // document top-level — the resolved union of parsed-location and enrichment
-// values — and are filtered via those bare attributes.
+// values — and are filtered via those bare attributes. The reality signal is NOT
+// set here (it needs the caller's clock and role-cluster counts); the caller
+// attaches it to the returned document via doc.Reality so it backs the
+// `reality.class` facet.
 func FromJob(j db.Job) (JobDocument, error) {
 	view, err := jobview.FromRow(j)
 	if err != nil {

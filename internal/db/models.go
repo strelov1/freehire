@@ -94,6 +94,7 @@ type Job struct {
 	Cities             []string           `json:"cities"`
 	ViewCount          int32              `json:"view_count"`
 	AppliedCount       int32              `json:"applied_count"`
+	RoleFingerprint    pgtype.Text        `json:"role_fingerprint"`
 }
 
 type JobReport struct {

@@ -433,6 +433,18 @@ type Querier interface {
 	// expired probes can close a job. Guarded to the non-zero case so probing an
 	// already-clean job does not churn the row.
 	ResetLivenessStrikes(ctx context.Context, id int64) error
+	// The job-reality repost/mass-posting counts for one role cluster: how many postings
+	// of the same role (by role_fingerprint within a company) exist of any status
+	// (repost_count = repost history) and how many are still open (mass_count = concurrent
+	// mass-posting). A NULL/empty fingerprint is excluded so unfingerprinted rows never
+	// cluster together; a lookup miss means a unique role (count 1). Used by the
+	// incremental index push and the single-job detail read.
+	RoleClusterCount(ctx context.Context, arg RoleClusterCountParams) (RoleClusterCountRow, error)
+	// The whole-catalogue role-cluster counts in one aggregate pass, for the reindex to
+	// build its (company_slug, role_fingerprint) -> counts lookup once. Only clusters with
+	// more than one posting are returned (singletons are the count-1 default a lookup miss
+	// already implies), keeping the map small. NULL/empty fingerprints are excluded.
+	RoleClusterCountsAll(ctx context.Context) ([]RoleClusterCountsAllRow, error)
 	// Save (bookmark) a job for a user. Idempotent and independent of a prior view:
 	// it inserts the row (viewed_at defaults) or refreshes saved_at in place.
 	SaveJob(ctx context.Context, arg SaveJobParams) (UserJob, error)

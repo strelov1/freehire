@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/worker"
 )
@@ -123,7 +124,12 @@ func run() int {
 		}
 		scope := "since " + since.String()
 		log.Printf("reindex: target=%s scope=%s mode=in-place", target, scope)
-		indexed, deleted, skipped, err := reindexAll(ctx, worker.NewIncrementalReader(q, time.Now().Add(-since)), ops)
+		lookup, err := buildRealityLookup(ctx, q)
+		if err != nil {
+			log.Printf("reindex: build reality lookup: %v", err)
+			return 1
+		}
+		indexed, deleted, skipped, err := reindexAll(ctx, worker.NewIncrementalReader(q, time.Now().Add(-since)), ops, lookup, time.Now())
 		if err != nil {
 			log.Printf("reindex: %v", err)
 			return 1
@@ -146,7 +152,12 @@ func run() int {
 		scope = "posted-within " + postedWithin.String()
 	}
 	log.Printf("reindex: target=%s scope=%s mode=swap", target, scope)
-	indexed, skipped, err := reindexFull(ctx, reader, b)
+	lookup, err := buildRealityLookup(ctx, q)
+	if err != nil {
+		log.Printf("reindex: build reality lookup: %v", err)
+		return 1
+	}
+	indexed, skipped, err := reindexFull(ctx, reader, b, lookup, time.Now())
 	if err != nil {
 		log.Printf("reindex: %v", err)
 		return 1
@@ -229,7 +240,7 @@ func semanticRequested(args []string) bool {
 // how many documents were indexed (open jobs) and deleted (closed jobs). fetch
 // pages by keyset (id > last seen) — full or incremental (--since) — so rows
 // inserted or re-ordered during the run cannot be skipped or repeated.
-func reindexAll(ctx context.Context, reader worker.PageReader, ops indexOps) (int, int, int, error) {
+func reindexAll(ctx context.Context, reader worker.PageReader, ops indexOps, lookup realityLookup, now time.Time) (int, int, int, error) {
 	if err := ops.ensure(ctx); err != nil {
 		return 0, 0, 0, err
 	}
@@ -253,7 +264,7 @@ func reindexAll(ctx context.Context, reader worker.PageReader, ops indexOps) (in
 		skipped += len(corrupted)
 
 		if len(jobs) > 0 {
-			docs, deleteIDs, err := splitJobs(jobs)
+			docs, deleteIDs, err := splitJobs(jobs, lookup, now)
 			if err != nil {
 				return int(indexed.Load()), int(deleted.Load()), skipped, err
 			}
@@ -297,7 +308,7 @@ type rebuilder interface {
 // fetch pages by keyset (id > last seen) so rows inserted or re-ordered during the
 // run cannot be skipped or repeated. Used for full passes; --since stays in place
 // (reindexAll) since a partial index cannot be swapped in wholesale.
-func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder) (int, int, error) {
+func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, lookup realityLookup, now time.Time) (int, int, error) {
 	if err := b.Prepare(ctx); err != nil {
 		return 0, 0, err
 	}
@@ -318,7 +329,7 @@ func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder) (in
 		skipped += len(corrupted)
 
 		if len(jobs) > 0 {
-			docs, _, err := splitJobs(jobs) // closed jobs (deleteIDs) are dropped, not indexed
+			docs, _, err := splitJobs(jobs, lookup, now) // closed jobs (deleteIDs) are dropped, not indexed
 			if err != nil {
 				return int(indexed.Load()), skipped, err
 			}
@@ -343,10 +354,36 @@ func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder) (in
 	return int(indexed.Load()), skipped, nil
 }
 
+// realityLookup returns a role cluster's repost and concurrent-open counts for the
+// job-reality signal. A miss (a role not in the precomputed map, i.e. a singleton)
+// yields (1, 1) — a unique, non-reposted role. A nil lookup means the counts default
+// to (1, 1) everywhere (used by tests that do not exercise clustering).
+type realityLookup func(companySlug, fingerprint string) (repost, mass int)
+
+// buildRealityLookup precomputes the whole-catalogue role-cluster counts once, so the
+// per-job classification during the rebuild is a map read, not N queries.
+func buildRealityLookup(ctx context.Context, q *db.Queries) (realityLookup, error) {
+	rows, err := q.RoleClusterCountsAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m := make(map[string][2]int, len(rows))
+	for _, r := range rows {
+		m[r.CompanySlug+"\x00"+r.RoleFingerprint.String] = [2]int{int(r.RepostCount), int(r.MassCount)}
+	}
+	return func(cs, fp string) (int, int) {
+		if v, ok := m[cs+"\x00"+fp]; ok {
+			return v[0], v[1]
+		}
+		return 1, 1
+	}, nil
+}
+
 // splitJobs partitions a batch from the (deliberately unfiltered) reindex feed:
-// open jobs become index documents, closed jobs become deletions so they leave
+// open jobs become index documents (each carrying its reality signal, classified
+// against `now` and its cluster counts), closed jobs become deletions so they leave
 // the index (the index contains only open jobs — see the job-search spec).
-func splitJobs(jobs []db.Job) ([]search.JobDocument, []int64, error) {
+func splitJobs(jobs []db.Job, lookup realityLookup, now time.Time) ([]search.JobDocument, []int64, error) {
 	docs := make([]search.JobDocument, 0, len(jobs))
 	deleteIDs := make([]int64, 0, len(jobs))
 	for _, j := range jobs {
@@ -354,10 +391,16 @@ func splitJobs(jobs []db.Job) ([]search.JobDocument, []int64, error) {
 			deleteIDs = append(deleteIDs, j.ID)
 			continue
 		}
+		repost, mass := 1, 1
+		if lookup != nil {
+			repost, mass = lookup(j.CompanySlug, j.RoleFingerprint.String)
+		}
 		doc, err := search.FromJob(j)
 		if err != nil {
 			return nil, nil, err
 		}
+		reality := jobview.ClassifyReality(j, now, repost, mass)
+		doc.Reality = &reality
 		docs = append(docs, doc)
 	}
 	return docs, deleteIDs, nil

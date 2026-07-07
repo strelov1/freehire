@@ -12,6 +12,7 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/jobhash"
+	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/pipeline"
 	"github.com/strelov1/freehire/internal/search"
 )
@@ -84,6 +85,9 @@ func (s *dbStore) Save(ctx context.Context, job pipeline.Job) error {
 	// Fingerprint the indexed fields so the upsert can report whether this write
 	// changed searchable content (drives incremental indexing below).
 	params.ContentHash = pgtype.Text{String: jobhash.Of(params), Valid: true}
+	// role_fingerprint is the repost IDENTITY (excludes posted_at/url/slug), so a
+	// reposted role clusters for the job-reality signal — distinct from content_hash.
+	params.RoleFingerprint = pgtype.Text{String: jobhash.RoleFingerprint(params), Valid: true}
 
 	qtx := s.q.WithTx(tx)
 	saved, err := qtx.UpsertJob(ctx, params)
@@ -120,10 +124,23 @@ func (s *dbStore) Save(ctx context.Context, job pipeline.Job) error {
 	// paths (enrichment via SetJobEnrichment, collections via
 	// PropagateCollectionsToJobs) reconcile on the next batch reindex, not here.
 	if s.indexer != nil && needsIndex(saved) {
+		// The job-reality signal needs this role's cluster counts; a lookup failure
+		// degrades to a unique role (counts 1) rather than failing the index push.
+		repost, mass := int64(1), int64(1)
+		if c, err := s.q.RoleClusterCount(ctx, db.RoleClusterCountParams{
+			CompanySlug:     saved.Job.CompanySlug,
+			RoleFingerprint: saved.Job.RoleFingerprint,
+		}); err != nil {
+			log.Printf("ingest: role-cluster count for job %d: %v", saved.Job.ID, err)
+		} else {
+			repost, mass = c.RepostCount, c.MassCount
+		}
 		doc, err := search.FromJob(saved.Job)
 		if err != nil {
 			log.Printf("ingest: build index doc for job %d: %v", saved.Job.ID, err)
 		} else {
+			reality := jobview.ClassifyReality(saved.Job, time.Now(), int(repost), int(mass))
+			doc.Reality = &reality
 			s.indexer.Add(ctx, doc)
 		}
 	}

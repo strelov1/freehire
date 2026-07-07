@@ -86,7 +86,7 @@ func TestSplitJobs_OpenBecomeDocsClosedBecomeDeletions(t *testing.T) {
 	closed := db.Job{ID: 2, Title: "Closed", PublicSlug: "closed-x",
 		ClosedAt: pgtype.Timestamptz{Time: open.CreatedAt.Time, Valid: true}}
 
-	docs, deleteIDs, err := splitJobs([]db.Job{open, closed})
+	docs, deleteIDs, err := splitJobs([]db.Job{open, closed}, nil, time.Now())
 	if err != nil {
 		t.Fatalf("splitJobs: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestReindexFull_PushesOpenDocsThenPromotes(t *testing.T) {
 	reader := &fakePageReader{pages: map[int64][]db.Job{0: page}}
 
 	f := &fakeRebuilder{}
-	indexed, skipped, err := reindexFull(context.Background(), reader, f)
+	indexed, skipped, err := reindexFull(context.Background(), reader, f, nil, time.Now())
 	if err != nil {
 		t.Fatalf("reindexFull: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestReindexFull_SkipsCorruptedRowAndPromotes(t *testing.T) {
 	}
 
 	f := &fakeRebuilder{}
-	indexed, skipped, err := reindexFull(context.Background(), reader, f)
+	indexed, skipped, err := reindexFull(context.Background(), reader, f, nil, time.Now())
 	if err != nil {
 		t.Fatalf("reindexFull: %v", err)
 	}

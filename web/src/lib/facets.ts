@@ -329,6 +329,15 @@ export function categoryLabel(value: string): string {
 }
 const DOMAINS: FacetOption[] = options(DOMAIN_VALUES, DOMAIN_LABELS);
 
+// The job-reality classes (internal/jobreality) — a small closed set, spelled out
+// like CURRENCY (not a generated values array). Offered excludable so the common use
+// is "exclude Likely evergreen" to hide probable ghost postings; not hidden by default.
+const REALITY: FacetOption[] = [
+  { value: 'fresh', label: 'Fresh' },
+  { value: 'stale', label: 'Stale' },
+  { value: 'likely-evergreen', label: 'Likely evergreen' },
+];
+
 const CURRENCY: FacetOption[] = [
   { value: 'USD', label: 'USD' },
   { value: 'EUR', label: 'EUR' },
@@ -405,6 +414,7 @@ export const FACETS: FacetDef[] = [
   { param: 'employment_type', label: 'Employment', control: 'pills', options: EMPLOYMENT, excludable: true },
   { param: 'english_level', label: 'English', control: 'pills', options: ENGLISH, excludable: true },
   { param: 'posting_language', label: 'Job language', control: 'select', dynamic: true, excludable: true, placeholder: 'Search languages' },
+  { param: 'reality', label: 'Posting reality', control: 'pills', options: REALITY, excludable: true },
   { param: 'salary_currency', label: 'Currency', control: 'pills', options: CURRENCY, excludable: true },
   { param: 'company_slug', label: 'Company', control: 'remote', excludable: true, placeholder: 'Search companies', remote: companySearch },
   { param: 'source', label: 'Source', control: 'select', dynamic: true, excludable: true, placeholder: 'Search sources' },

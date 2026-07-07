@@ -141,7 +141,7 @@ func (q *Queries) EstimateOpenJobs(ctx context.Context) (int64, error) {
 }
 
 const getJob = `-- name: GetJob :one
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint
 FROM jobs
 WHERE id = $1
 `
@@ -188,12 +188,13 @@ func (q *Queries) GetJob(ctx context.Context, id int64) (Job, error) {
 		&i.Cities,
 		&i.ViewCount,
 		&i.AppliedCount,
+		&i.RoleFingerprint,
 	)
 	return i, err
 }
 
 const getJobBySlug = `-- name: GetJobBySlug :one
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint
 FROM jobs
 WHERE public_slug = $1
 `
@@ -240,6 +241,7 @@ func (q *Queries) GetJobBySlug(ctx context.Context, publicSlug string) (Job, err
 		&i.Cities,
 		&i.ViewCount,
 		&i.AppliedCount,
+		&i.RoleFingerprint,
 	)
 	return i, err
 }
@@ -375,7 +377,7 @@ func (q *Queries) ListJobSitemapFreshest(ctx context.Context, rowLimit int32) ([
 }
 
 const listJobs = `-- name: ListJobs :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint
 FROM jobs
 WHERE closed_at IS NULL
 ORDER BY created_at DESC, id DESC
@@ -438,6 +440,7 @@ func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, erro
 			&i.Cities,
 			&i.ViewCount,
 			&i.AppliedCount,
+			&i.RoleFingerprint,
 		); err != nil {
 			return nil, err
 		}
@@ -450,7 +453,7 @@ func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, erro
 }
 
 const listJobsByCompany = `-- name: ListJobsByCompany :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint
 FROM jobs
 WHERE company_slug = $1 AND closed_at IS NULL
 ORDER BY created_at DESC, id DESC
@@ -511,6 +514,7 @@ func (q *Queries) ListJobsByCompany(ctx context.Context, arg ListJobsByCompanyPa
 			&i.Cities,
 			&i.ViewCount,
 			&i.AppliedCount,
+			&i.RoleFingerprint,
 		); err != nil {
 			return nil, err
 		}
@@ -523,7 +527,7 @@ func (q *Queries) ListJobsByCompany(ctx context.Context, arg ListJobsByCompanyPa
 }
 
 const listJobsByIDAfter = `-- name: ListJobsByIDAfter :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint
 FROM jobs
 WHERE id > $1
 ORDER BY id
@@ -586,6 +590,7 @@ func (q *Queries) ListJobsByIDAfter(ctx context.Context, arg ListJobsByIDAfterPa
 			&i.Cities,
 			&i.ViewCount,
 			&i.AppliedCount,
+			&i.RoleFingerprint,
 		); err != nil {
 			return nil, err
 		}
@@ -598,7 +603,7 @@ func (q *Queries) ListJobsByIDAfter(ctx context.Context, arg ListJobsByIDAfterPa
 }
 
 const listJobsUpdatedAfter = `-- name: ListJobsUpdatedAfter :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint
 FROM jobs
 WHERE id > $1 AND updated_at >= $2
 ORDER BY id
@@ -665,6 +670,7 @@ func (q *Queries) ListJobsUpdatedAfter(ctx context.Context, arg ListJobsUpdatedA
 			&i.Cities,
 			&i.ViewCount,
 			&i.AppliedCount,
+			&i.RoleFingerprint,
 		); err != nil {
 			return nil, err
 		}
@@ -713,7 +719,7 @@ func (q *Queries) ListOpenJobIDsPostedAfter(ctx context.Context, arg ListOpenJob
 }
 
 const listOpenJobsPostedAfter = `-- name: ListOpenJobsPostedAfter :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint
 FROM jobs
 WHERE id > $1 AND closed_at IS NULL AND COALESCE(posted_at, created_at) >= $2
 ORDER BY id
@@ -782,6 +788,7 @@ func (q *Queries) ListOpenJobsPostedAfter(ctx context.Context, arg ListOpenJobsP
 			&i.Cities,
 			&i.ViewCount,
 			&i.AppliedCount,
+			&i.RoleFingerprint,
 		); err != nil {
 			return nil, err
 		}
@@ -861,6 +868,87 @@ WHERE id = $1 AND liveness_strikes <> 0
 func (q *Queries) ResetLivenessStrikes(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, resetLivenessStrikes, id)
 	return err
+}
+
+const roleClusterCount = `-- name: RoleClusterCount :one
+SELECT
+    COUNT(*)::bigint AS repost_count,
+    COUNT(*) FILTER (WHERE closed_at IS NULL)::bigint AS mass_count
+FROM jobs
+WHERE company_slug = $1
+  AND role_fingerprint = $2
+  AND role_fingerprint <> ''
+`
+
+type RoleClusterCountParams struct {
+	CompanySlug     string      `json:"company_slug"`
+	RoleFingerprint pgtype.Text `json:"role_fingerprint"`
+}
+
+type RoleClusterCountRow struct {
+	RepostCount int64 `json:"repost_count"`
+	MassCount   int64 `json:"mass_count"`
+}
+
+// The job-reality repost/mass-posting counts for one role cluster: how many postings
+// of the same role (by role_fingerprint within a company) exist of any status
+// (repost_count = repost history) and how many are still open (mass_count = concurrent
+// mass-posting). A NULL/empty fingerprint is excluded so unfingerprinted rows never
+// cluster together; a lookup miss means a unique role (count 1). Used by the
+// incremental index push and the single-job detail read.
+func (q *Queries) RoleClusterCount(ctx context.Context, arg RoleClusterCountParams) (RoleClusterCountRow, error) {
+	row := q.db.QueryRow(ctx, roleClusterCount, arg.CompanySlug, arg.RoleFingerprint)
+	var i RoleClusterCountRow
+	err := row.Scan(&i.RepostCount, &i.MassCount)
+	return i, err
+}
+
+const roleClusterCountsAll = `-- name: RoleClusterCountsAll :many
+SELECT
+    company_slug,
+    role_fingerprint,
+    COUNT(*)::bigint AS repost_count,
+    COUNT(*) FILTER (WHERE closed_at IS NULL)::bigint AS mass_count
+FROM jobs
+WHERE role_fingerprint IS NOT NULL AND role_fingerprint <> ''
+GROUP BY company_slug, role_fingerprint
+HAVING COUNT(*) > 1
+`
+
+type RoleClusterCountsAllRow struct {
+	CompanySlug     string      `json:"company_slug"`
+	RoleFingerprint pgtype.Text `json:"role_fingerprint"`
+	RepostCount     int64       `json:"repost_count"`
+	MassCount       int64       `json:"mass_count"`
+}
+
+// The whole-catalogue role-cluster counts in one aggregate pass, for the reindex to
+// build its (company_slug, role_fingerprint) -> counts lookup once. Only clusters with
+// more than one posting are returned (singletons are the count-1 default a lookup miss
+// already implies), keeping the map small. NULL/empty fingerprints are excluded.
+func (q *Queries) RoleClusterCountsAll(ctx context.Context) ([]RoleClusterCountsAllRow, error) {
+	rows, err := q.db.Query(ctx, roleClusterCountsAll)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RoleClusterCountsAllRow{}
+	for rows.Next() {
+		var i RoleClusterCountsAllRow
+		if err := rows.Scan(
+			&i.CompanySlug,
+			&i.RoleFingerprint,
+			&i.RepostCount,
+			&i.MassCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const selectOrphanLivenessCandidates = `-- name: SelectOrphanLivenessCandidates :many
@@ -1055,7 +1143,7 @@ SET title        = $1,
     updated_by   = $20::bigint,
     updated_at   = now()
 WHERE public_slug = $21 AND created_by IS NOT NULL
-RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count
+RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint
 `
 
 type UpdateManualJobParams struct {
@@ -1158,6 +1246,7 @@ func (q *Queries) UpdateManualJob(ctx context.Context, arg UpdateManualJobParams
 		&i.Cities,
 		&i.ViewCount,
 		&i.AppliedCount,
+		&i.RoleFingerprint,
 	)
 	return i, err
 }
@@ -1179,7 +1268,7 @@ INSERT INTO jobs (
     source, external_id, url, title, company, company_slug, location, remote, description, posted_at,
     public_slug, countries, regions, cities, work_mode, skills, seniority, category,
     posting_language, employment_type, education_level, english_level, experience_years_min,
-    content_hash
+    content_hash, role_fingerprint
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6, $7, $8,
@@ -1188,7 +1277,7 @@ INSERT INTO jobs (
     COALESCE($12::text[], '{}'), COALESCE($13::text[], '{}'), COALESCE($14::text[], '{}'),
     $15, COALESCE($16::text[], '{}'), $17, $18,
     $19, $20, $21, $22, $23,
-    $24
+    $24, $25
 )
 ON CONFLICT (source, external_id) DO UPDATE SET
     url          = EXCLUDED.url,
@@ -1220,6 +1309,9 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     english_level        = EXCLUDED.english_level,
     experience_years_min = EXCLUDED.experience_years_min,
     content_hash = EXCLUDED.content_hash,
+    -- role_fingerprint is the repost-identity (internal/jobhash.RoleFingerprint):
+    -- refreshed on re-ingest so a title/description edit re-clusters the role.
+    role_fingerprint = EXCLUDED.role_fingerprint,
     -- The crawl saw the posting: refresh liveness and reopen if it was closed. A
     -- reopen (the row was closed) resets the strike count so a single later expired
     -- probe can't immediately re-close it — the two-strike grace survives a reopen.
@@ -1227,7 +1319,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     closed_at    = NULL,
     liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE jobs.liveness_strikes END,
     updated_at   = now()
-RETURNING jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.company, jobs.location, jobs.remote, jobs.description, jobs.posted_at, jobs.created_at, jobs.updated_at, jobs.company_slug, jobs.enrichment, jobs.enriched_at, jobs.enrichment_version, jobs.public_slug, jobs.last_seen_at, jobs.closed_at, jobs.countries, jobs.regions, jobs.work_mode, jobs.liveness_strikes, jobs.skills, jobs.seniority, jobs.category, jobs.created_by, jobs.updated_by, jobs.posting_language, jobs.employment_type, jobs.education_level, jobs.experience_years_min, jobs.collections, jobs.content_hash, jobs.english_level, jobs.cities, jobs.view_count, jobs.applied_count,
+RETURNING jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.company, jobs.location, jobs.remote, jobs.description, jobs.posted_at, jobs.created_at, jobs.updated_at, jobs.company_slug, jobs.enrichment, jobs.enriched_at, jobs.enrichment_version, jobs.public_slug, jobs.last_seen_at, jobs.closed_at, jobs.countries, jobs.regions, jobs.work_mode, jobs.liveness_strikes, jobs.skills, jobs.seniority, jobs.category, jobs.created_by, jobs.updated_by, jobs.posting_language, jobs.employment_type, jobs.education_level, jobs.experience_years_min, jobs.collections, jobs.content_hash, jobs.english_level, jobs.cities, jobs.view_count, jobs.applied_count, jobs.role_fingerprint,
     NOT COALESCE((SELECT existed FROM existing), false) AS inserted,
     ((SELECT old_hash FROM existing) IS DISTINCT FROM $24) AS changed
 `
@@ -1257,6 +1349,7 @@ type UpsertJobParams struct {
 	EnglishLevel       string             `json:"english_level"`
 	ExperienceYearsMin pgtype.Int4        `json:"experience_years_min"`
 	ContentHash        pgtype.Text        `json:"content_hash"`
+	RoleFingerprint    pgtype.Text        `json:"role_fingerprint"`
 }
 
 type UpsertJobRow struct {
@@ -1311,6 +1404,7 @@ func (q *Queries) UpsertJob(ctx context.Context, arg UpsertJobParams) (UpsertJob
 		arg.EnglishLevel,
 		arg.ExperienceYearsMin,
 		arg.ContentHash,
+		arg.RoleFingerprint,
 	)
 	var i UpsertJobRow
 	err := row.Scan(
@@ -1352,6 +1446,7 @@ func (q *Queries) UpsertJob(ctx context.Context, arg UpsertJobParams) (UpsertJob
 		&i.Job.Cities,
 		&i.Job.ViewCount,
 		&i.Job.AppliedCount,
+		&i.Job.RoleFingerprint,
 		&i.Inserted,
 		&i.Changed,
 	)
@@ -1410,7 +1505,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     closed_at    = NULL,
     liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE jobs.liveness_strikes END,
     updated_at   = now()
-RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count
+RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint
 `
 
 type UpsertManualJobParams struct {
@@ -1519,6 +1614,7 @@ func (q *Queries) UpsertManualJob(ctx context.Context, arg UpsertManualJobParams
 		&i.Cities,
 		&i.ViewCount,
 		&i.AppliedCount,
+		&i.RoleFingerprint,
 	)
 	return i, err
 }

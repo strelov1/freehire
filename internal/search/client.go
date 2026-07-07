@@ -643,6 +643,10 @@ func facetSettings() *meilisearch.Settings {
 			// field the "posted within N days" range filter needs (Meili range operators
 			// require a number; the string posted_at below is sort-only).
 			"posted_ts",
+			// reality.class is the job-reality signal (fresh/stale/likely-evergreen),
+			// nested under the served reality object; the "hide likely-evergreen" filter
+			// matches on this dot path.
+			"reality.class",
 		},
 		// posted_at / created_at are RFC3339 UTC strings and sort chronologically as text.
 		SortableAttributes: []string{"posted_at", "created_at", "enrichment.salary_min", "enrichment.salary_max"},

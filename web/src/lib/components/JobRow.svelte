@@ -4,6 +4,7 @@
   import { cardTags, formatSalary } from '$lib/enrichment';
   import type { Job } from '$lib/types';
   import { Badge } from '$lib/ui';
+  import RealityBadge from './RealityBadge.svelte';
   import { timeAgo } from '$lib/utils';
   import { hasViewed } from '$lib/viewedJobs.svelte';
 
@@ -43,9 +44,12 @@
         <Badge variant="secondary">{tag}</Badge>
       {/each}
     </div>
-    {#if posted}
-      <span class="shrink-0 text-xs text-muted-foreground">{posted}</span>
-    {/if}
+    <div class="flex shrink-0 items-center gap-2">
+      <RealityBadge reality={job.reality} />
+      {#if posted}
+        <span class="text-xs text-muted-foreground">{posted}</span>
+      {/if}
+    </div>
   </div>
 
   <h3 class="mt-2 line-clamp-2 text-lg font-semibold tracking-tight">{job.title}</h3>

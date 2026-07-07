@@ -77,6 +77,10 @@ type Job struct {
 	// from the jobs columns (no read-time counting). Displayed on the detail page.
 	ViewCount    int32 `json:"view_count"`
 	AppliedCount int32 `json:"applied_count"`
+	// Reality is the job-reality signal (fresh/stale/likely-evergreen + evidence),
+	// computed at index/read time and attached by ClassifyReality — never stored, as
+	// it is time-dependent. Nil when not computed (e.g. a plain FromRow without counts).
+	Reality *Reality `json:"reality,omitempty"`
 }
 
 // FromRow maps a database job row to the public wire shape. The enrichment

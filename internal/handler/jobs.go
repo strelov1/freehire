@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"time"
+
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/db"
@@ -49,6 +51,19 @@ func (a *API) GetJob(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+
+	// Attach the job-reality signal (see internal/jobreality): the badge on the detail
+	// page. A count-query failure degrades to a unique role (counts 1) rather than
+	// dropping the whole response.
+	repost, mass := int64(1), int64(1)
+	if cnt, err := a.queries.RoleClusterCount(c.Context(), db.RoleClusterCountParams{
+		CompanySlug:     job.CompanySlug,
+		RoleFingerprint: job.RoleFingerprint,
+	}); err == nil {
+		repost, mass = cnt.RepostCount, cnt.MassCount
+	}
+	reality := jobview.ClassifyReality(job, time.Now(), int(repost), int(mass))
+	view.Reality = &reality
 
 	return c.JSON(fiber.Map{"data": view})
 }

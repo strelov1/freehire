@@ -12,6 +12,7 @@
   import { formatDate } from '$lib/utils';
   import CompanyLogo from './CompanyLogo.svelte';
   import JobMatch from './JobMatch.svelte';
+  import RealityBadge from './RealityBadge.svelte';
   import ReportDialog from './ReportDialog.svelte';
 
   // The job is server-rendered: it arrives as a prop from the route's `load`, so
@@ -173,6 +174,8 @@
         </div>
       {/if}
     </div>
+
+    <RealityBadge reality={job.reality} detailed />
 
     {#if showApplyPrompt && !applied}
       <div

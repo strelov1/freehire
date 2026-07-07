@@ -13,6 +13,7 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/jobfacts"
+	"github.com/strelov1/freehire/internal/jobhash"
 	"github.com/strelov1/freehire/internal/lang"
 	"github.com/strelov1/freehire/internal/location"
 	"github.com/strelov1/freehire/internal/normalize"
@@ -100,7 +101,7 @@ func (s *extractStore) Complete(ctx context.Context, post telegram.PendingPost, 
 			category = classify.NonTechFromDescription(j.Description)
 		}
 		descHTML := telegram.TextToHTML(j.Description)
-		saved, err := qtx.UpsertJob(ctx, db.UpsertJobParams{
+		params := db.UpsertJobParams{
 			Source:      "telegram",
 			ExternalID:  externalID,
 			URL:         "https://t.me/" + base,
@@ -125,7 +126,9 @@ func (s *extractStore) Complete(ctx context.Context, post telegram.PendingPost, 
 			EducationLevel:     jobfacts.EducationLevel(descHTML),
 			EnglishLevel:       jobfacts.EnglishLevel(descHTML),
 			ExperienceYearsMin: toInt4(jobfacts.ExperienceYearsMin(descHTML)),
-		})
+		}
+		params.RoleFingerprint = pgtype.Text{String: jobhash.RoleFingerprint(params), Valid: true}
+		saved, err := qtx.UpsertJob(ctx, params)
 		if err != nil {
 			return fmt.Errorf("upsert job %s: %w", externalID, err)
 		}
@@ -180,7 +183,7 @@ func (s *extractStore) CompleteLinks(
 		if j.PostedAt != nil {
 			postedAt = pgtype.Timestamptz{Time: *j.PostedAt, Valid: true}
 		}
-		saved, err := qtx.UpsertJob(ctx, db.UpsertJobParams{
+		params := db.UpsertJobParams{
 			Source:      j.Source,
 			ExternalID:  j.ExternalID,
 			URL:         j.URL,
@@ -205,7 +208,9 @@ func (s *extractStore) CompleteLinks(
 			EducationLevel:     jobfacts.EducationLevel(j.Description),
 			EnglishLevel:       jobfacts.EnglishLevel(j.Description),
 			ExperienceYearsMin: toInt4(jobfacts.ExperienceYearsMin(j.Description)),
-		})
+		}
+		params.RoleFingerprint = pgtype.Text{String: jobhash.RoleFingerprint(params), Valid: true}
+		saved, err := qtx.UpsertJob(ctx, params)
 		if err != nil {
 			return fmt.Errorf("upsert job %s/%s: %w", j.Source, j.ExternalID, err)
 		}

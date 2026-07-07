@@ -155,7 +155,7 @@ INSERT INTO jobs (
     source, external_id, url, title, company, company_slug, location, remote, description, posted_at,
     public_slug, countries, regions, cities, work_mode, skills, seniority, category,
     posting_language, employment_type, education_level, english_level, experience_years_min,
-    content_hash
+    content_hash, role_fingerprint
 ) VALUES (
     sqlc.arg(source), sqlc.arg(external_id), sqlc.arg(url), sqlc.arg(title),
     sqlc.arg(company), sqlc.arg(company_slug), sqlc.arg(location), sqlc.arg(remote),
@@ -164,7 +164,7 @@ INSERT INTO jobs (
     COALESCE(sqlc.arg(countries)::text[], '{}'), COALESCE(sqlc.arg(regions)::text[], '{}'), COALESCE(sqlc.arg(cities)::text[], '{}'),
     sqlc.arg(work_mode), COALESCE(sqlc.arg(skills)::text[], '{}'), sqlc.arg(seniority), sqlc.arg(category),
     sqlc.arg(posting_language), sqlc.arg(employment_type), sqlc.arg(education_level), sqlc.arg(english_level), sqlc.arg(experience_years_min),
-    sqlc.arg(content_hash)
+    sqlc.arg(content_hash), sqlc.arg(role_fingerprint)
 )
 -- public_slug is deliberately NOT in the DO UPDATE SET: the slug is minted once
 -- at insert and is the row's stable public identity. Re-ingest of the same
@@ -200,6 +200,9 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     english_level        = EXCLUDED.english_level,
     experience_years_min = EXCLUDED.experience_years_min,
     content_hash = EXCLUDED.content_hash,
+    -- role_fingerprint is the repost-identity (internal/jobhash.RoleFingerprint):
+    -- refreshed on re-ingest so a title/description edit re-clusters the role.
+    role_fingerprint = EXCLUDED.role_fingerprint,
     -- The crawl saw the posting: refresh liveness and reopen if it was closed. A
     -- reopen (the row was closed) resets the strike count so a single later expired
     -- probe can't immediately re-close it — the two-strike grace survives a reopen.
@@ -210,6 +213,36 @@ ON CONFLICT (source, external_id) DO UPDATE SET
 RETURNING sqlc.embed(jobs),
     NOT COALESCE((SELECT existed FROM existing), false) AS inserted,
     ((SELECT old_hash FROM existing) IS DISTINCT FROM sqlc.arg(content_hash)) AS changed;
+
+-- name: RoleClusterCount :one
+-- The job-reality repost/mass-posting counts for one role cluster: how many postings
+-- of the same role (by role_fingerprint within a company) exist of any status
+-- (repost_count = repost history) and how many are still open (mass_count = concurrent
+-- mass-posting). A NULL/empty fingerprint is excluded so unfingerprinted rows never
+-- cluster together; a lookup miss means a unique role (count 1). Used by the
+-- incremental index push and the single-job detail read.
+SELECT
+    COUNT(*)::bigint AS repost_count,
+    COUNT(*) FILTER (WHERE closed_at IS NULL)::bigint AS mass_count
+FROM jobs
+WHERE company_slug = sqlc.arg(company_slug)
+  AND role_fingerprint = sqlc.arg(role_fingerprint)
+  AND role_fingerprint <> '';
+
+-- name: RoleClusterCountsAll :many
+-- The whole-catalogue role-cluster counts in one aggregate pass, for the reindex to
+-- build its (company_slug, role_fingerprint) -> counts lookup once. Only clusters with
+-- more than one posting are returned (singletons are the count-1 default a lookup miss
+-- already implies), keeping the map small. NULL/empty fingerprints are excluded.
+SELECT
+    company_slug,
+    role_fingerprint,
+    COUNT(*)::bigint AS repost_count,
+    COUNT(*) FILTER (WHERE closed_at IS NULL)::bigint AS mass_count
+FROM jobs
+WHERE role_fingerprint IS NOT NULL AND role_fingerprint <> ''
+GROUP BY company_slug, role_fingerprint
+HAVING COUNT(*) > 1;
 
 -- name: PropagateCollectionsToJobs :execrows
 -- Denormalize each company's curated-collection set onto its jobs, so the search
