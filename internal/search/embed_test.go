@@ -58,9 +58,10 @@ func teiEcho(t *testing.T) *httptest.Server {
 func TestEmbedBatchChunksAndPreservesOrder(t *testing.T) {
 	srv := teiEcho(t)
 	defer srv.Close()
-	c := &Client{embedURL: srv.URL}
+	// Concurrency > 1 so chunks complete out of order — the result must still be ordered.
+	c := &Client{embedURL: srv.URL, embedConcurrency: 8}
 
-	n := teiMaxBatch*2 + 3 // spans three chunks
+	n := teiMaxBatch*5 + 3 // spans several chunks across the worker pool
 	inputs := make([]string, n)
 	for i := range inputs {
 		inputs[i] = strconv.Itoa(i)

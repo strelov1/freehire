@@ -91,6 +91,10 @@ type Client struct {
 	// embedKey is the optional bearer token for embedURL (EMBED_API_KEY). Empty for
 	// the authless host2 TEI; set when pointing at an authenticated endpoint (HF, etc.).
 	embedKey string
+	// embedConcurrency is how many embed calls a batch runs in flight (EMBED_CONCURRENCY,
+	// default 1). The CPU-bound host2 TEI gains nothing from concurrency, but a remote
+	// GPU endpoint does (it hides per-call latency) — a bulk reindex sets it high.
+	embedConcurrency int
 }
 
 // NewClient connects to Meilisearch at url authenticated by key. It does no I/O
@@ -103,14 +107,19 @@ func NewClient(url, key string) *Client {
 	if v := os.Getenv("EMBED_URL"); v != "" {
 		embedURL = v
 	}
+	concurrency := 1
+	if v, err := strconv.Atoi(os.Getenv("EMBED_CONCURRENCY")); err == nil && v > 0 {
+		concurrency = v
+	}
 	return &Client{
-		manager:  m,
-		facet:    m.Index(facetIndexUID),
-		semantic: m.Index(semanticIndexUID),
-		url:      url,
-		key:      key,
-		embedURL: embedURL,
-		embedKey: os.Getenv("EMBED_API_KEY"),
+		manager:          m,
+		facet:            m.Index(facetIndexUID),
+		semantic:         m.Index(semanticIndexUID),
+		url:              url,
+		key:              key,
+		embedURL:         embedURL,
+		embedKey:         os.Getenv("EMBED_API_KEY"),
+		embedConcurrency: concurrency,
 	}
 }
 

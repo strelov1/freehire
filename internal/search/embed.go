@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 )
 
 // teiMaxBatch caps how many inputs go in one TEI /v1/embeddings call. TEI rejects a
@@ -33,24 +34,70 @@ func jobPassage(d JobDocument) string {
 	return "passage: " + d.Title + " at " + d.Company + ". " + body
 }
 
-// embedBatch turns texts into vectors by calling TEI's OpenAI-compatible
-// /v1/embeddings directly, in input order. We embed here and store the result as a
-// userProvided Meilisearch embedder (see jobEmbedder) rather than letting Meili's rest
-// embedder reach TEI itself: the engine rejects the loopback TEI URI, and embedding in
-// one place keeps the job corpus and the CV query on an identical path (one model, one
-// server → one vector space). Inputs are chunked to TEI's per-call batch limit.
+// embedBatch turns texts into vectors, in input order, by calling the embedding backend
+// (see embedChunk). We embed here and store the result as a userProvided Meilisearch
+// embedder (see jobEmbedder) rather than letting Meili's rest embedder reach the server
+// itself: the engine rejects the loopback TEI URI, and embedding in one place keeps the
+// job corpus and the CV query on an identical path (one model, one server → one vector
+// space). Inputs are chunked to the backend's per-call batch limit, and up to
+// embedConcurrency chunks run in flight — a remote GPU endpoint needs the concurrency to
+// hide per-call latency (the CPU-bound host2 TEI runs it at 1).
 func (c *Client) embedBatch(ctx context.Context, inputs []string) ([][]float64, error) {
-	out := make([][]float64, 0, len(inputs))
+	type span struct{ start, end int }
+	var chunks []span
 	for start := 0; start < len(inputs); start += teiMaxBatch {
 		end := start + teiMaxBatch
 		if end > len(inputs) {
 			end = len(inputs)
 		}
-		vecs, err := c.embedChunk(ctx, inputs[start:end])
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, vecs...)
+		chunks = append(chunks, span{start, end})
+	}
+
+	conc := c.embedConcurrency
+	if conc < 1 {
+		conc = 1
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Each chunk writes its vectors into its own slot, so the flattened result stays in
+	// input order regardless of completion order.
+	results := make([][][]float64, len(chunks))
+	sem := make(chan struct{}, conc)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var firstErr error
+	for i, ch := range chunks {
+		wg.Add(1)
+		go func(i int, ch span) {
+			defer wg.Done()
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
+			defer func() { <-sem }()
+			vecs, err := c.embedChunk(ctx, inputs[ch.start:ch.end])
+			if err != nil {
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = err
+					cancel() // stop the remaining chunks on the first failure
+				}
+				mu.Unlock()
+				return
+			}
+			results[i] = vecs
+		}(i, ch)
+	}
+	wg.Wait()
+	if firstErr != nil {
+		return nil, firstErr
+	}
+
+	out := make([][]float64, 0, len(inputs))
+	for _, r := range results {
+		out = append(out, r...)
 	}
 	return out, nil
 }
