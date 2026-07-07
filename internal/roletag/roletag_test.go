@@ -44,12 +44,20 @@ func TestDerive(t *testing.T) {
 
 		// Mined granular tech roles co-exist with their coarse bare category.
 		{"android developer + mobile", "", "mobile", "Android Developer", []string{"mobile", "android_developer"}},
-		{"senior ios engineer", "senior", "mobile", "Senior iOS Engineer", []string{"senior", "mobile", "senior_mobile", "ios_developer"}},
+		{"senior ios engineer", "senior", "mobile", "Senior iOS Engineer", []string{"senior", "mobile", "senior_mobile", "ios_developer", "senior_ios_developer"}},
 		{"platform engineer + devops", "", "devops", "Platform Engineer", []string{"devops", "platform_engineer"}},
 		{"solutions architect", "", "architecture", "Solution Architect", []string{"architecture", "solutions_architect"}},
 
 		// Seniority + bare + composite + one named coexist without duplicates.
 		{"all four sources", "senior", "backend", "Senior Backend Founding Engineer", []string{"senior", "backend", "senior_backend", "founding_engineer"}},
+
+		// Gradeable named roles compose with seniority — "Senior Software Engineer"
+		// is a single role, not just "Senior" + "Software Engineer".
+		{"senior software engineer composes", "senior", "", "Senior Software Engineer", []string{"senior", "software_engineer", "senior_software_engineer"}},
+		{"lead android developer composes", "lead", "mobile", "Lead Android Developer", []string{"lead", "mobile", "lead_mobile", "android_developer", "lead_android_developer"}},
+		// Non-gradeable named roles do NOT compose (grade is meaningless / baked in).
+		{"fractional cto does not compose", "c_level", "", "Fractional CTO", []string{"c_level", "fractional_cto"}},
+		{"staff engineer does not compose", "staff", "", "Staff Engineer", []string{"staff", "staff_engineer"}},
 
 		// Never guesses: no seniority, no category, no named alias.
 		{"nothing resolvable", "", "", "Rockstar Ninja Guru", nil},

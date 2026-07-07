@@ -199,6 +199,19 @@ var namedAliases = buildNamedAliases()
 // namedLabel maps each named-role slug to its display label. Built from namedRoleTable.
 var namedLabel = buildNamedLabels()
 
+// nonGradeable are the named roles that do NOT compose with a seniority: the grade
+// is meaningless or already baked in (fractional/founding/staff/lead/exec). Every
+// other named role grades ("Senior Software Engineer" = senior_software_engineer),
+// so the picker offers the graded role as a single option like the category
+// composites.
+var nonGradeable = map[string]bool{
+	"fractional_cto": true, "fractional_cfo": true, "fractional_cmo": true,
+	"fractional_coo": true, "fractional_cpo": true,
+	"founder": true, "founding_engineer": true, "founding_designer": true, "founding_pm": true,
+	"staff_engineer": true, "technical_lead": true, "vp_engineering": true, "chief_of_staff": true,
+	"head_of_product": true, "head_of_growth": true, "head_of_design": true, "head_of_marketing": true,
+}
+
 func buildNamedAliases() []namedAlias {
 	var out []namedAlias
 	for _, r := range namedRoleTable {
@@ -248,6 +261,11 @@ func Derive(seniority, category, title string) []string {
 	for _, na := range namedAliases {
 		if wordmatch.Contains(lower, na.alias, wordmatch.UnicodeBoundary) {
 			roles = append(roles, na.slug)
+			// A gradeable named role composes with the seniority, so
+			// "Senior Software Engineer" is one role, not "Senior" + "Software Engineer".
+			if seniority != "" && !nonGradeable[na.slug] {
+				roles = append(roles, seniority+"_"+na.slug)
+			}
 			break
 		}
 	}
@@ -271,6 +289,11 @@ func Catalog() map[string]string {
 	}
 	for slug, label := range namedLabel {
 		cat[slug] = label
+		if !nonGradeable[slug] {
+			for sen, senLabel := range seniorityLabel {
+				cat[sen+"_"+slug] = senLabel + " " + label
+			}
+		}
 	}
 	return cat
 }
