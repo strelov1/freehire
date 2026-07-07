@@ -85,7 +85,9 @@
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && onClose()} />
 
-<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+<!-- z-60 so the auth dialog sits ABOVE other z-50 modals (it can be opened from
+     within the filter modal's "Sign in to save filters"). -->
+<div class="fixed inset-0 z-[60] flex items-center justify-center p-4">
   <!-- Backdrop is a real button so closing on click is keyboard-accessible. -->
   <button type="button" aria-label="Close dialog" class="absolute inset-0 bg-black/50" onclick={onClose}
   ></button>
