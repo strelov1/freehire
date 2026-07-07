@@ -83,6 +83,7 @@
       placeholder={def.placeholder}
       cap={def.cap}
       related={def.related}
+      searchAliases={def.searchAliases}
       {onToggle}
       {expand}
     />

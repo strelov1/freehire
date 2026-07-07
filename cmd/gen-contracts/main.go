@@ -14,6 +14,7 @@ import (
 
 	"github.com/gzuidhof/tygo/tygo"
 
+	"github.com/strelov1/freehire/internal/classify"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/location"
 	"github.com/strelov1/freehire/internal/roletag"
@@ -212,7 +213,40 @@ func genVocab() string {
 	// Role slug→label catalog for the role picker — the source of truth for role
 	// labels, derived from the roletag dictionary (composite + named roles).
 	b.WriteString(emitMap("RoleLabels", "ROLE_LABELS", roletag.Catalog()))
+	// Role slug→shorthand-aliases for the picker's search: the same curated terms
+	// used to tag titles, so typing "swe"/"sre"/"devrel" finds the role.
+	b.WriteString(emitMapOfSlices("RoleAliases", "ROLE_ALIASES", roleAliases()))
 	return b.String()
+}
+
+// roleAliases unions the curated shorthand→role aliases from the three
+// dictionaries feeding the role facet — category and seniority aliases (classify)
+// plus named-role aliases (roletag) — keyed by role slug and deduped, for the web
+// picker's alias search. Every value is a lowercase alias already used to tag
+// titles, so search and tagging stay in lockstep.
+func roleAliases() map[string][]string {
+	sets := map[string]map[string]struct{}{}
+	addAll := func(m map[string][]string) {
+		for slug, aliases := range m {
+			if sets[slug] == nil {
+				sets[slug] = map[string]struct{}{}
+			}
+			for _, a := range aliases {
+				sets[slug][a] = struct{}{}
+			}
+		}
+	}
+	addAll(classify.CategoryAliases())
+	addAll(classify.SeniorityAliases())
+	addAll(roletag.NamedAliases())
+
+	out := make(map[string][]string, len(sets))
+	for slug, set := range sets {
+		for a := range set {
+			out[slug] = append(out[slug], a)
+		}
+	}
+	return out
 }
 
 // dedup returns the slice with duplicates removed, preserving first-occurrence order.

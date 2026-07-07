@@ -53,6 +53,36 @@ func emitMap(typeName, constName string, m map[string]string) string {
 	return b.String()
 }
 
+// emitMapOfSlices renders a string→[]string map as a frozen object of string
+// arrays plus a type alias. Keys and each value slice are emitted in sorted order
+// so the committed output is deterministic despite Go's randomized map iteration.
+func emitMapOfSlices(typeName, constName string, m map[string][]string) string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var b strings.Builder
+	if len(keys) == 0 {
+		b.WriteString("export const " + constName + " = {} as const;\n")
+	} else {
+		b.WriteString("export const " + constName + " = {\n")
+		for _, k := range keys {
+			vals := append([]string(nil), m[k]...)
+			sort.Strings(vals)
+			quoted := make([]string, len(vals))
+			for i, v := range vals {
+				quoted[i] = quoteTS(v)
+			}
+			b.WriteString("  " + quoteTS(k) + ": [" + strings.Join(quoted, ", ") + "],\n")
+		}
+		b.WriteString("} as const;\n")
+	}
+	b.WriteString("export type " + typeName + " = typeof " + constName + ";\n")
+	return b.String()
+}
+
 // quoteTS renders a string as a single-quoted TS literal, escaping backslashes and
 // single quotes so a value like "N'Djamena" can't break the generated file.
 func quoteTS(s string) string {

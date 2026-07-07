@@ -15,8 +15,9 @@
 import {
   WORK_MODE_VALUES, SENIORITY_VALUES, CATEGORY_VALUES,
   EMPLOYMENT_TYPE_VALUES, RELOCATION_VALUES, ENGLISH_LEVEL_VALUES,
-  COMPANY_TYPE_VALUES, DOMAIN_VALUES, ROLE_LABELS,
+  COMPANY_TYPE_VALUES, DOMAIN_VALUES, ROLE_LABELS, ROLE_ALIASES,
 } from './generated/contracts';
+import { fuzzyMatch } from './fuzzy';
 import {
   REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
   CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS,
@@ -97,6 +98,13 @@ export interface FacetDef {
    * sets it; see relatedOptions / ROLE_RELATED.
    */
   related?: Record<string, string[]>;
+  /**
+   * Curated slug → shorthand-aliases map letting the picker's search match roles
+   * by abbreviation/synonym, not just the display label — typing "swe"/"sre"/
+   * "devrel" finds the role. Only the role facet sets it; see optionMatches /
+   * ROLE_ALIASES (generated from the same dictionaries that tag titles).
+   */
+  searchAliases?: Record<string, readonly string[]>;
 }
 
 // Resolve an ISO 3166-1 alpha-2 code to an English country name via platform Intl
@@ -231,6 +239,21 @@ export function relatedOptions(
     }
   }
   return out;
+}
+
+/** Does a facet option match the picker's search query? Always typo-tolerantly
+ *  matches the display label; when `searchAliases` is supplied (role facet), also
+ *  matches the option's curated shorthand aliases — keyed by BASE slug, so "swe"
+ *  surfaces Software Engineer and its seniority variants, "sre"/"devrel" find
+ *  their roles. An empty query matches everything (via the label match). */
+export function optionMatches(
+  option: FacetOption,
+  query: string,
+  searchAliases?: Record<string, readonly string[]>,
+): boolean {
+  if (fuzzyMatch(option.label, query)) return true;
+  const aliases = searchAliases?.[baseRole(option.value)];
+  return !!aliases && aliases.some((a) => fuzzyMatch(a, query));
 }
 
 /** A title-cased fallback label for a value with no explicit label. */
@@ -370,7 +393,7 @@ export const FACETS: FacetDef[] = [
   { param: 'collections', label: 'Collection', control: 'pills', options: COLLECTION, excludable: false },
   { param: 'regions', label: 'Region', control: 'pills', options: JOB_REGION, excludable: true },
   { param: 'work_mode', label: 'Work format', control: 'pills', options: WORK_MODE, excludable: true },
-  { param: 'role', label: 'Role', control: 'select', dynamic: true, excludable: true, hasAndOr: true, placeholder: 'Search roles', cap: 24, related: ROLE_RELATED },
+  { param: 'role', label: 'Role', control: 'select', dynamic: true, excludable: true, hasAndOr: true, placeholder: 'Search roles', cap: 24, related: ROLE_RELATED, searchAliases: ROLE_ALIASES },
   { param: 'category', label: 'Specialization', control: 'select', options: CATEGORY, excludable: true, placeholder: 'Search specializations' },
   { param: 'seniority', label: 'Seniority', control: 'pills', options: SENIORITY, excludable: true },
   { param: 'skills', label: 'Skills', control: 'select', dynamic: true, excludable: true, hasAndOr: true, placeholder: 'Search skills' },

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { baseRole, relatedOptions, type FacetOption } from './facets';
+import { baseRole, optionMatches, relatedOptions, type FacetOption } from './facets';
 
 const opt = (value: string, count = 1): FacetOption => ({ value, label: value, count });
 
@@ -70,5 +70,42 @@ describe('relatedOptions', () => {
   it('honours the limit', () => {
     const out = relatedOptions(options, ['mobile'], [], related, 2);
     expect(out).toHaveLength(2);
+  });
+});
+
+describe('optionMatches', () => {
+  const aliases = {
+    software_engineer: ['swe', 'sde', 'software engineer'],
+    sre: ['sre', 'site reliability'],
+    senior: ['senior', 'sr'],
+  };
+  const label = (value: string, l: string): FacetOption => ({ value, label: l });
+
+  it('matches on the label (with no aliases needed)', () => {
+    expect(optionMatches(label('sre', 'Site Reliability Engineer'), 'reliability')).toBe(true);
+  });
+
+  it('matches a shorthand alias the label would miss', () => {
+    // "swe" is nowhere in "Software Engineer" — only the alias bridges it.
+    expect(optionMatches(label('software_engineer', 'Software Engineer'), 'swe', aliases)).toBe(true);
+    expect(optionMatches(label('sre', 'Site Reliability Engineer'), 'sre', aliases)).toBe(true);
+  });
+
+  it('resolves the alias by BASE slug, so a graded variant matches too', () => {
+    // senior_software_engineer → base software_engineer → "swe" alias.
+    expect(
+      optionMatches(label('senior_software_engineer', 'Senior Software Engineer'), 'swe', aliases),
+    ).toBe(true);
+    // seniority-only role via its own alias.
+    expect(optionMatches(label('senior', 'Senior'), 'sr', aliases)).toBe(true);
+  });
+
+  it('does not match unrelated queries, and needs the alias map to use aliases', () => {
+    expect(optionMatches(label('software_engineer', 'Software Engineer'), 'swe')).toBe(false);
+    expect(optionMatches(label('software_engineer', 'Software Engineer'), 'devops', aliases)).toBe(false);
+  });
+
+  it('an empty query matches everything', () => {
+    expect(optionMatches(label('sre', 'Site Reliability Engineer'), '', aliases)).toBe(true);
   });
 });

@@ -1,7 +1,6 @@
 <script lang="ts">
   import { Plus } from '@lucide/svelte';
-  import { relatedOptions, uniqueByValue, type FacetOption } from '$lib/facets';
-  import { fuzzyMatch } from '$lib/fuzzy';
+  import { optionMatches, relatedOptions, uniqueByValue, type FacetOption } from '$lib/facets';
   import { Input } from '$lib/ui';
   import { pillClass, pillTitle } from './pill';
 
@@ -22,6 +21,7 @@
     expand = false,
     cap,
     related,
+    searchAliases,
   }: {
     options: FacetOption[];
     include: string[];
@@ -44,6 +44,10 @@
     // chip row appears under the list once a search narrows it, suggesting
     // siblings the text search can't name (type "mobile" → iOS/Android chips).
     related?: Record<string, string[]>;
+    // Curated slug → shorthand-aliases map (role facet). When set, the search
+    // matches an option by its aliases too, so "swe"/"sre"/"devrel" surface the
+    // right role, not just a label substring.
+    searchAliases?: Record<string, readonly string[]>;
   } = $props();
 
   let filter = $state('');
@@ -56,11 +60,12 @@
   const isSelected = (v: string) => include.includes(v) || exclude.includes(v);
 
   // Typo-tolerant filter (fuzzyMatch falls back to substring, so it only ever
-  // adds matches — no exact hit is lost). Keeps the busiest-first order (selected
-  // pinned first); the parent already sorted options by count.
+  // adds matches — no exact hit is lost) over the label and any shorthand aliases.
+  // Keeps the busiest-first order (selected pinned first); the parent already
+  // sorted options by count.
   const matched = $derived(
     uniqueByValue(options)
-      .filter((o) => fuzzyMatch(o.label, filter))
+      .filter((o) => optionMatches(o, filter, searchAliases))
       .toSorted((a, b) => Number(isSelected(b.value)) - Number(isSelected(a.value))),
   );
 

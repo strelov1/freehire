@@ -244,6 +244,18 @@ func buildNamedLabels() map[string]string {
 	return m
 }
 
+// NamedAliases maps each named role's slug to its curated title aliases (the same
+// lowercase aliases used for title matching). Exposed so the web role picker can
+// search by shorthand — typing "swe" or "devrel" finds the role, not just its
+// display label. Returns a copy; the table stays immutable.
+func NamedAliases() map[string][]string {
+	m := make(map[string][]string, len(namedRoleTable))
+	for _, r := range namedRoleTable {
+		m[r.slug] = append([]string(nil), r.aliases...)
+	}
+	return m
+}
+
 // Derive returns a job's canonical role slugs from its resolved seniority,
 // resolved category, and title:
 //   - the seniority-only role ({seniority}) when the grade resolves;

@@ -30,6 +30,22 @@ func Parse(title string) Classification {
 	}
 }
 
+// CategoryAliases maps each category canonical to the title aliases that resolve
+// to it (the inverse of the internal alias table); SeniorityAliases does the same
+// for grades. Exposed so the web role picker can search roles by shorthand — the
+// same curated EN+RU terms used to tag titles, so "sre"/"sysadmin"/"sr" find their
+// role rather than only its display label.
+func CategoryAliases() map[string][]string  { return invertAliases(categoryAliases) }
+func SeniorityAliases() map[string][]string { return invertAliases(seniorityAliases) }
+
+func invertAliases(m map[string]string) map[string][]string {
+	out := make(map[string][]string, len(m))
+	for alias, slug := range m {
+		out[slug] = append(out[slug], alias)
+	}
+	return out
+}
+
 // matchOrdered returns the canonical value of the first alias (in priority order)
 // that occurs as a whole word in title, or "" if none match. Ordering encodes
 // precedence: the most specific / highest-rank alias is checked first, so a title
