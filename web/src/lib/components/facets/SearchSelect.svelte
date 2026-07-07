@@ -1,5 +1,6 @@
 <script lang="ts">
   import { uniqueByValue, type FacetOption } from '$lib/facets';
+  import { fuzzyMatch } from '$lib/fuzzy';
   import { Input } from '$lib/ui';
   import { pillClass, pillTitle } from './pill';
 
@@ -48,9 +49,12 @@
 
   const isSelected = (v: string) => include.includes(v) || exclude.includes(v);
 
+  // Typo-tolerant filter (fuzzyMatch falls back to substring, so it only ever
+  // adds matches — no exact hit is lost). Keeps the busiest-first order (selected
+  // pinned first); the parent already sorted options by count.
   const matched = $derived(
     uniqueByValue(options)
-      .filter((o) => o.label.toLowerCase().includes(filter.trim().toLowerCase()))
+      .filter((o) => fuzzyMatch(o.label, filter))
       .toSorted((a, b) => Number(isSelected(b.value)) - Number(isSelected(a.value))),
   );
 
