@@ -2,6 +2,7 @@
   import { ChevronDown, Search } from '@lucide/svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import type { FacetStore } from '$lib/facets';
+  import type { FacetCounts } from '$lib/types';
   import { CATEGORY_GROUPS } from '$lib/filterSections';
   import FacetHeader from './FacetHeader.svelte';
   import { pillClass, pillTitle } from '../facets/pill';
@@ -10,8 +11,10 @@
   // facet-local search filtering the visible options. In the job filter it toggles
   // the excludable `category` facet (each chip cycles off → include → exclude → off);
   // `plain` makes it an include-only choice (e.g. a profile category is not a filter
-  // to exclude).
-  let { store, plain = false }: { store: FacetStore; plain?: boolean } = $props();
+  // to exclude). When `counts` is passed, each chip shows its live match count.
+  let { store, plain = false, counts = null }: { store: FacetStore; plain?: boolean; counts?: FacetCounts | null } = $props();
+
+  const dist = $derived(counts?.facets?.category ?? null);
 
   const excludable = $derived(!plain);
   let query = $state('');
@@ -61,7 +64,7 @@
             title={pillTitle(included, excluded, excludable)}
             class={pillClass(included || excluded, excluded, 'px-3 py-1.5 text-sm')}
           >
-            {o.label}
+            {o.label}{#if dist}<span class="ml-1 opacity-60 tabular-nums">{(dist[o.value] ?? 0).toLocaleString()}</span>{/if}
           </button>
         {/each}
       </div>

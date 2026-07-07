@@ -197,10 +197,10 @@
       <div class="mb-6"><FacetSection def={roleDef} store={staged} {counts} expand /></div>
     {/if}
     {#if !exclude.includes('seniority')}
-      <ChipFacet store={staged} param="seniority" label="Seniority" />
-      <div class="mt-6"><CategoryPane store={staged} {plain} /></div>
+      <ChipFacet store={staged} param="seniority" label="Seniority" {counts} />
+      <div class="mt-6"><CategoryPane store={staged} {plain} {counts} /></div>
     {:else}
-      <CategoryPane store={staged} {plain} />
+      <CategoryPane store={staged} {plain} {counts} />
     {/if}
   {:else if entry.kind === 'location'}
     <LocationPane store={staged} {counts} />

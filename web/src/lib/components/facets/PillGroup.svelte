@@ -45,7 +45,7 @@
       title={pillTitle(included, excluded, excludable)}
       class={pillClass(included || excluded, excluded, 'px-3 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50')}
     >
-      {opt.label}
+      {opt.label}{#if opt.count !== undefined}<span class="ml-1 opacity-60 tabular-nums">{opt.count.toLocaleString()}</span>{/if}
     </button>
   {/each}
 </div>
