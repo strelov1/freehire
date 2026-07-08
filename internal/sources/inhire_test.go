@@ -56,7 +56,7 @@ func TestInhireFetchMapsListAndDetail(t *testing.T) {
 	if j.Location != "São Paulo, BR" {
 		t.Errorf("Location = %q", j.Location)
 	}
-	if j.URL != "https://contaazul.inhire.com.br/vagas/"+jobID {
+	if j.URL != "https://contaazul.inhire.app/vagas/"+jobID {
 		t.Errorf("URL = %q", j.URL)
 	}
 	if j.WorkMode != "remote" {

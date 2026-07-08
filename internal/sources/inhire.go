@@ -19,7 +19,7 @@ type inhire struct {
 const (
 	inhireListURL    = "https://api.inhire.app/job-posts/public/pages"
 	inhireDetailURL  = "https://api.inhire.app/job-posts/public/pages/%s"
-	inhireVacancyURL = "https://%s.inhire.com.br/vagas/%s"
+	inhireVacancyURL = "https://%s.inhire.app/vagas/%s"
 )
 
 // NewInhire builds the InHire adapter over the given HTTP client.
