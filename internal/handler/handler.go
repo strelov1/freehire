@@ -246,6 +246,11 @@ func Register(app *fiber.App, cfg Config) {
 	// Read-only per-job skill match against the caller's profile (no writes).
 	api.Get("/jobs/:slug/match", keyAuth, a.JobMatch)
 
+	// Stateless market-coverage: score a caller-supplied skill list (request body)
+	// against the facet-filtered market. Cookie or API key — the CLI drives it with
+	// a key. No user data is stored; it is the stateless sibling of the CV verdict.
+	api.Post("/market/coverage", keyAuth, a.MarketCoverage)
+
 	// Moderator-authored jobs: create a hand-curated vacancy and edit it. Authenticated
 	// by cookie or API key (the CLI uses a key), then gated on the moderator role. The
 	// public job reads above stay unauthenticated; a non-moderator gets 403.

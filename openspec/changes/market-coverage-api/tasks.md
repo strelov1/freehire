@@ -1,13 +1,13 @@
 ## 1. Backend: extract shared coverage step
 
-- [ ] 1.1 Extract `coverageFor(ctx, roleFilter any, declared, body, all []string) (verdict.Verdict, error)` from `computeCoverage` in `internal/handler/resume_verdict.go` (the three facet queries + `verdict.Compute`); rewire `computeCoverage`/`GetResumeVerdict` to call it. Existing verdict tests stay green (behavior-preserving).
+- [x] 1.1 Extract `coverageFor(ctx, roleFilter any, coverageSkills, declared, body, all []string) (verdict.Verdict, error)` from `computeCoverage` in `internal/handler/resume_verdict.go` (the three facet queries + `verdict.Compute`); rewire `computeCoverage`/`GetResumeVerdict` to call it. `coverageSkills` drives covered/uncovered; declared/body/all score the breakdown (the two differ for the CV verdict). Existing verdict tests stay green (behavior-preserving).
 
 ## 2. Backend: stateless market-coverage endpoint
 
-- [ ] 2.1 RED: integration test `internal/handler/market_coverage_integration_test.go` — `POST /api/v1/market/coverage` with skills body + facet query returns coverage `data`; empty skills → 400; no search → 503; API-key auth accepted; anonymous → 401.
-- [ ] 2.2 GREEN: `internal/handler/market_coverage.go` — parse `{"skills":[...]}` from body, build filter via `buildSearchFilter(c)`, call `coverageFor(ctx, filter, skills, nil, skills)`, return `{"data": verdict}` with `coherence_percent` omitted/zeroed.
-- [ ] 2.3 Register `POST /api/v1/market/coverage` behind `keyAuth` in `internal/handler/handler.go` (next to the other `keyAuth` job routes).
-- [ ] 2.4 Confirm the `verdict.Verdict` TS contract still regenerates cleanly (`cmd/gen-contracts`) — no new field, so no web change expected.
+- [x] 2.1 RED: handler unit test `internal/handler/market_coverage_test.go` (fake facetCounter, no Docker) — `POST /market/coverage` with skills body + facet query returns coverage `data`; skills-from-body reach `AndNotSkills`, filter-from-query reaches the role query, supplied skills do NOT filter the market; empty skills → 400; too-many skills → 400; no search → 503. (Route-level 401/API-key acceptance is delivered by the shared `keyAuth` middleware — tested where that middleware is tested — see 2.3.)
+- [x] 2.2 GREEN: `internal/handler/market_coverage.go` — parse `{"skills":[...]}` from body, trim/drop empties + cap at `maxCoverageSkills`, build filter via `marketFilter(c)` (full vocabulary, skills stripped), call `coverageFor(ctx, filter, skills, skills, nil, skills)`, return `{"data": verdict}` with `coherence_percent` zeroed.
+- [x] 2.3 Register `POST /api/v1/market/coverage` behind `keyAuth` in `internal/handler/handler.go` (next to the other `keyAuth` job routes).
+- [x] 2.4 Confirm the `verdict.Verdict` TS contract still regenerates cleanly (`cmd/gen-contracts`) — no new field, no `web/` change.
 
 ## 3. CLI (freehire-cli repo): client + command
 

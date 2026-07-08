@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"net/url"
 
 	"github.com/gofiber/fiber/v2"
@@ -38,25 +39,35 @@ func (a *API) GetResumeVerdict(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": v})
 }
 
-// computeCoverage runs the two facet queries behind the coverage verdict and folds
-// them through the pure verdict.Compute. Query A is the role's open-vacancy total;
-// query B is the "uncovered" set — the same role filtered to vacancies listing
-// none of the profile's skills — whose total and skill distribution give the
-// covered count and the per-skill new-vacancy unlock.
+// computeCoverage builds the coverage verdict for the caller's profile: the role
+// filter is the request facets (defaulting category to the profile), the covered
+// count is measured against the profile's structured skills, and the role-skill
+// breakdown is scored against the CV's parsed declared/body/all sets.
 func (a *API) computeCoverage(c *fiber.Ctx, userID int64, profile db.UserProfile) (verdict.Verdict, error) {
 	roleFilter := search.FilterFromValues(roleValues(c, profile))
+	declared, body, all := a.cvSkillSets(c, userID)
+	return a.coverageFor(c.Context(), roleFilter, profile.Skills, declared, body, all)
+}
 
-	// The role query now also reads the full role skill distribution (Facets:skills)
-	// so the breakdown can rank the role's top in-demand skills and flag must-haves.
-	role, err := a.facets.FacetCounts(c.Context(), search.FacetParams{
+// coverageFor runs the three facet queries behind the coverage verdict for a role
+// filter and folds them through the pure verdict.Compute. Query A is the role's
+// open-vacancy total (plus its full skill distribution, ranked into the
+// breakdown); query B is the "uncovered" set — the same role filtered to vacancies
+// listing none of coverageSkills — whose total and skill distribution give the
+// covered count and the per-skill new-vacancy unlock; query C is the skill-bearing
+// total (see below). coverageSkills drives covered/uncovered; declared/body/all
+// score the role-skill breakdown — the two sets differ for the CV verdict (profile
+// skills vs parsed CV) and coincide for a stateless skill list.
+func (a *API) coverageFor(ctx context.Context, roleFilter any, coverageSkills, declared, body, all []string) (verdict.Verdict, error) {
+	role, err := a.facets.FacetCounts(ctx, search.FacetParams{
 		Filter: roleFilter,
 		Facets: []string{"skills"},
 	})
 	if err != nil {
 		return verdict.Verdict{}, err
 	}
-	uncovered, err := a.facets.FacetCounts(c.Context(), search.FacetParams{
-		Filter: search.AndNotSkills(roleFilter, profile.Skills),
+	uncovered, err := a.facets.FacetCounts(ctx, search.FacetParams{
+		Filter: search.AndNotSkills(roleFilter, coverageSkills),
 		Facets: []string{"skills"},
 	})
 	if err != nil {
@@ -65,13 +76,12 @@ func (a *API) computeCoverage(c *fiber.Ctx, userID int64, profile db.UserProfile
 	// Skill-bearing total: the role's vacancies that list at least one tagged skill.
 	// Skill frequency (and the must-have flag) is measured against this, not the raw
 	// role total, so postings the tagger left skill-less don't deflate frequencies.
-	skilled, err := a.facets.FacetCounts(c.Context(), search.FacetParams{
+	skilled, err := a.facets.FacetCounts(ctx, search.FacetParams{
 		Filter: search.AndSkillsPresent(roleFilter),
 	})
 	if err != nil {
 		return verdict.Verdict{}, err
 	}
-	declared, body, all := a.cvSkillSets(c, userID)
 	return verdict.Compute(verdict.Input{
 		Total:           role.Total,
 		SkilledTotal:    skilled.Total,
@@ -102,13 +112,20 @@ func (a *API) cvSkillSets(c *fiber.Ctx, userID int64) (declared, body, all []str
 // selected no category — so an unfiltered verdict scores the profile's own role.
 func roleValues(c *fiber.Ctx, profile db.UserProfile) url.Values {
 	vals, _ := url.ParseQuery(string(c.Request().URI().QueryString()))
-	delete(vals, "skills")
-	delete(vals, "skills_exclude")
-	delete(vals, "skills_mode")
+	stripSkillParams(vals)
 	if !hasNonEmpty(vals["category"]) {
 		vals["category"] = profile.Specializations
 	}
 	return vals
+}
+
+// stripSkillParams removes the skills facet params (bare + _exclude/_mode) from a
+// query set. In the coverage endpoints the caller's skills are the measured set,
+// never a market filter that would narrow the market to jobs already listing them.
+func stripSkillParams(vals url.Values) {
+	delete(vals, "skills")
+	delete(vals, "skills_exclude")
+	delete(vals, "skills_mode")
 }
 
 // hasNonEmpty reports whether a query-param slice carries at least one non-empty
