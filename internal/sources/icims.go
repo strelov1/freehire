@@ -1,7 +1,9 @@
 package sources
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -152,23 +154,47 @@ func (s icims) detail(ctx context.Context, e CompanyEntry, host string, vanity b
 // icimsPosting is the schema.org JobPosting decoded from an iCIMS job fragment's
 // application/ld+json block.
 type icimsPosting struct {
-	Title              string       `json:"title"`
-	Description        string       `json:"description"`
-	DatePosted         string       `json:"datePosted"`
-	JobLocationType    string       `json:"jobLocationType"`
-	JobLocation        []icimsPlace `json:"jobLocation"`
+	Title              string      `json:"title"`
+	Description        string      `json:"description"`
+	DatePosted         string      `json:"datePosted"`
+	JobLocationType    string      `json:"jobLocationType"`
+	JobLocation        icimsPlaces `json:"jobLocation"`
 	HiringOrganization struct {
 		Name string `json:"name"`
 	} `json:"hiringOrganization"`
 }
 
-// icimsPlace is one entry of JobPosting.jobLocation (iCIMS emits an array).
+// icimsPlace is one entry of JobPosting.jobLocation.
 type icimsPlace struct {
 	Address struct {
 		AddressLocality string `json:"addressLocality"`
 		AddressRegion   string `json:"addressRegion"`
 		AddressCountry  string `json:"addressCountry"`
 	} `json:"address"`
+}
+
+// icimsPlaces decodes JobPosting.jobLocation, which iCIMS emits as EITHER a single Place
+// object (single-location jobs, the common careers-home shape) OR an array of them
+// (multi-location) — normalizing both to a slice. Without this, a single-object jobLocation
+// fails to unmarshal into a []icimsPlace and the whole posting is silently dropped.
+type icimsPlaces []icimsPlace
+
+func (p *icimsPlaces) UnmarshalJSON(b []byte) error {
+	trimmed := bytes.TrimSpace(b)
+	if len(trimmed) > 0 && trimmed[0] == '[' {
+		var arr []icimsPlace
+		if err := json.Unmarshal(trimmed, &arr); err != nil {
+			return err
+		}
+		*p = arr
+		return nil
+	}
+	var one icimsPlace
+	if err := json.Unmarshal(trimmed, &one); err != nil {
+		return err
+	}
+	*p = []icimsPlace{one}
+	return nil
 }
 
 // icimsJobIDPattern captures the numeric posting id from a job URL's /jobs/<id> segment,

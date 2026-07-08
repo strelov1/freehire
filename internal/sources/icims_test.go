@@ -26,6 +26,21 @@ const icimsDetailHTML = `<html><head></head><body>
 </script>
 </body></html>`
 
+// icimsDetailSingleLocationHTML is a JobPosting whose jobLocation is a single Place OBJECT
+// (not an array). iCIMS emits this for single-location jobs (e.g. most DocuSign careers-home
+// postings); the adapter must accept it as well as the array form.
+const icimsDetailSingleLocationHTML = `<html><head></head><body>
+<script type="application/ld+json">
+{"@context":"http://schema.org","@type":"JobPosting",
+"title":"Solo Role",
+"description":"<p>One place.</p>",
+"datePosted":"2026-05-01T00:00:00.000Z",
+"hiringOrganization":{"@type":"Organization","name":"Acme"},
+"jobLocation":{"@type":"Place","address":{"@type":"PostalAddress",
+"addressLocality":"Seattle","addressRegion":"Washington","addressCountry":"US"}}}
+</script>
+</body></html>`
+
 // icimsSitemapXML builds an iCIMS sitemap urlset from the given job locs.
 func icimsSitemapXML(locs ...string) string {
 	var b strings.Builder
@@ -88,6 +103,27 @@ func TestICIMSVanityDomainSitemapIndexAndCareersHomeDetail(t *testing.T) {
 	}
 	if jobs[0].Title != "Mobile Medical Assistant" {
 		t.Errorf("Title = %q — detail fragment not fetched via careers-home path", jobs[0].Title)
+	}
+}
+
+// A JobPosting whose jobLocation is a single object (not an array) must still parse and
+// yield the location — iCIMS single-location jobs use the object form, and dropping them
+// silently loses most of a careers-home board.
+func TestICIMSJobLocationAsSingleObject(t *testing.T) {
+	loc := "https://careers-acme.icims.com/jobs/555/solo-role/job"
+	fake := (&routedHTTP{}).
+		route("/sitemap.xml", icimsSitemapXML(loc)).
+		route("/jobs/555/solo-role/job?in_iframe=1", icimsDetailSingleLocationHTML)
+
+	jobs, err := NewICIMS(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1 — a single-object jobLocation must parse, not drop", len(jobs))
+	}
+	if jobs[0].Location != "Seattle, Washington, US" {
+		t.Errorf("Location = %q, want %q", jobs[0].Location, "Seattle, Washington, US")
 	}
 }
 
