@@ -19,8 +19,9 @@ type searcher interface {
 	// EmbedText returns a vector for text in the jobs' embedding space plus the
 	// embedder identity that produced it (used to embed a CV on upload).
 	EmbedText(ctx context.Context, key, text string) ([]float64, string, error)
-	// RecommendByVector ranks open jobs by similarity to a raw vector (the CV feed).
-	RecommendByVector(ctx context.Context, vector []float64, limit, offset int) (search.SearchResult, error)
+	// RecommendByVector ranks open jobs by similarity to a raw vector (the CV feed),
+	// constrained to an optional facet filter (nil for none).
+	RecommendByVector(ctx context.Context, vector []float64, filter any, limit, offset int) (search.SearchResult, error)
 }
 
 // defaultSemanticRatio is 0 — pure keyword search against the always-fresh facet

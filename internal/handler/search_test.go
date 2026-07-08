@@ -26,9 +26,10 @@ type fakeSearcher struct {
 	embedModel   string
 	embedErr     error
 	// recommend-by-vector call recording + canned result
-	gotRecVec []float64
-	recRes    search.SearchResult
-	recErr    error
+	gotRecVec    []float64
+	gotRecFilter any
+	recRes       search.SearchResult
+	recErr       error
 }
 
 func (f *fakeSearcher) Search(_ context.Context, p search.SearchParams) (search.SearchResult, error) {
@@ -46,8 +47,9 @@ func (f *fakeSearcher) EmbedText(_ context.Context, _, text string) ([]float64, 
 	return f.embedVec, f.embedModel, f.embedErr
 }
 
-func (f *fakeSearcher) RecommendByVector(_ context.Context, v []float64, _, _ int) (search.SearchResult, error) {
+func (f *fakeSearcher) RecommendByVector(_ context.Context, v []float64, filter any, _, _ int) (search.SearchResult, error) {
 	f.gotRecVec = v
+	f.gotRecFilter = filter
 	return f.recRes, f.recErr
 }
 

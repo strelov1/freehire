@@ -579,7 +579,7 @@ func TestIntegration_EmbedTextAndRecommend(t *testing.T) {
 		t.Errorf("EmbedText model = %q, want %q", model, embedderModel)
 	}
 
-	res, err := c.RecommendByVector(ctx, vec, 10, 0)
+	res, err := c.RecommendByVector(ctx, vec, nil, 10, 0)
 	if err != nil {
 		t.Fatalf("RecommendByVector: %v", err)
 	}
@@ -591,8 +591,21 @@ func TestIntegration_EmbedTextAndRecommend(t *testing.T) {
 		t.Errorf("top recommendation id = %d, want a backend job (1 or 2); hits=%+v", top, ids(res.Hits))
 	}
 
+	t.Run("filter narrows the ranked set to matching jobs", func(t *testing.T) {
+		// A filter passed to the recommend call must constrain the candidates before
+		// the vector ranks them: with `id = 1` only the first job survives, even though
+		// the CV also overlaps job 2. Proves the filter reaches the semantic search.
+		res, err := c.RecommendByVector(ctx, vec, "id = 1", 10, 0)
+		if err != nil {
+			t.Fatalf("RecommendByVector(filter): %v", err)
+		}
+		if got := ids(res.Hits); len(got) != 1 || got[0] != 1 {
+			t.Errorf("filtered recommend ids = %v, want exactly [1]", got)
+		}
+	})
+
 	t.Run("empty vector yields empty feed, not an error", func(t *testing.T) {
-		empty, err := c.RecommendByVector(ctx, nil, 10, 0)
+		empty, err := c.RecommendByVector(ctx, nil, nil, 10, 0)
 		if err != nil {
 			t.Fatalf("RecommendByVector(nil): %v", err)
 		}

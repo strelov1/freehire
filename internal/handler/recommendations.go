@@ -37,7 +37,9 @@ func (a *API) Recommendations(c *fiber.Ctx) error {
 		return empty()
 	}
 
-	res, err := a.search.RecommendByVector(c.Context(), vec, limit, offset)
+	// The same facet params the search endpoint accepts constrain the candidate set;
+	// the CV vector then ranks only the jobs that pass the filter.
+	res, err := a.search.RecommendByVector(c.Context(), vec, buildSearchFilter(c), limit, offset)
 	if err != nil {
 		return err
 	}

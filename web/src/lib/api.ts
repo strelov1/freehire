@@ -184,11 +184,15 @@ export function createApi(
   }
 
   /** Personalized job recommendations for the signed-in user: open jobs ranked by
-   *  semantic similarity to their uploaded CV. An empty slice means no usable CV
-   *  vector yet (no CV uploaded, or the embedder was superseded) — the page then
-   *  prompts the user to add their CV. Authenticated. */
-  async function recommendations(limit: number, offset: number): Promise<Slice<Job>> {
-    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+   *  semantic similarity to their uploaded CV, constrained to `facets` (the same
+   *  facet filter params `searchJobs` accepts, built by the caller). An empty slice
+   *  means either no usable CV vector yet (no CV uploaded, or the embedder was
+   *  superseded) or that the active filter matched nothing — the page tells them
+   *  apart by whether a filter is set. Authenticated. */
+  async function recommendations(facets: URLSearchParams, limit: number, offset: number): Promise<Slice<Job>> {
+    const params = new URLSearchParams(facets);
+    params.set('limit', String(limit));
+    params.set('offset', String(offset));
     return toSlice(await request<Page<Job>>(`/api/v1/me/recommendations?${params}`), offset);
   }
 

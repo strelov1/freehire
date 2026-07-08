@@ -555,9 +555,11 @@ func (c *Client) EmbedText(ctx context.Context, _, text string) ([]float64, stri
 
 // RecommendByVector ranks open jobs in the semantic index by similarity to a raw
 // vector (the caller's persisted CV embedding), the shared ranking rules breaking
-// ties toward fresher jobs. An empty vector or an absent semantic index yields no
+// ties toward fresher jobs. An optional filter (a Meilisearch filter expression, nil
+// for none) constrains the candidate set before ranking — the CV ranks only the jobs
+// that pass the facet filter. An empty vector or an absent semantic index yields no
 // results — the caller treats "no usable CV vector" as an empty feed, not an error.
-func (c *Client) RecommendByVector(ctx context.Context, vector []float64, limit, offset int) (SearchResult, error) {
+func (c *Client) RecommendByVector(ctx context.Context, vector []float64, filter any, limit, offset int) (SearchResult, error) {
 	if len(vector) == 0 {
 		return SearchResult{}, nil
 	}
@@ -565,6 +567,7 @@ func (c *Client) RecommendByVector(ctx context.Context, vector []float64, limit,
 		Limit:  int64(limit),
 		Offset: int64(offset),
 		Vector: toFloat32(vector),
+		Filter: filter,
 		Hybrid: &meilisearch.SearchRequestHybrid{Embedder: embedderName, SemanticRatio: 1},
 	})
 	if err != nil {
