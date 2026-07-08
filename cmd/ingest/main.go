@@ -19,6 +19,7 @@ import (
 	"log"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -43,11 +44,29 @@ func main() {
 func run() int {
 	// The board file is usually one provider's list (sources/<provider>.yml, provider =
 	// file name), but an entry may name its own provider, so it may be a mixed file
-	// (sources/custom.yml). Accept it as the first argument (cron passes the file) or via
-	// SOURCES_FILE.
-	path := os.Getenv("SOURCES_FILE")
-	if len(os.Args) > 1 && os.Args[1] != "" {
-		path = os.Args[1]
+	// (sources/custom.yml). Accept it as the first positional argument (cron passes the
+	// file) or via SOURCES_FILE. An optional --shard=i/n (or the SHARD env) crawls only a
+	// round-robin slice of the file, so a provider with too many boards to finish in one
+	// timeout (workday) is spread across several staggered runs.
+	var path, shardSpec string
+	for _, a := range os.Args[1:] {
+		switch {
+		case strings.HasPrefix(a, "--shard="):
+			shardSpec = strings.TrimPrefix(a, "--shard=")
+		case a == "--shard":
+			// The value must be attached (--shard=i/n); a space-separated form would
+			// otherwise swallow the next arg (the board path) as the selector's value.
+			log.Print("config: --shard needs an attached value, e.g. --shard=2/6")
+			return 1
+		case a != "" && !strings.HasPrefix(a, "-") && path == "":
+			path = a
+		}
+	}
+	if path == "" {
+		path = os.Getenv("SOURCES_FILE")
+	}
+	if shardSpec == "" {
+		shardSpec = os.Getenv("SHARD")
 	}
 	if path == "" {
 		log.Print("config: no board file given (pass sources/<provider>.yml as an argument or set SOURCES_FILE)")
@@ -61,9 +80,25 @@ func run() int {
 
 	registry := sources.All(sources.NewClient())
 	// Fail fast before touching the DB: a misconfigured board should not start a run.
+	// Validate the WHOLE file (not just this shard's slice) so a config error anywhere is
+	// caught on every shard's run, not only when its shard happens to include the bad entry.
 	if err := sourceCfg.Validate(registry); err != nil {
 		log.Printf("config: %v", err)
 		return 1
+	}
+
+	// Narrow to this shard's slice, if requested. Applied after validation, so the run
+	// crawls only its share of a large board file while the stale-job sweep below stays
+	// safe (it already scopes closes to the companies actually crawled this run).
+	if shardSpec != "" {
+		i, n, err := sources.ParseShard(shardSpec)
+		if err != nil {
+			log.Printf("config: %v", err)
+			return 1
+		}
+		full := len(sourceCfg.Sources)
+		sourceCfg = sourceCfg.Shard(i, n)
+		log.Printf("ingest: shard %d/%d — crawling %d of %d boards in %s", i, n, len(sourceCfg.Sources), full, path)
 	}
 
 	ctx, cfg, pool, cleanup, err := worker.Bootstrap(context.Background())
