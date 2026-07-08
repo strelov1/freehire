@@ -69,6 +69,8 @@
   board: spocket
 - company: Squeeze Studio
   board: squeezestudio
+- company: Tellent
+  board: tellent
 - company: ten square games
   board: tensquaregames
 - company: Terra
