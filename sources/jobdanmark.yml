@@ -1,0 +1,6 @@
+# JobiDanmark (jobdanmark.dk), a Danish job portal. Boardless aggregator: one public, keyless
+# search API (jobdanmark.dk/api/jobsearch/search), so the entry carries no board, and each job's
+# employer comes from the item, not this placeholder. The list omits the body, so the crawl fetches
+# a detail page per posting for the description (JSON-LD JobPosting) — like getmatch, its own cron slot.
+- company: JobiDanmark
+  provider: jobdanmark

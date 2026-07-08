@@ -1,0 +1,6 @@
+# Jobnet.dk — Denmark's official public job portal, operated by STAR (Styrelsen for
+# Arbejdsmarked og Rekruttering). Boardless aggregator: one public BFF search API
+# (jobnet.dk/bff/FindJob/Search, gated only by a non-secret "x-csrf: 1" header), so the
+# entry carries no board, and each job's employer comes from the ad, not this placeholder.
+- company: Jobnet
+  provider: jobnet
