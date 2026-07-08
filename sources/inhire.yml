@@ -702,3 +702,9 @@
   board: toroinvestimentos
 - company: "Voltta"
   board: volttaenergy
+
+# --- harvested from the backend-br /vagas sibling repos 2026-07-08 ---
+- company: "XP Inc"
+  board: rpo-xpinc
+- company: "Spun"
+  board: spun

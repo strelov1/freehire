@@ -2316,3 +2316,7 @@
   board: zumbrazil
 - company: BemAgro
   board: bemagro
+
+# --- harvested from the backend-br /vagas sibling repos 2026-07-08 ---
+- company: "Sistemas Tecnologia"
+  board: sistemastecnol
