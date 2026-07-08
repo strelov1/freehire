@@ -184,9 +184,11 @@ func TestFromRow_GeographyAndWorkModeAreDictOnly(t *testing.T) {
 	}
 }
 
-// A dictionary-silent facet is served empty, never filled from the LLM — the
-// load-bearing case that lets the LLM later run free without leaking into
-// production facets.
+// A dictionary-silent facet is served empty for the STRICT dict-only facets
+// (skills/work_mode/seniority/category), never filled from the LLM — the load-bearing
+// case that lets the LLM run free without leaking into those production facets.
+// Geography is the documented exception (geoFacet): a dict-silent country/region DOES
+// fall back to the LLM, asserted separately below.
 func TestFromRow_DictSilentFacetsAreEmptyNotLLM(t *testing.T) {
 	raw, err := json.Marshal(enrich.Enrichment{
 		Countries: []string{"fr"},
@@ -204,8 +206,9 @@ func TestFromRow_DictSilentFacetsAreEmptyNotLLM(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FromRow: %v", err)
 	}
-	if len(view.Countries) != 0 || len(view.Regions) != 0 || len(view.Skills) != 0 {
-		t.Errorf("multi-valued facets should be empty, got countries=%v regions=%v skills=%v", view.Countries, view.Regions, view.Skills)
+	// Strict dict-only facets stay empty when the dictionary is silent.
+	if len(view.Skills) != 0 {
+		t.Errorf("skills should be empty (dict silent), got %v", view.Skills)
 	}
 	if view.WorkMode != "" {
 		t.Errorf("WorkMode = %q, want empty (dict silent, LLM ignored)", view.WorkMode)
@@ -213,6 +216,64 @@ func TestFromRow_DictSilentFacetsAreEmptyNotLLM(t *testing.T) {
 	if view.Enrichment.Seniority != "" || view.Enrichment.Category != "" {
 		t.Errorf("seniority/category should be empty, got {%q, %q}", view.Enrichment.Seniority, view.Enrichment.Category)
 	}
+	// Geography is the hybrid exception: dict silent → LLM countries/regions fill in.
+	if len(view.Countries) != 1 || view.Countries[0] != "fr" {
+		t.Errorf("Countries = %v, want [fr] (LLM fallback when dict silent)", view.Countries)
+	}
+	if len(view.Regions) != 1 || view.Regions[0] != "eu" {
+		t.Errorf("Regions = %v, want [eu] (LLM fallback when dict silent)", view.Regions)
+	}
+}
+
+// Geography is a dict-then-LLM hybrid. The LLM fills in only when the dictionary left
+// the geography unpinned — empty, or the bare-"Remote" "global" bucket (the reported
+// bug: "Remote (SPAIN only)" where the ATS location string was just "Remote" and only
+// the description named Spain, which the LLM read into enrichment.countries=[es]).
+func TestFromRow_GeoHybridFallback(t *testing.T) {
+	llm, err := json.Marshal(enrich.Enrichment{Countries: []string{"ES"}, Regions: []string{"eu"}})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	// Bare-remote global bucket → LLM's Spain fills in, replacing global.
+	t.Run("global bucket falls back to LLM", func(t *testing.T) {
+		view, err := FromRow(db.Job{ID: 1, PublicSlug: "x-1", Regions: []string{"global"}, Enrichment: llm})
+		if err != nil {
+			t.Fatalf("FromRow: %v", err)
+		}
+		if len(view.Countries) != 1 || view.Countries[0] != "es" {
+			t.Errorf("Countries = %v, want [es]", view.Countries)
+		}
+		if len(view.Regions) != 1 || view.Regions[0] != "eu" {
+			t.Errorf("Regions = %v, want [eu] (global replaced)", view.Regions)
+		}
+	})
+
+	// A dictionary-pinned place (a resolved country) is NEVER overridden by the LLM.
+	t.Run("pinned dict wins over LLM", func(t *testing.T) {
+		view, err := FromRow(db.Job{ID: 2, PublicSlug: "x-2", Countries: []string{"de"}, Regions: []string{"eu"}, Enrichment: llm})
+		if err != nil {
+			t.Fatalf("FromRow: %v", err)
+		}
+		if len(view.Countries) != 1 || view.Countries[0] != "de" {
+			t.Errorf("Countries = %v, want [de] (pinned dict, LLM ignored)", view.Countries)
+		}
+	})
+
+	// Genuinely open-anywhere: dict global and the LLM knows no place either → stays global.
+	t.Run("global with no LLM geo stays global", func(t *testing.T) {
+		bare, err := json.Marshal(enrich.Enrichment{WorkMode: "remote"})
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		view, err := FromRow(db.Job{ID: 3, PublicSlug: "x-3", Regions: []string{"global"}, Enrichment: bare})
+		if err != nil {
+			t.Fatalf("FromRow: %v", err)
+		}
+		if len(view.Regions) != 1 || view.Regions[0] != "global" {
+			t.Errorf("Regions = %v, want [global] (open-anywhere unchanged)", view.Regions)
+		}
+	})
 }
 
 func TestFromRow_WorkModeIsTheDictValue(t *testing.T) {

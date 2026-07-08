@@ -364,3 +364,63 @@ func TestDerive_SourceSkillsUnionWithDictionary(t *testing.T) {
 		t.Errorf("Skills = %v, want [go kubernetes] (source ∪ dictionary, deduped+sorted)", got.Skills)
 	}
 }
+
+// A bare-"Remote" location resolves to the global bucket, but a hard US-only
+// eligibility statement in the description pins the job to the US instead of leaving
+// it Global/Worldwide (the reported bug: a US-citizen/clearance role labeled global).
+func TestDerive_USOnlyDescriptionPinsBareRemoteToUS(t *testing.T) {
+	got := Derive(Input{
+		Title:       "Senior Full-Stack Engineer",
+		Company:     "Redhorse",
+		Source:      "lever",
+		ExternalID:  "1",
+		Location:    "Remote", // → global bucket, no country
+		Description: "Must be a U.S. Citizen and eligible for a U.S. SECRET clearance.",
+	})
+	if !reflect.DeepEqual(got.Countries, []string{"us"}) {
+		t.Errorf("Countries = %v, want [us]", got.Countries)
+	}
+	if !reflect.DeepEqual(got.Regions, []string{"north_america"}) {
+		t.Errorf("Regions = %v, want [north_america] (not global)", got.Regions)
+	}
+	// The override touches only geography — remoteness stays on the work-mode facet.
+	if got.WorkMode != "remote" {
+		t.Errorf("WorkMode = %q, want remote (unchanged)", got.WorkMode)
+	}
+}
+
+// The US-only override fires ONLY when the location left the geography unpinned. A
+// location that resolved a specific place ("Remote - Germany" → de/eu) is never
+// overridden, even if the description mentions a US eligibility phrase.
+func TestDerive_USOnlyDoesNotOverrideResolvedPlace(t *testing.T) {
+	got := Derive(Input{
+		Title:       "Engineer",
+		Company:     "Acme",
+		Source:      "greenhouse",
+		ExternalID:  "board:1",
+		Location:    "Remote - Germany", // resolves de/eu
+		Description: "US citizenship preferred but we hire across the EU.",
+	})
+	if !reflect.DeepEqual(got.Countries, []string{"de"}) {
+		t.Errorf("Countries = %v, want [de] (resolved place not overridden)", got.Countries)
+	}
+}
+
+// A bare-"Remote" job whose description carries no US-only phrase stays global — the
+// override never guesses, so genuinely open-anywhere remote jobs are unaffected.
+func TestDerive_BareRemoteWithoutUSOnlyStaysGlobal(t *testing.T) {
+	got := Derive(Input{
+		Title:       "Engineer",
+		Company:     "Acme",
+		Source:      "greenhouse",
+		ExternalID:  "board:1",
+		Location:    "Remote",
+		Description: "We are a fully distributed team hiring worldwide.",
+	})
+	if len(got.Countries) != 0 {
+		t.Errorf("Countries = %v, want [] (no US-only signal)", got.Countries)
+	}
+	if !reflect.DeepEqual(got.Regions, []string{"global"}) {
+		t.Errorf("Regions = %v, want [global] (unchanged)", got.Regions)
+	}
+}

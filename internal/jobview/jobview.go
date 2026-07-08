@@ -90,15 +90,20 @@ func FromRow(j db.Job) (Job, error) {
 		}
 	}
 
-	// The six dictionary-derived facets are sourced from the jobs columns ONLY (the
+	// The dictionary-derived facets are sourced from the jobs columns ONLY (the
 	// deterministic dictionaries are the production source); the LLM's values for
 	// them are excluded from the served object so the LLM can later run free as a
 	// discovery signal without corrupting production data. The LLM values stay in
 	// the stored enrichment JSONB (untouched) but are folded out of the served copy
 	// here. normalizeSet lowercases/sorts/dedups each column and guarantees a
 	// non-nil slice so the facet serializes as [] not null.
-	countries := normalizeSet(j.Countries)
-	regions := normalizeSet(j.Regions)
+	//
+	// Countries/regions are the exception (like cities): a hybrid dict-then-LLM facet.
+	// The dictionary wins whenever it pinned a place, but when it left geography
+	// unpinned — no country and at most the bare-"Remote" "global" bucket — the LLM's
+	// enrichment.countries/regions fill in, catching a restriction stated only in the
+	// prose ("Remote (SPAIN only)") that the location string never carried.
+	countries, regions := geoFacet(j.Countries, j.Regions, e.Countries, e.Regions)
 	workMode := j.WorkMode
 	// Seniority/category are the dictionary column value, always — never the LLM's,
 	// and never a dict-silent fill. They stay nested under enrichment, so the
@@ -182,6 +187,42 @@ var nonCityFallback = map[string]struct{}{
 	"remote": {}, "remote-first": {}, "fully remote": {}, "worldwide": {},
 	"anywhere": {}, "global": {}, "distributed": {}, "hybrid": {},
 	"onsite": {}, "on-site": {}, "work from home": {}, "wfh": {},
+}
+
+// geoFacet builds the served country/region facets. The deterministic dictionary
+// columns win whenever they pinned a place — a country, or a region more specific
+// than the open-anywhere "global" bucket. Only when the dictionary left geography
+// unpinned (no country, and at most the bare-"Remote" "global" region) does it fall
+// back wholesale to the LLM's enrichment.countries/regions, which read a restriction
+// stated only in the prose ("Remote (SPAIN only)") that the location string never
+// carried. This mirrors cityFacet's dict-then-LLM hybrid; a pinned dictionary place
+// is never overridden, so the LLM can only fill the global/unspecified bucket — never
+// corrupt a resolved facet. Both outputs are lowercased/sorted/deduped (non-nil).
+func geoFacet(dictCountries, dictRegions, llmCountries, llmRegions []string) (countries, regions []string) {
+	countries = normalizeSet(dictCountries)
+	regions = normalizeSet(dictRegions)
+	if geoPinned(countries, regions) {
+		return countries, regions
+	}
+	llmC, llmR := normalizeSet(llmCountries), normalizeSet(llmRegions)
+	if len(llmC) == 0 && len(llmR) == 0 {
+		return countries, regions // the LLM knows no more than the dict — keep it
+	}
+	return llmC, llmR
+}
+
+// geoPinned reports whether the dictionary resolved a concrete place: a country, or a
+// region more specific than the open-anywhere "global" bucket.
+func geoPinned(countries, regions []string) bool {
+	if len(countries) > 0 {
+		return true
+	}
+	for _, r := range regions {
+		if r != "global" {
+			return true
+		}
+	}
+	return false
 }
 
 // cityFacet builds the served city facet: the deterministic dictionary cities when

@@ -72,6 +72,17 @@ type Derived struct {
 // and skills (structured ∪ dictionary).
 func Derive(in Input) Derived {
 	geo := location.Parse(in.Location)
+	// Geography precedence: the location dictionary → a US-only description signal.
+	// When the location left the geography unpinned (no country, and either no region
+	// or only the bare-"Remote" global bucket) but the description states a hard
+	// US-only eligibility requirement, the job is US-restricted, not open-anywhere —
+	// pin it to the US so it leaves Global/Worldwide. Like the work-mode fallback
+	// below, prose is the lowest-priority source and only fills what the location
+	// dictionary left blank; a resolved place is never overridden.
+	countries, regions := geo.Countries, geo.Regions
+	if usOnly(countries, regions, in.Description) {
+		countries, regions = []string{"us"}, []string{"north_america"}
+	}
 	// Work-mode precedence: structured (ATS) → location marker → description phrase.
 	// Each lower source only fills a value the higher ones left empty.
 	workMode := in.WorkMode
@@ -110,8 +121,8 @@ func Derive(in Input) Derived {
 	return Derived{
 		CompanySlug: normalize.Slug(in.Company),
 		PublicSlug:  normalize.JobSlug(in.Title, in.Company, in.Source, in.ExternalID),
-		Countries:   geo.Countries,
-		Regions:     geo.Regions,
+		Countries:   countries,
+		Regions:     regions,
 		Cities:      geo.Cities,
 		WorkMode:    workMode,
 		// Skills is a set: the structured source skills are unioned with the
@@ -125,6 +136,22 @@ func Derive(in Input) Derived {
 		EnglishLevel:       jobfacts.EnglishLevel(in.Description),
 		ExperienceYearsMin: experience,
 	}
+}
+
+// usOnly reports whether a job's geography is unpinned by the location dictionary —
+// no country resolved, and either no region or only the bare-"Remote" global bucket —
+// while its description carries a hard US-only eligibility signal. It is the gate for
+// the US geography override in Derive: a resolved country or a specific region (e.g.
+// "eu" from "Europe") is left untouched, so the override only rescues the exact case a
+// bare-"Remote" posting with a US-citizenship/clearance requirement falls into.
+func usOnly(countries, regions []string, desc string) bool {
+	if len(countries) != 0 {
+		return false
+	}
+	if len(regions) > 1 || (len(regions) == 1 && regions[0] != "global") {
+		return false
+	}
+	return location.USOnlyFromDescription(desc)
 }
 
 // unionSkills merges the structured source skills with the dictionary skills into a
