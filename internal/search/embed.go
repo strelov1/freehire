@@ -8,12 +8,29 @@ import (
 	"io"
 	"net/http"
 	"sync"
+	"time"
 )
 
 // teiMaxBatch caps how many inputs go in one TEI /v1/embeddings call. TEI rejects a
 // batch above its --max-client-batch-size (default 32); embedBatch chunks larger
 // inputs into sequential calls so callers can hand it a whole reindex batch.
 const teiMaxBatch = 32
+
+// embedMaxAttempts bounds how many times embedChunk retries a transient embedding-backend
+// failure (a transport error, 429, or 5xx) before giving up. A bulk semantic reindex makes
+// hundreds of thousands of cross-network calls to a remote embedding endpoint over many
+// hours, so a single blip (a dropped connection, a brief endpoint restart) must not abort
+// the whole run — but a persistent outage, or a deterministic 4xx from a malformed batch,
+// still surfaces after the bounded retries rather than looping forever.
+const embedMaxAttempts = 5
+
+// embedAttemptTimeout caps a single embedding HTTP call so a hung connection is retried
+// rather than stalling the run indefinitely — http.DefaultClient has no timeout of its own.
+const embedAttemptTimeout = 60 * time.Second
+
+// embedRetryBase is the backoff before the first retry; it doubles each attempt (1s, 2s,
+// 4s, …). A package var, not a const, so tests can shrink it to keep them fast.
+var embedRetryBase = time.Second
 
 // jobPassage renders a job document into the text embedded for semantic retrieval.
 // e5 is asymmetric: the corpus side carries the "passage:" prefix and the query side
@@ -102,20 +119,55 @@ func (c *Client) embedBatch(ctx context.Context, inputs []string) ([][]float64, 
 	return out, nil
 }
 
-// embedChunk embeds one TEI-sized batch and returns the vectors in input order. It
-// speaks TEI's native `/embed` shape — `{"inputs": [...]}` in, an array of vectors out
-// — which every backend we target accepts: the host2 TEI (/embed, bare array) and an
-// HF Inference Endpoint (root, `{"embeddings": [...]}`). Over-long inputs (e5 caps at
-// 512 tokens) are truncated server-side (host2 TEI's --auto-truncate; HF truncates by
-// default), so no per-input length handling is needed here.
+// embedChunk embeds one TEI-sized batch and returns the vectors in input order,
+// retrying a transient backend failure with exponential backoff (see embedMaxAttempts).
+// A long bulk reindex crosses the network hundreds of thousands of times, so one blip
+// must not abort it — but a deterministic error (a 4xx, a malformed response) or a
+// cancelled parent context fails fast without burning the retry budget.
 func (c *Client) embedChunk(ctx context.Context, inputs []string) ([][]float64, error) {
 	body, err := json.Marshal(map[string]any{"inputs": inputs})
 	if err != nil {
 		return nil, fmt.Errorf("search: embed marshal: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.embedURL, bytes.NewReader(body))
+
+	var lastErr error
+	for attempt := 0; attempt < embedMaxAttempts; attempt++ {
+		if attempt > 0 {
+			// Back off before retrying, but abort promptly if the parent context is done
+			// (e.g. a sibling chunk failed and cancelled the batch).
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(embedRetryBase << (attempt - 1)):
+			}
+		}
+		vecs, retriable, err := c.embedOnce(ctx, body, len(inputs))
+		if err == nil {
+			return vecs, nil
+		}
+		lastErr = err
+		if !retriable {
+			return nil, err
+		}
+	}
+	return nil, fmt.Errorf("search: embed: giving up after %d attempts: %w", embedMaxAttempts, lastErr)
+}
+
+// embedOnce makes a single embedding call and reports whether a failure is worth
+// retrying. It speaks TEI's native `/embed` shape — `{"inputs": [...]}` in, an array of
+// vectors out — which every backend we target accepts: the host2 TEI (/embed, bare array)
+// and an HF Inference Endpoint (root, `{"embeddings": [...]}`). Over-long inputs (e5 caps
+// at 512 tokens) are truncated server-side (host2 TEI's --auto-truncate; HF truncates by
+// default), so no per-input length handling is needed here.
+//
+// Transport errors, 429, and 5xx are transient (retriable); a 4xx or a mismatched vector
+// count is deterministic (not retriable); a cancelled parent context is terminal.
+func (c *Client) embedOnce(ctx context.Context, body []byte, n int) ([][]float64, bool, error) {
+	reqCtx, cancel := context.WithTimeout(ctx, embedAttemptTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, c.embedURL, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("search: embed request: %w", err)
+		return nil, false, fmt.Errorf("search: embed request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if c.embedKey != "" {
@@ -123,24 +175,31 @@ func (c *Client) embedChunk(ctx context.Context, inputs []string) ([][]float64, 
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("search: embed call: %w", err)
+		// A cancelled PARENT context is terminal (the whole batch is being torn down);
+		// any other transport failure — including this attempt's own timeout — is transient.
+		if ctx.Err() != nil {
+			return nil, false, ctx.Err()
+		}
+		return nil, true, fmt.Errorf("search: embed call: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("search: embed: unexpected status %d", resp.StatusCode)
+		retriable := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
+		return nil, retriable, fmt.Errorf("search: embed: unexpected status %d", resp.StatusCode)
 	}
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("search: embed read: %w", err)
+		// A body cut short mid-read is a broken connection — transient.
+		return nil, true, fmt.Errorf("search: embed read: %w", err)
 	}
 	vecs, err := parseEmbeddings(raw)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	if len(vecs) != len(inputs) {
-		return nil, fmt.Errorf("search: embed: got %d vectors for %d inputs", len(vecs), len(inputs))
+	if len(vecs) != n {
+		return nil, false, fmt.Errorf("search: embed: got %d vectors for %d inputs", len(vecs), n)
 	}
-	return vecs, nil
+	return vecs, false, nil
 }
 
 // parseEmbeddings decodes a TEI-style embeddings response, tolerating both the bare

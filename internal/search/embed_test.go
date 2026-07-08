@@ -7,7 +7,9 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // jobPassage must prefix the corpus side with e5's "passage:" marker and weave in the
@@ -77,6 +79,91 @@ func TestEmbedBatchChunksAndPreservesOrder(t *testing.T) {
 		if len(v) != 1 || v[0] != float64(i) {
 			t.Fatalf("vecs[%d] = %v, want [%d]", i, v, i)
 		}
+	}
+}
+
+// shrinkEmbedRetryBase makes retry backoff negligible for the duration of a test, so a
+// test exercising retries does not sleep whole seconds.
+func shrinkEmbedRetryBase(t *testing.T) {
+	t.Helper()
+	prev := embedRetryBase
+	embedRetryBase = time.Microsecond
+	t.Cleanup(func() { embedRetryBase = prev })
+}
+
+// A transient backend failure (a dropped connection, a brief 5xx while the endpoint
+// restarts) must NOT abort a bulk reindex — embedChunk retries it. Without this, a single
+// blip over a multi-hour run kills the whole embed pass (the ghost-JD incident).
+func TestEmbedChunkRetriesTransientThenSucceeds(t *testing.T) {
+	shrinkEmbedRetryBase(t)
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) <= 2 { // fail the first two attempts, then serve
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		var in struct {
+			Inputs []string `json:"inputs"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		out := make([][]float64, len(in.Inputs))
+		for i := range in.Inputs {
+			out[i] = []float64{float64(i)}
+		}
+		_ = json.NewEncoder(w).Encode(out)
+	}))
+	defer srv.Close()
+	c := &Client{embedURL: srv.URL}
+
+	vecs, err := c.embedBatch(context.Background(), []string{"a", "b"})
+	if err != nil {
+		t.Fatalf("embedBatch after transient failures: %v", err)
+	}
+	if len(vecs) != 2 {
+		t.Fatalf("got %d vectors, want 2", len(vecs))
+	}
+	if got := calls.Load(); got != 3 {
+		t.Fatalf("expected 3 calls (2 failed + 1 ok), got %d", got)
+	}
+}
+
+// A persistent backend outage must surface as an error after the bounded retries — not
+// loop forever and not give up on the first try.
+func TestEmbedChunkGivesUpAfterMaxAttempts(t *testing.T) {
+	shrinkEmbedRetryBase(t)
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		http.Error(w, "down", http.StatusBadGateway)
+	}))
+	defer srv.Close()
+	c := &Client{embedURL: srv.URL}
+
+	if _, err := c.embedBatch(context.Background(), []string{"a"}); err == nil {
+		t.Fatal("expected an error after exhausting retries, got nil")
+	}
+	if got := calls.Load(); got != embedMaxAttempts {
+		t.Fatalf("expected %d attempts, got %d", embedMaxAttempts, got)
+	}
+}
+
+// A 4xx is a deterministic client error (a malformed batch) — retrying it only wastes the
+// budget, so embedChunk must fail fast on the first call.
+func TestEmbedChunkDoesNotRetryClientError(t *testing.T) {
+	shrinkEmbedRetryBase(t)
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		http.Error(w, "bad request", http.StatusBadRequest)
+	}))
+	defer srv.Close()
+	c := &Client{embedURL: srv.URL}
+
+	if _, err := c.embedBatch(context.Background(), []string{"a"}); err == nil {
+		t.Fatal("expected an error on a 4xx, got nil")
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("expected exactly 1 call (no retry on 4xx), got %d", got)
 	}
 }
 
