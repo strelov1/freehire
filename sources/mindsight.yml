@@ -1,0 +1,5 @@
+# Mindsight boards. Provider is the filename; each entry is company + board.
+# board = the tenant path segment served from oportunidades.mindsight.com.br/<slug>
+# (see internal/sources/mindsight.go).
+- company: Grupo MNGT
+  board: grupomngt

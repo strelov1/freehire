@@ -1,0 +1,8 @@
+# Quickin boards. Provider is the filename; each entry is company + board.
+# board = the Quickin account slug in jobs.quickin.io/<slug> (resolved to the account's
+# opaque id via api.quickin.io, which keys the paginated jobs listing — see
+# internal/sources/quickin.go).
+- company: BotCity
+  board: botcity
+- company: Igma
+  board: igma

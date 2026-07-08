@@ -87,12 +87,17 @@ export interface Job {
   location: string;
   description: string;
   /**
-   * Countries/Regions/WorkMode/Skills are served from the jobs dictionary columns
-   * ONLY — the deterministic dictionaries are the sole production source for these
-   * facets. The LLM's enrichment values for them are deliberately excluded from
-   * the served object (they remain raw in the stored enrichment JSONB), so the LLM
-   * can later run free as a discovery signal without corrupting production data.
-   * They are served top-level and once; the same fields are folded out of the
+   * WorkMode/Skills are served from the jobs dictionary columns ONLY — the
+   * deterministic dictionaries are the sole production source for these facets. The
+   * LLM's enrichment values for them are deliberately excluded from the served object
+   * (they remain raw in the stored enrichment JSONB), so the LLM can later run free as
+   * a discovery signal without corrupting production data.
+   * Countries/Regions are a HYBRID facet, like Cities (see geoFacet): the dictionary
+   * columns win whenever they pinned a place, but an unpinned geography (no country,
+   * and at most the bare-"Remote" "global" bucket) falls back to the LLM's
+   * enrichment.countries/regions — catching a restriction stated only in the prose
+   * ("Remote (SPAIN only)") that the location string never carried.
+   * All four are served top-level and once; the same fields are folded out of the
    * nested Enrichment to avoid duplication.
    */
   countries: string[];
@@ -318,7 +323,7 @@ export interface JobMatch {
   missing: string[];
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'breezy', 'careerplug', 'careerspage', 'clinch', 'comeet', 'cornerstone', 'deel', 'eightfold', 'epam', 'erecruiter', 'factorial', 'freshteam', 'gem', 'getmatch', 'getonbrd', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'himalayas', 'hireology', 'huntflow', 'icims', 'inhire', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobicy', 'jobstash', 'jobtech', 'join', 'justjoin', 'lever', 'luxoft', 'mycareersfuture', 'oracle', 'paycom', 'paylocity', 'personio', 'phenom', 'pinpoint', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'solides', 'successfactors', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'ukg', 'vention', 'vouch', 'wantedkr', 'weworkremotely', 'workable', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'breezy', 'careerplug', 'careerspage', 'clinch', 'comeet', 'cornerstone', 'deel', 'earcu', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'gem', 'getmatch', 'getonbrd', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'himalayas', 'hireology', 'huntflow', 'icims', 'inhire', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobstash', 'jobtech', 'join', 'justjoin', 'lever', 'luxoft', 'mindsight', 'mycareersfuture', 'oracle', 'paycom', 'paylocity', 'personio', 'phenom', 'pinpoint', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'solides', 'successfactors', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'ukg', 'vention', 'vouch', 'wantedkr', 'weworkremotely', 'workable', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];
