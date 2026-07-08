@@ -1,9 +1,14 @@
 # iCIMS boards. Provider is the filename; each entry is company + board.
 # board = the iCIMS slug, forming careers-<board>.icims.com (see internal/sources/icims.go);
 # the adapter reads its sitemap.xml and each job's ?in_iframe=1 JobPosting ld+json fragment.
+# A board that is a full host (contains a dot, e.g. careers.docusign.com) is a vanity domain
+# on the newer "careers-home" product: the adapter follows its sitemap index and reads
+# /careers-home/jobs/<id>?in_iframe=1 instead.
 # Each board validated live (sitemap lists >0 job postings) before adding — slugs are
 # harvested from a seed worklist via cmd/harvest-boards, never copied unvalidated.
 
+- company: Docusign
+  board: careers.docusign.com
 - company: 360care
   board: 360care
 - company: 142designgroup

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 
 	"golang.org/x/net/html"
 )
@@ -36,35 +37,82 @@ type icimsSitemapEntry struct {
 }
 
 func (s icims) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	var sitemap struct {
-		URLs []icimsSitemapEntry `xml:"url"`
-	}
-	url := fmt.Sprintf("https://careers-%s.icims.com/sitemap.xml", e.Board)
-	if err := s.http.GetXML(ctx, url, &sitemap); err != nil {
-		return nil, fmt.Errorf("icims: sitemap %s: %w", e.Board, err)
+	host := icimsHost(e.Board)
+	locs, err := s.jobLocs(ctx, host, e.Board)
+	if err != nil {
+		return nil, err
 	}
 
-	// Keep only real job postings: a loc with a parseable /jobs/<id>/ segment. This drops
-	// the non-posting /jobs/search and /jobs/intro entries, which carry no numeric id.
+	// Each job's posting comes from its own iframe-fragment fetch, fanned out under a
+	// bounded pool. vanity boards (careers-home) build the fragment URL differently.
+	vanity := icimsVanity(e.Board)
+	return fetchDetails(locs, defaultDetailWorkers, func(loc string) (Job, bool) {
+		return s.detail(ctx, e, host, vanity, loc)
+	}), nil
+}
+
+// icimsVanity reports whether the board is a full vanity host (contains a dot) rather than a
+// bare iCIMS slug. A vanity site (e.g. careers.docusign.com) runs the newer "careers-home"
+// product: its sitemap is an index and its job detail lives at /careers-home/jobs/<id>.
+func icimsVanity(board string) bool { return strings.Contains(board, ".") }
+
+// icimsHost resolves the board to the host the endpoints use: a vanity board is itself the
+// host; a bare slug forms the classic "careers-<slug>.icims.com".
+func icimsHost(board string) string {
+	if icimsVanity(board) {
+		return board
+	}
+	return "careers-" + board + ".icims.com"
+}
+
+// icimsSitemap decodes either sitemap shape: a flat <urlset> (child <url>) or a
+// <sitemapindex> (child <sitemap>). Both nest a <loc>, so one entry type serves both.
+type icimsSitemap struct {
+	URLs     []icimsSitemapEntry `xml:"url"`
+	Sitemaps []icimsSitemapEntry `xml:"sitemap"`
+}
+
+// jobLocs collects the board's job-posting URLs from its sitemap, following a sitemap index
+// one level deep (vanity/careers-home sites nest their <url> entries under sub-sitemaps) and
+// keeping only locs with a parseable /jobs/<id> segment — dropping the /jobs/search and
+// /jobs/intro entries, which carry no numeric id.
+func (s icims) jobLocs(ctx context.Context, host, board string) ([]string, error) {
+	var root icimsSitemap
+	if err := s.http.GetXML(ctx, fmt.Sprintf("https://%s/sitemap.xml", host), &root); err != nil {
+		return nil, fmt.Errorf("icims: sitemap %s: %w", board, err)
+	}
+	entries := root.URLs
+	for _, sm := range root.Sitemaps {
+		var sub icimsSitemap
+		if err := s.http.GetXML(ctx, sm.Loc, &sub); err != nil {
+			// Skip a flaky sub-sitemap rather than losing the whole board — the same
+			// per-entry isolation the detail fan-out uses; the missed postings reappear
+			// on the next crawl. Only a failed ROOT sitemap fails the board.
+			continue
+		}
+		entries = append(entries, sub.URLs...)
+	}
 	var locs []string
-	for _, u := range sitemap.URLs {
+	for _, u := range entries {
 		if icimsJobID(u.Loc) != "" {
 			locs = append(locs, u.Loc)
 		}
 	}
-
-	// Each job's posting comes from its own iframe-fragment fetch, fanned out under a
-	// bounded pool.
-	return fetchDetails(locs, defaultDetailWorkers, func(loc string) (Job, bool) {
-		return s.detail(ctx, e, loc)
-	}), nil
+	return locs, nil
 }
 
 // detail fetches one job's "?in_iframe=1" fragment and maps its JobPosting ld+json to a
 // Job, returning ok=false when the fragment fetch fails or carries no JobPosting, so the
 // caller skips just that posting.
-func (s icims) detail(ctx context.Context, e CompanyEntry, loc string) (Job, bool) {
-	root, err := s.http.GetHTML(ctx, loc+"?in_iframe=1")
+func (s icims) detail(ctx context.Context, e CompanyEntry, host string, vanity bool, loc string) (Job, bool) {
+	id := icimsJobID(loc)
+	// Classic hosts serve the fragment at <loc>?in_iframe=1. Vanity/careers-home locs are
+	// /jobs/<id>?lang=… (a query already), so their fragment lives at a distinct path.
+	frag := loc + "?in_iframe=1"
+	if vanity {
+		frag = fmt.Sprintf("https://%s/careers-home/jobs/%s?in_iframe=1", host, id)
+	}
+	root, err := s.http.GetHTML(ctx, frag)
 	if err != nil {
 		return Job{}, false
 	}
@@ -89,7 +137,7 @@ func (s icims) detail(ctx context.Context, e CompanyEntry, loc string) (Job, boo
 	remote := p.JobLocationType == "TELECOMMUTE"
 
 	return Job{
-		ExternalID:  icimsJobID(loc),
+		ExternalID:  id,
 		URL:         loc,
 		Title:       p.Title,
 		Company:     firstNonEmpty(p.HiringOrganization.Name, e.Company),
@@ -123,10 +171,11 @@ type icimsPlace struct {
 	} `json:"address"`
 }
 
-// icimsJobIDPattern captures the numeric posting id from a job URL's /jobs/<id>/ segment.
-// The trailing slash is required, so the non-posting /jobs/search and /jobs/intro entries
-// (no id, no trailing-slash digits) yield no match.
-var icimsJobIDPattern = regexp.MustCompile(`/jobs/(\d+)/`)
+// icimsJobIDPattern captures the numeric posting id from a job URL's /jobs/<id> segment,
+// terminated by a slash, query, fragment, or end of string. This matches both the classic
+// host form (/jobs/<id>/<slug>/job) and the vanity/careers-home form (/jobs/<id>?lang=…),
+// while the non-posting /jobs/search and /jobs/intro entries (no digits) yield no match.
+var icimsJobIDPattern = regexp.MustCompile(`/jobs/(\d+)(?:[/?#]|$)`)
 
 // icimsJobID extracts the native numeric posting id from a job page URL, or "" when the
 // URL is not a job posting.

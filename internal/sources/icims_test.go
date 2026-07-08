@@ -37,6 +37,60 @@ func icimsSitemapXML(locs ...string) string {
 	return b.String()
 }
 
+// icimsSitemapIndexXML builds an iCIMS <sitemapindex> pointing at the given sub-sitemap locs.
+func icimsSitemapIndexXML(subLocs ...string) string {
+	var b strings.Builder
+	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`)
+	for _, l := range subLocs {
+		b.WriteString(`<sitemap><loc>` + l + `</loc></sitemap>`)
+	}
+	b.WriteString(`</sitemapindex>`)
+	return b.String()
+}
+
+func TestICIMSHost(t *testing.T) {
+	cases := map[string]string{
+		"360care":              "careers-360care.icims.com", // classic slug → icims host
+		"careers.docusign.com": "careers.docusign.com",      // vanity domain passes through
+	}
+	for board, want := range cases {
+		if got := icimsHost(board); got != want {
+			t.Errorf("icimsHost(%q) = %q, want %q", board, got, want)
+		}
+	}
+}
+
+// A vanity-domain board (careers.docusign.com) serves a sitemap INDEX (not a flat urlset)
+// and its job detail lives at /careers-home/jobs/<id>?in_iframe=1 (not <loc>?in_iframe=1).
+// The adapter must follow the index, match the query-form job loc, and fetch the
+// careers-home fragment.
+func TestICIMSVanityDomainSitemapIndexAndCareersHomeDetail(t *testing.T) {
+	loc := "https://careers.docusign.com/jobs/27897?lang=en-us"
+	fake := (&routedHTTP{}).
+		route("/sitemap.xml", icimsSitemapIndexXML("https://careers.docusign.com/sitemap1.xml")).
+		route("/sitemap1.xml", icimsSitemapXML(loc)).
+		route("/careers-home/jobs/27897?in_iframe=1", icimsDetailHTML)
+
+	jobs, err := NewICIMS(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Docusign", Provider: "icims", Board: "careers.docusign.com",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1 (index followed, query-form loc matched)", len(jobs))
+	}
+	if jobs[0].ExternalID != "27897" {
+		t.Errorf("ExternalID = %q, want 27897", jobs[0].ExternalID)
+	}
+	if jobs[0].URL != loc {
+		t.Errorf("URL = %q, want the canonical sitemap loc %q", jobs[0].URL, loc)
+	}
+	if jobs[0].Title != "Mobile Medical Assistant" {
+		t.Errorf("Title = %q — detail fragment not fetched via careers-home path", jobs[0].Title)
+	}
+}
+
 func TestICIMSProvider(t *testing.T) {
 	if got := NewICIMS(nil).Provider(); got != "icims" {
 		t.Errorf("Provider() = %q, want %q", got, "icims")
@@ -49,6 +103,9 @@ func TestICIMSJobID(t *testing.T) {
 		"https://careers-acme.icims.com/jobs/12345/some-role/job?in_iframe=1":      "12345",
 		"https://careers-acme.icims.com/jobs/search":                               "",
 		"https://careers-acme.icims.com/jobs/intro":                                "",
+		// Vanity/careers-home sitemap locs: /jobs/<id> with a query and no trailing slash.
+		"https://careers.docusign.com/jobs/27897?lang=en-us": "27897",
+		"https://careers.docusign.com/jobs/29339":            "29339",
 	}
 	for loc, want := range cases {
 		if got := icimsJobID(loc); got != want {
