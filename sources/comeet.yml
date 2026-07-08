@@ -36,3 +36,5 @@
   board: winn_ai/4A.00F
 - company: DealHub.ai
   board: dealhub/86.005
+- company: Sequoia Connect
+  board: sequoiaconnect/45.004

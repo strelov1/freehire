@@ -708,3 +708,7 @@
   board: rpo-xpinc
 - company: "Spun"
   board: spun
+
+# --- added from a LinkedIn-sourced vacancy, validated live 2026-07-08 ---
+- company: "Woba"
+  board: woba
