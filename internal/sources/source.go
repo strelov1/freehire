@@ -422,8 +422,17 @@ func parseLayout(layout, s string) *time.Time {
 }
 
 // parseRFC3339 parses an RFC3339 timestamp (the common ATS format). RFC3339Nano
-// accepts both fractional and plain-second forms, a strict superset of RFC3339.
-func parseRFC3339(s string) *time.Time { return parseLayout(time.RFC3339Nano, s) }
+// accepts both fractional and plain-second forms (Z and colon offsets), a strict
+// superset of RFC3339. As a fallback it accepts the RFC822-style numeric offset
+// WITHOUT a colon (e.g. iCIMS careers-home's "2026-06-30T15:42:00+0000"), which
+// RFC3339 rejects — the fallback layout only matches numeric offsets, so a Z or
+// colon-offset string that reached here (parse or NotFuture failure) still yields nil.
+func parseRFC3339(s string) *time.Time {
+	if t := parseLayout(time.RFC3339Nano, s); t != nil {
+		return t
+	}
+	return parseLayout("2006-01-02T15:04:05.999999999-0700", s)
+}
 
 // parseDate parses a date-only timestamp ("2006-01-02", as Workable emits).
 func parseDate(s string) *time.Time { return parseLayout("2006-01-02", s) }
