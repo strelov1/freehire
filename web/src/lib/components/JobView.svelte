@@ -175,7 +175,7 @@
       {/if}
     </div>
 
-    <RealityBadge reality={job.reality} detailed />
+    <RealityBadge reality={job.reality} postedAt={job.posted_at} detailed />
 
     {#if showApplyPrompt && !applied}
       <div
