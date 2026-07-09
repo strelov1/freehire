@@ -20,11 +20,12 @@ type companyDetailResponse struct {
 // ListCompanies returns a page of companies with their denormalized job counts,
 // most active first. An optional `q` query param filters by a case-insensitive
 // name substring, and repeatable facet params — collections/regions/countries/
-// domains/company_type/company_size/remote_regions — filter against the company's
-// denormalized facet arrays by array overlap (OR within a facet, AND across facets),
-// composably with `q`. `remote_regions` is the curated hiring-regions facet, distinct
-// from the job-derived `regions`. meta.total reports the count matching the full
-// filter so pagination is correct.
+// domains/company_type/company_size/remote_regions/yc_batch/yc_status — filter
+// against the company's denormalized facet arrays by array overlap (OR within a
+// facet, AND across facets), composably with `q`. `remote_regions` is the
+// job-derived remote-hiring facet; `yc_batch`/`yc_status` are the curated YC
+// directory facets. meta.total reports the count matching the full filter so
+// pagination is correct.
 func (a *API) ListCompanies(c *fiber.Ctx) error {
 	limit, offset := pageParams(c)
 	search := c.Query("q")
@@ -41,6 +42,8 @@ func (a *API) ListCompanies(c *fiber.Ctx) error {
 	companyTypes := facetValues(vals, "company_type")
 	companySizes := facetValues(vals, "company_size")
 	remoteRegions := facetValues(vals, "remote_regions")
+	ycBatch := facetValues(vals, "yc_batch")
+	ycStatus := facetValues(vals, "yc_status")
 
 	companies, err := a.queries.ListCompanies(c.Context(), db.ListCompaniesParams{
 		Search:        search,
@@ -51,6 +54,8 @@ func (a *API) ListCompanies(c *fiber.Ctx) error {
 		CompanyTypes:  companyTypes,
 		CompanySizes:  companySizes,
 		RemoteRegions: remoteRegions,
+		YcBatch:       ycBatch,
+		YcStatus:      ycStatus,
 		Limit:         int32(limit),
 		Offset:        int32(offset),
 	})
@@ -67,6 +72,8 @@ func (a *API) ListCompanies(c *fiber.Ctx) error {
 		CompanyTypes:  companyTypes,
 		CompanySizes:  companySizes,
 		RemoteRegions: remoteRegions,
+		YcBatch:       ycBatch,
+		YcStatus:      ycStatus,
 	})
 	if err != nil {
 		return err

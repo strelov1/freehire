@@ -109,3 +109,17 @@ describe('remote_regions facet (curated hiring regions)', () => {
     expect(companyFiltersToParams(f).getAll('remote_regions')).toEqual(['eu', 'apac']);
   });
 });
+
+describe('yc facets (curated YC directory)', () => {
+  test('yc_status and yc_batch are selectable and round-trip', () => {
+    let f = emptyCompanyFilters();
+    f = toggleCompanyFacet(f, 'yc_status', 'Public');
+    f = toggleCompanyFacet(f, 'yc_batch', 'Summer 2009');
+    expect(f.facets.yc_status).toEqual(['Public']);
+    expect(f.facets.yc_batch).toEqual(['Summer 2009']);
+    expect(activeCompanyFilterCount(f)).toBe(2);
+    const p = companyFiltersToParams(f);
+    expect(p.getAll('yc_status')).toEqual(['Public']);
+    expect(companyFiltersFromParams(p).facets.yc_batch).toEqual(['Summer 2009']);
+  });
+});

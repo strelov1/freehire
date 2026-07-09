@@ -289,3 +289,69 @@ func TestListCompaniesRemoteRegionsFacet(t *testing.T) {
 		}
 	})
 }
+
+func TestListCompaniesYCFacets(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, "TRUNCATE companies RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	seed := func(slug string, batch, status []string) {
+		t.Helper()
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO companies (slug, name, yc_batch, yc_status) VALUES ($1, $1, $2, $3)`,
+			slug, batch, status); err != nil {
+			t.Fatalf("seed %q: %v", slug, err)
+		}
+	}
+	seed("stripe", []string{"Summer 2009"}, []string{"Public"})
+	seed("airbnb", []string{"Winter 2009"}, []string{"Public"})
+	seed("newco", []string{"Winter 2024"}, []string{"Active"})
+	seed("nonyc", []string{}, []string{}) // no YC facets
+
+	h := &API{pool: pool, queries: db.New(pool)}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/api/v1/companies", h.ListCompanies)
+
+	list := func(url string) (slugs []string, total float64) {
+		resp, err := app.Test(httptest.NewRequest("GET", url, nil))
+		if err != nil {
+			t.Fatalf("request %q: %v", url, err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != fiber.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("status %d (body %s)", resp.StatusCode, body)
+		}
+		var body struct {
+			Data []struct {
+				Slug string `json:"slug"`
+			} `json:"data"`
+			Meta struct {
+				Total float64 `json:"total"`
+			} `json:"meta"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		for _, c := range body.Data {
+			slugs = append(slugs, c.Slug)
+		}
+		sort.Strings(slugs)
+		return slugs, body.Meta.Total
+	}
+
+	t.Run("status facet", func(t *testing.T) {
+		got, total := list("/api/v1/companies?yc_status=Public")
+		if strings.Join(got, ",") != "airbnb,stripe" || int(total) != 2 {
+			t.Errorf("yc_status=Public → %v total=%v, want [airbnb stripe]/2", got, total)
+		}
+	})
+
+	t.Run("batch AND status compose", func(t *testing.T) {
+		got, _ := list("/api/v1/companies?yc_status=Public&yc_batch=Summer%202009")
+		if strings.Join(got, ",") != "stripe" {
+			t.Errorf("→ %v, want [stripe]", got)
+		}
+	})
+}

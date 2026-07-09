@@ -55,6 +55,8 @@ type Company struct {
 	IsReference      bool               `json:"is_reference"`
 	CompanyInfoAt    pgtype.Timestamptz `json:"company_info_at"`
 	RemoteRegions    []string           `json:"remote_regions"`
+	YcBatch          []string           `json:"yc_batch"`
+	YcStatus         []string           `json:"yc_status"`
 }
 
 type EnrichmentOutbox struct {

@@ -385,12 +385,19 @@ const COUNTRY: FacetOption[] = ISO_COUNTRY_CODES.map((value) => ({
 })).toSorted((a, b) => a.label.localeCompare(b.label));
 
 // The company catalog's filter facets: mostly a subset of the job facets whose
-// values are derivable from a company's open jobs and denormalized onto the
-// companies row (collections + the RefreshCompanyFacets arrays), plus `remote_regions`
-// — the curated "where they hire remotely" facet, backfilled from an external
-// directory rather than derived from jobs (distinct from the job-derived `regions`).
-// No exclude/AND-OR modes — the companies list endpoint filters by plain array
-// overlap. Reuses the same option vocabularies as the job facets so labels never drift.
+// values are mostly derived from a company's open jobs and denormalized onto the
+// companies row (collections + the RefreshCompanyFacets arrays), including
+// `remote_regions` (regions scoped to remote jobs). `yc_batch`/`yc_status` are the
+// curated YC-directory facets loaded by cmd/import-yc. No exclude/AND-OR modes — the
+// companies list endpoint filters by plain array overlap. Reuses the same option
+// vocabularies as the job facets so labels never drift.
+const YC_STATUS: FacetOption[] = options(['Active', 'Acquired', 'Public', 'Inactive']);
+// YC batch labels are the verbatim source strings ("Winter 2012"). Generate the full
+// season×year grid so the searchable select covers any batch; phantom combinations
+// that no company has simply match nothing.
+const YC_BATCH: FacetOption[] = Array.from({ length: 2027 - 2005 + 1 }, (_, i) => 2027 - i).flatMap((y) =>
+  ['Winter', 'Spring', 'Summer', 'Fall'].map((s) => ({ value: `${s} ${y}`, label: `${s} ${y}` })),
+);
 export const COMPANY_FACETS: FacetDef[] = [
   { param: 'collections', label: 'Collection', control: 'pills', options: COLLECTION, excludable: false },
   { param: 'regions', label: 'Region', control: 'pills', options: REGION, excludable: false },
@@ -399,6 +406,8 @@ export const COMPANY_FACETS: FacetDef[] = [
   { param: 'domains', label: 'Industry', control: 'select', options: DOMAINS, excludable: false, placeholder: 'Search industries' },
   { param: 'company_type', label: 'Company type', control: 'pills', options: COMPANY_TYPE, excludable: false },
   { param: 'company_size', label: 'Company size', control: 'pills', options: COMPANY_SIZE, excludable: false },
+  { param: 'yc_status', label: 'YC status', control: 'pills', options: YC_STATUS, excludable: false },
+  { param: 'yc_batch', label: 'YC batch', control: 'select', options: YC_BATCH, excludable: false, placeholder: 'Search YC batches' },
 ];
 
 export const FACETS: FacetDef[] = [

@@ -21,6 +21,8 @@ WHERE (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || 
   AND (coalesce(cardinality(sqlc.arg('company_types')::text[]), 0) = 0 OR company_types && sqlc.arg('company_types')::text[])
   AND (coalesce(cardinality(sqlc.arg('company_sizes')::text[]), 0) = 0 OR company_sizes && sqlc.arg('company_sizes')::text[])
   AND (coalesce(cardinality(sqlc.arg('remote_regions')::text[]), 0) = 0 OR remote_regions && sqlc.arg('remote_regions')::text[])
+  AND (coalesce(cardinality(sqlc.arg('yc_batch')::text[]), 0) = 0 OR yc_batch && sqlc.arg('yc_batch')::text[])
+  AND (coalesce(cardinality(sqlc.arg('yc_status')::text[]), 0) = 0 OR yc_status && sqlc.arg('yc_status')::text[])
 ORDER BY job_count DESC, name
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
@@ -37,7 +39,9 @@ WHERE (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || 
   AND (coalesce(cardinality(sqlc.arg('domains')::text[]), 0) = 0 OR domains && sqlc.arg('domains')::text[])
   AND (coalesce(cardinality(sqlc.arg('company_types')::text[]), 0) = 0 OR company_types && sqlc.arg('company_types')::text[])
   AND (coalesce(cardinality(sqlc.arg('company_sizes')::text[]), 0) = 0 OR company_sizes && sqlc.arg('company_sizes')::text[])
-  AND (coalesce(cardinality(sqlc.arg('remote_regions')::text[]), 0) = 0 OR remote_regions && sqlc.arg('remote_regions')::text[]);
+  AND (coalesce(cardinality(sqlc.arg('remote_regions')::text[]), 0) = 0 OR remote_regions && sqlc.arg('remote_regions')::text[])
+  AND (coalesce(cardinality(sqlc.arg('yc_batch')::text[]), 0) = 0 OR yc_batch && sqlc.arg('yc_batch')::text[])
+  AND (coalesce(cardinality(sqlc.arg('yc_status')::text[]), 0) = 0 OR yc_status && sqlc.arg('yc_status')::text[]);
 
 -- name: ListCompanySitemap :many
 -- Slim keyset page of companies for the sitemap, cursored by the slug primary key
@@ -140,6 +144,33 @@ ON CONFLICT (slug) DO UPDATE SET
     company_info      = EXCLUDED.company_info,
     company_info_at   = now(),
     updated_at        = now();
+
+-- name: UpsertYCCompany :exec
+-- Apply one yc-oss directory entry, matched by slug. A new slug is inserted as a
+-- reference row (is_reference = true) with no jobs; an existing slug (job-backed or a
+-- prior reference) has its company-info columns plus the curated yc_batch/yc_status
+-- facets refreshed — name, job_count, collections, is_reference, and the job-derived
+-- facet arrays (regions/remote_regions/countries/domains/company_types/company_sizes)
+-- are left untouched. Idempotent: re-running the same entry rewrites the same values.
+INSERT INTO companies (
+    slug, name, industries, year_founded, employee_count, hq_country,
+    tagline, company_info, yc_batch, yc_status, is_reference, company_info_at
+) VALUES (
+    sqlc.arg(slug), sqlc.arg(name), sqlc.arg(industries), sqlc.arg(year_founded),
+    sqlc.arg(employee_count), sqlc.arg(hq_country), sqlc.arg(tagline),
+    sqlc.arg(company_info), sqlc.arg(yc_batch), sqlc.arg(yc_status), true, now()
+)
+ON CONFLICT (slug) DO UPDATE SET
+    industries      = EXCLUDED.industries,
+    year_founded    = EXCLUDED.year_founded,
+    employee_count  = EXCLUDED.employee_count,
+    hq_country      = EXCLUDED.hq_country,
+    tagline         = EXCLUDED.tagline,
+    company_info    = EXCLUDED.company_info,
+    yc_batch        = EXCLUDED.yc_batch,
+    yc_status       = EXCLUDED.yc_status,
+    company_info_at = now(),
+    updated_at      = now();
 
 -- name: RefreshCompanyFacets :execrows
 -- Recompute every company's denormalized state in one set-based pass: the open-job

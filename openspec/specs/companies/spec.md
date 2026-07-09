@@ -58,14 +58,16 @@ by a case-insensitive substring match on the company `name`. An absent or empty
 
 The endpoint SHALL additionally accept repeatable facet query parameters —
 `collections`, `regions`, `countries`, `domains`, `company_type`, `company_size`,
-and `remote_regions` — each filtering against the company's corresponding
-denormalized array by **array overlap**: a company matches a facet when its array
-shares at least one value with the requested values (OR within a facet), and a
-company must match every provided facet (AND across facets). The `remote_regions`
-facet filters against the job-derived `companies.remote_regions` column — the
-regions the company hires remotely in, derived from its open **remote** jobs (a
-subset of the broader `regions` facet). Facet filters SHALL compose with the `q`
-name search. An absent facet parameter SHALL not constrain the list.
+`remote_regions`, `yc_batch`, and `yc_status` — each filtering against the
+company's corresponding denormalized array by **array overlap**: a company matches
+a facet when its array shares at least one value with the requested values (OR
+within a facet), and a company must match every provided facet (AND across facets).
+The `remote_regions` facet filters the job-derived remote-hiring regions (a subset
+of `regions`). The `yc_batch` and `yc_status` facets filter the curated
+`companies.yc_batch` / `companies.yc_status` columns loaded from the YC directory
+(see the `yc-company-enrichment` capability); a non-YC company has both empty and
+matches neither. Facet filters SHALL compose with the `q` name search. An absent
+facet parameter SHALL not constrain the list.
 
 When any filter (`q` or a facet) is applied, the list `meta.total` SHALL report
 the count of companies matching the full filter combination, so pagination over
@@ -117,13 +119,12 @@ the filtered results is correct.
 - **THEN** the response contains only companies whose `remote_regions` array
   contains `eu`, and `meta.total` is the count of such companies
 
-#### Scenario: remote_regions is a remote-scoped subset of regions
+#### Scenario: Filtering by YC batch and status
 
-- **WHEN** a company has an open remote job resolving to `eu` and an open onsite
-  job resolving to `north_america`, so its `regions` is `{eu, north_america}` and
-  its `remote_regions` is `{eu}`
-- **THEN** the company matches `remote_regions=eu` and `regions=north_america`, but
-  does not match `remote_regions=north_america`
+- **WHEN** a client requests `GET /api/v1/companies?yc_status=Active&yc_batch=Winter%202012`
+- **THEN** the response contains only companies whose `yc_status` contains `Active`
+  **and** whose `yc_batch` contains `Winter 2012`, and `meta.total` is the count of
+  such companies
 
 ### Requirement: Company job counts are denormalized and periodically recomputed
 

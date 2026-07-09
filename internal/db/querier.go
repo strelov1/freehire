@@ -659,6 +659,13 @@ type Querier interface {
 	// idempotent upsert: first save inserts, later saves overwrite specializations/skills and
 	// bump updated_at. Specializations and skills are already normalized by the service.
 	UpsertUserProfile(ctx context.Context, arg UpsertUserProfileParams) (UserProfile, error)
+	// Apply one yc-oss directory entry, matched by slug. A new slug is inserted as a
+	// reference row (is_reference = true) with no jobs; an existing slug (job-backed or a
+	// prior reference) has its company-info columns plus the curated yc_batch/yc_status
+	// facets refreshed — name, job_count, collections, is_reference, and the job-derived
+	// facet arrays (regions/remote_regions/countries/domains/company_types/company_sizes)
+	// are left untouched. Idempotent: re-running the same entry rewrites the same values.
+	UpsertYCCompany(ctx context.Context, arg UpsertYCCompanyParams) error
 }
 
 var _ Querier = (*Queries)(nil)

@@ -71,6 +71,8 @@ WHERE ($1::text = '' OR name ILIKE '%' || $1 || '%')
   AND (coalesce(cardinality($6::text[]), 0) = 0 OR company_types && $6::text[])
   AND (coalesce(cardinality($7::text[]), 0) = 0 OR company_sizes && $7::text[])
   AND (coalesce(cardinality($8::text[]), 0) = 0 OR remote_regions && $8::text[])
+  AND (coalesce(cardinality($9::text[]), 0) = 0 OR yc_batch && $9::text[])
+  AND (coalesce(cardinality($10::text[]), 0) = 0 OR yc_status && $10::text[])
 `
 
 type CountCompaniesParams struct {
@@ -82,6 +84,8 @@ type CountCompaniesParams struct {
 	CompanyTypes  []string `json:"company_types"`
 	CompanySizes  []string `json:"company_sizes"`
 	RemoteRegions []string `json:"remote_regions"`
+	YcBatch       []string `json:"yc_batch"`
+	YcStatus      []string `json:"yc_status"`
 }
 
 // Total companies matching the same optional name + facet filters as ListCompanies,
@@ -97,6 +101,8 @@ func (q *Queries) CountCompanies(ctx context.Context, arg CountCompaniesParams) 
 		arg.CompanyTypes,
 		arg.CompanySizes,
 		arg.RemoteRegions,
+		arg.YcBatch,
+		arg.YcStatus,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -122,7 +128,7 @@ func (q *Queries) DeleteOrphanCompanies(ctx context.Context) (int64, error) {
 }
 
 const getCompany = `-- name: GetCompany :one
-SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes, industries, year_founded, employee_count, hq_country, organization_type, tagline, company_info, is_reference, company_info_at, remote_regions
+SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes, industries, year_founded, employee_count, hq_country, organization_type, tagline, company_info, is_reference, company_info_at, remote_regions, yc_batch, yc_status
 FROM companies
 WHERE slug = $1
 `
@@ -155,6 +161,8 @@ func (q *Queries) GetCompany(ctx context.Context, slug string) (Company, error) 
 		&i.IsReference,
 		&i.CompanyInfoAt,
 		&i.RemoteRegions,
+		&i.YcBatch,
+		&i.YcStatus,
 	)
 	return i, err
 }
@@ -170,8 +178,10 @@ WHERE ($1::text = '' OR name ILIKE '%' || $1 || '%')
   AND (coalesce(cardinality($6::text[]), 0) = 0 OR company_types && $6::text[])
   AND (coalesce(cardinality($7::text[]), 0) = 0 OR company_sizes && $7::text[])
   AND (coalesce(cardinality($8::text[]), 0) = 0 OR remote_regions && $8::text[])
+  AND (coalesce(cardinality($9::text[]), 0) = 0 OR yc_batch && $9::text[])
+  AND (coalesce(cardinality($10::text[]), 0) = 0 OR yc_status && $10::text[])
 ORDER BY job_count DESC, name
-LIMIT $10 OFFSET $9
+LIMIT $12 OFFSET $11
 `
 
 type ListCompaniesParams struct {
@@ -183,6 +193,8 @@ type ListCompaniesParams struct {
 	CompanyTypes  []string `json:"company_types"`
 	CompanySizes  []string `json:"company_sizes"`
 	RemoteRegions []string `json:"remote_regions"`
+	YcBatch       []string `json:"yc_batch"`
+	YcStatus      []string `json:"yc_status"`
 	Offset        int32    `json:"offset"`
 	Limit         int32    `json:"limit"`
 }
@@ -218,6 +230,8 @@ func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([
 		arg.CompanyTypes,
 		arg.CompanySizes,
 		arg.RemoteRegions,
+		arg.YcBatch,
+		arg.YcStatus,
 		arg.Offset,
 		arg.Limit,
 	)
@@ -502,6 +516,63 @@ func (q *Queries) UpsertCompanyInfo(ctx context.Context, arg UpsertCompanyInfoPa
 		arg.OrganizationType,
 		arg.Tagline,
 		arg.CompanyInfo,
+	)
+	return err
+}
+
+const upsertYCCompany = `-- name: UpsertYCCompany :exec
+INSERT INTO companies (
+    slug, name, industries, year_founded, employee_count, hq_country,
+    tagline, company_info, yc_batch, yc_status, is_reference, company_info_at
+) VALUES (
+    $1, $2, $3, $4,
+    $5, $6, $7,
+    $8, $9, $10, true, now()
+)
+ON CONFLICT (slug) DO UPDATE SET
+    industries      = EXCLUDED.industries,
+    year_founded    = EXCLUDED.year_founded,
+    employee_count  = EXCLUDED.employee_count,
+    hq_country      = EXCLUDED.hq_country,
+    tagline         = EXCLUDED.tagline,
+    company_info    = EXCLUDED.company_info,
+    yc_batch        = EXCLUDED.yc_batch,
+    yc_status       = EXCLUDED.yc_status,
+    company_info_at = now(),
+    updated_at      = now()
+`
+
+type UpsertYCCompanyParams struct {
+	Slug          string          `json:"slug"`
+	Name          string          `json:"name"`
+	Industries    []string        `json:"industries"`
+	YearFounded   pgtype.Int4     `json:"year_founded"`
+	EmployeeCount pgtype.Int4     `json:"employee_count"`
+	HqCountry     pgtype.Text     `json:"hq_country"`
+	Tagline       pgtype.Text     `json:"tagline"`
+	CompanyInfo   json.RawMessage `json:"company_info"`
+	YcBatch       []string        `json:"yc_batch"`
+	YcStatus      []string        `json:"yc_status"`
+}
+
+// Apply one yc-oss directory entry, matched by slug. A new slug is inserted as a
+// reference row (is_reference = true) with no jobs; an existing slug (job-backed or a
+// prior reference) has its company-info columns plus the curated yc_batch/yc_status
+// facets refreshed — name, job_count, collections, is_reference, and the job-derived
+// facet arrays (regions/remote_regions/countries/domains/company_types/company_sizes)
+// are left untouched. Idempotent: re-running the same entry rewrites the same values.
+func (q *Queries) UpsertYCCompany(ctx context.Context, arg UpsertYCCompanyParams) error {
+	_, err := q.db.Exec(ctx, upsertYCCompany,
+		arg.Slug,
+		arg.Name,
+		arg.Industries,
+		arg.YearFounded,
+		arg.EmployeeCount,
+		arg.HqCountry,
+		arg.Tagline,
+		arg.CompanyInfo,
+		arg.YcBatch,
+		arg.YcStatus,
 	)
 	return err
 }
