@@ -1,4 +1,4 @@
-.PHONY: help run reindex build tidy sqlc gen-contracts up down logs migrate psql
+.PHONY: help run reindex build tidy sqlc gen-contracts gen-cities up down logs migrate psql
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -20,6 +20,9 @@ sqlc: ## Generate code from SQL (via Docker, no local sqlc needed)
 
 gen-contracts: ## Regenerate web/src/lib/generated/contracts.ts from Go contracts
 	go run ./cmd/gen-contracts
+
+gen-cities: ## Regenerate internal/location/cities15000.tsv from the GeoNames dump
+	go run ./cmd/gen-cities
 
 up: ## Start everything in Docker (app + postgres)
 	docker compose up --build -d

@@ -1,28 +1,28 @@
 ## 1. Generator (`cmd/gen-cities`)
 
-- [ ] 1.1 Add `cmd/gen-cities/main.go`: download `cities15000.zip` from GeoNames, parse the fixed-column dump into records (name, asciiname, alternatenames, country code, population).
-- [ ] 1.2 Build the alias set per place (lowercased name + asciiname + native + alternatenames), dedupe; keep the most-populous place for any bare name shared across places.
-- [ ] 1.3 Apply the collision stoplist (curated common words + parser work-mode/open-anywhere markers) to drop unsafe aliases.
-- [ ] 1.4 Emit a sorted, committed TSV (`canonical <TAB> country <TAB> alias|alias|…`) into `internal/location/`; add a `make gen-cities` target and a generated-file header note.
+- [x] 1.1 Add `cmd/gen-cities/main.go`: download `cities15000.zip` from GeoNames, parse the fixed-column dump into records (name, asciiname, alternatenames, country code, population).
+- [x] 1.2 Build the alias set per place (lowercased name + asciiname + native + alternatenames), dedupe; restrict to Latin/Cyrillic scripts; drop short uppercase codes; emit population-sorted so the loader's first-wins picks the most-populous for a shared alias.
+- [x] 1.3 Apply the collision stoplist (work-mode / open-anywhere / macro-region markers, mirroring internal/location) to drop unsafe aliases.
+- [x] 1.4 Emit a sorted, committed TSV (`canonical <TAB> country <TAB> alias|alias|…`) into `internal/location/`; add a `make gen-cities` target and a generated-file header note.
 
 ## 2. Embedded dictionary in `internal/location`
 
-- [ ] 2.1 `go:embed` the TSV and parse it once at init into the city lookup (alias → canonical name + country code).
-- [ ] 2.2 Add a small curated-override map for cities GeoNames lacks / spells differently (e.g. `Cupertino`, ATS shorthands); apply overrides over the generated base (override wins).
-- [ ] 2.3 Remove the now-redundant hand-curated city entries from `nameToCity`/`nameToCountry` that the generated source covers, keeping only genuine overrides.
+- [x] 2.1 `go:embed` the TSV and parse it once at init (streaming scan, CRLF-tolerant) into the city lookup (alias → canonical name + country code).
+- [x] 2.2 Add a small curated-override map (`cityOverrides`) for spellings GeoNames differs on (Köln→Cologne, Zürich→Zurich, …); apply overrides over the generated base (override wins).
+- [x] 2.3 Remove the old hand-curated `nameToCity` map (replaced by the generated dictionary + overrides). Keep `nameToCountry` — it stays the authoritative country source and the agreement-guard input; its city entries are a harmless sub-15k fallback.
 
 ## 3. Parser resolution
 
-- [ ] 3.1 In `location.Parse`, resolve a city token against the merged dictionary so a hit writes BOTH the canonical city name and the country code (→ region) from one lookup.
-- [ ] 3.2 Verify cooperation with existing separator tokenization, work-mode stripping, Russian city-marker stripping, and dash-export handling (embedded-country and `г <city>` forms still resolve).
+- [x] 3.1 In `location.Parse`, resolve a city token against the merged dictionary and emit the canonical city NAME only — country/region stay the curated dictionaries' job (never guessed from an ambiguous city). When a curated token fixed the country, emit the city name only on per-token country agreement (order-independent).
+- [x] 3.2 Verify cooperation with existing separator tokenization, work-mode stripping, Russian city-marker stripping, and dash-export handling (embedded-country and `г <city>` forms still resolve).
 
 ## 4. Tests
 
-- [ ] 4.1 Table-driven `location` tests: `Florianópolis` → city `Florianópolis` + country `br` + region `latam`; `Florianópolis, Brazil` and `г Москва` forms; an unresolved place emits nothing.
-- [ ] 4.2 Stoplist tests: a stoplisted common word / work-mode word resolves no city.
-- [ ] 4.3 Override tests: a curated alias GeoNames lacks (`Cupertino`) still resolves.
+- [x] 4.1 Table-driven `location` tests: `Florianópolis` → city + br + latam (curated country); `Recife` (long-tail) → city only, no guessed country; `Recife, Brazil` → br; `USA` → us with no stray city; unresolved place emits nothing.
+- [x] 4.2 Generator tests (`cmd/gen-cities`): normalize/keepAlias/buildAliases (script + code + stoplist filtering); loader first-wins + override precedence.
+- [x] 4.3 Update existing `location` expectations for the now-broader city facet; confirm `clinch` slug splitting is unchanged (net-zero diff — the dictionary adds no geography clinch reads).
 
 ## 5. Rollout
 
-- [ ] 5.1 `go build ./... && go vet ./... && go test ./...` green; regenerate contracts if the location surface exported to the web changed (`make gen-contracts`).
-- [ ] 5.2 Document the re-derive + reindex procedure for existing jobs in the change (backfill-derive → reindex), consistent with the dictionary-change convention.
+- [x] 5.1 `go build ./... && go vet ./... && go test ./...` green.
+- [x] 5.2 Document the re-derive + reindex procedure for existing jobs (backfill-derive → reindex), consistent with the dictionary-change convention.

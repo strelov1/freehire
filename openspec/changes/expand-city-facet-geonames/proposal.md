@@ -17,12 +17,17 @@ consistent without leaning on the LLM.
   normalizes it, and writes a compact embedded dataset (a `go:embed`-ed TSV of
   `canonical-name <TAB> country-code <TAB> alias|alias|…`).
 - `internal/location` loads the embedded dataset once at init and resolves a city
-  token against it. A resolved city SHALL emit **both** its canonical display name
-  to the `cities` facet **and** its ISO country code (and thereby its region) —
-  closing the two-map divergence with a single generated source of truth.
-- Disambiguation and collision safety are part of the generated data: a bare city
-  name resolves to its most-populous GeoNames match; names that collide with
-  common English/other words below a safety bar are excluded (never guess).
+  token against it, emitting the city's canonical display name to the `cities`
+  facet. The generated dictionary supplies the **city name only** — country and
+  region still come from the curated deterministic dictionaries (and the LLM at
+  serve time), so an ambiguous city name never *guesses* a geography (honouring the
+  parser's "never guesses" contract). The old `nameToCity`↔`nameToCountry`
+  divergence is closed by making the generated dictionary the single, broad source
+  of city facet values.
+- Disambiguation and collision safety are part of the generated data: a shared
+  alias resolves to its most-populous GeoNames match (a deterministic display
+  name); names that collide with work-mode / open-anywhere / macro-region markers
+  are excluded (never guess).
 - The hand-curated city entries that GeoNames does not cover (ATS shorthands,
   campus names like `Cupertino`) are retained as explicit overrides layered on the
   generated base.
@@ -37,8 +42,9 @@ consistent without leaning on the LLM.
 
 ### Modified Capabilities
 - `job-geography`: The deterministic location parser resolves cities from the
-  generated dictionary; a resolved city emits both the `cities` facet value and
-  its country/region, replacing the divergent hand-curated city maps.
+  generated dictionary and emits the `cities` facet value; country/region stay the
+  curated dictionaries' job (never guessed from an ambiguous city), replacing the
+  divergent hand-curated `nameToCity` map with a broad generated source.
 
 ## Impact
 

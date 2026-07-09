@@ -120,12 +120,12 @@ func TestParse(t *testing.T) {
 		{
 			name:     "country buried among unknown tokens",
 			location: "Burlington, Massachusetts, United States; Remote",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, WorkMode: "remote"},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Burlington"}, WorkMode: "remote"},
 		},
 		{
 			name:     "Central Asia: Uzbek district, city, country (Uzbek spelling)",
 			location: "Yunusobod, Toshkent, Uzbekistan",
-			want:     Geo{Countries: []string{"uz"}, Regions: []string{"cis"}},
+			want:     Geo{Countries: []string{"uz"}, Regions: []string{"cis"}, Cities: []string{"Tashkent", "Yunusobod"}},
 		},
 		{
 			name:     "Central Asia: remote Kazakhstan",
@@ -140,7 +140,7 @@ func TestParse(t *testing.T) {
 		{
 			name:     "country-only Georgia is the US state, not the country (no false ge)",
 			location: "Atlanta, Georgia, United States",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Atlanta"}},
 		},
 		{
 			name:     "empty location",
@@ -149,7 +149,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name:     "unresolvable token guesses nothing",
-			location: "Atlantis",
+			location: "Zzqxville",
 			want:     Geo{},
 		},
 		{
@@ -181,10 +181,13 @@ func TestParse(t *testing.T) {
 			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}},
 		},
 		{
-			// A hyphenated city whose inner segment is a bare code ("on") never misfires.
+			// A hyphenated city whose inner segment is a bare code ("on", Ontario) never
+			// misfires a phantom country: cityDict resolves the whole name to the real city
+			// as a facet value, but emits no country of its own — so there is no stray "ca"
+			// from the "on" segment, only the city name.
 			name:     "hyphenated city does not misfire",
 			location: "stoke-on-trent",
-			want:     Geo{},
+			want:     Geo{Cities: []string{"Stoke-on-Trent"}},
 		},
 	}
 
@@ -212,17 +215,17 @@ func TestParseNorthAmerica(t *testing.T) {
 		{
 			name:     "US City, ST ZIP",
 			location: "Lake Worth, TX 76135",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Lake Worth Beach"}},
 		},
 		{
 			name:     "US City, ST",
 			location: "Austin, TX",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Austin"}},
 		},
 		{
 			name:     "US state code CA is California, not Canada",
 			location: "San Francisco, CA",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"San Francisco"}},
 		},
 		{
 			name:     "US full state name",
@@ -252,7 +255,7 @@ func TestParseNorthAmerica(t *testing.T) {
 		{
 			name:     "Washington DC resolves to us",
 			location: "Washington, DC",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Washington"}},
 		},
 		{
 			name:     "country Georgia is never misread as the US state",
@@ -298,7 +301,7 @@ func TestParseCyrillic(t *testing.T) {
 		{
 			name:     "multi-word Cyrillic city",
 			location: "Нижний Новгород",
-			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}},
+			want:     Geo{Countries: []string{"ru"}, Regions: []string{"cis"}, Cities: []string{"Nizhniy Novgorod"}},
 		},
 		{
 			name:     "country token Россия resolves even past an unknown city",
@@ -343,7 +346,7 @@ func TestParseCyrillic(t *testing.T) {
 		{
 			name:     "city starting with г is not mistaken for the marker",
 			location: "Грозный",
-			want:     Geo{},
+			want:     Geo{Cities: []string{"Grozny"}},
 		},
 	}
 
@@ -390,14 +393,14 @@ func TestParseExpandedCoverage(t *testing.T) {
 		want     Geo
 	}{
 		// Trailing bare ISO 3166-1 alpha-2 code ("City, Region, code").
-		{"Shanghai, Shanghai, cn", Geo{Countries: []string{"cn"}, Regions: []string{"apac"}}},
-		{"Riyadh, sa", Geo{Countries: []string{"sa"}, Regions: []string{"mena"}}},
-		{"Lisboa, Lisboa, pt", Geo{Countries: []string{"pt"}, Regions: []string{"eu"}}},
-		{"São Paulo, SP, br", Geo{Countries: []string{"br"}, Regions: []string{"latam"}}},
+		{"Shanghai, Shanghai, cn", Geo{Countries: []string{"cn"}, Regions: []string{"apac"}, Cities: []string{"Shanghai"}}},
+		{"Riyadh, sa", Geo{Countries: []string{"sa"}, Regions: []string{"mena"}, Cities: []string{"Riyadh"}}},
+		{"Lisboa, Lisboa, pt", Geo{Countries: []string{"pt"}, Regions: []string{"eu"}, Cities: []string{"Lisbon"}}},
+		{"São Paulo, SP, br", Geo{Countries: []string{"br"}, Regions: []string{"latam"}, Cities: []string{"São Paulo"}}},
 		// Beacon cities.
-		{"San Francisco", Geo{Countries: []string{"us"}, Regions: []string{"north_america"}}},
-		{"Athens, Attica, Greece", Geo{Countries: []string{"gr"}, Regions: []string{"eu"}}},
-		{"Seoul, South Korea", Geo{Countries: []string{"kr"}, Regions: []string{"apac"}}},
+		{"San Francisco", Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"San Francisco"}}},
+		{"Athens, Attica, Greece", Geo{Countries: []string{"gr"}, Regions: []string{"eu"}, Cities: []string{"Athens"}}},
+		{"Seoul, South Korea", Geo{Countries: []string{"kr"}, Regions: []string{"apac"}, Cities: []string{"Seoul"}}},
 		// Country names: English + native + ES/PT/DE.
 		{"China", Geo{Countries: []string{"cn"}, Regions: []string{"apac"}}},
 		{"Brasil", Geo{Countries: []string{"br"}, Regions: []string{"latam"}}},
@@ -415,5 +418,69 @@ func TestParseExpandedCoverage(t *testing.T) {
 		if !reflect.DeepEqual(got, tt.want) {
 			t.Errorf("Parse(%q) = %+v, want %+v", tt.location, got, tt.want)
 		}
+	}
+}
+
+// TestParseCityFacetExpansion covers the GeoNames-backed city dictionary: a resolved
+// city emits both its canonical facet value and its country/region, a genuinely
+// long-tail city works, GeoNames alternate-name noise is rejected, stoplisted markers
+// never become cities, and a curated override spelling wins.
+func TestParseCityFacetExpansion(t *testing.T) {
+	tests := []struct {
+		name     string
+		location string
+		want     Geo
+	}{
+		{
+			// The motivating case: a city that used to resolve a country but no city.
+			name:     "curated city emits facet + country + region",
+			location: "Florianópolis",
+			want:     Geo{Countries: []string{"br"}, Regions: []string{"latam"}, Cities: []string{"Florianópolis"}},
+		},
+		{
+			name:     "city with embedded country still resolves the facet",
+			location: "Florianópolis, Brazil",
+			want:     Geo{Countries: []string{"br"}, Regions: []string{"latam"}, Cities: []string{"Florianópolis"}},
+		},
+		{
+			// A long-tail city absent from the hand-curated maps — its facet name is now
+			// covered, but the parser emits no country/region of its own (never guessed).
+			name:     "long-tail city emits the facet name without guessing a country",
+			location: "Recife",
+			want:     Geo{Cities: []string{"Recife"}},
+		},
+		{
+			// With an explicit country token the geography resolves deterministically too.
+			name:     "long-tail city with a country token resolves geography",
+			location: "Recife, Brazil",
+			want:     Geo{Countries: []string{"br"}, Regions: []string{"latam"}, Cities: []string{"Recife"}},
+		},
+		{
+			// "usa" appears among a Japanese city's GeoNames alternate names; the
+			// country-agreement guard must reject that city while keeping the country.
+			name:     "GeoNames alternate-name noise is rejected",
+			location: "USA",
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}},
+		},
+		{
+			// A stoplisted open-anywhere marker is never a city; it stays a region signal.
+			name:     "stoplisted marker never becomes a city",
+			location: "Worldwide",
+			want:     Geo{Regions: []string{"global"}, WorkMode: "remote"},
+		},
+		{
+			// The curated override pins the English facet spelling over GeoNames "Köln".
+			name:     "curated override spelling wins",
+			location: "Köln",
+			want:     Geo{Countries: []string{"de"}, Regions: []string{"eu"}, Cities: []string{"Cologne"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Parse(tt.location)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Parse(%q) = %+v, want %+v", tt.location, got, tt.want)
+			}
+		})
 	}
 }

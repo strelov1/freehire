@@ -52,6 +52,11 @@ func Parse(location string) Geo {
 	countrySet := map[string]struct{}{}
 	regionSet := map[string]struct{}{}
 	citySet := map[string]struct{}{}
+	// Reused per-token scratch sets: a token's curated geography is resolved here first
+	// so the city-name agreement check sees only THIS token's country (order-independent),
+	// then merged into the result.
+	tokCountry := map[string]struct{}{}
+	tokRegion := map[string]struct{}{}
 	for _, tok := range strings.Split(s, ",") {
 		tok = strings.TrimSpace(tok)
 		if tok == "" {
@@ -66,14 +71,37 @@ func Parse(location string) Geo {
 		if tok == "" {
 			continue
 		}
-		// Beacon-city facet: a recognized city alias emits its canonical display name
-		// (independent of the country/region resolution below, which also fires for a
-		// city via nameToCountry). Unknown cities fall through — the served city facet
-		// backfills them from the LLM at serve time (jobview), never from a guess here.
-		if c, ok := nameToCity[tok]; ok {
-			citySet[c] = struct{}{}
+		// Curated geography first, into the scratch sets (authoritative for country/region).
+		clear(tokCountry)
+		clear(tokRegion)
+		resolved := resolveGeoToken(tok, tokCountry, tokRegion)
+		// City facet from the generated dictionary (cmd/gen-cities). cityDict supplies the
+		// canonical display NAME only — never a country/region — so an ambiguous city name
+		// ("Birmingham") can never *guess* a geography here; the country/region stay the
+		// curated dictionaries' job (and the LLM's, at serve time). This keeps the parser's
+		// "never guesses" contract while still populating the cities facet broadly.
+		if ce, ok := cityDict[tok]; ok {
+			if resolved {
+				// The token is a curated place: emit the city name only when cityDict agrees
+				// on its country, so a country/region token ("usa") never emits the unrelated
+				// city buried in its GeoNames alternate names ("Yokkaichi").
+				if _, agree := tokCountry[ce.Country]; agree {
+					citySet[ce.Name] = struct{}{}
+				}
+			} else {
+				// A long-tail city the curated maps do not place ("Recife", "Joinville"):
+				// emit its name for the facet; its country/region are left unresolved.
+				citySet[ce.Name] = struct{}{}
+				resolved = true
+			}
 		}
-		if resolveGeoToken(tok, countrySet, regionSet) {
+		for c := range tokCountry {
+			countrySet[c] = struct{}{}
+		}
+		for r := range tokRegion {
+			regionSet[r] = struct{}{}
+		}
+		if resolved {
 			continue
 		}
 		// Dash-delimited exports carry the geography either first ("United

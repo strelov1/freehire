@@ -51,30 +51,40 @@ aliases, (b) for a bare name shared by multiple places keeps only the
 most-populous, (c) drops aliases in the collision stoplist, and (d) writes the TSV
 sorted for a stable diff. Committed output; `make gen-cities` re-runs it.
 
-**4. One resolution path.** `location.Parse` resolves a city token against the
-merged dictionary (generated base + curated overrides). A hit writes the canonical
-name into the city set AND the country code into the country/region sets — the two
-former maps collapse into one lookup. The curated overrides (`nameToCity` entries
-GeoNames lacks: `Cupertino`, ATS shorthands) are a small literal map applied over
-the generated base at init; an override wins on key collision.
+**4. City name only — never a guessed country (the key correctness decision).**
+`location.Parse` resolves a city token against the merged dictionary (generated base
++ curated overrides) and emits the city's canonical display name to the `cities`
+facet. It does **not** take a country/region from the dictionary: country/region
+stay the curated deterministic dictionaries' job (and the LLM's, at serve time). This
+honours the parser's "never guesses" contract — an ambiguous bare city (`Birmingham`,
+`Valencia`, `Burlington`) can never mis-file a job under the wrong country via a
+most-populous pick. When a curated token already fixed the country, the city name is
+emitted only if the dictionary's country agrees (checked against that token's own
+resolution, so it is order-independent), so a country/region token (`USA`) never
+emits an unrelated city buried in its GeoNames alternate names (`Yokkaichi`). A
+consequence: `clinch`'s slug splitter, which asks `location.Parse` whether a fragment
+resolves *geography*, is unaffected — the dictionary adds no country/region, so it
+needs no change. The old `nameToCity` map is replaced by the generated dictionary; a
+small `cityOverrides` map pins the handful of spellings GeoNames differs on
+(`Köln`→`Cologne`, `Zürich`→`Zurich`), applied over the base (override wins).
 
-**5. Collision safety.** The stoplist = a small curated list of common
-English/other words that are also GeoNames place names (`Of`, `As`, `Mobile`,
-`Reading`, `Remote`, …) plus the parser's existing work-mode and open-anywhere
-markers, so a city never misfires from an ordinary token or a work-mode word.
+**5. Collision safety.** The stoplist excludes the parser's work-mode, open-anywhere,
+and macro-region/continent markers, so a token like `Remote` or `Europe` never
+becomes a city. Because the dictionary contributes no country, an ordinary word that
+is also a small city can at worst add a stray *city-facet* value on a location field
+that literally contains it — never a wrong country/region.
 
 ## Risks / Trade-offs
 
-- **[Ambiguous bare names still pick one country]** → Most-populous wins; this is
-  the same bias the current `nameToCountry` uses (it lists the well-known city).
-  A location that means a smaller same-named town is mis-countried — acceptable,
-  and no worse than today.
-- **[Common-word collisions inflate false cities]** → The stoplist + the ≥15k
-  threshold + exact (not fuzzy) matching keep this small; the stoplist is curated
-  from an actual scan of `cities15000` names against a common-word list.
-- **[Embedded dataset size]** → A ~25k-row TSV with aliases is on the order of a
-  few hundred KB, compiled into the binary. Acceptable; far smaller than a Go map
-  literal of the same data.
+- **[A bare long-tail city yields no country/region]** → By design (never guess): a
+  bare `Recife` emits the city facet but no country until an explicit country token
+  or the LLM serve-time fallback fills it. Most ATS location fields carry a country/
+  subdivision token, and the LLM `enrichment` geo fallback already covers the rest.
+- **[Embedded dataset size]** → A ~34k-row TSV with Latin/Cyrillic aliases is ~3.3 MB,
+  compiled into every binary that imports `internal/location`. Accepted: it is data
+  (not code), far smaller than a Go map literal, and the idiomatic `go:embed` choice;
+  workers that never call `Parse` still carry it, which is a deliberate simplicity
+  trade over a lazy loader.
 - **[GeoNames licensing]** → CC-BY 4.0. Attribution belongs in the generator
   header/repo, not shipped per-row.
 

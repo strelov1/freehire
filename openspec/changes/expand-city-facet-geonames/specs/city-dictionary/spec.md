@@ -23,18 +23,21 @@ build succeeds without invoking it.
 - **WHEN** the location parser resolves a city at runtime
 - **THEN** it reads only the embedded dataset and makes no network request
 
-### Requirement: Ambiguous city names resolve to the most-populous match
+### Requirement: A city alias resolves to its most-populous place
 
-A bare city name shared by multiple GeoNames places SHALL resolve to the single
-most-populous place, so that a location string carrying only a city name yields
-one deterministic country and canonical display name rather than a guess among
-equals.
+A city alias shared by multiple GeoNames places SHALL resolve to the single
+most-populous place, giving one deterministic canonical display name for the
+`cities` facet rather than a pick among equals. The entry's country code is used
+by the parser only to reject an unrelated city on a country/region token (the
+agreement check); the dictionary never contributes a country to the parser's
+output, so a most-populous pick can never mis-file an ambiguous bare city under
+the wrong country.
 
-#### Scenario: A shared name resolves to the largest city
+#### Scenario: A shared alias resolves to the largest city's display name
 
-- **WHEN** a name occurs for several GeoNames places of differing population
+- **WHEN** an alias occurs for several GeoNames places of differing population
 - **THEN** the generated dictionary keeps only the entry for the most-populous
-  place under that bare name
+  place under that alias
 
 ### Requirement: City names colliding with common words are excluded
 
