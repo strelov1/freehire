@@ -205,8 +205,8 @@ type ListCompaniesRow struct {
 // name). Each facet param is a text[] filtered by array overlap (&&): an empty
 // array short-circuits to no constraint, non-empty values are OR-ed within the
 // facet, and the facets AND together (and with the name search). `remote_regions`
-// is the curated backfilled facet (see SetCompanyRemoteRegions), independent of the
-// job-derived `regions`. CountCompanies MUST keep an identical WHERE so the filtered
+// is the job-derived facet scoped to remote jobs (see RefreshCompanyFacets), a
+// subset of `regions`. CountCompanies MUST keep an identical WHERE so the filtered
 // total matches the page.
 func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([]ListCompaniesRow, error) {
 	rows, err := q.db.Query(ctx, listCompanies,
@@ -323,7 +323,7 @@ func (q *Queries) ListCompanySitemap(ctx context.Context, arg ListCompanySitemap
 
 const refreshCompanyFacets = `-- name: RefreshCompanyFacets :execrows
 WITH oj AS (
-    SELECT company_slug, regions, countries, enrichment
+    SELECT company_slug, regions, countries, enrichment, work_mode
     FROM jobs
     WHERE closed_at IS NULL AND company_slug <> ''
 ),
@@ -333,6 +333,12 @@ counts AS (
 reg AS (
     SELECT company_slug, array_agg(DISTINCT r ORDER BY r) AS arr
     FROM oj CROSS JOIN LATERAL unnest(oj.regions) AS r
+    GROUP BY company_slug
+),
+remote_reg AS (
+    SELECT company_slug, array_agg(DISTINCT r ORDER BY r) AS arr
+    FROM oj CROSS JOIN LATERAL unnest(oj.regions) AS r
+    WHERE oj.work_mode = 'remote'
     GROUP BY company_slug
 ),
 cty AS (
@@ -362,39 +368,43 @@ csize AS (
     GROUP BY company_slug
 )
 UPDATE companies c
-SET job_count     = COALESCE(counts.cnt, 0),
-    regions       = COALESCE(reg.arr, '{}'),
-    countries     = COALESCE(cty.arr, '{}'),
-    domains       = COALESCE(dom.arr, '{}'),
-    company_types = COALESCE(ctype.arr, '{}'),
-    company_sizes = COALESCE(csize.arr, '{}')
+SET job_count      = COALESCE(counts.cnt, 0),
+    regions        = COALESCE(reg.arr, '{}'),
+    remote_regions = COALESCE(remote_reg.arr, '{}'),
+    countries      = COALESCE(cty.arr, '{}'),
+    domains        = COALESCE(dom.arr, '{}'),
+    company_types  = COALESCE(ctype.arr, '{}'),
+    company_sizes  = COALESCE(csize.arr, '{}')
 FROM companies c2
-LEFT JOIN counts ON counts.company_slug = c2.slug
-LEFT JOIN reg    ON reg.company_slug    = c2.slug
-LEFT JOIN cty    ON cty.company_slug    = c2.slug
-LEFT JOIN dom    ON dom.company_slug    = c2.slug
-LEFT JOIN ctype  ON ctype.company_slug  = c2.slug
-LEFT JOIN csize  ON csize.company_slug  = c2.slug
+LEFT JOIN counts      ON counts.company_slug     = c2.slug
+LEFT JOIN reg         ON reg.company_slug        = c2.slug
+LEFT JOIN remote_reg  ON remote_reg.company_slug = c2.slug
+LEFT JOIN cty         ON cty.company_slug        = c2.slug
+LEFT JOIN dom         ON dom.company_slug        = c2.slug
+LEFT JOIN ctype       ON ctype.company_slug      = c2.slug
+LEFT JOIN csize       ON csize.company_slug      = c2.slug
 WHERE c.slug = c2.slug
-  AND (c.job_count     IS DISTINCT FROM COALESCE(counts.cnt, 0)
-    OR c.regions       IS DISTINCT FROM COALESCE(reg.arr, '{}')
-    OR c.countries     IS DISTINCT FROM COALESCE(cty.arr, '{}')
-    OR c.domains       IS DISTINCT FROM COALESCE(dom.arr, '{}')
-    OR c.company_types IS DISTINCT FROM COALESCE(ctype.arr, '{}')
-    OR c.company_sizes IS DISTINCT FROM COALESCE(csize.arr, '{}'))
+  AND (c.job_count      IS DISTINCT FROM COALESCE(counts.cnt, 0)
+    OR c.regions        IS DISTINCT FROM COALESCE(reg.arr, '{}')
+    OR c.remote_regions IS DISTINCT FROM COALESCE(remote_reg.arr, '{}')
+    OR c.countries      IS DISTINCT FROM COALESCE(cty.arr, '{}')
+    OR c.domains        IS DISTINCT FROM COALESCE(dom.arr, '{}')
+    OR c.company_types  IS DISTINCT FROM COALESCE(ctype.arr, '{}')
+    OR c.company_sizes  IS DISTINCT FROM COALESCE(csize.arr, '{}'))
 `
 
 // Recompute every company's denormalized state in one set-based pass: the open-job
 // count plus the facet arrays derived from those open jobs — regions/countries from
-// the jobs geography columns, and domains/company_types/company_sizes from the
+// the jobs geography columns, remote_regions from those same regions but scoped to
+// remote jobs (work_mode='remote'), and domains/company_types/company_sizes from the
 // jobs.enrichment JSONB. Each array is the distinct union across the company's open
 // jobs (closed_at IS NULL), aggregated with a stable ORDER BY so the guard below
-// compares deterministically. A company with no open jobs (or no enriched jobs) is
-// zeroed/emptied via COALESCE. The per-column `IS DISTINCT FROM` guard skips rows
-// already current, so re-running rewrites nothing and the affected-rows count reports
-// real churn. This is cmd/recount-companies' whole job; run periodically (eventual
-// consistency). The facet aggregates are each their own non-correlated GROUP BY so
-// the row-multiplying unnest of one array never distorts another's count.
+// compares deterministically. A company with no open jobs (or no remote/enriched
+// jobs) is zeroed/emptied via COALESCE. The per-column `IS DISTINCT FROM` guard skips
+// rows already current, so re-running rewrites nothing and the affected-rows count
+// reports real churn. This is cmd/recount-companies' whole job; run periodically
+// (eventual consistency). The facet aggregates are each their own non-correlated
+// GROUP BY so the row-multiplying unnest of one array never distorts another's count.
 func (q *Queries) RefreshCompanyFacets(ctx context.Context) (int64, error) {
 	result, err := q.db.Exec(ctx, refreshCompanyFacets)
 	if err != nil {
@@ -421,36 +431,6 @@ type SetCompanyCollectionsParams struct {
 func (q *Queries) SetCompanyCollections(ctx context.Context, arg SetCompanyCollectionsParams) error {
 	_, err := q.db.Exec(ctx, setCompanyCollections, arg.Slug, arg.Collections)
 	return err
-}
-
-const setCompanyRemoteRegions = `-- name: SetCompanyRemoteRegions :execrows
-UPDATE companies
-SET remote_regions = $1::text[],
-    company_info   = company_info || jsonb_build_object('remote_regions_raw', $2::text),
-    updated_at     = now()
-WHERE slug = $3
-`
-
-type SetCompanyRemoteRegionsParams struct {
-	RemoteRegions    []string `json:"remote_regions"`
-	RemoteRegionsRaw string   `json:"remote_regions_raw"`
-	Slug             string   `json:"slug"`
-}
-
-// Apply one remote-hiring-regions record to an EXISTING company, matched by slug.
-// Sets the curated remote_regions facet and records the raw source string under
-// company_info.remote_regions_raw for mapping audit. It updates existing companies
-// only — an unmatched slug affects zero rows and inserts nothing (no reference row) —
-// and never touches name, job_count, collections, is_reference, or the job-derived
-// facet arrays (regions/countries/domains/company_types/company_sizes). Idempotent:
-// re-running the same record rewrites the same values. cmd/backfill-remote-regions
-// reads the affected-rows count to tally matched vs unmatched.
-func (q *Queries) SetCompanyRemoteRegions(ctx context.Context, arg SetCompanyRemoteRegionsParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setCompanyRemoteRegions, arg.RemoteRegions, arg.RemoteRegionsRaw, arg.Slug)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
 }
 
 const syncCompaniesFromJobs = `-- name: SyncCompaniesFromJobs :exec

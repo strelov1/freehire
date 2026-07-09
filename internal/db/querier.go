@@ -306,8 +306,8 @@ type Querier interface {
 	// name). Each facet param is a text[] filtered by array overlap (&&): an empty
 	// array short-circuits to no constraint, non-empty values are OR-ed within the
 	// facet, and the facets AND together (and with the name search). `remote_regions`
-	// is the curated backfilled facet (see SetCompanyRemoteRegions), independent of the
-	// job-derived `regions`. CountCompanies MUST keep an identical WHERE so the filtered
+	// is the job-derived facet scoped to remote jobs (see RefreshCompanyFacets), a
+	// subset of `regions`. CountCompanies MUST keep an identical WHERE so the filtered
 	// total matches the page.
 	ListCompanies(ctx context.Context, arg ListCompaniesParams) ([]ListCompaniesRow, error)
 	// All companies with their current collection membership. cmd/import-collections
@@ -473,15 +473,16 @@ type Querier interface {
 	RecordTelegramPostFailure(ctx context.Context, arg RecordTelegramPostFailureParams) (RecordTelegramPostFailureRow, error)
 	// Recompute every company's denormalized state in one set-based pass: the open-job
 	// count plus the facet arrays derived from those open jobs — regions/countries from
-	// the jobs geography columns, and domains/company_types/company_sizes from the
+	// the jobs geography columns, remote_regions from those same regions but scoped to
+	// remote jobs (work_mode='remote'), and domains/company_types/company_sizes from the
 	// jobs.enrichment JSONB. Each array is the distinct union across the company's open
 	// jobs (closed_at IS NULL), aggregated with a stable ORDER BY so the guard below
-	// compares deterministically. A company with no open jobs (or no enriched jobs) is
-	// zeroed/emptied via COALESCE. The per-column `IS DISTINCT FROM` guard skips rows
-	// already current, so re-running rewrites nothing and the affected-rows count reports
-	// real churn. This is cmd/recount-companies' whole job; run periodically (eventual
-	// consistency). The facet aggregates are each their own non-correlated GROUP BY so
-	// the row-multiplying unnest of one array never distorts another's count.
+	// compares deterministically. A company with no open jobs (or no remote/enriched
+	// jobs) is zeroed/emptied via COALESCE. The per-column `IS DISTINCT FROM` guard skips
+	// rows already current, so re-running rewrites nothing and the affected-rows count
+	// reports real churn. This is cmd/recount-companies' whole job; run periodically
+	// (eventual consistency). The facet aggregates are each their own non-correlated
+	// GROUP BY so the row-multiplying unnest of one array never distorts another's count.
 	RefreshCompanyFacets(ctx context.Context) (int64, error)
 	// Release the lease on a subscription's claimed jobs without counting an attempt,
 	// so a soft-skipped delivery (e.g. Telegram not yet linked) is retried promptly on
@@ -519,15 +520,6 @@ type Querier interface {
 	// (preserving unmanaged tags) and writes it here; updated_at is bumped for parity
 	// with the other write paths.
 	SetCompanyCollections(ctx context.Context, arg SetCompanyCollectionsParams) error
-	// Apply one remote-hiring-regions record to an EXISTING company, matched by slug.
-	// Sets the curated remote_regions facet and records the raw source string under
-	// company_info.remote_regions_raw for mapping audit. It updates existing companies
-	// only — an unmatched slug affects zero rows and inserts nothing (no reference row) —
-	// and never touches name, job_count, collections, is_reference, or the job-derived
-	// facet arrays (regions/countries/domains/company_types/company_sizes). Idempotent:
-	// re-running the same record rewrites the same values. cmd/backfill-remote-regions
-	// reads the affected-rows count to tally matched vs unmatched.
-	SetCompanyRemoteRegions(ctx context.Context, arg SetCompanyRemoteRegionsParams) (int64, error)
 	// Targeted enrichment write used by the enrichment command: set only the payload
 	// and the provenance stamp, touching no raw source field. Kept separate from
 	// UpsertJob (the ingest full-upsert path) so ingest and enrichment stay decoupled.
