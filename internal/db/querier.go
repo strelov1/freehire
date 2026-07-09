@@ -26,6 +26,19 @@ type Querier interface {
 	// lease predicate reclaims entries whose worker died (stale claimed_at), so no
 	// separate reaper process is needed.
 	ClaimEnrichmentBatch(ctx context.Context, arg ClaimEnrichmentBatchParams) ([]ClaimEnrichmentBatchRow, error)
+	// Claim a batch of live, unleased entries, freshest job first, by stamping claimed_at.
+	// Unlike ClaimEnrichmentBatch this does NOT filter closed jobs out: a closed entry is
+	// the removal signal, so the worker must receive it and branch on `closed`. The jobs
+	// join supplies both the freshness order and the closed flag. Freshness is
+	// COALESCE(posted_at, created_at): jobs without a source post date fall back to ingest
+	// time so they rank by recency instead of starving under NULLS LAST. FOR UPDATE OF o
+	// locks only outbox rows (a bare FOR UPDATE would also lock jobs, making concurrent
+	// claim waves contend); SKIP LOCKED lets concurrent workers take disjoint rows; the
+	// lease predicate reclaims entries whose worker died (stale claimed_at), so no separate
+	// reaper process is needed.
+	// Join jobs off the claimable CTE (not the UPDATE target o, which Postgres forbids in
+	// FROM) so the removal branch gets the job's closed flag without a second query.
+	ClaimSemanticBatch(ctx context.Context, arg ClaimSemanticBatchParams) ([]ClaimSemanticBatchRow, error)
 	// Lease a batch of pending, live matches for active subscriptions by stamping
 	// claimed_at, oldest-claimable first, ordered by subscription so the worker can
 	// group a subscription's matches into one digest. FOR UPDATE OF m locks only match
@@ -45,6 +58,9 @@ type Querier interface {
 	// affected row count: 1 for an owned row (whether or not it was shared — unshare is an
 	// idempotent no-op when already private), 0 when missing or not the caller's (→ 404).
 	ClearSavedSearchPublicSlug(ctx context.Context, arg ClearSavedSearchPublicSlugParams) (int64, error)
+	// Clear a job's embed provenance after its document is removed from jobs_semantic
+	// (closed-job path). Run in the same transaction as DeleteSemanticEntry.
+	ClearSemanticEmbedded(ctx context.Context, id int64) error
 	// Clear the user's résumé pointer (after deleting the object from storage), any
 	// cached ATS review, and the derived CV embedding (no CV → no recommendations).
 	ClearUserResume(ctx context.Context, id int64) error
@@ -139,6 +155,7 @@ type Querier interface {
 	// Returns the affected row count: 0 means it does not exist or is not the caller's
 	// (the handler maps that to 404).
 	DeleteSavedSearch(ctx context.Context, arg DeleteSavedSearchParams) (int64, error)
+	DeleteSemanticEntry(ctx context.Context, id int64) error
 	// Unsubscribe, scoped to its owner. Returns the affected row count: 0 means it
 	// does not exist or is not the caller's (the handler maps that to 404). The match
 	// ledger cascades away with the subscription.
@@ -170,6 +187,19 @@ type Querier interface {
 	// exactly one entry per (job_id, target_version), so running this every command
 	// invocation never duplicates work.
 	EnqueuePendingJobs(ctx context.Context, arg EnqueuePendingJobsParams) (int64, error)
+	// Idempotent backfill for the incremental semantic-embedding queue. Enqueues two
+	// kinds of outstanding work at the target embedder model:
+	//   1. OPEN jobs whose stored vector is missing, content-stale, or model-stale —
+	//      i.e. semantic_embedded_model differs from the target OR semantic_embedded_hash
+	//      differs from the job's current content_hash. Jobs whose derived category is in
+	//      exclude_categories (enrich.NonTechCategories) are skipped so embed budget stays
+	//      on technical roles; category is NOT NULL DEFAULT '', so an empty/unrecognized
+	//      category is never excluded (empty string <> ALL keeps the row).
+	//   2. CLOSED jobs that still carry an embed stamp (were embedded while open) — so the
+	//      worker removes their now-dead document from jobs_semantic and clears the stamp.
+	// ON CONFLICT keeps exactly one entry per (job_id, target_model), so running this every
+	// command invocation never duplicates work.
+	EnqueuePendingSemanticJobs(ctx context.Context, arg EnqueuePendingSemanticJobsParams) (int64, error)
 	// Fast approximate open-job total for the DB-backed /jobs list's meta.total. An
 	// exact count(*) over ~millions of open rows was a per-request full scan; the
 	// planner's estimate (see estimate_open_jobs(), migration 0033) is O(1) and
@@ -403,6 +433,12 @@ type Querier interface {
 	// is left in place — its expiry gates the retry to a later pass and doubles as the
 	// crash reaper, mirroring enrichment_outbox.
 	RecordMatchDeliveryFailure(ctx context.Context, arg RecordMatchDeliveryFailureParams) error
+	// Count a failed attempt: bump attempts, record the error, and dead-letter (set
+	// failed_at) once attempts reach the max. The lease (claimed_at) is intentionally left
+	// in place — its expiry gates the retry to a later run and doubles as the crash reaper,
+	// so a failed entry is never reprocessed within the same run. Mirrors
+	// RecordEnrichmentFailure.
+	RecordSemanticFailure(ctx context.Context, arg RecordSemanticFailureParams) (RecordSemanticFailureRow, error)
 	// Record that a job matched a subscription. The PK (subscription_id, job_id) makes
 	// this idempotent — re-scanning an already-recorded match is a no-op — so the
 	// worker can re-scan recent jobs freely without ever delivering twice. Returns the
@@ -481,6 +517,15 @@ type Querier interface {
 	// Persist the user's derived CV embedding vector plus the identity of the embedder
 	// that produced it (so a model change can mark the vector stale). Never the raw CV text.
 	SetUserResumeEmbedding(ctx context.Context, arg SetUserResumeEmbeddingParams) error
+	// Record that a job's content is embedded under the given model. Run in the same
+	// transaction as DeleteSemanticEntry on the success path, so a crash between the index
+	// write and this stamp is safely retried (idempotent re-embed). hash is the job's
+	// content_hash AS IT WAS EMBEDDED (passed through, nullable): stamping the exact
+	// embedded hash — not the row's current one — keeps the staleness check honest, so a
+	// content change concurrent with the embed re-enqueues on the next run instead of being
+	// silently marked current, and a NULL content_hash stamps NULL (NULL IS DISTINCT FROM
+	// NULL is false, so it does not re-enqueue forever).
+	StampSemanticEmbedded(ctx context.Context, arg StampSemanticEmbeddedParams) error
 	// Rebuild the companies catalogue from jobs. The companies table is derivable
 	// from jobs (slug = company_slug, name = company), so after a slug-builder change
 	// re-keys jobs, this re-keys companies to match. DISTINCT ON collapses a slug's
