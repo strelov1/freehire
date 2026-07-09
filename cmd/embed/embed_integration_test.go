@@ -179,7 +179,7 @@ func TestIntegration_EmbedWorkerDrainsQueue(t *testing.T) {
 
 	runner := embed.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client}}
 	stats, err := runner.Run(ctx, embed.RunOptions{
-		TargetModel: search.CurrentEmbedderModel(), Concurrency: 2, LeaseSeconds: 300, MaxAttempts: 3,
+		TargetModel: search.CurrentEmbedderModel(), BatchSize: 500, LeaseSeconds: 300, MaxAttempts: 3,
 	})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -241,11 +241,11 @@ func preIndexClosed(t *testing.T, ctx context.Context, client *search.Client, po
 	// The job was seeded already-closed; temporarily treat it as open for the pre-index
 	// by loading and indexing its document directly.
 	ix := searchIndexer{client: client}
-	job, err := newDBStore(pool).Job(ctx, id)
-	if err != nil {
-		t.Fatalf("load closed job: %v", err)
+	jobs, err := newDBStore(pool).Jobs(ctx, []int64{id})
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("load closed job: rows=%d err=%v", len(jobs), err)
 	}
-	if err := ix.IndexOpen(ctx, job); err != nil {
+	if err := ix.IndexOpen(ctx, jobs); err != nil {
 		t.Fatalf("pre-index closed job: %v", err)
 	}
 	if _, err := pool.Exec(ctx,

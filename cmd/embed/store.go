@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/db"
@@ -14,7 +13,7 @@ import (
 
 // dbStore adapts the generated queries + pool to embed.Store. It is the only place the
 // runner's domain operations meet the DB layer; each success path (stamp/clear + delete
-// outbox) runs in one transaction here.
+// outbox for a whole batch) runs in one transaction here.
 type dbStore struct {
 	pool *pgxpool.Pool
 	q    *db.Queries
@@ -48,27 +47,29 @@ func (s *dbStore) Claim(ctx context.Context, batch, leaseSeconds int) ([]embed.C
 	return out, nil
 }
 
-func (s *dbStore) Job(ctx context.Context, id int64) (db.Job, error) {
-	return s.q.GetJob(ctx, id)
+func (s *dbStore) Jobs(ctx context.Context, ids []int64) ([]db.Job, error) {
+	return s.q.GetJobsByIDs(ctx, ids)
 }
 
-func (s *dbStore) CompleteOpen(ctx context.Context, entry embed.Claimed, model string, hash pgtype.Text) error {
+func (s *dbStore) CompleteOpen(ctx context.Context, entries []embed.Claimed, model string) error {
+	jobIDs, outboxIDs := splitIDs(entries)
 	return s.tx(ctx, func(qtx *db.Queries) error {
-		if err := qtx.StampSemanticEmbedded(ctx, db.StampSemanticEmbeddedParams{
-			Model: model, Hash: hash, ID: entry.JobID,
+		if err := qtx.StampSemanticEmbeddedBatch(ctx, db.StampSemanticEmbeddedBatchParams{
+			Model: model, Ids: jobIDs,
 		}); err != nil {
 			return fmt.Errorf("stamp: %w", err)
 		}
-		return qtx.DeleteSemanticEntry(ctx, entry.OutboxID)
+		return qtx.DeleteSemanticEntriesBatch(ctx, outboxIDs)
 	})
 }
 
-func (s *dbStore) CompleteClosed(ctx context.Context, entry embed.Claimed) error {
+func (s *dbStore) CompleteClosed(ctx context.Context, entries []embed.Claimed) error {
+	jobIDs, outboxIDs := splitIDs(entries)
 	return s.tx(ctx, func(qtx *db.Queries) error {
-		if err := qtx.ClearSemanticEmbedded(ctx, entry.JobID); err != nil {
+		if err := qtx.ClearSemanticEmbeddedBatch(ctx, jobIDs); err != nil {
 			return fmt.Errorf("clear: %w", err)
 		}
-		return qtx.DeleteSemanticEntry(ctx, entry.OutboxID)
+		return qtx.DeleteSemanticEntriesBatch(ctx, outboxIDs)
 	})
 }
 
@@ -82,6 +83,17 @@ func (s *dbStore) Fail(ctx context.Context, outboxID int64, errMsg string, maxAt
 		return false, err
 	}
 	return row.FailedAt.Valid, nil
+}
+
+// splitIDs pulls the parallel job-id and outbox-id slices a batch completion needs.
+func splitIDs(entries []embed.Claimed) (jobIDs, outboxIDs []int64) {
+	jobIDs = make([]int64, len(entries))
+	outboxIDs = make([]int64, len(entries))
+	for i, e := range entries {
+		jobIDs[i] = e.JobID
+		outboxIDs[i] = e.OutboxID
+	}
+	return jobIDs, outboxIDs
 }
 
 // tx runs fn against a transaction, committing on success and rolling back otherwise.

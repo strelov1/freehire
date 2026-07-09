@@ -7,31 +7,27 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
 )
 
-// fakeStore is an in-memory Store: a queue of claimable entries drained one wave at a
-// time, plus call recorders. Guarded by mu because a wave processes entries concurrently.
+// fakeStore is an in-memory Store. It records batch vs. per-item calls so tests can
+// assert the happy path takes one batch call and a failure falls back to per-item.
 type fakeStore struct {
 	mu sync.Mutex
 
-	pending  []Claimed        // claimed in FIFO order, one wave per Claim call up to batch
-	jobs     map[int64]db.Job // rows returned by Job
-	jobErr   map[int64]error  // load error for a job id (e.g. corrupted row)
-	failWith map[int64]error  // CompleteOpen/CompleteClosed error for a job id
+	pending []Claimed        // claimed FIFO, one wave per Claim up to batch
+	jobs    map[int64]db.Job // rows returned by Jobs
+	jobErr  map[int64]error  // load error for a job id (e.g. corrupted row)
 
-	openDone   []int64             // job ids CompleteOpen'd
-	openStamps map[int64]stampArgs // model+hash stamped per job
-	closedDone []int64             // job ids CompleteClosed'd
-	failCalls  []failCall          // recorded Fail calls
-	attempts   map[int64]int       // outbox id -> attempts so far (dead-letters at maxAttempts)
-}
+	indexErr map[int64]error // CompleteOpen error for a job id (single-item path)
 
-type stampArgs struct {
-	model string
-	hash  pgtype.Text
+	openBatches   [][]int64 // job ids per CompleteOpen call (len>1 = a real batch)
+	closedBatches [][]int64 // job ids per CompleteClosed call
+	openDone      []int64   // all job ids CompleteOpen'd
+	closedDone    []int64   // all job ids CompleteClosed'd
+	failCalls     []failCall
+	attempts      map[int64]int // outbox id -> attempts so far
 }
 
 type failCall struct {
@@ -42,8 +38,8 @@ type failCall struct {
 
 func newFakeStore() *fakeStore {
 	return &fakeStore{
-		jobs: map[int64]db.Job{}, jobErr: map[int64]error{}, failWith: map[int64]error{},
-		openStamps: map[int64]stampArgs{}, attempts: map[int64]int{},
+		jobs: map[int64]db.Job{}, jobErr: map[int64]error{}, indexErr: map[int64]error{},
+		attempts: map[int64]int{},
 	}
 }
 
@@ -63,33 +59,49 @@ func (s *fakeStore) Claim(_ context.Context, batch, _ int) ([]Claimed, error) {
 	return wave, nil
 }
 
-func (s *fakeStore) Job(_ context.Context, id int64) (db.Job, error) {
+func (s *fakeStore) Jobs(_ context.Context, ids []int64) ([]db.Job, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.jobErr[id]; err != nil {
-		return db.Job{}, err
+	// A corrupted row aborts a whole multi-id load (a seq scan hits it); a single-id
+	// load surfaces the row's own error so the runner can isolate it.
+	for _, id := range ids {
+		if err := s.jobErr[id]; err != nil {
+			return nil, err
+		}
 	}
-	return s.jobs[id], nil
+	out := make([]db.Job, 0, len(ids))
+	for _, id := range ids {
+		if j, ok := s.jobs[id]; ok {
+			out = append(out, j)
+		}
+	}
+	return out, nil
 }
 
-func (s *fakeStore) CompleteOpen(_ context.Context, entry Claimed, model string, hash pgtype.Text) error {
+func (s *fakeStore) CompleteOpen(_ context.Context, entries []Claimed, _ string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.failWith[entry.JobID]; err != nil {
-		return err
+	var ids []int64
+	for _, e := range entries {
+		if err := s.indexErr[e.JobID]; err != nil {
+			return err
+		}
+		ids = append(ids, e.JobID)
 	}
-	s.openDone = append(s.openDone, entry.JobID)
-	s.openStamps[entry.JobID] = stampArgs{model, hash}
+	s.openBatches = append(s.openBatches, ids)
+	s.openDone = append(s.openDone, ids...)
 	return nil
 }
 
-func (s *fakeStore) CompleteClosed(_ context.Context, entry Claimed) error {
+func (s *fakeStore) CompleteClosed(_ context.Context, entries []Claimed) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.failWith[entry.JobID]; err != nil {
-		return err
+	var ids []int64
+	for _, e := range entries {
+		ids = append(ids, e.JobID)
 	}
-	s.closedDone = append(s.closedDone, entry.JobID)
+	s.closedBatches = append(s.closedBatches, ids)
+	s.closedDone = append(s.closedDone, ids...)
 	return nil
 }
 
@@ -101,41 +113,50 @@ func (s *fakeStore) Fail(_ context.Context, outboxID int64, msg string, maxAttem
 	return s.attempts[outboxID] >= maxAttempts, nil
 }
 
-// fakeIndexer records which jobs were embedded vs removed, and can fail specific ids.
+// fakeIndexer records IndexOpen/RemoveClosed calls. batchFails makes any multi-job
+// IndexOpen fail (to exercise the per-item fallback); indexErr fails a specific job.
 type fakeIndexer struct {
-	mu        sync.Mutex
-	indexed   []int64
-	removed   []int64
-	indexErr  map[int64]error
-	removeErr map[int64]error
+	mu         sync.Mutex
+	indexCalls [][]int64 // job ids per IndexOpen call
+	removeCall [][]int64 // ids per RemoveClosed call
+	indexed    []int64
+	removed    []int64
+	batchFails bool
+	indexErr   map[int64]error
 }
 
-func newFakeIndexer() *fakeIndexer {
-	return &fakeIndexer{indexErr: map[int64]error{}, removeErr: map[int64]error{}}
-}
+func newFakeIndexer() *fakeIndexer { return &fakeIndexer{indexErr: map[int64]error{}} }
 
-func (ix *fakeIndexer) IndexOpen(_ context.Context, job db.Job) error {
+func (ix *fakeIndexer) IndexOpen(_ context.Context, jobs []db.Job) error {
 	ix.mu.Lock()
 	defer ix.mu.Unlock()
-	if err := ix.indexErr[job.ID]; err != nil {
-		return err
+	ids := make([]int64, len(jobs))
+	for i, j := range jobs {
+		ids[i] = j.ID
 	}
-	ix.indexed = append(ix.indexed, job.ID)
+	ix.indexCalls = append(ix.indexCalls, ids)
+	if ix.batchFails && len(jobs) > 1 {
+		return errors.New("batch embed failed")
+	}
+	for _, j := range jobs {
+		if err := ix.indexErr[j.ID]; err != nil {
+			return err
+		}
+	}
+	ix.indexed = append(ix.indexed, ids...)
 	return nil
 }
 
-func (ix *fakeIndexer) RemoveClosed(_ context.Context, jobID int64) error {
+func (ix *fakeIndexer) RemoveClosed(_ context.Context, ids []int64) error {
 	ix.mu.Lock()
 	defer ix.mu.Unlock()
-	if err := ix.removeErr[jobID]; err != nil {
-		return err
-	}
-	ix.removed = append(ix.removed, jobID)
+	ix.removeCall = append(ix.removeCall, ids)
+	ix.removed = append(ix.removed, ids...)
 	return nil
 }
 
 func opt() RunOptions {
-	return RunOptions{TargetModel: "e5-test", Concurrency: 2, LeaseSeconds: 300, MaxAttempts: 3}
+	return RunOptions{TargetModel: "e5-test", BatchSize: 500, LeaseSeconds: 300, MaxAttempts: 3}
 }
 
 func has(ids []int64, id int64) bool {
@@ -147,86 +168,93 @@ func has(ids []int64, id int64) bool {
 	return false
 }
 
-func TestRunnerBranchesOnClosed(t *testing.T) {
+func TestRunnerBatchesOpenAndClosed(t *testing.T) {
 	store := newFakeStore()
 	ix := newFakeIndexer()
-	// Two open jobs (embed + stamp) and one closed job (remove + clear).
-	store.jobs[1] = db.Job{ID: 1, ContentHash: pgtype.Text{String: "h1", Valid: true}}
-	store.jobs[2] = db.Job{ID: 2} // NULL content_hash → stamp NULL
+	for _, id := range []int64{1, 2, 3} {
+		store.jobs[id] = db.Job{ID: id}
+	}
 	store.pending = []Claimed{
 		{OutboxID: 10, JobID: 1, Closed: false},
 		{OutboxID: 20, JobID: 2, Closed: false},
-		{OutboxID: 30, JobID: 3, Closed: true},
+		{OutboxID: 30, JobID: 3, Closed: false},
+		{OutboxID: 40, JobID: 4, Closed: true},
+		{OutboxID: 50, JobID: 5, Closed: true},
 	}
 
 	stats, err := Runner{Store: store, Indexer: ix}.Run(context.Background(), opt())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if stats.Indexed != 2 || stats.Removed != 1 || stats.Failed != 0 || stats.DeadLettered != 0 {
-		t.Fatalf("stats = %+v, want indexed=2 removed=1 failed=0 dead=0", stats)
+	if stats.Indexed != 3 || stats.Removed != 2 || stats.Failed != 0 {
+		t.Fatalf("stats = %+v, want indexed=3 removed=2 failed=0", stats)
 	}
-	if !has(ix.indexed, 1) || !has(ix.indexed, 2) {
-		t.Errorf("indexed = %v, want jobs 1 and 2 embedded", ix.indexed)
+	// The whole wave of open jobs must be embedded in ONE IndexOpen call and completed
+	// in ONE CompleteOpen call — that is the batching (one Meili task per wave).
+	if len(ix.indexCalls) != 1 || len(ix.indexCalls[0]) != 3 {
+		t.Errorf("IndexOpen calls = %v, want a single 3-job batch", ix.indexCalls)
 	}
-	if !has(ix.removed, 3) {
-		t.Errorf("removed = %v, want job 3 removed", ix.removed)
+	if len(store.openBatches) != 1 || len(store.openBatches[0]) != 3 {
+		t.Errorf("CompleteOpen batches = %v, want a single 3-entry batch", store.openBatches)
 	}
-	if !has(store.openDone, 1) || !has(store.openDone, 2) {
-		t.Errorf("openDone = %v, want 1 and 2", store.openDone)
+	if len(ix.removeCall) != 1 || len(ix.removeCall[0]) != 2 {
+		t.Errorf("RemoveClosed calls = %v, want a single 2-id batch", ix.removeCall)
 	}
-	if !has(store.closedDone, 3) {
-		t.Errorf("closedDone = %v, want 3", store.closedDone)
-	}
-	// The open path must stamp the model and the exact embedded content_hash (NULL stays NULL).
-	if s := store.openStamps[1]; s.model != "e5-test" || !s.hash.Valid || s.hash.String != "h1" {
-		t.Errorf("job 1 stamp = %+v, want model e5-test / hash h1", s)
-	}
-	if s := store.openStamps[2]; s.model != "e5-test" || s.hash.Valid {
-		t.Errorf("job 2 stamp = %+v, want model e5-test / NULL hash", s)
+	if len(store.closedBatches) != 1 || len(store.closedBatches[0]) != 2 {
+		t.Errorf("CompleteClosed batches = %v, want a single 2-entry batch", store.closedBatches)
 	}
 }
 
-func TestRunnerFailureDoesNotAbort(t *testing.T) {
+func TestRunnerFallsBackToPerItemOnBatchFailure(t *testing.T) {
 	store := newFakeStore()
 	ix := newFakeIndexer()
+	ix.batchFails = true                           // the multi-job batch embed fails
+	ix.indexErr[2] = errors.New("job 2 is poison") // and job 2 fails individually too
+	for _, id := range []int64{1, 2, 3} {
+		store.jobs[id] = db.Job{ID: id}
+	}
+	store.pending = []Claimed{
+		{OutboxID: 10, JobID: 1, Closed: false},
+		{OutboxID: 20, JobID: 2, Closed: false},
+		{OutboxID: 30, JobID: 3, Closed: false},
+	}
+
+	stats, err := Runner{Store: store, Indexer: ix}.Run(context.Background(), opt())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// Batch failed → per-item retry: jobs 1 and 3 succeed, job 2 fails in isolation.
+	if stats.Indexed != 2 || stats.Failed != 1 {
+		t.Fatalf("stats = %+v, want indexed=2 failed=1 (only the poison job fails)", stats)
+	}
+	if !has(ix.indexed, 1) || !has(ix.indexed, 3) {
+		t.Errorf("indexed = %v, want jobs 1 and 3 to survive the poison job", ix.indexed)
+	}
+	if len(store.failCalls) != 1 || store.failCalls[0].outboxID != 20 {
+		t.Errorf("failCalls = %+v, want one for outbox 20 (job 2)", store.failCalls)
+	}
+}
+
+func TestRunnerCorruptedRowDeadLettersInFallback(t *testing.T) {
+	store := newFakeStore()
+	ix := newFakeIndexer()
+	// A corrupted row aborts the batch load; the per-item fallback isolates it and
+	// dead-letters it immediately (maxAttempts=1), while the rest embed.
+	store.jobErr[2] = &pgconn.PgError{Code: "XX001"}
 	store.jobs[1] = db.Job{ID: 1}
-	store.jobs[2] = db.Job{ID: 2}
-	ix.indexErr[1] = errors.New("embed backend down") // job 1's embed fails
+	store.jobs[3] = db.Job{ID: 3}
 	store.pending = []Claimed{
 		{OutboxID: 10, JobID: 1, Closed: false},
 		{OutboxID: 20, JobID: 2, Closed: false},
+		{OutboxID: 30, JobID: 3, Closed: false},
 	}
 
 	stats, err := Runner{Store: store, Indexer: ix}.Run(context.Background(), opt())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if stats.Indexed != 1 || stats.Failed != 1 {
-		t.Fatalf("stats = %+v, want indexed=1 failed=1 (job 2 still done despite job 1 failing)", stats)
-	}
-	if !has(ix.indexed, 2) {
-		t.Errorf("job 2 not indexed — a sibling failure aborted the wave")
-	}
-	if len(store.failCalls) != 1 || store.failCalls[0].outboxID != 10 || store.failCalls[0].maxAttempts != opt().MaxAttempts {
-		t.Errorf("failCalls = %+v, want one for outbox 10 at maxAttempts=%d", store.failCalls, opt().MaxAttempts)
-	}
-}
-
-func TestRunnerCorruptedRowDeadLettersImmediately(t *testing.T) {
-	store := newFakeStore()
-	ix := newFakeIndexer()
-	// A corrupted row can never load — it must dead-letter on the first attempt
-	// (maxAttempts=1), not burn the whole attempt budget across cron runs.
-	store.jobErr[1] = &pgconn.PgError{Code: "XX001"} // data_corrupted
-	store.pending = []Claimed{{OutboxID: 10, JobID: 1, Closed: false}}
-
-	stats, err := Runner{Store: store, Indexer: ix}.Run(context.Background(), opt())
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if stats.DeadLettered != 1 || stats.Indexed != 0 {
-		t.Fatalf("stats = %+v, want dead=1 indexed=0", stats)
+	if stats.Indexed != 2 || stats.DeadLettered != 1 {
+		t.Fatalf("stats = %+v, want indexed=2 dead=1", stats)
 	}
 	if len(store.failCalls) != 1 || store.failCalls[0].maxAttempts != 1 {
 		t.Errorf("failCalls = %+v, want one with maxAttempts=1 (immediate dead-letter)", store.failCalls)

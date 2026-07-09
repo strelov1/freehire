@@ -1,19 +1,18 @@
 // Package embed drives incremental semantic embedding: enqueue open jobs whose vector
 // is missing/stale (and closed jobs whose vector must be removed), then drain the
-// semantic_outbox queue wave by wave, embedding+upserting open jobs and removing closed
-// ones in place. It mirrors internal/enrich: the Runner is independent of the DB and
-// search layers (Store + Indexer ports), so the branch/fail logic is unit-tested with
-// fakes; cmd/embed wires the real adapters.
+// semantic_outbox queue wave by wave. Each wave is embedded and upserted as ONE batch
+// (one Meilisearch task per wave, not per job) so a bulk backfill isn't bottlenecked on
+// Meili's serial task queue; on a batch failure it falls back to per-item processing so
+// a single poison/corrupted row can't sink the whole batch. It mirrors internal/enrich:
+// the Runner is independent of the DB and search layers (Store + Indexer ports), so the
+// batch/fallback logic is unit-tested with fakes; cmd/embed wires the real adapters.
 package embed
 
 import (
 	"context"
 	"fmt"
 	"log"
-	"sync"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/worker"
@@ -35,24 +34,26 @@ type Store interface {
 	Enqueue(ctx context.Context, targetModel string) (int64, error)
 	// Claim leases up to batch live, unleased entries (closed jobs included).
 	Claim(ctx context.Context, batch, leaseSeconds int) ([]Claimed, error)
-	// Job returns the persisted row a document is built from.
-	Job(ctx context.Context, id int64) (db.Job, error)
-	// CompleteOpen stamps the job's embed provenance (model + the exact embedded
-	// content hash) and deletes the outbox entry, atomically.
-	CompleteOpen(ctx context.Context, entry Claimed, model string, hash pgtype.Text) error
-	// CompleteClosed clears the job's embed provenance and deletes the outbox entry,
-	// atomically (its document was just removed from the index).
-	CompleteClosed(ctx context.Context, entry Claimed) error
-	// Fail records a failed attempt; it returns whether the entry was dead-lettered.
+	// Jobs returns the persisted rows the documents are built from. A corrupted row
+	// aborts the whole load, so the runner retries such a batch per item to isolate it.
+	Jobs(ctx context.Context, ids []int64) ([]db.Job, error)
+	// CompleteOpen stamps each entry's job embed provenance (model + its current
+	// content_hash) and deletes the outbox entries, atomically.
+	CompleteOpen(ctx context.Context, entries []Claimed, model string) error
+	// CompleteClosed clears each entry's job embed provenance and deletes the outbox
+	// entries, atomically (their documents were just removed from the index).
+	CompleteClosed(ctx context.Context, entries []Claimed) error
+	// Fail records a failed attempt for one entry; it reports whether it dead-lettered.
 	Fail(ctx context.Context, outboxID int64, errMsg string, maxAttempts int) (deadLettered bool, err error)
 }
 
-// Indexer is the semantic-index side: embed+upsert an open job, or remove a closed one.
+// Indexer is the semantic-index side: embed+upsert open jobs, or remove closed ones.
 type Indexer interface {
-	// IndexOpen embeds the job's document and upserts its vector into the semantic index.
-	IndexOpen(ctx context.Context, job db.Job) error
-	// RemoveClosed deletes the job's document from the semantic index.
-	RemoveClosed(ctx context.Context, jobID int64) error
+	// IndexOpen embeds the jobs' documents and upserts their vectors into the semantic
+	// index in one batch.
+	IndexOpen(ctx context.Context, jobs []db.Job) error
+	// RemoveClosed deletes the jobs' documents from the semantic index in one batch.
+	RemoveClosed(ctx context.Context, ids []int64) error
 }
 
 // RunOptions are the per-run knobs.
@@ -60,13 +61,14 @@ type RunOptions struct {
 	// TargetModel is the embedder identity: the enqueue staleness key and the value
 	// stamped on a successful embed (search.CurrentEmbedderModel()).
 	TargetModel string
-	// Concurrency is both the number of embeds in flight and the claim wave size, so
-	// each claimed entry's lease window stays ≈ one embed call.
-	Concurrency  int
+	// BatchSize is the claim wave size and the embed/upsert batch size — the lever that
+	// collapses per-doc Meili tasks into one task per wave. The embed backend chunks the
+	// batch internally (EMBED_CONCURRENCY), so this can be large (hundreds).
+	BatchSize    int
 	LeaseSeconds int
 	MaxAttempts  int
-	// CallTimeout bounds a single job's index/remove operation; 0 means no per-call
-	// timeout (the embed backend has its own per-attempt timeout regardless).
+	// CallTimeout bounds a single batch's (or fallback item's) index/remove operation;
+	// 0 means no per-call timeout (the embed backend has its own per-attempt timeout).
 	CallTimeout time.Duration
 }
 
@@ -91,103 +93,148 @@ func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
 	if err != nil {
 		return Stats{}, fmt.Errorf("enqueue: %w", err)
 	}
-	log.Printf("embed: enqueued %d pending, draining (concurrency=%d)", enqueued, opt.Concurrency)
+	log.Printf("embed: enqueued %d pending, draining (batch=%d)", enqueued, opt.BatchSize)
 
 	rn := &run{store: r.Store, indexer: r.Indexer, opt: opt}
 	for {
-		// A wave the size of the concurrency, drained in parallel so each entry's lease
-		// window stays ≈ one embed call.
-		batch, err := r.Store.Claim(ctx, opt.Concurrency, opt.LeaseSeconds)
+		batch, err := r.Store.Claim(ctx, opt.BatchSize, opt.LeaseSeconds)
 		if err != nil {
 			return rn.stats, fmt.Errorf("claim: %w", err)
 		}
 		if len(batch) == 0 {
 			return rn.stats, nil
 		}
-		var wg sync.WaitGroup
-		for _, entry := range batch {
-			wg.Add(1)
-			go func(e Claimed) {
-				defer wg.Done()
-				rn.process(ctx, e)
-			}(entry)
+		var open, closed []Claimed
+		for _, e := range batch {
+			if e.Closed {
+				closed = append(closed, e)
+			} else {
+				open = append(open, e)
+			}
 		}
-		wg.Wait()
+		rn.processOpenBatch(ctx, open)
+		rn.processClosedBatch(ctx, closed)
 		log.Printf("embed: progress indexed=%d removed=%d failed=%d dead=%d",
 			rn.stats.Indexed, rn.stats.Removed, rn.stats.Failed, rn.stats.DeadLettered)
 	}
 }
 
-// run accumulates one Run's options and tallies; a wave's workers process entries
-// concurrently, so the tallies are guarded by mu.
+// run accumulates one Run's options and tallies. Waves are processed sequentially (the
+// embed concurrency lives inside the Indexer), so the tallies need no lock.
 type run struct {
 	store   Store
 	indexer Indexer
 	opt     RunOptions
-
-	mu    sync.Mutex
-	stats Stats
+	stats   Stats
 }
 
-// process handles one claimed entry, branching on whether the job is open (embed) or
-// closed (remove). Any failure routes to fail so the run continues with the rest.
-func (rn *run) process(ctx context.Context, entry Claimed) {
+// processOpenBatch embeds+upserts a whole wave of open jobs in one batch and completes
+// them in one transaction. Any batch-level failure (a corrupted-row load, a batch embed
+// error, a partial load) falls back to per-item processing so one bad entry can't sink
+// the wave.
+func (rn *run) processOpenBatch(ctx context.Context, entries []Claimed) {
+	if len(entries) == 0 {
+		return
+	}
 	start := time.Now()
 	callCtx, cancel := rn.callContext(ctx)
 	defer cancel()
 
-	if entry.Closed {
-		rn.processClosed(callCtx, entry, start)
+	jobs, err := rn.store.Jobs(callCtx, jobIDs(entries))
+	if err != nil || len(jobs) != len(entries) {
+		rn.fallbackOpen(ctx, entries)
 		return
 	}
-	rn.processOpen(callCtx, entry, start)
+	if err := rn.indexer.IndexOpen(callCtx, jobs); err != nil {
+		rn.fallbackOpen(ctx, entries)
+		return
+	}
+	if err := rn.store.CompleteOpen(callCtx, entries, rn.opt.TargetModel); err != nil {
+		rn.fallbackOpen(ctx, entries)
+		return
+	}
+	rn.stats.Indexed += len(entries)
+	log.Printf("embed: indexed batch of %d in %s", len(entries), since(start))
 }
 
-func (rn *run) processOpen(ctx context.Context, entry Claimed, start time.Time) {
-	job, err := rn.store.Job(ctx, entry.JobID)
+func (rn *run) fallbackOpen(ctx context.Context, entries []Claimed) {
+	for _, e := range entries {
+		rn.processOpenOne(ctx, e)
+	}
+}
+
+func (rn *run) processOpenOne(ctx context.Context, entry Claimed) {
+	callCtx, cancel := rn.callContext(ctx)
+	defer cancel()
+
+	jobs, err := rn.store.Jobs(callCtx, []int64{entry.JobID})
 	if err != nil {
 		// A corrupted row (XX001) can never load — dead-letter it immediately rather
 		// than burning the attempt budget across cron runs (mirrors enrich).
 		if worker.IsCorruptedRow(err) {
 			rn.failN(entry, fmt.Errorf("load job: %w", err), 1)
-			log.Printf("embed: job=%d dead-lettered (corrupted row) in %s: %v", entry.JobID, since(start), err)
 			return
 		}
 		rn.fail(entry, fmt.Errorf("load job: %w", err))
-		log.Printf("embed: job=%d load failed in %s: %v", entry.JobID, since(start), err)
 		return
 	}
-
-	if err := rn.indexer.IndexOpen(ctx, job); err != nil {
+	if len(jobs) == 0 {
+		rn.fail(entry, fmt.Errorf("job %d not found", entry.JobID))
+		return
+	}
+	if err := rn.indexer.IndexOpen(callCtx, jobs); err != nil {
 		rn.fail(entry, fmt.Errorf("embed/index: %w", err))
-		log.Printf("embed: job=%d index FAILED in %s: %v", entry.JobID, since(start), err)
 		return
 	}
-	if err := rn.store.CompleteOpen(ctx, entry, rn.opt.TargetModel, job.ContentHash); err != nil {
+	if err := rn.store.CompleteOpen(callCtx, []Claimed{entry}, rn.opt.TargetModel); err != nil {
 		rn.fail(entry, fmt.Errorf("complete open: %w", err))
-		log.Printf("embed: job=%d complete failed in %s: %v", entry.JobID, since(start), err)
 		return
 	}
-	rn.tally(func(s *Stats) { s.Indexed++ })
-	log.Printf("embed: job=%d indexed in %s", entry.JobID, since(start))
+	rn.stats.Indexed++
 }
 
-func (rn *run) processClosed(ctx context.Context, entry Claimed, start time.Time) {
-	if err := rn.indexer.RemoveClosed(ctx, entry.JobID); err != nil {
+// processClosedBatch removes a whole wave of closed jobs' documents in one batch, with
+// the same per-item fallback on failure.
+func (rn *run) processClosedBatch(ctx context.Context, entries []Claimed) {
+	if len(entries) == 0 {
+		return
+	}
+	callCtx, cancel := rn.callContext(ctx)
+	defer cancel()
+
+	if err := rn.indexer.RemoveClosed(callCtx, jobIDs(entries)); err != nil {
+		rn.fallbackClosed(ctx, entries)
+		return
+	}
+	if err := rn.store.CompleteClosed(callCtx, entries); err != nil {
+		rn.fallbackClosed(ctx, entries)
+		return
+	}
+	rn.stats.Removed += len(entries)
+}
+
+func (rn *run) fallbackClosed(ctx context.Context, entries []Claimed) {
+	for _, e := range entries {
+		rn.processClosedOne(ctx, e)
+	}
+}
+
+func (rn *run) processClosedOne(ctx context.Context, entry Claimed) {
+	callCtx, cancel := rn.callContext(ctx)
+	defer cancel()
+
+	if err := rn.indexer.RemoveClosed(callCtx, []int64{entry.JobID}); err != nil {
 		rn.fail(entry, fmt.Errorf("remove closed: %w", err))
-		log.Printf("embed: job=%d remove FAILED in %s: %v", entry.JobID, since(start), err)
 		return
 	}
-	if err := rn.store.CompleteClosed(ctx, entry); err != nil {
+	if err := rn.store.CompleteClosed(callCtx, []Claimed{entry}); err != nil {
 		rn.fail(entry, fmt.Errorf("complete closed: %w", err))
-		log.Printf("embed: job=%d complete-closed failed in %s: %v", entry.JobID, since(start), err)
 		return
 	}
-	rn.tally(func(s *Stats) { s.Removed++ })
-	log.Printf("embed: job=%d removed (closed) in %s", entry.JobID, since(start))
+	rn.stats.Removed++
 }
 
-// callContext derives the per-entry timeout context (no-op when CallTimeout is 0).
+// callContext derives the per-batch timeout context (no-op when CallTimeout is 0).
 func (rn *run) callContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	if rn.opt.CallTimeout <= 0 {
 		return context.WithCancel(ctx)
@@ -208,19 +255,19 @@ func (rn *run) failN(entry Claimed, cause error, maxAttempts int) {
 	if err != nil {
 		log.Printf("embed: outbox=%d fail-bookkeeping error: %v", entry.OutboxID, err)
 	}
-	rn.tally(func(s *Stats) {
-		if err == nil && dead {
-			s.DeadLettered++
-			return
-		}
-		s.Failed++
-	})
+	if err == nil && dead {
+		rn.stats.DeadLettered++
+		return
+	}
+	rn.stats.Failed++
 }
 
-func (rn *run) tally(f func(*Stats)) {
-	rn.mu.Lock()
-	defer rn.mu.Unlock()
-	f(&rn.stats)
+func jobIDs(entries []Claimed) []int64 {
+	ids := make([]int64, len(entries))
+	for i, e := range entries {
+		ids[i] = e.JobID
+	}
+	return ids
 }
 
 func since(t time.Time) time.Duration { return time.Since(t).Round(time.Millisecond) }

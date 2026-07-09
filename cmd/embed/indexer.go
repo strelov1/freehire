@@ -8,22 +8,28 @@ import (
 	"github.com/strelov1/freehire/internal/search"
 )
 
-// searchIndexer adapts the search client to embed.Indexer: embed+upsert an open job's
-// vector in place (no swap), or remove a closed job's document. It builds the document
-// from the persisted row (search.FromJob) so a re-embedded job keeps its enrichment
-// facets — the same path the incremental ingest indexer uses.
+// searchIndexer adapts the search client to embed.Indexer: embed+upsert a batch of open
+// jobs' vectors in place (no swap), or remove a batch of closed jobs' documents. It
+// builds each document from the persisted row (search.FromJob) so a re-embedded job
+// keeps its enrichment facets — the same path the incremental ingest indexer uses.
 type searchIndexer struct {
 	client *search.Client
 }
 
-func (ix searchIndexer) IndexOpen(ctx context.Context, job db.Job) error {
-	doc, err := search.FromJob(job)
-	if err != nil {
-		return fmt.Errorf("build document: %w", err)
+func (ix searchIndexer) IndexOpen(ctx context.Context, jobs []db.Job) error {
+	docs := make([]search.JobDocument, 0, len(jobs))
+	for _, job := range jobs {
+		doc, err := search.FromJob(job)
+		if err != nil {
+			return fmt.Errorf("build document (job %d): %w", job.ID, err)
+		}
+		docs = append(docs, doc)
 	}
-	return ix.client.IndexSemanticJobs(ctx, []search.JobDocument{doc})
+	// IndexSemanticJobs embeds the whole batch (chunked to the backend's limit) and
+	// upserts it as ONE Meilisearch task, so a large backfill isn't per-doc bound.
+	return ix.client.IndexSemanticJobs(ctx, docs)
 }
 
-func (ix searchIndexer) RemoveClosed(ctx context.Context, jobID int64) error {
-	return ix.client.DeleteSemanticJobs(ctx, []int64{jobID})
+func (ix searchIndexer) RemoveClosed(ctx context.Context, ids []int64) error {
+	return ix.client.DeleteSemanticJobs(ctx, ids)
 }

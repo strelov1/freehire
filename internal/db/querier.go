@@ -58,9 +58,9 @@ type Querier interface {
 	// affected row count: 1 for an owned row (whether or not it was shared — unshare is an
 	// idempotent no-op when already private), 0 when missing or not the caller's (→ 404).
 	ClearSavedSearchPublicSlug(ctx context.Context, arg ClearSavedSearchPublicSlugParams) (int64, error)
-	// Clear a job's embed provenance after its document is removed from jobs_semantic
-	// (closed-job path). Run in the same transaction as DeleteSemanticEntry.
-	ClearSemanticEmbedded(ctx context.Context, id int64) error
+	// Clear a batch of jobs' embed provenance after their documents are removed from
+	// jobs_semantic (closed-job path). Run in the same transaction as DeleteSemanticEntriesBatch.
+	ClearSemanticEmbeddedBatch(ctx context.Context, ids []int64) error
 	// Clear the user's résumé pointer (after deleting the object from storage), any
 	// cached ATS review, and the derived CV embedding (no CV → no recommendations).
 	ClearUserResume(ctx context.Context, id int64) error
@@ -155,7 +155,7 @@ type Querier interface {
 	// Returns the affected row count: 0 means it does not exist or is not the caller's
 	// (the handler maps that to 404).
 	DeleteSavedSearch(ctx context.Context, arg DeleteSavedSearchParams) (int64, error)
-	DeleteSemanticEntry(ctx context.Context, id int64) error
+	DeleteSemanticEntriesBatch(ctx context.Context, ids []int64) error
 	// Unsubscribe, scoped to its owner. Returns the affected row count: 0 means it
 	// does not exist or is not the caller's (the handler maps that to 404). The match
 	// ledger cascades away with the subscription.
@@ -227,6 +227,10 @@ type Querier interface {
 	// columns over the wire on every silent view. GetJobBySlug (SELECT *) stays for the
 	// public detail handler that renders the whole row.
 	GetJobIDBySlug(ctx context.Context, publicSlug string) (int64, error)
+	// Batch-load the persisted rows the embed worker builds documents from. A corrupted
+	// row (SQLSTATE XX001) aborts the whole scan; the worker then retries the batch one id
+	// at a time to isolate and dead-letter the bad row.
+	GetJobsByIDs(ctx context.Context, ids []int64) ([]Job, error)
 	// The display fields for the jobs in a digest, freshest first.
 	GetJobsForDigest(ctx context.Context, jobIds []int64) ([]GetJobsForDigestRow, error)
 	// Public read of a shared board by its slug — no auth, no owner-scoping. Exposes only
@@ -520,15 +524,19 @@ type Querier interface {
 	// Persist the user's derived CV embedding vector plus the identity of the embedder
 	// that produced it (so a model change can mark the vector stale). Never the raw CV text.
 	SetUserResumeEmbedding(ctx context.Context, arg SetUserResumeEmbeddingParams) error
-	// Record that a job's content is embedded under the given model. Run in the same
-	// transaction as DeleteSemanticEntry on the success path, so a crash between the index
-	// write and this stamp is safely retried (idempotent re-embed). hash is the job's
-	// content_hash AS IT WAS EMBEDDED (passed through, nullable): stamping the exact
-	// embedded hash — not the row's current one — keeps the staleness check honest, so a
-	// content change concurrent with the embed re-enqueues on the next run instead of being
-	// silently marked current, and a NULL content_hash stamps NULL (NULL IS DISTINCT FROM
-	// NULL is false, so it does not re-enqueue forever).
-	StampSemanticEmbedded(ctx context.Context, arg StampSemanticEmbeddedParams) error
+	// Record that a batch of jobs' content is embedded under the given model. Run in the
+	// same transaction as DeleteSemanticEntriesBatch on the success path, so a crash between
+	// the index write and this stamp is safely retried (idempotent re-embed). The stamp
+	// copies each job's CURRENT content_hash (nullable-safe: a NULL content_hash stamps NULL
+	// so NULL IS DISTINCT FROM NULL stays false and the job is not re-enqueued forever).
+	// Caveat: if an ingest commits a new content_hash in the tiny window between the embed
+	// (which read the old content) and this stamp, the stamp records the NEW hash while the
+	// vector reflects the old one — so the enqueue predicate sees a match and does NOT
+	// re-enqueue it next run; that job carries a one-revision-stale vector until its content
+	// changes AGAIN (which re-enqueues it). The window is one embed-duration and the drift
+	// self-corrects on the next real change, so this is accepted over threading the exact
+	// embedded hash through a nullable text[] per batch.
+	StampSemanticEmbeddedBatch(ctx context.Context, arg StampSemanticEmbeddedBatchParams) error
 	// Rebuild the companies catalogue from jobs. The companies table is derivable
 	// from jobs (slug = company_slug, name = company), so after a slug-builder change
 	// re-keys jobs, this re-keys companies to match. DISTINCT ON collapses a slug's

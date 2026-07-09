@@ -74,27 +74,27 @@ func (q *Queries) ClaimSemanticBatch(ctx context.Context, arg ClaimSemanticBatch
 	return items, nil
 }
 
-const clearSemanticEmbedded = `-- name: ClearSemanticEmbedded :exec
+const clearSemanticEmbeddedBatch = `-- name: ClearSemanticEmbeddedBatch :exec
 UPDATE jobs
 SET semantic_embedded_model = NULL,
     semantic_embedded_hash  = NULL
-WHERE id = $1
+WHERE id = ANY($1::bigint[])
 `
 
-// Clear a job's embed provenance after its document is removed from jobs_semantic
-// (closed-job path). Run in the same transaction as DeleteSemanticEntry.
-func (q *Queries) ClearSemanticEmbedded(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, clearSemanticEmbedded, id)
+// Clear a batch of jobs' embed provenance after their documents are removed from
+// jobs_semantic (closed-job path). Run in the same transaction as DeleteSemanticEntriesBatch.
+func (q *Queries) ClearSemanticEmbeddedBatch(ctx context.Context, ids []int64) error {
+	_, err := q.db.Exec(ctx, clearSemanticEmbeddedBatch, ids)
 	return err
 }
 
-const deleteSemanticEntry = `-- name: DeleteSemanticEntry :exec
+const deleteSemanticEntriesBatch = `-- name: DeleteSemanticEntriesBatch :exec
 DELETE FROM semantic_outbox
-WHERE id = $1
+WHERE id = ANY($1::bigint[])
 `
 
-func (q *Queries) DeleteSemanticEntry(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteSemanticEntry, id)
+func (q *Queries) DeleteSemanticEntriesBatch(ctx context.Context, ids []int64) error {
+	_, err := q.db.Exec(ctx, deleteSemanticEntriesBatch, ids)
 	return err
 }
 
@@ -138,6 +138,77 @@ func (q *Queries) EnqueuePendingSemanticJobs(ctx context.Context, arg EnqueuePen
 	return result.RowsAffected(), nil
 }
 
+const getJobsByIDs = `-- name: GetJobsByIDs :many
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash
+FROM jobs
+WHERE id = ANY($1::bigint[])
+`
+
+// Batch-load the persisted rows the embed worker builds documents from. A corrupted
+// row (SQLSTATE XX001) aborts the whole scan; the worker then retries the batch one id
+// at a time to isolate and dead-letter the bad row.
+func (q *Queries) GetJobsByIDs(ctx context.Context, ids []int64) ([]Job, error) {
+	rows, err := q.db.Query(ctx, getJobsByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Job{}
+	for rows.Next() {
+		var i Job
+		if err := rows.Scan(
+			&i.ID,
+			&i.Source,
+			&i.ExternalID,
+			&i.URL,
+			&i.Title,
+			&i.Company,
+			&i.Location,
+			&i.Remote,
+			&i.Description,
+			&i.PostedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CompanySlug,
+			&i.Enrichment,
+			&i.EnrichedAt,
+			&i.EnrichmentVersion,
+			&i.PublicSlug,
+			&i.LastSeenAt,
+			&i.ClosedAt,
+			&i.Countries,
+			&i.Regions,
+			&i.WorkMode,
+			&i.LivenessStrikes,
+			&i.Skills,
+			&i.Seniority,
+			&i.Category,
+			&i.CreatedBy,
+			&i.UpdatedBy,
+			&i.PostingLanguage,
+			&i.EmploymentType,
+			&i.EducationLevel,
+			&i.ExperienceYearsMin,
+			&i.Collections,
+			&i.ContentHash,
+			&i.EnglishLevel,
+			&i.Cities,
+			&i.ViewCount,
+			&i.AppliedCount,
+			&i.RoleFingerprint,
+			&i.SemanticEmbeddedModel,
+			&i.SemanticEmbeddedHash,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const recordSemanticFailure = `-- name: RecordSemanticFailure :one
 UPDATE semantic_outbox
 SET attempts   = attempts + 1,
@@ -173,28 +244,31 @@ func (q *Queries) RecordSemanticFailure(ctx context.Context, arg RecordSemanticF
 	return i, err
 }
 
-const stampSemanticEmbedded = `-- name: StampSemanticEmbedded :exec
+const stampSemanticEmbeddedBatch = `-- name: StampSemanticEmbeddedBatch :exec
 UPDATE jobs
 SET semantic_embedded_model = $1::text,
-    semantic_embedded_hash  = $2
-WHERE id = $3
+    semantic_embedded_hash  = content_hash
+WHERE id = ANY($2::bigint[])
 `
 
-type StampSemanticEmbeddedParams struct {
-	Model string      `json:"model"`
-	Hash  pgtype.Text `json:"hash"`
-	ID    int64       `json:"id"`
+type StampSemanticEmbeddedBatchParams struct {
+	Model string  `json:"model"`
+	Ids   []int64 `json:"ids"`
 }
 
-// Record that a job's content is embedded under the given model. Run in the same
-// transaction as DeleteSemanticEntry on the success path, so a crash between the index
-// write and this stamp is safely retried (idempotent re-embed). hash is the job's
-// content_hash AS IT WAS EMBEDDED (passed through, nullable): stamping the exact
-// embedded hash — not the row's current one — keeps the staleness check honest, so a
-// content change concurrent with the embed re-enqueues on the next run instead of being
-// silently marked current, and a NULL content_hash stamps NULL (NULL IS DISTINCT FROM
-// NULL is false, so it does not re-enqueue forever).
-func (q *Queries) StampSemanticEmbedded(ctx context.Context, arg StampSemanticEmbeddedParams) error {
-	_, err := q.db.Exec(ctx, stampSemanticEmbedded, arg.Model, arg.Hash, arg.ID)
+// Record that a batch of jobs' content is embedded under the given model. Run in the
+// same transaction as DeleteSemanticEntriesBatch on the success path, so a crash between
+// the index write and this stamp is safely retried (idempotent re-embed). The stamp
+// copies each job's CURRENT content_hash (nullable-safe: a NULL content_hash stamps NULL
+// so NULL IS DISTINCT FROM NULL stays false and the job is not re-enqueued forever).
+// Caveat: if an ingest commits a new content_hash in the tiny window between the embed
+// (which read the old content) and this stamp, the stamp records the NEW hash while the
+// vector reflects the old one — so the enqueue predicate sees a match and does NOT
+// re-enqueue it next run; that job carries a one-revision-stale vector until its content
+// changes AGAIN (which re-enqueues it). The window is one embed-duration and the drift
+// self-corrects on the next real change, so this is accepted over threading the exact
+// embedded hash through a nullable text[] per batch.
+func (q *Queries) StampSemanticEmbeddedBatch(ctx context.Context, arg StampSemanticEmbeddedBatchParams) error {
+	_, err := q.db.Exec(ctx, stampSemanticEmbeddedBatch, arg.Model, arg.Ids)
 	return err
 }

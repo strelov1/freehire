@@ -58,7 +58,7 @@ func run() int {
 
 	stats, err := runner.Run(ctx, embed.RunOptions{
 		TargetModel:  search.CurrentEmbedderModel(),
-		Concurrency:  ecfg.Concurrency,
+		BatchSize:    ecfg.BatchSize,
 		LeaseSeconds: ecfg.LeaseSeconds,
 		MaxAttempts:  ecfg.MaxAttempts,
 		CallTimeout:  ecfg.CallTimeout,

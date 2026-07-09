@@ -15,7 +15,6 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -302,14 +301,15 @@ func TestSemanticStampClearFailure(t *testing.T) {
 	t.Run("stamp then clear provenance", func(t *testing.T) {
 		truncate(t, pool)
 		j := insertJob(t, pool, "stampme")
-		if err := q.StampSemanticEmbedded(ctx, StampSemanticEmbeddedParams{Model: targetModel, Hash: pgtype.Text{String: "h1", Valid: true}, ID: j}); err != nil {
+		setContentHash(t, pool, j, "h1") // the batch stamp copies content_hash
+		if err := q.StampSemanticEmbeddedBatch(ctx, StampSemanticEmbeddedBatchParams{Model: targetModel, Ids: []int64{j}}); err != nil {
 			t.Fatal(err)
 		}
 		model, hash := semanticStamp(t, pool, j)
 		if model == nil || *model != targetModel || hash == nil || *hash != "h1" {
 			t.Errorf("after stamp: model=%v hash=%v, want %q/%q", model, hash, targetModel, "h1")
 		}
-		if err := q.ClearSemanticEmbedded(ctx, j); err != nil {
+		if err := q.ClearSemanticEmbeddedBatch(ctx, []int64{j}); err != nil {
 			t.Fatal(err)
 		}
 		if model, hash := semanticStamp(t, pool, j); model != nil || hash != nil {
@@ -319,14 +319,12 @@ func TestSemanticStampClearFailure(t *testing.T) {
 
 	t.Run("NULL-content_hash job stamped NULL is not re-enqueued", func(t *testing.T) {
 		// A job whose content_hash is NULL (never re-ingested since the content_hash
-		// migration) embeds fine; the stamp must record NULL, not "", so the enqueue's
-		// `semantic_embedded_hash IS DISTINCT FROM content_hash` (NULL vs NULL → false)
-		// does not re-queue it forever.
+		// migration) embeds fine; the stamp copies content_hash, so it records NULL — the
+		// enqueue's `semantic_embedded_hash IS DISTINCT FROM content_hash` (NULL vs NULL →
+		// false) then does not re-queue it forever.
 		truncate(t, pool)
 		j := insertJob(t, pool, "nullhash") // content_hash stays NULL
-		if err := q.StampSemanticEmbedded(ctx, StampSemanticEmbeddedParams{
-			Model: targetModel, Hash: pgtype.Text{Valid: false}, ID: j,
-		}); err != nil {
+		if err := q.StampSemanticEmbeddedBatch(ctx, StampSemanticEmbeddedBatchParams{Model: targetModel, Ids: []int64{j}}); err != nil {
 			t.Fatal(err)
 		}
 		if _, hash := semanticStamp(t, pool, j); hash != nil {
@@ -350,7 +348,7 @@ func TestSemanticStampClearFailure(t *testing.T) {
 		if err != nil || len(claimed) != 1 {
 			t.Fatalf("claim: rows=%d err=%v, want 1", len(claimed), err)
 		}
-		if err := q.DeleteSemanticEntry(ctx, claimed[0].ID); err != nil {
+		if err := q.DeleteSemanticEntriesBatch(ctx, []int64{claimed[0].ID}); err != nil {
 			t.Fatal(err)
 		}
 		if got := semanticOutboxJobIDs(t, pool); len(got) != 0 {

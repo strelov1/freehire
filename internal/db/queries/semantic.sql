@@ -54,31 +54,43 @@ JOIN jobs j ON j.id = c.job_id
 WHERE o.id = c.id
 RETURNING o.id, o.job_id, (j.closed_at IS NOT NULL)::boolean AS closed;
 
--- name: StampSemanticEmbedded :exec
--- Record that a job's content is embedded under the given model. Run in the same
--- transaction as DeleteSemanticEntry on the success path, so a crash between the index
--- write and this stamp is safely retried (idempotent re-embed). hash is the job's
--- content_hash AS IT WAS EMBEDDED (passed through, nullable): stamping the exact
--- embedded hash — not the row's current one — keeps the staleness check honest, so a
--- content change concurrent with the embed re-enqueues on the next run instead of being
--- silently marked current, and a NULL content_hash stamps NULL (NULL IS DISTINCT FROM
--- NULL is false, so it does not re-enqueue forever).
+-- name: GetJobsByIDs :many
+-- Batch-load the persisted rows the embed worker builds documents from. A corrupted
+-- row (SQLSTATE XX001) aborts the whole scan; the worker then retries the batch one id
+-- at a time to isolate and dead-letter the bad row.
+SELECT *
+FROM jobs
+WHERE id = ANY(sqlc.arg(ids)::bigint[]);
+
+-- name: StampSemanticEmbeddedBatch :exec
+-- Record that a batch of jobs' content is embedded under the given model. Run in the
+-- same transaction as DeleteSemanticEntriesBatch on the success path, so a crash between
+-- the index write and this stamp is safely retried (idempotent re-embed). The stamp
+-- copies each job's CURRENT content_hash (nullable-safe: a NULL content_hash stamps NULL
+-- so NULL IS DISTINCT FROM NULL stays false and the job is not re-enqueued forever).
+-- Caveat: if an ingest commits a new content_hash in the tiny window between the embed
+-- (which read the old content) and this stamp, the stamp records the NEW hash while the
+-- vector reflects the old one — so the enqueue predicate sees a match and does NOT
+-- re-enqueue it next run; that job carries a one-revision-stale vector until its content
+-- changes AGAIN (which re-enqueues it). The window is one embed-duration and the drift
+-- self-corrects on the next real change, so this is accepted over threading the exact
+-- embedded hash through a nullable text[] per batch.
 UPDATE jobs
 SET semantic_embedded_model = sqlc.arg(model)::text,
-    semantic_embedded_hash  = sqlc.narg(hash)
-WHERE id = sqlc.arg(id);
+    semantic_embedded_hash  = content_hash
+WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 
--- name: ClearSemanticEmbedded :exec
--- Clear a job's embed provenance after its document is removed from jobs_semantic
--- (closed-job path). Run in the same transaction as DeleteSemanticEntry.
+-- name: ClearSemanticEmbeddedBatch :exec
+-- Clear a batch of jobs' embed provenance after their documents are removed from
+-- jobs_semantic (closed-job path). Run in the same transaction as DeleteSemanticEntriesBatch.
 UPDATE jobs
 SET semantic_embedded_model = NULL,
     semantic_embedded_hash  = NULL
-WHERE id = sqlc.arg(id);
+WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 
--- name: DeleteSemanticEntry :exec
+-- name: DeleteSemanticEntriesBatch :exec
 DELETE FROM semantic_outbox
-WHERE id = $1;
+WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 
 -- name: RecordSemanticFailure :one
 -- Count a failed attempt: bump attempts, record the error, and dead-letter (set
