@@ -11,9 +11,9 @@ import (
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobhash"
 	"github.com/strelov1/freehire/internal/jobview"
-	"github.com/strelov1/freehire/internal/pipeline"
 	"github.com/strelov1/freehire/internal/search"
 )
 
@@ -49,38 +49,41 @@ func needsIndex(row db.UpsertJobRow) bool {
 	return row.Changed || row.Inserted.Bool
 }
 
-func (s *dbStore) Save(ctx context.Context, job pipeline.Job) error {
+func (s *dbStore) Save(ctx context.Context, j job.Job) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
 
+	// The aggregate's read projection carries every persistable field; the write path
+	// never touches enrichment (SetJobEnrichment owns those columns), so it is not mapped.
+	f := j.Fields()
 	params := db.UpsertJobParams{
-		Source:      job.Source,
-		ExternalID:  job.ExternalID,
-		URL:         job.URL,
-		Title:       job.Title,
-		Company:     job.Company,
-		CompanySlug: job.CompanySlug,
-		PublicSlug:  job.PublicSlug,
-		Location:    job.Location,
-		Remote:      job.Remote,
-		Description: job.Description,
-		PostedAt:    toTimestamptz(job.PostedAt),
-		Countries:   job.Countries,
-		Regions:     job.Regions,
-		Cities:      job.Cities,
-		WorkMode:    job.WorkMode,
-		Skills:      job.Skills,
-		Seniority:   job.Seniority,
-		Category:    job.Category,
+		Source:      f.Source,
+		ExternalID:  f.ExternalID,
+		URL:         f.URL,
+		Title:       f.Title,
+		Company:     f.Company,
+		CompanySlug: f.CompanySlug,
+		PublicSlug:  f.PublicSlug,
+		Location:    f.Location,
+		Remote:      f.Remote,
+		Description: f.Description,
+		PostedAt:    toTimestamptz(f.PostedAt),
+		Countries:   f.Countries,
+		Regions:     f.Regions,
+		Cities:      f.Cities,
+		WorkMode:    f.WorkMode,
+		Skills:      f.Skills,
+		Seniority:   f.Seniority,
+		Category:    f.Category,
 
-		PostingLanguage:    job.PostingLanguage,
-		EmploymentType:     job.EmploymentType,
-		EducationLevel:     job.EducationLevel,
-		EnglishLevel:       job.EnglishLevel,
-		ExperienceYearsMin: toInt4(job.ExperienceYearsMin),
+		PostingLanguage:    f.PostingLanguage,
+		EmploymentType:     f.EmploymentType,
+		EducationLevel:     f.EducationLevel,
+		EnglishLevel:       f.EnglishLevel,
+		ExperienceYearsMin: toInt4(f.ExperienceYearsMin),
 	}
 	// Fingerprint the indexed fields so the upsert can report whether this write
 	// changed searchable content (drives incremental indexing below).

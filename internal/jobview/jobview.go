@@ -5,8 +5,6 @@
 package jobview
 
 import (
-	"encoding/json"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -15,6 +13,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/job"
 )
 
 // Job is the public wire shape of a job. It carries the public_slug and
@@ -90,85 +89,93 @@ type Job struct {
 	Reality *Reality `json:"reality,omitempty"`
 }
 
-// FromRow maps a database job row to the public wire shape. The enrichment
-// JSONB is decoded into the typed Enrichment; an empty or absent payload yields
-// the zero Enrichment.
+// FromRow maps a database job row to the public wire shape. It is a thin shim: it
+// hydrates the row into the Job aggregate (plus its read-only Extras) via
+// job.FromRow, then delegates to FromDomain — the projection source of truth. It
+// stays so existing read callers that hold a db.Job are untouched.
 func FromRow(j db.Job) (Job, error) {
-	var e enrich.Enrichment
-	if len(j.Enrichment) > 0 {
-		if err := json.Unmarshal(j.Enrichment, &e); err != nil {
-			return Job{}, fmt.Errorf("jobview: decode enrichment for job %d: %w", j.ID, err)
-		}
+	domain, extras, err := job.FromRow(j)
+	if err != nil {
+		return Job{}, err
 	}
+	return FromDomain(domain, extras)
+}
 
-	// The dictionary-derived facets are sourced from the jobs columns ONLY (the
-	// deterministic dictionaries are the production source); the LLM's values for
-	// them are excluded from the served object so the LLM can later run free as a
-	// discovery signal without corrupting production data. The LLM values stay in
-	// the stored enrichment JSONB (untouched) but are folded out of the served copy
-	// here. normalizeSet lowercases/sorts/dedups each column and guarantees a
-	// non-nil slice so the facet serializes as [] not null.
-	//
-	// Countries/regions are the exception (like cities): a hybrid dict-then-LLM facet.
-	// The dictionary wins whenever it pinned a place, but when it left geography
-	// unpinned — no country and at most the bare-"Remote" "global" bucket — the LLM's
-	// enrichment.countries/regions fill in, catching a restriction stated only in the
-	// prose ("Remote (SPAIN only)") that the location string never carried.
-	countries, regions := geoFacet(j.Countries, j.Regions, e.Countries, e.Regions)
-	workMode := j.WorkMode
-	// Seniority/category are the dictionary column value, always — never the LLM's,
-	// and never a dict-silent fill. They stay nested under enrichment, so the
-	// existing enrichment.seniority/category facets are unchanged.
-	e.Seniority = j.Seniority
-	e.Category = j.Category
-	// The synthetic facets (posting_language/employment_type/education_level/
-	// english_level/experience_years_min) follow the same dict-only rule: the
-	// deterministic column value always wins (the LLM's stays raw in the JSONB), kept
-	// nested under enrichment so the wire shape is unchanged.
-	e.PostingLanguage = j.PostingLanguage
-	e.EmploymentType = j.EmploymentType
-	e.EducationLevel = j.EducationLevel
-	e.EnglishLevel = j.EnglishLevel
-	e.ExperienceYearsMin = int4ToPtr(j.ExperienceYearsMin)
-	skills := normalizeSet(j.Skills)
-	// Collections is denormalized from the company onto the job; it has no LLM
-	// counterpart to fold out, so it is simply normalized like the other facets.
-	collections := normalizeSet(j.Collections)
-	// Cities is the hybrid facet: the deterministic column when it resolved a beacon
-	// city, else a normalized fallback to the LLM's cities (the one dict+LLM exception).
-	// Kept case-preserving (values are display names), unlike the lowercased facets.
-	cities := cityFacet(j.Cities, e.Cities)
+// FromDomain projects the Job aggregate (plus its read-only Extras) to the public
+// wire shape. It is the projection source of truth; FromRow is a thin shim that
+// hydrates a db row into the domain and delegates here. The facet handling mirrors
+// FromRow exactly — the dictionary columns are served, the LLM's copies are folded
+// out of the nested enrichment, and countries/regions/cities stay dict-then-LLM
+// hybrids — so the wire output is byte-equivalent to the pre-aggregate projection.
+func FromDomain(j job.Job, x job.Extras) (Job, error) {
+	f := j.Fields()
+	// e is the raw decoded LLM enrichment; the dictionary columns are folded over it
+	// below (dict wins) and the multi-valued LLM facets are folded out.
+	e := f.Enrichment
+
+	countries, regions := geoFacet(f.Countries, f.Regions, e.Countries, e.Regions)
+	workMode := f.WorkMode
+	// Seniority/category and the synthetic facets are the dictionary column value,
+	// always — kept nested under enrichment so the wire shape is unchanged.
+	e.Seniority = f.Seniority
+	e.Category = f.Category
+	e.PostingLanguage = f.PostingLanguage
+	e.EmploymentType = f.EmploymentType
+	e.EducationLevel = f.EducationLevel
+	e.EnglishLevel = f.EnglishLevel
+	e.ExperienceYearsMin = f.ExperienceYearsMin
+	skills := normalizeSet(f.Skills)
+	collections := normalizeSet(x.Collections)
+	cities := cityFacet(f.Cities, e.Cities)
 	e.Countries, e.Regions, e.WorkMode = nil, nil, ""
 	e.Skills = nil
 	e.Cities = nil
 
 	return Job{
-		PublicSlug:        j.PublicSlug,
-		Source:            j.Source,
-		ManuallyAdded:     j.CreatedBy.Valid,
-		ExternalID:        j.ExternalID,
-		URL:               j.URL,
-		Title:             j.Title,
-		Company:           j.Company,
-		CompanySlug:       j.CompanySlug,
-		Location:          j.Location,
-		Description:       j.Description,
+		PublicSlug:        f.PublicSlug,
+		Source:            f.Source,
+		ManuallyAdded:     f.ManuallyAdded,
+		ExternalID:        f.ExternalID,
+		URL:               f.URL,
+		Title:             f.Title,
+		Company:           f.Company,
+		CompanySlug:       f.CompanySlug,
+		Location:          f.Location,
+		Description:       f.Description,
 		Countries:         countries,
 		Regions:           regions,
 		WorkMode:          workMode,
 		Skills:            skills,
 		Cities:            cities,
 		Collections:       collections,
-		PostedAt:          rfc3339(EffectivePostedAt(j.PostedAt, j.CreatedAt)),
-		CreatedAt:         rfc3339(j.CreatedAt),
-		UpdatedAt:         rfc3339(j.UpdatedAt),
-		ClosedAt:          rfc3339(j.ClosedAt),
+		PostedAt:          rfc3339Ptr(effectivePosted(f.PostedAt, f.CreatedAt)),
+		CreatedAt:         rfc3339Ptr(f.CreatedAt),
+		UpdatedAt:         rfc3339Ptr(f.UpdatedAt),
+		ClosedAt:          rfc3339Ptr(f.ClosedAt),
 		Enrichment:        e,
-		EnrichedAt:        rfc3339(j.EnrichedAt),
-		EnrichmentVersion: j.EnrichmentVersion,
-		ViewCount:         j.ViewCount,
-		AppliedCount:      j.AppliedCount,
+		EnrichedAt:        rfc3339Ptr(f.EnrichedAt),
+		EnrichmentVersion: f.EnrichmentVersion,
+		ViewCount:         x.ViewCount,
+		AppliedCount:      x.AppliedCount,
 	}, nil
+}
+
+// effectivePosted is EffectivePostedAt over domain *time.Time: the source posted
+// time when present and not in the future, otherwise the ingest time.
+func effectivePosted(posted, created *time.Time) *time.Time {
+	if posted == nil || posted.After(time.Now()) {
+		return created
+	}
+	return posted
+}
+
+// rfc3339Ptr renders a nullable domain timestamp as an RFC3339 UTC string, or nil.
+func rfc3339Ptr(t *time.Time) *string {
+	if t == nil {
+		return nil
+	}
+	s := t.UTC().Format(time.RFC3339)
+	return &s
 }
 
 // normalizeSet returns the sorted, deduplicated, lowercased form of a facet
@@ -306,25 +313,4 @@ func EffectivePostedAt(posted, created pgtype.Timestamptz) pgtype.Timestamptz {
 		return created
 	}
 	return posted
-}
-
-// rfc3339 renders a nullable Postgres timestamp as an RFC3339 UTC string, or nil
-// when unset. UTC keeps the lexicographic order chronological for sorting.
-func rfc3339(ts pgtype.Timestamptz) *string {
-	if !ts.Valid {
-		return nil
-	}
-	s := ts.Time.UTC().Format(time.RFC3339)
-	return &s
-}
-
-// int4ToPtr renders a nullable Postgres integer (experience_years_min) as *int, or
-// nil when unset — so an unknown value is omitted from the served enrichment rather
-// than reported as 0.
-func int4ToPtr(n pgtype.Int4) *int {
-	if !n.Valid {
-		return nil
-	}
-	v := int(n.Int32)
-	return &v
 }

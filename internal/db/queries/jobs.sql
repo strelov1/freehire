@@ -86,6 +86,13 @@ SELECT *
 FROM jobs
 WHERE public_slug = $1;
 
+-- name: GetJobBySourceExternalID :one
+-- Load a job by its dedup identity (source, external_id) — the key the Job
+-- aggregate's repository loads by, mirroring the CloseJobBySourceExternalID key.
+SELECT *
+FROM jobs
+WHERE source = $1 AND external_id = $2;
+
 -- name: GetJobIDBySlug :one
 -- Slim slug->id lookup for the view/apply interaction path, which needs only the
 -- internal id (the user_jobs FK) and must not drag the wide description/enrichment

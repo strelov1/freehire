@@ -246,6 +246,66 @@ func (q *Queries) GetJobBySlug(ctx context.Context, publicSlug string) (Job, err
 	return i, err
 }
 
+const getJobBySourceExternalID = `-- name: GetJobBySourceExternalID :one
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint
+FROM jobs
+WHERE source = $1 AND external_id = $2
+`
+
+type GetJobBySourceExternalIDParams struct {
+	Source     string `json:"source"`
+	ExternalID string `json:"external_id"`
+}
+
+// Load a job by its dedup identity (source, external_id) — the key the Job
+// aggregate's repository loads by, mirroring the CloseJobBySourceExternalID key.
+func (q *Queries) GetJobBySourceExternalID(ctx context.Context, arg GetJobBySourceExternalIDParams) (Job, error) {
+	row := q.db.QueryRow(ctx, getJobBySourceExternalID, arg.Source, arg.ExternalID)
+	var i Job
+	err := row.Scan(
+		&i.ID,
+		&i.Source,
+		&i.ExternalID,
+		&i.URL,
+		&i.Title,
+		&i.Company,
+		&i.Location,
+		&i.Remote,
+		&i.Description,
+		&i.PostedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CompanySlug,
+		&i.Enrichment,
+		&i.EnrichedAt,
+		&i.EnrichmentVersion,
+		&i.PublicSlug,
+		&i.LastSeenAt,
+		&i.ClosedAt,
+		&i.Countries,
+		&i.Regions,
+		&i.WorkMode,
+		&i.LivenessStrikes,
+		&i.Skills,
+		&i.Seniority,
+		&i.Category,
+		&i.CreatedBy,
+		&i.UpdatedBy,
+		&i.PostingLanguage,
+		&i.EmploymentType,
+		&i.EducationLevel,
+		&i.ExperienceYearsMin,
+		&i.Collections,
+		&i.ContentHash,
+		&i.EnglishLevel,
+		&i.Cities,
+		&i.ViewCount,
+		&i.AppliedCount,
+		&i.RoleFingerprint,
+	)
+	return i, err
+}
+
 const getJobIDBySlug = `-- name: GetJobIDBySlug :one
 SELECT id
 FROM jobs

@@ -4,20 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/strelov1/freehire/internal/classify"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
-	"github.com/strelov1/freehire/internal/jobfacts"
+	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobhash"
-	"github.com/strelov1/freehire/internal/lang"
-	"github.com/strelov1/freehire/internal/location"
-	"github.com/strelov1/freehire/internal/normalize"
-	"github.com/strelov1/freehire/internal/skilltag"
 	"github.com/strelov1/freehire/internal/telegram"
 )
 
@@ -28,6 +24,58 @@ func toInt4(n *int) pgtype.Int4 {
 		return pgtype.Int4{}
 	}
 	return pgtype.Int4{Int32: int32(*n), Valid: true}
+}
+
+// buildParams constructs the UpsertJob params for one Telegram-sourced job through
+// the Job aggregate factory, so the dictionary facets and slugs are derived exactly
+// as ingest and the moderator path derive them (job.New wraps jobderive) — no more
+// inline derivation that could drift from the shared dictionaries. workMode carries
+// a structured signal (link-resolved jobs may state it); "" lets the parser decide.
+// It returns job.ErrInvalidDraft for an extracted job with no title/identity.
+func buildParams(source, externalID, url, title, company, loc string, remote bool, description, workMode string, postedAt pgtype.Timestamptz) (db.UpsertJobParams, error) {
+	j, err := job.New(job.Draft{
+		Source:      source,
+		ExternalID:  externalID,
+		URL:         url,
+		Title:       title,
+		Company:     company,
+		Location:    loc,
+		Remote:      remote,
+		Description: description,
+		WorkMode:    workMode,
+	})
+	if err != nil {
+		return db.UpsertJobParams{}, err
+	}
+	f := j.Fields()
+	params := db.UpsertJobParams{
+		Source:      f.Source,
+		ExternalID:  f.ExternalID,
+		URL:         f.URL,
+		Title:       f.Title,
+		Company:     f.Company,
+		CompanySlug: f.CompanySlug,
+		PublicSlug:  f.PublicSlug,
+		Location:    f.Location,
+		Remote:      f.Remote,
+		Description: f.Description,
+		PostedAt:    postedAt,
+		Countries:   f.Countries,
+		Regions:     f.Regions,
+		Cities:      f.Cities,
+		WorkMode:    f.WorkMode,
+		Skills:      f.Skills,
+		Seniority:   f.Seniority,
+		Category:    f.Category,
+
+		PostingLanguage:    f.PostingLanguage,
+		EmploymentType:     f.EmploymentType,
+		EducationLevel:     f.EducationLevel,
+		EnglishLevel:       f.EnglishLevel,
+		ExperienceYearsMin: toInt4(f.ExperienceYearsMin),
+	}
+	params.RoleFingerprint = pgtype.Text{String: jobhash.RoleFingerprint(params), Valid: true}
+	return params, nil
 }
 
 // maxAttempts is the retry budget per post: the first failure leaves the post
@@ -92,42 +140,16 @@ func (s *extractStore) Complete(ctx context.Context, post telegram.PendingPost, 
 	base := post.Channel + "/" + strconv.FormatInt(post.MsgID, 10)
 	for i, j := range jobs {
 		externalID := base + "/" + strconv.Itoa(i)
-		geo := location.Parse(j.Location)
-		class := classify.Parse(j.Title)
-		// Category precedence mirrors jobderive: title dictionary → non-tech
-		// description fallback (tg-extract derives inline, not via jobderive).
-		category := class.Category
-		if category == "" {
-			category = classify.NonTechFromDescription(j.Description)
-		}
 		descHTML := telegram.TextToHTML(j.Description)
-		params := db.UpsertJobParams{
-			Source:      "telegram",
-			ExternalID:  externalID,
-			URL:         "https://t.me/" + base,
-			Title:       j.Title,
-			Company:     j.Company,
-			CompanySlug: normalize.Slug(j.Company),
-			PublicSlug:  normalize.JobSlug(j.Title, j.Company, "telegram", externalID),
-			Location:    j.Location,
-			Remote:      j.Remote,
-			Description: descHTML,
-			PostedAt:    pgtype.Timestamptz{Time: post.PostedAt, Valid: true},
-			Countries:   geo.Countries,
-			Regions:     geo.Regions,
-			Cities:      geo.Cities,
-			WorkMode:    geo.WorkMode,
-			Skills:      skilltag.Parse(descHTML),
-			Seniority:   class.Seniority,
-			Category:    category,
-
-			PostingLanguage:    lang.Detect(descHTML),
-			EmploymentType:     jobfacts.EmploymentType(j.Title, descHTML),
-			EducationLevel:     jobfacts.EducationLevel(descHTML),
-			EnglishLevel:       jobfacts.EnglishLevel(descHTML),
-			ExperienceYearsMin: toInt4(jobfacts.ExperienceYearsMin(descHTML)),
+		params, err := buildParams("telegram", externalID, "https://t.me/"+base,
+			j.Title, j.Company, j.Location, j.Remote, descHTML, "",
+			pgtype.Timestamptz{Time: post.PostedAt, Valid: true})
+		if err != nil {
+			// An extracted job with no title/identity is junk (a mis-extraction); skip it
+			// rather than persisting it or failing the whole post.
+			log.Printf("tg-extract: skipping job %s: %v", externalID, err)
+			continue
 		}
-		params.RoleFingerprint = pgtype.Text{String: jobhash.RoleFingerprint(params), Valid: true}
 		saved, err := qtx.UpsertJob(ctx, params)
 		if err != nil {
 			return fmt.Errorf("upsert job %s: %w", externalID, err)
@@ -167,49 +189,19 @@ func (s *extractStore) CompleteLinks(
 	qtx := s.q.WithTx(tx)
 
 	for _, j := range jobs {
-		geo := location.Parse(j.Location)
-		class := classify.Parse(j.Title)
-		// Category precedence mirrors jobderive: title dictionary → non-tech
-		// description fallback (tg-extract derives inline, not via jobderive).
-		category := class.Category
-		if category == "" {
-			category = classify.NonTechFromDescription(j.Description)
-		}
-		workMode := j.WorkMode
-		if workMode == "" {
-			workMode = geo.WorkMode
-		}
 		postedAt := pgtype.Timestamptz{Time: post.PostedAt, Valid: true}
 		if j.PostedAt != nil {
 			postedAt = pgtype.Timestamptz{Time: *j.PostedAt, Valid: true}
 		}
-		params := db.UpsertJobParams{
-			Source:      j.Source,
-			ExternalID:  j.ExternalID,
-			URL:         j.URL,
-			Title:       j.Title,
-			Company:     j.Company,
-			CompanySlug: normalize.Slug(j.Company),
-			PublicSlug:  normalize.JobSlug(j.Title, j.Company, j.Source, j.ExternalID),
-			Location:    j.Location,
-			Remote:      j.Remote,
-			Description: j.Description,
-			PostedAt:    postedAt,
-			Countries:   geo.Countries,
-			Regions:     geo.Regions,
-			Cities:      geo.Cities,
-			WorkMode:    workMode,
-			Skills:      skilltag.Parse(j.Description),
-			Seniority:   class.Seniority,
-			Category:    category,
-
-			PostingLanguage:    lang.Detect(j.Description),
-			EmploymentType:     jobfacts.EmploymentType(j.Title, j.Description),
-			EducationLevel:     jobfacts.EducationLevel(j.Description),
-			EnglishLevel:       jobfacts.EnglishLevel(j.Description),
-			ExperienceYearsMin: toInt4(jobfacts.ExperienceYearsMin(j.Description)),
+		// The resolved job may carry a structured work-mode; job.New gives it precedence
+		// over the location parser (an empty value lets the parser decide), matching the
+		// prior j.WorkMode || geo.WorkMode fallback.
+		params, err := buildParams(j.Source, j.ExternalID, j.URL,
+			j.Title, j.Company, j.Location, j.Remote, j.Description, j.WorkMode, postedAt)
+		if err != nil {
+			log.Printf("tg-extract: skipping link job %s/%s: %v", j.Source, j.ExternalID, err)
+			continue
 		}
-		params.RoleFingerprint = pgtype.Text{String: jobhash.RoleFingerprint(params), Valid: true}
 		saved, err := qtx.UpsertJob(ctx, params)
 		if err != nil {
 			return fmt.Errorf("upsert job %s/%s: %w", j.Source, j.ExternalID, err)

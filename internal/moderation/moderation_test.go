@@ -124,7 +124,7 @@ func TestCreate_SanitizesDescription(t *testing.T) {
 }
 
 func TestUpdate_SanitizesDescription(t *testing.T) {
-	repo := &fakeRepo{bySlugJob: db.Job{Source: "manual", PublicSlug: "s", Description: "old"}}
+	repo := &fakeRepo{bySlugJob: db.Job{Source: "manual", ExternalID: "https://acme.example/jobs/1", Title: "Dev", PublicSlug: "s", Description: "old"}}
 	evil := `<script>alert(1)</script><b>new</b>`
 	_, err := moderation.New(repo).Update(context.Background(), 9, "s", moderation.UpdatePatch{Description: &evil})
 	if err != nil {

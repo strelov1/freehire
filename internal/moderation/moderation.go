@@ -17,7 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/jobderive"
+	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/sources"
 )
 
@@ -131,40 +131,35 @@ func (s *Service) Create(ctx context.Context, actorID int64, in CreateInput) (db
 	// {@html}; sanitize to the same allowlist as every other source so no active
 	// markup is ever persisted (stored XSS). Done once and reused for derivation.
 	description := sources.SanitizeHTML(in.Description)
-	d := jobderive.Derive(jobderive.Input{
-		Title:       in.Title,
-		Company:     in.Company,
-		Source:      source,
-		ExternalID:  in.URL,
-		Location:    in.Location,
-		Description: description,
-		WorkMode:    remoteWorkMode(in.Remote),
-	})
+	f, err := derive(source, in.URL, in.Title, in.Company, in.Location, description, in.Remote)
+	if err != nil {
+		return db.Job{}, err
+	}
 	return s.repo.Create(ctx, db.UpsertManualJobParams{
 		Source:      source,
 		ExternalID:  in.URL,
 		URL:         in.URL,
 		Title:       in.Title,
 		Company:     in.Company,
-		CompanySlug: d.CompanySlug,
-		Location:    in.Location,
+		CompanySlug: f.CompanySlug,
+		Location:    f.Location,
 		Remote:      in.Remote,
 		Description: description,
 		PostedAt:    toTimestamptz(in.PostedAt),
-		PublicSlug:  d.PublicSlug,
-		Countries:   d.Countries,
-		Regions:     d.Regions,
-		Cities:      d.Cities,
-		WorkMode:    d.WorkMode,
-		Skills:      d.Skills,
-		Seniority:   d.Seniority,
-		Category:    d.Category,
+		PublicSlug:  f.PublicSlug,
+		Countries:   f.Countries,
+		Regions:     f.Regions,
+		Cities:      f.Cities,
+		WorkMode:    f.WorkMode,
+		Skills:      f.Skills,
+		Seniority:   f.Seniority,
+		Category:    f.Category,
 
-		PostingLanguage:    d.PostingLanguage,
-		EmploymentType:     d.EmploymentType,
-		EducationLevel:     d.EducationLevel,
-		EnglishLevel:       d.EnglishLevel,
-		ExperienceYearsMin: toInt4(d.ExperienceYearsMin),
+		PostingLanguage:    f.PostingLanguage,
+		EmploymentType:     f.EmploymentType,
+		EducationLevel:     f.EducationLevel,
+		EnglishLevel:       f.EnglishLevel,
+		ExperienceYearsMin: toInt4(f.ExperienceYearsMin),
 
 		CreatedBy: actorID,
 		UpdatedBy: actorID,
@@ -202,40 +197,57 @@ func (s *Service) Update(ctx context.Context, actorID int64, slug string, p Upda
 
 	// External id and source stay the create-time identity; only the dictionary facets
 	// re-derive (the recomputed public slug is discarded — identity is immutable).
-	d := jobderive.Derive(jobderive.Input{
-		Title:       title,
-		Company:     company,
-		Source:      cur.Source,
-		ExternalID:  cur.ExternalID,
-		Location:    location,
-		Description: description,
-		WorkMode:    remoteWorkMode(remote),
-	})
+	f, err := derive(cur.Source, cur.ExternalID, title, company, location, description, remote)
+	if err != nil {
+		return db.Job{}, err
+	}
 	return s.repo.Update(ctx, db.UpdateManualJobParams{
 		PublicSlug:  slug,
 		Title:       title,
 		Company:     company,
-		CompanySlug: d.CompanySlug,
-		Location:    location,
+		CompanySlug: f.CompanySlug,
+		Location:    f.Location,
 		Remote:      remote,
 		Description: description,
 		PostedAt:    postedAt,
-		Countries:   d.Countries,
-		Regions:     d.Regions,
-		Cities:      d.Cities,
-		WorkMode:    d.WorkMode,
-		Skills:      d.Skills,
-		Seniority:   d.Seniority,
-		Category:    d.Category,
+		Countries:   f.Countries,
+		Regions:     f.Regions,
+		Cities:      f.Cities,
+		WorkMode:    f.WorkMode,
+		Skills:      f.Skills,
+		Seniority:   f.Seniority,
+		Category:    f.Category,
 
-		PostingLanguage:    d.PostingLanguage,
-		EmploymentType:     d.EmploymentType,
-		EducationLevel:     d.EducationLevel,
-		EnglishLevel:       d.EnglishLevel,
-		ExperienceYearsMin: toInt4(d.ExperienceYearsMin),
+		PostingLanguage:    f.PostingLanguage,
+		EmploymentType:     f.EmploymentType,
+		EducationLevel:     f.EducationLevel,
+		EnglishLevel:       f.EnglishLevel,
+		ExperienceYearsMin: toInt4(f.ExperienceYearsMin),
 
 		UpdatedBy: actorID,
 	})
+}
+
+// derive builds the Job aggregate through the factory and returns its projected
+// fields — the moderator write path's single door to the deterministic slugs and
+// dictionary facets, shared with ingest and Telegram extraction. WorkMode carries
+// the moderator's structured remote flag (job.New cleans the location and derives
+// the rest). It errors only when the identity or title is blank, which the caller's
+// validation already precludes.
+func derive(source, externalID, title, company, location, description string, remote bool) (job.Fields, error) {
+	j, err := job.New(job.Draft{
+		Source:      source,
+		ExternalID:  externalID,
+		Title:       title,
+		Company:     company,
+		Location:    location,
+		Description: description,
+		WorkMode:    remoteWorkMode(remote),
+	})
+	if err != nil {
+		return job.Fields{}, err
+	}
+	return j.Fields(), nil
 }
 
 // remoteWorkMode maps the moderator's structured remote flag onto a work-mode signal

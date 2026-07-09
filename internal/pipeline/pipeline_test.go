@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/normalize"
 	"github.com/strelov1/freehire/internal/sources"
 )
@@ -15,18 +16,18 @@ import (
 // the optional closer capability, so it is safe for the runner's concurrent Save/Close calls.
 type fakeStore struct {
 	mu     sync.Mutex
-	saved  []Job
+	saved  []job.Job
 	closed [][2]string
 	err    error
 }
 
-func (s *fakeStore) Save(_ context.Context, job Job) error {
+func (s *fakeStore) Save(_ context.Context, j job.Job) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.err != nil {
 		return s.err
 	}
-	s.saved = append(s.saved, job)
+	s.saved = append(s.saved, j)
 	return nil
 }
 
@@ -135,7 +136,7 @@ func TestRunStreamClosesRemovedJobs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if len(store.saved) != 1 || store.saved[0].ExternalID != ":1" {
+	if len(store.saved) != 1 || store.saved[0].Fields().ExternalID != ":1" {
 		t.Fatalf("saved = %+v, want 1 live job with external_id \":1\"", store.saved)
 	}
 	if len(store.closed) != 1 || store.closed[0] != [2]string{"jobtech", ":2"} {
@@ -186,7 +187,7 @@ func TestRunNormalizesAndNamespaces(t *testing.T) {
 		t.Fatalf("len(saved) = %d, want 1", len(store.saved))
 	}
 
-	j := store.saved[0]
+	j := store.saved[0].Fields()
 	if j.Source != "greenhouse" {
 		t.Errorf("Source = %q, want %q", j.Source, "greenhouse")
 	}
@@ -210,14 +211,22 @@ func TestRunNormalizesAndNamespaces(t *testing.T) {
 func TestNormalizeJobParsesGeographyFromLocation(t *testing.T) {
 	e := sources.CompanyEntry{Company: "Acme", Provider: "greenhouse", Board: "acme"}
 
-	geo := normalizeJob(e, sources.Job{ExternalID: "1", Title: "Dev", Company: "Acme", Location: "Remote - Germany"})
+	geoJob, err := normalizeJob(e, sources.Job{ExternalID: "1", Title: "Dev", Company: "Acme", Location: "Remote - Germany"})
+	if err != nil {
+		t.Fatalf("normalizeJob: %v", err)
+	}
+	geo := geoJob.Fields()
 	if !reflect.DeepEqual(geo.Countries, []string{"de"}) || !reflect.DeepEqual(geo.Regions, []string{"eu"}) {
 		t.Errorf("geography = %v/%v, want [de]/[eu]", geo.Countries, geo.Regions)
 	}
 
 	// A bare "Remote" resolves no country, so it falls into the open-anywhere global
 	// region (its remoteness stays on WorkMode; see location.Parse).
-	bare := normalizeJob(e, sources.Job{ExternalID: "2", Title: "Dev", Company: "Acme", Location: "Remote"})
+	bareJob, err := normalizeJob(e, sources.Job{ExternalID: "2", Title: "Dev", Company: "Acme", Location: "Remote"})
+	if err != nil {
+		t.Fatalf("normalizeJob: %v", err)
+	}
+	bare := bareJob.Fields()
 	if len(bare.Countries) != 0 || !reflect.DeepEqual(bare.Regions, []string{"global"}) {
 		t.Errorf("bare remote geography = %v/%v, want []/[global]", bare.Countries, bare.Regions)
 	}
@@ -228,15 +237,21 @@ func TestNormalizeJobPrefersAdapterWorkModeOverParser(t *testing.T) {
 
 	// The adapter states hybrid structurally; the location text would parse as
 	// remote. The structured signal wins.
-	structured := normalizeJob(e, sources.Job{ExternalID: "1", Title: "Dev", Company: "Acme", Location: "Remote", WorkMode: "hybrid"})
-	if structured.WorkMode != "hybrid" {
-		t.Errorf("WorkMode = %q, want hybrid (adapter structured wins over parser)", structured.WorkMode)
+	structured, err := normalizeJob(e, sources.Job{ExternalID: "1", Title: "Dev", Company: "Acme", Location: "Remote", WorkMode: "hybrid"})
+	if err != nil {
+		t.Fatalf("normalizeJob: %v", err)
+	}
+	if structured.Fields().WorkMode != "hybrid" {
+		t.Errorf("WorkMode = %q, want hybrid (adapter structured wins over parser)", structured.Fields().WorkMode)
 	}
 
 	// No structured signal: the parser fills from the location text.
-	parsed := normalizeJob(e, sources.Job{ExternalID: "2", Title: "Dev", Company: "Acme", Location: "Remote"})
-	if parsed.WorkMode != "remote" {
-		t.Errorf("WorkMode = %q, want remote (parser fallback)", parsed.WorkMode)
+	parsed, err := normalizeJob(e, sources.Job{ExternalID: "2", Title: "Dev", Company: "Acme", Location: "Remote"})
+	if err != nil {
+		t.Fatalf("normalizeJob: %v", err)
+	}
+	if parsed.Fields().WorkMode != "remote" {
+		t.Errorf("WorkMode = %q, want remote (parser fallback)", parsed.Fields().WorkMode)
 	}
 }
 
@@ -259,7 +274,7 @@ func TestRunIsolatesSourceFailure(t *testing.T) {
 	if stats.Total().Ingested != 1 {
 		t.Errorf("stats.Total().Ingested = %d, want 1 (the healthy board)", stats.Total().Ingested)
 	}
-	if len(store.saved) != 1 || store.saved[0].Source != "greenhouse" {
+	if len(store.saved) != 1 || store.saved[0].Fields().Source != "greenhouse" {
 		t.Errorf("only the healthy board's job should be saved, got %+v", store.saved)
 	}
 }
@@ -311,6 +326,32 @@ func TestRunIsolatesPerJobSaveError(t *testing.T) {
 	}
 }
 
+// TestRunSkipsInvalidDraft proves the runner does not persist a posting the
+// aggregate factory rejects (here an empty title): job.New returns ErrInvalidDraft,
+// so the job is skipped rather than upserted as junk. Not every adapter filters a
+// blank title, so this guard lives in the shared write path.
+func TestRunSkipsInvalidDraft(t *testing.T) {
+	src := fakeSource{provider: "greenhouse", jobs: []sources.Job{
+		{ExternalID: "1", Title: "", Company: "Acme"}, // no title → invalid draft
+		{ExternalID: "2", Title: "Real Job", Company: "Acme"},
+	}}
+	store := &fakeStore{}
+	r := Runner{Registry: registry(src), Store: store}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Acme", Provider: "greenhouse", Board: "acme"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(store.saved) != 1 {
+		t.Fatalf("len(saved) = %d, want 1 (the empty-title posting is skipped, not saved as junk)", len(store.saved))
+	}
+	if stats.Total().Ingested != 1 || stats.Total().Skipped != 1 {
+		t.Errorf("stats = %+v, want Ingested=1 Skipped=1", stats.Total())
+	}
+}
+
 func TestRunCountsUnknownProviderAsFailed(t *testing.T) {
 	store := &fakeStore{}
 	r := Runner{Registry: registry(), Store: store}
@@ -327,29 +368,36 @@ func TestRunCountsUnknownProviderAsFailed(t *testing.T) {
 }
 
 func TestNormalizeJobDerivesSkills(t *testing.T) {
-	got := normalizeJob(
+	dj, err := normalizeJob(
 		sources.CompanyEntry{Provider: "greenhouse", Board: "acme"},
 		sources.Job{
 			Title: "Backend Engineer", Company: "Acme", ExternalID: "1",
 			Description: "<p>Build services in Golang with PostgreSQL and Kubernetes.</p>",
 		},
 	)
+	if err != nil {
+		t.Fatalf("normalizeJob: %v", err)
+	}
 	want := []string{"go", "kubernetes", "postgresql"}
-	if !reflect.DeepEqual(got.Skills, want) {
-		t.Fatalf("Skills = %#v, want %#v", got.Skills, want)
+	if got := dj.Fields().Skills; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Skills = %#v, want %#v", got, want)
 	}
 }
 
 func TestNormalizeJobDerivesClassification(t *testing.T) {
-	job := normalizeJob(
+	dj, err := normalizeJob(
 		sources.CompanyEntry{Provider: "greenhouse", Board: "acme", Company: "Acme"},
 		sources.Job{ExternalID: "1", Title: "Senior Backend Engineer", Description: "x"},
 	)
-	if job.Seniority != "senior" {
-		t.Errorf("Seniority = %q, want senior", job.Seniority)
+	if err != nil {
+		t.Fatalf("normalizeJob: %v", err)
 	}
-	if job.Category != "backend" {
-		t.Errorf("Category = %q, want backend", job.Category)
+	f := dj.Fields()
+	if f.Seniority != "senior" {
+		t.Errorf("Seniority = %q, want senior", f.Seniority)
+	}
+	if f.Category != "backend" {
+		t.Errorf("Category = %q, want backend", f.Category)
 	}
 }
 

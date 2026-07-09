@@ -10,8 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/strelov1/freehire/internal/jobderive"
-	"github.com/strelov1/freehire/internal/normalize"
+	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/worker"
 )
@@ -24,51 +23,13 @@ const defaultConcurrency = 8
 // stops advancing — instead of the run going silent until it finishes.
 const progressInterval = 60 * time.Second
 
-// Job is a normalized posting ready to persist: the pipeline has set the platform as
-// source, namespaced the external id by board, derived the company slug, and minted
-// the public slug.
-type Job struct {
-	Source      string
-	ExternalID  string
-	URL         string
-	Title       string
-	Company     string
-	CompanySlug string
-	PublicSlug  string
-	Location    string
-	Remote      bool
-	Description string
-	PostedAt    *time.Time
-	// Countries/Regions/WorkMode are parsed from Location: ISO alpha-2 codes,
-	// region codes, and a work-mode hint. Each is empty when the location states
-	// nothing the parser can resolve.
-	Countries []string
-	Regions   []string
-	Cities    []string
-	WorkMode  string
-	// Skills are the deterministic technology tags parsed from Description by
-	// internal/skilltag. Empty when the description resolves no known skill.
-	Skills []string
-	// Seniority and Category are deterministic classification parsed from Title by
-	// internal/classify. Each is "" when the title resolves nothing.
-	Seniority string
-	Category  string
-	// Synthetic enrichment facets derived from Title/Description by jobderive
-	// (internal/lang + internal/jobfacts): the posting language, employment type,
-	// education level, English level, and minimum required experience. Each is
-	// empty/nil when nothing is resolved.
-	PostingLanguage    string
-	EmploymentType     string
-	EducationLevel     string
-	EnglishLevel       string
-	ExperienceYearsMin *int
-}
-
-// Store persists one normalized job and enqueues it for enrichment when needed,
-// atomically. The pipeline is unaware of the schema version or the outbox — that is
-// the Store implementation's concern.
+// Store persists one Job aggregate and enqueues it for enrichment when needed,
+// atomically. It accepts only a job.Job — a value obtainable exclusively through
+// the aggregate factory (job.New) — so the write path cannot persist a posting that
+// bypassed the deterministic derivation. The pipeline is unaware of the schema
+// version or the outbox — that is the Store implementation's concern.
 type Store interface {
-	Save(ctx context.Context, job Job) error
+	Save(ctx context.Context, j job.Job) error
 }
 
 // closer is the optional Store capability a self-closing streaming source needs: closing a
@@ -196,7 +157,15 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) (ingest
 
 	var firstErr error
 	for _, j := range raw {
-		if err := r.Store.Save(ctx, normalizeJob(e, j)); err != nil {
+		dj, err := normalizeJob(e, j)
+		if err != nil {
+			skipped++
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if err := r.Store.Save(ctx, dj); err != nil {
 			skipped++
 			if firstErr == nil {
 				firstErr = err
@@ -205,10 +174,11 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) (ingest
 		}
 		ingested++
 	}
-	// One line per board with skips (not one per job), so a systemic save failure —
-	// e.g. the DB behind a migration — is visible without flooding the log.
+	// One line per board with skips (not one per job), so a systemic failure — e.g.
+	// the DB behind a migration, or a board whose postings won't construct — is visible
+	// without flooding the log.
 	if skipped > 0 {
-		log.Printf("ingest: %s board %q (%s): skipped %d/%d jobs on save error (e.g. %v)",
+		log.Printf("ingest: %s board %q (%s): skipped %d/%d jobs on construct or save error (e.g. %v)",
 			e.Provider, e.Board, e.Company, skipped, len(raw), firstErr)
 	}
 	return ingested, 0, skipped
@@ -248,7 +218,15 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 			ingested++
 			return
 		}
-		if err := r.Store.Save(ctx, normalizeJob(e, j)); err != nil {
+		dj, err := normalizeJob(e, j)
+		if err != nil {
+			skipped++
+			if firstErr == nil {
+				firstErr = err
+			}
+			return
+		}
+		if err := r.Store.Save(ctx, dj); err != nil {
 			skipped++
 			if firstErr == nil {
 				firstErr = err
@@ -279,58 +257,28 @@ func jobIdentity(e sources.CompanyEntry, j sources.Job) (source, externalID stri
 	return e.Provider, sources.NamespaceExternalID(e.Board, j.ExternalID)
 }
 
-// normalizeJob turns a raw posting into a persistable Job: the platform becomes the
-// source, the external id is namespaced by board so two companies on one platform
-// cannot collide, the company slug is derived with the shared normalizer, and the
-// public slug is minted from the same (source, external_id) identity so it is stable
-// across re-ingests and deterministic with the dedup key.
-func normalizeJob(e sources.CompanyEntry, j sources.Job) Job {
+// normalizeJob turns a raw posting into the Job aggregate through the factory: the
+// platform becomes the source and the external id is namespaced by board (so two
+// companies on one platform cannot collide), and job.New derives the slugs and the
+// dictionary facets internally — so ingest, the moderator write path, and Telegram
+// extraction all produce identical facets from the one door. It returns
+// job.ErrInvalidDraft for a posting with no title/identity, which the caller skips.
+func normalizeJob(e sources.CompanyEntry, j sources.Job) (job.Job, error) {
 	source, externalID := jobIdentity(e, j)
-	// Strip any coordinate tail a source jammed into the free-text location before it
-	// reaches both the facet derivation and the stored/displayed field.
-	location := normalize.CleanLocation(j.Location)
-	// The slugs and dictionary facets (geography/work-mode/skills/classification) are
-	// derived by the shared jobderive helper, so ingest and the moderator write path
-	// produce identical facets. The adapter's structured facet signals (work-mode,
-	// seniority, category, skills, experience) take precedence over the dictionary
-	// there; an unset signal lets the dictionary decide.
-	d := jobderive.Derive(jobderive.Input{
-		Title:              j.Title,
-		Company:            j.Company,
+	return job.New(job.Draft{
 		Source:             source,
 		ExternalID:         externalID,
-		Location:           location,
+		URL:                j.URL,
+		Title:              j.Title,
+		Company:            j.Company,
+		Location:           j.Location,
+		Remote:             j.Remote,
 		Description:        j.Description,
+		PostedAt:           j.PostedAt,
 		WorkMode:           j.WorkMode,
 		Seniority:          j.Seniority,
 		Category:           j.Category,
 		Skills:             j.Skills,
 		ExperienceYearsMin: j.ExperienceYearsMin,
 	})
-	return Job{
-		Source:      source,
-		ExternalID:  externalID,
-		URL:         j.URL,
-		Title:       j.Title,
-		Company:     j.Company,
-		CompanySlug: d.CompanySlug,
-		PublicSlug:  d.PublicSlug,
-		Location:    location,
-		Remote:      j.Remote,
-		Description: j.Description,
-		PostedAt:    j.PostedAt,
-		Countries:   d.Countries,
-		Regions:     d.Regions,
-		Cities:      d.Cities,
-		WorkMode:    d.WorkMode,
-		Skills:      d.Skills,
-		Seniority:   d.Seniority,
-		Category:    d.Category,
-
-		PostingLanguage:    d.PostingLanguage,
-		EmploymentType:     d.EmploymentType,
-		EducationLevel:     d.EducationLevel,
-		EnglishLevel:       d.EnglishLevel,
-		ExperienceYearsMin: d.ExperienceYearsMin,
-	}
 }

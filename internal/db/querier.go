@@ -189,6 +189,9 @@ type Querier interface {
 	GetCompany(ctx context.Context, slug string) (Company, error)
 	GetJob(ctx context.Context, id int64) (Job, error)
 	GetJobBySlug(ctx context.Context, publicSlug string) (Job, error)
+	// Load a job by its dedup identity (source, external_id) — the key the Job
+	// aggregate's repository loads by, mirroring the CloseJobBySourceExternalID key.
+	GetJobBySourceExternalID(ctx context.Context, arg GetJobBySourceExternalIDParams) (Job, error)
 	// Slim slug->id lookup for the view/apply interaction path, which needs only the
 	// internal id (the user_jobs FK) and must not drag the wide description/enrichment
 	// columns over the wire on every silent view. GetJobBySlug (SELECT *) stays for the
