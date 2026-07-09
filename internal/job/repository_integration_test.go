@@ -126,3 +126,69 @@ func TestQueriesRepository_LoadNotFound(t *testing.T) {
 		t.Errorf("Load(missing) err = %v, want ErrNotFound", err)
 	}
 }
+
+// The aggregate's ShouldEnrich rule must agree with the SQL enqueue predicate
+// (closed_at IS NULL AND enrichment_version < target) that the enrichment worker
+// uses — the rule lives on the type, the set-based SQL is its performant
+// implementation, and this pins them equivalent so neither drifts.
+func TestShouldEnrich_MatchesEnqueuePredicate(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	q := db.New(pool)
+	repo := NewQueriesRepository(q)
+	const target int32 = 1
+
+	// Seed the three lifecycle/version states the predicate distinguishes.
+	seed := func(ext string, version int32, enriched, closed bool) {
+		t.Helper()
+		var enrichedAt, closedAt any
+		if enriched {
+			enrichedAt = "2026-01-01"
+		}
+		if closed {
+			closedAt = "2026-01-01"
+		}
+		_, err := pool.Exec(ctx,
+			`INSERT INTO jobs (source, external_id, url, title, public_slug, enrichment_version, enriched_at, closed_at)
+			 VALUES ('t', $1, 'http://x', 'Dev', 'slug-'||$1, $2, $3, $4)`,
+			ext, version, enrichedAt, closedAt)
+		if err != nil {
+			t.Fatalf("seed %s: %v", ext, err)
+		}
+	}
+	seed("open-v0", 0, false, false)  // eligible
+	seed("open-v1", 1, true, false)   // at target → not eligible
+	seed("closed-v0", 0, false, true) // closed → not eligible
+
+	// The set-based enqueue is the production path; no category exclusion here.
+	if _, err := q.EnqueuePendingJobs(ctx, db.EnqueuePendingJobsParams{TargetVersion: target}); err != nil {
+		t.Fatalf("EnqueuePendingJobs: %v", err)
+	}
+	enqueued := map[string]bool{}
+	rows, err := pool.Query(ctx,
+		`SELECT j.external_id FROM enrichment_outbox o JOIN jobs j ON j.id = o.job_id`)
+	if err != nil {
+		t.Fatalf("read outbox: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var ext string
+		if err := rows.Scan(&ext); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		enqueued[ext] = true
+	}
+
+	// For every seeded job, the aggregate's ShouldEnrich must agree with whether the
+	// SQL predicate enqueued it.
+	for _, ext := range []string{"open-v0", "open-v1", "closed-v0"} {
+		j, _, err := repo.Load(ctx, "t", ext)
+		if err != nil {
+			t.Fatalf("Load %s: %v", ext, err)
+		}
+		if got := j.ShouldEnrich(target); got != enqueued[ext] {
+			t.Errorf("%s: ShouldEnrich=%v but enqueued=%v — rule and SQL predicate diverged",
+				ext, got, enqueued[ext])
+		}
+	}
+}

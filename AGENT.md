@@ -50,7 +50,8 @@ internal/
   enrich/            enrichment contract (typed Enrichment + controlled vocabularies), the LLM Provider abstraction, and the queue-draining Runner
   search/            Meilisearch-backed job search (document shape + indexing)
   location/          curated dictionary deriving country/region codes + a work-mode hint from a free-text ATS location string (no geocoding, never guesses)
-  jobview/           the single public wire shape of a job (shared by list/detail/company/search responses and the search index)
+  job/               the Job domain aggregate: a sealed type built ONLY through job.New (the factory that derives facets) or a repository Load; owns lifecycle (Close/Reopen/ShouldEnrich) and the persistence↔domain ACL mapping. Every write path constructs through it.
+  jobview/           the single public wire shape of a job (shared by list/detail/company/search responses and the search index), projected from the job aggregate via FromDomain
   normalize/         slug normalization
 migrations/          SQL schema — single source for BOTH sqlc and Postgres initdb
 ```

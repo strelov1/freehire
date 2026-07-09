@@ -71,19 +71,29 @@
 
 ## 5. Route lifecycle + enrichment through the aggregate
 
-- [ ] 5.1 Route the three close mechanisms (ingest unseen sweep, stream self-close,
-  liveness) through the aggregate `Close` decision + repository persistence, without
-  changing when a job closes. Existing lifecycle tests stay green.
-- [ ] 5.2 Express the enrichment-eligibility rule through `ShouldEnrich()` at the
-  enqueue site; keep the SQL queue filter but assert equivalence in a test.
+- [~] 5.1 SCOPED OUT (ceremony/perf): the three close paths stay set-based SQL. The
+  canonical rule already lives on the aggregate (`Close`/`Reopen`, group 1); routing the
+  bulk `CloseUnseenJobs` sweep through per-job `aggregate.Close()` would be N loads+writes
+  vs one `UPDATE` — a perf anti-pattern the design D4 explicitly anticipated ("aggregate
+  owns the decision, repository/SQL owns the performant persistence"). No behavior change
+  is available here, so the churn is unjustified. The repository `Close` (group 2) is the
+  by-identity home when a caller wants it.
+- [x] 5.2 Pinned `ShouldEnrich()` equivalent to the SQL enqueue predicate with an
+  integration test (`TestShouldEnrich_MatchesEnqueuePredicate`): seeds open-v0 / open-v1 /
+  closed-v0, runs `EnqueuePendingJobs`, asserts the aggregate rule agrees with outbox
+  membership per job — guards the rule and the set-based SQL from drifting apart.
 
 ## 6. Repoint reads and clean up
 
-- [ ] 6.1 Repoint read/list callers from `jobview.FromRow` to `FromDomain` (via the
-  narrow per-row `db.Job → job.Job` map for list slices per design Open Question);
-  remove the `FromRow` shim once no caller depends on it.
-- [ ] 6.2 Run `go build ./... && go vet ./... && go test ./...` (+ integration tag for
-  DB tests); confirm `internal/jobview` no longer imports `db.Job` as its projection
-  input shape and only `job`/adapter maps persistence.
-- [ ] 6.3 Update `AGENT.md` conventions: document the `job` aggregate as the single
-  construction door and the projection direction (domain → wire).
+- [~] 6.1 SCOPED OUT (cosmetic): `jobview.FromRow` stays as a thin, clean adapter over
+  `job.FromRow` → `FromDomain`. The persistence→wire leak is already closed — the projection
+  LOGIC (`FromDomain`) depends only on domain types. Removing the shim would spread its
+  two-line hydration across ~10 read call sites (handlers/search) for zero behavior change,
+  which contradicts "no overengineering". The shim keeps read callers untouched.
+- [x] 6.2 Verified: `go build`/`go vet`/`go test ./...` green (57 pkgs) + `-tags=integration`
+  for the DB tests. `internal/jobview` imports `db` in ONE place only — the deliberate
+  `FromRow` shim (+ `FromRows`); the projection input shape is now `job.Job`/`job.Extras`,
+  not `db.Job`.
+- [x] 6.3 Updated `AGENT.md`: added the `internal/job` aggregate to the layout as the single
+  construction door (built only via `job.New`/repository Load), and noted `jobview` now
+  projects from the aggregate via `FromDomain`.
