@@ -124,8 +124,9 @@ func run() int {
 	// post-run sweep scopes its closes to them (see the sweep below and crawledSet).
 	crawled := newCrawledSet()
 	runner := pipeline.Runner{
-		Registry: registry,
-		Store:    newDBStore(pool, enrich.Version, storeIndexer, crawled),
+		Registry:    registry,
+		Store:       newDBStore(pool, enrich.Version, storeIndexer, crawled),
+		BoardHealth: newBoardHealth(pool),
 	}
 
 	runStats, err := runner.Run(ctx, sourceCfg.Sources)
@@ -133,6 +134,10 @@ func run() int {
 		log.Printf("ingest: %v", err)
 		return 1
 	}
+
+	// Surface which boards are failing / cooled without grepping logs — one line
+	// naming them, their failure count, and when they next become eligible.
+	logUnhealthyBoards(ctx, db.New(pool))
 
 	// Flush whatever new/changed documents the crawl buffered into the live index.
 	// Best-effort: failures are already logged per batch and never affect the run.

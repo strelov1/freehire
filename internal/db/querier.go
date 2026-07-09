@@ -213,6 +213,9 @@ type Querier interface {
 	// search filter stays bounded; the overflow risk is only an occasional re-shown
 	// long-ago-seen job, never a correctness problem.
 	ExcludedJobIDs(ctx context.Context, arg ExcludedJobIDsParams) ([]int64, error)
+	// The board's current cooldown_until (NULL = eligible). Absent row → pgx.ErrNoRows,
+	// which the caller treats as "never seen, eligible".
+	GetBoardCooldown(ctx context.Context, arg GetBoardCooldownParams) (pgtype.Timestamptz, error)
 	// SELECT * (not an explicit column list) so the generated row stays db.Company as
 	// the table grows columns (e.g. collections); an explicit subset makes sqlc emit a
 	// distinct row type and breaks the company-detail handler on every new column.
@@ -374,6 +377,9 @@ type Querier interface {
 	// The caller's subscriptions joined to each saved search's display name and query,
 	// newest first — the "My subscriptions" view.
 	ListSubscriptions(ctx context.Context, userID int64) ([]ListSubscriptionsRow, error)
+	// Every board currently failing or cooled down, worst first — the operator's
+	// "what's broken" query and the source of the per-run summary log.
+	ListUnhealthyBoards(ctx context.Context) ([]ListUnhealthyBoardsRow, error)
 	// A user's job interactions joined with the job rows, most recently touched
 	// first (GREATEST ignores NULLs; viewed_at is always set). filter narrows to
 	// viewed-only/saved/applied subsets; 'all' is every interaction, 'viewed' is
@@ -424,6 +430,13 @@ type Querier interface {
 	// picks the changed rows up; the IS DISTINCT FROM guard skips unchanged rows, making
 	// re-runs idempotent and cheap.
 	PropagateCollectionsToJobs(ctx context.Context) (int64, error)
+	// Count a failed crawl: bump consecutive_failures, record the error, stamp the run,
+	// and RETURN the new failure count so the caller can compute the cooldown (the backoff
+	// policy lives in Go, not here). The cooldown itself is applied by SetBoardCooldown.
+	RecordBoardFailure(ctx context.Context, arg RecordBoardFailureParams) (int32, error)
+	// A successful crawl clears the failure state and stamps freshness. Upsert so a
+	// first-ever crawl creates the row.
+	RecordBoardSuccess(ctx context.Context, arg RecordBoardSuccessParams) error
 	// Count a failed attempt: bump attempts, record the error, and dead-letter (set
 	// failed_at) once attempts reach the max. The lease (claimed_at) is intentionally
 	// left in place — its expiry gates the retry to a later run and doubles as the
@@ -499,6 +512,9 @@ type Querier interface {
 	// ATS provider set from the sources registry; <> ALL excludes them, so a new adapter
 	// never silently becomes a probe target. Closed jobs are skipped (already not open).
 	SelectOrphanLivenessCandidates(ctx context.Context, atsProviders []string) ([]SelectOrphanLivenessCandidatesRow, error)
+	// Apply the Go-computed cooldown window to a board (called only when the backoff
+	// policy says to cool down).
+	SetBoardCooldown(ctx context.Context, arg SetBoardCooldownParams) error
 	// Replace a company's collection set. The import worker computes the full set in Go
 	// (preserving unmanaged tags) and writes it here; updated_at is bumped for parity
 	// with the other write paths.

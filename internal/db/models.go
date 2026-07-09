@@ -21,6 +21,18 @@ type ApiKey struct {
 	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
 }
 
+type BoardHealth struct {
+	Provider            string             `json:"provider"`
+	Board               string             `json:"board"`
+	ConsecutiveFailures int32              `json:"consecutive_failures"`
+	CooldownUntil       pgtype.Timestamptz `json:"cooldown_until"`
+	LastError           pgtype.Text        `json:"last_error"`
+	LastErrorAt         pgtype.Timestamptz `json:"last_error_at"`
+	LastSuccessAt       pgtype.Timestamptz `json:"last_success_at"`
+	LastIngestedCount   pgtype.Int4        `json:"last_ingested_count"`
+	LastRunAt           pgtype.Timestamptz `json:"last_run_at"`
+}
+
 type Company struct {
 	Slug             string             `json:"slug"`
 	Name             string             `json:"name"`
