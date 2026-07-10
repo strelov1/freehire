@@ -8,10 +8,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/ledongthuc/pdf"
 
+	classifydict "github.com/strelov1/freehire/internal/classify"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/skilltag"
 )
@@ -29,16 +31,98 @@ type resumeUpload struct {
 	Text        string
 }
 
-// ExtractResumeSkills turns an uploaded resume into canonical skill slugs via the
-// deterministic skilltag dictionary. It accepts a PDF (multipart/form-data field
+// cvProfile is the profile a résumé yields through the deterministic dictionaries:
+// canonical skills, the seniority grade, and every category the résumé spans (a person
+// can be several — backend + ML). Each dictionary "never guesses", so an unresolved field
+// is empty.
+type cvProfile struct {
+	Skills     []string
+	Seniority  string
+	Categories []string
+}
+
+// headlineRunes bounds the résumé "headline" fed to the title dictionaries: wide enough to
+// clear the name + contact preamble and reach the title (and a few summary words), tight
+// enough that the career-history section below can't reach in and over-promote the grade.
+const headlineRunes = 120
+
+// resumeHeadline returns the top of a résumé as a single flowing string — the name, title,
+// and the start of the summary — with contact/metadata tokens (email, phone, profile URL,
+// bare numbers, punctuation) dropped. The title dictionary (classify) runs over this, not
+// the whole CV, so a grade or role word buried in the career history
+// ("reported to the Head of Eng", a past Director role) can't over-promote the current
+// role. It collapses all whitespace first because PDF text extraction is unreliable about
+// line breaks — a two-column or table header often comes out one token per line — so a
+// line-based scan would stall on the name and never reach the title.
+func resumeHeadline(text string) string {
+	var kept []string
+	runes := 0
+	for _, tok := range strings.Fields(text) {
+		if looksLikeContactToken(tok) {
+			continue
+		}
+		kept = append(kept, tok)
+		if runes += len([]rune(tok)) + 1; runes >= headlineRunes {
+			break
+		}
+	}
+	return strings.Join(kept, " ")
+}
+
+// looksLikeContactToken reports whether a whitespace-delimited résumé token is
+// contact/metadata noise rather than a title word: an email, a profile URL, or a token
+// with no letters at all (a "|" separator, a phone fragment, a bare number). Dropping these
+// keeps the headline landing on the actual role, not the candidate's inbox.
+func looksLikeContactToken(tok string) bool {
+	lower := strings.ToLower(tok)
+	if strings.Contains(lower, "@") {
+		return true
+	}
+	for _, s := range []string{"http", "www.", "linkedin.com", "github.com", ".com/"} {
+		if strings.Contains(lower, s) {
+			return true
+		}
+	}
+	for _, r := range tok {
+		if unicode.IsLetter(r) {
+			return false
+		}
+	}
+	return true // no letters → punctuation / phone digits / bare number
+}
+
+// resumeProfile derives a cvProfile from résumé text using only the existing
+// dictionaries — skilltag for skills over the whole text (skills appear anywhere), and
+// classify over the headline (the current title + summary top) for the seniority grade
+// and the categories the résumé spans. No LLM.
+func resumeProfile(text string) cvProfile {
+	skills := skilltag.Parse(text, skilltag.WithResumeAcronyms())
+	if skills == nil {
+		skills = []string{}
+	}
+	head := resumeHeadline(text)
+	categories := classifydict.Categories(head)
+	if categories == nil {
+		categories = []string{}
+	}
+	return cvProfile{
+		Skills:     skills,
+		Seniority:  classifydict.Parse(head).Seniority,
+		Categories: categories,
+	}
+}
+
+// ExtractResumeProfile turns an uploaded résumé into a structured profile — canonical
+// skill slugs plus the dictionary-resolved seniority grade and the categories it spans —
+// all via the deterministic dictionaries (no LLM). It accepts a PDF (multipart/form-data field
 // "file") or plain text (application/json {text}), dispatched by Content-Type. When S3
 // storage is configured it also stores the résumé once — the single upload point, so the
 // verdict's coherence can reuse it without a second upload; storing is best-effort here
-// (a hiccup must not fail skill extraction, this endpoint's contract). When storage is
-// unconfigured the résumé is parsed and discarded (only the slugs are returned). Behind
-// RequireAuth (cookie-only). Oversize bodies are rejected by the server's global
+// (a hiccup must not fail extraction, this endpoint's contract). When storage is
+// unconfigured the résumé is parsed and discarded (only the derived fields are returned).
+// Behind RequireAuth (cookie-only). Oversize bodies are rejected by the server's global
 // BodyLimit (413) before this handler runs.
-func (a *API) ExtractResumeSkills(c *fiber.Ctx) error {
+func (a *API) ExtractResumeProfile(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -52,16 +136,11 @@ func (a *API) ExtractResumeSkills(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "resume is empty")
 	}
 
-	// Résumé path: enable the résumé-scoped acronym tier (e.g. RAG), which stays off
-	// for job parsing so it never tags job facets ("RAG status").
-	skills := skilltag.Parse(up.Text, skilltag.WithResumeAcronyms())
-	if skills == nil {
-		skills = []string{}
-	}
+	prof := resumeProfile(up.Text)
 
 	if a.resume.Enabled() {
 		if _, err := a.resume.Put(c.Context(), userID, up.ContentType, up.Data); err != nil {
-			// Best-effort: log (never the résumé bytes) and still return the skills.
+			// Best-effort: log (never the résumé bytes) and still return the profile.
 			log.Printf("resume: store on extract failed for user %d: %v", userID, err)
 		} else {
 			// This is the résumé-upload path the app actually uses, so it is where the CV
@@ -69,7 +148,14 @@ func (a *API) ExtractResumeSkills(c *fiber.Ctx) error {
 			go a.embedResume(userID, up.Text)
 		}
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"skills": skills}})
+
+	// skills and categories are always arrays (possibly empty) so the client can treat
+	// them uniformly; seniority is omitted when unresolved so a client never sees a guess.
+	data := fiber.Map{"skills": prof.Skills, "categories": prof.Categories}
+	if prof.Seniority != "" {
+		data["seniority"] = prof.Seniority
+	}
+	return c.JSON(fiber.Map{"data": data})
 }
 
 // resumeMetaResponse is the wire shape for résumé status: whether storage is enabled at

@@ -87,6 +87,27 @@ func TestParse(t *testing.T) {
 	}
 }
 
+func TestCategories(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want []string
+	}{
+		{"single category", "Senior Backend Engineer", []string{"backend"}},
+		{"several distinct categories, precedence order", "Backend Engineer and Data Engineer doing machine learning", []string{"data_engineering", "ml_ai", "backend"}},
+		{"duplicate aliases collapse to one", "backend and back-end developer", []string{"backend"}},
+		{"generic title resolves nothing", "Software Engineer", nil},
+		{"empty", "", nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Categories(tc.text); !slices.Equal(got, tc.want) {
+				t.Errorf("Categories(%q) = %v, want %v", tc.text, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestCanonicalValuesAreInVocabulary(t *testing.T) {
 	for alias, canon := range seniorityAliases {
 		if !slices.Contains(enrich.SeniorityValues, canon) {

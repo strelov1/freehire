@@ -35,6 +35,7 @@ import type {
   Verdict,
   ATSResponse,
   JobMatch,
+  ResumeProfile,
 } from './types';
 
 /** A page of list items, optionally the total matching the query (endpoints that
@@ -536,14 +537,16 @@ export function createApi(
     return { method, body: form };
   }
 
-  /** Extract canonical skill slugs from a resume — a PDF `File` (sent as multipart) or
-   *  pasted text (sent as JSON). Skills come back ready to merge into a profile. */
-  async function extractResumeSkills(input: File | string): Promise<string[]> {
-    const res = await request<{ data: { skills: string[] } }>(
+  /** Derive a résumé's profile — a PDF `File` (sent as multipart) or pasted text (sent
+   *  as JSON) — via the deterministic dictionaries: canonical skills plus the
+   *  specializations and seniority resolved, ready to pre-fill a profile or the onboarding
+   *  wizard. */
+  async function extractResumeProfile(input: File | string): Promise<ResumeProfile> {
+    const res = await request<{ data: ResumeProfile }>(
       '/api/v1/me/resume/extract',
       resumeInit('POST', input),
     );
-    return res.data.skills;
+    return res.data;
   }
 
   /** The market-coverage verdict for the caller's profile: how many open vacancies the
@@ -751,7 +754,7 @@ export function createApi(
     getProfile,
     saveProfile,
     deleteProfile,
-    extractResumeSkills,
+    extractResumeProfile,
     getProfileVerdict,
     getATSReport,
     runATSReview,
@@ -824,7 +827,7 @@ export const {
   getProfile,
   saveProfile,
   deleteProfile,
-  extractResumeSkills,
+  extractResumeProfile,
   getProfileVerdict,
   getATSReport,
   runATSReview,

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ArrowUp, Check, X } from '@lucide/svelte';
-  import { ApiError, extractResumeSkills, facetCounts } from '$lib/api';
+  import { ApiError, extractResumeProfile, facetCounts } from '$lib/api';
   import { CATEGORY_OPTIONS, categoryLabel, type FacetOption } from '$lib/facets';
   import { profileStore } from '$lib/profile.svelte';
   import type { UserProfile } from '$lib/types';
@@ -78,27 +78,44 @@
     void loadSkills();
   });
 
-  // Extract skills from a résumé PDF and merge them into the skills field as a
-  // deduplicated union, preserving anything already entered. The upload also stores the
-  // CV server-side, so notify the parent to refresh the CV-readiness state.
+  // Derive skills + specialization from a résumé PDF and merge them into the fields as a
+  // deduplicated union, preserving anything already entered (the specialization respects
+  // the cap). The upload also stores the CV server-side, so notify the parent to refresh
+  // the CV-readiness state.
   async function analyzeResume(file: File) {
     resumeBusy = true;
     resumeError = null;
     resumeNote = null;
     try {
-      const extracted = await extractResumeSkills(file);
+      const cv = await extractResumeProfile(file);
       onCvUploaded?.();
-      if (extracted.length === 0) {
-        resumeNote = 'No known skills found in the CV.';
-        return;
+
+      const beforeSkills = skills.length;
+      skills = [...new Set([...skills, ...cv.skills])];
+      const addedSkills = skills.length - beforeSkills;
+
+      // Merge every specialization the CV resolved, respecting the cap; track how many
+      // were added vs. left out by the cap so the note is accurate.
+      let addedSpecs = 0;
+      let cappedSpecs = 0; // resolved but the cap left no room
+      for (const cat of cv.categories) {
+        if (specializations.includes(cat)) continue;
+        if (specializations.length < MAX_SPECIALIZATIONS) {
+          specializations = [...specializations, cat];
+          addedSpecs++;
+        } else {
+          cappedSpecs++;
+        }
       }
-      const before = skills.length;
-      skills = [...new Set([...skills, ...extracted])];
-      const added = skills.length - before;
-      resumeNote =
-        added > 0
-          ? `Added ${added} skill${added === 1 ? '' : 's'} from your CV.`
-          : 'All CV skills were already listed.';
+
+      const parts: string[] = [];
+      if (addedSkills > 0) parts.push(`${addedSkills} skill${addedSkills === 1 ? '' : 's'}`);
+      if (addedSpecs > 0) parts.push(`${addedSpecs} specialization${addedSpecs === 1 ? '' : 's'}`);
+      if (parts.length) resumeNote = `Added ${parts.join(' and ')} from your CV.`;
+      else if (cappedSpecs > 0)
+        resumeNote = `Reached the ${MAX_SPECIALIZATIONS}-specialization limit — nothing more added.`;
+      else if (cv.skills.length === 0 && cv.categories.length === 0) resumeNote = 'No known skills found in the CV.';
+      else resumeNote = 'Everything from your CV was already listed.';
     } catch (err) {
       resumeError = err instanceof ApiError ? err.message : 'Could not read the CV. Please try again.';
     } finally {

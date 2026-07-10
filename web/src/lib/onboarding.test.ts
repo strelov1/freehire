@@ -37,14 +37,24 @@ describe('selectionsToQuery', () => {
   });
 
   it('maps a role-only selection to the category facet', () => {
-    const f = facetsOf({ ...emptySelection(), specialization: 'backend' });
+    const f = facetsOf({ ...emptySelection(), specializations: ['backend'] });
     expect(f.category?.include).toEqual(['backend']);
     expect(f.seniority?.include).toEqual([]);
     expect(f.skills?.include).toEqual([]);
   });
 
+  it('maps several specializations to the category facet', () => {
+    const f = facetsOf({ ...emptySelection(), specializations: ['backend', 'ai_engineering'] });
+    expect(f.category?.include).toEqual(['backend', 'ai_engineering']);
+  });
+
+  it('maps several seniorities to the seniority facet (grade range)', () => {
+    const f = facetsOf({ ...emptySelection(), seniorities: ['middle', 'senior'] });
+    expect(f.seniority?.include).toEqual(['middle', 'senior']);
+  });
+
   it('round-trips a role + stack selection', () => {
-    const sel: OnboardingSelection = { ...emptySelection(), specialization: 'backend', stack: ['Go', 'Kubernetes'] };
+    const sel: OnboardingSelection = { ...emptySelection(), specializations: ['backend'], stack: ['Go', 'Kubernetes'] };
     const f = facetsOf(sel);
     expect(f.category?.include).toEqual(['backend']);
     expect(f.skills?.include).toEqual(['Go', 'Kubernetes']);
@@ -52,8 +62,8 @@ describe('selectionsToQuery', () => {
 
   it('round-trips a full selection across all five facets', () => {
     const sel: OnboardingSelection = {
-      specialization: 'frontend',
-      seniority: 'senior',
+      specializations: ['frontend'],
+      seniorities: ['senior'],
       workMode: 'remote',
       region: 'eu',
       stack: ['TypeScript'],
@@ -74,7 +84,7 @@ describe('selectionsToQuery', () => {
 
 describe('narrowestFacet', () => {
   it('returns null when no relaxable facet is set', () => {
-    const f = filtersFromParams(new URLSearchParams(selectionsToQuery({ ...emptySelection(), specialization: 'backend' })));
+    const f = filtersFromParams(new URLSearchParams(selectionsToQuery({ ...emptySelection(), specializations: ['backend'] })));
     // only category (never relaxed) is set
     expect(narrowestFacet(f)).toBeNull();
   });
@@ -82,18 +92,18 @@ describe('narrowestFacet', () => {
   it('peels stack first, then region, then seniority — never the role', () => {
     const full = filtersFromParams(
       new URLSearchParams(
-        selectionsToQuery({ specialization: 'backend', seniority: 'senior', workMode: undefined, region: 'eu', stack: ['Go'] }),
+        selectionsToQuery({ specializations: ['backend'], seniorities: ['senior'], workMode: undefined, region: 'eu', stack: ['Go'] }),
       ),
     );
     expect(narrowestFacet(full)).toBe('skills');
 
     const noStack = filtersFromParams(
-      new URLSearchParams(selectionsToQuery({ ...emptySelection(), specialization: 'backend', seniority: 'senior', region: 'eu' })),
+      new URLSearchParams(selectionsToQuery({ ...emptySelection(), specializations: ['backend'], seniorities: ['senior'], region: 'eu' })),
     );
     expect(narrowestFacet(noStack)).toBe('regions');
 
     const seniorityOnly = filtersFromParams(
-      new URLSearchParams(selectionsToQuery({ ...emptySelection(), specialization: 'backend', seniority: 'senior' })),
+      new URLSearchParams(selectionsToQuery({ ...emptySelection(), specializations: ['backend'], seniorities: ['senior'] })),
     );
     expect(narrowestFacet(seniorityOnly)).toBe('seniority');
   });

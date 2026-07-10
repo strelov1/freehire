@@ -29,7 +29,7 @@ func resumeApp(t *testing.T) (*fiber.App, string) {
 	}
 	h := &API{issuer: iss}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Post("/me/resume/extract", auth.RequireAuth(iss), h.ExtractResumeSkills)
+	app.Post("/me/resume/extract", auth.RequireAuth(iss), h.ExtractResumeProfile)
 	return app, token
 }
 
@@ -85,7 +85,7 @@ func decodeSkills(t *testing.T, resp *http.Response) []string {
 	return got.Data.Skills
 }
 
-func TestExtractResumeSkills_Unauthenticated(t *testing.T) {
+func TestExtractResumeProfile_Unauthenticated(t *testing.T) {
 	app, _ := resumeApp(t)
 	resp := postResumeJSON(t, app, `{"text":"Go and PostgreSQL"}`, "")
 	if resp.StatusCode != fiber.StatusUnauthorized {
@@ -93,7 +93,7 @@ func TestExtractResumeSkills_Unauthenticated(t *testing.T) {
 	}
 }
 
-func TestExtractResumeSkills_Text(t *testing.T) {
+func TestExtractResumeProfile_Text(t *testing.T) {
 	app, token := resumeApp(t)
 	resp := postResumeJSON(t, app, `{"text":"Experienced with PostgreSQL, Kubernetes and Docker."}`, token)
 	if resp.StatusCode != fiber.StatusOK {
@@ -105,7 +105,7 @@ func TestExtractResumeSkills_Text(t *testing.T) {
 	}
 }
 
-func TestExtractResumeSkills_TextNoSkills(t *testing.T) {
+func TestExtractResumeProfile_TextNoSkills(t *testing.T) {
 	app, token := resumeApp(t)
 	resp := postResumeJSON(t, app, `{"text":"I like long walks on the beach."}`, token)
 	if resp.StatusCode != fiber.StatusOK {
@@ -118,7 +118,7 @@ func TestExtractResumeSkills_TextNoSkills(t *testing.T) {
 	}
 }
 
-func TestExtractResumeSkills_EmptyText(t *testing.T) {
+func TestExtractResumeProfile_EmptyText(t *testing.T) {
 	app, token := resumeApp(t)
 	resp := postResumeJSON(t, app, `{"text":"   "}`, token)
 	if resp.StatusCode != fiber.StatusBadRequest {
@@ -126,7 +126,7 @@ func TestExtractResumeSkills_EmptyText(t *testing.T) {
 	}
 }
 
-func TestExtractResumeSkills_PDF(t *testing.T) {
+func TestExtractResumeProfile_PDF(t *testing.T) {
 	pdf, err := os.ReadFile("testdata/resume_sample.pdf")
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
@@ -142,7 +142,7 @@ func TestExtractResumeSkills_PDF(t *testing.T) {
 	}
 }
 
-func TestExtractResumeSkills_MalformedPDF(t *testing.T) {
+func TestExtractResumeProfile_MalformedPDF(t *testing.T) {
 	app, token := resumeApp(t)
 	resp := postResumeFile(t, app, "resume.pdf", []byte("this is not a pdf"), token)
 	if resp.StatusCode != fiber.StatusBadRequest {

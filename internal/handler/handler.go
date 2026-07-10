@@ -327,7 +327,7 @@ func Register(app *fiber.App, cfg Config) {
 	// modal (extracted skills merge into the profile). When S3 storage is configured it
 	// also stores the résumé once (the single upload point); when not, it stays stateless
 	// (parsed and discarded, only canonical slugs returned).
-	api.Post("/me/resume/extract", saved, a.ExtractResumeSkills)
+	api.Post("/me/resume/extract", saved, a.ExtractResumeProfile)
 
 	// Résumé storage (cookie-only): store the résumé once so the verdict's coherence can
 	// reuse it without a second upload. PUT stores/replaces, GET reports status (enabled +

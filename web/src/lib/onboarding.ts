@@ -12,10 +12,12 @@ import { emptyFilters, filtersToParams, type JobFilters } from './facetModel';
 // skippable per field, and an empty field contributes no filter constraint.
 // Each maps to one existing job facet param (see selectionsToQuery).
 export interface OnboardingSelection {
-  /** Coarse specialization → the `category` facet (Backend, Frontend, ML/AI, …). */
-  specialization?: string;
-  /** → the `seniority` facet. */
-  seniority?: string;
+  /** Specializations → the `category` facet (Backend, Frontend, ML/AI, …). Multi-select:
+   *  a person can be several (a CV upload can pre-fill more than one). */
+  specializations: string[];
+  /** Seniorities → the `seniority` facet. Multi-select: a search can span a grade range
+   *  (Middle + Senior), though a CV pre-fills the single current grade. */
+  seniorities: string[];
   /** → the `work_mode` facet. */
   workMode?: string;
   /** → the `regions` facet (macro region code). */
@@ -25,7 +27,7 @@ export interface OnboardingSelection {
 }
 
 export function emptySelection(): OnboardingSelection {
-  return { stack: [] };
+  return { specializations: [], seniorities: [], stack: [] };
 }
 
 /** Map the wizard's selection onto the existing filter query string, via the same
@@ -34,8 +36,8 @@ export function emptySelection(): OnboardingSelection {
  *  No hand-written param strings: the facet-param contract stays in facetModel. */
 export function selectionsToQuery(sel: OnboardingSelection): string {
   const f = emptyFilters();
-  if (sel.specialization) f.facets.category!.include = [sel.specialization];
-  if (sel.seniority) f.facets.seniority!.include = [sel.seniority];
+  if (sel.specializations.length) f.facets.category!.include = [...sel.specializations];
+  if (sel.seniorities.length) f.facets.seniority!.include = [...sel.seniorities];
   if (sel.workMode) f.facets.work_mode!.include = [sel.workMode];
   if (sel.region) f.facets.regions!.include = [sel.region];
   const stack = sel.stack.map((s) => s.trim()).filter(Boolean);

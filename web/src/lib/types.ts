@@ -295,3 +295,13 @@ export interface TelegramStatus {
   linked: boolean;
   chat_id?: number;
 }
+
+/** What a résumé yields through the deterministic dictionaries: canonical skills and
+ *  every specialization the résumé spans, plus the seniority grade. `skills` and
+ *  `categories` are always arrays (empty when nothing resolved); `seniority` is omitted
+ *  when unresolved (never guessed). */
+export interface ResumeProfile {
+  skills: string[];
+  categories: string[];
+  seniority?: string;
+}

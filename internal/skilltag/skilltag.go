@@ -124,7 +124,7 @@ type options struct {
 
 // WithResumeAcronyms enables the résumé-scoped acronym tier (resumeAcronyms, e.g.
 // RAG) for a Parse call. Job callers omit it so those acronyms never tag job
-// facets; the résumé path (handler.ExtractResumeSkills) sets it.
+// facets; the résumé path (handler.ExtractResumeProfile) sets it.
 func WithResumeAcronyms() Option {
 	return func(o *options) { o.resumeAcronyms = true }
 }

@@ -30,6 +30,32 @@ func Parse(title string) Classification {
 	}
 }
 
+// Categories resolves every category the text mentions — each alias that occurs as a
+// whole word — distinct and in precedence order (the primary category first). Unlike
+// Parse, which keeps only the single strongest category, this surfaces the full set a
+// résumé spans (a backend engineer who also does ML). Empty when nothing resolves; it
+// never guesses.
+func Categories(text string) []string {
+	return matchAllOrdered(strings.ToLower(text), categoryOrder, categoryAliases)
+}
+
+// matchAllOrdered returns the distinct canonical values of every alias (in priority
+// order) that occurs as a whole word in title. Several aliases can share a canonical
+// ("backend"/"back-end"), so results are deduplicated while preserving first-seen order.
+func matchAllOrdered(title string, order []string, aliases map[string]string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, alias := range order {
+		if wordmatch.Contains(title, alias, wordmatch.UnicodeBoundary) {
+			if slug := aliases[alias]; !seen[slug] {
+				seen[slug] = true
+				out = append(out, slug)
+			}
+		}
+	}
+	return out
+}
+
 // CategoryAliases maps each category canonical to the title aliases that resolve
 // to it (the inverse of the internal alias table); SeniorityAliases does the same
 // for grades. Exposed so the web role picker can search roles by shorthand — the
