@@ -323,7 +323,113 @@ export interface JobMatch {
   missing: string[];
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'breezy', 'careerplug', 'careerspage', 'clinch', 'comeet', 'cornerstone', 'deel', 'earcu', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'gem', 'getmatch', 'getonbrd', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'himalayas', 'hireology', 'huntflow', 'icims', 'inhire', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobstash', 'jobtech', 'join', 'justjoin', 'lever', 'luxoft', 'mindsight', 'mycareersfuture', 'oracle', 'paycom', 'paylocity', 'personio', 'phenom', 'pinpoint', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'solides', 'successfactors', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'ukg', 'vention', 'vouch', 'wantedkr', 'weworkremotely', 'workable', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
+/**
+ * Canonical dimension keys, in the fixed display/scoring order. The model returns
+ * the five scores by name; the wire Dimensions slice is built here so a dropped,
+ * reordered, or injected dimension can never reach the response.
+ */
+export const DimTitleAlignment = "title_alignment";
+/**
+ * Canonical dimension keys, in the fixed display/scoring order. The model returns
+ * the five scores by name; the wire Dimensions slice is built here so a dropped,
+ * reordered, or injected dimension can never reach the response.
+ */
+export const DimExperienceRelevance = "experience_relevance";
+/**
+ * Canonical dimension keys, in the fixed display/scoring order. The model returns
+ * the five scores by name; the wire Dimensions slice is built here so a dropped,
+ * reordered, or injected dimension can never reach the response.
+ */
+export const DimSeniorityFit = "seniority_fit";
+/**
+ * Canonical dimension keys, in the fixed display/scoring order. The model returns
+ * the five scores by name; the wire Dimensions slice is built here so a dropped,
+ * reordered, or injected dimension can never reach the response.
+ */
+export const DimSkillsCoverage = "skills_coverage";
+/**
+ * Canonical dimension keys, in the fixed display/scoring order. The model returns
+ * the five scores by name; the wire Dimensions slice is built here so a dropped,
+ * reordered, or injected dimension can never reach the response.
+ */
+export const DimCompanyContext = "company_context";
+/**
+ * Verdict labels (server-derived from overall_score — never taken from the model).
+ */
+export const VerdictStrong = "Strong Fit";
+/**
+ * Verdict labels (server-derived from overall_score — never taken from the model).
+ */
+export const VerdictGood = "Good Fit";
+/**
+ * Verdict labels (server-derived from overall_score — never taken from the model).
+ */
+export const VerdictModerate = "Moderate Fit";
+/**
+ * Verdict labels (server-derived from overall_score — never taken from the model).
+ */
+export const VerdictWeak = "Weak Fit";
+/**
+ * Verdict labels (server-derived from overall_score — never taken from the model).
+ */
+export const VerdictPoor = "Poor Fit";
+/**
+ * Requirement priorities and match statuses (the ATS lens vocabulary).
+ */
+export const PriorityRequired = "required";
+/**
+ * Requirement priorities and match statuses (the ATS lens vocabulary).
+ */
+export const PriorityPreferred = "preferred";
+/**
+ * Requirement priorities and match statuses (the ATS lens vocabulary).
+ */
+export const StatusCovered = "covered"; // present in the CV (verbatim or trivial inflection)
+/**
+ * Requirement priorities and match statuses (the ATS lens vocabulary).
+ */
+export const StatusSynonymOnly = "synonym-only"; // the concept is present under a different term
+/**
+ * Requirement priorities and match statuses (the ATS lens vocabulary).
+ */
+export const StatusMissingHave = "missing-have"; // profile evidences it but the CV never states it
+/**
+ * Requirement priorities and match statuses (the ATS lens vocabulary).
+ */
+export const StatusMissingGap = "missing-gap"; // a genuine gap — absent, no close equivalent held
+/**
+ * Dimension is one scored fit dimension on the wire.
+ */
+export interface Dimension {
+  key: string;
+  label: string;
+  score: number /* int */; // 0-100
+  comment: string;
+}
+/**
+ * Requirement is one vacancy requirement classified against the CV (the ATS lens).
+ */
+export interface Requirement {
+  text: string;
+  priority: string; // required | preferred
+  status: string; // covered | synonym-only | missing-have | missing-gap
+  evidence: string; // where it appears in the CV, or why it is absent
+}
+/**
+ * Analysis is the full served fit verdict — the single wire contract exported to TS
+ * via cmd/gen-contracts.
+ */
+export interface Analysis {
+  dimensions: Dimension[];
+  requirement_match: Requirement[];
+  overall_score: number /* int */;
+  verdict: string;
+  strengths: string[];
+  gaps: string[];
+  recommendation: string;
+}
+
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'breezy', 'careerplug', 'careerspage', 'clinch', 'comeet', 'cornerstone', 'deel', 'earcu', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'gem', 'getmatch', 'getonbrd', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'himalayas', 'hireology', 'huntflow', 'icims', 'inhire', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobstash', 'jobtech', 'join', 'justjoin', 'lever', 'loxo', 'luxoft', 'mindsight', 'mycareersfuture', 'oracle', 'paycom', 'paylocity', 'personio', 'phenom', 'pinpoint', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'solides', 'successfactors', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'ukg', 'vention', 'vouch', 'wantedkr', 'weworkremotely', 'workable', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];

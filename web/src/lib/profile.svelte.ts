@@ -8,7 +8,7 @@
 
 import { api } from '$lib/api';
 import { UserResource } from '$lib/userResource.svelte';
-import type { UserProfile } from '$lib/types';
+import type { LocationPreferences, UserProfile } from '$lib/types';
 
 class ProfileStore extends UserResource<UserProfile | null> {
   // Reassigned (never mutated in place) on every change, so $state.raw is enough and
@@ -33,10 +33,15 @@ class ProfileStore extends UserResource<UserProfile | null> {
     this.#profile = null;
   }
 
-  /** Create-or-replace the profile. Throws on a bad specialization or empty skills (the
-   *  caller shows the error). */
-  async save(specializations: string[], skills: string[]): Promise<UserProfile> {
-    const row = await api.saveProfile(specializations, skills);
+  /** Create-or-replace the profile. `location` is the optional location-preferences block
+   *  (null clears it). Throws on a bad specialization, empty skills, or an out-of-vocabulary
+   *  location value (the caller shows the error). */
+  async save(
+    specializations: string[],
+    skills: string[],
+    location: LocationPreferences | null,
+  ): Promise<UserProfile> {
+    const row = await api.saveProfile(specializations, skills, location);
     this.#profile = row;
     this.markLoaded();
     return row;

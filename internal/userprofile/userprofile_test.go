@@ -47,7 +47,7 @@ func TestSave_UpsertsWithOwnerNormalizedSpecializationsAndSkills(t *testing.T) {
 	svc := userprofile.New(repo)
 
 	_, err := svc.Save(context.Background(), 7,
-		[]string{" backend ", "devops", "backend"}, []string{"Go", " PostgreSQL ", "go"})
+		[]string{" backend ", "devops", "backend"}, []string{"Go", " PostgreSQL ", "go"}, nil)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -69,7 +69,7 @@ func TestSave_UpsertsWithOwnerNormalizedSpecializationsAndSkills(t *testing.T) {
 
 func TestSave_RejectsUnknownSpecialization(t *testing.T) {
 	repo := &fakeRepo{}
-	_, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend", "wizardry"}, []string{"go"})
+	_, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend", "wizardry"}, []string{"go"}, nil)
 	if !errors.Is(err, userprofile.ErrInvalidSpecialization) {
 		t.Errorf("err = %v, want ErrInvalidSpecialization", err)
 	}
@@ -90,7 +90,7 @@ func TestSave_RejectsEmptySpecializations(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &fakeRepo{}
-			_, err := userprofile.New(repo).Save(context.Background(), 7, tc.in, []string{"go"})
+			_, err := userprofile.New(repo).Save(context.Background(), 7, tc.in, []string{"go"}, nil)
 			if !errors.Is(err, userprofile.ErrEmptySpecializations) {
 				t.Errorf("err = %v, want ErrEmptySpecializations", err)
 			}
@@ -104,7 +104,7 @@ func TestSave_RejectsEmptySpecializations(t *testing.T) {
 func TestSave_RejectsTooManySpecializations(t *testing.T) {
 	repo := &fakeRepo{}
 	six := []string{"backend", "frontend", "fullstack", "mobile", "devops", "sre"}
-	_, err := userprofile.New(repo).Save(context.Background(), 7, six, []string{"go"})
+	_, err := userprofile.New(repo).Save(context.Background(), 7, six, []string{"go"}, nil)
 	if !errors.Is(err, userprofile.ErrTooManySpecializations) {
 		t.Errorf("err = %v, want ErrTooManySpecializations", err)
 	}
@@ -125,7 +125,7 @@ func TestSave_RejectsEmptySkills(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &fakeRepo{}
-			_, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend"}, tc.in)
+			_, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend"}, tc.in, nil)
 			if !errors.Is(err, userprofile.ErrEmptySkills) {
 				t.Errorf("err = %v, want ErrEmptySkills", err)
 			}

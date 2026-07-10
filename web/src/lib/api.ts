@@ -35,9 +35,11 @@ import type {
   Verdict,
   ATSResponse,
   JobMatch,
+  JobFitResponse,
   ResumeProfile,
   ActivityGranularity,
   ActivityPoint,
+  LocationPreferences,
 } from './types';
 
 /** A page of list items, optionally the total matching the query (endpoints that
@@ -163,6 +165,20 @@ export function createApi(
    *  calls it in that state. */
   async function getJobMatch(slug: string): Promise<JobMatch> {
     return requestData<JobMatch>(`/api/v1/jobs/${slug}/match`);
+  }
+
+  /** The cached LLM fit analysis for a job (never runs the model). `has_cv` is false
+   *  when no CV is stored; `analysis` is null when none is cached yet; `stale` marks a
+   *  cached analysis whose CV or job changed since. Safe to call on expand. */
+  async function getJobFit(slug: string): Promise<JobFitResponse> {
+    return requestData<JobFitResponse>(`/api/v1/jobs/${slug}/fit`);
+  }
+
+  /** Run the three-stage fit prompt-chain over the caller's CV and this job, cache it
+   *  per (user, job), and return it fresh. Bound to the explicit compute/recompute
+   *  action. With no LLM configured this returns `has_cv` with a null analysis. */
+  async function runJobFit(slug: string): Promise<JobFitResponse> {
+    return requestData<JobFitResponse>(`/api/v1/jobs/${slug}/fit`, { method: 'POST' });
   }
 
   /** Full-text search over jobs. `facets` carries the query text and any facet
@@ -490,10 +506,18 @@ export function createApi(
   }
 
   /** Create-or-replace the user's profile from a non-empty set of specializations (job
-   *  categories) and a non-empty set of skills. A bad specialization or empty skills is a
-   *  400. */
-  async function saveProfile(specializations: string[], skills: string[]): Promise<UserProfile> {
-    return requestData<UserProfile>('/api/v1/me/profile', jsonBody('PUT', { specializations, skills }));
+   *  categories), a non-empty set of skills, and an optional location-preferences block
+   *  (null clears it). A bad specialization, empty skills, or an out-of-vocabulary location
+   *  value is a 400. */
+  async function saveProfile(
+    specializations: string[],
+    skills: string[],
+    location: LocationPreferences | null,
+  ): Promise<UserProfile> {
+    return requestData<UserProfile>(
+      '/api/v1/me/profile',
+      jsonBody('PUT', { specializations, skills, location_preferences: location }),
+    );
   }
 
   /** Clear the user's profile. Idempotent. */
@@ -649,6 +673,8 @@ export function createApi(
     getJob,
     getSimilarJobs,
     getJobMatch,
+    getJobFit,
+    runJobFit,
     searchJobs,
     swipeDeck,
     recommendations,

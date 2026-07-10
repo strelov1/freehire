@@ -1,7 +1,11 @@
 // Wire types mirroring the backend JSON (internal/db models and query rows).
 // Timestamps marshal as RFC3339 strings when present, or null.
 
-import type { Job, Report as ATSReportContract } from './generated/contracts';
+import type {
+  Job,
+  Report as ATSReportContract,
+  Analysis as JobFitAnalysisContract,
+} from './generated/contracts';
 export type { Job, Enrichment, Verdict, Gap, SkillRow } from './generated/contracts';
 // Per-job profile match (how well a job's skills are covered by the caller's profile).
 export type { JobMatch, AdjacentSkill } from './generated/contracts';
@@ -18,6 +22,24 @@ export type {
 export interface ATSResponse {
   has_cv: boolean;
   report: ATSReportContract | null;
+}
+
+// The on-demand LLM job-fit analysis wire shapes (five scored dimensions + the
+// ATS-style requirement match), generated from internal/jobfit.
+export type {
+  Analysis as JobFitAnalysis,
+  Dimension as JobFitDimension,
+  Requirement as JobFitRequirement,
+} from './generated/contracts';
+
+/** The job-fit analysis response: `has_cv` is false when the caller has no stored CV
+ *  (the block prompts an upload); `analysis` is null when none is cached yet or the LLM
+ *  is unconfigured; `stale` marks a cached analysis whose CV or job changed since (the
+ *  block then offers a recompute). */
+export interface JobFitResponse {
+  has_cv: boolean;
+  stale: boolean;
+  analysis: JobFitAnalysisContract | null;
 }
 
 /** The lower-coverage extras stored in the company's `company_info` JSONB. Every
@@ -282,9 +304,41 @@ export interface Board {
  *  `specializations` (job categories) and a non-empty set of canonical skill tokens. One
  *  per user (no id, no name); the foundation for finding relevant work. Timestamps are
  *  RFC3339 strings or null. */
+/** A geographic reach: controlled regions and/or ISO country codes. Empty = anywhere. */
+export interface LocationGeoSet {
+  regions?: string[];
+  countries?: string[];
+}
+
+/** The user's current single base: an ISO country code and a free-text city. */
+export interface LocationBase {
+  country?: string;
+  city?: string;
+}
+
+/** Willingness to relocate: an open flag plus acceptable destinations (open + empty
+ *  targets = anywhere). */
+export interface LocationRelocation {
+  open: boolean;
+  regions?: string[];
+  countries?: string[];
+  cities?: string[];
+}
+
+/** Optional "where & how I want to work" block: accepted work arrangements plus three
+ *  geographic parts (remote reach, current base, relocation), freely combined. Mirrors the
+ *  backend userprofile.LocationPreferences; null on a profile means the user set none. */
+export interface LocationPreferences {
+  work_modes?: string[];
+  remote: LocationGeoSet;
+  base: LocationBase;
+  relocation: LocationRelocation;
+}
+
 export interface UserProfile {
   specializations: string[];
   skills: string[];
+  location_preferences: LocationPreferences | null;
   created_at: string | null;
   updated_at: string | null;
 }

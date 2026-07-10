@@ -7,6 +7,7 @@
 // same facet controls render against staged or live state without change.
 
 import type { FacetStore } from './facets';
+import type { UserProfile } from './types';
 import {
   activeFilterCount,
   emptyFacet,
@@ -92,10 +93,11 @@ export class StagedFilters implements FacetStore {
     this.#f = emptyFilters();
   }
 
-  /** Reset every staged filter and seed from a user profile: specializations →
-   *  `category`, skills → `skills`. Backs the modal's "Apply my profile" action. */
-  applyProfile(specializations: string[], skills: string[]): void {
-    this.#f = filtersFromProfile(specializations, skills);
+  /** Reset every staged filter and seed from a user profile: specializations → `category`,
+   *  skills → `skills`, and the location block → the location facets (see filtersFromProfile).
+   *  Backs the modal's "Apply my profile" action. */
+  applyProfile(profile: UserProfile): void {
+    this.#f = filtersFromProfile(profile);
   }
 
   /** Replace the staged filters from a saved query string — the "My filters" tab

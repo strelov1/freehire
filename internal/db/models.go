@@ -251,10 +251,21 @@ type UserJob struct {
 	DismissedAt pgtype.Timestamptz `json:"dismissed_at"`
 }
 
+type UserJobAnalysis struct {
+	UserID         int64              `json:"user_id"`
+	JobID          int64              `json:"job_id"`
+	Analysis       []byte             `json:"analysis"`
+	Model          string             `json:"model"`
+	CvUploadedAt   pgtype.Timestamptz `json:"cv_uploaded_at"`
+	JobContentHash pgtype.Text        `json:"job_content_hash"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
 type UserProfile struct {
-	UserID          int64              `json:"user_id"`
-	Skills          []string           `json:"skills"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
-	Specializations []string           `json:"specializations"`
+	UserID              int64              `json:"user_id"`
+	Skills              []string           `json:"skills"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	Specializations     []string           `json:"specializations"`
+	LocationPreferences json.RawMessage    `json:"location_preferences"`
 }

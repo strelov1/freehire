@@ -65,9 +65,10 @@ func (s *Service) Get(ctx context.Context, userID int64) (db.UserProfile, error)
 
 // Save validates and upserts the user's single profile. The specializations are
 // normalized (each a known category, deduped, non-empty, capped); the skills are
-// normalized and must be non-empty. It is a create-or-replace: the first save inserts,
-// later saves overwrite.
-func (s *Service) Save(ctx context.Context, userID int64, specializations, skills []string) (db.UserProfile, error) {
+// normalized and must be non-empty; the optional location block is validated and
+// normalized (or stored NULL when nil/empty). It is a create-or-replace: the first save
+// inserts, later saves overwrite.
+func (s *Service) Save(ctx context.Context, userID int64, specializations, skills []string, loc *LocationPreferences) (db.UserProfile, error) {
 	specs, err := normalizeSpecializations(specializations)
 	if err != nil {
 		return db.UserProfile{}, err
@@ -76,10 +77,15 @@ func (s *Service) Save(ctx context.Context, userID int64, specializations, skill
 	if err != nil {
 		return db.UserProfile{}, err
 	}
+	locJSON, err := normalizeLocationPreferences(loc)
+	if err != nil {
+		return db.UserProfile{}, err
+	}
 	return s.repo.Upsert(ctx, db.UpsertUserProfileParams{
-		UserID:          userID,
-		Specializations: specs,
-		Skills:          normalized,
+		UserID:              userID,
+		Specializations:     specs,
+		Skills:              normalized,
+		LocationPreferences: locJSON,
 	})
 }
 

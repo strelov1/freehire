@@ -24,3 +24,8 @@ sql:
           # straight through to the company-detail response ({} stays {}), not base64.
           - column: "companies.company_info"
             go_type: "encoding/json.RawMessage"
+          # The profile location block: raw JSON round-trips whole. The service
+          # marshals a validated, normalized block (or NULL for none), and the stored
+          # bytes marshal straight through to the profile response (null stays null).
+          - column: "user_profiles.location_preferences"
+            go_type: "encoding/json.RawMessage"
