@@ -15,3 +15,27 @@
 - company: LA-Tech
   board: pod4.app.loxo.co/la-tech
   hub: true
+- company: Syndesus
+  board: syndesus.app.loxo.co/syndesus
+  hub: true
+- company: Axiom Path
+  board: app.loxo.co/axiom-path
+  hub: true
+- company: Blue Signal Search
+  board: blue-signal-search.app.loxo.co/blue-signal-search
+  hub: true
+- company: VIEWS
+  board: app.loxo.co/views
+  hub: true
+- company: White Bay
+  board: app.loxo.co/white-bay
+  hub: true
+- company: Lighthouse Technology Services
+  board: app.loxo.co/lighthouse-technology-services
+  hub: true
+- company: Emerald Resource Group
+  board: app.loxo.co/emerald-resource-group
+  hub: true
+- company: Loxo
+  board: app.loxo.co/loxo
+  hub: true
