@@ -425,7 +425,7 @@ export const COMPANY_FACETS: FacetDef[] = [
   { param: 'company_size', label: 'Company size', control: 'pills', options: COMPANY_SIZE, excludable: false },
   { param: 'yc_status', label: 'YC status', control: 'pills', options: YC_STATUS, excludable: false },
   { param: 'yc_stage', label: 'YC stage', control: 'pills', options: YC_STAGE, excludable: false },
-  { param: 'yc_flags', label: 'YC', control: 'pills', options: YC_FLAGS, excludable: false },
+  { param: 'yc_flags', label: 'YC highlights', control: 'pills', options: YC_FLAGS, excludable: false },
   { param: 'yc_batch', label: 'YC batch', control: 'select', options: YC_BATCH, excludable: false, placeholder: 'Search YC batches' },
 ];
 
