@@ -128,17 +128,19 @@ the URL query string (`?q=`) so a search survives reload, sharing, and
 back/forward navigation. The page SHALL show the count of matching companies and
 a distinct empty state when a search matches nothing.
 
-The page SHALL present a filter sidebar alongside the list with facets for
-**collection**, **region**, **country**, **industry** (domains), **company type**,
-and **company size**, reusing the jobs filter controls and closed-vocabulary
-option registries (country is a searchable select over the country list; the
-others are pill/select controls over their fixed vocabularies). Selecting facet
-values SHALL refetch the list against the corresponding repeatable API facet
-parameters and mirror the active facets into the URL query string, so a filtered
-view survives reload, sharing, and back/forward navigation, composably with the
-`q` search. The sidebar SHALL offer a way to clear all active filters. On narrow
-viewports the sidebar SHALL collapse into a toggle-opened panel rather than
-occupying the list column.
+The page SHALL present filters through the same two-pane "All filters" modal and
+chip-summary sidebar the jobs list uses (the reusable filter shells), over the
+company facet set: **collection**, **region**, **country**, **industry** (domains),
+**company type**, and **company size**, reusing the jobs filter controls and
+closed-vocabulary option registries (country is a searchable select over the country
+list; the others are pill/select controls over their fixed vocabularies). On desktop
+the sidebar SHALL show the applied-facet chips plus an **All filters** button opening
+the modal; on narrow viewports the modal SHALL open from a pinned left-edge tab. As
+in the jobs modal, facet edits SHALL be staged and applied on **Show results**;
+applying SHALL refetch the list against the corresponding repeatable API facet
+parameters and mirror the active facets into the URL query string, so a filtered view
+survives reload, sharing, and back/forward navigation, composably with the `q` search.
+The summary sidebar SHALL offer a **Reset all** control.
 
 #### Scenario: Companies are listed
 
@@ -165,7 +167,8 @@ occupying the list column.
 
 #### Scenario: User filters companies by a facet
 
-- **WHEN** a user selects a region in the sidebar
+- **WHEN** a user opens the **All filters** modal, selects a region, and activates
+  **Show results**
 - **THEN** the list is refetched against `?regions=<value>` and the URL query
   string reflects the active facet
 
@@ -173,11 +176,12 @@ occupying the list column.
 
 - **WHEN** a user opens `/companies?collections=yc&regions=europe` directly or via
   back/forward
-- **THEN** the sidebar shows those facets active and the list is filtered to match
+- **THEN** the summary sidebar shows those facets active and the list is filtered to
+  match
 
 #### Scenario: Clearing filters
 
-- **WHEN** a user clears all filters
+- **WHEN** a user activates **Reset all**
 - **THEN** the facet parameters are removed from the URL and the full list (for the
   current `q`, if any) is shown
 
@@ -597,4 +601,29 @@ toggle.
 
 - **WHEN** a signed-out user opens a job page
 - **THEN** no Save toggle is rendered
+
+### Requirement: Profile filters appear only on the Market coverage tab
+
+The `/my/profile` page SHALL expose its role/filter controls (the summary sidebar,
+the mobile left-edge tab, and the two-pane modal) only while the **Market coverage**
+tab is active, since coverage is the only view computed against ad-hoc filters. On the
+**Your CV** and **CV readiness** tabs the filter controls SHALL NOT be shown, and CV
+readiness SHALL be scored against the profile's default role. The profile page SHALL
+NOT present the "My filters" (saved-search) tab.
+
+#### Scenario: Filters shown on Market coverage
+
+- **WHEN** a signed-in user with a profile opens the **Market coverage** tab
+- **THEN** the filter summary, the mobile filters tab, and the **All filters** modal
+  are available to refine the comparison role
+
+#### Scenario: Filters hidden on other tabs
+
+- **WHEN** the user switches to the **Your CV** or **CV readiness** tab
+- **THEN** no filter summary, mobile tab, or modal is shown
+
+#### Scenario: No My filters on the profile
+
+- **WHEN** the profile's **All filters** modal is opened
+- **THEN** it presents the facet rail without a "My filters" (saved-search) tab
 

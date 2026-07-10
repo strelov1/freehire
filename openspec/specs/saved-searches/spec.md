@@ -73,19 +73,31 @@ Every saved-search operation SHALL be scoped to the calling user; one user MUST 
 - **THEN** the system responds `404` and the target row is unchanged
 
 ### Requirement: Saved-search UI in the filters panel
-The web filters panel SHALL present a "My filters" control to signed-in users for selecting, saving, updating, and deleting saved searches, and SHALL prompt anonymous users to sign in instead of showing the list.
+
+The web filter modal SHALL present a "My filters" tab to signed-in users for
+selecting, saving, updating, and deleting saved searches, and SHALL prompt anonymous
+users to sign in instead of showing the list. Because the modal defers, the tab
+SHALL operate on the staged filters: selecting a set seeds the staged state and
+saving captures the staged filters; the changes reach the live filter state (and the
+URL) only when the modal's **Show results** action is activated.
 
 #### Scenario: Apply a saved search
-- **WHEN** a signed-in user selects a saved set from the "My filters" control
-- **THEN** the panel applies its filters by parsing the stored query string into the filter state and committing it to the URL, and the results re-search accordingly
+
+- **WHEN** a signed-in user selects a saved set from the "My filters" tab and activates
+  **Show results**
+- **THEN** the modal parses the stored query string into the staged filters and, on
+  **Show results**, commits it to the URL, and the results re-search accordingly
 
 #### Scenario: Active set is marked
-- **WHEN** the current filter state's canonical query string equals a saved set's query
+
+- **WHEN** the staged filter state's canonical query string equals a saved set's query
 - **THEN** that set is marked active (checkmark) in the control
 
 #### Scenario: Anonymous prompt
-- **WHEN** an anonymous (signed-out) user opens the filters panel
-- **THEN** the "My filters" control shows a "sign in to save" affordance that opens the auth dialog instead of a list of sets
+
+- **WHEN** an anonymous (signed-out) user opens the "My filters" tab
+- **THEN** the control shows a "sign in to save" affordance that opens the auth dialog
+  instead of a list of sets
 
 ### Requirement: Share a saved search as a public board
 A signed-in user SHALL be able to make one of their own saved searches public by minting a stable public slug for it. Sharing MAY include an optional author label (free text, 1-60 characters after trim) stored on the board; an omitted or empty label means the board is anonymous. Sharing an already-shared set is idempotent for the slug (the existing slug is kept) but SHALL update the author label to the supplied value.
@@ -173,15 +185,4 @@ The web app SHALL expose a dedicated account section at `/my/searches`, reachabl
 #### Scenario: Anonymous access to the section
 - **WHEN** an anonymous (signed-out) visitor opens `/my/searches`
 - **THEN** the page prompts sign-in instead of listing saved searches
-
-### Requirement: Share affordance in the filters panel
-The "My filters" control SHALL let a signed-in user share and unshare the selected saved search and obtain the public board link for a shared set, in addition to its existing create/apply/update/delete actions.
-
-#### Scenario: Share from the control
-- **WHEN** a signed-in user chooses to share a saved set and confirms
-- **THEN** the control shows the set as shared and surfaces its copyable public `/b/:slug` link
-
-#### Scenario: Unshare from the control
-- **WHEN** a signed-in user unshares a shared set
-- **THEN** the control shows the set as private again and no longer offers its public link
 
