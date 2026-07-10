@@ -1,6 +1,6 @@
 module github.com/strelov1/freehire
 
-go 1.25.11
+go 1.25.12
 
 require (
 	github.com/abadojack/whatlanggo v1.0.1
