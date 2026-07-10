@@ -133,7 +133,10 @@ func loxoDescription(root *html.Node) string {
 		}
 		return true
 	})
-	return html.UnescapeString(desc)
+	// The blob carries raw HTML markup (not entity-escaped), so it goes straight to
+	// sanitizeHTML in the caller — no UnescapeString, which would corrupt literal
+	// entities in text nodes.
+	return desc
 }
 
 // loxoLocation extracts the free-text location from the og:description, whose format is

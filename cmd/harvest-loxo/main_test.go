@@ -11,6 +11,7 @@ func TestExtractCandidates(t *testing.T) {
 		"https://fitnext.app.loxo.co/login",                       // non-careers, skip
 		"https://app.loxo.co/agile-recruiter",                     // dup of #2 (query stripped)
 		"https://example.com/careers",                             // not loxo, skip
+		"https://notapp.loxo.co/evil",                             // lookalike host, skip
 		"  ",                                                      // blank, skip
 	}
 	got := extractCandidates(in)

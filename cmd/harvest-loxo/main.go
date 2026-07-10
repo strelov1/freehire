@@ -116,7 +116,7 @@ func extractCandidates(lines []string) []candidate {
 // segment; a /job/<base64> URL has two segments and carries no slug.
 func candidateFromURL(raw string) (candidate, bool) {
 	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || u.Host == "" || !strings.HasSuffix(u.Host, "app.loxo.co") {
+	if err != nil || u.Host == "" || !isLoxoHost(u.Host) {
 		return candidate{}, false
 	}
 	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
@@ -128,6 +128,12 @@ func candidateFromURL(raw string) (candidate, bool) {
 		return candidate{}, false
 	}
 	return candidate{host: u.Host, slug: parts[0]}, true
+}
+
+// isLoxoHost reports whether host is app.loxo.co or one of its subdomains (agency or pod),
+// without matching a lookalike like "notapp.loxo.co".
+func isLoxoHost(host string) bool {
+	return host == "app.loxo.co" || strings.HasSuffix(host, ".app.loxo.co")
 }
 
 // probeAll validates each candidate concurrently, keeping the boards that yield open jobs.
