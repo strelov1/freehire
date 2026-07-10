@@ -92,6 +92,14 @@ func TestParseActivityQuery(t *testing.T) {
 			t.Fatal("expected error for an over-long range, got nil")
 		}
 	})
+
+	t.Run("a multi-millennium range is rejected without duration overflow", func(t *testing.T) {
+		// A span this wide overflows time.Duration; the cap must still reject it
+		// rather than wrap negative and let a giant generate_series through.
+		if _, err := parseActivityQuery("day", "0001-01-01", "9999-12-31", fixedNow); err == nil {
+			t.Fatal("expected error for a multi-millennium range, got nil")
+		}
+	})
 }
 
 // TestJobsActivityValidation covers the DB-free path of the handler: the route is

@@ -18,8 +18,6 @@ export interface ActivityBar {
   removedX: number;
   removedY: number;
   removedH: number;
-  /** Centre x of the period slot, for an optional tick label. */
-  labelX: number;
 }
 
 /** The full chart model: the positioned bars plus the viewBox and baseline the
@@ -78,7 +76,6 @@ export function buildActivityChart(points: ActivityPoint[]): ActivityChartModel 
       removedX,
       removedY: baselineY - removedH,
       removedH,
-      labelX: slotX + slot / 2,
     };
   });
 

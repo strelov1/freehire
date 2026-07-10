@@ -29,36 +29,17 @@ FULL OUTER JOIN (
     GROUP BY 1
 ) r ON a.day = r.day;
 
--- name: ListJobActivityDay :many
--- Dense daily series over [from, to]: generate_series makes the gap-free calendar,
--- LEFT JOIN fills each day's counts (missing days → 0). $1 = from, $2 = to.
+-- name: ListJobActivity :many
+-- Dense activity series over [from, to] at the given granularity. A daily
+-- generate_series builds the gap-free calendar; the LEFT JOIN fills each day's
+-- counts (missing days → 0), and date_trunc(unit, ...) rolls those days up to the
+-- requested bucket (day/week/month) so empty buckets still appear as zeros. `unit`
+-- is a caller-validated date_trunc field (day/week/month), never raw user input.
 SELECT
-    d::date                 AS period,
-    COALESCE(s.added, 0)::int   AS added,
-    COALESCE(s.removed, 0)::int AS removed
-FROM generate_series(sqlc.arg('from_ts')::timestamp, sqlc.arg('to_ts')::timestamp, interval '1 day') AS d
-LEFT JOIN job_daily_stats s ON s.day = d::date
-ORDER BY d;
-
--- name: ListJobActivityWeek :many
--- Dense weekly series: the same daily generate_series grouped to ISO weeks, so
--- every week overlapping [from, to] appears with its summed counts (empty → 0).
-SELECT
-    date_trunc('week', d)::date AS period,
+    date_trunc(sqlc.arg('unit')::text, d)::date AS period,
     COALESCE(sum(s.added), 0)::int   AS added,
     COALESCE(sum(s.removed), 0)::int AS removed
 FROM generate_series(sqlc.arg('from_ts')::timestamp, sqlc.arg('to_ts')::timestamp, interval '1 day') AS d
 LEFT JOIN job_daily_stats s ON s.day = d::date
-GROUP BY date_trunc('week', d)
-ORDER BY date_trunc('week', d);
-
--- name: ListJobActivityMonth :many
--- Dense monthly series: the same daily generate_series grouped to calendar months.
-SELECT
-    date_trunc('month', d)::date AS period,
-    COALESCE(sum(s.added), 0)::int   AS added,
-    COALESCE(sum(s.removed), 0)::int AS removed
-FROM generate_series(sqlc.arg('from_ts')::timestamp, sqlc.arg('to_ts')::timestamp, interval '1 day') AS d
-LEFT JOIN job_daily_stats s ON s.day = d::date
-GROUP BY date_trunc('month', d)
-ORDER BY date_trunc('month', d);
+GROUP BY date_trunc(sqlc.arg('unit')::text, d)
+ORDER BY date_trunc(sqlc.arg('unit')::text, d);

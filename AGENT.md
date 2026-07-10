@@ -33,7 +33,7 @@ cmd/tg-ingest/main.go      crawls the Telegram channels in sources/telegram.yml 
 cmd/tg-extract/main.go     LLM-extracts vacancies from pending telegram_posts into the job catalogue
 cmd/liveness/main.go       URL-probes open non-board (orphan) jobs and closes ones whose posting is dead
 cmd/reindex/main.go        rebuilds the Meilisearch jobs index from Postgres
-cmd/rollup-stats/main.go   recomputes the job_daily_stats rollup (per-UTC-day added/removed counts) from jobs in one atomic delete+rebuild; feeds the public GET /api/v1/stats/jobs-activity endpoint and the /stats dashboard page
+cmd/rollup-stats/main.go   recomputes the job_daily_stats rollup (per-UTC-day added/removed counts) from jobs in one atomic delete+rebuild; feeds the public GET /api/v1/stats/jobs-activity endpoint and the /trends dashboard page
 cmd/backfill-derive/main.go  re-derives all six deterministic dictionary facets (countries/regions/work_mode/skills/seniority/category) on existing jobs in one pass via jobderive
 cmd/reslug/main.go         backfills public_slug/company_slug after a deliberate slug-rule change
 cmd/import-yc/main.go       enriches companies from the yc-oss directory (descriptions/industry/size/founded/HQ + curated yc_batch/yc_status facets), matching by normalized name and inserting unmatched YC companies as reference rows

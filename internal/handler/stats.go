@@ -80,7 +80,9 @@ func parseActivityQuery(granularity, from, to string, now time.Time) (activityQu
 	if fromDate.After(toDate) {
 		return activityQuery{}, fmt.Errorf("from %s is after to %s", fromDate.Format(dateLayout), toDate.Format(dateLayout))
 	}
-	if toDate.Sub(fromDate) > maxRangeDays*24*time.Hour {
+	// Compare via AddDate rather than toDate.Sub(fromDate): a multi-millennium span
+	// would overflow time.Duration (int64 ns, ~292y max) and silently defeat the cap.
+	if fromDate.Before(toDate.AddDate(0, 0, -maxRangeDays)) {
 		return activityQuery{}, fmt.Errorf("range too large (max %d days)", maxRangeDays)
 	}
 	return activityQuery{Granularity: granularity, From: fromDate, To: toDate}, nil
@@ -102,35 +104,18 @@ func (a *API) JobsActivity(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 
-	from := pgtype.Timestamp{Time: q.From, Valid: true}
-	to := pgtype.Timestamp{Time: q.To, Valid: true}
+	rows, err := a.queries.ListJobActivity(c.Context(), db.ListJobActivityParams{
+		Unit:   q.Granularity,
+		FromTs: pgtype.Timestamp{Time: q.From, Valid: true},
+		ToTs:   pgtype.Timestamp{Time: q.To, Valid: true},
+	})
+	if err != nil {
+		return err
+	}
 
-	var points []activityPoint
-	switch q.Granularity {
-	case "day":
-		rows, err := a.queries.ListJobActivityDay(c.Context(), db.ListJobActivityDayParams{FromTs: from, ToTs: to})
-		if err != nil {
-			return err
-		}
-		points = mapActivity(rows, func(r db.ListJobActivityDayRow) activityPoint {
-			return activityPoint{r.Period.Time.Format(dateLayout), r.Added, r.Removed}
-		})
-	case "week":
-		rows, err := a.queries.ListJobActivityWeek(c.Context(), db.ListJobActivityWeekParams{FromTs: from, ToTs: to})
-		if err != nil {
-			return err
-		}
-		points = mapActivity(rows, func(r db.ListJobActivityWeekRow) activityPoint {
-			return activityPoint{r.Period.Time.Format(dateLayout), r.Added, r.Removed}
-		})
-	case "month":
-		rows, err := a.queries.ListJobActivityMonth(c.Context(), db.ListJobActivityMonthParams{FromTs: from, ToTs: to})
-		if err != nil {
-			return err
-		}
-		points = mapActivity(rows, func(r db.ListJobActivityMonthRow) activityPoint {
-			return activityPoint{r.Period.Time.Format(dateLayout), r.Added, r.Removed}
-		})
+	points := make([]activityPoint, len(rows))
+	for i, r := range rows {
+		points[i] = activityPoint{Period: r.Period.Time.Format(dateLayout), Added: r.Added, Removed: r.Removed}
 	}
 
 	return c.JSON(fiber.Map{
@@ -141,15 +126,4 @@ func (a *API) JobsActivity(c *fiber.Ctx) error {
 			"to":          q.To.Format(dateLayout),
 		},
 	})
-}
-
-// mapActivity projects a slice of sqlc rows to activityPoints. The three
-// granularity queries return distinct row types with identical fields, so this
-// keeps the per-granularity branches to one line each.
-func mapActivity[T any](rows []T, f func(T) activityPoint) []activityPoint {
-	out := make([]activityPoint, len(rows))
-	for i, r := range rows {
-		out[i] = f(r)
-	}
-	return out
 }

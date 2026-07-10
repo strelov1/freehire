@@ -334,14 +334,12 @@ type Querier interface {
 	// Slim keyset page of companies for the sitemap, cursored by the slug primary key
 	// (first chunk keyed by the empty string, which sorts before every slug).
 	ListCompanySitemap(ctx context.Context, arg ListCompanySitemapParams) ([]ListCompanySitemapRow, error)
-	// Dense daily series over [from, to]: generate_series makes the gap-free calendar,
-	// LEFT JOIN fills each day's counts (missing days → 0). $1 = from, $2 = to.
-	ListJobActivityDay(ctx context.Context, arg ListJobActivityDayParams) ([]ListJobActivityDayRow, error)
-	// Dense monthly series: the same daily generate_series grouped to calendar months.
-	ListJobActivityMonth(ctx context.Context, arg ListJobActivityMonthParams) ([]ListJobActivityMonthRow, error)
-	// Dense weekly series: the same daily generate_series grouped to ISO weeks, so
-	// every week overlapping [from, to] appears with its summed counts (empty → 0).
-	ListJobActivityWeek(ctx context.Context, arg ListJobActivityWeekParams) ([]ListJobActivityWeekRow, error)
+	// Dense activity series over [from, to] at the given granularity. A daily
+	// generate_series builds the gap-free calendar; the LEFT JOIN fills each day's
+	// counts (missing days → 0), and date_trunc(unit, ...) rolls those days up to the
+	// requested bucket (day/week/month) so empty buckets still appear as zeros. `unit`
+	// is a caller-validated date_trunc field (day/week/month), never raw user input.
+	ListJobActivity(ctx context.Context, arg ListJobActivityParams) ([]ListJobActivityRow, error)
 	// Id-only projection of ListJobsByIDAfter, used as the corruption-degrade path:
 	// when a full SELECT * batch faults on a corrupted TOAST value (SQLSTATE XX001),
 	// the scan re-reads the same window as bare ids (id is never toasted, so this

@@ -1,9 +1,9 @@
 -- Materialized daily rollup of catalogue flow (see the job-activity-stats change).
 -- One row per calendar day (UTC): `added` = jobs whose created_at falls on that
 -- day, `removed` = jobs whose CURRENT closed_at falls on that day. It is a pure
--- function of the current `jobs` state, fully recomputed and upserted by
--- cmd/rollup-stats; reopen (closed_at cleared) drops a job from its old removed
--- day on the next recompute. The public GET /api/v1/stats/jobs-activity endpoint
+-- function of the current `jobs` state, fully recomputed by cmd/rollup-stats as an
+-- atomic delete-and-reinsert (not an upsert); reopen (closed_at cleared) drops a job
+-- from its old removed day on the next recompute. The public GET /api/v1/stats/jobs-activity endpoint
 -- reads it (aggregated to day/week/month via date_trunc).
 --
 -- No supporting jobs index ships here: the recompute is a full-table batch

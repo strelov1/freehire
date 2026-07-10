@@ -9,7 +9,7 @@
 
   let { data }: { data: PageData } = $props();
 
-  const canonical = $derived(`${page.url.origin}/stats`);
+  const canonical = $derived(`${page.url.origin}/trends`);
 
   const options: { value: ActivityGranularity; label: string }[] = [
     { value: 'day', label: 'Day' },
@@ -26,26 +26,37 @@
   let loading = $state(false);
   let failed = $state(false);
 
+  // Sequence toggles: a fast Day→Week→Month burst fires overlapping fetches, and
+  // an earlier one can resolve last. Only the latest request may touch state, so a
+  // stale response can't overwrite the chart the active toggle promises.
+  let latestRequest = 0;
+
   async function load(next: ActivityGranularity) {
     granularity = next;
+    const request = ++latestRequest;
     loading = true;
     failed = false;
     try {
-      points = await api.jobsActivity(next);
+      const result = await api.jobsActivity(next);
+      if (request !== latestRequest) return;
+      points = result;
     } catch {
+      if (request !== latestRequest) return;
       failed = true;
     } finally {
-      loading = false;
+      if (request === latestRequest) loading = false;
     }
   }
 
+  // Reload on a genuine change, or when re-clicking the active tab after a failure
+  // (so the toggle itself retries, not only the separate Retry link).
   function select(next: ActivityGranularity) {
-    if (next !== granularity) load(next);
+    if (next !== granularity || failed) load(next);
   }
 </script>
 
 <Seo
-  title="Job activity · freehire"
+  title="Trends · freehire"
   description="How the freehire catalogue moves over time — new vacancies added versus postings removed, by day, week, or month."
   {canonical}
 />
@@ -53,7 +64,7 @@
 <div class="mx-auto w-full max-w-6xl px-4 py-6">
   <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
     <div>
-      <h1 class="text-xl font-semibold tracking-tight">Job activity</h1>
+      <h1 class="text-xl font-semibold tracking-tight">Trends</h1>
       <p class="mt-1 text-sm text-muted-foreground">
         New vacancies added versus postings removed over time.
       </p>

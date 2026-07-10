@@ -23,7 +23,7 @@ Constraints from the codebase:
 **Goals:**
 - A materialized daily rollup that reads fast and is cheap to keep current.
 - A public API that serves the rollup at day/week/month granularity.
-- A public `/stats` page with a green-added / red-removed grouped bar chart and
+- A public `/trends` page with a green-added / red-removed grouped bar chart and
   a granularity toggle.
 
 **Non-Goals:**
@@ -80,10 +80,15 @@ thin SPA" convention and keeps the payload to one element per rendered bar. A
 whitelist maps `granularity` → the trunc unit; anything else is a `400` before
 touching the DB (fiber `NewError`). Default range is a sensible recent window
 (e.g. last 90 days for `day`, wider for coarser units) resolvable server-side;
-explicit `from`/`to` override. sqlc can't parameterize the trunc unit, so this is
-either three named queries (day/week/month) or one query with the unit switched
-in Go — decided at implement time (lean toward three explicit queries for sqlc
-friendliness).
+explicit `from`/`to` override. The `date_trunc` **field** is an ordinary text
+argument, so it parameterizes cleanly — a single sqlc query
+(`ListJobActivity(unit, from, to)`) covers all three granularities (`day` groups
+by `date_trunc('day', …)`, i.e. per-day), rather than three near-identical named
+queries. The handler passes the already-whitelisted `granularity` straight
+through as the unit (never raw user input reaching `date_trunc`). Edge buckets at
+the range boundaries reflect only the in-window days (a partial leading week/month
+and the in-progress current one) — intentional, standard time-bucket behavior;
+the series is keyed by each bucket's canonical start date.
 
 ### D4. "Today" freshness — intra-day cron, not a live-overlay query
 
@@ -104,7 +109,7 @@ now.
 
 New `web/src/lib/components/ActivityBars.svelte`: a viewBox-scaled SVG with two
 `<rect>` per period (green added, red removed), a baseline axis, and simple
-hover labels — same technique as `PipelineFunnel`/`RateDonut`. The `/stats`
+hover labels — same technique as `PipelineFunnel`/`RateDonut`. The `/trends`
 route (`+page.svelte` + `+page.server.ts` for SSR initial load) fetches via the
 existing `web/src/lib/api.ts` client and drives the granularity toggle by
 re-fetching. **Why no lib:** adding Chart.js/d3 for two bars violates "no
@@ -146,7 +151,7 @@ stays a thin mapper.
 - **New table before a persistent-DB deploy** → Apply the migration manually
   before deploying the binary that reads it, else the read 500s (the unapplied-
   migration hazard). Migration Plan covers ordering.
-- **Two analytics surfaces** (`/analytics` facets + `/stats` activity) → Slight
+- **Two analytics surfaces** (`/analytics` facets + `/trends` activity) → Slight
   IA overlap; mitigated by distinct titles/purpose and a possible later merge.
 
 ## Migration Plan
@@ -155,7 +160,7 @@ stays a thin mapper.
    deploying the new server binary (creates table + the two supporting indexes).
 2. Run `cmd/rollup-stats` once to populate history, then add its cron entry
    (once daily) in ops.
-3. Deploy the server (new read endpoint) and the web build (`/stats` page +
+3. Deploy the server (new read endpoint) and the web build (`/trends` page +
    nav/footer link).
 4. **Rollback:** the endpoint and page are additive; disabling the cron and
    hiding the nav link fully backs it out. The table can be dropped independently

@@ -73,14 +73,14 @@ each `data` element is `{ "period": <ISO date>, "added": <int>, "removed":
 
 ### Requirement: Public job-activity dashboard page
 
-The web SPA SHALL provide a public `/stats` page that renders the job-activity
+The web SPA SHALL provide a public `/trends` page that renders the job-activity
 data as a grouped bar chart — a green bar for `added` and a red bar for
 `removed` per period — with a control to switch the granularity between day,
 week, and month. The page SHALL be reachable without signing in.
 
 #### Scenario: Chart renders added and removed bars
 
-- **WHEN** a visitor opens `/stats`
+- **WHEN** a visitor opens `/trends`
 - **THEN** the page fetches `GET /api/v1/stats/jobs-activity` and renders, per
   period, a green added bar and a red removed bar
 

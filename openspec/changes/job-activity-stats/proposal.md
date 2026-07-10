@@ -20,7 +20,7 @@ or surfaced.
   `GET /api/v1/stats/jobs-activity` that serves the rollup aggregated to a
   requested granularity (`day` | `week` | `month`) over a date range, using
   Postgres `date_trunc` so the wire payload stays small.
-- Add a **public SPA page `/stats`** rendering a grouped bar chart: green bar =
+- Add a **public SPA page `/trends`** rendering a grouped bar chart: green bar =
   added, red bar = removed, per period, with a day/week/month granularity
   toggle.
 
@@ -45,7 +45,7 @@ or surfaced.
   into `worker.Main`; one new cron entry in ops.
 - **API**: new `internal/handler/stats.go` + route registration; public read,
   no auth.
-- **Frontend**: new `/stats` route under `web/`, a bar-chart component, and a
+- **Frontend**: new `/trends` route under `web/`, a bar-chart component, and a
   nav/footer link.
 - **Dependencies**: a lightweight chart approach in the SPA (reuse existing
   charting if present; otherwise hand-rolled SVG bars — decided in design).

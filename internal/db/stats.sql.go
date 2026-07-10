@@ -24,125 +24,43 @@ func (q *Queries) DeleteAllJobDailyStats(ctx context.Context) error {
 	return err
 }
 
-const listJobActivityDay = `-- name: ListJobActivityDay :many
+const listJobActivity = `-- name: ListJobActivity :many
 SELECT
-    d::date                 AS period,
-    COALESCE(s.added, 0)::int   AS added,
-    COALESCE(s.removed, 0)::int AS removed
-FROM generate_series($1::timestamp, $2::timestamp, interval '1 day') AS d
-LEFT JOIN job_daily_stats s ON s.day = d::date
-ORDER BY d
-`
-
-type ListJobActivityDayParams struct {
-	FromTs pgtype.Timestamp `json:"from_ts"`
-	ToTs   pgtype.Timestamp `json:"to_ts"`
-}
-
-type ListJobActivityDayRow struct {
-	Period  pgtype.Date `json:"period"`
-	Added   int32       `json:"added"`
-	Removed int32       `json:"removed"`
-}
-
-// Dense daily series over [from, to]: generate_series makes the gap-free calendar,
-// LEFT JOIN fills each day's counts (missing days → 0). $1 = from, $2 = to.
-func (q *Queries) ListJobActivityDay(ctx context.Context, arg ListJobActivityDayParams) ([]ListJobActivityDayRow, error) {
-	rows, err := q.db.Query(ctx, listJobActivityDay, arg.FromTs, arg.ToTs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListJobActivityDayRow{}
-	for rows.Next() {
-		var i ListJobActivityDayRow
-		if err := rows.Scan(&i.Period, &i.Added, &i.Removed); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listJobActivityMonth = `-- name: ListJobActivityMonth :many
-SELECT
-    date_trunc('month', d)::date AS period,
+    date_trunc($1::text, d)::date AS period,
     COALESCE(sum(s.added), 0)::int   AS added,
     COALESCE(sum(s.removed), 0)::int AS removed
-FROM generate_series($1::timestamp, $2::timestamp, interval '1 day') AS d
+FROM generate_series($2::timestamp, $3::timestamp, interval '1 day') AS d
 LEFT JOIN job_daily_stats s ON s.day = d::date
-GROUP BY date_trunc('month', d)
-ORDER BY date_trunc('month', d)
+GROUP BY date_trunc($1::text, d)
+ORDER BY date_trunc($1::text, d)
 `
 
-type ListJobActivityMonthParams struct {
+type ListJobActivityParams struct {
+	Unit   string           `json:"unit"`
 	FromTs pgtype.Timestamp `json:"from_ts"`
 	ToTs   pgtype.Timestamp `json:"to_ts"`
 }
 
-type ListJobActivityMonthRow struct {
+type ListJobActivityRow struct {
 	Period  pgtype.Date `json:"period"`
 	Added   int32       `json:"added"`
 	Removed int32       `json:"removed"`
 }
 
-// Dense monthly series: the same daily generate_series grouped to calendar months.
-func (q *Queries) ListJobActivityMonth(ctx context.Context, arg ListJobActivityMonthParams) ([]ListJobActivityMonthRow, error) {
-	rows, err := q.db.Query(ctx, listJobActivityMonth, arg.FromTs, arg.ToTs)
+// Dense activity series over [from, to] at the given granularity. A daily
+// generate_series builds the gap-free calendar; the LEFT JOIN fills each day's
+// counts (missing days → 0), and date_trunc(unit, ...) rolls those days up to the
+// requested bucket (day/week/month) so empty buckets still appear as zeros. `unit`
+// is a caller-validated date_trunc field (day/week/month), never raw user input.
+func (q *Queries) ListJobActivity(ctx context.Context, arg ListJobActivityParams) ([]ListJobActivityRow, error) {
+	rows, err := q.db.Query(ctx, listJobActivity, arg.Unit, arg.FromTs, arg.ToTs)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListJobActivityMonthRow{}
+	items := []ListJobActivityRow{}
 	for rows.Next() {
-		var i ListJobActivityMonthRow
-		if err := rows.Scan(&i.Period, &i.Added, &i.Removed); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listJobActivityWeek = `-- name: ListJobActivityWeek :many
-SELECT
-    date_trunc('week', d)::date AS period,
-    COALESCE(sum(s.added), 0)::int   AS added,
-    COALESCE(sum(s.removed), 0)::int AS removed
-FROM generate_series($1::timestamp, $2::timestamp, interval '1 day') AS d
-LEFT JOIN job_daily_stats s ON s.day = d::date
-GROUP BY date_trunc('week', d)
-ORDER BY date_trunc('week', d)
-`
-
-type ListJobActivityWeekParams struct {
-	FromTs pgtype.Timestamp `json:"from_ts"`
-	ToTs   pgtype.Timestamp `json:"to_ts"`
-}
-
-type ListJobActivityWeekRow struct {
-	Period  pgtype.Date `json:"period"`
-	Added   int32       `json:"added"`
-	Removed int32       `json:"removed"`
-}
-
-// Dense weekly series: the same daily generate_series grouped to ISO weeks, so
-// every week overlapping [from, to] appears with its summed counts (empty → 0).
-func (q *Queries) ListJobActivityWeek(ctx context.Context, arg ListJobActivityWeekParams) ([]ListJobActivityWeekRow, error) {
-	rows, err := q.db.Query(ctx, listJobActivityWeek, arg.FromTs, arg.ToTs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListJobActivityWeekRow{}
-	for rows.Next() {
-		var i ListJobActivityWeekRow
+		var i ListJobActivityRow
 		if err := rows.Scan(&i.Period, &i.Added, &i.Removed); err != nil {
 			return nil, err
 		}
