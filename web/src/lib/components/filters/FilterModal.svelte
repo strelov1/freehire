@@ -89,9 +89,11 @@
   });
 
   // The header "Apply my profile" affordance shows only on the full job modal (same scope
-  // as the My-filters tab) for a signed-in user: the profile-derived Apply button when a
-  // profile exists, a create-profile link when it doesn't. Signed-out shows neither.
-  const showProfileAction = $derived(hasSavedTab && isAuthenticated());
+  // as the My-filters tab) for a signed-in user, once the profile load has settled (so a
+  // user who has a profile never flashes the "create" link while it loads): the
+  // profile-derived Apply button when a profile exists, a create-profile link when it
+  // doesn't. Signed-out — or a failed load — shows neither.
+  const showProfileAction = $derived(hasSavedTab && isAuthenticated() && profileStore.loaded);
   const profile = $derived(profileStore.profile);
 
   // The footer nudge shows only when the My-filters tab exists (so the jump lands

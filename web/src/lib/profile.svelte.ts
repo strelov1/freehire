@@ -15,7 +15,10 @@ class ProfileStore {
   // Reassigned (never mutated in place) on every change, so $state.raw is enough and
   // readers ($derived in the view) re-run on each new value.
   #profile = $state.raw<UserProfile | null>(null);
-  #loaded = false;
+  // Reactive so readers can distinguish "not loaded yet" from "loaded, no profile"
+  // (both leave #profile null) — e.g. the filter modal hides its profile action until
+  // the load settles instead of flashing the wrong affordance.
+  #loaded = $state(false);
   // The in-flight load, shared so concurrent callers issue one request.
   #loading: Promise<void> | null = null;
   // Bumped by reset(); a load resolving after a reset (a same-tab user handoff) is
