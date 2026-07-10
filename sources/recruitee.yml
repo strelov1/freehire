@@ -3523,3 +3523,5 @@
   board: twint
 - company: "Xeltis AG"
   board: xeltis
+- company: "Appercut"
+  board: appercut
