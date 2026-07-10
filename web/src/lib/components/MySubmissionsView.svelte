@@ -1,13 +1,11 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { listMySubmissions } from '$lib/api';
+  import { api } from '$lib/api';
+  import { AsyncData } from '$lib/asyncData.svelte';
   import { isAuthenticated } from '$lib/auth.svelte';
   import type { Submission } from '$lib/types';
   import { timeAgo } from '$lib/utils';
   import States from './States.svelte';
-
-  let status = $state<'loading' | 'error' | 'ready'>('loading');
-  let submissions = $state.raw<Submission[]>([]);
 
   // status → a coloured pill. The three review states map to amber/green/red.
   const statusClass: Record<Submission['status'], string> = {
@@ -16,20 +14,14 @@
     rejected: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
   };
 
-  async function load() {
-    status = 'loading';
-    try {
-      submissions = await listMySubmissions();
-      status = 'ready';
-    } catch {
-      status = 'error';
-    }
-  }
-
-  // Load once the session is confirmed (mirrors ApiKeysView/MyJobsView).
+  // Load once the session is confirmed (the boot-time /me resolution may still be in
+  // flight when the page is opened directly).
+  const submissionsData = new AsyncData<Submission[]>([]);
   $effect(() => {
-    if (isAuthenticated()) void load();
+    if (isAuthenticated()) void submissionsData.run(() => api.listMySubmissions());
   });
+  const status = $derived(submissionsData.status);
+  const submissions = $derived(submissionsData.value);
 </script>
 
 {#if !isAuthenticated()}

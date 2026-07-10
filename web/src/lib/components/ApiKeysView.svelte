@@ -1,14 +1,12 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { createApiKey, listApiKeys, revokeApiKey } from '$lib/api';
+  import { api } from '$lib/api';
+  import { AsyncData } from '$lib/asyncData.svelte';
   import { isAuthenticated } from '$lib/auth.svelte';
   import type { ApiKey, CreatedApiKey } from '$lib/types';
   import { Button, Input } from '$lib/ui';
   import { timeAgo } from '$lib/utils';
   import States from './States.svelte';
-
-  let status = $state<'loading' | 'error' | 'ready'>('loading');
-  let keys = $state.raw<ApiKey[]>([]);
 
   // Create form.
   const expiryOptions = [
@@ -36,21 +34,14 @@
       : '',
   );
 
-  async function load() {
-    status = 'loading';
-    try {
-      keys = await listApiKeys();
-      status = 'ready';
-    } catch {
-      status = 'error';
-    }
-  }
-
   // Load once the session is confirmed (the boot-time /me resolution may still be
   // in flight when the page is opened directly), mirroring MyJobsView.
+  const keysData = new AsyncData<ApiKey[]>([]);
   $effect(() => {
-    if (isAuthenticated()) void load();
+    if (isAuthenticated()) void keysData.run(() => api.listApiKeys());
   });
+  const status = $derived(keysData.status);
+  const keys = $derived(keysData.value);
 
   async function submit(e: SubmitEvent) {
     e.preventDefault();
@@ -62,9 +53,9 @@
     try {
       const expiresAt =
         expiryDays > 0 ? new Date(Date.now() + expiryDays * 86_400_000).toISOString() : undefined;
-      const created = await createApiKey(trimmed, expiresAt);
+      const created = await api.createApiKey(trimmed, expiresAt);
       revealed = created;
-      keys = [created, ...keys];
+      keysData.value = [created, ...keysData.value];
       name = '';
       expiryDays = 0;
     } catch {
@@ -89,8 +80,8 @@
       return;
     }
     try {
-      await revokeApiKey(key.id);
-      keys = keys.filter((k) => k.id !== key.id);
+      await api.revokeApiKey(key.id);
+      keysData.value = keysData.value.filter((k) => k.id !== key.id);
       if (revealed?.id === key.id) revealed = null;
     } catch {
       formError = 'Could not revoke the key. Please try again.';

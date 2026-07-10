@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { getMyPipeline } from '$lib/api';
+  import { api } from '$lib/api';
+  import { AsyncData } from '$lib/asyncData.svelte';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { interviewRate, offerRate } from '$lib/pipeline';
   import type { PipelineStats } from '$lib/types';
@@ -8,23 +9,13 @@
   import States from './States.svelte';
 
   // Single aggregate fetch (not paginated): the snapshot of where the caller's
-  // applications stand. Reassigned wholesale, never mutated → $state.raw.
-  let status = $state<'loading' | 'error' | 'ready'>('loading');
-  let stats = $state.raw<PipelineStats | null>(null);
-
-  async function load() {
-    status = 'loading';
-    try {
-      stats = await getMyPipeline();
-      status = 'ready';
-    } catch {
-      status = 'error';
-    }
-  }
-
+  // applications stand.
+  const pipeline = new AsyncData<PipelineStats | null>(null);
   $effect(() => {
-    if (isAuthenticated()) void load();
+    if (isAuthenticated()) void pipeline.run(() => api.getMyPipeline());
   });
+  const status = $derived(pipeline.status);
+  const stats = $derived(pipeline.value);
 
   const iv = $derived(stats ? interviewRate(stats) : 0);
   const offer = $derived(stats ? offerRate(stats) : 0);

@@ -1,7 +1,8 @@
 <script lang="ts">
   // Aliased: this component already has a local `resolve(report, …)` action.
   import { resolve as resolveRoute } from '$app/paths';
-  import { dismissReport, listPendingReports, resolveReport } from '$lib/api';
+  import { api } from '$lib/api';
+  import { AsyncData } from '$lib/asyncData.svelte';
   import { reportReasonLabel } from '$lib/reports';
   import type { Report } from '$lib/types';
   import { Badge, Button } from '$lib/ui';
@@ -10,29 +11,20 @@
 
   // Rendered only inside the moderator-gated ModerationView, so it assumes a
   // moderator session; the server authorizes independently regardless.
-  let status = $state<'loading' | 'error' | 'ready'>('loading');
-  let queue = $state.raw<Report[]>([]);
   // The id currently being acted on, to disable its row's buttons.
   let acting = $state<number | null>(null);
   let actionError = $state<string | null>(null);
 
-  async function load() {
-    status = 'loading';
-    try {
-      queue = await listPendingReports();
-      status = 'ready';
-    } catch {
-      status = 'error';
-    }
-  }
-
   // Load once on mount (the parent only mounts this for a moderator).
+  const reportsData = new AsyncData<Report[]>([]);
   $effect(() => {
-    void load();
+    void reportsData.run(() => api.listPendingReports());
   });
+  const status = $derived(reportsData.status);
+  const queue = $derived(reportsData.value);
 
   function drop(id: number) {
-    queue = queue.filter((r) => r.id !== id);
+    reportsData.value = reportsData.value.filter((r) => r.id !== id);
   }
 
   // Resolve a report; closeJob decides whether the reported vacancy is soft-closed.
@@ -41,7 +33,7 @@
     acting = r.id;
     actionError = null;
     try {
-      await resolveReport(r.id, closeJob);
+      await api.resolveReport(r.id, closeJob);
       drop(r.id);
     } catch {
       actionError = `Could not resolve the report on "${r.job_title}". It may have already been decided.`;
@@ -58,7 +50,7 @@
     acting = r.id;
     actionError = null;
     try {
-      await dismissReport(r.id, reason);
+      await api.dismissReport(r.id, reason);
       drop(r.id);
     } catch {
       actionError = `Could not dismiss the report on "${r.job_title}". It may have already been decided.`;

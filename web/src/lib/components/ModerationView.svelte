@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { approveSubmission, listPendingSubmissions, rejectSubmission } from '$lib/api';
+  import { api } from '$lib/api';
+  import { AsyncData } from '$lib/asyncData.svelte';
   import { currentUser } from '$lib/auth.svelte';
   import type { Submission } from '$lib/types';
   import { Button } from '$lib/ui';
@@ -16,29 +17,20 @@
   ];
   let view = $state<View>('queue');
 
-  let status = $state<'loading' | 'error' | 'ready'>('loading');
-  let queue = $state.raw<Submission[]>([]);
   // The id currently being approved/rejected, to disable its row's buttons.
   let acting = $state<number | null>(null);
   let actionError = $state<string | null>(null);
 
-  async function load() {
-    status = 'loading';
-    try {
-      queue = await listPendingSubmissions();
-      status = 'ready';
-    } catch {
-      status = 'error';
-    }
-  }
-
   // Load once the moderator session is confirmed.
+  const queueData = new AsyncData<Submission[]>([]);
   $effect(() => {
-    if (isModerator) void load();
+    if (isModerator) void queueData.run(() => api.listPendingSubmissions());
   });
+  const status = $derived(queueData.status);
+  const queue = $derived(queueData.value);
 
   function drop(id: number) {
-    queue = queue.filter((s) => s.id !== id);
+    queueData.value = queueData.value.filter((s) => s.id !== id);
   }
 
   async function approve(s: Submission) {
@@ -46,7 +38,7 @@
     acting = s.id;
     actionError = null;
     try {
-      await approveSubmission(s.id);
+      await api.approveSubmission(s.id);
       drop(s.id);
     } catch {
       actionError = `Could not approve "${s.title}". It may have already been decided.`;
@@ -64,7 +56,7 @@
     acting = s.id;
     actionError = null;
     try {
-      await rejectSubmission(s.id, reason);
+      await api.rejectSubmission(s.id, reason);
       drop(s.id);
     } catch {
       actionError = `Could not reject "${s.title}". It may have already been decided.`;
