@@ -68,6 +68,7 @@ func genStructs() (string, error) {
 	verdictTS := filepath.Join(tmp, "verdict.ts")
 	atscheckTS := filepath.Join(tmp, "atscheck.ts")
 	jobmatchTS := filepath.Join(tmp, "jobmatch.ts")
+	jobfitTS := filepath.Join(tmp, "jobfit.ts")
 
 	cfg := &tygo.Config{
 		Packages: []*tygo.PackageConfig{
@@ -109,6 +110,13 @@ func genStructs() (string, error) {
 				OutputPath:   jobmatchTS,
 				IncludeFiles: []string{"jobmatch.go"},
 			},
+			{
+				// The on-demand LLM fit analysis wire shape (Analysis + Dimension +
+				// Requirement). Only jobfit.go — analyzer.go holds server-only types.
+				Path:         "github.com/strelov1/freehire/internal/jobfit",
+				OutputPath:   jobfitTS,
+				IncludeFiles: []string{"jobfit.go"},
+			},
 		},
 	}
 	if err := tygo.New(cfg).Generate(); err != nil {
@@ -139,7 +147,11 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + jobmatchBody, nil
+	jobfitBody, err := readBody(jobfitTS)
+	if err != nil {
+		return "", err
+	}
+	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + jobmatchBody + "\n" + jobfitBody, nil
 }
 
 // readBody returns a tygo output file's body with its leading preamble removed, so

@@ -282,6 +282,11 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
 	// OAuth sign-in fast path: resolve a provider identity straight to its user.
 	GetUserByIdentity(ctx context.Context, arg GetUserByIdentityParams) (GetUserByIdentityRow, error)
+	// The caller's cached fit analysis for one job, with the staleness stamps it was
+	// computed against. No row means the pair was never analyzed (the handler serves a
+	// null analysis, no LLM call). The handler compares cv_uploaded_at / job_content_hash
+	// to the live CV upload time and job content_hash to decide the stale flag.
+	GetUserJobAnalysis(ctx context.Context, arg GetUserJobAnalysisParams) (GetUserJobAnalysisRow, error)
 	// The caller's single profile, keyed by user_id. No matching row means the user has not
 	// saved a profile yet (the handler maps that to a null payload / 404 on sub-resources).
 	GetUserProfile(ctx context.Context, userID int64) (UserProfile, error)
@@ -685,6 +690,10 @@ type Querier interface {
 	// Link (or relink) a user's Telegram chat, captured from the inbound /start. One
 	// row per user; relinking from a different chat overwrites the chat_id.
 	UpsertTelegramLink(ctx context.Context, arg UpsertTelegramLinkParams) error
+	// Create-or-replace the cached analysis for a (user, job). The composite PRIMARY KEY
+	// makes it idempotent: a recompute overwrites the analysis, model, and both staleness
+	// stamps and re-bumps created_at. analysis is the sanitized jobfit.Analysis JSON.
+	UpsertUserJobAnalysis(ctx context.Context, arg UpsertUserJobAnalysisParams) error
 	// Create-or-replace the user's one profile. The PRIMARY KEY (user_id) makes this an
 	// idempotent upsert: first save inserts, later saves overwrite specializations/skills and
 	// bump updated_at. Specializations and skills are already normalized by the service.

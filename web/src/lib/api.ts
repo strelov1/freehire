@@ -35,6 +35,7 @@ import type {
   Verdict,
   ATSResponse,
   JobMatch,
+  JobFitResponse,
   ResumeProfile,
 } from './types';
 
@@ -161,6 +162,20 @@ export function createApi(
    *  calls it in that state. */
   async function getJobMatch(slug: string): Promise<JobMatch> {
     return requestData<JobMatch>(`/api/v1/jobs/${slug}/match`);
+  }
+
+  /** The cached LLM fit analysis for a job (never runs the model). `has_cv` is false
+   *  when no CV is stored; `analysis` is null when none is cached yet; `stale` marks a
+   *  cached analysis whose CV or job changed since. Safe to call on expand. */
+  async function getJobFit(slug: string): Promise<JobFitResponse> {
+    return requestData<JobFitResponse>(`/api/v1/jobs/${slug}/fit`);
+  }
+
+  /** Run the three-stage fit prompt-chain over the caller's CV and this job, cache it
+   *  per (user, job), and return it fresh. Bound to the explicit compute/recompute
+   *  action. With no LLM configured this returns `has_cv` with a null analysis. */
+  async function runJobFit(slug: string): Promise<JobFitResponse> {
+    return requestData<JobFitResponse>(`/api/v1/jobs/${slug}/fit`, { method: 'POST' });
   }
 
   /** Full-text search over jobs. `facets` carries the query text and any facet
@@ -631,6 +646,8 @@ export function createApi(
     getJob,
     getSimilarJobs,
     getJobMatch,
+    getJobFit,
+    runJobFit,
     searchJobs,
     swipeDeck,
     recommendations,

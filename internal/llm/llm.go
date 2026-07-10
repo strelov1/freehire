@@ -36,6 +36,15 @@ type Client struct {
 	source  string
 }
 
+// ModelID returns the configured model id, so a caller can record which model
+// produced a result (e.g. a cached analysis's provenance). Empty on a nil client.
+func (c *Client) ModelID() string {
+	if c == nil {
+		return ""
+	}
+	return c.modelID
+}
+
 // Option configures a Client at construction. Options keep tracing opt-in without
 // changing the constructors' required parameters, so existing call sites compile
 // unchanged.

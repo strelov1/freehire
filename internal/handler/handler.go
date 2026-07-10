@@ -16,6 +16,7 @@ import (
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/jobfit"
 	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/moderation"
@@ -92,6 +93,11 @@ type API struct {
 	atsAnalyzer *atscheck.Analyzer
 	// atsCache reads/writes the per-user cached CV ATS review (backed by *db.Queries).
 	atsCache atsReviewStore
+	// jobFit runs the on-demand three-stage LLM fit analysis for one (candidate, job).
+	// Its client is nil when the LLM is unconfigured; Analyze then degrades to a no-op.
+	jobFit *jobfit.Analyzer
+	// jobFitCache reads/writes the per-(user, job) cached fit analysis (backed by *db.Queries).
+	jobFitCache jobFitStore
 	// Telegram notification wiring. All nil/empty when the bot is unconfigured —
 	// the linking endpoints then report the feature off and the webhook is inert.
 	// telegramLinks mints/verifies the deep-link token; telegramBot replies to the
@@ -191,6 +197,10 @@ func Register(app *fiber.App, cfg Config) {
 	// or not the LLM is configured.
 	a.atsAnalyzer = atscheck.NewAnalyzer(cfg.LLM)
 	a.atsCache = queries
+	// The fit analysis shares the same LLM client (nil-safe: a nil client makes
+	// Analyze a no-op, so the endpoint degrades to no analysis).
+	a.jobFit = jobfit.NewAnalyzer(cfg.LLM)
+	a.jobFitCache = queries
 	// Telegram notifications are enabled only with both a bot token and a JWT
 	// secret (the link token reuses it). Absent either, the linking endpoints
 	// report the feature off and the webhook is inert (see telegramEnabled).
@@ -245,6 +255,8 @@ func Register(app *fiber.App, cfg Config) {
 	api.Delete("/jobs/:slug/track", keyAuth, a.Untrack)
 	// Read-only per-job skill match against the caller's profile (no writes).
 	api.Get("/jobs/:slug/match", keyAuth, a.JobMatch)
+	api.Get("/jobs/:slug/fit", keyAuth, a.GetJobFit)
+	api.Post("/jobs/:slug/fit", keyAuth, a.PostJobFit)
 
 	// Stateless market-coverage: score a caller-supplied skill list (request body)
 	// against the facet-filtered market. Cookie or API key — the CLI drives it with
