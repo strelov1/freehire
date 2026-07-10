@@ -8,12 +8,19 @@ import type { PageServerLoad } from './$types';
 // shell); other failures bubble to the 500 page.
 export const load: PageServerLoad = async ({ params, fetch }) => {
   const api = serverApi(fetch);
-  const job = await api.getJob(params.slug).catch((e) => {
-    if (e instanceof ApiError && e.status === 404) error(404, 'Job not found');
-    throw e;
-  });
+  // Both fetches key only on the slug and are independent, so run them in parallel
+  // — serialising them cost a full API round-trip on every job page. They stay
+  // awaited (not streamed) so the "Similar jobs" rows remain in the SSR HTML for
+  // internal-link crawlability.
+  //
   // Similar jobs are a non-essential discovery aid: a failure (search disabled,
   // no neighbours yet) must not break the page, so it degrades to an empty list.
-  const similar = await api.getSimilarJobs(params.slug).catch(() => []);
+  const [job, similar] = await Promise.all([
+    api.getJob(params.slug).catch((e) => {
+      if (e instanceof ApiError && e.status === 404) error(404, 'Job not found');
+      throw e;
+    }),
+    api.getSimilarJobs(params.slug).catch(() => []),
+  ]);
   return { job, similar };
 };
