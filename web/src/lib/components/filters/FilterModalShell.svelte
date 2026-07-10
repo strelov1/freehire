@@ -38,6 +38,7 @@
     countsFetch,
     initialKey,
     pane,
+    headerAction,
     extra,
     footerNote,
   }: {
@@ -67,6 +68,9 @@
     /** Renders the active entry's controls into the right pane, given the live staged
      *  facet counts (null until the first fetch resolves or when `countsFetch` is absent). */
     pane: Snippet<[RailEntry, FacetCounts | null]>;
+    /** Optional control rendered in the header row, between the title and Close (e.g. the
+     *  job modal's "Apply my profile"). Absent for callers that don't need one. */
+    headerAction?: Snippet;
     /** Optional content above the pane (e.g. the profile editor's "import from CV"). */
     extra?: Snippet;
     /** Optional footer nudge above the action row, handed a `jumpTo` to switch panes and
@@ -177,6 +181,7 @@
       <!-- header -->
       <div class="flex items-center gap-3 border-b border-border px-4 py-3">
         <h2 class="flex-1 text-base font-semibold tracking-tight">{title}</h2>
+        {#if headerAction}{@render headerAction()}{/if}
         <button
           type="button"
           onclick={onClose}

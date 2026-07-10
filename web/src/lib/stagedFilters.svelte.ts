@@ -12,6 +12,7 @@ import {
   emptyFacet,
   emptyFilters,
   filtersFromParams,
+  filtersFromProfile,
   filtersToParams,
   facetCycle,
   facetPick,
@@ -89,6 +90,12 @@ export class StagedFilters implements FacetStore {
   /** Reset every staged filter. */
   clear(): void {
     this.#f = emptyFilters();
+  }
+
+  /** Reset every staged filter and seed from a user profile: specializations →
+   *  `category`, skills → `skills`. Backs the modal's "Apply my profile" action. */
+  applyProfile(specializations: string[], skills: string[]): void {
+    this.#f = filtersFromProfile(specializations, skills);
   }
 
   /** Replace the staged filters from a saved query string — the "My filters" tab
