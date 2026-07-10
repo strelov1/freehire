@@ -8,6 +8,7 @@
   import { isAuthenticated } from '$lib/auth.svelte';
   import { cardTags, formatSalary } from '$lib/enrichment';
   import { FilterStore, filtersToParams } from '$lib/filters';
+  import { latestOnly } from '$lib/latestOnly';
   import type { Job, FacetCounts } from '$lib/types';
   import { Badge } from '$lib/ui';
   import { markViewed } from '$lib/viewedJobs.svelte';
@@ -35,7 +36,8 @@
 
   // queue holds only UNJUDGED cards; the active one is queue[0]. seen dedups by
   // slug so a prefetch that races a just-sent save/dismiss can't re-add a card.
-  let queue = $state<Job[]>([]);
+  // Reassigned wholesale (never mutated in place), so raw skips per-item proxying.
+  let queue = $state.raw<Job[]>([]);
   const seen = new Set<string>();
   // Single-step undo: the last judged card and how it was judged.
   let last = $state<{ job: Job; kind: Judgement } | null>(null);
@@ -59,18 +61,12 @@
   let modalOpen = $state(false);
 
   // Live facet distribution feeding the modal's dynamic selects + "Show N jobs"
-  // preview. A stale-response guard (countsGen) mirrors JobsView.
-  let counts = $state<FacetCounts | null>(null);
-  let countsGen = 0;
-  function refreshCounts() {
-    const g = ++countsGen;
-    api
-      .facetCounts(deckParams())
-      .then((c) => {
-        if (g === countsGen) counts = c;
-      })
-      .catch(() => {});
-  }
+  // preview. latestOnly discards a slow earlier response, mirroring JobsView.
+  let counts = $state.raw<FacetCounts | null>(null);
+  const refreshCounts = latestOnly(
+    () => api.facetCounts(deckParams()),
+    (c) => (counts = c),
+  );
   const previewCount = (params: URLSearchParams) => api.facetCounts(params).then((c) => c.total);
 
   // The card transitions (springs back or flies off) whenever it isn't tracking

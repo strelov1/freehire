@@ -8,6 +8,7 @@
   import { api, type Slice } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { ensureViewedLoaded } from '$lib/viewedJobs.svelte';
+  import { latestOnly } from '$lib/latestOnly';
   import { Paginator } from '$lib/paginated.svelte';
   import { FilterStore, filtersToParams } from '$lib/filters';
   import { loadJobFilters } from '$lib/filterStorage';
@@ -90,19 +91,12 @@
   // selects (skills, countries) so the user sees which values exist and how many
   // jobs each has under the current filters. A failed fetch leaves the prior
   // counts — the selects degrade to plain (countless) options, never break.
-  // `countsGen` is a monotonic fetch id so a slow earlier response can't
-  // overwrite a newer one (same guard as AnalyticsView).
-  let counts = $state<FacetCounts | null>(null);
-  let countsGen = 0;
-  const refreshCounts = () => {
-    const gen = ++countsGen;
-    return api
-      .facetCounts(scopedParams())
-      .then((c) => {
-        if (gen === countsGen) counts = c;
-      })
-      .catch(() => {});
-  };
+  // latestOnly stops a slow earlier response overwriting a newer one.
+  let counts = $state.raw<FacetCounts | null>(null);
+  const refreshCounts = latestOnly(
+    () => api.facetCounts(scopedParams()),
+    (c) => (counts = c),
+  );
 
   let modalOpen = $state(false);
   let started = false;
@@ -157,7 +151,7 @@
   // without a remount). Consumed exactly once; standalone list only; skipped if a banner
   // is already showing.
   $effect(() => {
-    if (!browser || !untrack(() => standalone) || alertBanner) return;
+    if (!untrack(() => standalone) || alertBanner) return; // effect: client-only, no browser guard
     if (!isAuthenticated()) return;
     const pending = consumePendingAlert();
     if (pending !== null) alertBanner = { query: pending, autostart: true };

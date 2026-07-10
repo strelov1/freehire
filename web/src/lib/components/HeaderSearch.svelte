@@ -18,8 +18,8 @@
   const DEBOUNCE_MS = 250;
 
   let query = $state('');
-  let jobs = $state<Job[]>([]);
-  let companies = $state<CompanyListItem[]>([]);
+  let jobs = $state.raw<Job[]>([]);
+  let companies = $state.raw<CompanyListItem[]>([]);
   let open = $state(false);
   let loading = $state(false);
   let noResults = $state(false);

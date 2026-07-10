@@ -4,6 +4,7 @@
   import { page } from '$app/state';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
+  import { latestOnly } from '$lib/latestOnly';
   import { Paginator } from '$lib/paginated.svelte';
   import { FilterStore, filtersToParams } from '$lib/filters';
   import { syncOnNavigation } from '$lib/urlSynced.svelte';
@@ -34,17 +35,11 @@
   // pure-vector feed the ranking spans the whole catalogue, so the facet distribution
   // over the same filters (the shared /jobs facets endpoint) is the honest proxy — it
   // answers "which facet values have open jobs", not "how many of your matches are X".
-  let counts = $state<FacetCounts | null>(null);
-  let countsGen = 0;
-  const refreshCounts = () => {
-    const gen = ++countsGen;
-    return api
-      .facetCounts(filterParams())
-      .then((c) => {
-        if (gen === countsGen) counts = c;
-      })
-      .catch(() => {});
-  };
+  let counts = $state.raw<FacetCounts | null>(null);
+  const refreshCounts = latestOnly(
+    () => api.facetCounts(filterParams()),
+    (c) => (counts = c),
+  );
 
   // Disjunctive counts for the staged (in-modal) filter set, so a selected facet still
   // shows its siblings' counts and the total matches what the list would show.
