@@ -1124,3 +1124,21 @@
   board: wati-dot-i-o
 - company: YouTrip
   board: youtrip
+
+# --- startupvalleys.com import (companies + discovered career pages) ---
+- company: "Backbone Art SA"
+  board: bkbn
+- company: "Frontiers Media SA"
+  board: frontiersmedia
+- company: "Matternet"
+  board: matternet
+- company: "SkyCell AG"
+  board: skycell-ag
+- company: "The Faction Collective SA"
+  board: full-stack-supply-co
+- company: "Unit8 SA"
+  board: unit8
+- company: "Vanguard Internet SA"
+  board: batgroup
+- company: "ZYTLYN TECHNOLOGIES AG"
+  board: vorsee

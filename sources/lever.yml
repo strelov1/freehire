@@ -4312,3 +4312,10 @@
   board: zerion
 - company: Packmatic
   board: Packmatic
+
+# --- startupvalleys.com import (companies + discovered career pages) ---
+- company: "Altoida AG"
+  board: Altoida
+- company: "grape insurance AG"
+  board: grape-health
+  region: eu

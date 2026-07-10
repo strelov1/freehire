@@ -3569,3 +3569,7 @@
   board: chatfuel
 - company: Quantori
   board: quantori
+
+# --- startupvalleys.com import (companies + discovered career pages) ---
+- company: "Drone Harmony AG"
+  board: drone-harmony

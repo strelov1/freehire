@@ -7977,3 +7977,31 @@
   board: urbansportsclub
 - company: Workflex
   board: workflex
+
+# --- startupvalleys.com import (companies + discovered career pages) ---
+- company: "Impact Hub Zürich"
+  board: impact-hub-zuerich-ag
+- company: "QUMEA"
+  board: qumea-ag
+- company: "Avantama AG"
+  board: avantama
+- company: "Crypto Finance AG"
+  board: crypto-finance
+- company: "derma2go AG"
+  board: derma2go
+- company: "Kaiko AI"
+  board: kaiko
+- company: "nexoya AG"
+  board: nexoya
+- company: "Nexxiot AG"
+  board: nexxiot
+- company: "Previse Systems GmbH"
+  board: previsesystems
+- company: "Scalera (RA Scale AG)"
+  board: scalera
+- company: "Scanvio Medical AG"
+  board: scanvio
+- company: "Speedgoat GmbH"
+  board: speedgoat
+- company: "ZuriQ AG"
+  board: zuriq

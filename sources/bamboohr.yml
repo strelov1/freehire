@@ -18637,3 +18637,11 @@
   board: thetradingpit
 - company: YouHodler
   board: youhodler
+
+# --- startupvalleys.com import (companies + discovered career pages) ---
+- company: "GUURU Solutions AG"
+  board: guuru
+- company: "Kuros Biosciences"
+  board: kurosbio
+- company: "SurgeonsLab AG"
+  board: surgeonslab

@@ -7399,3 +7399,7 @@
   board: eneba
 - company: Lightspeed
   board: lightspeed
+
+# --- startupvalleys.com import (companies + discovered career pages) ---
+- company: "Loki Robotics"
+  board: loki

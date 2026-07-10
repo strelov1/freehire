@@ -3505,3 +3505,21 @@
   board: betterme
 - company: TTeam
   board: tteam
+
+# --- startupvalleys.com import (companies + discovered career pages) ---
+- company: "Bloom"
+  board: bloom
+- company: "Exa"
+  board: exa
+- company: "Goodwall SA"
+  board: goodwall
+- company: "Imnoo – AI-commerce for the manufacturing industry"
+  board: imnoo
+- company: "Ipex AG"
+  board: ipex
+- company: "NIKIN AG"
+  board: nikin
+- company: "TWINT"
+  board: twint
+- company: "Xeltis AG"
+  board: xeltis

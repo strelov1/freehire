@@ -14059,3 +14059,9 @@
   board: fxpro
 - company: N26
   board: n26
+
+# --- startupvalleys.com import (companies + discovered career pages) ---
+- company: "Informal Systems"
+  board: informal
+- company: "Numab Therapeutics AG"
+  board: numab
