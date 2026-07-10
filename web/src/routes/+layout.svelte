@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import { initTheme } from '$lib/theme.svelte';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { resetUserStores } from '$lib/userResource';
+  import { resetUserStores } from '$lib/userResource.svelte';
   import TopBar from '$lib/components/TopBar.svelte';
   import Footer from '$lib/components/Footer.svelte';
   import '../app.css';

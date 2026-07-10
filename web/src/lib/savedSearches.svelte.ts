@@ -9,7 +9,7 @@
 // caller (a duplicate name or the per-user cap is a 409) so the UI can show them.
 
 import { api } from '$lib/api';
-import { UserResource } from '$lib/userResource';
+import { UserResource } from '$lib/userResource.svelte';
 import type { SavedSearch } from '$lib/types';
 
 class SavedSearches extends UserResource<SavedSearch[]> {

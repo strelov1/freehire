@@ -7,12 +7,14 @@
 // caller (a bad specialization or empty skills is a 400) so the UI can show them.
 
 import { api } from '$lib/api';
-import { UserResource } from '$lib/userResource';
+import { UserResource } from '$lib/userResource.svelte';
 import type { UserProfile } from '$lib/types';
 
 class ProfileStore extends UserResource<UserProfile | null> {
   // Reassigned (never mutated in place) on every change, so $state.raw is enough and
-  // readers ($derived in the view) re-run on each new value.
+  // readers ($derived in the view) re-run on each new value. The base's `loaded` is
+  // reactive too, so the filter modal can wait for the load to settle before showing
+  // its "Apply my profile" action.
   #profile = $state.raw<UserProfile | null>(null);
 
   get profile(): UserProfile | null {

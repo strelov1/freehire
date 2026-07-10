@@ -10,7 +10,7 @@
 
 import { SvelteSet } from 'svelte/reactivity';
 import { api } from '$lib/api';
-import { UserResource } from '$lib/userResource';
+import { UserResource } from '$lib/userResource.svelte';
 
 class ViewedJobs extends UserResource<string[]> {
   // SvelteSet (not a plain Set): a plain Set in $state is not deeply reactive, so

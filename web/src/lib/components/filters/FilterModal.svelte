@@ -1,8 +1,9 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { Bell } from '@lucide/svelte';
+  import { Bell, UserRound } from '@lucide/svelte';
   import { FACETS } from '$lib/facets';
   import { isAuthenticated } from '$lib/auth.svelte';
+  import { profileStore } from '$lib/profile.svelte';
   import { notifications } from '$lib/notifications.svelte';
   import { emptyFilters, type FilterStore, type JobFilters } from '$lib/filters';
   import { StagedFilters } from '$lib/stagedFilters.svelte';
@@ -76,12 +77,24 @@
   // to it, so the jump never lands on a missing tab.
   const hasSavedTab = $derived(savedSearches && !railKeys);
 
-  // Warm the Telegram feature flag when the modal opens for a signed-in user, so the
-  // footer "save for TG alerts" nudge can gate on it before the My-filters tab (which
-  // otherwise triggers the load) is ever opened. No-op off the browser / once loaded.
+  // Warm the Telegram feature flag and the user's profile when the modal opens for a
+  // signed-in user on the full job modal: the footer "save for TG alerts" nudge gates on
+  // the flag, and the header "Apply my profile" action gates on the profile. Both are
+  // no-ops off the browser / once loaded.
   $effect(() => {
-    if (open && hasSavedTab && isAuthenticated()) void notifications.ensureLoaded();
+    if (open && hasSavedTab && isAuthenticated()) {
+      void notifications.ensureLoaded();
+      void profileStore.ensureLoaded();
+    }
   });
+
+  // The header "Apply my profile" affordance shows only on the full job modal (same scope
+  // as the My-filters tab) for a signed-in user, once the profile load has settled (so a
+  // user who has a profile never flashes the "create" link while it loads): the
+  // profile-derived Apply button when a profile exists, a create-profile link when it
+  // doesn't. Signed-out — or a failed load — shows neither.
+  const showProfileAction = $derived(hasSavedTab && isAuthenticated() && profileStore.loaded);
+  const profile = $derived(profileStore.profile);
 
   // The footer nudge shows only when the My-filters tab exists (so the jump lands
   // somewhere), Telegram alerts are available, and there's a search worth saving.
@@ -168,9 +181,31 @@
   {previewCount}
   countsFetch={stagedCounts}
   {pane}
+  headerAction={showProfileAction ? profileAction : undefined}
   extra={extra ? extraStaged : undefined}
   {footerNote}
 />
+
+{#snippet profileAction()}
+  {#if profile}
+    <button
+      type="button"
+      onclick={() => staged.applyProfile(profile.specializations, profile.skills)}
+      class="flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+    >
+      <UserRound class="size-4 shrink-0" aria-hidden="true" />
+      Apply my profile
+    </button>
+  {:else}
+    <a
+      href="/my/profile"
+      class="flex h-9 items-center gap-1.5 rounded-lg border border-dashed border-border px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+    >
+      <UserRound class="size-4 shrink-0" aria-hidden="true" />
+      Create a profile
+    </a>
+  {/if}
+{/snippet}
 
 {#snippet extraStaged()}
   {@render extra?.(staged)}

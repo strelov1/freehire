@@ -66,7 +66,17 @@
   {:else}
     {#each groups as g (g.label)}
       <div class="flex flex-col gap-2">
-        <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{g.label}</span>
+        <div class="flex items-center gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{g.label}</span>
+          <button
+            type="button"
+            aria-label="Clear {g.label}"
+            onclick={() => g.chips.forEach((c) => c.remove())}
+            class="text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <X class="size-3" />
+          </button>
+        </div>
         <div class="flex flex-wrap gap-1.5">
           {#each g.chips as c (c.text)}
             <span

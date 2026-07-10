@@ -20,7 +20,10 @@ export function resetUserStores(): void {
 }
 
 export abstract class UserResource<T> {
-  #loaded = false;
+  // Reactive so readers can distinguish "not loaded yet" from "loaded, empty" (both
+  // may leave the resource blank) — e.g. the filter modal hides its profile action
+  // until the load settles instead of flashing the wrong affordance.
+  #loaded = $state(false);
   // The in-flight load, shared so concurrent callers issue one request.
   #loading: Promise<void> | null = null;
   // Bumped by reset(); a load resolving after a reset (a same-tab user handoff) is

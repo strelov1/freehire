@@ -8,7 +8,7 @@
 // and leaves empty/disabled state for signed-out users.
 
 import { api } from '$lib/api';
-import { UserResource } from '$lib/userResource';
+import { UserResource } from '$lib/userResource.svelte';
 import type { Subscription, TelegramStatus } from '$lib/types';
 
 const disabled: TelegramStatus = { enabled: false, linked: false };
