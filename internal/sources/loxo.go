@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 
 	"golang.org/x/net/html"
 )
@@ -26,8 +28,11 @@ type loxo struct {
 	http HTMLGetter
 }
 
-// NewLoxo builds the Loxo careers-board adapter over the given HTML client.
-func NewLoxo(c HTMLGetter) Source { return loxo{http: c} }
+// NewLoxo builds the Loxo careers-board adapter over the given HTML client, wrapping it in a
+// throttle for the shared app.loxo.co host (see loxoThrottle).
+func NewLoxo(c HTMLGetter) Source {
+	return loxo{http: newLoxoThrottle(c, loxoSharedHostGap)}
+}
 
 func (loxo) Provider() string { return "loxo" }
 
@@ -206,4 +211,59 @@ func isPrintable(s string) bool {
 		}
 	}
 	return true
+}
+
+// loxoSharedHost is Loxo's multi-tenant host: many agency boards live at app.loxo.co/<slug>,
+// and it 429s when they are crawled back-to-back (listing + detail fan-out). Dedicated agency
+// subdomains (fitnext.app.loxo.co) and pods (pod4.app.loxo.co) do not share this limit.
+const loxoSharedHost = "app.loxo.co"
+
+// loxoSharedHostGap is the minimum spacing between requests to loxoSharedHost — enough to
+// stay under its rate limit while keeping an hourly crawl well within its window.
+const loxoSharedHostGap = 350 * time.Millisecond
+
+// loxoThrottle wraps an HTMLGetter to serialize requests to the shared app.loxo.co host,
+// spacing them by a minimum gap so a burst of boards on that host does not 429. Requests to
+// dedicated subdomains/pods bypass the throttle and keep full concurrency.
+type loxoThrottle struct {
+	inner HTMLGetter
+	gap   time.Duration
+	mu    sync.Mutex
+	last  time.Time
+}
+
+func newLoxoThrottle(inner HTMLGetter, gap time.Duration) *loxoThrottle {
+	return &loxoThrottle{inner: inner, gap: gap}
+}
+
+func (t *loxoThrottle) GetHTML(ctx context.Context, u string) (*html.Node, error) {
+	if loxoIsSharedHost(u) {
+		// Hold the lock across the sleep so shared-host requests run one at a time, gap apart.
+		t.mu.Lock()
+		if d := loxoNextDelay(t.last, time.Now(), t.gap); d > 0 {
+			time.Sleep(d)
+		}
+		t.last = time.Now()
+		t.mu.Unlock()
+	}
+	return t.inner.GetHTML(ctx, u)
+}
+
+// loxoIsSharedHost reports whether the URL targets the shared app.loxo.co host (exactly, not a
+// subdomain), which is the one that rate-limits.
+func loxoIsSharedHost(u string) bool {
+	parsed, err := url.Parse(u)
+	return err == nil && parsed.Host == loxoSharedHost
+}
+
+// loxoNextDelay is how long to wait before the next shared-host request given the last one's
+// time: zero on the first request or once the gap has elapsed, else the remaining gap.
+func loxoNextDelay(last, now time.Time, gap time.Duration) time.Duration {
+	if last.IsZero() {
+		return 0
+	}
+	if d := gap - now.Sub(last); d > 0 {
+		return d
+	}
+	return 0
 }

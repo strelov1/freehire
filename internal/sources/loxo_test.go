@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/net/html"
 )
@@ -149,4 +150,33 @@ func parseFixture(t *testing.T, path string) *html.Node {
 		t.Fatalf("parse fixture %s: %v", path, err)
 	}
 	return root
+}
+
+func TestLoxoIsSharedHost(t *testing.T) {
+	cases := map[string]bool{
+		"https://app.loxo.co/agile-recruiter": true,
+		"https://app.loxo.co/job/abc==":       true,
+		"https://fitnext.app.loxo.co/fitnext": false, // dedicated subdomain
+		"https://pod4.app.loxo.co/la-tech":    false, // pod
+		"https://example.com/x":               false,
+	}
+	for u, want := range cases {
+		if got := loxoIsSharedHost(u); got != want {
+			t.Errorf("loxoIsSharedHost(%q) = %v, want %v", u, got, want)
+		}
+	}
+}
+
+func TestLoxoNextDelay(t *testing.T) {
+	gap := 350 * time.Millisecond
+	now := time.Unix(1000, 0)
+	if d := loxoNextDelay(time.Time{}, now, gap); d != 0 {
+		t.Errorf("first request delay = %v, want 0", d)
+	}
+	if d := loxoNextDelay(now.Add(-100*time.Millisecond), now, gap); d != 250*time.Millisecond {
+		t.Errorf("delay = %v, want 250ms", d)
+	}
+	if d := loxoNextDelay(now.Add(-500*time.Millisecond), now, gap); d != 0 {
+		t.Errorf("elapsed-gap delay = %v, want 0", d)
+	}
 }
