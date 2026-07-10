@@ -5,7 +5,7 @@
 // match what the search API (GET /api/v1/jobs/search) expects, including the
 // `<param>_exclude` and `<param>_mode=and` conventions.
 
-import { FACETS } from './facets';
+import { FACETS, type FacetSelection } from './facets';
 
 /** The three states a facet value can hold. */
 export type Sign = 'off' | 'include' | 'exclude';
@@ -14,12 +14,11 @@ export type Sign = 'off' | 'include' | 'exclude';
  *  in at most one set), plus whether the *included* values are ANDed (match all)
  *  instead of ORed (match any). Excluded values are always ANDed — a job matches
  *  only if it has none of them. Include and exclude coexist in one facet, so a
- *  user can include some values and exclude others at the same time. */
-export interface FacetState {
-  include: string[];
-  exclude: string[];
-  matchAll: boolean;
-}
+ *  user can include some values and exclude others at the same time.
+ *
+ *  Structurally identical to (and aliased from) facets.ts's `FacetSelection`, the
+ *  shape `FacetSection` reads — one canonical type so the two can't drift. */
+export type FacetState = FacetSelection;
 
 /** The fields the browse list can be ordered by. Only `posted_at` (the source's
  *  posting date, newest-first) is offered today; the type stays a union so a
