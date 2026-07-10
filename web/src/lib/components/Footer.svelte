@@ -18,6 +18,7 @@
     {
       title: 'Resources',
       links: [
+        { label: 'Activity', href: resolve('/stats') },
         { label: 'CLI', href: resolve('/cli') },
         { label: 'API docs', href: resolve('/docs/api') },
       ],

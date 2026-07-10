@@ -51,6 +51,7 @@
     { href: '/companies', label: 'Companies' },
     { href: '/collections', label: 'Collections' },
     { href: '/analytics', label: 'Analytics' },
+    { href: '/stats', label: 'Activity' },
     { href: '/cli', label: 'CLI' },
     { href: '/recruiters', label: 'For recruiters' },
     { href: '/for-companies', label: 'For companies' },

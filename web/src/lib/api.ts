@@ -36,6 +36,8 @@ import type {
   ATSResponse,
   JobMatch,
   ResumeProfile,
+  ActivityGranularity,
+  ActivityPoint,
 } from './types';
 
 /** A page of list items, optionally the total matching the query (endpoints that
@@ -217,6 +219,22 @@ export function createApi(
     if (opts?.disjunctive) p.set('disjunctive', '1');
     const res = await request<{ data: FacetCounts }>(`/api/v1/jobs/facets?${p}`);
     return { total: res.data.total, facets: res.data.facets ?? {}, stats: res.data.stats ?? {} };
+  }
+
+  /** The public catalogue-activity time series: vacancies added vs. removed per
+   *  period, aggregated to `granularity` (day/week/month) over an optional date
+   *  range (`from`/`to`, ISO YYYY-MM-DD; the server defaults a sensible recent
+   *  window per granularity). The series is dense — empty periods carry zeros —
+   *  so the chart draws without gap-filling. Unauthenticated. */
+  async function jobsActivity(
+    granularity: ActivityGranularity,
+    from?: string,
+    to?: string,
+  ): Promise<ActivityPoint[]> {
+    const params = new URLSearchParams({ granularity });
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    return requestData<ActivityPoint[]>(`/api/v1/stats/jobs-activity?${params}`);
   }
 
   /** List companies, optionally filtered by a name query `q` (a case-insensitive
@@ -635,6 +653,7 @@ export function createApi(
     swipeDeck,
     recommendations,
     facetCounts,
+    jobsActivity,
     listCompanies,
     getCompany,
     sitemapJobs,

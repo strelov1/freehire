@@ -228,6 +228,11 @@ func Register(app *fiber.App, cfg Config) {
 	// the job/company reads above. Owner identity is never exposed (see boardResponse).
 	api.Get("/boards/:slug", a.GetBoard)
 
+	// Public catalogue-activity time series (added vs. removed vacancies per period),
+	// unauthenticated like the other public reads. Served from the job_daily_stats
+	// rollup (cmd/rollup-stats); the /stats SPA page renders it as a bar chart.
+	api.Get("/stats/jobs-activity", a.JobsActivity)
+
 	// Per-user job interactions and the user-scoped reads accept either the
 	// session cookie or an API key (RequireAuthOrKey), so a script holding a key
 	// can drive the same flow as the browser. The public job reads above stay

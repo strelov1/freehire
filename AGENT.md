@@ -33,6 +33,7 @@ cmd/tg-ingest/main.go      crawls the Telegram channels in sources/telegram.yml 
 cmd/tg-extract/main.go     LLM-extracts vacancies from pending telegram_posts into the job catalogue
 cmd/liveness/main.go       URL-probes open non-board (orphan) jobs and closes ones whose posting is dead
 cmd/reindex/main.go        rebuilds the Meilisearch jobs index from Postgres
+cmd/rollup-stats/main.go   recomputes the job_daily_stats rollup (per-UTC-day added/removed counts) from jobs in one atomic delete+rebuild; feeds the public GET /api/v1/stats/jobs-activity endpoint and the /stats dashboard page
 cmd/backfill-derive/main.go  re-derives all six deterministic dictionary facets (countries/regions/work_mode/skills/seniority/category) on existing jobs in one pass via jobderive
 cmd/reslug/main.go         backfills public_slug/company_slug after a deliberate slug-rule change
 cmd/import-yc/main.go       enriches companies from the yc-oss directory (descriptions/industry/size/founded/HQ + curated yc_batch/yc_status facets), matching by normalized name and inserting unmatched YC companies as reference rows
@@ -80,6 +81,7 @@ go run ./cmd/tg-ingest       # Telegram crawl worker — crawls sources/telegram
 go run ./cmd/tg-extract      # Telegram extraction worker — drains telegram_posts via the LLM; needs DATABASE_URL + LLM_*
 go run ./cmd/liveness        # orphan-job liveness worker — URL-probes open non-board jobs, closes dead ones; needs DATABASE_URL
 go run ./cmd/backfill-derive # re-derive all six dictionary facets on existing jobs in one pass; needs DATABASE_URL; follow with make reindex
+go run ./cmd/rollup-stats    # recompute the job_daily_stats activity rollup (added/removed per UTC day); run-once, cron intra-day (~every 3h); needs DATABASE_URL
 make reindex                 # rebuild the Meilisearch index from Postgres (cmd/reindex; needs MEILI_URL)
 ```
 

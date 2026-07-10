@@ -116,6 +116,13 @@ type Job struct {
 	SemanticEmbeddedHash  pgtype.Text        `json:"semantic_embedded_hash"`
 }
 
+type JobDailyStat struct {
+	Day        pgtype.Date        `json:"day"`
+	Added      int32              `json:"added"`
+	Removed    int32              `json:"removed"`
+	ComputedAt pgtype.Timestamptz `json:"computed_at"`
+}
+
 type JobReport struct {
 	ID              int64              `json:"id"`
 	ReportedBy      int64              `json:"reported_by"`

@@ -149,6 +149,11 @@ type Querier interface {
 	// Returns the affected row count: 0 means the key does not exist or is not the
 	// caller's (the handler maps that to 404).
 	DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) (int64, error)
+	// First half of the atomic rebuild: clear the rollup. Run in the same transaction
+	// as RebuildJobDailyStats so readers never see an empty table and reopen-orphaned
+	// days (a day that had only closures, now reopened) are dropped rather than left
+	// stale.
+	DeleteAllJobDailyStats(ctx context.Context) error
 	DeleteEnrichmentEntry(ctx context.Context, id int64) error
 	// Drop companies no longer referenced by any job — the stale rows left behind
 	// when a slug-builder change re-keys jobs onto new slugs. Reference rows imported
@@ -329,6 +334,14 @@ type Querier interface {
 	// Slim keyset page of companies for the sitemap, cursored by the slug primary key
 	// (first chunk keyed by the empty string, which sorts before every slug).
 	ListCompanySitemap(ctx context.Context, arg ListCompanySitemapParams) ([]ListCompanySitemapRow, error)
+	// Dense daily series over [from, to]: generate_series makes the gap-free calendar,
+	// LEFT JOIN fills each day's counts (missing days → 0). $1 = from, $2 = to.
+	ListJobActivityDay(ctx context.Context, arg ListJobActivityDayParams) ([]ListJobActivityDayRow, error)
+	// Dense monthly series: the same daily generate_series grouped to calendar months.
+	ListJobActivityMonth(ctx context.Context, arg ListJobActivityMonthParams) ([]ListJobActivityMonthRow, error)
+	// Dense weekly series: the same daily generate_series grouped to ISO weeks, so
+	// every week overlapping [from, to] appears with its summed counts (empty → 0).
+	ListJobActivityWeek(ctx context.Context, arg ListJobActivityWeekParams) ([]ListJobActivityWeekRow, error)
 	// Id-only projection of ListJobsByIDAfter, used as the corruption-degrade path:
 	// when a full SELECT * batch faults on a corrupted TOAST value (SQLSTATE XX001),
 	// the scan re-reads the same window as bare ids (id is never toasted, so this
@@ -445,6 +458,12 @@ type Querier interface {
 	// picks the changed rows up; the IS DISTINCT FROM guard skips unchanged rows, making
 	// re-runs idempotent and cheap.
 	PropagateCollectionsToJobs(ctx context.Context) (int64, error)
+	// Second half of the atomic rebuild: recompute every active day from jobs. `added`
+	// counts jobs by their created_at day; `removed` counts jobs by their CURRENT
+	// closed_at day (NULL = still open, excluded). Days are UTC calendar dates
+	// (AT TIME ZONE 'UTC') so buckets are stable regardless of session timezone. The
+	// FULL OUTER JOIN yields one row per day that saw either an add or a removal.
+	RebuildJobDailyStats(ctx context.Context) (int64, error)
 	// Count a failed crawl: bump consecutive_failures, record the error, stamp the run,
 	// and RETURN the new failure count so the caller can compute the cooldown (the backoff
 	// policy lives in Go, not here). The cooldown itself is applied by SetBoardCooldown.

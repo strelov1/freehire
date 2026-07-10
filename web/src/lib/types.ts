@@ -221,6 +221,18 @@ export interface PipelineStats {
   buckets: PipelineBuckets;
 }
 
+/** The bucketing period for the job-activity time series. */
+export type ActivityGranularity = 'day' | 'week' | 'month';
+
+/** One period on the job-activity dashboard: the ISO date labelling the bucket
+ *  and the counts of vacancies added vs. removed within it. The backend returns a
+ *  dense, gap-free series (empty periods carry zeros). */
+export interface ActivityPoint {
+  period: string;
+  added: number;
+  removed: number;
+}
+
 /** An API key as returned by the management endpoints — metadata only; the
  *  plaintext token is never part of this shape. `token_prefix` is a short,
  *  non-secret leading slice (e.g. "fhk_Ab12cd") shown so the user can tell keys
