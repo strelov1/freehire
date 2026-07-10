@@ -4,6 +4,15 @@ import { sentrySvelteKit } from '@sentry/sveltekit';
 import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
+  // Strip Sentry's tracing/debug code at build time. We run errors-only
+  // (tracesSampleRate:0, no replay), but Sentry's tracing/web-vitals paths sit
+  // behind runtime `if (__SENTRY_TRACING__)` checks that ship regardless. Defining
+  // these Sentry build flags to `false` turns those into dead `if (false)` branches
+  // Rollup drops — ~22KB gzip off the client entry chunk, no behaviour change.
+  define: {
+    __SENTRY_DEBUG__: false,
+    __SENTRY_TRACING__: false,
+  },
   // SvelteKit owns routing/SSR; it provides the $lib alias, so the manual alias
   // is gone. sentrySvelteKit() must precede sveltekit(); tailwindcss() too.
   //
