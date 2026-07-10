@@ -36,16 +36,16 @@
 
 ## 6. harvest-loxo prober
 
-- [ ] 6.1 RED: test slug/host extraction from footprint URLs (careers + `/job/`
+- [x] 6.1 RED: test slug/host extraction from footprint URLs (careers + `/job/`
   URLs across host variants) yields distinct `(host, slug)` candidates
-- [ ] 6.2 GREEN: implement footprint enumeration + candidate extraction
-- [ ] 6.3 Implement live validation (200 + `/job/` links; skip dead, never abort)
+- [x] 6.2 GREEN: implement footprint enumeration + candidate extraction
+- [x] 6.3 Implement live validation (200 + `/job/` links; skip dead, never abort)
   and per-board tech-count via `internal/classify`
-- [ ] 6.4 Emit draft `sources/loxo.yml` entries (`company`, `board: <host>/<slug>`,
+- [x] 6.4 Emit draft `sources/loxo.yml` entries (`company`, `board: <host>/<slug>`,
   `hub: true`), de-duplicated against the existing file
 
 ## 7. Verify
 
-- [ ] 7.1 `go build ./... && go vet ./... && go test ./...` green
-- [ ] 7.2 Run `harvest-loxo` against the live footprint and confirm it emits
+- [x] 7.1 `go build ./... && go vet ./... && go test ./...` green
+- [x] 7.2 Run `harvest-loxo` against the live footprint and confirm it emits
   validated draft entries; sanity-run `cmd/ingest sources/loxo.yml` end-to-end

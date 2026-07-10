@@ -2,15 +2,17 @@
 
 ### Requirement: Loxo board discovery from the search footprint
 
-The system SHALL provide a `harvest-loxo` host tool that enumerates candidate Loxo
-agency boards from the search-engine footprint (paginating `site:app.loxo.co` and
-`*.app.loxo.co`), extracting the `(host, slug)` pair from each careers-page and
-`/job/<base64>` URL. Because Loxo exposes no public directory of agencies, this
-footprint enumeration is the discovery source.
+The system SHALL provide a `harvest-loxo` host tool that consumes operator-supplied
+Loxo footprint URLs (careers-page and `/job/<base64>` URLs, read from stdin or a
+seed file) and extracts the `(host, slug)` pair from each into a distinct candidate
+board set. Because Loxo exposes no public directory of agencies, the operator gathers
+the footprint (e.g. via a `site:app.loxo.co` search) and the tool validates and
+curates it — mirroring `harvest-boards`, which validates a supplied seed set rather
+than scraping a search engine itself.
 
 #### Scenario: Candidates extracted from footprint URLs
 
-- **WHEN** the tool reads indexed Loxo URLs for careers pages and job details
+- **WHEN** the tool reads Loxo careers-page and job-detail URLs across host variants
 - **THEN** it derives one candidate `(host, slug)` per distinct agency board
 
 ### Requirement: Live validation of candidate boards
