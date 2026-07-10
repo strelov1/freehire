@@ -4,62 +4,39 @@
 // and keep the local list in sync, newest-first, so the picker updates without a
 // reload.
 //
-// SSR-safe and auth-agnostic: `ensureLoaded` is a no-op off the browser, and the
-// list simply stays empty for signed-out users (the component gates the load on
-// auth and renders a sign-in prompt instead). Mutations surface API errors to the
+// SSR-safe and auth-agnostic (see UserResource): the load is a browser-only no-op and
+// the list stays empty for signed-out users. Mutations surface API errors to the
 // caller (a duplicate name or the per-user cap is a 409) so the UI can show them.
 
-import { browser } from '$app/environment';
-import {
-  listSavedSearches,
-  createSavedSearch,
-  updateSavedSearch,
-  deleteSavedSearch,
-  shareSavedSearch,
-  unshareSavedSearch,
-} from '$lib/api';
+import { api } from '$lib/api';
+import { UserResource } from '$lib/userResource';
 import type { SavedSearch } from '$lib/types';
 
-class SavedSearches {
+class SavedSearches extends UserResource<SavedSearch[]> {
   // Reassigned (never mutated in place) on every change, so $state.raw is enough
   // and readers ($derived in the component) re-run on each new array.
   #items = $state.raw<SavedSearch[]>([]);
-  #loaded = false;
-  // The in-flight load, shared so concurrent callers issue one request.
-  #loading: Promise<void> | null = null;
-  // Bumped by reset(); a load resolving after a reset (a same-tab user handoff) is
-  // discarded instead of repopulating the list with the previous user's searches.
-  #generation = 0;
 
   get items(): SavedSearch[] {
     return this.#items;
   }
 
-  /** Load the list once. Repeat calls reuse the first load (or its in-flight
-   *  promise). No-op on the server. A failed load leaves the list empty. */
-  async ensureLoaded(): Promise<void> {
-    if (!browser || this.#loaded) return;
-    if (this.#loading) return this.#loading;
-    const gen = this.#generation;
-    this.#loading = listSavedSearches()
-      .then((rows) => {
-        if (gen !== this.#generation) return; // reset() ran mid-load — discard stale rows.
-        this.#items = rows;
-        this.#loaded = true;
-      })
-      .catch(() => {
-        // best-effort: a failed load just means the picker is empty.
-      })
-      .finally(() => {
-        if (gen === this.#generation) this.#loading = null;
-      });
-    return this.#loading;
+  protected load(): Promise<SavedSearch[]> {
+    return api.listSavedSearches();
+  }
+
+  protected apply(rows: SavedSearch[]) {
+    this.#items = rows;
+  }
+
+  protected clearState() {
+    this.#items = [];
   }
 
   /** Save the current filters under a name; prepend the new set (newest-first).
    *  Throws on a duplicate name or the per-user cap (the caller shows the error). */
   async create(name: string, query: string): Promise<SavedSearch> {
-    const row = await createSavedSearch(name, query);
+    const row = await api.createSavedSearch(name, query);
     this.#items = [row, ...this.#items];
     return row;
   }
@@ -67,41 +44,31 @@ class SavedSearches {
   /** Overwrite a set's name and/or query; move it to the front (it is now the
    *  most recently updated, matching the server's ordering). */
   async update(id: number, patch: { name?: string; query?: string }): Promise<SavedSearch> {
-    const row = await updateSavedSearch(id, patch);
+    const row = await api.updateSavedSearch(id, patch);
     this.#items = [row, ...this.#items.filter((s) => s.id !== id)];
     return row;
   }
 
   /** Delete a set and drop it from the list. */
   async remove(id: number): Promise<void> {
-    await deleteSavedSearch(id);
+    await api.deleteSavedSearch(id);
     this.#items = this.#items.filter((s) => s.id !== id);
   }
 
   /** Publish a set as a public board and replace it in place (keeping its position, so
    *  toggling share doesn't reorder the list). Returns the updated set with its slug. */
   async share(id: number, authorLabel = ''): Promise<SavedSearch> {
-    const row = await shareSavedSearch(id, authorLabel);
+    const row = await api.shareSavedSearch(id, authorLabel);
     this.#items = this.#items.map((s) => (s.id === id ? row : s));
     return row;
   }
 
   /** Make a shared set private again and clear its board fields in place. */
   async unshare(id: number): Promise<void> {
-    await unshareSavedSearch(id);
+    await api.unshareSavedSearch(id);
     this.#items = this.#items.map((s) =>
       s.id === id ? { ...s, public_slug: '', author_label: '' } : s,
     );
-  }
-
-  /** Drop the cached list and the loaded flag. The component calls this when the
-   *  session ends, so a different user signing in on the same tab loads their own
-   *  searches instead of seeing the previous user's (the list is per-user). */
-  reset() {
-    this.#generation++;
-    this.#items = [];
-    this.#loaded = false;
-    this.#loading = null;
   }
 }
 

@@ -3,10 +3,7 @@
   import { onMount } from 'svelte';
   import { initTheme } from '$lib/theme.svelte';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { resetViewedJobs } from '$lib/viewedJobs.svelte';
-  import { savedSearches } from '$lib/savedSearches.svelte';
-  import { profileStore } from '$lib/profile.svelte';
-  import { notifications } from '$lib/notifications.svelte';
+  import { resetUserStores } from '$lib/userResource';
   import TopBar from '$lib/components/TopBar.svelte';
   import Footer from '$lib/components/Footer.svelte';
   import '../app.css';
@@ -20,17 +17,12 @@
   // Drop every per-user store the moment the session ends. logout() re-resolves via
   // invalidateAll() — a soft client navigation, so these module-singleton stores
   // survive it and would otherwise show the previous user's data to whoever signs in
-  // next on the same tab. Centralized in the always-mounted root layout so it fires
-  // regardless of route (the per-component load effects only cover their own store
-  // while mounted; viewedJobs, used on /jobs, had no reset at all). Idempotent — a
-  // reset of already-empty stores while signed out is a no-op.
+  // next on the same tab. resetUserStores() sweeps every registered UserResource, so
+  // a new per-user store participates automatically (no list here to forget). Fired
+  // from the always-mounted root layout so it covers every route; idempotent while
+  // signed out.
   $effect(() => {
-    if (!isAuthenticated()) {
-      resetViewedJobs();
-      savedSearches.reset();
-      profileStore.reset();
-      notifications.reset();
-    }
+    if (!isAuthenticated()) resetUserStores();
   });
 </script>
 
