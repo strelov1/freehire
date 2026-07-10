@@ -4,15 +4,15 @@ import "testing"
 
 func TestExtractCandidates(t *testing.T) {
 	in := []string{
-		"https://fitnext.app.loxo.co/fitnext",                     // agency subdomain
-		"https://app.loxo.co/agile-recruiter?location_sort=asc",   // bare host + query
-		"https://pod4.app.loxo.co/la-tech",                        // regional pod
+		"https://fitnext.app.loxo.co/fitnext",                      // agency subdomain
+		"https://app.loxo.co/agile-recruiter?location_sort=asc",    // bare host + query
+		"https://pod4.app.loxo.co/la-tech",                         // regional pod
 		"https://app.loxo.co/job/NDI0NzQtN3RzZTNpa2M2NDJ5emowdg==", // job detail — no slug, skip
-		"https://fitnext.app.loxo.co/login",                       // non-careers, skip
-		"https://app.loxo.co/agile-recruiter",                     // dup of #2 (query stripped)
-		"https://example.com/careers",                             // not loxo, skip
-		"https://notapp.loxo.co/evil",                             // lookalike host, skip
-		"  ",                                                      // blank, skip
+		"https://fitnext.app.loxo.co/login",                        // non-careers, skip
+		"https://app.loxo.co/agile-recruiter",                      // dup of #2 (query stripped)
+		"https://example.com/careers",                              // not loxo, skip
+		"https://notapp.loxo.co/evil",                              // lookalike host, skip
+		"  ",                                                       // blank, skip
 	}
 	got := extractCandidates(in)
 	want := []candidate{

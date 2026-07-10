@@ -127,10 +127,10 @@ func TestLoxoCompany(t *testing.T) {
 func TestLoxoExternalID(t *testing.T) {
 	cases := map[string]string{
 		"https://fitnext.app.loxo.co/job/NDI0NzQtN3RzZTNpa2M2NDJ5emowdg==": "42474-7tse3ikc642yzj0v",
-		"https://app.loxo.co/job/YWJjLTE=":                                "abc-1",
+		"https://app.loxo.co/job/YWJjLTE=":                                 "abc-1",
 		"https://app.loxo.co/job/NDI0NzQtN3RzZTNpa2M2NDJ5emowdg==?t=99":    "42474-7tse3ikc642yzj0v",
-		"https://app.loxo.co/careers-in-nonprofits":                       "",
-		"https://app.loxo.co/job/":                                        "",
+		"https://app.loxo.co/careers-in-nonprofits":                        "",
+		"https://app.loxo.co/job/":                                         "",
 	}
 	for u, want := range cases {
 		if got := loxoExternalID(u); got != want {
