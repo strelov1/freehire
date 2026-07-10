@@ -182,8 +182,8 @@ export function facetRemove(st: FacetState, v: string): FacetState {
  *  reset-and-seed behind "Apply my profile" — trimming/dedup come free from facetAdd. */
 export function filtersFromProfile(specializations: string[], skills: string[]): JobFilters {
   const seed = (values: string[]) => values.reduce(facetAdd, emptyFacet());
-  return {
-    ...emptyFilters(),
-    facets: { ...emptyFacets(), category: seed(specializations), skills: seed(skills) },
-  };
+  const f = emptyFilters();
+  f.facets.category = seed(specializations);
+  f.facets.skills = seed(skills);
+  return f;
 }
