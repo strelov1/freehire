@@ -8,7 +8,7 @@
 
 import { invalidateAll } from '$app/navigation';
 import { page } from '$app/state';
-import * as api from '$lib/api';
+import { api } from '$lib/api';
 import type { User } from '$lib/types';
 
 /** The current signed-in user, or null. Reactive: reads `page.data.user`. */

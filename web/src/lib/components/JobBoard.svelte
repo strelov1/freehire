@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { listMyJobs, trackJob, saveJob, clearJobStage, untrackJob } from '$lib/api';
+  import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import type { MyJob } from '$lib/types';
   import { BOARD_COLUMNS, columnOf, type BoardColumnId, type BoardItem, type ClosedOutcome } from '$lib/board';
@@ -25,7 +25,7 @@
   async function load() {
     status = 'loading';
     try {
-      const slice = await listMyJobs('board', 500, 0); // pipeline is small; whole board in one page
+      const slice = await api.listMyJobs('board', 500, 0); // pipeline is small; whole board in one page
       const next = emptyColumns();
       const cols: Record<string, BoardColumnId> = {};
       for (const row of slice.items) {
@@ -67,21 +67,21 @@
       switch (to) {
         case 'applied':
           item.stage = 'applied';
-          await trackJob(item.id, { stage: 'applied' });
+          await api.trackJob(item.id, { stage: 'applied' });
           break;
         case 'interview':
           item.stage = 'interview';
-          await trackJob(item.id, { stage: 'interview' });
+          await api.trackJob(item.id, { stage: 'interview' });
           break;
         case 'offer':
           item.stage = 'offer';
-          await trackJob(item.id, { stage: 'offer' });
+          await api.trackJob(item.id, { stage: 'offer' });
           break;
         case 'saved':
           item.stage = null;
           item.applied_at = null;
-          await saveJob(item.id);
-          await clearJobStage(item.id);
+          await api.saveJob(item.id);
+          await api.clearJobStage(item.id);
           break;
         case 'closed':
           // Outcome unknown until the user picks: open the drawer, require a choice.
@@ -100,7 +100,7 @@
     item.stage = outcome;
     pendingOutcome = false;
     try {
-      await trackJob(item.id, { stage: outcome });
+      await api.trackJob(item.id, { stage: outcome });
     } catch {
       await load();
     }
@@ -122,10 +122,10 @@
       // Empty stage is not a vocabulary value — clearing progress is its own
       // backend path (the same one the drag-to-Saved move uses).
       if (stage) {
-        await trackJob(item.id, { stage });
+        await api.trackJob(item.id, { stage });
       } else {
-        await saveJob(item.id);
-        await clearJobStage(item.id);
+        await api.saveJob(item.id);
+        await api.clearJobStage(item.id);
       }
     } catch {
       await load();
@@ -136,7 +136,7 @@
     if (!openItem) return;
     openItem.notes = notes;
     try {
-      await trackJob(openItem.id, { notes });
+      await api.trackJob(openItem.id, { notes });
     } catch {
       /* keep optimistic value; a transient failure shouldn't drop the edit */
     }
@@ -152,7 +152,7 @@
     }
     openItem = null;
     try {
-      await untrackJob(item.id);
+      await api.untrackJob(item.id);
     } catch {
       await load();
     }

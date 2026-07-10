@@ -128,21 +128,31 @@ export function createApi(
     return (await call(path, init)).json() as Promise<T>;
   }
 
+  /** Request a `{ data: T }` envelope and unwrap it. Nearly every endpoint wraps
+   *  its payload this way, so this collapses the request+`.data` unwrap into one call. */
+  async function requestData<T>(path: string, init?: RequestInit): Promise<T> {
+    return (await request<{ data: T }>(path, init)).data;
+  }
+
+  /** Build the request init for a JSON body (POST/PATCH/PUT). Single-sources the
+   *  Content-Type header and JSON.stringify so no call site repeats them. */
+  function jsonBody(method: string, body: unknown): RequestInit {
+    return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+  }
+
   async function listJobs(limit: number, offset: number): Promise<Slice<Job>> {
     return toSlice(await request<Page<Job>>(`/api/v1/jobs${query(limit, offset)}`), offset);
   }
 
   async function getJob(slug: string): Promise<Job> {
-    const body = await request<{ data: Job }>(`/api/v1/jobs/${slug}`);
-    return body.data;
+    return requestData<Job>(`/api/v1/jobs/${slug}`);
   }
 
   /** Jobs semantically nearest to the one addressed by `slug` — the "Similar jobs"
    *  section on the detail page. Same Job wire shape as the list, so the same card
    *  renders them; the source job is excluded by the backend. */
   async function getSimilarJobs(slug: string): Promise<Job[]> {
-    const body = await request<{ data: Job[] }>(`/api/v1/jobs/${slug}/similar`);
-    return body.data;
+    return requestData<Job[]>(`/api/v1/jobs/${slug}/similar`);
   }
 
   /** How well the job addressed by `slug` is covered by the caller's profile skills:
@@ -150,8 +160,7 @@ export function createApi(
    *  Requires a signed-in caller with a profile (404 otherwise); the sidebar only
    *  calls it in that state. */
   async function getJobMatch(slug: string): Promise<JobMatch> {
-    const body = await request<{ data: JobMatch }>(`/api/v1/jobs/${slug}/match`);
-    return body.data;
+    return requestData<JobMatch>(`/api/v1/jobs/${slug}/match`);
   }
 
   /** Full-text search over jobs. `facets` carries the query text and any facet
@@ -234,10 +243,9 @@ export function createApi(
     limit: number,
     offset: number,
   ): Promise<{ company: Company; jobs: Job[] }> {
-    const body = await request<{ data: { company: Company; jobs: Job[] } }>(
+    return requestData<{ company: Company; jobs: Job[] }>(
       `/api/v1/companies/${slug}${query(limit, offset)}`,
     );
-    return body.data;
   }
 
   // --- Sitemap --------------------------------------------------------------
@@ -248,22 +256,19 @@ export function createApi(
 
   /** The freshest open-job sitemap entries (newest first), one file. */
   async function sitemapJobs(): Promise<SitemapEntry[]> {
-    const res = await request<{ data: SitemapEntry[] }>('/api/v1/jobs/sitemap');
-    return res.data;
+    return requestData<SitemapEntry[]>('/api/v1/jobs/sitemap');
   }
 
   /** One chunk of company sitemap entries with slug > `after` ('' for the first). */
   async function sitemapCompanies(after: string, limit: number): Promise<SitemapEntry[]> {
-    const res = await request<{ data: SitemapEntry[] }>(
+    return requestData<SitemapEntry[]>(
       `/api/v1/companies/sitemap?after=${encodeURIComponent(after)}&limit=${limit}`,
     );
-    return res.data;
   }
 
   /** The slug cursor ending each `chunk`-sized page of companies. */
   async function sitemapCompanyBoundaries(chunk: number): Promise<string[]> {
-    const res = await request<{ data: string[] }>(`/api/v1/companies/sitemap/boundaries?chunk=${chunk}`);
-    return res.data;
+    return requestData<string[]>(`/api/v1/companies/sitemap/boundaries?chunk=${chunk}`);
   }
 
   // --- Auth -----------------------------------------------------------------
@@ -274,12 +279,7 @@ export function createApi(
 
   /** POST credentials and return the created/authenticated user. */
   async function postAuth(path: string, body: unknown): Promise<User> {
-    const res = await request<{ data: User }>(path, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    return res.data;
+    return requestData<User>(path, jsonBody('POST', body));
   }
 
   function register(email: string, password: string): Promise<User> {
@@ -294,8 +294,7 @@ export function createApi(
    *  The dialog renders one "Continue with …" button per name; sign-in itself is
    *  a full-page redirect through /api/v1/auth/oauth/:provider/start. */
   async function oauthProviders(): Promise<string[]> {
-    const res = await request<{ data: string[] }>('/api/v1/auth/oauth/providers');
-    return res.data;
+    return requestData<string[]>('/api/v1/auth/oauth/providers');
   }
 
   /** Clear the session cookie server-side. */
@@ -306,8 +305,7 @@ export function createApi(
   /** Fetch the current user using the auth cookie. Throws ApiError(401) if it is
    *  missing or rejected. */
   async function me(): Promise<User> {
-    const res = await request<{ data: User }>('/api/v1/auth/me');
-    return res.data;
+    return requestData<User>('/api/v1/auth/me');
   }
 
   // --- Per-user job interactions --------------------------------------------
@@ -321,8 +319,7 @@ export function createApi(
     action: 'view' | 'apply' | 'save' | 'stage' | 'track' | 'dismiss',
     method: 'POST' | 'DELETE' = 'POST',
   ): Promise<UserJob> {
-    const res = await request<{ data: UserJob }>(`/api/v1/jobs/${slug}/${action}`, { method });
-    return res.data;
+    return requestData<UserJob>(`/api/v1/jobs/${slug}/${action}`, { method });
   }
 
   /** Record that the current user viewed a job; returns their interaction
@@ -344,12 +341,7 @@ export function createApi(
   /** Set a job's application stage and/or notes (partial update — omit a field to
    *  leave it unchanged). Returns the updated interaction. */
   async function trackJob(slug: string, patch: { stage?: string; notes?: string }): Promise<UserJob> {
-    const res = await request<{ data: UserJob }>(`/api/v1/jobs/${slug}/track`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    });
-    return res.data;
+    return requestData<UserJob>(`/api/v1/jobs/${slug}/track`, jsonBody('PATCH', patch));
   }
 
   /** Clear a job's saved mark. Idempotent: "already not saved" is success. */
@@ -396,16 +388,14 @@ export function createApi(
   /** The current user's application-pipeline snapshot: per-bucket application
    *  counts aggregated server-side, for the Pipeline tab's Sankey and rate cards. */
   async function getMyPipeline(): Promise<PipelineStats> {
-    const res = await request<{ data: PipelineStats }>('/api/v1/me/jobs/pipeline');
-    return res.data;
+    return requestData<PipelineStats>('/api/v1/me/jobs/pipeline');
   }
 
   /** The public slugs of every job the current user has interacted with. The
    *  browse UI cross-references this set to dim already-viewed cards without
    *  authenticating the public job list. */
   async function listViewedSlugs(): Promise<string[]> {
-    const res = await request<{ data: string[] }>('/api/v1/me/jobs/viewed');
-    return res.data;
+    return requestData<string[]>('/api/v1/me/jobs/viewed');
   }
 
   // --- API keys -------------------------------------------------------------
@@ -416,19 +406,13 @@ export function createApi(
 
   /** The current user's API keys (metadata only — no secret). */
   async function listApiKeys(): Promise<ApiKey[]> {
-    const res = await request<{ data: ApiKey[] }>('/api/v1/me/api-keys');
-    return res.data;
+    return requestData<ApiKey[]>('/api/v1/me/api-keys');
   }
 
   /** Create a key and return it with its one-time plaintext `token`. `expiresAt` is
    *  an RFC3339 string, or omitted for a key that never expires. */
   async function createApiKey(name: string, expiresAt?: string): Promise<CreatedApiKey> {
-    const res = await request<{ data: CreatedApiKey }>('/api/v1/me/api-keys', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, expires_at: expiresAt ?? null }),
-    });
-    return res.data;
+    return requestData<CreatedApiKey>('/api/v1/me/api-keys', jsonBody('POST', { name, expires_at: expiresAt ?? null }));
   }
 
   /** Revoke a key by id; it stops authenticating immediately. */
@@ -440,19 +424,13 @@ export function createApi(
 
   /** The current user's saved searches, most recently updated first. */
   async function listSavedSearches(): Promise<SavedSearch[]> {
-    const res = await request<{ data: SavedSearch[] }>('/api/v1/me/searches');
-    return res.data;
+    return requestData<SavedSearch[]>('/api/v1/me/searches');
   }
 
   /** Save the current filter state under a name. `query` is the canonical search
    *  query string (may be empty). A duplicate name or the per-user cap is a 409. */
   async function createSavedSearch(name: string, query: string): Promise<SavedSearch> {
-    const res = await request<{ data: SavedSearch }>('/api/v1/me/searches', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, query }),
-    });
-    return res.data;
+    return requestData<SavedSearch>('/api/v1/me/searches', jsonBody('POST', { name, query }));
   }
 
   /** Overwrite a saved search's name and/or query; an omitted field is unchanged. */
@@ -460,12 +438,7 @@ export function createApi(
     id: number,
     patch: { name?: string; query?: string },
   ): Promise<SavedSearch> {
-    const res = await request<{ data: SavedSearch }>(`/api/v1/me/searches/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    });
-    return res.data;
+    return requestData<SavedSearch>(`/api/v1/me/searches/${id}`, jsonBody('PATCH', patch));
   }
 
   /** Delete a saved search by id. */
@@ -477,12 +450,7 @@ export function createApi(
    *  now carrying `public_slug`. An optional `authorLabel` is shown on the board; blank
    *  renders it anonymously. Re-sharing keeps the existing slug. */
   async function shareSavedSearch(id: number, authorLabel = ''): Promise<SavedSearch> {
-    const res = await request<{ data: SavedSearch }>(`/api/v1/me/searches/${id}/share`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ author_label: authorLabel }),
-    });
-    return res.data;
+    return requestData<SavedSearch>(`/api/v1/me/searches/${id}/share`, jsonBody('POST', { author_label: authorLabel }));
   }
 
   /** Make a shared board private again (cookie-only). Idempotent. */
@@ -493,28 +461,21 @@ export function createApi(
   /** Public read of a shared board by slug — unauthenticated. Returns only display
    *  fields (name, query, author_label). An unknown/unshared slug throws (404). */
   async function getBoard(slug: string): Promise<Board> {
-    const res = await request<{ data: Board }>(`/api/v1/boards/${encodeURIComponent(slug)}`);
-    return res.data;
+    return requestData<Board>(`/api/v1/boards/${encodeURIComponent(slug)}`);
   }
 
   // The single per-user profile: a specialization + skills set (cookie-only on the server).
 
   /** The current user's profile, or null when they have not saved one yet. */
   async function getProfile(): Promise<UserProfile | null> {
-    const res = await request<{ data: UserProfile | null }>('/api/v1/me/profile');
-    return res.data;
+    return requestData<UserProfile | null>('/api/v1/me/profile');
   }
 
   /** Create-or-replace the user's profile from a non-empty set of specializations (job
    *  categories) and a non-empty set of skills. A bad specialization or empty skills is a
    *  400. */
   async function saveProfile(specializations: string[], skills: string[]): Promise<UserProfile> {
-    const res = await request<{ data: UserProfile }>('/api/v1/me/profile', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ specializations, skills }),
-    });
-    return res.data;
+    return requestData<UserProfile>('/api/v1/me/profile', jsonBody('PUT', { specializations, skills }));
   }
 
   /** Clear the user's profile. Idempotent. */
@@ -542,11 +503,10 @@ export function createApi(
    *  specializations and seniority resolved, ready to pre-fill a profile or the onboarding
    *  wizard. */
   async function extractResumeProfile(input: File | string): Promise<ResumeProfile> {
-    const res = await request<{ data: ResumeProfile }>(
+    return requestData<ResumeProfile>(
       '/api/v1/me/resume/extract',
       resumeInit('POST', input),
     );
-    return res.data;
   }
 
   /** The market-coverage verdict for the caller's profile: how many open vacancies the
@@ -556,10 +516,9 @@ export function createApi(
    *  profile's specializations. Session-scoped (404 when no profile). */
   async function getProfileVerdict(params?: URLSearchParams): Promise<Verdict> {
     const qs = params?.toString();
-    const res = await request<{ data: Verdict }>(
+    return requestData<Verdict>(
       `/api/v1/me/profile/verdict${qs ? `?${qs}` : ''}`,
     );
-    return res.data;
   }
 
   /** The CV ATS-readiness report for the caller's profile: structural checks over the
@@ -568,10 +527,9 @@ export function createApi(
    *  when no CV is stored — the page then prompts an upload. Session-scoped. */
   async function getATSReport(params?: URLSearchParams): Promise<ATSResponse> {
     const qs = params?.toString();
-    const res = await request<{ data: ATSResponse }>(
+    return requestData<ATSResponse>(
       `/api/v1/me/profile/ats-report${qs ? `?${qs}` : ''}`,
     );
-    return res.data;
   }
 
   /** Run the optional LLM qualitative review over the caller's stored CV; returns the
@@ -579,37 +537,25 @@ export function createApi(
    *  LLM configured this is just the deterministic report. */
   async function runATSReview(params?: URLSearchParams): Promise<ATSResponse> {
     const qs = params?.toString();
-    const res = await request<{ data: ATSResponse }>(
+    return requestData<ATSResponse>(
       `/api/v1/me/profile/ats-report${qs ? `?${qs}` : ''}`,
       { method: 'POST' },
     );
-    return res.data;
   }
 
   /** The caller's notification subscriptions (one per saved search + channel). */
   async function listSubscriptions(): Promise<Subscription[]> {
-    const res = await request<{ data: Subscription[] }>('/api/v1/me/subscriptions');
-    return res.data;
+    return requestData<Subscription[]>('/api/v1/me/subscriptions');
   }
 
   /** Subscribe a saved search to a channel (telegram by default). A duplicate is a 409. */
   async function createSubscription(savedSearchId: number, channel = 'telegram'): Promise<Subscription> {
-    const res = await request<{ data: Subscription }>('/api/v1/me/subscriptions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ saved_search_id: savedSearchId, channel }),
-    });
-    return res.data;
+    return requestData<Subscription>('/api/v1/me/subscriptions', jsonBody('POST', { saved_search_id: savedSearchId, channel }));
   }
 
   /** Pause or resume a subscription. */
   async function setSubscriptionActive(id: number, active: boolean): Promise<Subscription> {
-    const res = await request<{ data: Subscription }>(`/api/v1/me/subscriptions/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ active }),
-    });
-    return res.data;
+    return requestData<Subscription>(`/api/v1/me/subscriptions/${id}`, jsonBody('PATCH', { active }));
   }
 
   /** Unsubscribe by subscription id. */
@@ -619,8 +565,7 @@ export function createApi(
 
   /** Whether Telegram notifications are configured and whether this user is linked. */
   async function telegramStatus(): Promise<TelegramStatus> {
-    const res = await request<{ data: TelegramStatus }>('/api/v1/me/telegram');
-    return res.data;
+    return requestData<TelegramStatus>('/api/v1/me/telegram');
   }
 
   /** Mint a one-time deep link the user opens to connect their Telegram chat. */
@@ -636,78 +581,49 @@ export function createApi(
 
   /** Submit a vacancy for moderation. Returns the pending submission. */
   async function submitJob(input: SubmissionInput): Promise<Submission> {
-    const res = await request<{ data: Submission }>('/api/v1/submissions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    });
-    return res.data;
+    return requestData<Submission>('/api/v1/submissions', jsonBody('POST', input));
   }
 
   /** The caller's own submissions with their review status. */
   async function listMySubmissions(): Promise<Submission[]> {
-    const res = await request<{ data: Submission[] }>('/api/v1/me/submissions');
-    return res.data;
+    return requestData<Submission[]>('/api/v1/me/submissions');
   }
 
   /** The moderator review queue: pending submissions, with submitter emails. */
   async function listPendingSubmissions(): Promise<Submission[]> {
-    const res = await request<{ data: Submission[] }>('/api/v1/submissions');
-    return res.data;
+    return requestData<Submission[]>('/api/v1/submissions');
   }
 
   /** Approve a pending submission; the server mints a live job from it. */
   async function approveSubmission(id: number): Promise<Submission> {
-    const res = await request<{ data: Submission }>(`/api/v1/submissions/${id}/approve`, {
+    return requestData<Submission>(`/api/v1/submissions/${id}/approve`, {
       method: 'POST',
     });
-    return res.data;
   }
 
   /** Reject a pending submission with an optional reason. */
   async function rejectSubmission(id: number, reason?: string): Promise<Submission> {
-    const res = await request<{ data: Submission }>(`/api/v1/submissions/${id}/reject`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reason: reason ?? '' }),
-    });
-    return res.data;
+    return requestData<Submission>(`/api/v1/submissions/${id}/reject`, jsonBody('POST', { reason: reason ?? '' }));
   }
 
   /** Report a problem with a live vacancy (by slug). Returns the pending report. */
   async function reportJob(slug: string, input: ReportInput): Promise<Report> {
-    const res = await request<{ data: Report }>(`/api/v1/jobs/${slug}/reports`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    });
-    return res.data;
+    return requestData<Report>(`/api/v1/jobs/${slug}/reports`, jsonBody('POST', input));
   }
 
   /** The moderator review queue: pending reports, with reporter email and job fields. */
   async function listPendingReports(): Promise<Report[]> {
-    const res = await request<{ data: Report[] }>('/api/v1/reports');
-    return res.data;
+    return requestData<Report[]>('/api/v1/reports');
   }
 
   /** Resolve a pending report; optionally soft-close the reported job. */
   async function resolveReport(id: number, closeJob: boolean): Promise<Report> {
-    const res = await request<{ data: Report }>(`/api/v1/reports/${id}/resolve`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ close_job: closeJob }),
-    });
-    return res.data;
+    return requestData<Report>(`/api/v1/reports/${id}/resolve`, jsonBody('POST', { close_job: closeJob }));
   }
 
   /** Dismiss a pending report with an optional reason; the job is unchanged. */
   async function dismissReport(id: number, reason?: string): Promise<Report> {
-    const res = await request<{ data: Report }>(`/api/v1/reports/${id}/dismiss`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reason: reason ?? '' }),
-    });
-    return res.data;
+    return requestData<Report>(`/api/v1/reports/${id}/dismiss`, jsonBody('POST', { reason: reason ?? '' }));
   }
 
   return {
@@ -779,72 +695,6 @@ export function createApi(
 
 export type MyJobsFilter = 'all' | 'viewed' | 'saved' | 'applied' | 'board';
 
-/** The default browser client: global fetch, same-origin, cookie attached. */
-export type Api = ReturnType<typeof createApi>;
+/** The default browser client: global fetch, same-origin, cookie attached. Client
+ *  components call methods on it (`api.foo()`); server `load` uses `serverApi(event.fetch)`. */
 export const api = createApi();
-
-// Named exports of the default browser client, for ergonomic imports in client
-// components (e.g. `import { recordJobView } from '$lib/api'`). Server `load`
-// code uses `serverApi(event.fetch)` instead. Safe to detach because the methods
-// close over `fetchImpl`, not `this`.
-export const {
-  listJobs,
-  getJob,
-  getSimilarJobs,
-  getJobMatch,
-  searchJobs,
-  swipeDeck,
-  facetCounts,
-  listCompanies,
-  getCompany,
-  register,
-  login,
-  oauthProviders,
-  logout,
-  me,
-  recordJobView,
-  markJobApplied,
-  saveJob,
-  unsaveJob,
-  dismissJob,
-  undismissJob,
-  clearJobStage,
-  untrackJob,
-  trackJob,
-  listMyJobs,
-  getMyPipeline,
-  listViewedSlugs,
-  listApiKeys,
-  createApiKey,
-  revokeApiKey,
-  listSavedSearches,
-  createSavedSearch,
-  updateSavedSearch,
-  deleteSavedSearch,
-  shareSavedSearch,
-  unshareSavedSearch,
-  getBoard,
-  getProfile,
-  saveProfile,
-  deleteProfile,
-  extractResumeProfile,
-  getProfileVerdict,
-  getATSReport,
-  runATSReview,
-  listSubscriptions,
-  createSubscription,
-  setSubscriptionActive,
-  deleteSubscription,
-  telegramStatus,
-  telegramLink,
-  telegramUnlink,
-  submitJob,
-  listMySubmissions,
-  listPendingSubmissions,
-  approveSubmission,
-  rejectSubmission,
-  reportJob,
-  listPendingReports,
-  resolveReport,
-  dismissReport,
-} = api;

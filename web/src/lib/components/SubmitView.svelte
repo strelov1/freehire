@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { ApiError, submitJob } from '$lib/api';
+  import { api, ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import type { Submission } from '$lib/types';
   import { Button, Input } from '$lib/ui';
@@ -32,7 +32,7 @@
     formError = null;
     submitted = null;
     try {
-      submitted = await submitJob({
+      submitted = await api.submitJob({
         url: url.trim(),
         title: title.trim(),
         company: company.trim(),

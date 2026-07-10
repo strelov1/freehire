@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { listMyJobs } from '$lib/api';
+  import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { Paginator } from '$lib/paginated.svelte';
   import JobRow from './JobRow.svelte';
@@ -7,7 +7,7 @@
   import States from './States.svelte';
 
   const page = new Paginator(async (limit, offset) => {
-    const slice = await listMyJobs('viewed', limit, offset);
+    const slice = await api.listMyJobs('viewed', limit, offset);
     return slice;
   });
 

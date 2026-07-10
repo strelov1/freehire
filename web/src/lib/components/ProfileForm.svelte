@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ArrowUp, Check, X } from '@lucide/svelte';
-  import { ApiError, extractResumeProfile, facetCounts } from '$lib/api';
+  import { api, ApiError } from '$lib/api';
   import { CATEGORY_OPTIONS, categoryLabel, type FacetOption } from '$lib/facets';
   import { profileStore } from '$lib/profile.svelte';
   import type { UserProfile } from '$lib/types';
@@ -64,7 +64,7 @@
 
   async function loadSkills() {
     try {
-      const counts = await facetCounts(new URLSearchParams());
+      const counts = await api.facetCounts(new URLSearchParams());
       const dist = counts.facets?.skills ?? {};
       skillDist = Object.entries(dist)
         .map(([value, count]) => ({ value, label: value, count }))
@@ -87,7 +87,7 @@
     resumeError = null;
     resumeNote = null;
     try {
-      const cv = await extractResumeProfile(file);
+      const cv = await api.extractResumeProfile(file);
       onCvUploaded?.();
 
       const beforeSkills = skills.length;

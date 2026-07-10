@@ -2,7 +2,7 @@
   import { untrack } from 'svelte';
   import { Sparkles, Trash2 } from '@lucide/svelte';
   import { page } from '$app/state';
-  import { facetCounts, getATSReport, getProfileVerdict, runATSReview } from '$lib/api';
+  import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { FilterStore, filtersToParams } from '$lib/filters';
@@ -39,7 +39,7 @@
   const hasCv = $derived((ats?.has_cv ?? false) || cvUploaded);
 
   // Job-count preview for the modal's staged filters — the same facet call, total only.
-  const previewCount = (params: URLSearchParams) => facetCounts(params).then((c) => c.total);
+  const previewCount = (params: URLSearchParams) => api.facetCounts(params).then((c) => c.total);
 
   // AI review state.
   let reviewBusy = $state(false);
@@ -53,7 +53,7 @@
     reviewUnavailable = false;
     try {
       const params = filters ? filtersToParams(filters.applied) : undefined;
-      const next = await runATSReview(params);
+      const next = await api.runATSReview(params);
       ats = next;
       if (next.has_cv && next.report && !next.report.reviewed) {
         reviewUnavailable = true;
@@ -124,9 +124,9 @@
     const params = filtersToParams(filters.applied);
     try {
       const [v, c, a] = await Promise.all([
-        getProfileVerdict(params),
-        facetCounts(params),
-        getATSReport(params),
+        api.getProfileVerdict(params),
+        api.facetCounts(params),
+        api.getATSReport(params),
       ]);
       if (gen !== reloadGeneration) return; // a newer reload started — discard stale results.
       [verdict, counts, ats] = [v, c, a];

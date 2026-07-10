@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ArrowLeft, ArrowRight, FileUp, LoaderCircle, Sparkles, X } from '@lucide/svelte';
-  import { ApiError, extractResumeProfile } from '$lib/api';
+  import { api, ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import {
@@ -82,7 +82,7 @@
     cvError = null;
     cvNote = null;
     try {
-      const cv = await extractResumeProfile(file);
+      const cv = await api.extractResumeProfile(file);
       if (gen !== cvGen) return; // superseded by another pick or a wizard reset
       const resolved = cv.categories.length > 0 || !!cv.seniority || cv.skills.length > 0;
       // Pre-fill the fields the dictionaries resolved and stay on step 1, so the user

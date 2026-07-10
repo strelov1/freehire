@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import { login, register } from '$lib/auth.svelte';
   import { authDialog } from '$lib/auth-dialog.svelte';
-  import { ApiError, oauthProviders } from '$lib/api';
+  import { api, ApiError } from '$lib/api';
   import { Button } from '$lib/ui';
   import ProviderIcon from './ProviderIcon.svelte';
 
@@ -33,7 +33,7 @@
   // Enabled OAuth providers; an unreachable endpoint just means no provider
   // buttons — the email/password form must keep working either way.
   let providers = $state<string[]>([]);
-  oauthProviders()
+  api.oauthProviders()
     .then((names) => {
       providers = names.filter((n) => n in providerLabels);
     })

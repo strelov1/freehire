@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ArrowLeft, Ban, BellOff, Check, ChevronRight, Clock, MoreHorizontal, Send, ShieldAlert, X } from '@lucide/svelte';
-  import { ApiError, reportJob } from '$lib/api';
+  import { api, ApiError } from '$lib/api';
   import { reportReasons } from '$lib/reports';
   import type { ReportReason } from '$lib/types';
   import { Button } from '$lib/ui';
@@ -49,7 +49,7 @@
     error = null;
     submitting = true;
     try {
-      await reportJob(slug, {
+      await api.reportJob(slug, {
         reason,
         details,
         contact_telegram: contactTelegram.trim() || undefined,

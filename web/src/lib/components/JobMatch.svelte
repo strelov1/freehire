@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
   import { resolve } from '$app/paths';
   import { FileText, Lock } from '@lucide/svelte';
-  import { getJobMatch } from '$lib/api';
+  import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { resolveMatchState, matchBarSegments } from '$lib/jobMatch';
@@ -20,7 +19,7 @@
   // One-time profile load for signed-in viewers (SSR-safe no-op otherwise); the
   // block resolves to `loading` until it settles so the CTA doesn't flash.
   $effect(() => {
-    if (browser && isAuthenticated()) profileStore.ensureLoaded();
+    if (isAuthenticated()) profileStore.ensureLoaded();
   });
 
   const blockState = $derived(
@@ -36,8 +35,8 @@
   $effect(() => {
     const slug = job.public_slug; // track the current job
     match = null;
-    if (!browser || blockState !== 'ready') return;
-    getJobMatch(slug)
+    if (blockState !== 'ready') return;
+    api.getJobMatch(slug)
       .then((m) => {
         if (job.public_slug === slug) match = m;
       })

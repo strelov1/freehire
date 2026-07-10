@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
   import { resolve } from '$app/paths';
   import { ArrowRight, Bookmark, Check, Eye, Flag } from '@lucide/svelte';
-  import { markJobApplied, recordJobView, saveJob, unsaveJob } from '$lib/api';
+  import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { filterHref, formatSalary, summaryFacets } from '$lib/enrichment';
@@ -50,8 +49,8 @@
     interaction = null;
     showApplyPrompt = false;
     showSignInPrompt = false;
-    if (!browser || !isAuthenticated()) return;
-    recordJobView(slug)
+    if (!isAuthenticated()) return; // effects run client-only, so no browser guard needed
+    api.recordJobView(slug)
       .then((rec) => {
         // Mark it locally so its card dims on back-navigation without a reload.
         markViewed(slug);
@@ -88,7 +87,7 @@
 
   async function confirmApplied() {
     try {
-      interaction = await markJobApplied(job.public_slug);
+      interaction = await api.markJobApplied(job.public_slug);
     } catch {
       // Leave the prompt up so the user can retry; nothing else to do.
       return;
@@ -125,7 +124,7 @@
   // return the full interaction, so the button can never drift from the truth.
   async function toggleSave() {
     try {
-      interaction = saved ? await unsaveJob(job.public_slug) : await saveJob(job.public_slug);
+      interaction = saved ? await api.unsaveJob(job.public_slug) : await api.saveJob(job.public_slug);
     } catch {
       // Leave the current state; the user can retry.
     }
