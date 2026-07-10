@@ -124,6 +124,11 @@ func TestIndexSettings_FacetingRaisesValueCap(t *testing.T) {
 	if f.MaxValuesPerFacet <= 100 {
 		t.Errorf("MaxValuesPerFacet = %d, want > 100", f.MaxValuesPerFacet)
 	}
+	// The cap must keep the busiest values, not the alphabetically-first ones, or a
+	// high-cardinality facet (cities) drops popular values that sort late.
+	if got := f.SortFacetValuesBy["*"]; got != meilisearch.SortFacetTypeCount {
+		t.Errorf(`SortFacetValuesBy["*"] = %q, want %q`, got, meilisearch.SortFacetTypeCount)
+	}
 }
 
 func TestDecodeFacetDistribution(t *testing.T) {

@@ -669,11 +669,20 @@ func facetSettings() *meilisearch.Settings {
 		// server and SDK fields align.
 		Pagination: &meilisearch.Pagination{MaxTotalHits: maxTotalHits},
 		// Raise the per-facet value cap above Meili's default of 100 so the
-		// analytics facet distribution is not truncated for high-cardinality
-		// facets. Value ordering is done client-side by count; SortFacetValuesBy is
-		// left unset (see the TypoTolerance note above on the SDK over-serializing
-		// newer fields). Requires a reindex to take effect on an existing index.
-		Faceting: &meilisearch.Faceting{MaxValuesPerFacet: maxValuesPerFacet},
+		// distribution is not truncated for high-cardinality facets. And keep the
+		// TOP values BY COUNT, not alphabetically: cities has far more than
+		// maxValuesPerFacet distinct values, so with the default alpha ordering Meili
+		// drops the busiest cities that sort late (e.g. "Florianópolis", 1000+ jobs)
+		// from the distribution even though filtering by them works — client-side
+		// count sorting can't recover a value the engine never returned. `count`
+		// ordering makes the cap keep the most-common values and also sheds the
+		// long-tail noise (zip fragments, one-off strings). sortFacetValuesBy is a
+		// query-time setting supported since Meili v0.28, so unlike the TypoTolerance
+		// note above it is safe on the pinned server.
+		Faceting: &meilisearch.Faceting{
+			MaxValuesPerFacet: maxValuesPerFacet,
+			SortFacetValuesBy: map[string]meilisearch.SortFacetType{"*": meilisearch.SortFacetTypeCount},
+		},
 	}
 }
 
