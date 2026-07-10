@@ -1,0 +1,17 @@
+# Loxo recruiting-agency careers boards. Provider is the filename; each entry is
+# company + board. board = the careers URL without scheme, "<host>/<slug>", covering
+# Loxo's host variants (agency subdomain, bare app.loxo.co, regional pod); see
+# internal/sources/loxo.go. Boards are agencies hosting many clients' vacancies, so every
+# entry is hub: true — the adapter resolves the client from the posting when the title
+# reveals it and otherwise attributes the vacancy to the agency name.
+# Each board validated live (listing lists >0 /job postings) before adding.
+
+- company: FitNext Co.
+  board: fitnext.app.loxo.co/fitnext
+  hub: true
+- company: Agile Recruiter
+  board: app.loxo.co/agile-recruiter
+  hub: true
+- company: LA-Tech
+  board: pod4.app.loxo.co/la-tech
+  hub: true
