@@ -298,3 +298,9 @@
   board: xsensio
 - company: Yudrio
   board: yudrio-team
+- company: Chattermill
+  board: chattermill
+- company: Pyypl
+  board: pyypl
+- company: TourScanner
+  board: tourscanner
