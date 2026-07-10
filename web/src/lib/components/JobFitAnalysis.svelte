@@ -25,6 +25,7 @@
     computing = false;
     data = null;
     loaded = false;
+    computeReturnedEmpty = false;
   });
 
   async function toggle() {
@@ -32,27 +33,46 @@
     if (!expanded || loaded) return;
     loaded = true;
     loading = true;
+    // Capture the slug this request is for; a fast navigation to another job resets
+    // state (the effect above) and must not be overwritten by this in-flight response.
+    const forSlug = slug;
     try {
-      data = await api.getJobFit(slug);
+      const res = await api.getJobFit(forSlug);
+      if (forSlug === slug) data = res;
     } catch {
       // Best-effort: leave data null; the block offers a compute.
     } finally {
-      loading = false;
+      if (forSlug === slug) loading = false;
     }
   }
 
   async function compute() {
     computing = true;
+    const forSlug = slug;
     try {
-      data = await api.runJobFit(slug);
+      const res = await api.runJobFit(forSlug);
+      if (forSlug === slug) {
+        data = res;
+        computeReturnedEmpty = res.has_cv && !res.analysis;
+      }
     } catch {
       // Swallowed: the compute button stays available to retry.
     } finally {
-      computing = false;
+      if (forSlug === slug) computing = false;
     }
   }
 
   const analysis = $derived(data?.analysis ?? null);
+  // The backend initializes every array (never a nil slice → always `[]` on the wire),
+  // but normalize defensively so a hand-written/legacy cache row can never null-deref
+  // and tear down the page.
+  const dimensions = $derived(analysis?.dimensions ?? []);
+  const requirements = $derived(analysis?.requirement_match ?? []);
+  const strengths = $derived(analysis?.strengths ?? []);
+  const gaps = $derived(analysis?.gaps ?? []);
+  // A compute that returned no analysis (LLM unconfigured/failed) — distinct from
+  // "not analyzed yet", so we surface an unavailable note instead of looping the button.
+  let computeReturnedEmpty = $state(false);
 
   const toneText: Record<Tone, string> = {
     strong: 'text-emerald-600 dark:text-emerald-400',
@@ -84,6 +104,7 @@
     type="button"
     class="flex items-center justify-between gap-2 text-left"
     aria-expanded={expanded}
+    aria-controls="job-fit-panel"
     onclick={toggle}
   >
     <span class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -93,6 +114,7 @@
   </button>
 
   {#if expanded}
+    <div id="job-fit-panel" class="flex flex-col gap-3">
     {#if loading}
       <div class="h-2 animate-pulse rounded bg-secondary"></div>
       <div class="h-2 w-2/3 animate-pulse rounded bg-secondary"></div>
@@ -103,6 +125,8 @@
         </span>
         <Button variant="primary" size="sm" href={profileHref}>Upload CV</Button>
       </div>
+    {:else if computeReturnedEmpty}
+      <p class="text-sm text-muted-foreground">AI analysis is unavailable right now. Please try again later.</p>
     {:else if !analysis}
       <p class="text-sm text-muted-foreground">
         A recruiter-style read of your CV against this role — title fit, relevant experience, and the gaps an ATS flags.
@@ -128,7 +152,7 @@
       </div>
 
       <div class="flex flex-col gap-2">
-        {#each analysis.dimensions as d (d.key)}
+        {#each dimensions as d (d.key)}
           {@const dt = verdictTone(d.score)}
           <div class="flex flex-col gap-1">
             <div class="flex items-baseline justify-between gap-2 text-xs">
@@ -143,11 +167,11 @@
         {/each}
       </div>
 
-      {#if analysis.requirement_match.length}
+      {#if requirements.length}
         <div class="flex flex-col gap-1.5">
           <span class="text-xs font-medium text-muted-foreground">Requirements (ATS view)</span>
           <ul class="flex flex-col gap-1">
-            {#each analysis.requirement_match as r (r.text)}
+            {#each requirements as r, i (i)}
               {@const meta = requirementStatusMeta(r.status)}
               <li class="flex items-center justify-between gap-2 text-xs">
                 <span class="min-w-0 truncate">{r.text}</span>
@@ -158,20 +182,20 @@
         </div>
       {/if}
 
-      {#if analysis.strengths.length}
+      {#if strengths.length}
         <div class="flex flex-col gap-1">
           <span class="text-xs font-medium text-muted-foreground">Strengths</span>
           <ul class="flex flex-col gap-0.5 text-xs">
-            {#each analysis.strengths as s (s)}<li class="flex gap-1.5"><span class="text-emerald-500">+</span>{s}</li>{/each}
+            {#each strengths as s, i (i)}<li class="flex gap-1.5"><span class="text-emerald-500">+</span>{s}</li>{/each}
           </ul>
         </div>
       {/if}
 
-      {#if analysis.gaps.length}
+      {#if gaps.length}
         <div class="flex flex-col gap-1">
           <span class="text-xs font-medium text-muted-foreground">Gaps</span>
           <ul class="flex flex-col gap-0.5 text-xs">
-            {#each analysis.gaps as g (g)}<li class="flex gap-1.5"><span class="text-destructive">−</span>{g}</li>{/each}
+            {#each gaps as g, i (i)}<li class="flex gap-1.5"><span class="text-destructive">−</span>{g}</li>{/each}
           </ul>
         </div>
       {/if}
@@ -180,5 +204,6 @@
         <p class="text-xs text-muted-foreground italic">{analysis.recommendation}</p>
       {/if}
     {/if}
+    </div>
   {/if}
 </section>
