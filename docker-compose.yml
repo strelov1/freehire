@@ -21,7 +21,7 @@ services:
   # huggingFace embedder downloads and runs its model inside this container, so
   # the model is cached in the meilisearch_data volume across restarts.
   meilisearch:
-    image: getmeili/meilisearch:v1.13
+    image: getmeili/meilisearch:v1.49.0
     environment:
       MEILI_MASTER_KEY: "${MEILI_MASTER_KEY:-dev-insecure-meili-key}"
       MEILI_ENV: development
