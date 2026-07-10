@@ -127,6 +127,68 @@ func TestPutProfile_ReturnsSpecializationsArray(t *testing.T) {
 	}
 }
 
+func TestPutProfile_ParsesAndEchoesLocationPreferences(t *testing.T) {
+	loc := `{"work_modes":["remote","onsite"],"remote":{"regions":["latam"]},"base":{"country":"BR","city":"Florianópolis"},"relocation":{"open":true,"cities":["Berlin"]}}`
+	repo := &fakeProfileRepo{}
+	// Echo back whatever the service upserts, so the response reflects the stored block.
+	app, token := profileApp(t, repo)
+	resp := doProfile(t, app, fiber.MethodPut,
+		`{"specializations":["backend"],"skills":["go"],"location_preferences":`+loc+`}`, token)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	// The nested block reached the service and was normalized into the upsert params.
+	if repo.upserted.LocationPreferences == nil {
+		t.Fatal("location_preferences did not reach the upsert")
+	}
+	var stored userprofile.LocationPreferences
+	if err := json.Unmarshal(repo.upserted.LocationPreferences, &stored); err != nil {
+		t.Fatalf("unmarshal upserted location: %v", err)
+	}
+	if stored.Base.Country != "br" || stored.Base.City != "Florianópolis" {
+		t.Errorf("base = %+v, want {br Florianópolis}", stored.Base)
+	}
+	if !stored.Relocation.Open || len(stored.Relocation.Cities) != 1 {
+		t.Errorf("relocation = %+v", stored.Relocation)
+	}
+}
+
+func TestPutProfile_RejectsInvalidLocationBlock(t *testing.T) {
+	repo := &fakeProfileRepo{}
+	app, token := profileApp(t, repo)
+	resp := doProfile(t, app, fiber.MethodPut,
+		`{"specializations":["backend"],"skills":["go"],"location_preferences":{"work_modes":["freelance"]}}`, token)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("status = %d, want 400", resp.StatusCode)
+	}
+	if repo.upserted.UserID != 0 {
+		t.Error("repo.Upsert should not be called on an invalid location block")
+	}
+}
+
+func TestGetProfile_EchoesStoredLocationPreferences(t *testing.T) {
+	stored := json.RawMessage(`{"work_modes":["remote"],"remote":{"regions":["latam"]}}`)
+	ret := db.UserProfile{UserID: 1, Specializations: []string{"backend"}, Skills: []string{"go"}, LocationPreferences: stored}
+	app, token := profileApp(t, &fakeProfileRepo{getRet: ret})
+	resp := doProfile(t, app, fiber.MethodGet, "", token)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var got struct {
+		Data profileResponse `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	var loc userprofile.LocationPreferences
+	if err := json.Unmarshal(got.Data.LocationPreferences, &loc); err != nil {
+		t.Fatalf("unmarshal response location: %v", err)
+	}
+	if len(loc.WorkModes) != 1 || loc.WorkModes[0] != "remote" {
+		t.Errorf("work_modes = %v, want [remote]", loc.WorkModes)
+	}
+}
+
 func TestGetProfile_NullWhenNone(t *testing.T) {
 	app, token := profileApp(t, &fakeProfileRepo{getErr: userprofile.ErrNotFound})
 	resp := doProfile(t, app, fiber.MethodGet, "", token)

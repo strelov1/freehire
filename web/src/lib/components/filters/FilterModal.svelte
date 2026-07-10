@@ -190,7 +190,7 @@
   {#if profile}
     <button
       type="button"
-      onclick={() => staged.applyProfile(profile.specializations, profile.skills)}
+      onclick={() => staged.applyProfile(profile)}
       class="flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent"
     >
       <UserRound class="size-4 shrink-0" aria-hidden="true" />

@@ -270,9 +270,41 @@ export interface Board {
  *  `specializations` (job categories) and a non-empty set of canonical skill tokens. One
  *  per user (no id, no name); the foundation for finding relevant work. Timestamps are
  *  RFC3339 strings or null. */
+/** A geographic reach: controlled regions and/or ISO country codes. Empty = anywhere. */
+export interface LocationGeoSet {
+  regions?: string[];
+  countries?: string[];
+}
+
+/** The user's current single base: an ISO country code and a free-text city. */
+export interface LocationBase {
+  country?: string;
+  city?: string;
+}
+
+/** Willingness to relocate: an open flag plus acceptable destinations (open + empty
+ *  targets = anywhere). */
+export interface LocationRelocation {
+  open: boolean;
+  regions?: string[];
+  countries?: string[];
+  cities?: string[];
+}
+
+/** Optional "where & how I want to work" block: accepted work arrangements plus three
+ *  geographic parts (remote reach, current base, relocation), freely combined. Mirrors the
+ *  backend userprofile.LocationPreferences; null on a profile means the user set none. */
+export interface LocationPreferences {
+  work_modes?: string[];
+  remote: LocationGeoSet;
+  base: LocationBase;
+  relocation: LocationRelocation;
+}
+
 export interface UserProfile {
   specializations: string[];
   skills: string[];
+  location_preferences: LocationPreferences | null;
   created_at: string | null;
   updated_at: string | null;
 }

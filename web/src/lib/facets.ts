@@ -334,6 +334,11 @@ const CATEGORY: FacetOption[] = options(CATEGORY_VALUES, CATEGORY_LABELS);
 // profile's specialization picker) so the same labels/order are shared, not duplicated.
 export const CATEGORY_OPTIONS: FacetOption[] = CATEGORY;
 
+// Work-mode and region options, exported for the profile's location preferences editor so
+// it shares the filter panel's vocabulary/order instead of duplicating it.
+export const WORK_MODE_OPTIONS: FacetOption[] = WORK_MODE;
+export const REGION_OPTIONS: FacetOption[] = REGION;
+
 /** Display label for a category code (e.g. ml_ai → "ML / AI"), shared by the profile
  *  view; falls back to the humanized code. */
 export function categoryLabel(value: string): string {
@@ -395,6 +400,10 @@ const COUNTRY: FacetOption[] = ISO_COUNTRY_CODES.map((value) => ({
   value,
   label: countryLabel(value),
 })).toSorted((a, b) => a.label.localeCompare(b.label));
+
+// The full ISO country select, exported for the profile's location editor (base +
+// remote/relocation countries) so it reuses the same list/labels as the company facet.
+export const COUNTRY_OPTIONS: FacetOption[] = COUNTRY;
 
 // The company catalog's filter facets: mostly a subset of the job facets whose
 // values are mostly derived from a company's open jobs and denormalized onto the

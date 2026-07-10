@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 )
 
 const deleteUserProfile = `-- name: DeleteUserProfile :execrows
@@ -25,7 +26,7 @@ func (q *Queries) DeleteUserProfile(ctx context.Context, userID int64) (int64, e
 }
 
 const getUserProfile = `-- name: GetUserProfile :one
-SELECT user_id, skills, created_at, updated_at, specializations FROM user_profiles
+SELECT user_id, skills, created_at, updated_at, specializations, location_preferences FROM user_profiles
 WHERE user_id = $1
 `
 
@@ -40,31 +41,40 @@ func (q *Queries) GetUserProfile(ctx context.Context, userID int64) (UserProfile
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Specializations,
+		&i.LocationPreferences,
 	)
 	return i, err
 }
 
 const upsertUserProfile = `-- name: UpsertUserProfile :one
-INSERT INTO user_profiles (user_id, specializations, skills)
-VALUES ($1, $2, $3)
+INSERT INTO user_profiles (user_id, specializations, skills, location_preferences)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (user_id) DO UPDATE
-SET specializations = EXCLUDED.specializations,
-    skills          = EXCLUDED.skills,
-    updated_at      = now()
-RETURNING user_id, skills, created_at, updated_at, specializations
+SET specializations      = EXCLUDED.specializations,
+    skills               = EXCLUDED.skills,
+    location_preferences = EXCLUDED.location_preferences,
+    updated_at           = now()
+RETURNING user_id, skills, created_at, updated_at, specializations, location_preferences
 `
 
 type UpsertUserProfileParams struct {
-	UserID          int64    `json:"user_id"`
-	Specializations []string `json:"specializations"`
-	Skills          []string `json:"skills"`
+	UserID              int64           `json:"user_id"`
+	Specializations     []string        `json:"specializations"`
+	Skills              []string        `json:"skills"`
+	LocationPreferences json.RawMessage `json:"location_preferences"`
 }
 
 // Create-or-replace the user's one profile. The PRIMARY KEY (user_id) makes this an
-// idempotent upsert: first save inserts, later saves overwrite specializations/skills and
-// bump updated_at. Specializations and skills are already normalized by the service.
+// idempotent upsert: first save inserts, later saves overwrite specializations/skills/
+// location_preferences and bump updated_at. All fields are already normalized by the
+// service; location_preferences is a validated JSONB block or NULL (no preferences).
 func (q *Queries) UpsertUserProfile(ctx context.Context, arg UpsertUserProfileParams) (UserProfile, error) {
-	row := q.db.QueryRow(ctx, upsertUserProfile, arg.UserID, arg.Specializations, arg.Skills)
+	row := q.db.QueryRow(ctx, upsertUserProfile,
+		arg.UserID,
+		arg.Specializations,
+		arg.Skills,
+		arg.LocationPreferences,
+	)
 	var i UserProfile
 	err := row.Scan(
 		&i.UserID,
@@ -72,6 +82,7 @@ func (q *Queries) UpsertUserProfile(ctx context.Context, arg UpsertUserProfilePa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Specializations,
+		&i.LocationPreferences,
 	)
 	return i, err
 }

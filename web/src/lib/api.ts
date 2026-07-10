@@ -36,6 +36,7 @@ import type {
   ATSResponse,
   JobMatch,
   ResumeProfile,
+  LocationPreferences,
 } from './types';
 
 /** A page of list items, optionally the total matching the query (endpoints that
@@ -472,10 +473,18 @@ export function createApi(
   }
 
   /** Create-or-replace the user's profile from a non-empty set of specializations (job
-   *  categories) and a non-empty set of skills. A bad specialization or empty skills is a
-   *  400. */
-  async function saveProfile(specializations: string[], skills: string[]): Promise<UserProfile> {
-    return requestData<UserProfile>('/api/v1/me/profile', jsonBody('PUT', { specializations, skills }));
+   *  categories), a non-empty set of skills, and an optional location-preferences block
+   *  (null clears it). A bad specialization, empty skills, or an out-of-vocabulary location
+   *  value is a 400. */
+  async function saveProfile(
+    specializations: string[],
+    skills: string[],
+    location: LocationPreferences | null,
+  ): Promise<UserProfile> {
+    return requestData<UserProfile>(
+      '/api/v1/me/profile',
+      jsonBody('PUT', { specializations, skills, location_preferences: location }),
+    );
   }
 
   /** Clear the user's profile. Idempotent. */

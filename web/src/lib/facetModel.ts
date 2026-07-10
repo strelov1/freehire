@@ -6,6 +6,7 @@
 // `<param>_exclude` and `<param>_mode=and` conventions.
 
 import { FACETS, type FacetSelection } from './facets';
+import type { UserProfile } from './types';
 
 /** The three states a facet value can hold. */
 export type Sign = 'off' | 'include' | 'exclude';
@@ -176,13 +177,37 @@ export function facetRemove(st: FacetState, v: string): FacetState {
   return facetSetSign(st, v, 'off');
 }
 
-/** Build a fresh filter set seeded from a user profile: specializations become
- *  `category` values and skills become `skills` values, everything else empty. The
- *  reset-and-seed behind "Apply my profile" — trimming/dedup come free from facetAdd. */
-export function filtersFromProfile(specializations: string[], skills: string[]): JobFilters {
+/** Build a fresh filter set seeded from a user profile — the reset-and-seed behind
+ *  "Apply my profile". Specializations become `category` values and skills become `skills`.
+ *  The optional location block flattens into the location facets: work_modes → `work_mode`;
+ *  regions from the remote reach ∪ relocation targets; countries from the remote reach ∪
+ *  base ∪ relocation targets; cities from the base ∪ relocation targets; and `relocation`
+ *  staged as supported+required when the user is open to relocating. The flatten is lossy
+ *  (base vs relocation merge) — the filter is a convenience narrowing of "places relevant to
+ *  me". Trimming/dedup come free from facetAdd, so unions of overlapping lists are safe. */
+export function filtersFromProfile(profile: UserProfile): JobFilters {
   const seed = (values: string[]) => values.reduce(facetAdd, emptyFacet());
   const f = emptyFilters();
-  f.facets.category = seed(specializations);
-  f.facets.skills = seed(skills);
+  f.facets.category = seed(profile.specializations);
+  f.facets.skills = seed(profile.skills);
+
+  const loc = profile.location_preferences;
+  if (loc) {
+    // Relocation targets only count when the user is actually open to relocating — `open`
+    // gates the whole relocation contribution (targets and the relocation facet alike).
+    const reloc = loc.relocation.open ? loc.relocation : { regions: [], countries: [], cities: [] };
+    f.facets.work_mode = seed(loc.work_modes ?? []);
+    f.facets.regions = seed([...(loc.remote.regions ?? []), ...(reloc.regions ?? [])]);
+    f.facets.countries = seed([
+      ...(loc.remote.countries ?? []),
+      ...(loc.base.country ? [loc.base.country] : []),
+      ...(reloc.countries ?? []),
+    ]);
+    f.facets.cities = seed([
+      ...(loc.base.city ? [loc.base.city] : []),
+      ...(reloc.cities ?? []),
+    ]);
+    if (loc.relocation.open) f.facets.relocation = seed(['supported', 'required']);
+  }
   return f;
 }
