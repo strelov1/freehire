@@ -13,7 +13,7 @@
 
 ## 3. Sort control (`web/src/lib/components/JobsView.svelte`)
 
-- [x] 3.1 Add a compact sort selector on the count row, right-aligned, rendered only when `standalone`, with options "Newest" (`posted_at`) and "By my CV" (`cv`); wire it to `filters.setSort(...)` reading `filters.value.sort`.
+- [x] 3.1 Add a compact sort selector on the count row, right-aligned, rendered only when `standalone`, with options "Newest" (`posted_at`) and "Recommended" (`cv`); wire it to `filters.setSort(...)` reading `filters.value.sort`.
 - [x] 3.2 `svelte-check` clean; visual pass — control renders on the standalone feed, absent on the company-embedded feed, matches existing feed control styling.
 
 ## 4. Eligibility prompts (`web/src/lib/components/JobsView.svelte`)
@@ -32,4 +32,4 @@
 
 - [x] 6.1 Run the web unit tests (vitest) — facetModel round-trip tests pass.
 - [x] 6.2 Run `svelte-check` and eslint locally (web CI does not gate them) — clean.
-- [x] 6.3 Visual end-to-end: signed-in-with-CV user toggles Newest ↔ By my CV, applies a facet filter in CV mode and sees it narrow the ranked feed, reloads `?sort=cv` and it restores; signed-out and no-CV prompts render.
+- [x] 6.3 Visual end-to-end: signed-in-with-CV user toggles Newest ↔ Recommended, applies a facet filter in CV mode and sees it narrow the ranked feed, reloads `?sort=cv` and it restores; signed-out and no-CV prompts render.
