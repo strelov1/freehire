@@ -4,7 +4,7 @@
 
 The standalone jobs feed SHALL offer a sort control with two modes — "Newest" (the default, newest-added first) and "Recommended" (ranked by similarity to the caller's CV) — and in CV mode SHALL rank the feed via the recommendations endpoint while keeping every facet filter in effect. The selected sort SHALL round-trip through the URL (`sort=cv`) and the standalone list's persisted filter storage, so a reload, a shared link, or a return visit restores it. The `sort=cv` value SHALL be a frontend routing signal only and SHALL NOT be sent to the keyword search endpoint. The sort control SHALL appear only on the standalone feed, not on a company-scoped embedded feed. Free-text query is not combined with CV ranking; in CV mode the free-text query does not influence ranking while facet filters still apply.
 
-The control SHALL always be visible. When a user who cannot be ranked selects CV mode, the feed SHALL prompt the appropriate next step instead of erroring: a signed-out user SHALL be prompted to sign in, and a signed-in user with no usable CV vector SHALL be prompted to add or update their CV. Because an empty CV feed is ambiguous at the API (no CV and no-match both return an empty list), the feed SHALL distinguish the no-CV prompt from an ordinary "no matches" state by whether a facet filter is applied.
+The sort control SHALL be offered only to a signed-in user (the "Recommended" mode needs a CV, so a signed-out visitor has no use for it). When a user who cannot be ranked is nonetheless in CV mode, the feed SHALL prompt the appropriate next step instead of erroring: a signed-out user who reaches CV mode via a shared `sort=cv` link SHALL be prompted to sign in, and a signed-in user with no usable CV vector SHALL be prompted to add or update their CV. Because an empty CV feed is ambiguous at the API (no CV and no-match both return an empty list), the feed SHALL distinguish the no-CV prompt from an ordinary "no matches" state by whether a facet filter is applied.
 
 #### Scenario: Switching to CV mode ranks the feed by the CV vector
 
@@ -31,9 +31,14 @@ The control SHALL always be visible. When a user who cannot be ranked selects CV
 - **WHEN** a user selects "Newest" (or has not chosen a sort)
 - **THEN** the feed lists open jobs newest-added first via the keyword search endpoint, and the URL carries no `sort` parameter
 
-#### Scenario: Signed-out user is prompted to sign in
+#### Scenario: The sort control is hidden for a signed-out user
 
-- **WHEN** a signed-out user selects "Recommended"
+- **WHEN** a signed-out user views the standalone feed
+- **THEN** no sort control is shown (the default newest feed is served)
+
+#### Scenario: Signed-out user reaching CV mode is prompted to sign in
+
+- **WHEN** a signed-out user opens the feed with the CV sort active (e.g. a shared `sort=cv` link)
 - **THEN** the feed shows a sign-in prompt and does not call the authenticated recommendations endpoint
 
 #### Scenario: Signed-in user without a CV is prompted to upload one

@@ -287,7 +287,9 @@
 </script>
 
 <!-- The feed sort control, handed to ListToolbar so it sits in the shared toolbar
-     (mobile) / above the list (desktop). Standalone-only; the URL value stays `cv`. -->
+     (mobile) / above the list (desktop). Offered only to a signed-in user on the
+     standalone feed — "Recommended" needs a CV, so a signed-out visitor has no use
+     for it (a shared ?sort=cv link still shows the sign-in prompt). URL value stays `cv`. -->
 {#snippet sortSelect()}
   <label class="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
     <span class="hidden sm:inline">Sort</span>
@@ -348,7 +350,7 @@
       onOpenFilters={() => (modalOpen = true)}
       onSwipe={standalone ? openSwipe : undefined}
       showDesktopTotal={standalone}
-      sortControl={standalone ? sortSelect : undefined}
+      sortControl={standalone && isAuthenticated() ? sortSelect : undefined}
     />
 
     {#if cvSignInPrompt}

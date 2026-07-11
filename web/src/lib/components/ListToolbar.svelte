@@ -100,13 +100,13 @@
      the control stays visible on an empty/prompt list where the total is null. -->
 {#if showDesktopTotal && (total !== null || sortControl)}
   <div class="mb-3 hidden items-center justify-end gap-3 md:flex">
-    {@render sortControl?.()}
     {#if total !== null}
       <span class="text-sm text-muted-foreground" aria-live="polite">
         <span class="font-semibold tabular-nums text-foreground">{total.toLocaleString()}</span>
         {unit}
       </span>
     {/if}
+    {@render sortControl?.()}
   </div>
 {/if}
 
