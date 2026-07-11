@@ -22,6 +22,7 @@ import (
 	"github.com/strelov1/freehire/internal/moderation"
 	"github.com/strelov1/freehire/internal/report"
 	"github.com/strelov1/freehire/internal/resume"
+	"github.com/strelov1/freehire/internal/resumeextract"
 	"github.com/strelov1/freehire/internal/savedsearch"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/submission"
@@ -40,6 +41,10 @@ const (
 	// model spends tens of seconds thinking before answering, so a stage needs more than
 	// the shared client's default.
 	jobfitLLMTimeout = 180 * time.Second
+	// resumeExtractLLMTimeout bounds the single structured-résumé extraction call. It runs
+	// off the upload response path (background) so it can be generous, but still bounded so
+	// a stalled gateway cannot leak a goroutine indefinitely.
+	resumeExtractLLMTimeout = 120 * time.Second
 )
 
 // API holds dependencies shared across HTTP handlers.
@@ -92,6 +97,10 @@ type API struct {
 	// text for the verdict). Its blob store is nil when S3 is unconfigured; Enabled()
 	// then reports false and callers degrade to per-request résumé upload.
 	resume *resume.Store
+	// structuredExtractor derives the read-only structured résumé from an uploaded CV
+	// (best-effort, background). Its client is nil when the LLM is unconfigured; extraction
+	// then no-ops and the profile simply shows no structured section.
+	structuredExtractor *resumeextract.Extractor
 	// atsAnalyzer runs the optional LLM qualitative review for the CV ATS report.
 	// Its client is nil when the LLM is unconfigured; Analyze then degrades to a no-op.
 	atsAnalyzer *atscheck.Analyzer
@@ -205,6 +214,7 @@ func Register(app *fiber.App, cfg Config) {
 	// its reasoning model is slow (tens of seconds per stage), so the default would time
 	// out mid-stage. Nil-safe (a nil client stays nil → Analyze is a no-op).
 	a.jobFit = jobfit.NewAnalyzer(cfg.LLM.WithTimeout(jobfitLLMTimeout))
+	a.structuredExtractor = resumeextract.NewExtractor(cfg.LLM.WithTimeout(resumeExtractLLMTimeout))
 	a.jobFitCache = queries
 	// Telegram notifications are enabled only with both a bot token and a JWT
 	// secret (the link token reuses it). Absent either, the linking endpoints

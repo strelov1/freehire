@@ -148,6 +148,7 @@ func (a *API) PostJobFit(c *fiber.Ctx) error {
 		JobDescription:      job.Description,
 		CompanyInfo:         a.companyInfo(c, job.CompanySlug),
 		CVText:              cvText,
+		StructuredResume:    a.structuredResumeJSON(c, userID),
 		Match:               jobmatch.Compute(job.Skills, profile.Skills),
 		JobWorkMode:         job.WorkMode,
 		JobRemote:           job.Remote,
@@ -234,6 +235,25 @@ func (a *API) cvUploadedAt(c *fiber.Ctx, userID int64) (*time.Time, bool) {
 		return nil, false
 	}
 	return meta.UploadedAt, true
+}
+
+// structuredResumeJSON returns the caller's current structured résumé as JSON for the
+// fit input, or "" when the caller has none current (no résumé, unconfigured LLM, not
+// yet extracted, or stale) — the fit chain then runs on the CV text alone. Best-effort:
+// a read/marshal error degrades to "".
+func (a *API) structuredResumeJSON(c *fiber.Ctx, userID int64) string {
+	if !a.resume.Enabled() {
+		return ""
+	}
+	st, ok, err := a.resume.Structured(c.Context(), userID)
+	if err != nil || !ok {
+		return ""
+	}
+	blob, err := json.Marshal(st)
+	if err != nil {
+		return ""
+	}
+	return string(blob)
 }
 
 // companyInfo returns the raw company_info JSON for the job's company, or "" when the

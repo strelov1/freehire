@@ -221,16 +221,19 @@ type TelegramPost struct {
 }
 
 type User struct {
-	ID                   int64              `json:"id"`
-	Email                string             `json:"email"`
-	PasswordHash         pgtype.Text        `json:"password_hash"`
-	CreatedAt            pgtype.Timestamptz `json:"created_at"`
-	Role                 string             `json:"role"`
-	ResumeObjectKey      pgtype.Text        `json:"resume_object_key"`
-	ResumeUploadedAt     pgtype.Timestamptz `json:"resume_uploaded_at"`
-	ResumeAtsAnalysis    []byte             `json:"resume_ats_analysis"`
-	ResumeEmbedding      []float64          `json:"resume_embedding"`
-	ResumeEmbeddingModel pgtype.Text        `json:"resume_embedding_model"`
+	ID                         int64              `json:"id"`
+	Email                      string             `json:"email"`
+	PasswordHash               pgtype.Text        `json:"password_hash"`
+	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
+	Role                       string             `json:"role"`
+	ResumeObjectKey            pgtype.Text        `json:"resume_object_key"`
+	ResumeUploadedAt           pgtype.Timestamptz `json:"resume_uploaded_at"`
+	ResumeAtsAnalysis          []byte             `json:"resume_ats_analysis"`
+	ResumeEmbedding            []float64          `json:"resume_embedding"`
+	ResumeEmbeddingModel       pgtype.Text        `json:"resume_embedding_model"`
+	ResumeStructured           []byte             `json:"resume_structured"`
+	ResumeStructuredModel      pgtype.Text        `json:"resume_structured_model"`
+	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
 }
 
 type UserIdentity struct {

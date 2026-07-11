@@ -399,3 +399,20 @@ export interface ResumeProfile {
   categories: string[];
   seniority?: string;
 }
+
+/** The read-only structured résumé parsed from the uploaded CV by the LLM. */
+export type {
+  Structured as ResumeStructured,
+  Experience as ResumeExperience,
+  Education as ResumeEducation,
+} from './generated/contracts';
+
+/** The résumé status (`GET /me/resume`): whether storage is enabled and a résumé is
+ *  stored (with its upload time), plus the read-only structured résumé — null when the
+ *  caller has none current (no résumé, unconfigured LLM, not yet extracted, or stale). */
+export interface ResumeMeta {
+  enabled: boolean;
+  present: boolean;
+  uploaded_at: string | null;
+  structured: import('./generated/contracts').Structured | null;
+}

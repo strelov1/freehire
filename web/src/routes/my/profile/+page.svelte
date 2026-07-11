@@ -11,10 +11,11 @@
   import FilterModal from '$lib/components/filters/FilterModal.svelte';
   import FilterEdgeTab from '$lib/components/FilterEdgeTab.svelte';
   import ProfileForm from '$lib/components/ProfileForm.svelte';
+  import ResumeStructuredView from '$lib/components/ResumeStructuredView.svelte';
   import States from '$lib/components/States.svelte';
   import VerdictView from '$lib/components/VerdictView.svelte';
   import { profileStore } from '$lib/profile.svelte';
-  import type { ATSResponse, FacetCounts, Verdict } from '$lib/types';
+  import type { ATSResponse, FacetCounts, ResumeStructured, Verdict } from '$lib/types';
   import { Button } from '$lib/ui';
 
   const profile = $derived(profileStore.profile);
@@ -28,6 +29,10 @@
   let verdict = $state<Verdict | null>(null);
   let counts = $state<FacetCounts | null>(null);
   let ats = $state<ATSResponse | null>(null);
+  // The read-only structured résumé parsed from the CV (null when none is current: no
+  // résumé, unconfigured LLM, background extraction not yet landed, or stale). Fetched
+  // independently of the filter-driven reload.
+  let structured = $state<ResumeStructured | null>(null);
   let loadError = $state(false);
   let tab = $state<'profile' | 'coverage' | 'readiness'>('profile');
   let modalOpen = $state(false);
@@ -83,6 +88,17 @@
       status = 'ready';
     } catch {
       status = 'error';
+    }
+    void loadStructured();
+  }
+
+  // Fetch the read-only structured résumé independently of the filter-driven reload.
+  // Best-effort: any failure (or none current) leaves the section hidden, never an error.
+  async function loadStructured() {
+    try {
+      structured = (await api.getResume()).structured;
+    } catch {
+      structured = null;
     }
   }
 
@@ -143,6 +159,9 @@
   function handleCvUploaded() {
     cvUploaded = true;
     void reload();
+    // The structured résumé is derived in the background (seconds), so it usually is not
+    // ready this instant; re-fetch anyway — it lands on the next profile visit otherwise.
+    void loadStructured();
   }
 
   // Link a gap skill to the job search under the current comparison role plus that skill.
@@ -284,21 +303,29 @@
             <States state="loading" />
           {:else if tab === 'coverage'}
             <VerdictView {verdict} {gapHref} />
-          {:else if ats?.has_cv && ats.report}
-            <!-- CV readiness -->
-            <div class="flex flex-col gap-5">
-              {#if reviewUnavailable}
-                <p class="text-xs text-muted-foreground">AI review is not available right now.</p>
-              {/if}
-              <ATSReportView report={ats.report} action={reviewAction} />
-            </div>
           {:else}
-            <!-- No CV yet: uploaded via the Your CV tab. -->
-            <div class="flex flex-col items-start gap-2 rounded-xl border border-dashed border-border p-6">
-              <p class="text-sm font-medium">Add your CV to score its ATS readiness</p>
-              <p class="text-sm text-muted-foreground">
-                Upload your CV in the <button type="button" class="font-medium text-foreground underline underline-offset-2" onclick={() => (tab = 'profile')}>Your CV</button> tab to check ATS readability and this role's keywords.
-              </p>
+            <!-- CV readiness: the structured résumé we parsed from the CV (read-only,
+                 omitted when none is current) above the ATS-readiness score. -->
+            <div class="flex flex-col gap-6">
+              {#if structured}
+                <ResumeStructuredView resume={structured} />
+              {/if}
+              {#if ats?.has_cv && ats.report}
+                <div class="flex flex-col gap-5">
+                  {#if reviewUnavailable}
+                    <p class="text-xs text-muted-foreground">AI review is not available right now.</p>
+                  {/if}
+                  <ATSReportView report={ats.report} action={reviewAction} />
+                </div>
+              {:else if !structured}
+                <!-- No CV yet: uploaded via the Your CV tab. -->
+                <div class="flex flex-col items-start gap-2 rounded-xl border border-dashed border-border p-6">
+                  <p class="text-sm font-medium">Add your CV to score its ATS readiness</p>
+                  <p class="text-sm text-muted-foreground">
+                    Upload your CV in the <button type="button" class="font-medium text-foreground underline underline-offset-2" onclick={() => (tab = 'profile')}>Your CV</button> tab to check ATS readability and this role's keywords.
+                  </p>
+                </div>
+              {/if}
             </div>
           {/if}
         </main>

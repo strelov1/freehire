@@ -39,6 +39,7 @@ import type {
   JobFitQuota,
   MyAnalysisItem,
   ResumeProfile,
+  ResumeMeta,
   ActivityGranularity,
   ActivityPoint,
   LocationPreferences,
@@ -568,6 +569,13 @@ export function createApi(
     );
   }
 
+  /** The caller's résumé status, including the read-only structured résumé parsed from
+   *  the CV (null when none is current). Session-scoped; always 200 (an absent/disabled
+   *  résumé is a normal state the profile renders). */
+  async function getResume(): Promise<ResumeMeta> {
+    return requestData<ResumeMeta>('/api/v1/me/resume');
+  }
+
   /** The market-coverage verdict for the caller's profile: how many open vacancies the
    *  profile's skills reach for the selected role, and which missing skill unlocks the
    *  most new ones. `params` carries the same facet filters as job search, so the caller
@@ -735,6 +743,7 @@ export function createApi(
     saveProfile,
     deleteProfile,
     extractResumeProfile,
+    getResume,
     getProfileVerdict,
     getATSReport,
     runATSReview,

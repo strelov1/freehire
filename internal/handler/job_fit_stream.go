@@ -50,6 +50,7 @@ func (a *API) StreamJobFit(c *fiber.Ctx) error {
 		JobDescription:      job.Description,
 		CompanyInfo:         a.companyInfo(c, job.CompanySlug),
 		CVText:              cvText,
+		StructuredResume:    a.structuredResumeJSON(c, userID),
 		Match:               jobmatch.Compute(job.Skills, profile.Skills),
 		JobWorkMode:         job.WorkMode,
 		JobRemote:           job.Remote,

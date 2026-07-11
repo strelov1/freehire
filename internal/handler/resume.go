@@ -15,6 +15,7 @@ import (
 
 	classifydict "github.com/strelov1/freehire/internal/classify"
 	"github.com/strelov1/freehire/internal/resume"
+	"github.com/strelov1/freehire/internal/resumeextract"
 	"github.com/strelov1/freehire/internal/skilltag"
 )
 
@@ -139,13 +140,13 @@ func (a *API) ExtractResumeProfile(c *fiber.Ctx) error {
 	prof := resumeProfile(up.Text)
 
 	if a.resume.Enabled() {
-		if _, err := a.resume.Put(c.Context(), userID, up.ContentType, up.Data); err != nil {
+		if meta, err := a.resume.Put(c.Context(), userID, up.ContentType, up.Data); err != nil {
 			// Best-effort: log (never the résumé bytes) and still return the profile.
 			log.Printf("resume: store on extract failed for user %d: %v", userID, err)
 		} else {
 			// This is the résumé-upload path the app actually uses, so it is where the CV
-			// gets embedded for /my/recommendations (background, best-effort — see embedResume).
-			go a.embedResume(userID, up.Text)
+			// gets embedded for /my/recommendations and structured for the profile.
+			a.deriveResumeArtifacts(userID, up.Text, meta.UploadedAt)
 		}
 	}
 
@@ -160,11 +161,14 @@ func (a *API) ExtractResumeProfile(c *fiber.Ctx) error {
 
 // resumeMetaResponse is the wire shape for résumé status: whether storage is enabled at
 // all, whether the caller has a résumé stored, and when it was uploaded (RFC3339, nil
-// when absent).
+// when absent). Structured carries the read-only structured résumé for the profile view,
+// null when the caller has none current (no résumé, unconfigured LLM, not yet extracted,
+// or stale relative to the current CV).
 type resumeMetaResponse struct {
-	Enabled    bool    `json:"enabled"`
-	Present    bool    `json:"present"`
-	UploadedAt *string `json:"uploaded_at"`
+	Enabled    bool                      `json:"enabled"`
+	Present    bool                      `json:"present"`
+	UploadedAt *string                   `json:"uploaded_at"`
+	Structured *resumeextract.Structured `json:"structured"`
 }
 
 func newResumeMeta(enabled bool, m resume.Meta) resumeMetaResponse {
@@ -201,7 +205,10 @@ func (a *API) PutResume(c *fiber.Ctx) error {
 	// Embed in the background: it must not block the upload response. Embedding is a
 	// Meilisearch round-trip that is seconds normally but MINUTES while a full semantic
 	// rebuild is monopolizing the engine — long enough to time out the proxy/upload.
-	go a.embedResume(userID, up.Text)
+	// Derive the CV embedding and the structured résumé in the background (best-effort,
+	// off the response path). The structure is stamped with this upload's time so it is
+	// served only while it describes the current CV.
+	a.deriveResumeArtifacts(userID, up.Text, meta.UploadedAt)
 	return c.JSON(fiber.Map{"data": newResumeMeta(true, meta)})
 }
 
@@ -230,6 +237,38 @@ func (a *API) embedResume(userID int64, text string) {
 	}
 }
 
+// deriveResumeArtifacts kicks the background best-effort derivations a fresh upload feeds:
+// the CV embedding (/my/recommendations) and the structured résumé (profile view + fit
+// context). Both run detached on their own timeout contexts. Defined once so the two
+// upload paths (PutResume, ExtractResumeProfile) can't drift out of sync.
+func (a *API) deriveResumeArtifacts(userID int64, text string, uploadedAt *time.Time) {
+	go a.embedResume(userID, text)
+	go a.extractStructuredResume(userID, text, uploadedAt)
+}
+
+// extractStructuredResume derives the read-only structured résumé from the just-uploaded
+// CV and persists it, stamped with uploadedAt (the résumé upload time it was derived
+// from, captured up front so the stamp matches the CV actually read — Store.Structured
+// serves only on a stamp match). Background + best-effort: an unconfigured LLM, a missing
+// upload time, or any extraction/persist error is logged (never the CV text/bytes) and
+// swallowed, so the upload and the deterministic extractors are untouched. Runs on its
+// own timeout context (the request's is gone once the upload responded).
+func (a *API) extractStructuredResume(userID int64, text string, uploadedAt *time.Time) {
+	if !a.structuredExtractor.Enabled() || uploadedAt == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), resumeExtractLLMTimeout+30*time.Second)
+	defer cancel()
+	st, err := a.structuredExtractor.Extract(ctx, text)
+	if err != nil {
+		log.Printf("resume structured: user %d: %v", userID, err)
+		return
+	}
+	if err := a.resume.SetStructured(ctx, userID, st, a.structuredExtractor.ModelID(), *uploadedAt); err != nil {
+		log.Printf("resume structured persist: user %d: %v", userID, err)
+	}
+}
+
 // GetResume reports whether the caller has a stored résumé (and when). Always 200:
 // unconfigured storage or no résumé is a normal state the SPA renders (it decides between
 // "re-run coherence" and a single upload prompt). Cookie-only.
@@ -245,7 +284,15 @@ func (a *API) GetResume(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return c.JSON(fiber.Map{"data": newResumeMeta(true, meta)})
+	resp := newResumeMeta(true, meta)
+	// Attach the read-only structured résumé when a current one exists (best-effort: a
+	// read hiccup or stale/absent structure simply leaves it null, never failing status).
+	if st, ok, err := a.resume.Structured(c.Context(), userID); err != nil {
+		log.Printf("resume structured read: user %d: %v", userID, err)
+	} else if ok {
+		resp.Structured = &st
+	}
+	return c.JSON(fiber.Map{"data": resp})
 }
 
 // DeleteResume removes the caller's stored résumé (object + pointer). 501 when storage is

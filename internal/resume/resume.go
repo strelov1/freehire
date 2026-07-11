@@ -10,6 +10,7 @@ package resume
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/resumeextract"
 )
 
 var (
@@ -49,6 +51,12 @@ type Repository interface {
 	// CV is never matched by the old vector). GetEmbedding reads them back.
 	SetEmbedding(ctx context.Context, userID int64, vec []float64, model string) error
 	GetEmbedding(ctx context.Context, userID int64) (db.GetUserResumeEmbeddingRow, error)
+	// SetStructured persists the derived structured résumé blob + the producing model and
+	// the résumé upload time it was derived from (the stamp). GetStructured reads the blob,
+	// its stamps, and the current résumé upload time so the Store can tell whether the
+	// structure still describes the stored CV.
+	SetStructured(ctx context.Context, userID int64, blob []byte, model string, uploadedAt time.Time) error
+	GetStructured(ctx context.Context, userID int64) (db.GetUserResumeStructuredRow, error)
 }
 
 // Store owns the résumé's object storage plus its pointer. blobs is nil when storage is
@@ -102,6 +110,52 @@ func (s *Store) Embedding(ctx context.Context, userID int64) (vec []float64, mod
 		return nil, "", err
 	}
 	return row.ResumeEmbedding, row.ResumeEmbeddingModel.String, nil
+}
+
+// SetStructured persists the user's derived structured résumé, stamped with the
+// producing model and the résumé upload time it was derived from (so the read can tell
+// whether it still describes the stored CV). Independent of object storage — it only
+// touches the pointer row.
+func (s *Store) SetStructured(ctx context.Context, userID int64, st resumeextract.Structured, model string, uploadedAt time.Time) error {
+	blob, err := json.Marshal(st)
+	if err != nil {
+		return fmt.Errorf("resume: marshal structured: %w", err)
+	}
+	return s.repo.SetStructured(ctx, userID, blob, model, uploadedAt)
+}
+
+// Structured returns the user's derived structured résumé, but ONLY when it still
+// describes the currently-stored CV — i.e. its stamp equals the résumé's upload time.
+// ok is false (with no error) when none is stored or the stamp is stale (a newer CV
+// whose extraction has not landed yet, or a persistent extraction outage), so the read
+// surface never serves a structure derived from a superseded résumé.
+//
+// Staleness is keyed on the upload time ALONE, not the model stamp (unlike the CV
+// embedding, which is re-checked against the current embedder). The structured résumé has
+// no reconciler that re-derives it — only a re-upload does — so gating reads on the model
+// would hide the parsed profile forever after an LLM_MODEL upgrade rather than refreshing
+// it. Serving a best-effort, display-only structure from an older model is the better
+// degradation; resume_structured_model is kept as provenance for a future backfill.
+func (s *Store) Structured(ctx context.Context, userID int64) (resumeextract.Structured, bool, error) {
+	row, err := s.repo.GetStructured(ctx, userID)
+	if err != nil {
+		return resumeextract.Structured{}, false, err
+	}
+	if len(row.ResumeStructured) == 0 || !stampsEqual(row.ResumeStructuredUploadedAt, row.ResumeUploadedAt) {
+		return resumeextract.Structured{}, false, nil
+	}
+	var st resumeextract.Structured
+	if err := json.Unmarshal(row.ResumeStructured, &st); err != nil {
+		// A corrupt blob is treated as absent (the next upload re-derives it), not an error.
+		return resumeextract.Structured{}, false, nil
+	}
+	return st, true, nil
+}
+
+// stampsEqual reports whether two timestamps are both present and equal — the freshness
+// rule for the structured résumé (mirrors the jobfit cache stamp comparison).
+func stampsEqual(a, b pgtype.Timestamptz) bool {
+	return a.Valid && b.Valid && a.Time.Equal(b.Time)
 }
 
 // Status reports whether the user has a stored résumé and when it was uploaded.
@@ -232,4 +286,17 @@ func (r *QueriesRepository) SetEmbedding(ctx context.Context, userID int64, vec 
 
 func (r *QueriesRepository) GetEmbedding(ctx context.Context, userID int64) (db.GetUserResumeEmbeddingRow, error) {
 	return r.q.GetUserResumeEmbedding(ctx, userID)
+}
+
+func (r *QueriesRepository) SetStructured(ctx context.Context, userID int64, blob []byte, model string, uploadedAt time.Time) error {
+	return r.q.SetUserResumeStructured(ctx, db.SetUserResumeStructuredParams{
+		ID:                         userID,
+		ResumeStructured:           blob,
+		ResumeStructuredModel:      pgtype.Text{String: model, Valid: model != ""},
+		ResumeStructuredUploadedAt: pgtype.Timestamptz{Time: uploadedAt, Valid: true},
+	})
+}
+
+func (r *QueriesRepository) GetStructured(ctx context.Context, userID int64) (db.GetUserResumeStructuredRow, error) {
+	return r.q.GetUserResumeStructured(ctx, userID)
 }

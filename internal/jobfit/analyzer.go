@@ -44,7 +44,12 @@ type Input struct {
 	JobDescription string
 	CompanyInfo    string
 	CVText         string
-	Match          jobmatch.JobMatch
+	// StructuredResume is the caller's sanitized structured résumé as JSON, supplied
+	// beside CVText as pre-normalized context — never a replacement (the raw CV stays the
+	// ground truth). Empty when the caller has no current structured résumé, in which case
+	// the chain runs exactly as it does on the CV text alone.
+	StructuredResume string
+	Match            jobmatch.JobMatch
 
 	// Job geography for the location dimension.
 	JobWorkMode  string
@@ -232,11 +237,13 @@ func stage3SystemPrompt() string {
 	return b.String()
 }
 
-// stage1UserPrompt carries the (bounded) job text, CV, and the deterministic anchor.
+// stage1UserPrompt carries the (bounded) job text, CV, and the deterministic anchor,
+// plus the pre-normalized structured résumé when present (additive to the raw CV).
 func stage1UserPrompt(in Input) string {
 	var b strings.Builder
 	writeJob(&b, in)
 	writeAnchor(&b, in.Match)
+	writeStructured(&b, in)
 	writeCV(&b, in)
 	return b.String()
 }
@@ -282,6 +289,24 @@ func writeCV(b *strings.Builder, in Input) {
 	b.WriteString("CV:\n")
 	b.WriteString(llm.TruncateRunes(in.CVText, maxCVRunes))
 	b.WriteString("\n")
+}
+
+// maxStructuredRunes bounds the structured-résumé JSON added to the prompt — it is a
+// compact summary, so a modest cap covers it while keeping the stage responsive.
+const maxStructuredRunes = 3000
+
+// writeStructured appends the caller's pre-normalized structured résumé as context, when
+// present. Omitted entirely when empty, so an un-extracted CV yields exactly today's
+// prompt. It is labelled as a parsed summary so the model treats the raw CV as ground
+// truth and this as an aid.
+func writeStructured(b *strings.Builder, in Input) {
+	s := strings.TrimSpace(in.StructuredResume)
+	if s == "" {
+		return
+	}
+	b.WriteString("Structured résumé (parsed summary, JSON — the CV below is ground truth):\n")
+	b.WriteString(llm.TruncateRunes(s, maxStructuredRunes))
+	b.WriteString("\n\n")
 }
 
 // writeAnchor renders the deterministic skills match so the model explains and

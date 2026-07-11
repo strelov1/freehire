@@ -14,12 +14,15 @@ import (
 const clearUserResume = `-- name: ClearUserResume :exec
 UPDATE users
 SET resume_object_key = NULL, resume_uploaded_at = NULL, resume_ats_analysis = NULL,
-    resume_embedding = NULL, resume_embedding_model = NULL
+    resume_embedding = NULL, resume_embedding_model = NULL,
+    resume_structured = NULL, resume_structured_model = NULL,
+    resume_structured_uploaded_at = NULL
 WHERE id = $1
 `
 
 // Clear the user's résumé pointer (after deleting the object from storage), any
-// cached ATS review, and the derived CV embedding (no CV → no recommendations).
+// cached ATS review, the derived CV embedding (no CV → no recommendations), and the
+// derived structured résumé (the structure must not outlive the CV it describes).
 func (q *Queries) ClearUserResume(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, clearUserResume, id)
 	return err
@@ -171,6 +174,35 @@ func (q *Queries) GetUserResumeEmbedding(ctx context.Context, id int64) (GetUser
 	return i, err
 }
 
+const getUserResumeStructured = `-- name: GetUserResumeStructured :one
+SELECT resume_structured, resume_structured_model, resume_structured_uploaded_at, resume_uploaded_at
+FROM users
+WHERE id = $1
+`
+
+type GetUserResumeStructuredRow struct {
+	ResumeStructured           []byte             `json:"resume_structured"`
+	ResumeStructuredModel      pgtype.Text        `json:"resume_structured_model"`
+	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
+	ResumeUploadedAt           pgtype.Timestamptz `json:"resume_uploaded_at"`
+}
+
+// The user's derived structured résumé plus its provenance stamps (the LLM model and
+// the résumé upload time it was derived from), alongside the current résumé upload time
+// so the caller can tell whether the structure still describes the stored CV (served
+// only when resume_structured_uploaded_at equals resume_uploaded_at). NULLs when none.
+func (q *Queries) GetUserResumeStructured(ctx context.Context, id int64) (GetUserResumeStructuredRow, error) {
+	row := q.db.QueryRow(ctx, getUserResumeStructured, id)
+	var i GetUserResumeStructuredRow
+	err := row.Scan(
+		&i.ResumeStructured,
+		&i.ResumeStructuredModel,
+		&i.ResumeStructuredUploadedAt,
+		&i.ResumeUploadedAt,
+	)
+	return i, err
+}
+
 const getUserRole = `-- name: GetUserRole :one
 SELECT role
 FROM users
@@ -239,5 +271,35 @@ type SetUserResumeEmbeddingParams struct {
 // that produced it (so a model change can mark the vector stale). Never the raw CV text.
 func (q *Queries) SetUserResumeEmbedding(ctx context.Context, arg SetUserResumeEmbeddingParams) error {
 	_, err := q.db.Exec(ctx, setUserResumeEmbedding, arg.ID, arg.ResumeEmbedding, arg.ResumeEmbeddingModel)
+	return err
+}
+
+const setUserResumeStructured = `-- name: SetUserResumeStructured :exec
+UPDATE users
+SET resume_structured = $2, resume_structured_model = $3, resume_structured_uploaded_at = $4
+WHERE id = $1 AND resume_uploaded_at = $4
+`
+
+type SetUserResumeStructuredParams struct {
+	ID                         int64              `json:"id"`
+	ResumeStructured           []byte             `json:"resume_structured"`
+	ResumeStructuredModel      pgtype.Text        `json:"resume_structured_model"`
+	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
+}
+
+// Persist the user's derived structured résumé, stamped with the producing LLM model
+// and the résumé upload time it was derived from (passed in, not now(), so the stamp
+// matches the CV the background extraction actually read). Never the raw CV text.
+// The `resume_uploaded_at = $4` guard makes the write monotonic: a slow background
+// extraction for a since-superseded CV (its stamp no longer equals the current upload
+// time) matches no row and is dropped, so a late writer can't clobber a newer CV's
+// structure with an already-stale stamp (which Store.Structured would then hide forever).
+func (q *Queries) SetUserResumeStructured(ctx context.Context, arg SetUserResumeStructuredParams) error {
+	_, err := q.db.Exec(ctx, setUserResumeStructured,
+		arg.ID,
+		arg.ResumeStructured,
+		arg.ResumeStructuredModel,
+		arg.ResumeStructuredUploadedAt,
+	)
 	return err
 }

@@ -69,6 +69,7 @@ func genStructs() (string, error) {
 	atscheckTS := filepath.Join(tmp, "atscheck.ts")
 	jobmatchTS := filepath.Join(tmp, "jobmatch.ts")
 	jobfitTS := filepath.Join(tmp, "jobfit.ts")
+	resumeextractTS := filepath.Join(tmp, "resumeextract.ts")
 
 	cfg := &tygo.Config{
 		Packages: []*tygo.PackageConfig{
@@ -117,6 +118,14 @@ func genStructs() (string, error) {
 				OutputPath:   jobfitTS,
 				IncludeFiles: []string{"jobfit.go"},
 			},
+			{
+				// The read-only structured résumé wire shape (Structured + Experience +
+				// Education). Only structured.go — resumeextract.go holds the server-only
+				// Extractor.
+				Path:         "github.com/strelov1/freehire/internal/resumeextract",
+				OutputPath:   resumeextractTS,
+				IncludeFiles: []string{"structured.go"},
+			},
 		},
 	}
 	if err := tygo.New(cfg).Generate(); err != nil {
@@ -151,7 +160,11 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + jobmatchBody + "\n" + jobfitBody, nil
+	resumeextractBody, err := readBody(resumeextractTS)
+	if err != nil {
+		return "", err
+	}
+	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + jobmatchBody + "\n" + jobfitBody + "\n" + resumeextractBody, nil
 }
 
 // readBody returns a tygo output file's body with its leading preamble removed, so

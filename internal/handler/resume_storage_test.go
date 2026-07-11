@@ -18,6 +18,7 @@ import (
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/resume"
+	"github.com/strelov1/freehire/internal/resumeextract"
 )
 
 // fakeResumeBlobs is an in-memory blobstore.Store for handler tests.
@@ -47,13 +48,20 @@ func (f *fakeResumeBlobs) Delete(_ context.Context, key string) error {
 	return nil
 }
 
+// resumeUploadedAt is the fixed upload time the fake repo stamps a stored résumé with,
+// so a test can seed a structured stamp that matches (fresh) or differs (stale).
+var resumeUploadedAt = time.Unix(1_700_000_000, 0).UTC()
+
 // fakeResumeRepo is an in-memory résumé-pointer Repository. Set stamps a timestamp,
 // mirroring the SQL now().
 type fakeResumeRepo struct {
-	key      string
-	set      bool
-	embVec   []float64
-	embModel string
+	key         string
+	set         bool
+	embVec      []float64
+	embModel    string
+	structured  []byte
+	structModel string
+	structAt    pgtype.Timestamptz
 }
 
 func (r *fakeResumeRepo) Get(_ context.Context, _ int64) (db.GetUserResumeRow, error) {
@@ -62,7 +70,7 @@ func (r *fakeResumeRepo) Get(_ context.Context, _ int64) (db.GetUserResumeRow, e
 	}
 	return db.GetUserResumeRow{
 		ResumeObjectKey:  pgtype.Text{String: r.key, Valid: true},
-		ResumeUploadedAt: pgtype.Timestamptz{Time: time.Unix(1_700_000_000, 0).UTC(), Valid: true},
+		ResumeUploadedAt: pgtype.Timestamptz{Time: resumeUploadedAt, Valid: true},
 	}, nil
 }
 
@@ -73,6 +81,7 @@ func (r *fakeResumeRepo) Set(_ context.Context, _ int64, key string) error {
 
 func (r *fakeResumeRepo) Clear(_ context.Context, _ int64) error {
 	r.key, r.set = "", false
+	r.structured, r.structModel, r.structAt = nil, "", pgtype.Timestamptz{}
 	return nil
 }
 
@@ -86,6 +95,24 @@ func (r *fakeResumeRepo) GetEmbedding(_ context.Context, _ int64) (db.GetUserRes
 		ResumeEmbedding:      r.embVec,
 		ResumeEmbeddingModel: pgtype.Text{String: r.embModel, Valid: r.embModel != ""},
 	}, nil
+}
+
+func (r *fakeResumeRepo) SetStructured(_ context.Context, _ int64, blob []byte, model string, uploadedAt time.Time) error {
+	r.structured, r.structModel = blob, model
+	r.structAt = pgtype.Timestamptz{Time: uploadedAt, Valid: true}
+	return nil
+}
+
+func (r *fakeResumeRepo) GetStructured(_ context.Context, _ int64) (db.GetUserResumeStructuredRow, error) {
+	row := db.GetUserResumeStructuredRow{
+		ResumeStructured:           r.structured,
+		ResumeStructuredModel:      pgtype.Text{String: r.structModel, Valid: r.structModel != ""},
+		ResumeStructuredUploadedAt: r.structAt,
+	}
+	if r.set {
+		row.ResumeUploadedAt = pgtype.Timestamptz{Time: resumeUploadedAt, Valid: true}
+	}
+	return row, nil
 }
 
 func resumeStorageApp(t *testing.T, store *resume.Store) (*fiber.App, string) {
@@ -167,6 +194,31 @@ func TestResume_DisabledStorage(t *testing.T) {
 	status, meta := resumeReq(t, app, fiber.MethodGet, "", token)
 	if status != fiber.StatusOK || meta.Enabled || meta.Present {
 		t.Errorf("GET = %d/%+v, want 200 disabled not-present", status, meta)
+	}
+}
+
+func TestResume_GetStructuredShape(t *testing.T) {
+	blob, _ := json.Marshal(resumeextract.Structured{FullName: "Jane Doe", TotalYears: 5})
+
+	// Fresh: the structured stamp equals the résumé upload time → structured is served.
+	fresh := &fakeResumeRepo{key: "resumes/1", set: true, structured: blob, structModel: "m",
+		structAt: pgtype.Timestamptz{Time: resumeUploadedAt, Valid: true}}
+	app, token := resumeStorageApp(t, resume.New(newFakeResumeBlobs(), fresh))
+	status, meta := resumeReq(t, app, fiber.MethodGet, "", token)
+	if status != fiber.StatusOK || meta.Structured == nil {
+		t.Fatalf("fresh GET = %d/%+v, want 200 with structured present", status, meta)
+	}
+	if meta.Structured.FullName != "Jane Doe" {
+		t.Errorf("structured = %+v, want the stored value", meta.Structured)
+	}
+
+	// Stale: the structured stamp predates the current résumé → structured is null.
+	stale := &fakeResumeRepo{key: "resumes/1", set: true, structured: blob, structModel: "m",
+		structAt: pgtype.Timestamptz{Time: resumeUploadedAt.Add(-time.Hour), Valid: true}}
+	app, token = resumeStorageApp(t, resume.New(newFakeResumeBlobs(), stale))
+	status, meta = resumeReq(t, app, fiber.MethodGet, "", token)
+	if status != fiber.StatusOK || meta.Structured != nil {
+		t.Fatalf("stale GET = %d/%+v, want 200 with structured null", status, meta)
 	}
 }
 

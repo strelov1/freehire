@@ -435,6 +435,44 @@ export interface Analysis {
   recommendation: string;
 }
 
+/**
+ * Structured is the typed, sanitized résumé. Every field is optional — a value the CV
+ * does not state is left empty rather than invented (the model is prompted accordingly
+ * and Sanitize drops empty entries).
+ */
+export interface Structured {
+  full_name?: string;
+  headline?: string;
+  location?: string;
+  email?: string;
+  phone?: string;
+  summary?: string;
+  total_years?: number /* int */;
+  experience?: Experience[];
+  education?: Education[];
+  languages?: string[];
+  links?: string[];
+}
+/**
+ * Experience is one work-history entry. Dates are kept as free-form strings as printed
+ * on the CV (e.g. "2021-03", "Mar 2021", "Present") — no date parsing is attempted.
+ */
+export interface Experience {
+  title?: string;
+  company?: string;
+  start?: string;
+  end?: string;
+  summary?: string;
+}
+/**
+ * Education is one education entry.
+ */
+export interface Education {
+  degree?: string;
+  institution?: string;
+  year?: string;
+}
+
 export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'breezy', 'careerplug', 'careerspage', 'clinch', 'comeet', 'cornerstone', 'deel', 'earcu', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'gem', 'getmatch', 'getonbrd', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'himalayas', 'hireology', 'huntflow', 'icims', 'inhire', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobstash', 'jobtech', 'join', 'justjoin', 'lever', 'loxo', 'luxoft', 'mindsight', 'mycareersfuture', 'oracle', 'paycom', 'paylocity', 'personio', 'phenom', 'pinpoint', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'solides', 'successfactors', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'ukg', 'vention', 'vouch', 'wantedkr', 'weworkremotely', 'workable', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn'] as const;
