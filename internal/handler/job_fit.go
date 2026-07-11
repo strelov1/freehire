@@ -91,12 +91,22 @@ func (a *API) PostJobFit(c *fiber.Ctx) error {
 	// an older CV's analysis.
 	cvUploadedAt, _ := a.cvUploadedAt(c, userID)
 
+	// The caller's profile drives both the deterministic skills anchor and the location
+	// dimension; a missing profile is tolerated (zero value → empty skills/preferences).
+	profile, _ := a.userProfile.Get(c.Context(), userID)
+
 	analysis, err := a.jobFit.Analyze(c.Context(), jobfit.Input{
-		JobTitle:       job.Title,
-		JobDescription: job.Description,
-		CompanyInfo:    a.companyInfo(c, job.CompanySlug),
-		CVText:         cvText,
-		Match:          jobmatch.Compute(job.Skills, a.profileSkills(c, userID)),
+		JobTitle:            job.Title,
+		JobDescription:      job.Description,
+		CompanyInfo:         a.companyInfo(c, job.CompanySlug),
+		CVText:              cvText,
+		Match:               jobmatch.Compute(job.Skills, profile.Skills),
+		JobWorkMode:         job.WorkMode,
+		JobRemote:           job.Remote,
+		JobLocation:         job.Location,
+		JobRegions:          job.Regions,
+		JobCountries:        job.Countries,
+		LocationPreferences: string(profile.LocationPreferences),
 	})
 	if err != nil {
 		// Best-effort: log (never the CV/job text) and serve no analysis.
@@ -155,16 +165,6 @@ func (a *API) companyInfo(c *fiber.Ctx, companySlug string) string {
 		return ""
 	}
 	return string(company.CompanyInfo)
-}
-
-// profileSkills returns the caller's profile skills for the deterministic anchor, or
-// nil when they have no profile (the anchor is then all-missing — still valid).
-func (a *API) profileSkills(c *fiber.Ctx, userID int64) []string {
-	profile, err := a.userProfile.Get(c.Context(), userID)
-	if err != nil {
-		return nil
-	}
-	return profile.Skills
 }
 
 // stampsFresh reports whether a cached row still matches the live CV upload time, job

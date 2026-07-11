@@ -146,9 +146,9 @@
         </div>
       {/if}
 
-      <div class="flex items-baseline justify-between gap-2">
-        <span class="text-2xl font-bold tabular-nums leading-none {toneText[tone]}">{analysis.overall_score}%</span>
-        <span class="text-sm font-medium {toneText[tone]}">{analysis.verdict}</span>
+      <div class="flex items-center justify-between gap-2">
+        <span class="text-3xl font-bold tabular-nums leading-none {toneText[tone]}">{analysis.overall_score}%</span>
+        <span class="rounded-full border px-2.5 py-1 text-xs font-semibold {toneChip[tone]}">{analysis.verdict}</span>
       </div>
 
       <div class="flex flex-col gap-2">
@@ -173,9 +173,9 @@
           <ul class="flex flex-col gap-1">
             {#each requirements as r, i (i)}
               {@const meta = requirementStatusMeta(r.status)}
-              <li class="flex items-center justify-between gap-2 text-xs">
-                <span class="min-w-0 truncate">{r.text}</span>
-                <span class="shrink-0 rounded-full border px-2 py-0.5 font-medium {toneChip[meta.tone]}">{meta.label}</span>
+              <li class="flex items-start justify-between gap-2 text-xs">
+                <span class="min-w-0">{r.text}</span>
+                <span class="mt-0.5 shrink-0 rounded-full border px-2 py-0.5 font-medium {toneChip[meta.tone]}">{meta.label}</span>
               </li>
             {/each}
           </ul>

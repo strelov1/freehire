@@ -32,19 +32,24 @@ func (*queuedModel) Call(context.Context, string, ...llms.CallOption) (string, e
 
 func sampleInput() Input {
 	return Input{
-		JobTitle:       "Senior Go Engineer",
-		JobDescription: "Build backends in Go. Kafka a plus.",
-		CompanyInfo:    `{"tagline":"We ship fridges"}`,
-		CVText:         "Backend engineer, 5y Go at Acme.",
-		Match:          jobmatch.JobMatch{Matched: []string{"go"}, Missing: []string{"kafka"}, CoveragePercent: 50},
+		JobTitle:            "Senior Go Engineer",
+		JobDescription:      "Build backends in Go. Kafka a plus.",
+		CompanyInfo:         `{"tagline":"We ship fridges"}`,
+		CVText:              "Backend engineer, 5y Go at Acme.",
+		Match:               jobmatch.JobMatch{Matched: []string{"go"}, Missing: []string{"kafka"}, CoveragePercent: 50},
+		JobWorkMode:         "onsite",
+		JobLocation:         "Berlin, Germany",
+		JobRegions:          []string{"eu"},
+		JobCountries:        []string{"de"},
+		LocationPreferences: `{"work_modes":["remote"],"base":{"country":"br","city":"São Paulo"}}`,
 	}
 }
 
 const (
 	stage1JSON = `{"requirements":[{"text":"Go","priority":"required","status":"covered","evidence":"5y at Acme"},{"text":"Kafka","priority":"preferred","status":"missing-gap"}]}`
-	stage2JSON = `{"title_alignment":{"score":80,"comment":"titles align"},"experience_relevance":{"score":70},"seniority_fit":{"score":60},"skills_coverage":{"score":50},"company_context":{"score":40},"strengths":["Strong Go"],"gaps":["No Kafka"],"recommendation":"Apply."}`
+	stage2JSON = `{"title_alignment":{"score":80,"comment":"titles align"},"experience_relevance":{"score":70},"seniority_fit":{"score":60},"skills_coverage":{"score":50},"company_context":{"score":40},"location_fit":{"score":60},"strengths":["Strong Go"],"gaps":["No Kafka"],"recommendation":"Apply."}`
 	// Stage 3 tightens experience down and prunes the unsupported strength.
-	stage3JSON = `{"title_alignment":{"score":80},"experience_relevance":{"score":50},"seniority_fit":{"score":60},"skills_coverage":{"score":50},"company_context":{"score":40},"strengths":[],"gaps":["No Kafka","Thin on scale"],"recommendation":"Apply, address Kafka."}`
+	stage3JSON = `{"title_alignment":{"score":80},"experience_relevance":{"score":50},"seniority_fit":{"score":60},"skills_coverage":{"score":50},"company_context":{"score":40},"location_fit":{"score":60},"strengths":[],"gaps":["No Kafka","Thin on scale"],"recommendation":"Apply, address Kafka."}`
 )
 
 func TestAnalyze_NilClientIsNoOp(t *testing.T) {
@@ -73,7 +78,7 @@ func TestAnalyze_ThreeStageChainUsesAuditedVerdict(t *testing.T) {
 	if len(got.RequirementMatch) != 2 {
 		t.Errorf("RequirementMatch = %d, want the 2 Stage-1 requirements", len(got.RequirementMatch))
 	}
-	// overall = 80*.25 + 50*.25 + 60*.15 + 50*.20 + 40*.15 = 20+12.5+9+10+6 = 57.5 → 58.
+	// overall = 80*.20 + 50*.25 + 60*.15 + 50*.15 + 40*.10 + 60*.15 = 16+12.5+9+7.5+4+9 = 58.
 	if got.OverallScore != 58 {
 		t.Errorf("OverallScore = %d, want 58", got.OverallScore)
 	}
@@ -128,6 +133,11 @@ func TestStagePrompts_CarryTheirInputs(t *testing.T) {
 	}
 	if s := stage2UserPrompt(in, reqs); !strings.Contains(s, "We ship fridges") || !strings.Contains(s, "covered") {
 		t.Error("stage2 prompt must carry company_info and the Stage-1 match")
+	}
+	// Stage 2 must carry the job geography and the candidate's location preferences so
+	// the model can score location & work-mode fit.
+	if s := stage2UserPrompt(in, reqs); !strings.Contains(s, "Berlin") || !strings.Contains(s, "onsite") || !strings.Contains(s, "São Paulo") {
+		t.Error("stage2 prompt must carry job geography + candidate location preferences")
 	}
 	v := recruiterVerdict{TitleAlignment: dimScore{Score: 80}, Recommendation: "Apply."}
 	if s := stage3UserPrompt(in, reqs, v); !strings.Contains(s, "Apply.") {

@@ -10,6 +10,7 @@ func TestBuildAnalysis_WeightedOverallAndVerdict(t *testing.T) {
 		SeniorityFit:        dimScore{Score: 80},
 		SkillsCoverage:      dimScore{Score: 80},
 		CompanyContext:      dimScore{Score: 80},
+		LocationFit:         dimScore{Score: 80},
 		Recommendation:      "Apply.",
 	}
 	got := buildAnalysis(nil, v)
@@ -19,24 +20,38 @@ func TestBuildAnalysis_WeightedOverallAndVerdict(t *testing.T) {
 	if got.Verdict != VerdictStrong {
 		t.Errorf("Verdict = %q, want %q", got.Verdict, VerdictStrong)
 	}
-	if len(got.Dimensions) != 5 {
-		t.Fatalf("Dimensions = %d, want the 5 canonical dimensions", len(got.Dimensions))
+	if len(got.Dimensions) != 6 {
+		t.Fatalf("Dimensions = %d, want the 6 canonical dimensions", len(got.Dimensions))
 	}
 	// The dimensions are server-built in a fixed order regardless of the model.
 	if got.Dimensions[0].Key != DimTitleAlignment {
 		t.Errorf("Dimensions[0].Key = %q, want %q", got.Dimensions[0].Key, DimTitleAlignment)
 	}
+	// Location & work-mode fit is the sixth dimension.
+	if got.Dimensions[5].Key != DimLocationFit {
+		t.Errorf("Dimensions[5].Key = %q, want %q", got.Dimensions[5].Key, DimLocationFit)
+	}
 }
 
 func TestBuildAnalysis_WeightingFavoursTitleAndExperience(t *testing.T) {
-	// Title (25) + Experience (25) high, the rest zero → overall = 50, not 20 (equal weight).
+	// Title (20) + Experience (25) high, the rest zero → overall = 45, not 33 (equal weight).
 	v := recruiterVerdict{
 		TitleAlignment:      dimScore{Score: 100},
 		ExperienceRelevance: dimScore{Score: 100},
 	}
 	got := buildAnalysis(nil, v)
-	if got.OverallScore != 50 {
-		t.Errorf("OverallScore = %d, want 50 (Title 25 + Experience 25)", got.OverallScore)
+	if got.OverallScore != 45 {
+		t.Errorf("OverallScore = %d, want 45 (Title 20 + Experience 25)", got.OverallScore)
+	}
+}
+
+func TestDimensionWeightsSumTo100(t *testing.T) {
+	sum := 0
+	for _, s := range dimensionSpecs {
+		sum += s.weight
+	}
+	if sum != 100 {
+		t.Fatalf("dimension weights sum to %d, want 100", sum)
 	}
 }
 

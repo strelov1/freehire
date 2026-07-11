@@ -33,14 +33,25 @@ func NewAnalyzer(client *llm.Client) *Analyzer { return &Analyzer{client: client
 func (a *Analyzer) ModelID() string { return a.client.ModelID() }
 
 // Input is everything the chain needs, gathered by the handler before the first call:
-// the job text, the raw company_info JSON, the candidate's CV text, and the
-// deterministic skills match used as the grounding anchor.
+// the job text, the raw company_info JSON, the candidate's CV text, the deterministic
+// skills match used as the grounding anchor, and the job geography + the candidate's
+// location preferences (raw JSON) used to score location & work-mode fit.
 type Input struct {
 	JobTitle       string
 	JobDescription string
 	CompanyInfo    string
 	CVText         string
 	Match          jobmatch.JobMatch
+
+	// Job geography for the location dimension.
+	JobWorkMode  string
+	JobRemote    bool
+	JobLocation  string
+	JobRegions   []string
+	JobCountries []string
+	// LocationPreferences is the candidate's raw profile location_preferences JSON
+	// (accepted work modes, remote reach, base, relocation); empty when unset.
+	LocationPreferences string
 }
 
 // stage1Out is the Extract & Match stage's raw output.
@@ -134,7 +145,13 @@ func stage2SystemPrompt() string {
 	b.WriteString("- \"seniority_fit\": does their level match the role's seniority?\n")
 	b.WriteString("- \"skills_coverage\": consistent with the provided deterministic skills match.\n")
 	b.WriteString("- \"company_context\": fit with the company's stage/industry (from the company info).\n")
-	b.WriteString("Each of the five is an object {\"score\": int 0-100, \"comment\": string}.\n")
+	b.WriteString("- \"location_fit\": can the candidate actually take the role given the job's location/work ")
+	b.WriteString("mode and their location preferences (accepted work modes, remote reach, base, relocation)? ")
+	b.WriteString("A remote job within their remote reach, or an onsite job where they are based or will ")
+	b.WriteString("relocate, scores high; an onsite job far from their base with no relocation and a remote-only ")
+	b.WriteString("preference scores low. If the candidate stated no preferences, judge on the job alone and ")
+	b.WriteString("do not penalise.\n")
+	b.WriteString("Each of the six is an object {\"score\": int 0-100, \"comment\": string}.\n")
 	b.WriteString("Also return \"strengths\" (array, max 6), \"gaps\" (array, max 6), and a single ")
 	b.WriteString("\"recommendation\" string. Do NOT return an overall score — it is computed separately.\n")
 	return b.String()
@@ -149,7 +166,7 @@ func stage3SystemPrompt() string {
 	b.WriteString("strengths the CV does not actually support, and surface gaps that were glossed over. ")
 	b.WriteString("Keep what is well-supported. Return the corrected verdict with the same keys ")
 	b.WriteString("(title_alignment, experience_relevance, seniority_fit, skills_coverage, ")
-	b.WriteString("company_context, strengths, gaps, recommendation). Do NOT fabricate anything.\n")
+	b.WriteString("company_context, location_fit, strengths, gaps, recommendation). Do NOT fabricate anything.\n")
 	return b.String()
 }
 
@@ -172,6 +189,7 @@ func stage2UserPrompt(in Input, reqs []Requirement) string {
 		b.WriteString("\n\n")
 	}
 	writeAnchor(&b, in.Match)
+	writeLocation(&b, in)
 	writeRequirements(&b, reqs)
 	writeCV(&b, in)
 	return b.String()
@@ -219,6 +237,39 @@ func writeAnchor(b *strings.Builder, m jobmatch.JobMatch) {
 	}
 	if len(m.Missing) > 0 {
 		b.WriteString("- missing: " + strings.Join(m.Missing, ", ") + "\n")
+	}
+	b.WriteString("\n")
+}
+
+// writeLocation renders the job geography and the candidate's location preferences so
+// the model can score location & work-mode fit. Omitted entirely when neither side
+// carries any geography (nothing to reason about).
+func writeLocation(b *strings.Builder, in Input) {
+	hasJob := in.JobWorkMode != "" || in.JobRemote || in.JobLocation != "" || len(in.JobRegions) > 0 || len(in.JobCountries) > 0
+	hasPref := strings.TrimSpace(in.LocationPreferences) != ""
+	if !hasJob && !hasPref {
+		return
+	}
+	b.WriteString("Location & work mode:\n")
+	if in.JobWorkMode != "" {
+		b.WriteString("- job work mode: " + in.JobWorkMode + "\n")
+	}
+	if in.JobRemote {
+		b.WriteString("- job is remote\n")
+	}
+	if in.JobLocation != "" {
+		b.WriteString("- job location: " + in.JobLocation + "\n")
+	}
+	if len(in.JobRegions) > 0 {
+		b.WriteString("- job regions: " + strings.Join(in.JobRegions, ", ") + "\n")
+	}
+	if len(in.JobCountries) > 0 {
+		b.WriteString("- job countries: " + strings.Join(in.JobCountries, ", ") + "\n")
+	}
+	if hasPref {
+		b.WriteString("- candidate location preferences (JSON): ")
+		b.WriteString(llm.TruncateRunes(strings.TrimSpace(in.LocationPreferences), maxCompanyRunes))
+		b.WriteString("\n")
 	}
 	b.WriteString("\n")
 }

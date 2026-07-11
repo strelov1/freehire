@@ -325,34 +325,40 @@ export interface JobMatch {
 
 /**
  * Canonical dimension keys, in the fixed display/scoring order. The model returns
- * the five scores by name; the wire Dimensions slice is built here so a dropped,
+ * the six scores by name; the wire Dimensions slice is built here so a dropped,
  * reordered, or injected dimension can never reach the response.
  */
 export const DimTitleAlignment = "title_alignment";
 /**
  * Canonical dimension keys, in the fixed display/scoring order. The model returns
- * the five scores by name; the wire Dimensions slice is built here so a dropped,
+ * the six scores by name; the wire Dimensions slice is built here so a dropped,
  * reordered, or injected dimension can never reach the response.
  */
 export const DimExperienceRelevance = "experience_relevance";
 /**
  * Canonical dimension keys, in the fixed display/scoring order. The model returns
- * the five scores by name; the wire Dimensions slice is built here so a dropped,
+ * the six scores by name; the wire Dimensions slice is built here so a dropped,
  * reordered, or injected dimension can never reach the response.
  */
 export const DimSeniorityFit = "seniority_fit";
 /**
  * Canonical dimension keys, in the fixed display/scoring order. The model returns
- * the five scores by name; the wire Dimensions slice is built here so a dropped,
+ * the six scores by name; the wire Dimensions slice is built here so a dropped,
  * reordered, or injected dimension can never reach the response.
  */
 export const DimSkillsCoverage = "skills_coverage";
 /**
  * Canonical dimension keys, in the fixed display/scoring order. The model returns
- * the five scores by name; the wire Dimensions slice is built here so a dropped,
+ * the six scores by name; the wire Dimensions slice is built here so a dropped,
  * reordered, or injected dimension can never reach the response.
  */
 export const DimCompanyContext = "company_context";
+/**
+ * Canonical dimension keys, in the fixed display/scoring order. The model returns
+ * the six scores by name; the wire Dimensions slice is built here so a dropped,
+ * reordered, or injected dimension can never reach the response.
+ */
+export const DimLocationFit = "location_fit";
 /**
  * Verdict labels (server-derived from overall_score — never taken from the model).
  */

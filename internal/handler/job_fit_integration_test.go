@@ -177,8 +177,8 @@ func TestJobFitEndpoints(t *testing.T) {
 		if status != fiber.StatusOK || body.Data.Analysis == nil {
 			t.Fatalf("POST got status=%d analysis=%v, want 200 + analysis", status, body.Data.Analysis)
 		}
-		if body.Data.Analysis.Verdict == "" || len(body.Data.Analysis.Dimensions) != 5 {
-			t.Errorf("analysis = %+v, want verdict + 5 dimensions", body.Data.Analysis)
+		if body.Data.Analysis.Verdict == "" || len(body.Data.Analysis.Dimensions) != 6 {
+			t.Errorf("analysis = %+v, want verdict + 6 dimensions", body.Data.Analysis)
 		}
 		if len(body.Data.Analysis.RequirementMatch) != 2 {
 			t.Errorf("requirement_match = %d, want 2", len(body.Data.Analysis.RequirementMatch))

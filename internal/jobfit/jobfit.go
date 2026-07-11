@@ -20,7 +20,7 @@ import (
 )
 
 // Canonical dimension keys, in the fixed display/scoring order. The model returns
-// the five scores by name; the wire Dimensions slice is built here so a dropped,
+// the six scores by name; the wire Dimensions slice is built here so a dropped,
 // reordered, or injected dimension can never reach the response.
 const (
 	DimTitleAlignment      = "title_alignment"
@@ -28,6 +28,7 @@ const (
 	DimSeniorityFit        = "seniority_fit"
 	DimSkillsCoverage      = "skills_coverage"
 	DimCompanyContext      = "company_context"
+	DimLocationFit         = "location_fit"
 )
 
 // Verdict labels (server-derived from overall_score — never taken from the model).
@@ -60,11 +61,12 @@ type dimensionSpec struct {
 }
 
 var dimensionSpecs = []dimensionSpec{
-	{DimTitleAlignment, "Title & role alignment", 25},
+	{DimTitleAlignment, "Title & role alignment", 20},
 	{DimExperienceRelevance, "Experience relevance", 25},
 	{DimSeniorityFit, "Seniority fit", 15},
-	{DimSkillsCoverage, "Skills coverage", 20},
-	{DimCompanyContext, "Company & role context", 15},
+	{DimSkillsCoverage, "Skills coverage", 15},
+	{DimCompanyContext, "Company & role context", 10},
+	{DimLocationFit, "Location & work-mode fit", 15},
 }
 
 // Verdict thresholds (inclusive lower bounds), adapted from the reference framework.
@@ -121,7 +123,7 @@ type dimScore struct {
 	Comment string `json:"comment"`
 }
 
-// recruiterVerdict is the recruiter/audit stage output: the five scores by name plus
+// recruiterVerdict is the recruiter/audit stage output: the six scores by name plus
 // the free-text verdict fields. The named fields (not a free array) keep the weighted
 // overall deterministic even when the model is internally inconsistent.
 type recruiterVerdict struct {
@@ -130,6 +132,7 @@ type recruiterVerdict struct {
 	SeniorityFit        dimScore `json:"seniority_fit"`
 	SkillsCoverage      dimScore `json:"skills_coverage"`
 	CompanyContext      dimScore `json:"company_context"`
+	LocationFit         dimScore `json:"location_fit"`
 	Strengths           []string `json:"strengths"`
 	Gaps                []string `json:"gaps"`
 	Recommendation      string   `json:"recommendation"`
@@ -145,6 +148,7 @@ func buildAnalysis(reqs []Requirement, v recruiterVerdict) Analysis {
 		DimSeniorityFit:        v.SeniorityFit,
 		DimSkillsCoverage:      v.SkillsCoverage,
 		DimCompanyContext:      v.CompanyContext,
+		DimLocationFit:         v.LocationFit,
 	}
 	dims := make([]Dimension, 0, len(dimensionSpecs))
 	weighted := 0.0
@@ -196,7 +200,7 @@ func verdictFor(overall int) string {
 // fields, so no out-of-range or oversized model output is scored or served.
 func sanitizeVerdict(v *recruiterVerdict) {
 	for _, ds := range []*dimScore{
-		&v.TitleAlignment, &v.ExperienceRelevance, &v.SeniorityFit, &v.SkillsCoverage, &v.CompanyContext,
+		&v.TitleAlignment, &v.ExperienceRelevance, &v.SeniorityFit, &v.SkillsCoverage, &v.CompanyContext, &v.LocationFit,
 	} {
 		ds.Score = clamp(ds.Score)
 		ds.Comment = llm.TruncateRunes(strings.TrimSpace(ds.Comment), maxCommentRunes)
