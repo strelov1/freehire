@@ -51,27 +51,59 @@ The system SHALL expose an authenticated endpoint `GET /api/v1/me/recommendation
 - **WHEN** a request to `GET /api/v1/me/recommendations` carries neither a valid auth cookie nor a valid API key
 - **THEN** the system responds `401`
 
-### Requirement: The recommendations page presents the feed with empty states
+### Requirement: The main jobs feed offers a CV-similarity sort mode
 
-The web app SHALL provide a `/my/recommendations` page, reachable from the signed-in navigation, that renders the recommendations feed for the authenticated user and offers a sidebar facet filter over it. The page SHALL reuse the shared filter UI (the same modal, summary, and mobile edge tab as `/jobs`), reflect the active filters in the URL, and re-fetch the feed from `GET /api/v1/me/recommendations` with the selected facets when they change. When there are no recommendations because the user has not uploaded a CV, the page SHALL prompt them to upload one; when the feed is empty because the current filters match no job, it SHALL show a non-error "no matches" state distinct from the upload prompt; when recommendations are otherwise empty or unavailable, it SHALL show a non-error empty state.
+The standalone jobs feed SHALL offer a sort control with two modes — "Newest" (the default, newest-added first) and "Recommended" (ranked by similarity to the caller's CV) — and in CV mode SHALL rank the feed via the recommendations endpoint while keeping every facet filter in effect. The selected sort SHALL round-trip through the URL (`sort=cv`) and the standalone list's persisted filter storage, so a reload, a shared link, or a return visit restores it. The `sort=cv` value SHALL be a frontend routing signal only and SHALL NOT be sent to the keyword search endpoint. The sort control SHALL appear only on the standalone feed, not on a company-scoped embedded feed. Free-text query is not combined with CV ranking; in CV mode the free-text query does not influence ranking while facet filters still apply.
 
-#### Scenario: Feed renders for a user with recommendations
+The sort control SHALL be offered only to a signed-in user (the "Recommended" mode needs a CV, so a signed-out visitor has no use for it). When a user who cannot be ranked is nonetheless in CV mode, the feed SHALL prompt the appropriate next step instead of erroring: a signed-out user who reaches CV mode via a shared `sort=cv` link SHALL be prompted to sign in, and a signed-in user with no usable CV vector SHALL be prompted to add or update their CV. Because an empty CV feed is ambiguous at the API (no CV and no-match both return an empty list), the feed SHALL distinguish the no-CV prompt from an ordinary "no matches" state by whether a facet filter is applied.
 
-- **WHEN** a signed-in user with a CV vector opens `/my/recommendations`
-- **THEN** the page lists the recommended jobs alongside a sidebar filter
+#### Scenario: Switching to CV mode ranks the feed by the CV vector
 
-#### Scenario: Applying a filter narrows the feed
+- **WHEN** a signed-in user with a usable CV vector selects the "Recommended" sort on the feed
+- **THEN** the feed re-fetches from the recommendations endpoint and lists open jobs ranked by similarity to the CV, and the URL carries `sort=cv`
 
-- **WHEN** the user selects one or more facets in the recommendations sidebar
-- **THEN** the feed re-fetches and lists only the recommended jobs matching those facets
+#### Scenario: Facet filters still narrow the CV-sorted feed
 
-#### Scenario: A filter matching nothing shows a no-matches state
+- **WHEN** a user in CV mode has one or more facet filters applied (e.g. work mode, seniority)
+- **THEN** the feed lists only jobs matching those facets, ranked by CV similarity
 
-- **WHEN** the user has a CV vector but the selected filters match no open job
-- **THEN** the page shows a non-error "no matching jobs" state rather than the upload prompt
+#### Scenario: CV sort round-trips on reload
 
-#### Scenario: No CV prompts upload
+- **WHEN** the feed is loaded with `sort=cv` in the URL for a signed-in user with a usable CV vector
+- **THEN** the feed starts in CV mode ranked by the CV vector rather than the newest-first default
 
-- **WHEN** a signed-in user who has not uploaded a CV opens `/my/recommendations`
-- **THEN** the page shows a prompt to upload a CV instead of an empty error
+#### Scenario: The routing signal is not sent to the search endpoint
+
+- **WHEN** the feed is in CV mode
+- **THEN** the outgoing request goes to the recommendations endpoint and carries no `sort=cv` parameter to the keyword search endpoint
+
+#### Scenario: Default (Newest) sort browses via keyword search
+
+- **WHEN** a user selects "Newest" (or has not chosen a sort)
+- **THEN** the feed lists open jobs newest-added first via the keyword search endpoint, and the URL carries no `sort` parameter
+
+#### Scenario: The sort control is hidden for a signed-out user
+
+- **WHEN** a signed-out user views the standalone feed
+- **THEN** no sort control is shown (the default newest feed is served)
+
+#### Scenario: Signed-out user reaching CV mode is prompted to sign in
+
+- **WHEN** a signed-out user opens the feed with the CV sort active (e.g. a shared `sort=cv` link)
+- **THEN** the feed shows a sign-in prompt and does not call the authenticated recommendations endpoint
+
+#### Scenario: Signed-in user without a CV is prompted to upload one
+
+- **WHEN** a signed-in user with no usable CV vector is in CV mode with no facet filter applied
+- **THEN** the feed shows a prompt to add or update their CV rather than an error or a bare empty list
+
+#### Scenario: CV mode with a non-matching filter shows a no-matches state
+
+- **WHEN** a user in CV mode has a usable CV vector but the applied facet filters match no open job
+- **THEN** the feed shows a non-error "no matches" state distinct from the upload prompt
+
+#### Scenario: CV sort is absent on a company-scoped feed
+
+- **WHEN** the feed is rendered embedded and scoped to a single company
+- **THEN** no CV sort control is offered
 

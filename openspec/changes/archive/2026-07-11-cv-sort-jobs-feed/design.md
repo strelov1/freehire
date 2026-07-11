@@ -20,7 +20,7 @@ Full agreed design: `docs/superpowers/specs/2026-07-11-cv-sort-on-jobs-feed-desi
 ## Goals / Non-Goals
 
 **Goals:**
-- Surface CV ranking as a sort mode ("Newest" / "By my CV") on the standalone feed.
+- Surface CV ranking as a sort mode ("Newest" / "Recommended") on the standalone feed.
 - Reuse the existing recommendations endpoint unchanged; zero backend work.
 - Keep facet filters working in CV mode; round-trip the sort in URL + localStorage.
 - Graceful prompts for signed-out and no-CV users; never break the public feed.

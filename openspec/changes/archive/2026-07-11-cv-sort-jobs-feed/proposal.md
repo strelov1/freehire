@@ -2,13 +2,13 @@
 
 CV-similarity ranking is hidden on a separate `/my/recommendations` page, so users
 who browse the main feed never discover it. Folding it into the feed as a sort mode
-("Newest" vs "By my CV") surfaces it where people already look and removes a
+("Newest" vs "Recommended") surfaces it where people already look and removes a
 redundant page.
 
 ## What Changes
 
 - Add a sort selector to the standalone jobs feed (homepage `/`): **Newest**
-  (default, `posted_at`) or **By my CV** (`cv`).
+  (default, `posted_at`) or **Recommended** (`cv`).
 - In CV mode the feed's paginator calls the existing `GET /api/v1/me/recommendations`
   instead of `GET /api/v1/jobs/search`; facet filters keep working (the filter
   narrows the set, the CV vector ranks it). Same facet params, same job wire shape.
