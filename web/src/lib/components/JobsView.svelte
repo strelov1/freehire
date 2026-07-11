@@ -295,7 +295,7 @@
     <span class="hidden sm:inline">Sort</span>
     <select
       aria-label="Sort jobs"
-      class="rounded-lg border border-input bg-transparent px-2 py-1 text-sm text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 dark:bg-input/30"
+      class="rounded-lg border border-input bg-transparent py-2 pl-2 pr-1 text-sm text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:py-1 dark:bg-input/30"
       value={filters.value.sort}
       onchange={(e) => filters.setSort(e.currentTarget.value as SortField)}
     >

@@ -57,10 +57,12 @@
   });
 </script>
 
-<!-- Mobile inline toolbar: total on the left, controls on the right. -->
+<!-- Mobile inline toolbar: total on the left, controls on the right. The Filters/Swipe
+     entries are icon-only here (labelled for a11y) so the row stays on one line with the
+     count and the sort control; the words would crowd it out on a narrow phone. -->
 <div bind:this={toolbarEl} class="mb-3 flex items-center gap-2 md:hidden">
   {#if total !== null}
-    <span class="text-sm text-muted-foreground" aria-live="polite">
+    <span class="shrink-0 whitespace-nowrap text-sm text-muted-foreground" aria-live="polite">
       <span class="font-semibold tabular-nums text-foreground">{total.toLocaleString()}</span>
       {unit}
     </span>
@@ -70,10 +72,11 @@
     <button
       type="button"
       onclick={onOpenFilters}
-      class="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium transition-colors hover:bg-accent"
+      aria-label="Filters"
+      title="Filters"
+      class="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-2 text-sm font-medium transition-colors hover:bg-accent"
     >
       <SlidersHorizontal class="size-4 shrink-0" />
-      Filters
       {#if active > 0}
         <span
           class="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold leading-none text-primary-foreground"
@@ -86,10 +89,11 @@
       <button
         type="button"
         onclick={onSwipe}
-        class="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium transition-colors hover:bg-accent"
+        aria-label="Swipe mode"
+        title="Swipe mode"
+        class="inline-flex items-center rounded-lg border border-border bg-card px-2.5 py-2 text-sm font-medium transition-colors hover:bg-accent"
       >
         <Layers class="size-4 shrink-0" />
-        Swipe
       </button>
     {/if}
   </div>
