@@ -145,21 +145,22 @@ var AICompanySlugs = []string{
 
 // AINativeSlugs is the curated AI-native cohort sourced from the remotepilot.dev
 // directory — model/inference APIs, vector databases, and agent/dev tooling built
-// around AI. Entries are canonical company slugs (normalize.Slug) matched against
-// our ingested companies; the forms below were verified against the names our
-// adapters ingest (e.g. "openrouter.ai" → openrouter-ai, "trmlabs" → trmlabs), with
-// a brand variant listed alongside the few that could be ingested either way. It
-// overlaps AICompanySlugs by design — a company may belong to both collections.
+// around AI. Entries are canonical company slugs (normalize.Slug), each verified
+// against the exact name our adapters ingest (the board-file company), e.g.
+// "openrouter.ai" → openrouter-ai, "trmlabs" → trmlabs, "qdrant.tech" → qdrant-tech.
+// Only the exact ingested form is listed: a brand-name variant (openrouter,
+// qdrant, …) resolves to a separate duplicate company row and would double the
+// cohort. It overlaps AICompanySlugs by design — a company may belong to both.
 var AINativeSlugs = []string{
 	// Model & inference APIs.
-	"deepgram", "cohere", "together-ai", "fireworks-ai", "openrouter-ai", "openrouter",
+	"deepgram", "cohere", "together-ai", "fireworks-ai", "openrouter-ai",
 	// Vector databases & data infrastructure.
-	"pinecone", "qdrant-tech", "qdrant", "weaviate", "supabase", "planetscale", "tensorwave",
+	"pinecone", "qdrant-tech", "weaviate", "supabase", "planetscale", "tensorwave",
 	// Agent & developer tooling.
 	"langchain", "composio", "livekit", "linear", "resend",
 	// Other AI-native companies.
-	"trmlabs", "trm-labs", "jasper", "concentrate-ai", "andromeda",
-	"infinity-constellation", "vclusterlabs", "vcluster-labs", "urun", "tollbit",
+	"trmlabs", "jasper", "concentrate-ai", "andromeda",
+	"infinity-constellation", "vclusterlabs", "urun", "tollbit",
 }
 
 // Mag7Slugs is the Magnificent Seven — the 2025 canonical mega-cap tech cohort.
