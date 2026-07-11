@@ -50,5 +50,18 @@ export const load: PageServerLoad = async ({ fetch }) => {
     count: facetCounts ? (facetCounts[c.slug] ?? 0) : null,
   }));
 
-  return { cards: [...filterCards, ...companyCards] };
+  // Feature two cards at the top of the grid — worldwide-remote first, then the
+  // AI-native cohort — ahead of the rest (filter collections, then the remaining
+  // company collections in registry order).
+  const featuredHrefs: CollectionCard['href'][] = [
+    '/collections/remote-worldwide',
+    '/collections/ai-native',
+  ];
+  const all = [...filterCards, ...companyCards];
+  const featured = featuredHrefs
+    .map((href) => all.find((c) => c.href === href))
+    .filter((c): c is CollectionCard => c !== undefined);
+  const rest = all.filter((c) => !featuredHrefs.includes(c.href));
+
+  return { cards: [...featured, ...rest] };
 };
