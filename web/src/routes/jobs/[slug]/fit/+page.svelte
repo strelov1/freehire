@@ -4,6 +4,7 @@
   import { ArrowLeft, RefreshCw, FileText, Check, Loader } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
+  import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import {
     verdictTone,
     requirementStatusMeta,
@@ -21,6 +22,12 @@
   let streaming = $state(false);
   let showThinking = $state(false);
   let es: EventSource | null = null;
+  // The thinking panel tails the model's reasoning: keep it pinned to the newest tokens.
+  let thinkingEl = $state<HTMLElement | null>(null);
+  $effect(() => {
+    stream.thinking; // track new reasoning
+    if (thinkingEl) thinkingEl.scrollTop = thinkingEl.scrollHeight;
+  });
 
   function seed(): FitStreamState {
     const s = initFitStream();
@@ -129,10 +136,12 @@
     >
       <ArrowLeft class="size-3.5" />Back to role
     </a>
-    <div class="flex flex-col gap-2 border-b border-border pb-6">
-      <span class="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">AI Fit Analysis</span>
-      <h1 class="text-3xl font-bold leading-[1.1] tracking-tight sm:text-4xl">{data.job.title}</h1>
-      <p class="text-sm text-muted-foreground">{data.job.company}</p>
+    <div class="flex flex-col gap-2.5 border-b border-border pb-6">
+      <h1 class="text-xl font-bold leading-tight tracking-tight sm:text-2xl">{data.job.title}</h1>
+      <div class="flex items-center gap-2">
+        <CompanyLogo name={data.job.company} size="size-5" />
+        <p class="text-sm text-muted-foreground">{data.job.company}</p>
+      </div>
     </div>
   </header>
 
@@ -200,31 +209,28 @@
 
     <!-- Streaming: stage stepper + thinking -->
     {#if streaming || (!analysis && !stream.error)}
-      <section class="rounded-2xl border border-border bg-card p-6">
-        <ol class="flex flex-col gap-0 sm:flex-row sm:items-start sm:gap-0">
-          {#each stream.stages as st, i (st.n)}
-            <li class="flex flex-1 gap-3 sm:flex-col sm:items-center sm:gap-2 sm:text-center">
-              <div class="flex flex-col items-center sm:w-full sm:flex-row">
-                <span
-                  class="flex size-8 shrink-0 items-center justify-center rounded-full border text-sm font-semibold transition-colors
-                  {st.state === 'done' ? 'border-emerald-500 bg-emerald-500 text-white' : st.state === 'active' ? 'border-primary text-primary' : 'border-border text-muted-foreground'}"
-                >
-                  {#if st.state === 'done'}<Check class="size-4" />
-                  {:else if st.state === 'active'}<Loader class="size-4 animate-spin" />
-                  {:else}{st.n}{/if}
-                </span>
-                {#if i < stream.stages.length - 1}
-                  <span class="my-1 h-6 w-px bg-border sm:my-0 sm:h-px sm:w-full sm:flex-1"></span>
-                {/if}
-              </div>
-              <span class="pb-4 text-sm font-medium {st.state === 'pending' ? 'text-muted-foreground' : 'text-foreground'} sm:pb-0">{st.label}</span>
-            </li>
+      <section class="rounded-2xl border border-border bg-card p-6 sm:px-8">
+        <!-- Stage stepper: evenly-spaced nodes over a single connecting rail. -->
+        <div class="relative flex">
+          <div class="absolute inset-x-[16.67%] top-4 h-px bg-border" aria-hidden="true"></div>
+          {#each stream.stages as st (st.n)}
+            <div class="relative z-10 flex flex-1 flex-col items-center gap-2">
+              <span
+                class="flex size-8 shrink-0 items-center justify-center rounded-full border bg-card text-sm font-semibold transition-colors
+                {st.state === 'done' ? 'border-emerald-500 bg-emerald-500 text-white' : st.state === 'active' ? 'border-primary text-primary' : 'border-border text-muted-foreground'}"
+              >
+                {#if st.state === 'done'}<Check class="size-4" />
+                {:else if st.state === 'active'}<Loader class="size-4 animate-spin" />
+                {:else}{st.n}{/if}
+              </span>
+              <span class="max-w-[7rem] text-center text-xs font-medium leading-tight sm:text-sm {st.state === 'pending' ? 'text-muted-foreground' : 'text-foreground'}">{st.label}</span>
+            </div>
           {/each}
-        </ol>
+        </div>
 
         {#if stream.thinking}
-          <div class="mt-5 border-t border-border pt-4">
-            <button type="button" class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground" onclick={() => (showThinking = !showThinking)}>
+          <div class="mt-6 border-t border-border pt-4">
+            <button type="button" class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground" onclick={() => (showThinking = !showThinking)}>
               <span class="relative flex size-2">
                 <span class="absolute inline-flex size-full animate-ping rounded-full bg-primary/60"></span>
                 <span class="relative inline-flex size-2 rounded-full bg-primary"></span>
@@ -232,7 +238,7 @@
               Thinking {showThinking ? '▾' : '▸'}
             </button>
             {#if showThinking}
-              <p class="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted-foreground">{stream.thinking}</p>
+              <p bind:this={thinkingEl} class="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted-foreground">{stream.thinking}</p>
             {/if}
           </div>
         {/if}
