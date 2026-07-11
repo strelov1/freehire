@@ -11,11 +11,14 @@ import (
 	"github.com/strelov1/freehire/internal/llm"
 )
 
-// Input bounds for untrusted, user/ingest-supplied text sent to the model.
+// Input bounds for untrusted, user/ingest-supplied text sent to the model. Kept modest
+// on purpose: the fit model reasons over every input token, so a large CV/description
+// balloons its thinking time (tens of seconds per stage). These caps keep each stage
+// responsive while still covering the substance of a CV and a posting.
 const (
-	maxCVRunes          = 24000
-	maxDescriptionRunes = 16000
-	maxCompanyRunes     = 4000
+	maxCVRunes          = 10000
+	maxDescriptionRunes = 6000
+	maxCompanyRunes     = 2000
 )
 
 // Analyzer runs the fixed three-stage fit prompt-chain over an llm.Client. A nil
@@ -141,34 +144,34 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 	return &analysis, nil
 }
 
-// stageAttempts is how many times a stage's LLM call is tried before giving up. The
-// gateway occasionally returns a transient HTML error page (a 502/504 under the slow
-// reasoning model's load) that fails JSON parsing; a single retry recovers it, mirroring
-// the enrichment worker's retry-once policy.
+// stageAttempts is how many times a stage's LLM call is tried on a PARSE failure. The
+// gateway occasionally returns a transient HTML error page (a 502/504) that fails JSON
+// parsing; a single re-try recovers it, mirroring the enrichment worker. A transport
+// error (timeout, connection) is NOT retried — the model is slow, so a retry with the
+// same timeout would only double the wait — it is returned immediately.
 const stageAttempts = 2
 
 // streamStage runs one streaming JSON call, forwarding reasoning deltas as thinking
 // events for the given stage, and unmarshals the accumulated JSON into out. A transport
-// or parse failure is retried once (stageAttempts) before it is returned — the retry's
-// thinking deltas stream too, so the panel simply continues.
+// failure returns at once; a parse failure (non-JSON gateway error page) is retried once.
 func (a *Analyzer) streamStage(ctx context.Context, stage int, system, user string, emit func(Event), out any) error {
-	var err error
+	var parseErr error
 	for attempt := 1; attempt <= stageAttempts; attempt++ {
-		var raw string
-		raw, err = a.client.GenerateJSONStream(ctx, system, user, func(t string) {
+		raw, err := a.client.GenerateJSONStream(ctx, system, user, func(t string) {
 			emit(Event{Kind: EventThinking, Stage: stage, Thinking: t})
 		})
-		if err == nil {
-			if err = json.Unmarshal([]byte(strings.TrimSpace(raw)), out); err == nil {
-				return nil
-			}
-			err = fmt.Errorf("parse: %w", err)
+		if err != nil {
+			return err // transport/timeout — retrying wouldn't help, fail fast
 		}
+		if parseErr = json.Unmarshal([]byte(strings.TrimSpace(raw)), out); parseErr == nil {
+			return nil
+		}
+		parseErr = fmt.Errorf("parse: %w", parseErr)
 		if attempt < stageAttempts {
-			log.Printf("jobfit: stage %d attempt %d failed, retrying: %v", stage, attempt, err)
+			log.Printf("jobfit: stage %d parse failed, retrying: %v", stage, parseErr)
 		}
 	}
-	return err
+	return parseErr
 }
 
 // stage1SystemPrompt pins the ATS extract-and-match contract.

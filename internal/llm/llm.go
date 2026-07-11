@@ -45,6 +45,18 @@ func (c *Client) ModelID() string {
 	return c.modelID
 }
 
+// WithTimeout returns a shallow copy of the client with a different per-call timeout,
+// so a slow use case (a reasoning-heavy multi-stage analysis) can allow longer calls
+// without raising the shared client's default for everyone. Nil-safe.
+func (c *Client) WithTimeout(d time.Duration) *Client {
+	if c == nil {
+		return nil
+	}
+	clone := *c
+	clone.timeout = d
+	return &clone
+}
+
 // Option configures a Client at construction. Options keep tracing opt-in without
 // changing the constructors' required parameters, so existing call sites compile
 // unchanged.

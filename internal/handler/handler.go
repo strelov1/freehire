@@ -36,6 +36,10 @@ const (
 	// telegramLinkTTL bounds how long a deep-link token is valid — long enough to
 	// open Telegram and tap Start, short enough to limit a leaked link's window.
 	telegramLinkTTL = 10 * time.Minute
+	// jobfitLLMTimeout is the per-stage LLM timeout for the fit analysis: its reasoning
+	// model spends tens of seconds thinking before answering, so a stage needs more than
+	// the shared client's default.
+	jobfitLLMTimeout = 180 * time.Second
 )
 
 // API holds dependencies shared across HTTP handlers.
@@ -197,9 +201,10 @@ func Register(app *fiber.App, cfg Config) {
 	// or not the LLM is configured.
 	a.atsAnalyzer = atscheck.NewAnalyzer(cfg.LLM)
 	a.atsCache = queries
-	// The fit analysis shares the same LLM client (nil-safe: a nil client makes
-	// Analyze a no-op, so the endpoint degrades to no analysis).
-	a.jobFit = jobfit.NewAnalyzer(cfg.LLM)
+	// The fit analysis shares the same LLM client but with a longer per-call timeout:
+	// its reasoning model is slow (tens of seconds per stage), so the default would time
+	// out mid-stage. Nil-safe (a nil client stays nil → Analyze is a no-op).
+	a.jobFit = jobfit.NewAnalyzer(cfg.LLM.WithTimeout(jobfitLLMTimeout))
 	a.jobFitCache = queries
 	// Telegram notifications are enabled only with both a bot token and a JWT
 	// secret (the link token reuses it). Absent either, the linking endpoints
