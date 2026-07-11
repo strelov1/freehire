@@ -33,11 +33,6 @@ export type SortField = 'posted_at' | 'cv';
  *  backend's own empty-query default stays the single source of truth. */
 export const DEFAULT_SORT: SortField = 'posted_at';
 
-/** The non-default sort values the URL round-trips back into state (posted_at is
- *  the default and never written to the URL). A value outside this set — absent,
- *  legacy, or malformed — reads as the default. */
-const KNOWN_SORTS: readonly SortField[] = ['cv'];
-
 export interface JobFilters {
   q: string;
   /** Facet state keyed by the facet's query param (see FACETS). */
@@ -111,10 +106,9 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   // negative, non-numeric) reads as "any age", matching the backend's own guard.
   const days = Number(p.get('posted_within_days'));
   f.postedWithinDays = Number.isInteger(days) && days > 0 ? days : null;
-  // Accept only a known non-default sort; anything else (absent, legacy, malformed)
-  // stays the default seeded by emptyFilters(), matching the backend's own guard.
-  const sort = p.get('sort');
-  f.sort = KNOWN_SORTS.find((s) => s === sort) ?? DEFAULT_SORT;
+  // Only `cv` round-trips (posted_at is the default and never written to the URL);
+  // any other value — absent, legacy, malformed — reads as the default.
+  f.sort = p.get('sort') === 'cv' ? 'cv' : DEFAULT_SORT;
   return f;
 }
 
@@ -133,9 +127,20 @@ export function activeFilterCount(f: JobFilters): number {
 
 /** Normalize a search query string to its canonical form (parse → re-serialize),
  *  so two filter sets that differ only in param order or stale/unknown params
- *  compare equal. Used to detect which saved search matches the current filters. */
+ *  compare equal. Used to detect which saved search matches the current filters.
+ *  Sort never survives (filtersToParams omits the default and canonicalizing a
+ *  saved query drops the view-only `cv` — see savedSearchQuery), so a sort change
+ *  never flips which saved search is active. */
 export function canonicalQuery(query: string): string {
-  return filtersToParams(filtersFromParams(new URLSearchParams(query))).toString();
+  return savedSearchQuery(filtersFromParams(new URLSearchParams(query)));
+}
+
+/** The saved-search / alert target: the filters as a query string with the view-only
+ *  sort dropped. Sort is a per-session preference, not an alert criterion — the
+ *  server-side digest runs a keyword search that can't honor `sort=cv` — so it must
+ *  not be baked into a persisted or shared saved search. */
+export function savedSearchQuery(f: JobFilters): string {
+  return filtersToParams({ ...f, sort: DEFAULT_SORT }).toString();
 }
 
 // ---- per-value sign transitions (pure: FacetState -> FacetState) ----

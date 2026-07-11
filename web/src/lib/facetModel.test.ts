@@ -6,6 +6,7 @@ import {
   filtersFromParams,
   activeFilterCount,
   canonicalQuery,
+  savedSearchQuery,
   DEFAULT_SORT,
   signOf,
   facetSetSign,
@@ -185,7 +186,22 @@ describe('sort', () => {
     expect(filtersToParams(emptyFilters()).get('sort')).toBeNull();
   });
 
-  it('round-trips sort=cv through canonicalQuery', () => {
-    expect(canonicalQuery('sort=cv')).toBe('sort=cv');
+  it('round-trips sort=cv through the URL (parse then serialize)', () => {
+    expect(filtersToParams(filtersFromParams(new URLSearchParams('sort=cv'))).get('sort')).toBe('cv');
+  });
+
+  it('savedSearchQuery drops the view-only sort', () => {
+    const cv = emptyFilters();
+    cv.sort = 'cv';
+    expect(savedSearchQuery(cv)).toBe('');
+    const filtered = withSkills({ include: ['go'] });
+    filtered.sort = 'cv';
+    expect(new URLSearchParams(savedSearchQuery(filtered)).get('sort')).toBeNull();
+    expect(new URLSearchParams(savedSearchQuery(filtered)).getAll('skills')).toEqual(['go']);
+  });
+
+  it('canonicalQuery drops sort so a sort change never flips the active saved search', () => {
+    expect(canonicalQuery('sort=cv')).toBe('');
+    expect(canonicalQuery('skills=go&sort=cv')).toBe(canonicalQuery('skills=go'));
   });
 });

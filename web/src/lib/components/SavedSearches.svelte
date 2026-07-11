@@ -3,7 +3,7 @@
   import { ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
-  import { canonicalQuery, filtersToParams } from '$lib/filters';
+  import { canonicalQuery, savedSearchQuery } from '$lib/filters';
   import type { StagedFilters } from '$lib/stagedFilters.svelte';
   import { savedSearches } from '$lib/savedSearches.svelte';
   import type { SavedSearch } from '$lib/types';
@@ -33,7 +33,7 @@
 
   // The current (staged) filters as a canonical query string, and the saved set — if
   // any — that exactly matches it.
-  const current = $derived(filtersToParams(store.value).toString());
+  const current = $derived(savedSearchQuery(store.value));
   const items = $derived(savedSearches.items);
   const activeId = $derived(items.find((s) => canonicalQuery(s.query) === current)?.id ?? null);
   const base = $derived(items.find((s) => s.id === baseId) ?? null);

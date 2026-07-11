@@ -1,6 +1,6 @@
 <script lang="ts">
   import { dynamicLabel, FACETS } from '$lib/facets';
-  import { type FilterStore, filtersToParams } from '$lib/filters';
+  import { type FilterStore, savedSearchQuery } from '$lib/filters';
   import { freshnessLabel } from '$lib/filterControls';
   import FilterSummaryShell, { type SummaryChip, type SummaryGroup } from './FilterSummaryShell.svelte';
   import SaveSearchAlert from './SaveSearchAlert.svelte';
@@ -13,8 +13,8 @@
   // tab drives the same control.
   let { store, exclude = [], onOpen, canSave = false }: { store: FilterStore; exclude?: string[]; onOpen: () => void; canSave?: boolean } = $props();
 
-  // The current filters as a canonical query string — the saved-search / alert target.
-  const current = $derived(filtersToParams(store.value).toString());
+  // The current filters as the saved-search / alert target (view-only sort dropped).
+  const current = $derived(savedSearchQuery(store.value));
 
   function valueLabel(param: string, value: string): string {
     const def = FACETS.find((d) => d.param === param);
