@@ -34,12 +34,18 @@ type Digest struct {
 	Jobs            []DigestJob
 }
 
-// DigestJob is the display shape of one matched job (no internal id).
+// DigestJob is the display shape of one matched job (no internal id). The salary
+// fields are projected from the job's enrichment; a zero SalaryMin/SalaryMax (or
+// empty Currency) means the compensation is unknown and the renderer omits it.
 type DigestJob struct {
-	Title   string
-	Company string
-	Slug    string
-	URL     string
+	Title          string
+	Company        string
+	Slug           string
+	URL            string
+	SalaryMin      int
+	SalaryMax      int
+	SalaryCurrency string
+	SalaryPeriod   string
 }
 
 // Notifier delivers a digest over a channel to a destination. The matching engine

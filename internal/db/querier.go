@@ -250,7 +250,9 @@ type Querier interface {
 	// row (SQLSTATE XX001) aborts the whole scan; the worker then retries the batch one id
 	// at a time to isolate and dead-letter the bad row.
 	GetJobsByIDs(ctx context.Context, ids []int64) ([]Job, error)
-	// The display fields for the jobs in a digest, freshest first.
+	// The display fields for the jobs in a digest, freshest first. Salary fields are
+	// projected out of the enrichment JSONB (absent keys → NULL) so a card can render
+	// a compensation line only when one is known.
 	GetJobsForDigest(ctx context.Context, jobIds []int64) ([]GetJobsForDigestRow, error)
 	// Public read of a shared board by its slug — no auth, no owner-scoping. Exposes only
 	// the board's display fields; owner columns (user_id) are never selected. A NULL slug

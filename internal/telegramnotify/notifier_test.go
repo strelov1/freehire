@@ -19,7 +19,8 @@ func TestNotifier_Render(t *testing.T) {
 		SavedSearchName: "Go & <remote>",
 		Total:           3,
 		Jobs: []notify.DigestJob{
-			{Title: "Go Dev <x>", Company: "Acme", Slug: "go-dev-acme"},
+			{Title: "Go Dev <x>", Company: "Acme", Slug: "go-dev-acme",
+				SalaryMin: 130000, SalaryMax: 170000, SalaryCurrency: "USD", SalaryPeriod: "year"},
 			{Title: "Rustacean", Company: "", Slug: "rustacean-foo"},
 		},
 	}
@@ -32,17 +33,52 @@ func TestNotifier_Render(t *testing.T) {
 	if !strings.Contains(got, "Go &amp; &lt;remote&gt;") {
 		t.Errorf("saved-search name not HTML-escaped: %q", got)
 	}
-	// Job title escaped; link points at the freehire job page (trailing slash trimmed).
-	if !strings.Contains(got, `<a href="https://freehire.dev/jobs/go-dev-acme">Go Dev &lt;x&gt;</a> — Acme`) {
-		t.Errorf("job line wrong: %q", got)
+	// Card: escaped bold title, "at Company" line, salary line, and an Apply link
+	// to the freehire job page (trailing slash trimmed) tagged with the telegram UTM.
+	for _, want := range []string{
+		"💼 <b>Go Dev &lt;x&gt;</b>",
+		"🏛️ at Acme",
+		"💰 $130K—$170K / year",
+		`✅ <a href="https://freehire.dev/jobs/go-dev-acme?utm_source=telegram-bot">Apply →</a>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("card missing %q in: %q", want, got)
+		}
 	}
-	// A job with no company omits the dash suffix.
-	if !strings.Contains(got, `<a href="https://freehire.dev/jobs/rustacean-foo">Rustacean</a>`) {
-		t.Errorf("company-less job line wrong: %q", got)
+	// A job with no company/salary omits those lines but still renders title + Apply.
+	if !strings.Contains(got, "💼 <b>Rustacean</b>") ||
+		!strings.Contains(got, `href="https://freehire.dev/jobs/rustacean-foo?utm_source=telegram-bot"`) {
+		t.Errorf("company/salary-less card wrong: %q", got)
+	}
+	if strings.Contains(got, "🏛️ at \n") || strings.Count(got, "💰") != 1 {
+		t.Errorf("empty company/salary lines should be omitted: %q", got)
 	}
 	// Total 3 but only 2 listed → "+ 1 more".
 	if !strings.Contains(got, "+ 1 more") {
 		t.Errorf("missing overflow summary: %q", got)
+	}
+}
+
+func TestFormatSalary(t *testing.T) {
+	cases := []struct {
+		name             string
+		min, max         int
+		currency, period string
+		want             string
+	}{
+		{"range", 130000, 170000, "USD", "year", "$130K—$170K / year"},
+		{"min only", 90000, 0, "EUR", "year", "€90K / year"},
+		{"max only", 0, 50000, "GBP", "month", "£50K / month"},
+		{"equal bounds collapse", 100000, 100000, "USD", "year", "$100K / year"},
+		{"unknown currency is a prefix", 20000, 30000, "PLN", "month", "PLN 20K—PLN 30K / month"},
+		{"hourly rate not abbreviated", 50, 80, "USD", "hour", "$50—$80 / hour"},
+		{"fractional thousands", 4500, 0, "USD", "", "$4.5K"},
+		{"no figure", 0, 0, "USD", "year", ""},
+	}
+	for _, tc := range cases {
+		if got := formatSalary(tc.min, tc.max, tc.currency, tc.period); got != tc.want {
+			t.Errorf("%s: formatSalary(%d,%d,%q,%q) = %q, want %q", tc.name, tc.min, tc.max, tc.currency, tc.period, got, tc.want)
+		}
 	}
 }
 
@@ -75,7 +111,7 @@ func TestNotifier_RenderCapsAtTelegramLimit(t *testing.T) {
 	if n16 := len(utf16.Encode([]rune(got))); n16 > 4096 {
 		t.Errorf("rendered %d UTF-16 units, want <= 4096 (Telegram sendMessage limit)", n16)
 	}
-	shown := strings.Count(got, "• ")
+	shown := strings.Count(got, "💼 ")
 	if shown == 0 || shown >= total {
 		t.Errorf("shown = %d, want some-but-not-all of %d jobs listed", shown, total)
 	}

@@ -97,8 +97,14 @@ LEFT JOIN telegram_links tl ON tl.user_id = s.user_id
 WHERE s.id = $1;
 
 -- name: GetJobsForDigest :many
--- The display fields for the jobs in a digest, freshest first.
-SELECT id, title, company, public_slug, url, posted_at
+-- The display fields for the jobs in a digest, freshest first. Salary fields are
+-- projected out of the enrichment JSONB (absent keys → NULL) so a card can render
+-- a compensation line only when one is known.
+SELECT id, title, company, public_slug, url, posted_at,
+       COALESCE((enrichment->>'salary_min')::int, 0)::int AS salary_min,
+       COALESCE((enrichment->>'salary_max')::int, 0)::int AS salary_max,
+       COALESCE(enrichment->>'salary_currency', '')::text AS salary_currency,
+       COALESCE(enrichment->>'salary_period', '')::text   AS salary_period
 FROM jobs
 WHERE id = ANY(sqlc.arg(job_ids)::bigint[])
 ORDER BY COALESCE(posted_at, created_at) DESC;

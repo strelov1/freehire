@@ -136,22 +136,32 @@ func (q *Queries) DeleteSubscription(ctx context.Context, arg DeleteSubscription
 }
 
 const getJobsForDigest = `-- name: GetJobsForDigest :many
-SELECT id, title, company, public_slug, url, posted_at
+SELECT id, title, company, public_slug, url, posted_at,
+       COALESCE((enrichment->>'salary_min')::int, 0)::int AS salary_min,
+       COALESCE((enrichment->>'salary_max')::int, 0)::int AS salary_max,
+       COALESCE(enrichment->>'salary_currency', '')::text AS salary_currency,
+       COALESCE(enrichment->>'salary_period', '')::text   AS salary_period
 FROM jobs
 WHERE id = ANY($1::bigint[])
 ORDER BY COALESCE(posted_at, created_at) DESC
 `
 
 type GetJobsForDigestRow struct {
-	ID         int64              `json:"id"`
-	Title      string             `json:"title"`
-	Company    string             `json:"company"`
-	PublicSlug string             `json:"public_slug"`
-	URL        string             `json:"url"`
-	PostedAt   pgtype.Timestamptz `json:"posted_at"`
+	ID             int64              `json:"id"`
+	Title          string             `json:"title"`
+	Company        string             `json:"company"`
+	PublicSlug     string             `json:"public_slug"`
+	URL            string             `json:"url"`
+	PostedAt       pgtype.Timestamptz `json:"posted_at"`
+	SalaryMin      int32              `json:"salary_min"`
+	SalaryMax      int32              `json:"salary_max"`
+	SalaryCurrency string             `json:"salary_currency"`
+	SalaryPeriod   string             `json:"salary_period"`
 }
 
-// The display fields for the jobs in a digest, freshest first.
+// The display fields for the jobs in a digest, freshest first. Salary fields are
+// projected out of the enrichment JSONB (absent keys → NULL) so a card can render
+// a compensation line only when one is known.
 func (q *Queries) GetJobsForDigest(ctx context.Context, jobIds []int64) ([]GetJobsForDigestRow, error) {
 	rows, err := q.db.Query(ctx, getJobsForDigest, jobIds)
 	if err != nil {
@@ -168,6 +178,10 @@ func (q *Queries) GetJobsForDigest(ctx context.Context, jobIds []int64) ([]GetJo
 			&i.PublicSlug,
 			&i.URL,
 			&i.PostedAt,
+			&i.SalaryMin,
+			&i.SalaryMax,
+			&i.SalaryCurrency,
+			&i.SalaryPeriod,
 		); err != nil {
 			return nil, err
 		}

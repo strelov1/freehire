@@ -108,10 +108,14 @@ func buildDigest(name string, jobs []db.GetJobsForDigestRow, limit int) Digest {
 			break
 		}
 		d.Jobs = append(d.Jobs, DigestJob{
-			Title:   j.Title,
-			Company: j.Company,
-			Slug:    j.PublicSlug,
-			URL:     j.URL,
+			Title:          j.Title,
+			Company:        j.Company,
+			Slug:           j.PublicSlug,
+			URL:            j.URL,
+			SalaryMin:      int(j.SalaryMin),
+			SalaryMax:      int(j.SalaryMax),
+			SalaryCurrency: j.SalaryCurrency,
+			SalaryPeriod:   j.SalaryPeriod,
 		})
 	}
 	return d
