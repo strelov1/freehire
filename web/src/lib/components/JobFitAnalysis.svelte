@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Sparkles, ArrowRight, FileText } from '@lucide/svelte';
+  import { ArrowRight, FileText } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { verdictTone, type Tone } from '$lib/jobFit';
@@ -40,9 +40,7 @@
 </script>
 
 <section class="flex flex-col gap-3 border-t border-border pt-4" aria-label="AI fit analysis">
-  <p class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-    <Sparkles class="size-3.5 shrink-0" />AI fit analysis
-  </p>
+  <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">AI fit analysis</p>
 
   {#if data && !data.has_cv}
     <div class="flex items-center justify-between gap-2">
@@ -65,8 +63,6 @@
     </a>
   {:else}
     <p class="text-sm text-muted-foreground">A recruiter-style read of your CV against this role — title fit, experience, and the gaps an ATS flags.</p>
-    <Button variant="primary" size="sm" href={resolve('/jobs/[slug]/fit', { slug })}>
-      <Sparkles class="size-3.5" />Analyse fit with AI
-    </Button>
+    <Button variant="primary" size="sm" href={resolve('/jobs/[slug]/fit', { slug })}>Analyse fit with AI</Button>
   {/if}
 </section>
