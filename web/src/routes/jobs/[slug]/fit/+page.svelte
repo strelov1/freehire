@@ -36,8 +36,10 @@
 
   const analysis = $derived(stream.analysis);
   const isStale = $derived(data.fit?.stale ?? false);
-  // A fresh cached analysis already covers the page; anything else needs a live compute.
-  const needsCompute = $derived(!data.fit?.analysis || isStale);
+  // Only auto-run when there is NO cached analysis at all (cold). A stale cache still
+  // paints instantly and offers a manual Recompute — so a refresh never silently burns
+  // three LLM calls, and a fresh cache never recomputes.
+  const coldStart = $derived(!data.fit?.analysis);
   const dimensions = $derived(analysis?.dimensions ?? []);
   const requirements = $derived(analysis?.requirement_match?.length ? analysis.requirement_match : stream.requirements);
 
@@ -71,7 +73,7 @@
   }
 
   onMount(() => {
-    if (isAuthenticated() && needsCompute && (data.fit?.has_cv ?? true)) start();
+    if (isAuthenticated() && coldStart && (data.fit?.has_cv ?? true)) start();
   });
   onDestroy(stop);
 
