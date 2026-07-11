@@ -225,29 +225,17 @@ func (c *Client) GenerateJSONStream(ctx context.Context, system, user string, on
 
 	// Reasoning deltas go to onThinking; content deltas are ignored here (the full
 	// content is read from the final response, matching GenerateJSON's fence-stripping).
-	// The counters are temporary instrumentation: they reveal whether the provider is
-	// actually streaming reasoning/content deltas through langchaingo, or delivering the
-	// whole response in one shot (which would make the live "thinking" panel empty).
-	var reasoningChunks, contentChunks, firstDeltaMs int64
-	stream := llms.WithStreamingReasoningFunc(func(_ context.Context, reasoningChunk, contentChunk []byte) error {
-		if firstDeltaMs == 0 {
-			firstDeltaMs = time.Since(start).Milliseconds()
-		}
-		if len(reasoningChunk) > 0 {
-			reasoningChunks++
-			if onThinking != nil {
-				onThinking(string(reasoningChunk))
-			}
-		}
-		if len(contentChunk) > 0 {
-			contentChunks++
+	stream := llms.WithStreamingReasoningFunc(func(_ context.Context, reasoningChunk, _ []byte) error {
+		if onThinking != nil && len(reasoningChunk) > 0 {
+			onThinking(string(reasoningChunk))
 		}
 		return nil
 	})
 
 	resp, err := c.model.GenerateContent(ctx, messages, llms.WithJSONMode(), stream)
-	log.Printf("llm: stream model=%s dur=%s first_delta_ms=%d reasoning_chunks=%d content_chunks=%d err=%v",
-		c.modelID, time.Since(start).Round(time.Millisecond), firstDeltaMs, reasoningChunks, contentChunks, err)
+	// The fit model is slow (tens of seconds per call); log the duration so per-stage
+	// cost stays observable without a tracer.
+	log.Printf("llm: stream model=%s dur=%s err=%v", c.modelID, time.Since(start).Round(time.Millisecond), err)
 	if err != nil {
 		wrapped := fmt.Errorf("llm: generate stream: %w", err)
 		g := gen()
