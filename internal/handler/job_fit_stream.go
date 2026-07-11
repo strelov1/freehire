@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/valyala/fasthttp"
@@ -55,7 +56,17 @@ func (a *API) StreamJobFit(c *fiber.Ctx) error {
 	c.Set(fiber.HeaderConnection, "keep-alive")
 	c.Set("X-Accel-Buffering", "no") // stop nginx buffering so events reach the browser promptly
 
+	// The server's 10s WriteTimeout would kill this long-lived stream mid-analysis, so
+	// clear the connection's write deadline for the SSE response only (captured here while
+	// the ctx is valid; used inside the writer, which runs after this handler returns).
+	conn := c.Context().Conn()
+
 	c.Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
+		if conn != nil {
+			_ = conn.SetWriteDeadline(time.Time{})
+		}
+		start := time.Now()
+		log.Printf("jobfit: stream start user=%d job=%d has_cv=%v", userID, job.ID, hasCV)
 		writeSSE(w, "meta", map[string]bool{"has_cv": hasCV})
 		if !hasCV {
 			return
@@ -63,11 +74,13 @@ func (a *API) StreamJobFit(c *fiber.Ctx) error {
 		// A background context: the fiber request ctx is gone by now, and each LLM call
 		// is already bounded by the client's per-call timeout.
 		ctx := context.Background()
+		events := 0
 		analysis, err := a.jobFit.AnalyzeStream(ctx, input, func(e jobfit.Event) {
+			events++
 			writeSSE(w, string(e.Kind), e)
 		})
 		if err != nil {
-			log.Printf("jobfit: stream analyze failed for user %d job %d: %v", userID, job.ID, err)
+			log.Printf("jobfit: stream FAILED user=%d job=%d dur=%s events=%d: %v", userID, job.ID, time.Since(start).Round(time.Millisecond), events, err)
 			writeSSE(w, "stream_error", map[string]string{"message": "analysis failed"})
 			return
 		}
@@ -76,6 +89,7 @@ func (a *API) StreamJobFit(c *fiber.Ctx) error {
 			return
 		}
 		a.cacheAnalysis(ctx, userID, job, cvUploadedAt, analysis)
+		log.Printf("jobfit: stream DONE user=%d job=%d dur=%s events=%d overall=%d", userID, job.ID, time.Since(start).Round(time.Millisecond), events, analysis.OverallScore)
 	}))
 	return nil
 }
