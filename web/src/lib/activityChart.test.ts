@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildActivityChart, type ActivityBar } from './activityChart';
+import { buildActivityChart, formatCount, pickTickIndices, type ActivityBar } from './activityChart';
 import type { ActivityPoint } from './types';
 
 const pt = (period: string, added: number, removed: number): ActivityPoint => ({
@@ -54,5 +54,48 @@ describe('buildActivityChart', () => {
     const m = buildActivityChart([pt('2026-01-01', 4, 4)]);
     const bar = requireBar(m.bars, 0);
     expect(bar.removedX).toBeGreaterThanOrEqual(bar.addedX + m.barW);
+  });
+
+  it('centres each bar-pair at the seam between its two bars', () => {
+    const m = buildActivityChart([pt('2026-01-01', 4, 4)]);
+    const bar = requireBar(m.bars, 0);
+    // The slot centre is where the added bar ends and the removed bar begins.
+    expect(bar.centerX).toBeCloseTo(bar.addedX + m.barW);
+    expect(bar.centerX).toBeCloseTo(bar.removedX);
+  });
+});
+
+describe('formatCount', () => {
+  it('leaves small numbers as-is', () => {
+    expect(formatCount(0)).toBe('0');
+    expect(formatCount(842)).toBe('842');
+  });
+  it('abbreviates thousands and millions', () => {
+    expect(formatCount(697191)).toBe('697K');
+    expect(formatCount(3354251)).toBe('3.4M');
+    expect(formatCount(3400)).toBe('3.4K');
+  });
+});
+
+describe('pickTickIndices', () => {
+  it('labels every index when there are few', () => {
+    expect(pickTickIndices(3)).toEqual([0, 1, 2]);
+  });
+  it('always includes the first and last index', () => {
+    const ticks = pickTickIndices(90);
+    expect(ticks[0]).toBe(0);
+    expect(ticks[ticks.length - 1]).toBe(89);
+  });
+  it('thins a long series to a readable number of ticks', () => {
+    const ticks = pickTickIndices(90);
+    expect(ticks.length).toBeLessThanOrEqual(12);
+    // strictly increasing, in range
+    for (let i = 1; i < ticks.length; i++) {
+      expect(ticks[i]!).toBeGreaterThan(ticks[i - 1]!);
+      expect(ticks[i]!).toBeLessThan(90);
+    }
+  });
+  it('returns nothing for an empty series', () => {
+    expect(pickTickIndices(0)).toEqual([]);
   });
 });

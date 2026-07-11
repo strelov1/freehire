@@ -18,6 +18,9 @@ export interface ActivityBar {
   removedX: number;
   removedY: number;
   removedH: number;
+  /** Centre x of the period slot (the seam between the two bars) — anchors the
+   *  x-axis date tick and the hover highlight. */
+  centerX: number;
 }
 
 /** The full chart model: the positioned bars plus the viewBox and baseline the
@@ -28,9 +31,11 @@ export interface ActivityChartModel {
   height: number;
   baselineY: number;
   /** The count the tallest bar represents (always ≥ 1 so scaling never divides by
-   *  zero); handy for a y-axis max label. */
+   *  zero); labels the y-axis max. */
   max: number;
   barW: number;
+  /** Width of one period slot — the hover highlight spans it. */
+  slot: number;
 }
 
 const WIDTH = 960;
@@ -51,6 +56,7 @@ export function buildActivityChart(points: ActivityPoint[]): ActivityChartModel 
     baselineY,
     max: 1,
     barW: 0,
+    slot: 0,
   };
   if (points.length === 0) {
     return { ...frame, bars: [] };
@@ -62,8 +68,9 @@ export function buildActivityChart(points: ActivityPoint[]): ActivityChartModel 
 
   const bars = points.map((p, i): ActivityBar => {
     const slotX = PAD + i * slot;
-    const addedX = slotX + slot / 2 - barW; // left of centre
-    const removedX = slotX + slot / 2; // right of centre
+    const centerX = slotX + slot / 2;
+    const addedX = centerX - barW; // left of centre
+    const removedX = centerX; // right of centre
     const addedH = (p.added / max) * PLOT_H;
     const removedH = (p.removed / max) * PLOT_H;
     return {
@@ -76,8 +83,35 @@ export function buildActivityChart(points: ActivityPoint[]): ActivityChartModel 
       removedX,
       removedY: baselineY - removedH,
       removedH,
+      centerX,
     };
   });
 
-  return { ...frame, bars, max, barW };
+  return { ...frame, bars, max, barW, slot };
+}
+
+/** Compact count formatting for axis/summary labels: 3354251 → "3.4M",
+ *  697191 → "697K", 842 → "842". Full precision is left to the tooltip. */
+export function formatCount(n: number): string {
+  const abs = Math.abs(n);
+  if (abs >= 1e6) return trimZero((n / 1e6).toFixed(1)) + 'M';
+  if (abs >= 1e3) return trimZero((n / 1e3).toFixed(abs >= 1e5 ? 0 : 1)) + 'K';
+  return String(n);
+}
+
+function trimZero(s: string): string {
+  return s.replace(/\.0$/, '');
+}
+
+/** Choose which period indices get an x-axis date label. Few periods → label all;
+ *  a long series is thinned to at most MAX_TICKS evenly-spaced labels, always
+ *  including the first and last so the time span reads correctly. */
+export function pickTickIndices(count: number): number[] {
+  const MAX_TICKS = 12;
+  if (count <= 0) return [];
+  if (count <= MAX_TICKS) return Array.from({ length: count }, (_, i) => i);
+  const step = (count - 1) / (MAX_TICKS - 1);
+  const seen = new Set<number>();
+  for (let i = 0; i < MAX_TICKS; i++) seen.add(Math.round(i * step));
+  return [...seen].sort((a, b) => a - b);
 }
