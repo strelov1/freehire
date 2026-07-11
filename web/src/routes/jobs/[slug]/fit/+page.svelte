@@ -25,7 +25,7 @@
   // The thinking panel tails the model's reasoning: keep it pinned to the newest tokens.
   let thinkingEl = $state<HTMLElement | null>(null);
   $effect(() => {
-    stream.thinking; // track new reasoning
+    void stream.thinking; // track new reasoning
     if (thinkingEl) thinkingEl.scrollTop = thinkingEl.scrollHeight;
   });
 

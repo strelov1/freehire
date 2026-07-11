@@ -3,7 +3,7 @@
 // this module owns only the reactive UrlSyncedState wrapper. Re-exports the model's
 // public surface so existing `$lib/companyFilters` importers are unchanged.
 
-import { COMPANY_FACETS, type FacetSelection, type FacetStore } from './facets';
+import { type FacetSelection, type FacetStore } from './facets';
 import {
   activeCompanyFilterCount,
   addCompanyFacet,
