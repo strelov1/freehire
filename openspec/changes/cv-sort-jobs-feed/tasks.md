@@ -30,6 +30,6 @@
 
 ## 6. Verification
 
-- [ ] 6.1 Run the web unit tests (vitest) — facetModel round-trip tests pass.
-- [ ] 6.2 Run `svelte-check` and eslint locally (web CI does not gate them) — clean.
-- [ ] 6.3 Visual end-to-end: signed-in-with-CV user toggles Newest ↔ By my CV, applies a facet filter in CV mode and sees it narrow the ranked feed, reloads `?sort=cv` and it restores; signed-out and no-CV prompts render.
+- [x] 6.1 Run the web unit tests (vitest) — facetModel round-trip tests pass.
+- [x] 6.2 Run `svelte-check` and eslint locally (web CI does not gate them) — clean.
+- [x] 6.3 Visual end-to-end: signed-in-with-CV user toggles Newest ↔ By my CV, applies a facet filter in CV mode and sees it narrow the ranked feed, reloads `?sort=cv` and it restores; signed-out and no-CV prompts render.
