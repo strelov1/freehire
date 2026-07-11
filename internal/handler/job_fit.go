@@ -117,19 +117,20 @@ func (a *API) PostJobFit(c *fiber.Ctx) error {
 		// LLM unconfigured — nothing to cache.
 		return c.JSON(fiber.Map{"data": jobFitResponse{HasCV: true}})
 	}
-	a.cacheAnalysis(c, userID, job, cvUploadedAt, analysis)
+	a.cacheAnalysis(c.Context(), userID, job, cvUploadedAt, analysis)
 	return c.JSON(fiber.Map{"data": jobFitResponse{HasCV: true, Stale: false, Analysis: analysis}})
 }
 
 // cacheAnalysis upserts the analysis stamped with the analyzed CV's upload time, the job
-// content hash, and the model that produced it. Best-effort: a cache failure is logged,
-// not surfaced.
-func (a *API) cacheAnalysis(c *fiber.Ctx, userID int64, job db.Job, cvUploadedAt *time.Time, analysis *jobfit.Analysis) {
+// content hash, and the model that produced it. It takes a plain context (not the fiber
+// ctx) so the SSE stream can cache after the request handler has returned. Best-effort:
+// a cache failure is logged, not surfaced.
+func (a *API) cacheAnalysis(ctx context.Context, userID int64, job db.Job, cvUploadedAt *time.Time, analysis *jobfit.Analysis) {
 	blob, err := json.Marshal(analysis)
 	if err != nil {
 		return
 	}
-	if err := a.jobFitCache.UpsertUserJobAnalysis(c.Context(), db.UpsertUserJobAnalysisParams{
+	if err := a.jobFitCache.UpsertUserJobAnalysis(ctx, db.UpsertUserJobAnalysisParams{
 		UserID:         userID,
 		JobID:          job.ID,
 		Analysis:       blob,

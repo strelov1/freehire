@@ -262,6 +262,7 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/jobs/:slug/match", keyAuth, a.JobMatch)
 	api.Get("/jobs/:slug/fit", keyAuth, a.GetJobFit)
 	api.Post("/jobs/:slug/fit", keyAuth, a.PostJobFit)
+	api.Get("/jobs/:slug/fit/stream", keyAuth, a.StreamJobFit)
 
 	// Stateless market-coverage: score a caller-supplied skill list (request body)
 	// against the facet-filtered market. Cookie or API key — the CLI drives it with

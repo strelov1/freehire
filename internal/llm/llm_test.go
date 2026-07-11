@@ -27,6 +27,72 @@ func (f *fakeModel) GenerateContent(_ context.Context, msgs []llms.MessageConten
 	return &llms.ContentResponse{Choices: []*llms.ContentChoice{{Content: f.resp, GenerationInfo: f.genInfo}}}, nil
 }
 
+// streamModel drives the streaming callback: it applies the call options, feeds the
+// reasoning + content chunks through StreamingReasoningFunc, then returns the joined
+// content as the final response (mirroring a real streaming provider).
+type streamModel struct {
+	reasoning []string
+	content   []string
+}
+
+func (m *streamModel) GenerateContent(ctx context.Context, _ []llms.MessageContent, opts ...llms.CallOption) (*llms.ContentResponse, error) {
+	var co llms.CallOptions
+	for _, o := range opts {
+		o(&co)
+	}
+	full := ""
+	for i := range m.content {
+		reasoning := ""
+		if i < len(m.reasoning) {
+			reasoning = m.reasoning[i]
+		}
+		if co.StreamingReasoningFunc != nil {
+			if err := co.StreamingReasoningFunc(ctx, []byte(reasoning), []byte(m.content[i])); err != nil {
+				return nil, err
+			}
+		}
+		full += m.content[i]
+	}
+	return &llms.ContentResponse{Choices: []*llms.ContentChoice{{Content: full}}}, nil
+}
+func (*streamModel) Call(context.Context, string, ...llms.CallOption) (string, error) { return "", nil }
+
+func TestGenerateJSONStream_AccumulatesContentAndStreamsThinking(t *testing.T) {
+	m := &streamModel{
+		reasoning: []string{"The candidate ", "looks strong. "},
+		content:   []string{`{"score"`, `:80}`},
+	}
+	c := &Client{model: m, timeout: time.Second}
+
+	var thinking string
+	got, err := c.GenerateJSONStream(context.Background(), "sys", "usr", func(s string) { thinking += s })
+	if err != nil {
+		t.Fatalf("GenerateJSONStream: %v", err)
+	}
+	if got != `{"score":80}` {
+		t.Errorf("content = %q, want the accumulated JSON", got)
+	}
+	if thinking != "The candidate looks strong. " {
+		t.Errorf("thinking = %q, want the joined reasoning deltas", thinking)
+	}
+}
+
+func TestGenerateJSONStream_NoReasoningIsFine(t *testing.T) {
+	m := &streamModel{content: []string{`{"ok":`, `true}`}} // no reasoning deltas
+	c := &Client{model: m, timeout: time.Second}
+	calls := 0
+	got, err := c.GenerateJSONStream(context.Background(), "s", "u", func(string) { calls++ })
+	if err != nil {
+		t.Fatalf("GenerateJSONStream: %v", err)
+	}
+	if got != `{"ok":true}` {
+		t.Errorf("content = %q", got)
+	}
+	if calls != 0 {
+		t.Errorf("onThinking called %d times, want 0 when the model emits no reasoning", calls)
+	}
+}
+
 // captureTracer records the generations it observes.
 type captureTracer struct{ got []Generation }
 

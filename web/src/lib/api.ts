@@ -181,6 +181,12 @@ export function createApi(
     return requestData<JobFitResponse>(`/api/v1/jobs/${slug}/fit`, { method: 'POST' });
   }
 
+  /** The same-origin URL for the fit SSE stream — the fit page opens an EventSource on
+   *  it (EventSource takes a URL, not our fetch wrapper; the session cookie rides along). */
+  function jobFitStreamUrl(slug: string): string {
+    return `${baseUrl}/api/v1/jobs/${slug}/fit/stream`;
+  }
+
   /** Full-text search over jobs. `facets` carries the query text and any facet
    *  filters (built by the caller); pagination is appended here. Results are the
    *  same Job wire shape as listJobs, so views render them with the same
@@ -675,6 +681,7 @@ export function createApi(
     getJobMatch,
     getJobFit,
     runJobFit,
+    jobFitStreamUrl,
     searchJobs,
     swipeDeck,
     recommendations,

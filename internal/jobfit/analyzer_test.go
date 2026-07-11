@@ -125,6 +125,62 @@ func TestAnalyze_Stage1ErrorPropagates(t *testing.T) {
 	}
 }
 
+func TestAnalyzeStream_EmitsOrderedEventsAndMatchesSyncFinal(t *testing.T) {
+	events := func() []Event {
+		m := &queuedModel{resp: []string{stage1JSON, stage2JSON, stage3JSON}}
+		var got []Event
+		final, err := NewAnalyzer(llm.NewWithModel(m)).AnalyzeStream(context.Background(), sampleInput(), func(e Event) {
+			got = append(got, e)
+		})
+		if err != nil {
+			t.Fatalf("AnalyzeStream: %v", err)
+		}
+		if final == nil || final.OverallScore != 58 {
+			t.Fatalf("stream final = %+v, want overall 58", final)
+		}
+		return got
+	}()
+
+	// Kinds must arrive in chain order.
+	wantKinds := []EventKind{
+		EventStageStart, EventRequirements, EventStageDone, // stage 1
+		EventStageStart, EventDimensions, EventStageDone, // stage 2
+		EventStageStart, EventStageDone, // stage 3
+		EventFinal,
+	}
+	if len(events) != len(wantKinds) {
+		t.Fatalf("emitted %d events, want %d: %+v", len(events), len(wantKinds), events)
+	}
+	for i, k := range wantKinds {
+		if events[i].Kind != k {
+			t.Errorf("event[%d].Kind = %q, want %q", i, events[i].Kind, k)
+		}
+	}
+	// The requirements event carries the Stage-1 match; the final event carries the analysis.
+	if reqEv := events[1]; len(reqEv.Requirements) != 2 {
+		t.Errorf("requirements event = %+v, want 2 requirements", reqEv)
+	}
+	if fin := events[len(events)-1]; fin.Analysis == nil || len(fin.Analysis.Dimensions) != 6 {
+		t.Errorf("final event analysis = %+v, want 6 dimensions", fin.Analysis)
+	}
+
+	// Analyze must return the identical final verdict (it is a thin collector).
+	m := &queuedModel{resp: []string{stage1JSON, stage2JSON, stage3JSON}}
+	sync, _ := NewAnalyzer(llm.NewWithModel(m)).Analyze(context.Background(), sampleInput())
+	if sync == nil || sync.OverallScore != 58 {
+		t.Errorf("Analyze final = %+v, want overall 58 (same as stream)", sync)
+	}
+}
+
+func TestAnalyzeStream_NilClientIsNoOp(t *testing.T) {
+	got, err := NewAnalyzer(nil).AnalyzeStream(context.Background(), sampleInput(), func(Event) {
+		t.Error("no events expected from a nil client")
+	})
+	if err != nil || got != nil {
+		t.Fatalf("nil stream = (%v,%v), want (nil,nil)", got, err)
+	}
+}
+
 func TestStagePrompts_CarryTheirInputs(t *testing.T) {
 	in := sampleInput()
 	reqs := []Requirement{{Text: "Go", Priority: "required", Status: "covered"}}

@@ -188,6 +188,62 @@ func (c *Client) GenerateJSON(ctx context.Context, system, user string) (string,
 	return out, nil
 }
 
+// GenerateJSONStream is the streaming sibling of GenerateJSON: it sends the same
+// system+user prompt in JSON mode but streams the response. Content tokens accumulate
+// into the returned JSON string (the caller parses it exactly as with GenerateJSON);
+// reasoning ("thinking") tokens are forwarded to onThinking as they arrive, when the
+// provider surfaces them (best-effort — a model that emits none simply never calls it).
+// The raw partial JSON is never surfaced. Bounded by the client timeout and observed
+// like GenerateJSON.
+func (c *Client) GenerateJSONStream(ctx context.Context, system, user string, onThinking func(string)) (string, error) {
+	if c.timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+	messages := []llms.MessageContent{
+		llms.TextParts(llms.ChatMessageTypeSystem, system),
+		llms.TextParts(llms.ChatMessageTypeHuman, user),
+	}
+
+	start := time.Now()
+	gen := func() Generation {
+		return Generation{Model: c.modelID, System: system, User: user, Start: start, End: time.Now(), Source: c.source}
+	}
+
+	// Reasoning deltas go to onThinking; content deltas are ignored here (the full
+	// content is read from the final response, matching GenerateJSON's fence-stripping).
+	stream := llms.WithStreamingReasoningFunc(func(_ context.Context, reasoningChunk, _ []byte) error {
+		if onThinking != nil && len(reasoningChunk) > 0 {
+			onThinking(string(reasoningChunk))
+		}
+		return nil
+	})
+
+	resp, err := c.model.GenerateContent(ctx, messages, llms.WithJSONMode(), stream)
+	if err != nil {
+		wrapped := fmt.Errorf("llm: generate stream: %w", err)
+		g := gen()
+		g.Err = wrapped
+		c.observe(g)
+		return "", wrapped
+	}
+	if len(resp.Choices) == 0 {
+		err := errors.New("llm: model returned no choices")
+		g := gen()
+		g.Err = err
+		c.observe(g)
+		return "", err
+	}
+
+	out := StripJSONFence(resp.Choices[0].Content)
+	g := gen()
+	g.Output = out
+	g.Usage = usageFrom(resp.Choices[0])
+	c.observe(g)
+	return out, nil
+}
+
 // observe reports a generation when a tracer is attached; a nil tracer makes this
 // a no-op, so an unconfigured client is unchanged.
 func (c *Client) observe(g Generation) {

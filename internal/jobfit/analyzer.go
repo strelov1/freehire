@@ -59,50 +59,94 @@ type stage1Out struct {
 	Requirements []Requirement `json:"requirements"`
 }
 
-// Analyze runs Stage 1 (Extract & Match) → Stage 2 (Recruiter verdict) → Stage 3
-// (Adversarial audit) as sequential JSON calls, sanitizes each, and builds the served
-// Analysis from the audited dimensions. Returns (nil, nil) when the LLM is
-// unconfigured. A Stage 1/2 failure returns an error (nothing to serve); a Stage 3
-// failure degrades to the un-audited Stage 2 verdict rather than erroring.
+// EventKind tags a streaming Event (see AnalyzeStream).
+type EventKind string
+
+const (
+	EventStageStart   EventKind = "stage_start"  // a stage began (Stage set)
+	EventStageDone    EventKind = "stage_done"   // a stage finished (Stage set)
+	EventThinking     EventKind = "thinking"     // a reasoning-token delta (Stage + Thinking)
+	EventRequirements EventKind = "requirements" // Stage-1 result (Requirements)
+	EventDimensions   EventKind = "dimensions"   // interim post-Stage-2 analysis (Analysis)
+	EventFinal        EventKind = "final"        // the audited final analysis (Analysis)
+)
+
+// Event is one step of a streaming analysis. Only the fields relevant to Kind are set.
+type Event struct {
+	Kind         EventKind     `json:"kind"`
+	Stage        int           `json:"stage,omitempty"`
+	Label        string        `json:"label,omitempty"`
+	Thinking     string        `json:"thinking,omitempty"`
+	Requirements []Requirement `json:"requirements,omitempty"`
+	Analysis     *Analysis     `json:"analysis,omitempty"`
+}
+
+var stageLabels = map[int]string{1: "Extract & Match", 2: "Recruiter verdict", 3: "Adversarial audit"}
+
+// Analyze runs the three-stage chain and returns the final analysis, discarding the
+// stream. Returns (nil, nil) when the LLM is unconfigured. It is a thin collector over
+// AnalyzeStream — one chain implementation, no duplication.
 func (a *Analyzer) Analyze(ctx context.Context, in Input) (*Analysis, error) {
+	return a.AnalyzeStream(ctx, in, func(Event) {})
+}
+
+// AnalyzeStream runs Stage 1 (Extract & Match) → Stage 2 (Recruiter verdict) → Stage 3
+// (Adversarial audit), emitting stage/thinking/section events through emit as it goes,
+// and returns the final analysis. Returns (nil, nil) when the LLM is unconfigured (no
+// events). A Stage 1/2 failure returns an error (nothing served); a Stage 3 failure
+// degrades to the un-audited Stage 2 verdict rather than erroring. emit must not be nil.
+func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)) (*Analysis, error) {
 	if a == nil || a.client == nil {
 		return nil, nil
 	}
 
 	// Stage 1 — Extract & Match (the ATS lens).
+	emit(Event{Kind: EventStageStart, Stage: 1, Label: stageLabels[1]})
 	var s1 stage1Out
-	if err := a.stage(ctx, stage1SystemPrompt(), stage1UserPrompt(in), &s1); err != nil {
+	if err := a.streamStage(ctx, 1, stage1SystemPrompt(), stage1UserPrompt(in), emit, &s1); err != nil {
 		return nil, fmt.Errorf("jobfit: stage 1: %w", err)
 	}
 	reqs := sanitizeRequirements(s1.Requirements)
+	emit(Event{Kind: EventRequirements, Requirements: reqs})
+	emit(Event{Kind: EventStageDone, Stage: 1, Label: stageLabels[1]})
 
 	// Stage 2 — Recruiter verdict (the human lens).
+	emit(Event{Kind: EventStageStart, Stage: 2, Label: stageLabels[2]})
 	var verdict recruiterVerdict
-	if err := a.stage(ctx, stage2SystemPrompt(), stage2UserPrompt(in, reqs), &verdict); err != nil {
+	if err := a.streamStage(ctx, 2, stage2SystemPrompt(), stage2UserPrompt(in, reqs), emit, &verdict); err != nil {
 		return nil, fmt.Errorf("jobfit: stage 2: %w", err)
 	}
 	sanitizeVerdict(&verdict)
+	interim := buildAnalysis(reqs, verdict)
+	emit(Event{Kind: EventDimensions, Analysis: &interim})
+	emit(Event{Kind: EventStageDone, Stage: 2, Label: stageLabels[2]})
 
 	// Stage 3 — Adversarial audit. Seed the audit target with the sanitized Stage 2
 	// verdict so json.Unmarshal MERGES: the audit overrides only the fields it returns
 	// and omitted dimensions keep their Stage 2 scores. A budget model that echoes just
 	// the fields it changed can then only refine the verdict, never hollow it out to
 	// zeros. Best-effort: on a parse/transport failure keep the un-audited verdict.
+	emit(Event{Kind: EventStageStart, Stage: 3, Label: stageLabels[3]})
 	audited := verdict
-	if err := a.stage(ctx, stage3SystemPrompt(), stage3UserPrompt(in, reqs, verdict), &audited); err != nil {
+	if err := a.streamStage(ctx, 3, stage3SystemPrompt(), stage3UserPrompt(in, reqs, verdict), emit, &audited); err != nil {
 		log.Printf("jobfit: stage 3 audit failed, serving un-audited verdict: %v", err)
 	} else {
 		sanitizeVerdict(&audited)
 		verdict = audited
 	}
+	emit(Event{Kind: EventStageDone, Stage: 3, Label: stageLabels[3]})
 
 	analysis := buildAnalysis(reqs, verdict)
+	emit(Event{Kind: EventFinal, Analysis: &analysis})
 	return &analysis, nil
 }
 
-// stage runs one JSON call and unmarshals it into out.
-func (a *Analyzer) stage(ctx context.Context, system, user string, out any) error {
-	raw, err := a.client.GenerateJSON(ctx, system, user)
+// streamStage runs one streaming JSON call, forwarding reasoning deltas as thinking
+// events for the given stage, and unmarshals the accumulated JSON into out.
+func (a *Analyzer) streamStage(ctx context.Context, stage int, system, user string, emit func(Event), out any) error {
+	raw, err := a.client.GenerateJSONStream(ctx, system, user, func(t string) {
+		emit(Event{Kind: EventThinking, Stage: stage, Thinking: t})
+	})
 	if err != nil {
 		return err
 	}
