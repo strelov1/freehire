@@ -3529,3 +3529,17 @@
   board: seetickets
 - company: NecstGen
   board: necstgen
+- company: FoodLabs
+  board: foodlabs
+- company: NIOZ Royal Netherlands Institute for Sea Research
+  board: nioz
+- company: EnnovationHub
+  board: ennovationhub
+- company: CarbonBetter
+  board: carbonbetter
+- company: Ottawa Safety Council
+  board: ottawasafetycouncil
+- company: Elegant Resorts
+  board: elegantresorts
+- company: Avant Arte
+  board: avantarte

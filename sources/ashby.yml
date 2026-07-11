@@ -7403,3 +7403,5 @@
 # --- startupvalleys.com import (companies + discovered career pages) ---
 - company: "Loki Robotics"
   board: loki
+- company: Going
+  board: going
