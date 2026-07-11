@@ -40,31 +40,44 @@
 
 <a
   href={resolve('/jobs/[slug]', { slug: job.public_slug })}
-  class="block rounded-xl border border-border bg-card p-4 transition hover:bg-accent hover:opacity-100"
+  class="block rounded-xl border border-border bg-card p-4 transition hover:border-foreground/15 hover:bg-accent hover:opacity-100"
   class:opacity-60={isViewed}
 >
-  <div class="flex items-start justify-between gap-3">
-    <div class="flex min-w-0 flex-wrap items-center gap-2">
-      <span class="inline-flex items-center gap-1.5 font-semibold">
-        <CompanyLogo name={job.company} size="size-8" />
+  <!-- Company + timestamp rail: a quiet eyebrow that yields the stage to the title.
+       The name truncates to a single line, so a long company (e.g. "Veterinary
+       Emergency Group (VEG)") keeps the logo centred and the card rhythm even
+       instead of wrapping into a ragged multi-line header. -->
+  <div class="flex items-center justify-between gap-3">
+    <div class="flex min-w-0 items-center gap-2">
+      <CompanyLogo name={job.company} size="size-7" />
+      <span class="truncate text-sm font-medium text-muted-foreground">
         {job.company || 'Unknown company'}
       </span>
-      {#each tags as tag (tag)}
-        <Badge variant="secondary">{tag}</Badge>
-      {/each}
     </div>
-    <div class="flex shrink-0 items-center gap-2">
-      <RealityBadge reality={job.reality} />
-      {#if posted}
-        <span class="text-xs text-muted-foreground">{posted}</span>
-      {/if}
-    </div>
+    {#if posted}
+      <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{posted}</span>
+    {/if}
   </div>
 
-  <h3 class="mt-2 line-clamp-2 text-lg font-semibold tracking-tight">{job.title}</h3>
+  <!-- The title is the card's hero — a size up from the body with tight leading, so
+       the eye lands on the role first. -->
+  <h3 class="mt-2.5 line-clamp-2 text-lg font-semibold leading-snug tracking-tight sm:text-[1.35rem]">
+    {job.title}
+  </h3>
+
+  <!-- Signal row: reality chip + the region/employment facets, grouped under the
+       title as quiet outline chips so they read as metadata, not decoration. -->
+  {#if job.reality || tags.length > 0}
+    <div class="mt-2 flex flex-wrap items-center gap-1.5">
+      <RealityBadge reality={job.reality} />
+      {#each tags as tag (tag)}
+        <Badge variant="outline">{tag}</Badge>
+      {/each}
+    </div>
+  {/if}
 
   {#if blurb}
-    <p class="mt-1.5 line-clamp-2 text-sm text-muted-foreground">{blurb}</p>
+    <p class="mt-2 line-clamp-2 text-sm text-muted-foreground">{blurb}</p>
   {/if}
 
   <div class="mt-3 flex items-end justify-between gap-3">
@@ -77,7 +90,7 @@
       {/if}
     </div>
     {#if salary}
-      <span class="shrink-0 text-base font-bold tracking-tight">{salary}</span>
+      <span class="shrink-0 text-base font-bold tabular-nums tracking-tight">{salary}</span>
     {/if}
   </div>
 </a>

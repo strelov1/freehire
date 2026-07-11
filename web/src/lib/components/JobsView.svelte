@@ -29,7 +29,7 @@
   import type { Job, FacetCounts } from '$lib/types';
   import FilterSummary from './filters/FilterSummary.svelte';
   import FilterModal from './filters/FilterModal.svelte';
-  import FilterEdgeTab from './FilterEdgeTab.svelte';
+  import ListToolbar from './ListToolbar.svelte';
   import States from './States.svelte';
   import JobRow from './JobRow.svelte';
   import LoadMore from './LoadMore.svelte';
@@ -275,22 +275,29 @@
 
   <div class="min-w-0 flex-1">
     {#if showBanner}
-      <!-- pl-12 md:pl-0 clears the mobile filters edge tab, matching the count row.
-           The banner is the only onboarding entry: it shows once (until dismissed or
-           completed), then retires — no persistent re-open control. -->
-      <div class="pl-12 md:pl-0">
-        <OnboardingBanner onOpen={() => (wizardOpen = true)} onDismiss={dismissBanner} />
-      </div>
+      <!-- Full-bleed within the content column — the Filters/Swipe controls live in the
+           toolbar below (and reappear as scroll-revealed edge tabs), so nothing up here
+           has to indent to clear them. The banner is the only onboarding entry: it shows
+           once (until dismissed or completed), then retires — no persistent re-open control. -->
+      <OnboardingBanner onOpen={() => (wizardOpen = true)} onDismiss={dismissBanner} />
     {/if}
     {#if alertBanner}
-      <div class="pl-12 md:pl-0">
-        <OnboardingAlertBanner
-          query={alertBanner.query}
-          autostart={alertBanner.autostart}
-          onDismiss={() => (alertBanner = null)}
-        />
-      </div>
+      <OnboardingAlertBanner
+        query={alertBanner.query}
+        autostart={alertBanner.autostart}
+        onDismiss={() => (alertBanner = null)}
+      />
     {/if}
+
+    <ListToolbar
+      total={jobs.status === 'ready' && jobs.items.length > 0 ? jobs.total : null}
+      unit={jobs.total === 1 ? 'job' : 'jobs'}
+      active={filters.active}
+      onOpenFilters={() => (modalOpen = true)}
+      onSwipe={standalone ? openSwipe : undefined}
+      showDesktopTotal={standalone}
+    />
+
     {#if jobs.status === 'loading'}
       <States state="loading" />
     {:else if jobs.status === 'error'}
@@ -311,19 +318,6 @@
         </div>
       {/if}
     {:else}
-      <!-- Standalone: the count is the topmost element, level with the fixed edge
-           tab, so pl-12 clears it (reset at md). Company embed: the count sits well
-           below the header/facts, clear of the tab, so it aligns with the cards; it
-           also moves to the sidebar on desktop, hence mobile-only and a touch bolder. -->
-      <p
-        class={[
-          'mb-3 text-sm',
-          standalone ? 'pl-12 text-muted-foreground md:pl-0' : 'font-medium text-foreground md:hidden',
-        ]}
-        aria-live="polite"
-      >
-        {jobs.total.toLocaleString()} {jobs.total === 1 ? 'job' : 'jobs'}
-      </p>
       <div class="flex flex-col gap-3">
         {#each jobs.items as job (job.public_slug)}
           <JobRow {job} />
@@ -340,22 +334,17 @@
   </div>
 </div>
 
-<!-- Mobile left-edge Filters tab, for both the standalone list and the embedded
-     company view (parity with /jobs) — it floats over the left edge of the content
-     the same way on either page. -->
-<FilterEdgeTab active={filters.active} onclick={() => (modalOpen = true)} />
-
 {#if standalone}
-  <!-- Swipe-mode entry: an icon-only button pinned to the right viewport edge,
-       level with the left filters tab (top-16). Fixed, so it only exists while the
-       standalone jobs list is mounted (never on the embedded company view) and
-       stays reachable while scrolling; kept below the z-40 mobile overlays. -->
+  <!-- Desktop swipe-mode entry: an icon-only button pinned to the right viewport edge
+       (mobile uses the inline toolbar / scroll-revealed tab, so this is md-only). Fixed,
+       so it exists only while the standalone list is mounted and stays reachable while
+       scrolling; kept below the z-40 mobile overlays. -->
   <button
     type="button"
     onclick={openSwipe}
     aria-label="Swipe mode"
     title="Swipe mode"
-    class="fixed right-0 top-16 z-30 flex items-center rounded-l-lg border border-r-0 border-border bg-secondary py-2.5 pl-2 pr-1.5 text-secondary-foreground shadow-sm transition-colors hover:bg-accent"
+    class="fixed right-0 top-16 z-30 hidden items-center rounded-l-xl border border-r-0 border-border bg-secondary py-2.5 pl-2.5 pr-2 text-secondary-foreground shadow-md transition-colors hover:bg-accent md:flex"
   >
     <Layers class="size-4 shrink-0" />
   </button>

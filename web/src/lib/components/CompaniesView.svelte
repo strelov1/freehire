@@ -17,7 +17,7 @@
   import CompanyLogo from './CompanyLogo.svelte';
   import CompanyFilterSummary from './filters/CompanyFilterSummary.svelte';
   import CompanyFilterModal from './filters/CompanyFilterModal.svelte';
-  import FilterEdgeTab from './FilterEdgeTab.svelte';
+  import ListToolbar from './ListToolbar.svelte';
 
   // The first page is server-rendered (route `load`) for the current filters, so
   // the rows are in the initial HTML.
@@ -87,6 +87,12 @@
   </aside>
 
   <div class="min-w-0 flex-1">
+    <ListToolbar
+      total={companies.status === 'ready' && companies.items.length > 0 ? companies.total : null}
+      unit={companies.total === 1 ? 'company' : 'companies'}
+      active={filters.active}
+      onOpenFilters={() => (modalOpen = true)}
+    />
     {#if companies.status === 'loading'}
       <States state="loading" />
     {:else if companies.status === 'error'}
@@ -97,10 +103,6 @@
         message={filters.value.q || filters.active > 0 ? 'No matching companies.' : 'No companies yet.'}
       />
     {:else}
-      <!-- Clear the left-edge filters tab on mobile (see FilterEdgeTab below). -->
-      <p class="mb-3 pl-12 text-sm text-muted-foreground md:pl-0" aria-live="polite">
-        {companies.total.toLocaleString()} {companies.total === 1 ? 'company' : 'companies'}
-      </p>
       <div class="flex flex-col gap-3">
         {#each companies.items as company (company.slug)}
           {@const industry = company.industries?.[0]}
@@ -145,8 +147,5 @@
     {/if}
   </div>
 </div>
-
-<!-- Mobile filters entry (the desktop aside hosts the summary + All-filters button). -->
-<FilterEdgeTab active={filters.active} onclick={() => (modalOpen = true)} />
 
 <CompanyFilterModal store={filters} open={modalOpen} onClose={() => (modalOpen = false)} />
