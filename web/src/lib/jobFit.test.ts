@@ -56,7 +56,7 @@ describe('reduceFitEvent', () => {
   });
 
   it('captures an error event as terminal', () => {
-    const s = reduceFitEvent(initFitStream(), 'error', { message: 'boom' });
+    const s = reduceFitEvent(initFitStream(), 'stream_error', { message: 'boom' });
     expect(s.error).toBe('boom');
     expect(s.done).toBe(true);
   });

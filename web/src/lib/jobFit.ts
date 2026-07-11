@@ -107,7 +107,7 @@ export function reduceFitEvent(prev: FitStreamState, name: string, data: unknown
       s.done = true;
       s.stages = s.stages.map((x) => ({ ...x, state: 'done' as StageState }));
       return s;
-    case 'error':
+    case 'stream_error':
       s.error = String(d.message ?? 'Analysis failed');
       s.done = true;
       return s;

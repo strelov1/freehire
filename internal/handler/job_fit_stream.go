@@ -68,11 +68,11 @@ func (a *API) StreamJobFit(c *fiber.Ctx) error {
 		})
 		if err != nil {
 			log.Printf("jobfit: stream analyze failed for user %d job %d: %v", userID, job.ID, err)
-			writeSSE(w, "error", map[string]string{"message": "analysis failed"})
+			writeSSE(w, "stream_error", map[string]string{"message": "analysis failed"})
 			return
 		}
 		if analysis == nil {
-			writeSSE(w, "error", map[string]string{"message": "analysis unavailable"})
+			writeSSE(w, "stream_error", map[string]string{"message": "analysis unavailable"})
 			return
 		}
 		a.cacheAnalysis(ctx, userID, job, cvUploadedAt, analysis)

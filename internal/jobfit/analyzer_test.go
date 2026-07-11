@@ -85,7 +85,8 @@ func TestAnalyze_ThreeStageChainUsesAuditedVerdict(t *testing.T) {
 }
 
 func TestAnalyze_Stage3FailFallsBackToStage2(t *testing.T) {
-	m := &queuedModel{resp: []string{stage1JSON, stage2JSON, "not json"}}
+	// Stage 3 fails on both attempts (the retry also gets junk), then falls back.
+	m := &queuedModel{resp: []string{stage1JSON, stage2JSON, "not json", "still not json"}}
 	got, err := NewAnalyzer(llm.NewWithModel(m)).Analyze(context.Background(), sampleInput())
 	if err != nil {
 		t.Fatalf("Analyze should degrade, not error: %v", err)
@@ -115,6 +116,22 @@ func TestAnalyze_Stage3PartialMergesOntoStage2(t *testing.T) {
 	}
 	if len(got.Gaps) != 1 || got.Gaps[0] != "Thin on scale" {
 		t.Errorf("gaps = %v, want the audit's override", got.Gaps)
+	}
+}
+
+func TestAnalyzeStream_RetriesATransientStageFailure(t *testing.T) {
+	// Stage 1 first returns an HTML error page (a transient gateway 502), then valid JSON
+	// on the retry; the chain must recover and produce the final analysis.
+	m := &queuedModel{resp: []string{`<html>502 Bad Gateway</html>`, stage1JSON, stage2JSON, stage3JSON}}
+	got, err := NewAnalyzer(llm.NewWithModel(m)).Analyze(context.Background(), sampleInput())
+	if err != nil {
+		t.Fatalf("Analyze should recover on retry: %v", err)
+	}
+	if got == nil || got.OverallScore != 58 {
+		t.Errorf("recovered final = %+v, want overall 58", got)
+	}
+	if m.n != 4 {
+		t.Errorf("model calls = %d, want 4 (1 failed stage-1 + retry + stages 2,3)", m.n)
 	}
 }
 

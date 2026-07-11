@@ -48,10 +48,12 @@
     showThinking = true;
     const source = new EventSource(api.jobFitStreamUrl(data.job.public_slug), { withCredentials: true });
     es = source;
-    for (const name of ['meta', 'stage_start', 'stage_done', 'thinking', 'requirements', 'dimensions', 'final', 'error']) {
+    // NB: our server error event is `stream_error`, never `error` — `error` is
+    // EventSource's own reserved connection-error event (handled by onerror below).
+    for (const name of ['meta', 'stage_start', 'stage_done', 'thinking', 'requirements', 'dimensions', 'final', 'stream_error']) {
       source.addEventListener(name, (e) => {
         stream = reduceFitEvent(stream, name, JSON.parse((e as MessageEvent).data));
-        if (name === 'final' || name === 'error') stop();
+        if (name === 'final' || name === 'stream_error') stop();
       });
     }
     // A connection drop before the final event is a real failure (not the normal close,

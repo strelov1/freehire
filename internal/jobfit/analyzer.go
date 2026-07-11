@@ -141,19 +141,34 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 	return &analysis, nil
 }
 
+// stageAttempts is how many times a stage's LLM call is tried before giving up. The
+// gateway occasionally returns a transient HTML error page (a 502/504 under the slow
+// reasoning model's load) that fails JSON parsing; a single retry recovers it, mirroring
+// the enrichment worker's retry-once policy.
+const stageAttempts = 2
+
 // streamStage runs one streaming JSON call, forwarding reasoning deltas as thinking
-// events for the given stage, and unmarshals the accumulated JSON into out.
+// events for the given stage, and unmarshals the accumulated JSON into out. A transport
+// or parse failure is retried once (stageAttempts) before it is returned — the retry's
+// thinking deltas stream too, so the panel simply continues.
 func (a *Analyzer) streamStage(ctx context.Context, stage int, system, user string, emit func(Event), out any) error {
-	raw, err := a.client.GenerateJSONStream(ctx, system, user, func(t string) {
-		emit(Event{Kind: EventThinking, Stage: stage, Thinking: t})
-	})
-	if err != nil {
-		return err
+	var err error
+	for attempt := 1; attempt <= stageAttempts; attempt++ {
+		var raw string
+		raw, err = a.client.GenerateJSONStream(ctx, system, user, func(t string) {
+			emit(Event{Kind: EventThinking, Stage: stage, Thinking: t})
+		})
+		if err == nil {
+			if err = json.Unmarshal([]byte(strings.TrimSpace(raw)), out); err == nil {
+				return nil
+			}
+			err = fmt.Errorf("parse: %w", err)
+		}
+		if attempt < stageAttempts {
+			log.Printf("jobfit: stage %d attempt %d failed, retrying: %v", stage, attempt, err)
+		}
 	}
-	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), out); err != nil {
-		return fmt.Errorf("parse: %w", err)
-	}
-	return nil
+	return err
 }
 
 // stage1SystemPrompt pins the ATS extract-and-match contract.
