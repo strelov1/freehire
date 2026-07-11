@@ -4,6 +4,7 @@
   import JobsView from './JobsView.svelte';
   import States from './States.svelte';
   import CompanyHeader from './CompanyHeader.svelte';
+  import CompanyAbout from './CompanyAbout.svelte';
   import CompanyFacts from './CompanyFacts.svelte';
 
   // The company entity is server-rendered (route `load`), so the header is in the
@@ -18,6 +19,12 @@
 </script>
 
 <CompanyHeader {company} {slug} />
+
+<!-- Full company description, full-width under the header (CompanyHeader shows only the
+     derived tagline). Renders nothing when there's no description. -->
+<div class="mt-4">
+  <CompanyAbout {company} />
+</div>
 
 <!-- Company facts sit atop the jobs sidebar on desktop (passed into JobsView as
      `sidebarTop`); the sidebar is hidden on mobile, so mirror them here as a card

@@ -77,7 +77,7 @@ func (q *Queries) CompanySitemapBoundaries(ctx context.Context, chunkSize int64)
 const countCompanies = `-- name: CountCompanies :one
 SELECT count(*)
 FROM companies
-WHERE ($1::text = '' OR name ILIKE '%' || $1 || '%')
+WHERE ($1::text = '' OR name ILIKE '%' || $1 || '%' OR slug ILIKE '%' || $1 || '%')
   AND (coalesce(cardinality($2::text[]), 0) = 0 OR collections && $2::text[])
   AND (coalesce(cardinality($3::text[]), 0) = 0 OR regions && $3::text[])
   AND (coalesce(cardinality($4::text[]), 0) = 0 OR countries && $4::text[])
@@ -192,7 +192,7 @@ func (q *Queries) GetCompany(ctx context.Context, slug string) (Company, error) 
 const listCompanies = `-- name: ListCompanies :many
 SELECT slug, name, job_count, tagline, industries, hq_country
 FROM companies
-WHERE ($1::text = '' OR name ILIKE '%' || $1 || '%')
+WHERE ($1::text = '' OR name ILIKE '%' || $1 || '%' OR slug ILIKE '%' || $1 || '%')
   AND (coalesce(cardinality($2::text[]), 0) = 0 OR collections && $2::text[])
   AND (coalesce(cardinality($3::text[]), 0) = 0 OR regions && $3::text[])
   AND (coalesce(cardinality($4::text[]), 0) = 0 OR countries && $4::text[])
@@ -244,8 +244,10 @@ type ListCompaniesRow struct {
 // array short-circuits to no constraint, non-empty values are OR-ed within the
 // facet, and the facets AND together (and with the name search). `remote_regions`
 // is the job-derived facet scoped to remote jobs (see RefreshCompanyFacets), a
-// subset of `regions`. CountCompanies MUST keep an identical WHERE so the filtered
-// total matches the page.
+// subset of `regions`. The name search also matches the slug, so a hyphenated slug
+// query ("ge-vernova") finds the company even though its name has a space ("GE
+// Vernova"). CountCompanies MUST keep an identical WHERE so the filtered total
+// matches the page.
 func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([]ListCompaniesRow, error) {
 	rows, err := q.db.Query(ctx, listCompanies,
 		arg.Search,

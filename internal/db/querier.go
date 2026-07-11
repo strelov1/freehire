@@ -318,8 +318,10 @@ type Querier interface {
 	// array short-circuits to no constraint, non-empty values are OR-ed within the
 	// facet, and the facets AND together (and with the name search). `remote_regions`
 	// is the job-derived facet scoped to remote jobs (see RefreshCompanyFacets), a
-	// subset of `regions`. CountCompanies MUST keep an identical WHERE so the filtered
-	// total matches the page.
+	// subset of `regions`. The name search also matches the slug, so a hyphenated slug
+	// query ("ge-vernova") finds the company even though its name has a space ("GE
+	// Vernova"). CountCompanies MUST keep an identical WHERE so the filtered total
+	// matches the page.
 	ListCompanies(ctx context.Context, arg ListCompaniesParams) ([]ListCompaniesRow, error)
 	// All companies with their current collection membership. cmd/import-collections
 	// reads this to know the existing company slugs (the match target) and each

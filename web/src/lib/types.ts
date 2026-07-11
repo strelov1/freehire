@@ -37,9 +37,12 @@ export interface CompanyInfo {
     symbol?: string;
     exchange?: string;
   };
-  // YC-directory extras (populated by cmd/import-yc; absent on non-YC companies).
+  // Directory extras (populated by cmd/import-yc and cmd/import-hirebase; absent on
+  // companies neither importer touched). `website`/`linkedin` are the hirebase
+  // outbound links; `description` is the full company summary.
   description?: string;
   website?: string;
+  linkedin?: string;
   stage?: string;
   top_company?: boolean;
   is_hiring?: boolean;

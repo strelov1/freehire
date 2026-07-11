@@ -9,11 +9,13 @@
 -- array short-circuits to no constraint, non-empty values are OR-ed within the
 -- facet, and the facets AND together (and with the name search). `remote_regions`
 -- is the job-derived facet scoped to remote jobs (see RefreshCompanyFacets), a
--- subset of `regions`. CountCompanies MUST keep an identical WHERE so the filtered
--- total matches the page.
+-- subset of `regions`. The name search also matches the slug, so a hyphenated slug
+-- query ("ge-vernova") finds the company even though its name has a space ("GE
+-- Vernova"). CountCompanies MUST keep an identical WHERE so the filtered total
+-- matches the page.
 SELECT slug, name, job_count, tagline, industries, hq_country
 FROM companies
-WHERE (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%')
+WHERE (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%' OR slug ILIKE '%' || sqlc.arg('search') || '%')
   AND (coalesce(cardinality(sqlc.arg('collections')::text[]), 0) = 0 OR collections && sqlc.arg('collections')::text[])
   AND (coalesce(cardinality(sqlc.arg('regions')::text[]), 0) = 0 OR regions && sqlc.arg('regions')::text[])
   AND (coalesce(cardinality(sqlc.arg('countries')::text[]), 0) = 0 OR countries && sqlc.arg('countries')::text[])
@@ -34,7 +36,7 @@ LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 -- to ListCompanies.
 SELECT count(*)
 FROM companies
-WHERE (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%')
+WHERE (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%' OR slug ILIKE '%' || sqlc.arg('search') || '%')
   AND (coalesce(cardinality(sqlc.arg('collections')::text[]), 0) = 0 OR collections && sqlc.arg('collections')::text[])
   AND (coalesce(cardinality(sqlc.arg('regions')::text[]), 0) = 0 OR regions && sqlc.arg('regions')::text[])
   AND (coalesce(cardinality(sqlc.arg('countries')::text[]), 0) = 0 OR countries && sqlc.arg('countries')::text[])
