@@ -176,6 +176,28 @@ func TestRegistry_HasUnicorn(t *testing.T) {
 	}
 }
 
+func TestRegistry_HasAINative(t *testing.T) {
+	c, ok := Lookup("ai-native")
+	if !ok || len(c.Slugs) == 0 {
+		t.Fatalf("ai-native collection missing or has no member slugs: %+v ok=%v", c, ok)
+	}
+	if c.Title == "" || c.Description == "" {
+		t.Errorf("ai-native collection missing display copy: %+v", c)
+	}
+	// Members are the canonical slugs of our ingested companies (matched by
+	// normalize.Slug), so the forms that differ from the brand name must be present.
+	want := []string{"deepgram", "openrouter-ai", "trmlabs", "qdrant-tech"}
+	set := make(map[string]struct{}, len(c.Slugs))
+	for _, s := range c.Slugs {
+		set[s] = struct{}{}
+	}
+	for _, w := range want {
+		if _, ok := set[w]; !ok {
+			t.Errorf("ai-native slugs missing %q", w)
+		}
+	}
+}
+
 func TestRetiredSlugs_AreNotLiveCollections(t *testing.T) {
 	// A retired slug must be absent from All (else it is a live collection, not
 	// retired) — the invariant that lets import-collections manage-then-strip it.

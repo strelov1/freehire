@@ -100,6 +100,12 @@ var All = []Collection{
 		Description: "Open roles at globally distributed companies founded by Eastern European (incl. Russian-speaking) founders or with Eastern European engineering roots.",
 		Dataset:     &Dataset{Data: easternRootsData, Parse: ParseSlugList},
 	},
+	{
+		Slug:        "ai-native",
+		Title:       "AI-Native",
+		Description: "Open roles at AI-native companies building AI-first products and infrastructure — model and inference APIs, vector databases, and agent/dev tooling.",
+		Slugs:       AINativeSlugs,
+	},
 }
 
 // Default dataset URLs (overridable per collection via <SLUG>_DATASET_URL in the
@@ -135,6 +141,25 @@ var AICompanySlugs = []string{
 	"runway-ml", "elevenlabs", "eleven-labs", "synthesia", "jasper",
 	"glean", "harvey", "harvey-ai", "suno", "descript", "cresta",
 	"anysphere", "cursor",
+}
+
+// AINativeSlugs is the curated AI-native cohort sourced from the remotepilot.dev
+// directory — model/inference APIs, vector databases, and agent/dev tooling built
+// around AI. Entries are canonical company slugs (normalize.Slug) matched against
+// our ingested companies; the forms below were verified against the names our
+// adapters ingest (e.g. "openrouter.ai" → openrouter-ai, "trmlabs" → trmlabs), with
+// a brand variant listed alongside the few that could be ingested either way. It
+// overlaps AICompanySlugs by design — a company may belong to both collections.
+var AINativeSlugs = []string{
+	// Model & inference APIs.
+	"deepgram", "cohere", "together-ai", "fireworks-ai", "openrouter-ai", "openrouter",
+	// Vector databases & data infrastructure.
+	"pinecone", "qdrant-tech", "qdrant", "weaviate", "supabase", "planetscale", "tensorwave",
+	// Agent & developer tooling.
+	"langchain", "composio", "livekit", "linear", "resend",
+	// Other AI-native companies.
+	"trmlabs", "trm-labs", "jasper", "concentrate-ai", "andromeda",
+	"infinity-constellation", "vclusterlabs", "vcluster-labs", "urun", "tollbit",
 }
 
 // Mag7Slugs is the Magnificent Seven — the 2025 canonical mega-cap tech cohort.

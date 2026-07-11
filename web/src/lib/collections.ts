@@ -504,6 +504,12 @@ export const COLLECTIONS: Collection[] = [
     description:
       'Open roles at globally distributed companies founded by Eastern European (incl. Russian-speaking) founders or with Eastern European engineering roots.',
   },
+  {
+    slug: 'ai-native',
+    title: 'AI-Native',
+    description:
+      'Open roles at AI-native companies building AI-first products and infrastructure — model and inference APIs, vector databases, and agent/dev tooling.',
+  },
 ];
 
 // A resolved collection: the display copy plus the fixed job-search facet params
