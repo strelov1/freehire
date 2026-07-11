@@ -21,15 +21,22 @@ export type Sign = 'off' | 'include' | 'exclude';
  *  shape `FacetSection` reads — one canonical type so the two can't drift. */
 export type FacetState = FacetSelection;
 
-/** The fields the browse list can be ordered by. Only `posted_at` (the source's
- *  posting date, newest-first) is offered today; the type stays a union so a
- *  future sort (e.g. salary) re-introduces an option without reshaping callers. */
-export type SortField = 'posted_at';
+/** The orders the browse list can take. `posted_at` is the source's posting date
+ *  (newest-first). `cv` is a frontend-only routing signal: the feed ranks by the
+ *  signed-in user's CV vector via the recommendations endpoint — it is never sent
+ *  to the keyword search endpoint (whose sort allowlist is posted_at/created_at/
+ *  salary_*), only carried in the URL/store for round-trip. */
+export type SortField = 'posted_at' | 'cv';
 
-/** Default (and currently only) browse order: freshest by posting date. Kept out
- *  of the URL (see filtersToParams) so the default reads as a clean, sort-less URL
- *  and the backend's own empty-query default stays the single source of truth. */
+/** Default browse order: freshest by posting date. Kept out of the URL (see
+ *  filtersToParams) so the default reads as a clean, sort-less URL and the
+ *  backend's own empty-query default stays the single source of truth. */
 export const DEFAULT_SORT: SortField = 'posted_at';
+
+/** The non-default sort values the URL round-trips back into state (posted_at is
+ *  the default and never written to the URL). A value outside this set — absent,
+ *  legacy, or malformed — reads as the default. */
+const KNOWN_SORTS: readonly SortField[] = ['cv'];
 
 export interface JobFilters {
   q: string;
@@ -104,8 +111,10 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   // negative, non-numeric) reads as "any age", matching the backend's own guard.
   const days = Number(p.get('posted_within_days'));
   f.postedWithinDays = Number.isInteger(days) && days > 0 ? days : null;
-  // Sort isn't user-selectable today, so it's never read from the URL — it stays
-  // the default seeded by emptyFilters().
+  // Accept only a known non-default sort; anything else (absent, legacy, malformed)
+  // stays the default seeded by emptyFilters(), matching the backend's own guard.
+  const sort = p.get('sort');
+  f.sort = KNOWN_SORTS.find((s) => s === sort) ?? DEFAULT_SORT;
   return f;
 }
 

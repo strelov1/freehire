@@ -6,6 +6,7 @@ import {
   filtersFromParams,
   activeFilterCount,
   canonicalQuery,
+  DEFAULT_SORT,
   signOf,
   facetSetSign,
   facetCycle,
@@ -161,5 +162,30 @@ describe('sign transitions (pure)', () => {
   it('facetRemove clears the value from both sets', () => {
     expect(facetRemove({ include: ['go'], exclude: [], matchAll: false }, 'go')).toEqual(emptyFacet());
     expect(facetRemove({ include: [], exclude: ['go'], matchAll: false }, 'go')).toEqual(emptyFacet());
+  });
+});
+
+describe('sort', () => {
+  it('parses a known sort value from the URL', () => {
+    expect(filtersFromParams(new URLSearchParams('sort=cv')).sort).toBe('cv');
+  });
+
+  it('defaults an absent sort to DEFAULT_SORT', () => {
+    expect(filtersFromParams(new URLSearchParams('')).sort).toBe(DEFAULT_SORT);
+  });
+
+  it('defaults an unknown sort value to DEFAULT_SORT', () => {
+    expect(filtersFromParams(new URLSearchParams('sort=bogus')).sort).toBe(DEFAULT_SORT);
+  });
+
+  it('serializes a non-default sort and omits the default', () => {
+    const cv = emptyFilters();
+    cv.sort = 'cv';
+    expect(filtersToParams(cv).get('sort')).toBe('cv');
+    expect(filtersToParams(emptyFilters()).get('sort')).toBeNull();
+  });
+
+  it('round-trips sort=cv through canonicalQuery', () => {
+    expect(canonicalQuery('sort=cv')).toBe('sort=cv');
   });
 });
