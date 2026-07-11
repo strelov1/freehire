@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fade } from 'svelte/transition';
   import { Layers, SlidersHorizontal } from '@lucide/svelte';
+  import type { Snippet } from 'svelte';
 
   // The mobile controls for a list page (jobs, companies, …): an inline toolbar at the
   // top of the list — the results total on the left, the Filters entry (and, on the jobs
@@ -15,6 +16,9 @@
   // where a swipe deck exists (the standalone jobs list). `showDesktopTotal` is false when
   // the desktop layout already surfaces the total elsewhere (the company page's sidebar
   // stat), so the above-list line isn't shown twice; the mobile toolbar total is unaffected.
+  // `sortControl` is an optional leading control (the jobs feed's sort selector) rendered
+  // in the mobile toolbar and beside the desktop total; it shows even when `total` is null
+  // so the control stays reachable while the list is empty or standing in a prompt.
   let {
     total,
     unit,
@@ -22,6 +26,7 @@
     onOpenFilters,
     onSwipe,
     showDesktopTotal = true,
+    sortControl,
   }: {
     total: number | null;
     unit: string;
@@ -29,6 +34,7 @@
     onOpenFilters: () => void;
     onSwipe?: () => void;
     showDesktopTotal?: boolean;
+    sortControl?: Snippet;
   } = $props();
 
   // Reveal the floating edge tabs once the inline toolbar leaves the viewport. The
@@ -60,6 +66,7 @@
     </span>
   {/if}
   <div class="ml-auto flex items-center gap-2">
+    {@render sortControl?.()}
     <button
       type="button"
       onclick={onOpenFilters}
@@ -88,12 +95,19 @@
   </div>
 </div>
 
-<!-- Desktop: the total sits top-right above the list (filters live in the sidebar). -->
-{#if total !== null && showDesktopTotal}
-  <p class="mb-3 hidden text-right text-sm text-muted-foreground md:block" aria-live="polite">
-    <span class="font-semibold tabular-nums text-foreground">{total.toLocaleString()}</span>
-    {unit}
-  </p>
+<!-- Desktop: the total (and any sort control) sit top-right above the list (filters
+     live in the sidebar). Renders when there's a total OR a sort control to show, so
+     the control stays visible on an empty/prompt list where the total is null. -->
+{#if showDesktopTotal && (total !== null || sortControl)}
+  <div class="mb-3 hidden items-center justify-end gap-3 md:flex">
+    {@render sortControl?.()}
+    {#if total !== null}
+      <span class="text-sm text-muted-foreground" aria-live="polite">
+        <span class="font-semibold tabular-nums text-foreground">{total.toLocaleString()}</span>
+        {unit}
+      </span>
+    {/if}
+  </div>
 {/if}
 
 <!-- Scroll-revealed floating controls: Filters (left) and, where present, Swipe (right). -->
