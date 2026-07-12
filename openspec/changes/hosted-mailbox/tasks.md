@@ -16,10 +16,10 @@
 
 ## 4. SES inbound ingest
 
-- [ ] 4.1 `InboundSource` interface (`Receive`/`Ack`) + a fake for tests; ingest worker: parse → resolve recipient to mailbox/user → upsert `hosted` message (idempotent by Message-ID, synth key when absent) → ack; drop unknown-recipient/unparseable, leave transient store errors un-acked; unit-tested over the fake (port from apply `ingest/worker.go`)
-- [ ] 4.2 `SESSource` adapter: SQS long-poll → fetch S3 object → yield raw MIME; Ack deletes the SQS message; AWS config via default chain (add AWS SDK v2 deps)
-- [ ] 4.3 `cmd/mail-ingest` daemon: wire config (`MAIL_DOMAIN`, `AWS_REGION`, `MAIL_INBOUND_QUEUE_URL`, `MAIL_INBOUND_BUCKET`), run the poll loop, graceful shutdown; gated on config
-- [ ] 4.4 `internal/config`: add the mail-ingest env; document it in `.env.example`
+- [x] 4.1 `InboundSource` interface (`Receive`/`Ack`) + a fake for tests; ingest worker: parse → resolve recipient to mailbox/user → upsert `hosted` message (idempotent by Message-ID, synth key when absent) → ack; drop unknown-recipient/unparseable, leave transient store errors un-acked; unit-tested over the fake (port from apply `ingest/worker.go`)
+- [x] 4.2 `SESSource` adapter: SQS long-poll → fetch S3 object → yield raw MIME; Ack deletes the SQS message; AWS config via default chain (add AWS SDK v2 deps)
+- [x] 4.3 `cmd/mail-ingest` daemon: wire config (`MAIL_DOMAIN`, `AWS_REGION`, `MAIL_INBOUND_QUEUE_URL`, `MAIL_INBOUND_BUCKET`), run the poll loop, graceful shutdown; gated on config
+- [x] 4.4 `internal/config`: add the mail-ingest env; document it in `.env.example`
 
 ## 5. Refactor Gmail store onto the unified shape
 
