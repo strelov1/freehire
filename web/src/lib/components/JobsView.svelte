@@ -329,20 +329,6 @@
   </aside>
 
   <div class="min-w-0 flex-1">
-    {#if showBanner}
-      <!-- Full-bleed within the content column — the Filters/Swipe controls live in the
-           toolbar below (and reappear as scroll-revealed edge tabs), so nothing up here
-           has to indent to clear them. The banner is the only onboarding entry: it shows
-           once (until dismissed or completed), then retires — no persistent re-open control. -->
-      <OnboardingBanner onOpen={() => (wizardOpen = true)} onDismiss={dismissBanner} />
-    {/if}
-    {#if alertBanner}
-      <OnboardingAlertBanner
-        query={alertBanner.query}
-        autostart={alertBanner.autostart}
-        onDismiss={() => (alertBanner = null)}
-      />
-    {/if}
     <ListToolbar
       total={!cvSignInPrompt && jobs.items.length > 0 ? jobs.total : null}
       unit={jobs.total === 1 ? 'job' : 'jobs'}
@@ -352,6 +338,24 @@
       showDesktopTotal={standalone}
       sortControl={standalone && isAuthenticated() ? sortSelect : undefined}
     />
+
+    <!-- Onboarding nudges sit UNDER the sort toolbar so the feed controls stay at the
+         top; each shows once (until dismissed or completed), then retires. Never blocks
+         the feed below. -->
+    {#if showBanner || alertBanner}
+      <div class="mt-3">
+        {#if showBanner}
+          <OnboardingBanner onOpen={() => (wizardOpen = true)} onDismiss={dismissBanner} />
+        {/if}
+        {#if alertBanner}
+          <OnboardingAlertBanner
+            query={alertBanner.query}
+            autostart={alertBanner.autostart}
+            onDismiss={() => (alertBanner = null)}
+          />
+        {/if}
+      </div>
+    {/if}
 
     {#if cvSignInPrompt}
       <!-- CV ranking needs the authenticated recommendations endpoint; the reload
@@ -397,7 +401,7 @@
             <button
               type="button"
               onclick={relaxFeed}
-              class="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium transition-colors hover:bg-accent"
+              class="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
             >
               Broaden search
             </button>

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { LoaderCircle, X } from '@lucide/svelte';
+  import { ArrowRight, LoaderCircle, X } from '@lucide/svelte';
   import type { RailEntry, RailSection } from '$lib/filterSections';
   import type { FacetCounts } from '$lib/types';
 
@@ -207,7 +207,7 @@
                   class={[
                     'flex w-full items-center justify-between gap-2 border-l-2 px-3 py-2 text-left text-sm transition-colors',
                     active === e.key
-                      ? 'border-foreground bg-accent font-semibold'
+                      ? 'border-brand bg-accent font-semibold'
                       : 'border-transparent font-medium hover:bg-accent',
                   ]}
                 >
@@ -216,7 +216,7 @@
                     <span
                       class={[
                         'shrink-0 rounded-full px-1.5 text-[11px] font-semibold',
-                        active === e.key ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground',
+                        active === e.key ? 'bg-brand text-brand-foreground' : 'bg-secondary text-muted-foreground',
                       ]}>{n}</span
                     >
                   {/if}
@@ -248,15 +248,17 @@
             type="button"
             onclick={runApply}
             disabled={applyDisabled || applyBusy}
-            class="inline-flex h-11 items-center gap-1.5 rounded-lg bg-primary px-6 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            class="inline-flex h-11 items-center gap-1.5 rounded-lg bg-brand px-6 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {#if applyLabel}
               {applyBusy ? 'Saving…' : applyLabel}
+              {#if !applyBusy}<ArrowRight class="size-4" aria-hidden="true" />{/if}
             {:else if loading}
               Show <LoaderCircle class="size-4 animate-spin" /> jobs
             {:else}
               Show {total != null ? total.toLocaleString('en-US') : ''}
               {total === 1 ? 'job' : 'jobs'}
+              <ArrowRight class="size-4" aria-hidden="true" />
             {/if}
           </button>
         </div>

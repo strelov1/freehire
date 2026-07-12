@@ -31,8 +31,8 @@
   });
 
   const toneText: Record<Tone, string> = {
-    strong: 'text-emerald-600 dark:text-emerald-400',
-    good: 'text-emerald-600 dark:text-emerald-400',
+    strong: 'text-brand-strong',
+    good: 'text-brand-strong',
     moderate: 'text-amber-600 dark:text-amber-500',
     weak: 'text-amber-600 dark:text-amber-500',
     poor: 'text-destructive',
@@ -66,7 +66,7 @@
       <li>
         <a
           href={resolve('/jobs/[slug]/fit', { slug: it.slug })}
-          class="group flex items-center gap-4 rounded-lg border border-border p-3.5 transition-colors hover:border-primary/40 hover:bg-accent/40"
+          class="group flex items-center gap-4 rounded-lg border border-border p-3.5 transition-colors hover:border-brand/40 hover:bg-accent/40"
         >
           <span class="w-12 shrink-0 text-center text-2xl font-bold tabular-nums leading-none {toneText[tone]}">
             {it.overall_score}<span class="text-xs font-medium text-muted-foreground">%</span>

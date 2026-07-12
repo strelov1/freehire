@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { ArrowRight, Bookmark, Check, Eye, Flag } from '@lucide/svelte';
+  import { ArrowRight, Bookmark, Check, CheckCircle2, Eye, Flag } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
@@ -157,26 +157,26 @@
 
   <header class="flex flex-col gap-4 lg:col-start-2 lg:row-start-2">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-      <h1 class="text-2xl font-semibold tracking-tight">{job.title}</h1>
+      <div class="flex flex-wrap items-center gap-2.5">
+        <h1 class="text-2xl font-semibold tracking-tight">{job.title}</h1>
+        {#if applied}
+          <span class="inline-flex items-center gap-1.5 rounded-full border border-brand/30 bg-brand-muted px-2.5 py-0.5 text-xs font-semibold text-brand-strong">
+            <CheckCircle2 class="size-3.5" aria-hidden="true" /> Applied
+          </span>
+        {/if}
+      </div>
 
-      {#if !job.closed_at || applied}
-        <div class="flex shrink-0 flex-col gap-2 sm:items-end">
-          {#if !job.closed_at}
-            <Button
-              variant="primary"
-              href={job.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onclick={onApplyClick}
-              class="w-full sm:w-auto"
-            >
-              Show <ArrowRight class="size-4" />
-            </Button>
-          {/if}
-          {#if applied}
-            <Badge variant="secondary"><Check class="mr-1 size-3.5" /> You applied</Badge>
-          {/if}
-        </div>
+      {#if !job.closed_at}
+        <Button
+          variant="primary"
+          href={job.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onclick={onApplyClick}
+          class="w-full shrink-0 sm:w-auto"
+        >
+          Show <ArrowRight class="size-4" />
+        </Button>
       {/if}
     </div>
 
@@ -220,8 +220,14 @@
       {/if}
 
       <div class="flex flex-col gap-2 border-t border-border pt-4 first:border-t-0 first:pt-0">
-        <Button variant="outline" onclick={onSaveClick} aria-pressed={saved} class="w-full">
-          <Bookmark class={saved ? 'size-4 fill-current' : 'size-4'} />
+        <Button
+          variant="outline"
+          size="lg"
+          onclick={onSaveClick}
+          aria-pressed={saved}
+          class="w-full gap-2 rounded-xl border-transparent bg-brand-muted font-semibold text-brand-strong transition hover:bg-brand-muted hover:text-brand-strong hover:opacity-80"
+        >
+          <Bookmark class={saved ? 'size-[1.1rem] fill-current' : 'size-[1.1rem]'} />
           {saved ? 'Saved' : 'Save'}
         </Button>
       </div>
@@ -256,9 +262,9 @@
       {/if}
 
       <div class="flex flex-col gap-2 border-t border-border pt-4 first:border-t-0 first:pt-0">
-        <div class="flex flex-wrap items-center gap-2">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
-          <a href={filterHref('source', job.source)}>
+          <a href={filterHref('source', job.source)} class="inline-flex">
             <Badge variant="outline" class="transition-colors hover:bg-accent hover:text-foreground">
               {job.source}
             </Badge>
@@ -266,15 +272,15 @@
           {#if job.manually_added}
             <Badge variant="secondary">Manually added</Badge>
           {/if}
-          {#if posted}<span class="text-xs text-muted-foreground">Posted {posted}</span>{/if}
+          {#if posted}<span>Posted {posted}</span>{/if}
         </div>
         {#if views > 0 || applies > 0}
-          <div class="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+          <div class="flex flex-wrap items-center gap-3 text-xs leading-none text-muted-foreground">
             {#if views > 0}
-              <span class="flex items-center gap-1"><Eye class="size-3.5" />{views} {views === 1 ? 'view' : 'views'}</span>
+              <span class="inline-flex items-center gap-1"><Eye class="size-3.5 shrink-0" />{views} {views === 1 ? 'view' : 'views'}</span>
             {/if}
             {#if applies > 0}
-              <span class="flex items-center gap-1"><Check class="size-3.5" />{applies} applied</span>
+              <span class="inline-flex items-center gap-1"><Check class="size-3.5 shrink-0" />{applies} applied</span>
             {/if}
           </div>
         {/if}

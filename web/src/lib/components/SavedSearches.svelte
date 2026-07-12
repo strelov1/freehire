@@ -162,7 +162,7 @@
                 title="Apply this filter"
                 class={['flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent', active && 'bg-accent']}
               >
-                <span class={['size-1.5 shrink-0 rounded-full transition-colors', active ? 'bg-primary' : isBase ? 'bg-muted-foreground/50' : 'bg-transparent']}></span>
+                <span class={['size-1.5 shrink-0 rounded-full transition-colors', active ? 'bg-brand' : isBase ? 'bg-muted-foreground/50' : 'bg-transparent']}></span>
                 <span class={['truncate text-sm', active && 'font-medium']}>{set.name}</span>
               </button>
               <button

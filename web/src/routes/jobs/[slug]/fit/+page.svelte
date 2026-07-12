@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { resolve } from '$app/paths';
-  import { ArrowLeft, RefreshCw, FileText, Check, Loader } from '@lucide/svelte';
+  import { ArrowLeft, RefreshCw, FileText, Check, Loader, TriangleAlert } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
@@ -94,36 +94,36 @@
   const GAUGE_C = 2 * Math.PI * GAUGE_R;
 
   const toneText: Record<Tone, string> = {
-    strong: 'text-emerald-600 dark:text-emerald-400',
-    good: 'text-emerald-600 dark:text-emerald-400',
+    strong: 'text-brand-strong',
+    good: 'text-brand-strong',
     moderate: 'text-amber-600 dark:text-amber-500',
     weak: 'text-amber-600 dark:text-amber-500',
     poor: 'text-destructive',
   };
   const toneBar: Record<Tone, string> = {
-    strong: 'bg-emerald-500',
-    good: 'bg-emerald-500',
+    strong: 'bg-brand',
+    good: 'bg-brand',
     moderate: 'bg-amber-500',
     weak: 'bg-amber-500',
     poor: 'bg-destructive',
   };
   const toneStroke: Record<Tone, string> = {
-    strong: 'stroke-emerald-500',
-    good: 'stroke-emerald-500',
+    strong: 'stroke-brand',
+    good: 'stroke-brand',
     moderate: 'stroke-amber-500',
     weak: 'stroke-amber-500',
     poor: 'stroke-destructive',
   };
   const toneChip: Record<Tone, string> = {
-    strong: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
-    good: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+    strong: 'border-brand/30 bg-brand-muted text-brand-strong',
+    good: 'border-brand/30 bg-brand-muted text-brand-strong',
     moderate: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-500',
     weak: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-500',
     poor: 'border-destructive/30 bg-destructive/10 text-destructive',
   };
   const toneGlow: Record<Tone, string> = {
-    strong: 'rgba(16,185,129,0.10)',
-    good: 'rgba(16,185,129,0.10)',
+    strong: 'rgba(120,140,21,0.16)',
+    good: 'rgba(120,140,21,0.16)',
     moderate: 'rgba(245,158,11,0.10)',
     weak: 'rgba(245,158,11,0.10)',
     poor: 'rgba(239,68,68,0.10)',
@@ -231,7 +231,7 @@
             <div class="relative z-10 flex flex-1 flex-col items-center gap-2">
               <span
                 class="flex size-8 shrink-0 items-center justify-center rounded-full border bg-card text-sm font-semibold transition-colors
-                {st.state === 'done' ? 'border-emerald-500 bg-emerald-500 text-white' : st.state === 'active' ? 'border-primary text-primary' : 'border-border text-muted-foreground'}"
+                {st.state === 'done' ? 'border-brand bg-brand text-brand-foreground' : st.state === 'active' ? 'border-brand text-primary' : 'border-border text-muted-foreground'}"
               >
                 {#if st.state === 'done'}<Check class="size-4" />
                 {:else if st.state === 'active'}<Loader class="size-4 animate-spin" />
@@ -246,8 +246,8 @@
           <div class="mt-6 border-t border-border pt-4">
             <button type="button" class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground" onclick={() => (showThinking = !showThinking)}>
               <span class="relative flex size-2">
-                <span class="absolute inline-flex size-full animate-ping rounded-full bg-primary/60"></span>
-                <span class="relative inline-flex size-2 rounded-full bg-primary"></span>
+                <span class="absolute inline-flex size-full animate-ping rounded-full bg-brand/60"></span>
+                <span class="relative inline-flex size-2 rounded-full bg-brand"></span>
               </span>
               Thinking {showThinking ? '▾' : '▸'}
             </button>
@@ -260,9 +260,18 @@
     {/if}
 
     {#if stream.error && !analysis}
-      <div class="rounded-xl border border-destructive/30 bg-destructive/5 p-8 text-center text-sm text-destructive">
-        <p>{stream.error}.</p>
-        <button class="mt-2 font-semibold underline underline-offset-4" onclick={start}>Try again</button>
+      {@const msg = stream.error.charAt(0).toUpperCase() + stream.error.slice(1)}
+      <div class="flex flex-col items-center gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-8 text-center">
+        <span class="flex size-10 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+          <TriangleAlert class="size-5" aria-hidden="true" />
+        </span>
+        <p class="text-sm font-medium text-foreground">{msg}.</p>
+        <button
+          class="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
+          onclick={start}
+        >
+          <RefreshCw class="size-4" aria-hidden="true" /> Try again
+        </button>
       </div>
     {/if}
 
@@ -311,11 +320,11 @@
         <div class="grid gap-8 border-t border-border pt-8 sm:grid-cols-2">
           {#if analysis.strengths.length}
             <section class="flex flex-col gap-3">
-              <h2 class="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-400">Strengths</h2>
+              <h2 class="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-brand-strong">Strengths</h2>
               <ul class="flex flex-col gap-2.5">
                 {#each analysis.strengths as s, i (i)}
                   <li class="flex gap-2.5 text-sm leading-relaxed">
-                    <span class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">+</span>
+                    <span class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-brand-muted text-brand-strong">+</span>
                     {s}
                   </li>
                 {/each}

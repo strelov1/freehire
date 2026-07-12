@@ -99,29 +99,20 @@
   </aside>
 
   <div class="min-w-0 flex-1">
-    <div class="mb-4 flex items-center justify-between gap-2">
-      <div>
-        <p class="text-2xl font-semibold tracking-tight tabular-nums">
-          {counts.total.toLocaleString()}
-        </p>
-        <p class="text-sm text-muted-foreground" aria-live="polite">
-          {counts.total === 1 ? 'vacancy' : 'vacancies'} under current filters{#if status === 'loading'}
-            <span class="ml-1 italic">· updating…</span>
-          {/if}
-        </p>
-        {#if salary}
-          <p class="mt-1 text-xs text-muted-foreground">
-            Salary range ({salaryCurrency}): {salary.lo.toLocaleString()}–{salary.hi.toLocaleString()}
-          </p>
+    <div class="mb-4">
+      <p class="text-2xl font-semibold tracking-tight tabular-nums">
+        {counts.total.toLocaleString()}
+      </p>
+      <p class="text-sm text-muted-foreground" aria-live="polite">
+        {counts.total === 1 ? 'vacancy' : 'vacancies'} under current filters{#if status === 'loading'}
+          <span class="ml-1 italic">· updating…</span>
         {/if}
-      </div>
-      <button
-        type="button"
-        class="h-9 shrink-0 rounded-lg border border-border bg-secondary px-3 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent md:hidden"
-        onclick={() => (modalOpen = true)}
-      >
-        Filters{#if filters.active > 0}&nbsp;({filters.active}){/if}
-      </button>
+      </p>
+      {#if salary}
+        <p class="mt-1 text-xs text-muted-foreground">
+          Salary range ({salaryCurrency}): {salary.lo.toLocaleString()}–{salary.hi.toLocaleString()}
+        </p>
+      {/if}
     </div>
 
     {#if status === 'error'}

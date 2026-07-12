@@ -212,8 +212,8 @@
   // Two-state toggle-pill styling for the small fixed sets (work format, regions).
   function pillCls(active: boolean): string {
     return active
-      ? 'rounded-full bg-primary px-3 py-1 text-sm font-medium text-primary-foreground'
-      : 'rounded-full border border-border px-3 py-1 text-sm transition-colors hover:border-primary/60';
+      ? 'rounded-full bg-brand px-3 py-1 text-sm font-medium text-brand-foreground'
+      : 'rounded-full border border-border px-3 py-1 text-sm transition-colors hover:border-brand/60';
   }
 
   // Add the drafted city (trimmed, case-insensitive dedup) to the relocation targets.
@@ -269,7 +269,7 @@
       type="button"
       onclick={() => (formTab = 'main')}
       class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {formTab === 'main'
-        ? 'border-primary text-foreground'
+        ? 'border-brand text-foreground'
         : 'border-transparent text-muted-foreground hover:text-foreground'}"
     >
       Skills &amp; role
@@ -278,7 +278,7 @@
       type="button"
       onclick={() => (formTab = 'location')}
       class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {formTab === 'location'
-        ? 'border-primary text-foreground'
+        ? 'border-brand text-foreground'
         : 'border-transparent text-muted-foreground hover:text-foreground'}"
     >
       Location &amp; work
@@ -343,7 +343,7 @@
       disabled={resumeBusy}
       class="flex items-center justify-center gap-3 rounded-xl border-2 border-dashed text-center transition-colors disabled:opacity-70 {hasCv
         ? 'px-4 py-3'
-        : 'px-6 py-8'} {dragActive ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/60'}"
+        : 'px-6 py-8'} {dragActive ? 'border-brand bg-brand/5' : 'border-border hover:border-brand/60'}"
     >
       {#if hasCv}
         <Check class="size-4 shrink-0 text-primary" />
@@ -354,7 +354,7 @@
           {/if}
         </span>
       {:else}
-        <span class="flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground">
+        <span class="flex size-11 items-center justify-center rounded-full bg-brand text-brand-foreground">
           <ArrowUp class="size-5" />
         </span>
         <span class="flex flex-col gap-0.5 text-left">
@@ -407,7 +407,7 @@
           <button
             type="button"
             onclick={() => toggleSpecialization(value)}
-            class="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+            class="inline-flex items-center gap-1 rounded-full bg-brand px-2.5 py-1 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90"
           >
             {categoryLabel(value)}
             <X class="size-3" />
@@ -499,7 +499,7 @@
                 <button
                   type="button"
                   onclick={() => (relocCities = relocCities.filter((c) => c !== city))}
-                  class="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+                  class="inline-flex items-center gap-1 rounded-full bg-brand px-2.5 py-1 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90"
                 >
                   {city}
                   <X class="size-3" />

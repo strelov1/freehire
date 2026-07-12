@@ -46,7 +46,7 @@
             ]}
           >
             <span
-              class="pointer-events-none absolute inset-y-0 left-0 rounded-md bg-primary/10 transition-[width] group-hover:bg-primary/15"
+              class="pointer-events-none absolute inset-y-0 left-0 rounded-md bg-brand/10 transition-[width] group-hover:bg-brand/15"
               style:width={`${max > 0 ? (count / max) * 100 : 0}%`}
             ></span>
             <span class="relative truncate">{labels.get(value) ?? value}</span>

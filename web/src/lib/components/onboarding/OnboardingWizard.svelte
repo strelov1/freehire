@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowLeft, ArrowRight, FileUp, LoaderCircle, Sparkles, X } from '@lucide/svelte';
+  import { ArrowLeft, ArrowRight, FileUp, LoaderCircle, X } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
@@ -160,7 +160,7 @@
         aria-pressed={sel[field] === o.value}
         class={[
           'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
-          sel[field] === o.value ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card hover:bg-accent',
+          sel[field] === o.value ? 'border-brand bg-brand text-brand-foreground' : 'border-border bg-card hover:bg-accent',
         ]}
       >
         {o.label}
@@ -179,7 +179,7 @@
         aria-pressed={selected.includes(o.value)}
         class={[
           'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
-          selected.includes(o.value) ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card hover:bg-accent',
+          selected.includes(o.value) ? 'border-brand bg-brand text-brand-foreground' : 'border-border bg-card hover:bg-accent',
         ]}
       >
         {o.label}
@@ -202,7 +202,7 @@
       <div class="flex items-center gap-3 border-b border-border px-5 py-3">
         <div class="flex flex-1 items-center gap-1.5" aria-hidden="true">
           {#each { length: TOTAL_STEPS } as _, i (i)}
-            <span class={['h-1 w-7 rounded-full transition-colors', i < step ? 'bg-primary' : 'bg-border']}></span>
+            <span class={['h-1 w-7 rounded-full transition-colors', i < step ? 'bg-brand' : 'bg-border']}></span>
           {/each}
         </div>
         <button
@@ -224,8 +224,8 @@
 
       <!-- body -->
       <div class="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-        <div class="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary">
-          <Sparkles class="size-3.5" /> Step {step} of {TOTAL_STEPS}
+        <div class="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-strong">
+          Step {step} of {TOTAL_STEPS}
         </div>
         {#if step === 1}
           <h2 class="text-xl font-semibold tracking-tight">What do you do?</h2>
@@ -243,7 +243,7 @@
             type="button"
             onclick={pickCv}
             disabled={cvState === 'parsing'}
-            class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card px-4 py-3 text-sm font-medium transition-colors hover:border-primary hover:bg-accent disabled:opacity-60"
+            class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card px-4 py-3 text-sm font-medium transition-colors hover:border-brand hover:bg-accent disabled:opacity-60"
           >
             {#if cvState === 'parsing'}
               <LoaderCircle class="size-4 animate-spin" aria-hidden="true" /> Reading your CV…
@@ -303,7 +303,7 @@
         <button
           type="button"
           onclick={step < TOTAL_STEPS ? () => (step += 1) : complete}
-          class="inline-flex h-11 items-center gap-1.5 rounded-lg bg-primary px-6 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+          class="inline-flex h-11 items-center gap-1.5 rounded-lg bg-brand px-6 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
         >
           {step < TOTAL_STEPS ? 'Next' : 'Show jobs'} <ArrowRight class="size-4" />
         </button>

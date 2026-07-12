@@ -27,7 +27,7 @@
 
   // Status → badge styling (STRONG green / HIDDEN amber / ADJACENT blue / MISSING red).
   const statusStyle: Record<string, string> = {
-    strong: 'bg-primary/10 text-primary',
+    strong: 'bg-brand/10 text-primary',
     hidden: 'bg-amber-500/10 text-amber-600 dark:text-amber-500',
     adjacent: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
     missing: 'bg-destructive/10 text-destructive',
@@ -49,7 +49,7 @@
       </Badge>
     </div>
     <div class="h-2 overflow-hidden rounded bg-secondary">
-      <div class="h-full rounded bg-primary transition-all" style="width: {verdict.coverage_percent}%"></div>
+      <div class="h-full rounded bg-brand transition-all" style="width: {verdict.coverage_percent}%"></div>
     </div>
     <p class="text-sm text-muted-foreground">
       Vacancies for this role that mention at least one of your skills. Add the skills below to
@@ -94,7 +94,7 @@
         {#each bundles as b (b.name)}
           <span
             class="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm {b.has
-              ? 'bg-primary/5 text-foreground'
+              ? 'bg-brand/5 text-foreground'
               : 'bg-card text-muted-foreground'}"
           >
             {#if b.has}<Check class="size-3.5 text-primary" />{/if}
@@ -113,7 +113,7 @@
         type="button"
         onclick={() => (sub = 'gaps')}
         class="-mb-px flex items-center gap-1.5 border-b-2 px-1 pb-2 text-sm font-medium transition-colors {sub === 'gaps'
-          ? 'border-primary text-foreground'
+          ? 'border-brand text-foreground'
           : 'border-transparent text-muted-foreground hover:text-foreground'}"
       >
         <TrendingUp class="size-4" />
@@ -123,7 +123,7 @@
         type="button"
         onclick={() => (sub = 'skills')}
         class="-mb-px border-b-2 px-1 pb-2 text-sm font-medium transition-colors {sub === 'skills'
-          ? 'border-primary text-foreground'
+          ? 'border-brand text-foreground'
           : 'border-transparent text-muted-foreground hover:text-foreground'}"
       >
         Top market skills

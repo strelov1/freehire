@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { ArrowRight, FileText } from '@lucide/svelte';
+  import { ArrowRight, FileText, ScanSearch } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { verdictTone, type Tone } from '$lib/jobFit';
@@ -35,8 +35,8 @@
   const quotaSpent = $derived(!!quota && quota.remaining <= 0);
 
   const toneText: Record<Tone, string> = {
-    strong: 'text-emerald-600 dark:text-emerald-400',
-    good: 'text-emerald-600 dark:text-emerald-400',
+    strong: 'text-brand-strong',
+    good: 'text-brand-strong',
     moderate: 'text-amber-600 dark:text-amber-500',
     weak: 'text-amber-600 dark:text-amber-500',
     poor: 'text-destructive',
@@ -53,7 +53,7 @@
     </div>
   {:else if analysis}
     {@const tone = verdictTone(analysis.overall_score)}
-    <a href={resolve('/jobs/[slug]/fit', { slug })} class="group flex flex-col gap-2 rounded-lg border border-border p-3 transition-colors hover:border-primary/40 hover:bg-accent/40">
+    <a href={resolve('/jobs/[slug]/fit', { slug })} class="group flex flex-col gap-2 rounded-lg border border-border p-3 transition-colors hover:border-brand/40 hover:bg-accent/40">
       <div class="flex items-baseline justify-between gap-2">
         <span class="text-2xl font-bold tabular-nums leading-none {toneText[tone]}">{analysis.overall_score}%</span>
         <span class="text-sm font-medium {toneText[tone]}">{analysis.verdict}</span>
@@ -68,8 +68,16 @@
   {:else if quotaSpent}
     <p class="text-sm text-muted-foreground">You've used all {quota?.limit} AI fit analyses for this month. Your quota frees up as older analyses pass the 30-day mark.</p>
   {:else}
-    <p class="text-sm text-muted-foreground">A recruiter-style read of your CV against this role — title fit, experience, and the gaps an ATS flags.</p>
-    <Button variant="primary" size="sm" href={resolve('/jobs/[slug]/fit', { slug })}>Analyse fit with AI</Button>
+    <p class="text-sm text-muted-foreground">How your CV reads against this role — fit, gaps, and ATS flags.</p>
+    <Button
+      variant="primary"
+      size="lg"
+      href={resolve('/jobs/[slug]/fit', { slug })}
+      class="w-full justify-center gap-2 rounded-xl font-semibold"
+    >
+      Analyze match
+      <ScanSearch class="size-[1.15rem]" aria-hidden="true" />
+    </Button>
     {#if quota}
       <p class="text-xs text-muted-foreground">{quota.used}/{quota.limit} used this month</p>
     {/if}

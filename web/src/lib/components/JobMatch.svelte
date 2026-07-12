@@ -50,7 +50,7 @@
   const teaser = { percent: 76, have: ['React', 'Docker', 'SQL'], missing: ['Kafka'] };
 
   const chip = 'rounded-full border px-2 py-0.5 text-xs font-medium';
-  const haveChip = `${chip} border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400`;
+  const haveChip = `${chip} border-brand/30 bg-brand-muted text-brand-strong`;
   const adjChip = `${chip} border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-500`;
   const missChip = `${chip} border-destructive/30 bg-destructive/10 text-destructive`;
 
@@ -73,7 +73,7 @@
         <span class="text-xs text-muted-foreground">4 of 5 skills</span>
       </div>
       <div class="flex h-2 overflow-hidden rounded bg-secondary">
-        <div class="h-full bg-emerald-500" style="width: {teaser.percent}%"></div>
+        <div class="h-full bg-brand" style="width: {teaser.percent}%"></div>
       </div>
       <div class="flex flex-wrap gap-1.5">
         {#each teaser.have as skill (skill)}<span class={haveChip}>{skill}</span>{/each}
@@ -103,14 +103,14 @@
       </span>
     </div>
     <div class="flex h-2 overflow-hidden rounded bg-secondary">
-      <div class="h-full bg-emerald-500 transition-all" style="width: {segments.exact}%"></div>
+      <div class="h-full bg-brand transition-all" style="width: {segments.exact}%"></div>
       <div class="h-full bg-amber-500 transition-all" style="width: {segments.adjacent}%"></div>
     </div>
 
     {#if match.matched.length}
       <div class="flex flex-col gap-1.5">
         <span class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          <span class="size-1.5 rounded-full bg-emerald-500"></span>You have
+          <span class="size-1.5 rounded-full bg-brand"></span>You have
         </span>
         <div class="flex flex-wrap gap-1.5">
           {#each match.matched as skill (skill)}<span class={haveChip}>{skill}</span>{/each}

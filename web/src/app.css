@@ -22,6 +22,14 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  /* Brand accent (Granola "oats green"). One family: --brand is the solid CTA
+     fill, --brand-strong the readable text/link tone, --brand-muted the soft
+     tint for chips/badges, --brand-ring the focus outline. */
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-muted: var(--brand-muted);
+  --color-brand-ring: var(--brand-ring);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -34,7 +42,7 @@
 /* Flat neutral palette. One background fills the whole canvas in both modes;
    separation comes from spacing and thin borders, not competing fills. */
 :root {
-  --background: oklch(1 0 0);
+  --background: oklch(0.997 0.003 130);
   --foreground: oklch(0.13 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.13 0 0);
@@ -51,12 +59,19 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.92 0 0);
   --input: oklch(0.93 0 0);
-  --ring: oklch(0.7 0 0);
+  --ring: var(--brand-ring);
   --radius: 0.625rem;
+
+  /* oats green — dark olive CTA, pale tint, mid ring (Granola palette) */
+  --brand: #5b6f00;
+  --brand-foreground: #f3f6e2;
+  --brand-strong: #4c5c00;
+  --brand-muted: #e5eacd;
+  --brand-ring: #b2c248;
 }
 
 .dark {
-  --background: oklch(0.155 0 0);
+  --background: oklch(0.16 0.006 110);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.155 0 0);
   --card-foreground: oklch(0.985 0 0);
@@ -73,7 +88,14 @@
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 8%);
   --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.6 0 0);
+  --ring: var(--brand-ring);
+
+  /* oats green on dark — a calmer olive CTA (not neon) with dark ink, deep tint */
+  --brand: oklch(0.72 0.095 121);
+  --brand-foreground: oklch(0.18 0.02 120);
+  --brand-strong: oklch(0.79 0.1 118);
+  --brand-muted: oklch(0.31 0.045 118);
+  --brand-ring: oklch(0.6 0.09 118);
 }
 
 @layer base {

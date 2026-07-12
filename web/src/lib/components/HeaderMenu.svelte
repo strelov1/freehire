@@ -8,7 +8,6 @@
   import { themeStore } from '$lib/theme.svelte';
   import { lockScroll, unlockScroll } from '$lib/scrollLock';
   import { cn } from '$lib/utils';
-  import Avatar from './Avatar.svelte';
   import BrandMark from './BrandMark.svelte';
   import GithubStars from './GithubStars.svelte';
 
@@ -32,8 +31,6 @@
     'flex items-center gap-2 rounded-md px-4 min-h-11 text-base transition-colors hover:bg-accent hover:text-accent-foreground sm:min-h-0 sm:rounded-none sm:px-3 sm:py-2 sm:text-sm';
   const linkClass = (href: string) =>
     cn(rowBase, isActive(href) ? 'font-medium text-foreground' : 'text-muted-foreground');
-  const sectionLabel =
-    'px-4 pt-3 pb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground sm:hidden';
   // Shared icon-button treatment for the bar controls (menu + theme toggle).
   const iconButton =
     'size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
@@ -46,14 +43,17 @@
 
   // Static nav (always shown) and the signed-in account items (shown only when
   // authenticated). Moderation is gated on the moderator role at render time.
-  const navLinks = [
-    // No "Jobs" entry: the homepage IS the job feed, reached via the logo.
+  // Primary destinations pinned to the very top of the menu. Jobs is the homepage
+  // feed (also reachable via the logo); Companies leads the browse surfaces.
+  const primaryLinks = [
+    { href: '/', label: 'Jobs' },
     { href: '/companies', label: 'Companies' },
+  ] as const;
+
+  const navLinks = [
     { href: '/collections', label: 'Collections' },
     { href: '/analytics', label: 'Analytics' },
     { href: '/trends', label: 'Trends' },
-    { href: '/recruiters', label: 'For recruiters' },
-    { href: '/for-companies', label: 'For companies' },
   ] as const;
 
   // Personal account items — what the signed-in user owns/reads. "Submit a job"
@@ -61,7 +61,7 @@
   // "My submissions" reading item it used to sit next to.
   const accountLinks = [
     { href: '/my/tracking', label: 'Tracking' },
-    { href: '/my/searches', label: 'Saved searches & alerts' },
+    { href: '/my/searches', label: 'Search notifications' },
     { href: '/my/api-keys', label: 'API keys' },
     { href: '/my/submissions', label: 'My submissions' },
   ] as const;
@@ -208,33 +208,32 @@
 
       <!-- Middle: scrollable, sectioned links. -->
       <div class="max-sm:flex-1 max-sm:overflow-y-auto max-sm:px-2 max-sm:pb-3">
-        <!-- Signed-in first: the identity row and the user's own Account items sit
-             above the general site nav, so a returning user reaches their stuff
-             (My jobs, saved searches, submissions) without scrolling past the nav. -->
+        <!-- Primary destinations pinned to the top, then a divider before the
+             signed-in personal items and the rest of the site nav. -->
+        {#each primaryLinks as link (link.href)}
+          <a href={resolve(link.href)} role="menuitem" onclick={() => (open = false)} class={linkClass(link.href)}>
+            {link.label}
+          </a>
+        {/each}
+        <div class="my-1 h-px bg-border"></div>
+
         {#if isAuthenticated()}
-          <!-- Identity row: avatar + email, a single link to the profile. -->
           <a
             href={resolve('/my/profile')}
             role="menuitem"
             onclick={() => (open = false)}
-            class={cn(rowBase, 'text-muted-foreground')}
+            class={linkClass('/my/profile')}
             title={email}
           >
-            <Avatar {email} />
-            <span class="truncate">{email}</span>
+            Profile
           </a>
-          <div class="my-1 hidden h-px bg-border sm:block"></div>
-
-          <p class={sectionLabel}>Account</p>
           {#each accountLinks as link (link.href)}
             <a href={resolve(link.href)} role="menuitem" onclick={() => (open = false)} class={linkClass(link.href)}>
               {link.label}
             </a>
           {/each}
 
-          <!-- Create/action items, split off from the account reading items above
-               by an always-visible divider (so "Submit a job" no longer reads as a
-               sibling of "My submissions"). -->
+          <!-- Create/action items, split off from the account reading items above. -->
           <div class="my-1 h-px bg-border"></div>
           <a href={resolve('/submit')} role="menuitem" onclick={() => (open = false)} class={linkClass('/submit')}>
             Submit a job
@@ -249,11 +248,9 @@
               Moderation
             </a>
           {/if}
-          <div class="my-1 hidden h-px bg-border sm:block"></div>
+          <div class="my-1 h-px bg-border"></div>
         {/if}
 
-        <!-- Nav -->
-        <p class={sectionLabel}>Navigate</p>
         {#each navLinks as link (link.href)}
           <a href={resolve(link.href)} role="menuitem" onclick={() => (open = false)} class={linkClass(link.href)}>
             {link.label}

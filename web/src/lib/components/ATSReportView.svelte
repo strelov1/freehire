@@ -82,7 +82,7 @@
           </span>
         </div>
         <div class="h-1.5 overflow-hidden rounded bg-secondary">
-          <div class="h-full rounded bg-primary" style="width: {(cat.score / cat.max) * 100}%"></div>
+          <div class="h-full rounded bg-brand" style="width: {(cat.score / cat.max) * 100}%"></div>
         </div>
         <ul class="flex flex-col gap-1.5">
           {#each cat.items as it, i (i)}
@@ -119,7 +119,7 @@
           <h3 class="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Strong keywords</h3>
           <div class="flex flex-wrap gap-1.5">
             {#each strong as s (s)}
-              <span class="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">{s}</span>
+              <span class="rounded-full bg-brand/10 px-2.5 py-1 text-xs font-medium text-primary">{s}</span>
             {/each}
           </div>
         </div>

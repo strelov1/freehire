@@ -34,12 +34,12 @@
      feedback even while a route's `load` is still streaming. -->
 {#if navigating.to}
   <div
-    class="fixed inset-x-0 top-0 z-50 h-0.5 overflow-hidden bg-primary/20"
+    class="fixed inset-x-0 top-0 z-50 h-0.5 overflow-hidden bg-brand/20"
     role="progressbar"
     aria-label="Loading"
     aria-busy="true"
   >
-    <div class="nav-progress-bar h-full w-2/5 bg-primary"></div>
+    <div class="nav-progress-bar h-full w-2/5 bg-brand"></div>
   </div>
 {/if}
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Sparkles, X } from '@lucide/svelte';
+  import { Target, X } from '@lucide/svelte';
 
   // The unobtrusive nudge above the /jobs feed. Presentational only: it knows
   // whether it's shown and emits open/dismiss — JobsView owns visibility (unseen
@@ -8,8 +8,8 @@
 </script>
 
 <div class="mb-3 flex items-center gap-3 rounded-xl border border-border bg-card p-3 pl-4 sm:pl-4">
-  <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-    <Sparkles class="size-4.5" />
+  <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand-strong">
+    <Target class="size-4.5" />
   </div>
   <div class="min-w-0 flex-1">
     <p class="text-sm font-semibold tracking-tight">Make this your feed</p>
@@ -18,7 +18,7 @@
   <button
     type="button"
     onclick={onOpen}
-    class="inline-flex h-9 shrink-0 items-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+    class="inline-flex h-9 shrink-0 items-center rounded-lg bg-brand px-4 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
   >
     Set up
   </button>

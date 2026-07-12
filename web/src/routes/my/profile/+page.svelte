@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { Sparkles, Trash2 } from '@lucide/svelte';
+  import { ScanSearch, Trash2 } from '@lucide/svelte';
   import { page } from '$app/state';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
@@ -217,12 +217,12 @@
     {#snippet reviewAction()}
       {#if ats?.report && !ats.report.reviewed && !reviewUnavailable}
         <Button variant="primary" onclick={runReview} disabled={reviewBusy}>
-          <Sparkles class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
+          <ScanSearch class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
           {reviewBusy ? 'Reviewing…' : 'Run AI review'}
         </Button>
       {:else if ats?.report?.reviewed}
         <Button variant="ghost" onclick={runReview} disabled={reviewBusy}>
-          <Sparkles class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
+          <ScanSearch class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
           {reviewBusy ? 'Reviewing…' : 'Re-run AI review'}
         </Button>
       {/if}
@@ -254,7 +254,7 @@
               type="button"
               onclick={() => (tab = 'profile')}
               class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'profile'
-                ? 'border-primary text-foreground'
+                ? 'border-brand text-foreground'
                 : 'border-transparent text-muted-foreground hover:text-foreground'}"
             >
               Your CV
@@ -263,7 +263,7 @@
               type="button"
               onclick={() => (tab = 'coverage')}
               class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'coverage'
-                ? 'border-primary text-foreground'
+                ? 'border-brand text-foreground'
                 : 'border-transparent text-muted-foreground hover:text-foreground'}"
             >
               Market coverage
@@ -272,7 +272,7 @@
               type="button"
               onclick={() => (tab = 'readiness')}
               class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'readiness'
-                ? 'border-primary text-foreground'
+                ? 'border-brand text-foreground'
                 : 'border-transparent text-muted-foreground hover:text-foreground'}"
             >
               CV readiness

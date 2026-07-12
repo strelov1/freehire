@@ -19,7 +19,7 @@
 </script>
 
 <div class="mb-3 flex items-start gap-3 rounded-xl border border-border bg-card p-3 pl-4">
-  <div class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+  <div class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand-strong">
     <Bookmark class="size-4.5" />
   </div>
   <div class="min-w-0 flex-1">

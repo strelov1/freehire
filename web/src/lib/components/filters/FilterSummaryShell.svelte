@@ -53,7 +53,7 @@
     <SlidersHorizontal class="size-4" />
     <span>All filters</span>
     {#if active > 0}
-      <span class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">{active}</span>
+      <span class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-[11px] font-semibold text-brand-foreground">{active}</span>
     {/if}
   </button>
 
@@ -82,7 +82,7 @@
             <span
               class={[
                 'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium',
-                c.exclude ? 'border-destructive/30 bg-destructive/15 text-destructive line-through' : 'border-border bg-secondary text-secondary-foreground',
+                c.exclude ? 'border-destructive/30 bg-destructive/15 text-destructive line-through' : 'border-transparent bg-brand-muted text-brand-strong',
               ]}
             >
               {c.text}

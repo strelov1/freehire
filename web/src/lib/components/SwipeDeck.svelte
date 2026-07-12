@@ -331,7 +331,7 @@
       <SlidersHorizontal class="size-5" />
       {#if filters.active > 0}
         <span
-          class="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold leading-none text-primary-foreground"
+          class="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1 text-[11px] font-semibold leading-none text-brand-foreground"
         >
           {filters.active}
         </span>
@@ -379,7 +379,7 @@
                  below scrolls. -->
             {#if dragX > 20}
               <span
-                class="pointer-events-none absolute left-5 top-5 z-10 rotate-[-12deg] rounded-lg border-4 border-emerald-500 px-3 py-1 text-2xl font-extrabold uppercase tracking-wider text-emerald-500"
+                class="pointer-events-none absolute left-5 top-5 z-10 rotate-[-12deg] rounded-lg border-4 border-brand px-3 py-1 text-2xl font-extrabold uppercase tracking-wider text-brand"
                 style={`opacity: ${stampOpacity}`}
               >
                 Save
@@ -413,7 +413,7 @@
               <h2 class="line-clamp-3 text-2xl font-bold tracking-tight">{current.title}</h2>
 
               {#if salary}
-                <div class="text-lg font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
+                <div class="text-lg font-bold tracking-tight text-brand-strong">
                   {salary}
                 </div>
               {/if}
@@ -485,7 +485,7 @@
       <button
         type="button"
         aria-label="Save"
-        class="flex h-16 w-16 items-center justify-center rounded-full border border-border bg-card text-emerald-500 shadow-md transition hover:bg-accent active:scale-95"
+        class="flex h-16 w-16 items-center justify-center rounded-full border border-border bg-card text-brand shadow-md transition hover:bg-accent active:scale-95"
         onclick={() => judge('save')}
       >
         <Heart class="size-7" />

@@ -32,6 +32,16 @@
   let busy = $state(false);
   let error = $state<string | null>(null);
 
+  // The primary Save button is prominent in the `full` placement (modal / sidebar)
+  // and compact in the `quick` onboarding banner. Derived once so both save states
+  // (sign-in-first and unsaved) share one definition.
+  const saveBig = $derived(variant === 'full');
+  const saveBtnClass = $derived(
+    saveBig
+      ? 'w-full justify-center gap-2 rounded-xl text-[0.95rem] font-semibold shadow-sm transition-shadow hover:shadow-md'
+      : 'justify-center gap-2 rounded-lg font-semibold',
+  );
+
   // Load saved searches + telegram status once the session is known; sign-out cache
   // reset is owned centrally by +layout.svelte, so it isn't duplicated here.
   $effect(() => {
@@ -136,13 +146,13 @@
 
 <div class="flex flex-col gap-1.5">
   {#if alertState === 'signed-out'}
-    <Button variant="primary" size="sm" onclick={save} class="justify-center gap-1.5">
-      <Bookmark class="size-4" aria-hidden="true" />
+    <Button variant="primary" size={saveBig ? 'lg' : 'md'} onclick={save} class={saveBtnClass}>
+      <Bookmark class={saveBig ? 'size-[1.15rem]' : 'size-4'} aria-hidden="true" />
       Save this search
     </Button>
   {:else if alertState === 'unsaved'}
-    <Button variant="primary" size="sm" onclick={save} disabled={busy} class="justify-center gap-1.5">
-      <Bookmark class="size-4" aria-hidden="true" />
+    <Button variant="primary" size={saveBig ? 'lg' : 'md'} onclick={save} disabled={busy} class={saveBtnClass}>
+      <Bookmark class={saveBig ? 'size-[1.15rem]' : 'size-4'} aria-hidden="true" />
       {busy ? 'Saving…' : 'Save filter'}
     </Button>
   {:else if alertState === 'saved'}
