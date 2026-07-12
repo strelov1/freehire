@@ -330,6 +330,7 @@
         store={filters}
         {counts}
         exclude={excludeFacets}
+        savedSearches
         open={modalOpen}
         onClose={() => (modalOpen = false)}
         {previewCount}
