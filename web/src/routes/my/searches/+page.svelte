@@ -4,10 +4,10 @@
 
 <svelte:head>
   <title>Saved searches — freehire</title>
-  <!-- Personal page: keep it out of search results. -->
-  <meta name="robots" content="noindex" />
 </svelte:head>
 
-<div class="mx-auto w-full max-w-3xl px-4 py-6">
+<!-- The account shell (my/+layout) owns the container, auth gate, and noindex;
+     an inner max-width keeps the list readable within the content column. -->
+<div class="max-w-3xl">
   <SavedSearchesView />
 </div>

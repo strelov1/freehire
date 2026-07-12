@@ -4,7 +4,6 @@
   import { page } from '$app/state';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { FilterStore, filtersToParams } from '$lib/filters';
   import ATSReportView from '$lib/components/ATSReportView.svelte';
   import FilterSummary from '$lib/components/filters/FilterSummary.svelte';
@@ -185,163 +184,156 @@
 
 <svelte:head>
   <title>Profile — freehire</title>
-  <!-- Personal page: keep it out of search results. -->
-  <meta name="robots" content="noindex" />
 </svelte:head>
 
-<div class="mx-auto w-full max-w-6xl px-4 py-6">
-  {#if !isAuthenticated()}
-    <div class="flex flex-col items-center gap-3 py-12 text-center">
-      <p class="text-sm text-muted-foreground">Sign in to set up your profile.</p>
-      <Button variant="primary" onclick={() => openAuthDialog()}>Sign in</Button>
-    </div>
-  {:else if status === 'loading'}
-    <States state="loading" />
-  {:else if status === 'error'}
-    <States state="error" message="Couldn't load your profile." />
-  {:else}
-    <!-- Header -->
-    <div class="mb-6 flex flex-col gap-1">
-      <h1 class="text-2xl font-semibold tracking-tight">Profile</h1>
-      <p class="text-sm text-muted-foreground">
-        Your CV, skills and role — measured against live market demand.
-      </p>
-    </div>
+<!-- The account shell (my/+layout) owns the container, auth gate, and noindex. -->
+{#if status === 'loading'}
+  <States state="loading" />
+{:else if status === 'error'}
+  <States state="error" message="Couldn't load your profile." />
+{:else}
+  <!-- Header -->
+  <div class="mb-6 flex flex-col gap-1">
+    <h1 class="text-2xl font-semibold tracking-tight">Profile</h1>
+    <p class="text-sm text-muted-foreground">
+      Your CV, skills and role — measured against live market demand.
+    </p>
+  </div>
 
-    {#if actionError}
-      <p class="mb-4 text-sm text-destructive">{actionError}</p>
+  {#if actionError}
+    <p class="mb-4 text-sm text-destructive">{actionError}</p>
+  {/if}
+
+  <!-- Run / Re-run AI review control, rendered inside the CV-readiness section header
+       (via ATSReportView's `action` slot) rather than crammed into the tab row. -->
+  {#snippet reviewAction()}
+    {#if ats?.report && !ats.report.reviewed && !reviewUnavailable}
+      <Button variant="primary" onclick={runReview} disabled={reviewBusy}>
+        <ScanSearch class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
+        {reviewBusy ? 'Reviewing…' : 'Run AI review'}
+      </Button>
+    {:else if ats?.report?.reviewed}
+      <Button variant="ghost" onclick={runReview} disabled={reviewBusy}>
+        <ScanSearch class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
+        {reviewBusy ? 'Reviewing…' : 'Re-run AI review'}
+      </Button>
     {/if}
+  {/snippet}
 
-    <!-- Run / Re-run AI review control, rendered inside the CV-readiness section header
-         (via ATSReportView's `action` slot) rather than crammed into the tab row. -->
-    {#snippet reviewAction()}
-      {#if ats?.report && !ats.report.reviewed && !reviewUnavailable}
-        <Button variant="primary" onclick={runReview} disabled={reviewBusy}>
-          <ScanSearch class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
-          {reviewBusy ? 'Reviewing…' : 'Run AI review'}
-        </Button>
-      {:else if ats?.report?.reviewed}
-        <Button variant="ghost" onclick={runReview} disabled={reviewBusy}>
-          <ScanSearch class="size-4 {reviewBusy ? 'animate-pulse' : ''}" />
-          {reviewBusy ? 'Reviewing…' : 'Re-run AI review'}
-        </Button>
-      {/if}
-    {/snippet}
+  {#if profile === null}
+    <!-- Set-up: the inline form only; coverage appears once a profile exists. -->
+    <div class="mx-auto w-full max-w-2xl">
+      <ProfileForm profile={null} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
+    </div>
+  {:else}
+    <div class="flex gap-6">
+      <main class="flex min-w-0 flex-1 flex-col gap-6">
+        <!-- Tabs -->
+        <div class="flex gap-5 border-b border-border">
+          <button
+            type="button"
+            onclick={() => (tab = 'profile')}
+            class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'profile'
+              ? 'border-brand text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground'}"
+          >
+            Your CV
+          </button>
+          <button
+            type="button"
+            onclick={() => (tab = 'coverage')}
+            class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'coverage'
+              ? 'border-brand text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground'}"
+          >
+            Market coverage
+          </button>
+          <button
+            type="button"
+            onclick={() => (tab = 'readiness')}
+            class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'readiness'
+              ? 'border-brand text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground'}"
+          >
+            CV readiness
+          </button>
+        </div>
 
-    {#if profile === null}
-      <!-- Set-up: the inline form only; coverage appears once a profile exists. -->
-      <div class="mx-auto w-full max-w-2xl">
-        <ProfileForm profile={null} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
-      </div>
-    {:else}
-      <div class="flex gap-6">
-        <!-- Filters refine the Market coverage comparison only, so the summary sidebar
-             shows on that tab alone; the other tabs get the full width. -->
-        {#if filters && tab === 'coverage'}
-          <aside class="hidden w-72 shrink-0 md:block">
-            <div class="sticky top-6 flex max-h-[calc(100vh-5rem)] flex-col gap-4 overflow-y-auto">
-              <div class="rounded-xl border border-border bg-card p-4">
-                <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} />
-              </div>
-            </div>
-          </aside>
-        {/if}
-
-        <main class="flex min-w-0 flex-1 flex-col gap-6">
-          <!-- Tabs -->
-          <div class="flex gap-5 border-b border-border">
-            <button
-              type="button"
-              onclick={() => (tab = 'profile')}
-              class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'profile'
-                ? 'border-brand text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground'}"
+        <!-- Body -->
+        {#if tab === 'profile'}
+          {#key profile.updated_at}
+            <ProfileForm {profile} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
+          {/key}
+          <!-- Destructive action lives at the foot of the profile-management tab, out of
+               the page header (where it crowded the title on narrow viewports). -->
+          <div class="mt-2 flex justify-end border-t border-border pt-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onclick={remove}
+              class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
             >
-              Your CV
-            </button>
-            <button
-              type="button"
-              onclick={() => (tab = 'coverage')}
-              class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'coverage'
-                ? 'border-brand text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground'}"
-            >
-              Market coverage
-            </button>
-            <button
-              type="button"
-              onclick={() => (tab = 'readiness')}
-              class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'readiness'
-                ? 'border-brand text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground'}"
-            >
-              CV readiness
-            </button>
+              <Trash2 class="size-4" />
+              Delete profile
+            </Button>
           </div>
+        {:else if loadError}
+          <States state="error" message="Couldn't load the report." />
+        {:else if verdict === null}
+          <States state="loading" />
+        {:else if tab === 'coverage'}
+          <VerdictView {verdict} {gapHref} />
+        {:else}
+          <!-- CV readiness: the structured résumé we parsed from the CV (read-only,
+               omitted when none is current) above the ATS-readiness score. -->
+          <div class="flex flex-col gap-6">
+            {#if structured}
+              <ResumeStructuredView resume={structured} />
+            {/if}
+            {#if ats?.has_cv && ats.report}
+              <div class="flex flex-col gap-5">
+                {#if reviewUnavailable}
+                  <p class="text-xs text-muted-foreground">AI review is not available right now.</p>
+                {/if}
+                <ATSReportView report={ats.report} action={reviewAction} />
+              </div>
+            {:else if !structured}
+              <!-- No CV yet: uploaded via the Your CV tab. -->
+              <div class="flex flex-col items-start gap-2 rounded-xl border border-dashed border-border p-6">
+                <p class="text-sm font-medium">Add your CV to score its ATS readiness</p>
+                <p class="text-sm text-muted-foreground">
+                  Upload your CV in the <button type="button" class="font-medium text-foreground underline underline-offset-2" onclick={() => (tab = 'profile')}>Your CV</button> tab to check ATS readability and this role's keywords.
+                </p>
+              </div>
+            {/if}
+          </div>
+        {/if}
+      </main>
 
-          <!-- Body -->
-          {#if tab === 'profile'}
-            {#key profile.updated_at}
-              <ProfileForm {profile} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
-            {/key}
-            <!-- Destructive action lives at the foot of the profile-management tab, out of
-                 the page header (where it crowded the title on narrow viewports). -->
-            <div class="mt-2 flex justify-end border-t border-border pt-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onclick={remove}
-                class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-              >
-                <Trash2 class="size-4" />
-                Delete profile
-              </Button>
-            </div>
-          {:else if loadError}
-            <States state="error" message="Couldn't load the report." />
-          {:else if verdict === null}
-            <States state="loading" />
-          {:else if tab === 'coverage'}
-            <VerdictView {verdict} {gapHref} />
-          {:else}
-            <!-- CV readiness: the structured résumé we parsed from the CV (read-only,
-                 omitted when none is current) above the ATS-readiness score. -->
-            <div class="flex flex-col gap-6">
-              {#if structured}
-                <ResumeStructuredView resume={structured} />
-              {/if}
-              {#if ats?.has_cv && ats.report}
-                <div class="flex flex-col gap-5">
-                  {#if reviewUnavailable}
-                    <p class="text-xs text-muted-foreground">AI review is not available right now.</p>
-                  {/if}
-                  <ATSReportView report={ats.report} action={reviewAction} />
-                </div>
-              {:else if !structured}
-                <!-- No CV yet: uploaded via the Your CV tab. -->
-                <div class="flex flex-col items-start gap-2 rounded-xl border border-dashed border-border p-6">
-                  <p class="text-sm font-medium">Add your CV to score its ATS readiness</p>
-                  <p class="text-sm text-muted-foreground">
-                    Upload your CV in the <button type="button" class="font-medium text-foreground underline underline-offset-2" onclick={() => (tab = 'profile')}>Your CV</button> tab to check ATS readability and this role's keywords.
-                  </p>
-                </div>
-              {/if}
-            </div>
-          {/if}
-        </main>
-      </div>
-
+      <!-- Filters refine the Market coverage comparison only, so the summary sidebar
+           shows on that tab alone — to the right of the content, clear of the account
+           nav sidebar. -->
       {#if filters && tab === 'coverage'}
-        <FilterEdgeTab active={filters.active} onclick={() => (modalOpen = true)} />
-        <FilterModal
-          store={filters}
-          {counts}
-          exclude={excludeFacets}
-          open={modalOpen}
-          onClose={() => (modalOpen = false)}
-          {previewCount}
-        />
+        <aside class="hidden w-72 shrink-0 md:block">
+          <div class="sticky top-6 flex max-h-[calc(100vh-5rem)] flex-col gap-4 overflow-y-auto">
+            <div class="rounded-xl border border-border bg-card p-4">
+              <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} />
+            </div>
+          </div>
+        </aside>
       {/if}
+    </div>
+
+    {#if filters && tab === 'coverage'}
+      <FilterEdgeTab active={filters.active} onclick={() => (modalOpen = true)} />
+      <FilterModal
+        store={filters}
+        {counts}
+        exclude={excludeFacets}
+        open={modalOpen}
+        onClose={() => (modalOpen = false)}
+        {previewCount}
+      />
     {/if}
   {/if}
-</div>
+{/if}
