@@ -27,12 +27,16 @@ var (
 	ErrNotFound = errors.New("subscription: not found")
 )
 
-// ChannelTelegram is the only channel implemented today; the schema and this
-// validation leave room for webhook/email without a migration.
-const ChannelTelegram = "telegram"
+// Supported delivery channels. The schema (channel + destination columns and the
+// UNIQUE (saved_search, channel) constraint) accommodates both without a
+// migration; the notify worker routes each channel to its Notifier.
+const (
+	ChannelTelegram = "telegram"
+	ChannelEmail    = "email"
+)
 
 // validChannels is the allowlist enforced on create.
-var validChannels = map[string]bool{ChannelTelegram: true}
+var validChannels = map[string]bool{ChannelTelegram: true, ChannelEmail: true}
 
 // Repository is the persistence contract, user-scoped. Create maps a unique
 // violation to ErrDuplicate and a missing/non-owned saved search to
@@ -61,9 +65,10 @@ func (s *Service) List(ctx context.Context, userID int64) ([]db.ListSubscription
 }
 
 // Create subscribes one of the user's saved searches to a channel. The channel is
-// validated against the allowlist; the destination is left NULL for telegram (the
-// recipient is the user's linked chat). Ownership of the saved search is enforced
-// in SQL (a non-owned id surfaces as ErrSavedSearchNotFound).
+// validated against the allowlist; the destination is left NULL for both channels
+// (the recipient is resolved live at delivery — the linked chat for telegram, the
+// account email for email). Ownership of the saved search is enforced in SQL (a
+// non-owned id surfaces as ErrSavedSearchNotFound).
 func (s *Service) Create(ctx context.Context, userID, savedSearchID int64, channel string) (db.Subscription, error) {
 	if !validChannels[channel] {
 		return db.Subscription{}, ErrInvalidChannel

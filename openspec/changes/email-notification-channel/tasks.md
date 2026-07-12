@@ -21,11 +21,11 @@
 
 ## 5. Wire the worker
 
-- [ ] 5.1 In `cmd/notify`, build a `notify.Router`, register the Telegram notifier when the bot is configured and the email notifier when `AWS_REGION`+`NOTIFY_EMAIL_FROM` are set, and pass the router to `notify.New`. Keep "no channels configured ⇒ exit 0 (nothing to deliver)" behavior.
+- [x] 5.1 In `cmd/notify`, build a `notify.Router`, register the Telegram notifier when the bot is configured and the email notifier when `AWS_REGION`+`NOTIFY_EMAIL_FROM` are set, and pass the router to `notify.New`. Keep "no channels configured ⇒ exit 0 (nothing to deliver)" behavior.
 
 ## 6. Subscription channel allowlist
 
-- [ ] 6.1 Add `ChannelEmail = "email"` to `internal/subscription` and include it in `validChannels`. Unit-test that an `email` subscription is accepted and an unknown channel returns `ErrInvalidChannel`.
+- [x] 6.1 Add `ChannelEmail = "email"` to `internal/subscription` and include it in `validChannels`. Unit-test that an `email` subscription is accepted and an unknown channel returns `ErrInvalidChannel`.
 
 ## 7. Frontend
 
