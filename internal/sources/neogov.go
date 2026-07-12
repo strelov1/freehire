@@ -89,7 +89,19 @@ func (s neogov) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			break
 		}
 	}
-	return jobs, nil
+
+	// The listing carries only a teaser snippet; fetch each card's detail page for the full
+	// body. The detail page is server-rendered, so it needs no XHR header (unlike the
+	// listing). A failed or bodyless detail keeps the listing snippet rather than dropping
+	// the job, so a transient detail failure never yields a blank description.
+	return fetchDetails(jobs, defaultDetailWorkers, func(j Job) (Job, bool) {
+		if page, err := s.http.GetTextWithHeaders(ctx, j.URL, nil); err == nil {
+			if full := neogovDetailDescription(page); full != "" {
+				j.Description = full
+			}
+		}
+		return j, true
+	}), nil
 }
 
 // neogovTotal reads the open-postings count from the listing header, or 0 when absent (an
@@ -139,6 +151,24 @@ func neogovParseListing(fragment, domain, agency string) ([]Job, error) {
 		return true
 	})
 	return jobs, nil
+}
+
+// neogovDetailDescription extracts the full posting body from a detail page: the
+// #details-info container (Froala's .fr-view) holding the Definition, Minimum
+// Qualifications, and Supplemental Information sections. It returns the sanitized inner
+// HTML, or "" when the container is absent or empty (the caller then keeps the listing
+// snippet). The sibling #details-benefits/#details-questions tabs are deliberately not
+// captured — only the job description belongs in the description.
+func neogovDetailDescription(page string) string {
+	root, err := html.Parse(strings.NewReader(page))
+	if err != nil {
+		return ""
+	}
+	info := firstByID(root, "details-info")
+	if info == nil {
+		return ""
+	}
+	return sanitizeHTML(innerHTML(info))
 }
 
 // neogovFirstMeta returns the text of the first <li> inside the card's list-meta list (the

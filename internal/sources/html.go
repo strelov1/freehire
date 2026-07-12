@@ -118,6 +118,22 @@ func elementAttr(root *html.Node, tag, class, name string) string {
 	return found
 }
 
+// firstByID returns the first element whose id attribute equals id, or nil when none matches.
+func firstByID(root *html.Node, id string) *html.Node {
+	var found *html.Node
+	walk(root, func(n *html.Node) bool {
+		if found != nil {
+			return false
+		}
+		if n.Type == html.ElementNode && attr(n, "id") == id {
+			found = n
+			return false
+		}
+		return true
+	})
+	return found
+}
+
 // hasClass reports whether n's space-separated class attribute contains class; an empty
 // class matches any element.
 func hasClass(n *html.Node, class string) bool {
