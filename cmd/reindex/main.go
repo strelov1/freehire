@@ -382,12 +382,21 @@ func recomputeRoleDuplicates(ctx context.Context, q *db.Queries) (int64, error) 
 		return 0, err
 	}
 	var total int64
+	var failures int
+	var lastErr error
 	for _, c := range companies {
+		// Companies are independent, so one failure (e.g. a statement timeout on an
+		// unusually large cluster) must not starve the rest — log-and-continue.
 		n, err := q.RecomputeRoleDuplicatesForCompany(ctx, c)
 		if err != nil {
-			return total, fmt.Errorf("company %q: %w", c, err)
+			failures++
+			lastErr = fmt.Errorf("company %q: %w", c, err)
+			continue
 		}
 		total += n
+	}
+	if failures > 0 {
+		return total, fmt.Errorf("%d/%d companies failed; last: %w", failures, len(companies), lastErr)
 	}
 	return total, nil
 }
