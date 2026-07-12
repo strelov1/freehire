@@ -52,12 +52,14 @@ func run() int {
 		router[notify.ChannelTelegram] = telegramnotify.NewNotifier(telegramnotify.NewClient(cfg.TelegramBotToken), cfg.FrontendOrigin)
 	}
 	if cfg.AWSRegion != "" && cfg.NotifyEmailFrom != "" {
-		ses, err := emailnotify.NewClient(ctx, cfg.AWSRegion)
-		if err != nil {
-			log.Printf("notify: email channel: %v", err)
-			return 1
+		// A failure to build the SES client disables only the email channel — the
+		// email subscriptions soft-skip and retry next pass, while any other
+		// configured channel still delivers this run (channels are independent).
+		if ses, err := emailnotify.NewClient(ctx, cfg.AWSRegion); err != nil {
+			log.Printf("notify: email channel disabled: %v", err)
+		} else {
+			router[notify.ChannelEmail] = emailnotify.NewNotifier(ses, cfg.NotifyEmailFrom, cfg.FrontendOrigin)
 		}
-		router[notify.ChannelEmail] = emailnotify.NewNotifier(ses, cfg.NotifyEmailFrom, cfg.FrontendOrigin)
 	}
 	if len(router) == 0 {
 		log.Printf("notify: no delivery channel configured (TELEGRAM_BOT_TOKEN or AWS_REGION+NOTIFY_EMAIL_FROM); nothing to deliver")
