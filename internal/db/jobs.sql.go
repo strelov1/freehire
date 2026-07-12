@@ -1389,6 +1389,11 @@ const suppressAggregatorDuplicatesForCompany = `-- name: SuppressAggregatorDupli
 WITH ats AS (
     SELECT jobs.id,
            btrim(regexp_replace(lower(jobs.title), '[^a-z0-9]+', ' ', 'g')) AS ntitle,
+           btrim(regexp_replace(lower(
+             regexp_replace(
+               regexp_replace(jobs.title, '&[a-zA-Z0-9#]+;', ' ', 'g'),
+               '^(.*)\s[-|—]\s.+$', '\1')
+           ), '[^a-z0-9]+', ' ', 'g')) AS ntitle2,
            jobs.countries
     FROM jobs
     WHERE jobs.company_slug = $1
@@ -1398,6 +1403,11 @@ WITH ats AS (
 agg AS (
     SELECT a.id,
            btrim(regexp_replace(lower(a.title), '[^a-z0-9]+', ' ', 'g')) AS ntitle,
+           btrim(regexp_replace(lower(
+             regexp_replace(
+               regexp_replace(a.title, '&[a-zA-Z0-9#]+;', ' ', 'g'),
+               '^(.*)\s[-|—]\s.+$', '\1')
+           ), '[^a-z0-9]+', ' ', 'g')) AS ntitle2,
            a.countries
     FROM jobs a
     WHERE a.company_slug = $1
@@ -1412,20 +1422,32 @@ agg AS (
           )
       )
 ),
+matches AS (
+    -- Two match paths: the exact key (ntitle) and the entity-decoded, suffix-stripped key
+    -- (ntitle2), which catches an ATS title that only appends " - <suffix>" or carries an
+    -- undecoded HTML entity. Each path is a SEPARATE single-equality hash join (O(agg + ats))
+    -- and the two are UNION ALL-ed — an OR of the two equalities in one ON would defeat the
+    -- hash join and go quadratic on a big company (the hotel-chain case). UNION ALL, not
+    -- UNION: a row matched by both paths appears twice, but the downstream MIN(ats_id)
+    -- absorbs the duplicate, so the de-dup pass is wasted work. Both require a non-empty key;
+    -- the country gate applies to each path.
+    SELECT a.id AS agg_id, t.id AS ats_id
+    FROM agg a JOIN ats t
+      ON t.ntitle = a.ntitle AND a.ntitle <> ''
+     AND (t.countries && a.countries OR cardinality(t.countries) = 0 OR cardinality(a.countries) = 0)
+    UNION ALL
+    SELECT a.id, t.id
+    FROM agg a JOIN ats t
+      ON t.ntitle2 = a.ntitle2 AND a.ntitle2 <> ''
+     AND (t.countries && a.countries OR cardinality(t.countries) = 0 OR cardinality(a.countries) = 0)
+),
 target AS (
-    -- LEFT JOIN + MIN (not a correlated subquery) so the match is a hash join on ntitle,
-    -- O(agg + ats) instead of O(agg * ats) — a company with thousands of same-title rows
-    -- (a hotel chain's ATS + its aggregator copies) would otherwise scan quadratically.
-    -- No match (including an empty ntitle, excluded in the ON) yields NULL, which releases
-    -- a previously-suppressed row whose ATS twin has closed.
-    SELECT a.id, MIN(t.id) AS new_dup
+    -- Every candidate aggregator row, with its MIN matching ATS id or NULL. LEFT JOIN so an
+    -- unmatched row (including one whose ATS twin just closed) resolves to NULL and is
+    -- released back into search/embedding/enrichment. min(id) picks a stable target.
+    SELECT a.id, MIN(m.ats_id) AS new_dup
     FROM agg a
-    LEFT JOIN ats t
-      ON t.ntitle = a.ntitle
-     AND a.ntitle <> ''
-     AND (t.countries && a.countries
-          OR cardinality(t.countries) = 0
-          OR cardinality(a.countries) = 0)
+    LEFT JOIN matches m ON m.agg_id = a.id
     GROUP BY a.id
 )
 UPDATE jobs j
