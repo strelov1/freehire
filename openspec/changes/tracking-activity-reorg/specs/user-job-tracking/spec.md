@@ -53,3 +53,41 @@ The frontend personal-jobs section SHALL be presented as **Tracking** and served
 
 - **WHEN** a signed-in user opens the tracking section
 - **THEN** the navigation and heading read "Tracking", with tabs for Board and Pipeline only
+
+### Requirement: SPA surfaces interaction state on the job view
+
+The web SPA SHALL, for a signed-in user, record a view when a job is opened and
+surface the applied state. A job already applied to SHALL show an "applied"
+indicator. After the user follows the external apply link, the SPA SHALL offer
+an explicit "Did you apply?" choice; confirming marks the job applied and SHALL
+then surface a link to the Tracking board (`/my/tracking`) so the user can jump
+to where the job now sits, while declining changes no server state and shows no
+such link. A signed-out user SHALL see the existing job view unchanged.
+
+#### Scenario: Opening a job while signed in
+
+- **WHEN** a signed-in user opens a job in the SPA
+- **THEN** the SPA records a view for that job
+- **AND** if the returned record shows the job was already applied to, the SPA
+  shows an "applied" indicator and does not offer the apply prompt
+
+#### Scenario: Confirming an application
+
+- **WHEN** a signed-in user follows the apply link and then confirms "Yes" on the
+  "Did you apply?" prompt
+- **THEN** the SPA marks the job applied
+- **AND** the "applied" indicator appears
+- **AND** a link to the Tracking board (`/my/tracking`) is shown
+
+#### Scenario: Declining the apply prompt
+
+- **WHEN** a signed-in user chooses "No" on the "Did you apply?" prompt
+- **THEN** the prompt is dismissed in the client
+- **AND** no application is recorded on the server
+- **AND** no board link is shown
+
+#### Scenario: Signed-out user
+
+- **WHEN** a signed-out user opens a job
+- **THEN** the job view behaves exactly as before this change
+- **AND** no view or apply request is sent

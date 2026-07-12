@@ -325,7 +325,12 @@
     </div>
 
     {#if filters && tab === 'coverage'}
-      <FilterEdgeTab active={filters.active} onclick={() => (modalOpen = true)} />
+      <FilterEdgeTab
+        active={filters.active}
+        onclick={() => (modalOpen = true)}
+        side="right"
+        class="top-[5.5rem]"
+      />
       <FilterModal
         store={filters}
         {counts}

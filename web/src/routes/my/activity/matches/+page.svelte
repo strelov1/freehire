@@ -3,7 +3,7 @@
 </script>
 
 <svelte:head>
-  <title>AI fit — Tracking — freehire</title>
+  <title>Matches — Activity — freehire</title>
 </svelte:head>
 
 <AnalysesView />

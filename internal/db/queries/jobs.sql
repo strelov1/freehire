@@ -335,6 +335,99 @@ FROM target t
 WHERE j.id = t.id
   AND j.duplicate_of IS DISTINCT FROM t.new_dup;
 
+-- name: CompaniesWithAggregatorPostings :many
+-- Company slugs with at least one OPEN aggregator posting — the drive list for the
+-- cross-source aggregator suppression pass. An open aggregator row is a candidate whether
+-- it still needs suppressing OR needs releasing (its ATS twin closed), so one predicate
+-- covers both. Processed one company at a time (SuppressAggregatorDuplicatesForCompany),
+-- mirroring the role-duplicate recompute's lock discipline.
+SELECT DISTINCT company_slug FROM jobs
+WHERE closed_at IS NULL AND company_slug <> ''
+  AND source = ANY(sqlc.arg(aggregators)::text[]);
+
+-- name: SuppressAggregatorDuplicatesForCompany :execrows
+-- The per-company slice of the cross-source aggregator suppression. An open aggregator
+-- posting is marked duplicate_of an open CANONICAL ATS (non-aggregator) posting of the
+-- same company, equal normalized title, and compatible country (countries overlap, or
+-- either side empty — the geography dictionary is sparse, so an unresolved side must not
+-- veto). The ATS row is never touched, so it stays canonical. Candidate aggregator rows
+-- are those that are canonical OR already point at a non-aggregator row (i.e. suppressed
+-- by THIS pass) — an aggregator repost pointed at another aggregator by the role pass is
+-- left alone. A candidate with no ATS twin resolves to NULL, so a closed twin releases
+-- its aggregator copy back into search/embedding/enrichment. min(id) picks a stable
+-- target; the IS DISTINCT FROM guard makes re-runs cheap and idempotent. Run AFTER
+-- RecomputeRoleDuplicatesForCompany so ATS reposts have already collapsed to their canon.
+WITH ats AS (
+    SELECT jobs.id,
+           btrim(regexp_replace(lower(jobs.title), '[^a-z0-9]+', ' ', 'g')) AS ntitle,
+           btrim(regexp_replace(lower(
+             regexp_replace(
+               regexp_replace(jobs.title, '&[a-zA-Z0-9#]+;', ' ', 'g'),
+               '^(.*)\s[-|—]\s.+$', '\1')
+           ), '[^a-z0-9]+', ' ', 'g')) AS ntitle2,
+           jobs.countries
+    FROM jobs
+    WHERE jobs.company_slug = sqlc.arg(company)
+      AND jobs.closed_at IS NULL AND jobs.duplicate_of IS NULL
+      AND NOT (jobs.source = ANY(sqlc.arg(aggregators)::text[]))
+),
+agg AS (
+    SELECT a.id,
+           btrim(regexp_replace(lower(a.title), '[^a-z0-9]+', ' ', 'g')) AS ntitle,
+           btrim(regexp_replace(lower(
+             regexp_replace(
+               regexp_replace(a.title, '&[a-zA-Z0-9#]+;', ' ', 'g'),
+               '^(.*)\s[-|—]\s.+$', '\1')
+           ), '[^a-z0-9]+', ' ', 'g')) AS ntitle2,
+           a.countries
+    FROM jobs a
+    WHERE a.company_slug = sqlc.arg(company)
+      AND a.closed_at IS NULL
+      AND a.source = ANY(sqlc.arg(aggregators)::text[])
+      AND (
+          a.duplicate_of IS NULL
+          OR EXISTS (
+              SELECT 1 FROM jobs p
+              WHERE p.id = a.duplicate_of
+                AND NOT (p.source = ANY(sqlc.arg(aggregators)::text[]))
+          )
+      )
+),
+matches AS (
+    -- Two match paths: the exact key (ntitle) and the entity-decoded, suffix-stripped key
+    -- (ntitle2), which catches an ATS title that only appends " - <suffix>" or carries an
+    -- undecoded HTML entity. Each path is a SEPARATE single-equality hash join (O(agg + ats))
+    -- and the two are UNION ALL-ed — an OR of the two equalities in one ON would defeat the
+    -- hash join and go quadratic on a big company (the hotel-chain case). UNION ALL, not
+    -- UNION: a row matched by both paths appears twice, but the downstream MIN(ats_id)
+    -- absorbs the duplicate, so the de-dup pass is wasted work. Both require a non-empty key;
+    -- the country gate applies to each path.
+    SELECT a.id AS agg_id, t.id AS ats_id
+    FROM agg a JOIN ats t
+      ON t.ntitle = a.ntitle AND a.ntitle <> ''
+     AND (t.countries && a.countries OR cardinality(t.countries) = 0 OR cardinality(a.countries) = 0)
+    UNION ALL
+    SELECT a.id, t.id
+    FROM agg a JOIN ats t
+      ON t.ntitle2 = a.ntitle2 AND a.ntitle2 <> ''
+     AND (t.countries && a.countries OR cardinality(t.countries) = 0 OR cardinality(a.countries) = 0)
+),
+target AS (
+    -- Every candidate aggregator row, with its MIN matching ATS id or NULL. LEFT JOIN so an
+    -- unmatched row (including one whose ATS twin just closed) resolves to NULL and is
+    -- released back into search/embedding/enrichment. min(id) picks a stable target.
+    SELECT a.id, MIN(m.ats_id) AS new_dup
+    FROM agg a
+    LEFT JOIN matches m ON m.agg_id = a.id
+    GROUP BY a.id
+)
+UPDATE jobs j
+SET duplicate_of = t.new_dup,
+    updated_at   = now()
+FROM target t
+WHERE j.id = t.id
+  AND j.duplicate_of IS DISTINCT FROM t.new_dup;
+
 -- name: PropagateCollectionsToJobs :execrows
 -- Denormalize each company's curated-collection set onto its jobs, so the search
 -- facet (jobs.collections) reflects current membership. Run by cmd/import-collections

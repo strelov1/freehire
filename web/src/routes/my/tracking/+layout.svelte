@@ -9,13 +9,11 @@
   // The account shell (my/+layout) owns the container, auth gate, and noindex;
   // this layout adds only Tracking's own sub-navigation. Each view is its own URL
   // so it is linkable, bookmarkable, and survives a reload. Board is the index
-  // route; Pipeline/History/Matches get their own paths.
+  // route; Pipeline gets its own path. History and Matches live under Activity.
   const path = $derived(page.url.pathname);
   // Board (index) matches exactly so it is not also active on the child routes.
   const boardActive = $derived(path === '/my/tracking');
   const pipelineActive = $derived(path.startsWith('/my/tracking/pipeline'));
-  const historyActive = $derived(path.startsWith('/my/tracking/history'));
-  const analysesActive = $derived(path.startsWith('/my/tracking/analyses'));
 
   const tabClass = (active: boolean) =>
     cn(
@@ -45,22 +43,6 @@
       class={tabClass(pipelineActive)}
     >
       Pipeline
-    </a>
-    <a
-      role="tab"
-      aria-selected={historyActive}
-      href={resolve('/my/tracking/history')}
-      class={tabClass(historyActive)}
-    >
-      History
-    </a>
-    <a
-      role="tab"
-      aria-selected={analysesActive}
-      href={resolve('/my/tracking/analyses')}
-      class={tabClass(analysesActive)}
-    >
-      Matches
     </a>
   </div>
 

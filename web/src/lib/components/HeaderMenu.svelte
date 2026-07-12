@@ -2,7 +2,27 @@
   import { page } from '$app/state';
   import { afterNavigate } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import { Menu, X, Sun, Moon } from '@lucide/svelte';
+  import {
+    Menu,
+    X,
+    Sun,
+    Moon,
+    Briefcase,
+    Building2,
+    CircleUser,
+    ListChecks,
+    BellRing,
+    KeyRound,
+    Inbox,
+    SquarePlus,
+    ShieldCheck,
+    Layers,
+    ChartColumn,
+    TrendingUp,
+    Info,
+    LogOut,
+    LogIn,
+  } from '@lucide/svelte';
   import { isAuthenticated, currentUser, logout as doLogout } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { themeStore } from '$lib/theme.svelte';
@@ -46,24 +66,24 @@
   // Primary destinations pinned to the very top of the menu. Jobs is the homepage
   // feed (also reachable via the logo); Companies leads the browse surfaces.
   const primaryLinks = [
-    { href: '/', label: 'Jobs' },
-    { href: '/companies', label: 'Companies' },
+    { href: '/', label: 'Jobs', icon: Briefcase },
+    { href: '/companies', label: 'Companies', icon: Building2 },
   ] as const;
 
   const navLinks = [
-    { href: '/collections', label: 'Collections' },
-    { href: '/analytics', label: 'Analytics' },
-    { href: '/trends', label: 'Trends' },
+    { href: '/collections', label: 'Collections', icon: Layers },
+    { href: '/analytics', label: 'Analytics', icon: ChartColumn },
+    { href: '/trends', label: 'Trends', icon: TrendingUp },
   ] as const;
 
   // Personal account items — what the signed-in user owns/reads. "Submit a job"
   // is a create action, so it's rendered separately (below), split off from the
   // "My submissions" reading item it used to sit next to.
   const accountLinks = [
-    { href: '/my/tracking', label: 'Tracking' },
-    { href: '/my/searches', label: 'Search notifications' },
-    { href: '/my/api-keys', label: 'API keys' },
-    { href: '/my/submissions', label: 'My submissions' },
+    { href: '/my/tracking', label: 'Tracking', icon: ListChecks },
+    { href: '/my/searches', label: 'Search notifications', icon: BellRing },
+    { href: '/my/api-keys', label: 'API keys', icon: KeyRound },
+    { href: '/my/submissions', label: 'My submissions', icon: Inbox },
   ] as const;
 
   // Mobile only: the open panel is a full-screen overlay, so lock the page behind
@@ -126,7 +146,7 @@
       onclick={logout}
       class={cn(rowBase, 'w-full text-left text-muted-foreground')}
     >
-      Log out
+      <LogOut class="size-4 shrink-0" /> Log out
     </button>
   {:else}
     <button
@@ -135,7 +155,7 @@
       onclick={signIn}
       class={cn(rowBase, 'w-full text-left font-medium text-foreground')}
     >
-      Sign in
+      <LogIn class="size-4 shrink-0" /> Sign in
     </button>
   {/if}
 {/snippet}
@@ -211,7 +231,9 @@
         <!-- Primary destinations pinned to the top, then a divider before the
              signed-in personal items and the rest of the site nav. -->
         {#each primaryLinks as link (link.href)}
+          {@const Icon = link.icon}
           <a href={resolve(link.href)} role="menuitem" onclick={() => (open = false)} class={linkClass(link.href)}>
+            <Icon class="size-4 shrink-0" />
             {link.label}
           </a>
         {/each}
@@ -225,10 +247,13 @@
             class={linkClass('/my/profile')}
             title={email}
           >
+            <CircleUser class="size-4 shrink-0" />
             Profile
           </a>
           {#each accountLinks as link (link.href)}
+            {@const Icon = link.icon}
             <a href={resolve(link.href)} role="menuitem" onclick={() => (open = false)} class={linkClass(link.href)}>
+              <Icon class="size-4 shrink-0" />
               {link.label}
             </a>
           {/each}
@@ -236,6 +261,7 @@
           <!-- Create/action items, split off from the account reading items above. -->
           <div class="my-1 h-px bg-border"></div>
           <a href={resolve('/submit')} role="menuitem" onclick={() => (open = false)} class={linkClass('/submit')}>
+            <SquarePlus class="size-4 shrink-0" />
             Submit a job
           </a>
           {#if isModerator}
@@ -245,6 +271,7 @@
               onclick={() => (open = false)}
               class={linkClass('/moderation')}
             >
+              <ShieldCheck class="size-4 shrink-0" />
               Moderation
             </a>
           {/if}
@@ -252,7 +279,9 @@
         {/if}
 
         {#each navLinks as link (link.href)}
+          {@const Icon = link.icon}
           <a href={resolve(link.href)} role="menuitem" onclick={() => (open = false)} class={linkClass(link.href)}>
+            <Icon class="size-4 shrink-0" />
             {link.label}
           </a>
         {/each}
@@ -260,6 +289,7 @@
         <!-- About sits at the very bottom of the link list, just before the
              Sign in / Log out action (the marketing landing lives at /about). -->
         <a href={resolve('/about')} role="menuitem" onclick={() => (open = false)} class={linkClass('/about')}>
+          <Info class="size-4 shrink-0" />
           About
         </a>
 

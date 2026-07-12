@@ -79,6 +79,20 @@ func TestFilterableProviders(t *testing.T) {
 	}
 }
 
+func TestAggregatorProvidersListsOnlyAggregators(t *testing.T) {
+	got := AggregatorProviders(reg(
+		fakeSource{"greenhouse"},         // board-based ATS → excluded
+		fakeBoardlessSource{"ozon"},      // single-company boardless (not aggregator) → excluded
+		fakeAggregatorSource{"jobstash"}, // aggregator → listed
+		fakeAggregatorSource{"himalayas"},
+	))
+
+	want := []string{"himalayas", "jobstash"}
+	if !slices.Equal(got, want) {
+		t.Errorf("AggregatorProviders() = %v, want %v", got, want)
+	}
+}
+
 func TestFilterableProvidersKeepsAggregatorsDropsSingleCompany(t *testing.T) {
 	got := filterableProviders(reg(
 		fakeSource{"greenhouse"},         // board-based → listed

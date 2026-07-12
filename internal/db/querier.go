@@ -89,6 +89,12 @@ type Querier interface {
 	// touched. The caller passes the crawled slugs and owns the grace window (cutoff =
 	// now() - window), so neither a failed nor a partial crawl mass-closes a catalogue.
 	CloseUnseenJobs(ctx context.Context, arg CloseUnseenJobsParams) (int64, error)
+	// Company slugs with at least one OPEN aggregator posting — the drive list for the
+	// cross-source aggregator suppression pass. An open aggregator row is a candidate whether
+	// it still needs suppressing OR needs releasing (its ATS twin closed), so one predicate
+	// covers both. Processed one company at a time (SuppressAggregatorDuplicatesForCompany),
+	// mirroring the role-duplicate recompute's lock discipline.
+	CompaniesWithAggregatorPostings(ctx context.Context, aggregators []string) ([]string, error)
 	// Company slugs whose role-duplicate markers may need recomputing: a company with an
 	// open role cluster (>1 posting sharing a fingerprint) to collapse, OR one still
 	// carrying an open marker that may need clearing (its cluster shrank). The recompute
@@ -649,6 +655,18 @@ type Querier interface {
 	// self-corrects on the next real change, so this is accepted over threading the exact
 	// embedded hash through a nullable text[] per batch.
 	StampSemanticEmbeddedBatch(ctx context.Context, arg StampSemanticEmbeddedBatchParams) error
+	// The per-company slice of the cross-source aggregator suppression. An open aggregator
+	// posting is marked duplicate_of an open CANONICAL ATS (non-aggregator) posting of the
+	// same company, equal normalized title, and compatible country (countries overlap, or
+	// either side empty — the geography dictionary is sparse, so an unresolved side must not
+	// veto). The ATS row is never touched, so it stays canonical. Candidate aggregator rows
+	// are those that are canonical OR already point at a non-aggregator row (i.e. suppressed
+	// by THIS pass) — an aggregator repost pointed at another aggregator by the role pass is
+	// left alone. A candidate with no ATS twin resolves to NULL, so a closed twin releases
+	// its aggregator copy back into search/embedding/enrichment. min(id) picks a stable
+	// target; the IS DISTINCT FROM guard makes re-runs cheap and idempotent. Run AFTER
+	// RecomputeRoleDuplicatesForCompany so ATS reposts have already collapsed to their canon.
+	SuppressAggregatorDuplicatesForCompany(ctx context.Context, arg SuppressAggregatorDuplicatesForCompanyParams) (int64, error)
 	// Rebuild the companies catalogue from jobs. The companies table is derivable
 	// from jobs (slug = company_slug, name = company), so after a slug-builder change
 	// re-keys jobs, this re-keys companies to match. DISTINCT ON collapses a slug's

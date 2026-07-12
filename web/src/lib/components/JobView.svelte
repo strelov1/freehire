@@ -23,6 +23,9 @@
   // yet loaded). `showApplyPrompt` is the post-click "Did you apply?" question.
   let interaction = $state.raw<UserJob | null>(null);
   let showApplyPrompt = $state(false);
+  // Set after the user confirms "Yes" on the apply prompt: surfaces a one-tap
+  // link to the Tracking board where the job now sits. Reset when the job changes.
+  let justApplied = $state(false);
   // Signed-out gate: the "Show" click offers sign-in before opening the posting.
   let showSignInPrompt = $state(false);
   // The report dialog (a problem-with-this-job complaint) opens over the page.
@@ -48,6 +51,7 @@
     const slug = job.public_slug; // track the current job
     interaction = null;
     showApplyPrompt = false;
+    justApplied = false;
     showSignInPrompt = false;
     if (!isAuthenticated()) return; // effects run client-only, so no browser guard needed
     api.recordJobView(slug)
@@ -93,6 +97,7 @@
       return;
     }
     showApplyPrompt = false;
+    justApplied = true; // offer the board link now that the job is tracked
   }
 
   // "No": purely local — the job must not enter the tracker.
@@ -191,6 +196,22 @@
           <Button variant="primary" size="sm" onclick={confirmApplied}>Yes, save</Button>
           <Button variant="ghost" size="sm" onclick={dismissApplyPrompt}>No</Button>
         </div>
+      </div>
+    {/if}
+
+    {#if justApplied}
+      <div
+        class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-brand/30 bg-brand-muted px-4 py-3"
+      >
+        <span class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-strong">
+          <CheckCircle2 class="size-4 shrink-0" aria-hidden="true" /> Added to your board
+        </span>
+        <a
+          href={resolve('/my/tracking')}
+          class="text-sm font-medium text-brand-strong underline underline-offset-4"
+        >
+          View on your board →
+        </a>
       </div>
     {/if}
 

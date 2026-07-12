@@ -29,6 +29,7 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/search"
+	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/worker"
 )
 
@@ -121,6 +122,16 @@ func run() int {
 		log.Printf("reindex: recompute role duplicates (continuing with prior markers): %v", err)
 	} else if n > 0 {
 		log.Printf("reindex: recomputed role duplicates (%d rows re-marked)", n)
+	}
+
+	// Then suppress aggregator postings that duplicate a first-party ATS posting, so the
+	// aggregator copy drops out of this rebuild (and out of embedding/enrichment). Run
+	// AFTER the role recompute so ATS reposts have collapsed to their canon first. Same
+	// per-company, best-effort discipline as the role pass.
+	if n, err := suppressAggregatorDuplicates(ctx, q); err != nil {
+		log.Printf("reindex: suppress aggregator duplicates (continuing with prior markers): %v", err)
+	} else if n > 0 {
+		log.Printf("reindex: suppressed aggregator duplicates (%d rows re-marked)", n)
 	}
 
 	// --since is a delta into the LIVE index in place: a partial set cannot be
@@ -388,6 +399,44 @@ func recomputeRoleDuplicates(ctx context.Context, q *db.Queries) (int64, error) 
 		// Companies are independent, so one failure (e.g. a statement timeout on an
 		// unusually large cluster) must not starve the rest — log-and-continue.
 		n, err := q.RecomputeRoleDuplicatesForCompany(ctx, c)
+		if err != nil {
+			failures++
+			lastErr = fmt.Errorf("company %q: %w", c, err)
+			continue
+		}
+		total += n
+	}
+	if failures > 0 {
+		return total, fmt.Errorf("%d/%d companies failed; last: %w", failures, len(companies), lastErr)
+	}
+	return total, nil
+}
+
+// suppressAggregatorDuplicates marks each open aggregator posting that duplicates a
+// first-party ATS posting (same company, normalized title, compatible country) as a
+// duplicate of that ATS row, one company at a time. Returns the total rows re-marked.
+// The aggregator set comes from the source registry's aggregator() markers. Best-effort
+// and lock-scoped exactly like recomputeRoleDuplicates: a per-company failure is logged
+// and skipped so it never starves the rest or blocks the reindex.
+func suppressAggregatorDuplicates(ctx context.Context, q *db.Queries) (int64, error) {
+	// The aggregator set comes from the registry markers. usajobs is the one adapter
+	// sources.All only registers when USAJOBS_API_KEY is set, so a reindex without that
+	// key classifies existing usajobs rows as ATS. That is harmless here: federal postings
+	// have no corporate ATS twin, so they are never suppressed either way and would only
+	// ever be a target on an (essentially impossible) exact company+title+country collision.
+	aggregators := sources.AggregatorProviders(sources.All(nil))
+	companies, err := q.CompaniesWithAggregatorPostings(ctx, aggregators)
+	if err != nil {
+		return 0, err
+	}
+	var total int64
+	var failures int
+	var lastErr error
+	for _, c := range companies {
+		n, err := q.SuppressAggregatorDuplicatesForCompany(ctx, db.SuppressAggregatorDuplicatesForCompanyParams{
+			Company:     c,
+			Aggregators: aggregators,
+		})
 		if err != nil {
 			failures++
 			lastErr = fmt.Errorf("company %q: %w", c, err)

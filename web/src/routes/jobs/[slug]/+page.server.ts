@@ -21,9 +21,9 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
       throw e;
     }),
     api.getSimilarJobs(params.slug).catch(() => []),
-    // The "openings across cities" list for a collapsed role. Non-essential and only
-    // meaningful for a mass-posted role, so it degrades to empty on failure.
-    api.getJobCopies(params.slug).catch(() => ({ copies: [], total: 0 })),
+    // A small preview of the other-locations tab (the full list is /jobs/:slug/copies).
+    // Non-essential and only meaningful for a mass-posted role, so it degrades to empty.
+    api.getJobCopies(params.slug, 10).catch(() => ({ copies: [], total: 0 })),
   ]);
   return { job, similar, copies: copiesResult.copies, copiesTotal: copiesResult.total };
 };

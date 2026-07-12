@@ -59,8 +59,12 @@ with a mode flag; revisit if a third such list appears.
 - [Stale bookmarks to `/my/tracking/history` or `.../analyses` 404] → Accepted:
   `noindex`, auth-gated, no external links. Add redirects later only if telemetry shows
   hits (noted seam).
-- [`board` fetch returns saved-only rows the board then discards] → Negligible: the set
-  is small and capped at 500; correctness over a marginal payload trim.
+- [`board` fetch returns saved-only rows the board then discards] → Mostly negligible,
+  but note the cap: saved-only rows count toward the 500-row fetch, and the server orders
+  by most-recent activity, so a user with 500+ tracked jobs and many recent saves could
+  have older active applications fall outside the window and vanish from the board.
+  Accepted at current scale and documented in `JobBoard.load()`; the clean fix is a
+  server-side board-minus-saved filter, deferred until it bites.
 - [`columnOf` signature change to `| null` touches every caller] → Callers are
   `JobBoard.svelte` only (plus the unit test); the compiler flags each site.
 

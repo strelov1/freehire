@@ -10,6 +10,7 @@
 export const accountNav = [
   { href: '/my/profile', label: 'Profile' },
   { href: '/my/tracking', label: 'Tracking' },
+  { href: '/my/activity', label: 'Activity' },
   { href: '/my/searches', label: 'Search notifications' },
   { href: '/my/api-keys', label: 'API keys' },
   { href: '/my/submissions', label: 'My submissions' },

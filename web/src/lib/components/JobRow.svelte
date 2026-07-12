@@ -40,7 +40,7 @@
 
 <a
   href={resolve('/jobs/[slug]', { slug: job.public_slug })}
-  class="block rounded-xl border border-border bg-card p-4 transition hover:border-foreground/15 hover:bg-accent hover:opacity-100"
+  class="block rounded-xl border border-border bg-card p-4 transition hover:border-brand hover:bg-accent hover:opacity-100"
   class:opacity-60={isViewed}
 >
   <!-- Company + timestamp rail: a quiet eyebrow that yields the stage to the title.
