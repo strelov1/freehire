@@ -68,5 +68,5 @@ export function parseFrontmatter(raw: Record<string, unknown>, filePath: string)
 export function selectPosts(posts: PostMeta[], { includeDrafts }: { includeDrafts: boolean }): PostMeta[] {
   return posts
     .filter((post) => includeDrafts || !post.draft)
-    .sort((a, b) => b.date.localeCompare(a.date));
+    .toSorted((a, b) => b.date.localeCompare(a.date));
 }
