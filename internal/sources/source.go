@@ -138,6 +138,20 @@ func SelfClosingProviders(reg map[string]Source) []string {
 	return out
 }
 
+// AggregatorProviders returns the sorted provider names in reg that aggregate postings
+// from many companies (see aggregator). The cross-source dedup pass uses this to tell an
+// aggregator copy (which may be suppressed) from a first-party ATS posting (which wins).
+func AggregatorProviders(reg map[string]Source) []string {
+	var out []string
+	for name, src := range reg {
+		if _, ok := src.(aggregator); ok {
+			out = append(out, name)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
 // FilterableProviders returns the sorted provider keys the source facet offers.
 // Passing a nil client is safe: Provider() and the marker assertions never touch the
 // transport.

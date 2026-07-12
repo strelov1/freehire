@@ -2,8 +2,9 @@
 
 ### Requirement: An aggregator posting is suppressed when a first-party ATS twin exists
 
-The system SHALL, at ingest time, mark an open posting from an aggregator source as
-`duplicate_of` an open posting from a non-aggregator (ATS) source when both share the
+The system SHALL, when the reindex recomputes duplicate markers, mark an open posting
+from an aggregator source as `duplicate_of` an open posting from a non-aggregator (ATS)
+source when both share the
 same `company_slug`, the same normalized title, and a compatible country. Two postings
 have a compatible country when their `countries` arrays overlap, or when either array is
 empty. The ATS posting SHALL remain canonical (its `duplicate_of` stays NULL); the
@@ -61,15 +62,15 @@ role cluster's copies.
 
 ### Requirement: Suppression fails over when the ATS twin closes
 
-The system SHALL re-evaluate suppression on each ingest run so that a suppressed
+The system SHALL re-evaluate suppression on each reindex run so that a suppressed
 aggregator posting whose ATS twin has closed is un-suppressed (its `duplicate_of` cleared)
 and re-enters search, embedding, and enrichment. Re-evaluation SHALL be idempotent — a
 run that changes no relationships performs no writes.
 
 #### Scenario: Closed ATS twin releases the aggregator copy
 
-- **WHEN** the ATS posting that suppressed an aggregator copy is closed and ingest runs
-  again
+- **WHEN** the ATS posting that suppressed an aggregator copy is closed and the reindex
+  runs again
 - **THEN** the aggregator copy's `duplicate_of` is cleared and it becomes eligible for
   search, embedding, and enrichment again
 

@@ -12,10 +12,11 @@ already serve, better, from the first-party source.
 
 ## What Changes
 
-- A new ingest-time suppression pass marks an open **aggregator** posting as
-  `duplicate_of` an open **ATS** posting when they share the same `company_slug`, the
-  same normalized title, and a compatible country (country arrays overlap, or either is
-  empty). The ATS posting is always the survivor; the aggregator copy is the duplicate.
+- A new suppression pass — run in the reindex reconcile, immediately after the existing
+  role-duplicate recompute — marks an open **aggregator** posting as `duplicate_of` an
+  open **ATS** posting when they share the same `company_slug`, the same normalized title,
+  and a compatible country (country arrays overlap, or either is empty). The ATS posting
+  is always the survivor; the aggregator copy is the duplicate.
 - Suppressed aggregator copies inherit the existing `duplicate_of` treatment with **no
   downstream changes**: excluded from search/Meilisearch, from semantic embedding (and
   their vector removed), and from LLM enrichment — but still stored and reachable by
@@ -25,7 +26,7 @@ already serve, better, from the first-party source.
   compatible country (so a Singapore aggregator posting is never suppressed by a
   same-titled US ATS posting — the 7-Eleven false-merge). It never merges aggregator↔
   aggregator or ATS↔ATS; that stays the job of `role_fingerprint`.
-- If the ATS twin later closes, the aggregator copy un-suppresses on the next ingest run
+- If the ATS twin later closes, the aggregator copy un-suppresses on the next reindex run
   and re-enters search/embedding/enrichment (idempotent failover, mirroring the existing
   role-duplicate recompute).
 - No schema change: the aggregator/ATS distinction is sourced from
@@ -39,9 +40,9 @@ riskier fuzzy-title follow-up, out of scope here.
 ## Capabilities
 
 ### New Capabilities
-- `aggregator-ats-dedup`: an ingest-time pass that suppresses an aggregator job posting
-  as a duplicate of a first-party ATS posting of the same company, title, and country,
-  keeping the ATS copy canonical.
+- `aggregator-ats-dedup`: a reindex-reconcile pass that suppresses an aggregator job
+  posting as a duplicate of a first-party ATS posting of the same company, title, and
+  country, keeping the ATS copy canonical.
 
 ### Modified Capabilities
 <!-- none — the duplicate_of exclusions (search, embed, enrich, by-slug, cluster-copies)
@@ -51,9 +52,10 @@ riskier fuzzy-title follow-up, out of scope here.
 
 - `internal/sources/` — add `AggregatorProviders()` enumerating the registry's
   `aggregator()`-marked providers.
-- `internal/db/queries/jobs.sql` — new `SuppressAggregatorDuplicatesForCompany` query;
-  regenerate sqlc.
-- `cmd/ingest/` — invoke the new suppression pass per company alongside the existing
-  role-duplicate recompute (repost-collapse first, then cross-source suppression).
+- `internal/db/queries/jobs.sql` — new `CompaniesWithAggregatorPostings` driver +
+  `SuppressAggregatorDuplicatesForCompany` per-company query; regenerate sqlc.
+- `cmd/reindex/` — invoke the new suppression pass per company immediately after the
+  existing `recomputeRoleDuplicates` (repost-collapse first, then cross-source
+  suppression).
 - No migration, no new column; reuses the existing `duplicate_of` column and every
   surface that already filters it.

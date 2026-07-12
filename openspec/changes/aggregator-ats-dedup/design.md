@@ -37,9 +37,11 @@ as distinct jobs today.
 
 ### Decision: A separate suppression pass, not a change to `role_fingerprint`
 
-Add a new per-company query `SuppressAggregatorDuplicatesForCompany`, run at ingest right
-after `RecomputeRoleDuplicatesForCompany`. It sets `duplicate_of` on an open aggregator
-row to the id of an open canonical ATS row (`duplicate_of IS NULL`) of the same
+Add a new per-company query `SuppressAggregatorDuplicatesForCompany` (with a
+`CompaniesWithAggregatorPostings` driver), run in the reindex reconcile right after
+`recomputeRoleDuplicates` — the reindex is where `duplicate_of` markers are already
+refreshed and the search index is rebuilt from them. It sets `duplicate_of` on an open
+aggregator row to the id of an open canonical ATS row (`duplicate_of IS NULL`) of the same
 `company_slug`, equal normalized title, and compatible country.
 
 - **Alternative — loosen `role_fingerprint` to drop the description:** rejected. The
@@ -70,19 +72,25 @@ and an ATS may phrase the city differently but agree on the country.
 
 ### Decision: Aggregator set sourced from the Go registry, passed as a query param
 
-Add `sources.AggregatorProviders() []string`, derived from the existing `aggregator()`
-interface markers (single source of truth). The ingest caller passes it into the query as
+Add `sources.AggregatorProviders(reg) []string`, derived from the existing `aggregator()`
+interface markers (single source of truth). The reindex caller passes it into the query as
 a `text[]` param. No persisted `source_is_aggregator` column, so no migration and no
 backfill; the set updates automatically when a source's marker changes.
 
 ### Decision: Idempotent, failover-safe re-evaluation
 
-Follow the existing recompute's shape: compute the desired `duplicate_of` for each open
-aggregator row and write only where it `IS DISTINCT FROM` the current value. A suppressed
-row whose ATS twin has closed finds no open canonical ATS match and is set back to NULL,
-re-entering the active surfaces. Ordering matters: run the role-cluster recompute first
-(so ATS reposts collapse to their own canonical row), then this pass (so aggregator rows
-point at the ATS *canonical* row, never at an ATS duplicate).
+Follow the existing recompute's shape: compute the desired `duplicate_of` for each
+candidate aggregator row and write only where it `IS DISTINCT FROM` the current value. A
+suppressed row whose ATS twin has closed finds no open canonical ATS match and is set back
+to NULL, re-entering the active surfaces. Ordering matters: run the role-cluster recompute
+first (so ATS reposts collapse to their own canonical row), then this pass (so aggregator
+rows point at the ATS *canonical* row, never at an ATS duplicate).
+
+Candidate rows are open aggregator rows that are **canonical OR already point at a
+non-aggregator row** (i.e. suppressed by this pass). An aggregator row the role pass
+pointed at *another aggregator* (a cross-aggregator repost) is excluded, so this pass never
+clobbers the role pass's decision — the two passes own disjoint sets of `duplicate_of`
+edges.
 
 ## Risks / Trade-offs
 
@@ -102,13 +110,12 @@ point at the ATS *canonical* row, never at an ATS duplicate).
 
 ## Migration Plan
 
-No schema migration. Ships as code only. On first ingest run per company after deploy, the
-new pass suppresses the matching aggregator copies; they drop out of the search index on
-the next reindex and out of embedding/enrichment on the next worker pass. Rollback is
-reverting the code — a later ingest run clears the `duplicate_of` values this pass set
-(they fail the `IS DISTINCT FROM` guard against a no-longer-computed target only if the
-pass runs; on pure rollback the values persist harmlessly until the role pass or a manual
-clear touches them, and they remain valid duplicates regardless).
+No schema migration. Ships as code only. The suppression runs inside the reindex, so the
+first reindex after deploy suppresses the matching aggregator copies and rebuilds the
+index without them; they drop out of embedding/enrichment on the next worker pass (whose
+enqueue already filters `duplicate_of`). Rollback is reverting the code — the values this
+pass set persist harmlessly until a run touches them, and they remain valid duplicates
+regardless.
 
 ## Open Questions
 
