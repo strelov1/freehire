@@ -50,6 +50,32 @@ func TestDetect(t *testing.T) {
 			html: `<script src="https://boards.greenhouse.io/embed/job_board/js"></script>`,
 			ok:   false,
 		},
+		// Second tier: any URL FromURL can parse into a board is detected too.
+		{
+			name:     "workday url in careers page",
+			html:     `<a href="https://xavier.wd1.myworkdayjobs.com/en-US/XavierCareers/job/US/role_R123">Apply</a>`,
+			provider: "workday", slug: "xavier.wd1.myworkdayjobs.com/XavierCareers", ok: true,
+		},
+		{
+			name:     "oracle url in careers page",
+			html:     `<iframe src="https://edzz.fa.em3.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_6001/requisitions"></iframe>`,
+			provider: "oracle", slug: "edzz.fa.em3.oraclecloud.com/CX_6001", ok: true,
+		},
+		{
+			name:     "taleo url in careers page",
+			html:     `window.open('https://valero.taleo.net/careersection/2/jobsearch.ftl')`,
+			provider: "taleo", slug: "valero.taleo.net/2", ok: true,
+		},
+		{
+			name:     "cornerstone url in careers page",
+			html:     `<link href="https://nintendoeurope.csod.com/ux/ats/careersite/1/home?c=nintendoeurope"/>`,
+			provider: "cornerstone", slug: "nintendoeurope", ok: true,
+		},
+		{
+			name:     "first-tier greenhouse still wins over second-tier workday",
+			html:     `<a href="https://acme.wd1.myworkdayjobs.com/x/y"></a><a href="https://boards.greenhouse.io/acme"></a>`,
+			provider: "greenhouse", slug: "acme", ok: true,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -25,14 +25,28 @@ var matchers = []struct {
 // slugs (e.g. `boards.greenhouse.io/embed/...` with no `for=` param).
 var reserved = map[string]bool{"embed": true}
 
-// Detect returns the first supported ATS board found in html. ok is false when no
-// matcher yields a valid, non-reserved slug.
+// absURLRe extracts absolute http(s) URLs from arbitrary markup (href/src attributes
+// or bare URLs in inline scripts), stopping at the first quote, angle bracket, or
+// whitespace. It is the second-tier feed into FromURL.
+var absURLRe = regexp.MustCompile(`https?://[^\s"'<>)\\]+`)
+
+// Detect returns the first supported ATS board found in html. It first tries the
+// ordered slug matchers (whose order encodes provider precedence and covers the
+// greenhouse embed shape FromURL can't parse), then falls back to scanning every
+// absolute URL through FromURL — so any board shape FromURL understands is detected
+// on a careers page without duplicating its host parsing here. ok is false when
+// nothing resolves.
 func Detect(html string) (provider, slug string, ok bool) {
 	for _, m := range matchers {
 		for _, sub := range m.re.FindAllStringSubmatch(html, -1) {
 			if s := sub[1]; !reserved[s] {
 				return m.provider, s, true
 			}
+		}
+	}
+	for _, u := range absURLRe.FindAllString(html, -1) {
+		if p, b, ok := FromURL(u); ok {
+			return p, b, true
 		}
 	}
 	return "", "", false

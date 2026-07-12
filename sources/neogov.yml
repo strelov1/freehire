@@ -1,0 +1,33 @@
+# neogov (NEOGOV governmentjobs.com / schooljobs.com) boards. Provider is the
+# filename; board = "<domain>/<agency>" where domain is governmentjobs.com or its
+# education vertical schooljobs.com (see internal/sources/neogov.go). NEOGOV is
+# common among US public colleges and school districts (schooljobs.com is the
+# education tenant space).
+#
+# Add a board only after validating it live: the listing endpoint
+# (www.<domain>/careers/home/index?agency=<agency> with the
+# X-Requested-With: XMLHttpRequest header) must return job cards. harvest-boards
+# neogov <seed> does this automatically.
+
+- company: Cochise College
+  board: schooljobs.com/cochisecollege
+- company: Atlantic Cape Community College
+  board: governmentjobs.com/atlanticcape
+- company: Northeastern Junior College
+  board: governmentjobs.com/colorado
+- company: Allan Hancock College
+  board: governmentjobs.com/hancockcollege
+- company: Bossier Parish Community College
+  board: governmentjobs.com/louisiana
+- company: Gadsden State Community College
+  board: schooljobs.com/accs
+- company: Alamance Community College
+  board: schooljobs.com/alamanceccedu
+- company: Allegany College of Maryland
+  board: schooljobs.com/allegany
+- company: Alma College
+  board: schooljobs.com/alma
+- company: Black Hawk College
+  board: schooljobs.com/bhcedu
+- company: Carteret Community College
+  board: schooljobs.com/carteretcc

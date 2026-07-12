@@ -28,6 +28,38 @@ var siteParsers = map[string]func([]byte) ([]companySite, error){
 	"unicorn":    func(b []byte) ([]companySite, error) { return parseCSVSites(b, ',', "Company", "Company Website") },
 }
 
+// parseUniversitySites parses the Hipo university-domains dataset (a JSON array of
+// {name, web_pages, domains}) into resolve-ready sites. The website is the first
+// listed web page, falling back to https://<first-domain>; an entry with neither is
+// dropped.
+func parseUniversitySites(data []byte) ([]companySite, error) {
+	var raw []struct {
+		Name     string   `json:"name"`
+		WebPages []string `json:"web_pages"`
+		Domains  []string `json:"domains"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("parse university sites: %w", err)
+	}
+	out := make([]companySite, 0, len(raw))
+	for _, u := range raw {
+		site := ""
+		if len(u.WebPages) > 0 {
+			site = strings.TrimSpace(u.WebPages[0])
+		}
+		if site == "" && len(u.Domains) > 0 {
+			if d := strings.TrimSpace(u.Domains[0]); d != "" {
+				site = "https://" + d
+			}
+		}
+		if site == "" {
+			continue
+		}
+		out = append(out, companySite{Name: strings.TrimSpace(u.Name), Website: site})
+	}
+	return out, nil
+}
+
 func parseYCSites(data []byte) ([]companySite, error) {
 	var raw []struct {
 		Name    string `json:"name"`

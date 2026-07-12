@@ -103,6 +103,55 @@ func TestFromURL(t *testing.T) {
 			url:      "https://eiby.fa.em2.oraclecloud.com/hcmui/candidateexperience/en/sites/jobsearch/job/11175",
 			provider: "oracle", board: "eiby.fa.em2.oraclecloud.com/jobsearch", ok: true,
 		},
+		// Taleo: board is the tenant host + the careersection number.
+		{
+			name:     "taleo careersection",
+			url:      "https://valero.taleo.net/careersection/2/jobsearch.ftl?lang=en&portal=101",
+			provider: "taleo", board: "valero.taleo.net/2", ok: true,
+		},
+		{
+			name: "taleo without careersection segment is not harvestable",
+			url:  "https://valero.taleo.net/",
+			ok:   false,
+		},
+		// Cornerstone (CSOD): board is the tenant subdomain of *.csod.com.
+		{
+			name:     "cornerstone csod",
+			url:      "https://nintendoeurope.csod.com/ux/ats/careersite/1/home?c=nintendoeurope",
+			provider: "cornerstone", board: "nintendoeurope", ok: true,
+		},
+		{
+			name: "cornerstone multi-label subdomain is not harvestable",
+			url:  "https://uk-ext.eu.csod.com/ux/ats/careersite/1/home",
+			ok:   false,
+		},
+		// PageUp: board is the numeric institution id on the canonical host.
+		{
+			name:     "pageup canonical host",
+			url:      "https://careers.pageuppeople.com/513/cw/en/job/694504/senior-audiovisual-design-engineer",
+			provider: "pageup", board: "513", ok: true,
+		},
+		{
+			name: "pageup non-numeric first segment is not a board",
+			url:  "https://careers.pageuppeople.com/cw/en/search",
+			ok:   false,
+		},
+		// NEOGOV: board is "<domain>/<agency>"; domain distinguishes the two tenant spaces.
+		{
+			name:     "neogov schooljobs",
+			url:      "https://www.schooljobs.com/careers/cochisecollege/jobs/5371857/ft-academic-career-advisor-svc",
+			provider: "neogov", board: "schooljobs.com/cochisecollege", ok: true,
+		},
+		{
+			name:     "neogov governmentjobs",
+			url:      "https://www.governmentjobs.com/careers/longbeach/jobs/4812345/analyst",
+			provider: "neogov", board: "governmentjobs.com/longbeach", ok: true,
+		},
+		{
+			name: "neogov without careers agency segment is not harvestable",
+			url:  "https://www.governmentjobs.com/careers",
+			ok:   false,
+		},
 		// Shapes whose URL does not yield the board id our adapter expects.
 		{
 			name: "adp vanity not cid:ccId",

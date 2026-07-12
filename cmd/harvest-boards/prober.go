@@ -573,6 +573,10 @@ var probers = map[string]prober{
 	"apploi":          apploiProber{},
 	"paylocity":       paylocityProber{},
 	"hireology":       hireologyProber{},
+	"pageup":          pageupProber{},
+	"cornerstone":     adapterProber{provider: "cornerstone", newSource: func() sources.Source { return sources.NewCornerstone(sources.NewClient()) }},
+	"taleo":           adapterProber{provider: "taleo", newSource: func() sources.Source { return sources.NewTaleo(sources.NewCookieClient()) }},
+	"neogov":          adapterProber{provider: "neogov", newSource: func() sources.Source { return sources.NewNeogov(sources.NewClient()) }},
 }
 
 // hireologyProber probes a careers.hireology.com tenant (slug = board) via the public

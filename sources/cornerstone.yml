@@ -12,3 +12,21 @@
   board: turnerconstruction
 - company: Canadian National Railway
   board: cn360
+- company: Alamo Colleges
+  board: alamo
+- company: Arizona Western College
+  board: azwestern
+- company: Blinn College
+  board: blinn
+- company: Concordia College - Moorhead
+  board: concordiacollege
+- company: University of Illinois Urbana-Champaign
+  board: illinois
+- company: Massachusetts Bay Community College
+  board: mbcc-mass
+- company: Mohawk Valley Community College
+  board: mvcc
+- company: University of Illinois Chicago
+  board: uic
+- company: University of Northern Colorado
+  board: unco

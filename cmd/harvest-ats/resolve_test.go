@@ -73,6 +73,31 @@ func TestResolve(t *testing.T) {
 		}
 	})
 
+	t.Run("detects on a separate careers host guess", func(t *testing.T) {
+		pages := map[string]string{
+			"https://acme.com":         `<p>welcome, no careers link here</p>`,
+			"https://careers.acme.com": `<a href="https://jobs.lever.co/acme">Apply</a>`,
+		}
+		fetch := func(u string) (string, error) { return pages[u], nil }
+		p, s, ok := resolve("https://acme.com", fetch)
+		if !ok || p != "lever" || s != "acme" {
+			t.Fatalf("resolve = (%q,%q,%v), want (lever,acme,true)", p, s, ok)
+		}
+	})
+
+	t.Run("follows one deeper hop to the vacancies page", func(t *testing.T) {
+		pages := map[string]string{
+			"https://acme.com":                          `<a href="/careers">Careers</a>`,
+			"https://acme.com/careers":                  `<a href="/careers/current-openings">Current Openings</a>`,
+			"https://acme.com/careers/current-openings": `<a href="https://jobs.ashbyhq.com/acme">Apply</a>`,
+		}
+		fetch := func(u string) (string, error) { return pages[u], nil }
+		p, s, ok := resolve("https://acme.com", fetch)
+		if !ok || p != "ashby" || s != "acme" {
+			t.Fatalf("resolve = (%q,%q,%v), want (ashby,acme,true)", p, s, ok)
+		}
+	})
+
 	t.Run("dead homepage skips career-path probes", func(t *testing.T) {
 		var calls int
 		fetch := func(u string) (string, error) {

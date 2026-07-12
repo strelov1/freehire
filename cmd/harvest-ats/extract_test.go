@@ -5,6 +5,25 @@ import (
 	"testing"
 )
 
+func TestParseUniversitySites(t *testing.T) {
+	got, err := parseUniversitySites([]byte(`[
+		{"name":"Alpha University","web_pages":["https://alpha.edu/"],"domains":["alpha.edu"]},
+		{"name":"Beta College","web_pages":[],"domains":["beta.ac.uk"]},
+		{"name":"Ghost","web_pages":[],"domains":[]}
+	]`))
+	if err != nil {
+		t.Fatalf("parseUniversitySites: %v", err)
+	}
+	want := []companySite{
+		{Name: "Alpha University", Website: "https://alpha.edu/"}, // web_pages wins
+		{Name: "Beta College", Website: "https://beta.ac.uk"},     // built from domain
+		// Ghost dropped: no web page and no domain
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %#v, want %#v", got, want)
+	}
+}
+
 func TestParseYCSites(t *testing.T) {
 	got, err := parseYCSites([]byte(`[
 		{"name":"Acme","website":"https://acme.com"},

@@ -77,6 +77,27 @@ func FromURL(rawurl string) (provider, board string, ok bool) {
 		if site := segAfter(segs, "sites"); site != "" {
 			return "oracle", host + "/" + site, true
 		}
+	case strings.HasSuffix(host, ".taleo.net"):
+		// board is the tenant host + the public careersection number, e.g.
+		// "valero.taleo.net/2" from /careersection/2/jobsearch.ftl.
+		if section := segAfter(segs, "careersection"); section != "" {
+			return "taleo", host + "/" + section, true
+		}
+	case strings.HasSuffix(host, ".csod.com"):
+		// board is the tenant subdomain; a multi-label prefix is not a crawlable board.
+		if sub := subdomain(host, ".csod.com"); sub != "" {
+			return "cornerstone", sub, true
+		}
+	case host == "careers.pageuppeople.com":
+		// board is the numeric institution id, the first path segment on the canonical host.
+		if len(segs) >= 1 && isAllDigits(segs[0]) {
+			return "pageup", segs[0], true
+		}
+	case host == "www.governmentjobs.com", host == "www.schooljobs.com":
+		// board is "<domain>/<agency>"; the two domains are separate tenant spaces.
+		if agency := segAfter(segs, "careers"); agency != "" {
+			return "neogov", strings.TrimPrefix(host, "www.") + "/" + agency, true
+		}
 	case host == "www.paycomonline.net", host == "paycomonline.net":
 		// board is the 32-hex client key in /v4/ats/web.php/portal/<clientkey>/...
 		if key := segAfter(segs, "portal"); key != "" {
@@ -84,6 +105,19 @@ func FromURL(rawurl string) (provider, board string, ok bool) {
 		}
 	}
 	return "", "", false
+}
+
+// isAllDigits reports whether s is non-empty and only ASCII digits (a numeric board id).
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // pathSegments splits a URL path into its non-empty segments.

@@ -1,0 +1,19 @@
+# pageup (PageUp People) boards. Provider is the filename; board = the numeric
+# institution id served on the canonical host careers.pageuppeople.com/<instID>/
+# (see internal/sources/pageup.go). PageUp is common in AU/UK/NZ higher education.
+#
+# Add an instID only after validating it live: the search endpoint
+# (careers.pageuppeople.com/<instID>/cw/en/search/?page-items=1 with the
+# X-Requested-With: XMLHttpRequest header) must return a JSON envelope with count > 0.
+# harvest-boards pageup <seed> does this automatically.
+
+- company: Monash University
+  board: "513"
+- company: Kenyon College
+  board: "695"
+- company: California State University, Long Beach
+  board: "873"
+- company: University of Dayton
+  board: "875"
+- company: Deakin University
+  board: "949"

@@ -136,6 +136,10 @@ func NewClient() *Client {
 	}
 }
 
+// NewCookieClient exposes newCookieClient to host tools (e.g. harvest-boards' Taleo
+// prober, which reuses the session-bound Taleo adapter to validate a board).
+func NewCookieClient() *Client { return newCookieClient() }
+
 // newCookieClient builds an HTTP client that persists cookies across calls, for the one
 // adapter (Taleo) whose session-bound API needs the JSESSIONID a careersection GET sets to
 // carry into the searchjobs POST. The jar is host-scoped, so a single client segregates
