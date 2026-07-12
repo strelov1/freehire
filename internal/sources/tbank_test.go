@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -14,10 +15,11 @@ import (
 // description[] on the request's urlSlug. A urlSlug in failSlugs errors so detail-isolation
 // can be exercised.
 type tbankHTTP struct {
-	pages     map[int]string    // offset -> canned getVacancies payload
-	detail    map[string]string // urlSlug -> canned getVacancyDescription payload
-	failSlugs map[string]bool   // urlSlugs whose detail request errors
-	listCalls int               // number of getVacancies requests served (loop-termination guard)
+	pages       map[int]string    // offset -> canned getVacancies payload
+	detail      map[string]string // urlSlug -> canned getVacancyDescription payload
+	failSlugs   map[string]bool   // urlSlugs whose detail request errors
+	listCalls   int               // number of getVacancies requests served (loop-termination guard)
+	lastListReq tbankListRequest  // the most recent getVacancies request body (filter assertions)
 }
 
 func (f *tbankHTTP) PostJSON(_ context.Context, url string, body, v any) error {
@@ -28,6 +30,7 @@ func (f *tbankHTTP) PostJSON(_ context.Context, url string, body, v any) error {
 			return errors.New("tbankHTTP: list body is not a tbankListRequest")
 		}
 		f.listCalls++
+		f.lastListReq = req
 		if f.listCalls > 8 { // a non-advancing loop would spin forever; bound the test
 			return errors.New("tbankHTTP: too many list calls (pagination did not terminate)")
 		}
@@ -83,6 +86,29 @@ func TestTBankProvider(t *testing.T) {
 func TestTBankIsBoardless(t *testing.T) {
 	if _, ok := NewTBank(nil).(boardless); !ok {
 		t.Error("tbank should implement the boardless marker")
+	}
+}
+
+// The publisher list source treats an empty category filter as work-with-clients only, so
+// the request MUST name every top-level category to reach IT and back-office vacancies.
+func TestTBankListRequestsAllCategories(t *testing.T) {
+	fake := &tbankHTTP{
+		pages:  map[int]string{0: tbankListPage(0, true, tbankVacancy("Eng", "Москва", "tcareer_it", "s1", "eng"))},
+		detail: map[string]string{"s1": `{"resultCode":"OK","payload":{"description":[{"key":"k","content":"<p>x</p>"}]}}`},
+	}
+
+	if _, err := NewTBank(fake).Fetch(context.Background(), CompanyEntry{Company: "T-Bank"}); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+
+	cats, ok := fake.lastListReq.Filters["category"].([]string)
+	if !ok {
+		t.Fatalf("list filters.category = %#v, want []string of top-level categories", fake.lastListReq.Filters["category"])
+	}
+	for _, want := range []string{"tcareer_it", "tcareer_back_office", "tcareer_work_with_clients"} {
+		if !slices.Contains(cats, want) {
+			t.Errorf("list filters.category %v missing %q", cats, want)
+		}
 	}
 }
 

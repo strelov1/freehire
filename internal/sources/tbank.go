@@ -9,8 +9,10 @@ import (
 
 // tbank adapts T-Bank's public careers API (tbank.ru/pfpjobs/papi), a single-company source
 // with no per-tenant board id (boardless). The list endpoint paginates by publisher offset
-// and carries no body, so each vacancy's description comes from its own POST detail request,
-// fanned out like the other detail-fetching adapters. The "publisher" source covers all roles.
+// and carries only titles, so each vacancy's description comes from its own POST detail
+// request, fanned out like the other detail-fetching adapters. The publisher list source does
+// NOT return all roles by default — the request must name every top-level category (see
+// tbankCategories) or IT and back-office vacancies are silently omitted.
 type tbank struct {
 	http JSONPoster
 }
@@ -21,6 +23,14 @@ const (
 	tbankSource    = "publisher"
 	tbankPageLimit = 20
 )
+
+// tbankCategories is the full set of T-Bank's top-level vacancy categories. The publisher
+// list source treats an empty category filter as tcareer_work_with_clients ONLY (mass-hire
+// client roles), silently excluding IT and back-office; naming every category is what reaches
+// the whole catalogue. The server unions them, so one filtered pagination loop covers all.
+// A curated constant (like the location/skilltag dictionaries) — extend it if T-Bank adds a
+// top-level category. (Discovered from the careers-site filter config, 2026-07.)
+var tbankCategories = []string{"tcareer_it", "tcareer_back_office", "tcareer_work_with_clients"}
 
 // NewTBank builds the T-Bank adapter over the given HTTP client.
 func NewTBank(c JSONPoster) Source { return tbank{http: c} }
@@ -78,7 +88,7 @@ func (b tbank) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 func (b tbank) list(ctx context.Context) ([]tbankVacancyItem, error) {
 	var items []tbankVacancyItem
 	for offset := 0; ; {
-		req := tbankListRequest{Limit: tbankPageLimit, Filters: map[string]any{}}
+		req := tbankListRequest{Limit: tbankPageLimit, Filters: map[string]any{"category": tbankCategories}}
 		req.Pagination.Publisher.Offset = offset
 
 		var resp struct {
