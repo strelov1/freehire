@@ -15,12 +15,15 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
   //
   // Similar jobs are a non-essential discovery aid: a failure (search disabled,
   // no neighbours yet) must not break the page, so it degrades to an empty list.
-  const [job, similar] = await Promise.all([
+  const [job, similar, copiesResult] = await Promise.all([
     api.getJob(params.slug).catch((e) => {
       if (e instanceof ApiError && e.status === 404) error(404, 'Job not found');
       throw e;
     }),
     api.getSimilarJobs(params.slug).catch(() => []),
+    // The "openings across cities" list for a collapsed role. Non-essential and only
+    // meaningful for a mass-posted role, so it degrades to empty on failure.
+    api.getJobCopies(params.slug).catch(() => ({ copies: [], total: 0 })),
   ]);
-  return { job, similar };
+  return { job, similar, copies: copiesResult.copies, copiesTotal: copiesResult.total };
 };

@@ -244,6 +244,7 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/jobs/sitemap", a.JobSitemap)
 	api.Get("/jobs/:slug", a.GetJob)
 	api.Get("/jobs/:slug/similar", a.SimilarJobs)
+	api.Get("/jobs/:slug/copies", a.JobCopies)
 	api.Get("/companies", a.ListCompanies)
 	api.Get("/companies/sitemap", a.CompanySitemap)
 	api.Get("/companies/sitemap/boundaries", a.CompanySitemapBoundaries)

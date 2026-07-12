@@ -428,6 +428,12 @@ type Querier interface {
 	// The moderator review queue: every pending submission, newest first, with the submitter's
 	// email so the moderator can judge provenance.
 	ListPendingSubmissions(ctx context.Context) ([]ListPendingSubmissionsRow, error)
+	// The open postings sharing a role cluster (company_slug + role_fingerprint) with the
+	// anchor job — the "N openings across cities" list for a collapsed role. Each copy keeps
+	// its own location and apply URL, so a seeker picks their city; the anchor itself is
+	// included (it is one of the openings). Ordered by location. An empty-fingerprint anchor
+	// clusters with no one and returns nothing.
+	ListRoleClusterCopies(ctx context.Context, arg ListRoleClusterCopiesParams) ([]ListRoleClusterCopiesRow, error)
 	// A user's saved searches, most recently updated first (the "My filters" picker order).
 	ListSavedSearches(ctx context.Context, userID int64) ([]SavedSearch, error)
 	// "My submissions": one user's submissions, newest first, whatever their status.

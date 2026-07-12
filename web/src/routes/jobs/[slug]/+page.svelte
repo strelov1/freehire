@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import JobCopies from '$lib/components/JobCopies.svelte';
   import JobRow from '$lib/components/JobRow.svelte';
   import JobView from '$lib/components/JobView.svelte';
   import Seo from '$lib/components/Seo.svelte';
@@ -41,6 +42,8 @@
 
 <div class="mx-auto w-full max-w-6xl px-4 py-6">
   <JobView job={data.job} />
+
+  <JobCopies copies={data.copies} total={data.copiesTotal} />
 
   {#if data.similar.length > 0}
     <section class="mt-10">

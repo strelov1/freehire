@@ -1032,6 +1032,64 @@ func (q *Queries) ListOpenJobsPostedAfter(ctx context.Context, arg ListOpenJobsP
 	return items, nil
 }
 
+const listRoleClusterCopies = `-- name: ListRoleClusterCopies :many
+SELECT j.public_slug, j.location, j.url, j.posted_at,
+    COUNT(*) OVER()::bigint AS total
+FROM jobs j
+JOIN jobs anchor ON anchor.id = $1
+WHERE j.company_slug = anchor.company_slug
+  AND j.role_fingerprint = anchor.role_fingerprint
+  AND anchor.role_fingerprint <> ''
+  AND j.closed_at IS NULL
+ORDER BY j.location, j.id
+LIMIT $3 OFFSET $2
+`
+
+type ListRoleClusterCopiesParams struct {
+	JobID     int64 `json:"job_id"`
+	RowOffset int32 `json:"row_offset"`
+	RowLimit  int32 `json:"row_limit"`
+}
+
+type ListRoleClusterCopiesRow struct {
+	PublicSlug string             `json:"public_slug"`
+	Location   string             `json:"location"`
+	URL        string             `json:"url"`
+	PostedAt   pgtype.Timestamptz `json:"posted_at"`
+	Total      int64              `json:"total"`
+}
+
+// The open postings sharing a role cluster (company_slug + role_fingerprint) with the
+// anchor job — the "N openings across cities" list for a collapsed role. Each copy keeps
+// its own location and apply URL, so a seeker picks their city; the anchor itself is
+// included (it is one of the openings). Ordered by location. An empty-fingerprint anchor
+// clusters with no one and returns nothing.
+func (q *Queries) ListRoleClusterCopies(ctx context.Context, arg ListRoleClusterCopiesParams) ([]ListRoleClusterCopiesRow, error) {
+	rows, err := q.db.Query(ctx, listRoleClusterCopies, arg.JobID, arg.RowOffset, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRoleClusterCopiesRow{}
+	for rows.Next() {
+		var i ListRoleClusterCopiesRow
+		if err := rows.Scan(
+			&i.PublicSlug,
+			&i.Location,
+			&i.URL,
+			&i.PostedAt,
+			&i.Total,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markLivenessExpired = `-- name: MarkLivenessExpired :one
 UPDATE jobs
 SET liveness_strikes = liveness_strikes + 1,

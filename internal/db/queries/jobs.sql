@@ -259,6 +259,23 @@ WHERE company_slug = sqlc.arg(company_slug)
   AND role_fingerprint = sqlc.arg(role_fingerprint)
   AND role_fingerprint <> '';
 
+-- name: ListRoleClusterCopies :many
+-- The open postings sharing a role cluster (company_slug + role_fingerprint) with the
+-- anchor job — the "N openings across cities" list for a collapsed role. Each copy keeps
+-- its own location and apply URL, so a seeker picks their city; the anchor itself is
+-- included (it is one of the openings). Ordered by location. An empty-fingerprint anchor
+-- clusters with no one and returns nothing.
+SELECT j.public_slug, j.location, j.url, j.posted_at,
+    COUNT(*) OVER()::bigint AS total
+FROM jobs j
+JOIN jobs anchor ON anchor.id = sqlc.arg(job_id)
+WHERE j.company_slug = anchor.company_slug
+  AND j.role_fingerprint = anchor.role_fingerprint
+  AND anchor.role_fingerprint <> ''
+  AND j.closed_at IS NULL
+ORDER BY j.location, j.id
+LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);
+
 -- name: RoleClusterCountsAll :many
 -- The whole-catalogue role-cluster counts in one aggregate pass, for the reindex to
 -- build its (company_slug, role_fingerprint) -> counts lookup once. Only clusters with
