@@ -29,7 +29,7 @@
 
 ## 4. Verification
 
-- [ ] 4.1 On the ingest/reindex integration harness (or a scratch DB), seed one aggregator
-  posting plus its ATS twin, run the reindex suppression pass, and confirm the aggregator
-  copy gets `duplicate_of` set, disappears from `ListJobs`, and is not enqueued for
-  embedding/enrichment, while its detail-by-slug still resolves.
+- [x] 4.1 Integration test `TestSuppressedAggregator_HiddenFromListAndEnrichmentButServedBySlug`
+  seeds one aggregator posting plus its ATS twin, runs the suppression pass, and confirms
+  the aggregator copy gets `duplicate_of` set, is absent from `ListJobs`, is not enqueued
+  by `EnqueuePendingJobs`, and still resolves via `GetJobBySlug`.
