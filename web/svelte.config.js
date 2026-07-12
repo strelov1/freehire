@@ -1,9 +1,14 @@
 import adapter from '@sveltejs/adapter-node';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+import { mdsvex } from 'mdsvex';
 
 /** @type {import('@sveltejs/kit').Config} */
 export default {
-  preprocess: vitePreprocess(),
+  // `.svelte` compiles as usual; `.svx` blog posts (web/src/posts/*.svx) go through
+  // mdsvex, which compiles markdown + frontmatter to Svelte components at build time.
+  // mdsvex output is bundled same-origin, so the strict script-src CSP below is unaffected.
+  extensions: ['.svelte', '.svx'],
+  preprocess: [vitePreprocess(), mdsvex({ extensions: ['.svx'] })],
   kit: {
     // The frontend ships as a long-lived Node server (see design D1/D2): nginx
     // fronts it and proxies /api + /health to the Go backend, keeping the SPA

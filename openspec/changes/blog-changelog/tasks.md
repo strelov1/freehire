@@ -1,7 +1,7 @@
 ## 1. Tooling & dependencies
 
-- [ ] 1.1 Add `mdsvex` to `web/package.json` (dev dep) and install; register the mdsvex preprocessor + `.svx` extension in `web/svelte.config.js` alongside `vitePreprocess`, leaving `.svelte` and CSP intact
-- [ ] 1.2 Verify `npm run build` and existing `svelte-check` still pass with the preprocessor wired (no route changes yet)
+- [x] 1.1 Add `mdsvex` to `web/package.json` (dev dep) and install; register the mdsvex preprocessor + `.svx` extension in `web/svelte.config.js` alongside `vitePreprocess`, leaving `.svelte` and CSP intact
+- [x] 1.2 Verify `npm run build` and existing `svelte-check` still pass with the preprocessor wired (no route changes yet)
 
 ## 2. Content model & loader
 
