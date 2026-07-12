@@ -93,6 +93,42 @@ func (q *Queries) CloseUnseenJobs(ctx context.Context, arg CloseUnseenJobsParams
 	return result.RowsAffected(), nil
 }
 
+const companiesWithRoleClusters = `-- name: CompaniesWithRoleClusters :many
+SELECT company_slug FROM jobs
+WHERE closed_at IS NULL AND company_slug <> '' AND role_fingerprint IS NOT NULL AND role_fingerprint <> ''
+GROUP BY company_slug, role_fingerprint
+HAVING COUNT(*) > 1
+UNION
+SELECT DISTINCT company_slug FROM jobs
+WHERE closed_at IS NULL AND company_slug <> '' AND duplicate_of IS NOT NULL
+`
+
+// Company slugs whose role-duplicate markers may need recomputing: a company with an
+// open role cluster (>1 posting sharing a fingerprint) to collapse, OR one still
+// carrying an open marker that may need clearing (its cluster shrank). The recompute
+// processes these ONE COMPANY AT A TIME (RecomputeRoleDuplicatesForCompany) in short
+// transactions, so it never holds a table-wide lock that would stall concurrent ingest
+// crawls (a whole-table UPDATE did: it locked ~1.4M rows for minutes).
+func (q *Queries) CompaniesWithRoleClusters(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, companiesWithRoleClusters)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var company_slug string
+		if err := rows.Scan(&company_slug); err != nil {
+			return nil, err
+		}
+		items = append(items, company_slug)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const enqueueJobEnrichment = `-- name: EnqueueJobEnrichment :execrows
 INSERT INTO enrichment_outbox (job_id, target_version)
 SELECT id, $1::int
@@ -1052,20 +1088,20 @@ func (q *Queries) PropagateCollectionsToJobs(ctx context.Context) (int64, error)
 	return result.RowsAffected(), nil
 }
 
-const recomputeRoleDuplicates = `-- name: RecomputeRoleDuplicates :execrows
+const recomputeRoleDuplicatesForCompany = `-- name: RecomputeRoleDuplicatesForCompany :execrows
 WITH canon AS (
-    SELECT company_slug, role_fingerprint, MIN(id) AS canon_id, COUNT(*) AS n
+    SELECT jobs.role_fingerprint, MIN(jobs.id) AS canon_id, COUNT(*) AS n
     FROM jobs
-    WHERE closed_at IS NULL AND role_fingerprint IS NOT NULL AND role_fingerprint <> ''
-    GROUP BY company_slug, role_fingerprint
+    WHERE jobs.company_slug = $1
+      AND jobs.closed_at IS NULL AND jobs.role_fingerprint IS NOT NULL AND jobs.role_fingerprint <> ''
+    GROUP BY jobs.role_fingerprint
 ),
 target AS (
     SELECT j.id,
         CASE WHEN c.n > 1 AND j.id <> c.canon_id THEN c.canon_id END AS new_dup
     FROM jobs j
-    JOIN canon c
-      ON j.company_slug = c.company_slug AND j.role_fingerprint = c.role_fingerprint
-    WHERE j.closed_at IS NULL
+    JOIN canon c ON j.role_fingerprint = c.role_fingerprint
+    WHERE j.company_slug = $1 AND j.closed_at IS NULL
 )
 UPDATE jobs j
 SET duplicate_of = t.new_dup,
@@ -1075,15 +1111,15 @@ WHERE j.id = t.id
   AND j.duplicate_of IS DISTINCT FROM t.new_dup
 `
 
-// Collapse each role cluster to one canonical open job. For every OPEN, fingerprinted
-// job, the canon is the min(id) among its (company_slug, role_fingerprint) cluster's
-// open rows; the canon and any singleton/empty-fingerprint row get duplicate_of NULL,
-// the other reposts point to the canon. Rows are never deleted, so the reality counts
-// (which count the rows) are untouched. The IS DISTINCT FROM guard makes re-runs cheap
-// and idempotent, and a closed canon fails over to the next min(id) on the next run.
-// Closed rows are left as-is (excluded by closed_at everywhere the marker is read).
-func (q *Queries) RecomputeRoleDuplicates(ctx context.Context) (int64, error) {
-	result, err := q.db.Exec(ctx, recomputeRoleDuplicates)
+// The per-company slice of the role-duplicate recompute. Canon = min(id) among the
+// company's open rows sharing a role_fingerprint; the canon and any singleton/empty-fp
+// row get duplicate_of NULL, the other reposts point to the canon. Rows are never
+// deleted, so the reality counts are untouched. Scoped to one company_slug so it locks
+// only that company's rows briefly; the (company_slug, role_fingerprint) index makes the
+// aggregation a range scan. The IS DISTINCT FROM guard makes re-runs cheap and
+// idempotent, and a closed canon fails over to the next min(id) on the next run.
+func (q *Queries) RecomputeRoleDuplicatesForCompany(ctx context.Context, company string) (int64, error) {
+	result, err := q.db.Exec(ctx, recomputeRoleDuplicatesForCompany, company)
 	if err != nil {
 		return 0, err
 	}

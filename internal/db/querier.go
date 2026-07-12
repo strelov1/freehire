@@ -89,6 +89,13 @@ type Querier interface {
 	// touched. The caller passes the crawled slugs and owns the grace window (cutoff =
 	// now() - window), so neither a failed nor a partial crawl mass-closes a catalogue.
 	CloseUnseenJobs(ctx context.Context, arg CloseUnseenJobsParams) (int64, error)
+	// Company slugs whose role-duplicate markers may need recomputing: a company with an
+	// open role cluster (>1 posting sharing a fingerprint) to collapse, OR one still
+	// carrying an open marker that may need clearing (its cluster shrank). The recompute
+	// processes these ONE COMPANY AT A TIME (RecomputeRoleDuplicatesForCompany) in short
+	// transactions, so it never holds a table-wide lock that would stall concurrent ingest
+	// crawls (a whole-table UPDATE did: it locked ~1.4M rows for minutes).
+	CompaniesWithRoleClusters(ctx context.Context) ([]string, error)
 	// Whether a company row already exists for the slug. The backfill checks this
 	// before upserting to log matched-existing vs inserted-reference counts — the
 	// upsert itself is blind to which path (insert or update) it took.
@@ -494,14 +501,14 @@ type Querier interface {
 	// (AT TIME ZONE 'UTC') so buckets are stable regardless of session timezone. The
 	// FULL OUTER JOIN yields one row per day that saw either an add or a removal.
 	RebuildJobDailyStats(ctx context.Context) (int64, error)
-	// Collapse each role cluster to one canonical open job. For every OPEN, fingerprinted
-	// job, the canon is the min(id) among its (company_slug, role_fingerprint) cluster's
-	// open rows; the canon and any singleton/empty-fingerprint row get duplicate_of NULL,
-	// the other reposts point to the canon. Rows are never deleted, so the reality counts
-	// (which count the rows) are untouched. The IS DISTINCT FROM guard makes re-runs cheap
-	// and idempotent, and a closed canon fails over to the next min(id) on the next run.
-	// Closed rows are left as-is (excluded by closed_at everywhere the marker is read).
-	RecomputeRoleDuplicates(ctx context.Context) (int64, error)
+	// The per-company slice of the role-duplicate recompute. Canon = min(id) among the
+	// company's open rows sharing a role_fingerprint; the canon and any singleton/empty-fp
+	// row get duplicate_of NULL, the other reposts point to the canon. Rows are never
+	// deleted, so the reality counts are untouched. Scoped to one company_slug so it locks
+	// only that company's rows briefly; the (company_slug, role_fingerprint) index makes the
+	// aggregation a range scan. The IS DISTINCT FROM guard makes re-runs cheap and
+	// idempotent, and a closed canon fails over to the next min(id) on the next run.
+	RecomputeRoleDuplicatesForCompany(ctx context.Context, company string) (int64, error)
 	// Count a failed crawl: bump consecutive_failures, record the error, stamp the run,
 	// and RETURN the new failure count so the caller can compute the cooldown (the backoff
 	// policy lives in Go, not here). The cooldown itself is applied by SetBoardCooldown.

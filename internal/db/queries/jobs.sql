@@ -274,27 +274,42 @@ WHERE role_fingerprint IS NOT NULL AND role_fingerprint <> ''
 GROUP BY company_slug, role_fingerprint
 HAVING COUNT(*) > 1;
 
--- name: RecomputeRoleDuplicates :execrows
--- Collapse each role cluster to one canonical open job. For every OPEN, fingerprinted
--- job, the canon is the min(id) among its (company_slug, role_fingerprint) cluster's
--- open rows; the canon and any singleton/empty-fingerprint row get duplicate_of NULL,
--- the other reposts point to the canon. Rows are never deleted, so the reality counts
--- (which count the rows) are untouched. The IS DISTINCT FROM guard makes re-runs cheap
--- and idempotent, and a closed canon fails over to the next min(id) on the next run.
--- Closed rows are left as-is (excluded by closed_at everywhere the marker is read).
+-- name: CompaniesWithRoleClusters :many
+-- Company slugs whose role-duplicate markers may need recomputing: a company with an
+-- open role cluster (>1 posting sharing a fingerprint) to collapse, OR one still
+-- carrying an open marker that may need clearing (its cluster shrank). The recompute
+-- processes these ONE COMPANY AT A TIME (RecomputeRoleDuplicatesForCompany) in short
+-- transactions, so it never holds a table-wide lock that would stall concurrent ingest
+-- crawls (a whole-table UPDATE did: it locked ~1.4M rows for minutes).
+SELECT company_slug FROM jobs
+WHERE closed_at IS NULL AND company_slug <> '' AND role_fingerprint IS NOT NULL AND role_fingerprint <> ''
+GROUP BY company_slug, role_fingerprint
+HAVING COUNT(*) > 1
+UNION
+SELECT DISTINCT company_slug FROM jobs
+WHERE closed_at IS NULL AND company_slug <> '' AND duplicate_of IS NOT NULL;
+
+-- name: RecomputeRoleDuplicatesForCompany :execrows
+-- The per-company slice of the role-duplicate recompute. Canon = min(id) among the
+-- company's open rows sharing a role_fingerprint; the canon and any singleton/empty-fp
+-- row get duplicate_of NULL, the other reposts point to the canon. Rows are never
+-- deleted, so the reality counts are untouched. Scoped to one company_slug so it locks
+-- only that company's rows briefly; the (company_slug, role_fingerprint) index makes the
+-- aggregation a range scan. The IS DISTINCT FROM guard makes re-runs cheap and
+-- idempotent, and a closed canon fails over to the next min(id) on the next run.
 WITH canon AS (
-    SELECT company_slug, role_fingerprint, MIN(id) AS canon_id, COUNT(*) AS n
+    SELECT jobs.role_fingerprint, MIN(jobs.id) AS canon_id, COUNT(*) AS n
     FROM jobs
-    WHERE closed_at IS NULL AND role_fingerprint IS NOT NULL AND role_fingerprint <> ''
-    GROUP BY company_slug, role_fingerprint
+    WHERE jobs.company_slug = sqlc.arg(company)
+      AND jobs.closed_at IS NULL AND jobs.role_fingerprint IS NOT NULL AND jobs.role_fingerprint <> ''
+    GROUP BY jobs.role_fingerprint
 ),
 target AS (
     SELECT j.id,
         CASE WHEN c.n > 1 AND j.id <> c.canon_id THEN c.canon_id END AS new_dup
     FROM jobs j
-    JOIN canon c
-      ON j.company_slug = c.company_slug AND j.role_fingerprint = c.role_fingerprint
-    WHERE j.closed_at IS NULL
+    JOIN canon c ON j.role_fingerprint = c.role_fingerprint
+    WHERE j.company_slug = sqlc.arg(company) AND j.closed_at IS NULL
 )
 UPDATE jobs j
 SET duplicate_of = t.new_dup,

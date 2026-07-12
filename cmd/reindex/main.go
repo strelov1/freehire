@@ -113,11 +113,11 @@ func run() int {
 	}
 
 	// Refresh the role-cluster canonical markers before reading jobs, so the collapse
-	// (splitJobs drops non-canonical reposts) reflects the current catalogue and a
-	// closed canon has failed over. Whole-table but IS DISTINCT FROM-guarded, so steady
-	// state only re-marks changed rows. Best-effort: a hiccup here must not block the
-	// reindex (which also owns settings/compaction), so it degrades to the prior markers.
-	if n, err := q.RecomputeRoleDuplicates(ctx); err != nil {
+	// (splitJobs drops non-canonical reposts) reflects the current catalogue and a closed
+	// canon has failed over. Done per company in short transactions (never a table-wide
+	// lock that would stall ingest). Best-effort: a hiccup here must not block the reindex
+	// (which also owns settings/compaction), so it degrades to the prior markers.
+	if n, err := recomputeRoleDuplicates(ctx, q); err != nil {
 		log.Printf("reindex: recompute role duplicates (continuing with prior markers): %v", err)
 	} else if n > 0 {
 		log.Printf("reindex: recomputed role duplicates (%d rows re-marked)", n)
@@ -370,6 +370,27 @@ func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, loo
 // yields (1, 1) — a unique, non-reposted role. A nil lookup means the counts default
 // to (1, 1) everywhere (used by tests that do not exercise clustering).
 type realityLookup func(companySlug, fingerprint string) (repost, mass int)
+
+// recomputeRoleDuplicates refreshes jobs.duplicate_of one company at a time, returning
+// the total rows re-marked. Scoping each UPDATE to a single company keeps its lock
+// window to that company's rows for a moment, so the pass never holds the table-wide
+// lock that would stall concurrent ingest crawls. A per-company failure aborts (the
+// caller treats the whole pass as best-effort and continues with the prior markers).
+func recomputeRoleDuplicates(ctx context.Context, q *db.Queries) (int64, error) {
+	companies, err := q.CompaniesWithRoleClusters(ctx)
+	if err != nil {
+		return 0, err
+	}
+	var total int64
+	for _, c := range companies {
+		n, err := q.RecomputeRoleDuplicatesForCompany(ctx, c)
+		if err != nil {
+			return total, fmt.Errorf("company %q: %w", c, err)
+		}
+		total += n
+	}
+	return total, nil
+}
 
 // buildRealityLookup precomputes the whole-catalogue role-cluster counts once, so the
 // per-job classification during the rebuild is a map read, not N queries.
