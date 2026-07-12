@@ -73,7 +73,11 @@ keep the prior `summary` Twitter Card behaviour and emit no `og:image`.
 The job-detail page SHALL include a `JobPosting` JSON-LD `<script type="application/ld+json">`
 block in its server-rendered HTML, populated from the job's public fields
 (title, description, hiring organization, location/remote, posting date, and the
-application URL), so the posting is eligible for Google Jobs. Company pages SHALL
+application URL), so the posting is eligible for Google Jobs. The `JobPosting`
+SHALL additionally carry, each only when the underlying data is present: the
+hiring organization's `logo`, the job's `skills`, an `experienceRequirements`
+derived from the minimum years of experience, and an `educationRequirements`
+derived from the required education level. Company pages SHALL
 include `Organization` JSON-LD, and that `Organization` object SHALL carry every
 company-info fact the company row provides — its logo, description, homepage and
 LinkedIn links (as `sameAs`), founding year, employee count, and HQ country — so
@@ -92,6 +96,24 @@ the company does not have.
 - **WHEN** the job carries a `closed_at`
 - **THEN** the `JobPosting` data conveys that the posting is no longer accepting
   applications rather than presenting it as open
+
+#### Scenario: JobPosting carries logo, skills, and requirements when present
+
+- **WHEN** `GET /jobs/:slug` is requested for a job that has a company name,
+  dictionary skills, a positive minimum years of experience, and a degree-level
+  education requirement
+- **THEN** the `JobPosting` includes a `hiringOrganization.logo` URL, a `skills`
+  value listing those skills, an `experienceRequirements` of type
+  `OccupationalExperienceRequirements` whose `monthsOfExperience` equals the
+  minimum years × 12, and an `educationRequirements` of type
+  `EducationalOccupationalCredential` with a `credentialCategory`
+
+#### Scenario: Absent or signal-free enrichment fields are omitted
+
+- **WHEN** the job has no skills, a minimum experience of zero, and an education
+  level of `none`
+- **THEN** the `JobPosting` omits `skills`, `experienceRequirements`, and
+  `educationRequirements` entirely rather than emitting empty or zero values
 
 #### Scenario: Company Organization carries its known company-info facts
 
