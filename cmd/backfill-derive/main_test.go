@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/db"
@@ -10,9 +11,11 @@ import (
 )
 
 // fakeStore serves one page of jobs (keyset paging: AfterID 0 returns all, then
-// empty) and records every UpdateJobFacets call.
+// empty) and records every UpdateJobFacets call. UpdateJobFacets is guarded so the
+// concurrent worker pool can call it in parallel without a data race.
 type fakeStore struct {
 	jobs    []db.Job
+	mu      sync.Mutex
 	updates []db.UpdateJobFacetsParams
 }
 
@@ -24,6 +27,8 @@ func (f *fakeStore) ListJobsByIDAfter(_ context.Context, arg db.ListJobsByIDAfte
 }
 
 func (f *fakeStore) UpdateJobFacets(_ context.Context, arg db.UpdateJobFacetsParams) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.updates = append(f.updates, arg)
 	return nil
 }
@@ -60,7 +65,7 @@ func TestBackfill_RewritesAllFacetsInOnePass(t *testing.T) {
 	}
 	store := &fakeStore{jobs: []db.Job{job}}
 
-	scanned, updated, err := backfillAll(context.Background(), store)
+	scanned, updated, err := backfillAll(context.Background(), store, 1)
 	if err != nil {
 		t.Fatalf("backfillAll: %v", err)
 	}
@@ -100,7 +105,7 @@ func TestBackfill_IsIdempotent(t *testing.T) {
 	job.EducationLevel, job.ExperienceYearsMin = d.EducationLevel, d.ExperienceYearsMin
 
 	store := &fakeStore{jobs: []db.Job{job}}
-	scanned, updated, err := backfillAll(context.Background(), store)
+	scanned, updated, err := backfillAll(context.Background(), store, 1)
 	if err != nil {
 		t.Fatalf("backfillAll: %v", err)
 	}
@@ -120,12 +125,48 @@ func TestBackfill_PreservesSetWorkMode(t *testing.T) {
 		Location: "Berlin, Germany", WorkMode: "hybrid",
 	}
 	store := &fakeStore{jobs: []db.Job{job}}
-	if _, _, err := backfillAll(context.Background(), store); err != nil {
+	if _, _, err := backfillAll(context.Background(), store, 1); err != nil {
 		t.Fatalf("backfillAll: %v", err)
 	}
 	for _, u := range store.updates {
 		if u.WorkMode != "hybrid" {
 			t.Errorf("WorkMode = %q, want hybrid (preserved)", u.WorkMode)
+		}
+	}
+}
+
+// The worker pool must process every row exactly once regardless of concurrency:
+// each of N distinct jobs needing a write is updated exactly once, order aside.
+// Run with -race to catch a store or counter data race.
+func TestBackfill_Concurrent(t *testing.T) {
+	const n = 200
+	jobs := make([]db.Job, n)
+	for i := range jobs {
+		jobs[i] = db.Job{
+			ID: int64(i + 1), Title: "Senior Go Developer", Company: "Acme",
+			Source: "manual", ExternalID: "x", Location: "Berlin, Germany",
+			Description: backfillJobDescription,
+		}
+	}
+	store := &fakeStore{jobs: jobs}
+
+	scanned, updated, err := backfillAll(context.Background(), store, 8)
+	if err != nil {
+		t.Fatalf("backfillAll: %v", err)
+	}
+	if scanned != n || updated != n {
+		t.Fatalf("scanned=%d updated=%d, want %d/%d", scanned, updated, n, n)
+	}
+	seen := make(map[int64]int, n)
+	for _, u := range store.updates {
+		seen[u.ID]++
+	}
+	if len(seen) != n {
+		t.Fatalf("distinct updated ids = %d, want %d", len(seen), n)
+	}
+	for id, c := range seen {
+		if c != 1 {
+			t.Errorf("job id %d written %d times, want exactly 1", id, c)
 		}
 	}
 }
