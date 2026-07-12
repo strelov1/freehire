@@ -138,14 +138,42 @@ export function jobPostingJsonLd(job: Job, origin: string): Record<string, unkno
   return ld;
 }
 
-/** schema.org Organization for a company page. */
+/** schema.org Organization for a company page. Every company-info fact is added
+ *  only when present and non-empty — an omitted field is never emitted as an empty
+ *  string, null, or empty array (mismatched/empty structured data is a ranking
+ *  liability, mirroring `jobPostingJsonLd`). */
 export function organizationJsonLd(company: Company, origin: string): Record<string, unknown> {
-  return {
+  const info = company.company_info ?? {};
+  const ld: Record<string, unknown> = {
     '@context': 'https://schema.org',
     '@type': 'Organization',
     name: company.name,
     url: `${origin}/companies/${company.slug}`,
   };
+
+  if (info.logo) ld.logo = info.logo;
+  if (info.description) ld.description = info.description;
+
+  // sameAs advertises the company's canonical outbound links (homepage, LinkedIn);
+  // emit only the ones we have, and drop the field entirely when we have none. The
+  // homepage lives under `website` (hirebase/YC) or `homepage` (the bulk backfill,
+  // often a bare domain) — read whichever is present and normalize to an absolute
+  // URL, mirroring CompanyHeader.svelte, so sameAs never holds a relative string.
+  const homepage = info.website ?? info.homepage;
+  const sameAs: string[] = [];
+  if (homepage) sameAs.push(homepage.startsWith('http') ? homepage : `https://${homepage}`);
+  if (info.linkedin) sameAs.push(info.linkedin);
+  if (sameAs.length > 0) ld.sameAs = sameAs;
+
+  if (company.year_founded != null) ld.foundingDate = String(company.year_founded);
+  if (company.employee_count != null) {
+    ld.numberOfEmployees = { '@type': 'QuantitativeValue', value: company.employee_count };
+  }
+  if (company.hq_country) {
+    ld.address = { '@type': 'PostalAddress', addressCountry: company.hq_country.toUpperCase() };
+  }
+
+  return ld;
 }
 
 /** schema.org WebSite for the homepage. The SearchAction advertises the job
@@ -195,6 +223,36 @@ export function breadcrumbJsonLd(items: { name: string; url: string }[]): Record
       name: item.name,
       item: item.url,
     })),
+  };
+}
+
+/** schema.org CollectionPage wrapping an `ItemList` of the jobs rendered on a
+ *  collection landing page. Each item is a summary `ListItem` (position + name +
+ *  detail URL), not an embedded `JobPosting` — Google's recommended shape for a
+ *  list page, and it keeps the payload small. An empty `jobs` yields an empty
+ *  `itemListElement`, still valid JSON-LD. */
+export function collectionPageJsonLd(
+  title: string,
+  description: string,
+  url: string,
+  jobs: Job[],
+  origin: string
+): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: title,
+    description,
+    url,
+    mainEntity: {
+      '@type': 'ItemList',
+      itemListElement: jobs.map((job, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        name: job.title,
+        url: `${origin}/jobs/${job.public_slug}`,
+      })),
+    },
   };
 }
 

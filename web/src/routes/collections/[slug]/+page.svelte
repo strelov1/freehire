@@ -2,7 +2,7 @@
   import { page } from '$app/state';
   import JobsView from '$lib/components/JobsView.svelte';
   import Seo from '$lib/components/Seo.svelte';
-  import { breadcrumbJsonLd, jsonLdScript } from '$lib/seo';
+  import { breadcrumbJsonLd, collectionPageJsonLd, jsonLdScript } from '$lib/seo';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -20,16 +20,25 @@
   // collection's constraint (JobsView.scopedParams) — hiding those controls is a
   // deferred UI polish, not a correctness gap.
   const excludeFacets = $derived(Object.keys(data.collection.params));
-  // Breadcrumb structured data (freehire → Collections → this collection), mirroring
-  // the company landing — this is an SEO landing page, so the trail helps engines.
+  // Structured data for this SEO landing page: a CollectionPage wrapping the
+  // first page of jobs as an ItemList (so engines read the page as a curated
+  // collection), plus a breadcrumb trail (freehire → Collections → this one),
+  // mirroring the company landing.
   const jsonLd = $derived(
-    jsonLdScript(
+    jsonLdScript([
+      collectionPageJsonLd(
+        heading,
+        data.collection.description,
+        canonical,
+        data.initial.items,
+        origin
+      ),
       breadcrumbJsonLd([
         { name: 'freehire', url: `${origin}/` },
         { name: 'Collections', url: `${origin}/collections` },
         { name: heading, url: canonical },
-      ])
-    )
+      ]),
+    ])
   );
 </script>
 
