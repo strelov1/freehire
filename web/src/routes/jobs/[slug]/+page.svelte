@@ -1,7 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import JobCopies from '$lib/components/JobCopies.svelte';
-  import JobRow from '$lib/components/JobRow.svelte';
+  import JobRelated from '$lib/components/JobRelated.svelte';
   import JobView from '$lib/components/JobView.svelte';
   import Seo from '$lib/components/Seo.svelte';
   import {
@@ -43,16 +42,10 @@
 <div class="mx-auto w-full max-w-6xl px-4 py-6">
   <JobView job={data.job} />
 
-  <JobCopies copies={data.copies} total={data.copiesTotal} />
-
-  {#if data.similar.length > 0}
-    <section class="mt-10">
-      <h2 class="mb-4 text-lg font-semibold">Similar jobs</h2>
-      <div class="flex flex-col gap-3">
-        {#each data.similar as job (job.public_slug)}
-          <JobRow {job} />
-        {/each}
-      </div>
-    </section>
-  {/if}
+  <JobRelated
+    similar={data.similar}
+    copies={data.copies}
+    copiesTotal={data.copiesTotal}
+    slug={data.job.public_slug}
+  />
 </div>

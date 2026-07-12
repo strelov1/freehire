@@ -174,9 +174,17 @@ export function createApi(
   /** The open postings sharing this job's role cluster — the "openings across cities"
    *  list under a collapsed role. `total` is the whole cluster's open size (pre-limit),
    *  so the header stays accurate when `copies` is a capped page. */
-  async function getJobCopies(slug: string): Promise<{ copies: JobCopy[]; total: number }> {
+  async function getJobCopies(
+    slug: string,
+    limit?: number,
+    offset?: number,
+  ): Promise<{ copies: JobCopy[]; total: number }> {
+    const qs = new URLSearchParams();
+    if (limit != null) qs.set('limit', String(limit));
+    if (offset != null) qs.set('offset', String(offset));
+    const suffix = qs.toString() ? `?${qs}` : '';
     const res = await request<{ data: JobCopy[]; meta: { total: number } }>(
-      `/api/v1/jobs/${slug}/copies`,
+      `/api/v1/jobs/${slug}/copies${suffix}`,
     );
     return { copies: res.data, total: res.meta?.total ?? res.data.length };
   }
