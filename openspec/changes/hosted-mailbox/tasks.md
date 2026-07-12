@@ -12,7 +12,7 @@
 
 - [x] 3.1 Allocation service: claim-or-return within a transaction, retrying the suffix on the `address` unique violation; unit-tested with a fake store
 - [x] 3.2 `GET /me/mailbox` (address or null + `available`), `POST /me/mailbox` (claim), `DELETE /me/mailbox` (release + purge hosted mail); feature-gated on `MAIL_DOMAIN` (routes report unavailable when unset)
-- [ ] 3.3 Handler tests (integration) for claim idempotency, status, release-purges-hosted-only
+- [x] 3.3 Handler tests (integration) for claim idempotency, status, release-purges-hosted-only
 
 ## 4. SES inbound ingest
 
@@ -41,5 +41,5 @@
 ## 8. Verify
 
 - [ ] 8.1 `go build ./... && go vet ./...`, `go test ./...`, integration tests, `web` check pass
-- [ ] 8.2 End-to-end over the fake InboundSource: a synthesized inbound message resolves to a mailbox and appears in `/my/inbox` alongside Gmail mail, unread until opened
+- [x] 8.2 End-to-end over the fake InboundSource: a synthesized inbound message resolves to a mailbox and appears in `/my/inbox` alongside Gmail mail, unread until opened
 - [ ] 8.3 (Post-infra, manual) real SES: send to a claimed address, confirm it lands in the inbox

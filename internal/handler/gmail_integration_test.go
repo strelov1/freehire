@@ -41,7 +41,7 @@ func TestGmailInboxEndToEnd(t *testing.T) {
 	insEmail := func(u int64, msgID, subject, subjectNorm, body string) int64 {
 		var id int64
 		if err := pool.QueryRow(ctx,
-			`INSERT INTO emails (user_id, gmail_msg_id, from_addr, from_name, subject, subject_norm, body_text, received_at)
+			`INSERT INTO emails (user_id, external_id, from_addr, from_name, subject, subject_norm, body_text, received_at)
 			 VALUES ($1, $2, 'no-reply@ashbyhq.com', 'Acme', $3, $4, $5, now()) RETURNING id`,
 			u, msgID, subject, subjectNorm, body).Scan(&id); err != nil {
 			t.Fatalf("seed email: %v", err)
