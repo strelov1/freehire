@@ -148,10 +148,12 @@ func (w *Worker) handle(ctx context.Context, in Inbound) error {
 	})
 }
 
-// pickDomainRecipient returns the first recipient whose domain equals domain
-// (case-insensitive), preserving the original address casing. A message may be
-// addressed to several recipients (To/Cc); only the one on our mail domain
-// identifies the target mailbox.
+// pickDomainRecipient returns the first recipient on our mail domain, lowercased.
+// A message may be addressed to several recipients (To/Cc); only the one on our
+// domain identifies the target mailbox. The result is lowercased because
+// addresses are always allocated lowercase (mailbox.Handle), while the SMTP
+// envelope recipient carries whatever case the sender used — matching them
+// case-sensitively would silently drop mail to e.g. "Ivan@..." vs "ivan@...".
 func pickDomainRecipient(recipients []string, domain string) (string, bool) {
 	domain = strings.ToLower(domain)
 	for _, r := range recipients {
@@ -159,9 +161,10 @@ func pickDomainRecipient(recipients []string, domain string) (string, bool) {
 		if parsed, err := mail.ParseAddress(r); err == nil {
 			addr = parsed.Address
 		}
+		addr = strings.ToLower(addr)
 		if at := strings.LastIndexByte(addr, '@'); at >= 0 {
-			if strings.ToLower(addr[at+1:]) == domain {
-				return r, true
+			if addr[at+1:] == domain {
+				return addr, true
 			}
 		}
 	}

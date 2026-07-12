@@ -73,6 +73,21 @@ func TestRunOnce_KnownRecipientStored(t *testing.T) {
 	}
 }
 
+func TestRunOnce_MixedCaseRecipientResolves(t *testing.T) {
+	// SES may hand us the envelope recipient in a different case than the stored
+	// (always-lowercase) address; the worker must still resolve it.
+	src := &fakeSource{batch: []Inbound{inbound("m1", "Ivan@Inbox.Freehire.Dev", sampleMIME)}}
+	store := &fakeStore{byAddr: map[string]int64{"ivan@inbox.freehire.dev": 42}}
+	w := NewWorker(src, store, "inbox.freehire.dev")
+
+	if err := w.RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if len(store.stored) != 1 || store.stored[0].UserID != 42 {
+		t.Fatalf("mixed-case recipient not resolved: stored=%v", store.stored)
+	}
+}
+
 func TestRunOnce_UnknownRecipientDropped(t *testing.T) {
 	src := &fakeSource{batch: []Inbound{inbound("m1", "nobody@inbox.freehire.dev", sampleMIME)}}
 	store := &fakeStore{byAddr: map[string]int64{}}
