@@ -5,9 +5,9 @@
 
 ## 2. Content model & loader
 
-- [ ] 2.1 Create the content directory `web/src/posts/` with one seed `changelog` post (`*.svx`) carrying full frontmatter (`title`, `date`, `summary`, `type`, `tags`, `draft`)
-- [ ] 2.2 Implement `web/src/lib/blog.ts`: typed `PostMeta` (incl. `type` enum, default `changelog`), `import.meta.glob` discovery, slug-from-filename, required-field + `type`-enum validation (throws at build with the offending file name), `draft` filtering gated on `import.meta.env.DEV`, newest-first sort, and `listPosts()` / `getPost(slug)`
-- [ ] 2.3 Unit-test the loader's pure logic (sort order, draft filtering, missing-field + bad-`type` validation, default type) in `web/src/lib/blog.test.ts`
+- [x] 2.1 Create the content directory `web/src/posts/` with one seed `changelog` post (`*.svx`) carrying full frontmatter (`title`, `date`, `summary`, `type`, `tags`, `draft`)
+- [x] 2.2 Implement the loader: pure core in `web/src/lib/blog.ts` (typed `PostMeta` incl. `type` enum default `changelog`, `slugFromPath`, `parseFrontmatter` with required-field + `type`-enum validation throwing the offending file name, newest-first `selectPosts`) + `web/src/lib/blogPosts.ts` (`import.meta.glob` discovery, `draft` gate on `import.meta.env.DEV`, `listPosts()` / `getPost(slug)`) — split so the pure core runs under the plain-Node vitest config
+- [x] 2.3 Unit-test the loader's pure logic (sort order, draft filtering, missing-field + bad-`type` validation, default type) in `web/src/lib/blog.test.ts`
 
 ## 3. Blog pages
 

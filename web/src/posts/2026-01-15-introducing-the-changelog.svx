@@ -1,0 +1,21 @@
+---
+title: Introducing the freehire changelog
+date: 2026-01-15
+summary: A public home for product updates — new sources, features, and fixes as they ship.
+type: changelog
+tags:
+  - product
+  - meta
+draft: false
+---
+
+We now publish product updates here. Expect short notes as we ship: new job
+sources coming online, search and filtering improvements, and the occasional
+longer write-up on how freehire works under the hood.
+
+## What to expect
+
+- **Changelog notes** — the short entries, like this one, for day-to-day changes.
+- **Articles** — longer posts when a change deserves the room.
+
+Subscribe via [RSS](/blog/rss.xml) to follow along.
