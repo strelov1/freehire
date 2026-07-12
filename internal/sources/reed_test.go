@@ -44,6 +44,18 @@ func TestReedRegisteredOnlyWhenKeySet(t *testing.T) {
 	}
 }
 
+// reed opts into the hydrating capability (detail only for new postings) and must NOT be a
+// StreamingSource: the pipeline checks streaming first, which would bypass hydration entirely.
+func TestReedIsHydratingNotStreaming(t *testing.T) {
+	s := NewReed(nil, "k")
+	if _, ok := s.(HydratingSource); !ok {
+		t.Error("reed should implement the HydratingSource marker (FetchNew)")
+	}
+	if _, ok := s.(StreamingSource); ok {
+		t.Error("reed must NOT implement StreamingSource — streaming is dispatched first and would bypass hydration")
+	}
+}
+
 func TestReedBoardFileValidates(t *testing.T) {
 	t.Setenv("REED_API_KEY", "test-key")
 	cfg, err := LoadConfig("../../sources/reed.yml")
@@ -117,6 +129,9 @@ func TestReedFetchDedupAuthAndDetailURL(t *testing.T) {
 	byID := map[string]Job{}
 	for _, j := range jobs {
 		byID[j.ExternalID] = j
+		if j.SeenRefresh {
+			t.Errorf("Fetch fallback (no seen-set) must hydrate every job, but %s is marked SeenRefresh", j.ExternalID)
+		}
 	}
 	j1, ok := byID["1001"]
 	if !ok {
@@ -138,6 +153,71 @@ func TestReedFetchDedupAuthAndDetailURL(t *testing.T) {
 	j2 := byID["1002"]
 	if j2.URL != "https://www.reed.co.uk/jobs/be/1002" {
 		t.Errorf("1002 URL = %q, want the Reed jobUrl fallback (no externalUrl)", j2.URL)
+	}
+}
+
+// countingReed serves the fixed two-result search for every keyword and records how many
+// detail requests each job id received, so a test can assert a seen job's detail is skipped.
+type countingReed struct {
+	mu         sync.Mutex
+	detailHits map[string]int
+}
+
+func (f *countingReed) GetJSONWithHeaders(ctx context.Context, url string, headers map[string]string, v any) error {
+	if strings.Contains(url, "/search") {
+		return json.Unmarshal([]byte(reedSearchTwo), v)
+	}
+	f.mu.Lock()
+	for _, id := range []string{"1001", "1002"} {
+		if strings.HasSuffix(url, "/"+id) {
+			f.detailHits[id]++
+		}
+	}
+	f.mu.Unlock()
+	switch {
+	case strings.HasSuffix(url, "/1001"):
+		return json.Unmarshal([]byte(reedDetail1001), v)
+	default:
+		return json.Unmarshal([]byte(reedDetail1002), v)
+	}
+}
+
+// FetchNew hydrates detail only for job ids not already ingested; an already-ingested id is
+// emitted as a liveness refresh (SeenRefresh) with no detail request.
+func TestReedFetchNewHydratesOnlyUnseen(t *testing.T) {
+	f := &countingReed{detailHits: map[string]int{}}
+	seen := func(externalID string) bool { return externalID == "1001" }
+
+	hs, ok := NewReed(f, "k").(HydratingSource)
+	if !ok {
+		t.Fatal("reed must implement HydratingSource")
+	}
+	jobs, err := hs.FetchNew(context.Background(), CompanyEntry{Provider: "reed"}, seen)
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("got %d jobs, want 2 (deduped across keywords)", len(jobs))
+	}
+	byID := map[string]Job{}
+	for _, j := range jobs {
+		byID[j.ExternalID] = j
+	}
+
+	// 1001 is seen → a content-less liveness refresh, and its detail must NOT be fetched.
+	if got := byID["1001"]; !got.SeenRefresh || got.Description != "" {
+		t.Errorf("seen job 1001 should be a liveness refresh with no content, got SeenRefresh=%v description=%q", got.SeenRefresh, got.Description)
+	}
+	if f.detailHits["1001"] != 0 {
+		t.Errorf("seen job 1001 detail must NOT be fetched, got %d detail requests", f.detailHits["1001"])
+	}
+
+	// 1002 is new → hydrated from its detail, not marked SeenRefresh.
+	if got := byID["1002"]; got.SeenRefresh || !strings.Contains(got.Description, "Full description for 1002") {
+		t.Errorf("new job 1002 should be hydrated, got SeenRefresh=%v description=%q", got.SeenRefresh, got.Description)
+	}
+	if f.detailHits["1002"] == 0 {
+		t.Error("new job 1002 detail must be fetched")
 	}
 }
 

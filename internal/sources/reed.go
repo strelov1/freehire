@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
-	"sync"
 )
 
 // reed adapts the Reed Jobseeker API (reed.co.uk), the UK's largest job board. Like the
@@ -23,9 +22,15 @@ import (
 // The API has no sector filter, only free-text keywords, and freehire is an IT board — so
 // the adapter enumerates a topical IT slice by searching a curated keyword set, unioning the
 // hits and deduping by Reed job id. The search list omits the employer's real apply URL and
-// truncates the description, so each unique job is fetched in detail (FetchStream +
-// fetchDetailsStream, like eightfold): the detail carries the full body and the employer's
-// externalUrl, with the Reed listing URL (jobUrl) as the fallback.
+// truncates the description, so a job is fetched in detail for the full body and the employer's
+// externalUrl (with the Reed listing URL, jobUrl, as the fallback).
+//
+// Because the Reed API enforces a per-hour request quota, reed is a HydratingSource: it fetches
+// detail ONLY for jobs the catalogue does not already have (FetchNew, driven by the pipeline's
+// seen-set), emitting an already-ingested job as a liveness refresh with no detail request. This
+// bounds a run's request volume to the day's new postings instead of re-hydrating every live
+// posting each crawl, which would exhaust the quota (a 403 "exceeded your per-hour request
+// limit"). Fetch is the list-only fallback used when the pipeline cannot supply a seen-set.
 type reed struct {
 	http   HeaderJSONGetter
 	apiKey string
@@ -110,36 +115,35 @@ func (r reed) authHeaders() map[string]string {
 	return map[string]string{"Authorization": "Basic " + token}
 }
 
-// Fetch buffers the whole crawl by collecting the streamed postings. The pipeline prefers
-// FetchStream (incremental save); Fetch stays for non-streaming callers and tests.
+// Fetch is the list-only fallback used when the pipeline cannot supply a seen-set (a non-DB
+// caller or a test): it hydrates every unique job's detail. The pipeline prefers FetchNew.
 func (r reed) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	var (
-		mu   sync.Mutex
-		jobs []Job
-	)
-	err := r.FetchStream(ctx, e, func(j Job) {
-		mu.Lock()
-		jobs = append(jobs, j)
-		mu.Unlock()
-	})
-	return jobs, err
+	return r.FetchNew(ctx, e, func(string) bool { return false })
 }
 
-// FetchStream enumerates the IT slice across the curated keywords (deduping by job id), then
-// fetches each unique job's detail concurrently and emits the assembled Job the moment its
-// detail completes — so the pipeline persists this long, rate-limited crawl incrementally. A
-// failed detail is dropped; only a search (listing) failure is returned as a board-level error.
-func (r reed) FetchStream(ctx context.Context, e CompanyEntry, emit func(Job)) error {
+// FetchNew enumerates the IT slice across the curated keywords (deduping by job id), then fetches
+// detail ONLY for jobs not already ingested — an already-ingested job (seen) is emitted as a
+// liveness refresh (SeenRefresh) carrying just its identity, with no detail request — so a run's
+// request volume stays under the Reed API's per-hour quota. Detail fetches run concurrently; a
+// failed detail is dropped; only a total search (listing) failure is a board-level error.
+func (r reed) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	if r.apiKey == "" {
-		return errors.New("reed: missing API key (set REED_API_KEY)")
+		return nil, errors.New("reed: missing API key (set REED_API_KEY)")
 	}
 	ids, err := r.searchIDs(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	fetchDetailsStream(ids, reedDetailWorkers,
-		func(id int64) (Job, bool) { return r.detail(ctx, id) }, emit)
-	return nil
+	return fetchDetails(ids, reedDetailWorkers, func(id int64) (Job, bool) {
+		extID := strconv.FormatInt(id, 10)
+		if seen(extID) {
+			// Already ingested: refresh liveness only, no detail request. Carry just the
+			// identity — a content-less re-upsert would wipe the description/facets hydrated
+			// when this job was new (an empty description re-derives to empty facets).
+			return Job{ExternalID: extID, SeenRefresh: true}, true
+		}
+		return r.detail(ctx, id)
+	}), nil
 }
 
 // searchIDs pages every curated keyword and returns the union of unique job ids, deduped so a
