@@ -2,8 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { accountNav, isSectionActive } from './accountNav';
 
 describe('accountNav config', () => {
-  it('lists the five account sections', () => {
-    expect(accountNav).toHaveLength(5);
+  it('lists the six account sections', () => {
+    expect(accountNav).toHaveLength(6);
+  });
+
+  it('places Activity directly after Tracking', () => {
+    const hrefs = accountNav.map((i) => i.href);
+    expect(hrefs.indexOf('/my/activity')).toBe(hrefs.indexOf('/my/tracking') + 1);
+    expect(accountNav.find((i) => i.href === '/my/activity')?.label).toBe('Activity');
   });
 
   it('every item links under /my/ and has a label', () => {

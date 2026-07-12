@@ -2,7 +2,7 @@
   import type { Snippet } from 'svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { User, LayoutList, Bell, Key, FileText } from '@lucide/svelte';
+  import { User, LayoutList, Activity, Bell, Key, FileText } from '@lucide/svelte';
   import type { LucideIcon } from '@lucide/svelte';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
@@ -14,7 +14,7 @@
   // container, the noindex tag, the auth gate, and the section navigation. Child
   // pages render only their own header + body inside the content column. The nav
   // is a vertical sidebar at lg+ and a horizontal scrollable strip below lg;
-  // Tracking keeps its own sub-tabs (this is the top navigation level).
+  // Tracking and Activity keep their own sub-tabs (this is the top nav level).
 
   let { children }: { children: Snippet } = $props();
 
@@ -26,6 +26,7 @@
   const icons: Record<AccountNavItem['href'], LucideIcon> = {
     '/my/profile': User,
     '/my/tracking': LayoutList,
+    '/my/activity': Activity,
     '/my/searches': Bell,
     '/my/api-keys': Key,
     '/my/submissions': FileText,

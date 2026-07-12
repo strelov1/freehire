@@ -8,7 +8,7 @@
   import States from './States.svelte';
 
   function emptyColumns(): Record<BoardColumnId, BoardItem[]> {
-    return { saved: [], applied: [], interview: [], offer: [], closed: [] };
+    return { applied: [], interview: [], offer: [], closed: [] };
   }
 
   // Per-column arrays are the source of truth once loaded; svelte-dnd-action
@@ -25,12 +25,18 @@
   async function load() {
     status = 'loading';
     try {
-      const slice = await api.listMyJobs('board', 500, 0); // pipeline is small; whole board in one page
+      // The 'board' filter returns saved ∪ applied ∪ stage; we drop the saved-only
+      // rows below (they belong to Activity → Saved). Those rows still count toward
+      // this 500 cap, so a user with 500+ tracked jobs, many recently saved, could
+      // have older active applications fall outside the fetched window. Acceptable
+      // at this scale; revisit with a server-side board-minus-saved filter if it bites.
+      const slice = await api.listMyJobs('board', 500, 0);
       const next = emptyColumns();
       const cols: Record<string, BoardColumnId> = {};
       for (const row of slice.items) {
         const item: BoardItem = { ...row, id: row.job.public_slug };
         const col = columnOf(item);
+        if (!col) continue; // saved-only rows live in Activity → Saved, not the board
         next[col].push(item);
         cols[item.id] = col;
       }
@@ -77,12 +83,6 @@
           item.stage = 'offer';
           await api.trackJob(item.id, { stage: 'offer' });
           break;
-        case 'saved':
-          item.stage = null;
-          item.applied_at = null;
-          await api.saveJob(item.id);
-          await api.clearJobStage(item.id);
-          break;
         case 'closed':
           // Outcome unknown until the user picks: open the drawer, require a choice.
           openItem = item;
@@ -111,16 +111,24 @@
     const item = openItem;
     const prevCol = cardCol[item.id];
     item.stage = stage || null;
-    if (!stage) item.applied_at = null; // "No stage" demotes back to the wishlist
+    if (!stage) item.applied_at = null; // "No stage" takes the job off the board (saved-only)
     const nextCol = columnOf(item);
-    if (prevCol && nextCol !== prevCol) {
+    if (nextCol === null) {
+      // Off the board now: drop the card and close the drawer. The job keeps its
+      // saved mark and reappears under Activity → Saved.
+      if (prevCol) {
+        columns[prevCol] = columns[prevCol].filter((i) => i.id !== item.id);
+        delete cardCol[item.id];
+      }
+      openItem = null;
+    } else if (prevCol && nextCol !== prevCol) {
       columns[prevCol] = columns[prevCol].filter((i) => i.id !== item.id);
       columns[nextCol] = [item, ...columns[nextCol]];
       cardCol[item.id] = nextCol;
     }
     try {
-      // Empty stage is not a vocabulary value — clearing progress is its own
-      // backend path (the same one the drag-to-Saved move uses).
+      // Empty stage is not a vocabulary value — clearing progress keeps the saved
+      // mark but removes the application, so the job leaves the board.
       if (stage) {
         await api.trackJob(item.id, { stage });
       } else {

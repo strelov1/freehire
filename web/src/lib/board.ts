@@ -1,13 +1,12 @@
 // Derives which Kanban column a tracked job belongs to. The column is NOT stored
-// — it is a view over the user_jobs row's saved_at / applied_at / stage. Keep this
-// in lockstep with the backend `board` filter (a job is on the board iff it has
-// any of those three signals).
+// — it is a view over the user_jobs row's applied_at / stage. The board shows only
+// jobs in an active application state; a saved-only row (saved but never applied,
+// no stage) has no column and lives in the Activity → Saved list instead.
 import type { MyJob } from './types';
 
-export type BoardColumnId = 'saved' | 'applied' | 'interview' | 'offer' | 'closed';
+export type BoardColumnId = 'applied' | 'interview' | 'offer' | 'closed';
 
 export const BOARD_COLUMNS: { id: BoardColumnId; label: string }[] = [
-  { id: 'saved', label: 'Saved' },
   { id: 'applied', label: 'Applied' },
   { id: 'interview', label: 'Interview' },
   { id: 'offer', label: 'Offer' },
@@ -15,7 +14,7 @@ export const BOARD_COLUMNS: { id: BoardColumnId; label: string }[] = [
 ];
 
 // Precise backend stage → column group. Stages not listed fall through to the
-// applied_at/saved_at fallbacks in columnOf.
+// applied_at fallback in columnOf.
 const STAGE_COLUMN: Record<string, BoardColumnId> = {
   applied: 'applied',
   screening: 'applied',
@@ -27,13 +26,14 @@ const STAGE_COLUMN: Record<string, BoardColumnId> = {
   withdrawn: 'closed',
 };
 
-/** The column a tracked job currently sits in. Priority: precise stage, then a
- *  legacy applied-without-stage row, else the wishlist. */
-export function columnOf(item: MyJob): BoardColumnId {
+/** The column a tracked job currently sits in, or `null` when it is saved-only and
+ *  therefore not on the board. Priority: precise stage, then a legacy
+ *  applied-without-stage row, else off-board. */
+export function columnOf(item: MyJob): BoardColumnId | null {
   const col = item.stage ? STAGE_COLUMN[item.stage] : undefined;
   if (col) return col;
   if (item.applied_at) return 'applied';
-  return 'saved';
+  return null;
 }
 
 // The three terminal stages live behind the single "Closed" column; the user
