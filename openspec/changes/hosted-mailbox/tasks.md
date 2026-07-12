@@ -29,9 +29,9 @@
 
 ## 6. SPA (web/)
 
-- [ ] 6.1 `/my/inbox`: offer both actions ("Connect Gmail" + "Get a freehire mailbox"), show the claimed address, render the grouped list with unread styling, and an **account switcher** (`All` · `Gmail` · `freehire mailbox`) that sets the `source` filter — shown only for connected sources
-- [ ] 6.2 Mailbox claim/release wired to the new endpoints; copy-to-clipboard for the address
-- [ ] 6.3 `web/src/lib/api.ts`: mailbox types + methods; message shape gains `source`/`read`
+- [x] 6.1 `/my/inbox`: offer both actions ("Connect Gmail" + "Get a freehire mailbox"), show the claimed address, render the grouped list with unread styling, and an **account switcher** (`All` · `Gmail` · `freehire mailbox`) that sets the `source` filter — shown only for connected sources
+- [x] 6.2 Mailbox claim/release wired to the new endpoints; copy-to-clipboard for the address
+- [x] 6.3 `web/src/lib/api.ts`: mailbox types + methods; message shape gains `source`/`read`
 
 ## 7. Config + infra docs
 
