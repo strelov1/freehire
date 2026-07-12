@@ -42,6 +42,11 @@ type Settings struct {
 	// inbox feature is disabled (like an unset optional integration).
 	GmailTokenKey []byte
 
+	// MailDomain is the receiving domain hosted mailboxes live on
+	// (<handle>@MailDomain, e.g. inbox.freehire.dev). Empty = the hosted-mailbox
+	// option is off (claim route unregistered, status reports unavailable).
+	MailDomain string
+
 	// Meilisearch backs the job search endpoint and the reindex command. Shared
 	// via Load (both cmd/server and cmd/reindex read it). Search is optional:
 	// MeiliKey empty ⇒ search is disabled and the server still starts (see
@@ -121,6 +126,7 @@ func Load() Settings {
 		CookieDomain:   os.Getenv("COOKIE_DOMAIN"),
 		OAuth:          loadOAuth(),
 		GmailTokenKey:  decodeKey(os.Getenv("GMAIL_TOKEN_KEY")),
+		MailDomain:     os.Getenv("MAIL_DOMAIN"),
 		MeiliURL:       env("MEILI_URL", "http://localhost:7700"),
 		MeiliKey:       os.Getenv("MEILI_MASTER_KEY"),
 

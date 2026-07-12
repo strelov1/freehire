@@ -151,6 +151,7 @@ func main() {
 		OAuthProviders: oauthProviders,
 		GmailConnector: gmailConnector,
 		GmailCipher:    gmailCipher,
+		MailDomain:     cfg.MailDomain,
 		Search:         searchClient,
 		Blob:           blobStore,
 		LLM:            llmClient,

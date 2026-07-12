@@ -68,6 +68,10 @@ type API struct {
 	// routes are then not registered and the inbox reads empty.
 	gmailConnector *gmailsync.Connector
 	gmailCipher    *tokencrypt.Cipher
+	// mailDomain is the receiving domain hosted mailboxes live on (<handle>@mailDomain).
+	// Empty = the hosted-mailbox feature is off: the claim route is unregistered and
+	// status reports unavailable.
+	mailDomain string
 	// search is the job-search backend. Nil when Meilisearch is unconfigured —
 	// the search endpoint then reports 503 and the rest of the API is unaffected.
 	search searcher
@@ -183,6 +187,9 @@ type Config struct {
 	// feature is off (connect routes unregistered, inbox empty).
 	GmailConnector *gmailsync.Connector
 	GmailCipher    *tokencrypt.Cipher
+	// MailDomain enables the hosted-mailbox option: the receiving domain user
+	// addresses live on (<handle>@MailDomain). Empty = the feature is off.
+	MailDomain string
 }
 
 // Register wires all routes onto the application from cfg. Auth is same-origin
@@ -202,6 +209,7 @@ func Register(app *fiber.App, cfg Config) {
 		frontendOrigin: cfg.FrontendOrigin,
 		gmailConnector: cfg.GmailConnector,
 		gmailCipher:    cfg.GmailCipher,
+		mailDomain:     cfg.MailDomain,
 		tracking:       jobtracking.New(jobtracking.NewQueriesRepository(queries)),
 		accounts:       accounts.New(accounts.NewQueriesRepository(queries, cfg.Pool), authHasher{}),
 		moderation:     moderation.New(moderation.NewQueriesRepository(queries, cfg.Pool, enrich.Version)),
@@ -375,6 +383,13 @@ func Register(app *fiber.App, cfg Config) {
 		api.Get("/me/gmail/connect", saved, a.GmailConnect)
 		api.Get("/me/gmail/callback", saved, a.GmailCallback)
 		api.Post("/me/gmail/sync", saved, a.SyncGmail)
+	}
+	// Hosted-mailbox option: status is always available (reports unavailable when
+	// the feature is off); claim/release only when a receiving domain is configured.
+	api.Get("/me/mailbox", saved, a.GetMailbox)
+	if a.mailboxReady() {
+		api.Post("/me/mailbox", saved, a.ClaimMailbox)
+		api.Delete("/me/mailbox", saved, a.ReleaseMailbox)
 	}
 	// The résumé verdict is a profile sub-resource: GET computes the live
 	// market-coverage verdict from the profile's skills against the selected role.

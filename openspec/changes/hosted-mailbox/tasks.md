@@ -5,13 +5,13 @@
 
 ## 2. Pure helpers
 
-- [ ] 2.1 `internal/mailbox`: `Handle(email)` (local-part → `[a-z0-9.-]`, lowercased, fallback) + `candidate(base, n)` collision suffix — pure, table-tested (port from apply)
-- [ ] 2.2 MIME parse for inbound: headers (from/subject/message-id/date), text + HTML bodies, best-effort — pure, table-tested (port/adapt apply `ingest/parse.go`)
+- [x] 2.1 `internal/mailbox`: `Handle(email)` (local-part → `[a-z0-9.-]`, lowercased, fallback) + `candidate(base, n)` collision suffix — pure, table-tested (port from apply)
+- [x] 2.2 MIME parse for inbound: headers (from/subject/message-id/date), text + HTML bodies, best-effort — pure, table-tested (port/adapt apply `ingest/parse.go`)
 
 ## 3. Mailbox allocation + status API
 
-- [ ] 3.1 Allocation service: claim-or-return within a transaction, retrying the suffix on the `address` unique violation; unit-tested with a fake store
-- [ ] 3.2 `GET /me/mailbox` (address or null + `available`), `POST /me/mailbox` (claim), `DELETE /me/mailbox` (release + purge hosted mail); feature-gated on `MAIL_DOMAIN` (routes report unavailable when unset)
+- [x] 3.1 Allocation service: claim-or-return within a transaction, retrying the suffix on the `address` unique violation; unit-tested with a fake store
+- [x] 3.2 `GET /me/mailbox` (address or null + `available`), `POST /me/mailbox` (claim), `DELETE /me/mailbox` (release + purge hosted mail); feature-gated on `MAIL_DOMAIN` (routes report unavailable when unset)
 - [ ] 3.3 Handler tests (integration) for claim idempotency, status, release-purges-hosted-only
 
 ## 4. SES inbound ingest
