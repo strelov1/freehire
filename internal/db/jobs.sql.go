@@ -1440,6 +1440,26 @@ matches AS (
     FROM agg a JOIN ats t
       ON t.ntitle2 = a.ntitle2 AND a.ntitle2 <> ''
      AND (t.countries && a.countries OR cardinality(t.countries) = 0 OR cardinality(a.countries) = 0)
+    UNION ALL
+    -- Third path: word-subset containment — the aggregator dropped words the ATS keeps (a
+    -- mid-title drop the two equality keys miss). This arm is a nested loop (no hash on <@),
+    -- but runs only on the residual after the equality arms and is bounded per company.
+    -- Guards against over-merge: the aggregator title needs >= 2 words, and the words the ATS
+    -- adds over it must include at least one NON-seniority word — so "Software Engineer" is not
+    -- merged into "Senior Software Engineer" (a distinct grade), only into a title that adds a
+    -- real specialty/location/department word the aggregator dropped.
+    SELECT a.id, t.id
+    FROM agg a JOIN ats t
+      ON string_to_array(a.ntitle, ' ') <@ string_to_array(t.ntitle, ' ')
+     AND array_length(string_to_array(a.ntitle, ' '), 1) >= 2
+     AND (t.countries && a.countries OR cardinality(t.countries) = 0 OR cardinality(a.countries) = 0)
+     AND EXISTS (
+         SELECT 1 FROM unnest(string_to_array(t.ntitle, ' ')) AS w
+         WHERE w <> ALL (string_to_array(a.ntitle, ' '))
+           AND w <> ALL (ARRAY['senior','sr','junior','jr','lead','principal','staff','mid',
+                               'midlevel','entry','chief','intern','trainee','graduate',
+                               'apprentice','ii','iii','iv']::text[])
+     )
 ),
 target AS (
     -- Every candidate aggregator row, with its MIN matching ATS id or NULL. LEFT JOIN so an
