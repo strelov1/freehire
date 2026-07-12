@@ -15,27 +15,45 @@ const countInboxGroups = `-- name: CountInboxGroups :one
 SELECT count(DISTINCT subject_norm)
 FROM emails
 WHERE user_id = $1
+  AND ($2::text = '' OR source = $2)
   AND (
-    $2::text = ''
-    OR subject   ILIKE '%' || $2 || '%'
-    OR from_name ILIKE '%' || $2 || '%'
-    OR from_addr ILIKE '%' || $2 || '%'
-    OR body_text ILIKE '%' || $2 || '%'
+    $3::text = ''
+    OR subject   ILIKE '%' || $3 || '%'
+    OR from_name ILIKE '%' || $3 || '%'
+    OR from_addr ILIKE '%' || $3 || '%'
+    OR body_text ILIKE '%' || $3 || '%'
   )
 `
 
 type CountInboxGroupsParams struct {
 	UserID int64  `json:"user_id"`
+	Src    string `json:"src"`
 	Q      string `json:"q"`
 }
 
-// Total distinct subject groups for the caller (with the same optional search),
+// Total distinct subject groups for the caller (same optional source + search),
 // so the inbox knows whether more pages remain.
 func (q *Queries) CountInboxGroups(ctx context.Context, arg CountInboxGroupsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countInboxGroups, arg.UserID, arg.Q)
+	row := q.db.QueryRow(ctx, countInboxGroups, arg.UserID, arg.Src, arg.Q)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const deleteEmailsBySource = `-- name: DeleteEmailsBySource :exec
+DELETE FROM emails WHERE user_id = $1 AND source = $2
+`
+
+type DeleteEmailsBySourceParams struct {
+	UserID int64  `json:"user_id"`
+	Source string `json:"source"`
+}
+
+// Purge one source's mail for a user (Gmail disconnect passes 'gmail', mailbox
+// release passes 'hosted') — the other source's mail is left untouched.
+func (q *Queries) DeleteEmailsBySource(ctx context.Context, arg DeleteEmailsBySourceParams) error {
+	_, err := q.db.Exec(ctx, deleteEmailsBySource, arg.UserID, arg.Source)
+	return err
 }
 
 const deleteGmailConnection = `-- name: DeleteGmailConnection :exec
@@ -47,17 +65,9 @@ func (q *Queries) DeleteGmailConnection(ctx context.Context, userID int64) error
 	return err
 }
 
-const deleteUserEmails = `-- name: DeleteUserEmails :exec
-DELETE FROM emails WHERE user_id = $1
-`
-
-func (q *Queries) DeleteUserEmails(ctx context.Context, userID int64) error {
-	_, err := q.db.Exec(ctx, deleteUserEmails, userID)
-	return err
-}
-
 const getEmail = `-- name: GetEmail :one
-SELECT id, gmail_msg_id, from_addr, from_name, subject, body_text, body_html, received_at
+SELECT id, source, external_id, s3_key, from_addr, from_name, subject,
+    body_text, body_html, received_at, (read_at IS NOT NULL)::boolean AS read
 FROM emails
 WHERE id = $1 AND user_id = $2
 `
@@ -69,13 +79,16 @@ type GetEmailParams struct {
 
 type GetEmailRow struct {
 	ID         int64              `json:"id"`
-	GmailMsgID string             `json:"gmail_msg_id"`
+	Source     string             `json:"source"`
+	ExternalID string             `json:"external_id"`
+	S3Key      pgtype.Text        `json:"s3_key"`
 	FromAddr   string             `json:"from_addr"`
 	FromName   string             `json:"from_name"`
 	Subject    string             `json:"subject"`
 	BodyText   string             `json:"body_text"`
 	BodyHtml   string             `json:"body_html"`
 	ReceivedAt pgtype.Timestamptz `json:"received_at"`
+	Read       bool               `json:"read"`
 }
 
 func (q *Queries) GetEmail(ctx context.Context, arg GetEmailParams) (GetEmailRow, error) {
@@ -83,13 +96,16 @@ func (q *Queries) GetEmail(ctx context.Context, arg GetEmailParams) (GetEmailRow
 	var i GetEmailRow
 	err := row.Scan(
 		&i.ID,
-		&i.GmailMsgID,
+		&i.Source,
+		&i.ExternalID,
+		&i.S3Key,
 		&i.FromAddr,
 		&i.FromName,
 		&i.Subject,
 		&i.BodyText,
 		&i.BodyHtml,
 		&i.ReceivedAt,
+		&i.Read,
 	)
 	return i, err
 }
@@ -176,7 +192,8 @@ func (q *Queries) ListConnectedGmailUsers(ctx context.Context) ([]ListConnectedG
 }
 
 const listEmailsByGroup = `-- name: ListEmailsByGroup :many
-SELECT id, gmail_msg_id, from_addr, from_name, subject, received_at
+SELECT id, source, external_id, from_addr, from_name, subject, received_at,
+    (read_at IS NOT NULL)::boolean AS read
 FROM emails
 WHERE user_id = $1 AND subject_norm = $2
 ORDER BY received_at DESC
@@ -189,11 +206,13 @@ type ListEmailsByGroupParams struct {
 
 type ListEmailsByGroupRow struct {
 	ID         int64              `json:"id"`
-	GmailMsgID string             `json:"gmail_msg_id"`
+	Source     string             `json:"source"`
+	ExternalID string             `json:"external_id"`
 	FromAddr   string             `json:"from_addr"`
 	FromName   string             `json:"from_name"`
 	Subject    string             `json:"subject"`
 	ReceivedAt pgtype.Timestamptz `json:"received_at"`
+	Read       bool               `json:"read"`
 }
 
 func (q *Queries) ListEmailsByGroup(ctx context.Context, arg ListEmailsByGroupParams) ([]ListEmailsByGroupRow, error) {
@@ -207,11 +226,13 @@ func (q *Queries) ListEmailsByGroup(ctx context.Context, arg ListEmailsByGroupPa
 		var i ListEmailsByGroupRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.GmailMsgID,
+			&i.Source,
+			&i.ExternalID,
 			&i.FromAddr,
 			&i.FromName,
 			&i.Subject,
 			&i.ReceivedAt,
+			&i.Read,
 		); err != nil {
 			return nil, err
 		}
@@ -227,25 +248,28 @@ const listInboxGroups = `-- name: ListInboxGroups :many
 SELECT
     subject_norm,
     count(*)                                                   AS message_count,
+    count(*) FILTER (WHERE read_at IS NULL)                    AS unread_count,
     max(received_at)::timestamptz                              AS latest_received,
     ((array_agg(subject ORDER BY received_at DESC))[1])::text  AS latest_subject,
     array_remove(array_agg(DISTINCT from_name), '')::text[]    AS senders
 FROM emails
 WHERE user_id = $1
+  AND ($2::text = '' OR source = $2)
   AND (
-    $2::text = ''
-    OR subject   ILIKE '%' || $2 || '%'
-    OR from_name ILIKE '%' || $2 || '%'
-    OR from_addr ILIKE '%' || $2 || '%'
-    OR body_text ILIKE '%' || $2 || '%'
+    $3::text = ''
+    OR subject   ILIKE '%' || $3 || '%'
+    OR from_name ILIKE '%' || $3 || '%'
+    OR from_addr ILIKE '%' || $3 || '%'
+    OR body_text ILIKE '%' || $3 || '%'
   )
 GROUP BY subject_norm
 ORDER BY max(received_at) DESC
-LIMIT $4 OFFSET $3
+LIMIT $5 OFFSET $4
 `
 
 type ListInboxGroupsParams struct {
 	UserID int64  `json:"user_id"`
+	Src    string `json:"src"`
 	Q      string `json:"q"`
 	Off    int32  `json:"off"`
 	Lim    int32  `json:"lim"`
@@ -254,18 +278,21 @@ type ListInboxGroupsParams struct {
 type ListInboxGroupsRow struct {
 	SubjectNorm    string             `json:"subject_norm"`
 	MessageCount   int64              `json:"message_count"`
+	UnreadCount    int64              `json:"unread_count"`
 	LatestReceived pgtype.Timestamptz `json:"latest_received"`
 	LatestSubject  string             `json:"latest_subject"`
 	Senders        []string           `json:"senders"`
 }
 
-// One row per normalized subject: count, newest receipt, distinct sender names,
-// and the newest message's original subject for display. An optional search term
-// (empty = no filter) matches a message's subject, sender, or body — a group
+// One row per normalized subject: total + unread counts, newest receipt, distinct
+// sender names, and the newest message's original subject for display. An optional
+// source filter (empty = all accounts) narrows to one source; an optional search
+// term (empty = no filter) matches a message's subject, sender, or body — a group
 // surfaces when any of its messages matches.
 func (q *Queries) ListInboxGroups(ctx context.Context, arg ListInboxGroupsParams) ([]ListInboxGroupsRow, error) {
 	rows, err := q.db.Query(ctx, listInboxGroups,
 		arg.UserID,
+		arg.Src,
 		arg.Q,
 		arg.Off,
 		arg.Lim,
@@ -280,6 +307,7 @@ func (q *Queries) ListInboxGroups(ctx context.Context, arg ListInboxGroupsParams
 		if err := rows.Scan(
 			&i.SubjectNorm,
 			&i.MessageCount,
+			&i.UnreadCount,
 			&i.LatestReceived,
 			&i.LatestSubject,
 			&i.Senders,
@@ -292,6 +320,22 @@ func (q *Queries) ListInboxGroups(ctx context.Context, arg ListInboxGroupsParams
 		return nil, err
 	}
 	return items, nil
+}
+
+const markEmailRead = `-- name: MarkEmailRead :exec
+UPDATE emails SET read_at = now()
+WHERE id = $1 AND user_id = $2 AND read_at IS NULL
+`
+
+type MarkEmailReadParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+// Stamp read on first open; a no-op once already read.
+func (q *Queries) MarkEmailRead(ctx context.Context, arg MarkEmailReadParams) error {
+	_, err := q.db.Exec(ctx, markEmailRead, arg.ID, arg.UserID)
+	return err
 }
 
 const setGmailStatus = `-- name: SetGmailStatus :exec
@@ -326,15 +370,15 @@ func (q *Queries) SetGmailSynced(ctx context.Context, arg SetGmailSyncedParams) 
 
 const upsertEmail = `-- name: UpsertEmail :exec
 INSERT INTO emails (
-    user_id, gmail_msg_id, thread_id, from_addr, from_name,
+    user_id, source, external_id, thread_id, from_addr, from_name,
     subject, subject_norm, body_text, body_html, received_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-ON CONFLICT (user_id, gmail_msg_id) DO NOTHING
+) VALUES ($1, 'gmail', $2, $3, $4, $5, $6, $7, $8, $9, $10)
+ON CONFLICT (user_id, source, external_id) DO NOTHING
 `
 
 type UpsertEmailParams struct {
 	UserID      int64              `json:"user_id"`
-	GmailMsgID  string             `json:"gmail_msg_id"`
+	ExternalID  string             `json:"external_id"`
 	ThreadID    string             `json:"thread_id"`
 	FromAddr    string             `json:"from_addr"`
 	FromName    string             `json:"from_name"`
@@ -345,11 +389,12 @@ type UpsertEmailParams struct {
 	ReceivedAt  pgtype.Timestamptz `json:"received_at"`
 }
 
-// Idempotent by (user_id, gmail_msg_id): a re-sync of the same message is a no-op.
+// Store a Gmail message, idempotent by (user_id, source, external_id) with
+// source fixed to 'gmail'; the hosted path has its own insert (InsertHostedMessage).
 func (q *Queries) UpsertEmail(ctx context.Context, arg UpsertEmailParams) error {
 	_, err := q.db.Exec(ctx, upsertEmail,
 		arg.UserID,
-		arg.GmailMsgID,
+		arg.ExternalID,
 		arg.ThreadID,
 		arg.FromAddr,
 		arg.FromName,

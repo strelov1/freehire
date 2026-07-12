@@ -118,7 +118,7 @@ type Querier interface {
 	// so search/filter pagination reports the filtered total. Keep this WHERE identical
 	// to ListCompanies.
 	CountCompanies(ctx context.Context, arg CountCompaniesParams) (int64, error)
-	// Total distinct subject groups for the caller (with the same optional search),
+	// Total distinct subject groups for the caller (same optional source + search),
 	// so the inbox knows whether more pages remain.
 	CountInboxGroups(ctx context.Context, arg CountInboxGroupsParams) (int64, error)
 	// Per-stage application counts for the Pipeline snapshot. An application is any
@@ -177,8 +177,12 @@ type Querier interface {
 	// days (a day that had only closures, now reopened) are dropped rather than left
 	// stale.
 	DeleteAllJobDailyStats(ctx context.Context) error
+	// Purge one source's mail for a user (Gmail disconnect passes 'gmail', mailbox
+	// release passes 'hosted') — the other source's mail is left untouched.
+	DeleteEmailsBySource(ctx context.Context, arg DeleteEmailsBySourceParams) error
 	DeleteEnrichmentEntry(ctx context.Context, id int64) error
 	DeleteGmailConnection(ctx context.Context, userID int64) error
+	DeleteMailbox(ctx context.Context, userID int64) error
 	// Drop companies no longer referenced by any job — the stale rows left behind
 	// when a slug-builder change re-keys jobs onto new slugs. Reference rows imported
 	// by the company-info backfill are preserved: they intentionally have no job, so
@@ -195,7 +199,6 @@ type Querier interface {
 	DeleteSubscription(ctx context.Context, arg DeleteSubscriptionParams) (int64, error)
 	// Unlink Telegram. Returns the affected row count: 0 means there was no link.
 	DeleteTelegramLink(ctx context.Context, userID int64) (int64, error)
-	DeleteUserEmails(ctx context.Context, userID int64) error
 	// Remove the caller's profile. Returns the affected row count (0 when none existed); the
 	// handler treats delete as idempotent (204 either way).
 	DeleteUserProfile(ctx context.Context, userID int64) (int64, error)
@@ -285,6 +288,9 @@ type Querier interface {
 	// projected out of the enrichment JSONB (absent keys → NULL) so a card can render
 	// a compensation line only when one is known.
 	GetJobsForDigest(ctx context.Context, jobIds []int64) ([]GetJobsForDigestRow, error)
+	// Recipient resolution for the inbound ingest worker.
+	GetMailboxByAddress(ctx context.Context, address string) (Mailbox, error)
+	GetMailboxByUser(ctx context.Context, userID int64) (Mailbox, error)
 	// Public read of a shared board by its slug — no auth, no owner-scoping. Exposes only
 	// the board's display fields; owner columns (user_id) are never selected. A NULL slug
 	// never equals the param, so private sets are unreachable. No row → 404.
@@ -345,6 +351,13 @@ type Querier interface {
 	// request to a role-gated endpoint and needs only the role, so it does not drag the
 	// full user row (the GetJobIDBySlug precedent for a hot-path read).
 	GetUserRole(ctx context.Context, id int64) (string, error)
+	// Store a message received at a hosted mailbox, idempotent by
+	// (user_id, source, external_id) with source fixed to 'hosted'.
+	InsertHostedMessage(ctx context.Context, arg InsertHostedMessageParams) error
+	// Claim an address for a user. May raise a unique violation on user_id (already
+	// has a mailbox) or address (taken) — the allocation service handles both: it
+	// reads-back on a user conflict and retries the next suffix on an address conflict.
+	InsertMailbox(ctx context.Context, arg InsertMailboxParams) (Mailbox, error)
 	// Crawl write path: store a fetched post once. ON CONFLICT DO NOTHING makes
 	// re-crawling idempotent — a stored post (pending, done, or dead-lettered) is
 	// never reset. extracted_at is non-NULL when the ingest prefilter already
@@ -383,9 +396,10 @@ type Querier interface {
 	// Drives the sync worker: every connection still authorized.
 	ListConnectedGmailUsers(ctx context.Context) ([]ListConnectedGmailUsersRow, error)
 	ListEmailsByGroup(ctx context.Context, arg ListEmailsByGroupParams) ([]ListEmailsByGroupRow, error)
-	// One row per normalized subject: count, newest receipt, distinct sender names,
-	// and the newest message's original subject for display. An optional search term
-	// (empty = no filter) matches a message's subject, sender, or body — a group
+	// One row per normalized subject: total + unread counts, newest receipt, distinct
+	// sender names, and the newest message's original subject for display. An optional
+	// source filter (empty = all accounts) narrows to one source; an optional search
+	// term (empty = no filter) matches a message's subject, sender, or body — a group
 	// surfaces when any of its messages matches.
 	ListInboxGroups(ctx context.Context, arg ListInboxGroupsParams) ([]ListInboxGroupsRow, error)
 	// Dense activity series over [from, to] at the given granularity. A daily
@@ -485,6 +499,8 @@ type Querier interface {
 	// Closed jobs are included: dimming a closed posting that still shows in a
 	// history surface is correct, and the browse list filters closed jobs itself.
 	ListViewedJobSlugs(ctx context.Context, userID int64) ([]string, error)
+	// Stamp read on first open; a no-op once already read.
+	MarkEmailRead(ctx context.Context, arg MarkEmailReadParams) error
 	// Mark a job as applied for a user. Idempotent and independent of a prior view:
 	// it inserts the row (viewed_at defaults) or updates applied_at in place, and
 	// seeds stage='applied' only when the stage is unset (an advanced stage survives
@@ -764,7 +780,8 @@ type Querier interface {
 	// name, job_count, collections, is_reference, and the job-derived facet arrays are
 	// left untouched. Idempotent: re-running the same record rewrites the same values.
 	UpsertCompanyInfo(ctx context.Context, arg UpsertCompanyInfoParams) error
-	// Idempotent by (user_id, gmail_msg_id): a re-sync of the same message is a no-op.
+	// Store a Gmail message, idempotent by (user_id, source, external_id) with
+	// source fixed to 'gmail'; the hosted path has its own insert (InsertHostedMessage).
 	UpsertEmail(ctx context.Context, arg UpsertEmailParams) error
 	// Connect (or reconnect) a user's Gmail: store the encrypted refresh token and
 	// mark connected, preserving the sync cursor on reconnect.

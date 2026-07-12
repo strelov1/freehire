@@ -64,7 +64,7 @@ type Company struct {
 type Email struct {
 	ID          int64              `json:"id"`
 	UserID      int64              `json:"user_id"`
-	GmailMsgID  string             `json:"gmail_msg_id"`
+	ExternalID  string             `json:"external_id"`
 	ThreadID    string             `json:"thread_id"`
 	FromAddr    string             `json:"from_addr"`
 	FromName    string             `json:"from_name"`
@@ -74,6 +74,9 @@ type Email struct {
 	BodyHtml    string             `json:"body_html"`
 	ReceivedAt  pgtype.Timestamptz `json:"received_at"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	Source      string             `json:"source"`
+	S3Key       pgtype.Text        `json:"s3_key"`
+	ReadAt      pgtype.Timestamptz `json:"read_at"`
 }
 
 type EnrichmentOutbox struct {
@@ -180,6 +183,13 @@ type JobSubmission struct {
 	ReviewedAt   pgtype.Timestamptz `json:"reviewed_at"`
 	JobID        pgtype.Int8        `json:"job_id"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+type Mailbox struct {
+	ID        int64              `json:"id"`
+	UserID    int64              `json:"user_id"`
+	Address   string             `json:"address"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type SavedSearch struct {

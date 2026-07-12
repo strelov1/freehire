@@ -35,30 +35,36 @@ UPDATE gmail_connections SET status = $2 WHERE user_id = $1;
 -- name: DeleteGmailConnection :exec
 DELETE FROM gmail_connections WHERE user_id = $1;
 
--- name: DeleteUserEmails :exec
-DELETE FROM emails WHERE user_id = $1;
+-- name: DeleteEmailsBySource :exec
+-- Purge one source's mail for a user (Gmail disconnect passes 'gmail', mailbox
+-- release passes 'hosted') — the other source's mail is left untouched.
+DELETE FROM emails WHERE user_id = $1 AND source = $2;
 
 -- name: UpsertEmail :exec
--- Idempotent by (user_id, gmail_msg_id): a re-sync of the same message is a no-op.
+-- Store a Gmail message, idempotent by (user_id, source, external_id) with
+-- source fixed to 'gmail'; the hosted path has its own insert (InsertHostedMessage).
 INSERT INTO emails (
-    user_id, gmail_msg_id, thread_id, from_addr, from_name,
+    user_id, source, external_id, thread_id, from_addr, from_name,
     subject, subject_norm, body_text, body_html, received_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-ON CONFLICT (user_id, gmail_msg_id) DO NOTHING;
+) VALUES ($1, 'gmail', $2, $3, $4, $5, $6, $7, $8, $9, $10)
+ON CONFLICT (user_id, source, external_id) DO NOTHING;
 
 -- name: ListInboxGroups :many
--- One row per normalized subject: count, newest receipt, distinct sender names,
--- and the newest message's original subject for display. An optional search term
--- (empty = no filter) matches a message's subject, sender, or body — a group
+-- One row per normalized subject: total + unread counts, newest receipt, distinct
+-- sender names, and the newest message's original subject for display. An optional
+-- source filter (empty = all accounts) narrows to one source; an optional search
+-- term (empty = no filter) matches a message's subject, sender, or body — a group
 -- surfaces when any of its messages matches.
 SELECT
     subject_norm,
     count(*)                                                   AS message_count,
+    count(*) FILTER (WHERE read_at IS NULL)                    AS unread_count,
     max(received_at)::timestamptz                              AS latest_received,
     ((array_agg(subject ORDER BY received_at DESC))[1])::text  AS latest_subject,
     array_remove(array_agg(DISTINCT from_name), '')::text[]    AS senders
 FROM emails
 WHERE user_id = $1
+  AND (sqlc.arg(src)::text = '' OR source = sqlc.arg(src))
   AND (
     sqlc.arg(q)::text = ''
     OR subject   ILIKE '%' || sqlc.arg(q) || '%'
@@ -71,11 +77,12 @@ ORDER BY max(received_at) DESC
 LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 
 -- name: CountInboxGroups :one
--- Total distinct subject groups for the caller (with the same optional search),
+-- Total distinct subject groups for the caller (same optional source + search),
 -- so the inbox knows whether more pages remain.
 SELECT count(DISTINCT subject_norm)
 FROM emails
 WHERE user_id = $1
+  AND (sqlc.arg(src)::text = '' OR source = sqlc.arg(src))
   AND (
     sqlc.arg(q)::text = ''
     OR subject   ILIKE '%' || sqlc.arg(q) || '%'
@@ -85,12 +92,19 @@ WHERE user_id = $1
   );
 
 -- name: ListEmailsByGroup :many
-SELECT id, gmail_msg_id, from_addr, from_name, subject, received_at
+SELECT id, source, external_id, from_addr, from_name, subject, received_at,
+    (read_at IS NOT NULL)::boolean AS read
 FROM emails
 WHERE user_id = $1 AND subject_norm = $2
 ORDER BY received_at DESC;
 
 -- name: GetEmail :one
-SELECT id, gmail_msg_id, from_addr, from_name, subject, body_text, body_html, received_at
+SELECT id, source, external_id, s3_key, from_addr, from_name, subject,
+    body_text, body_html, received_at, (read_at IS NOT NULL)::boolean AS read
 FROM emails
 WHERE id = $1 AND user_id = $2;
+
+-- name: MarkEmailRead :exec
+-- Stamp read on first open; a no-op once already read.
+UPDATE emails SET read_at = now()
+WHERE id = $1 AND user_id = $2 AND read_at IS NULL;

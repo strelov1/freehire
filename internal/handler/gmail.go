@@ -118,7 +118,8 @@ func (a *API) GmailDisconnect(c *fiber.Ctx) error {
 			}
 		}
 	}
-	if err := a.queries.DeleteUserEmails(c.Context(), userID); err != nil {
+	// Purge only this user's Gmail-sourced mail; a hosted mailbox's mail stays.
+	if err := a.queries.DeleteEmailsBySource(c.Context(), db.DeleteEmailsBySourceParams{UserID: userID, Source: "gmail"}); err != nil {
 		return err
 	}
 	if err := a.queries.DeleteGmailConnection(c.Context(), userID); err != nil {
