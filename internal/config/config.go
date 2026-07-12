@@ -82,6 +82,15 @@ type Settings struct {
 	TelegramBotToken      string
 	TelegramBotUsername   string
 	TelegramWebhookSecret string
+
+	// Email notifications for filter subscriptions, sent via AWS SES by the notify
+	// worker. Optional: the email channel is registered only when both AWSRegion and
+	// NotifyEmailFrom are set — either empty and the worker still delivers Telegram
+	// (enforced at the cmd/notify call site, not here). AWS credentials come from the
+	// default AWS chain (env/role), never config. NotifyEmailFrom is the verified SES
+	// sender address (e.g. notifications@freehire.dev).
+	AWSRegion       string
+	NotifyEmailFrom string
 }
 
 // OAuthCredentials is one OAuth provider's client id/secret pair.
@@ -127,6 +136,9 @@ func Load() Settings {
 		TelegramBotToken:      os.Getenv("TELEGRAM_BOT_TOKEN"),
 		TelegramBotUsername:   os.Getenv("TELEGRAM_BOT_USERNAME"),
 		TelegramWebhookSecret: os.Getenv("TELEGRAM_WEBHOOK_SECRET"),
+
+		AWSRegion:       os.Getenv("AWS_REGION"),
+		NotifyEmailFrom: os.Getenv("NOTIFY_EMAIL_FROM"),
 	}
 }
 

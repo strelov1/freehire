@@ -1,17 +1,17 @@
 ## 1. Dependencies & config
 
 - [ ] 1.1 Add `github.com/aws/aws-sdk-go-v2/config` and `.../service/sesv2` to `go.mod` (`go get`), tidy, and confirm `go build ./...`.
-- [ ] 1.2 Add optional config knobs `AWSRegion` (`AWS_REGION`) and `NotifyEmailFrom` (`NOTIFY_EMAIL_FROM`) to `internal/config`; both empty ⇒ email disabled. Document them in `.env.example`.
+- [x] 1.2 Add optional config knobs `AWSRegion` (`AWS_REGION`) and `NotifyEmailFrom` (`NOTIFY_EMAIL_FROM`) to `internal/config`; both empty ⇒ email disabled. Document them in `.env.example`.
 
 ## 2. Channel routing in the engine
 
-- [ ] 2.1 Add `ChannelEmail = "email"` const to `internal/notify` and a `notify.Router` (`map[string]Notifier`) whose `Send` dispatches by channel; an unregistered channel returns a sentinel the delivery loop treats as a soft-skip (matches stay pending, no attempt counted). Unit-test dispatch + unknown-channel soft-skip.
-- [ ] 2.2 Extend `recipient()` with an `email` branch that returns the account email from the delivery row; keep `destination` NULL. Unit-test that an email subscription resolves the account email and a missing email soft-skips.
+- [x] 2.1 Add `ChannelEmail = "email"` const to `internal/notify` and a `notify.Router` (`map[string]Notifier`) whose `Send` dispatches by channel; an unregistered channel returns a sentinel the delivery loop treats as a soft-skip (matches stay pending, no attempt counted). Unit-test dispatch + unknown-channel soft-skip.
+- [x] 2.2 Extend `recipient()` with an `email` branch that returns the account email from the delivery row; keep `destination` NULL. Unit-test that an email subscription resolves the account email and a missing email soft-skips.
 
 ## 3. Account-email resolution (DB)
 
-- [ ] 3.1 Modify `GetSubscriptionForDelivery` in `internal/db/queries/subscriptions.sql` to also select `users.email`; run `make sqlc` and commit generated code.
-- [ ] 3.2 Wire the new email field through `internal/notify` delivery (`GetSubscriptionForDeliveryRow` → `recipient()`); adjust the `Store` interface/fakes as needed.
+- [x] 3.1 Modify `GetSubscriptionForDelivery` in `internal/db/queries/subscriptions.sql` to also select `users.email`; run `make sqlc` and commit generated code.
+- [x] 3.2 Wire the new email field through `internal/notify` delivery (`GetSubscriptionForDeliveryRow` → `recipient()`); adjust the `Store` interface/fakes as needed.
 
 ## 4. Email notifier (`internal/emailnotify`)
 

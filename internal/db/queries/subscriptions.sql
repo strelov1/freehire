@@ -86,13 +86,16 @@ RETURNING m.subscription_id, m.job_id;
 
 -- name: GetSubscriptionForDelivery :one
 -- The delivery context for one subscription: channel + destination, the saved
--- search name (for the digest heading), and the user's linked Telegram chat (NULL
--- when unlinked → the worker soft-skips telegram delivery rather than failing it).
+-- search name (for the digest heading), the user's account email (the email
+-- channel's live recipient), and the user's linked Telegram chat (NULL when
+-- unlinked → the worker soft-skips telegram delivery rather than failing it).
 SELECT s.id, s.user_id, s.channel, s.destination,
        ss.name AS saved_search_name,
+       u.email AS account_email,
        tl.chat_id AS telegram_chat_id
 FROM subscriptions s
 JOIN saved_searches ss ON ss.id = s.saved_search_id
+JOIN users u ON u.id = s.user_id
 LEFT JOIN telegram_links tl ON tl.user_id = s.user_id
 WHERE s.id = $1;
 

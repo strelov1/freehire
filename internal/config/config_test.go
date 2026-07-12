@@ -151,3 +151,23 @@ func TestLoad_OAuthUnsetProviderIsZero(t *testing.T) {
 		t.Errorf("OAuth[linkedin] = %+v, want zero", got)
 	}
 }
+
+func TestLoad_EmailNotifyFromEnv(t *testing.T) {
+	t.Setenv("AWS_REGION", "eu-central-1")
+	t.Setenv("NOTIFY_EMAIL_FROM", "notifications@freehire.dev")
+
+	s := Load()
+	if s.AWSRegion != "eu-central-1" || s.NotifyEmailFrom != "notifications@freehire.dev" {
+		t.Errorf("email-notify settings = %q/%q, want the env values", s.AWSRegion, s.NotifyEmailFrom)
+	}
+}
+
+func TestLoad_EmailNotifyEmptyWhenUnset(t *testing.T) {
+	t.Setenv("AWS_REGION", "")
+	t.Setenv("NOTIFY_EMAIL_FROM", "")
+
+	s := Load()
+	if s.AWSRegion != "" || s.NotifyEmailFrom != "" {
+		t.Errorf("email-notify settings should be empty when unset, got %q/%q", s.AWSRegion, s.NotifyEmailFrom)
+	}
+}

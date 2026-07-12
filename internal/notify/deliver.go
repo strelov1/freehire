@@ -2,6 +2,7 @@ package notify
 
 import (
 	"context"
+	"errors"
 	"log"
 
 	"github.com/strelov1/freehire/internal/db"
@@ -64,6 +65,15 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 
 	digest := buildDigest(info.SavedSearchName, jobs, r.cfg.DigestCap)
 	if err := r.notifier.Send(ctx, info.Channel, dest, digest); err != nil {
+		// A channel with no registered notifier (e.g. email while SES is
+		// unconfigured) is not a delivery failure: soft-skip so the matches stay
+		// pending for a pass once the channel is provisioned, without burning an
+		// attempt toward the dead-letter limit.
+		if errors.Is(err, ErrChannelNotConfigured) {
+			r.release(ctx, subID, jobIDs)
+			stats.SoftSkips++
+			return
+		}
 		log.Printf("notify: deliver subscription %d: %v", subID, err)
 		if ferr := r.store.RecordMatchDeliveryFailure(ctx, db.RecordMatchDeliveryFailureParams{
 			SubscriptionID: subID,

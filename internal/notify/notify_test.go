@@ -222,6 +222,55 @@ func TestDeliver_FailureIsRecordedNotNotified(t *testing.T) {
 	}
 }
 
+func TestDeliver_EmailResolvesAccountEmail(t *testing.T) {
+	store := &fakeStore{
+		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
+		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
+			1: {ID: 1, Channel: ChannelEmail, SavedSearchName: "Go", AccountEmail: "user@acme.com"},
+		},
+		digestJobs: map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A"}},
+	}
+	em := &recordingNotifier{}
+	r := New(store, &fakeSearcher{}, Router{ChannelEmail: em}, DefaultConfig())
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(em.sent) != 1 || em.dest != "user@acme.com" {
+		t.Errorf("email notifier got %d sends dest=%q, want 1 to the account email", len(em.sent), em.dest)
+	}
+	if len(store.notified) != 1 {
+		t.Errorf("notified = %d, want 1", len(store.notified))
+	}
+}
+
+func TestDeliver_UnconfiguredEmailChannelIsSoftSkipped(t *testing.T) {
+	store := &fakeStore{
+		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
+		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
+			1: {ID: 1, Channel: ChannelEmail, AccountEmail: "user@acme.com"},
+		},
+		digestJobs: map[int64]db.GetJobsForDigestRow{10: {ID: 10}},
+	}
+	// Router without an email notifier (SES unconfigured): the email channel is
+	// unregistered, so delivery must soft-skip rather than dead-letter.
+	r := New(store, &fakeSearcher{}, Router{ChannelTelegram: &recordingNotifier{}}, DefaultConfig())
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.failures) != 0 {
+		t.Errorf("failures = %d, want 0 (unconfigured channel is a soft-skip, not a failed attempt)", len(store.failures))
+	}
+	if len(store.released) != 1 {
+		t.Errorf("released = %d, want 1 (claim released for retry)", len(store.released))
+	}
+	if stats.SoftSkips != 1 {
+		t.Errorf("soft skips = %d, want 1", stats.SoftSkips)
+	}
+}
+
 func TestDeliver_UnlinkedTelegramIsSoftSkipped(t *testing.T) {
 	store := &fakeStore{
 		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},

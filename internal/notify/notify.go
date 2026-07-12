@@ -140,15 +140,23 @@ func (r *Runner) Run(ctx context.Context) (Stats, error) {
 	return stats, nil
 }
 
-// telegramRecipient resolves the destination string for delivery, and whether the
+// recipient resolves the destination string for delivery, and whether the
 // subscription is deliverable right now. Telegram resolves the linked chat_id
-// (absent → not deliverable, soft-skipped); other channels use destination.
+// (absent → not deliverable, soft-skipped); email resolves the user's account
+// email live (absent → soft-skipped); any other channel uses the stored
+// destination.
 func recipient(info db.GetSubscriptionForDeliveryRow) (string, bool) {
-	if info.Channel == ChannelTelegram {
+	switch info.Channel {
+	case ChannelTelegram:
 		if !info.TelegramChatID.Valid {
 			return "", false
 		}
 		return strconv.FormatInt(info.TelegramChatID.Int64, 10), true
+	case ChannelEmail:
+		if info.AccountEmail == "" {
+			return "", false
+		}
+		return info.AccountEmail, true
 	}
 	if !info.Destination.Valid || info.Destination.String == "" {
 		return "", false

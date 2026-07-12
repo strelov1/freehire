@@ -278,8 +278,9 @@ type Querier interface {
 	// defense-in-depth against a concurrent second decision.
 	GetSubmission(ctx context.Context, id int64) (JobSubmission, error)
 	// The delivery context for one subscription: channel + destination, the saved
-	// search name (for the digest heading), and the user's linked Telegram chat (NULL
-	// when unlinked → the worker soft-skips telegram delivery rather than failing it).
+	// search name (for the digest heading), the user's account email (the email
+	// channel's live recipient), and the user's linked Telegram chat (NULL when
+	// unlinked → the worker soft-skips telegram delivery rather than failing it).
 	GetSubscriptionForDelivery(ctx context.Context, id int64) (GetSubscriptionForDeliveryRow, error)
 	// The caller's linked Telegram chat (link-status endpoint + delivery resolution).
 	GetTelegramLink(ctx context.Context, userID int64) (TelegramLink, error)
