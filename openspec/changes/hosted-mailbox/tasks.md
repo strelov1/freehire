@@ -35,11 +35,11 @@
 
 ## 7. Config + infra docs
 
-- [ ] 7.1 Document the AWS SES inbound setup (receiving subdomain + MX, receipt rule set → S3 + SNS→SQS, IAM role, region) as an ops checklist in the change/docs; note the systemd service for `cmd/mail-ingest`
-- [ ] 7.2 Note the `0015` migration must be applied to prod by hand before deploy (live `emails` table)
+- [x] 7.1 Document the AWS SES inbound setup (receiving subdomain + MX, receipt rule set → S3 + SNS→SQS, IAM role, region) as an ops checklist in the change/docs; note the systemd service for `cmd/mail-ingest`
+- [x] 7.2 Note the `0015` migration must be applied to prod by hand before deploy (live `emails` table)
 
 ## 8. Verify
 
-- [ ] 8.1 `go build ./... && go vet ./...`, `go test ./...`, integration tests, `web` check pass
+- [x] 8.1 `go build ./... && go vet ./...`, `go test ./...`, integration tests, `web` check pass
 - [x] 8.2 End-to-end over the fake InboundSource: a synthesized inbound message resolves to a mailbox and appears in `/my/inbox` alongside Gmail mail, unread until opened
 - [ ] 8.3 (Post-infra, manual) real SES: send to a claimed address, confirm it lands in the inbox
