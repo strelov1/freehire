@@ -1,0 +1,4 @@
+# infojobs.net Spanish national job board. Boardless aggregator: the IT category listing is
+# paged (no per-company board), and each job's company comes from the offer, not this placeholder.
+- company: infojobs
+  provider: infojobs

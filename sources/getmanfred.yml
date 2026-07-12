@@ -1,0 +1,5 @@
+# getmanfred.com Spanish developer job marketplace. Boardless: one global keyless feed
+# (getmanfred.com/api/v2/public/offers), so the entry carries no board, and each job's company
+# comes from the offer, not this placeholder.
+- company: getmanfred
+  provider: getmanfred

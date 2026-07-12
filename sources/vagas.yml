@@ -1,0 +1,5 @@
+# vagas.com.br Brazilian national job board. Boardless aggregator: a fixed set of IT area
+# listings is crawled (no per-company board), and each job's company comes from the vacancy,
+# not this placeholder.
+- company: vagas
+  provider: vagas
