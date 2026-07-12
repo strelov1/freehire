@@ -1,6 +1,6 @@
 ## 1. Dependencies & config
 
-- [ ] 1.1 Add `github.com/aws/aws-sdk-go-v2/config` and `.../service/sesv2` to `go.mod` (`go get`), tidy, and confirm `go build ./...`.
+- [x] 1.1 Add `github.com/aws/aws-sdk-go-v2/config` and `.../service/sesv2` to `go.mod` (`go get`), tidy, and confirm `go build ./...`.
 - [x] 1.2 Add optional config knobs `AWSRegion` (`AWS_REGION`) and `NotifyEmailFrom` (`NOTIFY_EMAIL_FROM`) to `internal/config`; both empty ⇒ email disabled. Document them in `.env.example`.
 
 ## 2. Channel routing in the engine
@@ -15,9 +15,9 @@
 
 ## 4. Email notifier (`internal/emailnotify`)
 
-- [ ] 4.1 Create the package with a `Notifier` implementing `notify.Notifier`: `render(Digest)` → subject (`N new jobs for "<search>"`) + HTML body + plain-text alternative, following the email template in design.md (`html/template` auto-escaping, centered ~600px table, inline styles, hidden preheader, brand header, one row per job linking to `<origin>/jobs/<slug>?utm_source=email` with company + salary suffixes, "and N more → View all" tail, footer with a Manage-alerts link to `<origin>/my/notifications`). Unit-test render (subject, auto-escaping of a hostile title, cap + "and N more", salary suffix, plain-text alternative parity).
-- [ ] 4.2 Implement `Send` via `sesv2.SendEmail` behind a small SES-client interface (From = configured address, To = dest); build the client from `awsconfig.LoadDefaultConfig` (default credential chain). Unit-test `Send` success + error propagation with a fake SES client.
-- [ ] 4.3 Add a compile-time `var _ notify.Notifier = (*Notifier)(nil)` assertion.
+- [x] 4.1 Create the package with a `Notifier` implementing `notify.Notifier`: `render(Digest)` → subject (`N new jobs for "<search>"`) + HTML body + plain-text alternative, following the email template in design.md (`html/template` auto-escaping, centered ~600px table, inline styles, hidden preheader, brand header, one row per job linking to `<origin>/jobs/<slug>?utm_source=email` with company + salary suffixes, "and N more → View all" tail, footer with a Manage-alerts link to `<origin>/my/notifications`). Unit-test render (subject, auto-escaping of a hostile title, cap + "and N more", salary suffix, plain-text alternative parity).
+- [x] 4.2 Implement `Send` via `sesv2.SendEmail` behind a small SES-client interface (From = configured address, To = dest); build the client from `awsconfig.LoadDefaultConfig` (default credential chain). Unit-test `Send` success + error propagation with a fake SES client.
+- [x] 4.3 Add a compile-time `var _ notify.Notifier = (*Notifier)(nil)` assertion.
 
 ## 5. Wire the worker
 
