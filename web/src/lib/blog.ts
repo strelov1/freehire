@@ -39,11 +39,34 @@ function isIsoDate(value: string): boolean {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
 }
 
+// Normalize the frontmatter `date` to a `YYYY-MM-DD` string. YAML parses an
+// unquoted `2026-01-15` as a timestamp, which mdsvex surfaces as a Date (in dev)
+// or an ISO datetime string like `2026-01-15T00:00:00.000Z` (in the production
+// build); a quoted value stays a plain string. Accept all three, then validate
+// the calendar day. Throws (naming the file) on a missing or unreal date.
+function normalizeDate(value: unknown, filePath: string): string {
+  let day: string;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) {
+      throw new Error(`blog post ${filePath}: invalid date (unparseable)`);
+    }
+    day = value.toISOString().slice(0, 10);
+  } else if (typeof value === 'string' && value.trim() !== '') {
+    day = value.trim().slice(0, 10);
+  } else {
+    throw new Error(`blog post ${filePath}: missing or empty required field "date"`);
+  }
+  if (!isIsoDate(day)) {
+    throw new Error(`blog post ${filePath}: invalid date "${String(value)}" (expected ISO YYYY-MM-DD)`);
+  }
+  return day;
+}
+
 /** Validate and normalize one post's raw frontmatter into a `PostMeta`. Throws,
  *  naming the offending file, on a missing required field or an out-of-enum
  *  `type` — a loud build failure beats shipping a post with blank metadata. */
 export function parseFrontmatter(raw: Record<string, unknown>, filePath: string): PostMeta {
-  const required = (key: 'title' | 'date' | 'summary'): string => {
+  const required = (key: 'title' | 'summary'): string => {
     const value = raw[key];
     if (typeof value !== 'string' || value.trim() === '') {
       throw new Error(`blog post ${filePath}: missing or empty required field "${key}"`);
@@ -51,10 +74,7 @@ export function parseFrontmatter(raw: Record<string, unknown>, filePath: string)
     return value;
   };
 
-  const date = required('date');
-  if (!isIsoDate(date)) {
-    throw new Error(`blog post ${filePath}: invalid date "${date}" (expected ISO YYYY-MM-DD)`);
-  }
+  const date = normalizeDate(raw.date, filePath);
 
   let type: PostType = 'changelog';
   if (raw.type !== undefined) {

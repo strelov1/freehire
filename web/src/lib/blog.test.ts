@@ -34,6 +34,18 @@ describe('parseFrontmatter', () => {
     });
   });
 
+  // YAML parses an unquoted `2026-01-15` as a timestamp; mdsvex serializes it to a
+  // Date (in memory) or an ISO datetime string (in the production build). All must
+  // normalize to the YYYY-MM-DD day. Regression: prod 500 "invalid date 2026-01-15T00:00:00.000Z".
+  it.each([
+    ['plain ISO string', '2026-01-15'],
+    ['ISO datetime string', '2026-01-15T00:00:00.000Z'],
+    ['Date object', new Date('2026-01-15T00:00:00.000Z')],
+  ])('normalizes a %s date to YYYY-MM-DD', (_label, date) => {
+    const post = parseFrontmatter({ ...full, date }, '/src/posts/launch.svx');
+    expect(post.date).toBe('2026-01-15');
+  });
+
   it('defaults type to changelog, tags to [], draft to false when omitted', () => {
     const post = parseFrontmatter(
       { title: 'Note', date: '2026-02-01', summary: 'Small fix.' },
