@@ -13,6 +13,7 @@ Non-negotiable. Bias toward caution over speed; use judgment on trivial tasks.
 - **No overengineering, and no MVP shortcuts.** Hold the middle path: don't build infrastructure before there's a concrete need (note the seam for later instead), and don't ship quick-and-dirty or "for now" hacks. Build each feature correctly and idiomatically — neither gold-plated nor a placeholder.
 - **MVP stage — keep the architecture fluid.** The project is early/MVP; the current structure is not load-bearing legacy. When a new feature doesn't fit the existing architecture cleanly, prefer reshaping or refactoring the affected part over bolting on an awkward special case — re-architect freely to keep the design clean rather than accumulating legacy. This complements "no MVP shortcuts" (still build each feature correctly) and extends "surgical changes" (existing structure is not frozen when a clean fit needs it reshaped).
 - **English only.** All code, comments, identifiers, docs, and commits are in English.
+- **Announce shipped work.** When a user-facing feature or fix lands, close the loop by offering a changelog entry on the `/blog` feed, then a longer blog post if it warrants one (posts are `.svx` files in `web/src/posts/`; the `write-changelog` skill drafts them). Skip for internal-only changes.
 
 ## What this is
 

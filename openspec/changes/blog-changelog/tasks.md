@@ -26,11 +26,11 @@
 
 ## 6. Authoring discipline (skill + workflow hooks)
 
-- [ ] 6.1 Create `.claude/skills/write-changelog/SKILL.md`: invokable at feature completion — offers a `type: changelog` post (short, from the shipped diff/summary), then offers to draft a `type: article` post; writes `.svx` into `web/src/posts/` in the exact frontmatter contract from task 2.2
-- [ ] 6.2 Add a Finish-step to `.claude/skills/spec-driven-tdd/SKILL.md` (`### 4. Finish`) invoking the write-changelog skill after archive+sync
-- [ ] 6.3 Add a one-line rule to `AGENT.md` (via the `CLAUDE.md → AGENT.md` symlink) that a completed user-facing feature ends by offering a changelog entry, then a blog post
+- [x] 6.1 Create `.claude/skills/write-changelog/SKILL.md` (note: `.claude/` is gitignored — local tooling, not in the branch): invokable at feature completion — offers a `type: changelog` post (short, from the shipped diff/summary), then offers to draft a `type: article` post; writes `.svx` into `web/src/posts/` in the exact frontmatter contract from task 2.2
+- [x] 6.2 Add a Finish-step to `.claude/skills/spec-driven-tdd/SKILL.md` (gitignored local tooling) (`### 4. Finish`) invoking the write-changelog skill after archive+sync
+- [x] 6.3 Add a one-line rule to `AGENT.md` (via the `CLAUDE.md → AGENT.md` symlink) that a completed user-facing feature ends by offering a changelog entry, then a blog post
 
 ## 7. Verification
 
-- [ ] 7.1 Run `npm run build`, `svelte-check`, `vitest`, and `eslint` in `web/`; manually verify `/blog` (incl. type filter), a post page, `/blog/<slug>/og.png`, `/blog/rss.xml`, and the post's presence in `sitemap-pages.xml`
+- [x] 7.1 Run `npm run build`, `svelte-check`, `vitest`, and `eslint` in `web/`; manually verify `/blog` (incl. type filter), a post page, `/blog/<slug>/og.png`, `/blog/rss.xml`, and the post's presence in `sitemap-pages.xml`
 - [ ] 7.2 Sanity-check the write-changelog skill end-to-end: invoke it, confirm it produces a valid `.svx` post the loader accepts (build stays green)
