@@ -367,9 +367,12 @@ func (q *Queries) ListCompanySitemap(ctx context.Context, arg ListCompanySitemap
 
 const refreshCompanyFacets = `-- name: RefreshCompanyFacets :execrows
 WITH oj AS (
+    -- duplicate_of IS NULL counts one canonical job per role cluster, so the company
+    -- job_count matches the collapsed /jobs and company lists (reposts share facets, so
+    -- the DISTINCT region/country aggregates are unaffected — only the count changes).
     SELECT company_slug, regions, countries, enrichment, work_mode
     FROM jobs
-    WHERE closed_at IS NULL AND company_slug <> ''
+    WHERE closed_at IS NULL AND duplicate_of IS NULL AND company_slug <> ''
 ),
 counts AS (
     SELECT company_slug, count(*) AS cnt FROM oj GROUP BY company_slug

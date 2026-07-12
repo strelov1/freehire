@@ -27,9 +27,10 @@ type Querier interface {
 	// separate reaper process is needed.
 	ClaimEnrichmentBatch(ctx context.Context, arg ClaimEnrichmentBatchParams) ([]ClaimEnrichmentBatchRow, error)
 	// Claim a batch of live, unleased entries, freshest job first, by stamping claimed_at.
-	// Unlike ClaimEnrichmentBatch this does NOT filter closed jobs out: a closed entry is
-	// the removal signal, so the worker must receive it and branch on `closed`. The jobs
-	// join supplies both the freshness order and the closed flag. Freshness is
+	// Unlike ClaimEnrichmentBatch this does NOT filter unindexable jobs out: a closed OR
+	// non-canonical (duplicate_of) entry is the removal signal, so the worker must receive
+	// it and branch on `closed` (true = remove the document). The jobs join supplies both
+	// the freshness order and that flag. Freshness is
 	// COALESCE(posted_at, created_at): jobs without a source post date fall back to ingest
 	// time so they rank by recency instead of starving under NULLS LAST. FOR UPDATE OF o
 	// locks only outbox rows (a bare FOR UPDATE would also lock jobs, making concurrent
@@ -210,8 +211,11 @@ type Querier interface {
 	//      exclude_categories (enrich.NonTechCategories) are skipped so embed budget stays
 	//      on technical roles; category is NOT NULL DEFAULT '', so an empty/unrecognized
 	//      category is never excluded (empty string <> ALL keeps the row).
-	//   2. CLOSED jobs that still carry an embed stamp (were embedded while open) — so the
-	//      worker removes their now-dead document from jobs_semantic and clears the stamp.
+	//   2. UNINDEXABLE jobs that still carry an embed stamp (were embedded while open and
+	//      canonical) — a job now closed OR a non-canonical repost (duplicate_of set) — so
+	//      the worker removes their document from jobs_semantic and clears the stamp. This
+	//      mirrors the facet index: the full reindex --semantic also drops reposts (shared
+	//      splitJobs), so the incremental path must not re-add them.
 	// ON CONFLICT keeps exactly one entry per (job_id, target_model), so running this every
 	// command invocation never duplicates work.
 	EnqueuePendingSemanticJobs(ctx context.Context, arg EnqueuePendingSemanticJobsParams) (int64, error)
@@ -381,6 +385,8 @@ type Querier interface {
 	// across re-ingests), so fresh ingests surface on top regardless of how old the
 	// platform's posted_at is. id breaks ties within one ingest batch.
 	ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, error)
+	// duplicate_of IS NULL collapses role-cluster reposts to their canonical row, matching
+	// the /jobs list so a company page shows one card per role, not every repost.
 	ListJobsByCompany(ctx context.Context, arg ListJobsByCompanyParams) ([]Job, error)
 	// Keyset scan for the reindex command: pages by the immutable primary key, so
 	// concurrent inserts/updates (which shift posted_at ordering) cannot make the

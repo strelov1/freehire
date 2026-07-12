@@ -139,14 +139,16 @@ SELECT estimate_open_jobs()::bigint;
 -- fuller coverage needs a precomputed narrow table, not a live scan.
 SELECT public_slug, updated_at
 FROM jobs
-WHERE closed_at IS NULL
+WHERE closed_at IS NULL AND duplicate_of IS NULL
 ORDER BY id DESC
 LIMIT sqlc.arg(row_limit);
 
 -- name: ListJobsByCompany :many
+-- duplicate_of IS NULL collapses role-cluster reposts to their canonical row, matching
+-- the /jobs list so a company page shows one card per role, not every repost.
 SELECT *
 FROM jobs
-WHERE company_slug = $1 AND closed_at IS NULL
+WHERE company_slug = $1 AND closed_at IS NULL AND duplicate_of IS NULL
 ORDER BY created_at DESC, id DESC
 LIMIT $2 OFFSET $3;
 

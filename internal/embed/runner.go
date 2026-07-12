@@ -18,8 +18,9 @@ import (
 	"github.com/strelov1/freehire/internal/worker"
 )
 
-// Claimed is one outbox entry leased to this run. Closed marks whether the job has
-// since closed: open jobs are embedded, closed jobs have their document removed.
+// Claimed is one outbox entry leased to this run. Closed marks whether the job is now
+// unindexable — closed OR a non-canonical repost (duplicate_of set): open canonical jobs
+// are embedded, unindexable ones have their document removed.
 type Claimed struct {
 	OutboxID int64
 	JobID    int64

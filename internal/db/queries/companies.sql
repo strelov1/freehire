@@ -196,9 +196,12 @@ ON CONFLICT (slug) DO UPDATE SET
 -- (eventual consistency). The facet aggregates are each their own non-correlated
 -- GROUP BY so the row-multiplying unnest of one array never distorts another's count.
 WITH oj AS (
+    -- duplicate_of IS NULL counts one canonical job per role cluster, so the company
+    -- job_count matches the collapsed /jobs and company lists (reposts share facets, so
+    -- the DISTINCT region/country aggregates are unaffected — only the count changes).
     SELECT company_slug, regions, countries, enrichment, work_mode
     FROM jobs
-    WHERE closed_at IS NULL AND company_slug <> ''
+    WHERE closed_at IS NULL AND duplicate_of IS NULL AND company_slug <> ''
 ),
 counts AS (
     SELECT company_slug, count(*) AS cnt FROM oj GROUP BY company_slug

@@ -439,7 +439,7 @@ func (q *Queries) ListJobIDsUpdatedAfter(ctx context.Context, arg ListJobIDsUpda
 const listJobSitemapFreshest = `-- name: ListJobSitemapFreshest :many
 SELECT public_slug, updated_at
 FROM jobs
-WHERE closed_at IS NULL
+WHERE closed_at IS NULL AND duplicate_of IS NULL
 ORDER BY id DESC
 LIMIT $1
 `
@@ -557,7 +557,7 @@ func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, erro
 const listJobsByCompany = `-- name: ListJobsByCompany :many
 SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of
 FROM jobs
-WHERE company_slug = $1 AND closed_at IS NULL
+WHERE company_slug = $1 AND closed_at IS NULL AND duplicate_of IS NULL
 ORDER BY created_at DESC, id DESC
 LIMIT $2 OFFSET $3
 `
@@ -568,6 +568,8 @@ type ListJobsByCompanyParams struct {
 	Offset      int32  `json:"offset"`
 }
 
+// duplicate_of IS NULL collapses role-cluster reposts to their canonical row, matching
+// the /jobs list so a company page shows one card per role, not every repost.
 func (q *Queries) ListJobsByCompany(ctx context.Context, arg ListJobsByCompanyParams) ([]Job, error) {
 	rows, err := q.db.Query(ctx, listJobsByCompany, arg.CompanySlug, arg.Limit, arg.Offset)
 	if err != nil {

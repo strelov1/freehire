@@ -7,27 +7,31 @@
 --      exclude_categories (enrich.NonTechCategories) are skipped so embed budget stays
 --      on technical roles; category is NOT NULL DEFAULT '', so an empty/unrecognized
 --      category is never excluded (empty string <> ALL keeps the row).
---   2. CLOSED jobs that still carry an embed stamp (were embedded while open) — so the
---      worker removes their now-dead document from jobs_semantic and clears the stamp.
+--   2. UNINDEXABLE jobs that still carry an embed stamp (were embedded while open and
+--      canonical) — a job now closed OR a non-canonical repost (duplicate_of set) — so
+--      the worker removes their document from jobs_semantic and clears the stamp. This
+--      mirrors the facet index: the full reindex --semantic also drops reposts (shared
+--      splitJobs), so the incremental path must not re-add them.
 -- ON CONFLICT keeps exactly one entry per (job_id, target_model), so running this every
 -- command invocation never duplicates work.
 INSERT INTO semantic_outbox (job_id, target_model)
 SELECT id, sqlc.arg(target_model)::text
 FROM jobs
 WHERE (
-        closed_at IS NULL
+        closed_at IS NULL AND duplicate_of IS NULL
         AND (semantic_embedded_model IS DISTINCT FROM sqlc.arg(target_model)::text
              OR semantic_embedded_hash IS DISTINCT FROM content_hash)
         AND category <> ALL(COALESCE(sqlc.arg(exclude_categories)::text[], '{}'))
       )
-   OR (closed_at IS NOT NULL AND semantic_embedded_model IS NOT NULL)
+   OR ((closed_at IS NOT NULL OR duplicate_of IS NOT NULL) AND semantic_embedded_model IS NOT NULL)
 ON CONFLICT (job_id, target_model) DO NOTHING;
 
 -- name: ClaimSemanticBatch :many
 -- Claim a batch of live, unleased entries, freshest job first, by stamping claimed_at.
--- Unlike ClaimEnrichmentBatch this does NOT filter closed jobs out: a closed entry is
--- the removal signal, so the worker must receive it and branch on `closed`. The jobs
--- join supplies both the freshness order and the closed flag. Freshness is
+-- Unlike ClaimEnrichmentBatch this does NOT filter unindexable jobs out: a closed OR
+-- non-canonical (duplicate_of) entry is the removal signal, so the worker must receive
+-- it and branch on `closed` (true = remove the document). The jobs join supplies both
+-- the freshness order and that flag. Freshness is
 -- COALESCE(posted_at, created_at): jobs without a source post date fall back to ingest
 -- time so they rank by recency instead of starving under NULLS LAST. FOR UPDATE OF o
 -- locks only outbox rows (a bare FOR UPDATE would also lock jobs, making concurrent
@@ -52,7 +56,7 @@ SET claimed_at = now()
 FROM claimable c
 JOIN jobs j ON j.id = c.job_id
 WHERE o.id = c.id
-RETURNING o.id, o.job_id, (j.closed_at IS NOT NULL)::boolean AS closed;
+RETURNING o.id, o.job_id, (j.closed_at IS NOT NULL OR j.duplicate_of IS NOT NULL)::boolean AS closed;
 
 -- name: GetJobsByIDs :many
 -- Batch-load the persisted rows the embed worker builds documents from. A corrupted
