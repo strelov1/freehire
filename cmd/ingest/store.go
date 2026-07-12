@@ -126,7 +126,10 @@ func (s *dbStore) Save(ctx context.Context, j job.Job) error {
 	// facets. The signal only covers fields UpsertJob writes: changes made by other
 	// paths (enrichment via SetJobEnrichment, collections via
 	// PropagateCollectionsToJobs) reconcile on the next batch reindex, not here.
-	if s.indexer != nil && needsIndex(saved) {
+	// A known non-canonical repost (duplicate_of set on a prior recompute) is not
+	// searchable, so it is never pushed to the live index; the reindex reconciles a
+	// freshly-ingested repost whose marker is not yet computed.
+	if s.indexer != nil && needsIndex(saved) && !saved.Job.DuplicateOf.Valid {
 		// The job-reality signal needs this role's cluster counts; a lookup failure
 		// degrades to a unique role (counts 1) rather than failing the index push.
 		repost, mass := int64(1), int64(1)

@@ -20,6 +20,7 @@ WITH claimable AS (
       AND (o.claimed_at IS NULL
            OR o.claimed_at < now() - make_interval(secs => $1::int))
       AND j.closed_at IS NULL
+      AND j.duplicate_of IS NULL
     ORDER BY COALESCE(j.posted_at, j.created_at) DESC, j.id DESC
     FOR UPDATE OF o SKIP LOCKED
     LIMIT $2
@@ -87,6 +88,7 @@ INSERT INTO enrichment_outbox (job_id, target_version)
 SELECT id, $1::int
 FROM jobs
 WHERE closed_at IS NULL
+  AND duplicate_of IS NULL
   AND (enriched_at IS NULL OR enrichment_version < $1::int)
   AND category <> ALL(COALESCE($2::text[], '{}'))
 ON CONFLICT (job_id, target_version) DO NOTHING

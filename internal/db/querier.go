@@ -488,6 +488,14 @@ type Querier interface {
 	// (AT TIME ZONE 'UTC') so buckets are stable regardless of session timezone. The
 	// FULL OUTER JOIN yields one row per day that saw either an add or a removal.
 	RebuildJobDailyStats(ctx context.Context) (int64, error)
+	// Collapse each role cluster to one canonical open job. For every OPEN, fingerprinted
+	// job, the canon is the min(id) among its (company_slug, role_fingerprint) cluster's
+	// open rows; the canon and any singleton/empty-fingerprint row get duplicate_of NULL,
+	// the other reposts point to the canon. Rows are never deleted, so the reality counts
+	// (which count the rows) are untouched. The IS DISTINCT FROM guard makes re-runs cheap
+	// and idempotent, and a closed canon fails over to the next min(id) on the next run.
+	// Closed rows are left as-is (excluded by closed_at everywhere the marker is read).
+	RecomputeRoleDuplicates(ctx context.Context) (int64, error)
 	// Count a failed crawl: bump consecutive_failures, record the error, stamp the run,
 	// and RETURN the new failure count so the caller can compute the cooldown (the backoff
 	// policy lives in Go, not here). The cooldown itself is applied by SetBoardCooldown.

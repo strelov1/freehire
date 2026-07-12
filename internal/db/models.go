@@ -114,6 +114,7 @@ type Job struct {
 	RoleFingerprint       pgtype.Text        `json:"role_fingerprint"`
 	SemanticEmbeddedModel pgtype.Text        `json:"semantic_embedded_model"`
 	SemanticEmbeddedHash  pgtype.Text        `json:"semantic_embedded_hash"`
+	DuplicateOf           pgtype.Int8        `json:"duplicate_of"`
 }
 
 type JobDailyStat struct {

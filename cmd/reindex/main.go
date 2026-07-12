@@ -112,6 +112,17 @@ func run() int {
 		return 1
 	}
 
+	// Refresh the role-cluster canonical markers before reading jobs, so the collapse
+	// (splitJobs drops non-canonical reposts) reflects the current catalogue and a
+	// closed canon has failed over. Whole-table but IS DISTINCT FROM-guarded, so steady
+	// state only re-marks changed rows. Best-effort: a hiccup here must not block the
+	// reindex (which also owns settings/compaction), so it degrades to the prior markers.
+	if n, err := q.RecomputeRoleDuplicates(ctx); err != nil {
+		log.Printf("reindex: recompute role duplicates (continuing with prior markers): %v", err)
+	} else if n > 0 {
+		log.Printf("reindex: recomputed role duplicates (%d rows re-marked)", n)
+	}
+
 	// --since is a delta into the LIVE index in place: a partial set cannot be
 	// swapped in wholesale (it would drop everything else). A full pass instead
 	// builds a fresh index and atomically swaps it over the live one, which keeps
@@ -387,7 +398,10 @@ func splitJobs(jobs []db.Job, lookup realityLookup, now time.Time) ([]search.Job
 	docs := make([]search.JobDocument, 0, len(jobs))
 	deleteIDs := make([]int64, 0, len(jobs))
 	for _, j := range jobs {
-		if j.ClosedAt.Valid {
+		// A closed job or a non-canonical repost (duplicate_of set) leaves the index:
+		// only the open canonical row of each role cluster is searchable. Deleting (not
+		// just skipping) removes a row that was indexed before it was closed or demoted.
+		if j.ClosedAt.Valid || j.DuplicateOf.Valid {
 			deleteIDs = append(deleteIDs, j.ID)
 			continue
 		}

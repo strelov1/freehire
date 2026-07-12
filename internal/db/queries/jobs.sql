@@ -4,7 +4,7 @@
 -- platform's posted_at is. id breaks ties within one ingest batch.
 SELECT *
 FROM jobs
-WHERE closed_at IS NULL
+WHERE closed_at IS NULL AND duplicate_of IS NULL
 ORDER BY created_at DESC, id DESC
 LIMIT $1 OFFSET $2;
 
@@ -271,6 +271,35 @@ FROM jobs
 WHERE role_fingerprint IS NOT NULL AND role_fingerprint <> ''
 GROUP BY company_slug, role_fingerprint
 HAVING COUNT(*) > 1;
+
+-- name: RecomputeRoleDuplicates :execrows
+-- Collapse each role cluster to one canonical open job. For every OPEN, fingerprinted
+-- job, the canon is the min(id) among its (company_slug, role_fingerprint) cluster's
+-- open rows; the canon and any singleton/empty-fingerprint row get duplicate_of NULL,
+-- the other reposts point to the canon. Rows are never deleted, so the reality counts
+-- (which count the rows) are untouched. The IS DISTINCT FROM guard makes re-runs cheap
+-- and idempotent, and a closed canon fails over to the next min(id) on the next run.
+-- Closed rows are left as-is (excluded by closed_at everywhere the marker is read).
+WITH canon AS (
+    SELECT company_slug, role_fingerprint, MIN(id) AS canon_id, COUNT(*) AS n
+    FROM jobs
+    WHERE closed_at IS NULL AND role_fingerprint IS NOT NULL AND role_fingerprint <> ''
+    GROUP BY company_slug, role_fingerprint
+),
+target AS (
+    SELECT j.id,
+        CASE WHEN c.n > 1 AND j.id <> c.canon_id THEN c.canon_id END AS new_dup
+    FROM jobs j
+    JOIN canon c
+      ON j.company_slug = c.company_slug AND j.role_fingerprint = c.role_fingerprint
+    WHERE j.closed_at IS NULL
+)
+UPDATE jobs j
+SET duplicate_of = t.new_dup,
+    updated_at   = now()
+FROM target t
+WHERE j.id = t.id
+  AND j.duplicate_of IS DISTINCT FROM t.new_dup;
 
 -- name: PropagateCollectionsToJobs :execrows
 -- Denormalize each company's curated-collection set onto its jobs, so the search

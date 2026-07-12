@@ -98,6 +98,25 @@ func TestSplitJobs_OpenBecomeDocsClosedBecomeDeletions(t *testing.T) {
 	}
 }
 
+// A non-canonical repost (duplicate_of set) must not be indexed, and is deleted from
+// the index so a previously-canonical row that got demoted leaves search.
+func TestSplitJobs_RepostsDeletedNotIndexed(t *testing.T) {
+	canon := db.Job{ID: 1, Title: "Canon", PublicSlug: "canon-x"}
+	repost := db.Job{ID: 2, Title: "Repost", PublicSlug: "repost-x",
+		DuplicateOf: pgtype.Int8{Int64: 1, Valid: true}}
+
+	docs, deleteIDs, err := splitJobs([]db.Job{canon, repost}, nil, time.Now())
+	if err != nil {
+		t.Fatalf("splitJobs: %v", err)
+	}
+	if len(docs) != 1 || docs[0].ID != 1 {
+		t.Fatalf("docs = %+v, want only the canon", docs)
+	}
+	if len(deleteIDs) != 1 || deleteIDs[0] != 2 {
+		t.Fatalf("deleteIDs = %v, want [2] (repost removed)", deleteIDs)
+	}
+}
+
 // fakeRebuilder records the sequence of rebuilder calls and the ids of every
 // pushed batch, so a unit test can pin the full-rebuild orchestration without a
 // real Meilisearch.
