@@ -27,5 +27,5 @@
 - [x] 3.2 Confirm the pipeline path is unchanged (no edits under `internal/pipeline/`),
   and that `reed` is exercised via the existing `HydratingSource`/`seenLookup`/`touch`
   seam.
-- [ ] 3.3 Sync the spec delta into `openspec/specs/source-ingest/spec.md` and archive the
+- [x] 3.3 Sync the spec delta into `openspec/specs/source-ingest/spec.md` and archive the
   change per the project OpenSpec workflow.

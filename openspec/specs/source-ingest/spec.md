@@ -919,6 +919,13 @@ description and the employer's `externalUrl` from it, falling back to the Reed
 listing URL (`jobUrl`) when no `externalUrl` is present. Authentication SHALL use the
 API key as HTTP Basic credentials.
 
+Because the Reed API enforces a per-hour request quota, the adapter SHALL be a
+hydrating adapter (per the "Adapters may hydrate only postings the catalogue lacks"
+requirement): it SHALL fetch a posting's detail only when that posting is not already
+ingested, and SHALL mark an already-ingested posting for a liveness refresh instead of
+re-fetching its detail. When the pipeline cannot supply a seen-set, the adapter SHALL
+fall back to fetching every unique job's detail.
+
 #### Scenario: Registered only when the key is configured
 
 - **WHEN** `REED_API_KEY` is unset
@@ -938,6 +945,18 @@ API key as HTTP Basic credentials.
 - **THEN** the emitted job's URL is that `externalUrl`, not the Reed listing URL
 - **AND WHEN** the detail has no `externalUrl`
 - **THEN** the emitted job's URL falls back to the Reed listing URL
+
+#### Scenario: Detail is fetched only for postings not already ingested
+
+- **WHEN** the pipeline supplies a seen-set and a unioned Reed job id is already ingested
+- **THEN** the adapter marks that posting for a liveness refresh and issues NO detail request
+- **AND WHEN** a unioned Reed job id is not in the seen-set
+- **THEN** the adapter fetches that job's detail and emits the hydrated posting
+
+#### Scenario: Falls back to hydrating every posting without a seen-set
+
+- **WHEN** the pipeline cannot supply a seen-set (e.g. a non-DB caller)
+- **THEN** the adapter fetches every unique job's detail, as before
 
 ### Requirement: getmatch is a registered boardless aggregator provider
 
