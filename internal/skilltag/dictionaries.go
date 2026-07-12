@@ -558,6 +558,34 @@ var wordAliases = map[string]string{
 	"airtable":       "airtable",
 	"ajax":           "ajax",
 	"wcag":           "wcag",
+
+	// LLM-mined batch 3 — broad tech CONCEPTS (jobs.enrichment->skills, freq >= 1500).
+	// A deliberate widening past the "distinctive product token" rule to the high-signal
+	// generic concepts the discovery signal surfaced most. Tokens with a clear non-tech
+	// collision are still withheld (security↔guard, testing↔drug/QC, architecture↔building,
+	// monitoring/storage/logging, http-in-URLs, "workday"↔"a work day") — the
+	// never-corrupt-a-facet invariant outranks recall.
+	"ai":               "ai",
+	"automation":       "automation",
+	"crm":              "crm",
+	"erp":              "erp",
+	"saas":             "saas",
+	"fintech":          "fintech",
+	"ecommerce":        "ecommerce",
+	"api":              "api",
+	"apis":             "api",
+	"cloud":            "cloud",
+	"networking":       "networking",
+	"analytics":        "analytics",
+	"statistics":       "statistics",
+	"authentication":   "authentication",
+	"containerization": "containerization",
+	"containerisation": "containerization",
+	"seo":              "seo",
+	"sdlc":             "sdlc",
+	"elt":              "elt",
+	"maven":            "maven",
+	"genai":            "generative-ai",
 }
 
 // phraseAlias is a punctuated or multi-word term matched against the normalized
@@ -744,6 +772,11 @@ var phraseAliases = []phraseAlias{
 	{"unreal engine", "unreal-engine"},
 	{"hyper-v", "hyper-v"}, {"hyper v", "hyper-v"},
 	{"sd-wan", "sd-wan"},
+	// LLM-mined batch 3 — multi-word broad concepts (see the wordAliases batch 3 note).
+	{"data analytics", "data-analytics"},
+	{"data governance", "data-governance"},
+	{"data quality", "data-quality"},
+	{"e commerce", "ecommerce"},
 }
 
 // sharedAcronyms resolve in ALL text (jobs and résumés). They are matched by their
