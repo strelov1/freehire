@@ -34,10 +34,10 @@
 
 ## 8. Ops prerequisites (`../freehire-ops`, deploy-time)
 
-- [ ] 8.1 Add SES sending identity + DKIM for `freehire.dev` (or a `mail.` subdomain) in terraform; publish the DNS records in the zone.
-- [ ] 8.2 Add an IAM principal with `ses:SendEmail`/`ses:SendRawEmail` scoped to the From address; provision its credentials into the `notify` worker env.
-- [ ] 8.3 Request SES production access (out of sandbox). Document that the email channel stays config-disabled until this lands.
+- [x] 8.1 Add SES sending identity + DKIM for `freehire.dev` (or a `mail.` subdomain) in terraform; publish the DNS records in the zone.
+- [x] 8.2 Add an IAM principal with `ses:SendEmail`/`ses:SendRawEmail` scoped to the From address; provision its credentials into the `notify` worker env.
+- [x] 8.3 Request SES production access (out of sandbox). Document that the email channel stays config-disabled until this lands.
 
 ## 9. Verify
 
-- [ ] 9.1 `go build ./... && go vet ./... && go test ./...` green; run the `notify` worker locally with email unset (Telegram path unaffected) and with a fake/SES-configured path to confirm dispatch. Confirm `.env.example` documents the new knobs.
+- [x] 9.1 `go build ./... && go vet ./... && go test ./...` green; run the `notify` worker locally with email unset (Telegram path unaffected) and with a fake/SES-configured path to confirm dispatch. Confirm `.env.example` documents the new knobs.

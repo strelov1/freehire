@@ -89,6 +89,41 @@ func TestSubscriptionCreate(t *testing.T) {
 	})
 }
 
+func TestGetSubscriptionForDelivery_ResolvesAccountEmail(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	truncateSubs(t, pool)
+	uid := insertUser(t, pool, "digest@example.test")
+	ssID := insertSavedSearch(t, pool, uid, "Go remote", "q=go")
+	sub, err := q.CreateSubscription(ctx, CreateSubscriptionParams{
+		Channel: "email", SavedSearchID: ssID, UserID: uid,
+	})
+	if err != nil {
+		t.Fatalf("create email subscription: %v", err)
+	}
+
+	info, err := q.GetSubscriptionForDelivery(ctx, sub.ID)
+	if err != nil {
+		t.Fatalf("GetSubscriptionForDelivery: %v", err)
+	}
+	// The email channel's live recipient is the user's account email, joined from
+	// users; with no telegram link the chat id is absent.
+	if info.Channel != "email" {
+		t.Errorf("channel = %q, want email", info.Channel)
+	}
+	if info.AccountEmail != "digest@example.test" {
+		t.Errorf("account_email = %q, want digest@example.test", info.AccountEmail)
+	}
+	if info.TelegramChatID.Valid {
+		t.Errorf("telegram_chat_id = %v, want absent (no link)", info.TelegramChatID)
+	}
+	if info.SavedSearchName != "Go remote" {
+		t.Errorf("saved_search_name = %q, want Go remote", info.SavedSearchName)
+	}
+}
+
 func TestSubscriptionMatchLedger(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
