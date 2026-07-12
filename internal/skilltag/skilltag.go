@@ -134,35 +134,55 @@ func WithResumeAcronyms() Option {
 // that union into a set: a case-preserving acronym pass over the HTML-stripped
 // original-case text (shared tier always, résumé tier when opted in), then a phrase
 // pass (separator-insensitive) and a word pass over the lowercased, normalized text.
+//
+// Matches split into two tiers. A "strong" match is any acronym, any phrase, or an
+// unambiguous word alias; it always tags. A "weak" match is a word alias listed in
+// ambiguousWords (react/swift/spring/networking/…) — an English word that doubles
+// as a tech name — and it tags ONLY when the text also carries at least one strong
+// match (corroboration). So "must react to changes" on a non-tech post drops react,
+// while "React and TypeScript" keeps it. Unambiguous forms (reactjs, "react native",
+// "spring boot") stay strong, so a genuinely-named stack never needs corroboration.
 func Parse(text string, opts ...Option) []string {
 	var o options
 	for _, fn := range opts {
 		fn(&o)
 	}
-	set := map[string]struct{}{}
+	strong := map[string]struct{}{}
+	weak := map[string]struct{}{}
 
 	// Acronym pass: case-sensitive whole-word match over case-preserved text, so an
 	// UPPERCASE acronym resolves while its ambiguous lowercase form does not. Uses a
 	// Unicode word boundary because the text is not lowercased here (ASCIIBoundary's
 	// word test is lowercase-only and would misjudge uppercase neighbours).
 	cased := htmlTagRE.ReplaceAllString(text, " ")
-	matchAcronyms(cased, sharedAcronyms, set)
+	matchAcronyms(cased, sharedAcronyms, strong)
 	if o.resumeAcronyms {
-		matchAcronyms(cased, resumeAcronyms, set)
+		matchAcronyms(cased, resumeAcronyms, strong)
 	}
 
 	norm := normalize(text)
 	for _, m := range phraseMatchers {
 		if m.matches(norm) {
-			set[m.canonical] = struct{}{}
+			strong[m.canonical] = struct{}{}
 		}
 	}
 	for _, tok := range wordTokens(norm) {
 		if c, ok := wordAliases[tok]; ok {
-			set[c] = struct{}{}
+			if ambiguousWords[tok] {
+				weak[c] = struct{}{}
+			} else {
+				strong[c] = struct{}{}
+			}
 		}
 	}
-	return stringset.Sorted(set)
+	// A weak (ambiguous-word) match survives only when corroborated by a strong tech
+	// token in the same text; alone it is English-word noise and is dropped.
+	if len(strong) > 0 {
+		for c := range weak {
+			strong[c] = struct{}{}
+		}
+	}
+	return stringset.Sorted(strong)
 }
 
 // matchAcronyms adds the canonical of each acronym whose exact surface form occurs

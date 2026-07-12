@@ -473,3 +473,76 @@ func TestParse_ExpansionBatch3(t *testing.T) {
 		})
 	}
 }
+
+// Ambiguous English words that double as tech names (react/swift/rust/spring/…)
+// must only tag when the same text carries an unambiguous tech token
+// (corroboration). This kills the dominant false-positive class — a non-tech post
+// that merely says "must react to changes" or "strong networking skills" — while a
+// real posting that also names its stack keeps the tag. Unambiguous alias forms
+// (reactjs, "react native", "spring boot") always tag, no corroboration needed.
+func TestParse_AmbiguousCorroboration(t *testing.T) {
+	contains := func(hay []string, needle string) bool {
+		for _, h := range hay {
+			if h == needle {
+				return true
+			}
+		}
+		return false
+	}
+	cases := []struct {
+		name   string
+		in     string
+		want   []string
+		absent []string
+	}{
+		// bare ambiguous word, NO unambiguous tech token → dropped
+		{"react verb (cook)", "Must be able to react to changes in schedules.", nil, []string{"react"}},
+		{"networking soft skill", "Strong networking and negotiation skills.", nil, []string{"networking"}},
+		{"spring season", "Spring and summer seasonal cleaning crew.", nil, []string{"spring"}},
+		{"rust corrosion", "Inspect the railings for rust and repaint.", nil, []string{"rust"}},
+		{"swift adjective", "We need a swift and friendly barista.", nil, []string{"swift"}},
+		{"ruby name", "Report directly to Ruby, the floor manager.", nil, []string{"ruby"}},
+		{"cloud weather", "Outdoor role, rain or cloud, year round.", nil, []string{"cloud"}},
+		// broad concepts alone (non-tech context) → dropped
+		{"ai marketing", "AI-powered marketing automation for our sales team.", nil, []string{"ai", "automation"}},
+		{"crm sales role", "Manage our CRM as an account executive.", nil, []string{"crm"}},
+		{"broad concepts don't self-corroborate", "AI, automation and analytics for retail.", nil, []string{"ai", "automation", "analytics"}},
+		// broad concept + concrete tech → kept
+		{"ai + pytorch", "AI models with PyTorch and Python.", []string{"ai", "pytorch", "python"}, nil},
+		// corroborated by an unambiguous tech token → kept
+		{"react + typescript", "React and TypeScript for our UI.", []string{"react", "typescript"}, nil},
+		{"networking + linux", "Networking with Linux, BGP and firewalls.", []string{"networking", "linux", "bgp"}, nil},
+		{"swift + ios", "Swift developer building for iOS.", []string{"swift", "ios"}, nil},
+		{"cloud + aws", "Cloud infrastructure on AWS and Kubernetes.", []string{"cloud", "aws", "kubernetes"}, nil},
+		// unambiguous alias forms tag WITHOUT corroboration
+		{"reactjs standalone", "We build with reactjs.", []string{"react"}, nil},
+		{"react native phrase", "React Native mobile apps.", []string{"react-native", "react"}, nil},
+		{"spring boot phrase", "Spring Boot services.", []string{"spring"}, nil},
+		{"ruby on rails phrase", "A Ruby on Rails shop.", []string{"ruby", "rails"}, nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := Parse(c.in)
+			for _, w := range c.want {
+				if !contains(got, w) {
+					t.Errorf("Parse(%q) = %v, missing %q", c.in, got, w)
+				}
+			}
+			for _, a := range c.absent {
+				if contains(got, a) {
+					t.Errorf("Parse(%q) = %v, must NOT contain %q", c.in, got, a)
+				}
+			}
+		})
+	}
+}
+
+// Every ambiguousWords key must be a real wordAliases entry — an ambiguous marker
+// on a token the word pass never emits would be dead config.
+func TestAmbiguousWordsSubsetOfAliases(t *testing.T) {
+	for w := range ambiguousWords {
+		if _, ok := wordAliases[w]; !ok {
+			t.Errorf("ambiguousWords[%q] has no wordAliases entry", w)
+		}
+	}
+}

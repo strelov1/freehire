@@ -586,6 +586,64 @@ var wordAliases = map[string]string{
 	"elt":              "elt",
 	"maven":            "maven",
 	"genai":            "generative-ai",
+	"expressjs":        "express",
+}
+
+// ambiguousWords marks the wordAliases keys whose word-pass match is "weak": Parse
+// tags it ONLY when the same text carries at least one strong tech token
+// (corroboration). Two groups qualify:
+//
+//   - English-word collisions — a common word that doubles as a tech name
+//     (react/swift/spring/rust/ruby/…). Alone it is noise: a cook's "must react to
+//     changes", a maintenance post's "inspect for rust".
+//   - Broad concepts — the batch-3 generic tags (ai/automation/cloud/api/crm/erp/
+//     saas/analytics/seo/networking/…). They appear on non-tech posts too ("AI-powered
+//     marketing", a salesperson's "CRM experience", "strong networking skills"), so
+//     they are too low-precision to stand alone AND too low-precision to corroborate
+//     one another — only a concrete named technology (python, kubernetes, typescript,
+//     a phrase, an acronym) is a trustworthy corroborator.
+//
+// The unambiguous alias forms of the collision canonicals stay strong (reactjs,
+// "react native", "spring boot", expressjs, "ruby on rails"), so a genuinely-named
+// stack is never gated. Membership is per-alias, not per-canonical; value is unused.
+var ambiguousWords = map[string]bool{
+	// English-word collisions
+	"react":   true,
+	"swift":   true,
+	"rust":    true,
+	"spring":  true,
+	"express": true,
+	"ruby":    true,
+	"dart":    true,
+	"gin":     true,
+	"fiber":   true,
+	"ember":   true,
+	"elixir":  true,
+	"rails":   true,
+	"groovy":  true,
+	"gorilla": true,
+	"koa":     true,
+	"remix":   true,
+	"astro":   true,
+	"shell":   true,
+	"apex":    true,
+	"julia":   true,
+	"maven":   true,
+	// broad concepts (batch 3) — tag only in a concrete tech context
+	"ai":         true,
+	"automation": true,
+	"crm":        true,
+	"erp":        true,
+	"saas":       true,
+	"analytics":  true,
+	"api":        true,
+	"apis":       true,
+	"cloud":      true,
+	"networking": true,
+	"statistics": true,
+	"seo":        true,
+	"ecommerce":  true,
+	"fintech":    true,
 }
 
 // phraseAlias is a punctuated or multi-word term matched against the normalized
@@ -640,7 +698,11 @@ var phraseAliases = []phraseAlias{
 	{"retrieval augmented generation", "rag"},
 	// LLM-mined multi-word gaps (jobs.enrichment->skills). Multi-word or ambiguous
 	// terms routed as phrases so the bare token can't misfire on non-tech jobs.
-	// ("spring boot" needs no entry — the "spring" word alias already tags it.)
+	// Unambiguous names for the frameworks whose bare word is now corroboration-gated
+	// (see ambiguousWords) — these strong forms tag without needing a co-token.
+	{"spring boot", "spring"}, {"spring framework", "spring"}, {"spring mvc", "spring"},
+	{"ruby on rails", "ruby"}, {"ruby on rails", "rails"},
+	{"express.js", "express"},
 	{"azure devops", "azure-devops"},
 	{"power apps", "powerapps"}, {"powerapps", "powerapps"},
 	{"power automate", "power-automate"},
