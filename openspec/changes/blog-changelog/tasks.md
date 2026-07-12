@@ -33,4 +33,4 @@
 ## 7. Verification
 
 - [x] 7.1 Run `npm run build`, `svelte-check`, `vitest`, and `eslint` in `web/`; manually verify `/blog` (incl. type filter), a post page, `/blog/<slug>/og.png`, `/blog/rss.xml`, and the post's presence in `sitemap-pages.xml`
-- [ ] 7.2 Sanity-check the write-changelog skill end-to-end: invoke it, confirm it produces a valid `.svx` post the loader accepts (build stays green)
+- [x] 7.2 Sanity-check the write-changelog skill end-to-end: invoke it, confirm it produces a valid `.svx` post the loader accepts (build stays green)
