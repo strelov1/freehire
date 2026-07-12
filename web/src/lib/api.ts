@@ -65,6 +65,15 @@ export interface SitemapEntry {
   updated_at: string;
 }
 
+/** One posting in a role cluster — a single city's opening under a collapsed role
+ *  (see the /jobs/:slug/copies endpoint). Each keeps its own location and apply URL. */
+export interface JobCopy {
+  public_slug: string;
+  location: string;
+  apply_url: string;
+  posted_at: string | null;
+}
+
 /** A non-2xx API response. Carries the HTTP status so callers can branch on it
  *  (e.g. 401 invalid credentials, 409 email taken) instead of parsing strings.
  *  `message` is the backend's `{ "error": msg }` text when present, so logs and
@@ -160,6 +169,12 @@ export function createApi(
    *  renders them; the source job is excluded by the backend. */
   async function getSimilarJobs(slug: string): Promise<Job[]> {
     return requestData<Job[]>(`/api/v1/jobs/${slug}/similar`);
+  }
+
+  /** The open postings sharing this job's role cluster — the "openings across cities"
+   *  list under a collapsed role. Each copy keeps its own location and apply URL. */
+  async function getJobCopies(slug: string): Promise<JobCopy[]> {
+    return requestData<JobCopy[]>(`/api/v1/jobs/${slug}/copies`);
   }
 
   /** How well the job addressed by `slug` is covered by the caller's profile skills:
@@ -697,6 +712,7 @@ export function createApi(
     listJobs,
     getJob,
     getSimilarJobs,
+    getJobCopies,
     getJobMatch,
     getJobFit,
     runJobFit,
