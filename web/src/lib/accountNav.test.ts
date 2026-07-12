@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { accountNav, isSectionActive } from './accountNav';
 
 describe('accountNav config', () => {
-  it('lists the six account sections', () => {
-    expect(accountNav).toHaveLength(6);
+  it('lists the seven account sections', () => {
+    expect(accountNav).toHaveLength(7);
   });
 
   it('places Activity directly after Tracking', () => {

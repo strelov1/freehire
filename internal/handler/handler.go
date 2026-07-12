@@ -16,6 +16,7 @@ import (
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/gmailsync"
 	"github.com/strelov1/freehire/internal/jobfit"
 	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/llm"
@@ -28,6 +29,7 @@ import (
 	"github.com/strelov1/freehire/internal/submission"
 	"github.com/strelov1/freehire/internal/subscription"
 	"github.com/strelov1/freehire/internal/telegramnotify"
+	"github.com/strelov1/freehire/internal/tokencrypt"
 	"github.com/strelov1/freehire/internal/userprofile"
 )
 
@@ -61,6 +63,11 @@ type API struct {
 	oauth map[string]oauth.Provider
 	// frontendOrigin is where OAuth callbacks send the browser back to.
 	frontendOrigin string
+	// gmailConnector + gmailCipher back the "Connect Gmail" inbox. Both nil when
+	// the feature is unconfigured (Google creds / token key absent) — the connect
+	// routes are then not registered and the inbox reads empty.
+	gmailConnector *gmailsync.Connector
+	gmailCipher    *tokencrypt.Cipher
 	// search is the job-search backend. Nil when Meilisearch is unconfigured —
 	// the search endpoint then reports 503 and the rest of the API is unaffected.
 	search searcher
@@ -172,6 +179,10 @@ type Config struct {
 	TelegramBotToken      string
 	TelegramBotUsername   string
 	TelegramWebhookSecret string
+	// GmailConnector + GmailCipher enable the Connect-Gmail inbox. Both nil = the
+	// feature is off (connect routes unregistered, inbox empty).
+	GmailConnector *gmailsync.Connector
+	GmailCipher    *tokencrypt.Cipher
 }
 
 // Register wires all routes onto the application from cfg. Auth is same-origin
@@ -189,6 +200,8 @@ func Register(app *fiber.App, cfg Config) {
 		cookieDomain:   cfg.CookieDomain,
 		oauth:          cfg.OAuthProviders,
 		frontendOrigin: cfg.FrontendOrigin,
+		gmailConnector: cfg.GmailConnector,
+		gmailCipher:    cfg.GmailCipher,
 		tracking:       jobtracking.New(jobtracking.NewQueriesRepository(queries)),
 		accounts:       accounts.New(accounts.NewQueriesRepository(queries, cfg.Pool), authHasher{}),
 		moderation:     moderation.New(moderation.NewQueriesRepository(queries, cfg.Pool, enrich.Version)),
@@ -348,6 +361,21 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/me/profile", saved, a.GetProfile)
 	api.Put("/me/profile", saved, a.PutProfile)
 	api.Delete("/me/profile", saved, a.DeleteProfile)
+
+	// Connect-Gmail inbox. The read + disconnect routes are always available
+	// (empty/no-op when not connected); the OAuth connect routes only when the
+	// feature is configured (Google creds + token key present). Cookie-only, as
+	// they are browser OAuth flows.
+	api.Get("/me/gmail", saved, a.GmailStatus)
+	api.Delete("/me/gmail", saved, a.GmailDisconnect)
+	api.Get("/me/inbox", saved, a.GetInbox)
+	api.Get("/me/inbox/group", saved, a.GetInboxGroup)
+	api.Get("/me/emails/:id", saved, a.GetEmail)
+	if a.gmailReady() {
+		api.Get("/me/gmail/connect", saved, a.GmailConnect)
+		api.Get("/me/gmail/callback", saved, a.GmailCallback)
+		api.Post("/me/gmail/sync", saved, a.SyncGmail)
+	}
 	// The résumé verdict is a profile sub-resource: GET computes the live
 	// market-coverage verdict from the profile's skills against the selected role.
 	// Cookie-only and session-scoped, like the profile it hangs off (no profile → 404).

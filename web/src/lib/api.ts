@@ -118,6 +118,46 @@ function toSlice<T>(page: Page<T>, offset: number): Slice<T> {
  *  - SvelteKit server `load`: pass `event.fetch` and the internal API origin
  *    (`serverApi`), because a server-side relative `/api` would hit the Node app
  *    itself, not nginx→Go. `baseUrl` resolves that to a real server-to-server call. */
+// --- Gmail inbox wire shapes ---------------------------------------------
+
+export interface GmailStatus {
+  connected: boolean;
+  available?: boolean; // whether the connect flow is configured server-side
+  email?: string;
+  status?: string;
+}
+
+/** One subject-grouped bucket in the inbox. */
+export interface InboxGroup {
+  key: string;
+  subject: string;
+  message_count: number;
+  latest_received: string;
+  senders: string[];
+}
+
+/** A message row within a group. */
+export interface InboxMessage {
+  id: number;
+  gmail_msg_id: string;
+  from_addr: string;
+  from_name: string;
+  subject: string;
+  received_at: string;
+}
+
+/** One message in full, for the reading pane. */
+export interface EmailBody {
+  id: number;
+  gmail_msg_id: string;
+  from_addr: string;
+  from_name: string;
+  subject: string;
+  body_text: string;
+  body_html: string;
+  received_at: string;
+}
+
 export function createApi(
   fetchImpl: typeof fetch = fetch,
   baseUrl = '',
@@ -720,6 +760,45 @@ export function createApi(
     return requestData<Report>(`/api/v1/reports/${id}/dismiss`, jsonBody('POST', { reason: reason ?? '' }));
   }
 
+  // --- Gmail inbox ---------------------------------------------------------
+
+  /** Whether the caller has connected Gmail for the ATS inbox. */
+  async function gmailStatus(): Promise<GmailStatus> {
+    return requestData<GmailStatus>('/api/v1/me/gmail');
+  }
+
+  /** Disconnect Gmail: revoke the grant and purge synced mail. */
+  async function disconnectGmail(): Promise<void> {
+    await requestData<unknown>('/api/v1/me/gmail', { method: 'DELETE' });
+  }
+
+  /** Trigger an on-demand sync of the caller's ATS mail (runs in the background). */
+  async function syncGmail(): Promise<void> {
+    await requestData<unknown>('/api/v1/me/gmail/sync', { method: 'POST' });
+  }
+
+  /** A page of the ATS inbox grouped by normalized subject, newest group first,
+   *  with the total group count. An optional search term filters by message
+   *  subject, sender, or body. */
+  async function getInbox(q = '', limit = 20, offset = 0): Promise<{ groups: InboxGroup[]; total: number }> {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (q) params.set('q', q);
+    const res = await request<{ data: InboxGroup[]; meta: { total: number } }>(
+      `/api/v1/me/inbox?${params.toString()}`,
+    );
+    return { groups: res.data, total: res.meta.total };
+  }
+
+  /** One subject group's messages, newest first. */
+  async function getInboxGroup(key: string): Promise<InboxMessage[]> {
+    return requestData<InboxMessage[]>(`/api/v1/me/inbox/group?key=${encodeURIComponent(key)}`);
+  }
+
+  /** One message's full body. */
+  async function getEmail(id: number): Promise<EmailBody> {
+    return requestData<EmailBody>(`/api/v1/me/emails/${id}`);
+  }
+
   return {
     listJobs,
     getJob,
@@ -791,6 +870,12 @@ export function createApi(
     listPendingReports,
     resolveReport,
     dismissReport,
+    gmailStatus,
+    disconnectGmail,
+    syncGmail,
+    getInbox,
+    getInboxGroup,
+    getEmail,
   };
 }
 

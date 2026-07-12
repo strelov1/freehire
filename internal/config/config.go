@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"os"
 	"strconv"
 	"strings"
@@ -35,6 +36,11 @@ type Settings struct {
 	// incomplete credentials is simply disabled (enforced where the provider
 	// registry is built, not here), and the server starts either way.
 	OAuth map[string]OAuthCredentials
+
+	// GmailTokenKey is the 32-byte AES key (from GMAIL_TOKEN_KEY, base64) that
+	// encrypts stored Gmail refresh tokens. Empty/invalid = the Connect-Gmail
+	// inbox feature is disabled (like an unset optional integration).
+	GmailTokenKey []byte
 
 	// Meilisearch backs the job search endpoint and the reindex command. Shared
 	// via Load (both cmd/server and cmd/reindex read it). Search is optional:
@@ -114,6 +120,7 @@ func Load() Settings {
 		CookieSecure:   envBool("COOKIE_SECURE", false),
 		CookieDomain:   os.Getenv("COOKIE_DOMAIN"),
 		OAuth:          loadOAuth(),
+		GmailTokenKey:  decodeKey(os.Getenv("GMAIL_TOKEN_KEY")),
 		MeiliURL:       env("MEILI_URL", "http://localhost:7700"),
 		MeiliKey:       os.Getenv("MEILI_MASTER_KEY"),
 
@@ -140,6 +147,19 @@ func Load() Settings {
 		AWSRegion:       os.Getenv("AWS_REGION"),
 		NotifyEmailFrom: os.Getenv("NOTIFY_EMAIL_FROM"),
 	}
+}
+
+// decodeKey base64-decodes an AES key, returning nil unless it is exactly 32
+// bytes so a missing or malformed key simply disables the feature.
+func decodeKey(s string) []byte {
+	if s == "" {
+		return nil
+	}
+	b, err := base64.StdEncoding.DecodeString(s)
+	if err != nil || len(b) != 32 {
+		return nil
+	}
+	return b
 }
 
 func loadOAuth() map[string]OAuthCredentials {

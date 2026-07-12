@@ -118,6 +118,9 @@ type Querier interface {
 	// so search/filter pagination reports the filtered total. Keep this WHERE identical
 	// to ListCompanies.
 	CountCompanies(ctx context.Context, arg CountCompaniesParams) (int64, error)
+	// Total distinct subject groups for the caller (with the same optional search),
+	// so the inbox knows whether more pages remain.
+	CountInboxGroups(ctx context.Context, arg CountInboxGroupsParams) (int64, error)
 	// Per-stage application counts for the Pipeline snapshot. An application is any
 	// row the user applied to or staged (saved-only rows are excluded); a row with
 	// applied_at set but no stage groups under a NULL stage. The Go layer folds these
@@ -175,6 +178,7 @@ type Querier interface {
 	// stale.
 	DeleteAllJobDailyStats(ctx context.Context) error
 	DeleteEnrichmentEntry(ctx context.Context, id int64) error
+	DeleteGmailConnection(ctx context.Context, userID int64) error
 	// Drop companies no longer referenced by any job — the stale rows left behind
 	// when a slug-builder change re-keys jobs onto new slugs. Reference rows imported
 	// by the company-info backfill are preserved: they intentionally have no job, so
@@ -191,6 +195,7 @@ type Querier interface {
 	DeleteSubscription(ctx context.Context, arg DeleteSubscriptionParams) (int64, error)
 	// Unlink Telegram. Returns the affected row count: 0 means there was no link.
 	DeleteTelegramLink(ctx context.Context, userID int64) (int64, error)
+	DeleteUserEmails(ctx context.Context, userID int64) error
 	// Remove the caller's profile. Returns the affected row count (0 when none existed); the
 	// handler treats delete as idempotent (204 either way).
 	DeleteUserProfile(ctx context.Context, userID int64) (int64, error)
@@ -259,6 +264,9 @@ type Querier interface {
 	// the table grows columns (e.g. collections); an explicit subset makes sqlc emit a
 	// distinct row type and breaks the company-detail handler on every new column.
 	GetCompany(ctx context.Context, slug string) (Company, error)
+	GetEmail(ctx context.Context, arg GetEmailParams) (GetEmailRow, error)
+	GetGmailConnection(ctx context.Context, userID int64) (GetGmailConnectionRow, error)
+	GetGmailRefreshToken(ctx context.Context, userID int64) (GetGmailRefreshTokenRow, error)
 	GetJob(ctx context.Context, id int64) (Job, error)
 	GetJobBySlug(ctx context.Context, publicSlug string) (Job, error)
 	// Load a job by its dedup identity (source, external_id) — the key the Job
@@ -372,6 +380,14 @@ type Querier interface {
 	// Slim keyset page of companies for the sitemap, cursored by the slug primary key
 	// (first chunk keyed by the empty string, which sorts before every slug).
 	ListCompanySitemap(ctx context.Context, arg ListCompanySitemapParams) ([]ListCompanySitemapRow, error)
+	// Drives the sync worker: every connection still authorized.
+	ListConnectedGmailUsers(ctx context.Context) ([]ListConnectedGmailUsersRow, error)
+	ListEmailsByGroup(ctx context.Context, arg ListEmailsByGroupParams) ([]ListEmailsByGroupRow, error)
+	// One row per normalized subject: count, newest receipt, distinct sender names,
+	// and the newest message's original subject for display. An optional search term
+	// (empty = no filter) matches a message's subject, sender, or body — a group
+	// surfaces when any of its messages matches.
+	ListInboxGroups(ctx context.Context, arg ListInboxGroupsParams) ([]ListInboxGroupsRow, error)
 	// Dense activity series over [from, to] at the given granularity. A daily
 	// generate_series builds the gap-free calendar; the LEFT JOIN fills each day's
 	// counts (missing days → 0), and date_trunc(unit, ...) rolls those days up to the
@@ -611,6 +627,8 @@ type Querier interface {
 	// (preserving unmanaged tags) and writes it here; updated_at is bumped for parity
 	// with the other write paths.
 	SetCompanyCollections(ctx context.Context, arg SetCompanyCollectionsParams) error
+	SetGmailStatus(ctx context.Context, arg SetGmailStatusParams) error
+	SetGmailSynced(ctx context.Context, arg SetGmailSyncedParams) error
 	// Targeted enrichment write used by the enrichment command: set only the payload
 	// and the provenance stamp, touching no raw source field. Kept separate from
 	// UpsertJob (the ingest full-upsert path) so ingest and enrichment stay decoupled.
@@ -746,6 +764,11 @@ type Querier interface {
 	// name, job_count, collections, is_reference, and the job-derived facet arrays are
 	// left untouched. Idempotent: re-running the same record rewrites the same values.
 	UpsertCompanyInfo(ctx context.Context, arg UpsertCompanyInfoParams) error
+	// Idempotent by (user_id, gmail_msg_id): a re-sync of the same message is a no-op.
+	UpsertEmail(ctx context.Context, arg UpsertEmailParams) error
+	// Connect (or reconnect) a user's Gmail: store the encrypted refresh token and
+	// mark connected, preserving the sync cursor on reconnect.
+	UpsertGmailConnection(ctx context.Context, arg UpsertGmailConnectionParams) error
 	// Single atomic write: upsert the company (only when the slug is non-empty,
 	// via the WHERE on the SELECT) and the job together, keeping the "one write =
 	// one job" property of the pipeline's write path.

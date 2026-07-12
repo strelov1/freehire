@@ -2,7 +2,7 @@
   import type { Snippet } from 'svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { User, LayoutList, Activity, Bell, Key, FileText } from '@lucide/svelte';
+  import { User, LayoutList, Activity, Bell, Key, FileText, Inbox } from '@lucide/svelte';
   import type { LucideIcon } from '@lucide/svelte';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
@@ -27,6 +27,7 @@
     '/my/profile': User,
     '/my/tracking': LayoutList,
     '/my/activity': Activity,
+    '/my/inbox': Inbox,
     '/my/searches': Bell,
     '/my/api-keys': Key,
     '/my/submissions': FileText,

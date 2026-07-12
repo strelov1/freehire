@@ -16,10 +16,12 @@ import (
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/config"
 	"github.com/strelov1/freehire/internal/database"
+	"github.com/strelov1/freehire/internal/gmailsync"
 	"github.com/strelov1/freehire/internal/handler"
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/observability"
 	"github.com/strelov1/freehire/internal/search"
+	"github.com/strelov1/freehire/internal/tokencrypt"
 )
 
 func main() {
@@ -135,6 +137,10 @@ func main() {
 	// auth. Redirect URLs derive from the same-origin frontend origin.
 	oauthProviders := oauth.NewRegistry(cfg.FrontendOrigin, cfg.OAuth)
 
+	// Connect-Gmail inbox: enabled only when the Google OAuth client and the
+	// token-encryption key are configured. Both nil disables the feature.
+	gmailConnector, gmailCipher := buildGmail(cfg)
+
 	handler.Register(app, handler.Config{
 		Pool:           pool,
 		FrontendOrigin: cfg.FrontendOrigin,
@@ -143,6 +149,8 @@ func main() {
 		CookieSecure:   cfg.CookieSecure,
 		CookieDomain:   cfg.CookieDomain,
 		OAuthProviders: oauthProviders,
+		GmailConnector: gmailConnector,
+		GmailCipher:    gmailCipher,
 		Search:         searchClient,
 		Blob:           blobStore,
 		LLM:            llmClient,
@@ -169,4 +177,19 @@ func main() {
 	if err := app.ShutdownWithTimeout(10 * time.Second); err != nil {
 		log.Printf("shutdown: %v", err)
 	}
+}
+
+// buildGmail wires the Connect-Gmail inbox from config: it needs the Google OAuth
+// client (reused from sign-in) and the 32-byte token-encryption key. Any piece
+// missing returns (nil, nil) — the feature stays off and the server runs unchanged.
+func buildGmail(cfg config.Settings) (*gmailsync.Connector, *tokencrypt.Cipher) {
+	g := cfg.OAuth["google"]
+	if g.ClientID == "" || g.ClientSecret == "" || len(cfg.GmailTokenKey) != 32 {
+		return nil, nil
+	}
+	cipher, err := tokencrypt.New(cfg.GmailTokenKey)
+	if err != nil {
+		return nil, nil
+	}
+	return gmailsync.NewConnector(g.ClientID, g.ClientSecret, cfg.FrontendOrigin), cipher
 }
