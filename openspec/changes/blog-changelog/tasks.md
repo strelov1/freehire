@@ -11,18 +11,18 @@
 
 ## 3. Blog pages
 
-- [ ] 3.1 `web/src/routes/blog/+page.ts` (loads `listPosts()`) + `+page.svelte` rendering the newest-first list (title link, date, summary, type badge, tags) with a client-side All / Changelog / Articles filter, styled to match existing content pages
-- [ ] 3.2 `web/src/routes/blog/[slug]/+page.ts` loading `getPost(params.slug)` with `error(404)` on miss or prod-draft, + `+page.svelte` rendering the compiled body via `<svelte:component>` with title/date
+- [x] 3.1 `web/src/routes/blog/+page.ts` (loads `listPosts()`) + `+page.svelte` rendering the newest-first list (title link, date, summary, type badge, tags) with a client-side All / Changelog / Articles filter, styled to match existing content pages
+- [x] 3.2 `web/src/routes/blog/[slug]/+page.ts` loading `getPost(params.slug)` with `error(404)` on miss or prod-draft, + `+page.svelte` rendering the compiled body via `<svelte:component>` with title/date
 
 ## 4. SEO
 
-- [ ] 4.1 Post page `<svelte:head>`: `<title>`, meta description, Open Graph (`article`) tags, and `Article` JSON-LD from the post metadata
-- [ ] 4.2 Add `blogPaths()` to `web/src/lib/sitemap.ts` and spread `/blog` + published post URLs into `sitemap-pages.xml`'s `GET`; cover `blogPaths()` in a sitemap unit test
-- [ ] 4.3 `$lib/server/og/blog.ts` `buildBlogCard(post)` + `web/src/routes/blog/[slug]/og.png/+server.ts` rendering a 1200×630 card via `renderMarkupPng`/`loadOgFonts`; unknown/draft slug → 404
+- [x] 4.1 Post page `<svelte:head>`: `<title>`, meta description, Open Graph (`article`) tags, and `Article` JSON-LD from the post metadata
+- [x] 4.2 Add `blogPaths()` to `web/src/lib/sitemap.ts` and spread `/blog` + published post URLs into `sitemap-pages.xml`'s `GET`; cover `blogPaths()` in a sitemap unit test
+- [x] 4.3 `$lib/server/og/blog.ts` `buildBlogCard(post)` + `web/src/routes/blog/[slug]/og.png/+server.ts` rendering a 1200×630 card via `renderMarkupPng`/`loadOgFonts`; unknown/draft slug → 404
 
 ## 5. RSS
 
-- [ ] 5.1 `web/src/routes/blog/rss.xml/+server.ts`: valid RSS 2.0 from `listPosts()` (title/link/guid/pubDate/description), newest-first, drafts excluded, XML-escaped; unit-test the feed builder
+- [x] 5.1 `web/src/routes/blog/rss.xml/+server.ts`: valid RSS 2.0 from `listPosts()` (title/link/guid/pubDate/description), newest-first, drafts excluded, XML-escaped; unit-test the feed builder
 
 ## 6. Authoring discipline (skill + workflow hooks)
 

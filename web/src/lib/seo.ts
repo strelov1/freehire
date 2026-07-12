@@ -2,6 +2,7 @@
 // public wire shapes. Emitted server-side (see the route +page.svelte files) so
 // crawlers and Google Jobs see structured data in the initial HTML.
 
+import type { PostMeta } from './blog';
 import { logoDevUrl } from './logo';
 import type { Company, Enrichment, Job } from './types';
 
@@ -301,6 +302,22 @@ export function faqPageJsonLd(faqs: FaqItem[]): Record<string, unknown> {
       acceptedAnswer: { '@type': 'Answer', text: f.answer },
     })),
   };
+}
+
+/** schema.org Article for a blog post page. Built from the validated `PostMeta`,
+ *  so every field is present; `keywords` is emitted only when the post has tags. */
+export function articleJsonLd(post: PostMeta, origin: string): Record<string, unknown> {
+  const ld: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: post.title,
+    description: post.summary,
+    datePublished: post.date,
+    url: `${origin}/blog/${post.slug}`,
+    publisher: { '@type': 'Organization', name: SITE, url: `${origin}/` },
+  };
+  if (post.tags.length > 0) ld.keywords = post.tags.join(', ');
+  return ld;
 }
 
 /** Render a JSON-LD object as a ready-to-inline `<script>` string. `<` is escaped

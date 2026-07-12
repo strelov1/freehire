@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Typography plugin: the `prose` classes style the mdsvex-rendered blog post body
+   (web/src/routes/blog/[slug]). Opt-in, so no other page is affected. */
+@plugin "@tailwindcss/typography";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

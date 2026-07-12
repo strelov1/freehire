@@ -18,20 +18,18 @@ export type PostWithBody = {
 // them from every surface. A single gate keeps index/post/sitemap/rss in agreement.
 const INCLUDE_DRAFTS = import.meta.env.DEV;
 
-// Frontmatter-only glob: cheap listing that never pulls in the body components.
-const metadataModules = import.meta.glob<Record<string, unknown>>('/src/posts/*.svx', {
-  eager: true,
-  import: 'metadata',
-});
-
-// Full glob: component + metadata, for rendering a single post's body.
+// One eager glob for both the component (`default`) and its frontmatter
+// (`metadata`). A named-export glob (`{ import: 'metadata' }`) would trip Vite's
+// dev dep-scanner, which parses `.svx` without mdsvex and can't find the export;
+// reading `metadata` off the namespace is opaque to the scanner. The post count
+// is tiny, so eagerly pulling the bodies for a listing is negligible.
 const postModules = import.meta.glob<{ default: Component; metadata: Record<string, unknown> }>(
   '/src/posts/*.svx',
   { eager: true },
 );
 
 function allPosts(): PostMeta[] {
-  return Object.entries(metadataModules).map(([path, meta]) => parseFrontmatter(meta ?? {}, path));
+  return Object.entries(postModules).map(([path, mod]) => parseFrontmatter(mod.metadata ?? {}, path));
 }
 
 /** Published posts (drafts included only in dev), newest-first — for the index,

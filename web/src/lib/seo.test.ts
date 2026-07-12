@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { collectionPageJsonLd, jobPostingJsonLd, organizationJsonLd } from './seo';
+import { articleJsonLd, collectionPageJsonLd, jobPostingJsonLd, organizationJsonLd } from './seo';
 import { logoDevUrl } from './logo';
+import type { PostMeta } from './blog';
 import type { Company, Job } from './types';
 
 // collectionPageJsonLd reads only title + public_slug off each job.
@@ -212,5 +213,38 @@ describe('collectionPageJsonLd', () => {
     const ld = collectionPageJsonLd('Empty', 'Nothing yet.', URL, [], ORIGIN);
 
     expect(ld.mainEntity).toEqual({ '@type': 'ItemList', itemListElement: [] });
+  });
+});
+
+// articleJsonLd reads a validated PostMeta.
+function post(overrides: Partial<PostMeta> = {}): PostMeta {
+  return {
+    slug: 'launch',
+    title: 'Launch',
+    date: '2026-01-15',
+    summary: 'We shipped it.',
+    type: 'article',
+    tags: ['product', 'launch'],
+    draft: false,
+    ...overrides,
+  };
+}
+
+describe('articleJsonLd', () => {
+  const ORIGIN = 'https://freehire.dev';
+
+  it('builds an Article with headline, description, date, url and keywords', () => {
+    const ld = articleJsonLd(post(), ORIGIN);
+    expect(ld['@type']).toBe('Article');
+    expect(ld.headline).toBe('Launch');
+    expect(ld.description).toBe('We shipped it.');
+    expect(ld.datePublished).toBe('2026-01-15');
+    expect(ld.url).toBe('https://freehire.dev/blog/launch');
+    expect(ld.keywords).toBe('product, launch');
+  });
+
+  it('omits keywords when the post has no tags', () => {
+    const ld = articleJsonLd(post({ tags: [] }), ORIGIN);
+    expect(ld.keywords).toBeUndefined();
   });
 });
