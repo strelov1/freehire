@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Check } from '@lucide/svelte';
+  import { Check, Mail } from '@lucide/svelte';
   import { ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
@@ -72,6 +72,25 @@
   let error = $state<string | null>(null);
   // The row whose link was just copied, to flip its button label briefly.
   let copiedId = $state<number | null>(null);
+  // The row whose email alert is being toggled.
+  let emailBusyId = $state<number | null>(null);
+
+  // Toggle the email alert for an (already saved) search: subscribe on the account
+  // email, or unsubscribe if it is already on. No linking step — unlike Telegram,
+  // email delivers to the account address with no connect flow.
+  async function toggleEmail(s: SavedSearch) {
+    emailBusyId = s.id;
+    error = null;
+    try {
+      const existing = notifications.forSavedSearch(s.id, 'email');
+      if (existing) await notifications.unsubscribe(existing.id);
+      else await notifications.subscribe(s.id, 'email');
+    } catch (e) {
+      error = e instanceof ApiError ? e.message : 'Could not update the email alert. Please try again.';
+    } finally {
+      emailBusyId = null;
+    }
+  }
 
   async function load() {
     status = 'loading';
@@ -175,8 +194,8 @@
     <div class="flex flex-col gap-1">
       <h1 class="text-2xl font-semibold tracking-tight">Saved searches &amp; alerts</h1>
       <p class="text-sm text-muted-foreground">
-        Reuse a saved filter set, turn on its Telegram alert, or share it as a public board
-        anyone can open. Create new saved searches from the filters panel on the jobs page.
+        Reuse a saved filter set, turn on its Telegram or email alert, or share it as a public
+        board anyone can open. Create new saved searches from the filters panel on the jobs page.
       </p>
     </div>
 
@@ -233,6 +252,7 @@
       {:else}
         <ul class="flex flex-col divide-y divide-border rounded-lg border border-border">
         {#each items as s (s.id)}
+          {@const emailSub = notifications.forSavedSearch(s.id, 'email')}
           <li class="flex flex-col gap-2 px-4 py-3">
             <div class="flex items-start justify-between gap-3">
               <div class="flex min-w-0 flex-col gap-0.5">
@@ -265,6 +285,36 @@
                  shared control shows the alert offer / subscribed state (with turn-off). -->
             <div class="flex">
               <SaveSearchAlert query={s.query} variant="full" />
+            </div>
+
+            <!-- Per-search email alert. No linking step — email goes to the account
+                 address — so this is a plain subscribe/turn-off toggle. -->
+            <div class="flex flex-col gap-1.5">
+              {#if emailSub}
+                <p class="flex items-center gap-1.5 text-sm">
+                  <Check class="size-4 text-primary" aria-hidden="true" />
+                  <span>You’ll get new jobs by email</span>
+                </p>
+                <button
+                  type="button"
+                  onclick={() => toggleEmail(s)}
+                  disabled={emailBusyId === s.id}
+                  class="self-start text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                >
+                  Turn off
+                </button>
+              {:else}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onclick={() => toggleEmail(s)}
+                  disabled={emailBusyId === s.id}
+                  class="justify-center gap-1.5 self-start"
+                >
+                  <Mail class="size-4" aria-hidden="true" />
+                  {emailBusyId === s.id ? 'Setting up…' : 'Email me new jobs'}
+                </Button>
+              {/if}
             </div>
 
             {#if s.public_slug}

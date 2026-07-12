@@ -25,9 +25,9 @@ class Notifications extends UserResource<[TelegramStatus, Subscription[]]> {
     return this.#subs;
   }
 
-  /** The telegram subscription for a saved search, if any. */
-  forSavedSearch(savedSearchId: number): Subscription | undefined {
-    return this.#subs.find((s) => s.saved_search_id === savedSearchId && s.channel === 'telegram');
+  /** The subscription for a saved search on a channel (telegram by default), if any. */
+  forSavedSearch(savedSearchId: number, channel = 'telegram'): Subscription | undefined {
+    return this.#subs.find((s) => s.saved_search_id === savedSearchId && s.channel === channel);
   }
 
   protected load(): Promise<[TelegramStatus, Subscription[]]> {
@@ -44,9 +44,9 @@ class Notifications extends UserResource<[TelegramStatus, Subscription[]]> {
     this.#subs = [];
   }
 
-  /** Subscribe a saved search to Telegram; prepend the new subscription. */
-  async subscribe(savedSearchId: number): Promise<void> {
-    const sub = await api.createSubscription(savedSearchId);
+  /** Subscribe a saved search to a channel (telegram by default); prepend it. */
+  async subscribe(savedSearchId: number, channel = 'telegram'): Promise<void> {
+    const sub = await api.createSubscription(savedSearchId, channel);
     this.#subs = [sub, ...this.#subs];
   }
 

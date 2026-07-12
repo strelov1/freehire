@@ -29,8 +29,8 @@
 
 ## 7. Frontend
 
-- [ ] 7.1 Extend the subscription client state (`web/src/lib/savedSearches.svelte.ts` / `notifications.svelte.ts`) to support the `email` channel (subscribe/unsubscribe, per-saved-search enabled state).
-- [ ] 7.2 Add an email alert toggle per saved search in `SavedSearchesView.svelte` alongside the Telegram control (email always "enabled"; no address input). Verify via svelte-check + visual.
+- [x] 7.1 Extend the subscription client state (`web/src/lib/savedSearches.svelte.ts` / `notifications.svelte.ts`) to support the `email` channel (subscribe/unsubscribe, per-saved-search enabled state).
+- [x] 7.2 Add an email alert toggle per saved search in `SavedSearchesView.svelte` alongside the Telegram control (email always "enabled"; no address input). Verify via svelte-check + visual.
 
 ## 8. Ops prerequisites (`../freehire-ops`, deploy-time)
 
