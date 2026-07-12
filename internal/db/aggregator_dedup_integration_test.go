@@ -11,6 +11,7 @@ package db
 
 import (
 	"context"
+	"slices"
 	"testing"
 )
 
@@ -249,19 +250,10 @@ func TestCompaniesWithAggregatorPostings_OnlyAggregatorCompanies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("driver: %v", err)
 	}
-	if !containsStr(got, "acme") {
+	if !slices.Contains(got, "acme") {
 		t.Errorf("driver = %v, want it to include %q", got, "acme")
 	}
-	if containsStr(got, "other") {
+	if slices.Contains(got, "other") {
 		t.Errorf("driver = %v, want it to exclude ATS-only company %q", got, "other")
 	}
-}
-
-func containsStr(ss []string, s string) bool {
-	for _, x := range ss {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }

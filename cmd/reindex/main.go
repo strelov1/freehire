@@ -419,6 +419,11 @@ func recomputeRoleDuplicates(ctx context.Context, q *db.Queries) (int64, error) 
 // and lock-scoped exactly like recomputeRoleDuplicates: a per-company failure is logged
 // and skipped so it never starves the rest or blocks the reindex.
 func suppressAggregatorDuplicates(ctx context.Context, q *db.Queries) (int64, error) {
+	// The aggregator set comes from the registry markers. usajobs is the one adapter
+	// sources.All only registers when USAJOBS_API_KEY is set, so a reindex without that
+	// key classifies existing usajobs rows as ATS. That is harmless here: federal postings
+	// have no corporate ATS twin, so they are never suppressed either way and would only
+	// ever be a target on an (essentially impossible) exact company+title+country collision.
 	aggregators := sources.AggregatorProviders(sources.All(nil))
 	companies, err := q.CompaniesWithAggregatorPostings(ctx, aggregators)
 	if err != nil {
