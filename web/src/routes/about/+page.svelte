@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import AboutValues from '$lib/components/AboutValues.svelte';
   import HomeView from '$lib/components/HomeView.svelte';
   import Seo from '$lib/components/Seo.svelte';
   import { HOME_FAQ } from '$lib/homeFaq';
@@ -30,4 +31,5 @@
 
 <div class="mx-auto w-full max-w-6xl px-4 py-6">
   <HomeView stats={data.stats} />
+  <AboutValues />
 </div>
