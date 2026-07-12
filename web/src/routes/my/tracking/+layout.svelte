@@ -68,7 +68,7 @@
           href={resolve('/my/tracking/analyses')}
           class={tabClass(analysesActive)}
         >
-          AI fit
+          Matches
         </a>
       </div>
 

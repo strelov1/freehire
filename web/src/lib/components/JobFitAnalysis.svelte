@@ -43,8 +43,8 @@
   };
 </script>
 
-<section class="flex flex-col gap-3 border-t border-border pt-4" aria-label="AI fit analysis">
-  <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">AI fit analysis</p>
+<section class="flex flex-col gap-3 border-t border-border pt-4" aria-label="Analyze match">
+  <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Analyze match</p>
 
   {#if data && !data.has_cv}
     <div class="flex items-center justify-between gap-2">
