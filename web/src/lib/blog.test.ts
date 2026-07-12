@@ -55,6 +55,21 @@ describe('parseFrontmatter', () => {
       parseFrontmatter({ ...full, type: 'news' }, '/src/posts/bad-type.svx'),
     ).toThrow(/bad-type\.svx/);
   });
+
+  it.each(['Jan 15 2026', '2026-13-40', '2026/01/15', '15-01-2026'])(
+    'throws naming the file for a non-ISO date %s',
+    (date) => {
+      expect(() => parseFrontmatter({ ...full, date }, '/src/posts/bad-date.svx')).toThrow(
+        /bad-date\.svx/,
+      );
+    },
+  );
+
+  it('throws naming the file when tags is present but not a list', () => {
+    expect(() =>
+      parseFrontmatter({ ...full, tags: 'product' }, '/src/posts/bad-tags.svx'),
+    ).toThrow(/bad-tags\.svx/);
+  });
 });
 
 describe('selectPosts', () => {
