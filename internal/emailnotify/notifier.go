@@ -157,9 +157,7 @@ var htmlTemplate = template.Must(template.New("email").Parse(`<!DOCTYPE html>
       {{range .Jobs}}
       <tr><td style="padding:8px 28px;">
         <a href="{{.URL}}" style="font-size:16px;font-weight:600;color:#2563eb;text-decoration:none;">{{.Title}}</a>
-        <div style="font-size:14px;color:#6b7280;padding-top:2px;">
-          {{if .Company}}{{.Company}}{{end}}{{if and .Company .Salary}} · {{end}}{{if .Salary}}{{.Salary}}{{end}}
-        </div>
+        {{if or .Company .Salary}}<div style="font-size:14px;color:#6b7280;padding-top:2px;">{{.Company}}{{if and .Company .Salary}} · {{end}}{{.Salary}}</div>{{end}}
       </td></tr>
       {{end}}
       {{if gt .More 0}}
