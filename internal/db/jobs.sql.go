@@ -1033,7 +1033,8 @@ func (q *Queries) ListOpenJobsPostedAfter(ctx context.Context, arg ListOpenJobsP
 }
 
 const listRoleClusterCopies = `-- name: ListRoleClusterCopies :many
-SELECT j.public_slug, j.location, j.url, j.posted_at
+SELECT j.public_slug, j.location, j.url, j.posted_at,
+    COUNT(*) OVER()::bigint AS total
 FROM jobs j
 JOIN jobs anchor ON anchor.id = $1
 WHERE j.company_slug = anchor.company_slug
@@ -1055,6 +1056,7 @@ type ListRoleClusterCopiesRow struct {
 	Location   string             `json:"location"`
 	URL        string             `json:"url"`
 	PostedAt   pgtype.Timestamptz `json:"posted_at"`
+	Total      int64              `json:"total"`
 }
 
 // The open postings sharing a role cluster (company_slug + role_fingerprint) with the
@@ -1076,6 +1078,7 @@ func (q *Queries) ListRoleClusterCopies(ctx context.Context, arg ListRoleCluster
 			&i.Location,
 			&i.URL,
 			&i.PostedAt,
+			&i.Total,
 		); err != nil {
 			return nil, err
 		}

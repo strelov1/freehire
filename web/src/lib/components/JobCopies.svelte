@@ -1,15 +1,15 @@
 <script lang="ts">
   import type { JobCopy } from '$lib/api';
 
-  // The per-city openings folded under this collapsed role. Only worth a section when
-  // there is more than one (a genuinely mass-posted role); a single opening is just the
-  // job itself.
-  let { copies }: { copies: JobCopy[] } = $props();
+  // The per-city openings folded under this collapsed role. `copies` is a capped page;
+  // `total` is the whole cluster's open size. Only worth a section for a genuinely
+  // mass-posted role (more than one opening).
+  let { copies, total }: { copies: JobCopy[]; total: number } = $props();
 </script>
 
-{#if copies.length > 1}
+{#if total > 1}
   <section class="mt-10">
-    <h2 class="mb-4 text-lg font-semibold">{copies.length} openings across locations</h2>
+    <h2 class="mb-4 text-lg font-semibold">{total} openings across locations</h2>
     <ul class="divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-100">
       {#each copies as copy (copy.public_slug)}
         <li>

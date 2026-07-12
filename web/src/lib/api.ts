@@ -172,9 +172,13 @@ export function createApi(
   }
 
   /** The open postings sharing this job's role cluster — the "openings across cities"
-   *  list under a collapsed role. Each copy keeps its own location and apply URL. */
-  async function getJobCopies(slug: string): Promise<JobCopy[]> {
-    return requestData<JobCopy[]>(`/api/v1/jobs/${slug}/copies`);
+   *  list under a collapsed role. `total` is the whole cluster's open size (pre-limit),
+   *  so the header stays accurate when `copies` is a capped page. */
+  async function getJobCopies(slug: string): Promise<{ copies: JobCopy[]; total: number }> {
+    const res = await request<{ data: JobCopy[]; meta: { total: number } }>(
+      `/api/v1/jobs/${slug}/copies`,
+    );
+    return { copies: res.data, total: res.meta?.total ?? res.data.length };
   }
 
   /** How well the job addressed by `slug` is covered by the caller's profile skills:

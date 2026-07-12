@@ -43,7 +43,7 @@
 <div class="mx-auto w-full max-w-6xl px-4 py-6">
   <JobView job={data.job} />
 
-  <JobCopies copies={data.copies} />
+  <JobCopies copies={data.copies} total={data.copiesTotal} />
 
   {#if data.similar.length > 0}
     <section class="mt-10">

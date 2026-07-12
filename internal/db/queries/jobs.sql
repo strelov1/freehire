@@ -265,7 +265,8 @@ WHERE company_slug = sqlc.arg(company_slug)
 -- its own location and apply URL, so a seeker picks their city; the anchor itself is
 -- included (it is one of the openings). Ordered by location. An empty-fingerprint anchor
 -- clusters with no one and returns nothing.
-SELECT j.public_slug, j.location, j.url, j.posted_at
+SELECT j.public_slug, j.location, j.url, j.posted_at,
+    COUNT(*) OVER()::bigint AS total
 FROM jobs j
 JOIN jobs anchor ON anchor.id = sqlc.arg(job_id)
 WHERE j.company_slug = anchor.company_slug

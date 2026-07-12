@@ -55,5 +55,12 @@ func (a *API) JobCopies(c *fiber.Ctx) error {
 		}
 		copies[i] = cp
 	}
-	return c.JSON(fiber.Map{"data": copies})
+
+	// total is the whole cluster's open size (COUNT(*) OVER, pre-LIMIT), so the client's
+	// "N openings" header stays accurate even when the list is a capped page.
+	var total int64
+	if len(rows) > 0 {
+		total = rows[0].Total
+	}
+	return c.JSON(fiber.Map{"data": copies, "meta": fiber.Map{"total": total}})
 }

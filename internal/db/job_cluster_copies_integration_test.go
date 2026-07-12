@@ -57,6 +57,9 @@ func TestListRoleClusterCopies_ReturnsOpenClusterByLocation(t *testing.T) {
 	if len(copies) != 3 {
 		t.Fatalf("got %d copies, want 3 (open cluster members)", len(copies))
 	}
+	if copies[0].Total != 3 {
+		t.Errorf("total = %d, want 3 (whole open cluster, pre-limit)", copies[0].Total)
+	}
 	wantOrder := []string{"Kazan", "Moscow", "Perm"}
 	for i, want := range wantOrder {
 		if copies[i].Location != want {
