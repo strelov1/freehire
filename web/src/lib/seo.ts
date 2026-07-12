@@ -2,6 +2,7 @@
 // public wire shapes. Emitted server-side (see the route +page.svelte files) so
 // crawlers and Google Jobs see structured data in the initial HTML.
 
+import { logoDevUrl } from './logo';
 import type { Company, Enrichment, Job } from './types';
 
 const SITE = 'freehire';
@@ -87,11 +88,23 @@ function applicantRegions(regions?: string[]): unknown {
   return named.length === 1 ? named[0] : named;
 }
 
+// schema.org educationRequirements.credentialCategory, from the enrich
+// education_level vocabulary ("none"/"bachelor"/"master"/"phd"). "none" and any
+// unmapped value carry no requirement and are omitted.
+const EDUCATION_CREDENTIAL: Record<string, string> = {
+  bachelor: 'bachelor degree',
+  master: 'postgraduate degree',
+  phd: 'postgraduate degree',
+};
+
 /** schema.org JobPosting for a job-detail page, eligible for Google Jobs. A
  *  closed posting sets `validThrough` to its close time so it reads as expired,
  *  not open. `origin` is the absolute site origin (e.g. https://freehire.dev). */
 export function jobPostingJsonLd(job: Job, origin: string): Record<string, unknown> {
   const e = job.enrichment ?? {};
+  // logo.dev resolves a logo from the company name (404s for unknown companies,
+  // which Google silently ignores); same source the SPA and OG cards use.
+  const logo = logoDevUrl(job.company);
   const ld: Record<string, unknown> = {
     '@context': 'https://schema.org',
     '@type': 'JobPosting',
@@ -102,6 +115,7 @@ export function jobPostingJsonLd(job: Job, origin: string): Record<string, unkno
       '@type': 'Organization',
       name: job.company || 'Unknown',
       ...(job.company_slug ? { sameAs: `${origin}/companies/${job.company_slug}` } : {}),
+      ...(logo ? { logo } : {}),
     },
   };
 
@@ -133,6 +147,25 @@ export function jobPostingJsonLd(job: Job, origin: string): Record<string, unkno
 
   if (e.salary_min != null || e.salary_max != null) {
     ld.baseSalary = baseSalary(e);
+  }
+
+  // skills is the dictionary facet (canonical names), served as Google Text.
+  if (job.skills?.length) ld.skills = job.skills.join(', ');
+
+  // A zero minimum (explicit entry-level) carries no SEO signal, so omit it.
+  if (e.experience_years_min != null && e.experience_years_min > 0) {
+    ld.experienceRequirements = {
+      '@type': 'OccupationalExperienceRequirements',
+      monthsOfExperience: e.experience_years_min * 12,
+    };
+  }
+
+  const credential = e.education_level ? EDUCATION_CREDENTIAL[e.education_level] : undefined;
+  if (credential) {
+    ld.educationRequirements = {
+      '@type': 'EducationalOccupationalCredential',
+      credentialCategory: credential,
+    };
   }
 
   return ld;

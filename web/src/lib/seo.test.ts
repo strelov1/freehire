@@ -1,10 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { collectionPageJsonLd, organizationJsonLd } from './seo';
+import { collectionPageJsonLd, jobPostingJsonLd, organizationJsonLd } from './seo';
+import { logoDevUrl } from './logo';
 import type { Company, Job } from './types';
 
 // collectionPageJsonLd reads only title + public_slug off each job.
 function job(title: string, slug: string): Job {
   return { title, public_slug: slug } as Job;
+}
+
+// A job carrying the fields jobPostingJsonLd reads; tests spread the facts under test.
+function postingJob(overrides: Partial<Job> = {}): Job {
+  return {
+    public_slug: 'engineer-abc',
+    title: 'Engineer',
+    company: 'Acme',
+    description: 'Build things.',
+    skills: [],
+    ...overrides,
+  } as Job;
 }
 
 // Minimal valid Company; individual tests spread in the facts under test.
@@ -107,6 +120,56 @@ describe('organizationJsonLd', () => {
     );
 
     expect(ld).not.toHaveProperty('sameAs');
+  });
+});
+
+describe('jobPostingJsonLd', () => {
+  it('adds logo, skills, and experience/education requirements when present', () => {
+    const ld = jobPostingJsonLd(
+      postingJob({
+        company: 'Acme',
+        skills: ['Go', 'Kubernetes'],
+        enrichment: { experience_years_min: 5, education_level: 'bachelor' },
+      }),
+      ORIGIN
+    );
+
+    expect((ld.hiringOrganization as Record<string, unknown>).logo).toBe(logoDevUrl('Acme'));
+    expect(ld.skills).toBe('Go, Kubernetes');
+    expect(ld.experienceRequirements).toEqual({
+      '@type': 'OccupationalExperienceRequirements',
+      monthsOfExperience: 60,
+    });
+    expect(ld.educationRequirements).toEqual({
+      '@type': 'EducationalOccupationalCredential',
+      credentialCategory: 'bachelor degree',
+    });
+  });
+
+  it('maps master and phd education to a postgraduate degree', () => {
+    for (const level of ['master', 'phd']) {
+      const ld = jobPostingJsonLd(postingJob({ enrichment: { education_level: level } }), ORIGIN);
+      expect(ld.educationRequirements).toEqual({
+        '@type': 'EducationalOccupationalCredential',
+        credentialCategory: 'postgraduate degree',
+      });
+    }
+  });
+
+  it('omits logo, skills, and signal-free requirements', () => {
+    const ld = jobPostingJsonLd(
+      postingJob({
+        company: '',
+        skills: [],
+        enrichment: { experience_years_min: 0, education_level: 'none' },
+      }),
+      ORIGIN
+    );
+
+    expect(ld.hiringOrganization).not.toHaveProperty('logo');
+    expect(ld).not.toHaveProperty('skills');
+    expect(ld).not.toHaveProperty('experienceRequirements');
+    expect(ld).not.toHaveProperty('educationRequirements');
   });
 });
 
