@@ -611,6 +611,13 @@ type Querier interface {
 	// reports real churn. This is cmd/recount-companies' whole job; run periodically
 	// (eventual consistency). The facet aggregates are each their own non-correlated
 	// GROUP BY so the row-multiplying unnest of one array never distorts another's count.
+	// gov marks a company whose open jobs come from an exclusively-government source
+	// (usajobs = US federal, neogov = US state/local gov ATS). Generic ATS (workday,
+	// greenhouse, …) carry government jobs too, so they are deliberately NOT a signal.
+	// mat is the deterministic single-valued maturity, computed per company from its own
+	// signals plus the gov-source marker, in precedence order (government beats size).
+	// NULL = unknown (an honest abstain when no signal fits). Computed once here so both
+	// the SET and the IS DISTINCT FROM guard reference the same value.
 	RefreshCompanyFacets(ctx context.Context) (int64, error)
 	// Release the lease on a subscription's claimed jobs without counting an attempt,
 	// so a soft-skipped delivery (e.g. Telegram not yet linked) is retried promptly on

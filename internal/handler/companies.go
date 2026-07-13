@@ -47,6 +47,7 @@ type companyView struct {
 	YcStatus         []string        `json:"yc_status"`
 	YcStage          []string        `json:"yc_stage"`
 	YcFlags          []string        `json:"yc_flags"`
+	Maturity         pgtype.Text     `json:"maturity"`
 }
 
 // companyViewFrom projects a stored company onto its public view, dropping only the
@@ -74,6 +75,7 @@ func companyViewFrom(c db.Company) companyView {
 		YcStatus:         c.YcStatus,
 		YcStage:          c.YcStage,
 		YcFlags:          c.YcFlags,
+		Maturity:         c.Maturity,
 	}
 }
 
@@ -106,6 +108,7 @@ func (a *API) ListCompanies(c *fiber.Ctx) error {
 	ycStatus := facetValues(vals, "yc_status")
 	ycStage := facetValues(vals, "yc_stage")
 	ycFlags := facetValues(vals, "yc_flags")
+	maturity := facetValues(vals, "maturity")
 
 	companies, err := a.queries.ListCompanies(c.Context(), db.ListCompaniesParams{
 		Search:        search,
@@ -120,6 +123,7 @@ func (a *API) ListCompanies(c *fiber.Ctx) error {
 		YcStatus:      ycStatus,
 		YcStage:       ycStage,
 		YcFlags:       ycFlags,
+		Maturity:      maturity,
 		Limit:         int32(limit),
 		Offset:        int32(offset),
 	})
@@ -140,6 +144,7 @@ func (a *API) ListCompanies(c *fiber.Ctx) error {
 		YcStatus:      ycStatus,
 		YcStage:       ycStage,
 		YcFlags:       ycFlags,
+		Maturity:      maturity,
 	})
 	if err != nil {
 		return err

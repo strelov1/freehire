@@ -89,6 +89,7 @@ WHERE ($1::text = '' OR name ILIKE '%' || $1 || '%' OR slug ILIKE '%' || $1 || '
   AND (coalesce(cardinality($10::text[]), 0) = 0 OR yc_status && $10::text[])
   AND (coalesce(cardinality($11::text[]), 0) = 0 OR yc_stage && $11::text[])
   AND (coalesce(cardinality($12::text[]), 0) = 0 OR yc_flags && $12::text[])
+  AND (coalesce(cardinality($13::text[]), 0) = 0 OR maturity = ANY($13::text[]))
 `
 
 type CountCompaniesParams struct {
@@ -104,6 +105,7 @@ type CountCompaniesParams struct {
 	YcStatus      []string `json:"yc_status"`
 	YcStage       []string `json:"yc_stage"`
 	YcFlags       []string `json:"yc_flags"`
+	Maturity      []string `json:"maturity"`
 }
 
 // Total companies matching the same optional name + facet filters as ListCompanies,
@@ -123,6 +125,7 @@ func (q *Queries) CountCompanies(ctx context.Context, arg CountCompaniesParams) 
 		arg.YcStatus,
 		arg.YcStage,
 		arg.YcFlags,
+		arg.Maturity,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -148,7 +151,7 @@ func (q *Queries) DeleteOrphanCompanies(ctx context.Context) (int64, error) {
 }
 
 const getCompany = `-- name: GetCompany :one
-SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes, industries, year_founded, employee_count, hq_country, organization_type, tagline, company_info, is_reference, company_info_at, remote_regions, yc_batch, yc_status, yc_stage, yc_flags
+SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes, industries, year_founded, employee_count, hq_country, organization_type, tagline, company_info, is_reference, company_info_at, remote_regions, yc_batch, yc_status, yc_stage, yc_flags, maturity
 FROM companies
 WHERE slug = $1
 `
@@ -185,6 +188,7 @@ func (q *Queries) GetCompany(ctx context.Context, slug string) (Company, error) 
 		&i.YcStatus,
 		&i.YcStage,
 		&i.YcFlags,
+		&i.Maturity,
 	)
 	return i, err
 }
@@ -204,8 +208,11 @@ WHERE ($1::text = '' OR name ILIKE '%' || $1 || '%' OR slug ILIKE '%' || $1 || '
   AND (coalesce(cardinality($10::text[]), 0) = 0 OR yc_status && $10::text[])
   AND (coalesce(cardinality($11::text[]), 0) = 0 OR yc_stage && $11::text[])
   AND (coalesce(cardinality($12::text[]), 0) = 0 OR yc_flags && $12::text[])
+  -- maturity is a SCALAR column (not an array): membership, not overlap. A NULL
+  -- (unknown) maturity matches no requested value, so ` + "`" + `NULL = ANY(...)` + "`" + ` excludes it.
+  AND (coalesce(cardinality($13::text[]), 0) = 0 OR maturity = ANY($13::text[]))
 ORDER BY job_count DESC, name
-LIMIT $14 OFFSET $13
+LIMIT $15 OFFSET $14
 `
 
 type ListCompaniesParams struct {
@@ -221,6 +228,7 @@ type ListCompaniesParams struct {
 	YcStatus      []string `json:"yc_status"`
 	YcStage       []string `json:"yc_stage"`
 	YcFlags       []string `json:"yc_flags"`
+	Maturity      []string `json:"maturity"`
 	Offset        int32    `json:"offset"`
 	Limit         int32    `json:"limit"`
 }
@@ -262,6 +270,7 @@ func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([
 		arg.YcStatus,
 		arg.YcStage,
 		arg.YcFlags,
+		arg.Maturity,
 		arg.Offset,
 		arg.Limit,
 	)
@@ -370,7 +379,7 @@ WITH oj AS (
     -- duplicate_of IS NULL counts one canonical job per role cluster, so the company
     -- job_count matches the collapsed /jobs and company lists (reposts share facets, so
     -- the DISTINCT region/country aggregates are unaffected — only the count changes).
-    SELECT company_slug, regions, countries, enrichment, work_mode
+    SELECT company_slug, regions, countries, enrichment, work_mode, source
     FROM jobs
     WHERE closed_at IS NULL AND duplicate_of IS NULL AND company_slug <> ''
 ),
@@ -413,6 +422,28 @@ csize AS (
     FROM oj
     WHERE COALESCE(enrichment->>'company_size', '') <> ''
     GROUP BY company_slug
+),
+gov AS (
+    SELECT company_slug, bool_or(source IN ('usajobs', 'neogov')) AS is_gov
+    FROM oj
+    GROUP BY company_slug
+),
+mat AS (
+    SELECT co.slug AS company_slug,
+           CASE
+               WHEN COALESCE(g.is_gov, false) OR co.organization_type = 'Government' THEN 'government'
+               -- enterprise beats startup: a grown company is enterprise regardless of a
+               -- historical YC badge (YC alumni go Public/Acquired and scale to thousands).
+               WHEN co.employee_count >= 1000 THEN 'enterprise'
+               -- startup only for a still-ACTIVE YC company (not Public/Acquired/Inactive),
+               -- or an independently small-and-recent company.
+               WHEN co.yc_status && ARRAY['Active']
+                    OR (co.year_founded >= extract(year FROM now())::int - 7 AND co.employee_count <= 50) THEN 'startup'
+               WHEN co.employee_count BETWEEN 51 AND 999 THEN 'scaleup'
+               ELSE NULL
+           END AS val
+    FROM companies co
+    LEFT JOIN gov g ON g.company_slug = co.slug
 )
 UPDATE companies c
 SET job_count      = COALESCE(counts.cnt, 0),
@@ -421,7 +452,8 @@ SET job_count      = COALESCE(counts.cnt, 0),
     countries      = COALESCE(cty.arr, '{}'),
     domains        = COALESCE(dom.arr, '{}'),
     company_types  = COALESCE(ctype.arr, '{}'),
-    company_sizes  = COALESCE(csize.arr, '{}')
+    company_sizes  = COALESCE(csize.arr, '{}'),
+    maturity       = mat.val
 FROM companies c2
 LEFT JOIN counts      ON counts.company_slug     = c2.slug
 LEFT JOIN reg         ON reg.company_slug        = c2.slug
@@ -430,6 +462,7 @@ LEFT JOIN cty         ON cty.company_slug        = c2.slug
 LEFT JOIN dom         ON dom.company_slug        = c2.slug
 LEFT JOIN ctype       ON ctype.company_slug      = c2.slug
 LEFT JOIN csize       ON csize.company_slug      = c2.slug
+LEFT JOIN mat         ON mat.company_slug        = c2.slug
 WHERE c.slug = c2.slug
   AND (c.job_count      IS DISTINCT FROM COALESCE(counts.cnt, 0)
     OR c.regions        IS DISTINCT FROM COALESCE(reg.arr, '{}')
@@ -437,7 +470,8 @@ WHERE c.slug = c2.slug
     OR c.countries      IS DISTINCT FROM COALESCE(cty.arr, '{}')
     OR c.domains        IS DISTINCT FROM COALESCE(dom.arr, '{}')
     OR c.company_types  IS DISTINCT FROM COALESCE(ctype.arr, '{}')
-    OR c.company_sizes  IS DISTINCT FROM COALESCE(csize.arr, '{}'))
+    OR c.company_sizes  IS DISTINCT FROM COALESCE(csize.arr, '{}')
+    OR c.maturity       IS DISTINCT FROM mat.val)
 `
 
 // Recompute every company's denormalized state in one set-based pass: the open-job
@@ -452,6 +486,13 @@ WHERE c.slug = c2.slug
 // reports real churn. This is cmd/recount-companies' whole job; run periodically
 // (eventual consistency). The facet aggregates are each their own non-correlated
 // GROUP BY so the row-multiplying unnest of one array never distorts another's count.
+// gov marks a company whose open jobs come from an exclusively-government source
+// (usajobs = US federal, neogov = US state/local gov ATS). Generic ATS (workday,
+// greenhouse, …) carry government jobs too, so they are deliberately NOT a signal.
+// mat is the deterministic single-valued maturity, computed per company from its own
+// signals plus the gov-source marker, in precedence order (government beats size).
+// NULL = unknown (an honest abstain when no signal fits). Computed once here so both
+// the SET and the IS DISTINCT FROM guard reference the same value.
 func (q *Queries) RefreshCompanyFacets(ctx context.Context) (int64, error) {
 	result, err := q.db.Exec(ctx, refreshCompanyFacets)
 	if err != nil {

@@ -414,6 +414,14 @@ export const COUNTRY_OPTIONS: FacetOption[] = COUNTRY;
 // vocabularies as the job facets so labels never drift.
 const YC_STATUS: FacetOption[] = options(['Active', 'Acquired', 'Public', 'Inactive']);
 const YC_STAGE: FacetOption[] = options(['Early', 'Growth']);
+// Deterministic company maturity (see the company-classification-facets change),
+// derived server-side from company signals; unknown (NULL) companies match nothing.
+const MATURITY: FacetOption[] = options(['startup', 'scaleup', 'enterprise', 'government'], {
+  startup: 'Startup',
+  scaleup: 'Scaleup',
+  enterprise: 'Enterprise',
+  government: 'Government',
+});
 const YC_FLAGS: FacetOption[] = options(['top_company', 'hiring'], {
   top_company: 'YC Top Company',
   hiring: 'Hiring',
@@ -432,6 +440,7 @@ export const COMPANY_FACETS: FacetDef[] = [
   { param: 'domains', label: 'Industry', control: 'select', options: DOMAINS, excludable: false, placeholder: 'Search industries' },
   { param: 'company_type', label: 'Company type', control: 'pills', options: COMPANY_TYPE, excludable: false },
   { param: 'company_size', label: 'Company size', control: 'pills', options: COMPANY_SIZE, excludable: false },
+  { param: 'maturity', label: 'Company stage', control: 'pills', options: MATURITY, excludable: false },
   { param: 'yc_status', label: 'YC status', control: 'pills', options: YC_STATUS, excludable: false },
   { param: 'yc_stage', label: 'YC stage', control: 'pills', options: YC_STAGE, excludable: false },
   { param: 'yc_flags', label: 'YC highlights', control: 'pills', options: YC_FLAGS, excludable: false },

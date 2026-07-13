@@ -27,6 +27,9 @@ WHERE (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || 
   AND (coalesce(cardinality(sqlc.arg('yc_status')::text[]), 0) = 0 OR yc_status && sqlc.arg('yc_status')::text[])
   AND (coalesce(cardinality(sqlc.arg('yc_stage')::text[]), 0) = 0 OR yc_stage && sqlc.arg('yc_stage')::text[])
   AND (coalesce(cardinality(sqlc.arg('yc_flags')::text[]), 0) = 0 OR yc_flags && sqlc.arg('yc_flags')::text[])
+  -- maturity is a SCALAR column (not an array): membership, not overlap. A NULL
+  -- (unknown) maturity matches no requested value, so `NULL = ANY(...)` excludes it.
+  AND (coalesce(cardinality(sqlc.arg('maturity')::text[]), 0) = 0 OR maturity = ANY(sqlc.arg('maturity')::text[]))
 ORDER BY job_count DESC, name
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
@@ -47,7 +50,8 @@ WHERE (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || 
   AND (coalesce(cardinality(sqlc.arg('yc_batch')::text[]), 0) = 0 OR yc_batch && sqlc.arg('yc_batch')::text[])
   AND (coalesce(cardinality(sqlc.arg('yc_status')::text[]), 0) = 0 OR yc_status && sqlc.arg('yc_status')::text[])
   AND (coalesce(cardinality(sqlc.arg('yc_stage')::text[]), 0) = 0 OR yc_stage && sqlc.arg('yc_stage')::text[])
-  AND (coalesce(cardinality(sqlc.arg('yc_flags')::text[]), 0) = 0 OR yc_flags && sqlc.arg('yc_flags')::text[]);
+  AND (coalesce(cardinality(sqlc.arg('yc_flags')::text[]), 0) = 0 OR yc_flags && sqlc.arg('yc_flags')::text[])
+  AND (coalesce(cardinality(sqlc.arg('maturity')::text[]), 0) = 0 OR maturity = ANY(sqlc.arg('maturity')::text[]));
 
 -- name: ListCompanySitemap :many
 -- Slim keyset page of companies for the sitemap, cursored by the slug primary key
@@ -199,7 +203,7 @@ WITH oj AS (
     -- duplicate_of IS NULL counts one canonical job per role cluster, so the company
     -- job_count matches the collapsed /jobs and company lists (reposts share facets, so
     -- the DISTINCT region/country aggregates are unaffected — only the count changes).
-    SELECT company_slug, regions, countries, enrichment, work_mode
+    SELECT company_slug, regions, countries, enrichment, work_mode, source
     FROM jobs
     WHERE closed_at IS NULL AND duplicate_of IS NULL AND company_slug <> ''
 ),
@@ -242,6 +246,35 @@ csize AS (
     FROM oj
     WHERE COALESCE(enrichment->>'company_size', '') <> ''
     GROUP BY company_slug
+),
+-- gov marks a company whose open jobs come from an exclusively-government source
+-- (usajobs = US federal, neogov = US state/local gov ATS). Generic ATS (workday,
+-- greenhouse, …) carry government jobs too, so they are deliberately NOT a signal.
+gov AS (
+    SELECT company_slug, bool_or(source IN ('usajobs', 'neogov')) AS is_gov
+    FROM oj
+    GROUP BY company_slug
+),
+-- mat is the deterministic single-valued maturity, computed per company from its own
+-- signals plus the gov-source marker, in precedence order (government beats size).
+-- NULL = unknown (an honest abstain when no signal fits). Computed once here so both
+-- the SET and the IS DISTINCT FROM guard reference the same value.
+mat AS (
+    SELECT co.slug AS company_slug,
+           CASE
+               WHEN COALESCE(g.is_gov, false) OR co.organization_type = 'Government' THEN 'government'
+               -- enterprise beats startup: a grown company is enterprise regardless of a
+               -- historical YC badge (YC alumni go Public/Acquired and scale to thousands).
+               WHEN co.employee_count >= 1000 THEN 'enterprise'
+               -- startup only for a still-ACTIVE YC company (not Public/Acquired/Inactive),
+               -- or an independently small-and-recent company.
+               WHEN co.yc_status && ARRAY['Active']
+                    OR (co.year_founded >= extract(year FROM now())::int - 7 AND co.employee_count <= 50) THEN 'startup'
+               WHEN co.employee_count BETWEEN 51 AND 999 THEN 'scaleup'
+               ELSE NULL
+           END AS val
+    FROM companies co
+    LEFT JOIN gov g ON g.company_slug = co.slug
 )
 UPDATE companies c
 SET job_count      = COALESCE(counts.cnt, 0),
@@ -250,7 +283,8 @@ SET job_count      = COALESCE(counts.cnt, 0),
     countries      = COALESCE(cty.arr, '{}'),
     domains        = COALESCE(dom.arr, '{}'),
     company_types  = COALESCE(ctype.arr, '{}'),
-    company_sizes  = COALESCE(csize.arr, '{}')
+    company_sizes  = COALESCE(csize.arr, '{}'),
+    maturity       = mat.val
 FROM companies c2
 LEFT JOIN counts      ON counts.company_slug     = c2.slug
 LEFT JOIN reg         ON reg.company_slug        = c2.slug
@@ -259,6 +293,7 @@ LEFT JOIN cty         ON cty.company_slug        = c2.slug
 LEFT JOIN dom         ON dom.company_slug        = c2.slug
 LEFT JOIN ctype       ON ctype.company_slug      = c2.slug
 LEFT JOIN csize       ON csize.company_slug      = c2.slug
+LEFT JOIN mat         ON mat.company_slug        = c2.slug
 WHERE c.slug = c2.slug
   AND (c.job_count      IS DISTINCT FROM COALESCE(counts.cnt, 0)
     OR c.regions        IS DISTINCT FROM COALESCE(reg.arr, '{}')
@@ -266,7 +301,8 @@ WHERE c.slug = c2.slug
     OR c.countries      IS DISTINCT FROM COALESCE(cty.arr, '{}')
     OR c.domains        IS DISTINCT FROM COALESCE(dom.arr, '{}')
     OR c.company_types  IS DISTINCT FROM COALESCE(ctype.arr, '{}')
-    OR c.company_sizes  IS DISTINCT FROM COALESCE(csize.arr, '{}'));
+    OR c.company_sizes  IS DISTINCT FROM COALESCE(csize.arr, '{}')
+    OR c.maturity       IS DISTINCT FROM mat.val);
 
 -- name: CompanyJobCountBySlug :one
 -- The denormalized open-job count for a slug (pgx.ErrNoRows if the company is

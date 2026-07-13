@@ -59,6 +59,7 @@ type Company struct {
 	YcStatus         []string           `json:"yc_status"`
 	YcStage          []string           `json:"yc_stage"`
 	YcFlags          []string           `json:"yc_flags"`
+	Maturity         pgtype.Text        `json:"maturity"`
 }
 
 type Email struct {
