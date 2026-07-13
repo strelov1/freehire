@@ -30,6 +30,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/embed"
 	"github.com/strelov1/freehire/internal/search"
 )
@@ -177,7 +178,7 @@ func TestIntegration_EmbedWorkerDrainsQueue(t *testing.T) {
 	// it as embedded so the enqueue picks it up for removal.
 	preIndexClosed(t, ctx, client, pool, closedID)
 
-	runner := embed.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client}}
+	runner := embed.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client, q: db.New(pool)}}
 	stats, err := runner.Run(ctx, embed.RunOptions{
 		TargetModel: search.CurrentEmbedderModel(), BatchSize: 500, LeaseSeconds: 300, MaxAttempts: 3,
 	})
@@ -240,7 +241,7 @@ func preIndexClosed(t *testing.T, ctx context.Context, client *search.Client, po
 	t.Helper()
 	// The job was seeded already-closed; temporarily treat it as open for the pre-index
 	// by loading and indexing its document directly.
-	ix := searchIndexer{client: client}
+	ix := searchIndexer{client: client, q: db.New(pool)}
 	jobs, err := newDBStore(pool).Jobs(ctx, []int64{id})
 	if err != nil || len(jobs) != 1 {
 		t.Fatalf("load closed job: rows=%d err=%v", len(jobs), err)

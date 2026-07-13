@@ -13,6 +13,7 @@ import (
 	"log"
 
 	"github.com/strelov1/freehire/internal/config"
+	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/embed"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/worker"
@@ -53,7 +54,7 @@ func run() int {
 
 	runner := embed.Runner{
 		Store:   newDBStore(pool),
-		Indexer: searchIndexer{client: client},
+		Indexer: searchIndexer{client: client, q: db.New(pool)},
 	}
 
 	stats, err := runner.Run(ctx, embed.RunOptions{
