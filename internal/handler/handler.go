@@ -338,6 +338,7 @@ func Register(app *fiber.App, cfg Config) {
 	// list, and analyses lists the jobs the caller has run the AI fit analysis on.
 	api.Get("/me/tracking", keyAuth, a.ListTrackedJobs)
 	api.Get("/me/tracking/viewed", keyAuth, a.ListViewedSlugs)
+	api.Get("/me/tracking/saved", keyAuth, a.ListSavedSlugs)
 	api.Get("/me/tracking/pipeline", keyAuth, a.TrackingPipeline)
 	api.Get("/me/tracking/swipe", keyAuth, a.SwipeDeck)
 	api.Get("/me/tracking/analyses", keyAuth, a.ListMyAnalyses)

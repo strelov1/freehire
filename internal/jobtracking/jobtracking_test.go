@@ -40,6 +40,8 @@ type fakeRepo struct {
 	countErr            error
 	viewedResult        []string
 	viewedErr           error
+	savedResult         []string
+	savedErr            error
 	excludedResult      []int64
 	excludedErr         error
 	excludedLimit       int32
@@ -113,6 +115,10 @@ func (f *fakeRepo) CountInteractions(_ context.Context, _ int64) (jobtracking.Co
 
 func (f *fakeRepo) ViewedSlugs(_ context.Context, _ int64) ([]string, error) {
 	return f.viewedResult, f.viewedErr
+}
+
+func (f *fakeRepo) SavedSlugs(_ context.Context, _ int64) ([]string, error) {
+	return f.savedResult, f.savedErr
 }
 
 func (f *fakeRepo) ExcludedJobIDs(_ context.Context, _ int64, limit int32) ([]int64, error) {
@@ -596,6 +602,20 @@ func TestViewedSlugs_Passthrough(t *testing.T) {
 	svc := jobtracking.New(repo)
 
 	slugs, err := svc.ViewedSlugs(ctx(), userID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(slugs) != 2 || slugs[0] != "job-a" {
+		t.Errorf("slugs = %v, want [job-a job-b]", slugs)
+	}
+}
+
+func TestSavedSlugs_Passthrough(t *testing.T) {
+	repo := newRepo()
+	repo.savedResult = []string{"job-a", "job-b"}
+	svc := jobtracking.New(repo)
+
+	slugs, err := svc.SavedSlugs(ctx(), userID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

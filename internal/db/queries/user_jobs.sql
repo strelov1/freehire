@@ -147,6 +147,19 @@ FROM user_jobs uj
 JOIN jobs ON jobs.id = uj.job_id
 WHERE uj.user_id = $1;
 
+-- name: ListSavedJobSlugs :many
+-- Every public_slug the user has saved (bookmarked). Used by the SPA to render
+-- the save toggle as filled on already-saved cards in the browse list and search
+-- results, without authenticating the public job-read path — the saved set is
+-- cross-referenced client-side, never joined into ListJobs/SearchJobs. Bounded by
+-- the caller's saved subset (typically small) and indexed by the (user_id, job_id)
+-- primary key, so it stays cheap for heavy users. Closed jobs are included: a
+-- saved posting that later closes still shows filled in a history surface.
+SELECT jobs.public_slug
+FROM user_jobs uj
+JOIN jobs ON jobs.id = uj.job_id
+WHERE uj.user_id = $1 AND uj.saved_at IS NOT NULL;
+
 -- name: CountUserJobs :one
 -- Per-filter row counts for the my-jobs tabs, in one aggregate pass. "all" is
 -- every interaction row; "viewed" is the view-only subset (neither saved nor

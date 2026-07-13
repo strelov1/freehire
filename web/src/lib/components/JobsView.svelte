@@ -8,6 +8,7 @@
   import { api, type Slice } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { ensureViewedLoaded } from '$lib/viewedJobs.svelte';
+  import { ensureSavedLoaded } from '$lib/savedJobs.svelte';
   import { latestOnly } from '$lib/latestOnly';
   import { Paginator } from '$lib/paginated.svelte';
   import { FilterStore, filtersToParams, activeFilterCount, type SortField } from '$lib/filters';
@@ -206,11 +207,15 @@
   // Detect that mismatch so the first effect run reloads instead of keeping `initial`.
   const initialStale = browser && page.url.search !== location.search;
 
-  // For a signed-in user, load the set of already-viewed slugs so JobRow can dim
-  // seen cards (no-op when signed out — the set stays empty). Cleanup: cancel any
-  // pending debounced reload so it can't fire after this view is gone.
+  // For a signed-in user, load the set of already-viewed and already-saved slugs so
+  // JobRow can dim seen cards and fill saved bookmarks (no-op when signed out — the
+  // sets stay empty). Cleanup: cancel any pending debounced reload so it can't fire
+  // after this view is gone.
   onMount(() => {
-    if (isAuthenticated()) ensureViewedLoaded();
+    if (isAuthenticated()) {
+      ensureViewedLoaded();
+      ensureSavedLoaded();
+    }
     // Register this page's store so the header search drives it. This holds for the
     // standalone /jobs list AND the company page's embedded, scoped list — on
     // /companies/:slug the header search filters that company's postings (there's

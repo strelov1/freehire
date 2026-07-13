@@ -6,6 +6,7 @@
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { filterHref, formatSalary, summaryFacets } from '$lib/enrichment';
   import { markViewed } from '$lib/viewedJobs.svelte';
+  import { markSaved, markUnsaved } from '$lib/savedJobs.svelte';
   import type { Job, UserJob } from '$lib/types';
   import { Badge, Button } from '$lib/ui';
   import { formatDate } from '$lib/utils';
@@ -130,6 +131,10 @@
   async function toggleSave() {
     try {
       interaction = saved ? await api.unsaveJob(job.public_slug) : await api.saveJob(job.public_slug);
+      // Keep the shared saved set in sync so a browse card's bookmark reflects this
+      // on back-navigation without a reload (mirrors markViewed above).
+      if (interaction?.saved_at != null) markSaved(job.public_slug);
+      else markUnsaved(job.public_slug);
     } catch {
       // Leave the current state; the user can retry.
     }

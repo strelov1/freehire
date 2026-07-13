@@ -106,3 +106,23 @@ func (a *API) ListViewedSlugs(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{"data": slugs})
 }
+
+// ListSavedSlugs returns the set of public job slugs the authenticated caller has
+// saved (bookmarked). The SPA reads this to render the save toggle as filled on
+// already-saved cards in the browse list and search results without
+// authenticating the public job-read path — saved state is cross-referenced
+// client-side, never joined into ListJobs/SearchJobs. The response is a flat
+// {"data": [slug, ...]} list scoped to the caller.
+func (a *API) ListSavedSlugs(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+
+	slugs, err := a.tracking.SavedSlugs(c.Context(), userID)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(fiber.Map{"data": slugs})
+}

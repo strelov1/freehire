@@ -523,6 +523,13 @@ export function createApi(
     return requestData<string[]>('/api/v1/me/tracking/viewed');
   }
 
+  /** The public slugs of every job the current user has saved (bookmarked). The
+   *  browse UI cross-references this set to render the save toggle as filled on
+   *  already-saved cards without authenticating the public job list. */
+  async function listSavedSlugs(): Promise<string[]> {
+    return requestData<string[]>('/api/v1/me/tracking/saved');
+  }
+
   // --- API keys -------------------------------------------------------------
   //
   // Personal API keys for non-browser access. Management is cookie-only (these
@@ -858,6 +865,7 @@ export function createApi(
     getMyPipeline,
     myAnalyses,
     listViewedSlugs,
+    listSavedSlugs,
     listApiKeys,
     createApiKey,
     revokeApiKey,

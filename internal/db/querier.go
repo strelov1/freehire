@@ -467,6 +467,14 @@ type Querier interface {
 	// included (it is one of the openings). Ordered by location. An empty-fingerprint anchor
 	// clusters with no one and returns nothing.
 	ListRoleClusterCopies(ctx context.Context, arg ListRoleClusterCopiesParams) ([]ListRoleClusterCopiesRow, error)
+	// Every public_slug the user has saved (bookmarked). Used by the SPA to render
+	// the save toggle as filled on already-saved cards in the browse list and search
+	// results, without authenticating the public job-read path — the saved set is
+	// cross-referenced client-side, never joined into ListJobs/SearchJobs. Bounded by
+	// the caller's saved subset (typically small) and indexed by the (user_id, job_id)
+	// primary key, so it stays cheap for heavy users. Closed jobs are included: a
+	// saved posting that later closes still shows filled in a history surface.
+	ListSavedJobSlugs(ctx context.Context, userID int64) ([]string, error)
 	// A user's saved searches, most recently updated first (the "My filters" picker order).
 	ListSavedSearches(ctx context.Context, userID int64) ([]SavedSearch, error)
 	// "My submissions": one user's submissions, newest first, whatever their status.

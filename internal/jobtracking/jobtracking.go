@@ -158,6 +158,9 @@ type Repository interface {
 	// ViewedSlugs returns every public job slug the caller has interacted with.
 	ViewedSlugs(ctx context.Context, userID int64) ([]string, error)
 
+	// SavedSlugs returns every public job slug the caller has saved (bookmarked).
+	SavedSlugs(ctx context.Context, userID int64) ([]string, error)
+
 	// ExcludedJobIDs returns up to limit job ids the caller has already interacted
 	// with (viewed, saved, applied, or dismissed), most-recently-touched first.
 	ExcludedJobIDs(ctx context.Context, userID int64, limit int32) ([]int64, error)
@@ -201,6 +204,11 @@ func (s *Service) ListTracked(ctx context.Context, userID int64, filter string, 
 // ViewedSlugs returns every public job slug the caller has interacted with.
 func (s *Service) ViewedSlugs(ctx context.Context, userID int64) ([]string, error) {
 	return s.repo.ViewedSlugs(ctx, userID)
+}
+
+// SavedSlugs returns every public job slug the caller has saved (bookmarked).
+func (s *Service) SavedSlugs(ctx context.Context, userID int64) ([]string, error) {
+	return s.repo.SavedSlugs(ctx, userID)
 }
 
 // ExcludedJobIDs returns the job ids the caller has already interacted with

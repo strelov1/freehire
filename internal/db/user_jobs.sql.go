@@ -186,6 +186,40 @@ func (q *Queries) ExcludedJobIDs(ctx context.Context, arg ExcludedJobIDsParams) 
 	return items, nil
 }
 
+const listSavedJobSlugs = `-- name: ListSavedJobSlugs :many
+SELECT jobs.public_slug
+FROM user_jobs uj
+JOIN jobs ON jobs.id = uj.job_id
+WHERE uj.user_id = $1 AND uj.saved_at IS NOT NULL
+`
+
+// Every public_slug the user has saved (bookmarked). Used by the SPA to render
+// the save toggle as filled on already-saved cards in the browse list and search
+// results, without authenticating the public job-read path — the saved set is
+// cross-referenced client-side, never joined into ListJobs/SearchJobs. Bounded by
+// the caller's saved subset (typically small) and indexed by the (user_id, job_id)
+// primary key, so it stays cheap for heavy users. Closed jobs are included: a
+// saved posting that later closes still shows filled in a history surface.
+func (q *Queries) ListSavedJobSlugs(ctx context.Context, userID int64) ([]string, error) {
+	rows, err := q.db.Query(ctx, listSavedJobSlugs, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var public_slug string
+		if err := rows.Scan(&public_slug); err != nil {
+			return nil, err
+		}
+		items = append(items, public_slug)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUserJobs = `-- name: ListUserJobs :many
 SELECT jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.company, jobs.location, jobs.remote, jobs.description, jobs.posted_at, jobs.created_at, jobs.updated_at, jobs.company_slug, jobs.enrichment, jobs.enriched_at, jobs.enrichment_version, jobs.public_slug, jobs.last_seen_at, jobs.closed_at, jobs.countries, jobs.regions, jobs.work_mode, jobs.liveness_strikes, jobs.skills, jobs.seniority, jobs.category, jobs.created_by, jobs.updated_by, jobs.posting_language, jobs.employment_type, jobs.education_level, jobs.experience_years_min, jobs.collections, jobs.content_hash, jobs.english_level, jobs.cities, jobs.view_count, jobs.applied_count, jobs.role_fingerprint, jobs.semantic_embedded_model, jobs.semantic_embedded_hash, jobs.duplicate_of, uj.viewed_at, uj.saved_at, uj.applied_at, uj.stage, uj.notes
 FROM user_jobs uj

@@ -194,6 +194,11 @@ func (r *QueriesRepository) ViewedSlugs(ctx context.Context, userID int64) ([]st
 	return r.q.ListViewedJobSlugs(ctx, userID)
 }
 
+// SavedSlugs returns every public job slug the caller has saved (bookmarked).
+func (r *QueriesRepository) SavedSlugs(ctx context.Context, userID int64) ([]string, error) {
+	return r.q.ListSavedJobSlugs(ctx, userID)
+}
+
 // ExcludedJobIDs returns up to limit job ids the caller has already interacted
 // with (viewed, saved, applied, or dismissed).
 func (r *QueriesRepository) ExcludedJobIDs(ctx context.Context, userID int64, limit int32) ([]int64, error) {

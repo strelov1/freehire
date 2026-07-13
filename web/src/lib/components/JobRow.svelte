@@ -1,6 +1,10 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { Bookmark } from '@lucide/svelte';
   import CompanyLogo from './CompanyLogo.svelte';
+  import { api } from '$lib/api';
+  import { isAuthenticated } from '$lib/auth.svelte';
+  import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { cardTags, formatSalary } from '$lib/enrichment';
   import { metaDescription } from '$lib/seo';
   import type { Job } from '$lib/types';
@@ -8,6 +12,7 @@
   import RealityBadge from './RealityBadge.svelte';
   import { timeAgo } from '$lib/utils';
   import { hasViewed } from '$lib/viewedJobs.svelte';
+  import { isSaved, markSaved, markUnsaved } from '$lib/savedJobs.svelte';
 
   // Single source of truth for how a job appears in any list (jobs list and
   // company detail). The whole card is a link to the job detail.
@@ -36,8 +41,42 @@
   const MAX_SKILLS = 5;
   const shownSkills = $derived(skills.slice(0, MAX_SKILLS));
   const extraSkills = $derived(skills.length - MAX_SKILLS);
+
+  // Whether the signed-in user has saved this job, read from the shared saved set
+  // (loaded once on the browse view). The bookmark reflects this and updates the
+  // set on toggle, so every card for the same job stays in sync.
+  const saved = $derived(isSaved(job.public_slug));
+  // Guards against a double-click racing two requests for the same job.
+  let saving = $state(false);
+
+  // Toggle the save mark. Optimistic: flip the shared set first so the bookmark
+  // fills instantly, then confirm with the server and roll back on failure. A
+  // signed-out click routes to sign-in instead (no auto-save afterwards). The
+  // button is an overlay sibling of the card link — not a descendant — so this
+  // never triggers the card's navigation.
+  async function toggleSave() {
+    if (!isAuthenticated()) {
+      openAuthDialog('login');
+      return;
+    }
+    if (saving) return;
+    saving = true;
+    const wasSaved = saved;
+    if (wasSaved) markUnsaved(job.public_slug);
+    else markSaved(job.public_slug);
+    try {
+      if (wasSaved) await api.unsaveJob(job.public_slug);
+      else await api.saveJob(job.public_slug);
+    } catch {
+      if (wasSaved) markSaved(job.public_slug);
+      else markUnsaved(job.public_slug);
+    } finally {
+      saving = false;
+    }
+  }
 </script>
 
+<div class="relative">
 <a
   href={resolve('/jobs/[slug]', { slug: job.public_slug })}
   class="block rounded-xl border border-border bg-card p-4 transition hover:border-brand hover:bg-accent hover:opacity-100"
@@ -47,7 +86,9 @@
        The name truncates to a single line, so a long company (e.g. "Veterinary
        Emergency Group (VEG)") keeps the logo centred and the card rhythm even
        instead of wrapping into a ragged multi-line header. -->
-  <div class="flex items-center justify-between gap-3">
+  <!-- pr-9 reserves the top-right corner for the save button (an overlay outside
+       this link), so the timestamp never slides under it. -->
+  <div class="flex items-center justify-between gap-3 pr-9">
     <div class="flex min-w-0 items-center gap-2">
       <CompanyLogo name={job.company} size="size-7" />
       <span class="truncate text-sm font-medium text-muted-foreground">
@@ -94,3 +135,22 @@
     {/if}
   </div>
 </a>
+
+<!-- Save toggle: an icon-only overlay in the card's top-right corner. It sits
+     outside the <a> (a sibling, not a descendant), so clicking it toggles the
+     bookmark without navigating to the job. -->
+<button
+  type="button"
+  onclick={toggleSave}
+  disabled={saving}
+  aria-pressed={saved}
+  aria-label={saved ? 'Remove from saved' : 'Save job'}
+  title={saved ? 'Saved' : 'Save'}
+  class={[
+    'absolute right-2.5 top-2.5 grid size-8 place-items-center rounded-lg transition hover:bg-accent hover:text-brand disabled:pointer-events-none disabled:opacity-50',
+    saved ? 'text-brand' : 'text-muted-foreground',
+  ]}
+>
+  <Bookmark class="size-[1.05rem] {saved ? 'fill-current' : ''}" aria-hidden="true" />
+</button>
+</div>
