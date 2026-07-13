@@ -9,7 +9,7 @@
     EmailBody,
   } from '$lib/api';
   import { Badge, Button } from '$lib/ui';
-  import { Mail, AtSign, Copy, Search, RefreshCw } from '@lucide/svelte';
+  import { Mail, AtSign, Copy, Search, RefreshCw, ChevronLeft } from '@lucide/svelte';
   import { timeAgo } from '$lib/utils';
   import { avatarInitials, avatarColor } from '$lib/avatar';
 
@@ -113,6 +113,13 @@
     if (source === s) return;
     source = s;
     await reloadList();
+  }
+
+  // Mobile master-detail: clear the selection to return from the reading pane to
+  // the list (on md+ both panes are always visible, so this only matters below md).
+  function backToList() {
+    selectedId = null;
+    selected = null;
   }
 
   async function openMessage(id: number) {
@@ -336,9 +343,10 @@
           {search ? 'No mail matches your search.' : 'No mail yet — it appears here as it arrives.'}
         </p>
       {:else}
-        <!-- Two-pane mail client: a compact message list, then a borderless reading pane. -->
+        <!-- Two-pane on md+; a mobile master-detail below md (open a message → the
+             reading pane replaces the list, with a Back control). -->
         <div class="grid gap-5 md:grid-cols-[minmax(0,19rem)_1fr]">
-          <div class="flex flex-col gap-2">
+          <div class="flex-col gap-2 {selectedId === null ? 'flex' : 'hidden md:flex'}">
             <ul class="flex flex-col gap-1">
               {#each messages as m, i (m.id)}
                 <li class="row-in" style="animation-delay: {Math.min(i, 14) * 15}ms">
@@ -387,8 +395,16 @@
             {/if}
           </div>
 
-          <!-- Reading pane — borderless, flush, to give the content the room. -->
-          <div class="min-h-[20rem]">
+          <!-- Reading pane — borderless, flush, to give the content the room. On
+               mobile it replaces the list once a message is open. -->
+          <div class="min-h-[20rem] {selectedId === null ? 'hidden md:block' : 'block'}">
+            <button
+              type="button"
+              onclick={backToList}
+              class="mb-3 -ml-1 flex items-center gap-1 rounded-md px-1 py-1 text-sm text-muted-foreground hover:text-foreground md:hidden"
+            >
+              <ChevronLeft class="h-4 w-4" /> Inbox
+            </button>
             {#if bodyLoading}
               <p class="py-16 text-center text-sm text-muted-foreground">Loading…</p>
             {:else if !selected}
