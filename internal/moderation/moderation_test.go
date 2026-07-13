@@ -7,36 +7,52 @@ import (
 	"testing"
 
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/moderation"
 	"github.com/strelov1/freehire/internal/normalize"
 )
 
-// fakeRepo captures the params it is handed and returns canned rows, so the tests can
-// assert what the service derived without a database.
+// fakeRepo captures the domain inputs it is handed and returns canned aggregates, so the
+// tests can assert what the service derived without a database.
 type fakeRepo struct {
-	created      db.UpsertManualJobParams
-	updated      db.UpdateManualJobParams
+	created     job.Fields
+	createActor int64
+	updated     job.Fields
+	updateSlug  string
+	updateActor int64
+
 	createCalled bool
 	updateCalled bool
 
-	bySlugJob db.Job
+	bySlugJob job.Job
 	bySlugErr error
 
-	ret db.Job
+	ret job.Job
 }
 
-func (f *fakeRepo) Create(_ context.Context, p db.UpsertManualJobParams) (db.Job, error) {
-	f.created, f.createCalled = p, true
-	return f.ret, nil
+func (f *fakeRepo) Create(_ context.Context, fields job.Fields, actorID int64) (job.Job, job.Extras, error) {
+	f.created, f.createActor, f.createCalled = fields, actorID, true
+	return f.ret, job.Extras{}, nil
 }
 
-func (f *fakeRepo) BySlug(_ context.Context, _ string) (db.Job, error) {
-	return f.bySlugJob, f.bySlugErr
+func (f *fakeRepo) BySlug(_ context.Context, _ string) (job.Job, job.Extras, error) {
+	return f.bySlugJob, job.Extras{}, f.bySlugErr
 }
 
-func (f *fakeRepo) Update(_ context.Context, p db.UpdateManualJobParams) (db.Job, error) {
-	f.updated, f.updateCalled = p, true
-	return f.ret, nil
+func (f *fakeRepo) Update(_ context.Context, slug string, fields job.Fields, actorID int64) (job.Job, job.Extras, error) {
+	f.updated, f.updateSlug, f.updateActor, f.updateCalled = fields, slug, actorID, true
+	return f.ret, job.Extras{}, nil
+}
+
+// mustJob hydrates a db row into the aggregate for the BySlug fixtures (the load path used
+// by Update), failing the test on a malformed row.
+func mustJob(t *testing.T, r db.Job) job.Job {
+	t.Helper()
+	j, _, err := job.FromRow(r)
+	if err != nil {
+		t.Fatalf("FromRow: %v", err)
+	}
+	return j
 }
 
 func TestCreate_DerivesAndPersists(t *testing.T) {
@@ -44,7 +60,7 @@ func TestCreate_DerivesAndPersists(t *testing.T) {
 	svc := moderation.New(repo)
 
 	const url = "https://acme.example/jobs/1"
-	_, err := svc.Create(context.Background(), 7, moderation.CreateInput{
+	_, _, err := svc.Create(context.Background(), 7, moderation.CreateInput{
 		URL:         url,
 		Title:       "Senior Go Developer",
 		Company:     "Acme",
@@ -73,8 +89,9 @@ func TestCreate_DerivesAndPersists(t *testing.T) {
 	if len(got.Skills) != 1 || got.Skills[0] != "go" {
 		t.Errorf("Skills = %v, want [go]", got.Skills)
 	}
-	if got.CreatedBy != 7 || got.UpdatedBy != 7 {
-		t.Errorf("audit = created %d / updated %d, want both 7", got.CreatedBy, got.UpdatedBy)
+	// The acting moderator is stamped onto both created_by and updated_by by the adapter.
+	if repo.createActor != 7 {
+		t.Errorf("actor = %d, want 7", repo.createActor)
 	}
 	if got.Source != "manual" {
 		t.Errorf("Source = %q, want manual (default when none given)", got.Source)
@@ -84,7 +101,7 @@ func TestCreate_DerivesAndPersists(t *testing.T) {
 func TestCreate_SourceIsRecordedAndSlugsFromIt(t *testing.T) {
 	repo := &fakeRepo{}
 	const url = "https://www.workatastartup.com/jobs/96572"
-	_, err := moderation.New(repo).Create(context.Background(), 7, moderation.CreateInput{
+	_, _, err := moderation.New(repo).Create(context.Background(), 7, moderation.CreateInput{
 		URL:     url,
 		Source:  "workatastartup",
 		Title:   "Senior Frontend Engineer",
@@ -106,7 +123,7 @@ func TestCreate_SanitizesDescription(t *testing.T) {
 	// Moderator descriptions are bulk-imported from scraped pages and rendered with
 	// {@html}, so the service must strip active markup before persisting (stored XSS).
 	repo := &fakeRepo{}
-	_, err := moderation.New(repo).Create(context.Background(), 7, moderation.CreateInput{
+	_, _, err := moderation.New(repo).Create(context.Background(), 7, moderation.CreateInput{
 		URL:         "https://acme.example/jobs/1",
 		Title:       "Dev",
 		Company:     "Acme",
@@ -124,9 +141,9 @@ func TestCreate_SanitizesDescription(t *testing.T) {
 }
 
 func TestUpdate_SanitizesDescription(t *testing.T) {
-	repo := &fakeRepo{bySlugJob: db.Job{Source: "manual", ExternalID: "https://acme.example/jobs/1", Title: "Dev", PublicSlug: "s", Description: "old"}}
+	repo := &fakeRepo{bySlugJob: mustJob(t, db.Job{Source: "manual", ExternalID: "https://acme.example/jobs/1", Title: "Dev", PublicSlug: "s", Description: "old"})}
 	evil := `<script>alert(1)</script><b>new</b>`
-	_, err := moderation.New(repo).Update(context.Background(), 9, "s", moderation.UpdatePatch{Description: &evil})
+	_, _, err := moderation.New(repo).Update(context.Background(), 9, "s", moderation.UpdatePatch{Description: &evil})
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -149,7 +166,7 @@ func TestCreate_ValidationRejects(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &fakeRepo{}
-			_, err := moderation.New(repo).Create(context.Background(), 7, tc.in)
+			_, _, err := moderation.New(repo).Create(context.Background(), 7, tc.in)
 			if !errors.Is(err, moderation.ErrInvalid) {
 				t.Errorf("err = %v, want ErrInvalid", err)
 			}
@@ -162,7 +179,7 @@ func TestCreate_ValidationRejects(t *testing.T) {
 
 func TestUpdate_MergesAndRederives(t *testing.T) {
 	repo := &fakeRepo{
-		bySlugJob: db.Job{
+		bySlugJob: mustJob(t, db.Job{
 			Source:      "manual",
 			ExternalID:  "https://acme.example/jobs/1",
 			Title:       "Old Title",
@@ -170,12 +187,12 @@ func TestUpdate_MergesAndRederives(t *testing.T) {
 			Location:    "Remote",
 			Description: "old",
 			PublicSlug:  "old-title-acme-abcd1234",
-		},
+		}),
 	}
 	svc := moderation.New(repo)
 
 	newLoc := "Germany"
-	_, err := svc.Update(context.Background(), 9, "old-title-acme-abcd1234", moderation.UpdatePatch{
+	_, _, err := svc.Update(context.Background(), 9, "old-title-acme-abcd1234", moderation.UpdatePatch{
 		Location: &newLoc,
 	})
 	if err != nil {
@@ -193,18 +210,18 @@ func TestUpdate_MergesAndRederives(t *testing.T) {
 	if got.Location != "Germany" || len(got.Countries) == 0 || got.Countries[0] != "de" {
 		t.Errorf("location/geo not re-derived: loc=%q countries=%v", got.Location, got.Countries)
 	}
-	// Identity is preserved.
-	if got.PublicSlug != "old-title-acme-abcd1234" {
-		t.Errorf("PublicSlug = %q, want unchanged identity", got.PublicSlug)
+	// Identity is preserved: the adapter is asked to write under the original slug.
+	if repo.updateSlug != "old-title-acme-abcd1234" {
+		t.Errorf("update slug = %q, want unchanged identity", repo.updateSlug)
 	}
-	if got.UpdatedBy != 9 {
-		t.Errorf("UpdatedBy = %d, want 9", got.UpdatedBy)
+	if repo.updateActor != 9 {
+		t.Errorf("update actor = %d, want 9", repo.updateActor)
 	}
 }
 
 func TestCreate_RemoteDerivesWorkMode(t *testing.T) {
 	repo := &fakeRepo{}
-	_, err := moderation.New(repo).Create(context.Background(), 7, moderation.CreateInput{
+	_, _, err := moderation.New(repo).Create(context.Background(), 7, moderation.CreateInput{
 		URL:      "https://acme.example/jobs/r",
 		Title:    "Dev",
 		Company:  "Acme",
@@ -220,9 +237,9 @@ func TestCreate_RemoteDerivesWorkMode(t *testing.T) {
 }
 
 func TestUpdate_RejectsBlankRequiredField(t *testing.T) {
-	repo := &fakeRepo{bySlugJob: db.Job{Source: "manual"}}
+	repo := &fakeRepo{}
 	blank := ""
-	_, err := moderation.New(repo).Update(context.Background(), 9, "slug", moderation.UpdatePatch{Company: &blank})
+	_, _, err := moderation.New(repo).Update(context.Background(), 9, "slug", moderation.UpdatePatch{Company: &blank})
 	if !errors.Is(err, moderation.ErrInvalid) {
 		t.Errorf("err = %v, want ErrInvalid for a blanked company", err)
 	}
@@ -233,7 +250,7 @@ func TestUpdate_RejectsBlankRequiredField(t *testing.T) {
 
 func TestUpdate_NotFoundPropagates(t *testing.T) {
 	repo := &fakeRepo{bySlugErr: moderation.ErrJobNotFound}
-	_, err := moderation.New(repo).Update(context.Background(), 9, "missing", moderation.UpdatePatch{})
+	_, _, err := moderation.New(repo).Update(context.Background(), 9, "missing", moderation.UpdatePatch{})
 	if !errors.Is(err, moderation.ErrJobNotFound) {
 		t.Errorf("err = %v, want ErrJobNotFound", err)
 	}

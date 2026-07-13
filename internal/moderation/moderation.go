@@ -14,9 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
-	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/sources"
 )
@@ -96,13 +93,16 @@ func (p UpdatePatch) validate() error {
 	return nil
 }
 
-// Repository is the persistence contract. Create runs the upsert and enrichment enqueue
-// atomically; BySlug loads a moderator-authored job (ErrJobNotFound when missing or not
-// moderator-created); Update writes the full resulting row, scoped to created_by IS NOT NULL.
+// Repository is the persistence contract, expressed in the Job aggregate rather than the
+// generated db rows. Create runs the upsert and enrichment enqueue atomically; BySlug loads
+// a moderator-authored job (ErrJobNotFound when missing or not moderator-created); Update
+// writes the full resulting row, scoped to created_by IS NOT NULL. Create and Update take
+// the derived job.Fields plus the acting moderator; the adapter builds the db params from
+// them. All three return the persisted aggregate and its read-only Extras.
 type Repository interface {
-	Create(ctx context.Context, p db.UpsertManualJobParams) (db.Job, error)
-	BySlug(ctx context.Context, slug string) (db.Job, error)
-	Update(ctx context.Context, p db.UpdateManualJobParams) (db.Job, error)
+	Create(ctx context.Context, f job.Fields, actorID int64) (job.Job, job.Extras, error)
+	BySlug(ctx context.Context, slug string) (job.Job, job.Extras, error)
+	Update(ctx context.Context, slug string, f job.Fields, actorID int64) (job.Job, job.Extras, error)
 }
 
 // Service implements the moderator-authored job use cases.
@@ -119,9 +119,9 @@ func New(repo Repository) *Service {
 // new job (source 'manual', external_id = url). created_by and updated_by are both stamped
 // with the acting moderator: created_by is written on insert, updated_by on a re-create of
 // the same URL.
-func (s *Service) Create(ctx context.Context, actorID int64, in CreateInput) (db.Job, error) {
+func (s *Service) Create(ctx context.Context, actorID int64, in CreateInput) (job.Job, job.Extras, error) {
 	if err := in.Validate(); err != nil {
-		return db.Job{}, err
+		return job.Job{}, job.Extras{}, err
 	}
 	source := strings.TrimSpace(in.Source)
 	if source == "" {
@@ -133,37 +133,14 @@ func (s *Service) Create(ctx context.Context, actorID int64, in CreateInput) (db
 	description := sources.SanitizeHTML(in.Description)
 	f, err := derive(source, in.URL, in.Title, in.Company, in.Location, description, in.Remote)
 	if err != nil {
-		return db.Job{}, err
+		return job.Job{}, job.Extras{}, err
 	}
-	return s.repo.Create(ctx, db.UpsertManualJobParams{
-		Source:      source,
-		ExternalID:  in.URL,
-		URL:         in.URL,
-		Title:       in.Title,
-		Company:     in.Company,
-		CompanySlug: f.CompanySlug,
-		Location:    f.Location,
-		Remote:      in.Remote,
-		Description: description,
-		PostedAt:    toTimestamptz(in.PostedAt),
-		PublicSlug:  f.PublicSlug,
-		Countries:   f.Countries,
-		Regions:     f.Regions,
-		Cities:      f.Cities,
-		WorkMode:    f.WorkMode,
-		Skills:      f.Skills,
-		Seniority:   f.Seniority,
-		Category:    f.Category,
-
-		PostingLanguage:    f.PostingLanguage,
-		EmploymentType:     f.EmploymentType,
-		EducationLevel:     f.EducationLevel,
-		EnglishLevel:       f.EnglishLevel,
-		ExperienceYearsMin: toInt4(f.ExperienceYearsMin),
-
-		CreatedBy: actorID,
-		UpdatedBy: actorID,
-	})
+	// job.New's Draft derives the facets but leaves the identity/content fields the manual
+	// write also persists unset; carry them onto the derived Fields for the adapter.
+	f.URL = in.URL
+	f.Remote = in.Remote
+	f.PostedAt = in.PostedAt
+	return s.repo.Create(ctx, f, actorID)
 }
 
 // Update loads the manual job, overlays the supplied (nil-means-unchanged) fields, and
@@ -171,61 +148,41 @@ func (s *Service) Create(ctx context.Context, actorID int64, in CreateInput) (db
 // description, or company keeps geography/skills/company-slug consistent. The source
 // identity (url/external_id/public_slug) is never recomputed, keeping the public slug
 // stable. A missing or non-moderator-created slug surfaces ErrJobNotFound.
-func (s *Service) Update(ctx context.Context, actorID int64, slug string, p UpdatePatch) (db.Job, error) {
+func (s *Service) Update(ctx context.Context, actorID int64, slug string, p UpdatePatch) (job.Job, job.Extras, error) {
 	if err := p.validate(); err != nil {
-		return db.Job{}, err
+		return job.Job{}, job.Extras{}, err
 	}
-	cur, err := s.repo.BySlug(ctx, slug)
+	cur, _, err := s.repo.BySlug(ctx, slug)
 	if err != nil {
-		return db.Job{}, err
+		return job.Job{}, job.Extras{}, err
 	}
+	curF := cur.Fields()
 
-	title := stringOr(p.Title, cur.Title)
-	company := stringOr(p.Company, cur.Company)
-	location := stringOr(p.Location, cur.Location)
+	title := stringOr(p.Title, curF.Title)
+	company := stringOr(p.Company, curF.Company)
+	location := stringOr(p.Location, curF.Location)
 	// Sanitize a supplied description before persisting (stored XSS); re-sanitizing the
 	// already-clean current value is idempotent.
-	description := sources.SanitizeHTML(stringOr(p.Description, cur.Description))
-	remote := cur.Remote
+	description := sources.SanitizeHTML(stringOr(p.Description, curF.Description))
+	remote := curF.Remote
 	if p.Remote != nil {
 		remote = *p.Remote
 	}
-	postedAt := cur.PostedAt
+	postedAt := curF.PostedAt
 	if p.PostedAt != nil {
-		postedAt = toTimestamptz(p.PostedAt)
+		postedAt = p.PostedAt
 	}
 
 	// External id and source stay the create-time identity; only the dictionary facets
-	// re-derive (the recomputed public slug is discarded — identity is immutable).
-	f, err := derive(cur.Source, cur.ExternalID, title, company, location, description, remote)
+	// re-derive (the recomputed public slug is discarded — identity is immutable, so the
+	// adapter writes the passed-in slug, not f.PublicSlug).
+	f, err := derive(curF.Source, curF.ExternalID, title, company, location, description, remote)
 	if err != nil {
-		return db.Job{}, err
+		return job.Job{}, job.Extras{}, err
 	}
-	return s.repo.Update(ctx, db.UpdateManualJobParams{
-		PublicSlug:  slug,
-		Title:       title,
-		Company:     company,
-		CompanySlug: f.CompanySlug,
-		Location:    f.Location,
-		Remote:      remote,
-		Description: description,
-		PostedAt:    postedAt,
-		Countries:   f.Countries,
-		Regions:     f.Regions,
-		Cities:      f.Cities,
-		WorkMode:    f.WorkMode,
-		Skills:      f.Skills,
-		Seniority:   f.Seniority,
-		Category:    f.Category,
-
-		PostingLanguage:    f.PostingLanguage,
-		EmploymentType:     f.EmploymentType,
-		EducationLevel:     f.EducationLevel,
-		EnglishLevel:       f.EnglishLevel,
-		ExperienceYearsMin: toInt4(f.ExperienceYearsMin),
-
-		UpdatedBy: actorID,
-	})
+	f.Remote = remote
+	f.PostedAt = postedAt
+	return s.repo.Update(ctx, slug, f, actorID)
 }
 
 // derive builds the Job aggregate through the factory and returns its projected
@@ -266,21 +223,4 @@ func stringOr(p *string, fallback string) string {
 		return *p
 	}
 	return fallback
-}
-
-// toTimestamptz maps an optional time to the pgtype the params expect; nil becomes NULL.
-func toTimestamptz(t *time.Time) pgtype.Timestamptz {
-	if t == nil {
-		return pgtype.Timestamptz{}
-	}
-	return pgtype.Timestamptz{Time: *t, Valid: true}
-}
-
-// toInt4 maps an optional int (experience_years_min) to the pgtype the params expect;
-// nil becomes NULL.
-func toInt4(n *int) pgtype.Int4 {
-	if n == nil {
-		return pgtype.Int4{}
-	}
-	return pgtype.Int4{Int32: int32(*n), Valid: true}
 }

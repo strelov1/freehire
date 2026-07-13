@@ -6,56 +6,62 @@ import (
 	"testing"
 
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/moderation"
 	"github.com/strelov1/freehire/internal/submission"
 )
 
-// fakeRepo records the params it is handed and returns canned rows, so the service tests
-// run without a database (the moderation_test.go precedent).
+// fakeRepo records the domain inputs it is handed and returns canned rows, so the service
+// tests run without a database (the moderation_test.go precedent).
 type fakeRepo struct {
-	created      db.CreateSubmissionParams
-	createCalled bool
-	createErr    error
-	createRet    db.JobSubmission
+	created         moderation.CreateInput
+	createSubmitter int64
+	createCalled    bool
+	createErr       error
+	createRet       submission.Submission
 
-	getRet db.JobSubmission
+	getRet submission.Submission
 	getErr error
 
-	approved      db.MarkSubmissionApprovedParams
-	approveCalled bool
-	approveErr    error
-	approveRet    db.JobSubmission
+	approveID       int64
+	approveReviewer int64
+	approveJobID    int64
+	approveCalled   bool
+	approveErr      error
+	approveRet      submission.Submission
 
-	rejected     db.MarkSubmissionRejectedParams
-	rejectCalled bool
-	rejectErr    error
-	rejectRet    db.JobSubmission
+	rejectID       int64
+	rejectReviewer int64
+	rejectReason   string
+	rejectCalled   bool
+	rejectErr      error
+	rejectRet      submission.Submission
 }
 
-func (f *fakeRepo) Create(_ context.Context, p db.CreateSubmissionParams) (db.JobSubmission, error) {
-	f.created, f.createCalled = p, true
+func (f *fakeRepo) Create(_ context.Context, submittedBy int64, in moderation.CreateInput) (submission.Submission, error) {
+	f.created, f.createSubmitter, f.createCalled = in, submittedBy, true
 	return f.createRet, f.createErr
 }
 
-func (f *fakeRepo) Get(_ context.Context, _ int64) (db.JobSubmission, error) {
+func (f *fakeRepo) Get(_ context.Context, _ int64) (submission.Submission, error) {
 	return f.getRet, f.getErr
 }
 
-func (f *fakeRepo) ListPending(_ context.Context) ([]db.ListPendingSubmissionsRow, error) {
+func (f *fakeRepo) ListPending(_ context.Context) ([]submission.PendingSubmission, error) {
 	return nil, nil
 }
 
-func (f *fakeRepo) ListByUser(_ context.Context, _ int64) ([]db.ListSubmissionsByUserRow, error) {
+func (f *fakeRepo) ListByUser(_ context.Context, _ int64) ([]submission.UserSubmission, error) {
 	return nil, nil
 }
 
-func (f *fakeRepo) MarkApproved(_ context.Context, p db.MarkSubmissionApprovedParams) (db.JobSubmission, error) {
-	f.approved, f.approveCalled = p, true
+func (f *fakeRepo) MarkApproved(_ context.Context, id, reviewerID, jobID int64) (submission.Submission, error) {
+	f.approveID, f.approveReviewer, f.approveJobID, f.approveCalled = id, reviewerID, jobID, true
 	return f.approveRet, f.approveErr
 }
 
-func (f *fakeRepo) MarkRejected(_ context.Context, p db.MarkSubmissionRejectedParams) (db.JobSubmission, error) {
-	f.rejected, f.rejectCalled = p, true
+func (f *fakeRepo) MarkRejected(_ context.Context, id, reviewerID int64, reason string) (submission.Submission, error) {
+	f.rejectID, f.rejectReviewer, f.rejectReason, f.rejectCalled = id, reviewerID, reason, true
 	return f.rejectRet, f.rejectErr
 }
 
@@ -64,13 +70,23 @@ type fakeMinter struct {
 	actorID int64
 	in      moderation.CreateInput
 	called  bool
-	ret     db.Job
+	ret     job.Job
 	err     error
 }
 
-func (m *fakeMinter) Create(_ context.Context, actorID int64, in moderation.CreateInput) (db.Job, error) {
+func (m *fakeMinter) Create(_ context.Context, actorID int64, in moderation.CreateInput) (job.Job, job.Extras, error) {
 	m.actorID, m.in, m.called = actorID, in, true
-	return m.ret, m.err
+	return m.ret, job.Extras{}, m.err
+}
+
+// mustJob hydrates a db row into the aggregate for the minted-job fixture.
+func mustJob(t *testing.T, r db.Job) job.Job {
+	t.Helper()
+	j, _, err := job.FromRow(r)
+	if err != nil {
+		t.Fatalf("FromRow: %v", err)
+	}
+	return j
 }
 
 func validInput() moderation.CreateInput {
@@ -84,7 +100,7 @@ func validInput() moderation.CreateInput {
 }
 
 func TestSubmit_PersistsPendingWithOwner(t *testing.T) {
-	repo := &fakeRepo{createRet: db.JobSubmission{ID: 1, Status: "pending"}}
+	repo := &fakeRepo{createRet: submission.Submission{ID: 1, Status: "pending"}}
 	svc := submission.New(repo, &fakeMinter{})
 
 	_, err := svc.Submit(context.Background(), 7, validInput())
@@ -94,10 +110,10 @@ func TestSubmit_PersistsPendingWithOwner(t *testing.T) {
 	if !repo.createCalled {
 		t.Fatal("repo.Create was not called")
 	}
-	got := repo.created
-	if got.SubmittedBy != 7 {
-		t.Errorf("SubmittedBy = %d, want 7", got.SubmittedBy)
+	if repo.createSubmitter != 7 {
+		t.Errorf("submittedBy = %d, want 7", repo.createSubmitter)
 	}
+	got := repo.created
 	if got.URL != "https://acme.example/jobs/1" || got.Title != "Senior Go Developer" || got.Company != "Acme" {
 		t.Errorf("content not carried through: %+v", got)
 	}
@@ -139,9 +155,9 @@ func TestSubmit_PropagatesDuplicatePending(t *testing.T) {
 }
 
 func TestApprove_MintsUnderSubmitterAndMarks(t *testing.T) {
-	sub := db.JobSubmission{ID: 5, SubmittedBy: 7, Status: "pending", URL: "https://x/1", Source: "workatastartup", Title: "Dev", Company: "Acme", Location: "Berlin", Remote: true, Description: "Build <b>it</b>"}
-	repo := &fakeRepo{getRet: sub, approveRet: db.JobSubmission{ID: 5, Status: "approved"}}
-	minter := &fakeMinter{ret: db.Job{ID: 99}}
+	sub := submission.Submission{ID: 5, SubmittedBy: 7, Status: "pending", URL: "https://x/1", Source: "workatastartup", Title: "Dev", Company: "Acme", Location: "Berlin", Remote: true, Description: "Build <b>it</b>"}
+	repo := &fakeRepo{getRet: sub, approveRet: submission.Submission{ID: 5, Status: "approved"}}
+	minter := &fakeMinter{ret: mustJob(t, db.Job{ID: 99})}
 	svc := submission.New(repo, minter)
 
 	_, err := svc.Approve(context.Background(), 3, 5)
@@ -163,8 +179,8 @@ func TestApprove_MintsUnderSubmitterAndMarks(t *testing.T) {
 	if !repo.approveCalled {
 		t.Fatal("repo.MarkApproved was not called")
 	}
-	if repo.approved.ID != 5 || repo.approved.ReviewedBy != 3 || repo.approved.JobID != 99 {
-		t.Errorf("approve params = %+v, want id=5 reviewer=3 job=99", repo.approved)
+	if repo.approveID != 5 || repo.approveReviewer != 3 || repo.approveJobID != 99 {
+		t.Errorf("approve params = id=%d reviewer=%d job=%d, want id=5 reviewer=3 job=99", repo.approveID, repo.approveReviewer, repo.approveJobID)
 	}
 }
 
@@ -181,7 +197,7 @@ func TestApprove_NotFound(t *testing.T) {
 }
 
 func TestApprove_AlreadyDecided(t *testing.T) {
-	repo := &fakeRepo{getRet: db.JobSubmission{ID: 5, Status: "approved"}}
+	repo := &fakeRepo{getRet: submission.Submission{ID: 5, Status: "approved"}}
 	minter := &fakeMinter{}
 	_, err := submission.New(repo, minter).Approve(context.Background(), 3, 5)
 	if !errors.Is(err, submission.ErrAlreadyDecided) {
@@ -193,7 +209,7 @@ func TestApprove_AlreadyDecided(t *testing.T) {
 }
 
 func TestReject_MarksWithReason(t *testing.T) {
-	repo := &fakeRepo{getRet: db.JobSubmission{ID: 5, Status: "pending"}, rejectRet: db.JobSubmission{Status: "rejected"}}
+	repo := &fakeRepo{getRet: submission.Submission{ID: 5, Status: "pending"}, rejectRet: submission.Submission{Status: "rejected"}}
 	minter := &fakeMinter{}
 	_, err := submission.New(repo, minter).Reject(context.Background(), 3, 5, "duplicate")
 	if err != nil {
@@ -202,8 +218,8 @@ func TestReject_MarksWithReason(t *testing.T) {
 	if !repo.rejectCalled {
 		t.Fatal("repo.MarkRejected was not called")
 	}
-	if repo.rejected.ID != 5 || repo.rejected.ReviewedBy != 3 || repo.rejected.ReviewReason != "duplicate" {
-		t.Errorf("reject params = %+v, want id=5 reviewer=3 reason=duplicate", repo.rejected)
+	if repo.rejectID != 5 || repo.rejectReviewer != 3 || repo.rejectReason != "duplicate" {
+		t.Errorf("reject params = id=%d reviewer=%d reason=%q, want id=5 reviewer=3 reason=duplicate", repo.rejectID, repo.rejectReviewer, repo.rejectReason)
 	}
 	if minter.called {
 		t.Error("reject must not mint a job")
@@ -211,7 +227,7 @@ func TestReject_MarksWithReason(t *testing.T) {
 }
 
 func TestReject_AlreadyDecided(t *testing.T) {
-	repo := &fakeRepo{getRet: db.JobSubmission{ID: 5, Status: "rejected"}}
+	repo := &fakeRepo{getRet: submission.Submission{ID: 5, Status: "rejected"}}
 	_, err := submission.New(repo, &fakeMinter{}).Reject(context.Background(), 3, 5, "")
 	if !errors.Is(err, submission.ErrAlreadyDecided) {
 		t.Errorf("err = %v, want ErrAlreadyDecided", err)

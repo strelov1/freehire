@@ -79,12 +79,12 @@ func (a *API) CreateJob(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
 
-	job, err := a.moderation.Create(c.Context(), actorID, in.toCreateInput())
+	domainJob, extras, err := a.moderation.Create(c.Context(), actorID, in.toCreateInput())
 	if err != nil {
 		return moderationError(err)
 	}
 
-	view, err := jobview.FromRow(job)
+	view, err := jobview.FromDomain(domainJob, extras)
 	if err != nil {
 		return err
 	}
@@ -104,7 +104,7 @@ func (a *API) UpdateJob(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
 
-	job, err := a.moderation.Update(c.Context(), actorID, c.Params("slug"), moderation.UpdatePatch{
+	domainJob, extras, err := a.moderation.Update(c.Context(), actorID, c.Params("slug"), moderation.UpdatePatch{
 		Title:       in.Title,
 		Company:     in.Company,
 		Location:    in.Location,
@@ -116,7 +116,7 @@ func (a *API) UpdateJob(c *fiber.Ctx) error {
 		return moderationError(err)
 	}
 
-	view, err := jobview.FromRow(job)
+	view, err := jobview.FromDomain(domainJob, extras)
 	if err != nil {
 		return err
 	}

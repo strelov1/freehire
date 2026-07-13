@@ -11,9 +11,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
-	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/moderation"
 )
 
@@ -29,20 +27,58 @@ var (
 	ErrAlreadyDecided = errors.New("submission: already decided")
 )
 
+// Submission is a stored queue entry: the package domain type, decoupled from the generated
+// db row. SubmittedBy is kept (unlike the report queue's dropped ownership columns) because
+// Approve mints the live job attributed to the original submitter; it is never on the wire.
+// created_at/reviewed_at/posted_at are *time.Time because the handler serializes them.
+type Submission struct {
+	ID           int64
+	SubmittedBy  int64
+	URL          string
+	Source       string
+	Title        string
+	Company      string
+	Location     string
+	Remote       bool
+	Description  string
+	PostedAt     *time.Time
+	Status       string
+	ReviewReason string
+	ReviewedAt   *time.Time
+	CreatedAt    *time.Time
+}
+
+// PendingSubmission is a moderator-queue row: a Submission plus the joined submitter email
+// the reviewer needs.
+type PendingSubmission struct {
+	Submission
+	SubmitterEmail string
+}
+
+// UserSubmission is a "my submissions" row: a Submission plus the minted job's public slug,
+// set only on an approved submission (empty otherwise) so the UI can link to /jobs/<slug>.
+type UserSubmission struct {
+	Submission
+	JobSlug string
+}
+
 // Minter mints a live vacancy from validated content. internal/moderation.Service
 // satisfies it; the seam keeps the service testable without a database.
 type Minter interface {
-	Create(ctx context.Context, actorID int64, in moderation.CreateInput) (db.Job, error)
+	Create(ctx context.Context, actorID int64, in moderation.CreateInput) (job.Job, job.Extras, error)
 }
 
-// Repository is the persistence contract for the submission queue.
+// Repository is the persistence contract for the submission queue, expressed in the package
+// domain types rather than the generated db rows. Create takes the validated content plus the
+// owning user; the mark methods take primitive ids; the adapter builds the db params and maps
+// the rows back.
 type Repository interface {
-	Create(ctx context.Context, p db.CreateSubmissionParams) (db.JobSubmission, error)
-	Get(ctx context.Context, id int64) (db.JobSubmission, error)
-	ListPending(ctx context.Context) ([]db.ListPendingSubmissionsRow, error)
-	ListByUser(ctx context.Context, userID int64) ([]db.ListSubmissionsByUserRow, error)
-	MarkApproved(ctx context.Context, p db.MarkSubmissionApprovedParams) (db.JobSubmission, error)
-	MarkRejected(ctx context.Context, p db.MarkSubmissionRejectedParams) (db.JobSubmission, error)
+	Create(ctx context.Context, submittedBy int64, in moderation.CreateInput) (Submission, error)
+	Get(ctx context.Context, id int64) (Submission, error)
+	ListPending(ctx context.Context) ([]PendingSubmission, error)
+	ListByUser(ctx context.Context, userID int64) ([]UserSubmission, error)
+	MarkApproved(ctx context.Context, id, reviewerID, jobID int64) (Submission, error)
+	MarkRejected(ctx context.Context, id, reviewerID int64, reason string) (Submission, error)
 }
 
 // Service implements the submission use cases.
@@ -60,31 +96,21 @@ func New(repo Repository, minter Minter) *Service {
 // and stores it as a pending submission owned by the given user. A second submission of a
 // URL already pending surfaces ErrDuplicatePending (the repository maps the unique
 // violation).
-func (s *Service) Submit(ctx context.Context, submittedBy int64, in moderation.CreateInput) (db.JobSubmission, error) {
+func (s *Service) Submit(ctx context.Context, submittedBy int64, in moderation.CreateInput) (Submission, error) {
 	if err := in.Validate(); err != nil {
-		return db.JobSubmission{}, err
+		return Submission{}, err
 	}
-	return s.repo.Create(ctx, db.CreateSubmissionParams{
-		SubmittedBy: submittedBy,
-		URL:         in.URL,
-		Source:      in.Source,
-		Title:       in.Title,
-		Company:     in.Company,
-		Location:    in.Location,
-		Remote:      in.Remote,
-		Description: in.Description,
-		PostedAt:    toTimestamptz(in.PostedAt),
-	})
+	return s.repo.Create(ctx, submittedBy, in)
 }
 
 // ListMine returns the given user's submissions, newest first. Each row carries the
 // minted job's slug (when approved) so the UI can link to the live vacancy.
-func (s *Service) ListMine(ctx context.Context, userID int64) ([]db.ListSubmissionsByUserRow, error) {
+func (s *Service) ListMine(ctx context.Context, userID int64) ([]UserSubmission, error) {
 	return s.repo.ListByUser(ctx, userID)
 }
 
 // ListPending returns the moderator review queue (with submitter emails), newest first.
-func (s *Service) ListPending(ctx context.Context) ([]db.ListPendingSubmissionsRow, error) {
+func (s *Service) ListPending(ctx context.Context) ([]PendingSubmission, error) {
 	return s.repo.ListPending(ctx)
 }
 
@@ -93,15 +119,15 @@ func (s *Service) ListPending(ctx context.Context) ([]db.ListPendingSubmissionsR
 // minted job. A missing submission is ErrSubmissionNotFound; one that is no longer pending
 // is ErrAlreadyDecided. The mint runs before the mark; because the moderation upsert is
 // idempotent on the URL, a failure between the two is safe to retry.
-func (s *Service) Approve(ctx context.Context, reviewerID, id int64) (db.JobSubmission, error) {
+func (s *Service) Approve(ctx context.Context, reviewerID, id int64) (Submission, error) {
 	sub, err := s.repo.Get(ctx, id)
 	if err != nil {
-		return db.JobSubmission{}, err
+		return Submission{}, err
 	}
 	if sub.Status != statusPending {
-		return db.JobSubmission{}, ErrAlreadyDecided
+		return Submission{}, ErrAlreadyDecided
 	}
-	job, err := s.minter.Create(ctx, sub.SubmittedBy, moderation.CreateInput{
+	mintedJob, _, err := s.minter.Create(ctx, sub.SubmittedBy, moderation.CreateInput{
 		URL:         sub.URL,
 		Source:      sub.Source,
 		Title:       sub.Title,
@@ -109,52 +135,28 @@ func (s *Service) Approve(ctx context.Context, reviewerID, id int64) (db.JobSubm
 		Location:    sub.Location,
 		Remote:      sub.Remote,
 		Description: sub.Description,
-		PostedAt:    fromTimestamptz(sub.PostedAt),
+		PostedAt:    sub.PostedAt,
 	})
 	if err != nil {
-		return db.JobSubmission{}, err
+		return Submission{}, err
 	}
-	return s.repo.MarkApproved(ctx, db.MarkSubmissionApprovedParams{
-		ID:         id,
-		ReviewedBy: reviewerID,
-		JobID:      job.ID,
-	})
+	return s.repo.MarkApproved(ctx, id, reviewerID, mintedJob.Fields().ID)
 }
 
 // Reject marks a pending submission rejected with an optional reason, recording the
 // reviewing moderator. No job is created. A missing submission is ErrSubmissionNotFound;
 // one that is no longer pending is ErrAlreadyDecided.
-func (s *Service) Reject(ctx context.Context, reviewerID, id int64, reason string) (db.JobSubmission, error) {
+func (s *Service) Reject(ctx context.Context, reviewerID, id int64, reason string) (Submission, error) {
 	sub, err := s.repo.Get(ctx, id)
 	if err != nil {
-		return db.JobSubmission{}, err
+		return Submission{}, err
 	}
 	if sub.Status != statusPending {
-		return db.JobSubmission{}, ErrAlreadyDecided
+		return Submission{}, ErrAlreadyDecided
 	}
-	return s.repo.MarkRejected(ctx, db.MarkSubmissionRejectedParams{
-		ID:           id,
-		ReviewedBy:   reviewerID,
-		ReviewReason: reason,
-	})
+	return s.repo.MarkRejected(ctx, id, reviewerID, reason)
 }
 
 // statusPending is the only status that can be approved or rejected; the closed vocabulary
 // lives in the migration's CHECK.
 const statusPending = "pending"
-
-// toTimestamptz maps an optional time to the pgtype the params expect; nil becomes NULL.
-func toTimestamptz(t *time.Time) pgtype.Timestamptz {
-	if t == nil {
-		return pgtype.Timestamptz{}
-	}
-	return pgtype.Timestamptz{Time: *t, Valid: true}
-}
-
-// fromTimestamptz maps a nullable DB timestamp back to an optional time for the mint input.
-func fromTimestamptz(t pgtype.Timestamptz) *time.Time {
-	if !t.Valid {
-		return nil
-	}
-	return &t.Time
-}

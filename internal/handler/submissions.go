@@ -5,9 +5,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/moderation"
 	"github.com/strelov1/freehire/internal/submission"
 )
@@ -36,7 +34,7 @@ type submissionResponse struct {
 }
 
 // toSubmissionResponse maps a stored submission to its wire shape (no submitter email).
-func toSubmissionResponse(s db.JobSubmission) submissionResponse {
+func toSubmissionResponse(s submission.Submission) submissionResponse {
 	return submissionResponse{
 		ID:           s.ID,
 		URL:          s.URL,
@@ -46,16 +44,16 @@ func toSubmissionResponse(s db.JobSubmission) submissionResponse {
 		Location:     s.Location,
 		Remote:       s.Remote,
 		Description:  s.Description,
-		PostedAt:     timePtr(s.PostedAt),
+		PostedAt:     s.PostedAt,
 		Status:       s.Status,
 		ReviewReason: s.ReviewReason,
-		ReviewedAt:   timePtr(s.ReviewedAt),
-		CreatedAt:    timePtr(s.CreatedAt),
+		ReviewedAt:   s.ReviewedAt,
+		CreatedAt:    s.CreatedAt,
 	}
 }
 
 // toPendingSubmissionResponse maps a moderator-queue row, adding the submitter's email.
-func toPendingSubmissionResponse(r db.ListPendingSubmissionsRow) submissionResponse {
+func toPendingSubmissionResponse(r submission.PendingSubmission) submissionResponse {
 	return submissionResponse{
 		ID:             r.ID,
 		URL:            r.URL,
@@ -65,18 +63,18 @@ func toPendingSubmissionResponse(r db.ListPendingSubmissionsRow) submissionRespo
 		Location:       r.Location,
 		Remote:         r.Remote,
 		Description:    r.Description,
-		PostedAt:       timePtr(r.PostedAt),
+		PostedAt:       r.PostedAt,
 		Status:         r.Status,
 		ReviewReason:   r.ReviewReason,
-		ReviewedAt:     timePtr(r.ReviewedAt),
-		CreatedAt:      timePtr(r.CreatedAt),
+		ReviewedAt:     r.ReviewedAt,
+		CreatedAt:      r.CreatedAt,
 		SubmitterEmail: r.SubmitterEmail,
 	}
 }
 
 // toMySubmissionResponse maps a "my submissions" row, adding the minted job's slug when
-// the submission was approved (job_slug is NULL otherwise).
-func toMySubmissionResponse(r db.ListSubmissionsByUserRow) submissionResponse {
+// the submission was approved (empty otherwise).
+func toMySubmissionResponse(r submission.UserSubmission) submissionResponse {
 	return submissionResponse{
 		ID:           r.ID,
 		URL:          r.URL,
@@ -86,12 +84,12 @@ func toMySubmissionResponse(r db.ListSubmissionsByUserRow) submissionResponse {
 		Location:     r.Location,
 		Remote:       r.Remote,
 		Description:  r.Description,
-		PostedAt:     timePtr(r.PostedAt),
+		PostedAt:     r.PostedAt,
 		Status:       r.Status,
 		ReviewReason: r.ReviewReason,
-		ReviewedAt:   timePtr(r.ReviewedAt),
-		CreatedAt:    timePtr(r.CreatedAt),
-		JobSlug:      r.JobSlug.String,
+		ReviewedAt:   r.ReviewedAt,
+		CreatedAt:    r.CreatedAt,
+		JobSlug:      r.JobSlug,
 	}
 }
 
@@ -212,12 +210,4 @@ func (a *API) RejectSubmission(c *fiber.Ctx) error {
 		return submissionError(err)
 	}
 	return c.JSON(fiber.Map{"data": toSubmissionResponse(sub)})
-}
-
-// timePtr maps a nullable DB timestamp to an optional time for the wire shape.
-func timePtr(t pgtype.Timestamptz) *time.Time {
-	if !t.Valid {
-		return nil
-	}
-	return &t.Time
 }
