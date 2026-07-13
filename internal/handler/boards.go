@@ -3,7 +3,7 @@ package handler
 import (
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/savedsearch"
 )
 
 // boardResponse is the public wire shape of a shared board: only its display fields. It
@@ -16,11 +16,11 @@ type boardResponse struct {
 }
 
 // toBoardResponse maps a public-board row to its wire shape.
-func toBoardResponse(b db.GetPublicBoardBySlugRow) boardResponse {
+func toBoardResponse(b savedsearch.Board) boardResponse {
 	return boardResponse{
 		Name:        b.Name,
 		Query:       b.Query,
-		AuthorLabel: b.AuthorLabel.String,
+		AuthorLabel: b.AuthorLabel,
 	}
 }
 

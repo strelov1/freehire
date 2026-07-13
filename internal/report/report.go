@@ -11,8 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-
-	"github.com/strelov1/freehire/internal/db"
+	"time"
 )
 
 // Sentinel errors mapped to HTTP statuses by the handler.
@@ -73,13 +72,39 @@ func (in FileInput) validate() (FileInput, error) {
 	}, nil
 }
 
-// Repository is the persistence contract for the report queue.
+// Report is a stored moderation-queue report: the package domain type, decoupled from the
+// generated db row. The internal ownership columns (reported_by, reviewed_by) are dropped —
+// they are never on the wire — while created_at/reviewed_at are kept as *time.Time because
+// the handler serializes them.
+type Report struct {
+	ID              int64
+	JobID           int64
+	Reason          string
+	Details         string
+	ContactTelegram string
+	Status          string
+	ReviewReason    string
+	ReviewedAt      *time.Time
+	CreatedAt       *time.Time
+}
+
+// PendingReport is a moderator-queue row: a Report plus the joined columns the reviewer
+// needs — the reporter's email and the reported job's slug and title.
+type PendingReport struct {
+	Report
+	ReporterEmail string
+	JobSlug       string
+	JobTitle      string
+}
+
+// Repository is the persistence contract for the report queue. Implementations map the
+// generated db rows to Report/PendingReport, so the use case never sees db.*.
 type Repository interface {
-	Create(ctx context.Context, p db.CreateReportParams) (db.JobReport, error)
-	Get(ctx context.Context, id int64) (db.JobReport, error)
-	ListPending(ctx context.Context) ([]db.ListPendingReportsRow, error)
-	MarkResolved(ctx context.Context, p db.MarkReportResolvedParams) (db.JobReport, error)
-	MarkDismissed(ctx context.Context, p db.MarkReportDismissedParams) (db.JobReport, error)
+	Create(ctx context.Context, reportedBy, jobID int64, reason, details, contactTelegram string) (Report, error)
+	Get(ctx context.Context, id int64) (Report, error)
+	ListPending(ctx context.Context) ([]PendingReport, error)
+	MarkResolved(ctx context.Context, id, reviewedBy int64) (Report, error)
+	MarkDismissed(ctx context.Context, id, reviewedBy int64, reviewReason string) (Report, error)
 }
 
 // JobCloser soft-closes one job. The QueriesRepository satisfies it (over CloseJobByID);
@@ -102,23 +127,17 @@ func New(repo Repository, closer JobCloser) *Service {
 // File validates the content and stores a pending report owned by reportedBy against
 // jobID. A second open report of the same job by the same user surfaces ErrDuplicateOpen
 // (the repository maps the unique violation).
-func (s *Service) File(ctx context.Context, reportedBy, jobID int64, in FileInput) (db.JobReport, error) {
+func (s *Service) File(ctx context.Context, reportedBy, jobID int64, in FileInput) (Report, error) {
 	v, err := in.validate()
 	if err != nil {
-		return db.JobReport{}, err
+		return Report{}, err
 	}
-	return s.repo.Create(ctx, db.CreateReportParams{
-		ReportedBy:      reportedBy,
-		JobID:           jobID,
-		Reason:          v.Reason,
-		Details:         v.Details,
-		ContactTelegram: v.ContactTelegram,
-	})
+	return s.repo.Create(ctx, reportedBy, jobID, v.Reason, v.Details, v.ContactTelegram)
 }
 
 // ListPending returns the moderator review queue (with reporter email and job slug/title),
 // newest first.
-func (s *Service) ListPending(ctx context.Context) ([]db.ListPendingReportsRow, error) {
+func (s *Service) ListPending(ctx context.Context) ([]PendingReport, error) {
 	return s.repo.ListPending(ctx)
 }
 
@@ -126,38 +145,34 @@ func (s *Service) ListPending(ctx context.Context) ([]db.ListPendingReportsRow, 
 // is set, the reported job is soft-closed first; a close failure aborts before the mark, so
 // the report stays pending and the action is safe to retry. A missing report is
 // ErrReportNotFound; one no longer pending is ErrAlreadyDecided.
-func (s *Service) Resolve(ctx context.Context, reviewerID, id int64, closeJob bool) (db.JobReport, error) {
+func (s *Service) Resolve(ctx context.Context, reviewerID, id int64, closeJob bool) (Report, error) {
 	rep, err := s.repo.Get(ctx, id)
 	if err != nil {
-		return db.JobReport{}, err
+		return Report{}, err
 	}
 	if rep.Status != statusPending {
-		return db.JobReport{}, ErrAlreadyDecided
+		return Report{}, ErrAlreadyDecided
 	}
 	if closeJob {
 		if err := s.closer.Close(ctx, rep.JobID); err != nil {
-			return db.JobReport{}, err
+			return Report{}, err
 		}
 	}
-	return s.repo.MarkResolved(ctx, db.MarkReportResolvedParams{ID: id, ReviewedBy: reviewerID})
+	return s.repo.MarkResolved(ctx, id, reviewerID)
 }
 
 // Dismiss marks a pending report dismissed with an optional reason, recording the reviewing
 // moderator. The reported job is not touched. A missing report is ErrReportNotFound; one no
 // longer pending is ErrAlreadyDecided.
-func (s *Service) Dismiss(ctx context.Context, reviewerID, id int64, reason string) (db.JobReport, error) {
+func (s *Service) Dismiss(ctx context.Context, reviewerID, id int64, reason string) (Report, error) {
 	rep, err := s.repo.Get(ctx, id)
 	if err != nil {
-		return db.JobReport{}, err
+		return Report{}, err
 	}
 	if rep.Status != statusPending {
-		return db.JobReport{}, ErrAlreadyDecided
+		return Report{}, ErrAlreadyDecided
 	}
-	return s.repo.MarkDismissed(ctx, db.MarkReportDismissedParams{
-		ID:           id,
-		ReviewedBy:   reviewerID,
-		ReviewReason: reason,
-	})
+	return s.repo.MarkDismissed(ctx, id, reviewerID, reason)
 }
 
 // statusPending is the only status that can be resolved or dismissed; the closed vocabulary

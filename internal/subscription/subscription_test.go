@@ -4,30 +4,36 @@ import (
 	"context"
 	"errors"
 	"testing"
-
-	"github.com/strelov1/freehire/internal/db"
 )
+
+// createArgs captures the primitive params Create is handed, so a test can assert them
+// without a db.* params struct.
+type createArgs struct {
+	UserID        int64
+	SavedSearchID int64
+	Channel       string
+}
 
 // fakeRepo records Create calls so a test can assert the channel that reached the
 // repository (and whether it was reached at all).
 type fakeRepo struct {
-	created *db.CreateSubscriptionParams
+	created *createArgs
 }
 
-func (r *fakeRepo) List(context.Context, int64) ([]db.ListSubscriptionsRow, error) {
+func (r *fakeRepo) List(context.Context, int64) ([]SubscriptionListItem, error) {
 	return nil, nil
 }
 
-func (r *fakeRepo) Create(_ context.Context, p db.CreateSubscriptionParams) (db.Subscription, error) {
-	r.created = &p
-	return db.Subscription{Channel: p.Channel}, nil
+func (r *fakeRepo) Create(_ context.Context, userID, savedSearchID int64, channel string) (Subscription, error) {
+	r.created = &createArgs{UserID: userID, SavedSearchID: savedSearchID, Channel: channel}
+	return Subscription{Channel: channel}, nil
 }
 
-func (r *fakeRepo) SetActive(context.Context, db.SetSubscriptionActiveParams) (db.Subscription, error) {
-	return db.Subscription{}, nil
+func (r *fakeRepo) SetActive(context.Context, int64, int64, bool) (Subscription, error) {
+	return Subscription{}, nil
 }
 
-func (r *fakeRepo) Delete(context.Context, db.DeleteSubscriptionParams) error { return nil }
+func (r *fakeRepo) Delete(context.Context, int64, int64) error { return nil }
 
 func TestCreate_EmailChannelAccepted(t *testing.T) {
 	repo := &fakeRepo{}

@@ -7,9 +7,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
-	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/normalize"
 )
 
@@ -39,73 +36,63 @@ const slugAlphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
 // mints a readable one from the name otherwise, and stores the optional author label
 // (trimmed; blank → anonymous, over-long → ErrInvalidAuthorLabel). A slug collision is
 // retried with a fresh suffix. Returns the updated row (with its public slug).
-func (s *Service) Share(ctx context.Context, userID, id int64, authorLabel string) (db.SavedSearch, error) {
+func (s *Service) Share(ctx context.Context, userID, id int64, authorLabel string) (SavedSearch, error) {
 	label, err := validAuthorLabel(authorLabel)
 	if err != nil {
-		return db.SavedSearch{}, err
+		return SavedSearch{}, err
 	}
 
-	set, err := s.repo.Get(ctx, db.GetSavedSearchParams{ID: id, UserID: userID})
+	set, err := s.repo.Get(ctx, id, userID)
 	if err != nil {
-		return db.SavedSearch{}, err
+		return SavedSearch{}, err
 	}
 
 	// Re-share keeps the existing slug so a previously shared link stays valid.
-	if set.PublicSlug.Valid {
-		return s.repo.SetPublicSlug(ctx, db.SetSavedSearchPublicSlugParams{
-			ID:          id,
-			UserID:      userID,
-			PublicSlug:  set.PublicSlug,
-			AuthorLabel: label,
-		})
+	if set.PublicSlug != "" {
+		return s.repo.SetPublicSlug(ctx, id, userID, set.PublicSlug, label)
 	}
 
 	for attempt := 0; attempt < maxShareAttempts; attempt++ {
 		slug, err := boardSlug(set.Name)
 		if err != nil {
-			return db.SavedSearch{}, err
+			return SavedSearch{}, err
 		}
-		row, err := s.repo.SetPublicSlug(ctx, db.SetSavedSearchPublicSlugParams{
-			ID:          id,
-			UserID:      userID,
-			PublicSlug:  pgtype.Text{String: slug, Valid: true},
-			AuthorLabel: label,
-		})
+		row, err := s.repo.SetPublicSlug(ctx, id, userID, slug, label)
 		if errors.Is(err, ErrSlugTaken) {
 			continue // fresh suffix on the next attempt
 		}
 		if err != nil {
-			return db.SavedSearch{}, err
+			return SavedSearch{}, err
 		}
 		return row, nil
 	}
-	return db.SavedSearch{}, ErrSlugTaken
+	return SavedSearch{}, ErrSlugTaken
 }
 
 // Unshare makes a shared board private again, owner-scoped. It is an idempotent no-op
 // when the set is already private; a missing or non-owned id → ErrNotFound.
 func (s *Service) Unshare(ctx context.Context, userID, id int64) error {
-	return s.repo.ClearPublicSlug(ctx, db.ClearSavedSearchPublicSlugParams{ID: id, UserID: userID})
+	return s.repo.ClearPublicSlug(ctx, id, userID)
 }
 
 // GetPublicBoard reads a shared board by its public slug — no auth, no owner-scoping.
 // An unknown or unshared slug → ErrNotFound.
-func (s *Service) GetPublicBoard(ctx context.Context, slug string) (db.GetPublicBoardBySlugRow, error) {
+func (s *Service) GetPublicBoard(ctx context.Context, slug string) (Board, error) {
 	return s.repo.GetPublicBoard(ctx, slug)
 }
 
 // validAuthorLabel trims the label and enforces the length bound (counted in runes, as
-// labels are often Cyrillic). A blank label is valid and stored as NULL (the board renders
-// anonymously); an over-long one → ErrInvalidAuthorLabel.
-func validAuthorLabel(label string) (pgtype.Text, error) {
+// labels are often Cyrillic). A blank label is valid and returned empty, stored as NULL
+// (the board renders anonymously); an over-long one → ErrInvalidAuthorLabel.
+func validAuthorLabel(label string) (string, error) {
 	label = strings.TrimSpace(label)
 	if label == "" {
-		return pgtype.Text{}, nil
+		return "", nil
 	}
 	if utf8.RuneCountInString(label) > maxAuthorLabelLen {
-		return pgtype.Text{}, ErrInvalidAuthorLabel
+		return "", ErrInvalidAuthorLabel
 	}
-	return pgtype.Text{String: label, Valid: true}, nil
+	return label, nil
 }
 
 // boardSlug builds a readable public slug from a name: the transliterated, hyphenated base

@@ -6,7 +6,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/savedsearch"
 )
 
@@ -24,17 +23,16 @@ type savedSearchResponse struct {
 }
 
 // toSavedSearchResponse maps a stored saved search to its wire shape (no user id).
-// PublicSlug/AuthorLabel are empty strings when their columns are NULL (private /
-// anonymous), since pgtype.Text zero-values its String to "".
-func toSavedSearchResponse(s db.SavedSearch) savedSearchResponse {
+// PublicSlug/AuthorLabel are empty strings when the board is private / anonymous.
+func toSavedSearchResponse(s savedsearch.SavedSearch) savedSearchResponse {
 	return savedSearchResponse{
 		ID:          s.ID,
 		Name:        s.Name,
 		Query:       s.Query,
-		PublicSlug:  s.PublicSlug.String,
-		AuthorLabel: s.AuthorLabel.String,
-		CreatedAt:   timePtr(s.CreatedAt),
-		UpdatedAt:   timePtr(s.UpdatedAt),
+		PublicSlug:  s.PublicSlug,
+		AuthorLabel: s.AuthorLabel,
+		CreatedAt:   s.CreatedAt,
+		UpdatedAt:   s.UpdatedAt,
 	}
 }
 

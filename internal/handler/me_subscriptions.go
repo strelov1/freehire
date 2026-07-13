@@ -6,7 +6,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/subscription"
 )
 
@@ -22,24 +21,24 @@ type subscriptionResponse struct {
 	CreatedAt       *time.Time `json:"created_at"`
 }
 
-func toSubscriptionResponse(s db.Subscription) subscriptionResponse {
+func toSubscriptionResponse(s subscription.Subscription) subscriptionResponse {
 	return subscriptionResponse{
 		ID:            s.ID,
 		SavedSearchID: s.SavedSearchID,
 		Channel:       s.Channel,
 		Active:        s.Active,
-		CreatedAt:     timePtr(s.CreatedAt),
+		CreatedAt:     s.CreatedAt,
 	}
 }
 
-func toSubscriptionListItem(s db.ListSubscriptionsRow) subscriptionResponse {
+func toSubscriptionListItem(s subscription.SubscriptionListItem) subscriptionResponse {
 	return subscriptionResponse{
 		ID:              s.ID,
 		SavedSearchID:   s.SavedSearchID,
 		SavedSearchName: s.SavedSearchName,
 		Channel:         s.Channel,
 		Active:          s.Active,
-		CreatedAt:       timePtr(s.CreatedAt),
+		CreatedAt:       s.CreatedAt,
 	}
 }
 

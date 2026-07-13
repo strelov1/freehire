@@ -6,11 +6,45 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
-	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/savedsearch"
 )
+
+// The *Args structs capture the primitive params the repository is handed, so the service
+// tests can assert them without a db.* params struct.
+type createArgs struct {
+	UserID int64
+	Name   string
+	Query  string
+}
+
+type updateArgs struct {
+	ID     int64
+	UserID int64
+	Name   *string
+	Query  *string
+}
+
+type getArgs struct {
+	ID     int64
+	UserID int64
+}
+
+type setArgs struct {
+	ID          int64
+	UserID      int64
+	PublicSlug  string
+	AuthorLabel string
+}
+
+type deleteArgs struct {
+	ID     int64
+	UserID int64
+}
+
+type clearArgs struct {
+	ID     int64
+	UserID int64
+}
 
 // fakeRepo records the params it is handed and returns canned rows/errors, so the
 // service tests run without a database (the submission_test.go precedent).
@@ -18,67 +52,67 @@ type fakeRepo struct {
 	count    int64
 	countErr error
 
-	created      db.CreateSavedSearchParams
+	created      createArgs
 	createCalled bool
 	createErr    error
-	createRet    db.SavedSearch
+	createRet    savedsearch.SavedSearch
 
-	updated      db.UpdateSavedSearchParams
+	updated      updateArgs
 	updateCalled bool
 	updateErr    error
-	updateRet    db.SavedSearch
+	updateRet    savedsearch.SavedSearch
 
-	deleted      db.DeleteSavedSearchParams
+	deleted      deleteArgs
 	deleteCalled bool
 	deleteErr    error
 
-	listRet []db.SavedSearch
+	listRet []savedsearch.SavedSearch
 
-	getRet    db.SavedSearch
+	getRet    savedsearch.SavedSearch
 	getErr    error
-	getParams db.GetSavedSearchParams
+	getParams getArgs
 
-	setRet    db.SavedSearch
+	setRet    savedsearch.SavedSearch
 	setErrs   []error // consumed one per SetPublicSlug call (nil = success)
 	setCalls  int
-	setParams []db.SetSavedSearchPublicSlugParams
+	setParams []setArgs
 
 	clearErr    error
 	clearCalled bool
-	clearParams db.ClearSavedSearchPublicSlugParams
+	clearParams clearArgs
 
-	boardRet    db.GetPublicBoardBySlugRow
+	boardRet    savedsearch.Board
 	boardErr    error
 	boardSlug   string
 	boardCalled bool
 }
 
-func (f *fakeRepo) Get(_ context.Context, p db.GetSavedSearchParams) (db.SavedSearch, error) {
-	f.getParams = p
+func (f *fakeRepo) Get(_ context.Context, id, userID int64) (savedsearch.SavedSearch, error) {
+	f.getParams = getArgs{ID: id, UserID: userID}
 	return f.getRet, f.getErr
 }
 
-func (f *fakeRepo) SetPublicSlug(_ context.Context, p db.SetSavedSearchPublicSlugParams) (db.SavedSearch, error) {
-	f.setParams = append(f.setParams, p)
+func (f *fakeRepo) SetPublicSlug(_ context.Context, id, userID int64, publicSlug, authorLabel string) (savedsearch.SavedSearch, error) {
+	f.setParams = append(f.setParams, setArgs{ID: id, UserID: userID, PublicSlug: publicSlug, AuthorLabel: authorLabel})
 	i := f.setCalls
 	f.setCalls++
 	if i < len(f.setErrs) && f.setErrs[i] != nil {
-		return db.SavedSearch{}, f.setErrs[i]
+		return savedsearch.SavedSearch{}, f.setErrs[i]
 	}
 	return f.setRet, nil
 }
 
-func (f *fakeRepo) ClearPublicSlug(_ context.Context, p db.ClearSavedSearchPublicSlugParams) error {
-	f.clearParams, f.clearCalled = p, true
+func (f *fakeRepo) ClearPublicSlug(_ context.Context, id, userID int64) error {
+	f.clearParams, f.clearCalled = clearArgs{ID: id, UserID: userID}, true
 	return f.clearErr
 }
 
-func (f *fakeRepo) GetPublicBoard(_ context.Context, slug string) (db.GetPublicBoardBySlugRow, error) {
+func (f *fakeRepo) GetPublicBoard(_ context.Context, slug string) (savedsearch.Board, error) {
 	f.boardSlug, f.boardCalled = slug, true
 	return f.boardRet, f.boardErr
 }
 
-func (f *fakeRepo) List(_ context.Context, _ int64) ([]db.SavedSearch, error) {
+func (f *fakeRepo) List(_ context.Context, _ int64) ([]savedsearch.SavedSearch, error) {
 	return f.listRet, nil
 }
 
@@ -86,23 +120,23 @@ func (f *fakeRepo) Count(_ context.Context, _ int64) (int64, error) {
 	return f.count, f.countErr
 }
 
-func (f *fakeRepo) Create(_ context.Context, p db.CreateSavedSearchParams) (db.SavedSearch, error) {
-	f.created, f.createCalled = p, true
+func (f *fakeRepo) Create(_ context.Context, userID int64, name, query string) (savedsearch.SavedSearch, error) {
+	f.created, f.createCalled = createArgs{UserID: userID, Name: name, Query: query}, true
 	return f.createRet, f.createErr
 }
 
-func (f *fakeRepo) Update(_ context.Context, p db.UpdateSavedSearchParams) (db.SavedSearch, error) {
-	f.updated, f.updateCalled = p, true
+func (f *fakeRepo) Update(_ context.Context, id, userID int64, name, query *string) (savedsearch.SavedSearch, error) {
+	f.updated, f.updateCalled = updateArgs{ID: id, UserID: userID, Name: name, Query: query}, true
 	return f.updateRet, f.updateErr
 }
 
-func (f *fakeRepo) Delete(_ context.Context, p db.DeleteSavedSearchParams) error {
-	f.deleted, f.deleteCalled = p, true
+func (f *fakeRepo) Delete(_ context.Context, id, userID int64) error {
+	f.deleted, f.deleteCalled = deleteArgs{ID: id, UserID: userID}, true
 	return f.deleteErr
 }
 
 func TestCreate_PersistsWithOwnerAndTrimmedName(t *testing.T) {
-	repo := &fakeRepo{createRet: db.SavedSearch{ID: 1}}
+	repo := &fakeRepo{createRet: savedsearch.SavedSearch{ID: 1}}
 	svc := savedsearch.New(repo)
 
 	_, err := svc.Create(context.Background(), 7, "  Remote Go  ", "q=go&work_mode=remote")
@@ -124,7 +158,7 @@ func TestCreate_PersistsWithOwnerAndTrimmedName(t *testing.T) {
 }
 
 func TestCreate_EmptyQueryAllowed(t *testing.T) {
-	repo := &fakeRepo{createRet: db.SavedSearch{ID: 1}}
+	repo := &fakeRepo{createRet: savedsearch.SavedSearch{ID: 1}}
 	_, err := savedsearch.New(repo).Create(context.Background(), 7, "All jobs", "")
 	if err != nil {
 		t.Fatalf("Create with empty query: %v", err)
@@ -161,7 +195,7 @@ func TestCreate_NameLengthCountsRunes(t *testing.T) {
 	// The DB CHECK bounds length(trim(name)) in characters, and the app is RU-facing,
 	// so the name limit must count runes, not bytes — a 100-rune Cyrillic name (200
 	// bytes) is valid; 101 runes is not.
-	repo := &fakeRepo{createRet: db.SavedSearch{ID: 1}}
+	repo := &fakeRepo{createRet: savedsearch.SavedSearch{ID: 1}}
 	if _, err := savedsearch.New(repo).Create(context.Background(), 7, strings.Repeat("я", 100), ""); err != nil {
 		t.Errorf("100-rune name: err = %v, want nil", err)
 	}
@@ -195,7 +229,7 @@ func TestCreate_PropagatesDuplicateName(t *testing.T) {
 }
 
 func TestUpdate_PartialFields(t *testing.T) {
-	repo := &fakeRepo{updateRet: db.SavedSearch{ID: 5}}
+	repo := &fakeRepo{updateRet: savedsearch.SavedSearch{ID: 5}}
 	svc := savedsearch.New(repo)
 
 	newName := "  Renamed  "
@@ -209,11 +243,11 @@ func TestUpdate_PartialFields(t *testing.T) {
 	if repo.updated.ID != 5 || repo.updated.UserID != 7 {
 		t.Errorf("update scope = id %d user %d, want id 5 user 7", repo.updated.ID, repo.updated.UserID)
 	}
-	if !repo.updated.Name.Valid || repo.updated.Name.String != "Renamed" {
-		t.Errorf("Name param = %+v, want trimmed valid %q", repo.updated.Name, "Renamed")
+	if repo.updated.Name == nil || *repo.updated.Name != "Renamed" {
+		t.Errorf("Name param = %v, want trimmed %q", repo.updated.Name, "Renamed")
 	}
-	if repo.updated.Query.Valid {
-		t.Error("Query param should be NULL (unchanged) when not provided")
+	if repo.updated.Query != nil {
+		t.Error("Query param should be nil (unchanged) when not provided")
 	}
 }
 
@@ -259,8 +293,8 @@ func TestDelete_NotFound(t *testing.T) {
 
 func TestShare_MintsReadableSlugFromName(t *testing.T) {
 	repo := &fakeRepo{
-		getRet: db.SavedSearch{ID: 5, UserID: 7, Name: "Remote Go"}, // private (no slug)
-		setRet: db.SavedSearch{ID: 5, PublicSlug: pgtype.Text{String: "remote-go-a3f1", Valid: true}},
+		getRet: savedsearch.SavedSearch{ID: 5, Name: "Remote Go"}, // private (no slug)
+		setRet: savedsearch.SavedSearch{ID: 5, PublicSlug: "remote-go-a3f1"},
 	}
 	svc := savedsearch.New(repo)
 
@@ -278,50 +312,49 @@ func TestShare_MintsReadableSlugFromName(t *testing.T) {
 	if p.ID != 5 || p.UserID != 7 {
 		t.Errorf("set scope = id %d user %d, want id 5 user 7", p.ID, p.UserID)
 	}
-	if !p.PublicSlug.Valid || !strings.HasPrefix(p.PublicSlug.String, "remote-go-") {
-		t.Errorf("minted slug = %q, want readable prefix %q", p.PublicSlug.String, "remote-go-")
+	if p.PublicSlug == "" || !strings.HasPrefix(p.PublicSlug, "remote-go-") {
+		t.Errorf("minted slug = %q, want readable prefix %q", p.PublicSlug, "remote-go-")
 	}
-	if p.PublicSlug.String == "remote-go-" {
+	if p.PublicSlug == "remote-go-" {
 		t.Error("minted slug has no random suffix")
 	}
-	if !p.AuthorLabel.Valid || p.AuthorLabel.String != "strelov" {
-		t.Errorf("author label param = %+v, want valid %q", p.AuthorLabel, "strelov")
+	if p.AuthorLabel != "strelov" {
+		t.Errorf("author label param = %q, want %q", p.AuthorLabel, "strelov")
 	}
-	if got.PublicSlug.String != "remote-go-a3f1" {
-		t.Errorf("returned slug = %q, want the persisted row's", got.PublicSlug.String)
+	if got.PublicSlug != "remote-go-a3f1" {
+		t.Errorf("returned slug = %q, want the persisted row's", got.PublicSlug)
 	}
 }
 
 func TestShare_KeepsExistingSlugOnReshare(t *testing.T) {
 	repo := &fakeRepo{
-		getRet: db.SavedSearch{ID: 5, UserID: 7, Name: "Remote Go",
-			PublicSlug: pgtype.Text{String: "remote-go-old1", Valid: true}}, // already shared
-		setRet: db.SavedSearch{ID: 5, PublicSlug: pgtype.Text{String: "remote-go-old1", Valid: true}},
+		getRet: savedsearch.SavedSearch{ID: 5, Name: "Remote Go", PublicSlug: "remote-go-old1"}, // already shared
+		setRet: savedsearch.SavedSearch{ID: 5, PublicSlug: "remote-go-old1"},
 	}
 	_, err := savedsearch.New(repo).Share(context.Background(), 7, 5, "new label")
 	if err != nil {
 		t.Fatalf("re-share: %v", err)
 	}
-	if repo.setParams[0].PublicSlug.String != "remote-go-old1" {
-		t.Errorf("re-share slug = %q, want existing %q kept", repo.setParams[0].PublicSlug.String, "remote-go-old1")
+	if repo.setParams[0].PublicSlug != "remote-go-old1" {
+		t.Errorf("re-share slug = %q, want existing %q kept", repo.setParams[0].PublicSlug, "remote-go-old1")
 	}
-	if repo.setParams[0].AuthorLabel.String != "new label" {
-		t.Errorf("re-share author label = %q, want updated %q", repo.setParams[0].AuthorLabel.String, "new label")
+	if repo.setParams[0].AuthorLabel != "new label" {
+		t.Errorf("re-share author label = %q, want updated %q", repo.setParams[0].AuthorLabel, "new label")
 	}
 }
 
 func TestShare_EmptyLabelIsAnonymous(t *testing.T) {
-	repo := &fakeRepo{getRet: db.SavedSearch{ID: 5, UserID: 7, Name: "X"}, setRet: db.SavedSearch{ID: 5}}
+	repo := &fakeRepo{getRet: savedsearch.SavedSearch{ID: 5, Name: "X"}, setRet: savedsearch.SavedSearch{ID: 5}}
 	if _, err := savedsearch.New(repo).Share(context.Background(), 7, 5, "   "); err != nil {
 		t.Fatalf("Share: %v", err)
 	}
-	if repo.setParams[0].AuthorLabel.Valid {
-		t.Errorf("author label = %+v, want NULL (anonymous) for blank input", repo.setParams[0].AuthorLabel)
+	if repo.setParams[0].AuthorLabel != "" {
+		t.Errorf("author label = %q, want empty (anonymous) for blank input", repo.setParams[0].AuthorLabel)
 	}
 }
 
 func TestShare_RejectsOverLongLabel(t *testing.T) {
-	repo := &fakeRepo{getRet: db.SavedSearch{ID: 5, UserID: 7, Name: "X"}}
+	repo := &fakeRepo{getRet: savedsearch.SavedSearch{ID: 5, Name: "X"}}
 	_, err := savedsearch.New(repo).Share(context.Background(), 7, 5, strings.Repeat("x", 61))
 	if !errors.Is(err, savedsearch.ErrInvalidAuthorLabel) {
 		t.Errorf("err = %v, want ErrInvalidAuthorLabel", err)
@@ -344,9 +377,9 @@ func TestShare_NotOwned(t *testing.T) {
 
 func TestShare_RetriesOnSlugCollision(t *testing.T) {
 	repo := &fakeRepo{
-		getRet:  db.SavedSearch{ID: 5, UserID: 7, Name: "Remote Go"},
+		getRet:  savedsearch.SavedSearch{ID: 5, Name: "Remote Go"},
 		setErrs: []error{savedsearch.ErrSlugTaken}, // first attempt collides, second succeeds
-		setRet:  db.SavedSearch{ID: 5, PublicSlug: pgtype.Text{String: "remote-go-b2c3", Valid: true}},
+		setRet:  savedsearch.SavedSearch{ID: 5, PublicSlug: "remote-go-b2c3"},
 	}
 	_, err := savedsearch.New(repo).Share(context.Background(), 7, 5, "")
 	if err != nil {
@@ -375,7 +408,7 @@ func TestUnshare_NotFound(t *testing.T) {
 }
 
 func TestGetPublicBoard_ReturnsBoard(t *testing.T) {
-	repo := &fakeRepo{boardRet: db.GetPublicBoardBySlugRow{Name: "Remote Go", Query: "q=go"}}
+	repo := &fakeRepo{boardRet: savedsearch.Board{Name: "Remote Go", Query: "q=go"}}
 	got, err := savedsearch.New(repo).GetPublicBoard(context.Background(), "remote-go-a3f1")
 	if err != nil {
 		t.Fatalf("GetPublicBoard: %v", err)

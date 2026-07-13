@@ -6,7 +6,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/report"
 )
 
@@ -28,7 +27,7 @@ type reportResponse struct {
 }
 
 // toReportResponse maps a stored report to its wire shape (no reporter email or job fields).
-func toReportResponse(r db.JobReport) reportResponse {
+func toReportResponse(r report.Report) reportResponse {
 	return reportResponse{
 		ID:              r.ID,
 		Reason:          r.Reason,
@@ -36,14 +35,14 @@ func toReportResponse(r db.JobReport) reportResponse {
 		ContactTelegram: r.ContactTelegram,
 		Status:          r.Status,
 		ReviewReason:    r.ReviewReason,
-		ReviewedAt:      timePtr(r.ReviewedAt),
-		CreatedAt:       timePtr(r.CreatedAt),
+		ReviewedAt:      r.ReviewedAt,
+		CreatedAt:       r.CreatedAt,
 	}
 }
 
 // toPendingReportResponse maps a moderator-queue row, adding the reporter's email and the
 // reported job's slug and title.
-func toPendingReportResponse(r db.ListPendingReportsRow) reportResponse {
+func toPendingReportResponse(r report.PendingReport) reportResponse {
 	return reportResponse{
 		ID:              r.ID,
 		Reason:          r.Reason,
@@ -51,8 +50,8 @@ func toPendingReportResponse(r db.ListPendingReportsRow) reportResponse {
 		ContactTelegram: r.ContactTelegram,
 		Status:          r.Status,
 		ReviewReason:    r.ReviewReason,
-		ReviewedAt:      timePtr(r.ReviewedAt),
-		CreatedAt:       timePtr(r.CreatedAt),
+		ReviewedAt:      r.ReviewedAt,
+		CreatedAt:       r.CreatedAt,
 		ReporterEmail:   r.ReporterEmail,
 		JobSlug:         r.JobSlug,
 		JobTitle:        r.JobTitle,

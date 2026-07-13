@@ -6,52 +6,73 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/report"
 )
+
+// createArgs / resolveArgs / dismissArgs capture the primitive params the repository is
+// handed, so the service tests can assert them without a db.* params struct.
+type createArgs struct {
+	ReportedBy      int64
+	JobID           int64
+	Reason          string
+	Details         string
+	ContactTelegram string
+}
+
+type resolveArgs struct {
+	ID         int64
+	ReviewedBy int64
+}
+
+type dismissArgs struct {
+	ID           int64
+	ReviewedBy   int64
+	ReviewReason string
+}
 
 // fakeRepo records the params it is handed and returns canned rows, so the service tests
 // run without a database (the submission_test.go precedent).
 type fakeRepo struct {
-	created      db.CreateReportParams
+	created      createArgs
 	createCalled bool
 	createErr    error
-	createRet    db.JobReport
+	createRet    report.Report
 
-	getRet db.JobReport
+	getRet report.Report
 	getErr error
 
-	resolved      db.MarkReportResolvedParams
+	resolved      resolveArgs
 	resolveCalled bool
 	resolveErr    error
-	resolveRet    db.JobReport
+	resolveRet    report.Report
 
-	dismissed     db.MarkReportDismissedParams
+	dismissed     dismissArgs
 	dismissCalled bool
 	dismissErr    error
-	dismissRet    db.JobReport
+	dismissRet    report.Report
 }
 
-func (f *fakeRepo) Create(_ context.Context, p db.CreateReportParams) (db.JobReport, error) {
-	f.created, f.createCalled = p, true
+func (f *fakeRepo) Create(_ context.Context, reportedBy, jobID int64, reason, details, contactTelegram string) (report.Report, error) {
+	f.created = createArgs{ReportedBy: reportedBy, JobID: jobID, Reason: reason, Details: details, ContactTelegram: contactTelegram}
+	f.createCalled = true
 	return f.createRet, f.createErr
 }
 
-func (f *fakeRepo) Get(_ context.Context, _ int64) (db.JobReport, error) {
+func (f *fakeRepo) Get(_ context.Context, _ int64) (report.Report, error) {
 	return f.getRet, f.getErr
 }
 
-func (f *fakeRepo) ListPending(_ context.Context) ([]db.ListPendingReportsRow, error) {
+func (f *fakeRepo) ListPending(_ context.Context) ([]report.PendingReport, error) {
 	return nil, nil
 }
 
-func (f *fakeRepo) MarkResolved(_ context.Context, p db.MarkReportResolvedParams) (db.JobReport, error) {
-	f.resolved, f.resolveCalled = p, true
+func (f *fakeRepo) MarkResolved(_ context.Context, id, reviewedBy int64) (report.Report, error) {
+	f.resolved, f.resolveCalled = resolveArgs{ID: id, ReviewedBy: reviewedBy}, true
 	return f.resolveRet, f.resolveErr
 }
 
-func (f *fakeRepo) MarkDismissed(_ context.Context, p db.MarkReportDismissedParams) (db.JobReport, error) {
-	f.dismissed, f.dismissCalled = p, true
+func (f *fakeRepo) MarkDismissed(_ context.Context, id, reviewedBy int64, reviewReason string) (report.Report, error) {
+	f.dismissed, f.dismissCalled = dismissArgs{ID: id, ReviewedBy: reviewedBy, ReviewReason: reviewReason}, true
 	return f.dismissRet, f.dismissErr
 }
 
@@ -72,7 +93,7 @@ func validInput() report.FileInput {
 }
 
 func TestFile_PersistsPendingWithOwnerAndJob(t *testing.T) {
-	repo := &fakeRepo{createRet: db.JobReport{ID: 1, Status: "pending"}}
+	repo := &fakeRepo{createRet: report.Report{ID: 1, Status: "pending"}}
 	svc := report.New(repo, &fakeCloser{})
 
 	_, err := svc.File(context.Background(), 7, 42, validInput())
@@ -92,7 +113,7 @@ func TestFile_PersistsPendingWithOwnerAndJob(t *testing.T) {
 }
 
 func TestFile_TrimsDetailsAndContact(t *testing.T) {
-	repo := &fakeRepo{createRet: db.JobReport{ID: 1}}
+	repo := &fakeRepo{createRet: report.Report{ID: 1}}
 	in := report.FileInput{Reason: "spam", Details: "  not a job  ", ContactTelegram: "  @x  "}
 	if _, err := report.New(repo, &fakeCloser{}).File(context.Background(), 1, 1, in); err != nil {
 		t.Fatalf("File: %v", err)
@@ -129,7 +150,7 @@ func TestFile_ValidatesBeforePersist(t *testing.T) {
 
 func TestFile_AcceptsEveryReason(t *testing.T) {
 	for _, reason := range []string{"no_response", "not_relevant", "spam", "fraud", "other"} {
-		repo := &fakeRepo{createRet: db.JobReport{ID: 1}}
+		repo := &fakeRepo{createRet: report.Report{ID: 1}}
 		in := report.FileInput{Reason: reason, Details: "d"}
 		if _, err := report.New(repo, &fakeCloser{}).File(context.Background(), 1, 1, in); err != nil {
 			t.Errorf("reason %q rejected: %v", reason, err)
@@ -146,7 +167,7 @@ func TestFile_PropagatesDuplicateOpen(t *testing.T) {
 }
 
 func TestResolve_ClosesJobWhenAsked(t *testing.T) {
-	repo := &fakeRepo{getRet: db.JobReport{ID: 5, JobID: 42, Status: "pending"}, resolveRet: db.JobReport{ID: 5, Status: "resolved"}}
+	repo := &fakeRepo{getRet: report.Report{ID: 5, JobID: 42, Status: "pending"}, resolveRet: report.Report{ID: 5, Status: "resolved"}}
 	closer := &fakeCloser{}
 	_, err := report.New(repo, closer).Resolve(context.Background(), 3, 5, true)
 	if err != nil {
@@ -161,7 +182,7 @@ func TestResolve_ClosesJobWhenAsked(t *testing.T) {
 }
 
 func TestResolve_LeavesJobOpenWhenNotAsked(t *testing.T) {
-	repo := &fakeRepo{getRet: db.JobReport{ID: 5, JobID: 42, Status: "pending"}, resolveRet: db.JobReport{Status: "resolved"}}
+	repo := &fakeRepo{getRet: report.Report{ID: 5, JobID: 42, Status: "pending"}, resolveRet: report.Report{Status: "resolved"}}
 	closer := &fakeCloser{}
 	if _, err := report.New(repo, closer).Resolve(context.Background(), 3, 5, false); err != nil {
 		t.Fatalf("Resolve: %v", err)
@@ -175,7 +196,7 @@ func TestResolve_LeavesJobOpenWhenNotAsked(t *testing.T) {
 }
 
 func TestResolve_CloseErrorAbortsBeforeMark(t *testing.T) {
-	repo := &fakeRepo{getRet: db.JobReport{ID: 5, JobID: 42, Status: "pending"}}
+	repo := &fakeRepo{getRet: report.Report{ID: 5, JobID: 42, Status: "pending"}}
 	closer := &fakeCloser{err: errors.New("boom")}
 	_, err := report.New(repo, closer).Resolve(context.Background(), 3, 5, true)
 	if err == nil {
@@ -199,7 +220,7 @@ func TestResolve_NotFound(t *testing.T) {
 }
 
 func TestResolve_AlreadyDecided(t *testing.T) {
-	repo := &fakeRepo{getRet: db.JobReport{ID: 5, Status: "resolved"}}
+	repo := &fakeRepo{getRet: report.Report{ID: 5, Status: "resolved"}}
 	closer := &fakeCloser{}
 	_, err := report.New(repo, closer).Resolve(context.Background(), 3, 5, true)
 	if !errors.Is(err, report.ErrAlreadyDecided) {
@@ -211,7 +232,7 @@ func TestResolve_AlreadyDecided(t *testing.T) {
 }
 
 func TestDismiss_MarksWithReason(t *testing.T) {
-	repo := &fakeRepo{getRet: db.JobReport{ID: 5, Status: "pending"}, dismissRet: db.JobReport{Status: "dismissed"}}
+	repo := &fakeRepo{getRet: report.Report{ID: 5, Status: "pending"}, dismissRet: report.Report{Status: "dismissed"}}
 	closer := &fakeCloser{}
 	_, err := report.New(repo, closer).Dismiss(context.Background(), 3, 5, "not a real issue")
 	if err != nil {
@@ -226,7 +247,7 @@ func TestDismiss_MarksWithReason(t *testing.T) {
 }
 
 func TestDismiss_AlreadyDecided(t *testing.T) {
-	repo := &fakeRepo{getRet: db.JobReport{ID: 5, Status: "dismissed"}}
+	repo := &fakeRepo{getRet: report.Report{ID: 5, Status: "dismissed"}}
 	_, err := report.New(repo, &fakeCloser{}).Dismiss(context.Background(), 3, 5, "")
 	if !errors.Is(err, report.ErrAlreadyDecided) {
 		t.Errorf("err = %v, want ErrAlreadyDecided", err)
