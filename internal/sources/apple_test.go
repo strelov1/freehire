@@ -56,6 +56,42 @@ func TestAppleProvider(t *testing.T) {
 	}
 }
 
+func TestAppleDescriptionBuildsSanitizedHTML(t *testing.T) {
+	// Apple serves the summary + description as plain-text paragraphs (\n\n) and the
+	// qualifications as newline-separated bullet lines. The stored description must be
+	// sanitized HTML (the {@html} consumer), so paragraphs become <p> and each
+	// qualification line a <li> under an <h2> section header.
+	got := appleDescription(
+		"Apple Retail is where the best of Apple comes together.\n\nAs a Specialist, you build brand loyalty.",
+		"Deliver excellent service.\n\nStay up to date on Apple products.",
+		"Availability to work nights and weekends.\nProficient in the local language.",
+		"You can:\nDemonstrate knowledge of Apple products.\nPersonalize solutions.",
+	)
+	for _, want := range []string{
+		"<p>Apple Retail is where the best of Apple comes together.</p>",
+		"<p>As a Specialist, you build brand loyalty.</p>",
+		"<p>Deliver excellent service.</p>",
+		"<h2>Minimum Qualifications</h2>",
+		"<li>Availability to work nights and weekends.</li>",
+		"<h2>Preferred Qualifications</h2>",
+		"<li>Personalize solutions.</li>",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("appleDescription() missing %q\ngot: %q", want, got)
+		}
+	}
+}
+
+func TestAppleDescriptionOmitsEmptySections(t *testing.T) {
+	got := appleDescription("", "Just a description.", "", "")
+	if !strings.Contains(got, "<p>Just a description.</p>") {
+		t.Errorf("want the description paragraph, got %q", got)
+	}
+	if strings.Contains(got, "Qualifications") {
+		t.Errorf("empty qualification sections must be omitted, got %q", got)
+	}
+}
+
 func TestAppleFetchPaginatesDedupsAndMaps(t *testing.T) {
 	fake := &appleFake{
 		pages: map[int]string{
@@ -68,7 +104,7 @@ func TestAppleFetchPaginatesDedupsAndMaps(t *testing.T) {
 			]}}`,
 		},
 		details: map[string]string{
-			"200600664": `{"res":{"description":"Build the Watch software.","minimumQualifications":"5+ years experience.","preferredQualifications":"Swift expertise."}}`,
+			"200600664": `{"res":{"jobSummary":"Join the Watch team.","description":"Build the Watch software.","minimumQualifications":"5+ years experience.","preferredQualifications":"Swift expertise."}}`,
 			"200659431": `{"res":{"description":"Keep services running.","minimumQualifications":"","preferredQualifications":""}}`,
 		},
 	}
@@ -104,10 +140,13 @@ func TestAppleFetchPaginatesDedupsAndMaps(t *testing.T) {
 	if want := "San Diego"; j.Location != want {
 		t.Errorf("Location = %q, want first-seen %q", j.Location, want)
 	}
-	for _, part := range []string{"Build the Watch software.", "5+ years experience.", "Swift expertise."} {
+	for _, part := range []string{"Join the Watch team.", "Build the Watch software.", "5+ years experience.", "Swift expertise."} {
 		if !strings.Contains(j.Description, part) {
 			t.Errorf("Description missing %q: %q", part, j.Description)
 		}
+	}
+	if !strings.Contains(j.Description, "<p>") {
+		t.Errorf("Description should be sanitized HTML, got plain text: %q", j.Description)
 	}
 	if j.Remote || j.WorkMode != "" {
 		t.Errorf("homeOffice=false should be onsite-unknown, got Remote=%v WorkMode=%q", j.Remote, j.WorkMode)

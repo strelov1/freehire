@@ -129,6 +129,7 @@ func (s apple) detail(ctx context.Context, e CompanyEntry, p applePosting) (Job,
 	}
 	var resp struct {
 		Res struct {
+			JobSummary              string `json:"jobSummary"`
 			Description             string `json:"description"`
 			MinimumQualifications   string `json:"minimumQualifications"`
 			PreferredQualifications string `json:"preferredQualifications"`
@@ -137,7 +138,7 @@ func (s apple) detail(ctx context.Context, e CompanyEntry, p applePosting) (Job,
 	if err := s.http.GetJSON(ctx, fmt.Sprintf(appleDetailURL, p.PositionID), &resp); err != nil {
 		return Job{}, false
 	}
-	desc := appleDescription(resp.Res.Description, resp.Res.MinimumQualifications, resp.Res.PreferredQualifications)
+	desc := appleDescription(resp.Res.JobSummary, resp.Res.Description, resp.Res.MinimumQualifications, resp.Res.PreferredQualifications)
 	if desc == "" {
 		return Job{}, false
 	}
@@ -180,19 +181,39 @@ func appleLocationString(locs []appleLocation) string {
 	return strings.Join(names, "; ")
 }
 
-// appleDescription assembles the role's full description from the detail fields. Apple serves
-// these as plain text (no markup), so they are joined with blank lines under their section
-// headers rather than HTML-sanitized; an empty section is omitted.
-func appleDescription(description, minQual, prefQual string) string {
-	parts := make([]string, 0, 3)
-	if d := strings.TrimSpace(description); d != "" {
-		parts = append(parts, d)
+// appleDescription assembles the role's full description from the detail fields into sanitized
+// HTML, matching the "descriptions are sanitized HTML" convention the {@html} consumer relies
+// on (mirroring the other plain-text/Markdown adapters). Apple serves the summary and
+// description as plain-text paragraphs (blank-line separated) and the qualifications as
+// newline-separated bullet lines, so the summary/description are emitted as Markdown paragraphs
+// and each qualification section as a headed bullet list. An empty section is omitted.
+func appleDescription(jobSummary, description, minQual, prefQual string) string {
+	var b strings.Builder
+	appendParagraphs := func(s string) {
+		if s = strings.TrimSpace(s); s != "" {
+			b.WriteString(s)
+			b.WriteString("\n\n")
+		}
 	}
-	if m := strings.TrimSpace(minQual); m != "" {
-		parts = append(parts, "Minimum Qualifications\n"+m)
+	appendBullets := func(header, s string) {
+		if strings.TrimSpace(s) == "" {
+			return
+		}
+		b.WriteString("## ")
+		b.WriteString(header)
+		b.WriteString("\n\n")
+		for _, line := range strings.Split(s, "\n") {
+			if line = strings.TrimSpace(line); line != "" {
+				b.WriteString("- ")
+				b.WriteString(line)
+				b.WriteString("\n")
+			}
+		}
+		b.WriteString("\n")
 	}
-	if p := strings.TrimSpace(prefQual); p != "" {
-		parts = append(parts, "Preferred Qualifications\n"+p)
-	}
-	return strings.Join(parts, "\n\n")
+	appendParagraphs(jobSummary)
+	appendParagraphs(description)
+	appendBullets("Minimum Qualifications", minQual)
+	appendBullets("Preferred Qualifications", prefQual)
+	return sanitizeHTML(markdownToHTML(strings.TrimSpace(b.String())))
 }
