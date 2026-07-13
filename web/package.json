@@ -49,6 +49,7 @@
     "@resvg/resvg-js": "^2.6.2",
     "@sentry/sveltekit": "^10.63.0",
     "clsx": "^2.1.1",
+    "easymde": "^2.21.0",
     "satori": "^0.26.0",
     "satori-html": "^0.3.2",
     "svelte-dnd-action": "^0.9.70",

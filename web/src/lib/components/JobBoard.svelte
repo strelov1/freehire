@@ -201,13 +201,15 @@
 {/if}
 
 {#if openItem}
-  <JobDrawer
-    item={openItem}
-    {pendingOutcome}
-    onsetstage={setStage}
-    onsavenotes={saveNotes}
-    onchooseoutcome={chooseOutcome}
-    onremove={remove}
-    onclose={closeDrawer}
-  />
+  {#key openItem.job.public_slug}
+    <JobDrawer
+      item={openItem}
+      {pendingOutcome}
+      onsetstage={setStage}
+      onsavenotes={saveNotes}
+      onchooseoutcome={chooseOutcome}
+      onremove={remove}
+      onclose={closeDrawer}
+    />
+  {/key}
 {/if}
