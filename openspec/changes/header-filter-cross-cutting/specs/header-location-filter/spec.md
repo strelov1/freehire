@@ -18,8 +18,8 @@ company mode (companies do not carry those facets).
 
 ### Requirement: Launcher mode on listless pages
 
-On pages without a filterable list (job detail, `/about`, `/collections`, …), the
-header search launcher SHALL show the same filter trigger; because there is no list
+The header search launcher SHALL show the filter trigger on pages without a
+filterable list (job detail, `/about`, `/collections`, …); because there is no list
 to filter in place, selecting a value SHALL navigate to the jobs feed (`/jobs`) with
 that scope applied, where further changes filter live.
 
