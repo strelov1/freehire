@@ -20,7 +20,7 @@ func TestCompanyDetailHidesJobID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FromRows: %v", err)
 	}
-	resp := companyDetailResponse{Company: db.Company{Slug: "acme", Name: "Acme"}, Jobs: views}
+	resp := companyDetailResponse{Company: companyViewFrom(db.Company{Slug: "acme", Name: "Acme"}), Jobs: views}
 
 	data, err := json.Marshal(resp)
 	if err != nil {

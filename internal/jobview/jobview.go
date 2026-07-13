@@ -14,6 +14,7 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/job"
+	"github.com/strelov1/freehire/internal/pgconv"
 )
 
 // Job is the public wire shape of a job. It carries the public_slug and
@@ -307,10 +308,9 @@ func FromRows(jobs []db.Job) ([]Job, error) {
 // freshness. The raw created_at stays exposed separately, so the substitution is visible.
 //
 // It is exported so the search document derives its numeric posted_ts (epoch) from the same
-// definition the display posted_at (RFC3339) uses — one fallback rule, two encodings.
+// definition the display posted_at (RFC3339) uses — one fallback rule, two encodings. It
+// converts its pgtype inputs to the domain *time.Time and delegates to effectivePosted, so
+// the fallback rule lives in exactly one place.
 func EffectivePostedAt(posted, created pgtype.Timestamptz) pgtype.Timestamptz {
-	if !posted.Valid || posted.Time.After(time.Now()) {
-		return created
-	}
-	return posted
+	return pgconv.Timestamptz(effectivePosted(pgconv.TimePtr(posted), pgconv.TimePtr(created)))
 }

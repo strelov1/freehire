@@ -3,14 +3,14 @@ package accounts
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/pgconv"
+	"github.com/strelov1/freehire/internal/pgerr"
 )
 
 // QueriesRepository is the production Repository backed by sqlc-generated
@@ -75,7 +75,7 @@ func (r *QueriesRepository) LinkOrCreateByEmail(
 			PasswordHash: pgtype.Text{}, // passwordless OAuth account
 		})
 		if err != nil {
-			if isUniqueViolation(err) {
+			if pgerr.IsUniqueViolation(err) {
 				// users has a single unique index (lower(email)), so this can only be
 				// a concurrent account creation for the same email — not our identity.
 				return 0, ErrEmailRace
@@ -92,14 +92,14 @@ func (r *QueriesRepository) LinkOrCreateByEmail(
 		ProviderUserID: providerUserID,
 		UserID:         userID,
 	}); err != nil {
-		if isUniqueViolation(err) {
+		if pgerr.IsUniqueViolation(err) {
 			return 0, ErrIdentityConflict
 		}
 		return 0, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		if isUniqueViolation(err) {
+		if pgerr.IsUniqueViolation(err) {
 			return 0, ErrIdentityConflict
 		}
 		return 0, err
@@ -115,13 +115,13 @@ func (r *QueriesRepository) CreateUser(ctx context.Context, email, passwordHash 
 		Email:        email,
 		PasswordHash: pgtype.Text{String: passwordHash, Valid: true},
 	})
-	if isUniqueViolation(err) {
+	if pgerr.IsUniqueViolation(err) {
 		return User{}, ErrEmailTaken
 	}
 	if err != nil {
 		return User{}, err
 	}
-	return User{ID: row.ID, Email: row.Email, Role: row.Role, CreatedAt: timePtr(row.CreatedAt)}, nil
+	return User{ID: row.ID, Email: row.Email, Role: row.Role, CreatedAt: pgconv.TimePtr(row.CreatedAt)}, nil
 }
 
 // UserByEmail looks up the account with the given (already-normalised) email.
@@ -135,7 +135,7 @@ func (r *QueriesRepository) UserByEmail(ctx context.Context, email string) (User
 	if err != nil {
 		return User{}, "", false, err
 	}
-	u := User{ID: row.ID, Email: row.Email, Role: row.Role, CreatedAt: timePtr(row.CreatedAt)}
+	u := User{ID: row.ID, Email: row.Email, Role: row.Role, CreatedAt: pgconv.TimePtr(row.CreatedAt)}
 	return u, row.PasswordHash.String, row.PasswordHash.Valid, nil
 }
 
@@ -148,22 +148,5 @@ func (r *QueriesRepository) UserByID(ctx context.Context, id int64) (User, error
 	if err != nil {
 		return User{}, err
 	}
-	return User{ID: row.ID, Email: row.Email, Role: row.Role, CreatedAt: timePtr(row.CreatedAt)}, nil
-}
-
-// timePtr converts a pgtype.Timestamptz to a *time.Time, returning nil when
-// the value is NULL.
-func timePtr(ts pgtype.Timestamptz) *time.Time {
-	if !ts.Valid {
-		return nil
-	}
-	t := ts.Time
-	return &t
-}
-
-// isUniqueViolation reports whether err is a PostgreSQL unique-constraint
-// violation (SQLSTATE 23505).
-func isUniqueViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+	return User{ID: row.ID, Email: row.Email, Role: row.Role, CreatedAt: pgconv.TimePtr(row.CreatedAt)}, nil
 }

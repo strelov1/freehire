@@ -146,7 +146,7 @@ func (a *API) JobFacets(c *fiber.Ctx) error {
 		// Disjunctive: each facet counted under the full filter minus its own
 		// selection, so a selected facet still shows its siblings (the live-modal
 		// experience). The total stays the full-filter count.
-		vals, _ := url.ParseQuery(string(c.Request().URI().QueryString()))
+		vals := queryValues(c)
 		res, err = a.facets.DisjunctiveFacetCounts(c.Context(), q, facetReqs(vals), search.FilterFromValues(vals))
 	} else {
 		res, err = a.facets.FacetCounts(c.Context(), search.FacetParams{

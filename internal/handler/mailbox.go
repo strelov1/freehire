@@ -6,10 +6,10 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/mailbox"
+	"github.com/strelov1/freehire/internal/pgerr"
 )
 
 // mailboxStatus is the wire shape for the hosted-mailbox endpoints: the caller's
@@ -88,14 +88,8 @@ func (s dbMailboxStore) AddressByUser(ctx context.Context, userID int64) (string
 
 func (s dbMailboxStore) Insert(ctx context.Context, userID int64, address string) error {
 	_, err := s.q.InsertMailbox(ctx, db.InsertMailboxParams{UserID: userID, Address: address})
-	if isUniqueViolation(err) {
+	if pgerr.IsUniqueViolation(err) {
 		return mailbox.ErrTaken
 	}
 	return err
-}
-
-// isUniqueViolation reports a Postgres unique-constraint violation (SQLSTATE 23505).
-func isUniqueViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }

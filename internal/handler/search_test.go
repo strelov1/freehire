@@ -42,7 +42,7 @@ func (f *fakeSearcher) SimilarJobs(_ context.Context, _ int64, limit int) ([]sea
 	return f.similarHits, f.similarErr
 }
 
-func (f *fakeSearcher) EmbedText(_ context.Context, _, text string) ([]float64, string, error) {
+func (f *fakeSearcher) EmbedText(_ context.Context, text string) ([]float64, string, error) {
 	f.gotEmbedText = text
 	return f.embedVec, f.embedModel, f.embedErr
 }

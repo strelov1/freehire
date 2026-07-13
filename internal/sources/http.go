@@ -176,7 +176,7 @@ func (c *Client) GetStream(ctx context.Context, url, accept string, fn func(io.R
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("sources: get %s: status %d", url, resp.StatusCode)
+		return &StatusError{Code: resp.StatusCode, URL: url}
 	}
 	return fn(resp.Body)
 }
@@ -306,6 +306,20 @@ func (c *Client) PostJSONWithHeaders(ctx context.Context, url string, headers ma
 	})
 }
 
+// StatusError is a non-2xx HTTP response from the sources client. Callers that need
+// to branch on the status code (e.g. eightfold's rate-limit backoff) match it with
+// errors.As instead of scraping the message. Its Error() renders the same
+// "sources: GET <url>: status <n>" text the client has always produced, so any
+// remaining string-based check keeps working.
+type StatusError struct {
+	Code int
+	URL  string
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("sources: GET %s: status %d", e.URL, e.Code)
+}
+
 // request is the parameters of a single HTTP exchange issued by do. A non-nil body is
 // re-sent on each retry; the standard User-Agent/Accept headers always win over headers.
 type request struct {
@@ -376,15 +390,15 @@ func (c *Client) do(ctx context.Context, r request) error {
 		case resp.StatusCode == http.StatusTooManyRequests:
 			delay = retryAfter(resp, c.retryDelay) // honor the rate-limit hint
 			resp.Body.Close()
-			lastErr = fmt.Errorf("sources: GET %s: status %d", r.url, resp.StatusCode)
+			lastErr = &StatusError{Code: resp.StatusCode, URL: r.url}
 			continue // rate limited — transient
 		case resp.StatusCode >= 500:
 			resp.Body.Close()
-			lastErr = fmt.Errorf("sources: GET %s: status %d", r.url, resp.StatusCode)
+			lastErr = &StatusError{Code: resp.StatusCode, URL: r.url}
 			continue // server error — transient
 		default:
 			resp.Body.Close()
-			return fmt.Errorf("sources: GET %s: status %d", r.url, resp.StatusCode)
+			return &StatusError{Code: resp.StatusCode, URL: r.url}
 		}
 	}
 	return fmt.Errorf("sources: GET %s failed after %d attempts: %w", r.url, c.maxRetries+1, lastErr)

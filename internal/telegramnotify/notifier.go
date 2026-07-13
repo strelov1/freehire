@@ -55,7 +55,7 @@ func (n *Notifier) Send(ctx context.Context, _ string, dest string, d notify.Dig
 // notifications.
 func (n *Notifier) render(d notify.Digest) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "🔔 <b>%d</b> new job%s for %q\n\n", d.Total, plural(d.Total), html.EscapeString(d.SavedSearchName))
+	fmt.Fprintf(&b, "🔔 <b>%d</b> new job%s for %q\n\n", d.Total, notify.Plural(d.Total), html.EscapeString(d.SavedSearchName))
 
 	// Reserve room for the widest possible tail up front (d.Total is its worst-case
 	// count), so appending the actual tail after the loop can never push past the limit.
@@ -87,7 +87,7 @@ func (n *Notifier) jobLine(j notify.DigestJob) string {
 	if j.Company != "" {
 		fmt.Fprintf(&b, " — %s", html.EscapeString(j.Company))
 	}
-	if s := formatSalary(j.SalaryMin, j.SalaryMax, j.SalaryCurrency, j.SalaryPeriod); s != "" {
+	if s := j.SalaryString(); s != "" {
 		fmt.Fprintf(&b, " · %s", html.EscapeString(s))
 	}
 	b.WriteByte('\n')
@@ -99,50 +99,6 @@ func (n *Notifier) jobLine(j notify.DigestJob) string {
 // normalized values, so the URL needs no escaping.
 func (n *Notifier) applyURL(j notify.DigestJob) string {
 	return n.jobBaseURL + "/jobs/" + j.Slug + "?utm_source=telegram-bot"
-}
-
-// currencySymbols maps the common ISO 4217 codes to a glyph; any other code is
-// used as a prefix verbatim (e.g. "PLN 20K").
-var currencySymbols = map[string]string{"USD": "$", "EUR": "€", "GBP": "£"}
-
-// formatSalary renders a compensation string like "$130K—$170K / year" from the
-// enrichment salary fields, or "" when no figure is known. A zero bound counts as
-// absent (matching enrichment's positive-or-nil convention), so a one-sided range
-// renders alone. Amounts of 1000+ are abbreviated with a K suffix; smaller figures
-// (e.g. hourly rates) are shown in full.
-func formatSalary(min, max int, currency, period string) string {
-	if min <= 0 && max <= 0 {
-		return ""
-	}
-	sym := currencySymbols[strings.ToUpper(currency)]
-	if sym == "" && currency != "" {
-		sym = currency + " "
-	}
-	var amount string
-	switch {
-	case min > 0 && max > 0 && min != max:
-		amount = sym + shortMoney(min) + "—" + sym + shortMoney(max)
-	case min > 0:
-		amount = sym + shortMoney(min)
-	default: // only max is known
-		amount = sym + shortMoney(max)
-	}
-	if period != "" {
-		amount += " / " + period
-	}
-	return amount
-}
-
-// shortMoney abbreviates 12000→"12K", 4500→"4.5K", and leaves sub-thousand
-// figures (e.g. hourly rates) in full: 950→"950".
-func shortMoney(v int) string {
-	if v < 1000 {
-		return strconv.Itoa(v)
-	}
-	if v%1000 == 0 {
-		return strconv.Itoa(v/1000) + "K"
-	}
-	return strconv.FormatFloat(float64(v)/1000, 'f', 1, 64) + "K"
 }
 
 // moreLine is the "+ N more" overflow tail, or "" when nothing is omitted.
@@ -157,11 +113,4 @@ func moreLine(more int) string {
 // against — so a supplementary-plane rune (e.g. the 🔔 emoji) correctly counts as two.
 func utf16Len(s string) int {
 	return len(utf16.Encode([]rune(s)))
-}
-
-func plural(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "s"
 }

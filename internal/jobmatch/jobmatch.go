@@ -1,14 +1,14 @@
 // Package jobmatch computes how well a single job's skills are covered by a
 // user's profile skills. It is a pure, deterministic set operation over canonical
-// skilltag slugs, plus the curated adjacency dictionary from internal/verdict — no
-// LLM, no market data. Each job skill is exact (held), adjacent (a neighbour is
-// held, naming the via skill), or missing.
+// skilltag slugs, plus the curated adjacency dictionary from
+// internal/skilladjacency — no LLM, no market data. Each job skill is exact (held),
+// adjacent (a neighbour is held, naming the via skill), or missing.
 package jobmatch
 
 import (
 	"math"
 
-	"github.com/strelov1/freehire/internal/verdict"
+	"github.com/strelov1/freehire/internal/skilladjacency"
 )
 
 // AdjacentSkill is a job skill the profile does not hold exactly but for which it
@@ -50,7 +50,7 @@ func Compute(jobSkills, profileSkills []string) JobMatch {
 	for _, skill := range jobSkills {
 		if held[skill] {
 			r.Matched = append(r.Matched, skill)
-		} else if via, ok := verdict.AdjacentVia(skill, held); ok {
+		} else if via, ok := skilladjacency.AdjacentVia(skill, held); ok {
 			r.Adjacent = append(r.Adjacent, AdjacentSkill{Name: skill, Via: via})
 		} else {
 			r.Missing = append(r.Missing, skill)

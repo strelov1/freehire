@@ -225,15 +225,16 @@ func metaFromPointer(ptr db.GetUserResumeRow) Meta {
 // plumbing.
 func extractText(data []byte) (string, error) {
 	if bytes.HasPrefix(data, []byte("%PDF")) {
-		return pdfText(data)
+		return ExtractPDFText(data)
 	}
 	return string(data), nil
 }
 
-// pdfText extracts plain text from PDF bytes. ledongthuc/pdf can panic (not just error)
-// on a malformed content stream, so a deferred recover maps that to an error rather than
-// crashing the request.
-func pdfText(data []byte) (text string, err error) {
+// ExtractPDFText extracts plain text from PDF bytes, shared by the résumé store and
+// the upload handler (which wraps the returned error into a 400). ledongthuc/pdf can
+// panic (not just error) on a malformed content stream, so a deferred recover maps
+// that to an error rather than crashing the request.
+func ExtractPDFText(data []byte) (text string, err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			text, err = "", errors.New("resume: invalid PDF")

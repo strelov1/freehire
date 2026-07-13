@@ -21,9 +21,14 @@ import (
 	"github.com/strelov1/freehire/internal/search"
 )
 
-// ChannelTelegram is the only delivery channel implemented today; the Notifier
-// interface is the seam for webhook/email.
+// ChannelTelegram is a delivery channel; the Notifier interface is the seam for
+// each one. ChannelEmail is declared alongside the Router in router.go.
 const ChannelTelegram = "telegram"
+
+// Channels is the delivery-channel vocabulary: the single source of truth shared
+// by the router's dispatch and the subscription use case's create-time allowlist,
+// so the two can never drift.
+var Channels = []string{ChannelTelegram, ChannelEmail}
 
 // Digest is one subscription's batch of new matches, rendered by a Notifier into
 // a channel-specific message. Jobs is capped to the configured digest size; Total

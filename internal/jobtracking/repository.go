@@ -3,12 +3,12 @@ package jobtracking
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobview"
+	"github.com/strelov1/freehire/internal/pgconv"
 	"github.com/strelov1/freehire/internal/userjob"
 )
 
@@ -163,9 +163,9 @@ func (r *QueriesRepository) ListInteractions(
 			Job: view,
 			Interaction: Interaction{
 				JobID:     row.Job.ID,
-				ViewedAt:  timePtr(row.ViewedAt),
-				SavedAt:   timePtr(row.SavedAt),
-				AppliedAt: timePtr(row.AppliedAt),
+				ViewedAt:  pgconv.TimePtr(row.ViewedAt),
+				SavedAt:   pgconv.TimePtr(row.SavedAt),
+				AppliedAt: pgconv.TimePtr(row.AppliedAt),
 				Stage:     textPtr(row.Stage),
 				Notes:     textPtr(row.Notes),
 			},
@@ -218,22 +218,13 @@ func (r *QueriesRepository) PipelineCounts(ctx context.Context, userID int64) ([
 func toInteraction(r db.UserJob) Interaction {
 	return Interaction{
 		JobID:       r.JobID,
-		ViewedAt:    timePtr(r.ViewedAt),
-		AppliedAt:   timePtr(r.AppliedAt),
-		SavedAt:     timePtr(r.SavedAt),
-		DismissedAt: timePtr(r.DismissedAt),
+		ViewedAt:    pgconv.TimePtr(r.ViewedAt),
+		AppliedAt:   pgconv.TimePtr(r.AppliedAt),
+		SavedAt:     pgconv.TimePtr(r.SavedAt),
+		DismissedAt: pgconv.TimePtr(r.DismissedAt),
 		Stage:       textPtr(r.Stage),
 		Notes:       textPtr(r.Notes),
 	}
-}
-
-// timePtr converts a pgtype.Timestamptz to *time.Time (nil when NULL).
-func timePtr(t pgtype.Timestamptz) *time.Time {
-	if !t.Valid {
-		return nil
-	}
-	v := t.Time
-	return &v
 }
 
 // textPtr converts a pgtype.Text to *string (nil when NULL).

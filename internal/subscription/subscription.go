@@ -10,6 +10,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"github.com/strelov1/freehire/internal/notify"
 )
 
 // Sentinel errors mapped to HTTP statuses by the handler.
@@ -26,16 +28,25 @@ var (
 	ErrNotFound = errors.New("subscription: not found")
 )
 
-// Supported delivery channels. The schema (channel + destination columns and the
-// UNIQUE (saved_search, channel) constraint) accommodates both without a
-// migration; the notify worker routes each channel to its Notifier.
+// Supported delivery channels. The values live once in internal/notify (the
+// delivery-channel vocabulary shared with the routing worker); these aliases keep
+// them addressable from the HTTP-facing use case. The schema (channel + destination
+// columns and the UNIQUE (saved_search, channel) constraint) accommodates both
+// without a migration; the notify worker routes each channel to its Notifier.
 const (
-	ChannelTelegram = "telegram"
-	ChannelEmail    = "email"
+	ChannelTelegram = notify.ChannelTelegram
+	ChannelEmail    = notify.ChannelEmail
 )
 
-// validChannels is the allowlist enforced on create.
-var validChannels = map[string]bool{ChannelTelegram: true, ChannelEmail: true}
+// validChannels is the create-time allowlist, derived from the notify
+// delivery-channel vocabulary so the two never drift.
+var validChannels = func() map[string]bool {
+	m := make(map[string]bool, len(notify.Channels))
+	for _, c := range notify.Channels {
+		m[c] = true
+	}
+	return m
+}()
 
 // Subscription is a stored filter subscription: the package domain type, decoupled from
 // the generated db row. The internal columns (user_id, the destination and start_at

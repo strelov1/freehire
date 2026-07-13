@@ -111,7 +111,7 @@ func (a *API) cvSkillSets(c *fiber.Ctx, userID int64) (declared, body, all []str
 // filter) and defaults `category` to the profile's specializations when the caller
 // selected no category — so an unfiltered verdict scores the profile's own role.
 func roleValues(c *fiber.Ctx, profile userprofile.Profile) url.Values {
-	vals, _ := url.ParseQuery(string(c.Request().URI().QueryString()))
+	vals := queryValues(c)
 	stripSkillParams(vals)
 	if !hasNonEmpty(vals["category"]) {
 		vals["category"] = profile.Specializations

@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"html/template"
-	"strconv"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/notify"
@@ -80,7 +79,7 @@ func (n *Notifier) render(d notify.Digest) renderedEmail {
 		lines = append(lines, jobLine{
 			Title:   j.Title,
 			Company: j.Company,
-			Salary:  formatSalary(j.SalaryMin, j.SalaryMax, j.SalaryCurrency, j.SalaryPeriod),
+			Salary:  j.SalaryString(),
 			URL:     n.jobURL(j),
 		})
 	}
@@ -91,15 +90,15 @@ func (n *Notifier) render(d notify.Digest) renderedEmail {
 		more = 0
 	}
 
-	subject := fmt.Sprintf(`%d new job%s for "%s"`, d.Total, plural(d.Total), d.SavedSearchName)
+	subject := fmt.Sprintf(`%d new job%s for "%s"`, d.Total, notify.Plural(d.Total), d.SavedSearchName)
 
 	var b bytes.Buffer
 	// The template is a trusted constant and the data is escaped in context, so
 	// Execute can only fail on a template bug — surfaced by the render tests.
 	_ = htmlTemplate.Execute(&b, htmlData{
-		Preheader:  fmt.Sprintf("%d new job%s matching your %q alert", d.Total, plural(d.Total), d.SavedSearchName),
+		Preheader:  fmt.Sprintf("%d new job%s matching your %q alert", d.Total, notify.Plural(d.Total), d.SavedSearchName),
 		Total:      d.Total,
-		Word:       "job" + plural(d.Total),
+		Word:       "job" + notify.Plural(d.Total),
 		SearchName: d.SavedSearchName,
 		Jobs:       lines,
 		More:       more,
@@ -113,7 +112,7 @@ func (n *Notifier) render(d notify.Digest) renderedEmail {
 // non-HTML clients (and spam scorers) see the same content.
 func (n *Notifier) renderText(d notify.Digest, lines []jobLine, more int) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%d new job%s for %q\n\n", d.Total, plural(d.Total), d.SavedSearchName)
+	fmt.Fprintf(&b, "%d new job%s for %q\n\n", d.Total, notify.Plural(d.Total), d.SavedSearchName)
 	for _, l := range lines {
 		b.WriteString("- " + l.Title)
 		if l.Company != "" {
@@ -176,56 +175,3 @@ var htmlTemplate = template.Must(template.New("email").Parse(`<!DOCTYPE html>
 </table>
 </body>
 </html>`))
-
-// --- salary formatting (duplicated from telegramnotify: the two renderers differ
-// in markup; extract to a shared helper only if a third channel needs it) --------
-
-// currencySymbols maps the common ISO 4217 codes to a glyph; any other code is
-// used as a prefix verbatim (e.g. "PLN 20K").
-var currencySymbols = map[string]string{"USD": "$", "EUR": "€", "GBP": "£"}
-
-// formatSalary renders a compensation string like "$130K—$170K / year" from the
-// enrichment salary fields, or "" when no figure is known. A zero bound counts as
-// absent, so a one-sided range renders alone. Amounts of 1000+ are abbreviated
-// with a K suffix; smaller figures (e.g. hourly rates) are shown in full.
-func formatSalary(min, max int, currency, period string) string {
-	if min <= 0 && max <= 0 {
-		return ""
-	}
-	sym := currencySymbols[strings.ToUpper(currency)]
-	if sym == "" && currency != "" {
-		sym = currency + " "
-	}
-	var amount string
-	switch {
-	case min > 0 && max > 0 && min != max:
-		amount = sym + shortMoney(min) + "—" + sym + shortMoney(max)
-	case min > 0:
-		amount = sym + shortMoney(min)
-	default: // only max is known
-		amount = sym + shortMoney(max)
-	}
-	if period != "" {
-		amount += " / " + period
-	}
-	return amount
-}
-
-// shortMoney abbreviates 12000→"12K", 4500→"4.5K", and leaves sub-thousand
-// figures (e.g. hourly rates) in full: 950→"950".
-func shortMoney(v int) string {
-	if v < 1000 {
-		return strconv.Itoa(v)
-	}
-	if v%1000 == 0 {
-		return strconv.Itoa(v/1000) + "K"
-	}
-	return strconv.FormatFloat(float64(v)/1000, 'f', 1, 64) + "K"
-}
-
-func plural(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "s"
-}

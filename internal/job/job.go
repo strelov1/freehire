@@ -10,9 +10,11 @@ import (
 	"errors"
 	"time"
 
+	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/jobderive"
 	"github.com/strelov1/freehire/internal/normalize"
+	"github.com/strelov1/freehire/internal/pgconv"
 )
 
 // ErrInvalidDraft is returned by New when a draft lacks the identity a job
@@ -154,6 +156,41 @@ func New(d Draft) (Job, error) {
 // Fields returns the readable projection of the aggregate. Slice and pointer
 // fields alias the aggregate's; callers treat the result as read-only.
 func (j Job) Fields() Fields { return j.f }
+
+// UpsertParams maps the Fields-derived columns of a job to the generated UpsertJob
+// params, so every write path (ingest, telegram extraction) shares one mapping
+// instead of re-listing the columns. It covers only the fields carried on Fields;
+// columns a caller derives separately (ContentHash, RoleFingerprint, or a PostedAt
+// supplied outside the aggregate) are set on the returned struct after this call.
+// Enrichment columns are deliberately excluded — SetJobEnrichment owns those.
+func (f Fields) UpsertParams() db.UpsertJobParams {
+	return db.UpsertJobParams{
+		Source:      f.Source,
+		ExternalID:  f.ExternalID,
+		URL:         f.URL,
+		Title:       f.Title,
+		Company:     f.Company,
+		CompanySlug: f.CompanySlug,
+		PublicSlug:  f.PublicSlug,
+		Location:    f.Location,
+		Remote:      f.Remote,
+		Description: f.Description,
+		PostedAt:    pgconv.Timestamptz(f.PostedAt),
+		Countries:   f.Countries,
+		Regions:     f.Regions,
+		Cities:      f.Cities,
+		WorkMode:    f.WorkMode,
+		Skills:      f.Skills,
+		Seniority:   f.Seniority,
+		Category:    f.Category,
+
+		PostingLanguage:    f.PostingLanguage,
+		EmploymentType:     f.EmploymentType,
+		EducationLevel:     f.EducationLevel,
+		EnglishLevel:       f.EnglishLevel,
+		ExperienceYearsMin: pgconv.Int4(f.ExperienceYearsMin),
+	}
+}
 
 // IsOpen reports whether the job is live (not soft-closed).
 func (j Job) IsOpen() bool { return j.f.ClosedAt == nil }

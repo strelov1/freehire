@@ -39,21 +39,11 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobderive"
+	"github.com/strelov1/freehire/internal/pgconv"
 	"github.com/strelov1/freehire/internal/worker"
 )
-
-// toInt4 maps an optional int (experience_years_min) to the pgtype the generated
-// params expect; a nil pointer becomes SQL NULL.
-func toInt4(n *int) pgtype.Int4 {
-	if n == nil {
-		return pgtype.Int4{}
-	}
-	return pgtype.Int4{Int32: int32(*n), Valid: true}
-}
 
 // backfillBatchSize bounds how many jobs are read per keyset page.
 const backfillBatchSize = 500
@@ -112,7 +102,7 @@ func deriveFacets(j db.Job) (db.UpdateJobFacetsParams, bool) {
 		Description: j.Description,
 		WorkMode:    j.WorkMode, // preserves a set work_mode (jobderive precedence)
 	})
-	experience := toInt4(d.ExperienceYearsMin)
+	experience := pgconv.Int4(d.ExperienceYearsMin)
 	changed := !(slices.Equal(d.Countries, j.Countries) &&
 		slices.Equal(d.Regions, j.Regions) &&
 		slices.Equal(d.Cities, j.Cities) &&

@@ -540,9 +540,7 @@ func (c *Client) SimilarJobs(ctx context.Context, id int64, limit int) ([]JobDoc
 // returns the vector plus the embedder identity that produced it, so a CV vector is
 // directly comparable to the job corpus. The CV is the query side of e5's asymmetric
 // retrieval, so it carries the "query:" prefix (jobs carry "passage:", see jobPassage).
-// The key parameter is unused now that no scratch document is round-tripped through
-// Meilisearch; it is kept for interface compatibility.
-func (c *Client) EmbedText(ctx context.Context, _, text string) ([]float64, string, error) {
+func (c *Client) EmbedText(ctx context.Context, text string) ([]float64, string, error) {
 	vecs, err := c.embedBatch(ctx, []string{"query: " + text})
 	if err != nil {
 		return nil, "", err

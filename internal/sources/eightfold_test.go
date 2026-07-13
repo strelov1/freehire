@@ -3,21 +3,21 @@ package sources
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 )
 
-// rateLimitedHTTP serves the pcsx list, then fails detail GETs with failErr for the first
-// detailFails attempts before serving detail — mimicking Eightfold's ~290-requests/window
-// per-IP cap (a 403). detailCalls counts detail attempts so a test can assert retry behaviour.
+// rateLimitedHTTP serves the pcsx list, then fails detail GETs with a StatusError of
+// failCode for the first detailFails attempts before serving detail — mimicking Eightfold's
+// ~290-requests/window per-IP cap (a 403). detailCalls counts detail attempts so a test can
+// assert retry behaviour.
 type rateLimitedHTTP struct {
 	mu          sync.Mutex
 	list        string
 	detail      string
-	failErr     string
+	failCode    int
 	detailFails int
 	detailCalls int
 }
@@ -31,7 +31,7 @@ func (r *rateLimitedHTTP) GetJSON(_ context.Context, url string, v any) error {
 	r.detailCalls++
 	if r.detailFails > 0 {
 		r.detailFails--
-		return fmt.Errorf("sources: GET %s: %s", url, r.failErr)
+		return &StatusError{Code: r.failCode, URL: url}
 	}
 	return json.Unmarshal([]byte(r.detail), v)
 }
@@ -43,7 +43,7 @@ func TestEightfoldRetriesRateLimitedDetail(t *testing.T) {
 	fake := &rateLimitedHTTP{
 		list:        eightfoldList(1, `{"id": 111, "name": "Role", "locations": ["Remote"]}`),
 		detail:      `{"id": 111, "job_description": "<p>desc</p>"}`,
-		failErr:     "status 403",
+		failCode:    403,
 		detailFails: 3,
 	}
 	jobs, err := NewEightfold(fake).Fetch(context.Background(), eightfoldEntry)
@@ -65,7 +65,7 @@ func TestEightfoldDoesNotRetryNonRateLimitError(t *testing.T) {
 	fake := &rateLimitedHTTP{
 		list:        eightfoldList(1, `{"id": 222, "name": "Gone", "locations": ["Remote"]}`),
 		detail:      `{}`,
-		failErr:     "status 404",
+		failCode:    404,
 		detailFails: 99,
 	}
 	jobs, err := NewEightfold(fake).Fetch(context.Background(), eightfoldEntry)

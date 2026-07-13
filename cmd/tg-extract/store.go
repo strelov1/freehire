@@ -17,15 +17,6 @@ import (
 	"github.com/strelov1/freehire/internal/telegram"
 )
 
-// toInt4 maps an optional int (experience_years_min) to the pgtype the generated
-// params expect; a nil pointer becomes SQL NULL.
-func toInt4(n *int) pgtype.Int4 {
-	if n == nil {
-		return pgtype.Int4{}
-	}
-	return pgtype.Int4{Int32: int32(*n), Valid: true}
-}
-
 // buildParams constructs the UpsertJob params for one Telegram-sourced job through
 // the Job aggregate factory, so the dictionary facets and slugs are derived exactly
 // as ingest and the moderator path derive them (job.New wraps jobderive) — no more
@@ -47,33 +38,10 @@ func buildParams(source, externalID, url, title, company, loc string, remote boo
 	if err != nil {
 		return db.UpsertJobParams{}, err
 	}
-	f := j.Fields()
-	params := db.UpsertJobParams{
-		Source:      f.Source,
-		ExternalID:  f.ExternalID,
-		URL:         f.URL,
-		Title:       f.Title,
-		Company:     f.Company,
-		CompanySlug: f.CompanySlug,
-		PublicSlug:  f.PublicSlug,
-		Location:    f.Location,
-		Remote:      f.Remote,
-		Description: f.Description,
-		PostedAt:    postedAt,
-		Countries:   f.Countries,
-		Regions:     f.Regions,
-		Cities:      f.Cities,
-		WorkMode:    f.WorkMode,
-		Skills:      f.Skills,
-		Seniority:   f.Seniority,
-		Category:    f.Category,
-
-		PostingLanguage:    f.PostingLanguage,
-		EmploymentType:     f.EmploymentType,
-		EducationLevel:     f.EducationLevel,
-		EnglishLevel:       f.EnglishLevel,
-		ExperienceYearsMin: toInt4(f.ExperienceYearsMin),
-	}
+	params := j.Fields().UpsertParams()
+	// posted_at is supplied by the caller (the Telegram post's timestamp), not carried
+	// on the job draft, so it is set over the aggregate-derived (NULL) value here.
+	params.PostedAt = postedAt
 	params.RoleFingerprint = pgtype.Text{String: jobhash.RoleFingerprint(params), Valid: true}
 	return params, nil
 }

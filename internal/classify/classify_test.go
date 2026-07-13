@@ -109,14 +109,14 @@ func TestCategories(t *testing.T) {
 }
 
 func TestCanonicalValuesAreInVocabulary(t *testing.T) {
-	for alias, canon := range seniorityAliases {
-		if !slices.Contains(enrich.SeniorityValues, canon) {
-			t.Errorf("seniority alias %q -> %q not in SeniorityValues", alias, canon)
+	for _, e := range seniorityTable {
+		if !slices.Contains(enrich.SeniorityValues, e.canonical) {
+			t.Errorf("seniority alias %q -> %q not in SeniorityValues", e.alias, e.canonical)
 		}
 	}
-	for alias, canon := range categoryAliases {
-		if !slices.Contains(enrich.CategoryValues, canon) {
-			t.Errorf("category alias %q -> %q not in CategoryValues", alias, canon)
+	for _, e := range categoryTable {
+		if !slices.Contains(enrich.CategoryValues, e.canonical) {
+			t.Errorf("category alias %q -> %q not in CategoryValues", e.alias, e.canonical)
 		}
 	}
 }

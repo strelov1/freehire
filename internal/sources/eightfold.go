@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -151,12 +152,12 @@ func (s eightfold) getJSONRetrying(ctx context.Context, url string, v any) error
 	return err
 }
 
-// isRateLimited reports whether err is an Eightfold rate-limit response (HTTP 403 or 429). The
-// shared client formats a status failure as "... status <code>", so the code is matched in the
-// error text — the client does not surface the status any other way.
+// isRateLimited reports whether err is an Eightfold rate-limit response (HTTP 403 or 429).
+// The shared client surfaces a non-2xx response as a typed *StatusError, so the status code
+// is matched structurally (errors.As) rather than scraped from the message.
 func isRateLimited(err error) bool {
-	msg := err.Error()
-	return strings.Contains(msg, "status 403") || strings.Contains(msg, "status 429")
+	var se *StatusError
+	return errors.As(err, &se) && (se.Code == 403 || se.Code == 429)
 }
 
 // listPositions returns the board's positions, auto-detecting the list-API generation: it

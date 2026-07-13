@@ -8,6 +8,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobderive"
+	"github.com/strelov1/freehire/internal/pgconv"
 )
 
 // fakeStore serves one page of jobs (keyset paging: AfterID 0 returns all, then
@@ -47,7 +48,7 @@ func expectedFacets(j db.Job) db.UpdateJobFacetsParams {
 		PostingLanguage:    d.PostingLanguage,
 		EmploymentType:     d.EmploymentType,
 		EducationLevel:     d.EducationLevel,
-		ExperienceYearsMin: toInt4(d.ExperienceYearsMin),
+		ExperienceYearsMin: pgconv.Int4(d.ExperienceYearsMin),
 	}
 }
 

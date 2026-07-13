@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"net/url"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -18,7 +17,7 @@ type searcher interface {
 	SimilarJobs(ctx context.Context, id int64, limit int) ([]search.JobDocument, error)
 	// EmbedText returns a vector for text in the jobs' embedding space plus the
 	// embedder identity that produced it (used to embed a CV on upload).
-	EmbedText(ctx context.Context, key, text string) ([]float64, string, error)
+	EmbedText(ctx context.Context, text string) ([]float64, string, error)
 	// RecommendByVector ranks open jobs by similarity to a raw vector (the CV feed),
 	// constrained to an optional facet filter (nil for none).
 	RecommendByVector(ctx context.Context, vector []float64, filter any, limit, offset int) (search.SearchResult, error)
@@ -108,6 +107,5 @@ func searchSort(c *fiber.Ctx) []string {
 // translation the notification matcher applies to a saved search's stored query,
 // so the two cannot drift. Returns nil when no facet is set.
 func buildSearchFilter(c *fiber.Ctx) any {
-	vals, _ := url.ParseQuery(string(c.Request().URI().QueryString()))
-	return search.FilterFromValues(vals)
+	return search.FilterFromValues(queryValues(c))
 }

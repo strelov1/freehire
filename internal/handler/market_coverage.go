@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"net/url"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -61,7 +60,7 @@ func (a *API) MarketCoverage(c *fiber.Ctx) error {
 // marketFilter builds the market filter from the request's facet query params
 // (the full facet vocabulary), with the skills facet stripped (see stripSkillParams).
 func marketFilter(c *fiber.Ctx) any {
-	vals, _ := url.ParseQuery(string(c.Request().URI().QueryString()))
+	vals := queryValues(c)
 	stripSkillParams(vals)
 	return search.FilterFromValues(vals)
 }

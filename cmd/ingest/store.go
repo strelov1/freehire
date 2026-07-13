@@ -58,33 +58,7 @@ func (s *dbStore) Save(ctx context.Context, j job.Job) error {
 
 	// The aggregate's read projection carries every persistable field; the write path
 	// never touches enrichment (SetJobEnrichment owns those columns), so it is not mapped.
-	f := j.Fields()
-	params := db.UpsertJobParams{
-		Source:      f.Source,
-		ExternalID:  f.ExternalID,
-		URL:         f.URL,
-		Title:       f.Title,
-		Company:     f.Company,
-		CompanySlug: f.CompanySlug,
-		PublicSlug:  f.PublicSlug,
-		Location:    f.Location,
-		Remote:      f.Remote,
-		Description: f.Description,
-		PostedAt:    toTimestamptz(f.PostedAt),
-		Countries:   f.Countries,
-		Regions:     f.Regions,
-		Cities:      f.Cities,
-		WorkMode:    f.WorkMode,
-		Skills:      f.Skills,
-		Seniority:   f.Seniority,
-		Category:    f.Category,
-
-		PostingLanguage:    f.PostingLanguage,
-		EmploymentType:     f.EmploymentType,
-		EducationLevel:     f.EducationLevel,
-		EnglishLevel:       f.EnglishLevel,
-		ExperienceYearsMin: toInt4(f.ExperienceYearsMin),
-	}
+	params := j.Fields().UpsertParams()
 	// Fingerprint the indexed fields so the upsert can report whether this write
 	// changed searchable content (drives incremental indexing below).
 	params.ContentHash = pgtype.Text{String: jobhash.Of(params), Valid: true}
@@ -202,22 +176,4 @@ func (s *dbStore) Touch(ctx context.Context, source, externalID string) error {
 		s.crawled.record(source, companySlug)
 	}
 	return nil
-}
-
-// toTimestamptz maps an optional posted_at to the pgtype the generated params expect;
-// a nil time becomes SQL NULL.
-func toTimestamptz(t *time.Time) pgtype.Timestamptz {
-	if t == nil {
-		return pgtype.Timestamptz{}
-	}
-	return pgtype.Timestamptz{Time: *t, Valid: true}
-}
-
-// toInt4 maps an optional int (e.g. experience_years_min) to the pgtype the generated
-// params expect; a nil pointer becomes SQL NULL.
-func toInt4(n *int) pgtype.Int4 {
-	if n == nil {
-		return pgtype.Int4{}
-	}
-	return pgtype.Int4{Int32: int32(*n), Valid: true}
 }

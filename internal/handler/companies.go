@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/url"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobview"
@@ -11,10 +13,68 @@ import (
 
 // companyDetailResponse is the public shape of a company together with a page of
 // its jobs. Its Jobs field is []jobview.Job, not []db.Job, so the internal job
-// id cannot leak through this endpoint — the type enforces the DTO mapping.
+// id cannot leak through this endpoint; its Company is a companyView, not a raw
+// db.Company, so the internal bookkeeping columns cannot leak either — both types
+// enforce the DTO mapping.
 type companyDetailResponse struct {
-	Company db.Company    `json:"company"`
+	Company companyView   `json:"company"`
 	Jobs    []jobview.Job `json:"jobs"`
+}
+
+// companyView is the public projection of a company for the detail endpoint. It
+// mirrors db.Company minus the purely-internal bookkeeping columns (created_at,
+// updated_at, is_reference, company_info_at), so those never leak onto
+// GET /api/v1/companies/:slug. Every field the company page renders is kept.
+type companyView struct {
+	Slug             string          `json:"slug"`
+	Name             string          `json:"name"`
+	Collections      []string        `json:"collections"`
+	JobCount         int32           `json:"job_count"`
+	Regions          []string        `json:"regions"`
+	Countries        []string        `json:"countries"`
+	Domains          []string        `json:"domains"`
+	CompanyTypes     []string        `json:"company_types"`
+	CompanySizes     []string        `json:"company_sizes"`
+	Industries       []string        `json:"industries"`
+	YearFounded      pgtype.Int4     `json:"year_founded"`
+	EmployeeCount    pgtype.Int4     `json:"employee_count"`
+	HqCountry        pgtype.Text     `json:"hq_country"`
+	OrganizationType pgtype.Text     `json:"organization_type"`
+	Tagline          pgtype.Text     `json:"tagline"`
+	CompanyInfo      json.RawMessage `json:"company_info"`
+	RemoteRegions    []string        `json:"remote_regions"`
+	YcBatch          []string        `json:"yc_batch"`
+	YcStatus         []string        `json:"yc_status"`
+	YcStage          []string        `json:"yc_stage"`
+	YcFlags          []string        `json:"yc_flags"`
+}
+
+// companyViewFrom projects a stored company onto its public view, dropping only the
+// internal bookkeeping columns.
+func companyViewFrom(c db.Company) companyView {
+	return companyView{
+		Slug:             c.Slug,
+		Name:             c.Name,
+		Collections:      c.Collections,
+		JobCount:         c.JobCount,
+		Regions:          c.Regions,
+		Countries:        c.Countries,
+		Domains:          c.Domains,
+		CompanyTypes:     c.CompanyTypes,
+		CompanySizes:     c.CompanySizes,
+		Industries:       c.Industries,
+		YearFounded:      c.YearFounded,
+		EmployeeCount:    c.EmployeeCount,
+		HqCountry:        c.HqCountry,
+		OrganizationType: c.OrganizationType,
+		Tagline:          c.Tagline,
+		CompanyInfo:      c.CompanyInfo,
+		RemoteRegions:    c.RemoteRegions,
+		YcBatch:          c.YcBatch,
+		YcStatus:         c.YcStatus,
+		YcStage:          c.YcStage,
+		YcFlags:          c.YcFlags,
+	}
 }
 
 // ListCompanies returns a page of companies with their denormalized job counts,
@@ -29,7 +89,7 @@ type companyDetailResponse struct {
 func (a *API) ListCompanies(c *fiber.Ctx) error {
 	limit, offset := pageParams(c)
 	search := c.Query("q")
-	vals, _ := url.ParseQuery(string(c.Request().URI().QueryString()))
+	vals := queryValues(c)
 
 	// Parse each facet once and feed both queries, so their WHERE clauses can't
 	// drift. The query param names (company_type/company_size singular) differ from
@@ -129,5 +189,5 @@ func (a *API) GetCompany(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.JSON(fiber.Map{"data": companyDetailResponse{Company: company, Jobs: views}})
+	return c.JSON(fiber.Map{"data": companyDetailResponse{Company: companyViewFrom(company), Jobs: views}})
 }

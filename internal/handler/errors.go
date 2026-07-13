@@ -6,7 +6,8 @@ import (
 	sentryfiber "github.com/getsentry/sentry-go/fiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/strelov1/freehire/internal/pgerr"
 )
 
 // LocalPanicReported is a c.Locals key set by the server's recover middleware when
@@ -59,16 +60,9 @@ func classify(err error) (status int, msg string, report bool) {
 	switch {
 	case errors.As(err, &fe):
 		return fe.Code, fe.Message, false
-	case errors.Is(err, pgx.ErrNoRows), isForeignKeyViolation(err):
+	case errors.Is(err, pgx.ErrNoRows), pgerr.IsForeignKeyViolation(err):
 		return fiber.StatusNotFound, "not found", false
 	default:
 		return fiber.StatusInternalServerError, "internal server error", true
 	}
-}
-
-// isForeignKeyViolation reports whether err is a Postgres foreign-key violation
-// (SQLSTATE 23503) — a write that references a row that doesn't exist.
-func isForeignKeyViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23503"
 }

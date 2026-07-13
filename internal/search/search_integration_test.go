@@ -568,7 +568,7 @@ func TestIntegration_EmbedTextAndRecommend(t *testing.T) {
 		t.Fatalf("IndexSemanticJobs: %v", err)
 	}
 
-	vec, model, err := c.EmbedText(ctx, "user-1", "Backend engineer building Go services and REST APIs.")
+	vec, model, err := c.EmbedText(ctx, "Backend engineer building Go services and REST APIs.")
 	if err != nil {
 		t.Fatalf("EmbedText: %v", err)
 	}

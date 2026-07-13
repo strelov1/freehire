@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"net/url"
+
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/auth"
@@ -16,6 +18,15 @@ func requireUserID(c *fiber.Ctx) (int64, error) {
 		return 0, fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
 	}
 	return id, nil
+}
+
+// queryValues parses the raw request query string into url.Values. The handlers
+// parse the raw query (rather than Fiber's key-lowercasing accessors) to preserve
+// key case and repeated values; this centralizes that one idiom. A malformed query
+// yields whatever ParseQuery salvaged, matching the call sites that ignore its error.
+func queryValues(c *fiber.Ctx) url.Values {
+	vals, _ := url.ParseQuery(string(c.Request().URI().QueryString()))
+	return vals
 }
 
 // pathID parses the ":id" route param as an int64, returning a 400 on a malformed

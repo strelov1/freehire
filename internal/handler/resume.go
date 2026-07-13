@@ -1,17 +1,14 @@
 package handler
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"log"
-	"strconv"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/ledongthuc/pdf"
 
 	classifydict "github.com/strelov1/freehire/internal/classify"
 	"github.com/strelov1/freehire/internal/resume"
@@ -224,7 +221,7 @@ func (a *API) embedResume(userID int64, text string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	vec, model, err := a.search.EmbedText(ctx, strconv.FormatInt(userID, 10), text)
+	vec, model, err := a.search.EmbedText(ctx, text)
 	if err != nil {
 		log.Printf("resume embed: user %d: %v", userID, err)
 		if err := a.resume.SetEmbedding(ctx, userID, nil, ""); err != nil {
@@ -342,37 +339,12 @@ func readResumeUpload(c *fiber.Ctx) (resumeUpload, error) {
 	if err != nil {
 		return resumeUpload{}, fiber.NewError(fiber.StatusBadRequest, "cannot read resume file")
 	}
-	text, err := pdfText(bytes.NewReader(data), int64(len(data)))
+	// An undecodable or non-PDF input is a 400 (not a 500): it is bad client input,
+	// not a server fault. ExtractPDFText's deferred recover already turns the parser's
+	// panic on a malformed stream into an error, so every failure lands here.
+	text, err := resume.ExtractPDFText(data)
 	if err != nil {
-		return resumeUpload{}, err
+		return resumeUpload{}, fiber.NewError(fiber.StatusBadRequest, "invalid PDF")
 	}
 	return resumeUpload{Data: data, ContentType: "application/pdf", Text: text}, nil
-}
-
-// pdfText extracts the plain text from a PDF. An undecodable or non-PDF input is a 400
-// (not a 500): it is bad client input, not a server fault. bytes.Reader satisfies
-// io.ReaderAt, so the buffered upload parses without a second copy.
-//
-// ledongthuc/pdf can panic (not just error) on a malformed content stream, so a deferred
-// recover maps that to the same 400 — a corrupt upload must not surface as a server error.
-func pdfText(r io.ReaderAt, size int64) (text string, err error) {
-	defer func() {
-		if p := recover(); p != nil {
-			text, err = "", fiber.NewError(fiber.StatusBadRequest, "invalid PDF")
-		}
-	}()
-
-	rd, err := pdf.NewReader(r, size)
-	if err != nil {
-		return "", fiber.NewError(fiber.StatusBadRequest, "invalid PDF")
-	}
-	tr, err := rd.GetPlainText()
-	if err != nil {
-		return "", fiber.NewError(fiber.StatusBadRequest, "invalid PDF")
-	}
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, tr); err != nil {
-		return "", fiber.NewError(fiber.StatusBadRequest, "invalid PDF")
-	}
-	return buf.String(), nil
 }
