@@ -21,8 +21,9 @@ import (
 	"github.com/strelov1/freehire/internal/search"
 )
 
-// ChannelTelegram is a delivery channel; the Notifier interface is the seam for
-// each one. ChannelEmail is declared alongside the Router in router.go.
+// ChannelTelegram and ChannelEmail are the delivery channels implemented today;
+// the Notifier interface remains the seam for future channels (e.g. webhooks).
+// ChannelEmail is declared alongside the Router in router.go.
 const ChannelTelegram = "telegram"
 
 // Channels is the delivery-channel vocabulary: the single source of truth shared

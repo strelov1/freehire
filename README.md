@@ -153,7 +153,7 @@ slug.
 | POST   | `/api/v1/jobs/:slug/save`         | ✓    | Save (bookmark)                          |
 | DELETE | `/api/v1/jobs/:slug/save`         | ✓    | Unsave                                   |
 | PATCH  | `/api/v1/jobs/:slug/track`        | ✓    | Set application stage / notes            |
-| GET    | `/api/v1/me/jobs`                 | ✓    | The caller's tracked/saved jobs          |
+| GET    | `/api/v1/me/tracking`             | ✓    | The caller's tracked/saved jobs          |
 | POST   | `/api/v1/me/api-keys`             | 🍪   | Create an API key (returns it once)      |
 | GET    | `/api/v1/me/api-keys`             | 🍪   | List API keys                            |
 | DELETE | `/api/v1/me/api-keys/:id`         | 🍪   | Revoke an API key                        |

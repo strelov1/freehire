@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// teiMaxBatch caps how many inputs go in one TEI /v1/embeddings call. TEI rejects a
+// teiMaxBatch caps how many inputs go in one TEI /embed call. TEI rejects a
 // batch above its --max-client-batch-size (default 32); embedBatch chunks larger
 // inputs into sequential calls so callers can hand it a whole reindex batch.
 const teiMaxBatch = 32

@@ -71,22 +71,25 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 
 | Param | Filter | Values |
 | --- | --- | --- |
-| `collections` | Collection | yc, techstars, european, ai, mag7, bigtech, unicorn, fortune500 |
-| `regions` | Region | global, north_america, latam, eu, uk, mena, africa, apac, cis |
+| `collections` | Collection | yc, techstars, european, ai, mag7, bigtech, unicorn, fortune500, eastern-roots, ai-native |
+| `regions` | Region | global, north_america, latam, eu, uk, mena, africa, apac, cis, none |
 | `work_mode` | Work format | remote, hybrid, onsite |
-| `category` | Specialization | backend, frontend, fullstack, mobile, devops, sre, data_engineering, data_science, data_analytics, ml_ai, qa, security, hardware, embedded, blockchain, design, product, project_management, management, marketing, sales, support, other |
+| `role` | Role | Open vocabulary — call /jobs/facets for live values |
+| `category` | Specialization | backend, frontend, fullstack, mobile, devops, sre, network_engineering, data_engineering, data_science, data_analytics, ml_ai, ai_engineering, qa, security, hardware, embedded, blockchain, architecture, design, product, project_management, management, marketing, sales, support, other |
 | `seniority` | Seniority | intern, junior, middle, senior, lead, staff, principal, c_level |
 | `skills` | Skills | Open vocabulary — call /jobs/facets for live values |
 | `domains` | Industry | fintech, gambling, ecommerce, crypto, healthcare, saas, gamedev, edtech, adtech, govtech, media, travel, logistics, other |
 | `company_type` | Company type | product, startup, outsource, outstaff, agency, inhouse, government |
 | `countries` | Countries | Open vocabulary — call /jobs/facets for live values |
+| `cities` | City | Open vocabulary — call /jobs/facets for live values |
 | `relocation` | Relocation | not_supported, supported, required |
 | `employment_type` | Employment | full_time, part_time, contract, internship |
 | `english_level` | English | none, a1, a2, b1, b2, c1, c2, native |
-| `posting_language` | Job language | en, ru, uk |
+| `posting_language` | Job language | Open vocabulary — call /jobs/facets for live values |
+| `reality` | Posting reality | fresh, stale, likely-evergreen |
 | `salary_currency` | Currency | USD, EUR, GBP, RUB |
 | `company_slug` | Company | Open vocabulary — call /jobs/facets for live values |
-| `source` | Source | telegram, workatastartup, remoteok, arc, arbeitnow, ashby, ashbygraphql, bamboohr, breezy, deel, eightfold, freshteam, gem, getonbrd, globalpayments, greenhouse, gupy, himalayas, huntflow, icims, jazzhr, jibe, jobicy, jobstash, join, justjoin, lever, mycareersfuture, oracle, personio, phenom, pinpoint, radancy, recruitee, remotive, rippling, smartrecruiters, successfactors, teamtailor, tecla, thehub, wantedkr, weworkremotely, workable, workday, workingnomads, wpyoast |
+| `source` | Source | Open vocabulary — call /jobs/facets for live values |
 | `company_size` | Company size | 1-10, 11-50, 51-200, 201-500, 501-1000, 1000+ |
 | `education_level` | Education level | none, bachelor, master, phd |
 | `salary_period` | Salary period | year, month, day, hour |
@@ -651,7 +654,7 @@ curl -X DELETE "https://freehire.dev/api/v1/jobs/<slug>/track" -H "Authorization
 { "data": { "ok": true } }
 ```
 
-### `GET /me/jobs`
+### `GET /me/tracking`
 
 **Auth:** Session or API key
 
@@ -668,7 +671,7 @@ Each item carries the job in the shared wire shape with your interaction timesta
 | `offset` | integer | no | Rows to skip. (e.g. `0`) |
 
 ```bash
-curl "https://freehire.dev/api/v1/me/jobs?filter=applied" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl "https://freehire.dev/api/v1/me/tracking?filter=applied" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
@@ -692,18 +695,48 @@ curl "https://freehire.dev/api/v1/me/jobs?filter=applied" -H "Authorization: Bea
 }
 ```
 
-### `GET /me/jobs/viewed`
+### `GET /me/tracking/viewed`
 
 **Auth:** Session or API key
 
 Slugs of jobs you have viewed.
 
 ```bash
-curl "https://freehire.dev/api/v1/me/jobs/viewed" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl "https://freehire.dev/api/v1/me/tracking/viewed" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
 { "data": ["senior-go-engineer-acme-1a2b", "..."] }
+```
+
+### `GET /me/tracking/analyses`
+
+**Auth:** Session or API key
+
+Jobs you have run the AI fit analysis on.
+
+Newest first, closed jobs included (with `closed: true`). Each item carries the overall score and verdict; `stale` marks an analysis whose CV, job, or model has changed since. `meta.quota` reports your monthly fit-analysis usage. Never runs the LLM.
+
+```bash
+curl "https://freehire.dev/api/v1/me/tracking/analyses" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": [
+    {
+      "slug": "senior-go-engineer-acme-1a2b",
+      "title": "Senior Go Engineer",
+      "company": "Acme",
+      "closed": false,
+      "overall_score": 82,
+      "verdict": "Strong Fit",
+      "analysed_at": "2026-07-11T10:00:00Z",
+      "stale": false
+    }
+  ],
+  "meta": { "quota": { "used": 3, "limit": 10, "remaining": 7 } }
+}
 ```
 
 ## Job submissions

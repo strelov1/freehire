@@ -199,7 +199,7 @@ func stage1SystemPrompt() string {
 	return b.String()
 }
 
-// stage2SystemPrompt pins the recruiter five-dimension scoring contract.
+// stage2SystemPrompt pins the recruiter six-dimension scoring contract.
 func stage2SystemPrompt() string {
 	var b strings.Builder
 	b.WriteString("You are a senior technical recruiter judging how well a candidate fits ONE role. ")

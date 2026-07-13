@@ -104,8 +104,8 @@ func (a *API) setSession(c *fiber.Ctx, userID int64) error {
 	return nil
 }
 
-// Me returns the authenticated user. It runs behind auth.RequireAuth, which has
-// already resolved and stored the user id.
+// Me returns the authenticated user. It runs behind auth.RequireAuthOrKey (a
+// session cookie or an API key), which has already resolved and stored the user id.
 func (a *API) Me(c *fiber.Ctx) error {
 	id, err := requireUserID(c)
 	if err != nil {

@@ -1,5 +1,5 @@
 // Package jobfit computes an on-demand, LLM-driven fit analysis for a single
-// (candidate, job) pair: a five-dimension scored verdict centered on job-title
+// (candidate, job) pair: a six-dimension scored verdict centered on job-title
 // alignment and relevant experience, plus an ATS-style requirement-match table.
 //
 // It runs a fixed three-stage prompt-chain (see analyzer.go) — Extract & Match (the
@@ -7,7 +7,7 @@
 // provider-agnostic internal/llm client, NOT an autonomous agent: the step count and
 // order are fixed and every input is gathered before the first call. This file owns
 // the wire contract, the untrusted-output sanitize, and the deterministic weighted
-// scoring; the model only scores the five dimensions, while overall_score and the
+// scoring; the model only scores the six dimensions, while overall_score and the
 // verdict label are computed here so the headline number stays consistent with the
 // dimensions. Pure and I/O-free (mirrors internal/atscheck / internal/verdict).
 package jobfit
@@ -139,7 +139,7 @@ type recruiterVerdict struct {
 }
 
 // buildAnalysis assembles the served Analysis from the (sanitized) requirement match
-// and recruiter verdict: the five dimensions in fixed order, the weighted overall, and
+// and recruiter verdict: the six dimensions in fixed order, the weighted overall, and
 // the derived verdict label.
 func buildAnalysis(reqs []Requirement, v recruiterVerdict) Analysis {
 	scores := map[string]dimScore{
