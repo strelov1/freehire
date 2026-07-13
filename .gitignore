@@ -50,3 +50,32 @@ __pycache__/
 
 # Superpowers visual brainstorm scratch
 .superpowers/
+
+# Compiled cmd/* worker binaries (go build ./cmd/<name>/ writes <name> into the repo root)
+/backfill-company-info
+/backfill-derive
+/backfill-descriptions
+/backfill-justjoin
+/embed
+/enrich
+/gen-cities
+/gen-contracts
+/gmail-sync
+/harvest-ats
+/harvest-boards
+/harvest-erecruiter
+/harvest-loxo
+/harvest-role
+/import-collections
+/import-yc
+/ingest
+/liveness
+/mail-ingest
+/notify
+/recount-companies
+/reindex
+/reslug
+/rollup-stats
+/server
+/tg-extract
+/tg-ingest
