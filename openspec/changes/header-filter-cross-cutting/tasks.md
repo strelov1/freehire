@@ -17,7 +17,7 @@
 
 - [x] 4.1 In `web/src/lib/components/HeaderLocationFilter.svelte`, add prop `variant: 'jobs' | 'companies' | 'launcher'` (default `'jobs'`). Compute the trigger summary with `summarizeScope(store, variant === 'companies' ? COMPANIES_SCOPE : JOBS_SCOPE)`; the `jobs` body is unchanged.
 - [x] 4.2 Add the **companies** body: a `Region` pill row (`REGION_OPTIONS` → `store.cycle('regions', v)`) and a `Remote hiring` pill row (`REGION_OPTIONS` → `store.cycle('remote_regions', v)`), each pill styled with `pillClass`/`pillTitle` and state from `store.facet(...)`. `Clear all` clears `regions` + `remote_regions`. No work-format / LocationPane in this mode.
-- [ ] 4.3 Run `npx svelte-check` — no new errors; visually verify jobs mode is unchanged and companies mode renders on `/companies`.
+- [x] 4.3 Run `npx svelte-check` — no new errors; visually verify jobs mode is unchanged and companies mode renders on `/companies`.
 
 ## 5. Launcher mode (listless pages)
 
@@ -30,5 +30,5 @@
 
 ## 7. Verify end-to-end
 
-- [ ] 7.1 Dev server: (a) jobs feed `/` unchanged (work format + location, live, URL); (b) `/companies` shows Region + Remote-hiring, selecting filters the company list + URL; (c) a job-detail page shows the launcher trigger, picking a region navigates to `/jobs?regions=…`.
-- [ ] 7.2 Run `npx vitest run`, `npx svelte-check`; changed files clean on `eslint`.
+- [x] 7.1 Dev server: (a) jobs feed `/` unchanged (work format + location, live, URL); (b) `/companies` shows Region + Remote-hiring, selecting filters the company list + URL; (c) a job-detail page shows the launcher trigger, picking a region navigates to `/jobs?regions=…`.
+- [x] 7.2 Run `npx vitest run`, `npx svelte-check`; changed files clean on `eslint`.
