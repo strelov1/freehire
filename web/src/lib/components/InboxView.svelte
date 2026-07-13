@@ -13,7 +13,7 @@
   import { timeAgo } from '$lib/utils';
   import { avatarInitials, avatarColor } from '$lib/avatar';
 
-  const PAGE_SIZE = 20;
+  const PAGE_SIZE = 5;
 
   let gmail = $state<GmailStatus | null>(null);
   let mailbox = $state<MailboxStatus | null>(null);
@@ -336,8 +336,8 @@
           {search ? 'No mail matches your search.' : 'No mail yet — it appears here as it arrives.'}
         </p>
       {:else}
-        <!-- Two-pane mail client: the flat message list, then the reading pane. -->
-        <div class="grid gap-4 md:grid-cols-[minmax(0,24rem)_1fr]">
+        <!-- Two-pane mail client: a compact message list, then a borderless reading pane. -->
+        <div class="grid gap-5 md:grid-cols-[minmax(0,19rem)_1fr]">
           <div class="flex flex-col gap-2">
             <ul class="flex flex-col gap-1">
               {#each messages as m, i (m.id)}
@@ -387,8 +387,8 @@
             {/if}
           </div>
 
-          <!-- Reading pane. -->
-          <div class="min-h-[20rem] rounded-xl border border-border bg-card p-5">
+          <!-- Reading pane — borderless, flush, to give the content the room. -->
+          <div class="min-h-[20rem]">
             {#if bodyLoading}
               <p class="py-16 text-center text-sm text-muted-foreground">Loading…</p>
             {:else if !selected}
