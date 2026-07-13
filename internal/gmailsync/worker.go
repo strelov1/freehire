@@ -16,9 +16,8 @@ type Connection struct {
 
 // StoredEmail is a fetched message ready to persist.
 type StoredEmail struct {
-	UserID      int64
-	Message     Message
-	SubjectNorm string
+	UserID  int64
+	Message Message
 }
 
 // Store is the persistence the worker needs (subset of db.Queries).
@@ -94,9 +93,8 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) {
 			continue
 		}
 		if err := w.store.UpsertEmail(ctx, StoredEmail{
-			UserID:      u.UserID,
-			Message:     msg,
-			SubjectNorm: NormalizeSubject(msg.Subject),
+			UserID:  u.UserID,
+			Message: msg,
 		}); err != nil {
 			log.Printf("gmail-sync: user %d: store %s: %v", u.UserID, id, err)
 			continue

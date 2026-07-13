@@ -65,9 +65,6 @@ func TestRunOnce_KnownRecipientStored(t *testing.T) {
 	if got.ExternalID != "abc123@acme.com" {
 		t.Errorf("ExternalID = %q", got.ExternalID)
 	}
-	if got.SubjectNorm == "" {
-		t.Error("SubjectNorm not normalized")
-	}
 	if len(src.acked) != 1 || src.acked[0] != "m1" {
 		t.Errorf("acked = %v, want [m1]", src.acked)
 	}

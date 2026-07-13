@@ -45,8 +45,8 @@ DELETE FROM emails WHERE user_id = $1 AND source = $2;
 -- source fixed to 'gmail'; the hosted path has its own insert (InsertHostedMessage).
 INSERT INTO emails (
     user_id, source, external_id, thread_id, from_addr, from_name,
-    subject, subject_norm, body_text, body_html, received_at
-) VALUES ($1, 'gmail', $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    subject, body_text, body_html, received_at
+) VALUES ($1, 'gmail', $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (user_id, source, external_id) DO NOTHING;
 
 -- name: ListEmails :many

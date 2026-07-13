@@ -317,22 +317,21 @@ func (q *Queries) SetGmailSynced(ctx context.Context, arg SetGmailSyncedParams) 
 const upsertEmail = `-- name: UpsertEmail :exec
 INSERT INTO emails (
     user_id, source, external_id, thread_id, from_addr, from_name,
-    subject, subject_norm, body_text, body_html, received_at
-) VALUES ($1, 'gmail', $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    subject, body_text, body_html, received_at
+) VALUES ($1, 'gmail', $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (user_id, source, external_id) DO NOTHING
 `
 
 type UpsertEmailParams struct {
-	UserID      int64              `json:"user_id"`
-	ExternalID  string             `json:"external_id"`
-	ThreadID    string             `json:"thread_id"`
-	FromAddr    string             `json:"from_addr"`
-	FromName    string             `json:"from_name"`
-	Subject     string             `json:"subject"`
-	SubjectNorm string             `json:"subject_norm"`
-	BodyText    string             `json:"body_text"`
-	BodyHtml    string             `json:"body_html"`
-	ReceivedAt  pgtype.Timestamptz `json:"received_at"`
+	UserID     int64              `json:"user_id"`
+	ExternalID string             `json:"external_id"`
+	ThreadID   string             `json:"thread_id"`
+	FromAddr   string             `json:"from_addr"`
+	FromName   string             `json:"from_name"`
+	Subject    string             `json:"subject"`
+	BodyText   string             `json:"body_text"`
+	BodyHtml   string             `json:"body_html"`
+	ReceivedAt pgtype.Timestamptz `json:"received_at"`
 }
 
 // Store a Gmail message, idempotent by (user_id, source, external_id) with
@@ -345,7 +344,6 @@ func (q *Queries) UpsertEmail(ctx context.Context, arg UpsertEmailParams) error 
 		arg.FromAddr,
 		arg.FromName,
 		arg.Subject,
-		arg.SubjectNorm,
 		arg.BodyText,
 		arg.BodyHtml,
 		arg.ReceivedAt,

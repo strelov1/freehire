@@ -38,16 +38,15 @@ func (s *DBStore) RefreshToken(ctx context.Context, userID int64) (string, error
 
 func (s *DBStore) UpsertEmail(ctx context.Context, e StoredEmail) error {
 	return s.q.UpsertEmail(ctx, db.UpsertEmailParams{
-		UserID:      e.UserID,
-		ExternalID:  e.Message.ID,
-		ThreadID:    e.Message.ThreadID,
-		FromAddr:    e.Message.FromAddr,
-		FromName:    e.Message.FromName,
-		Subject:     e.Message.Subject,
-		SubjectNorm: e.SubjectNorm,
-		BodyText:    e.Message.BodyText,
-		BodyHtml:    e.Message.BodyHTML,
-		ReceivedAt:  pgtype.Timestamptz{Time: e.Message.ReceivedAt, Valid: true},
+		UserID:     e.UserID,
+		ExternalID: e.Message.ID,
+		ThreadID:   e.Message.ThreadID,
+		FromAddr:   e.Message.FromAddr,
+		FromName:   e.Message.FromName,
+		Subject:    e.Message.Subject,
+		BodyText:   e.Message.BodyText,
+		BodyHtml:   e.Message.BodyHTML,
+		ReceivedAt: pgtype.Timestamptz{Time: e.Message.ReceivedAt, Valid: true},
 	})
 }
 

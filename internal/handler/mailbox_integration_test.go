@@ -31,8 +31,8 @@ func TestHostedMailboxEndToEnd(t *testing.T) {
 	}
 	// A Gmail message so we can prove release purges only hosted mail.
 	if _, err := pool.Exec(ctx,
-		`INSERT INTO emails (user_id, source, external_id, subject, subject_norm, body_text, received_at)
-		 VALUES ($1, 'gmail', 'g1', 'Gmail msg', 'gmail msg', 'body', now())`, uid); err != nil {
+		`INSERT INTO emails (user_id, source, external_id, subject, body_text, received_at)
+		 VALUES ($1, 'gmail', 'g1', 'Gmail msg', 'body', now())`, uid); err != nil {
 		t.Fatalf("seed gmail email: %v", err)
 	}
 
@@ -88,8 +88,8 @@ func TestHostedMailboxEndToEnd(t *testing.T) {
 
 	// A hosted message joins the same inbox as the Gmail one.
 	if _, err := pool.Exec(ctx,
-		`INSERT INTO emails (user_id, source, external_id, subject, subject_norm, body_text, received_at)
-		 VALUES ($1, 'hosted', 'h1', 'Hosted msg', 'hosted msg', 'body', now())`, uid); err != nil {
+		`INSERT INTO emails (user_id, source, external_id, subject, body_text, received_at)
+		 VALUES ($1, 'hosted', 'h1', 'Hosted msg', 'body', now())`, uid); err != nil {
 		t.Fatalf("seed hosted email: %v", err)
 	}
 	if _, body := do("GET", "/api/v1/me/inbox"); func() bool { g, _ := body["data"].([]any); return len(g) != 2 }() {

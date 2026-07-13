@@ -6,8 +6,6 @@ import (
 	"net/mail"
 	"strings"
 	"time"
-
-	"github.com/strelov1/freehire/internal/gmailsync"
 )
 
 // pollInterval is how long Run waits after an empty receive before polling again.
@@ -20,16 +18,15 @@ const opTimeout = 30 * time.Second
 
 // HostedMessage is a received message ready to store, keyed by (user, external id).
 type HostedMessage struct {
-	UserID      int64
-	ExternalID  string
-	S3Key       string
-	FromAddr    string
-	FromName    string
-	Subject     string
-	SubjectNorm string
-	BodyText    string
-	BodyHTML    string
-	ReceivedAt  time.Time
+	UserID     int64
+	ExternalID string
+	S3Key      string
+	FromAddr   string
+	FromName   string
+	Subject    string
+	BodyText   string
+	BodyHTML   string
+	ReceivedAt time.Time
 }
 
 // Store is the db-free persistence the worker needs (faked in tests). A db-backed
@@ -135,16 +132,15 @@ func (w *Worker) handle(ctx context.Context, in Inbound) error {
 	}
 
 	return w.store.InsertMessage(ctx, HostedMessage{
-		UserID:      userID,
-		ExternalID:  externalID,
-		S3Key:       in.S3Key,
-		FromAddr:    parsed.FromAddr,
-		FromName:    parsed.FromName,
-		Subject:     parsed.Subject,
-		SubjectNorm: gmailsync.NormalizeSubject(parsed.Subject),
-		BodyText:    parsed.TextBody,
-		BodyHTML:    parsed.HTMLBody,
-		ReceivedAt:  receivedAt,
+		UserID:     userID,
+		ExternalID: externalID,
+		S3Key:      in.S3Key,
+		FromAddr:   parsed.FromAddr,
+		FromName:   parsed.FromName,
+		Subject:    parsed.Subject,
+		BodyText:   parsed.TextBody,
+		BodyHTML:   parsed.HTMLBody,
+		ReceivedAt: receivedAt,
 	})
 }
 

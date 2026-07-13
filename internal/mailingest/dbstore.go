@@ -31,15 +31,14 @@ func (s *DBStore) MailboxByAddress(ctx context.Context, address string) (int64, 
 
 func (s *DBStore) InsertMessage(ctx context.Context, m HostedMessage) error {
 	return s.q.InsertHostedMessage(ctx, db.InsertHostedMessageParams{
-		UserID:      m.UserID,
-		ExternalID:  m.ExternalID,
-		S3Key:       pgtype.Text{String: m.S3Key, Valid: m.S3Key != ""},
-		FromAddr:    m.FromAddr,
-		FromName:    m.FromName,
-		Subject:     m.Subject,
-		SubjectNorm: m.SubjectNorm,
-		BodyText:    m.BodyText,
-		BodyHtml:    m.BodyHTML,
-		ReceivedAt:  pgtype.Timestamptz{Time: m.ReceivedAt, Valid: true},
+		UserID:     m.UserID,
+		ExternalID: m.ExternalID,
+		S3Key:      pgtype.Text{String: m.S3Key, Valid: m.S3Key != ""},
+		FromAddr:   m.FromAddr,
+		FromName:   m.FromName,
+		Subject:    m.Subject,
+		BodyText:   m.BodyText,
+		BodyHtml:   m.BodyHTML,
+		ReceivedAt: pgtype.Timestamptz{Time: m.ReceivedAt, Valid: true},
 	})
 }

@@ -81,12 +81,6 @@ func TestRunOnceSyncsUser(t *testing.T) {
 	if len(store.upserted) != 2 {
 		t.Fatalf("upserted = %d, want 2", len(store.upserted))
 	}
-	// Both messages normalize to the same grouping key.
-	for _, e := range store.upserted {
-		if e.SubjectNorm != "thank you for applying to acme" {
-			t.Errorf("subject_norm = %q", e.SubjectNorm)
-		}
-	}
 	if !store.syncedCalled || store.syncedCursor != t2.Unix() {
 		t.Errorf("cursor = %d (called=%v), want %d", store.syncedCursor, store.syncedCalled, t2.Unix())
 	}

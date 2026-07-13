@@ -37,20 +37,20 @@ func TestGmailInboxEndToEnd(t *testing.T) {
 		`INSERT INTO gmail_connections (user_id, email, refresh_token_enc) VALUES ($1, 'gm@gmail.com', 'enc')`, uid); err != nil {
 		t.Fatalf("seed connection: %v", err)
 	}
-	insEmail := func(u int64, msgID, subject, subjectNorm, body string) int64 {
+	insEmail := func(u int64, msgID, subject, body string) int64 {
 		var id int64
 		if err := pool.QueryRow(ctx,
-			`INSERT INTO emails (user_id, external_id, from_addr, from_name, subject, subject_norm, body_text, received_at)
-			 VALUES ($1, $2, 'no-reply@ashbyhq.com', 'Acme', $3, $4, $5, now()) RETURNING id`,
-			u, msgID, subject, subjectNorm, body).Scan(&id); err != nil {
+			`INSERT INTO emails (user_id, external_id, from_addr, from_name, subject, body_text, received_at)
+			 VALUES ($1, $2, 'no-reply@ashbyhq.com', 'Acme', $3, $4, now()) RETURNING id`,
+			u, msgID, subject, body).Scan(&id); err != nil {
 			t.Fatalf("seed email: %v", err)
 		}
 		return id
 	}
-	m1 := insEmail(uid, "m1", "Thank you for applying to Acme", "thank you for applying to acme", "Hi Ilya")
-	insEmail(uid, "m2", "Re: Thank you for applying to Acme", "thank you for applying to acme", "Reply body")
-	insEmail(uid, "m3", "Interview invite", "interview invite", "Come chat")
-	foreign := insEmail(other, "m4", "Other mail", "other mail", "secret")
+	m1 := insEmail(uid, "m1", "Thank you for applying to Acme", "Hi Ilya")
+	insEmail(uid, "m2", "Re: Thank you for applying to Acme", "Reply body")
+	insEmail(uid, "m3", "Interview invite", "Come chat")
+	foreign := insEmail(other, "m4", "Other mail", "secret")
 
 	iss := auth.NewIssuer("test-secret-that-is-long-enough-0001", time.Hour)
 	cookie, _ := iss.Issue(uid)

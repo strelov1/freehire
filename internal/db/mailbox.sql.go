@@ -56,22 +56,21 @@ func (q *Queries) GetMailboxByUser(ctx context.Context, userID int64) (Mailbox, 
 const insertHostedMessage = `-- name: InsertHostedMessage :exec
 INSERT INTO emails (
     user_id, source, external_id, s3_key, from_addr, from_name,
-    subject, subject_norm, body_text, body_html, received_at
-) VALUES ($1, 'hosted', $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    subject, body_text, body_html, received_at
+) VALUES ($1, 'hosted', $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (user_id, source, external_id) DO NOTHING
 `
 
 type InsertHostedMessageParams struct {
-	UserID      int64              `json:"user_id"`
-	ExternalID  string             `json:"external_id"`
-	S3Key       pgtype.Text        `json:"s3_key"`
-	FromAddr    string             `json:"from_addr"`
-	FromName    string             `json:"from_name"`
-	Subject     string             `json:"subject"`
-	SubjectNorm string             `json:"subject_norm"`
-	BodyText    string             `json:"body_text"`
-	BodyHtml    string             `json:"body_html"`
-	ReceivedAt  pgtype.Timestamptz `json:"received_at"`
+	UserID     int64              `json:"user_id"`
+	ExternalID string             `json:"external_id"`
+	S3Key      pgtype.Text        `json:"s3_key"`
+	FromAddr   string             `json:"from_addr"`
+	FromName   string             `json:"from_name"`
+	Subject    string             `json:"subject"`
+	BodyText   string             `json:"body_text"`
+	BodyHtml   string             `json:"body_html"`
+	ReceivedAt pgtype.Timestamptz `json:"received_at"`
 }
 
 // Store a message received at a hosted mailbox, idempotent by
@@ -84,7 +83,6 @@ func (q *Queries) InsertHostedMessage(ctx context.Context, arg InsertHostedMessa
 		arg.FromAddr,
 		arg.FromName,
 		arg.Subject,
-		arg.SubjectNorm,
 		arg.BodyText,
 		arg.BodyHtml,
 		arg.ReceivedAt,
