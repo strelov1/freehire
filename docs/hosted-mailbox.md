@@ -21,7 +21,7 @@ migration discipline.
 ## 2. Receiving domain + MX
 
 - Use a dedicated subdomain, e.g. `inbox.freehire.dev` — **not** the apex domain,
-  whose MX serves real mail. This is `MAIL_DOMAIN`.
+  whose MX serves real mail. This is `MAILBOX_DOMAIN`.
 - Verify the subdomain in SES **for receiving** (SES email receiving is only
   available in a subset of regions — pick one and use it for `AWS_REGION`).
 - Add an `MX` record for the subdomain pointing at SES inbound:
@@ -56,14 +56,14 @@ release the same way as the other `cmd/*` binaries.
 
 | var | purpose |
 |-----|---------|
-| `MAIL_DOMAIN` | receiving subdomain; also enables the claim route + status on the server |
+| `MAILBOX_DOMAIN` | receiving subdomain; also enables the claim route + status on the server |
 | `AWS_REGION` | an SES-inbound-capable region |
 | `MAIL_INBOUND_QUEUE_URL` | the SQS queue the SES notifications land in |
 | `MAIL_INBOUND_BUCKET` | fallback S3 bucket for the raw MIME |
 
-`MAIL_DOMAIN` is read by **both** the server (to offer the option and gate the
+`MAILBOX_DOMAIN` is read by **both** the server (to offer the option and gate the
 claim route) and the worker; the rest are worker-only. AWS credentials come from
-the instance/SSO role. With `MAIL_DOMAIN` unset the option is off (claim route
+the instance/SSO role. With `MAILBOX_DOMAIN` unset the option is off (claim route
 unregistered, status reports unavailable); with the AWS vars unset the worker
 exits cleanly (nothing to drain).
 

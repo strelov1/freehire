@@ -4,10 +4,10 @@
   import { resolve } from '$app/paths';
   import { User, LayoutList, Activity, Bell, Key, FileText, Inbox } from '@lucide/svelte';
   import type { LucideIcon } from '@lucide/svelte';
-  import { isAuthenticated } from '$lib/auth.svelte';
+  import { isAuthenticated, currentUser } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { Button } from '$lib/ui';
-  import { accountNav, isSectionActive, type AccountNavItem } from '$lib/accountNav';
+  import { visibleAccountNav, isSectionActive, type AccountNavItem } from '$lib/accountNav';
   import { cn } from '$lib/utils';
 
   // The account shell: one source of truth for the `my/*` chrome — the width
@@ -19,6 +19,10 @@
   let { children }: { children: Snippet } = $props();
 
   const path = $derived(page.url.pathname);
+
+  // Moderator-only sections (Inbox) are hidden from the nav for everyone else; the
+  // server enforces the real 403, this just declutters the UI.
+  const navItems = $derived(visibleAccountNav(currentUser()?.role === 'moderator'));
 
   // Icon per section, kept out of the pure accountNav model so that stays
   // Svelte-free and unit-testable. Keyed by the nav hrefs so a new section
@@ -57,7 +61,7 @@
   {:else}
     <!-- Same items, two forms; `extra` carries the per-form item tweaks. -->
     {#snippet navLinks(extra: string)}
-      {#each accountNav as item (item.href)}
+      {#each navItems as item (item.href)}
         {@const active = isSectionActive(path, item.href)}
         {@const Icon = icons[item.href]}
         <a

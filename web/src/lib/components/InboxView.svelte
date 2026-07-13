@@ -32,6 +32,10 @@
   let syncing = $state(false);
   let claiming = $state(false);
 
+  // Which pane: the mail list ('inbox') or the account setup ('settings'). Kept in
+  // separate tabs so the page doesn't dump connection cards and mail at once.
+  let tab = $state<'inbox' | 'settings'>('inbox');
+
   // Expanded group's messages, cached by key; and the opened message body.
   let expanded = $state<string | null>(null);
   let threads = $state<Record<string, InboxMessage[]>>({});
@@ -51,6 +55,7 @@
     try {
       [gmail, mailbox] = await Promise.all([api.gmailStatus(), api.mailboxStatus()]);
       if (hasAnySource) await fetchFirstPage();
+      else tab = 'settings'; // nothing to read yet — land on setup
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to load the inbox.';
     } finally {
@@ -234,8 +239,24 @@
   <p class="text-sm text-destructive">{error}</p>
 {:else}
   <div class="flex flex-col gap-4">
-    <!-- Sources: the two ways to get mail in — connect Gmail and/or claim a mailbox. -->
-    <div class="grid gap-3 sm:grid-cols-2">
+    <!-- Tabs: keep the mail list and the account setup on separate panes. -->
+    <div class="flex gap-4 border-b border-border text-sm">
+      {#each [{ id: 'inbox', label: 'Inbox' }, { id: 'settings', label: 'Settings' }] as t (t.id)}
+        <button
+          type="button"
+          onclick={() => (tab = t.id as 'inbox' | 'settings')}
+          class="-mb-px border-b-2 px-1 py-2 transition-colors {tab === t.id
+            ? 'border-brand font-medium text-foreground'
+            : 'border-transparent text-muted-foreground hover:text-foreground'}"
+        >
+          {t.label}
+        </button>
+      {/each}
+    </div>
+
+    {#if tab === 'settings'}
+      <!-- Sources: the two ways to get mail in — connect Gmail and/or claim a mailbox. -->
+      <div class="grid gap-3 sm:grid-cols-2">
       <!-- Gmail -->
       <div class="rounded-xl border border-border bg-card p-4">
         <div class="flex items-center gap-2 text-sm font-medium">
@@ -290,9 +311,10 @@
       </div>
     </div>
 
-    {#if !hasAnySource}
+    {:else if !hasAnySource}
       <p class="py-8 text-center text-sm text-muted-foreground">
-        Connect Gmail or get a freehire mailbox above to start seeing your ATS mail here.
+        No mail source yet —
+        <button type="button" class="font-medium text-primary hover:underline" onclick={() => (tab = 'settings')}>set one up in Settings</button>.
       </p>
     {:else}
       <!-- Account switcher (only when both sources feed the inbox). -->

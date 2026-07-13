@@ -187,9 +187,9 @@ type Config struct {
 	// feature is off (connect routes unregistered, inbox empty).
 	GmailConnector *gmailsync.Connector
 	GmailCipher    *tokencrypt.Cipher
-	// MailDomain enables the hosted-mailbox option: the receiving domain user
-	// addresses live on (<handle>@MailDomain). Empty = the feature is off.
-	MailDomain string
+	// MailboxDomain enables the hosted-mailbox option: the receiving domain user
+	// addresses live on (<handle>@MailboxDomain). Empty = the feature is off.
+	MailboxDomain string
 }
 
 // Register wires all routes onto the application from cfg. Auth is same-origin
@@ -209,7 +209,7 @@ func Register(app *fiber.App, cfg Config) {
 		frontendOrigin: cfg.FrontendOrigin,
 		gmailConnector: cfg.GmailConnector,
 		gmailCipher:    cfg.GmailCipher,
-		mailDomain:     cfg.MailDomain,
+		mailDomain:     cfg.MailboxDomain,
 		tracking:       jobtracking.New(jobtracking.NewQueriesRepository(queries)),
 		accounts:       accounts.New(accounts.NewQueriesRepository(queries, cfg.Pool), authHasher{}),
 		moderation:     moderation.New(moderation.NewQueriesRepository(queries, cfg.Pool, enrich.Version)),
@@ -370,26 +370,27 @@ func Register(app *fiber.App, cfg Config) {
 	api.Put("/me/profile", saved, a.PutProfile)
 	api.Delete("/me/profile", saved, a.DeleteProfile)
 
-	// Connect-Gmail inbox. The read + disconnect routes are always available
-	// (empty/no-op when not connected); the OAuth connect routes only when the
-	// feature is configured (Google creds + token key present). Cookie-only, as
-	// they are browser OAuth flows.
-	api.Get("/me/gmail", saved, a.GmailStatus)
-	api.Delete("/me/gmail", saved, a.GmailDisconnect)
-	api.Get("/me/inbox", saved, a.GetInbox)
-	api.Get("/me/inbox/group", saved, a.GetInboxGroup)
-	api.Get("/me/emails/:id", saved, a.GetEmail)
+	// Mail inbox (Gmail connect + hosted mailbox). The whole surface is
+	// moderator-gated for now (a restricted rollout) — a non-moderator gets 403
+	// and the SPA hides the nav entry. The read + disconnect routes are always
+	// registered (empty/no-op when not connected); the OAuth connect routes only
+	// when configured. Cookie-or-key auth, then the role gate.
+	api.Get("/me/gmail", saved, requireModerator, a.GmailStatus)
+	api.Delete("/me/gmail", saved, requireModerator, a.GmailDisconnect)
+	api.Get("/me/inbox", saved, requireModerator, a.GetInbox)
+	api.Get("/me/inbox/group", saved, requireModerator, a.GetInboxGroup)
+	api.Get("/me/emails/:id", saved, requireModerator, a.GetEmail)
 	if a.gmailReady() {
-		api.Get("/me/gmail/connect", saved, a.GmailConnect)
-		api.Get("/me/gmail/callback", saved, a.GmailCallback)
-		api.Post("/me/gmail/sync", saved, a.SyncGmail)
+		api.Get("/me/gmail/connect", saved, requireModerator, a.GmailConnect)
+		api.Get("/me/gmail/callback", saved, requireModerator, a.GmailCallback)
+		api.Post("/me/gmail/sync", saved, requireModerator, a.SyncGmail)
 	}
 	// Hosted-mailbox option: status is always available (reports unavailable when
 	// the feature is off); claim/release only when a receiving domain is configured.
-	api.Get("/me/mailbox", saved, a.GetMailbox)
+	api.Get("/me/mailbox", saved, requireModerator, a.GetMailbox)
 	if a.mailboxReady() {
-		api.Post("/me/mailbox", saved, a.ClaimMailbox)
-		api.Delete("/me/mailbox", saved, a.ReleaseMailbox)
+		api.Post("/me/mailbox", saved, requireModerator, a.ClaimMailbox)
+		api.Delete("/me/mailbox", saved, requireModerator, a.ReleaseMailbox)
 	}
 	// The résumé verdict is a profile sub-resource: GET computes the live
 	// market-coverage verdict from the profile's skills against the selected role.

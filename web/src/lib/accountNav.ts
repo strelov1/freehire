@@ -11,13 +11,21 @@ export const accountNav = [
   { href: '/my/profile', label: 'Profile' },
   { href: '/my/tracking', label: 'Tracking' },
   { href: '/my/activity', label: 'Activity' },
-  { href: '/my/inbox', label: 'Inbox' },
+  // Mail inbox is a restricted rollout — moderators only (the server 403s others).
+  { href: '/my/inbox', label: 'Inbox', moderatorOnly: true },
   { href: '/my/searches', label: 'Search notifications' },
   { href: '/my/api-keys', label: 'API keys' },
   { href: '/my/submissions', label: 'My submissions' },
 ] as const;
 
 export type AccountNavItem = (typeof accountNav)[number];
+
+// The sections visible to a caller: a `moderatorOnly` section is hidden unless the
+// caller is a moderator. This is a UI affordance only — the server re-checks the
+// role on every request, so hiding the nav is not the security boundary.
+export function visibleAccountNav(isModerator: boolean): readonly AccountNavItem[] {
+  return accountNav.filter((i) => !('moderatorOnly' in i && i.moderatorOnly) || isModerator);
+}
 
 // A section is active when the current path equals its route or is a descendant
 // of it. The trailing-slash guard means a shared string prefix that is not a path

@@ -5,7 +5,7 @@
 // run-once cron workers it is long-lived (SES delivery is push-driven), so it
 // loops until SIGTERM.
 //
-// It is gated on config: without MAIL_DOMAIN / AWS_REGION / MAIL_INBOUND_QUEUE_URL
+// It is gated on config: without MAILBOX_DOMAIN / AWS_REGION / MAIL_INBOUND_QUEUE_URL
 // it exits cleanly (nothing to drain). AWS credentials come from the default chain
 // (instance/SSO role), never app config.
 package main
@@ -30,12 +30,12 @@ func run() int {
 	}
 	defer cleanup()
 
-	domain := cfg.MailDomain
+	domain := cfg.MailboxDomain
 	region := os.Getenv("AWS_REGION")
 	queueURL := os.Getenv("MAIL_INBOUND_QUEUE_URL")
 	bucket := os.Getenv("MAIL_INBOUND_BUCKET")
 	if domain == "" || region == "" || queueURL == "" {
-		log.Print("mail-ingest: not configured (MAIL_DOMAIN / AWS_REGION / MAIL_INBOUND_QUEUE_URL) — nothing to do")
+		log.Print("mail-ingest: not configured (MAILBOX_DOMAIN / AWS_REGION / MAIL_INBOUND_QUEUE_URL) — nothing to do")
 		return 0
 	}
 
