@@ -9,8 +9,9 @@
     EmailBody,
   } from '$lib/api';
   import { Badge, Button } from '$lib/ui';
-  import { Mail, AtSign, Copy } from '@lucide/svelte';
+  import { Mail, AtSign, Copy, Search, RefreshCw } from '@lucide/svelte';
   import { timeAgo } from '$lib/utils';
+  import { avatarInitials, avatarColor } from '$lib/avatar';
 
   const PAGE_SIZE = 20;
 
@@ -30,6 +31,7 @@
 
   let syncing = $state(false);
   let claiming = $state(false);
+  let refreshing = $state(false);
 
   // Which pane: the mail list ('inbox') or the account setup ('settings').
   let tab = $state<'inbox' | 'settings'>('inbox');
@@ -75,6 +77,20 @@
       await fetchFirstPage();
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to load the inbox.';
+    }
+  }
+
+  // Toolbar refresh — re-fetch the first page, keeping the open message.
+  async function refreshInbox() {
+    if (refreshing) return;
+    refreshing = true;
+    error = null;
+    try {
+      await fetchFirstPage();
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Refresh failed.';
+    } finally {
+      refreshing = false;
     }
   }
 
@@ -280,30 +296,40 @@
         <button type="button" class="font-medium text-primary hover:underline" onclick={() => (tab = 'settings')}>set one up in Settings</button>.
       </p>
     {:else}
-      <!-- Account switcher (only when both sources feed the inbox). -->
-      {#if bothConnected}
-        <div class="flex gap-1 self-start rounded-lg border border-border p-1 text-sm">
-          {#each [{ value: '', label: 'All' }, { value: 'gmail', label: 'Gmail' }, { value: 'hosted', label: 'Mailbox' }] as opt (opt.value)}
-            <button
-              type="button"
-              onclick={() => setSource(opt.value as InboxSource)}
-              class="rounded px-3 py-1 transition-colors {source === opt.value
-                ? 'bg-secondary font-medium text-foreground'
-                : 'text-muted-foreground hover:text-foreground'}"
-            >
-              {opt.label}
-            </button>
-          {/each}
-        </div>
-      {/if}
+      <!-- Toolbar: account switcher, search, refresh. -->
+      <div class="flex flex-wrap items-center gap-2">
+        {#if bothConnected}
+          <div class="flex gap-1 rounded-lg border border-border p-1 text-sm">
+            {#each [{ value: '', label: 'All' }, { value: 'gmail', label: 'Gmail' }, { value: 'hosted', label: 'Mailbox' }] as opt (opt.value)}
+              <button
+                type="button"
+                onclick={() => setSource(opt.value as InboxSource)}
+                class="rounded px-3 py-1 transition-colors {source === opt.value
+                  ? 'bg-secondary font-medium text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'}"
+              >
+                {opt.label}
+              </button>
+            {/each}
+          </div>
+        {/if}
 
-      <input
-        type="search"
-        placeholder="Search subject, sender, or body…"
-        bind:value={search}
-        oninput={onSearchInput}
-        class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-      />
+        <div class="relative min-w-0 flex-1">
+          <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="search"
+            placeholder="Search subject, sender, or body…"
+            bind:value={search}
+            oninput={onSearchInput}
+            class="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-ring/40"
+          />
+        </div>
+
+        <Button variant="outline" size="sm" disabled={refreshing} onclick={refreshInbox} title="Refresh">
+          <RefreshCw class="h-4 w-4 {refreshing ? 'animate-spin' : ''}" />
+          Refresh
+        </Button>
+      </div>
 
       {#if messages.length === 0}
         <p class="py-12 text-center text-sm text-muted-foreground">
@@ -311,34 +337,42 @@
         </p>
       {:else}
         <!-- Two-pane mail client: the flat message list, then the reading pane. -->
-        <div class="grid gap-4 md:grid-cols-[minmax(0,22rem)_1fr]">
+        <div class="grid gap-4 md:grid-cols-[minmax(0,24rem)_1fr]">
           <div class="flex flex-col gap-2">
             <ul class="flex flex-col gap-1">
-              {#each messages as m (m.id)}
-                <li>
+              {#each messages as m, i (m.id)}
+                <li class="row-in" style="animation-delay: {Math.min(i, 14) * 15}ms">
                   <button
                     type="button"
                     onclick={() => openMessage(m.id)}
                     aria-current={selectedId === m.id}
-                    class="w-full rounded-lg border p-3 text-left transition-colors {selectedId === m.id
-                      ? 'border-brand bg-secondary'
-                      : 'border-border bg-card hover:bg-accent'}"
+                    class="flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors {selectedId === m.id
+                      ? 'border-brand-ring bg-brand-muted/60'
+                      : 'border-transparent hover:border-border hover:bg-accent'}"
                   >
-                    <div class="flex items-center gap-2">
-                      {#if !m.read}
-                        <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" aria-label="unread"></span>
+                    <div
+                      class="mt-0.5 flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-full text-xs font-semibold text-white"
+                      style="background-color: {avatarColor(m.from_addr || m.from_name)}"
+                    >
+                      {avatarInitials(m.from_name, m.from_addr)}
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-baseline gap-2">
+                        {#if !m.read}
+                          <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" aria-label="unread"></span>
+                        {/if}
+                        <span class="min-w-0 flex-1 truncate text-sm {m.read ? 'font-medium text-foreground/90' : 'font-semibold text-foreground'}">
+                          {m.from_name || m.from_addr}
+                        </span>
+                        <span class="shrink-0 text-[11px] text-muted-foreground">{timeAgo(m.received_at)}</span>
+                      </div>
+                      <div class="mt-0.5 truncate text-sm {m.read ? 'text-muted-foreground' : 'text-foreground'}">
+                        {m.subject || '(no subject)'}
+                      </div>
+                      {#if m.snippet}
+                        <div class="mt-0.5 truncate text-xs text-muted-foreground/80">{m.snippet}</div>
                       {/if}
-                      <span class="min-w-0 truncate text-sm {m.read ? 'font-normal' : 'font-semibold'}">
-                        {m.from_name || m.from_addr}
-                      </span>
-                      <span class="ml-auto shrink-0 text-xs text-muted-foreground">{timeAgo(m.received_at)}</span>
                     </div>
-                    <div class="mt-0.5 truncate text-sm {m.read ? 'text-muted-foreground' : 'text-foreground'}">
-                      {m.subject || '(no subject)'}
-                    </div>
-                    {#if m.snippet}
-                      <div class="mt-0.5 truncate text-xs text-muted-foreground">{m.snippet}</div>
-                    {/if}
                   </button>
                 </li>
               {/each}
@@ -354,45 +388,61 @@
           </div>
 
           <!-- Reading pane. -->
-          <div class="rounded-xl border border-border bg-card p-4">
+          <div class="min-h-[20rem] rounded-xl border border-border bg-card p-5">
             {#if bodyLoading}
-              <p class="py-12 text-center text-sm text-muted-foreground">Loading…</p>
+              <p class="py-16 text-center text-sm text-muted-foreground">Loading…</p>
             {:else if !selected}
-              <p class="py-12 text-center text-sm text-muted-foreground">Select a message to read it.</p>
+              <div class="flex h-full flex-col items-center justify-center gap-2 py-16 text-center">
+                <Mail class="h-7 w-7 text-muted-foreground/50" />
+                <p class="text-sm text-muted-foreground">Select a message to read it.</p>
+              </div>
             {:else}
-              <div class="flex flex-col gap-1">
-                <h2 class="text-lg font-semibold tracking-tight">{selected.subject || '(no subject)'}</h2>
-                <div class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                  <span>{selected.from_name || selected.from_addr}</span>
-                  {#if selected.from_name}
-                    <Badge variant="outline">{selected.from_addr}</Badge>
-                  {/if}
-                  <span class="ml-auto text-xs">{timeAgo(selected.received_at)}</span>
+              {@const s = selected}
+              <div class="flex items-start gap-3">
+                <div
+                  class="flex h-10 w-10 shrink-0 select-none items-center justify-center rounded-full text-sm font-semibold text-white"
+                  style="background-color: {avatarColor(s.from_addr || s.from_name)}"
+                >
+                  {avatarInitials(s.from_name, s.from_addr)}
+                </div>
+                <div class="min-w-0 flex-1">
+                  <h2 class="text-base font-semibold leading-snug tracking-tight">{s.subject || '(no subject)'}</h2>
+                  <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                    <span class="font-medium text-foreground/80">{s.from_name || s.from_addr}</span>
+                    {#if s.from_name}
+                      <span aria-hidden="true">·</span>
+                      <span class="truncate">{s.from_addr}</span>
+                    {/if}
+                    <span class="ml-auto shrink-0">{timeAgo(s.received_at)}</span>
+                  </div>
                 </div>
               </div>
-              {#if selected.source === 'gmail'}
+
+              {#if s.source === 'gmail'}
                 <div class="mt-2 flex justify-end">
                   <a
-                    href={gmailUrl(selected.external_id)}
+                    href={gmailUrl(s.external_id)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="text-xs font-medium text-primary hover:underline"
+                    class="text-xs font-medium text-brand-strong hover:underline"
                   >
                     Open in Gmail ↗
                   </a>
                 </div>
               {/if}
-              <hr class="my-3 border-border" />
-              {#if selected.body_html}
+
+              <hr class="my-4 border-border" />
+
+              {#if s.body_html}
                 <!-- Untrusted sender HTML isolated in a sandboxed iframe (no scripts/forms/navigation). -->
                 <iframe
                   title="Message body"
                   sandbox=""
-                  srcdoc={selected.body_html}
-                  class="h-[28rem] w-full rounded-md border border-border bg-white"
+                  srcdoc={s.body_html}
+                  class="h-[30rem] w-full rounded-md border border-border bg-white"
                 ></iframe>
               {:else}
-                <pre class="whitespace-pre-wrap font-sans text-sm">{selected.body_text}</pre>
+                <pre class="whitespace-pre-wrap font-sans text-sm leading-relaxed">{s.body_text}</pre>
               {/if}
             {/if}
           </div>
@@ -401,3 +451,24 @@
     {/if}
   </div>
 {/if}
+
+<style>
+  @keyframes row-in {
+    from {
+      opacity: 0;
+      transform: translateY(3px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .row-in {
+    animation: row-in 0.22s ease both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .row-in {
+      animation: none;
+    }
+  }
+</style>
