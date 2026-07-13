@@ -50,6 +50,8 @@
   provider: dodo
 - company: DomClick
   provider: domclick
+- company: 2GIS
+  provider: 2gis
 - company: MTS Link
   provider: mtslink
 - company: T-Bank

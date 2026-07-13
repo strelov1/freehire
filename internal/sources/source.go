@@ -297,6 +297,7 @@ func All(c HTTPClient) map[string]Source {
 		NewTBank(c),
 		NewMTS(c),
 		NewVK(c),
+		NewTwoGIS(c),
 	)
 	// USAJobs and Reed are the keyed sources: register each only when its API key is
 	// configured, so unconfigured environments (tests, local dev) leave it absent rather than
