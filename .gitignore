@@ -28,6 +28,7 @@ hire
 /remoteok.txt
 /workatastartup.html
 /native-boards.md
+/ats_emails.json
 
 # Environment
 .env
