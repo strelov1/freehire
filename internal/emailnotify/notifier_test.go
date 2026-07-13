@@ -129,4 +129,3 @@ func TestNotifier_SendPropagatesError(t *testing.T) {
 		t.Error("Send should propagate the sender error so the delivery retries")
 	}
 }
-
