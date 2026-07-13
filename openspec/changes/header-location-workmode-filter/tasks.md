@@ -16,7 +16,7 @@
 
 - [x] 4.1 Create `web/src/lib/components/HeaderLocationFilter.svelte` with props `{ store: FacetStore; counts: FacetCounts | null }`. Trigger button: icon from `summarizeScope(store)` (Lucide `Globe`/`House` etc.) + label + `ChevronDown`; label hidden on `max-sm` (icon+caret only). Uses `$state` `open`, outside-click + Escape + `afterNavigate` close, mirroring `HeaderMenu.svelte`.
 - [x] 4.2 In the popover: header row with a `Location & format` title and a `Clear all` button that calls `store.clearFacet('work_mode'|'regions'|'countries'|'cities')`. Then a `Work format` labelled pill row over `WORK_MODE_OPTIONS`, each pill using `pillClass`/`pillTitle` (from `./facets/pill`) and `onclick={() => store.cycle('work_mode', opt.value)}` with include/exclude state read from `store.facet('work_mode')`. Then `<LocationPane {store} {counts} />`. Popover container `max-h-[70vh] overflow-y-auto`, anchored under the trigger.
-- [ ] 4.3 Visually verify the component in isolation on the running dev server (trigger states, pill cycling, pane rendering, open/close). Run `npx svelte-check` — no new errors.
+- [x] 4.3 Visually verify the component in isolation on the running dev server (trigger states, pill cycling, pane rendering, open/close). Run `npx svelte-check` — no new errors.
 
 ## 5. Wire into the header search box
 
@@ -24,5 +24,5 @@
 
 ## 6. Verify end-to-end
 
-- [ ] 6.1 On the dev server, on the jobs feed `/`: open the popover, select Remote + a region + a country + a city; confirm the list and counts reload, the URL gains `work_mode`/`regions`/`countries`/`cities`, and the trigger label reflects the selection. Confirm the popover is absent on `/companies` and on a non-list page (global launcher).
-- [ ] 6.2 Run `npx vitest run`, `npx svelte-check`, and `npm run lint` in `web/`; all clean.
+- [x] 6.1 On the dev server, on the jobs feed `/`: open the popover, select Remote + a region + a country + a city; confirm the list and counts reload, the URL gains `work_mode`/`regions`/`countries`/`cities`, and the trigger label reflects the selection. Confirm the popover is absent on `/companies` and on a non-list page (global launcher).
+- [x] 6.2 Run `npx vitest run`, `npx svelte-check`, and `npm run lint` in `web/`; all clean.

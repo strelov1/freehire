@@ -5,11 +5,10 @@
 
 import type { FacetStore } from './facets';
 import { countryLabel } from './facets';
+import { WORK_MODE_VALUES, type WorkMode } from './generated/contracts';
 import { REGION_LABELS, WORK_MODE_LABELS } from './labels';
 
-export type ScopeIcon = 'globe' | 'remote' | 'hybrid' | 'onsite';
-
-const WORK_MODES = ['remote', 'hybrid', 'onsite'] as const;
+export type ScopeIcon = 'globe' | WorkMode;
 
 const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const workModeLabel = (code: string) => WORK_MODE_LABELS[code] ?? titleCase(code);
@@ -24,7 +23,7 @@ function selected(store: Pick<FacetStore, 'facet'>, param: string): string[] {
 /** Derive the trigger's `{ icon, label }` from the current scope facets. */
 export function summarizeScope(store: Pick<FacetStore, 'facet'>): { icon: ScopeIcon; label: string } {
   const modes = selected(store, 'work_mode');
-  const firstMode = WORK_MODES.find((m) => modes.includes(m));
+  const firstMode = WORK_MODE_VALUES.find((m) => modes.includes(m));
   const icon: ScopeIcon = firstMode ?? 'globe';
 
   // Geography in display order: regions, then countries, then cities.
