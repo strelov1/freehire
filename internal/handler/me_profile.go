@@ -7,7 +7,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/userprofile"
 )
 
@@ -26,13 +25,13 @@ type profileResponse struct {
 // toProfileResponse maps a stored profile to its wire shape (no user id). The location
 // block is the raw JSONB (json.RawMessage), which marshals through unchanged — a NULL
 // column stays null.
-func toProfileResponse(p db.UserProfile) profileResponse {
+func toProfileResponse(p userprofile.Profile) profileResponse {
 	return profileResponse{
 		Specializations:     p.Specializations,
 		Skills:              p.Skills,
 		LocationPreferences: p.LocationPreferences,
-		CreatedAt:           timePtr(p.CreatedAt),
-		UpdatedAt:           timePtr(p.UpdatedAt),
+		CreatedAt:           p.CreatedAt,
+		UpdatedAt:           p.UpdatedAt,
 	}
 }
 

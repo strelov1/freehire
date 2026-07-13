@@ -12,7 +12,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/auth"
-	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/userprofile"
 )
@@ -53,7 +52,7 @@ func coverageFacets() *twoQueryFacets {
 }
 
 func ownedProfile() *fakeProfileRepo {
-	return &fakeProfileRepo{getRet: db.UserProfile{
+	return &fakeProfileRepo{getRet: userprofile.Profile{
 		UserID: 1, Specializations: []string{"backend"}, Skills: []string{"go"},
 	}}
 }

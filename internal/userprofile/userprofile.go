@@ -10,11 +10,12 @@ package userprofile
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
+	"time"
 
-	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 )
 
@@ -39,12 +40,27 @@ var (
 // migration's cardinality CHECK is the backstop.
 const maxSpecializations = 5
 
+// Profile is the user's saved professional profile: their specializations (job
+// categories) and skills, plus optional location preferences kept as raw JSON
+// (persisted and served verbatim). It is the package's domain type, decoupled from
+// the generated db row — the internal bookkeeping columns (created_at/updated_at) are
+// deliberately omitted so a schema change never ripples into handlers.
+type Profile struct {
+	UserID              int64
+	Specializations     []string
+	Skills              []string
+	LocationPreferences json.RawMessage
+	CreatedAt           *time.Time
+	UpdatedAt           *time.Time
+}
+
 // Repository is the persistence contract for the single user profile. Every method is
 // user-scoped by user_id. Get maps a missing row to ErrNotFound; Upsert creates or
-// replaces; Delete is idempotent (no row is not an error).
+// replaces; Delete is idempotent (no row is not an error). Implementations map the
+// generated db row to Profile, so the use case never sees db.*.
 type Repository interface {
-	Get(ctx context.Context, userID int64) (db.UserProfile, error)
-	Upsert(ctx context.Context, p db.UpsertUserProfileParams) (db.UserProfile, error)
+	Get(ctx context.Context, userID int64) (Profile, error)
+	Upsert(ctx context.Context, userID int64, specializations, skills []string, locationPreferences json.RawMessage) (Profile, error)
 	Delete(ctx context.Context, userID int64) error
 }
 
@@ -59,7 +75,7 @@ func New(repo Repository) *Service {
 }
 
 // Get returns the user's profile, or ErrNotFound when they have not saved one yet.
-func (s *Service) Get(ctx context.Context, userID int64) (db.UserProfile, error) {
+func (s *Service) Get(ctx context.Context, userID int64) (Profile, error) {
 	return s.repo.Get(ctx, userID)
 }
 
@@ -68,25 +84,20 @@ func (s *Service) Get(ctx context.Context, userID int64) (db.UserProfile, error)
 // normalized and must be non-empty; the optional location block is validated and
 // normalized (or stored NULL when nil/empty). It is a create-or-replace: the first save
 // inserts, later saves overwrite.
-func (s *Service) Save(ctx context.Context, userID int64, specializations, skills []string, loc *LocationPreferences) (db.UserProfile, error) {
+func (s *Service) Save(ctx context.Context, userID int64, specializations, skills []string, loc *LocationPreferences) (Profile, error) {
 	specs, err := normalizeSpecializations(specializations)
 	if err != nil {
-		return db.UserProfile{}, err
+		return Profile{}, err
 	}
 	normalized, err := normalizeSkills(skills)
 	if err != nil {
-		return db.UserProfile{}, err
+		return Profile{}, err
 	}
 	locJSON, err := normalizeLocationPreferences(loc)
 	if err != nil {
-		return db.UserProfile{}, err
+		return Profile{}, err
 	}
-	return s.repo.Upsert(ctx, db.UpsertUserProfileParams{
-		UserID:              userID,
-		Specializations:     specs,
-		Skills:              normalized,
-		LocationPreferences: locJSON,
-	})
+	return s.repo.Upsert(ctx, userID, specs, normalized, locJSON)
 }
 
 // Delete removes the user's profile. It is idempotent — deleting when none exists is not

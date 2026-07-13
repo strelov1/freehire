@@ -2,11 +2,13 @@ package userprofile
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/pgconv"
 )
 
 // Compile-time proof that QueriesRepository satisfies Repository.
@@ -25,20 +27,42 @@ func NewQueriesRepository(q *db.Queries) *QueriesRepository {
 }
 
 // Get returns the user's profile, mapping no row to ErrNotFound.
-func (r *QueriesRepository) Get(ctx context.Context, userID int64) (db.UserProfile, error) {
+func (r *QueriesRepository) Get(ctx context.Context, userID int64) (Profile, error) {
 	row, err := r.q.GetUserProfile(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return db.UserProfile{}, ErrNotFound
+		return Profile{}, ErrNotFound
 	}
 	if err != nil {
-		return db.UserProfile{}, err
+		return Profile{}, err
 	}
-	return row, nil
+	return profileFromRow(row), nil
 }
 
 // Upsert creates or replaces the user's profile.
-func (r *QueriesRepository) Upsert(ctx context.Context, p db.UpsertUserProfileParams) (db.UserProfile, error) {
-	return r.q.UpsertUserProfile(ctx, p)
+func (r *QueriesRepository) Upsert(ctx context.Context, userID int64, specializations, skills []string, locationPreferences json.RawMessage) (Profile, error) {
+	row, err := r.q.UpsertUserProfile(ctx, db.UpsertUserProfileParams{
+		UserID:              userID,
+		Specializations:     specializations,
+		Skills:              skills,
+		LocationPreferences: locationPreferences,
+	})
+	if err != nil {
+		return Profile{}, err
+	}
+	return profileFromRow(row), nil
+}
+
+// profileFromRow maps the generated db row to the package domain type, dropping the
+// internal bookkeeping columns the use case does not need.
+func profileFromRow(row db.UserProfile) Profile {
+	return Profile{
+		UserID:              row.UserID,
+		Specializations:     row.Specializations,
+		Skills:              row.Skills,
+		LocationPreferences: row.LocationPreferences,
+		CreatedAt:           pgconv.TimePtr(row.CreatedAt),
+		UpdatedAt:           pgconv.TimePtr(row.UpdatedAt),
+	}
 }
 
 // Delete removes the user's profile. The affected-row count is ignored: deleting when

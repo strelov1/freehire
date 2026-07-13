@@ -7,8 +7,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/cvsection"
-	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/search"
+	"github.com/strelov1/freehire/internal/userprofile"
 	"github.com/strelov1/freehire/internal/verdict"
 )
 
@@ -43,7 +43,7 @@ func (a *API) GetResumeVerdict(c *fiber.Ctx) error {
 // filter is the request facets (defaulting category to the profile), the covered
 // count is measured against the profile's structured skills, and the role-skill
 // breakdown is scored against the CV's parsed declared/body/all sets.
-func (a *API) computeCoverage(c *fiber.Ctx, userID int64, profile db.UserProfile) (verdict.Verdict, error) {
+func (a *API) computeCoverage(c *fiber.Ctx, userID int64, profile userprofile.Profile) (verdict.Verdict, error) {
 	roleFilter := search.FilterFromValues(roleValues(c, profile))
 	declared, body, all := a.cvSkillSets(c, userID)
 	return a.coverageFor(c.Context(), roleFilter, profile.Skills, declared, body, all)
@@ -110,7 +110,7 @@ func (a *API) cvSkillSets(c *fiber.Ctx, userID int64) (declared, body, all []str
 // strips the `skills` facet (the profile's skills are the measured set, not a role
 // filter) and defaults `category` to the profile's specializations when the caller
 // selected no category — so an unfiltered verdict scores the profile's own role.
-func roleValues(c *fiber.Ctx, profile db.UserProfile) url.Values {
+func roleValues(c *fiber.Ctx, profile userprofile.Profile) url.Values {
 	vals, _ := url.ParseQuery(string(c.Request().URI().QueryString()))
 	stripSkillParams(vals)
 	if !hasNonEmpty(vals["category"]) {

@@ -12,7 +12,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/auth"
-	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/userprofile"
 )
 
@@ -21,19 +20,26 @@ import (
 // specialization/skills validation (which reject before Upsert is reached) without a
 // database. Shared by the profile, verdict, and ATS handler tests. The DB-backed contract
 // is covered by the service's own tests.
+type profileUpsert struct {
+	UserID              int64
+	Specializations     []string
+	Skills              []string
+	LocationPreferences json.RawMessage
+}
+
 type fakeProfileRepo struct {
-	getRet    db.UserProfile
+	getRet    userprofile.Profile
 	getErr    error
-	upsertRet db.UserProfile
-	upserted  db.UpsertUserProfileParams
+	upsertRet userprofile.Profile
+	upserted  profileUpsert
 	delErr    error
 }
 
-func (f *fakeProfileRepo) Get(context.Context, int64) (db.UserProfile, error) {
+func (f *fakeProfileRepo) Get(context.Context, int64) (userprofile.Profile, error) {
 	return f.getRet, f.getErr
 }
-func (f *fakeProfileRepo) Upsert(_ context.Context, p db.UpsertUserProfileParams) (db.UserProfile, error) {
-	f.upserted = p
+func (f *fakeProfileRepo) Upsert(_ context.Context, userID int64, specializations, skills []string, locationPreferences json.RawMessage) (userprofile.Profile, error) {
+	f.upserted = profileUpsert{UserID: userID, Specializations: specializations, Skills: skills, LocationPreferences: locationPreferences}
 	return f.upsertRet, nil
 }
 func (f *fakeProfileRepo) Delete(context.Context, int64) error { return f.delErr }
@@ -110,7 +116,7 @@ func TestPutProfile_ValidationErrors(t *testing.T) {
 }
 
 func TestPutProfile_ReturnsSpecializationsArray(t *testing.T) {
-	ret := db.UserProfile{UserID: 1, Specializations: []string{"backend", "devops"}, Skills: []string{"go"}}
+	ret := userprofile.Profile{UserID: 1, Specializations: []string{"backend", "devops"}, Skills: []string{"go"}}
 	app, token := profileApp(t, &fakeProfileRepo{upsertRet: ret})
 	resp := doProfile(t, app, fiber.MethodPut, `{"specializations":["backend","devops"],"skills":["go"]}`, token)
 	if resp.StatusCode != fiber.StatusOK {
@@ -168,7 +174,7 @@ func TestPutProfile_RejectsInvalidLocationBlock(t *testing.T) {
 
 func TestGetProfile_EchoesStoredLocationPreferences(t *testing.T) {
 	stored := json.RawMessage(`{"work_modes":["remote"],"remote":{"regions":["latam"]}}`)
-	ret := db.UserProfile{UserID: 1, Specializations: []string{"backend"}, Skills: []string{"go"}, LocationPreferences: stored}
+	ret := userprofile.Profile{UserID: 1, Specializations: []string{"backend"}, Skills: []string{"go"}, LocationPreferences: stored}
 	app, token := profileApp(t, &fakeProfileRepo{getRet: ret})
 	resp := doProfile(t, app, fiber.MethodGet, "", token)
 	if resp.StatusCode != fiber.StatusOK {
@@ -205,7 +211,7 @@ func TestGetProfile_NullWhenNone(t *testing.T) {
 }
 
 func TestGetProfile_ReturnsProfile(t *testing.T) {
-	ret := db.UserProfile{UserID: 1, Specializations: []string{"backend"}, Skills: []string{"go"}}
+	ret := userprofile.Profile{UserID: 1, Specializations: []string{"backend"}, Skills: []string{"go"}}
 	app, token := profileApp(t, &fakeProfileRepo{getRet: ret})
 	resp := doProfile(t, app, fiber.MethodGet, "", token)
 	if resp.StatusCode != fiber.StatusOK {

@@ -2,24 +2,33 @@ package userprofile_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
 
-	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/userprofile"
 )
 
-// fakeRepo records the params it is handed and returns canned rows/errors, so the
+// upsertArgs captures the primitive params the repository's Upsert is handed, so the
+// service tests can assert normalization without a db.* params struct.
+type upsertArgs struct {
+	UserID              int64
+	Specializations     []string
+	Skills              []string
+	LocationPreferences json.RawMessage
+}
+
+// fakeRepo records the params it is handed and returns canned profiles/errors, so the
 // service tests run without a database (the searchprofile_test.go precedent).
 type fakeRepo struct {
-	upserted     db.UpsertUserProfileParams
+	upserted     upsertArgs
 	upsertCalled bool
 	upsertErr    error
-	upsertRet    db.UserProfile
+	upsertRet    userprofile.Profile
 
 	getUserID int64
-	getRet    db.UserProfile
+	getRet    userprofile.Profile
 	getErr    error
 
 	delUserID int64
@@ -27,13 +36,14 @@ type fakeRepo struct {
 	delErr    error
 }
 
-func (f *fakeRepo) Get(_ context.Context, userID int64) (db.UserProfile, error) {
+func (f *fakeRepo) Get(_ context.Context, userID int64) (userprofile.Profile, error) {
 	f.getUserID = userID
 	return f.getRet, f.getErr
 }
 
-func (f *fakeRepo) Upsert(_ context.Context, p db.UpsertUserProfileParams) (db.UserProfile, error) {
-	f.upserted, f.upsertCalled = p, true
+func (f *fakeRepo) Upsert(_ context.Context, userID int64, specializations, skills []string, locationPreferences json.RawMessage) (userprofile.Profile, error) {
+	f.upserted = upsertArgs{UserID: userID, Specializations: specializations, Skills: skills, LocationPreferences: locationPreferences}
+	f.upsertCalled = true
 	return f.upsertRet, f.upsertErr
 }
 
@@ -43,7 +53,7 @@ func (f *fakeRepo) Delete(_ context.Context, userID int64) error {
 }
 
 func TestSave_UpsertsWithOwnerNormalizedSpecializationsAndSkills(t *testing.T) {
-	repo := &fakeRepo{upsertRet: db.UserProfile{UserID: 7}}
+	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
 	svc := userprofile.New(repo)
 
 	_, err := svc.Save(context.Background(), 7,
@@ -137,7 +147,7 @@ func TestSave_RejectsEmptySkills(t *testing.T) {
 }
 
 func TestGet_ReturnsOwnersProfile(t *testing.T) {
-	repo := &fakeRepo{getRet: db.UserProfile{UserID: 7}}
+	repo := &fakeRepo{getRet: userprofile.Profile{UserID: 7}}
 	got, err := userprofile.New(repo).Get(context.Background(), 7)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
