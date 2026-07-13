@@ -7,7 +7,7 @@
   import { timeAgo, cn } from '$lib/utils';
   import { cardTags } from '$lib/enrichment';
   import CompanyLogo from './CompanyLogo.svelte';
-  import JobFitAnalysis from './JobFitAnalysis.svelte';
+  import JobFitFull from './JobFitFull.svelte';
   import JobMatch from './JobMatch.svelte';
   import NoteEditor from './NoteEditor.svelte';
   import type { MyJob } from '$lib/types';
@@ -77,7 +77,7 @@
 
   const tabClass = (active: boolean) =>
     cn(
-      'rounded-full px-4 py-1.5 text-sm transition-colors',
+      'shrink-0 rounded-full px-4 py-1.5 text-sm transition-colors',
       active
         ? 'bg-card font-medium text-foreground shadow-sm'
         : 'text-muted-foreground hover:text-foreground',
@@ -101,14 +101,27 @@
           <h2 class="text-xl font-bold leading-tight tracking-tight">{item.job.title}</h2>
           <p class="text-sm text-muted-foreground">{item.job.company || 'Unknown company'}</p>
         </div>
-        <button
-          type="button"
-          onclick={close}
-          class="-mr-1 -mt-1 shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          aria-label="Close"
-        >
-          <X class="size-5" />
-        </button>
+        <div class="flex shrink-0 items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            href={resolve('/jobs/[slug]', { slug: item.job.public_slug })}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="gap-1.5 whitespace-nowrap"
+          >
+            View job
+            <ExternalLink class="size-3.5" />
+          </Button>
+          <button
+            type="button"
+            onclick={close}
+            class="-mr-1 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            aria-label="Close"
+          >
+            <X class="size-5" />
+          </button>
+        </div>
       </div>
 
       {#if tags.length || stageLabel}
@@ -139,25 +152,14 @@
         </ol>
       {/if}
 
-      <div class="flex items-start justify-between gap-3">
-        <div role="tablist" aria-label="Job details view" class="flex flex-wrap items-center gap-1 rounded-full bg-muted p-1">
+      <div class="no-scrollbar overflow-x-auto">
+        <div role="tablist" aria-label="Job details view" class="flex w-max items-center gap-1 rounded-full bg-muted p-1">
           {#each TABS as t (t.id)}
             <button type="button" role="tab" aria-selected={tab === t.id} class={tabClass(tab === t.id)} onclick={() => (tab = t.id)}>
               {t.label}
             </button>
           {/each}
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          href={resolve('/jobs/[slug]', { slug: item.job.public_slug })}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="shrink-0 gap-1.5 whitespace-nowrap"
-        >
-          View job
-          <ExternalLink class="size-3.5" />
-        </Button>
       </div>
     </div>
   </div>
@@ -200,7 +202,7 @@
       {:else if tab === 'profile'}
         <JobMatch job={item.job} />
       {:else if tab === 'fit'}
-        <JobFitAnalysis slug={item.job.public_slug} />
+        <JobFitFull job={item.job} />
       {:else}
         <div class="flex flex-col gap-5">
           {#if item.job.description}
@@ -243,6 +245,15 @@
 </aside>
 
 <style>
+  /* Tab rail scrolls horizontally on narrow screens without a visible scrollbar. */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
   /* Descriptions are arbitrary scraped HTML: a long URL — or words glued by
      non-breaking spaces — must wrap instead of forcing a horizontal scroll.
      Styles mirror JobView's .job-description so the read matches the job page. */
