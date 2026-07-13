@@ -32,10 +32,6 @@
 
   const path = $derived(page.url.pathname);
 
-  // The inbox is a two-pane mail client that wants the room — give it a wider
-  // container than the single-column pages (which self-constrain their own width).
-  const wide = $derived(path.startsWith('/my/inbox'));
-
   // Collapsible sidebar (lg+), persisted so it stays across navigations/sessions.
   let collapsed = $state(false);
   onMount(() => {
@@ -78,7 +74,7 @@
   <meta name="robots" content="noindex" />
 </svelte:head>
 
-<div class={cn('mx-auto w-full px-4 py-6', wide ? 'max-w-[100rem]' : 'max-w-6xl')}>
+<div class="mx-auto w-full max-w-6xl px-4 py-6">
   {#if !isAuthenticated()}
     <div class="flex flex-col items-center gap-3 py-12 text-center">
       <p class="text-sm text-muted-foreground">Sign in to access your account.</p>

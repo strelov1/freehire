@@ -6,6 +6,7 @@
   <title>Inbox — freehire</title>
 </svelte:head>
 
-<!-- The account shell (my/+layout) owns the container (wide for inbox), auth gate,
-     and noindex. The inbox fills the content column full-width. -->
-<InboxView />
+<!-- The account shell (my/+layout) owns the container, auth gate, and noindex. -->
+<div class="max-w-3xl">
+  <InboxView />
+</div>

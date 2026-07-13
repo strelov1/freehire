@@ -336,8 +336,8 @@
           {search ? 'No mail matches your search.' : 'No mail yet — it appears here as it arrives.'}
         </p>
       {:else}
-        <!-- Two-pane mail client: a compact message list, then a wide reading pane. -->
-        <div class="grid gap-4 md:grid-cols-[minmax(0,20rem)_1fr]">
+        <!-- Two-pane mail client: the flat message list, then the reading pane. -->
+        <div class="grid gap-4 md:grid-cols-[minmax(0,24rem)_1fr]">
           <div class="flex flex-col gap-2">
             <ul class="flex flex-col gap-1">
               {#each messages as m, i (m.id)}
@@ -442,8 +442,7 @@
                   class="h-[30rem] w-full rounded-md border border-border bg-white"
                 ></iframe>
               {:else}
-                <!-- Plain text: cap at a readable measure even in the wide pane. -->
-                <pre class="max-w-3xl whitespace-pre-wrap font-sans text-sm leading-relaxed">{s.body_text}</pre>
+                <pre class="whitespace-pre-wrap font-sans text-sm leading-relaxed">{s.body_text}</pre>
               {/if}
             {/if}
           </div>
