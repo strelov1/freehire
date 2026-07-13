@@ -1,0 +1,23 @@
+---
+title: Filter out non-tech jobs
+date: 2026-07-13
+summary: A new Tech / Non-tech filter hides the nursing, retail, and warehouse roles that big company job boards drag in.
+type: changelog
+tags:
+  - search
+  - filters
+draft: false
+---
+
+We pull jobs straight from company career systems, and the big ones (Oracle, Workday,
+UKG and friends) hand us a company's *entire* board — not just engineering. That means
+nurses, cashiers, warehouse and hospitality roles land in the catalogue next to the
+software jobs.
+
+There's now a **Tech / Non-tech** filter in the job filters. Pick "Tech" to keep only the
+engineering-and-adjacent roles, or exclude "Non-tech" to hide the rest. The classification
+is deterministic — read off the job title, never guessed — so it errs toward leaving a role
+in rather than wrongly hiding a real tech job.
+
+Try it on [search](/jobs). Jobs we can't confidently place either way stay visible under
+both — we'd rather show a maybe than hide something you were looking for.
