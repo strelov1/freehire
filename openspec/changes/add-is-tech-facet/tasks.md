@@ -1,17 +1,17 @@
 ## 1. Non-tech title detector
 
-- [ ] 1.1 Add `nonTechTable` (confident non-tech role nouns, EN, whole-word) to `internal/classify/dictionaries.go`
-- [ ] 1.2 Add `classify.IsNonTech(title string) bool` with unit tests: confident non-tech → true, tech titles → false, substring/word-boundary and shared-term ("engineer") negatives
+- [x] 1.1 Add `nonTechTable` (confident non-tech role nouns, EN, whole-word) to `internal/classify/dictionaries.go`
+- [x] 1.2 Add `classify.IsNonTech(title string) bool` with unit tests: confident non-tech → true, tech titles → false, substring/word-boundary and shared-term ("engineer") negatives
 
 ## 2. Tech-category partition
 
-- [ ] 2.1 Add `enrich.TechCategories` (CategoryValues minus NonTechCategories minus `other`) as the single source of truth for "recognized technical category"
-- [ ] 2.2 Test that TechCategories / NonTechCategories / {`other`} partition `CategoryValues` (no overlap, full cover)
+- [x] 2.1 Add `enrich.TechCategories` (CategoryValues minus NonTechCategories minus `other`) as the single source of truth for "recognized technical category"
+- [x] 2.2 Test that TechCategories / NonTechCategories / {`other`} partition `CategoryValues` (no overlap, full cover)
 
 ## 3. is_tech derivation
 
-- [ ] 3.1 Add `IsTech *bool` to the `jobderive.Derived` result
-- [ ] 3.2 Derive it in `jobderive.Derive`: tech category → true; category ∈ NonTechCategories OR `IsNonTech(title)` → false; else nil. Unit tests for all four states, tech-wins precedence
+- [x] 3.1 Add `IsTech *bool` to the `jobderive.Derived` result
+- [x] 3.2 Derive it in `jobderive.Derive`: tech category → true; category ∈ NonTechCategories OR `IsNonTech(title)` → false; else nil. Unit tests for all four states, tech-wins precedence
 
 ## 4. Persistence (DB + aggregate)
 

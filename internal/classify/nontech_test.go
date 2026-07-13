@@ -1,0 +1,47 @@
+package classify
+
+import "testing"
+
+func TestIsNonTech(t *testing.T) {
+	tests := []struct {
+		name  string
+		title string
+		want  bool
+	}{
+		// Positives — confident non-tech role nouns beyond the 4 category buckets.
+		{"nurse", "NICU Registered Nurse - Per Diem", true},
+		{"veterinary nurse", "Veterinary Nurse", true},
+		{"forklift operator", "Forklift Operator - Night Shift", true},
+		{"warehouse cleaner", "Warehouse Janitorial Cleaner", true},
+		{"cashier", "Cashier / Front End Associate", true},
+		{"housekeeping", "Accommodation Cleaner Part Time", true},
+		{"electrician", "Journeyman Electrician", true},
+		{"plumber", "Commercial Plumber", true},
+		{"pilates instructor", "Pilates Instructor", true},
+		{"dental hygienist", "Dental Hygienist", true},
+		{"line cook", "Line Cook - Banquet Setup", true},
+		{"barista", "Barista (Seasonal)", true},
+		{"truck driver", "Class A Truck Driver", true},
+		{"security guard", "Overnight Security Guard", true},
+		{"teacher", "Preschool Teacher", true},
+
+		// Trap negatives — technical titles that must NOT be flagged, including
+		// shared words ("engineer") and non-tech-adjacent substrings from real data.
+		{"software engineer", "Software Engineer II, AWS DynamoDB", false},
+		{"hris engineer", "Senior HRIS Engineer (SAP SuccessFactors)", false},
+		{"devops engineer", "DevOps Engineer", false},
+		{"data scientist", "Data Scientist", false},
+		{"retail application engineer", "Principal Systems Engineer - Retail Application Engineer", false},
+		{"device driver engineer", "Storage Driver Engineer", false},
+		{"support engineer", "Application Support Engineer", false},
+		{"chef config tool", "Configuration Engineer (Chef, Puppet)", false},
+		{"empty", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsNonTech(tt.title); got != tt.want {
+				t.Errorf("IsNonTech(%q) = %v, want %v", tt.title, got, tt.want)
+			}
+		})
+	}
+}

@@ -127,7 +127,21 @@ var (
 	// empty/"other"/unrecognized category still enqueues, so a tech job the title
 	// dictionary could not place is never silently skipped.
 	NonTechCategories = []string{"marketing", "sales", "support", "management"}
-	DomainValues      = []string{
+	// TechCategories are the CategoryValues for recognized technical roles: every
+	// category that is neither a NonTechCategories member nor the residual "other".
+	// It is the single source of truth for "is this a technical category?" that the
+	// is_tech derivation reads, so the tech/non-tech/other split stays in one place;
+	// a test asserts the three sets partition CategoryValues exactly. Product/design/
+	// project_management count as technical here (IT-industry roles), matching the
+	// blacklist that treats only marketing/sales/support/management as non-tech.
+	TechCategories = []string{
+		"backend", "frontend", "fullstack", "mobile", "devops", "sre",
+		"network_engineering",
+		"data_engineering", "data_science", "data_analytics", "ml_ai", "ai_engineering",
+		"qa", "security", "hardware", "embedded", "blockchain", "architecture",
+		"design", "product", "project_management",
+	}
+	DomainValues = []string{
 		"fintech", "gambling", "ecommerce", "crypto", "healthcare",
 		"saas", "gamedev", "edtech", "adtech", "govtech",
 		"media", "travel", "logistics", "other",

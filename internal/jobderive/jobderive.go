@@ -6,9 +6,11 @@
 package jobderive
 
 import (
+	"slices"
 	"sort"
 
 	"github.com/strelov1/freehire/internal/classify"
+	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/jobfacts"
 	"github.com/strelov1/freehire/internal/lang"
 	"github.com/strelov1/freehire/internal/location"
@@ -53,6 +55,12 @@ type Derived struct {
 	Skills      []string
 	Seniority   string
 	Category    string
+	// IsTech is the tri-state technical/non-technical signal: non-nil true when the
+	// derived category is a recognized technical category, non-nil false when it is a
+	// known non-technical category or the title states a confident non-tech role, and
+	// nil when neither resolves (unknown — never coerced, so the coverage gap stays
+	// measurable).
+	IsTech *bool
 	// Synthetic enrichment facets (category B): deterministic stand-ins for fields
 	// the LLM also emits, served dict-only like the facets above. ExperienceYearsMin
 	// is nil when the description states no figure.
@@ -113,6 +121,7 @@ func Derive(in Input) Derived {
 	if category == "" {
 		category = classify.NonTechFromDescription(in.Description)
 	}
+	isTech := deriveIsTech(category, in.Title)
 	// Experience precedence: structured source signal → description text parse.
 	experience := in.ExperienceYearsMin
 	if experience == nil {
@@ -130,12 +139,33 @@ func Derive(in Input) Derived {
 		Skills:             unionSkills(in.Skills, skilltag.Parse(in.Description)),
 		Seniority:          seniority,
 		Category:           category,
+		IsTech:             isTech,
 		PostingLanguage:    lang.Detect(in.Description),
 		EmploymentType:     jobfacts.EmploymentType(in.Title, in.Description),
 		EducationLevel:     jobfacts.EducationLevel(in.Description),
 		EnglishLevel:       jobfacts.EnglishLevel(in.Description),
 		ExperienceYearsMin: experience,
 	}
+}
+
+// deriveIsTech computes the tri-state is_tech signal from the already-resolved
+// category and the raw title. Technical evidence wins: a recognized technical
+// category yields true first; otherwise a known non-technical category or a
+// confident non-tech title yields false; otherwise the signal is unknown (nil),
+// never coerced, so the unclassified mass stays measurable. Because the category
+// derivation checks the tech title dictionary before anything non-technical, a
+// title carrying both a tech role and a non-tech noun ("Backend Engineer, Nurse
+// Scheduling") already resolves a tech category and never reaches IsNonTech.
+func deriveIsTech(category, title string) *bool {
+	if slices.Contains(enrich.TechCategories, category) {
+		t := true
+		return &t
+	}
+	if slices.Contains(enrich.NonTechCategories, category) || classify.IsNonTech(title) {
+		f := false
+		return &f
+	}
+	return nil
 }
 
 // usOnly reports whether a job's geography is unpinned by the location dictionary —
