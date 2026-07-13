@@ -13,7 +13,7 @@
   import { timeAgo } from '$lib/utils';
   import { avatarInitials, avatarColor } from '$lib/avatar';
 
-  const PAGE_SIZE = 5;
+  const PAGE_SIZE = 7;
 
   let gmail = $state<GmailStatus | null>(null);
   let mailbox = $state<MailboxStatus | null>(null);
