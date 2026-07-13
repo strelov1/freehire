@@ -79,36 +79,29 @@ func buildSystemPrompt() string {
 	enum := func(field string, vals []string) {
 		fmt.Fprintf(&b, "- %s: %s\n", field, strings.Join(vals, ", "))
 	}
-	enum("work_mode", WorkModeValues)
+	// work_mode, seniority, category, employment_type, education_level, and
+	// english_level are deliberately NOT requested: jobview serves them from the
+	// deterministic dictionaries (internal/jobderive), so the LLM's copies were never
+	// served — asking for them only burned output tokens (see enrich-prompt-trim).
 	enum("regions (array)", RegionValues)
-	enum("employment_type", EmploymentTypeValues)
 	enum("relocation", RelocationValues)
 	enum("salary_period", SalaryPeriodValues)
-	enum("seniority", SeniorityValues)
-	enum("english_level", EnglishLevelValues)
-	enum("education_level", EducationLevelValues)
-	enum("category", CategoryValues)
 	enum("domains (array)", DomainValues)
 	enum("company_type", CompanyTypeValues)
 	enum("company_size", CompanySizeValues)
 
-	// Discovery facets: these seven (plus the open countries/skills) are served from
-	// our own dictionaries, not from your value, so they are a discovery signal.
-	// Prefer an allowed value, but emit your own label when none fits — this surfaces
-	// vocabulary we are missing. The other enum fields above stay strict.
-	b.WriteString("\nException for work_mode, regions, seniority, category, employment_type, ")
-	b.WriteString("education_level, english_level: prefer an allowed value above, but if none ")
-	b.WriteString("accurately fits, you MAY return a concise lowercase label of your own ")
-	b.WriteString("(e.g. seniority \"staff_plus\", category \"ml_platform\"). ")
+	// Discovery facets: countries/regions are served as a dict-then-LLM hybrid (the
+	// LLM fills the unpinned geographic bucket via jobview.geoFacet), so they are the
+	// sole facets we still let the model coin its own label for. The other enum fields
+	// above stay strict.
+	b.WriteString("\nException for countries and regions: prefer an allowed value above, but if none ")
+	b.WriteString("accurately fits, you MAY return a concise lowercase label of your own. ")
 	b.WriteString("Still omit the key when the posting does not state it.\n")
 
 	b.WriteString("\nOther keys (omit when unstated): ")
 	b.WriteString("visa_sponsorship (boolean), countries (array of ISO 3166-1 alpha-2), ")
 	b.WriteString("cities (array of strings), timezone_note (string), ")
-	b.WriteString("salary_min (int), salary_max (int), salary_currency (ISO 4217), ")
-	b.WriteString("experience_years_min (non-negative int), ")
-	b.WriteString("skills (array of lowercase tokens, e.g. go, postgresql), ")
-	b.WriteString("posting_language (ISO 639-1, e.g. en, uk, ru).\n")
+	b.WriteString("salary_min (int), salary_max (int), salary_currency (ISO 4217).\n")
 
 	b.WriteString("\nregions is the job's geographic area, for ANY work mode — a remote role's ")
 	b.WriteString("reach or an onsite/hybrid role's location: ")

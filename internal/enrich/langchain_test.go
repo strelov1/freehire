@@ -37,19 +37,45 @@ func TestSystemPromptIncludesRegionVocabulary(t *testing.T) {
 	}
 }
 
-// Relax: the prompt permits a novel own-label for the seven discovery facets while
-// keeping the strict "exactly one allowed value" instruction for the served fields.
-func TestSystemPromptRelaxesDiscoveryFacets(t *testing.T) {
+// The prompt must NOT request the dict-backed facets: jobview serves them from the
+// deterministic dictionaries (internal/jobderive), so the LLM's copies are never
+// served and asking for them only burns output tokens. Removing them from the prompt
+// is the whole point of the enrich-prompt-trim change.
+func TestSystemPromptOmitsDictBackedFacets(t *testing.T) {
 	p := buildSystemPrompt()
+	for _, f := range []string{
+		"work_mode", "seniority", "category", "skills",
+		"employment_type", "education_level", "english_level",
+		"posting_language", "experience_years_min",
+	} {
+		if strings.Contains(p, f) {
+			t.Errorf("prompt must not request dict-backed facet %q (served from dictionaries), got:\n%s", f, p)
+		}
+	}
+}
+
+// The prompt must still request every served or hybrid field it is the source of:
+// the synthesized summary, salary extraction, the served enums, the geographic
+// hybrid (countries/regions), and relocation. countries/regions keep their novel
+// own-label allowance (they are the sole remaining discovery facets); the served
+// enums keep the strict "exactly one allowed value" instruction.
+func TestSystemPromptKeepsServedAndHybridFields(t *testing.T) {
+	p := buildSystemPrompt()
+	for _, f := range []string{
+		"summary",
+		"salary_min", "salary_max", "salary_currency", "salary_period",
+		"visa_sponsorship", "timezone_note",
+		"company_type", "company_size", "domains",
+		"relocation", "countries", "regions",
+	} {
+		if !strings.Contains(p, f) {
+			t.Errorf("prompt must still request served/hybrid field %q, got:\n%s", f, p)
+		}
+	}
 	if !strings.Contains(p, "exactly one of the allowed values") {
 		t.Errorf("served enum fields must keep the strict instruction")
 	}
 	if !strings.Contains(p, "concise lowercase label of your own") {
-		t.Errorf("discovery facets must permit a novel own label")
-	}
-	for _, f := range []string{"work_mode", "regions", "seniority", "category", "employment_type", "education_level", "english_level"} {
-		if !strings.Contains(p, f) {
-			t.Errorf("discovery instruction should name the facet %q", f)
-		}
+		t.Errorf("countries/regions must keep the novel own-label allowance")
 	}
 }
