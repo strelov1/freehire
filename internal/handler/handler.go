@@ -16,6 +16,7 @@ import (
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/gmailsync"
 	"github.com/strelov1/freehire/internal/jobfit"
 	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/llm"
@@ -28,6 +29,7 @@ import (
 	"github.com/strelov1/freehire/internal/submission"
 	"github.com/strelov1/freehire/internal/subscription"
 	"github.com/strelov1/freehire/internal/telegramnotify"
+	"github.com/strelov1/freehire/internal/tokencrypt"
 	"github.com/strelov1/freehire/internal/userprofile"
 )
 
@@ -61,6 +63,15 @@ type API struct {
 	oauth map[string]oauth.Provider
 	// frontendOrigin is where OAuth callbacks send the browser back to.
 	frontendOrigin string
+	// gmailConnector + gmailCipher back the "Connect Gmail" inbox. Both nil when
+	// the feature is unconfigured (Google creds / token key absent) — the connect
+	// routes are then not registered and the inbox reads empty.
+	gmailConnector *gmailsync.Connector
+	gmailCipher    *tokencrypt.Cipher
+	// mailDomain is the receiving domain hosted mailboxes live on (<handle>@mailDomain).
+	// Empty = the hosted-mailbox feature is off: the claim route is unregistered and
+	// status reports unavailable.
+	mailDomain string
 	// search is the job-search backend. Nil when Meilisearch is unconfigured —
 	// the search endpoint then reports 503 and the rest of the API is unaffected.
 	search searcher
@@ -172,6 +183,13 @@ type Config struct {
 	TelegramBotToken      string
 	TelegramBotUsername   string
 	TelegramWebhookSecret string
+	// GmailConnector + GmailCipher enable the Connect-Gmail inbox. Both nil = the
+	// feature is off (connect routes unregistered, inbox empty).
+	GmailConnector *gmailsync.Connector
+	GmailCipher    *tokencrypt.Cipher
+	// MailboxDomain enables the hosted-mailbox option: the receiving domain user
+	// addresses live on (<handle>@MailboxDomain). Empty = the feature is off.
+	MailboxDomain string
 }
 
 // Register wires all routes onto the application from cfg. Auth is same-origin
@@ -189,6 +207,9 @@ func Register(app *fiber.App, cfg Config) {
 		cookieDomain:   cfg.CookieDomain,
 		oauth:          cfg.OAuthProviders,
 		frontendOrigin: cfg.FrontendOrigin,
+		gmailConnector: cfg.GmailConnector,
+		gmailCipher:    cfg.GmailCipher,
+		mailDomain:     cfg.MailboxDomain,
 		tracking:       jobtracking.New(jobtracking.NewQueriesRepository(queries)),
 		accounts:       accounts.New(accounts.NewQueriesRepository(queries, cfg.Pool), authHasher{}),
 		moderation:     moderation.New(moderation.NewQueriesRepository(queries, cfg.Pool, enrich.Version)),
@@ -348,6 +369,28 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/me/profile", saved, a.GetProfile)
 	api.Put("/me/profile", saved, a.PutProfile)
 	api.Delete("/me/profile", saved, a.DeleteProfile)
+
+	// Mail inbox (Gmail connect + hosted mailbox). The whole surface is
+	// moderator-gated for now (a restricted rollout) — a non-moderator gets 403
+	// and the SPA hides the nav entry. The read + disconnect routes are always
+	// registered (empty/no-op when not connected); the OAuth connect routes only
+	// when configured. Cookie-or-key auth, then the role gate.
+	api.Get("/me/gmail", saved, requireModerator, a.GmailStatus)
+	api.Delete("/me/gmail", saved, requireModerator, a.GmailDisconnect)
+	api.Get("/me/inbox", saved, requireModerator, a.GetInbox)
+	api.Get("/me/emails/:id", saved, requireModerator, a.GetEmail)
+	if a.gmailReady() {
+		api.Get("/me/gmail/connect", saved, requireModerator, a.GmailConnect)
+		api.Get("/me/gmail/callback", saved, requireModerator, a.GmailCallback)
+		api.Post("/me/gmail/sync", saved, requireModerator, a.SyncGmail)
+	}
+	// Hosted-mailbox option: status is always available (reports unavailable when
+	// the feature is off); claim/release only when a receiving domain is configured.
+	api.Get("/me/mailbox", saved, requireModerator, a.GetMailbox)
+	if a.mailboxReady() {
+		api.Post("/me/mailbox", saved, requireModerator, a.ClaimMailbox)
+		api.Delete("/me/mailbox", saved, requireModerator, a.ReleaseMailbox)
+	}
 	// The résumé verdict is a profile sub-resource: GET computes the live
 	// market-coverage verdict from the profile's skills against the selected role.
 	// Cookie-only and session-scoped, like the profile it hangs off (no profile → 404).

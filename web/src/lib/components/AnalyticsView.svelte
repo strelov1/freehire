@@ -128,6 +128,6 @@
 </div>
 
 <!-- Mobile: edge tab opens the same full-screen modal as the header button. -->
-<FilterEdgeTab active={filters.active} onclick={() => (modalOpen = true)} />
+<FilterEdgeTab active={filters.active} side="right" onclick={() => (modalOpen = true)} />
 
 <FilterModal store={filters} {counts} open={modalOpen} onClose={() => (modalOpen = false)} {previewCount} />

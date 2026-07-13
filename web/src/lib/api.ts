@@ -118,6 +118,52 @@ function toSlice<T>(page: Page<T>, offset: number): Slice<T> {
  *  - SvelteKit server `load`: pass `event.fetch` and the internal API origin
  *    (`serverApi`), because a server-side relative `/api` would hit the Node app
  *    itself, not nginx→Go. `baseUrl` resolves that to a real server-to-server call. */
+// --- Gmail inbox wire shapes ---------------------------------------------
+
+export interface GmailStatus {
+  connected: boolean;
+  available?: boolean; // whether the connect flow is configured server-side
+  email?: string;
+  status?: string;
+}
+
+/** The hosted-mailbox option: the caller's address (null when none) + whether
+ *  the feature is configured server-side. */
+export interface MailboxStatus {
+  available: boolean;
+  address: string | null;
+}
+
+/** The account switcher value: '' = all sources. */
+export type InboxSource = '' | 'gmail' | 'hosted';
+
+/** One row in the flat inbox listing. */
+export interface InboxMessage {
+  id: number;
+  source: string;
+  external_id: string;
+  from_addr: string;
+  from_name: string;
+  subject: string;
+  snippet: string;
+  received_at: string;
+  read: boolean;
+}
+
+/** One message in full, for the reading pane. */
+export interface EmailBody {
+  id: number;
+  source: string;
+  external_id: string;
+  from_addr: string;
+  from_name: string;
+  subject: string;
+  body_text: string;
+  body_html: string;
+  received_at: string;
+  read: boolean;
+}
+
 export function createApi(
   fetchImpl: typeof fetch = fetch,
   baseUrl = '',
@@ -720,6 +766,61 @@ export function createApi(
     return requestData<Report>(`/api/v1/reports/${id}/dismiss`, jsonBody('POST', { reason: reason ?? '' }));
   }
 
+  // --- Gmail inbox ---------------------------------------------------------
+
+  /** Whether the caller has connected Gmail for the ATS inbox. */
+  async function gmailStatus(): Promise<GmailStatus> {
+    return requestData<GmailStatus>('/api/v1/me/gmail');
+  }
+
+  /** Disconnect Gmail: revoke the grant and purge synced mail. */
+  async function disconnectGmail(): Promise<void> {
+    await requestData<unknown>('/api/v1/me/gmail', { method: 'DELETE' });
+  }
+
+  /** Trigger an on-demand sync of the caller's ATS mail (runs in the background). */
+  async function syncGmail(): Promise<void> {
+    await requestData<unknown>('/api/v1/me/gmail/sync', { method: 'POST' });
+  }
+
+  /** A page of the flat inbox listing, newest first, with the total message count.
+   *  Optional search term filters by subject, sender, or body; optional source
+   *  narrows to one account (the switcher). */
+  async function getInbox(
+    q = '',
+    limit = 20,
+    offset = 0,
+    source: InboxSource = '',
+  ): Promise<{ messages: InboxMessage[]; total: number }> {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (q) params.set('q', q);
+    if (source) params.set('source', source);
+    const res = await request<{ data: InboxMessage[]; meta: { total: number } }>(
+      `/api/v1/me/inbox?${params.toString()}`,
+    );
+    return { messages: res.data, total: res.meta.total };
+  }
+
+  /** The caller's hosted-mailbox address (or null) + feature availability. */
+  async function mailboxStatus(): Promise<MailboxStatus> {
+    return requestData<MailboxStatus>('/api/v1/me/mailbox');
+  }
+
+  /** Claim (or return) the caller's hosted mailbox address. */
+  async function claimMailbox(): Promise<MailboxStatus> {
+    return requestData<MailboxStatus>('/api/v1/me/mailbox', { method: 'POST' });
+  }
+
+  /** Release the hosted mailbox: drop the address and purge its received mail. */
+  async function releaseMailbox(): Promise<MailboxStatus> {
+    return requestData<MailboxStatus>('/api/v1/me/mailbox', { method: 'DELETE' });
+  }
+
+  /** One message's full body. */
+  async function getEmail(id: number): Promise<EmailBody> {
+    return requestData<EmailBody>(`/api/v1/me/emails/${id}`);
+  }
+
   return {
     listJobs,
     getJob,
@@ -791,6 +892,14 @@ export function createApi(
     listPendingReports,
     resolveReport,
     dismissReport,
+    gmailStatus,
+    disconnectGmail,
+    syncGmail,
+    mailboxStatus,
+    claimMailbox,
+    releaseMailbox,
+    getInbox,
+    getEmail,
   };
 }
 

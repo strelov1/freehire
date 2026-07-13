@@ -61,6 +61,24 @@ type Company struct {
 	YcFlags          []string           `json:"yc_flags"`
 }
 
+type Email struct {
+	ID          int64              `json:"id"`
+	UserID      int64              `json:"user_id"`
+	ExternalID  string             `json:"external_id"`
+	ThreadID    string             `json:"thread_id"`
+	FromAddr    string             `json:"from_addr"`
+	FromName    string             `json:"from_name"`
+	Subject     string             `json:"subject"`
+	SubjectNorm string             `json:"subject_norm"`
+	BodyText    string             `json:"body_text"`
+	BodyHtml    string             `json:"body_html"`
+	ReceivedAt  pgtype.Timestamptz `json:"received_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	Source      string             `json:"source"`
+	S3Key       pgtype.Text        `json:"s3_key"`
+	ReadAt      pgtype.Timestamptz `json:"read_at"`
+}
+
 type EnrichmentOutbox struct {
 	ID            int64              `json:"id"`
 	JobID         int64              `json:"job_id"`
@@ -70,6 +88,16 @@ type EnrichmentOutbox struct {
 	FailedAt      pgtype.Timestamptz `json:"failed_at"`
 	LastError     string             `json:"last_error"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
+type GmailConnection struct {
+	UserID          int64              `json:"user_id"`
+	Email           string             `json:"email"`
+	RefreshTokenEnc string             `json:"refresh_token_enc"`
+	Status          string             `json:"status"`
+	SyncCursor      int64              `json:"sync_cursor"`
+	ConnectedAt     pgtype.Timestamptz `json:"connected_at"`
+	LastSyncedAt    pgtype.Timestamptz `json:"last_synced_at"`
 }
 
 type Job struct {
@@ -155,6 +183,13 @@ type JobSubmission struct {
 	ReviewedAt   pgtype.Timestamptz `json:"reviewed_at"`
 	JobID        pgtype.Int8        `json:"job_id"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+type Mailbox struct {
+	ID        int64              `json:"id"`
+	UserID    int64              `json:"user_id"`
+	Address   string             `json:"address"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type SavedSearch struct {

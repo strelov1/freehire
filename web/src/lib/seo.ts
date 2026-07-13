@@ -2,6 +2,7 @@
 // public wire shapes. Emitted server-side (see the route +page.svelte files) so
 // crawlers and Google Jobs see structured data in the initial HTML.
 
+import type { PostMeta } from './blog';
 import { logoDevUrl } from './logo';
 import type { Company, Enrichment, Job } from './types';
 
@@ -125,6 +126,19 @@ export function jobPostingJsonLd(job: Job, origin: string): Record<string, unkno
   if (datePosted) ld.datePosted = datePosted;
   // A closed posting is no longer accepting applications: mark it expired.
   if (job.closed_at) ld.validThrough = job.closed_at;
+
+  // identifier is the hiring org's own posting id (Google-recommended): external_id
+  // is the source's stable job id, so Google dedupes the vacancy across boards
+  // rather than reading us as a scraped copy. external_id is the namespaced dedup
+  // key "<board>:<id>" (sources.NamespaceExternalID); a boardless source yields a
+  // bare ":<id>", so drop a leading colon for a clean identifier value.
+  if (job.external_id) {
+    ld.identifier = {
+      '@type': 'PropertyValue',
+      name: job.company || 'Unknown',
+      value: job.external_id.replace(/^:/, ''),
+    };
+  }
 
   const empType = e.employment_type ? EMPLOYMENT_TYPE[e.employment_type] : undefined;
   if (empType) ld.employmentType = empType;
@@ -301,6 +315,22 @@ export function faqPageJsonLd(faqs: FaqItem[]): Record<string, unknown> {
       acceptedAnswer: { '@type': 'Answer', text: f.answer },
     })),
   };
+}
+
+/** schema.org Article for a blog post page. Built from the validated `PostMeta`,
+ *  so every field is present; `keywords` is emitted only when the post has tags. */
+export function articleJsonLd(post: PostMeta, origin: string): Record<string, unknown> {
+  const ld: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: post.title,
+    description: post.summary,
+    datePublished: post.date,
+    url: `${origin}/blog/${post.slug}`,
+    publisher: { '@type': 'Organization', name: SITE, url: `${origin}/` },
+  };
+  if (post.tags.length > 0) ld.keywords = post.tags.join(', ');
+  return ld;
 }
 
 /** Render a JSON-LD object as a ready-to-inline `<script>` string. `<` is escaped

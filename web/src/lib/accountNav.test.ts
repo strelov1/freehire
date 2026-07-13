@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { accountNav, isSectionActive } from './accountNav';
+import { accountNav, isSectionActive, visibleAccountNav } from './accountNav';
 
 describe('accountNav config', () => {
-  it('lists the six account sections', () => {
-    expect(accountNav).toHaveLength(6);
+  it('lists the seven account sections', () => {
+    expect(accountNav).toHaveLength(7);
   });
 
   it('places Activity directly after Tracking', () => {
@@ -22,6 +22,20 @@ describe('accountNav config', () => {
   it('has unique hrefs', () => {
     const hrefs = accountNav.map((i) => i.href);
     expect(new Set(hrefs).size).toBe(hrefs.length);
+  });
+});
+
+describe('visibleAccountNav', () => {
+  it('hides the moderator-only Inbox from non-moderators', () => {
+    const hrefs = visibleAccountNav(false).map((i) => i.href);
+    expect(hrefs).not.toContain('/my/inbox');
+    expect(hrefs).toHaveLength(accountNav.length - 1);
+  });
+
+  it('shows every section to a moderator', () => {
+    const hrefs = visibleAccountNav(true).map((i) => i.href);
+    expect(hrefs).toContain('/my/inbox');
+    expect(hrefs).toHaveLength(accountNav.length);
   });
 });
 

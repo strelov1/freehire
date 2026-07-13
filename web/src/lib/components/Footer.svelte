@@ -18,6 +18,7 @@
     {
       title: 'Resources',
       links: [
+        { label: 'Blog', href: resolve('/blog') },
         { label: 'Trends', href: resolve('/trends') },
         { label: 'CLI', href: resolve('/cli') },
         { label: 'ChatGPT', href: resolve('/chatgpt') },

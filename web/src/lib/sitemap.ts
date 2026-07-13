@@ -29,6 +29,13 @@ export function collectionPaths(): string[] {
   return collectionSlugs().map((slug) => `/collections/${slug}`);
 }
 
+/** Sitemap paths for the blog: the index (`/blog`) plus one path per published
+ *  post. Takes the posts (from `listPosts()`) rather than reading them itself, so
+ *  it stays pure/testable — the glob-backed loader is called by the route. */
+export function blogPaths(posts: { slug: string }[]): string[] {
+  return ['/blog', ...posts.map((post) => `/blog/${post.slug}`)];
+}
+
 export interface UrlEntry {
   loc: string;
   lastmod?: string;

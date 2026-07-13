@@ -1,0 +1,82 @@
+---
+title: How we collapse duplicate job listings
+date: 2026-07-13
+summary: The same opening often shows up on several sites. Here's how we work out which postings are the same job and keep one.
+type: article
+tags:
+  - engineering
+  - search
+draft: false
+---
+
+Someone searching freehire wants each opening once. But the same role is often posted in
+several places: on the company's own careers page, and again on one or more job-board
+aggregators that re-list it. We crawl both, so without care the same job shows up two or
+three times.
+
+Collapsing those copies sounds simple and isn't. Here's what we settled on.
+
+## The easy case: exact identity
+
+When an aggregator links straight to the company's hiring system — a Greenhouse or Lever
+URL, say — we store the posting under that system's own identity. A copy that carries the
+real link then lands on the exact same key as our direct crawl of that board, and the two
+collapse for free. No guessing required.
+
+That works for aggregators that expose the underlying link. Many don't.
+
+## The hard case: matching by title
+
+The big regional and remote aggregators apply through their own site and never reveal the
+source URL. For those, the only thing shared between the two copies is the job itself: same
+company, same role, similar title. So we match on that.
+
+Within a single company, an aggregator posting is treated as a duplicate of a first-party
+one when their titles line up. "Line up" turned out to need three passes:
+
+- **Exact** — the normalized titles are identical.
+- **Reformatted** — the aggregator mangled the title in a predictable way. A hotel chain's
+  system lists `Assistant Director of Sales - Leisure`; the aggregator drops the trailing
+  part and leaves `Assistant Director of Sales`. Or it leaves an HTML entity undecoded, so
+  `F&amp;B` never matched `F&B`. We normalize both away.
+- **Word-subset** — the aggregator dropped words from the middle, not just the end.
+  `Guest Service Agent` is the same job as `Guest Service Agent Front Office`. When every
+  word of the aggregator title appears in the first-party one, it's a match.
+
+## Guarding against false merges
+
+The looser each pass gets, the more it risks merging two genuinely different roles. Two
+guards keep it honest.
+
+The first is geography. `Store Associate` at a US company and `Store Associate` at its
+Singapore arm are different jobs, so we only merge when the countries are compatible. That
+was the difference between a clean result and folding a Singapore posting into an unrelated
+American one.
+
+The second is seniority. `Software Engineer` is a subset of `Senior Software Engineer`, but
+those are different grades, not duplicates. So the word-subset pass refuses to merge when
+the only extra words are seniority markers. It merges only when the first-party title adds
+something real that the aggregator left out.
+
+## What we tried and dropped
+
+Two tempting approaches didn't survive a quick experiment.
+
+Fuzzy string similarity would catch reworded titles the subset pass misses. But measured
+against the real data, the plain word-subset match already caught the same duplicates,
+without a similarity threshold to tune and with less risk of merging the wrong roles. The
+fuzzier tool wasn't buying anything.
+
+Mining the real hiring-system link out of the aggregators' pages would have given everyone
+the exact-identity path. We checked: one applies through itself, another hides its pages
+behind a bot challenge with no source URL in the data we get. The precise path simply isn't
+available for these sites.
+
+## The result
+
+The first run collapsed about 10,600 duplicate postings: roughly 2,800 hotel and hospitality
+jobs syndicated from one system, 2,200 remote roles from another, and a long tail across a
+dozen more. Each now shows once, from the source closest to the company.
+
+Nothing is deleted. A collapsed copy keeps its own page and link; it is only hidden from
+search, and it reappears on its own if the first-party posting ever closes.
