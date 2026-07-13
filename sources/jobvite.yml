@@ -1,0 +1,8 @@
+# jobvite boards. Provider is the filename; each entry is company + board.
+# board = the company's Jobvite careersite slug (see internal/sources/jobvite.go); the adapter
+# reads https://jobs.jobvite.com/<board>/jobs (server-rendered listing) then each posting's
+# schema.org JobPosting ld+json detail page.
+# Each board validated live (>0 jobs from the listing) before adding; expand with harvest-boards.
+
+- company: Hachette Book Group # hachette-book-group
+  board: hachette-book-group
