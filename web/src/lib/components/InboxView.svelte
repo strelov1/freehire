@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { api } from '$lib/api';
   import type {
     GmailStatus,
@@ -62,11 +62,13 @@
     }
   }
 
-  // Load the first page for the current search term + source filter.
+  // Load the first page for the current search term + source filter, then top up
+  // until the list overflows its pane so infinite scroll has room to work.
   async function fetchFirstPage() {
     const res = await api.getInbox(search, PAGE_SIZE, 0, source);
     messages = res.messages;
     total = res.total;
+    await fillViewport();
   }
 
   // Reload the first page; clears the reading pane.
@@ -101,6 +103,37 @@
       total = res.total;
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to load more.';
+    }
+  }
+
+  // Infinite scroll: the list is a fixed-height scroll pane (the page itself does
+  // not grow), and nearing its bottom pulls the next page in place.
+  let listEl = $state<HTMLElement>();
+  let loadingMore = $state(false);
+  function onListScroll() {
+    if (!listEl || loadingMore || messages.length >= total) return;
+    if (listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 240) {
+      loadingMore = true;
+      loadMore().finally(() => (loadingMore = false));
+    }
+  }
+
+  // After a fresh first page, keep pulling until the list overflows its pane (so
+  // there is something to scroll into) or the mailbox is exhausted — otherwise a
+  // short first page in a tall pane would never trigger the scroll load.
+  async function fillViewport() {
+    if (loadingMore) return;
+    loadingMore = true;
+    try {
+      await tick();
+      let guard = 0;
+      while (listEl && messages.length < total && listEl.scrollHeight <= listEl.clientHeight + 4 && guard < 40) {
+        await loadMore();
+        await tick();
+        guard++;
+      }
+    } finally {
+      loadingMore = false;
     }
   }
 
@@ -343,10 +376,15 @@
           {search ? 'No mail matches your search.' : 'No mail yet — it appears here as it arrives.'}
         </p>
       {:else}
-        <!-- Two-pane on md+; a mobile master-detail below md (open a message → the
-             reading pane replaces the list, with a Back control). -->
-        <div class="grid gap-5 md:grid-cols-[minmax(0,19rem)_1fr]">
-          <div class="flex-col gap-2 {selectedId === null ? 'flex' : 'hidden md:flex'}">
+        <!-- Fixed-height two-pane so the page itself never scrolls: each pane scrolls
+             internally, and the list infinite-loads in place. On md+ side by side; below
+             md a master-detail (open a message → the reading pane replaces the list). -->
+        <div class="grid h-[calc(100dvh-12rem)] min-h-[26rem] gap-5 md:grid-cols-[minmax(0,19rem)_1fr]">
+          <div
+            bind:this={listEl}
+            onscroll={onListScroll}
+            class="min-h-0 flex-col gap-1 overflow-y-auto pr-1 {selectedId === null ? 'flex' : 'hidden md:flex'}"
+          >
             <ul class="flex flex-col gap-1">
               {#each messages as m, i (m.id)}
                 <li class="row-in" style="animation-delay: {Math.min(i, 14) * 15}ms">
@@ -386,22 +424,18 @@
               {/each}
             </ul>
 
-            {#if messages.length < total}
-              <div class="flex justify-center pt-1">
-                <Button variant="outline" size="sm" onclick={loadMore}>
-                  Load more ({messages.length} of {total})
-                </Button>
-              </div>
+            {#if loadingMore}
+              <p class="py-3 text-center text-xs text-muted-foreground">Loading…</p>
             {/if}
           </div>
 
-          <!-- Reading pane — borderless, flush, to give the content the room. On
-               mobile it replaces the list once a message is open. -->
-          <div class="min-h-[20rem] {selectedId === null ? 'hidden md:block' : 'block'}">
+          <!-- Reading pane — borderless, flush, fills the pane height and scrolls
+               internally. On mobile it replaces the list once a message is open. -->
+          <div class="flex min-h-0 flex-col {selectedId === null ? 'hidden md:flex' : 'flex'}">
             <button
               type="button"
               onclick={backToList}
-              class="mb-3 -ml-1 flex items-center gap-1 rounded-md px-1 py-1 text-sm text-muted-foreground hover:text-foreground md:hidden"
+              class="mb-3 -ml-1 flex shrink-0 items-center gap-1 rounded-md px-1 py-1 text-sm text-muted-foreground hover:text-foreground md:hidden"
             >
               <ChevronLeft class="h-4 w-4" /> Inbox
             </button>
@@ -414,7 +448,7 @@
               </div>
             {:else}
               {@const s = selected}
-              <div class="flex items-start gap-3">
+              <div class="flex shrink-0 items-start gap-3">
                 <div
                   class="flex h-10 w-10 shrink-0 select-none items-center justify-center rounded-full text-sm font-semibold text-white"
                   style="background-color: {avatarColor(s.from_addr || s.from_name)}"
@@ -435,7 +469,7 @@
               </div>
 
               {#if s.source === 'gmail'}
-                <div class="mt-2 flex justify-end">
+                <div class="mt-2 flex shrink-0 justify-end">
                   <a
                     href={gmailUrl(s.external_id)}
                     target="_blank"
@@ -447,7 +481,7 @@
                 </div>
               {/if}
 
-              <hr class="my-4 border-border" />
+              <hr class="my-4 shrink-0 border-border" />
 
               {#if s.body_html}
                 <!-- Untrusted sender HTML isolated in a sandboxed iframe (no scripts/forms/navigation). -->
@@ -455,10 +489,10 @@
                   title="Message body"
                   sandbox=""
                   srcdoc={s.body_html}
-                  class="h-[30rem] w-full rounded-md border border-border bg-white"
+                  class="min-h-0 w-full flex-1 rounded-md border border-border bg-white"
                 ></iframe>
               {:else}
-                <pre class="whitespace-pre-wrap font-sans text-sm leading-relaxed">{s.body_text}</pre>
+                <pre class="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap font-sans text-sm leading-relaxed">{s.body_text}</pre>
               {/if}
             {/if}
           </div>
