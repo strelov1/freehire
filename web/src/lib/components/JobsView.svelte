@@ -220,7 +220,17 @@
     // standalone /jobs list AND the company page's embedded, scoped list — on
     // /companies/:slug the header search filters that company's postings (there's
     // no inline box), so both modes route their text search through the header.
-    setListSearchTarget(filters);
+    // The adapter also exposes `filterScope` (the store + a reactive counts getter)
+    // so the header renders its Location & work-format popover on these jobs-backed
+    // lists; the company list registers a bare store with no filterScope, so the
+    // popover stays hidden there.
+    setListSearchTarget({
+      get value() {
+        return filters.value;
+      },
+      setQuery: (q) => filters.setQuery(q),
+      filterScope: { store: filters, counts: () => counts },
+    });
     return () => {
       setListSearchTarget(null);
       filters.dispose();

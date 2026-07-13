@@ -2,6 +2,7 @@
   import { page } from '$app/state';
   import { Search, X } from '@lucide/svelte';
   import { listSearchTarget } from '$lib/listSearch.svelte';
+  import HeaderLocationFilter from './HeaderLocationFilter.svelte';
 
   // The header's list-mode input: on /jobs and /companies it IS the page's text
   // search, proxying straight into the active list store (registered by the view).
@@ -39,6 +40,13 @@
   <div
     class="flex h-11 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm focus-within:ring-2 focus-within:ring-ring"
   >
+    <!-- Jobs-backed lists expose a filter scope: surface the Location & work-format
+         quick-filter as a scope-prefix, divided from the search icon. Absent on the
+         company list (no filterScope), so the box renders exactly as before there. -->
+    {#if target?.filterScope}
+      <HeaderLocationFilter store={target.filterScope.store} counts={target.filterScope.counts()} />
+      <div class="h-5 w-px shrink-0 bg-border"></div>
+    {/if}
     <Search class="size-4 shrink-0 text-muted-foreground" />
     <input
       bind:this={inputEl}

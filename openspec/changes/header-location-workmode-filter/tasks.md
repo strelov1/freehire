@@ -6,21 +6,21 @@
 
 ## 2. Bridge capability
 
-- [ ] 2.1 Extend `ListSearchTarget` in `web/src/lib/listSearch.svelte.ts` with an optional `filterScope?: { store: FacetStore; counts(): FacetCounts | null }` (import `FacetStore` from `$lib/facets`, `FacetCounts` from `$lib/types`); document it as jobs-only. Keep the base `value`/`setQuery` contract unchanged.
+- [x] 2.1 Extend `ListSearchTarget` in `web/src/lib/listSearch.svelte.ts` with an optional `filterScope?: { store: FacetStore; counts(): FacetCounts | null }` (import `FacetStore` from `$lib/facets`, `FacetCounts` from `$lib/types`); document it as jobs-only. Keep the base `value`/`setQuery` contract unchanged.
 
 ## 3. JobsView adapter registration
 
-- [ ] 3.1 In `web/src/lib/components/JobsView.svelte`, change the `setListSearchTarget(filters)` call (~line 218) to register an adapter object: `{ get value() { return filters.value; }, setQuery: (q) => filters.setQuery(q), filterScope: { store: filters, counts: () => counts } }`, where `counts` is the existing `$state.raw<FacetCounts|null>`. Leave the `setListSearchTarget(null)` cleanup as-is. Confirm `CompaniesView.svelte` is untouched (bare `CompanyFilterStore`, no `filterScope`).
+- [x] 3.1 In `web/src/lib/components/JobsView.svelte`, change the `setListSearchTarget(filters)` call (~line 218) to register an adapter object: `{ get value() { return filters.value; }, setQuery: (q) => filters.setQuery(q), filterScope: { store: filters, counts: () => counts } }`, where `counts` is the existing `$state.raw<FacetCounts|null>`. Leave the `setListSearchTarget(null)` cleanup as-is. Confirm `CompaniesView.svelte` is untouched (bare `CompanyFilterStore`, no `filterScope`).
 
 ## 4. HeaderLocationFilter component
 
-- [ ] 4.1 Create `web/src/lib/components/HeaderLocationFilter.svelte` with props `{ store: FacetStore; counts: FacetCounts | null }`. Trigger button: icon from `summarizeScope(store)` (Lucide `Globe`/`House` etc.) + label + `ChevronDown`; label hidden on `max-sm` (icon+caret only). Uses `$state` `open`, outside-click + Escape + `afterNavigate` close, mirroring `HeaderMenu.svelte`.
-- [ ] 4.2 In the popover: header row with a `Location & format` title and a `Clear all` button that calls `store.clearFacet('work_mode'|'regions'|'countries'|'cities')`. Then a `Work format` labelled pill row over `WORK_MODE_OPTIONS`, each pill using `pillClass`/`pillTitle` (from `./facets/pill`) and `onclick={() => store.cycle('work_mode', opt.value)}` with include/exclude state read from `store.facet('work_mode')`. Then `<LocationPane {store} {counts} />`. Popover container `max-h-[70vh] overflow-y-auto`, anchored under the trigger.
+- [x] 4.1 Create `web/src/lib/components/HeaderLocationFilter.svelte` with props `{ store: FacetStore; counts: FacetCounts | null }`. Trigger button: icon from `summarizeScope(store)` (Lucide `Globe`/`House` etc.) + label + `ChevronDown`; label hidden on `max-sm` (icon+caret only). Uses `$state` `open`, outside-click + Escape + `afterNavigate` close, mirroring `HeaderMenu.svelte`.
+- [x] 4.2 In the popover: header row with a `Location & format` title and a `Clear all` button that calls `store.clearFacet('work_mode'|'regions'|'countries'|'cities')`. Then a `Work format` labelled pill row over `WORK_MODE_OPTIONS`, each pill using `pillClass`/`pillTitle` (from `./facets/pill`) and `onclick={() => store.cycle('work_mode', opt.value)}` with include/exclude state read from `store.facet('work_mode')`. Then `<LocationPane {store} {counts} />`. Popover container `max-h-[70vh] overflow-y-auto`, anchored under the trigger.
 - [ ] 4.3 Visually verify the component in isolation on the running dev server (trigger states, pill cycling, pane rendering, open/close). Run `npx svelte-check` — no new errors.
 
 ## 5. Wire into the header search box
 
-- [ ] 5.1 In `web/src/lib/components/HeaderListSearch.svelte`, read the active `listSearchTarget()`; when `target.filterScope` is set, render `<HeaderLocationFilter store={target.filterScope.store} counts={target.filterScope.counts()} />` plus a vertical divider immediately before the search `<Search>` icon inside the box. When absent, render the box exactly as today.
+- [x] 5.1 In `web/src/lib/components/HeaderListSearch.svelte`, read the active `listSearchTarget()`; when `target.filterScope` is set, render `<HeaderLocationFilter store={target.filterScope.store} counts={target.filterScope.counts()} />` plus a vertical divider immediately before the search `<Search>` icon inside the box. When absent, render the box exactly as today.
 
 ## 6. Verify end-to-end
 

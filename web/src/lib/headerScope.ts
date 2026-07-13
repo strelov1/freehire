@@ -36,9 +36,10 @@ export function summarizeScope(store: Pick<FacetStore, 'facet'>): { icon: ScopeI
 
   const parts: string[] = [];
   if (firstMode) parts.push(workModeLabel(firstMode));
-  if (geo.length) {
-    const rest = geo.length - 1;
-    parts.push(rest > 0 ? `${geo[0]} +${rest}` : geo[0]);
+  const head = geo[0];
+  if (head !== undefined) {
+    const extra = geo.length - 1;
+    parts.push(extra > 0 ? `${head} +${extra}` : head);
   }
 
   return { icon, label: parts.length ? parts.join(' · ') : 'Location' };

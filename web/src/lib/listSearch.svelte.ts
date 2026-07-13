@@ -5,11 +5,24 @@
 // reload, and back/forward handling instead of re-implementing (and re-breaking)
 // that logic in the header.
 
+import type { FacetStore } from './facets';
+import type { FacetCounts } from './types';
+
 /** The slice of a page filter store the header drives. Both FilterStore and
- *  CompanyFilterStore satisfy it (`value.q` + `setQuery`). */
+ *  CompanyFilterStore satisfy the base contract (`value.q` + `setQuery`). */
 export interface ListSearchTarget {
   readonly value: { q: string };
   setQuery(q: string): void;
+
+  /** Jobs-only capability: the geography + work-format facet scope the header's
+   *  Location & format popover drives. Present only for jobs-backed lists (the
+   *  jobs feed and a company's jobs list, both on FilterStore); absent on the
+   *  company list, so the popover stays hidden there. `counts` is a getter so the
+   *  view's live facet distribution stays reactive across the bridge. */
+  readonly filterScope?: {
+    store: FacetStore;
+    counts(): FacetCounts | null;
+  };
 }
 
 let active = $state<ListSearchTarget | null>(null);
