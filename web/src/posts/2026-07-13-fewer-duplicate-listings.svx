@@ -1,0 +1,21 @@
+---
+title: Fewer duplicate job listings
+date: 2026-07-13
+summary: When a job appears on both an aggregator and the company's own careers page, search now shows it once.
+type: changelog
+tags:
+  - search
+  - quality
+draft: false
+---
+
+Some jobs get posted in more than one place — on a job-board aggregator we index, and
+on the company's own careers page that we also crawl directly. Until now both copies could
+turn up in search as if they were separate openings.
+
+We now spot these pairs and keep the first-party copy, the one straight from the company,
+hiding the aggregator duplicate behind it. The first pass collapsed about 10,600 duplicate
+postings, so results are cleaner and each opening shows up once.
+
+The hidden copy isn't deleted — it's still reachable by its own link — it just stops
+cluttering [search](/jobs) and no longer skews the counts.
