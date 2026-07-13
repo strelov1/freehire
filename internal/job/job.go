@@ -194,25 +194,3 @@ func (f Fields) UpsertParams() db.UpsertJobParams {
 
 // IsOpen reports whether the job is live (not soft-closed).
 func (j Job) IsOpen() bool { return j.f.ClosedAt == nil }
-
-// Close soft-closes the job as of at, idempotently: an already-closed job keeps
-// its original closed_at. Closing is non-destructive — the public slug, facets,
-// and enrichment are untouched, so the posting reopens for free.
-func (j *Job) Close(at time.Time) {
-	if j.f.ClosedAt != nil {
-		return
-	}
-	j.f.ClosedAt = &at
-}
-
-// Reopen clears the closed state (e.g. a previously closed posting reappears in
-// its source feed), so the job serves on list/search surfaces again.
-func (j *Job) Reopen() { j.f.ClosedAt = nil }
-
-// ShouldEnrich reports whether the job is eligible for (re-)enrichment: it is open
-// and its stored enrichment is below the target schema version. This mirrors the
-// enrichment queue's `closed_at IS NULL AND enrichment_version < $target` guard;
-// the target is passed in so this package need not depend on internal/enrich.
-func (j Job) ShouldEnrich(targetVersion int32) bool {
-	return j.IsOpen() && j.f.EnrichmentVersion < targetVersion
-}

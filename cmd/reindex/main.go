@@ -11,10 +11,9 @@
 //     (it embeds new/changed documents); run on its own, looser schedule and only
 //     while semantic search is enabled — it never blocks the facet pass.
 //
-// --since <duration> scopes either pass to jobs changed within that window
-// (keyed on updated_at), so a frequent run re-pushes only the delta instead of
-// the whole table. Meilisearch already skips re-embedding unchanged documents;
-// --since additionally skips reading and re-pushing them at all.
+// A full --semantic rebuild may be scoped to a fresh posting window with
+// --posted-within <duration> (the in-engine embedder cannot embed the whole
+// catalogue in reasonable time); every other pass scans the whole table.
 package main
 
 import (
@@ -39,24 +38,6 @@ import (
 // from 500 to amortize it (Postgres read and the ~7KB-doc payload are both cheap
 // at this size). A const for now; promote to config if it needs tuning.
 const reindexBatchSize = 2000
-
-// indexOps is the set of index operations a reindex pass drives. The default pass
-// targets the facet/keyword index; --semantic targets the hybrid index. Selecting
-// ops up front keeps the streaming loop identical for both.
-type indexOps struct {
-	name   string
-	ensure func(context.Context) error
-	index  func(context.Context, []search.JobDocument) error
-	remove func(context.Context, []int64) error
-}
-
-func facetOps(c *search.Client) indexOps {
-	return indexOps{"facet", c.EnsureIndex, c.IndexJobs, c.DeleteJobs}
-}
-
-func semanticOps(c *search.Client) indexOps {
-	return indexOps{"semantic", c.EnsureSemanticIndex, c.IndexSemanticJobs, c.DeleteSemanticJobs}
-}
 
 // progressInterval is how often reindex emits a heartbeat with its running totals.
 // A full reindex pushes hundreds of thousands of docs to Meilisearch and otherwise
@@ -93,22 +74,15 @@ func run() int {
 		target = "semantic"
 	}
 
-	since, incremental, err := sinceFrom(os.Args[1:])
-	if err != nil {
-		log.Printf("reindex: %v", err)
-		return 1
-	}
-
 	postedWithin, scoped, err := postedWithinFrom(os.Args[1:])
 	if err != nil {
 		log.Printf("reindex: %v", err)
 		return 1
 	}
 	// --posted-within scopes the fresh window the semantic swap rebuild embeds; it is
-	// meaningless for the facet index (which holds the whole catalogue) and for the
-	// in-place --since delta (which cannot be swapped in). Reject those combos loudly
-	// rather than silently ignoring the flag.
-	if scoped && (!semantic || incremental) {
+	// meaningless for the facet index (which holds the whole catalogue). Reject that
+	// combo loudly rather than silently ignoring the flag.
+	if scoped && !semantic {
 		log.Print("reindex: --posted-within applies only to a full --semantic rebuild")
 		return 1
 	}
@@ -132,32 +106,6 @@ func run() int {
 		log.Printf("reindex: suppress aggregator duplicates (continuing with prior markers): %v", err)
 	} else if n > 0 {
 		log.Printf("reindex: suppressed aggregator duplicates (%d rows re-marked)", n)
-	}
-
-	// --since is a delta into the LIVE index in place: a partial set cannot be
-	// swapped in wholesale (it would drop everything else). A full pass instead
-	// builds a fresh index and atomically swaps it over the live one, which keeps
-	// merges cheap (the new index grows from empty) and never exposes a half-built
-	// index to search.
-	if incremental {
-		ops := facetOps(client)
-		if semantic {
-			ops = semanticOps(client)
-		}
-		scope := "since " + since.String()
-		log.Printf("reindex: target=%s scope=%s mode=in-place", target, scope)
-		lookup, err := buildRealityLookup(ctx, q)
-		if err != nil {
-			log.Printf("reindex: build reality lookup: %v", err)
-			return 1
-		}
-		indexed, deleted, skipped, err := reindexAll(ctx, worker.NewIncrementalReader(q, time.Now().Add(-since)), ops, lookup, time.Now())
-		if err != nil {
-			log.Printf("reindex: %v", err)
-			return 1
-		}
-		log.Printf("reindex done: target=%s scope=%s indexed=%d deleted=%d skipped=%d", target, scope, indexed, deleted, skipped)
-		return 0
 	}
 
 	var b rebuilder = client.NewFacetRebuild()
@@ -188,40 +136,11 @@ func run() int {
 	return 0
 }
 
-// sinceFrom parses an optional --since <duration> / --since=<duration> flag (e.g.
-// "50h"). It reports (duration, true, nil) when present, (0, false, nil) when
-// absent, and an error for a missing or unparseable value.
-func sinceFrom(args []string) (time.Duration, bool, error) {
-	for i, a := range args {
-		var raw string
-		switch {
-		case a == "--since":
-			if i+1 >= len(args) {
-				return 0, false, fmt.Errorf("--since needs a duration (e.g. 50h)")
-			}
-			raw = args[i+1]
-		case strings.HasPrefix(a, "--since="):
-			raw = strings.TrimPrefix(a, "--since=")
-		default:
-			continue
-		}
-		d, err := time.ParseDuration(raw)
-		if err != nil {
-			return 0, false, fmt.Errorf("--since %q: %w", raw, err)
-		}
-		if d <= 0 {
-			return 0, false, fmt.Errorf("--since must be positive, got %q", raw)
-		}
-		return d, true, nil
-	}
-	return 0, false, nil
-}
-
 // postedWithinFrom parses an optional --posted-within <duration> / --posted-within=<duration>
 // flag (e.g. "168h" for 7 days). It scopes a full --semantic rebuild to jobs posted
 // within that window, since the in-engine embedder cannot embed the whole catalogue in
 // reasonable time. Reports (duration, true, nil) when present, (0, false, nil) when
-// absent, and an error for a missing or unparseable value. Mirrors sinceFrom.
+// absent, and an error for a missing or unparseable value.
 func postedWithinFrom(args []string) (time.Duration, bool, error) {
 	for i, a := range args {
 		var raw string
@@ -258,58 +177,6 @@ func semanticRequested(args []string) bool {
 	return false
 }
 
-// reindexAll ensures the index and streams jobs through it in batches, returning
-// how many documents were indexed (open jobs) and deleted (closed jobs). fetch
-// pages by keyset (id > last seen) — full or incremental (--since) — so rows
-// inserted or re-ordered during the run cannot be skipped or repeated.
-func reindexAll(ctx context.Context, reader worker.PageReader, ops indexOps, lookup realityLookup, now time.Time) (int, int, int, error) {
-	if err := ops.ensure(ctx); err != nil {
-		return 0, 0, 0, err
-	}
-
-	// Atomic so the heartbeat goroutine can read the running totals while the loop
-	// advances them. Without the heartbeat a long reindex is silent until "done",
-	// indistinguishable from a stalled push to Meilisearch.
-	var indexed, deleted atomic.Int64
-	stopHeartbeat := worker.Heartbeat(progressInterval, func() {
-		log.Printf("reindex: progress indexed=%d deleted=%d", indexed.Load(), deleted.Load())
-	})
-	defer stopHeartbeat()
-
-	var afterID int64
-	var skipped int
-	for {
-		jobs, lastID, corrupted, err := worker.ResilientPage(ctx, reader, afterID, reindexBatchSize)
-		if err != nil {
-			return int(indexed.Load()), int(deleted.Load()), skipped, err
-		}
-		skipped += len(corrupted)
-
-		if len(jobs) > 0 {
-			docs, deleteIDs, err := splitJobs(jobs, lookup, now)
-			if err != nil {
-				return int(indexed.Load()), int(deleted.Load()), skipped, err
-			}
-			if err := ops.index(ctx, docs); err != nil {
-				return int(indexed.Load()), int(deleted.Load()), skipped, err
-			}
-			if err := ops.remove(ctx, deleteIDs); err != nil {
-				return int(indexed.Load()), int(deleted.Load()), skipped, err
-			}
-			indexed.Add(int64(len(docs)))
-			deleted.Add(int64(len(deleteIDs)))
-		}
-
-		// Keyset progress is the exhaustion signal (see reindexFull).
-		if lastID == afterID {
-			break
-		}
-		afterID = lastID
-	}
-
-	return int(indexed.Load()), int(deleted.Load()), skipped, nil
-}
-
 // rebuilder builds a brand-new index out of band and atomically swaps it into
 // production. A full reindex uses it instead of mutating the live index in place:
 // Prepare creates a fresh, empty rebuild index; Push streams document batches into
@@ -328,8 +195,7 @@ type rebuilder interface {
 // open jobs into the fresh index — closed jobs are simply absent (the rebuild
 // index never held them, so unlike the in-place path there is nothing to delete).
 // fetch pages by keyset (id > last seen) so rows inserted or re-ordered during the
-// run cannot be skipped or repeated. Used for full passes; --since stays in place
-// (reindexAll) since a partial index cannot be swapped in wholesale.
+// run cannot be skipped or repeated.
 func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, lookup realityLookup, now time.Time) (int, int, error) {
 	if err := b.Prepare(ctx); err != nil {
 		return 0, 0, err

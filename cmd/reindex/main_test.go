@@ -13,34 +13,6 @@ import (
 	"github.com/strelov1/freehire/internal/search"
 )
 
-func TestSinceFrom(t *testing.T) {
-	tests := []struct {
-		name    string
-		args    []string
-		wantDur time.Duration
-		wantOK  bool
-		wantErr bool
-	}{
-		{"absent", []string{"--semantic"}, 0, false, false},
-		{"space form", []string{"--semantic", "--since", "50h"}, 50 * time.Hour, true, false},
-		{"equals form", []string{"--since=24h"}, 24 * time.Hour, true, false},
-		{"missing value", []string{"--since"}, 0, false, true},
-		{"unparseable", []string{"--since", "soon"}, 0, false, true},
-		{"non-positive", []string{"--since", "0h"}, 0, false, true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dur, ok, err := sinceFrom(tt.args)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
-			}
-			if ok != tt.wantOK || dur != tt.wantDur {
-				t.Errorf("got (%v, %v), want (%v, %v)", dur, ok, tt.wantDur, tt.wantOK)
-			}
-		})
-	}
-}
-
 func TestPostedWithinFrom(t *testing.T) {
 	tests := []struct {
 		name    string

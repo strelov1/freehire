@@ -1,89 +1,34 @@
 package job
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 )
 
-// ErrNotFound is returned by Repository.Load when no job matches the identity.
-var ErrNotFound = errors.New("job: not found")
-
 // Extras is the read-only projection data that rides on the jobs row but is NOT
 // part of the Job aggregate's invariants: the engagement counters (materialized
 // from user_jobs) and the collection slugs (denormalized from the company). Keeping
-// them out of Job preserves a clean write surface — New/Close/Reopen never see them
+// them out of Job preserves a clean write surface — the New factory never sees them
 // — while the read path still gets them in one load. Zero on a fresh New; populated
-// only by a repository Load. It lives here (not in jobview) so the repository can
-// return it without the domain importing the wire layer.
+// only by FromRow. It lives here (not in jobview) so a load can return it without
+// the domain importing the wire layer.
 type Extras struct {
 	ViewCount    int32
 	AppliedCount int32
 	Collections  []string
 }
 
-// Repository is the persistence port for the Job aggregate: load by dedup
-// identity and soft-close by it. The domain never sees db.Job — the adapter maps
-// between the persistence row and the aggregate. Load also returns the read-only
-// Extras that ride on the same row. (Upsert lives with the write path that computes
-// the content-hash/role-fingerprint signals; it is added when the ingest path
-// switches to the factory.)
-type Repository interface {
-	Load(ctx context.Context, source, externalID string) (Job, Extras, error)
-	Close(ctx context.Context, source, externalID string) (int64, error)
-}
-
-// Compile-time proof that QueriesRepository satisfies Repository.
-var _ Repository = (*QueriesRepository)(nil)
-
-// QueriesRepository adapts *db.Queries to the Repository port, mirroring the
-// jobtracking package's convention.
-type QueriesRepository struct{ q *db.Queries }
-
-// NewQueriesRepository wraps q as a Repository.
-func NewQueriesRepository(q *db.Queries) *QueriesRepository {
-	return &QueriesRepository{q: q}
-}
-
-// Load returns the domain Job and its read-only Extras for the given dedup
-// identity, or ErrNotFound.
-func (r *QueriesRepository) Load(ctx context.Context, source, externalID string) (Job, Extras, error) {
-	row, err := r.q.GetJobBySourceExternalID(ctx, db.GetJobBySourceExternalIDParams{
-		Source:     source,
-		ExternalID: externalID,
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Job{}, Extras{}, ErrNotFound
-	}
-	if err != nil {
-		return Job{}, Extras{}, err
-	}
-	return FromRow(row)
-}
-
-// Close soft-closes the job identified by (source, external_id) and reports how
-// many rows it closed (0 when already closed or absent) — the persistence side of
-// the aggregate's Close decision.
-func (r *QueriesRepository) Close(ctx context.Context, source, externalID string) (int64, error) {
-	return r.q.CloseJobBySourceExternalID(ctx, db.CloseJobBySourceExternalIDParams{
-		Source:     source,
-		ExternalID: externalID,
-	})
-}
-
 // FromRow is the anti-corruption mapping from a persistence row to the domain
-// Job plus its read-only Extras. It is the hydration path shared by the repository
-// Load and the jobview projection shim; it never derives (a stored row already
-// carries its facets), so it does not bypass the New construction invariant. It is
-// the single place the domain depends on the db row shape.
+// Job plus its read-only Extras. It is the hydration path used by the jobview
+// projection shim; it never derives (a stored row already carries its facets), so it
+// does not bypass the New construction invariant. It is the single place the domain
+// depends on the db row shape.
 func FromRow(r db.Job) (Job, Extras, error) {
 	j, err := jobFromRow(r)
 	if err != nil {
