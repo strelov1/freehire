@@ -1,0 +1,19 @@
+---
+title: Location and work format, right in the search box
+date: 2026-07-13
+summary: Narrow the jobs feed by region, country, city, or work format without opening the full filter panel.
+type: changelog
+tags:
+  - search
+  - filters
+draft: false
+---
+
+Two of the filters people reach for most — where a job is and whether it's remote — used
+to mean opening the full filter panel. Now they sit right in the search box.
+
+A new control on the left of the search bar opens location and work format together: pick
+a region, drill into a country or city, and toggle remote, hybrid, or on-site — any
+combination. The [jobs feed](/jobs) updates as you go, and your choice rides in the URL, so
+a filtered view is easy to share or bookmark. The full filter panel is still there for
+everything else.
