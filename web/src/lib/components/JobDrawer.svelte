@@ -30,10 +30,9 @@
     onclose: () => void;
   } = $props();
 
-  type Tab = 'application' | 'profile' | 'fit' | 'description';
+  type Tab = 'application' | 'fit' | 'description';
   const TABS: { id: Tab; label: string }[] = [
     { id: 'application', label: 'Application' },
-    { id: 'profile', label: 'Profile match' },
     { id: 'fit', label: 'Job Match' },
     { id: 'description', label: 'Job description' },
   ];
@@ -199,10 +198,11 @@
             <NoteEditor value={item.notes ?? ''} onsave={onsavenotes} />
           </div>
         </div>
-      {:else if tab === 'profile'}
-        <JobMatch job={item.job} />
       {:else if tab === 'fit'}
-        <JobFitFull job={item.job} />
+        <div class="flex flex-col gap-6">
+          <JobMatch job={item.job} />
+          <JobFitFull job={item.job} />
+        </div>
       {:else}
         <div class="flex flex-col gap-5">
           {#if item.job.description}
