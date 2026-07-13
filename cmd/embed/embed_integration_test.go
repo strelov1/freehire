@@ -115,7 +115,7 @@ func startPostgres(t *testing.T) *pgxpool.Pool {
 		t.Fatalf("list migrations: %v (found %d)", err, len(scripts))
 	}
 	sort.Strings(scripts)
-	pg, err := postgres.Run(ctx, "postgres:16-alpine",
+	pg, err := postgres.Run(ctx, "postgres:18-alpine",
 		postgres.WithDatabase("hire"), postgres.WithUsername("hire"), postgres.WithPassword("hire"),
 		postgres.WithInitScripts(scripts...), postgres.BasicWaitStrategies(),
 	)

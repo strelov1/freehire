@@ -41,7 +41,7 @@ func startPostgres(t *testing.T) *pgxpool.Pool {
 	}
 	sort.Strings(scripts)
 
-	pg, err := postgres.Run(ctx, "postgres:16-alpine",
+	pg, err := postgres.Run(ctx, "postgres:18-alpine",
 		postgres.WithDatabase("hire"),
 		postgres.WithUsername("hire"),
 		postgres.WithPassword("hire"),
