@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { FacetStore, FacetSelection } from './facets';
-import { summarizeScope } from './headerScope';
+import { summarizeScope, COMPANIES_SCOPE } from './headerScope';
 
 // Minimal fake store: only `facet` is exercised by summarizeScope.
 type Sel = { include?: string[]; exclude?: string[] };
@@ -57,6 +57,28 @@ describe('summarizeScope', () => {
     expect(summarizeScope(fakeStore({ regions: { include: ['eu'], exclude: ['uk'] } }))).toEqual({
       icon: 'globe',
       label: 'Europe +1',
+    });
+  });
+
+  describe('company spec', () => {
+    it('summarizes remote_regions', () => {
+      expect(summarizeScope(fakeStore({ remote_regions: { include: ['eu'] } }), COMPANIES_SCOPE)).toEqual({
+        icon: 'globe',
+        label: 'Europe',
+      });
+    });
+
+    it('rolls up regions then remote_regions', () => {
+      expect(
+        summarizeScope(fakeStore({ regions: { include: ['eu'] }, remote_regions: { include: ['uk'] } }), COMPANIES_SCOPE),
+      ).toEqual({ icon: 'globe', label: 'Europe +1' });
+    });
+
+    it('ignores work_mode (companies have no work format)', () => {
+      expect(summarizeScope(fakeStore({ work_mode: { include: ['remote'] } }), COMPANIES_SCOPE)).toEqual({
+        icon: 'globe',
+        label: 'Location',
+      });
     });
   });
 });

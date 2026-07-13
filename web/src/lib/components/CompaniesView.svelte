@@ -47,9 +47,18 @@
   const initialStale = browser && page.url.search !== location.search;
 
   // Register this page's store so the header search drives it (the header hosts
-  // the text field here — see HeaderListSearch).
+  // the text field here — see HeaderListSearch). The adapter also exposes a
+  // `companies` filter scope so the header's Location popover shows region +
+  // remote-hiring pills here (no facet counts are fetched on this page, so counts
+  // is null and the pills render countless).
   onMount(() => {
-    setListSearchTarget(filters);
+    setListSearchTarget({
+      get value() {
+        return filters.value;
+      },
+      setQuery: (q) => filters.setQuery(q),
+      filterScope: { store: filters, counts: () => null, variant: 'companies' },
+    });
     return () => {
       setListSearchTarget(null);
       filters.dispose();

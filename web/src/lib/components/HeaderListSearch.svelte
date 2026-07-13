@@ -40,11 +40,15 @@
   <div
     class="flex h-11 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm focus-within:ring-2 focus-within:ring-ring"
   >
-    <!-- Jobs-backed lists expose a filter scope: surface the Location & work-format
-         quick-filter as a scope-prefix, divided from the search icon. Absent on the
-         company list (no filterScope), so the box renders exactly as before there. -->
+    <!-- List pages expose a filter scope: surface the Location quick-filter as a
+         scope-prefix, divided from the search icon. `variant` picks the popover body
+         (jobs work-format+location vs the company region/remote-hiring pills). -->
     {#if target?.filterScope}
-      <HeaderLocationFilter store={target.filterScope.store} counts={target.filterScope.counts()} />
+      <HeaderLocationFilter
+        variant={target.filterScope.variant}
+        store={target.filterScope.store}
+        counts={target.filterScope.counts()}
+      />
       <div class="h-5 w-px shrink-0 bg-border"></div>
     {/if}
     <Search class="size-4 shrink-0 text-muted-foreground" />

@@ -14,14 +14,15 @@ export interface ListSearchTarget {
   readonly value: { q: string };
   setQuery(q: string): void;
 
-  /** Jobs-only capability: the geography + work-format facet scope the header's
-   *  Location & format popover drives. Present only for jobs-backed lists (the
-   *  jobs feed and a company's jobs list, both on FilterStore); absent on the
-   *  company list, so the popover stays hidden there. `counts` is a getter so the
-   *  view's live facet distribution stays reactive across the bridge. */
+  /** The geography (+ work-format) facet scope the header's Location & format popover
+   *  drives, present on both list surfaces. `variant` selects the popover body: jobs
+   *  lists show work format + the full location pane; the company list shows region +
+   *  remote-hiring pills. `counts` is a getter so the view's live facet distribution
+   *  stays reactive across the bridge (null on the company list, which fetches none). */
   readonly filterScope?: {
     store: FacetStore;
     counts(): FacetCounts | null;
+    variant: 'jobs' | 'companies';
   };
 }
 

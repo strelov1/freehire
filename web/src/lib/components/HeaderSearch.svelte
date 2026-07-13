@@ -7,6 +7,7 @@
   import { lockScroll, unlockScroll } from '$lib/scrollLock';
   import { cn } from '$lib/utils';
   import CompanyLogo from './CompanyLogo.svelte';
+  import HeaderLocationFilter from './HeaderLocationFilter.svelte';
 
   // The global launcher: jumps straight to a job/company or hands a free-text
   // query to /jobs. TopBar renders it on every page EXCEPT the list pages
@@ -180,6 +181,10 @@
   <div
     class="flex h-11 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm focus-within:ring-2 focus-within:ring-ring"
   >
+    <!-- Launcher mode: listless pages have no list to filter, so the location trigger
+         scopes the jobs feed — a pick navigates to /jobs with that facet. -->
+    <HeaderLocationFilter variant="launcher" />
+    <div class="h-5 w-px shrink-0 bg-border"></div>
     <Search class="size-4 shrink-0 text-muted-foreground" />
     <input
       bind:this={inputEl}

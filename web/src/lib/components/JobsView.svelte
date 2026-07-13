@@ -229,7 +229,7 @@
         return filters.value;
       },
       setQuery: (q) => filters.setQuery(q),
-      filterScope: { store: filters, counts: () => counts },
+      filterScope: { store: filters, counts: () => counts, variant: 'jobs' },
     });
     return () => {
       setListSearchTarget(null);
