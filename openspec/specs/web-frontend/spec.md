@@ -519,7 +519,7 @@ its global open-job count, not a count contextual to the other active filters.
 The SPA SHALL visually de-emphasise job cards that the signed-in user has already
 viewed, in both the jobs list and the search results, so they can tell at a
 glance what they have already opened. The marking SHALL be driven by the set of
-viewed slugs read from `GET /api/v1/me/jobs/viewed`, loaded once when a signed-in
+viewed slugs read from `GET /api/v1/me/tracking/viewed`, loaded once when a signed-in
 user opens the browse view. A viewed card SHALL be dimmed (reduced opacity) and
 SHALL return to full strength on hover to signal it remains clickable. For
 anonymous (signed-out) visitors no card SHALL be dimmed. Surfaces where every

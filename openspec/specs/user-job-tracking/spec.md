@@ -219,7 +219,7 @@ changes.
 
 #### Scenario: Stage and notes on the my-jobs listing
 
-- **WHEN** `GET /api/v1/me/jobs` returns the user's tracked jobs
+- **WHEN** `GET /api/v1/me/tracking` returns the user's tracked jobs
 - **THEN** each row includes the job's `stage` and `notes`
 
 ### Requirement: SPA shows and edits application stage and notes
@@ -252,7 +252,7 @@ list and search endpoints SHALL remain unauthenticated and unchanged.
 
 #### Scenario: Signed-in user reads their viewed slugs
 
-- **WHEN** an authenticated user sends `GET /api/v1/me/jobs/viewed` and has
+- **WHEN** an authenticated user sends `GET /api/v1/me/tracking/viewed` and has
   previously viewed two jobs
 - **THEN** the system responds `200` with `{"data": [slug_a, slug_b]}` containing
   exactly the `public_slug`s of those two jobs
@@ -260,12 +260,12 @@ list and search endpoints SHALL remain unauthenticated and unchanged.
 #### Scenario: User with no interactions
 
 - **WHEN** an authenticated user who has viewed no jobs sends
-  `GET /api/v1/me/jobs/viewed`
+  `GET /api/v1/me/tracking/viewed`
 - **THEN** the system responds `200` with `{"data": []}`
 
 #### Scenario: Viewed slugs require authentication
 
-- **WHEN** a request to `GET /api/v1/me/jobs/viewed` carries neither a valid auth
+- **WHEN** a request to `GET /api/v1/me/tracking/viewed` carries neither a valid auth
   cookie nor a valid API key
 - **THEN** the system responds `401` and returns no slug data
 
@@ -382,7 +382,7 @@ return the resulting interaction record.
 
 ### Requirement: Listing a user's job interactions
 
-The system SHALL expose `GET /api/v1/me/jobs` (auth required) returning the
+The system SHALL expose `GET /api/v1/me/tracking` (auth required) returning the
 authenticated user's interactions joined with the public job view shape,
 ordered by most recent interaction activity first, with limit/offset
 pagination. A `filter` query parameter SHALL narrow the list: `all` (default —
@@ -395,7 +395,7 @@ SHALL be a `400`.
 
 #### Scenario: Listing all interactions
 
-- **WHEN** an authenticated user requests `GET /api/v1/me/jobs`
+- **WHEN** an authenticated user requests `GET /api/v1/me/tracking`
 - **THEN** the response is `200` with
   `{"data": [{job, viewed_at, saved_at, applied_at}, ...], "meta": {...}}`
 - **AND** each `job` is the shared job view shape (no internal id)
@@ -404,13 +404,13 @@ SHALL be a `400`.
 
 #### Scenario: Filtering to applications
 
-- **WHEN** the user requests `GET /api/v1/me/jobs?filter=applied`
+- **WHEN** the user requests `GET /api/v1/me/tracking?filter=applied`
 - **THEN** only interactions with non-null `applied_at` are returned
 - **AND** `meta.total` counts only those
 
 #### Scenario: Filtering to viewed-only
 
-- **WHEN** the user requests `GET /api/v1/me/jobs?filter=viewed`
+- **WHEN** the user requests `GET /api/v1/me/tracking?filter=viewed`
 - **THEN** only interactions with null `saved_at` and null `applied_at` are
   returned — the passive view history, without the jobs already acted on
 
@@ -426,12 +426,12 @@ SHALL be a `400`.
 
 #### Scenario: Unknown filter
 
-- **WHEN** the user requests `GET /api/v1/me/jobs?filter=bogus`
+- **WHEN** the user requests `GET /api/v1/me/tracking?filter=bogus`
 - **THEN** the system responds `400`
 
 #### Scenario: Listing requires authentication
 
-- **WHEN** a request to `GET /api/v1/me/jobs` carries no valid auth cookie
+- **WHEN** a request to `GET /api/v1/me/tracking` carries no valid auth cookie
 - **THEN** the system responds `401`
 
 

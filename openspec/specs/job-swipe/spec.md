@@ -44,7 +44,7 @@ SHALL NOT call the deck endpoint.
 
 ### Requirement: The deck endpoint mirrors search and excludes judged jobs
 
-The system SHALL expose an authenticated endpoint `GET /api/v1/me/jobs/swipe`
+The system SHALL expose an authenticated endpoint `GET /api/v1/me/tracking/swipe`
 that returns a batch of open jobs. It SHALL accept the same facet and free-text
 query parameters as `/api/v1/jobs/search` and run the same Meilisearch query, so
 ranking and filtering match the list. It SHALL exclude the caller's already
@@ -56,7 +56,7 @@ and SHALL support batching via `limit`/`offset` for prefetch.
 #### Scenario: Deck excludes saved and dismissed jobs
 
 - **WHEN** a signed-in user who has saved job A and dismissed job B requests
-  `GET /api/v1/me/jobs/swipe` with filters that would otherwise match A and B
+  `GET /api/v1/me/tracking/swipe` with filters that would otherwise match A and B
 - **THEN** neither A nor B appears in the returned batch
 - **AND** other matching jobs are returned in search order
 
@@ -68,7 +68,7 @@ and SHALL support batching via `limit`/`offset` for prefetch.
 
 #### Scenario: Deck requires authentication
 
-- **WHEN** a request to `GET /api/v1/me/jobs/swipe` carries neither a valid auth
+- **WHEN** a request to `GET /api/v1/me/tracking/swipe` carries neither a valid auth
   cookie nor a valid API key
 - **THEN** the system responds `401` and returns no deck
 

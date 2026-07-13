@@ -5,16 +5,16 @@ TBD - created by syncing change add-my-jobs-pipeline-tab. Update Purpose after a
 ## Requirements
 ### Requirement: Pipeline aggregate endpoint
 
-The system SHALL expose `GET /api/v1/me/jobs/pipeline`, authenticated with `RequireAuthOrKey` (session cookie or API key), returning the signed-in user's application counts aggregated server-side over **all** of their tracked applications. The response envelope SHALL be `{"data": {"applications": <int>, "buckets": {"no_answer","in_progress","interviewing","offer","accepted","rejected","declined"}}}` where every bucket key is always present (zero when empty).
+The system SHALL expose `GET /api/v1/me/tracking/pipeline`, authenticated with `RequireAuthOrKey` (session cookie or API key), returning the signed-in user's application counts aggregated server-side over **all** of their tracked applications. The response envelope SHALL be `{"data": {"applications": <int>, "buckets": {"no_answer","in_progress","interviewing","offer","accepted","rejected","declined"}}}` where every bucket key is always present (zero when empty).
 
 #### Scenario: Authenticated user with applications
 
-- **WHEN** an authenticated user requests `GET /api/v1/me/jobs/pipeline`
+- **WHEN** an authenticated user requests `GET /api/v1/me/tracking/pipeline`
 - **THEN** the response is `200` with `data.applications` equal to the number of their tracked applications and `data.buckets` carrying the per-bucket counts that sum to `data.applications`
 
 #### Scenario: Unauthenticated request
 
-- **WHEN** a request without a valid session or API key hits `GET /api/v1/me/jobs/pipeline`
+- **WHEN** a request without a valid session or API key hits `GET /api/v1/me/tracking/pipeline`
 - **THEN** the response is `401`
 
 #### Scenario: User with no applications
