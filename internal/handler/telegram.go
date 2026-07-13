@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"crypto/subtle"
 	"log"
 
 	"github.com/gofiber/fiber/v2"
@@ -74,8 +75,9 @@ func (a *API) TelegramWebhook(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusNotFound, "not found")
 	}
 	// Reject forged updates: the secret token must match the one registered with
-	// setWebhook. Constant work either way; a mismatch is a 403.
-	if c.Get("X-Telegram-Bot-Api-Secret-Token") != a.telegramWebhookSecret {
+	// setWebhook. Compared in constant time so a timing side-channel cannot be used
+	// to recover the secret byte by byte; a mismatch is a 403.
+	if subtle.ConstantTimeCompare([]byte(c.Get("X-Telegram-Bot-Api-Secret-Token")), []byte(a.telegramWebhookSecret)) != 1 {
 		return fiber.NewError(fiber.StatusForbidden, "forbidden")
 	}
 

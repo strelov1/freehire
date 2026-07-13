@@ -320,3 +320,30 @@ func TestSanitizeSummary(t *testing.T) {
 		}
 	})
 }
+
+// The other two served free-text fields (timezone_note, salary_currency) are
+// extracted from the untrusted description and reach the public wire, so Sanitize
+// must bound them like Summary — else an oversized/injected value is served raw.
+func TestSanitizeBoundsFreeTextFields(t *testing.T) {
+	e := Enrichment{
+		TimezoneNote:   "  " + strings.Repeat("z", maxTimezoneNoteRunes+50) + "  ",
+		SalaryCurrency: strings.Repeat("U", maxSalaryCurrencyRunes+50),
+	}
+	e.Sanitize()
+	if got := len([]rune(e.TimezoneNote)); got != maxTimezoneNoteRunes {
+		t.Errorf("TimezoneNote clipped length = %d runes, want %d", got, maxTimezoneNoteRunes)
+	}
+	if got := len([]rune(e.SalaryCurrency)); got != maxSalaryCurrencyRunes {
+		t.Errorf("SalaryCurrency clipped length = %d runes, want %d", got, maxSalaryCurrencyRunes)
+	}
+
+	// A normal timezone note is trimmed but otherwise untouched.
+	e2 := Enrichment{TimezoneNote: "  overlaps US business hours  ", SalaryCurrency: "USD"}
+	e2.Sanitize()
+	if e2.TimezoneNote != "overlaps US business hours" {
+		t.Errorf("TimezoneNote = %q, want trimmed value", e2.TimezoneNote)
+	}
+	if e2.SalaryCurrency != "USD" {
+		t.Errorf("SalaryCurrency = %q, want USD unchanged", e2.SalaryCurrency)
+	}
+}

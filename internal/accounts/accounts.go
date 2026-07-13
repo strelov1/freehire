@@ -16,6 +16,13 @@ const minPasswordLen = 8
 // so a longer password would have its tail ignored. Reject rather than mislead.
 const maxPasswordLen = 72
 
+// dummyPasswordHash is a valid, throwaway bcrypt hash (cost = bcrypt.DefaultCost,
+// matching production hashes) used only to keep Login constant-work: an unknown or
+// passwordless account runs one bcrypt Check against it so its response time matches
+// a real account's, closing the timing side-channel that would otherwise reveal which
+// emails have password accounts (account enumeration). It never matches any password.
+const dummyPasswordHash = "$2a$10$uAK6XQv2KNKj0KXGXHcgAe3fn70C1tZiCUeG4ZCkdGGJ60p2.py7S"
+
 // User is the public representation of a local account. Role is the DB-stored
 // authorization role ('user'/'moderator'/'admin'); it rides the wire shape so a client
 // can gate moderator-only UI, while RequireRole still authorizes server-side.
@@ -179,6 +186,11 @@ func (s *Service) Login(ctx context.Context, email, password string) (User, erro
 	}
 	user, hash, hasPassword, err := s.repo.UserByEmail(ctx, addr)
 	if err != nil || !hasPassword {
+		// Spend one bcrypt Check on a dummy hash so an unknown or passwordless
+		// account costs the same as a real one — otherwise the timing difference
+		// (fast indexed lookup vs. slow bcrypt) discloses which emails have password
+		// accounts, defeating the deliberately-generic error.
+		_ = s.hasher.Check(dummyPasswordHash, password)
 		return User{}, ErrInvalidCredentials
 	}
 	if s.hasher.Check(hash, password) != nil {

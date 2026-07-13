@@ -27,6 +27,16 @@ import (
 // 1–2 sentences, so a normal value never reaches this cap.
 const maxSummaryRunes = 400
 
+// maxTimezoneNoteRunes and maxSalaryCurrencyRunes bound the other two served
+// free-text enrichment fields. Both are extracted from the same attacker-influenced
+// description as Summary, so Sanitize clips them too — every served free-text field
+// passes through the same bound (the persist/serve prompt-injection guard). A
+// normal timezone note or ISO-4217 currency is far under these caps.
+const (
+	maxTimezoneNoteRunes   = 120
+	maxSalaryCurrencyRunes = 12
+)
+
 // Enrichment is the typed view of a job's enrichment JSONB payload. JSON keys
 // are snake_case to match the existing jobs JSON tags. The blob maps 1:1 to the
 // future search document.
@@ -197,8 +207,11 @@ func (e Enrichment) Validate() error {
 func (e *Enrichment) Sanitize() {
 	// Summary is synthesized free text; trim and clip an over-long value so the
 	// served payload stays bounded (guards a runaway model; the prompt asks for
-	// 1–2 sentences).
+	// 1–2 sentences). timezone_note and salary_currency are extracted from the same
+	// untrusted description and also served raw, so bound them identically.
 	e.Summary = truncateRunes(strings.TrimSpace(e.Summary), maxSummaryRunes)
+	e.TimezoneNote = truncateRunes(strings.TrimSpace(e.TimezoneNote), maxTimezoneNoteRunes)
+	e.SalaryCurrency = truncateRunes(strings.TrimSpace(e.SalaryCurrency), maxSalaryCurrencyRunes)
 
 	for _, s := range e.servedScalarEnums() {
 		if *s.ptr != "" && !slices.Contains(s.vocab, *s.ptr) {

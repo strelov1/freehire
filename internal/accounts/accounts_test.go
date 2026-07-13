@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // fakeRepo is a test double for Repository.
@@ -404,7 +406,9 @@ func TestLogin_UserNotFound(t *testing.T) {
 	}
 }
 
-// Login when hasPassword=false → ErrInvalidCredentials; Check NOT called.
+// Login when hasPassword=false → ErrInvalidCredentials, but a dummy Check still
+// runs so the passwordless path costs one bcrypt like a real account (timing guard
+// against account enumeration).
 func TestLogin_NoPassword(t *testing.T) {
 	wantUser := User{ID: 5, Email: "user@example.com"}
 	repo := &fakeRepo{
@@ -417,8 +421,34 @@ func TestLogin_NoPassword(t *testing.T) {
 	if !errors.Is(err, ErrInvalidCredentials) {
 		t.Errorf("want ErrInvalidCredentials, got %v", err)
 	}
-	if hasher.checkCalls != 0 {
-		t.Errorf("Check should NOT be called when hasPassword=false, got %d calls", hasher.checkCalls)
+	if hasher.checkCalls != 1 {
+		t.Errorf("dummy Check must run exactly once on the passwordless path, got %d calls", hasher.checkCalls)
+	}
+}
+
+// Login for an unknown email spends a dummy Check too, so an unknown account is
+// timing-indistinguishable from a real one.
+func TestLogin_UserNotFound_SpendsDummyCheck(t *testing.T) {
+	repo := &fakeRepo{
+		userByEmailResults: []userByEmailResult{{err: ErrUserNotFound}},
+	}
+	hasher := &fakeHasher{}
+	svc := New(repo, hasher)
+
+	if _, err := svc.Login(context.Background(), "ghost@example.com", "password123"); !errors.Is(err, ErrInvalidCredentials) {
+		t.Errorf("want ErrInvalidCredentials, got %v", err)
+	}
+	if hasher.checkCalls != 1 {
+		t.Errorf("dummy Check must run exactly once for an unknown email, got %d calls", hasher.checkCalls)
+	}
+}
+
+// dummyPasswordHash must be a well-formed bcrypt hash — a malformed one would make
+// CompareHashAndPassword return immediately without spending bcrypt work, silently
+// re-opening the timing side-channel.
+func TestDummyPasswordHashIsWellFormed(t *testing.T) {
+	if _, err := bcrypt.Cost([]byte(dummyPasswordHash)); err != nil {
+		t.Fatalf("dummyPasswordHash is not a valid bcrypt hash: %v", err)
 	}
 }
 
