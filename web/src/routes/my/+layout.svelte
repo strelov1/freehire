@@ -1,8 +1,20 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { User, LayoutList, Activity, Bell, Key, FileText, Inbox } from '@lucide/svelte';
+  import {
+    User,
+    LayoutList,
+    Activity,
+    Bell,
+    Key,
+    FileText,
+    Inbox,
+    PanelLeftClose,
+    PanelLeft,
+  } from '@lucide/svelte';
   import type { LucideIcon } from '@lucide/svelte';
   import { isAuthenticated, currentUser } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
@@ -13,12 +25,26 @@
   // The account shell: one source of truth for the `my/*` chrome — the width
   // container, the noindex tag, the auth gate, and the section navigation. Child
   // pages render only their own header + body inside the content column. The nav
-  // is a vertical sidebar at lg+ and a horizontal scrollable strip below lg;
-  // Tracking and Activity keep their own sub-tabs (this is the top nav level).
+  // is a collapsible vertical sidebar at lg+ and a horizontal scrollable strip
+  // below lg; Tracking and Activity keep their own sub-tabs (this is the top level).
 
   let { children }: { children: Snippet } = $props();
 
   const path = $derived(page.url.pathname);
+
+  // The inbox is a two-pane mail client that wants the room — give it a wider
+  // container than the single-column pages (which self-constrain their own width).
+  const wide = $derived(path.startsWith('/my/inbox'));
+
+  // Collapsible sidebar (lg+), persisted so it stays across navigations/sessions.
+  let collapsed = $state(false);
+  onMount(() => {
+    collapsed = localStorage.getItem('hire.myNavCollapsed') === '1';
+  });
+  function toggleNav() {
+    collapsed = !collapsed;
+    if (browser) localStorage.setItem('hire.myNavCollapsed', collapsed ? '1' : '0');
+  }
 
   // Moderator-only sections (Inbox) are hidden from the nav for everyone else; the
   // server enforces the real 403, this just declutters the UI.
@@ -52,25 +78,27 @@
   <meta name="robots" content="noindex" />
 </svelte:head>
 
-<div class="mx-auto w-full max-w-6xl px-4 py-6">
+<div class={cn('mx-auto w-full px-4 py-6', wide ? 'max-w-[100rem]' : 'max-w-6xl')}>
   {#if !isAuthenticated()}
     <div class="flex flex-col items-center gap-3 py-12 text-center">
       <p class="text-sm text-muted-foreground">Sign in to access your account.</p>
       <Button variant="primary" onclick={() => openAuthDialog()}>Sign in</Button>
     </div>
   {:else}
-    <!-- Same items, two forms; `extra` carries the per-form item tweaks. -->
-    {#snippet navLinks(extra: string)}
+    <!-- Same items, two forms; `extra` carries the per-form item tweaks. When
+         `iconOnly`, the label is dropped and the icon centres (collapsed rail). -->
+    {#snippet navLinks(extra: string, iconOnly = false)}
       {#each navItems as item (item.href)}
         {@const active = isSectionActive(path, item.href)}
         {@const Icon = icons[item.href]}
         <a
           href={resolve(item.href)}
           aria-current={active ? 'page' : undefined}
-          class={cn(itemClass(active), extra)}
+          title={iconOnly ? item.label : undefined}
+          class={cn(itemClass(active), iconOnly && 'justify-center', extra)}
         >
           <Icon class="size-4 shrink-0" />
-          {item.label}
+          {#if !iconOnly}{item.label}{/if}
         </a>
       {/each}
     {/snippet}
@@ -81,11 +109,32 @@
     </nav>
 
     <div class="lg:flex lg:gap-8">
-      <!-- lg and up: a vertical sidebar beside the content. -->
-      <aside aria-label="Account sections" class="hidden shrink-0 lg:block lg:w-56">
-        <nav class="sticky top-6 flex flex-col gap-1">
-          {@render navLinks('')}
-        </nav>
+      <!-- lg and up: a collapsible vertical sidebar beside the content. -->
+      <aside
+        aria-label="Account sections"
+        class={cn('hidden shrink-0 transition-[width] duration-200 lg:block', collapsed ? 'lg:w-14' : 'lg:w-56')}
+      >
+        <div class="sticky top-6 flex flex-col gap-1">
+          <button
+            type="button"
+            onclick={toggleNav}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            class={cn(
+              'mb-1 flex items-center rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
+              collapsed && 'justify-center',
+            )}
+          >
+            {#if collapsed}
+              <PanelLeft class="size-4" />
+            {:else}
+              <PanelLeftClose class="size-4" />
+            {/if}
+          </button>
+          <nav aria-label="Account sections" class="flex flex-col gap-1">
+            {@render navLinks('', collapsed)}
+          </nav>
+        </div>
       </aside>
 
       <div class="min-w-0 flex-1">
