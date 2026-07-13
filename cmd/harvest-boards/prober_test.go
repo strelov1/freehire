@@ -269,6 +269,17 @@ func TestSlugFallbackProbers(t *testing.T) {
 			},
 			live: "acme", empty: "empty",
 		},
+		{
+			name: "jobvite",
+			p:    jobviteProber{},
+			getter: fakeGetter{
+				// Live: a /<slug>/job/<code> permalink. Empty: only the /jobs and /jobAlerts
+				// nav anchors, which the job pattern must not count.
+				"https://jobs.jobvite.com/acme/jobs":  `<html><body><a href="/acme/job/ojJpAfwL">Engineer</a></body></html>`,
+				"https://jobs.jobvite.com/empty/jobs": `<html><body><a href="/empty/jobs">All</a><a href="/empty/jobAlerts">Alerts</a></body></html>`,
+			},
+			live: "acme", empty: "empty",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
