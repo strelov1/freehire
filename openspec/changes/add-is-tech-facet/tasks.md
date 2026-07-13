@@ -15,24 +15,24 @@
 
 ## 4. Persistence (DB + aggregate)
 
-- [ ] 4.1 Migration: add nullable `jobs.is_tech boolean`
-- [ ] 4.2 Thread `IsTech` through the `internal/job` aggregate (field + `job.New` + `job.FromRow`)
-- [ ] 4.3 Update `UpsertJob` and the backfill-derive update query in `internal/db/queries/*.sql`; run `make sqlc`
-- [ ] 4.4 Verify `cmd/backfill-derive` writes `is_tech` (it re-derives via jobderive); DB integration/handler test as applicable
+- [x] 4.1 Migration: add nullable `jobs.is_tech boolean`
+- [x] 4.2 Thread `IsTech` through the `internal/job` aggregate (field + `job.New` + `job.FromRow`)
+- [x] 4.3 Update `UpsertJob` and the backfill-derive update query in `internal/db/queries/*.sql`; run `make sqlc`
+- [x] 4.4 Verify `cmd/backfill-derive` writes `is_tech` (it re-derives via jobderive); DB integration/handler test as applicable
 
 ## 5. Served wire shape
 
-- [ ] 5.1 Add `is_tech` string-enum field to `jobview` (`"tech"`/`"non_tech"`, omitted when unknown), mapped from the aggregate `*bool`
-- [ ] 5.2 Unit test `jobview.FromDomain` for the three states
+- [x] 5.1 Add `is_tech` string-enum field to `jobview` (`"tech"`/`"non_tech"`, omitted when unknown), mapped from the aggregate `*bool`
+- [x] 5.2 Unit test `jobview.FromDomain` for the three states
 
 ## 6. Search facet + filter
 
-- [ ] 6.1 Include `is_tech` in the search document (top-level string facet, like `roles`) and add it to `facetSettings` FilterableAttributes
-- [ ] 6.2 Wire `is_tech` into `internal/search` facet request + `query_filter` mapping; test filter (tech excludes non_tech + unknown) and facet distribution
-- [ ] 6.3 Add the Tech / Non-tech control to `web/src/lib/facets.ts` + labels (FilterModal), values `tech`/`non_tech`
+- [x] 6.1 Include `is_tech` in the search document (top-level string facet, like `roles`) and add it to `facetSettings` FilterableAttributes
+- [x] 6.2 Wire `is_tech` into `internal/search` facet request + `query_filter` mapping; test filter (tech excludes non_tech + unknown) and facet distribution
+- [x] 6.3 Add the Tech / Non-tech control to `web/src/lib/facets.ts` + labels (FilterModal), values `tech`/`non_tech`
 
 ## 7. Contracts + verification
 
-- [ ] 7.1 Regenerate TS contracts (`cmd/gen-contracts`) so the `is_tech` field reaches the frontend types
-- [ ] 7.2 `go build ./... && go vet ./... && go test ./...`; web `svelte-check` for touched files
-- [ ] 7.3 Confirm end-to-end locally: ingest a job → `is_tech` persisted → served in jobview → filterable in search (reindex first)
+- [x] 7.1 Regenerate TS contracts (`cmd/gen-contracts`) so the `is_tech` field reaches the frontend types
+- [x] 7.2 `go build ./... && go vet ./... && go test ./...`; web `svelte-check` for touched files
+- [x] 7.3 Confirm end-to-end locally: ingest a job → `is_tech` persisted → served in jobview → filterable in search (reindex first)

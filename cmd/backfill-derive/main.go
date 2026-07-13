@@ -103,6 +103,7 @@ func deriveFacets(j db.Job) (db.UpdateJobFacetsParams, bool) {
 		WorkMode:    j.WorkMode, // preserves a set work_mode (jobderive precedence)
 	})
 	experience := pgconv.Int4(d.ExperienceYearsMin)
+	isTech := pgconv.Bool(d.IsTech)
 	changed := !(slices.Equal(d.Countries, j.Countries) &&
 		slices.Equal(d.Regions, j.Regions) &&
 		slices.Equal(d.Cities, j.Cities) &&
@@ -110,6 +111,7 @@ func deriveFacets(j db.Job) (db.UpdateJobFacetsParams, bool) {
 		slices.Equal(d.Skills, j.Skills) &&
 		d.Seniority == j.Seniority &&
 		d.Category == j.Category &&
+		isTech == j.IsTech &&
 		d.PostingLanguage == j.PostingLanguage &&
 		d.EmploymentType == j.EmploymentType &&
 		d.EducationLevel == j.EducationLevel &&
@@ -124,6 +126,7 @@ func deriveFacets(j db.Job) (db.UpdateJobFacetsParams, bool) {
 		Skills:             d.Skills,
 		Seniority:          d.Seniority,
 		Category:           d.Category,
+		IsTech:             isTech,
 		PostingLanguage:    d.PostingLanguage,
 		EmploymentType:     d.EmploymentType,
 		EducationLevel:     d.EducationLevel,

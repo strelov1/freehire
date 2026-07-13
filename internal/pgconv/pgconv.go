@@ -39,3 +39,13 @@ func Int4(n *int) pgtype.Int4 {
 	}
 	return pgtype.Int4{Int32: int32(*n), Valid: true}
 }
+
+// Bool maps an optional bool to the pgtype the generated params expect: nil becomes
+// the zero (NULL) value, a non-nil pointer a valid bool. It is the write-side
+// adapter for a tri-state (true/false/NULL) column such as jobs.is_tech.
+func Bool(b *bool) pgtype.Bool {
+	if b == nil {
+		return pgtype.Bool{}
+	}
+	return pgtype.Bool{Bool: *b, Valid: true}
+}

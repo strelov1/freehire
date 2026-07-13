@@ -142,6 +142,7 @@ type Job struct {
 	SemanticEmbeddedModel pgtype.Text        `json:"semantic_embedded_model"`
 	SemanticEmbeddedHash  pgtype.Text        `json:"semantic_embedded_hash"`
 	DuplicateOf           pgtype.Int8        `json:"duplicate_of"`
+	IsTech                pgtype.Bool        `json:"is_tech"`
 }
 
 type JobDailyStat struct {

@@ -183,7 +183,7 @@ company_upsert AS (
 )
 INSERT INTO jobs (
     source, external_id, url, title, company, company_slug, location, remote, description, posted_at,
-    public_slug, countries, regions, cities, work_mode, skills, seniority, category,
+    public_slug, countries, regions, cities, work_mode, skills, seniority, category, is_tech,
     posting_language, employment_type, education_level, english_level, experience_years_min,
     content_hash, role_fingerprint
 ) VALUES (
@@ -192,7 +192,7 @@ INSERT INTO jobs (
     sqlc.arg(description), sqlc.arg(posted_at),
     sqlc.arg(public_slug),
     COALESCE(sqlc.arg(countries)::text[], '{}'), COALESCE(sqlc.arg(regions)::text[], '{}'), COALESCE(sqlc.arg(cities)::text[], '{}'),
-    sqlc.arg(work_mode), COALESCE(sqlc.arg(skills)::text[], '{}'), sqlc.arg(seniority), sqlc.arg(category),
+    sqlc.arg(work_mode), COALESCE(sqlc.arg(skills)::text[], '{}'), sqlc.arg(seniority), sqlc.arg(category), sqlc.arg(is_tech),
     sqlc.arg(posting_language), sqlc.arg(employment_type), sqlc.arg(education_level), sqlc.arg(english_level), sqlc.arg(experience_years_min),
     sqlc.arg(content_hash), sqlc.arg(role_fingerprint)
 )
@@ -224,6 +224,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     skills       = EXCLUDED.skills,
     seniority    = EXCLUDED.seniority,
     category     = EXCLUDED.category,
+    is_tech      = EXCLUDED.is_tech,
     posting_language     = EXCLUDED.posting_language,
     employment_type      = EXCLUDED.employment_type,
     education_level      = EXCLUDED.education_level,
@@ -482,7 +483,7 @@ WITH company_upsert AS (
 )
 INSERT INTO jobs (
     source, external_id, url, title, company, company_slug, location, remote, description, posted_at,
-    public_slug, countries, regions, cities, work_mode, skills, seniority, category,
+    public_slug, countries, regions, cities, work_mode, skills, seniority, category, is_tech,
     posting_language, employment_type, education_level, english_level, experience_years_min,
     created_by
 ) VALUES (
@@ -492,7 +493,7 @@ INSERT INTO jobs (
     sqlc.arg(public_slug),
     COALESCE(sqlc.arg(countries)::text[], '{}'), COALESCE(sqlc.arg(regions)::text[], '{}'), COALESCE(sqlc.arg(cities)::text[], '{}'),
     sqlc.arg(work_mode), COALESCE(sqlc.arg(skills)::text[], '{}'),
-    sqlc.arg(seniority), sqlc.arg(category),
+    sqlc.arg(seniority), sqlc.arg(category), sqlc.arg(is_tech),
     sqlc.arg(posting_language), sqlc.arg(employment_type), sqlc.arg(education_level), sqlc.arg(english_level), sqlc.arg(experience_years_min),
     sqlc.arg(created_by)::bigint
 )
@@ -512,6 +513,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     skills       = EXCLUDED.skills,
     seniority    = EXCLUDED.seniority,
     category     = EXCLUDED.category,
+    is_tech      = EXCLUDED.is_tech,
     posting_language     = EXCLUDED.posting_language,
     employment_type      = EXCLUDED.employment_type,
     education_level      = EXCLUDED.education_level,
@@ -561,6 +563,7 @@ SET title        = sqlc.arg(title),
     skills       = COALESCE(sqlc.arg(skills)::text[], '{}'),
     seniority    = sqlc.arg(seniority),
     category     = sqlc.arg(category),
+    is_tech      = sqlc.arg(is_tech),
     posting_language     = sqlc.arg(posting_language),
     employment_type      = sqlc.arg(employment_type),
     education_level      = sqlc.arg(education_level),
@@ -716,7 +719,7 @@ WHERE id = sqlc.arg(id);
 
 -- name: UpdateJobFacets :exec
 -- One-off backfill (cmd/backfill-derive): rewrite every deterministic dictionary
--- facet column — countries, regions, work_mode, skills, seniority, category, plus the
+-- facet column — countries, regions, work_mode, skills, seniority, category, is_tech, plus the
 -- synthetic enrichment facets posting_language, employment_type, education_level,
 -- english_level, and experience_years_min — from the row's raw content
 -- (title/location/description) in one
@@ -735,6 +738,7 @@ SET countries = COALESCE(sqlc.arg(countries)::text[], '{}'),
     skills    = COALESCE(sqlc.arg(skills)::text[], '{}'),
     seniority = sqlc.arg(seniority),
     category  = sqlc.arg(category),
+    is_tech   = sqlc.arg(is_tech),
     posting_language     = sqlc.arg(posting_language),
     employment_type      = sqlc.arg(employment_type),
     education_level      = sqlc.arg(education_level),

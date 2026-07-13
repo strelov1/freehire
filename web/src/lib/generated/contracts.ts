@@ -120,6 +120,13 @@ export interface Job {
    * column; an untagged job serializes it as [].
    */
   collections: string[];
+  /**
+   * IsTech is the deterministic technical/non-technical facet: "tech" or "non_tech",
+   * omitted when unknown (the tri-state jobs.is_tech NULL). Served top-level and
+   * indexed as a filterable Meili facet; an unknown value is absent so it filters as
+   * empty. Derived from title + category (jobderive), never from the LLM.
+   */
+  is_tech?: string;
   posted_at?: string;
   created_at?: string;
   updated_at?: string;
@@ -473,7 +480,7 @@ export interface Education {
   year?: string;
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'breezy', 'careerplug', 'careerspage', 'clinch', 'comeet', 'cornerstone', 'deel', 'earcu', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'gem', 'getmatch', 'getonbrd', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'himalayas', 'hireology', 'huntflow', 'icims', 'inhire', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobstash', 'jobtech', 'join', 'justjoin', 'lever', 'loxo', 'luxoft', 'mindsight', 'mycareersfuture', 'oracle', 'paycom', 'paylocity', 'personio', 'phenom', 'pinpoint', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'solides', 'successfactors', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'ukg', 'vention', 'vouch', 'wantedkr', 'weworkremotely', 'workable', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'breezy', 'careerplug', 'careerspage', 'clinch', 'comeet', 'cornerstone', 'deel', 'earcu', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'himalayas', 'hireology', 'huntflow', 'icims', 'infojobs', 'inhire', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobstash', 'jobtech', 'jobvite', 'join', 'justjoin', 'lever', 'loxo', 'luxoft', 'mindsight', 'mycareersfuture', 'neogov', 'oracle', 'pageup', 'paycom', 'paylocity', 'personio', 'phenom', 'pinpoint', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'solides', 'successfactors', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'ukg', 'vagas', 'vention', 'vouch', 'wantedkr', 'weworkremotely', 'workable', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];

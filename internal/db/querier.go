@@ -744,7 +744,7 @@ type Querier interface {
 	// and hash move; the deterministic facets are re-derived separately by cmd/backfill-derive.
 	UpdateJobDescription(ctx context.Context, arg UpdateJobDescriptionParams) (int64, error)
 	// One-off backfill (cmd/backfill-derive): rewrite every deterministic dictionary
-	// facet column — countries, regions, work_mode, skills, seniority, category, plus the
+	// facet column — countries, regions, work_mode, skills, seniority, category, is_tech, plus the
 	// synthetic enrichment facets posting_language, employment_type, education_level,
 	// english_level, and experience_years_min — from the row's raw content
 	// (title/location/description) in one

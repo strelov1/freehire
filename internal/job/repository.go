@@ -67,6 +67,7 @@ func jobFromRow(r db.Job) (Job, error) {
 		Skills:    r.Skills,
 		Seniority: r.Seniority,
 		Category:  r.Category,
+		IsTech:    boolPtr(r.IsTech),
 
 		PostingLanguage:    r.PostingLanguage,
 		EmploymentType:     r.EmploymentType,
@@ -105,6 +106,16 @@ func tsPtr(ts pgtype.Timestamptz) *time.Time {
 	}
 	t := ts.Time
 	return &t
+}
+
+// boolPtr renders a nullable Postgres bool as *bool (nil when unset), keeping the
+// tri-state is_tech signal out of pgtype in the aggregate.
+func boolPtr(b pgtype.Bool) *bool {
+	if !b.Valid {
+		return nil
+	}
+	v := b.Bool
+	return &v
 }
 
 // int4Ptr renders a nullable Postgres int4 as *int (nil when unset).

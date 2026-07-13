@@ -355,6 +355,15 @@ const REALITY: FacetOption[] = [
   { value: 'likely-evergreen', label: 'Likely evergreen' },
 ];
 
+// Tech vs non-tech: the deterministic is_tech facet (internal/jobderive), a small
+// closed set spelled out like REALITY. Unknown jobs carry no value (absent) and are
+// matched by neither bucket. Offered excludable so the common use is "exclude
+// Non-tech" to hide the non-engineering roles generic ATS boards pull in.
+const IS_TECH: FacetOption[] = [
+  { value: 'tech', label: 'Tech' },
+  { value: 'non_tech', label: 'Non-tech' },
+];
+
 const CURRENCY: FacetOption[] = [
   { value: 'USD', label: 'USD' },
   { value: 'EUR', label: 'EUR' },
@@ -442,6 +451,7 @@ export const FACETS: FacetDef[] = [
   { param: 'collections', label: 'Collection', control: 'pills', options: COLLECTION, excludable: false },
   { param: 'regions', label: 'Region', control: 'pills', options: JOB_REGION, excludable: true },
   { param: 'work_mode', label: 'Work format', control: 'pills', options: WORK_MODE, excludable: true },
+  { param: 'is_tech', label: 'Tech / Non-tech', control: 'pills', options: IS_TECH, excludable: true },
   { param: 'role', label: 'Role', control: 'select', dynamic: true, excludable: true, hasAndOr: true, placeholder: 'Search roles', cap: 8, related: ROLE_RELATED, searchAliases: ROLE_ALIASES },
   { param: 'category', label: 'Specialization', control: 'select', options: CATEGORY, excludable: true, placeholder: 'Search specializations' },
   { param: 'seniority', label: 'Seniority', control: 'pills', options: SENIORITY, excludable: true },

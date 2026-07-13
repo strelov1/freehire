@@ -61,6 +61,7 @@ func (r *QueriesRepository) Create(ctx context.Context, f job.Fields, actorID in
 		Skills:      f.Skills,
 		Seniority:   f.Seniority,
 		Category:    f.Category,
+		IsTech:      pgconv.Bool(f.IsTech),
 
 		PostingLanguage:    f.PostingLanguage,
 		EmploymentType:     f.EmploymentType,
@@ -124,6 +125,7 @@ func (r *QueriesRepository) Update(ctx context.Context, slug string, f job.Field
 		Skills:      f.Skills,
 		Seniority:   f.Seniority,
 		Category:    f.Category,
+		IsTech:      pgconv.Bool(f.IsTech),
 
 		PostingLanguage:    f.PostingLanguage,
 		EmploymentType:     f.EmploymentType,

@@ -45,6 +45,7 @@ func expectedFacets(j db.Job) db.UpdateJobFacetsParams {
 	return db.UpdateJobFacetsParams{
 		ID: j.ID, Countries: d.Countries, Regions: d.Regions, Cities: d.Cities, WorkMode: d.WorkMode,
 		Skills: d.Skills, Seniority: d.Seniority, Category: d.Category,
+		IsTech:             pgconv.Bool(d.IsTech),
 		PostingLanguage:    d.PostingLanguage,
 		EmploymentType:     d.EmploymentType,
 		EducationLevel:     d.EducationLevel,

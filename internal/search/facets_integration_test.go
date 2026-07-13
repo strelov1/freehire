@@ -118,3 +118,63 @@ func TestIntegration_FacetCounts(t *testing.T) {
 		}
 	})
 }
+
+// TestIntegration_IsTechFilter locks the is_tech facet spec scenarios against a real
+// Meilisearch: the distribution reports the tech/non_tech buckets (an unknown/NULL
+// is_tech job is absent, since jobview omits it), and filtering to tech excludes both
+// the non_tech and the unknown jobs. The is_tech column is set on the fixtures the way
+// UpsertJob persists it (the derivation itself is unit-tested); this covers the
+// index/filter round-trip the config-level unit tests cannot.
+func TestIntegration_IsTechFilter(t *testing.T) {
+	ctx := context.Background()
+	c := startMeili(t)
+	if err := c.EnsureIndex(ctx); err != nil {
+		t.Fatalf("EnsureIndex: %v", err)
+	}
+
+	yes := pgtype.Bool{Bool: true, Valid: true}
+	no := pgtype.Bool{Bool: false, Valid: true}
+	unknown := pgtype.Bool{} // NULL — jobview omits the facet
+	jobs := []db.Job{
+		{ID: 1, Title: "Senior Go Engineer", Company: "Acme", PublicSlug: "a", Category: "backend", IsTech: yes},
+		{ID: 2, Title: "Warehouse Cleaner", Company: "Beta", PublicSlug: "b", IsTech: no},
+		{ID: 3, Title: "Yard Coordinator", Company: "Gamma", PublicSlug: "c", IsTech: unknown},
+	}
+	docs := make([]JobDocument, 0, len(jobs))
+	for _, j := range jobs {
+		d, err := FromJob(j)
+		if err != nil {
+			t.Fatalf("FromJob: %v", err)
+		}
+		docs = append(docs, d)
+	}
+	if err := c.IndexJobs(ctx, docs); err != nil {
+		t.Fatalf("IndexJobs: %v", err)
+	}
+
+	t.Run("distribution reports tech and non_tech, unknown absent", func(t *testing.T) {
+		res, err := c.FacetCounts(ctx, FacetParams{Facets: []string{"is_tech"}})
+		if err != nil {
+			t.Fatalf("FacetCounts: %v", err)
+		}
+		if res.Facets["is_tech"]["tech"] != 1 || res.Facets["is_tech"]["non_tech"] != 1 {
+			t.Errorf("is_tech dist = %v, want tech:1 non_tech:1", res.Facets["is_tech"])
+		}
+		if len(res.Facets["is_tech"]) != 2 {
+			t.Errorf("is_tech dist should have no unknown bucket, got %v", res.Facets["is_tech"])
+		}
+	})
+
+	t.Run("filter to tech excludes non_tech and unknown", func(t *testing.T) {
+		res, err := c.FacetCounts(ctx, FacetParams{
+			Facets: []string{"is_tech"},
+			Filter: Filter([]string{Eq("is_tech", "tech")}),
+		})
+		if err != nil {
+			t.Fatalf("FacetCounts: %v", err)
+		}
+		if res.Total != 1 {
+			t.Errorf("filtered Total = %d, want 1 (only the tech job)", res.Total)
+		}
+	})
+}

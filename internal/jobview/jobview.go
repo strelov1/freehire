@@ -69,9 +69,14 @@ type Job struct {
 	// deterministic source fact (no LLM counterpart) served straight from the jobs
 	// column; an untagged job serializes it as [].
 	Collections []string `json:"collections"`
-	PostedAt    *string  `json:"posted_at"`
-	CreatedAt   *string  `json:"created_at"`
-	UpdatedAt   *string  `json:"updated_at"`
+	// IsTech is the deterministic technical/non-technical facet: "tech" or "non_tech",
+	// omitted when unknown (the tri-state jobs.is_tech NULL). Served top-level and
+	// indexed as a filterable Meili facet; an unknown value is absent so it filters as
+	// empty. Derived from title + category (jobderive), never from the LLM.
+	IsTech    string  `json:"is_tech,omitempty"`
+	PostedAt  *string `json:"posted_at"`
+	CreatedAt *string `json:"created_at"`
+	UpdatedAt *string `json:"updated_at"`
 	// ClosedAt is non-null when the posting is no longer open. Lists and the
 	// search index never contain closed jobs; only the detail endpoint serves
 	// them, and the SPA renders the closed state from this field.
@@ -149,6 +154,7 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 		Skills:            skills,
 		Cities:            cities,
 		Collections:       collections,
+		IsTech:            isTechFacet(f.IsTech),
 		PostedAt:          rfc3339Ptr(effectivePosted(f.PostedAt, f.CreatedAt)),
 		CreatedAt:         rfc3339Ptr(f.CreatedAt),
 		UpdatedAt:         rfc3339Ptr(f.UpdatedAt),
@@ -159,6 +165,20 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 		ViewCount:         x.ViewCount,
 		AppliedCount:      x.AppliedCount,
 	}, nil
+}
+
+// isTechFacet renders the tri-state is_tech signal as its served facet value:
+// "tech" for true, "non_tech" for false, and "" (omitted) for unknown (nil), so an
+// unclassified job carries no facet value and filters as empty rather than as a
+// misleading bucket.
+func isTechFacet(isTech *bool) string {
+	if isTech == nil {
+		return ""
+	}
+	if *isTech {
+		return "tech"
+	}
+	return "non_tech"
 }
 
 // effectivePosted is EffectivePostedAt over domain *time.Time: the source posted

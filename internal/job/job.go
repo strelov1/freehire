@@ -68,6 +68,9 @@ type Fields struct {
 	Skills    []string
 	Seniority string
 	Category  string
+	// IsTech is the tri-state technical/non-technical signal (nil = unknown), derived
+	// from title + category; served as a filterable facet. See jobderive.Derived.IsTech.
+	IsTech *bool
 
 	// synthetic enrichment facets (deterministic stand-ins)
 	PostingLanguage    string
@@ -144,6 +147,7 @@ func New(d Draft) (Job, error) {
 		Skills:    der.Skills,
 		Seniority: der.Seniority,
 		Category:  der.Category,
+		IsTech:    der.IsTech,
 
 		PostingLanguage:    der.PostingLanguage,
 		EmploymentType:     der.EmploymentType,
@@ -183,6 +187,7 @@ func (f Fields) UpsertParams() db.UpsertJobParams {
 		Skills:      f.Skills,
 		Seniority:   f.Seniority,
 		Category:    f.Category,
+		IsTech:      pgconv.Bool(f.IsTech),
 
 		PostingLanguage:    f.PostingLanguage,
 		EmploymentType:     f.EmploymentType,

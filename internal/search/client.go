@@ -631,6 +631,9 @@ func facetSettings() *meilisearch.Settings {
 			"id",
 			"source", "company_slug",
 			"work_mode", "regions", "countries", "cities", "skills", "collections",
+			// is_tech is the served top-level tech/non-tech facet (jobview), filtered on
+			// the bare attribute; an unknown value is absent so it filters as empty.
+			"is_tech",
 			// roles is derived at index time (roletag) and served top-level like the
 			// other bare facets, so it filters on the plain attribute, not a dot path.
 			"roles",

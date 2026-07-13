@@ -48,6 +48,18 @@ func TestRolesIsFilterable(t *testing.T) {
 	}
 }
 
+func TestIsTechIsFilterableFacet(t *testing.T) {
+	// is_tech is served top-level (jobview) and filtered on the bare attribute, so it
+	// must be declared filterable for `is_tech=` to take effect and its facet counts.
+	s := facetSettings()
+	if !contains(s.FilterableAttributes, "is_tech") {
+		t.Errorf("is_tech must be filterable for the tech/non-tech facet, got %v", s.FilterableAttributes)
+	}
+	if StringFacets["is_tech"] != "is_tech" {
+		t.Errorf("StringFacets[is_tech] = %q, want the bare attribute \"is_tech\"", StringFacets["is_tech"])
+	}
+}
+
 func TestIDIsFilterable(t *testing.T) {
 	// The swipe deck excludes the caller's already-judged jobs via an
 	// `id NOT IN [...]` filter, which requires id to be a filterable attribute.
