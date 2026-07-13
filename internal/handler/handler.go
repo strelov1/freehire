@@ -378,7 +378,6 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/me/gmail", saved, requireModerator, a.GmailStatus)
 	api.Delete("/me/gmail", saved, requireModerator, a.GmailDisconnect)
 	api.Get("/me/inbox", saved, requireModerator, a.GetInbox)
-	api.Get("/me/inbox/group", saved, requireModerator, a.GetInboxGroup)
 	api.Get("/me/emails/:id", saved, requireModerator, a.GetEmail)
 	if a.gmailReady() {
 		api.Get("/me/gmail/connect", saved, requireModerator, a.GmailConnect)

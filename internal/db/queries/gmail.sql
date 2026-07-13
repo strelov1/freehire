@@ -49,19 +49,14 @@ INSERT INTO emails (
 ) VALUES ($1, 'gmail', $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (user_id, source, external_id) DO NOTHING;
 
--- name: ListInboxGroups :many
--- One row per normalized subject: total + unread counts, newest receipt, distinct
--- sender names, and the newest message's original subject for display. An optional
--- source filter (empty = all accounts) narrows to one source; an optional search
--- term (empty = no filter) matches a message's subject, sender, or body — a group
--- surfaces when any of its messages matches.
-SELECT
-    subject_norm,
-    count(*)                                                   AS message_count,
-    count(*) FILTER (WHERE read_at IS NULL)                    AS unread_count,
-    max(received_at)::timestamptz                              AS latest_received,
-    ((array_agg(subject ORDER BY received_at DESC))[1])::text  AS latest_subject,
-    array_remove(array_agg(DISTINCT from_name), '')::text[]    AS senders
+-- name: ListEmails :many
+-- Flat inbox listing, newest first — one row per message (no subject grouping).
+-- An optional source filter (empty = all accounts) narrows to one source; an
+-- optional search term (empty = no filter) matches subject, sender, or body. The
+-- snippet is the body's leading text with whitespace collapsed, for the list row.
+SELECT id, source, external_id, from_addr, from_name, subject,
+    left(regexp_replace(body_text, E'\\s+', ' ', 'g'), 160)::text AS snippet,
+    received_at, (read_at IS NOT NULL)::boolean AS read
 FROM emails
 WHERE user_id = $1
   AND (sqlc.arg(src)::text = '' OR source = sqlc.arg(src))
@@ -72,14 +67,12 @@ WHERE user_id = $1
     OR from_addr ILIKE '%' || sqlc.arg(q) || '%'
     OR body_text ILIKE '%' || sqlc.arg(q) || '%'
   )
-GROUP BY subject_norm
-ORDER BY max(received_at) DESC
+ORDER BY received_at DESC, id DESC
 LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 
--- name: CountInboxGroups :one
--- Total distinct subject groups for the caller (same optional source + search),
--- so the inbox knows whether more pages remain.
-SELECT count(DISTINCT subject_norm)
+-- name: CountEmails :one
+-- Total messages for the caller (same optional source + search), for pagination.
+SELECT count(*)
 FROM emails
 WHERE user_id = $1
   AND (sqlc.arg(src)::text = '' OR source = sqlc.arg(src))
@@ -90,13 +83,6 @@ WHERE user_id = $1
     OR from_addr ILIKE '%' || sqlc.arg(q) || '%'
     OR body_text ILIKE '%' || sqlc.arg(q) || '%'
   );
-
--- name: ListEmailsByGroup :many
-SELECT id, source, external_id, from_addr, from_name, subject, received_at,
-    (read_at IS NOT NULL)::boolean AS read
-FROM emails
-WHERE user_id = $1 AND subject_norm = $2
-ORDER BY received_at DESC;
 
 -- name: GetEmail :one
 SELECT id, source, external_id, s3_key, from_addr, from_name, subject,

@@ -137,17 +137,7 @@ export interface MailboxStatus {
 /** The account switcher value: '' = all sources. */
 export type InboxSource = '' | 'gmail' | 'hosted';
 
-/** One subject-grouped bucket in the inbox. */
-export interface InboxGroup {
-  key: string;
-  subject: string;
-  message_count: number;
-  unread_count: number;
-  latest_received: string;
-  senders: string[];
-}
-
-/** A message row within a group. */
+/** One row in the flat inbox listing. */
 export interface InboxMessage {
   id: number;
   source: string;
@@ -155,6 +145,7 @@ export interface InboxMessage {
   from_addr: string;
   from_name: string;
   subject: string;
+  snippet: string;
   received_at: string;
   read: boolean;
 }
@@ -792,22 +783,22 @@ export function createApi(
     await requestData<unknown>('/api/v1/me/gmail/sync', { method: 'POST' });
   }
 
-  /** A page of the inbox grouped by normalized subject, newest group first, with
-   *  the total group count. Optional search term filters by message subject,
-   *  sender, or body; optional source narrows to one account (the switcher). */
+  /** A page of the flat inbox listing, newest first, with the total message count.
+   *  Optional search term filters by subject, sender, or body; optional source
+   *  narrows to one account (the switcher). */
   async function getInbox(
     q = '',
     limit = 20,
     offset = 0,
     source: InboxSource = '',
-  ): Promise<{ groups: InboxGroup[]; total: number }> {
+  ): Promise<{ messages: InboxMessage[]; total: number }> {
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (q) params.set('q', q);
     if (source) params.set('source', source);
-    const res = await request<{ data: InboxGroup[]; meta: { total: number } }>(
+    const res = await request<{ data: InboxMessage[]; meta: { total: number } }>(
       `/api/v1/me/inbox?${params.toString()}`,
     );
-    return { groups: res.data, total: res.meta.total };
+    return { messages: res.data, total: res.meta.total };
   }
 
   /** The caller's hosted-mailbox address (or null) + feature availability. */
@@ -823,11 +814,6 @@ export function createApi(
   /** Release the hosted mailbox: drop the address and purge its received mail. */
   async function releaseMailbox(): Promise<MailboxStatus> {
     return requestData<MailboxStatus>('/api/v1/me/mailbox', { method: 'DELETE' });
-  }
-
-  /** One subject group's messages, newest first. */
-  async function getInboxGroup(key: string): Promise<InboxMessage[]> {
-    return requestData<InboxMessage[]>(`/api/v1/me/inbox/group?key=${encodeURIComponent(key)}`);
   }
 
   /** One message's full body. */
@@ -913,7 +899,6 @@ export function createApi(
     claimMailbox,
     releaseMailbox,
     getInbox,
-    getInboxGroup,
     getEmail,
   };
 }

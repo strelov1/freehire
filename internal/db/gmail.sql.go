@@ -11,8 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const countInboxGroups = `-- name: CountInboxGroups :one
-SELECT count(DISTINCT subject_norm)
+const countEmails = `-- name: CountEmails :one
+SELECT count(*)
 FROM emails
 WHERE user_id = $1
   AND ($2::text = '' OR source = $2)
@@ -25,16 +25,15 @@ WHERE user_id = $1
   )
 `
 
-type CountInboxGroupsParams struct {
+type CountEmailsParams struct {
 	UserID int64  `json:"user_id"`
 	Src    string `json:"src"`
 	Q      string `json:"q"`
 }
 
-// Total distinct subject groups for the caller (same optional source + search),
-// so the inbox knows whether more pages remain.
-func (q *Queries) CountInboxGroups(ctx context.Context, arg CountInboxGroupsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countInboxGroups, arg.UserID, arg.Src, arg.Q)
+// Total messages for the caller (same optional source + search), for pagination.
+func (q *Queries) CountEmails(ctx context.Context, arg CountEmailsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countEmails, arg.UserID, arg.Src, arg.Q)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -191,67 +190,10 @@ func (q *Queries) ListConnectedGmailUsers(ctx context.Context) ([]ListConnectedG
 	return items, nil
 }
 
-const listEmailsByGroup = `-- name: ListEmailsByGroup :many
-SELECT id, source, external_id, from_addr, from_name, subject, received_at,
-    (read_at IS NOT NULL)::boolean AS read
-FROM emails
-WHERE user_id = $1 AND subject_norm = $2
-ORDER BY received_at DESC
-`
-
-type ListEmailsByGroupParams struct {
-	UserID      int64  `json:"user_id"`
-	SubjectNorm string `json:"subject_norm"`
-}
-
-type ListEmailsByGroupRow struct {
-	ID         int64              `json:"id"`
-	Source     string             `json:"source"`
-	ExternalID string             `json:"external_id"`
-	FromAddr   string             `json:"from_addr"`
-	FromName   string             `json:"from_name"`
-	Subject    string             `json:"subject"`
-	ReceivedAt pgtype.Timestamptz `json:"received_at"`
-	Read       bool               `json:"read"`
-}
-
-func (q *Queries) ListEmailsByGroup(ctx context.Context, arg ListEmailsByGroupParams) ([]ListEmailsByGroupRow, error) {
-	rows, err := q.db.Query(ctx, listEmailsByGroup, arg.UserID, arg.SubjectNorm)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListEmailsByGroupRow{}
-	for rows.Next() {
-		var i ListEmailsByGroupRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Source,
-			&i.ExternalID,
-			&i.FromAddr,
-			&i.FromName,
-			&i.Subject,
-			&i.ReceivedAt,
-			&i.Read,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listInboxGroups = `-- name: ListInboxGroups :many
-SELECT
-    subject_norm,
-    count(*)                                                   AS message_count,
-    count(*) FILTER (WHERE read_at IS NULL)                    AS unread_count,
-    max(received_at)::timestamptz                              AS latest_received,
-    ((array_agg(subject ORDER BY received_at DESC))[1])::text  AS latest_subject,
-    array_remove(array_agg(DISTINCT from_name), '')::text[]    AS senders
+const listEmails = `-- name: ListEmails :many
+SELECT id, source, external_id, from_addr, from_name, subject,
+    left(regexp_replace(body_text, E'\\s+', ' ', 'g'), 160)::text AS snippet,
+    received_at, (read_at IS NOT NULL)::boolean AS read
 FROM emails
 WHERE user_id = $1
   AND ($2::text = '' OR source = $2)
@@ -262,12 +204,11 @@ WHERE user_id = $1
     OR from_addr ILIKE '%' || $3 || '%'
     OR body_text ILIKE '%' || $3 || '%'
   )
-GROUP BY subject_norm
-ORDER BY max(received_at) DESC
+ORDER BY received_at DESC, id DESC
 LIMIT $5 OFFSET $4
 `
 
-type ListInboxGroupsParams struct {
+type ListEmailsParams struct {
 	UserID int64  `json:"user_id"`
 	Src    string `json:"src"`
 	Q      string `json:"q"`
@@ -275,22 +216,24 @@ type ListInboxGroupsParams struct {
 	Lim    int32  `json:"lim"`
 }
 
-type ListInboxGroupsRow struct {
-	SubjectNorm    string             `json:"subject_norm"`
-	MessageCount   int64              `json:"message_count"`
-	UnreadCount    int64              `json:"unread_count"`
-	LatestReceived pgtype.Timestamptz `json:"latest_received"`
-	LatestSubject  string             `json:"latest_subject"`
-	Senders        []string           `json:"senders"`
+type ListEmailsRow struct {
+	ID         int64              `json:"id"`
+	Source     string             `json:"source"`
+	ExternalID string             `json:"external_id"`
+	FromAddr   string             `json:"from_addr"`
+	FromName   string             `json:"from_name"`
+	Subject    string             `json:"subject"`
+	Snippet    string             `json:"snippet"`
+	ReceivedAt pgtype.Timestamptz `json:"received_at"`
+	Read       bool               `json:"read"`
 }
 
-// One row per normalized subject: total + unread counts, newest receipt, distinct
-// sender names, and the newest message's original subject for display. An optional
-// source filter (empty = all accounts) narrows to one source; an optional search
-// term (empty = no filter) matches a message's subject, sender, or body — a group
-// surfaces when any of its messages matches.
-func (q *Queries) ListInboxGroups(ctx context.Context, arg ListInboxGroupsParams) ([]ListInboxGroupsRow, error) {
-	rows, err := q.db.Query(ctx, listInboxGroups,
+// Flat inbox listing, newest first — one row per message (no subject grouping).
+// An optional source filter (empty = all accounts) narrows to one source; an
+// optional search term (empty = no filter) matches subject, sender, or body. The
+// snippet is the body's leading text with whitespace collapsed, for the list row.
+func (q *Queries) ListEmails(ctx context.Context, arg ListEmailsParams) ([]ListEmailsRow, error) {
+	rows, err := q.db.Query(ctx, listEmails,
 		arg.UserID,
 		arg.Src,
 		arg.Q,
@@ -301,16 +244,19 @@ func (q *Queries) ListInboxGroups(ctx context.Context, arg ListInboxGroupsParams
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListInboxGroupsRow{}
+	items := []ListEmailsRow{}
 	for rows.Next() {
-		var i ListInboxGroupsRow
+		var i ListEmailsRow
 		if err := rows.Scan(
-			&i.SubjectNorm,
-			&i.MessageCount,
-			&i.UnreadCount,
-			&i.LatestReceived,
-			&i.LatestSubject,
-			&i.Senders,
+			&i.ID,
+			&i.Source,
+			&i.ExternalID,
+			&i.FromAddr,
+			&i.FromName,
+			&i.Subject,
+			&i.Snippet,
+			&i.ReceivedAt,
+			&i.Read,
 		); err != nil {
 			return nil, err
 		}

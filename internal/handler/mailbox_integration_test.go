@@ -93,11 +93,11 @@ func TestHostedMailboxEndToEnd(t *testing.T) {
 		t.Fatalf("seed hosted email: %v", err)
 	}
 	if _, body := do("GET", "/api/v1/me/inbox"); func() bool { g, _ := body["data"].([]any); return len(g) != 2 }() {
-		t.Error("inbox should list 2 groups (gmail + hosted)")
+		t.Error("inbox should list 2 messages (gmail + hosted)")
 	}
 	// Source filter narrows to the hosted account only.
 	if _, body := do("GET", "/api/v1/me/inbox?source=hosted"); func() bool { g, _ := body["data"].([]any); return len(g) != 1 }() {
-		t.Error("hosted filter should list 1 group")
+		t.Error("hosted filter should list 1 message")
 	}
 
 	// Release purges hosted mail + the mailbox; Gmail mail survives.

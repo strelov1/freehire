@@ -118,9 +118,8 @@ type Querier interface {
 	// so search/filter pagination reports the filtered total. Keep this WHERE identical
 	// to ListCompanies.
 	CountCompanies(ctx context.Context, arg CountCompaniesParams) (int64, error)
-	// Total distinct subject groups for the caller (same optional source + search),
-	// so the inbox knows whether more pages remain.
-	CountInboxGroups(ctx context.Context, arg CountInboxGroupsParams) (int64, error)
+	// Total messages for the caller (same optional source + search), for pagination.
+	CountEmails(ctx context.Context, arg CountEmailsParams) (int64, error)
 	// Per-stage application counts for the Pipeline snapshot. An application is any
 	// row the user applied to or staged (saved-only rows are excluded); a row with
 	// applied_at set but no stage groups under a NULL stage. The Go layer folds these
@@ -395,13 +394,11 @@ type Querier interface {
 	ListCompanySitemap(ctx context.Context, arg ListCompanySitemapParams) ([]ListCompanySitemapRow, error)
 	// Drives the sync worker: every connection still authorized.
 	ListConnectedGmailUsers(ctx context.Context) ([]ListConnectedGmailUsersRow, error)
-	ListEmailsByGroup(ctx context.Context, arg ListEmailsByGroupParams) ([]ListEmailsByGroupRow, error)
-	// One row per normalized subject: total + unread counts, newest receipt, distinct
-	// sender names, and the newest message's original subject for display. An optional
-	// source filter (empty = all accounts) narrows to one source; an optional search
-	// term (empty = no filter) matches a message's subject, sender, or body — a group
-	// surfaces when any of its messages matches.
-	ListInboxGroups(ctx context.Context, arg ListInboxGroupsParams) ([]ListInboxGroupsRow, error)
+	// Flat inbox listing, newest first — one row per message (no subject grouping).
+	// An optional source filter (empty = all accounts) narrows to one source; an
+	// optional search term (empty = no filter) matches subject, sender, or body. The
+	// snippet is the body's leading text with whitespace collapsed, for the list row.
+	ListEmails(ctx context.Context, arg ListEmailsParams) ([]ListEmailsRow, error)
 	// Dense activity series over [from, to] at the given granularity. A daily
 	// generate_series builds the gap-free calendar; the LEFT JOIN fills each day's
 	// counts (missing days → 0), and date_trunc(unit, ...) rolls those days up to the

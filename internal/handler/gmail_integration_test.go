@@ -1,7 +1,7 @@
 //go:build integration
 
 // Integration tests for the Gmail inbox HTTP flow against a real Postgres: the
-// inbox groups mail by normalized subject (Re:/Fwd: folded), a message body is
+// inbox is a flat per-user message list (search filters it), a message body is
 // caller-scoped (another user's is a 404), and disconnect purges the connection
 // and all synced mail. Run with: go test -tags=integration ./internal/handler/
 package handler
@@ -13,7 +13,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
 	"time"
 
@@ -62,7 +61,6 @@ func TestGmailInboxEndToEnd(t *testing.T) {
 	app.Get("/api/v1/me/gmail", ra, h.GmailStatus)
 	app.Delete("/api/v1/me/gmail", ra, h.GmailDisconnect)
 	app.Get("/api/v1/me/inbox", ra, h.GetInbox)
-	app.Get("/api/v1/me/inbox/group", ra, h.GetInboxGroup)
 	app.Get("/api/v1/me/emails/:id", ra, h.GetEmail)
 
 	do := func(method, path string) (int, map[string]any) {
@@ -85,32 +83,17 @@ func TestGmailInboxEndToEnd(t *testing.T) {
 		t.Errorf("status data = %v", body["data"])
 	}
 
-	// Inbox: two groups; the applying group folds m1+m2 (count 2).
+	// Inbox: a flat list of this user's three messages (m1, m2, m3); m4 is another
+	// user's and must not appear.
 	_, body := do("GET", "/api/v1/me/inbox")
-	groups, _ := body["data"].([]any)
-	if len(groups) != 2 {
-		t.Fatalf("groups = %d, want 2", len(groups))
-	}
-	var applyCount float64
-	for _, g := range groups {
-		if gm, _ := g.(map[string]any); gm["key"] == "thank you for applying to acme" {
-			applyCount, _ = gm["message_count"].(float64)
-		}
-	}
-	if applyCount != 2 {
-		t.Errorf("apply group count = %v, want 2", applyCount)
+	if msgs, _ := body["data"].([]any); len(msgs) != 3 {
+		t.Fatalf("messages = %d, want 3", len(msgs))
 	}
 
-	// Group thread: two messages.
-	_, body = do("GET", "/api/v1/me/inbox/group?key="+url.QueryEscape("thank you for applying to acme"))
-	if msgs, _ := body["data"].([]any); len(msgs) != 2 {
-		t.Errorf("group messages = %d, want 2", len(msgs))
-	}
-
-	// Search: "interview" matches only the interview group.
+	// Search: "interview" matches only m3.
 	_, body = do("GET", "/api/v1/me/inbox?q=interview")
-	if g, _ := body["data"].([]any); len(g) != 1 {
-		t.Errorf("search 'interview' groups = %d, want 1", len(g))
+	if m, _ := body["data"].([]any); len(m) != 1 {
+		t.Errorf("search 'interview' messages = %d, want 1", len(m))
 	}
 
 	// Message body, caller-scoped.
