@@ -3,6 +3,7 @@
   import { Bell, UserRound } from '@lucide/svelte';
   import { FACETS } from '$lib/facets';
   import { isAuthenticated } from '$lib/auth.svelte';
+  import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { profileStore } from '$lib/profile.svelte';
   import { notifications } from '$lib/notifications.svelte';
   import { emptyFilters, type FilterStore, type JobFilters } from '$lib/filters';
@@ -88,12 +89,13 @@
     }
   });
 
-  // The header "Apply my profile" affordance shows only on the full job modal (same scope
-  // as the My-filters tab) for a signed-in user, once the profile load has settled (so a
-  // user who has a profile never flashes the "create" link while it loads): the
-  // profile-derived Apply button when a profile exists, a create-profile link when it
-  // doesn't. Signed-out — or a failed load — shows neither.
-  const showProfileAction = $derived(hasSavedTab && isAuthenticated() && profileStore.loaded);
+  // The header "Apply my profile" affordance shows on the full job modal (same scope as
+  // the My-filters tab). Signed-out: the button still shows and its click opens the
+  // sign-in dialog (apply after auth). Signed-in: gated on the profile load having
+  // settled (so a user who has a profile never flashes the "create" link while it
+  // loads) — the profile-derived Apply button when a profile exists, a create-profile
+  // link when it doesn't.
+  const showProfileAction = $derived(hasSavedTab && (!isAuthenticated() || profileStore.loaded));
   const profile = $derived(profileStore.profile);
 
   // The footer nudge shows only when the My-filters tab exists (so the jump lands
@@ -187,11 +189,12 @@
 />
 
 {#snippet profileAction()}
-  {#if profile}
+  {#if !isAuthenticated() || profile}
+    <!-- Signed-out: click opens the sign-in dialog; signed-in with a profile: applies it. -->
     <button
       type="button"
-      onclick={() => staged.applyProfile(profile)}
-      class="flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+      onclick={() => (profile ? staged.applyProfile(profile) : openAuthDialog('login'))}
+      class="flex h-9 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90"
     >
       <UserRound class="size-4 shrink-0" aria-hidden="true" />
       Apply my profile
@@ -213,10 +216,10 @@
 
 {#snippet footerNote({ jumpTo, activeKey }: { jumpTo: (key: string) => void; activeKey: string })}
   {#if showSaveNudge && activeKey !== 'saved'}
-    <p class="flex items-center gap-1.5 text-xs text-muted-foreground">
+    <p class="flex items-center justify-end gap-1.5 text-xs text-muted-foreground">
       <Bell class="size-3.5 shrink-0" aria-hidden="true" />
       <span>
-        Want new jobs for this search in Telegram?
+        Want new jobs for this search via Email/Telegram?
         <button
           type="button"
           onclick={() => jumpTo('saved')}
