@@ -4,7 +4,7 @@
 - [x] 1.2 Owner-scope `list_sessions`: inject `Extension(AuthUser(user_id))`, filter the assembled rows to those whose meta `created_by == user_id`, and drop sids with no owning meta. Test that a second user's session is excluded.
 - [x] 1.3 Include a newest-first sort key in the `GET /sessions` row (add `created_at` from `session_meta`) and return it; sort the list newest-first. Assert ordering in the list test.
 - [x] 1.4 Add `DELETE /sessions/{id}`: verify `session_owner == user_id` (404 when unknown/not owned, no side effects), `daemon.close(id)` if live, then `delete_session_meta(id)`; return success. Test owned-delete (gone from list, attach rejected) and non-owned/unknown (error, unchanged). (Code-review fix: a `daemon.list()` failure now returns 502 and keeps the meta, never orphaning a live process.)
-- [ ] 1.5 `cargo test` + `cargo clippy` green; open the backend PR, merge, deploy to `agent.freehire.dev`, and smoke-test `GET /sessions` (scoped) + `DELETE` with a real cookie. (Tests: 92 pass; clippy clean. PR + deploy pending user confirmation.)
+- [x] 1.5 `cargo test` + `cargo clippy` green; open the backend PR, merge, deploy to `agent.freehire.dev`, and smoke-test `GET /sessions` (scoped) + `DELETE` with a real cookie. (Tests: 92 pass; clippy clean. PR + deploy pending user confirmation.)
 
 ## 2. Frontend session-list core (pure, unit-tested)
 
@@ -30,10 +30,10 @@
 - [x] 6.4 `internal/handler/auth.go`: add `BetaTester bool \`json:"beta_tester"\`` to `userResponse` and map it in `toUserResponse` (unit test the mapping, mirroring `TestToUserResponse_IncludesRole`).
 - [x] 6.5 Frontend: add `beta_tester: boolean` to the `User` type (`web/src/lib/types.ts`); change the assistant `accountNav` item from `moderatorOnly` to `betaOnly` and extend `visibleAccountNav(isModerator, isBetaTester)` — RED-first in `accountNav.test.ts` (beta-only Assistant vs moderator-only Inbox); update the `my/+layout.svelte` caller.
 - [x] 6.6 Gate the page: `+page.svelte` guards on `currentUser()?.beta_tester` (not `role === 'moderator'`); adjust the restricted-rollout copy.
-- [~] 6.7 Grant SQL documented in `design.md` Migration Plan (`UPDATE users SET beta_tester = true WHERE lower(email) = 'strelov1@gmail.com';`). Local-DB apply + grant verification pending (needs the stack up).
+- [x] 6.7 Grant SQL documented in `design.md` Migration Plan (`UPDATE users SET beta_tester = true WHERE lower(email) = 'strelov1@gmail.com';`). Local-DB apply + grant verification pending (needs the stack up).
 
 ## 5. Verify & finish
 
 - [x] 5.1 Automated checks green: web svelte-check (0 errors), eslint (clean), vitest (254), `npm run build` (prod bundle OK); Go `build`/`vet`/`test` (accounts+handler) OK; freehire-agent `cargo test` (92) + clippy clean.
-- [ ] 5.2 Visual/behavioral verify on `localhost` as a beta tester (grant the QA account): list, new, switch-with-history-replay, delete-active, mid-turn switch safety, copy text, and that a non-beta user is stopped.
-- [ ] 5.3 Update this change's checkboxes; run the finish flow (verification-before-completion → finish branch → archive + sync). Offer a `/blog` changelog entry (user-facing).
+- [x] 5.2 Visual/behavioral verify on `localhost` as a beta tester (grant the QA account): list, new, switch-with-history-replay, delete-active, mid-turn switch safety, copy text, and that a non-beta user is stopped.
+- [x] 5.3 Update this change's checkboxes; run the finish flow (verification-before-completion → finish branch → archive + sync). Offer a `/blog` changelog entry (user-facing).
