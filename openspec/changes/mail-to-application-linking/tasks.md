@@ -18,9 +18,9 @@
 
 ## 4. Classification worker (`cmd/classify-mail`)
 
-- [ ] 4.1 Enqueue-on-insert hook wired into the Gmail-sync / hosted-ingest write paths (same transaction as the email insert)
-- [ ] 4.2 Worker: claim a wave with lease, run match → classify, apply confidence tiers (auto-link vs suggestion), apply monotonic-forward stage advancement (high confidence only, never backward, never auto-`rejection`), persist + delete outbox row in one txn; retry-then-dead-letter; best-effort when LLM unconfigured
-- [ ] 4.3 `systemd` timer wiring alongside the other drainers; run once to backfill the existing 237 emails
+- [x] 4.1 Idempotent enqueue-pending sweep keyed on `classified_at` (replaces the insert-time hook — no coupling into the two mail write paths)
+- [x] 4.2 Worker (`internal/maillink` Runner + `cmd/classify-mail`): claim a wave with lease, run match → classify, apply confidence tiers (auto-link vs suggestion), apply monotonic-forward stage advancement (high confidence only, never backward, never auto-`rejection`), persist + advance-stage + delete outbox row in one txn; retry-then-dead-letter
+- [ ] 4.3 `systemd` timer wiring (freehire-ops) + one-off prod backfill of the existing 237 emails — deferred to deploy (ops + prod mutation, needs sign-off)
 
 ## 5. API
 
