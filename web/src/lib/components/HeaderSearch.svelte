@@ -176,7 +176,7 @@
 
 <svelte:window onkeydown={onWindowKeydown} onclick={onWindowClick} />
 
-<div bind:this={wrapEl} class="relative flex-1">
+<div bind:this={wrapEl} class="relative min-w-0 flex-1">
   <!-- Search box -->
   <div
     class="flex h-11 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm focus-within:ring-2 focus-within:ring-ring"
