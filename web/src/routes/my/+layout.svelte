@@ -6,6 +6,7 @@
   import { resolve } from '$app/paths';
   import {
     User,
+    Bot,
     LayoutList,
     Activity,
     Bell,
@@ -51,6 +52,7 @@
   // without an icon is a compile error, not a runtime `<undefined />`.
   const icons: Record<AccountNavItem['href'], LucideIcon> = {
     '/my/profile': User,
+    '/my/assistant': Bot,
     '/my/tracking': LayoutList,
     '/my/activity': Activity,
     '/my/inbox': Inbox,

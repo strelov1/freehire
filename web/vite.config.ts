@@ -48,6 +48,17 @@ export default defineConfig({
         target: process.env.VITE_API_URL ?? 'http://localhost:8080',
         changeOrigin: true,
       },
+      // The freehire-agent backend (roy management on :8079), reached same-origin
+      // so the assistant chat's httpOnly cookie is sent and the `/ws` upgrade has
+      // no CORS. `ws:true` forwards the WebSocket; the rewrite strips the prefix
+      // so `/assistant-api/ws` → backend `/ws`, `/assistant-api/auth/login` →
+      // `/auth/login`. Prod wiring (an nginx location) is a later seam.
+      '/assistant-api': {
+        target: process.env.VITE_ASSISTANT_API_URL ?? 'http://127.0.0.1:8079',
+        changeOrigin: true,
+        ws: true,
+        rewrite: (path) => path.replace(/^\/assistant-api/, ''),
+      },
     },
   },
 });

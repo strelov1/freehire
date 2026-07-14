@@ -9,6 +9,8 @@
 // HeaderMenu's navLinks).
 export const accountNav = [
   { href: '/my/profile', label: 'Profile' },
+  // Assistant is a restricted rollout — moderators only for now.
+  { href: '/my/assistant', label: 'Assistant', moderatorOnly: true },
   { href: '/my/tracking', label: 'Tracking' },
   { href: '/my/activity', label: 'Activity' },
   // Mail inbox is a restricted rollout — moderators only (the server 403s others).
