@@ -1,9 +1,9 @@
 <script lang="ts">
-  // The FreeHire brand mark — a ring enclosing a diamond. `fill="currentColor"`
+  // The freehire brand mark — a ring enclosing a diamond. `fill="currentColor"`
   // makes it track the theme (dark mark on light, light mark on dark), exactly
   // like the wordmark beside it. Shared by the desktop header (TopBar) and the
   // mobile drawer (HeaderMenu) so the geometry lives in one place. aria-hidden:
-  // callers pair it with the visible "FreeHire" text, which names the link. The
+  // callers pair it with the visible "freehire" text, which names the link. The
   // OG-image copy in server/og/shared.ts is a separately rendered PNG (satori)
   // and intentionally does not route through here.
   let { class: cls = 'size-5 shrink-0' }: { class?: string } = $props();

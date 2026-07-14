@@ -133,7 +133,7 @@
         </h1>
 
         <p class="reveal mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground" style="--d:160ms">
-          FreeHire pulls openings straight from company career boards, strips the duplicates, and tags each
+          Freehire pulls openings straight from company career boards, strips the duplicates, and tags each
           one with stack, seniority and location — so you search jobs, not job boards.
         </p>
 

@@ -39,7 +39,7 @@
         </h1>
 
         <p class="reveal mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground" style="--d:160ms">
-          <span class="text-foreground">FreeHire GPT</span> is a custom GPT wired to the same job API the
+          <span class="text-foreground">freehire GPT</span> is a custom GPT wired to the same job API the
           site runs on. Ask for jobs in plain language and it searches the live
           <code class="font-mono text-foreground">freehire</code> catalogue — then saves, applies and tracks
           them on your account. (You still apply on the employer's site; the GPT records that you did.)
@@ -47,7 +47,7 @@
 
         <div class="reveal mt-9 flex flex-wrap items-center gap-3" style="--d:240ms">
           <Button href={GPT_URL} target="_blank" rel="noopener noreferrer" variant="primary" size="lg">
-            Open FreeHire GPT ↗
+            Open freehire GPT ↗
           </Button>
           <Button href={resolve('/my/api-keys')} variant="outline" size="lg">Get an API key</Button>
         </div>
@@ -61,7 +61,7 @@
           class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground"
         >
           <span class="size-2.5 rounded-full bg-muted-foreground/30"></span>
-          ChatGPT · FreeHire
+          ChatGPT · freehire
         </figcaption>
         <div class="flex flex-col gap-4 p-4 leading-relaxed">
           <div class="self-end max-w-[85%] rounded-2xl rounded-br-sm bg-foreground px-3.5 py-2 text-background">
@@ -125,7 +125,7 @@
     <ol class="mt-6 max-w-2xl space-y-3 text-sm leading-relaxed text-muted-foreground">
       <li>
         <span class="font-medium text-foreground">1.</span>
-        <a href={GPT_URL} target="_blank" rel="noopener noreferrer" class="font-medium text-foreground underline-offset-4 hover:underline">Open FreeHire GPT</a>
+        <a href={GPT_URL} target="_blank" rel="noopener noreferrer" class="font-medium text-foreground underline-offset-4 hover:underline">Open freehire GPT</a>
         and start asking for jobs — search needs no setup.
       </li>
       <li>

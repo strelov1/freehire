@@ -76,7 +76,7 @@
       class="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-tight"
     >
       <BrandMark />
-      <span class="hidden sm:inline">FreeHire</span>
+      <span class="hidden sm:inline">freehire</span>
     </a>
 
     {#if listKind === 'jobs' || listKind === 'company'}
