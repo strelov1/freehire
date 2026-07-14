@@ -30,10 +30,10 @@
 - [x] 6.4 `internal/handler/auth.go`: add `BetaTester bool \`json:"beta_tester"\`` to `userResponse` and map it in `toUserResponse` (unit test the mapping, mirroring `TestToUserResponse_IncludesRole`).
 - [x] 6.5 Frontend: add `beta_tester: boolean` to the `User` type (`web/src/lib/types.ts`); change the assistant `accountNav` item from `moderatorOnly` to `betaOnly` and extend `visibleAccountNav(isModerator, isBetaTester)` — RED-first in `accountNav.test.ts` (beta-only Assistant vs moderator-only Inbox); update the `my/+layout.svelte` caller.
 - [x] 6.6 Gate the page: `+page.svelte` guards on `currentUser()?.beta_tester` (not `role === 'moderator'`); adjust the restricted-rollout copy.
-- [ ] 6.7 Document the manual grant SQL in the change/deploy notes: `UPDATE users SET beta_tester = true WHERE lower(email) = 'strelov1@gmail.com';` (apply to prod manually, like migrations). Apply the migration + grant to the local DB for verification.
+- [~] 6.7 Grant SQL documented in `design.md` Migration Plan (`UPDATE users SET beta_tester = true WHERE lower(email) = 'strelov1@gmail.com';`). Local-DB apply + grant verification pending (needs the stack up).
 
 ## 5. Verify & finish
 
-- [ ] 5.1 `npm run` checks that gate/apply locally (svelte-check + eslint + vitest for `sessions.ts`/`accountNav`) and `go build ./... && go vet ./... && go test ./...`; builds pass.
+- [x] 5.1 Automated checks green: web svelte-check (0 errors), eslint (clean), vitest (254), `npm run build` (prod bundle OK); Go `build`/`vet`/`test` (accounts+handler) OK; freehire-agent `cargo test` (92) + clippy clean.
 - [ ] 5.2 Visual/behavioral verify on `localhost` as a beta tester (grant the QA account): list, new, switch-with-history-replay, delete-active, mid-turn switch safety, copy text, and that a non-beta user is stopped.
 - [ ] 5.3 Update this change's checkboxes; run the finish flow (verification-before-completion → finish branch → archive + sync). Offer a `/blog` changelog entry (user-facing).
