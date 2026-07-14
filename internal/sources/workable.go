@@ -33,6 +33,7 @@ func (w workable) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			State         string `json:"state"`
 			Country       string `json:"country"`
 			Telecommuting bool   `json:"telecommuting"`
+			Type          string `json:"type"`
 		} `json:"jobs"`
 	}
 	if err := w.http.GetJSON(ctx, url, &resp); err != nil {
@@ -42,16 +43,34 @@ func (w workable) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	jobs := make([]Job, 0, len(resp.Jobs))
 	for _, j := range resp.Jobs {
 		jobs = append(jobs, Job{
-			ExternalID:  j.Shortcode,
-			URL:         j.URL,
-			Title:       j.Title,
-			Company:     e.Company,
-			Location:    joinNonEmpty(j.City, j.State, j.Country),
-			Description: sanitizeHTML(j.Description),
-			Remote:      j.Telecommuting,
-			WorkMode:    workModeFromRemote(j.Telecommuting),
-			PostedAt:    parseDate(j.PublishedOn),
+			ExternalID:     j.Shortcode,
+			URL:            j.URL,
+			Title:          j.Title,
+			Company:        e.Company,
+			Location:       joinNonEmpty(j.City, j.State, j.Country),
+			Description:    sanitizeHTML(j.Description),
+			Remote:         j.Telecommuting,
+			WorkMode:       workModeFromRemote(j.Telecommuting),
+			PostedAt:       parseDate(j.PublishedOn),
+			EmploymentType: workableEmploymentType(j.Type),
 		})
 	}
 	return jobs, nil
+}
+
+// workableEmploymentType maps Workable's widget "type" onto the freehire vocabulary,
+// returning "" for "Other"/absent so the description parser decides.
+func workableEmploymentType(t string) string {
+	switch t {
+	case "Full-time":
+		return "full_time"
+	case "Part-time":
+		return "part_time"
+	case "Contract", "Temporary":
+		return "contract"
+	case "Internship":
+		return "internship"
+	default:
+		return ""
+	}
 }

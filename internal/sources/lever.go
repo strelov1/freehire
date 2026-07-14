@@ -46,7 +46,8 @@ func (l lever) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			Content string `json:"content"`
 		} `json:"lists"`
 		Categories struct {
-			Location string `json:"location"`
+			Location   string `json:"location"`
+			Commitment string `json:"commitment"`
 		} `json:"categories"`
 	}
 	if err := l.http.GetJSON(ctx, url, &postings); err != nil {
@@ -71,16 +72,37 @@ func (l lever) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		body.WriteString(p.Additional)
 
 		jobs = append(jobs, Job{
-			ExternalID:  p.ID,
-			URL:         p.HostedURL,
-			Title:       p.Text,
-			Company:     e.Company,
-			Location:    p.Categories.Location,
-			Description: sanitizeHTML(body.String()),
-			Remote:      isRemote(p.Categories.Location),
-			WorkMode:    workplaceTypeMode(p.WorkplaceType),
-			PostedAt:    parseEpochMillis(p.CreatedAt),
+			ExternalID:     p.ID,
+			URL:            p.HostedURL,
+			Title:          p.Text,
+			Company:        e.Company,
+			Location:       p.Categories.Location,
+			Description:    sanitizeHTML(body.String()),
+			Remote:         isRemote(p.Categories.Location),
+			WorkMode:       workplaceTypeMode(p.WorkplaceType),
+			PostedAt:       parseEpochMillis(p.CreatedAt),
+			EmploymentType: leverEmploymentType(p.Categories.Commitment),
 		})
 	}
 	return jobs, nil
+}
+
+// leverEmploymentType maps Lever's free-text categories.commitment (a per-company label
+// like "Regular Full-Time" or "Full-Time Maintenance") onto the freehire vocabulary via
+// keyword containment, in priority order. An unrecognized/ambiguous value (e.g. "Variable
+// Hour") maps to "" so the description parser decides — structured signal only, never a guess.
+func leverEmploymentType(commitment string) string {
+	c := strings.ToLower(commitment)
+	switch {
+	case strings.Contains(c, "intern"):
+		return "internship"
+	case strings.Contains(c, "part-time") || strings.Contains(c, "part time"):
+		return "part_time"
+	case strings.Contains(c, "full-time") || strings.Contains(c, "full time"):
+		return "full_time"
+	case strings.Contains(c, "contract") || strings.Contains(c, "temporary") || strings.Contains(c, "seasonal"):
+		return "contract"
+	default:
+		return ""
+	}
 }

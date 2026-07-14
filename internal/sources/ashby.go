@@ -31,6 +31,7 @@ func (a ashby) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			PublishedAt     string `json:"publishedAt"`
 			DescriptionHTML string `json:"descriptionHtml"`
 			IsRemote        bool   `json:"isRemote"`
+			EmploymentType  string `json:"employmentType"`
 		} `json:"jobs"`
 	}
 	if err := a.http.GetJSON(ctx, url, &resp); err != nil {
@@ -40,16 +41,34 @@ func (a ashby) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	jobs := make([]Job, 0, len(resp.Jobs))
 	for _, j := range resp.Jobs {
 		jobs = append(jobs, Job{
-			ExternalID:  j.ID,
-			URL:         j.JobURL,
-			Title:       j.Title,
-			Company:     e.Company,
-			Location:    j.Location,
-			Description: sanitizeHTML(j.DescriptionHTML),
-			Remote:      j.IsRemote,
-			WorkMode:    workModeFromRemote(j.IsRemote),
-			PostedAt:    parseRFC3339(j.PublishedAt),
+			ExternalID:     j.ID,
+			URL:            j.JobURL,
+			Title:          j.Title,
+			Company:        e.Company,
+			Location:       j.Location,
+			Description:    sanitizeHTML(j.DescriptionHTML),
+			Remote:         j.IsRemote,
+			WorkMode:       workModeFromRemote(j.IsRemote),
+			PostedAt:       parseRFC3339(j.PublishedAt),
+			EmploymentType: ashbyEmploymentType(j.EmploymentType),
 		})
 	}
 	return jobs, nil
+}
+
+// ashbyEmploymentType maps Ashby's employmentType enum onto the freehire vocabulary,
+// returning "" for an unknown/absent value so the description parser decides.
+func ashbyEmploymentType(t string) string {
+	switch t {
+	case "FullTime":
+		return "full_time"
+	case "PartTime":
+		return "part_time"
+	case "Contract", "Temporary":
+		return "contract"
+	case "Intern", "Internship":
+		return "internship"
+	default:
+		return ""
+	}
 }
