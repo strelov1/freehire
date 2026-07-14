@@ -30,9 +30,14 @@ type bairesDevHTTP interface {
 }
 
 const (
-	bairesDevListURL   = "https://talent.bairesdev.com/"
-	bairesDevJobAPIURL = "https://applicants.bairesdev.com/api/JobPosting?JobPostingId=%s"
-	bairesDevApplyURL  = "https://applicants.bairesdev.com/job/%s/%s/apply"
+	bairesDevListURL = "https://talent.bairesdev.com/"
+	// bairesDevJobPostingURL is the SEO JSON-LD endpoint: clean title, real posted date, and
+	// remote flag, but only a short teaser description.
+	bairesDevJobPostingURL = "https://applicants.bairesdev.com/api/JobPosting?JobPostingId=%s"
+	// bairesDevJobDetailURL is the apply-flow endpoint: it carries the FULL HTML description
+	// (JobPosting's is truncated to a blurb), but no date/location, so the two are merged.
+	bairesDevJobDetailURL = "https://applicants.bairesdev.com/api/Job?JobOfferId=%s"
+	bairesDevApplyURL     = "https://applicants.bairesdev.com/job/%s/%s/apply"
 )
 
 // NewBairesDev builds the BairesDev adapter over the given HTTP client.
@@ -121,18 +126,26 @@ type bairesDevPosting struct {
 	} `json:"hiringOrganization"`
 }
 
-// detail hydrates one posting from the public JobPosting endpoint. The external id and URL match
-// the linksource adapter exactly, so a job crawled here and one followed from a Telegram link dedup
-// into a single row. ok=false (skip) when the id no longer resolves to a live posting.
+// detail hydrates one posting: the JobPosting endpoint supplies the clean title, real date, and
+// remote flag; the Job endpoint supplies the full description (JobPosting's is truncated). The
+// external id and URL match the linksource adapter exactly, so a job crawled here and one followed
+// from a Telegram link dedup into a single row. ok=false (skip) when the id no longer resolves to a
+// live posting.
 func (b bairesdev) detail(ctx context.Context, r bairesDevRef) (Job, bool) {
 	var p bairesDevPosting
-	if err := b.http.GetJSON(ctx, fmt.Sprintf(bairesDevJobAPIURL, r.jobID), &p); err != nil {
+	if err := b.http.GetJSON(ctx, fmt.Sprintf(bairesDevJobPostingURL, r.jobID), &p); err != nil {
 		return Job{}, false
 	}
 	if strings.TrimSpace(p.Title) == "" {
 		return Job{}, false // no live posting under this id
 	}
 
+	// The full description lives on the apply-flow endpoint; fall back to the JobPosting teaser
+	// when it is unavailable, so a Job-endpoint hiccup degrades the text instead of dropping the job.
+	desc := b.fullDescription(ctx, r.jobID)
+	if desc == "" {
+		desc = p.Description
+	}
 	// datePosted has no timezone (e.g. "2025-06-02T10:23:21.503"), so RFC3339 rejects it; fall
 	// back to the date alone, keeping the approximate posted_at.
 	posted := parseRFC3339(p.DatePosted)
@@ -152,9 +165,26 @@ func (b bairesdev) detail(ctx context.Context, r bairesDevRef) (Job, bool) {
 		URL:         fmt.Sprintf(bairesDevApplyURL, r.careerID, r.jobID),
 		Title:       p.Title,
 		Company:     company,
-		Description: sanitizeHTML(p.Description),
+		Description: sanitizeHTML(desc),
 		Remote:      mode == "remote",
 		WorkMode:    mode,
 		PostedAt:    posted,
 	}, true
+}
+
+// fullDescription reads the full HTML description from the apply-flow endpoint
+// (jobResults[0].description), or "" when the endpoint fails or carries no result.
+func (b bairesdev) fullDescription(ctx context.Context, jobID string) string {
+	var resp struct {
+		JobResults []struct {
+			Description string `json:"description"`
+		} `json:"jobResults"`
+	}
+	if err := b.http.GetJSON(ctx, fmt.Sprintf(bairesDevJobDetailURL, jobID), &resp); err != nil {
+		return ""
+	}
+	if len(resp.JobResults) == 0 {
+		return ""
+	}
+	return resp.JobResults[0].Description
 }

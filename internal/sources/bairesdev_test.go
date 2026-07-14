@@ -10,11 +10,13 @@ import (
 	"time"
 )
 
-// bairesDevFake routes the two calls the adapter makes: GetText → the talent listing HTML,
-// GetJSON → the per-job endpoint keyed by JobPostingId.
+// bairesDevFake routes the calls the adapter makes: GetText → the talent listing HTML, GetJSON →
+// the JobPosting endpoint (keyed by JobPostingId, for meta) and the Job endpoint (keyed by
+// JobOfferId, for the full description).
 type bairesDevFake struct {
 	listing string
 	jobs    map[string]string // JobPostingId → JSON-LD body
+	details map[string]string // JobOfferId → Job body (full description)
 }
 
 func (f *bairesDevFake) GetText(context.Context, string) (string, error) {
@@ -27,7 +29,12 @@ func (f *bairesDevFake) GetJSON(_ context.Context, url string, v any) error {
 			return json.Unmarshal([]byte(body), v)
 		}
 	}
-	return fmt.Errorf("bairesDevFake: no job for %s", url)
+	for id, body := range f.details {
+		if strings.Contains(url, "JobOfferId="+id) {
+			return json.Unmarshal([]byte(body), v)
+		}
+	}
+	return fmt.Errorf("bairesDevFake: no route for %s", url)
 }
 
 // bairesDevListingHTML wraps a widget config (built from the given apply URLs) in the one attribute
@@ -52,12 +59,17 @@ func TestBairesDevCrawlsListingDedupsAndHydrates(t *testing.T) {
 		),
 		jobs: map[string]string{
 			"284579": `{"@type":"JobPosting","title":"Sales Director - Remote Work",` +
-				`"description":"<p>Own it.</p><script>evil()</script>",` +
-				`"datePosted":"2025-06-02T10:23:21.503","jobLocationType":"TELECOMMUTE",` +
-				`"hiringOrganization":{"name":"BairesDev"}}`,
+				`"description":"Short teaser.","datePosted":"2025-06-02T10:23:21.503",` +
+				`"jobLocationType":"TELECOMMUTE","hiringOrganization":{"name":"BairesDev"}}`,
 			"176816": `{"@type":"JobPosting","title":"Node Developer",` +
 				`"description":"Build it.","datePosted":"2022-07-28T00:00:00",` +
 				`"jobLocationType":"TELECOMMUTE","hiringOrganization":{"name":"BairesDev"}}`,
+		},
+		// The Job endpoint carries the full HTML description (JobPosting's is a teaser). 284579 has
+		// one; 176816 does not (so it falls back to the teaser).
+		details: map[string]string{
+			"284579": `{"jobResults":[{"description":"<h3>Own it.</h3><p>The full role text.</p>` +
+				`<script>evil()</script>"}]}`,
 		},
 	}
 
@@ -89,8 +101,16 @@ func TestBairesDevCrawlsListingDedupsAndHydrates(t *testing.T) {
 	if !sd.Remote || sd.WorkMode != "remote" {
 		t.Errorf("Remote=%v WorkMode=%q, want remote for TELECOMMUTE", sd.Remote, sd.WorkMode)
 	}
-	if strings.Contains(sd.Description, "<script>") || !strings.Contains(sd.Description, "Own it.") {
-		t.Errorf("Description not sanitized: %q", sd.Description)
+	// The FULL description (Job endpoint) is used and sanitized, not the JobPosting teaser.
+	if strings.Contains(sd.Description, "<script>") || !strings.Contains(sd.Description, "The full role text.") {
+		t.Errorf("Description not the sanitized full text: %q", sd.Description)
+	}
+	if strings.Contains(sd.Description, "Short teaser.") {
+		t.Errorf("Description used the JobPosting teaser instead of the full Job text: %q", sd.Description)
+	}
+	// 176816 has no Job-endpoint detail → falls back to its JobPosting teaser.
+	if nd := byID["176816"]; !strings.Contains(nd.Description, "Build it.") {
+		t.Errorf("176816 Description = %q, want teaser fallback", nd.Description)
 	}
 	// datePosted has no timezone → date-only fallback.
 	if sd.PostedAt == nil || !sd.PostedAt.Equal(time.Date(2025, 6, 2, 0, 0, 0, 0, time.UTC)) {

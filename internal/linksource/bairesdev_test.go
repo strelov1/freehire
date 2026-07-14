@@ -19,10 +19,17 @@ const bairesDevPostingJSON = `{"@context":"https://schema.org","@type":"JobPosti
 	`"jobLocationType":"TELECOMMUTE","employmentType":"FULL_TIME",` +
 	`"hiringOrganization":{"@type":"Organization","name":"BairesDev","sameAs":"https://www.bairesdev.com"}}`
 
+// bairesDevJobJSON is the apply-flow endpoint's payload: the FULL HTML description (the JobPosting
+// block above carries only a teaser).
+const bairesDevJobJSON = `{"jobResults":[{"title":"Sales Director (Retail Background) - Remote Work",` +
+	`"description":"<h3>Own the deal.</h3><p>The full role responsibilities.</p><script>evil()</script>"}]}`
+
 func TestBairesDevResolvesFromApplyLink(t *testing.T) {
 	// A real apply link carries a career-site id, the job id, and tracking query params.
 	const link = "https://applicants.bairesdev.com/job/97/284579/apply?_gl=1*2opsly&lang=en"
-	c := (&fakeClient{}).route("JobPostingId=284579", bairesDevPostingJSON, "")
+	c := (&fakeClient{}).
+		route("JobPostingId=284579", bairesDevPostingJSON, "").
+		route("JobOfferId=284579", bairesDevJobJSON, "")
 
 	job, ok, err := NewBairesDev(c).Resolve(context.Background(), link)
 	if err != nil {
@@ -49,8 +56,9 @@ func TestBairesDevResolvesFromApplyLink(t *testing.T) {
 	if !job.Remote {
 		t.Error("Remote = false, want true for TELECOMMUTE")
 	}
-	if strings.Contains(job.Description, "<script>") || !strings.Contains(job.Description, "Own the deal.") {
-		t.Errorf("Description not sanitized: %q", job.Description)
+	// The FULL description (Job endpoint) is used and sanitized, not the JobPosting teaser.
+	if strings.Contains(job.Description, "<script>") || !strings.Contains(job.Description, "The full role responsibilities.") {
+		t.Errorf("Description not the sanitized full text: %q", job.Description)
 	}
 	// datePosted has no timezone, so it falls back to the date alone (posted_at is approximate).
 	if job.PostedAt == nil || !job.PostedAt.Equal(time.Date(2025, 6, 2, 0, 0, 0, 0, time.UTC)) {

@@ -67,6 +67,12 @@ func (b bairesdev) Resolve(ctx context.Context, raw string) (sources.Job, bool, 
 		return sources.Job{}, false, nil // no live posting under this id — skip
 	}
 
+	// JobPosting carries only a teaser; the full HTML description lives on the apply-flow endpoint.
+	// Fall back to the teaser when it is unavailable so a hiccup degrades the text, not the job.
+	desc := b.fullDescription(ctx, jobID)
+	if desc == "" {
+		desc = p.Description
+	}
 	// datePosted has no timezone (e.g. "2025-06-02T10:23:21.503"), so RFC3339 rejects it;
 	// fall back to the date alone, keeping the approximate posted_at.
 	posted := sources.ParseRFC3339(p.DatePosted)
@@ -82,8 +88,26 @@ func (b bairesdev) Resolve(ctx context.Context, raw string) (sources.Job, bool, 
 		URL:         fmt.Sprintf("https://applicants.bairesdev.com/job/%s/%s/apply", careerID, jobID),
 		Title:       p.Title,
 		Company:     company,
-		Description: sources.SanitizeHTML(p.Description),
+		Description: sources.SanitizeHTML(desc),
 		Remote:      isTelecommute(p.JobLocationType),
 		PostedAt:    posted,
 	}, true, nil
+}
+
+// fullDescription reads the full HTML description from the apply-flow endpoint
+// (jobResults[0].description), or "" when the endpoint fails or carries no result.
+func (b bairesdev) fullDescription(ctx context.Context, jobID string) string {
+	var resp struct {
+		JobResults []struct {
+			Description string `json:"description"`
+		} `json:"jobResults"`
+	}
+	api := "https://applicants.bairesdev.com/api/Job?JobOfferId=" + jobID
+	if err := b.http.GetJSON(ctx, api, &resp); err != nil {
+		return ""
+	}
+	if len(resp.JobResults) == 0 {
+		return ""
+	}
+	return resp.JobResults[0].Description
 }
