@@ -6,6 +6,23 @@ import "testing"
 // onto freehire's controlled values, mapping any unknown/ambiguous value to "" so the
 // pipeline's description parser decides — structured signal only, never a guess.
 
+func TestUKGEmploymentType(t *testing.T) {
+	tru, fls := true, false
+	cases := []struct {
+		in   *bool
+		want string
+	}{
+		{&tru, "full_time"},
+		{&fls, "part_time"},
+		{nil, ""}, // absent flag → let the description parser decide
+	}
+	for _, c := range cases {
+		if got := ukgEmploymentType(c.in); got != c.want {
+			t.Errorf("ukgEmploymentType(%v) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
 func TestOracleEmploymentType(t *testing.T) {
 	cases := map[string]string{
 		"Full time": "full_time", "full time": "full_time",

@@ -70,7 +70,7 @@ func TestUKGLocation(t *testing.T) {
 func ukgDetailHTML(description string) string {
 	return `<html><head></head><body>` +
 		`<script>var opportunity = new US.Opportunity.CandidateOpportunityDetail(` +
-		`{"Id":"x","Title":"t","Description":"` + description + `"});</script>` +
+		`{"Id":"x","Title":"t","FullTime":true,"Description":"` + description + `"});</script>` +
 		`</body></html>`
 }
 
@@ -107,6 +107,10 @@ func TestUKGFetch(t *testing.T) {
 	// The detail page upgrades the brief body to the full description.
 	if !strings.Contains(j.Description, "Full body") {
 		t.Errorf("job0 description = %q, want full body", j.Description)
+	}
+	// The detail page's FullTime flag maps to the structured employment type.
+	if j.EmploymentType != "full_time" {
+		t.Errorf("job0 EmploymentType = %q, want full_time (from FullTime:true)", j.EmploymentType)
 	}
 	if j.PostedAt == nil {
 		t.Errorf("job0 PostedAt is nil")

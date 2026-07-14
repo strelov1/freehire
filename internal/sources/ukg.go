@@ -134,8 +134,10 @@ func (u ukg) list(ctx context.Context, host, tenant, guid string) ([]ukgOpportun
 func (u ukg) toJob(ctx context.Context, host, tenant, guid string, o ukgOpportunity) Job {
 	url := fmt.Sprintf("https://%s/%s/JobBoard/%s/OpportunityDetail?opportunityId=%s", host, tenant, guid, o.ID)
 	body := o.BriefDescription
-	if full, ok := u.fullDescription(ctx, url); ok {
-		body = full
+	var employmentType string
+	if detail, ok := u.fetchDetail(ctx, url); ok {
+		body = detail.Description
+		employmentType = ukgEmploymentType(detail.FullTime)
 	}
 	location := o.location()
 	return Job{
@@ -146,33 +148,56 @@ func (u ukg) toJob(ctx context.Context, host, tenant, guid string, o ukgOpportun
 		Description: sanitizeHTML(html.UnescapeString(body)),
 		Remote:      isRemote(location),
 		PostedAt:    parseRFC3339(o.PostedDate),
+		// FullTime is UKG's structured full/part-time flag; preferred over the free-text
+		// employment-type parse.
+		EmploymentType: employmentType,
 	}
 }
 
-// fullDescription fetches a detail page and returns the opportunity's full HTML description,
-// which the page bootstraps as the JSON argument of a CandidateOpportunityDetail(...) call.
-// It returns ok=false (so the caller keeps the brief body) when the page fetch fails or
-// carries no parseable opportunity.
-func (u ukg) fullDescription(ctx context.Context, url string) (string, bool) {
+// ukgDetail is the parsed subset of the CandidateOpportunityDetail JSON the detail page
+// bootstraps: the full HTML description plus the structured full-time flag (a pointer so an
+// absent field is distinguishable from false).
+type ukgDetail struct {
+	Description string `json:"Description"`
+	FullTime    *bool  `json:"FullTime"`
+}
+
+// fetchDetail fetches a detail page and returns the opportunity's parsed detail (full HTML
+// description + FullTime flag), which the page bootstraps as the JSON argument of a
+// CandidateOpportunityDetail(...) call. It returns ok=false (so the caller keeps the brief
+// body) when the page fetch fails or carries no parseable opportunity.
+func (u ukg) fetchDetail(ctx context.Context, url string) (ukgDetail, bool) {
 	root, err := u.http.GetHTML(ctx, url)
 	if err != nil {
-		return "", false
+		return ukgDetail{}, false
 	}
 	script := scriptContaining(root, ukgDetailMarker)
 	if script == "" {
-		return "", false
+		return ukgDetail{}, false
 	}
 	raw, ok := bracketSlice(script, ukgDetailMarker, '{', '}')
 	if !ok {
-		return "", false
+		return ukgDetail{}, false
 	}
-	var detail struct {
-		Description string `json:"Description"`
-	}
+	var detail ukgDetail
 	if err := json.Unmarshal([]byte(raw), &detail); err != nil || detail.Description == "" {
-		return "", false
+		return ukgDetail{}, false
 	}
-	return detail.Description, true
+	return detail, true
+}
+
+// ukgEmploymentType maps UKG's FullTime boolean onto the freehire vocabulary: true →
+// full_time, false → part_time. A nil flag (the field is absent) yields "" so the
+// description parser decides — structured signal only.
+func ukgEmploymentType(fullTime *bool) string {
+	switch {
+	case fullTime == nil:
+		return ""
+	case *fullTime:
+		return "full_time"
+	default:
+		return "part_time"
+	}
 }
 
 // ukgDetailMarker is the bootstrap call whose JSON argument carries the full opportunity
