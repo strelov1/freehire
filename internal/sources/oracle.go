@@ -119,6 +119,7 @@ func (s oracle) detail(ctx context.Context, e CompanyEntry, b oracleBoard, r ora
 			ExternalDescriptionStr      string `json:"ExternalDescriptionStr"`
 			ExternalResponsibilitiesStr string `json:"ExternalResponsibilitiesStr"`
 			ExternalQualificationsStr   string `json:"ExternalQualificationsStr"`
+			JobSchedule                 string `json:"JobSchedule"`
 		} `json:"items"`
 	}
 	if err := s.http.GetJSON(ctx, url, &resp); err != nil || len(resp.Items) == 0 {
@@ -142,7 +143,24 @@ func (s oracle) detail(ctx context.Context, e CompanyEntry, b oracleBoard, r ora
 		Remote:      workMode == "remote" || isRemote(r.PrimaryLocation),
 		WorkMode:    workMode,
 		PostedAt:    parseDate(r.PostedDate),
+		// JobSchedule is Oracle's structured full/part-time enum; preferred over the
+		// free-text employment-type parse.
+		EmploymentType: oracleEmploymentType(d.JobSchedule),
 	}, true
+}
+
+// oracleEmploymentType maps Oracle's JobSchedule ("Full time" / "Part time") onto the
+// freehire employment-type vocabulary, returning "" for any other/absent value so the
+// description parser decides — structured signal only, never a guess.
+func oracleEmploymentType(jobSchedule string) string {
+	switch strings.TrimSpace(strings.ToLower(jobSchedule)) {
+	case "full time":
+		return "full_time"
+	case "part time":
+		return "part_time"
+	default:
+		return ""
+	}
 }
 
 // oracleWorkMode maps an ORC workplace-type code to our work-mode vocabulary; an empty or

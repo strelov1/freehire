@@ -34,7 +34,8 @@ func TestOracleFetchListsAndFetchesDetail(t *testing.T) {
 			"Id": "30607",
 			"ExternalDescriptionStr": "<p>Build the backend.</p>",
 			"ExternalResponsibilitiesStr": "<ul><li>Own services</li></ul>",
-			"ExternalQualificationsStr": "<p>Go experience.</p>"
+			"ExternalQualificationsStr": "<p>Go experience.</p>",
+			"JobSchedule": "Full time"
 		}]}`).
 		route("30610", `{"items": [{
 			"Id": "30610",
@@ -79,6 +80,9 @@ func TestOracleFetchListsAndFetchesDetail(t *testing.T) {
 	}
 	if j.Remote {
 		t.Error("Remote = true, want false for an on-site role")
+	}
+	if j.EmploymentType != "full_time" {
+		t.Errorf("EmploymentType = %q, want full_time (from JobSchedule)", j.EmploymentType)
 	}
 	for _, want := range []string{"Build the backend.", "Own services", "Go experience."} {
 		if !strings.Contains(j.Description, want) {
