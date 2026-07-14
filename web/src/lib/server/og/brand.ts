@@ -10,7 +10,7 @@
 
 import { MARK_DATA_URI, OG_HEIGHT, OG_WIDTH, esc } from './shared';
 
-const HEADLINE = 'Open source job aggregator that covers all ATS';
+const HEADLINE = 'The open-source search engine for every job';
 
 export type BrandStat = { value: string; label: string };
 

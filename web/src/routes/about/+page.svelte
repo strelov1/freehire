@@ -19,8 +19,8 @@
 </script>
 
 <Seo
-  title="About freehire — the open-source tech job aggregator"
-  description="FreeHire aggregates tech jobs straight from company career boards, deduplicates them, and tags each with stack, seniority and location. Free and open source."
+  title="About freehire — the open-source search engine for tech jobs"
+  description="FreeHire is an open-source search engine for tech jobs: it indexes millions of openings straight from company career boards, deduplicates them, and tags each with stack, seniority and location. Free and open source."
   {canonical}
 />
 

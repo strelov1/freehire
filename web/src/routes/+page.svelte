@@ -10,8 +10,8 @@
 </script>
 
 <Seo
-  title="freehire — every tech job, in one clean feed"
-  description="Browse tech jobs aggregated straight from company career boards — deduplicated and tagged by stack, seniority and location. Filter by remote policy and more. Free and open source."
+  title="freehire — the open-source search engine for tech jobs"
+  description="Search 3M+ tech jobs indexed straight from company career boards — deduplicated and tagged by stack, seniority and location. Free, open source, no walls."
   {canonical}
 />
 

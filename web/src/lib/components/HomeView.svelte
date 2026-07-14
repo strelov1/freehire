@@ -17,9 +17,9 @@
   // The under-the-fold stats strip: two live totals, then the two constants —
   // ATS breadth and licensing — that don't need a query.
   const figures = $derived([
-    { value: compact(stats.jobs, '2.9M+'), label: 'open jobs' },
-    { value: compact(stats.companies, '188K+'), label: 'companies' },
-    { value: '50+', label: 'ATS platforms' },
+    { value: compact(stats.jobs, '3.1M+'), label: 'open jobs' },
+    { value: compact(stats.companies, '220K+'), label: 'companies' },
+    { value: '98', label: 'ATS platforms' },
     { value: '100%', label: 'open source' },
   ]);
 
@@ -129,7 +129,7 @@
           class="reveal mt-6 max-w-2xl text-balance text-5xl font-semibold leading-[0.95] tracking-tighter sm:text-7xl"
           style="--d:80ms"
         >
-          Every tech job,<br />in one clean feed.
+          Every tech job,<br />one search.
         </h1>
 
         <p class="reveal mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground" style="--d:160ms">

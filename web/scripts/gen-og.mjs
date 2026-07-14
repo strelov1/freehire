@@ -18,9 +18,9 @@ import { createOgVite, isValidPng, loadFonts, webRoot } from './og-render.mjs';
 const outPath = resolve(webRoot, 'static/og.png');
 
 const STATS = [
-  { value: '2.9M+', label: 'open jobs' },
-  { value: '188K+', label: 'companies' },
-  { value: '50+', label: 'ATS platforms' },
+  { value: '3.1M+', label: 'open jobs' },
+  { value: '220K+', label: 'companies' },
+  { value: '98', label: 'ATS platforms' },
 ];
 
 async function main() {
