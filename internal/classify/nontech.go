@@ -22,30 +22,51 @@ import (
 //   - This detector is consulted only after the tech category dictionary is
 //     silent (see jobderive), so tech evidence always wins.
 var nonTechTitleTerms = []string{
-	// Healthcare & care
-	"nurse", "nursing", "caregiver", "caretaker", "home health aide",
-	"veterinary", "veterinarian", "dental hygienist", "dental assistant",
-	"pharmacist", "phlebotomist", "paramedic", "medical assistant",
-	"physical therapist", "occupational therapist", "massage therapist",
-	// Skilled trades
+	// Healthcare & care. "…technician" collides with IT/field-service technician, so
+	// only anchored forms ("pharmacy technician", "surgical technician") are listed.
+	"nurse", "nursing", "registered nurse", "nurse practitioner",
+	"certified nursing assistant", "cna", "lpn", "licensed practical nurse",
+	"caregiver", "caretaker", "home health aide", "home health", "hospice",
+	"veterinary", "veterinarian", "dentist", "dental hygienist", "dental assistant",
+	"pharmacist", "pharmacy technician", "phlebotomist", "phlebotomy", "paramedic",
+	"medical assistant", "certified medical assistant", "medical scribe",
+	"medical technologist", "patient care", "patient access",
+	"surgical technologist", "surgical technician", "scrub tech",
+	"physical therapist", "occupational therapist", "respiratory therapist",
+	"speech therapist", "massage therapist", "radiologic technologist", "sonographer",
+	// Skilled trades. "…engineer"/"…technician" excluded; "hvac technician" anchored.
 	"electrician", "plumber", "welder", "carpenter", "machinist", "millwright",
-	"forklift",
+	"forklift", "ironworker", "iron worker", "laborer", "general labor",
+	"pipefitter", "stone mason", "brick mason", "bricklayer", "roofer", "hvac",
+	"hvac technician", "mechanic", "boilermaker", "sheet metal",
 	// Hospitality & food service. Bare "chef" is deliberately absent — it collides
 	// with Progress Chef (config-management), which would mislabel a DevOps/SRE
 	// title the tech dictionary did not place; the cook terms cover food service.
-	"barista", "bartender", "line cook", "prep cook", "dishwasher",
-	"housekeeper", "housekeeping", "banquet", "waiter", "waitress", "busser",
-	"concierge", "valet",
-	// Retail & warehouse
-	"cashier", "stocker", "merchandiser",
+	"cook", "line cook", "prep cook", "fry cook", "grill cook", "food service",
+	"barista", "bartender", "dishwasher", "housekeeper", "housekeeping", "banquet",
+	"waiter", "waitress", "busser", "concierge", "valet",
+	// Retail & warehouse. Bare "warehouse" excluded (data-warehouse engineer); only
+	// anchored role forms.
+	"cashier", "stocker", "merchandiser", "retail associate", "retail sales",
+	"sales associate", "sales clerk", "store associate", "store clerk",
+	"warehouse associate", "warehouse worker", "order picker", "picker", "packer",
+	"material handler", "package handler", "cdl driver",
 	// Personal care & fitness
 	"pilates instructor", "yoga instructor", "fitness instructor",
 	"personal trainer", "cosmetologist", "hair stylist", "hairstylist",
-	"barber", "esthetician",
+	"barber", "esthetician", "manicurist", "nail technician",
 	// Education & childcare
-	"teacher", "tutor", "preschool",
+	"teacher", "substitute teacher", "teaching assistant", "tutor", "preschool",
+	"childcare", "child care", "daycare", "camp counselor", "paraprofessional",
+	// Office & finance administration. Anchored forms only ("data entry clerk", not
+	// bare "data"; "loan officer", not bare "officer").
+	"paralegal", "bookkeeper", "accountant", "accounting clerk", "payroll clerk",
+	"payroll specialist", "accounts payable", "accounts receivable", "teller",
+	"bank teller", "loan officer", "underwriter", "claims adjuster",
+	"administrative assistant", "office assistant", "data entry clerk", "file clerk",
 	// Facilities & cleaning
-	"janitor", "janitorial", "cleaner", "custodian", "groundskeeper",
+	"janitor", "janitorial", "cleaner", "custodian", "custodial", "groundskeeper",
+	"maintenance worker", "parking attendant", "flight attendant",
 	// Security & transport
 	"security guard", "truck driver", "delivery driver", "bus driver", "courier",
 	// Front-of-house administration
