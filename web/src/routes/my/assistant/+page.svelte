@@ -160,9 +160,22 @@
   // DOMPurify before it reaches `{@html}`. `isomorphic-dompurify` is SSR-safe,
   // so the guard holds even though this page only paints messages client-side.
   const md = new Marked({ gfm: true, breaks: true });
+  // Open links the model writes in a new tab so clicking one never navigates the
+  // chat away (losing the conversation). Scoped to this sanitize call — added
+  // right before and removed right after — so it never affects DOMPurify use
+  // elsewhere in the app.
+  function openLinksInNewTab(node: Element) {
+    if (node.tagName === 'A') {
+      node.setAttribute('target', '_blank');
+      node.setAttribute('rel', 'noopener noreferrer');
+    }
+  }
   function renderMarkdown(text: string): string {
     const html = md.parse(text, { async: false }) as string;
-    return DOMPurify.sanitize(html);
+    DOMPurify.addHook('afterSanitizeAttributes', openLinksInNewTab);
+    const clean = DOMPurify.sanitize(html);
+    DOMPurify.removeHook('afterSanitizeAttributes');
+    return clean;
   }
 
   // Fold a message's flat tool-call list into consecutive same-family groups,
