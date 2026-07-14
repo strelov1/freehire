@@ -16,6 +16,8 @@
   import { createSession, listSessions, deleteSession, assistantWsUrl } from '$lib/assistant/api';
   import { RoyClient } from '$lib/assistant/client';
   import { initChat, reduceTurnEvent, type ChatState } from '$lib/assistant/chat';
+  import { parseJobSegments } from '$lib/assistant/unfurl';
+  import JobCardUnfurl from '$lib/assistant/JobCardUnfurl.svelte';
   import {
     fromSummary,
     newestFirst,
@@ -673,12 +675,33 @@
               {/each}
 
               {#if message.text}
-                <article class="self-start max-w-[88%] px-1 py-1 text-sm leading-relaxed text-foreground">
-                  <div class="md">
+                {#if message.streaming}
+                  <!-- While streaming, render plain markdown — the text arrives
+                       token-by-token, so a half-typed job URL would otherwise
+                       match each prefix as a bogus slug (spurious 404s + card
+                       flicker). Unfurl only once the reply is settled. -->
+                  <article class="md self-start max-w-[88%] px-1 py-1 text-sm leading-relaxed text-foreground">
                     <!-- eslint-disable-next-line svelte/no-at-html-tags -- DOMPurify-sanitized markdown -->
                     {@html renderMarkdown(message.text)}
+                  </article>
+                {:else}
+                  <!-- Settled reply: split into markdown + job-link segments so
+                       freehire job links unfurl into real JobRow cards while the
+                       prose stays sanitized markdown. Cards take the column
+                       width; prose keeps a readable measure. -->
+                  <div class="self-start w-full">
+                    {#each parseJobSegments(message.text) as seg, si (si)}
+                      {#if seg.kind === 'job'}
+                        <JobCardUnfurl slug={seg.slug} />
+                      {:else}
+                        <article class="md max-w-[88%] px-1 py-1 text-sm leading-relaxed text-foreground">
+                          <!-- eslint-disable-next-line svelte/no-at-html-tags -- DOMPurify-sanitized markdown -->
+                          {@html renderMarkdown(seg.text)}
+                        </article>
+                      {/if}
+                    {/each}
                   </div>
-                </article>
+                {/if}
               {/if}
 
               {#if message.errored}

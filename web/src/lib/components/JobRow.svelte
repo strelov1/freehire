@@ -20,7 +20,14 @@
   // `dimViewed` dims the card when the signed-in user has already viewed this
   // job, so the browse list shows what's been seen. The My Jobs surfaces (where
   // every card is viewed by definition) pass `dimViewed={false}` to opt out.
-  let { job, dimViewed = true }: { job: Job; dimViewed?: boolean } = $props();
+  // `newTab` opens the job in a new browser tab (used when the card is rendered
+  // inside the assistant chat, so the conversation stays open). Default false
+  // keeps same-tab navigation everywhere else.
+  let {
+    job,
+    dimViewed = true,
+    newTab = false,
+  }: { job: Job; dimViewed?: boolean; newTab?: boolean } = $props();
 
   const isViewed = $derived(dimViewed && hasViewed(job.public_slug));
 
@@ -79,6 +86,8 @@
 <div class="relative">
 <a
   href={resolve('/jobs/[slug]', { slug: job.public_slug })}
+  target={newTab ? '_blank' : undefined}
+  rel={newTab ? 'noopener' : undefined}
   class="block rounded-xl border border-border bg-card p-4 transition hover:border-brand hover:bg-accent hover:opacity-100"
   class:opacity-60={isViewed}
 >
