@@ -618,6 +618,11 @@ type Querier interface {
 	// signals plus the gov-source marker, in precedence order (government beats size).
 	// NULL = unknown (an honest abstain when no signal fits). Computed once here so both
 	// the SET and the IS DISTINCT FROM guard reference the same value.
+	// csize_final is the employee_count-authoritative company_sizes hybrid: the company's
+	// own recorded headcount (bucketed into the company_size vocabulary) is a single, more
+	// accurate value than the LLM's per-posting guess, so it wins when present; otherwise
+	// fall back to the distinct union of enrichment.company_size over open jobs (the csize
+	// CTE). Computed once so the SET and the IS DISTINCT FROM guard share one value.
 	RefreshCompanyFacets(ctx context.Context) (int64, error)
 	// Release the lease on a subscription's claimed jobs without counting an attempt,
 	// so a soft-skipped delivery (e.g. Telegram not yet linked) is retried promptly on

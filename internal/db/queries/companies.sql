@@ -275,6 +275,25 @@ mat AS (
            END AS val
     FROM companies co
     LEFT JOIN gov g ON g.company_slug = co.slug
+),
+-- csize_final is the employee_count-authoritative company_sizes hybrid: the company's
+-- own recorded headcount (bucketed into the company_size vocabulary) is a single, more
+-- accurate value than the LLM's per-posting guess, so it wins when present; otherwise
+-- fall back to the distinct union of enrichment.company_size over open jobs (the csize
+-- CTE). Computed once so the SET and the IS DISTINCT FROM guard share one value.
+csize_final AS (
+    SELECT co.slug AS company_slug,
+           CASE
+               WHEN co.employee_count IS NULL   THEN COALESCE(cs.arr, '{}')
+               WHEN co.employee_count <= 10     THEN ARRAY['1-10']
+               WHEN co.employee_count <= 50     THEN ARRAY['11-50']
+               WHEN co.employee_count <= 200    THEN ARRAY['51-200']
+               WHEN co.employee_count <= 500    THEN ARRAY['201-500']
+               WHEN co.employee_count <= 1000   THEN ARRAY['501-1000']
+               ELSE ARRAY['1000+']
+           END AS arr
+    FROM companies co
+    LEFT JOIN csize cs ON cs.company_slug = co.slug
 )
 UPDATE companies c
 SET job_count      = COALESCE(counts.cnt, 0),
@@ -283,7 +302,7 @@ SET job_count      = COALESCE(counts.cnt, 0),
     countries      = COALESCE(cty.arr, '{}'),
     domains        = COALESCE(dom.arr, '{}'),
     company_types  = COALESCE(ctype.arr, '{}'),
-    company_sizes  = COALESCE(csize.arr, '{}'),
+    company_sizes  = csize_final.arr,
     maturity       = mat.val
 FROM companies c2
 LEFT JOIN counts      ON counts.company_slug     = c2.slug
@@ -292,7 +311,7 @@ LEFT JOIN remote_reg  ON remote_reg.company_slug = c2.slug
 LEFT JOIN cty         ON cty.company_slug        = c2.slug
 LEFT JOIN dom         ON dom.company_slug        = c2.slug
 LEFT JOIN ctype       ON ctype.company_slug      = c2.slug
-LEFT JOIN csize       ON csize.company_slug      = c2.slug
+LEFT JOIN csize_final ON csize_final.company_slug = c2.slug
 LEFT JOIN mat         ON mat.company_slug        = c2.slug
 WHERE c.slug = c2.slug
   AND (c.job_count      IS DISTINCT FROM COALESCE(counts.cnt, 0)
@@ -301,7 +320,7 @@ WHERE c.slug = c2.slug
     OR c.countries      IS DISTINCT FROM COALESCE(cty.arr, '{}')
     OR c.domains        IS DISTINCT FROM COALESCE(dom.arr, '{}')
     OR c.company_types  IS DISTINCT FROM COALESCE(ctype.arr, '{}')
-    OR c.company_sizes  IS DISTINCT FROM COALESCE(csize.arr, '{}')
+    OR c.company_sizes  IS DISTINCT FROM csize_final.arr
     OR c.maturity       IS DISTINCT FROM mat.val);
 
 -- name: CompanyJobCountBySlug :one
