@@ -187,6 +187,7 @@ func recordToParams(r ycdir.Record) db.UpsertYCCompanyParams {
 		Slug:          r.Slug,
 		Name:          r.Name,
 		Industries:    nonNil(r.Industries),
+		Subindustry:   text(r.Subindustry),
 		YearFounded:   int4(r.YearFounded),
 		EmployeeCount: int4(r.EmployeeCount),
 		HqCountry:     text(r.HQCountry),

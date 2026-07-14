@@ -42,6 +42,7 @@ type Record struct {
 	Name          string
 	Tagline       string
 	Industries    []string
+	Subindustry   string // clean YC subindustry-path leaf ("" = unknown)
 	EmployeeCount int    // 0 = unknown
 	YearFounded   int    // 0 = unknown
 	HQCountry     string // "" = unknown
@@ -67,6 +68,7 @@ func Map(e Entry) (Record, bool) {
 		Name:          name,
 		Tagline:       strings.TrimSpace(e.OneLiner),
 		Industries:    industries(e),
+		Subindustry:   subindustryLeaf(e.Subindustry),
 		EmployeeCount: e.TeamSize,
 		YearFounded:   launchYear(e.LaunchedAt),
 		HQCountry:     hqCountry(e.AllLocations),

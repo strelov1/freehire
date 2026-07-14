@@ -40,6 +40,11 @@ func TestMapFullEntry(t *testing.T) {
 	if !reflect.DeepEqual(r.Industries, []string{"Industrials", "Manufacturing", "Manufacturing and Robotics", "Robotics", "Hardware"}) {
 		t.Errorf("industries = %v", r.Industries)
 	}
+	// subindustry is the clean leaf of the YC subindustry path, stored separately from
+	// the tag-inclusive industries bag.
+	if r.Subindustry != "Manufacturing and Robotics" {
+		t.Errorf("subindustry = %q, want %q", r.Subindustry, "Manufacturing and Robotics")
+	}
 	if r.EmployeeCount != 58 {
 		t.Errorf("employee_count = %d, want 58", r.EmployeeCount)
 	}
@@ -102,5 +107,8 @@ func TestMapMissingOptionalsOmitted(t *testing.T) {
 	}
 	if !reflect.DeepEqual(r.Industries, []string{"Fintech"}) {
 		t.Errorf("industries = %v, want [Fintech]", r.Industries)
+	}
+	if r.Subindustry != "" {
+		t.Errorf("subindustry = %q, want empty (no subindustry given)", r.Subindustry)
 	}
 }

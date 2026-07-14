@@ -30,6 +30,8 @@ WHERE (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || 
   -- maturity is a SCALAR column (not an array): membership, not overlap. A NULL
   -- (unknown) maturity matches no requested value, so `NULL = ANY(...)` excludes it.
   AND (coalesce(cardinality(sqlc.arg('maturity')::text[]), 0) = 0 OR maturity = ANY(sqlc.arg('maturity')::text[]))
+  -- subindustry is likewise a NULLABLE SCALAR: membership, not overlap; NULL matches none.
+  AND (coalesce(cardinality(sqlc.arg('subindustries')::text[]), 0) = 0 OR subindustry = ANY(sqlc.arg('subindustries')::text[]))
 ORDER BY job_count DESC, name
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
@@ -51,7 +53,18 @@ WHERE (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || 
   AND (coalesce(cardinality(sqlc.arg('yc_status')::text[]), 0) = 0 OR yc_status && sqlc.arg('yc_status')::text[])
   AND (coalesce(cardinality(sqlc.arg('yc_stage')::text[]), 0) = 0 OR yc_stage && sqlc.arg('yc_stage')::text[])
   AND (coalesce(cardinality(sqlc.arg('yc_flags')::text[]), 0) = 0 OR yc_flags && sqlc.arg('yc_flags')::text[])
-  AND (coalesce(cardinality(sqlc.arg('maturity')::text[]), 0) = 0 OR maturity = ANY(sqlc.arg('maturity')::text[]));
+  AND (coalesce(cardinality(sqlc.arg('maturity')::text[]), 0) = 0 OR maturity = ANY(sqlc.arg('maturity')::text[]))
+  AND (coalesce(cardinality(sqlc.arg('subindustries')::text[]), 0) = 0 OR subindustry = ANY(sqlc.arg('subindustries')::text[]));
+
+-- name: CompanySubindustries :many
+-- Distinct non-NULL subindustry values with their company counts, most common first
+-- (ties broken by value), serving the searchable option list for the subindustry facet.
+-- Counts are unconditional — they do not reflect other active list filters.
+SELECT subindustry AS value, count(*) AS count
+FROM companies
+WHERE subindustry IS NOT NULL
+GROUP BY subindustry
+ORDER BY count(*) DESC, subindustry;
 
 -- name: ListCompanySitemap :many
 -- Slim keyset page of companies for the sitemap, cursored by the slug primary key
@@ -163,17 +176,18 @@ ON CONFLICT (slug) DO UPDATE SET
 -- facet arrays (regions/remote_regions/countries/domains/company_types/company_sizes)
 -- are left untouched. Idempotent: re-running the same entry rewrites the same values.
 INSERT INTO companies (
-    slug, name, industries, year_founded, employee_count, hq_country,
+    slug, name, industries, subindustry, year_founded, employee_count, hq_country,
     tagline, company_info, yc_batch, yc_status, yc_stage, yc_flags,
     is_reference, company_info_at
 ) VALUES (
-    sqlc.arg(slug), sqlc.arg(name), sqlc.arg(industries), sqlc.arg(year_founded),
-    sqlc.arg(employee_count), sqlc.arg(hq_country), sqlc.arg(tagline),
+    sqlc.arg(slug), sqlc.arg(name), sqlc.arg(industries), sqlc.arg(subindustry),
+    sqlc.arg(year_founded), sqlc.arg(employee_count), sqlc.arg(hq_country), sqlc.arg(tagline),
     sqlc.arg(company_info), sqlc.arg(yc_batch), sqlc.arg(yc_status),
     sqlc.arg(yc_stage), sqlc.arg(yc_flags), true, now()
 )
 ON CONFLICT (slug) DO UPDATE SET
     industries      = EXCLUDED.industries,
+    subindustry     = EXCLUDED.subindustry,
     year_founded    = EXCLUDED.year_founded,
     employee_count  = EXCLUDED.employee_count,
     hq_country      = EXCLUDED.hq_country,

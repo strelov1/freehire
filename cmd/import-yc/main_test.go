@@ -31,7 +31,7 @@ func (f *fakeStore) UpsertYCCompany(_ context.Context, p db.UpsertYCCompanyParam
 
 func TestLoad(t *testing.T) {
 	entries := []ycdir.Entry{
-		{Name: "Stripe", OneLiner: "Payments", Industry: "Fintech", TeamSize: 8000, Batch: "Summer 2009", Status: "Public", Stage: "Growth", TopCompany: true},
+		{Name: "Stripe", OneLiner: "Payments", Industry: "Fintech", Subindustry: "Fintech -> Payments", TeamSize: 8000, Batch: "Summer 2009", Status: "Public", Stage: "Growth", TopCompany: true},
 		{Name: "New Co", Batch: "Winter 2024", Status: "Active"},
 		{Name: "Meta", FormerNames: []string{"Facebook"}, Batch: "Summer 2005", Status: "Public"}, // current absent, former exists
 		{Name: "Benchmark", TeamSize: 7, Batch: "Winter 2023", Status: "Active"},                  // homonym: tiny YC vs big non-YC company
@@ -79,6 +79,10 @@ func TestLoad(t *testing.T) {
 	if stripe.Industries == nil {
 		t.Error("industries is nil, want non-nil for the NOT NULL column")
 	}
+	// subindustry is forwarded as the clean YC leaf (nullable text).
+	if !stripe.Subindustry.Valid || stripe.Subindustry.String != "Payments" {
+		t.Errorf("stripe subindustry = %+v, want valid %q", stripe.Subindustry, "Payments")
+	}
 	var info map[string]any
 	if err := json.Unmarshal(stripe.CompanyInfo, &info); err != nil {
 		t.Fatalf("company_info not JSON: %v", err)
@@ -91,5 +95,8 @@ func TestLoad(t *testing.T) {
 	}
 	if newco.YcBatch == nil || newco.Industries == nil {
 		t.Error("newco arrays must be non-nil (NOT NULL columns)")
+	}
+	if newco.Subindustry.Valid {
+		t.Errorf("newco subindustry = %+v, want NULL (no subindustry given)", newco.Subindustry)
 	}
 }

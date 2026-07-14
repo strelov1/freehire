@@ -74,6 +74,42 @@ func (q *Queries) CompanySitemapBoundaries(ctx context.Context, chunkSize int64)
 	return items, nil
 }
 
+const companySubindustries = `-- name: CompanySubindustries :many
+SELECT subindustry AS value, count(*) AS count
+FROM companies
+WHERE subindustry IS NOT NULL
+GROUP BY subindustry
+ORDER BY count(*) DESC, subindustry
+`
+
+type CompanySubindustriesRow struct {
+	Value pgtype.Text `json:"value"`
+	Count int64       `json:"count"`
+}
+
+// Distinct non-NULL subindustry values with their company counts, most common first
+// (ties broken by value), serving the searchable option list for the subindustry facet.
+// Counts are unconditional — they do not reflect other active list filters.
+func (q *Queries) CompanySubindustries(ctx context.Context) ([]CompanySubindustriesRow, error) {
+	rows, err := q.db.Query(ctx, companySubindustries)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CompanySubindustriesRow{}
+	for rows.Next() {
+		var i CompanySubindustriesRow
+		if err := rows.Scan(&i.Value, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countCompanies = `-- name: CountCompanies :one
 SELECT count(*)
 FROM companies
@@ -90,6 +126,7 @@ WHERE ($1::text = '' OR name ILIKE '%' || $1 || '%' OR slug ILIKE '%' || $1 || '
   AND (coalesce(cardinality($11::text[]), 0) = 0 OR yc_stage && $11::text[])
   AND (coalesce(cardinality($12::text[]), 0) = 0 OR yc_flags && $12::text[])
   AND (coalesce(cardinality($13::text[]), 0) = 0 OR maturity = ANY($13::text[]))
+  AND (coalesce(cardinality($14::text[]), 0) = 0 OR subindustry = ANY($14::text[]))
 `
 
 type CountCompaniesParams struct {
@@ -106,6 +143,7 @@ type CountCompaniesParams struct {
 	YcStage       []string `json:"yc_stage"`
 	YcFlags       []string `json:"yc_flags"`
 	Maturity      []string `json:"maturity"`
+	Subindustries []string `json:"subindustries"`
 }
 
 // Total companies matching the same optional name + facet filters as ListCompanies,
@@ -126,6 +164,7 @@ func (q *Queries) CountCompanies(ctx context.Context, arg CountCompaniesParams) 
 		arg.YcStage,
 		arg.YcFlags,
 		arg.Maturity,
+		arg.Subindustries,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -151,7 +190,7 @@ func (q *Queries) DeleteOrphanCompanies(ctx context.Context) (int64, error) {
 }
 
 const getCompany = `-- name: GetCompany :one
-SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes, industries, year_founded, employee_count, hq_country, organization_type, tagline, company_info, is_reference, company_info_at, remote_regions, yc_batch, yc_status, yc_stage, yc_flags, maturity
+SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes, industries, year_founded, employee_count, hq_country, organization_type, tagline, company_info, is_reference, company_info_at, remote_regions, yc_batch, yc_status, yc_stage, yc_flags, maturity, subindustry
 FROM companies
 WHERE slug = $1
 `
@@ -189,6 +228,7 @@ func (q *Queries) GetCompany(ctx context.Context, slug string) (Company, error) 
 		&i.YcStage,
 		&i.YcFlags,
 		&i.Maturity,
+		&i.Subindustry,
 	)
 	return i, err
 }
@@ -211,8 +251,10 @@ WHERE ($1::text = '' OR name ILIKE '%' || $1 || '%' OR slug ILIKE '%' || $1 || '
   -- maturity is a SCALAR column (not an array): membership, not overlap. A NULL
   -- (unknown) maturity matches no requested value, so ` + "`" + `NULL = ANY(...)` + "`" + ` excludes it.
   AND (coalesce(cardinality($13::text[]), 0) = 0 OR maturity = ANY($13::text[]))
+  -- subindustry is likewise a NULLABLE SCALAR: membership, not overlap; NULL matches none.
+  AND (coalesce(cardinality($14::text[]), 0) = 0 OR subindustry = ANY($14::text[]))
 ORDER BY job_count DESC, name
-LIMIT $15 OFFSET $14
+LIMIT $16 OFFSET $15
 `
 
 type ListCompaniesParams struct {
@@ -229,6 +271,7 @@ type ListCompaniesParams struct {
 	YcStage       []string `json:"yc_stage"`
 	YcFlags       []string `json:"yc_flags"`
 	Maturity      []string `json:"maturity"`
+	Subindustries []string `json:"subindustries"`
 	Offset        int32    `json:"offset"`
 	Limit         int32    `json:"limit"`
 }
@@ -271,6 +314,7 @@ func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([
 		arg.YcStage,
 		arg.YcFlags,
 		arg.Maturity,
+		arg.Subindustries,
 		arg.Offset,
 		arg.Limit,
 	)
@@ -615,17 +659,18 @@ func (q *Queries) UpsertCompanyInfo(ctx context.Context, arg UpsertCompanyInfoPa
 
 const upsertYCCompany = `-- name: UpsertYCCompany :exec
 INSERT INTO companies (
-    slug, name, industries, year_founded, employee_count, hq_country,
+    slug, name, industries, subindustry, year_founded, employee_count, hq_country,
     tagline, company_info, yc_batch, yc_status, yc_stage, yc_flags,
     is_reference, company_info_at
 ) VALUES (
     $1, $2, $3, $4,
-    $5, $6, $7,
-    $8, $9, $10,
-    $11, $12, true, now()
+    $5, $6, $7, $8,
+    $9, $10, $11,
+    $12, $13, true, now()
 )
 ON CONFLICT (slug) DO UPDATE SET
     industries      = EXCLUDED.industries,
+    subindustry     = EXCLUDED.subindustry,
     year_founded    = EXCLUDED.year_founded,
     employee_count  = EXCLUDED.employee_count,
     hq_country      = EXCLUDED.hq_country,
@@ -643,6 +688,7 @@ type UpsertYCCompanyParams struct {
 	Slug          string          `json:"slug"`
 	Name          string          `json:"name"`
 	Industries    []string        `json:"industries"`
+	Subindustry   pgtype.Text     `json:"subindustry"`
 	YearFounded   pgtype.Int4     `json:"year_founded"`
 	EmployeeCount pgtype.Int4     `json:"employee_count"`
 	HqCountry     pgtype.Text     `json:"hq_country"`
@@ -665,6 +711,7 @@ func (q *Queries) UpsertYCCompany(ctx context.Context, arg UpsertYCCompanyParams
 		arg.Slug,
 		arg.Name,
 		arg.Industries,
+		arg.Subindustry,
 		arg.YearFounded,
 		arg.EmployeeCount,
 		arg.HqCountry,

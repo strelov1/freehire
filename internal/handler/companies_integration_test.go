@@ -222,6 +222,134 @@ func TestListCompaniesFacetFilterEndpoint(t *testing.T) {
 	})
 }
 
+func TestListCompaniesSubindustryFacet(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+
+	// subindustry is a nullable SCALAR column filtered by membership (= ANY), so a
+	// NULL-subindustry company must never match a subindustries filter.
+	seed := func(slug string, subindustry any) {
+		t.Helper()
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO companies (slug, name, subindustry) VALUES ($1, $1, $2)`,
+			slug, subindustry); err != nil {
+			t.Fatalf("seed %q: %v", slug, err)
+		}
+	}
+	seed("payco", "Payments")
+	seed("payco2", "Payments")
+	seed("diagco", "Diagnostics")
+	seed("plainco", nil) // NULL subindustry
+
+	h := &API{pool: pool, queries: db.New(pool)}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/api/v1/companies", h.ListCompanies)
+
+	assert := func(t *testing.T, url string, want []string) {
+		t.Helper()
+		resp, err := app.Test(httptest.NewRequest("GET", url, nil))
+		if err != nil {
+			t.Fatalf("request %q: %v", url, err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != fiber.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("status = %d, want 200 (body %s)", resp.StatusCode, body)
+		}
+		var body struct {
+			Data []struct {
+				Slug string `json:"slug"`
+			} `json:"data"`
+			Meta struct {
+				Total float64 `json:"total"`
+			} `json:"meta"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		var got []string
+		for _, c := range body.Data {
+			got = append(got, c.Slug)
+		}
+		sort.Strings(got)
+		sort.Strings(want)
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("%s → slugs %v, want %v", url, got, want)
+		}
+		if int(body.Meta.Total) != len(want) {
+			t.Errorf("%s → meta.total %v, want %d", url, body.Meta.Total, len(want))
+		}
+	}
+
+	t.Run("single subindustry filters by membership", func(t *testing.T) {
+		assert(t, "/api/v1/companies?subindustries=Payments", []string{"payco", "payco2"})
+	})
+
+	t.Run("multiple subindustries are OR-ed", func(t *testing.T) {
+		assert(t, "/api/v1/companies?subindustries=Payments&subindustries=Diagnostics",
+			[]string{"diagco", "payco", "payco2"})
+	})
+
+	t.Run("NULL subindustry matches no filter", func(t *testing.T) {
+		assert(t, "/api/v1/companies?subindustries=Payments", []string{"payco", "payco2"})
+	})
+
+	t.Run("no subindustry param returns all", func(t *testing.T) {
+		assert(t, "/api/v1/companies", []string{"diagco", "payco", "payco2", "plainco"})
+	})
+}
+
+func TestCompanySubindustriesEndpoint(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+
+	seed := func(slug string, subindustry any) {
+		t.Helper()
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO companies (slug, name, subindustry) VALUES ($1, $1, $2)`,
+			slug, subindustry); err != nil {
+			t.Fatalf("seed %q: %v", slug, err)
+		}
+	}
+	seed("payco", "Payments")
+	seed("payco2", "Payments")
+	seed("diagco", "Diagnostics")
+	seed("plainco", nil) // NULL — excluded from the vocabulary
+
+	h := &API{pool: pool, queries: db.New(pool)}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/api/v1/companies/subindustries", h.CompanySubindustries)
+
+	resp, err := app.Test(httptest.NewRequest("GET", "/api/v1/companies/subindustries", nil))
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d, want 200 (body %s)", resp.StatusCode, body)
+	}
+	var body struct {
+		Data []struct {
+			Value string `json:"value"`
+			Count int    `json:"count"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	// Distinct non-NULL subindustries, most common first; NULL excluded.
+	if len(body.Data) != 2 {
+		t.Fatalf("got %d rows, want 2: %+v", len(body.Data), body.Data)
+	}
+	if body.Data[0].Value != "Payments" || body.Data[0].Count != 2 {
+		t.Errorf("row[0] = %+v, want {Payments 2}", body.Data[0])
+	}
+	if body.Data[1].Value != "Diagnostics" || body.Data[1].Count != 1 {
+		t.Errorf("row[1] = %+v, want {Diagnostics 1}", body.Data[1])
+	}
+}
+
 func TestListCompaniesRemoteRegionsFacet(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()

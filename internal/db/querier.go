@@ -114,6 +114,10 @@ type Querier interface {
 	// excluding the final row, so the sitemap index can list each company sub-sitemap's
 	// keyset cursor.
 	CompanySitemapBoundaries(ctx context.Context, chunkSize int64) ([]string, error)
+	// Distinct non-NULL subindustry values with their company counts, most common first
+	// (ties broken by value), serving the searchable option list for the subindustry facet.
+	// Counts are unconditional — they do not reflect other active list filters.
+	CompanySubindustries(ctx context.Context) ([]CompanySubindustriesRow, error)
 	// Total companies matching the same optional name + facet filters as ListCompanies,
 	// so search/filter pagination reports the filtered total. Keep this WHERE identical
 	// to ListCompanies.

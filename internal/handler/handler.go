@@ -269,6 +269,7 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/companies", a.ListCompanies)
 	api.Get("/companies/sitemap", a.CompanySitemap)
 	api.Get("/companies/sitemap/boundaries", a.CompanySitemapBoundaries)
+	api.Get("/companies/subindustries", a.CompanySubindustries)
 	api.Get("/companies/:slug", a.GetCompany)
 
 	// Public read of a shared saved-search "board" by its slug — unauthenticated, like

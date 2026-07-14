@@ -109,6 +109,7 @@ func (a *API) ListCompanies(c *fiber.Ctx) error {
 	ycStage := facetValues(vals, "yc_stage")
 	ycFlags := facetValues(vals, "yc_flags")
 	maturity := facetValues(vals, "maturity")
+	subindustries := facetValues(vals, "subindustries")
 
 	companies, err := a.queries.ListCompanies(c.Context(), db.ListCompaniesParams{
 		Search:        search,
@@ -124,6 +125,7 @@ func (a *API) ListCompanies(c *fiber.Ctx) error {
 		YcStage:       ycStage,
 		YcFlags:       ycFlags,
 		Maturity:      maturity,
+		Subindustries: subindustries,
 		Limit:         int32(limit),
 		Offset:        int32(offset),
 	})
@@ -145,12 +147,35 @@ func (a *API) ListCompanies(c *fiber.Ctx) error {
 		YcStage:       ycStage,
 		YcFlags:       ycFlags,
 		Maturity:      maturity,
+		Subindustries: subindustries,
 	})
 	if err != nil {
 		return err
 	}
 
 	return listResponse(c, companies, total, limit, offset)
+}
+
+// subindustryFacet is one option in the company subindustry vocabulary: a clean YC
+// subindustry leaf and the number of companies carrying it.
+type subindustryFacet struct {
+	Value string `json:"value"`
+	Count int64  `json:"count"`
+}
+
+// CompanySubindustries serves the distinct subindustry vocabulary with company counts,
+// most common first, backing the searchable "Industry" facet's option list. Counts are
+// unconditional (they do not reflect other active list filters).
+func (a *API) CompanySubindustries(c *fiber.Ctx) error {
+	rows, err := a.queries.CompanySubindustries(c.Context())
+	if err != nil {
+		return err
+	}
+	out := make([]subindustryFacet, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, subindustryFacet{Value: r.Value.String, Count: r.Count})
+	}
+	return c.JSON(fiber.Map{"data": out})
 }
 
 // facetValues reads the repeatable values of one facet query param, dropping empty
