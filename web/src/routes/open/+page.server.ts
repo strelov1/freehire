@@ -61,12 +61,13 @@ async function fetchGithub(fetchImpl: typeof fetch): Promise<GithubStats | null>
 
 export const load: PageServerLoad = async ({ fetch, setHeaders }) => {
   const api = serverApi(fetch);
-  const [jobs, companies, activity, facets, growth, github] = await Promise.allSettled([
+  const [jobs, companies, activity, facets, growth, engagement, github] = await Promise.allSettled([
     api.listJobs(1, 0),
     api.listCompanies('', 1, 0),
     api.jobsActivity('day'),
     api.facetCounts(new URLSearchParams()),
     api.userGrowth(),
+    api.engagementStats(),
     fetchGithub(fetch),
   ]);
 
@@ -84,6 +85,7 @@ export const load: PageServerLoad = async ({ fetch, setHeaders }) => {
     activity: value(activity) ?? [],
     facets: value(facets)?.facets ?? null,
     growth: value(growth) ?? [],
+    engagement: value(engagement),
     github: value(github),
   };
 };

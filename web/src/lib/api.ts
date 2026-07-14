@@ -43,6 +43,7 @@ import type {
   ActivityGranularity,
   ActivityPoint,
   UserGrowthPoint,
+  EngagementStats,
   LocationPreferences,
 } from './types';
 
@@ -342,6 +343,12 @@ export function createApi(
    *  Aggregate-only — no user field is exposed. Unauthenticated. */
   async function userGrowth(): Promise<UserGrowthPoint[]> {
     return requestData<UserGrowthPoint[]>(`/api/v1/stats/user-growth`);
+  }
+
+  /** Aggregate engagement counts (jobs saved / applied / viewed across all users).
+   *  Aggregate-only, unauthenticated. */
+  async function engagementStats(): Promise<EngagementStats> {
+    return requestData<EngagementStats>(`/api/v1/stats/engagement`);
   }
 
   /** List companies, optionally filtered by a name query `q` (a case-insensitive
@@ -858,6 +865,7 @@ export function createApi(
     facetCounts,
     jobsActivity,
     userGrowth,
+    engagementStats,
     listCompanies,
     getCompany,
     listCompanySubindustries,

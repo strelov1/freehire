@@ -271,6 +271,11 @@ type Querier interface {
 	// distinct row type and breaks the company-detail handler on every new column.
 	GetCompany(ctx context.Context, slug string) (Company, error)
 	GetEmail(ctx context.Context, arg GetEmailParams) (GetEmailRow, error)
+	// Aggregate interaction counts from user_jobs — saved / applied / viewed — for the
+	// public engagement endpoint. Aggregate-only: no user identifier or row-level field
+	// is selected. viewed_at is NOT NULL on every row (set on RecordView), so "viewed"
+	// equals the total interaction count.
+	GetEngagementStats(ctx context.Context) (GetEngagementStatsRow, error)
 	GetGmailConnection(ctx context.Context, userID int64) (GetGmailConnectionRow, error)
 	GetGmailRefreshToken(ctx context.Context, userID int64) (GetGmailRefreshTokenRow, error)
 	GetJob(ctx context.Context, id int64) (Job, error)

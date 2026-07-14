@@ -287,6 +287,11 @@ func Register(app *fiber.App, cfg Config) {
 	// bar chart. Aggregate-only — no user identifier is exposed.
 	api.Get("/stats/user-growth", a.UserGrowth)
 
+	// Public engagement counts (jobs saved / applied / viewed across all users),
+	// unauthenticated like the other public reads. Aggregate-only from user_jobs;
+	// the /open transparency page renders them as a stat-strip.
+	api.Get("/stats/engagement", a.EngagementStats)
+
 	// Per-user job interactions and the user-scoped reads accept either the
 	// session cookie or an API key (RequireAuthOrKey), so a script holding a key
 	// can drive the same flow as the browser. The public job reads above stay

@@ -65,6 +65,16 @@
     const last = data.growth[data.growth.length - 1];
     return last ? last.total : null;
   });
+
+  const engagement = $derived.by(() => {
+    const e = data.engagement;
+    if (!e) return null;
+    return [
+      { value: nf.format(e.saved), label: 'jobs saved' },
+      { value: nf.format(e.applied), label: 'applications' },
+      { value: nf.format(e.viewed), label: 'jobs viewed' },
+    ];
+  });
 </script>
 
 {#snippet distributionBars(items: Bar[])}
@@ -156,6 +166,30 @@
       Cumulative registered members over time. Early days — and that's the point of showing it.
     </p>
     <GrowthArea points={data.growth} />
+  </section>
+
+  <!-- Engagement -->
+  <section class="mb-14">
+    <div class="flex items-baseline justify-between">
+      <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// engagement</p>
+      {@render sourceLink('/api/v1/stats/engagement', '/stats/engagement')}
+    </div>
+    <h2 class="mt-3 text-xl font-semibold tracking-tight">What people do here</h2>
+    <p class="mb-6 mt-1 text-sm text-muted-foreground">
+      Signed-in interactions across freehire — jobs saved, applications tracked, and postings opened.
+    </p>
+    {#if engagement}
+      <dl class="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-border bg-border">
+        {#each engagement as e (e.label)}
+          <div class="bg-background p-5 sm:p-6">
+            <dt class="font-mono text-xs uppercase tracking-wide text-muted-foreground">{e.label}</dt>
+            <dd class="mt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">{e.value}</dd>
+          </div>
+        {/each}
+      </dl>
+    {:else}
+      <p class="text-sm text-muted-foreground">Engagement data is unavailable right now.</p>
+    {/if}
   </section>
 
   <!-- C. What's inside -->

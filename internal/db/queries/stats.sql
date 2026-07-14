@@ -54,6 +54,17 @@ FROM generate_series(
 LEFT JOIN daily ON daily.day = d::date
 ORDER BY d;
 
+-- name: GetEngagementStats :one
+-- Aggregate interaction counts from user_jobs — saved / applied / viewed — for the
+-- public engagement endpoint. Aggregate-only: no user identifier or row-level field
+-- is selected. viewed_at is NOT NULL on every row (set on RecordView), so "viewed"
+-- equals the total interaction count.
+SELECT
+    count(*) FILTER (WHERE saved_at IS NOT NULL)::int   AS saved,
+    count(*) FILTER (WHERE applied_at IS NOT NULL)::int AS applied,
+    count(*) FILTER (WHERE viewed_at IS NOT NULL)::int  AS viewed
+FROM user_jobs;
+
 -- name: ListJobActivity :many
 -- Dense activity series over [from, to] at the given granularity. A daily
 -- generate_series builds the gap-free calendar; the LEFT JOIN fills each day's

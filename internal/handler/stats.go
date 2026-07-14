@@ -120,6 +120,21 @@ func (a *API) UserGrowth(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": points})
 }
 
+// EngagementStats serves the public, unauthenticated engagement counts: how many
+// user_jobs rows have been saved, applied to, and viewed. Aggregate-only — the
+// query selects nothing but the three integer totals, so no per-user field can
+// leak. An empty table yields all zeros (200).
+func (a *API) EngagementStats(c *fiber.Ctx) error {
+	s, err := a.queries.GetEngagementStats(c.Context())
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(fiber.Map{
+		"data": fiber.Map{"saved": s.Saved, "applied": s.Applied, "viewed": s.Viewed},
+	})
+}
+
 // JobsActivity serves the public, unauthenticated job-activity time series:
 // added vs. removed vacancies per period, aggregated to the requested granularity
 // over a date range. The dense, gap-free series (missing periods → 0) is produced

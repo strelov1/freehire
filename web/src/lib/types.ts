@@ -295,6 +295,14 @@ export interface UserGrowthPoint {
   total: number;
 }
 
+/** Aggregate engagement counts across all users: jobs saved, applications marked,
+ *  and jobs viewed. Aggregate-only — no per-user or row-level field. */
+export interface EngagementStats {
+  saved: number;
+  applied: number;
+  viewed: number;
+}
+
 /** An API key as returned by the management endpoints — metadata only; the
  *  plaintext token is never part of this shape. `token_prefix` is a short,
  *  non-secret leading slice (e.g. "fhk_Ab12cd") shown so the user can tell keys

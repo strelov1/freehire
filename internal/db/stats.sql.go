@@ -24,6 +24,31 @@ func (q *Queries) DeleteAllJobDailyStats(ctx context.Context) error {
 	return err
 }
 
+const getEngagementStats = `-- name: GetEngagementStats :one
+SELECT
+    count(*) FILTER (WHERE saved_at IS NOT NULL)::int   AS saved,
+    count(*) FILTER (WHERE applied_at IS NOT NULL)::int AS applied,
+    count(*) FILTER (WHERE viewed_at IS NOT NULL)::int  AS viewed
+FROM user_jobs
+`
+
+type GetEngagementStatsRow struct {
+	Saved   int32 `json:"saved"`
+	Applied int32 `json:"applied"`
+	Viewed  int32 `json:"viewed"`
+}
+
+// Aggregate interaction counts from user_jobs — saved / applied / viewed — for the
+// public engagement endpoint. Aggregate-only: no user identifier or row-level field
+// is selected. viewed_at is NOT NULL on every row (set on RecordView), so "viewed"
+// equals the total interaction count.
+func (q *Queries) GetEngagementStats(ctx context.Context) (GetEngagementStatsRow, error) {
+	row := q.db.QueryRow(ctx, getEngagementStats)
+	var i GetEngagementStatsRow
+	err := row.Scan(&i.Saved, &i.Applied, &i.Viewed)
+	return i, err
+}
+
 const listJobActivity = `-- name: ListJobActivity :many
 SELECT
     date_trunc($1::text, d)::date AS period,
