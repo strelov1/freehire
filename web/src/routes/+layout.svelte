@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { navigating } from '$app/state';
+  import { navigating, page } from '$app/state';
   import { onMount } from 'svelte';
   import { initTheme } from '$lib/theme.svelte';
   import { isAuthenticated } from '$lib/auth.svelte';
@@ -9,6 +9,12 @@
   import '../app.css';
 
   let { children } = $props();
+
+  // The account area (/my/*) is an app-like surface with its own sidebar nav —
+  // the marketing footer with its link columns doesn't belong there.
+  const hideFooter = $derived(
+    page.url.pathname === '/my' || page.url.pathname.startsWith('/my/'),
+  );
 
   // Apply the persisted theme and start tracking the OS preference once mounted.
   // A no-FOUC inline script in app.html already set the class before paint.
@@ -50,7 +56,9 @@
     {@render children()}
   </main>
 
-  <Footer />
+  {#if !hideFooter}
+    <Footer />
+  {/if}
 </div>
 
 <style>
