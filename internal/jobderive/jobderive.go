@@ -149,15 +149,16 @@ func Derive(in Input) Derived {
 }
 
 // deriveIsTech computes the tri-state is_tech signal from the already-resolved
-// category and the raw title. Technical evidence wins: a recognized technical
-// category yields true first; otherwise a known non-technical category or a
-// confident non-tech title yields false; otherwise the signal is unknown (nil),
-// never coerced, so the unclassified mass stays measurable. Because the category
-// derivation checks the tech title dictionary before anything non-technical, a
-// title carrying both a tech role and a non-tech noun ("Backend Engineer, Nurse
-// Scheduling") already resolves a tech category and never reaches IsNonTech.
+// category and the raw title. Technical evidence wins and is checked first: a
+// recognized technical category OR a confident software/IT title (classify.IsTech)
+// yields true; otherwise a known non-technical category or a confident non-tech
+// title yields false; otherwise the signal is unknown (nil), never coerced, so the
+// unclassified mass stays measurable. The tech title detector is the symmetric
+// counterpart to IsNonTech — it rescues generic software titles ("Software
+// Engineer", "COBOL Programmer") that resolve no sub-category. A non-software
+// "…Engineer" (mechanical, drainage) matches neither detector and stays unknown.
 func deriveIsTech(category, title string) *bool {
-	if slices.Contains(enrich.TechCategories, category) {
+	if slices.Contains(enrich.TechCategories, category) || classify.IsTech(title) {
 		t := true
 		return &t
 	}

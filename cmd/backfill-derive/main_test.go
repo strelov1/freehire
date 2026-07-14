@@ -103,6 +103,7 @@ func TestBackfill_IsIdempotent(t *testing.T) {
 	job.Countries, job.Regions, job.WorkMode = d.Countries, d.Regions, d.WorkMode
 	job.Cities = d.Cities
 	job.Skills, job.Seniority, job.Category = d.Skills, d.Seniority, d.Category
+	job.IsTech = d.IsTech
 	job.PostingLanguage, job.EmploymentType = d.PostingLanguage, d.EmploymentType
 	job.EducationLevel, job.ExperienceYearsMin = d.EducationLevel, d.ExperienceYearsMin
 

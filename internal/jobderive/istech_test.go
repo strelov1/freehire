@@ -33,6 +33,16 @@ func TestDerive_IsTech(t *testing.T) {
 			in:   Input{Title: "Backend Engineer, Nurse Scheduling Platform"},
 			want: boolp(true),
 		},
+		{
+			name: "detector-only tech title (no category) → true",
+			in:   Input{Title: "COBOL Programmer"},
+			want: boolp(true),
+		},
+		{
+			name: "non-software engineer stays unknown → nil",
+			in:   Input{Title: "Senior Mechanical Engineer"},
+			want: nil,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
