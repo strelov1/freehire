@@ -37,14 +37,14 @@ func (f *bairesDevFake) GetJSON(_ context.Context, url string, v any) error {
 	return fmt.Errorf("bairesDevFake: no route for %s", url)
 }
 
-// bairesDevListingHTML wraps a widget config (built from the given apply URLs) in the one attribute
-// the adapter reads.
-func bairesDevListingHTML(applyURLs ...string) string {
-	rows := make([]string, len(applyURLs))
-	for i, u := range applyURLs {
-		rows[i] = fmt.Sprintf(`{"page_item_url":%q}`, u)
+// bairesDevListingHTML wraps a widget config (built from the given {applyURL, jobTitle} rows) in the
+// one attribute the adapter reads. The title tail carries the row's location.
+func bairesDevListingHTML(rows ...[2]string) string {
+	items := make([]string, len(rows))
+	for i, r := range rows {
+		items[i] = fmt.Sprintf(`{"page_item_url":%q,"jobTitle":%q}`, r[0], r[1])
 	}
-	cfg := `{"jobList":[` + strings.Join(rows, ",") + `]}`
+	cfg := `{"jobList":[` + strings.Join(items, ",") + `]}`
 	b64 := base64.StdEncoding.EncodeToString([]byte(cfg))
 	return `<div data-widget-config="` + b64 + `"></div>`
 }
@@ -53,9 +53,9 @@ func TestBairesDevCrawlsListingDedupsAndHydrates(t *testing.T) {
 	// The same posting 284579 is listed twice (two locations under one id) plus a distinct 176816.
 	fake := &bairesDevFake{
 		listing: bairesDevListingHTML(
-			"https://applicants.bairesdev.com/job/97/284579/apply",
-			"https://applicants.bairesdev.com/job/97/284579/apply",
-			"https://applicants.bairesdev.com/job/111/176816/apply",
+			[2]string{"https://applicants.bairesdev.com/job/97/284579/apply", "Sales Director | Remote Work | New York, United States"},
+			[2]string{"https://applicants.bairesdev.com/job/97/284579/apply", "Sales Director | Remote Work | Brazil"},
+			[2]string{"https://applicants.bairesdev.com/job/111/176816/apply", "Node Developer | Remote Work | Colombia"},
 		),
 		jobs: map[string]string{
 			"284579": `{"@type":"JobPosting","title":"Sales Director - Remote Work",` +
@@ -98,6 +98,10 @@ func TestBairesDevCrawlsListingDedupsAndHydrates(t *testing.T) {
 	if sd.URL != "https://applicants.bairesdev.com/job/97/284579/apply" {
 		t.Errorf("URL = %q, want canonical apply link (matches linksource identity)", sd.URL)
 	}
+	// Location unions the distinct location tails of every row sharing the id (insertion order).
+	if sd.Location != "New York, United States, Brazil" {
+		t.Errorf("Location = %q, want the two rows' locations unioned", sd.Location)
+	}
 	if !sd.Remote || sd.WorkMode != "remote" {
 		t.Errorf("Remote=%v WorkMode=%q, want remote for TELECOMMUTE", sd.Remote, sd.WorkMode)
 	}
@@ -121,7 +125,7 @@ func TestBairesDevCrawlsListingDedupsAndHydrates(t *testing.T) {
 func TestBairesDevSkipsPostingThatNoLongerResolves(t *testing.T) {
 	// The listing references 999999, but the endpoint returns an empty body (id gone) → skipped.
 	fake := &bairesDevFake{
-		listing: bairesDevListingHTML("https://applicants.bairesdev.com/job/97/999999/apply"),
+		listing: bairesDevListingHTML([2]string{"https://applicants.bairesdev.com/job/97/999999/apply", "Ghost | Remote Work | Brazil"}),
 		jobs:    map[string]string{"999999": `{}`},
 	}
 	jobs, err := NewBairesDev(fake).Fetch(context.Background(), CompanyEntry{})

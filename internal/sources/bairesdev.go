@@ -49,8 +49,16 @@ func (bairesdev) Provider() string { return "bairesdev" }
 func (bairesdev) boardless() {}
 
 // bairesDevRef is one distinct posting to hydrate: the career-site id and the job id parsed from a
-// listing row's apply link.
-type bairesDevRef struct{ careerID, jobID string }
+// listing row's apply link, plus the locations aggregated from every row that shares this job id
+// (the site lists the same posting once per location, so the union is where the role is open —
+// e.g. "Brazil, Colombia, Mexico, Latin America" for a LatAm role, "United States" for a US one).
+// The applicants JobPosting endpoint's applicantLocationRequirements is a generic 45-country
+// boilerplate identical across all postings, so the listing rows are the only per-job geography.
+type bairesDevRef struct {
+	careerID string
+	jobID    string
+	location string
+}
 
 // bairesDevWidgetConfig extracts the base64 Duda job-widget config from the talent site HTML.
 var bairesDevWidgetConfig = regexp.MustCompile(`data-widget-config="([A-Za-z0-9+/=]+)"`)
@@ -89,30 +97,61 @@ func parseBairesDevListing(page string) ([]bairesDevRef, error) {
 	}
 	var cfg struct {
 		JobList []struct {
-			URL string `json:"page_item_url"`
+			URL   string `json:"page_item_url"`
+			Title string `json:"jobTitle"`
 		} `json:"jobList"`
 	}
 	if err := json.Unmarshal(raw, &cfg); err != nil {
 		return nil, fmt.Errorf("parse widget config: %w", err)
 	}
-	var refs []bairesDevRef
-	seen := map[string]struct{}{}
+	// Aggregate by job id: the same posting appears once per location, so union the location tails
+	// of every row sharing an id (insertion order, deduped) into the ref's location.
+	byJob := map[string]*bairesDevRef{}
+	var order []string
 	for _, j := range cfg.JobList {
 		mm := bairesDevApplyPath.FindStringSubmatch(j.URL)
 		if mm == nil {
 			continue
 		}
-		jobID := mm[2]
-		if _, ok := seen[jobID]; ok {
-			continue
+		careerID, jobID := mm[1], mm[2]
+		ref, ok := byJob[jobID]
+		if !ok {
+			ref = &bairesDevRef{careerID: careerID, jobID: jobID}
+			byJob[jobID] = ref
+			order = append(order, jobID)
 		}
-		seen[jobID] = struct{}{}
-		refs = append(refs, bairesDevRef{careerID: mm[1], jobID: jobID})
+		if loc := bairesDevTitleLocation(j.Title); loc != "" && !strings.Contains(ref.location, loc) {
+			if ref.location == "" {
+				ref.location = loc
+			} else {
+				ref.location += ", " + loc
+			}
+		}
 	}
-	if len(refs) == 0 {
+	if len(order) == 0 {
 		return nil, fmt.Errorf("no apply links in widget config")
 	}
+	refs := make([]bairesDevRef, 0, len(order))
+	for _, jobID := range order {
+		refs = append(refs, *byJob[jobID])
+	}
 	return refs, nil
+}
+
+// bairesDevTitleLocation returns the location tail of a widget row title
+// ("Python Developer | Remote Work | Brazil" → "Brazil"), or "" when the title carries no location
+// segment. The listing embeds the per-variant location only in the title (the JobPosting title is
+// location-stripped), so this is the sole per-job geography.
+func bairesDevTitleLocation(title string) string {
+	parts := strings.Split(title, "|")
+	if len(parts) < 3 {
+		return "" // not the "role | Remote Work | location" shape
+	}
+	loc := strings.TrimSpace(parts[len(parts)-1])
+	if strings.EqualFold(loc, "Remote Work") {
+		return ""
+	}
+	return loc
 }
 
 // bairesDevPosting selects the JobPosting ld+json fields the public endpoint returns.
@@ -165,6 +204,7 @@ func (b bairesdev) detail(ctx context.Context, r bairesDevRef) (Job, bool) {
 		URL:         fmt.Sprintf(bairesDevApplyURL, r.careerID, r.jobID),
 		Title:       p.Title,
 		Company:     company,
+		Location:    r.location,
 		Description: sanitizeHTML(desc),
 		Remote:      mode == "remote",
 		WorkMode:    mode,
