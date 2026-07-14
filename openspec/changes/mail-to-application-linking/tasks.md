@@ -1,8 +1,8 @@
 ## 1. Schema and generated DB access
 
-- [ ] 1.1 Add migration `0017_email_application_linking.sql`: new `emails` columns (`job_id` BIGINT NULL REFERENCES jobs(id), `suggested_job_id` BIGINT NULL REFERENCES jobs(id), `link_source` TEXT NULL, `match_confidence` REAL NULL, `status_signal` TEXT NULL, `classified_at` TIMESTAMPTZ NULL, `classification_model` TEXT NULL) + `email_classification_outbox` table (email_id, lease/retry bookkeeping) mirroring `enrichment_outbox`
-- [ ] 1.2 Add queries in `internal/db/queries/`: enqueue-on-insert, claim/lease a wave, set classification result + delete outbox row, list emails by application, confirm/reject/manual-link mutations
-- [ ] 1.3 Run `make sqlc` and commit generated `internal/db` changes
+- [x] 1.1 Add migration `0017_email_application_linking.sql`: new `emails` columns (`job_id` BIGINT NULL REFERENCES jobs(id), `suggested_job_id` BIGINT NULL REFERENCES jobs(id), `link_source` TEXT NULL, `match_confidence` REAL NULL, `status_signal` TEXT NULL, `classified_at` TIMESTAMPTZ NULL, `classification_model` TEXT NULL) + `email_classification_outbox` table (email_id, lease/retry bookkeeping) mirroring `enrichment_outbox`
+- [x] 1.2 Add queries in `internal/db/queries/`: enqueue-on-insert, claim/lease a wave, set classification result + delete outbox row, list emails by application, confirm/reject/manual-link mutations
+- [x] 1.3 Run `make sqlc` and commit generated `internal/db` changes
 
 ## 2. Deterministic matching (`internal/mailmatch`)
 

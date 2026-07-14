@@ -64,20 +64,37 @@ type Company struct {
 }
 
 type Email struct {
-	ID         int64              `json:"id"`
-	UserID     int64              `json:"user_id"`
-	ExternalID string             `json:"external_id"`
-	ThreadID   string             `json:"thread_id"`
-	FromAddr   string             `json:"from_addr"`
-	FromName   string             `json:"from_name"`
-	Subject    string             `json:"subject"`
-	BodyText   string             `json:"body_text"`
-	BodyHtml   string             `json:"body_html"`
-	ReceivedAt pgtype.Timestamptz `json:"received_at"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	Source     string             `json:"source"`
-	S3Key      pgtype.Text        `json:"s3_key"`
-	ReadAt     pgtype.Timestamptz `json:"read_at"`
+	ID                  int64              `json:"id"`
+	UserID              int64              `json:"user_id"`
+	ExternalID          string             `json:"external_id"`
+	ThreadID            string             `json:"thread_id"`
+	FromAddr            string             `json:"from_addr"`
+	FromName            string             `json:"from_name"`
+	Subject             string             `json:"subject"`
+	BodyText            string             `json:"body_text"`
+	BodyHtml            string             `json:"body_html"`
+	ReceivedAt          pgtype.Timestamptz `json:"received_at"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	Source              string             `json:"source"`
+	S3Key               pgtype.Text        `json:"s3_key"`
+	ReadAt              pgtype.Timestamptz `json:"read_at"`
+	JobID               pgtype.Int8        `json:"job_id"`
+	SuggestedJobID      pgtype.Int8        `json:"suggested_job_id"`
+	LinkSource          pgtype.Text        `json:"link_source"`
+	MatchConfidence     pgtype.Float4      `json:"match_confidence"`
+	StatusSignal        pgtype.Text        `json:"status_signal"`
+	ClassifiedAt        pgtype.Timestamptz `json:"classified_at"`
+	ClassificationModel pgtype.Text        `json:"classification_model"`
+}
+
+type EmailClassificationOutbox struct {
+	ID        int64              `json:"id"`
+	EmailID   int64              `json:"email_id"`
+	Attempts  int32              `json:"attempts"`
+	ClaimedAt pgtype.Timestamptz `json:"claimed_at"`
+	FailedAt  pgtype.Timestamptz `json:"failed_at"`
+	LastError string             `json:"last_error"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type EnrichmentOutbox struct {

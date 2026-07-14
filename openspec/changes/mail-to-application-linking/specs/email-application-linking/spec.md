@@ -2,12 +2,12 @@
 
 ### Requirement: Classification pipeline is queue-driven
 
-The system SHALL enqueue every newly stored inbox email into an `email_classification_outbox` queue in the same transaction that inserts the email, and a run-once-and-exit worker (`cmd/classify-mail`) SHALL drain that queue, mirroring the enrichment outbox idiom (reference-only rows, lease + retry, dead-letter after a bounded number of attempts).
+The system SHALL enqueue every not-yet-classified inbox email into an `email_classification_outbox` queue and a run-once-and-exit worker (`cmd/classify-mail`) SHALL drain that queue, mirroring the enrichment outbox idiom (reference-only rows, lease + retry, dead-letter after a bounded number of attempts). Enqueue is an idempotent pending sweep keyed on the `classified_at` stamp, so re-running never duplicates work.
 
-#### Scenario: New email is enqueued on insert
+#### Scenario: Unclassified emails are enqueued
 
-- **WHEN** an email is stored by the Gmail-sync or hosted-ingest write path
-- **THEN** a corresponding `email_classification_outbox` row is written in the same transaction
+- **WHEN** the classify-mail worker runs its enqueue sweep
+- **THEN** every email without a `classified_at` stamp gets exactly one `email_classification_outbox` entry, and already-classified or already-queued emails are left untouched
 
 #### Scenario: Worker drains the queue
 

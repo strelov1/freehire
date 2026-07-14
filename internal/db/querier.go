@@ -11,10 +11,18 @@ import (
 )
 
 type Querier interface {
+	// Move an application forward to a new stage (the worker only calls this after
+	// checking the transition is strictly forward and high-confidence).
+	AdvanceUserJobStage(ctx context.Context, arg AdvanceUserJobStageParams) error
 	// Resolve a presented token (by its SHA-256 hash) to the owning user id, enforcing
 	// expiry and touching last_used_at in one atomic statement. No row means the key is
 	// unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401.
 	AuthenticateAPIKey(ctx context.Context, tokenHash string) (int64, error)
+	// Claim a wave of live, unleased entries by stamping claimed_at, newest email first,
+	// returning the email fields the matcher/classifier need. FOR UPDATE OF o locks only
+	// outbox rows; SKIP LOCKED lets concurrent workers take disjoint rows; the lease
+	// predicate reclaims entries whose worker died, so no separate reaper is needed.
+	ClaimEmailClassificationBatch(ctx context.Context, arg ClaimEmailClassificationBatchParams) ([]ClaimEmailClassificationBatchRow, error)
 	// Claim a batch of live, unleased entries for OPEN jobs, freshest job first, by
 	// stamping claimed_at. The jobs join lets the claim order by posting freshness and
 	// skip closed jobs, so LLM budget goes to live postings users will actually see.
@@ -180,6 +188,7 @@ type Querier interface {
 	// days (a day that had only closures, now reopened) are dropped rather than left
 	// stale.
 	DeleteAllJobDailyStats(ctx context.Context) error
+	DeleteEmailClassificationOutbox(ctx context.Context, id int64) error
 	// Purge one source's mail for a user (Gmail disconnect passes 'gmail', mailbox
 	// release passes 'hosted') — the other source's mail is left untouched.
 	DeleteEmailsBySource(ctx context.Context, arg DeleteEmailsBySourceParams) error
@@ -218,6 +227,10 @@ type Querier interface {
 	// via the outbox's UNIQUE (job_id, target_version). Run in the same transaction as the
 	// job's UpsertJob so a newly ingested job is queued atomically with its write.
 	EnqueueJobEnrichment(ctx context.Context, arg EnqueueJobEnrichmentParams) (int64, error)
+	// Idempotent backfill: enqueue every email not yet classified. classified_at is the
+	// "done" marker; ON CONFLICT keeps one entry per email, so running this each worker
+	// invocation never duplicates work.
+	EnqueuePendingEmailClassification(ctx context.Context) (int64, error)
 	// Idempotent backfill: enqueue every OPEN job that is unenriched or below the target
 	// schema version. Closed jobs (closed_at IS NOT NULL) are skipped — a dead posting no
 	// user will see should not consume LLM budget. Jobs whose derived category is in
@@ -263,6 +276,9 @@ type Querier interface {
 	// reopens it via the upsert regardless). Keyed by source alone; the caller namespaces the
 	// adapter's raw posting id to match the stored external_id.
 	ExistingExternalIDs(ctx context.Context, source string) ([]string, error)
+	// Record a failed attempt: bump attempts, release the lease, store the error, and
+	// dead-letter (set failed_at) once attempts reach max_attempts.
+	FailEmailClassification(ctx context.Context, arg FailEmailClassificationParams) error
 	// The board's current cooldown_until (NULL = eligible). Absent row → pgx.ErrNoRows,
 	// which the caller treats as "never seen, eligible".
 	GetBoardCooldown(ctx context.Context, arg GetBoardCooldownParams) (pgtype.Timestamptz, error)
@@ -335,6 +351,9 @@ type Querier interface {
 	// null analysis, no LLM call). The handler compares cv_uploaded_at / job_content_hash
 	// to the live CV upload time and job content_hash to decide the stale flag.
 	GetUserJobAnalysis(ctx context.Context, arg GetUserJobAnalysisParams) (GetUserJobAnalysisRow, error)
+	// The caller's current stage for one application (empty string when unset), so the
+	// worker can decide a monotonic-forward advancement.
+	GetUserJobStage(ctx context.Context, arg GetUserJobStageParams) (string, error)
 	// The caller's single profile, keyed by user_id. No matching row means the user has not
 	// saved a profile yet (the handler maps that to a null payload / 404 on sub-resources).
 	GetUserProfile(ctx context.Context, userID int64) (UserProfile, error)
@@ -491,6 +510,12 @@ type Querier interface {
 	// Every board currently failing or cooled down, worst first — the operator's
 	// "what's broken" query and the source of the per-run summary log.
 	ListUnhealthyBoards(ctx context.Context) ([]ListUnhealthyBoardsRow, error)
+	// The caller's open applications offered to the matcher (applied, saved, or staged),
+	// as (job_id, company). Closed postings are excluded.
+	ListUserApplicationsForMatch(ctx context.Context, userID int64) ([]ListUserApplicationsForMatchRow, error)
+	// Existing thread→application links for the caller, so the matcher can continue a
+	// thread already attached to an application.
+	ListUserEmailThreadLinks(ctx context.Context, userID int64) ([]ListUserEmailThreadLinksRow, error)
 	// Dense cumulative member-growth series: one UTC calendar day per row from the
 	// first registration through today, each carrying the running total of members
 	// registered on or before that day. A daily generate_series builds the gap-free
@@ -673,6 +698,10 @@ type Querier interface {
 	// (preserving unmanaged tags) and writes it here; updated_at is bumped for parity
 	// with the other write paths.
 	SetCompanyCollections(ctx context.Context, arg SetCompanyCollectionsParams) error
+	// Persist the resolved link + classification and stamp classified_at + model in one
+	// write. job_id/suggested_job_id/link_source/match_confidence are nullable — an
+	// unlinked or suggestion-only email leaves job_id NULL.
+	SetEmailClassification(ctx context.Context, arg SetEmailClassificationParams) error
 	SetGmailStatus(ctx context.Context, arg SetGmailStatusParams) error
 	SetGmailSynced(ctx context.Context, arg SetGmailSyncedParams) error
 	// Targeted enrichment write used by the enrichment command: set only the payload
