@@ -364,6 +364,12 @@ export function createApi(
     );
   }
 
+  /** The subindustry facet vocabulary (each clean YC leaf + its company count),
+   *  count-ordered, backing the company "Industry" filter's searchable options. */
+  async function listCompanySubindustries(): Promise<{ value: string; count: number }[]> {
+    return requestData<{ value: string; count: number }[]>('/api/v1/companies/subindustries');
+  }
+
   // --- Sitemap --------------------------------------------------------------
   //
   // Feeds behind the sitemap index (server routes only). Jobs ship their freshest
@@ -844,6 +850,7 @@ export function createApi(
     jobsActivity,
     listCompanies,
     getCompany,
+    listCompanySubindustries,
     sitemapJobs,
     sitemapCompanies,
     sitemapCompanyBoundaries,

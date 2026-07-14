@@ -28,7 +28,8 @@
     { key: 'collections', label: 'Collection', params: ['collections'] },
     { key: 'region', label: 'Region', params: ['regions', 'remote_regions'] },
     { key: 'countries', label: 'Country', params: ['countries'] },
-    { key: 'domains', label: 'Industry', params: ['domains'] },
+    { key: 'subindustries', label: 'Industry', params: ['subindustries'] },
+    { key: 'domains', label: 'Domain', params: ['domains'] },
     { key: 'company', label: 'Company', params: ['company_type', 'company_size'] },
     { key: 'yc', label: 'Y Combinator', params: ['yc_status', 'yc_stage', 'yc_flags', 'yc_batch'] },
   ];

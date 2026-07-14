@@ -12,7 +12,7 @@
 
 ## 4. Frontend facet
 
-- [ ] 4.1 In `web/src/lib/facets.ts` add a searchable `subindustries` facet labelled "Industry" whose options load from `GET /api/v1/companies/subindustries`, and relabel the existing `domains` facet "Industry" → "Domain"; wire the option loading into the companies filter modal. Verify via `svelte-check` + a visual check of the filter
+- [x] 4.1 In `web/src/lib/facets.ts` add a searchable `subindustries` facet labelled "Industry" whose options load from `GET /api/v1/companies/subindustries`, and relabel the existing `domains` facet "Industry" → "Domain"; wire the option loading into the companies filter modal. Verify via `svelte-check` + a visual check of the filter
 
 ## 5. Verify & rollout
 
