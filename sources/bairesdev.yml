@@ -1,0 +1,6 @@
+# BairesDev (talent.bairesdev.com), a Latin-American software-outsourcing company. Boardless
+# single-company source: the whole open-req list is embedded in the talent site's Duda job widget,
+# so the entry carries no board, and the crawl hydrates each distinct posting from the public
+# applicants.bairesdev.com/api/JobPosting endpoint. Gets its own cron slot (per-job detail fetch).
+- company: BairesDev
+  provider: bairesdev
