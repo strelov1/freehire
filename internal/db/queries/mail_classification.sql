@@ -12,7 +12,7 @@ ON CONFLICT (email_id) DO NOTHING;
 -- outbox rows; SKIP LOCKED lets concurrent workers take disjoint rows; the lease
 -- predicate reclaims entries whose worker died, so no separate reaper is needed.
 WITH claimable AS (
-    SELECT o.id
+    SELECT o.id, o.email_id
     FROM email_classification_outbox o
     JOIN emails e ON e.id = o.email_id
     WHERE o.failed_at IS NULL
@@ -25,7 +25,7 @@ WITH claimable AS (
 UPDATE email_classification_outbox o
 SET claimed_at = now()
 FROM claimable c
-JOIN emails e ON e.id = o.email_id
+JOIN emails e ON e.id = c.email_id
 WHERE o.id = c.id
 RETURNING o.id, o.email_id, e.user_id, e.thread_id, e.from_name, e.subject, e.body_text;
 

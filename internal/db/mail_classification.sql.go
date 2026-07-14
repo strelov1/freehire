@@ -30,7 +30,7 @@ func (q *Queries) AdvanceUserJobStage(ctx context.Context, arg AdvanceUserJobSta
 
 const claimEmailClassificationBatch = `-- name: ClaimEmailClassificationBatch :many
 WITH claimable AS (
-    SELECT o.id
+    SELECT o.id, o.email_id
     FROM email_classification_outbox o
     JOIN emails e ON e.id = o.email_id
     WHERE o.failed_at IS NULL
@@ -43,7 +43,7 @@ WITH claimable AS (
 UPDATE email_classification_outbox o
 SET claimed_at = now()
 FROM claimable c
-JOIN emails e ON e.id = o.email_id
+JOIN emails e ON e.id = c.email_id
 WHERE o.id = c.id
 RETURNING o.id, o.email_id, e.user_id, e.thread_id, e.from_name, e.subject, e.body_text
 `
