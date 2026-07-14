@@ -40,6 +40,7 @@ type Input struct {
 	WorkMode           string
 	Seniority          string
 	Category           string
+	EmploymentType     string
 	Skills             []string
 	ExperienceYearsMin *int
 }
@@ -122,6 +123,12 @@ func Derive(in Input) Derived {
 		category = classify.NonTechFromDescription(in.Description)
 	}
 	isTech := deriveIsTech(category, in.Title)
+	// Employment-type precedence: structured source signal (an ATS timeType /
+	// typeOfEmployment enum) → free-text description parse. The source's own value wins.
+	employmentType := in.EmploymentType
+	if employmentType == "" {
+		employmentType = jobfacts.EmploymentType(in.Title, in.Description)
+	}
 	// Experience precedence: structured source signal → description text parse.
 	experience := in.ExperienceYearsMin
 	if experience == nil {
@@ -141,7 +148,7 @@ func Derive(in Input) Derived {
 		Category:           category,
 		IsTech:             isTech,
 		PostingLanguage:    lang.Detect(in.Description),
-		EmploymentType:     jobfacts.EmploymentType(in.Title, in.Description),
+		EmploymentType:     employmentType,
 		EducationLevel:     jobfacts.EducationLevel(in.Description),
 		EnglishLevel:       jobfacts.EnglishLevel(in.Description),
 		ExperienceYearsMin: experience,

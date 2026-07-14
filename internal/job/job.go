@@ -40,6 +40,7 @@ type Draft struct {
 	WorkMode           string
 	Seniority          string
 	Category           string
+	EmploymentType     string
 	Skills             []string
 	ExperienceYearsMin *int
 }
@@ -124,6 +125,7 @@ func New(d Draft) (Job, error) {
 		WorkMode:           d.WorkMode,
 		Seniority:          d.Seniority,
 		Category:           d.Category,
+		EmploymentType:     d.EmploymentType,
 		Skills:             d.Skills,
 		ExperienceYearsMin: d.ExperienceYearsMin,
 	})

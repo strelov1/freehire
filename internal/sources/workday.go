@@ -120,6 +120,7 @@ func (s workday) detail(ctx context.Context, e CompanyEntry, b workdayBoard, p w
 			StartDate      string `json:"startDate"`
 			ExternalURL    string `json:"externalUrl"`
 			RemoteType     string `json:"remoteType"`
+			TimeType       string `json:"timeType"`
 		} `json:"jobPostingInfo"`
 	}
 	if err := s.http.GetJSON(ctx, url, &d); err != nil {
@@ -144,7 +145,25 @@ func (s workday) detail(ctx context.Context, e CompanyEntry, b workdayBoard, p w
 		Description: sanitizeHTML(info.JobDescription),
 		Remote:      remote,
 		PostedAt:    parseWorkdayDate(info.StartDate),
+		// timeType is Workday's structured full/part-time enum; the pipeline prefers it
+		// over the free-text employment-type parse. Workday's timeType only distinguishes
+		// full vs part time (contract/intern live in other, per-tenant fields).
+		EmploymentType: workdayEmploymentType(info.TimeType),
 	}, true
+}
+
+// workdayEmploymentType maps Workday's timeType ("Full time" / "Part time") onto the
+// freehire employment-type vocabulary, returning "" for any other/absent value so the
+// description parser decides instead — structured signal only, never a guess.
+func workdayEmploymentType(timeType string) string {
+	switch strings.TrimSpace(strings.ToLower(timeType)) {
+	case "full time":
+		return "full_time"
+	case "part time":
+		return "part_time"
+	default:
+		return ""
+	}
 }
 
 // parseWorkdayDate reads Workday's startDate, which may be a full RFC3339 timestamp or

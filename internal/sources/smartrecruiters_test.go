@@ -87,6 +87,7 @@ func detailBody(id, title string) string {
 		"id": %q,
 		"postingUrl": "https://jobs.smartrecruiters.com/Acme/%s",
 		"experienceLevel": {"id": "mid_senior_level", "label": "Mid-Senior Level"},
+		"typeOfEmployment": {"id": "permanent", "label": "Full-time"},
 		"jobAd": {"sections": {
 			"companyDescription": {"title": "Company", "text": "<p>boilerplate</p>"},
 			"jobDescription": {"title": "Job", "text": "<p>%s do the job.</p>"},
@@ -120,6 +121,27 @@ func TestSmartRecruitersSeniority(t *testing.T) {
 	for in, want := range cases {
 		if got := smartRecruitersSeniority(in); got != want {
 			t.Errorf("smartRecruitersSeniority(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// The SmartRecruiters typeOfEmployment enum maps onto freehire's employment-type
+// vocabulary; unknown/absent ids map to "" so the description parser decides.
+func TestSmartRecruitersEmploymentType(t *testing.T) {
+	cases := map[string]string{
+		"permanent":   "full_time",
+		"full-time":   "full_time",
+		"part-time":   "part_time",
+		"contract":    "contract",
+		"temporary":   "contract",
+		"internship":  "internship",
+		"traineeship": "internship",
+		"":            "",
+		"whatever":    "",
+	}
+	for in, want := range cases {
+		if got := smartRecruitersEmploymentType(in); got != want {
+			t.Errorf("smartRecruitersEmploymentType(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
@@ -180,6 +202,9 @@ func TestSmartRecruitersFetchPaginatesAndFetchesDetail(t *testing.T) {
 	}
 	if j.Seniority != "senior" {
 		t.Errorf("Seniority = %q, want senior (mapped from experienceLevel mid_senior_level)", j.Seniority)
+	}
+	if j.EmploymentType != "full_time" {
+		t.Errorf("EmploymentType = %q, want full_time (mapped from typeOfEmployment permanent)", j.EmploymentType)
 	}
 }
 

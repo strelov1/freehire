@@ -429,6 +429,7 @@ func normalizeJob(e sources.CompanyEntry, j sources.Job) (job.Job, error) {
 		WorkMode:           j.WorkMode,
 		Seniority:          j.Seniority,
 		Category:           j.Category,
+		EmploymentType:     j.EmploymentType,
 		Skills:             j.Skills,
 		ExperienceYearsMin: j.ExperienceYearsMin,
 	})

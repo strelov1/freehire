@@ -85,6 +85,23 @@ func TestDerive_SyntheticFacetsSilent(t *testing.T) {
 	}
 }
 
+// A structured employment_type from the adapter takes precedence over the free-text
+// jobfacts parse, mirroring the seniority/category precedence — the source's own
+// value wins even when the description text would parse to something else.
+func TestDerive_StructuredEmploymentTypeWins(t *testing.T) {
+	got := Derive(Input{
+		Title:          "Backend Engineering Intern", // jobfacts would parse "internship"
+		Company:        "Acme",
+		Source:         "manual",
+		ExternalID:     "3",
+		Description:    "An internship opportunity.",
+		EmploymentType: "contract", // structured signal from the source
+	})
+	if got.EmploymentType != "contract" {
+		t.Errorf("EmploymentType = %q, want contract (structured wins over jobfacts internship)", got.EmploymentType)
+	}
+}
+
 func TestDerive_StructuredWorkModeWins(t *testing.T) {
 	got := Derive(Input{
 		Title:      "Dev",

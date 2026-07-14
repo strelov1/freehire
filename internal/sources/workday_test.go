@@ -6,6 +6,22 @@ import (
 	"testing"
 )
 
+func TestWorkdayEmploymentType(t *testing.T) {
+	cases := map[string]string{
+		"Full time": "full_time",
+		"full time": "full_time",
+		"Part time": "part_time",
+		"part time": "part_time",
+		"":          "",
+		"Seasonal":  "",
+	}
+	for in, want := range cases {
+		if got := workdayEmploymentType(in); got != want {
+			t.Errorf("workdayEmploymentType(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestWorkdayProvider(t *testing.T) {
 	if got := NewWorkday(nil).Provider(); got != "workday" {
 		t.Errorf("Provider() = %q, want %q", got, "workday")
@@ -24,7 +40,8 @@ func TestWorkdayFetchListsAndFetchesDetail(t *testing.T) {
 			"location": "Berlin, Germany",
 			"startDate": "2024-06-11",
 			"externalUrl": "https://acme.wd1.myworkdayjobs.com/en-US/Careers/job/Berlin/Backend_JR-1",
-			"remoteType": "On-site"
+			"remoteType": "On-site",
+			"timeType": "Full time"
 		}}`).
 		route("Data_JR-2", `{"jobPostingInfo": {
 			"title": "Data Engineer",
@@ -70,6 +87,9 @@ func TestWorkdayFetchListsAndFetchesDetail(t *testing.T) {
 	}
 	if j.PostedAt == nil || j.PostedAt.UTC().Year() != 2024 {
 		t.Errorf("PostedAt = %v, want parsed startDate (2024)", j.PostedAt)
+	}
+	if j.EmploymentType != "full_time" {
+		t.Errorf("EmploymentType = %q, want full_time (from timeType)", j.EmploymentType)
 	}
 
 	d := byID["/job/Remote/Data_JR-2"]

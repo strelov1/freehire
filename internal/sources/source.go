@@ -47,15 +47,17 @@ type Job struct {
 	// location string. Provenance stays clean: this carries structured signal only,
 	// never the location heuristic.
 	WorkMode string
-	// Seniority, Category, Skills, and ExperienceYearsMin are the platform's
-	// STRUCTURED facet signals, already mapped into freehire's controlled
-	// vocabularies (enrich.SeniorityValues / enrich.CategoryValues / canonical skill
-	// names). They mirror WorkMode: an adapter sets them only when the platform states
-	// the value in a structured field, never a heuristic inferred from free text, and
-	// leaves them empty/nil otherwise so the pipeline's dictionaries decide. The
-	// pipeline gives a set value precedence over the dictionary (Skills are unioned).
+	// Seniority, Category, EmploymentType, Skills, and ExperienceYearsMin are the
+	// platform's STRUCTURED facet signals, already mapped into freehire's controlled
+	// vocabularies (enrich.SeniorityValues / enrich.CategoryValues /
+	// enrich.EmploymentTypeValues / canonical skill names). They mirror WorkMode: an
+	// adapter sets them only when the platform states the value in a structured field
+	// (e.g. an ATS timeType / typeOfEmployment enum), never a heuristic inferred from
+	// free text, and leaves them empty/nil otherwise so the pipeline's dictionaries
+	// decide. The pipeline gives a set value precedence over the dictionary (Skills are unioned).
 	Seniority          string
 	Category           string
+	EmploymentType     string
 	Skills             []string
 	ExperienceYearsMin *int
 	// Removed marks a posting the source reports as taken down (e.g. an item flagged

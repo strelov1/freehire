@@ -112,6 +112,9 @@ func (s smartRecruiters) detail(ctx context.Context, e CompanyEntry, p smartRecr
 		ExperienceLevel struct {
 			ID string `json:"id"`
 		} `json:"experienceLevel"`
+		TypeOfEmployment struct {
+			ID string `json:"id"`
+		} `json:"typeOfEmployment"`
 		JobAd struct {
 			Sections struct {
 				JobDescription        srSection `json:"jobDescription"`
@@ -141,5 +144,26 @@ func (s smartRecruiters) detail(ctx context.Context, e CompanyEntry, p smartRecr
 		// experienceLevel is the employer's own structured seniority; the pipeline gives it
 		// precedence over the title dictionary, so it fills the grade for title-silent roles.
 		Seniority: smartRecruitersSeniority(d.ExperienceLevel.ID),
+		// typeOfEmployment is the employer's structured employment type; preferred over the
+		// free-text description parse.
+		EmploymentType: smartRecruitersEmploymentType(d.TypeOfEmployment.ID),
 	}, true
+}
+
+// smartRecruitersEmploymentType maps the SmartRecruiters typeOfEmployment enum onto the
+// freehire employment-type vocabulary, returning "" for an unset/unknown id so the
+// description parser decides — structured signal only, never a guess.
+func smartRecruitersEmploymentType(typeOfEmploymentID string) string {
+	switch typeOfEmploymentID {
+	case "permanent", "full-time":
+		return "full_time"
+	case "part-time":
+		return "part_time"
+	case "contract", "temporary":
+		return "contract"
+	case "internship", "traineeship":
+		return "internship"
+	default:
+		return ""
+	}
 }
