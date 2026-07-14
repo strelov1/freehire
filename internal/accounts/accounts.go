@@ -26,11 +26,15 @@ const dummyPasswordHash = "$2a$10$uAK6XQv2KNKj0KXGXHcgAe3fn70C1tZiCUeG4ZCkdGGJ60
 // User is the public representation of a local account. Role is the DB-stored
 // authorization role ('user'/'moderator'/'admin'); it rides the wire shape so a client
 // can gate moderator-only UI, while RequireRole still authorizes server-side.
+// BetaTester is a separate rollout-group membership (independent of Role); it
+// gates the in-app agent assistant and likewise rides the wire shape as a UI
+// affordance.
 type User struct {
-	ID        int64
-	Email     string
-	Role      string
-	CreatedAt *time.Time
+	ID         int64
+	Email      string
+	Role       string
+	BetaTester bool
+	CreatedAt  *time.Time
 }
 
 // PasswordHasher hashes and verifies passwords (bcrypt in production). Injected

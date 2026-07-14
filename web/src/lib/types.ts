@@ -152,6 +152,9 @@ export interface User {
   // Authorization role ('user' | 'moderator' | 'admin'). A UI affordance only —
   // the server re-checks it on every privileged request.
   role: string;
+  // Beta-tester group membership, independent of `role`. Gates the agent
+  // assistant (/my/assistant) in the UI.
+  beta_tester: boolean;
   created_at: string | null;
 }
 

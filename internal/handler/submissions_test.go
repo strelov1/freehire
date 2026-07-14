@@ -41,3 +41,16 @@ func TestToUserResponse_IncludesRole(t *testing.T) {
 		t.Errorf("role = %q, want moderator", got.Role)
 	}
 }
+
+// beta_tester is a separate group from role, carried on the wire so the SPA can
+// gate the assistant independently of moderator/admin.
+func TestToUserResponse_IncludesBetaTester(t *testing.T) {
+	got := toUserResponse(accounts.User{ID: 1, Email: "a@b.test", Role: "user", BetaTester: true})
+	if !got.BetaTester {
+		t.Errorf("beta_tester = %v, want true", got.BetaTester)
+	}
+	// role and beta_tester are independent — a plain user can be a beta tester.
+	if got.Role != "user" {
+		t.Errorf("role = %q, want user", got.Role)
+	}
+}

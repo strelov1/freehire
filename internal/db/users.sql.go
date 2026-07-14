@@ -31,7 +31,7 @@ func (q *Queries) ClearUserResume(ctx context.Context, id int64) error {
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, password_hash)
 VALUES ($1, $2)
-RETURNING id, email, role, created_at
+RETURNING id, email, role, beta_tester, created_at
 `
 
 type CreateUserParams struct {
@@ -40,10 +40,11 @@ type CreateUserParams struct {
 }
 
 type CreateUserRow struct {
-	ID        int64              `json:"id"`
-	Email     string             `json:"email"`
-	Role      string             `json:"role"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID         int64              `json:"id"`
+	Email      string             `json:"email"`
+	Role       string             `json:"role"`
+	BetaTester bool               `json:"beta_tester"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
 // Register a new account. email is stored as given (the handler lowercases it);
@@ -56,6 +57,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 		&i.ID,
 		&i.Email,
 		&i.Role,
+		&i.BetaTester,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -77,7 +79,7 @@ func (q *Queries) GetUserATSAnalysis(ctx context.Context, id int64) ([]byte, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, role, password_hash, created_at
+SELECT id, email, role, beta_tester, password_hash, created_at
 FROM users
 WHERE lower(email) = lower($1)
 `
@@ -86,6 +88,7 @@ type GetUserByEmailRow struct {
 	ID           int64              `json:"id"`
 	Email        string             `json:"email"`
 	Role         string             `json:"role"`
+	BetaTester   bool               `json:"beta_tester"`
 	PasswordHash pgtype.Text        `json:"password_hash"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
@@ -100,6 +103,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (GetUserByEm
 		&i.ID,
 		&i.Email,
 		&i.Role,
+		&i.BetaTester,
 		&i.PasswordHash,
 		&i.CreatedAt,
 	)
@@ -107,16 +111,17 @@ func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (GetUserByEm
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, role, created_at
+SELECT id, email, role, beta_tester, created_at
 FROM users
 WHERE id = $1
 `
 
 type GetUserByIDRow struct {
-	ID        int64              `json:"id"`
-	Email     string             `json:"email"`
-	Role      string             `json:"role"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID         int64              `json:"id"`
+	Email      string             `json:"email"`
+	Role       string             `json:"role"`
+	BetaTester bool               `json:"beta_tester"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
 // Profile lookup for the authenticated user. Never selects password_hash. role is
@@ -128,6 +133,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, er
 		&i.ID,
 		&i.Email,
 		&i.Role,
+		&i.BetaTester,
 		&i.CreatedAt,
 	)
 	return i, err

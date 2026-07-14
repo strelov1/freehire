@@ -121,7 +121,7 @@ func (r *QueriesRepository) CreateUser(ctx context.Context, email, passwordHash 
 	if err != nil {
 		return User{}, err
 	}
-	return User{ID: row.ID, Email: row.Email, Role: row.Role, CreatedAt: pgconv.TimePtr(row.CreatedAt)}, nil
+	return User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester, CreatedAt: pgconv.TimePtr(row.CreatedAt)}, nil
 }
 
 // UserByEmail looks up the account with the given (already-normalised) email.
@@ -135,7 +135,7 @@ func (r *QueriesRepository) UserByEmail(ctx context.Context, email string) (User
 	if err != nil {
 		return User{}, "", false, err
 	}
-	u := User{ID: row.ID, Email: row.Email, Role: row.Role, CreatedAt: pgconv.TimePtr(row.CreatedAt)}
+	u := User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester, CreatedAt: pgconv.TimePtr(row.CreatedAt)}
 	return u, row.PasswordHash.String, row.PasswordHash.Valid, nil
 }
 
@@ -148,5 +148,5 @@ func (r *QueriesRepository) UserByID(ctx context.Context, id int64) (User, error
 	if err != nil {
 		return User{}, err
 	}
-	return User{ID: row.ID, Email: row.Email, Role: row.Role, CreatedAt: pgconv.TimePtr(row.CreatedAt)}, nil
+	return User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester, CreatedAt: pgconv.TimePtr(row.CreatedAt)}, nil
 }

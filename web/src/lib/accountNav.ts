@@ -9,8 +9,9 @@
 // HeaderMenu's navLinks).
 export const accountNav = [
   { href: '/my/profile', label: 'Profile' },
-  // Assistant is a restricted rollout — moderators only for now.
-  { href: '/my/assistant', label: 'Assistant', moderatorOnly: true },
+  // The agent is a restricted rollout — beta testers only (a group separate from
+  // the moderator role; see `beta_tester` on the user).
+  { href: '/my/assistant', label: 'Agent', betaOnly: true },
   { href: '/my/tracking', label: 'Tracking' },
   { href: '/my/activity', label: 'Activity' },
   // Mail inbox is a restricted rollout — moderators only (the server 403s others).
@@ -23,10 +24,19 @@ export const accountNav = [
 export type AccountNavItem = (typeof accountNav)[number];
 
 // The sections visible to a caller: a `moderatorOnly` section is hidden unless the
-// caller is a moderator. This is a UI affordance only — the server re-checks the
-// role on every request, so hiding the nav is not the security boundary.
-export function visibleAccountNav(isModerator: boolean): readonly AccountNavItem[] {
-  return accountNav.filter((i) => !('moderatorOnly' in i && i.moderatorOnly) || isModerator);
+// caller is a moderator, and a `betaOnly` section unless the caller is a beta
+// tester (an independent group). This is a UI affordance only — the relevant
+// server surfaces re-check on every request, so hiding the nav is not the
+// security boundary.
+export function visibleAccountNav(
+  isModerator: boolean,
+  isBetaTester: boolean,
+): readonly AccountNavItem[] {
+  return accountNav.filter((i) => {
+    if ('moderatorOnly' in i && i.moderatorOnly) return isModerator;
+    if ('betaOnly' in i && i.betaOnly) return isBetaTester;
+    return true;
+  });
 }
 
 // A section is active when the current path equals its route or is a descendant

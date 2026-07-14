@@ -15,10 +15,11 @@ import (
 // decide whether to surface moderator-only UI; it is an affordance only, as RequireRole
 // re-checks the DB-stored role on every privileged request.
 type userResponse struct {
-	ID        int64      `json:"id"`
-	Email     string     `json:"email"`
-	Role      string     `json:"role"`
-	CreatedAt *time.Time `json:"created_at"`
+	ID         int64      `json:"id"`
+	Email      string     `json:"email"`
+	Role       string     `json:"role"`
+	BetaTester bool       `json:"beta_tester"`
+	CreatedAt  *time.Time `json:"created_at"`
 }
 
 type credentials struct {
@@ -28,7 +29,7 @@ type credentials struct {
 
 // toUserResponse maps an accounts.User to its public response shape.
 func toUserResponse(u accounts.User) userResponse {
-	return userResponse{ID: u.ID, Email: u.Email, Role: u.Role, CreatedAt: u.CreatedAt}
+	return userResponse{ID: u.ID, Email: u.Email, Role: u.Role, BetaTester: u.BetaTester, CreatedAt: u.CreatedAt}
 }
 
 // accountsError maps the accounts service sentinels to HTTP errors, preserving

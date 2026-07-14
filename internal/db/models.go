@@ -272,6 +272,7 @@ type User struct {
 	ResumeStructured           []byte             `json:"resume_structured"`
 	ResumeStructuredModel      pgtype.Text        `json:"resume_structured_model"`
 	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
+	BetaTester                 bool               `json:"beta_tester"`
 }
 
 type UserIdentity struct {
