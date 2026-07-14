@@ -86,6 +86,7 @@ func detailBody(id, title string) string {
 	return fmt.Sprintf(`{
 		"id": %q,
 		"postingUrl": "https://jobs.smartrecruiters.com/Acme/%s",
+		"experienceLevel": {"id": "mid_senior_level", "label": "Mid-Senior Level"},
 		"jobAd": {"sections": {
 			"companyDescription": {"title": "Company", "text": "<p>boilerplate</p>"},
 			"jobDescription": {"title": "Job", "text": "<p>%s do the job.</p>"},
@@ -98,6 +99,28 @@ func detailBody(id, title string) string {
 func TestSmartRecruitersProvider(t *testing.T) {
 	if got := NewSmartRecruiters(nil).Provider(); got != "smartrecruiters" {
 		t.Errorf("Provider() = %q, want %q", got, "smartrecruiters")
+	}
+}
+
+// The SmartRecruiters experienceLevel enum maps onto freehire's seniority vocabulary.
+// Ambiguous/unset values (not_applicable, unknown) map to "" so the title dictionary
+// decides instead — structured signal only, never a guess.
+func TestSmartRecruitersSeniority(t *testing.T) {
+	cases := map[string]string{
+		"internship":       "intern",
+		"entry_level":      "junior",
+		"associate":        "middle",
+		"mid_senior_level": "senior",
+		"director":         "lead",
+		"executive":        "c_level",
+		"not_applicable":   "",
+		"":                 "",
+		"something_new":    "",
+	}
+	for in, want := range cases {
+		if got := smartRecruitersSeniority(in); got != want {
+			t.Errorf("smartRecruitersSeniority(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
 
@@ -154,6 +177,9 @@ func TestSmartRecruitersFetchPaginatesAndFetchesDetail(t *testing.T) {
 	}
 	if j.PostedAt == nil || j.PostedAt.UTC().Year() != 2024 {
 		t.Errorf("PostedAt = %v, want parsed releasedDate (2024)", j.PostedAt)
+	}
+	if j.Seniority != "senior" {
+		t.Errorf("Seniority = %q, want senior (mapped from experienceLevel mid_senior_level)", j.Seniority)
 	}
 }
 

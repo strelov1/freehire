@@ -26,6 +26,26 @@ func NewSmartRecruiters(c JSONGetter) Source { return smartRecruiters{http: c} }
 
 func (smartRecruiters) Provider() string { return "smartrecruiters" }
 
+// smartRecruitersSeniorityMap maps the SmartRecruiters experienceLevel enum onto
+// freehire's seniority vocabulary. Values not in the map (notably "not_applicable",
+// the plurality, plus any unknown/empty id) yield "" so the Job carries no structured
+// seniority and the pipeline's title dictionary decides — structured signal only,
+// never a guess (the sources.Job.Seniority contract).
+var smartRecruitersSeniorityMap = map[string]string{
+	"internship":       "intern",
+	"entry_level":      "junior",
+	"associate":        "middle",
+	"mid_senior_level": "senior",
+	"director":         "lead",
+	"executive":        "c_level",
+}
+
+// smartRecruitersSeniority maps an experienceLevel id to a freehire seniority, or ""
+// when the level is unset/ambiguous/unknown.
+func smartRecruitersSeniority(experienceLevelID string) string {
+	return smartRecruitersSeniorityMap[experienceLevelID]
+}
+
 // srSection is one HTML section of a posting's job ad (the description lives here).
 type srSection struct {
 	Text string `json:"text"`
@@ -88,8 +108,11 @@ func (s smartRecruiters) detail(ctx context.Context, e CompanyEntry, p smartRecr
 	url := fmt.Sprintf("%s/%s/postings/%s", smartRecruitersBaseURL, e.Board, p.ID)
 
 	var d struct {
-		PostingURL string `json:"postingUrl"`
-		JobAd      struct {
+		PostingURL      string `json:"postingUrl"`
+		ExperienceLevel struct {
+			ID string `json:"id"`
+		} `json:"experienceLevel"`
+		JobAd struct {
 			Sections struct {
 				JobDescription        srSection `json:"jobDescription"`
 				Qualifications        srSection `json:"qualifications"`
@@ -115,5 +138,8 @@ func (s smartRecruiters) detail(ctx context.Context, e CompanyEntry, p smartRecr
 		Remote:      p.Location.Remote,
 		WorkMode:    workModeFromRemote(p.Location.Remote),
 		PostedAt:    parseRFC3339(p.ReleasedDate),
+		// experienceLevel is the employer's own structured seniority; the pipeline gives it
+		// precedence over the title dictionary, so it fills the grade for title-silent roles.
+		Seniority: smartRecruitersSeniority(d.ExperienceLevel.ID),
 	}, true
 }
