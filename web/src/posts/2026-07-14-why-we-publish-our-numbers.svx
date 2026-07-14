@@ -1,0 +1,53 @@
+---
+title: Why we publish our numbers
+date: 2026-07-14
+summary: freehire is an open, free search engine for jobs — so our metrics are open too. Here's what's on the /open page and why.
+type: article
+tags:
+  - transparency
+  - open-source
+draft: false
+---
+
+freehire is a search engine for jobs. It indexes millions of openings straight
+from company career boards and other sources, deduplicates them, and serves them
+over a free, open API. The whole pipeline is on GitHub.
+
+If the pitch is "open and free", the numbers should be open too. So we built
+[/open](/open): a single page with freehire's live metrics, no login required.
+
+## What's on it
+
+- **The catalogue** — how many open jobs, companies, ATS platforms, and Telegram
+  channels we cover. This is the core of what freehire is: reach.
+- **Daily movement** — vacancies crawled in versus postings detected as closed,
+  per day. It shows the catalogue breathing, not a static number.
+- **Members and engagement** — how many people signed up, and how many jobs get
+  saved, applied to, and viewed. Real usage, aggregate-only.
+- **What's inside** — the shape of the catalogue: top countries, skills,
+  seniority, and the remote share.
+- **Open source** — GitHub stars, forks, and contributors.
+
+## Live, not curated
+
+Every figure is read at request time from the same public API you can call
+yourself — and each headline number links to the endpoint that produced it. There's
+no hand-maintained dashboard to massage, and nothing rounded up to look bigger. If
+the crawler had a slow day, the movement chart shows it.
+
+## Small numbers, on purpose
+
+Some of these numbers are small right now — a few hundred members, a few dozen
+GitHub stars. We're showing them anyway. That's the point of building in the open:
+you get to watch the thing grow, and the honest early number is worth more than a
+polished vague one. Check back and the curves should bend.
+
+## It's also a demo
+
+There's a second reason the page reads its data live from the API: it doubles as
+proof that the API is real and open. freehire is built API-first, so an AI agent
+can search the whole job market instead of scraping one site at a time — and the
+transparency page is just another client of the same endpoints.
+
+Take a look at [/open](/open), and if a job source you use is missing, adding it is
+usually one small adapter — [contributions are very welcome](https://github.com/strelov1/freehire).

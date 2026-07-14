@@ -1,0 +1,25 @@
+---
+title: All our numbers, live
+date: 2026-07-14
+summary: A public /open page with freehire's live metrics — catalogue, movement, members, engagement, and open-source stats.
+type: changelog
+tags:
+  - product
+  - transparency
+draft: false
+---
+
+Every number about freehire is now public at [/open](/open) — live, and pulled
+straight from the same API anyone (or any AI agent) can query.
+
+On the page:
+
+- **The catalogue** — open jobs, companies, ATS platforms, and Telegram channels.
+- **Daily movement** — vacancies added versus removed over time.
+- **Members & engagement** — how many people are here, and how many jobs get
+  saved, applied to, and viewed.
+- **What's inside** — top countries, skills, seniority, and the remote share.
+- **Open source** — GitHub stars, forks, and contributors.
+
+No dashboards behind a login, no rounded-up vanity figures. Each headline number
+links to the API endpoint that produced it. Have a look: [/open](/open).
