@@ -48,6 +48,7 @@ func All(c Client) []Source {
 		NewAshby(c),
 		NewLever(c),
 		NewWorkable(c),
+		NewBairesDev(c),
 	}
 }
 
