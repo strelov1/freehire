@@ -21,13 +21,15 @@
   // job, so the browse list shows what's been seen. The My Jobs surfaces (where
   // every card is viewed by definition) pass `dimViewed={false}` to opt out.
   // `newTab` opens the job in a new browser tab (used when the card is rendered
-  // inside the assistant chat, so the conversation stays open). Default false
-  // keeps same-tab navigation everywhere else.
+  // inside the assistant chat, so the conversation stays open). `compact` tightens
+  // the card for the narrow chat column (smaller padding + title, one-line title,
+  // no blurb). Both default off so the jobs list / company pages are unchanged.
   let {
     job,
     dimViewed = true,
     newTab = false,
-  }: { job: Job; dimViewed?: boolean; newTab?: boolean } = $props();
+    compact = false,
+  }: { job: Job; dimViewed?: boolean; newTab?: boolean; compact?: boolean } = $props();
 
   const isViewed = $derived(dimViewed && hasViewed(job.public_slug));
 
@@ -88,7 +90,10 @@
   href={resolve('/jobs/[slug]', { slug: job.public_slug })}
   target={newTab ? '_blank' : undefined}
   rel={newTab ? 'noopener' : undefined}
-  class="block rounded-xl border border-border bg-card p-4 transition hover:border-brand hover:bg-accent hover:opacity-100"
+  class={[
+    'block rounded-xl border border-border bg-card transition hover:border-brand hover:bg-accent hover:opacity-100',
+    compact ? 'p-3' : 'p-4',
+  ]}
   class:opacity-60={isViewed}
 >
   <!-- Company + timestamp rail: a quiet eyebrow that yields the stage to the title.
@@ -111,7 +116,12 @@
 
   <!-- The title is the card's hero — a size up from the body with tight leading, so
        the eye lands on the role first. -->
-  <h3 class="mt-2.5 line-clamp-2 text-lg font-semibold leading-snug tracking-tight sm:text-[1.35rem]">
+  <h3
+    class={[
+      'font-semibold leading-snug tracking-tight',
+      compact ? 'mt-2 line-clamp-1 text-base' : 'mt-2.5 line-clamp-2 text-lg sm:text-[1.35rem]',
+    ]}
+  >
     {job.title}
   </h3>
 
@@ -126,7 +136,7 @@
     </div>
   {/if}
 
-  {#if blurb}
+  {#if blurb && !compact}
     <p class="mt-2 line-clamp-2 text-sm text-muted-foreground">{blurb}</p>
   {/if}
 

@@ -18,7 +18,7 @@
       <div class="h-3 w-full rounded bg-muted"></div>
     </div>
   {:then job}
-    <JobRow {job} dimViewed={false} newTab />
+    <JobRow {job} dimViewed={false} newTab compact />
   {:catch}
     <a
       href={resolve('/jobs/[slug]', { slug })}
