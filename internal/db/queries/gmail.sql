@@ -54,20 +54,28 @@ ON CONFLICT (user_id, source, external_id) DO NOTHING;
 -- An optional source filter (empty = all accounts) narrows to one source; an
 -- optional search term (empty = no filter) matches subject, sender, or body. The
 -- snippet is the body's leading text with whitespace collapsed, for the list row.
-SELECT id, source, external_id, from_addr, from_name, subject,
-    left(regexp_replace(body_text, E'\\s+', ' ', 'g'), 160)::text AS snippet,
-    received_at, (read_at IS NOT NULL)::boolean AS read
+-- The link/classification columns ride alongside so the inbox can render the
+-- confirm chip and application link without a second lookup; the LEFT JOINs
+-- resolve the linked/suggested application's public slug + company for display.
+SELECT emails.id, emails.source, emails.external_id, emails.from_addr, emails.from_name, emails.subject,
+    left(regexp_replace(emails.body_text, E'\\s+', ' ', 'g'), 160)::text AS snippet,
+    emails.received_at, (emails.read_at IS NOT NULL)::boolean AS read,
+    emails.job_id, emails.suggested_job_id, emails.status_signal, emails.link_source,
+    lj.public_slug AS linked_slug, lj.company AS linked_company,
+    sj.public_slug AS suggested_slug, sj.company AS suggested_company
 FROM emails
-WHERE user_id = $1
-  AND (sqlc.arg(src)::text = '' OR source = sqlc.arg(src))
+LEFT JOIN jobs lj ON lj.id = emails.job_id
+LEFT JOIN jobs sj ON sj.id = emails.suggested_job_id
+WHERE emails.user_id = $1
+  AND (sqlc.arg(src)::text = '' OR emails.source = sqlc.arg(src))
   AND (
     sqlc.arg(q)::text = ''
-    OR subject   ILIKE '%' || sqlc.arg(q) || '%'
-    OR from_name ILIKE '%' || sqlc.arg(q) || '%'
-    OR from_addr ILIKE '%' || sqlc.arg(q) || '%'
-    OR body_text ILIKE '%' || sqlc.arg(q) || '%'
+    OR emails.subject   ILIKE '%' || sqlc.arg(q) || '%'
+    OR emails.from_name ILIKE '%' || sqlc.arg(q) || '%'
+    OR emails.from_addr ILIKE '%' || sqlc.arg(q) || '%'
+    OR emails.body_text ILIKE '%' || sqlc.arg(q) || '%'
   )
-ORDER BY received_at DESC, id DESC
+ORDER BY emails.received_at DESC, emails.id DESC
 LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 
 -- name: CountEmails :one
@@ -85,10 +93,15 @@ WHERE user_id = $1
   );
 
 -- name: GetEmail :one
-SELECT id, source, external_id, s3_key, from_addr, from_name, subject,
-    body_text, body_html, received_at, (read_at IS NOT NULL)::boolean AS read
+SELECT emails.id, emails.source, emails.external_id, emails.s3_key, emails.from_addr, emails.from_name, emails.subject,
+    emails.body_text, emails.body_html, emails.received_at, (emails.read_at IS NOT NULL)::boolean AS read,
+    emails.job_id, emails.suggested_job_id, emails.status_signal, emails.link_source,
+    lj.public_slug AS linked_slug, lj.company AS linked_company,
+    sj.public_slug AS suggested_slug, sj.company AS suggested_company
 FROM emails
-WHERE id = $1 AND user_id = $2;
+LEFT JOIN jobs lj ON lj.id = emails.job_id
+LEFT JOIN jobs sj ON sj.id = emails.suggested_job_id
+WHERE emails.id = $1 AND emails.user_id = $2;
 
 -- name: MarkEmailRead :exec
 -- Stamp read on first open; a no-op once already read.

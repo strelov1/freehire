@@ -24,9 +24,9 @@
 
 ## 5. API
 
-- [ ] 5.1 `GET /api/v1/me/tracking/:slug` — application detail with linked emails (status_signal, sender, subject, received_at), moderator-gated, 404 on untracked slug
-- [ ] 5.2 Email link endpoints under `/me/emails`: confirm suggestion (→ `job_id`, `link_source=manual`), reject suggestion (clear), manual link/unlink to a chosen application
-- [ ] 5.3 Extend the inbox email read shape with `job_id`/`suggested_job_id`/`status_signal`/`link_source`
+- [x] 5.1 `GET /api/v1/me/tracking/:slug` — application detail with linked emails (status_signal, sender, subject, received_at), moderator-gated, 404 on untracked slug
+- [x] 5.2 Email link endpoints under `/me/emails`: confirm suggestion (→ `job_id`, `link_source=manual`), reject suggestion (clear), manual link/unlink to a chosen application
+- [x] 5.3 Extend the inbox email read shape with `job_id`/`suggested_job_id`/`status_signal`/`link_source`
 
 ## 6. Frontend
 

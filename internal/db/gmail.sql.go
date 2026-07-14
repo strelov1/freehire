@@ -65,10 +65,15 @@ func (q *Queries) DeleteGmailConnection(ctx context.Context, userID int64) error
 }
 
 const getEmail = `-- name: GetEmail :one
-SELECT id, source, external_id, s3_key, from_addr, from_name, subject,
-    body_text, body_html, received_at, (read_at IS NOT NULL)::boolean AS read
+SELECT emails.id, emails.source, emails.external_id, emails.s3_key, emails.from_addr, emails.from_name, emails.subject,
+    emails.body_text, emails.body_html, emails.received_at, (emails.read_at IS NOT NULL)::boolean AS read,
+    emails.job_id, emails.suggested_job_id, emails.status_signal, emails.link_source,
+    lj.public_slug AS linked_slug, lj.company AS linked_company,
+    sj.public_slug AS suggested_slug, sj.company AS suggested_company
 FROM emails
-WHERE id = $1 AND user_id = $2
+LEFT JOIN jobs lj ON lj.id = emails.job_id
+LEFT JOIN jobs sj ON sj.id = emails.suggested_job_id
+WHERE emails.id = $1 AND emails.user_id = $2
 `
 
 type GetEmailParams struct {
@@ -77,17 +82,25 @@ type GetEmailParams struct {
 }
 
 type GetEmailRow struct {
-	ID         int64              `json:"id"`
-	Source     string             `json:"source"`
-	ExternalID string             `json:"external_id"`
-	S3Key      pgtype.Text        `json:"s3_key"`
-	FromAddr   string             `json:"from_addr"`
-	FromName   string             `json:"from_name"`
-	Subject    string             `json:"subject"`
-	BodyText   string             `json:"body_text"`
-	BodyHtml   string             `json:"body_html"`
-	ReceivedAt pgtype.Timestamptz `json:"received_at"`
-	Read       bool               `json:"read"`
+	ID               int64              `json:"id"`
+	Source           string             `json:"source"`
+	ExternalID       string             `json:"external_id"`
+	S3Key            pgtype.Text        `json:"s3_key"`
+	FromAddr         string             `json:"from_addr"`
+	FromName         string             `json:"from_name"`
+	Subject          string             `json:"subject"`
+	BodyText         string             `json:"body_text"`
+	BodyHtml         string             `json:"body_html"`
+	ReceivedAt       pgtype.Timestamptz `json:"received_at"`
+	Read             bool               `json:"read"`
+	JobID            pgtype.Int8        `json:"job_id"`
+	SuggestedJobID   pgtype.Int8        `json:"suggested_job_id"`
+	StatusSignal     pgtype.Text        `json:"status_signal"`
+	LinkSource       pgtype.Text        `json:"link_source"`
+	LinkedSlug       pgtype.Text        `json:"linked_slug"`
+	LinkedCompany    pgtype.Text        `json:"linked_company"`
+	SuggestedSlug    pgtype.Text        `json:"suggested_slug"`
+	SuggestedCompany pgtype.Text        `json:"suggested_company"`
 }
 
 func (q *Queries) GetEmail(ctx context.Context, arg GetEmailParams) (GetEmailRow, error) {
@@ -105,6 +118,14 @@ func (q *Queries) GetEmail(ctx context.Context, arg GetEmailParams) (GetEmailRow
 		&i.BodyHtml,
 		&i.ReceivedAt,
 		&i.Read,
+		&i.JobID,
+		&i.SuggestedJobID,
+		&i.StatusSignal,
+		&i.LinkSource,
+		&i.LinkedSlug,
+		&i.LinkedCompany,
+		&i.SuggestedSlug,
+		&i.SuggestedCompany,
 	)
 	return i, err
 }
@@ -191,20 +212,25 @@ func (q *Queries) ListConnectedGmailUsers(ctx context.Context) ([]ListConnectedG
 }
 
 const listEmails = `-- name: ListEmails :many
-SELECT id, source, external_id, from_addr, from_name, subject,
-    left(regexp_replace(body_text, E'\\s+', ' ', 'g'), 160)::text AS snippet,
-    received_at, (read_at IS NOT NULL)::boolean AS read
+SELECT emails.id, emails.source, emails.external_id, emails.from_addr, emails.from_name, emails.subject,
+    left(regexp_replace(emails.body_text, E'\\s+', ' ', 'g'), 160)::text AS snippet,
+    emails.received_at, (emails.read_at IS NOT NULL)::boolean AS read,
+    emails.job_id, emails.suggested_job_id, emails.status_signal, emails.link_source,
+    lj.public_slug AS linked_slug, lj.company AS linked_company,
+    sj.public_slug AS suggested_slug, sj.company AS suggested_company
 FROM emails
-WHERE user_id = $1
-  AND ($2::text = '' OR source = $2)
+LEFT JOIN jobs lj ON lj.id = emails.job_id
+LEFT JOIN jobs sj ON sj.id = emails.suggested_job_id
+WHERE emails.user_id = $1
+  AND ($2::text = '' OR emails.source = $2)
   AND (
     $3::text = ''
-    OR subject   ILIKE '%' || $3 || '%'
-    OR from_name ILIKE '%' || $3 || '%'
-    OR from_addr ILIKE '%' || $3 || '%'
-    OR body_text ILIKE '%' || $3 || '%'
+    OR emails.subject   ILIKE '%' || $3 || '%'
+    OR emails.from_name ILIKE '%' || $3 || '%'
+    OR emails.from_addr ILIKE '%' || $3 || '%'
+    OR emails.body_text ILIKE '%' || $3 || '%'
   )
-ORDER BY received_at DESC, id DESC
+ORDER BY emails.received_at DESC, emails.id DESC
 LIMIT $5 OFFSET $4
 `
 
@@ -217,21 +243,32 @@ type ListEmailsParams struct {
 }
 
 type ListEmailsRow struct {
-	ID         int64              `json:"id"`
-	Source     string             `json:"source"`
-	ExternalID string             `json:"external_id"`
-	FromAddr   string             `json:"from_addr"`
-	FromName   string             `json:"from_name"`
-	Subject    string             `json:"subject"`
-	Snippet    string             `json:"snippet"`
-	ReceivedAt pgtype.Timestamptz `json:"received_at"`
-	Read       bool               `json:"read"`
+	ID               int64              `json:"id"`
+	Source           string             `json:"source"`
+	ExternalID       string             `json:"external_id"`
+	FromAddr         string             `json:"from_addr"`
+	FromName         string             `json:"from_name"`
+	Subject          string             `json:"subject"`
+	Snippet          string             `json:"snippet"`
+	ReceivedAt       pgtype.Timestamptz `json:"received_at"`
+	Read             bool               `json:"read"`
+	JobID            pgtype.Int8        `json:"job_id"`
+	SuggestedJobID   pgtype.Int8        `json:"suggested_job_id"`
+	StatusSignal     pgtype.Text        `json:"status_signal"`
+	LinkSource       pgtype.Text        `json:"link_source"`
+	LinkedSlug       pgtype.Text        `json:"linked_slug"`
+	LinkedCompany    pgtype.Text        `json:"linked_company"`
+	SuggestedSlug    pgtype.Text        `json:"suggested_slug"`
+	SuggestedCompany pgtype.Text        `json:"suggested_company"`
 }
 
 // Flat inbox listing, newest first — one row per message (no subject grouping).
 // An optional source filter (empty = all accounts) narrows to one source; an
 // optional search term (empty = no filter) matches subject, sender, or body. The
 // snippet is the body's leading text with whitespace collapsed, for the list row.
+// The link/classification columns ride alongside so the inbox can render the
+// confirm chip and application link without a second lookup; the LEFT JOINs
+// resolve the linked/suggested application's public slug + company for display.
 func (q *Queries) ListEmails(ctx context.Context, arg ListEmailsParams) ([]ListEmailsRow, error) {
 	rows, err := q.db.Query(ctx, listEmails,
 		arg.UserID,
@@ -257,6 +294,14 @@ func (q *Queries) ListEmails(ctx context.Context, arg ListEmailsParams) ([]ListE
 			&i.Snippet,
 			&i.ReceivedAt,
 			&i.Read,
+			&i.JobID,
+			&i.SuggestedJobID,
+			&i.StatusSignal,
+			&i.LinkSource,
+			&i.LinkedSlug,
+			&i.LinkedCompany,
+			&i.SuggestedSlug,
+			&i.SuggestedCompany,
 		); err != nil {
 			return nil, err
 		}

@@ -4,12 +4,33 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
 )
 
 // inboxSources is the account-switcher vocabulary: "" means all accounts.
 var inboxSources = map[string]bool{"": true, "gmail": true, "hosted": true}
+
+// emailLinking is the classification/link overlay carried by every inbox message
+// shape: the classified status and, when resolved, the linked application (slug +
+// company) or a pending suggestion the reading pane confirms inline.
+type emailLinking struct {
+	StatusSignal     string `json:"status_signal,omitempty"`
+	LinkSource       string `json:"link_source,omitempty"`
+	LinkedSlug       string `json:"linked_slug,omitempty"`
+	LinkedCompany    string `json:"linked_company,omitempty"`
+	SuggestedSlug    string `json:"suggested_slug,omitempty"`
+	SuggestedCompany string `json:"suggested_company,omitempty"`
+}
+
+// pgStr unwraps a nullable text column to a plain string ("" when NULL).
+func pgStr(t pgtype.Text) string {
+	if t.Valid {
+		return t.String
+	}
+	return ""
+}
 
 // inboxMessage is one row in the flat inbox listing.
 type inboxMessage struct {
@@ -22,6 +43,7 @@ type inboxMessage struct {
 	Snippet    string    `json:"snippet"`
 	ReceivedAt time.Time `json:"received_at"`
 	Read       bool      `json:"read"`
+	emailLinking
 }
 
 // emailBody is the single-message wire shape. s3_key (the internal raw-MIME
@@ -37,6 +59,7 @@ type emailBody struct {
 	BodyHTML   string    `json:"body_html"`
 	ReceivedAt time.Time `json:"received_at"`
 	Read       bool      `json:"read"`
+	emailLinking
 }
 
 // GetInbox returns the caller's mail as a flat list, newest first. An optional
@@ -69,6 +92,14 @@ func (a *API) GetInbox(c *fiber.Ctx) error {
 			ID: r.ID, Source: r.Source, ExternalID: r.ExternalID,
 			FromAddr: r.FromAddr, FromName: r.FromName, Subject: r.Subject,
 			Snippet: r.Snippet, ReceivedAt: r.ReceivedAt.Time, Read: r.Read,
+			emailLinking: emailLinking{
+				StatusSignal:     pgStr(r.StatusSignal),
+				LinkSource:       pgStr(r.LinkSource),
+				LinkedSlug:       pgStr(r.LinkedSlug),
+				LinkedCompany:    pgStr(r.LinkedCompany),
+				SuggestedSlug:    pgStr(r.SuggestedSlug),
+				SuggestedCompany: pgStr(r.SuggestedCompany),
+			},
 		})
 	}
 	return listResponse(c, out, total, limit, offset)
@@ -95,5 +126,13 @@ func (a *API) GetEmail(c *fiber.Ctx) error {
 		FromAddr: row.FromAddr, FromName: row.FromName, Subject: row.Subject,
 		BodyText: row.BodyText, BodyHTML: row.BodyHtml,
 		ReceivedAt: row.ReceivedAt.Time, Read: row.Read,
+		emailLinking: emailLinking{
+			StatusSignal:     pgStr(row.StatusSignal),
+			LinkSource:       pgStr(row.LinkSource),
+			LinkedSlug:       pgStr(row.LinkedSlug),
+			LinkedCompany:    pgStr(row.LinkedCompany),
+			SuggestedSlug:    pgStr(row.SuggestedSlug),
+			SuggestedCompany: pgStr(row.SuggestedCompany),
+		},
 	}})
 }

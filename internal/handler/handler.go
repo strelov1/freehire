@@ -387,6 +387,14 @@ func Register(app *fiber.App, cfg Config) {
 	api.Delete("/me/gmail", saved, requireModerator, a.GmailDisconnect)
 	api.Get("/me/inbox", saved, requireModerator, a.GetInbox)
 	api.Get("/me/emails/:id", saved, requireModerator, a.GetEmail)
+	// Email → application linking. The detail endpoint exposes mail, so it is
+	// moderator-gated like the rest of the inbox surface; :slug is registered after
+	// the static /me/tracking/* routes above so it does not shadow them.
+	api.Get("/me/tracking/:slug", saved, requireModerator, a.GetTrackedApplication)
+	api.Post("/me/emails/:id/link", saved, requireModerator, a.LinkEmail)
+	api.Post("/me/emails/:id/unlink", saved, requireModerator, a.UnlinkEmail)
+	api.Post("/me/emails/:id/confirm", saved, requireModerator, a.ConfirmEmailLink)
+	api.Post("/me/emails/:id/reject", saved, requireModerator, a.RejectEmailLink)
 	if a.gmailReady() {
 		api.Get("/me/gmail/connect", saved, requireModerator, a.GmailConnect)
 		api.Get("/me/gmail/callback", saved, requireModerator, a.GmailCallback)

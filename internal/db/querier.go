@@ -126,6 +126,9 @@ type Querier interface {
 	// (ties broken by value), serving the searchable option list for the subindustry facet.
 	// Counts are unconditional — they do not reflect other active list filters.
 	CompanySubindustries(ctx context.Context) ([]CompanySubindustriesRow, error)
+	// Promote a suggested link to a confirmed one: the suggestion becomes job_id with
+	// link_source 'manual'. No-op (0 rows) when there is no pending suggestion.
+	ConfirmEmailLink(ctx context.Context, arg ConfirmEmailLinkParams) (int64, error)
 	// Total companies matching the same optional name + facet filters as ListCompanies,
 	// so search/filter pagination reports the filtered total. Keep this WHERE identical
 	// to ListCompanies.
@@ -337,6 +340,8 @@ type Querier interface {
 	// The user's cached CV ATS qualitative review (content-quality + findings), or NULL
 	// when none has been computed. Derived only — never the raw CV text.
 	GetUserATSAnalysis(ctx context.Context, id int64) ([]byte, error)
+	// The caller's interaction row for one job (the application-detail header).
+	GetUserApplication(ctx context.Context, arg GetUserApplicationParams) (GetUserApplicationRow, error)
 	// Login lookup. Case-insensitive on email; returns password_hash so the handler
 	// can verify the password (and reject accounts that have none). role feeds the
 	// post-login wire shape.
@@ -385,6 +390,9 @@ type Querier interface {
 	// never reset. extracted_at is non-NULL when the ingest prefilter already
 	// decided the post holds no vacancy, so it is recorded but never queued.
 	InsertTelegramPost(ctx context.Context, arg InsertTelegramPostParams) (int64, error)
+	// Manually link (or relink) an email to a chosen application, overriding any
+	// auto-link or suggestion.
+	LinkEmailToJob(ctx context.Context, arg LinkEmailToJobParams) (int64, error)
 	// A user's API keys, newest first. Metadata only — never the token_hash.
 	ListAPIKeysByUser(ctx context.Context, userID int64) ([]ListAPIKeysByUserRow, error)
 	// Every active subscription with the data the matching worker needs: the saved
@@ -421,6 +429,9 @@ type Querier interface {
 	// An optional source filter (empty = all accounts) narrows to one source; an
 	// optional search term (empty = no filter) matches subject, sender, or body. The
 	// snippet is the body's leading text with whitespace collapsed, for the list row.
+	// The link/classification columns ride alongside so the inbox can render the
+	// confirm chip and application link without a second lookup; the LEFT JOINs
+	// resolve the linked/suggested application's public slug + company for display.
 	ListEmails(ctx context.Context, arg ListEmailsParams) ([]ListEmailsRow, error)
 	// Dense activity series over [from, to] at the given granularity. A daily
 	// generate_series builds the gap-free calendar; the LEFT JOIN fills each day's
@@ -428,6 +439,9 @@ type Querier interface {
 	// requested bucket (day/week/month) so empty buckets still appear as zeros. `unit`
 	// is a caller-validated date_trunc field (day/week/month), never raw user input.
 	ListJobActivity(ctx context.Context, arg ListJobActivityParams) ([]ListJobActivityRow, error)
+	// The emails linked to one of the caller's applications, newest first, for the
+	// application detail page.
+	ListJobEmails(ctx context.Context, arg ListJobEmailsParams) ([]ListJobEmailsRow, error)
 	// Id-only projection of ListJobsByIDAfter, used as the corruption-degrade path:
 	// when a full SELECT * batch faults on a corrupted TOAST value (SQLSTATE XX001),
 	// the scan re-reads the same window as bare ids (id is never toasted, so this
@@ -662,6 +676,8 @@ type Querier interface {
 	// fall back to the distinct union of enrichment.company_size over open jobs (the csize
 	// CTE). Computed once so the SET and the IS DISTINCT FROM guard share one value.
 	RefreshCompanyFacets(ctx context.Context) (int64, error)
+	// Dismiss a suggestion without linking.
+	RejectEmailLink(ctx context.Context, arg RejectEmailLinkParams) (int64, error)
 	// Release the lease on a subscription's claimed jobs without counting an attempt,
 	// so a soft-skipped delivery (e.g. Telegram not yet linked) is retried promptly on
 	// a later pass instead of waiting out the lease.
@@ -785,6 +801,8 @@ type Querier interface {
 	// treats that as "already not dismissed", never as a failure. This is the undo
 	// path for a swipe-left decision.
 	UndismissJob(ctx context.Context, arg UndismissJobParams) (UserJob, error)
+	// Clear an email's application link (leaves the classified status intact).
+	UnlinkEmail(ctx context.Context, arg UnlinkEmailParams) (int64, error)
 	// Clear a job's saved mark without deleting the interaction row, so view and
 	// apply history survive unsaving. No interaction row -> pgx.ErrNoRows; the
 	// handler treats that as "already not saved", never as a failure.
