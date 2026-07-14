@@ -141,12 +141,38 @@
     if (scroller) scroller.scrollTop = scroller.scrollHeight;
   }
 
+  // Persist the session id so a page refresh re-attaches to the same daemon
+  // session and replays its journal (the chat history) instead of starting over.
+  // Keyed by freehire user so a different account on the same browser never
+  // adopts the previous user's session (the relay also enforces ownership).
+  const sessionKey = () => `freehire.assistant.session.${currentUser()?.id ?? 'anon'}`;
+  function storeSession(id: string) {
+    try {
+      localStorage.setItem(sessionKey(), id);
+    } catch {
+      /* private mode / storage disabled — history just won't persist */
+    }
+  }
+  function loadStoredSession(): string | null {
+    try {
+      return localStorage.getItem(sessionKey());
+    } catch {
+      return null;
+    }
+  }
+  function clearStoredSession() {
+    try {
+      localStorage.removeItem(sessionKey());
+    } catch {
+      /* ignore */
+    }
+  }
+
   async function connect() {
     phase = 'connecting';
     error = null;
     connectionLost = false;
     try {
-      session = await createSession();
       const url = assistantWsUrl();
       client = new RoyClient();
       // Surface a mid-session disconnect instead of stranding the UI: once we're
@@ -169,12 +195,41 @@
         }),
       );
       await client.connect(url);
-      await client.call({ op: 'attach', session }, 'attached');
-      unsubscribers.push(client.subscribeFrames(session, (entry) => onFrame(entry.event)));
+
+      // Re-attach to the previous session (replaying its journal = the history)
+      // when we still have a live, owned one; otherwise start a fresh session.
+      const stored = loadStoredSession();
+      if (!(stored && (await tryAttach(stored)))) {
+        clearStoredSession();
+        chat = initChat();
+        session = await createSession();
+        storeSession(session);
+        unsubscribers.push(client.subscribeFrames(session, (entry) => onFrame(entry.event)));
+        await client.call({ op: 'attach', session }, 'attached');
+      }
       phase = 'ready';
+      void scrollToBottom();
     } catch (err) {
       error = err instanceof Error ? err.message : 'Could not reach the assistant backend.';
       teardown();
+    }
+  }
+
+  // Subscribe to frames BEFORE attaching so the journal replay isn't missed,
+  // then attach. Returns false (leaving no subscription) if the stored session
+  // is gone or not ours — the caller then starts a fresh one.
+  async function tryAttach(id: string): Promise<boolean> {
+    if (!client) return false;
+    session = id;
+    const off = client.subscribeFrames(id, (entry) => onFrame(entry.event));
+    try {
+      await client.call({ op: 'attach', session: id }, 'attached');
+      unsubscribers.push(off);
+      return true;
+    } catch {
+      off();
+      chat = initChat(); // discard any partial replay before falling back
+      return false;
     }
   }
 
