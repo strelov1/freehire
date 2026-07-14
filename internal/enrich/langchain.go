@@ -31,7 +31,7 @@ func NewLangChainProvider(c *llm.Client) *LangChainProvider {
 // Enrich asks the model for a structured Enrichment for the job and parses the JSON
 // response. It does not validate the result — the caller validates before persisting.
 func (p *LangChainProvider) Enrich(ctx context.Context, job JobInput) (Enrichment, error) {
-	raw, err := p.client.GenerateJSON(ctx, systemPrompt, userPrompt(job))
+	raw, err := p.client.GenerateJSON(ctx, buildSystemPrompt(!job.GeoPinned), userPrompt(job))
 	if err != nil {
 		return Enrichment{}, fmt.Errorf("enrich: %w", err)
 	}
@@ -53,16 +53,20 @@ func parseEnrichment(raw string) (Enrichment, error) {
 	return e, nil
 }
 
-// systemPrompt instructs the model to emit only stated fields and to draw the
+// buildSystemPrompt instructs the model to emit only stated fields and to draw the
 // SERVED enum values from the controlled vocabularies — the same lists Validate
 // enforces. The dictionary-covered discovery facets (work_mode, regions,
 // seniority, category, employment_type, education_level, english_level) are
 // deliberately relaxed: the prompt invites a novel label when none fits, and Validate
 // does not reject it (it is unserved discovery material), so prompt and validator
 // diverge there on purpose.
-var systemPrompt = buildSystemPrompt()
-
-func buildSystemPrompt() string {
+//
+// askGeo is false when the deterministic dictionary already pinned the job's
+// countries/regions (see GeoPinned): geoFacet then discards the LLM's copy, so asking
+// for it only burns tokens. The geo enum, its own-label exception, its "Other keys"
+// mention, and the geographic-area paragraph are dropped in that case. It stays true
+// when the dictionary left geography unpinned and the LLM fills the bucket.
+func buildSystemPrompt(askGeo bool) string {
 	var b strings.Builder
 	b.WriteString("You read an IT job posting and return ONLY a JSON object.\n")
 	// summary is the one SYNTHESIZED field and must lead: stating it first, and
@@ -83,23 +87,30 @@ func buildSystemPrompt() string {
 	// english_level are deliberately NOT requested: jobview serves them from the
 	// deterministic dictionaries (internal/jobderive), so the LLM's copies were never
 	// served — asking for them only burned output tokens (see enrich-prompt-trim).
-	enum("regions (array)", RegionValues)
+	if askGeo {
+		enum("regions (array)", RegionValues)
+	}
 	enum("relocation", RelocationValues)
 	enum("salary_period", SalaryPeriodValues)
 	enum("domains (array)", DomainValues)
 	enum("company_type", CompanyTypeValues)
 	enum("company_size", CompanySizeValues)
 
-	// Discovery facets: countries/regions are served as a dict-then-LLM hybrid (the
-	// LLM fills the unpinned geographic bucket via jobview.geoFacet), so they are the
-	// sole facets we still let the model coin its own label for. The other enum fields
-	// above stay strict.
-	b.WriteString("\nException for countries and regions: prefer an allowed value above, but if none ")
-	b.WriteString("accurately fits, you MAY return a concise lowercase label of your own. ")
-	b.WriteString("Still omit the key when the posting does not state it.\n")
+	if askGeo {
+		// Discovery facets: countries/regions are served as a dict-then-LLM hybrid (the
+		// LLM fills the unpinned geographic bucket via jobview.geoFacet), so they are the
+		// sole facets we still let the model coin its own label for. The other enum fields
+		// above stay strict.
+		b.WriteString("\nException for countries and regions: prefer an allowed value above, but if none ")
+		b.WriteString("accurately fits, you MAY return a concise lowercase label of your own. ")
+		b.WriteString("Still omit the key when the posting does not state it.\n")
+	}
 
 	b.WriteString("\nOther keys (omit when unstated): ")
-	b.WriteString("visa_sponsorship (boolean), countries (array of ISO 3166-1 alpha-2), ")
+	b.WriteString("visa_sponsorship (boolean), ")
+	if askGeo {
+		b.WriteString("countries (array of ISO 3166-1 alpha-2), ")
+	}
 	b.WriteString("cities (array of strings), timezone_note (string), ")
 	b.WriteString("salary_min (int), salary_max (int), salary_currency (ISO 4217).\n")
 
@@ -110,11 +121,13 @@ func buildSystemPrompt() string {
 	b.WriteString("Round a fractional rate to the nearest whole unit and NEVER strip the ")
 	b.WriteString("decimal point: an hourly \"$26.08\" is 26 (with salary_period=hour), never 2608.\n")
 
-	b.WriteString("\nregions is the job's geographic area, for ANY work mode — a remote role's ")
-	b.WriteString("reach or an onsite/hybrid role's location: ")
-	b.WriteString("use 'global' ONLY when the posting explicitly says the role is open worldwide / ")
-	b.WriteString("anywhere / from any country; otherwise list the region(s) or country code(s) ")
-	b.WriteString("the role covers, from the allowed values. Omit when unstated (unknown is not global).\n")
+	if askGeo {
+		b.WriteString("\nregions is the job's geographic area, for ANY work mode — a remote role's ")
+		b.WriteString("reach or an onsite/hybrid role's location: ")
+		b.WriteString("use 'global' ONLY when the posting explicitly says the role is open worldwide / ")
+		b.WriteString("anywhere / from any country; otherwise list the region(s) or country code(s) ")
+		b.WriteString("the role covers, from the allowed values. Omit when unstated (unknown is not global).\n")
+	}
 	b.WriteString("\nIf the Location field is empty, the URL path may still encode the location ")
 	b.WriteString("(e.g. a city as the first slug segment); read it as a location signal.\n")
 	return b.String()

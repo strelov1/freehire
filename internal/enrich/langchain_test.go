@@ -25,7 +25,7 @@ func TestUserPromptIncludesURL(t *testing.T) {
 // use, drawn from the same list Validate enforces, so prompt and validator
 // cannot drift.
 func TestSystemPromptIncludesRegionVocabulary(t *testing.T) {
-	p := buildSystemPrompt()
+	p := buildSystemPrompt(true)
 
 	if !strings.Contains(p, "regions") {
 		t.Errorf("prompt must mention regions, got:\n%s", p)
@@ -42,7 +42,7 @@ func TestSystemPromptIncludesRegionVocabulary(t *testing.T) {
 // served and asking for them only burns output tokens. Removing them from the prompt
 // is the whole point of the enrich-prompt-trim change.
 func TestSystemPromptOmitsDictBackedFacets(t *testing.T) {
-	p := buildSystemPrompt()
+	p := buildSystemPrompt(true)
 	for _, f := range []string{
 		"work_mode", "seniority", "category", "skills",
 		"employment_type", "education_level", "english_level",
@@ -60,7 +60,7 @@ func TestSystemPromptOmitsDictBackedFacets(t *testing.T) {
 // own-label allowance (they are the sole remaining discovery facets); the served
 // enums keep the strict "exactly one allowed value" instruction.
 func TestSystemPromptKeepsServedAndHybridFields(t *testing.T) {
-	p := buildSystemPrompt()
+	p := buildSystemPrompt(true)
 	for _, f := range []string{
 		"summary",
 		"salary_min", "salary_max", "salary_currency", "salary_period",
@@ -84,10 +84,62 @@ func TestSystemPromptKeepsServedAndHybridFields(t *testing.T) {
 // never decimal-stripped into an inflated integer (26.08 -> 2608). The guard anchors
 // the weak model on the exact counter-example, so the prompt must carry it verbatim.
 func TestSystemPromptGuardsFractionalHourlySalary(t *testing.T) {
-	p := buildSystemPrompt()
-	for _, want := range []string{"whole", "26.08", "2608"} {
+	for _, askGeo := range []bool{true, false} {
+		p := buildSystemPrompt(askGeo)
+		for _, want := range []string{"whole", "26.08", "2608"} {
+			if !strings.Contains(p, want) {
+				t.Errorf("askGeo=%v: salary guard must mention %q, got:\n%s", askGeo, want, p)
+			}
+		}
+	}
+}
+
+// When the dictionary already pinned the job's geography, the LLM's countries/regions
+// are discarded by geoFacet, so the prompt must not ask for them — dropping the enum,
+// the exception block, the "Other keys" mention, and the geographic-area paragraph.
+func TestSystemPromptOmitsGeoWhenPinned(t *testing.T) {
+	p := buildSystemPrompt(false)
+	for _, absent := range []string{"regions", "countries", "geographic area", "Exception for countries"} {
+		if strings.Contains(p, absent) {
+			t.Errorf("pinned-geo prompt must omit %q, got:\n%s", absent, p)
+		}
+	}
+	// Non-geo fields it is still the source of must remain.
+	for _, want := range []string{"summary", "salary_min", "domains", "company_type"} {
 		if !strings.Contains(p, want) {
-			t.Errorf("salary guard must mention %q, got:\n%s", want, p)
+			t.Errorf("pinned-geo prompt must keep non-geo field %q, got:\n%s", want, p)
+		}
+	}
+}
+
+// When the dictionary left geography unpinned, the LLM fills the bucket, so the
+// prompt must still request countries/regions and explain the regions facet.
+func TestSystemPromptAsksGeoWhenUnpinned(t *testing.T) {
+	p := buildSystemPrompt(true)
+	for _, want := range []string{"regions", "countries", "geographic area"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("unpinned-geo prompt must request %q, got:\n%s", want, p)
+		}
+	}
+}
+
+// GeoPinned mirrors jobview.geoPinned: a country, or a region more specific than the
+// open-anywhere "global" bucket, counts as pinned; nothing, or only "global", does not.
+func TestGeoPinned(t *testing.T) {
+	cases := []struct {
+		name       string
+		countries  []string
+		regions    []string
+		wantPinned bool
+	}{
+		{"country pins", []string{"us"}, nil, true},
+		{"non-global region pins", nil, []string{"eu"}, true},
+		{"only global is unpinned", nil, []string{"global"}, false},
+		{"empty is unpinned", nil, nil, false},
+	}
+	for _, c := range cases {
+		if got := GeoPinned(c.countries, c.regions); got != c.wantPinned {
+			t.Errorf("%s: GeoPinned(%v,%v)=%v, want %v", c.name, c.countries, c.regions, got, c.wantPinned)
 		}
 	}
 }

@@ -23,6 +23,29 @@ type JobInput struct {
 	// the role) in the URL path — e.g. SuccessFactors /job/Limburg-Maschinenfuhrer/
 	// — so it is a location signal even when the structured Location is empty.
 	URL string
+	// GeoPinned is the one derived signal on this otherwise source-shaped input: the
+	// deterministic dictionary already resolved the job's country/region (see
+	// GeoPinned). When true, the prompt drops the countries/regions ask — geoFacet
+	// would discard the LLM's copy anyway — so the model spends no tokens on geography
+	// we already know.
+	GeoPinned bool
+}
+
+// GeoPinned reports whether the deterministic dictionary resolved a concrete place for
+// a job: a country, or a region more specific than the open-anywhere "global" bucket.
+// It mirrors jobview.geoPinned (the read-side hybrid that discards the LLM's geo when
+// the dictionary pinned one); the two layers are independent, so the small predicate is
+// duplicated rather than shared. A pinned job needs no LLM geography in its prompt.
+func GeoPinned(countries, regions []string) bool {
+	if len(countries) > 0 {
+		return true
+	}
+	for _, r := range regions {
+		if r != "global" {
+			return true
+		}
+	}
+	return false
 }
 
 // Provider derives a structured Enrichment for a job by calling an LLM.

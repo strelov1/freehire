@@ -63,6 +63,9 @@ func (s *dbStore) Job(ctx context.Context, id int64) (enrich.JobInput, error) {
 		Remote:      j.Remote,
 		Description: j.Description,
 		URL:         j.URL,
+		// The dictionary-derived country/region columns tell the prompt builder to skip
+		// the geo ask when geography is already pinned (see enrich.GeoPinned).
+		GeoPinned: enrich.GeoPinned(j.Countries, j.Regions),
 	}, nil
 }
 
