@@ -3,6 +3,7 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { cn } from '$lib/utils';
+  import { tablist } from '$lib/actions/tablist';
 
   let { children }: { children: Snippet } = $props();
 
@@ -14,6 +15,8 @@
   // Board (index) matches exactly so it is not also active on the child routes.
   const boardActive = $derived(path === '/my/tracking');
   const pipelineActive = $derived(path.startsWith('/my/tracking/pipeline'));
+  // The id of the active tab, so the routed panel can point back at it (aria-labelledby).
+  const activeTabId = $derived(pipelineActive ? 'tracking-tab-pipeline' : 'tracking-tab-board');
 
   const tabClass = (active: boolean) =>
     cn(
@@ -32,13 +35,22 @@
 <div class="flex flex-col gap-4">
   <h1 class="text-2xl font-semibold tracking-tight">Tracking</h1>
 
-  <div role="tablist" aria-label="Tracking view" class="flex items-center gap-1">
-    <a role="tab" aria-selected={boardActive} href={resolve('/my/tracking')} class={tabClass(boardActive)}>
+  <div role="tablist" aria-label="Tracking view" use:tablist={path} class="flex items-center gap-1">
+    <a
+      role="tab"
+      id="tracking-tab-board"
+      aria-selected={boardActive}
+      aria-controls="tracking-tabpanel"
+      href={resolve('/my/tracking')}
+      class={tabClass(boardActive)}
+    >
       Board
     </a>
     <a
       role="tab"
+      id="tracking-tab-pipeline"
       aria-selected={pipelineActive}
+      aria-controls="tracking-tabpanel"
       href={resolve('/my/tracking/pipeline')}
       class={tabClass(pipelineActive)}
     >
@@ -46,5 +58,7 @@
     </a>
   </div>
 
-  {@render children()}
+  <div role="tabpanel" id="tracking-tabpanel" aria-labelledby={activeTabId} tabindex="0">
+    {@render children()}
+  </div>
 </div>

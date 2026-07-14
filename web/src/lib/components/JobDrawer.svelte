@@ -5,6 +5,7 @@
   import { STAGES, humanizeStage } from '$lib/stages';
   import { CLOSED_OUTCOMES, type ClosedOutcome } from '$lib/board';
   import { timeAgo, cn } from '$lib/utils';
+  import { tablist } from '$lib/actions/tablist';
   import { cardTags } from '$lib/enrichment';
   import CompanyLogo from './CompanyLogo.svelte';
   import JobFitFull from './JobFitFull.svelte';
@@ -152,9 +153,22 @@
       {/if}
 
       <div class="no-scrollbar overflow-x-auto">
-        <div role="tablist" aria-label="Job details view" class="flex w-max items-center gap-1 rounded-full bg-muted p-1">
+        <div
+          role="tablist"
+          aria-label="Job details view"
+          use:tablist={tab}
+          class="flex w-max items-center gap-1 rounded-full bg-muted p-1"
+        >
           {#each TABS as t (t.id)}
-            <button type="button" role="tab" aria-selected={tab === t.id} class={tabClass(tab === t.id)} onclick={() => (tab = t.id)}>
+            <button
+              type="button"
+              role="tab"
+              id="jobdrawer-tab-{t.id}"
+              aria-selected={tab === t.id}
+              aria-controls="jobdrawer-tabpanel"
+              class={tabClass(tab === t.id)}
+              onclick={() => (tab = t.id)}
+            >
               {t.label}
             </button>
           {/each}
@@ -165,7 +179,13 @@
 
   <!-- Scrolling tab body -->
   <div class="min-h-0 flex-1 overflow-y-auto">
-    <div class="mx-auto w-full max-w-2xl px-5 py-5 sm:px-6">
+    <div
+      role="tabpanel"
+      id="jobdrawer-tabpanel"
+      aria-labelledby="jobdrawer-tab-{tab}"
+      tabindex="0"
+      class="mx-auto w-full max-w-2xl px-5 py-5 sm:px-6"
+    >
       {#if tab === 'application'}
         <div class="flex flex-col gap-4">
           {#if pendingOutcome}

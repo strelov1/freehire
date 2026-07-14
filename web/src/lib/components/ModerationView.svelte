@@ -7,6 +7,7 @@
   import { cn, timeAgo } from '$lib/utils';
   import ReportQueue from './ReportQueue.svelte';
   import States from './States.svelte';
+  import { tablist } from '$lib/actions/tablist';
 
   const isModerator = $derived(currentUser()?.role === 'moderator');
 
@@ -74,12 +75,14 @@
   <div class="flex flex-col gap-6">
     <h1 class="text-2xl font-semibold tracking-tight">Moderation</h1>
 
-    <div role="tablist" aria-label="Moderation view" class="flex items-center gap-1">
+    <div role="tablist" aria-label="Moderation view" use:tablist={view} class="flex items-center gap-1">
       {#each tabs as tab (tab.value)}
         <button
           type="button"
           role="tab"
+          id="mod-tab-{tab.value}"
           aria-selected={view === tab.value}
+          aria-controls="mod-tabpanel"
           onclick={() => (view = tab.value)}
           class={cn(
             'rounded-md px-3 py-1.5 text-sm transition-colors',
@@ -93,6 +96,7 @@
       {/each}
     </div>
 
+    <div role="tabpanel" id="mod-tabpanel" aria-labelledby="mod-tab-{view}" tabindex="0">
     {#if view === 'queue'}
       <div class="flex flex-col gap-6">
         <p class="text-sm text-muted-foreground">
@@ -145,5 +149,6 @@
     {:else}
       <ReportQueue />
     {/if}
+    </div>
   </div>
 {/if}

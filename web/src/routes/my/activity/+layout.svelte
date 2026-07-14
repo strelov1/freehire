@@ -3,6 +3,7 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { cn } from '$lib/utils';
+  import { tablist } from '$lib/actions/tablist';
 
   let { children }: { children: Snippet } = $props();
 
@@ -15,6 +16,10 @@
   const savedActive = $derived(path === '/my/activity');
   const historyActive = $derived(path.startsWith('/my/activity/history'));
   const matchesActive = $derived(path.startsWith('/my/activity/matches'));
+  // The id of the active tab, so the routed panel can point back at it (aria-labelledby).
+  const activeTabId = $derived(
+    historyActive ? 'activity-tab-history' : matchesActive ? 'activity-tab-matches' : 'activity-tab-saved',
+  );
 
   const tabClass = (active: boolean) =>
     cn(
@@ -33,13 +38,22 @@
 <div class="flex flex-col gap-4">
   <h1 class="text-2xl font-semibold tracking-tight">Activity</h1>
 
-  <div role="tablist" aria-label="Activity view" class="flex items-center gap-1">
-    <a role="tab" aria-selected={savedActive} href={resolve('/my/activity')} class={tabClass(savedActive)}>
+  <div role="tablist" aria-label="Activity view" use:tablist={path} class="flex items-center gap-1">
+    <a
+      role="tab"
+      id="activity-tab-saved"
+      aria-selected={savedActive}
+      aria-controls="activity-tabpanel"
+      href={resolve('/my/activity')}
+      class={tabClass(savedActive)}
+    >
       Saved
     </a>
     <a
       role="tab"
+      id="activity-tab-history"
       aria-selected={historyActive}
+      aria-controls="activity-tabpanel"
       href={resolve('/my/activity/history')}
       class={tabClass(historyActive)}
     >
@@ -47,7 +61,9 @@
     </a>
     <a
       role="tab"
+      id="activity-tab-matches"
       aria-selected={matchesActive}
+      aria-controls="activity-tabpanel"
       href={resolve('/my/activity/matches')}
       class={tabClass(matchesActive)}
     >
@@ -55,5 +71,7 @@
     </a>
   </div>
 
-  {@render children()}
+  <div role="tabpanel" id="activity-tabpanel" aria-labelledby={activeTabId} tabindex="0">
+    {@render children()}
+  </div>
 </div>
