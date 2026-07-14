@@ -29,6 +29,31 @@ FULL OUTER JOIN (
     GROUP BY 1
 ) r ON a.day = r.day;
 
+-- name: ListUserGrowth :many
+-- Dense cumulative member-growth series: one UTC calendar day per row from the
+-- first registration through today, each carrying the running total of members
+-- registered on or before that day. A daily generate_series builds the gap-free
+-- calendar (days with no new signups repeat the previous total), the LEFT JOIN
+-- attaches each day's new-signup count, and the window SUM makes it cumulative, so
+-- the series is monotonically non-decreasing. Aggregate only — no user identifier,
+-- email, or other personal field is selected. With no members the series is empty
+-- (min(day) is NULL, so generate_series yields no rows).
+WITH daily AS (
+    SELECT (created_at AT TIME ZONE 'UTC')::date AS day, count(*) AS n
+    FROM users
+    GROUP BY 1
+)
+SELECT
+    d::date AS day,
+    sum(COALESCE(daily.n, 0)) OVER (ORDER BY d)::int AS total
+FROM generate_series(
+    (SELECT min(day) FROM daily),
+    (now() AT TIME ZONE 'UTC')::date,
+    interval '1 day'
+) AS d
+LEFT JOIN daily ON daily.day = d::date
+ORDER BY d;
+
 -- name: ListJobActivity :many
 -- Dense activity series over [from, to] at the given granularity. A daily
 -- generate_series builds the gap-free calendar; the LEFT JOIN fills each day's

@@ -42,6 +42,7 @@ import type {
   ResumeMeta,
   ActivityGranularity,
   ActivityPoint,
+  UserGrowthPoint,
   LocationPreferences,
 } from './types';
 
@@ -333,6 +334,14 @@ export function createApi(
     if (from) params.set('from', from);
     if (to) params.set('to', to);
     return requestData<ActivityPoint[]>(`/api/v1/stats/jobs-activity?${params}`);
+  }
+
+  /** The public member-growth series: the cumulative count of registered members
+   *  per UTC day, from the first registration through today. Dense and
+   *  monotonically non-decreasing (gap days repeat the running total).
+   *  Aggregate-only — no user field is exposed. Unauthenticated. */
+  async function userGrowth(): Promise<UserGrowthPoint[]> {
+    return requestData<UserGrowthPoint[]>(`/api/v1/stats/user-growth`);
   }
 
   /** List companies, optionally filtered by a name query `q` (a case-insensitive
@@ -848,6 +857,7 @@ export function createApi(
     recommendations,
     facetCounts,
     jobsActivity,
+    userGrowth,
     listCompanies,
     getCompany,
     listCompanySubindustries,

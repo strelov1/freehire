@@ -491,6 +491,15 @@ type Querier interface {
 	// Every board currently failing or cooled down, worst first — the operator's
 	// "what's broken" query and the source of the per-run summary log.
 	ListUnhealthyBoards(ctx context.Context) ([]ListUnhealthyBoardsRow, error)
+	// Dense cumulative member-growth series: one UTC calendar day per row from the
+	// first registration through today, each carrying the running total of members
+	// registered on or before that day. A daily generate_series builds the gap-free
+	// calendar (days with no new signups repeat the previous total), the LEFT JOIN
+	// attaches each day's new-signup count, and the window SUM makes it cumulative, so
+	// the series is monotonically non-decreasing. Aggregate only — no user identifier,
+	// email, or other personal field is selected. With no members the series is empty
+	// (min(day) is NULL, so generate_series yields no rows).
+	ListUserGrowth(ctx context.Context) ([]ListUserGrowthRow, error)
 	// Every job the caller has analyzed, newest first, joined to the job for display. Powers
 	// the Tracking → AI fit tab. Includes closed jobs (surfaced with a badge). The stored
 	// staleness stamps ride along so the handler can flag rows whose CV/job/model has since

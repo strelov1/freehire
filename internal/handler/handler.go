@@ -281,6 +281,12 @@ func Register(app *fiber.App, cfg Config) {
 	// rollup (cmd/rollup-stats); the /trends SPA page renders it as a bar chart.
 	api.Get("/stats/jobs-activity", a.JobsActivity)
 
+	// Public member-growth time series (cumulative registrations per UTC day),
+	// unauthenticated like the other public reads. Computed on the fly from
+	// users.created_at (no rollup); the /open transparency page renders it as a
+	// bar chart. Aggregate-only — no user identifier is exposed.
+	api.Get("/stats/user-growth", a.UserGrowth)
+
 	// Per-user job interactions and the user-scoped reads accept either the
 	// session cookie or an API key (RequireAuthOrKey), so a script holding a key
 	// can drive the same flow as the browser. The public job reads above stay

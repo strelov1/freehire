@@ -286,6 +286,15 @@ export interface ActivityPoint {
   removed: number;
 }
 
+/** One point on the member-growth series: the ISO date and the cumulative count of
+ *  registered members as of that day. The backend returns a dense, gap-free series
+ *  (days with no new signups repeat the running total), monotonically
+ *  non-decreasing. */
+export interface UserGrowthPoint {
+  date: string;
+  total: number;
+}
+
 /** An API key as returned by the management endpoints — metadata only; the
  *  plaintext token is never part of this shape. `token_prefix` is a short,
  *  non-secret leading slice (e.g. "fhk_Ab12cd") shown so the user can tell keys
