@@ -6,7 +6,9 @@ import "context"
 // it on every job it writes (jobs.enrichment_version) and uses it as the target
 // version when enqueuing work; bumping it enqueues re-enrichment of every job that
 // was written under an older version.
-const Version = 1
+// v2: salary prompt guard — round fractional hourly rates to whole currency units
+// instead of decimal-stripping them (26.08 -> 2608). Re-enriches corrupted rows.
+const Version = 2
 
 // JobInput is the raw, source-shaped view of a job that a Provider reads to derive
 // an Enrichment. It carries exactly the fields the model extracts from — no

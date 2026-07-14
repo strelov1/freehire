@@ -79,3 +79,15 @@ func TestSystemPromptKeepsServedAndHybridFields(t *testing.T) {
 		t.Errorf("countries/regions must keep the novel own-label allowance")
 	}
 }
+
+// A fractional hourly rate ("$26.08/hr") must be rounded to a whole currency unit,
+// never decimal-stripped into an inflated integer (26.08 -> 2608). The guard anchors
+// the weak model on the exact counter-example, so the prompt must carry it verbatim.
+func TestSystemPromptGuardsFractionalHourlySalary(t *testing.T) {
+	p := buildSystemPrompt()
+	for _, want := range []string{"whole", "26.08", "2608"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("salary guard must mention %q, got:\n%s", want, p)
+		}
+	}
+}

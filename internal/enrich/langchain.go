@@ -103,6 +103,13 @@ func buildSystemPrompt() string {
 	b.WriteString("cities (array of strings), timezone_note (string), ")
 	b.WriteString("salary_min (int), salary_max (int), salary_currency (ISO 4217).\n")
 
+	// Salary guard: the model, told the field is an int, otherwise decimal-strips a
+	// fractional hourly rate ($26.08 -> 2608), inflating it 100x. A concrete
+	// counter-example is what makes a budget model round instead of strip.
+	b.WriteString("\nsalary_min and salary_max are WHOLE units of the currency. ")
+	b.WriteString("Round a fractional rate to the nearest whole unit and NEVER strip the ")
+	b.WriteString("decimal point: an hourly \"$26.08\" is 26 (with salary_period=hour), never 2608.\n")
+
 	b.WriteString("\nregions is the job's geographic area, for ANY work mode — a remote role's ")
 	b.WriteString("reach or an onsite/hybrid role's location: ")
 	b.WriteString("use 'global' ONLY when the posting explicitly says the role is open worldwide / ")
