@@ -12,9 +12,9 @@
 
 ## 3. LLM classification and disambiguation (`internal/mailclassify`)
 
-- [ ] 3.1 Status contract: the controlled vocabulary type + `Sanitize` (coerce out-of-vocabulary → `other`, bound text) as the persist and prompt-injection guard
-- [ ] 3.2 LLM prompt over the email body via `internal/llm`: return status signal (+ the disambiguation tier: pick one of the caller's applications or "none")
-- [ ] 3.3 Unit tests for `Sanitize` (out-of-vocabulary coercion, bounding) and the vocabulary→stage mapping
+- [x] 3.1 Status contract: the controlled vocabulary type + `Sanitize` (coerce out-of-vocabulary → `other`, bound text) as the persist and prompt-injection guard
+- [x] 3.2 LLM prompt over the email body via `internal/llm`: return status signal (+ the disambiguation tier: pick one of the caller's applications or "none")
+- [x] 3.3 Unit tests for `Sanitize` (out-of-vocabulary coercion, bounding) and the vocabulary→stage mapping
 
 ## 4. Classification worker (`cmd/classify-mail`)
 
