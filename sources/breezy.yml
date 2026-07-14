@@ -1,6 +1,8 @@
 # breezy boards. Provider is the filename; each entry is company + board.
 # board = the company's Breezy subdomain (see internal/sources/breezy.go).
 
+- company: AccelOne
+  board: accelone
 - company: AGBO
   board: agbo
 - company: Alconost
@@ -9,6 +11,8 @@
   board: at-t
 - company: BetterMe
   board: betterme
+- company: Flux IT
+  board: fluxit
 - company: Fugo Games
   board: fugo-games
 - company: Gamurs Group
