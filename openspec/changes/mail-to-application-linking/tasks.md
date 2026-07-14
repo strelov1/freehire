@@ -6,9 +6,9 @@
 
 ## 2. Deterministic matching (`internal/mailmatch`)
 
-- [ ] 2.1 Company-name extraction + normalization from `from_name`/`subject` (strip "Hiring Team"/"- Workday"/"LLC", drop ATS pseudo-names like "Greenhouse"/"Workday")
-- [ ] 2.2 Match cascade tiers 1–2 as pure functions: thread continuity, then normalized-name fuzzy match against the caller's open applications; return best candidate + confidence
-- [ ] 2.3 Unit tests with fakes over the 237-email patterns (ATS pseudo-name is not matched; single vs multi candidate; unlinked is valid)
+- [x] 2.1 Company-name extraction + normalization from `from_name`/`subject` (strip "Hiring Team"/"- Workday"/"LLC", drop ATS pseudo-names like "Greenhouse"/"Workday")
+- [x] 2.2 Match cascade tiers 1–2 as pure functions: thread continuity, then normalized-name fuzzy match against the caller's open applications; return best candidate + confidence
+- [x] 2.3 Unit tests with fakes over the 237-email patterns (ATS pseudo-name is not matched; single vs multi candidate; unlinked is valid)
 
 ## 3. LLM classification and disambiguation (`internal/mailclassify`)
 
