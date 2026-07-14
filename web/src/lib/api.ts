@@ -12,6 +12,8 @@
 
 import type {
   Job,
+  EmailLinking,
+  TrackedApplication,
   Company,
   CompanyListItem,
   FacetCounts,
@@ -139,7 +141,7 @@ export interface MailboxStatus {
 export type InboxSource = '' | 'gmail' | 'hosted';
 
 /** One row in the flat inbox listing. */
-export interface InboxMessage {
+export interface InboxMessage extends EmailLinking {
   id: number;
   source: string;
   external_id: string;
@@ -152,7 +154,7 @@ export interface InboxMessage {
 }
 
 /** One message in full, for the reading pane. */
-export interface EmailBody {
+export interface EmailBody extends EmailLinking {
   id: number;
   source: string;
   external_id: string;
@@ -843,6 +845,34 @@ export function createApi(
     return requestData<EmailBody>(`/api/v1/me/emails/${id}`);
   }
 
+  /** The caller's application for a job slug, with its linked emails. */
+  async function getTrackedApplication(slug: string): Promise<TrackedApplication> {
+    return requestData<TrackedApplication>(`/api/v1/me/tracking/${encodeURIComponent(slug)}`);
+  }
+
+  /** Promote an email's pending suggestion to a confirmed link. */
+  async function confirmEmailLink(id: number): Promise<EmailBody> {
+    return requestData<EmailBody>(`/api/v1/me/emails/${id}/confirm`, { method: 'POST' });
+  }
+
+  /** Dismiss an email's pending suggestion without linking. */
+  async function rejectEmailLink(id: number): Promise<EmailBody> {
+    return requestData<EmailBody>(`/api/v1/me/emails/${id}/reject`, { method: 'POST' });
+  }
+
+  /** Manually link an email to the application named by slug. */
+  async function linkEmail(id: number, slug: string): Promise<EmailBody> {
+    return requestData<EmailBody>(`/api/v1/me/emails/${id}/link`, {
+      method: 'POST',
+      body: JSON.stringify({ slug }),
+    });
+  }
+
+  /** Clear an email's application link. */
+  async function unlinkEmail(id: number): Promise<EmailBody> {
+    return requestData<EmailBody>(`/api/v1/me/emails/${id}/unlink`, { method: 'POST' });
+  }
+
   return {
     listJobs,
     getJob,
@@ -925,6 +955,11 @@ export function createApi(
     releaseMailbox,
     getInbox,
     getEmail,
+    getTrackedApplication,
+    confirmEmailLink,
+    rejectEmailLink,
+    linkEmail,
+    unlinkEmail,
   };
 }
 

@@ -30,9 +30,9 @@
 
 ## 6. Frontend
 
-- [ ] 6.1 New route `/my/tracking/[slug]`: job + interaction + linked emails with per-email status badges
-- [ ] 6.2 Inbox reading pane: inline link-confirmation chip for a suggested match (confirm/not-this), application link when linked, manual-link affordance when unlinked
-- [ ] 6.3 Link from an inbox email to its application detail page
+- [x] 6.1 New route `/my/tracking/[slug]`: job + interaction + linked emails with per-email status badges
+- [x] 6.2 Inbox reading pane: inline link-confirmation chip for a suggested match (confirm/not-this), application link when linked, manual-link affordance when unlinked
+- [x] 6.3 Link from an inbox email to its application detail page
 
 ## 7. Verification
 

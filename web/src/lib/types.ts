@@ -246,6 +246,42 @@ export interface MyJob {
   notes: string | null;
 }
 
+/** The classification/link overlay an inbox email carries: its classified status
+ *  and, when resolved, the linked application (slug + company) or a pending
+ *  suggestion the reading pane confirms inline. All optional/omitempty. */
+export interface EmailLinking {
+  status_signal?: string;
+  link_source?: string;
+  linked_slug?: string;
+  linked_company?: string;
+  suggested_slug?: string;
+  suggested_company?: string;
+}
+
+/** One email linked to an application, on the application detail page. */
+export interface ApplicationEmail {
+  id: number;
+  source: string;
+  from_addr: string;
+  from_name: string;
+  subject: string;
+  status_signal?: string;
+  link_source?: string;
+  received_at: string;
+  read: boolean;
+}
+
+/** The caller's application for one job slug, with the emails linked to it. */
+export interface TrackedApplication {
+  job: Job;
+  viewed_at: string | null;
+  saved_at: string | null;
+  applied_at: string | null;
+  stage?: string;
+  notes?: string;
+  emails: ApplicationEmail[];
+}
+
 /** Per-tab row counts for the my-jobs page, from the listing's meta. `viewed`
  *  is the view-only subset: rows neither saved nor applied. */
 export interface MyJobCounts {

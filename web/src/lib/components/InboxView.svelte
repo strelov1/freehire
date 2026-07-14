@@ -8,6 +8,8 @@
     InboxMessage,
     EmailBody,
   } from '$lib/api';
+  import type { EmailLinking } from '$lib/types';
+  import { statusLabel, statusClass } from '$lib/emailStatus';
   import { Badge, Button } from '$lib/ui';
   import { Mail, AtSign, Copy, Search, RefreshCw, ChevronLeft } from '@lucide/svelte';
   import { timeAgo } from '$lib/utils';
@@ -167,6 +169,50 @@
       error = e instanceof Error ? e.message : 'Failed to load the message.';
     } finally {
       bodyLoading = false;
+    }
+  }
+
+  // --- Email → application linking ---
+
+  // Copy the link overlay from a refreshed body back onto both the open message
+  // and its list row, so the chip/badge update without a refetch.
+  function applyLinkUpdate(updated: EmailBody) {
+    selected = updated;
+    const overlay: EmailLinking = {
+      status_signal: updated.status_signal,
+      link_source: updated.link_source,
+      linked_slug: updated.linked_slug,
+      linked_company: updated.linked_company,
+      suggested_slug: updated.suggested_slug,
+      suggested_company: updated.suggested_company,
+    };
+    messages = messages.map((m) => (m.id === updated.id ? { ...m, ...overlay } : m));
+  }
+
+  async function confirmLink() {
+    if (!selected) return;
+    try {
+      applyLinkUpdate(await api.confirmEmailLink(selected.id));
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to link.';
+    }
+  }
+
+  async function rejectLink() {
+    if (!selected) return;
+    try {
+      applyLinkUpdate(await api.rejectEmailLink(selected.id));
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to dismiss.';
+    }
+  }
+
+  async function unlink() {
+    if (!selected) return;
+    try {
+      applyLinkUpdate(await api.unlinkEmail(selected.id));
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to unlink.';
     }
   }
 
@@ -418,6 +464,20 @@
                       {#if m.snippet}
                         <div class="mt-0.5 truncate text-xs text-muted-foreground/80">{m.snippet}</div>
                       {/if}
+                      {#if statusLabel(m.status_signal) || m.linked_slug}
+                        <div class="mt-1 flex items-center gap-1">
+                          {#if statusLabel(m.status_signal)}
+                            <span class="inline-block rounded border px-1.5 text-[10px] leading-4 {statusClass(m.status_signal)}">
+                              {statusLabel(m.status_signal)}
+                            </span>
+                          {/if}
+                          {#if m.linked_slug}
+                            <span class="truncate text-[10px] text-muted-foreground/70">· {m.linked_company}</span>
+                          {:else if m.suggested_slug}
+                            <span class="text-[10px] text-brand-strong">· suggested</span>
+                          {/if}
+                        </div>
+                      {/if}
                     </div>
                   </button>
                 </li>
@@ -467,6 +527,30 @@
                   </div>
                 </div>
               </div>
+
+              {#if statusLabel(s.status_signal) || s.linked_slug || s.suggested_slug}
+                <div class="mt-3 flex shrink-0 flex-wrap items-center gap-2">
+                  {#if statusLabel(s.status_signal)}
+                    <Badge variant="outline" class={statusClass(s.status_signal)}>{statusLabel(s.status_signal)}</Badge>
+                  {/if}
+                  {#if s.linked_slug}
+                    <a
+                      href="/my/tracking/{s.linked_slug}"
+                      class="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-brand-ring hover:text-foreground"
+                    >
+                      Linked to {s.linked_company || 'application'} ↗
+                    </a>
+                    <button type="button" onclick={unlink} class="text-xs text-muted-foreground hover:text-destructive">Unlink</button>
+                  {:else if s.suggested_slug}
+                    <span class="inline-flex items-center gap-2 rounded-full border border-brand-ring/50 bg-brand-muted/40 px-2.5 py-0.5 text-xs">
+                      Looks like <span class="font-medium">{s.suggested_company || 'an application'}</span>
+                      <button type="button" onclick={confirmLink} class="font-medium text-brand-strong hover:underline">Link</button>
+                      <span aria-hidden="true">·</span>
+                      <button type="button" onclick={rejectLink} class="text-muted-foreground hover:text-foreground">Not this</button>
+                    </span>
+                  {/if}
+                </div>
+              {/if}
 
               {#if s.source === 'gmail'}
                 <div class="mt-2 flex shrink-0 justify-end">
