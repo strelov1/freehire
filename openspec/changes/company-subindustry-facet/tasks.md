@@ -16,5 +16,5 @@
 
 ## 5. Verify & rollout
 
-- [ ] 5.1 Full verification: `go build ./...`, `go vet ./...`, `go test ./...`, `go test -tags=integration ./internal/db/ ./internal/handler/`, and a manual run of the subindustry filter end-to-end
-- [ ] 5.2 Record post-deploy ops (apply the `subindustry` migration, then re-run `cmd/import-yc` to populate; no reindex) and offer a `/blog` changelog entry
+- [x] 5.1 Full verification: `go build ./...`, `go vet ./...`, `go test ./...`, `go test -tags=integration ./internal/db/ ./internal/handler/`, and a manual run of the subindustry filter end-to-end
+- [x] 5.2 Record post-deploy ops (apply the `subindustry` migration, then re-run `cmd/import-yc` to populate; no reindex) and offer a `/blog` changelog entry
