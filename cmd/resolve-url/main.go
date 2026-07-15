@@ -20,6 +20,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -28,7 +29,9 @@ import (
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobhash"
+	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/linksource"
+	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/worker"
 )
@@ -42,13 +45,23 @@ func run() int {
 		return 1
 	}
 
-	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
+	ctx, cfg, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
 		log.Printf("database: %v", err)
 		return 1
 	}
 	defer cleanup()
 	q := db.New(pool)
+
+	// Push each newly-written job straight to the live search index when the engine is
+	// configured (MEILI_MASTER_KEY set), mirroring cmd/ingest — the company page and
+	// /jobs search read from Meili, so without this a resolved job stays invisible there
+	// until the next full reindex. Best-effort: an index failure never fails the write,
+	// and the batch reindex stays the reconciler. Absent the key, nil skips the push.
+	var idx *search.Client
+	if cfg.MeiliKey != "" {
+		idx = search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
+	}
 
 	// The generic resolver is appended AFTER the host-scoped adapters (so a known ATS is
 	// handled by its richer API adapter) and only here, never in the shared registry —
@@ -69,7 +82,7 @@ func run() int {
 
 	var saved, failed int
 	for _, r := range resolved {
-		if err := upsert(ctx, pool, q, r); err != nil {
+		if err := upsert(ctx, pool, q, idx, r); err != nil {
 			failed++
 			log.Printf("resolve-url: %s/%s: %v", r.Source, r.Job.ExternalID, err)
 			continue
@@ -88,7 +101,7 @@ func run() int {
 // upsert writes one resolved job through the Job aggregate factory and the canonical
 // UpsertJob, enqueuing it for enrichment in the same transaction — the same write path as
 // ingest and tg-extract, so facets, slugs and the enrichment outbox stay consistent.
-func upsert(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, r linksource.Resolved) error {
+func upsert(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, idx *search.Client, r linksource.Resolved) error {
 	j, err := job.New(job.Draft{
 		Source:      r.Source,
 		ExternalID:  r.Job.ExternalID,
@@ -126,7 +139,44 @@ func upsert(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, r linksource
 	}); err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	indexJob(ctx, q, idx, res)
+	return nil
+}
+
+// indexJob pushes a just-written open job to the live search index, best-effort — same doc
+// build as cmd/ingest, so the company page and /jobs search show it immediately instead of
+// waiting for the next full reindex. Unlike ingest it does NOT gate on Inserted/Changed:
+// this is an operator tool over a handful of explicit URLs, so a re-run must (re)index an
+// already-present posting rather than silently no-op on an unchanged hash. The Meili upsert
+// is idempotent. A build or push failure is logged and swallowed — the job is already
+// persisted and the batch reindex reconciles. A non-canonical repost or a closed job is
+// never made searchable, matching ingest.
+func indexJob(ctx context.Context, q *db.Queries, idx *search.Client, saved db.UpsertJobRow) {
+	if idx == nil || saved.Job.DuplicateOf.Valid || saved.Job.ClosedAt.Valid {
+		return
+	}
+	// The job-reality signal needs this role's cluster counts; a lookup failure degrades
+	// to a unique role (counts 1) rather than skipping the push.
+	repost, mass := int64(1), int64(1)
+	if c, err := q.RoleClusterCount(ctx, db.RoleClusterCountParams{
+		CompanySlug:     saved.Job.CompanySlug,
+		RoleFingerprint: saved.Job.RoleFingerprint,
+	}); err == nil {
+		repost, mass = c.RepostCount, c.MassCount
+	}
+	doc, err := search.FromJob(saved.Job)
+	if err != nil {
+		log.Printf("resolve-url: build index doc for job %d: %v", saved.Job.ID, err)
+		return
+	}
+	reality := jobview.ClassifyReality(saved.Job, time.Now(), int(repost), int(mass))
+	doc.Reality = &reality
+	if err := idx.SubmitJobs(ctx, []search.JobDocument{doc}); err != nil {
+		log.Printf("resolve-url: index job %d: %v", saved.Job.ID, err)
+	}
 }
 
 // readURLs collects job URLs from the command line, falling back to stdin (one per line,
