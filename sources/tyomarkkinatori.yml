@@ -1,0 +1,8 @@
+# Job Market Finland (tyomarkkinatori.fi), the Finnish national job portal (KEHA-keskus, successor
+# to te-palvelut). Boardless aggregator: one public, keyless JSON API
+# (tyomarkkinatori.fi/api/jobpostingfulltext/search/v2/search), so the entry carries no board, and
+# each job's employer comes from the posting, not this placeholder. The list omits the body, so the
+# crawl fetches a detail page per posting for the description; it shards the search by region to
+# clear the API's 10k deep-paging cap. Its own cron slot.
+- company: Job Market Finland
+  provider: tyomarkkinatori

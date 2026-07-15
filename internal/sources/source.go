@@ -201,6 +201,9 @@ func All(c HTTPClient) map[string]Source {
 		NewTeamtailor(c),
 		NewICIMS(c),
 		NewCareerPage(c),
+		NewNorthstone(c),
+		NewTalentAdore(c),
+		NewLikeit(c),
 		NewLoxo(c),
 		NewHireology(c),
 		NewIsolvedHire(c),
@@ -276,6 +279,7 @@ func All(c HTTPClient) map[string]Source {
 		NewJobtech(c),
 		NewJobnet(c),
 		NewJobdanmark(c),
+		NewTyomarkkinatori(c),
 		// International single-company adapters (boardless).
 		NewTelegramCareers(c),
 		NewUber(c),
@@ -284,6 +288,7 @@ func All(c HTTPClient) map[string]Source {
 		NewApple(c),
 		NewLumenalta(c),
 		NewDataArt(c),
+		NewAlignerr(c),
 		NewBairesDev(c),
 		// RU-domestic single-company adapters (boardless, except Yandex which selects
 		// host+language by board).

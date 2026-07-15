@@ -1,0 +1,5 @@
+# Alignerr careers (www.alignerr.com). Boardless single-company source: one fixed host with no
+# per-tenant board id, so the entry carries no board. The job's company is this entry's
+# `company` (Alignerr), not read per posting. See internal/sources/alignerr.go.
+- company: Alignerr
+  provider: alignerr

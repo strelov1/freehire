@@ -1,0 +1,19 @@
+# Likeit (Saarni Likeit Oy) recruiting boards — a Finnish HR/ERP platform for staffing
+# agencies. Each tenant runs its board on a subdomain (<board>.likeit.fi) and publishes a
+# keyless RSS feed of open adverts at /jsp/duuni/AdvertRss.jsp; see internal/sources/likeit.go.
+# board = the tenant subdomain (e.g. "rekrymesta"); company = the staffing agency running it.
+#
+# Add a board only after validating it live: https://<board>.likeit.fi/jsp/duuni/AdvertRss.jsp
+# must return 200 with <item> adverts. Each entry below was validated live.
+- company: Mestarit Henkilöstöpalvelut
+  board: mestarit
+- company: Rekrymesta
+  board: rekrymesta
+- company: Carrot
+  board: carrot
+- company: Apuvoima
+  board: apuvoima
+- company: Duuri-tiimi
+  board: duuritiimi
+- company: Safrent
+  board: safrent
