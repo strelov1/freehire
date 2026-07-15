@@ -81,6 +81,11 @@ func (s workday) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 func (s workday) listPostings(ctx context.Context, b workdayBoard) ([]workdayPosting, error) {
 	url := fmt.Sprintf("https://%s/wday/cxs/%s/%s/jobs", b.host, b.tenant, b.site)
 	var postings []workdayPosting
+	// Some boards (e.g. pg.wd5.myworkdayjobs.com) report the real total only on the
+	// first page and total:0 thereafter, so latch the first non-zero total and page
+	// against it — reading each page's total would break after page one and silently
+	// truncate the board, which the 48h unseen sweep then reads as postings removed.
+	total := -1
 	for offset := 0; ; {
 		reqBody := map[string]any{
 			"appliedFacets": map[string]any{},
@@ -100,7 +105,10 @@ func (s workday) listPostings(ctx context.Context, b workdayBoard) ([]workdayPos
 		}
 		postings = append(postings, page.JobPostings...)
 		offset += len(page.JobPostings)
-		if offset >= page.Total {
+		if total < 0 && page.Total > 0 {
+			total = page.Total
+		}
+		if total >= 0 && offset >= total {
 			break
 		}
 	}

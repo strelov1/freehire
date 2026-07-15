@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -119,6 +120,62 @@ func TestWorkdayFetchSkipsFailedDetail(t *testing.T) {
 	}
 	if len(jobs) != 1 || jobs[0].ExternalID != "/job/X/JR-1" {
 		t.Fatalf("want only JR-1 to survive, got %d jobs", len(jobs))
+	}
+}
+
+// pagedWorkday returns a canned list page per call (in order), delegating detail
+// GetJSONs to the embedded routedHTTP. It mimics pg.wd5.myworkdayjobs.com, which
+// reports the real `total` only on the first page and `total:0` thereafter.
+type pagedWorkday struct {
+	*routedHTTP
+	pages []string
+	call  int
+}
+
+func (p *pagedWorkday) PostJSON(_ context.Context, _ string, _, v any) error {
+	body := `{"total":0,"jobPostings":[]}`
+	if p.call < len(p.pages) {
+		body = p.pages[p.call]
+	}
+	p.call++
+	return json.Unmarshal([]byte(body), v)
+}
+
+func workdayDetailBody(title string) string {
+	return `{"jobPostingInfo":{"title":"` + title + `","jobDescription":"<p>x</p>","location":"Berlin, Germany","startDate":"2024-06-11"}}`
+}
+
+// A board reporting total only on its first page must still be drained fully:
+// stopping at a later page's total:0 drops the postings past it, and a dropped
+// posting loses its last_seen_at stamp and is closed by the 48h unseen sweep.
+func TestWorkdayPagesByFirstPageTotal(t *testing.T) {
+	fake := &pagedWorkday{
+		routedHTTP: (&routedHTTP{}).
+			route("A_JR-1", workdayDetailBody("A")).
+			route("B_JR-2", workdayDetailBody("B")).
+			route("C_JR-3", workdayDetailBody("C")).
+			route("D_JR-4", workdayDetailBody("D")),
+		pages: []string{
+			`{"total":4,"jobPostings":[{"title":"A","externalPath":"/job/X/A_JR-1"},{"title":"B","externalPath":"/job/X/B_JR-2"}]}`,
+			`{"total":0,"jobPostings":[{"title":"C","externalPath":"/job/X/C_JR-3"}]}`,
+			`{"total":0,"jobPostings":[{"title":"D","externalPath":"/job/X/D_JR-4"}]}`,
+		},
+	}
+	jobs, err := NewWorkday(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "workday", Board: "acme.wd1.myworkdayjobs.com/Careers",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 4 {
+		t.Fatalf("len(jobs) = %d, want 4 (all pages drained despite total:0 after page one)", len(jobs))
+	}
+	got := map[string]bool{}
+	for _, j := range jobs {
+		got[j.ExternalID] = true
+	}
+	if !got["/job/X/D_JR-4"] {
+		t.Error("posting on page three missing — pagination stopped early on a later page's total:0")
 	}
 }
 
