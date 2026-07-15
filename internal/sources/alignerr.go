@@ -52,7 +52,6 @@ type alignerrListItem struct {
 // isActive gates closed postings; jobType is the structured employment enum; firstPostDate is
 // the publish date (createdAt is the fallback).
 type alignerrJob struct {
-	ID                  string `json:"id"`
 	Name                string `json:"name"`
 	HTMLLongDescription string `json:"htmlLongDescription"`
 	ShortDescription    string `json:"shortDescription"`
