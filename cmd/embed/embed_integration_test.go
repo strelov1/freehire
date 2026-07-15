@@ -207,6 +207,16 @@ func TestIntegration_EmbedWorkerDrainsQueue(t *testing.T) {
 		t.Errorf("closed job stamp model = %v, want NULL (cleared)", model)
 	}
 
+	// Durability: the open job's vector is persisted to Postgres beside the stamp (the
+	// backup copy that lets the index be rehydrated without re-embedding); the removed
+	// job carries none.
+	if l := jobVectorLen(t, pool, openID); l <= 0 {
+		t.Errorf("open job semantic_embedding length = %d, want > 0 (vector persisted)", l)
+	}
+	if l := jobVectorLen(t, pool, closedID); l != 0 {
+		t.Errorf("closed job semantic_embedding length = %d, want 0/NULL (cleared)", l)
+	}
+
 	// Outbox drained.
 	var n int
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM semantic_outbox").Scan(&n); err != nil {
@@ -246,7 +256,7 @@ func preIndexClosed(t *testing.T, ctx context.Context, client *search.Client, po
 	if err != nil || len(jobs) != 1 {
 		t.Fatalf("load closed job: rows=%d err=%v", len(jobs), err)
 	}
-	if err := ix.IndexOpen(ctx, jobs); err != nil {
+	if _, err := ix.IndexOpen(ctx, jobs); err != nil {
 		t.Fatalf("pre-index closed job: %v", err)
 	}
 	if _, err := pool.Exec(ctx,
@@ -254,6 +264,21 @@ func preIndexClosed(t *testing.T, ctx context.Context, client *search.Client, po
 		search.CurrentEmbedderModel(), id); err != nil {
 		t.Fatalf("stamp closed job: %v", err)
 	}
+}
+
+// jobVectorLen returns the length of a job's persisted semantic_embedding, or 0 when
+// the column is NULL (no vector).
+func jobVectorLen(t *testing.T, pool *pgxpool.Pool, id int64) int {
+	t.Helper()
+	var n *int
+	if err := pool.QueryRow(context.Background(),
+		"SELECT array_length(semantic_embedding, 1) FROM jobs WHERE id = $1", id).Scan(&n); err != nil {
+		t.Fatalf("read vector length: %v", err)
+	}
+	if n == nil {
+		return 0
+	}
+	return *n
 }
 
 func jobStamp(t *testing.T, pool *pgxpool.Pool, id int64) (model, hash *string) {

@@ -1,0 +1,17 @@
+-- semantic_embedding is the durable copy of a job's semantic search vector — the
+-- e5-base (768-dim) embedding the cmd/embed worker computes and upserts into the
+-- Meilisearch jobs_semantic index. Until now those vectors lived ONLY in Meili, so a
+-- lost Meili volume would force a full re-embed of the whole catalogue (a weeks-long
+-- pass). Persisting them here makes Postgres the source of truth: the nightly pg_dump
+-- backs the vectors up, and the index can be rehydrated from Postgres without any
+-- re-embedding. Stored as real[] (float4) — e5 vectors are natively float32, so this
+-- preserves precision at half the footprint of double precision[].
+--
+-- Nullable: a job carries a vector only once cmd/embed has embedded it (technical,
+-- open jobs). The embed provenance already lives in jobs.semantic_embedded_model /
+-- semantic_embedded_hash; this column adds only the vector itself. Seed existing rows
+-- from Meili with cmd/backfill-semantic-vectors (no re-embedding).
+--
+-- Applied to a fresh volume by initdb after 0020; on the existing prod volume this
+-- ALTER must be run manually BEFORE deploying code that writes the column.
+ALTER TABLE jobs ADD COLUMN semantic_embedding real[];

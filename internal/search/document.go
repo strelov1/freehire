@@ -41,6 +41,11 @@ type JobDocument struct {
 	// document (not jobview.Job), so it backs the `roles` facet but is never part
 	// of the served public wire shape.
 	Roles []string `json:"roles"`
+	// semanticVector is the job's persisted embedding (jobs.semantic_embedding), carried
+	// transiently so a --from-pg rebuild can rehydrate the semantic index from the stored
+	// vectors instead of re-embedding via TEI. Unexported, so it is never serialized into
+	// the Meili document body — the vector rides _vectors on the semanticDocument wrapper.
+	semanticVector []float32
 }
 
 // FromJob maps a database job row to its index document. An empty or absent
@@ -61,6 +66,7 @@ func FromJob(j db.Job) (JobDocument, error) {
 	// its own jobview.FromRow, unaffected by this local copy.
 	view.Description = truncateRunes(view.Description, maxIndexedDescriptionRunes)
 	doc := JobDocument{ID: j.ID, Job: view, Roles: roletag.Derive(j.Seniority, j.Category, j.Title)}
+	doc.semanticVector = j.SemanticEmbedding
 	if eff := jobview.EffectivePostedAt(j.PostedAt, j.CreatedAt); eff.Valid {
 		doc.PostedTS = eff.Time.Unix()
 	}

@@ -165,8 +165,11 @@ type Rebuild struct {
 	// semantic marks this a hybrid-index rebuild: Push embeds each batch (via TEI) and
 	// attaches the vectors, since the semantic index uses a userProvided embedder.
 	semantic bool
-	rebuild  meilisearch.IndexManager
-	tasks    []int64
+	// fromPG makes a semantic rebuild rehydrate from the vectors persisted in Postgres
+	// (jobs.semantic_embedding) instead of re-embedding via TEI — the fast recovery path.
+	fromPG  bool
+	rebuild meilisearch.IndexManager
+	tasks   []int64
 }
 
 // NewFacetRebuild starts a full rebuild of the facet/keyword production index.
@@ -177,6 +180,15 @@ func (c *Client) NewFacetRebuild() *Rebuild {
 // NewSemanticRebuild starts a full rebuild of the hybrid semantic index.
 func (c *Client) NewSemanticRebuild() *Rebuild {
 	return &Rebuild{c: c, liveUID: semanticIndexUID, rebuildUID: semanticRebuildUID, settings: semanticSettings(), semantic: true}
+}
+
+// NewSemanticRebuildFromPG starts a full rebuild of the hybrid semantic index that
+// rehydrates from the vectors already stored in Postgres instead of re-embedding via
+// TEI. Jobs without a persisted vector are left out of the rebuild (the embed worker
+// fills them incrementally). Use it to restore the index after a Meili data loss
+// without paying the weeks-long re-embedding cost.
+func (c *Client) NewSemanticRebuildFromPG() *Rebuild {
+	return &Rebuild{c: c, liveUID: semanticIndexUID, rebuildUID: semanticRebuildUID, settings: semanticSettings(), semantic: true, fromPG: true}
 }
 
 // Prepare creates a fresh, empty rebuild index with this pass's settings, ready to
@@ -220,9 +232,20 @@ func (r *Rebuild) Push(ctx context.Context, docs []JobDocument) error {
 	// pushes the plain documents.
 	var payload any = docs
 	if r.semantic {
-		sdocs, err := r.c.embedDocs(ctx, docs)
-		if err != nil {
-			return err
+		var sdocs []semanticDocument
+		if r.fromPG {
+			// Rehydrate: reuse the vectors already stored in Postgres, no TEI call.
+			// Documents without a persisted vector are dropped from this batch (the
+			// embed worker fills them incrementally).
+			sdocs = semanticDocsFromPG(docs)
+		} else {
+			var err error
+			if sdocs, err = r.c.embedDocs(ctx, docs); err != nil {
+				return err
+			}
+		}
+		if len(sdocs) == 0 {
+			return nil // nothing to push this batch (e.g. none carried a persisted vector)
 		}
 		payload = sdocs
 	}
@@ -341,22 +364,31 @@ func (c *Client) IndexJobs(ctx context.Context, docs []JobDocument) error {
 }
 
 // IndexSemanticJobs embeds a batch (via TEI) and upserts it into the semantic index
-// with each document's vector, since that index uses a userProvided embedder. Used by
-// the incremental reindex --semantic pass.
-func (c *Client) IndexSemanticJobs(ctx context.Context, docs []JobDocument) error {
+// with each document's vector, since that index uses a userProvided embedder. It
+// returns the computed vectors keyed by job id so the caller can persist them to
+// Postgres in the same unit of work — the durable copy that lets the index be
+// rehydrated without re-embedding. Used by the incremental embed worker.
+func (c *Client) IndexSemanticJobs(ctx context.Context, docs []JobDocument) (map[int64][]float32, error) {
 	if len(docs) == 0 {
-		return nil
+		return nil, nil
 	}
 	sdocs, err := c.embedDocs(ctx, docs)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	pk := primaryKey
 	task, err := c.semantic.UpdateDocumentsWithContext(ctx, sdocs, &meilisearch.DocumentOptions{PrimaryKey: &pk})
 	if err != nil {
-		return fmt.Errorf("search: index semantic documents: %w", err)
+		return nil, fmt.Errorf("search: index semantic documents: %w", err)
 	}
-	return c.awaitTask(ctx, c.semantic, task.TaskUID)
+	if err := c.awaitTask(ctx, c.semantic, task.TaskUID); err != nil {
+		return nil, err
+	}
+	vectors := make(map[int64][]float32, len(sdocs))
+	for _, sd := range sdocs {
+		vectors[sd.ID] = sd.Vectors[embedderName]
+	}
+	return vectors, nil
 }
 
 func (c *Client) indexInto(ctx context.Context, idx meilisearch.IndexManager, docs []JobDocument) error {

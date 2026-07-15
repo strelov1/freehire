@@ -84,12 +84,26 @@ SET semantic_embedded_model = sqlc.arg(model)::text,
     semantic_embedded_hash  = content_hash
 WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 
+-- name: SetSemanticEmbedding :exec
+-- Persist one job's semantic vector — the durable copy of what was just upserted into
+-- the jobs_semantic index. Called once per embedded job inside the SAME transaction as
+-- StampSemanticEmbeddedBatch on the open-job success path, so the stamp and the vector
+-- commit together (a job is never marked embedded without its vector reaching Postgres).
+-- Postgres thus becomes the source of truth for the vector: the nightly pg_dump backs it
+-- up and reindex can rehydrate Meili from it without re-embedding. Idempotent by primary key.
+UPDATE jobs
+SET semantic_embedding = sqlc.arg(embedding)::real[]
+WHERE id = sqlc.arg(id);
+
 -- name: ClearSemanticEmbeddedBatch :exec
--- Clear a batch of jobs' embed provenance after their documents are removed from
--- jobs_semantic (closed-job path). Run in the same transaction as DeleteSemanticEntriesBatch.
+-- Clear a batch of jobs' embed provenance AND their durable vector after their documents
+-- are removed from jobs_semantic (closed-job path). Run in the same transaction as
+-- DeleteSemanticEntriesBatch. Dropping semantic_embedding keeps Postgres consistent with
+-- the index: a closed job has no vector in either place.
 UPDATE jobs
 SET semantic_embedded_model = NULL,
-    semantic_embedded_hash  = NULL
+    semantic_embedded_hash  = NULL,
+    semantic_embedding      = NULL
 WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 
 -- name: DeleteSemanticEntriesBatch :exec

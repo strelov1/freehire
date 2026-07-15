@@ -50,6 +50,15 @@ func TestSemanticRequested(t *testing.T) {
 	}
 }
 
+func TestFromPGRequested(t *testing.T) {
+	if !fromPGRequested([]string{"--semantic", "--from-pg"}) {
+		t.Error("--from-pg should be detected among other args")
+	}
+	if fromPGRequested([]string{"--semantic"}) {
+		t.Error("absent --from-pg must not be reported")
+	}
+}
+
 // The reindex feed deliberately includes closed jobs: open ones are upserted as
 // documents, closed ones become deletions so they leave the index (job-search
 // spec: the index contains only open jobs).

@@ -239,7 +239,7 @@ func TestIntegration_EnsureIndexIndexAndSearch(t *testing.T) {
 		if err := c.EnsureSemanticIndex(ctx); err != nil {
 			t.Fatalf("EnsureSemanticIndex: %v", err)
 		}
-		if err := c.IndexSemanticJobs(ctx, docs); err != nil {
+		if _, err := c.IndexSemanticJobs(ctx, docs); err != nil {
 			t.Fatalf("IndexSemanticJobs: %v", err)
 		}
 		res, err := c.Search(ctx, SearchParams{Query: "backend engineering role", SemanticRatio: 0.5, Limit: 10})
@@ -476,7 +476,7 @@ func TestIntegration_SimilarJobs(t *testing.T) {
 			PublicSlug:  "data-scientist-delta-ddd",
 			Enrichment:  enrichedJSON(t, enrich.Enrichment{})},
 	}
-	if err := c.IndexSemanticJobs(ctx, toDocs(t, jobs)); err != nil {
+	if _, err := c.IndexSemanticJobs(ctx, toDocs(t, jobs)); err != nil {
 		t.Fatalf("IndexSemanticJobs: %v", err)
 	}
 
@@ -564,7 +564,7 @@ func TestIntegration_EmbedTextAndRecommend(t *testing.T) {
 			PublicSlug:  "frontend-react-developer-gamma-ccc",
 			Enrichment:  enrichedJSON(t, enrich.Enrichment{})},
 	}
-	if err := c.IndexSemanticJobs(ctx, toDocs(t, jobs)); err != nil {
+	if _, err := c.IndexSemanticJobs(ctx, toDocs(t, jobs)); err != nil {
 		t.Fatalf("IndexSemanticJobs: %v", err)
 	}
 
@@ -692,5 +692,65 @@ func TestIntegration_RebuildSwapsFreshIndexAndDropsOld(t *testing.T) {
 
 	if _, err := c.manager.GetIndexWithContext(ctx, "jobs_rebuild"); err == nil {
 		t.Error("jobs_rebuild still exists; Promote should drop it")
+	}
+}
+
+// A --from-pg semantic rebuild rehydrates the index from the vectors persisted in
+// Postgres (jobs.semantic_embedding) instead of re-embedding via TEI: a job carrying a
+// stored vector lands in jobs_semantic with that exact vector, and a job without one is
+// left out (for the embed worker to fill). This is the disaster-recovery path.
+func TestIntegration_SemanticRebuildFromPG(t *testing.T) {
+	ctx := context.Background()
+	c := startMeili(t)
+	if err := c.EnsureSemanticIndex(ctx); err != nil {
+		t.Fatalf("EnsureSemanticIndex: %v", err)
+	}
+
+	vec := func(seed float32) []float32 {
+		v := make([]float32, embedderDimensions)
+		for i := range v {
+			v[i] = seed
+		}
+		return v
+	}
+	jobs := []db.Job{
+		{ID: 1, Title: "Senior Golang Engineer", Company: "Acme", Location: "Berlin",
+			Description: "Build backend services in Go.",
+			PublicSlug:  "senior-golang-engineer-acme-aaa",
+			Enrichment:  enrichedJSON(t, enrich.Enrichment{}),
+			// 0.5 is exactly representable in float32, so the round-trip is exact.
+			SemanticEmbedding: vec(0.5)},
+		{ID: 2, Title: "Frontend Developer", Company: "Beta", Location: "Remote",
+			Description: "Build UIs in React.",
+			PublicSlug:  "frontend-developer-beta-bbb",
+			Enrichment:  enrichedJSON(t, enrich.Enrichment{})}, // no persisted vector
+	}
+
+	b := c.NewSemanticRebuildFromPG()
+	if err := b.Prepare(ctx); err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+	if err := b.Push(ctx, toDocs(t, jobs)); err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	if err := b.Promote(ctx); err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+
+	got, err := c.ListSemanticVectors(ctx, 0, 100)
+	if err != nil {
+		t.Fatalf("ListSemanticVectors: %v", err)
+	}
+	byID := make(map[int64][]float32, len(got))
+	for _, v := range got {
+		byID[v.ID] = v.Vector
+	}
+	if v, ok := byID[1]; !ok {
+		t.Fatal("job 1 missing from jobs_semantic after from-pg rebuild")
+	} else if len(v) != embedderDimensions || v[0] != 0.5 {
+		t.Errorf("job 1 vector[0] = %v (len %d); want 0.5 (len %d)", v[0], len(v), embedderDimensions)
+	}
+	if _, ok := byID[2]; ok {
+		t.Error("job 2 has no persisted vector and must be absent from the rehydrated index")
 	}
 }

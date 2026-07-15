@@ -39,8 +39,10 @@ type Store interface {
 	// aborts the whole load, so the runner retries such a batch per item to isolate it.
 	Jobs(ctx context.Context, ids []int64) ([]db.Job, error)
 	// CompleteOpen stamps each entry's job embed provenance (model + its current
-	// content_hash) and deletes the outbox entries, atomically.
-	CompleteOpen(ctx context.Context, entries []Claimed, model string) error
+	// content_hash), persists each job's semantic vector, and deletes the outbox
+	// entries, atomically. vectors maps job id to the vector just upserted into the
+	// index, so the durable Postgres copy commits with the provenance stamp.
+	CompleteOpen(ctx context.Context, entries []Claimed, model string, vectors map[int64][]float32) error
 	// CompleteClosed clears each entry's job embed provenance and deletes the outbox
 	// entries, atomically (their documents were just removed from the index).
 	CompleteClosed(ctx context.Context, entries []Claimed) error
@@ -51,8 +53,9 @@ type Store interface {
 // Indexer is the semantic-index side: embed+upsert open jobs, or remove closed ones.
 type Indexer interface {
 	// IndexOpen embeds the jobs' documents and upserts their vectors into the semantic
-	// index in one batch.
-	IndexOpen(ctx context.Context, jobs []db.Job) error
+	// index in one batch, returning the vectors keyed by job id so they can be persisted
+	// to Postgres alongside the provenance stamp.
+	IndexOpen(ctx context.Context, jobs []db.Job) (map[int64][]float32, error)
 	// RemoveClosed deletes the jobs' documents from the semantic index in one batch.
 	RemoveClosed(ctx context.Context, ids []int64) error
 }
@@ -146,11 +149,12 @@ func (rn *run) processOpenBatch(ctx context.Context, entries []Claimed) {
 		rn.fallbackOpen(ctx, entries)
 		return
 	}
-	if err := rn.indexer.IndexOpen(callCtx, jobs); err != nil {
+	vectors, err := rn.indexer.IndexOpen(callCtx, jobs)
+	if err != nil {
 		rn.fallbackOpen(ctx, entries)
 		return
 	}
-	if err := rn.store.CompleteOpen(callCtx, entries, rn.opt.TargetModel); err != nil {
+	if err := rn.store.CompleteOpen(callCtx, entries, rn.opt.TargetModel, vectors); err != nil {
 		rn.fallbackOpen(ctx, entries)
 		return
 	}
@@ -183,11 +187,12 @@ func (rn *run) processOpenOne(ctx context.Context, entry Claimed) {
 		rn.fail(entry, fmt.Errorf("job %d not found", entry.JobID))
 		return
 	}
-	if err := rn.indexer.IndexOpen(callCtx, jobs); err != nil {
+	vectors, err := rn.indexer.IndexOpen(callCtx, jobs)
+	if err != nil {
 		rn.fail(entry, fmt.Errorf("embed/index: %w", err))
 		return
 	}
-	if err := rn.store.CompleteOpen(callCtx, []Claimed{entry}, rn.opt.TargetModel); err != nil {
+	if err := rn.store.CompleteOpen(callCtx, []Claimed{entry}, rn.opt.TargetModel, vectors); err != nil {
 		rn.fail(entry, fmt.Errorf("complete open: %w", err))
 		return
 	}

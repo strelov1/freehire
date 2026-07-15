@@ -67,8 +67,10 @@ type Querier interface {
 	// affected row count: 1 for an owned row (whether or not it was shared — unshare is an
 	// idempotent no-op when already private), 0 when missing or not the caller's (→ 404).
 	ClearSavedSearchPublicSlug(ctx context.Context, arg ClearSavedSearchPublicSlugParams) (int64, error)
-	// Clear a batch of jobs' embed provenance after their documents are removed from
-	// jobs_semantic (closed-job path). Run in the same transaction as DeleteSemanticEntriesBatch.
+	// Clear a batch of jobs' embed provenance AND their durable vector after their documents
+	// are removed from jobs_semantic (closed-job path). Run in the same transaction as
+	// DeleteSemanticEntriesBatch. Dropping semantic_embedding keeps Postgres consistent with
+	// the index: a closed job has no vector in either place.
 	ClearSemanticEmbeddedBatch(ctx context.Context, ids []int64) error
 	// Clear the user's résumé pointer (after deleting the object from storage), any
 	// cached ATS review, the derived CV embedding (no CV → no recommendations), and the
@@ -746,6 +748,13 @@ type Querier interface {
 	// author_label is set verbatim (NULL clears it → anonymous). No matching owner-scoped
 	// row returns no row (→ ErrNotFound).
 	SetSavedSearchPublicSlug(ctx context.Context, arg SetSavedSearchPublicSlugParams) (SavedSearch, error)
+	// Persist one job's semantic vector — the durable copy of what was just upserted into
+	// the jobs_semantic index. Called once per embedded job inside the SAME transaction as
+	// StampSemanticEmbeddedBatch on the open-job success path, so the stamp and the vector
+	// commit together (a job is never marked embedded without its vector reaching Postgres).
+	// Postgres thus becomes the source of truth for the vector: the nightly pg_dump backs it
+	// up and reindex can rehydrate Meili from it without re-embedding. Idempotent by primary key.
+	SetSemanticEmbedding(ctx context.Context, arg SetSemanticEmbeddingParams) error
 	// Pause/resume a subscription, scoped to its owner. No matching owner-scoped row
 	// returns no row (the handler maps that to 404).
 	SetSubscriptionActive(ctx context.Context, arg SetSubscriptionActiveParams) (Subscription, error)

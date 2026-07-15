@@ -78,12 +78,15 @@ func (q *Queries) ClaimSemanticBatch(ctx context.Context, arg ClaimSemanticBatch
 const clearSemanticEmbeddedBatch = `-- name: ClearSemanticEmbeddedBatch :exec
 UPDATE jobs
 SET semantic_embedded_model = NULL,
-    semantic_embedded_hash  = NULL
+    semantic_embedded_hash  = NULL,
+    semantic_embedding      = NULL
 WHERE id = ANY($1::bigint[])
 `
 
-// Clear a batch of jobs' embed provenance after their documents are removed from
-// jobs_semantic (closed-job path). Run in the same transaction as DeleteSemanticEntriesBatch.
+// Clear a batch of jobs' embed provenance AND their durable vector after their documents
+// are removed from jobs_semantic (closed-job path). Run in the same transaction as
+// DeleteSemanticEntriesBatch. Dropping semantic_embedding keeps Postgres consistent with
+// the index: a closed job has no vector in either place.
 func (q *Queries) ClearSemanticEmbeddedBatch(ctx context.Context, ids []int64) error {
 	_, err := q.db.Exec(ctx, clearSemanticEmbeddedBatch, ids)
 	return err
@@ -143,7 +146,7 @@ func (q *Queries) EnqueuePendingSemanticJobs(ctx context.Context, arg EnqueuePen
 }
 
 const getJobsByIDs = `-- name: GetJobsByIDs :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding
 FROM jobs
 WHERE id = ANY($1::bigint[])
 `
@@ -204,6 +207,7 @@ func (q *Queries) GetJobsByIDs(ctx context.Context, ids []int64) ([]Job, error) 
 			&i.SemanticEmbeddedHash,
 			&i.DuplicateOf,
 			&i.IsTech,
+			&i.SemanticEmbedding,
 		); err != nil {
 			return nil, err
 		}
@@ -248,6 +252,28 @@ func (q *Queries) RecordSemanticFailure(ctx context.Context, arg RecordSemanticF
 	var i RecordSemanticFailureRow
 	err := row.Scan(&i.Attempts, &i.FailedAt)
 	return i, err
+}
+
+const setSemanticEmbedding = `-- name: SetSemanticEmbedding :exec
+UPDATE jobs
+SET semantic_embedding = $1::real[]
+WHERE id = $2
+`
+
+type SetSemanticEmbeddingParams struct {
+	Embedding []float32 `json:"embedding"`
+	ID        int64     `json:"id"`
+}
+
+// Persist one job's semantic vector — the durable copy of what was just upserted into
+// the jobs_semantic index. Called once per embedded job inside the SAME transaction as
+// StampSemanticEmbeddedBatch on the open-job success path, so the stamp and the vector
+// commit together (a job is never marked embedded without its vector reaching Postgres).
+// Postgres thus becomes the source of truth for the vector: the nightly pg_dump backs it
+// up and reindex can rehydrate Meili from it without re-embedding. Idempotent by primary key.
+func (q *Queries) SetSemanticEmbedding(ctx context.Context, arg SetSemanticEmbeddingParams) error {
+	_, err := q.db.Exec(ctx, setSemanticEmbedding, arg.Embedding, arg.ID)
+	return err
 }
 
 const stampSemanticEmbeddedBatch = `-- name: StampSemanticEmbeddedBatch :exec

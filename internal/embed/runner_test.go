@@ -22,10 +22,11 @@ type fakeStore struct {
 
 	indexErr map[int64]error // CompleteOpen error for a job id (single-item path)
 
-	openBatches   [][]int64 // job ids per CompleteOpen call (len>1 = a real batch)
-	closedBatches [][]int64 // job ids per CompleteClosed call
-	openDone      []int64   // all job ids CompleteOpen'd
-	closedDone    []int64   // all job ids CompleteClosed'd
+	openBatches   [][]int64           // job ids per CompleteOpen call (len>1 = a real batch)
+	openVectors   map[int64][]float32 // vectors handed to CompleteOpen, keyed by job id
+	closedBatches [][]int64           // job ids per CompleteClosed call
+	openDone      []int64             // all job ids CompleteOpen'd
+	closedDone    []int64             // all job ids CompleteClosed'd
 	failCalls     []failCall
 	attempts      map[int64]int // outbox id -> attempts so far
 }
@@ -78,7 +79,7 @@ func (s *fakeStore) Jobs(_ context.Context, ids []int64) ([]db.Job, error) {
 	return out, nil
 }
 
-func (s *fakeStore) CompleteOpen(_ context.Context, entries []Claimed, _ string) error {
+func (s *fakeStore) CompleteOpen(_ context.Context, entries []Claimed, _ string, vectors map[int64][]float32) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var ids []int64
@@ -90,6 +91,12 @@ func (s *fakeStore) CompleteOpen(_ context.Context, entries []Claimed, _ string)
 	}
 	s.openBatches = append(s.openBatches, ids)
 	s.openDone = append(s.openDone, ids...)
+	if s.openVectors == nil {
+		s.openVectors = map[int64][]float32{}
+	}
+	for id, v := range vectors {
+		s.openVectors[id] = v
+	}
 	return nil
 }
 
@@ -127,24 +134,26 @@ type fakeIndexer struct {
 
 func newFakeIndexer() *fakeIndexer { return &fakeIndexer{indexErr: map[int64]error{}} }
 
-func (ix *fakeIndexer) IndexOpen(_ context.Context, jobs []db.Job) error {
+func (ix *fakeIndexer) IndexOpen(_ context.Context, jobs []db.Job) (map[int64][]float32, error) {
 	ix.mu.Lock()
 	defer ix.mu.Unlock()
 	ids := make([]int64, len(jobs))
+	vecs := make(map[int64][]float32, len(jobs))
 	for i, j := range jobs {
 		ids[i] = j.ID
+		vecs[j.ID] = []float32{float32(j.ID)} // deterministic per-job vector
 	}
 	ix.indexCalls = append(ix.indexCalls, ids)
 	if ix.batchFails && len(jobs) > 1 {
-		return errors.New("batch embed failed")
+		return nil, errors.New("batch embed failed")
 	}
 	for _, j := range jobs {
 		if err := ix.indexErr[j.ID]; err != nil {
-			return err
+			return nil, err
 		}
 	}
 	ix.indexed = append(ix.indexed, ids...)
-	return nil
+	return vecs, nil
 }
 
 func (ix *fakeIndexer) RemoveClosed(_ context.Context, ids []int64) error {
@@ -258,5 +267,32 @@ func TestRunnerCorruptedRowDeadLettersInFallback(t *testing.T) {
 	}
 	if len(store.failCalls) != 1 || store.failCalls[0].maxAttempts != 1 {
 		t.Errorf("failCalls = %+v, want one with maxAttempts=1 (immediate dead-letter)", store.failCalls)
+	}
+}
+
+func TestRunnerPersistsVectorsToStore(t *testing.T) {
+	store := newFakeStore()
+	ix := newFakeIndexer()
+	for _, id := range []int64{1, 2} {
+		store.jobs[id] = db.Job{ID: id}
+	}
+	store.pending = []Claimed{
+		{OutboxID: 10, JobID: 1, Closed: false},
+		{OutboxID: 20, JobID: 2, Closed: false},
+	}
+
+	if _, err := (Runner{Store: store, Indexer: ix}).Run(context.Background(), opt()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// The vectors IndexOpen produced must reach CompleteOpen so they commit to Postgres
+	// alongside the provenance stamp (the fake indexer returns [float32(id)] per job).
+	if len(store.openVectors) != 2 {
+		t.Fatalf("openVectors = %v; want 2 entries", store.openVectors)
+	}
+	if got := store.openVectors[1]; len(got) != 1 || got[0] != 1 {
+		t.Fatalf("vector for job 1 = %v; want [1]", got)
+	}
+	if got := store.openVectors[2]; len(got) != 1 || got[0] != 2 {
+		t.Fatalf("vector for job 2 = %v; want [2]", got)
 	}
 }

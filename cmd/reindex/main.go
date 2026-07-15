@@ -87,6 +87,15 @@ func run() int {
 		return 1
 	}
 
+	// --from-pg rehydrates the semantic index from the vectors already in Postgres
+	// (jobs.semantic_embedding) instead of re-embedding via TEI. It only makes sense for
+	// the semantic pass — the facet index carries no vectors.
+	fromPG := fromPGRequested(os.Args[1:])
+	if fromPG && !semantic {
+		log.Print("reindex: --from-pg applies only to a --semantic rebuild")
+		return 1
+	}
+
 	// Refresh the role-cluster canonical markers before reading jobs, so the collapse
 	// (splitJobs drops non-canonical reposts) reflects the current catalogue and a closed
 	// canon has failed over. Done per company in short transactions (never a table-wide
@@ -111,6 +120,9 @@ func run() int {
 	var b rebuilder = client.NewFacetRebuild()
 	if semantic {
 		b = client.NewSemanticRebuild()
+		if fromPG {
+			b = client.NewSemanticRebuildFromPG()
+		}
 	}
 	// The semantic rebuild optionally scopes to a fresh posting window (--posted-within);
 	// every other full pass scans the whole table. A scoped reader returns open jobs only,
@@ -121,7 +133,13 @@ func run() int {
 		reader = worker.NewPostedSinceReader(q, time.Now().Add(-postedWithin))
 		scope = "posted-within " + postedWithin.String()
 	}
-	log.Printf("reindex: target=%s scope=%s mode=swap", target, scope)
+	vectors := "n/a"
+	if semantic {
+		if vectors = "tei"; fromPG {
+			vectors = "pg"
+		}
+	}
+	log.Printf("reindex: target=%s scope=%s mode=swap vectors=%s", target, scope, vectors)
 	lookup, err := buildRealityLookup(ctx, q)
 	if err != nil {
 		log.Printf("reindex: build reality lookup: %v", err)
@@ -171,6 +189,18 @@ func postedWithinFrom(args []string) (time.Duration, bool, error) {
 func semanticRequested(args []string) bool {
 	for _, a := range args {
 		if a == "--semantic" || a == "semantic" {
+			return true
+		}
+	}
+	return false
+}
+
+// fromPGRequested reports whether a --semantic rebuild should rehydrate from the
+// vectors persisted in Postgres (jobs.semantic_embedding) instead of re-embedding via
+// TEI — the fast disaster-recovery path that costs no model calls.
+func fromPGRequested(args []string) bool {
+	for _, a := range args {
+		if a == "--from-pg" {
 			return true
 		}
 	}

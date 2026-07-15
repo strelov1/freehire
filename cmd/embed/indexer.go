@@ -22,12 +22,12 @@ type searchIndexer struct {
 	q      *db.Queries
 }
 
-func (ix searchIndexer) IndexOpen(ctx context.Context, jobs []db.Job) error {
+func (ix searchIndexer) IndexOpen(ctx context.Context, jobs []db.Job) (map[int64][]float32, error) {
 	docs := make([]search.JobDocument, 0, len(jobs))
 	for _, job := range jobs {
 		doc, err := search.FromJob(job)
 		if err != nil {
-			return fmt.Errorf("build document (job %d): %w", job.ID, err)
+			return nil, fmt.Errorf("build document (job %d): %w", job.ID, err)
 		}
 		// Attach the job-reality signal so an incrementally-embedded job carries
 		// reality.class immediately, matching the ingest incremental path. Without it a
@@ -48,7 +48,8 @@ func (ix searchIndexer) IndexOpen(ctx context.Context, jobs []db.Job) error {
 		docs = append(docs, doc)
 	}
 	// IndexSemanticJobs embeds the whole batch (chunked to the backend's limit) and
-	// upserts it as ONE Meilisearch task, so a large backfill isn't per-doc bound.
+	// upserts it as ONE Meilisearch task, so a large backfill isn't per-doc bound. It
+	// returns the computed vectors so the store can persist them beside the stamp.
 	return ix.client.IndexSemanticJobs(ctx, docs)
 }
 
