@@ -1,0 +1,15 @@
+# workablemarketplace (jobs.workable.com marketplace API) boards. Provider is the
+# filename; board = the company's opaque marketplace hashid, taken from a posting's
+# company URL (jobs.workable.com/company/<hashid>/jobs-at-<name>). Use this ONLY for
+# "marketplace-only" employers — those whose apply.workable.com widget board is empty
+# (so the plain `workable` adapter can't reach them). A company already crawlable via
+# sources/workable.yml must NOT be listed here too (it would double-list under a second
+# source + external-id scheme). Each hashid validated live (feed returned >0 jobs).
+# Lago is a staffing agency (mixed roles); its non-tech postings are filtered by the
+# enrich non-tech gate, its engineering roles kept.
+- company: AOA
+  board: v8S3GJczSWhxjzGHK1FFKW
+- company: Intuition Machines
+  board: ix7jhWd4JnugmXDK5RaQSZ
+- company: Lago
+  board: fLBK8dBBYxkHwkj9pperGP

@@ -184,6 +184,7 @@ func All(c HTTPClient) map[string]Source {
 		NewLever(c),
 		NewAshby(c),
 		NewWorkable(c),
+		NewWorkableMarketplace(c),
 		NewRecruitee(c),
 		NewSmartRecruiters(c),
 		NewGupy(c),
