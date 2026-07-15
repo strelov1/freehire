@@ -830,14 +830,42 @@ export function createApi(
     limit = 20,
     offset = 0,
     source: InboxSource = '',
+    unread = false,
+    status = '',
   ): Promise<{ messages: InboxMessage[]; total: number }> {
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (q) params.set('q', q);
     if (source) params.set('source', source);
+    if (unread) params.set('unread', '1');
+    if (status) params.set('status', status);
     const res = await request<{ data: InboxMessage[]; meta: { total: number } }>(
       `/api/v1/me/inbox?${params.toString()}`,
     );
     return { messages: res.data, total: res.meta.total };
+  }
+
+  /** Mark every unread message matching the active filters as read; returns the
+   *  count marked. The unread flag is implicit server-side, so it is not sent. */
+  async function markAllRead(source: InboxSource = '', status = '', q = ''): Promise<number> {
+    const params = new URLSearchParams();
+    if (source) params.set('source', source);
+    if (status) params.set('status', status);
+    if (q) params.set('q', q);
+    const res = await requestData<{ marked: number }>(
+      `/api/v1/me/inbox/read-all?${params.toString()}`,
+      { method: 'POST' },
+    );
+    return res.marked;
+  }
+
+  /** Soft-delete a message (hidden from the inbox, restorable via restoreEmail). */
+  async function deleteEmail(id: number): Promise<void> {
+    await request(`/api/v1/me/emails/${id}/delete`, { method: 'POST' });
+  }
+
+  /** Undo a soft-delete, bringing the message back into the inbox. */
+  async function restoreEmail(id: number): Promise<void> {
+    await request(`/api/v1/me/emails/${id}/restore`, { method: 'POST' });
   }
 
   /** The caller's hosted-mailbox address (or null) + feature availability. */
@@ -972,6 +1000,9 @@ export function createApi(
     releaseMailbox,
     getInbox,
     getEmail,
+    markAllRead,
+    deleteEmail,
+    restoreEmail,
     getTrackedApplication,
     confirmEmailLink,
     rejectEmailLink,

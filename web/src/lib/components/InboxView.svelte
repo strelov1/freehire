@@ -9,12 +9,12 @@
     EmailBody,
   } from '$lib/api';
   import type { EmailLinking } from '$lib/types';
-  import { statusLabel, statusClass } from '$lib/emailStatus';
+  import { statusLabel, statusClass, STATUS_LABELS } from '$lib/emailStatus';
   import { inboxLinkState, type LastUnlinked } from '$lib/inboxLink';
   import { Badge, Button } from '$lib/ui';
   import GmailConnectDialog from './GmailConnectDialog.svelte';
   import ApplicationLinkPicker from './ApplicationLinkPicker.svelte';
-  import { Mail, AtSign, Copy, Search, RefreshCw, ChevronLeft } from '@lucide/svelte';
+  import { Mail, AtSign, Copy, Search, RefreshCw, ChevronLeft, CheckCheck, Trash2 } from '@lucide/svelte';
   import { timeAgo } from '$lib/utils';
   import { avatarInitials, avatarColor } from '$lib/avatar';
 
@@ -34,9 +34,20 @@
   let search = $state('');
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
+  // Triage filters: unread-only and one classification label ('' = all).
+  let unread = $state(false);
+  let label = $state('');
+  // The dropdown offers only signals with a human label (drops 'other' → blank).
+  const LABEL_OPTIONS = Object.entries(STATUS_LABELS).filter(([, l]) => l !== '');
+  const filterActive = $derived(unread || label !== '' || search !== '');
+
   let syncing = $state(false);
   let claiming = $state(false);
   let refreshing = $state(false);
+  let markingAll = $state(false);
+
+  // The message just soft-deleted, for a one-click Undo (per-email, like unlink).
+  let lastDeleted = $state<{ id: number; subject: string } | null>(null);
 
   // Which pane: the mail list ('inbox') or the account setup ('settings').
   let tab = $state<'inbox' | 'settings'>('inbox');
@@ -77,7 +88,7 @@
   // Load the first page for the current search term + source filter, then top up
   // until the list overflows its pane so infinite scroll has room to work.
   async function fetchFirstPage() {
-    const res = await api.getInbox(search, PAGE_SIZE, 0, source);
+    const res = await api.getInbox(search, PAGE_SIZE, 0, source, unread, label);
     messages = res.messages;
     total = res.total;
     await fillViewport();
@@ -110,7 +121,7 @@
 
   async function loadMore() {
     try {
-      const res = await api.getInbox(search, PAGE_SIZE, messages.length, source);
+      const res = await api.getInbox(search, PAGE_SIZE, messages.length, source, unread, label);
       messages = [...messages, ...res.messages];
       total = res.total;
     } catch (e) {
@@ -160,6 +171,70 @@
     await reloadList();
   }
 
+  async function toggleUnread() {
+    unread = !unread;
+    await reloadList();
+  }
+
+  async function setLabel(l: string) {
+    if (label === l) return;
+    label = l;
+    await reloadList();
+  }
+
+  // Mark every unread message matching the active filters as read. Optimistically
+  // flip the visible rows so the dots clear without a refetch; on failure, reload.
+  async function markAllRead() {
+    if (markingAll) return;
+    markingAll = true;
+    error = null;
+    try {
+      await api.markAllRead(source, label, search);
+      messages = messages.map((m) => ({ ...m, read: true }));
+      if (selected) selected = { ...selected, read: true };
+      if (unread) await reloadList(); // the unread view should now be empty
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to mark all read.';
+      await reloadList();
+    } finally {
+      markingAll = false;
+    }
+  }
+
+  // Soft-delete the open message: drop it from the list optimistically, clear the
+  // reading pane, and remember it for a one-click Undo (per-email, like unlink).
+  async function deleteSelected() {
+    if (!selected) return;
+    const id = selected.id;
+    const subject = selected.subject;
+    const prev = messages;
+    messages = messages.filter((m) => m.id !== id);
+    total = Math.max(0, total - 1);
+    selectedId = null;
+    selected = null;
+    try {
+      await api.deleteEmail(id);
+      lastDeleted = { id, subject };
+    } catch (e) {
+      messages = prev; // put the row back
+      total += 1;
+      error = e instanceof Error ? e.message : 'Failed to delete.';
+    }
+  }
+
+  // Undo the last delete: restore the message and reload so it lands in order.
+  async function undoDelete() {
+    if (!lastDeleted) return;
+    const { id } = lastDeleted;
+    lastDeleted = null;
+    try {
+      await api.restoreEmail(id);
+      await reloadList();
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to restore.';
+    }
+  }
+
   // Mobile master-detail: clear the selection to return from the reading pane to
   // the list (on md+ both panes are always visible, so this only matters below md).
   function backToList() {
@@ -169,6 +244,7 @@
 
   async function openMessage(id: number) {
     if (lastUnlinked && lastUnlinked.id !== id) lastUnlinked = null; // Undo is per-email
+    if (lastDeleted && lastDeleted.id !== id) lastDeleted = null;
     selectedId = id;
     selected = null;
     bodyLoading = true;
@@ -444,7 +520,7 @@
         <button type="button" class="font-medium text-primary hover:underline" onclick={() => (tab = 'settings')}>set one up in Settings</button>.
       </p>
     {:else}
-      <!-- Toolbar: account switcher, search, refresh. -->
+      <!-- Toolbar: account switcher, unread + label filters, search, mark-all-read, refresh. -->
       <div class="flex flex-wrap items-center gap-2">
         {#if bothConnected}
           <div class="flex gap-1 rounded-lg border border-border p-1 text-sm">
@@ -462,6 +538,31 @@
           </div>
         {/if}
 
+        <button
+          type="button"
+          onclick={toggleUnread}
+          aria-pressed={unread}
+          class="rounded-lg border px-3 py-1.5 text-sm transition-colors {unread
+            ? 'border-brand-ring bg-brand-muted/60 font-medium text-foreground'
+            : 'border-border text-muted-foreground hover:text-foreground'}"
+        >
+          Unread only
+        </button>
+
+        <select
+          bind:value={label}
+          onchange={() => setLabel(label)}
+          aria-label="Filter by label"
+          class="rounded-lg border border-border bg-background py-1.5 pl-3 pr-8 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-ring/40 {label
+            ? 'font-medium text-foreground'
+            : 'text-muted-foreground'}"
+        >
+          <option value="">All labels</option>
+          {#each LABEL_OPTIONS as [value, text] (value)}
+            <option {value}>{text}</option>
+          {/each}
+        </select>
+
         <div class="relative min-w-0 flex-1">
           <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
@@ -473,15 +574,28 @@
           />
         </div>
 
+        <Button variant="outline" size="sm" disabled={markingAll} onclick={markAllRead} title="Mark all read">
+          <CheckCheck class="h-4 w-4" />
+          Mark all read
+        </Button>
+
         <Button variant="outline" size="sm" disabled={refreshing} onclick={refreshInbox} title="Refresh">
           <RefreshCw class="h-4 w-4 {refreshing ? 'animate-spin' : ''}" />
           Refresh
         </Button>
       </div>
 
+      {#if lastDeleted}
+        <div class="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+          Deleted “{lastDeleted.subject || '(no subject)'}”
+          <span aria-hidden="true">·</span>
+          <button type="button" onclick={undoDelete} class="font-medium text-brand-strong hover:underline">Undo</button>
+        </div>
+      {/if}
+
       {#if messages.length === 0}
         <p class="py-12 text-center text-sm text-muted-foreground">
-          {search ? 'No mail matches your search.' : 'No mail yet — it appears here as it arrives.'}
+          {filterActive ? 'No mail matches your filters.' : 'No mail yet — it appears here as it arrives.'}
         </p>
       {:else}
         <!-- Fixed-height two-pane so the page itself never scrolls: each pane scrolls
@@ -588,6 +702,15 @@
                     <span class="ml-auto shrink-0">{timeAgo(s.received_at)}</span>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onclick={deleteSelected}
+                  title="Delete"
+                  aria-label="Delete message"
+                  class="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 class="h-4 w-4" />
+                </button>
               </div>
 
               {@const linkState = inboxLinkState(s, lastUnlinked)}

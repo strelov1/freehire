@@ -15,19 +15,19 @@
 
 ## 3. Frontend API client
 
-- [ ] 3.1 In `web/src/lib/api.ts`, add optional `unread`/`status` params to `getInbox`, and new methods `markAllRead`, `deleteEmail`, `restoreEmail`
+- [x] 3.1 In `web/src/lib/api.ts`, add optional `unread`/`status` params to `getInbox`, and new methods `markAllRead`, `deleteEmail`, `restoreEmail`
 
 ## 4. Frontend toolbar filters
 
-- [ ] 4.1 In `InboxView.svelte`, add `unread`/`label` `$state` and wire an **Unread only** toggle + **All Labels** dropdown (from `emailStatus.ts` `STATUS_LABELS`) that call `reloadList()` on change; thread both into `fetchFirstPage()`
-- [ ] 4.2 Update the empty-state copy to "No mail matches your filters" when a filter is active
+- [x] 4.1 In `InboxView.svelte`, add `unread`/`label` `$state` and wire an **Unread only** toggle + **All Labels** dropdown (from `emailStatus.ts` `STATUS_LABELS`) that call `reloadList()` on change; thread both into `fetchFirstPage()`
+- [x] 4.2 Update the empty-state copy to "No mail matches your filters" when a filter is active
 
 ## 5. Frontend mark-all-read & delete/undo
 
-- [ ] 5.1 Add a **Mark all read** toolbar button: call `api.markAllRead(...)`, optimistically mark visible rows read, drop the unread count; on error `reloadList()`
-- [ ] 5.2 Add a **Delete** control (reading pane) with optimistic removal, `total` decrement, and a "Deleted · Undo" toast reusing the `lastUnlinked`/`undoUnlink` pattern (`lastDeleted` + `restoreEmail`)
+- [x] 5.1 Add a **Mark all read** toolbar button: call `api.markAllRead(...)`, optimistically mark visible rows read, drop the unread count; on error `reloadList()`
+- [x] 5.2 Add a **Delete** control (reading pane) with optimistic removal, `total` decrement, and a "Deleted · Undo" toast reusing the `lastUnlinked`/`undoUnlink` pattern (`lastDeleted` + `restoreEmail`)
 
 ## 6. Verify
 
-- [ ] 6.1 `go build ./... && go vet ./... && go test ./...`
-- [ ] 6.2 Web: `svelte-check` clean + visual check of the toolbar (throwaway route + headless Chrome)
+- [x] 6.1 `go build ./... && go vet ./... && go test ./...`
+- [~] 6.2 Web: `svelte-check` clean (my files 0 problems). Browser visual blocked by a pre-existing posthog-js env gap in this checkout (hooks.client.ts/+layout import analytics); verify on a running instance.
