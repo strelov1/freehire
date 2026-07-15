@@ -40,17 +40,9 @@
   // The Emails tab is moderator-only — linked mail is a moderator-gated surface, and
   // the getTrackedApplication read 403s everyone else.
   const isModerator = $derived(currentUser()?.role === 'moderator');
-  const TABS = $derived<{ id: Tab; label: string }[]>([
-    { id: 'application', label: 'Application' },
-    { id: 'fit', label: 'Job Match' },
-    { id: 'description', label: 'Job description' },
-    ...(isModerator ? [{ id: 'emails' as Tab, label: 'Emails' }] : []),
-  ]);
-  // Local UI state. The parent re-keys this component per job (JobBoard's {#key}),
-  // so a fresh mount always opens on Application.
-  let tab = $state<Tab>('application');
 
-  // Emails tab: the application's linked mail, lazy-loaded on first open. Each email
+  // Emails-tab state (declared before TABS, which shows the loaded count). The
+  // application's linked mail lazy-loads (see the eager $effect below); each email
   // expands inline (accordion) to its full body, itself lazy-fetched. $state.raw —
   // these are API payloads we only ever reassign, never mutate.
   let emails = $state.raw<ApplicationEmail[] | null>(null);
@@ -59,6 +51,16 @@
   let expandedId = $state<number | null>(null);
   let expandedBody = $state.raw<EmailBody | null>(null);
   let bodyLoading = $state(false);
+
+  const TABS = $derived<{ id: Tab; label: string }[]>([
+    { id: 'application', label: 'Application' },
+    { id: 'fit', label: 'Job Match' },
+    { id: 'description', label: 'Job description' },
+    ...(isModerator ? [{ id: 'emails' as Tab, label: emails ? `Emails (${emails.length})` : 'Emails' }] : []),
+  ]);
+  // Local UI state. The parent re-keys this component per job (JobBoard's {#key}),
+  // so a fresh mount always opens on Application.
+  let tab = $state<Tab>('application');
 
   async function loadEmails() {
     if (emails !== null || emailsLoading) return;
@@ -73,6 +75,12 @@
       emailsLoading = false;
     }
   }
+
+  // Load the linked mail eagerly (moderators only) so the tab shows its count before
+  // it's opened. Re-keyed per job by the parent, so this runs once per application.
+  $effect(() => {
+    if (isModerator) void loadEmails();
+  });
 
   async function toggleEmail(id: number) {
     if (expandedId === id) {
@@ -90,11 +98,6 @@
     } finally {
       bodyLoading = false;
     }
-  }
-
-  function selectTab(id: Tab) {
-    tab = id;
-    if (id === 'emails') void loadEmails();
   }
 
   // Meta pills (work arrangement, region, employment type, seniority) — only the
@@ -223,7 +226,7 @@
               aria-selected={tab === t.id}
               aria-controls="jobdrawer-tabpanel"
               class={tabClass(tab === t.id)}
-              onclick={() => selectTab(t.id)}
+              onclick={() => (tab = t.id)}
             >
               {t.label}
             </button>
@@ -325,7 +328,7 @@
                         title="Message body"
                         sandbox=""
                         srcdoc={expandedBody.body_html}
-                        class="h-96 w-full rounded-md border border-border bg-white"
+                        class="h-96 w-full bg-white"
                       ></iframe>
                     {:else if expandedBody?.body_text}
                       <pre class="max-h-96 overflow-y-auto whitespace-pre-wrap font-sans text-sm leading-relaxed">{expandedBody.body_text}</pre>
