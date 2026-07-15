@@ -176,23 +176,21 @@
     await reloadList();
   }
 
-  async function setLabel(l: string) {
-    if (label === l) return;
-    label = l;
-    await reloadList();
-  }
-
-  // Mark every unread message matching the active filters as read. Optimistically
-  // flip the visible rows so the dots clear without a refetch; on failure, reload.
+  // Mark every unread message matching the active filters as read. When the unread
+  // view is active it should now be empty, so reload; otherwise flip the visible
+  // rows optimistically so the dots clear without a refetch.
   async function markAllRead() {
     if (markingAll) return;
     markingAll = true;
     error = null;
     try {
       await api.markAllRead(source, label, search);
-      messages = messages.map((m) => ({ ...m, read: true }));
-      if (selected) selected = { ...selected, read: true };
-      if (unread) await reloadList(); // the unread view should now be empty
+      if (unread) {
+        await reloadList();
+      } else {
+        messages = messages.map((m) => ({ ...m, read: true }));
+        if (selected) selected = { ...selected, read: true };
+      }
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to mark all read.';
       await reloadList();
@@ -551,7 +549,7 @@
 
         <select
           bind:value={label}
-          onchange={() => setLabel(label)}
+          onchange={reloadList}
           aria-label="Filter by label"
           class="rounded-lg border border-border bg-background py-1.5 pl-3 pr-8 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-ring/40 {label
             ? 'font-medium text-foreground'
