@@ -387,6 +387,8 @@
   board: eyebot
 - company: Faculty AI
   board: faculty
+- company: fal.ai
+  board: fal-ai
 - company: fanvue.com
   board: fanvue.com
 - company: far.ai
@@ -7407,3 +7409,7 @@
   board: loki
 - company: Going
   board: going
+- company: Cerebras
+  board: cerebras
+- company: Vast.ai
+  board: vastai
