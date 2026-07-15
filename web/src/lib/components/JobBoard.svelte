@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pushState } from '$app/navigation';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import type { MyJob } from '$lib/types';
@@ -6,6 +7,11 @@
   import BoardColumn from './BoardColumn.svelte';
   import JobDrawer from './JobDrawer.svelte';
   import States from './States.svelte';
+
+  // initialSlug (from /my/tracking/[slug]) opens that application's drawer once the
+  // board has loaded, so a deep link / inbox link / refresh reopens the same card.
+  let { initialSlug }: { initialSlug?: string } = $props();
+  let openedInitial = false;
 
   function emptyColumns(): Record<BoardColumnId, BoardItem[]> {
     return { applied: [], interview: [], offer: [], closed: [] };
@@ -43,6 +49,19 @@
       columns = next;
       cardCol = cols;
       status = 'ready';
+      // Deep link: open the requested application's drawer once, after the board is
+      // built. A slug that isn't on the board (untracked / saved-only) just leaves
+      // the board showing.
+      if (initialSlug && !openedInitial) {
+        openedInitial = true;
+        const found = Object.values(next)
+          .flat()
+          .find((i) => i.id === initialSlug);
+        if (found) {
+          openItem = found;
+          pendingOutcome = false;
+        }
+      }
     } catch {
       status = 'error';
     }
@@ -173,11 +192,14 @@
       void load();
     }
     openItem = null;
+    pushState('/my/tracking', {}); // drop the per-application slug from the URL
   }
 
   function openDrawer(item: MyJob) {
     openItem = item as BoardItem;
     pendingOutcome = false;
+    // Give the open application its own shareable URL without a full navigation.
+    pushState(`/my/tracking/${item.job.public_slug}`, {});
   }
 </script>
 

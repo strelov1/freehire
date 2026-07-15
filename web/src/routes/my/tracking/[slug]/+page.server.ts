@@ -1,26 +1,14 @@
-import { error, redirect } from '@sveltejs/kit';
-import { ApiError } from '$lib/api';
-import { serverApi } from '$lib/server/api';
+import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
-// The application detail page shows the mail linked to an application, so it is
-// moderator-only like the rest of the inbox surface. Server-render the application
-// (with its linked emails) for an instant paint; a signed-out visitor bounces to
-// sign-in, a non-moderator to their tracking board, and an untracked slug is a 404.
-export const load: PageServerLoad = async ({ parent, params, fetch, request }) => {
+// /my/tracking/[slug] renders the tracking board with the application's drawer open
+// (deep-linkable — the inbox links here, and a refresh/share reopens the same card).
+// The board itself is for any signed-in user; the Emails tab inside the drawer
+// self-gates to moderators. Guard auth like /my/tracking and pass the slug through.
+export const load: PageServerLoad = async ({ parent, params, url }) => {
   const { user } = await parent();
   if (!user) {
-    const target = `/my/tracking/${params.slug}`;
-    redirect(302, `/?auth=required&redirect=${encodeURIComponent(target)}`);
+    redirect(302, `/?auth=required&redirect=${encodeURIComponent(url.pathname)}`);
   }
-  if (user.role !== 'moderator') {
-    redirect(302, '/my/tracking');
-  }
-  const application = await serverApi(fetch, request.headers.get('cookie'))
-    .getTrackedApplication(params.slug)
-    .catch((e) => {
-      if (e instanceof ApiError && e.status === 404) error(404, 'Application not found');
-      throw e;
-    });
-  return { application };
+  return { slug: params.slug };
 };

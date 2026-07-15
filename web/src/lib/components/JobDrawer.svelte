@@ -11,7 +11,12 @@
   import JobFitFull from './JobFitFull.svelte';
   import JobMatch from './JobMatch.svelte';
   import NoteEditor from './NoteEditor.svelte';
-  import type { MyJob } from '$lib/types';
+  import { api } from '$lib/api';
+  import type { EmailBody } from '$lib/api';
+  import { currentUser } from '$lib/auth.svelte';
+  import { statusLabel, statusClass } from '$lib/emailStatus';
+  import { avatarInitials, avatarColor } from '$lib/avatar';
+  import type { MyJob, ApplicationEmail } from '$lib/types';
 
   let {
     item,
@@ -31,15 +36,66 @@
     onclose: () => void;
   } = $props();
 
-  type Tab = 'application' | 'fit' | 'description';
-  const TABS: { id: Tab; label: string }[] = [
+  type Tab = 'application' | 'fit' | 'description' | 'emails';
+  // The Emails tab is moderator-only — linked mail is a moderator-gated surface, and
+  // the getTrackedApplication read 403s everyone else.
+  const isModerator = $derived(currentUser()?.role === 'moderator');
+  const TABS = $derived<{ id: Tab; label: string }[]>([
     { id: 'application', label: 'Application' },
     { id: 'fit', label: 'Job Match' },
     { id: 'description', label: 'Job description' },
-  ];
+    ...(isModerator ? [{ id: 'emails' as Tab, label: 'Emails' }] : []),
+  ]);
   // Local UI state. The parent re-keys this component per job (JobBoard's {#key}),
   // so a fresh mount always opens on Application.
   let tab = $state<Tab>('application');
+
+  // Emails tab: the application's linked mail, lazy-loaded on first open. Each email
+  // expands inline (accordion) to its full body, itself lazy-fetched. $state.raw —
+  // these are API payloads we only ever reassign, never mutate.
+  let emails = $state.raw<ApplicationEmail[] | null>(null);
+  let emailsLoading = $state(false);
+  let emailsError = $state<string | null>(null);
+  let expandedId = $state<number | null>(null);
+  let expandedBody = $state.raw<EmailBody | null>(null);
+  let bodyLoading = $state(false);
+
+  async function loadEmails() {
+    if (emails !== null || emailsLoading) return;
+    emailsLoading = true;
+    emailsError = null;
+    try {
+      const app = await api.getTrackedApplication(item.job.public_slug);
+      emails = app.emails;
+    } catch (e) {
+      emailsError = e instanceof Error ? e.message : 'Failed to load emails.';
+    } finally {
+      emailsLoading = false;
+    }
+  }
+
+  async function toggleEmail(id: number) {
+    if (expandedId === id) {
+      expandedId = null;
+      expandedBody = null;
+      return;
+    }
+    expandedId = id;
+    expandedBody = null;
+    bodyLoading = true;
+    try {
+      expandedBody = await api.getEmail(id);
+    } catch {
+      /* leave the row collapsed-open with no body; the list still shows */
+    } finally {
+      bodyLoading = false;
+    }
+  }
+
+  function selectTab(id: Tab) {
+    tab = id;
+    if (id === 'emails') void loadEmails();
+  }
 
   // Meta pills (work arrangement, region, employment type, seniority) — only the
   // stated ones, reusing the list-card logic.
@@ -167,7 +223,7 @@
               aria-selected={tab === t.id}
               aria-controls="jobdrawer-tabpanel"
               class={tabClass(tab === t.id)}
-              onclick={() => (tab = t.id)}
+              onclick={() => selectTab(t.id)}
             >
               {t.label}
             </button>
@@ -222,6 +278,65 @@
         <div class="flex flex-col gap-6">
           <JobMatch job={item.job} />
           <JobFitFull job={item.job} />
+        </div>
+      {:else if tab === 'emails'}
+        <div class="flex flex-col gap-2">
+          {#if emailsLoading}
+            <p class="text-sm text-muted-foreground">Loading emails…</p>
+          {:else if emailsError}
+            <p class="text-sm text-destructive">{emailsError}</p>
+          {:else if !emails || emails.length === 0}
+            <p class="text-sm text-muted-foreground">No emails linked to this application yet.</p>
+          {:else}
+            {#each emails as e (e.id)}
+              <div class="overflow-hidden rounded-xl border border-border">
+                <button
+                  type="button"
+                  onclick={() => toggleEmail(e.id)}
+                  aria-expanded={expandedId === e.id}
+                  class="flex w-full items-start gap-3 p-3 text-left transition-colors hover:bg-accent"
+                >
+                  <div
+                    class="mt-0.5 flex size-9 shrink-0 select-none items-center justify-center rounded-full text-xs font-semibold text-white"
+                    style="background-color: {avatarColor(e.from_addr || e.from_name)}"
+                  >
+                    {avatarInitials(e.from_name, e.from_addr)}
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-baseline gap-2">
+                      <span class="min-w-0 flex-1 truncate text-sm font-medium">{e.from_name || e.from_addr}</span>
+                      <span class="shrink-0 text-[11px] text-muted-foreground">{timeAgo(e.received_at)}</span>
+                    </div>
+                    <div class="mt-0.5 truncate text-sm text-muted-foreground">{e.subject || '(no subject)'}</div>
+                    {#if statusLabel(e.status_signal)}
+                      <span class="mt-1 inline-block rounded border px-1.5 text-[10px] leading-4 {statusClass(e.status_signal)}">
+                        {statusLabel(e.status_signal)}
+                      </span>
+                    {/if}
+                  </div>
+                </button>
+                {#if expandedId === e.id}
+                  <div class="border-t border-border p-3">
+                    {#if bodyLoading}
+                      <p class="text-sm text-muted-foreground">Loading…</p>
+                    {:else if expandedBody?.body_html}
+                      <!-- Untrusted sender HTML isolated in a sandboxed iframe (no scripts/forms/navigation). -->
+                      <iframe
+                        title="Message body"
+                        sandbox=""
+                        srcdoc={expandedBody.body_html}
+                        class="h-96 w-full rounded-md border border-border bg-white"
+                      ></iframe>
+                    {:else if expandedBody?.body_text}
+                      <pre class="max-h-96 overflow-y-auto whitespace-pre-wrap font-sans text-sm leading-relaxed">{expandedBody.body_text}</pre>
+                    {:else}
+                      <p class="text-sm text-muted-foreground">No content.</p>
+                    {/if}
+                  </div>
+                {/if}
+              </div>
+            {/each}
+          {/if}
         </div>
       {:else}
         <div class="flex flex-col gap-5">
