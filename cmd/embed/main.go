@@ -11,6 +11,7 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 
 	"github.com/strelov1/freehire/internal/config"
 	"github.com/strelov1/freehire/internal/db"
@@ -39,6 +40,11 @@ func run() int {
 		return 1
 	}
 
+	// EMBED_PG_ONLY drains the queue writing vectors to Postgres ONLY (no Meili), for a
+	// fast bulk backfill that Meili's serial task queue can't gate; rebuild the index
+	// afterwards with `reindex --semantic --from-pg`.
+	pgOnly := os.Getenv("EMBED_PG_ONLY") != ""
+
 	ecfg := config.LoadEmbed()
 	client := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
 
@@ -46,15 +52,18 @@ func run() int {
 	// vectors. Unlike the incremental facet path (a plain index), a semantic upsert into
 	// an index that lacks the embedder settings fails every task. `reindex --semantic` is
 	// the usual creator, but this makes the worker self-sufficient on a fresh index (e.g.
-	// the embed cron firing before the first semantic reindex). Idempotent.
-	if err := client.EnsureSemanticIndex(ctx); err != nil {
+	// the embed cron firing before the first semantic reindex). Idempotent. pg-only never
+	// writes Meili, so it skips this (the only startup Meili call).
+	if pgOnly {
+		log.Print("embed: PG-ONLY mode — writing vectors to Postgres, NOT Meili")
+	} else if err := client.EnsureSemanticIndex(ctx); err != nil {
 		log.Printf("search: ensure semantic index: %v", err)
 		return 1
 	}
 
 	runner := embed.Runner{
 		Store:   newDBStore(pool),
-		Indexer: searchIndexer{client: client, q: db.New(pool)},
+		Indexer: searchIndexer{client: client, q: db.New(pool), pgOnly: pgOnly},
 	}
 
 	stats, err := runner.Run(ctx, embed.RunOptions{

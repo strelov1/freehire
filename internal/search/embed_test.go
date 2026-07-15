@@ -182,3 +182,39 @@ func TestEmbedBatchRejectsCountMismatch(t *testing.T) {
 		t.Fatal("expected an error on vector/input count mismatch, got nil")
 	}
 }
+
+// EmbedJobs must compute a vector per job id WITHOUT touching Meilisearch — the pg-only
+// backfill path. The Client here has an embedder but no Meili wiring, so any Meili call
+// would panic; returning cleanly proves the embed side stands alone.
+func TestEmbedJobsReturnsVectorPerJobWithoutMeili(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Inputs []string `json:"inputs"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		out := make([][]float64, len(in.Inputs))
+		for i := range in.Inputs {
+			out[i] = []float64{float64(i) + 0.5} // positional so id->vector mapping is checkable
+		}
+		_ = json.NewEncoder(w).Encode(out)
+	}))
+	defer srv.Close()
+	c := &Client{embedURL: srv.URL, embedConcurrency: 1}
+
+	docs := []JobDocument{{ID: 7}, {ID: 42}}
+	docs[0].Title, docs[1].Title = "A", "B"
+
+	got, err := c.EmbedJobs(context.Background(), docs)
+	if err != nil {
+		t.Fatalf("EmbedJobs: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d vectors, want 2", len(got))
+	}
+	if v := got[7]; len(v) != 1 || v[0] != 0.5 {
+		t.Errorf("vector for job 7 = %v; want [0.5]", v)
+	}
+	if v := got[42]; len(v) != 1 || v[0] != 1.5 {
+		t.Errorf("vector for job 42 = %v; want [1.5]", v)
+	}
+}

@@ -290,3 +290,48 @@ func jobStamp(t *testing.T, pool *pgxpool.Pool, id int64) (model, hash *string) 
 	}
 	return model, hash
 }
+
+// PG-only mode embeds to Postgres WITHOUT touching Meilisearch: the open job's vector
+// and stamp land in Postgres, but its document never appears in jobs_semantic (that
+// index is filled later by `reindex --semantic --from-pg`). This is the fast bulk-embed
+// path that Meili's serial task queue cannot gate.
+func TestIntegration_EmbedWorkerPGOnly(t *testing.T) {
+	ctx := context.Background()
+	t.Setenv("EMBED_URL", fakeTEI(t))
+	meiliURL, key := startMeili(t)
+	pool := startPostgres(t)
+
+	client := search.NewClient(meiliURL, key)
+	// Create the (empty) semantic index up front so we can assert pg-only leaves it empty.
+	if err := client.EnsureSemanticIndex(ctx); err != nil {
+		t.Fatalf("EnsureSemanticIndex: %v", err)
+	}
+
+	openID := seedJob(t, pool, "pgonly-open", "Senior Golang Engineer", false, true)
+
+	runner := embed.Runner{
+		Store:   newDBStore(pool),
+		Indexer: searchIndexer{client: client, q: db.New(pool), pgOnly: true},
+	}
+	stats, err := runner.Run(ctx, embed.RunOptions{
+		TargetModel: search.CurrentEmbedderModel(), BatchSize: 500, LeaseSeconds: 300, MaxAttempts: 3,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Indexed != 1 {
+		t.Fatalf("stats = %+v, want indexed=1", stats)
+	}
+
+	// Postgres has the vector + the current-model stamp.
+	if l := jobVectorLen(t, pool, openID); l <= 0 {
+		t.Errorf("open job semantic_embedding length = %d, want > 0 (vector persisted)", l)
+	}
+	if model, _ := jobStamp(t, pool, openID); model == nil || *model != search.CurrentEmbedderModel() {
+		t.Errorf("open job stamp model = %v, want %q", model, search.CurrentEmbedderModel())
+	}
+	// Meili was NOT touched: the document is absent from jobs_semantic.
+	if meiliDocExists(t, meiliURL, key, openID) {
+		t.Error("pg-only mode must NOT write the document into jobs_semantic")
+	}
+}

@@ -384,11 +384,32 @@ func (c *Client) IndexSemanticJobs(ctx context.Context, docs []JobDocument) (map
 	if err := c.awaitTask(ctx, c.semantic, task.TaskUID); err != nil {
 		return nil, err
 	}
+	return vectorsByID(sdocs), nil
+}
+
+// EmbedJobs computes each document's vector WITHOUT touching Meilisearch, returning them
+// keyed by job id. It is the pg-only backfill path: the vector is persisted to Postgres
+// (the durable source of truth) and the semantic index is rebuilt from Postgres in one
+// pass afterwards (reindex --semantic --from-pg), so a fast bulk embed is never gated by
+// Meilisearch's serial task queue.
+func (c *Client) EmbedJobs(ctx context.Context, docs []JobDocument) (map[int64][]float32, error) {
+	if len(docs) == 0 {
+		return nil, nil
+	}
+	sdocs, err := c.embedDocs(ctx, docs)
+	if err != nil {
+		return nil, err
+	}
+	return vectorsByID(sdocs), nil
+}
+
+// vectorsByID pulls the per-job vectors out of the embedded documents.
+func vectorsByID(sdocs []semanticDocument) map[int64][]float32 {
 	vectors := make(map[int64][]float32, len(sdocs))
 	for _, sd := range sdocs {
 		vectors[sd.ID] = sd.Vectors[embedderName]
 	}
-	return vectors, nil
+	return vectors
 }
 
 func (c *Client) indexInto(ctx context.Context, idx meilisearch.IndexManager, docs []JobDocument) error {
