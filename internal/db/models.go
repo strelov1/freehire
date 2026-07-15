@@ -118,6 +118,42 @@ type GmailConnection struct {
 	LastSyncedAt    pgtype.Timestamptz `json:"last_synced_at"`
 }
 
+type InsightsRoleStat struct {
+	Category      string `json:"category"`
+	Seniority     string `json:"seniority"`
+	Country       string `json:"country"`
+	OpenCount     int32  `json:"open_count"`
+	OpenCountPrev int32  `json:"open_count_prev"`
+}
+
+type InsightsSalaryStat struct {
+	Category   string `json:"category"`
+	Seniority  string `json:"seniority"`
+	Country    string `json:"country"`
+	Currency   string `json:"currency"`
+	Period     string `json:"period"`
+	SampleSize int32  `json:"sample_size"`
+	P25        int32  `json:"p25"`
+	P50        int32  `json:"p50"`
+	P75        int32  `json:"p75"`
+}
+
+type InsightsSkillStat struct {
+	Skill         string `json:"skill"`
+	Category      string `json:"category"`
+	Country       string `json:"country"`
+	OpenCount     int32  `json:"open_count"`
+	OpenCountPrev int32  `json:"open_count_prev"`
+}
+
+type InsightsVelocityDaily struct {
+	Day        pgtype.Date `json:"day"`
+	FacetKind  string      `json:"facet_kind"`
+	FacetValue string      `json:"facet_value"`
+	Added      int32       `json:"added"`
+	Removed    int32       `json:"removed"`
+}
+
 type Job struct {
 	ID                    int64              `json:"id"`
 	Source                string             `json:"source"`

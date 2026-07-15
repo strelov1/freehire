@@ -292,6 +292,15 @@ func Register(app *fiber.App, cfg Config) {
 	// the /open transparency page renders them as a stat-strip.
 	api.Get("/stats/engagement", a.EngagementStats)
 
+	// Public Trends & Insights reads: aggregate market intelligence (role & skill
+	// demand, hiring velocity, salary bands) served from the insights_* rollups
+	// (cmd/rollup-stats), unauthenticated like the other public reads. Aggregate-only
+	// — no record-level field is exposed.
+	api.Get("/insights/roles", a.InsightsRoles)
+	api.Get("/insights/skills", a.InsightsSkills)
+	api.Get("/insights/velocity", a.InsightsVelocity)
+	api.Get("/insights/salary", a.InsightsSalary)
+
 	// Public ingest-fleet status, unauthenticated like the other public reads.
 	// A per-provider health rollup over board_health, sanitized (no error text or
 	// board identifiers); the /status page renders it as a status board.

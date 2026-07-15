@@ -188,6 +188,27 @@ type Querier interface {
 	// Returns the affected row count: 0 means the key does not exist or is not the
 	// caller's (the handler maps that to 404).
 	DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) (int64, error)
+	// Trends & Insights rollups (insights_*), recomputed by cmd/rollup-stats as an
+	// atomic delete-and-reinsert, and the read queries the public /api/v1/insights/*
+	// endpoints serve from them. All rollups are a pure function of current `jobs`
+	// state; @prev_ts (the growth-window start) and @min_sample are supplied by the
+	// worker so the window and sample floor stay out of the SQL and are test-injectable.
+	// ---------------------------------------------------------------------------
+	// Role demand
+	// ---------------------------------------------------------------------------
+	DeleteAllInsightsRoleStats(ctx context.Context) error
+	// ---------------------------------------------------------------------------
+	// Salary bands
+	// ---------------------------------------------------------------------------
+	DeleteAllInsightsSalaryStats(ctx context.Context) error
+	// ---------------------------------------------------------------------------
+	// Skill demand
+	// ---------------------------------------------------------------------------
+	DeleteAllInsightsSkillStats(ctx context.Context) error
+	// ---------------------------------------------------------------------------
+	// Hiring velocity (faceted)
+	// ---------------------------------------------------------------------------
+	DeleteAllInsightsVelocityDaily(ctx context.Context) error
 	// First half of the atomic rebuild: clear the rollup. Run in the same transaction
 	// as RebuildJobDailyStats so readers never see an empty table and reopen-orphaned
 	// days (a day that had only closures, now reopened) are dropped rather than left
@@ -443,6 +464,20 @@ type Querier interface {
 	// confirm chip and application link without a second lookup; the LEFT JOINs
 	// resolve the linked/suggested application's public slug + company for display.
 	ListEmails(ctx context.Context, arg ListEmailsParams) ([]ListEmailsRow, error)
+	// Ranked roles within one country slice ('' = all countries), ordered by raw
+	// demand or by growth (open_count - open_count_prev), demand as the tiebreak.
+	ListInsightsRoles(ctx context.Context, arg ListInsightsRolesParams) ([]ListInsightsRolesRow, error)
+	// Salary bands for one role × country scope, one row per (currency, period),
+	// richest samples first. Currencies are never combined.
+	ListInsightsSalary(ctx context.Context, arg ListInsightsSalaryParams) ([]ListInsightsSalaryRow, error)
+	// Ranked skills within one (category, country) scope; scoping is one-dimensional
+	// (either category or country carries a value, the other is ''), matching what the
+	// rollup materializes.
+	ListInsightsSkills(ctx context.Context, arg ListInsightsSkillsParams) ([]ListInsightsSkillsRow, error)
+	// Dense, gap-free added/removed series over [from_ts, to_ts] at @unit granularity
+	// for one facet slice. A daily generate_series fills missing days with zeros; @unit
+	// is a caller-validated date_trunc field (day/week/month).
+	ListInsightsVelocity(ctx context.Context, arg ListInsightsVelocityParams) ([]ListInsightsVelocityRow, error)
 	// Dense activity series over [from, to] at the given granularity. A daily
 	// generate_series builds the gap-free calendar; the LEFT JOIN fills each day's
 	// counts (missing days → 0), and date_trunc(unit, ...) rolls those days up to the
@@ -613,6 +648,33 @@ type Querier interface {
 	// coalesced/cast to bigint so it reads as a plain int64 (an all-failing provider
 	// yields 0, not NULL).
 	ProviderHealthRollup(ctx context.Context) ([]ProviderHealthRollupRow, error)
+	// Per-country role demand: a job contributes once to each of its countries.
+	RebuildInsightsRoleStatsByCountry(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
+	// Country-agnostic ('' bucket) role demand. open_count = jobs open now
+	// (closed_at IS NULL); open_count_prev = jobs open as of @prev_ts. The inner
+	// aggregate is wrapped so the "non-zero in either window" filter names the counts
+	// once instead of repeating the FILTER expressions in a HAVING.
+	RebuildInsightsRoleStatsGlobal(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
+	// Per-country salary bands (same CUBE of role scope, country from unnest).
+	RebuildInsightsSalaryStatsByCountry(ctx context.Context, minSample int32) (int64, error)
+	// Country-agnostic salary bands. CUBE(category, seniority) emits every scope the
+	// endpoint can ask for — the exact (category, seniority) band, the category-only
+	// band (seniority ''), the seniority-only band (category ''), and the overall band
+	// (both '') — all per (currency, period), which is never aggregated across. The
+	// representative figure per job is the min/max midpoint (or whichever bound is
+	// present). Only bands at/above @min_sample are stored.
+	RebuildInsightsSalaryStatsGlobal(ctx context.Context, minSample int32) (int64, error)
+	// Per-category skill demand (country '' bucket).
+	RebuildInsightsSkillStatsByCategory(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
+	// Per-country skill demand (category '' bucket).
+	RebuildInsightsSkillStatsByCountry(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
+	// Country- and category-agnostic skill demand (both '' buckets).
+	RebuildInsightsSkillStatsGlobal(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
+	// One INSERT for every facet slice: a UNION ALL expands each job into added
+	// (created_at day) and removed (closed_at day) events across the 'all', category,
+	// seniority, and country axes (country from unnest), then aggregates per
+	// (day, facet_kind, facet_value). Days are UTC calendar dates.
+	RebuildInsightsVelocityDaily(ctx context.Context) (int64, error)
 	// Second half of the atomic rebuild: recompute every active day from jobs. `added`
 	// counts jobs by their created_at day; `removed` counts jobs by their CURRENT
 	// closed_at day (NULL = still open, excluded). Days are UTC calendar dates

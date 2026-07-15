@@ -1715,6 +1715,118 @@ Returns `204 No Content`. `501` when object storage is unconfigured.
 curl -X DELETE "https://freehire.dev/api/v1/me/resume" -b cookies.txt
 ```
 
+## Trends & Insights
+
+Four public, aggregate-only market-intelligence reads over the job catalogue: role demand, skill demand, hiring velocity, and salary bands. Every response carries only aggregate counts, percentiles, and facet labels — never a record-level field. The data is served from precomputed rollups refreshed a few times a day, so it reflects trends rather than the live second. `category` and `seniority` are validated against the enrichment vocabularies; `country` is an ISO 3166-1 alpha-2 code.
+
+### `GET /insights/roles`
+
+**Auth:** Public
+
+Roles (category × seniority) ranked by the number of open jobs, with a growth measure comparing the current open-count to 30 days earlier.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `country` | string | no | ISO 3166-1 alpha-2 scope; omitted = all countries. (e.g. `DE`) |
+| `sort` | string | no | `open` (default) ranks by open-count, `growth` by the window delta. |
+| `limit` | integer | no | Result cap, 1–200 (default 20). |
+
+```bash
+curl "https://freehire.dev/api/v1/insights/roles?country=DE&sort=growth"
+```
+
+```json
+{
+  "data": [
+    { "category": "backend", "seniority": "senior", "open_count": 128, "growth": 12 }
+  ],
+  "meta": { "country": "DE", "sort": "growth", "limit": 20 }
+}
+```
+
+### `GET /insights/skills`
+
+**Auth:** Public
+
+Skills ranked by the number of open jobs that list them, with the same growth measure. Scoping is one-dimensional: pass **either** `category` **or** `country`, not both (a `400`).
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `category` | string | no | Category scope (enrichment vocabulary). (e.g. `backend`) |
+| `country` | string | no | ISO 3166-1 alpha-2 scope. (e.g. `DE`) |
+| `sort` | string | no | `open` (default) or `growth`. |
+| `limit` | integer | no | Result cap, 1–200 (default 20). |
+
+```bash
+curl "https://freehire.dev/api/v1/insights/skills?category=backend"
+```
+
+```json
+{
+  "data": [ { "skill": "go", "open_count": 340, "growth": 22 } ],
+  "meta": { "category": "backend", "country": "", "sort": "open", "limit": 20 }
+}
+```
+
+### `GET /insights/velocity`
+
+**Auth:** Public
+
+Added vs. removed vacancies per period, optionally scoped to a single facet. Same window/granularity semantics as `/stats/jobs-activity` (dense series, `400` on an over-4000-day range). Pass at most one of `category`, `seniority`, `country`; more than one is a `400`.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `granularity` | string | no | One of `day`, `week`, `month` (default `day`). |
+| `from` | string (YYYY-MM-DD) | no | Start date (UTC). |
+| `to` | string (YYYY-MM-DD) | no | End date (UTC). Defaults to today. |
+| `category` | string | no | Facet scope (enrichment vocabulary). |
+| `seniority` | string | no | Facet scope (enrichment vocabulary). |
+| `country` | string | no | Facet scope (ISO 3166-1 alpha-2). |
+
+```bash
+curl "https://freehire.dev/api/v1/insights/velocity?granularity=week&category=backend"
+```
+
+```json
+{
+  "data": [ { "period": "2026-06-01", "added": 42, "removed": 15 } ],
+  "meta": { "granularity": "week", "from": "2025-06-09", "to": "2026-06-08", "facet_kind": "category", "facet_value": "backend" }
+}
+```
+
+### `GET /insights/salary`
+
+**Auth:** Public
+
+Salary distribution bands (25th/50th/75th percentiles) for a role and geography, one entry per currency and pay period. Currencies are never combined, and a band with too few disclosed salaries is omitted rather than returned unreliable. Figures are integers in the currency's own units.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `category` | string | no | Role category (enrichment vocabulary). (e.g. `backend`) |
+| `seniority` | string | no | Role seniority (enrichment vocabulary). (e.g. `senior`) |
+| `country` | string | no | ISO 3166-1 alpha-2 scope; omitted = all countries. |
+
+```bash
+curl "https://freehire.dev/api/v1/insights/salary?category=backend&seniority=senior"
+```
+
+```json
+{
+  "data": [
+    { "currency": "USD", "period": "year", "sample_size": 84, "p25": 130000, "p50": 155000, "p75": 180000 }
+  ],
+  "meta": { "category": "backend", "seniority": "senior", "country": "" }
+}
+```
+
 ## Activity & shared boards
 
 Two public reads — the catalogue-activity time series and a shared saved-search “board” by slug — plus the session-only publish/unpublish actions that turn one of your saved searches into such a board. A published board exposes no owner identity.

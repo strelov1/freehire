@@ -16,6 +16,8 @@ tags:
   description: Company search and company details.
 - name: Tracking
   description: User-specific saved, applied, stage, notes, and history actions.
+- name: Insights
+  description: Public aggregate market intelligence — role demand, skill demand, hiring velocity, and salary bands.
 paths:
   "/jobs/search":
     get:
@@ -794,6 +796,209 @@ paths:
             application/json:
               schema:
                 "$ref": "#/components/schemas/JobListEnvelope"
+        default:
+          "$ref": "#/components/responses/Error"
+  "/insights/roles":
+    get:
+      operationId: getInsightsRoles
+      tags:
+      - Insights
+      summary: Rank roles by open-job demand and growth
+      x-openai-isConsequential: false
+      parameters:
+      - name: country
+        in: query
+        schema:
+          type: string
+        description: ISO 3166-1 alpha-2 scope; omit for all countries.
+      - name: sort
+        in: query
+        schema:
+          type: string
+          enum: [open, growth]
+          default: open
+        description: Rank by raw open-count or by the 30-day growth delta.
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 20
+        description: Result cap.
+      responses:
+        '200':
+          description: Ranked roles.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        category: { type: string }
+                        seniority: { type: string }
+                        open_count: { type: integer }
+                        growth: { type: integer }
+                  meta: { type: object }
+        default:
+          "$ref": "#/components/responses/Error"
+  "/insights/skills":
+    get:
+      operationId: getInsightsSkills
+      tags:
+      - Insights
+      summary: Rank skills by open-job demand and growth
+      x-openai-isConsequential: false
+      parameters:
+      - name: category
+        in: query
+        schema:
+          type: string
+        description: Category scope (enrichment vocabulary). Mutually exclusive with country.
+      - name: country
+        in: query
+        schema:
+          type: string
+        description: ISO 3166-1 alpha-2 scope. Mutually exclusive with category.
+      - name: sort
+        in: query
+        schema:
+          type: string
+          enum: [open, growth]
+          default: open
+        description: Rank by raw open-count or by the 30-day growth delta.
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 20
+        description: Result cap.
+      responses:
+        '200':
+          description: Ranked skills.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        skill: { type: string }
+                        open_count: { type: integer }
+                        growth: { type: integer }
+                  meta: { type: object }
+        default:
+          "$ref": "#/components/responses/Error"
+  "/insights/velocity":
+    get:
+      operationId: getInsightsVelocity
+      tags:
+      - Insights
+      summary: Hiring velocity (added vs removed) per period
+      x-openai-isConsequential: false
+      parameters:
+      - name: granularity
+        in: query
+        schema:
+          type: string
+          enum: [day, week, month]
+          default: day
+      - name: from
+        in: query
+        schema:
+          type: string
+        description: Start date, YYYY-MM-DD (UTC).
+      - name: to
+        in: query
+        schema:
+          type: string
+        description: End date, YYYY-MM-DD (UTC). Defaults to today.
+      - name: category
+        in: query
+        schema:
+          type: string
+        description: Single facet scope (enrichment vocabulary); at most one of category/seniority/country.
+      - name: seniority
+        in: query
+        schema:
+          type: string
+        description: Single facet scope (enrichment vocabulary).
+      - name: country
+        in: query
+        schema:
+          type: string
+        description: Single facet scope (ISO 3166-1 alpha-2).
+      responses:
+        '200':
+          description: Dense velocity series.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        period: { type: string }
+                        added: { type: integer }
+                        removed: { type: integer }
+                  meta: { type: object }
+        default:
+          "$ref": "#/components/responses/Error"
+  "/insights/salary":
+    get:
+      operationId: getInsightsSalary
+      tags:
+      - Insights
+      summary: Salary percentile bands by role and geography
+      x-openai-isConsequential: false
+      parameters:
+      - name: category
+        in: query
+        schema:
+          type: string
+        description: Role category (enrichment vocabulary).
+      - name: seniority
+        in: query
+        schema:
+          type: string
+        description: Role seniority (enrichment vocabulary).
+      - name: country
+        in: query
+        schema:
+          type: string
+        description: ISO 3166-1 alpha-2 scope; omit for all countries.
+      responses:
+        '200':
+          description: Salary bands, one per currency and pay period.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        currency: { type: string }
+                        period: { type: string }
+                        sample_size: { type: integer }
+                        p25: { type: integer }
+                        p50: { type: integer }
+                        p75: { type: integer }
+                  meta: { type: object }
         default:
           "$ref": "#/components/responses/Error"
   "/companies":
