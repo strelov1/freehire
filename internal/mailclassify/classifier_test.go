@@ -11,11 +11,61 @@ type fakeGen struct {
 	gotSystem string
 	gotUser   string
 	err       error
+	called    bool
 }
 
 func (f *fakeGen) GenerateJSON(_ context.Context, system, user string) (string, error) {
+	f.called = true
 	f.gotSystem, f.gotUser = system, user
 	return f.raw, f.err
+}
+
+func TestClassifyKeywordFastPathSkipsLLM(t *testing.T) {
+	f := &fakeGen{raw: `{"signal":"other","confidence":0.1}`} // must NOT be used
+	c := &Classifier{gen: f}
+	in := Input{
+		Subject: "Regarding your application",
+		Body:    "Unfortunately we have decided not to proceed with your application.",
+		// no candidates → status-only (auto-linked) path
+	}
+	got, err := c.Classify(context.Background(), in)
+	if err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+	if f.called {
+		t.Error("LLM was called despite a confident keyword status")
+	}
+	if got.Signal != SignalRejection || got.Confidence != KeywordConfidence {
+		t.Errorf("got (%q, %v), want (rejection, %v)", got.Signal, got.Confidence, KeywordConfidence)
+	}
+}
+
+func TestClassifyKeywordFastPathDefersWhenAmbiguous(t *testing.T) {
+	f := &fakeGen{raw: `{"signal":"acknowledgement","confidence":0.7}`}
+	c := &Classifier{gen: f}
+	in := Input{Subject: "Thank you for your interest", Body: "Thank you for your interest in Xata!"}
+	if _, err := c.Classify(context.Background(), in); err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+	if !f.called {
+		t.Error("LLM should be called when no confident keyword status")
+	}
+}
+
+func TestClassifyKeywordFastPathIgnoredWithCandidates(t *testing.T) {
+	f := &fakeGen{raw: `{"signal":"rejection","confidence":0.9,"matched_job_id":1}`}
+	c := &Classifier{gen: f}
+	in := Input{
+		Subject:    "Regarding your application",
+		Body:       "Unfortunately we have decided not to proceed.",
+		Candidates: []Candidate{{JobID: 1, Company: "Acme"}}, // disambiguation needed → LLM
+	}
+	if _, err := c.Classify(context.Background(), in); err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+	if !f.called {
+		t.Error("LLM must be called when candidates need disambiguation, even on a keyword hit")
+	}
 }
 
 func TestClassifySanitizesAndValidatesMatch(t *testing.T) {

@@ -46,6 +46,14 @@ type Input struct {
 // controlled vocabulary and the picked id is validated against the offered
 // candidates (a hallucinated id becomes 0).
 func (c *Classifier) Classify(ctx context.Context, in Input) (Classification, error) {
+	// Deterministic fast-path: when no disambiguation is needed (no candidates
+	// offered — the auto-linked case, where the LLM would run purely for status),
+	// a confident keyword status skips the LLM entirely.
+	if len(in.Candidates) == 0 {
+		if sig, ok := KeywordStatus(in.Subject, in.Body); ok {
+			return Classification{Signal: sig, Confidence: KeywordConfidence}, nil
+		}
+	}
 	raw, err := c.gen.GenerateJSON(ctx, systemPrompt, userPrompt(in))
 	if err != nil {
 		return Classification{}, err
