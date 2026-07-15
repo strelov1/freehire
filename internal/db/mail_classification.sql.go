@@ -241,7 +241,7 @@ SET job_id               = $1,
     status_signal        = $5,
     classification_model = $6,
     classified_at        = now()
-WHERE id = $7
+WHERE id = $7 AND user_id = $8
 `
 
 type SetEmailClassificationParams struct {
@@ -252,6 +252,7 @@ type SetEmailClassificationParams struct {
 	StatusSignal    pgtype.Text   `json:"status_signal"`
 	Model           pgtype.Text   `json:"model"`
 	ID              int64         `json:"id"`
+	UserID          int64         `json:"user_id"`
 }
 
 // Persist the resolved link + classification and stamp classified_at + model in one
@@ -266,6 +267,7 @@ func (q *Queries) SetEmailClassification(ctx context.Context, arg SetEmailClassi
 		arg.StatusSignal,
 		arg.Model,
 		arg.ID,
+		arg.UserID,
 	)
 	return err
 }

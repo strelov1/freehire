@@ -103,6 +103,7 @@ func (s *dbStore) Save(ctx context.Context, outboxID, userID int64, r maillink.R
 		StatusSignal:    textOrNull(string(r.Signal)),
 		Model:           pgtype.Text{String: model, Valid: true},
 		ID:              r.EmailID,
+		UserID:          userID,
 	}); err != nil {
 		return fmt.Errorf("set classification: %w", err)
 	}

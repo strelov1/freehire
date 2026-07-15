@@ -41,7 +41,7 @@ SET job_id               = sqlc.narg(job_id),
     status_signal        = sqlc.narg(status_signal),
     classification_model = sqlc.arg(model),
     classified_at        = now()
-WHERE id = sqlc.arg(id);
+WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
 
 -- name: DeleteEmailClassificationOutbox :exec
 DELETE FROM email_classification_outbox WHERE id = $1;
