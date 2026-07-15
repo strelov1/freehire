@@ -10,8 +10,10 @@
   } from '$lib/api';
   import type { EmailLinking } from '$lib/types';
   import { statusLabel, statusClass } from '$lib/emailStatus';
+  import { inboxLinkState, type LastUnlinked } from '$lib/inboxLink';
   import { Badge, Button } from '$lib/ui';
   import GmailConnectDialog from './GmailConnectDialog.svelte';
+  import ApplicationLinkPicker from './ApplicationLinkPicker.svelte';
   import { Mail, AtSign, Copy, Search, RefreshCw, ChevronLeft } from '@lucide/svelte';
   import { timeAgo } from '$lib/utils';
   import { avatarInitials, avatarColor } from '$lib/avatar';
@@ -43,6 +45,13 @@
   let selectedId = $state<number | null>(null);
   let selected = $state<EmailBody | null>(null);
   let bodyLoading = $state(false);
+
+  // Manual linking: the caller's applications for the picker (lazy-loaded once),
+  // and the application an email was just unlinked from, for a one-click Undo.
+  let trackedApps = $state<{ slug: string; company: string; title?: string }[]>([]);
+  let trackedLoaded = $state(false);
+  let trackedLoading = $state(false);
+  let lastUnlinked = $state<LastUnlinked | null>(null);
 
   const hasGmail = $derived(!!gmail?.connected);
   const hasMailbox = $derived(!!mailbox?.address);
@@ -159,6 +168,7 @@
   }
 
   async function openMessage(id: number) {
+    if (lastUnlinked && lastUnlinked.id !== id) lastUnlinked = null; // Undo is per-email
     selectedId = id;
     selected = null;
     bodyLoading = true;
@@ -166,10 +176,32 @@
       selected = await api.getEmail(id);
       // Reflect the just-opened message as read in the list without a refetch.
       messages = messages.map((m) => (m.id === id ? { ...m, read: true } : m));
+      // An email with no link and no suggestion can be linked by hand — make sure
+      // the picker has the caller's applications ready.
+      if (!selected.linked_slug && !selected.suggested_slug) void ensureTrackedApps();
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to load the message.';
     } finally {
       bodyLoading = false;
+    }
+  }
+
+  // Load the caller's applications for the link picker once, on first need.
+  async function ensureTrackedApps() {
+    if (trackedLoaded || trackedLoading) return;
+    trackedLoading = true;
+    try {
+      const res = await api.listMyJobs('applied', 100, 0);
+      trackedApps = res.items.map((m) => ({
+        slug: m.job.public_slug,
+        company: m.job.company,
+        title: m.job.title,
+      }));
+      trackedLoaded = true;
+    } catch {
+      // Leave the list empty; the picker shows its empty state.
+    } finally {
+      trackedLoading = false;
     }
   }
 
@@ -203,6 +235,8 @@
     if (!selected) return;
     try {
       applyLinkUpdate(await api.rejectEmailLink(selected.id));
+      // Dismissing the suggestion drops the email into the manual picker — load its data.
+      void ensureTrackedApps();
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to dismiss.';
     }
@@ -210,11 +244,34 @@
 
   async function unlink() {
     if (!selected) return;
+    const prevSlug = selected.linked_slug;
+    const prevCompany = selected.linked_company;
     try {
       applyLinkUpdate(await api.unlinkEmail(selected.id));
+      // Remember what it was linked to so the row can offer a one-click Undo.
+      if (prevSlug) lastUnlinked = { id: selected.id, slug: prevSlug, company: prevCompany };
+      // The row now also offers the picker (to link elsewhere) — make sure it has data.
+      void ensureTrackedApps();
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to unlink.';
     }
+  }
+
+  // Manually link the open email to a chosen application (also used to relink).
+  async function linkTo(slug: string) {
+    if (!selected) return;
+    try {
+      applyLinkUpdate(await api.linkEmail(selected.id, slug));
+      lastUnlinked = null;
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to link.';
+    }
+  }
+
+  // Undo the last unlink: relink the email to the application it was unlinked from.
+  async function undoUnlink() {
+    if (!selected || !lastUnlinked) return;
+    await linkTo(lastUnlinked.slug);
   }
 
   // --- Gmail source ---
@@ -533,29 +590,37 @@
                 </div>
               </div>
 
-              {#if statusLabel(s.status_signal) || s.linked_slug || s.suggested_slug}
-                <div class="mt-3 flex shrink-0 flex-wrap items-center gap-2">
-                  {#if statusLabel(s.status_signal)}
-                    <Badge variant="outline" class={statusClass(s.status_signal)}>{statusLabel(s.status_signal)}</Badge>
-                  {/if}
-                  {#if s.linked_slug}
-                    <a
-                      href="/my/tracking/{s.linked_slug}"
-                      class="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-brand-ring hover:text-foreground"
-                    >
-                      Linked to {s.linked_company || 'application'} ↗
-                    </a>
-                    <button type="button" onclick={unlink} class="text-xs text-muted-foreground hover:text-destructive">Unlink</button>
-                  {:else if s.suggested_slug}
-                    <span class="inline-flex items-center gap-2 rounded-full border border-brand-ring/50 bg-brand-muted/40 px-2.5 py-0.5 text-xs">
-                      Looks like <span class="font-medium">{s.suggested_company || 'an application'}</span>
-                      <button type="button" onclick={confirmLink} class="font-medium text-brand-strong hover:underline">Link</button>
+              {@const linkState = inboxLinkState(s, lastUnlinked)}
+              <div class="mt-3 flex shrink-0 flex-wrap items-center gap-2">
+                {#if statusLabel(s.status_signal)}
+                  <Badge variant="outline" class={statusClass(s.status_signal)}>{statusLabel(s.status_signal)}</Badge>
+                {/if}
+                {#if linkState === 'linked'}
+                  <a
+                    href="/my/tracking/{s.linked_slug}"
+                    class="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-brand-ring hover:text-foreground"
+                  >
+                    Linked to {s.linked_company || 'application'} ↗
+                  </a>
+                  <button type="button" onclick={unlink} class="text-xs text-muted-foreground hover:text-destructive">Unlink</button>
+                {:else if linkState === 'suggested'}
+                  <span class="inline-flex items-center gap-2 rounded-full border border-brand-ring/50 bg-brand-muted/40 px-2.5 py-0.5 text-xs">
+                    Looks like <span class="font-medium">{s.suggested_company || 'an application'}</span>
+                    <button type="button" onclick={confirmLink} class="font-medium text-brand-strong hover:underline">Link</button>
+                    <span aria-hidden="true">·</span>
+                    <button type="button" onclick={rejectLink} class="text-muted-foreground hover:text-foreground">Not this</button>
+                  </span>
+                {:else}
+                  {#if linkState === 'undo'}
+                    <span class="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                      Unlinked
                       <span aria-hidden="true">·</span>
-                      <button type="button" onclick={rejectLink} class="text-muted-foreground hover:text-foreground">Not this</button>
+                      <button type="button" onclick={undoUnlink} class="font-medium text-brand-strong hover:underline">Undo</button>
                     </span>
                   {/if}
-                </div>
-              {/if}
+                  <ApplicationLinkPicker applications={trackedApps} loading={trackedLoading} onpick={linkTo} />
+                {/if}
+              </div>
 
               {#if s.source === 'gmail'}
                 <div class="mt-2 flex shrink-0 justify-end">

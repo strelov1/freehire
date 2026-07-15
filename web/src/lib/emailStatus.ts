@@ -9,6 +9,7 @@ export const STATUS_LABELS: Record<string, string> = {
   offer: 'Offer',
   rejection: 'Rejected',
   info_request: 'Info requested',
+  incomplete_application: 'Incomplete',
   other: '',
 };
 
@@ -20,6 +21,7 @@ export const STATUS_CLASSES: Record<string, string> = {
   offer: 'border-emerald-500/60 font-semibold text-emerald-700 dark:text-emerald-300',
   rejection: 'border-destructive/40 text-destructive',
   info_request: 'border-amber-400/50 text-amber-600 dark:text-amber-400',
+  incomplete_application: 'border-orange-400/50 text-orange-600 dark:text-orange-400',
   other: '',
 };
 

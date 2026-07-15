@@ -1,0 +1,22 @@
+---
+title: Four new job sources — remote LATAM engineering and AI-training work
+date: 2026-07-15
+summary: We added EnzRossi, Revun, Langford Staffing, and Alignerr to the crawl, bringing remote engineering roles and hourly AI-training contract work into the catalogue.
+type: changelog
+tags:
+  - sources
+  - remote
+draft: false
+---
+
+freehire keeps widening the net. Four more career sites just started feeding the
+catalogue:
+
+- **EnzRossi** — remote software engineering roles (full-stack, backend
+  Python/FastAPI, React/Node) open across Latin America.
+- **Revun** and **Langford Staffing** — recruiting brands placing
+  engineering-leadership and operations roles.
+- **Alignerr** — remote, contract "AI training" work: writing the expert tasks
+  that train and evaluate AI models, paid by the hour.
+
+[Browse the newest jobs](/jobs) to see them roll in.

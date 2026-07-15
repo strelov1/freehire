@@ -2,7 +2,9 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"regexp"
 
@@ -36,11 +38,24 @@ func (t teamtailor) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		return nil, fmt.Errorf("teamtailor: board %q: %w", e.Board, err)
 	}
 
+	// Most sites list postings under /jobs; a few (e.g. jobs.proxify.io) disable that path
+	// and render the listing on the site root instead. Probe /jobs first and, when page 1
+	// 404s, fall back to the root for this board — a standard site answers /jobs with 200 and
+	// never enters the fallback, so their enumeration is unchanged.
+	listPath := "jobs"
 	var urls []string
 	seen := make(map[string]bool)
 	for page := 1; page <= ttMaxPages; page++ {
-		listURL := fmt.Sprintf("https://%s/jobs?page=%d", e.Board, page)
+		listURL := fmt.Sprintf("https://%s/%s?page=%d", e.Board, listPath, page)
 		root, err := t.http.GetHTML(ctx, listURL)
+		if err != nil {
+			var se *StatusError
+			if page == 1 && listPath == "jobs" && errors.As(err, &se) && se.Code == http.StatusNotFound {
+				listPath = ""
+				listURL = fmt.Sprintf("https://%s/?page=%d", e.Board, page)
+				root, err = t.http.GetHTML(ctx, listURL)
+			}
+		}
 		if err != nil {
 			if page == 1 {
 				return nil, fmt.Errorf("teamtailor: listing %s: %w", e.Board, err)
