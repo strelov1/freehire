@@ -278,6 +278,7 @@ func All(c HTTPClient) map[string]Source {
 		NewJobnet(c),
 		NewJobdanmark(c),
 		NewTyomarkkinatori(c),
+		NewLikeit(c),
 		// International single-company adapters (boardless).
 		NewTelegramCareers(c),
 		NewUber(c),
