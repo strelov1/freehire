@@ -25,7 +25,7 @@ and how it interacts with the rest of the system, your PR will be closed.
 
 Using AI to write code is fine. Submitting AI-generated slop you have not read
 and understood is not. If you use an agent, run it from the repository root so
-it picks up `AGENT.md` automatically, and make sure it follows the rules there.
+it picks up `AGENTS.md` automatically, and make sure it follows the rules there.
 
 ## Contribution Gate
 
@@ -91,7 +91,7 @@ npm run build
 
 ## Adding a Source
 
-This is the most welcome kind of contribution. See `AGENT.md` for the source
+This is the most welcome kind of contribution. See `AGENTS.md` for the source
 adapter contract and the dedup/lifecycle conventions. In short:
 
 - An ATS board adapter implements the `Source` interface in `internal/sources`

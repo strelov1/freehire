@@ -343,7 +343,7 @@ freehire's core is a small pipeline; the extension point is the **source**
 (one entry in a `sources/` board file, or a new adapter in `internal/sources`). New
 contributors: open an issue first — issues and PRs from unapproved accounts are
 auto-closed by default. See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow
-and [AGENT.md](AGENT.md) for the architecture and conventions. Questions and
+and [AGENTS.md](AGENTS.md) for the architecture and conventions. Questions and
 ideas go in [Discussions](https://github.com/strelov1/freehire/discussions).
 
 ## Security
