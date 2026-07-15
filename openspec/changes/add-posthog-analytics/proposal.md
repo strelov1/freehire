@@ -21,8 +21,10 @@ PostHog Cloud (EU) closes all three gaps with one client SDK.
 - Emit a small set of explicit funnel events (`search`, `job_view`, `job_apply`,
   `job_save`, `job_track`) through a thin `$lib/analytics.ts` wrapper; keep
   autocapture on for everything else.
-- Wire one client-side **feature flag** as a demonstrator gating the
-  `default-hide-nontech` default. Backend flag migration is out of scope.
+- Expose a generic client-side **feature-flag reader** (`isFeatureEnabled`) as
+  the flag capability. Wiring a concrete product default (e.g.
+  `default-hide-nontech`, not on origin/main) is left as a seam; backend flag
+  migration is out of scope.
 
 ## Capabilities
 

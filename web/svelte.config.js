@@ -50,6 +50,12 @@ export default {
         // client SDK ships in the same-origin bundle and injects no external script,
         // so script-src needs nothing either. If a connect-src is ever introduced,
         // it MUST include the Sentry ingest host above (and GA's collect host).
+        //
+        // PostHog: needs no CSP entry either. Ingestion and the lazily-loaded
+        // session-replay recorder both go through the same-origin /ingest reverse
+        // proxy (nginx → eu.i.posthog.com; see the add-posthog-analytics design),
+        // so 'self' already covers script-src and no external host is contacted. A
+        // future connect-src must include /ingest (same origin).
       },
     },
   },

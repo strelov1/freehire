@@ -1,9 +1,16 @@
 <script lang="ts">
   import { navigating, page } from '$app/state';
+  import { afterNavigate } from '$app/navigation';
   import { onMount } from 'svelte';
   import { initTheme } from '$lib/theme.svelte';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { resetUserStores } from '$lib/userResource.svelte';
+  import {
+    capturePageview,
+    syncReplayForRoute,
+    identifyUser,
+    resetIdentity,
+  } from '$lib/analytics';
   import TopBar from '$lib/components/TopBar.svelte';
   import Footer from '$lib/components/Footer.svelte';
   import '../app.css';
@@ -29,6 +36,29 @@
   // signed out.
   $effect(() => {
     if (!isAuthenticated()) resetUserStores();
+  });
+
+  // Analytics is inert unless PostHog was initialized (see hooks.client.ts), so
+  // every call below is a no-op when the key is absent. afterNavigate also fires
+  // on the initial load, so the pageview and the replay privacy toggle cover a
+  // hard-loaded route too — replay is stopped on /my/* before it can leak.
+  afterNavigate(() => {
+    capturePageview();
+    syncReplayForRoute(page.url.pathname);
+  });
+
+  // Bind/clear analytics identity only on a real session transition. page.data is
+  // a fresh object per navigation, so acting on every run would call posthog.reset()
+  // on each anonymous navigation — reset() mints a new anonymous id each time and
+  // would fragment one visitor into many. Tracking the last identified id makes
+  // identify fire once at sign-in and reset once at sign-out.
+  let lastIdentified: number | null = null;
+  $effect(() => {
+    const id = page.data.user?.id ?? null;
+    if (id === lastIdentified) return;
+    lastIdentified = id;
+    if (page.data.user) identifyUser(page.data.user);
+    else resetIdentity();
   });
 </script>
 

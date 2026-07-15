@@ -12,6 +12,7 @@ Svelte SPA under `web/` consuming the freehire API (same-origin; Vite proxy forw
 - `JobFitAnalysis.svelte` is a compact summary (overall % + verdict + top gap) linking to the full `/jobs/[slug]/fit/` page; it never computes inline.
 - `ResumeStructuredView.svelte` is read-only — the structured resume is display-only, never editable.
 - Sentry is gated on `PUBLIC_SENTRY_DSN` (+ `PUBLIC_SENTRY_ENVIRONMENT`); source map upload only when `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT` are set (build succeeds without them).
+- PostHog product analytics is gated on `PUBLIC_POSTHOG_KEY` (inert without it — no init, no events); ingestion goes through the same-origin `/ingest` reverse proxy (nginx → `eu.i.posthog.com`), overridable via `PUBLIC_POSTHOG_HOST` (default `/ingest`). Both are injected by `freehire-ops`, never committed, and unset in dev.
 
 ## How it works
 The SPA is built with SvelteKit and consumes the API at `/api/v1/*`. Auth is handled via httpOnly cookies, transported transparently by the browser (no client-side token management). The Vite proxy forwards `/api` to the backend in dev; in production the SPA and API are same-origin.

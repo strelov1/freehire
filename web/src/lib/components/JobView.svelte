@@ -7,6 +7,7 @@
   import { filterHref, formatSalary, summaryFacets } from '$lib/enrichment';
   import { markViewed } from '$lib/viewedJobs.svelte';
   import { markSaved, markUnsaved } from '$lib/savedJobs.svelte';
+  import { track } from '$lib/analytics';
   import type { Job, UserJob } from '$lib/types';
   import { Badge, Button } from '$lib/ui';
   import { formatDate } from '$lib/utils';
@@ -44,6 +45,14 @@
   const views = $derived(job.view_count ?? 0);
   const applies = $derived(job.applied_count ?? 0);
 
+  // Funnel view — captured for everyone (unlike the authed-only server record
+  // below). Keyed on the slug alone so it fires once per job and never re-emits
+  // when an unrelated dependency (e.g. auth state) changes mid-view.
+  $effect(() => {
+    const slug = job.public_slug;
+    track('job_view', { slug, source: job.source });
+  });
+
   // Record a view for signed-in users once the page hydrates (browser only).
   // Silent history that also tells us whether they
   // already applied; a failed view must not break the page. Re-runs on client
@@ -70,6 +79,8 @@
   // not open) and a sign-in offer is shown instead — the posting opens only via
   // "View without signing in" below.
   function onApplyClick(e: MouseEvent) {
+    // Apply-intent — fired regardless of auth (the CTA click is the funnel step).
+    track('job_apply', { slug: job.public_slug, source: job.source });
     if (!isAuthenticated()) {
       e.preventDefault();
       showSignInPrompt = true;
@@ -99,6 +110,7 @@
     }
     showApplyPrompt = false;
     justApplied = true; // offer the board link now that the job is tracked
+    track('job_track', { slug: job.public_slug, stage: 'applied' });
   }
 
   // "No": purely local — the job must not enter the tracker.
@@ -133,8 +145,10 @@
       interaction = saved ? await api.unsaveJob(job.public_slug) : await api.saveJob(job.public_slug);
       // Keep the shared saved set in sync so a browse card's bookmark reflects this
       // on back-navigation without a reload (mirrors markViewed above).
-      if (interaction?.saved_at != null) markSaved(job.public_slug);
-      else markUnsaved(job.public_slug);
+      if (interaction?.saved_at != null) {
+        markSaved(job.public_slug);
+        track('job_save', { slug: job.public_slug });
+      } else markUnsaved(job.public_slug);
     } catch {
       // Leave the current state; the user can retry.
     }

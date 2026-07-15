@@ -52,6 +52,7 @@
     "easymde": "^2.21.0",
     "isomorphic-dompurify": "^3.18.0",
     "marked": "^18.0.6",
+    "posthog-js": "^1.402.0",
     "satori": "^0.26.0",
     "satori-html": "^0.3.2",
     "shiki": "^3.23.0",

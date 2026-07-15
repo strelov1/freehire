@@ -28,6 +28,7 @@
   import OnboardingAlertBanner from './onboarding/OnboardingAlertBanner.svelte';
   import { syncOnNavigation } from '$lib/urlSynced.svelte';
   import { setListSearchTarget } from '$lib/listSearch.svelte';
+  import { track } from '$lib/analytics';
   import type { Job, FacetCounts } from '$lib/types';
   import FilterSummary from './filters/FilterSummary.svelte';
   import FilterModal from './filters/FilterModal.svelte';
@@ -134,6 +135,10 @@
 
   let modalOpen = $state(false);
   let started = false;
+  // Signature of the applied filters last reported as a search, so a re-run that
+  // didn't change the filters (back/forward re-seed, CV sign-in prompt toggle)
+  // doesn't emit a spurious funnel event.
+  let lastSearchKey = '';
 
   // Onboarding: the one-time nudge banner + wizard, standalone-only. The lifecycle
   // lives in localStorage (client-only); seed it at init on the client so a returning
@@ -261,7 +266,8 @@
     const blocked = cvSignInPrompt; // read in the tracked scope so a sign-in refetches
     untrack(() => {
       refreshCounts();
-      if (!started) {
+      const firstRun = !started;
+      if (firstRun) {
         started = true;
         // Keep the SSR `initial` page unless it was loaded for a different URL than
         // the address bar (stale shallow-routing restore) or the feed is in CV mode
@@ -269,6 +275,17 @@
         if (!initialStale && !cvMode) return;
       }
       if (blocked) return;
+      // Funnel search — only when the applied filters actually changed: not the
+      // initial paint, a back/forward re-seed to the same set, or an unrelated
+      // effect re-run (the CV sign-in prompt toggling reads into this scope too).
+      const searchKey = filtersToParams(filters.applied).toString();
+      if (!firstRun && searchKey !== lastSearchKey) {
+        track('search', {
+          q: filters.applied.q.trim(),
+          facets: activeFilterCount(filters.applied),
+        });
+      }
+      lastSearchKey = searchKey;
       reloadList();
     });
   });

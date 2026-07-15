@@ -89,18 +89,19 @@ PostHog is uninitialized.
 - **WHEN** a tracked action fires while PostHog is not initialized
 - **THEN** the analytics call is a safe no-op and does not throw
 
-### Requirement: Client feature flag
+### Requirement: Client feature flag reader
 
-The app SHALL read a client-side PostHog feature flag to control the
-`default-hide-nontech` default, falling back to the current hardcoded default
-when the flag is unavailable.
+The app SHALL expose a generic client-side feature-flag reader that returns a
+PostHog flag's value when available and a caller-supplied fallback otherwise.
+Wiring specific product defaults (e.g. `default-hide-nontech`) to flags is out of
+scope here and left as a seam until those features land.
 
 #### Scenario: Flag resolves
 
-- **WHEN** the PostHog feature flag for the non-tech default is available
-- **THEN** the default hide-non-tech behavior follows the flag value
+- **WHEN** a caller reads a feature flag that PostHog has loaded
+- **THEN** the reader returns the flag's value
 
 #### Scenario: Flag unavailable
 
 - **WHEN** the flag cannot be resolved (PostHog inert or flags not loaded)
-- **THEN** the app uses its existing hardcoded default with no error
+- **THEN** the reader returns the caller-supplied fallback with no error
