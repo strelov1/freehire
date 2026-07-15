@@ -14,9 +14,9 @@ export const accountNav = [
   { href: '/my/assistant', label: 'Agent', betaOnly: true, beta: true },
   { href: '/my/tracking', label: 'Tracking' },
   { href: '/my/activity', label: 'Activity' },
-  // Mail inbox is a restricted rollout — moderators OR beta testers (the server 403s
-  // everyone else). `beta` shows a nav badge.
-  { href: '/my/inbox', label: 'Inbox', moderatorOrBeta: true, beta: true },
+  // Mail inbox: connect Gmail and/or claim a freehire mailbox to track application
+  // replies. Open to every signed-in user.
+  { href: '/my/inbox', label: 'Inbox' },
   { href: '/my/searches', label: 'Search notifications' },
   { href: '/my/api-keys', label: 'API keys' },
   { href: '/my/submissions', label: 'My submissions' },

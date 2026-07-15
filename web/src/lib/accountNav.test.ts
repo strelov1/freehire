@@ -26,20 +26,20 @@ describe('accountNav config', () => {
 });
 
 describe('visibleAccountNav', () => {
-  it('hides both restricted sections from a plain user', () => {
+  it('hides the beta-only Assistant from a plain user but shows the Inbox', () => {
     const hrefs = visibleAccountNav(false, false).map((i) => i.href);
-    expect(hrefs).not.toContain('/my/inbox');
     expect(hrefs).not.toContain('/my/assistant');
+    expect(hrefs).toContain('/my/inbox'); // Inbox is open to everyone now
   });
 
   it('gates the Assistant on beta membership, not the moderator role', () => {
-    // A moderator who is not a beta tester sees Inbox but NOT the Assistant.
+    // A moderator who is not a beta tester sees the Inbox but NOT the Assistant.
     const modOnly = visibleAccountNav(true, false).map((i) => i.href);
     expect(modOnly).toContain('/my/inbox');
     expect(modOnly).not.toContain('/my/assistant');
 
-    // A beta tester who is not a moderator sees the Assistant AND the Inbox (Inbox
-    // is a moderator-OR-beta section).
+    // A beta tester who is not a moderator sees the Assistant (and, like everyone,
+    // the Inbox).
     const betaOnly = visibleAccountNav(false, true).map((i) => i.href);
     expect(betaOnly).toContain('/my/assistant');
     expect(betaOnly).toContain('/my/inbox');

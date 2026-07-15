@@ -37,9 +37,8 @@
   } = $props();
 
   type Tab = 'application' | 'fit' | 'description' | 'emails';
-  // The Emails tab shows linked mail — a moderator-or-beta surface; the
-  // getTrackedApplication read 403s everyone else.
-  const canSeeMail = $derived(currentUser()?.role === 'moderator' || currentUser()?.beta_tester === true);
+  // The Emails tab shows linked mail — open to every signed-in user.
+  const canSeeMail = $derived(!!currentUser());
 
   // Emails-tab state (declared before TABS, which shows the loaded count). The
   // application's linked mail lazy-loads (see the eager $effect below); each email

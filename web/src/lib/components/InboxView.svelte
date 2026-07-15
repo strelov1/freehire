@@ -518,7 +518,8 @@
         <button type="button" class="font-medium text-primary hover:underline" onclick={() => (tab = 'settings')}>set one up in Settings</button>.
       </p>
     {:else}
-      <!-- Toolbar: account switcher, unread + label filters, search, mark-all-read, refresh. -->
+      <!-- Toolbar: account switcher + label filter + search on the left; a compact
+           icon cluster (unread filter, mark-all-read, refresh) on the right. -->
       <div class="flex flex-wrap items-center gap-2">
         {#if bothConnected}
           <div class="flex gap-1 rounded-lg border border-border p-1 text-sm">
@@ -536,22 +537,11 @@
           </div>
         {/if}
 
-        <button
-          type="button"
-          onclick={toggleUnread}
-          aria-pressed={unread}
-          class="rounded-lg border px-3 py-1.5 text-sm transition-colors {unread
-            ? 'border-brand-ring bg-brand-muted/60 font-medium text-foreground'
-            : 'border-border text-muted-foreground hover:text-foreground'}"
-        >
-          Unread only
-        </button>
-
         <select
           bind:value={label}
           onchange={reloadList}
           aria-label="Filter by label"
-          class="rounded-lg border border-border bg-background py-1.5 pl-3 pr-8 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-ring/40 {label
+          class="rounded-lg border border-border bg-background py-2 pl-3 pr-8 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-ring/40 {label
             ? 'font-medium text-foreground'
             : 'text-muted-foreground'}"
         >
@@ -561,7 +551,7 @@
           {/each}
         </select>
 
-        <div class="relative min-w-0 flex-1">
+        <div class="relative min-w-[11rem] flex-1">
           <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             type="search"
@@ -572,15 +562,41 @@
           />
         </div>
 
-        <Button variant="outline" size="sm" disabled={markingAll} onclick={markAllRead} title="Mark all read">
-          <CheckCheck class="h-4 w-4" />
-          Mark all read
-        </Button>
-
-        <Button variant="outline" size="sm" disabled={refreshing} onclick={refreshInbox} title="Refresh">
-          <RefreshCw class="h-4 w-4 {refreshing ? 'animate-spin' : ''}" />
-          Refresh
-        </Button>
+        <!-- Compact icon actions, grouped: unread toggle · mark all read · refresh. -->
+        <div class="flex items-center gap-1">
+          <button
+            type="button"
+            onclick={toggleUnread}
+            aria-pressed={unread}
+            title="Unread only"
+            aria-label="Unread only"
+            class="rounded-lg border p-2 transition-colors {unread
+              ? 'border-brand-ring bg-brand-muted/60 text-foreground'
+              : 'border-border text-muted-foreground hover:text-foreground'}"
+          >
+            <Mail class="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onclick={markAllRead}
+            disabled={markingAll}
+            title="Mark all read"
+            aria-label="Mark all read"
+            class="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+          >
+            <CheckCheck class="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onclick={refreshInbox}
+            disabled={refreshing}
+            title="Refresh"
+            aria-label="Refresh"
+            class="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+          >
+            <RefreshCw class="h-4 w-4 {refreshing ? 'animate-spin' : ''}" />
+          </button>
+        </div>
       </div>
 
       {#if lastDeleted}

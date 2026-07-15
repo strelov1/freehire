@@ -397,38 +397,34 @@ func Register(app *fiber.App, cfg Config) {
 	api.Put("/me/profile", saved, a.PutProfile)
 	api.Delete("/me/profile", saved, a.DeleteProfile)
 
-	// Mail inbox (Gmail connect + hosted mailbox). Restricted rollout: a moderator
-	// OR a beta tester may use it; everyone else gets 403 and the SPA hides the nav
-	// entry. The read + disconnect routes are always registered (empty/no-op when not
-	// connected); the OAuth connect routes only when configured. Cookie-or-key auth,
-	// then the moderator-or-beta gate.
-	requireMail := auth.RequireModeratorOrBeta(a.queries, a.queries)
-	api.Get("/me/gmail", saved, requireMail, a.GmailStatus)
-	api.Delete("/me/gmail", saved, requireMail, a.GmailDisconnect)
-	api.Get("/me/inbox", saved, requireMail, a.GetInbox)
-	api.Post("/me/inbox/read-all", saved, requireMail, a.MarkAllReadInbox)
-	api.Get("/me/emails/:id", saved, requireMail, a.GetEmail)
-	api.Post("/me/emails/:id/delete", saved, requireMail, a.DeleteEmail)
-	api.Post("/me/emails/:id/restore", saved, requireMail, a.RestoreEmail)
-	// Email → application linking. The detail endpoint exposes mail, so it rides the
-	// same mail gate; :slug is registered after the static /me/tracking/* routes above
-	// so it does not shadow them.
-	api.Get("/me/tracking/:slug", saved, requireMail, a.GetTrackedApplication)
-	api.Post("/me/emails/:id/link", saved, requireMail, a.LinkEmail)
-	api.Post("/me/emails/:id/unlink", saved, requireMail, a.UnlinkEmail)
-	api.Post("/me/emails/:id/confirm", saved, requireMail, a.ConfirmEmailLink)
-	api.Post("/me/emails/:id/reject", saved, requireMail, a.RejectEmailLink)
+	// Mail inbox (Gmail connect + hosted mailbox). Open to every signed-in user.
+	// The read + disconnect routes are always registered (empty/no-op when not
+	// connected); the OAuth connect routes only when configured. Cookie-or-key auth.
+	api.Get("/me/gmail", saved, a.GmailStatus)
+	api.Delete("/me/gmail", saved, a.GmailDisconnect)
+	api.Get("/me/inbox", saved, a.GetInbox)
+	api.Post("/me/inbox/read-all", saved, a.MarkAllReadInbox)
+	api.Get("/me/emails/:id", saved, a.GetEmail)
+	api.Post("/me/emails/:id/delete", saved, a.DeleteEmail)
+	api.Post("/me/emails/:id/restore", saved, a.RestoreEmail)
+	// Email → application linking. :slug is registered after the static
+	// /me/tracking/* routes above so it does not shadow them.
+	api.Get("/me/tracking/:slug", saved, a.GetTrackedApplication)
+	api.Post("/me/emails/:id/link", saved, a.LinkEmail)
+	api.Post("/me/emails/:id/unlink", saved, a.UnlinkEmail)
+	api.Post("/me/emails/:id/confirm", saved, a.ConfirmEmailLink)
+	api.Post("/me/emails/:id/reject", saved, a.RejectEmailLink)
 	if a.gmailReady() {
-		api.Get("/me/gmail/connect", saved, requireMail, a.GmailConnect)
-		api.Get("/me/gmail/callback", saved, requireMail, a.GmailCallback)
-		api.Post("/me/gmail/sync", saved, requireMail, a.SyncGmail)
+		api.Get("/me/gmail/connect", saved, a.GmailConnect)
+		api.Get("/me/gmail/callback", saved, a.GmailCallback)
+		api.Post("/me/gmail/sync", saved, a.SyncGmail)
 	}
 	// Hosted-mailbox option: status is always available (reports unavailable when
 	// the feature is off); claim/release only when a receiving domain is configured.
-	api.Get("/me/mailbox", saved, requireMail, a.GetMailbox)
+	api.Get("/me/mailbox", saved, a.GetMailbox)
 	if a.mailboxReady() {
-		api.Post("/me/mailbox", saved, requireMail, a.ClaimMailbox)
-		api.Delete("/me/mailbox", saved, requireMail, a.ReleaseMailbox)
+		api.Post("/me/mailbox", saved, a.ClaimMailbox)
+		api.Delete("/me/mailbox", saved, a.ReleaseMailbox)
 	}
 	// The résumé verdict is a profile sub-resource: GET computes the live
 	// market-coverage verdict from the profile's skills against the selected role.
