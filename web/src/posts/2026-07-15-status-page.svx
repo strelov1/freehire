@@ -1,0 +1,30 @@
+---
+title: A live status page for our crawlers
+date: 2026-07-15
+summary: /status now shows the health of every job source at a glance — which ATS providers are crawling clean, which are degraded, and which are down.
+type: changelog
+tags:
+  - transparency
+  - reliability
+draft: false
+---
+
+freehire pulls jobs from hundreds of company career boards, and some of them go
+down, rate-limit us, or quietly change under our feet. Until now that health lived
+only in our logs.
+
+[/status](/status) puts it in the open. It rolls up every source adapter by
+provider and shows:
+
+- **Operational, degraded, or down** — per provider, derived from how many of its
+  boards are healthy and how recently they last crawled successfully.
+- **Board counts** — how many boards each provider covers, and how many are green.
+- **Last run** — when we last reached each one.
+
+You can search by name and filter by source type — ATS platforms, job
+aggregators, or a company's own careers page — to jump straight to what you
+care about.
+
+Like [/open](/open), it reads live from the public API
+([/api/v1/status](/api/v1/status)) — no login, no hand-maintained dashboard. If a
+source you rely on stops updating, you can now see it for yourself.

@@ -33,6 +33,7 @@ func TestIngestStatusEndpoint(t *testing.T) {
 
 	type providerEntry struct {
 		Provider      string  `json:"provider"`
+		Kind          string  `json:"kind"`
 		Status        string  `json:"status"`
 		TotalBoards   int     `json:"total_boards"`
 		HealthyBoards int     `json:"healthy_boards"`
@@ -124,6 +125,9 @@ func TestIngestStatusEndpoint(t *testing.T) {
 	for _, b := range []string{"secret-wd-4", "secret-wd-5"} {
 		cooled("workday", b)
 	}
+	// jobstash: an aggregator adapter — proves provider-kind classification wires
+	// through from the sources registry into the DTO.
+	healthy("jobstash", "", 500)
 
 	env, raw := get(t)
 
@@ -146,6 +150,15 @@ func TestIngestStatusEndpoint(t *testing.T) {
 	}
 	if gh.Status != "operational" || gh.TotalBoards != 2 || gh.HealthyBoards != 2 || gh.IngestedTotal != 100 {
 		t.Errorf("greenhouse = %+v, want operational/2/2/100", gh)
+	}
+	// Provider-kind classification: a board-based ATS vs a many-company aggregator.
+	if gh.Kind != "ats" {
+		t.Errorf("greenhouse kind = %q, want ats", gh.Kind)
+	}
+	if js, ok := byProvider["jobstash"]; !ok {
+		t.Fatal("jobstash missing from providers")
+	} else if js.Kind != "aggregator" {
+		t.Errorf("jobstash kind = %q, want aggregator", js.Kind)
 	}
 
 	lv, ok := byProvider["lever"]

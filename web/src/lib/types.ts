@@ -343,11 +343,16 @@ export interface EngagementStats {
  *  /status page. */
 export type HealthStatus = 'operational' | 'degraded' | 'down';
 
+/** How a source is shaped: a multi-tenant ATS platform, a many-company job
+ *  aggregator, a single company's own careers page, or an unclassified source. */
+export type ProviderKind = 'ats' | 'aggregator' | 'company' | 'other';
+
 /** One provider's health on the public /status page: board counts, freshness, and
  *  the derived status. Sanitized — no error text or board identifiers are exposed.
  *  Timestamps are RFC3339 strings, or null when the provider has never run/succeeded. */
 export interface ProviderHealth {
   provider: string;
+  kind: ProviderKind;
   status: HealthStatus;
   total_boards: number;
   healthy_boards: number;

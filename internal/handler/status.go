@@ -5,6 +5,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/strelov1/freehire/internal/sources"
 )
 
 // providerStatus is the public health verdict for a provider (and the fleet):
@@ -83,6 +85,7 @@ func overallStatus(statuses []providerStatus) providerStatus {
 // cannot leak by omission.
 type statusProvider struct {
 	Provider      string         `json:"provider"`
+	Kind          string         `json:"kind"`
 	Status        providerStatus `json:"status"`
 	TotalBoards   int64          `json:"total_boards"`
 	HealthyBoards int64          `json:"healthy_boards"`
@@ -105,6 +108,9 @@ func (a *API) IngestStatus(c *fiber.Ctx) error {
 	}
 
 	now := time.Now().UTC()
+	// One registry per request to classify each provider by adapter kind (ATS /
+	// aggregator / company page). nil client is safe — only marker assertions run.
+	reg := sources.All(nil)
 	providers := make([]statusProvider, len(rows))
 	statuses := make([]providerStatus, len(rows))
 	for i, r := range rows {
@@ -116,6 +122,7 @@ func (a *API) IngestStatus(c *fiber.Ctx) error {
 		statuses[i] = st
 		providers[i] = statusProvider{
 			Provider:      r.Provider,
+			Kind:          sources.ProviderKind(reg, r.Provider),
 			Status:        st,
 			TotalBoards:   r.TotalBoards,
 			HealthyBoards: r.HealthyBoards,

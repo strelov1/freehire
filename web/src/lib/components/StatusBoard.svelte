@@ -1,6 +1,6 @@
 <script lang="ts">
   import { timeAgo } from '$lib/utils';
-  import type { HealthStatus, IngestStatus } from '$lib/types';
+  import type { HealthStatus, IngestStatus, ProviderKind } from '$lib/types';
 
   // The presentational half of the /status page: given the ingest-fleet rollup (or
   // null when the API read failed), it renders the overall banner and the
@@ -36,6 +36,17 @@
 
   const SEVERITY: Record<HealthStatus, number> = { operational: 0, degraded: 1, down: 2 };
 
+  // Human labels for the source-kind taxonomy the backend derives from adapter type.
+  const KIND_LABEL: Record<ProviderKind, string> = {
+    ats: 'ATS',
+    aggregator: 'Aggregators',
+    company: 'Company pages',
+    other: 'Other',
+  };
+  // Order the kind chips deliberately (ATS first — the bulk), then filter to those
+  // that actually appear in the data.
+  const KIND_ORDER: ProviderKind[] = ['ats', 'aggregator', 'company', 'other'];
+
   const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/[_-]/g, ' ');
   const nf = new Intl.NumberFormat('en');
 
@@ -46,6 +57,27 @@
     ),
   );
   const overall = $derived(status?.overall ?? null);
+
+  // Kind chips: only kinds present in the data, each with its live count.
+  const kindCounts = $derived.by(() => {
+    const counts: Partial<Record<ProviderKind, number>> = {};
+    for (const p of providers) counts[p.kind] = (counts[p.kind] ?? 0) + 1;
+    return KIND_ORDER.filter((k) => counts[k]).map((k) => ({ kind: k, count: counts[k]! }));
+  });
+
+  // Two combined filters: a kind chip ('all' = no kind constraint) and a free-text
+  // match over the name. With dozens of providers, "narrow to aggregators, then find
+  // the one I care about" beats scrolling.
+  let kind = $state<ProviderKind | 'all'>('all');
+  let query = $state('');
+  const filtered = $derived.by(() => {
+    const q = query.trim().toLowerCase();
+    return providers.filter((p) => {
+      if (kind !== 'all' && p.kind !== kind) return false;
+      if (!q) return true;
+      return p.provider.toLowerCase().includes(q) || titleCase(p.provider).toLowerCase().includes(q);
+    });
+  });
 </script>
 
 {#if !status || !overall}
@@ -79,13 +111,59 @@
     {#if providers.length === 0}
       <p class="mt-6 text-sm text-muted-foreground">No providers have run yet.</p>
     {:else}
-      <ul class="mt-6 divide-y divide-border overflow-hidden rounded-xl border border-border">
-        {#each providers as p (p.provider)}
+      <label class="mt-6 block">
+        <span class="sr-only">Filter providers by name</span>
+        <input
+          type="search"
+          bind:value={query}
+          placeholder="Filter providers…"
+          autocomplete="off"
+          class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-foreground"
+        />
+      </label>
+
+      {#if kindCounts.length > 1}
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onclick={() => (kind = 'all')}
+            class="rounded-full border px-3 py-1 text-xs font-medium transition-colors {kind === 'all'
+              ? 'border-foreground bg-foreground text-background'
+              : 'border-border text-muted-foreground hover:text-foreground'}"
+          >
+            All {nf.format(providers.length)}
+          </button>
+          {#each kindCounts as kc (kc.kind)}
+            <button
+              type="button"
+              onclick={() => (kind = kc.kind)}
+              class="rounded-full border px-3 py-1 text-xs font-medium transition-colors {kind === kc.kind
+                ? 'border-foreground bg-foreground text-background'
+                : 'border-border text-muted-foreground hover:text-foreground'}"
+            >
+              {KIND_LABEL[kc.kind]} {nf.format(kc.count)}
+            </button>
+          {/each}
+        </div>
+      {/if}
+
+      {#if filtered.length === 0}
+        <p class="mt-6 text-sm text-muted-foreground">
+          No providers match “{query.trim()}”.
+        </p>
+      {:else}
+        <ul class="mt-4 divide-y divide-border overflow-hidden rounded-xl border border-border">
+          {#each filtered as p (p.provider)}
           {@const meta = STATUS_META[p.status]}
           <li class="flex flex-wrap items-center gap-x-4 gap-y-1 bg-background p-4 sm:p-5">
             <span class="h-2.5 w-2.5 shrink-0 rounded-full {meta.dot}"></span>
             <div class="min-w-0 flex-1">
-              <div class="font-medium">{titleCase(p.provider)}</div>
+              <div class="flex items-center gap-2">
+                <span class="font-medium">{titleCase(p.provider)}</span>
+                <span class="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {KIND_LABEL[p.kind]}
+                </span>
+              </div>
               <div class="text-sm text-muted-foreground">
                 {nf.format(p.healthy_boards)} / {nf.format(p.total_boards)} boards healthy{#if p.cooled_boards > 0}<span
                     class="text-amber-600 dark:text-amber-500"
@@ -107,8 +185,9 @@
               {/if}
             </div>
           </li>
-        {/each}
-      </ul>
+          {/each}
+        </ul>
+      {/if}
     {/if}
   </section>
 {/if}
