@@ -8,7 +8,10 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # postgres:18+ stores data in a version-specific subdirectory and expects
+      # the volume at /var/lib/postgresql (not the legacy .../data path, which it
+      # now treats as an unused mount and refuses to start).
+      - pgdata:/var/lib/postgresql
       # Migrations are applied automatically by Postgres on first volume init.
       - ./migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
