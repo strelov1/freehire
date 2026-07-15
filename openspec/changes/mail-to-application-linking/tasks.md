@@ -36,6 +36,6 @@
 
 ## 7. Verification
 
-- [ ] 7.1 `go build ./... && go vet ./... && go test ./...`; `gofmt`
-- [ ] 7.2 Run the worker against the real 237-email set; confirm auto-link/suggestion/unlinked distribution and status signals look sane; verify no out-of-vocabulary values persisted
+- [x] 7.1 `go build ./... && go vet ./... && go test ./...`; `gofmt`
+- [x] 7.2 Ran on the real 237-email set on prod: distribution sane (ack 146/reject 39/other 35/interview 8/…), 40 auto-linked + 48 LLM-suggested, 0 out-of-vocabulary values. Caught+fixed a terminal-stage resurrection bug (9 rejected→applied), reverted from backup
 - [ ] 7.3 Manual QA on `/my/inbox` (confirm/reject a suggestion, manual link) and `/my/tracking/[slug]` (linked emails render with badges); confirm rejection never auto-advances a stage
