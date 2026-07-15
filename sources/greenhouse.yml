@@ -14099,3 +14099,7 @@
   board: fanaticscollectibles
 - company: Bees Brasil
   board: beesbrasil
+
+# Greenhouse tenant behind vanity domain (jobcrawls harvest 2026-07, API-validated)
+- company: Sector Alarm
+  board: sectoralarmgroup

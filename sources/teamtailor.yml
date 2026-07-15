@@ -2662,3 +2662,149 @@
   board: headway.teamtailor.com
 - company: Avenga
   board: career.avenga.com
+
+# Finnish/Nordic Teamtailor tenants harvested from jobcrawls.com (2026-07, live-validated >0 jobs)
+- company: Verda
+  board: jobs.verda.com
+- company: Terveytesi Palvelut Oy
+  board: rekry.terveytesi.com
+- company: Granlund
+  board: careers.granlund.fi
+- company: Humana
+  board: ura.humana.fi
+- company: ReOrbit
+  board: careers.reorbit.space
+- company: atNorth
+  board: careers.atnorth.com
+- company: Rejlers Finland
+  board: career.rejlers.fi
+- company: Aarni Henkilöstö Oy
+  board: ura.aarnihenkilosto.fi
+- company: Dobra Finland
+  board: jobs.dobrafinland.fi
+- company: Rainmaker
+  board: rekry.rainmaker.fi
+- company: HiQ
+  board: careers.hiq.fi
+- company: TalentFlow
+  board: avoimet.talentflow.fi
+- company: Elämäsi Adato Oy
+  board: tyopaikat.xn--elmsi-hrab.com
+- company: Nawia Oy
+  board: careers.nawia.fi
+- company: Synsam Group Finland Oy
+  board: job.synsam.fi
+- company: FORCIT Finland
+  board: ura.forcit.fi
+- company: Aito
+  board: www.aitorekry.fi
+- company: Musti ja Mirri Oy
+  board: tyopaikat.mustijamirri.fi
+- company: CERTEGO Finland
+  board: tyopaikat.certego.fi
+- company: Broman Group Oy
+  board: rekry.bromangroup.fi
+- company: Stravito
+  board: careers.stravito.com
+- company: TryHackMe
+  board: careers.tryhackme.com
+- company: Greenstep
+  board: careers.greenstep.com
+- company: Eficode
+  board: career.eficode.com
+- company: AiCan
+  board: happyrekry.aican.fi
+- company: Suomen Seniorihoiva
+  board: ura.suomenseniorihoiva.fi
+- company: Oneflow
+  board: career.oneflow.com
+- company: VALA
+  board: apply.valagroup.com
+- company: 61N Solutions Oy
+  board: careers.61n.fi
+- company: Yrjö ja Hanna Hoiva
+  board: tyopaikat.yrjojahanna.fi
+- company: Frends
+  board: careers.frends.com
+- company: Nosto
+  board: careers.nosto.com
+- company: Nordhealth
+  board: careers.nordhealth.com
+- company: Trainers' House
+  board: rekrytointi.trainershouse.fi
+- company: Welado Group
+  board: careers.welado.fi
+- company: Newsec Suomessa
+  board: ura.newsec.fi
+- company: JIS
+  board: ura.jis.fi
+- company: Bilar99
+  board: rekry.bilar99e.fi
+- company: Kamux Suomi
+  board: rekry.kamux.fi
+- company: Bluefors
+  board: careers.bluefors.com
+- company: Rakennustieto Oy
+  board: ura.rakennustieto.fi
+- company: Genie AI
+  board: careers.genieai.co
+- company: NClean
+  board: rekry.nclean.fi
+- company: Polar Squad
+  board: careers.polarsquad.com
+- company: Bookers Group
+  board: rekrytointi.bookers.fi
+- company: Aurilo
+  board: ura.aurilo.fi
+- company: Operaria Headhunting & Recruiting
+  board: rekry.operaria.fi
+- company: Koiviston Auto
+  board: ura.koivistonauto.fi
+- company: Terrafame Oy
+  board: www.kykyjentalteenotto.fi
+- company: Rastor
+  board: rekry.rastorinst.fi
+- company: Insta
+  board: careers.insta.fi
+- company: Biisoni
+  board: rekry.biisoni.fi
+- company: Lapti
+  board: ura.lapti.fi
+- company: Päiväkumpu
+  board: rekry.paivakumpuhoiva.fi
+- company: Sospro Oy
+  board: ura.sospro.fi
+- company: Lumon Suomi
+  board: ura.lumon.fi
+- company: Funidata
+  board: rekry.funidata.fi
+- company: Kotico Oy
+  board: rekry.kotico.fi
+- company: Mandatum
+  board: careers.mandatum.fi
+- company: Integrata
+  board: rekry.integrata.fi
+- company: Oscar Software
+  board: careers.oscar.fi
+- company: Pelastusarmeija
+  board: tyopaikat.pelastusarmeija.fi
+- company: Evitec Solutions
+  board: careers.evitec.com
+- company: Target Headhunting Oy
+  board: tyopaikat.targetheadhunting.fi
+- company: Face2face Finland
+  board: tyo.face2face.fi
+- company: B2 Impact Finland
+  board: careers.b2-impact.fi
+- company: Ramirent Finland Oy
+  board: rakennatyopaikkasi.ramirent.fi
+- company: Loimua Oy
+  board: urat.loimua.fi
+- company: Instabee
+  board: career.instabee.com
+- company: Wapice
+  board: jobs.wapice.com
+- company: Prohoc
+  board: careers.prohoc.fi
+- company: Corsearch
+  board: careers.corsearch.com
