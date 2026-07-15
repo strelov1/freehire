@@ -85,6 +85,7 @@ type Email struct {
 	StatusSignal        pgtype.Text        `json:"status_signal"`
 	ClassifiedAt        pgtype.Timestamptz `json:"classified_at"`
 	ClassificationModel pgtype.Text        `json:"classification_model"`
+	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type EmailClassificationOutbox struct {

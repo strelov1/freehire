@@ -397,7 +397,10 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/me/gmail", saved, requireMail, a.GmailStatus)
 	api.Delete("/me/gmail", saved, requireMail, a.GmailDisconnect)
 	api.Get("/me/inbox", saved, requireMail, a.GetInbox)
+	api.Post("/me/inbox/read-all", saved, requireMail, a.MarkAllReadInbox)
 	api.Get("/me/emails/:id", saved, requireMail, a.GetEmail)
+	api.Post("/me/emails/:id/delete", saved, requireMail, a.DeleteEmail)
+	api.Post("/me/emails/:id/restore", saved, requireMail, a.RestoreEmail)
 	// Email → application linking. The detail endpoint exposes mail, so it rides the
 	// same mail gate; :slug is registered after the static /me/tracking/* routes above
 	// so it does not shadow them.

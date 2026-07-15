@@ -26,6 +26,12 @@ var validSignals = map[StatusSignal]bool{
 	SignalInfoRequest: true, SignalOther: true,
 }
 
+// IsValidSignal reports whether s is a known classification label — used to
+// validate a caller-supplied inbox label filter before it reaches the query.
+func IsValidSignal(s string) bool {
+	return validSignals[StatusSignal(s)]
+}
+
 // Classification is the LLM output for one email: the status signal, a
 // confidence in [0,1], and (only used when deterministic matching was
 // ambiguous/none) the disambiguation pick — 0 meaning "none".

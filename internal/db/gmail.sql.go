@@ -15,25 +15,37 @@ const countEmails = `-- name: CountEmails :one
 SELECT count(*)
 FROM emails
 WHERE user_id = $1
+  AND deleted_at IS NULL
   AND ($2::text = '' OR source = $2)
+  AND ($3::bool = false OR read_at IS NULL)
+  AND ($4::text = '' OR status_signal = $4)
   AND (
-    $3::text = ''
-    OR subject   ILIKE '%' || $3 || '%'
-    OR from_name ILIKE '%' || $3 || '%'
-    OR from_addr ILIKE '%' || $3 || '%'
-    OR body_text ILIKE '%' || $3 || '%'
+    $5::text = ''
+    OR subject   ILIKE '%' || $5 || '%'
+    OR from_name ILIKE '%' || $5 || '%'
+    OR from_addr ILIKE '%' || $5 || '%'
+    OR body_text ILIKE '%' || $5 || '%'
   )
 `
 
 type CountEmailsParams struct {
 	UserID int64  `json:"user_id"`
 	Src    string `json:"src"`
+	Unread bool   `json:"unread"`
+	Status string `json:"status"`
 	Q      string `json:"q"`
 }
 
-// Total messages for the caller (same optional source + search), for pagination.
+// Total live messages for the caller (same optional filters as ListEmails), for
+// pagination.
 func (q *Queries) CountEmails(ctx context.Context, arg CountEmailsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countEmails, arg.UserID, arg.Src, arg.Q)
+	row := q.db.QueryRow(ctx, countEmails,
+		arg.UserID,
+		arg.Src,
+		arg.Unread,
+		arg.Status,
+		arg.Q,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -73,7 +85,7 @@ SELECT emails.id, emails.source, emails.external_id, emails.s3_key, emails.from_
 FROM emails
 LEFT JOIN jobs lj ON lj.id = emails.job_id
 LEFT JOIN jobs sj ON sj.id = emails.suggested_job_id
-WHERE emails.id = $1 AND emails.user_id = $2
+WHERE emails.id = $1 AND emails.user_id = $2 AND emails.deleted_at IS NULL
 `
 
 type GetEmailParams struct {
@@ -222,21 +234,26 @@ FROM emails
 LEFT JOIN jobs lj ON lj.id = emails.job_id
 LEFT JOIN jobs sj ON sj.id = emails.suggested_job_id
 WHERE emails.user_id = $1
+  AND emails.deleted_at IS NULL
   AND ($2::text = '' OR emails.source = $2)
+  AND ($3::bool = false OR emails.read_at IS NULL)
+  AND ($4::text = '' OR emails.status_signal = $4)
   AND (
-    $3::text = ''
-    OR emails.subject   ILIKE '%' || $3 || '%'
-    OR emails.from_name ILIKE '%' || $3 || '%'
-    OR emails.from_addr ILIKE '%' || $3 || '%'
-    OR emails.body_text ILIKE '%' || $3 || '%'
+    $5::text = ''
+    OR emails.subject   ILIKE '%' || $5 || '%'
+    OR emails.from_name ILIKE '%' || $5 || '%'
+    OR emails.from_addr ILIKE '%' || $5 || '%'
+    OR emails.body_text ILIKE '%' || $5 || '%'
   )
 ORDER BY emails.received_at DESC, emails.id DESC
-LIMIT $5 OFFSET $4
+LIMIT $7 OFFSET $6
 `
 
 type ListEmailsParams struct {
 	UserID int64  `json:"user_id"`
 	Src    string `json:"src"`
+	Unread bool   `json:"unread"`
+	Status string `json:"status"`
 	Q      string `json:"q"`
 	Off    int32  `json:"off"`
 	Lim    int32  `json:"lim"`
@@ -262,9 +279,10 @@ type ListEmailsRow struct {
 	SuggestedCompany pgtype.Text        `json:"suggested_company"`
 }
 
-// Flat inbox listing, newest first — one row per message (no subject grouping).
-// An optional source filter (empty = all accounts) narrows to one source; an
-// optional search term (empty = no filter) matches subject, sender, or body. The
+// Flat inbox listing, newest first — one row per message (no subject grouping),
+// soft-deleted messages excluded. Optional filters (each empty/false = no filter):
+// source narrows to one account; unread hides already-read mail; status narrows to
+// one classified signal; the search term matches subject, sender, or body. The
 // snippet is the body's leading text with whitespace collapsed, for the list row.
 // The link/classification columns ride alongside so the inbox can render the
 // confirm chip and application link without a second lookup; the LEFT JOINs
@@ -273,6 +291,8 @@ func (q *Queries) ListEmails(ctx context.Context, arg ListEmailsParams) ([]ListE
 	rows, err := q.db.Query(ctx, listEmails,
 		arg.UserID,
 		arg.Src,
+		arg.Unread,
+		arg.Status,
 		arg.Q,
 		arg.Off,
 		arg.Lim,
@@ -313,6 +333,45 @@ func (q *Queries) ListEmails(ctx context.Context, arg ListEmailsParams) ([]ListE
 	return items, nil
 }
 
+const markAllEmailsRead = `-- name: MarkAllEmailsRead :execrows
+UPDATE emails SET read_at = now()
+WHERE user_id = $1
+  AND read_at IS NULL
+  AND deleted_at IS NULL
+  AND ($2::text = '' OR source = $2)
+  AND ($3::text = '' OR status_signal = $3)
+  AND (
+    $4::text = ''
+    OR subject   ILIKE '%' || $4 || '%'
+    OR from_name ILIKE '%' || $4 || '%'
+    OR from_addr ILIKE '%' || $4 || '%'
+    OR body_text ILIKE '%' || $4 || '%'
+  )
+`
+
+type MarkAllEmailsReadParams struct {
+	UserID int64  `json:"user_id"`
+	Src    string `json:"src"`
+	Status string `json:"status"`
+	Q      string `json:"q"`
+}
+
+// Bulk mark-as-read for the caller, honoring the same optional filters as the
+// listing, so "mark all read" means "everything currently shown". Only unread,
+// live rows are touched; returns how many it marked.
+func (q *Queries) MarkAllEmailsRead(ctx context.Context, arg MarkAllEmailsReadParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markAllEmailsRead,
+		arg.UserID,
+		arg.Src,
+		arg.Status,
+		arg.Q,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const markEmailRead = `-- name: MarkEmailRead :exec
 UPDATE emails SET read_at = now()
 WHERE id = $1 AND user_id = $2 AND read_at IS NULL
@@ -327,6 +386,26 @@ type MarkEmailReadParams struct {
 func (q *Queries) MarkEmailRead(ctx context.Context, arg MarkEmailReadParams) error {
 	_, err := q.db.Exec(ctx, markEmailRead, arg.ID, arg.UserID)
 	return err
+}
+
+const restoreEmail = `-- name: RestoreEmail :execrows
+UPDATE emails SET deleted_at = NULL
+WHERE id = $1 AND user_id = $2
+`
+
+type RestoreEmailParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+// Undo a soft-delete, scoped to the caller and idempotent. Returns 0 rows only
+// when it is not the caller's message (→ 404).
+func (q *Queries) RestoreEmail(ctx context.Context, arg RestoreEmailParams) (int64, error) {
+	result, err := q.db.Exec(ctx, restoreEmail, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const setGmailStatus = `-- name: SetGmailStatus :exec
@@ -357,6 +436,27 @@ type SetGmailSyncedParams struct {
 func (q *Queries) SetGmailSynced(ctx context.Context, arg SetGmailSyncedParams) error {
 	_, err := q.db.Exec(ctx, setGmailSynced, arg.UserID, arg.SyncCursor)
 	return err
+}
+
+const softDeleteEmail = `-- name: SoftDeleteEmail :execrows
+UPDATE emails SET deleted_at = now()
+WHERE id = $1 AND user_id = $2
+`
+
+type SoftDeleteEmailParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+// Soft-delete one message (hidden from the listing, retained for restore),
+// scoped to the caller and idempotent. Returns 0 rows only when it is not the
+// caller's message (→ 404).
+func (q *Queries) SoftDeleteEmail(ctx context.Context, arg SoftDeleteEmailParams) (int64, error) {
+	result, err := q.db.Exec(ctx, softDeleteEmail, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const upsertEmail = `-- name: UpsertEmail :exec

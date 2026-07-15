@@ -135,7 +135,8 @@ type Querier interface {
 	// so search/filter pagination reports the filtered total. Keep this WHERE identical
 	// to ListCompanies.
 	CountCompanies(ctx context.Context, arg CountCompaniesParams) (int64, error)
-	// Total messages for the caller (same optional source + search), for pagination.
+	// Total live messages for the caller (same optional filters as ListEmails), for
+	// pagination.
 	CountEmails(ctx context.Context, arg CountEmailsParams) (int64, error)
 	// Per-stage application counts for the Pipeline snapshot. An application is any
 	// row the user applied to or staged (saved-only rows are excluded); a row with
@@ -435,9 +436,10 @@ type Querier interface {
 	ListCompanySitemap(ctx context.Context, arg ListCompanySitemapParams) ([]ListCompanySitemapRow, error)
 	// Drives the sync worker: every connection still authorized.
 	ListConnectedGmailUsers(ctx context.Context) ([]ListConnectedGmailUsersRow, error)
-	// Flat inbox listing, newest first — one row per message (no subject grouping).
-	// An optional source filter (empty = all accounts) narrows to one source; an
-	// optional search term (empty = no filter) matches subject, sender, or body. The
+	// Flat inbox listing, newest first — one row per message (no subject grouping),
+	// soft-deleted messages excluded. Optional filters (each empty/false = no filter):
+	// source narrows to one account; unread hides already-read mail; status narrows to
+	// one classified signal; the search term matches subject, sender, or body. The
 	// snippet is the body's leading text with whitespace collapsed, for the list row.
 	// The link/classification columns ride alongside so the inbox can render the
 	// confirm chip and application link without a second lookup; the LEFT JOINs
@@ -566,6 +568,10 @@ type Querier interface {
 	// Closed jobs are included: dimming a closed posting that still shows in a
 	// history surface is correct, and the browse list filters closed jobs itself.
 	ListViewedJobSlugs(ctx context.Context, userID int64) ([]string, error)
+	// Bulk mark-as-read for the caller, honoring the same optional filters as the
+	// listing, so "mark all read" means "everything currently shown". Only unread,
+	// live rows are touched; returns how many it marked.
+	MarkAllEmailsRead(ctx context.Context, arg MarkAllEmailsReadParams) (int64, error)
 	// Stamp read on first open; a no-op once already read.
 	MarkEmailRead(ctx context.Context, arg MarkEmailReadParams) error
 	// Mark a job as applied for a user. Idempotent and independent of a prior view:
@@ -703,6 +709,9 @@ type Querier interface {
 	// expired probes can close a job. Guarded to the non-zero case so probing an
 	// already-clean job does not churn the row.
 	ResetLivenessStrikes(ctx context.Context, id int64) error
+	// Undo a soft-delete, scoped to the caller and idempotent. Returns 0 rows only
+	// when it is not the caller's message (→ 404).
+	RestoreEmail(ctx context.Context, arg RestoreEmailParams) (int64, error)
 	// The job-reality repost/mass-posting counts for one role cluster: how many postings
 	// of the same role (by role_fingerprint within a company) exist of any status
 	// (repost_count = repost history) and how many are still open (mass_count = concurrent
@@ -775,6 +784,10 @@ type Querier interface {
 	// time) matches no row and is dropped, so a late writer can't clobber a newer CV's
 	// structure with an already-stale stamp (which Store.Structured would then hide forever).
 	SetUserResumeStructured(ctx context.Context, arg SetUserResumeStructuredParams) error
+	// Soft-delete one message (hidden from the listing, retained for restore),
+	// scoped to the caller and idempotent. Returns 0 rows only when it is not the
+	// caller's message (→ 404).
+	SoftDeleteEmail(ctx context.Context, arg SoftDeleteEmailParams) (int64, error)
 	// Record that a batch of jobs' content is embedded under the given model. Run in the
 	// same transaction as DeleteSemanticEntriesBatch on the success path, so a crash between
 	// the index write and this stamp is safely retried (idempotent re-embed). The stamp
