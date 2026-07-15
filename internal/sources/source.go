@@ -244,6 +244,7 @@ func All(c HTTPClient) map[string]Source {
 		NewTraffit(c),
 		NewErecruiter(c),
 		NewQuickin(c),
+		NewSpark(c),
 		NewMindsight(c),
 		NewEnlizt(c),
 		NewJobvite(c),

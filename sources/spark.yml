@@ -1,0 +1,5 @@
+# Spark.work career sites. Provider is the filename; each entry is company + board.
+# board = the workspace slug in <workspace>.spark.work, passed as the X-workspace header to
+# the shared hub.spark.work API (see internal/sources/spark.go).
+- company: VOLO
+  board: volo
