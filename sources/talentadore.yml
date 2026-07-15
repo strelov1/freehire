@@ -1,0 +1,5 @@
+# TalentAdore Hire — Nordic AI-assisted ATS. The board is the per-employer positions
+# feed token from the career-site widget's data-url
+# (ats.talentadore.com/positions/<token>/json), not a human-readable slug.
+- company: TalentAdore
+  board: 9wmfASE
