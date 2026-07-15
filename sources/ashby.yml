@@ -625,6 +625,8 @@
   board: langchain
 - company: Langfuse
   board: langfuse
+- company: LatamCent
+  board: latamcent
 - company: ledger
   board: ledger
 - company: Legion Health
