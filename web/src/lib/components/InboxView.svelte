@@ -11,6 +11,7 @@
   import type { EmailLinking } from '$lib/types';
   import { statusLabel, statusClass } from '$lib/emailStatus';
   import { Badge, Button } from '$lib/ui';
+  import GmailConnectDialog from './GmailConnectDialog.svelte';
   import { Mail, AtSign, Copy, Search, RefreshCw, ChevronLeft } from '@lucide/svelte';
   import { timeAgo } from '$lib/utils';
   import { avatarInitials, avatarColor } from '$lib/avatar';
@@ -218,6 +219,10 @@
 
   // --- Gmail source ---
 
+  // First-time connect opens an explainer dialog (what's read + how the LLM pipeline
+  // sorts it, with source links); connectGmail is the actual OAuth redirect it triggers.
+  let showConnectDialog = $state(false);
+
   function connectGmail() {
     window.location.href = '/api/v1/me/gmail/connect';
   }
@@ -344,7 +349,7 @@
             </div>
           {:else if gmail?.available}
             <p class="mt-1 text-xs text-muted-foreground">Pull replies from your own Gmail (needs Google sign-in).</p>
-            <Button variant="primary" size="sm" class="mt-3" onclick={connectGmail}>
+            <Button variant="primary" size="sm" class="mt-3" onclick={() => (showConnectDialog = true)}>
               Connect Gmail <Mail class="h-4 w-4" />
             </Button>
           {:else}
@@ -584,6 +589,10 @@
       {/if}
     {/if}
   </div>
+{/if}
+
+{#if showConnectDialog}
+  <GmailConnectDialog onClose={() => (showConnectDialog = false)} onConnect={connectGmail} />
 {/if}
 
 <style>
