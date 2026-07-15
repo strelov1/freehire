@@ -176,18 +176,16 @@
         {/if}
       </div>
 
-      {#if !job.closed_at}
-        <Button
-          variant="primary"
-          href={job.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          onclick={onApplyClick}
-          class="w-full shrink-0 sm:w-auto"
-        >
-          Show <ArrowRight class="size-4" />
-        </Button>
-      {/if}
+      <Button
+        variant="primary"
+        href={job.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        onclick={onApplyClick}
+        class="w-full shrink-0 sm:w-auto"
+      >
+        Show <ArrowRight class="size-4" />
+      </Button>
     </div>
 
     <RealityBadge reality={job.reality} postedAt={job.posted_at} detailed />
