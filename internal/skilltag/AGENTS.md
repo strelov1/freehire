@@ -12,5 +12,5 @@ Deterministic skill tagging feeds a Meilisearch facet (`jobs.skills` text[], not
 ## Convention
 
 - `internal/skilltag/` owns the dictionary parser and canonical vocabulary.
-- Adding a skill: add alias→canonical mapping in the dictionary source; the canonical set must be a subset of `enrich.SkillValues` if enrich also references it.
+- Adding a skill: add an alias→canonical mapping in the dictionary source. The canonical set is owned by `internal/skilltag` alone — skills are a free source fact with no controlled `enrich` vocabulary (unlike regions/seniority/category, there is no `enrich.*Values` for skills).
 - No LLM dependency — instant, deterministic.

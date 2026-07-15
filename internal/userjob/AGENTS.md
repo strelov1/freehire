@@ -8,7 +8,7 @@ Per-user job interactions: view/apply/save/track endpoints backed by the `user_j
 - **All writes are idempotent upserts** behind `RequireAuthOrKey` (session cookie or API key) and addressed by the job's public `:slug` (resolved to internal id before the write).
 - **`stage` is a controlled vocabulary** (`userjob.Stages`/`ValidStage` in `internal/userjob/stages.go`): applied/screening/responded/interview/offer/accepted/rejected/withdrawn. The SPA mirrors it; an unknown stage is a 400 before any DB touch.
 - Handlers return `{"data": interaction}` with `user_id` omitted; public job reads stay unauthenticated.
-- `user_jobs.stage_integration_test.go` covers the stage vocabulary and interactions.
+- `internal/db/user_jobs_stage_integration_test.go` covers the stage vocabulary and interactions.
 
 ## How it works
 
@@ -22,4 +22,4 @@ Per-user job interactions: view/apply/save/track endpoints backed by the `user_j
 The `/me/tracking` read joins the caller's interactions with the jobs they touch. View history = all rows; applications = `applied_at IS NOT NULL`. The `buckets.go` module provides job-status buckets (saved, viewed, applied, etc.) used by the tracking UI. `stages.go` defines the controlled vocabulary with validation (`ValidStage`).
 
 ## Limitations
-- No bulk operations (e.g. "mark all viewed"); bulk is always a client-side loop over individual upserts.
+- No bulk operations (e.g. "mark all viewed"); each interaction is an individual per-(user, job) upsert.

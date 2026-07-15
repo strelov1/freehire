@@ -25,6 +25,6 @@ The SPA is built with SvelteKit and consumes the API at `/api/v1/*`. Auth is han
 **Filters:** the companies FilterModal uses `COMPANY_FACETS` from `web/src/lib/facets.ts`, including a "Remote hiring" pill that reuses the shared `REGION` vocabulary for the `remote_regions` overlap facet.
 
 ## Limitations
-- The `write-changelog` skill referenced in AGENT.md for drafting blog posts doesn't exist in the SPA's scope (it's an agent-level concern, out of scope for the frontend module).
+- Announcing shipped work via the `/blog` changelog (the `write-changelog` skill) is an agent-level concern documented in the root `AGENTS.md` — out of scope for the frontend module.
 - No CSP `connect-src` restriction is set — a comment in `web/svelte.config.js` records the ingest host for any future `connect-src` if one is added.
 - OAuth identity unlinking/management UI is not implemented (backend seam mirrored on the frontend).

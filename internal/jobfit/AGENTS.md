@@ -33,4 +33,4 @@ On-demand, cached, three-stage LLM prompt-chain for job-fit analysis per (user, 
 ## Limitations
 - A live company web-research stage (Stage 2a) is where a real tool-using agent would fit later; company context is `company_info`-only for now.
 - Migration numbering: parallel branches produced several `0009_*` files (job-analysis, daily-stats, profile-location→renamed `0010_`); harmless because Postgres initdb runs by filename, but a versioned runner is the real fix.
-- `user_job_analysis` migration (`0009` → later renamed `0010_`) must be applied to prod manually before deploy.
+- `user_job_analysis` migration (`0009`) must be applied to prod manually before deploy.

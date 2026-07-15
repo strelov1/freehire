@@ -7,8 +7,8 @@ body:
       value: >-
         Adding a source is freehire's primary extension point. The cleanest fit
         is a board behind an already-supported ATS provider (greenhouse / lever
-        / ashby) — that is just an entry in `sources.yml`. See CONTRIBUTING.md
-        and AGENT.md.
+        / ashby) — that is just an entry in a provider board file
+        (`sources/<provider>.yml`). See CONTRIBUTING.md and AGENTS.md.
   - type: dropdown
     id: kind
     attributes:

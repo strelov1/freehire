@@ -31,6 +31,6 @@ Provider registry over the same cookie session as password login.
 - Redirect URLs derive from `FRONTEND_ORIGIN` (`<origin>/api/v1/auth/oauth/<p>/callback`)
 - Provider tokens used once to fetch identity, never stored
 
-## Known Seams
+## Limitations
 
 - Identity unlinking/management UI, magic-link sign-in

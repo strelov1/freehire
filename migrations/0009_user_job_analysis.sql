@@ -19,7 +19,7 @@
 --
 -- Applied to a fresh volume by initdb after 0008; on an existing prod volume this
 -- statement must be run manually BEFORE deploying code that reads the table (no
--- versioned migration runner — see the migrations gotcha in AGENT.md).
+-- versioned migration runner — see the migrations gotcha in internal/db/AGENTS.md).
 
 CREATE TABLE public.user_job_analysis (
     user_id          bigint      NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,

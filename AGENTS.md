@@ -13,11 +13,11 @@ Non-negotiable. Bias toward caution over speed; use judgment on trivial tasks.
 - **No overengineering, and no MVP shortcuts.** Hold the middle path: don't build infrastructure before there's a concrete need (note the seam for later instead), and don't ship quick-and-dirty or "for now" hacks. Build each feature correctly and idiomatically — neither gold-plated nor a placeholder.
 - **MVP stage — keep the architecture fluid.** The project is early/MVP; the current structure is not load-bearing legacy. When a new feature doesn't fit the existing architecture cleanly, prefer reshaping or refactoring the affected part over bolting on an awkward special case — re-architect freely to keep the design clean rather than accumulating legacy.
 - **English only.** All code, comments, identifiers, docs, and commits are in English.
-- **Announce shipped work.** When a user-facing feature or fix lands, close the loop by offering a changelog entry on the `/blog` feed, then a longer blog post if it warrants one (posts are `.svx` files in `web/src/posts/`). Skip for internal-only changes.
+- **Announce shipped work.** When a user-facing feature or fix lands, close the loop by offering a changelog entry on the `/blog` feed, then a longer blog post if it warrants one (posts are `.svx` files in `web/src/posts/`; the `write-changelog` skill drafts them). Skip for internal-only changes.
 
 ## What this is
 
-`freehire` ([freehire.dev](https://freehire.dev)) is an open-source IT job aggregator backend. Intended shape: many source parsers feed a pipeline that normalizes jobs into one schema, deduplicates them, and enrichs them with AI; served over an HTTP API with rich filters.
+`freehire` ([freehire.dev](https://freehire.dev)) is an open-source IT job aggregator backend. Intended shape: many source parsers feed a pipeline that normalizes jobs into one schema, deduplicates them, and enriches them with AI; served over an HTTP API with rich filters.
 
 **Current state: working backend.** Fiber HTTP server with `/health`, `/api/v1/jobs[/:slug]`, Meilisearch-backed `/api/v1/jobs/search`, companies endpoints, a `/api/v1/auth` surface (register/login/me with stateless JWT + OAuth sign-in), per-user job-interaction endpoints (view/apply/save/track, behind auth, addressed by slug), and API-key management under `/api/v1/me`; Postgres via sqlc with `jobs`, `companies`, `users`, `user_jobs`, `user_identities`, and `api_keys` tables; a typed, versioned enrichment schema on `jobs`; and a family of standalone, run-once-and-exit workers: `cmd/ingest` (crawls one board file, normalizes and upserts, enqueues new postings for enrichment), `cmd/enrich` (drains the enrichment outbox via an LLM), `cmd/embed` (incremental semantic-embedding worker), `cmd/tg-ingest`/`cmd/tg-extract` (Telegram crawl + LLM-extract), `cmd/liveness` (URL-probes orphan jobs, closes dead ones), `cmd/reindex`/`cmd/backfill-derive`/`cmd/reslug` (maintenance), `cmd/rollup-stats` (activity rollup), `cmd/import-yc` (YC directory enrichment). A Svelte SPA lives under `web/` and consumes the API.
 
@@ -40,7 +40,7 @@ cmd/reslug/main.go         backfills public_slug/company_slug
 cmd/import-yc/main.go      enriches companies from yc-oss directory
 sources/                   board files + sources/custom.yml + sources/telegram.yml
 internal/
-  config/            env config (server: PORT, DATABASE_URL, JWT_*, OAUTH_*, SENTRY_*)
+  config/            env config (server: PORT, DATABASE_URL, FRONTEND_ORIGIN, JWT_SECRET/JWT_TTL, COOKIE_SECURE, MEILI_URL/MEILI_MASTER_KEY, OAUTH_*, SENTRY_*; workers: LLM_BASE_URL/LLM_API_KEY/LLM_MODEL, EMBED_*)
   observability/     optional Sentry error reporting (see observability/AGENTS.md)
   database/          pgxpool connection pool
   db/                GENERATED sqlc code + queries/*.sql (see db/AGENTS.md)
@@ -65,6 +65,26 @@ internal/
   classify/          seniority/category tagging from job title (see classify/AGENTS.md)
   skilltag/          deterministic skill tagging dictionary (see skilltag/AGENTS.md)
 migrations/          SQL schema — source for BOTH sqlc and Postgres initdb
+```
+
+## Commands
+
+```bash
+make up / make down / make logs       # start / stop / tail app + postgres in Docker
+make run / make psql / make sqlc      # run server on host / psql into DB / regenerate internal/db
+make reindex                          # rebuild the Meilisearch index from Postgres
+go build ./...  &&  go vet ./...
+go test ./...                              # unit tests (no external deps)
+go test -tags=integration ./internal/db/  # queue integration tests (needs Docker; testcontainers)
+# run-once-and-exit cron workers (all need DATABASE_URL):
+go run ./cmd/ingest sources/<provider>.yml # crawl one board file (path as arg or SOURCES_FILE)
+go run ./cmd/enrich                        # + LLM_BASE_URL/LLM_API_KEY/LLM_MODEL
+go run ./cmd/embed                         # + MEILI_URL/MEILI_MASTER_KEY (+ EMBED_* to tune)
+go run ./cmd/tg-ingest                     # crawl sources/telegram.yml (path via CHANNELS_FILE)
+go run ./cmd/tg-extract                    # + LLM_* — drain telegram_posts into the catalogue
+go run ./cmd/liveness                      # URL-probe orphan jobs, close dead ones
+go run ./cmd/backfill-derive               # re-derive dictionary facets; follow with make reindex
+go run ./cmd/rollup-stats                  # recompute job_daily_stats (run-once, cron ~every 3h)
 ```
 
 For the full architecture and conventions, see the **module files** below. Each module is self-contained and can be read independently.

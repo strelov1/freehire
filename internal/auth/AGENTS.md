@@ -11,7 +11,7 @@ Auth primitives: bcrypt password hashing, JWT cookie transport, API-key hashing/
 - `email` is the canonical account key (`UNIQUE (lower(email))`); external providers link via `user_identities`.
 - `JWT_SECRET` is required at server startup (fail-fast in `cmd/server`); `COOKIE_SECURE=true` for HTTPS (default false for http://localhost dev).
 - Credential endpoints (`register`/`login`) are throttled by a per-instance rate limiter (10/min, keyed on client IP).
-- **API keys are hashed at rest:** only `SHA-256(HashAPIKey(token))` is stored; plaintext is shown exactly once at create time and is unrecoverable.
+- **API keys are hashed at rest:** the row stores only the `HashAPIKey(token)` SHA-256 (i.e. `SHA-256(token)`) plus a short non-secret `token_prefix` (enough to tell keys apart in a list); the plaintext (minted by `GenerateAPIKey`) is shown exactly once at create time and is unrecoverable.
 - **Key management is cookie-only (`RequireAuth`)** — a leaked key must not be able to create, list, or revoke keys.
 - **Per-user job endpoints and `/auth/me` accept either credential** (`RequireAuthOrKey`).
 
