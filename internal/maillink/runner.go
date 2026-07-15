@@ -30,7 +30,8 @@ type Claimed struct {
 	ThreadID string
 	FromName string
 	Subject  string
-	Body     string
+	Body     string // plain-text part; empty for HTML-only mail (e.g. many ATS templates)
+	BodyHTML string // HTML part, stripped to text as the classifier body fallback
 }
 
 // Application is one of the caller's tracked applications offered to the matcher.
@@ -138,7 +139,7 @@ func (r *Runner) process(ctx context.Context, c Claimed) error {
 		candidates = classifyCandidates(apps)
 	}
 	cls, err := r.classifier.Classify(ctx, mailclassify.Input{
-		FromName: c.FromName, Subject: c.Subject, Body: c.Body, Candidates: candidates,
+		FromName: c.FromName, Subject: c.Subject, Body: readableBody(c.Body, c.BodyHTML), Candidates: candidates,
 	})
 	if err != nil {
 		return err

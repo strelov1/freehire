@@ -27,7 +27,7 @@ SET claimed_at = now()
 FROM claimable c
 JOIN emails e ON e.id = c.email_id
 WHERE o.id = c.id
-RETURNING o.id, o.email_id, e.user_id, e.thread_id, e.from_name, e.subject, e.body_text;
+RETURNING o.id, o.email_id, e.user_id, e.thread_id, e.from_name, e.subject, e.body_text, e.body_html;
 
 -- name: SetEmailClassification :exec
 -- Persist the resolved link + classification and stamp classified_at + model in one

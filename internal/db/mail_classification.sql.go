@@ -45,7 +45,7 @@ SET claimed_at = now()
 FROM claimable c
 JOIN emails e ON e.id = c.email_id
 WHERE o.id = c.id
-RETURNING o.id, o.email_id, e.user_id, e.thread_id, e.from_name, e.subject, e.body_text
+RETURNING o.id, o.email_id, e.user_id, e.thread_id, e.from_name, e.subject, e.body_text, e.body_html
 `
 
 type ClaimEmailClassificationBatchParams struct {
@@ -61,6 +61,7 @@ type ClaimEmailClassificationBatchRow struct {
 	FromName string `json:"from_name"`
 	Subject  string `json:"subject"`
 	BodyText string `json:"body_text"`
+	BodyHtml string `json:"body_html"`
 }
 
 // Claim a wave of live, unleased entries by stamping claimed_at, newest email first,
@@ -84,6 +85,7 @@ func (q *Queries) ClaimEmailClassificationBatch(ctx context.Context, arg ClaimEm
 			&i.FromName,
 			&i.Subject,
 			&i.BodyText,
+			&i.BodyHtml,
 		); err != nil {
 			return nil, err
 		}

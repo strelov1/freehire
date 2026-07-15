@@ -47,6 +47,7 @@ func (s *dbStore) ClaimBatch(ctx context.Context, leaseSeconds, batchSize int) (
 			FromName: r.FromName,
 			Subject:  r.Subject,
 			Body:     r.BodyText,
+			BodyHTML: r.BodyHtml,
 		}
 	}
 	return out, nil

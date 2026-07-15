@@ -2,6 +2,7 @@ package maillink
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/mailclassify"
@@ -40,10 +41,12 @@ func (s *fakeStore) Fail(context.Context, int64, string, int) error { return nil
 type fakeClassifier struct {
 	out        mailclassify.Classification
 	gotCandCnt int
+	gotBody    string
 }
 
 func (c *fakeClassifier) Classify(_ context.Context, in mailclassify.Input) (mailclassify.Classification, error) {
 	c.gotCandCnt = len(in.Candidates)
+	c.gotBody = in.Body
 	return c.out, nil
 }
 
@@ -80,6 +83,37 @@ func TestRunnerAutoLinksDeterministicMatchAndAdvancesStage(t *testing.T) {
 	}
 	if store.savedOutbox[0] != 100 {
 		t.Errorf("saved outbox id = %d, want 100", store.savedOutbox[0])
+	}
+}
+
+func TestRunnerFeedsHTMLOnlyBodyToClassifier(t *testing.T) {
+	store := &fakeStore{
+		apps: []Application{{JobID: 7, Company: "Fingerprint"}},
+		claimed: []Claimed{{
+			OutboxID: 102, EmailID: 202, UserID: 1,
+			FromName: "Fingerprint Recruiting", Subject: "Regarding your Application to Fingerprint",
+			Body: "", // HTML-only ATS mail: no plain-text part
+			BodyHTML: `<html><body><p>We regret to inform you that we have ` +
+				`decided not to proceed with your application.</p></body></html>`,
+		}},
+	}
+	cls := &fakeClassifier{out: mailclassify.Classification{Signal: mailclassify.SignalRejection, Confidence: 0.9}}
+	r := New(store, cls, "test-model")
+
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if cls.gotBody == "" {
+		t.Fatal("classifier received an empty body for an HTML-only email")
+	}
+	if !strings.Contains(cls.gotBody, "decided not to proceed") {
+		t.Errorf("classifier body missing message text, got %q", cls.gotBody)
+	}
+	if strings.Contains(cls.gotBody, "<p>") {
+		t.Errorf("classifier body should be tag-free, got %q", cls.gotBody)
+	}
+	if store.saved[0].Signal != mailclassify.SignalRejection {
+		t.Errorf("persisted signal = %q, want rejection", store.saved[0].Signal)
 	}
 }
 
