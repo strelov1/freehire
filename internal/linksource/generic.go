@@ -77,10 +77,10 @@ func (g generic) Resolve(ctx context.Context, raw string) (sources.Job, bool, er
 		canonical = fu.String()
 	}
 	return sources.Job{
-		ExternalID:  canonical,
-		URL:         canonical,
-		Title:       p.Title,
-		Company:     p.HiringOrganization.Name,
+		ExternalID: canonical,
+		URL:        canonical,
+		Title:      p.Title,
+		Company:    p.HiringOrganization.Name,
 		// Unescape BEFORE sanitizing: some ATSes (Teamtailor) entity-encode the HTML
 		// inside the ld+json string (`&lt;p&gt;…`), so without a decode the sanitizer
 		// sees plain text and stores literal tags that render broken under {@html}.
