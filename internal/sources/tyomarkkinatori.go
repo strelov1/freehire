@@ -2,10 +2,13 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"html"
 	"log"
+	"net/http"
 	"strings"
+	"sync/atomic"
 )
 
 // tyomarkkinatori adapts Job Market Finland (tyomarkkinatori.fi), the Finnish national job
@@ -34,6 +37,13 @@ import (
 // Detail is the expensive fan-out (one request per posting over ~10k postings), so the adapter is
 // a HydratingSource: FetchNew fetches a posting's detail only when the catalogue does not already
 // have it, refreshing a seen posting's liveness without a detail request (see justjoin).
+//
+// The detail endpoint rate-limits under sustained load: a cold-start crawl that fetches all ~10k
+// details trips a 403 after a few hundred requests. So hydration is GRADUAL — the first 403 latches
+// off further detail requests for the rest of the run, and an un-hydrated posting is left
+// un-ingested (not stored description-less) so it stays unseen and a later run hydrates it once the
+// limit has cooled. Over successive hourly runs the catalogue fills up, every posting with a real
+// description; in steady state only the daily delta needs a detail request, well under the limit.
 type tyomarkkinatori struct {
 	http tmtClient
 }
@@ -55,6 +65,10 @@ const (
 	// still, so a shard always pages to exhaustion before either bound bites.
 	tmtPageSize = 90
 	tmtMaxPage  = 100
+	// tmtDetailWorkers bounds the detail fan-out. It is gentler than the shared default because
+	// the detail endpoint rate-limits (403) under sustained load; a lower concurrency hydrates
+	// more postings before the 403 latch trips, and the latch stops the rest for the run.
+	tmtDetailWorkers = 4
 )
 
 // tmtRegions is the fixed set of Finnish region (maakunta) codes the search filters on — the 18
@@ -189,8 +203,9 @@ func (s tyomarkkinatori) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, erro
 	if err != nil {
 		return nil, err
 	}
-	return fetchDetails(items, defaultDetailWorkers, func(it tmtListItem) (Job, bool) {
-		return s.hydrate(ctx, it, nil)
+	var limited atomic.Bool
+	return fetchDetails(items, tmtDetailWorkers, func(it tmtListItem) (Job, bool) {
+		return s.hydrate(ctx, it, nil, &limited)
 	}), nil
 }
 
@@ -204,16 +219,19 @@ func (s tyomarkkinatori) FetchNew(ctx context.Context, _ CompanyEntry, seen func
 	if err != nil {
 		return nil, err
 	}
-	return fetchDetails(items, defaultDetailWorkers, func(it tmtListItem) (Job, bool) {
-		return s.hydrate(ctx, it, seen)
+	var limited atomic.Bool
+	return fetchDetails(items, tmtDetailWorkers, func(it tmtListItem) (Job, bool) {
+		return s.hydrate(ctx, it, seen, &limited)
 	}), nil
 }
 
-// hydrate maps one list item to a Job. When seen reports the posting already ingested, it returns
-// the list-only job flagged SeenRefresh (no detail request); otherwise it fetches the detail and
-// applies its body/employer/date, falling back to the list-only job if the detail request fails.
-// A nil seen forces full hydration (the Fetch path).
-func (s tyomarkkinatori) hydrate(ctx context.Context, it tmtListItem, seen func(string) bool) (Job, bool) {
+// hydrate maps one list item to a Job. A seen posting is refreshed (SeenRefresh, no detail
+// request). An unseen posting is hydrated with its detail — except once the detail endpoint has
+// rate-limited this run (limited latched by an earlier 403), an unseen posting is SKIPPED
+// (ok=false) so it is left un-ingested and stays unseen for a later run to hydrate. A non-403
+// detail failure falls back to list-only so a genuinely broken detail does not lose the posting.
+// A nil seen forces hydration for every posting (the Fetch path).
+func (s tyomarkkinatori) hydrate(ctx context.Context, it tmtListItem, seen func(string) bool, limited *atomic.Bool) (Job, bool) {
 	base, ok := it.toJob()
 	if !ok {
 		return Job{}, false
@@ -225,7 +243,16 @@ func (s tyomarkkinatori) hydrate(ctx context.Context, it tmtListItem, seen func(
 		base.SeenRefresh = true
 		return base, true
 	}
-	d, ok := s.detail(ctx, it.ID)
+	if limited.Load() {
+		// The detail endpoint pushed back earlier this run; leave this posting unseen so a
+		// later run hydrates it with a real description rather than storing it description-less.
+		return Job{}, false
+	}
+	d, ok, rateLimited := s.detail(ctx, it.ID)
+	if rateLimited {
+		limited.Store(true)
+		return Job{}, false // skip; a later run hydrates it once the limit has cooled
+	}
 	if !ok {
 		log.Printf("tyomarkkinatori: detail %q failed; ingesting list-only", it.ID)
 		return base, true
@@ -324,14 +351,19 @@ type tmtDetail struct {
 	} `json:"application"`
 }
 
-// detail fetches a posting's detail, returning ok=false on a failed request so the caller falls
-// back to the list-only job — a posting is never dropped over a missing detail.
-func (s tyomarkkinatori) detail(ctx context.Context, id string) (tmtDetail, bool) {
-	var d tmtDetail
+// detail fetches a posting's detail. It returns ok=false on a failed request, and rateLimited=true
+// specifically when the endpoint answered 403 (its rate-limit response) — the caller latches on
+// that to stop hydrating for the rest of the run. Any other failure leaves rateLimited false so the
+// caller falls back to list-only.
+func (s tyomarkkinatori) detail(ctx context.Context, id string) (d tmtDetail, ok bool, rateLimited bool) {
 	if err := s.http.GetJSON(ctx, fmt.Sprintf(tmtDetailURL, id), &d); err != nil {
-		return tmtDetail{}, false
+		var se *StatusError
+		if errors.As(err, &se) && se.Code == http.StatusForbidden {
+			return tmtDetail{}, false, true
+		}
+		return tmtDetail{}, false, false
 	}
-	return d, true
+	return d, true, false
 }
 
 // apply enriches a list-derived job with the detail payload: the rendered body becomes the

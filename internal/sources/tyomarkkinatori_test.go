@@ -19,6 +19,8 @@ type tmtFake struct {
 	regions map[string][]tmtListItem
 	// details maps a posting id to its detail JSON; a missing id fails the GET.
 	details map[string]string
+	// forbidden ids answer the detail GET with a 403 (the portal's rate-limit response).
+	forbidden map[string]bool
 }
 
 func (f *tmtFake) PostJSON(_ context.Context, _ string, body, v any) error {
@@ -37,6 +39,9 @@ func (f *tmtFake) PostJSON(_ context.Context, _ string, body, v any) error {
 
 func (f *tmtFake) GetJSON(_ context.Context, url string, v any) error {
 	id := url[strings.LastIndex(url, "/")+1:]
+	if f.forbidden[id] {
+		return &StatusError{Code: 403, URL: url}
+	}
 	body, ok := f.details[id]
 	if !ok {
 		return fmt.Errorf("tmtFake: no detail for %s", id)
@@ -197,6 +202,67 @@ func TestTyomarkkinatoriFetchNewHydratesOnlyNew(t *testing.T) {
 	}
 	if nuOK && nu.Title != "New Role" {
 		t.Errorf("unseen Title = %q, want hydrated detail title", nu.Title)
+	}
+}
+
+// TestTyomarkkinatoriRateLimitedDetailSkipped verifies the 403 latch: the portal rate-limits the
+// detail endpoint under a cold-start crawl, so a 403'd unseen posting is SKIPPED (left un-ingested,
+// so it stays unseen and a later run hydrates it with a real description) rather than ingested
+// description-less. A seen posting is still refreshed. Contrast with a non-403 detail failure,
+// which falls back to list-only so the posting is not lost.
+func TestTyomarkkinatoriRateLimitedDetailSkipped(t *testing.T) {
+	fake := &tmtFake{
+		regions: map[string][]tmtListItem{
+			"01": {
+				listItem("seen1", "01", "Vanha", "Acme Oy"),
+				listItem("rl1", "01", "Kehittäjä", "Beta Oy"),
+				listItem("rl2", "01", "Suunnittelija", "Gamma Oy"),
+			},
+		},
+		forbidden: map[string]bool{"rl1": true, "rl2": true},
+	}
+	seen := func(id string) bool { return id == "seen1" }
+
+	jobs, err := NewTyomarkkinatori(fake).(HydratingSource).FetchNew(context.Background(), CompanyEntry{}, seen)
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	// The two rate-limited postings must not be ingested at all (neither hydrated nor list-only).
+	if _, ok := jobByID(jobs, "rl1"); ok {
+		t.Error("rate-limited posting rl1 must be skipped, not ingested")
+	}
+	if _, ok := jobByID(jobs, "rl2"); ok {
+		t.Error("rate-limited posting rl2 must be skipped, not ingested")
+	}
+	// The seen posting is still refreshed (no detail request).
+	if s, ok := jobByID(jobs, "seen1"); !ok || !s.SeenRefresh {
+		t.Errorf("seen posting should still be SeenRefresh, got %+v (ok=%v)", s, ok)
+	}
+}
+
+// TestTyomarkkinatoriDetailFailureFallsBackToListOnly verifies a NON-403 detail failure (e.g. a
+// 404 or transient error) still ingests the posting list-only, so a genuinely broken detail does
+// not lose an otherwise-complete posting.
+func TestTyomarkkinatoriDetailFailureFallsBackToListOnly(t *testing.T) {
+	fake := &tmtFake{
+		regions: map[string][]tmtListItem{
+			// "broken" has no detail entry → generic (non-403) GET failure.
+			"01": {listItem("broken", "01", "Rikki", "Acme Oy")},
+		},
+	}
+	jobs, err := NewTyomarkkinatori(fake).Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	j, ok := jobByID(jobs, "broken")
+	if !ok {
+		t.Fatal("posting with a failed (non-403) detail should be ingested list-only")
+	}
+	if j.SeenRefresh {
+		t.Error("list-only fallback must not be a SeenRefresh")
+	}
+	if j.Description != "" {
+		t.Errorf("list-only job should have no description, got %q", j.Description)
 	}
 }
 
