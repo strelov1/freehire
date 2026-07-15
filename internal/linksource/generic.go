@@ -2,6 +2,7 @@ package linksource
 
 import (
 	"context"
+	"html"
 	"net/url"
 
 	"github.com/strelov1/freehire/internal/sources"
@@ -80,7 +81,13 @@ func (g generic) Resolve(ctx context.Context, raw string) (sources.Job, bool, er
 		URL:         canonical,
 		Title:       p.Title,
 		Company:     p.HiringOrganization.Name,
-		Description: sources.SanitizeHTML(p.Description),
+		// Unescape BEFORE sanitizing: some ATSes (Teamtailor) entity-encode the HTML
+		// inside the ld+json string (`&lt;p&gt;…`), so without a decode the sanitizer
+		// sees plain text and stores literal tags that render broken under {@html}.
+		// Decoding first also turns an entity-encoded `&lt;script&gt;` into a real one
+		// the sanitizer then strips — the same order the teamtailor/breezy board
+		// adapters use, so it is both correct and safe.
+		Description: sources.SanitizeHTML(html.UnescapeString(p.Description)),
 		Remote:      isTelecommute(p.JobLocationType),
 		PostedAt:    sources.ParseDate(p.DatePosted),
 	}, true, nil

@@ -71,6 +71,34 @@ func TestGenericResolvesJobPosting(t *testing.T) {
 	}
 }
 
+// entityEncodedJobHTML mirrors a Teamtailor detail page whose ld+json description is
+// HTML-entity-encoded (`&lt;p&gt;…`) — including an entity-encoded <script>. The resolver
+// must decode it before sanitizing, so the stored markup is real HTML (not literal tags
+// that render broken under {@html}) and the decoded script is still stripped.
+const entityEncodedJobHTML = `<html><head>
+<script type="application/ld+json">
+{"@context":"https://schema.org/","@type":"JobPosting",
+ "title":"Senior Backend Engineer","hiringOrganization":{"name":"Vairix"},
+ "description":"&lt;p&gt;We build &lt;strong&gt;distributed systems&lt;/strong&gt;.&lt;/p&gt;&lt;script&gt;evil()&lt;/script&gt;"}
+</script></head><body></body></html>`
+
+func TestGenericDecodesEntityEncodedDescription(t *testing.T) {
+	c := (&fakeClient{}).route("/jobs/1", entityEncodedJobHTML, "")
+	job, ok, err := NewGeneric(c).Resolve(context.Background(), "https://careers.vairix.com/jobs/1-x")
+	if err != nil || !ok {
+		t.Fatalf("Resolve: ok=%v err=%v", ok, err)
+	}
+	if strings.Contains(job.Description, "&lt;") {
+		t.Errorf("description kept literal entities (not decoded): %q", job.Description)
+	}
+	if !strings.Contains(job.Description, "<strong>distributed systems</strong>") {
+		t.Errorf("description lost its real markup after decode+sanitize: %q", job.Description)
+	}
+	if strings.Contains(job.Description, "evil") {
+		t.Errorf("decoded <script> was not stripped: %q", job.Description)
+	}
+}
+
 func TestGenericSkipsNonVacancy(t *testing.T) {
 	c := (&fakeClient{}).route("/jobs", genericListingHTML, "")
 	_, ok, err := NewGeneric(c).Resolve(context.Background(), "https://acme.com/jobs")
