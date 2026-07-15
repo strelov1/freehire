@@ -29,6 +29,21 @@ var ATSDomains = []string{
 	"eightfold.ai",
 	"gem.com",
 	"rippling.com",
+	// Mail-relay domains that differ from a platform's board domain — applicant
+	// mail arrives from these, so they must be listed to be synced (observed in a
+	// real inbox; the board-domain entries above do not cover them).
+	"workablemail.com",         // Workable (board domain: workable.com)
+	"teamtailor-mail.com",      // Teamtailor (board domain: teamtailor.com)
+	"comeet-notifications.com", // Comeet
+	"recruitee-mailbox.com",    // Recruitee (also uses recruitee.com)
+	"freshteam.com",            // Freshteam
+	"gupy.com.br",              // Gupy
+	"talentlyft.com",           // TalentLyft
+	"join.com",                 // Join
+	"icims.eu",                 // iCIMS EU (also icims.com)
+	"successfactors.eu",        // SuccessFactors EU (also successfactors.com)
+	"m.personio.com",           // Personio applicant relay (subdomain: avoid product mail)
+	"mail.paylocity.com",       // Paylocity applicant relay (subdomain: avoid product mail)
 }
 
 // BuildQuery builds a Gmail search query for ATS mail newer than the given Unix
