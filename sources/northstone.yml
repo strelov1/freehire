@@ -1,0 +1,10 @@
+# Northstone Holdings recruiting-brand career sites (see internal/sources/northstone.go).
+# board = "<host>/<section>": the careers host plus the listing path segment. The brands share
+# one server-rendered Next.js template; the native id comes from the JobPosting identifier.value.
+# Each board validated live (the /<section>/ listing returns the job anchors) before adding.
+- company: EnzRossi
+  board: vetted.enzrossi.com/positions
+- company: Revun
+  board: www.revun.com/careers
+- company: Langford Staffing
+  board: www.langfordstaffing.com/careers
