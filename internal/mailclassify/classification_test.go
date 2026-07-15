@@ -63,6 +63,9 @@ func TestAdvanceStage(t *testing.T) {
 		{"rejection never auto-advances", "screening", SignalRejection, "", false},
 		{"other never advances", "applied", SignalOther, "", false},
 		{"offer advances from interview", "interview", SignalOffer, "offer", true},
+		{"terminal rejected is never resurrected", "rejected", SignalAcknowledgement, "", false},
+		{"terminal accepted is never moved", "accepted", SignalOffer, "", false},
+		{"terminal withdrawn is never moved", "withdrawn", SignalInterviewInvitation, "", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

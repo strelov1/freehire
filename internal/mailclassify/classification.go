@@ -59,6 +59,14 @@ var stageOrder = map[string]int{
 	"applied": 1, "screening": 2, "responded": 3, "interview": 4, "offer": 5,
 }
 
+// terminalStages are the settled outcomes an automatic advance must never move a
+// job OUT of. They rank below `applied` in stageOrder (rank 0), so without this
+// guard any forward signal would "advance" a rejected/accepted/withdrawn job back
+// into the active pipeline — resurrecting a dead application.
+var terminalStages = map[string]bool{
+	"rejected": true, "accepted": true, "withdrawn": true,
+}
+
 // signalStage maps a status signal to the application stage it implies and
 // whether that stage may be applied automatically. Negative/terminal outcomes
 // (rejection) and non-progress signals (info_request, other) are never auto.
@@ -76,6 +84,9 @@ var signalStage = map[StatusSignal]string{
 // An empty `current` ranks below every stage, so a first classified email can
 // seed the stage.
 func AdvanceStage(current string, sig StatusSignal) (string, bool) {
+	if terminalStages[current] {
+		return "", false // a settled application is never resurrected automatically
+	}
 	target, ok := signalStage[sig]
 	if !ok {
 		return "", false
