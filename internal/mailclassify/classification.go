@@ -16,14 +16,18 @@ const (
 	SignalOffer               StatusSignal = "offer"
 	SignalRejection           StatusSignal = "rejection"
 	SignalInfoRequest         StatusSignal = "info_request"
-	SignalOther               StatusSignal = "other"
+	// SignalIncompleteApplication is an actionable to-do: the application was
+	// started but not finished. Intentionally absent from signalStage — an
+	// unfinished application has not progressed.
+	SignalIncompleteApplication StatusSignal = "incomplete_application"
+	SignalOther                 StatusSignal = "other"
 )
 
 var validSignals = map[StatusSignal]bool{
 	SignalAcknowledgement: true, SignalScreening: true,
 	SignalInterviewInvitation: true, SignalAssessment: true,
 	SignalOffer: true, SignalRejection: true,
-	SignalInfoRequest: true, SignalOther: true,
+	SignalInfoRequest: true, SignalIncompleteApplication: true, SignalOther: true,
 }
 
 // Classification is the LLM output for one email: the status signal, a

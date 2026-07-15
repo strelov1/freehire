@@ -89,6 +89,7 @@ Return ONLY a JSON object: {"signal": <status>, "confidence": <0..1>, "matched_j
 - offer: a job offer
 - rejection: not moving forward / declined
 - info_request: they ask the candidate for more information
+- incomplete_application: the application was started but not finished; the candidate must complete/finish it
 - other: anything not about an application (e.g. a sign-in code)
 
 If a list of the candidate's applications is given, set "matched_job_id" to the id

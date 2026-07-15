@@ -33,6 +33,9 @@ var keywordRules = []keywordRule{
 	// "unfortunately" alone is intentionally excluded: too weak to skip the LLM on
 	// (it appears in some acknowledgements) — those emails defer to the LLM instead.
 	{SignalRejection, []string{"we regret", "regret to inform", "not to proceed", "not moving forward", "not be moving forward", "won't be moving forward", "won’t be moving forward", "decided not to move", "decided not to proceed", "other candidates", "not be progressing", "will not be progressing", "not selected", "move forward with other", "not the right fit", "not a fit for", "decided to move forward with"}},
+	// Ordered before acknowledgement: an "…thank you for starting your application,
+	// please complete it…" email is an incomplete-application to-do, not an ack.
+	{SignalIncompleteApplication, []string{"application is incomplete", "incomplete application", "complete your application", "finish your application", "action required to complete", "to complete your application", "your application is not complete", "did not complete your application"}},
 	{SignalAcknowledgement, []string{"thank you for applying", "thank you for your application", "thanks for applying", "we have received your application", "we've received your", "we’ve received your", "received your application", "received your resume", "application submitted", "your application has been received"}},
 }
 
