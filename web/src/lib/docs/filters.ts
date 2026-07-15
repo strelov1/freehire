@@ -65,6 +65,11 @@ export const FILTER_EXTRAS: FilterRow[] = [
     label: 'Minimum experience',
     values: 'integer — jobs requiring at least this many years',
   },
+  {
+    param: 'posted_within_days',
+    label: 'Posted within',
+    values: 'integer — jobs whose effective posting date falls in the last N days',
+  },
 ];
 
 /** How the cross-facet modifiers behave — they apply to every string facet. */
@@ -73,6 +78,7 @@ export const FILTER_MODIFIERS = [
   'Add `<param>_mode=and` to require all selected values: `skills=go&skills=rust&skills_mode=and` matches both.',
   'Add `<param>_exclude=<value>` to exclude matches: `company_type_exclude=outstaff` drops outstaff jobs.',
   'Different facets are ANDed together; numeric and boolean filters are ANDed too.',
+  'Use `regions=none` to match jobs with no resolved geography (an empty region set); it ORs with real region values and supports `_exclude` like any region.',
 ];
 
 /** Worked filter recipes shown as ready-to-run examples. */

@@ -1,8 +1,13 @@
 <script lang="ts">
   // A copyable code block for the API docs. Each instance owns its own "copied"
-  // flash, so a page full of blocks needs no shared state. Mirrors the copy
-  // micro-interaction in CliView, packaged for reuse here.
-  let { code, label = 'shell' }: { code: string; label?: string } = $props();
+  // flash, so a page full of blocks needs no shared state. When `html` is given
+  // (Shiki-highlighted, computed in `load`) it renders that; otherwise it falls
+  // back to plain preformatted text. Copy always uses the raw `code`.
+  let {
+    code,
+    label = 'shell',
+    html = undefined,
+  }: { code: string; label?: string; html?: string } = $props();
 
   let copied = $state(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -32,5 +37,9 @@
       {copied ? 'copied ✓' : 'copy'}
     </button>
   </figcaption>
-  <pre class="overflow-x-auto p-3 leading-relaxed">{code}</pre>
+  {#if html}
+    <div class="docs-shiki overflow-x-auto p-3 leading-relaxed">{@html html}</div>
+  {:else}
+    <pre class="overflow-x-auto p-3 leading-relaxed">{code}</pre>
+  {/if}
 </figure>

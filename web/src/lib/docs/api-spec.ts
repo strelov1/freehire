@@ -30,7 +30,7 @@ export interface Param {
 /** One HTTP endpoint. `curl` and `responseExample` are plain strings so they
  *  drop verbatim into both the page's code blocks and the Markdown fences. */
 export interface Endpoint {
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   path: string;
   auth: Auth;
   summary: string;
@@ -145,19 +145,56 @@ export const GROUPS: Group[] = [
   "data": [
     {
       "public_slug": "senior-go-engineer-acme-1a2b",
+      "source": "greenhouse",
+      "manually_added": false,
+      "external_id": "123",
+      "url": "https://boards.greenhouse.io/acme/jobs/123",
       "title": "Senior Go Engineer",
       "company": "Acme",
       "company_slug": "acme",
-      "url": "https://boards.greenhouse.io/acme/jobs/123",
       "location": "Remote — EU",
-      "regions": ["europe"],
+      "description": "...",
       "countries": ["DE"],
+      "regions": ["eu"],
       "work_mode": "remote",
       "skills": ["go", "postgresql"],
+      "cities": ["Berlin"],
       "collections": ["yc"],
-      "source": "greenhouse",
+      "is_tech": "tech",
       "posted_at": "2026-06-18T00:00:00Z",
-      "enrichment": { "seniority": "senior", "category": "backend" }
+      "created_at": "2026-06-18T09:12:00Z",
+      "updated_at": "2026-06-18T09:12:00Z",
+      "closed_at": null,
+      "enrichment": {
+        "summary": "...",
+        "seniority": "senior",
+        "category": "backend",
+        "employment_type": "full_time",
+        "relocation": "not_supported",
+        "visa_sponsorship": false,
+        "experience_years_min": 5,
+        "english_level": "b2",
+        "education_level": "bachelor",
+        "domains": ["fintech"],
+        "posting_language": "en",
+        "company_type": "product",
+        "company_size": "51-200",
+        "salary_min": 90000,
+        "salary_max": 130000,
+        "salary_currency": "EUR",
+        "salary_period": "year"
+      },
+      "enriched_at": "2026-06-18T09:20:00Z",
+      "enrichment_version": 7,
+      "view_count": 42,
+      "applied_count": 8,
+      "reality": {
+        "class": "fresh",
+        "age_days": 3,
+        "repost_count": 0,
+        "mass_posting_count": 0,
+        "fake_freshness": false
+      }
     }
   ],
   "meta": { "total": 4213, "limit": 20, "offset": 0 }
@@ -238,6 +275,191 @@ export const GROUPS: Group[] = [
         curl: `curl "${BASE_URL}/jobs/senior-go-engineer-acme-1a2b/similar?limit=10"`,
         responseExample: `{ "data": [ { "public_slug": "...", "title": "...", "...": "..." } ] }`,
       },
+      {
+        method: 'GET',
+        path: '/jobs/{slug}/copies',
+        auth: 'none',
+        summary: 'Other open postings in the same role cluster (per-city duplicates).',
+        description:
+          'The per-city openings folded under one canonical card by content-dedup — ' +
+          'each keeps its own `location` and `apply_url` so a seeker picks their city. ' +
+          'The anchor job itself is included. `meta.total` is the whole cluster size, ' +
+          'so it stays accurate when the list is a capped page.',
+        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.', example: 'senior-go-engineer-acme-1a2b' }],
+        query: [
+          { name: 'limit', type: 'integer', description: 'Page size, 1–200 (default 50).', example: '50' },
+          { name: 'offset', type: 'integer', description: 'Rows to skip.', example: '0' },
+        ],
+        curl: `curl "${BASE_URL}/jobs/senior-go-engineer-acme-1a2b/copies"`,
+        responseExample: `{
+  "data": [
+    {
+      "public_slug": "senior-go-engineer-acme-1a2b",
+      "location": "Berlin, Germany",
+      "apply_url": "https://boards.greenhouse.io/acme/jobs/123",
+      "posted_at": "2026-06-18T00:00:00Z"
+    }
+  ],
+  "meta": { "total": 4 }
+}`,
+      },
+    ],
+  },
+  {
+    title: 'AI analysis',
+    intro:
+      'Personalized signals computed against the caller’s profile or stored CV. ' +
+      'All accept the session cookie or an API key. The skill-match endpoint is ' +
+      'deterministic (no LLM); the fit endpoints run the LLM chain and are quota-' +
+      'limited. All take the same facet filter params as search where they narrow a ' +
+      'market or candidate set.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/jobs/{slug}/match',
+        auth: 'cookie-or-key',
+        summary: 'Deterministic skill match of the job against your profile (no LLM).',
+        description:
+          'How well the job’s skills are covered by your profile skills — exact, ' +
+          'adjacent, and missing, plus a coverage percent. A caller without a saved ' +
+          'profile is a 404.',
+        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
+        curl: `curl "${BASE_URL}/jobs/<slug>/match" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
+        responseExample: `{
+  "data": {
+    "total": 12,
+    "exact_count": 7,
+    "adjacent_count": 2,
+    "coverage_percent": 75,
+    "matched": ["go", "postgresql"],
+    "adjacent": [ { "name": "typescript", "via": "javascript" } ],
+    "missing": ["kubernetes"]
+  }
+}`,
+      },
+      {
+        method: 'GET',
+        path: '/jobs/{slug}/fit',
+        auth: 'cookie-or-key',
+        summary: 'The cached AI fit analysis for the job (never runs the LLM).',
+        description:
+          'Returns the cached analysis, flagged `stale` when your CV or the job ' +
+          'changed since it was computed, or a null analysis when none is cached. ' +
+          '`has_cv` is false when you have no stored CV. `quota` reports your monthly ' +
+          'fit-analysis usage.',
+        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
+        curl: `curl "${BASE_URL}/jobs/<slug>/fit" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
+        responseExample: `{
+  "data": {
+    "has_cv": true,
+    "stale": false,
+    "analysis": {
+      "overall_score": 82,
+      "verdict": "Strong Fit",
+      "dimensions": { "...": "..." },
+      "requirement_match": [ { "text": "5+ years Go", "priority": "required", "status": "covered", "evidence": "..." } ],
+      "strengths": ["..."],
+      "gaps": ["..."],
+      "recommendation": "..."
+    },
+    "quota": { "used": 3, "limit": 10, "remaining": 7 }
+  }
+}`,
+      },
+      {
+        method: 'POST',
+        path: '/jobs/{slug}/fit',
+        auth: 'cookie-or-key',
+        summary: 'Run the three-stage AI fit analysis and cache it.',
+        description:
+          'Runs the fit prompt-chain over your stored CV and the job, caches the ' +
+          'result, and returns it fresh (no `quota` on this response). A new job over ' +
+          'your monthly quota is a `429`; recomputing an already-analyzed job is free. ' +
+          '`has_cv` is false when no CV is stored; a failing or unconfigured LLM ' +
+          'returns a null analysis (200).',
+        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
+        curl: `curl -X POST "${BASE_URL}/jobs/<slug>/fit" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
+        responseExample: `{
+  "data": {
+    "has_cv": true,
+    "stale": false,
+    "analysis": { "overall_score": 82, "verdict": "Strong Fit", "...": "..." }
+  }
+}`,
+      },
+      {
+        method: 'GET',
+        path: '/jobs/{slug}/fit/stream',
+        auth: 'cookie-or-key',
+        summary: 'Run the fit analysis over Server-Sent Events.',
+        description:
+          'The same three-stage chain as `POST /jobs/{slug}/fit`, streamed as SSE ' +
+          '(`text/event-stream`) rather than a single JSON body. Each event’s `kind` ' +
+          'is one of `stage_start`, `stage_done`, `thinking`, `requirements`, ' +
+          '`dimensions`, `final`; the `final` event carries the completed `analysis` ' +
+          '(the same shape as the fit endpoints). Not a JSON endpoint.',
+        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
+        curl: `curl -N "${BASE_URL}/jobs/<slug>/fit/stream" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
+        responseExample: `data: {"kind":"stage_start","stage":1,"label":"Extracting requirements"}
+
+data: {"kind":"requirements","requirements":[ { "...": "..." } ]}
+
+data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...":"..."}}`,
+      },
+      {
+        method: 'GET',
+        path: '/me/recommendations',
+        auth: 'cookie-or-key',
+        summary: 'Open jobs ranked by semantic similarity to your CV.',
+        description:
+          'Ranks jobs by your persisted CV embedding, constrained by the same facet ' +
+          'filter params as search. Degrades to a successful empty list (never an ' +
+          'error) when you have no usable CV vector or the semantic index is off.',
+        query: [
+          { name: 'limit', type: 'integer', description: 'Page size, 1–100.', example: '20' },
+          { name: 'offset', type: 'integer', description: 'Rows to skip; `offset + limit` ≤ 10000.', example: '0' },
+        ],
+        curl: `curl "${BASE_URL}/me/recommendations" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
+        responseExample: `{
+  "data": [ { "public_slug": "...", "title": "...", "...": "..." } ],
+  "meta": { "total": 40, "limit": 20, "offset": 0 }
+}`,
+      },
+      {
+        method: 'POST',
+        path: '/market/coverage',
+        auth: 'cookie-or-key',
+        summary: 'Score a supplied skill list against the filtered job market.',
+        description:
+          'Stateless sibling of the CV verdict: skills come from the request body, the ' +
+          'market from the facet query params (same vocabulary as search; the `skills` ' +
+          'facet is ignored as a filter). Reports how many of the role’s vacancies ' +
+          'your skills cover and which missing skill unlocks the most. `400` on empty ' +
+          'skills, `503` when search is unavailable.',
+        query: [
+          { name: '(any search filter)', type: 'string', description: 'Any search facet param scopes the market (the `skills` facet is ignored here).', example: 'category=backend' },
+        ],
+        body: [
+          { name: 'skills', type: 'string[]', required: true, description: 'The skill list to score (max 100).', example: '["go","postgresql"]' },
+        ],
+        curl: `curl -X POST "${BASE_URL}/market/coverage?category=backend" \\
+  -H "Authorization: Bearer $FREEHIRE_API_KEY" \\
+  -H 'Content-Type: application/json' \\
+  -d '{"skills":["go","postgresql"]}'`,
+        responseExample: `{
+  "data": {
+    "total": 1820,
+    "covered": 1400,
+    "coverage_percent": 77,
+    "gaps": [ { "name": "kubernetes", "new_vacancies": 120, "unlock_percent": 7 } ],
+    "skills": [ { "name": "go", "market_frequency": 61, "must_have": true, "status": "strong", "advice": "" } ],
+    "must_have_total": 8,
+    "must_have_covered": 6,
+    "stack_match_percent": 75,
+    "bundles": [ { "...": "..." } ]
+  }
+}`,
+      },
     ],
   },
   {
@@ -248,14 +470,59 @@ export const GROUPS: Group[] = [
         method: 'GET',
         path: '/companies',
         auth: 'none',
-        summary: 'List companies with job counts; optional name filter.',
+        summary: 'List companies with job counts and denormalized facets; optional filters.',
+        description:
+          'Most active first. Facet params are repeatable and filter by array overlap ' +
+          '(OR within a facet, AND across facets), composably with `q`. `meta.total` ' +
+          'reports the count matching the full filter.',
         query: [
           { name: 'q', type: 'string', description: 'Case-insensitive name substring filter.', example: 'acme' },
+          { name: 'collections', type: 'string', description: 'Curated-collection slug (e.g. `yc`, `bigtech`). Repeatable.', example: 'yc' },
+          { name: 'regions', type: 'string', description: 'Region the company hires in. Repeatable.', example: 'eu' },
+          { name: 'countries', type: 'string', description: 'ISO 3166-1 alpha-2 country. Repeatable.', example: 'DE' },
+          { name: 'domains', type: 'string', description: 'Business domain (e.g. `fintech`). Repeatable.', example: 'fintech' },
+          { name: 'company_type', type: 'string', description: 'Company type (e.g. `product`, `outstaff`). Repeatable.', example: 'product' },
+          { name: 'company_size', type: 'string', description: 'Size bucket (e.g. `51-200`). Repeatable.', example: '51-200' },
+          { name: 'remote_regions', type: 'string', description: 'Job-derived remote-hiring region. Repeatable.', example: 'eu' },
+          { name: 'yc_batch', type: 'string', description: 'YC batch (e.g. `W21`). Repeatable.', example: 'W21' },
+          { name: 'yc_status', type: 'string', description: 'YC company status. Repeatable.', example: 'active' },
+          { name: 'yc_stage', type: 'string', description: 'YC funding stage. Repeatable.', example: 'series-a' },
+          { name: 'yc_flags', type: 'string', description: 'Curated YC highlight flag. Repeatable.', example: 'hiring' },
+          { name: 'maturity', type: 'string', description: 'Company stage/maturity. Repeatable.', example: 'growth' },
+          { name: 'subindustries', type: 'string', description: 'YC subindustry leaf (see /companies/subindustries). Repeatable.', example: 'payments' },
           { name: 'limit', type: 'integer', description: 'Page size, 1–100.', example: '20' },
           { name: 'offset', type: 'integer', description: 'Rows to skip.', example: '0' },
         ],
-        curl: `curl "${BASE_URL}/companies?q=acme"`,
-        responseExample: `{ "data": [ { "name": "Acme", "slug": "acme", "job_count": 12 } ], "meta": { "total": 1, "limit": 20, "offset": 0 } }`,
+        curl: `curl "${BASE_URL}/companies?q=acme&collections=yc"`,
+        responseExample: `{
+  "data": [
+    {
+      "slug": "acme",
+      "name": "Acme",
+      "job_count": 12,
+      "collections": ["yc"],
+      "regions": ["eu"],
+      "countries": ["DE"],
+      "domains": ["fintech"],
+      "company_types": ["product"],
+      "company_sizes": ["51-200"],
+      "industries": ["payments"],
+      "year_founded": 2015,
+      "employee_count": 120,
+      "hq_country": "DE",
+      "organization_type": "private",
+      "tagline": "Payments for builders",
+      "company_info": { "...": "..." },
+      "remote_regions": ["eu"],
+      "yc_batch": ["W21"],
+      "yc_status": ["active"],
+      "yc_stage": ["series-a"],
+      "yc_flags": ["hiring"],
+      "maturity": "growth"
+    }
+  ],
+  "meta": { "total": 1, "limit": 20, "offset": 0 }
+}`,
       },
       {
         method: 'GET',
@@ -268,7 +535,46 @@ export const GROUPS: Group[] = [
           { name: 'offset', type: 'integer', description: 'Rows to skip in the jobs list.', example: '0' },
         ],
         curl: `curl "${BASE_URL}/companies/acme"`,
-        responseExample: `{ "data": { "company": { "name": "Acme", "slug": "acme" }, "jobs": [ { "public_slug": "...", "...": "..." } ] } }`,
+        responseExample: `{
+  "data": {
+    "company": {
+      "slug": "acme",
+      "name": "Acme",
+      "job_count": 12,
+      "collections": ["yc"],
+      "regions": ["eu"],
+      "countries": ["DE"],
+      "domains": ["fintech"],
+      "company_types": ["product"],
+      "company_sizes": ["51-200"],
+      "industries": ["payments"],
+      "year_founded": 2015,
+      "employee_count": 120,
+      "hq_country": "DE",
+      "organization_type": "private",
+      "tagline": "Payments for builders",
+      "company_info": { "...": "..." },
+      "remote_regions": ["eu"],
+      "yc_batch": ["W21"],
+      "yc_status": ["active"],
+      "yc_stage": ["series-a"],
+      "yc_flags": ["hiring"],
+      "maturity": "growth"
+    },
+    "jobs": [ { "public_slug": "...", "title": "...", "...": "..." } ]
+  }
+}`,
+      },
+      {
+        method: 'GET',
+        path: '/companies/subindustries',
+        auth: 'none',
+        summary: 'Distinct company subindustry vocabulary with company counts.',
+        description:
+          'Backs the searchable “Industry” facet’s option list, most common first. ' +
+          'Counts are unconditional (they do not reflect other active list filters).',
+        curl: `curl "${BASE_URL}/companies/subindustries"`,
+        responseExample: `{ "data": [ { "value": "payments", "count": 42 }, { "value": "developer-tools", "count": 31 } ] }`,
       },
     ],
   },
@@ -471,6 +777,27 @@ ${BASE_URL}/auth/oauth/google/start`,
         responseExample: `{ "data": { "ok": true } }`,
       },
       {
+        method: 'POST',
+        path: '/jobs/{slug}/dismiss',
+        auth: 'cookie-or-key',
+        summary: 'Dismiss (swipe away) the job.',
+        description:
+          'Only keeps the job out of the swipe deck; it stays visible in the public ' +
+          '`/jobs` list and search. Idempotent.',
+        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
+        curl: `curl -X POST "${BASE_URL}/jobs/<slug>/dismiss" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
+        responseExample: `{ "data": { "job_id": 42, "dismissed_at": "2026-06-19T10:00:00Z", "saved_at": null, "stage": null } }`,
+      },
+      {
+        method: 'DELETE',
+        path: '/jobs/{slug}/dismiss',
+        auth: 'cookie-or-key',
+        summary: 'Undismiss the job (no-op if not dismissed).',
+        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
+        curl: `curl -X DELETE "${BASE_URL}/jobs/<slug>/dismiss" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
+        responseExample: `{ "data": { "job_id": 42, "dismissed_at": null } }`,
+      },
+      {
         method: 'GET',
         path: '/me/tracking',
         auth: 'cookie-or-key',
@@ -536,6 +863,59 @@ ${BASE_URL}/auth/oauth/google/start`,
     }
   ],
   "meta": { "quota": { "used": 3, "limit": 10, "remaining": 7 } }
+}`,
+      },
+      {
+        method: 'GET',
+        path: '/me/tracking/saved',
+        auth: 'cookie-or-key',
+        summary: 'Slugs of jobs you have saved.',
+        description: 'Lets the SPA render the save toggle as filled without authenticating the public job reads.',
+        curl: `curl "${BASE_URL}/me/tracking/saved" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
+        responseExample: `{ "data": ["senior-go-engineer-acme-1a2b", "..."] }`,
+      },
+      {
+        method: 'GET',
+        path: '/me/tracking/pipeline',
+        auth: 'cookie-or-key',
+        summary: 'Your application-pipeline snapshot (counts per stage bucket).',
+        description:
+          'The total application count and its distribution across the seven status ' +
+          'buckets, aggregated server-side over all of your applications.',
+        curl: `curl "${BASE_URL}/me/tracking/pipeline" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
+        responseExample: `{
+  "data": {
+    "applications": 12,
+    "buckets": {
+      "no_answer": 4,
+      "in_progress": 3,
+      "interviewing": 2,
+      "offer": 1,
+      "accepted": 1,
+      "rejected": 1,
+      "declined": 0
+    }
+  }
+}`,
+      },
+      {
+        method: 'GET',
+        path: '/me/tracking/swipe',
+        auth: 'cookie-or-key',
+        summary: 'A batch of open jobs for the swipe triage deck.',
+        description:
+          'Runs the same query as search (same facets, `q`, and sort), then excludes ' +
+          'the jobs you have already saved or dismissed. `503` when search is ' +
+          'unavailable.',
+        query: [
+          { name: 'q', type: 'string', description: 'Optional full-text query (as in search).', example: 'golang' },
+          { name: 'limit', type: 'integer', description: 'Page size, 1–100.', example: '20' },
+          { name: 'offset', type: 'integer', description: 'Rows to skip; `offset + limit` ≤ 10000.', example: '0' },
+        ],
+        curl: `curl "${BASE_URL}/me/tracking/swipe" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
+        responseExample: `{
+  "data": [ { "public_slug": "...", "title": "Senior Go Engineer", "...": "..." } ],
+  "meta": { "total": 137, "limit": 20, "offset": 0 }
 }`,
       },
     ],
@@ -706,6 +1086,250 @@ ${BASE_URL}/auth/oauth/google/start`,
   -H 'Content-Type: application/json' \\
   -d '{"title":"Staff Go Engineer"}'`,
         responseExample: `{ "data": { "public_slug": "...", "title": "Staff Go Engineer" } }`,
+      },
+    ],
+  },
+  {
+    title: 'Profile & résumé',
+    intro:
+      'Your career profile and stored CV, session-only (a browser feature, like ' +
+      'saved searches). The profile is a singleton keyed by your session — no id in ' +
+      'the path. The verdict and ATS report are read-only sub-resources computed from ' +
+      'the profile and CV; résumé storage degrades to `501` when object storage is ' +
+      'unconfigured.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/me/profile',
+        auth: 'cookie',
+        summary: 'Your career profile, or null if you have not saved one.',
+        curl: `curl "${BASE_URL}/me/profile" -b cookies.txt`,
+        responseExample: `{
+  "data": {
+    "specializations": ["backend"],
+    "skills": ["go", "postgresql"],
+    "location_preferences": { "work_modes": ["remote"], "base": { "country": "DE" }, "...": "..." },
+    "created_at": "2026-06-19T10:00:00Z",
+    "updated_at": "2026-06-19T10:00:00Z"
+  }
+}`,
+      },
+      {
+        method: 'PUT',
+        path: '/me/profile',
+        auth: 'cookie',
+        summary: 'Create or replace your profile.',
+        description:
+          'The whole profile is replaced on each save. An unknown specialization ' +
+          '(must be a job category), empty skills, or an out-of-vocabulary location ' +
+          'value is a `400`.',
+        body: [
+          { name: 'specializations', type: 'string[]', required: true, description: 'One or more job categories (max 5).', example: '["backend"]' },
+          { name: 'skills', type: 'string[]', required: true, description: 'Canonical skill tokens (non-empty).', example: '["go","postgresql"]' },
+          { name: 'location_preferences', type: 'object', description: 'Optional location block (`work_modes`, `remote`, `base`, `relocation`); omit or null to clear.' },
+        ],
+        curl: `curl -X PUT "${BASE_URL}/me/profile" \\
+  -H 'Content-Type: application/json' -b cookies.txt \\
+  -d '{"specializations":["backend"],"skills":["go","postgresql"]}'`,
+        responseExample: `{ "data": { "specializations": ["backend"], "skills": ["go", "postgresql"], "location_preferences": null } }`,
+      },
+      {
+        method: 'DELETE',
+        path: '/me/profile',
+        auth: 'cookie',
+        summary: 'Clear your profile (idempotent).',
+        description: 'Returns `204 No Content`.',
+        curl: `curl -X DELETE "${BASE_URL}/me/profile" -b cookies.txt`,
+      },
+      {
+        method: 'GET',
+        path: '/me/profile/verdict',
+        auth: 'cookie',
+        summary: 'Market-coverage verdict for your profile skills.',
+        description:
+          'How many of your selected role’s open vacancies your skills reach, and ' +
+          'which missing skill unlocks the most. The role is the request’s facet ' +
+          'params (defaulting to your specializations). No profile is a `404`; `503` ' +
+          'when search is unavailable.',
+        query: [
+          { name: '(any search filter)', type: 'string', description: 'Any search facet param scopes the role (the `skills` facet is ignored; your profile skills are the measured set).', example: 'category=backend' },
+        ],
+        curl: `curl "${BASE_URL}/me/profile/verdict" -b cookies.txt`,
+        responseExample: `{
+  "data": {
+    "total": 1820,
+    "covered": 1400,
+    "coverage_percent": 77,
+    "gaps": [ { "name": "kubernetes", "new_vacancies": 120, "unlock_percent": 7 } ],
+    "skills": [ { "...": "..." } ],
+    "coherence_percent": 64,
+    "bundles": [ { "...": "..." } ]
+  }
+}`,
+      },
+      {
+        method: 'GET',
+        path: '/me/profile/ats-report',
+        auth: 'cookie',
+        summary: 'CV ATS-readiness report (deterministic + any cached LLM review).',
+        description:
+          'Scores your stored CV’s structure and its keyword match against the ' +
+          'selected role. `has_cv` is false when no CV is stored; no profile is a ' +
+          '`404`; `503` when search is unavailable.',
+        curl: `curl "${BASE_URL}/me/profile/ats-report" -b cookies.txt`,
+        responseExample: `{
+  "data": {
+    "has_cv": true,
+    "report": {
+      "overall": 78,
+      "potential": 90,
+      "categories": [ { "id": "structure", "label": "Structure", "score": 18, "max": 20, "items": [ { "...": "..." } ] } ],
+      "strong_keywords": ["go", "postgresql"],
+      "recommended_keywords": ["kubernetes"],
+      "reviewed": false
+    }
+  }
+}`,
+      },
+      {
+        method: 'POST',
+        path: '/me/profile/ats-report',
+        auth: 'cookie',
+        summary: 'Run the optional LLM qualitative ATS review and cache it.',
+        description:
+          'Runs the LLM review over your stored CV and folds it into the report ' +
+          '(`reviewed: true`). Best-effort: an unconfigured or failing LLM returns the ' +
+          'deterministic report (200).',
+        curl: `curl -X POST "${BASE_URL}/me/profile/ats-report" -b cookies.txt`,
+        responseExample: `{ "data": { "has_cv": true, "report": { "overall": 78, "reviewed": true, "...": "..." } } }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/resume/extract',
+        auth: 'cookie',
+        summary: 'Extract a structured profile from an uploaded résumé (no LLM).',
+        description:
+          'Accepts a PDF (`multipart/form-data` field `file`) or plain text ' +
+          '(`application/json` `{ "text": ... }`). Returns canonical skill slugs, the ' +
+          'categories it spans, and the resolved seniority (omitted when unresolved). ' +
+          'When storage is configured it also stores the résumé once.',
+        body: [
+          { name: 'text', type: 'string', description: 'Résumé plain text (JSON path); or send a PDF as multipart field `file`.' },
+        ],
+        curl: `curl -X POST "${BASE_URL}/me/resume/extract" \\
+  -H 'Content-Type: application/json' -b cookies.txt \\
+  -d '{"text":"Senior Go engineer, 6 years..."}'`,
+        responseExample: `{ "data": { "skills": ["go", "postgresql"], "categories": ["backend"], "seniority": "senior" } }`,
+      },
+      {
+        method: 'PUT',
+        path: '/me/resume',
+        auth: 'cookie',
+        summary: 'Store or replace your résumé.',
+        description:
+          'Accepts a PDF (multipart `file`) or JSON `{ "text": ... }`. Returns the ' +
+          'résumé metadata. `501` when object storage is unconfigured.',
+        body: [
+          { name: 'text', type: 'string', description: 'Résumé plain text (JSON path); or send a PDF as multipart field `file`.' },
+        ],
+        curl: `curl -X PUT "${BASE_URL}/me/resume" \\
+  -H 'Content-Type: application/json' -b cookies.txt \\
+  -d '{"text":"Senior Go engineer, 6 years..."}'`,
+        responseExample: `{ "data": { "enabled": true, "present": true, "uploaded_at": "2026-06-19T10:00:00Z", "structured": null } }`,
+      },
+      {
+        method: 'GET',
+        path: '/me/resume',
+        auth: 'cookie',
+        summary: 'Your résumé status (enabled / present / uploaded_at).',
+        description:
+          'Always `200`: unconfigured storage or no résumé is a normal state. ' +
+          '`structured` carries the read-only structured résumé, or null when none is ' +
+          'current.',
+        curl: `curl "${BASE_URL}/me/resume" -b cookies.txt`,
+        responseExample: `{ "data": { "enabled": true, "present": true, "uploaded_at": "2026-06-19T10:00:00Z", "structured": { "...": "..." } } }`,
+      },
+      {
+        method: 'DELETE',
+        path: '/me/resume',
+        auth: 'cookie',
+        summary: 'Delete your stored résumé.',
+        description: 'Returns `204 No Content`. `501` when object storage is unconfigured.',
+        curl: `curl -X DELETE "${BASE_URL}/me/resume" -b cookies.txt`,
+      },
+    ],
+  },
+  {
+    title: 'Activity & shared boards',
+    intro:
+      'Two public reads — the catalogue-activity time series and a shared saved-' +
+      'search “board” by slug — plus the session-only publish/unpublish actions that ' +
+      'turn one of your saved searches into such a board. A published board exposes ' +
+      'no owner identity.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/stats/jobs-activity',
+        auth: 'none',
+        summary: 'Public time series of added vs. removed vacancies per period.',
+        description:
+          'Aggregated to the requested granularity over a date range; the series is ' +
+          'dense (missing periods are 0). Defaults: `granularity=day`, `to`=today, ' +
+          '`from` a per-granularity window before `to`. An unknown granularity or a ' +
+          'range over 4000 days is a `400`.',
+        query: [
+          { name: 'granularity', type: 'string', description: 'One of `day`, `week`, `month` (default `day`).', example: 'week' },
+          { name: 'from', type: 'string (YYYY-MM-DD)', description: 'Start date (UTC). Defaults to a per-granularity window before `to`.', example: '2026-01-01' },
+          { name: 'to', type: 'string (YYYY-MM-DD)', description: 'End date (UTC). Defaults to today.', example: '2026-06-30' },
+        ],
+        curl: `curl "${BASE_URL}/stats/jobs-activity?granularity=week"`,
+        responseExample: `{
+  "data": [
+    { "period": "2026-06-01", "added": 120, "removed": 40 },
+    { "period": "2026-06-08", "added": 98, "removed": 55 }
+  ],
+  "meta": { "granularity": "week", "from": "2025-06-09", "to": "2026-06-08" }
+}`,
+      },
+      {
+        method: 'GET',
+        path: '/boards/{slug}',
+        auth: 'none',
+        summary: 'A shared saved-search board by its public slug.',
+        description:
+          'Public, no owner-scoping — returns only display fields (`name`, the ' +
+          'canonical filter `query`, and an optional `author_label`). An unknown or ' +
+          'unshared slug is a `404`.',
+        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The board public slug.', example: 'senior-go-remote-3f9a' }],
+        curl: `curl "${BASE_URL}/boards/senior-go-remote-3f9a"`,
+        responseExample: `{ "data": { "name": "Senior Go remote", "query": "q=go&seniority=senior&work_mode=remote", "author_label": "Jane D." } }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/searches/{id}/share',
+        auth: 'cookie',
+        summary: 'Publish one of your saved searches as a public board.',
+        description:
+          'Mints (or keeps) the board slug and sets the optional author label. Owner-' +
+          'scoped; a missing/non-owned id is a `404`. Returns the saved search, now ' +
+          'carrying `public_slug`.',
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The saved-search id.', example: '2' }],
+        body: [
+          { name: 'author_label', type: 'string', description: 'Label shown on the board; blank/omitted renders it anonymously.', example: 'Jane D.' },
+        ],
+        curl: `curl -X POST "${BASE_URL}/me/searches/2/share" \\
+  -H 'Content-Type: application/json' -b cookies.txt \\
+  -d '{"author_label":"Jane D."}'`,
+        responseExample: `{ "data": { "id": 2, "name": "Senior Go remote", "query": "q=go&seniority=senior&work_mode=remote", "public_slug": "senior-go-remote-3f9a", "author_label": "Jane D." } }`,
+      },
+      {
+        method: 'DELETE',
+        path: '/me/searches/{id}/share',
+        auth: 'cookie',
+        summary: 'Make a shared board private again.',
+        description: 'Owner-scoped and idempotent (already-private is a no-op). Returns `204 No Content`.',
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The saved-search id.', example: '2' }],
+        curl: `curl -X DELETE "${BASE_URL}/me/searches/2/share" -b cookies.txt`,
       },
     ],
   },

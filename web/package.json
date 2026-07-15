@@ -54,6 +54,7 @@
     "marked": "^18.0.6",
     "satori": "^0.26.0",
     "satori-html": "^0.3.2",
+    "shiki": "^3.23.0",
     "svelte-dnd-action": "^0.9.70",
     "tailwind-merge": "^3.6.0"
   }

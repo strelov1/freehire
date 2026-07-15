@@ -121,3 +121,21 @@
     @apply text-base sm:text-sm;
   }
 }
+
+/* Shiki dual-theme code highlighting for the API docs. One SSR render emits both
+   palettes as CSS vars; the light values apply by default and the dark values
+   swap in under the .dark theme class. The block chrome (padding, scroll) is
+   owned by the surrounding figure, so Shiki's own <pre> background is dropped. */
+.docs-shiki .shiki,
+.docs-shiki .shiki span {
+  color: var(--shiki-light);
+  background-color: transparent;
+}
+.dark .docs-shiki .shiki,
+.dark .docs-shiki .shiki span {
+  color: var(--shiki-dark);
+}
+.docs-shiki .shiki {
+  margin: 0;
+  background: transparent !important;
+}

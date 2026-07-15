@@ -13,6 +13,7 @@ Base URL: `https://freehire.dev/api/v1`
 - [Authentication model](#authentication-model)
 - [Filtering jobs](#filtering-jobs)
 - [Jobs](#jobs)
+- [AI analysis](#ai-analysis)
 - [Companies](#companies)
 - [Authentication](#authentication)
 - [API keys](#api-keys)
@@ -20,6 +21,8 @@ Base URL: `https://freehire.dev/api/v1`
 - [Job submissions](#job-submissions)
 - [Job reports](#job-reports)
 - [Moderator jobs](#moderator-jobs)
+- [Profile & résumé](#profile-r-sum)
+- [Activity & shared boards](#activity-shared-boards)
 - [Saved searches & subscriptions](#saved-searches-subscriptions)
 
 ## Base URL
@@ -64,6 +67,7 @@ These parameters apply to `GET /jobs/search` and `GET /jobs/facets`. Combine any
 - Add `<param>_mode=and` to require all selected values: `skills=go&skills=rust&skills_mode=and` matches both.
 - Add `<param>_exclude=<value>` to exclude matches: `company_type_exclude=outstaff` drops outstaff jobs.
 - Different facets are ANDed together; numeric and boolean filters are ANDed too.
+- Use `regions=none` to match jobs with no resolved geography (an empty region set); it ORs with real region values and supports `_exclude` like any region.
 
 ### Facets
 
@@ -74,6 +78,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `collections` | Collection | yc, techstars, european, ai, mag7, bigtech, unicorn, fortune500, eastern-roots, ai-native |
 | `regions` | Region | global, north_america, latam, eu, uk, mena, africa, apac, cis, none |
 | `work_mode` | Work format | remote, hybrid, onsite |
+| `is_tech` | Tech / Non-tech | tech, non_tech |
 | `role` | Role | Open vocabulary — call /jobs/facets for live values |
 | `category` | Specialization | backend, frontend, fullstack, mobile, devops, sre, network_engineering, data_engineering, data_science, data_analytics, ml_ai, ai_engineering, qa, security, hardware, embedded, blockchain, architecture, design, product, project_management, management, marketing, sales, support, other |
 | `seniority` | Seniority | intern, junior, middle, senior, lead, staff, principal, c_level |
@@ -102,6 +107,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `salary_min` | Minimum salary | integer — jobs whose minimum salary is at least this (pair with salary_currency) |
 | `salary_max` | Maximum salary | integer — jobs whose maximum salary is at most this (pair with salary_currency) |
 | `experience_years_min` | Minimum experience | integer — jobs requiring at least this many years |
+| `posted_within_days` | Posted within | integer — jobs whose effective posting date falls in the last N days |
 
 ### Recipes
 
@@ -137,19 +143,56 @@ curl "https://freehire.dev/api/v1/jobs?limit=20&offset=0"
   "data": [
     {
       "public_slug": "senior-go-engineer-acme-1a2b",
+      "source": "greenhouse",
+      "manually_added": false,
+      "external_id": "123",
+      "url": "https://boards.greenhouse.io/acme/jobs/123",
       "title": "Senior Go Engineer",
       "company": "Acme",
       "company_slug": "acme",
-      "url": "https://boards.greenhouse.io/acme/jobs/123",
       "location": "Remote — EU",
-      "regions": ["europe"],
+      "description": "...",
       "countries": ["DE"],
+      "regions": ["eu"],
       "work_mode": "remote",
       "skills": ["go", "postgresql"],
+      "cities": ["Berlin"],
       "collections": ["yc"],
-      "source": "greenhouse",
+      "is_tech": "tech",
       "posted_at": "2026-06-18T00:00:00Z",
-      "enrichment": { "seniority": "senior", "category": "backend" }
+      "created_at": "2026-06-18T09:12:00Z",
+      "updated_at": "2026-06-18T09:12:00Z",
+      "closed_at": null,
+      "enrichment": {
+        "summary": "...",
+        "seniority": "senior",
+        "category": "backend",
+        "employment_type": "full_time",
+        "relocation": "not_supported",
+        "visa_sponsorship": false,
+        "experience_years_min": 5,
+        "english_level": "b2",
+        "education_level": "bachelor",
+        "domains": ["fintech"],
+        "posting_language": "en",
+        "company_type": "product",
+        "company_size": "51-200",
+        "salary_min": 90000,
+        "salary_max": 130000,
+        "salary_currency": "EUR",
+        "salary_period": "year"
+      },
+      "enriched_at": "2026-06-18T09:20:00Z",
+      "enrichment_version": 7,
+      "view_count": 42,
+      "applied_count": 8,
+      "reality": {
+        "class": "fresh",
+        "age_days": 3,
+        "repost_count": 0,
+        "mass_posting_count": 0,
+        "fake_freshness": false
+      }
     }
   ],
   "meta": { "total": 4213, "limit": 20, "offset": 0 }
@@ -270,6 +313,241 @@ curl "https://freehire.dev/api/v1/jobs/senior-go-engineer-acme-1a2b/similar?limi
 { "data": [ { "public_slug": "...", "title": "...", "...": "..." } ] }
 ```
 
+### `GET /jobs/{slug}/copies`
+
+**Auth:** Public
+
+Other open postings in the same role cluster (per-city duplicates).
+
+The per-city openings folded under one canonical card by content-dedup — each keeps its own `location` and `apply_url` so a seeker picks their city. The anchor job itself is included. `meta.total` is the whole cluster size, so it stays accurate when the list is a capped page.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The job `public_slug`. (e.g. `senior-go-engineer-acme-1a2b`) |
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `limit` | integer | no | Page size, 1–200 (default 50). (e.g. `50`) |
+| `offset` | integer | no | Rows to skip. (e.g. `0`) |
+
+```bash
+curl "https://freehire.dev/api/v1/jobs/senior-go-engineer-acme-1a2b/copies"
+```
+
+```json
+{
+  "data": [
+    {
+      "public_slug": "senior-go-engineer-acme-1a2b",
+      "location": "Berlin, Germany",
+      "apply_url": "https://boards.greenhouse.io/acme/jobs/123",
+      "posted_at": "2026-06-18T00:00:00Z"
+    }
+  ],
+  "meta": { "total": 4 }
+}
+```
+
+## AI analysis
+
+Personalized signals computed against the caller’s profile or stored CV. All accept the session cookie or an API key. The skill-match endpoint is deterministic (no LLM); the fit endpoints run the LLM chain and are quota-limited. All take the same facet filter params as search where they narrow a market or candidate set.
+
+### `GET /jobs/{slug}/match`
+
+**Auth:** Session or API key
+
+Deterministic skill match of the job against your profile (no LLM).
+
+How well the job’s skills are covered by your profile skills — exact, adjacent, and missing, plus a coverage percent. A caller without a saved profile is a 404.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The job `public_slug`. |
+
+```bash
+curl "https://freehire.dev/api/v1/jobs/<slug>/match" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "total": 12,
+    "exact_count": 7,
+    "adjacent_count": 2,
+    "coverage_percent": 75,
+    "matched": ["go", "postgresql"],
+    "adjacent": [ { "name": "typescript", "via": "javascript" } ],
+    "missing": ["kubernetes"]
+  }
+}
+```
+
+### `GET /jobs/{slug}/fit`
+
+**Auth:** Session or API key
+
+The cached AI fit analysis for the job (never runs the LLM).
+
+Returns the cached analysis, flagged `stale` when your CV or the job changed since it was computed, or a null analysis when none is cached. `has_cv` is false when you have no stored CV. `quota` reports your monthly fit-analysis usage.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The job `public_slug`. |
+
+```bash
+curl "https://freehire.dev/api/v1/jobs/<slug>/fit" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "has_cv": true,
+    "stale": false,
+    "analysis": {
+      "overall_score": 82,
+      "verdict": "Strong Fit",
+      "dimensions": { "...": "..." },
+      "requirement_match": [ { "text": "5+ years Go", "priority": "required", "status": "covered", "evidence": "..." } ],
+      "strengths": ["..."],
+      "gaps": ["..."],
+      "recommendation": "..."
+    },
+    "quota": { "used": 3, "limit": 10, "remaining": 7 }
+  }
+}
+```
+
+### `POST /jobs/{slug}/fit`
+
+**Auth:** Session or API key
+
+Run the three-stage AI fit analysis and cache it.
+
+Runs the fit prompt-chain over your stored CV and the job, caches the result, and returns it fresh (no `quota` on this response). A new job over your monthly quota is a `429`; recomputing an already-analyzed job is free. `has_cv` is false when no CV is stored; a failing or unconfigured LLM returns a null analysis (200).
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The job `public_slug`. |
+
+```bash
+curl -X POST "https://freehire.dev/api/v1/jobs/<slug>/fit" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "has_cv": true,
+    "stale": false,
+    "analysis": { "overall_score": 82, "verdict": "Strong Fit", "...": "..." }
+  }
+}
+```
+
+### `GET /jobs/{slug}/fit/stream`
+
+**Auth:** Session or API key
+
+Run the fit analysis over Server-Sent Events.
+
+The same three-stage chain as `POST /jobs/{slug}/fit`, streamed as SSE (`text/event-stream`) rather than a single JSON body. Each event’s `kind` is one of `stage_start`, `stage_done`, `thinking`, `requirements`, `dimensions`, `final`; the `final` event carries the completed `analysis` (the same shape as the fit endpoints). Not a JSON endpoint.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The job `public_slug`. |
+
+```bash
+curl -N "https://freehire.dev/api/v1/jobs/<slug>/fit/stream" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+data: {"kind":"stage_start","stage":1,"label":"Extracting requirements"}
+
+data: {"kind":"requirements","requirements":[ { "...": "..." } ]}
+
+data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...":"..."}}
+```
+
+### `GET /me/recommendations`
+
+**Auth:** Session or API key
+
+Open jobs ranked by semantic similarity to your CV.
+
+Ranks jobs by your persisted CV embedding, constrained by the same facet filter params as search. Degrades to a successful empty list (never an error) when you have no usable CV vector or the semantic index is off.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `limit` | integer | no | Page size, 1–100. (e.g. `20`) |
+| `offset` | integer | no | Rows to skip; `offset + limit` ≤ 10000. (e.g. `0`) |
+
+```bash
+curl "https://freehire.dev/api/v1/me/recommendations" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": [ { "public_slug": "...", "title": "...", "...": "..." } ],
+  "meta": { "total": 40, "limit": 20, "offset": 0 }
+}
+```
+
+### `POST /market/coverage`
+
+**Auth:** Session or API key
+
+Score a supplied skill list against the filtered job market.
+
+Stateless sibling of the CV verdict: skills come from the request body, the market from the facet query params (same vocabulary as search; the `skills` facet is ignored as a filter). Reports how many of the role’s vacancies your skills cover and which missing skill unlocks the most. `400` on empty skills, `503` when search is unavailable.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `(any search filter)` | string | no | Any search facet param scopes the market (the `skills` facet is ignored here). (e.g. `category=backend`) |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `skills` | string[] | yes | The skill list to score (max 100). (e.g. `["go","postgresql"]`) |
+
+```bash
+curl -X POST "https://freehire.dev/api/v1/market/coverage?category=backend" \
+  -H "Authorization: Bearer $FREEHIRE_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"skills":["go","postgresql"]}'
+```
+
+```json
+{
+  "data": {
+    "total": 1820,
+    "covered": 1400,
+    "coverage_percent": 77,
+    "gaps": [ { "name": "kubernetes", "new_vacancies": 120, "unlock_percent": 7 } ],
+    "skills": [ { "name": "go", "market_frequency": 61, "must_have": true, "status": "strong", "advice": "" } ],
+    "must_have_total": 8,
+    "must_have_covered": 6,
+    "stack_match_percent": 75,
+    "bundles": [ { "...": "..." } ]
+  }
+}
+```
+
 ## Companies
 
 Public reads. A company detail also returns a page of its open jobs.
@@ -278,22 +556,65 @@ Public reads. A company detail also returns a page of its open jobs.
 
 **Auth:** Public
 
-List companies with job counts; optional name filter.
+List companies with job counts and denormalized facets; optional filters.
+
+Most active first. Facet params are repeatable and filter by array overlap (OR within a facet, AND across facets), composably with `q`. `meta.total` reports the count matching the full filter.
 
 **Query parameters**
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
 | `q` | string | no | Case-insensitive name substring filter. (e.g. `acme`) |
+| `collections` | string | no | Curated-collection slug (e.g. `yc`, `bigtech`). Repeatable. (e.g. `yc`) |
+| `regions` | string | no | Region the company hires in. Repeatable. (e.g. `eu`) |
+| `countries` | string | no | ISO 3166-1 alpha-2 country. Repeatable. (e.g. `DE`) |
+| `domains` | string | no | Business domain (e.g. `fintech`). Repeatable. (e.g. `fintech`) |
+| `company_type` | string | no | Company type (e.g. `product`, `outstaff`). Repeatable. (e.g. `product`) |
+| `company_size` | string | no | Size bucket (e.g. `51-200`). Repeatable. (e.g. `51-200`) |
+| `remote_regions` | string | no | Job-derived remote-hiring region. Repeatable. (e.g. `eu`) |
+| `yc_batch` | string | no | YC batch (e.g. `W21`). Repeatable. (e.g. `W21`) |
+| `yc_status` | string | no | YC company status. Repeatable. (e.g. `active`) |
+| `yc_stage` | string | no | YC funding stage. Repeatable. (e.g. `series-a`) |
+| `yc_flags` | string | no | Curated YC highlight flag. Repeatable. (e.g. `hiring`) |
+| `maturity` | string | no | Company stage/maturity. Repeatable. (e.g. `growth`) |
+| `subindustries` | string | no | YC subindustry leaf (see /companies/subindustries). Repeatable. (e.g. `payments`) |
 | `limit` | integer | no | Page size, 1–100. (e.g. `20`) |
 | `offset` | integer | no | Rows to skip. (e.g. `0`) |
 
 ```bash
-curl "https://freehire.dev/api/v1/companies?q=acme"
+curl "https://freehire.dev/api/v1/companies?q=acme&collections=yc"
 ```
 
 ```json
-{ "data": [ { "name": "Acme", "slug": "acme", "job_count": 12 } ], "meta": { "total": 1, "limit": 20, "offset": 0 } }
+{
+  "data": [
+    {
+      "slug": "acme",
+      "name": "Acme",
+      "job_count": 12,
+      "collections": ["yc"],
+      "regions": ["eu"],
+      "countries": ["DE"],
+      "domains": ["fintech"],
+      "company_types": ["product"],
+      "company_sizes": ["51-200"],
+      "industries": ["payments"],
+      "year_founded": 2015,
+      "employee_count": 120,
+      "hq_country": "DE",
+      "organization_type": "private",
+      "tagline": "Payments for builders",
+      "company_info": { "...": "..." },
+      "remote_regions": ["eu"],
+      "yc_batch": ["W21"],
+      "yc_status": ["active"],
+      "yc_stage": ["series-a"],
+      "yc_flags": ["hiring"],
+      "maturity": "growth"
+    }
+  ],
+  "meta": { "total": 1, "limit": 20, "offset": 0 }
+}
 ```
 
 ### `GET /companies/{slug}`
@@ -320,7 +641,51 @@ curl "https://freehire.dev/api/v1/companies/acme"
 ```
 
 ```json
-{ "data": { "company": { "name": "Acme", "slug": "acme" }, "jobs": [ { "public_slug": "...", "...": "..." } ] } }
+{
+  "data": {
+    "company": {
+      "slug": "acme",
+      "name": "Acme",
+      "job_count": 12,
+      "collections": ["yc"],
+      "regions": ["eu"],
+      "countries": ["DE"],
+      "domains": ["fintech"],
+      "company_types": ["product"],
+      "company_sizes": ["51-200"],
+      "industries": ["payments"],
+      "year_founded": 2015,
+      "employee_count": 120,
+      "hq_country": "DE",
+      "organization_type": "private",
+      "tagline": "Payments for builders",
+      "company_info": { "...": "..." },
+      "remote_regions": ["eu"],
+      "yc_batch": ["W21"],
+      "yc_status": ["active"],
+      "yc_stage": ["series-a"],
+      "yc_flags": ["hiring"],
+      "maturity": "growth"
+    },
+    "jobs": [ { "public_slug": "...", "title": "...", "...": "..." } ]
+  }
+}
+```
+
+### `GET /companies/subindustries`
+
+**Auth:** Public
+
+Distinct company subindustry vocabulary with company counts.
+
+Backs the searchable “Industry” facet’s option list, most common first. Counts are unconditional (they do not reflect other active list filters).
+
+```bash
+curl "https://freehire.dev/api/v1/companies/subindustries"
+```
+
+```json
+{ "data": [ { "value": "payments", "count": 42 }, { "value": "developer-tools", "count": 31 } ] }
 ```
 
 ## Authentication
@@ -654,6 +1019,48 @@ curl -X DELETE "https://freehire.dev/api/v1/jobs/<slug>/track" -H "Authorization
 { "data": { "ok": true } }
 ```
 
+### `POST /jobs/{slug}/dismiss`
+
+**Auth:** Session or API key
+
+Dismiss (swipe away) the job.
+
+Only keeps the job out of the swipe deck; it stays visible in the public `/jobs` list and search. Idempotent.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The job `public_slug`. |
+
+```bash
+curl -X POST "https://freehire.dev/api/v1/jobs/<slug>/dismiss" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{ "data": { "job_id": 42, "dismissed_at": "2026-06-19T10:00:00Z", "saved_at": null, "stage": null } }
+```
+
+### `DELETE /jobs/{slug}/dismiss`
+
+**Auth:** Session or API key
+
+Undismiss the job (no-op if not dismissed).
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The job `public_slug`. |
+
+```bash
+curl -X DELETE "https://freehire.dev/api/v1/jobs/<slug>/dismiss" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{ "data": { "job_id": 42, "dismissed_at": null } }
+```
+
 ### `GET /me/tracking`
 
 **Auth:** Session or API key
@@ -736,6 +1143,78 @@ curl "https://freehire.dev/api/v1/me/tracking/analyses" -H "Authorization: Beare
     }
   ],
   "meta": { "quota": { "used": 3, "limit": 10, "remaining": 7 } }
+}
+```
+
+### `GET /me/tracking/saved`
+
+**Auth:** Session or API key
+
+Slugs of jobs you have saved.
+
+Lets the SPA render the save toggle as filled without authenticating the public job reads.
+
+```bash
+curl "https://freehire.dev/api/v1/me/tracking/saved" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{ "data": ["senior-go-engineer-acme-1a2b", "..."] }
+```
+
+### `GET /me/tracking/pipeline`
+
+**Auth:** Session or API key
+
+Your application-pipeline snapshot (counts per stage bucket).
+
+The total application count and its distribution across the seven status buckets, aggregated server-side over all of your applications.
+
+```bash
+curl "https://freehire.dev/api/v1/me/tracking/pipeline" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "applications": 12,
+    "buckets": {
+      "no_answer": 4,
+      "in_progress": 3,
+      "interviewing": 2,
+      "offer": 1,
+      "accepted": 1,
+      "rejected": 1,
+      "declined": 0
+    }
+  }
+}
+```
+
+### `GET /me/tracking/swipe`
+
+**Auth:** Session or API key
+
+A batch of open jobs for the swipe triage deck.
+
+Runs the same query as search (same facets, `q`, and sort), then excludes the jobs you have already saved or dismissed. `503` when search is unavailable.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `q` | string | no | Optional full-text query (as in search). (e.g. `golang`) |
+| `limit` | integer | no | Page size, 1–100. (e.g. `20`) |
+| `offset` | integer | no | Rows to skip; `offset + limit` ≤ 10000. (e.g. `0`) |
+
+```bash
+curl "https://freehire.dev/api/v1/me/tracking/swipe" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": [ { "public_slug": "...", "title": "Senior Go Engineer", "...": "..." } ],
+  "meta": { "total": 137, "limit": 20, "offset": 0 }
 }
 ```
 
@@ -1018,6 +1497,326 @@ curl -X PATCH "https://freehire.dev/api/v1/jobs/<slug>" \
 
 ```json
 { "data": { "public_slug": "...", "title": "Staff Go Engineer" } }
+```
+
+## Profile & résumé
+
+Your career profile and stored CV, session-only (a browser feature, like saved searches). The profile is a singleton keyed by your session — no id in the path. The verdict and ATS report are read-only sub-resources computed from the profile and CV; résumé storage degrades to `501` when object storage is unconfigured.
+
+### `GET /me/profile`
+
+**Auth:** Session only
+
+Your career profile, or null if you have not saved one.
+
+```bash
+curl "https://freehire.dev/api/v1/me/profile" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "specializations": ["backend"],
+    "skills": ["go", "postgresql"],
+    "location_preferences": { "work_modes": ["remote"], "base": { "country": "DE" }, "...": "..." },
+    "created_at": "2026-06-19T10:00:00Z",
+    "updated_at": "2026-06-19T10:00:00Z"
+  }
+}
+```
+
+### `PUT /me/profile`
+
+**Auth:** Session only
+
+Create or replace your profile.
+
+The whole profile is replaced on each save. An unknown specialization (must be a job category), empty skills, or an out-of-vocabulary location value is a `400`.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `specializations` | string[] | yes | One or more job categories (max 5). (e.g. `["backend"]`) |
+| `skills` | string[] | yes | Canonical skill tokens (non-empty). (e.g. `["go","postgresql"]`) |
+| `location_preferences` | object | no | Optional location block (`work_modes`, `remote`, `base`, `relocation`); omit or null to clear. |
+
+```bash
+curl -X PUT "https://freehire.dev/api/v1/me/profile" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"specializations":["backend"],"skills":["go","postgresql"]}'
+```
+
+```json
+{ "data": { "specializations": ["backend"], "skills": ["go", "postgresql"], "location_preferences": null } }
+```
+
+### `DELETE /me/profile`
+
+**Auth:** Session only
+
+Clear your profile (idempotent).
+
+Returns `204 No Content`.
+
+```bash
+curl -X DELETE "https://freehire.dev/api/v1/me/profile" -b cookies.txt
+```
+
+### `GET /me/profile/verdict`
+
+**Auth:** Session only
+
+Market-coverage verdict for your profile skills.
+
+How many of your selected role’s open vacancies your skills reach, and which missing skill unlocks the most. The role is the request’s facet params (defaulting to your specializations). No profile is a `404`; `503` when search is unavailable.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `(any search filter)` | string | no | Any search facet param scopes the role (the `skills` facet is ignored; your profile skills are the measured set). (e.g. `category=backend`) |
+
+```bash
+curl "https://freehire.dev/api/v1/me/profile/verdict" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "total": 1820,
+    "covered": 1400,
+    "coverage_percent": 77,
+    "gaps": [ { "name": "kubernetes", "new_vacancies": 120, "unlock_percent": 7 } ],
+    "skills": [ { "...": "..." } ],
+    "coherence_percent": 64,
+    "bundles": [ { "...": "..." } ]
+  }
+}
+```
+
+### `GET /me/profile/ats-report`
+
+**Auth:** Session only
+
+CV ATS-readiness report (deterministic + any cached LLM review).
+
+Scores your stored CV’s structure and its keyword match against the selected role. `has_cv` is false when no CV is stored; no profile is a `404`; `503` when search is unavailable.
+
+```bash
+curl "https://freehire.dev/api/v1/me/profile/ats-report" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "has_cv": true,
+    "report": {
+      "overall": 78,
+      "potential": 90,
+      "categories": [ { "id": "structure", "label": "Structure", "score": 18, "max": 20, "items": [ { "...": "..." } ] } ],
+      "strong_keywords": ["go", "postgresql"],
+      "recommended_keywords": ["kubernetes"],
+      "reviewed": false
+    }
+  }
+}
+```
+
+### `POST /me/profile/ats-report`
+
+**Auth:** Session only
+
+Run the optional LLM qualitative ATS review and cache it.
+
+Runs the LLM review over your stored CV and folds it into the report (`reviewed: true`). Best-effort: an unconfigured or failing LLM returns the deterministic report (200).
+
+```bash
+curl -X POST "https://freehire.dev/api/v1/me/profile/ats-report" -b cookies.txt
+```
+
+```json
+{ "data": { "has_cv": true, "report": { "overall": 78, "reviewed": true, "...": "..." } } }
+```
+
+### `POST /me/resume/extract`
+
+**Auth:** Session only
+
+Extract a structured profile from an uploaded résumé (no LLM).
+
+Accepts a PDF (`multipart/form-data` field `file`) or plain text (`application/json` `{ "text": ... }`). Returns canonical skill slugs, the categories it spans, and the resolved seniority (omitted when unresolved). When storage is configured it also stores the résumé once.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `text` | string | no | Résumé plain text (JSON path); or send a PDF as multipart field `file`. |
+
+```bash
+curl -X POST "https://freehire.dev/api/v1/me/resume/extract" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"text":"Senior Go engineer, 6 years..."}'
+```
+
+```json
+{ "data": { "skills": ["go", "postgresql"], "categories": ["backend"], "seniority": "senior" } }
+```
+
+### `PUT /me/resume`
+
+**Auth:** Session only
+
+Store or replace your résumé.
+
+Accepts a PDF (multipart `file`) or JSON `{ "text": ... }`. Returns the résumé metadata. `501` when object storage is unconfigured.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `text` | string | no | Résumé plain text (JSON path); or send a PDF as multipart field `file`. |
+
+```bash
+curl -X PUT "https://freehire.dev/api/v1/me/resume" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"text":"Senior Go engineer, 6 years..."}'
+```
+
+```json
+{ "data": { "enabled": true, "present": true, "uploaded_at": "2026-06-19T10:00:00Z", "structured": null } }
+```
+
+### `GET /me/resume`
+
+**Auth:** Session only
+
+Your résumé status (enabled / present / uploaded_at).
+
+Always `200`: unconfigured storage or no résumé is a normal state. `structured` carries the read-only structured résumé, or null when none is current.
+
+```bash
+curl "https://freehire.dev/api/v1/me/resume" -b cookies.txt
+```
+
+```json
+{ "data": { "enabled": true, "present": true, "uploaded_at": "2026-06-19T10:00:00Z", "structured": { "...": "..." } } }
+```
+
+### `DELETE /me/resume`
+
+**Auth:** Session only
+
+Delete your stored résumé.
+
+Returns `204 No Content`. `501` when object storage is unconfigured.
+
+```bash
+curl -X DELETE "https://freehire.dev/api/v1/me/resume" -b cookies.txt
+```
+
+## Activity & shared boards
+
+Two public reads — the catalogue-activity time series and a shared saved-search “board” by slug — plus the session-only publish/unpublish actions that turn one of your saved searches into such a board. A published board exposes no owner identity.
+
+### `GET /stats/jobs-activity`
+
+**Auth:** Public
+
+Public time series of added vs. removed vacancies per period.
+
+Aggregated to the requested granularity over a date range; the series is dense (missing periods are 0). Defaults: `granularity=day`, `to`=today, `from` a per-granularity window before `to`. An unknown granularity or a range over 4000 days is a `400`.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `granularity` | string | no | One of `day`, `week`, `month` (default `day`). (e.g. `week`) |
+| `from` | string (YYYY-MM-DD) | no | Start date (UTC). Defaults to a per-granularity window before `to`. (e.g. `2026-01-01`) |
+| `to` | string (YYYY-MM-DD) | no | End date (UTC). Defaults to today. (e.g. `2026-06-30`) |
+
+```bash
+curl "https://freehire.dev/api/v1/stats/jobs-activity?granularity=week"
+```
+
+```json
+{
+  "data": [
+    { "period": "2026-06-01", "added": 120, "removed": 40 },
+    { "period": "2026-06-08", "added": 98, "removed": 55 }
+  ],
+  "meta": { "granularity": "week", "from": "2025-06-09", "to": "2026-06-08" }
+}
+```
+
+### `GET /boards/{slug}`
+
+**Auth:** Public
+
+A shared saved-search board by its public slug.
+
+Public, no owner-scoping — returns only display fields (`name`, the canonical filter `query`, and an optional `author_label`). An unknown or unshared slug is a `404`.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The board public slug. (e.g. `senior-go-remote-3f9a`) |
+
+```bash
+curl "https://freehire.dev/api/v1/boards/senior-go-remote-3f9a"
+```
+
+```json
+{ "data": { "name": "Senior Go remote", "query": "q=go&seniority=senior&work_mode=remote", "author_label": "Jane D." } }
+```
+
+### `POST /me/searches/{id}/share`
+
+**Auth:** Session only
+
+Publish one of your saved searches as a public board.
+
+Mints (or keeps) the board slug and sets the optional author label. Owner-scoped; a missing/non-owned id is a `404`. Returns the saved search, now carrying `public_slug`.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | integer | yes | The saved-search id. (e.g. `2`) |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `author_label` | string | no | Label shown on the board; blank/omitted renders it anonymously. (e.g. `Jane D.`) |
+
+```bash
+curl -X POST "https://freehire.dev/api/v1/me/searches/2/share" \
+  -H 'Content-Type: application/json' -b cookies.txt \
+  -d '{"author_label":"Jane D."}'
+```
+
+```json
+{ "data": { "id": 2, "name": "Senior Go remote", "query": "q=go&seniority=senior&work_mode=remote", "public_slug": "senior-go-remote-3f9a", "author_label": "Jane D." } }
+```
+
+### `DELETE /me/searches/{id}/share`
+
+**Auth:** Session only
+
+Make a shared board private again.
+
+Owner-scoped and idempotent (already-private is a no-op). Returns `204 No Content`.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | integer | yes | The saved-search id. (e.g. `2`) |
+
+```bash
+curl -X DELETE "https://freehire.dev/api/v1/me/searches/2/share" -b cookies.txt
 ```
 
 ## Saved searches & subscriptions

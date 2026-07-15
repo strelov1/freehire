@@ -15,6 +15,8 @@
   board: beamng
 - company: Bestex Research
   board: bestex-research
+- company: Board of Innovation
+  board: boardofinnovation
 - company: Cause and FX
   board: cause-and-fx-ltd
 - company: Climax Studios
@@ -25,16 +27,22 @@
   board: keywords-intl1
 - company: codeninja
   board: codeninjapk
+- company: Codurance
+  board: codurance
 - company: ComeOn Group
   board: comeon-group
 - company: CoolGames
   board: coolgames
+- company: Creative Chaos
+  board: creativechaos
 - company: DataVisor
   board: datavisor-jobs
 - company: Detroit Labs
   board: detroitlabs
 - company: Devoted Studios
   board: devoted-studios-1
+- company: Devsu
+  board: devsu
 - company: Double Eleven
   board: double-eleven
 - company: Drake cooper
@@ -73,6 +81,8 @@
   board: huggingface
 - company: hutch
   board: hutch
+- company: Huzzle
+  board: huzzle
 - company: Impact Theory
   board: impact-theory
 - company: Integrant
@@ -111,6 +121,8 @@
   board: newrich-network
 - company: nextgen-clearing
   board: nextgen-clearing
+- company: NineTwoThree AI Studio
+  board: ninetwothree-ai-studio
 - company: Nuvei
   board: nuvei
 - company: Peaksware
@@ -127,6 +139,8 @@
   board: rebellion
 - company: reversing labs
   board: reversinglabs
+- company: RevStar
+  board: revstar
 - company: Rive
   board: rivecareers
 - company: Sawhorse Productions

@@ -7,3 +7,5 @@
 # Format: one entry per line — `<github-username> <issue|pr>`.
 #   issue = the user's future issues stay open.
 #   pr    = the user's future issues and PRs stay open.
+
+gearsandcode pr

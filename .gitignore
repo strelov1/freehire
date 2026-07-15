@@ -51,6 +51,13 @@ __pycache__/
 # Superpowers visual brainstorm scratch
 .superpowers/
 
+# Node / Vite / Vitest caches. The frontend lives in web/ with its own
+# .gitignore; these guard against a stray tool run (e.g. vitest) from the repo
+# root leaking a node_modules/.vite cache into the Go project.
+node_modules/
+.vite/
+.svelte-kit/
+
 # Compiled cmd/* worker binaries (go build ./cmd/<name>/ writes <name> into the repo root)
 /backfill-company-info
 /backfill-derive
