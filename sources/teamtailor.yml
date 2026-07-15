@@ -3,18 +3,38 @@
 # reads https://<board>/jobs and follows pagination, then each job page's JobPosting ld+json.
 # Each board validated live (>0 jobs in its listing, full normalized sample) before adding.
 
+- company: Arrive Logistics
+  board: careers.arrive.com
 - company: BRYTER
   board: bryter.teamtailor.com
+- company: Insense
+  board: insense.na.teamtailor.com
 - company: ioet
   board: ioet.na.teamtailor.com
+- company: Knowmad Mood
+  board: knowmadmood.teamtailor.com
 - company: Latino Legends
   board: talent.latinolegends.com
+- company: Loft
+  board: loft.teamtailor.com
+- company: Marvik
+  board: marvik.na.teamtailor.com
 - company: Naranja X
   board: naranjax.na.teamtailor.com
+- company: Opinov8
+  board: jobs.opinov8.com
 - company: Periferia IT Group
   board: jobs.periferiaitgroup.com
+- company: Product Hackers
+  board: producthackers.teamtailor.com
 - company: Prometeo Talent
   board: jobs.prometeotalent.com
+- company: Rooftop
+  board: rooftop.na.teamtailor.com
+- company: Sofka
+  board: oportunidades.sofka.com.co
+- company: TalyCap Global
+  board: jobs.talycapglobal.com
 - company: Tibber
   board: jobs.tibber.com
 
@@ -64,6 +84,8 @@
   board: tacticaladventures.teamtailor.com
 - company: Tangle Wood Games
   board: tanglewoodgameslive-1744291072.teamtailor.com
+- company: Tightline Software
+  board: careers.tightlinesoftware.com
 - company: Tried and True Media
   board: triedandtruemedia.na.teamtailor.com
 - company: Venoeer

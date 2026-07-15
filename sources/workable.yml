@@ -7,6 +7,8 @@
   board: abzorbagames
 - company: Antarctica Global
   board: antarcticaglobal
+- company: AOA
+  board: helloaoa
 - company: Arkadium
   board: arkadium-1
 - company: Axes InMotion
@@ -39,6 +41,8 @@
   board: datavisor-jobs
 - company: Detroit Labs
   board: detroitlabs
+- company: Dev.Pro
+  board: devpro
 - company: Devoted Studios
   board: devoted-studios-1
 - company: Devsu
@@ -75,6 +79,8 @@
   board: hardsuit-labs-1
 - company: High Voltage Software
   board: high-voltage-software
+- company: Hire Overseas
+  board: hire-overseas
 - company: Homa Games
   board: homa-games
 - company: Hugging Face
@@ -95,6 +101,8 @@
   board: kingsisle-entertainment-inc
 - company: Lakshya Digital
   board: lakshyadigitalglobal
+- company: Legacy People
+  board: legacypeople
 - company: Lighthouse Games
   board: lighthousegames
 - company: Liquid Advertising
@@ -111,6 +119,8 @@
   board: followloop
 - company: Magic Media
   board: magic-media
+- company: Maxana
+  board: maxana
 - company: Moonbug Entertainment
   board: moonbug-entertainment
 - company: nDreams
@@ -125,18 +135,24 @@
   board: ninetwothree-ai-studio
 - company: Nuvei
   board: nuvei
+- company: Partner One Capital
+  board: partner-one-capital
 - company: Peaksware
   board: peaksware
 - company: Persado
   board: persado
 - company: PikPok
   board: pikpok
+- company: Plain Concepts
+  board: plainconcepts
 - company: powtoon
   board: powtoon
 - company: PTW
   board: sideinc
 - company: Rebellion
   board: rebellion
+- company: RecargaPay
+  board: recargapay
 - company: reversing labs
   board: reversinglabs
 - company: RevStar
@@ -179,6 +195,10 @@
   board: vizrt
 - company: We are social
   board: we-are-social-1
+- company: Wingz LatAm
+  board: wingz-latam
+- company: Workstate
+  board: workstate
 - company: ZeptoLab
   board: zeptolab
 - company: zipdev

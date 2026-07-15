@@ -62,6 +62,8 @@
   board: ebhu.fa.us2.oraclecloud.com/CX
 - company: Chubb
   board: fa-ewgu-saasfaprod1.fa.ocs.oraclecloud.com/CX_2001
+- company: Ciklum
+  board: ialmme.fa.ocs.oraclecloud.com/ciklum-career
 - company: Citco
   board: fa-euxc-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
 - company: Citizens Financial Group

@@ -1,6 +1,10 @@
 # workday boards. Provider is the filename; each entry is company + board.
 # board = platform-specific id (see internal/sources/workday.go).
 
+- company: Equifax
+  board: equifax.wd5.myworkdayjobs.com/External
+- company: Fugro
+  board: fugro.wd3.myworkdayjobs.com/Careers
 - company: RingCentral
   board: ringcentral.wd1.myworkdayjobs.com/RingCentral_Careers
 - company: NVIDIA
