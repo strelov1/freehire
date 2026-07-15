@@ -45,3 +45,22 @@ SELECT provider, board, consecutive_failures, cooldown_until, last_error, last_e
 FROM board_health
 WHERE consecutive_failures > 0 OR (cooldown_until IS NOT NULL AND cooldown_until > now())
 ORDER BY consecutive_failures DESC, provider, board;
+
+-- name: ProviderHealthRollup :many
+-- Per-provider health rollup that backs the public /status page: one row per
+-- provider with board counts and freshness. Read-only — it never touches cooldown
+-- state. Aggregate-only: it selects no board identifier and no error text, so the
+-- public endpoint built on it cannot leak internal detail. ingested_total is
+-- coalesced/cast to bigint so it reads as a plain int64 (an all-failing provider
+-- yields 0, not NULL).
+SELECT
+    provider,
+    count(*)                                                         AS total_boards,
+    count(*) FILTER (WHERE consecutive_failures = 0)                 AS healthy_boards,
+    count(*) FILTER (WHERE cooldown_until IS NOT NULL AND cooldown_until > now()) AS cooled_boards,
+    max(last_run_at)::timestamptz                                    AS last_run_at,
+    max(last_success_at)::timestamptz                                AS last_success_at,
+    coalesce(sum(last_ingested_count) FILTER (WHERE consecutive_failures = 0), 0)::bigint AS ingested_total
+FROM board_health
+GROUP BY provider
+ORDER BY provider;

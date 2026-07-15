@@ -76,6 +76,64 @@ func (q *Queries) ListUnhealthyBoards(ctx context.Context) ([]ListUnhealthyBoard
 	return items, nil
 }
 
+const providerHealthRollup = `-- name: ProviderHealthRollup :many
+SELECT
+    provider,
+    count(*)                                                         AS total_boards,
+    count(*) FILTER (WHERE consecutive_failures = 0)                 AS healthy_boards,
+    count(*) FILTER (WHERE cooldown_until IS NOT NULL AND cooldown_until > now()) AS cooled_boards,
+    max(last_run_at)::timestamptz                                    AS last_run_at,
+    max(last_success_at)::timestamptz                                AS last_success_at,
+    coalesce(sum(last_ingested_count) FILTER (WHERE consecutive_failures = 0), 0)::bigint AS ingested_total
+FROM board_health
+GROUP BY provider
+ORDER BY provider
+`
+
+type ProviderHealthRollupRow struct {
+	Provider      string             `json:"provider"`
+	TotalBoards   int64              `json:"total_boards"`
+	HealthyBoards int64              `json:"healthy_boards"`
+	CooledBoards  int64              `json:"cooled_boards"`
+	LastRunAt     pgtype.Timestamptz `json:"last_run_at"`
+	LastSuccessAt pgtype.Timestamptz `json:"last_success_at"`
+	IngestedTotal int64              `json:"ingested_total"`
+}
+
+// Per-provider health rollup that backs the public /status page: one row per
+// provider with board counts and freshness. Read-only — it never touches cooldown
+// state. Aggregate-only: it selects no board identifier and no error text, so the
+// public endpoint built on it cannot leak internal detail. ingested_total is
+// coalesced/cast to bigint so it reads as a plain int64 (an all-failing provider
+// yields 0, not NULL).
+func (q *Queries) ProviderHealthRollup(ctx context.Context) ([]ProviderHealthRollupRow, error) {
+	rows, err := q.db.Query(ctx, providerHealthRollup)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ProviderHealthRollupRow{}
+	for rows.Next() {
+		var i ProviderHealthRollupRow
+		if err := rows.Scan(
+			&i.Provider,
+			&i.TotalBoards,
+			&i.HealthyBoards,
+			&i.CooledBoards,
+			&i.LastRunAt,
+			&i.LastSuccessAt,
+			&i.IngestedTotal,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const recordBoardFailure = `-- name: RecordBoardFailure :one
 INSERT INTO board_health (provider, board, consecutive_failures, last_error, last_error_at, last_run_at)
 VALUES ($1, $2, 1, $3, now(), now())

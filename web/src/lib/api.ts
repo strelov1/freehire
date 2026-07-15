@@ -46,6 +46,7 @@ import type {
   ActivityPoint,
   UserGrowthPoint,
   EngagementStats,
+  IngestStatus,
   LocationPreferences,
 } from './types';
 
@@ -351,6 +352,13 @@ export function createApi(
    *  Aggregate-only, unauthenticated. */
   async function engagementStats(): Promise<EngagementStats> {
     return requestData<EngagementStats>(`/api/v1/stats/engagement`);
+  }
+
+  /** The public ingest-fleet status: a per-provider health rollup with a derived
+   *  operational/degraded/down verdict and an overall status. Sanitized
+   *  (no error text or board identifiers), aggregate-only, unauthenticated. */
+  async function ingestStatus(): Promise<IngestStatus> {
+    return requestData<IngestStatus>(`/api/v1/status`);
   }
 
   /** List companies, optionally filtered by a name query `q` (a case-insensitive
@@ -896,6 +904,7 @@ export function createApi(
     jobsActivity,
     userGrowth,
     engagementStats,
+    ingestStatus,
     listCompanies,
     getCompany,
     listCompanySubindustries,

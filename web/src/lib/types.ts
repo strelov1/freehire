@@ -339,6 +339,32 @@ export interface EngagementStats {
   viewed: number;
 }
 
+/** The derived health verdict for a provider (and the fleet) on the public
+ *  /status page. */
+export type HealthStatus = 'operational' | 'degraded' | 'down';
+
+/** One provider's health on the public /status page: board counts, freshness, and
+ *  the derived status. Sanitized — no error text or board identifiers are exposed.
+ *  Timestamps are RFC3339 strings, or null when the provider has never run/succeeded. */
+export interface ProviderHealth {
+  provider: string;
+  status: HealthStatus;
+  total_boards: number;
+  healthy_boards: number;
+  cooled_boards: number;
+  last_run: string | null;
+  last_success: string | null;
+  ingested_total: number;
+}
+
+/** The public ingest-fleet status: the overall (worst-provider) verdict, the
+ *  generation timestamp, and one entry per provider. */
+export interface IngestStatus {
+  overall: HealthStatus;
+  generated_at: string;
+  providers: ProviderHealth[];
+}
+
 /** An API key as returned by the management endpoints — metadata only; the
  *  plaintext token is never part of this shape. `token_prefix` is a short,
  *  non-secret leading slice (e.g. "fhk_Ab12cd") shown so the user can tell keys

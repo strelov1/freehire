@@ -604,6 +604,13 @@ type Querier interface {
 	// picks the changed rows up; the IS DISTINCT FROM guard skips unchanged rows, making
 	// re-runs idempotent and cheap.
 	PropagateCollectionsToJobs(ctx context.Context) (int64, error)
+	// Per-provider health rollup that backs the public /status page: one row per
+	// provider with board counts and freshness. Read-only — it never touches cooldown
+	// state. Aggregate-only: it selects no board identifier and no error text, so the
+	// public endpoint built on it cannot leak internal detail. ingested_total is
+	// coalesced/cast to bigint so it reads as a plain int64 (an all-failing provider
+	// yields 0, not NULL).
+	ProviderHealthRollup(ctx context.Context) ([]ProviderHealthRollupRow, error)
 	// Second half of the atomic rebuild: recompute every active day from jobs. `added`
 	// counts jobs by their created_at day; `removed` counts jobs by their CURRENT
 	// closed_at day (NULL = still open, excluded). Days are UTC calendar dates
