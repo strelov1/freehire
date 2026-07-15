@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/net/html"
 )
 
 func mustURL(t *testing.T, s string) *url.URL {
@@ -275,6 +277,42 @@ func TestTeamtailorRegisteredInAll(t *testing.T) {
 	}
 	if s.Provider() != "teamtailor" {
 		t.Errorf("All()[teamtailor].Provider() = %q", s.Provider())
+	}
+}
+
+// ttRootListingHTTP models a Teamtailor site that disables /jobs (404) and renders its
+// listing on the root instead: /jobs?page=N → 404, /?page=1 → one job, /?page=2 → empty.
+type ttRootListingHTTP struct {
+	jobURL, detail string
+}
+
+func (h ttRootListingHTTP) GetHTML(_ context.Context, u string) (*html.Node, error) {
+	switch {
+	case strings.Contains(u, "/jobs?page="):
+		return nil, &StatusError{Code: 404, URL: u}
+	case strings.Contains(u, "/jobs/"): // detail page
+		return html.Parse(strings.NewReader(h.detail))
+	case strings.Contains(u, "/?page=1"):
+		return html.Parse(strings.NewReader(ttListingHTML(h.jobURL)))
+	default: // /?page=2 and beyond → empty listing ends enumeration
+		return html.Parse(strings.NewReader(ttListingHTML()))
+	}
+}
+
+func TestTeamtailorFallsBackToRootListingWhenJobsPath404s(t *testing.T) {
+	jobURL := "https://jobs.proxify.io/jobs/8024669-enterprise-account-executive"
+	d := ttDetailHTML("Enterprise Account Executive", "&lt;p&gt;x&lt;/p&gt;",
+		"2026-07-06T00:00:00+02:00", "Stockholm", "SE", "")
+	fake := ttRootListingHTTP{jobURL: jobURL, detail: d}
+
+	jobs, err := NewTeamtailor(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Proxify", Board: "jobs.proxify.io",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].ExternalID != "8024669" {
+		t.Fatalf("got %v, want the one root-listed posting", jobs)
 	}
 }
 
