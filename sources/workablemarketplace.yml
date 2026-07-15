@@ -5,11 +5,15 @@
 # (so the plain `workable` adapter can't reach them). A company already crawlable via
 # sources/workable.yml must NOT be listed here too (it would double-list under a second
 # source + external-id scheme). Each hashid validated live (feed returned >0 jobs).
-# Lago is a staffing agency (mixed roles); its non-tech postings are filtered by the
-# enrich non-tech gate, its engineering roles kept.
+# "Hire Lago" (hirelago.com) is a staffing agency (mixed roles); its non-tech postings are
+# filtered by the enrich non-tech gate, its engineering roles kept. It is named "Hire Lago"
+# — NOT "Lago" — on purpose: the company slug is derived from the name, and plain "Lago"
+# collides with getlago (the dev-tooling company, ingested via ashby + workatastartup),
+# merging this agency's ~288 postings onto getlago's page. The distinct name gives it its
+# own slug (hire-lago) and leaves getlago clean under "lago".
 # NOTE: AOA is NOT here — it has a working widget board (helloaoa) in workable.yml, so
 # listing it here too would double-source the same roles under a second external-id scheme.
 - company: Intuition Machines
   board: ix7jhWd4JnugmXDK5RaQSZ
-- company: Lago
+- company: Hire Lago
   board: fLBK8dBBYxkHwkj9pperGP
