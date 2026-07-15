@@ -1,0 +1,29 @@
+---
+title: An inbox for your application replies
+date: 2026-07-15
+summary: Connect Gmail or claim a freehire mailbox and your employer replies land in one place — auto-sorted by stage, linked to the application, and now easy to triage.
+type: changelog
+tags:
+  - inbox
+  - applications
+draft: false
+---
+
+Applying to jobs means living in your email — screening notes, assessment links,
+interview invites, and the occasional rejection, all scattered across threads. The
+**[inbox](/my/inbox)** pulls them into one place, and it's now open to everyone.
+
+Connect your Gmail or claim a mailbox on our domain, and replies to your
+applications show up in `/my/inbox`. Each one is classified by stage — Screening,
+Interview, Assessment, Offer, Rejected — and linked back to the application it
+belongs to, so you always know where a conversation stands.
+
+New this release, a set of triage controls to keep the pile under control:
+
+- **Unread only** and an **All labels** filter to focus on what needs a reply.
+- **Mark all read** — clears everything matching your current filters, not the
+  whole inbox.
+- **Delete** with a one-click **Undo**, so tidying up is never destructive.
+
+It's your mail — we only read replies to jobs you're tracking, and nothing is
+shared. Open it at **[/my/inbox](/my/inbox)**.

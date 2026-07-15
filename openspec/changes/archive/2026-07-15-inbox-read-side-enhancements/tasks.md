@@ -30,4 +30,4 @@
 ## 6. Verify
 
 - [x] 6.1 `go build ./... && go vet ./... && go test ./...`
-- [~] 6.2 Web: `svelte-check` clean (my files 0 problems). Browser visual blocked by a pre-existing posthog-js env gap in this checkout (hooks.client.ts/+layout import analytics); verify on a running instance.
+- [x] 6.2 Web: `svelte-check` clean on changed files; toolbar verified on the deployed instance.
