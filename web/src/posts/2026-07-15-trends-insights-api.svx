@@ -1,0 +1,33 @@
+---
+title: A public API for job-market trends
+date: 2026-07-15
+summary: A new Insights API turns the whole catalogue into aggregate market data — which roles and skills are in demand, how fast a segment is hiring, and what a role pays.
+type: changelog
+tags:
+  - api
+  - data
+draft: false
+---
+
+We already tag every job with structured facets — role, seniority, skills,
+location, salary. Until now you could only see them one job at a time. The new
+**Insights API** aggregates them across the whole catalogue, no login required:
+
+- **[/api/v1/insights/roles](/api/v1/insights/roles)** — roles ranked by how many
+  jobs are open, plus a 30-day growth measure. Scope by country.
+- **[/api/v1/insights/skills](/api/v1/insights/skills)** — the same for skills:
+  what's most in demand right now, and what's rising.
+- **[/api/v1/insights/velocity](/api/v1/insights/velocity)** — hiring velocity over
+  time (jobs added vs. removed per week), optionally for a single category, role
+  level, or country.
+- **[/api/v1/insights/salary](/api/v1/insights/salary)** — salary bands (25th /
+  50th / 75th percentile) for a role, reported per currency so figures are never
+  mixed.
+
+Every response is aggregate-only — counts, percentiles, and labels, never an
+individual posting. It reads from precomputed rollups, so it's fast, and it's part
+of the same open API as everything else (it's in our
+[OpenAPI spec](/openapi.yaml), so ChatGPT and other agents can call it too).
+
+This is the data layer. Browsable pages built on top of it — "highest-paying
+backend roles", "fastest-growing skills" — are next.
