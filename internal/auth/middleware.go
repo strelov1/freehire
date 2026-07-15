@@ -97,6 +97,37 @@ func RequireRole(loader RoleLoader, role string) fiber.Handler {
 	}
 }
 
+// BetaLoader resolves an authenticated user id to its beta-tester membership. Like
+// RoleLoader it returns a primitive so this package needs no database import; it is
+// satisfied directly by *db.Queries (IsBetaTester).
+type BetaLoader interface {
+	IsBetaTester(ctx context.Context, id int64) (bool, error)
+}
+
+// RequireModeratorOrBeta authorizes a request when the caller is EITHER a moderator
+// OR a beta tester — for restricted-rollout features that moderators administer and
+// beta testers get early access to (e.g. the mail inbox). Same fail-closed discipline
+// as RequireRole: no user id → 401; neither moderator nor beta → 403.
+func RequireModeratorOrBeta(roles RoleLoader, beta BetaLoader) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		id, ok := UserID(c)
+		if !ok {
+			return fiber.NewError(fiber.StatusUnauthorized, "not authenticated")
+		}
+		if role, err := roles.GetUserRole(c.Context(), id); err == nil && role == "moderator" {
+			return c.Next()
+		}
+		isBeta, err := beta.IsBetaTester(c.Context(), id)
+		if err != nil {
+			return fiber.NewError(fiber.StatusUnauthorized, "not authenticated")
+		}
+		if !isBeta {
+			return fiber.NewError(fiber.StatusForbidden, "forbidden")
+		}
+		return c.Next()
+	}
+}
+
 // bearerToken extracts the credential from an `Authorization: Bearer <token>`
 // header, returning "" when the header is absent or not a Bearer scheme.
 func bearerToken(c *fiber.Ctx) string {

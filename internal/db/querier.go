@@ -395,6 +395,9 @@ type Querier interface {
 	// never reset. extracted_at is non-NULL when the ingest prefilter already
 	// decided the post holds no vacancy, so it is recorded but never queued.
 	InsertTelegramPost(ctx context.Context, arg InsertTelegramPostParams) (int64, error)
+	// Slim beta-membership lookup for the RequireModeratorOrBeta middleware — a
+	// primitive bool so the auth package stays free of a db import (same shape as GetUserRole).
+	IsBetaTester(ctx context.Context, id int64) (bool, error)
 	// Manually link (or relink) an email to a chosen application, overriding any
 	// auto-link or suggestion.
 	LinkEmailToJob(ctx context.Context, arg LinkEmailToJobParams) (int64, error)

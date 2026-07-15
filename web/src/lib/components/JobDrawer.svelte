@@ -37,9 +37,9 @@
   } = $props();
 
   type Tab = 'application' | 'fit' | 'description' | 'emails';
-  // The Emails tab is moderator-only — linked mail is a moderator-gated surface, and
-  // the getTrackedApplication read 403s everyone else.
-  const isModerator = $derived(currentUser()?.role === 'moderator');
+  // The Emails tab shows linked mail — a moderator-or-beta surface; the
+  // getTrackedApplication read 403s everyone else.
+  const canSeeMail = $derived(currentUser()?.role === 'moderator' || currentUser()?.beta_tester === true);
 
   // Emails-tab state (declared before TABS, which shows the loaded count). The
   // application's linked mail lazy-loads (see the eager $effect below); each email
@@ -56,7 +56,7 @@
     { id: 'application', label: 'Application' },
     { id: 'fit', label: 'Job Match' },
     { id: 'description', label: 'Job description' },
-    ...(isModerator ? [{ id: 'emails' as Tab, label: emails ? `Emails (${emails.length})` : 'Emails' }] : []),
+    ...(canSeeMail ? [{ id: 'emails' as Tab, label: emails ? `Emails (${emails.length})` : 'Emails' }] : []),
   ]);
   // Local UI state. The parent re-keys this component per job (JobBoard's {#key}),
   // so a fresh mount always opens on Application.
@@ -76,10 +76,10 @@
     }
   }
 
-  // Load the linked mail eagerly (moderators only) so the tab shows its count before
-  // it's opened. Re-keyed per job by the parent, so this runs once per application.
+  // Load the linked mail eagerly (moderator or beta only) so the tab shows its count
+  // before it's opened. Re-keyed per job by the parent, so this runs once per application.
   $effect(() => {
-    if (isModerator) void loadEmails();
+    if (canSeeMail) void loadEmails();
   });
 
   async function toggleEmail(id: number) {

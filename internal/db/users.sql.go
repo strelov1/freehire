@@ -225,6 +225,21 @@ func (q *Queries) GetUserRole(ctx context.Context, id int64) (string, error) {
 	return role, err
 }
 
+const isBetaTester = `-- name: IsBetaTester :one
+SELECT beta_tester
+FROM users
+WHERE id = $1
+`
+
+// Slim beta-membership lookup for the RequireModeratorOrBeta middleware — a
+// primitive bool so the auth package stays free of a db import (same shape as GetUserRole).
+func (q *Queries) IsBetaTester(ctx context.Context, id int64) (bool, error) {
+	row := q.db.QueryRow(ctx, isBetaTester, id)
+	var beta_tester bool
+	err := row.Scan(&beta_tester)
+	return beta_tester, err
+}
+
 const setUserATSAnalysis = `-- name: SetUserATSAnalysis :exec
 UPDATE users
 SET resume_ats_analysis = $2

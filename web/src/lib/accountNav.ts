@@ -14,8 +14,9 @@ export const accountNav = [
   { href: '/my/assistant', label: 'Agent', betaOnly: true },
   { href: '/my/tracking', label: 'Tracking' },
   { href: '/my/activity', label: 'Activity' },
-  // Mail inbox is a restricted rollout — moderators only (the server 403s others).
-  { href: '/my/inbox', label: 'Inbox', moderatorOnly: true },
+  // Mail inbox is a restricted rollout — moderators OR beta testers (the server 403s
+  // everyone else).
+  { href: '/my/inbox', label: 'Inbox', moderatorOrBeta: true },
   { href: '/my/searches', label: 'Search notifications' },
   { href: '/my/api-keys', label: 'API keys' },
   { href: '/my/submissions', label: 'My submissions' },
@@ -23,11 +24,11 @@ export const accountNav = [
 
 export type AccountNavItem = (typeof accountNav)[number];
 
-// The sections visible to a caller: a `moderatorOnly` section is hidden unless the
-// caller is a moderator, and a `betaOnly` section unless the caller is a beta
-// tester (an independent group). This is a UI affordance only — the relevant
-// server surfaces re-check on every request, so hiding the nav is not the
-// security boundary.
+// The sections visible to a caller: a `moderatorOnly` section needs the moderator
+// role, a `betaOnly` section needs beta membership (an independent group), and a
+// `moderatorOrBeta` section needs either. This is a UI affordance only — the relevant
+// server surfaces re-check on every request, so hiding the nav is not the security
+// boundary.
 export function visibleAccountNav(
   isModerator: boolean,
   isBetaTester: boolean,
@@ -35,6 +36,7 @@ export function visibleAccountNav(
   return accountNav.filter((i) => {
     if ('moderatorOnly' in i && i.moderatorOnly) return isModerator;
     if ('betaOnly' in i && i.betaOnly) return isBetaTester;
+    if ('moderatorOrBeta' in i && i.moderatorOrBeta) return isModerator || isBetaTester;
     return true;
   });
 }

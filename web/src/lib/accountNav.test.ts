@@ -38,10 +38,11 @@ describe('visibleAccountNav', () => {
     expect(modOnly).toContain('/my/inbox');
     expect(modOnly).not.toContain('/my/assistant');
 
-    // A beta tester who is not a moderator sees the Assistant but NOT Inbox.
+    // A beta tester who is not a moderator sees the Assistant AND the Inbox (Inbox
+    // is a moderator-OR-beta section).
     const betaOnly = visibleAccountNav(false, true).map((i) => i.href);
     expect(betaOnly).toContain('/my/assistant');
-    expect(betaOnly).not.toContain('/my/inbox');
+    expect(betaOnly).toContain('/my/inbox');
   });
 
   it('shows every section to a moderator who is also a beta tester', () => {

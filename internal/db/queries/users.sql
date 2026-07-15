@@ -103,3 +103,10 @@ WHERE id = $1 AND resume_uploaded_at = $4;
 SELECT role
 FROM users
 WHERE id = $1;
+
+-- name: IsBetaTester :one
+-- Slim beta-membership lookup for the RequireModeratorOrBeta middleware — a
+-- primitive bool so the auth package stays free of a db import (same shape as GetUserRole).
+SELECT beta_tester
+FROM users
+WHERE id = $1;
