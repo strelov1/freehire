@@ -58,6 +58,18 @@ func run() int {
 		return 1
 	}
 	defer tx.Rollback(ctx)
+
+	// The recompute runs several large full-table aggregates (the insights_*
+	// rebuilds unnest arrays and compute percentiles over the whole catalogue). At
+	// the OLTP-default work_mem (a few MB) their sorts/hash aggregates spill to disk
+	// and the run drags for many minutes. Raise work_mem for this batch transaction
+	// only (SET LOCAL — scoped to this connection's transaction, reset on commit) so
+	// the aggregates stay in memory.
+	if _, err := tx.Exec(ctx, "SET LOCAL work_mem = '256MB'"); err != nil {
+		log.Printf("set work_mem: %v", err)
+		return 1
+	}
+
 	q := db.New(pool).WithTx(tx)
 
 	if err := q.DeleteAllJobDailyStats(ctx); err != nil {
