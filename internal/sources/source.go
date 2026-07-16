@@ -192,6 +192,7 @@ func All(c HTTPClient) map[string]Source {
 		NewGupy(c),
 		NewSolides(c),
 		NewPersonio(c),
+		NewPeopleForce(c),
 		NewPinpoint(c),
 		NewRippling(c),
 		NewBambooHR(c),

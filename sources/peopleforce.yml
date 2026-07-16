@@ -1,0 +1,126 @@
+# PeopleForce career sites. Provider is the filename; each entry is company + board.
+# board = the tenant subdomain (<board>.peopleforce.io); see internal/sources/peopleforce.go.
+# The listing is server-rendered HTML paged via ?page=N; each job's /careers/v/<id> detail
+# page carries the description (col-lg-8 column) and a <dl> of Work type / Location.
+- company: Acropolium
+  board: acropolium
+- company: Better Regulation Delivery Office
+  board: brdo
+- company: Brights
+  board: brights
+- company: CHOICE
+  board: choiceqr
+- company: Devlight
+  board: devlight
+- company: Legarithm
+  board: dss-legarithm
+- company: Dwarf Engineering
+  board: dwarfengineering
+- company: EasySoftGroup
+  board: easysoftgroup
+- company: Empat
+  board: empattech
+- company: Energise.pro
+  board: energisepro
+- company: EPC Network
+  board: epc
+- company: Exalate
+  board: exalate
+- company: expla
+  board: expla
+- company: Fedoriv Group
+  board: fedoriv
+- company: Fintech Farm
+  board: fintech-farm
+- company: Galaktica
+  board: galaktica
+- company: Genome
+  board: genome
+- company: GigaCloud
+  board: gigacloud
+- company: Forward Media
+  board: havasvillage
+- company: Hitapps
+  board: hitapps
+- company: ICONIC21
+  board: iconic21
+- company: Infingame
+  board: infingame
+- company: Introduct Group
+  board: introduct-tech
+- company: Ixilix
+  board: ixilix
+- company: JATAPP
+  board: jatapp
+- company: SkyUp Airlines
+  board: joinup
+- company: Kasta.ua
+  board: kasta
+- company: King Group
+  board: kinggroup
+- company: Kombine
+  board: kombine
+- company: The Kyiv Independent
+  board: kyivindependent
+- company: Lej.me
+  board: leime
+- company: LTVplus
+  board: ltvplus
+- company: LYNKSEN DIGITAL
+  board: lynksen
+- company: Magnetics.io
+  board: magnetics
+- company: Media24
+  board: media24
+- company: Frontline
+  board: miltech-1
+- company: Мрія
+  board: mriia
+- company: Multiplex
+  board: multiplex
+- company: Nov8
+  board: nove8
+- company: Pecode software
+  board: pecode
+- company: Point2Web
+  board: point2web
+- company: Creative&Tech Online Institute Projector
+  board: prjctr
+- company: Qwerty.Software
+  board: qwertysoftware
+- company: Respeecher
+  board: respeecher
+- company: REW Technology
+  board: rewtechnology
+- company: RIA.com
+  board: riacomtech
+- company: Повернись живим
+  board: savelife
+- company: Seeton
+  board: seeton
+- company: SOFTCOM
+  board: softcom
+- company: Spendbase
+  board: spendbase
+- company: Strimco
+  board: strimco
+- company: YouScan
+  board: team
+- company: Trueplay
+  board: trueplay
+- company: Trypillian
+  board: trypillian
+- company: uSoftware
+  board: unitedsoftware
+- company: You are launched
+  board: urlaunched
+- company: UTECH
+  board: utechcorp
+- company: Vyriy Drone
+  board: vyriy
+- company: Weltrade
+  board: weltrade
+- company: YouScan
+  board: youscan
+- company: Zagoriy Foundation
+  board: zagofoundation
