@@ -244,6 +244,9 @@ export interface MyJob {
   applied_at: string | null;
   stage: string | null;
   notes: string | null;
+  /** Live inbox messages linked to this job — the board card's ✉ badge. 0 for
+   *  users without a connected mailbox / no linked mail. */
+  email_count: number;
 }
 
 /** The classification/link overlay an inbox email carries: its classified status

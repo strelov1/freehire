@@ -221,7 +221,12 @@ func (q *Queries) ListSavedJobSlugs(ctx context.Context, userID int64) ([]string
 }
 
 const listUserJobs = `-- name: ListUserJobs :many
-SELECT jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.company, jobs.location, jobs.remote, jobs.description, jobs.posted_at, jobs.created_at, jobs.updated_at, jobs.company_slug, jobs.enrichment, jobs.enriched_at, jobs.enrichment_version, jobs.public_slug, jobs.last_seen_at, jobs.closed_at, jobs.countries, jobs.regions, jobs.work_mode, jobs.liveness_strikes, jobs.skills, jobs.seniority, jobs.category, jobs.created_by, jobs.updated_by, jobs.posting_language, jobs.employment_type, jobs.education_level, jobs.experience_years_min, jobs.collections, jobs.content_hash, jobs.english_level, jobs.cities, jobs.view_count, jobs.applied_count, jobs.role_fingerprint, jobs.semantic_embedded_model, jobs.semantic_embedded_hash, jobs.duplicate_of, jobs.is_tech, jobs.semantic_embedding, uj.viewed_at, uj.saved_at, uj.applied_at, uj.stage, uj.notes
+SELECT jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.company, jobs.location, jobs.remote, jobs.description, jobs.posted_at, jobs.created_at, jobs.updated_at, jobs.company_slug, jobs.enrichment, jobs.enriched_at, jobs.enrichment_version, jobs.public_slug, jobs.last_seen_at, jobs.closed_at, jobs.countries, jobs.regions, jobs.work_mode, jobs.liveness_strikes, jobs.skills, jobs.seniority, jobs.category, jobs.created_by, jobs.updated_by, jobs.posting_language, jobs.employment_type, jobs.education_level, jobs.experience_years_min, jobs.collections, jobs.content_hash, jobs.english_level, jobs.cities, jobs.view_count, jobs.applied_count, jobs.role_fingerprint, jobs.semantic_embedded_model, jobs.semantic_embedded_hash, jobs.duplicate_of, jobs.is_tech, jobs.semantic_embedding, uj.viewed_at, uj.saved_at, uj.applied_at, uj.stage, uj.notes,
+       (SELECT count(*)
+          FROM emails e
+         WHERE e.user_id = uj.user_id
+           AND e.job_id = jobs.id
+           AND e.deleted_at IS NULL) AS email_count
 FROM user_jobs uj
 JOIN jobs ON jobs.id = uj.job_id
 WHERE uj.user_id = $1
@@ -243,19 +248,22 @@ type ListUserJobsParams struct {
 }
 
 type ListUserJobsRow struct {
-	Job       Job                `json:"job"`
-	ViewedAt  pgtype.Timestamptz `json:"viewed_at"`
-	SavedAt   pgtype.Timestamptz `json:"saved_at"`
-	AppliedAt pgtype.Timestamptz `json:"applied_at"`
-	Stage     pgtype.Text        `json:"stage"`
-	Notes     pgtype.Text        `json:"notes"`
+	Job        Job                `json:"job"`
+	ViewedAt   pgtype.Timestamptz `json:"viewed_at"`
+	SavedAt    pgtype.Timestamptz `json:"saved_at"`
+	AppliedAt  pgtype.Timestamptz `json:"applied_at"`
+	Stage      pgtype.Text        `json:"stage"`
+	Notes      pgtype.Text        `json:"notes"`
+	EmailCount int64              `json:"email_count"`
 }
 
 // A user's job interactions joined with the job rows, most recently touched
 // first (GREATEST ignores NULLs; viewed_at is always set). filter narrows to
 // viewed-only/saved/applied subsets; 'all' is every interaction, 'viewed' is
 // the passive history (rows neither saved nor applied). Closed jobs stay
-// listed: a user's history must not shrink when a posting closes.
+// listed: a user's history must not shrink when a posting closes. email_count is
+// the caller's live (non-deleted) inbox messages linked to this job — the board's
+// per-card ✉ badge; 0 for everyone without a connected mailbox.
 func (q *Queries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]ListUserJobsRow, error) {
 	rows, err := q.db.Query(ctx, listUserJobs,
 		arg.UserID,
@@ -320,6 +328,7 @@ func (q *Queries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]L
 			&i.AppliedAt,
 			&i.Stage,
 			&i.Notes,
+			&i.EmailCount,
 		); err != nil {
 			return nil, err
 		}

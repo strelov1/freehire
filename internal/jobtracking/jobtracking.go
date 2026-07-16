@@ -84,6 +84,9 @@ func (c Counts) Total(f Filter) int64 {
 type TrackedJob struct {
 	Job jobview.Job
 	Interaction
+	// EmailCount is the caller's live inbox messages linked to this job — the
+	// board's per-card ✉ badge. 0 for users without a connected mailbox.
+	EmailCount int
 }
 
 // Listing is the result of ListTracked: a page of tracked jobs for the active

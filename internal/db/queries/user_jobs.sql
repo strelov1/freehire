@@ -122,8 +122,15 @@ RETURNING *;
 -- first (GREATEST ignores NULLs; viewed_at is always set). filter narrows to
 -- viewed-only/saved/applied subsets; 'all' is every interaction, 'viewed' is
 -- the passive history (rows neither saved nor applied). Closed jobs stay
--- listed: a user's history must not shrink when a posting closes.
-SELECT sqlc.embed(jobs), uj.viewed_at, uj.saved_at, uj.applied_at, uj.stage, uj.notes
+-- listed: a user's history must not shrink when a posting closes. email_count is
+-- the caller's live (non-deleted) inbox messages linked to this job — the board's
+-- per-card ✉ badge; 0 for everyone without a connected mailbox.
+SELECT sqlc.embed(jobs), uj.viewed_at, uj.saved_at, uj.applied_at, uj.stage, uj.notes,
+       (SELECT count(*)
+          FROM emails e
+         WHERE e.user_id = uj.user_id
+           AND e.job_id = jobs.id
+           AND e.deleted_at IS NULL) AS email_count
 FROM user_jobs uj
 JOIN jobs ON jobs.id = uj.job_id
 WHERE uj.user_id = $1

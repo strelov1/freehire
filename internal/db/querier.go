@@ -603,7 +603,9 @@ type Querier interface {
 	// first (GREATEST ignores NULLs; viewed_at is always set). filter narrows to
 	// viewed-only/saved/applied subsets; 'all' is every interaction, 'viewed' is
 	// the passive history (rows neither saved nor applied). Closed jobs stay
-	// listed: a user's history must not shrink when a posting closes.
+	// listed: a user's history must not shrink when a posting closes. email_count is
+	// the caller's live (non-deleted) inbox messages linked to this job — the board's
+	// per-card ✉ badge; 0 for everyone without a connected mailbox.
 	ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]ListUserJobsRow, error)
 	// Every public_slug the user has interacted with (viewed_at is always set, so
 	// any interaction row counts as viewed). Used by the SPA to dim already-seen
