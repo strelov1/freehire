@@ -1,0 +1,10 @@
+# Self-hosted Odoo recruitment sites (website_hr_recruitment module). Provider is the
+# filename; each entry is company + board. board = the careers host. GET /jobs lists every
+# position; the /jobs/detail/<slug>-<id> detail carries a schema.org JobPosting as microdata.
+# See internal/sources/odoo.go. (odoo.com itself is excluded — its detail structure diverges.)
+- company: Ameware Group
+  board: jobs.amewaregroup.com
+- company: ERP Ukraine
+  board: erp.co.ua
+- company: Garazd Creation
+  board: garazd.biz
