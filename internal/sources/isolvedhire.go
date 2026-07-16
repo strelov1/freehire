@@ -2,7 +2,9 @@ package sources
 
 import (
 	"context"
+	"encoding/xml"
 	"fmt"
+	"io"
 	"regexp"
 
 	"golang.org/x/net/html"
@@ -19,10 +21,11 @@ type isolvedFamily struct {
 	host     string
 }
 
-// isolvedHTTP is the client capability the family needs: the sitemap as XML and each detail
-// page as parsed HTML (for its ld+json).
+// isolvedHTTP is the client capability the family needs: the sitemap as a stream (some tenants'
+// sitemaps run past the buffered-body cap — see Fetch) and each detail page as parsed HTML (for
+// its ld+json).
 type isolvedHTTP interface {
-	XMLGetter
+	StreamGetter
 	HTMLGetter
 }
 
@@ -44,25 +47,41 @@ func (s isolvedFamily) Provider() string { return s.provider }
 var isolvedJobID = regexp.MustCompile(`/jobs/(\d+)`)
 
 func (s isolvedFamily) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	var sitemap struct {
-		URLs []struct {
-			Loc string `xml:"loc"`
-		} `xml:"url"`
-	}
 	smURL := fmt.Sprintf("https://%s.%s/sitemap.xml", e.Board, s.host)
-	if err := s.http.GetXML(ctx, smURL, &sitemap); err != nil {
-		return nil, fmt.Errorf("%s: sitemap %q: %w", s.provider, e.Board, err)
-	}
 
+	// The sitemap is streamed and scanned <loc>-by-<loc> rather than buffered whole: a large
+	// tenant's sitemap runs past the buffered-body size cap (35 MiB+ seen in prod), which would
+	// truncate it mid-element and fail the XML decode. Streaming reads it in full at any size.
 	seen := map[string]struct{}{}
 	var ids []string
-	for _, u := range sitemap.URLs {
-		if m := isolvedJobID.FindStringSubmatch(u.Loc); m != nil {
-			if _, ok := seen[m[1]]; !ok {
-				seen[m[1]] = struct{}{}
-				ids = append(ids, m[1])
+	err := s.http.GetStream(ctx, smURL, "application/xml", func(r io.Reader) error {
+		dec := xml.NewDecoder(r)
+		for {
+			tok, err := dec.Token()
+			if err == io.EOF {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			start, ok := tok.(xml.StartElement)
+			if !ok || start.Name.Local != "loc" {
+				continue
+			}
+			var loc string
+			if err := dec.DecodeElement(&loc, &start); err != nil {
+				return err
+			}
+			if m := isolvedJobID.FindStringSubmatch(loc); m != nil {
+				if _, ok := seen[m[1]]; !ok {
+					seen[m[1]] = struct{}{}
+					ids = append(ids, m[1])
+				}
 			}
 		}
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%s: sitemap %q: %w", s.provider, e.Board, err)
 	}
 
 	return fetchDetails(ids, defaultDetailWorkers, func(id string) (Job, bool) {

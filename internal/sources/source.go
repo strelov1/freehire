@@ -368,6 +368,9 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// djinni.co IP-blocklists the prod datacenter IP: a fast crawl escalates to a hard "your
 	// IP has been blocked" page, while a residential IP is served the full JSON-LD listing.
 	"djinni": func(c HTTPClient) Source { return NewDjinni(c) },
+	// 2gis tarpits datacenter IPs (the prod IP times out at 25s); the residential proxy is
+	// served in ~2s. It uses the standard HTMLGetter, so the proxied client serves it directly.
+	"2gis": func(c HTTPClient) Source { return NewTwoGIS(c) },
 }
 
 // ApplyProxyEgress rewires the proxiedProviders in registry to egress through the proxy

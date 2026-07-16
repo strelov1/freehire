@@ -26,14 +26,19 @@ func TestApplyProxyEgressRewiresProxiedProviderOnly(t *testing.T) {
 	t.Setenv("SOURCES_PROXY_URL", "http://user:pass@proxy.example:8080")
 
 	registry := All(NewClient())
-	proxiedBefore := registry[proxiedProbe]
+	proxiedBefore := map[string]Source{}
+	for name := range proxiedProviders {
+		proxiedBefore[name] = registry[name]
+	}
 	directBefore := registry["greenhouse"] // not in proxiedProviders
 
 	if err := ApplyProxyEgress(registry); err != nil {
 		t.Fatalf("valid proxy: %v", err)
 	}
-	if registry[proxiedProbe] == proxiedBefore {
-		t.Error("a proxied provider must be rewired onto the proxy client")
+	for name, before := range proxiedBefore {
+		if registry[name] == before {
+			t.Errorf("proxied provider %q must be rewired onto the proxy client", name)
+		}
 	}
 	if registry["greenhouse"] != directBefore {
 		t.Error("a non-proxied provider must stay on the direct client")

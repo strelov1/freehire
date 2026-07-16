@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"testing"
@@ -56,6 +57,18 @@ func (r *routedHTTP) GetHTML(_ context.Context, url string) (*html.Node, error) 
 		}
 	}
 	return nil, fmt.Errorf("routedHTTP: no route for %s", url)
+}
+
+func (r *routedHTTP) GetStream(_ context.Context, url, _ string, fn func(io.Reader) error) error {
+	r.mu.Lock()
+	r.calls++
+	r.mu.Unlock()
+	for _, rt := range r.routes {
+		if strings.Contains(url, rt.match) {
+			return fn(strings.NewReader(rt.body))
+		}
+	}
+	return fmt.Errorf("routedHTTP: no route for %s", url)
 }
 
 func (r *routedHTTP) GetText(_ context.Context, url string) (string, error) {
