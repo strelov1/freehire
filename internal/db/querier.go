@@ -468,10 +468,18 @@ type Querier interface {
 	ListEmails(ctx context.Context, arg ListEmailsParams) ([]ListEmailsRow, error)
 	// Ranked roles within one country slice ('' = all countries), ordered by raw
 	// demand or by growth (open_count - open_count_prev), demand as the tiebreak.
+	// An empty @category means all categories (the original behavior); a non-empty
+	// @category restricts the ranking to that category's seniorities.
 	ListInsightsRoles(ctx context.Context, arg ListInsightsRolesParams) ([]ListInsightsRolesRow, error)
 	// Salary bands for one role × country scope, one row per (currency, period),
 	// richest samples first. Currencies are never combined.
 	ListInsightsSalary(ctx context.Context, arg ListInsightsSalaryParams) ([]ListInsightsSalaryRow, error)
+	// All-seniority salary bands for one category (country-agnostic '' bucket), so a
+	// per-category salary page is one call: one row per (seniority, currency, period),
+	// richest samples first. seniority '' is the category-wide band; the named
+	// seniorities are the per-grade bands. Bands below the sample floor are already
+	// absent from the rollup.
+	ListInsightsSalaryByCategory(ctx context.Context, category string) ([]ListInsightsSalaryByCategoryRow, error)
 	// Ranked skills within one (category, country) scope; scoping is one-dimensional
 	// (either category or country carries a value, the other is ''), matching what the
 	// rollup materializes.

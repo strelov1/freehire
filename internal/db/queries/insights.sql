@@ -50,9 +50,12 @@ WHERE open_count > 0 OR open_count_prev > 0;
 -- name: ListInsightsRoles :many
 -- Ranked roles within one country slice ('' = all countries), ordered by raw
 -- demand or by growth (open_count - open_count_prev), demand as the tiebreak.
+-- An empty @category means all categories (the original behavior); a non-empty
+-- @category restricts the ranking to that category's seniorities.
 SELECT category, seniority, open_count, (open_count - open_count_prev)::int AS growth
 FROM insights_role_stats
 WHERE country = sqlc.arg('country')
+  AND (sqlc.arg('category')::text = '' OR category = sqlc.arg('category'))
 ORDER BY
     (CASE WHEN sqlc.arg('sort')::text = 'growth' THEN (open_count - open_count_prev) ELSE open_count END) DESC,
     open_count DESC
@@ -212,6 +215,18 @@ WHERE category = sqlc.arg('category')
   AND seniority = sqlc.arg('seniority')
   AND country = sqlc.arg('country')
 ORDER BY sample_size DESC;
+
+-- name: ListInsightsSalaryByCategory :many
+-- All-seniority salary bands for one category (country-agnostic '' bucket), so a
+-- per-category salary page is one call: one row per (seniority, currency, period),
+-- richest samples first. seniority '' is the category-wide band; the named
+-- seniorities are the per-grade bands. Bands below the sample floor are already
+-- absent from the rollup.
+SELECT seniority, currency, period, sample_size, p25, p50, p75
+FROM insights_salary_stats
+WHERE category = sqlc.arg('category')
+  AND country = ''
+ORDER BY seniority, sample_size DESC;
 
 -- ---------------------------------------------------------------------------
 -- Hiring velocity (faceted)

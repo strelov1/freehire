@@ -36,6 +36,17 @@ export function blogPaths(posts: { slug: string }[]): string[] {
   return ['/blog', ...posts.map((post) => `/blog/${post.slug}`)];
 }
 
+/** Sitemap paths for the insights pages: the hub plus salary/skills/roles for each
+ *  covered category. Takes the already-gated category tokens (from
+ *  `coveredCategories`) so it stays pure — a thin category is never listed. */
+export function insightsPaths(categories: string[]): string[] {
+  const paths = ['/insights'];
+  for (const c of categories) {
+    paths.push(`/insights/salary/${c}`, `/insights/skills/${c}`, `/insights/roles/${c}`);
+  }
+  return paths;
+}
+
 export interface UrlEntry {
   loc: string;
   lastmod?: string;

@@ -303,6 +303,27 @@ export function collectionPageJsonLd(
   };
 }
 
+/** schema.org Dataset descriptor for an insights page — tells search/AI engines
+ *  the page presents an aggregate dataset (salary bands, demand rankings) free to
+ *  access, published by freehire. Aggregate-only, so no distribution file is
+ *  advertised. */
+export function datasetJsonLd(
+  name: string,
+  description: string,
+  url: string,
+  origin: string
+): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Dataset',
+    name,
+    description,
+    url,
+    isAccessibleForFree: true,
+    creator: { '@type': 'Organization', name: SITE, url: `${origin}/` },
+  };
+}
+
 /** schema.org FAQPage. The questions must also appear as visible text on the page
  *  (Google's requirement), so it is built from the same source as the rendered FAQ. */
 export function faqPageJsonLd(faqs: FaqItem[]): Record<string, unknown> {

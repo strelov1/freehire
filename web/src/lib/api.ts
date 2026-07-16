@@ -70,6 +70,28 @@ export interface SitemapEntry {
   updated_at: string;
 }
 
+/** Aggregate market-insight wire shapes (the /api/v1/insights/* reads). */
+export interface InsightRole {
+  category: string;
+  seniority: string;
+  open_count: number;
+  growth: number;
+}
+export interface InsightSkill {
+  skill: string;
+  open_count: number;
+  growth: number;
+}
+export interface InsightSalaryBand {
+  seniority: string;
+  currency: string;
+  period: string;
+  sample_size: number;
+  p25: number;
+  p50: number;
+  p75: number;
+}
+
 /** One posting in a role cluster — a single city's opening under a collapsed role
  *  (see the /jobs/:slug/copies endpoint). Each keeps its own location and apply URL. */
 export interface JobCopy {
@@ -394,6 +416,46 @@ export function createApi(
    *  count-ordered, backing the company "Industry" filter's searchable options. */
   async function listCompanySubindustries(): Promise<{ value: string; count: number }[]> {
     return requestData<{ value: string; count: number }[]>('/api/v1/companies/subindustries');
+  }
+
+  // --- Insights (aggregate market data behind the /insights SEO pages) --------
+
+  function insightsQuery(opts: {
+    category?: string;
+    country?: string;
+    sort?: 'open' | 'growth';
+    limit?: number;
+  }): string {
+    const q = new URLSearchParams();
+    if (opts.category) q.set('category', opts.category);
+    if (opts.country) q.set('country', opts.country);
+    if (opts.sort) q.set('sort', opts.sort);
+    if (opts.limit != null) q.set('limit', String(opts.limit));
+    return q.toString();
+  }
+
+  /** Ranked roles (category × seniority). Pass `category` to restrict to one
+   *  category's seniorities (the per-category roles page); omit for all. */
+  async function insightsRoles(
+    opts: { category?: string; country?: string; sort?: 'open' | 'growth'; limit?: number } = {},
+  ): Promise<InsightRole[]> {
+    return requestData<InsightRole[]>(`/api/v1/insights/roles?${insightsQuery(opts)}`);
+  }
+
+  /** Ranked skills, optionally scoped by category or country (not both). */
+  async function insightsSkills(
+    opts: { category?: string; country?: string; sort?: 'open' | 'growth'; limit?: number } = {},
+  ): Promise<InsightSkill[]> {
+    return requestData<InsightSkill[]>(`/api/v1/insights/skills?${insightsQuery(opts)}`);
+  }
+
+  /** Every seniority's salary bands for one category, in a single call (the
+   *  per-category salary page). Rows carry their own `seniority` ('' = the
+   *  category-wide band). */
+  async function insightsSalaryByCategory(category: string): Promise<InsightSalaryBand[]> {
+    return requestData<InsightSalaryBand[]>(
+      `/api/v1/insights/salary?category=${encodeURIComponent(category)}`,
+    );
   }
 
   // --- Sitemap --------------------------------------------------------------
@@ -936,6 +998,9 @@ export function createApi(
     listCompanies,
     getCompany,
     listCompanySubindustries,
+    insightsRoles,
+    insightsSkills,
+    insightsSalaryByCategory,
     sitemapJobs,
     sitemapCompanies,
     sitemapCompanyBoundaries,

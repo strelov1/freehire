@@ -1729,12 +1729,13 @@ Roles (category × seniority) ranked by the number of open jobs, with a growth m
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
+| `category` | string | no | Restrict to one category's seniorities (enrichment vocabulary); omitted = all categories. (e.g. `backend`) |
 | `country` | string | no | ISO 3166-1 alpha-2 scope; omitted = all countries. (e.g. `DE`) |
 | `sort` | string | no | `open` (default) ranks by open-count, `growth` by the window delta. |
 | `limit` | integer | no | Result cap, 1–200 (default 20). |
 
 ```bash
-curl "https://freehire.dev/api/v1/insights/roles?country=DE&sort=growth"
+curl "https://freehire.dev/api/v1/insights/roles?category=backend&sort=growth"
 ```
 
 ```json
@@ -1804,26 +1805,33 @@ curl "https://freehire.dev/api/v1/insights/velocity?granularity=week&category=ba
 
 **Auth:** Public
 
-Salary distribution bands (25th/50th/75th percentiles) for a role and geography, one entry per currency and pay period. Currencies are never combined, and a band with too few disclosed salaries is omitted rather than returned unreliable. Figures are integers in the currency's own units.
+Salary distribution bands (25th/50th/75th percentiles) for a role and geography, one entry per currency and pay period. Currencies are never combined, and a band with too few disclosed salaries is omitted rather than returned unreliable. Figures are integers in the currency's own units. Each row carries the `seniority` it applies to.
+
+Passing `category` alone (no `seniority`, no `country`) returns the **per-seniority breakdown** for that category in one call — every seniority's bands plus the category-wide band (`seniority: ""`) — with `meta.breakdown = "seniority"`. This is what the per-category salary page reads.
 
 **Query parameters**
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `category` | string | no | Role category (enrichment vocabulary). (e.g. `backend`) |
+| `category` | string | no | Role category (enrichment vocabulary). Alone → per-seniority breakdown. (e.g. `backend`) |
 | `seniority` | string | no | Role seniority (enrichment vocabulary). (e.g. `senior`) |
 | `country` | string | no | ISO 3166-1 alpha-2 scope; omitted = all countries. |
 
 ```bash
+# Exact scope (one grade):
 curl "https://freehire.dev/api/v1/insights/salary?category=backend&seniority=senior"
+# Per-seniority breakdown for a category (the salary page's read):
+curl "https://freehire.dev/api/v1/insights/salary?category=backend"
 ```
 
 ```json
 {
   "data": [
-    { "currency": "USD", "period": "year", "sample_size": 84, "p25": 130000, "p50": 155000, "p75": 180000 }
+    { "seniority": "junior", "currency": "USD", "period": "year", "sample_size": 40, "p25": 95000, "p50": 110000, "p75": 125000 },
+    { "seniority": "senior", "currency": "USD", "period": "year", "sample_size": 84, "p25": 130000, "p50": 155000, "p75": 180000 },
+    { "seniority": "", "currency": "USD", "period": "year", "sample_size": 210, "p25": 110000, "p50": 150000, "p75": 185000 }
   ],
-  "meta": { "category": "backend", "seniority": "senior", "country": "" }
+  "meta": { "category": "backend", "seniority": "", "country": "", "breakdown": "seniority" }
 }
 ```
 

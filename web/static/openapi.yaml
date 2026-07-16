@@ -806,6 +806,11 @@ paths:
       summary: Rank roles by open-job demand and growth
       x-openai-isConsequential: false
       parameters:
+      - name: category
+        in: query
+        schema:
+          type: string
+        description: Restrict to one category's seniorities (enrichment vocabulary); omit for all categories.
       - name: country
         in: query
         schema:
@@ -968,7 +973,7 @@ paths:
         in: query
         schema:
           type: string
-        description: Role category (enrichment vocabulary).
+        description: Role category (enrichment vocabulary). Alone (no seniority/country) returns the per-seniority breakdown for the category.
       - name: seniority
         in: query
         schema:
@@ -992,6 +997,7 @@ paths:
                     items:
                       type: object
                       properties:
+                        seniority: { type: string }
                         currency: { type: string }
                         period: { type: string }
                         sample_size: { type: integer }

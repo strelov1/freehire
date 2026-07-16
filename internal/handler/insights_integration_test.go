@@ -178,6 +178,42 @@ func TestInsightsEndpoints(t *testing.T) {
 		t.Errorf("salary seniority-only: status %d, missing USD band: %s", code, raw)
 	}
 
+	// --- roles scoped to one category (SEO-page read) ---------------------------
+	out, raw, code = get(t, "/api/v1/insights/roles?category=backend")
+	bodies = append(bodies, raw)
+	if code != fiber.StatusOK {
+		t.Fatalf("roles?category: status %d, want 200: %s", code, raw)
+	}
+	rows, _ := out["data"].([]any)
+	if len(rows) == 0 {
+		t.Errorf("roles?category=backend returned no rows: %s", raw)
+	}
+	for _, e := range rows {
+		if m, ok := e.(map[string]any); ok && m["category"] != "backend" {
+			t.Errorf("roles?category=backend leaked category %v: %s", m["category"], raw)
+		}
+	}
+
+	// --- per-category salary breakdown (all seniorities in one call) -------------
+	out, raw, code = get(t, "/api/v1/insights/salary?category=backend")
+	bodies = append(bodies, raw)
+	if code != fiber.StatusOK {
+		t.Fatalf("salary?category breakdown: status %d, want 200: %s", code, raw)
+	}
+	if out["meta"].(map[string]any)["breakdown"] != "seniority" {
+		t.Errorf("salary?category: expected breakdown meta, got %v", out["meta"])
+	}
+	// Breakdown carries per-row seniority and includes the senior grade's USD band.
+	foundSeniorUSD := false
+	for _, e := range out["data"].([]any) {
+		if m, ok := e.(map[string]any); ok && m["seniority"] == "senior" && m["currency"] == "USD" {
+			foundSeniorUSD = true
+		}
+	}
+	if !foundSeniorUSD {
+		t.Errorf("salary?category=backend breakdown missing senior USD band: %s", raw)
+	}
+
 	// --- aggregate-only: no record-level string leaks into any body -------------
 	for _, raw := range bodies {
 		for _, leak := range []string{"SECRET_TITLE", "secret-slug", "secret-ext", "ex.test"} {

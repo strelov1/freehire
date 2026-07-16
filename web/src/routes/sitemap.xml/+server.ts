@@ -11,7 +11,11 @@ export const GET: RequestHandler = async ({ url, fetch }) => {
   const origin = url.origin;
   const companyCursors = await serverApi(fetch).sitemapCompanyBoundaries(SITEMAP_CHUNK);
 
-  const locs = [`${origin}/sitemap-pages.xml`, `${origin}/sitemap-jobs.xml`];
+  const locs = [
+    `${origin}/sitemap-pages.xml`,
+    `${origin}/sitemap-jobs.xml`,
+    `${origin}/sitemap-insights.xml`,
+  ];
   // The first company chunk starts before every slug (empty string); each boundary
   // cursor starts the next chunk.
   for (const after of ['', ...companyCursors]) {

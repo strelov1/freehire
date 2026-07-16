@@ -44,6 +44,7 @@ type skillInsight struct {
 
 // salaryBand is one (currency, period) salary distribution on the wire.
 type salaryBand struct {
+	Seniority  string `json:"seniority"`
 	Currency   string `json:"currency"`
 	Period     string `json:"period"`
 	SampleSize int32  `json:"sample_size"`
@@ -171,8 +172,12 @@ func (a *API) InsightsRoles(c *fiber.Ctx) error {
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
+	category, err := parseCategory(c.Query("category"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
 
-	rows, err := a.queries.ListInsightsRoles(c.Context(), db.ListInsightsRolesParams{Country: country, Sort: sort, Lim: limit})
+	rows, err := a.queries.ListInsightsRoles(c.Context(), db.ListInsightsRolesParams{Country: country, Category: category, Sort: sort, Lim: limit})
 	if err != nil {
 		return err
 	}
@@ -182,7 +187,7 @@ func (a *API) InsightsRoles(c *fiber.Ctx) error {
 	}
 	return c.JSON(fiber.Map{
 		"data": data,
-		"meta": fiber.Map{"country": country, "sort": sort, "limit": limit},
+		"meta": fiber.Map{"country": country, "category": category, "sort": sort, "limit": limit},
 	})
 }
 
@@ -292,13 +297,31 @@ func (a *API) InsightsSalary(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 
+	// Per-category breakdown: a category with no seniority and no country scope
+	// returns every seniority's bands (plus the category-wide '' band) in one call —
+	// what the per-category salary page needs. Each row carries its own seniority.
+	if category != "" && seniority == "" && country == "" {
+		rows, err := a.queries.ListInsightsSalaryByCategory(c.Context(), category)
+		if err != nil {
+			return err
+		}
+		data := make([]salaryBand, len(rows))
+		for i, r := range rows {
+			data[i] = salaryBand{Seniority: r.Seniority, Currency: r.Currency, Period: r.Period, SampleSize: r.SampleSize, P25: r.P25, P50: r.P50, P75: r.P75}
+		}
+		return c.JSON(fiber.Map{
+			"data": data,
+			"meta": fiber.Map{"category": category, "seniority": "", "country": "", "breakdown": "seniority"},
+		})
+	}
+
 	rows, err := a.queries.ListInsightsSalary(c.Context(), db.ListInsightsSalaryParams{Category: category, Seniority: seniority, Country: country})
 	if err != nil {
 		return err
 	}
 	data := make([]salaryBand, len(rows))
 	for i, r := range rows {
-		data[i] = salaryBand{Currency: r.Currency, Period: r.Period, SampleSize: r.SampleSize, P25: r.P25, P50: r.P50, P75: r.P75}
+		data[i] = salaryBand{Seniority: seniority, Currency: r.Currency, Period: r.Period, SampleSize: r.SampleSize, P25: r.P25, P50: r.P50, P75: r.P75}
 	}
 	return c.JSON(fiber.Map{
 		"data": data,

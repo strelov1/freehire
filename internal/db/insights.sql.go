@@ -73,16 +73,18 @@ const listInsightsRoles = `-- name: ListInsightsRoles :many
 SELECT category, seniority, open_count, (open_count - open_count_prev)::int AS growth
 FROM insights_role_stats
 WHERE country = $1
+  AND ($2::text = '' OR category = $2)
 ORDER BY
-    (CASE WHEN $2::text = 'growth' THEN (open_count - open_count_prev) ELSE open_count END) DESC,
+    (CASE WHEN $3::text = 'growth' THEN (open_count - open_count_prev) ELSE open_count END) DESC,
     open_count DESC
-LIMIT $3::int
+LIMIT $4::int
 `
 
 type ListInsightsRolesParams struct {
-	Country string `json:"country"`
-	Sort    string `json:"sort"`
-	Lim     int32  `json:"lim"`
+	Country  string `json:"country"`
+	Category string `json:"category"`
+	Sort     string `json:"sort"`
+	Lim      int32  `json:"lim"`
 }
 
 type ListInsightsRolesRow struct {
@@ -94,8 +96,15 @@ type ListInsightsRolesRow struct {
 
 // Ranked roles within one country slice (” = all countries), ordered by raw
 // demand or by growth (open_count - open_count_prev), demand as the tiebreak.
+// An empty @category means all categories (the original behavior); a non-empty
+// @category restricts the ranking to that category's seniorities.
 func (q *Queries) ListInsightsRoles(ctx context.Context, arg ListInsightsRolesParams) ([]ListInsightsRolesRow, error) {
-	rows, err := q.db.Query(ctx, listInsightsRoles, arg.Country, arg.Sort, arg.Lim)
+	rows, err := q.db.Query(ctx, listInsightsRoles,
+		arg.Country,
+		arg.Category,
+		arg.Sort,
+		arg.Lim,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -155,6 +164,57 @@ func (q *Queries) ListInsightsSalary(ctx context.Context, arg ListInsightsSalary
 	for rows.Next() {
 		var i ListInsightsSalaryRow
 		if err := rows.Scan(
+			&i.Currency,
+			&i.Period,
+			&i.SampleSize,
+			&i.P25,
+			&i.P50,
+			&i.P75,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInsightsSalaryByCategory = `-- name: ListInsightsSalaryByCategory :many
+SELECT seniority, currency, period, sample_size, p25, p50, p75
+FROM insights_salary_stats
+WHERE category = $1
+  AND country = ''
+ORDER BY seniority, sample_size DESC
+`
+
+type ListInsightsSalaryByCategoryRow struct {
+	Seniority  string `json:"seniority"`
+	Currency   string `json:"currency"`
+	Period     string `json:"period"`
+	SampleSize int32  `json:"sample_size"`
+	P25        int32  `json:"p25"`
+	P50        int32  `json:"p50"`
+	P75        int32  `json:"p75"`
+}
+
+// All-seniority salary bands for one category (country-agnostic ” bucket), so a
+// per-category salary page is one call: one row per (seniority, currency, period),
+// richest samples first. seniority ” is the category-wide band; the named
+// seniorities are the per-grade bands. Bands below the sample floor are already
+// absent from the rollup.
+func (q *Queries) ListInsightsSalaryByCategory(ctx context.Context, category string) ([]ListInsightsSalaryByCategoryRow, error) {
+	rows, err := q.db.Query(ctx, listInsightsSalaryByCategory, category)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListInsightsSalaryByCategoryRow{}
+	for rows.Next() {
+		var i ListInsightsSalaryByCategoryRow
+		if err := rows.Scan(
+			&i.Seniority,
 			&i.Currency,
 			&i.Period,
 			&i.SampleSize,
