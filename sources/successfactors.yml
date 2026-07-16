@@ -11,3 +11,9 @@
   board: jobs.paysafe.com
 - company: Worldline
   board: jobs.worldline.com
+
+# SuccessFactors tenants from jobcrawls harvest (2026-07, job_sitemap.xml validated)
+- company: University of Helsinki
+  board: jobs.helsinki.fi
+- company: Bilfinger
+  board: jobs.bilfinger.com

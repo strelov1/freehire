@@ -97,3 +97,7 @@
   board: careers.activision.com
 - company: BNSF Railway
   board: jobs.bnsf.com
+
+# Phenom tenant from jobcrawls harvest (2026-07, refineSearch-validated 482 postings)
+- company: Exyte
+  board: careers.exyte.net

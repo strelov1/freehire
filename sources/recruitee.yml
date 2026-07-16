@@ -3543,3 +3543,7 @@
   board: elegantresorts
 - company: Avant Arte
   board: avantarte
+
+# Recruitee tenant from jobcrawls harvest (2026-07, offers API-validated)
+- company: Norrin
+  board: norrin
