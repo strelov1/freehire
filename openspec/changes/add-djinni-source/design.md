@@ -75,12 +75,29 @@ fragile against that). This needed a new `HTMLResolvedGetter` interface (added t
 non-redirected empty page is kept as a secondary stop, and `djinniMaxPages` (above the observed
 ~488) is the backstop against a pathological feed, mirroring `justJoinMaxPages`.
 
+### Decision: Pace the crawl and keep partial results on a datacenter 403
+
+The spike (residential IP) saw no rate limiting, but the FIRST prod run (host-2 datacenter IP)
+`403`'d at page ~204 of a no-delay crawl — Djinni throttles a fast burst by IP. Two changes
+make the crawl production-viable: (1) a `djinniPageDelay` (~600ms) between page requests to stay
+under the limit and be a polite crawler; (2) **partial-on-error** — a mid-crawl fetch error
+stops the crawl but keeps the pages already collected (the freshest, since Djinni orders by
+recency), instead of the original "abort the whole board on any page error" which lost ~3,000
+already-crawled jobs and dropped the board into cooldown. The board fails hard ONLY when page 1
+fails, so an empty successful crawl never reaches the unseen-sweep (the workday-total:0
+false-close class). Trade-off: the crawl depth per run is whatever stays under the limit (the
+freshest N pages), not guaranteed full corpus; the older tail is lower value and a residential
+egress / deeper pacing is the noted seam if full coverage is ever wanted.
+
 ## Risks / Trade-offs
 
-- **Full-corpus crawl is ~488 sequential requests (~16 min/run).** → Acceptable for a
-  run-once cron; requests are cheap and Djinni showed no rate limiting on rapid sequential
-  hits during the spike. Sharding by `?primary_keyword=` is a noted seam if latency ever
-  matters.
+- **Full-corpus crawl is ~488 sequential requests.** → Paced at ~600ms/page (~5 min) and
+  bounded by partial-on-error when Djinni's datacenter rate-limit lands; each run reliably gets
+  the freshest pages. Sharding by `?primary_keyword=` or a residential egress is a noted seam
+  if full-corpus coverage ever matters.
+- **A moving 403 boundary causes minor unseen-sweep churn** (jobs near the boundary flip in/out
+  between runs). → The 48h unseen window absorbs it — a job must be missed for 48h straight to
+  close, which a near-boundary posting rarely is.
 - **One failing board = the whole source in cooldown** (single-board granularity of
   `board_health`). → Inherent to a single-board source; consistent with other boardless
   aggregators (justjoin, himalayas).

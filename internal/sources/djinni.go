@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -30,6 +31,12 @@ const (
 	djinniMaxPages = 600
 )
 
+// djinniPageDelay paces the sequential page crawl. Djinni rate-limits a fast burst from a
+// datacenter IP with a 403 (a no-delay crawl 403'd around page ~200 from prod, while the same
+// pages spaced ~1s apart return 200), so we throttle to stay under the limit and be a polite
+// crawler; partial-on-error bounds the damage if a 403 still lands. A var so tests zero it.
+var djinniPageDelay = 600 * time.Millisecond
+
 // NewDjinni builds the djinni listing adapter over the given HTML client.
 func NewDjinni(c HTMLResolvedGetter) Source { return djinni{http: c} }
 
@@ -44,13 +51,29 @@ func (djinni) aggregator() {}
 // the bare listing (/jobs/), so the FINAL URL no longer carries the requested page marker.
 // (Following the redirect would otherwise re-serve page 1 indefinitely, since page 1 is not
 // empty.) A genuinely empty non-redirected page is a secondary stop.
+//
+// A page fetch that fails partway (Djinni 403s a datacenter IP that crawls too fast) does NOT
+// discard the crawl: the pages already collected are the freshest postings (Djinni orders by
+// recency), so Fetch keeps them and stops. It fails the whole board only when page 1 itself
+// fails — an empty successful crawl would otherwise let the unseen-sweep close the catalogue.
 func (s djinni) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 	var jobs []Job
 	for page := 1; page <= djinniMaxPages; page++ {
+		if page > 1 {
+			select {
+			case <-ctx.Done():
+				return jobs, ctx.Err()
+			case <-time.After(djinniPageDelay):
+			}
+		}
 		pageMarker := fmt.Sprintf("page=%d", page)
 		root, final, err := s.http.GetHTMLResolved(ctx, djinniListBase+pageMarker)
 		if err != nil {
-			return nil, fmt.Errorf("djinni: fetch page %d: %w", page, err)
+			if len(jobs) == 0 {
+				return nil, fmt.Errorf("djinni: fetch page %d: %w", page, err)
+			}
+			log.Printf("djinni: page %d failed (%v); keeping %d jobs from pages 1..%d", page, err, len(jobs), page-1)
+			break // partial crawl — keep the freshest pages rather than losing everything
 		}
 		if !strings.Contains(final, pageMarker) {
 			break // redirected off the end of the feed (past-the-end page 302s to /jobs/)

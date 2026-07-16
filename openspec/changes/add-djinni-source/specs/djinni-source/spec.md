@@ -57,6 +57,28 @@ pathological feed, so a crawl can never loop unboundedly.
 - **WHEN** the listing never signals the end within the configured page cap
 - **THEN** the adapter stops at the cap rather than paging without bound
 
+### Requirement: Djinni survives a datacenter rate-limit mid-crawl
+
+Djinni rate-limits a fast page burst from a datacenter IP with a `403`. The adapter SHALL pace
+its sequential page requests to stay under that limit, and SHALL treat a page fetch that fails
+partway through the crawl as a partial success: it keeps the postings already collected (the
+freshest pages, since Djinni orders by recency) and stops, rather than discarding the whole
+crawl. The adapter SHALL fail the board (return an error) ONLY when the FIRST page fails, so a
+successful crawl never returns an empty set that would let the unseen-sweep close the catalogue.
+
+#### Scenario: A mid-crawl 403 keeps the pages already collected
+
+- **WHEN** page 1 maps successfully and a later page fails with a fetch error (e.g. a rate-limit
+  `403`)
+- **THEN** the adapter returns the jobs from the pages it did fetch, with no error, and does not
+  request further pages
+
+#### Scenario: A first-page failure fails the board
+
+- **WHEN** the very first page fails with a fetch error (no jobs collected yet)
+- **THEN** the adapter returns an error so the board is counted failed and cooled down — an
+  empty successful crawl (which the unseen-sweep would act on) is never returned
+
 ### Requirement: Djinni drops a posting it cannot key or address
 
 The adapter SHALL drop a `JobPosting` that lacks a usable `identifier` (no dedup key), a

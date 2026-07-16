@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -55,18 +56,25 @@ const djinniSingleHTML = `<html><head>
 
 const djinniEmptyHTML = `<html><head></head><body></body></html>`
 
+func init() { djinniPageDelay = 0 } // don't pace the crawl in unit tests
+
 // djinniPagedHTTP models djinni.co's listing pagination. A page present in bodies is served
-// directly (final URL == requested URL, no redirect). A page ABSENT from bodies models the real
-// past-the-end behavior: djinni 302s to the bare listing (/jobs/) and serves page 1's content —
-// so the resolved final URL loses the page marker, which is the adapter's end-of-feed signal.
+// directly (final URL == requested URL, no redirect). A page listed in errPages fails with a 403
+// (modelling Djinni rate-limiting a fast datacenter crawl). A page ABSENT from both models the
+// real past-the-end behavior: djinni 302s to the bare listing (/jobs/) and serves page 1's
+// content — so the resolved final URL loses the page marker, the adapter's end-of-feed signal.
 type djinniPagedHTTP struct {
-	bodies  map[int]string
-	gotURLs []string
+	bodies   map[int]string
+	errPages map[int]bool
+	gotURLs  []string
 }
 
 func (f *djinniPagedHTTP) GetHTMLResolved(_ context.Context, url string) (*html.Node, string, error) {
 	f.gotURLs = append(f.gotURLs, url)
 	page := djinniPageOf(url)
+	if f.errPages[page] {
+		return nil, "", fmt.Errorf("GET %s: status 403", url)
+	}
 	if body, ok := f.bodies[page]; ok {
 		node, err := html.Parse(strings.NewReader(body))
 		return node, url, err // served directly, no redirect
@@ -191,6 +199,37 @@ func TestDjinniStopsOnEmptyNonRedirectedPage(t *testing.T) {
 	}
 	if len(fake.gotURLs) != 2 {
 		t.Fatalf("requested %d pages, want page 1 then the empty page 2", len(fake.gotURLs))
+	}
+}
+
+// TestDjinniPartialOnMidCrawlError covers the datacenter rate-limit case: page 1 maps, then
+// page 2 403s. The adapter must keep page 1's jobs and return no error (a partial crawl of the
+// freshest pages beats losing everything and dropping the board into cooldown).
+func TestDjinniPartialOnMidCrawlError(t *testing.T) {
+	fake := &djinniPagedHTTP{
+		bodies:   map[int]string{1: djinniListingHTML},
+		errPages: map[int]bool{2: true},
+	}
+	jobs, err := NewDjinni(fake).Fetch(context.Background(), CompanyEntry{Provider: "djinni"})
+	if err != nil {
+		t.Fatalf("Fetch returned error %v, want nil (partial success on a mid-crawl 403)", err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("got %d jobs, want page 1's 2 usable postings kept despite the page-2 403", len(jobs))
+	}
+}
+
+// TestDjinniFailsHardWhenFirstPageErrors guards the sweep: an error on page 1 (zero jobs
+// collected) must surface as a board failure, never an empty successful crawl — otherwise the
+// unseen-sweep would close the whole Djinni catalogue.
+func TestDjinniFailsHardWhenFirstPageErrors(t *testing.T) {
+	fake := &djinniPagedHTTP{
+		bodies:   map[int]string{1: djinniListingHTML},
+		errPages: map[int]bool{1: true},
+	}
+	jobs, err := NewDjinni(fake).Fetch(context.Background(), CompanyEntry{Provider: "djinni"})
+	if err == nil {
+		t.Fatalf("Fetch returned nil error with %d jobs, want a board failure when page 1 fails", len(jobs))
 	}
 }
 
