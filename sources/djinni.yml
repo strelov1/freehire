@@ -1,0 +1,6 @@
+# Djinni.co Ukrainian/CEE IT job board. Boardless: one guest listing (djinni.co/jobs/?page=N)
+# aggregating many companies, so the entry carries no board; each job's company comes from the
+# posting's hiringOrganization, not this placeholder. Aggregator — inherits the reindex ATS
+# suppression, so a posting that duplicates a first-party ATS twin is hidden automatically.
+- company: Djinni
+  provider: djinni

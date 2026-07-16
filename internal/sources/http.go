@@ -50,6 +50,14 @@ type HTMLGetter interface {
 	GetHTML(ctx context.Context, url string) (*html.Node, error)
 }
 
+// HTMLResolvedGetter fetches a URL following redirects and returns its parsed HTML tree
+// together with the FINAL URL after redirects — for adapters that must observe a redirect
+// (e.g. djinni's listing, whose past-the-end page 302s to the bare listing, so the final
+// URL is the only reliable end-of-feed signal).
+type HTMLResolvedGetter interface {
+	GetHTMLResolved(ctx context.Context, url string) (*html.Node, string, error)
+}
+
 // TextGetter fetches a URL and returns its raw response body, for adapters that regex a
 // token or config blob out of a page rather than parsing its DOM (e.g. Cornerstone).
 type TextGetter interface {
@@ -89,6 +97,7 @@ type HTTPClient interface {
 	StreamGetter
 	XMLGetter
 	HTMLGetter
+	HTMLResolvedGetter
 	TextGetter
 	HeaderTextGetter
 	JSONPoster

@@ -1,0 +1,128 @@
+package sources
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"html"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// djinni adapts djinni.co, a Ukrainian/CEE IT job board. Each anonymous listing page
+// (/jobs/?page=N) embeds one application/ld+json block that is an ARRAY of full schema.org
+// JobPosting objects — description included — so one fetch per page yields every posting
+// without a per-posting detail request. Boardless (djinni.co is one site with no per-tenant
+// board) and an aggregator (many companies; each posting's company comes from the feed), so it
+// stays in the source facet and inherits the reindex aggregator/ATS suppression.
+type djinni struct {
+	http HTMLResolvedGetter
+}
+
+const (
+	// djinniListBase is the guest listing; the caller appends the "page=N" (1-based) marker,
+	// which doubles as the end-of-feed sentinel checked against the resolved final URL.
+	djinniListBase = "https://djinni.co/jobs/?"
+	// djinniMaxPages caps pagination as a backstop, comfortably above the observed corpus
+	// (~488 pages). The empty-page stop below is the primary terminator; this only bounds a
+	// pathological feed that never empties.
+	djinniMaxPages = 600
+)
+
+// NewDjinni builds the djinni listing adapter over the given HTML client.
+func NewDjinni(c HTMLResolvedGetter) Source { return djinni{http: c} }
+
+func (djinni) Provider() string { return "djinni" }
+
+func (djinni) boardless() {}
+
+func (djinni) aggregator() {}
+
+// Fetch pages the listing from page 1 upward, mapping each page's JSON-LD JobPosting array to
+// jobs. It stops at the end of the feed, detected by the redirect: a past-the-end page 302s to
+// the bare listing (/jobs/), so the FINAL URL no longer carries the requested page marker.
+// (Following the redirect would otherwise re-serve page 1 indefinitely, since page 1 is not
+// empty.) A genuinely empty non-redirected page is a secondary stop.
+func (s djinni) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
+	var jobs []Job
+	for page := 1; page <= djinniMaxPages; page++ {
+		pageMarker := fmt.Sprintf("page=%d", page)
+		root, final, err := s.http.GetHTMLResolved(ctx, djinniListBase+pageMarker)
+		if err != nil {
+			return nil, fmt.Errorf("djinni: fetch page %d: %w", page, err)
+		}
+		if !strings.Contains(final, pageMarker) {
+			break // redirected off the end of the feed (past-the-end page 302s to /jobs/)
+		}
+		nodes := LDJobPostings(root)
+		if len(nodes) == 0 {
+			break // a non-redirected page with no postings — nothing more to read
+		}
+		for _, raw := range nodes {
+			var p djinniPosting
+			if json.Unmarshal(raw, &p) != nil {
+				continue // a posting that fails to decode is skipped, never aborting the page
+			}
+			if job, ok := p.toJob(); ok {
+				jobs = append(jobs, job)
+			}
+		}
+	}
+	return jobs, nil
+}
+
+// djinniPosting is one schema.org JobPosting from the listing. identifier is a bare integer;
+// jobLocationType (TELECOMMUTE/ON_SITE) is the work-arrangement signal; the applicant location
+// requirement carries only a country.
+type djinniPosting struct {
+	Title              string `json:"title"`
+	Description        string `json:"description"`
+	URL                string `json:"url"`
+	DatePosted         string `json:"datePosted"`
+	EmploymentType     string `json:"employmentType"`
+	JobLocationType    string `json:"jobLocationType"`
+	Identifier         int64  `json:"identifier"`
+	HiringOrganization struct {
+		Name string `json:"name"`
+	} `json:"hiringOrganization"`
+	ApplicantLocationRequirements struct {
+		Address struct {
+			AddressCountry string `json:"addressCountry"`
+		} `json:"address"`
+	} `json:"applicantLocationRequirements"`
+}
+
+// toJob maps a posting to a Job, returning ok=false for a posting with no identifier (no dedup
+// key), no url (no canonical address), or no company (which would break the company slug).
+func (p djinniPosting) toJob() (Job, bool) {
+	if p.Identifier == 0 || p.URL == "" || p.HiringOrganization.Name == "" {
+		return Job{}, false
+	}
+	remote := strings.EqualFold(p.JobLocationType, "TELECOMMUTE")
+	return Job{
+		ExternalID:     strconv.FormatInt(p.Identifier, 10),
+		URL:            p.URL,
+		Title:          p.Title,
+		Company:        p.HiringOrganization.Name,
+		Location:       p.ApplicantLocationRequirements.Address.AddressCountry,
+		Description:    sanitizeHTML(html.UnescapeString(p.Description)),
+		Remote:         remote,
+		WorkMode:       workModeFromRemote(remote),
+		EmploymentType: schemaEmploymentType(p.EmploymentType),
+		PostedAt:       djinniDate(p.DatePosted),
+	}, true
+}
+
+// djinniDate parses Djinni's datePosted, an ISO-8601 local datetime WITHOUT a zone (e.g.
+// "2026-07-16T04:43:20.486231"). parseRFC3339 rejects the missing zone, so this reads it as
+// UTC, trying parseRFC3339 first (should Djinni ever emit a zoned value) and a bare date last.
+func djinniDate(s string) *time.Time {
+	if t := parseRFC3339(s); t != nil {
+		return t
+	}
+	if t := parseLayout("2006-01-02T15:04:05.999999999", s); t != nil {
+		return t
+	}
+	return parseDate(s)
+}
