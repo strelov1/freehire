@@ -29,6 +29,13 @@ func (careerspage) Provider() string { return "careerspage" }
 // page cannot loop forever (the boards seen are ~10 pages; this is ample headroom).
 const careerspageMaxPages = 100
 
+// careerspageDetailWorkers throttles the per-board detail fan-out well below the shared
+// defaultDetailWorkers (8): careers-page.com rate-limits by request volume, and a wide burst
+// trips a 429 window after ~8 requests — starving large boards even through the proxy egress
+// (see proxiedProviders). A narrow pool keeps the crawl under the window; the standard client's
+// 429-retry backoff absorbs the occasional overshoot, so a full board converges in one run.
+const careerspageDetailWorkers = 2
+
 func (s careerspage) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	base, err := url.Parse(fmt.Sprintf("https://%s.careers-page.com/", e.Board))
 	if err != nil {
@@ -62,8 +69,9 @@ func (s careerspage) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		}
 	}
 
-	// Each posting's fields come from its own detail fetch, fanned out under a bounded pool.
-	return fetchDetails(locs, defaultDetailWorkers, func(loc string) (Job, bool) {
+	// Each posting's fields come from its own detail fetch, fanned out under a narrow pool
+	// (careerspageDetailWorkers) to stay under careers-page.com's rate-limit window.
+	return fetchDetails(locs, careerspageDetailWorkers, func(loc string) (Job, bool) {
 		return s.detail(ctx, e, loc)
 	}), nil
 }
