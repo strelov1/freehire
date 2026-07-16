@@ -21,7 +21,7 @@ const djinniListingHTML = `<html><head>
 [{"@context":"https://schema.org/","@type":"JobPosting",
 "title":"Senior Backend Go Engineer",
 "url":"https://djinni.co/jobs/837549-senior-backend-go-engineer/",
-"description":"<p>Build &amp; ship services.</p>",
+"description":"Build & ship services.\n\nHiring process:\nA short call.\n\nWhat you will do:\n• Design APIs\n• Ship features\n\nMinimum:\n- Go\n— Postgres",
 "datePosted":"2026-07-06T04:43:20.486231",
 "employmentType":"FULL_TIME",
 "jobLocationType":"TELECOMMUTE",
@@ -128,10 +128,16 @@ func TestDjinniFetchMapsListingArray(t *testing.T) {
 	if j.Location != "UA" {
 		t.Errorf("Location = %q, want addressCountry", j.Location)
 	}
-	// sanitizeHTML keeps structural markup (bluemonday allows <p>) and re-encodes bare &,
-	// so a description round-trips as safe HTML rather than being flattened to plain text.
-	if j.Description != "<p>Build &amp; ship services.</p>" {
-		t.Errorf("Description = %q, want sanitized description HTML", j.Description)
+	// Djinni's JSON-LD description is plain text (newline-delimited, glyph-marked bullets), not
+	// markup, so the adapter rebuilds structural HTML from it: blank lines split paragraphs,
+	// consecutive text lines join with <br>, and runs of bullet lines (•, -, — all recognized)
+	// become a <ul>. Text is HTML-escaped, so a bare & round-trips as &amp;.
+	wantDesc := "<p>Build &amp; ship services.</p>" +
+		"<p>Hiring process:<br>A short call.</p>" +
+		"<p>What you will do:</p><ul><li>Design APIs</li><li>Ship features</li></ul>" +
+		"<p>Minimum:</p><ul><li>Go</li><li>Postgres</li></ul>"
+	if j.Description != wantDesc {
+		t.Errorf("Description = %q,\nwant %q", j.Description, wantDesc)
 	}
 	if !j.Remote || j.WorkMode != "remote" {
 		t.Errorf("Remote=%v WorkMode=%q, want true/remote for TELECOMMUTE", j.Remote, j.WorkMode)
