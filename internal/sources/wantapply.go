@@ -35,9 +35,10 @@ const (
 	// wantapplyHostname is the sitemap host a vacancy loc must carry (guards against a foreign
 	// or malformed URL slipping through as a slug).
 	wantapplyHostname = "wantapply.cy"
-	// wantapplyDetailWorkers bounds the detail-fetch fan-out below the shared default (8): the
-	// .cy mirror throttles a burst of concurrent requests (a prod run at 8 landed only ~32% of
-	// the catalogue), while 4 fetches the full sitemap cleanly (~2 min for ~930 vacancies).
+	// wantapplyDetailWorkers bounds the detail-fetch fan-out below the shared default (8): a burst
+	// at 8 is throttled hard (a residential-IP crawl landed ~32% at 8 vs ~100% at 4). Prod egresses
+	// through a proxy whose IP the .cy edge rate-caps per window, so one run still lands only part
+	// of the catalogue — the HydratingSource re-crawl accretes the rest across subsequent runs.
 	wantapplyDetailWorkers = 4
 )
 
