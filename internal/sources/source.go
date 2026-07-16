@@ -297,6 +297,7 @@ func All(c HTTPClient) map[string]Source {
 		NewApple(c),
 		NewLumenalta(c),
 		NewDataArt(c),
+		NewOnstrider(c),
 		NewAlignerr(c),
 		NewBairesDev(c),
 		// RU-domestic single-company adapters (boardless, except Yandex which selects
@@ -393,6 +394,11 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// not a hard blocklist, so egressing through a fresh proxy IP keeps the crawl off the
 	// penalised prod IP; the adapter's narrow detail pool bounds the per-board burst.
 	"peopleforce": func(c HTTPClient) Source { return NewPeopleForce(c) },
+	// onstrider.com sits behind Cloudflare and is untested from the prod datacenter IP (the
+	// spike ran from a residential IP). It is pre-wired here so that, if the prod IP is blocked
+	// like djinni's, setting SOURCES_PROXY_URL routes only this provider through the proxy with
+	// no code change; while the proxy is unset this entry is inert.
+	"onstrider": func(c HTTPClient) Source { return NewOnstrider(c) },
 }
 
 // ApplyProxyEgress rewires the proxiedProviders in registry to egress through the proxy

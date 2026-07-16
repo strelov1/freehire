@@ -1,0 +1,7 @@
+# Strider careers (www.onstrider.com), a HubSpot-hosted LATAM talent marketplace. Boardless
+# single-company source: the sitemap enumerates every vacancy and each OPEN vacancy page renders
+# a schema.org JobPosting ld+json block (a closed vacancy drops the markup — that absence is the
+# open/closed signal). The real employer is hidden (hiringOrganization is always "Strider"), so
+# every posting maps to this entry's `company`. See internal/sources/onstrider.go.
+- company: Strider
+  provider: onstrider
