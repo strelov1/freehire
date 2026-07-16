@@ -365,6 +365,9 @@ func All(c HTTPClient) map[string]Source {
 var proxiedProviders = map[string]func(HTTPClient) Source{
 	"eightfold": func(c HTTPClient) Source { return NewEightfold(c) },
 	"wantapply": func(c HTTPClient) Source { return NewWantapply(c) },
+	// djinni.co IP-blocklists the prod datacenter IP: a fast crawl escalates to a hard "your
+	// IP has been blocked" page, while a residential IP is served the full JSON-LD listing.
+	"djinni": func(c HTTPClient) Source { return NewDjinni(c) },
 }
 
 // ApplyProxyEgress rewires the proxiedProviders in registry to egress through the proxy

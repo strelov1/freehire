@@ -233,6 +233,13 @@ func TestDjinniFailsHardWhenFirstPageErrors(t *testing.T) {
 	}
 }
 
+func TestDjinniIsProxied(t *testing.T) {
+	// djinni.co IP-blocklists the prod datacenter IP, so djinni must egress through the proxy.
+	if _, ok := proxiedProviders["djinni"]; !ok {
+		t.Error("djinni must be in proxiedProviders (its edge blocks the prod datacenter IP)")
+	}
+}
+
 func TestDjinniIsAggregator(t *testing.T) {
 	reg := All(nil)
 	if got := ProviderKind(reg, "djinni"); got != KindAggregator {
