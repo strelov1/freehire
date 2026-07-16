@@ -1,0 +1,12 @@
+# CATS (catsone.com) career portals. Provider is the filename; each entry is company + board.
+# board = the careers host: a tenant subdomain (<board>.catsone.com) or a custom domain mapped
+# to CATS (e.g. jobs.<company>.com). See internal/sources/catsone.go. GET /careers redirects to
+# the portal table listing every job; the /careers/<portalId>/jobs/<id> detail carries the body.
+- company: Authority Partners
+  board: authoritypartnersinc.catsone.com
+- company: Business & Finance Consulting
+  board: bfc.catsone.com
+- company: EVOPLAY
+  board: jobs.evoplay.com.ua
+- company: Sphere Partners
+  board: sphereinc.catsone.com
