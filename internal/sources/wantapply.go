@@ -134,6 +134,13 @@ func (s wantapply) detail(ctx context.Context, v wantapplyVacancy) (Job, bool) {
 	if company == "" {
 		return Job{}, false // aggregator: no employer name → cannot normalize
 	}
+	// Prefer the page's rendered <div class="Description"> body — it keeps the headings and
+	// lists that the flat JobPosting `description` field strips to run-together plain text. Fall
+	// back to the (unformatted) JSON-LD description when the container is absent.
+	description := wantapplyDescription(root)
+	if description == "" {
+		description = sanitizeHTML(html.UnescapeString(p.Description))
+	}
 	location := p.location()
 	// jobLocationType is the structured work-arrangement signal: TELECOMMUTE means remote. Absent
 	// → leave WorkMode empty and fall back to the location text for the remote flag.
@@ -153,12 +160,30 @@ func (s wantapply) detail(ctx context.Context, v wantapplyVacancy) (Job, bool) {
 		Title:          p.Title,
 		Company:        company,
 		Location:       location,
-		Description:    sanitizeHTML(html.UnescapeString(p.Description)),
+		Description:    description,
 		Remote:         remote || isRemote(location),
 		WorkMode:       workMode,
 		EmploymentType: schemaEmploymentType(employmentType),
 		PostedAt:       parseRFC3339(p.DatePosted),
 	}, true
+}
+
+// wantapplyDescription returns the sanitized rich HTML of the page's <div class="Description">
+// body — the block that preserves the headings and lists the flat JobPosting `description` field
+// loses. It returns "" when the container is absent, so the caller falls back to the JSON-LD text.
+func wantapplyDescription(root *html.Node) string {
+	var body string
+	walk(root, func(n *html.Node) bool {
+		if body != "" {
+			return false
+		}
+		if n.Type == html.ElementNode && n.Data == "div" && hasClass(n, "Description") {
+			body = innerHTML(n)
+			return false
+		}
+		return true
+	})
+	return sanitizeHTML(body)
 }
 
 // wantapplyVacancySlug returns the vacancy slug for a sitemap loc that is a single-segment,

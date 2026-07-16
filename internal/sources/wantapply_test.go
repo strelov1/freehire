@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -138,6 +139,55 @@ func TestWantapplyFetchSitemapThenDetailAndMaps(t *testing.T) {
 	}
 	if j.WorkMode != "" {
 		t.Errorf("WorkMode = %q, want empty (no TELECOMMUTE)", j.WorkMode)
+	}
+}
+
+func TestWantapplyDetailPrefersFormattedDescriptionDiv(t *testing.T) {
+	jobURL := "https://wantapply.cy/senior-backend-developer-at-acclaim"
+	// The JobPosting `description` is flat run-together text; the visible <div class="Description">
+	// carries the real formatting (headings + lists). The adapter must use the div.
+	page := `<html><head><script type="application/ld+json">` +
+		`{"@type":"JobPosting","title":"Senior Backend Developer","datePosted":"2026-07-15T10:00:00Z",` +
+		`"employmentType":["FULL_TIME"],` +
+		`"hiringOrganization":{"name":"Acclaim"},` +
+		`"jobLocation":[{"@type":"Place","address":{"addressCountry":"Cyprus"}}],` +
+		`"description":"REQUIREMENTS 6+ years Python RESPONSIBILITIES Build services"}` +
+		`</script></head><body>` +
+		`<div class="Description"><p>Intro paragraph.</p><h3><strong>REQUIREMENTS</strong></h3>` +
+		`<ul><li><p>6+ years Python</p></li></ul><script>alert(1)</script></div>` +
+		`</body></html>`
+	fake := (&routedHTTP{}).route("/senior-backend-developer-at-acclaim", page)
+
+	j, ok := wantapply{http: fake}.detail(context.Background(),
+		wantapplyVacancy{slug: "senior-backend-developer-at-acclaim", url: jobURL})
+	if !ok {
+		t.Fatal("detail returned ok=false")
+	}
+	for _, want := range []string{"<h3>", "<strong>REQUIREMENTS</strong>", "<ul>", "<li>", "<p>6+ years Python</p>"} {
+		if !strings.Contains(j.Description, want) {
+			t.Errorf("Description missing %q; got %q", want, j.Description)
+		}
+	}
+	if strings.Contains(j.Description, "<script>") {
+		t.Errorf("Description kept <script>; got %q", j.Description)
+	}
+}
+
+func TestWantapplyDetailFallsBackToJSONLDDescription(t *testing.T) {
+	jobURL := "https://wantapply.cy/role-no-div"
+	// No <div class="Description"> → fall back to the (sanitized) JSON-LD description.
+	detail := wantapplyDetailHTML("Some Role", "Acme",
+		"&lt;p&gt;Plain body.&lt;/p&gt;", "2026-07-15T10:00:00Z", "",
+		[3]string{"", "", "Cyprus"})
+	fake := (&routedHTTP{}).route("/role-no-div", detail)
+
+	j, ok := wantapply{http: fake}.detail(context.Background(),
+		wantapplyVacancy{slug: "role-no-div", url: jobURL})
+	if !ok {
+		t.Fatal("detail returned ok=false")
+	}
+	if j.Description != "<p>Plain body.</p>" {
+		t.Errorf("Description = %q, want the JSON-LD fallback", j.Description)
 	}
 }
 
