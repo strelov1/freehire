@@ -17,3 +17,24 @@
   board: duuritiimi
 - company: Safrent
   board: safrent
+# Additional tenants harvested from jobcrawls.com (2026-07, RSS-validated >0 items)
+- company: Worker
+  board: worker
+- company: Visio HR
+  board: visiohr
+- company: WulffWorks
+  board: wulffworks
+- company: Amiko
+  board: amiko
+- company: Basso HR
+  board: bassohr
+- company: Henkilöstöliiga
+  board: henkilostoliiga
+- company: Maximus
+  board: maximus
+- company: NordRec
+  board: nordrec
+- company: Canvas
+  board: canvas
+- company: Best Workers
+  board: bestworkers
