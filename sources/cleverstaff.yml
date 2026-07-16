@@ -1,0 +1,22 @@
+# CleverStaff (cleverstaff.net) tenants. Provider is the filename; each entry is company + board.
+# board = the tenant alias in the public URL (cleverstaff.net/i/<alias>-vacancies), used to fetch
+# getAllOpenVacancy?alias=<board> — see internal/sources/cleverstaff.go.
+# Each alias validated live (status ok, >0 open vacancies) before adding.
+# hub: true marks a staffing/outstaff tenant whose vacancies belong to several client companies;
+# the adapter then takes each job's employer from the posting's clientName and company is only the
+# tenant name and per-vacancy fallback. A single-company tenant omits hub.
+
+- company: DOIT Software
+  board: doit-software1
+- company: 8allocate
+  board: 8allocate
+  hub: true
+- company: Talent Connect
+  board: talent-connect
+  hub: true
+- company: Data Science UA
+  board: data-science-ua
+  hub: true
+- company: Crunch-IS
+  board: crunch-is
+  hub: true

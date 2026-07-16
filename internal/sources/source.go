@@ -204,6 +204,7 @@ func All(c HTTPClient) map[string]Source {
 		NewHurma(c),
 		NewICIMS(c),
 		NewCareerPage(c),
+		NewCleverstaff(c),
 		NewNorthstone(c),
 		NewBriefHQ(c),
 		NewDjinni(c),
@@ -377,6 +378,11 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// others this is volume rate-limiting, not a hard blocklist (spaced requests from the prod
 	// IP pass), so egressing through a fresh proxy IP keeps its crawl off the penalised prod IP.
 	"careerspage": func(c HTTPClient) Source { return NewCareerPage(c) },
+	// cleverstaff.net is untested from the prod datacenter IP (the spike ran from a residential
+	// IP). It is pre-wired here so that, if the prod IP is blocked like djinni's, setting
+	// SOURCES_PROXY_URL routes only this provider through the proxy with no code change; while
+	// the proxy is unset this entry is inert.
+	"cleverstaff": func(c HTTPClient) Source { return NewCleverstaff(c) },
 }
 
 // ApplyProxyEgress rewires the proxiedProviders in registry to egress through the proxy
