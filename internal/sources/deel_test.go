@@ -71,7 +71,7 @@ func TestDeelTextRows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decodeNextFlight: %v", err)
 	}
-	rows := deelTextRows(flight)
+	rows := nextFlightTextRows(flight)
 	html23, ok := rows["23"]
 	if !ok {
 		t.Fatal("text row 23 not resolved")

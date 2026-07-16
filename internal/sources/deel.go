@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -47,7 +45,7 @@ func (d deel) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		return nil, fmt.Errorf("deel: board %q: %w", e.Board, err)
 	}
 	org := extractDeelOrgName(flight)
-	rows := deelTextRows(flight)
+	rows := nextFlightTextRows(flight)
 
 	var jobs []Job
 	refs, resolved := 0, 0
@@ -70,36 +68,6 @@ func (d deel) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		return nil, fmt.Errorf("deel: board %q: %d description references but none resolved", e.Board, refs)
 	}
 	return jobs, nil
-}
-
-// deelTextRowMarker matches the start of an RSC text row, "<id>:T<hexlen>,". RSC numbers
-// both the row id and the byte length in lowercase HEX (refs run …$29, $2a, $2b, $30…),
-// so the id is hex, not decimal. The leading non-hex byte anchors the id's left edge (so
-// "a2a:T" is not read as "2a:T") without a lookbehind; a text row is never at offset 0, so
-// requiring one preceding byte is safe.
-var deelTextRowMarker = regexp.MustCompile(`[^0-9a-f]([0-9a-f]+):T([0-9a-f]+),`)
-
-// deelTextRows returns the flight stream's text rows keyed by id. A text row is
-// "<id>:T<hexlen>,<bytes>" whose content is exactly hexlen BYTES (it may itself contain
-// newlines), so each marker's content is sliced by its declared byte length. A posting's
-// "$N" richtextDescription reference resolves to row N's content.
-func deelTextRows(flight string) map[string]string {
-	b := []byte(flight)
-	rows := make(map[string]string)
-	for _, m := range deelTextRowMarker.FindAllSubmatchIndex(b, -1) {
-		id := string(b[m[2]:m[3]])
-		n, err := strconv.ParseInt(string(b[m[4]:m[5]]), 16, 64)
-		if err != nil {
-			continue
-		}
-		start := m[1] // end of the full match = first content byte after the comma
-		end := start + int(n)
-		if end > len(b) {
-			end = len(b)
-		}
-		rows[id] = string(b[start:end])
-	}
-	return rows
 }
 
 // deelPosting is the subset of a jobPostings entry the adapter maps. id is the posting id

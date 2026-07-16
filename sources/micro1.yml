@@ -1,0 +1,5 @@
+# micro1 job board (jobs.micro1.ai). Boardless single-company source: one fixed host with no
+# per-tenant board id, so the entry carries no board. The job's company is this entry's
+# `company` (micro1), not read per posting (clients are anonymized). See internal/sources/micro1.go.
+- company: micro1
+  provider: micro1

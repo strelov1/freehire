@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -88,4 +89,34 @@ func bracketSlice(s, key string, open, closing byte) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// nextFlightTextRowMarker matches the start of an RSC text row, "<id>:T<hexlen>,". RSC numbers
+// both the row id and the byte length in lowercase HEX (refs run …$29, $2a, $2b, $30…), so the
+// id is hex, not decimal. The leading non-hex byte anchors the id's left edge (so "a2a:T" is not
+// read as "2a:T") without a lookbehind; a text row is never at offset 0, so requiring one
+// preceding byte is safe.
+var nextFlightTextRowMarker = regexp.MustCompile(`[^0-9a-f]([0-9a-f]+):T([0-9a-f]+),`)
+
+// nextFlightTextRows returns the flight stream's text rows keyed by id. A text row is
+// "<id>:T<hexlen>,<bytes>" whose content is exactly hexlen BYTES (it may itself contain
+// newlines or commas), so each marker's content is sliced by its declared byte length. A
+// posting's "$N" reference (e.g. a richtext description) resolves to row N's content.
+func nextFlightTextRows(flight string) map[string]string {
+	b := []byte(flight)
+	rows := make(map[string]string)
+	for _, m := range nextFlightTextRowMarker.FindAllSubmatchIndex(b, -1) {
+		id := string(b[m[2]:m[3]])
+		n, err := strconv.ParseInt(string(b[m[4]:m[5]]), 16, 64)
+		if err != nil {
+			continue
+		}
+		start := m[1] // end of the full match = first content byte after the comma
+		end := start + int(n)
+		if end > len(b) {
+			end = len(b)
+		}
+		rows[id] = string(b[start:end])
+	}
+	return rows
 }
