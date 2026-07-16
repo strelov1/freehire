@@ -6,10 +6,9 @@ describe('accountNav config', () => {
     expect(accountNav).toHaveLength(8);
   });
 
-  it('places Activity directly after Tracking', () => {
+  it('leads with the four everyday sections in use order', () => {
     const hrefs = accountNav.map((i) => i.href);
-    expect(hrefs.indexOf('/my/activity')).toBe(hrefs.indexOf('/my/tracking') + 1);
-    expect(accountNav.find((i) => i.href === '/my/activity')?.label).toBe('Activity');
+    expect(hrefs.slice(0, 4)).toEqual(['/my/profile', '/my/activity', '/my/tracking', '/my/inbox']);
   });
 
   it('every item links under /my/ and has a label', () => {

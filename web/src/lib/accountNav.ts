@@ -2,21 +2,22 @@
 // the active-item rule. Kept free of Svelte/icon imports so it stays pure and
 // unit-testable; the `my/+layout.svelte` shell maps each href to its icon.
 
-// Order = the order shown in the sidebar / tab strip. Identity (Profile) first,
-// then the reading/working sections. Create actions (Submit a job, Moderation)
-// deliberately live in the header menu, not here. `as const` keeps each href a
-// literal route so the layout can pass it to `resolve()` type-safely (mirroring
-// HeaderMenu's navLinks).
+// Order = the order shown in the sidebar / tab strip. The four everyday sections
+// lead in the order they're used — Profile (identity), Activity, Tracking, Inbox —
+// then the occasional ones (Agent, notifications, keys, submissions). Create actions
+// (Submit a job, Moderation) deliberately live in the header menu, not here.
+// `as const` keeps each href a literal route so the layout can pass it to `resolve()`
+// type-safely (mirroring HeaderMenu's navLinks).
 export const accountNav = [
   { href: '/my/profile', label: 'Profile' },
-  // The agent is a restricted rollout — beta testers only (a group separate from
-  // the moderator role; see `beta_tester` on the user). `beta` shows a nav badge.
-  { href: '/my/assistant', label: 'Agent', betaOnly: true, beta: true },
-  { href: '/my/tracking', label: 'Tracking' },
   { href: '/my/activity', label: 'Activity' },
+  { href: '/my/tracking', label: 'Tracking' },
   // Mail inbox: connect Gmail and/or claim a freehire mailbox to track application
   // replies. Open to every signed-in user.
   { href: '/my/inbox', label: 'Inbox' },
+  // The agent is a restricted rollout — beta testers only (a group separate from
+  // the moderator role; see `beta_tester` on the user). `beta` shows a nav badge.
+  { href: '/my/assistant', label: 'Agent', betaOnly: true, beta: true },
   { href: '/my/searches', label: 'Search notifications' },
   { href: '/my/api-keys', label: 'API keys' },
   { href: '/my/submissions', label: 'My submissions' },

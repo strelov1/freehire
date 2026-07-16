@@ -10,10 +10,12 @@
     Briefcase,
     Building2,
     CircleUser,
+    Activity,
     ListChecks,
     BellRing,
     KeyRound,
     Inbox,
+    FileText,
     SquarePlus,
     ShieldCheck,
     Layers,
@@ -76,14 +78,18 @@
     { href: '/trends', label: 'Trends', icon: TrendingUp },
   ] as const;
 
-  // Personal account items — what the signed-in user owns/reads. "Submit a job"
-  // is a create action, so it's rendered separately (below), split off from the
-  // "My submissions" reading item it used to sit next to.
+  // Personal account items — what the signed-in user owns/reads, in the same order
+  // as the account sidebar (Profile is rendered separately just above these, so the
+  // full run reads Profile · Activity · Tracking · Inbox · …). "Submit a job" is a
+  // create action, rendered separately (below), split off from the "My submissions"
+  // reading item it used to sit next to.
   const accountLinks = [
+    { href: '/my/activity', label: 'Activity', icon: Activity },
     { href: '/my/tracking', label: 'Tracking', icon: ListChecks },
+    { href: '/my/inbox', label: 'Inbox', icon: Inbox },
     { href: '/my/searches', label: 'Search notifications', icon: BellRing },
     { href: '/my/api-keys', label: 'API keys', icon: KeyRound },
-    { href: '/my/submissions', label: 'My submissions', icon: Inbox },
+    { href: '/my/submissions', label: 'My submissions', icon: FileText },
   ] as const;
 
   // Mobile only: the open panel is a full-screen overlay, so lock the page behind
