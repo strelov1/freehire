@@ -9,9 +9,11 @@ import (
 	"github.com/yuin/goldmark"
 )
 
-// joinPageSize is the list-API page size.
+// joinPageSize is the list-API page size. Join's public API caps pageSize at 5; any larger
+// value is rejected with HTTP 422. Pagination is driven by pagination.pageCount, so a smaller
+// page just means more list pages — the per-job detail fetches (the bulk of the work) are unaffected.
 const (
-	joinPageSize = 100
+	joinPageSize = 5
 )
 
 // join adapts Join.com career pages over its public JSON API. The board is the numeric Join
