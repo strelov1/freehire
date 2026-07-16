@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -124,12 +125,24 @@ type Client struct {
 }
 
 // NewClient builds the default ingest HTTP client.
-func NewClient() *Client {
+func NewClient() *Client { return newClientWithProxy(nil) }
+
+// NewProxyClient builds an ingest client whose requests egress through proxy. It is
+// identical to NewClient but for the proxied transport, and is handed only to the
+// curated set of providers whose prod-IP is anti-bot-blocklisted (see All). The proxy
+// URL — including its host and credentials — comes entirely from configuration
+// (SOURCES_PROXY_URL); no proxy endpoint is hardcoded here.
+func NewProxyClient(proxy *url.URL) *Client { return newClientWithProxy(proxy) }
+
+// newClientWithProxy builds a Client with an optional egress proxy (nil = direct).
+func newClientWithProxy(proxy *url.URL) *Client {
 	return &Client{
 		// Guarded transport: adapters and link-following fetch attacker-influenced
-		// URLs, so the client must refuse internal/metadata targets (SSRF).
-		httpClient:   safehttp.NewClient(15 * time.Second),
-		streamClient: safehttp.NewClient(streamTimeout),
+		// URLs, so the client must refuse internal/metadata targets (SSRF). A proxied
+		// client relaxes the target check (the proxy resolves the target) and is only
+		// given to trusted, curated providers — never the link-following path.
+		httpClient:   safehttp.NewClientWithProxy(15*time.Second, proxy),
+		streamClient: safehttp.NewClientWithProxy(streamTimeout, proxy),
 		userAgent:    "freehire/0.1 (+https://freehire.dev)",
 		maxRetries:   2,
 		retryDelay:   500 * time.Millisecond,

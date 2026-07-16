@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"syscall"
 	"time"
 )
@@ -72,8 +73,18 @@ func GuardedDialer(timeout time.Duration) *net.Dialer {
 // NewTransport returns an *http.Transport that dials through the SSRF guard, with
 // sane handshake/idle timeouts so a stalled peer cannot pin a connection open.
 func NewTransport(dialTimeout time.Duration) *http.Transport {
+	return NewTransportWithProxy(dialTimeout, nil)
+}
+
+// NewTransportWithProxy is NewTransport with an optional egress proxy. When proxy is
+// non-nil the transport routes requests through it; the guarded dialer then vets the
+// PROXY's IP (which must be public), not the ultimate target — the proxy resolves that
+// itself. So a proxied transport must only be pointed at trusted hosts, never at
+// attacker-influenced URLs (liveness/linksource keep the nil-proxy transport). A nil
+// proxy yields exactly the direct, target-guarded behavior of NewTransport.
+func NewTransportWithProxy(dialTimeout time.Duration, proxy *url.URL) *http.Transport {
 	d := GuardedDialer(dialTimeout)
-	return &http.Transport{
+	t := &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			return d.DialContext(ctx, network, addr)
 		},
@@ -83,14 +94,24 @@ func NewTransport(dialTimeout time.Duration) *http.Transport {
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
+	if proxy != nil {
+		t.Proxy = http.ProxyURL(proxy)
+	}
+	return t
 }
 
 // NewClient returns an *http.Client with the SSRF-guarded transport and the given
 // overall timeout. Redirects use the default policy (capped at 10 hops); each hop
 // re-dials through the guard, so a redirect to an internal address is refused.
 func NewClient(timeout time.Duration) *http.Client {
+	return NewClientWithProxy(timeout, nil)
+}
+
+// NewClientWithProxy is NewClient with an optional egress proxy (see
+// NewTransportWithProxy for the SSRF caveat). A nil proxy is identical to NewClient.
+func NewClientWithProxy(timeout time.Duration, proxy *url.URL) *http.Client {
 	return &http.Client{
 		Timeout:   timeout,
-		Transport: NewTransport(5 * time.Second),
+		Transport: NewTransportWithProxy(5*time.Second, proxy),
 	}
 }

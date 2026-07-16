@@ -5,6 +5,8 @@ package sources
 
 import (
 	"context"
+	"fmt"
+	"net/url"
 	"os"
 	"slices"
 	"strings"
@@ -347,6 +349,57 @@ func All(c HTTPClient) map[string]Source {
 		registry["gulftalent"] = NewGulfTalent(fp)
 	}
 	return registry
+}
+
+// proxiedProviders is the opt-in allowlist of providers whose crawl must egress through
+// the configured proxy because the prod datacenter IP is anti-bot IP-blocklisted by their
+// edge (eightfold 403s every prod-IP request while a residential IP is served normally).
+// Membership here is the per-provider opt-in: only these route through the proxy when one
+// is configured; every other provider stays on the direct IP. Each value rebuilds the
+// adapter over the proxied client, so adding the next blocked provider is one line.
+//
+// Only providers served by the standard client belong here — the fingerprint-client
+// providers (bayt/gulftalent) would need proxy support wired into fingerprintHTTP instead.
+var proxiedProviders = map[string]func(HTTPClient) Source{
+	"eightfold": func(c HTTPClient) Source { return NewEightfold(c) },
+}
+
+// ApplyProxyEgress rewires the proxiedProviders in registry to egress through the proxy
+// named by SOURCES_PROXY_URL (form http://user:pass@host:port). It is a no-op when the
+// variable is empty (every provider stays direct) and returns an error — for fail-fast at
+// worker startup — when the variable is set but unparseable, rather than silently leaving a
+// meant-to-be-proxied provider on the blocked direct IP. The proxy endpoint and its
+// credentials live entirely in the environment; nothing about the proxy is hardcoded.
+func ApplyProxyEgress(registry map[string]Source) error {
+	raw := strings.TrimSpace(os.Getenv("SOURCES_PROXY_URL"))
+	if raw == "" {
+		return nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		// Redacted() strips any password so the invalid value can be surfaced safely.
+		return fmt.Errorf("sources: invalid SOURCES_PROXY_URL %q", redactProxy(raw))
+	}
+	proxied := NewProxyClient(u)
+	for name, build := range proxiedProviders {
+		if _, ok := registry[name]; ok {
+			registry[name] = build(proxied)
+		}
+	}
+	return nil
+}
+
+// redactProxy returns a proxy URL string with any credentials removed, so a malformed
+// value can appear in an error without leaking the password.
+func redactProxy(raw string) string {
+	if u, err := url.Parse(raw); err == nil {
+		return u.Redacted()
+	}
+	// Unparseable: fall back to the scheme+host prefix so we never echo embedded creds.
+	if i := strings.Index(raw, "@"); i >= 0 {
+		return "<redacted>" + raw[i:]
+	}
+	return raw
 }
 
 // defaultDetailWorkers bounds the per-board detail-fetch fan-out for adapters whose

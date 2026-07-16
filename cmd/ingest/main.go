@@ -79,6 +79,13 @@ func run() int {
 	}
 
 	registry := sources.All(sources.NewClient())
+	// Route the IP-blocklisted providers through the egress proxy when one is configured
+	// (SOURCES_PROXY_URL). No-op when unset; a set-but-invalid value fails the run here,
+	// before the DB is touched.
+	if err := sources.ApplyProxyEgress(registry); err != nil {
+		log.Printf("config: %v", err)
+		return 1
+	}
 	// Fail fast before touching the DB: a misconfigured board should not start a run.
 	// Validate the WHOLE file (not just this shard's slice) so a config error anywhere is
 	// caught on every shard's run, not only when its shard happens to include the bad entry.

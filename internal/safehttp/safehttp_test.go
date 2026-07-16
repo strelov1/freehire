@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -38,6 +39,31 @@ func TestBlockedClassifiesAddresses(t *testing.T) {
 		if got := blocked(ip); got != tc.want {
 			t.Errorf("blocked(%s) = %v, want %v", tc.ip, got, tc.want)
 		}
+	}
+}
+
+func TestNewTransportWithProxy(t *testing.T) {
+	// Nil proxy must yield the direct transport (no Proxy set), identical to NewTransport.
+	if got := NewTransportWithProxy(time.Second, nil); got.Proxy != nil {
+		t.Error("nil proxy should leave Transport.Proxy unset")
+	}
+
+	// A non-nil proxy must be wired so every request resolves to it.
+	proxy, _ := url.Parse("http://user:pass@proxy.example:8080")
+	tr := NewTransportWithProxy(time.Second, proxy)
+	if tr.Proxy == nil {
+		t.Fatal("expected Transport.Proxy to be set")
+	}
+	got, err := tr.Proxy(httptest.NewRequest(http.MethodGet, "http://target.example/x", nil))
+	if err != nil {
+		t.Fatalf("proxy func: %v", err)
+	}
+	if got.String() != proxy.String() {
+		t.Errorf("proxy = %q, want %q", got, proxy)
+	}
+	// The guarded dialer is retained even with a proxy (it vets the proxy's IP).
+	if tr.DialContext == nil {
+		t.Error("proxied transport dropped the guarded DialContext")
 	}
 }
 
