@@ -195,6 +195,7 @@ func All(c HTTPClient) map[string]Source {
 		NewPeopleForce(c),
 		NewCatsone(c),
 		NewOdoo(c),
+		NewTalentLyft(c),
 		NewPinpoint(c),
 		NewRippling(c),
 		NewBambooHR(c),

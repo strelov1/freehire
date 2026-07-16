@@ -1,0 +1,10 @@
+# TalentLyft career sites. Provider is the filename; each entry is company + board.
+# board = the tenant subdomain (<board>.talentlyft.com); see internal/sources/talentlyft.go.
+# The tenant's sitemap.xml enumerates every /jobs/<slug>-<code> posting, each carrying a
+# schema.org JobPosting ld+json the adapter maps into a posting.
+- company: Inetec d.o.o.
+  board: inetec
+- company: Flyer One Ventures
+  board: flyer-one-ventures
+- company: Selecto
+  board: selecto
