@@ -297,6 +297,9 @@
   board: findem
 - company: finn
   board: finn
+- company: Finom
+  board: pnlfin
+  region: eu
 - company: Firemon
   board: firemon
 - company: fiscalnote
