@@ -922,12 +922,12 @@ export function createApi(
 
   /** Soft-delete a message (hidden from the inbox, restorable via restoreEmail). */
   async function deleteEmail(id: number): Promise<void> {
-    await request(`/api/v1/me/emails/${id}/delete`, { method: 'POST' });
+    await call(`/api/v1/me/emails/${id}/delete`, { method: 'POST' });
   }
 
   /** Undo a soft-delete, bringing the message back into the inbox. */
   async function restoreEmail(id: number): Promise<void> {
-    await request(`/api/v1/me/emails/${id}/restore`, { method: 'POST' });
+    await call(`/api/v1/me/emails/${id}/restore`, { method: 'POST' });
   }
 
   /** The caller's hosted-mailbox address (or null) + feature availability. */
@@ -967,10 +967,7 @@ export function createApi(
 
   /** Manually link an email to the application named by slug. */
   async function linkEmail(id: number, slug: string): Promise<EmailBody> {
-    return requestData<EmailBody>(`/api/v1/me/emails/${id}/link`, {
-      method: 'POST',
-      body: JSON.stringify({ slug }),
-    });
+    return requestData<EmailBody>(`/api/v1/me/emails/${id}/link`, jsonBody('POST', { slug }));
   }
 
   /** Clear an email's application link. */
