@@ -1,5 +1,5 @@
 import { redirect } from '@sveltejs/kit';
-import { serverApi } from '$lib/server/api';
+import { loadBoard } from '$lib/server/tracking';
 import type { PageServerLoad } from './$types';
 
 // /my/tracking is personal: a signed-out visitor has nothing to show, so guard it
@@ -14,15 +14,7 @@ export const load: PageServerLoad = async ({ parent, url, fetch, request }) => {
     const target = url.pathname + url.search;
     redirect(302, `/?auth=required&redirect=${encodeURIComponent(target)}`);
   }
-  // Fetch the board here so it renders with the page. Previously JobBoard fetched
-  // it client-side on mount, a waterfall (navigate → HTML → hydrate → listMyJobs →
-  // render); pulling it into the server load collapses that into one round trip.
-  // A transient API failure shouldn't 500 the page — leave board undefined and let
-  // JobBoard fall back to its client fetch (which renders the friendly error state).
-  try {
-    const board = await serverApi(fetch, request.headers.get('cookie')).listMyJobs('board', 500, 0);
-    return { board: board.items };
-  } catch {
-    return {};
-  }
+  // Fetch the board here so it renders with the page, not after a client fetch on
+  // mount (see loadBoard for the waterfall it replaces + the failure fallback).
+  return { board: await loadBoard(fetch, request.headers.get('cookie')) };
 };

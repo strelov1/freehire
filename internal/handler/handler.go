@@ -36,6 +36,10 @@ import (
 const (
 	defaultLimit = 20
 	maxLimit     = 100
+	// trackingMaxLimit is the higher ceiling for the caller's own tracked-jobs
+	// listing: the Kanban board is unpaginated (it fetches everything at once), so
+	// the shared 100 cap would silently hide a heavy user's older applications.
+	trackingMaxLimit = 500
 	// telegramLinkTTL bounds how long a deep-link token is valid — long enough to
 	// open Telegram and tap Start, short enough to limit a leaked link's window.
 	telegramLinkTTL = 10 * time.Minute
@@ -137,6 +141,13 @@ type API struct {
 // The offset is clamped into int32 range because the column binds as a Postgres
 // int4, and an unbounded query value would otherwise overflow on the conversion.
 func pageParams(c *fiber.Ctx) (limit, offset int) {
+	return pageParamsMax(c, maxLimit)
+}
+
+// pageParamsMax is pageParams with a caller-supplied limit ceiling, for endpoints
+// whose page is bounded differently than the shared list cap (e.g. the tracking
+// board, which is unpaginated and needs the whole set).
+func pageParamsMax(c *fiber.Ctx, maxLimit int) (limit, offset int) {
 	limit = min(max(c.QueryInt("limit", defaultLimit), 1), maxLimit)
 	offset = min(max(c.QueryInt("offset", 0), 0), math.MaxInt32)
 	return limit, offset

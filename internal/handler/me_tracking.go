@@ -35,7 +35,7 @@ func (a *API) ListTrackedJobs(c *fiber.Ctx) error {
 		return err
 	}
 
-	limit, offset := pageParams(c)
+	limit, offset := pageParamsMax(c, trackingMaxLimit)
 	listing, err := a.tracking.ListTracked(c.Context(), userID, c.Query("filter"), int32(limit), int32(offset))
 	if err != nil {
 		return trackingError(err)

@@ -1,5 +1,5 @@
 import { redirect } from '@sveltejs/kit';
-import { serverApi } from '$lib/server/api';
+import { loadBoard } from '$lib/server/tracking';
 import type { PageServerLoad } from './$types';
 
 // /my/tracking/[slug] renders the tracking board with the application's drawer open
@@ -13,12 +13,5 @@ export const load: PageServerLoad = async ({ parent, params, url, fetch, request
   if (!user) {
     redirect(302, `/?auth=required&redirect=${encodeURIComponent(url.pathname)}`);
   }
-  // A transient API failure shouldn't 500 the deep link — leave board undefined and
-  // let JobBoard fall back to its client fetch (which renders the friendly error state).
-  try {
-    const board = await serverApi(fetch, request.headers.get('cookie')).listMyJobs('board', 500, 0);
-    return { slug: params.slug, board: board.items };
-  } catch {
-    return { slug: params.slug };
-  }
+  return { slug: params.slug, board: await loadBoard(fetch, request.headers.get('cookie')) };
 };
