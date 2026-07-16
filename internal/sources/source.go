@@ -371,6 +371,12 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// 2gis tarpits datacenter IPs (the prod IP times out at 25s); the residential proxy is
 	// served in ~2s. It uses the standard HTMLGetter, so the proxied client serves it directly.
 	"2gis": func(c HTTPClient) Source { return NewTwoGIS(c) },
+	// careers-page.com rate-limits the prod datacenter IP (429) once the per-board detail
+	// fan-out exceeds its window — every large board then under-fills silently (board_health
+	// stays green) and even the single-request listing 429s during the cooldown. Unlike the
+	// others this is volume rate-limiting, not a hard blocklist (spaced requests from the prod
+	// IP pass), so egressing through a fresh proxy IP keeps its crawl off the penalised prod IP.
+	"careerspage": func(c HTTPClient) Source { return NewCareerPage(c) },
 }
 
 // ApplyProxyEgress rewires the proxiedProviders in registry to egress through the proxy
