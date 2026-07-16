@@ -15,10 +15,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// insertCompany seeds a listable company: job_count = 1 so it satisfies the
+// catalog's `job_count > 0` scope (ListCompanies/CountCompanies). Tests that
+// exercise the derived count seed jobs and call RefreshCompanyFacets, which
+// overwrites this placeholder with the real open-job count.
 func insertCompany(t *testing.T, pool *pgxpool.Pool, slug, name string) {
 	t.Helper()
 	if _, err := pool.Exec(context.Background(),
-		`INSERT INTO companies (slug, name) VALUES ($1, $2)`, slug, name); err != nil {
+		`INSERT INTO companies (slug, name, job_count) VALUES ($1, $2, 1)`, slug, name); err != nil {
 		t.Fatalf("insert company %q: %v", slug, err)
 	}
 }

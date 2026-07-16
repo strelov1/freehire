@@ -72,7 +72,7 @@ func TestListCompaniesSearchEndpoint(t *testing.T) {
 		{"acme", "Acme Corp"}, {"acme-labs", "ACME Labs"}, {"globex", "Globex"},
 	} {
 		if _, err := pool.Exec(ctx,
-			`INSERT INTO companies (slug, name) VALUES ($1, $2)`, c.slug, c.name); err != nil {
+			`INSERT INTO companies (slug, name, job_count) VALUES ($1, $2, 1)`, c.slug, c.name); err != nil {
 			t.Fatalf("seed %q: %v", c.slug, err)
 		}
 	}
@@ -141,8 +141,8 @@ func TestListCompaniesFacetFilterEndpoint(t *testing.T) {
 	seed := func(slug, name string, collections, regions, companyTypes []string) {
 		t.Helper()
 		if _, err := pool.Exec(ctx,
-			`INSERT INTO companies (slug, name, collections, regions, company_types)
-			 VALUES ($1, $2, $3, $4, $5)`,
+			`INSERT INTO companies (slug, name, job_count, collections, regions, company_types)
+			 VALUES ($1, $2, 1, $3, $4, $5)`,
 			slug, name, collections, regions, companyTypes); err != nil {
 			t.Fatalf("seed %q: %v", slug, err)
 		}
@@ -231,7 +231,7 @@ func TestListCompaniesSubindustryFacet(t *testing.T) {
 	seed := func(slug string, subindustry any) {
 		t.Helper()
 		if _, err := pool.Exec(ctx,
-			`INSERT INTO companies (slug, name, subindustry) VALUES ($1, $1, $2)`,
+			`INSERT INTO companies (slug, name, job_count, subindustry) VALUES ($1, $1, 1, $2)`,
 			slug, subindustry); err != nil {
 			t.Fatalf("seed %q: %v", slug, err)
 		}
@@ -306,7 +306,7 @@ func TestCompanySubindustriesEndpoint(t *testing.T) {
 	seed := func(slug string, subindustry any) {
 		t.Helper()
 		if _, err := pool.Exec(ctx,
-			`INSERT INTO companies (slug, name, subindustry) VALUES ($1, $1, $2)`,
+			`INSERT INTO companies (slug, name, job_count, subindustry) VALUES ($1, $1, 1, $2)`,
 			slug, subindustry); err != nil {
 			t.Fatalf("seed %q: %v", slug, err)
 		}
@@ -362,7 +362,7 @@ func TestListCompaniesRemoteRegionsFacet(t *testing.T) {
 	seed := func(slug string, remote, regions []string) {
 		t.Helper()
 		if _, err := pool.Exec(ctx,
-			`INSERT INTO companies (slug, name, remote_regions, regions) VALUES ($1, $1, $2, $3)`,
+			`INSERT INTO companies (slug, name, job_count, remote_regions, regions) VALUES ($1, $1, 1, $2, $3)`,
 			slug, remote, regions); err != nil {
 			t.Fatalf("seed %q: %v", slug, err)
 		}
@@ -427,7 +427,7 @@ func TestListCompaniesYCFacets(t *testing.T) {
 	seed := func(slug string, batch, status []string) {
 		t.Helper()
 		if _, err := pool.Exec(ctx,
-			`INSERT INTO companies (slug, name, yc_batch, yc_status) VALUES ($1, $1, $2, $3)`,
+			`INSERT INTO companies (slug, name, job_count, yc_batch, yc_status) VALUES ($1, $1, 1, $2, $3)`,
 			slug, batch, status); err != nil {
 			t.Fatalf("seed %q: %v", slug, err)
 		}
@@ -493,7 +493,7 @@ func TestListCompaniesYCStageFlags(t *testing.T) {
 	seed := func(slug string, stage, flags []string) {
 		t.Helper()
 		if _, err := pool.Exec(ctx,
-			`INSERT INTO companies (slug, name, yc_stage, yc_flags) VALUES ($1, $1, $2, $3)`,
+			`INSERT INTO companies (slug, name, job_count, yc_stage, yc_flags) VALUES ($1, $1, 1, $2, $3)`,
 			slug, stage, flags); err != nil {
 			t.Fatalf("seed %q: %v", slug, err)
 		}
