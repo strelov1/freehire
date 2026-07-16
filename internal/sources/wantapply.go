@@ -35,6 +35,10 @@ const (
 	// wantapplyHostname is the sitemap host a vacancy loc must carry (guards against a foreign
 	// or malformed URL slipping through as a slug).
 	wantapplyHostname = "wantapply.cy"
+	// wantapplyDetailWorkers bounds the detail-fetch fan-out below the shared default (8): the
+	// .cy mirror throttles a burst of concurrent requests (a prod run at 8 landed only ~32% of
+	// the catalogue), while 4 fetches the full sitemap cleanly (~2 min for ~930 vacancies).
+	wantapplyDetailWorkers = 4
 )
 
 // wantapplyReserved are the single-segment paths that are pages, not vacancies. Multi-segment
@@ -67,7 +71,7 @@ func (s wantapply) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	return fetchDetails(vacancies, defaultDetailWorkers, func(v wantapplyVacancy) (Job, bool) {
+	return fetchDetails(vacancies, wantapplyDetailWorkers, func(v wantapplyVacancy) (Job, bool) {
 		return s.detail(ctx, v)
 	}), nil
 }
@@ -76,13 +80,13 @@ func (s wantapply) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 // whether a slug is already ingested. A seen vacancy yields a liveness-refresh job (no detail
 // request) so the pipeline refreshes its last-seen/open state WITHOUT rewriting the content
 // hydrated when it was new; an unseen vacancy is hydrated from its detail page. Detail fetches
-// run under the shared bounded worker pool, and a single vacancy's detail failure is isolated.
+// run under a bounded worker pool, and a single vacancy's detail failure is isolated.
 func (s wantapply) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	vacancies, err := s.crawl(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return fetchDetails(vacancies, defaultDetailWorkers, func(v wantapplyVacancy) (Job, bool) {
+	return fetchDetails(vacancies, wantapplyDetailWorkers, func(v wantapplyVacancy) (Job, bool) {
 		if seen(v.slug) {
 			// Already ingested: refresh liveness only, no detail request. Just the identity
 			// fields the pipeline's touch needs (ExternalID); content is left untouched.
