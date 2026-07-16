@@ -1,4 +1,5 @@
 import { redirect } from '@sveltejs/kit';
+import { serverApi } from '$lib/server/api';
 import type { PageServerLoad } from './$types';
 
 // /my/tracking is personal: a signed-out visitor has nothing to show, so guard it
@@ -7,10 +8,21 @@ import type { PageServerLoad } from './$types';
 // dialog (no /login route), so we bounce home with ?auth=required and the TopBar
 // pops the sign-in dialog (same pattern as the ?auth_error OAuth callback). The
 // ?redirect carries the destination so sign-in returns here, not the home page.
-export const load: PageServerLoad = async ({ parent, url }) => {
+export const load: PageServerLoad = async ({ parent, url, fetch, request }) => {
   const { user } = await parent();
   if (!user) {
     const target = url.pathname + url.search;
     redirect(302, `/?auth=required&redirect=${encodeURIComponent(target)}`);
+  }
+  // Fetch the board here so it renders with the page. Previously JobBoard fetched
+  // it client-side on mount, a waterfall (navigate → HTML → hydrate → listMyJobs →
+  // render); pulling it into the server load collapses that into one round trip.
+  // A transient API failure shouldn't 500 the page — leave board undefined and let
+  // JobBoard fall back to its client fetch (which renders the friendly error state).
+  try {
+    const board = await serverApi(fetch, request.headers.get('cookie')).listMyJobs('board', 500, 0);
+    return { board: board.items };
+  } catch {
+    return {};
   }
 };

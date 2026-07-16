@@ -10,7 +10,10 @@
 
   // initialSlug (from /my/tracking/[slug]) opens that application's drawer once the
   // board has loaded, so a deep link / inbox link / refresh reopens the same card.
-  let { initialSlug }: { initialSlug?: string } = $props();
+  // initial carries the board rows fetched in the route's server load, so the board
+  // paints with the page (no client fetch on mount); a caller that omits it falls
+  // back to a client fetch. Mutations still reload() client-side.
+  let { initialSlug, initial }: { initialSlug?: string; initial?: MyJob[] } = $props();
   let openedInitial = false;
 
   function emptyColumns(): Record<BoardColumnId, BoardItem[]> {
@@ -28,47 +31,59 @@
   let openItem = $state.raw<BoardItem | null>(null);
   let pendingOutcome = $state(false);
 
+  // Lay the fetched rows out into the columns and open the deep-linked drawer once.
+  // The 'board' filter returns saved ∪ applied ∪ stage; saved-only rows are dropped
+  // here (they belong to Activity → Saved). Those rows still count toward the 500 cap,
+  // so a user with 500+ tracked jobs, many recently saved, could have older active
+  // applications fall outside the fetched window. Acceptable at this scale; revisit
+  // with a server-side board-minus-saved filter if it bites.
+  function build(rows: MyJob[]) {
+    const next = emptyColumns();
+    const cols: Record<string, BoardColumnId> = {};
+    for (const row of rows) {
+      const item: BoardItem = { ...row, id: row.job.public_slug };
+      const col = columnOf(item);
+      if (!col) continue; // saved-only rows live in Activity → Saved, not the board
+      next[col].push(item);
+      cols[item.id] = col;
+    }
+    columns = next;
+    cardCol = cols;
+    status = 'ready';
+    // Deep link: open the requested application's drawer once, after the board is
+    // built. A slug that isn't on the board (untracked / saved-only) just leaves
+    // the board showing.
+    if (initialSlug && !openedInitial) {
+      openedInitial = true;
+      const found = Object.values(next)
+        .flat()
+        .find((i) => i.id === initialSlug);
+      if (found) {
+        openItem = found;
+        pendingOutcome = false;
+      }
+    }
+  }
+
   async function load() {
     status = 'loading';
     try {
-      // The 'board' filter returns saved ∪ applied ∪ stage; we drop the saved-only
-      // rows below (they belong to Activity → Saved). Those rows still count toward
-      // this 500 cap, so a user with 500+ tracked jobs, many recently saved, could
-      // have older active applications fall outside the fetched window. Acceptable
-      // at this scale; revisit with a server-side board-minus-saved filter if it bites.
       const slice = await api.listMyJobs('board', 500, 0);
-      const next = emptyColumns();
-      const cols: Record<string, BoardColumnId> = {};
-      for (const row of slice.items) {
-        const item: BoardItem = { ...row, id: row.job.public_slug };
-        const col = columnOf(item);
-        if (!col) continue; // saved-only rows live in Activity → Saved, not the board
-        next[col].push(item);
-        cols[item.id] = col;
-      }
-      columns = next;
-      cardCol = cols;
-      status = 'ready';
-      // Deep link: open the requested application's drawer once, after the board is
-      // built. A slug that isn't on the board (untracked / saved-only) just leaves
-      // the board showing.
-      if (initialSlug && !openedInitial) {
-        openedInitial = true;
-        const found = Object.values(next)
-          .flat()
-          .find((i) => i.id === initialSlug);
-        if (found) {
-          openItem = found;
-          pendingOutcome = false;
-        }
-      }
+      build(slice.items);
     } catch {
       status = 'error';
     }
   }
 
+  // Server-preloaded rows paint immediately (SSR + client-nav both run the route's
+  // server load). `initial` is fixed for this mount (drawer open/close is pushState,
+  // not a reload), so capture its presence once and only bootstrap a client fetch
+  // when the caller gave us none.
+  const preloaded = !!initial;
+  if (initial) build(initial);
+
   $effect(() => {
-    if (isAuthenticated()) void load();
+    if (!preloaded && isAuthenticated()) void load();
   });
 
   function onconsider(id: BoardColumnId, items: BoardItem[]) {

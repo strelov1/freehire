@@ -10,4 +10,4 @@
 </svelte:head>
 
 <!-- Same board as /my/tracking, but opened on the given application's drawer. -->
-<JobBoard initialSlug={data.slug} />
+<JobBoard initialSlug={data.slug} initial={data.board} />
