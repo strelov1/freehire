@@ -203,7 +203,8 @@ func All(c HTTPClient) map[string]Source {
 		NewTeamtailor(c),
 		NewHurma(c),
 		NewICIMS(c),
-		NewCareerPage(c),
+		// careerspage is rate-paced (pacedCareerPageGetter); the proxied path paces it too.
+		NewCareerPage(pacedCareerPageGetter(c)),
 		NewNorthstone(c),
 		NewBriefHQ(c),
 		NewDjinni(c),
@@ -376,7 +377,9 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// stays green) and even the single-request listing 429s during the cooldown. Unlike the
 	// others this is volume rate-limiting, not a hard blocklist (spaced requests from the prod
 	// IP pass), so egressing through a fresh proxy IP keeps its crawl off the penalised prod IP.
-	"careerspage": func(c HTTPClient) Source { return NewCareerPage(c) },
+	// Also rate-paced (pacedCareerPageGetter) so a full run stays under the window even on the
+	// fresh proxy IP — concurrency limits the burst, pacing limits the total-per-window.
+	"careerspage": func(c HTTPClient) Source { return NewCareerPage(pacedCareerPageGetter(c)) },
 }
 
 // ApplyProxyEgress rewires the proxiedProviders in registry to egress through the proxy
