@@ -203,7 +203,8 @@ func All(c HTTPClient) map[string]Source {
 		NewTeamtailor(c),
 		NewHurma(c),
 		NewICIMS(c),
-		NewCareerPage(c),
+		// careerspage is rate-paced (pacedCareerPageGetter); the proxied path paces it too.
+		NewCareerPage(pacedCareerPageGetter(c)),
 		NewCleverstaff(c),
 		NewNorthstone(c),
 		NewBriefHQ(c),
@@ -377,7 +378,9 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// stays green) and even the single-request listing 429s during the cooldown. Unlike the
 	// others this is volume rate-limiting, not a hard blocklist (spaced requests from the prod
 	// IP pass), so egressing through a fresh proxy IP keeps its crawl off the penalised prod IP.
-	"careerspage": func(c HTTPClient) Source { return NewCareerPage(c) },
+	// Also rate-paced (pacedCareerPageGetter) so a full run stays under the window even on the
+	// fresh proxy IP — concurrency limits the burst, pacing limits the total-per-window.
+	"careerspage": func(c HTTPClient) Source { return NewCareerPage(pacedCareerPageGetter(c)) },
 	// cleverstaff.net is untested from the prod datacenter IP (the spike ran from a residential
 	// IP). It is pre-wired here so that, if the prod IP is blocked like djinni's, setting
 	// SOURCES_PROXY_URL routes only this provider through the proxy with no code change; while
