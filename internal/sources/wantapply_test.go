@@ -290,6 +290,13 @@ func TestWantapplyProviderBoardlessAggregatorNotSelfClosing(t *testing.T) {
 	}
 }
 
+func TestWantapplyIsProxied(t *testing.T) {
+	// The .cy edge IP-blocks the prod datacenter IP, so wantapply must egress through the proxy.
+	if _, ok := proxiedProviders["wantapply"]; !ok {
+		t.Error("wantapply must be in proxiedProviders (its edge blocks the prod datacenter IP)")
+	}
+}
+
 func TestWantapplyRegisteredInAll(t *testing.T) {
 	reg := All(NewClient())
 	if _, ok := reg["wantapply"]; !ok {

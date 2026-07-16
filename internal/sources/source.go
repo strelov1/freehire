@@ -364,6 +364,7 @@ func All(c HTTPClient) map[string]Source {
 // providers (bayt/gulftalent) would need proxy support wired into fingerprintHTTP instead.
 var proxiedProviders = map[string]func(HTTPClient) Source{
 	"eightfold": func(c HTTPClient) Source { return NewEightfold(c) },
+	"wantapply": func(c HTTPClient) Source { return NewWantapply(c) },
 }
 
 // ApplyProxyEgress rewires the proxiedProviders in registry to egress through the proxy
