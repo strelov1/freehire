@@ -203,6 +203,7 @@ func All(c HTTPClient) map[string]Source {
 		NewTeamtailor(c),
 		NewHurma(c),
 		NewICIMS(c),
+		NewCareerPage(c),
 		NewNorthstone(c),
 		NewBriefHQ(c),
 		NewDjinni(c),
@@ -334,26 +335,20 @@ func All(c HTTPClient) map[string]Source {
 	}
 	// meta is NOT served by the shared client: Meta's edge 400s the default Go TLS+HTTP/2
 	// fingerprint, so it needs the shared Chrome-fingerprint transport (fingerprintHTTP, also used
-	// by the bayt/gulftalent aggregators and careerspage). Build it only when there is a real client
-	// to serve (the c == nil marker/listing path — e.g. FilterableProviders — must stay
-	// transport-free, so these register with a nil client there; Provider()/boardless() never touch
-	// it). If the deterministic transport build ever fails, they are left unregistered so config
-	// validation fails fast on those entries, rather than registering a client guaranteed to be
-	// rejected by the edge.
-	//
-	// careerspage joined this set once careers-page.com's Cloudflare began silently serving the
-	// default Go-client fingerprint an empty/challenge 200 (no error → board_health stays green
-	// while every board yields 0 postings); the same URLs pass under the Chrome fingerprint.
+	// by the bayt/gulftalent aggregators). Build it only when there is a real client to serve (the
+	// c == nil marker/listing path — e.g. FilterableProviders — must stay transport-free, so meta
+	// registers with a nil client there; Provider()/boardless() never touch it). If the
+	// deterministic transport build ever fails, meta is left unregistered so config validation
+	// fails fast on the "meta" entry, rather than registering a client guaranteed to be rejected by
+	// Meta's edge.
 	if c == nil {
 		registry["meta"] = NewMetaCareers(nil)
 		registry["bayt"] = NewBayt(nil)
 		registry["gulftalent"] = NewGulfTalent(nil)
-		registry["careerspage"] = NewCareerPage(nil)
 	} else if fp, err := newFingerprintHTTP(); err == nil {
 		registry["meta"] = NewMetaCareers(fp)
 		registry["bayt"] = NewBayt(fp)
 		registry["gulftalent"] = NewGulfTalent(fp)
-		registry["careerspage"] = NewCareerPage(fp)
 	}
 	return registry
 }
