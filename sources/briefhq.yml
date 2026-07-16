@@ -1,0 +1,5 @@
+# briefhq boards. Provider is the filename; each entry is company + board.
+# board = the static careers page's "<host>/<path>" (no scheme); see internal/sources/briefhq.go.
+
+- company: Brief
+  board: briefhq.ai/careers/
