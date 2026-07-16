@@ -14,6 +14,10 @@
   board: whatnot
 
 # International single-company sources.
+# 2GIS (job.2gis.ru) tarpits datacenter IPs, so it was dropped in #660; it egresses through
+# the residential proxy now (proxiedProviders), which the tarpit is served past in ~2s.
+- company: 2GIS
+  provider: 2gis
 - company: Uber
   provider: uber
 - company: Amazon
