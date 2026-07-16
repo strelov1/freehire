@@ -1,0 +1,92 @@
+---
+title: Turning a million job postings into market data
+date: 2026-07-15
+summary: We already tag every job with structured facets. Here's how we turned that into an aggregate Insights API and a set of landing pages — and the one thing that only broke in production.
+type: article
+tags:
+  - engineering
+  - insights
+  - seo
+draft: false
+---
+
+Every job we ingest gets normalized and tagged: a category, a seniority, a set of
+skills, a location, and — when the posting discloses it — a salary. Until recently
+you could only see those facets one job at a time, or use them as search filters.
+The data to answer catalogue-wide questions was all there — "which roles are hiring
+most", "what skills are rising", "what does a senior backend role actually pay" — we
+just never exposed it as an aggregate.
+
+The new [Insights API](/api/v1/insights/roles) does exactly that, and the
+[/insights](/insights) pages put a human face on it.
+
+## Precompute, don't aggregate on the fly
+
+The obvious way to build this is to run a big `GROUP BY` over the jobs table on every
+request. We didn't. These endpoints are public and unauthenticated, and aggregating
+over the whole catalogue per request is both slow and an easy way for a crawler to
+hammer the database.
+
+Instead a small worker recomputes four rollup tables — role demand, skill demand,
+hiring velocity, and salary bands — every few hours, as one atomic swap. The reads
+then become cheap lookups on tiny tables. A page load never counts anything; it reads
+a few hundred pre-aggregated rows.
+
+Two design choices made the rollups a *pure function of the current data*, which
+means re-running them is always safe and never drifts:
+
+- **Growth without history.** "How fast is this role growing" needs a before-and-
+  after. Rather than keep historical snapshots, we derive "open as of a date" straight
+  from each job's `created_at` and `closed_at`. Open now versus open 30 days ago is a
+  single query over today's table — no snapshot bookkeeping to fall out of sync.
+- **Salary that never mixes apples.** Salaries come in different currencies and pay
+  periods. We compute percentiles per `(currency, period)` and never across them, and
+  we suppress any band built from too few disclosed salaries — both because a
+  three-sample "median" is noise, and because a one-sample band could point at a
+  specific person. A single SQL `CUBE` gives us the exact role, the category-wide
+  band, and every seniority in between, in one pass.
+
+The result, for backend today: a median of about **$195,000/year** across ~400
+postings that disclose pay. That number is computed, not guessed.
+
+## Pages that earn their place in the index
+
+The API is the hard part; the landing pages are the payoff. `/insights/salary/backend`,
+`/insights/skills/backend`, `/insights/roles/backend` — server-rendered, so search
+engines and AI crawlers see the numbers in the initial HTML, with a data-driven intro
+sentence, an internal-link rail, and `Dataset` + `BreadcrumbList` structured data.
+
+The trap with programmatic pages is thin content: generate a page for every possible
+slug and most of them are empty, which Google punishes. So every category runs through
+a **data-quality gate** — it only gets pages (and a sitemap entry) once it clears a
+minimum amount of real demand. A category that's present in the data but too small
+returns a 404 rather than an empty page, and the covered set is derived live, so it
+grows and shrinks with the catalogue on its own.
+
+## The bug that only showed up in production
+
+Everything passed locally and in tests. Then we ran the rollup worker against the real
+1.75-million-row catalogue and the hiring-velocity recompute took over ten minutes,
+churning through disk the whole time.
+
+The cause was mundane: the velocity query scanned the jobs table eight separate times
+— once per facet axis, for both additions and removals. On a small test table that's
+invisible; on the real one it dominates. Two fixes followed. First, a batch worker
+legitimately wants more working memory than the default tuned for tiny transactions,
+so we raise it for that one transaction. Then we rewrote the query to scan the table
+**once** and expand each job into its events inline. The velocity step dropped from
+five-plus minutes to under a minute, which also keeps the long batch transaction from
+getting in the way of routine table cleanup.
+
+It's a good reminder that some costs are only measurable at real scale — and that
+shipping to production *is* part of the test.
+
+## What it's for
+
+This is the data layer for a bigger idea: freehire as a source of truth about the tech
+job market, not just a place to find one job. The same aggregates are already on the
+open [API](/docs/api), so an agent can ask them too. Next up are the pages built to be
+found — "highest-paying roles", "fastest-growing skills" — each one a front door into
+the catalogue.
+
+Take a look at [/insights](/insights).
