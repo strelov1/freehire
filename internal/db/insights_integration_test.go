@@ -159,6 +159,36 @@ func TestInsightsSalaryPerCurrencyAndSuppression(t *testing.T) {
 	}
 }
 
+func TestInsightsSalaryCurrencyCaseMerges(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	// Same role, same currency in mixed case ('USD' and 'usd'): the rollup upper()s
+	// the code so both fold into one band rather than two split ones.
+	for i, cur := range []string{"USD", "usd", "USD", "usd"} {
+		seedInsightsJob(t, ctx, q, pool, fmt.Sprintf("c%d", i), insightSeed{
+			category: "engineering", seniority: "senior", countries: []string{"us"},
+			createdAgo: 5, salary: 150000, currency: cur, period: "year",
+		})
+	}
+	if err := q.DeleteAllInsightsSalaryStats(ctx); err != nil {
+		t.Fatalf("delete salary: %v", err)
+	}
+	if _, err := q.RebuildInsightsSalaryStatsGlobal(ctx, 1); err != nil {
+		t.Fatalf("rebuild salary: %v", err)
+	}
+
+	bands, err := q.ListInsightsSalary(ctx, ListInsightsSalaryParams{Category: "engineering", Seniority: "senior", Country: ""})
+	if err != nil {
+		t.Fatalf("list salary: %v", err)
+	}
+	if len(bands) != 1 || bands[0].Currency != "USD" || bands[0].SampleSize != 4 {
+		t.Errorf("bands = %+v, want a single USD band with sample 4 (usd+USD merged)", bands)
+	}
+}
+
 func TestInsightsVelocityFaceted(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)

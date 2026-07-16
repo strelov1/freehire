@@ -684,10 +684,13 @@ type Querier interface {
 	RebuildInsightsSkillStatsByCountry(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
 	// Country- and category-agnostic skill demand (both '' buckets).
 	RebuildInsightsSkillStatsGlobal(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
-	// One INSERT for every facet slice: a UNION ALL expands each job into added
-	// (created_at day) and removed (closed_at day) events across the 'all', category,
-	// seniority, and country axes (country from unnest), then aggregates per
-	// (day, facet_kind, facet_value). Days are UTC calendar dates.
+	// Faceted added/removed-per-day rollup from a SINGLE scan of jobs: a CROSS JOIN
+	// LATERAL expands each job into its events instead of the previous 8 separate
+	// full-table scans (one per facet axis × added/removed), which at catalogue scale
+	// dominated the recompute. Per job the lateral emits: added events on the
+	// created_at day and (if closed) removed events on the closed_at day, across the
+	// 'all', category, seniority, and country (unnest) axes. Days are UTC calendar
+	// dates; the outer GROUP BY aggregates per (day, facet_kind, facet_value).
 	RebuildInsightsVelocityDaily(ctx context.Context) (int64, error)
 	// Second half of the atomic rebuild: recompute every active day from jobs. `added`
 	// counts jobs by their created_at day; `removed` counts jobs by their CURRENT

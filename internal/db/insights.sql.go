@@ -411,7 +411,7 @@ FROM (
         category,
         seniority,
         country,
-        enrichment->>'salary_currency' AS currency,
+        upper(enrichment->>'salary_currency') AS currency,
         enrichment->>'salary_period'   AS period,
         coalesce(
             (nullif(enrichment->>'salary_min', '')::numeric + nullif(enrichment->>'salary_max', '')::numeric) / 2,
@@ -454,7 +454,7 @@ FROM (
     SELECT
         category,
         seniority,
-        enrichment->>'salary_currency' AS currency,
+        upper(enrichment->>'salary_currency') AS currency,
         enrichment->>'salary_period'   AS period,
         coalesce(
             (nullif(enrichment->>'salary_min', '')::numeric + nullif(enrichment->>'salary_max', '')::numeric) / 2,
@@ -561,30 +561,37 @@ func (q *Queries) RebuildInsightsSkillStatsGlobal(ctx context.Context, prevTs pg
 const rebuildInsightsVelocityDaily = `-- name: RebuildInsightsVelocityDaily :execrows
 INSERT INTO insights_velocity_daily (day, facet_kind, facet_value, added, removed)
 SELECT day, facet_kind, facet_value, sum(added)::int, sum(removed)::int
-FROM (
-    SELECT (created_at AT TIME ZONE 'UTC')::date AS day, 'all'::text AS facet_kind, ''::text AS facet_value, 1 AS added, 0 AS removed FROM jobs
+FROM jobs j
+CROSS JOIN LATERAL (
+    -- Added events (created_at day), scalar facet axes.
+    SELECT (j.created_at AT TIME ZONE 'UTC')::date AS day, f.fk AS facet_kind, f.fv AS facet_value, 1 AS added, 0 AS removed
+    FROM (VALUES ('all', ''), ('category', j.category), ('seniority', j.seniority)) AS f(fk, fv)
+    WHERE f.fk = 'all' OR f.fv <> ''
     UNION ALL
-    SELECT (created_at AT TIME ZONE 'UTC')::date, 'category', category, 1, 0 FROM jobs WHERE category <> ''
+    -- Added events, per country.
+    SELECT (j.created_at AT TIME ZONE 'UTC')::date, 'country', c, 1, 0
+    FROM unnest(j.countries) AS c
     UNION ALL
-    SELECT (created_at AT TIME ZONE 'UTC')::date, 'seniority', seniority, 1, 0 FROM jobs WHERE seniority <> ''
+    -- Removed events (closed_at day), scalar facet axes — only for closed jobs.
+    SELECT (j.closed_at AT TIME ZONE 'UTC')::date, f.fk, f.fv, 0, 1
+    FROM (VALUES ('all', ''), ('category', j.category), ('seniority', j.seniority)) AS f(fk, fv)
+    WHERE j.closed_at IS NOT NULL AND (f.fk = 'all' OR f.fv <> '')
     UNION ALL
-    SELECT (created_at AT TIME ZONE 'UTC')::date, 'country', c, 1, 0 FROM jobs, unnest(countries) AS c
-    UNION ALL
-    SELECT (closed_at AT TIME ZONE 'UTC')::date, 'all', '', 0, 1 FROM jobs WHERE closed_at IS NOT NULL
-    UNION ALL
-    SELECT (closed_at AT TIME ZONE 'UTC')::date, 'category', category, 0, 1 FROM jobs WHERE closed_at IS NOT NULL AND category <> ''
-    UNION ALL
-    SELECT (closed_at AT TIME ZONE 'UTC')::date, 'seniority', seniority, 0, 1 FROM jobs WHERE closed_at IS NOT NULL AND seniority <> ''
-    UNION ALL
-    SELECT (closed_at AT TIME ZONE 'UTC')::date, 'country', c, 0, 1 FROM jobs, unnest(countries) AS c WHERE closed_at IS NOT NULL
+    -- Removed events, per country.
+    SELECT (j.closed_at AT TIME ZONE 'UTC')::date, 'country', c, 0, 1
+    FROM unnest(j.countries) AS c
+    WHERE j.closed_at IS NOT NULL
 ) e
 GROUP BY day, facet_kind, facet_value
 `
 
-// One INSERT for every facet slice: a UNION ALL expands each job into added
-// (created_at day) and removed (closed_at day) events across the 'all', category,
-// seniority, and country axes (country from unnest), then aggregates per
-// (day, facet_kind, facet_value). Days are UTC calendar dates.
+// Faceted added/removed-per-day rollup from a SINGLE scan of jobs: a CROSS JOIN
+// LATERAL expands each job into its events instead of the previous 8 separate
+// full-table scans (one per facet axis × added/removed), which at catalogue scale
+// dominated the recompute. Per job the lateral emits: added events on the
+// created_at day and (if closed) removed events on the closed_at day, across the
+// 'all', category, seniority, and country (unnest) axes. Days are UTC calendar
+// dates; the outer GROUP BY aggregates per (day, facet_kind, facet_value).
 func (q *Queries) RebuildInsightsVelocityDaily(ctx context.Context) (int64, error) {
 	result, err := q.db.Exec(ctx, rebuildInsightsVelocityDaily)
 	if err != nil {
