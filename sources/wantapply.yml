@@ -1,0 +1,5 @@
+# Wantapply job aggregator (wantapply.com). Boardless aggregator: one sitemap over the WAF-free
+# .cy mirror, so the entry carries no board; each job's company comes from the posting's
+# hiringOrganization, not this placeholder. See internal/sources/wantapply.go.
+- company: Wantapply
+  provider: wantapply

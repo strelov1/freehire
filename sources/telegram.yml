@@ -234,3 +234,11 @@ channels:
     kind: board
   - channel: wantapply_marketing
     kind: board
+  - channel: wantapply_managers
+    kind: board
+  - channel: wantapply_design
+    kind: board
+  - channel: wantapply_analytics
+    kind: board
+  - channel: wantapply_qa_jobs
+    kind: board
