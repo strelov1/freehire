@@ -1,0 +1,9 @@
+# hurma boards. Provider is the filename; each entry is company + board.
+# board = the Hurma tenant subdomain of <board>.hurma.work (see internal/sources/hurma.go);
+# the adapter reads /api/v1/public-vacancies (XHR-gated JSON) and each vacancy's detail.
+# Each board validated live (>0 vacancies) before adding.
+
+- company: ScrumLaunch
+  board: scrumlaunch
+- company: Phenomenon Studio
+  board: phenomenonstudio
