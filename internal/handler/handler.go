@@ -14,6 +14,7 @@ import (
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/auth/oauth"
 	"github.com/strelov1/freehire/internal/blobstore"
+	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/gmailsync"
@@ -112,6 +113,11 @@ type API struct {
 	// text for the verdict). Its blob store is nil when S3 is unconfigured; Enabled()
 	// then reports false and callers degrade to per-request résumé upload.
 	resume *resume.Store
+	// cvStore owns the CV-builder use cases (per-user structured CVs, CRUD + seed).
+	cvStore *cv.Store
+	// cvRenderer renders a CV to PDF. Nil when no typst binary is configured; the PDF
+	// endpoint then returns 501 while the rest of the CV builder still works.
+	cvRenderer cv.Renderer
 	// structuredExtractor derives the read-only structured résumé from an uploaded CV
 	// (best-effort, background). Its client is nil when the LLM is unconfigured; extraction
 	// then no-ops and the profile simply shows no structured section.
@@ -184,6 +190,9 @@ type Config struct {
 	// Blob backs résumé storage (internal/blobstore). Nil disables storage: résumé
 	// upload only extracts skills in-request (no regression).
 	Blob blobstore.Store
+	// TypstBin is the resolved path to the typst binary for CV PDF rendering. Empty
+	// disables rendering: the /me/cvs/:id/pdf endpoint returns 501, the rest works.
+	TypstBin string
 	// LLM backs the optional CV ATS qualitative review. Nil disables the AI layer:
 	// the ATS score stays deterministic (the report just omits content-quality).
 	LLM *llm.Client
@@ -238,6 +247,14 @@ func Register(app *fiber.App, cfg Config) {
 	// Résumé storage is nil-safe: a nil Blob (S3 unconfigured) yields a disabled service
 	// whose Enabled() is false, so the upload/verdict paths degrade to in-request parsing.
 	a.resume = resume.New(cfg.Blob, resume.NewQueriesRepository(queries))
+
+	// CV builder: store is always available; the renderer is enabled only when a typst
+	// binary was resolved (assign only a non-nil renderer so the interface stays nil when
+	// disabled — a typed-nil would defeat the 501 gate).
+	a.cvStore = cv.NewStore(cv.NewQueriesRepository(queries))
+	if r := cv.NewTypstRenderer(cfg.TypstBin); r != nil {
+		a.cvRenderer = r
+	}
 	// Nil-safe: NewAnalyzer(nil) is a no-op analyzer, so the ATS report works whether
 	// or not the LLM is configured.
 	a.atsAnalyzer = atscheck.NewAnalyzer(cfg.LLM)
@@ -407,6 +424,17 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/me/profile", saved, a.GetProfile)
 	api.Put("/me/profile", saved, a.PutProfile)
 	api.Delete("/me/profile", saved, a.DeleteProfile)
+
+	// CV builder: cookie-only and gated to beta testers / moderators (restricted
+	// rollout). Owner-scoped (a foreign id is a 404). The PDF endpoint 501s when no
+	// typst binary is configured; the rest still works.
+	cvGate := auth.RequireModeratorOrBeta(a.queries, a.queries)
+	api.Get("/me/cvs", saved, cvGate, a.ListCVs)
+	api.Post("/me/cvs", saved, cvGate, a.CreateCV)
+	api.Get("/me/cvs/:id", saved, cvGate, a.GetCV)
+	api.Put("/me/cvs/:id", saved, cvGate, a.UpdateCV)
+	api.Delete("/me/cvs/:id", saved, cvGate, a.DeleteCV)
+	api.Get("/me/cvs/:id/pdf", saved, cvGate, a.RenderCVPDF)
 
 	// Mail inbox (Gmail connect + hosted mailbox). Open to every signed-in user.
 	// The read + disconnect routes are always registered (empty/no-op when not

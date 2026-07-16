@@ -24,10 +24,26 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/hire ./cmd/server
  && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/recount-companies ./cmd/recount-companies \
  && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/backfill-company-info ./cmd/backfill-company-info
 
+# --- typst stage: fetch the pinned, statically-linked typst binary used to render CV
+# PDFs (internal/cv). The musl build is fully static, so it runs on distroless/static;
+# Libertinus Serif is embedded in the binary, so no fonts are bundled separately. Pinned
+# to match the version verified against the ATS extraction test (local == prod output). ---
+FROM alpine:3.20 AS typst
+ARG TYPST_VERSION=0.15.0
+RUN apk add --no-cache curl xz \
+ && curl -fsSL "https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/typst-x86_64-unknown-linux-musl.tar.xz" -o /tmp/typst.tar.xz \
+ && tar -xJf /tmp/typst.tar.xz -C /tmp \
+ && install -m 0755 /tmp/typst-x86_64-unknown-linux-musl/typst /usr/local/bin/typst \
+ && /usr/local/bin/typst --version
+
 # --- runtime stage ---
 FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /app
 COPY --from=build /out/hire /out/ingest /out/enrich /out/reindex /out/tg-ingest /out/tg-extract /out/reslug /out/backfill-derive /out/liveness /out/notify /out/import-collections /out/recount-companies /out/backfill-company-info /app/
+# CV PDF rendering: the typst binary + the env that points the server at it. Absent this
+# the CV builder still works and the PDF endpoint returns 501 (config resolves via LookPath).
+COPY --from=typst /usr/local/bin/typst /app/typst
+ENV TYPST_BIN=/app/typst
 EXPOSE 8080
 USER nonroot:nonroot
 ENTRYPOINT ["/app/hire"]

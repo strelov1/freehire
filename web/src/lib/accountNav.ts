@@ -18,6 +18,9 @@ export const accountNav = [
   // The agent is a restricted rollout — beta testers only (a group separate from
   // the moderator role; see `beta_tester` on the user). `beta` shows a nav badge.
   { href: '/my/assistant', label: 'Agent', betaOnly: true, beta: true },
+  // CV builder is a restricted rollout — beta testers only (the server re-checks via
+  // RequireModeratorOrBeta). `beta` shows a nav badge.
+  { href: '/my/cvs', label: 'CV builder', betaOnly: true, beta: true },
   { href: '/my/searches', label: 'Search notifications' },
   { href: '/my/api-keys', label: 'API keys' },
   { href: '/my/submissions', label: 'My submissions' },

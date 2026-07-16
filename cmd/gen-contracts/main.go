@@ -70,6 +70,7 @@ func genStructs() (string, error) {
 	jobmatchTS := filepath.Join(tmp, "jobmatch.ts")
 	jobfitTS := filepath.Join(tmp, "jobfit.ts")
 	resumeextractTS := filepath.Join(tmp, "resumeextract.ts")
+	cvTS := filepath.Join(tmp, "cv.ts")
 
 	cfg := &tygo.Config{
 		Packages: []*tygo.PackageConfig{
@@ -126,6 +127,14 @@ func genStructs() (string, error) {
 				OutputPath:   resumeextractTS,
 				IncludeFiles: []string{"structured.go"},
 			},
+			{
+				// The editable CV-builder document wire shape (Document + Header +
+				// Experience + Education + SkillGroup + Language + Project +
+				// Certification). Only cv.go — seed/store/renderer are server-only.
+				Path:         "github.com/strelov1/freehire/internal/cv",
+				OutputPath:   cvTS,
+				IncludeFiles: []string{"cv.go"},
+			},
 		},
 	}
 	if err := tygo.New(cfg).Generate(); err != nil {
@@ -164,7 +173,11 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + jobmatchBody + "\n" + jobfitBody + "\n" + resumeextractBody, nil
+	cvBody, err := readBody(cvTS)
+	if err != nil {
+		return "", err
+	}
+	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + jobmatchBody + "\n" + jobfitBody + "\n" + resumeextractBody + "\n" + cvBody, nil
 }
 
 // readBody returns a tygo output file's body with its leading preamble removed, so

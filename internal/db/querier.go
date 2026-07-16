@@ -161,6 +161,10 @@ type Querier interface {
 	// expires_at NULL means the key never expires. Returns display fields only, never
 	// the hash.
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (CreateAPIKeyRow, error)
+	// Insert a new CV for a user. data is the sanitized structured document (JSON). job_id
+	// defaults NULL (the tailoring seam is unused in phase 1). Returns the metadata the list
+	// and detail responses need.
+	CreateCV(ctx context.Context, arg CreateCVParams) (CreateCVRow, error)
 	// File a user complaint about a job into the moderation queue as 'pending'. The partial
 	// unique index on (reported_by, job_id) WHERE status='pending' rejects a second open report
 	// of the same job by the same user (the repository maps that unique violation to a 409).
@@ -215,6 +219,9 @@ type Querier interface {
 	// days (a day that had only closures, now reopened) are dropped rather than left
 	// stale.
 	DeleteAllJobDailyStats(ctx context.Context) error
+	// Delete a CV owned by the user. Returns the affected-row count so the handler can 404
+	// when nothing was deleted (foreign or missing id).
+	DeleteCV(ctx context.Context, arg DeleteCVParams) (int64, error)
 	DeleteEmailClassificationOutbox(ctx context.Context, id int64) error
 	// Purge one source's mail for a user (Gmail disconnect passes 'gmail', mailbox
 	// release passes 'hosted') — the other source's mail is left untouched.
@@ -309,6 +316,9 @@ type Querier interface {
 	// The board's current cooldown_until (NULL = eligible). Absent row → pgx.ErrNoRows,
 	// which the caller treats as "never seen, eligible".
 	GetBoardCooldown(ctx context.Context, arg GetBoardCooldownParams) (pgtype.Timestamptz, error)
+	// One CV owned by the user, including the full data blob. Owner-scoped: a foreign or
+	// missing id returns no row (the handler maps it to 404).
+	GetCVByID(ctx context.Context, arg GetCVByIDParams) (GetCVByIDRow, error)
 	// SELECT * (not an explicit column list) so the generated row stays db.Company as
 	// the table grows columns (e.g. collections); an explicit subset makes sqlc emit a
 	// distinct row type and breaks the company-detail handler on every new column.
@@ -432,6 +442,8 @@ type Querier interface {
 	// worker groups these by canonical(query) so each distinct filter hits the search
 	// index once regardless of how many subscriptions share it.
 	ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubscriptionsRow, error)
+	// A user's CVs as metadata (no data blob), newest edit first.
+	ListCVsByUser(ctx context.Context, userID int64) ([]ListCVsByUserRow, error)
 	// Catalog page: companies with their job counts, most active first. The job count
 	// is read from the denormalized companies.job_count column (maintained by
 	// cmd/recount-companies), so this read does not join jobs. Ordered by job_count
@@ -925,6 +937,9 @@ type Querier interface {
 	// Remove a job from the board: drop every pipeline mark, keep viewed_at so the
 	// job remains in the user's view history.
 	UntrackJob(ctx context.Context, arg UntrackJobParams) (UserJob, error)
+	// Replace a CV's editable fields, stamping updated_at. Owner-scoped: no row is updated
+	// for a foreign or missing id (the handler maps the resulting no-row error to 404).
+	UpdateCV(ctx context.Context, arg UpdateCVParams) (UpdateCVRow, error)
 	// Targeted description rewrite for cmd/backfill-justjoin: sets the description and the refreshed
 	// content_hash (recomputed in Go from the row's indexed fields with the new description) so the
 	// row re-indexes. Stamps updated_at so `reindex --since` also captures it. Only the description

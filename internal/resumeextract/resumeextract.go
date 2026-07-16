@@ -66,8 +66,13 @@ Rules:
 - Extract ONLY facts stated in the CV. Never invent or infer a field that is not present — omit it instead.
 - Fields: full_name, headline (current role/title line), location, email, phone, summary (1-3 sentences),
   total_years (integer years of professional experience, best estimate; 0 if unclear),
-  experience (array of {title, company, start, end, summary}; keep dates as written, e.g. "2021-03" or "Present"),
-  education (array of {degree, institution, year}), languages (array of strings), links (array of URLs).
+  experience (array of {title, company, location, start, end, summary, highlights, stack}; keep dates as
+    written, e.g. "2021-03" or "Present"; summary is the one-line company/role context; highlights is the
+    array of achievement bullet points for that role, each a full sentence copied faithfully from the CV;
+    stack is the array of technologies listed for that role, e.g. from a "Stack:" line),
+  education (array of {degree, institution, year}), languages (array of strings), links (array of URLs),
+  skills (array of strings — technologies/tools stated in the CV, properly cased, e.g. "Go", "PostgreSQL", "Kafka"),
+  projects (array of {name, link, highlights} — personal/side projects with their bullet points).
 - Omit any field or entry you cannot fill from the CV. Return {} if the text is not a résumé.`
 
 func userPrompt(cvText string) string {

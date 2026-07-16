@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { accountNav, isSectionActive, visibleAccountNav } from './accountNav';
 
 describe('accountNav config', () => {
-  it('lists the eight account sections', () => {
-    expect(accountNav).toHaveLength(8);
+  it('lists the nine account sections', () => {
+    expect(accountNav).toHaveLength(9);
   });
 
   it('leads with the four everyday sections in use order', () => {
@@ -25,10 +25,16 @@ describe('accountNav config', () => {
 });
 
 describe('visibleAccountNav', () => {
-  it('hides the beta-only Assistant from a plain user but shows the Inbox', () => {
+  it('hides the beta-only Assistant and CV builder from a plain user but shows the Inbox', () => {
     const hrefs = visibleAccountNav(false, false).map((i) => i.href);
     expect(hrefs).not.toContain('/my/assistant');
+    expect(hrefs).not.toContain('/my/cvs');
     expect(hrefs).toContain('/my/inbox'); // Inbox is open to everyone now
+  });
+
+  it('shows the beta-only CV builder to a beta tester, not a plain moderator', () => {
+    expect(visibleAccountNav(false, true).map((i) => i.href)).toContain('/my/cvs');
+    expect(visibleAccountNav(true, false).map((i) => i.href)).not.toContain('/my/cvs');
   });
 
   it('gates the Assistant on beta membership, not the moderator role', () => {

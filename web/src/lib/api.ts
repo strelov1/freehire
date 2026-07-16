@@ -10,6 +10,7 @@
 // fetch per call site — not a module-level variable — keeps concurrent SSR
 // requests from sharing (and racing on) a session.
 
+import type { CvMeta, CvRecord, CreateCvInput, UpdateCvInput } from './cv';
 import type {
   Job,
   EmailLinking,
@@ -975,6 +976,38 @@ export function createApi(
     return requestData<EmailBody>(`/api/v1/me/emails/${id}/unlink`, { method: 'POST' });
   }
 
+  // --- CV builder (beta-gated on the server) ---
+
+  /** List the caller's CVs (metadata, newest edit first). */
+  async function listCvs(): Promise<CvMeta[]> {
+    return requestData<CvMeta[]>('/api/v1/me/cvs');
+  }
+
+  /** Create a CV, optionally seeded from the stored résumé structure. */
+  async function createCv(input: CreateCvInput = {}): Promise<CvRecord> {
+    return requestData<CvRecord>('/api/v1/me/cvs', jsonBody('POST', input));
+  }
+
+  /** Fetch one CV with its full document. */
+  async function getCv(id: number): Promise<CvRecord> {
+    return requestData<CvRecord>(`/api/v1/me/cvs/${id}`);
+  }
+
+  /** Replace a CV's title, template, and document. */
+  async function updateCv(id: number, input: UpdateCvInput): Promise<CvMeta> {
+    return requestData<CvMeta>(`/api/v1/me/cvs/${id}`, jsonBody('PUT', input));
+  }
+
+  /** Delete a CV. */
+  async function deleteCv(id: number): Promise<void> {
+    await call(`/api/v1/me/cvs/${id}`, { method: 'DELETE' });
+  }
+
+  /** The authenticated PDF URL for a CV (same-origin cookie rides along on download). */
+  function cvPdfUrl(id: number): string {
+    return `${baseUrl}/api/v1/me/cvs/${id}/pdf`;
+  }
+
   return {
     listJobs,
     getJob,
@@ -1070,6 +1103,12 @@ export function createApi(
     rejectEmailLink,
     linkEmail,
     unlinkEmail,
+    listCvs,
+    createCv,
+    getCv,
+    updateCv,
+    deleteCv,
+    cvPdfUrl,
   };
 }
 

@@ -459,17 +459,31 @@ export interface Structured {
   education?: Education[];
   languages?: string[];
   links?: string[];
+  skills?: string[];
+  projects?: Project[];
 }
 /**
  * Experience is one work-history entry. Dates are kept as free-form strings as printed
  * on the CV (e.g. "2021-03", "Mar 2021", "Present") — no date parsing is attempted.
+ * Summary is the role/company one-line context; Highlights are the achievement bullets.
  */
 export interface Experience {
   title?: string;
   company?: string;
+  location?: string;
   start?: string;
   end?: string;
   summary?: string;
+  highlights?: string[];
+  stack?: string[];
+}
+/**
+ * Project is one portfolio/side-project entry.
+ */
+export interface Project {
+  name?: string;
+  link?: string;
+  highlights?: string[];
 }
 /**
  * Education is one education entry.
@@ -480,7 +494,93 @@ export interface Education {
   year?: string;
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'breezy', 'careerplug', 'careerspage', 'clinch', 'comeet', 'cornerstone', 'deel', 'earcu', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'himalayas', 'hireology', 'huntflow', 'icims', 'infojobs', 'inhire', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobstash', 'jobtech', 'jobvite', 'join', 'justjoin', 'lever', 'loxo', 'luxoft', 'mindsight', 'mycareersfuture', 'neogov', 'oracle', 'pageup', 'paycom', 'paylocity', 'personio', 'phenom', 'pinpoint', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'solides', 'successfactors', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'ukg', 'vagas', 'vention', 'vouch', 'wantedkr', 'weworkremotely', 'workable', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
+/**
+ * Document is the typed, sanitized CV. Every field is optional; sections the user has
+ * not filled in are left empty rather than invented, and Sanitize drops empty entries.
+ */
+export interface Document {
+  header: Header;
+  summary?: string;
+  experience?: ExperienceItem[];
+  education?: EducationItem[];
+  skills?: SkillGroup[];
+  languages?: Language[];
+  projects?: Project[];
+  certifications?: Certification[];
+}
+/**
+ * Header is the top-of-CV contact block. The tagline under the name is Document.Summary
+ * (there is no separate headline field — one "summary" term across the CV).
+ */
+export interface Header {
+  full_name?: string;
+  email?: string;
+  phone?: string;
+  location?: string;
+  links?: string[];
+}
+/**
+ * Experience is one work-history entry. Dates are free-form strings as printed on the
+ * CV (e.g. "2021-03", "Mar 2021", "Present") — no date parsing is attempted.
+ */
+export interface ExperienceItem {
+  role?: string;
+  company?: string;
+  location?: string;
+  start?: string;
+  end?: string;
+  current?: boolean;
+  /**
+   * Summary is the one-line company/role context printed under the role header, before
+   * the bullets. Stack is the per-role technology line printed after the bullets.
+   */
+  summary?: string;
+  bullets?: string[];
+  stack?: string[];
+}
+/**
+ * Education is one education entry.
+ */
+export interface EducationItem {
+  institution?: string;
+  degree?: string;
+  field?: string;
+  start?: string;
+  end?: string;
+}
+/**
+ * SkillGroup is a named cluster of skills (e.g. "Languages" → Go, Python). A group with
+ * no items and no name is dropped.
+ */
+export interface SkillGroup {
+  group?: string;
+  items?: string[];
+}
+/**
+ * Language is one spoken/written language and its proficiency level.
+ */
+export interface Language {
+  name?: string;
+  level?: string;
+}
+/**
+ * Project is one portfolio/side-project entry.
+ */
+export interface Project {
+  name?: string;
+  link?: string;
+  bullets?: string[];
+}
+/**
+ * Certification is one certification/credential.
+ */
+export interface Certification {
+  name?: string;
+  issuer?: string;
+  year?: string;
+}
+
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'breezy', 'briefhq', 'careerplug', 'careerspage', 'clinch', 'comeet', 'cornerstone', 'deel', 'djinni', 'earcu', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'himalayas', 'hireology', 'huntflow', 'hurma', 'icims', 'infojobs', 'inhire', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobstash', 'jobtech', 'jobvite', 'join', 'justjoin', 'lever', 'likeit', 'loxo', 'luxoft', 'mindsight', 'mycareersfuture', 'neogov', 'northstone', 'oracle', 'pageup', 'paycom', 'paylocity', 'personio', 'phenom', 'pinpoint', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'solides', 'spark', 'successfactors', 'talentadore', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'tyomarkkinatori', 'ukg', 'vagas', 'vention', 'vouch', 'wantapply', 'wantedkr', 'weworkremotely', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];

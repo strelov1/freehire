@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/base64"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -79,6 +80,13 @@ type Settings struct {
 	S3AccessKey string
 	S3SecretKey string
 
+	// TypstBin is the resolved path to the typst binary used to render CV PDFs
+	// (internal/cv). Optional: an empty value disables PDF rendering (the /me/cvs/:id/pdf
+	// endpoint returns 501, the rest of the CV builder still works). Resolved via
+	// exec.LookPath(TYPST_BIN|"typst") so "disabled" means the binary is genuinely
+	// absent, not merely misconfigured — enforced at the cmd/server call site, not here.
+	TypstBin string
+
 	// Sentry backs optional error reporting for the server and every cron worker
 	// (internal/observability). Optional: an empty SentryDSN disables the integration
 	// entirely (no init, no delivery) — enforced at the observability call site, not
@@ -145,6 +153,8 @@ func Load() Settings {
 		S3AccessKey: os.Getenv("S3_ACCESS_KEY"),
 		S3SecretKey: os.Getenv("S3_SECRET_KEY"),
 
+		TypstBin: resolveTypstBin(env("TYPST_BIN", "typst")),
+
 		SentryDSN:         os.Getenv("SENTRY_DSN"),
 		SentryEnvironment: env("SENTRY_ENVIRONMENT", "development"),
 
@@ -187,6 +197,20 @@ func env(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// resolveTypstBin returns the absolute path to the typst binary named by name, or "" when
+// no such binary is on PATH — so a missing binary cleanly disables PDF rendering (501)
+// instead of failing every render at exec time (500).
+func resolveTypstBin(name string) string {
+	if name == "" {
+		return ""
+	}
+	path, err := exec.LookPath(name)
+	if err != nil {
+		return ""
+	}
+	return path
 }
 
 func envDuration(key string, fallback time.Duration) time.Duration {

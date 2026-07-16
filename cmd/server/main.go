@@ -154,6 +154,7 @@ func main() {
 		MailboxDomain:  cfg.MailboxDomain,
 		Search:         searchClient,
 		Blob:           blobStore,
+		TypstBin:       cfg.TypstBin,
 		LLM:            llmClient,
 
 		TelegramBotToken:      cfg.TelegramBotToken,

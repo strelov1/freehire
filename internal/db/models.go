@@ -63,6 +63,17 @@ type Company struct {
 	Subindustry      pgtype.Text        `json:"subindustry"`
 }
 
+type Cv struct {
+	ID         int64              `json:"id"`
+	UserID     int64              `json:"user_id"`
+	Title      string             `json:"title"`
+	TemplateID string             `json:"template_id"`
+	Data       []byte             `json:"data"`
+	JobID      pgtype.Int8        `json:"job_id"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Email struct {
 	ID                  int64              `json:"id"`
 	UserID              int64              `json:"user_id"`

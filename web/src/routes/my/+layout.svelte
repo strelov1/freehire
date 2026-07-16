@@ -12,6 +12,7 @@
     Bell,
     Key,
     FileText,
+    ScrollText,
     Inbox,
     PanelLeftClose,
     PanelLeft,
@@ -56,6 +57,7 @@
   const icons: Record<AccountNavItem['href'], LucideIcon> = {
     '/my/profile': User,
     '/my/assistant': Bot,
+    '/my/cvs': ScrollText,
     '/my/tracking': LayoutList,
     '/my/activity': Activity,
     '/my/inbox': Inbox,
