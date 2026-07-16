@@ -43,6 +43,15 @@ const (
 	lockKey = 0x66686c76 // "fhlv" — freehire liveness
 )
 
+// unprobableSources are open-job sources excluded from the probe on top of the ATS
+// registry: their stored URL is a container that outlives the vacancy, not the
+// vacancy's own page, so a liveness probe can never reach a death verdict. Only
+// telegram qualifies today — its URL is the Telegram post (see cmd/tg-extract), which
+// stays live after the job is filled. (habr_career/geekjob are NOT here: their URL is
+// the vacancy page itself and does 404 when the posting is removed.) These jobs have
+// no lifecycle close signal at all; see the job-lifecycle spec's telegram limitation.
+var unprobableSources = []string{"telegram"}
+
 func main() {
 	worker.Main(run)
 }
@@ -93,12 +102,20 @@ func run() int {
 		return 1
 	}
 
-	candidates, err := queries.SelectOrphanLivenessCandidates(ctx, atsProviders)
+	// Also exclude sources whose stored URL is not the vacancy's own page but a
+	// container that outlives it — a Telegram job's URL is the post (https://t.me/
+	// <chan>/<id>), which stays live long after the vacancy it advertised is filled,
+	// so probing it always reads Live and never closes the job. Excluding it skips a
+	// probe that can only waste a fetch, never reach a verdict. Appended AFTER the
+	// guard above so the empty-ATS-registry safeguard still keys off atsProviders.
+	excluded := append(atsProviders, unprobableSources...)
+
+	candidates, err := queries.SelectOrphanLivenessCandidates(ctx, excluded)
 	if err != nil {
 		log.Printf("select candidates: %v", err)
 		return 1
 	}
-	log.Printf("liveness: %d orphan candidates (excluding %d ATS providers)", len(candidates), len(atsProviders))
+	log.Printf("liveness: %d orphan candidates (excluding %d ATS providers + %d unprobable sources)", len(candidates), len(atsProviders), len(unprobableSources))
 
 	// Probe targets are orphan-job URLs that originated from attacker-influenced
 	// sources (telegram posts), so the probe must refuse internal/metadata targets.
