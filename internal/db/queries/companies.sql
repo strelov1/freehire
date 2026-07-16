@@ -12,10 +12,14 @@
 -- subset of `regions`. The name search also matches the slug, so a hyphenated slug
 -- query ("ge-vernova") finds the company even though its name has a space ("GE
 -- Vernova"). CountCompanies MUST keep an identical WHERE so the filtered total
--- matches the page.
+-- matches the page. `job_count > 0` scopes the catalog to companies that are
+-- actually hiring, excluding the ~92k job-less reference rows imported by the YC
+-- and company-info backfills; it also lets both reads ride companies_hiring_job_count_idx
+-- (partial index) instead of scanning the full 2.3 GB heap.
 SELECT slug, name, job_count, tagline, industries, hq_country
 FROM companies
-WHERE (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%' OR slug ILIKE '%' || sqlc.arg('search') || '%')
+WHERE job_count > 0
+  AND (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%' OR slug ILIKE '%' || sqlc.arg('search') || '%')
   AND (coalesce(cardinality(sqlc.arg('collections')::text[]), 0) = 0 OR collections && sqlc.arg('collections')::text[])
   AND (coalesce(cardinality(sqlc.arg('regions')::text[]), 0) = 0 OR regions && sqlc.arg('regions')::text[])
   AND (coalesce(cardinality(sqlc.arg('countries')::text[]), 0) = 0 OR countries && sqlc.arg('countries')::text[])
@@ -38,10 +42,11 @@ LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 -- name: CountCompanies :one
 -- Total companies matching the same optional name + facet filters as ListCompanies,
 -- so search/filter pagination reports the filtered total. Keep this WHERE identical
--- to ListCompanies.
+-- to ListCompanies (including the job_count > 0 hiring scope).
 SELECT count(*)
 FROM companies
-WHERE (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%' OR slug ILIKE '%' || sqlc.arg('search') || '%')
+WHERE job_count > 0
+  AND (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%' OR slug ILIKE '%' || sqlc.arg('search') || '%')
   AND (coalesce(cardinality(sqlc.arg('collections')::text[]), 0) = 0 OR collections && sqlc.arg('collections')::text[])
   AND (coalesce(cardinality(sqlc.arg('regions')::text[]), 0) = 0 OR regions && sqlc.arg('regions')::text[])
   AND (coalesce(cardinality(sqlc.arg('countries')::text[]), 0) = 0 OR countries && sqlc.arg('countries')::text[])

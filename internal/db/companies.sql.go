@@ -113,7 +113,8 @@ func (q *Queries) CompanySubindustries(ctx context.Context) ([]CompanySubindustr
 const countCompanies = `-- name: CountCompanies :one
 SELECT count(*)
 FROM companies
-WHERE ($1::text = '' OR name ILIKE '%' || $1 || '%' OR slug ILIKE '%' || $1 || '%')
+WHERE job_count > 0
+  AND ($1::text = '' OR name ILIKE '%' || $1 || '%' OR slug ILIKE '%' || $1 || '%')
   AND (coalesce(cardinality($2::text[]), 0) = 0 OR collections && $2::text[])
   AND (coalesce(cardinality($3::text[]), 0) = 0 OR regions && $3::text[])
   AND (coalesce(cardinality($4::text[]), 0) = 0 OR countries && $4::text[])
@@ -148,7 +149,7 @@ type CountCompaniesParams struct {
 
 // Total companies matching the same optional name + facet filters as ListCompanies,
 // so search/filter pagination reports the filtered total. Keep this WHERE identical
-// to ListCompanies.
+// to ListCompanies (including the job_count > 0 hiring scope).
 func (q *Queries) CountCompanies(ctx context.Context, arg CountCompaniesParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countCompanies,
 		arg.Search,
@@ -236,7 +237,8 @@ func (q *Queries) GetCompany(ctx context.Context, slug string) (Company, error) 
 const listCompanies = `-- name: ListCompanies :many
 SELECT slug, name, job_count, tagline, industries, hq_country
 FROM companies
-WHERE ($1::text = '' OR name ILIKE '%' || $1 || '%' OR slug ILIKE '%' || $1 || '%')
+WHERE job_count > 0
+  AND ($1::text = '' OR name ILIKE '%' || $1 || '%' OR slug ILIKE '%' || $1 || '%')
   AND (coalesce(cardinality($2::text[]), 0) = 0 OR collections && $2::text[])
   AND (coalesce(cardinality($3::text[]), 0) = 0 OR regions && $3::text[])
   AND (coalesce(cardinality($4::text[]), 0) = 0 OR countries && $4::text[])
@@ -298,7 +300,10 @@ type ListCompaniesRow struct {
 // subset of `regions`. The name search also matches the slug, so a hyphenated slug
 // query ("ge-vernova") finds the company even though its name has a space ("GE
 // Vernova"). CountCompanies MUST keep an identical WHERE so the filtered total
-// matches the page.
+// matches the page. `job_count > 0` scopes the catalog to companies that are
+// actually hiring, excluding the ~92k job-less reference rows imported by the YC
+// and company-info backfills; it also lets both reads ride companies_hiring_job_count_idx
+// (partial index) instead of scanning the full 2.3 GB heap.
 func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([]ListCompaniesRow, error) {
 	rows, err := q.db.Query(ctx, listCompanies,
 		arg.Search,

@@ -133,7 +133,7 @@ type Querier interface {
 	ConfirmEmailLink(ctx context.Context, arg ConfirmEmailLinkParams) (int64, error)
 	// Total companies matching the same optional name + facet filters as ListCompanies,
 	// so search/filter pagination reports the filtered total. Keep this WHERE identical
-	// to ListCompanies.
+	// to ListCompanies (including the job_count > 0 hiring scope).
 	CountCompanies(ctx context.Context, arg CountCompaniesParams) (int64, error)
 	// Total live messages for the caller (same optional filters as ListEmails), for
 	// pagination.
@@ -445,7 +445,10 @@ type Querier interface {
 	// subset of `regions`. The name search also matches the slug, so a hyphenated slug
 	// query ("ge-vernova") finds the company even though its name has a space ("GE
 	// Vernova"). CountCompanies MUST keep an identical WHERE so the filtered total
-	// matches the page.
+	// matches the page. `job_count > 0` scopes the catalog to companies that are
+	// actually hiring, excluding the ~92k job-less reference rows imported by the YC
+	// and company-info backfills; it also lets both reads ride companies_hiring_job_count_idx
+	// (partial index) instead of scanning the full 2.3 GB heap.
 	ListCompanies(ctx context.Context, arg ListCompaniesParams) ([]ListCompaniesRow, error)
 	// All companies with their current collection membership. cmd/import-collections
 	// reads this to know the existing company slugs (the match target) and each
