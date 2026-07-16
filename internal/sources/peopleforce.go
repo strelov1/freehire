@@ -30,6 +30,13 @@ func (peopleforce) Provider() string { return "peopleforce" }
 // cannot loop forever (the largest boards seen are a few pages; this is ample headroom).
 const peopleforceMaxPages = 100
 
+// peopleforceDetailWorkers throttles the per-board detail fan-out below the shared
+// defaultDetailWorkers (8): peopleforce.io rate-limits by request volume (429), and a wide
+// burst across 61 boards poisons the egress IP — starving later boards whose listing then
+// 429s. A narrow pool keeps each board's burst small; the crawl also egresses through the
+// proxy (see proxiedProviders) so the volume never lands on the prod IP.
+const peopleforceDetailWorkers = 3
+
 // peopleforceListing is one job card read from a listing page: its canonical detail URL and
 // the title from the anchor text (the detail page's own <h1> is not the job title).
 type peopleforceListing struct {
@@ -72,7 +79,7 @@ func (s peopleforce) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 
 	// Each posting's description and structured fields come from its own detail fetch, fanned
 	// out under the shared bounded pool.
-	return fetchDetails(cards, defaultDetailWorkers, func(c peopleforceListing) (Job, bool) {
+	return fetchDetails(cards, peopleforceDetailWorkers, func(c peopleforceListing) (Job, bool) {
 		return s.detail(ctx, e, c)
 	}), nil
 }

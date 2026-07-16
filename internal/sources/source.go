@@ -387,6 +387,12 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// SOURCES_PROXY_URL routes only this provider through the proxy with no code change; while
 	// the proxy is unset this entry is inert.
 	"cleverstaff": func(c HTTPClient) Source { return NewCleverstaff(c) },
+	// peopleforce.io rate-limits the prod datacenter IP (429): a full 61-board run's
+	// listing+detail volume poisons the IP after the first few boards, and every later
+	// board's single listing GET then 429s. Like careerspage this is volume rate-limiting,
+	// not a hard blocklist, so egressing through a fresh proxy IP keeps the crawl off the
+	// penalised prod IP; the adapter's narrow detail pool bounds the per-board burst.
+	"peopleforce": func(c HTTPClient) Source { return NewPeopleForce(c) },
 }
 
 // ApplyProxyEgress rewires the proxiedProviders in registry to egress through the proxy
