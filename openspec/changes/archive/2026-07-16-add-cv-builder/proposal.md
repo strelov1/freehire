@@ -19,7 +19,7 @@ Users can upload one résumé and get it analyzed, but they cannot *author* tail
 - `cv-builder`: authoring, storing, seeding, and PDF-rendering of per-user structured CVs, including the `Renderer` abstraction and the ATS template contract.
 
 ### Modified Capabilities
-<!-- None: existing specs (resume-structured-profile, resume-storage, job-fit-analysis, resume-verdict) keep their current requirements; this change only reads resume_structured to seed. -->
+- `resume-structured-profile`: the structured-résumé contract is extended so a CV seeded from it is complete — per-role location, achievement highlights, and technology stack, plus a flat skills list and portfolio projects.
 
 ## Impact
 
