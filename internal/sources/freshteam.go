@@ -36,30 +36,13 @@ func (f freshteam) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		return nil, fmt.Errorf("freshteam: board %q: %w", e.Board, err)
 	}
 
-	var urls []string
-	seen := make(map[string]bool)
-	for page := 1; page <= ftMaxPages; page++ {
-		listURL := fmt.Sprintf("https://%s.freshteam.com/jobs?page=%d", e.Board, page)
-		root, err := f.http.GetHTML(ctx, listURL)
-		if err != nil {
-			if page == 1 {
-				return nil, fmt.Errorf("freshteam: listing %s: %w", e.Board, err)
-			}
-			break // a later page failing ends enumeration with the jobs gathered so far
-		}
-		// Stop on the first page that adds no new links: an empty page, or a board that
-		// serves the same page for any ?page=N (de-dup turns the repeat into zero new).
-		newLinks := 0
-		for _, link := range ftJobLinks(base, root) {
-			if !seen[link] {
-				seen[link] = true
-				urls = append(urls, link)
-				newLinks++
-			}
-		}
-		if newLinks == 0 {
-			break
-		}
+	// Page through the listing until a page adds no new links (an empty page, or a board that
+	// serves the same page for any ?page=N — de-dup turns the repeat into zero new).
+	urls, err := crawlPagedLinks(ctx, f.http, ftMaxPages,
+		func(page int) string { return fmt.Sprintf("https://%s.freshteam.com/jobs?page=%d", e.Board, page) },
+		func(root *html.Node) []string { return ftJobLinks(base, root) })
+	if err != nil {
+		return nil, fmt.Errorf("freshteam: listing %s: %w", e.Board, err)
 	}
 
 	// Each job's posting comes from its own page fetch, fanned out under a bounded pool.

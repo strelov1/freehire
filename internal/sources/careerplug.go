@@ -38,31 +38,18 @@ func (s careerplug) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		return nil, fmt.Errorf("careerplug: board %q: %w", e.Board, err)
 	}
 
-	var urls []string
-	seen := make(map[string]bool)
-	for page := 1; page <= careerplugMaxPages; page++ {
-		listURL := fmt.Sprintf("https://%s/jobs", host)
-		if page > 1 {
-			listURL = fmt.Sprintf("https://%s/jobs?page=%d", host, page)
-		}
-		root, err := s.http.GetHTML(ctx, listURL)
-		if err != nil {
-			if page == 1 {
-				return nil, fmt.Errorf("careerplug: listing %s: %w", e.Board, err)
+	// Page through the listing until a page adds no new links (an empty page, or a board that
+	// clamps ?page=N past its last page — de-dup turns the repeat into zero new).
+	urls, err := crawlPagedLinks(ctx, s.http, careerplugMaxPages,
+		func(page int) string {
+			if page > 1 {
+				return fmt.Sprintf("https://%s/jobs?page=%d", host, page)
 			}
-			break // a later page failing ends enumeration with the jobs gathered so far
-		}
-		newLinks := 0
-		for _, link := range careerplugJobLinks(base, root) {
-			if !seen[link] {
-				seen[link] = true
-				urls = append(urls, link)
-				newLinks++
-			}
-		}
-		if newLinks == 0 { // empty page, or a board clamping ?page=N past its last page
-			break
-		}
+			return fmt.Sprintf("https://%s/jobs", host)
+		},
+		func(root *html.Node) []string { return careerplugJobLinks(base, root) })
+	if err != nil {
+		return nil, fmt.Errorf("careerplug: listing %s: %w", e.Board, err)
 	}
 
 	return fetchDetails(urls, defaultDetailWorkers, func(u string) (Job, bool) {

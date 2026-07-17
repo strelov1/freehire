@@ -42,31 +42,14 @@ func (s careerspage) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		return nil, fmt.Errorf("careerspage: board %q: %w", e.Board, err)
 	}
 
-	// Page through the listing, collecting canonical job-detail URLs until a page yields
-	// no new links (the tail/empty page) or the safety cap is hit. A first-page failure is
-	// a board-level error; a later-page failure just stops the walk with what we have.
-	seen := map[string]struct{}{}
-	var locs []string
-	for page := 1; page <= careerspageMaxPages; page++ {
-		listURL := fmt.Sprintf("%s?page=%d", base, page)
-		root, err := s.http.GetHTML(ctx, listURL)
-		if err != nil {
-			if page == 1 {
-				return nil, fmt.Errorf("careerspage: listing %s: %w", e.Board, err)
-			}
-			break
-		}
-		added := 0
-		for _, l := range careerspageJobLinks(base, root) {
-			if _, ok := seen[l]; !ok {
-				seen[l] = struct{}{}
-				locs = append(locs, l)
-				added++
-			}
-		}
-		if added == 0 {
-			break
-		}
+	// Page through the listing until a page yields no new links (the tail/empty page) or the
+	// safety cap is hit. A first-page failure is a board-level error; a later-page failure just
+	// stops the walk with what we have.
+	locs, err := crawlPagedLinks(ctx, s.http, careerspageMaxPages,
+		func(page int) string { return fmt.Sprintf("%s?page=%d", base, page) },
+		func(root *html.Node) []string { return careerspageJobLinks(base, root) })
+	if err != nil {
+		return nil, fmt.Errorf("careerspage: listing %s: %w", e.Board, err)
 	}
 
 	// Each posting's fields come from its own detail fetch, fanned out under a narrow pool

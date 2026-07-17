@@ -36,30 +36,13 @@ func (g globalpayments) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error
 		return nil, fmt.Errorf("globalpayments: board %q: %w", e.Board, err)
 	}
 
-	var urls []string
-	seen := make(map[string]bool)
-	for page := 1; page <= gpMaxPages; page++ {
-		listURL := fmt.Sprintf("https://%s/en/jobs/?page=%d", e.Board, page)
-		root, err := g.http.GetHTML(ctx, listURL)
-		if err != nil {
-			if page == 1 {
-				return nil, fmt.Errorf("globalpayments: listing %s: %w", e.Board, err)
-			}
-			break // a later page failing ends enumeration with the jobs gathered so far
-		}
-		// Stop on the first page that adds no new links: an empty page, or a board that
-		// clamps ?page=N past its last page (de-dup turns the repeat into zero new).
-		newLinks := 0
-		for _, link := range gpJobLinks(base, root) {
-			if !seen[link] {
-				seen[link] = true
-				urls = append(urls, link)
-				newLinks++
-			}
-		}
-		if newLinks == 0 {
-			break
-		}
+	// Page through the listing until a page adds no new links (an empty page, or a board that
+	// clamps ?page=N past its last page — de-dup turns the repeat into zero new).
+	urls, err := crawlPagedLinks(ctx, g.http, gpMaxPages,
+		func(page int) string { return fmt.Sprintf("https://%s/en/jobs/?page=%d", e.Board, page) },
+		func(root *html.Node) []string { return gpJobLinks(base, root) })
+	if err != nil {
+		return nil, fmt.Errorf("globalpayments: listing %s: %w", e.Board, err)
 	}
 
 	// Each job's posting comes from its own page fetch, fanned out under a bounded pool.

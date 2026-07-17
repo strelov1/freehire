@@ -1,6 +1,7 @@
 package sources
 
 import (
+	"context"
 	"net/url"
 	"strings"
 
@@ -241,4 +242,37 @@ func metaProperty(root *html.Node, property string) string {
 		return true
 	})
 	return found
+}
+
+// crawlPagedLinks pages a listing from page 1, collecting the deduplicated links each page
+// yields (in first-seen order) until a page adds no new link or maxPages is hit — the shared
+// body of the paginated HTML-listing crawlers, which differ only in their page-URL builder and
+// link extractor. pageURL builds the listing URL for a 1-based page number; links extracts a
+// page's job links. It returns an error ONLY when the FIRST page fails (a board-level failure)
+// — the caller adds its board context; a later page failing ends the walk with the links
+// gathered so far, so a partial crawl survives a mid-listing hiccup.
+func crawlPagedLinks(ctx context.Context, get HTMLGetter, maxPages int, pageURL func(page int) string, links func(*html.Node) []string) ([]string, error) {
+	var out []string
+	seen := make(map[string]bool)
+	for page := 1; page <= maxPages; page++ {
+		root, err := get.GetHTML(ctx, pageURL(page))
+		if err != nil {
+			if page == 1 {
+				return nil, err
+			}
+			break // a later page failing ends enumeration with the links gathered so far
+		}
+		added := 0
+		for _, link := range links(root) {
+			if !seen[link] {
+				seen[link] = true
+				out = append(out, link)
+				added++
+			}
+		}
+		if added == 0 { // empty page, or a board clamping ?page=N past its last page
+			break
+		}
+	}
+	return out, nil
 }

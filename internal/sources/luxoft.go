@@ -40,36 +40,22 @@ func (l luxoft) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		return nil, fmt.Errorf("luxoft: board %q: %w", e.Board, err)
 	}
 
-	var urls []string
-	seen := make(map[string]bool)
-	for page := 1; page <= lxMaxPages; page++ {
-		// page=1 is the default; Luxoft 301-redirects /jobs?page=1 to a broken relative
-		// Location that resolves to a 404, so omit the page param on the first page and add
-		// it only from page 2 on.
-		listURL := fmt.Sprintf("https://%s/jobs?perPage=%d", e.Board, lxPerPage)
-		if page > 1 {
-			listURL += fmt.Sprintf("&page=%d", page)
-		}
-		root, err := l.http.GetHTML(ctx, listURL)
-		if err != nil {
-			if page == 1 {
-				return nil, fmt.Errorf("luxoft: listing %s: %w", e.Board, err)
+	// Page through the listing until a page adds no new links (an empty page, or a board that
+	// clamps ?page=N past its last page — de-dup turns the repeat into zero new).
+	urls, err := crawlPagedLinks(ctx, l.http, lxMaxPages,
+		func(page int) string {
+			// page=1 is the default; Luxoft 301-redirects /jobs?page=1 to a broken relative
+			// Location that resolves to a 404, so omit the page param on the first page and add
+			// it only from page 2 on.
+			listURL := fmt.Sprintf("https://%s/jobs?perPage=%d", e.Board, lxPerPage)
+			if page > 1 {
+				listURL += fmt.Sprintf("&page=%d", page)
 			}
-			break // a later page failing ends enumeration with the jobs gathered so far
-		}
-		// Stop on the first page that adds no new links: an empty page, or a board that
-		// clamps ?page=N past its last page (de-dup turns the repeat into zero new).
-		newLinks := 0
-		for _, link := range lxJobLinks(base, root) {
-			if !seen[link] {
-				seen[link] = true
-				urls = append(urls, link)
-				newLinks++
-			}
-		}
-		if newLinks == 0 {
-			break
-		}
+			return listURL
+		},
+		func(root *html.Node) []string { return lxJobLinks(base, root) })
+	if err != nil {
+		return nil, fmt.Errorf("luxoft: listing %s: %w", e.Board, err)
 	}
 
 	// Each job's posting comes from its own page fetch, fanned out under a bounded pool.
