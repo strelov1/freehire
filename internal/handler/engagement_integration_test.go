@@ -1,9 +1,10 @@
 //go:build integration
 
-// Integration test for the engagement-stats read endpoint. The counts are a pure
-// aggregate over user_jobs and the handler reads through a concrete *db.Queries,
-// so it can only be exercised against a real Postgres. It asserts the empty case,
-// then seeds saves/applies/views and checks the counts.
+// Integration test for the engagement-stats read endpoint. The counts are pure
+// aggregates over user_jobs, users, user_job_analysis and saved_searches, and the
+// handler reads through a concrete *db.Queries, so it can only be exercised against
+// a real Postgres. It asserts the empty case, then seeds saves/applies/views plus a
+// résumé, a fit analysis and a saved search, and checks every count.
 // Run with: go test -tags=integration ./internal/handler/
 package handler
 
@@ -27,9 +28,12 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 	app.Get("/api/v1/stats/engagement", h.EngagementStats)
 
 	type counts struct {
-		Saved   int `json:"saved"`
-		Applied int `json:"applied"`
-		Viewed  int `json:"viewed"`
+		Saved         int `json:"saved"`
+		Applied       int `json:"applied"`
+		Viewed        int `json:"viewed"`
+		CvsUploaded   int `json:"cvs_uploaded"`
+		FitChecks     int `json:"fit_checks"`
+		SavedSearches int `json:"saved_searches"`
 	}
 	type envelope struct {
 		Data counts `json:"data"`
@@ -51,9 +55,10 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 		return env.Data
 	}
 
-	// --- Empty table: all zeros ------------------------------------------------
-	if c := get(); c.Saved != 0 || c.Applied != 0 || c.Viewed != 0 {
-		t.Fatalf("empty table: got %+v, want all zeros", c)
+	// --- Empty tables: all zeros -----------------------------------------------
+	if c := get(); c.Saved != 0 || c.Applied != 0 || c.Viewed != 0 ||
+		c.CvsUploaded != 0 || c.FitChecks != 0 || c.SavedSearches != 0 {
+		t.Fatalf("empty tables: got %+v, want all zeros", c)
 	}
 
 	// --- Seed a user + jobs + interactions -------------------------------------
@@ -89,7 +94,26 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 	seedInteraction(j2, true, false)
 	seedInteraction(j3, false, true)
 
-	if c := get(); c.Saved != 1 || c.Applied != 1 || c.Viewed != 3 {
-		t.Errorf("got %+v, want {Saved:1 Applied:1 Viewed:3}", c)
+	// A stored résumé (→ cvs_uploaded=1), one job-fit analysis (→ fit_checks=1),
+	// and one saved search (→ saved_searches=1).
+	if _, err := pool.Exec(ctx,
+		`UPDATE users SET resume_object_key = 'cv/u.pdf', resume_uploaded_at = now() WHERE id = $1`,
+		uid); err != nil {
+		t.Fatalf("seed résumé: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO user_job_analysis (user_id, job_id, analysis, model)
+		 VALUES ($1, $2, '{}'::jsonb, 'test-model')`, uid, j1); err != nil {
+		t.Fatalf("seed fit analysis: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO saved_searches (user_id, name, query) VALUES ($1, 'my search', 'go')`,
+		uid); err != nil {
+		t.Fatalf("seed saved search: %v", err)
+	}
+
+	if c := get(); c.Saved != 1 || c.Applied != 1 || c.Viewed != 3 ||
+		c.CvsUploaded != 1 || c.FitChecks != 1 || c.SavedSearches != 1 {
+		t.Errorf("got %+v, want {Saved:1 Applied:1 Viewed:3 CvsUploaded:1 FitChecks:1 SavedSearches:1}", c)
 	}
 }

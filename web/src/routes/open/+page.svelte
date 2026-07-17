@@ -83,6 +83,9 @@
       { value: nf.format(e.saved), label: 'jobs saved' },
       { value: nf.format(e.applied), label: 'applications' },
       { value: nf.format(e.viewed), label: 'jobs viewed' },
+      { value: nf.format(e.cvs_uploaded), label: 'CVs uploaded' },
+      { value: nf.format(e.fit_checks), label: 'fit checks' },
+      { value: nf.format(e.saved_searches), label: 'saved searches' },
     ];
   });
 </script>
@@ -189,7 +192,7 @@
       Signed-in interactions across freehire — jobs saved, applications tracked, and postings opened.
     </p>
     {#if engagement}
-      <dl class="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-border bg-border">
+      <dl class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
         {#each engagement as e (e.label)}
           <div class="bg-background p-5 sm:p-6">
             <dt class="font-mono text-xs uppercase tracking-wide text-muted-foreground">{e.label}</dt>

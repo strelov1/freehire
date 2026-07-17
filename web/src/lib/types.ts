@@ -355,6 +355,9 @@ export interface EngagementStats {
   saved: number;
   applied: number;
   viewed: number;
+  cvs_uploaded: number;
+  fit_checks: number;
+  saved_searches: number;
 }
 
 /** The derived health verdict for a provider (and the fleet) on the public

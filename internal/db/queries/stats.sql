@@ -55,14 +55,21 @@ LEFT JOIN daily ON daily.day = d::date
 ORDER BY d;
 
 -- name: GetEngagementStats :one
--- Aggregate interaction counts from user_jobs — saved / applied / viewed — for the
--- public engagement endpoint. Aggregate-only: no user identifier or row-level field
--- is selected. viewed_at is NOT NULL on every row (set on RecordView), so "viewed"
--- equals the total interaction count.
+-- Aggregate interaction counts for the public engagement endpoint. Aggregate-only:
+-- every column is a scalar total, so no user identifier or row-level field is
+-- selected. The user_jobs counts (saved / applied / viewed) are interaction-row
+-- totals across all users — viewed_at is NOT NULL on every row (set on RecordView),
+-- so "viewed" equals the total interaction count. The remaining three mirror that
+-- event-total semantics from their own tables: cvs_uploaded is the count of users
+-- holding a stored résumé (one per user, so also a people count), fit_checks is
+-- every job-fit analysis ever run, and saved_searches is every saved search.
 SELECT
     count(*) FILTER (WHERE saved_at IS NOT NULL)::int   AS saved,
     count(*) FILTER (WHERE applied_at IS NOT NULL)::int AS applied,
-    count(*) FILTER (WHERE viewed_at IS NOT NULL)::int  AS viewed
+    count(*) FILTER (WHERE viewed_at IS NOT NULL)::int  AS viewed,
+    (SELECT count(*) FROM users WHERE resume_object_key IS NOT NULL)::int AS cvs_uploaded,
+    (SELECT count(*) FROM user_job_analysis)::int AS fit_checks,
+    (SELECT count(*) FROM saved_searches)::int AS saved_searches
 FROM user_jobs;
 
 -- name: ListJobActivity :many

@@ -354,10 +354,14 @@ type Querier interface {
 	// distinct row type and breaks the company-detail handler on every new column.
 	GetCompany(ctx context.Context, slug string) (Company, error)
 	GetEmail(ctx context.Context, arg GetEmailParams) (GetEmailRow, error)
-	// Aggregate interaction counts from user_jobs — saved / applied / viewed — for the
-	// public engagement endpoint. Aggregate-only: no user identifier or row-level field
-	// is selected. viewed_at is NOT NULL on every row (set on RecordView), so "viewed"
-	// equals the total interaction count.
+	// Aggregate interaction counts for the public engagement endpoint. Aggregate-only:
+	// every column is a scalar total, so no user identifier or row-level field is
+	// selected. The user_jobs counts (saved / applied / viewed) are interaction-row
+	// totals across all users — viewed_at is NOT NULL on every row (set on RecordView),
+	// so "viewed" equals the total interaction count. The remaining three mirror that
+	// event-total semantics from their own tables: cvs_uploaded is the count of users
+	// holding a stored résumé (one per user, so also a people count), fit_checks is
+	// every job-fit analysis ever run, and saved_searches is every saved search.
 	GetEngagementStats(ctx context.Context) (GetEngagementStatsRow, error)
 	GetGmailConnection(ctx context.Context, userID int64) (GetGmailConnectionRow, error)
 	GetGmailRefreshToken(ctx context.Context, userID int64) (GetGmailRefreshTokenRow, error)
