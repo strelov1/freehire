@@ -6,6 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/outboundurl"
 )
 
 // defaultCopiesLimit / maxCopiesLimit bound the "openings across cities" list a
@@ -48,7 +49,7 @@ func (a *API) JobCopies(c *fiber.Ctx) error {
 
 	copies := make([]jobCopy, len(rows))
 	for i, r := range rows {
-		cp := jobCopy{PublicSlug: r.PublicSlug, Location: r.Location, ApplyURL: r.URL}
+		cp := jobCopy{PublicSlug: r.PublicSlug, Location: r.Location, ApplyURL: outboundurl.Tag(r.URL)}
 		if r.PostedAt.Valid {
 			t := r.PostedAt.Time
 			cp.PostedAt = &t

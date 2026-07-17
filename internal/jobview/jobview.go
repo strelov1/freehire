@@ -14,6 +14,7 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/job"
+	"github.com/strelov1/freehire/internal/outboundurl"
 	"github.com/strelov1/freehire/internal/pgconv"
 )
 
@@ -142,7 +143,7 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 		Source:            f.Source,
 		ManuallyAdded:     f.ManuallyAdded,
 		ExternalID:        f.ExternalID,
-		URL:               f.URL,
+		URL:               outboundurl.Tag(f.URL),
 		Title:             f.Title,
 		Company:           f.Company,
 		CompanySlug:       f.CompanySlug,
