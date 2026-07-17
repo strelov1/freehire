@@ -134,10 +134,7 @@ var hurmaVacancyIDPattern = regexp.MustCompile(`/public-vacancies/(\d+)`)
 
 // hurmaVacancyID extracts the native numeric vacancy id from a vacancy's public URL.
 func hurmaVacancyID(u string) string {
-	if m := hurmaVacancyIDPattern.FindStringSubmatch(u); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(hurmaVacancyIDPattern, u)
 }
 
 // hurmaTitlePrefix matches the "#<id> " tag Hurma prepends to a vacancy name.

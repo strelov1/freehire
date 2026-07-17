@@ -76,10 +76,7 @@ var odooJobIDPattern = regexp.MustCompile(`/jobs/(?:detail/)?[^"?#]*?-(\d+)(?:[/
 // odooJobID extracts the native numeric job id from a detail URL, or "" when the URL is not
 // a job posting (e.g. the /jobs listing itself).
 func odooJobID(loc string) string {
-	if m := odooJobIDPattern.FindStringSubmatch(loc); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(odooJobIDPattern, loc)
 }
 
 // itempropAttr returns the datetime/content attribute of the first element carrying the given

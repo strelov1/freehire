@@ -115,10 +115,7 @@ var gpJobIDPattern = regexp.MustCompile(`/en/jobs/([^/?#]+)/[^/?#]+`)
 
 // gpJobID extracts the native posting id (e.g. "r0072212") from a job page URL.
 func gpJobID(u string) string {
-	if m := gpJobIDPattern.FindStringSubmatch(u); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(gpJobIDPattern, u)
 }
 
 // gpPosting is the schema.org JobPosting decoded from a Global Payments job page's

@@ -93,10 +93,7 @@ var talentlyftJobIDPattern = regexp.MustCompile(`/jobs/.+-([A-Za-z0-9]{3,})$`)
 // talentlyftJobID extracts the native posting code from a detail URL, or "" for the listing
 // root and section pages that carry no code.
 func talentlyftJobID(loc string) string {
-	if m := talentlyftJobIDPattern.FindStringSubmatch(trimURLSuffix(loc)); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(talentlyftJobIDPattern, trimURLSuffix(loc))
 }
 
 // talentlyftPosting is the schema.org JobPosting decoded from a TalentLyft posting page's

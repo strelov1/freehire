@@ -81,10 +81,7 @@ var metaJobIDPattern = regexp.MustCompile(`/job_details/(\d+)/?$`)
 
 // metaJobID extracts the native numeric posting id from a job page URL, "" when absent.
 func metaJobID(loc string) string {
-	if m := metaJobIDPattern.FindStringSubmatch(loc); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(metaJobIDPattern, loc)
 }
 
 // detail fetches one job page and maps its ld+json JobPosting to a Job, returning ok=false when

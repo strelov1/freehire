@@ -124,10 +124,7 @@ var rapydPositionIDPattern = regexp.MustCompile(`/company/careers/positions/([^/
 // rapydPositionID extracts the slug id (e.g. "sales-manager-bogota-colombia") from a
 // position page URL, or "" when the URL is not a position page.
 func rapydPositionID(u string) string {
-	if m := rapydPositionIDPattern.FindStringSubmatch(u); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(rapydPositionIDPattern, u)
 }
 
 // firstByTag returns the first element node with the given tag name, or nil.

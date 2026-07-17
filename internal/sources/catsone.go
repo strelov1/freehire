@@ -80,10 +80,7 @@ var catsoneJobIDPattern = regexp.MustCompile(`/careers/\d+/jobs/(\d+)`)
 // catsoneJobID extracts the native numeric job id from a detail URL, or "" when the URL is
 // not a job posting.
 func catsoneJobID(loc string) string {
-	if m := catsoneJobIDPattern.FindStringSubmatch(loc); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(catsoneJobIDPattern, loc)
 }
 
 // catsoneListings parses each job row from the portal table into its absolute detail URL,

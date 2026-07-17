@@ -141,10 +141,7 @@ var careerspageJobIDPattern = regexp.MustCompile(`/jobs/([0-9a-fA-F-]{36})(?:$|[
 // careerspageJobID extracts the native job UUID from a detail URL, or "" when the URL is
 // not a canonical job posting.
 func careerspageJobID(loc string) string {
-	if m := careerspageJobIDPattern.FindStringSubmatch(loc); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(careerspageJobIDPattern, loc)
 }
 
 // careerspageJobLinks returns the absolute, deduplicated canonical detail URL of every job

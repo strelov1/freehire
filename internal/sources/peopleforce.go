@@ -121,10 +121,7 @@ var peopleforceJobIDPattern = regexp.MustCompile(`/careers/v/(\d+)`)
 // peopleforceJobID extracts the native numeric job id from a detail URL, or "" when the URL
 // is not a job posting.
 func peopleforceJobID(loc string) string {
-	if m := peopleforceJobIDPattern.FindStringSubmatch(loc); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(peopleforceJobIDPattern, loc)
 }
 
 // peopleforceListings returns each job card's absolute detail URL and title from a listing

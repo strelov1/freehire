@@ -119,10 +119,7 @@ var ftJobIDPattern = regexp.MustCompile(`/jobs/([A-Za-z0-9_-]{12})(?:[/?#]|$)`)
 // ftJobID extracts the native posting id from a job page URL, or "" when the URL is not a
 // job permalink.
 func ftJobID(u string) string {
-	if m := ftJobIDPattern.FindStringSubmatch(u); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(ftJobIDPattern, u)
 }
 
 // ftPosting is the schema.org JobPosting decoded from a Freshteam job page's

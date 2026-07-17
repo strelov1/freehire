@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -605,6 +606,16 @@ func trimURLSuffix(u string) string {
 		return u[:i]
 	}
 	return u
+}
+
+// firstSubmatch returns the first capture group of pattern in s, or "". Adapters that pull a
+// native posting id out of a URL with a single-group regex funnel through it, so the "match,
+// else empty" idiom is written once.
+func firstSubmatch(pattern *regexp.Regexp, s string) string {
+	if m := pattern.FindStringSubmatch(s); m != nil {
+		return m[1]
+	}
+	return ""
 }
 
 // joinNonEmpty joins the non-empty parts with ", ", so a location built from

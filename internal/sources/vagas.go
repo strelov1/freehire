@@ -137,10 +137,7 @@ var vagasJobIDPattern = regexp.MustCompile(`/vagas/v(\d+)`)
 
 // vagasJobID extracts the native posting id from a job URL, or "" when the URL is not a job link.
 func vagasJobID(u string) string {
-	if m := vagasJobIDPattern.FindStringSubmatch(u); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(vagasJobIDPattern, u)
 }
 
 // vagasPosting is the schema.org JobPosting decoded from a vagas.com job page. identifier.value

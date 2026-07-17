@@ -109,10 +109,7 @@ var careerplugJobIDPattern = regexp.MustCompile(`/jobs/(\d+)`)
 
 // careerplugJobID extracts the native posting id from a job URL, or "" when absent.
 func careerplugJobID(u string) string {
-	if m := careerplugJobIDPattern.FindStringSubmatch(u); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(careerplugJobIDPattern, u)
 }
 
 // careerplugJobLinks returns the absolute hrefs of all /jobs/<id> job-page anchors, resolved

@@ -103,10 +103,7 @@ var dataartVacancyCodePattern = regexp.MustCompile(`^https?://www\.dataart\.team
 // dataartVacancyCode extracts the vacancy code from a canonical English vacancy URL, returning
 // "" for the listing root, localisations, and unrelated pages.
 func dataartVacancyCode(u string) string {
-	if m := dataartVacancyCodePattern.FindStringSubmatch(u); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(dataartVacancyCodePattern, u)
 }
 
 // dataartPosting is the schema.org JobPosting decoded from a DataArt vacancy page's ld+json.

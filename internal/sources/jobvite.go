@@ -85,10 +85,7 @@ var jobviteJobIDPattern = regexp.MustCompile(`/job/([A-Za-z0-9]+)(?:[/?#]|$)`)
 // jobviteJobID extracts the native posting code from a job page URL, or "" when the URL is not a
 // job posting.
 func jobviteJobID(loc string) string {
-	if m := jobviteJobIDPattern.FindStringSubmatch(loc); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(jobviteJobIDPattern, loc)
 }
 
 // jobvitePosting is the schema.org JobPosting decoded from a Jobvite job page's ld+json. It

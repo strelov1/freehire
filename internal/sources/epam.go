@@ -102,10 +102,7 @@ var epamJobIDPattern = regexp.MustCompile(`/en/vacancy/[^/?#]*-(blt[a-z0-9]+)_en
 // epamJobID extracts the vacancy uid from an English vacancy URL, returning "" for the
 // listing, language roots, and non-English vacancy localisations.
 func epamJobID(u string) string {
-	if m := epamJobIDPattern.FindStringSubmatch(u); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(epamJobIDPattern, u)
 }
 
 // epamPosting is the schema.org JobPosting decoded from an EPAM vacancy page's ld+json

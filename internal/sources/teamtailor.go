@@ -126,10 +126,7 @@ var ttJobIDPattern = regexp.MustCompile(`/jobs/(\d+)`)
 
 // ttJobID extracts the native numeric posting id from a job page URL.
 func ttJobID(u string) string {
-	if m := ttJobIDPattern.FindStringSubmatch(u); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(ttJobIDPattern, u)
 }
 
 // ttPosting is the schema.org JobPosting decoded from a Teamtailor job page's

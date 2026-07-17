@@ -135,10 +135,7 @@ var avitoVacancyIDPattern = regexp.MustCompile(`/vacancies/[^/]+/(\d+)`)
 // avitoVacancyID extracts the numeric vacancy id from a detail URL, or "" when the URL is
 // not a vacancy-detail page.
 func avitoVacancyID(loc string) string {
-	if m := avitoVacancyIDPattern.FindStringSubmatch(loc); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(avitoVacancyIDPattern, loc)
 }
 
 // avitoTitleCityPattern captures the display city from a page <title>'s
@@ -159,8 +156,5 @@ func avitoTitleCity(root *html.Node) string {
 		}
 		return true
 	})
-	if m := avitoTitleCityPattern.FindStringSubmatch(title); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(avitoTitleCityPattern, title)
 }

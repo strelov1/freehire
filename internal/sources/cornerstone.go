@@ -157,11 +157,3 @@ var (
 	cornerstoneCultureIDPattern   = regexp.MustCompile(`(?i)"cultureID"\s*:\s*(\d+)`)
 	cornerstoneCultureNamePattern = regexp.MustCompile(`(?i)"cultureName"\s*:\s*"([^"]+)"`)
 )
-
-// firstSubmatch returns the first capture group of pattern in s, or "".
-func firstSubmatch(pattern *regexp.Regexp, s string) string {
-	if m := pattern.FindStringSubmatch(s); m != nil {
-		return m[1]
-	}
-	return ""
-}

@@ -127,10 +127,7 @@ var lxJobIDPattern = regexp.MustCompile(`/jobs/[^/?#]*-(\d+)(?:[/?#]|$)`)
 // lxJobID extracts the native posting id (the trailing numeric slug segment, e.g. "25262")
 // from a job page URL.
 func lxJobID(u string) string {
-	if m := lxJobIDPattern.FindStringSubmatch(u); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(lxJobIDPattern, u)
 }
 
 // lxPosting is the schema.org JobPosting decoded from a Luxoft job page's ld+json block.

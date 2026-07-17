@@ -88,8 +88,5 @@ var sfJobIDPattern = regexp.MustCompile(`/(\d+)(?:-[^/]*)?/?$`)
 
 // sfJobID extracts the native numeric posting id from a job page URL.
 func sfJobID(loc string) string {
-	if m := sfJobIDPattern.FindStringSubmatch(loc); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(sfJobIDPattern, loc)
 }

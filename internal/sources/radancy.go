@@ -138,8 +138,5 @@ var radancyJobIDPattern = regexp.MustCompile(`/job/.*/(\d+)/?$`)
 // radancyJobID extracts the native numeric posting id from a job page URL, or "" when the
 // URL is not a job posting.
 func radancyJobID(loc string) string {
-	if m := radancyJobIDPattern.FindStringSubmatch(loc); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(radancyJobIDPattern, loc)
 }

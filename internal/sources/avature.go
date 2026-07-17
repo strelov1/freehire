@@ -122,10 +122,7 @@ var avatureJobIDPattern = regexp.MustCompile(`/JobDetail/[^/]+/(\d+)/?$`)
 
 // avatureJobID extracts the native numeric posting id from a job page URL.
 func avatureJobID(loc string) string {
-	if m := avatureJobIDPattern.FindStringSubmatch(loc); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(avatureJobIDPattern, loc)
 }
 
 // avatureWorkMode maps an Avature "Work Model" field value to the controlled work-mode

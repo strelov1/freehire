@@ -140,10 +140,7 @@ func (s paycom) detail(ctx context.Context, board, mantle string, auth map[strin
 var paycomSessionJWTPattern = regexp.MustCompile(`"sessionJWT":"([^"]+)"`)
 
 func paycomSessionJWT(page string) string {
-	if m := paycomSessionJWTPattern.FindStringSubmatch(page); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(paycomSessionJWTPattern, page)
 }
 
 // paycomMantleHostPattern captures the regional Mantle API host from the portal page; the

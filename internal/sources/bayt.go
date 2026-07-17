@@ -58,10 +58,7 @@ var baytJobIDPattern = regexp.MustCompile(`/jobs/[^/]+-(\d+)/?$`)
 // job-detail page or carries no trailing id. Any query string or fragment is stripped first so a
 // listing href with a tracking suffix (?utm=…) still matches.
 func baytJobID(loc string) string {
-	if m := baytJobIDPattern.FindStringSubmatch(trimURLSuffix(loc)); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(baytJobIDPattern, trimURLSuffix(loc))
 }
 
 // baytLDPosting is the slice of the page's schema.org JobPosting the adapter reads. Unlike Meta,

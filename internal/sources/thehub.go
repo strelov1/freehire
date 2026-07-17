@@ -119,10 +119,7 @@ var thehubJobIDPattern = regexp.MustCompile(`/jobs/([0-9a-fA-F]{12,})`)
 // thehubJobID extracts the native posting id from a job page URL, or "" when the URL is not
 // a job posting (so non-job sitemap entries are dropped).
 func thehubJobID(loc string) string {
-	if m := thehubJobIDPattern.FindStringSubmatch(loc); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(thehubJobIDPattern, loc)
 }
 
 // resolveSubSitemap fetches a sitemap index and returns the first sub-sitemap loc whose URL

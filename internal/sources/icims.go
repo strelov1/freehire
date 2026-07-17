@@ -206,10 +206,7 @@ var icimsJobIDPattern = regexp.MustCompile(`/jobs/(\d+)(?:[/?#]|$)`)
 // icimsJobID extracts the native numeric posting id from a job page URL, or "" when the
 // URL is not a job posting.
 func icimsJobID(loc string) string {
-	if m := icimsJobIDPattern.FindStringSubmatch(loc); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(icimsJobIDPattern, loc)
 }
 
 // icimsAvailable blanks the iCIMS "UNAVAILABLE" placeholder so it never leaks into a

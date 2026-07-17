@@ -83,10 +83,7 @@ func (i itechart) detail(ctx context.Context, e CompanyEntry, jobURL string) (Jo
 var itechartJobIDPattern = regexp.MustCompile(`/job-openings/([a-z0-9-]+)(?:[/?#]|$)`)
 
 func itechartJobID(u string) string {
-	if m := itechartJobIDPattern.FindStringSubmatch(u); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(itechartJobIDPattern, u)
 }
 
 // itechartPosting is the schema.org JobPosting on an iTechArt vacancy page. jobLocation is a

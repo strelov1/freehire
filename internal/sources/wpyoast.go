@@ -129,8 +129,5 @@ var wpyoastJobIDPattern = regexp.MustCompile(`/job/(\d+)-`)
 // wpyoastJobID extracts the native numeric posting id from a job page URL, or "" when the
 // URL is not a job posting (so non-job sitemap entries are dropped).
 func wpyoastJobID(loc string) string {
-	if m := wpyoastJobIDPattern.FindStringSubmatch(loc); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(wpyoastJobIDPattern, loc)
 }

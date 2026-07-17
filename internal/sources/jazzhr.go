@@ -102,10 +102,7 @@ var jazzhrJobIDPattern = regexp.MustCompile(`/apply/([A-Za-z0-9]+)/`)
 
 // jazzhrJobID extracts the native posting token from a job page URL.
 func jazzhrJobID(u string) string {
-	if m := jazzhrJobIDPattern.FindStringSubmatch(u); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(jazzhrJobIDPattern, u)
 }
 
 // jazzhrJobLinks returns the absolute hrefs of all anchors linking an /apply/<token>/ job

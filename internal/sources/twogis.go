@@ -93,10 +93,7 @@ var twogisJobIDPattern = regexp.MustCompile(`/vacancies/[a-z0-9_-]+/(\d+)(?:[/?#
 // twogisJobID extracts the native posting id from a vacancy page URL, or "" when the URL is not a
 // vacancy posting.
 func twogisJobID(loc string) string {
-	if m := twogisJobIDPattern.FindStringSubmatch(loc); m != nil {
-		return m[1]
-	}
-	return ""
+	return firstSubmatch(twogisJobIDPattern, loc)
 }
 
 // twogisPosting is the schema.org JobPosting decoded from a 2GIS vacancy page's ld+json. It reuses
