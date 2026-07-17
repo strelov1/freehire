@@ -1,0 +1,30 @@
+---
+title: Contribute a company board, earn points
+date: 2026-07-17
+summary: Spotted a company we don't cover yet? Paste a link from its careers page and we'll start crawling it — one point per new board you find.
+type: changelog
+tags:
+  - community
+  - sources
+draft: false
+---
+
+Our catalogue grows as our crawlers reach new company career pages. You often know
+of companies we've missed — so now you can hand them to us.
+
+On **[My contributions](/my/contributions)**, paste any link from a company's ATS
+careers page — a single job or the board itself. If it's a company we don't crawl
+yet, we add it and you earn a point. We then pull in **all** of its open jobs, not
+just the one you sent.
+
+A few things worth knowing:
+
+- The unit is the **company**, not the job. Once you've contributed a board, more
+  links to the same company don't add anything — we've already got it covered.
+- We support links from Greenhouse, Lever, Ashby, and Workable to start, with more
+  ATS platforms coming.
+- If you've linked your Telegram account, you can just **send the link to the bot**
+  and it runs the same check — handy for firing off boards on the go.
+
+It's an easy way to widen the catalogue for everyone. More ways to spend points are
+on the way.
