@@ -582,6 +582,16 @@ func parseRFC3339(s string) *time.Time {
 	return parseLayout("2006-01-02T15:04:05.999999999-0700", s)
 }
 
+// parseRFC3339OrDate parses a JobPosting datePosted that a board may emit as either a full
+// RFC3339 timestamp or a bare "2006-01-02" date, trying the timestamp first. Shared by the
+// ld+json adapters whose datePosted format varies by tenant (briefhq, northstone).
+func parseRFC3339OrDate(s string) *time.Time {
+	if t := parseRFC3339(s); t != nil {
+		return t
+	}
+	return parseDate(s)
+}
+
 // parseDate parses a date-only timestamp ("2006-01-02", as Workable emits).
 func parseDate(s string) *time.Time { return parseLayout("2006-01-02", s) }
 
@@ -597,6 +607,35 @@ func ParseRFC3339(s string) *time.Time     { return parseRFC3339(s) }
 // MST", as Recruitee emits). Recruitee emits UTC; an unrecognized zone abbreviation
 // would be read as offset 0, acceptable for an approximate posted_at.
 func parseSpaceTime(s string) *time.Time { return parseLayout("2006-01-02 15:04:05 MST", s) }
+
+// parsePubDate parses an RSS <pubDate>, an RFC1123 timestamp with or without a numeric zone
+// offset. Shared by the RSS-feed adapters (trakstar, earcu, likeit).
+func parsePubDate(s string) *time.Time {
+	if t := parseLayout(time.RFC1123Z, s); t != nil {
+		return t
+	}
+	return parseLayout(time.RFC1123, s)
+}
+
+// distinctJoin maps each item to a label, drops blank and duplicate labels (keeping first-seen
+// order), and joins the rest with sep. Adapters that build a location from a list of place
+// objects share it (getmatch, habrcareer) instead of each re-looping.
+func distinctJoin[T any](items []T, sep string, label func(T) string) string {
+	var kept []string
+	seen := map[string]struct{}{}
+	for _, it := range items {
+		l := strings.TrimSpace(label(it))
+		if l == "" {
+			continue
+		}
+		if _, ok := seen[l]; ok {
+			continue
+		}
+		seen[l] = struct{}{}
+		kept = append(kept, l)
+	}
+	return strings.Join(kept, sep)
+}
 
 // trimURLSuffix drops any query string or fragment from a URL, leaving just the path. Adapters
 // that extract an id from the end of a URL path use it so a tracking suffix (?utm=…) or a #anchor

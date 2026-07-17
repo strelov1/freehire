@@ -99,31 +99,10 @@ func careerplugJobID(u string) string {
 	return firstSubmatch(careerplugJobIDPattern, u)
 }
 
-// careerplugJobLinks returns the absolute hrefs of all /jobs/<id> job-page anchors, resolved
-// against base so relative hrefs yield fetchable URLs, de-duplicated in first-seen order (a
-// card links the same job from its title and other controls).
+// careerplugJobLinks returns the absolute, deduplicated hrefs of all /jobs/<id> job-page
+// anchors, resolved against base (a card links the same job from its title and other controls).
 func careerplugJobLinks(base *url.URL, root *html.Node) []string {
-	var out []string
-	seen := make(map[string]bool)
-	walk(root, func(n *html.Node) bool {
-		if n.Type == html.ElementNode && n.Data == "a" {
-			href := attr(n, "href")
-			if careerplugJobID(href) == "" {
-				return true
-			}
-			ref, err := url.Parse(href)
-			if err != nil {
-				return true
-			}
-			abs := base.ResolveReference(ref).String()
-			if !seen[abs] {
-				seen[abs] = true
-				out = append(out, abs)
-			}
-		}
-		return true
-	})
-	return out
+	return jobLinks(base, root, func(href string) bool { return careerplugJobID(href) != "" })
 }
 
 // careerplugPosting is the schema.org JobPosting decoded from a CareerPlug job page's

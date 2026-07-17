@@ -129,7 +129,7 @@ func (h habrCareer) toJob(ctx context.Context, v habrVacancy) Job {
 		URL:         fmt.Sprintf(habrVacancyURL, v.ID),
 		Title:       v.Title,
 		Company:     v.Company.Title,
-		Location:    habrLocationString(v.Locations),
+		Location:    distinctJoin(v.Locations, ", ", func(l habrLocation) string { return l.Title }),
 		Description: h.description(ctx, v.ID),
 		Remote:      v.RemoteWork,
 		WorkMode:    mode,
@@ -150,24 +150,6 @@ func (h habrCareer) description(ctx context.Context, id int) string {
 		return ""
 	}
 	return sanitizeHTML(p.Description)
-}
-
-// habrLocationString joins a vacancy's distinct location titles in order.
-func habrLocationString(items []habrLocation) string {
-	var titles []string
-	seen := map[string]struct{}{}
-	for _, it := range items {
-		t := strings.TrimSpace(it.Title)
-		if t == "" {
-			continue
-		}
-		if _, ok := seen[t]; ok {
-			continue
-		}
-		seen[t] = struct{}{}
-		titles = append(titles, t)
-	}
-	return strings.Join(titles, ", ")
 }
 
 // HabrPosting is the schema.org JobPosting a Habr Career vacancy page carries, flattened into the

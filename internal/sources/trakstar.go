@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"html"
 	"strings"
-	"time"
 )
 
 // trakstar adapts the Trakstar Hire (formerly Recruiterbox) public RSS job feed. Each
@@ -72,14 +71,4 @@ func jobIDFromLink(link string) string {
 		return link[i+1:]
 	}
 	return link
-}
-
-// parsePubDate parses a Trakstar RSS pubDate, which is RFC1123Z (numeric zone offset),
-// falling back to RFC1123 (named zone) for feeds that emit one. Returns nil on an empty
-// or unparseable value (posted_at is nullable).
-func parsePubDate(s string) *time.Time {
-	if t := parseLayout(time.RFC1123Z, s); t != nil {
-		return t
-	}
-	return parseLayout(time.RFC1123, s)
 }

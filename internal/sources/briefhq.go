@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"html"
 	"strings"
-	"time"
 )
 
 // briefhq adapts a hand-rolled static careers page (briefhq.ai/careers) that inlines every
@@ -52,7 +51,7 @@ func (s briefhq) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			Remote:         remote || isRemote(p.location()),
 			WorkMode:       workModeFromRemote(remote),
 			EmploymentType: schemaEmploymentType(p.EmploymentType),
-			PostedAt:       briefhqDate(p.DatePosted),
+			PostedAt:       parseRFC3339OrDate(p.DatePosted),
 		})
 	}
 	return jobs, nil
@@ -89,13 +88,4 @@ func (p briefhqPosting) location() string {
 		p.JobLocation.Address.AddressRegion,
 		p.JobLocation.Address.AddressCountry,
 	)
-}
-
-// briefhqDate parses the JobPosting datePosted, which briefhq emits as a bare "2006-01-02" but
-// which the schema.org field may also carry as a full RFC3339 timestamp.
-func briefhqDate(s string) *time.Time {
-	if t := parseRFC3339(s); t != nil {
-		return t
-	}
-	return parseDate(s)
 }

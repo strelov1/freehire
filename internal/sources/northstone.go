@@ -6,7 +6,6 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
-	"time"
 
 	"golang.org/x/net/html"
 )
@@ -88,17 +87,8 @@ func (s northstone) detail(ctx context.Context, e CompanyEntry, loc string) (Job
 		Remote:         remote || isRemote(location),
 		WorkMode:       workMode,
 		EmploymentType: schemaEmploymentType(p.EmploymentType),
-		PostedAt:       northstoneDate(p.DatePosted),
+		PostedAt:       parseRFC3339OrDate(p.DatePosted),
 	}, true
-}
-
-// northstoneDate parses the JobPosting datePosted, which arrives as a full RFC3339 timestamp
-// on some brands (EnzRossi) and as a bare date on others (Revun's "2026-07-01").
-func northstoneDate(s string) *time.Time {
-	if t := parseRFC3339(s); t != nil {
-		return t
-	}
-	return parseDate(s)
 }
 
 // northstonePosting is the schema.org JobPosting decoded from a detail page's ld+json block.

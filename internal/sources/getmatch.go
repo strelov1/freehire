@@ -131,7 +131,7 @@ func (g getmatch) toJob(ctx context.Context, o getmatchOffer) Job {
 		Title:              o.Position,
 		Company:            o.Company.Name,
 		Description:        sanitizeHTML(desc),
-		Location:           getmatchLocationString(o.LocationItems),
+		Location:           distinctJoin(o.LocationItems, ", ", func(l getmatchLocation) string { return l.Label }),
 		Remote:             mode == "remote",
 		WorkMode:           mode,
 		PostedAt:           parseLayout(getmatchDateLayout, o.PublishedAt),
@@ -256,22 +256,4 @@ func getmatchWorkMode(items []getmatchLocation) string {
 		}
 	}
 	return mode
-}
-
-// getmatchLocationString joins an offer's distinct location labels in order.
-func getmatchLocationString(items []getmatchLocation) string {
-	var labels []string
-	seen := map[string]struct{}{}
-	for _, it := range items {
-		l := strings.TrimSpace(it.Label)
-		if l == "" {
-			continue
-		}
-		if _, ok := seen[l]; ok {
-			continue
-		}
-		seen[l] = struct{}{}
-		labels = append(labels, l)
-	}
-	return strings.Join(labels, ", ")
 }
