@@ -12,9 +12,9 @@
 
 ## 3. Store: tailoring bootstrap + patch
 
-- [ ] 3.1 `cv.Store` method to apply a patch: load → `cv.Apply` → `Sanitize` → update, owner-scoped; 422 on bad addressing
-- [ ] 3.2 `cv.Store`/service bootstrap: find base CV or seed one from `resume.Structured` (absent résumé → typed 409 error, no row created), then create the tailored copy from the base
-- [ ] 3.3 Unit/integration tests: bootstrap seeds base when absent, refuses without résumé, tailored copy equals base and base is untouched
+- [x] 3.1 `cv.Store` method to apply a patch: load → `cv.Apply` → `Sanitize` → update, owner-scoped; 422 on bad addressing
+- [x] 3.2 `cv.Store`/service bootstrap: find base CV or seed one from `resume.Structured` (absent résumé → typed 409 error, no row created), then create the tailored copy from the base
+- [x] 3.3 Unit/integration tests: bootstrap seeds base when absent, refuses without résumé, tailored copy equals base and base is untouched
 
 ## 4. Scoped credential
 

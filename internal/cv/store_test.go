@@ -23,6 +23,7 @@ type fakeRow struct {
 	title      string
 	templateID string
 	data       []byte
+	jobID      int64 // 0 = base CV (job_id NULL); >0 = tailored copy bound to a vacancy
 }
 
 func newFakeRepo() *fakeRepo { return &fakeRepo{rows: map[int64]fakeRow{}, next: 1} }
@@ -59,7 +60,7 @@ func (f *fakeRepo) Update(_ context.Context, id, userID int64, title, templateID
 	if !ok || r.userID != userID {
 		return db.UpdateCVRow{}, pgx.ErrNoRows
 	}
-	f.rows[id] = fakeRow{userID: userID, title: title, templateID: templateID, data: data}
+	f.rows[id] = fakeRow{userID: userID, title: title, templateID: templateID, data: data, jobID: r.jobID}
 	return db.UpdateCVRow{ID: id, Title: title, TemplateID: templateID, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
 }
 
@@ -69,6 +70,29 @@ func (f *fakeRepo) Delete(_ context.Context, id, userID int64) (int64, error) {
 	}
 	delete(f.rows, id)
 	return 1, nil
+}
+
+func (f *fakeRepo) GetBase(_ context.Context, userID int64) (db.GetBaseCVByUserRow, error) {
+	// Newest base CV = the highest id among the user's non-tailored rows (mirrors the
+	// query's updated_at DESC, id DESC tiebreak).
+	var bestID int64
+	for id, r := range f.rows {
+		if r.userID == userID && r.jobID == 0 && id > bestID {
+			bestID = id
+		}
+	}
+	if bestID == 0 {
+		return db.GetBaseCVByUserRow{}, pgx.ErrNoRows
+	}
+	r := f.rows[bestID]
+	return db.GetBaseCVByUserRow{ID: bestID, Title: r.title, TemplateID: r.templateID, Data: r.data, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
+}
+
+func (f *fakeRepo) CreateTailored(_ context.Context, userID, jobID int64, title, templateID string, data []byte) (db.CreateTailoredCVRow, error) {
+	id := f.next
+	f.next++
+	f.rows[id] = fakeRow{userID: userID, title: title, templateID: templateID, data: data, jobID: jobID}
+	return db.CreateTailoredCVRow{ID: id, Title: title, TemplateID: templateID, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
 }
 
 func TestStoreCreateGetRoundTripSanitized(t *testing.T) {
