@@ -73,6 +73,7 @@ func (b bambooHR) detail(ctx context.Context, e CompanyEntry, p bambooHRPosting)
 		Location:    joinNonEmpty(jo.Location.City, jo.Location.State, jo.Location.AddressCountry),
 		Description: sanitizeHTML(jo.Description),
 		Remote:      p.IsRemote,
+		WorkMode:    workModeFromRemote(p.IsRemote),
 		PostedAt:    parseDate(jo.DatePosted),
 	}, true
 }

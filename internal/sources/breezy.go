@@ -82,6 +82,7 @@ func (b breezy) detail(ctx context.Context, e CompanyEntry, p breezyPosting) (Jo
 		// is_remote is the authoritative structured signal; isRemote(location) is only a
 		// fallback (never the title, which false-positives on "Remote …" role names).
 		Remote:   p.Location.IsRemote || isRemote(location),
+		WorkMode: workModeFromRemote(p.Location.IsRemote),
 		PostedAt: parseRFC3339(p.PublishedDate),
 	}, true
 }

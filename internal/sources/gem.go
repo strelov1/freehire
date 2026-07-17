@@ -143,6 +143,7 @@ func (g gem) detail(ctx context.Context, e CompanyEntry, p gemPosting) (Job, boo
 		Location:    joinNonEmpty(city, country),
 		Description: sanitizeHTML(resp.Data.Posting.DescriptionHTML),
 		Remote:      remote || p.Job.LocationType == "REMOTE",
+		WorkMode:    workplaceTypeMode(p.Job.LocationType),
 		PostedAt:    parseEpochSeconds(int64(resp.Data.Posting.FirstPublishedTsSec)),
 	}, true
 }

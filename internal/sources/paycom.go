@@ -131,6 +131,7 @@ func (s paycom) detail(ctx context.Context, board, mantle string, auth map[strin
 		Location:    p.Location,
 		Description: sanitizeHTML(html.UnescapeString(p.Description)),
 		Remote:      strings.EqualFold(p.RemoteType, "remote") || isRemote(p.Location),
+		WorkMode:    workModeFromRemote(strings.EqualFold(p.RemoteType, "remote")),
 		PostedAt:    parseRFC3339(p.StartDate),
 	}, true
 }

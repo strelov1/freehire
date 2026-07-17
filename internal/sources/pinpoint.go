@@ -57,6 +57,7 @@ func (p pinpoint) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			Location:    firstNonEmpty(joinNonEmpty(d.Location.City, d.Location.Province), d.Location.Name),
 			Description: sanitizeHTML(body),
 			Remote:      d.WorkplaceType == "remote",
+			WorkMode:    workplaceTypeMode(d.WorkplaceType),
 			PostedAt:    nil, // the postings feed carries no publish date
 		})
 	}
