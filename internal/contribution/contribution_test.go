@@ -14,10 +14,16 @@ type fakeRepo struct {
 	recorded      RecordInput
 	recordCalls   int
 	listByUserRet []Contribution
+	companyName   string
+	companySlug   string
 }
 
 func (f *fakeRepo) BoardTracked(_ context.Context, _, _ string) (bool, error) {
 	return f.boardTracked, nil
+}
+
+func (f *fakeRepo) CompanyForBoard(_ context.Context, _, _ string) (string, string, bool, error) {
+	return f.companyName, f.companySlug, f.companyName != "" || f.companySlug != "", nil
 }
 
 func (f *fakeRepo) Record(_ context.Context, in RecordInput) (Contribution, error) {
@@ -112,6 +118,18 @@ func TestSubmitRecordsBoardFromListingURL(t *testing.T) {
 	}
 	if repo.recorded.Source != "greenhouse" || repo.recorded.Board != "acme" {
 		t.Errorf("recorded = (%q,%q), want (greenhouse, acme)", repo.recorded.Source, repo.recorded.Board)
+	}
+}
+
+func TestTrackedCompanyResolvesFromLink(t *testing.T) {
+	repo := &fakeRepo{companyName: "Acme Corp", companySlug: "acme"}
+	name, slug, ok := newService(repo).TrackedCompany(context.Background(), "https://jobs.ashbyhq.com/blitzy/uuid")
+	if !ok || name != "Acme Corp" || slug != "acme" {
+		t.Errorf("TrackedCompany = (%q,%q,%v), want (Acme Corp, acme, true)", name, slug, ok)
+	}
+	// An unrecognized link resolves nothing.
+	if _, _, ok := newService(repo).TrackedCompany(context.Background(), "https://example.com/x"); ok {
+		t.Error("TrackedCompany(unknown host) ok = true, want false")
 	}
 }
 

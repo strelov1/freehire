@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/subtle"
 	"errors"
+	"fmt"
+	"html"
 	"log"
 	"regexp"
 	"strings"
@@ -131,6 +133,19 @@ func (a *API) sendTelegram(ctx context.Context, chatID int64, msg string) {
 	}
 }
 
+// alreadyTrackedReply is the "we already cover this" message, linking to the company page when
+// the board resolves to a tracked company; otherwise a plain acknowledgement.
+func (a *API) alreadyTrackedReply(ctx context.Context, rawURL string) string {
+	name, slug, ok := a.contribution.TrackedCompany(ctx, rawURL)
+	if !ok || slug == "" || a.frontendOrigin == "" {
+		return "👍 We already track that board — nothing to add."
+	}
+	return fmt.Sprintf(
+		"👍 <b>%s</b> is already tracked. That exact role might not be in the catalogue yet, but it'll appear on the next crawl.\n%s/companies/%s",
+		html.EscapeString(name), a.frontendOrigin, slug,
+	)
+}
+
 // telegramContribTimeout bounds the background contribution work spawned from a webhook
 // update — the DB lookups plus the outbound reply — so a stuck goroutine cannot leak.
 const telegramContribTimeout = 15 * time.Second
@@ -179,7 +194,7 @@ func (a *API) processTelegramContribution(chatID int64, rawURL string) {
 	case errors.Is(err, contribution.ErrUnsupportedATS):
 		a.sendTelegram(ctx, chatID, "🤔 That link isn't from a supported ATS board. Send a link from a company's careers page on a supported ATS (Greenhouse, Lever, Ashby, Recruitee, BambooHR, SmartRecruiters, and many more).")
 	case errors.Is(err, contribution.ErrBoardAlreadyTracked):
-		a.sendTelegram(ctx, chatID, "👍 We already track that board — nothing to add.")
+		a.sendTelegram(ctx, chatID, a.alreadyTrackedReply(ctx, rawURL))
 	case errors.Is(err, contribution.ErrBoardAlreadyContributed):
 		a.sendTelegram(ctx, chatID, "✅ That board was already contributed — no new point, but thanks!")
 	case err != nil:

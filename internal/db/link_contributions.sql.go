@@ -9,6 +9,32 @@ import (
 	"context"
 )
 
+const companyForBoard = `-- name: CompanyForBoard :one
+SELECT company, company_slug FROM jobs
+WHERE source = $1 AND external_id LIKE $2 AND company_slug <> ''
+LIMIT 1
+`
+
+type CompanyForBoardParams struct {
+	Source       string `json:"source"`
+	BoardPattern string `json:"board_pattern"`
+}
+
+type CompanyForBoardRow struct {
+	Company     string `json:"company"`
+	CompanySlug string `json:"company_slug"`
+}
+
+// The tracked company on a board — for the "already tracked" reply: a job's company name and
+// slug so the bot/UI can link to /companies/<slug>. board_pattern is "<escaped board>:%" (same
+// index-backed LIKE as JobsExistForBoard). Only rows with a resolved company_slug qualify.
+func (q *Queries) CompanyForBoard(ctx context.Context, arg CompanyForBoardParams) (CompanyForBoardRow, error) {
+	row := q.db.QueryRow(ctx, companyForBoard, arg.Source, arg.BoardPattern)
+	var i CompanyForBoardRow
+	err := row.Scan(&i.Company, &i.CompanySlug)
+	return i, err
+}
+
 const createContribution = `-- name: CreateContribution :one
 INSERT INTO link_contributions (submitted_by, url, source, board)
 VALUES ($1::bigint, $2, $3, $4)

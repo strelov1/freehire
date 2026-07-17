@@ -108,23 +108,30 @@ export interface JobCopy {
  *  `message` is the backend's `{ "error": msg }` text when present, so logs and
  *  any raw-error surface read the real reason rather than a bare status line. */
 export class ApiError extends Error {
-  constructor(public readonly status: number, message: string) {
+  constructor(
+    public readonly status: number,
+    message: string,
+    /** The parsed JSON error body, when present — so callers can read extra fields a
+     *  specific endpoint attaches to a failure (e.g. the already-tracked company). */
+    public readonly body?: Record<string, unknown>,
+  ) {
     super(message);
     this.name = 'ApiError';
   }
 }
 
-/** Extract a human-readable message from a failed response. The backend's
- *  standard error envelope is `{ "error": msg }`; surface that when present,
- *  falling back to the status line for a non-JSON error (e.g. a proxy 502). */
-async function errorMessage(res: Response): Promise<string> {
+/** Parse a failed response into an ApiError. The backend's standard error envelope is
+ *  `{ "error": msg }`; surface that as the message (falling back to the status line for a
+ *  non-JSON error, e.g. a proxy 502) and keep the whole parsed body for callers that need
+ *  extra fields. Reads the body once. */
+async function toApiError(res: Response): Promise<ApiError> {
   try {
     const body = await res.json();
-    if (body && typeof body.error === 'string') return body.error;
+    const msg = body && typeof body.error === 'string' ? body.error : `${res.status} ${res.statusText}`;
+    return new ApiError(res.status, msg, body ?? undefined);
   } catch {
-    // Body was not JSON (proxy/HTML error page) — fall through to the status line.
+    return new ApiError(res.status, `${res.status} ${res.statusText}`);
   }
-  return `${res.status} ${res.statusText}`;
 }
 
 function query(limit: number, offset: number): string {
@@ -209,7 +216,7 @@ export function createApi(
       headers: { ...defaultHeaders, ...init?.headers },
     });
     if (!res.ok) {
-      throw new ApiError(res.status, await errorMessage(res));
+      throw await toApiError(res);
     }
     return res;
   }

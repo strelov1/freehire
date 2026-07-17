@@ -116,6 +116,10 @@ type Querier interface {
 	// before upserting to log matched-existing vs inserted-reference counts — the
 	// upsert itself is blind to which path (insert or update) it took.
 	CompanyExists(ctx context.Context, slug string) (bool, error)
+	// The tracked company on a board — for the "already tracked" reply: a job's company name and
+	// slug so the bot/UI can link to /companies/<slug>. board_pattern is "<escaped board>:%" (same
+	// index-backed LIKE as JobsExistForBoard). Only rows with a resolved company_slug qualify.
+	CompanyForBoard(ctx context.Context, arg CompanyForBoardParams) (CompanyForBoardRow, error)
 	// The denormalized open-job count for a slug (pgx.ErrNoRows if the company is
 	// absent). cmd/import-yc uses it to guard against homonym collisions: it skips
 	// enriching an existing company whose job_count dwarfs a matched YC entry's team.

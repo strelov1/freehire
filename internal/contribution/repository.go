@@ -2,8 +2,10 @@ package contribution
 
 import (
 	"context"
+	"errors"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/db"
@@ -32,6 +34,19 @@ func NewQueriesRepository(q *db.Queries, pool *pgxpool.Pool) *QueriesRepository 
 // so a slug with % or _ cannot widen the match.
 func (r *QueriesRepository) BoardTracked(ctx context.Context, source, board string) (bool, error) {
 	return r.q.JobsExistForBoard(ctx, db.JobsExistForBoardParams{Source: source, BoardPattern: likePrefix(board)})
+}
+
+// CompanyForBoard returns the company name + slug already tracked on the board, or ok=false
+// when the board has no job with a resolved company.
+func (r *QueriesRepository) CompanyForBoard(ctx context.Context, source, board string) (name, slug string, ok bool, err error) {
+	row, err := r.q.CompanyForBoard(ctx, db.CompanyForBoardParams{Source: source, BoardPattern: likePrefix(board)})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", false, nil
+	}
+	if err != nil {
+		return "", "", false, err
+	}
+	return row.Company, row.CompanySlug, true, nil
 }
 
 // likePrefix builds a LIKE pattern matching external_ids on board ("<board>:…"), escaping the

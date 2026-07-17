@@ -16,6 +16,14 @@ SELECT EXISTS (
     SELECT 1 FROM jobs WHERE source = sqlc.arg(source) AND external_id LIKE sqlc.arg(board_pattern)
 ) AS exists;
 
+-- name: CompanyForBoard :one
+-- The tracked company on a board — for the "already tracked" reply: a job's company name and
+-- slug so the bot/UI can link to /companies/<slug>. board_pattern is "<escaped board>:%" (same
+-- index-backed LIKE as JobsExistForBoard). Only rows with a resolved company_slug qualify.
+SELECT company, company_slug FROM jobs
+WHERE source = sqlc.arg(source) AND external_id LIKE sqlc.arg(board_pattern) AND company_slug <> ''
+LIMIT 1;
+
 -- name: ListContributionsByUser :many
 -- The "my contributions" list: one user's contributions, newest first.
 SELECT * FROM link_contributions

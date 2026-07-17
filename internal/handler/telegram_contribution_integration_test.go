@@ -63,10 +63,18 @@ func TestTelegramContribution(t *testing.T) {
 		}
 	}
 
+	// A board we already crawl, with a resolved company — for the "already tracked" reply.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO jobs (source, external_id, url, title, public_slug, company, company_slug)
+		 VALUES ('greenhouse', 'acmeco:1', 'http://example.test', 'Go Dev', 'go-dev-acmeco', 'Acme Co', 'acme-co')`); err != nil {
+		t.Fatalf("seed tracked job: %v", err)
+	}
+
 	queries := db.New(pool)
 	h := &API{
 		pool:                  pool,
 		queries:               queries,
+		frontendOrigin:        "https://freehire.test",
 		telegramLinks:         telegramnotify.NewLinkTokens("test-secret", 10*time.Minute),
 		telegramBot:           telegramnotify.NewClientWithBase("bottoken", stub.URL),
 		telegramWebhookSecret: "hook-secret",
@@ -143,6 +151,14 @@ func TestTelegramContribution(t *testing.T) {
 		post(999999, "https://jobs.ashbyhq.com/newco/uuid")
 		if reply := waitReply(t); !strings.Contains(strings.ToLower(reply), "link your") {
 			t.Errorf("reply = %q, want a link-your-account prompt", reply)
+		}
+	})
+
+	t.Run("an already-tracked board replies with the company link", func(t *testing.T) {
+		post(chatID, "https://job-boards.greenhouse.io/acmeco/jobs/1")
+		reply := waitReply(t)
+		if !strings.Contains(reply, "Acme Co") || !strings.Contains(reply, "https://freehire.test/companies/acme-co") {
+			t.Errorf("reply = %q, want the company name + /companies/acme-co link", reply)
 		}
 	})
 }

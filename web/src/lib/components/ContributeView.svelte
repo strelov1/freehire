@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invalidateAll } from '$app/navigation';
+  import { resolve } from '$app/paths';
   import { api, ApiError } from '$lib/api';
   import { AsyncData } from '$lib/asyncData.svelte';
   import { currentUser, isAuthenticated } from '$lib/auth.svelte';
@@ -13,6 +14,9 @@
   let formError = $state<string | null>(null);
   // The just-accepted contribution, shown as confirmation (and whether it opened a new board).
   let accepted = $state.raw<Contribution | null>(null);
+  // Set when the submitted board is already tracked: the company we cover, so we can link to it
+  // instead of a bare "already tracked" error.
+  let tracked = $state.raw<{ name: string; slug: string } | null>(null);
 
   // The reward balance rides on the session user (page.data.user); invalidateAll() after a
   // successful contribution re-resolves it so the count updates without a manual refresh.
@@ -34,6 +38,7 @@
     submitting = true;
     formError = null;
     accepted = null;
+    tracked = null;
     try {
       accepted = await api.submitContribution(url.trim());
       url = '';
@@ -41,10 +46,17 @@
       // reads page.data.user, this also re-runs it, refreshing the list in one shot.
       await invalidateAll();
     } catch (err) {
-      // 422 = unsupported ATS, 409 = already held / already contributed — surface the
-      // backend's specific message so the user knows which it was.
-      formError =
-        err instanceof ApiError ? err.message : 'Could not submit the link. Please try again.';
+      // A 409 for a board we already track carries the company, so link to it instead of a
+      // bare error. Otherwise (422 unsupported, 409 already-contributed) surface the message.
+      if (err instanceof ApiError && err.status === 409 && typeof err.body?.company_slug === 'string') {
+        tracked = {
+          name: typeof err.body.company_name === 'string' ? err.body.company_name : 'This company',
+          slug: err.body.company_slug,
+        };
+      } else {
+        formError =
+          err instanceof ApiError ? err.message : 'Could not submit the link. Please try again.';
+      }
     } finally {
       submitting = false;
     }
@@ -77,6 +89,14 @@
       <div class="rounded-lg border border-border bg-secondary/40 p-4 text-sm" role="status">
         Thanks — <span class="font-medium">{accepted.board}</span> ({accepted.source}) is a new
         board for us. We'll start crawling it. <span class="font-medium">+1 point.</span>
+      </div>
+    {:else if tracked}
+      <div class="rounded-lg border border-border bg-secondary/40 p-4 text-sm" role="status">
+        We already cover <span class="font-medium">{tracked.name}</span>. That exact role might not
+        be in the catalogue yet, but it'll appear on the next crawl.
+        <a href={resolve('/companies/[slug]', { slug: tracked.slug })} class="font-medium underline underline-offset-4">
+          View {tracked.name} →
+        </a>
       </div>
     {/if}
 

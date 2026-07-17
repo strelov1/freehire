@@ -52,6 +52,7 @@ type RecordInput struct {
 // board to ErrBoardAlreadyContributed.
 type Repository interface {
 	BoardTracked(ctx context.Context, source, board string) (bool, error)
+	CompanyForBoard(ctx context.Context, source, board string) (name, slug string, ok bool, err error)
 	Record(ctx context.Context, in RecordInput) (Contribution, error)
 	ListByUser(ctx context.Context, userID int64) ([]Contribution, error)
 }
@@ -96,4 +97,19 @@ func (s *Service) Submit(ctx context.Context, submittedBy int64, rawURL string) 
 // ListMine returns the given user's contributions, newest first.
 func (s *Service) ListMine(ctx context.Context, userID int64) ([]Contribution, error) {
 	return s.repo.ListByUser(ctx, userID)
+}
+
+// TrackedCompany resolves the company already tracked on the board a link points to — for the
+// "we already cover this" reply, so the caller can link to the company page. ok=false when the
+// link is unrecognized or the board has no resolved company.
+func (s *Service) TrackedCompany(ctx context.Context, rawURL string) (name, slug string, ok bool) {
+	source, board, _, recognized := recognizeBoard(rawURL)
+	if !recognized {
+		return "", "", false
+	}
+	name, slug, found, err := s.repo.CompanyForBoard(ctx, source, board)
+	if err != nil || !found {
+		return "", "", false
+	}
+	return name, slug, true
 }
