@@ -66,7 +66,9 @@ func (s jibe) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			break
 		}
 		for _, item := range listing.Jobs {
-			jobs = append(jobs, s.toJob(e, item.Data))
+			if job, ok := s.toJob(e, item.Data); ok {
+				jobs = append(jobs, job)
+			}
 		}
 		// Stop once the catalogue total is reached; the empty-page check above is the
 		// fallback if totalCount is ever absent or wrong.
@@ -78,9 +80,13 @@ func (s jibe) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 }
 
 // toJob maps one Jibe posting to the normalized Job shape. The id is the posting slug
-// (the public job-page path segment), falling back to req_id.
-func (s jibe) toJob(e CompanyEntry, p jibePosting) Job {
+// (the public job-page path segment), falling back to req_id. A posting with neither has
+// no dedup key — it would collide on a bare ".../jobs/" URL — so it is dropped (ok=false).
+func (s jibe) toJob(e CompanyEntry, p jibePosting) (Job, bool) {
 	id := firstNonEmpty(p.Slug, p.ReqID)
+	if id == "" {
+		return Job{}, false
+	}
 	location := firstNonEmpty(p.LocationName, p.FullLocation)
 	// location_type is the structured work-arrangement signal (REMOTE/HYBRID/ONSITE);
 	// "ANY" and unknown values yield no mode, leaving the pipeline to fall back to the
@@ -96,5 +102,5 @@ func (s jibe) toJob(e CompanyEntry, p jibePosting) Job {
 		Remote:      workMode == "remote" || isRemote(location),
 		WorkMode:    workMode,
 		PostedAt:    parseLayout(jibeDateLayout, p.PostedDate),
-	}
+	}, true
 }

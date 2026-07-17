@@ -93,3 +93,28 @@ func TestJibeFetchPaginatesAndMaps(t *testing.T) {
 		t.Errorf("Company(5600) = %q, want configured company fallback", got)
 	}
 }
+
+func TestJibeDropsPostingWithoutID(t *testing.T) {
+	// A posting with neither slug nor req_id has no dedup key; emitting it would give an
+	// empty ExternalID and a bare ".../jobs/" URL that collides with every other id-less
+	// posting. It must be dropped, like every sibling adapter does.
+	fake := (&routedHTTP{}).
+		route("page=1", `{"totalCount": 2, "jobs": [`+
+			jibeJob("5441", "Valid Role", "US Remote", "REMOTE", "GitHub, Inc.", "2026-06-16T20:41:00+0000")+`,`+
+			jibeJob("", "No ID Role", "Berlin", "ONSITE", "GitHub, Inc.", "2026-06-15T10:00:00+0000")+
+			`]}`).
+		route("page=2", `{"totalCount": 2, "jobs": []}`)
+
+	jobs, err := NewJibe(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "GitHub", Provider: "jibe", Board: "www.github.careers",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1 (the id-less posting must drop)", len(jobs))
+	}
+	if jobs[0].ExternalID != "5441" {
+		t.Errorf("ExternalID = %q, want the only posting with an id", jobs[0].ExternalID)
+	}
+}
