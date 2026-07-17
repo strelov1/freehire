@@ -4,13 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"html"
 	"log"
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 )
 
 // djinni adapts djinni.co, a Ukrainian/CEE IT job board. Each anonymous listing page
@@ -131,7 +128,7 @@ func (p djinniPosting) toJob() (Job, bool) {
 		Title:          p.Title,
 		Company:        p.HiringOrganization.Name,
 		Location:       p.ApplicantLocationRequirements.Address.AddressCountry,
-		Description:    sanitizeHTML(djinniDescriptionHTML(p.Description)),
+		Description:    sanitizeHTML(plainTextToHTML(p.Description)),
 		Remote:         remote,
 		WorkMode:       workModeFromRemote(remote),
 		EmploymentType: schemaEmploymentType(p.EmploymentType),
@@ -152,71 +149,5 @@ func djinniDate(s string) *time.Time {
 	return parseDate(s)
 }
 
-// djinniBulletMarkers are the line-leading glyphs Djinni company editors use to mark list items
-// in the otherwise plain-text JSON-LD description (bullet, middle dot, triangular/hollow/filled
-// bullets, hyphen, asterisk, en/em dash). A marker counts only when it leads a line and is
-// followed by whitespace, so a mid-sentence dash, a hyphenated word, or the "*Note" footnote
-// prefix stays prose.
-var djinniBulletMarkers = map[rune]bool{
-	'•': true, '·': true, '‣': true, '◦': true, '▪': true,
-	'-': true, '*': true, '–': true, '—': true,
-}
-
-// djinniBullet reports whether a trimmed line is a bullet, returning its text with the leading
-// marker (and the space after it) removed.
-func djinniBullet(line string) (string, bool) {
-	r, size := utf8.DecodeRuneInString(line)
-	if !djinniBulletMarkers[r] {
-		return "", false
-	}
-	next, _ := utf8.DecodeRuneInString(line[size:])
-	if !unicode.IsSpace(next) {
-		return "", false // "-word" / "*Note" without a following space is prose, not a bullet
-	}
-	return strings.TrimSpace(line[size:]), true
-}
-
-// djinniDescriptionHTML rebuilds the structural HTML the {@html} consumer renders from Djinni's
-// plain-text description. The feed carries the body as newline-delimited text — blank lines
-// separate blocks, assorted leading glyphs mark bullets — with no markup, so rendered as-is every
-// newline collapses into one unbroken wall of text. This reconstructs it: a run of bullet lines
-// becomes a <ul>, a run of other text lines becomes a <p> (wrapped lines joined by <br>), and a
-// blank line closes the open block. Text is HTML-escaped because it is literal prose, not markup.
-func djinniDescriptionHTML(text string) string {
-	var out strings.Builder
-	var para, bullets []string
-	flushPara := func() {
-		if len(para) > 0 {
-			out.WriteString("<p>" + strings.Join(para, "<br>") + "</p>")
-			para = para[:0]
-		}
-	}
-	flushBullets := func() {
-		if len(bullets) > 0 {
-			out.WriteString("<ul>")
-			for _, li := range bullets {
-				out.WriteString("<li>" + li + "</li>")
-			}
-			out.WriteString("</ul>")
-			bullets = bullets[:0]
-		}
-	}
-	for _, raw := range strings.Split(text, "\n") {
-		line := strings.TrimSpace(raw)
-		if line == "" {
-			flushBullets()
-			flushPara()
-			continue
-		}
-		if item, ok := djinniBullet(line); ok {
-			flushPara()
-			bullets = append(bullets, html.EscapeString(item))
-			continue
-		}
-		flushBullets()
-		para = append(para, html.EscapeString(line))
-	}
-	flushBullets()
-	flushPara()
-	return out.String()
-}
+// djinni's plain-text JSON-LD description is rebuilt into structural HTML by the shared
+// plainTextToHTML helper (see plaintext.go), reused by other plain-text sources (lumenalta).

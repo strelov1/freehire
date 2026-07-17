@@ -72,12 +72,14 @@ func (l lumenalta) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // location is set to "Remote" (which the pipeline's dictionary derives a remote work-mode from).
 func (lumenalta) toJob(e CompanyEntry, j lumenaltaJob) Job {
 	return Job{
-		ExternalID:  j.ID,
-		URL:         lumenaltaJobURL + j.Slug,
-		Title:       strings.TrimSpace(j.Name),
-		Company:     e.Company,
-		Location:    "Remote",
-		Description: strings.TrimSpace(j.Description),
+		ExternalID: j.ID,
+		URL:        lumenaltaJobURL + j.Slug,
+		Title:      strings.TrimSpace(j.Name),
+		Company:    e.Company,
+		Location:   "Remote",
+		// The API serves the description as plain text; rebuild it into sanitized structural
+		// HTML so the {@html} consumer renders paragraphs/lists instead of one collapsed line.
+		Description: sanitizeHTML(plainTextToHTML(j.Description)),
 		Remote:      true,
 	}
 }
