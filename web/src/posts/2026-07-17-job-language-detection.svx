@@ -1,0 +1,24 @@
+---
+title: More jobs now show their language
+date: 2026-07-17
+summary: A clearly-English posting is now labelled English even when the automatic detector is unsure, so about a third more jobs surface under the Job language filter.
+type: changelog
+tags:
+  - search
+  - filters
+draft: false
+---
+
+Every job can be filtered by the language it's written in. But our language
+detector used to leave the language off whenever a description leaned heavily on
+tech terms, brand names, and snippets of code — which is most of them. Those
+postings then never showed up under the **Job language** filter.
+
+We added a fallback: when a description is clearly written in the Latin
+alphabet and the detector's own best guess is English, we label it English
+rather than leaving it blank. Genuinely non-English postings are detected
+confidently and are untouched, so nothing gets mislabelled.
+
+About a third of previously-unlabelled jobs now carry a language. Filtering by
+**[English](/jobs?posting_language=en)** — or any language — now surfaces the
+postings that were invisible to that filter before.
