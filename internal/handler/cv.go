@@ -28,7 +28,18 @@ type cvMetaResponse struct {
 
 type cvResponse struct {
 	cvMetaResponse
-	Document cv.Document `json:"document"`
+	// AgentSessionID is the roy session bound to a tailored CV (empty when none) — the tailoring
+	// workspace resumes it.
+	AgentSessionID string      `json:"agent_session_id"`
+	Document       cv.Document `json:"document"`
+}
+
+// cvTailoredResponse is a tailored CV in the /my/cvs re-open list: metadata plus the vacancy
+// slug and the bound agent session, so the client links each row to its tailoring workspace.
+type cvTailoredResponse struct {
+	cvMetaResponse
+	JobSlug        string `json:"job_slug"`
+	AgentSessionID string `json:"agent_session_id"`
 }
 
 type createCVRequest struct {
@@ -49,19 +60,28 @@ func metaResponse(m cv.Meta) cvMetaResponse {
 	return cvMetaResponse{ID: m.ID, Title: m.Title, TemplateID: m.TemplateID, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}
 }
 
-// ListCVs returns the caller's CVs as metadata, newest edit first.
+func recordResponse(rec cv.Record) cvResponse {
+	return cvResponse{cvMetaResponse: metaResponse(rec.Meta), AgentSessionID: rec.AgentSessionID, Document: rec.Document}
+}
+
+// ListCVs returns the caller's TAILORED CVs (the re-open list), newest edit first, each with
+// its vacancy slug and bound agent session so the client links back to the tailoring workspace.
 func (a *API) ListCVs(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	metas, err := a.cvStore.List(c.Context(), userID)
+	items, err := a.cvStore.ListTailored(c.Context(), userID)
 	if err != nil {
 		return err
 	}
-	out := make([]cvMetaResponse, len(metas))
-	for i, m := range metas {
-		out[i] = metaResponse(m)
+	out := make([]cvTailoredResponse, len(items))
+	for i, m := range items {
+		out[i] = cvTailoredResponse{
+			cvMetaResponse: cvMetaResponse{ID: m.ID, Title: m.Title, TemplateID: m.TemplateID, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt},
+			JobSlug:        m.JobSlug,
+			AgentSessionID: m.AgentSessionID,
+		}
 	}
 	return c.JSON(fiber.Map{"data": out})
 }
@@ -100,7 +120,7 @@ func (a *API) CreateCV(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": cvResponse{metaResponse(rec.Meta), rec.Document}})
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": recordResponse(rec)})
 }
 
 // GetCV returns one owned CV with its full document.
@@ -117,7 +137,7 @@ func (a *API) GetCV(c *fiber.Ctx) error {
 	if err != nil {
 		return mapCVError(err)
 	}
-	return c.JSON(fiber.Map{"data": cvResponse{metaResponse(rec.Meta), rec.Document}})
+	return c.JSON(fiber.Map{"data": recordResponse(rec)})
 }
 
 // UpdateCV replaces an owned CV's title, template, and document.
@@ -156,6 +176,31 @@ func (a *API) DeleteCV(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid id")
 	}
 	if err := a.cvStore.Delete(c.Context(), int64(id), userID); err != nil {
+		return mapCVError(err)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+type setCVSessionRequest struct {
+	SessionID string `json:"session_id"`
+}
+
+// SetCVSession binds a roy agent session to an owned CV so the tailoring workspace can re-open
+// that exact session later. Cookie or API key; owner-scoped (a foreign/missing id is a 404).
+func (a *API) SetCVSession(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	id, err := c.ParamsInt("id")
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid id")
+	}
+	var in setCVSessionRequest
+	if err := c.BodyParser(&in); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+	if err := a.cvStore.SetSession(c.Context(), int64(id), userID, in.SessionID); err != nil {
 		return mapCVError(err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)

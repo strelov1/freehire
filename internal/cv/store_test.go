@@ -24,6 +24,7 @@ type fakeRow struct {
 	templateID string
 	data       []byte
 	jobID      int64 // 0 = base CV (job_id NULL); >0 = tailored copy bound to a vacancy
+	sessionID  string
 }
 
 func newFakeRepo() *fakeRepo { return &fakeRepo{rows: map[int64]fakeRow{}, next: 1} }
@@ -52,7 +53,31 @@ func (f *fakeRepo) Get(_ context.Context, id, userID int64) (db.GetCVByIDRow, er
 	if !ok || r.userID != userID {
 		return db.GetCVByIDRow{}, pgx.ErrNoRows
 	}
-	return db.GetCVByIDRow{ID: id, Title: r.title, TemplateID: r.templateID, Data: r.data, JobID: pgtype.Int8{Int64: r.jobID, Valid: r.jobID != 0}, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
+	return db.GetCVByIDRow{ID: id, Title: r.title, TemplateID: r.templateID, Data: r.data, JobID: pgtype.Int8{Int64: r.jobID, Valid: r.jobID != 0}, AgentSessionID: pgtype.Text{String: r.sessionID, Valid: r.sessionID != ""}, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
+}
+
+func (f *fakeRepo) SetSession(_ context.Context, id, userID int64, sessionID string) (int64, error) {
+	r, ok := f.rows[id]
+	if !ok || r.userID != userID {
+		return 0, nil
+	}
+	r.sessionID = sessionID
+	f.rows[id] = r
+	return 1, nil
+}
+
+func (f *fakeRepo) ListTailored(_ context.Context, userID int64) ([]db.ListTailoredCVsByUserRow, error) {
+	var out []db.ListTailoredCVsByUserRow
+	for id, r := range f.rows {
+		if r.userID == userID && r.jobID != 0 {
+			out = append(out, db.ListTailoredCVsByUserRow{
+				ID: id, Title: r.title, TemplateID: r.templateID,
+				AgentSessionID: pgtype.Text{String: r.sessionID, Valid: r.sessionID != ""},
+				JobSlug:        "job-slug", CreatedAt: stamp(), UpdatedAt: stamp(),
+			})
+		}
+	}
+	return out, nil
 }
 
 func (f *fakeRepo) Update(_ context.Context, id, userID int64, title, templateID string, data []byte) (db.UpdateCVRow, error) {
@@ -60,7 +85,7 @@ func (f *fakeRepo) Update(_ context.Context, id, userID int64, title, templateID
 	if !ok || r.userID != userID {
 		return db.UpdateCVRow{}, pgx.ErrNoRows
 	}
-	f.rows[id] = fakeRow{userID: userID, title: title, templateID: templateID, data: data, jobID: r.jobID}
+	f.rows[id] = fakeRow{userID: userID, title: title, templateID: templateID, data: data, jobID: r.jobID, sessionID: r.sessionID}
 	return db.UpdateCVRow{ID: id, Title: title, TemplateID: templateID, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
 }
 

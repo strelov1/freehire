@@ -34,8 +34,18 @@ type Meta struct {
 type Record struct {
 	Meta
 	// JobID is the vacancy a tailored CV is bound to, or 0 for a base CV (job_id NULL).
-	JobID    int64
-	Document Document
+	JobID int64
+	// AgentSessionID is the roy session bound to a tailored CV (empty when none).
+	AgentSessionID string
+	Document       Document
+}
+
+// TailoredItem is a tailored CV in the re-open list: metadata plus the vacancy slug and the
+// bound agent session, so a row links straight back to its tailoring workspace.
+type TailoredItem struct {
+	Meta
+	JobSlug        string
+	AgentSessionID string
 }
 
 // Repository persists CVs. Every read/update/delete is owner-scoped by (id, userID); a
@@ -48,6 +58,8 @@ type Repository interface {
 	Delete(ctx context.Context, id, userID int64) (int64, error)
 	GetBase(ctx context.Context, userID int64) (db.GetBaseCVByUserRow, error)
 	CreateTailored(ctx context.Context, userID, jobID int64, title, templateID string, data []byte) (db.CreateTailoredCVRow, error)
+	SetSession(ctx context.Context, id, userID int64, sessionID string) (int64, error)
+	ListTailored(ctx context.Context, userID int64) ([]db.ListTailoredCVsByUserRow, error)
 }
 
 // Seeder provides the user's extracted résumé, used to seed a base CV when they have none.
@@ -104,9 +116,10 @@ func (s *Store) Get(ctx context.Context, id, userID int64) (Record, error) {
 		return Record{}, err
 	}
 	return Record{
-		Meta:     Meta{ID: row.ID, Title: row.Title, TemplateID: row.TemplateID, CreatedAt: row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time},
-		JobID:    int8Value(row.JobID),
-		Document: doc,
+		Meta:           Meta{ID: row.ID, Title: row.Title, TemplateID: row.TemplateID, CreatedAt: row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time},
+		JobID:          int8Value(row.JobID),
+		AgentSessionID: textValue(row.AgentSessionID),
+		Document:       doc,
 	}, nil
 }
 
@@ -116,6 +129,44 @@ func int8Value(v pgtype.Int8) int64 {
 		return v.Int64
 	}
 	return 0
+}
+
+// textValue unwraps a nullable text column to its value, mapping NULL to "".
+func textValue(v pgtype.Text) string {
+	if v.Valid {
+		return v.String
+	}
+	return ""
+}
+
+// SetSession binds (or rebinds) the agent session to an owned CV, or returns ErrNotFound.
+func (s *Store) SetSession(ctx context.Context, id, userID int64, sessionID string) error {
+	n, err := s.repo.SetSession(ctx, id, userID, sessionID)
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ListTailored returns the user's tailored CVs (the re-open list): metadata plus the vacancy
+// slug and the bound agent session, newest edit first.
+func (s *Store) ListTailored(ctx context.Context, userID int64) ([]TailoredItem, error) {
+	rows, err := s.repo.ListTailored(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]TailoredItem, len(rows))
+	for i, r := range rows {
+		out[i] = TailoredItem{
+			Meta:           Meta{ID: r.ID, Title: r.Title, TemplateID: r.TemplateID, CreatedAt: r.CreatedAt.Time, UpdatedAt: r.UpdatedAt.Time},
+			JobSlug:        r.JobSlug,
+			AgentSessionID: textValue(r.AgentSessionID),
+		}
+	}
+	return out, nil
 }
 
 // Update sanitizes and replaces an owned CV's editable fields, or returns ErrNotFound.
@@ -283,4 +334,15 @@ func (r queriesRepository) CreateTailored(ctx context.Context, userID, jobID int
 		UserID: userID, Title: title, TemplateID: templateID, Data: data,
 		JobID: pgtype.Int8{Int64: jobID, Valid: true},
 	})
+}
+
+func (r queriesRepository) SetSession(ctx context.Context, id, userID int64, sessionID string) (int64, error) {
+	return r.q.SetCVSession(ctx, db.SetCVSessionParams{
+		ID: id, UserID: userID,
+		AgentSessionID: pgtype.Text{String: sessionID, Valid: sessionID != ""},
+	})
+}
+
+func (r queriesRepository) ListTailored(ctx context.Context, userID int64) ([]db.ListTailoredCVsByUserRow, error) {
+	return r.q.ListTailoredCVsByUser(ctx, userID)
 }

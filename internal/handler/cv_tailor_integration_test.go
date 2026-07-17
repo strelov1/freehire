@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -254,5 +255,51 @@ func TestTailorContextSplit(t *testing.T) {
 	base, _ := h.cvStore.Create(ctx, user, "Base", cv.DefaultTemplateID, cv.Document{})
 	if resp := doBearer(t, app, fiber.MethodGet, "/api/v1/me/cvs/"+strconv.FormatInt(base.ID, 10)+"/tailor-context", key, nil); resp.StatusCode != fiber.StatusConflict {
 		t.Fatalf("base-cv context = %d, want 409", resp.StatusCode)
+	}
+}
+
+// TestCVSessionAndTailoredList covers the CV↔session link over real Postgres: SetSession
+// round-trips on Get, ListTailored returns the vacancy slug + session (and excludes base CVs),
+// and SetSession is owner-scoped.
+func TestCVSessionAndTailoredList(t *testing.T) {
+	h, _ := newTailorAPI(t)
+	ctx := context.Background()
+	user := seedAccount(t, h, "sess@example.test", true)
+	jobID := seedJobSlug(t, h, "backend-eng")
+
+	// A base CV (job_id NULL) must NOT appear in the tailored list.
+	if _, err := h.cvStore.Create(ctx, user, "Base", cv.DefaultTemplateID, cv.Document{}); err != nil {
+		t.Fatalf("create base: %v", err)
+	}
+	tailored, err := h.cvStore.CreateTailored(ctx, user, jobID, "Tailored", cv.DefaultTemplateID, cv.Document{})
+	if err != nil {
+		t.Fatalf("create tailored: %v", err)
+	}
+
+	if err := h.cvStore.SetSession(ctx, tailored.ID, user, "sess-xyz"); err != nil {
+		t.Fatalf("set session: %v", err)
+	}
+	rec, err := h.cvStore.Get(ctx, tailored.ID, user)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if rec.AgentSessionID != "sess-xyz" {
+		t.Errorf("session = %q, want sess-xyz", rec.AgentSessionID)
+	}
+
+	items, err := h.cvStore.ListTailored(ctx, user)
+	if err != nil {
+		t.Fatalf("list tailored: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("tailored list len = %d, want 1 (base excluded)", len(items))
+	}
+	if items[0].JobSlug != "backend-eng" || items[0].AgentSessionID != "sess-xyz" {
+		t.Errorf("tailored item = %+v, want slug backend-eng + session sess-xyz", items[0])
+	}
+
+	other := seedAccount(t, h, "other-sess@example.test", true)
+	if err := h.cvStore.SetSession(ctx, tailored.ID, other, "hijack"); !errors.Is(err, cv.ErrNotFound) {
+		t.Errorf("foreign set-session err = %v, want ErrNotFound", err)
 	}
 }
