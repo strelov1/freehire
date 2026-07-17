@@ -1,7 +1,7 @@
 ## 1. Pure logic (vitest first)
 
-- [ ] 1.1 `clampWidth(px, min, max)` splitter helper in `web/src/lib/tailor/` + vitest (below min → min, above max → max, inside → unchanged)
-- [ ] 1.2 `splitRequirements(analysis)` → `{ missingHave, missingGap }` from `Analysis.requirement_match` (pure) + vitest, incl. the empty/absent cases
+- [x] 1.1 `clampWidth(px, min, max)` splitter helper in `web/src/lib/tailor/` + vitest (below min → min, above max → max, inside → unchanged)
+- [x] 1.2 `splitRequirements(analysis)` → `{ missingHave, missingGap }` from `Analysis.requirement_match` (pure) + vitest, incl. the empty/absent cases
 
 ## 2. Extract `<AssistantChat>`
 
