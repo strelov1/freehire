@@ -250,6 +250,10 @@ func TestTailorContextSplit(t *testing.T) {
 	if got.Data.Verdict != "Good Fit" {
 		t.Errorf("verdict = %q", got.Data.Verdict)
 	}
+	// The vacancy is bundled in so the agent sees the role it reframes toward.
+	if got.Data.Job.Title != "Backend Engineer" || got.Data.Job.Slug != "backend-eng" {
+		t.Errorf("job = %+v, want title=Backend Engineer slug=backend-eng", got.Data.Job)
+	}
 
 	// A base CV (no bound vacancy) is not tailorable-context → 409.
 	base, _ := h.cvStore.Create(ctx, user, "Base", cv.DefaultTemplateID, cv.Document{})

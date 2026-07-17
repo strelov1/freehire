@@ -41,8 +41,9 @@
     }
     try {
       if (cvParam) {
-        // Resume: reuse the existing tailored CV and re-attach its stored session.
-        resuming = true;
+        // Resume an existing tailored CV. If it already has a bound session, re-attach it with
+        // no kickoff. If it has none (a CV created before session binding), mint a fresh
+        // tailoring session for it and let the kickoff orient the agent.
         const existing = Number(cvParam);
         const [j, rec, fit] = await Promise.all([
           api.getJob(slug),
@@ -52,7 +53,18 @@
         job = j;
         cvId = existing;
         analysis = fit?.analysis ?? null;
-        sessionId = rec.agent_session_id || undefined;
+        if (rec.agent_session_id) {
+          resuming = true;
+          sessionId = rec.agent_session_id;
+        } else {
+          const s = await api.startTailorSession(existing);
+          sessionId = await createSession({
+            cli_token: s.cli_token,
+            cv_id: existing,
+            base_cv_id: s.base_cv_id,
+          });
+          await api.setCvSession(existing, sessionId).catch(() => {}); // best-effort
+        }
       } else {
         // Bootstrap: create the tailored CV + a seeded session, then bind the session to the CV.
         const [j, tailor] = await Promise.all([api.getJob(slug), api.tailorCv(slug)]);

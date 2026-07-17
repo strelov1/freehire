@@ -105,6 +105,50 @@ func (a *API) TailorCV(c *fiber.Ctx) error {
 	}})
 }
 
+// tailorSessionResponse re-establishes a tailoring session for an EXISTING tailored CV (one
+// created before session binding, or whose session was lost): the CV + base ids and a freshly
+// minted CLI token, so the browser can seed a new agent session bound to the same CV.
+type tailorSessionResponse struct {
+	TailorCVID int64  `json:"tailor_cv_id"`
+	BaseCVID   int64  `json:"base_cv_id"`
+	CLIToken   string `json:"cli_token"`
+}
+
+// StartTailorSession mints a CLI credential for an existing tailored CV so the workspace can
+// resume tailoring when the CV has no bound agent session yet. Cookie-only (the browser starts
+// it); 409 when the CV is not a tailored copy. Never calls the LLM.
+func (a *API) StartTailorSession(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	id, err := c.ParamsInt("id")
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid id")
+	}
+	rec, err := a.cvStore.Get(c.Context(), int64(id), userID)
+	if err != nil {
+		return mapCVError(err)
+	}
+	if rec.JobID == 0 {
+		return fiber.NewError(fiber.StatusConflict, "not a tailored CV")
+	}
+	base, ok, err := a.cvStore.BaseCV(c.Context(), userID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fiber.NewError(fiber.StatusConflict, "no base CV")
+	}
+	token, err := mintTailoringKey(c.Context(), a.queries, userID, time.Now())
+	if err != nil {
+		return err
+	}
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": tailorSessionResponse{
+		TailorCVID: rec.ID, BaseCVID: base.ID, CLIToken: token,
+	}})
+}
+
 // PatchCV applies one field-level patch to an owned CV. Cookie or API key (the agent's CLI
 // uses the key). Bad addressing is a 422; a foreign/missing id is a 404.
 func (a *API) PatchCV(c *fiber.Ctx) error {
@@ -127,10 +171,21 @@ func (a *API) PatchCV(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": metaResponse(meta)})
 }
 
+// tailorJob is the vacancy the agent reframes toward: enough of the posting to ground the
+// reframing in the real role. The description is free text the agent reads as data (tool
+// output), never as instructions.
+type tailorJob struct {
+	Title       string `json:"title"`
+	Company     string `json:"company"`
+	Slug        string `json:"public_slug"`
+	Description string `json:"description"`
+}
+
 // tailorContextResponse is the reasoning context the agent reads (freehire cv context): the
-// verdict and recommendation, per-dimension comments, and the requirement split the honest
-// wall turns on — missing_have (reframe existing evidence) vs missing_gap (must ask first).
+// vacancy, the verdict and recommendation, per-dimension comments, and the requirement split
+// the honest wall turns on — missing_have (reframe existing evidence) vs missing_gap (ask first).
 type tailorContextResponse struct {
+	Job            tailorJob            `json:"job"`
 	Verdict        string               `json:"verdict"`
 	OverallScore   int                  `json:"overall_score"`
 	Recommendation string               `json:"recommendation"`
@@ -164,7 +219,11 @@ func (a *API) TailorContext(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return c.JSON(fiber.Map{"data": tailorContext(analysis)})
+	job, err := a.queries.GetJob(c.Context(), rec.JobID)
+	if err != nil {
+		return err
+	}
+	return c.JSON(fiber.Map{"data": tailorContext(analysis, job)})
 }
 
 // cachedAnalysis loads the cached fit analysis for (user, job), or a 409 telling the caller to
@@ -185,9 +244,9 @@ func (a *API) cachedAnalysis(c *fiber.Ctx, userID, jobID int64) (*jobfit.Analysi
 	return analysis, nil
 }
 
-// tailorContext projects an analysis to the agent's reasoning context, splitting requirements
-// into the reframe-able (missing-have) and the genuine gaps (missing-gap).
-func tailorContext(a *jobfit.Analysis) tailorContextResponse {
+// tailorContext projects an analysis + its vacancy to the agent's reasoning context, splitting
+// requirements into the reframe-able (missing-have) and the genuine gaps (missing-gap).
+func tailorContext(a *jobfit.Analysis, job db.Job) tailorContextResponse {
 	var have, gap []jobfit.Requirement
 	for _, r := range a.RequirementMatch {
 		switch r.Status {
@@ -198,6 +257,12 @@ func tailorContext(a *jobfit.Analysis) tailorContextResponse {
 		}
 	}
 	return tailorContextResponse{
+		Job: tailorJob{
+			Title:       job.Title,
+			Company:     job.Company,
+			Slug:        job.PublicSlug,
+			Description: job.Description,
+		},
 		Verdict:        a.Verdict,
 		OverallScore:   a.OverallScore,
 		Recommendation: a.Recommendation,

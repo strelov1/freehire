@@ -463,6 +463,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Tailoring: the browser starts a session (cookie-only bootstrap); the agent's CLI drives
 	// the edit + context/get/render reads with its minted API key (keyAuth = cookie or Bearer).
 	api.Post("/me/cvs/tailor", saved, cvGate, a.TailorCV)
+	api.Post("/me/cvs/:id/tailor-session", saved, cvGate, a.StartTailorSession)
 	api.Patch("/me/cvs/:id", keyAuth, cvGate, a.PatchCV)
 	api.Put("/me/cvs/:id/session", keyAuth, cvGate, a.SetCVSession)
 	api.Get("/me/cvs/:id/tailor-context", keyAuth, cvGate, a.TailorContext)

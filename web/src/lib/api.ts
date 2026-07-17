@@ -1053,6 +1053,15 @@ export function createApi(
     return requestData<TailorResult>('/api/v1/me/cvs/tailor', jsonBody('POST', { job_slug: jobSlug }));
   }
 
+  /**
+   * Re-establish a tailoring session for an EXISTING tailored CV that has no bound agent session
+   * (one created before session binding): mints a fresh CLI token and returns the CV + base ids
+   * so the workspace can seed a new agent session against the same CV.
+   */
+  async function startTailorSession(id: number): Promise<TailorResult> {
+    return requestData<TailorResult>(`/api/v1/me/cvs/${id}/tailor-session`, jsonBody('POST', {}));
+  }
+
   return {
     listJobs,
     getJob,
@@ -1158,6 +1167,7 @@ export function createApi(
     setCvSession,
     cvPdfUrl,
     tailorCv,
+    startTailorSession,
   };
 }
 
