@@ -292,7 +292,7 @@
             <li>
               <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
               <a href={filterHref('skills', skill)}>
-                <Badge variant="secondary" class="transition-colors hover:bg-accent">{skill}</Badge>
+                <Badge variant="brand" class="transition hover:opacity-80">{skill}</Badge>
               </a>
             </li>
           {/each}

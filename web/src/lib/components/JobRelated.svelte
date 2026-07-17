@@ -28,14 +28,14 @@
   const tabClass = (isActive: boolean) =>
     `-mb-px border-b-2 px-1 pb-2 text-sm font-medium transition-colors ${
       isActive
-        ? 'border-gray-900 text-gray-900'
-        : 'border-transparent text-gray-500 hover:text-gray-800'
+        ? 'border-brand text-foreground'
+        : 'border-transparent text-muted-foreground hover:text-foreground'
     }`;
 </script>
 
 {#if hasSimilar || hasCopies}
   <section class="mt-10">
-    <div class="mb-4 flex gap-5 border-b border-gray-200">
+    <div class="mb-4 flex gap-5 border-b border-border">
       {#if hasSimilar}
         <button type="button" class={tabClass(active === 'similar')} onclick={() => (selected = 'similar')}>
           Similar jobs
@@ -55,15 +55,15 @@
         {/each}
       </div>
     {:else if active === 'copies' && hasCopies}
-      <ul class="divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-100">
+      <ul class="divide-y divide-border overflow-hidden rounded-lg border border-border">
         {#each preview as copy (copy.public_slug)}
           <li>
             <a
               href={resolve('/jobs/[slug]', { slug: copy.public_slug })}
-              class="flex items-center justify-between px-4 py-2.5 text-sm hover:bg-gray-50"
+              class="flex items-center justify-between px-4 py-2.5 text-sm hover:bg-accent"
             >
-              <span class="text-gray-800">{copy.location || 'Location not specified'}</span>
-              <span class="text-xs text-gray-400">View →</span>
+              <span class="text-foreground">{copy.location || 'Location not specified'}</span>
+              <span class="text-xs text-muted-foreground">View →</span>
             </a>
           </li>
         {/each}
@@ -71,7 +71,7 @@
       {#if copiesTotal > preview.length}
         <a
           href={resolve('/jobs/[slug]/copies', { slug })}
-          class="mt-3 inline-block text-sm font-medium text-blue-600 hover:text-blue-700"
+          class="mt-3 inline-block text-sm font-medium text-brand-strong hover:underline"
         >
           View all {copiesTotal} locations →
         </a>

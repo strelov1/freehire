@@ -7,6 +7,7 @@
       variant: {
         secondary: 'border-transparent bg-secondary text-secondary-foreground',
         outline: 'border-border text-muted-foreground',
+        brand: 'border-transparent bg-brand-muted text-brand-strong',
       },
     },
     defaultVariants: { variant: 'secondary' },

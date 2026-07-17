@@ -355,7 +355,7 @@
               <p class={sectionLabel}>Skills</p>
               <div class="flex flex-wrap gap-1.5">
                 {#each item.job.skills as skill (skill)}
-                  <Badge variant="secondary">{skill}</Badge>
+                  <Badge variant="brand">{skill}</Badge>
                 {/each}
               </div>
             </div>

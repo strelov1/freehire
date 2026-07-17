@@ -143,7 +143,7 @@
   <div class="mt-3 flex items-end justify-between gap-3">
     <div class="flex min-w-0 flex-wrap items-center gap-1.5">
       {#each shownSkills as skill (skill)}
-        <Badge variant="secondary">{skill}</Badge>
+        <Badge variant="brand">{skill}</Badge>
       {/each}
       {#if extraSkills > 0}
         <span class="text-xs text-muted-foreground">+{extraSkills} skills</span>

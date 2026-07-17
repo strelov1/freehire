@@ -423,7 +423,7 @@
                   <Badge variant="secondary">{tag}</Badge>
                 {/each}
                 {#each skills as skill (skill)}
-                  <Badge variant="secondary">{skill}</Badge>
+                  <Badge variant="brand">{skill}</Badge>
                 {/each}
               </div>
 
