@@ -44,6 +44,33 @@ func TestDetect(t *testing.T) {
 			text: "",
 			want: "",
 		},
+		{
+			// Tech-heavy English prose (brands, acronyms, code) scores "unreliable"
+			// in whatlanggo yet is clearly English: the English-leaning fallback
+			// rescues it instead of dropping the language.
+			name: "unreliable english tech-sparse -> en",
+			text: "Stack: React, Redux, TypeScript, Node.js, GraphQL, Docker, " +
+				"Kubernetes, AWS, Terraform, PostgreSQL, Redis, Kafka. CI/CD via " +
+				"GitHub Actions. Remote-first team.",
+			want: "en",
+		},
+		{
+			// Reliable non-English prose must NOT be pulled to "en" by the fallback:
+			// German scores reliably and keeps its own code.
+			name: "reliable german stays de",
+			text: "Wir suchen zum naechstmoeglichen Zeitpunkt einen erfahrenen " +
+				"Entwickler fuer unser Team in Berlin, der unsere Plattform " +
+				"weiterentwickelt und den Betrieb der Dienste sicherstellt.",
+			want: "de",
+		},
+		{
+			// Precision boundary: an unreliable posting whose best guess is NOT
+			// English is left empty rather than guessed — never mislabelled.
+			name: "unreliable non-english-guess stays empty",
+			text: "Join Acme! We use Go, gRPC, k8s. Ship fast. Great perks. " +
+				"Apply now via our portal today.",
+			want: "",
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
