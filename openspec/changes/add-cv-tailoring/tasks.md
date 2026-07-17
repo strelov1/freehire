@@ -18,8 +18,8 @@
 
 ## 4. Scoped credential
 
-- [ ] 4.1 Mint a short-lived scoped API key for the user at bootstrap via the existing `api_keys` machinery; decide TTL + scope string
-- [ ] 4.2 Test: minted key authenticates the CV endpoints and is owner-scoped (cannot touch another user's CV)
+- [x] 4.1 Mint a short-lived API key for the user via the existing `api_keys` machinery (`mintTailoringKey`, 2h TTL; no per-endpoint scope column exists → owner-scoped only). Delivery to the CLI (`~/.freehire` config vs env) is a cross-repo companion concern
+- [ ] 4.2 Test: minted key authenticates the CV endpoints and is owner-scoped (cannot touch another user's CV) — unit test covers hash↔token match; endpoint owner-scoping is exercised in 5.4
 
 ## 5. HTTP surface + gating
 

@@ -61,11 +61,20 @@ base-CV edits are a distinct, explicit action (patching the `job_id = NULL` row)
 "ask-before-adding" behavior itself lives in the agent skill (separate repo) but depends on this
 classification being exposed.
 
-**D5 — Scoped short-lived API key for the CLI credential.**
+**D5 — Short-lived owner-scoped API key for the CLI credential.**
 Alternative: pass the raw `hire_token` JWT as Bearer. Rejected: `RequireAuthOrKey` expects an API
-key as Bearer, and a scoped, revocable, short-lived key is safer than handing the session cookie to
-a subprocess. Minted at bootstrap, returned as `cli_token`, injected into the roy session as
-`FREEHIRE_TOKEN`.
+key as Bearer, and a revocable, short-lived key is safer than handing the session cookie to a
+subprocess. The freehire `api_keys` table has no per-endpoint scope column, so "scoped" here means
+owner-scoped only (the key resolves to the user; the CV endpoints' own owner checks confine it) —
+short-lived is real (2h TTL via the existing `expires_at`). Minted at bootstrap, returned as
+`cli_token`.
+
+**Key delivery (companion, cross-repo).** freehire only mints and returns `cli_token`; how it reaches
+the CLI is the roy session bootstrap's job. Preferred: the bootstrap writes the token into the
+session home in the `freehire-cli` config format (`~/.freehire`) so `freehire cv …` auto-authenticates
+on first run, rather than only injecting `FREEHIRE_TOKEN` into the process env (which exposes the
+secret to every child process). The exact config format lives in the `freehire-cli` repo; this change
+just returns the token.
 
 **D6 — Reuse `/my/assistant` with a split preview.** Alternative: a dedicated `/my/cvs/[id]/tailor`
 route. Chosen reuse: the assistant SPA already renders the roy `/ws` journal; add a right-hand CV
