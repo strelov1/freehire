@@ -86,21 +86,7 @@ func New(repo Repository, resolver Resolver) *Service {
 // already-tracked (409) before any write; the record+point transaction last, where a
 // duplicate-board race surfaces as ErrBoardAlreadyContributed (409).
 func (s *Service) Submit(ctx context.Context, submittedBy int64, rawURL string) (rec Contribution, source, board string, err error) {
-	source, board, canonical, ok := RecognizeBoard(rawURL)
-	if !ok && s.resolver != nil {
-		// Unknown host — the link may be a company careers page with an embedded ATS. Fetch it
-		// and detect the board (network fallback).
-		source, board, canonical, ok = s.resolver.Resolve(ctx, rawURL)
-	}
-	if !ok {
-		// Server-side embeds expose only the Greenhouse job id (no board token in URL or page).
-		// Find the board by that id — only resolves boards we already track (network-free).
-		if id, has := greenhouseJobID(rawURL); has {
-			if b, found, err := s.repo.BoardByGreenhouseJobID(ctx, id); err == nil && found {
-				source, board, canonical, ok = "greenhouse", b, stripQueryFragment(rawURL), true
-			}
-		}
-	}
+	source, board, canonical, ok := s.resolveBoard(ctx, rawURL)
 	if !ok {
 		// Log an unrecognized-but-plausible link (a valid http(s) URL) so a maintainer can
 		// review the feed and add support for a missed ATS. Garbage (non-URLs) is skipped.
@@ -123,6 +109,28 @@ func (s *Service) Submit(ctx context.Context, submittedBy int64, rawURL string) 
 		Board:       board,
 	})
 	return rec, source, board, err
+}
+
+// resolveBoard finds the (source, board, canonical URL) a pasted link belongs to, trying the
+// cheapest strategy first: the network-free URL recognizer; then a page fetch that detects an
+// ATS embedded on a company's own careers domain; then a Greenhouse job-id lookup, for
+// server-side embeds that expose only the job id (resolves boards we already track). ok=false
+// when none resolve.
+func (s *Service) resolveBoard(ctx context.Context, rawURL string) (source, board, canonical string, ok bool) {
+	if source, board, canonical, ok := RecognizeBoard(rawURL); ok {
+		return source, board, canonical, true
+	}
+	if s.resolver != nil {
+		if source, board, canonical, ok := s.resolver.Resolve(ctx, rawURL); ok {
+			return source, board, canonical, true
+		}
+	}
+	if id, has := greenhouseJobID(rawURL); has {
+		if b, found, err := s.repo.BoardByGreenhouseJobID(ctx, id); err == nil && found {
+			return "greenhouse", b, stripQueryFragment(rawURL), true
+		}
+	}
+	return "", "", "", false
 }
 
 // ListMine returns the given user's contributions, newest first.
