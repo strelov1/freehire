@@ -423,6 +423,57 @@ func (q *Queries) ListCompanySitemap(ctx context.Context, arg ListCompanySitemap
 	return items, nil
 }
 
+const listSlugLikeCompaniesForBackfill = `-- name: ListSlugLikeCompaniesForBackfill :many
+SELECT DISTINCT ON (company_slug)
+       company_slug AS slug,
+       company      AS name,
+       source,
+       url
+FROM jobs
+WHERE closed_at IS NULL
+  AND duplicate_of IS NULL
+  AND company_slug <> ''
+  AND company ~ '^[a-z0-9._-]+$'
+ORDER BY company_slug, created_at DESC
+`
+
+type ListSlugLikeCompaniesForBackfillRow struct {
+	Slug   string `json:"slug"`
+	Name   string `json:"name"`
+	Source string `json:"source"`
+	URL    string `json:"url"`
+}
+
+// Companies whose ingested name is still a squished slug (lowercase, no
+// whitespace or uppercase) and that have at least one open job, with a
+// representative open job's source and URL so the backfill worker can locate the
+// ATS board. Only boards with live jobs matter, so dead ones never appear. The Go
+// side re-validates slug-likeness authoritatively before touching anything.
+func (q *Queries) ListSlugLikeCompaniesForBackfill(ctx context.Context) ([]ListSlugLikeCompaniesForBackfillRow, error) {
+	rows, err := q.db.Query(ctx, listSlugLikeCompaniesForBackfill)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSlugLikeCompaniesForBackfillRow{}
+	for rows.Next() {
+		var i ListSlugLikeCompaniesForBackfillRow
+		if err := rows.Scan(
+			&i.Slug,
+			&i.Name,
+			&i.Source,
+			&i.URL,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const refreshCompanyFacets = `-- name: RefreshCompanyFacets :execrows
 WITH oj AS (
     -- duplicate_of IS NULL counts one canonical job per role cluster, so the company
@@ -563,6 +614,31 @@ WHERE c.slug = c2.slug
 // CTE). Computed once so the SET and the IS DISTINCT FROM guard share one value.
 func (q *Queries) RefreshCompanyFacets(ctx context.Context) (int64, error) {
 	result, err := q.db.Exec(ctx, refreshCompanyFacets)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const renameSlugCompany = `-- name: RenameSlugCompany :execrows
+UPDATE jobs
+SET company = $1, company_slug = $2, updated_at = now()
+WHERE company_slug = $3
+  AND company ~ '^[a-z0-9._-]+$'
+`
+
+type RenameSlugCompanyParams struct {
+	Name    string `json:"name"`
+	NewSlug string `json:"new_slug"`
+	OldSlug string `json:"old_slug"`
+}
+
+// Apply a resolved display name to every job under a slug-like company and
+// re-key its company_slug (computed by the caller via normalize.Slug), so the
+// derived catalogue re-keys through SyncCompaniesFromJobs + DeleteOrphanCompanies.
+// The name guard keeps a re-run from overwriting a name that is no longer a slug.
+func (q *Queries) RenameSlugCompany(ctx context.Context, arg RenameSlugCompanyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, renameSlugCompany, arg.Name, arg.NewSlug, arg.OldSlug)
 	if err != nil {
 		return 0, err
 	}

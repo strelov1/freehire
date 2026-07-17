@@ -133,6 +133,34 @@ ON CONFLICT (slug) DO UPDATE SET
     name       = EXCLUDED.name,
     updated_at = now();
 
+-- name: ListSlugLikeCompaniesForBackfill :many
+-- Companies whose ingested name is still a squished slug (lowercase, no
+-- whitespace or uppercase) and that have at least one open job, with a
+-- representative open job's source and URL so the backfill worker can locate the
+-- ATS board. Only boards with live jobs matter, so dead ones never appear. The Go
+-- side re-validates slug-likeness authoritatively before touching anything.
+SELECT DISTINCT ON (company_slug)
+       company_slug AS slug,
+       company      AS name,
+       source,
+       url
+FROM jobs
+WHERE closed_at IS NULL
+  AND duplicate_of IS NULL
+  AND company_slug <> ''
+  AND company ~ '^[a-z0-9._-]+$'
+ORDER BY company_slug, created_at DESC;
+
+-- name: RenameSlugCompany :execrows
+-- Apply a resolved display name to every job under a slug-like company and
+-- re-key its company_slug (computed by the caller via normalize.Slug), so the
+-- derived catalogue re-keys through SyncCompaniesFromJobs + DeleteOrphanCompanies.
+-- The name guard keeps a re-run from overwriting a name that is no longer a slug.
+UPDATE jobs
+SET company = @name, company_slug = @new_slug, updated_at = now()
+WHERE company_slug = @old_slug
+  AND company ~ '^[a-z0-9._-]+$';
+
 -- name: DeleteOrphanCompanies :execrows
 -- Drop companies no longer referenced by any job — the stale rows left behind
 -- when a slug-builder change re-keys jobs onto new slugs. Reference rows imported

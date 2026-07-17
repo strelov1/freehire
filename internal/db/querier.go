@@ -626,6 +626,12 @@ type Querier interface {
 	ListSavedJobSlugs(ctx context.Context, userID int64) ([]string, error)
 	// A user's saved searches, most recently updated first (the "My filters" picker order).
 	ListSavedSearches(ctx context.Context, userID int64) ([]SavedSearch, error)
+	// Companies whose ingested name is still a squished slug (lowercase, no
+	// whitespace or uppercase) and that have at least one open job, with a
+	// representative open job's source and URL so the backfill worker can locate the
+	// ATS board. Only boards with live jobs matter, so dead ones never appear. The Go
+	// side re-validates slug-likeness authoritatively before touching anything.
+	ListSlugLikeCompaniesForBackfill(ctx context.Context) ([]ListSlugLikeCompaniesForBackfillRow, error)
 	// "My submissions": one user's submissions, newest first, whatever their status.
 	// LEFT JOIN the minted job (present only once approved) to surface its public_slug,
 	// so the UI can link an approved submission straight to its live vacancy page.
@@ -837,6 +843,11 @@ type Querier interface {
 	// so a soft-skipped delivery (e.g. Telegram not yet linked) is retried promptly on
 	// a later pass instead of waiting out the lease.
 	ReleaseMatchClaim(ctx context.Context, arg ReleaseMatchClaimParams) error
+	// Apply a resolved display name to every job under a slug-like company and
+	// re-key its company_slug (computed by the caller via normalize.Slug), so the
+	// derived catalogue re-keys through SyncCompaniesFromJobs + DeleteOrphanCompanies.
+	// The name guard keeps a re-run from overwriting a name that is no longer a slug.
+	RenameSlugCompany(ctx context.Context, arg RenameSlugCompanyParams) (int64, error)
 	// A healthy (not-expired) probe clears any accumulated strikes, so only CONSECUTIVE
 	// expired probes can close a job. Guarded to the non-zero case so probing an
 	// already-clean job does not churn the row.
