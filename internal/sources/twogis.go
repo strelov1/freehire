@@ -97,14 +97,14 @@ func twogisJobID(loc string) string {
 }
 
 // twogisPosting is the schema.org JobPosting decoded from a 2GIS vacancy page's ld+json. It reuses
-// icimsPlaces, the shared single-or-array jobLocation decoder (2GIS emits a single Place object for
+// schemaPlaces, the shared single-or-array jobLocation decoder (2GIS emits a single Place object for
 // located roles and omits it for remote ones).
 type twogisPosting struct {
-	Title           string      `json:"title"`
-	Description     string      `json:"description"`
-	DatePosted      string      `json:"datePosted"`
-	JobLocationType string      `json:"jobLocationType"`
-	JobLocation     icimsPlaces `json:"jobLocation"`
+	Title           string       `json:"title"`
+	Description     string       `json:"description"`
+	DatePosted      string       `json:"datePosted"`
+	JobLocationType string       `json:"jobLocationType"`
+	JobLocation     schemaPlaces `json:"jobLocation"`
 }
 
 // location joins each jobLocation place as "City, Country" (falling back to whichever part is

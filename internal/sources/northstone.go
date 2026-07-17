@@ -182,21 +182,3 @@ func northstoneCanonical(loc string) string {
 	u.Path += "/"
 	return u.String()
 }
-
-// schemaEmploymentType maps a schema.org JobPosting employmentType enum onto the freehire
-// vocabulary, returning "" for an unknown/absent value (e.g. "OTHER") so the description
-// parser decides.
-func schemaEmploymentType(t string) string {
-	switch strings.ToUpper(strings.TrimSpace(t)) {
-	case "FULL_TIME":
-		return "full_time"
-	case "PART_TIME":
-		return "part_time"
-	case "CONTRACTOR", "TEMPORARY":
-		return "contract"
-	case "INTERN", "INTERNSHIP":
-		return "internship"
-	default:
-		return ""
-	}
-}

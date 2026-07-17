@@ -89,13 +89,13 @@ func jobviteJobID(loc string) string {
 }
 
 // jobvitePosting is the schema.org JobPosting decoded from a Jobvite job page's ld+json. It
-// reuses icimsPlaces, the shared single-or-array jobLocation decoder (Jobvite emits an array, but
+// reuses schemaPlaces, the shared single-or-array jobLocation decoder (Jobvite emits an array, but
 // the flexible form guards a board that emits a single Place object).
 type jobvitePosting struct {
-	Title       string      `json:"title"`
-	Description string      `json:"description"`
-	DatePosted  string      `json:"datePosted"`
-	JobLocation icimsPlaces `json:"jobLocation"`
+	Title       string       `json:"title"`
+	Description string       `json:"description"`
+	DatePosted  string       `json:"datePosted"`
+	JobLocation schemaPlaces `json:"jobLocation"`
 }
 
 // location joins each jobLocation place as "City, Country" (falling back to whichever part is
