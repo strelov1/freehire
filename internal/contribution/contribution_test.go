@@ -16,6 +16,7 @@ type fakeRepo struct {
 	listByUserRet []Contribution
 	companyName   string
 	companySlug   string
+	jobIDBoard    string // BoardByGreenhouseJobID returns this (ok when non-empty)
 }
 
 func (f *fakeRepo) BoardTracked(_ context.Context, _, _ string) (bool, error) {
@@ -24,6 +25,10 @@ func (f *fakeRepo) BoardTracked(_ context.Context, _, _ string) (bool, error) {
 
 func (f *fakeRepo) CompanyForBoard(_ context.Context, _, _ string) (string, string, bool, error) {
 	return f.companyName, f.companySlug, f.companyName != "" || f.companySlug != "", nil
+}
+
+func (f *fakeRepo) BoardByGreenhouseJobID(_ context.Context, _ string) (string, bool, error) {
+	return f.jobIDBoard, f.jobIDBoard != "", nil
 }
 
 func (f *fakeRepo) Record(_ context.Context, in RecordInput) (Contribution, error) {
@@ -159,6 +164,29 @@ func TestSubmitSkipsResolverForRecognizedHost(t *testing.T) {
 	}
 	if repo.recorded.Source != "ashby" {
 		t.Errorf("recorded source = %q, want ashby (network-free)", repo.recorded.Source)
+	}
+}
+
+func TestSubmitResolvesGreenhouseJobIDForServerSideVanity(t *testing.T) {
+	// A company careers page that exposes only the Greenhouse job id (gh_jid or a trailing
+	// numeric path segment) — no host or embed. The job-id lookup finds the tracked board.
+	repo := &fakeRepo{jobIDBoard: "sumup", boardTracked: true}
+	cases := []string{
+		"https://www.sumup.com/careers/positions/x/8578073002/?city=Brazil",
+		"https://www.talkspace.com/careers/job?gh_jid=6118228004",
+	}
+	for _, raw := range cases {
+		_, source, board, err := New(repo, nil).Submit(context.Background(), 7, raw)
+		if !errors.Is(err, ErrBoardAlreadyTracked) {
+			t.Errorf("Submit(%q) err = %v, want ErrBoardAlreadyTracked", raw, err)
+		}
+		if source != "greenhouse" || board != "sumup" {
+			t.Errorf("Submit(%q) = (%q,%q), want (greenhouse, sumup)", raw, source, board)
+		}
+	}
+	// No id in the URL → not resolved.
+	if _, _, _, err := New(repo, nil).Submit(context.Background(), 7, "https://example.com/careers/about"); !errors.Is(err, ErrUnsupportedATS) {
+		t.Errorf("err = %v, want ErrUnsupportedATS for a URL with no job id", err)
 	}
 }
 

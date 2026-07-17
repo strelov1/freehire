@@ -16,6 +16,16 @@ SELECT EXISTS (
     SELECT 1 FROM jobs WHERE source = sqlc.arg(source) AND external_id LIKE sqlc.arg(board_pattern)
 ) AS exists;
 
+-- name: BoardByGreenhouseJobID :one
+-- Find the greenhouse board already carrying a job with this Greenhouse job id — for links on
+-- a company's own domain that expose only the ATS job id (server-side embeds, no board token
+-- in the URL/page). external_id is "<board>:<id>"; served by the
+-- (split_part(external_id,':',2)) WHERE source='greenhouse' partial index.
+SELECT split_part(external_id, ':', 1) AS board
+FROM jobs
+WHERE source = 'greenhouse' AND split_part(external_id, ':', 2) = sqlc.arg(job_id)
+LIMIT 1;
+
 -- name: CompanyForBoard :one
 -- The tracked company on a board — for the "already tracked" reply: a job's company name and
 -- slug so the bot/UI can link to /companies/<slug>. board_pattern is "<escaped board>:%" (same

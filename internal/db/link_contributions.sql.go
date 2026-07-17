@@ -9,6 +9,24 @@ import (
 	"context"
 )
 
+const boardByGreenhouseJobID = `-- name: BoardByGreenhouseJobID :one
+SELECT split_part(external_id, ':', 1) AS board
+FROM jobs
+WHERE source = 'greenhouse' AND split_part(external_id, ':', 2) = $1
+LIMIT 1
+`
+
+// Find the greenhouse board already carrying a job with this Greenhouse job id — for links on
+// a company's own domain that expose only the ATS job id (server-side embeds, no board token
+// in the URL/page). external_id is "<board>:<id>"; served by the
+// (split_part(external_id,':',2)) WHERE source='greenhouse' partial index.
+func (q *Queries) BoardByGreenhouseJobID(ctx context.Context, jobID string) (string, error) {
+	row := q.db.QueryRow(ctx, boardByGreenhouseJobID, jobID)
+	var board string
+	err := row.Scan(&board)
+	return board, err
+}
+
 const companyForBoard = `-- name: CompanyForBoard :one
 SELECT company, company_slug FROM jobs
 WHERE source = $1 AND external_id LIKE $2 AND company_slug <> ''

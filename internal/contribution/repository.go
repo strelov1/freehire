@@ -36,6 +36,19 @@ func (r *QueriesRepository) BoardTracked(ctx context.Context, source, board stri
 	return r.q.JobsExistForBoard(ctx, db.JobsExistForBoardParams{Source: source, BoardPattern: likePrefix(board)})
 }
 
+// BoardByGreenhouseJobID returns the greenhouse board already carrying a job with the given
+// Greenhouse job id, or ok=false when none is tracked.
+func (r *QueriesRepository) BoardByGreenhouseJobID(ctx context.Context, jobID string) (board string, ok bool, err error) {
+	board, err = r.q.BoardByGreenhouseJobID(ctx, jobID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return board, true, nil
+}
+
 // CompanyForBoard returns the company name + slug already tracked on the board, or ok=false
 // when the board has no job with a resolved company.
 func (r *QueriesRepository) CompanyForBoard(ctx context.Context, source, board string) (name, slug string, ok bool, err error) {

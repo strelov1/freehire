@@ -2,6 +2,7 @@ package contribution
 
 import (
 	"net/url"
+	"regexp"
 	"strings"
 )
 
@@ -145,6 +146,38 @@ func subdomainLabel(host, apex string) string {
 		return sub[:i]
 	}
 	return sub
+}
+
+// ghNumericID matches a Greenhouse-style numeric job id.
+var ghNumericID = regexp.MustCompile(`^[0-9]{7,12}$`)
+
+// greenhouseJobID extracts a Greenhouse job id from a link that carries one but no board token:
+// the gh_jid query param (Greenhouse's embed param, e.g. company.com/careers?gh_jid=123), or a
+// trailing all-numeric path segment (company.com/careers/…/<id>/). ok=false when neither is
+// present. A non-Greenhouse id won't be found downstream, so a false positive is harmless.
+func greenhouseJobID(rawURL string) (string, bool) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "", false
+	}
+	if id := u.Query().Get("gh_jid"); ghNumericID.MatchString(id) {
+		return id, true
+	}
+	segs := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if last := segs[len(segs)-1]; ghNumericID.MatchString(last) {
+		return last, true
+	}
+	return "", false
+}
+
+// stripQueryFragment returns rawURL without its query or fragment; the raw string on parse error.
+func stripQueryFragment(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+	u.RawQuery, u.Fragment = "", ""
+	return u.String()
 }
 
 // hostname is u's lowercased hostname with a leading "www." stripped.

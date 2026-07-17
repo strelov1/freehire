@@ -53,6 +53,7 @@ type RecordInput struct {
 type Repository interface {
 	BoardTracked(ctx context.Context, source, board string) (bool, error)
 	CompanyForBoard(ctx context.Context, source, board string) (name, slug string, ok bool, err error)
+	BoardByGreenhouseJobID(ctx context.Context, jobID string) (board string, ok bool, err error)
 	Record(ctx context.Context, in RecordInput) (Contribution, error)
 	ListByUser(ctx context.Context, userID int64) ([]Contribution, error)
 }
@@ -88,6 +89,15 @@ func (s *Service) Submit(ctx context.Context, submittedBy int64, rawURL string) 
 		// Unknown host — the link may be a company careers page with an embedded ATS. Fetch it
 		// and detect the board (network fallback).
 		source, board, canonical, ok = s.resolver.Resolve(ctx, rawURL)
+	}
+	if !ok {
+		// Server-side embeds expose only the Greenhouse job id (no board token in URL or page).
+		// Find the board by that id — only resolves boards we already track (network-free).
+		if id, has := greenhouseJobID(rawURL); has {
+			if b, found, err := s.repo.BoardByGreenhouseJobID(ctx, id); err == nil && found {
+				source, board, canonical, ok = "greenhouse", b, stripQueryFragment(rawURL), true
+			}
+		}
 	}
 	if !ok {
 		return Contribution{}, "", "", ErrUnsupportedATS
