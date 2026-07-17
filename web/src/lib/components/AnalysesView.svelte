@@ -65,7 +65,7 @@
       {@const tone = verdictTone(it.overall_score)}
       <li>
         <a
-          href={resolve('/jobs/[slug]/fit', { slug: it.slug })}
+          href={resolve('/match/[slug]', { slug: it.slug })}
           class="group flex items-center gap-4 rounded-lg border border-border p-3.5 transition-colors hover:border-brand/40 hover:bg-accent/40"
         >
           <span class="w-12 shrink-0 text-center text-2xl font-bold tabular-nums leading-none {toneText[tone]}">

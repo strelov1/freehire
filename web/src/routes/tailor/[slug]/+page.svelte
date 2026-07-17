@@ -63,7 +63,7 @@
 {:else if status === 'error'}
   <div class="flex h-[calc(100svh-3.5rem)] flex-col items-center justify-center gap-3 p-6 text-center">
     <p class="max-w-md text-sm text-destructive">{errorMsg}</p>
-    <a href={`/jobs/${slug}/fit`} class="text-sm text-brand hover:underline">Back to the fit analysis</a>
+    <a href={`/match/${slug}`} class="text-sm text-brand hover:underline">Back to the fit analysis</a>
   </div>
 {:else}
   <div class="flex h-[calc(100svh-3.5rem)]">
@@ -74,6 +74,6 @@
       showSessionRail={false}
       onTurnComplete={() => (refreshKey += 1)}
     />
-    <ArtifactPanel {cvId} jobDescription={job?.description ?? ''} {analysis} {refreshKey} />
+    <ArtifactPanel {cvId} job={job!} {analysis} {refreshKey} />
   </div>
 {/if}

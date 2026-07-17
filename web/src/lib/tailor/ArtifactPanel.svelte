@@ -1,21 +1,23 @@
 <script lang="ts">
-  // The tailoring artifact panel: a resizable right-hand pane with three tabs — the live CV
-  // PDF (refreshed via refreshKey after each agent turn), the vacancy's job description, and
-  // the fit verdict (score + honest-wall requirement split). Splitter width is clamped by the
-  // vitest-covered clampWidth; the verdict split by splitRequirements.
+  // The tailoring artifact panel: a resizable right-hand pane with three tabs — the live CV PDF
+  // (refreshed via refreshKey after each agent turn), the vacancy's job description, and the fit
+  // verdict. JD and verdict reuse the SAME components the job page / fit page use, so they read
+  // identically. Splitter width is clamped by the vitest-covered clampWidth.
   import { clampWidth } from './geometry';
-  import { splitRequirements } from './verdict';
   import { api } from '$lib/api';
+  import JobDescription from '$lib/components/JobDescription.svelte';
+  import JobFitFull from '$lib/components/JobFitFull.svelte';
   import type { Analysis } from '$lib/generated/contracts';
+  import type { Job, JobFitResponse } from '$lib/types';
 
   let {
     cvId,
-    jobDescription,
+    job,
     analysis,
     refreshKey = 0,
   }: {
     cvId: number;
-    jobDescription: string;
+    job: Job;
     analysis: Analysis | null;
     refreshKey?: number;
   } = $props();
@@ -31,7 +33,8 @@
   let resizing = false;
 
   const cvUrl = $derived(`${api.cvPdfUrl(cvId)}?v=${refreshKey}`);
-  const reqs = $derived(splitRequirements(analysis));
+  // Seed JobFitFull from the already-cached analysis so it paints read-only (no recompute burn).
+  const fit = $derived<JobFitResponse>({ has_cv: true, stale: false, analysis });
 
   function startResize(e: PointerEvent) {
     resizing = true;
@@ -81,42 +84,16 @@
     {#if tab === 'cv'}
       <iframe src={cvUrl} title="CV preview" class="h-full w-full"></iframe>
     {:else if tab === 'jd'}
-      <div class="whitespace-pre-wrap p-4 text-sm leading-relaxed text-foreground">
-        {jobDescription || 'No job description.'}
+      <div class="p-4">
+        {#if job.description}
+          <JobDescription html={job.description} />
+        {:else}
+          <p class="text-sm text-muted-foreground">No job description.</p>
+        {/if}
       </div>
     {:else}
-      <div class="flex flex-col gap-4 p-4 text-sm">
-        {#if analysis}
-          <div>
-            <span class="text-2xl font-bold text-foreground">{analysis.overall_score}</span>
-            <span class="text-muted-foreground">/ 100 · {analysis.verdict}</span>
-          </div>
-          {#if analysis.recommendation}
-            <p class="leading-relaxed text-muted-foreground">{analysis.recommendation}</p>
-          {/if}
-          <div>
-            <h3 class="mb-1 font-medium text-foreground">Reframe — you already have this</h3>
-            <ul class="space-y-1 text-muted-foreground">
-              {#each reqs.missingHave as r (r.text)}
-                <li>• {r.text}</li>
-              {:else}
-                <li>—</li>
-              {/each}
-            </ul>
-          </div>
-          <div>
-            <h3 class="mb-1 font-medium text-foreground">Gaps — the agent should ask first</h3>
-            <ul class="space-y-1 text-muted-foreground">
-              {#each reqs.missingGap as r (r.text)}
-                <li>• {r.text}</li>
-              {:else}
-                <li>—</li>
-              {/each}
-            </ul>
-          </div>
-        {:else}
-          <p class="text-muted-foreground">No analysis available.</p>
-        {/if}
+      <div class="p-4">
+        <JobFitFull {job} initial={fit} autoRun={false} />
       </div>
     {/if}
   </div>
