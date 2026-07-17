@@ -1,0 +1,77 @@
+---
+title: Measuring what our filters miss
+date: 2026-07-17
+summary: We audited how often our structured job facets are simply blank, then let the measurement — not the idea — decide what to fix.
+type: article
+tags:
+  - search
+  - facets
+  - engineering
+draft: false
+---
+
+Every job in the catalogue is more than its title and description. We derive a
+set of structured facets from the text — the language it's written in, the
+skills it names, its category and seniority, where the work can happen — and
+those facets power the filters. They're produced by curated dictionaries and
+detectors that never guess: if the text doesn't clearly state something, the
+facet is left blank.
+
+That "never guess" rule keeps the filters trustworthy, but it raises an obvious
+question: **how often are we blank when we shouldn't be?** A filter is only as
+good as its coverage. So we measured it.
+
+## The audit
+
+We took a few thousand real postings and, for each facet, compared what our
+deterministic derivation produced against what a language model extracted from
+the same text. The model isn't the source of truth for the live site — it's a
+yardstick for "what's actually in the description that we're missing."
+
+The gaps were large on paper: most postings had no skills tagged, ~70% had no
+category, ~80% no seniority, ~30% no language. But a raw gap number doesn't tell
+you whether it's *recoverable* — the text might genuinely say nothing. So we
+looked closer, facet by facet.
+
+## Language: a real, cheap gap — shipped
+
+The language detector was leaving a third of clearly-English postings unlabelled.
+The reason: job descriptions are full of tech terms, brand names, and code, which
+depress an automatic detector's confidence until it gives up. But the signal was
+right there — the model agreed those postings were English about 99% of the time.
+
+This one was worth fixing, and cheaply: when the detector is unsure but its own
+best guess is English and the text is Latin-script, we now label it English.
+Genuinely non-English postings are detected confidently and are untouched.
+Result: **96%** of previously-blank postings now carry a language, with no
+mislabelling.
+
+## Category: looked recoverable, wasn't — dropped
+
+Category was the tempting one. The model could fill a category for ~94% of the
+blank jobs, so it *looked* like a huge win. Our category comes from the job
+title; a title like "Join our team" names no role, so those jobs stayed blank
+even when the description clearly described one.
+
+The catch is precision. The model reads a description and understands it. A
+keyword match just looks for category words — and category words are treacherous.
+When we prototyped filling the category from description keywords and measured it
+against the model's judgement, the two agreed **8% of the time**. The word
+"security" matched 56 postings; the model agreed it was a security role in
+**one** of them. The rest were "security clearance", "social security", "job
+security". Sixty-two percent of the keyword guesses were flat wrong.
+
+So we didn't ship it. Filling category from the description needs the model's
+comprehension, not a keyword scan — a different, more expensive tool for another
+day. The existing title-based category stays as it is.
+
+## The takeaway
+
+The measurement flipped our priorities. The facet we assumed was the big hole —
+skills — turned out to be mostly genuinely-non-technical jobs, not a dictionary
+blind spot. The one that looked easy — category — was a precision trap. And the
+one we might have overlooked — language — was the cheap, clean win.
+
+The lesson we keep relearning: measure the thing you're actually going to ship,
+not the ceiling of what's possible. An idea that reads as obviously good can cost
+you a facet's worth of trust if you don't check the numbers first.
