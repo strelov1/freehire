@@ -29,4 +29,4 @@
 ## 6. Verify
 
 - [x] 6.1 `svelte-check` (0 errors) + `vitest` (301 pass) + `npm run build` green
-- [ ] 6.2 Drive: match → tailor (fresh, stores session) → /my/cvs lists it → re-open resumes the SAME session (no kickoff) → Edit tab persists a field
+- [x] 6.2 Drive: match → tailor (fresh, stores session) → /my/cvs lists it → re-open resumes the SAME session (no kickoff) → Edit tab persists a field
