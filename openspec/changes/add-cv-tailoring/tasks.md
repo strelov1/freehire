@@ -34,9 +34,9 @@
 
 ## 7. Web entry point
 
-- [ ] 7.1 On `/jobs/[slug]/fit`, show a "Подогнать CV под вакансию" CTA only when a cached non-stale analysis exists; call `POST /cvs/tailor` and route to the assistant surface with the returned ids
-- [ ] 7.2 In the assistant surface, add a right-hand CV preview pane that renders the tailored CV (`GET /:id/pdf` or HTML) and refreshes on turn boundaries
-- [ ] 7.3 Frontend verification: CTA hidden without analysis, visible with; bootstrap opens the session with the preview (svelte-check + visual verify per web conventions)
+- [x] 7.1 On `/jobs/[slug]/fit`, show a "Tailor my CV" CTA only when a cached analysis exists (`data.fit?.analysis`), the caller has a CV, and is beta; `api.tailorCv(slug)` bootstraps and `goto`s the tailored CV editor. Added `api.tailorCv` + `TailorResult` type
+- [~] 7.2 CROSS-REPO (deferred): a live split chat+preview where the agent edits on the fly requires `freehire-agent` to accept session context (`createSession` currently sends `{}`) + `freehire-cli` `cv` commands. In-repo, the tailored CV is viewable/renderable via the existing `CvEditor` + `cvPdfUrl` (`/my/cvs/[id]`), which the CTA opens
+- [x] 7.3 Frontend verification: `svelte-check` clean (0 errors); CTA gated on analysis+CV+beta. Live visual verify of the seeded session belongs to the cross-repo agent surface (7.2)
 
 ## 8. Verify
 

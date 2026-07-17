@@ -10,7 +10,7 @@
 // fetch per call site — not a module-level variable — keeps concurrent SSR
 // requests from sharing (and racing on) a session.
 
-import type { CvMeta, CvRecord, CreateCvInput, UpdateCvInput } from './cv';
+import type { CvMeta, CvRecord, CreateCvInput, UpdateCvInput, TailorResult } from './cv';
 import type {
   Job,
   EmailLinking,
@@ -1008,6 +1008,15 @@ export function createApi(
     return `${baseUrl}/api/v1/me/cvs/${id}/pdf`;
   }
 
+  /**
+   * Bootstrap a tailoring session for a vacancy: seeds/creates the base CV, makes a
+   * vacancy-bound tailored copy, and returns its id plus the cached analysis. Requires a
+   * cached fit analysis and a stored résumé (409 otherwise); beta-gated.
+   */
+  async function tailorCv(jobSlug: string): Promise<TailorResult> {
+    return requestData<TailorResult>('/api/v1/me/cvs/tailor', jsonBody('POST', { job_slug: jobSlug }));
+  }
+
   return {
     listJobs,
     getJob,
@@ -1109,6 +1118,7 @@ export function createApi(
     updateCv,
     deleteCv,
     cvPdfUrl,
+    tailorCv,
   };
 }
 

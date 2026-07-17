@@ -11,6 +11,7 @@ import type {
   Language,
   Project,
   Certification,
+  Analysis,
 } from './generated/contracts';
 
 /** CV metadata (list rows and mutation responses). */
@@ -25,6 +26,19 @@ export interface CvMeta {
 /** A CV with its full editable document. */
 export interface CvRecord extends CvMeta {
   document: Document;
+}
+
+/**
+ * Result of bootstrapping a tailoring session: the ids of the new vacancy-bound CV and the
+ * base it was copied from, the cached fit analysis, and the short-lived token the agent's CLI
+ * authenticates with. `cli_token` is handed to the agent session; the browser only needs the
+ * ids (to open the tailored CV) and the analysis (to show context).
+ */
+export interface TailorResult {
+  tailor_cv_id: number;
+  base_cv_id: number;
+  analysis: Analysis | null;
+  cli_token: string;
 }
 
 /** Request body for creating a CV. */

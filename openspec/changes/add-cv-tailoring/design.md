@@ -76,9 +76,14 @@ on first run, rather than only injecting `FREEHIRE_TOKEN` into the process env (
 secret to every child process). The exact config format lives in the `freehire-cli` repo; this change
 just returns the token.
 
-**D6 — Reuse `/my/assistant` with a split preview.** Alternative: a dedicated `/my/cvs/[id]/tailor`
-route. Chosen reuse: the assistant SPA already renders the roy `/ws` journal; add a right-hand CV
-preview re-rendered on turn boundaries. Reversible if a dedicated route proves cleaner.
+**D6 — In-repo: CTA → tailored CV editor. Live split preview is cross-repo.** The fit-page CTA
+bootstraps and `goto`s the tailored copy in the existing `CvEditor` (`/my/cvs/[id]`), where the CV
+is viewable/renderable (PDF via `cvPdfUrl`). A live split (chat + preview refreshed on turn
+boundaries) needs the roy agent to accept **session context** on create — today `/my/assistant`'s
+`createSession` sends `{}` and the agent (agent.freehire.dev, separate repo) decides everything, so it
+cannot be seeded with a CV id / verdict. That interactive loop is the cross-repo companion
+(`freehire-agent` context-on-create + `freehire-cli` `cv` commands); this change lands the entry
+point and the tailored artifact it opens.
 
 ## Risks / Trade-offs
 
