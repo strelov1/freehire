@@ -8,6 +8,7 @@
   import { api } from '$lib/api';
   import JobDescription from '$lib/components/JobDescription.svelte';
   import JobFitFull from '$lib/components/JobFitFull.svelte';
+  import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import CvEditor from '$lib/components/cv/CvEditor.svelte';
   import type { Analysis } from '$lib/generated/contracts';
   import type { Job, JobFitResponse } from '$lib/types';
@@ -35,7 +36,10 @@
   let width = $state(480);
   let resizing = false;
 
-  const cvUrl = $derived(`${api.cvPdfUrl(cvId)}?v=${refreshKey}`);
+  // Cache-bust the PDF on both agent turns (refreshKey, from the host) and manual autosaves in
+  // the Edit tab (cvVersion, bumped locally) so the preview never shows a stale render.
+  let cvVersion = $state(0);
+  const cvUrl = $derived(`${api.cvPdfUrl(cvId)}?v=${refreshKey + cvVersion}`);
   // Seed JobFitFull from the already-cached analysis so it paints read-only (no recompute burn).
   const fit = $derived<JobFitResponse>({ has_cv: true, stale: false, analysis });
 
@@ -84,7 +88,7 @@
       {/each}
     </div>
     <a
-      href={api.cvPdfUrl(cvId)}
+      href={cvUrl}
       target="_blank"
       rel="noopener"
       title="Open the CV PDF in a new tab"
@@ -100,10 +104,18 @@
       <iframe src={cvUrl} title="CV preview" class="h-full w-full"></iframe>
     {:else if tab === 'edit'}
       <div class="p-4">
-        <CvEditor id={cvId} embedded />
+        <CvEditor id={cvId} embedded onSaved={() => (cvVersion += 1)} />
       </div>
     {:else if tab === 'jd'}
       <div class="p-4">
+        <!-- Role header: logo + title + company, so the JD reads as a real posting. -->
+        <div class="mb-4 flex items-start gap-3 border-b border-border pb-4">
+          <CompanyLogo name={job.company} size="size-10" />
+          <div class="min-w-0">
+            <h2 class="text-base font-semibold leading-snug text-foreground">{job.title}</h2>
+            <p class="text-sm text-muted-foreground">{job.company}</p>
+          </div>
+        </div>
         {#if job.description}
           <JobDescription html={job.description} />
         {:else}
@@ -112,7 +124,7 @@
       </div>
     {:else}
       <div class="p-4">
-        <JobFitFull {job} initial={fit} autoRun={false} />
+        <JobFitFull {job} initial={fit} autoRun={false} stacked />
       </div>
     {/if}
   </div>

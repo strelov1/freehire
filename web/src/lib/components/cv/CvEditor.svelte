@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { ArrowLeft, Download, Plus, Trash2 } from '@lucide/svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import { ArrowLeft, Plus, Trash2 } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import { Button, Input } from '$lib/ui';
   import type { Document } from '$lib/generated/contracts';
@@ -23,16 +23,26 @@
 
   // `embedded` drops the standalone chrome (the "All CVs" back-link) when the editor lives
   // inside the tailoring workspace tab, where navigation is owned by the surrounding surface.
-  let { id, embedded = false }: { id: number; embedded?: boolean } = $props();
+  // `onSaved` fires after each successful autosave so the host can refresh the CV preview.
+  let {
+    id,
+    embedded = false,
+    onSaved = undefined,
+  }: { id: number; embedded?: boolean; onSaved?: () => void } = $props();
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   let error = $state<string | null>(null);
-  let saving = $state(false);
-  let notice = $state<string | null>(null);
+  // Autosave lifecycle: 'idle' before the first change, then saving → saved (or error).
+  let saveState = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   let title = $state('');
   let templateId = $state('classic-ats');
   let doc = $state<Document>({ header: {} });
+
+  // A JSON snapshot of the last-persisted state. The autosave effect compares against it to
+  // detect real edits (and skip the initial load), and persist() advances it on success.
+  let lastSnapshot = '';
+  const snapshot = () => JSON.stringify({ title, templateId, doc });
 
   onMount(async () => {
     try {
@@ -40,6 +50,7 @@
       title = rec.title;
       templateId = rec.template_id;
       doc = toEditable(rec.document);
+      lastSnapshot = snapshot();
       status = 'ready';
     } catch (e) {
       error = e instanceof ApiError ? e.message : 'Could not load this CV.';
@@ -47,25 +58,45 @@
     }
   });
 
-  async function save(): Promise<boolean> {
-    saving = true;
+  async function persist() {
+    const snap = snapshot(); // capture NOW; edits during the round-trip re-trigger the effect
+    saveState = 'saving';
     error = null;
-    notice = null;
     try {
       await api.updateCv(id, { title, template_id: templateId, document: doc });
-      notice = 'Saved.';
-      return true;
+      lastSnapshot = snap;
+      saveState = 'saved';
+      onSaved?.();
     } catch (e) {
+      saveState = 'error';
       error = e instanceof ApiError ? e.message : 'Could not save. Please try again.';
-      return false;
-    } finally {
-      saving = false;
     }
   }
 
-  async function saveAndDownload() {
-    if (await save()) window.open(api.cvPdfUrl(id), '_blank', 'noopener');
-  }
+  // Debounced autosave: any edit schedules a save 800ms later, resetting the timer on each
+  // keystroke. There are no Save buttons — the CV persists on its own.
+  let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  $effect(() => {
+    if (status !== 'ready') return;
+    if (snapshot() === lastSnapshot) return; // subscribes to title/templateId/doc
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveTimer = null;
+      void persist();
+    }, 800);
+  });
+
+  // Tab switches unmount this component ({#if}); flush any pending edit best-effort so a quick
+  // edit-then-switch isn't lost with the debounce timer.
+  onDestroy(() => {
+    if (saveTimer) clearTimeout(saveTimer);
+    if (status === 'ready' && snapshot() !== lastSnapshot) {
+      void api
+        .updateCv(id, { title, template_id: templateId, document: doc })
+        .then(() => onSaved?.())
+        .catch(() => {});
+    }
+  });
 
   // Section row helpers: append a blank row / drop one by index. `doc` is reassigned so
   // Svelte tracks the structural change.
@@ -93,15 +124,14 @@
           <ArrowLeft class="h-4 w-4" /> All CVs
         </a>
       {/if}
-      <div class="flex items-center gap-2">
-        {#if notice}<span class="text-sm text-muted-foreground">{notice}</span>{/if}
-        {#if error}<span class="text-sm text-destructive">{error}</span>{/if}
-        <Button variant="outline" onclick={saveAndDownload} disabled={saving}>
-          <Download class="mr-1 h-4 w-4" /> Save &amp; download
-        </Button>
-        <Button variant="primary" onclick={save} disabled={saving}>
-          {saving ? 'Saving…' : 'Save'}
-        </Button>
+      <div class="flex items-center gap-2 text-sm" aria-live="polite">
+        {#if saveState === 'saving'}
+          <span class="text-muted-foreground">Saving…</span>
+        {:else if saveState === 'saved'}
+          <span class="text-muted-foreground">Saved</span>
+        {:else if saveState === 'error'}
+          <span class="text-destructive">{error}</span>
+        {/if}
       </div>
     </div>
 

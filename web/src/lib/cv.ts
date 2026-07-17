@@ -50,14 +50,6 @@ export interface TailorResult {
   cli_token: string;
 }
 
-/** Request body for creating a CV. */
-export interface CreateCvInput {
-  title?: string;
-  template_id?: string;
-  /** Pre-fill from the caller's stored résumé structure when available. */
-  seed?: boolean;
-}
-
 /** Request body for replacing a CV. */
 export interface UpdateCvInput {
   title: string;

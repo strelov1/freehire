@@ -78,7 +78,7 @@ func (a *API) ListCVs(c *fiber.Ctx) error {
 	out := make([]cvTailoredResponse, len(items))
 	for i, m := range items {
 		out[i] = cvTailoredResponse{
-			cvMetaResponse: cvMetaResponse{ID: m.ID, Title: m.Title, TemplateID: m.TemplateID, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt},
+			cvMetaResponse: metaResponse(m.Meta),
 			JobSlug:        m.JobSlug,
 			AgentSessionID: m.AgentSessionID,
 		}

@@ -14,7 +14,6 @@ import type {
   CvMeta,
   CvRecord,
   CvTailoredItem,
-  CreateCvInput,
   UpdateCvInput,
   TailorResult,
 } from './cv';
@@ -1025,11 +1024,6 @@ export function createApi(
     await call(`/api/v1/me/cvs/${id}/session`, jsonBody('PUT', { session_id: sessionId }));
   }
 
-  /** Create a CV, optionally seeded from the stored résumé structure. */
-  async function createCv(input: CreateCvInput = {}): Promise<CvRecord> {
-    return requestData<CvRecord>('/api/v1/me/cvs', jsonBody('POST', input));
-  }
-
   /** Fetch one CV with its full document. */
   async function getCv(id: number): Promise<CvRecord> {
     return requestData<CvRecord>(`/api/v1/me/cvs/${id}`);
@@ -1158,7 +1152,6 @@ export function createApi(
     linkEmail,
     unlinkEmail,
     listCvs,
-    createCv,
     getCv,
     updateCv,
     deleteCv,

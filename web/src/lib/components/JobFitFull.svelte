@@ -20,11 +20,15 @@
   // passes its load data for an instant paint); when absent (the card, which has no
   // SSR), the cached fit is fetched on mount. `autoRun` starts the stream on a cold
   // start — the same "never silently recompute a cached analysis" gate as the page.
+  // `stacked` forces every multi-column section into a single column regardless of viewport
+  // width — for the narrow tailoring artifact panel, where the viewport-based `lg:`/`sm:`
+  // breakpoints would otherwise cram two columns into ~480px.
   let {
     job,
     initial = null,
     autoRun = true,
-  }: { job: Job; initial?: JobFitResponse | null; autoRun?: boolean } = $props();
+    stacked = false,
+  }: { job: Job; initial?: JobFitResponse | null; autoRun?: boolean; stacked?: boolean } = $props();
 
   let fit = $state<JobFitResponse | null>(initial);
 
@@ -153,6 +157,12 @@
     weak: 'rgba(245,158,11,0.10)',
     poor: 'rgba(239,68,68,0.10)',
   };
+
+  // Section headings read as tiny wide-tracked uppercase labels on the full-width /match page;
+  // in the narrow stacked panel that looks cramped, so use a plain readable weight there.
+  const headingClass = $derived(
+    stacked ? 'text-sm font-semibold' : 'text-[0.7rem] font-semibold uppercase tracking-[0.2em]',
+  );
 </script>
 
 <div class="flex flex-col gap-8">
@@ -167,6 +177,15 @@
       <Button variant="primary" size="sm" href={resolve('/my/profile')}>Upload CV</Button>
     </div>
   {:else}
+    <!-- The recommendation card — defined once, placed near the top in the stacked panel (where
+         the punchline should lead) and at the bottom on the full-width page. -->
+    {#snippet verdictCard()}
+      <section class="relative rounded-2xl border border-border bg-secondary/40 p-6 sm:p-8">
+        <span class="{headingClass} text-muted-foreground">The verdict</span>
+        <p class="mt-2 border-l-2 border-foreground/20 pl-4 text-lg font-medium leading-relaxed">{analysis?.recommendation}</p>
+      </section>
+    {/snippet}
+
     <!-- Verdict hero: radial gauge + verdict -->
     {#if analysis}
       {@const tone = verdictTone(analysis.overall_score)}
@@ -210,6 +229,11 @@
           </div>
         </div>
       </section>
+    {/if}
+
+    <!-- Stacked panel: lead with the verdict. -->
+    {#if stacked && analysis?.recommendation}
+      {@render verdictCard()}
     {/if}
 
     {#if isStale && !streaming}
@@ -283,10 +307,10 @@
 
     <!-- The report -->
     {#if analysis}
-      <div class="grid gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div class={['grid gap-8', !stacked && 'lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]']}>
         <!-- Dimensions -->
         <section class="flex flex-col gap-5">
-          <h2 class="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Dimensions</h2>
+          <h2 class="{headingClass} text-muted-foreground">Dimensions</h2>
           <div class="flex flex-col gap-5">
             {#each dimensions as d, i (d.key)}
               {@const dt = verdictTone(d.score)}
@@ -306,7 +330,7 @@
 
         <!-- ATS requirements -->
         <section class="flex flex-col gap-5">
-          <h2 class="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Requirements · ATS view</h2>
+          <h2 class="{headingClass} text-muted-foreground">Requirements · ATS view</h2>
           <ul class="flex flex-col divide-y divide-border overflow-hidden rounded-xl border border-border">
             {#each requirements as r, i (i)}
               {@const meta = requirementStatusMeta(r.status)}
@@ -323,10 +347,10 @@
       </div>
 
       {#if analysis.strengths.length || analysis.gaps.length}
-        <div class="grid gap-8 border-t border-border pt-8 sm:grid-cols-2">
+        <div class={['grid gap-8 border-t border-border pt-8', !stacked && 'sm:grid-cols-2']}>
           {#if analysis.strengths.length}
             <section class="flex flex-col gap-3">
-              <h2 class="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-brand-strong">Strengths</h2>
+              <h2 class="{headingClass} text-brand-strong">Strengths</h2>
               <ul class="flex flex-col gap-2.5">
                 {#each analysis.strengths as s, i (i)}
                   <li class="flex gap-2.5 text-sm leading-relaxed">
@@ -339,7 +363,7 @@
           {/if}
           {#if analysis.gaps.length}
             <section class="flex flex-col gap-3">
-              <h2 class="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-destructive">Gaps</h2>
+              <h2 class="{headingClass} text-destructive">Gaps</h2>
               <ul class="flex flex-col gap-2.5">
                 {#each analysis.gaps as g, i (i)}
                   <li class="flex gap-2.5 text-sm leading-relaxed">
@@ -353,11 +377,8 @@
         </div>
       {/if}
 
-      {#if analysis.recommendation}
-        <section class="relative rounded-2xl border border-border bg-secondary/40 p-6 sm:p-8">
-          <span class="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">The verdict</span>
-          <p class="mt-2 border-l-2 border-foreground/20 pl-4 text-lg font-medium leading-relaxed">{analysis.recommendation}</p>
-        </section>
+      {#if !stacked && analysis.recommendation}
+        {@render verdictCard()}
       {/if}
     {/if}
   {/if}
