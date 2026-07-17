@@ -32,6 +32,7 @@
         { label: 'About', href: resolve('/about') },
         { label: 'Open', href: resolve('/open') },
         { label: 'For companies', href: resolve('/for-companies') },
+        { label: 'Contribute', href: resolve('/contribute') },
         { label: 'Submit a job', href: resolve('/submit') },
         { label: 'Privacy', href: resolve('/privacy') },
       ],
