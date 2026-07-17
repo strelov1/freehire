@@ -29,22 +29,11 @@ func NewTalentLyft(c talentlyftHTTP) Source { return talentlyft{http: c} }
 func (talentlyft) Provider() string { return "talentlyft" }
 
 func (s talentlyft) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	var sitemap struct {
-		URLs []struct {
-			Loc string `xml:"loc"`
-		} `xml:"url"`
-	}
 	sitemapURL := fmt.Sprintf("https://%s.talentlyft.com/sitemap.xml", e.Board)
-	if err := s.http.GetXML(ctx, sitemapURL, &sitemap); err != nil {
-		return nil, fmt.Errorf("talentlyft: sitemap %s: %w", e.Board, err)
-	}
-
 	// Keep only posting URLs (the listing root and section pages carry no job code).
-	var urls []string
-	for _, u := range sitemap.URLs {
-		if talentlyftJobID(u.Loc) != "" {
-			urls = append(urls, u.Loc)
-		}
+	urls, err := sitemapJobLocs(ctx, s.http, sitemapURL, talentlyftJobID)
+	if err != nil {
+		return nil, fmt.Errorf("talentlyft: sitemap %s: %w", e.Board, err)
 	}
 
 	return fetchDetails(urls, defaultDetailWorkers, func(u string) (Job, bool) {

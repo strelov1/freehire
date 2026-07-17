@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"regexp"
-	"strings"
 
 	"golang.org/x/net/html"
 )
@@ -44,20 +43,9 @@ func (s thehub) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 		return nil, nil
 	}
 
-	var urls struct {
-		URLs []struct {
-			Loc string `xml:"loc"`
-		} `xml:"url"`
-	}
-	if err := s.http.GetXML(ctx, jobSitemap, &urls); err != nil {
+	locs, err := sitemapJobLocs(ctx, s.http, jobSitemap, thehubJobID)
+	if err != nil {
 		return nil, fmt.Errorf("thehub: job sitemap: %w", err)
-	}
-
-	var locs []string
-	for _, u := range urls.URLs {
-		if thehubJobID(u.Loc) != "" {
-			locs = append(locs, u.Loc)
-		}
 	}
 
 	return fetchDetails(locs, defaultDetailWorkers, func(loc string) (Job, bool) {
@@ -120,23 +108,4 @@ var thehubJobIDPattern = regexp.MustCompile(`/jobs/([0-9a-fA-F]{12,})`)
 // a job posting (so non-job sitemap entries are dropped).
 func thehubJobID(loc string) string {
 	return firstSubmatch(thehubJobIDPattern, loc)
-}
-
-// resolveSubSitemap fetches a sitemap index and returns the first sub-sitemap loc whose URL
-// contains needle, or "" when none matches. Shared by the sitemap-index aggregators.
-func resolveSubSitemap(ctx context.Context, c XMLGetter, indexURL, needle string) (string, error) {
-	var index struct {
-		Sitemaps []struct {
-			Loc string `xml:"loc"`
-		} `xml:"sitemap"`
-	}
-	if err := c.GetXML(ctx, indexURL, &index); err != nil {
-		return "", fmt.Errorf("sitemap index: %w", err)
-	}
-	for _, sm := range index.Sitemaps {
-		if strings.Contains(sm.Loc, needle) {
-			return sm.Loc, nil
-		}
-	}
-	return "", nil
 }

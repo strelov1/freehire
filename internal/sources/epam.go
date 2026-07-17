@@ -31,23 +31,12 @@ func NewEPAM(c epamHTTP) Source { return epam{http: c} }
 func (epam) Provider() string { return "epam" }
 
 func (e epam) Fetch(ctx context.Context, ce CompanyEntry) ([]Job, error) {
-	var sitemap struct {
-		URLs []struct {
-			Loc string `xml:"loc"`
-		} `xml:"url"`
-	}
 	sitemapURL := fmt.Sprintf("https://%s/sitemap.xml.gz", ce.Board)
-	if err := e.http.GetXML(ctx, sitemapURL, &sitemap); err != nil {
-		return nil, fmt.Errorf("epam: sitemap %s: %w", ce.Board, err)
-	}
-
 	// Keep only English vacancy pages (epamJobID is empty for the listing, language roots,
 	// and the /uk//de/… localisations, so each vacancy is ingested once under its English url).
-	var urls []string
-	for _, u := range sitemap.URLs {
-		if epamJobID(u.Loc) != "" {
-			urls = append(urls, u.Loc)
-		}
+	urls, err := sitemapJobLocs(ctx, e.http, sitemapURL, epamJobID)
+	if err != nil {
+		return nil, fmt.Errorf("epam: sitemap %s: %w", ce.Board, err)
 	}
 
 	// Each job's posting comes from its own page fetch, fanned out under a bounded pool.
