@@ -116,6 +116,26 @@ func TestAlfaBankUnknownCityIsEmpty(t *testing.T) {
 	}
 }
 
+func TestAlfaBankStopsOnEmptyPageDespiteHigherTotal(t *testing.T) {
+	// Total is misreported as 250 (larger than the single row actually served). The empty
+	// second page must terminate the crawl; without the guard the loop advances to skip=200
+	// (unrouted here → the fake errors), so a clean single-job return proves it stopped.
+	fake := (&routedHTTP{}).
+		route("listId=cities", alfaCities).
+		route("skip=0", alfaListPage(250,
+			alfaItemJSON("1", "Job", "0100", "/moskva/office-job/job_1", "2026-05-01T09:00:00Z", "<p>x</p>"),
+		)).
+		route("skip=100", alfaListPage(250)) // empty items, but skip+take (200) still < 250
+
+	jobs, err := NewAlfaBank(fake).Fetch(context.Background(), CompanyEntry{Company: "Alfa-Bank", Provider: "alfabank"})
+	if err != nil {
+		t.Fatalf("Fetch: %v (crawl did not stop on the empty page and reached an unrouted skip)", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1 (empty page must stop the crawl)", len(jobs))
+	}
+}
+
 func TestAlfaBankEmptyListYieldsNoJobsNoError(t *testing.T) {
 	fake := (&routedHTTP{}).
 		route("listId=cities", alfaCities).

@@ -100,7 +100,10 @@ func (a alfabank) list(ctx context.Context) ([]alfaItem, error) {
 			return nil, fmt.Errorf("alfabank: list skip %d: %w", skip, err)
 		}
 		all = append(all, resp.Items...)
-		if skip+alfaPageSize >= resp.Total {
+		// Stop at the reported total, but also on any empty page: a Total larger than the rows
+		// actually served (a cap/filter artifact) would otherwise spin forever, since skip never
+		// reaches it and every further page comes back empty.
+		if len(resp.Items) == 0 || skip+alfaPageSize >= resp.Total {
 			break
 		}
 	}
