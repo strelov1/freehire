@@ -11,20 +11,24 @@ import (
 //   - subdomain: board = the leftmost DNS label under a fixed apex (<board>.recruitee.com).
 //   - host:      board = the whole careers host (the tenant identity IS the host, and the TLD
 //     varies by region, e.g. <tenant>.zohorecruit.eu / .com / .in).
+//   - hostpath:  board = "<host>/<first path segment>" (Workday: the tenant is the host, the
+//     site is the first path segment, e.g. acme.wd1.myworkdayjobs.com/Careers).
 //
-// For subdomain and host the board IS the host, so the canonical URL is the bare scheme://host —
-// collapsing a vacancy URL and the board listing to one board.
+// For subdomain and host the board IS the host; for hostpath it is host + site. In all three the
+// canonical URL is stripped to that board, collapsing a vacancy URL and the board listing to one.
 const (
 	modePath      = "path"
 	modeSubdomain = "subdomain"
 	modeHost      = "host"
+	modeHostPath  = "hostpath"
 )
 
 // atsBoards lists the supported multi-tenant ATS: a host (exact or subdomain-suffix match) →
 // its source key and extraction mode. Hosts were verified against each adapter's public job
 // URL. A wrong/missing entry is fail-safe: the link simply isn't recognized (422), never a
-// false board. Single-company brands, aggregators, and vanity-domain ATS (Workday/Taleo/
-// SuccessFactors/Oracle/…) are deliberately absent — their board can't be derived from a URL.
+// false board. Single-company brands, aggregators, and custom-domain ATS (Taleo, SuccessFactors,
+// Oracle, and Workday tenants on their own domain) are absent — their board can't be derived
+// from a URL. Workday's standard *.myworkdayjobs.com hosts ARE derivable (host + site).
 var atsBoards = []struct{ host, source, mode string }{
 	// --- path: board = first path segment on a fixed host ---
 	{"greenhouse.io", "greenhouse", modePath},
@@ -72,6 +76,9 @@ var atsBoards = []struct{ host, source, mode string }{
 
 	// --- host: board = the whole careers host (regional TLD varies) ---
 	{"zohorecruit", "zohorecruit", modeHost},
+
+	// --- hostpath: board = "<host>/<site>" (Workday tenant host + first-path-segment site) ---
+	{"myworkdayjobs.com", "workday", modeHostPath},
 }
 
 // recognizeBoard parses a pasted job link into the company board it belongs to: the source
@@ -102,6 +109,17 @@ func recognizeBoard(rawURL string) (source, board, canonical string, ok bool) {
 		// URL and the board listing to one board.
 		u.RawQuery, u.Fragment, u.Path = "", "", ""
 		return src, board, u.String(), true
+
+	case modeHostPath:
+		// Workday: board = "<host>/<site>" where site is the first path segment (case-preserved,
+		// as the ingest stores it). Canonical strips to scheme://host/site.
+		site := firstPathSegment(u)
+		if site == "" {
+			return "", "", "", false // bare host, no site
+		}
+		u.RawQuery, u.Fragment = "", ""
+		u.Path = "/" + site
+		return src, host + "/" + site, u.String(), true
 	}
 
 	// modePath: the board is the first path segment.
