@@ -221,6 +221,8 @@ func mapCVError(err error) error {
 		return fiber.NewError(fiber.StatusNotFound, "not found")
 	case errors.Is(err, cv.ErrUnknownTemplate):
 		return fiber.NewError(fiber.StatusBadRequest, "unknown template")
+	case errors.Is(err, cv.ErrInvalidPatch):
+		return fiber.NewError(fiber.StatusUnprocessableEntity, "invalid patch")
 	default:
 		return err
 	}

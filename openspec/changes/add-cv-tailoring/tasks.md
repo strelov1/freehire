@@ -19,14 +19,14 @@
 ## 4. Scoped credential
 
 - [x] 4.1 Mint a short-lived API key for the user via the existing `api_keys` machinery (`mintTailoringKey`, 2h TTL; no per-endpoint scope column exists → owner-scoped only). Delivery to the CLI (`~/.freehire` config vs env) is a cross-repo companion concern
-- [ ] 4.2 Test: minted key authenticates the CV endpoints and is owner-scoped (cannot touch another user's CV) — unit test covers hash↔token match; endpoint owner-scoping is exercised in 5.4
+- [x] 4.2 Test: minted key authenticates the CV endpoints and is owner-scoped (cannot touch another user's CV) — unit test covers hash↔token match; endpoint owner-scoping exercised in `TestPatchCVViaKey`
 
 ## 5. HTTP surface + gating
 
-- [ ] 5.1 `PATCH /api/v1/me/cvs/:id` handler (`RequireAuthOrKey` + beta gate) → store patch; 422 on bad addressing, 404 on non-owner
-- [ ] 5.2 `POST /api/v1/me/cvs/tailor` handler (`RequireAuth` + beta gate): 409 when no cached `jobfit.Analysis`, 409 when no résumé; returns `{tailor_cv_id, base_cv_id, analysis, cli_token}`
-- [ ] 5.3 `GET /api/v1/me/cvs/:id/tailor-context` handler (`RequireAuthOrKey` + beta): verdict + recommendation + dimension comments + requirements split `missing-have`/`missing-gap`, from cached analysis, no LLM
-- [ ] 5.4 Wire routes in `internal/handler/handler.go` under the existing `cvGate`; handler integration tests for the three endpoints (preconditions, gating, owner-scoping)
+- [x] 5.1 `PATCH /api/v1/me/cvs/:id` handler (`RequireAuthOrKey` + beta gate) → store patch; 422 on bad addressing, 404 on non-owner
+- [x] 5.2 `POST /api/v1/me/cvs/tailor` handler (`RequireAuth` + beta gate): 409 when no cached `jobfit.Analysis`, 409 when no résumé; returns `{tailor_cv_id, base_cv_id, analysis, cli_token}`
+- [x] 5.3 `GET /api/v1/me/cvs/:id/tailor-context` handler (`RequireAuthOrKey` + beta): verdict + recommendation + dimension comments + requirements split `missing-have`/`missing-gap`, from cached analysis, no LLM
+- [x] 5.4 Wire routes in `internal/handler/handler.go` under the existing `cvGate`; handler integration tests for the three endpoints (preconditions, gating, owner-scoping)
 
 ## 6. Typed contracts
 

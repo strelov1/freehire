@@ -435,6 +435,11 @@ func Register(app *fiber.App, cfg Config) {
 	api.Put("/me/cvs/:id", saved, cvGate, a.UpdateCV)
 	api.Delete("/me/cvs/:id", saved, cvGate, a.DeleteCV)
 	api.Get("/me/cvs/:id/pdf", saved, cvGate, a.RenderCVPDF)
+	// Tailoring: the browser starts a session (cookie-only bootstrap); the agent's CLI drives
+	// the edit + context reads with its minted API key (keyAuth = cookie or Bearer).
+	api.Post("/me/cvs/tailor", saved, cvGate, a.TailorCV)
+	api.Patch("/me/cvs/:id", keyAuth, cvGate, a.PatchCV)
+	api.Get("/me/cvs/:id/tailor-context", keyAuth, cvGate, a.TailorContext)
 
 	// Mail inbox (Gmail connect + hosted mailbox). Open to every signed-in user.
 	// The read + disconnect routes are always registered (empty/no-op when not

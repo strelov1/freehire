@@ -324,7 +324,8 @@ type Querier interface {
 	// which the caller treats as "never seen, eligible".
 	GetBoardCooldown(ctx context.Context, arg GetBoardCooldownParams) (pgtype.Timestamptz, error)
 	// One CV owned by the user, including the full data blob. Owner-scoped: a foreign or
-	// missing id returns no row (the handler maps it to 404).
+	// missing id returns no row (the handler maps it to 404). job_id is NULL for a base CV and
+	// the vacancy id for a tailored copy — the tailoring-context read resolves it to the analysis.
 	GetCVByID(ctx context.Context, arg GetCVByIDParams) (GetCVByIDRow, error)
 	// SELECT * (not an explicit column list) so the generated row stays db.Company as
 	// the table grows columns (e.g. collections); an explicit subset makes sqlc emit a

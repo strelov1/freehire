@@ -33,6 +33,8 @@ type Meta struct {
 // Record is a CV with its full document body.
 type Record struct {
 	Meta
+	// JobID is the vacancy a tailored CV is bound to, or 0 for a base CV (job_id NULL).
+	JobID    int64
 	Document Document
 }
 
@@ -103,8 +105,17 @@ func (s *Store) Get(ctx context.Context, id, userID int64) (Record, error) {
 	}
 	return Record{
 		Meta:     Meta{ID: row.ID, Title: row.Title, TemplateID: row.TemplateID, CreatedAt: row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time},
+		JobID:    int8Value(row.JobID),
 		Document: doc,
 	}, nil
+}
+
+// int8Value unwraps a nullable bigint to its value, mapping NULL to 0.
+func int8Value(v pgtype.Int8) int64 {
+	if v.Valid {
+		return v.Int64
+	}
+	return 0
 }
 
 // Update sanitizes and replaces an owned CV's editable fields, or returns ErrNotFound.

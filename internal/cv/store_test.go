@@ -52,7 +52,7 @@ func (f *fakeRepo) Get(_ context.Context, id, userID int64) (db.GetCVByIDRow, er
 	if !ok || r.userID != userID {
 		return db.GetCVByIDRow{}, pgx.ErrNoRows
 	}
-	return db.GetCVByIDRow{ID: id, Title: r.title, TemplateID: r.templateID, Data: r.data, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
+	return db.GetCVByIDRow{ID: id, Title: r.title, TemplateID: r.templateID, Data: r.data, JobID: pgtype.Int8{Int64: r.jobID, Valid: r.jobID != 0}, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
 }
 
 func (f *fakeRepo) Update(_ context.Context, id, userID int64, title, templateID string, data []byte) (db.UpdateCVRow, error) {

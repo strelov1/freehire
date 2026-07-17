@@ -15,8 +15,9 @@ ORDER BY updated_at DESC;
 
 -- name: GetCVByID :one
 -- One CV owned by the user, including the full data blob. Owner-scoped: a foreign or
--- missing id returns no row (the handler maps it to 404).
-SELECT id, title, template_id, data, created_at, updated_at
+-- missing id returns no row (the handler maps it to 404). job_id is NULL for a base CV and
+-- the vacancy id for a tailored copy — the tailoring-context read resolves it to the analysis.
+SELECT id, title, template_id, data, job_id, created_at, updated_at
 FROM cvs
 WHERE id = $1 AND user_id = $2;
 

@@ -151,7 +151,7 @@ func (q *Queries) GetBaseCVByUser(ctx context.Context, userID int64) (GetBaseCVB
 }
 
 const getCVByID = `-- name: GetCVByID :one
-SELECT id, title, template_id, data, created_at, updated_at
+SELECT id, title, template_id, data, job_id, created_at, updated_at
 FROM cvs
 WHERE id = $1 AND user_id = $2
 `
@@ -166,12 +166,14 @@ type GetCVByIDRow struct {
 	Title      string             `json:"title"`
 	TemplateID string             `json:"template_id"`
 	Data       []byte             `json:"data"`
+	JobID      pgtype.Int8        `json:"job_id"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
 // One CV owned by the user, including the full data blob. Owner-scoped: a foreign or
-// missing id returns no row (the handler maps it to 404).
+// missing id returns no row (the handler maps it to 404). job_id is NULL for a base CV and
+// the vacancy id for a tailored copy — the tailoring-context read resolves it to the analysis.
 func (q *Queries) GetCVByID(ctx context.Context, arg GetCVByIDParams) (GetCVByIDRow, error) {
 	row := q.db.QueryRow(ctx, getCVByID, arg.ID, arg.UserID)
 	var i GetCVByIDRow
@@ -180,6 +182,7 @@ func (q *Queries) GetCVByID(ctx context.Context, arg GetCVByIDParams) (GetCVByID
 		&i.Title,
 		&i.TemplateID,
 		&i.Data,
+		&i.JobID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
