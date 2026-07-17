@@ -15,11 +15,12 @@
   const compact = (n: number | null, fallback: string) => (n == null ? fallback : `${nf.format(n)}+`);
 
   // The under-the-fold stats strip: two live totals, then the two constants —
-  // ATS breadth and licensing — that don't need a query.
+  // ATS breadth and licensing — that don't need a query. The ATS count mirrors the
+  // /open stat-strip: registered adapters in internal/sources/source.go `All()`.
   const figures = $derived([
     { value: compact(stats.jobs, '3.1M+'), label: 'open jobs' },
     { value: compact(stats.companies, '220K+'), label: 'companies' },
-    { value: '98', label: 'ATS platforms' },
+    { value: '137', label: 'ATS platforms' },
     { value: '100%', label: 'open source' },
   ]);
 
