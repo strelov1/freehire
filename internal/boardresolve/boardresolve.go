@@ -12,8 +12,10 @@ package boardresolve
 import (
 	"context"
 	"net/url"
+	"regexp"
 
 	"github.com/strelov1/freehire/internal/atsdetect"
+	"github.com/strelov1/freehire/internal/contribution"
 	"github.com/strelov1/freehire/internal/sources"
 )
 
@@ -41,20 +43,38 @@ type Resolver struct {
 // New builds a Resolver over the default SSRF-guarded sources client.
 func New() *Resolver { return &Resolver{http: sources.NewClient()} }
 
-// Resolve fetches rawURL and detects an embedded ATS board, returning the catalogue
-// (source, board) and a canonical URL to store (query/fragment stripped). ok=false when the
-// fetch fails, no board is detected, or the detected provider is not one we trust to match the
-// ingest namespace.
+// absURLRe extracts absolute http(s) URLs from markup (href/src or bare URLs in inline JSON),
+// stopping at the first quote, angle bracket, or whitespace.
+var absURLRe = regexp.MustCompile(`https?://[^\s"'<>)\\]+`)
+
+// Resolve fetches rawURL and finds the ATS board it belongs to, returning the catalogue
+// (source, board) and a canonical URL to store. It looks two ways:
+//  1. the Greenhouse embed shape (script for=<board>) via atsdetect — which the URL recognizer
+//     can't parse (it would read the path word "embed" as the board);
+//  2. any supported ATS apply/board URL embedded in the page, run through the full
+//     contribution.RecognizeBoard (all ~40 ATS, all modes) — this catches a company careers page
+//     that links to its recruitee/peopleforce/zoho/workday board.
+//
+// ok=false when the fetch fails or no board is found.
 func (r *Resolver) Resolve(ctx context.Context, rawURL string) (source, board, canonical string, ok bool) {
 	html, err := r.http.GetText(ctx, rawURL)
 	if err != nil {
 		return "", "", "", false
 	}
-	provider, slug, ok := atsdetect.Detect(html)
-	if !ok || !trusted[provider] || slug == "" {
-		return "", "", "", false
+
+	// 1. Greenhouse embed (and atsdetect's own gh/lever/ashby URL scan). Trusted set only.
+	if provider, slug, ok := atsdetect.Detect(html); ok && trusted[provider] && slug != "" {
+		return provider, slug, stripTails(rawURL), true
 	}
-	return provider, slug, stripTails(rawURL), true
+
+	// 2. Any supported ATS URL in the page, via the full recognizer. First recognized wins;
+	//    a Greenhouse embed URL misparses to board "embed" (step 1 owns Greenhouse), so skip it.
+	for _, u := range absURLRe.FindAllString(html, -1) {
+		if s, b, _, matched := contribution.RecognizeBoard(u); matched && b != "embed" {
+			return s, b, stripTails(rawURL), true
+		}
+	}
+	return "", "", "", false
 }
 
 // stripTails returns rawURL without its query string or fragment (the identifying part of a

@@ -86,7 +86,7 @@ func New(repo Repository, resolver Resolver) *Service {
 // already-tracked (409) before any write; the record+point transaction last, where a
 // duplicate-board race surfaces as ErrBoardAlreadyContributed (409).
 func (s *Service) Submit(ctx context.Context, submittedBy int64, rawURL string) (rec Contribution, source, board string, err error) {
-	source, board, canonical, ok := recognizeBoard(rawURL)
+	source, board, canonical, ok := RecognizeBoard(rawURL)
 	if !ok && s.resolver != nil {
 		// Unknown host — the link may be a company careers page with an embedded ATS. Fetch it
 		// and detect the board (network fallback).

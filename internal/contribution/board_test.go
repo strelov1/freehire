@@ -54,15 +54,15 @@ func TestRecognizeBoard(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			src, board, canon, ok := recognizeBoard(c.raw)
+			src, board, canon, ok := RecognizeBoard(c.raw)
 			if ok != c.wantOK {
-				t.Fatalf("recognizeBoard(%q) ok = %v, want %v", c.raw, ok, c.wantOK)
+				t.Fatalf("RecognizeBoard(%q) ok = %v, want %v", c.raw, ok, c.wantOK)
 			}
 			if !ok {
 				return
 			}
 			if src != c.wantSource || board != c.wantBoard || canon != c.wantCanonical {
-				t.Errorf("recognizeBoard(%q) = (%q, %q, %q), want (%q, %q, %q)",
+				t.Errorf("RecognizeBoard(%q) = (%q, %q, %q), want (%q, %q, %q)",
 					c.raw, src, board, canon, c.wantSource, c.wantBoard, c.wantCanonical)
 			}
 		})
@@ -83,8 +83,8 @@ func TestVacancyAndListingSameBoard(t *testing.T) {
 		{"https://gm.wd5.myworkdayjobs.com/Careers_GM/job/x/Eng_JR-1", "https://gm.wd5.myworkdayjobs.com/Careers_GM"},
 	}
 	for _, p := range pairs {
-		sa, ba, _, oka := recognizeBoard(p[0])
-		sb, bb, _, okb := recognizeBoard(p[1])
+		sa, ba, _, oka := RecognizeBoard(p[0])
+		sb, bb, _, okb := RecognizeBoard(p[1])
 		if !oka || !okb || sa != sb || ba != bb {
 			t.Errorf("boards diverged: (%q,%q,%v) vs (%q,%q,%v)", sa, ba, oka, sb, bb, okb)
 		}

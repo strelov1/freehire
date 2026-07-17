@@ -37,6 +37,16 @@ func TestResolveDetectsGreenhouseEmbed(t *testing.T) {
 	}
 }
 
+func TestResolveDetectsPeopleForceApplyUrl(t *testing.T) {
+	// A company careers page on its own domain that links to its PeopleForce board — caught by
+	// scanning the page's URLs through the full recognizer (atsdetect doesn't know peopleforce).
+	html := `{"applyUrl":"https://akvelon.peopleforce.io/careers/v/215183-senior-dev/a/new"}`
+	src, board, _, ok := resolver(html, nil).Resolve(context.Background(), "https://akvelon.dev/jobs/215183")
+	if !ok || src != "peopleforce" || board != "akvelon" {
+		t.Errorf("(%q,%q,%v), want (peopleforce, akvelon, true)", src, board, ok)
+	}
+}
+
 func TestResolveDetectsDirectAshbyLinkOnPage(t *testing.T) {
 	html := `<a href="https://jobs.ashbyhq.com/acme/uuid">Apply</a>`
 	src, board, _, ok := resolver(html, nil).Resolve(context.Background(), "https://acme.io/careers")
@@ -45,12 +55,19 @@ func TestResolveDetectsDirectAshbyLinkOnPage(t *testing.T) {
 	}
 }
 
-func TestResolveRejectsUntrustedProvider(t *testing.T) {
-	// A page that only exposes a Workday link: atsdetect may recognize it, but workday's board
-	// semantics don't match our ingest namespace, so we decline.
-	html := `<a href="https://acme.wd1.myworkdayjobs.com/en-US/careers/job/123">Apply</a>`
+func TestResolveDetectsWorkdayLinkOnPage(t *testing.T) {
+	html := `<a href="https://acme.wd1.myworkdayjobs.com/Careers/job/x/Eng_JR-1">Apply</a>`
+	src, board, _, ok := resolver(html, nil).Resolve(context.Background(), "https://acme.com/jobs")
+	if !ok || src != "workday" || board != "acme.wd1.myworkdayjobs.com/Careers" {
+		t.Errorf("(%q,%q,%v), want (workday, acme.wd1.myworkdayjobs.com/Careers, true)", src, board, ok)
+	}
+}
+
+func TestResolveRejectsUnsupportedAts(t *testing.T) {
+	// Taleo isn't in the recognizer — a page exposing only a Taleo link resolves nothing.
+	html := `<a href="https://acme.taleo.net/careersection/x/jobdetail.ftl?job=123">Apply</a>`
 	if _, _, _, ok := resolver(html, nil).Resolve(context.Background(), "https://acme.com/jobs"); ok {
-		t.Error("ok=true for an untrusted provider, want false")
+		t.Error("ok=true for an unsupported ATS, want false")
 	}
 }
 

@@ -81,10 +81,10 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"myworkdayjobs.com", "workday", modeHostPath},
 }
 
-// recognizeBoard parses a pasted job link into the company board it belongs to: the source
+// RecognizeBoard parses a pasted job link into the company board it belongs to: the source
 // (ATS provider), the board slug, and the canonical URL to store. ok=false when the host is
 // not a supported ATS or the URL carries no board segment/label.
-func recognizeBoard(rawURL string) (source, board, canonical string, ok bool) {
+func RecognizeBoard(rawURL string) (source, board, canonical string, ok bool) {
 	u, err := url.Parse(rawURL)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return "", "", "", false
