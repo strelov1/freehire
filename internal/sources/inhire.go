@@ -33,7 +33,6 @@ type inhirePost struct {
 	DisplayName   string `json:"displayName"`
 	WorkplaceType string `json:"workplaceType"`
 	Location      string `json:"location"`
-	Status        string `json:"status"`
 }
 
 func (h inhire) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {

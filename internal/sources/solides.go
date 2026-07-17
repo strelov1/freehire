@@ -48,7 +48,6 @@ type solidesJob struct {
 		Name string `json:"name"`
 	} `json:"city"`
 	State struct {
-		Name string `json:"name"`
 		Code string `json:"code"`
 	} `json:"state"`
 	HomeOffice bool   `json:"homeOffice"`
