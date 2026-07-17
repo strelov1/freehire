@@ -22,15 +22,24 @@ export function assistantWsUrl(): string {
   return `${proto}//${location.host}/assistant-api/ws`;
 }
 
-/** Create the assistant session. The client sends an empty body and knows
- *  nothing about the agent's configuration — the backend decides everything
- *  (harness, persona/system prompt, the `freehire`-only sandbox, scope). */
-export async function createSession(): Promise<string> {
+/** Optional context that turns the new session into a CV-tailoring session: the agent is
+ *  seeded to reframe the given CV toward a vacancy, acting on the freehire API with the
+ *  short-lived key the tailoring bootstrap minted. */
+export interface TailoringSession {
+  cli_token: string;
+  cv_id: number;
+  base_cv_id: number;
+}
+
+/** Create the assistant session. For a normal chat the client sends an empty body and the
+ *  backend decides everything (harness, persona, sandbox, scope). Passing `tailoring` seeds
+ *  a CV-tailoring session instead (persona + FREEHIRE_TOKEN); the backend still owns the rest. */
+export async function createSession(tailoring?: TailoringSession): Promise<string> {
   const res = await fetch(`${BASE}/sessions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     credentials: 'include',
-    body: '{}',
+    body: JSON.stringify(tailoring ? { tailoring } : {}),
   });
   if (!res.ok) throw new Error(`could not create session (${res.status})`);
   const body = (await res.json()) as { session_id?: string };

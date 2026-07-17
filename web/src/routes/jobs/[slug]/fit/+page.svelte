@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import { ArrowLeft, Sparkles } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
+  import { createSession } from '$lib/assistant/api';
   import { currentUser } from '$lib/auth.svelte';
   import { Button } from '$lib/ui';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
@@ -28,8 +29,16 @@
     tailoring = true;
     tailorError = '';
     try {
+      // Bootstrap the tailored CV + cached analysis + a short-lived CLI key, then open an
+      // agent session seeded to reframe it — the agent drives the honest-wall dialogue and
+      // edits the CV through `freehire cv …` with that key.
       const res = await api.tailorCv(data.job.public_slug);
-      await goto(`/my/cvs/${res.tailor_cv_id}`);
+      const sessionId = await createSession({
+        cli_token: res.cli_token,
+        cv_id: res.tailor_cv_id,
+        base_cv_id: res.base_cv_id,
+      });
+      await goto(`/my/assistant?session=${sessionId}`);
     } catch (e) {
       tailorError =
         e instanceof ApiError ? e.message : 'Could not start tailoring. Please try again.';

@@ -267,9 +267,25 @@
           fromSummary(s, labelCache[s.session_id], fallbackLabel(s.created_at)),
         ),
       );
-      const newest = sessions[0];
-      if (newest) await openSession(newest.id);
-      else await createAndOpen();
+      // ?session=<id> opens a specific session (e.g. a tailoring session just started from
+      // the fit page); ensure it shows in the list even if listSessions is momentarily stale.
+      // Otherwise open the newest, or start a fresh chat when there are none.
+      const requested = new URLSearchParams(location.search).get('session');
+      if (requested) {
+        if (!sessions.some((s) => s.id === requested)) {
+          sessions = upsertSession(sessions, {
+            id: requested,
+            label: 'CV tailoring',
+            createdAt: Math.floor(Date.now() / 1000),
+            live: true,
+          });
+        }
+        await openSession(requested);
+      } else if (sessions[0]) {
+        await openSession(sessions[0].id);
+      } else {
+        await createAndOpen();
+      }
       phase = 'ready';
     } catch (err) {
       error = err instanceof Error ? err.message : 'Could not reach the agent backend.';
