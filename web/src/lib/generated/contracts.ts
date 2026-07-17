@@ -580,7 +580,38 @@ export interface Certification {
   year?: string;
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'breezy', 'briefhq', 'careerplug', 'careerspage', 'clinch', 'comeet', 'cornerstone', 'deel', 'djinni', 'earcu', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'himalayas', 'hireology', 'huntflow', 'hurma', 'icims', 'infojobs', 'inhire', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobstash', 'jobtech', 'jobvite', 'join', 'justjoin', 'lever', 'likeit', 'loxo', 'luxoft', 'mindsight', 'mycareersfuture', 'neogov', 'northstone', 'oracle', 'pageup', 'paycom', 'paylocity', 'personio', 'phenom', 'pinpoint', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'solides', 'spark', 'successfactors', 'talentadore', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'tyomarkkinatori', 'ukg', 'vagas', 'vention', 'vouch', 'wantapply', 'wantedkr', 'weworkremotely', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
+//////////
+// source: patch.go
+
+/**
+ * PatchOp is the discriminator selecting which field-level edit a Patch performs.
+ */
+export type PatchOp = string;
+export const PatchSetSummary: PatchOp = "set_summary";
+export const PatchSetHeaderField: PatchOp = "set_header_field";
+export const PatchAddBullet: PatchOp = "add_bullet";
+export const PatchReplaceBullet: PatchOp = "replace_bullet";
+export const PatchRemoveBullet: PatchOp = "remove_bullet";
+export const PatchReorderBullets: PatchOp = "reorder_bullets";
+export const PatchSetSkillGroup: PatchOp = "set_skill_group";
+/**
+ * Patch is one field-level edit to a CV Document. Op selects the operation; the remaining
+ * fields are its address and payload, and only the ones an op needs are read. A patch names
+ * the single field it changes rather than re-emitting the document, so an LLM tailoring a CV
+ * mid-session cannot silently drop untouched sections.
+ */
+export interface Patch {
+  op: PatchOp;
+  experience?: number /* int */; // index into Document.Experience
+  bullet?: number /* int */; // index into the entry's Bullets (replace/remove)
+  field?: string; // header field name (set_header_field)
+  value?: string; // summary / bullet / header value
+  order?: number /* int */[]; // permutation of bullet indices (reorder_bullets)
+  group?: string; // skill group name (set_skill_group)
+  items?: string[]; // skill group items (set_skill_group)
+}
+
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'breezy', 'briefhq', 'careerplug', 'careerspage', 'catsone', 'cleverstaff', 'clinch', 'comeet', 'cornerstone', 'deel', 'djinni', 'earcu', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'himalayas', 'hireology', 'huntflow', 'hurma', 'icims', 'infojobs', 'inhire', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobstash', 'jobtech', 'jobvite', 'join', 'justjoin', 'lever', 'likeit', 'loxo', 'luxoft', 'mindsight', 'mycareersfuture', 'neogov', 'northstone', 'odoo', 'oracle', 'pageup', 'paycom', 'paylocity', 'peopleforce', 'personio', 'phenom', 'pinpoint', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'solides', 'spark', 'successfactors', 'talentadore', 'talentlyft', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'tyomarkkinatori', 'ukg', 'vagas', 'vention', 'vouch', 'wantapply', 'wantedkr', 'weworkremotely', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];

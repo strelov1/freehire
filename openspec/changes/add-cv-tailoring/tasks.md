@@ -30,7 +30,7 @@
 
 ## 6. Typed contracts
 
-- [ ] 6.1 Register `cv.Patch` and the tailor-context wire struct in `cmd/gen-contracts`; run it; verify TS lands in `web/src/lib/generated/contracts.ts`
+- [x] 6.1 Register `cv.Patch` in `cmd/gen-contracts` (added `patch.go` to the cv package); `PatchOp` + `Patch` land in `contracts.ts`. The tailor-context/response wrappers are handler projections composed on the web from the already-emitted `Analysis`/`Requirement`/`Dimension`, not emitted (unexported handler structs)
 
 ## 7. Web entry point
 

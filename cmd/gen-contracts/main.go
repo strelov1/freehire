@@ -130,10 +130,11 @@ func genStructs() (string, error) {
 			{
 				// The editable CV-builder document wire shape (Document + Header +
 				// Experience + Education + SkillGroup + Language + Project +
-				// Certification). Only cv.go — seed/store/renderer are server-only.
+				// Certification) and the tailoring Patch. Only the wire files — seed/store/
+				// renderer are server-only.
 				Path:         "github.com/strelov1/freehire/internal/cv",
 				OutputPath:   cvTS,
-				IncludeFiles: []string{"cv.go"},
+				IncludeFiles: []string{"cv.go", "patch.go"},
 			},
 		},
 	}
