@@ -34,11 +34,7 @@ func NewDeel(c HTMLGetter) Source { return deel{http: c} }
 func (deel) Provider() string { return "deel" }
 
 func (d deel) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	root, err := d.http.GetHTML(ctx, fmt.Sprintf(deelBoardURL, e.Board))
-	if err != nil {
-		return nil, fmt.Errorf("deel: board %q: %w", e.Board, err)
-	}
-	flight, err := decodeNextFlight(root)
+	flight, err := fetchFlight(ctx, d.http, fmt.Sprintf(deelBoardURL, e.Board))
 	if err != nil {
 		return nil, fmt.Errorf("deel: board %q: %w", e.Board, err)
 	}
@@ -123,15 +119,7 @@ type deelPosting struct {
 // array is an error (a markup change must surface loudly rather than silently empty the
 // catalogue); an empty array is valid and yields no postings.
 func extractDeelPostings(flight string) ([]deelPosting, error) {
-	raw, ok := bracketSlice(flight, `"jobPostings":`, '[', ']')
-	if !ok {
-		return nil, fmt.Errorf("jobPostings payload not found")
-	}
-	var postings []deelPosting
-	if err := json.Unmarshal([]byte(raw), &postings); err != nil {
-		return nil, fmt.Errorf("decode jobPostings: %w", err)
-	}
-	return postings, nil
+	return flightArray[deelPosting](flight, `"jobPostings":`)
 }
 
 // extractDeelOrgName reads careerPageSettings.preferredOrganizationName from the flight

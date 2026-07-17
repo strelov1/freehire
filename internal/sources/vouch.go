@@ -2,7 +2,6 @@ package sources
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -30,24 +29,14 @@ func (vouch) Provider() string { return "vouch" }
 
 func (s vouch) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	pageURL := fmt.Sprintf("%s/companies/%s", vouchBaseURL, e.Board)
-	root, err := s.http.GetHTML(ctx, pageURL)
+	flight, err := fetchFlight(ctx, s.http, pageURL)
 	if err != nil {
 		return nil, fmt.Errorf("vouch: board %q: %w", e.Board, err)
 	}
-	flight, err := decodeNextFlight(root)
+	// The postings are the flight's "listings":[…] array.
+	listings, err := flightArray[vouchListing](flight, `"listings":`)
 	if err != nil {
 		return nil, fmt.Errorf("vouch: board %q: %w", e.Board, err)
-	}
-	// The postings are the flight's "listings":[…] array. A missing array is an error (a
-	// markup change must surface loudly rather than silently empty the catalogue); an empty
-	// array is valid and yields no jobs.
-	raw, ok := bracketSlice(flight, `"listings":`, '[', ']')
-	if !ok {
-		return nil, fmt.Errorf("vouch: board %q: listings payload not found", e.Board)
-	}
-	var listings []vouchListing
-	if err := json.Unmarshal([]byte(raw), &listings); err != nil {
-		return nil, fmt.Errorf("vouch: board %q: decode listings: %w", e.Board, err)
 	}
 
 	var jobs []Job

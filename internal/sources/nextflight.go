@@ -1,6 +1,7 @@
 package sources
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -12,7 +13,33 @@ import (
 // Shared Next.js App Router RSC-flight primitives. A Next.js server-rendered page inlines
 // its data as a sequence of self.__next_f.push([1,"…"]) chunks; concatenating and
 // JS-string-decoding the chunks yields one flight string that embeds the page's JSON.
-// The deel and vouch adapters both read their postings out of this stream.
+// The deel, vouch, and topco adapters read their postings out of this stream.
+
+// fetchFlight fetches a Next.js page and returns its decoded RSC-flight stream — the shared
+// opener for the flight adapters (they wrap the error with their own board context).
+func fetchFlight(ctx context.Context, c HTMLGetter, url string) (string, error) {
+	root, err := c.GetHTML(ctx, url)
+	if err != nil {
+		return "", err
+	}
+	return decodeNextFlight(root)
+}
+
+// flightArray decodes the JSON array that follows key in the flight stream into a []T. A
+// missing array is an error — a markup change must surface loudly rather than silently empty
+// the catalogue; an empty array is valid and yields no elements. key includes the trailing
+// colon (e.g. `"listings":`).
+func flightArray[T any](flight, key string) ([]T, error) {
+	raw, ok := bracketSlice(flight, key, '[', ']')
+	if !ok {
+		return nil, fmt.Errorf("flight array %s not found", key)
+	}
+	var out []T
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil, fmt.Errorf("decode flight array %s: %w", key, err)
+	}
+	return out, nil
+}
 
 // nextFlightPush captures the JS-string body of one self.__next_f.push([1,"…"]) flight
 // chunk (the init push, push([0]), carries no [1,"…"] payload and is ignored). The capture

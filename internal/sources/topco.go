@@ -54,24 +54,14 @@ type topcoVacancy struct {
 }
 
 func (s topco) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	root, err := s.http.GetHTML(ctx, topcoCareersURL)
-	if err != nil {
-		return nil, fmt.Errorf("topco: careers page: %w", err)
-	}
-	flight, err := decodeNextFlight(root)
+	flight, err := fetchFlight(ctx, s.http, topcoCareersURL)
 	if err != nil {
 		return nil, fmt.Errorf("topco: %w", err)
 	}
-	// The postings are the flight's "vacancies":[…] array. A missing array is an error (a
-	// markup change must surface loudly rather than silently empty the catalogue); an empty
-	// array is valid and yields no jobs.
-	raw, ok := bracketSlice(flight, `"vacancies":`, '[', ']')
-	if !ok {
-		return nil, fmt.Errorf("topco: vacancies payload not found")
-	}
-	var vacancies []topcoVacancy
-	if err := json.Unmarshal([]byte(raw), &vacancies); err != nil {
-		return nil, fmt.Errorf("topco: decode vacancies: %w", err)
+	// The postings are the flight's "vacancies":[…] array.
+	vacancies, err := flightArray[topcoVacancy](flight, `"vacancies":`)
+	if err != nil {
+		return nil, fmt.Errorf("topco: %w", err)
 	}
 
 	// Each posting takes one RSC detail fetch for its body; a failed fetch keeps the posting
