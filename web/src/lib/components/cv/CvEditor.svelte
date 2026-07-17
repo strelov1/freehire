@@ -21,7 +21,9 @@
   // `as entry` and binds to the entry's fields — Svelte proxies each element of the
   // $state array, so edits flow back without index-based access.
 
-  let { id }: { id: number } = $props();
+  // `embedded` drops the standalone chrome (the "All CVs" back-link) when the editor lives
+  // inside the tailoring workspace tab, where navigation is owned by the surrounding surface.
+  let { id, embedded = false }: { id: number; embedded?: boolean } = $props();
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   let error = $state<string | null>(null);
@@ -84,9 +86,13 @@
 {:else}
   <div class="space-y-8">
     <div class="flex items-center justify-between gap-4">
-      <a href="/my/cvs" class="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft class="h-4 w-4" /> All CVs
-      </a>
+      {#if embedded}
+        <span></span>
+      {:else}
+        <a href="/my/cvs" class="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          <ArrowLeft class="h-4 w-4" /> All CVs
+        </a>
+      {/if}
       <div class="flex items-center gap-2">
         {#if notice}<span class="text-sm text-muted-foreground">{notice}</span>{/if}
         {#if error}<span class="text-sm text-destructive">{error}</span>{/if}

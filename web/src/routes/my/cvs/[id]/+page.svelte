@@ -1,24 +1,25 @@
 <script lang="ts">
+  // Legacy entry point: the standalone CV editor moved into the tailoring workspace tab. Resolve
+  // this CV's vacancy slug from the tailored list and redirect into /tailor/<slug>?cv=<id>. A CV
+  // that isn't tied to a vacancy (or a load failure) falls back to the tailored-CV list.
+  import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { currentUser } from '$lib/auth.svelte';
-  import CvEditor from '$lib/components/cv/CvEditor.svelte';
+  import { api } from '$lib/api';
 
   const id = $derived(Number(page.params.id));
-  const eligible = $derived(
-    currentUser()?.beta_tester === true || currentUser()?.role === 'moderator',
-  );
+
+  onMount(async () => {
+    try {
+      const items = await api.listCvs();
+      const match = items.find((cv) => cv.id === id);
+      await goto(match ? `/tailor/${match.job_slug}?cv=${id}` : '/my/cvs', { replaceState: true });
+    } catch {
+      await goto('/my/cvs', { replaceState: true });
+    }
+  });
 </script>
 
-<svelte:head>
-  <title>Edit CV — freehire</title>
-</svelte:head>
+<svelte:head><title>Opening CV… — freehire</title></svelte:head>
 
-<div class="max-w-3xl">
-  {#if eligible}
-    {#key id}
-      <CvEditor {id} />
-    {/key}
-  {:else}
-    <p class="text-muted-foreground">The CV builder is in beta and not available on your account yet.</p>
-  {/if}
-</div>
+<p class="text-muted-foreground">Opening your tailoring workspace…</p>

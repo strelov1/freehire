@@ -23,9 +23,18 @@ export interface CvMeta {
   updated_at: string;
 }
 
-/** A CV with its full editable document. */
+/** A CV with its full editable document. `agent_session_id` is the roy session bound to a
+ *  tailored CV (empty when none) — the workspace resumes it. */
 export interface CvRecord extends CvMeta {
+  agent_session_id: string;
   document: Document;
+}
+
+/** A tailored CV in the /my/cvs re-open list: metadata plus the vacancy slug and the bound
+ *  agent session, so a row links straight to its tailoring workspace. */
+export interface CvTailoredItem extends CvMeta {
+  job_slug: string;
+  agent_session_id: string;
 }
 
 /**

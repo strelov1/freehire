@@ -16,17 +16,17 @@
 
 ## 4. Frontend: /tailor resume mode + editor tab
 
-- [ ] 4.1 `api`: `setCvSession(id, sessionId)`; extend CV list/detail types with `agent_session_id` + `job_slug`
-- [ ] 4.2 `/tailor/[slug]`: resume mode (`?cv=<id>` → GET CV + job + analysis, attach existing `agent_session_id`, no kickoff); bootstrap mode stores the session id via `setCvSession` after `createSession`
-- [ ] 4.3 `ArtifactPanel`: an **Edit** tab reusing `CvEditor` (load + save the tailored CV)
-- [ ] 4.4 `<AssistantChat>` already opens a given `session` with no kickoff — verify resume attaches without re-sending
+- [x] 4.1 `api`: `setCvSession(id, sessionId)`; extend CV list/detail types with `agent_session_id` + `job_slug`
+- [x] 4.2 `/tailor/[slug]`: resume mode (`?cv=<id>` → GET CV + job + analysis, attach existing `agent_session_id`, no kickoff); bootstrap mode stores the session id via `setCvSession` after `createSession`
+- [x] 4.3 `ArtifactPanel`: an **Edit** tab reusing `CvEditor` (load + save the tailored CV); plus an "Open PDF" action opening the CV in a new tab
+- [x] 4.4 `<AssistantChat>` already opens a given `session` with no kickoff — verify resume attaches without re-sending
 
 ## 5. Frontend: /my/cvs rework
 
-- [ ] 5.1 `CvList`: drop the create button; list tailored CVs; each row → `/tailor/<job_slug>?cv=<id>`
-- [ ] 5.2 `/my/cvs/[id]` editor route → redirect into the workspace (`/tailor/<slug>?cv=<id>`)
+- [x] 5.1 `CvList`: drop the create button; list tailored CVs; each row → `/tailor/<job_slug>?cv=<id>`
+- [x] 5.2 `/my/cvs/[id]` editor route → redirect into the workspace (`/tailor/<slug>?cv=<id>`)
 
 ## 6. Verify
 
-- [ ] 6.1 `svelte-check` + `vitest` + `npm run build` green
+- [x] 6.1 `svelte-check` (0 errors) + `vitest` (301 pass) + `npm run build` green
 - [ ] 6.2 Drive: match → tailor (fresh, stores session) → /my/cvs lists it → re-open resumes the SAME session (no kickoff) → Edit tab persists a field

@@ -4,9 +4,11 @@
   // verdict. JD and verdict reuse the SAME components the job page / fit page use, so they read
   // identically. Splitter width is clamped by the vitest-covered clampWidth.
   import { clampWidth } from './geometry';
+  import { ExternalLink } from '@lucide/svelte';
   import { api } from '$lib/api';
   import JobDescription from '$lib/components/JobDescription.svelte';
   import JobFitFull from '$lib/components/JobFitFull.svelte';
+  import CvEditor from '$lib/components/cv/CvEditor.svelte';
   import type { Analysis } from '$lib/generated/contracts';
   import type { Job, JobFitResponse } from '$lib/types';
 
@@ -22,9 +24,10 @@
     refreshKey?: number;
   } = $props();
 
-  type Tab = 'cv' | 'jd' | 'verdict';
+  type Tab = 'cv' | 'edit' | 'jd' | 'verdict';
   const tabs: [Tab, string][] = [
     ['cv', 'CV'],
+    ['edit', 'Edit'],
     ['jd', 'Job description'],
     ['verdict', 'Verdict'],
   ];
@@ -65,24 +68,40 @@
   class="hidden shrink-0 flex-col border-l border-border bg-background lg:flex"
   style="width: {width}px"
 >
-  <div class="flex items-center gap-1 border-b border-border px-2 py-1.5 text-sm">
-    {#each tabs as [id, label] (id)}
-      <button
-        type="button"
-        onclick={() => (tab = id)}
-        class={[
-          'rounded px-2 py-1 transition-colors',
-          tab === id ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:text-foreground',
-        ]}
-      >
-        {label}
-      </button>
-    {/each}
+  <div class="flex items-center justify-between border-b border-border px-2 py-1.5 text-sm">
+    <div class="flex items-center gap-1">
+      {#each tabs as [id, label] (id)}
+        <button
+          type="button"
+          onclick={() => (tab = id)}
+          class={[
+            'rounded px-2 py-1 transition-colors',
+            tab === id ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:text-foreground',
+          ]}
+        >
+          {label}
+        </button>
+      {/each}
+    </div>
+    <a
+      href={api.cvPdfUrl(cvId)}
+      target="_blank"
+      rel="noopener"
+      title="Open the CV PDF in a new tab"
+      class="inline-flex items-center gap-1 rounded px-2 py-1 text-muted-foreground transition-colors hover:text-foreground"
+    >
+      <ExternalLink class="size-4" />
+      <span class="hidden xl:inline">Open PDF</span>
+    </a>
   </div>
 
   <div class="min-h-0 flex-1 overflow-auto">
     {#if tab === 'cv'}
       <iframe src={cvUrl} title="CV preview" class="h-full w-full"></iframe>
+    {:else if tab === 'edit'}
+      <div class="p-4">
+        <CvEditor id={cvId} embedded />
+      </div>
     {:else if tab === 'jd'}
       <div class="p-4">
         {#if job.description}

@@ -1,7 +1,9 @@
 <script lang="ts">
-  // The dedicated CV-tailoring surface: full-width, chat on the left, a tabbed artifact panel
-  // (CV / Job description / Verdict) on the right. On load it bootstraps the tailored CV and a
-  // seeded agent session, then auto-starts the agent (kickoff). Reuses <AssistantChat>.
+  // The dedicated CV-tailoring workspace: full-width, chat on the left, a tabbed artifact panel
+  // (CV · Edit · Job description · Verdict) on the right. Two modes:
+  //  - bootstrap (no ?cv): create the tailored CV + a seeded agent session, auto-start, and
+  //    store the session id on the CV so it can be re-opened.
+  //  - resume (?cv=<id>): reuse the existing CV + its stored session — re-attach, NO kickoff.
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { api, ApiError } from '$lib/api';
@@ -13,6 +15,7 @@
   import type { Job } from '$lib/types';
 
   const slug = $derived(page.params.slug ?? '');
+  const cvParam = $derived(page.url.searchParams.get('cv'));
   const eligible = $derived(
     currentUser()?.beta_tester === true || currentUser()?.role === 'moderator',
   );
@@ -20,6 +23,7 @@
   let status = $state<'loading' | 'ready' | 'error'>('loading');
   let errorMsg = $state('');
   let sessionId = $state<string | undefined>(undefined);
+  let resuming = $state(false);
   let cvId = $state(0);
   let analysis = $state<Analysis | null>(null);
   let job = $state<Job | null>(null);
@@ -36,19 +40,35 @@
       return;
     }
     try {
-      // The job (for the JD tab + session name) and the tailoring bootstrap in parallel.
-      const [j, tailor] = await Promise.all([api.getJob(slug), api.tailorCv(slug)]);
-      job = j;
-      cvId = tailor.tailor_cv_id;
-      analysis = tailor.analysis;
-      sessionId = await createSession({
-        cli_token: tailor.cli_token,
-        cv_id: tailor.tailor_cv_id,
-        base_cv_id: tailor.base_cv_id,
-      });
+      if (cvParam) {
+        // Resume: reuse the existing tailored CV and re-attach its stored session.
+        resuming = true;
+        const existing = Number(cvParam);
+        const [j, rec, fit] = await Promise.all([
+          api.getJob(slug),
+          api.getCv(existing),
+          api.getJobFit(slug).catch(() => null),
+        ]);
+        job = j;
+        cvId = existing;
+        analysis = fit?.analysis ?? null;
+        sessionId = rec.agent_session_id || undefined;
+      } else {
+        // Bootstrap: create the tailored CV + a seeded session, then bind the session to the CV.
+        const [j, tailor] = await Promise.all([api.getJob(slug), api.tailorCv(slug)]);
+        job = j;
+        cvId = tailor.tailor_cv_id;
+        analysis = tailor.analysis;
+        sessionId = await createSession({
+          cli_token: tailor.cli_token,
+          cv_id: tailor.tailor_cv_id,
+          base_cv_id: tailor.base_cv_id,
+        });
+        await api.setCvSession(tailor.tailor_cv_id, sessionId).catch(() => {}); // best-effort
+      }
       status = 'ready';
     } catch (e) {
-      errorMsg = e instanceof ApiError ? e.message : 'Could not start tailoring. Please try again.';
+      errorMsg = e instanceof ApiError ? e.message : 'Could not open the tailoring workspace.';
       status = 'error';
     }
   });
@@ -58,7 +78,7 @@
 
 {#if status === 'loading'}
   <div class="flex h-[calc(100svh-3.5rem)] items-center justify-center text-sm text-muted-foreground">
-    Preparing your tailoring session…
+    {resuming ? 'Re-opening your tailoring session…' : 'Preparing your tailoring session…'}
   </div>
 {:else if status === 'error'}
   <div class="flex h-[calc(100svh-3.5rem)] flex-col items-center justify-center gap-3 p-6 text-center">
@@ -69,7 +89,7 @@
   <div class="flex h-[calc(100svh-3.5rem)]">
     <AssistantChat
       session={sessionId}
-      {kickoff}
+      kickoff={resuming ? undefined : kickoff}
       {sessionLabel}
       showSessionRail={false}
       onTurnComplete={() => (refreshKey += 1)}

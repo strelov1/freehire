@@ -10,7 +10,14 @@
 // fetch per call site — not a module-level variable — keeps concurrent SSR
 // requests from sharing (and racing on) a session.
 
-import type { CvMeta, CvRecord, CreateCvInput, UpdateCvInput, TailorResult } from './cv';
+import type {
+  CvMeta,
+  CvRecord,
+  CvTailoredItem,
+  CreateCvInput,
+  UpdateCvInput,
+  TailorResult,
+} from './cv';
 import type {
   Job,
   EmailLinking,
@@ -1007,9 +1014,15 @@ export function createApi(
 
   // --- CV builder (beta-gated on the server) ---
 
-  /** List the caller's CVs (metadata, newest edit first). */
-  async function listCvs(): Promise<CvMeta[]> {
-    return requestData<CvMeta[]>('/api/v1/me/cvs');
+  /** List the caller's TAILORED CVs (the re-open list): each with its vacancy slug + bound
+   *  agent session, newest edit first. */
+  async function listCvs(): Promise<CvTailoredItem[]> {
+    return requestData<CvTailoredItem[]>('/api/v1/me/cvs');
+  }
+
+  /** Bind a roy agent session to a CV so its workspace can re-open that exact session. */
+  async function setCvSession(id: number, sessionId: string): Promise<void> {
+    await call(`/api/v1/me/cvs/${id}/session`, jsonBody('PUT', { session_id: sessionId }));
   }
 
   /** Create a CV, optionally seeded from the stored résumé structure. */
@@ -1149,6 +1162,7 @@ export function createApi(
     getCv,
     updateCv,
     deleteCv,
+    setCvSession,
     cvPdfUrl,
     tailorCv,
   };

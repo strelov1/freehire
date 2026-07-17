@@ -1,18 +1,17 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
-  import { FileText, Download, Trash2, Plus } from '@lucide/svelte';
+  import { FileText, Download, Trash2 } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import { Button } from '$lib/ui';
-  import { cvTitle, type CvMeta } from '$lib/cv';
+  import { cvTitle, type CvTailoredItem } from '$lib/cv';
 
-  // The CV builder landing: the caller's CVs with create / edit / download / delete.
-  // Creating seeds from the stored résumé structure when one exists (the server decides).
+  // The tailored-CV landing: every CV the caller built for a specific vacancy, each a shortcut
+  // back into its tailoring workspace (which resumes the same agent session). CVs are created
+  // only from a vacancy's match page, so there is no create action here.
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   let error = $state<string | null>(null);
-  let creating = $state(false);
-  let items = $state<CvMeta[]>([]);
+  let items = $state<CvTailoredItem[]>([]);
 
   onMount(load);
 
@@ -27,19 +26,7 @@
     }
   }
 
-  async function create() {
-    creating = true;
-    error = null;
-    try {
-      const rec = await api.createCv({ seed: true });
-      await goto(`/my/cvs/${rec.id}`);
-    } catch (e) {
-      error = e instanceof ApiError ? e.message : 'Could not create a CV. Please try again.';
-      creating = false;
-    }
-  }
-
-  async function remove(cv: CvMeta) {
+  async function remove(cv: CvTailoredItem) {
     if (!window.confirm(`Delete “${cvTitle(cv.title)}”? This cannot be undone.`)) return;
     try {
       await api.deleteCv(cv.id);
@@ -53,14 +40,12 @@
 </script>
 
 <div class="space-y-6">
-  <div class="flex items-center justify-between gap-4">
-    <div>
-      <h1 class="text-2xl font-semibold">CV builder</h1>
-      <p class="text-sm text-muted-foreground">Build tailored, ATS-friendly CVs and export them to PDF.</p>
-    </div>
-    <Button variant="primary" onclick={create} disabled={creating}>
-      <Plus class="mr-1 h-4 w-4" /> {creating ? 'Creating…' : 'New CV'}
-    </Button>
+  <div>
+    <h1 class="text-2xl font-semibold">Tailored CVs</h1>
+    <p class="text-sm text-muted-foreground">
+      CVs you tailored for specific roles. Open one to resume its tailoring session, or start a new
+      one from any vacancy’s match page.
+    </p>
   </div>
 
   {#if error}<p class="text-sm text-destructive">{error}</p>{/if}
@@ -70,16 +55,16 @@
   {:else if status === 'ready' && items.length === 0}
     <div class="rounded-lg border border-dashed border-border p-10 text-center">
       <FileText class="mx-auto h-8 w-8 text-muted-foreground" />
-      <p class="mt-2 font-medium">No CVs yet</p>
+      <p class="mt-2 font-medium">No tailored CVs yet</p>
       <p class="text-sm text-muted-foreground">
-        Create your first CV — it starts from your uploaded résumé when you have one.
+        Open a vacancy, run the match analysis, and choose “Tailor my CV” to build one here.
       </p>
     </div>
   {:else}
     <ul class="divide-y divide-border rounded-lg border border-border">
       {#each items as cv (cv.id)}
         <li class="flex items-center justify-between gap-4 p-4">
-          <a href="/my/cvs/{cv.id}" class="min-w-0 flex-1">
+          <a href="/tailor/{cv.job_slug}?cv={cv.id}" class="min-w-0 flex-1">
             <span class="block truncate font-medium">{cvTitle(cv.title)}</span>
             <span class="text-xs text-muted-foreground">Updated {fmt(cv.updated_at)} · {cv.template_id}</span>
           </a>
