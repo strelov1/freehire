@@ -33,6 +33,11 @@ func TestExtractTitleName(t *testing.T) {
 		{"Jobs at Centellic | Centellic Careers", "Centellic"},
 		{"Jobs at AFC Bournemouth | AFC Bournemouth Careers", "AFC Bournemouth"},
 		{"Bath Spa University Careers", "Bath Spa University"},
+		// A non-"Jobs at" lead-in prefix is stripped too.
+		{"Employment Opportunities at BuzzFeed, Inc.", "BuzzFeed, Inc."},
+		{"Careers at Acme", "Acme"},
+		// A trailing " | ..." fragment is dropped and whitespace collapsed.
+		{"AB InBev  | Growth Group Careers", "AB InBev"},
 		{"Just a moment...", ""}, // no recognisable pattern
 		{"Careers", ""},          // strips to empty
 		{"", ""},

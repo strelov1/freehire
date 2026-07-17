@@ -51,7 +51,7 @@ func run() int {
 
 	queries := db.New(pool)
 	client := sources.NewClient()
-	registry := companyname.NewRegistry(client, client)
+	registry := companyname.NewRegistry(client)
 
 	rows, err := queries.ListSlugLikeCompaniesForBackfill(ctx)
 	if err != nil {

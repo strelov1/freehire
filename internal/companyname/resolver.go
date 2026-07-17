@@ -12,11 +12,6 @@ type textGetter interface {
 	GetText(ctx context.Context, url string) (string, error)
 }
 
-// jsonGetter decodes a URL's JSON body. Matches sources.JSONGetter.
-type jsonGetter interface {
-	GetJSON(ctx context.Context, url string, v any) error
-}
-
 // Resolver resolves a raw display-name candidate for a board from an ATS's own
 // source. It returns "" (not an error) when the source yields no usable name;
 // an error is reserved for transport failures. The candidate is unvalidated —
@@ -29,16 +24,19 @@ type Resolver interface {
 // alone rather than guessed.
 type Registry map[string]Resolver
 
-// NewRegistry wires the per-ATS resolvers over the shared HTTP getters.
-func NewRegistry(text textGetter, jsonG jsonGetter) Registry {
+// NewRegistry wires the per-ATS resolvers over the shared HTTP getter. Only ATSes
+// whose board is derivable from a job URL are here (see BoardFromURL): the board
+// is the host label (Pinpoint/BambooHR) or first path segment (Lever/Ashby).
+// Greenhouse is intentionally absent — its job URLs are the company's own vanity
+// careers domain (e.g. a16z.com/about/jobs), so no board can be recovered from
+// the URL; resolving it needs a board-from-source-file lookup, a separate seam.
+func NewRegistry(text textGetter) Registry {
 	return Registry{
 		// Careers-page <title> ATSes: same parser, different host template.
 		"pinpoint": newTitleResolver(text, "https://%s.pinpointhq.com"),
 		"bamboohr": newTitleResolver(text, "https://%s.bamboohr.com/careers"),
 		"lever":    newTitleResolver(text, "https://jobs.lever.co/%s"),
 		"ashby":    newTitleResolver(text, "https://jobs.ashbyhq.com/%s"),
-		// API-field ATSes.
-		"greenhouse": newGreenhouseResolver(jsonG),
 	}
 }
 
@@ -63,21 +61,4 @@ func (r *titleResolver) Name(ctx context.Context, board string) (string, error) 
 		return "", nil
 	}
 	return ExtractTitleName(m[1]), nil
-}
-
-type greenhouseResolver struct{ http jsonGetter }
-
-func newGreenhouseResolver(http jsonGetter) *greenhouseResolver {
-	return &greenhouseResolver{http: http}
-}
-
-func (r *greenhouseResolver) Name(ctx context.Context, board string) (string, error) {
-	var resp struct {
-		Name string `json:"name"`
-	}
-	url := fmt.Sprintf("https://boards-api.greenhouse.io/v1/boards/%s/", board)
-	if err := r.http.GetJSON(ctx, url, &resp); err != nil {
-		return "", err
-	}
-	return resp.Name, nil
 }

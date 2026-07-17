@@ -2,19 +2,12 @@ package companyname
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 )
 
 type fakeText map[string]string
 
 func (f fakeText) GetText(_ context.Context, url string) (string, error) { return f[url], nil }
-
-type fakeJSON map[string]string // url -> raw JSON body
-
-func (f fakeJSON) GetJSON(_ context.Context, url string, v any) error {
-	return json.Unmarshal([]byte(f[url]), v)
-}
 
 func TestTitleResolver(t *testing.T) {
 	getter := fakeText{
@@ -31,23 +24,16 @@ func TestTitleResolver(t *testing.T) {
 	}
 }
 
-func TestGreenhouseResolver(t *testing.T) {
-	getter := fakeJSON{
-		"https://boards-api.greenhouse.io/v1/boards/acme/": `{"name":"Acme Corp"}`,
-	}
-	r := newGreenhouseResolver(getter)
-	if got, _ := r.Name(context.Background(), "acme"); got != "Acme Corp" {
-		t.Errorf("Name(acme) = %q, want Acme Corp", got)
-	}
-}
-
 func TestRegistryLookup(t *testing.T) {
-	reg := NewRegistry(fakeText{}, fakeJSON{})
-	if _, ok := reg["pinpoint"]; !ok {
-		t.Error("registry missing pinpoint resolver")
+	reg := NewRegistry(fakeText{})
+	for _, src := range []string{"pinpoint", "bamboohr", "lever", "ashby"} {
+		if _, ok := reg[src]; !ok {
+			t.Errorf("registry missing %s resolver", src)
+		}
 	}
-	if _, ok := reg["greenhouse"]; !ok {
-		t.Error("registry missing greenhouse resolver")
+	// Greenhouse job URLs are vanity domains, so it has no URL-derivable board.
+	if _, ok := reg["greenhouse"]; ok {
+		t.Error("registry should not have a greenhouse resolver")
 	}
 	if _, ok := reg["nonexistent-ats"]; ok {
 		t.Error("registry should not have a resolver for an unknown source")

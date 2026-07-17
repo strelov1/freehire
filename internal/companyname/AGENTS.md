@@ -15,15 +15,15 @@ Consumed by `cmd/backfill-company-names`.
   lowercase token, ≥1 letter; hyphens/digits allowed). The SQL filter is an
   approximation; this is the gate the worker trusts.
 - **`Resolver` + `Registry`** — one resolver per source, keyed by source name. A
-  source with no resolver is left alone, never guessed. Two shapes:
-  - *title resolvers* (Pinpoint, BambooHR, Lever, Ashby) — fetch the careers page
-    and pull the name out of `<title>` via `ExtractTitleName` (`Jobs at {Name} |
-    …` or a trailing `{Name} Careers`).
-  - *API resolvers* (Greenhouse board `name`) — read a JSON field. iCIMS needs no
-    resolver: its adapter already prefers `HiringOrganization.Name`.
+  source with no resolver is left alone, never guessed. Only *title resolvers*
+  exist so far (Pinpoint, BambooHR, Lever, Ashby): fetch the careers page and pull
+  the name out of `<title>` via `ExtractTitleName` (a `<lead-in> at {Name}` prefix
+  or a trailing `{Name} Careers`, with a stray `| …` section trimmed off).
 - **`BoardFromURL(source, url)`** — extracts the ATS board id from a representative
-  job URL (host label for Pinpoint/BambooHR; first path segment for
-  Lever/Ashby/Greenhouse), matching what each resolver fetches against.
+  job URL (host label for Pinpoint/BambooHR; first path segment for Lever/Ashby),
+  matching what each resolver fetches against. Sources whose job URL is a vanity
+  careers domain (e.g. Greenhouse's `a16z.com/about/jobs`) carry no board in the
+  URL, so they get no resolver — a board-from-source-file lookup is a future seam.
 - **`Accept(slug, candidate)`** — the gate applied before writing: decode HTML
   entities, reject junk (test/recruiter titles), and require a **confidence
   match** — the squished candidate contains the slug (or vice versa), or a

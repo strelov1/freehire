@@ -13,9 +13,9 @@ func TestBoardFromURL(t *testing.T) {
 		{"bamboohr", "https://321theagency.bamboohr.com/careers/42", "321theagency", true},
 		{"lever", "https://jobs.lever.co/1inch/abc-123", "1inch", true},
 		{"ashby", "https://jobs.ashbyhq.com/0x/some-id", "0x", true},
-		{"greenhouse", "https://boards.greenhouse.io/acme/jobs/42", "acme", true},
-		{"greenhouse", "https://job-boards.greenhouse.io/acme/jobs/42", "acme", true},
-		// Unknown source or unparseable URL yields no board.
+		// Unknown source (greenhouse job URLs are vanity domains — no board) or
+		// unparseable URL yields no board.
+		{"greenhouse", "https://a16z.com/about/jobs/?gh_jid=42", "", false},
 		{"unknown-ats", "https://example.com/x", "", false},
 		{"pinpoint", "not a url", "", false},
 		{"lever", "https://jobs.lever.co/", "", false},

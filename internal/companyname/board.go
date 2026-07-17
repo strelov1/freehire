@@ -20,7 +20,7 @@ func BoardFromURL(source, rawURL string) (string, bool) {
 		if i := strings.IndexByte(u.Host, '.'); i > 0 {
 			return u.Host[:i], true
 		}
-	case "lever", "ashby", "greenhouse":
+	case "lever", "ashby":
 		// board is the first path segment: jobs.lever.co/{board}/...
 		if seg := firstPathSegment(u.Path); seg != "" {
 			return seg, true

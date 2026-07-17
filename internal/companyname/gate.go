@@ -21,6 +21,9 @@ var (
 	nonAlnum = regexp.MustCompile(`[^a-z0-9]+`)
 	words    = regexp.MustCompile(`[A-Za-z0-9]+`)
 	jobsAt   = regexp.MustCompile(`(?i)Jobs at (.+?)\s*\|`)
+	// A careers-page lead-in that precedes the real name: "Jobs at X",
+	// "Careers at X", "Employment Opportunities at X", "Open roles at X".
+	leadInAt = regexp.MustCompile(`(?i)^(?:jobs|careers|employment opportunities|open (?:roles|positions|jobs)) at (.+)$`)
 
 	// Titles that look resolvable but are placeholders or artifacts, not a
 	// company. The confidence gate catches most of these already; this is a
@@ -47,17 +50,32 @@ func SlugLike(name string) bool {
 }
 
 // ExtractTitleName pulls a company name out of a careers-page <title>. It
-// handles the two shapes ATS careers pages use — "Jobs at {Name} | ..." and a
-// trailing "{Name} Careers" — and returns "" when neither matches.
+// handles the shapes ATS careers pages use — a "<lead-in> at {Name}" prefix
+// (Jobs/Careers/Employment Opportunities at …) and a trailing "{Name} Careers" —
+// then cleans a stray " | …" section and collapsed whitespace off the result.
+// Returns "" when no shape matches.
 func ExtractTitleName(title string) string {
 	title = strings.TrimSpace(html.UnescapeString(title))
-	if m := jobsAt.FindStringSubmatch(title); m != nil {
-		return strings.TrimSpace(m[1])
+	switch {
+	case jobsAt.MatchString(title):
+		return clean(jobsAt.FindStringSubmatch(title)[1])
+	case leadInAt.MatchString(title):
+		return clean(leadInAt.FindStringSubmatch(title)[1])
+	default:
+		if rest, ok := cutSuffixFold(title, "Careers"); ok {
+			return clean(rest)
+		}
+		return ""
 	}
-	if rest, ok := cutSuffixFold(title, "Careers"); ok {
-		return strings.TrimSpace(strings.TrimRight(rest, " |-"))
+}
+
+// clean drops a trailing " | …" fragment (careers titles append a section name
+// after the company) and collapses runs of whitespace to single spaces.
+func clean(s string) string {
+	if i := strings.Index(s, " | "); i >= 0 {
+		s = s[:i]
 	}
-	return ""
+	return strings.Join(strings.Fields(s), " ")
 }
 
 // Accept decodes and validates a candidate name against the slug. It returns the
