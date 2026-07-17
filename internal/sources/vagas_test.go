@@ -129,6 +129,14 @@ func TestVagasFirstAreaFailure(t *testing.T) {
 	}
 }
 
+func TestVagasIsProxied(t *testing.T) {
+	// vagas.com.br 403s the prod datacenter IP on the very first listing request, so vagas
+	// must egress through the proxy (a residential IP is served the full HTML).
+	if _, ok := proxiedProviders["vagas"]; !ok {
+		t.Error("vagas must be in proxiedProviders (its edge 403s the prod datacenter IP)")
+	}
+}
+
 func TestVagasJobID(t *testing.T) {
 	cases := map[string]string{
 		"/vagas/v2820917/assistente-ti":           "2820917",

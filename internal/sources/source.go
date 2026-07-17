@@ -404,6 +404,11 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// like djinni's, setting SOURCES_PROXY_URL routes only this provider through the proxy with
 	// no code change; while the proxy is unset this entry is inert.
 	"onstrider": func(c HTTPClient) Source { return NewOnstrider(c) },
+	// vagas.com.br hard-blocks the prod datacenter IP: the very first listing GET returns 403
+	// from the datacenter IP while a residential IP is served the full HTML. Unlike the volume
+	// rate-limiters above, a single request trips it, so it must egress through the proxy.
+	// NewVagas takes an HTMLGetter, which HTTPClient satisfies.
+	"vagas": func(c HTTPClient) Source { return NewVagas(c) },
 }
 
 // ApplyProxyEgress rewires the proxiedProviders in registry to egress through the proxy
