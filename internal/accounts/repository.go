@@ -148,5 +148,5 @@ func (r *QueriesRepository) UserByID(ctx context.Context, id int64) (User, error
 	if err != nil {
 		return User{}, err
 	}
-	return User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester, CreatedAt: pgconv.TimePtr(row.CreatedAt)}, nil
+	return User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester, Points: int(row.Points), CreatedAt: pgconv.TimePtr(row.CreatedAt)}, nil
 }

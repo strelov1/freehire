@@ -34,6 +34,19 @@ func (q *Queries) GetTelegramLink(ctx context.Context, userID int64) (TelegramLi
 	return i, err
 }
 
+const getUserIDByTelegramChat = `-- name: GetUserIDByTelegramChat :one
+SELECT user_id FROM telegram_links WHERE chat_id = $1 ORDER BY linked_at DESC LIMIT 1
+`
+
+// Reverse lookup: the user linked to an inbound chat, for contribution-from-Telegram. If a
+// chat somehow linked more than once, the most recently linked user wins.
+func (q *Queries) GetUserIDByTelegramChat(ctx context.Context, chatID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, getUserIDByTelegramChat, chatID)
+	var user_id int64
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
 const upsertTelegramLink = `-- name: UpsertTelegramLink :exec
 INSERT INTO telegram_links (user_id, chat_id)
 VALUES ($1, $2)

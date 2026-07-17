@@ -33,6 +33,7 @@ import type {
   TelegramStatus,
   Submission,
   SubmissionInput,
+  Contribution,
   Report,
   ReportInput,
   Verdict,
@@ -831,6 +832,17 @@ export function createApi(
     return requestData<Submission[]>('/api/v1/me/submissions');
   }
 
+  /** Contribute a job link. The server detects the ATS, dedups by derived identity, and
+   *  records + rewards a novel link (422 unsupported ATS, 409 already held / contributed). */
+  async function submitContribution(url: string): Promise<Contribution> {
+    return requestData<Contribution>('/api/v1/me/contributions', jsonBody('POST', { url }));
+  }
+
+  /** The caller's own link contributions, newest first. */
+  async function listMyContributions(): Promise<Contribution[]> {
+    return requestData<Contribution[]>('/api/v1/me/contributions');
+  }
+
   /** The moderator review queue: pending submissions, with submitter emails. */
   async function listPendingSubmissions(): Promise<Submission[]> {
     return requestData<Submission[]>('/api/v1/submissions');
@@ -1080,6 +1092,8 @@ export function createApi(
     telegramUnlink,
     submitJob,
     listMySubmissions,
+    submitContribution,
+    listMyContributions,
     listPendingSubmissions,
     approveSubmission,
     rejectSubmission,

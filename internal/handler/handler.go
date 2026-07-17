@@ -14,6 +14,7 @@ import (
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/auth/oauth"
 	"github.com/strelov1/freehire/internal/blobstore"
+	"github.com/strelov1/freehire/internal/contribution"
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
@@ -96,6 +97,9 @@ type API struct {
 	// submission owns the public job-submission queue (submit/list/approve/reject);
 	// approval mints a live job by delegating to moderation.
 	submission *submission.Service
+	// contribution owns the crowdsourced paste-a-link flow (submit a URL → detect ATS,
+	// dedup by derived identity, record + award a point); list the caller's own.
+	contribution *contribution.Service
 	// report owns the job-report moderation queue (file/list/resolve/dismiss);
 	// resolving may soft-close the reported job through the job-lifecycle close path.
 	report *report.Service
@@ -237,6 +241,8 @@ func Register(app *fiber.App, cfg Config) {
 	// submission approval mints through the same moderation service, so derivation,
 	// dedup, and the enrichment enqueue are reused rather than duplicated.
 	a.submission = submission.New(submission.NewQueriesRepository(queries), a.moderation)
+	// Contributions detect the ATS board from the URL alone (network-free, see board.go).
+	a.contribution = contribution.New(contribution.NewQueriesRepository(queries, cfg.Pool))
 	// The report queue uses one QueriesRepository for both persistence and the
 	// job soft-close (it implements report.Repository and report.JobCloser).
 	reportRepo := report.NewQueriesRepository(queries)
@@ -377,6 +383,13 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/submissions", keyAuth, requireModerator, a.ListPendingSubmissions)
 	api.Post("/submissions/:id/approve", keyAuth, requireModerator, a.ApproveSubmission)
 	api.Post("/submissions/:id/reject", keyAuth, requireModerator, a.RejectSubmission)
+
+	// Link contributions: any authenticated user pastes a job URL (cookie or API key);
+	// a supported, novel link is recorded and earns a point. No moderation queue — the
+	// derived-identity dedup and the supported-ATS gate are the only guards. The caller
+	// reads their own contributions; the points balance rides on /auth/me.
+	api.Post("/me/contributions", keyAuth, a.CreateContribution)
+	api.Get("/me/contributions", keyAuth, a.ListMyContributions)
 
 	// Job reports: any authenticated user flags a problem with a live vacancy (cookie or
 	// API key), addressed by the job's public slug. The review actions (the pending queue,

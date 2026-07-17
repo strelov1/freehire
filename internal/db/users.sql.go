@@ -111,7 +111,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (GetUserByEm
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, role, beta_tester, created_at
+SELECT id, email, role, beta_tester, created_at, points
 FROM users
 WHERE id = $1
 `
@@ -122,10 +122,12 @@ type GetUserByIDRow struct {
 	Role       string             `json:"role"`
 	BetaTester bool               `json:"beta_tester"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	Points     int32              `json:"points"`
 }
 
 // Profile lookup for the authenticated user. Never selects password_hash. role is
-// included so /auth/me can tell a client whether to surface moderator-only UI.
+// included so /auth/me can tell a client whether to surface moderator-only UI; points is
+// the contribution reward balance shown on the account.
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error) {
 	row := q.db.QueryRow(ctx, getUserByID, id)
 	var i GetUserByIDRow
@@ -135,6 +137,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, er
 		&i.Role,
 		&i.BetaTester,
 		&i.CreatedAt,
+		&i.Points,
 	)
 	return i, err
 }

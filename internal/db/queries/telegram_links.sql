@@ -10,6 +10,11 @@ SET chat_id = EXCLUDED.chat_id, linked_at = now();
 -- The caller's linked Telegram chat (link-status endpoint + delivery resolution).
 SELECT * FROM telegram_links WHERE user_id = $1;
 
+-- name: GetUserIDByTelegramChat :one
+-- Reverse lookup: the user linked to an inbound chat, for contribution-from-Telegram. If a
+-- chat somehow linked more than once, the most recently linked user wins.
+SELECT user_id FROM telegram_links WHERE chat_id = $1 ORDER BY linked_at DESC LIMIT 1;
+
 -- name: DeleteTelegramLink :execrows
 -- Unlink Telegram. Returns the affected row count: 0 means there was no link.
 DELETE FROM telegram_links WHERE user_id = $1;

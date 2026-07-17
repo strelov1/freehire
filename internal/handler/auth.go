@@ -19,6 +19,7 @@ type userResponse struct {
 	Email      string     `json:"email"`
 	Role       string     `json:"role"`
 	BetaTester bool       `json:"beta_tester"`
+	Points     int        `json:"points"`
 	CreatedAt  *time.Time `json:"created_at"`
 }
 
@@ -29,7 +30,7 @@ type credentials struct {
 
 // toUserResponse maps an accounts.User to its public response shape.
 func toUserResponse(u accounts.User) userResponse {
-	return userResponse{ID: u.ID, Email: u.Email, Role: u.Role, BetaTester: u.BetaTester, CreatedAt: u.CreatedAt}
+	return userResponse{ID: u.ID, Email: u.Email, Role: u.Role, BetaTester: u.BetaTester, Points: u.Points, CreatedAt: u.CreatedAt}
 }
 
 // accountsError maps the accounts service sentinels to HTTP errors, preserving

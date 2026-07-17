@@ -253,6 +253,16 @@ type JobSubmission struct {
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
+type LinkContribution struct {
+	ID          int64              `json:"id"`
+	SubmittedBy int64              `json:"submitted_by"`
+	URL         string             `json:"url"`
+	Source      string             `json:"source"`
+	Board       string             `json:"board"`
+	Status      string             `json:"status"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
 type Mailbox struct {
 	ID        int64              `json:"id"`
 	UserID    int64              `json:"user_id"`
@@ -339,6 +349,7 @@ type User struct {
 	ResumeStructuredModel      pgtype.Text        `json:"resume_structured_model"`
 	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
 	BetaTester                 bool               `json:"beta_tester"`
+	Points                     int32              `json:"points"`
 }
 
 type UserIdentity struct {

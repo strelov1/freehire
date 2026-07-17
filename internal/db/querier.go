@@ -165,6 +165,11 @@ type Querier interface {
 	// defaults NULL (the tailoring seam is unused in phase 1). Returns the metadata the list
 	// and detail responses need.
 	CreateCV(ctx context.Context, arg CreateCVParams) (CreateCVRow, error)
+	// Record a contribution of a novel company board. The UNIQUE (source, board) constraint
+	// rejects a second contribution of the same board (another vacancy or the listing); the
+	// repository maps that unique violation to ErrBoardAlreadyContributed. Runs in the same
+	// transaction as IncrementUserPoints.
+	CreateContribution(ctx context.Context, arg CreateContributionParams) (LinkContribution, error)
 	// File a user complaint about a job into the moderation queue as 'pending'. The partial
 	// unique index on (reported_by, job_id) WHERE status='pending' rejects a second open report
 	// of the same job by the same user (the repository maps that unique violation to a 409).
@@ -386,10 +391,14 @@ type Querier interface {
 	// post-login wire shape.
 	GetUserByEmail(ctx context.Context, lower string) (GetUserByEmailRow, error)
 	// Profile lookup for the authenticated user. Never selects password_hash. role is
-	// included so /auth/me can tell a client whether to surface moderator-only UI.
+	// included so /auth/me can tell a client whether to surface moderator-only UI; points is
+	// the contribution reward balance shown on the account.
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
 	// OAuth sign-in fast path: resolve a provider identity straight to its user.
 	GetUserByIdentity(ctx context.Context, arg GetUserByIdentityParams) (GetUserByIdentityRow, error)
+	// Reverse lookup: the user linked to an inbound chat, for contribution-from-Telegram. If a
+	// chat somehow linked more than once, the most recently linked user wins.
+	GetUserIDByTelegramChat(ctx context.Context, chatID int64) (int64, error)
 	// The caller's cached fit analysis for one job, with the staleness stamps it was
 	// computed against. No row means the pair was never analyzed (the handler serves a
 	// null analysis, no LLM call). The handler compares cv_uploaded_at / job_content_hash
@@ -417,6 +426,9 @@ type Querier interface {
 	// request to a role-gated endpoint and needs only the role, so it does not drag the
 	// full user row (the GetJobIDBySlug precedent for a hot-path read).
 	GetUserRole(ctx context.Context, id int64) (string, error)
+	// Award one point to the contributor. Runs in the same transaction as CreateContribution,
+	// so a rolled-back insert (e.g. a duplicate-board race) never credits a point.
+	IncrementUserPoints(ctx context.Context, id int64) error
 	// Store a message received at a hosted mailbox, idempotent by
 	// (user_id, source, external_id) with source fixed to 'hosted'.
 	InsertHostedMessage(ctx context.Context, arg InsertHostedMessageParams) error
@@ -432,6 +444,10 @@ type Querier interface {
 	// Slim beta-membership lookup for the RequireModeratorOrBeta middleware — a
 	// primitive bool so the auth package stays free of a db import (same shape as GetUserRole).
 	IsBetaTester(ctx context.Context, id int64) (bool, error)
+	// Whether the catalogue already crawls this board — any job whose external_id is prefixed by
+	// "<board>:" for the multi-tenant sources. Used to reject a board we already track before any
+	// write. starts_with is a plain prefix test — no LIKE wildcards to escape.
+	JobsExistForBoard(ctx context.Context, arg JobsExistForBoardParams) (bool, error)
 	// Manually link (or relink) an email to a chosen application, overriding any
 	// auto-link or suggestion.
 	LinkEmailToJob(ctx context.Context, arg LinkEmailToJobParams) (int64, error)
@@ -472,6 +488,8 @@ type Querier interface {
 	ListCompanySitemap(ctx context.Context, arg ListCompanySitemapParams) ([]ListCompanySitemapRow, error)
 	// Drives the sync worker: every connection still authorized.
 	ListConnectedGmailUsers(ctx context.Context) ([]ListConnectedGmailUsersRow, error)
+	// The "my contributions" list: one user's contributions, newest first.
+	ListContributionsByUser(ctx context.Context, submittedBy int64) ([]LinkContribution, error)
 	// Flat inbox listing, newest first — one row per message (no subject grouping),
 	// soft-deleted messages excluded. Optional filters (each empty/false = no filter):
 	// source narrows to one account; unread hides already-read mail; status narrows to

@@ -155,6 +155,21 @@ export interface User {
   // Beta-tester group membership, independent of `role`. Gates the agent
   // assistant (/my/assistant) in the UI.
   beta_tester: boolean;
+  // Contribution reward balance — one point per accepted link contribution
+  // (see /my/contributions).
+  points: number;
+  created_at: string | null;
+}
+
+/** A crowdsourced board contribution: a job link a user pasted for a company board we do
+ *  not crawl yet. The unit is the board — `source` (ATS) + `board` (company slug) — not a
+ *  single vacancy; the ingest side later scrapes all its vacancies. */
+export interface Contribution {
+  id: number;
+  url: string;
+  source: string;
+  board: string;
+  status: string;
   created_at: string | null;
 }
 

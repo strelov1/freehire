@@ -24,6 +24,8 @@ export const accountNav = [
   { href: '/my/searches', label: 'Search notifications' },
   { href: '/my/api-keys', label: 'API keys' },
   { href: '/my/submissions', label: 'My submissions' },
+  // Paste a job link we don't have yet; a supported, novel link earns a point.
+  { href: '/my/contributions', label: 'Contributions' },
 ] as const;
 
 export type AccountNavItem = (typeof accountNav)[number];

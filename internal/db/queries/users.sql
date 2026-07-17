@@ -16,8 +16,9 @@ WHERE lower(email) = lower($1);
 
 -- name: GetUserByID :one
 -- Profile lookup for the authenticated user. Never selects password_hash. role is
--- included so /auth/me can tell a client whether to surface moderator-only UI.
-SELECT id, email, role, beta_tester, created_at
+-- included so /auth/me can tell a client whether to surface moderator-only UI; points is
+-- the contribution reward balance shown on the account.
+SELECT id, email, role, beta_tester, created_at, points
 FROM users
 WHERE id = $1;
 

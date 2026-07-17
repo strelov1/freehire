@@ -14,6 +14,7 @@
     FileText,
     ScrollText,
     Inbox,
+    Link2,
     PanelLeftClose,
     PanelLeft,
   } from '@lucide/svelte';
@@ -64,6 +65,7 @@
     '/my/searches': Bell,
     '/my/api-keys': Key,
     '/my/submissions': FileText,
+    '/my/contributions': Link2,
   };
 
   // Shared item treatment for both nav forms; active matches the tracking tabs.
