@@ -13,12 +13,19 @@ contributions are URL-only, auto-validated, unmoderated.
   we know the board, the ingest side onboards it and crawls ALL its vacancies — a second
   vacancy from the same board adds nothing.
 - **Board recognition is a pure, network-free URL parse** (`board.go`, `recognizeBoard`): the
-  host maps to a source via the `atsBoards` table and the board is the first path segment.
-  This is deliberately a small local table, NOT a per-adapter method on `linksource` — for the
-  supported ATS the rule is uniform (first path segment), so a table row per ATS is the whole
-  cost of adding one. Currently: greenhouse, lever, ashby, workable (all path-based).
-  Subdomain-based ATS (recruitee, teamtailor, bamboohr, …) extract the board differently and
-  are added when coverage expands — do NOT force them into the first-path-segment rule.
+  host maps to a source + extraction `mode` via the `atsBoards` table. Two modes: `path` (board
+  = first path segment, e.g. `jobs.lever.co/<board>`) and `subdomain` (board = leftmost DNS
+  label, e.g. `<board>.recruitee.com` — the canonical URL collapses to the bare host). This is
+  deliberately a small local table, NOT a per-adapter method on `linksource` — adding an ATS is
+  one row + a test. Covers ~37 multi-tenant ATS (greenhouse, lever, ashby, workable, recruitee,
+  smartrecruiters, bamboohr, personio, peopleforce, gupy, freshteam, jazzhr, huntflow, deel,
+  jobvite, gem, …); hosts were verified against each adapter's public job URL.
+- **Fail-safe by design.** A wrong or missing table entry only makes a link *unrecognized*
+  (422), never a false board: a bad apex/mode yields an empty board → reject. So adding a
+  best-guess host is safe. Excluded on purpose: single-company brands, aggregators, and
+  vanity-domain ATS (Workday/Taleo/SuccessFactors/Oracle/Teamtailor-custom/…) whose board lives
+  on the client's own domain and cannot be derived from a URL (see the ATS board-recognition
+  audit for the full 138-adapter classification).
 - **Checks run cheapest-first.** unsupported ATS (`ErrUnsupportedATS`, 422) before any DB read;
   board already crawled (`ErrBoardAlreadyTracked`, 409 — a job exists with `external_id`
   prefixed by `<board>:`, via `starts_with`) before any write; the record+point transaction

@@ -177,7 +177,7 @@ func (a *API) processTelegramContribution(chatID int64, rawURL string) {
 	rec, err := a.contribution.Submit(ctx, userID, rawURL)
 	switch {
 	case errors.Is(err, contribution.ErrUnsupportedATS):
-		a.sendTelegram(ctx, chatID, "🤔 That link isn't from a supported ATS board. Send a link from a company's Greenhouse, Lever, Ashby, or Workable careers page.")
+		a.sendTelegram(ctx, chatID, "🤔 That link isn't from a supported ATS board. Send a link from a company's careers page on a supported ATS (Greenhouse, Lever, Ashby, Recruitee, BambooHR, SmartRecruiters, and many more).")
 	case errors.Is(err, contribution.ErrBoardAlreadyTracked):
 		a.sendTelegram(ctx, chatID, "👍 We already track that board — nothing to add.")
 	case errors.Is(err, contribution.ErrBoardAlreadyContributed):
