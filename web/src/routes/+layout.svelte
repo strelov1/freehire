@@ -20,7 +20,9 @@
   // The account area (/my/*) is an app-like surface with its own sidebar nav —
   // the marketing footer with its link columns doesn't belong there.
   const hideFooter = $derived(
-    page.url.pathname === '/my' || page.url.pathname.startsWith('/my/'),
+    page.url.pathname === '/my' ||
+      page.url.pathname.startsWith('/my/') ||
+      page.url.pathname.startsWith('/tailor/'),
   );
 
   // Apply the persisted theme and start tracking the OS preference once mounted.

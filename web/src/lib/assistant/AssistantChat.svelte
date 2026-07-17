@@ -547,6 +547,9 @@
   });
 </script>
 
+<!-- Single flex-1 root so a host can compose the chat beside another pane (e.g. the tailor
+     artifact panel); the host supplies the outer height + flex row. -->
+<div class="flex min-w-0 flex-1 flex-col">
 {#if error}
   <div
     class="m-3 mb-0 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
@@ -562,7 +565,7 @@
     The agent is a limited beta and isn't available for your account yet.
   </div>
 {:else}
-  <div class="flex h-[calc(100svh-3.5rem)]">
+  <div class="flex min-h-0 flex-1">
     <!-- Session rail (desktop): collapsible; hidden entirely when the host disables it. -->
     {#if showSessionRail && sidebarOpen}
       <aside class="hidden w-64 shrink-0 flex-col border-r border-border bg-muted/20 md:flex">
@@ -875,6 +878,7 @@
 
   </div>
 {/if}
+</div>
 
 <style>
   /* Shimmer over the spinner verb. background-clip masks the text shape onto

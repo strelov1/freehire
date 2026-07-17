@@ -10,4 +10,6 @@
 
 <svelte:head><title>Agent — freehire</title></svelte:head>
 
-<AssistantChat {session} showSessionRail />
+<div class="flex h-[calc(100svh-3.5rem)]">
+  <AssistantChat {session} showSessionRail />
+</div>

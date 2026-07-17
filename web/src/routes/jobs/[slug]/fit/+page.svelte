@@ -2,8 +2,6 @@
   import { resolve } from '$app/paths';
   import { goto } from '$app/navigation';
   import { ArrowLeft, SquarePen } from '@lucide/svelte';
-  import { api, ApiError } from '$lib/api';
-  import { createSession } from '$lib/assistant/api';
   import { currentUser } from '$lib/auth.svelte';
   import { Button } from '$lib/ui';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
@@ -22,38 +20,11 @@
   );
 
   let tailoring = $state(false);
-  let tailorError = $state('');
 
   async function startTailoring() {
+    // The /tailor/[slug] surface owns the bootstrap + seeded agent session; this just goes there.
     tailoring = true;
-    tailorError = '';
-    try {
-      // Bootstrap the tailored CV + cached analysis + a short-lived CLI key, then open an
-      // agent session seeded to reframe it — the agent drives the honest-wall dialogue and
-      // edits the CV through `freehire cv …` with that key.
-      const res = await api.tailorCv(data.job.public_slug);
-      const sessionId = await createSession({
-        cli_token: res.cli_token,
-        cv_id: res.tailor_cv_id,
-        base_cv_id: res.base_cv_id,
-      });
-      // Hand the assistant page: the session, the CV to preview (?cv), a sidebar name kept
-      // separate from the prompt (?title), and a first prompt it auto-sends so the agent
-      // starts on arrival instead of waiting for the user to type.
-      const kickoff =
-        "Let's tailor my CV for this role — review the fit analysis and walk me through the gaps.";
-      const q = new URLSearchParams({
-        session: sessionId,
-        cv: String(res.tailor_cv_id),
-        title: `${data.job.title} · ${data.job.company}`,
-        prompt: kickoff,
-      });
-      await goto(`/my/assistant?${q}`);
-    } catch (e) {
-      tailorError =
-        e instanceof ApiError ? e.message : 'Could not start tailoring. Please try again.';
-      tailoring = false;
-    }
+    await goto(`/tailor/${data.job.public_slug}`);
   }
 </script>
 
@@ -95,9 +66,6 @@
           <p class="text-xs text-amber-600 dark:text-amber-500">
             This analysis is out of date — recompute above for the sharpest tailoring.
           </p>
-        {/if}
-        {#if tailorError}
-          <p class="text-sm text-destructive">{tailorError}</p>
         {/if}
       </div>
       <Button onclick={startTailoring} disabled={tailoring} class="shrink-0">
