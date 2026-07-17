@@ -29,28 +29,13 @@ func NewRadancy(c radancyHTTP) Source { return radancy{http: c} }
 
 func (radancy) Provider() string { return "radancy" }
 
-// radancySitemapEntry is one <url> of the sitemap: the page URL (a job page, a category
-// page, or the landing page).
-type radancySitemapEntry struct {
-	Loc string `xml:"loc"`
-}
-
 func (s radancy) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	var sitemap struct {
-		URLs []radancySitemapEntry `xml:"url"`
-	}
 	url := fmt.Sprintf("https://%s/sitemap.xml", e.Board)
-	if err := s.http.GetXML(ctx, url, &sitemap); err != nil {
-		return nil, fmt.Errorf("radancy: sitemap %s: %w", e.Board, err)
-	}
-
 	// Keep only real job postings: a loc with a /job/ segment and a trailing numeric id.
 	// This drops the /category/ and landing entries, which carry no posting id.
-	var locs []string
-	for _, u := range sitemap.URLs {
-		if radancyJobID(u.Loc) != "" {
-			locs = append(locs, u.Loc)
-		}
+	locs, err := sitemapJobLocs(ctx, s.http, url, radancyJobID)
+	if err != nil {
+		return nil, fmt.Errorf("radancy: sitemap %s: %w", e.Board, err)
 	}
 
 	// Each job's posting comes from its own page fetch, fanned out under a bounded pool.

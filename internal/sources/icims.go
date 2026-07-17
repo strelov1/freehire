@@ -30,12 +30,6 @@ func NewICIMS(c icimsHTTP) Source { return icims{http: c} }
 
 func (icims) Provider() string { return "icims" }
 
-// icimsSitemapEntry is one <url> of the sitemap: the page URL (a job page, the search
-// page, or the intro page).
-type icimsSitemapEntry struct {
-	Loc string `xml:"loc"`
-}
-
 func (s icims) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	host := icimsHost(e.Board)
 	locs, err := s.jobLocs(ctx, host, e.Board)
@@ -65,26 +59,19 @@ func icimsHost(board string) string {
 	return "careers-" + board + ".icims.com"
 }
 
-// icimsSitemap decodes either sitemap shape: a flat <urlset> (child <url>) or a
-// <sitemapindex> (child <sitemap>). Both nest a <loc>, so one entry type serves both.
-type icimsSitemap struct {
-	URLs     []icimsSitemapEntry `xml:"url"`
-	Sitemaps []icimsSitemapEntry `xml:"sitemap"`
-}
-
 // jobLocs collects the board's job-posting URLs from its sitemap, following a sitemap index
 // one level deep (vanity/careers-home sites nest their <url> entries under sub-sitemaps) and
 // keeping only locs with a parseable /jobs/<id> segment — dropping the /jobs/search and
 // /jobs/intro entries, which carry no numeric id.
 func (s icims) jobLocs(ctx context.Context, host, board string) ([]string, error) {
-	var root icimsSitemap
-	if err := s.http.GetXML(ctx, fmt.Sprintf("https://%s/sitemap.xml", host), &root); err != nil {
+	root, err := getSitemap(ctx, s.http, fmt.Sprintf("https://%s/sitemap.xml", host))
+	if err != nil {
 		return nil, fmt.Errorf("icims: sitemap %s: %w", board, err)
 	}
 	entries := root.URLs
 	for _, sm := range root.Sitemaps {
-		var sub icimsSitemap
-		if err := s.http.GetXML(ctx, sm.Loc, &sub); err != nil {
+		sub, err := getSitemap(ctx, s.http, sm.Loc)
+		if err != nil {
 			// Skip a flaky sub-sitemap rather than losing the whole board — the same
 			// per-entry isolation the detail fan-out uses; the missed postings reappear
 			// on the next crawl. Only a failed ROOT sitemap fails the board.

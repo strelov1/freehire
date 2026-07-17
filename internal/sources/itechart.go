@@ -28,21 +28,10 @@ func NewITechArt(c itechartHTTP) Source { return itechart{http: c} }
 func (itechart) Provider() string { return "itechart" }
 
 func (i itechart) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	var sitemap struct {
-		URLs []struct {
-			Loc string `xml:"loc"`
-		} `xml:"url"`
-	}
 	sitemapURL := fmt.Sprintf("https://%s/sitemap.xml", e.Board)
-	if err := i.http.GetXML(ctx, sitemapURL, &sitemap); err != nil {
+	urls, err := sitemapJobLocs(ctx, i.http, sitemapURL, itechartJobID)
+	if err != nil {
 		return nil, fmt.Errorf("itechart: sitemap %s: %w", e.Board, err)
-	}
-
-	var urls []string
-	for _, u := range sitemap.URLs {
-		if itechartJobID(u.Loc) != "" {
-			urls = append(urls, u.Loc)
-		}
 	}
 
 	return fetchDetails(urls, defaultDetailWorkers, func(u string) (Job, bool) {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"regexp"
-	"strings"
 
 	"golang.org/x/net/html"
 )
@@ -35,39 +34,17 @@ func (s wpyoast) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	// The Yoast sitemap index lists per-post-type sub-sitemaps; the postings live in the
 	// "job_listing" one. Resolving it from the index (rather than guessing the filename)
 	// keeps the adapter working across Yoast versions that name the file differently.
-	var index struct {
-		Sitemaps []struct {
-			Loc string `xml:"loc"`
-		} `xml:"sitemap"`
-	}
-	if err := s.http.GetXML(ctx, fmt.Sprintf("https://%s/sitemap.xml", e.Board), &index); err != nil {
-		return nil, fmt.Errorf("wpyoast: sitemap index %s: %w", e.Board, err)
-	}
-	jobSitemap := ""
-	for _, sm := range index.Sitemaps {
-		if strings.Contains(sm.Loc, "job_listing") {
-			jobSitemap = sm.Loc
-			break
-		}
+	jobSitemap, err := resolveSubSitemap(ctx, s.http, fmt.Sprintf("https://%s/sitemap.xml", e.Board), "job_listing")
+	if err != nil {
+		return nil, fmt.Errorf("wpyoast: %s: %w", e.Board, err)
 	}
 	if jobSitemap == "" {
 		return nil, nil // no job_listing sub-sitemap → no postings, not an error
 	}
 
-	var urls struct {
-		URLs []struct {
-			Loc string `xml:"loc"`
-		} `xml:"url"`
-	}
-	if err := s.http.GetXML(ctx, jobSitemap, &urls); err != nil {
+	locs, err := sitemapJobLocs(ctx, s.http, jobSitemap, wpyoastJobID)
+	if err != nil {
 		return nil, fmt.Errorf("wpyoast: job sitemap %s: %w", e.Board, err)
-	}
-
-	var locs []string
-	for _, u := range urls.URLs {
-		if wpyoastJobID(u.Loc) != "" {
-			locs = append(locs, u.Loc)
-		}
 	}
 
 	// Each job's posting comes from its own page fetch, fanned out under a bounded pool.

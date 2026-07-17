@@ -35,22 +35,11 @@ func (dataart) Provider() string { return "dataart" }
 func (dataart) boardless() {}
 
 func (d dataart) Fetch(ctx context.Context, ce CompanyEntry) ([]Job, error) {
-	var sitemap struct {
-		URLs []struct {
-			Loc string `xml:"loc"`
-		} `xml:"url"`
-	}
-	if err := d.http.GetXML(ctx, dataartSitemapURL, &sitemap); err != nil {
-		return nil, fmt.Errorf("dataart: sitemap: %w", err)
-	}
-
 	// Keep only canonical English vacancy pages: the listing root, unrelated pages, and the
 	// /xx/vacancies/… localisations yield no code, so each vacancy is ingested once.
-	var urls []string
-	for _, u := range sitemap.URLs {
-		if dataartVacancyCode(u.Loc) != "" {
-			urls = append(urls, u.Loc)
-		}
+	urls, err := sitemapJobLocs(ctx, d.http, dataartSitemapURL, dataartVacancyCode)
+	if err != nil {
+		return nil, fmt.Errorf("dataart: sitemap: %w", err)
 	}
 
 	return fetchDetails(urls, defaultDetailWorkers, func(u string) (Job, bool) {
