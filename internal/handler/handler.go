@@ -451,12 +451,14 @@ func Register(app *fiber.App, cfg Config) {
 	cvGate := auth.RequireModeratorOrBeta(a.queries, a.queries)
 	api.Get("/me/cvs", saved, cvGate, a.ListCVs)
 	api.Post("/me/cvs", saved, cvGate, a.CreateCV)
-	api.Get("/me/cvs/:id", saved, cvGate, a.GetCV)
+	// Read + render accept a key too (keyAuth), so the tailoring agent's CLI can fetch a CV
+	// and its PDF; mutations stay cookie-only (POST/PUT/DELETE — the browser owns authoring).
+	api.Get("/me/cvs/:id", keyAuth, cvGate, a.GetCV)
 	api.Put("/me/cvs/:id", saved, cvGate, a.UpdateCV)
 	api.Delete("/me/cvs/:id", saved, cvGate, a.DeleteCV)
-	api.Get("/me/cvs/:id/pdf", saved, cvGate, a.RenderCVPDF)
+	api.Get("/me/cvs/:id/pdf", keyAuth, cvGate, a.RenderCVPDF)
 	// Tailoring: the browser starts a session (cookie-only bootstrap); the agent's CLI drives
-	// the edit + context reads with its minted API key (keyAuth = cookie or Bearer).
+	// the edit + context/get/render reads with its minted API key (keyAuth = cookie or Bearer).
 	api.Post("/me/cvs/tailor", saved, cvGate, a.TailorCV)
 	api.Patch("/me/cvs/:id", keyAuth, cvGate, a.PatchCV)
 	api.Get("/me/cvs/:id/tailor-context", keyAuth, cvGate, a.TailorContext)

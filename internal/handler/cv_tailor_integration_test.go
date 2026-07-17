@@ -50,7 +50,7 @@ func buildTailorApp(h *API, iss *auth.Issuer) *fiber.App {
 	saved := auth.RequireAuth(iss)
 	keyAuth := auth.RequireAuthOrKey(iss, h.queries)
 	gate := auth.RequireModeratorOrBeta(h.queries, h.queries)
-	app.Get("/api/v1/me/cvs/:id", saved, gate, h.GetCV)
+	app.Get("/api/v1/me/cvs/:id", keyAuth, gate, h.GetCV)
 	app.Post("/api/v1/me/cvs/tailor", saved, gate, h.TailorCV)
 	app.Patch("/api/v1/me/cvs/:id", keyAuth, gate, h.PatchCV)
 	app.Get("/api/v1/me/cvs/:id/tailor-context", keyAuth, gate, h.TailorContext)
@@ -196,6 +196,12 @@ func TestPatchCVViaKey(t *testing.T) {
 	rec, _ := h.cvStore.Get(ctx, base.ID, owner)
 	if got := rec.Document.Experience[0].Bullets; len(got) != 2 || got[1] != "Cut latency" {
 		t.Errorf("bullets after patch = %v", got)
+	}
+
+	// The minted key can also READ the CV back (GET /me/cvs/:id is keyAuth) — the agent
+	// needs this to see the current document before patching.
+	if resp := doBearer(t, app, fiber.MethodGet, path, ownerKey, nil); resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("get via key = %d, want 200", resp.StatusCode)
 	}
 
 	// Bad addressing is a 422.
