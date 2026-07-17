@@ -1,8 +1,8 @@
 ## 1. Patch model (pure, unit-tested)
 
-- [ ] 1.1 Add `cv.Patch` type in a dependency-light file in `internal/cv/` (ops: set-summary, add/replace/remove/reorder bullet at `experience[i]`, set-skill-group, set-header-field), with a discriminated op field
-- [ ] 1.2 Implement pure `cv.Apply(doc Document, p Patch) (Document, error)` mirroring `cv.Seed` — no I/O, returns a client-style error for out-of-range/unknown addressing, never mutates the input
-- [ ] 1.3 Unit tests for `cv.Apply`: each op happy path, other sections byte-for-byte unchanged, reorder is a pure permutation (no add/drop), out-of-range index errors
+- [x] 1.1 Add `cv.Patch` type in a dependency-light file in `internal/cv/` (ops: set-summary, add/replace/remove/reorder bullet at `experience[i]`, set-skill-group, set-header-field), with a discriminated op field
+- [x] 1.2 Implement pure `cv.Apply(doc Document, p Patch) (Document, error)` mirroring `cv.Seed` — no I/O, returns a client-style error for out-of-range/unknown addressing, never mutates the input
+- [x] 1.3 Unit tests for `cv.Apply`: each op happy path, other sections byte-for-byte unchanged, reorder is a pure permutation (no add/drop), out-of-range index errors
 
 ## 2. SQL layer
 
