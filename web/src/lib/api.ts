@@ -378,6 +378,16 @@ export function createApi(
     return requestData<EngagementStats>(`/api/v1/stats/engagement`);
   }
 
+  /** The precomputed facet-distribution snapshot the /open page renders: value→count
+   *  per facet for countries, skills, seniority, and work_mode. Served from the daily
+   *  insights_facet_stats rollup, so this stays off the live Meilisearch facet count.
+   *  Returns the same `facets` map shape as `facetCounts`. Aggregate-only,
+   *  unauthenticated. An unpopulated snapshot yields empty facet maps. */
+  async function statsFacets(): Promise<FacetCounts['facets']> {
+    const res = await request<{ data: { facets: FacetCounts['facets'] } }>(`/api/v1/stats/facets`);
+    return res.data.facets ?? {};
+  }
+
   /** The public ingest-fleet status: a per-provider health rollup with a derived
    *  operational/degraded/down verdict and an overall status. Sanitized
    *  (no error text or board identifiers), aggregate-only, unauthenticated. */
@@ -1045,6 +1055,7 @@ export function createApi(
     jobsActivity,
     userGrowth,
     engagementStats,
+    statsFacets,
     ingestStatus,
     listCompanies,
     getCompany,

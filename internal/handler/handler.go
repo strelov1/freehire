@@ -326,6 +326,13 @@ func Register(app *fiber.App, cfg Config) {
 	// the /open transparency page renders them as a stat-strip.
 	api.Get("/stats/engagement", a.EngagementStats)
 
+	// Public facet-distribution snapshot (countries, skills, seniority, work_mode),
+	// unauthenticated like the other public reads. Served from the insights_facet_stats
+	// rollup (cmd/rollup-facets) so the /open transparency page's "what's inside"
+	// section stays off the live Meilisearch facet count. Aggregate-only — per-value
+	// counts only.
+	api.Get("/stats/facets", a.StatsFacets)
+
 	// Public Trends & Insights reads: aggregate market intelligence (role & skill
 	// demand, hiring velocity, salary bands) served from the insights_* rollups
 	// (cmd/rollup-stats), unauthenticated like the other public reads. Aggregate-only

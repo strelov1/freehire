@@ -19,7 +19,7 @@ Non-negotiable. Bias toward caution over speed; use judgment on trivial tasks.
 
 `freehire` ([freehire.dev](https://freehire.dev)) is an open-source IT job aggregator backend. Intended shape: many source parsers feed a pipeline that normalizes jobs into one schema, deduplicates them, and enriches them with AI; served over an HTTP API with rich filters.
 
-**Current state: working backend.** Fiber HTTP server with `/health`, `/api/v1/jobs[/:slug]`, Meilisearch-backed `/api/v1/jobs/search`, companies endpoints, a `/api/v1/auth` surface (register/login/me with stateless JWT + OAuth sign-in), per-user job-interaction endpoints (view/apply/save/track, behind auth, addressed by slug), and API-key management under `/api/v1/me`; Postgres via sqlc with `jobs`, `companies`, `users`, `user_jobs`, `user_identities`, and `api_keys` tables; a typed, versioned enrichment schema on `jobs`; and a family of standalone, run-once-and-exit workers: `cmd/ingest` (crawls one board file, normalizes and upserts, enqueues new postings for enrichment), `cmd/enrich` (drains the enrichment outbox via an LLM), `cmd/embed` (incremental semantic-embedding worker), `cmd/tg-ingest`/`cmd/tg-extract` (Telegram crawl + LLM-extract), `cmd/liveness` (URL-probes orphan jobs, closes dead ones), `cmd/reindex`/`cmd/backfill-derive`/`cmd/reslug` (maintenance), `cmd/rollup-stats` (activity rollup), `cmd/import-yc` (YC directory enrichment). A Svelte SPA lives under `web/` and consumes the API.
+**Current state: working backend.** Fiber HTTP server with `/health`, `/api/v1/jobs[/:slug]`, Meilisearch-backed `/api/v1/jobs/search`, companies endpoints, a `/api/v1/auth` surface (register/login/me with stateless JWT + OAuth sign-in), per-user job-interaction endpoints (view/apply/save/track, behind auth, addressed by slug), and API-key management under `/api/v1/me`; Postgres via sqlc with `jobs`, `companies`, `users`, `user_jobs`, `user_identities`, and `api_keys` tables; a typed, versioned enrichment schema on `jobs`; and a family of standalone, run-once-and-exit workers: `cmd/ingest` (crawls one board file, normalizes and upserts, enqueues new postings for enrichment), `cmd/enrich` (drains the enrichment outbox via an LLM), `cmd/embed` (incremental semantic-embedding worker), `cmd/tg-ingest`/`cmd/tg-extract` (Telegram crawl + LLM-extract), `cmd/liveness` (URL-probes orphan jobs, closes dead ones), `cmd/reindex`/`cmd/backfill-derive`/`cmd/reslug` (maintenance), `cmd/rollup-stats` (activity rollup), `cmd/rollup-facets` (daily /open facet snapshot), `cmd/import-yc` (YC directory enrichment). A Svelte SPA lives under `web/` and consumes the API.
 
 Stack: **Go + Fiber v2**, **PostgreSQL**, **sqlc**, **Docker Compose**, **langchaingo**.
 
@@ -35,6 +35,7 @@ cmd/tg-extract/main.go     LLM-extracts Telegram vacancies
 cmd/liveness/main.go       URL-probes orphan jobs, closes dead ones
 cmd/reindex/main.go        rebuilds the Meilisearch jobs index
 cmd/rollup-stats/main.go   recomputes the job_daily_stats rollup
+cmd/rollup-facets/main.go  recomputes the insights_facet_stats snapshot (/open facets)
 cmd/backfill-derive/main.go  re-derives all deterministic dictionary facets
 cmd/reslug/main.go         backfills public_slug/company_slug
 cmd/import-yc/main.go      enriches companies from yc-oss directory
@@ -85,6 +86,7 @@ go run ./cmd/tg-extract                    # + LLM_* — drain telegram_posts in
 go run ./cmd/liveness                      # URL-probe orphan jobs, close dead ones
 go run ./cmd/backfill-derive               # re-derive dictionary facets; follow with make reindex
 go run ./cmd/rollup-stats                  # recompute job_daily_stats (run-once, cron ~every 3h)
+go run ./cmd/rollup-facets                 # + MEILI_URL/MEILI_MASTER_KEY — recompute insights_facet_stats (run-once, cron ~daily)
 ```
 
 For the full architecture and conventions, see the **module files** below. Each module is self-contained and can be read independently.

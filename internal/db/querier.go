@@ -201,6 +201,14 @@ type Querier interface {
 	// Returns the affected row count: 0 means the key does not exist or is not the
 	// caller's (the handler maps that to 404).
 	DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) (int64, error)
+	// Facet-distribution snapshot (insights_facet_stats), recomputed by
+	// cmd/rollup-facets as an atomic delete-and-reinsert, and the read query the public
+	// /api/v1/stats/facets endpoint serves from it. The source is Meilisearch's facet
+	// count (not `jobs`), so the worker inserts rows it already holds in memory rather
+	// than a set-based INSERT ... SELECT.
+	// First half of the atomic rebuild: clear the snapshot. Run in the same transaction
+	// as the InsertFacetStat loop so a reader never sees an empty or partial table.
+	DeleteAllFacetStats(ctx context.Context) error
 	// Trends & Insights rollups (insights_*), recomputed by cmd/rollup-stats as an
 	// atomic delete-and-reinsert, and the read queries the public /api/v1/insights/*
 	// endpoints serve from them. All rollups are a pure function of current `jobs`
@@ -437,6 +445,9 @@ type Querier interface {
 	// Award one point to the contributor. Runs in the same transaction as CreateContribution,
 	// so a rolled-back insert (e.g. a duplicate-board race) never credits a point.
 	IncrementUserPoints(ctx context.Context, id int64) error
+	// Second half of the atomic rebuild: one row per (facet, value). Called once per
+	// value the worker computed, inside the same transaction as DeleteAllFacetStats.
+	InsertFacetStat(ctx context.Context, arg InsertFacetStatParams) error
 	// Store a message received at a hosted mailbox, idempotent by
 	// (user_id, source, external_id) with source fixed to 'hosted'.
 	InsertHostedMessage(ctx context.Context, arg InsertHostedMessageParams) error
@@ -507,6 +518,10 @@ type Querier interface {
 	// confirm chip and application link without a second lookup; the LEFT JOINs
 	// resolve the linked/suggested application's public slug + company for display.
 	ListEmails(ctx context.Context, arg ListEmailsParams) ([]ListEmailsRow, error)
+	// The whole snapshot, ordered by facet then count DESC so the reader can take the
+	// top-N per facet without re-sorting. Aggregate only — per-value counts, no
+	// record-level data.
+	ListFacetStats(ctx context.Context) ([]InsightsFacetStat, error)
 	// Ranked roles within one country slice ('' = all countries), ordered by raw
 	// demand or by growth (open_count - open_count_prev), demand as the tiebreak.
 	// An empty @category means all categories (the original behavior); a non-empty

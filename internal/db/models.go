@@ -130,6 +130,12 @@ type GmailConnection struct {
 	LastSyncedAt    pgtype.Timestamptz `json:"last_synced_at"`
 }
 
+type InsightsFacetStat struct {
+	Facet string `json:"facet"`
+	Value string `json:"value"`
+	Count int64  `json:"count"`
+}
+
 type InsightsRoleStat struct {
 	Category      string `json:"category"`
 	Seniority     string `json:"seniority"`

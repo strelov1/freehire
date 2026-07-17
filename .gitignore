@@ -82,6 +82,7 @@ node_modules/
 /recount-companies
 /reindex
 /reslug
+/rollup-facets
 /rollup-stats
 /server
 /tg-extract

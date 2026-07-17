@@ -44,6 +44,14 @@
   const seniority = $derived(top(facets?.seniority, 6, titleCase));
   const workMode = $derived(top(facets?.work_mode, 3, titleCase));
 
+  // The snapshot endpoint always returns the four facet keys (empty maps before the
+  // daily rollup's first run), so `facets` is truthy even when there's nothing to
+  // show. Gate the section on actual values so a not-yet-populated snapshot — or a
+  // failed load — falls back to the "unavailable" message instead of empty headings.
+  const hasFacets = $derived(
+    countries.length > 0 || skills.length > 0 || seniority.length > 0 || workMode.length > 0,
+  );
+
   // Remote share across the resolved work-mode buckets.
   const remoteShare = $derived.by(() => {
     const wm = facets?.work_mode;
@@ -196,9 +204,9 @@
   <section class="mb-14">
     <div class="flex items-baseline justify-between">
       <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// what's inside</p>
-      {@render sourceLink('/api/v1/jobs/facets', '/jobs/facets')}
+      {@render sourceLink('/api/v1/stats/facets', '/stats/facets')}
     </div>
-    {#if facets}
+    {#if hasFacets}
       <div class="mt-6 grid gap-x-10 gap-y-8 sm:grid-cols-2">
         <div>
           <h3 class="mb-4 text-sm font-semibold">Top countries</h3>
