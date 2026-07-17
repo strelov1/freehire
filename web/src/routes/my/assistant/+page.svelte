@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import { replaceState } from '$app/navigation';
   import { Marked } from 'marked';
   import DOMPurify from 'isomorphic-dompurify';
   import {
@@ -287,6 +288,18 @@
         await createAndOpen();
       }
       phase = 'ready';
+
+      // Autostart: a CTA (e.g. CV tailoring) can pass a first prompt via ?prompt so the agent
+      // begins immediately instead of waiting for the user to type. Only fire on a fresh
+      // (empty) session — on a refresh the kickoff and its reply are already in the journal,
+      // so chat is non-empty and we never re-send.
+      const kickoff = new URLSearchParams(location.search).get('prompt');
+      if (requested && kickoff && chat.messages.length === 0) {
+        // Drop ?prompt from the URL first: a refresh replays the journal asynchronously, so
+        // chat is momentarily empty again — without this the kickoff would re-send.
+        replaceState(`${location.pathname}?session=${requested}`, {});
+        await dispatch(kickoff);
+      }
     } catch (err) {
       error = err instanceof Error ? err.message : 'Could not reach the agent backend.';
       teardown();

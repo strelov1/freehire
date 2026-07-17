@@ -1,7 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { goto } from '$app/navigation';
-  import { ArrowLeft, Sparkles } from '@lucide/svelte';
+  import { ArrowLeft, SquarePen } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import { createSession } from '$lib/assistant/api';
   import { currentUser } from '$lib/auth.svelte';
@@ -37,7 +37,10 @@
         cv_id: res.tailor_cv_id,
         base_cv_id: res.base_cv_id,
       });
-      await goto(`/my/assistant?session=${sessionId}`);
+      // Pass a first prompt so the agent starts working on arrival instead of waiting for the
+      // user to type — the assistant page auto-sends it into the fresh session.
+      const kickoff = "Let's tailor my CV for this role — review the fit analysis and walk me through the gaps.";
+      await goto(`/my/assistant?session=${sessionId}&prompt=${encodeURIComponent(kickoff)}`);
     } catch (e) {
       tailorError =
         e instanceof ApiError ? e.message : 'Could not start tailoring. Please try again.';
@@ -74,7 +77,7 @@
     >
       <div class="flex flex-col gap-1">
         <h2 class="flex items-center gap-2 text-sm font-semibold">
-          <Sparkles class="size-4 text-primary" />Tailor your CV to this role
+          <SquarePen class="size-4 text-primary" />Tailor your CV to this role
         </h2>
         <p class="text-sm text-muted-foreground">
           Create a copy of your CV reframed toward this vacancy — starting from the gaps this
