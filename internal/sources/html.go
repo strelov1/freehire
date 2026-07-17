@@ -134,6 +134,55 @@ func firstByID(root *html.Node, id string) *html.Node {
 	return found
 }
 
+// firstByTag returns the first element node with the given tag name, or nil.
+func firstByTag(root *html.Node, tag string) *html.Node {
+	var found *html.Node
+	walk(root, func(n *html.Node) bool {
+		if found != nil {
+			return false
+		}
+		if n.Type == html.ElementNode && n.Data == tag {
+			found = n
+			return false
+		}
+		return true
+	})
+	return found
+}
+
+// firstByClass returns the first element node carrying the given class, or nil.
+func firstByClass(root *html.Node, class string) *html.Node {
+	var found *html.Node
+	walk(root, func(n *html.Node) bool {
+		if found != nil {
+			return false
+		}
+		if n.Type == html.ElementNode && hasClass(n, class) {
+			found = n
+			return false
+		}
+		return true
+	})
+	return found
+}
+
+// titleText returns the trimmed text of the page's first <title> element, or "" when the
+// page has none.
+func titleText(root *html.Node) string {
+	var t string
+	walk(root, func(n *html.Node) bool {
+		if t != "" {
+			return false
+		}
+		if n.Type == html.ElementNode && n.Data == "title" {
+			t = textContent(n)
+			return false
+		}
+		return true
+	})
+	return t
+}
+
 // hasClass reports whether n's space-separated class attribute contains class; an empty
 // class matches any element.
 func hasClass(n *html.Node, class string) bool {

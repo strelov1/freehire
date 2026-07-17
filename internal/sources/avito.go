@@ -145,16 +145,5 @@ var avitoTitleCityPattern = regexp.MustCompile(`в городе\s+(.+?)\s*$`)
 // avitoTitleCity returns the display city parsed from the page <title>'s "в городе"
 // suffix, or "" when the page has no such title.
 func avitoTitleCity(root *html.Node) string {
-	var title string
-	walk(root, func(n *html.Node) bool {
-		if title != "" {
-			return false
-		}
-		if n.Type == html.ElementNode && n.Data == "title" {
-			title = textContent(n)
-			return false
-		}
-		return true
-	})
-	return firstSubmatch(avitoTitleCityPattern, title)
+	return firstSubmatch(avitoTitleCityPattern, titleText(root))
 }

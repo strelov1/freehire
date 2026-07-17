@@ -126,35 +126,3 @@ var rapydPositionIDPattern = regexp.MustCompile(`/company/careers/positions/([^/
 func rapydPositionID(u string) string {
 	return firstSubmatch(rapydPositionIDPattern, u)
 }
-
-// firstByTag returns the first element node with the given tag name, or nil.
-func firstByTag(root *html.Node, tag string) *html.Node {
-	var found *html.Node
-	walk(root, func(n *html.Node) bool {
-		if found != nil {
-			return false
-		}
-		if n.Type == html.ElementNode && n.Data == tag {
-			found = n
-			return false
-		}
-		return true
-	})
-	return found
-}
-
-// firstByClass returns the first element node carrying the given class, or nil.
-func firstByClass(root *html.Node, class string) *html.Node {
-	var found *html.Node
-	walk(root, func(n *html.Node) bool {
-		if found != nil {
-			return false
-		}
-		if n.Type == html.ElementNode && hasClass(n, class) {
-			found = n
-			return false
-		}
-		return true
-	})
-	return found
-}

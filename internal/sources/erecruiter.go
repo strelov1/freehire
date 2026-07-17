@@ -221,7 +221,7 @@ var erecruiterBodyExcludeIDs = map[string]bool{"JobTitle": true, "WorkPlace": tr
 // rather than a fixed list of section ids. It falls back to the known section ids for a page
 // without the standard container, and returns "" when neither yields anything.
 func erecruiterBody(root *html.Node) string {
-	if cont := elementByID(root, "offCont"); cont != nil {
+	if cont := firstByID(root, "offCont"); cont != nil {
 		var drop []*html.Node
 		walk(cont, func(n *html.Node) bool {
 			if n.Type == html.ElementNode && erecruiterBodyExcludeIDs[attr(n, "id")] {
@@ -237,7 +237,7 @@ func erecruiterBody(root *html.Node) string {
 	}
 	var body strings.Builder
 	for _, id := range []string{"t1", "Opportunities", "CompanyDescription"} {
-		if n := elementByID(root, id); n != nil {
+		if n := firstByID(root, id); n != nil {
 			body.WriteString(innerHTML(n))
 		}
 	}
@@ -246,7 +246,7 @@ func erecruiterBody(root *html.Node) string {
 
 // erecruiterIDText returns the trimmed text of the element with the given id, or "".
 func erecruiterIDText(root *html.Node, id string) string {
-	if n := elementByID(root, id); n != nil {
+	if n := firstByID(root, id); n != nil {
 		return textContent(n)
 	}
 	return ""

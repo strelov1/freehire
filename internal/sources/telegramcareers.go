@@ -33,7 +33,7 @@ func (t telegramcareers) Fetch(ctx context.Context, e CompanyEntry) ([]Job, erro
 	if err != nil {
 		return nil, fmt.Errorf("telegramcareers: fetch jobs page: %w", err)
 	}
-	content := elementByID(root, "dev_page_content")
+	content := firstByID(root, "dev_page_content")
 	if content == nil {
 		return nil, fmt.Errorf("telegramcareers: jobs content not found")
 	}
@@ -70,20 +70,4 @@ func (t telegramcareers) Fetch(ctx context.Context, e CompanyEntry) ([]Job, erro
 	}
 	flush()
 	return jobs, nil
-}
-
-// elementByID returns the first element node whose id attribute equals id, or nil.
-func elementByID(root *html.Node, id string) *html.Node {
-	var found *html.Node
-	walk(root, func(n *html.Node) bool {
-		if found != nil {
-			return false
-		}
-		if n.Type == html.ElementNode && attr(n, "id") == id {
-			found = n
-			return false
-		}
-		return true
-	})
-	return found
 }

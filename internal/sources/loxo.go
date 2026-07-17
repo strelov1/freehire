@@ -180,22 +180,6 @@ func loxoCompany(title string, e CompanyEntry) (company, roleTitle string) {
 	return e.Company, title
 }
 
-// titleText returns the document <title> text, or "".
-func titleText(root *html.Node) string {
-	var t string
-	walk(root, func(n *html.Node) bool {
-		if t != "" {
-			return false
-		}
-		if n.Type == html.ElementNode && n.Data == "title" {
-			t = textContent(n)
-			return false
-		}
-		return true
-	})
-	return t
-}
-
 // loxoStripAgencySuffix drops a trailing " | <agency>" from a document title.
 func loxoStripAgencySuffix(title string) string {
 	if i := strings.LastIndex(title, " | "); i >= 0 {

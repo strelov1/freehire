@@ -43,7 +43,13 @@ func (z zoho) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	if err != nil {
 		return nil, fmt.Errorf("zoho: listing %s: %w", e.Board, err)
 	}
-	raw := elementAttrByID(root, "input", "jobs", "value")
+	// The listing JSON is embedded in a hidden <input id="jobs" value="…">; the HTML parser
+	// decodes the &#34;-escaped JSON in the value attribute back to plain JSON. Ids are unique,
+	// so the id alone locates the input.
+	raw := ""
+	if n := firstByID(root, "jobs"); n != nil {
+		raw = attr(n, "value")
+	}
 	if raw == "" {
 		return nil, fmt.Errorf("zoho: %s: no #jobs data", e.Board)
 	}
@@ -187,24 +193,4 @@ func zohoUnescapeOnce(s string) string {
 		}
 	}
 	return b.String()
-}
-
-// elementAttrByID returns the named attribute of the first element with the given tag and id,
-// or "". The HTML parser decodes character references in the attribute value, so a value that
-// embeds an &#34;-escaped JSON array comes back as plain JSON.
-func elementAttrByID(root *html.Node, tag, id, name string) string {
-	var out string
-	found := false
-	walk(root, func(n *html.Node) bool {
-		if found {
-			return false
-		}
-		if n.Type == html.ElementNode && n.Data == tag && attr(n, "id") == id {
-			out = attr(n, name)
-			found = true
-			return false
-		}
-		return true
-	})
-	return out
 }
