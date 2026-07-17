@@ -10,6 +10,8 @@ package contribution
 import (
 	"context"
 	"errors"
+	"log"
+	"net/url"
 	"time"
 )
 
@@ -100,6 +102,9 @@ func (s *Service) Submit(ctx context.Context, submittedBy int64, rawURL string) 
 		}
 	}
 	if !ok {
+		// Log an unrecognized-but-plausible link (a valid http(s) URL) so a maintainer can
+		// review the feed and add support for a missed ATS. Garbage (non-URLs) is skipped.
+		logUnrecognized(submittedBy, rawURL)
 		return Contribution{}, "", "", ErrUnsupportedATS
 	}
 
@@ -123,6 +128,17 @@ func (s *Service) Submit(ctx context.Context, submittedBy int64, rawURL string) 
 // ListMine returns the given user's contributions, newest first.
 func (s *Service) ListMine(ctx context.Context, userID int64) ([]Contribution, error) {
 	return s.repo.ListByUser(ctx, userID)
+}
+
+// logUnrecognized emits a log line for a rejected link that parses as an http(s) URL — a
+// review feed for missed ATS. Grep prod for "contribution: unrecognized". Non-URL garbage is
+// skipped so the feed stays signal.
+func logUnrecognized(submittedBy int64, rawURL string) {
+	u, err := url.Parse(rawURL)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return
+	}
+	log.Printf("contribution: unrecognized link (user=%d): %s", submittedBy, rawURL)
 }
 
 // CompanyForBoard resolves the company already tracked on a (source, board) — for the "we

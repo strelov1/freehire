@@ -1,8 +1,12 @@
 package contribution
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log"
+	"os"
+	"strings"
 	"testing"
 )
 
@@ -199,6 +203,25 @@ func TestCompanyForBoard(t *testing.T) {
 	// No company on the board → not ok.
 	if _, _, ok := newService(&fakeRepo{}).CompanyForBoard(context.Background(), "greenhouse", "empty"); ok {
 		t.Error("CompanyForBoard(no company) ok = true, want false")
+	}
+}
+
+func TestSubmitLogsUnrecognizedURLsOnly(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	svc := New(&fakeRepo{}, nil)
+	// A valid http(s) URL that resolves to nothing is logged for review.
+	_, _, _, _ = svc.Submit(context.Background(), 42, "https://acme.io/careers/some-role")
+	if !strings.Contains(buf.String(), "unrecognized link (user=42): https://acme.io/careers/some-role") {
+		t.Errorf("log = %q, want the unrecognized http link logged", buf.String())
+	}
+	// Garbage (not a URL) is not logged — the feed stays signal.
+	buf.Reset()
+	_, _, _, _ = svc.Submit(context.Background(), 42, "not a url")
+	if buf.Len() != 0 {
+		t.Errorf("log = %q, want nothing for non-URL garbage", buf.String())
 	}
 }
 
