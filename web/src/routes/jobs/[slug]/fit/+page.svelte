@@ -11,13 +11,12 @@
 
   let { data } = $props();
 
-  // Tailoring is beta-gated (the server re-checks); the CTA only shows once a FRESH analysis
-  // exists for a stored CV — a stale one (CV or job changed since) would reframe toward an
-  // outdated verdict, so the user should recompute first. The analysis is what a tailored
-  // copy reframes toward.
+  // Tailoring is beta-gated (the server re-checks); the CTA shows once an analysis exists for
+  // a stored CV. A stale analysis (CV or job changed since) still tailors — we nudge a
+  // recompute for the sharpest reframing (see below) rather than block, since any CV
+  // re-upload marks every past analysis stale and blocking would hide the feature too often.
   const canTailor = $derived(
     !!data.fit?.analysis &&
-      data.fit?.stale !== true &&
       data.fit?.has_cv === true &&
       (currentUser()?.beta_tester === true || currentUser()?.role === 'moderator'),
   );
@@ -81,6 +80,11 @@
           Create a copy of your CV reframed toward this vacancy — starting from the gaps this
           analysis found. You can keep editing it after.
         </p>
+        {#if data.fit?.stale}
+          <p class="text-xs text-amber-600 dark:text-amber-500">
+            This analysis is out of date — recompute above for the sharpest tailoring.
+          </p>
+        {/if}
         {#if tailorError}
           <p class="text-sm text-destructive">{tailorError}</p>
         {/if}
