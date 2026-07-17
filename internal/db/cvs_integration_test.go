@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -112,5 +113,56 @@ func TestCVsOwnerIsolation(t *testing.T) {
 	}
 	if list, err := q.ListCVsByUser(ctx, other); err != nil || len(list) != 0 {
 		t.Errorf("foreign list: err=%v len=%d, want 0", err, len(list))
+	}
+}
+
+// TestBaseCVAndTailoredCopy covers the two-tier tailoring queries: GetBaseCVByUser picks the
+// user's newest non-tailored CV (and reports no row when there is none), and CreateTailoredCV
+// binds a copy to a vacancy via job_id without that copy shadowing the base.
+func TestBaseCVAndTailoredCopy(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	truncateCVs(t, pool)
+	ctx := context.Background()
+
+	user := seedCVUser(t, pool, "tailor@example.com")
+
+	// No base CV yet → no row (the caller then seeds one from the résumé).
+	if _, err := q.GetBaseCVByUser(ctx, user); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("empty base err = %v, want ErrNoRows", err)
+	}
+
+	// Two non-tailored CVs: the base is the most-recently-created (id-tiebroken) one.
+	if _, err := q.CreateCV(ctx, CreateCVParams{UserID: user, Title: "Older", TemplateID: "classic-ats", Data: []byte(`{"summary":"old"}`)}); err != nil {
+		t.Fatalf("create older: %v", err)
+	}
+	newer, err := q.CreateCV(ctx, CreateCVParams{UserID: user, Title: "Newer", TemplateID: "classic-ats", Data: []byte(`{"summary":"new"}`)})
+	if err != nil {
+		t.Fatalf("create newer: %v", err)
+	}
+	base, err := q.GetBaseCVByUser(ctx, user)
+	if err != nil {
+		t.Fatalf("base: %v", err)
+	}
+	if base.ID != newer.ID {
+		t.Errorf("base = %d, want newest %d", base.ID, newer.ID)
+	}
+
+	// A tailored copy bound to a vacancy is created with job_id and must NOT become the base.
+	job := insertJob(t, pool, "job-ext-tailor")
+	tailored, err := q.CreateTailoredCV(ctx, CreateTailoredCVParams{
+		UserID: user, Title: "Tailored", TemplateID: "classic-ats",
+		Data: base.Data, JobID: pgtype.Int8{Int64: job, Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("create tailored: %v", err)
+	}
+	if again, err := q.GetBaseCVByUser(ctx, user); err != nil || again.ID != newer.ID {
+		t.Errorf("base after tailoring = %d (err %v), want %d (tailored excluded)", again.ID, err, newer.ID)
+	}
+	if got, err := q.GetCVByID(ctx, GetCVByIDParams{ID: tailored.ID, UserID: user}); err != nil {
+		t.Fatalf("get tailored: %v", err)
+	} else if got.Title != "Tailored" {
+		t.Errorf("tailored title = %q, want Tailored", got.Title)
 	}
 }

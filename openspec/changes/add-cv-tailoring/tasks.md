@@ -6,9 +6,9 @@
 
 ## 2. SQL layer
 
-- [ ] 2.1 Add `cvs.sql` query to fetch a user's base CV (`job_id IS NULL`), owner-scoped
-- [ ] 2.2 Extend/add a `CreateCV` path that sets `job_id` for the tailored copy; regenerate `internal/db` via `make sqlc`
-- [ ] 2.3 Integration test (build-tag) for base-CV fetch and tailored-row creation with `job_id`
+- [x] 2.1 Add `cvs.sql` query to fetch a user's base CV (`job_id IS NULL`), owner-scoped
+- [x] 2.2 Extend/add a `CreateCV` path that sets `job_id` for the tailored copy; regenerate `internal/db` via `make sqlc`
+- [x] 2.3 Integration test (build-tag) for base-CV fetch and tailored-row creation with `job_id`
 
 ## 3. Store: tailoring bootstrap + patch
 

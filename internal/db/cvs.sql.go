@@ -53,6 +53,49 @@ func (q *Queries) CreateCV(ctx context.Context, arg CreateCVParams) (CreateCVRow
 	return i, err
 }
 
+const createTailoredCV = `-- name: CreateTailoredCV :one
+INSERT INTO cvs (user_id, title, template_id, data, job_id)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, title, template_id, created_at, updated_at
+`
+
+type CreateTailoredCVParams struct {
+	UserID     int64       `json:"user_id"`
+	Title      string      `json:"title"`
+	TemplateID string      `json:"template_id"`
+	Data       []byte      `json:"data"`
+	JobID      pgtype.Int8 `json:"job_id"`
+}
+
+type CreateTailoredCVRow struct {
+	ID         int64              `json:"id"`
+	Title      string             `json:"title"`
+	TemplateID string             `json:"template_id"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Insert a CV bound to a vacancy (job_id set) — the per-vacancy tailored copy. data is the
+// sanitized document copied from the base CV. Returns the metadata the detail response needs.
+func (q *Queries) CreateTailoredCV(ctx context.Context, arg CreateTailoredCVParams) (CreateTailoredCVRow, error) {
+	row := q.db.QueryRow(ctx, createTailoredCV,
+		arg.UserID,
+		arg.Title,
+		arg.TemplateID,
+		arg.Data,
+		arg.JobID,
+	)
+	var i CreateTailoredCVRow
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.TemplateID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const deleteCV = `-- name: DeleteCV :execrows
 DELETE FROM cvs
 WHERE id = $1 AND user_id = $2
@@ -71,6 +114,40 @@ func (q *Queries) DeleteCV(ctx context.Context, arg DeleteCVParams) (int64, erro
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const getBaseCVByUser = `-- name: GetBaseCVByUser :one
+SELECT id, title, template_id, data, created_at, updated_at
+FROM cvs
+WHERE user_id = $1 AND job_id IS NULL
+ORDER BY updated_at DESC, id DESC
+LIMIT 1
+`
+
+type GetBaseCVByUserRow struct {
+	ID         int64              `json:"id"`
+	Title      string             `json:"title"`
+	TemplateID string             `json:"template_id"`
+	Data       []byte             `json:"data"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
+// The user's base CV (job_id IS NULL) — their non-tailored résumé, newest edit first. Used
+// as the seed source when tailoring; returns no row when the user has only tailored CVs or
+// none at all (the caller then seeds a base from the extracted résumé).
+func (q *Queries) GetBaseCVByUser(ctx context.Context, userID int64) (GetBaseCVByUserRow, error) {
+	row := q.db.QueryRow(ctx, getBaseCVByUser, userID)
+	var i GetBaseCVByUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.TemplateID,
+		&i.Data,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const getCVByID = `-- name: GetCVByID :one

@@ -33,3 +33,20 @@ RETURNING id, title, template_id, created_at, updated_at;
 -- when nothing was deleted (foreign or missing id).
 DELETE FROM cvs
 WHERE id = $1 AND user_id = $2;
+
+-- name: GetBaseCVByUser :one
+-- The user's base CV (job_id IS NULL) — their non-tailored résumé, newest edit first. Used
+-- as the seed source when tailoring; returns no row when the user has only tailored CVs or
+-- none at all (the caller then seeds a base from the extracted résumé).
+SELECT id, title, template_id, data, created_at, updated_at
+FROM cvs
+WHERE user_id = $1 AND job_id IS NULL
+ORDER BY updated_at DESC, id DESC
+LIMIT 1;
+
+-- name: CreateTailoredCV :one
+-- Insert a CV bound to a vacancy (job_id set) — the per-vacancy tailored copy. data is the
+-- sanitized document copied from the base CV. Returns the metadata the detail response needs.
+INSERT INTO cvs (user_id, title, template_id, data, job_id)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, title, template_id, created_at, updated_at;
