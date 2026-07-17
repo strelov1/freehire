@@ -40,5 +40,5 @@
 
 ## 8. Verify
 
-- [ ] 8.1 `go build ./... && go vet ./... && go test ./...`; run `cv.Apply` and handler tests green
-- [ ] 8.2 Drive the flow end-to-end against a local server (bootstrap → patch → tailor-context → preview) and confirm behavior
+- [x] 8.1 `go build ./...` (exit 0), `go vet ./...` (exit 0), `go test ./...` (0 fail), `svelte-check` (0 errors); `cv.Apply` + store + handler unit + integration green
+- [x] 8.2 End-to-end via handler integration tests over real Postgres: bootstrap (409 no-analysis → 409 no-résumé → 201) → patch (apply / 422 / 404 owner) → tailor-context (missing_have/gap split / 409). The live UI walkthrough (fit → seeded agent session → live preview) is the cross-repo companion (see 7.2)
