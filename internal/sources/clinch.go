@@ -32,19 +32,10 @@ func NewClinch(c XMLGetter) Source { return clinch{http: c} }
 
 func (clinch) Provider() string { return "clinch" }
 
-// clinchSitemapEntry is one <url> of the career-site sitemap: the page URL and its
-// last-modified date (used as posted_at).
-type clinchSitemapEntry struct {
-	Loc     string `xml:"loc"`
-	LastMod string `xml:"lastmod"`
-}
-
 func (c clinch) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	var sitemap struct {
-		URLs []clinchSitemapEntry `xml:"url"`
-	}
 	url := fmt.Sprintf("https://%s/sitemap.xml", e.Board)
-	if err := c.http.GetXML(ctx, url, &sitemap); err != nil {
+	sitemap, err := getSitemap(ctx, c.http, url)
+	if err != nil {
 		return nil, fmt.Errorf("clinch: sitemap %s: %w", e.Board, err)
 	}
 

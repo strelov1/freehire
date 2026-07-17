@@ -85,16 +85,9 @@ type gulftalentAddress struct {
 	AddressCountry  string `json:"addressCountry"`
 }
 
-// gtLoc is one <loc> in a sitemap or sitemap-index document.
-type gtLoc struct {
-	Loc string `xml:"loc"`
-}
-
 func (g gulftalent) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
-	var index struct {
-		Sitemaps []gtLoc `xml:"sitemap"`
-	}
-	if err := g.http.GetXML(ctx, gulftalentSitemapURL, &index); err != nil {
+	index, err := getSitemap(ctx, g.http, gulftalentSitemapURL)
+	if err != nil {
 		return nil, fmt.Errorf("gulftalent: sitemap index: %w", err)
 	}
 
@@ -103,10 +96,8 @@ func (g gulftalent) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 		if !strings.Contains(s.Loc, gulftalentJobShardMarker) {
 			continue // only the job-posting shards carry JobPostings
 		}
-		var shard struct {
-			URLs []gtLoc `xml:"url"`
-		}
-		if err := g.http.GetXML(ctx, s.Loc, &shard); err != nil {
+		shard, err := getSitemap(ctx, g.http, s.Loc)
+		if err != nil {
 			continue // a single unreadable shard just drops its slice of the catalogue this run
 		}
 		for _, u := range shard.URLs {

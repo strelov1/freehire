@@ -29,55 +29,32 @@ func NewAvature(c avatureHTTP) Source { return avature{http: c} }
 
 func (avature) Provider() string { return "avature" }
 
-// avatureEntry is one JobDetail URL plus its sitemap last-modified date (used as posted_at).
-type avatureEntry struct {
-	loc     string
-	lastMod string
-}
-
 func (s avature) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	var index struct {
-		Sitemaps []struct {
-			Loc string `xml:"loc"`
-		} `xml:"sitemap"`
-	}
 	indexURL := fmt.Sprintf("https://%s/careers/sitemap_index.xml", e.Board)
-	if err := s.http.GetXML(ctx, indexURL, &index); err != nil {
-		return nil, fmt.Errorf("avature: sitemap index %s: %w", e.Board, err)
-	}
-
 	// One sitemap per locale lists the same postings; crawl en_US to avoid duplicates.
-	var listURL string
-	for _, sm := range index.Sitemaps {
-		if strings.Contains(sm.Loc, "/en_US/") {
-			listURL = sm.Loc
-			break
-		}
+	listURL, err := resolveSubSitemap(ctx, s.http, indexURL, "/en_US/")
+	if err != nil {
+		return nil, fmt.Errorf("avature: %s: %w", e.Board, err)
 	}
 	if listURL == "" {
 		return nil, fmt.Errorf("avature: no en_US sitemap advertised for %s", e.Board)
 	}
 
-	var urlset struct {
-		URLs []struct {
-			Loc     string `xml:"loc"`
-			LastMod string `xml:"lastmod"`
-		} `xml:"url"`
-	}
-	if err := s.http.GetXML(ctx, listURL, &urlset); err != nil {
+	urlset, err := getSitemap(ctx, s.http, listURL)
+	if err != nil {
 		return nil, fmt.Errorf("avature: sitemap %s: %w", listURL, err)
 	}
 
 	// The locale sitemap mixes JobDetail pages with utility pages (AgentCreate, …); keep
-	// only the postings.
-	var entries []avatureEntry
+	// only the postings. Each entry's lastmod is carried into detail as posted_at.
+	var entries []sitemapLoc
 	for _, u := range urlset.URLs {
 		if strings.Contains(u.Loc, "/careers/JobDetail/") {
-			entries = append(entries, avatureEntry{loc: u.Loc, lastMod: u.LastMod})
+			entries = append(entries, u)
 		}
 	}
 
-	return fetchDetails(entries, defaultDetailWorkers, func(entry avatureEntry) (Job, bool) {
+	return fetchDetails(entries, defaultDetailWorkers, func(entry sitemapLoc) (Job, bool) {
 		return s.detail(ctx, e, entry)
 	}), nil
 }
@@ -85,13 +62,13 @@ func (s avature) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // detail fetches one job page and maps it to a Job, returning ok=false when the page fetch
 // fails, carries no parseable id, or renders no description — so the caller skips just that
 // posting.
-func (s avature) detail(ctx context.Context, e CompanyEntry, entry avatureEntry) (Job, bool) {
-	id := avatureJobID(entry.loc)
+func (s avature) detail(ctx context.Context, e CompanyEntry, entry sitemapLoc) (Job, bool) {
+	id := avatureJobID(entry.Loc)
 	if id == "" {
 		return Job{}, false // no native id → would collide on the dedup key; skip it
 	}
 
-	root, err := s.http.GetHTML(ctx, entry.loc)
+	root, err := s.http.GetHTML(ctx, entry.Loc)
 	if err != nil {
 		return Job{}, false
 	}
@@ -105,14 +82,14 @@ func (s avature) detail(ctx context.Context, e CompanyEntry, entry avatureEntry)
 	workMode := avatureWorkMode(avatureFieldValue(root, "Work Model"))
 	return Job{
 		ExternalID:  id,
-		URL:         entry.loc,
+		URL:         entry.Loc,
 		Title:       title,
 		Company:     e.Company,
 		Location:    avatureLabeledValue(root, "Locations"),
 		Description: description,
 		Remote:      workMode == "remote",
 		WorkMode:    workMode,
-		PostedAt:    parseDate(entry.lastMod),
+		PostedAt:    parseDate(entry.LastMod),
 	}, true
 }
 

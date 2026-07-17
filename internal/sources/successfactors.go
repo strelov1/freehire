@@ -27,32 +27,23 @@ func NewSuccessFactors(c successfactorsHTTP) Source { return successfactors{http
 
 func (successfactors) Provider() string { return "successfactors" }
 
-// sfSitemapEntry is one <url> of the job sitemap: the job page URL and its last-modified
-// date (used as posted_at).
-type sfSitemapEntry struct {
-	Loc     string `xml:"loc"`
-	LastMod string `xml:"lastmod"`
-}
-
 func (s successfactors) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	var sitemap struct {
-		URLs []sfSitemapEntry `xml:"url"`
-	}
 	url := fmt.Sprintf("https://%s/job_sitemap.xml", e.Board)
-	if err := s.http.GetXML(ctx, url, &sitemap); err != nil {
+	sitemap, err := getSitemap(ctx, s.http, url)
+	if err != nil {
 		return nil, fmt.Errorf("successfactors: sitemap %s: %w", e.Board, err)
 	}
 
 	// Each job's title and description come from its own page fetch, fanned out under a
-	// bounded worker pool.
-	return fetchDetails(sitemap.URLs, defaultDetailWorkers, func(entry sfSitemapEntry) (Job, bool) {
+	// bounded worker pool; the sitemap's lastmod is carried as posted_at.
+	return fetchDetails(sitemap.URLs, defaultDetailWorkers, func(entry sitemapLoc) (Job, bool) {
 		return s.detail(ctx, e, entry)
 	}), nil
 }
 
 // detail fetches one job page and maps it to a Job, returning ok=false when the page
 // fetch fails so the caller can skip just that posting.
-func (s successfactors) detail(ctx context.Context, e CompanyEntry, entry sfSitemapEntry) (Job, bool) {
+func (s successfactors) detail(ctx context.Context, e CompanyEntry, entry sitemapLoc) (Job, bool) {
 	id := sfJobID(entry.Loc)
 	if id == "" {
 		return Job{}, false // no native id → would collide on the dedup key; skip it

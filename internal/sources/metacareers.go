@@ -38,22 +38,14 @@ func (metacareers) boardless() {}
 // metaSitemapURL is Meta's flat jobsearch sitemap: a <urlset> of job_details page URLs.
 const metaSitemapURL = "https://www.metacareers.com/jobsearch/sitemap.xml"
 
-// metaSitemapEntry is one <url> of the jobsearch sitemap: the job page URL and its
-// last-modified date (used as a posted_at fallback).
-type metaSitemapEntry struct {
-	Loc     string `xml:"loc"`
-	LastMod string `xml:"lastmod"`
-}
-
 func (m metacareers) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	var sitemap struct {
-		URLs []metaSitemapEntry `xml:"url"`
-	}
-	if err := m.http.GetXML(ctx, metaSitemapURL, &sitemap); err != nil {
+	sitemap, err := getSitemap(ctx, m.http, metaSitemapURL)
+	if err != nil {
 		return nil, fmt.Errorf("meta: sitemap: %w", err)
 	}
 
-	return fetchDetails(sitemap.URLs, defaultDetailWorkers, func(entry metaSitemapEntry) (Job, bool) {
+	// The sitemap's lastmod is carried into detail as a posted_at fallback.
+	return fetchDetails(sitemap.URLs, defaultDetailWorkers, func(entry sitemapLoc) (Job, bool) {
 		return m.detail(ctx, e, entry)
 	}), nil
 }
@@ -87,7 +79,7 @@ func metaJobID(loc string) string {
 // detail fetches one job page and maps its ld+json JobPosting to a Job, returning ok=false when
 // the page fetch fails, carries no JobPosting, or has no parseable id (which would collide on the
 // dedup key) — so the caller skips just that posting.
-func (m metacareers) detail(ctx context.Context, e CompanyEntry, entry metaSitemapEntry) (Job, bool) {
+func (m metacareers) detail(ctx context.Context, e CompanyEntry, entry sitemapLoc) (Job, bool) {
 	id := metaJobID(entry.Loc)
 	if id == "" {
 		return Job{}, false

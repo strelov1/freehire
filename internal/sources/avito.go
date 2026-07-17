@@ -34,16 +34,9 @@ func (avito) Provider() string { return "avito" }
 // avito is single-company, so its config entries carry no board.
 func (avito) boardless() {}
 
-// avitoLoc is one <loc> of either the sitemap index or a sub-sitemap.
-type avitoLoc struct {
-	Loc string `xml:"loc"`
-}
-
 func (a avito) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	var index struct {
-		Sitemaps []avitoLoc `xml:"sitemap"`
-	}
-	if err := a.http.GetXML(ctx, avitoSitemapIndexURL, &index); err != nil {
+	index, err := getSitemap(ctx, a.http, avitoSitemapIndexURL)
+	if err != nil {
 		return nil, fmt.Errorf("avito: sitemap index: %w", err)
 	}
 
@@ -53,10 +46,8 @@ func (a avito) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	var urls []string
 	seen := make(map[string]bool)
 	for _, sm := range index.Sitemaps {
-		var sub struct {
-			URLs []avitoLoc `xml:"url"`
-		}
-		if err := a.http.GetXML(ctx, sm.Loc, &sub); err != nil {
+		sub, err := getSitemap(ctx, a.http, sm.Loc)
+		if err != nil {
 			continue
 		}
 		for _, u := range sub.URLs {
