@@ -65,8 +65,7 @@ func (s wpyoast) detail(ctx context.Context, e CompanyEntry, loc string) (Job, b
 		return Job{}, false
 	}
 
-	a := p.JobLocation.Address
-	location := joinNonEmpty(a.AddressLocality, a.AddressRegion, a.AddressCountry)
+	location := p.JobLocation.Address.Location()
 
 	return Job{
 		ExternalID:  wpyoastJobID(loc),
@@ -83,21 +82,13 @@ func (s wpyoast) detail(ctx context.Context, e CompanyEntry, loc string) (Job, b
 // wpyoastPosting is the schema.org JobPosting decoded from a WP/Yoast job page's
 // application/ld+json block. jobLocation is a single Place (not an array).
 type wpyoastPosting struct {
-	Title              string       `json:"title"`
-	Description        string       `json:"description"`
-	DatePosted         string       `json:"datePosted"`
-	JobLocation        wpyoastPlace `json:"jobLocation"`
+	Title              string      `json:"title"`
+	Description        string      `json:"description"`
+	DatePosted         string      `json:"datePosted"`
+	JobLocation        schemaPlace `json:"jobLocation"`
 	HiringOrganization struct {
 		Name string `json:"name"`
 	} `json:"hiringOrganization"`
-}
-
-type wpyoastPlace struct {
-	Address struct {
-		AddressLocality string `json:"addressLocality"`
-		AddressRegion   string `json:"addressRegion"`
-		AddressCountry  string `json:"addressCountry"`
-	} `json:"address"`
 }
 
 // wpyoastJobIDPattern captures the numeric posting id from a /job/<id>-<slug>/ URL.

@@ -114,17 +114,10 @@ type careerplugPosting struct {
 	HiringOrganization struct {
 		Name string `json:"name"`
 	} `json:"hiringOrganization"`
-	JobLocation struct {
-		Address struct {
-			AddressLocality string `json:"addressLocality"`
-			AddressRegion   string `json:"addressRegion"`
-			AddressCountry  string `json:"addressCountry"`
-		} `json:"address"`
-	} `json:"jobLocation"`
+	JobLocation schemaPlace `json:"jobLocation"`
 }
 
 // location builds the display location from the posting's address (city, region, country).
 func (p careerplugPosting) location() string {
-	a := p.JobLocation.Address
-	return joinNonEmpty(a.AddressLocality, a.AddressRegion, a.AddressCountry)
+	return p.JobLocation.Address.Location()
 }

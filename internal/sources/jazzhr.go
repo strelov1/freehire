@@ -59,8 +59,7 @@ func (s jazzhr) detail(ctx context.Context, e CompanyEntry, jobURL string) (Job,
 		return Job{}, false
 	}
 
-	a := p.JobLocation.Address
-	location := joinNonEmpty(a.AddressLocality, a.AddressRegion, a.AddressCountry)
+	location := p.JobLocation.Address.Location()
 
 	return Job{
 		ExternalID:  id,
@@ -82,18 +81,10 @@ type jazzhrPosting struct {
 	Title              string      `json:"title"`
 	Description        string      `json:"description"`
 	DatePosted         string      `json:"datePosted"`
-	JobLocation        jazzhrPlace `json:"jobLocation"`
+	JobLocation        schemaPlace `json:"jobLocation"`
 	HiringOrganization struct {
 		Name string `json:"name"`
 	} `json:"hiringOrganization"`
-}
-
-type jazzhrPlace struct {
-	Address struct {
-		AddressLocality string `json:"addressLocality"`
-		AddressRegion   string `json:"addressRegion"`
-		AddressCountry  string `json:"addressCountry"`
-	} `json:"address"`
 }
 
 // jazzhrJobIDPattern captures the JazzHR posting token from an /apply/<token>/ URL (the

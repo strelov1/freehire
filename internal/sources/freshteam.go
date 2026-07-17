@@ -68,11 +68,7 @@ func (f freshteam) detail(ctx context.Context, e CompanyEntry, jobURL string) (J
 		return Job{}, false
 	}
 
-	location := joinNonEmpty(
-		p.JobLocation.Address.AddressLocality,
-		p.JobLocation.Address.AddressRegion,
-		p.JobLocation.Address.AddressCountry,
-	)
+	location := p.JobLocation.Address.Location()
 
 	// Freshteam carries an explicit remote flag as a string ("true"/"false"); isRemote
 	// (location) is only a fallback (never the title, which false-positives on "Remote …"
@@ -112,14 +108,8 @@ type ftPosting struct {
 	Description string `json:"description"`
 	DatePosted  string `json:"datePosted"`
 	// Freshteam serializes remote as a JSON string ("true"/"false"), not a bool.
-	Remote      string `json:"remote"`
-	JobLocation struct {
-		Address struct {
-			AddressLocality string `json:"addressLocality"`
-			AddressRegion   string `json:"addressRegion"`
-			AddressCountry  string `json:"addressCountry"`
-		} `json:"address"`
-	} `json:"jobLocation"`
+	Remote      string      `json:"remote"`
+	JobLocation schemaPlace `json:"jobLocation"`
 }
 
 // ftJobLinks returns the absolute hrefs of all anchors linking a /jobs/<id> job page,

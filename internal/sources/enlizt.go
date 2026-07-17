@@ -58,11 +58,7 @@ func (s enlizt) detail(ctx context.Context, e CompanyEntry, loc string) (Job, bo
 		return Job{}, false
 	}
 
-	location := joinNonEmpty(
-		p.JobLocation.Address.AddressLocality,
-		p.JobLocation.Address.AddressRegion,
-		p.JobLocation.Address.AddressCountry,
-	)
+	location := p.JobLocation.Address.Location()
 	mode := ""
 	if strings.EqualFold(p.JobLocationType, "TELECOMMUTE") {
 		mode = "remote" // schema.org's structured remote signal
@@ -95,13 +91,7 @@ type enliztPosting struct {
 	HiringOrganization struct {
 		Name string `json:"name"`
 	} `json:"hiringOrganization"`
-	JobLocation struct {
-		Address struct {
-			AddressLocality string `json:"addressLocality"`
-			AddressRegion   string `json:"addressRegion"`
-			AddressCountry  string `json:"addressCountry"`
-		} `json:"address"`
-	} `json:"jobLocation"`
+	JobLocation schemaPlace `json:"jobLocation"`
 }
 
 // enliztVagaPattern matches a /vagas/<slug> posting path: a leading path boundary, one

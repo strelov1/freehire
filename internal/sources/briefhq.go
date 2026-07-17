@@ -69,23 +69,13 @@ type briefhqPosting struct {
 	HiringOrganization struct {
 		Name string `json:"name"`
 	} `json:"hiringOrganization"`
-	JobLocation struct {
-		Address struct {
-			AddressLocality string `json:"addressLocality"`
-			AddressRegion   string `json:"addressRegion"`
-			AddressCountry  string `json:"addressCountry"`
-		} `json:"address"`
-	} `json:"jobLocation"`
-	Identifier struct {
+	JobLocation schemaPlace `json:"jobLocation"`
+	Identifier  struct {
 		Value string `json:"value"`
 	} `json:"identifier"`
 }
 
 // location builds the free-text location from the jobLocation address.
 func (p briefhqPosting) location() string {
-	return joinNonEmpty(
-		p.JobLocation.Address.AddressLocality,
-		p.JobLocation.Address.AddressRegion,
-		p.JobLocation.Address.AddressCountry,
-	)
+	return p.JobLocation.Address.Location()
 }

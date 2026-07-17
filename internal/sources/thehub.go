@@ -66,8 +66,7 @@ func (s thehub) detail(ctx context.Context, loc string) (Job, bool) {
 		return Job{}, false
 	}
 
-	a := p.JobLocation.Address
-	location := joinNonEmpty(a.AddressLocality, a.AddressRegion, a.AddressCountry)
+	location := p.JobLocation.Address.Location()
 
 	return Job{
 		ExternalID:  thehubJobID(loc),
@@ -87,18 +86,10 @@ type thehubPosting struct {
 	Title              string      `json:"title"`
 	Description        string      `json:"description"`
 	DatePosted         string      `json:"datePosted"`
-	JobLocation        thehubPlace `json:"jobLocation"`
+	JobLocation        schemaPlace `json:"jobLocation"`
 	HiringOrganization struct {
 		Name string `json:"name"`
 	} `json:"hiringOrganization"`
-}
-
-type thehubPlace struct {
-	Address struct {
-		AddressLocality string `json:"addressLocality"`
-		AddressRegion   string `json:"addressRegion"`
-		AddressCountry  string `json:"addressCountry"`
-	} `json:"address"`
 }
 
 // thehubJobIDPattern captures the posting id from a /jobs/<id> URL (a 24-hex object id).

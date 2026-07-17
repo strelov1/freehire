@@ -37,6 +37,13 @@ type schemaAddress struct {
 	AddressCountry  string `json:"addressCountry"`
 }
 
+// Location joins the address parts as "City, Region, Country", skipping blanks. Adapters whose
+// jobLocation carries all three parts use it instead of re-spelling the joinNonEmpty. A board
+// that intentionally omits the region (to avoid it surfacing in the text) must NOT use this.
+func (a schemaAddress) Location() string {
+	return joinNonEmpty(a.AddressLocality, a.AddressRegion, a.AddressCountry)
+}
+
 // schemaPlace is one schema.org Place (a jobLocation entry): its postal address.
 type schemaPlace struct {
 	Address schemaAddress `json:"address"`
