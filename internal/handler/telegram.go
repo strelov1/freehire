@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"context"
 	"crypto/subtle"
 	"errors"
 	"log"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
@@ -119,19 +121,29 @@ func (a *API) TelegramWebhook(c *fiber.Ctx) error {
 // replyTelegram sends a confirmation back to the chat; a send failure is logged,
 // not surfaced (the link itself already succeeded or failed independently).
 func (a *API) replyTelegram(c *fiber.Ctx, chatID int64, msg string) {
-	if err := a.telegramBot.SendMessage(c.Context(), chatID, msg); err != nil {
-		log.Printf("telegram webhook: reply to chat=%d: %v", chatID, err)
+	a.sendTelegram(c.Context(), chatID, msg)
+}
+
+// sendTelegram posts msg to the chat, logging (not surfacing) a send failure.
+func (a *API) sendTelegram(ctx context.Context, chatID int64, msg string) {
+	if err := a.telegramBot.SendMessage(ctx, chatID, msg); err != nil {
+		log.Printf("telegram: send to chat=%d: %v", chatID, err)
 	}
 }
+
+// telegramContribTimeout bounds the background contribution work spawned from a webhook
+// update — the DB lookups plus the outbound reply — so a stuck goroutine cannot leak.
+const telegramContribTimeout = 15 * time.Second
 
 // telegramURL matches the first http(s) link in a message.
 var telegramURL = regexp.MustCompile(`https?://[^\s]+`)
 
-// handleTelegramContribution runs a board link pasted into the linked chat through the same
-// contribution flow as the website: it resolves the chat to its user, submits the first URL
-// in the message, and replies with the outcome. A message with no link is ignored silently
-// (so ordinary chatter draws no reply); a link from an unlinked chat prompts the user to link.
-func (a *API) handleTelegramContribution(c *fiber.Ctx, update telegramnotify.Update) {
+// handleTelegramContribution routes a board link pasted into the linked chat through the same
+// contribution flow as the website. It extracts the link and hands the DB + reply work to a
+// background goroutine so the webhook can ACK immediately: a slow webhook makes Telegram time
+// out and RE-DELIVER the update (a reply storm), and the request context is canceled the moment
+// we return. A message with no link is ignored silently.
+func (a *API) handleTelegramContribution(_ *fiber.Ctx, update telegramnotify.Update) {
 	if update.Message == nil {
 		return
 	}
@@ -142,29 +154,38 @@ func (a *API) handleTelegramContribution(c *fiber.Ctx, update telegramnotify.Upd
 	}
 	// Trim trailing punctuation a user (or Telegram) may append to the link.
 	rawURL := strings.TrimRight(m, ").,!?;:")
+	go a.processTelegramContribution(chatID, rawURL)
+}
 
-	userID, err := a.queries.GetUserIDByTelegramChat(c.Context(), chatID)
+// processTelegramContribution resolves the chat to its user, submits the link, and replies —
+// on its own bounded background context (the webhook has already returned). A link from an
+// unlinked chat prompts the user to link first.
+func (a *API) processTelegramContribution(chatID int64, rawURL string) {
+	ctx, cancel := context.WithTimeout(context.Background(), telegramContribTimeout)
+	defer cancel()
+
+	userID, err := a.queries.GetUserIDByTelegramChat(ctx, chatID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		a.replyTelegram(c, chatID, "🔗 Link your freehire account first (Settings → Telegram on the site), then send board links here.")
+		a.sendTelegram(ctx, chatID, "🔗 Link your freehire account first (Settings → Telegram on the site), then send board links here.")
 		return
 	}
 	if err != nil {
-		log.Printf("telegram webhook: resolve chat=%d: %v", chatID, err)
+		log.Printf("telegram: resolve chat=%d: %v", chatID, err)
 		return
 	}
 
-	rec, err := a.contribution.Submit(c.Context(), userID, rawURL)
+	rec, err := a.contribution.Submit(ctx, userID, rawURL)
 	switch {
 	case errors.Is(err, contribution.ErrUnsupportedATS):
-		a.replyTelegram(c, chatID, "🤔 That link isn't from a supported ATS board. Send a link from a company's Greenhouse, Lever, Ashby, or Workable careers page.")
+		a.sendTelegram(ctx, chatID, "🤔 That link isn't from a supported ATS board. Send a link from a company's Greenhouse, Lever, Ashby, or Workable careers page.")
 	case errors.Is(err, contribution.ErrBoardAlreadyTracked):
-		a.replyTelegram(c, chatID, "👍 We already track that board — nothing to add.")
+		a.sendTelegram(ctx, chatID, "👍 We already track that board — nothing to add.")
 	case errors.Is(err, contribution.ErrBoardAlreadyContributed):
-		a.replyTelegram(c, chatID, "✅ That board was already contributed — no new point, but thanks!")
+		a.sendTelegram(ctx, chatID, "✅ That board was already contributed — no new point, but thanks!")
 	case err != nil:
-		log.Printf("telegram webhook: submit user=%d: %v", userID, err)
-		a.replyTelegram(c, chatID, "⚠️ Something went wrong. Please try again.")
+		log.Printf("telegram: submit user=%d: %v", userID, err)
+		a.sendTelegram(ctx, chatID, "⚠️ Something went wrong. Please try again.")
 	default:
-		a.replyTelegram(c, chatID, "🎉 <b>"+rec.Board+"</b> ("+rec.Source+") is a new board — we'll start crawling it. +1 point!")
+		a.sendTelegram(ctx, chatID, "🎉 <b>"+rec.Board+"</b> ("+rec.Source+") is a new board — we'll start crawling it. +1 point!")
 	}
 }

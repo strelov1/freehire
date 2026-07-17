@@ -37,18 +37,31 @@ func TestTelegramContribution(t *testing.T) {
 		t.Fatalf("seed link: %v", err)
 	}
 
-	// Stub Bot API that captures each reply's text.
-	var lastReply string
+	// Stub Bot API that streams each reply's text over a channel. The reply now happens in a
+	// background goroutine (the webhook ACKs first), so tests wait on this rather than reading
+	// a shared variable — race-free and async-aware.
+	replies := make(chan string, 8)
 	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Text string `json:"text"`
 		}
 		b, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(b, &body)
-		lastReply = body.Text
+		replies <- body.Text
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
 	defer stub.Close()
+
+	waitReply := func(t *testing.T) string {
+		t.Helper()
+		select {
+		case msg := <-replies:
+			return msg
+		case <-time.After(5 * time.Second):
+			t.Fatal("no reply within 5s")
+			return ""
+		}
+	}
 
 	queries := db.New(pool)
 	h := &API{
@@ -85,14 +98,20 @@ func TestTelegramContribution(t *testing.T) {
 		return p
 	}
 
-	t.Run("a linked user's board link is recorded and rewarded", func(t *testing.T) {
-		lastReply = ""
+	t.Run("the webhook ACKs fast, then records and rewards in the background", func(t *testing.T) {
+		start := time.Now()
 		post(chatID, "found this: https://jobs.ashbyhq.com/blitzy/a741b4e8-8799-4539-b1c2-78d69ff625e7")
+		// The webhook must return well before the reply is sent — that's the whole point of the
+		// async fix (a slow ACK triggers Telegram's retry storm).
+		if d := time.Since(start); d > 2*time.Second {
+			t.Errorf("webhook took %v to ACK, want fast (reply is async)", d)
+		}
+		reply := waitReply(t)
+		if !strings.Contains(reply, "blitzy") || !strings.Contains(reply, "new board") {
+			t.Errorf("reply = %q, want a new-board confirmation naming blitzy", reply)
+		}
 		if points() != 1 {
 			t.Errorf("points = %d, want 1", points())
-		}
-		if !strings.Contains(lastReply, "blitzy") || !strings.Contains(lastReply, "new board") {
-			t.Errorf("reply = %q, want a new-board confirmation naming blitzy", lastReply)
 		}
 		var board string
 		if err := pool.QueryRow(ctx, `SELECT board FROM link_contributions WHERE submitted_by=$1`, userID).Scan(&board); err != nil || board != "blitzy" {
@@ -101,29 +120,29 @@ func TestTelegramContribution(t *testing.T) {
 	})
 
 	t.Run("a second link on the same board earns no point", func(t *testing.T) {
-		lastReply = ""
 		post(chatID, "https://jobs.ashbyhq.com/blitzy") // the board listing this time
+		if reply := waitReply(t); !strings.Contains(reply, "already contributed") {
+			t.Errorf("reply = %q, want already-contributed", reply)
+		}
 		if points() != 1 {
 			t.Errorf("points = %d, want still 1", points())
-		}
-		if !strings.Contains(lastReply, "already contributed") {
-			t.Errorf("reply = %q, want already-contributed", lastReply)
 		}
 	})
 
 	t.Run("a non-link message draws no reply", func(t *testing.T) {
-		lastReply = ""
 		post(chatID, "hello bot how are you")
-		if lastReply != "" {
-			t.Errorf("reply = %q, want none for ordinary chatter", lastReply)
+		select {
+		case msg := <-replies:
+			t.Errorf("reply = %q, want none for ordinary chatter", msg)
+		case <-time.After(500 * time.Millisecond):
+			// no reply — correct
 		}
 	})
 
 	t.Run("a link from an unlinked chat prompts to link", func(t *testing.T) {
-		lastReply = ""
 		post(999999, "https://jobs.ashbyhq.com/newco/uuid")
-		if !strings.Contains(strings.ToLower(lastReply), "link your") {
-			t.Errorf("reply = %q, want a link-your-account prompt", lastReply)
+		if reply := waitReply(t); !strings.Contains(strings.ToLower(reply), "link your") {
+			t.Errorf("reply = %q, want a link-your-account prompt", reply)
 		}
 	})
 }
