@@ -8,11 +8,12 @@ VALUES (sqlc.arg(submitted_by)::bigint, sqlc.arg(url), sqlc.arg(source), sqlc.ar
 RETURNING *;
 
 -- name: JobsExistForBoard :one
--- Whether the catalogue already crawls this board — any job whose external_id is prefixed by
--- "<board>:" for the multi-tenant sources. Used to reject a board we already track before any
--- write. starts_with is a plain prefix test — no LIKE wildcards to escape.
+-- Whether the catalogue already crawls this board — any job whose external_id is "<board>:…".
+-- Matched with a LIKE-prefix so the (source, external_id text_pattern_ops) index serves it as
+-- a range scan; starts_with()/a default-collation LIKE would seq-scan the whole source (37s
+-- over greenhouse's ~300k rows). board_pattern is "<escaped board>:%", built by the repository.
 SELECT EXISTS (
-    SELECT 1 FROM jobs WHERE source = sqlc.arg(source) AND starts_with(external_id, sqlc.arg(board_prefix))
+    SELECT 1 FROM jobs WHERE source = sqlc.arg(source) AND external_id LIKE sqlc.arg(board_pattern)
 ) AS exists;
 
 -- name: ListContributionsByUser :many

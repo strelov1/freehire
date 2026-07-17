@@ -51,7 +51,7 @@ type RecordInput struct {
 // the contribution and increments the submitter's points atomically, mapping a duplicate
 // board to ErrBoardAlreadyContributed.
 type Repository interface {
-	BoardTracked(ctx context.Context, source, boardPrefix string) (bool, error)
+	BoardTracked(ctx context.Context, source, board string) (bool, error)
 	Record(ctx context.Context, in RecordInput) (Contribution, error)
 	ListByUser(ctx context.Context, userID int64) ([]Contribution, error)
 }
@@ -77,7 +77,7 @@ func (s *Service) Submit(ctx context.Context, submittedBy int64, rawURL string) 
 		return Contribution{}, ErrUnsupportedATS
 	}
 
-	tracked, err := s.repo.BoardTracked(ctx, source, board+":")
+	tracked, err := s.repo.BoardTracked(ctx, source, board)
 	if err != nil {
 		return Contribution{}, err
 	}

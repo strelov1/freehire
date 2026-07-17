@@ -2,6 +2,7 @@ package contribution
 
 import (
 	"context"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -26,9 +27,18 @@ func NewQueriesRepository(q *db.Queries, pool *pgxpool.Pool) *QueriesRepository 
 }
 
 // BoardTracked reports whether the catalogue already crawls this board (any job whose
-// external_id is prefixed by "<board>:").
-func (r *QueriesRepository) BoardTracked(ctx context.Context, source, boardPrefix string) (bool, error) {
-	return r.q.JobsExistForBoard(ctx, db.JobsExistForBoardParams{Source: source, BoardPrefix: boardPrefix})
+// external_id is "<board>:…"). It matches with a LIKE-prefix served by the
+// (source, external_id text_pattern_ops) index; the board's LIKE metacharacters are escaped
+// so a slug with % or _ cannot widen the match.
+func (r *QueriesRepository) BoardTracked(ctx context.Context, source, board string) (bool, error) {
+	return r.q.JobsExistForBoard(ctx, db.JobsExistForBoardParams{Source: source, BoardPattern: likePrefix(board)})
+}
+
+// likePrefix builds a LIKE pattern matching external_ids on board ("<board>:…"), escaping the
+// LIKE metacharacters \ % _ in the (URL-derived) board with the default backslash escape.
+func likePrefix(board string) string {
+	esc := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(board)
+	return esc + ":%"
 }
 
 // Record inserts the contribution and awards the submitter a point in one transaction, so a

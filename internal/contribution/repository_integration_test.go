@@ -126,12 +126,16 @@ func TestBoardTracked(t *testing.T) {
 
 	insertJob(t, pool, "greenhouse", "acme:100")
 
-	// Board tracked by prefix; a different board is not.
-	if ok, err := repo.BoardTracked(ctx, "greenhouse", "acme:"); err != nil || !ok {
-		t.Errorf("BoardTracked(acme:) = %v,%v, want true", ok, err)
+	// Board tracked; a different board is not.
+	if ok, err := repo.BoardTracked(ctx, "greenhouse", "acme"); err != nil || !ok {
+		t.Errorf("BoardTracked(acme) = %v,%v, want true", ok, err)
 	}
-	if ok, err := repo.BoardTracked(ctx, "greenhouse", "globex:"); err != nil || ok {
-		t.Errorf("BoardTracked(globex:) = %v,%v, want false", ok, err)
+	if ok, err := repo.BoardTracked(ctx, "greenhouse", "globex"); err != nil || ok {
+		t.Errorf("BoardTracked(globex) = %v,%v, want false", ok, err)
+	}
+	// A LIKE metacharacter in the board must not widen the match: "ac_e" must not match "acme".
+	if ok, err := repo.BoardTracked(ctx, "greenhouse", "ac_e"); err != nil || ok {
+		t.Errorf("BoardTracked(ac_e) = %v,%v, want false — '_' must be escaped, not a wildcard", ok, err)
 	}
 }
 

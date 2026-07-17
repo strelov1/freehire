@@ -59,20 +59,21 @@ func (q *Queries) IncrementUserPoints(ctx context.Context, id int64) error {
 
 const jobsExistForBoard = `-- name: JobsExistForBoard :one
 SELECT EXISTS (
-    SELECT 1 FROM jobs WHERE source = $1 AND starts_with(external_id, $2)
+    SELECT 1 FROM jobs WHERE source = $1 AND external_id LIKE $2
 ) AS exists
 `
 
 type JobsExistForBoardParams struct {
-	Source      string `json:"source"`
-	BoardPrefix string `json:"board_prefix"`
+	Source       string `json:"source"`
+	BoardPattern string `json:"board_pattern"`
 }
 
-// Whether the catalogue already crawls this board — any job whose external_id is prefixed by
-// "<board>:" for the multi-tenant sources. Used to reject a board we already track before any
-// write. starts_with is a plain prefix test — no LIKE wildcards to escape.
+// Whether the catalogue already crawls this board — any job whose external_id is "<board>:…".
+// Matched with a LIKE-prefix so the (source, external_id text_pattern_ops) index serves it as
+// a range scan; starts_with()/a default-collation LIKE would seq-scan the whole source (37s
+// over greenhouse's ~300k rows). board_pattern is "<escaped board>:%", built by the repository.
 func (q *Queries) JobsExistForBoard(ctx context.Context, arg JobsExistForBoardParams) (bool, error) {
-	row := q.db.QueryRow(ctx, jobsExistForBoard, arg.Source, arg.BoardPrefix)
+	row := q.db.QueryRow(ctx, jobsExistForBoard, arg.Source, arg.BoardPattern)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err

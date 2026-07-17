@@ -452,9 +452,10 @@ type Querier interface {
 	// Slim beta-membership lookup for the RequireModeratorOrBeta middleware — a
 	// primitive bool so the auth package stays free of a db import (same shape as GetUserRole).
 	IsBetaTester(ctx context.Context, id int64) (bool, error)
-	// Whether the catalogue already crawls this board — any job whose external_id is prefixed by
-	// "<board>:" for the multi-tenant sources. Used to reject a board we already track before any
-	// write. starts_with is a plain prefix test — no LIKE wildcards to escape.
+	// Whether the catalogue already crawls this board — any job whose external_id is "<board>:…".
+	// Matched with a LIKE-prefix so the (source, external_id text_pattern_ops) index serves it as
+	// a range scan; starts_with()/a default-collation LIKE would seq-scan the whole source (37s
+	// over greenhouse's ~300k rows). board_pattern is "<escaped board>:%", built by the repository.
 	JobsExistForBoard(ctx context.Context, arg JobsExistForBoardParams) (bool, error)
 	// Manually link (or relink) an email to a chosen application, overriding any
 	// auto-link or suggestion.
