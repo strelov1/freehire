@@ -268,10 +268,11 @@
           fromSummary(s, labelCache[s.session_id], fallbackLabel(s.created_at)),
         ),
       );
+      const params = new URLSearchParams(location.search);
       // ?session=<id> opens a specific session (e.g. a tailoring session just started from
       // the fit page); ensure it shows in the list even if listSessions is momentarily stale.
       // Otherwise open the newest, or start a fresh chat when there are none.
-      const requested = new URLSearchParams(location.search).get('session');
+      const requested = params.get('session');
       if (requested) {
         if (!sessions.some((s) => s.id === requested)) {
           sessions = upsertSession(sessions, {
@@ -293,7 +294,7 @@
       // begins immediately instead of waiting for the user to type. Only fire on a fresh
       // (empty) session — on a refresh the kickoff and its reply are already in the journal,
       // so chat is non-empty and we never re-send.
-      const kickoff = new URLSearchParams(location.search).get('prompt');
+      const kickoff = params.get('prompt');
       if (requested && kickoff && chat.messages.length === 0) {
         // Drop ?prompt from the URL first: a refresh replays the journal asynchronously, so
         // chat is momentarily empty again — without this the kickoff would re-send.
