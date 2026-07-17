@@ -23,39 +23,39 @@
   board: activestate
 - company: adamarchitecture
   board: adamarchitecture
-- company: afcb
+- company: AFC Bournemouth
   board: afcb
 - company: alternativeheat
   board: alternativeheat
-- company: arcticbev
+- company: Arctic Beverages
   board: arcticbev
 - company: article
   board: article
 - company: astonmartinf1
   board: astonmartinf1
-- company: auroraer
+- company: Aurora Energy Research
   board: auroraer
 - company: avaaz
   board: avaaz
-- company: barnetsouthgate
+- company: Barnet and Southgate College
   board: barnetsouthgate
 - company: bathcollege
   board: bathcollege
-- company: bathspa
+- company: Bath Spa University
   board: bathspa
 - company: bmt
   board: bmt
-- company: chetwood-bank
+- company: Chetwood Bank
   board: chetwood-bank
-- company: climatebonds
+- company: Climate Bonds Initiative
   board: climatebonds
-- company: cpcatapult
+- company: Connected Places Catapult
   board: cpcatapult
 - company: cvtechnology
   board: cvtechnology
 - company: dains
   board: dains
-- company: dea
+- company: DEA Aviation Ltd
   board: dea
 - company: desteia
   board: desteia
@@ -65,11 +65,11 @@
   board: disturbia
 - company: doradosoftwaregroup
   board: doradosoftwaregroup
-- company: eastlandsvsl
+- company: Eastlands Venue Services Limited
   board: eastlandsvsl
 - company: ebiquity
   board: ebiquity
-- company: epuki
+- company: TTEP UK&I Investments Ltd
   board: epuki
 - company: esland
   board: esland
@@ -79,27 +79,27 @@
   board: forterro
 - company: fortifyhealth
   board: fortifyhealth
-- company: franklin-electric
+- company: Franklin Electric
   board: franklin-electric
 - company: frontline
   board: frontline
 - company: futuregroup
   board: futuregroup
-- company: gkc
+- company: Glasgow Kelvin College
   board: gkc
 - company: greenergy
   board: greenergy
-- company: gs1ca
+- company: GS1 Canada
   board: gs1ca
-- company: hollandamericaprincess
+- company: Holland America/Princess Alaska-Yukon Land Operations
   board: hollandamericaprincess
-- company: hughbaird
+- company: Hugh Baird College
   board: hughbaird
-- company: ifx
+- company: IFX Payments
   board: ifx
-- company: lbresearch
+- company: Centellic
   board: lbresearch
-- company: liv-coll
+- company: The City of Liverpool College
   board: liv-coll
 - company: lush
   board: lush
@@ -107,9 +107,9 @@
   board: maccreanorlavington
 - company: nasstar
   board: nasstar
-- company: nypl
+- company: The New York Public Library
   board: nypl
-- company: oxfordinternational
+- company: Oxford International Education Group
   board: oxfordinternational
 - company: peverelcourtcare
   board: peverelcourtcare
@@ -117,19 +117,19 @@
   board: photonic
 - company: porterdodson
   board: porterdodson
-- company: premierleague
+- company: The Premier League
   board: premierleague
-- company: pxlimited
+- company: px Group
   board: pxlimited
-- company: qac
+- company: Queen Alexandra Charity
   board: qac
 - company: reconomy
   board: reconomy
-- company: rowdentech
+- company: Rowden
   board: rowdentech
 - company: rwdi
   board: rwdi
-- company: sobencc
+- company: Soben part of Accenture
   board: sobencc
 - company: tabby
   board: tabby
@@ -141,23 +141,23 @@
   board: togethergroup
 - company: trivandi
   board: trivandi
-- company: ttep
+- company: TTEP UK&I Investments Ltd
   board: ttep
-- company: twiningsovocareers
+- company: Twinings Ovaltine
   board: twiningsovocareers
-- company: wfs
+- company: Worldwide Flight Services
   board: wfs
-- company: wigan-leigh-ac-uk
+- company: Wigan & Leigh College
   board: wigan-leigh-ac-uk
 - company: youlend
   board: youlend
 - company: abbottlyon
   board: abbottlyon
-- company: abcdboston
+- company: Action for Boston Community Development
   board: abcdboston
 - company: accenture
   board: accenture
-- company: accredited
+- company: Accredited Insurance
   board: accredited
 - company: advantagedental
   board: advantagedental
@@ -165,33 +165,33 @@
   board: advitaortho
 - company: agomab
   board: agomab
-- company: americancampus
+- company: American Campus Communities
   board: americancampus
 - company: americanveterinarygroup
   board: americanveterinarygroup
 - company: anthesisgroup
   board: anthesisgroup
-- company: aparaautism
+- company: Apara Autism Centers
   board: aparaautism
 - company: arthurcox
   board: arthurcox
 - company: ascensusspecialties
   board: ascensusspecialties
-- company: aspireallergy
+- company: Aspire Allergy & Sinus
   board: aspireallergy
-- company: astranahealth
+- company: Astrana Health, Inc.
   board: astranahealth
 - company: astrolab
   board: astrolab
 - company: atbtherapeutics
   board: atbtherapeutics
-- company: atlanticaviation
+- company: Atlantic Aviation Group
   board: atlanticaviation
 - company: avidaba
   board: avidaba
-- company: bandlab
+- company: BandLab Technologies
   board: bandlab
-- company: benchmarkgc
+- company: Benchmark Construction
   board: benchmarkgc
 - company: bighatbiosciences
   board: bighatbiosciences
@@ -203,23 +203,23 @@
   board: bluemantis
 - company: bluestreamfiber
   board: bluestreamfiber
-- company: bobsredmill
+- company: Bob's Red Mill
   board: bobsredmill
 - company: bright
   board: bright
 - company: brivo
   board: brivo
-- company: brookssolutions
+- company: Brooks Building Solutions
   board: brookssolutions
-- company: bryanfagan
+- company: Law Office of Bryan Fagan
   board: bryanfagan
 - company: c10labs
   board: c10labs
-- company: caturus
+- company: Caturus Management Services, LLC
   board: caturus
 - company: ces
   board: ces
-- company: cgt
+- company: CGT U.S. Limited
   board: cgt
 - company: chainbridgesolutions
   board: chainbridgesolutions
@@ -231,21 +231,21 @@
   board: compasshealthnetwork
 - company: compregroup
   board: compregroup
-- company: confidencems
+- company: Confidence Management Systems
   board: confidencems
-- company: continentalserves
+- company: Continental Services
   board: continentalserves
 - company: cord
   board: cord
-- company: corston
+- company: Corston Architectural Detail
   board: corston
 - company: cottonholdings
   board: cottonholdings
-- company: crcna
+- company: The Christian Reformed Church in North America
   board: crcna
 - company: davies
   board: davies
-- company: ebcap
+- company: East Bay Community Action Program
   board: ebcap
 - company: eberjey
   board: eberjey
@@ -257,7 +257,7 @@
   board: eptura
 - company: fidelitone
   board: fidelitone
-- company: fifa-careers
+- company: FIFA
   board: fifa-careers
 - company: finfrock
   board: finfrock
@@ -267,63 +267,63 @@
   board: fs-elliott
 - company: gdenergyproducts
   board: gdenergyproducts
-- company: gitmeidlaw
+- company: Law Offices of Robert S. Gitmeid & Associates
   board: gitmeidlaw
-- company: gmesupply
+- company: GME Supply Family of Brands
   board: gmesupply
-- company: gps-dental
+- company: GPS Dental
   board: gps-dental
-- company: grasshopper
+- company: Grasshopper Bank
   board: grasshopper
 - company: gravityglobal
   board: gravityglobal
 - company: greenstarexteriors
   board: greenstarexteriors
-- company: hallmarkhcs
+- company: Hallmark Health Care Solutions
   board: hallmarkhcs
 - company: harness
   board: harness
-- company: herrs
+- company: Herr Foods Inc.
   board: herrs
-- company: hollandamericagroup
+- company: Holland America Line & Seabourn
   board: hollandamericagroup
-- company: holtgrp
+- company: HOLT Group
   board: holtgrp
-- company: idtus
+- company: Innovative Defense Technologies
   board: idtus
 - company: impulsespace
   board: impulsespace
 - company: innovetivepetcare
   board: innovetivepetcare
-- company: intermedia
+- company: Intermedia Intelligent Communications
   board: intermedia
-- company: invictus-verus
+- company: Invictus Capital Partners / Verus Mortgage Capital
   board: invictus-verus
-- company: isginc
+- company: ISG
   board: isginc
-- company: jimersonfirm
+- company: Jimerson Birr, P.A.
   board: jimersonfirm
-- company: jobs-aligntech
+- company: Align Technology
   board: jobs-aligntech
 - company: joe-testing
   board: joe-testing
 - company: joinparachute
   board: joinparachute
-- company: jsitel
+- company: John Staurulakis
   board: jsitel
 - company: kempinski
   board: kempinski
-- company: keystoneclear
+- company: Keystone Clearwater Solutions
   board: keystoneclear
 - company: kharon
   board: kharon
 - company: kwi
   board: kwi
-- company: lakesidetrucks
+- company: Lakeside International Trucks
   board: lakesidetrucks
 - company: lomond
   board: lomond
-- company: looklab
+- company: Look Lab Med Spa
   board: looklab
 - company: lumanity
   board: lumanity
@@ -331,7 +331,7 @@
   board: mbhealthcare
 - company: medical
   board: medical
-- company: mjhughes
+- company: MJ Hughes Construction
   board: mjhughes
 - company: mmgapts
   board: mmgapts
@@ -339,15 +339,15 @@
   board: mooven
 - company: mountainwarehouse
   board: mountainwarehouse
-- company: multiplier-careers
+- company: Multiplier
   board: multiplier-careers
-- company: mybrio
+- company: Brio Living Services
   board: mybrio
-- company: myomo
+- company: Myomo, Inc
   board: myomo
-- company: mytech
+- company: Mytech Partners
   board: mytech
-- company: natcen
+- company: National Centre for Social Research
   board: natcen
 - company: nccgroup
   board: nccgroup
@@ -359,11 +359,11 @@
   board: nodalexchange
 - company: nxcus
   board: nxcus
-- company: nyx
+- company: NYX LLC
   board: nyx
-- company: ohiovalleyelectriccorporation
+- company: Ohio Valley Electric Corporation / Indiana - Kentucky Electric Corporation
   board: ohiovalleyelectriccorporation
-- company: oneplan
+- company: OnePlan Solutions
   board: oneplan
 - company: outform
   board: outform
@@ -375,29 +375,29 @@
   board: partnersforhome
 - company: pathify
   board: pathify
-- company: peachcareers
+- company: Peach Tech Limited
   board: peachcareers
-- company: pence
+- company: Pence Companies
   board: pence
-- company: pinnbank
+- company: Pinnacle Bank/Bank of Colorado
   board: pinnbank
 - company: pipedreams
   board: pipedreams
-- company: premier-roofing
+- company: Premier Roofing Company
   board: premier-roofing
-- company: pricebrotherskc
+- company: Price Brothers
   board: pricebrotherskc
 - company: princesscruises
   board: princesscruises
-- company: prophetexchange
+- company: ProphetX
   board: prophetexchange
 - company: pumacapitalgroup
   board: pumacapitalgroup
-- company: rangeline
+- company: Rangeline Group
   board: rangeline
-- company: reactor-inc
+- company: Reactor
   board: reactor-inc
-- company: reimaginedcareers
+- company: Reimagined Parking
   board: reimaginedcareers
 - company: rewardgateway
   board: rewardgateway
@@ -407,7 +407,7 @@
   board: samsara
 - company: scurri
   board: scurri
-- company: shieldtp
+- company: Shield
   board: shieldtp
 - company: skibeat
   board: skibeat
@@ -421,33 +421,33 @@
   board: slifcoelectric
 - company: smartworking
   board: smartworking
-- company: smithsonian
+- company: Smithsonian Institution
   board: smithsonian
 - company: spinplaygames
   board: spinplaygames
 - company: stacywitbeck
   board: stacywitbeck
-- company: staris
+- company: Staris AI
   board: staris
-- company: stonefieldeng
+- company: Stonefield Engineering and Design
   board: stonefieldeng
 - company: summitk12
   board: summitk12
 - company: syncfusion
   board: syncfusion
-- company: taco
+- company: Taco Family of Companies
   board: taco
-- company: teaching-strategies
+- company: Teaching Strategies, LLC
   board: teaching-strategies
 - company: telesolvconsulting
   board: telesolvconsulting
-- company: theboxcarbar
+- company: Boxcar Bar + Arcade
   board: theboxcarbar
-- company: thecrossinglv
+- company: The Crossing Church
   board: thecrossinglv
 - company: therapymgmt
   board: therapymgmt
-- company: thestahlcompanies
+- company: Stahl Companies
   board: thestahlcompanies
 - company: tithely
   board: tithely
@@ -463,29 +463,29 @@
   board: trulygoodfoods
 - company: utilitiesone
   board: utilitiesone
-- company: vanskitchen
+- company: Van's Kitchen
   board: vanskitchen
 - company: vgroup
   board: vgroup
-- company: victors
+- company: Victors Home Solutions
   board: victors
-- company: vintage
+- company: Vintage
   board: vintage
-- company: wearehuman8
+- company: Human8
   board: wearehuman8
-- company: weiweico
+- company: Wei, Wei & Co., LLP
   board: weiweico
-- company: weoneil
+- company: W.E. O'Neil Construction
   board: weoneil
-- company: wmhsolutions
+- company: WMH
   board: wmhsolutions
-- company: wolfe
+- company: Wolfe, LLC
   board: wolfe
 - company: woodrodgers
   board: woodrodgers
 - company: wyld
   board: wyld
-- company: ymcaboston
+- company: YMCA of Greater Boston
   board: ymcaboston
 - company: zappi
   board: zappi
@@ -513,7 +513,7 @@
   board: workstaff360
 - company: Zenergi
   board: zenergi
-- company: aerīz
+- company: Aeriz
   board: aeriz
 - company: Alcumus
   board: alcumus
