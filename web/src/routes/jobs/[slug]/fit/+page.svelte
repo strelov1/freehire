@@ -10,10 +10,13 @@
 
   let { data } = $props();
 
-  // Tailoring is beta-gated (the server re-checks); the CTA only shows once an analysis
-  // exists for a stored CV — the analysis is what a tailored copy reframes toward.
+  // Tailoring is beta-gated (the server re-checks); the CTA only shows once a FRESH analysis
+  // exists for a stored CV — a stale one (CV or job changed since) would reframe toward an
+  // outdated verdict, so the user should recompute first. The analysis is what a tailored
+  // copy reframes toward.
   const canTailor = $derived(
     !!data.fit?.analysis &&
+      data.fit?.stale !== true &&
       data.fit?.has_cv === true &&
       (currentUser()?.beta_tester === true || currentUser()?.role === 'moderator'),
   );
