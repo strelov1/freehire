@@ -12,9 +12,14 @@
     Loader2,
     Trash2,
     Plus,
+    RefreshCw,
+    ExternalLink,
+    X,
+    FileText,
   } from '@lucide/svelte';
   import { currentUser } from '$lib/auth.svelte';
   import { createSession, listSessions, deleteSession, assistantWsUrl } from '$lib/assistant/api';
+  import { api } from '$lib/api';
   import { RoyClient } from '$lib/assistant/client';
   import { initChat, reduceTurnEvent, type ChatState } from '$lib/assistant/chat';
   import { parseJobSegments } from '$lib/assistant/unfurl';
@@ -86,6 +91,16 @@
   // The optimistically-shown user text, so we drop the backend's echoed
   // `user_prompt` frame for it instead of rendering the message twice.
   let pendingEcho: string | null = null;
+
+  // CV-tailoring artifact panel: when the session was opened from a tailoring CTA (?cv=<id>),
+  // a collapsible panel beside the chat renders that CV's live PDF. previewVersion is bumped
+  // on every completed turn to cache-bust the iframe (the agent may have just edited the CV).
+  let cvPreviewId = $state<string | null>(null);
+  let previewOpen = $state(false);
+  let previewVersion = $state(0);
+  const cvPreviewUrl = $derived(
+    cvPreviewId ? `${api.cvPdfUrl(Number(cvPreviewId))}?v=${previewVersion}` : '',
+  );
 
   let scroller = $state<HTMLDivElement | null>(null);
   let textareaEl = $state<HTMLTextAreaElement | null>(null);
@@ -269,15 +284,26 @@
         ),
       );
       const params = new URLSearchParams(location.search);
+      // ?cv=<id> marks a tailoring session and opens the CV artifact panel beside the chat.
+      cvPreviewId = params.get('cv');
+      previewOpen = !!cvPreviewId;
       // ?session=<id> opens a specific session (e.g. a tailoring session just started from
       // the fit page); ensure it shows in the list even if listSessions is momentarily stale.
       // Otherwise open the newest, or start a fresh chat when there are none.
       const requested = params.get('session');
+      // ?title=<vacancy · company> names the session in the sidebar, kept separate from the
+      // kickoff prompt. Seeding labelCache also stops noteFirstUserMessage from overwriting
+      // the name with the first message.
+      const title = params.get('title');
       if (requested) {
+        if (title) {
+          labelCache[requested] = title;
+          persistLabels();
+        }
         if (!sessions.some((s) => s.id === requested)) {
           sessions = upsertSession(sessions, {
             id: requested,
-            label: 'CV tailoring',
+            label: title ?? 'CV tailoring',
             createdAt: Math.floor(Date.now() / 1000),
             live: true,
           });
@@ -296,9 +322,12 @@
       // so chat is non-empty and we never re-send.
       const kickoff = params.get('prompt');
       if (requested && kickoff && chat.messages.length === 0) {
-        // Drop ?prompt from the URL first: a refresh replays the journal asynchronously, so
-        // chat is momentarily empty again — without this the kickoff would re-send.
-        replaceState(`${location.pathname}?session=${requested}`, {});
+        // Drop ?prompt from the URL first (keeping session + cv): a refresh replays the
+        // journal asynchronously, so chat is momentarily empty again — without this the
+        // kickoff would re-send.
+        const keep = new URLSearchParams({ session: requested });
+        if (cvPreviewId) keep.set('cv', cvPreviewId);
+        replaceState(`${location.pathname}?${keep}`, {});
         await dispatch(kickoff);
       }
     } catch (err) {
@@ -417,6 +446,8 @@
   // queued message (reusing the held lease) or release the lease when idle.
   function endTurn() {
     turnActive = false;
+    // A completed turn may have edited the tailored CV — refresh the artifact preview.
+    if (cvPreviewId) previewVersion += 1;
     if (connectionLost) {
       inputAcquired = false;
       return;
@@ -832,6 +863,55 @@
         </div>
       </div>
     </div>
+
+    <!-- CV artifact panel: the live tailored-CV PDF, refreshed on each completed turn. -->
+    {#if cvPreviewId}
+      {#if previewOpen}
+        <aside class="hidden w-[26rem] shrink-0 flex-col rounded-xl border border-border bg-card lg:flex">
+          <div class="flex items-center justify-between border-b border-border px-3 py-2">
+            <span class="text-sm font-medium">CV preview</span>
+            <div class="flex items-center gap-0.5 text-muted-foreground">
+              <button
+                onclick={() => (previewVersion += 1)}
+                class="rounded p-1 transition-colors hover:text-foreground"
+                aria-label="Refresh preview"
+                title="Refresh"
+              >
+                <RefreshCw class="size-4" />
+              </button>
+              <a
+                href={api.cvPdfUrl(Number(cvPreviewId))}
+                target="_blank"
+                rel="noopener"
+                class="rounded p-1 transition-colors hover:text-foreground"
+                aria-label="Open PDF in a new tab"
+                title="Open in new tab"
+              >
+                <ExternalLink class="size-4" />
+              </a>
+              <button
+                onclick={() => (previewOpen = false)}
+                class="rounded p-1 transition-colors hover:text-foreground"
+                aria-label="Hide preview"
+                title="Hide"
+              >
+                <X class="size-4" />
+              </button>
+            </div>
+          </div>
+          <iframe src={cvPreviewUrl} title="CV preview" class="min-h-0 flex-1 rounded-b-xl"></iframe>
+        </aside>
+      {:else}
+        <button
+          onclick={() => (previewOpen = true)}
+          class="hidden shrink-0 flex-col items-center gap-1 rounded-xl border border-border bg-card px-2 py-3 text-xs text-muted-foreground transition-colors hover:text-foreground lg:flex"
+          aria-label="Show CV preview"
+          title="Show CV"
+        >
+          <FileText class="size-4" />CV
+        </button>
+      {/if}
+    {/if}
   </div>
 {/if}
 

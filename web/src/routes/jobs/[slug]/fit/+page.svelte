@@ -37,10 +37,18 @@
         cv_id: res.tailor_cv_id,
         base_cv_id: res.base_cv_id,
       });
-      // Pass a first prompt so the agent starts working on arrival instead of waiting for the
-      // user to type — the assistant page auto-sends it into the fresh session.
-      const kickoff = "Let's tailor my CV for this role — review the fit analysis and walk me through the gaps.";
-      await goto(`/my/assistant?session=${sessionId}&prompt=${encodeURIComponent(kickoff)}`);
+      // Hand the assistant page: the session, the CV to preview (?cv), a sidebar name kept
+      // separate from the prompt (?title), and a first prompt it auto-sends so the agent
+      // starts on arrival instead of waiting for the user to type.
+      const kickoff =
+        "Let's tailor my CV for this role — review the fit analysis and walk me through the gaps.";
+      const q = new URLSearchParams({
+        session: sessionId,
+        cv: String(res.tailor_cv_id),
+        title: `${data.job.title} · ${data.job.company}`,
+        prompt: kickoff,
+      });
+      await goto(`/my/assistant?${q}`);
     } catch (e) {
       tailorError =
         e instanceof ApiError ? e.message : 'Could not start tailoring. Please try again.';
