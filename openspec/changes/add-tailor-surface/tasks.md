@@ -5,8 +5,8 @@
 
 ## 2. Extract `<AssistantChat>`
 
-- [ ] 2.1 Create `web/src/lib/assistant/AssistantChat.svelte` by moving the chat out of `/my/assistant/+page.svelte`: transport (`RoyClient`), session lifecycle, message list, composer + queue, labels. Props: `{ session?, kickoff?, onTurnComplete?, showSessionRail? }`. Apply the roy-web aesthetic here (no card boxes; thin dividers; centered chat content)
-- [ ] 2.2 Refactor `/my/assistant/+page.svelte` into a thin host that renders `<AssistantChat showSessionRail />` — chat behaviour unchanged
+- [x] 2.1 Create `web/src/lib/assistant/AssistantChat.svelte` by moving the chat out of `/my/assistant/+page.svelte`: transport (`RoyClient`), session lifecycle, message list, composer + queue, labels. Props: `{ session?, kickoff?, onTurnComplete?, showSessionRail? }`. Apply the roy-web aesthetic here (no card boxes; thin dividers; centered chat content)
+- [x] 2.2 Refactor `/my/assistant/+page.svelte` into a thin host that renders `<AssistantChat showSessionRail />` — chat behaviour unchanged
 - [ ] 2.3 Verify `/my/assistant`: `svelte-check` clean; visual-verify send / queue / switch-session / delete still work (regression gate for the extraction)
 
 ## 3. Artifact panel
