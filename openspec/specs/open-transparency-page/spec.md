@@ -22,7 +22,7 @@ facet distributions, open-source stats, and member growth.
 
 #### Scenario: What's-inside section
 - **WHEN** the page renders
-- **THEN** it shows facet distributions (top countries, top skills, remote share, seniority split) derived from `/api/v1/jobs/facets`
+- **THEN** it shows facet distributions (top countries, top skills, remote share, seniority split) derived from the precomputed `/api/v1/stats/facets` snapshot
 
 #### Scenario: Member-growth section
 - **WHEN** the page renders
@@ -52,6 +52,10 @@ it, reinforcing the API-first positioning.
 #### Scenario: Stat links to endpoint
 - **WHEN** a visitor inspects a headline figure (e.g. open jobs, member growth)
 - **THEN** it links to the corresponding public API endpoint that returns that data
+
+#### Scenario: What's-inside links to the facets snapshot endpoint
+- **WHEN** a visitor inspects the "what's inside" section
+- **THEN** its source link points to `/api/v1/stats/facets`
 
 ### Requirement: Discoverable entry point
 The system SHALL expose an `/open` link in the site footer or navigation so the
