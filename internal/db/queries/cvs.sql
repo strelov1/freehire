@@ -13,12 +13,30 @@ FROM cvs
 WHERE user_id = $1
 ORDER BY updated_at DESC;
 
+-- name: ListTailoredCVsByUser :many
+-- A user's TAILORED CVs (bound to a vacancy), newest edit first — the re-open list. Carries the
+-- vacancy's public slug and the bound agent session so each row links back to its workspace.
+-- Base CVs (job_id NULL) are excluded; the JOIN also drops tailored CVs whose job was deleted.
+SELECT c.id, c.title, c.template_id, c.agent_session_id, j.public_slug AS job_slug,
+       c.created_at, c.updated_at
+FROM cvs c
+JOIN jobs j ON j.id = c.job_id
+WHERE c.user_id = $1 AND c.job_id IS NOT NULL
+ORDER BY c.updated_at DESC;
+
 -- name: GetCVByID :one
 -- One CV owned by the user, including the full data blob. Owner-scoped: a foreign or
 -- missing id returns no row (the handler maps it to 404). job_id is NULL for a base CV and
--- the vacancy id for a tailored copy — the tailoring-context read resolves it to the analysis.
-SELECT id, title, template_id, data, job_id, created_at, updated_at
+-- the vacancy id for a tailored copy; agent_session_id is the bound roy session (or NULL).
+SELECT id, title, template_id, data, job_id, agent_session_id, created_at, updated_at
 FROM cvs
+WHERE id = $1 AND user_id = $2;
+
+-- name: SetCVSession :execrows
+-- Bind (or rebind) the agent session to an owned CV. Owner-scoped: returns 0 affected rows for
+-- a foreign or missing id (the handler maps that to 404).
+UPDATE cvs
+SET agent_session_id = $3
 WHERE id = $1 AND user_id = $2;
 
 -- name: UpdateCV :one

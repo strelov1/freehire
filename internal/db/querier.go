@@ -347,7 +347,7 @@ type Querier interface {
 	GetBoardCooldown(ctx context.Context, arg GetBoardCooldownParams) (pgtype.Timestamptz, error)
 	// One CV owned by the user, including the full data blob. Owner-scoped: a foreign or
 	// missing id returns no row (the handler maps it to 404). job_id is NULL for a base CV and
-	// the vacancy id for a tailored copy — the tailoring-context read resolves it to the analysis.
+	// the vacancy id for a tailored copy; agent_session_id is the bound roy session (or NULL).
 	GetCVByID(ctx context.Context, arg GetCVByIDParams) (GetCVByIDRow, error)
 	// SELECT * (not an explicit column list) so the generated row stays db.Company as
 	// the table grows columns (e.g. collections); an explicit subset makes sqlc emit a
@@ -652,6 +652,10 @@ type Querier interface {
 	// The caller's subscriptions joined to each saved search's display name and query,
 	// newest first — the "My subscriptions" view.
 	ListSubscriptions(ctx context.Context, userID int64) ([]ListSubscriptionsRow, error)
+	// A user's TAILORED CVs (bound to a vacancy), newest edit first — the re-open list. Carries the
+	// vacancy's public slug and the bound agent session so each row links back to its workspace.
+	// Base CVs (job_id NULL) are excluded; the JOIN also drops tailored CVs whose job was deleted.
+	ListTailoredCVsByUser(ctx context.Context, userID int64) ([]ListTailoredCVsByUserRow, error)
 	// Every board currently failing or cooled down, worst first — the operator's
 	// "what's broken" query and the source of the per-run summary log.
 	ListUnhealthyBoards(ctx context.Context) ([]ListUnhealthyBoardsRow, error)
@@ -892,6 +896,9 @@ type Querier interface {
 	// Apply the Go-computed cooldown window to a board (called only when the backoff
 	// policy says to cool down).
 	SetBoardCooldown(ctx context.Context, arg SetBoardCooldownParams) error
+	// Bind (or rebind) the agent session to an owned CV. Owner-scoped: returns 0 affected rows for
+	// a foreign or missing id (the handler maps that to 404).
+	SetCVSession(ctx context.Context, arg SetCVSessionParams) (int64, error)
 	// Replace a company's collection set. The import worker computes the full set in Go
 	// (preserving unmanaged tags) and writes it here; updated_at is bumped for parity
 	// with the other write paths.

@@ -64,14 +64,15 @@ type Company struct {
 }
 
 type Cv struct {
-	ID         int64              `json:"id"`
-	UserID     int64              `json:"user_id"`
-	Title      string             `json:"title"`
-	TemplateID string             `json:"template_id"`
-	Data       []byte             `json:"data"`
-	JobID      pgtype.Int8        `json:"job_id"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	ID             int64              `json:"id"`
+	UserID         int64              `json:"user_id"`
+	Title          string             `json:"title"`
+	TemplateID     string             `json:"template_id"`
+	Data           []byte             `json:"data"`
+	JobID          pgtype.Int8        `json:"job_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	AgentSessionID pgtype.Text        `json:"agent_session_id"`
 }
 
 type Email struct {
