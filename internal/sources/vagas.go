@@ -118,8 +118,7 @@ func (v vagas) detail(ctx context.Context, jobURL string) (Job, bool) {
 		return Job{}, false
 	}
 
-	location := joinNonEmpty(p.JobLocation.Address.AddressLocality,
-		p.JobLocation.Address.AddressRegion, p.JobLocation.Address.AddressCountry)
+	location := p.JobLocation.Address.Location()
 	return Job{
 		ExternalID:  id,
 		URL:         jobURL,
@@ -149,11 +148,5 @@ type vagasPosting struct {
 	HiringOrganization struct {
 		Name string `json:"name"`
 	} `json:"hiringOrganization"`
-	JobLocation struct {
-		Address struct {
-			AddressLocality string `json:"addressLocality"`
-			AddressRegion   string `json:"addressRegion"`
-			AddressCountry  string `json:"addressCountry"`
-		} `json:"address"`
-	} `json:"jobLocation"`
+	JobLocation schemaPlace `json:"jobLocation"`
 }

@@ -102,11 +102,7 @@ func (s isolvedFamily) detail(ctx context.Context, e CompanyEntry, id string) (J
 		return Job{}, false
 	}
 
-	location := joinNonEmpty(
-		p.JobLocation.Address.AddressLocality,
-		p.JobLocation.Address.AddressRegion,
-		p.JobLocation.Address.AddressCountry,
-	)
+	location := p.JobLocation.Address.Location()
 
 	// datePosted is a space-separated "2006-01-02 15:04:05" with no zone; the date part is
 	// the reliable signal, so posted_at is date-granularity.
@@ -135,11 +131,5 @@ type isolvedPosting struct {
 	HiringOrganization struct {
 		Name string `json:"name"`
 	} `json:"hiringOrganization"`
-	JobLocation struct {
-		Address struct {
-			AddressLocality string `json:"addressLocality"`
-			AddressRegion   string `json:"addressRegion"`
-			AddressCountry  string `json:"addressCountry"`
-		} `json:"address"`
-	} `json:"jobLocation"`
+	JobLocation schemaPlace `json:"jobLocation"`
 }
