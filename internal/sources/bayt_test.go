@@ -62,6 +62,22 @@ func TestBaytJobID(t *testing.T) {
 	}
 }
 
+func TestBaytAbsURLResolvesHrefForms(t *testing.T) {
+	const want = "https://www.bayt.com/en/saudi-arabia/jobs/senior-dev-42/"
+	cases := map[string]string{
+		"/en/saudi-arabia/jobs/senior-dev-42/":                     want, // root-relative
+		"https://www.bayt.com/en/saudi-arabia/jobs/senior-dev-42/": want, // already absolute
+		// protocol-relative: keeps its own host; the old "http" prefix guess mis-built
+		// "https://www.bayt.com//www.bayt.com/…".
+		"//www.bayt.com/en/saudi-arabia/jobs/senior-dev-42/": want,
+	}
+	for href, w := range cases {
+		if got := baytAbsURL(href); got != w {
+			t.Errorf("baytAbsURL(%q) = %q, want %q", href, got, w)
+		}
+	}
+}
+
 func TestBaytRegisteredAndFacet(t *testing.T) {
 	if _, ok := All(nil)["bayt"]; !ok {
 		t.Fatal("bayt not registered in sources.All")

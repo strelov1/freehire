@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -135,13 +136,20 @@ func baytListingLinks(root *html.Node) []string {
 	return hrefs
 }
 
-// baytAbsURL resolves a listing href against the Bayt origin; an already-absolute href is
-// returned unchanged.
+// baytBase is the parsed Bayt origin, resolved against once per listing href.
+var baytBase, _ = url.Parse(baytBaseURL)
+
+// baytAbsURL resolves a listing href against the Bayt origin, handling all three forms via
+// ResolveReference: an already-absolute href keeps itself, a protocol-relative "//host/path"
+// keeps its own host under the origin's scheme, and a root-relative "/path" gets the origin. The
+// old strings.HasPrefix(href, "http") guess mis-resolved a protocol-relative href into
+// "https://www.bayt.com//host/path", silently dropping those postings at the detail fetch.
 func baytAbsURL(href string) string {
-	if strings.HasPrefix(href, "http") {
-		return href
+	ref, err := url.Parse(href)
+	if err != nil {
+		return baytBaseURL + href
 	}
-	return baytBaseURL + href
+	return baytBase.ResolveReference(ref).String()
 }
 
 // detail fetches one job page and maps its ld+json JobPosting to a Job, returning ok=false when
