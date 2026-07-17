@@ -16,6 +16,7 @@
     ExternalLink,
     X,
     FileText,
+    PanelLeft,
   } from '@lucide/svelte';
   import { currentUser } from '$lib/auth.svelte';
   import { createSession, listSessions, deleteSession, assistantWsUrl } from '$lib/assistant/api';
@@ -98,6 +99,9 @@
   let cvPreviewId = $state<string | null>(null);
   let previewOpen = $state(false);
   let previewVersion = $state(0);
+  // Session-list rail: collapsible for a full-width chat; starts collapsed in a tailoring
+  // session so the chat + CV preview get the room.
+  let sidebarOpen = $state(true);
   const cvPreviewUrl = $derived(
     cvPreviewId ? `${api.cvPdfUrl(Number(cvPreviewId))}?v=${previewVersion}` : '',
   );
@@ -287,6 +291,7 @@
       // ?cv=<id> marks a tailoring session and opens the CV artifact panel beside the chat.
       cvPreviewId = params.get('cv');
       previewOpen = !!cvPreviewId;
+      sidebarOpen = !cvPreviewId;
       // ?session=<id> opens a specific session (e.g. a tailoring session just started from
       // the fit page); ensure it shows in the list even if listSessions is momentarily stale.
       // Otherwise open the newest, or start a fresh chat when there are none.
@@ -559,14 +564,6 @@
   <title>Agent — freehire</title>
 </svelte:head>
 
-<div class="mb-6 flex flex-col gap-1">
-  <h1 class="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-    <Bot class="size-6 text-brand" />
-    Agent
-  </h1>
-  <p class="text-sm text-muted-foreground">Chat with an agent inside freehire.</p>
-</div>
-
 {#if error}
   <div
     class="mb-4 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
@@ -582,9 +579,10 @@
     The agent is a limited beta and isn't available for your account yet.
   </div>
 {:else}
-  <div class="flex h-[calc(100vh-16rem)] min-h-100 gap-3">
-    <!-- Sidebar (desktop): session list + New chat -->
-    <aside class="hidden w-60 shrink-0 flex-col rounded-xl border border-border bg-card md:flex">
+  <div class="flex h-[calc(100svh-3.5rem)] gap-3 p-3">
+    <!-- Sidebar (desktop): session list + New chat — collapsible for a full-width chat. -->
+    {#if sidebarOpen}
+      <aside class="hidden w-60 shrink-0 flex-col rounded-xl border border-border bg-card md:flex">
       <div class="p-2">
         <button
           type="button"
@@ -623,9 +621,33 @@
         {/each}
       </ul>
     </aside>
+    {/if}
 
     <!-- Chat pane -->
     <div class="flex min-w-0 flex-1 flex-col rounded-xl border border-border bg-card">
+      <!-- Desktop: collapse/expand the session list for a full-width chat. -->
+      <div class="hidden items-center gap-1 border-b border-border px-2 py-1.5 md:flex">
+        <button
+          type="button"
+          onclick={() => (sidebarOpen = !sidebarOpen)}
+          class="rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
+          aria-label={sidebarOpen ? 'Hide chats' : 'Show chats'}
+          title={sidebarOpen ? 'Hide chats' : 'Show chats'}
+        >
+          <PanelLeft class="size-4" />
+        </button>
+        {#if !sidebarOpen}
+          <button
+            type="button"
+            onclick={newChat}
+            disabled={switching || phase !== 'ready'}
+            class="flex items-center gap-1.5 rounded px-1.5 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            title="New chat"
+          >
+            <Plus class="size-4" />New chat
+          </button>
+        {/if}
+      </div>
       <!-- Mobile session switcher -->
       <div class="flex items-center gap-2 border-b border-border p-2 md:hidden">
         <select
