@@ -40,16 +40,9 @@ func (f factorial) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		return nil, fmt.Errorf("factorial: listing %s: %w", e.Board, err)
 	}
 
-	// The careers root renders every posting; dedup the links (the same job can appear under
-	// multiple team sections).
-	var urls []string
-	seen := make(map[string]bool)
-	for _, link := range jobLinks(base, root, func(href string) bool { return strings.Contains(href, "/job_posting/") }) {
-		if !seen[link] {
-			seen[link] = true
-			urls = append(urls, link)
-		}
-	}
+	// The careers root renders every posting; jobLinks already dedups (the same job can appear
+	// under multiple team sections).
+	urls := jobLinks(base, root, func(href string) bool { return strings.Contains(href, "/job_posting/") })
 
 	return fetchDetails(urls, defaultDetailWorkers, func(u string) (Job, bool) {
 		return f.detail(ctx, e, u)

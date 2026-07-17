@@ -100,12 +100,8 @@ func (s wantapply) FetchNew(ctx context.Context, _ CompanyEntry, seen func(exter
 // crawl reads the sitemap and returns every vacancy candidate (reserved pages, /company/*, and
 // /jobs/* excluded) — the shared enumeration behind Fetch and FetchNew.
 func (s wantapply) crawl(ctx context.Context) ([]wantapplyVacancy, error) {
-	var sitemap struct {
-		URLs []struct {
-			Loc string `xml:"loc"`
-		} `xml:"url"`
-	}
-	if err := s.http.GetXML(ctx, wantapplySitemapURL, &sitemap); err != nil {
+	sitemap, err := getSitemap(ctx, s.http, wantapplySitemapURL)
+	if err != nil {
 		return nil, fmt.Errorf("wantapply: sitemap: %w", err)
 	}
 	var out []wantapplyVacancy

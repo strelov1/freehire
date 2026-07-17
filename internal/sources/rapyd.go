@@ -94,27 +94,7 @@ func (r rapyd) detail(ctx context.Context, e CompanyEntry, jobURL string) (Job, 
 // relative hrefs still yield fetchable URLs, de-duplicated in first-seen order (a card
 // links the same position from its title and other controls).
 func rapydPositionLinks(base *url.URL, root *html.Node) []string {
-	var out []string
-	seen := make(map[string]bool)
-	walk(root, func(n *html.Node) bool {
-		if n.Type == html.ElementNode && n.Data == "a" {
-			href := attr(n, "href")
-			if rapydPositionID(href) == "" {
-				return true
-			}
-			ref, err := url.Parse(href)
-			if err != nil {
-				return true // unparseable href → not a usable position link
-			}
-			abs := base.ResolveReference(ref).String()
-			if !seen[abs] {
-				seen[abs] = true
-				out = append(out, abs)
-			}
-		}
-		return true
-	})
-	return out
+	return jobLinks(base, root, func(href string) bool { return rapydPositionID(href) != "" })
 }
 
 // rapydPositionIDPattern captures the slug from a /company/careers/positions/<slug>/ path.

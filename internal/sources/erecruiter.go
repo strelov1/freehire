@@ -261,11 +261,7 @@ var erecruiterCfgRe = regexp.MustCompile(`(?i)Code\.ashx\?cfg=([0-9A-Fa-f]{32})`
 // eRecruiter widget script, or "" when the page carries no such widget. It backs
 // cmd/harvest-erecruiter, the discovery bridge from a careers URL to a board entry.
 func ExtractErecruiterCfg(page string) string {
-	m := erecruiterCfgRe.FindStringSubmatch(page)
-	if len(m) < 2 {
-		return ""
-	}
-	return m[1]
+	return firstSubmatch(erecruiterCfgRe, page)
 }
 
 // ProbeErecruiterCfg live-validates a cfg by fetching its first list page and reporting how

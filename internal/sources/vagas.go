@@ -76,30 +76,11 @@ func (v vagas) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 // listArea enumerates one area's job URLs across its paginated listing, stopping on the first
 // page that adds no new links (an empty tail page, or a board that repeats a page for any pagina).
 func (v vagas) listArea(ctx context.Context, area string) ([]string, error) {
-	var urls []string
-	seen := make(map[string]bool)
-	for page := 1; page <= vagasMaxPages; page++ {
-		listURL := fmt.Sprintf("https://www.vagas.com.br/%s?pagina=%d", area, page)
-		root, err := v.http.GetHTML(ctx, listURL)
-		if err != nil {
-			if page == 1 {
-				return nil, err
-			}
-			break // a later page failing ends enumeration with the URLs gathered so far
-		}
-		newLinks := 0
-		for _, link := range jobLinks(vagasBase, root, func(href string) bool { return vagasJobID(href) != "" }) {
-			if !seen[link] {
-				seen[link] = true
-				urls = append(urls, link)
-				newLinks++
-			}
-		}
-		if newLinks == 0 {
-			break
-		}
-	}
-	return urls, nil
+	return crawlPagedLinks(ctx, v.http, vagasMaxPages,
+		func(page int) string { return fmt.Sprintf("https://www.vagas.com.br/%s?pagina=%d", area, page) },
+		func(root *html.Node) []string {
+			return jobLinks(vagasBase, root, func(href string) bool { return vagasJobID(href) != "" })
+		})
 }
 
 // detail fetches one job page and maps its JobPosting ld+json to a Job, returning ok=false when

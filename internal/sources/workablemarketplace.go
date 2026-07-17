@@ -83,7 +83,7 @@ func (w workableMarketplace) Fetch(ctx context.Context, e CompanyEntry) ([]Job, 
 				Location:       joinNonEmpty(j.Location.City, j.Location.CountryName),
 				Description:    sanitizeHTML(j.Description),
 				Remote:         remote,
-				WorkMode:       workableWorkplaceMode(j.Workplace),
+				WorkMode:       workplaceTypeMode(j.Workplace),
 				PostedAt:       parseRFC3339(j.Created),
 				EmploymentType: workableEmploymentType(j.EmploymentType),
 			})
@@ -97,19 +97,4 @@ func (w workableMarketplace) Fetch(ctx context.Context, e CompanyEntry) ([]Job, 
 		token = resp.NextPageToken
 	}
 	return jobs, nil
-}
-
-// workableWorkplaceMode maps Workable's marketplace "workplace" enum onto the freehire
-// work-mode vocabulary, returning "" for an absent/unknown value (the location parser decides).
-func workableWorkplaceMode(v string) string {
-	switch v {
-	case "remote":
-		return "remote"
-	case "hybrid":
-		return "hybrid"
-	case "on-site", "onsite":
-		return "onsite"
-	default:
-		return ""
-	}
 }

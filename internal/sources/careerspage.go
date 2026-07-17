@@ -80,11 +80,7 @@ func (s careerspage) detail(ctx context.Context, e CompanyEntry, loc string) (Jo
 		return Job{}, false
 	}
 
-	location := joinNonEmpty(
-		p.JobLocation.Address.AddressLocality,
-		p.JobLocation.Address.AddressRegion,
-		p.JobLocation.Address.AddressCountry,
-	)
+	location := p.JobLocation.Address.Location()
 
 	return Job{
 		ExternalID:  id,
@@ -107,13 +103,7 @@ type careerspagePosting struct {
 	HiringOrganization struct {
 		Name string `json:"name"`
 	} `json:"hiringOrganization"`
-	JobLocation struct {
-		Address struct {
-			AddressLocality string `json:"addressLocality"`
-			AddressRegion   string `json:"addressRegion"`
-			AddressCountry  string `json:"addressCountry"`
-		} `json:"address"`
-	} `json:"jobLocation"`
+	JobLocation schemaPlace `json:"jobLocation"`
 }
 
 // careerspageJobIDPattern captures the job UUID from a canonical /jobs/<uuid> URL. The
