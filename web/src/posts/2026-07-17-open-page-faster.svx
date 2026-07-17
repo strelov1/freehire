@@ -1,0 +1,23 @@
+---
+title: The /open page loads faster
+date: 2026-07-17
+summary: The "what's inside" breakdown on our open-metrics page now comes from a daily snapshot instead of a live catalogue-wide count, so the page renders quickly.
+type: changelog
+tags:
+  - open
+  - performance
+draft: false
+---
+
+Our **[open metrics](/open)** page shows what's inside the catalogue — top
+countries, skills, seniority, and remote share — alongside our live scale and
+growth numbers.
+
+Those distributions used to be counted across the whole catalogue on every
+request, which made the page slow to render. They now come from a snapshot we
+recompute once a day, so `/open` loads quickly while the figures stay current
+enough for a page whose numbers move slowly anyway.
+
+Everything else on the page — open jobs, companies, daily movement, member
+growth — is still pulled live, and every figure still links to the public API
+endpoint behind it.
