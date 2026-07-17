@@ -5,13 +5,18 @@ import (
 	"strings"
 )
 
-// Board extraction modes. path = the board is the first path segment on a fixed host
-// (jobs.lever.co/<board>/…); subdomain = the board is the leftmost DNS label under the apex
-// (<board>.recruitee.com). For subdomain the board IS the host, so the canonical URL is the
-// bare scheme://host — which collapses a vacancy URL and the board listing to one board.
+// Board extraction modes, each matching how the ingest adapter namespaces jobs.external_id:
+//   - path:      board = the first path segment on a fixed host (jobs.lever.co/<board>/…).
+//   - subdomain: board = the leftmost DNS label under a fixed apex (<board>.recruitee.com).
+//   - host:      board = the whole careers host (the tenant identity IS the host, and the TLD
+//     varies by region, e.g. <tenant>.zohorecruit.eu / .com / .in).
+//
+// For subdomain and host the board IS the host, so the canonical URL is the bare scheme://host —
+// collapsing a vacancy URL and the board listing to one board.
 const (
 	modePath      = "path"
 	modeSubdomain = "subdomain"
+	modeHost      = "host"
 )
 
 // atsBoards lists the supported multi-tenant ATS: a host (exact or subdomain-suffix match) →
@@ -42,7 +47,6 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"bamboohr.com", "bamboohr", modeSubdomain},
 	{"breezy.hr", "breezy", modeSubdomain},
 	{"freshteam.com", "freshteam", modeSubdomain},
-	{"gupy.io", "gupy", modeSubdomain},
 	{"huntflow.io", "huntflow", modeSubdomain},
 	{"peopleforce.io", "peopleforce", modeSubdomain},
 	{"jobs.personio.com", "personio", modeSubdomain},
@@ -64,6 +68,9 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"hire.trakstar.com", "trakstar", modeSubdomain},
 	{"portaldetalentos.senior.com.br", "senior", modeSubdomain},
 	{"vagas.solides.com.br", "solides", modeSubdomain},
+
+	// --- host: board = the whole careers host (regional TLD varies) ---
+	{"zohorecruit", "zohorecruit", modeHost},
 }
 
 // recognizeBoard parses a pasted job link into the company board it belongs to: the source
@@ -80,8 +87,13 @@ func recognizeBoard(rawURL string) (source, board, canonical string, ok bool) {
 		return "", "", "", false
 	}
 
-	if mode == modeSubdomain {
-		board = subdomainLabel(host, apex)
+	switch mode {
+	case modeSubdomain, modeHost:
+		if mode == modeSubdomain {
+			board = subdomainLabel(host, apex)
+		} else {
+			board = host // the whole careers host is the tenant identity
+		}
 		if board == "" {
 			return "", "", "", false // bare apex, no tenant label
 		}
@@ -102,10 +114,19 @@ func recognizeBoard(rawURL string) (source, board, canonical string, ok bool) {
 	return src, board, u.String(), true
 }
 
-// matchHost returns the ATS entry for a host, matching exactly or as a subdomain of the entry
-// host. It returns the entry host as the apex so subdomain extraction knows what to strip.
+// matchHost returns the ATS entry for a host. path/subdomain entries match the host exactly or
+// as a subdomain of the entry host (the returned apex). A host entry keys on a domain LABEL
+// (e.g. "zohorecruit") and matches any host containing ".<label>." — a tenant subdomain on any
+// regional TLD (<tenant>.zohorecruit.eu/.com/.in); the bare apex ("zohorecruit.com") does not
+// match, so it is never taken as a board.
 func matchHost(host string) (source, mode, apex string, ok bool) {
 	for _, a := range atsBoards {
+		if a.mode == modeHost {
+			if strings.Contains(host, "."+a.host+".") {
+				return a.source, a.mode, a.host, true
+			}
+			continue
+		}
 		if host == a.host || strings.HasSuffix(host, "."+a.host) {
 			return a.source, a.mode, a.host, true
 		}
