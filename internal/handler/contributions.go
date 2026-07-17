@@ -67,13 +67,13 @@ func (a *API) CreateContribution(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
 
-	rec, err := a.contribution.Submit(c.Context(), userID, in.URL)
+	rec, source, board, err := a.contribution.Submit(c.Context(), userID, in.URL)
 	if err != nil {
 		// On "already tracked", enrich the 409 with the company we cover so the UI can link to
 		// it (and say the exact role will land on the next crawl).
 		if errors.Is(err, contribution.ErrBoardAlreadyTracked) {
 			body := fiber.Map{"error": "this board is already in the catalogue"}
-			if name, slug, ok := a.contribution.TrackedCompany(c.Context(), in.URL); ok {
+			if name, slug, ok := a.contribution.CompanyForBoard(c.Context(), source, board); ok {
 				body["company_name"] = name
 				body["company_slug"] = slug
 			}

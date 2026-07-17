@@ -78,7 +78,7 @@ func TestTelegramContribution(t *testing.T) {
 		telegramLinks:         telegramnotify.NewLinkTokens("test-secret", 10*time.Minute),
 		telegramBot:           telegramnotify.NewClientWithBase("bottoken", stub.URL),
 		telegramWebhookSecret: "hook-secret",
-		contribution:          contribution.New(contribution.NewQueriesRepository(queries, pool)),
+		contribution:          contribution.New(contribution.NewQueriesRepository(queries, pool), nil),
 	}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})

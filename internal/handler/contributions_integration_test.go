@@ -47,7 +47,7 @@ func TestContributionsEndToEnd(t *testing.T) {
 		pool:         pool,
 		queries:      queries,
 		issuer:       iss,
-		contribution: contribution.New(contribution.NewQueriesRepository(queries, pool)),
+		contribution: contribution.New(contribution.NewQueriesRepository(queries, pool), nil),
 		accounts:     accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{}),
 	}
 

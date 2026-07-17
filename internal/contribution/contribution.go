@@ -57,41 +57,57 @@ type Repository interface {
 	ListByUser(ctx context.Context, userID int64) ([]Contribution, error)
 }
 
-// Service implements the contribution use cases over a Repository. Board recognition is a
-// pure, network-free URL parse (see board.go).
-type Service struct {
-	repo Repository
+// Resolver is the network fallback for links whose host is not a recognized ATS: it fetches
+// the page and detects an embedded board (a company careers page on its own domain — see
+// internal/boardresolve). Optional — a nil resolver keeps the flow network-free.
+type Resolver interface {
+	Resolve(ctx context.Context, rawURL string) (source, board, canonical string, ok bool)
 }
 
-// New creates a Service backed by the given Repository.
-func New(repo Repository) *Service {
-	return &Service{repo: repo}
+// Service implements the contribution use cases over a Repository. Board recognition is a
+// pure, network-free URL parse (board.go); an optional Resolver adds a network fallback for
+// vanity domains with an embedded ATS.
+type Service struct {
+	repo     Repository
+	resolver Resolver
+}
+
+// New creates a Service backed by the given Repository and an optional network Resolver (nil =
+// network-free recognition only).
+func New(repo Repository, resolver Resolver) *Service {
+	return &Service{repo: repo, resolver: resolver}
 }
 
 // Submit validates and records a contributed board, awarding the submitter a point for a novel
 // one. The checks run cheapest-first: unsupported ATS (422) before any DB read;
 // already-tracked (409) before any write; the record+point transaction last, where a
 // duplicate-board race surfaces as ErrBoardAlreadyContributed (409).
-func (s *Service) Submit(ctx context.Context, submittedBy int64, rawURL string) (Contribution, error) {
+func (s *Service) Submit(ctx context.Context, submittedBy int64, rawURL string) (rec Contribution, source, board string, err error) {
 	source, board, canonical, ok := recognizeBoard(rawURL)
+	if !ok && s.resolver != nil {
+		// Unknown host — the link may be a company careers page with an embedded ATS. Fetch it
+		// and detect the board (network fallback).
+		source, board, canonical, ok = s.resolver.Resolve(ctx, rawURL)
+	}
 	if !ok {
-		return Contribution{}, ErrUnsupportedATS
+		return Contribution{}, "", "", ErrUnsupportedATS
 	}
 
 	tracked, err := s.repo.BoardTracked(ctx, source, board)
 	if err != nil {
-		return Contribution{}, err
+		return Contribution{}, source, board, err
 	}
 	if tracked {
-		return Contribution{}, ErrBoardAlreadyTracked
+		return Contribution{}, source, board, ErrBoardAlreadyTracked
 	}
 
-	return s.repo.Record(ctx, RecordInput{
+	rec, err = s.repo.Record(ctx, RecordInput{
 		SubmittedBy: submittedBy,
 		URL:         canonical,
 		Source:      source,
 		Board:       board,
 	})
+	return rec, source, board, err
 }
 
 // ListMine returns the given user's contributions, newest first.
@@ -99,14 +115,11 @@ func (s *Service) ListMine(ctx context.Context, userID int64) ([]Contribution, e
 	return s.repo.ListByUser(ctx, userID)
 }
 
-// TrackedCompany resolves the company already tracked on the board a link points to — for the
-// "we already cover this" reply, so the caller can link to the company page. ok=false when the
-// link is unrecognized or the board has no resolved company.
-func (s *Service) TrackedCompany(ctx context.Context, rawURL string) (name, slug string, ok bool) {
-	source, board, _, recognized := recognizeBoard(rawURL)
-	if !recognized {
-		return "", "", false
-	}
+// CompanyForBoard resolves the company already tracked on a (source, board) — for the "we
+// already cover this" reply, so the caller can link to the company page. ok=false when the
+// board has no resolved company. The (source, board) come from Submit, so no re-recognition
+// (or re-fetch, for a resolved vanity domain) is needed.
+func (s *Service) CompanyForBoard(ctx context.Context, source, board string) (name, slug string, ok bool) {
 	name, slug, found, err := s.repo.CompanyForBoard(ctx, source, board)
 	if err != nil || !found {
 		return "", "", false

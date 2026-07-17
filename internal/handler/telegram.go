@@ -135,8 +135,8 @@ func (a *API) sendTelegram(ctx context.Context, chatID int64, msg string) {
 
 // alreadyTrackedReply is the "we already cover this" message, linking to the company page when
 // the board resolves to a tracked company; otherwise a plain acknowledgement.
-func (a *API) alreadyTrackedReply(ctx context.Context, rawURL string) string {
-	name, slug, ok := a.contribution.TrackedCompany(ctx, rawURL)
+func (a *API) alreadyTrackedReply(ctx context.Context, source, board string) string {
+	name, slug, ok := a.contribution.CompanyForBoard(ctx, source, board)
 	if !ok || slug == "" || a.frontendOrigin == "" {
 		return "👍 We already track that board — nothing to add."
 	}
@@ -189,12 +189,12 @@ func (a *API) processTelegramContribution(chatID int64, rawURL string) {
 		return
 	}
 
-	rec, err := a.contribution.Submit(ctx, userID, rawURL)
+	rec, source, board, err := a.contribution.Submit(ctx, userID, rawURL)
 	switch {
 	case errors.Is(err, contribution.ErrUnsupportedATS):
 		a.sendTelegram(ctx, chatID, "🤔 That link isn't from a supported ATS board. Send a link from a company's careers page on a supported ATS (Greenhouse, Lever, Ashby, Recruitee, BambooHR, SmartRecruiters, and many more).")
 	case errors.Is(err, contribution.ErrBoardAlreadyTracked):
-		a.sendTelegram(ctx, chatID, a.alreadyTrackedReply(ctx, rawURL))
+		a.sendTelegram(ctx, chatID, a.alreadyTrackedReply(ctx, source, board))
 	case errors.Is(err, contribution.ErrBoardAlreadyContributed):
 		a.sendTelegram(ctx, chatID, "✅ That board was already contributed — no new point, but thanks!")
 	case err != nil:

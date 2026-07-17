@@ -14,6 +14,7 @@ import (
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/auth/oauth"
 	"github.com/strelov1/freehire/internal/blobstore"
+	"github.com/strelov1/freehire/internal/boardresolve"
 	"github.com/strelov1/freehire/internal/contribution"
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/db"
@@ -241,8 +242,10 @@ func Register(app *fiber.App, cfg Config) {
 	// submission approval mints through the same moderation service, so derivation,
 	// dedup, and the enrichment enqueue are reused rather than duplicated.
 	a.submission = submission.New(submission.NewQueriesRepository(queries), a.moderation)
-	// Contributions detect the ATS board from the URL alone (network-free, see board.go).
-	a.contribution = contribution.New(contribution.NewQueriesRepository(queries, cfg.Pool))
+	// Contributions detect the ATS board from the URL alone (network-free, board.go), with a
+	// network fallback (boardresolve) that fetches a company careers page and detects an
+	// embedded ATS — so vanity-domain links (company.com/careers?gh_jid=…) resolve too.
+	a.contribution = contribution.New(contribution.NewQueriesRepository(queries, cfg.Pool), boardresolve.New())
 	// The report queue uses one QueriesRepository for both persistence and the
 	// job soft-close (it implements report.Repository and report.JobCloser).
 	reportRepo := report.NewQueriesRepository(queries)
