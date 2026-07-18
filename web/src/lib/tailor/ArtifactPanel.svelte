@@ -4,7 +4,7 @@
   // verdict. JD and verdict reuse the SAME components the job page / fit page use, so they read
   // identically. Splitter width is clamped by the vitest-covered clampWidth.
   import { clampWidth } from './geometry';
-  import { ExternalLink } from '@lucide/svelte';
+  import { ExternalLink, RefreshCw } from '@lucide/svelte';
   import { api } from '$lib/api';
   import JobDescription from '$lib/components/JobDescription.svelte';
   import JobFitFull from '$lib/components/JobFitFull.svelte';
@@ -87,16 +87,27 @@
         </button>
       {/each}
     </div>
-    <a
-      href={cvUrl}
-      target="_blank"
-      rel="noopener"
-      title="Open the CV PDF in a new tab"
-      class="inline-flex items-center gap-1 rounded px-2 py-1 text-muted-foreground transition-colors hover:text-foreground"
-    >
-      <ExternalLink class="size-4" />
-      <span class="hidden xl:inline">Open PDF</span>
-    </a>
+    <div class="flex items-center gap-1">
+      <button
+        type="button"
+        onclick={() => (cvVersion += 1)}
+        title="Reload the CV PDF (after editing it via the CLI)"
+        class="inline-flex items-center gap-1 rounded px-2 py-1 text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <RefreshCw class="size-4" />
+        <span class="hidden xl:inline">Refresh</span>
+      </button>
+      <a
+        href={cvUrl}
+        target="_blank"
+        rel="noopener"
+        title="Open the CV PDF in a new tab"
+        class="inline-flex items-center gap-1 rounded px-2 py-1 text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ExternalLink class="size-4" />
+        <span class="hidden xl:inline">Open PDF</span>
+      </a>
+    </div>
   </div>
 
   <div class="min-h-0 flex-1 overflow-auto">
