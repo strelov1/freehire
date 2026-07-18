@@ -1,0 +1,9 @@
+# Crelate — a recruiting/staffing ATS. Each board is a Crelate candidate portal, and a portal
+# commonly fronts a network of client companies (aggregator: each job's employer is its own
+# CompanyName). The board is "<portalSlug>:<organizationId>": the OrganizationId GUID keys the
+# keyless candidate-portal API, and the portal slug builds the human job URL. Find both on the
+# live portal at jobs.crelate.com/portal/<slug> — the OrganizationId GUID is embedded in the page
+# (it is the value the portal's GetAllJobs XHR sends). Keyless; one call returns every job.
+- company: Career Tree Network
+  provider: crelate
+  board: careertree:ec546cba-84d5-4d8a-97e5-52e8ef47db08
