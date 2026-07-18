@@ -262,8 +262,8 @@
           {#each stream.stages as st (st.n)}
             <div class="relative z-10 flex flex-1 flex-col items-center gap-2">
               <span
-                class="flex size-8 shrink-0 items-center justify-center rounded-full border bg-card text-sm font-semibold transition-colors
-                {st.state === 'done' ? 'border-brand bg-brand text-brand-foreground' : st.state === 'active' ? 'border-brand text-primary' : 'border-border text-muted-foreground'}"
+                class="flex size-8 shrink-0 items-center justify-center rounded-full border text-sm font-semibold transition-colors
+                {st.state === 'done' ? 'border-brand bg-brand text-brand-foreground' : st.state === 'active' ? 'border-brand bg-card text-primary' : 'border-border bg-card text-muted-foreground'}"
               >
                 {#if st.state === 'done'}<Check class="size-4" />
                 {:else if st.state === 'active'}<Loader class="size-4 animate-spin" />

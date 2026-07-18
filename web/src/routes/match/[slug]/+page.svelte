@@ -38,11 +38,11 @@
       <ArrowLeft class="size-3.5" />Back to role
     </a>
     <div class="flex flex-col gap-2.5 border-b border-border pb-6">
-      <h1 class="text-xl font-bold leading-tight tracking-tight sm:text-2xl">{data.job.title}</h1>
       <div class="flex items-center gap-2">
         <CompanyLogo name={data.job.company} size="size-5" />
         <p class="text-sm text-muted-foreground">{data.job.company}</p>
       </div>
+      <h1 class="text-xl font-bold leading-tight tracking-tight sm:text-2xl">{data.job.title}</h1>
     </div>
   </header>
 
