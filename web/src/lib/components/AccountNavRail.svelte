@@ -7,7 +7,7 @@
   import { cn } from '$lib/utils';
 
   // A compact, icon-only mirror of the account-section navigation (see
-  // my/+layout.svelte), pinned to the right edge of full-width surfaces that reset
+  // my/+layout.svelte), pinned to the left edge of full-width surfaces that reset
   // past the account shell — currently the Agent page. Same items, gating, order,
   // and active rule as the sidebar; no labels, no collapse. Reuses the shared
   // visible-nav model and icon map so there's one source of truth. Renders nothing
@@ -22,7 +22,7 @@
 {#if isAuthenticated()}
   <nav
     aria-label="Account sections"
-    class="flex w-14 shrink-0 flex-col gap-1 overflow-y-auto border-l border-border bg-background p-2"
+    class="flex w-14 shrink-0 flex-col gap-1 overflow-y-auto border-r border-border bg-background p-2"
   >
     {#each navItems as item (item.href)}
       {@const active = isSectionActive(path, item.href)}

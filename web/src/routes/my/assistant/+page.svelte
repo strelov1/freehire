@@ -12,8 +12,8 @@
 <svelte:head><title>Agent — freehire</title></svelte:head>
 
 <div class="flex h-[calc(100svh-3.5rem)]">
-  <AssistantChat {session} showSessionRail />
-  <!-- Full-width surface loses the account shell nav; a compact icon rail on the right
+  <!-- Full-width surface loses the account shell nav; a compact icon rail on the left
        edge brings the account sections back without stealing width from the chat. -->
   <AccountNavRail />
+  <AssistantChat {session} showSessionRail />
 </div>
