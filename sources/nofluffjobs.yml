@@ -1,0 +1,6 @@
+# NoFluffJobs Polish/CEE IT job board. Boardless: one public API (nofluffjobs.com/api/posting),
+# so the entry carries no board; each job's company comes from the posting, not this placeholder.
+# Hydrating adapter — descriptions are fetched per new posting from /api/posting/<slug>; see
+# internal/sources/nofluffjobs.go.
+- company: NoFluffJobs
+  provider: nofluffjobs
