@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -93,10 +94,41 @@ func (a *API) StreamJobFit(c *fiber.Ctx) error {
 		// is already bounded by the client's per-call timeout.
 		ctx := context.Background()
 		events := 0
+
+		// A long stage (a silent LLM call with no thinking tokens) would let the
+		// connection go quiet long enough for nginx's proxy_read_timeout to sever it
+		// mid-analysis — the client sees a bare "Connection lost". A periodic SSE comment
+		// keeps bytes flowing so the stream survives silent stages. The ticker goroutine
+		// and the stage callback both write to w, so a mutex serializes them (bufio.Writer
+		// is not safe for concurrent use).
+		var mu sync.Mutex
+		stopHeartbeat := make(chan struct{})
+		var heartbeat sync.WaitGroup
+		heartbeat.Add(1)
+		go func() {
+			defer heartbeat.Done()
+			t := time.NewTicker(15 * time.Second)
+			defer t.Stop()
+			for {
+				select {
+				case <-stopHeartbeat:
+					return
+				case <-t.C:
+					mu.Lock()
+					writeComment(w, "keepalive")
+					mu.Unlock()
+				}
+			}
+		}()
+
 		analysis, err := a.jobFit.AnalyzeStream(ctx, input, func(e jobfit.Event) {
 			events++
+			mu.Lock()
 			writeSSE(w, string(e.Kind), e)
+			mu.Unlock()
 		})
+		close(stopHeartbeat)
+		heartbeat.Wait()
 		if err != nil {
 			log.Printf("jobfit: stream FAILED user=%d job=%d dur=%s events=%d: %v", userID, job.ID, time.Since(start).Round(time.Millisecond), events, err)
 			writeSSE(w, "stream_error", map[string]string{"message": "analysis failed"})
@@ -123,6 +155,16 @@ func writeSSE(w *bufio.Writer, event string, data any) {
 		return
 	}
 	if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, blob); err != nil {
+		return
+	}
+	_ = w.Flush()
+}
+
+// writeComment writes an SSE comment line — ignored by EventSource — as a heartbeat that
+// keeps the connection producing bytes through long, silent stages. A write error (client
+// gone) is swallowed, exactly like writeSSE.
+func writeComment(w *bufio.Writer, text string) {
+	if _, err := fmt.Fprintf(w, ": %s\n\n", text); err != nil {
 		return
 	}
 	_ = w.Flush()
