@@ -8,19 +8,23 @@ import (
 
 // Board extraction modes, each matching how the ingest adapter namespaces jobs.external_id:
 //   - path:      board = the first path segment on a fixed host (jobs.lever.co/<board>/…).
+//   - pathlocale: like path, but a leading xx-XX locale segment is skipped first — Rippling's
+//     public site prefixes the board with a locale (ats.rippling.com/en-GB/<board>/…) that its
+//     board API omits, so both URL shapes must resolve to the same board.
 //   - subdomain: board = the leftmost DNS label under a fixed apex (<board>.recruitee.com).
 //   - host:      board = the whole careers host (the tenant identity IS the host, and the TLD
 //     varies by region, e.g. <tenant>.zohorecruit.eu / .com / .in).
 //   - hostpath:  board = "<host>/<first path segment>" (Workday: the tenant is the host, the
 //     site is the first path segment, e.g. acme.wd1.myworkdayjobs.com/Careers).
 //
-// For subdomain and host the board IS the host; for hostpath it is host + site. In all three the
+// For subdomain and host the board IS the host; for hostpath it is host + site. In all these the
 // canonical URL is stripped to that board, collapsing a vacancy URL and the board listing to one.
 const (
-	modePath      = "path"
-	modeSubdomain = "subdomain"
-	modeHost      = "host"
-	modeHostPath  = "hostpath"
+	modePath       = "path"
+	modePathLocale = "pathlocale"
+	modeSubdomain  = "subdomain"
+	modeHost       = "host"
+	modeHostPath   = "hostpath"
 )
 
 // atsBoards lists the supported multi-tenant ATS: a host (exact or subdomain-suffix match) →
@@ -44,8 +48,10 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"careers.hireology.com", "hireology", modePath},
 	{"jobs.smartrecruiters.com", "smartrecruiters", modePath},
 	{"careers.smartrecruiters.com", "smartrecruiters", modePath},
-	{"ats.rippling.com", "rippling", modePath},
 	{"recruiting.ultipro.com", "ukg", modePath},
+
+	// --- pathlocale: like path, skipping a leading xx-XX locale segment ---
+	{"ats.rippling.com", "rippling", modePathLocale},
 
 	// --- subdomain: board = leftmost DNS label under the apex ---
 	{"recruitee.com", "recruitee", modeSubdomain},
@@ -120,6 +126,18 @@ func RecognizeBoard(rawURL string) (source, board, canonical string, ok bool) {
 		u.RawQuery, u.Fragment = "", ""
 		u.Path = "/" + site
 		return src, host + "/" + site, u.String(), true
+
+	case modePathLocale:
+		// Rippling: skip a leading xx-XX locale segment (ats.rippling.com/en-GB/<board>/…),
+		// which the board API omits, and collapse the canonical to the board root so a
+		// locale-prefixed vacancy, a bare vacancy, and the listing all map to one board.
+		board = boardAfterLocale(u)
+		if board == "" {
+			return "", "", "", false
+		}
+		u.RawQuery, u.Fragment = "", ""
+		u.Path = "/" + board
+		return src, board, u.String(), true
 	}
 
 	// modePath: the board is the first path segment.
@@ -164,6 +182,28 @@ func subdomainLabel(host, apex string) string {
 		return sub[:i]
 	}
 	return sub
+}
+
+// localeSegment matches an xx-XX language-COUNTRY locale (e.g. en-GB) — the optional leading
+// path segment Rippling's public board site inserts before the tenant. Tenant slugs are
+// lowercase (satomic, 360-fire-flood), so the uppercase country code never collides.
+var localeSegment = regexp.MustCompile(`^[a-z]{2}-[A-Z]{2}$`)
+
+// boardAfterLocale returns the first path segment that isn't a leading locale — the tenant board
+// in ats.rippling.com/<locale?>/<board>/… . "" when the path is empty or carries only a locale.
+func boardAfterLocale(u *url.URL) string {
+	p := strings.Trim(u.Path, "/")
+	if p == "" {
+		return ""
+	}
+	segs := strings.Split(p, "/")
+	if localeSegment.MatchString(segs[0]) {
+		segs = segs[1:]
+	}
+	if len(segs) == 0 {
+		return ""
+	}
+	return segs[0]
 }
 
 // ghNumericID matches a Greenhouse-style numeric job id.

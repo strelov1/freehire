@@ -23,6 +23,14 @@ func TestRecognizeBoard(t *testing.T) {
 		{"deel path", "https://jobs.deel.com/acme/jobs/123", "deel", "acme", "https://jobs.deel.com/acme/jobs/123", true},
 		{"jobvite path", "https://jobs.jobvite.com/acme/job/oABC", "jobvite", "acme", "https://jobs.jobvite.com/acme/job/oABC", true},
 
+		// pathlocale — Rippling: an optional leading xx-XX locale segment is skipped; canonical
+		// collapses to the board root so a locale-prefixed vacancy, a bare vacancy, and the
+		// listing all map to one board.
+		{"rippling locale-prefixed vacancy", "https://ats.rippling.com/en-GB/satomic/jobs/48384892-1b6b?utm=x", "rippling", "satomic", "https://ats.rippling.com/satomic", true},
+		{"rippling no locale vacancy", "https://ats.rippling.com/satomic/jobs/34aaf2aa", "rippling", "satomic", "https://ats.rippling.com/satomic", true},
+		{"rippling board listing", "https://ats.rippling.com/satomic", "rippling", "satomic", "https://ats.rippling.com/satomic", true},
+		{"rippling locale only no tenant", "https://ats.rippling.com/en-GB", "", "", "", false},
+
 		// subdomain — canonical collapses to the bare host
 		{"recruitee vacancy strips path", "https://acme.recruitee.com/o/senior-go/apply?utm=x", "recruitee", "acme", "https://acme.recruitee.com", true},
 		{"recruitee board listing", "https://acme.recruitee.com", "recruitee", "acme", "https://acme.recruitee.com", true},
@@ -76,6 +84,8 @@ func TestVacancyAndListingSameBoard(t *testing.T) {
 		// path
 		{"https://jobs.ashbyhq.com/blitzy/a741b4e8", "https://jobs.ashbyhq.com/blitzy"},
 		{"https://job-boards.greenhouse.io/acme/jobs/1?utm=x", "https://job-boards.greenhouse.io/acme"},
+		// pathlocale (Rippling): a locale-prefixed vacancy and the bare listing collapse to one board
+		{"https://ats.rippling.com/en-GB/satomic/jobs/48384892", "https://ats.rippling.com/satomic"},
 		// subdomain
 		{"https://acme.recruitee.com/o/senior-go", "https://acme.recruitee.com"},
 		{"https://acme.bamboohr.com/careers/42/detail", "https://acme.bamboohr.com/careers/list"},
