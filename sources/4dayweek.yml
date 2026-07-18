@@ -1,0 +1,5 @@
+# 4dayweek.io job board (roles with a shortened work week). Boardless: one public API
+# (4dayweek.io/api/jobs), so the entry carries no board; each job's company comes from the
+# posting, not this placeholder.
+- company: 4dayweek
+  provider: 4dayweek
