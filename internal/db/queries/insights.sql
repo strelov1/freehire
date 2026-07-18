@@ -283,3 +283,40 @@ LEFT JOIN insights_velocity_daily v
    AND v.facet_value = sqlc.arg('facet_value')
 GROUP BY date_trunc(sqlc.arg('unit')::text, d)
 ORDER BY date_trunc(sqlc.arg('unit')::text, d);
+
+-- ---------------------------------------------------------------------------
+-- Per-company hiring signal
+-- ---------------------------------------------------------------------------
+
+-- name: DeleteAllInsightsCompanyStats :exec
+DELETE FROM insights_company_stats;
+
+-- name: RebuildInsightsCompanyStats :execrows
+-- Per-(company, day) hiring velocity with a running open count, from the retained
+-- jobs lifecycle. Each canonical, attributable job (company_slug <> '' AND
+-- duplicate_of IS NULL) emits an added event on its created_at (UTC) day and, if
+-- closed, a removed event on its closed_at (UTC) day; the inner aggregate collapses
+-- those to one row per (company_slug, day), and the window SUM over (added - removed)
+-- ordered by day yields open = cumulative(added) - cumulative(removed) as of that day
+-- (a job is created no later than it closes, so this equals the point-in-time open
+-- count). Only a company's activity days get a row.
+INSERT INTO insights_company_stats (company_slug, day, added, removed, open)
+SELECT
+    company_slug,
+    day,
+    added,
+    removed,
+    sum(added - removed) OVER (PARTITION BY company_slug ORDER BY day)::int AS open
+FROM (
+    SELECT j.company_slug, day, sum(added)::int AS added, sum(removed)::int AS removed
+    FROM jobs j
+    CROSS JOIN LATERAL (
+        -- Added event on the created_at day; removed event on the closed_at day.
+        SELECT (j.created_at AT TIME ZONE 'UTC')::date AS day, 1 AS added, 0 AS removed
+        UNION ALL
+        SELECT (j.closed_at AT TIME ZONE 'UTC')::date, 0, 1
+        WHERE j.closed_at IS NOT NULL
+    ) e
+    WHERE j.company_slug <> '' AND j.duplicate_of IS NULL
+    GROUP BY j.company_slug, day
+) daily;

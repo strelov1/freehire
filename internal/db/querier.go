@@ -218,6 +218,10 @@ type Querier interface {
 	// First half of the atomic rebuild: clear the snapshot. Run in the same transaction
 	// as the InsertFacetStat loop so a reader never sees an empty or partial table.
 	DeleteAllFacetStats(ctx context.Context) error
+	// ---------------------------------------------------------------------------
+	// Per-company hiring signal
+	// ---------------------------------------------------------------------------
+	DeleteAllInsightsCompanyStats(ctx context.Context) error
 	// Trends & Insights rollups (insights_*), recomputed by cmd/rollup-stats as an
 	// atomic delete-and-reinsert, and the read queries the public /api/v1/insights/*
 	// endpoints serve from them. All rollups are a pure function of current `jobs`
@@ -744,6 +748,15 @@ type Querier interface {
 	// coalesced/cast to bigint so it reads as a plain int64 (an all-failing provider
 	// yields 0, not NULL).
 	ProviderHealthRollup(ctx context.Context) ([]ProviderHealthRollupRow, error)
+	// Per-(company, day) hiring velocity with a running open count, from the retained
+	// jobs lifecycle. Each canonical, attributable job (company_slug <> '' AND
+	// duplicate_of IS NULL) emits an added event on its created_at (UTC) day and, if
+	// closed, a removed event on its closed_at (UTC) day; the inner aggregate collapses
+	// those to one row per (company_slug, day), and the window SUM over (added - removed)
+	// ordered by day yields open = cumulative(added) - cumulative(removed) as of that day
+	// (a job is created no later than it closes, so this equals the point-in-time open
+	// count). Only a company's activity days get a row.
+	RebuildInsightsCompanyStats(ctx context.Context) (int64, error)
 	// Per-country role demand: a job contributes once to each of its countries.
 	RebuildInsightsRoleStatsByCountry(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
 	// Country-agnostic ('' bucket) role demand. open_count = jobs open now

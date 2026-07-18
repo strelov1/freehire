@@ -11,6 +11,19 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const deleteAllInsightsCompanyStats = `-- name: DeleteAllInsightsCompanyStats :exec
+
+DELETE FROM insights_company_stats
+`
+
+// ---------------------------------------------------------------------------
+// Per-company hiring signal
+// ---------------------------------------------------------------------------
+func (q *Queries) DeleteAllInsightsCompanyStats(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteAllInsightsCompanyStats)
+	return err
+}
+
 const deleteAllInsightsRoleStats = `-- name: DeleteAllInsightsRoleStats :exec
 
 
@@ -338,6 +351,45 @@ func (q *Queries) ListInsightsVelocity(ctx context.Context, arg ListInsightsVelo
 		return nil, err
 	}
 	return items, nil
+}
+
+const rebuildInsightsCompanyStats = `-- name: RebuildInsightsCompanyStats :execrows
+INSERT INTO insights_company_stats (company_slug, day, added, removed, open)
+SELECT
+    company_slug,
+    day,
+    added,
+    removed,
+    sum(added - removed) OVER (PARTITION BY company_slug ORDER BY day)::int AS open
+FROM (
+    SELECT j.company_slug, day, sum(added)::int AS added, sum(removed)::int AS removed
+    FROM jobs j
+    CROSS JOIN LATERAL (
+        -- Added event on the created_at day; removed event on the closed_at day.
+        SELECT (j.created_at AT TIME ZONE 'UTC')::date AS day, 1 AS added, 0 AS removed
+        UNION ALL
+        SELECT (j.closed_at AT TIME ZONE 'UTC')::date, 0, 1
+        WHERE j.closed_at IS NOT NULL
+    ) e
+    WHERE j.company_slug <> '' AND j.duplicate_of IS NULL
+    GROUP BY j.company_slug, day
+) daily
+`
+
+// Per-(company, day) hiring velocity with a running open count, from the retained
+// jobs lifecycle. Each canonical, attributable job (company_slug <> ” AND
+// duplicate_of IS NULL) emits an added event on its created_at (UTC) day and, if
+// closed, a removed event on its closed_at (UTC) day; the inner aggregate collapses
+// those to one row per (company_slug, day), and the window SUM over (added - removed)
+// ordered by day yields open = cumulative(added) - cumulative(removed) as of that day
+// (a job is created no later than it closes, so this equals the point-in-time open
+// count). Only a company's activity days get a row.
+func (q *Queries) RebuildInsightsCompanyStats(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, rebuildInsightsCompanyStats)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const rebuildInsightsRoleStatsByCountry = `-- name: RebuildInsightsRoleStatsByCountry :execrows

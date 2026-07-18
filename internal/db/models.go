@@ -131,6 +131,14 @@ type GmailConnection struct {
 	LastSyncedAt    pgtype.Timestamptz `json:"last_synced_at"`
 }
 
+type InsightsCompanyStat struct {
+	CompanySlug string      `json:"company_slug"`
+	Day         pgtype.Date `json:"day"`
+	Added       int32       `json:"added"`
+	Removed     int32       `json:"removed"`
+	Open        int32       `json:"open"`
+}
+
 type InsightsFacetStat struct {
 	Facet string `json:"facet"`
 	Value string `json:"value"`
