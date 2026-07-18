@@ -1,0 +1,25 @@
+---
+title: Three new job sources — German, Polish/CEE IT, and curated remote
+date: 2026-07-18
+summary: We added the German Federal Employment Agency, NoFluffJobs, and Jobspresso to the crawl, bringing German IT roles, Polish/CEE tech jobs, and curated remote work into the catalogue.
+type: changelog
+tags:
+  - sources
+  - remote
+draft: false
+---
+
+Three more sources just started feeding the catalogue, widening coverage into two
+markets we reached only thinly before:
+
+- **Bundesagentur für Arbeit** — Germany's federal employment agency, the
+  country's largest job board. We pull its first-party IT postings (software
+  development, IT administration, systems analysis), not the listings it
+  re-syndicates from elsewhere.
+- **NoFluffJobs** — a major Polish/CEE IT board, the complement to justjoin.it.
+  Each role brings its own tech stack, seniority, and salary straight from the
+  posting.
+- **Jobspresso** — a curated, remote-only board of vetted roles at companies
+  hiring worldwide.
+
+[Browse the newest jobs](/jobs) to see them roll in.
