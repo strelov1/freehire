@@ -264,6 +264,7 @@ func All(c HTTPClient) map[string]Source {
 		NewJobvite(c),
 		NewBullhorn(c),
 		NewManatal(c),
+		NewJobscore(c),
 		// Ashby boards whose public Posting API is disabled, served via the embed GraphQL.
 		NewAshbyGraphQL(c),
 		// Multi-company aggregators (boardless): one global feed, company per posting.
