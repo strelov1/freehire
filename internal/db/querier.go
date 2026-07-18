@@ -940,6 +940,11 @@ type Querier interface {
 	// Targeted enrichment write used by the enrichment command: set only the payload
 	// and the provenance stamp, touching no raw source field. Kept separate from
 	// UpsertJob (the ingest full-upsert path) so ingest and enrichment stay decoupled.
+	// An authoritative manual salary (a recruiter/moderator stated it by hand, recorded in
+	// the salary_*_manual columns) is coalesced OVER the incoming payload's salary, so the
+	// LLM can compute its own figure but never displaces the stated one — the manual keys
+	// win via jsonb `||`, and jsonb_strip_nulls drops an unstated bound so it does not blank
+	// the payload's. The overlay only fires when a bound is set (the presence signal).
 	SetJobEnrichment(ctx context.Context, arg SetJobEnrichmentParams) error
 	// Publish a saved search as a board: set its public slug and (optional) author label,
 	// owner-scoped, bumping updated_at. The service decides the slug (keeping an existing
@@ -1122,9 +1127,12 @@ type Querier interface {
 	// provenance is recorded by created_by (set here, NULL for every automated source) —
 	// not by the source value. created_by is stamped once at insert; updated_by is
 	// (re)written on the conflict update. Like UpsertJob, public_slug is minted once and
-	// never rewritten, and the enrichment columns are left to SetJobEnrichment. The conflict
-	// reopens a previously closed posting (closed_at = NULL) since the moderator is
-	// re-asserting it.
+	// never rewritten, and the enrichment columns are otherwise left to SetJobEnrichment —
+	// the one exception is an authoritative manual salary, which is written to the
+	// salary_*_manual columns AND seeded into the enrichment payload here so the vacancy
+	// shows its salary immediately, before any enrichment pass runs (the pass then preserves
+	// it via SetJobEnrichment's overlay). The conflict reopens a previously closed posting
+	// (closed_at = NULL) since the moderator is re-asserting it.
 	UpsertManualJob(ctx context.Context, arg UpsertManualJobParams) (Job, error)
 	// Link (or relink) a user's Telegram chat, captured from the inbound /start. One
 	// row per user; relinking from a different chat overwrites the chat_id.

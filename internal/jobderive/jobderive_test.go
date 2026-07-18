@@ -441,3 +441,26 @@ func TestDerive_BareRemoteWithoutUSOnlyStaysGlobal(t *testing.T) {
 		t.Errorf("Regions = %v, want [global] (unchanged)", got.Regions)
 	}
 }
+
+// Explicit region/city signals supplied on the Input win over the location-dictionary
+// derivation, mirroring the precedence work-mode already has: a recruiter (or moderator)
+// who states the geography by hand overrides what the free-text location would derive,
+// while an unsupplied facet still derives.
+func TestDerive_ExplicitRegionCityOverride(t *testing.T) {
+	got := Derive(Input{
+		Title:       "Senior Go Developer",
+		Company:     "Acme",
+		Source:      "manual",
+		ExternalID:  "https://acme.example/jobs/1",
+		Location:    "Remote - Germany",
+		Description: "We use Golang.",
+		Regions:     []string{"north_america"},
+		Cities:      []string{"Austin"},
+	})
+	if !reflect.DeepEqual(got.Regions, []string{"north_america"}) {
+		t.Errorf("Regions = %v, want [north_america] (explicit wins over derived)", got.Regions)
+	}
+	if !reflect.DeepEqual(got.Cities, []string{"Austin"}) {
+		t.Errorf("Cities = %v, want [Austin] (explicit wins over derived)", got.Cities)
+	}
+}

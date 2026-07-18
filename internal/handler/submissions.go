@@ -31,11 +31,36 @@ type submissionResponse struct {
 	// JobSlug is the public slug of the minted live vacancy, set only on an approved
 	// submission in the "my submissions" view, so the UI can link to /jobs/<slug>.
 	JobSlug string `json:"job_slug,omitempty"`
+
+	// The structured facets the submitter stated, echoed back so the submit confirmation
+	// and the moderator queue show exactly what was entered.
+	Skills         []string `json:"skills,omitempty"`
+	Regions        []string `json:"regions,omitempty"`
+	Cities         []string `json:"cities,omitempty"`
+	WorkMode       string   `json:"work_mode,omitempty"`
+	SalaryMin      *int     `json:"salary_min,omitempty"`
+	SalaryMax      *int     `json:"salary_max,omitempty"`
+	SalaryCurrency string   `json:"salary_currency,omitempty"`
+	SalaryPeriod   string   `json:"salary_period,omitempty"`
+}
+
+// withStructured copies the submission's structured facets onto the response — the shared
+// tail of all three mappers, which build the same-named fields from the embedded Submission.
+func withStructured(resp submissionResponse, s submission.Submission) submissionResponse {
+	resp.Skills = s.Skills
+	resp.Regions = s.Regions
+	resp.Cities = s.Cities
+	resp.WorkMode = s.WorkMode
+	resp.SalaryMin = s.SalaryMin
+	resp.SalaryMax = s.SalaryMax
+	resp.SalaryCurrency = s.SalaryCurrency
+	resp.SalaryPeriod = s.SalaryPeriod
+	return resp
 }
 
 // toSubmissionResponse maps a stored submission to its wire shape (no submitter email).
 func toSubmissionResponse(s submission.Submission) submissionResponse {
-	return submissionResponse{
+	return withStructured(submissionResponse{
 		ID:           s.ID,
 		URL:          s.URL,
 		Source:       s.Source,
@@ -49,12 +74,12 @@ func toSubmissionResponse(s submission.Submission) submissionResponse {
 		ReviewReason: s.ReviewReason,
 		ReviewedAt:   s.ReviewedAt,
 		CreatedAt:    s.CreatedAt,
-	}
+	}, s)
 }
 
 // toPendingSubmissionResponse maps a moderator-queue row, adding the submitter's email.
 func toPendingSubmissionResponse(r submission.PendingSubmission) submissionResponse {
-	return submissionResponse{
+	return withStructured(submissionResponse{
 		ID:             r.ID,
 		URL:            r.URL,
 		Source:         r.Source,
@@ -69,13 +94,13 @@ func toPendingSubmissionResponse(r submission.PendingSubmission) submissionRespo
 		ReviewedAt:     r.ReviewedAt,
 		CreatedAt:      r.CreatedAt,
 		SubmitterEmail: r.SubmitterEmail,
-	}
+	}, r.Submission)
 }
 
 // toMySubmissionResponse maps a "my submissions" row, adding the minted job's slug when
 // the submission was approved (empty otherwise).
 func toMySubmissionResponse(r submission.UserSubmission) submissionResponse {
-	return submissionResponse{
+	return withStructured(submissionResponse{
 		ID:           r.ID,
 		URL:          r.URL,
 		Source:       r.Source,
@@ -90,7 +115,7 @@ func toMySubmissionResponse(r submission.UserSubmission) submissionResponse {
 		ReviewedAt:   r.ReviewedAt,
 		CreatedAt:    r.CreatedAt,
 		JobSlug:      r.JobSlug,
-	}
+	}, r.Submission)
 }
 
 // submissionError maps the submission sentinels onto HTTP statuses. moderation.ErrInvalid

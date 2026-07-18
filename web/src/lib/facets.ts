@@ -395,6 +395,10 @@ const CURRENCY: FacetOption[] = [
   { value: 'RUB', label: 'RUB' },
 ];
 
+// The salary currency vocabulary, reused by the submit form so a submitter's choice
+// aligns with the filter's currency facet.
+export const CURRENCY_OPTIONS: FacetOption[] = CURRENCY;
+
 // Curated collections (yc, bigtech, …) as pill options, sourced from the same
 // registry the /collections hub renders so the label/slug pairs never drift.
 const COLLECTION: FacetOption[] = COLLECTIONS.map((c) => ({ value: c.slug, label: c.title }));

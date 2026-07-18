@@ -30,6 +30,12 @@ import (
 // unioned with the dictionary skills. They carry structured signal only, never a
 // heuristic an adapter inferred from free text; an adapter with no signal leaves them
 // empty/nil so the dictionary decides.
+//
+// Regions and Cities are the caller's structured GEOGRAPHY signal (macro-region codes
+// and city names the submitter/moderator stated by hand). Unlike the scalars they fully
+// replace the location-dictionary derivation for that facet when present — an explicit
+// place is authoritative, not a hint the dictionary refines — and when empty the
+// dictionary derives as before.
 type Input struct {
 	Title              string
 	Company            string
@@ -38,6 +44,8 @@ type Input struct {
 	Location           string
 	Description        string
 	WorkMode           string
+	Regions            []string
+	Cities             []string
 	Seniority          string
 	Category           string
 	EmploymentType     string
@@ -92,6 +100,16 @@ func Derive(in Input) Derived {
 	if usOnly(countries, regions, in.Description) {
 		countries, regions = []string{"us"}, []string{"north_america"}
 	}
+	// An explicit region signal is authoritative: it fully replaces the derived regions
+	// (and the US override above), the same way a stated work mode replaces the hint.
+	if len(in.Regions) > 0 {
+		regions = in.Regions
+	}
+	// An explicit city signal likewise replaces the dictionary's cities outright.
+	cities := geo.Cities
+	if len(in.Cities) > 0 {
+		cities = in.Cities
+	}
 	// Work-mode precedence: structured (ATS) → location marker → description phrase.
 	// Each lower source only fills a value the higher ones left empty.
 	workMode := in.WorkMode
@@ -139,7 +157,7 @@ func Derive(in Input) Derived {
 		PublicSlug:  normalize.JobSlug(in.Title, in.Company, in.Source, in.ExternalID),
 		Countries:   countries,
 		Regions:     regions,
-		Cities:      geo.Cities,
+		Cities:      cities,
 		WorkMode:    workMode,
 		// Skills is a set: the structured source skills are unioned with the
 		// dictionary skills, neither replacing the other.

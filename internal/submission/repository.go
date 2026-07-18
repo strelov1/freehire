@@ -32,15 +32,23 @@ func NewQueriesRepository(q *db.Queries) *QueriesRepository {
 // ErrDuplicatePending.
 func (r *QueriesRepository) Create(ctx context.Context, submittedBy int64, in moderation.CreateInput) (Submission, error) {
 	sub, err := r.q.CreateSubmission(ctx, db.CreateSubmissionParams{
-		SubmittedBy: submittedBy,
-		URL:         in.URL,
-		Source:      in.Source,
-		Title:       in.Title,
-		Company:     in.Company,
-		Location:    in.Location,
-		Remote:      in.Remote,
-		Description: in.Description,
-		PostedAt:    pgconv.Timestamptz(in.PostedAt),
+		SubmittedBy:    submittedBy,
+		URL:            in.URL,
+		Source:         in.Source,
+		Title:          in.Title,
+		Company:        in.Company,
+		Location:       in.Location,
+		Remote:         in.Remote,
+		Description:    in.Description,
+		PostedAt:       pgconv.Timestamptz(in.PostedAt),
+		Skills:         in.Skills,
+		Regions:        in.Regions,
+		Cities:         in.Cities,
+		WorkMode:       in.WorkMode,
+		SalaryMin:      pgconv.Int4(in.SalaryMin),
+		SalaryMax:      pgconv.Int4(in.SalaryMax),
+		SalaryCurrency: in.SalaryCurrency,
+		SalaryPeriod:   in.SalaryPeriod,
 	})
 	if pgerr.IsUniqueViolation(err) {
 		return Submission{}, ErrDuplicatePending
@@ -139,6 +147,15 @@ func fromRow(row db.JobSubmission) Submission {
 		ReviewReason: row.ReviewReason,
 		ReviewedAt:   pgconv.TimePtr(row.ReviewedAt),
 		CreatedAt:    pgconv.TimePtr(row.CreatedAt),
+
+		Skills:         row.Skills,
+		Regions:        row.Regions,
+		Cities:         row.Cities,
+		WorkMode:       row.WorkMode,
+		SalaryMin:      pgconv.IntPtr(row.SalaryMin),
+		SalaryMax:      pgconv.IntPtr(row.SalaryMax),
+		SalaryCurrency: row.SalaryCurrency,
+		SalaryPeriod:   row.SalaryPeriod,
 	}
 }
 
@@ -160,6 +177,15 @@ func fromPendingRow(row db.ListPendingSubmissionsRow) PendingSubmission {
 			ReviewReason: row.ReviewReason,
 			ReviewedAt:   pgconv.TimePtr(row.ReviewedAt),
 			CreatedAt:    pgconv.TimePtr(row.CreatedAt),
+
+			Skills:         row.Skills,
+			Regions:        row.Regions,
+			Cities:         row.Cities,
+			WorkMode:       row.WorkMode,
+			SalaryMin:      pgconv.IntPtr(row.SalaryMin),
+			SalaryMax:      pgconv.IntPtr(row.SalaryMax),
+			SalaryCurrency: row.SalaryCurrency,
+			SalaryPeriod:   row.SalaryPeriod,
 		},
 		SubmitterEmail: row.SubmitterEmail,
 	}
@@ -184,6 +210,15 @@ func fromUserRow(row db.ListSubmissionsByUserRow) UserSubmission {
 			ReviewReason: row.ReviewReason,
 			ReviewedAt:   pgconv.TimePtr(row.ReviewedAt),
 			CreatedAt:    pgconv.TimePtr(row.CreatedAt),
+
+			Skills:         row.Skills,
+			Regions:        row.Regions,
+			Cities:         row.Cities,
+			WorkMode:       row.WorkMode,
+			SalaryMin:      pgconv.IntPtr(row.SalaryMin),
+			SalaryMax:      pgconv.IntPtr(row.SalaryMax),
+			SalaryCurrency: row.SalaryCurrency,
+			SalaryPeriod:   row.SalaryPeriod,
 		},
 		JobSlug: row.JobSlug.String,
 	}

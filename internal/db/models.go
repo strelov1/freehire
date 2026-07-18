@@ -232,6 +232,10 @@ type Job struct {
 	DuplicateOf           pgtype.Int8        `json:"duplicate_of"`
 	IsTech                pgtype.Bool        `json:"is_tech"`
 	SemanticEmbedding     []float32          `json:"semantic_embedding"`
+	SalaryMinManual       pgtype.Int4        `json:"salary_min_manual"`
+	SalaryMaxManual       pgtype.Int4        `json:"salary_max_manual"`
+	SalaryCurrencyManual  string             `json:"salary_currency_manual"`
+	SalaryPeriodManual    string             `json:"salary_period_manual"`
 }
 
 type JobDailyStat struct {
@@ -256,22 +260,30 @@ type JobReport struct {
 }
 
 type JobSubmission struct {
-	ID           int64              `json:"id"`
-	SubmittedBy  int64              `json:"submitted_by"`
-	URL          string             `json:"url"`
-	Source       string             `json:"source"`
-	Title        string             `json:"title"`
-	Company      string             `json:"company"`
-	Location     string             `json:"location"`
-	Remote       bool               `json:"remote"`
-	Description  string             `json:"description"`
-	PostedAt     pgtype.Timestamptz `json:"posted_at"`
-	Status       string             `json:"status"`
-	ReviewReason string             `json:"review_reason"`
-	ReviewedBy   pgtype.Int8        `json:"reviewed_by"`
-	ReviewedAt   pgtype.Timestamptz `json:"reviewed_at"`
-	JobID        pgtype.Int8        `json:"job_id"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ID             int64              `json:"id"`
+	SubmittedBy    int64              `json:"submitted_by"`
+	URL            string             `json:"url"`
+	Source         string             `json:"source"`
+	Title          string             `json:"title"`
+	Company        string             `json:"company"`
+	Location       string             `json:"location"`
+	Remote         bool               `json:"remote"`
+	Description    string             `json:"description"`
+	PostedAt       pgtype.Timestamptz `json:"posted_at"`
+	Status         string             `json:"status"`
+	ReviewReason   string             `json:"review_reason"`
+	ReviewedBy     pgtype.Int8        `json:"reviewed_by"`
+	ReviewedAt     pgtype.Timestamptz `json:"reviewed_at"`
+	JobID          pgtype.Int8        `json:"job_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	Skills         []string           `json:"skills"`
+	Regions        []string           `json:"regions"`
+	Cities         []string           `json:"cities"`
+	WorkMode       string             `json:"work_mode"`
+	SalaryMin      pgtype.Int4        `json:"salary_min"`
+	SalaryMax      pgtype.Int4        `json:"salary_max"`
+	SalaryCurrency string             `json:"salary_currency"`
+	SalaryPeriod   string             `json:"salary_period"`
 }
 
 type LinkContribution struct {

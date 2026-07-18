@@ -11,9 +11,11 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/sources"
 )
@@ -36,6 +38,12 @@ const defaultSource = "manual"
 // CreateInput is the moderator-supplied content for a new vacancy. URL (the dedup key),
 // Title, and Company are required; the rest is optional. Source is the posting's real
 // origin (e.g. "workatastartup"); empty defaults to "manual".
+//
+// The structured facets are the values a submitter/moderator states explicitly. Regions,
+// Cities, WorkMode, and Skills override the dictionary derivation (see jobderive), and
+// the Salary* fields become an authoritative manual salary on the job. All are optional
+// and sanitized before use (unknown WorkMode/Regions dropped, non-positive salary
+// dropped), so a malformed value degrades to derivation rather than corrupting the job.
 type CreateInput struct {
 	URL         string
 	Source      string
@@ -45,6 +53,15 @@ type CreateInput struct {
 	Remote      bool
 	Description string
 	PostedAt    *time.Time
+
+	Skills         []string
+	Regions        []string
+	Cities         []string
+	WorkMode       string
+	SalaryMin      *int
+	SalaryMax      *int
+	SalaryCurrency string
+	SalaryPeriod   string
 }
 
 // Validate enforces the required fields and that the URL is an absolute http(s) link
@@ -131,7 +148,7 @@ func (s *Service) Create(ctx context.Context, actorID int64, in CreateInput) (jo
 	// {@html}; sanitize to the same allowlist as every other source so no active
 	// markup is ever persisted (stored XSS). Done once and reused for derivation.
 	description := sources.SanitizeHTML(in.Description)
-	f, err := derive(source, in.URL, in.Title, in.Company, in.Location, description, in.Remote)
+	f, err := derive(source, in.URL, in.Title, in.Company, in.Location, description, in.Remote, in.structured())
 	if err != nil {
 		return job.Job{}, job.Extras{}, err
 	}
@@ -175,8 +192,9 @@ func (s *Service) Update(ctx context.Context, actorID int64, slug string, p Upda
 
 	// External id and source stay the create-time identity; only the dictionary facets
 	// re-derive (the recomputed public slug is discarded — identity is immutable, so the
-	// adapter writes the passed-in slug, not f.PublicSlug).
-	f, err := derive(curF.Source, curF.ExternalID, title, company, location, description, remote)
+	// adapter writes the passed-in slug, not f.PublicSlug). The edit path re-derives every
+	// facet from content and carries no explicit structured overrides.
+	f, err := derive(curF.Source, curF.ExternalID, title, company, location, description, remote, structuredFacets{})
 	if err != nil {
 		return job.Job{}, job.Extras{}, err
 	}
@@ -185,26 +203,117 @@ func (s *Service) Update(ctx context.Context, actorID int64, slug string, p Upda
 	return s.repo.Update(ctx, slug, f, actorID)
 }
 
+// structuredFacets are the sanitized explicit signals a create carries into derivation:
+// each overrides the dictionary for its facet (work-mode/regions/cities/skills) and the
+// salary becomes the job's authoritative manual salary. The zero value (an edit) carries
+// no overrides, so derivation decides every facet.
+type structuredFacets struct {
+	WorkMode string
+	Regions  []string
+	Cities   []string
+	Skills   []string
+	Salary   *job.Salary
+}
+
+// structured sanitizes the create input's explicit facets: an unknown work-mode or region
+// value is dropped (degrading to derivation), blank cities/skills are trimmed away, and a
+// salary is present only when a positive bound is stated.
+func (in CreateInput) structured() structuredFacets {
+	return structuredFacets{
+		WorkMode: validEnum(in.WorkMode, enrich.WorkModeValues),
+		Regions:  filterVocab(in.Regions, enrich.RegionValues),
+		Cities:   nonBlank(in.Cities),
+		Skills:   nonBlank(in.Skills),
+		Salary:   manualSalary(in.SalaryMin, in.SalaryMax, in.SalaryCurrency, in.SalaryPeriod),
+	}
+}
+
 // derive builds the Job aggregate through the factory and returns its projected
 // fields — the moderator write path's single door to the deterministic slugs and
-// dictionary facets, shared with ingest and Telegram extraction. WorkMode carries
-// the moderator's structured remote flag (job.New cleans the location and derives
-// the rest). It errors only when the identity or title is blank, which the caller's
-// validation already precludes.
-func derive(source, externalID, title, company, location, description string, remote bool) (job.Fields, error) {
+// dictionary facets, shared with ingest and Telegram extraction. The structured facets
+// override derivation where present; WorkMode also carries the moderator's structured
+// remote flag when no explicit work mode was given (job.New cleans the location and
+// derives the rest). It errors only when the identity or title is blank, which the
+// caller's validation already precludes.
+func derive(source, externalID, title, company, location, description string, remote bool, s structuredFacets) (job.Fields, error) {
+	workMode := s.WorkMode
+	if workMode == "" {
+		workMode = remoteWorkMode(remote)
+	}
 	j, err := job.New(job.Draft{
-		Source:      source,
-		ExternalID:  externalID,
-		Title:       title,
-		Company:     company,
-		Location:    location,
-		Description: description,
-		WorkMode:    remoteWorkMode(remote),
+		Source:       source,
+		ExternalID:   externalID,
+		Title:        title,
+		Company:      company,
+		Location:     location,
+		Description:  description,
+		WorkMode:     workMode,
+		Regions:      s.Regions,
+		Cities:       s.Cities,
+		Skills:       s.Skills,
+		ManualSalary: s.Salary,
 	})
 	if err != nil {
 		return job.Fields{}, err
 	}
 	return j.Fields(), nil
+}
+
+// validEnum returns v when it is a member of the allowed vocabulary, else "" — an
+// out-of-vocabulary value is dropped so it never overrides derivation with garbage.
+func validEnum(v string, allowed []string) string {
+	v = strings.TrimSpace(v)
+	if slices.Contains(allowed, v) {
+		return v
+	}
+	return ""
+}
+
+// filterVocab keeps only the members of in that are in the allowed vocabulary, trimming
+// each — unknown values are dropped (the dictionary-facets contract: never emit unknowns).
+func filterVocab(in, allowed []string) []string {
+	var out []string
+	for _, v := range in {
+		if v = strings.TrimSpace(v); slices.Contains(allowed, v) {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// nonBlank trims and drops empty entries, leaving an open-vocabulary list (skills, cities).
+func nonBlank(in []string) []string {
+	var out []string
+	for _, v := range in {
+		if v = strings.TrimSpace(v); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// manualSalary builds the authoritative manual salary, or nil when neither bound is a
+// positive figure (the presence signal). The currency is upper-cased and the period is
+// dropped unless it is a known salary period.
+func manualSalary(min, max *int, currency, period string) *job.Salary {
+	lo, hi := positiveOrNil(min), positiveOrNil(max)
+	if lo == nil && hi == nil {
+		return nil
+	}
+	return &job.Salary{
+		Min:      lo,
+		Max:      hi,
+		Currency: strings.ToUpper(strings.TrimSpace(currency)),
+		Period:   validEnum(period, enrich.SalaryPeriodValues),
+	}
+}
+
+// positiveOrNil drops a nil or non-positive figure to nil (an unstated bound).
+func positiveOrNil(n *int) *int {
+	if n == nil || *n <= 0 {
+		return nil
+	}
+	return n
 }
 
 // remoteWorkMode maps the moderator's structured remote flag onto a work-mode signal

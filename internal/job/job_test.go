@@ -118,3 +118,64 @@ func TestNew_RejectsMissingIdentity(t *testing.T) {
 		}
 	}
 }
+
+// An explicit region/city on the draft is authoritative: it overrides what the location
+// dictionary would derive, while an unsupplied facet still derives (see jobderive).
+func TestNew_ExplicitRegionCityOverrideDerivation(t *testing.T) {
+	j, err := job.New(job.Draft{
+		Source:      "manual",
+		ExternalID:  "https://acme.example/jobs/1",
+		Title:       "Senior Go Developer",
+		Company:     "Acme",
+		Location:    "Remote - Germany",
+		Description: "We use Golang.",
+		Regions:     []string{"north_america"},
+		Cities:      []string{"Austin"},
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	f := j.Fields()
+	if !reflect.DeepEqual(f.Regions, []string{"north_america"}) {
+		t.Errorf("Regions = %v, want [north_america] (explicit wins)", f.Regions)
+	}
+	if !reflect.DeepEqual(f.Cities, []string{"Austin"}) {
+		t.Errorf("Cities = %v, want [Austin] (explicit wins)", f.Cities)
+	}
+}
+
+// A manual salary supplied on the draft is carried verbatim onto the Job as a base
+// field — it is authoritative, never derived — and is absent by default.
+func TestNew_CarriesManualSalary(t *testing.T) {
+	min, max := 90000, 120000
+	j, err := job.New(job.Draft{
+		Source:       "manual",
+		ExternalID:   "https://acme.example/jobs/1",
+		Title:        "Senior Go Developer",
+		Company:      "Acme",
+		ManualSalary: &job.Salary{Min: &min, Max: &max, Currency: "EUR", Period: "year"},
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	f := j.Fields()
+	if f.ManualSalary == nil {
+		t.Fatal("ManualSalary = nil, want a value")
+	}
+	if f.ManualSalary.Min == nil || *f.ManualSalary.Min != 90000 || f.ManualSalary.Max == nil || *f.ManualSalary.Max != 120000 {
+		t.Errorf("ManualSalary range = %v/%v, want 90000/120000", f.ManualSalary.Min, f.ManualSalary.Max)
+	}
+	if f.ManualSalary.Currency != "EUR" || f.ManualSalary.Period != "year" {
+		t.Errorf("ManualSalary currency/period = %q/%q, want EUR/year", f.ManualSalary.Currency, f.ManualSalary.Period)
+	}
+}
+
+func TestNew_NoManualSalaryByDefault(t *testing.T) {
+	j, err := job.New(job.Draft{Source: "manual", ExternalID: "u", Title: "Go Dev", Company: "Acme"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if j.Fields().ManualSalary != nil {
+		t.Errorf("ManualSalary = %v, want nil (none supplied)", j.Fields().ManualSalary)
+	}
+}

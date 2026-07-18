@@ -40,6 +40,16 @@ func Int4(n *int) pgtype.Int4 {
 	return pgtype.Int4{Int32: int32(*n), Valid: true}
 }
 
+// IntPtr maps a nullable DB int to an optional int: an invalid (NULL) value becomes
+// nil, a valid one a pointer to its value. The read-side inverse of Int4.
+func IntPtr(n pgtype.Int4) *int {
+	if !n.Valid {
+		return nil
+	}
+	v := int(n.Int32)
+	return &v
+}
+
 // Bool maps an optional bool to the pgtype the generated params expect: nil becomes
 // the zero (NULL) value, a non-nil pointer a valid bool. It is the write-side
 // adapter for a tri-state (true/false/NULL) column such as jobs.is_tech.

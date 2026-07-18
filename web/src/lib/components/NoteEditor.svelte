@@ -28,8 +28,13 @@
   // imported on mount (never on the server) and torn down on unmount. `onsave` fires
   // on blur with the current markdown; the parent persists it. The component is
   // re-mounted per job by JobDrawer's {#key}, so the initial value never needs to be
-  // pushed reactively.
-  let { value = '', onsave }: { value?: string; onsave: (v: string) => void } = $props();
+  // pushed reactively. `placeholder` lets a reuse (e.g. the submit form's description)
+  // relabel the empty state; it defaults to the tracker's "Notes…".
+  let {
+    value = '',
+    onsave,
+    placeholder = 'Notes…',
+  }: { value?: string; onsave: (v: string) => void; placeholder?: string } = $props();
 
   let el = $state<HTMLTextAreaElement>();
 
@@ -54,7 +59,7 @@
       editor = new EasyMDECtor({
         element: el,
         initialValue: value,
-        placeholder: 'Notes…',
+        placeholder,
         spellChecker: false,
         status: false,
         minHeight: '120px',

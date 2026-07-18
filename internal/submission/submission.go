@@ -46,6 +46,17 @@ type Submission struct {
 	ReviewReason string
 	ReviewedAt   *time.Time
 	CreatedAt    *time.Time
+
+	// The structured facets the submitter stated, retained so the moderator sees them
+	// and Approve can carry them onto the minted job (see the Approve mint below).
+	Skills         []string
+	Regions        []string
+	Cities         []string
+	WorkMode       string
+	SalaryMin      *int
+	SalaryMax      *int
+	SalaryCurrency string
+	SalaryPeriod   string
 }
 
 // PendingSubmission is a moderator-queue row: a Submission plus the joined submitter email
@@ -128,14 +139,22 @@ func (s *Service) Approve(ctx context.Context, reviewerID, id int64) (Submission
 		return Submission{}, ErrAlreadyDecided
 	}
 	mintedJob, _, err := s.minter.Create(ctx, sub.SubmittedBy, moderation.CreateInput{
-		URL:         sub.URL,
-		Source:      sub.Source,
-		Title:       sub.Title,
-		Company:     sub.Company,
-		Location:    sub.Location,
-		Remote:      sub.Remote,
-		Description: sub.Description,
-		PostedAt:    sub.PostedAt,
+		URL:            sub.URL,
+		Source:         sub.Source,
+		Title:          sub.Title,
+		Company:        sub.Company,
+		Location:       sub.Location,
+		Remote:         sub.Remote,
+		Description:    sub.Description,
+		PostedAt:       sub.PostedAt,
+		Skills:         sub.Skills,
+		Regions:        sub.Regions,
+		Cities:         sub.Cities,
+		WorkMode:       sub.WorkMode,
+		SalaryMin:      sub.SalaryMin,
+		SalaryMax:      sub.SalaryMax,
+		SalaryCurrency: sub.SalaryCurrency,
+		SalaryPeriod:   sub.SalaryPeriod,
 	})
 	if err != nil {
 		return Submission{}, err

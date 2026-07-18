@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -330,4 +331,130 @@ func TestSubmissionsEndToEnd(t *testing.T) {
 // itoa renders an int64 id for a URL path without dragging strconv into the test body.
 func itoa(n int64) string {
 	return strconv.FormatInt(n, 10)
+}
+
+// TestSubmissionStructuredFacetsEndToEnd covers the enriched submit path: a submission
+// carrying explicit structured facets and a salary is stored with them, and on approval
+// the minted job carries the facets as overrides (region/city/work-mode/skills) plus an
+// authoritative manual salary seeded into the enrichment payload.
+func TestSubmissionStructuredFacetsEndToEnd(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+
+	var modID, userID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (email, role) VALUES ('mod2@example.test', 'moderator') RETURNING id`).Scan(&modID); err != nil {
+		t.Fatalf("seed moderator: %v", err)
+	}
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (email) VALUES ('recruiter@example.test') RETURNING id`).Scan(&userID); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	modCookie, _ := iss.Issue(modID)
+	userCookie, _ := iss.Issue(userID)
+	queries := db.New(pool)
+	mod := moderation.New(moderation.NewQueriesRepository(queries, pool, enrich.Version))
+	h := &API{
+		pool:       pool,
+		queries:    queries,
+		issuer:     iss,
+		moderation: mod,
+		submission: submission.New(submission.NewQueriesRepository(queries), mod),
+		accounts:   accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{}),
+	}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	keyAuth := auth.RequireAuthOrKey(iss, queries)
+	requireMod := auth.RequireRole(queries, "moderator")
+	app.Post("/api/v1/submissions", keyAuth, h.CreateSubmission)
+	app.Post("/api/v1/submissions/:id/approve", keyAuth, requireMod, h.ApproveSubmission)
+
+	req := func(method, path, cookie, body string) *http.Request {
+		var r *http.Request
+		if body != "" {
+			r = httptest.NewRequest(method, path, bytes.NewReader([]byte(body)))
+			r.Header.Set("Content-Type", "application/json")
+		} else {
+			r = httptest.NewRequest(method, path, nil)
+		}
+		if cookie != "" {
+			r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+		}
+		return r
+	}
+
+	const url = "https://acme.example/jobs/structured"
+	// Location "Germany" would derive the eu region; the explicit facets must win.
+	body := `{"url":"` + url + `","title":"Senior Go Developer","company":"Acme",` +
+		`"location":"Germany","description":"We use Golang.",` +
+		`"skills":["kubernetes"],"regions":["north_america"],"cities":["Austin"],"work_mode":"hybrid",` +
+		`"salary_min":90000,"salary_max":120000,"salary_currency":"EUR","salary_period":"year"}`
+
+	resp, err := app.Test(req(fiber.MethodPost, "/api/v1/submissions", userCookie, body))
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusCreated {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("submit status = %d, want 201 (body %s)", resp.StatusCode, b)
+	}
+	var subOut struct {
+		Data struct {
+			ID        int64    `json:"id"`
+			Regions   []string `json:"regions"`
+			WorkMode  string   `json:"work_mode"`
+			SalaryMin *int     `json:"salary_min"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&subOut); err != nil {
+		t.Fatalf("decode submit: %v", err)
+	}
+	// The response echoes the structured facets back to the submitter.
+	if len(subOut.Data.Regions) != 1 || subOut.Data.Regions[0] != "north_america" || subOut.Data.WorkMode != "hybrid" {
+		t.Errorf("echoed facets = %v/%q, want [north_america]/hybrid", subOut.Data.Regions, subOut.Data.WorkMode)
+	}
+	if subOut.Data.SalaryMin == nil || *subOut.Data.SalaryMin != 90000 {
+		t.Errorf("echoed salary_min = %v, want 90000", subOut.Data.SalaryMin)
+	}
+
+	// Approve → mint.
+	approve, err := app.Test(req(fiber.MethodPost, "/api/v1/submissions/"+strconv.FormatInt(subOut.Data.ID, 10)+"/approve", modCookie, ""))
+	if err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	if approve.StatusCode != fiber.StatusOK {
+		b, _ := io.ReadAll(approve.Body)
+		t.Fatalf("approve status = %d, want 200 (body %s)", approve.StatusCode, b)
+	}
+
+	// The minted job carries the explicit facets and the seeded manual salary.
+	var regions, cities, skills []string
+	var workMode string
+	var manualMin int
+	var enrichMin int
+	if err := pool.QueryRow(ctx,
+		`SELECT regions, cities, work_mode, skills, salary_min_manual, (enrichment->>'salary_min')::int
+		 FROM jobs WHERE source = 'manual' AND external_id = $1`, url).
+		Scan(&regions, &cities, &workMode, &skills, &manualMin, &enrichMin); err != nil {
+		t.Fatalf("read minted job: %v", err)
+	}
+	if len(regions) != 1 || regions[0] != "north_america" {
+		t.Errorf("minted regions = %v, want [north_america] (explicit wins over derived eu)", regions)
+	}
+	if len(cities) != 1 || cities[0] != "Austin" {
+		t.Errorf("minted cities = %v, want [Austin]", cities)
+	}
+	if workMode != "hybrid" {
+		t.Errorf("minted work_mode = %q, want hybrid", workMode)
+	}
+	if !slices.Contains(skills, "kubernetes") || !slices.Contains(skills, "go") {
+		t.Errorf("minted skills = %v, want to contain kubernetes and go", skills)
+	}
+	if manualMin != 90000 {
+		t.Errorf("minted salary_min_manual = %d, want 90000", manualMin)
+	}
+	if enrichMin != 90000 {
+		t.Errorf("seeded enrichment salary_min = %d, want 90000", enrichMin)
+	}
 }
