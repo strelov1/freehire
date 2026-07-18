@@ -314,7 +314,9 @@ func All(c HTTPClient) map[string]Source {
 		NewMicro1(c),
 		NewBairesDev(c),
 		// RU federal open-data aggregator: board-based, sharded per region (board = OKATO code).
-		NewTrudvsem(c),
+		// Paced: its gov API slows under the pipeline's board concurrency until the read timeout
+		// trips, so the aggregate request rate is throttled to a gentle serialized stream.
+		NewTrudvsem(pacedTrudvsemGetter(c)),
 		// hh.ru: multi-company aggregator, enumerated by professional_role (board), reading the
 		// server-rendered search page's embedded state.
 		NewHH(c),
