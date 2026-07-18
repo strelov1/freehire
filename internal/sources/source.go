@@ -407,6 +407,12 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// like djinni's, setting SOURCES_PROXY_URL routes only this provider through the proxy with
 	// no code change; while the proxy is unset this entry is inert.
 	"onstrider": func(c HTTPClient) Source { return NewOnstrider(c) },
+	// career.habr.com sits behind Qrator, which challenges the per-vacancy detail HTML from the
+	// prod datacenter IP (the listing JSON passes, but the description parse fails, leaving jobs
+	// with empty descriptions and so no derived skills/geo/enrichment). A residential IP is served
+	// the full page, so the whole crawl egresses through the proxy — like the others, listing and
+	// detail alike. A fixed, trusted host, so it satisfies the SSRF caveat above.
+	"habr_career": func(c HTTPClient) Source { return NewHabrCareer(c) },
 	// vagas.com.br blocks the prod datacenter IP (403 on the first listing GET) AND rate-limits
 	// by a per-IP request budget (429 once a full crawl's volume hits one IP). So it egresses
 	// through the proxy like careerspage AND is rate-paced (pacedVagasGetter) to hold its
