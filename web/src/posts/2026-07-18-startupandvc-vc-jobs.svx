@@ -1,0 +1,21 @@
+---
+title: New source — venture-capital jobs from Startup & VC
+date: 2026-07-18
+summary: Roles at VC firms — associate, analyst, principal and more — from the curated Startup & VC board now feed the catalogue.
+type: changelog
+tags:
+  - sources
+  - venture-capital
+draft: false
+---
+
+The catalogue now includes **Startup & VC** — a curated board of jobs at venture
+firms: associate, analyst, principal, partner and platform roles at funds around
+the world.
+
+Each posting keeps its own firm, location, and full description, and the apply
+link points straight at the original posting rather than a middle page. It's a
+niche most job boards miss, so if you're breaking into or moving within VC, these
+now surface alongside everything else.
+
+[Browse venture-capital roles](/jobs?q=venture%20capital) to see them.

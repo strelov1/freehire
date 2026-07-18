@@ -35,15 +35,15 @@
 </svelte:head>
 
 {#snippet board(heading: string, blurb: string, rows: InsightCompany[])}
-  <section class="rounded-lg border border-gray-200 p-4 sm:p-5">
-    <h2 class="text-lg font-semibold text-gray-900">{heading}</h2>
-    <p class="mt-0.5 text-xs text-gray-500">{blurb}</p>
+  <section class="rounded-lg border border-border p-4 sm:p-5">
+    <h2 class="text-lg font-semibold text-foreground">{heading}</h2>
+    <p class="mt-0.5 text-xs text-muted-foreground">{blurb}</p>
     {#if rows.length === 0}
-      <p class="mt-4 text-sm text-gray-500">Not enough data yet.</p>
+      <p class="mt-4 text-sm text-muted-foreground">Not enough data yet.</p>
     {:else}
       <table class="mt-3 w-full border-collapse text-left text-sm">
         <thead>
-          <tr class="border-b border-gray-300 text-gray-500">
+          <tr class="border-b border-border text-muted-foreground">
             <th class="py-2 pr-3 font-medium">Company</th>
             <th class="py-2 pr-3 text-right font-medium">Open</th>
             <th class="py-2 text-right font-medium">30-day</th>
@@ -51,25 +51,26 @@
         </thead>
         <tbody>
           {#each rows as c, i (c.company_slug)}
-            <tr class="border-b border-gray-100">
+            {@const growthTone =
+              c.growth_30d > 0
+                ? 'text-green-600 dark:text-green-400'
+                : c.growth_30d < 0
+                  ? 'text-red-600 dark:text-red-400'
+                  : 'text-muted-foreground'}
+            <tr class="border-b border-border">
               <td class="py-2 pr-3">
-                <span class="mr-1.5 tabular-nums text-gray-400">{i + 1}.</span>
+                <span class="mr-1.5 tabular-nums text-muted-foreground">{i + 1}.</span>
                 <a
                   href={resolve('/companies/[slug]', { slug: c.company_slug })}
-                  class="font-medium text-gray-900 hover:text-blue-600 hover:underline"
+                  class="font-medium text-foreground hover:text-blue-600 hover:underline"
                 >
                   {c.company_name}
                 </a>
               </td>
-              <td class="py-2 pr-3 text-right tabular-nums text-gray-700">
+              <td class="py-2 pr-3 text-right tabular-nums text-foreground">
                 {c.open_now.toLocaleString('en-US')}
               </td>
-              <td
-                class="py-2 text-right font-medium tabular-nums"
-                class:text-green-600={c.growth_30d > 0}
-                class:text-gray-400={c.growth_30d === 0}
-                class:text-red-600={c.growth_30d < 0}
-              >
+              <td class="py-2 text-right font-medium tabular-nums {growthTone}">
                 {c.growth_30d > 0 ? '+' : ''}{c.growth_30d.toLocaleString('en-US')}
               </td>
             </tr>
@@ -81,18 +82,18 @@
 {/snippet}
 
 <div class="mx-auto w-full max-w-4xl px-4 py-8">
-  <nav class="text-sm text-gray-500">
+  <nav class="text-sm text-muted-foreground">
     <a href={resolve('/insights')} class="hover:underline">Insights</a>
     <span class="mx-1">/</span>
-    <span class="text-gray-700">Companies</span>
+    <span class="text-foreground">Companies</span>
   </nav>
 
-  <h1 class="mt-3 text-3xl font-bold tracking-tight text-gray-900">Company Hiring Signal</h1>
-  <p class="mt-3 text-lg text-gray-600">{description}</p>
-  <p class="mt-1 text-sm text-gray-500">
+  <h1 class="mt-3 text-3xl font-bold tracking-tight text-foreground">Company Hiring Signal</h1>
+  <p class="mt-3 text-lg text-muted-foreground">{description}</p>
+  <p class="mt-1 text-sm text-muted-foreground">
     Change is the difference between open jobs now and 30 days ago. Refreshed daily; also on the
     <a href={resolve('/docs/api')} class="text-blue-600 hover:underline">open API</a>.
-    <span class="text-gray-400">Updated {updated}.</span>
+    <span class="text-muted-foreground">Updated {updated}.</span>
   </p>
 
   <div class="mt-8 grid gap-4 md:grid-cols-2">

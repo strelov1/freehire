@@ -1,0 +1,23 @@
+# JobScore — a US ATS. Each board is a company shortcode from its careers URL
+# (careers.jobscore.com/careers/<board>); one feed.json call returns every published posting with
+# structured location, a Yes/No remote string, job_type, experience_level, opened_date, and a
+# human detail_url. Keyless. JobScore asks integrations to poll a feed at most once per hour, so
+# this file is crawled on the standard hourly ingest timer — do not shard it to sub-hourly.
+- company: IERUS Technologies
+  provider: jobscore
+  board: ierustechnologiesinc
+- company: MAQ Software
+  provider: jobscore
+  board: maqsoftware
+- company: Caldera Medical
+  provider: jobscore
+  board: calderamedical
+- company: Aria Systems
+  provider: jobscore
+  board: ariasystems
+- company: Solutions 2 GO
+  provider: jobscore
+  board: solutions2go
+- company: Finalsite
+  provider: jobscore
+  board: finalsite

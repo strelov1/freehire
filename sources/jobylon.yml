@@ -1,0 +1,6 @@
+# Jobylon Nordic ATS. Boardless aggregator: the global jobs sitemap
+# (emp.jobylon.com/sitemap.xml → sitemap-jobs.xml) is one feed for every Jobylon employer, so the
+# entry carries no board; each job's company comes from its posting's hiringOrganization, not this
+# placeholder.
+- company: Jobylon
+  provider: jobylon

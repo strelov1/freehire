@@ -2,6 +2,7 @@ package sources
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,7 +43,41 @@ func ParseConfig(provider string, data []byte) (Config, error) {
 			entries[i].Provider = provider
 		}
 	}
+	entries = dedupeBoards(entries)
 	return Config{Provider: provider, Sources: entries}, nil
+}
+
+// dedupeBoards collapses entries that address the same case-insensitive board on the same
+// provider and region, keeping the first occurrence. ATS board ids are case-insensitive at
+// the platform (e.g. SmartRecruiters serves the same tenant for "SopraSteria1" and
+// "soprasteria1"), but the pipeline namespaces external_id with the literal board string
+// (see NamespaceExternalID), so a case-variant duplicate crawls identical postings yet
+// stores them as a SECOND row-set under a different namespace but the SAME company_slug.
+// The post-run unseen sweep is scoped by company_slug (not board), so whenever a run
+// refreshes one variant but not the other, it closes the un-refreshed variant's still-live
+// rows — a false-close. Collapsing here at load time keeps one row-set per board.
+//
+// Only board-bearing entries dedupe: a boardless entry (empty board) has no tenant id and
+// is its own company, so an empty board is never a dedupe key. Region is part of the key so
+// a same-name board on two regional hosts (a real, distinct crawl target) is preserved.
+func dedupeBoards(entries []CompanyEntry) []CompanyEntry {
+	seen := make(map[string]struct{}, len(entries))
+	kept := make([]CompanyEntry, 0, len(entries))
+	for _, e := range entries {
+		if e.Board == "" {
+			kept = append(kept, e)
+			continue
+		}
+		key := e.Provider + "\x00" + strings.ToLower(e.Board) + "\x00" + e.Region
+		if _, dup := seen[key]; dup {
+			log.Printf("sources: dropping duplicate board %q (provider %s, company %q) — case-variant of an earlier entry",
+				e.Board, e.Provider, e.Company)
+			continue
+		}
+		seen[key] = struct{}{}
+		kept = append(kept, e)
+	}
+	return kept
 }
 
 // Validate checks every entry against the registry by its own resolved provider, so the

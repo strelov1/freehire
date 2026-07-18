@@ -1,0 +1,10 @@
+# Getro-powered VC/accelerator job boards (<label>.getro.com). Aggregator: each job carries its
+# own employer (organization.name) and its url points at the company's first-party ATS, so the
+# `company` here is only the board's display name and the getro copy is dedup-suppressed in favour
+# of the first-party ATS when freehire crawls it directly. The `board` is the numeric network
+# (collection) id the search API requires — read it from the board's __NEXT_DATA__
+# (props.pageProps.network.id) or GET https://api.getro.com/api/v2/collections/<id>. See
+# internal/sources/getro.go.
+- company: Jobs in VC
+  provider: getro
+  board: "15272"

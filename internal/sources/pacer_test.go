@@ -65,3 +65,45 @@ func TestRateLimitedHTMLGetter_WaitErrorShortCircuits(t *testing.T) {
 		t.Fatalf("inner GetHTML called despite Wait error (%d times)", len(inner.urls))
 	}
 }
+
+// recordingJSONGetter records the URLs it was asked to fetch.
+type recordingJSONGetter struct {
+	urls []string
+}
+
+func (g *recordingJSONGetter) GetJSON(_ context.Context, url string, _ any) error {
+	g.urls = append(g.urls, url)
+	return nil
+}
+
+func TestConcurrencyLimitedJSONGetter_AcquiresThenDelegates(t *testing.T) {
+	inner := &recordingJSONGetter{}
+	g := concurrencyLimitedJSONGetter{inner: inner, sem: make(chan struct{}, 2)}
+
+	if err := g.GetJSON(context.Background(), "https://opendata.trudvsem.ru/api/v1/vacancies/region/x", nil); err != nil {
+		t.Fatalf("GetJSON returned error: %v", err)
+	}
+	if len(inner.urls) != 1 {
+		t.Fatalf("inner GetJSON called %d times, want 1", len(inner.urls))
+	}
+	// The slot must be released after the call, so the getter is reusable up to its cap.
+	if len(g.sem) != 0 {
+		t.Fatalf("semaphore slot not released: len=%d, want 0", len(g.sem))
+	}
+}
+
+func TestConcurrencyLimitedJSONGetter_CancelledContextShortCircuits(t *testing.T) {
+	inner := &recordingJSONGetter{}
+	sem := make(chan struct{}, 1)
+	sem <- struct{}{} // fill the only slot so the next acquire must wait
+	g := concurrencyLimitedJSONGetter{inner: inner, sem: sem}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := g.GetJSON(ctx, "https://opendata.trudvsem.ru/", nil); !errors.Is(err, context.Canceled) {
+		t.Fatalf("GetJSON error = %v, want context.Canceled", err)
+	}
+	if len(inner.urls) != 0 {
+		t.Fatalf("inner GetJSON called despite no free slot (%d times)", len(inner.urls))
+	}
+}

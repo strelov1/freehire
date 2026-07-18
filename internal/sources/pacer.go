@@ -70,3 +70,61 @@ func pacedVagasGetter(c HTMLGetter) HTMLGetter {
 		limiter: rate.NewLimiter(rate.Every(vagasRequestInterval), vagasRequestBurst),
 	}
 }
+
+// concurrencyLimitedJSONGetter bounds how many GetJSON calls are in flight at once via a shared
+// semaphore, independent of the pipeline's board-worker pool. Unlike a rate limiter — which caps
+// the request START rate but lets slow requests pile up concurrently — this caps simultaneous
+// in-flight requests, the right lever for an API that degrades under sustained concurrent load
+// rather than by rate. One instance carries one semaphore, shared across every board and page.
+type concurrencyLimitedJSONGetter struct {
+	inner JSONGetter
+	sem   chan struct{}
+}
+
+// GetJSON acquires a semaphore slot before delegating (releasing it after), so at most cap
+// requests run at once; a cancelled context surfaces while waiting and skips the inner fetch.
+func (g concurrencyLimitedJSONGetter) GetJSON(ctx context.Context, url string, v any) error {
+	select {
+	case g.sem <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	defer func() { <-g.sem }()
+	return g.inner.GetJSON(ctx, url, v)
+}
+
+// opendata.trudvsem.ru answers a page in ~0.5s in isolation and tolerates a brief burst, but its
+// gov infra degrades under the SUSTAINED concurrent load of the pipeline's 8 board workers
+// hammering it for a whole crawl — intermittent 500s and slow bodies that trip the 15s read
+// timeout, failing most regions (a rate limiter did not help, since slow reads keep the workers
+// busy and never wait on it). Bounding in-flight requests to a gentle few keeps the crawl in the
+// API's healthy regime; at ~0.5s a page and 2 in flight the whole ~4900-page board still finishes
+// well inside the 40-min ingest window. Tune from observed convergence.
+const trudvsemMaxInFlight = 2
+
+// limitedTrudvsemGetter wraps a getter with a fresh semaphore shared across one registry build, so
+// all of trudvsem's region-shard requests in a run stay under one gentle in-flight cap.
+func limitedTrudvsemGetter(c JSONGetter) JSONGetter {
+	return concurrencyLimitedJSONGetter{inner: c, sem: make(chan struct{}, trudvsemMaxInFlight)}
+}
+
+// hh.ru egresses through the single proxy IP (its detail pages 403 the direct datacenter IP), and
+// its per-vacancy detail fan-out is large — thousands of ~1 MB pages across the seeded roles. Fired
+// unpaced at defaultDetailWorkers concurrency, that burst 429s the proxy IP and ~2/3 of details
+// fall back to list-only (which never back-fill, since a seen posting skips detail). Pacing the
+// aggregate rate — not the worker pool — holds it under the proxy window so nearly every detail
+// lands. The interval is a middle ground: fast enough to finish a full role sweep inside the
+// ingest unit's TimeoutStartSec, gentle enough to stop the 429s. Tune from observed convergence.
+const (
+	hhRequestInterval = 250 * time.Millisecond // ~4 req/s
+	hhRequestBurst    = 4
+)
+
+// pacedHHGetter wraps a getter with a fresh limiter shared across one registry build, so all of
+// hh.ru's search and detail requests in a run stay under the proxy IP's per-window budget.
+func pacedHHGetter(c HTMLGetter) HTMLGetter {
+	return rateLimitedHTMLGetter{
+		inner:   c,
+		limiter: rate.NewLimiter(rate.Every(hhRequestInterval), hhRequestBurst),
+	}
+}

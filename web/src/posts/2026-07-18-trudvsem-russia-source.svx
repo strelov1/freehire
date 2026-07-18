@@ -1,0 +1,19 @@
+---
+title: New source — Trudvsem, Russia's federal job board
+date: 2026-07-18
+summary: Vacancies from «Работа России», Russia's official federal employment board, now feed the catalogue — open-data postings from employers across all of the country's regions.
+type: changelog
+tags:
+  - sources
+  - russia
+draft: false
+---
+
+The catalogue now includes **Trudvsem** — the job board of «Работа России», the
+Russian federal employment service, published as open government data.
+
+Each posting comes straight from the hiring employer and carries its own company,
+region, and role. We crawl every federal subject, so coverage spans the whole
+country rather than a single city, and the freshest openings surface first.
+
+[Browse the newest jobs](/jobs) to see them arrive.

@@ -1,0 +1,21 @@
+---
+title: EPAM job descriptions now render in full
+date: 2026-07-18
+summary: EPAM postings now keep their headings, bullet lists, and benefits section instead of collapsing into one wall of text.
+type: changelog
+tags:
+  - sources
+draft: false
+---
+
+EPAM job posts used to arrive as a single unbroken paragraph — responsibilities,
+requirements, and nice-to-haves all run together, with the benefits section
+missing entirely. That was an artifact of the structured data EPAM exposes for
+search engines, which flattens the real layout.
+
+We now read the page's full structured content instead, so each EPAM posting
+shows its **Responsibilities**, **Requirements**, **Nice to have**, and
+**Benefits** as proper headings and lists — matching what you'd see on EPAM's own
+careers site.
+
+[Browse EPAM roles](/companies/epam-systems) to see the difference.

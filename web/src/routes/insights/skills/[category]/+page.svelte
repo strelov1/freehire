@@ -41,11 +41,11 @@
   covered={data.covered}
 >
   {#if data.skills.length === 0}
-    <p class="text-gray-500">No skill data for this category yet.</p>
+    <p class="text-muted-foreground">No skill data for this category yet.</p>
   {:else}
     <table class="w-full border-collapse text-left text-sm">
       <thead>
-        <tr class="border-b border-gray-300 text-gray-500">
+        <tr class="border-b border-border text-muted-foreground">
           <th class="py-2 pr-4 font-medium">#</th>
           <th class="py-2 pr-4 font-medium">Skill</th>
           <th class="py-2 pr-4 font-medium text-right">Open postings</th>
@@ -54,16 +54,17 @@
       </thead>
       <tbody>
         {#each data.skills as s, i (s.skill)}
-          <tr class="border-b border-gray-100">
-            <td class="py-2 pr-4 text-gray-400 tabular-nums">{i + 1}</td>
-            <td class="py-2 pr-4 font-medium text-gray-900">{s.skill}</td>
+          {@const growthTone =
+            s.growth > 0
+              ? 'text-green-600 dark:text-green-400'
+              : s.growth < 0
+                ? 'text-red-600 dark:text-red-400'
+                : 'text-muted-foreground'}
+          <tr class="border-b border-border">
+            <td class="py-2 pr-4 text-muted-foreground tabular-nums">{i + 1}</td>
+            <td class="py-2 pr-4 font-medium text-foreground">{s.skill}</td>
             <td class="py-2 pr-4 text-right tabular-nums">{s.open_count.toLocaleString('en-US')}</td>
-            <td
-              class="py-2 text-right tabular-nums"
-              class:text-green-600={s.growth > 0}
-              class:text-gray-400={s.growth === 0}
-              class:text-red-600={s.growth < 0}
-            >
+            <td class="py-2 text-right tabular-nums {growthTone}">
               {s.growth > 0 ? '+' : ''}{s.growth.toLocaleString('en-US')}
             </td>
           </tr>

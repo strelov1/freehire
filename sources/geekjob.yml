@@ -1,0 +1,7 @@
+# Geekjob (geekjob.ru), a Russian-language IT job board. Boardless aggregator: one public
+# listing (geekjob.ru/vacancies/N) aggregating many companies, so the entry carries no board,
+# and each job's company comes from the posting's hiringOrganization, not this placeholder.
+# The crawl fetches a detail page per vacancy for the description, so it gets its own cron slot
+# (like habr_career and getmatch). Aggregator — inherits the reindex ATS-duplicate suppression.
+- company: Geekjob
+  provider: geekjob

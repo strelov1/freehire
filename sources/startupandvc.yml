@@ -1,0 +1,8 @@
+# startupandvc.com venture-capital jobs board. Boardless aggregator: one Webflow site
+# (/venture-capital-jobs) whose cards each link to a /venture-capital-jobs/<slug> detail page,
+# so the entry carries no board. Each job's company comes from the posting's hiringOrganization
+# and its url points at the original posting (LinkedIn/ATS), so `company` here is only the board's
+# display name and the startupandvc copy is dedup-suppressed in favour of the first-party ATS when
+# freehire crawls it directly. See internal/sources/startupandvc.go.
+- company: Startup & VC
+  provider: startupandvc

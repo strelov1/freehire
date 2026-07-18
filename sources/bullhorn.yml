@@ -1,0 +1,15 @@
+# Bullhorn — the largest staffing ATS. Each board is a staffing agency (the public API exposes
+# only the opaque corpToken, so the company name is set here). The board is "<cls>:<corpToken>":
+# cls is the numeric cluster/swimlane that selects the API host
+# (public-rest<cls>.bullhornstaffing.com) and corpToken is the public company token embedded in
+# the agency's Bullhorn career portal. The public API is keyless — only Open, Published-Approved
+# jobs are returned. Discover a board's cls/corpToken from the career portal's app.json (or the
+# XHR it makes to public-rest*). Staffing agencies list across industries, not only tech. Beware
+# the shared Bullhorn demo token 91:1VCNF4 (it ships as the career-portal default) — it is sample
+# data, not a real company.
+- company: Optomi
+  provider: bullhorn
+  board: 41:DJVM1
+- company: Flanders Job Creators
+  provider: bullhorn
+  board: 70:D1Z9J4
