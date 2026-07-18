@@ -16,6 +16,7 @@ import (
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/boardresolve"
 	"github.com/strelov1/freehire/internal/contribution"
+	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
@@ -137,6 +138,8 @@ type API struct {
 	jobFit *jobfit.Analyzer
 	// jobFitCache reads/writes the per-(user, job) cached fit analysis (backed by *db.Queries).
 	jobFitCache jobFitStore
+	// credits meters the per-user AI-points balance the match and tailor features debit.
+	credits *credits.Store
 	// Telegram notification wiring. All nil/empty when the bot is unconfigured —
 	// the linking endpoints then report the feature off and the webhook is inert.
 	// telegramLinks mints/verifies the deep-link token; telegramBot replies to the
@@ -215,6 +218,9 @@ type Config struct {
 	// MailboxDomain enables the hosted-mailbox option: the receiving domain user
 	// addresses live on (<handle>@MailboxDomain). Empty = the feature is off.
 	MailboxDomain string
+	// Credits carries the AI-points economics (monthly grant + per-action costs) that
+	// gate the match and tailor features.
+	Credits credits.Config
 }
 
 // Register wires all routes onto the application from cfg. Auth is same-origin
@@ -274,6 +280,7 @@ func Register(app *fiber.App, cfg Config) {
 	a.jobFit = jobfit.NewAnalyzer(cfg.LLM.WithTimeout(jobfitLLMTimeout))
 	a.structuredExtractor = resumeextract.NewExtractor(cfg.LLM.WithTimeout(resumeExtractLLMTimeout))
 	a.jobFitCache = queries
+	a.credits = credits.NewStore(queries, cfg.Pool, cfg.Credits)
 	// Telegram notifications are enabled only with both a bot token and a JWT
 	// secret (the link token reuses it). Absent either, the linking endpoints
 	// report the feature off and the webhook is inert (see telegramEnabled).

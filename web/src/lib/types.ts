@@ -32,25 +32,25 @@ export type {
   Requirement as JobFitRequirement,
 } from './generated/contracts';
 
-/** The caller's rolling-window AI fit-analysis usage. Present on GET reads (with a CV);
- *  `remaining` is floored at 0. A new-job analysis is blocked when `remaining` is 0; a
- *  recompute of an already-analysed job is always free. */
-export interface JobFitQuota {
-  used: number;
-  limit: number;
+/** The caller's AI-credits balance. Present on GET reads (with a CV); `remaining` is the
+ *  points left this month and `resets_at` the ISO date the monthly grant renews. A new-job
+ *  analysis is blocked when `remaining` is 0; a recompute of an already-analysed job is
+ *  always free. */
+export interface JobFitCredits {
   remaining: number;
+  resets_at: string;
 }
 
 /** The job-fit analysis response: `has_cv` is false when the caller has no stored CV
  *  (the block prompts an upload); `analysis` is null when none is cached yet or the LLM
  *  is unconfigured; `stale` marks a cached analysis whose CV or job changed since (the
- *  block then offers a recompute); `quota` reports monthly usage on reads (omitted on the
- *  no-CV read and on compute responses). */
+ *  block then offers a recompute); `credits` reports the points balance on reads (omitted
+ *  on the no-CV read and on compute responses). */
 export interface JobFitResponse {
   has_cv: boolean;
   stale: boolean;
   analysis: JobFitAnalysisContract | null;
-  quota?: JobFitQuota;
+  credits?: JobFitCredits;
 }
 
 /** One row of the Tracking → AI fit tab: a compact projection of a cached fit analysis

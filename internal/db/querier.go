@@ -206,6 +206,9 @@ type Querier interface {
 	// Link a provider identity to an account (first OAuth sign-in). The composite
 	// primary key rejects a duplicate identity.
 	CreateUserIdentity(ctx context.Context, arg CreateUserIdentityParams) error
+	// Whether the caller already spent points on this (feature, ref). True means the action
+	// is a recompute/resume and must not be charged again (idempotency by ref).
+	DebitExists(ctx context.Context, arg DebitExistsParams) (bool, error)
 	// Revoke (delete) a key, scoped to its owner so a user can only delete their own.
 	// Returns the affected row count: 0 means the key does not exist or is not the
 	// caller's (the handler maps that to 404).
@@ -323,6 +326,11 @@ type Querier interface {
 	// ON CONFLICT keeps exactly one entry per (job_id, target_model), so running this every
 	// command invocation never duplicates work.
 	EnqueuePendingSemanticJobs(ctx context.Context, arg EnqueuePendingSemanticJobsParams) (int64, error)
+	// Seed a balance row for a brand-new user so the subsequent SELECT ... FOR UPDATE
+	// always has a row to lock (this is what serializes concurrent first-ever debits).
+	// For an existing user the row is left untouched; a stale period is reset later
+	// under the lock. remaining is seeded with the monthly grant for a fresh row.
+	EnsureBalance(ctx context.Context, arg EnsureBalanceParams) error
 	// Fast approximate open-job total for the DB-backed /jobs list's meta.total. An
 	// exact count(*) over ~millions of open rows was a per-request full scan; the
 	// planner's estimate (see estimate_open_jobs(), migration 0033) is O(1) and
@@ -346,6 +354,13 @@ type Querier interface {
 	// Record a failed attempt: bump attempts, release the lease, store the error, and
 	// dead-letter (set failed_at) once attempts reach max_attempts.
 	FailEmailClassification(ctx context.Context, arg FailEmailClassificationParams) error
+	// Read-only balance for display (no lock, no LLM). Returns no rows for a user who has never
+	// had credit activity; the caller treats that as a full monthly grant remaining.
+	GetBalance(ctx context.Context, userID int64) (GetBalanceRow, error)
+	// Lock the caller's balance row for the debit transaction. EnsureBalance guarantees
+	// the row exists, so this never returns no-rows on the debit path; the lock serializes
+	// concurrent debits for the same user so the balance can never be oversold.
+	GetBalanceForUpdate(ctx context.Context, userID int64) (GetBalanceForUpdateRow, error)
 	// The user's base CV (job_id IS NULL) — their non-tailored résumé, newest edit first. Used
 	// as the seed source when tailoring; returns no row when the user has only tailored CVs or
 	// none at all (the caller then seeds a base from the extracted résumé).
@@ -466,9 +481,18 @@ type Querier interface {
 	// Award one point to the contributor. Runs in the same transaction as CreateContribution,
 	// so a rolled-back insert (e.g. a duplicate-board race) never credits a point.
 	IncrementUserPoints(ctx context.Context, id int64) error
+	// Append the debit for a metered action. delta is negative (the action cost). The partial
+	// unique index on (user_id, feature, ref) WHERE kind='debit' guards against a double charge
+	// for the same ref even under a race.
+	InsertDebit(ctx context.Context, arg InsertDebitParams) error
 	// Second half of the atomic rebuild: one row per (facet, value). Called once per
 	// value the worker computed, inside the same transaction as DeleteAllFacetStats.
 	InsertFacetStat(ctx context.Context, arg InsertFacetStatParams) error
+	// Record the monthly grant for (user, period), idempotent via the partial unique index
+	// on (user_id, period) WHERE kind = 'grant'. Safe to call on every debit: it inserts
+	// once per period and does nothing thereafter. Purchase grants (kind='purchase') are
+	// exempt from this index and can be added later without contention.
+	InsertGrant(ctx context.Context, arg InsertGrantParams) error
 	// Store a message received at a hosted mailbox, idempotent by
 	// (user_id, source, external_id) with source fixed to 'hosted'.
 	InsertHostedMessage(ctx context.Context, arg InsertHostedMessageParams) error
@@ -1038,6 +1062,10 @@ type Querier interface {
 	// Remove a job from the board: drop every pipeline mark, keep viewed_at so the
 	// job remains in the user's view history.
 	UntrackJob(ctx context.Context, arg UntrackJobParams) (UserJob, error)
+	// Persist the post-transaction balance: the current period and remaining points. Called at
+	// the end of the debit transaction to write back any lazy reset and/or decrement. The row is
+	// guaranteed to exist (EnsureBalance ran first).
+	UpdateBalance(ctx context.Context, arg UpdateBalanceParams) error
 	// Replace a CV's editable fields, stamping updated_at. Owner-scoped: no row is updated
 	// for a foreign or missing id (the handler maps the resulting no-row error to 404).
 	UpdateCV(ctx context.Context, arg UpdateCVParams) (UpdateCVRow, error)

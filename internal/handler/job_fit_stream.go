@@ -11,6 +11,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/valyala/fasthttp"
 
+	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/jobfit"
 	"github.com/strelov1/freehire/internal/jobmatch"
 )
@@ -34,12 +35,20 @@ func (a *API) StreamJobFit(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	// Enforce the monthly quota before opening the stream (the fiber ctx is still valid
-	// here, so an over-limit new job returns a real 429 instead of an SSE error). Only a
-	// CV-backed request would run the LLM; without one the stream just reports has_cv.
+	// Gate on points before opening the stream (the fiber ctx is still valid here, so an
+	// out-of-credits new job returns a real 402 instead of an SSE error). Only a CV-backed
+	// request would run the LLM; without one the stream just reports has_cv. A recompute is
+	// free — only a new analysis is charged, and only after it persists (in the writer).
+	isNew := false
 	if hasCV {
-		if err := a.enforceFitQuota(c.Context(), userID, job.ID); err != nil {
+		var err error
+		if isNew, err = a.matchIsNew(c.Context(), userID, job.ID); err != nil {
 			return err
+		}
+		if isNew {
+			if bal := a.creditsBalance(c.Context(), userID); bal != nil && bal.Remaining < a.credits.Cost(credits.FeatureMatch) {
+				return creditsError(c, *bal)
+			}
 		}
 	}
 	cvUploadedAt, _ := a.cvUploadedAt(c, userID)
@@ -98,6 +107,9 @@ func (a *API) StreamJobFit(c *fiber.Ctx) error {
 			return
 		}
 		a.cacheAnalysis(ctx, userID, job, cvUploadedAt, analysis)
+		if isNew {
+			a.debitMatch(ctx, userID, job.ID)
+		}
 		log.Printf("jobfit: stream DONE user=%d job=%d dur=%s events=%d overall=%d", userID, job.ID, time.Since(start).Round(time.Millisecond), events, analysis.OverallScore)
 	}))
 	return nil

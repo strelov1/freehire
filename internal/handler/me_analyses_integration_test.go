@@ -16,6 +16,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/auth"
+	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobfit"
 	"github.com/strelov1/freehire/internal/resume"
@@ -73,6 +74,7 @@ func TestListMyAnalysesEndpoint(t *testing.T) {
 		pool: pool, queries: queries, issuer: iss,
 		userProfile: userprofile.New(ownedProfile()),
 		resume:      store, jobFit: jobfit.NewAnalyzer(nil), jobFitCache: queries,
+		credits: credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}),
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/me/tracking/analyses", auth.RequireAuth(iss), h.ListMyAnalyses)
@@ -88,7 +90,7 @@ func TestListMyAnalysesEndpoint(t *testing.T) {
 	var body struct {
 		Data []myAnalysisItem `json:"data"`
 		Meta struct {
-			Quota fitQuota `json:"quota"`
+			Credits *credits.Balance `json:"credits"`
 		} `json:"meta"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
@@ -107,7 +109,9 @@ func TestListMyAnalysesEndpoint(t *testing.T) {
 	if body.Data[1].Slug != "closed-role" || !body.Data[1].Closed {
 		t.Errorf("item1 = %+v, want closed-role with Closed=true", body.Data[1])
 	}
-	if body.Meta.Quota.Used != 2 || body.Meta.Quota.Limit != fitAnalysisLimit || body.Meta.Quota.Remaining != fitAnalysisLimit-2 {
-		t.Errorf("quota = %+v, want used=2 limit=%d remaining=%d", body.Meta.Quota, fitAnalysisLimit, fitAnalysisLimit-2)
+	// The two seeded analyses were inserted directly (no debit), so the fresh monthly
+	// grant is intact in meta.
+	if body.Meta.Credits == nil || body.Meta.Credits.Remaining != 20 {
+		t.Errorf("credits = %+v, want remaining=20", body.Meta.Credits)
 	}
 }

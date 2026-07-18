@@ -15,6 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/auth/oauth"
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/config"
+	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/database"
 	"github.com/strelov1/freehire/internal/gmailsync"
 	"github.com/strelov1/freehire/internal/handler"
@@ -160,6 +161,8 @@ func main() {
 		TelegramBotToken:      cfg.TelegramBotToken,
 		TelegramBotUsername:   cfg.TelegramBotUsername,
 		TelegramWebhookSecret: cfg.TelegramWebhookSecret,
+
+		Credits: credits.Config(config.LoadCredits()),
 	})
 
 	// Run the server in a goroutine so main can wait for a shutdown signal.

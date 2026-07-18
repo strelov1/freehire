@@ -48,7 +48,7 @@ func buildAnalysisItems(rows []db.ListUserJobAnalysesRow, cvUploadedAt *time.Tim
 }
 
 // ListMyAnalyses lists the jobs the caller has run the AI fit analysis on (newest first),
-// with the caller's monthly quota in meta. Never calls the LLM. Cookie or API key.
+// with the caller's points balance in meta. Never calls the LLM. Cookie or API key.
 func (a *API) ListMyAnalyses(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -60,6 +60,5 @@ func (a *API) ListMyAnalyses(c *fiber.Ctx) error {
 	}
 	cvUploadedAt, _ := a.cvUploadedAt(c, userID)
 	items := buildAnalysisItems(rows, cvUploadedAt, a.jobFit.ModelID())
-	quota := a.fitQuotaFor(c.Context(), userID)
-	return c.JSON(fiber.Map{"data": items, "meta": fiber.Map{"quota": quota}})
+	return c.JSON(fiber.Map{"data": items, "meta": fiber.Map{"credits": a.creditsBalance(c.Context(), userID)}})
 }

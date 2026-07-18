@@ -46,7 +46,7 @@ import type {
   ATSResponse,
   JobMatch,
   JobFitResponse,
-  JobFitQuota,
+  JobFitCredits,
   MyAnalysisItem,
   ResumeProfile,
   ResumeMeta,
@@ -647,12 +647,12 @@ export function createApi(
   }
 
   /** The jobs the current user has run the AI fit analysis on (newest first), plus their
-   *  monthly quota — powers the Tracking → AI fit tab. Never triggers the LLM. */
-  async function myAnalyses(): Promise<{ items: MyAnalysisItem[]; quota: JobFitQuota }> {
-    const res = await request<{ data: MyAnalysisItem[]; meta: { quota: JobFitQuota } }>(
+   *  AI-credits balance — powers the Tracking → AI fit tab. Never triggers the LLM. */
+  async function myAnalyses(): Promise<{ items: MyAnalysisItem[]; credits: JobFitCredits | null }> {
+    const res = await request<{ data: MyAnalysisItem[]; meta: { credits: JobFitCredits | null } }>(
       '/api/v1/me/tracking/analyses',
     );
-    return { items: res.data, quota: res.meta.quota };
+    return { items: res.data, credits: res.meta.credits };
   }
 
   /** The public slugs of every job the current user has interacted with. The

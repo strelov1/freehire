@@ -3,6 +3,8 @@ package handler
 import (
 	"context"
 	"errors"
+	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -11,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/auth"
+	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobfit"
@@ -89,6 +92,11 @@ func (a *API) TailorCV(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	// Gate on points before creating anything: an out-of-credits caller is a 402 and no
+	// tailored CV or session is minted. The debit itself lands after the CV exists (below).
+	if bal := a.creditsBalance(c.Context(), userID); bal != nil && bal.Remaining < a.credits.Cost(credits.FeatureTailor) {
+		return creditsError(c, *bal)
+	}
 	base, tailored, err := a.cvStore.Tailor(c.Context(), userID, job.ID, tailoredCVTitle(job.Title), a.resume)
 	if errors.Is(err, cv.ErrNoResume) {
 		return fiber.NewError(fiber.StatusConflict, "add a résumé before tailoring")
@@ -99,6 +107,14 @@ func (a *API) TailorCV(c *fiber.Ctx) error {
 	token, err := mintTailoringKey(c.Context(), a.queries, userID, time.Now())
 	if err != nil {
 		return err
+	}
+	// Charge the tailor cost only once the session is fully minted, so a mint failure never
+	// leaves the caller charged for an unusable session (a retry would mint a new CV id and
+	// charge again). Idempotent by the new CV id; resuming an existing CV (a different
+	// endpoint) never debits. The session already exists, so a debit error — including a
+	// rare insufficient-balance race the pre-check let through — is logged, not surfaced.
+	if _, err := a.credits.Debit(c.Context(), userID, credits.FeatureTailor, strconv.FormatInt(tailored.ID, 10)); err != nil {
+		log.Printf("credits: tailor debit user=%d cv=%d: %v", userID, tailored.ID, err)
 	}
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": tailorCVResponse{
 		TailorCVID: tailored.ID, BaseCVID: base.ID, Analysis: analysis, CLIToken: token,

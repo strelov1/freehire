@@ -310,8 +310,8 @@ export const GROUPS: Group[] = [
     intro:
       'Personalized signals computed against the caller’s profile or stored CV. ' +
       'All accept the session cookie or an API key. The skill-match endpoint is ' +
-      'deterministic (no LLM); the fit endpoints run the LLM chain and are quota-' +
-      'limited. All take the same facet filter params as search where they narrow a ' +
+      'deterministic (no LLM); the fit endpoints run the LLM chain and cost AI ' +
+      'credits. All take the same facet filter params as search where they narrow a ' +
       'market or candidate set.',
     endpoints: [
       {
@@ -345,8 +345,8 @@ export const GROUPS: Group[] = [
         description:
           'Returns the cached analysis, flagged `stale` when your CV or the job ' +
           'changed since it was computed, or a null analysis when none is cached. ' +
-          '`has_cv` is false when you have no stored CV. `quota` reports your monthly ' +
-          'fit-analysis usage.',
+          '`has_cv` is false when you have no stored CV. `credits` reports your AI-points ' +
+          'balance and when it resets.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
         curl: `curl "${BASE_URL}/jobs/<slug>/fit" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{
@@ -362,7 +362,7 @@ export const GROUPS: Group[] = [
       "gaps": ["..."],
       "recommendation": "..."
     },
-    "quota": { "used": 3, "limit": 10, "remaining": 7 }
+    "credits": { "remaining": 17, "resets_at": "2026-08-01T00:00:00Z" }
   }
 }`,
       },
@@ -373,10 +373,10 @@ export const GROUPS: Group[] = [
         summary: 'Run the three-stage AI fit analysis and cache it.',
         description:
           'Runs the fit prompt-chain over your stored CV and the job, caches the ' +
-          'result, and returns it fresh (no `quota` on this response). A new job over ' +
-          'your monthly quota is a `429`; recomputing an already-analyzed job is free. ' +
-          '`has_cv` is false when no CV is stored; a failing or unconfigured LLM ' +
-          'returns a null analysis (200).',
+          'result, and returns it fresh (no `credits` on this response). Analysing a new ' +
+          'job costs one AI credit; if you have none left it is a `402`, and recomputing ' +
+          'an already-analyzed job is free. `has_cv` is false when no CV is stored; a ' +
+          'failing or unconfigured LLM returns a null analysis (200).',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
         curl: `curl -X POST "${BASE_URL}/jobs/<slug>/fit" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{
@@ -847,7 +847,7 @@ ${BASE_URL}/auth/oauth/google/start`,
         description:
           'Newest first, closed jobs included (with `closed: true`). Each item carries the ' +
           'overall score and verdict; `stale` marks an analysis whose CV, job, or model has ' +
-          'changed since. `meta.quota` reports your monthly fit-analysis usage. Never runs the LLM.',
+          'changed since. `meta.credits` reports your AI-points balance. Never runs the LLM.',
         curl: `curl "${BASE_URL}/me/tracking/analyses" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{
   "data": [
@@ -862,7 +862,7 @@ ${BASE_URL}/auth/oauth/google/start`,
       "stale": false
     }
   ],
-  "meta": { "quota": { "used": 3, "limit": 10, "remaining": 7 } }
+  "meta": { "credits": { "remaining": 17, "resets_at": "2026-08-01T00:00:00Z" } }
 }`,
       },
       {

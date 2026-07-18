@@ -55,31 +55,3 @@ func TestStampsFresh(t *testing.T) {
 		}
 	})
 }
-
-func TestNewFitQuota(t *testing.T) {
-	cases := []struct {
-		used          int64
-		wantRemaining int64
-		wantExhausted bool
-	}{
-		{used: 0, wantRemaining: fitAnalysisLimit, wantExhausted: false},
-		{used: fitAnalysisLimit - 1, wantRemaining: 1, wantExhausted: false},
-		{used: fitAnalysisLimit, wantRemaining: 0, wantExhausted: true},
-		{used: fitAnalysisLimit + 5, wantRemaining: 0, wantExhausted: true}, // remaining never negative
-	}
-	for _, tc := range cases {
-		q := newFitQuota(tc.used)
-		if q.Limit != fitAnalysisLimit {
-			t.Errorf("used=%d: limit = %d, want %d", tc.used, q.Limit, fitAnalysisLimit)
-		}
-		if q.Used != tc.used {
-			t.Errorf("used=%d: Used = %d, want %d", tc.used, q.Used, tc.used)
-		}
-		if q.Remaining != tc.wantRemaining {
-			t.Errorf("used=%d: remaining = %d, want %d", tc.used, q.Remaining, tc.wantRemaining)
-		}
-		if q.exhausted() != tc.wantExhausted {
-			t.Errorf("used=%d: exhausted = %v, want %v", tc.used, q.exhausted(), tc.wantExhausted)
-		}
-	}
-}

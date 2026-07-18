@@ -63,6 +63,24 @@ type Company struct {
 	Subindustry      pgtype.Text        `json:"subindustry"`
 }
 
+type CreditBalance struct {
+	UserID    int64              `json:"user_id"`
+	Period    string             `json:"period"`
+	Remaining int32              `json:"remaining"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CreditLedger struct {
+	ID        int64              `json:"id"`
+	UserID    int64              `json:"user_id"`
+	Period    string             `json:"period"`
+	Kind      string             `json:"kind"`
+	Feature   pgtype.Text        `json:"feature"`
+	Delta     int32              `json:"delta"`
+	Ref       pgtype.Text        `json:"ref"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type Cv struct {
 	ID             int64              `json:"id"`
 	UserID         int64              `json:"user_id"`

@@ -80,7 +80,16 @@
       }
       status = 'ready';
     } catch (e) {
-      errorMsg = e instanceof ApiError ? e.message : 'Could not open the tailoring workspace.';
+      if (e instanceof ApiError && e.status === 402) {
+        // Out of AI credits: surface the message plus when the monthly grant renews.
+        const resetsAt = typeof e.body?.resets_at === 'string' ? e.body.resets_at : null;
+        const renews = resetsAt
+          ? ` They renew ${new Date(resetsAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}.`
+          : '';
+        errorMsg = `${e.message}${renews}`;
+      } else {
+        errorMsg = e instanceof ApiError ? e.message : 'Could not open the tailoring workspace.';
+      }
       status = 'error';
     }
   });

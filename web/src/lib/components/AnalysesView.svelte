@@ -4,16 +4,16 @@
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { verdictTone, type Tone } from '$lib/jobFit';
-  import type { MyAnalysisItem, JobFitQuota } from '$lib/types';
+  import type { MyAnalysisItem, JobFitCredits } from '$lib/types';
   import CompanyLogo from './CompanyLogo.svelte';
   import States from './States.svelte';
 
   // The Tracking → AI fit tab: the jobs the caller has run the AI fit analysis on, with
-  // their monthly quota. Read-only — never triggers the LLM (each row links to the fit
+  // their AI-credits balance. Read-only — never triggers the LLM (each row links to the fit
   // page, which owns compute/recompute).
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   let items = $state<MyAnalysisItem[]>([]);
-  let quota = $state<JobFitQuota | null>(null);
+  let credits = $state<JobFitCredits | null>(null);
 
   $effect(() => {
     if (!isAuthenticated()) return;
@@ -22,7 +22,7 @@
       .myAnalyses()
       .then((r) => {
         items = r.items;
-        quota = r.quota;
+        credits = r.credits;
         status = 'ready';
       })
       .catch(() => {
@@ -42,14 +42,14 @@
     new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 </script>
 
-{#if quota}
+{#if credits}
   <div
     class="flex items-center justify-between gap-3 rounded-lg border border-border bg-secondary/40 px-4 py-2.5 text-sm"
   >
     <span class="text-muted-foreground">
-      <strong class="font-semibold text-foreground">{quota.used}/{quota.limit}</strong> AI analyses used this month
+      <strong class="font-semibold text-foreground">{credits.remaining}</strong> AI credits left this month
     </span>
-    <span class="text-xs text-muted-foreground">{quota.remaining} left</span>
+    <span class="text-xs text-muted-foreground">renews {fmtDate(credits.resets_at)}</span>
   </div>
 {/if}
 

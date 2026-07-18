@@ -29,10 +29,10 @@
 
   const analysis = $derived(data?.analysis ?? null);
   const topGap = $derived(analysis?.gaps?.[0] ?? null);
-  // A new (never-analysed) job can't be analysed once the monthly quota is spent; a
+  // A new (never-analysed) job can't be analysed once the monthly AI credits are spent; a
   // recompute of an already-analysed job stays free, so this only gates the fresh CTA.
-  const quota = $derived(data?.quota ?? null);
-  const quotaSpent = $derived(!!quota && quota.remaining <= 0);
+  const credits = $derived(data?.credits ?? null);
+  const creditsSpent = $derived(!!credits && credits.remaining <= 0);
 
   const toneText: Record<Tone, string> = {
     strong: 'text-brand-strong',
@@ -65,8 +65,8 @@
         View full analysis <ArrowRight class="size-3.5 transition-transform group-hover:translate-x-0.5" />
       </span>
     </a>
-  {:else if quotaSpent}
-    <p class="text-sm text-muted-foreground">You've used all {quota?.limit} AI fit analyses for this month. Your quota frees up as older analyses pass the 30-day mark.</p>
+  {:else if creditsSpent}
+    <p class="text-sm text-muted-foreground">You're out of AI credits for this month. They renew {credits ? new Date(credits.resets_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'next month'}.</p>
   {:else}
     <p class="text-sm text-muted-foreground">How your CV reads against this role — fit, gaps, and ATS flags.</p>
     <Button
@@ -78,8 +78,8 @@
       Analyze match
       <ScanSearch class="size-[1.15rem]" aria-hidden="true" />
     </Button>
-    {#if quota}
-      <p class="text-xs text-muted-foreground">{quota.used}/{quota.limit} used this month</p>
+    {#if credits}
+      <p class="text-xs text-muted-foreground">{credits.remaining} AI credits left this month</p>
     {/if}
   {/if}
 </section>

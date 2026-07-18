@@ -20,6 +20,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/auth"
+	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobfit"
@@ -41,6 +42,7 @@ func newTailorAPI(t *testing.T) (*API, *auth.Issuer) {
 		cvStore:     cv.NewStore(cv.NewQueriesRepository(queries)),
 		resume:      resume.New(nil, resume.NewQueriesRepository(queries)),
 		jobFitCache: queries,
+		credits:     credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}),
 	}
 	return h, iss
 }
@@ -162,6 +164,50 @@ func TestTailorCVBootstrap(t *testing.T) {
 	}
 	if got.Data.Analysis == nil || got.Data.Analysis.Verdict != "Good Fit" {
 		t.Errorf("analysis not returned: %+v", got.Data.Analysis)
+	}
+	// Creating the tailored CV debited the tailor cost (3) from the monthly grant (20).
+	var remaining int
+	_ = h.pool.QueryRow(context.Background(), `SELECT remaining FROM credit_balances WHERE user_id=$1`, user).Scan(&remaining)
+	if remaining != 17 {
+		t.Errorf("remaining after tailor = %d, want 17 (20 - 3)", remaining)
+	}
+	var debits int
+	_ = h.pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM credit_ledger WHERE user_id=$1 AND kind='debit' AND feature='tailor'`, user).Scan(&debits)
+	if debits != 1 {
+		t.Errorf("tailor debit rows = %d, want 1", debits)
+	}
+}
+
+// TestTailorCVOutOfCredits: a caller with no points gets a 402 and no tailored CV or
+// session is created, even with a cached analysis and a résumé present.
+func TestTailorCVOutOfCredits(t *testing.T) {
+	h, iss := newTailorAPI(t)
+	app := buildTailorApp(h, iss)
+	ctx := context.Background()
+
+	user := seedAccount(t, h, "poor@example.test", true)
+	tok, _ := iss.Issue(user)
+	jobID := seedJobSlug(t, h, "backend-eng")
+	seedAnalysis(t, h, user, jobID)
+	seedFreshResume(t, h, user)
+
+	// Force the current-period balance to zero so the tailor pre-check fails.
+	period := time.Now().UTC().Format("2006-01")
+	if _, err := h.pool.Exec(ctx,
+		`INSERT INTO credit_balances (user_id, period, remaining) VALUES ($1, $2, 0)`, user, period); err != nil {
+		t.Fatalf("seed zero balance: %v", err)
+	}
+
+	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/tailor", tok, tailorCVRequest{JobSlug: "backend-eng"})
+	if resp.StatusCode != fiber.StatusPaymentRequired {
+		t.Fatalf("out-of-credits tailor = %d, want 402", resp.StatusCode)
+	}
+	resp.Body.Close()
+	var cvs int
+	_ = h.pool.QueryRow(ctx, `SELECT count(*) FROM cvs WHERE user_id=$1`, user).Scan(&cvs)
+	if cvs != 0 {
+		t.Errorf("cvs created on 402 = %d, want 0", cvs)
 	}
 }
 

@@ -14,7 +14,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"testing"
 	"time"
 
@@ -23,6 +22,7 @@ import (
 	"github.com/tmc/langchaingo/llms"
 
 	"github.com/strelov1/freehire/internal/auth"
+	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobfit"
 	"github.com/strelov1/freehire/internal/llm"
@@ -44,7 +44,9 @@ type fitModel struct {
 }
 
 func (m *fitModel) GenerateContent(context.Context, []llms.MessageContent, ...llms.CallOption) (*llms.ContentResponse, error) {
-	r := m.resp[m.n]
+	// Cycle the canned stage responses so a test can drive more than one full analysis
+	// through the same model; m.n stays a total-calls counter for "LLM not called" checks.
+	r := m.resp[m.n%len(m.resp)]
 	m.n++
 	return &llms.ContentResponse{Choices: []*llms.ContentChoice{{Content: r}}}, nil
 }
@@ -63,6 +65,7 @@ func fitAPI(pool *pgxpool.Pool, queries *db.Queries, iss *auth.Issuer, store *re
 		pool: pool, queries: queries, issuer: iss,
 		userProfile: userprofile.New(ownedProfile()),
 		resume:      store, jobFit: an, jobFitCache: queries,
+		credits: credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}),
 	}
 }
 
@@ -199,10 +202,10 @@ func TestJobFitEndpoints(t *testing.T) {
 	})
 }
 
-// TestJobFitQuota covers the per-user monthly cap: a new job over the limit is a 429 (no
-// LLM call), a recompute of an already-analyzed job is always allowed, and GET reports
-// usage. It seeds analysis rows directly to place the user at a chosen usage level.
-func TestJobFitQuota(t *testing.T) {
+// TestJobFitCredits covers the points gate on the match feature: a new job with no points
+// is a 402 (no LLM call, nothing persisted), a recompute of an already-analyzed job is
+// always free, a fresh analysis debits one point, and GET reports the balance.
+func TestJobFitCredits(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
 	queries := db.New(pool)
@@ -250,11 +253,12 @@ func TestJobFitQuota(t *testing.T) {
 		}
 		return s
 	}
-	appFor := func(store *resume.Store, an *jobfit.Analyzer) *fiber.App {
+	appFor := func(store *resume.Store, an *jobfit.Analyzer, grant int) *fiber.App {
 		h := &API{
 			pool: pool, queries: queries, issuer: iss,
 			userProfile: userprofile.New(ownedProfile()),
 			resume:      store, jobFit: an, jobFitCache: queries,
+			credits: credits.NewStore(queries, pool, credits.Config{MonthlyGrant: grant, CostMatch: 1, CostTailor: 3}),
 		}
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 		g := auth.RequireAuth(iss)
@@ -276,116 +280,107 @@ func TestJobFitQuota(t *testing.T) {
 		_ = json.NewDecoder(resp.Body).Decode(&body)
 		return resp.StatusCode, body
 	}
-	// fillQuota seeds `n` distinct recently-analyzed jobs for a user (used = n).
-	fillQuota := func(t *testing.T, userID int64, tag string, n int) {
-		t.Helper()
-		for i := 0; i < n; i++ {
-			jid := seedJob(t, tag+"-"+strconv.Itoa(i), tag+"-job-"+strconv.Itoa(i))
-			seedAnalysis(t, userID, jid, time.Hour)
-		}
-	}
+	newModel := func() *fitModel { return &fitModel{resp: []string{fitStage1, fitStage2, fitStage3}} }
 
-	t.Run("new job over the limit is 429 and never calls the LLM", func(t *testing.T) {
-		userID, token := seedUser(t, "over@example.test")
-		fillQuota(t, userID, "over", int(fitAnalysisLimit))
-		seedJob(t, "over-new", "over-new")
-		model := &fitModel{resp: []string{fitStage1, fitStage2, fitStage3}}
-		app := appFor(storeWithCVFor(t, userID), jobfit.NewAnalyzer(llm.NewWithModel(model)))
+	t.Run("new job with no points is 402 and never calls the LLM", func(t *testing.T) {
+		userID, token := seedUser(t, "broke@example.test")
+		seedJob(t, "broke-new", "broke-new")
+		model := newModel()
+		app := appFor(storeWithCVFor(t, userID), jobfit.NewAnalyzer(llm.NewWithModel(model)), 0)
 
-		status, _ := postFit(t, app, "over-new", token)
-		if status != fiber.StatusTooManyRequests {
-			t.Errorf("status = %d, want 429", status)
+		status, _ := postFit(t, app, "broke-new", token)
+		if status != fiber.StatusPaymentRequired {
+			t.Errorf("status = %d, want 402", status)
 		}
 		if model.n != 0 {
-			t.Errorf("LLM was called %d times, want 0 when over quota", model.n)
+			t.Errorf("LLM was called %d times, want 0 when out of credits", model.n)
 		}
 		var n int
 		_ = pool.QueryRow(ctx, `SELECT count(*) FROM user_job_analysis WHERE user_id=$1`, userID).Scan(&n)
-		if n != int(fitAnalysisLimit) {
-			t.Errorf("cache rows = %d, want %d (nothing persisted on 429)", n, fitAnalysisLimit)
+		if n != 0 {
+			t.Errorf("cache rows = %d, want 0 (nothing persisted on 402)", n)
 		}
 	})
 
-	t.Run("recompute of an analyzed job is allowed even at the limit", func(t *testing.T) {
+	t.Run("recompute of an analyzed job is free even with no points", func(t *testing.T) {
 		userID, token := seedUser(t, "recompute@example.test")
-		fillQuota(t, userID, "rc", int(fitAnalysisLimit))
-		// The last-seeded job is one the user has already analyzed → recompute must run.
-		var createdBefore time.Time
-		if err := pool.QueryRow(ctx,
-			`SELECT created_at FROM user_job_analysis WHERE user_id=$1 ORDER BY created_at LIMIT 1`,
-			userID).Scan(&createdBefore); err != nil {
-			t.Fatalf("read created_at: %v", err)
-		}
-		model := &fitModel{resp: []string{fitStage1, fitStage2, fitStage3}}
-		app := appFor(storeWithCVFor(t, userID), jobfit.NewAnalyzer(llm.NewWithModel(model)))
+		jid := seedJob(t, "rc", "rc-job")
+		seedAnalysis(t, userID, jid, time.Hour) // prior cache row → recompute, not a new job
+		model := newModel()
+		app := appFor(storeWithCVFor(t, userID), jobfit.NewAnalyzer(llm.NewWithModel(model)), 0)
 
-		status, body := postFit(t, app, "rc-job-0", token)
+		status, body := postFit(t, app, "rc-job", token)
 		if status != fiber.StatusOK || body.Data.Analysis == nil {
 			t.Fatalf("recompute got status=%d analysis=%v, want 200 + analysis", status, body.Data.Analysis)
 		}
-		// A recompute must NOT re-bump created_at (else it would re-age the row into the
-		// window and mis-count the quota).
-		var createdAfter time.Time
-		_ = pool.QueryRow(ctx,
-			`SELECT created_at FROM user_job_analysis WHERE user_id=$1 AND job_id=(SELECT id FROM jobs WHERE public_slug='rc-job-0')`,
-			userID).Scan(&createdAfter)
-		if !createdAfter.Equal(createdBefore) {
-			t.Errorf("recompute changed created_at (%s → %s); want preserved", createdBefore, createdAfter)
+		if model.n == 0 {
+			t.Error("recompute must run the LLM")
+		}
+		var debits int
+		_ = pool.QueryRow(ctx, `SELECT count(*) FROM credit_ledger WHERE user_id=$1 AND kind='debit'`, userID).Scan(&debits)
+		if debits != 0 {
+			t.Errorf("recompute debited %d points, want 0", debits)
 		}
 	})
 
-	t.Run("under the limit a new job runs and GET reports usage", func(t *testing.T) {
-		userID, token := seedUser(t, "under@example.test")
-		fillQuota(t, userID, "under", int(fitAnalysisLimit)-1) // used = 9
-		seedJob(t, "under-new", "under-new")
-		model := &fitModel{resp: []string{fitStage1, fitStage2, fitStage3}}
-		app := appFor(storeWithCVFor(t, userID), jobfit.NewAnalyzer(llm.NewWithModel(model)))
+	t.Run("a fresh analysis debits one point and GET reports the balance", func(t *testing.T) {
+		userID, token := seedUser(t, "spend@example.test")
+		seedJob(t, "spend-1", "spend-1")
+		app := appFor(storeWithCVFor(t, userID), jobfit.NewAnalyzer(llm.NewWithModel(newModel())), 2)
 
-		// GET before compute: used=9, remaining=1.
-		greq := httptest.NewRequest(fiber.MethodGet, "/api/v1/jobs/under-new/fit", nil)
+		// GET before compute: full grant remaining, nothing consumed.
+		greq := httptest.NewRequest(fiber.MethodGet, "/api/v1/jobs/spend-1/fit", nil)
 		greq.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 		gresp, _ := app.Test(greq)
 		var gbody struct {
 			Data struct {
-				Quota *fitQuota `json:"quota"`
+				Credits *credits.Balance `json:"credits"`
 			} `json:"data"`
 		}
 		_ = json.NewDecoder(gresp.Body).Decode(&gbody)
 		gresp.Body.Close()
-		if gbody.Data.Quota == nil || gbody.Data.Quota.Used != fitAnalysisLimit-1 ||
-			gbody.Data.Quota.Limit != fitAnalysisLimit || gbody.Data.Quota.Remaining != 1 {
-			t.Fatalf("GET quota = %+v, want used=%d limit=%d remaining=1", gbody.Data.Quota, fitAnalysisLimit-1, fitAnalysisLimit)
+		if gbody.Data.Credits == nil || gbody.Data.Credits.Remaining != 2 {
+			t.Fatalf("GET credits = %+v, want remaining=2", gbody.Data.Credits)
 		}
 
-		// POST the 10th distinct job succeeds; the next new job is then over the limit.
-		if status, body := postFit(t, app, "under-new", token); status != fiber.StatusOK || body.Data.Analysis == nil {
-			t.Fatalf("10th analysis got status=%d analysis=%v, want 200 + analysis", status, body.Data.Analysis)
+		// First new job debits to 1.
+		if status, body := postFit(t, app, "spend-1", token); status != fiber.StatusOK || body.Data.Analysis == nil {
+			t.Fatalf("first analysis status=%d analysis=%v, want 200 + analysis", status, body.Data.Analysis)
 		}
-		seedJob(t, "under-new2", "under-new2")
-		if status, _ := postFit(t, app, "under-new2", token); status != fiber.StatusTooManyRequests {
-			t.Errorf("11th distinct job status = %d, want 429", status)
+		var remaining int
+		_ = pool.QueryRow(ctx, `SELECT remaining FROM credit_balances WHERE user_id=$1`, userID).Scan(&remaining)
+		if remaining != 1 {
+			t.Errorf("remaining after one match = %d, want 1", remaining)
+		}
+		// Second new job debits to 0; a third is then out of credits (402).
+		seedJob(t, "spend-2", "spend-2")
+		if status, _ := postFit(t, app, "spend-2", token); status != fiber.StatusOK {
+			t.Fatalf("second analysis status=%d, want 200", status)
+		}
+		seedJob(t, "spend-3", "spend-3")
+		if status, _ := postFit(t, app, "spend-3", token); status != fiber.StatusPaymentRequired {
+			t.Errorf("third new job status = %d, want 402", status)
 		}
 	})
 
-	t.Run("stream over the limit is 429 before opening the stream", func(t *testing.T) {
-		userID, token := seedUser(t, "stream-over@example.test")
-		fillQuota(t, userID, "so", int(fitAnalysisLimit))
-		seedJob(t, "so-new", "so-new")
-		model := &fitModel{resp: []string{fitStage1, fitStage2, fitStage3}}
-		app := appFor(storeWithCVFor(t, userID), jobfit.NewAnalyzer(llm.NewWithModel(model)))
+	t.Run("stream out of credits is 402 before opening the stream", func(t *testing.T) {
+		userID, token := seedUser(t, "stream-broke@example.test")
+		seedJob(t, "sb-new", "sb-new")
+		model := newModel()
+		app := appFor(storeWithCVFor(t, userID), jobfit.NewAnalyzer(llm.NewWithModel(model)), 0)
 
-		req := httptest.NewRequest(fiber.MethodGet, "/api/v1/jobs/so-new/fit/stream", nil)
+		req := httptest.NewRequest(fiber.MethodGet, "/api/v1/jobs/sb-new/fit/stream", nil)
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 		resp, err := app.Test(req, 5000)
 		if err != nil {
 			t.Fatalf("stream: %v", err)
 		}
 		defer resp.Body.Close()
-		if resp.StatusCode != fiber.StatusTooManyRequests {
-			t.Errorf("stream status = %d, want 429", resp.StatusCode)
+		if resp.StatusCode != fiber.StatusPaymentRequired {
+			t.Errorf("stream status = %d, want 402", resp.StatusCode)
 		}
 		if model.n != 0 {
-			t.Errorf("LLM called %d times, want 0 for an over-quota stream", model.n)
+			t.Errorf("LLM called %d times, want 0 for an out-of-credits stream", model.n)
 		}
 	})
 }
