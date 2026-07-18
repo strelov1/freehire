@@ -1,0 +1,14 @@
+# hh.ru (HeadHunter) — Russia's largest job board, crawled as a multi-company aggregator.
+# Each entry's board is a professional_role id: the crawl enumerates that role's freshest
+# vacancies from the server-rendered search page. company is a display label only — the real
+# employer comes from each posting. Role ids below are live-verified as cleanly IT-focused.
+- company: hh.ru — Developers
+  board: "96" # Программист, разработчик
+- company: hh.ru — Data science / ML
+  board: "165" # Дата-сайентист
+- company: hh.ru — Data analysts
+  board: "156" # BI-аналитик, аналитик данных
+- company: hh.ru — DevOps
+  board: "160" # DevOps-инженер
+- company: hh.ru — QA
+  board: "124" # Тестировщик

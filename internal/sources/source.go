@@ -311,6 +311,9 @@ func All(c HTTPClient) map[string]Source {
 		NewBairesDev(c),
 		// RU federal open-data aggregator: board-based, sharded per region (board = OKATO code).
 		NewTrudvsem(c),
+		// hh.ru: multi-company aggregator, enumerated by professional_role (board), reading the
+		// server-rendered search page's embedded state.
+		NewHH(c),
 		// RU-domestic single-company adapters (boardless, except Yandex which selects
 		// host+language by board).
 		NewYandex(c),
@@ -417,6 +420,12 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// blocked, setting SOURCES_PROXY_URL routes only this provider through the proxy with no code
 	// change; while the proxy is unset this entry is inert. A fixed, trusted host (SSRF caveat).
 	"geekjob": func(c HTTPClient) Source { return NewGeekjob(c) },
+	// hh.ru already 403s its public search API from the datacenter IP, so the HTML crawl may be
+	// blocked from prod too (untested there; the spike ran from a residential IP). Pre-wired so a
+	// block is a one-env-var fix. Caveat: hh's per-vacancy detail fan-out is high-volume, so a
+	// single proxy IP may itself get rate-limited — pacing (like careerspage/vagas) may be needed
+	// if the proxy path 429s. While SOURCES_PROXY_URL is unset this entry is inert.
+	"hh": func(c HTTPClient) Source { return NewHH(c) },
 	// career.habr.com sits behind Qrator, which challenges the per-vacancy detail HTML from the
 	// prod datacenter IP (the listing JSON passes, but the description parse fails, leaving jobs
 	// with empty descriptions and so no derived skills/geo/enrichment). A residential IP is served
