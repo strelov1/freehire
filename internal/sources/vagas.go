@@ -106,10 +106,21 @@ func (v vagas) detail(ctx context.Context, jobURL string) (Job, bool) {
 		Title:       p.Title,
 		Company:     p.HiringOrganization.Name,
 		Location:    location,
-		Description: sanitizeHTML(html.UnescapeString(p.Description)),
+		Description: sanitizeHTML(vagasDescription(root, p.Description)),
 		Remote:      isRemote(location),
 		PostedAt:    parseDate(p.DatePosted),
 	}, true
+}
+
+// vagasDescription returns the job's description HTML. It prefers the page's
+// job-description__text block, whose markup (paragraphs, lists, emphasis) is preserved by
+// sanitizeHTML; the JSON-LD description is a flattened, separator-stripped version that glues
+// headings and list items into the prose, so it is only a fallback when the block is absent.
+func vagasDescription(root *html.Node, ldDescription string) string {
+	if block := firstByClass(root, "job-description__text"); block != nil {
+		return innerHTML(block)
+	}
+	return html.UnescapeString(ldDescription)
 }
 
 // vagasJobIDPattern captures the native posting id from a /vagas/v<id>/<slug> URL.

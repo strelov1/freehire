@@ -103,6 +103,41 @@ func TestVagasFetch(t *testing.T) {
 	}
 }
 
+// vagas's JSON-LD description is a flattened, separator-stripped blob that glues words
+// together (headings/list items run into the prose); the page's job-description__text block
+// carries the real formatted HTML. The adapter must prefer the block so lists/paragraphs survive.
+func TestVagasDetailPrefersStructuredHTMLBlock(t *testing.T) {
+	const host = "https://www.vagas.com.br/"
+	page := `<html><head>` +
+		`<script type="application/ld+json">{"@context":"http://schema.org/","@type":"JobPosting",` +
+		`"title":"Dev","datePosted":"2026-06-18",` +
+		`"description":"Missao do cargo.REQUISITOS:Item um;Item dois",` +
+		`"hiringOrganization":{"@type":"Organization","name":"Acme"},` +
+		`"jobLocation":{"@type":"Place","address":{"@type":"PostalAddress","addressLocality":"SP","addressCountry":"Brasil"}}}` +
+		`</script></head><body>` +
+		`<div class="job-tab-content job-description__text texto">` +
+		`<p>Missao do cargo.</p><p><strong>REQUISITOS:</strong></p><ul><li>Item um</li><li>Item dois</li></ul>` +
+		`</div></body></html>`
+	pages := map[string]string{
+		"https://www.vagas.com.br/vagas-de-tecnologia?pagina=1": vagasListingHTML("/vagas/v900/dev"),
+		host + "vagas/v900/dev":                                 page,
+	}
+	jobs, err := vagas{http: &vagasHTTP{pages: pages}}.Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("want 1 job, got %d", len(jobs))
+	}
+	d := jobs[0].Description
+	if !strings.Contains(d, "<li>Item um</li>") || !strings.Contains(d, "<li>Item dois</li>") {
+		t.Fatalf("description should preserve the HTML list from the block, got: %q", d)
+	}
+	if strings.Contains(d, "REQUISITOS:Item") {
+		t.Fatalf("description still glued from JSON-LD, got: %q", d)
+	}
+}
+
 // A detail page with no JobPosting is skipped, not turned into a blank job.
 func TestVagasDetailWithoutJobPostingSkipped(t *testing.T) {
 	const host = "https://www.vagas.com.br/"
