@@ -1,0 +1,17 @@
+# Bundesagentur für Arbeit (Germany's federal employment agency) job board. Keyless search API
+# (jobsuche-service, public X-API-Key baked into the adapter); see internal/sources/arbeitsagentur.go.
+# board = the professional field (berufsfeld) passed as the search filter; company comes from each
+# posting. Only first-party postings are kept (externeUrl re-lists are dropped). Overlap across
+# fields collapses on the refnr dedup key. One entry per IT berufsfeld:
+- provider: arbeitsagentur
+  company: Bundesagentur für Arbeit
+  board: Informatik
+- provider: arbeitsagentur
+  company: Bundesagentur für Arbeit
+  board: Softwareentwicklung und Programmierung
+- provider: arbeitsagentur
+  company: Bundesagentur für Arbeit
+  board: IT-Netzwerktechnik, -Administration, -Organisation
+- provider: arbeitsagentur
+  company: Bundesagentur für Arbeit
+  board: IT-Systemanalyse, -Anwendungsberatung und -Vertrieb
