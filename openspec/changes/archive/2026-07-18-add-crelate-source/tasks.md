@@ -12,4 +12,4 @@
 ## 3. Verify & ship
 
 - [x] 3.1 Validate end-to-end against the live portal through the real adapter: fetch the seeded board and confirm postings, location coverage, and posted dates.
-- [ ] 3.2 Ship: open a PR, merge to main after CI is green, deploy on host-2 (`release.sh`), install and enable the `freehire-ingest@crelate` hourly timer, run one ingest, and confirm the jobs land in the prod database.
+- [x] 3.2 Ship: open a PR, merge to main after CI is green, deploy on host-2 (`release.sh`), install and enable the `freehire-ingest@crelate` hourly timer, run one ingest, and confirm the jobs land in the prod database.
