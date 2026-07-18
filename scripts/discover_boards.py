@@ -38,6 +38,7 @@ PROVIDER_HOSTS = {
     "breezy": "breezy.hr",
     "personio": "jobs.personio.com",
     "jazzhr": "applytojob.com",
+    "jobvite": "jobs.jobvite.com",
     "teamtailor": "teamtailor.com",
 }
 
