@@ -1,0 +1,45 @@
+# manatal boards. Provider is the filename; each entry is company + board.
+# board = the tenant's Manatal career-page slug (see internal/sources/manatal.go); the adapter
+# reads https://open.api.manatal.com/open/v3/career-page/<board>/jobs/ (public, keyless), which
+# carries every posting's description and structured location/remote/contract inline and
+# paginates via its "next" link. The human-facing posting lives at
+# https://www.careers-page.com/<board>/job/<hash>.
+#
+# Discovery footprint: careers-page.com is Manatal's hosted career-page domain, so a tenant is a
+# careers-page.com/<slug> path or a <slug>.careers-page.com subdomain (search-engine footprint
+# "careers-page.com"). Validate a candidate live before adding it:
+#   curl -s "https://open.api.manatal.com/open/v3/career-page/<slug>/jobs/" | jq .count   # want >0
+#
+# Note: many Manatal tenants are recruitment agencies posting many clients' roles; the adapter
+# labels each job with the configured company (the agency), the same as bullhorn/careerspage —
+# the per-vacancy employer is not resolved (a hub seam for later).
+
+- company: Syfe
+  board: syfe
+- company: IDR
+  board: idr
+- company: PHRS Recruitment
+  board: phrsrecruitment
+- company: GAP Recruitment Services
+  board: gaprecruitment
+- company: CPJ Recruitment
+  board: cpj-recruitment
+- company: One Recruitment
+  board: one-recruitment
+- company: MyCareerCraft
+  board: mycareercraft
+- company: Nexus Recruitment Group
+  board: nexusrecruitment
+- company: Recruitment Apple Lovers
+  board: recruitment-apple-lovers
+- company: AGC Recruitment
+  board: job-listings
+
+# Migrated from careerspage.yml: careers-page.com IS Manatal, and the JSON API is far more
+# complete than the old <slug>.careers-page.com HTML crawl (davidjoseph-co 182 vs 6, zarego 9 vs 0).
+- company: David Joseph & Company
+  board: davidjoseph-co
+- company: Zarego
+  board: zarego
+- company: Alcor
+  board: alcor
