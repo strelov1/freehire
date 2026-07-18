@@ -271,6 +271,7 @@ func All(c HTTPClient) map[string]Source {
 		NewGetmatch(c),
 		NewGetmanfred(c),
 		NewHabrCareer(c),
+		NewGeekjob(c),
 		NewWorkAtAStartup(c),
 		NewJobStash(c),
 		NewArbeitnow(c),
@@ -409,6 +410,13 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// like djinni's, setting SOURCES_PROXY_URL routes only this provider through the proxy with
 	// no code change; while the proxy is unset this entry is inert.
 	"onstrider": func(c HTTPClient) Source { return NewOnstrider(c) },
+	// geekjob.ru is a Russian board reached only over the prod datacenter IP in production and is
+	// untested from it (the spike ran from a residential IP). Like its RU sibling habr_career it
+	// fetches a per-vacancy detail page for the description, so a WAF challenge on the detail HTML
+	// would leave jobs with empty descriptions. It is pre-wired here so that, if the prod IP is
+	// blocked, setting SOURCES_PROXY_URL routes only this provider through the proxy with no code
+	// change; while the proxy is unset this entry is inert. A fixed, trusted host (SSRF caveat).
+	"geekjob": func(c HTTPClient) Source { return NewGeekjob(c) },
 	// career.habr.com sits behind Qrator, which challenges the per-vacancy detail HTML from the
 	// prod datacenter IP (the listing JSON passes, but the description parse fails, leaving jobs
 	// with empty descriptions and so no derived skills/geo/enrichment). A residential IP is served
