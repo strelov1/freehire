@@ -18,7 +18,7 @@ ORDER BY updated_at DESC;
 -- vacancy's public slug and the bound agent session so each row links back to its workspace.
 -- Base CVs (job_id NULL) are excluded; the JOIN also drops tailored CVs whose job was deleted.
 SELECT c.id, c.title, c.template_id, c.agent_session_id, j.public_slug AS job_slug,
-       c.created_at, c.updated_at
+       j.title AS job_title, j.company AS job_company, c.created_at, c.updated_at
 FROM cvs c
 JOIN jobs j ON j.id = c.job_id
 WHERE c.user_id = $1 AND c.job_id IS NOT NULL

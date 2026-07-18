@@ -2,12 +2,12 @@
   import { onMount } from 'svelte';
   import { FileText, Download, Trash2 } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
-  import { Button } from '$lib/ui';
-  import { cvTitle, type CvTailoredItem } from '$lib/cv';
+  import CompanyLogo from '$lib/components/CompanyLogo.svelte';
+  import { type CvTailoredItem } from '$lib/cv';
 
-  // The tailored-CV landing: every CV the caller built for a specific vacancy, each a shortcut
-  // back into its tailoring workspace (which resumes the same agent session). CVs are created
-  // only from a vacancy's match page, so there is no create action here.
+  // The tailored-CV landing: one company card per CV the caller built for a vacancy, styled like
+  // the saved-jobs cards. The card opens the tailoring workspace (which resumes the same agent
+  // session); the PDF and delete actions sit on the card without triggering the open.
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   let error = $state<string | null>(null);
@@ -27,7 +27,7 @@
   }
 
   async function remove(cv: CvTailoredItem) {
-    if (!window.confirm(`Delete “${cvTitle(cv.title)}”? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete your tailored CV for “${cv.job_title}”? This cannot be undone.`)) return;
     try {
       await api.deleteCv(cv.id);
       items = items.filter((i) => i.id !== cv.id);
@@ -61,20 +61,39 @@
       </p>
     </div>
   {:else}
-    <ul class="divide-y divide-border rounded-lg border border-border">
+    <ul class="flex flex-col gap-3">
       {#each items as cv (cv.id)}
-        <li class="flex items-center justify-between gap-4 p-4">
-          <a href="/tailor/{cv.job_slug}?cv={cv.id}" class="min-w-0 flex-1">
-            <span class="block truncate font-medium">{cvTitle(cv.title)}</span>
-            <span class="text-xs text-muted-foreground">Updated {fmt(cv.updated_at)} · {cv.template_id}</span>
-          </a>
-          <div class="flex items-center gap-1">
-            <Button variant="ghost" size="icon" href={api.cvPdfUrl(cv.id)} aria-label="Download PDF">
+        <li
+          class="group relative flex items-center gap-4 rounded-xl border border-border bg-card p-4 transition-colors hover:border-border/80 hover:bg-muted/30"
+        >
+          <!-- The whole card opens the workspace; the action buttons stop propagation below. -->
+          <a href="/tailor/{cv.job_slug}?cv={cv.id}" class="absolute inset-0" aria-label="Open {cv.job_title}"></a>
+          <CompanyLogo name={cv.job_company} size="size-11" />
+          <div class="min-w-0 flex-1">
+            <p class="truncate font-medium">{cv.job_title}</p>
+            <p class="truncate text-sm text-muted-foreground">{cv.job_company}</p>
+            <p class="mt-0.5 text-xs text-muted-foreground/80">Updated {fmt(cv.updated_at)}</p>
+          </div>
+          <div class="relative z-10 flex items-center gap-1">
+            <a
+              href={api.cvPdfUrl(cv.id)}
+              target="_blank"
+              rel="noopener"
+              aria-label="Open PDF"
+              title="Open PDF"
+              class="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
               <Download class="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" aria-label="Delete" onclick={() => remove(cv)}>
+            </a>
+            <button
+              type="button"
+              aria-label="Delete"
+              title="Delete"
+              onclick={() => remove(cv)}
+              class="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
               <Trash2 class="h-4 w-4" />
-            </Button>
+            </button>
           </div>
         </li>
       {/each}

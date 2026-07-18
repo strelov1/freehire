@@ -30,10 +30,12 @@ export interface CvRecord extends CvMeta {
   document: Document;
 }
 
-/** A tailored CV in the /my/cvs re-open list: metadata plus the vacancy slug and the bound
- *  agent session, so a row links straight to its tailoring workspace. */
+/** A tailored CV in the /my/cvs re-open list: metadata plus the vacancy (slug, title, company)
+ *  and the bound agent session, so a row renders as a company card linking to its workspace. */
 export interface CvTailoredItem extends CvMeta {
   job_slug: string;
+  job_title: string;
+  job_company: string;
   agent_session_id: string;
 }
 

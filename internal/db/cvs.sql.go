@@ -235,7 +235,7 @@ func (q *Queries) ListCVsByUser(ctx context.Context, userID int64) ([]ListCVsByU
 
 const listTailoredCVsByUser = `-- name: ListTailoredCVsByUser :many
 SELECT c.id, c.title, c.template_id, c.agent_session_id, j.public_slug AS job_slug,
-       c.created_at, c.updated_at
+       j.title AS job_title, j.company AS job_company, c.created_at, c.updated_at
 FROM cvs c
 JOIN jobs j ON j.id = c.job_id
 WHERE c.user_id = $1 AND c.job_id IS NOT NULL
@@ -248,6 +248,8 @@ type ListTailoredCVsByUserRow struct {
 	TemplateID     string             `json:"template_id"`
 	AgentSessionID pgtype.Text        `json:"agent_session_id"`
 	JobSlug        string             `json:"job_slug"`
+	JobTitle       string             `json:"job_title"`
+	JobCompany     string             `json:"job_company"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
@@ -270,6 +272,8 @@ func (q *Queries) ListTailoredCVsByUser(ctx context.Context, userID int64) ([]Li
 			&i.TemplateID,
 			&i.AgentSessionID,
 			&i.JobSlug,
+			&i.JobTitle,
+			&i.JobCompany,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {

@@ -40,11 +40,14 @@ type Record struct {
 	Document       Document
 }
 
-// TailoredItem is a tailored CV in the re-open list: metadata plus the vacancy slug and the
-// bound agent session, so a row links straight back to its tailoring workspace.
+// TailoredItem is a tailored CV in the re-open list: metadata plus the vacancy (slug, title,
+// company) and the bound agent session, so a row renders as a company card that links straight
+// back to its tailoring workspace.
 type TailoredItem struct {
 	Meta
 	JobSlug        string
+	JobTitle       string
+	JobCompany     string
 	AgentSessionID string
 }
 
@@ -163,6 +166,8 @@ func (s *Store) ListTailored(ctx context.Context, userID int64) ([]TailoredItem,
 		out[i] = TailoredItem{
 			Meta:           Meta{ID: r.ID, Title: r.Title, TemplateID: r.TemplateID, CreatedAt: r.CreatedAt.Time, UpdatedAt: r.UpdatedAt.Time},
 			JobSlug:        r.JobSlug,
+			JobTitle:       r.JobTitle,
+			JobCompany:     r.JobCompany,
 			AgentSessionID: textValue(r.AgentSessionID),
 		}
 	}

@@ -12,6 +12,7 @@
     Trash2,
     Plus,
     PanelLeft,
+    RefreshCw,
   } from '@lucide/svelte';
   import { currentUser } from '$lib/auth.svelte';
   import { createSession, listSessions, deleteSession, assistantWsUrl } from '$lib/assistant/api';
@@ -82,9 +83,13 @@
 
   let phase = $state<Phase>('connecting');
   let error = $state<string | null>(null);
-  // Set when the socket drops after we were live — the composer disables and
-  // prompts a reload, instead of silently accepting sends that can't go out.
+  // Set when the socket drops after we were live AND auto-reconnect has given up — the composer
+  // disables and offers a manual Reconnect button (never a full page reload).
   let connectionLost = $state(false);
+  // True while an automatic/manual reconnect attempt is in flight.
+  let reconnecting = $state(false);
+  let reconnectAttempts = 0;
+  const MAX_RECONNECT = 3;
 
   // Transport: one RoyClient per page. `activeId` is the session currently
   // attached and shown in the chat pane; `frameUnsub` is that session's frame
@@ -251,7 +256,9 @@
 
   // --- Connection + session orchestration ----------------------------------
 
-  async function boot() {
+  // `reopenId` (reconnect) re-attaches to a specific session and suppresses the kickoff; a bare
+  // boot (initial mount) opens the requested/newest/fresh session and may auto-start the kickoff.
+  async function boot(reopenId?: string) {
     phase = 'connecting';
     error = null;
     connectionLost = false;
@@ -270,11 +277,7 @@
       // Surface a mid-session disconnect instead of stranding the UI.
       statusUnsubs.push(
         client.onStatus((s) => {
-          if ((s === 'closed' || s === 'error') && phase === 'ready') {
-            connectionLost = true;
-            error = 'Connection to the agent was lost. Reload the page to reconnect.';
-            endTurn();
-          }
+          if ((s === 'closed' || s === 'error') && phase === 'ready') onConnectionDrop();
         }),
       );
       // A turn that fails with an `error` event (agent crash, tool failure)
@@ -292,10 +295,10 @@
           fromSummary(s, labelCache[s.session_id], fallbackLabel(s.created_at)),
         ),
       );
-      // Open the requested session (host prop), else the newest, else a fresh chat. A host
-      // (e.g. the /tailor route) seeds `session` + `sessionLabel`; seeding labelCache also stops
-      // noteFirstUserMessage from overwriting the name with the kickoff text.
-      const requested = session;
+      // Open the requested session (reconnect target, else the host prop), else the newest, else
+      // a fresh chat. A host (e.g. the /tailor route) seeds `session` + `sessionLabel`; seeding
+      // labelCache also stops noteFirstUserMessage from overwriting the name with the kickoff text.
+      const requested = reopenId ?? session;
       if (requested) {
         if (sessionLabel) {
           labelCache[requested] = sessionLabel;
@@ -318,14 +321,65 @@
       phase = 'ready';
 
       // Autostart: the host can pass a kickoff prompt so the agent begins immediately instead
-      // of waiting for the user to type. Only fire on a fresh (empty) session.
-      if (requested && kickoff && chat.messages.length === 0) {
+      // of waiting for the user to type. Only fire on a fresh (empty) session — never on reconnect.
+      if (!reopenId && requested && kickoff && chat.messages.length === 0) {
         await dispatch(kickoff);
       }
     } catch (err) {
       error = err instanceof Error ? err.message : 'Could not reach the agent backend.';
       teardown();
     }
+  }
+
+  // A mid-session socket drop: end the turn, then auto-reconnect (unless one is already running).
+  function onConnectionDrop() {
+    endTurn();
+    if (reconnecting) return;
+    reconnectAttempts = 0;
+    void reconnect();
+  }
+
+  // Re-establish the socket and re-attach to the session we were on (its journal replays, so the
+  // chat repaints intact). Auto-retries with backoff up to MAX_RECONNECT, then leaves a manual
+  // Reconnect button.
+  async function reconnect() {
+    reconnecting = true;
+    connectionLost = false;
+    error = null;
+    const keep = activeId ?? undefined;
+    // Drop the stale transport but keep the session id to reopen.
+    frameUnsub?.();
+    frameUnsub = null;
+    for (const off of statusUnsubs) off();
+    statusUnsubs = [];
+    client?.close();
+    client = null;
+    inputAcquired = false;
+    turnActive = false;
+    queue = [];
+    await boot(keep);
+    if (phase === 'ready') {
+      reconnecting = false;
+      reconnectAttempts = 0;
+      return;
+    }
+    // boot() failed internally (it set `error` + tore down). Retry with backoff, then give up
+    // to the manual button.
+    reconnecting = false;
+    if (reconnectAttempts < MAX_RECONNECT) {
+      reconnectAttempts += 1;
+      setTimeout(() => void reconnect(), 800 * 2 ** (reconnectAttempts - 1));
+    } else {
+      connectionLost = true;
+      error = 'Could not reconnect to the agent.';
+    }
+  }
+
+  // The manual "Reconnect" button: reset the attempt counter and try again.
+  function manualReconnect() {
+    if (reconnecting) return;
+    reconnectAttempts = 0;
+    void reconnect();
   }
 
   // Attach to `id` and replay its journal. Detaches the current session first,
@@ -550,7 +604,30 @@
 <!-- Single flex-1 root so a host can compose the chat beside another pane (e.g. the tailor
      artifact panel); the host supplies the outer height + flex row. -->
 <div class="flex min-w-0 flex-1 flex-col">
-{#if error}
+{#if reconnecting}
+  <div
+    class="m-3 mb-0 flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
+    role="status"
+  >
+    <Loader2 class="size-4 shrink-0 animate-spin" />
+    <span>Reconnecting to the agent…</span>
+  </div>
+{:else if connectionLost}
+  <div
+    class="m-3 mb-0 flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+    role="alert"
+  >
+    <AlertTriangle class="size-4 shrink-0" />
+    <span class="flex-1">Connection to the agent was lost.</span>
+    <button
+      type="button"
+      onclick={manualReconnect}
+      class="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-destructive/40 px-2.5 py-1 text-xs font-medium transition-colors hover:bg-destructive/15"
+    >
+      <RefreshCw class="size-3.5" /> Reconnect
+    </button>
+  </div>
+{:else if error}
   <div
     class="m-3 mb-0 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
     role="alert"

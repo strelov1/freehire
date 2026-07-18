@@ -39,6 +39,8 @@ type cvResponse struct {
 type cvTailoredResponse struct {
 	cvMetaResponse
 	JobSlug        string `json:"job_slug"`
+	JobTitle       string `json:"job_title"`
+	JobCompany     string `json:"job_company"`
 	AgentSessionID string `json:"agent_session_id"`
 }
 
@@ -80,6 +82,8 @@ func (a *API) ListCVs(c *fiber.Ctx) error {
 		out[i] = cvTailoredResponse{
 			cvMetaResponse: metaResponse(m.Meta),
 			JobSlug:        m.JobSlug,
+			JobTitle:       m.JobTitle,
+			JobCompany:     m.JobCompany,
 			AgentSessionID: m.AgentSessionID,
 		}
 	}
