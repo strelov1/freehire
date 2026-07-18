@@ -20,6 +20,7 @@
       links: [
         { label: 'Blog', href: resolve('/blog') },
         { label: 'Insights', href: resolve('/insights') },
+        { label: 'Hiring signal', href: resolve('/insights/companies') },
         { label: 'Trends', href: resolve('/trends') },
         { label: 'CLI', href: resolve('/cli') },
         { label: 'ChatGPT', href: resolve('/chatgpt') },

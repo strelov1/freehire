@@ -99,6 +99,13 @@ export interface InsightSalaryBand {
   p50: number;
   p75: number;
 }
+export interface InsightCompany {
+  company_slug: string;
+  company_name: string;
+  open_now: number;
+  open_prev_30d: number;
+  growth_30d: number;
+}
 
 /** One posting in a role cluster — a single city's opening under a collapsed role
  *  (see the /jobs/:slug/copies endpoint). Each keeps its own location and apply URL. */
@@ -481,6 +488,19 @@ export function createApi(
     return requestData<InsightSalaryBand[]>(
       `/api/v1/insights/salary?category=${encodeURIComponent(category)}`,
     );
+  }
+
+  /** Company hiring-signal leaderboard: companies ranked by 30-day open-job growth
+   *  (`growth` ramping, `-growth` freezing) or `open` size. `minOpen` floors the
+   *  current open-count to blunt ingest-artifact spikes. */
+  async function insightsCompanies(
+    opts: { sort?: 'growth' | '-growth' | 'open'; minOpen?: number; limit?: number } = {},
+  ): Promise<InsightCompany[]> {
+    const q = new URLSearchParams();
+    if (opts.sort) q.set('sort', opts.sort);
+    if (opts.minOpen != null) q.set('min_open', String(opts.minOpen));
+    if (opts.limit != null) q.set('limit', String(opts.limit));
+    return requestData<InsightCompany[]>(`/api/v1/insights/companies?${q.toString()}`);
   }
 
   // --- Sitemap --------------------------------------------------------------
@@ -1086,6 +1106,7 @@ export function createApi(
     insightsRoles,
     insightsSkills,
     insightsSalaryByCategory,
+    insightsCompanies,
     sitemapJobs,
     sitemapCompanies,
     sitemapCompanyBoundaries,

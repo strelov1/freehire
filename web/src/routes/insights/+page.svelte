@@ -35,6 +35,17 @@
     also available on the <a href={resolve('/docs/api')} class="text-blue-600 hover:underline">open API</a>.
   </p>
 
+  <a
+    href={resolve('/insights/companies')}
+    class="mt-6 flex items-center justify-between rounded-lg border border-gray-200 p-4 hover:border-gray-300 hover:bg-gray-50"
+  >
+    <span>
+      <span class="text-lg font-semibold text-gray-900">Company hiring signal</span>
+      <span class="mt-0.5 block text-sm text-gray-500">Which companies are ramping up or slowing down hiring</span>
+    </span>
+    <span aria-hidden="true" class="text-gray-400">→</span>
+  </a>
+
   {#if data.covered.length === 0}
     <p class="mt-8 text-gray-500">Insights are being computed — check back shortly.</p>
   {:else}
