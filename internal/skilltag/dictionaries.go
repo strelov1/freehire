@@ -39,15 +39,19 @@ var wordAliases = map[string]string{
 	"groovy":     "groovy",
 	"solidity":   "solidity",
 	// more languages
-	"julia":      "julia",
-	"ocaml":      "ocaml",
-	"fsharp":     "fsharp",
-	"vbnet":      "vbnet",
-	"cobol":      "cobol",
-	"fortran":    "fortran",
-	"matlab":     "matlab",
-	"abap":       "abap",
-	"apex":       "apex",
+	"julia":   "julia",
+	"ocaml":   "ocaml",
+	"fsharp":  "fsharp",
+	"vbnet":   "vbnet",
+	"cobol":   "cobol",
+	"fortran": "fortran",
+	"matlab":  "matlab",
+	"abap":    "abap",
+	"apex":    "apex",
+	// 1c is the RU enterprise platform's own language. Gated (ambiguousWords) because a bare
+	// "1c" also occurs as a figure/list label in English prose; the Cyrillic "1с" form the RU
+	// market uses is a strong phrase alias instead.
+	"1c":         "1c",
 	"nim":        "nim",
 	"zig":        "zig",
 	"assembly":   "assembly",
@@ -629,6 +633,7 @@ var ambiguousWords = map[string]bool{
 	"apex":    true,
 	"julia":   true,
 	"maven":   true,
+	"1c":      true,
 	// broad concepts (batch 3) — tag only in a concrete tech context
 	"ai":         true,
 	"automation": true,
@@ -669,6 +674,9 @@ var phraseAliases = []phraseAlias{
 	{"objective-c", "objective-c"},
 	{"ci/cd", "ci-cd"}, {"ci cd", "ci-cd"},
 	{"c developer", "c"}, {"c programming", "c"}, {"ansi c", "c"},
+	// Cyrillic 1С (the RU market's spelling) — the word pass can't see it ([a-z0-9] only), so it
+	// resolves here as a strong phrase; the Latin "1c" is the gated word alias.
+	{"1с", "1c"},
 	{"machine learning", "machine-learning"},
 	// additional phrases
 	{"rest api", "rest"}, {"rest apis", "rest"},

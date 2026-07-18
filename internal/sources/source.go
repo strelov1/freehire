@@ -426,12 +426,12 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// blocked, setting SOURCES_PROXY_URL routes only this provider through the proxy with no code
 	// change; while the proxy is unset this entry is inert. A fixed, trusted host (SSRF caveat).
 	"geekjob": func(c HTTPClient) Source { return NewGeekjob(c) },
-	// hh.ru already 403s its public search API from the datacenter IP, so the HTML crawl may be
-	// blocked from prod too (untested there; the spike ran from a residential IP). Pre-wired so a
-	// block is a one-env-var fix. Caveat: hh's per-vacancy detail fan-out is high-volume, so a
-	// single proxy IP may itself get rate-limited — pacing (like careerspage/vagas) may be needed
-	// if the proxy path 429s. While SOURCES_PROXY_URL is unset this entry is inert.
-	"hh": func(c HTTPClient) Source { return NewHH(c) },
+	// hh.ru's detail pages 403 the direct datacenter IP, so on prod it egresses through the proxy;
+	// its high-volume per-vacancy detail fan-out then 429s the single proxy IP unless paced (the
+	// first prod run landed only ~34% of descriptions unpaced), so — like careerspage/vagas — it is
+	// rate-paced (pacedHHGetter) to hold the aggregate rate under the proxy window. While
+	// SOURCES_PROXY_URL is unset this entry is inert (direct crawl is unpaced, fine for local/dev).
+	"hh": func(c HTTPClient) Source { return NewHH(pacedHHGetter(c)) },
 	// career.habr.com sits behind Qrator, which challenges the per-vacancy detail HTML from the
 	// prod datacenter IP (the listing JSON passes, but the description parse fails, leaving jobs
 	// with empty descriptions and so no derived skills/geo/enrichment). A residential IP is served

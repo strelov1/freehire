@@ -108,3 +108,24 @@ func pacedTrudvsemGetter(c JSONGetter) JSONGetter {
 		limiter: rate.NewLimiter(rate.Every(trudvsemRequestInterval), trudvsemRequestBurst),
 	}
 }
+
+// hh.ru egresses through the single proxy IP (its detail pages 403 the direct datacenter IP), and
+// its per-vacancy detail fan-out is large — thousands of ~1 MB pages across the seeded roles. Fired
+// unpaced at defaultDetailWorkers concurrency, that burst 429s the proxy IP and ~2/3 of details
+// fall back to list-only (which never back-fill, since a seen posting skips detail). Pacing the
+// aggregate rate — not the worker pool — holds it under the proxy window so nearly every detail
+// lands. The interval is a middle ground: fast enough to finish a full role sweep inside the
+// ingest unit's TimeoutStartSec, gentle enough to stop the 429s. Tune from observed convergence.
+const (
+	hhRequestInterval = 250 * time.Millisecond // ~4 req/s
+	hhRequestBurst    = 4
+)
+
+// pacedHHGetter wraps a getter with a fresh limiter shared across one registry build, so all of
+// hh.ru's search and detail requests in a run stay under the proxy IP's per-window budget.
+func pacedHHGetter(c HTMLGetter) HTMLGetter {
+	return rateLimitedHTMLGetter{
+		inner:   c,
+		limiter: rate.NewLimiter(rate.Every(hhRequestInterval), hhRequestBurst),
+	}
+}
