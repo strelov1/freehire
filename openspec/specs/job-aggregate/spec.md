@@ -11,8 +11,11 @@ SHALL NOT allow callers to assemble a `Job` from a raw composite literal outside
 `job` package. The factory SHALL run the deterministic derivation (`jobderive`,
 wrapping `location`/`skilltag`/`classify`/`roletag` and the public-identity slugs)
 internally, so a constructed `Job` always carries facets consistent with its source
-fields. Every write path that persists a posting — automated ingest, moderator
-authoring, and Telegram extraction — SHALL obtain its `Job` from this factory.
+fields. The draft MAY carry explicit values for the `regions`, `cities`, `work_mode`,
+and `skills` facets; when present, an explicit value SHALL win over the dictionary
+derivation for that facet, and when absent, derivation SHALL fill it. Every write path
+that persists a posting — automated ingest, moderator authoring, and Telegram
+extraction — SHALL obtain its `Job` from this factory.
 
 #### Scenario: Every write path derives facets identically
 
@@ -28,6 +31,33 @@ authoring, and Telegram extraction — SHALL obtain its `Job` from this factory.
   facet fields
 - **THEN** the resulting `Job` still carries the derived facets, because derivation
   happens inside `job.New` rather than in caller code
+
+#### Scenario: Explicit facet values win over derivation
+
+- **WHEN** a caller constructs a `Job` whose draft supplies explicit `regions`,
+  `cities`, `work_mode`, or `skills`
+- **THEN** the resulting `Job` carries those explicit values for those facets instead
+  of the values the dictionaries would derive, while any unsupplied facet is still
+  derived
+
+### Requirement: A manual salary override takes precedence over enriched salary
+
+The system SHALL let a job carry an authoritative manual salary (min, max, currency,
+period) independent of the LLM-enriched salary. When a job has a manual salary, the
+effective salary the system exposes (search facets, filters, insights, the public wire
+shape) SHALL be the manual salary, and an enrichment pass SHALL NOT displace it: applying
+enrichment to a job that has a manual salary MUST preserve that manual salary as the
+effective salary, even if the enrichment payload proposes a different figure.
+
+#### Scenario: Enrichment does not displace a manual salary
+
+- **WHEN** a job with a manual salary is processed by an enrichment pass whose payload proposes a different salary
+- **THEN** the job's effective salary remains the manual salary after the pass
+
+#### Scenario: Jobs without a manual salary are unaffected
+
+- **WHEN** a job that has no manual salary is processed by an enrichment pass
+- **THEN** the job's effective salary is the enriched salary, exactly as before
 
 ### Requirement: The domain Job is loaded and persisted through a repository port
 

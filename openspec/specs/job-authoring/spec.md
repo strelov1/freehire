@@ -12,15 +12,30 @@ The system SHALL allow a user with the `moderator` role to create a vacancy thro
 authorized by role; a non-moderator MUST be rejected.
 
 `url`, `title`, and `company` are required; `location`, `remote`, `description`, and
-`posted_at` are optional. `url` MUST be a valid `http`/`https` URL. The system SHALL
-derive geography (countries/regions/work-mode), skill tags, the public slug, and the
-company slug from the supplied fields using the same deterministic dictionaries the
-ingest pipeline uses.
+`posted_at` are optional, as are the structured facets `skills`, `regions`, `cities`,
+`work_mode` and the salary fields `salary_min`, `salary_max`, `salary_currency`,
+`salary_period`. `url` MUST be a valid `http`/`https` URL. The system SHALL derive
+geography (countries/regions/work-mode), skill tags, the public slug, and the company
+slug from the supplied fields using the same deterministic dictionaries the ingest
+pipeline uses. When the request supplies `skills`, `regions`, `cities`, or `work_mode`
+explicitly, those values MUST win over the dictionary derivation for that facet; when a
+facet is not supplied, derivation MUST fill it as before. When the request supplies
+salary, the system MUST store it as an authoritative manual salary on the job.
 
 #### Scenario: Moderator creates a job
 
 - **WHEN** a moderator `POST`s `{ "url": "...", "title": "...", "company": "..." }`
 - **THEN** the system stores a job with `source='manual'`, `external_id` equal to the URL, `created_by` set to the moderator, and responds `201` with `{ "data": <job> }`
+
+#### Scenario: Explicit structured facets override derivation
+
+- **WHEN** a moderator `POST`s a create body that supplies explicit `regions`, `cities`, `work_mode`, and `skills`
+- **THEN** the created job carries those explicit values for those facets rather than the values the dictionaries would derive from location and description
+
+#### Scenario: Supplied salary is stored as an authoritative manual salary
+
+- **WHEN** a moderator `POST`s a create body that supplies salary fields
+- **THEN** the created job carries that salary as its authoritative manual salary
 
 #### Scenario: Non-moderator is rejected
 
