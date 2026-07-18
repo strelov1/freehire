@@ -655,6 +655,12 @@ export function createApi(
     return { items: res.data, credits: res.meta.credits };
   }
 
+  /** The caller's current AI-credits balance (points left this month + reset date).
+   *  Never triggers the LLM. Powers the profile-page balance widget. */
+  async function myCredits(): Promise<JobFitCredits> {
+    return requestData<JobFitCredits>('/api/v1/me/credits');
+  }
+
   /** The public slugs of every job the current user has interacted with. The
    *  browse UI cross-references this set to dim already-viewed cards without
    *  authenticating the public job list. */
@@ -1127,6 +1133,7 @@ export function createApi(
     listMyJobs,
     getMyPipeline,
     myAnalyses,
+    myCredits,
     listViewedSlugs,
     listSavedSlugs,
     listApiKeys,

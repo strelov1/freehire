@@ -867,6 +867,20 @@ ${BASE_URL}/auth/oauth/google/start`,
       },
       {
         method: 'GET',
+        path: '/me/credits',
+        auth: 'cookie-or-key',
+        summary: 'Your current AI-credits balance.',
+        description:
+          'The points left this month (`remaining`) and when the monthly grant renews ' +
+          '(`resets_at`). AI credits are spent on the fit analysis (1) and CV tailoring (3), ' +
+          'topped up by the monthly grant and by accepted board contributions. Never runs the LLM.',
+        curl: `curl "${BASE_URL}/me/credits" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
+        responseExample: `{
+  "data": { "remaining": 17, "resets_at": "2026-08-01T00:00:00Z" }
+}`,
+      },
+      {
+        method: 'GET',
         path: '/me/tracking/saved',
         auth: 'cookie-or-key',
         summary: 'Slugs of jobs you have saved.',

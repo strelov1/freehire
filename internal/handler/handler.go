@@ -427,6 +427,7 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/me/tracking/pipeline", keyAuth, a.TrackingPipeline)
 	api.Get("/me/tracking/swipe", keyAuth, a.SwipeDeck)
 	api.Get("/me/tracking/analyses", keyAuth, a.ListMyAnalyses)
+	api.Get("/me/credits", keyAuth, a.GetMyCredits)
 	api.Get("/me/recommendations", keyAuth, a.Recommendations)
 
 	// API-key management is cookie-only (RequireAuth): a leaked key must not be
