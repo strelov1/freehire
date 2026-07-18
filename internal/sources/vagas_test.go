@@ -137,6 +137,22 @@ func TestVagasIsProxied(t *testing.T) {
 	}
 }
 
+func TestPacedVagasGetterPaces(t *testing.T) {
+	// vagas 429s the single proxy IP under an unpaced burst, so its crawl must go through a
+	// rate limiter (mirrors careerspage). Guard that the wrapper actually paces, not passes raw.
+	inner := &recordingHTMLGetter{node: &html.Node{}}
+	g, ok := pacedVagasGetter(inner).(rateLimitedHTMLGetter)
+	if !ok {
+		t.Fatal("pacedVagasGetter must return a rate-limited getter")
+	}
+	if g.inner != HTMLGetter(inner) {
+		t.Fatal("pacedVagasGetter must wrap the given getter")
+	}
+	if g.limiter == nil {
+		t.Fatal("pacedVagasGetter must install a limiter")
+	}
+}
+
 func TestVagasJobID(t *testing.T) {
 	cases := map[string]string{
 		"/vagas/v2820917/assistente-ti":           "2820917",

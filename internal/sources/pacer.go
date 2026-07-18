@@ -50,3 +50,23 @@ func pacedCareerPageGetter(c HTMLGetter) HTMLGetter {
 		limiter: rate.NewLimiter(rate.Every(careerspageRequestInterval), careerspageRequestBurst),
 	}
 }
+
+// vagas.com.br rate-limits by a per-IP request budget: a full national-board crawl (three area
+// listings paginated + a detail fan-out over hundreds of postings) fired unpaced through the
+// single egress proxy IP 429s that IP and then 429s even spaced requests during the penalty
+// window. Its detail pool bursts to defaultDetailWorkers, so the pacer — not the pool — must
+// hold the aggregate rate under the window. The interval is more conservative than careerspage's
+// because vagas 429'd hard and its true budget is unknown; tune from observed convergence.
+const (
+	vagasRequestInterval = time.Second // ~1 req/s
+	vagasRequestBurst    = 1
+)
+
+// pacedVagasGetter wraps a getter with a fresh limiter shared across one registry build, so all
+// of vagas's requests in a run stay under vagas.com.br's per-IP window on the single proxy IP.
+func pacedVagasGetter(c HTMLGetter) HTMLGetter {
+	return rateLimitedHTMLGetter{
+		inner:   c,
+		limiter: rate.NewLimiter(rate.Every(vagasRequestInterval), vagasRequestBurst),
+	}
+}
