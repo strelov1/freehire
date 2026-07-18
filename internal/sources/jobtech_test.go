@@ -112,6 +112,31 @@ func TestJobtechStreamMapsLiveClosesRemovedDropsInvalid(t *testing.T) {
 	}
 }
 
+func TestJobtechPrefersWorkplaceOverLegalName(t *testing.T) {
+	// Swedish ads often register under a numbered shell AB (employer.name, e.g. "Miro
+	// 461704 AB") while the real trading name sits in employer.workplace ("Direkten Nöje
+	// Casablanca"). The workplace is the meaningful company display — and using the shell
+	// name would let logo.dev fuzzy-match a well-known brand ("Miro") onto the wrong firm.
+	// Prefer workplace, fall back to name when the ad carries no workplace.
+	body := `[
+{"id":"1","removed":false,"webpage_url":"u","headline":"Butikssäljare","publication_date":"2026-06-10T12:00:00","employer":{"name":"Miro 461704 AB","workplace":"Direkten Nöje Casablanca"}},
+{"id":"2","removed":false,"webpage_url":"u","headline":"h","publication_date":"2026-06-10T12:00:00","employer":{"name":"Tatvanord AB"}}
+]`
+	jobs, err := NewJobtech(&fakeStream{body: body}).Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("got %d jobs, want 2", len(jobs))
+	}
+	if jobs[0].Company != "Direkten Nöje Casablanca" {
+		t.Errorf("Company = %q, want the workplace trading name over the shell AB", jobs[0].Company)
+	}
+	if jobs[1].Company != "Tatvanord AB" {
+		t.Errorf("Company = %q, want employer.name fallback when workplace is empty", jobs[1].Company)
+	}
+}
+
 func TestJobtechRequestsTrailingWindow(t *testing.T) {
 	fake := &fakeStream{body: `[]`}
 	if _, err := NewJobtech(fake).Fetch(context.Background(), CompanyEntry{}); err != nil {

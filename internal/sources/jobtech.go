@@ -66,7 +66,11 @@ type jobtechItem struct {
 		TextFormatted string `json:"text_formatted"`
 	} `json:"description"`
 	Employer struct {
-		Name string `json:"name"`
+		// Name is the legal entity (often a numbered shell AB, e.g. "Miro 461704 AB");
+		// Workplace is the trading name the shop actually operates under ("Direkten Nöje
+		// Casablanca"). Workplace is the meaningful company display — see toJob.
+		Name      string `json:"name"`
+		Workplace string `json:"workplace"`
 	} `json:"employer"`
 	WorkplaceAddress struct {
 		Municipality string `json:"municipality"`
@@ -126,11 +130,18 @@ func (s jobtech) FetchStream(ctx context.Context, _ CompanyEntry, emit func(Job)
 }
 
 // toJob maps a live ad to a Job, returning ok=false for an ad with no id to key on or no
-// employer name (which would break the company slug). Remote/WorkMode are left unset: the
-// API's remote_work flag is effectively always null, so the work arrangement is derived
-// downstream from the location string by the deterministic dictionary, not guessed here.
+// company to attribute it to (which would break the company slug). The company is the
+// trading name (employer.workplace) when present, falling back to the legal entity
+// (employer.name) — the numbered shell AB the workplace registers under is both a poor
+// display and a magnet for a wrong-brand logo.dev name match. Remote/WorkMode are left
+// unset: the API's remote_work flag is effectively always null, so the work arrangement is
+// derived downstream from the location string by the deterministic dictionary, not guessed.
 func (it jobtechItem) toJob() (Job, bool) {
-	if it.ID == "" || it.Employer.Name == "" {
+	company := it.Employer.Workplace
+	if company == "" {
+		company = it.Employer.Name
+	}
+	if it.ID == "" || company == "" {
 		return Job{}, false
 	}
 	desc := it.Description.TextFormatted
@@ -141,7 +152,7 @@ func (it jobtechItem) toJob() (Job, bool) {
 		ExternalID:  it.ID,
 		URL:         it.WebpageURL,
 		Title:       it.Headline,
-		Company:     it.Employer.Name,
+		Company:     company,
 		Location:    joinNonEmpty(it.WorkplaceAddress.Municipality, it.WorkplaceAddress.Region, it.WorkplaceAddress.Country),
 		Description: sanitizeHTML(desc),
 		PostedAt:    parseLayout(jobtechDateLayout, it.PublicationDate),
