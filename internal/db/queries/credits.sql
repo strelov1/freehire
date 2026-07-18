@@ -43,6 +43,22 @@ SELECT EXISTS (
 INSERT INTO credit_ledger (user_id, period, kind, feature, delta, ref)
 VALUES (sqlc.arg(user_id), sqlc.arg(period), 'debit', sqlc.arg(feature)::text, sqlc.arg(delta), sqlc.arg(ref)::text);
 
+-- name: RewardExists :one
+-- Whether the caller already received a reward for this ref (e.g. an accepted contribution).
+-- True means the reward was already granted and must not be granted again (idempotency).
+SELECT EXISTS (
+    SELECT 1 FROM credit_ledger
+    WHERE user_id = sqlc.arg(user_id)
+      AND kind = 'reward'
+      AND ref = sqlc.arg(ref)::text
+);
+
+-- name: InsertReward :exec
+-- Append a reward: points earned (e.g. for an accepted board contribution), delta positive,
+-- feature NULL. Rewards bank above the monthly grant and survive the period reset.
+INSERT INTO credit_ledger (user_id, period, kind, feature, delta, ref)
+VALUES (sqlc.arg(user_id), sqlc.arg(period), 'reward', NULL, sqlc.arg(delta), sqlc.arg(ref)::text);
+
 -- name: UpdateBalance :exec
 -- Persist the post-transaction balance: the current period and remaining points. Called at
 -- the end of the debit transaction to write back any lazy reset and/or decrement. The row is

@@ -2,6 +2,8 @@ package handler
 
 import (
 	"errors"
+	"log"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -80,6 +82,12 @@ func (a *API) CreateContribution(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusConflict).JSON(body)
 		}
 		return contributionError(err)
+	}
+	// Reward the contributor with AI credits, idempotent by the contribution id. Best-effort:
+	// the contribution is already recorded and its point awarded, so a reward error (or a
+	// zero configured reward) is logged, not surfaced.
+	if _, err := a.credits.Reward(c.Context(), userID, strconv.FormatInt(rec.ID, 10)); err != nil {
+		log.Printf("credits: contribution reward user=%d contribution=%d: %v", userID, rec.ID, err)
 	}
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toContributionResponse(rec)})
 }

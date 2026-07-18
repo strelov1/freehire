@@ -145,6 +145,53 @@ func (q *Queries) InsertGrant(ctx context.Context, arg InsertGrantParams) error 
 	return err
 }
 
+const insertReward = `-- name: InsertReward :exec
+INSERT INTO credit_ledger (user_id, period, kind, feature, delta, ref)
+VALUES ($1, $2, 'reward', NULL, $3, $4::text)
+`
+
+type InsertRewardParams struct {
+	UserID int64  `json:"user_id"`
+	Period string `json:"period"`
+	Delta  int32  `json:"delta"`
+	Ref    string `json:"ref"`
+}
+
+// Append a reward: points earned (e.g. for an accepted board contribution), delta positive,
+// feature NULL. Rewards bank above the monthly grant and survive the period reset.
+func (q *Queries) InsertReward(ctx context.Context, arg InsertRewardParams) error {
+	_, err := q.db.Exec(ctx, insertReward,
+		arg.UserID,
+		arg.Period,
+		arg.Delta,
+		arg.Ref,
+	)
+	return err
+}
+
+const rewardExists = `-- name: RewardExists :one
+SELECT EXISTS (
+    SELECT 1 FROM credit_ledger
+    WHERE user_id = $1
+      AND kind = 'reward'
+      AND ref = $2::text
+)
+`
+
+type RewardExistsParams struct {
+	UserID int64  `json:"user_id"`
+	Ref    string `json:"ref"`
+}
+
+// Whether the caller already received a reward for this ref (e.g. an accepted contribution).
+// True means the reward was already granted and must not be granted again (idempotency).
+func (q *Queries) RewardExists(ctx context.Context, arg RewardExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, rewardExists, arg.UserID, arg.Ref)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const updateBalance = `-- name: UpdateBalance :exec
 UPDATE credit_balances
 SET period = $1, remaining = $2, updated_at = now()

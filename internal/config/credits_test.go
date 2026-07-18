@@ -17,15 +17,19 @@ func TestLoadCredits_defaults(t *testing.T) {
 	if got.CostTailor != 3 {
 		t.Errorf("CostTailor default = %d, want 3", got.CostTailor)
 	}
+	if got.ContributionReward != 5 {
+		t.Errorf("ContributionReward default = %d, want 5", got.ContributionReward)
+	}
 }
 
 func TestLoadCredits_overrides(t *testing.T) {
 	t.Setenv("CREDITS_MONTHLY_GRANT", "50")
 	t.Setenv("CREDITS_COST_MATCH", "2")
 	t.Setenv("CREDITS_COST_TAILOR", "5")
+	t.Setenv("CREDITS_CONTRIBUTION_REWARD", "10")
 
 	got := LoadCredits()
-	if got.MonthlyGrant != 50 || got.CostMatch != 2 || got.CostTailor != 5 {
+	if got.MonthlyGrant != 50 || got.CostMatch != 2 || got.CostTailor != 5 || got.ContributionReward != 10 {
 		t.Errorf("overrides not applied: %+v", got)
 	}
 }
@@ -37,6 +41,7 @@ func TestLoadCredits_clampsInvalid(t *testing.T) {
 	t.Setenv("CREDITS_MONTHLY_GRANT", "-5")
 	t.Setenv("CREDITS_COST_MATCH", "0")
 	t.Setenv("CREDITS_COST_TAILOR", "-2")
+	t.Setenv("CREDITS_CONTRIBUTION_REWARD", "-9")
 
 	got := LoadCredits()
 	if got.MonthlyGrant != 0 {
@@ -47,5 +52,8 @@ func TestLoadCredits_clampsInvalid(t *testing.T) {
 	}
 	if got.CostTailor != 1 {
 		t.Errorf("CostTailor clamp = %d, want 1", got.CostTailor)
+	}
+	if got.ContributionReward != 0 {
+		t.Errorf("ContributionReward clamp = %d, want 0", got.ContributionReward)
 	}
 }

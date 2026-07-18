@@ -21,6 +21,7 @@ import (
 	"github.com/strelov1/freehire/internal/accounts"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/contribution"
+	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/db"
 )
 
@@ -49,6 +50,7 @@ func TestContributionsEndToEnd(t *testing.T) {
 		issuer:       iss,
 		contribution: contribution.New(contribution.NewQueriesRepository(queries, pool), nil),
 		accounts:     accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{}),
+		credits:      credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 5}),
 	}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
@@ -124,6 +126,15 @@ func TestContributionsEndToEnd(t *testing.T) {
 		}
 		if me.Data.Points != 1 {
 			t.Errorf("points = %d, want 1", me.Data.Points)
+		}
+
+		// The novel contribution also rewarded AI credits: 20 monthly grant + 5 reward.
+		var remaining int
+		if err := pool.QueryRow(ctx, `SELECT remaining FROM credit_balances WHERE user_id = $1`, userID).Scan(&remaining); err != nil {
+			t.Fatalf("read credit balance: %v", err)
+		}
+		if remaining != 25 {
+			t.Errorf("credit balance after contribution = %d, want 25 (20 grant + 5 reward)", remaining)
 		}
 	})
 

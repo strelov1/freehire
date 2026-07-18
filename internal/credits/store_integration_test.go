@@ -203,6 +203,80 @@ func TestDebit_lazyResetThenDebit(t *testing.T) {
 	}
 }
 
+func TestReward_addsAndIsIdempotent(t *testing.T) {
+	pool := startPostgres(t)
+	s := newStore(pool, Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 5})
+	uid := insertUser(t, pool, "reward@example.test")
+	ctx := context.Background()
+
+	bal, err := s.Reward(ctx, uid, "contrib-1")
+	if err != nil {
+		t.Fatalf("Reward: %v", err)
+	}
+	if bal.Remaining != 25 { // 20 grant + 5 reward
+		t.Errorf("Remaining after reward = %d, want 25", bal.Remaining)
+	}
+	// Same contribution again → no double reward.
+	bal, err = s.Reward(ctx, uid, "contrib-1")
+	if err != nil {
+		t.Fatalf("second Reward: %v", err)
+	}
+	if bal.Remaining != 25 {
+		t.Errorf("Remaining after repeat reward = %d, want 25 (idempotent)", bal.Remaining)
+	}
+	// A distinct contribution stacks.
+	bal, _ = s.Reward(ctx, uid, "contrib-2")
+	if bal.Remaining != 30 {
+		t.Errorf("Remaining after second distinct reward = %d, want 30", bal.Remaining)
+	}
+}
+
+func TestReward_banksAboveGrantAcrossPeriod(t *testing.T) {
+	pool := startPostgres(t)
+	s := newStore(pool, Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 5})
+	uid := insertUser(t, pool, "bank@example.test")
+	ctx := context.Background()
+
+	// Earn a reward this... actually seed a prior period with a banked surplus (grant 20 +
+	// 5 reward, unspent) and roll over: the surplus above the grant must survive.
+	seedBalance(t, pool, uid, "2000-01", 25)
+	bal, err := s.Balance(ctx, uid)
+	if err != nil {
+		t.Fatalf("Balance: %v", err)
+	}
+	if bal.Remaining != 25 {
+		t.Errorf("rolled-over Remaining = %d, want 25 (banked surplus survives)", bal.Remaining)
+	}
+	// A debit in the new period works off the banked balance and persists the reset.
+	bal, err = s.Debit(ctx, uid, FeatureMatch, "job-1")
+	if err != nil {
+		t.Fatalf("Debit: %v", err)
+	}
+	if bal.Remaining != 24 {
+		t.Errorf("Remaining after reset+debit = %d, want 24 (25 banked - 1)", bal.Remaining)
+	}
+}
+
+func TestReward_zeroConfigIsNoOp(t *testing.T) {
+	pool := startPostgres(t)
+	s := newStore(pool, Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 0})
+	uid := insertUser(t, pool, "noreward@example.test")
+
+	bal, err := s.Reward(context.Background(), uid, "contrib-1")
+	if err != nil {
+		t.Fatalf("Reward: %v", err)
+	}
+	if bal.Remaining != 20 {
+		t.Errorf("Remaining with zero reward = %d, want 20 (no-op)", bal.Remaining)
+	}
+	var rewards int
+	_ = pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM credit_ledger WHERE user_id=$1 AND kind='reward'`, uid).Scan(&rewards)
+	if rewards != 0 {
+		t.Errorf("reward rows with zero config = %d, want 0", rewards)
+	}
+}
+
 func TestDebit_concurrentNoOversell(t *testing.T) {
 	pool := startPostgres(t)
 	s := newStore(pool, Config{MonthlyGrant: 1, CostMatch: 1, CostTailor: 3})

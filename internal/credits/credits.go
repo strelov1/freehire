@@ -30,11 +30,13 @@ const (
 	FeatureTailor Feature = "tailor"
 )
 
-// Config carries the points economics: the monthly grant and per-action costs.
+// Config carries the points economics: the monthly grant, per-action costs, and the
+// reward granted for an accepted board contribution.
 type Config struct {
-	MonthlyGrant int
-	CostMatch    int
-	CostTailor   int
+	MonthlyGrant       int
+	CostMatch          int
+	CostTailor         int
+	ContributionReward int
 }
 
 // cost returns the points a given feature debits.
@@ -68,6 +70,20 @@ func NewStore(q *db.Queries, pool *pgxpool.Pool, cfg Config) *Store {
 // Cost returns the points a feature debits, so callers can pre-check a balance.
 func (s *Store) Cost(f Feature) int { return s.cfg.cost(f) }
 
+// applicableRemaining resolves the balance to work from given the stored row's period.
+// Same period: the stored remaining. A rolled-over period: floor at the monthly grant but
+// preserve any banked surplus above it — the monthly grant never lifts a balance above
+// MonthlyGrant, so anything higher is earned (reward) or bought and must not expire.
+func (s *Store) applicableRemaining(period, cur string, remaining int32) int32 {
+	if period == cur {
+		return remaining
+	}
+	if grant := int32(s.cfg.MonthlyGrant); remaining < grant {
+		return grant
+	}
+	return remaining
+}
+
 // Balance returns the caller's current points without consuming any. A user with no
 // stored row, or whose stored balance is from an earlier period, is reported at the
 // full monthly grant (the lazy reset applied in-memory for display); the persisted
@@ -78,9 +94,7 @@ func (s *Store) Balance(ctx context.Context, userID int64) (Balance, error) {
 	row, err := s.q.GetBalance(ctx, userID)
 	switch {
 	case err == nil:
-		if row.Period == periodKey(now) {
-			remaining = int(row.Remaining)
-		}
+		remaining = int(s.applicableRemaining(row.Period, periodKey(now), row.Remaining))
 	case errors.Is(err, pgx.ErrNoRows):
 		// fresh user — full grant remaining
 	default:
@@ -120,10 +134,8 @@ func (s *Store) Debit(ctx context.Context, userID int64, feature Feature, ref st
 		return Balance{}, err
 	}
 
-	remaining := row.Remaining
-	if row.Period != cur {
-		remaining = grant // period rolled over: reset, discarding unused prior-period points
-	}
+	// Period rolled over: floor at the grant but keep any banked surplus (rewards/purchases).
+	remaining := s.applicableRemaining(row.Period, cur, row.Remaining)
 
 	already, err := q.DebitExists(ctx, db.DebitExistsParams{UserID: userID, Feature: string(feature), Ref: ref})
 	if err != nil {
@@ -153,6 +165,57 @@ func (s *Store) Debit(ctx context.Context, userID int64, feature Feature, ref st
 		return Balance{}, err
 	}
 	return Balance{Remaining: int(remaining), ResetsAt: resetsAt(now)}, debitErr
+}
+
+// Reward credits the configured contribution reward to a user, atomically and idempotently
+// by ref (e.g. the accepted contribution id). The reward banks above the monthly grant and
+// survives the period reset (applicableRemaining preserves any surplus). A non-positive
+// configured reward is a no-op that just reports the current balance.
+func (s *Store) Reward(ctx context.Context, userID int64, ref string) (Balance, error) {
+	if s.cfg.ContributionReward <= 0 {
+		return s.Balance(ctx, userID)
+	}
+	now := time.Now().UTC()
+	cur := periodKey(now)
+	grant := int32(s.cfg.MonthlyGrant)
+	amount := int32(s.cfg.ContributionReward)
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return Balance{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := s.q.WithTx(tx)
+
+	if err := q.EnsureBalance(ctx, db.EnsureBalanceParams{UserID: userID, Period: cur, Remaining: grant}); err != nil {
+		return Balance{}, err
+	}
+	row, err := q.GetBalanceForUpdate(ctx, userID)
+	if err != nil {
+		return Balance{}, err
+	}
+	if err := q.InsertGrant(ctx, db.InsertGrantParams{UserID: userID, Period: cur, Delta: grant}); err != nil {
+		return Balance{}, err
+	}
+	remaining := s.applicableRemaining(row.Period, cur, row.Remaining)
+
+	already, err := q.RewardExists(ctx, db.RewardExistsParams{UserID: userID, Ref: ref})
+	if err != nil {
+		return Balance{}, err
+	}
+	if !already {
+		remaining += amount
+		if err := q.InsertReward(ctx, db.InsertRewardParams{UserID: userID, Period: cur, Delta: amount, Ref: ref}); err != nil {
+			return Balance{}, err
+		}
+	}
+	if err := q.UpdateBalance(ctx, db.UpdateBalanceParams{UserID: userID, Period: cur, Remaining: remaining}); err != nil {
+		return Balance{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Balance{}, err
+	}
+	return Balance{Remaining: int(remaining), ResetsAt: resetsAt(now)}, nil
 }
 
 // periodKey is the calendar-month key (UTC) a grant and its debits share.

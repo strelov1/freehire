@@ -500,6 +500,9 @@ type Querier interface {
 	// has a mailbox) or address (taken) — the allocation service handles both: it
 	// reads-back on a user conflict and retries the next suffix on an address conflict.
 	InsertMailbox(ctx context.Context, arg InsertMailboxParams) (Mailbox, error)
+	// Append a reward: points earned (e.g. for an accepted board contribution), delta positive,
+	// feature NULL. Rewards bank above the monthly grant and survive the period reset.
+	InsertReward(ctx context.Context, arg InsertRewardParams) error
 	// Crawl write path: store a fetched post once. ON CONFLICT DO NOTHING makes
 	// re-crawling idempotent — a stored post (pending, done, or dead-lettered) is
 	// never reset. extracted_at is non-NULL when the ingest prefilter already
@@ -924,6 +927,9 @@ type Querier interface {
 	// Undo a soft-delete, scoped to the caller and idempotent. Returns 0 rows only
 	// when it is not the caller's message (→ 404).
 	RestoreEmail(ctx context.Context, arg RestoreEmailParams) (int64, error)
+	// Whether the caller already received a reward for this ref (e.g. an accepted contribution).
+	// True means the reward was already granted and must not be granted again (idempotency).
+	RewardExists(ctx context.Context, arg RewardExistsParams) (bool, error)
 	// The job-reality repost/mass-posting counts for one role cluster: how many postings
 	// of the same role (by role_fingerprint within a company) exist of any status
 	// (repost_count = repost history) and how many are still open (mass_count = concurrent
