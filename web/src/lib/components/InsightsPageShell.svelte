@@ -52,25 +52,25 @@
 </script>
 
 <article class="mx-auto w-full max-w-4xl px-4 py-8">
-  <nav aria-label="Breadcrumb" class="mb-4 text-sm text-gray-500">
+  <nav aria-label="Breadcrumb" class="mb-4 text-sm text-muted-foreground">
     <a href={resolve('/')} class="hover:underline">freehire</a>
     <span aria-hidden="true"> › </span>
     <a href={resolve('/insights')} class="hover:underline">Insights</a>
     <span aria-hidden="true"> › </span>
-    <span class="text-gray-700">{label} {KIND_LABEL[kind]}</span>
+    <span class="text-foreground">{label} {KIND_LABEL[kind]}</span>
   </nav>
 
-  <h1 class="text-3xl font-bold tracking-tight text-gray-900">{title}</h1>
-  <p class="mt-3 text-lg text-gray-600">{intro}</p>
-  <p class="mt-1 text-xs text-gray-400">Updated {updated}</p>
+  <h1 class="text-3xl font-bold tracking-tight text-foreground">{title}</h1>
+  <p class="mt-3 text-lg text-muted-foreground">{intro}</p>
+  <p class="mt-1 text-xs text-muted-foreground">Updated {updated}</p>
 
   <section class="mt-8">
     {@render children()}
   </section>
 
-  <aside class="mt-10 border-t border-gray-200 pt-6">
+  <aside class="mt-10 border-t border-border pt-6">
     <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-      <span class="font-medium text-gray-700">More on {label}:</span>
+      <span class="font-medium text-foreground">More on {label}:</span>
       {#each otherKinds as k (k)}
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- href is resolve()d inside kindHref; the linter can't trace it through the helper -->
         <a href={kindHref(k, category)} class="text-blue-600 hover:underline">{KIND_LABEL[k]}</a>
@@ -83,10 +83,10 @@
 
     {#if siblings.length > 0}
       <div class="mt-4 flex flex-wrap items-center gap-2 text-sm">
-        <span class="font-medium text-gray-700">Other categories:</span>
+        <span class="font-medium text-foreground">Other categories:</span>
         {#each siblings as s (s.category)}
           <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- href is resolve()d inside kindHref; the linter can't trace it through the helper -->
-          <a href={kindHref(kind, s.category)} class="rounded-full bg-gray-100 px-3 py-1 text-gray-700 hover:bg-gray-200">
+          <a href={kindHref(kind, s.category)} class="rounded-full bg-secondary px-3 py-1 text-secondary-foreground hover:bg-accent">
             {s.label}
           </a>
         {/each}
