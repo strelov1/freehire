@@ -75,6 +75,8 @@ func jobFromRow(r db.Job) (Job, error) {
 		EnglishLevel:       r.EnglishLevel,
 		ExperienceYearsMin: int4Ptr(r.ExperienceYearsMin),
 
+		ManualSalary: manualSalaryFromRow(r),
+
 		ClosedAt:          tsPtr(r.ClosedAt),
 		EnrichmentVersion: r.EnrichmentVersion,
 
@@ -95,6 +97,20 @@ func extrasFromRow(r db.Job) Extras {
 		ViewCount:    r.ViewCount,
 		AppliedCount: r.AppliedCount,
 		Collections:  r.Collections,
+	}
+}
+
+// manualSalaryFromRow projects the authoritative manual-salary columns onto a Salary,
+// or nil when the row carries no manual salary (neither bound set — the presence signal).
+func manualSalaryFromRow(r db.Job) *Salary {
+	if !r.SalaryMinManual.Valid && !r.SalaryMaxManual.Valid {
+		return nil
+	}
+	return &Salary{
+		Min:      int4Ptr(r.SalaryMinManual),
+		Max:      int4Ptr(r.SalaryMaxManual),
+		Currency: r.SalaryCurrencyManual,
+		Period:   r.SalaryPeriodManual,
 	}
 }
 

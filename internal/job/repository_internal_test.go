@@ -100,3 +100,39 @@ func TestJobFromRow_EmptyEnrichment(t *testing.T) {
 		t.Error("ManuallyAdded should be false when created_by is null")
 	}
 }
+
+// A job row's manual-salary columns project onto Fields.ManualSalary, and a row with no
+// manual salary (NULL salary_min_manual) yields a nil ManualSalary.
+func TestJobFromRow_ProjectsManualSalary(t *testing.T) {
+	row := db.Job{
+		ID:                   7,
+		Source:               "manual",
+		ExternalID:           "https://acme.example/jobs/1",
+		Title:                "Senior Go Developer",
+		Company:              "Acme",
+		PublicSlug:           "senior-go-developer-acme-abc",
+		SalaryMinManual:      pgtype.Int4{Int32: 90000, Valid: true},
+		SalaryMaxManual:      pgtype.Int4{Int32: 120000, Valid: true},
+		SalaryCurrencyManual: "EUR",
+		SalaryPeriodManual:   "year",
+	}
+	j, err := jobFromRow(row)
+	if err != nil {
+		t.Fatalf("jobFromRow: %v", err)
+	}
+	ms := j.Fields().ManualSalary
+	if ms == nil {
+		t.Fatal("ManualSalary = nil, want a value")
+	}
+	if ms.Min == nil || *ms.Min != 90000 || ms.Max == nil || *ms.Max != 120000 || ms.Currency != "EUR" || ms.Period != "year" {
+		t.Errorf("ManualSalary = %+v, want 90000-120000 EUR year", ms)
+	}
+
+	none, err := jobFromRow(db.Job{ID: 8, Source: "manual", ExternalID: "u", Title: "t", Company: "c", PublicSlug: "s"})
+	if err != nil {
+		t.Fatalf("jobFromRow(none): %v", err)
+	}
+	if none.Fields().ManualSalary != nil {
+		t.Errorf("ManualSalary = %v, want nil for a row with no manual salary", none.Fields().ManualSalary)
+	}
+}

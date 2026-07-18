@@ -21,11 +21,24 @@ import (
 // requires: source, external id (together the dedup key), and a title.
 var ErrInvalidDraft = errors.New("job: draft missing source, external id, or title")
 
+// Salary is a stated compensation range in a currency's units over a period. A nil
+// Min/Max means that bound was not stated. It carries the authoritative manual salary a
+// submitter or moderator entered by hand — distinct from the LLM-enriched salary in the
+// enrichment payload, which it takes precedence over in the effective projection.
+type Salary struct {
+	Min      *int
+	Max      *int
+	Currency string
+	Period   string
+}
+
 // Draft is the source-agnostic input to New: the raw posting fields a write path
 // supplies before derivation. The caller resolves Source/ExternalID (the dedup
 // identity) so the job package stays free of the source registry. WorkMode,
 // Seniority, Category, Skills, and ExperienceYearsMin are optional structured
-// signals from the adapter that take precedence over the dictionaries.
+// signals from the adapter that take precedence over the dictionaries. Regions and
+// Cities are the structured geography signal (authoritative, replacing derivation when
+// present); ManualSalary is the authoritative manual salary (nil when none stated).
 type Draft struct {
 	Source      string
 	ExternalID  string
@@ -38,11 +51,14 @@ type Draft struct {
 	PostedAt    *time.Time
 
 	WorkMode           string
+	Regions            []string
+	Cities             []string
 	Seniority          string
 	Category           string
 	EmploymentType     string
 	Skills             []string
 	ExperienceYearsMin *int
+	ManualSalary       *Salary
 }
 
 // Fields is the readable projection of a Job: a plain DTO exposing every field for
@@ -79,6 +95,10 @@ type Fields struct {
 	EducationLevel     string
 	EnglishLevel       string
 	ExperienceYearsMin *int
+
+	// ManualSalary is the authoritative manual salary (nil when none). It is a base
+	// field, never derived, and takes precedence over the enriched salary.
+	ManualSalary *Salary
 
 	// lifecycle + enrichment provenance (0 = unenriched)
 	ClosedAt          *time.Time
@@ -123,6 +143,8 @@ func New(d Draft) (Job, error) {
 		Location:           location,
 		Description:        d.Description,
 		WorkMode:           d.WorkMode,
+		Regions:            d.Regions,
+		Cities:             d.Cities,
 		Seniority:          d.Seniority,
 		Category:           d.Category,
 		EmploymentType:     d.EmploymentType,
@@ -156,6 +178,9 @@ func New(d Draft) (Job, error) {
 		EducationLevel:     der.EducationLevel,
 		EnglishLevel:       der.EnglishLevel,
 		ExperienceYearsMin: der.ExperienceYearsMin,
+
+		// Authoritative manual salary is carried verbatim — never derived.
+		ManualSalary: d.ManualSalary,
 	}}, nil
 }
 

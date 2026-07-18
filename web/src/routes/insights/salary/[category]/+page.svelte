@@ -42,11 +42,11 @@
   covered={data.covered}
 >
   {#if data.bands.length === 0}
-    <p class="text-gray-500">No salary figures disclosed for this category yet.</p>
+    <p class="text-muted-foreground">No salary figures disclosed for this category yet.</p>
   {:else}
     <table class="w-full border-collapse text-left text-sm">
       <thead>
-        <tr class="border-b border-gray-300 text-gray-500">
+        <tr class="border-b border-border text-muted-foreground">
           <th class="py-2 pr-4 font-medium">Level</th>
           <th class="py-2 pr-4 font-medium">Currency</th>
           <th class="py-2 pr-4 font-medium">Period</th>
@@ -58,14 +58,14 @@
       </thead>
       <tbody>
         {#each data.bands as b (b.seniority + b.currency + b.period)}
-          <tr class="border-b border-gray-100">
-            <td class="py-2 pr-4 font-medium text-gray-900">{seniorityLabel(b.seniority)}</td>
-            <td class="py-2 pr-4 text-gray-600">{b.currency.toUpperCase()}</td>
-            <td class="py-2 pr-4 text-gray-600">{b.period}</td>
+          <tr class="border-b border-border">
+            <td class="py-2 pr-4 font-medium text-foreground">{seniorityLabel(b.seniority)}</td>
+            <td class="py-2 pr-4 text-muted-foreground">{b.currency.toUpperCase()}</td>
+            <td class="py-2 pr-4 text-muted-foreground">{b.period}</td>
             <td class="py-2 pr-4 text-right tabular-nums">{formatSalary(b.p25, b.currency)}</td>
             <td class="py-2 pr-4 text-right font-semibold tabular-nums">{formatSalary(b.p50, b.currency)}</td>
             <td class="py-2 pr-4 text-right tabular-nums">{formatSalary(b.p75, b.currency)}</td>
-            <td class="py-2 text-right tabular-nums text-gray-500">{b.sample_size}</td>
+            <td class="py-2 text-right tabular-nums text-muted-foreground">{b.sample_size}</td>
           </tr>
         {/each}
       </tbody>

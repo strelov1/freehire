@@ -2,10 +2,35 @@ package sources
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 )
+
+// epamNextDataScript builds the __NEXT_DATA__ script EPAM's vacancy pages embed, carrying the
+// structured description slices (intro HTML, category bullet arrays, benefits HTML) that the
+// flattened ld+json description drops. Marshaled via encoding/json so the fixture cannot drift
+// from valid JSON.
+func epamNextDataScript(intro string, resp, req, nice []string, benefitsHTML string) string {
+	payload := map[string]any{
+		"props": map[string]any{
+			"pageProps": map[string]any{
+				"job": map[string]any{
+					"description": intro,
+					"category": map[string]any{
+						"responsibilities": resp,
+						"requirements":     req,
+						"nice_to_have":     nice,
+					},
+					"benefits": []map[string]any{{"content": benefitsHTML}},
+				},
+			},
+		},
+	}
+	b, _ := json.Marshal(payload)
+	return `<script id="__NEXT_DATA__" type="application/json">` + string(b) + `</script>`
+}
 
 // epamSitemapXML builds the (gzip-decoded) sitemap urlset linking the given <loc> URLs.
 func epamSitemapXML(locs ...string) string {
@@ -109,6 +134,67 @@ func TestEPAMFetchSitemapThenDetailAndMaps(t *testing.T) {
 	}
 	if j.PostedAt == nil || !j.PostedAt.Equal(time.Date(2026, 6, 18, 0, 0, 0, 0, time.UTC)) {
 		t.Errorf("PostedAt = %v, want 2026-06-18", j.PostedAt)
+	}
+}
+
+func TestEPAMDescriptionFromNextDataStructured(t *testing.T) {
+	jobURL := "https://careers.epam.com/en/vacancy/senior-full-stack-developer-bltx6xf2xw5owhbw1rh_en"
+	nd := epamNextDataScript(
+		"<p>We are seeking a talented <strong>Senior Full Stack Developer</strong>.</p>",
+		[]string{"Design and maintain backend services", "Build user interfaces with React"},
+		[]string{"At least 3 years of experience"},
+		[]string{"Experience with Docker and Kubernetes"},
+		"<ul><li>International projects with top brands</li><li>Healthcare benefits</li></ul>",
+	)
+	// The ld+json still carries the flat, structure-less blob EPAM emits; the adapter must
+	// prefer the structured __NEXT_DATA__ payload over it.
+	detail := strings.Replace(
+		epamDetailHTML("Senior Full Stack Developer",
+			"Flat blob Responsibilities Design and maintain Requirements At least 3",
+			"2026-07-16", "TELECOMMUTE", "Argentina"),
+		"</body>", nd+"</body>", 1)
+	fake := (&routedHTTP{}).
+		route("sitemap.xml.gz", epamSitemapXML(jobURL)).
+		route("/en/vacancy/senior-full-stack-developer-bltx6xf2xw5owhbw1rh_en", detail)
+
+	jobs, err := NewEPAM(fake).Fetch(context.Background(), CompanyEntry{Company: "EPAM Systems", Board: "careers.epam.com"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1", len(jobs))
+	}
+	d := jobs[0].Description
+	for _, want := range []string{
+		"<strong>Senior Full Stack Developer</strong>", // intro HTML preserved
+		"<h3>Responsibilities</h3>",
+		"<li>Build user interfaces with React</li>",
+		"<h3>Requirements</h3>",
+		"<h3>Nice to have</h3>",
+		"<li>Experience with Docker and Kubernetes</li>",
+		"Healthcare benefits", // benefits section recovered (absent from ld+json)
+	} {
+		if !strings.Contains(d, want) {
+			t.Errorf("Description missing %q\n got: %s", want, d)
+		}
+	}
+	if strings.Contains(d, "Flat blob") {
+		t.Errorf("Description used flat ld+json blob instead of structured __NEXT_DATA__: %s", d)
+	}
+}
+
+func TestEPAMDescriptionDropsLeakedSectionLabels(t *testing.T) {
+	// EPAM's own data leaks the next section's heading as the last bullet of the previous
+	// list (the artifact that also duplicates "Requirements Requirements" in the ld+json).
+	j := epamJob{}
+	j.Category.Responsibilities = []string{"Build services", "Requirements"}
+	j.Category.Requirements = []string{"3 years experience", "Nice to have"}
+	d := j.descriptionHTML()
+	if strings.Contains(d, "<li>Requirements</li>") || strings.Contains(d, "<li>Nice to have</li>") {
+		t.Errorf("leaked section label rendered as a bullet: %s", d)
+	}
+	if !strings.Contains(d, "<li>Build services</li>") || !strings.Contains(d, "<li>3 years experience</li>") {
+		t.Errorf("dropped a real bullet: %s", d)
 	}
 }
 

@@ -470,9 +470,12 @@ WHERE jobs.company_slug = c.slug
 -- provenance is recorded by created_by (set here, NULL for every automated source) —
 -- not by the source value. created_by is stamped once at insert; updated_by is
 -- (re)written on the conflict update. Like UpsertJob, public_slug is minted once and
--- never rewritten, and the enrichment columns are left to SetJobEnrichment. The conflict
--- reopens a previously closed posting (closed_at = NULL) since the moderator is
--- re-asserting it.
+-- never rewritten, and the enrichment columns are otherwise left to SetJobEnrichment —
+-- the one exception is an authoritative manual salary, which is written to the
+-- salary_*_manual columns AND seeded into the enrichment payload here so the vacancy
+-- shows its salary immediately, before any enrichment pass runs (the pass then preserves
+-- it via SetJobEnrichment's overlay). The conflict reopens a previously closed posting
+-- (closed_at = NULL) since the moderator is re-asserting it.
 WITH company_upsert AS (
     INSERT INTO companies (slug, name)
     SELECT sqlc.arg(company_slug), sqlc.arg(company)
@@ -485,6 +488,7 @@ INSERT INTO jobs (
     source, external_id, url, title, company, company_slug, location, remote, description, posted_at,
     public_slug, countries, regions, cities, work_mode, skills, seniority, category, is_tech,
     posting_language, employment_type, education_level, english_level, experience_years_min,
+    salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, enrichment,
     created_by
 ) VALUES (
     sqlc.arg(source), sqlc.arg(external_id), sqlc.arg(url), sqlc.arg(title),
@@ -495,6 +499,19 @@ INSERT INTO jobs (
     sqlc.arg(work_mode), COALESCE(sqlc.arg(skills)::text[], '{}'),
     sqlc.arg(seniority), sqlc.arg(category), sqlc.arg(is_tech),
     sqlc.arg(posting_language), sqlc.arg(employment_type), sqlc.arg(education_level), sqlc.arg(english_level), sqlc.arg(experience_years_min),
+    sqlc.arg(salary_min_manual), sqlc.arg(salary_max_manual), sqlc.arg(salary_currency_manual), sqlc.arg(salary_period_manual),
+    -- Seed the enrichment salary from the manual salary so it displays before any pass;
+    -- '{}' when no bound is stated (the presence signal), leaving enrichment empty.
+    CASE
+        WHEN sqlc.arg(salary_min_manual)::int IS NOT NULL OR sqlc.arg(salary_max_manual)::int IS NOT NULL
+        THEN jsonb_strip_nulls(jsonb_build_object(
+            'salary_min', sqlc.arg(salary_min_manual)::int,
+            'salary_max', sqlc.arg(salary_max_manual)::int,
+            'salary_currency', NULLIF(sqlc.arg(salary_currency_manual), ''),
+            'salary_period', NULLIF(sqlc.arg(salary_period_manual), '')
+        ))
+        ELSE '{}'::jsonb
+    END,
     sqlc.arg(created_by)::bigint
 )
 ON CONFLICT (source, external_id) DO UPDATE SET
@@ -519,6 +536,22 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     education_level      = EXCLUDED.education_level,
     english_level        = EXCLUDED.english_level,
     experience_years_min = EXCLUDED.experience_years_min,
+    salary_min_manual      = EXCLUDED.salary_min_manual,
+    salary_max_manual      = EXCLUDED.salary_max_manual,
+    salary_currency_manual = EXCLUDED.salary_currency_manual,
+    salary_period_manual   = EXCLUDED.salary_period_manual,
+    -- Overlay the (possibly changed) manual salary onto the existing enrichment so a
+    -- re-create reflects it immediately while preserving any prior LLM enrichment.
+    enrichment = CASE
+        WHEN EXCLUDED.salary_min_manual IS NOT NULL OR EXCLUDED.salary_max_manual IS NOT NULL
+        THEN jobs.enrichment || jsonb_strip_nulls(jsonb_build_object(
+            'salary_min', EXCLUDED.salary_min_manual,
+            'salary_max', EXCLUDED.salary_max_manual,
+            'salary_currency', NULLIF(EXCLUDED.salary_currency_manual, ''),
+            'salary_period', NULLIF(EXCLUDED.salary_period_manual, '')
+        ))
+        ELSE jobs.enrichment
+    END,
     updated_by   = sqlc.arg(updated_by)::bigint,
     -- A moderator re-create reopens the job; reset the strike count too so the
     -- two-strike liveness grace survives a reopen (see UpsertJob).
@@ -710,8 +743,22 @@ ON CONFLICT (job_id, target_version) DO NOTHING;
 -- Targeted enrichment write used by the enrichment command: set only the payload
 -- and the provenance stamp, touching no raw source field. Kept separate from
 -- UpsertJob (the ingest full-upsert path) so ingest and enrichment stay decoupled.
+-- An authoritative manual salary (a recruiter/moderator stated it by hand, recorded in
+-- the salary_*_manual columns) is coalesced OVER the incoming payload's salary, so the
+-- LLM can compute its own figure but never displaces the stated one — the manual keys
+-- win via jsonb `||`, and jsonb_strip_nulls drops an unstated bound so it does not blank
+-- the payload's. The overlay only fires when a bound is set (the presence signal).
 UPDATE jobs
-SET enrichment         = sqlc.arg(enrichment),
+SET enrichment         = CASE
+        WHEN salary_min_manual IS NOT NULL OR salary_max_manual IS NOT NULL
+        THEN sqlc.arg(enrichment)::jsonb || jsonb_strip_nulls(jsonb_build_object(
+            'salary_min', salary_min_manual,
+            'salary_max', salary_max_manual,
+            'salary_currency', NULLIF(salary_currency_manual, ''),
+            'salary_period', NULLIF(salary_period_manual, '')
+        ))
+        ELSE sqlc.arg(enrichment)::jsonb
+    END,
     enriched_at        = sqlc.arg(enriched_at),
     enrichment_version = sqlc.arg(enrichment_version),
     updated_at         = now()

@@ -3,6 +3,8 @@ package moderation_test
 import (
 	"context"
 	"errors"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -256,5 +258,74 @@ func TestUpdate_NotFoundPropagates(t *testing.T) {
 	}
 	if repo.updateCalled {
 		t.Error("repo.Update should not be called when the job is not found")
+	}
+}
+
+// Explicit structured facets on the create input win over dictionary derivation, and a
+// supplied salary is carried onto the job as an authoritative manual salary.
+func TestCreate_AppliesExplicitStructuredFacetsAndManualSalary(t *testing.T) {
+	repo := &fakeRepo{}
+	min, max := 90000, 120000
+	_, _, err := moderation.New(repo).Create(context.Background(), 7, moderation.CreateInput{
+		URL:            "https://acme.example/jobs/1",
+		Title:          "Senior Go Developer",
+		Company:        "Acme",
+		Location:       "Remote - Germany", // would derive eu
+		Description:    "We use Golang.",
+		Regions:        []string{"north_america"},
+		Cities:         []string{"Austin"},
+		WorkMode:       "hybrid",
+		Skills:         []string{"kubernetes"},
+		SalaryMin:      &min,
+		SalaryMax:      &max,
+		SalaryCurrency: "EUR",
+		SalaryPeriod:   "year",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	got := repo.created
+	if !reflect.DeepEqual(got.Regions, []string{"north_america"}) {
+		t.Errorf("Regions = %v, want [north_america] (explicit wins)", got.Regions)
+	}
+	if !reflect.DeepEqual(got.Cities, []string{"Austin"}) {
+		t.Errorf("Cities = %v, want [Austin] (explicit wins)", got.Cities)
+	}
+	if got.WorkMode != "hybrid" {
+		t.Errorf("WorkMode = %q, want hybrid (explicit wins)", got.WorkMode)
+	}
+	// Skills are a union: the explicit "kubernetes" plus the dictionary's "go".
+	if !slices.Contains(got.Skills, "kubernetes") || !slices.Contains(got.Skills, "go") {
+		t.Errorf("Skills = %v, want to contain both kubernetes and go", got.Skills)
+	}
+	if got.ManualSalary == nil || got.ManualSalary.Min == nil || *got.ManualSalary.Min != 90000 ||
+		got.ManualSalary.Max == nil || *got.ManualSalary.Max != 120000 ||
+		got.ManualSalary.Currency != "EUR" || got.ManualSalary.Period != "year" {
+		t.Errorf("ManualSalary = %+v, want 90000-120000 EUR year", got.ManualSalary)
+	}
+}
+
+// Unknown work-mode and region values are dropped (not persisted verbatim): work_mode
+// falls back to derivation, and an out-of-vocabulary region is filtered out.
+func TestCreate_DropsUnknownWorkModeAndRegion(t *testing.T) {
+	repo := &fakeRepo{}
+	_, _, err := moderation.New(repo).Create(context.Background(), 7, moderation.CreateInput{
+		URL:         "https://acme.example/jobs/2",
+		Title:       "Go Developer",
+		Company:     "Acme",
+		Location:    "Germany",
+		Description: "We use Golang.",
+		Regions:     []string{"north_america", "atlantis"},
+		WorkMode:    "teleport",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	got := repo.created
+	if !reflect.DeepEqual(got.Regions, []string{"north_america"}) {
+		t.Errorf("Regions = %v, want [north_america] (unknown 'atlantis' dropped)", got.Regions)
+	}
+	if got.WorkMode == "teleport" {
+		t.Errorf("WorkMode = %q, want the unknown value dropped (derivation fallback)", got.WorkMode)
 	}
 }

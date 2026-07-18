@@ -1,0 +1,19 @@
+---
+title: New source — Functional Works
+date: 2026-07-18
+summary: Roles from Functional Works, a niche board for functional-programming and adjacent engineering jobs, now feed the catalogue — each posting arrives with its full description, tech stack, and work mode.
+type: changelog
+tags:
+  - sources
+  - remote
+draft: false
+---
+
+The catalogue now includes **[Functional Works](https://functional.works-hub.com)** —
+a niche board for functional-programming and adjacent engineering roles (Scala,
+Haskell, Clojure, Rust, and the like), heavy on remote and blockchain work.
+
+Each posting comes straight from the hiring company with its full description, tech
+stack, and work mode, so it lands ready to filter and search.
+
+[Browse the newest jobs](/jobs) to see them arrive.

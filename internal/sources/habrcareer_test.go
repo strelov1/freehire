@@ -238,3 +238,11 @@ func TestHabrCareerLaterPageErrorEndsEnumeration(t *testing.T) {
 		t.Fatalf("got %d jobs, want 2 (page 1 only, page 2 failed)", len(jobs))
 	}
 }
+
+func TestHabrCareerIsProxied(t *testing.T) {
+	// Qrator challenges habr's per-vacancy detail HTML from the prod datacenter IP (the listing
+	// JSON passes, but the description parse fails), so the crawl must egress through the proxy.
+	if _, ok := proxiedProviders["habr_career"]; !ok {
+		t.Error("habr_career must be in proxiedProviders (Qrator blocks detail fetches from the prod datacenter IP)")
+	}
+}

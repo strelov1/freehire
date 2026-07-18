@@ -1,0 +1,20 @@
+---
+title: New source — 4 Day Week
+date: 2026-07-18
+summary: Roles from 4dayweek.io, a curated board of companies hiring on a shortened work week, now feed the catalogue — each posting arrives with its work mode, seniority, and tech stack.
+type: changelog
+tags:
+  - sources
+  - remote
+draft: false
+---
+
+The catalogue now includes **[4 Day Week](https://4dayweek.io)** — a curated board
+of companies that hire on a shortened work week (four-day weeks, nine-day
+fortnights, compressed schedules, and the like).
+
+Each posting comes straight from the hiring company and arrives already tagged with
+its work arrangement (remote, hybrid, or on-site), seniority, and tech stack, so the
+filters work on them from day one.
+
+[Browse the newest jobs](/jobs) to see them arrive.

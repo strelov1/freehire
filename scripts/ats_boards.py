@@ -33,6 +33,11 @@ SLUG_PATTERNS = [
     (re.compile(r"([A-Za-z0-9_-]+)\.jobs\.personio\.(?:com|de)"), "personio"),
     (re.compile(r"([A-Za-z0-9_-]+)\.applytojob\.com"), "jazzhr"),
     (re.compile(r"jobs\.jobvite\.com/([A-Za-z0-9_-]+)"), "jobvite"),
+    # Traffit's board is the tenant subdomain (<board>.traffit.com), so a public apply
+    # link (<board>.traffit.com/public/form/...) exposes it directly. eRecruiter is
+    # deliberately absent: its apply link carries a per-form WebID, not the cfg board
+    # token our adapter needs, so it is not derivable here (see cmd/harvest-erecruiter).
+    (re.compile(r"([A-Za-z0-9_-]+)\.traffit\.com"), "traffit"),
     # Teamtailor's "slug" is the whole board host — the adapter takes board = hostname.
     # Only *.teamtailor.com hosts are detectable here; boards on a custom domain
     # (e.g. jobs.tibber.com) carry no teamtailor marker in the URL and are missed.
@@ -59,6 +64,7 @@ VALIDATORS = {
     "jazzhr": lambda s: f"https://{s}.applytojob.com/apply",  # /apply listing HTML
     "jobvite": lambda s: f"https://jobs.jobvite.com/{s}",  # careersite listing HTML
     "teamtailor": lambda s: f"https://{s}/jobs",  # s is the board host, not a slug
+    "traffit": lambda s: f"https://{s}.traffit.com/public/an/list/?limit=10&offset=0",  # {count, items}
 }
 
 
@@ -133,6 +139,8 @@ def validate(provider: str, slug: str) -> int | None:
         count = len(d.get("offers", []))
     elif provider == "bamboohr":
         count = len(d.get("result", []))
+    elif provider == "traffit":
+        count = d.get("count") or len(d.get("items", []))
     else:
         count = len(d.get("jobs", []))
     return count or None

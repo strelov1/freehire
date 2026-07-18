@@ -41,6 +41,15 @@ func (r *QueriesRepository) Create(ctx context.Context, f job.Fields, actorID in
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// The authoritative manual salary (nil when none) seeds the salary_*_manual columns;
+	// the mint query also folds it into the enrichment payload so it displays at once.
+	var salMin, salMax *int
+	var salCurrency, salPeriod string
+	if f.ManualSalary != nil {
+		salMin, salMax = f.ManualSalary.Min, f.ManualSalary.Max
+		salCurrency, salPeriod = f.ManualSalary.Currency, f.ManualSalary.Period
+	}
+
 	qtx := r.q.WithTx(tx)
 	row, err := qtx.UpsertManualJob(ctx, db.UpsertManualJobParams{
 		Source:      f.Source,
@@ -68,6 +77,11 @@ func (r *QueriesRepository) Create(ctx context.Context, f job.Fields, actorID in
 		EducationLevel:     f.EducationLevel,
 		EnglishLevel:       f.EnglishLevel,
 		ExperienceYearsMin: pgconv.Int4(f.ExperienceYearsMin),
+
+		SalaryMinManual:      pgconv.Int4(salMin),
+		SalaryMaxManual:      pgconv.Int4(salMax),
+		SalaryCurrencyManual: salCurrency,
+		SalaryPeriodManual:   salPeriod,
 
 		CreatedBy: actorID,
 		UpdatedBy: actorID,

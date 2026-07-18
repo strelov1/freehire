@@ -212,4 +212,10 @@ var categoryTable = []aliasEntry{
 	{"менеджер", "management"},
 	{"analyst", "data_analytics"},
 	{"аналитик", "data_analytics"},
+	// 1С (the RU enterprise/ERP dev platform) resolves last so a more specific role word in the
+	// title wins first ("Аналитик 1С" → data_analytics, "Тестировщик 1С" → qa); a title whose only
+	// signal is 1С ("Программист 1С", "1С-разработчик") reads as backend — server-side enterprise
+	// development. Bare tokens so any separator ("1С-разработчик", "разработчик 1С") matches.
+	{"1c", "backend"},
+	{"1с", "backend"},
 }

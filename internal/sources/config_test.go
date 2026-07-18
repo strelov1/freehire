@@ -31,6 +31,76 @@ func TestParseConfig(t *testing.T) {
 	}
 }
 
+// Two entries whose board ids differ only by case address the same case-insensitive ATS
+// tenant, so they crawl identical postings but namespace external_id differently — one
+// posting becomes two rows under the same company_slug, and the post-run unseen sweep
+// (scoped by company_slug) closes whichever side a run failed to refresh. ParseConfig
+// collapses such entries to the first occurrence so only one row-set is ever created.
+func TestParseConfigDropsCaseInsensitiveBoardDuplicates(t *testing.T) {
+	data := []byte(`
+- company: SopraSteria1
+  board: SopraSteria1
+- company: Stripe
+  board: stripe
+- company: soprasteria1
+  board: soprasteria1
+`)
+	cfg, err := ParseConfig("smartrecruiters", data)
+	if err != nil {
+		t.Fatalf("ParseConfig: %v", err)
+	}
+	want := []CompanyEntry{
+		{Company: "SopraSteria1", Provider: "smartrecruiters", Board: "SopraSteria1"}, // first wins
+		{Company: "Stripe", Provider: "smartrecruiters", Board: "stripe"},
+	}
+	if len(cfg.Sources) != len(want) {
+		t.Fatalf("len(Sources) = %d, want %d: %+v", len(cfg.Sources), len(want), cfg.Sources)
+	}
+	for i, w := range want {
+		if cfg.Sources[i] != w {
+			t.Errorf("Sources[%d] = %+v, want %+v", i, cfg.Sources[i], w)
+		}
+	}
+}
+
+// A same-name board on two different regional hosts (distinct Region) is a genuinely
+// different crawl target, not a case duplicate, so both are kept.
+func TestParseConfigKeepsSameBoardOnDifferentRegions(t *testing.T) {
+	data := []byte(`
+- company: Acme
+  board: acme
+  region: us
+- company: Acme
+  board: acme
+  region: eu
+`)
+	cfg, err := ParseConfig("lever", data)
+	if err != nil {
+		t.Fatalf("ParseConfig: %v", err)
+	}
+	if len(cfg.Sources) != 2 {
+		t.Fatalf("len(Sources) = %d, want 2 (region variants kept): %+v", len(cfg.Sources), cfg.Sources)
+	}
+}
+
+// Boardless entries carry no board id, so they must never collapse together on an empty
+// board key — each is its own company.
+func TestParseConfigKeepsBoardlessEntries(t *testing.T) {
+	data := []byte(`
+- company: VK
+  provider: vk
+- company: Ozon
+  provider: ozon
+`)
+	cfg, err := ParseConfig("custom", data)
+	if err != nil {
+		t.Fatalf("ParseConfig: %v", err)
+	}
+	if len(cfg.Sources) != 2 {
+		t.Fatalf("len(Sources) = %d, want 2 (boardless entries kept): %+v", len(cfg.Sources), cfg.Sources)
+	}
+}
+
 // LoadConfig takes the provider from the file name, so the board file never repeats
 // it per entry.
 func TestLoadConfigInfersProviderFromFilename(t *testing.T) {

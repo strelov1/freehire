@@ -194,6 +194,15 @@ export interface Submission {
   // Public slug of the minted live vacancy, present on an approved submission in the
   // caller's own list, so the UI can link to /jobs/<job_slug>.
   job_slug?: string;
+  // The structured facets the submitter stated, echoed back by the server.
+  skills?: string[];
+  regions?: string[];
+  cities?: string[];
+  work_mode?: string;
+  salary_min?: number;
+  salary_max?: number;
+  salary_currency?: string;
+  salary_period?: string;
 }
 
 /** The content a user submits for review (mirrors the moderator create body). */
@@ -205,6 +214,17 @@ export interface SubmissionInput {
   remote?: boolean;
   description?: string;
   source?: string;
+  // Structured facets the submitter can state explicitly. The backend sanitizes them
+  // (unknown work_mode/regions dropped) and applies them as overrides on the minted job;
+  // salary becomes an authoritative manual salary.
+  skills?: string[];
+  regions?: string[];
+  cities?: string[];
+  work_mode?: string;
+  salary_min?: number;
+  salary_max?: number;
+  salary_currency?: string;
+  salary_period?: string;
 }
 
 /** Why a job was reported. A closed vocabulary mirroring the backend's

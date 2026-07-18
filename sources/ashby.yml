@@ -7437,3 +7437,7 @@
   board: monad.foundation
 - company: ineffable
   board: ineffable
+- company: VillageSQL
+  board: villagesql
+- company: GigaML
+  board: GigaML

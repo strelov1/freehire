@@ -13,25 +13,37 @@ import (
 
 const createSubmission = `-- name: CreateSubmission :one
 INSERT INTO job_submissions (
-    submitted_by, url, source, title, company, location, remote, description, posted_at
+    submitted_by, url, source, title, company, location, remote, description, posted_at,
+    skills, regions, cities, work_mode, salary_min, salary_max, salary_currency, salary_period
 ) VALUES (
     $1::bigint, $2, $3, $4,
     $5, $6, $7, $8,
-    $9
+    $9,
+    COALESCE($10::text[], '{}'), COALESCE($11::text[], '{}'),
+    COALESCE($12::text[], '{}'), $13,
+    $14, $15, $16, $17
 )
-RETURNING id, submitted_by, url, source, title, company, location, remote, description, posted_at, status, review_reason, reviewed_by, reviewed_at, job_id, created_at
+RETURNING id, submitted_by, url, source, title, company, location, remote, description, posted_at, status, review_reason, reviewed_by, reviewed_at, job_id, created_at, skills, regions, cities, work_mode, salary_min, salary_max, salary_currency, salary_period
 `
 
 type CreateSubmissionParams struct {
-	SubmittedBy int64              `json:"submitted_by"`
-	URL         string             `json:"url"`
-	Source      string             `json:"source"`
-	Title       string             `json:"title"`
-	Company     string             `json:"company"`
-	Location    string             `json:"location"`
-	Remote      bool               `json:"remote"`
-	Description string             `json:"description"`
-	PostedAt    pgtype.Timestamptz `json:"posted_at"`
+	SubmittedBy    int64              `json:"submitted_by"`
+	URL            string             `json:"url"`
+	Source         string             `json:"source"`
+	Title          string             `json:"title"`
+	Company        string             `json:"company"`
+	Location       string             `json:"location"`
+	Remote         bool               `json:"remote"`
+	Description    string             `json:"description"`
+	PostedAt       pgtype.Timestamptz `json:"posted_at"`
+	Skills         []string           `json:"skills"`
+	Regions        []string           `json:"regions"`
+	Cities         []string           `json:"cities"`
+	WorkMode       string             `json:"work_mode"`
+	SalaryMin      pgtype.Int4        `json:"salary_min"`
+	SalaryMax      pgtype.Int4        `json:"salary_max"`
+	SalaryCurrency string             `json:"salary_currency"`
+	SalaryPeriod   string             `json:"salary_period"`
 }
 
 // Insert a user-contributed vacancy into the moderation queue as 'pending'. The partial
@@ -48,6 +60,14 @@ func (q *Queries) CreateSubmission(ctx context.Context, arg CreateSubmissionPara
 		arg.Remote,
 		arg.Description,
 		arg.PostedAt,
+		arg.Skills,
+		arg.Regions,
+		arg.Cities,
+		arg.WorkMode,
+		arg.SalaryMin,
+		arg.SalaryMax,
+		arg.SalaryCurrency,
+		arg.SalaryPeriod,
 	)
 	var i JobSubmission
 	err := row.Scan(
@@ -67,12 +87,20 @@ func (q *Queries) CreateSubmission(ctx context.Context, arg CreateSubmissionPara
 		&i.ReviewedAt,
 		&i.JobID,
 		&i.CreatedAt,
+		&i.Skills,
+		&i.Regions,
+		&i.Cities,
+		&i.WorkMode,
+		&i.SalaryMin,
+		&i.SalaryMax,
+		&i.SalaryCurrency,
+		&i.SalaryPeriod,
 	)
 	return i, err
 }
 
 const getSubmission = `-- name: GetSubmission :one
-SELECT id, submitted_by, url, source, title, company, location, remote, description, posted_at, status, review_reason, reviewed_by, reviewed_at, job_id, created_at FROM job_submissions WHERE id = $1
+SELECT id, submitted_by, url, source, title, company, location, remote, description, posted_at, status, review_reason, reviewed_by, reviewed_at, job_id, created_at, skills, regions, cities, work_mode, salary_min, salary_max, salary_currency, salary_period FROM job_submissions WHERE id = $1
 `
 
 // Load a single submission by id for the review path. The approve/reject flow guards the
@@ -98,12 +126,20 @@ func (q *Queries) GetSubmission(ctx context.Context, id int64) (JobSubmission, e
 		&i.ReviewedAt,
 		&i.JobID,
 		&i.CreatedAt,
+		&i.Skills,
+		&i.Regions,
+		&i.Cities,
+		&i.WorkMode,
+		&i.SalaryMin,
+		&i.SalaryMax,
+		&i.SalaryCurrency,
+		&i.SalaryPeriod,
 	)
 	return i, err
 }
 
 const listPendingSubmissions = `-- name: ListPendingSubmissions :many
-SELECT s.id, s.submitted_by, s.url, s.source, s.title, s.company, s.location, s.remote, s.description, s.posted_at, s.status, s.review_reason, s.reviewed_by, s.reviewed_at, s.job_id, s.created_at, u.email AS submitter_email
+SELECT s.id, s.submitted_by, s.url, s.source, s.title, s.company, s.location, s.remote, s.description, s.posted_at, s.status, s.review_reason, s.reviewed_by, s.reviewed_at, s.job_id, s.created_at, s.skills, s.regions, s.cities, s.work_mode, s.salary_min, s.salary_max, s.salary_currency, s.salary_period, u.email AS submitter_email
 FROM job_submissions s
 JOIN users u ON u.id = s.submitted_by
 WHERE s.status = 'pending'
@@ -127,6 +163,14 @@ type ListPendingSubmissionsRow struct {
 	ReviewedAt     pgtype.Timestamptz `json:"reviewed_at"`
 	JobID          pgtype.Int8        `json:"job_id"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	Skills         []string           `json:"skills"`
+	Regions        []string           `json:"regions"`
+	Cities         []string           `json:"cities"`
+	WorkMode       string             `json:"work_mode"`
+	SalaryMin      pgtype.Int4        `json:"salary_min"`
+	SalaryMax      pgtype.Int4        `json:"salary_max"`
+	SalaryCurrency string             `json:"salary_currency"`
+	SalaryPeriod   string             `json:"salary_period"`
 	SubmitterEmail string             `json:"submitter_email"`
 }
 
@@ -158,6 +202,14 @@ func (q *Queries) ListPendingSubmissions(ctx context.Context) ([]ListPendingSubm
 			&i.ReviewedAt,
 			&i.JobID,
 			&i.CreatedAt,
+			&i.Skills,
+			&i.Regions,
+			&i.Cities,
+			&i.WorkMode,
+			&i.SalaryMin,
+			&i.SalaryMax,
+			&i.SalaryCurrency,
+			&i.SalaryPeriod,
 			&i.SubmitterEmail,
 		); err != nil {
 			return nil, err
@@ -171,7 +223,7 @@ func (q *Queries) ListPendingSubmissions(ctx context.Context) ([]ListPendingSubm
 }
 
 const listSubmissionsByUser = `-- name: ListSubmissionsByUser :many
-SELECT s.id, s.submitted_by, s.url, s.source, s.title, s.company, s.location, s.remote, s.description, s.posted_at, s.status, s.review_reason, s.reviewed_by, s.reviewed_at, s.job_id, s.created_at, j.public_slug AS job_slug
+SELECT s.id, s.submitted_by, s.url, s.source, s.title, s.company, s.location, s.remote, s.description, s.posted_at, s.status, s.review_reason, s.reviewed_by, s.reviewed_at, s.job_id, s.created_at, s.skills, s.regions, s.cities, s.work_mode, s.salary_min, s.salary_max, s.salary_currency, s.salary_period, j.public_slug AS job_slug
 FROM job_submissions s
 LEFT JOIN jobs j ON j.id = s.job_id
 WHERE s.submitted_by = $1
@@ -179,23 +231,31 @@ ORDER BY s.created_at DESC
 `
 
 type ListSubmissionsByUserRow struct {
-	ID           int64              `json:"id"`
-	SubmittedBy  int64              `json:"submitted_by"`
-	URL          string             `json:"url"`
-	Source       string             `json:"source"`
-	Title        string             `json:"title"`
-	Company      string             `json:"company"`
-	Location     string             `json:"location"`
-	Remote       bool               `json:"remote"`
-	Description  string             `json:"description"`
-	PostedAt     pgtype.Timestamptz `json:"posted_at"`
-	Status       string             `json:"status"`
-	ReviewReason string             `json:"review_reason"`
-	ReviewedBy   pgtype.Int8        `json:"reviewed_by"`
-	ReviewedAt   pgtype.Timestamptz `json:"reviewed_at"`
-	JobID        pgtype.Int8        `json:"job_id"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	JobSlug      pgtype.Text        `json:"job_slug"`
+	ID             int64              `json:"id"`
+	SubmittedBy    int64              `json:"submitted_by"`
+	URL            string             `json:"url"`
+	Source         string             `json:"source"`
+	Title          string             `json:"title"`
+	Company        string             `json:"company"`
+	Location       string             `json:"location"`
+	Remote         bool               `json:"remote"`
+	Description    string             `json:"description"`
+	PostedAt       pgtype.Timestamptz `json:"posted_at"`
+	Status         string             `json:"status"`
+	ReviewReason   string             `json:"review_reason"`
+	ReviewedBy     pgtype.Int8        `json:"reviewed_by"`
+	ReviewedAt     pgtype.Timestamptz `json:"reviewed_at"`
+	JobID          pgtype.Int8        `json:"job_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	Skills         []string           `json:"skills"`
+	Regions        []string           `json:"regions"`
+	Cities         []string           `json:"cities"`
+	WorkMode       string             `json:"work_mode"`
+	SalaryMin      pgtype.Int4        `json:"salary_min"`
+	SalaryMax      pgtype.Int4        `json:"salary_max"`
+	SalaryCurrency string             `json:"salary_currency"`
+	SalaryPeriod   string             `json:"salary_period"`
+	JobSlug        pgtype.Text        `json:"job_slug"`
 }
 
 // "My submissions": one user's submissions, newest first, whatever their status.
@@ -227,6 +287,14 @@ func (q *Queries) ListSubmissionsByUser(ctx context.Context, submittedBy int64) 
 			&i.ReviewedAt,
 			&i.JobID,
 			&i.CreatedAt,
+			&i.Skills,
+			&i.Regions,
+			&i.Cities,
+			&i.WorkMode,
+			&i.SalaryMin,
+			&i.SalaryMax,
+			&i.SalaryCurrency,
+			&i.SalaryPeriod,
 			&i.JobSlug,
 		); err != nil {
 			return nil, err
@@ -246,7 +314,7 @@ SET status      = 'approved',
     reviewed_at = now(),
     job_id      = $2::bigint
 WHERE id = $3 AND status = 'pending'
-RETURNING id, submitted_by, url, source, title, company, location, remote, description, posted_at, status, review_reason, reviewed_by, reviewed_at, job_id, created_at
+RETURNING id, submitted_by, url, source, title, company, location, remote, description, posted_at, status, review_reason, reviewed_by, reviewed_at, job_id, created_at, skills, regions, cities, work_mode, salary_min, salary_max, salary_currency, salary_period
 `
 
 type MarkSubmissionApprovedParams struct {
@@ -278,6 +346,14 @@ func (q *Queries) MarkSubmissionApproved(ctx context.Context, arg MarkSubmission
 		&i.ReviewedAt,
 		&i.JobID,
 		&i.CreatedAt,
+		&i.Skills,
+		&i.Regions,
+		&i.Cities,
+		&i.WorkMode,
+		&i.SalaryMin,
+		&i.SalaryMax,
+		&i.SalaryCurrency,
+		&i.SalaryPeriod,
 	)
 	return i, err
 }
@@ -289,7 +365,7 @@ SET status        = 'rejected',
     reviewed_at   = now(),
     review_reason = $2
 WHERE id = $3 AND status = 'pending'
-RETURNING id, submitted_by, url, source, title, company, location, remote, description, posted_at, status, review_reason, reviewed_by, reviewed_at, job_id, created_at
+RETURNING id, submitted_by, url, source, title, company, location, remote, description, posted_at, status, review_reason, reviewed_by, reviewed_at, job_id, created_at, skills, regions, cities, work_mode, salary_min, salary_max, salary_currency, salary_period
 `
 
 type MarkSubmissionRejectedParams struct {
@@ -320,6 +396,14 @@ func (q *Queries) MarkSubmissionRejected(ctx context.Context, arg MarkSubmission
 		&i.ReviewedAt,
 		&i.JobID,
 		&i.CreatedAt,
+		&i.Skills,
+		&i.Regions,
+		&i.Cities,
+		&i.WorkMode,
+		&i.SalaryMin,
+		&i.SalaryMax,
+		&i.SalaryCurrency,
+		&i.SalaryPeriod,
 	)
 	return i, err
 }

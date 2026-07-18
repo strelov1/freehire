@@ -1,12 +1,9 @@
 # careers-page.com career sites. Provider is the filename; each entry is company + board.
 # board = the tenant subdomain (<board>.careers-page.com); see internal/sources/careerspage.go.
-# The listing is server-rendered HTML paged via ?page=N; each job's canonical /jobs/<uuid>
-# detail page carries a schema.org JobPosting ld+json the adapter maps into a posting.
-# Each board validated live (listing lists >0 job postings) before adding.
-
-- company: David Joseph & Company
-  board: davidjoseph-co
-- company: Zarego
-  board: zarego
-- company: Alcor
-  board: alcor
+#
+# EMPTY: careers-page.com is Manatal's hosted career-page domain, and Manatal exposes a public
+# JSON API (open.api.manatal.com/open/v3/career-page/<slug>/jobs/) that is far more complete than
+# this adapter's server-rendered HTML crawl — the subdomain path under-fetches badly (davidjoseph-co
+# listed 6 of 182, zarego 0 of 9). All former boards were migrated to sources/manatal.yml; new
+# careers-page.com tenants should be onboarded there (provider "manatal"), not here. The careerspage
+# adapter stays registered but is superseded — see internal/sources/manatal.go.

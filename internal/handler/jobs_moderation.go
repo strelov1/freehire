@@ -23,20 +23,40 @@ type createJobRequest struct {
 	Remote      bool       `json:"remote"`
 	Description string     `json:"description"`
 	PostedAt    *time.Time `json:"posted_at"`
+
+	// Optional structured facets: geography/work-mode/skills override dictionary
+	// derivation, and the salary fields become an authoritative manual salary. The
+	// moderation layer sanitizes them (drops unknown/invalid values).
+	Skills         []string `json:"skills"`
+	Regions        []string `json:"regions"`
+	Cities         []string `json:"cities"`
+	WorkMode       string   `json:"work_mode"`
+	SalaryMin      *int     `json:"salary_min"`
+	SalaryMax      *int     `json:"salary_max"`
+	SalaryCurrency string   `json:"salary_currency"`
+	SalaryPeriod   string   `json:"salary_period"`
 }
 
 // toCreateInput maps the wire body onto the moderation create input. Shared by the
 // moderator create path and the public submission path, which carry identical content.
 func (r createJobRequest) toCreateInput() moderation.CreateInput {
 	return moderation.CreateInput{
-		URL:         r.URL,
-		Source:      r.Source,
-		Title:       r.Title,
-		Company:     r.Company,
-		Location:    r.Location,
-		Remote:      r.Remote,
-		Description: r.Description,
-		PostedAt:    r.PostedAt,
+		URL:            r.URL,
+		Source:         r.Source,
+		Title:          r.Title,
+		Company:        r.Company,
+		Location:       r.Location,
+		Remote:         r.Remote,
+		Description:    r.Description,
+		PostedAt:       r.PostedAt,
+		Skills:         r.Skills,
+		Regions:        r.Regions,
+		Cities:         r.Cities,
+		WorkMode:       r.WorkMode,
+		SalaryMin:      r.SalaryMin,
+		SalaryMax:      r.SalaryMax,
+		SalaryCurrency: r.SalaryCurrency,
+		SalaryPeriod:   r.SalaryPeriod,
 	}
 }
 

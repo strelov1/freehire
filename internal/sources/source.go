@@ -262,6 +262,10 @@ func All(c HTTPClient) map[string]Source {
 		NewMindsight(c),
 		NewEnlizt(c),
 		NewJobvite(c),
+		NewBullhorn(c),
+		NewManatal(c),
+		NewJobscore(c),
+		NewCrelate(c),
 		// Ashby boards whose public Posting API is disabled, served via the embed GraphQL.
 		NewAshbyGraphQL(c),
 		// Multi-company aggregators (boardless): one global feed, company per posting.
@@ -271,6 +275,9 @@ func All(c HTTPClient) map[string]Source {
 		NewGetmatch(c),
 		NewGetmanfred(c),
 		NewHabrCareer(c),
+		NewGeekjob(c),
+		NewGetro(c),
+		NewJobylon(c),
 		NewWorkAtAStartup(c),
 		NewJobStash(c),
 		NewArbeitnow(c),
@@ -278,6 +285,9 @@ func All(c HTTPClient) map[string]Source {
 		NewJobicy(c),
 		NewWeWorkRemotely(c),
 		NewJobspresso(c),
+		NewStartupAndVC(c),
+		NewFourDayWeek(c),
+		NewFunctionalWorks(c),
 		NewTheHub(c),
 		NewGetonbrd(c),
 		NewVagas(c),
@@ -308,6 +318,13 @@ func All(c HTTPClient) map[string]Source {
 		NewAlignerr(c),
 		NewMicro1(c),
 		NewBairesDev(c),
+		// RU federal open-data aggregator: board-based, sharded per region (board = OKATO code).
+		// Concurrency-limited: its gov API degrades under the pipeline's board concurrency (500s +
+		// read-timeouts), so its in-flight requests are capped to a gentle few.
+		NewTrudvsem(limitedTrudvsemGetter(c)),
+		// hh.ru: multi-company aggregator, enumerated by professional_role (board), reading the
+		// server-rendered search page's embedded state.
+		NewHH(c),
 		// RU-domestic single-company adapters (boardless, except Yandex which selects
 		// host+language by board).
 		NewYandex(c),
@@ -407,6 +424,25 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// like djinni's, setting SOURCES_PROXY_URL routes only this provider through the proxy with
 	// no code change; while the proxy is unset this entry is inert.
 	"onstrider": func(c HTTPClient) Source { return NewOnstrider(c) },
+	// geekjob.ru is a Russian board reached only over the prod datacenter IP in production and is
+	// untested from it (the spike ran from a residential IP). Like its RU sibling habr_career it
+	// fetches a per-vacancy detail page for the description, so a WAF challenge on the detail HTML
+	// would leave jobs with empty descriptions. It is pre-wired here so that, if the prod IP is
+	// blocked, setting SOURCES_PROXY_URL routes only this provider through the proxy with no code
+	// change; while the proxy is unset this entry is inert. A fixed, trusted host (SSRF caveat).
+	"geekjob": func(c HTTPClient) Source { return NewGeekjob(c) },
+	// hh.ru's detail pages 403 the direct datacenter IP, so on prod it egresses through the proxy;
+	// its high-volume per-vacancy detail fan-out then 429s the single proxy IP unless paced (the
+	// first prod run landed only ~34% of descriptions unpaced), so — like careerspage/vagas — it is
+	// rate-paced (pacedHHGetter) to hold the aggregate rate under the proxy window. While
+	// SOURCES_PROXY_URL is unset this entry is inert (direct crawl is unpaced, fine for local/dev).
+	"hh": func(c HTTPClient) Source { return NewHH(pacedHHGetter(c)) },
+	// career.habr.com sits behind Qrator, which challenges the per-vacancy detail HTML from the
+	// prod datacenter IP (the listing JSON passes, but the description parse fails, leaving jobs
+	// with empty descriptions and so no derived skills/geo/enrichment). A residential IP is served
+	// the full page, so the whole crawl egresses through the proxy — like the others, listing and
+	// detail alike. A fixed, trusted host, so it satisfies the SSRF caveat above.
+	"habr_career": func(c HTTPClient) Source { return NewHabrCareer(c) },
 	// vagas.com.br blocks the prod datacenter IP (403 on the first listing GET) AND rate-limits
 	// by a per-IP request budget (429 once a full crawl's volume hits one IP). So it egresses
 	// through the proxy like careerspage AND is rate-paced (pacedVagasGetter) to hold its
