@@ -12,10 +12,23 @@ import (
 // Like the other aggregators it is boardless (one public API, no per-tenant board) yet lists
 // many employers, so it stays in the source facet and takes each posting's company from the
 // feed. The list API paginates and carries the platform's structured facets inline
-// (work_arrangement, level, category, stack), but no description and no apply link, so the
-// canonical URL is synthesized from the slug and the body is left for downstream enrichment.
+// (work_arrangement, level, category, stack) but no body and no apply link, so the canonical
+// URL is synthesized from the slug and the description is hydrated from the public job page.
+//
+// 4dayweek gates most descriptions behind its paid "Pro" tier: on a locked posting's page the
+// body is replaced by an "Unlock with Pro" notice and the article.prose container is absent.
+// We ingest ONLY the postings whose full description 4dayweek serves for free (article.prose
+// present) and drop the locked ones rather than store a blank card — so every posting is
+// fetched to read its lock state, and the crawl is scheduled sparsely (daily) to bound that.
 type fourDayWeek struct {
-	http JSONGetter
+	http fourDayWeekHTTP
+}
+
+// fourDayWeekHTTP is the slice of the HTTP client the adapter needs: the JSON list and the
+// server-rendered HTML detail page. The shared *Client satisfies it.
+type fourDayWeekHTTP interface {
+	JSONGetter
+	HTMLGetter
 }
 
 const (
@@ -29,7 +42,7 @@ const (
 )
 
 // NewFourDayWeek builds the 4dayweek adapter over the given HTTP client.
-func NewFourDayWeek(c JSONGetter) Source { return fourDayWeek{http: c} }
+func NewFourDayWeek(c fourDayWeekHTTP) Source { return fourDayWeek{http: c} }
 
 func (fourDayWeek) Provider() string { return "4dayweek" }
 
@@ -62,8 +75,33 @@ type fourDayWeekPosting struct {
 	} `json:"stack"`
 }
 
+// Fetch lists the board and hydrates each posting from its page, keeping only the postings whose
+// full description 4dayweek serves for free. A posting whose body is Pro-gated (no article.prose)
+// or whose page fetch fails is dropped rather than ingested as a blank card — so a locked posting
+// never reaches the catalogue, and one that later unlocks (or re-locks) is reflected on the next
+// crawl. Detail fetches run under the shared bounded worker pool.
 func (s fourDayWeek) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
-	var jobs []Job
+	postings, err := s.crawl(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return fetchDetails(postings, defaultDetailWorkers, func(p fourDayWeekPosting) (Job, bool) {
+		job, ok := p.toJob()
+		if !ok {
+			return Job{}, false
+		}
+		desc, ok := s.detail(ctx, p.Slug)
+		if !ok {
+			return Job{}, false // Pro-gated or body-less — drop, never ingest a blank card
+		}
+		job.Description = desc
+		return job, true
+	}), nil
+}
+
+// crawl pages the list feed and returns every raw posting — the list walk behind Fetch.
+func (s fourDayWeek) crawl(ctx context.Context) ([]fourDayWeekPosting, error) {
+	var postings []fourDayWeekPosting
 	for page := 1; page <= fourDayWeekMaxPages; page++ {
 		var resp struct {
 			Jobs    []fourDayWeekPosting `json:"jobs"`
@@ -72,16 +110,32 @@ func (s fourDayWeek) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 		if err := s.http.GetJSON(ctx, fmt.Sprintf(fourDayWeekListURL, page), &resp); err != nil {
 			return nil, fmt.Errorf("4dayweek: page %d: %w", page, err)
 		}
-		for _, p := range resp.Jobs {
-			if job, ok := p.toJob(); ok {
-				jobs = append(jobs, job)
-			}
-		}
+		postings = append(postings, resp.Jobs...)
 		if len(resp.Jobs) == 0 || !resp.HasMore {
 			break
 		}
 	}
-	return jobs, nil
+	return postings, nil
+}
+
+// detail fetches a posting's page and extracts its description from the article.prose container
+// the site renders the body in. It returns ok=false on a failed request or when article.prose is
+// absent — the signal that the posting is Pro-locked (the page shows an "Unlock with Pro" notice
+// instead of the body) or genuinely bodyless — so Fetch drops it.
+func (s fourDayWeek) detail(ctx context.Context, slug string) (string, bool) {
+	root, err := s.http.GetHTML(ctx, fmt.Sprintf(fourDayWeekJobURL, slug))
+	if err != nil {
+		return "", false
+	}
+	article := firstByClass(root, "prose")
+	if article == nil {
+		return "", false
+	}
+	body := sanitizeHTML(innerHTML(article))
+	if body == "" {
+		return "", false
+	}
+	return body, true
 }
 
 // toJob maps a posting to a Job, returning ok=false for an unusable posting (no native id,
