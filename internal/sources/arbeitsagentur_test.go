@@ -48,10 +48,11 @@ func (f *arbeitsagenturFake) GetHTML(_ context.Context, u string) (*html.Node, e
 	return html.Parse(strings.NewReader(f.detailByRef[ref]))
 }
 
-// detailHTML wraps an ng-state script carrying the given description, mirroring the real SSR page.
-func detailHTML(desc string) string {
+// detailHTML wraps an ng-state script carrying the given description and home-office flag,
+// mirroring the real SSR page.
+func detailHTML(desc string, homeOffice bool) string {
 	return `<html><body><script id="ng-state" type="application/json">{"jobdetail":{"stellenangebotsBeschreibung":` +
-		strconv.Quote(desc) + `}}</script></body></html>`
+		strconv.Quote(desc) + `,"homeofficemoeglich":` + strconv.FormatBool(homeOffice) + `}}</script></body></html>`
 }
 
 func TestArbeitsagenturFetchMapsFirstPartyAndDropsExterne(t *testing.T) {
@@ -63,8 +64,8 @@ func TestArbeitsagenturFetchMapsFirstPartyAndDropsExterne(t *testing.T) {
 	fake := &arbeitsagenturFake{
 		searchByPage: map[int]string{1: page1},
 		detailByRef: map[string]string{
-			"20177-44320844-717-S": detailHTML("Bei Boehringer Ingelheim entwickeln wir <b>bahnbrechende</b> Therapien."),
-			"AC-2":                 detailHTML("Wir suchen einen DevOps Engineer."),
+			"20177-44320844-717-S": detailHTML("Bei Boehringer Ingelheim entwickeln wir <b>bahnbrechende</b> Therapien.", true),
+			"AC-2":                 detailHTML("Wir suchen einen DevOps Engineer.", false),
 		},
 	}
 	jobs, err := NewArbeitsagentur(fake).Fetch(context.Background(), CompanyEntry{
@@ -101,6 +102,13 @@ func TestArbeitsagenturFetchMapsFirstPartyAndDropsExterne(t *testing.T) {
 	if j.PostedAt == nil || j.PostedAt.Format("2006-01-02") != "2026-07-18" {
 		t.Errorf("PostedAt = %v, want 2026-07-18", j.PostedAt)
 	}
+	// homeofficemoeglich:true → remote; the non-home-office posting stays unset.
+	if !j.Remote || j.WorkMode != "remote" {
+		t.Errorf("home-office job: Remote=%v WorkMode=%q, want true/remote", j.Remote, j.WorkMode)
+	}
+	if ac := byID["AC-2"]; ac.Remote || ac.WorkMode != "" {
+		t.Errorf("non-home-office job AC-2: Remote=%v WorkMode=%q, want false/empty", ac.Remote, ac.WorkMode)
+	}
 }
 
 func TestArbeitsagenturScrapesDescription(t *testing.T) {
@@ -113,7 +121,7 @@ func TestArbeitsagenturScrapesDescription(t *testing.T) {
 		searchByPage: map[int]string{1: page1},
 		detailByRef: map[string]string{
 			// The real Stellenbeschreibung is plain text with newline paragraphs, no markup.
-			"OK-1":     detailHTML("Bei uns arbeitest du remote.\n\nZweiter Absatz mit Details."),
+			"OK-1":     detailHTML("Bei uns arbeitest du remote.\n\nZweiter Absatz mit Details.", false),
 			"NODESC-2": `<html><body><p>no ng-state here</p></body></html>`,
 		},
 		detailErr: map[string]bool{"ERR-3": true},
@@ -139,6 +147,10 @@ func TestArbeitsagenturScrapesDescription(t *testing.T) {
 	}
 	if d := byID["ERR-3"].Description; d != "" {
 		t.Errorf("ERR-3 description = %q, want empty (detail fetch failed)", d)
+	}
+	// A failed/blockless detail leaves the remote flag unset.
+	if byID["ERR-3"].Remote || byID["NODESC-2"].Remote {
+		t.Error("postings with no usable detail should not be marked remote")
 	}
 }
 

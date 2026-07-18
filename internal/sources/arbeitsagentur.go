@@ -69,11 +69,20 @@ type arbeitsagenturOrt struct {
 	Land   string `json:"land"`
 }
 
-// arbeitsagenturDetail decodes the description out of the jobdetail page's ng-state JSON blob.
+// arbeitsagenturDetail decodes the fields the adapter needs out of the jobdetail page's ng-state
+// JSON blob: the description and the per-job home-office flag.
 type arbeitsagenturDetail struct {
 	Jobdetail struct {
-		Beschreibung string `json:"stellenangebotsBeschreibung"`
+		Beschreibung       string `json:"stellenangebotsBeschreibung"`
+		Homeofficemoeglich bool   `json:"homeofficemoeglich"`
 	} `json:"jobdetail"`
+}
+
+// description is the sanitized posting body. The Stellenbeschreibung is plain text (newline
+// paragraphs, no markup), so it goes through plainTextToHTML — as djinni/lumenalta do — to rebuild
+// paragraph structure rather than collapsing into one block when rendered.
+func (d arbeitsagenturDetail) description() string {
+	return sanitizeHTML(plainTextToHTML(d.Jobdetail.Beschreibung))
 }
 
 func (a arbeitsagentur) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
@@ -111,36 +120,37 @@ func (arbeitsagentur) searchURL(berufsfeld string, page int) string {
 
 func (a arbeitsagentur) toJob(ctx context.Context, p arbeitsagenturPosting) Job {
 	detailURL := arbeitsagenturDetailURL + p.Refnr
+	d := a.detail(ctx, detailURL)
 	return Job{
 		ExternalID:  p.Refnr,
 		URL:         detailURL,
 		Title:       strings.TrimSpace(p.Titel),
 		Company:     strings.TrimSpace(p.Arbeitgeber),
 		Location:    arbeitsagenturLocation(p.Arbeitsort),
-		Description: a.description(ctx, detailURL),
+		Description: d.description(),
+		Remote:      d.Jobdetail.Homeofficemoeglich,
+		WorkMode:    workModeFromRemote(d.Jobdetail.Homeofficemoeglich),
 		PostedAt:    arbeitsagenturDate(p.Datum),
 	}
 }
 
-// description scrapes the SSR jobdetail page's ng-state JSON for the Stellenbeschreibung. Any
-// failure (fetch error, no ng-state block, bad JSON) yields an empty description rather than an
-// error — the posting is still worth emitting. The Stellenbeschreibung is plain text (newline
-// paragraphs, no markup), so it goes through plainTextToHTML — as djinni/lumenalta do — to rebuild
-// paragraph structure rather than collapsing into one block when rendered.
-func (a arbeitsagentur) description(ctx context.Context, detailURL string) string {
+// detail scrapes and decodes the SSR jobdetail page's ng-state JSON. Any failure (fetch error, no
+// ng-state block, bad JSON) yields the zero detail rather than an error — the posting is still worth
+// emitting, just without a description or the home-office flag.
+func (a arbeitsagentur) detail(ctx context.Context, detailURL string) arbeitsagenturDetail {
 	root, err := a.http.GetHTML(ctx, detailURL)
 	if err != nil {
-		return ""
+		return arbeitsagenturDetail{}
 	}
 	blob := scriptTextByID(root, "ng-state")
 	if blob == "" {
-		return ""
+		return arbeitsagenturDetail{}
 	}
 	var d arbeitsagenturDetail
 	if err := json.Unmarshal([]byte(blob), &d); err != nil {
-		return ""
+		return arbeitsagenturDetail{}
 	}
-	return sanitizeHTML(plainTextToHTML(d.Jobdetail.Beschreibung))
+	return d
 }
 
 // arbeitsagenturLocation joins the non-empty parts of an arbeitsort, dropping the literal "null"
