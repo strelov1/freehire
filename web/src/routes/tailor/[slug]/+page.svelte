@@ -10,6 +10,7 @@
   import { createSession } from '$lib/assistant/api';
   import AssistantChat from '$lib/assistant/AssistantChat.svelte';
   import ArtifactPanel from '$lib/tailor/ArtifactPanel.svelte';
+  import AccountNavRail from '$lib/components/AccountNavRail.svelte';
   import { currentUser } from '$lib/auth.svelte';
   import type { Analysis } from '$lib/generated/contracts';
   import type { Job } from '$lib/types';
@@ -97,24 +98,29 @@
 
 <svelte:head><title>Tailor CV{job ? ` · ${job.title}` : ''} — freehire</title></svelte:head>
 
-{#if status === 'loading'}
-  <div class="flex h-[calc(100svh-3.5rem)] items-center justify-center text-sm text-muted-foreground">
-    {resuming ? 'Re-opening your tailoring session…' : 'Preparing your tailoring session…'}
-  </div>
-{:else if status === 'error'}
-  <div class="flex h-[calc(100svh-3.5rem)] flex-col items-center justify-center gap-3 p-6 text-center">
-    <p class="max-w-md text-sm text-destructive">{errorMsg}</p>
-    <a href={`/match/${slug}`} class="text-sm text-brand hover:underline">Back to the fit analysis</a>
-  </div>
-{:else}
-  <div class="flex h-[calc(100svh-3.5rem)]">
-    <AssistantChat
-      session={sessionId}
-      kickoff={resuming ? undefined : kickoff}
-      {sessionLabel}
-      showSessionRail={false}
-      onTurnComplete={() => (refreshKey += 1)}
-    />
-    <ArtifactPanel {cvId} job={job!} {analysis} {refreshKey} />
-  </div>
-{/if}
+<!-- Full-width workspace loses the account shell nav; the same left-edge icon rail as
+     the Agent page brings the account sections back. It stays put across every state. -->
+<div class="flex h-[calc(100svh-3.5rem)]">
+  <AccountNavRail />
+  {#if status === 'loading'}
+    <div class="flex min-w-0 flex-1 items-center justify-center text-sm text-muted-foreground">
+      {resuming ? 'Re-opening your tailoring session…' : 'Preparing your tailoring session…'}
+    </div>
+  {:else if status === 'error'}
+    <div class="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+      <p class="max-w-md text-sm text-destructive">{errorMsg}</p>
+      <a href={`/match/${slug}`} class="text-sm text-brand hover:underline">Back to the fit analysis</a>
+    </div>
+  {:else}
+    <div class="flex min-w-0 flex-1">
+      <AssistantChat
+        session={sessionId}
+        kickoff={resuming ? undefined : kickoff}
+        {sessionLabel}
+        showSessionRail={false}
+        onTurnComplete={() => (refreshKey += 1)}
+      />
+      <ArtifactPanel {cvId} job={job!} {analysis} {refreshKey} />
+    </div>
+  {/if}
+</div>

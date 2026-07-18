@@ -71,9 +71,10 @@ any viewport width.
 
 ### Requirement: Full-width surface navigation rail
 
-The Agent surface SHALL present the account section navigation as a compact,
-icon-only rail pinned to the left edge. The Agent page (`/my/assistant`) opts out
-of the account shell and would otherwise have no section navigation. The rail
+A full-width workspace that opts out of the account shell SHALL present the
+account section navigation as a compact, icon-only rail pinned to the left edge,
+so it is not left without section navigation. This covers the Agent page
+(`/my/assistant`) and the Tailor CV workspace (`/tailor/<slug>`). The rail
 SHALL list exactly the sections returned by the shared visible navigation model —
 the same items, order, and beta/moderator gating as the account sidebar — and
 SHALL NOT include create actions or non-account links. Each rail item SHALL
@@ -87,6 +88,12 @@ descendant of it). The rail SHALL be shown only to a signed-in user.
 - **WHEN** a signed-in user opens `/my/assistant`
 - **THEN** a compact icon-only navigation rail is pinned to the left edge, listing
   the same account sections (with the same gating) as the account sidebar
+
+#### Scenario: Tailor CV workspace shows the icon-only rail
+
+- **WHEN** a signed-in user opens a `/tailor/<slug>` CV workspace
+- **THEN** the same compact icon-only navigation rail is pinned to the left edge,
+  and it remains present across the workspace's loading, error, and ready states
 
 #### Scenario: Rail item reflects the active section
 
