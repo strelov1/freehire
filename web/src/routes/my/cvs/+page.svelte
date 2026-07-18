@@ -2,11 +2,10 @@
   import { currentUser } from '$lib/auth.svelte';
   import CvList from '$lib/components/cv/CvList.svelte';
 
-  // Beta-gated in the UI (the server re-checks via RequireModeratorOrBeta). This just
-  // keeps a non-beta user who navigates here directly from hitting a raw 403.
-  const eligible = $derived(
-    currentUser()?.beta_tester === true || currentUser()?.role === 'moderator',
-  );
+  // Beta-tester-gated in the UI (the server still admits moderators via RequireModeratorOrBeta
+  // as an admin override). This just keeps a non-beta user who navigates here directly from
+  // hitting a raw 403.
+  const eligible = $derived(currentUser()?.beta_tester === true);
 </script>
 
 <svelte:head>

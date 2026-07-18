@@ -9,14 +9,12 @@
 
   let { data } = $props();
 
-  // Tailoring is beta-gated (the server re-checks); the CTA shows once an analysis exists for
-  // a stored CV. A stale analysis (CV or job changed since) still tailors — we nudge a
-  // recompute for the sharpest reframing (see below) rather than block, since any CV
-  // re-upload marks every past analysis stale and blocking would hide the feature too often.
+  // Tailoring is a beta-tester feature; the CTA shows once an analysis exists for a stored
+  // CV. A stale analysis (CV or job changed since) still tailors — we nudge a recompute for
+  // the sharpest reframing (see below) rather than block, since any CV re-upload marks every
+  // past analysis stale and blocking would hide the feature too often.
   const canTailor = $derived(
-    !!data.fit?.analysis &&
-      data.fit?.has_cv === true &&
-      (currentUser()?.beta_tester === true || currentUser()?.role === 'moderator'),
+    !!data.fit?.analysis && data.fit?.has_cv === true && currentUser()?.beta_tester === true,
   );
 
   let tailoring = $state(false);

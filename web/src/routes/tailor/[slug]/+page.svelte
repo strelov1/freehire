@@ -16,9 +16,7 @@
 
   const slug = $derived(page.params.slug ?? '');
   const cvParam = $derived(page.url.searchParams.get('cv'));
-  const eligible = $derived(
-    currentUser()?.beta_tester === true || currentUser()?.role === 'moderator',
-  );
+  const eligible = $derived(currentUser()?.beta_tester === true);
 
   let status = $state<'loading' | 'ready' | 'error'>('loading');
   let errorMsg = $state('');
