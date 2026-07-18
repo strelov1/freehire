@@ -344,6 +344,7 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/insights/skills", a.InsightsSkills)
 	api.Get("/insights/velocity", a.InsightsVelocity)
 	api.Get("/insights/salary", a.InsightsSalary)
+	api.Get("/insights/companies", a.InsightsCompanies)
 
 	// Public ingest-fleet status, unauthenticated like the other public reads.
 	// A per-provider health rollup over board_health, sanitized (no error text or

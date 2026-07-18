@@ -1835,6 +1835,38 @@ curl "https://freehire.dev/api/v1/insights/salary?category=backend"
 }
 ```
 
+### `GET /insights/companies`
+
+**Auth:** Public
+
+The company hiring-signal leaderboard: companies ranked by how their number of open jobs has changed over the last 30 days (`growth_30d = open_now − open_prev_30d`), so you can see who is ramping up or freezing hiring. Served from a precomputed per-company rollup. Aggregate-only — no record-level job fields.
+
+`min_open` floors the current open-count (default `5`) so a company whose whole board just appeared or vanished in ingest doesn't dominate the ranking.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `sort` | string | no | `growth` (default, ramping first), `-growth` (freezing first), or `open` (largest first). |
+| `min_open` | integer | no | Minimum current open-job count; default `5`. |
+| `limit` | integer | no | Result cap; default `20`, max `200`. |
+
+```bash
+# Companies ramping up hiring the fastest:
+curl "https://freehire.dev/api/v1/insights/companies?sort=growth"
+# Companies pulling back:
+curl "https://freehire.dev/api/v1/insights/companies?sort=-growth&min_open=10"
+```
+
+```json
+{
+  "data": [
+    { "company_slug": "acme", "company_name": "Acme", "open_now": 42, "open_prev_30d": 18, "growth_30d": 24 }
+  ],
+  "meta": { "sort": "growth", "min_open": 5, "limit": 20 }
+}
+```
+
 ## Activity & shared boards
 
 Two public reads — the catalogue-activity time series and a shared saved-search “board” by slug — plus the session-only publish/unpublish actions that turn one of your saved searches into such a board. A published board exposes no owner identity.

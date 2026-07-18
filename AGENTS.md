@@ -36,7 +36,7 @@ cmd/liveness/main.go       URL-probes orphan jobs, closes dead ones
 cmd/reindex/main.go        rebuilds the Meilisearch jobs index
 cmd/rollup-stats/main.go   recomputes the job_daily_stats rollup
 cmd/rollup-facets/main.go  recomputes the insights_facet_stats snapshot (/open facets)
-cmd/rollup-company/main.go recomputes the insights_company_stats per-company hiring-signal rollup
+cmd/rollup-company/main.go recomputes insights_company_stats + insights_company_growth (per-company hiring-signal rollups; the latter backs GET /insights/companies)
 cmd/backfill-derive/main.go  re-derives all deterministic dictionary facets
 cmd/reslug/main.go         backfills public_slug/company_slug
 cmd/backfill-company-names/main.go  resolves real display names for slug-named companies
@@ -91,7 +91,7 @@ go run ./cmd/backfill-derive               # re-derive dictionary facets; follow
 go run ./cmd/backfill-company-names [--dry-run]  # resolve real names for slug-named companies; follow with make reindex
 go run ./cmd/rollup-stats                  # recompute job_daily_stats (run-once, cron ~every 3h)
 go run ./cmd/rollup-facets                 # + MEILI_URL/MEILI_MASTER_KEY — recompute insights_facet_stats (run-once, cron ~daily)
-go run ./cmd/rollup-company                 # recompute insights_company_stats per-company hiring-signal rollup (run-once, cron ~daily)
+go run ./cmd/rollup-company                 # recompute insights_company_stats + insights_company_growth (run-once, cron ~daily)
 ```
 
 For the full architecture and conventions, see the **module files** below. Each module is self-contained and can be read independently.

@@ -25,7 +25,20 @@ import (
 const (
 	insightsDefaultLimit = 20
 	insightsMaxLimit     = 200
+	// companiesDefaultMinOpen floors the leaderboard's current open-count by default,
+	// so a company whose whole board just appeared/vanished (an ingest artifact) does
+	// not dominate the ranking. Callers can override with min_open.
+	companiesDefaultMinOpen = 5
 )
+
+// companyInsight is one ranked company on the hiring-signal leaderboard.
+type companyInsight struct {
+	CompanySlug string `json:"company_slug"`
+	CompanyName string `json:"company_name"`
+	OpenNow     int32  `json:"open_now"`
+	OpenPrev30d int32  `json:"open_prev_30d"`
+	Growth30d   int32  `json:"growth_30d"`
+}
 
 // roleInsight is one ranked role on the wire.
 type roleInsight struct {
@@ -78,6 +91,35 @@ func parseInsightsLimit(s string) (int32, error) {
 	}
 	if n > insightsMaxLimit {
 		return 0, fmt.Errorf("limit %d exceeds max %d", n, insightsMaxLimit)
+	}
+	return int32(n), nil
+}
+
+// parseCompaniesSort resolves the leaderboard order: "growth" (default) ranks by the
+// window delta descending (ramping first), "-growth" ascending (freezing first),
+// "open" by raw open-count. Anything else is a 400.
+func parseCompaniesSort(s string) (string, error) {
+	switch s {
+	case "", "growth":
+		return "growth", nil
+	case "-growth":
+		return "-growth", nil
+	case "open":
+		return "open", nil
+	default:
+		return "", fmt.Errorf("unknown sort %q (want growth, -growth or open)", s)
+	}
+}
+
+// parseMinOpen resolves the current-open-count floor: empty → companiesDefaultMinOpen,
+// else a non-negative integer.
+func parseMinOpen(s string) (int32, error) {
+	if s == "" {
+		return companiesDefaultMinOpen, nil
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 0 {
+		return 0, fmt.Errorf("invalid min_open %q (want a non-negative integer)", s)
 	}
 	return int32(n), nil
 }
@@ -188,6 +230,43 @@ func (a *API) InsightsRoles(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"data": data,
 		"meta": fiber.Map{"country": country, "category": category, "sort": sort, "limit": limit},
+	})
+}
+
+// InsightsCompanies serves GET /api/v1/insights/companies: the hiring-signal
+// leaderboard — companies ranked by 30-day growth (ramping/freezing) or open-count,
+// from the precomputed insights_company_growth scalar. Aggregate-only.
+func (a *API) InsightsCompanies(c *fiber.Ctx) error {
+	sort, err := parseCompaniesSort(c.Query("sort"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	minOpen, err := parseMinOpen(c.Query("min_open"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	limit, err := parseInsightsLimit(c.Query("limit"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+
+	rows, err := a.queries.ListInsightsCompanies(c.Context(), db.ListInsightsCompaniesParams{MinOpen: minOpen, Sort: sort, Lim: limit})
+	if err != nil {
+		return err
+	}
+	data := make([]companyInsight, len(rows))
+	for i, r := range rows {
+		data[i] = companyInsight{
+			CompanySlug: r.CompanySlug,
+			CompanyName: r.CompanyName,
+			OpenNow:     r.OpenCount,
+			OpenPrev30d: r.OpenCountPrev,
+			Growth30d:   r.Growth,
+		}
+	}
+	return c.JSON(fiber.Map{
+		"data": data,
+		"meta": fiber.Map{"sort": sort, "min_open": minOpen, "limit": limit},
 	})
 }
 

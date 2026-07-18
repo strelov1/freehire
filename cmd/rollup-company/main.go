@@ -4,8 +4,10 @@
 //
 // insights_company_stats holds one row per (company_slug, day) for each of a company's
 // activity days, with that day's `added`/`removed` and a running `open` count, derived
-// solely from jobs.created_at/closed_at (closed jobs are retained). It is the company-
-// grained sibling of the insights_* rollups and the foundation for a company hiring
+// solely from jobs.created_at/closed_at (closed jobs are retained). insights_company_growth
+// holds one scalar row per company (open_count now + open_count as of the growth window
+// ago) that backs the ranked /api/v1/insights/companies leaderboard. Both are the company-
+// grained siblings of the insights_* rollups and the foundation for a company hiring
 // signal (who is ramping vs. freezing).
 //
 // It is a run-once-and-exit worker (cron-scheduled, ~daily given the company grain):
@@ -19,10 +21,17 @@ package main
 import (
 	"context"
 	"log"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/worker"
 )
+
+// growthWindowDays is how far back insights_company_growth's prior-window open-count
+// looks, so growth = open_count - open_count_prev. Matches cmd/rollup-stats.
+const growthWindowDays = 30
 
 func main() {
 	worker.Main(run)
@@ -65,11 +74,24 @@ func run() int {
 		return 1
 	}
 
+	// The scalar growth table (backs the ranked leaderboard) is rebuilt in the SAME
+	// transaction so it never diverges from the per-day rollup.
+	prevTs := pgtype.Timestamptz{Time: time.Now().UTC().AddDate(0, 0, -growthWindowDays), Valid: true}
+	if err := q.DeleteAllInsightsCompanyGrowth(ctx); err != nil {
+		log.Printf("clear growth: %v", err)
+		return 1
+	}
+	companies, err := q.RebuildInsightsCompanyGrowth(ctx, prevTs)
+	if err != nil {
+		log.Printf("rebuild growth: %v", err)
+		return 1
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		log.Printf("commit: %v", err)
 		return 1
 	}
 
-	log.Printf("rollup-company: rebuilt insights_company_stats (%d company-day rows)", rows)
+	log.Printf("rollup-company: rebuilt insights_company_stats (%d company-day rows) + insights_company_growth (%d companies)", rows, companies)
 	return 0
 }

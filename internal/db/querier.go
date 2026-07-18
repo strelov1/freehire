@@ -219,6 +219,10 @@ type Querier interface {
 	// as the InsertFacetStat loop so a reader never sees an empty or partial table.
 	DeleteAllFacetStats(ctx context.Context) error
 	// ---------------------------------------------------------------------------
+	// Per-company open/growth scalar (backs the /insights/companies leaderboard)
+	// ---------------------------------------------------------------------------
+	DeleteAllInsightsCompanyGrowth(ctx context.Context) error
+	// ---------------------------------------------------------------------------
 	// Per-company hiring signal
 	// ---------------------------------------------------------------------------
 	DeleteAllInsightsCompanyStats(ctx context.Context) error
@@ -540,6 +544,11 @@ type Querier interface {
 	// top-N per facet without re-sorting. Aggregate only — per-value counts, no
 	// record-level data.
 	ListFacetStats(ctx context.Context) ([]InsightsFacetStat, error)
+	// The leaderboard read: companies ranked by growth (open_count - open_count_prev),
+	// '-growth' (freezing) reverses it, 'open' ranks by raw size; open_count is the
+	// tiebreak. @min_open floors the current open-count (blunts ingest-artifact spikes).
+	// company_name falls back to the slug when no companies row exists.
+	ListInsightsCompanies(ctx context.Context, arg ListInsightsCompaniesParams) ([]ListInsightsCompaniesRow, error)
 	// Ranked roles within one country slice ('' = all countries), ordered by raw
 	// demand or by growth (open_count - open_count_prev), demand as the tiebreak.
 	// An empty @category means all categories (the original behavior); a non-empty
@@ -748,6 +757,12 @@ type Querier interface {
 	// coalesced/cast to bigint so it reads as a plain int64 (an all-failing provider
 	// yields 0, not NULL).
 	ProviderHealthRollup(ctx context.Context) ([]ProviderHealthRollupRow, error)
+	// One row per company with its current open-count and the open-count as of @prev_ts,
+	// from a single scan of jobs over canonical rows only (same count(*) FILTER idiom as
+	// insights_role_stats). open_count uses closed_at IS NULL (open now); open_count_prev
+	// uses open-as-of @prev_ts. Companies open at neither point are dropped (HAVING) to
+	// keep the table lean.
+	RebuildInsightsCompanyGrowth(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
 	// Per-(company, day) hiring velocity with a running open count, from the retained
 	// jobs lifecycle. Each canonical, attributable job (company_slug <> '' AND
 	// duplicate_of IS NULL) emits an added event on its created_at (UTC) day and, if

@@ -320,3 +320,50 @@ FROM (
     WHERE j.company_slug <> '' AND j.duplicate_of IS NULL
     GROUP BY j.company_slug, day
 ) daily;
+
+-- ---------------------------------------------------------------------------
+-- Per-company open/growth scalar (backs the /insights/companies leaderboard)
+-- ---------------------------------------------------------------------------
+
+-- name: DeleteAllInsightsCompanyGrowth :exec
+DELETE FROM insights_company_growth;
+
+-- name: RebuildInsightsCompanyGrowth :execrows
+-- One row per company with its current open-count and the open-count as of @prev_ts,
+-- from a single scan of jobs over canonical rows only (same count(*) FILTER idiom as
+-- insights_role_stats). open_count uses closed_at IS NULL (open now); open_count_prev
+-- uses open-as-of @prev_ts. Companies open at neither point are dropped (HAVING) to
+-- keep the table lean.
+INSERT INTO insights_company_growth (company_slug, open_count, open_count_prev)
+SELECT
+    company_slug,
+    count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
+    count(*) FILTER (WHERE created_at <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts')))::int AS open_count_prev
+FROM jobs
+WHERE company_slug <> '' AND duplicate_of IS NULL
+GROUP BY company_slug
+HAVING count(*) FILTER (WHERE closed_at IS NULL) > 0
+    OR count(*) FILTER (WHERE created_at <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts'))) > 0;
+
+-- name: ListInsightsCompanies :many
+-- The leaderboard read: companies ranked by growth (open_count - open_count_prev),
+-- '-growth' (freezing) reverses it, 'open' ranks by raw size; open_count is the
+-- tiebreak. @min_open floors the current open-count (blunts ingest-artifact spikes).
+-- company_name falls back to the slug when no companies row exists.
+SELECT
+    g.company_slug,
+    coalesce(c.name, g.company_slug) AS company_name,
+    g.open_count,
+    g.open_count_prev,
+    (g.open_count - g.open_count_prev)::int AS growth
+FROM insights_company_growth g
+LEFT JOIN companies c ON c.slug = g.company_slug
+WHERE g.open_count >= sqlc.arg('min_open')::int
+ORDER BY
+    (CASE
+        WHEN sqlc.arg('sort')::text = 'open'     THEN g.open_count
+        WHEN sqlc.arg('sort')::text = '-growth'  THEN -(g.open_count - g.open_count_prev)
+        ELSE (g.open_count - g.open_count_prev)
+    END) DESC,
+    g.open_count DESC
+LIMIT sqlc.arg('lim')::int;

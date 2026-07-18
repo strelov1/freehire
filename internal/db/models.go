@@ -131,6 +131,12 @@ type GmailConnection struct {
 	LastSyncedAt    pgtype.Timestamptz `json:"last_synced_at"`
 }
 
+type InsightsCompanyGrowth struct {
+	CompanySlug   string `json:"company_slug"`
+	OpenCount     int32  `json:"open_count"`
+	OpenCountPrev int32  `json:"open_count_prev"`
+}
+
 type InsightsCompanyStat struct {
 	CompanySlug string      `json:"company_slug"`
 	Day         pgtype.Date `json:"day"`

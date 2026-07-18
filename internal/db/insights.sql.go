@@ -11,6 +11,19 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const deleteAllInsightsCompanyGrowth = `-- name: DeleteAllInsightsCompanyGrowth :exec
+
+DELETE FROM insights_company_growth
+`
+
+// ---------------------------------------------------------------------------
+// Per-company open/growth scalar (backs the /insights/companies leaderboard)
+// ---------------------------------------------------------------------------
+func (q *Queries) DeleteAllInsightsCompanyGrowth(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteAllInsightsCompanyGrowth)
+	return err
+}
+
 const deleteAllInsightsCompanyStats = `-- name: DeleteAllInsightsCompanyStats :exec
 
 DELETE FROM insights_company_stats
@@ -80,6 +93,70 @@ DELETE FROM insights_velocity_daily
 func (q *Queries) DeleteAllInsightsVelocityDaily(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, deleteAllInsightsVelocityDaily)
 	return err
+}
+
+const listInsightsCompanies = `-- name: ListInsightsCompanies :many
+SELECT
+    g.company_slug,
+    coalesce(c.name, g.company_slug) AS company_name,
+    g.open_count,
+    g.open_count_prev,
+    (g.open_count - g.open_count_prev)::int AS growth
+FROM insights_company_growth g
+LEFT JOIN companies c ON c.slug = g.company_slug
+WHERE g.open_count >= $1::int
+ORDER BY
+    (CASE
+        WHEN $2::text = 'open'     THEN g.open_count
+        WHEN $2::text = '-growth'  THEN -(g.open_count - g.open_count_prev)
+        ELSE (g.open_count - g.open_count_prev)
+    END) DESC,
+    g.open_count DESC
+LIMIT $3::int
+`
+
+type ListInsightsCompaniesParams struct {
+	MinOpen int32  `json:"min_open"`
+	Sort    string `json:"sort"`
+	Lim     int32  `json:"lim"`
+}
+
+type ListInsightsCompaniesRow struct {
+	CompanySlug   string `json:"company_slug"`
+	CompanyName   string `json:"company_name"`
+	OpenCount     int32  `json:"open_count"`
+	OpenCountPrev int32  `json:"open_count_prev"`
+	Growth        int32  `json:"growth"`
+}
+
+// The leaderboard read: companies ranked by growth (open_count - open_count_prev),
+// '-growth' (freezing) reverses it, 'open' ranks by raw size; open_count is the
+// tiebreak. @min_open floors the current open-count (blunts ingest-artifact spikes).
+// company_name falls back to the slug when no companies row exists.
+func (q *Queries) ListInsightsCompanies(ctx context.Context, arg ListInsightsCompaniesParams) ([]ListInsightsCompaniesRow, error) {
+	rows, err := q.db.Query(ctx, listInsightsCompanies, arg.MinOpen, arg.Sort, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListInsightsCompaniesRow{}
+	for rows.Next() {
+		var i ListInsightsCompaniesRow
+		if err := rows.Scan(
+			&i.CompanySlug,
+			&i.CompanyName,
+			&i.OpenCount,
+			&i.OpenCountPrev,
+			&i.Growth,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listInsightsRoles = `-- name: ListInsightsRoles :many
@@ -351,6 +428,32 @@ func (q *Queries) ListInsightsVelocity(ctx context.Context, arg ListInsightsVelo
 		return nil, err
 	}
 	return items, nil
+}
+
+const rebuildInsightsCompanyGrowth = `-- name: RebuildInsightsCompanyGrowth :execrows
+INSERT INTO insights_company_growth (company_slug, open_count, open_count_prev)
+SELECT
+    company_slug,
+    count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
+    count(*) FILTER (WHERE created_at <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
+FROM jobs
+WHERE company_slug <> '' AND duplicate_of IS NULL
+GROUP BY company_slug
+HAVING count(*) FILTER (WHERE closed_at IS NULL) > 0
+    OR count(*) FILTER (WHERE created_at <= $1 AND (closed_at IS NULL OR closed_at > $1)) > 0
+`
+
+// One row per company with its current open-count and the open-count as of @prev_ts,
+// from a single scan of jobs over canonical rows only (same count(*) FILTER idiom as
+// insights_role_stats). open_count uses closed_at IS NULL (open now); open_count_prev
+// uses open-as-of @prev_ts. Companies open at neither point are dropped (HAVING) to
+// keep the table lean.
+func (q *Queries) RebuildInsightsCompanyGrowth(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error) {
+	result, err := q.db.Exec(ctx, rebuildInsightsCompanyGrowth, prevTs)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const rebuildInsightsCompanyStats = `-- name: RebuildInsightsCompanyStats :execrows
