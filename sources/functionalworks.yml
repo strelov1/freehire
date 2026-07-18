@@ -1,0 +1,5 @@
+# Functional Works (functional.works-hub.com) niche engineering board. Boardless: one public
+# GraphQL endpoint (functional.works-hub.com/api/graphql), so the entry carries no board; each
+# job's company comes from the posting, not this placeholder.
+- company: Functional Works
+  provider: functionalworks
