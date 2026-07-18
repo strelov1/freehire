@@ -29,7 +29,6 @@
   let title = $state('');
   let company = $state('');
   let location = $state('');
-  let remote = $state(false);
   let source = $state('');
 
   // The description is authored as markdown in the shared tracker editor and converted to
@@ -81,7 +80,6 @@
     cities = [];
     skills = [];
     salaryMin = salaryMax = null;
-    remote = false;
     editorKey += 1;
   }
 
@@ -99,7 +97,8 @@
         title: title.trim(),
         company: company.trim(),
         location: location.trim() || undefined,
-        remote,
+        // The dedicated "Remote" work format implies the remote flag — no separate checkbox.
+        remote: workMode === 'remote',
         description: descriptionHtml || undefined,
         source: source.trim() || undefined,
         skills: skills.length ? skills : undefined,
@@ -129,8 +128,8 @@
     <div class="flex flex-col gap-1">
       <h1 class="text-2xl font-semibold tracking-tight">Submit a job</h1>
       <p class="text-sm text-muted-foreground">
-        Found a vacancy worth sharing? Add what you know — skills, location, work format and
-        salary all help. A moderator approves it before it appears in the catalogue.
+        Hiring? Submit your opening — the skills, location, work format and salary you add help
+        the right candidates find it. A moderator reviews it before it goes live in the catalogue.
       </p>
     </div>
 
@@ -293,16 +292,10 @@
           </div>
         </div>
 
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-end">
-          <label class="flex flex-1 flex-col gap-1">
-            <span class="text-sm font-medium">Source</span>
-            <Input bind:value={source} placeholder="e.g. greenhouse (optional)" class="w-full" />
-          </label>
-          <label class="flex items-center gap-2 sm:h-9">
-            <input type="checkbox" bind:checked={remote} class="size-4 rounded border-input" />
-            <span class="text-sm font-medium">Remote</span>
-          </label>
-        </div>
+        <label class="flex flex-col gap-1">
+          <span class="text-sm font-medium">Source</span>
+          <Input bind:value={source} placeholder="e.g. greenhouse (optional)" class="w-full" />
+        </label>
       </fieldset>
 
       <!-- Description: the tracker's markdown editor; converted to HTML on submit. -->
