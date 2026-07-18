@@ -80,6 +80,12 @@ func (t trudvsem) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	for page := 0; page < trudvsemMaxPages; page++ {
 		var resp trudvsemResponse
 		if err := t.http.GetJSON(ctx, t.pageURL(e.Board, page), &resp); err != nil {
+			// The gov API intermittently 500s / times out under load. A blip mid-pagination must
+			// not discard the pages already gathered: keep them (the region self-heals next run),
+			// and only surface a hard failure when page 0 itself failed (nothing harvested at all).
+			if len(jobs) > 0 {
+				return jobs, nil
+			}
 			return nil, fmt.Errorf("trudvsem: region %q page %d: %w", e.Board, page, err)
 		}
 		for _, w := range resp.Results.Vacancies {

@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/url"
 	"slices"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 // whole region-shard pagination loop.
 type trudvsemFake struct {
 	byOffset   map[int]string // offset -> response JSON ("" => empty page envelope)
+	errAt      map[int]error  // offset -> transport error (simulates a 500/timeout blip)
 	offsets    []int          // offsets requested, in order
 	gotRegions []string       // region codes taken from the request path
 }
@@ -26,6 +28,9 @@ func (f *trudvsemFake) GetJSON(_ context.Context, u string, v any) error {
 	}
 	offset, _ := strconv.Atoi(pu.Query().Get("offset"))
 	f.offsets = append(f.offsets, offset)
+	if err := f.errAt[offset]; err != nil {
+		return err
+	}
 	body := f.byOffset[offset]
 	if body == "" {
 		body = `{"status":"200","meta":{"total":0},"results":{"vacancies":[]}}`
@@ -149,6 +154,31 @@ func TestTrudvsemStopsAtTotalMultiplePages(t *testing.T) {
 	}
 	if len(jobs) != 2*trudvsemPageSize {
 		t.Errorf("len(jobs) = %d, want %d", len(jobs), 2*trudvsemPageSize)
+	}
+}
+
+func TestTrudvsemKeepsPartialOnMidPageError(t *testing.T) {
+	// The gov API blips (500/timeout) on page 1 after a full page 0. The jobs already gathered
+	// must survive — Fetch returns page 0's postings and no error, not a discarded region.
+	fake := &trudvsemFake{
+		byOffset: map[int]string{0: trudvsemPage(trudvsemPageSize, 0, 100000)},
+		errAt:    map[int]error{1: errors.New("status 500")},
+	}
+	jobs, err := NewTrudvsem(fake).Fetch(context.Background(), CompanyEntry{Board: "5200000000000"})
+	if err != nil {
+		t.Fatalf("Fetch returned error on a mid-page blip, want partial success: %v", err)
+	}
+	if len(jobs) != trudvsemPageSize {
+		t.Errorf("len(jobs) = %d, want %d (page 0 kept despite page 1 error)", len(jobs), trudvsemPageSize)
+	}
+}
+
+func TestTrudvsemFailsWhenFirstPageErrors(t *testing.T) {
+	// A blip on page 0 harvested nothing, so the region is a genuine failure the pipeline must
+	// see (board_health) rather than a silent empty success.
+	fake := &trudvsemFake{errAt: map[int]error{0: errors.New("status 500")}}
+	if _, err := NewTrudvsem(fake).Fetch(context.Background(), CompanyEntry{Board: "5200000000000"}); err == nil {
+		t.Fatal("Fetch returned nil error when page 0 failed, want an error")
 	}
 }
 

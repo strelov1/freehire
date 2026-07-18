@@ -71,40 +71,39 @@ func pacedVagasGetter(c HTMLGetter) HTMLGetter {
 	}
 }
 
-// rateLimitedJSONGetter is the JSONGetter analog of rateLimitedHTMLGetter: it wraps a JSONGetter
-// with a shared limiter so its aggregate GetJSON rate stays under the limit regardless of the
-// pipeline's board-worker concurrency. All requests through one instance share one token bucket.
-type rateLimitedJSONGetter struct {
-	inner   JSONGetter
-	limiter waiter
+// concurrencyLimitedJSONGetter bounds how many GetJSON calls are in flight at once via a shared
+// semaphore, independent of the pipeline's board-worker pool. Unlike a rate limiter — which caps
+// the request START rate but lets slow requests pile up concurrently — this caps simultaneous
+// in-flight requests, the right lever for an API that degrades under sustained concurrent load
+// rather than by rate. One instance carries one semaphore, shared across every board and page.
+type concurrencyLimitedJSONGetter struct {
+	inner JSONGetter
+	sem   chan struct{}
 }
 
-// GetJSON blocks on the limiter before delegating, so a cancelled context surfaces as the Wait
-// error and the inner fetch is skipped.
-func (g rateLimitedJSONGetter) GetJSON(ctx context.Context, url string, v any) error {
-	if err := g.limiter.Wait(ctx); err != nil {
-		return err
+// GetJSON acquires a semaphore slot before delegating (releasing it after), so at most cap
+// requests run at once; a cancelled context surfaces while waiting and skips the inner fetch.
+func (g concurrencyLimitedJSONGetter) GetJSON(ctx context.Context, url string, v any) error {
+	select {
+	case g.sem <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
 	}
+	defer func() { <-g.sem }()
 	return g.inner.GetJSON(ctx, url, v)
 }
 
-// opendata.trudvsem.ru does not 429, but its gov infra answers large region pages slowly, and
-// the pipeline's 8-way board concurrency fires ~8 of those reads at once from the prod IP —
-// enough that the 15s client read timeout trips and most regions fail (85/90 on the first
-// full-board run), while a single sequential crawl never times out. So pace the aggregate rate
-// to serialize those workers into a gentle stream the API answers within the timeout. ~4 req/s
-// keeps the whole ~4900-page board inside the 40-min ingest window while staying far below the
-// concurrency that overwhelmed it; tune from observed convergence.
-const (
-	trudvsemRequestInterval = 250 * time.Millisecond // ~4 req/s
-	trudvsemRequestBurst    = 3
-)
+// opendata.trudvsem.ru answers a page in ~0.5s in isolation and tolerates a brief burst, but its
+// gov infra degrades under the SUSTAINED concurrent load of the pipeline's 8 board workers
+// hammering it for a whole crawl — intermittent 500s and slow bodies that trip the 15s read
+// timeout, failing most regions (a rate limiter did not help, since slow reads keep the workers
+// busy and never wait on it). Bounding in-flight requests to a gentle few keeps the crawl in the
+// API's healthy regime; at ~0.5s a page and 2 in flight the whole ~4900-page board still finishes
+// well inside the 40-min ingest window. Tune from observed convergence.
+const trudvsemMaxInFlight = 2
 
-// pacedTrudvsemGetter wraps a getter with a fresh limiter shared across one registry build, so
-// all of trudvsem's region-shard requests in a run are paced under one gentle aggregate rate.
-func pacedTrudvsemGetter(c JSONGetter) JSONGetter {
-	return rateLimitedJSONGetter{
-		inner:   c,
-		limiter: rate.NewLimiter(rate.Every(trudvsemRequestInterval), trudvsemRequestBurst),
-	}
+// limitedTrudvsemGetter wraps a getter with a fresh semaphore shared across one registry build, so
+// all of trudvsem's region-shard requests in a run stay under one gentle in-flight cap.
+func limitedTrudvsemGetter(c JSONGetter) JSONGetter {
+	return concurrencyLimitedJSONGetter{inner: c, sem: make(chan struct{}, trudvsemMaxInFlight)}
 }
