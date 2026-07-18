@@ -1,0 +1,5 @@
+# Jobspresso curated remote-jobs board. Boardless: one public WordPress Job Manager RSS feed
+# (jobspresso.co/feed/?post_type=job_listing), so the entry carries no board; each job's company
+# comes from the posting, not this placeholder.
+- company: Jobspresso
+  provider: jobspresso
