@@ -214,10 +214,14 @@ func stage2SystemPrompt() string {
 	b.WriteString("- \"company_context\": fit with the company's stage/industry (from the company info).\n")
 	b.WriteString("- \"location_fit\": can the candidate actually take the role given the job's location/work ")
 	b.WriteString("mode and their location preferences (accepted work modes, remote reach, base, relocation)? ")
-	b.WriteString("A remote job within their remote reach, or an onsite job where they are based or will ")
-	b.WriteString("relocate, scores high; an onsite job far from their base with no relocation and a remote-only ")
-	b.WriteString("preference scores low. If the candidate stated no preferences, judge on the job alone and ")
-	b.WriteString("do not penalise.\n")
+	b.WriteString("For a REMOTE role, judge ONLY whether its region or countries fall within the candidate's ")
+	b.WriteString("remote reach — a reach of \"global\", or one naming the job's region, covers any city or ")
+	b.WriteString("country in that region; ignore the candidate's physical base and relocation entirely, and ")
+	b.WriteString("never treat a remote posting's office city as a relocation requirement. Relocation matters ")
+	b.WriteString("only for onsite or hybrid roles: an onsite job where they are based or will relocate scores ")
+	b.WriteString("high; an onsite job far from their base with no relocation and a remote-only preference ")
+	b.WriteString("scores low. Honour any NOTE about remote reach in the input. If the candidate stated no ")
+	b.WriteString("preferences, judge on the job alone and do not penalise.\n")
 	b.WriteString("Each of the six is an object {\"score\": int 0-100, \"comment\": string}.\n")
 	b.WriteString("Also return \"strengths\" (array, max 6), \"gaps\" (array, max 6), and a single ")
 	b.WriteString("\"recommendation\" string. Do NOT return an overall score — it is computed separately.\n")
@@ -358,7 +362,50 @@ func writeLocation(b *strings.Builder, in Input) {
 		b.WriteString(llm.TruncateRunes(strings.TrimSpace(in.LocationPreferences), maxCompanyRunes))
 		b.WriteString("\n")
 	}
+	if remoteWithinReach(in) {
+		b.WriteString("- NOTE: this is a remote role and its region is within the candidate's stated ")
+		b.WriteString("remote reach, so they can work it from where they are — score location fit high and ")
+		b.WriteString("do not penalise their base or relocation stance.\n")
+	}
 	b.WriteString("\n")
+}
+
+// remoteWithinReach reports whether the job is remote AND its region falls within the
+// candidate's stated remote reach (their location_preferences remote.regions). A reach of
+// "global", or one naming the job's region, covers the posting regardless of the posted
+// office city/country — a remote worker in that region can take it without relocating. This
+// is deterministic on purpose: it stops the model from reading a remote role's HQ city (e.g.
+// a LATAM-remote job posted from Santo Domingo) as a relocation requirement and scoring
+// location_fit 0. Unset/unparseable prefs or a non-remote job → false (the model judges).
+func remoteWithinReach(in Input) bool {
+	if !in.JobRemote && !strings.EqualFold(in.JobWorkMode, "remote") {
+		return false
+	}
+	for _, r := range candidateRemoteReach(in.LocationPreferences) {
+		if strings.EqualFold(r, "global") {
+			return true
+		}
+		for _, jr := range in.JobRegions {
+			if strings.EqualFold(r, jr) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// candidateRemoteReach pulls the remote.regions list out of the raw location_preferences
+// JSON. Empty on unset/unparseable input (the caller then degrades to model judgement).
+func candidateRemoteReach(prefsJSON string) []string {
+	var p struct {
+		Remote struct {
+			Regions []string `json:"regions"`
+		} `json:"remote"`
+	}
+	if json.Unmarshal([]byte(strings.TrimSpace(prefsJSON)), &p) != nil {
+		return nil
+	}
+	return p.Remote.Regions
 }
 
 func writeRequirements(b *strings.Builder, reqs []Requirement) {
