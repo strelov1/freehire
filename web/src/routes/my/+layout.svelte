@@ -4,25 +4,12 @@
   import { browser } from '$app/environment';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import {
-    User,
-    Bot,
-    LayoutList,
-    Activity,
-    Bell,
-    Key,
-    FileText,
-    ScrollText,
-    Inbox,
-    Link2,
-    PanelLeftClose,
-    PanelLeft,
-  } from '@lucide/svelte';
-  import type { LucideIcon } from '@lucide/svelte';
+  import { PanelLeftClose, PanelLeft } from '@lucide/svelte';
   import { isAuthenticated, currentUser } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { Button } from '$lib/ui';
-  import { visibleAccountNav, isSectionActive, type AccountNavItem } from '$lib/accountNav';
+  import { visibleAccountNav, isSectionActive } from '$lib/accountNav';
+  import { accountNavIcons } from '$lib/accountNavIcons';
   import { cn } from '$lib/utils';
 
   // The account shell: one source of truth for the `my/*` chrome — the width
@@ -52,22 +39,6 @@
     visibleAccountNav(currentUser()?.role === 'moderator', currentUser()?.beta_tester ?? false),
   );
 
-  // Icon per section, kept out of the pure accountNav model so that stays
-  // Svelte-free and unit-testable. Keyed by the nav hrefs so a new section
-  // without an icon is a compile error, not a runtime `<undefined />`.
-  const icons: Record<AccountNavItem['href'], LucideIcon> = {
-    '/my/profile': User,
-    '/my/assistant': Bot,
-    '/my/cvs': ScrollText,
-    '/my/tracking': LayoutList,
-    '/my/activity': Activity,
-    '/my/inbox': Inbox,
-    '/my/searches': Bell,
-    '/my/api-keys': Key,
-    '/my/submissions': FileText,
-    '/my/contributions': Link2,
-  };
-
   // Shared item treatment for both nav forms; active matches the tracking tabs.
   const itemClass = (active: boolean) =>
     cn(
@@ -95,7 +66,7 @@
     {#snippet navLinks(extra: string, iconOnly = false)}
       {#each navItems as item (item.href)}
         {@const active = isSectionActive(path, item.href)}
-        {@const Icon = icons[item.href]}
+        {@const Icon = accountNavIcons[item.href]}
         <a
           href={resolve(item.href)}
           aria-current={active ? 'page' : undefined}

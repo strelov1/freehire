@@ -4,6 +4,7 @@
   // ?session deep-link. The full-width own layout comes from +layout@.svelte.
   import { page } from '$app/state';
   import AssistantChat from '$lib/assistant/AssistantChat.svelte';
+  import AccountNavRail from '$lib/components/AccountNavRail.svelte';
 
   const session = $derived(page.url.searchParams.get('session') ?? undefined);
 </script>
@@ -12,4 +13,7 @@
 
 <div class="flex h-[calc(100svh-3.5rem)]">
   <AssistantChat {session} showSessionRail />
+  <!-- Full-width surface loses the account shell nav; a compact icon rail on the right
+       edge brings the account sections back without stealing width from the chat. -->
+  <AccountNavRail />
 </div>
