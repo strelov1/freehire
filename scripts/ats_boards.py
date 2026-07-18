@@ -31,6 +31,7 @@ SLUG_PATTERNS = [
     (re.compile(r"([A-Za-z0-9_-]+)\.bamboohr\.com"), "bamboohr"),
     (re.compile(r"([A-Za-z0-9_-]+)\.breezy\.hr"), "breezy"),
     (re.compile(r"([A-Za-z0-9_-]+)\.jobs\.personio\.(?:com|de)"), "personio"),
+    (re.compile(r"([A-Za-z0-9_-]+)\.applytojob\.com"), "jazzhr"),
     # Teamtailor's "slug" is the whole board host — the adapter takes board = hostname.
     # Only *.teamtailor.com hosts are detectable here; boards on a custom domain
     # (e.g. jobs.tibber.com) carry no teamtailor marker in the URL and are missed.
@@ -54,6 +55,7 @@ VALIDATORS = {
     "bamboohr": lambda s: f"https://{s}.bamboohr.com/careers/list",
     "breezy": lambda s: f"https://{s}.breezy.hr/json",  # top-level JSON array of positions
     "personio": lambda s: f"https://{s}.jobs.personio.com/xml",
+    "jazzhr": lambda s: f"https://{s}.applytojob.com/apply",  # /apply listing HTML
     "teamtailor": lambda s: f"https://{s}/jobs",  # s is the board host, not a slug
 }
 
@@ -110,6 +112,9 @@ def validate(provider: str, slug: str) -> int | None:
         return body.count(b"<position>") or None
     if provider == "teamtailor":
         return len(set(re.findall(rb"/jobs/(\d+)", body))) or None
+    if provider == "jazzhr":
+        # Mirror internal/sources/jazzhr.go: a job is an /apply/<token>/ permalink.
+        return len(set(re.findall(rb"/apply/([A-Za-z0-9]+)/", body))) or None
     try:
         data = json.loads(body)
     except Exception:
