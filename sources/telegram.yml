@@ -24,13 +24,9 @@ channels:
   # --- General IT boards ---
   - channel: it_vakansii_jobs
     kind: board
-  - channel: geekjobs
-    kind: board
   - channel: vakansii_it
     kind: board
   - channel: zrabota
-    kind: board
-  - channel: habr_career
     kind: board
   - channel: huntmejob
     kind: board
@@ -221,8 +217,6 @@ channels:
 
   # Remote / relocation
   - channel: evacuatejobs
-    kind: board
-  - channel: remotegeekjob
     kind: board
   - channel: zarubezhom_jobs
     kind: board
