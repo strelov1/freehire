@@ -1,0 +1,190 @@
+# Trudvsem — opendata.trudvsem.ru, the open-data API of "Работа России" (the Russian federal
+# employment service). Keyless. One entry per federal subject (region): board is the 13-digit
+# OKATO region code, company is the region name (the real employer comes from each posting).
+#
+# The crawl shards by region because the API hard-caps pagination at offset < 10000 with a page
+# size of 100 — at most the freshest ~10k postings per region are reachable (results are ordered
+# by date_modify descending, so the unreachable tail is the stalest). 17 regions currently
+# exceed 10k (their oldest overflow is dropped); the other 73 are exhausted in full.
+# Regenerate the list from the /vacancies/region/<code> endpoint; totals below are informational.
+
+- company: Краснодарский край
+  board: "2300000000000"  # ~23766 vacancies
+- company: Город Москва
+  board: "7700000000000"  # ~18078 vacancies
+- company: Свердловская область
+  board: "6600000000000"  # ~17809 vacancies
+- company: Московская область
+  board: "5000000000000"  # ~15061 vacancies
+- company: Город Санкт-Петербург
+  board: "7800000000000"  # ~14410 vacancies
+- company: Самарская область
+  board: "6300000000000"  # ~14275 vacancies
+- company: Ростовская область
+  board: "6100000000000"  # ~13211 vacancies
+- company: Челябинская область
+  board: "7400000000000"  # ~12474 vacancies
+- company: Приморский край
+  board: "2500000000000"  # ~11570 vacancies
+- company: Красноярский край
+  board: "2400000000000"  # ~11256 vacancies
+- company: Республика Татарстан (Татарстан)
+  board: "1600000000000"  # ~11005 vacancies
+- company: Ленинградская область
+  board: "4700000000000"  # ~10974 vacancies
+- company: Волгоградская область
+  board: "3400000000000"  # ~10908 vacancies
+- company: Нижегородская область
+  board: "5200000000000"  # ~10898 vacancies
+- company: Республика Башкортостан
+  board: "0200000000000"  # ~10889 vacancies
+- company: Иркутская область
+  board: "3800000000000"  # ~10695 vacancies
+- company: Ставропольский край
+  board: "2600000000000"  # ~10377 vacancies
+- company: Новосибирская область
+  board: "5400000000000"  # ~9916 vacancies
+- company: Пермский край
+  board: "5900000000000"  # ~8914 vacancies
+- company: Тульская область
+  board: "7100000000000"  # ~8770 vacancies
+- company: Саратовская область
+  board: "6400000000000"  # ~8668 vacancies
+- company: Донецкая Народная Республика
+  board: "9300000000000"  # ~8450 vacancies
+- company: Алтайский край
+  board: "2200000000000"  # ~7940 vacancies
+- company: Хабаровский край
+  board: "2700000000000"  # ~7844 vacancies
+- company: Кировская область
+  board: "4300000000000"  # ~7732 vacancies
+- company: Оренбургская область
+  board: "5600000000000"  # ~7490 vacancies
+- company: Кемеровская область - Кузбасс
+  board: "4200000000000"  # ~7332 vacancies
+- company: Республика Крым
+  board: "9100000000000"  # ~7315 vacancies
+- company: Удмуртская Республика
+  board: "1800000000000"  # ~7281 vacancies
+- company: Омская область
+  board: "5500000000000"  # ~7260 vacancies
+- company: Луганская Народная Республика
+  board: "9400000000000"  # ~6982 vacancies
+- company: Воронежская область
+  board: "3600000000000"  # ~6832 vacancies
+- company: Ханты-Мансийский автономный округ - Югра
+  board: "8600000000000"  # ~6515 vacancies
+- company: Вологодская область
+  board: "3500000000000"  # ~6385 vacancies
+- company: Владимирская область
+  board: "3300000000000"  # ~6244 vacancies
+- company: Калужская область
+  board: "4000000000000"  # ~6160 vacancies
+- company: Тверская область
+  board: "6900000000000"  # ~6018 vacancies
+- company: Смоленская область
+  board: "6700000000000"  # ~5934 vacancies
+- company: Белгородская область
+  board: "3100000000000"  # ~5929 vacancies
+- company: Тюменская область
+  board: "7200000000000"  # ~5856 vacancies
+- company: Ульяновская область
+  board: "7300000000000"  # ~5743 vacancies
+- company: Забайкальский край
+  board: "7500000000000"  # ~5300 vacancies
+- company: Пензенская область
+  board: "5800000000000"  # ~5092 vacancies
+- company: Тамбовская область
+  board: "6800000000000"  # ~4739 vacancies
+- company: Калининградская область
+  board: "3900000000000"  # ~4559 vacancies
+- company: Рязанская область
+  board: "6200000000000"  # ~4381 vacancies
+- company: Амурская область
+  board: "2800000000000"  # ~4327 vacancies
+- company: Ярославская область
+  board: "7600000000000"  # ~4324 vacancies
+- company: Республика Саха (Якутия)
+  board: "1400000000000"  # ~4311 vacancies
+- company: Брянская область
+  board: "3200000000000"  # ~4219 vacancies
+- company: Липецкая область
+  board: "4800000000000"  # ~4178 vacancies
+- company: Запорожская область
+  board: "9000000000000"  # ~4103 vacancies
+- company: Республика Бурятия
+  board: "0300000000000"  # ~4077 vacancies
+- company: Томская область
+  board: "7000000000000"  # ~4053 vacancies
+- company: Ивановская область
+  board: "3700000000000"  # ~4009 vacancies
+- company: Мурманская область
+  board: "5100000000000"  # ~3890 vacancies
+- company: Курганская область
+  board: "4500000000000"  # ~3781 vacancies
+- company: Курская область
+  board: "4600000000000"  # ~3775 vacancies
+- company: Чувашская Республика - Чувашия
+  board: "2100000000000"  # ~3761 vacancies
+- company: Орловская область
+  board: "5700000000000"  # ~3725 vacancies
+- company: Астраханская область
+  board: "3000000000000"  # ~3694 vacancies
+- company: Ямало-Ненецкий автономный округ
+  board: "8900000000000"  # ~3455 vacancies
+- company: Камчатский край
+  board: "4100000000000"  # ~3398 vacancies
+- company: Республика Марий Эл
+  board: "1200000000000"  # ~3387 vacancies
+- company: Архангельская область
+  board: "2900000000000"  # ~3239 vacancies
+- company: Костромская область
+  board: "4400000000000"  # ~3201 vacancies
+- company: Республика Коми
+  board: "1100000000000"  # ~3153 vacancies
+- company: Республика Карелия
+  board: "1000000000000"  # ~3041 vacancies
+- company: Сахалинская область
+  board: "6500000000000"  # ~2814 vacancies
+- company: Республика Мордовия
+  board: "1300000000000"  # ~2809 vacancies
+- company: Псковская область
+  board: "6000000000000"  # ~2802 vacancies
+- company: Еврейская автономная область
+  board: "7900000000000"  # ~2742 vacancies
+- company: Новгородская область
+  board: "5300000000000"  # ~2641 vacancies
+- company: Республика Хакасия
+  board: "1900000000000"  # ~2304 vacancies
+- company: Республика Адыгея (Адыгея)
+  board: "0100000000000"  # ~2244 vacancies
+- company: Город Севастополь
+  board: "9200000000000"  # ~1439 vacancies
+- company: Магаданская область
+  board: "4900000000000"  # ~1375 vacancies
+- company: Кабардино-Балкарская Республика
+  board: "0700000000000"  # ~1373 vacancies
+- company: Республика Дагестан
+  board: "0500000000000"  # ~1282 vacancies
+- company: Херсонская область
+  board: "9500000000000"  # ~1068 vacancies
+- company: Республика Калмыкия
+  board: "0800000000000"  # ~909 vacancies
+- company: Республика Алтай
+  board: "0400000000000"  # ~852 vacancies
+- company: Чукотский автономный округ
+  board: "8700000000000"  # ~705 vacancies
+- company: Республика Северная Осетия - Алания
+  board: "1500000000000"  # ~680 vacancies
+- company: Чеченская Республика
+  board: "2000000000000"  # ~659 vacancies
+- company: Республика Тыва
+  board: "1700000000000"  # ~612 vacancies
+- company: Карачаево-Черкесская Республика
+  board: "0900000000000"  # ~542 vacancies
+- company: Ненецкий автономный округ
+  board: "8300000000000"  # ~287 vacancies
+- company: Город Байконур
+  board: "9900000000000"  # ~163 vacancies
+- company: Республика Ингушетия
+  board: "0600000000000"  # ~82 vacancies

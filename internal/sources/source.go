@@ -308,6 +308,8 @@ func All(c HTTPClient) map[string]Source {
 		NewAlignerr(c),
 		NewMicro1(c),
 		NewBairesDev(c),
+		// RU federal open-data aggregator: board-based, sharded per region (board = OKATO code).
+		NewTrudvsem(c),
 		// RU-domestic single-company adapters (boardless, except Yandex which selects
 		// host+language by board).
 		NewYandex(c),
