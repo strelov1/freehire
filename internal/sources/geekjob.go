@@ -32,6 +32,12 @@ func (geekjob) boardless() {}
 
 func (geekjob) aggregator() {}
 
+// geekjob lists its whole catalogue each run (one global /vacancies/N walk to the tail), so the
+// post-run sweep may close unseen jobs by source — retiring a company that dropped out of the feed
+// entirely, which the crawled-company scope cannot reach. Sound only because a truncated walk
+// errors (Fetch uses crawlAllPagedLinks): a partial listing must not be mistaken for a shrunken one.
+func (geekjob) fullCatalog() {}
+
 const (
 	// geekjobBaseURL is the site root the listing's relative /vacancy/<id> links resolve against.
 	geekjobBaseURL = "https://geekjob.ru/"
@@ -44,9 +50,10 @@ func (s geekjob) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	base, _ := url.Parse(geekjobBaseURL) // a constant literal never fails to parse
 
 	// Page through the listing until a page yields no new links (the tail/empty page, which the
-	// public feed reaches around page 14) or the safety cap is hit. A first-page failure is a
-	// board-level error; a later-page failure just stops the walk with what we have.
-	locs, err := crawlPagedLinks(ctx, s.http, geekjobMaxPages,
+	// public feed reaches around page 14) or the safety cap is hit. geekjob is a fullCatalog source
+	// swept by source, so ANY page failing is a board-level error (crawlAllPagedLinks): a truncated
+	// walk returned as success would let the sweep mass-close every posting past the failed page.
+	locs, err := crawlAllPagedLinks(ctx, s.http, geekjobMaxPages,
 		func(page int) string { return fmt.Sprintf("%svacancies/%d", geekjobBaseURL, page) },
 		func(root *html.Node) []string {
 			return jobLinks(base, root, func(href string) bool { return geekjobJobID(href) != "" })

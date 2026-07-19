@@ -250,14 +250,30 @@ func metaProperty(root *html.Node, property string) string {
 // link extractor. pageURL builds the listing URL for a 1-based page number; links extracts a
 // page's job links. It returns an error ONLY when the FIRST page fails (a board-level failure)
 // — the caller adds its board context; a later page failing ends the walk with the links
-// gathered so far, so a partial crawl survives a mid-listing hiccup.
+// gathered so far, so a partial crawl survives a mid-listing hiccup. Use crawlAllPagedLinks
+// when a truncated walk must NOT be salvaged (a fullCatalog aggregator swept by source).
 func crawlPagedLinks(ctx context.Context, get HTMLGetter, maxPages int, pageURL func(page int) string, links func(*html.Node) []string) ([]string, error) {
+	return pagedLinks(ctx, get, maxPages, pageURL, links, false)
+}
+
+// crawlAllPagedLinks is crawlPagedLinks that fails the WHOLE crawl if ANY page fails, not just
+// the first. For a fullCatalog aggregator whose post-run sweep closes unseen jobs by source, a
+// silently-truncated walk looks like a shrunken catalogue and would mass-close every posting past
+// the failed page — so a mid-listing failure must surface as a board error (Failed>0), steering
+// the sweep back to the safe company-scoped close. See sources.fullCatalog and cmd/ingest.
+func crawlAllPagedLinks(ctx context.Context, get HTMLGetter, maxPages int, pageURL func(page int) string, links func(*html.Node) []string) ([]string, error) {
+	return pagedLinks(ctx, get, maxPages, pageURL, links, true)
+}
+
+// pagedLinks is the shared paging loop. failOnGap makes a later-page fetch failure fail the whole
+// crawl (crawlAllPagedLinks) instead of ending the walk with what was gathered (crawlPagedLinks).
+func pagedLinks(ctx context.Context, get HTMLGetter, maxPages int, pageURL func(page int) string, links func(*html.Node) []string, failOnGap bool) ([]string, error) {
 	var out []string
 	seen := make(map[string]bool)
 	for page := 1; page <= maxPages; page++ {
 		root, err := get.GetHTML(ctx, pageURL(page))
 		if err != nil {
-			if page == 1 {
+			if page == 1 || failOnGap {
 				return nil, err
 			}
 			break // a later page failing ends enumeration with the links gathered so far

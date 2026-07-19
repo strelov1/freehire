@@ -239,12 +239,15 @@ func TestHabrCareerLaterPageErrorIsBoardError(t *testing.T) {
 	}
 }
 
-// FullCatalogProviders drives the sweep's source-scoped close; habr_career must be in it (and a
-// per-company board like greenhouse must not) or a vanished company's jobs never retire.
+// FullCatalogProviders drives the sweep's source-scoped close; the whole-catalogue aggregators
+// (habr_career, geekjob) must be in it and a per-company board like greenhouse must not, or a
+// vanished company's jobs never retire.
 func TestFullCatalogProviders(t *testing.T) {
 	got := FullCatalogProviders(All(nil))
-	if !slices.Contains(got, "habr_career") {
-		t.Errorf("FullCatalogProviders() = %v, want it to contain habr_career", got)
+	for _, want := range []string{"habr_career", "geekjob"} {
+		if !slices.Contains(got, want) {
+			t.Errorf("FullCatalogProviders() = %v, want it to contain %q", got, want)
+		}
 	}
 	if slices.Contains(got, "greenhouse") {
 		t.Error("FullCatalogProviders() must not contain a per-company board like greenhouse")
