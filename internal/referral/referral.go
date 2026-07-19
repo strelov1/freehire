@@ -56,8 +56,8 @@ var (
 	// ErrInvalidCVChoice is a CV choice that violates the kind/id invariant: an original
 	// carrying a cv_id, a built without one, or an unknown kind (422).
 	ErrInvalidCVChoice = errors.New("referral: invalid CV choice")
-	// ErrNoResume is an 'original' CV choice by a seeker who has no stored résumé (422).
-	ErrNoResume = errors.New("referral: no stored résumé to attach")
+	// ErrNoResume is an 'original' CV choice by a seeker who has no stored CV (422).
+	ErrNoResume = errors.New("referral: no stored CV to attach")
 	// ErrCompanyNotEligible is a request into a company with no approved referrer (409).
 	ErrCompanyNotEligible = errors.New("referral: company has no approved referrer")
 	// ErrDailyCapReached is a seeker exceeding the rolling-24h request cap (429).

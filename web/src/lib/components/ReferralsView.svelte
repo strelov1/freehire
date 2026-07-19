@@ -142,7 +142,7 @@
               <a href="/companies/{r.company_slug}" class="hover:underline">{r.company_slug}</a>
             </td>
             <td class="py-3 pr-4 text-muted-foreground">
-              {r.cv_kind === 'built' ? 'Tailored CV' : 'Uploaded résumé'}
+              {r.cv_kind === 'built' ? 'Tailored CV' : 'Uploaded CV'}
             </td>
             <td class="py-3 pr-4">
               <span class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold {pillClass[r.status]}">

@@ -59,7 +59,7 @@
   function messageFor(e: unknown): string {
     if (e instanceof ApiError) {
       if (e.status === 409) return 'You already have an active request for this company.';
-      if (e.status === 422) return 'Upload a résumé first, or pick a tailored CV.';
+      if (e.status === 422) return 'Upload a CV first, or pick a tailored one.';
       if (e.status === 429) return "You've reached today's referral request limit.";
       if (e.status === 401) return 'Please sign in to request a referral.';
     }
@@ -143,7 +143,7 @@
               disabled={!hasResume}
               onchange={() => (cvKind = 'original')}
             />
-            <span class="font-medium">My uploaded résumé</span>
+            <span class="font-medium">My uploaded CV</span>
             {#if !hasResume}
               <span class="ml-auto text-xs text-muted-foreground">none uploaded</span>
             {/if}
@@ -171,7 +171,7 @@
                 class="ml-auto max-w-[55%] rounded-md border border-border bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {#each tailored as cv (cv.id)}
-                  <option value={cv.id}>{cv.title} — {cv.job_company}</option>
+                  <option value={cv.id}>{cv.job_company ? `${cv.title} — ${cv.job_company}` : cv.title}</option>
                 {/each}
               </select>
             {:else}
