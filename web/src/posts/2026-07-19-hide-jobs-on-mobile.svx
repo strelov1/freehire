@@ -1,0 +1,18 @@
+---
+title: Hide jobs from your phone
+date: 2026-07-19
+summary: The "not interested" control on job cards now shows on touch screens, and saving a job with a reminder takes one tap less.
+type: changelog
+tags:
+  - browse
+  - mobile
+draft: false
+---
+
+Not interested in a posting? On the [jobs feed](/jobs) each card has a quiet
+"hide" control that drops it from your list. It used to appear only on hover, so
+on a phone there was no way to reach it — now it's always there on touch screens.
+
+While we were in the neighbourhood: after you save a job and pick a reminder,
+the little prompt just closes instead of making you tap a second "done" — one
+fewer step to get back to browsing.
