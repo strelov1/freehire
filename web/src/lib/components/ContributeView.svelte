@@ -66,7 +66,7 @@
       <p class="text-sm text-muted-foreground">
         Found a company we don't cover yet? Paste any link from its ATS careers page — a vacancy
         or the board itself. If it's a board we don't crawl, we add it and you earn
-        <span class="font-medium text-foreground">5 AI credits</span>. We then pull in all of its
+        <span class="font-medium text-foreground">1 AI credit</span>. We then pull in all of its
         jobs. Track your balance on the
         <a href={resolve('/my/credits')} class="font-medium underline underline-offset-4">Credits page</a>.
       </p>
@@ -75,7 +75,7 @@
     {#if accepted}
       <div class="rounded-lg border border-border bg-secondary/40 p-4 text-sm" role="status">
         Thanks — <span class="font-medium">{accepted.board}</span> ({accepted.source}) is a new
-        board for us. We'll start crawling it. <span class="font-medium">+5 AI credits.</span>
+        board for us. We'll start crawling it. <span class="font-medium">+1 AI credit.</span>
       </div>
     {:else if tracked}
       <div class="rounded-lg border border-border bg-secondary/40 p-4 text-sm" role="status">

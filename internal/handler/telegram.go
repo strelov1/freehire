@@ -202,6 +202,6 @@ func (a *API) processTelegramContribution(chatID int64, rawURL string) {
 		a.sendTelegram(ctx, chatID, "⚠️ Something went wrong. Please try again.")
 	default:
 		a.rewardContribution(ctx, userID, rec.ID)
-		a.sendTelegram(ctx, chatID, "🎉 <b>"+rec.Board+"</b> ("+rec.Source+") is a new board — we'll start crawling it. +5 AI credits!")
+		a.sendTelegram(ctx, chatID, "🎉 <b>"+rec.Board+"</b> ("+rec.Source+") is a new board — we'll start crawling it. +1 AI credit!")
 	}
 }

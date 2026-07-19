@@ -39,7 +39,7 @@
     {
       n: '03',
       title: 'New board? You’re rewarded',
-      body: 'If it’s a company we don’t track yet — the role isn’t in our catalogue — we add the board, crawl all of its openings, and credit you 5 AI credits.',
+      body: 'If it’s a company we don’t track yet — the role isn’t in our catalogue — we add the board, crawl all of its openings, and credit you 1 AI credit.',
     },
   ];
 </script>
@@ -106,7 +106,7 @@
         <p class="text-sm leading-relaxed text-muted-foreground">
           We simplified that first step down to a single link, and we reward the community for it.
           Spot a company we’re missing? Drop its link and you’ve just made the market a little
-          more complete for everyone — and earned AI credits for it.
+          more complete for everyone — and earned an AI credit for it.
         </p>
         <div class="flex flex-wrap gap-2">
           {#each supportedAts as ats (ats)}
@@ -156,7 +156,7 @@
     <h2 class="text-xl font-semibold tracking-tight">Found a company we’re missing?</h2>
     <p class="max-w-xl text-sm leading-relaxed text-muted-foreground">
       Paste its link — a vacancy or its careers page. If we don’t track it yet, you’ve found
-      new coverage, and the AI credits are yours.
+      new coverage, and the credit is yours.
     </p>
     <div class="flex flex-wrap gap-3">
       <Button href={resolve('/my/contributions')} variant="primary" size="lg">Contribute a board</Button>

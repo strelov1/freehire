@@ -19,7 +19,7 @@ func LoadCredits() Credits {
 		MonthlyGrant:       envInt("CREDITS_MONTHLY_GRANT", 20),
 		CostMatch:          envInt("CREDITS_COST_MATCH", 1),
 		CostTailor:         envInt("CREDITS_COST_TAILOR", 3),
-		ContributionReward: envInt("CREDITS_CONTRIBUTION_REWARD", 5),
+		ContributionReward: envInt("CREDITS_CONTRIBUTION_REWARD", 1),
 	}
 	if c.MonthlyGrant < 0 {
 		c.MonthlyGrant = 0

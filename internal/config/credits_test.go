@@ -6,6 +6,7 @@ func TestLoadCredits_defaults(t *testing.T) {
 	t.Setenv("CREDITS_MONTHLY_GRANT", "")
 	t.Setenv("CREDITS_COST_MATCH", "")
 	t.Setenv("CREDITS_COST_TAILOR", "")
+	t.Setenv("CREDITS_CONTRIBUTION_REWARD", "")
 
 	got := LoadCredits()
 	if got.MonthlyGrant != 20 {
@@ -17,8 +18,8 @@ func TestLoadCredits_defaults(t *testing.T) {
 	if got.CostTailor != 3 {
 		t.Errorf("CostTailor default = %d, want 3", got.CostTailor)
 	}
-	if got.ContributionReward != 5 {
-		t.Errorf("ContributionReward default = %d, want 5", got.ContributionReward)
+	if got.ContributionReward != 1 {
+		t.Errorf("ContributionReward default = %d, want 1", got.ContributionReward)
 	}
 }
 
