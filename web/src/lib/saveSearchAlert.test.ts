@@ -1,10 +1,9 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { ApiError } from './api';
-import type { SavedSearch, Subscription } from './types';
+import type { SavedSearch } from './types';
 import {
   alertName,
   matchedSavedSearch,
-  alertStateFor,
   ensureSaved,
   setPendingAlert,
   consumePendingAlert,
@@ -28,8 +27,6 @@ class MemoryStorage {
 
 const search = (id: number, query: string, name = `s${id}`): SavedSearch =>
   ({ id, name, query, public_slug: '', author_label: '', created_at: '', updated_at: '' }) as SavedSearch;
-const sub = (id: number, savedSearchId: number): Subscription =>
-  ({ id, saved_search_id: savedSearchId, channel: 'telegram', active: true, created_at: '' }) as Subscription;
 
 // A SavedSearchesPort double that records create calls and grows its list on success.
 function makeSaved(opts: {
@@ -79,28 +76,6 @@ describe('matchedSavedSearch', () => {
   });
   it('returns undefined when nothing matches', () => {
     expect(matchedSavedSearch('category=backend', [search(1, 'category=frontend')])).toBeUndefined();
-  });
-});
-
-describe('alertStateFor (save-first)', () => {
-  const base = { authed: true, saved: true, telegramEnabled: true, subscription: undefined, connecting: false };
-  it('signed-out when not authed', () => {
-    expect(alertStateFor({ ...base, authed: false })).toBe('signed-out');
-  });
-  it('unsaved when authed but the query is not saved', () => {
-    expect(alertStateFor({ ...base, saved: false })).toBe('unsaved');
-  });
-  it('subscribed when a subscription exists', () => {
-    expect(alertStateFor({ ...base, subscription: sub(1, 1) })).toBe('subscribed');
-  });
-  it('connecting while awaiting the link recheck', () => {
-    expect(alertStateFor({ ...base, connecting: true })).toBe('connecting');
-  });
-  it('saved (no alert) when saved but telegram is off', () => {
-    expect(alertStateFor({ ...base, telegramEnabled: false })).toBe('saved');
-  });
-  it('idle (offer alert) when saved and telegram is on', () => {
-    expect(alertStateFor(base)).toBe('idle');
   });
 });
 

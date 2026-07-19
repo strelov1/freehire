@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Pencil, Trash2 } from '@lucide/svelte';
+  import { Bell, Bookmark, Pencil, Trash2 } from '@lucide/svelte';
   import { ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
@@ -119,9 +119,7 @@
   }
 </script>
 
-<div class="flex flex-col gap-2">
-  <h3 class="text-sm font-semibold tracking-tight">My filters</h3>
-
+<div class="flex flex-col gap-4">
   {#if !isAuthenticated()}
     <button
       type="button"
@@ -131,20 +129,31 @@
       Sign in to save filters
     </button>
   {:else}
-    <!-- Save the current filters + turn on their Telegram alert (shared control). -->
-    <SaveSearchAlert query={current} variant="full" />
+    <!-- Zone 1: alerts for the filters staged right now. Save is the primary action;
+         once saved, the channel toggles (Telegram / Email) render in place. -->
+    <section class="flex flex-col gap-2">
+      <span class="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <Bell class="size-3.5" aria-hidden="true" /> Alerts for the current filters
+      </span>
+      <SaveSearchAlert query={current} variant="full" />
 
-    {#if dirty}
-      <Button variant="secondary" size="sm" onclick={update} disabled={busy} class="self-start">
-        Update “{base?.name}”
-      </Button>
-    {/if}
+      {#if dirty}
+        <Button variant="secondary" size="sm" onclick={update} disabled={busy} class="self-start">
+          Update “{base?.name}”
+        </Button>
+      {/if}
+    </section>
 
-    <!-- The saved sets: click a name to apply, pencil to rename inline, trash to delete.
-         The set matching the current filters is dotted + highlighted; a set you applied
-         and then edited keeps a muted dot as the "base". -->
+    <!-- Zone 2: the saved sets — click a name to apply, pencil to rename inline, trash
+         to delete. The set matching the current filters is dotted + highlighted; a set
+         you applied and then edited keeps a muted dot as the "base". -->
     {#if items.length > 0}
-      <ul class="mt-1 flex flex-col gap-0.5">
+      <section class="flex flex-col gap-1.5">
+        <span class="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <Bookmark class="size-3.5" aria-hidden="true" /> Your saved filters
+        </span>
+        <p class="-mt-0.5 text-xs text-muted-foreground">Click one to apply it to the list.</p>
+        <ul class="flex flex-col gap-0.5">
         {#each items as set (set.id)}
           {#if renamingId === set.id}
             <li class="flex items-center gap-2 py-0.5" {@attach focusInput}>
@@ -186,7 +195,8 @@
             </li>
           {/if}
         {/each}
-      </ul>
+        </ul>
+      </section>
     {/if}
 
     {#if error}

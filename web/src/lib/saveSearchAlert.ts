@@ -9,7 +9,7 @@
 import { ApiError } from './api';
 import { canonicalQuery, filtersFromParams } from './facetModel';
 import { FACETS, dynamicLabel } from './facets';
-import type { SavedSearch, Subscription } from './types';
+import type { SavedSearch } from './types';
 
 // ---- auto-name ----
 
@@ -39,40 +39,13 @@ export function alertName(query: string): string {
   return name || 'Job alert';
 }
 
-// ---- dedupe + render state ----
+// ---- dedupe ----
 
 /** The saved search whose canonical query matches this query, if any — so the flow
  *  reuses an existing set instead of creating a duplicate. */
 export function matchedSavedSearch(query: string, items: SavedSearch[]): SavedSearch | undefined {
   const target = canonicalQuery(query);
   return items.find((s) => canonicalQuery(s.query) === target);
-}
-
-/** The render state of the control for the current query. Save comes first and is
- *  its own state (`unsaved`), independent of Telegram; the alert states only apply
- *  once the search is saved. Auth is checked before everything (a signed-out visitor
- *  can neither save nor read the auth-gated telegram status). Link status is not an
- *  input — an unlinked but saved user still sees the "idle" alert offer; the link step
- *  is driven on activation. */
-export type AlertState = 'signed-out' | 'unsaved' | 'saved' | 'idle' | 'connecting' | 'subscribed';
-
-export interface AlertSnapshot {
-  authed: boolean;
-  /** A saved search matches this query. */
-  saved: boolean;
-  telegramEnabled: boolean;
-  subscription: Subscription | undefined;
-  /** The deep link was opened and we're awaiting the "I've connected" recheck. */
-  connecting: boolean;
-}
-
-export function alertStateFor(s: AlertSnapshot): AlertState {
-  if (!s.authed) return 'signed-out';
-  if (!s.saved) return 'unsaved';
-  if (s.subscription) return 'subscribed';
-  if (s.connecting) return 'connecting';
-  if (!s.telegramEnabled) return 'saved'; // saved, but no alert to offer
-  return 'idle'; // saved + telegram on → offer the alert
 }
 
 // ---- the save ----

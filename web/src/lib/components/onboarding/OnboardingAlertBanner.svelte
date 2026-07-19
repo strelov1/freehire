@@ -24,7 +24,7 @@
   </div>
   <div class="min-w-0 flex-1">
     <p class="text-sm font-semibold tracking-tight">Save this feed</p>
-    <p class="mb-2 text-xs text-muted-foreground">Keep it — then get its new jobs in Telegram, no need to check back.</p>
+    <p class="mb-2 text-xs text-muted-foreground">Keep it — then get its new jobs in Telegram or email, no need to check back.</p>
     <SaveSearchAlert {query} {autostart} variant="quick" />
   </div>
   <button

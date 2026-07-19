@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Check, Mail } from '@lucide/svelte';
+  import { Check, Pencil, Share2, Trash2 } from '@lucide/svelte';
   import { ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
@@ -8,13 +8,14 @@
   import type { SavedSearch } from '$lib/types';
   import { Button, Input } from '$lib/ui';
   import ProviderIcon from './ProviderIcon.svelte';
-  import SaveSearchAlert from './filters/SaveSearchAlert.svelte';
+  import AlertChannels from './filters/AlertChannels.svelte';
   import States from './States.svelte';
 
   // The account page for saved searches and their alerts: the Telegram connection at
-  // the top, then each saved search with its share/board controls and its own Telegram
-  // alert toggle (the shared SaveSearchAlert). Merges the former separate Notifications
-  // page — a subscription is always tied to a saved search, so it's managed per-row.
+  // the top, then each saved search as a card with its actions (open / rename / share /
+  // delete) and its per-channel alert toggles (the shared AlertChannels). Merges the
+  // former separate Notifications page — a subscription is always tied to a saved
+  // search, so it's managed per-row.
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   const items = $derived(savedSearches.items);
@@ -72,25 +73,6 @@
   let error = $state<string | null>(null);
   // The row whose link was just copied, to flip its button label briefly.
   let copiedId = $state<number | null>(null);
-  // The row whose email alert is being toggled.
-  let emailBusyId = $state<number | null>(null);
-
-  // Toggle the email alert for an (already saved) search: subscribe on the account
-  // email, or unsubscribe if it is already on. No linking step — unlike Telegram,
-  // email delivers to the account address with no connect flow.
-  async function toggleEmail(s: SavedSearch) {
-    emailBusyId = s.id;
-    error = null;
-    try {
-      const existing = notifications.forSavedSearch(s.id, 'email');
-      if (existing) await notifications.unsubscribe(existing.id);
-      else await notifications.subscribe(s.id, 'email');
-    } catch (e) {
-      error = e instanceof ApiError ? e.message : 'Could not update the email alert. Please try again.';
-    } finally {
-      emailBusyId = null;
-    }
-  }
 
   async function load() {
     status = 'loading';
@@ -194,8 +176,9 @@
     <div class="flex flex-col gap-1">
       <h1 class="text-2xl font-semibold tracking-tight">Saved searches &amp; alerts</h1>
       <p class="text-sm text-muted-foreground">
-        Reuse a saved filter set, turn on its Telegram or email alert, or share it as a public
-        board anyone can open. Create new saved searches from the filters panel on the jobs page.
+        Each saved set of filters can send you its new jobs — in Telegram, by email, or both.
+        Reuse one anytime, or share it as a public board. Create new saved searches from the
+        filters panel on the jobs page.
       </p>
     </div>
 
@@ -250,79 +233,62 @@
           message="No saved searches yet. Save a filter set from the jobs page to see it here."
         />
       {:else}
-        <ul class="flex flex-col divide-y divide-border rounded-lg border border-border">
+        <div class="flex flex-col gap-3">
         {#each items as s (s.id)}
-          {@const emailSub = notifications.forSavedSearch(s.id, 'email')}
-          <li class="flex flex-col gap-2 px-4 py-3">
-            <div class="flex items-start justify-between gap-3">
-              <div class="flex min-w-0 flex-col gap-0.5">
+          <article class="flex flex-col rounded-xl border border-border p-4 transition-colors hover:border-muted-foreground/30">
+            <div class="flex items-start gap-3">
+              <div class="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span class="truncate text-sm font-medium">{s.name}</span>
                 <span class="text-xs text-muted-foreground">
                   {s.query === '' ? 'All jobs' : 'Custom filters'}
-                  {#if s.public_slug}· <span class="text-primary">Shared</span>{/if}
+                  {#if s.public_slug}· <span class="font-medium text-brand-strong">Shared</span>{/if}
                 </span>
               </div>
-              <div class="flex shrink-0 flex-wrap items-center justify-end gap-1">
-                <Button variant="ghost" size="sm" href={`/?${s.query}`}>Open</Button>
-                <Button variant="ghost" size="sm" onclick={() => rename(s)}>Rename</Button>
-                {#if s.public_slug}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={busyId === s.id}
-                    onclick={() => unshare(s.id)}
+              <div class="flex shrink-0 items-center gap-1">
+                <Button variant="secondary" size="sm" href={`/?${s.query}`}>Open</Button>
+                <button
+                  type="button"
+                  aria-label="Rename “{s.name}”"
+                  title="Rename"
+                  onclick={() => rename(s)}
+                  class="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <Pencil class="size-4" />
+                </button>
+                {#if !s.public_slug}
+                  <button
+                    type="button"
+                    aria-label="Share “{s.name}”"
+                    title="Share as a public board"
+                    onclick={() => startShare(s)}
+                    class="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                   >
-                    Unshare
-                  </Button>
-                {:else}
-                  <Button variant="ghost" size="sm" onclick={() => startShare(s)}>Share</Button>
+                    <Share2 class="size-4" />
+                  </button>
                 {/if}
-                <Button variant="ghost" size="sm" onclick={() => remove(s)}>Delete</Button>
+                <button
+                  type="button"
+                  aria-label="Delete “{s.name}”"
+                  title="Delete"
+                  onclick={() => remove(s)}
+                  class="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 class="size-4" />
+                </button>
               </div>
             </div>
 
-            <!-- Per-search Telegram alert. The search is already saved here, so the
-                 shared control shows the alert offer / subscribed state (with turn-off). -->
-            <div class="flex">
-              <SaveSearchAlert query={s.query} variant="full" />
-            </div>
-
-            <!-- Per-search email alert. No linking step — email goes to the account
-                 address — so this is a plain subscribe/turn-off toggle. -->
-            <div class="flex flex-col gap-1.5">
-              {#if emailSub}
-                <p class="flex items-center gap-1.5 text-sm">
-                  <Check class="size-4 text-primary" aria-hidden="true" />
-                  <span>You’ll get new jobs by email</span>
-                </p>
-                <button
-                  type="button"
-                  onclick={() => toggleEmail(s)}
-                  disabled={emailBusyId === s.id}
-                  class="self-start text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-                >
-                  Turn off
-                </button>
-              {:else}
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onclick={() => toggleEmail(s)}
-                  disabled={emailBusyId === s.id}
-                  class="justify-center gap-1.5 self-start"
-                >
-                  <Mail class="size-4" aria-hidden="true" />
-                  {emailBusyId === s.id ? 'Setting up…' : 'Email me new jobs'}
-                </Button>
-              {/if}
+            <!-- Per-search alerts: the shared toggle chips (Telegram / Email). -->
+            <div class="mt-3 border-t border-dashed border-border pt-3">
+              <AlertChannels savedSearchId={s.id} />
             </div>
 
             {#if s.public_slug}
-              <!-- Shared: show the public link and (when set) the author label. -->
-              <div class="flex flex-wrap items-center gap-2 rounded bg-secondary/50 px-2 py-1.5">
+              <!-- Shared: the public link, its author label, copy, and unshare. -->
+              <div class="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-secondary/50 px-3 py-2">
                 <a
                   href={`/b/${s.public_slug}`}
-                  class="min-w-0 truncate text-xs text-primary underline-offset-4 hover:underline"
+                  class="min-w-0 truncate text-xs text-brand-strong underline-offset-4 hover:underline"
                 >
                   /b/{s.public_slug}
                 </a>
@@ -332,10 +298,13 @@
                 <Button variant="ghost" size="sm" class="ml-auto" onclick={() => copyLink(s)}>
                   {copiedId === s.id ? 'Copied' : 'Copy link'}
                 </Button>
+                <Button variant="ghost" size="sm" disabled={busyId === s.id} onclick={() => unshare(s.id)}>
+                  Unshare
+                </Button>
               </div>
             {:else if shareEditId === s.id}
               <!-- Private + sharing: optional author label, then confirm. -->
-              <div class="flex flex-wrap items-center gap-2">
+              <div class="mt-3 flex flex-wrap items-center gap-2">
                 <Input
                   bind:value={authorLabel}
                   placeholder="Author label (optional)"
@@ -353,9 +322,9 @@
                 <Button variant="ghost" size="sm" onclick={() => (shareEditId = null)}>Cancel</Button>
               </div>
             {/if}
-          </li>
+          </article>
         {/each}
-        </ul>
+        </div>
       {/if}
     {/if}
   </div>

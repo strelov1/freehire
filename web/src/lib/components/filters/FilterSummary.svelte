@@ -77,7 +77,7 @@
 <FilterSummaryShell {groups} active={store.active} onReset={() => store.clear()} {onOpen} {description}>
   {#snippet afterButton()}
     {#if canSave}
-      <SaveSearchAlert query={current} variant="full" />
+      <SaveSearchAlert query={current} variant="full" alerts="manage" />
     {/if}
   {/snippet}
 </FilterSummaryShell>
