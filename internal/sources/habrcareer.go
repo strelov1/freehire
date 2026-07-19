@@ -196,9 +196,31 @@ type habrRawPosting struct {
 	HiringOrganization struct {
 		Name string `json:"name"`
 	} `json:"hiringOrganization"`
-	JobLocation []struct {
-		Address habrAddress `json:"address"`
-	} `json:"jobLocation"`
+	JobLocation habrJobLocations `json:"jobLocation"`
+}
+
+// habrJobLocation is one jobLocation entry; only its address is read.
+type habrJobLocation struct {
+	Address habrAddress `json:"address"`
+}
+
+// habrJobLocations reads jobLocation, which schema.org allows as either a single Place object
+// or an array of them — Habr emits both shapes across vacancies. Best-effort like habrAddress:
+// an unrecognized shape leaves the location empty rather than failing the whole JobPosting
+// decode, which would drop the description (the field that matters) along with it.
+type habrJobLocations []habrJobLocation
+
+func (l *habrJobLocations) UnmarshalJSON(b []byte) error {
+	var arr []habrJobLocation
+	if json.Unmarshal(b, &arr) == nil {
+		*l = arr
+		return nil
+	}
+	var one habrJobLocation
+	if json.Unmarshal(b, &one) == nil {
+		*l = habrJobLocations{one}
+	}
+	return nil
 }
 
 // habrAddress reads jobLocation.address, which Habr emits as a bare string but schema.org types
