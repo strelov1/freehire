@@ -342,6 +342,20 @@ func (e *StatusError) Error() string {
 	return fmt.Sprintf("sources: GET %s: status %d", e.URL, e.Code)
 }
 
+// ChallengeError is an AWS-WAF Challenge response — a request the WAF answered with an
+// interactive JS proof-of-work shell instead of the real content (marked by the
+// "x-amzn-waf-action: challenge" header, served with HTTP 202). It is NOT a transient
+// failure: a fixed backoff will not clear it, and retrying only deepens the per-IP
+// penalty. Callers behind a rate-based WAF (e.g. clinch) match it with errors.As to
+// stop hydrating for the rest of the run rather than parse the shell as a posting.
+type ChallengeError struct {
+	URL string
+}
+
+func (e *ChallengeError) Error() string {
+	return fmt.Sprintf("sources: GET %s: WAF challenge", e.URL)
+}
+
 // request is the parameters of a single HTTP exchange issued by do. A non-nil body is
 // re-sent on each retry; the standard User-Agent/Accept headers always win over headers.
 type request struct {
@@ -396,6 +410,15 @@ func (c *Client) do(ctx context.Context, r request) error {
 		if err != nil {
 			lastErr = err
 			continue // network error — transient
+		}
+
+		// An AWS-WAF Challenge is served with HTTP 202 (a 2xx that would otherwise be
+		// decoded as content) and its own action header. Catch it before the success
+		// branch and return immediately — it is not transient, so a retry is wasted and
+		// only prolongs the WAF's per-IP penalty.
+		if resp.Header.Get("X-Amzn-Waf-Action") == "challenge" {
+			resp.Body.Close()
+			return &ChallengeError{URL: r.url}
 		}
 
 		switch {

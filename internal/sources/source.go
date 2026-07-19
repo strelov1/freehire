@@ -241,7 +241,10 @@ func All(c HTTPClient) map[string]Source {
 		NewADP(c),
 		NewITechArt(c),
 		NewVention(c),
-		NewClinch(c),
+		// Detail hydration is rate-paced (pacedClinchGetter) to hold the run's request rate
+		// under ClinchTalent's per-IP AWS-WAF challenge window; the sitemap fetch is a single
+		// request and needs no pacing.
+		NewClinch(c, pacedClinchGetter(c)),
 		NewOracle(c),
 		NewEightfold(c),
 		NewFreshteam(c),

@@ -107,3 +107,22 @@ func TestConcurrencyLimitedJSONGetter_CancelledContextShortCircuits(t *testing.T
 		t.Fatalf("inner GetJSON called despite no free slot (%d times)", len(inner.urls))
 	}
 }
+
+// challengingHTMLGetter always fails the fetch with a WAF ChallengeError.
+type challengingHTMLGetter struct{ url string }
+
+func (g challengingHTMLGetter) GetHTML(_ context.Context, _ string) (*html.Node, error) {
+	return nil, &ChallengeError{URL: g.url}
+}
+
+func TestPacedClinchGetter_PropagatesChallengeError(t *testing.T) {
+	g := pacedClinchGetter(challengingHTMLGetter{url: "https://careers.example.com/jobs/x"})
+
+	// The first call is admitted immediately by the limiter's burst, so this exercises the
+	// wiring without any timing dependency.
+	_, err := g.GetHTML(context.Background(), "https://careers.example.com/jobs/x")
+	var chErr *ChallengeError
+	if !errors.As(err, &chErr) {
+		t.Fatalf("GetHTML error = %v, want the inner *ChallengeError to propagate unchanged", err)
+	}
+}

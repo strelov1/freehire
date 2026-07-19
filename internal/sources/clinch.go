@@ -2,62 +2,102 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
+
+	"golang.org/x/net/html"
 
 	"github.com/strelov1/freehire/internal/location"
 )
 
 // clinch adapts ClinchTalent / career-pages.com career sites (e.g. careers.withwaymo.com).
-// The board is the career-site host. Unlike the other sitemap adapters (successfactors,
-// meta) it CANNOT fetch the job detail pages: ClinchTalent fronts them with an AWS WAF
-// "challenge" action (an interactive JS proof-of-work), so a plain or fingerprint-spoofed
-// GET is served a 202 challenge, never the posting. The publicly served sitemap is the only
-// reachable surface, so a posting is reconstructed from its URL slug alone:
+// The board is the career-site host. Detail pages sit behind a RATE-BASED AWS-WAF "challenge"
+// action: a cold IP is served a handful of clean pages before the WAF flips to a 202 challenge
+// (marked "x-amzn-waf-action: challenge") and holds a long per-IP penalty. So the sitemap is
+// always parsed — a posting is reconstructed from its URL slug alone:
 //
 //	/jobs/{title-words}-{city}-{state}-{country}[-{uuid}]
 //
-// Title and location are split out of the slug (clinchSplitSlug); the description is left
-// empty (the detail page is unreachable), so enrichment and the description-derived facets
-// stay blank for these jobs while the title-derived facets and the geography facet — the
-// location dictionary resolves the slug's place tail — still populate. This mirrors the
-// sitemap-only approach the ClinchTalent platform forces on every crawler.
+// Title and location are split out of the slug (clinchSplitSlug). The description is then
+// hydrated best-effort from each posting's detail page (div.job-description) through a paced
+// detail getter that holds the run's request rate under the WAF window. The first WAF
+// challenge LATCHES detail hydration off for the rest of the run (hammering a tripped WAF is
+// wasteful and prolongs the penalty), so the remaining postings keep the empty description
+// they would have had before. Coverage is therefore partial and back-fills across runs, and
+// the adapter is never worse than the old sitemap-only reconstruction.
 type clinch struct {
-	http XMLGetter
+	sitemap XMLGetter  // the career-site sitemap.xml (one request per run)
+	detail  HTMLGetter // per-posting detail pages, paced under the WAF window
 }
 
-// NewClinch builds the ClinchTalent adapter over the given XML client.
-func NewClinch(c XMLGetter) Source { return clinch{http: c} }
+// NewClinch builds the ClinchTalent adapter: sitemap fetches the board's sitemap.xml, detail
+// hydrates each posting's description (paced, see pacedClinchGetter).
+func NewClinch(sitemap XMLGetter, detail HTMLGetter) Source {
+	return clinch{sitemap: sitemap, detail: detail}
+}
 
 func (clinch) Provider() string { return "clinch" }
 
 func (c clinch) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	url := fmt.Sprintf("https://%s/sitemap.xml", e.Board)
-	sitemap, err := getSitemap(ctx, c.http, url)
+	sitemap, err := getSitemap(ctx, c.sitemap, url)
 	if err != nil {
 		return nil, fmt.Errorf("clinch: sitemap %s: %w", e.Board, err)
 	}
 
 	var jobs []Job
+	latched := false // set once the WAF challenges — stops further detail fetches this run
 	for _, entry := range sitemap.URLs {
 		slug := clinchJobSlug(entry.Loc)
 		if slug == "" {
 			continue // not a /jobs/ URL (marketing page) or empty slug
 		}
 		title, loc := clinchSplitSlug(slug)
+
+		description := ""
+		if !latched {
+			desc, challenged := c.hydrate(ctx, entry.Loc)
+			if challenged {
+				latched = true // remaining postings stay sitemap-only
+			} else {
+				description = desc // "" when the fetch failed or the block was absent
+			}
+		}
+
 		jobs = append(jobs, Job{
 			ExternalID:  clinchExternalID(slug),
 			URL:         entry.Loc,
 			Title:       title,
 			Company:     e.Company,
 			Location:    loc,
-			Description: "", // detail page is AWS-WAF-blocked; nothing to fetch
+			Description: description,
 			Remote:      isRemote(loc),
 			PostedAt:    parseDate(entry.LastMod),
 		})
 	}
 	return jobs, nil
+}
+
+// hydrate fetches a posting's detail page and returns its description. challenged reports a WAF
+// ChallengeError — the caller's signal to latch off detail hydration for the rest of the run.
+// Any other fetch failure (or a missing description block) returns an empty description without
+// latching, so a single bad page never drops the posting or stops the crawl.
+func (c clinch) hydrate(ctx context.Context, url string) (description string, challenged bool) {
+	node, err := c.detail.GetHTML(ctx, url)
+	if err != nil {
+		var chErr *ChallengeError
+		return "", errors.As(err, &chErr)
+	}
+	return clinchDescription(node), false
+}
+
+// clinchDescription returns the detail page's div.job-description block as sanitized HTML —
+// preserving its paragraph/list structure like every other adapter's description — or "" when
+// the page has no such block.
+func clinchDescription(root *html.Node) string {
+	return sanitizeHTML(elementInnerHTMLByClass(root, "div", "job-description"))
 }
 
 // clinchJobSlug returns the posting slug from a career-site URL — the path segment after

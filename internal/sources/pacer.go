@@ -71,6 +71,28 @@ func pacedVagasGetter(c HTMLGetter) HTMLGetter {
 	}
 }
 
+// ClinchTalent fronts detail pages with a rate-based AWS-WAF Challenge action: a cold IP is
+// served a handful of clean pages (spike observed ~6) before the WAF flips to a 202 challenge
+// and holds a long per-IP penalty. clinch fetches one detail page per new posting, so its
+// aggregate rate — not the worker pool — must stay under that window. The interval is
+// deliberately gentle (well below the observed trip point) because the true budget is unknown
+// and the penalty is punishing: under-shooting only lengthens a run, while over-shooting trips
+// the WAF and latches clinch back to sitemap-only for the rest of the run. Tune from the
+// observed description-fill rate.
+const (
+	clinchRequestInterval = 1500 * time.Millisecond // ~0.67 req/s
+	clinchRequestBurst    = 1
+)
+
+// pacedClinchGetter wraps a getter with a fresh limiter shared across one registry build, so all
+// of clinch's detail requests in a run stay under ClinchTalent's per-IP AWS-WAF challenge window.
+func pacedClinchGetter(c HTMLGetter) HTMLGetter {
+	return rateLimitedHTMLGetter{
+		inner:   c,
+		limiter: rate.NewLimiter(rate.Every(clinchRequestInterval), clinchRequestBurst),
+	}
+}
+
 // concurrencyLimitedJSONGetter bounds how many GetJSON calls are in flight at once via a shared
 // semaphore, independent of the pipeline's board-worker pool. Unlike a rate limiter — which caps
 // the request START rate but lets slow requests pile up concurrently — this caps simultaneous
