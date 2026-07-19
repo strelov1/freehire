@@ -12,6 +12,7 @@
   } from '$lib/types';
   import { Button } from '$lib/ui';
   import { timeAgo } from '$lib/utils';
+  import CompanyPicker from './CompanyPicker.svelte';
   import States from './States.svelte';
 
   type Tab = 'requests' | 'offers' | 'incoming';
@@ -170,16 +171,11 @@
 
   {#if offerOpen}
     <form onsubmit={submitOffer} class="mt-3 flex flex-col gap-3 rounded-lg border border-border p-4">
-      <label class="flex flex-col gap-1.5 text-sm">
+      <div class="flex flex-col gap-1.5 text-sm">
         <span class="font-medium">Company</span>
-        <input
-          type="text"
-          bind:value={offerSlug}
-          placeholder="company slug — e.g. acme"
-          class="rounded-md border border-border bg-background px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
-        <span class="text-xs text-muted-foreground">Find it in the company page URL: /companies/&lt;slug&gt;.</span>
-      </label>
+        <CompanyPicker onSelect={(c) => (offerSlug = c?.slug ?? '')} />
+        <span class="text-xs text-muted-foreground">Search and pick the company you work at.</span>
+      </div>
       <label class="flex flex-col gap-1.5 text-sm">
         <span class="font-medium">Proof of employment (PDF)</span>
         <input type="file" accept="application/pdf" bind:files={offerFile} class="text-sm" />
