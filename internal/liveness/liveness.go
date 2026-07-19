@@ -36,8 +36,9 @@ const (
 const minContentChars = 300
 
 // hardExpired matches phrases an employer page shows when a posting is closed
-// (EN/DE/FR). A match on a 2xx body is a definitive death signal. The sub-patterns
-// are top-level alternatives, so a plain "|" join is the whole pattern.
+// (EN/DE/FR/RU). A match on a 2xx body is a definitive death signal. The sub-patterns
+// are top-level alternatives, so a plain "|" join is the whole pattern. The (?i) flag
+// folds case for Cyrillic too, so one lowercase RU pattern covers "Вакансия"/"вакансия".
 var hardExpired = regexp.MustCompile(`(?i)` + strings.Join([]string{
 	`job (is )?no longer available`,
 	`job.*no longer open`,
@@ -52,6 +53,9 @@ var hardExpired = regexp.MustCompile(`(?i)` + strings.Join([]string{
 	`applications?\s+(?:(?:have|are|is)\s+)?closed`,
 	`diese stelle (ist )?(nicht mehr|bereits) besetzt`,
 	`offre (expirée|n'est plus disponible)`,
+	// RU orphan sources (habr_career, geekjob) serve a closed posting as a healthy
+	// 200 whose only death signal is a Russian archived/closed banner.
+	`ваканси\S* (в архиве|закрыта|неактивна)`,
 }, "|"))
 
 // listingPage matches a careers/search index rather than a single posting — the URL
