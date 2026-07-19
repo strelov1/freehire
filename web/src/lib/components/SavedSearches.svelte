@@ -132,10 +132,10 @@
     <!-- Zone 1: alerts for the filters staged right now. Save is the primary action;
          once saved, the channel toggles (Telegram / Email) render in place. -->
     <section class="flex flex-col gap-2">
-      <span class="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-        <Bell class="size-3.5" aria-hidden="true" /> Alerts for the current filters
+      <span class="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <Bell class="size-3.5 shrink-0" aria-hidden="true" /> Notify me when a new job matches these filters
       </span>
-      <SaveSearchAlert query={current} variant="full" />
+      <SaveSearchAlert query={current} variant="full" alertsLabel={false} />
 
       {#if dirty}
         <Button variant="secondary" size="sm" onclick={update} disabled={busy} class="self-start">

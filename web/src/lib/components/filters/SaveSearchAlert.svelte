@@ -24,11 +24,14 @@
     query,
     variant = 'full',
     alerts = 'inline',
+    alertsLabel = true,
     autostart = false,
   }: {
     query: string;
     variant?: 'quick' | 'full';
     alerts?: 'inline' | 'manage';
+    /** Show the "Alerts" label above the channel chips; off where a section header already says it. */
+    alertsLabel?: boolean;
     /** Run the save on mount — used to resume a pending save after sign-in. */
     autostart?: boolean;
   } = $props();
@@ -106,7 +109,7 @@
       <ChevronRight class="size-4 text-muted-foreground" aria-hidden="true" />
     </Button>
   {:else}
-    <AlertChannels savedSearchId={matched.id} />
+    <AlertChannels savedSearchId={matched.id} showLabel={alertsLabel} />
   {/if}
 
   {#if error}

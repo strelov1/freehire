@@ -12,7 +12,7 @@
   //
   // A chip is "on" when a subscription exists for that channel; tapping an on chip turns
   // it off. Telegram hides itself when the feature isn't configured server-side.
-  let { savedSearchId }: { savedSearchId: number } = $props();
+  let { savedSearchId, showLabel = true }: { savedSearchId: number; showLabel?: boolean } = $props();
 
   let busy = $state<'telegram' | 'email' | null>(null);
   // The Telegram deep link was opened; we await the user's "I've connected" recheck.
@@ -97,9 +97,11 @@
 
 <div class="flex flex-col gap-1.5">
   <div class="flex flex-wrap items-center gap-2">
-    <span class="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-      <Bell class="size-3.5" aria-hidden="true" /> Alerts
-    </span>
+    {#if showLabel}
+      <span class="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <Bell class="size-3.5" aria-hidden="true" /> Alerts
+      </span>
+    {/if}
 
     {#if tg.enabled}
       <button type="button" onclick={toggleTelegram} disabled={busy !== null} aria-pressed={tgSub != null} class={chipClass(tgSub != null)}>
