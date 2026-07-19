@@ -17,6 +17,12 @@ export const JOB_FILTERS_KEY = 'hire.jobFilters';
 // (offer the default) from someone who deliberately cleared (respect the empty set).
 const FILTERS_TOUCHED_KEY = 'hire.jobFiltersTouched';
 
+// The same "touched" marker, mirrored into a cookie so the SSR `load` can read it
+// (localStorage is invisible to the server). It gates the first-visit default
+// redirect — see firstVisit.ts. Kept in lockstep with FILTERS_TOUCHED_KEY by
+// saveJobFilters below.
+export const FILTERS_TOUCHED_COOKIE = 'hire_filters_touched';
+
 /** The filter set a first-time visitor lands on: fully-remote roles open worldwide.
  *  Same facet vocabulary as the `remote-worldwide` collection (see collections.ts). */
 export const DEFAULT_JOB_FILTERS = 'work_mode=remote&regions=global';
@@ -45,8 +51,10 @@ export function hasChangedFilters(): boolean {
 
 /** Mirror the applied filters to storage. An empty string removes the key, so a
  *  cleared filter set leaves nothing to restore. Either way the change marks the
- *  browser as touched, so the first-visit default is never re-offered. */
+ *  browser as touched — in both localStorage and the server-readable cookie — so the
+ *  first-visit default is never re-offered. */
 export function saveJobFilters(qs: string): void {
+  markFiltersTouchedCookie();
   if (typeof localStorage === 'undefined') return;
   try {
     if (qs) localStorage.setItem(JOB_FILTERS_KEY, qs);
@@ -55,4 +63,13 @@ export function saveJobFilters(qs: string): void {
   } catch {
     // best-effort: private mode / quota / disabled storage
   }
+}
+
+/** Set the server-readable "touched" cookie so the SSR first-visit redirect stops
+ *  offering the default. One year, path=/, Lax; Secure on https so it isn't sent in
+ *  the clear. Best-effort and browser-only (no document ⇒ SSR/test no-op). */
+function markFiltersTouchedCookie(): void {
+  if (typeof document === 'undefined') return;
+  const secure = typeof location !== 'undefined' && location.protocol === 'https:' ? '; secure' : '';
+  document.cookie = `${FILTERS_TOUCHED_COOKIE}=1; path=/; max-age=31536000; samesite=lax${secure}`;
 }

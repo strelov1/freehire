@@ -1,5 +1,11 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { loadJobFilters, saveJobFilters, hasChangedFilters, JOB_FILTERS_KEY } from './filterStorage';
+import {
+  loadJobFilters,
+  saveJobFilters,
+  hasChangedFilters,
+  JOB_FILTERS_KEY,
+  FILTERS_TOUCHED_COOKIE,
+} from './filterStorage';
 
 // A minimal in-memory localStorage stand-in for the Node test environment (where
 // there is no browser storage). Individual tests swap in throwing/undefined
@@ -19,8 +25,12 @@ class MemoryStorage {
 
 describe('filterStorage', () => {
   afterEach(() => {
-    // @ts-expect-error - clean up the global we install per test
+    // @ts-expect-error - clean up the globals we install per test
     delete globalThis.localStorage;
+    // @ts-expect-error
+    delete globalThis.document;
+    // @ts-expect-error
+    delete globalThis.location;
   });
 
   it('round-trips a non-empty query string through hire.jobFilters', () => {
@@ -67,6 +77,44 @@ describe('filterStorage', () => {
 
     expect(loadJobFilters()).toBe('');
     expect(hasChangedFilters()).toBe(true);
+  });
+
+  it('mirrors the touched marker into a server-readable cookie on any change', () => {
+    const store = new MemoryStorage();
+    // @ts-expect-error - install the stand-in
+    globalThis.localStorage = store;
+    let written = '';
+    // @ts-expect-error - minimal document stand-in capturing cookie writes
+    globalThis.document = {
+      set cookie(v: string) {
+        written = v;
+      },
+    };
+    // @ts-expect-error - https so the Secure attribute is emitted
+    globalThis.location = { protocol: 'https:' };
+
+    saveJobFilters('regions=EU');
+
+    expect(written).toContain(`${FILTERS_TOUCHED_COOKIE}=1`);
+    expect(written).toContain('path=/');
+    expect(written).toContain('secure');
+  });
+
+  it('sets the touched cookie even when localStorage is unavailable (private mode)', () => {
+    // No localStorage installed; the cookie is written before the storage guard.
+    let written = '';
+    // @ts-expect-error - minimal document stand-in
+    globalThis.document = {
+      set cookie(v: string) {
+        written = v;
+      },
+    };
+
+    saveJobFilters('regions=EU');
+
+    expect(written).toContain(`${FILTERS_TOUCHED_COOKIE}=1`);
+    // http (no location stub) omits Secure so the cookie is usable on localhost.
+    expect(written).not.toContain('secure');
   });
 
   it('reports no filter history when storage is unavailable (SSR)', () => {
