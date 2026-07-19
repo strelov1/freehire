@@ -45,18 +45,26 @@
 {:else}
   <ul class="flex flex-col gap-3">
     {#each page.items as item (item.job.public_slug)}
-      <li class="relative">
-        <JobRow job={item.job} dimViewed={false} />
-        <button
-          type="button"
-          onclick={() => unhide(item.job.public_slug)}
-          disabled={unhiding === item.job.public_slug}
-          title="Un-hide — show this job in the feed again"
-          class="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1.5 rounded-lg bg-accent px-2.5 py-1.5 text-xs font-medium text-foreground shadow-sm ring-1 ring-border transition hover:text-brand disabled:pointer-events-none disabled:opacity-50"
-        >
-          <Eye class="size-4" aria-hidden="true" />
-          Un-hide
-        </button>
+      <li>
+        <!-- Un-hide lives in the card's footer row (a divided sibling of the link),
+             not an overlay, so it never sits on top of the title or blurb on a narrow
+             screen. Mirrors the saved list's reminder chip. -->
+        <JobRow job={item.job} dimViewed={false}>
+          {#snippet footer()}
+            <div class="flex justify-end">
+              <button
+                type="button"
+                onclick={() => unhide(item.job.public_slug)}
+                disabled={unhiding === item.job.public_slug}
+                title="Un-hide — show this job in the feed again"
+                class="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-muted-foreground transition hover:text-brand disabled:pointer-events-none disabled:opacity-50"
+              >
+                <Eye class="size-4" aria-hidden="true" />
+                Un-hide
+              </button>
+            </div>
+          {/snippet}
+        </JobRow>
       </li>
     {/each}
   </ul>

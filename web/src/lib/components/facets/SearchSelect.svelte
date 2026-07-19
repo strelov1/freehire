@@ -103,9 +103,12 @@
         type="button"
         onclick={() => toggle(opt.value)}
         title={pillTitle(included, excluded, excludable)}
-        class={pillClass(included || excluded, excluded, 'px-2.5 py-1 text-sm')}
+        class={pillClass(included || excluded, excluded, 'inline-flex max-w-full items-center px-2.5 py-1 text-sm')}
       >
-        {opt.label}{#if opt.count !== undefined}<span class="ml-1 opacity-60 tabular-nums">{opt.count.toLocaleString()}</span>{/if}
+        <!-- A very long value (roles like "Senior Business Development Representative")
+             truncates to one line with an ellipsis instead of wrapping the pill onto
+             two rows; the full label surfaces on hover via title. -->
+        <span class="min-w-0 truncate" title={opt.label}>{opt.label}</span>{#if opt.count !== undefined}<span class="ml-1 shrink-0 opacity-60 tabular-nums">{opt.count.toLocaleString()}</span>{/if}
       </button>
     {/each}
     {#if shown.length === 0}
