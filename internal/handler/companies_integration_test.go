@@ -125,9 +125,12 @@ func TestListCompaniesSearchEndpoint(t *testing.T) {
 	})
 
 	t.Run("empty q returns the full list", func(t *testing.T) {
-		names, total := doList(t, "/api/v1/companies")
-		if len(names) != 3 || total != 3 {
-			t.Errorf("full list: names=%v total=%v, want 3/3", names, total)
+		// The unfiltered catalogue total is a planner estimate (EstimateHiringCompanies),
+		// not an exact count, so only the returned row set is asserted here — on a tiny
+		// seed table the estimate is a fixed planner guess unrelated to the real count.
+		names, _ := doList(t, "/api/v1/companies")
+		if len(names) != 3 {
+			t.Errorf("full list: names=%v, want 3", names)
 		}
 	})
 }
@@ -217,8 +220,12 @@ func TestListCompaniesFacetFilterEndpoint(t *testing.T) {
 	})
 
 	t.Run("no facet params returns the full list", func(t *testing.T) {
-		assertSlugs(t, "/api/v1/companies",
-			[]string{"asia-co", "euro-corp", "euro-lab", "global-lab"})
+		// Unfiltered: meta.total is a planner estimate, so assert only the row set.
+		got, _ := doList(t, "/api/v1/companies")
+		want := []string{"asia-co", "euro-corp", "euro-lab", "global-lab"}
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("/api/v1/companies → slugs %v, want %v", got, want)
+		}
 	})
 }
 
@@ -245,7 +252,7 @@ func TestListCompaniesSubindustryFacet(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/companies", h.ListCompanies)
 
-	assert := func(t *testing.T, url string, want []string) {
+	query := func(t *testing.T, url string) (slugs []string, total float64) {
 		t.Helper()
 		resp, err := app.Test(httptest.NewRequest("GET", url, nil))
 		if err != nil {
@@ -267,17 +274,22 @@ func TestListCompaniesSubindustryFacet(t *testing.T) {
 		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 			t.Fatalf("decode: %v", err)
 		}
-		var got []string
 		for _, c := range body.Data {
-			got = append(got, c.Slug)
+			slugs = append(slugs, c.Slug)
 		}
-		sort.Strings(got)
+		sort.Strings(slugs)
+		return slugs, body.Meta.Total
+	}
+
+	assert := func(t *testing.T, url string, want []string) {
+		t.Helper()
+		got, total := query(t, url)
 		sort.Strings(want)
 		if strings.Join(got, ",") != strings.Join(want, ",") {
 			t.Errorf("%s → slugs %v, want %v", url, got, want)
 		}
-		if int(body.Meta.Total) != len(want) {
-			t.Errorf("%s → meta.total %v, want %d", url, body.Meta.Total, len(want))
+		if int(total) != len(want) {
+			t.Errorf("%s → meta.total %v, want %d", url, total, len(want))
 		}
 	}
 
@@ -295,7 +307,12 @@ func TestListCompaniesSubindustryFacet(t *testing.T) {
 	})
 
 	t.Run("no subindustry param returns all", func(t *testing.T) {
-		assert(t, "/api/v1/companies", []string{"diagco", "payco", "payco2", "plainco"})
+		// Unfiltered: meta.total is a planner estimate, so assert only the row set.
+		got, _ := query(t, "/api/v1/companies")
+		want := []string{"diagco", "payco", "payco2", "plainco"}
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("/api/v1/companies → slugs %v, want %v", got, want)
+		}
 	})
 }
 

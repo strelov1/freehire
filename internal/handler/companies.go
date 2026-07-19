@@ -133,27 +133,52 @@ func (a *API) ListCompanies(c *fiber.Ctx) error {
 		return err
 	}
 
-	total, err := a.queries.CountCompanies(c.Context(), db.CountCompaniesParams{
-		Search:        search,
-		Collections:   collections,
-		Regions:       regions,
-		Countries:     countries,
-		Domains:       domains,
-		CompanyTypes:  companyTypes,
-		CompanySizes:  companySizes,
-		RemoteRegions: remoteRegions,
-		YcBatch:       ycBatch,
-		YcStatus:      ycStatus,
-		YcStage:       ycStage,
-		YcFlags:       ycFlags,
-		Maturity:      maturity,
-		Subindustries: subindustries,
-	})
+	// The unfiltered catalogue count(*) is a cold-cache heap scan (~17s on prod — see
+	// EstimateHiringCompanies); every facet/search filter narrows to an index and keeps
+	// it cheap. So a filtered request gets the exact count (accurate pagination total),
+	// and the pathological unfiltered case gets the O(1) planner estimate, as /jobs does.
+	var total int64
+	if isCompanyFilter(search, collections, regions, countries, domains, companyTypes,
+		companySizes, remoteRegions, ycBatch, ycStatus, ycStage, ycFlags, maturity, subindustries) {
+		total, err = a.queries.CountCompanies(c.Context(), db.CountCompaniesParams{
+			Search:        search,
+			Collections:   collections,
+			Regions:       regions,
+			Countries:     countries,
+			Domains:       domains,
+			CompanyTypes:  companyTypes,
+			CompanySizes:  companySizes,
+			RemoteRegions: remoteRegions,
+			YcBatch:       ycBatch,
+			YcStatus:      ycStatus,
+			YcStage:       ycStage,
+			YcFlags:       ycFlags,
+			Maturity:      maturity,
+			Subindustries: subindustries,
+		})
+	} else {
+		total, err = a.queries.EstimateHiringCompanies(c.Context())
+	}
 	if err != nil {
 		return err
 	}
 
 	return listResponse(c, companies, total, limit, offset)
+}
+
+// isCompanyFilter reports whether a /companies request carries any name search or facet
+// constraint — the exact-vs-estimate meta.total gate in ListCompanies. Every facet arrives
+// as a non-nil slice, so len == 0 means unset.
+func isCompanyFilter(search string, facets ...[]string) bool {
+	if search != "" {
+		return true
+	}
+	for _, f := range facets {
+		if len(f) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // subindustryFacet is one option in the company subindustry vocabulary: a clean YC

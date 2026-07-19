@@ -336,6 +336,12 @@ type Querier interface {
 	// For an existing user the row is left untouched; a stale period is reset later
 	// under the lock. remaining is seeded with the monthly grant for a fresh row.
 	EnsureBalance(ctx context.Context, arg EnsureBalanceParams) error
+	// Fast approximate hiring-company total (job_count > 0) for the UNFILTERED /companies
+	// list's meta.total. An exact count(*) over the ~227k hiring rows is a cold-cache heap
+	// scan (~17s on prod, see migration 0034); the planner's estimate is O(1). Only the
+	// no-filter catalogue count uses this — every facet/search filter narrows to an index
+	// and keeps CountCompanies cheap and exact. Approximate by design, like EstimateOpenJobs.
+	EstimateHiringCompanies(ctx context.Context) (int64, error)
 	// Fast approximate open-job total for the DB-backed /jobs list's meta.total. An
 	// exact count(*) over ~millions of open rows was a per-request full scan; the
 	// planner's estimate (see estimate_open_jobs(), migration 0033) is O(1) and

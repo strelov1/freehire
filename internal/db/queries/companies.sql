@@ -61,6 +61,14 @@ WHERE job_count > 0
   AND (coalesce(cardinality(sqlc.arg('maturity')::text[]), 0) = 0 OR maturity = ANY(sqlc.arg('maturity')::text[]))
   AND (coalesce(cardinality(sqlc.arg('subindustries')::text[]), 0) = 0 OR subindustry = ANY(sqlc.arg('subindustries')::text[]));
 
+-- name: EstimateHiringCompanies :one
+-- Fast approximate hiring-company total (job_count > 0) for the UNFILTERED /companies
+-- list's meta.total. An exact count(*) over the ~227k hiring rows is a cold-cache heap
+-- scan (~17s on prod, see migration 0034); the planner's estimate is O(1). Only the
+-- no-filter catalogue count uses this — every facet/search filter narrows to an index
+-- and keeps CountCompanies cheap and exact. Approximate by design, like EstimateOpenJobs.
+SELECT estimate_hiring_companies()::bigint;
+
 -- name: CompanySubindustries :many
 -- Distinct non-NULL subindustry values with their company counts, most common first
 -- (ties broken by value), serving the searchable option list for the subindustry facet.
