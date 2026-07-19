@@ -40,6 +40,10 @@ import type {
   Submission,
   SubmissionInput,
   Contribution,
+  ReferralOffer,
+  ReferralRequestInput,
+  SeekerReferralRequest,
+  IncomingReferralRequest,
   Report,
   ReportInput,
   Verdict,
@@ -892,6 +896,69 @@ export function createApi(
     return requestData<Contribution[]>('/api/v1/me/contributions');
   }
 
+  // ── Employee referrals ────────────────────────────────────────────────────
+
+  /** Request a referral into a company's approved-referrer pool. 409 when the company has
+   *  no referrer or an active request already exists; 422 on a bad CV/contact; 429 on cap. */
+  async function createReferralRequest(input: ReferralRequestInput): Promise<SeekerReferralRequest> {
+    return requestData<SeekerReferralRequest>('/api/v1/me/referrals/requests', jsonBody('POST', input));
+  }
+
+  /** The caller's own referral requests, newest first. */
+  async function listMyReferralRequests(): Promise<SeekerReferralRequest[]> {
+    return requestData<SeekerReferralRequest[]>('/api/v1/me/referrals/requests');
+  }
+
+  /** Submit an offer to refer into a company: a proof CV (PDF) uploaded as multipart, with
+   *  the company slug as a form field. Enters moderation. 409 on a duplicate offer. */
+  async function submitReferralOffer(companySlug: string, file: File): Promise<ReferralOffer> {
+    const form = new FormData();
+    form.append('company_slug', companySlug);
+    form.append('file', file);
+    return requestData<ReferralOffer>('/api/v1/me/referrals/offers', { method: 'POST', body: form });
+  }
+
+  /** The caller's own referral offers with moderation status, newest first. */
+  async function listMyReferralOffers(): Promise<ReferralOffer[]> {
+    return requestData<ReferralOffer[]>('/api/v1/me/referrals/offers');
+  }
+
+  /** The referrer inbox: open requests for the companies the caller is approved for. */
+  async function listIncomingReferrals(): Promise<IncomingReferralRequest[]> {
+    return requestData<IncomingReferralRequest[]>('/api/v1/me/referrals/incoming');
+  }
+
+  /** Mark an incoming request contacted or declined on the caller's behalf. */
+  async function resolveReferral(
+    id: number,
+    status: 'contacted' | 'declined',
+  ): Promise<IncomingReferralRequest> {
+    return requestData<IncomingReferralRequest>(
+      `/api/v1/me/referrals/incoming/${id}/resolve`,
+      jsonBody('POST', { status }),
+    );
+  }
+
+  /** The URL that streams an incoming request's attached CV (opened in a new tab). */
+  function referralCvUrl(id: number): string {
+    return `${baseUrl}/api/v1/me/referrals/incoming/${id}/cv`;
+  }
+
+  /** The moderator queue: referral offers awaiting a decision, oldest first. */
+  async function listPendingReferralOffers(): Promise<ReferralOffer[]> {
+    return requestData<ReferralOffer[]>('/api/v1/referrals/offers');
+  }
+
+  /** Approve or reject a pending offer. Moderator-only. */
+  async function decideReferralOffer(id: number, approve: boolean): Promise<ReferralOffer> {
+    return requestData<ReferralOffer>(`/api/v1/referrals/offers/${id}/decide`, jsonBody('POST', { approve }));
+  }
+
+  /** The URL that streams an offer's proof CV (moderator-only, opened in a new tab). */
+  function referralProofUrl(id: number): string {
+    return `${baseUrl}/api/v1/referrals/offers/${id}/proof`;
+  }
+
   /** The moderator review queue: pending submissions, with submitter emails. */
   async function listPendingSubmissions(): Promise<Submission[]> {
     return requestData<Submission[]>('/api/v1/submissions');
@@ -1165,6 +1232,16 @@ export function createApi(
     listMySubmissions,
     submitContribution,
     listMyContributions,
+    createReferralRequest,
+    listMyReferralRequests,
+    submitReferralOffer,
+    listMyReferralOffers,
+    listIncomingReferrals,
+    resolveReferral,
+    referralCvUrl,
+    listPendingReferralOffers,
+    decideReferralOffer,
+    referralProofUrl,
     listPendingSubmissions,
     approveSubmission,
     rejectSubmission,

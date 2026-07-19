@@ -15,6 +15,7 @@
   import JobDescription from './JobDescription.svelte';
   import JobMatch from './JobMatch.svelte';
   import RealityBadge from './RealityBadge.svelte';
+  import ReferralBlock from './ReferralBlock.svelte';
   import ReportDialog from './ReportDialog.svelte';
 
   // The job is server-rendered: it arrives as a prop from the route's `load`, so
@@ -204,6 +205,10 @@
     </div>
 
     <RealityBadge reality={job.reality} postedAt={job.posted_at} detailed />
+
+    {#if job.referral_available && job.company_slug}
+      <ReferralBlock companySlug={job.company_slug} companyName={job.company} />
+    {/if}
 
     {#if showApplyPrompt && !applied}
       <div

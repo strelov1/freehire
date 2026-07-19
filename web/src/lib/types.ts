@@ -173,6 +173,54 @@ export interface Contribution {
   created_at: string | null;
 }
 
+/** Employee referrals. An offer is a member's moderated "I can refer into company X". */
+export type ReferralOfferStatus = 'pending' | 'approved' | 'rejected';
+export type ReferralRequestStatus = 'sent' | 'contacted' | 'declined';
+export type ReferralCvKind = 'original' | 'built';
+
+export interface ReferralOffer {
+  id: number;
+  company_slug: string;
+  status: ReferralOfferStatus;
+  decided_at: string | null;
+  created_at: string | null;
+}
+
+/** What a seeker sees of their own request — no referrer identity (the request targets a pool). */
+export interface SeekerReferralRequest {
+  id: number;
+  company_slug: string;
+  job_id: number | null;
+  cv_kind: ReferralCvKind;
+  cv_id: number | null;
+  status: ReferralRequestStatus;
+  created_at: string | null;
+}
+
+/** What a referrer sees of an incoming request — the seeker's chosen contact and CV, no identity. */
+export interface IncomingReferralRequest {
+  id: number;
+  company_slug: string;
+  job_id: number | null;
+  cv_kind: ReferralCvKind;
+  contact_telegram?: string;
+  contact_email?: string;
+  note?: string;
+  status: ReferralRequestStatus;
+  created_at: string | null;
+}
+
+/** The seeker's referral-request payload. Exactly one CV field is meaningful per cv_kind. */
+export interface ReferralRequestInput {
+  company_slug: string;
+  job_id?: number;
+  cv_kind: ReferralCvKind;
+  cv_id?: number;
+  contact_telegram?: string;
+  contact_email?: string;
+  note?: string;
+}
+
 /** A job submitted for moderation. `status` is the review lifecycle; `review_reason`
  *  carries an optional rejection note. `submitter_email` is present only on the
  *  moderator review queue, never on a submitter's own view. */

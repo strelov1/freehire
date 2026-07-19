@@ -152,6 +152,13 @@ export interface Job {
    * it is time-dependent. Nil when not computed (e.g. a plain FromRow without counts).
    */
   reality?: Reality;
+  /**
+   * ReferralAvailable is true when the job's company has at least one approved employee
+   * referrer, so the detail page can show the "ask for a referral" affordance. A
+   * read-time projection attached only by the detail handler (omitted on list rows,
+   * where FromRow leaves it false).
+   */
+  referral_available?: boolean;
 }
 
 //////////
