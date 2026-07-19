@@ -63,11 +63,28 @@ func run() int {
 		idx = search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
 	}
 
+	// Route the proxied link-source adapters (habr_career/geekjob et al.) through the egress
+	// proxy when one is configured (SOURCES_PROXY_URL), exactly as cmd/ingest does for the
+	// crawl — their detail pages sit behind a WAF (Qrator) that challenges the prod datacenter
+	// IP, so a direct single-URL resolve gets an empty description. A set-but-invalid value
+	// fails the run here rather than silently resolving on the blocked direct IP.
+	proxy, err := sources.ProxyClientFromEnv()
+	if err != nil {
+		log.Printf("resolve-url: %v", err)
+		return 1
+	}
+	direct := sources.NewClient()
+	// A nil *sources.Client wrapped in the interface would read as non-nil; keep the
+	// interface value nil so AllWithProxyEgress leaves every adapter on the direct client.
+	var proxyClient linksource.Client
+	if proxy != nil {
+		proxyClient = proxy
+	}
 	// The generic resolver is appended AFTER the host-scoped adapters (so a known ATS is
-	// handled by its richer API adapter) and only here, never in the shared registry —
-	// its always-true Match must not leak into the Telegram crawl.
-	client := sources.NewClient()
-	reg := append(linksource.All(client), linksource.NewGeneric(client))
+	// handled by its richer API adapter) and only here, never in the shared registry — its
+	// always-true Match must not leak into the Telegram crawl. It stays on the direct client:
+	// the generic weblink fallback is not on the proxied allowlist.
+	reg := append(linksource.AllWithProxyEgress(direct, proxyClient), linksource.NewGeneric(direct))
 
 	resolved, err := linksource.ResolveLinks(ctx, reg, urls)
 	if err != nil {

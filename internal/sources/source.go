@@ -470,6 +470,26 @@ func IsProxied(provider string) bool {
 	return ok
 }
 
+// ProxyClientFromEnv builds the egress proxy client from SOURCES_PROXY_URL, returning a nil
+// client when the variable is empty (the caller then keeps every provider on the direct IP)
+// and an error when it is set but unparseable — so a worker can fail fast rather than
+// silently leave a meant-to-be-proxied provider on the blocked direct IP. The board crawl
+// reaches it through ApplyProxyEgress; cmd/resolve-url uses it directly to route the proxied
+// link-source adapters through the same proxy. The endpoint and credentials live entirely in
+// the environment; nothing about the proxy is hardcoded.
+func ProxyClientFromEnv() (*Client, error) {
+	raw := strings.TrimSpace(os.Getenv("SOURCES_PROXY_URL"))
+	if raw == "" {
+		return nil, nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		// Redacted() strips any password so the invalid value can be surfaced safely.
+		return nil, fmt.Errorf("sources: invalid SOURCES_PROXY_URL %q", redactProxy(raw))
+	}
+	return NewProxyClient(u), nil
+}
+
 // ApplyProxyEgress rewires the proxiedProviders in registry to egress through the proxy
 // named by SOURCES_PROXY_URL (form http://user:pass@host:port). It is a no-op when the
 // variable is empty (every provider stays direct) and returns an error — for fail-fast at
@@ -481,12 +501,10 @@ func ApplyProxyEgress(registry map[string]Source) error {
 	if raw == "" {
 		return nil
 	}
-	u, err := url.Parse(raw)
-	if err != nil || u.Host == "" {
-		// Redacted() strips any password so the invalid value can be surfaced safely.
-		return fmt.Errorf("sources: invalid SOURCES_PROXY_URL %q", redactProxy(raw))
+	proxied, err := ProxyClientFromEnv()
+	if err != nil {
+		return err
 	}
-	proxied := NewProxyClient(u)
 	for name, build := range proxiedProviders {
 		if _, ok := registry[name]; ok {
 			registry[name] = build(proxied)

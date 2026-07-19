@@ -37,19 +37,52 @@ type Source interface {
 	Resolve(ctx context.Context, raw string) (job sources.Job, ok bool, err error)
 }
 
-// All assembles the registered link-source adapters, sharing one HTTP client. Adding a
-// destination is a new adapter plus one line here.
-func All(c Client) []Source {
-	return []Source{
-		NewHabrCareer(c),
-		NewRemoteYeah(c),
-		NewGeekjob(c),
-		NewGreenhouse(c),
-		NewAshby(c),
-		NewLever(c),
-		NewWorkable(c),
-		NewBairesDev(c),
+// constructors lists every link-source adapter builder. All and AllWithProxyEgress build
+// the registry from this single list, so adding a destination is one line here.
+func constructors() []func(Client) Source {
+	return []func(Client) Source{
+		NewHabrCareer,
+		NewRemoteYeah,
+		NewGeekjob,
+		NewGreenhouse,
+		NewAshby,
+		NewLever,
+		NewWorkable,
+		NewBairesDev,
 	}
+}
+
+// All assembles the registered link-source adapters, sharing one HTTP client.
+func All(c Client) []Source {
+	ctors := constructors()
+	reg := make([]Source, len(ctors))
+	for i, ctor := range ctors {
+		reg[i] = ctor(c)
+	}
+	return reg
+}
+
+// AllWithProxyEgress assembles the registry like All but routes the providers on the
+// sources proxied allowlist (sources.IsProxied) through proxy, leaving every other adapter
+// on direct — the single-URL analogue of sources.ApplyProxyEgress. The board crawl proxies
+// blocked providers (habr_career/geekjob sit behind Qrator/a WAF that challenges the prod
+// datacenter IP); a single-URL resolve of those same hosts must egress the same way or its
+// detail fetch is challenged and the description comes back empty. A nil proxy leaves every
+// adapter on direct, so a caller can pass the parsed SOURCES_PROXY_URL client or nil
+// uniformly.
+func AllWithProxyEgress(direct, proxy Client) []Source {
+	ctors := constructors()
+	reg := make([]Source, len(ctors))
+	for i, ctor := range ctors {
+		c := direct
+		// Source() is a constant method, so a nil-client probe reads the provider name
+		// without a request — the same nil-client construction All(nil) already relies on.
+		if proxy != nil && sources.IsProxied(ctor(nil).Source()) {
+			c = proxy
+		}
+		reg[i] = ctor(c)
+	}
+	return reg
 }
 
 // Find returns the first adapter that matches u, or nil when no destination handles it.

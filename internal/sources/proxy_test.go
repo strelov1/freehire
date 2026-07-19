@@ -58,6 +58,42 @@ func TestApplyProxyEgressInvalidURLFailsWithoutLeakingCreds(t *testing.T) {
 	}
 }
 
+func TestProxyClientFromEnvNilWhenUnset(t *testing.T) {
+	t.Setenv("SOURCES_PROXY_URL", "")
+
+	c, err := ProxyClientFromEnv()
+	if err != nil {
+		t.Fatalf("unset proxy should not error, got %v", err)
+	}
+	if c != nil {
+		t.Error("unset proxy must return a nil client so the caller stays direct")
+	}
+}
+
+func TestProxyClientFromEnvBuildsClientWhenSet(t *testing.T) {
+	t.Setenv("SOURCES_PROXY_URL", "http://user:pass@proxy.example:8080")
+
+	c, err := ProxyClientFromEnv()
+	if err != nil {
+		t.Fatalf("valid proxy: %v", err)
+	}
+	if c == nil {
+		t.Error("a valid proxy URL must return a client")
+	}
+}
+
+func TestProxyClientFromEnvInvalidURLFailsWithoutLeakingCreds(t *testing.T) {
+	t.Setenv("SOURCES_PROXY_URL", "http://user:sup3rsecret@proxy.example:8080/\x7f")
+
+	_, err := ProxyClientFromEnv()
+	if err == nil {
+		t.Fatal("expected a set-but-invalid proxy URL to error")
+	}
+	if strings.Contains(err.Error(), "sup3rsecret") {
+		t.Errorf("error leaked the proxy password: %v", err)
+	}
+}
+
 func TestRedactProxyStripsPassword(t *testing.T) {
 	cases := []string{
 		"http://user:sup3rsecret@proxy.example:8080",
