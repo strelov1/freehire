@@ -26,15 +26,15 @@
 
 ## 4. Frontend
 
-- [ ] 4.1 Referral block on `jobview` and company page (rendered only when `referral_available`), with "ask for a referral" action
-- [ ] 4.2 Request modal: choose CV (original vs a tailored CV), enter contact (Telegram and/or email) + note, submit
-- [ ] 4.3 Seeker cabinet section: "My referral requests" with status
-- [ ] 4.4 Referrer cabinet: "My offers" (moderation status) + "Incoming requests" (contact, CV view, note, source job, mark contacted/declined)
-- [ ] 4.5 Moderator queue UI: pending offers with proof-CV view + approve/reject
+- [x] 4.1 Referral block on `jobview` and company page (rendered only when `referral_available`), with "ask for a referral" action
+- [x] 4.2 Request modal: choose CV (original vs a tailored CV), enter contact (Telegram and/or email) + note, submit
+- [x] 4.3 Seeker cabinet section: "My referral requests" with status
+- [x] 4.4 Referrer cabinet: "My offers" (moderation status) + "Incoming requests" (contact, CV view, note, source job, mark contacted/declined)
+- [x] 4.5 Moderator queue UI: pending offers with proof-CV view + approve/reject
 
 ## 5. Verification
 
-- [ ] 5.1 Integration tests for offer + request lifecycle (dedup, active-dup, daily cap, eligibility, authorization)
-- [ ] 5.2 Test the availability flag on company/job reads (approved vs pending/rejected/none)
-- [ ] 5.3 Test authorized CV access (approved referrer allowed; others denied)
+- [x] 5.1 Integration tests for offer + request lifecycle (dedup, active-dup, daily cap, eligibility, authorization)
+- [x] 5.2 Test the availability flag on company/job reads (approved vs pending/rejected/none)
+- [x] 5.3 Test authorized CV access (approved referrer allowed; others denied)
 - [ ] 5.4 `go build ./... && go vet ./... && go test ./...` green; manual end-to-end walk of both cabinets
