@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import { resolve } from '$app/paths';
   import { Bell, Bookmark, X } from '@lucide/svelte';
   import CompanyLogo from './CompanyLogo.svelte';
@@ -24,12 +25,16 @@
   // inside the assistant chat, so the conversation stays open). `compact` tightens
   // the card for the narrow chat column (smaller padding + title, one-line title,
   // no blurb). Both default off so the jobs list / company pages are unchanged.
+  // `footer` is an optional actions row rendered inside the card, below the link
+  // content (a sibling of the <a>, never nested in it — so its interactive controls
+  // don't fight the card's navigation). The saved list passes the reminder chip here.
   let {
     job,
     dimViewed = true,
     newTab = false,
     compact = false,
-  }: { job: Job; dimViewed?: boolean; newTab?: boolean; compact?: boolean } = $props();
+    footer,
+  }: { job: Job; dimViewed?: boolean; newTab?: boolean; compact?: boolean; footer?: Snippet } = $props();
 
   const isViewed = $derived(dimViewed && hasViewed(job.public_slug));
 
@@ -117,13 +122,16 @@
   }
 </script>
 
-<div class="relative">
+<!-- The card chrome (border, background, hover) lives on this wrapper, not the <a>,
+     so an optional footer row can sit inside the same bordered box as a sibling of
+     the link — interactive footer controls never nest inside the navigation <a>. -->
+<div class="relative rounded-xl border border-border bg-card transition hover:border-brand hover:bg-accent">
 <a
   href={resolve('/jobs/[slug]', { slug: job.public_slug })}
   target={newTab ? '_blank' : undefined}
   rel={newTab ? 'noopener' : undefined}
   class={[
-    'block rounded-xl border border-border bg-card transition hover:border-brand hover:bg-accent hover:opacity-100',
+    'block hover:opacity-100',
     compact ? 'p-3' : 'p-4',
   ]}
   class:opacity-60={isViewed}
@@ -186,6 +194,14 @@
     {/if}
   </div>
 </a>
+
+{#if footer}
+  <!-- Optional in-card actions row (e.g. the saved list's reminder chip), divided
+       from the content and rendered outside the <a> so its controls stay clickable. -->
+  <div class="border-t border-border px-4 py-2.5">
+    {@render footer()}
+  </div>
+{/if}
 
 <!-- Save toggle: an icon-only overlay in the card's top-right corner. It sits
      outside the <a> (a sibling, not a descendant), so clicking it toggles the

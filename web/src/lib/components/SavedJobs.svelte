@@ -26,9 +26,12 @@
 {:else}
   <ul class="flex flex-col gap-3">
     {#each page.items as item (item.job.public_slug)}
-      <li class="flex flex-col gap-2">
-        <ReminderChip slug={item.job.public_slug} fireAt={item.reminder_fire_at} />
-        <JobRow job={item.job} dimViewed={false} />
+      <li>
+        <JobRow job={item.job} dimViewed={false}>
+          {#snippet footer()}
+            <ReminderChip slug={item.job.public_slug} fireAt={item.reminder_fire_at} />
+          {/snippet}
+        </JobRow>
       </li>
     {/each}
   </ul>
