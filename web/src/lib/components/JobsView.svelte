@@ -9,6 +9,7 @@
   import { isAuthenticated } from '$lib/auth.svelte';
   import { ensureViewedLoaded } from '$lib/viewedJobs.svelte';
   import { ensureSavedLoaded } from '$lib/savedJobs.svelte';
+  import { ensureDismissedLoaded, isDismissed, markUndismissed } from '$lib/dismissedJobs.svelte';
   import { latestOnly } from '$lib/latestOnly';
   import { Paginator } from '$lib/paginated.svelte';
   import { FilterStore, filtersToParams, activeFilterCount, canonicalQuery, type SortField } from '$lib/filters';
@@ -37,6 +38,7 @@
   import JobRow from './JobRow.svelte';
   import LoadMore from './LoadMore.svelte';
   import InfiniteScroll from './InfiniteScroll.svelte';
+  import HiddenToast from './HiddenToast.svelte';
 
   // Filters live in the URL; the route `load` searches by them and returns the
   // first page as `initial`, so the rows are in the initial HTML for SSR/share/
@@ -235,6 +237,7 @@
     if (isAuthenticated()) {
       ensureViewedLoaded();
       ensureSavedLoaded();
+      ensureDismissedLoaded();
     }
     // Register this page's store so the header search drives it. This holds for the
     // standalone /jobs list AND the company page's embedded, scoped list — on
@@ -261,6 +264,36 @@
     const next = makePaginator();
     next.start();
     jobs = next;
+  }
+
+  // The feed minus the signed-in user's hidden jobs. Cross-referenced client-side
+  // against the shared dismissed set (loaded on mount), mirroring the viewed/saved
+  // sets — the server search is untouched. Re-derives when the page changes or when
+  // a hide/undo mutates the set, so a hidden card drops out (and an undone one
+  // returns) instantly. Empty for a signed-out user, so nothing is filtered.
+  const visibleJobs = $derived(jobs.items.filter((j) => !isDismissed(j.public_slug)));
+
+  // The pending "Job hidden — Undo" toast, or null. Set when a card is hidden; the
+  // toast owns its auto-dismiss. Undo clears the slug's hidden mark (card returns via
+  // visibleJobs) and confirms with the server; a failed undo is swallowed — the
+  // durable recovery path is Activity → Hidden.
+  let hiddenToast = $state<{ slug: string } | null>(null);
+
+  function onHide(slug: string) {
+    hiddenToast = { slug };
+  }
+
+  async function undoHide() {
+    const pending = hiddenToast;
+    if (!pending) return;
+    markUndismissed(pending.slug);
+    hiddenToast = null;
+    try {
+      await api.undismissJob(pending.slug);
+    } catch {
+      // Swallow: the job is already back in the feed optimistically, and Activity →
+      // Hidden remains the durable way to manage hidden jobs.
+    }
   }
 
   // Enter swipe mode carrying the current filters + query (same param shape the
@@ -457,10 +490,15 @@
           </div>
         {/if}
       {/if}
+    {:else if visibleJobs.length === 0 && !jobs.hasMore}
+      <!-- The server returned jobs but the user has hidden every one on this final
+           page: show the empty state rather than a blank feed. (With more pages,
+           the {:else} below keeps InfiniteScroll loading instead.) -->
+      <States state="empty" message="No matching jobs." />
     {:else}
       <div class="flex flex-col gap-3">
-        {#each jobs.items as job (job.public_slug)}
-          <JobRow {job} />
+        {#each visibleJobs as job (job.public_slug)}
+          <JobRow {job} {onHide} />
         {/each}
       </div>
 
@@ -488,6 +526,15 @@
   >
     <Layers class="size-4 shrink-0" />
   </button>
+{/if}
+
+<!-- Undo affordance for the hide gesture. Keyed by slug so hiding a second job while
+     a toast is up restarts the countdown for the newer one. A hide-then-forget is
+     still recoverable in Activity → Hidden. -->
+{#if hiddenToast}
+  {#key hiddenToast.slug}
+    <HiddenToast onUndo={undoHide} onClose={() => (hiddenToast = null)} />
+  {/key}
 {/if}
 
 <FilterModal

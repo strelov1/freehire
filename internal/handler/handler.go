@@ -440,6 +440,7 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/me/tracking", keyAuth, a.ListTrackedJobs)
 	api.Get("/me/tracking/viewed", keyAuth, a.ListViewedSlugs)
 	api.Get("/me/tracking/saved", keyAuth, a.ListSavedSlugs)
+	api.Get("/me/tracking/dismissed", keyAuth, a.ListDismissedSlugs)
 	api.Get("/me/tracking/pipeline", keyAuth, a.TrackingPipeline)
 	api.Get("/me/tracking/swipe", keyAuth, a.SwipeDeck)
 	api.Get("/me/tracking/analyses", keyAuth, a.ListMyAnalyses)

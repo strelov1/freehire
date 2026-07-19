@@ -191,6 +191,8 @@ type Querier interface {
 	// every interaction row; "viewed" is the view-only subset (neither saved nor
 	// applied), matching the ListUserJobs filter. "board" counts jobs on the Kanban
 	// board (saved, applied, or stage set), matching the ListUserJobs board filter.
+	// "dismissed" counts jobs the user hid from the feed, matching the ListUserJobs
+	// dismissed filter.
 	CountUserJobs(ctx context.Context, userID int64) (CountUserJobsRow, error)
 	// Create an API key for a user. The caller passes the SHA-256 token_hash and the
 	// display token_prefix; the plaintext token is shown once and never stored.
@@ -605,6 +607,13 @@ type Querier interface {
 	// by a caller-supplied limit and served by the (user_id, created_at DESC) index. The handler
 	// resolves each debit's ref to a human label (the job/CV it named).
 	ListCreditLedger(ctx context.Context, arg ListCreditLedgerParams) ([]ListCreditLedgerRow, error)
+	// Every public_slug the user has hidden (dismissed). Used by the SPA to exclude
+	// hidden jobs from the browse feed client-side, mirroring ListSavedJobSlugs —
+	// cross-referenced in the browser, never joined into ListJobs/SearchJobs. Bounded
+	// by the caller's dismissed subset (typically small) and indexed by the
+	// (user_id, job_id) primary key. Closed jobs are included: a hidden posting that
+	// later closes stays hidden.
+	ListDismissedJobSlugs(ctx context.Context, userID int64) ([]string, error)
 	// Flat inbox listing, newest first — one row per message (no subject grouping),
 	// soft-deleted messages excluded. Optional filters (each empty/false = no filter):
 	// source narrows to one account; unread hides already-read mail; status narrows to

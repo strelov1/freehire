@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { resolve } from '$app/paths';
-  import { Bell, Bookmark, X } from '@lucide/svelte';
+  import { Bell, Bookmark, EyeOff, X } from '@lucide/svelte';
   import CompanyLogo from './CompanyLogo.svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
@@ -14,6 +14,7 @@
   import { timeAgo } from '$lib/utils';
   import { hasViewed } from '$lib/viewedJobs.svelte';
   import { isSaved, markSaved, markUnsaved } from '$lib/savedJobs.svelte';
+  import { markDismissed, markUndismissed } from '$lib/dismissedJobs.svelte';
 
   // Single source of truth for how a job appears in any list (jobs list and
   // company detail). The whole card is a link to the job detail.
@@ -28,13 +29,28 @@
   // `footer` is an optional actions row rendered inside the card, below the link
   // content (a sibling of the <a>, never nested in it — so its interactive controls
   // don't fight the card's navigation). The saved list passes the reminder chip here.
+  //
+  // `onHide` is the feed's hook for the "hide this job" gesture: when set (only the
+  // browse feed passes it), the card shows a hover-revealed hide control, and after
+  // a successful dismiss it calls back with the slug so the feed can surface an undo
+  // affordance. Surfaces that reuse JobRow without it (saved/hidden lists, tracking
+  // board, assistant chat) get no hide control — leaving it out scopes the gesture
+  // to the feed.
   let {
     job,
     dimViewed = true,
     newTab = false,
     compact = false,
     footer,
-  }: { job: Job; dimViewed?: boolean; newTab?: boolean; compact?: boolean; footer?: Snippet } = $props();
+    onHide,
+  }: {
+    job: Job;
+    dimViewed?: boolean;
+    newTab?: boolean;
+    compact?: boolean;
+    footer?: Snippet;
+    onHide?: (slug: string) => void;
+  } = $props();
 
   const isViewed = $derived(dimViewed && hasViewed(job.public_slug));
 
@@ -120,12 +136,39 @@
       saving = false;
     }
   }
+
+  // Guards against a double-click firing two dismiss requests for the same job.
+  let hiding = $state(false);
+
+  // Hide (dismiss) the job from the feed. Optimistic: mark it hidden in the shared
+  // set first so the feed drops the card instantly, then confirm with the server and
+  // roll back on failure. A signed-out click routes to sign-in instead. On success we
+  // hand the slug to the feed (onHide) so it can surface an undo affordance. Like the
+  // save button, this is an overlay sibling of the card link, so it never navigates.
+  async function hide() {
+    if (!isAuthenticated()) {
+      openAuthDialog('login');
+      return;
+    }
+    if (hiding) return;
+    hiding = true;
+    markDismissed(job.public_slug);
+    try {
+      await api.dismissJob(job.public_slug);
+      onHide?.(job.public_slug);
+    } catch {
+      markUndismissed(job.public_slug);
+    } finally {
+      hiding = false;
+    }
+  }
 </script>
 
 <!-- The card chrome (border, background, hover) lives on this wrapper, not the <a>,
      so an optional footer row can sit inside the same bordered box as a sibling of
-     the link — interactive footer controls never nest inside the navigation <a>. -->
-<div class="relative rounded-xl border border-border bg-card transition hover:border-brand hover:bg-accent">
+     the link — interactive footer controls never nest inside the navigation <a>.
+     `group` lets the hover-revealed hide control fade in on card hover. -->
+<div class="group relative rounded-xl border border-border bg-card transition hover:border-brand hover:bg-accent">
 <a
   href={resolve('/jobs/[slug]', { slug: job.public_slug })}
   target={newTab ? '_blank' : undefined}
@@ -251,5 +294,23 @@
       </div>
     {/if}
   </div>
+{/if}
+
+<!-- Hide control: only the browse feed passes `onHide`, so this appears there and
+     nowhere else. A quiet icon in the card's bottom-right corner, revealed on hover
+     (and on keyboard focus). It's an overlay sibling of the card link, so hiding
+     never navigates. An opaque background keeps it legible over the salary corner on
+     the minority of cards that show one. -->
+{#if onHide}
+  <button
+    type="button"
+    onclick={hide}
+    disabled={hiding}
+    aria-label="Hide this job"
+    title="Not interested — hide this job"
+    class="absolute bottom-2.5 right-2.5 grid size-8 place-items-center rounded-lg bg-accent text-muted-foreground opacity-0 shadow-sm ring-1 ring-border transition hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-50"
+  >
+    <EyeOff class="size-3.5" aria-hidden="true" />
+  </button>
 {/if}
 </div>

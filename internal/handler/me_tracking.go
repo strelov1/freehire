@@ -63,11 +63,12 @@ func (a *API) ListTrackedJobs(c *fiber.Ctx) error {
 			"limit":  limit,
 			"offset": offset,
 			"counts": fiber.Map{
-				"all":     listing.Counts.All,
-				"viewed":  listing.Counts.Viewed,
-				"saved":   listing.Counts.Saved,
-				"applied": listing.Counts.Applied,
-				"board":   listing.Counts.Board,
+				"all":       listing.Counts.All,
+				"viewed":    listing.Counts.Viewed,
+				"saved":     listing.Counts.Saved,
+				"applied":   listing.Counts.Applied,
+				"board":     listing.Counts.Board,
+				"dismissed": listing.Counts.Dismissed,
 			},
 		},
 	})
@@ -124,6 +125,25 @@ func (a *API) ListSavedSlugs(c *fiber.Ctx) error {
 	}
 
 	slugs, err := a.tracking.SavedSlugs(c.Context(), userID)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(fiber.Map{"data": slugs})
+}
+
+// ListDismissedSlugs returns the set of public job slugs the authenticated caller
+// has hidden (dismissed). The SPA reads this to exclude hidden jobs from the
+// browse feed client-side, mirroring ListSavedSlugs — dismissed state is
+// cross-referenced client-side, never joined into ListJobs/SearchJobs. The
+// response is a flat {"data": [slug, ...]} list scoped to the caller.
+func (a *API) ListDismissedSlugs(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+
+	slugs, err := a.tracking.DismissedSlugs(c.Context(), userID)
 	if err != nil {
 		return err
 	}

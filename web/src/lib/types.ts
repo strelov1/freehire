@@ -354,6 +354,7 @@ export interface MyJobCounts {
   viewed: number;
   saved: number;
   applied: number;
+  dismissed: number;
 }
 
 /** A snapshot of the caller's applications across the seven pipeline buckets.

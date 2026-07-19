@@ -42,6 +42,8 @@ type fakeRepo struct {
 	viewedErr           error
 	savedResult         []string
 	savedErr            error
+	dismissedResult     []string
+	dismissedErr        error
 	excludedResult      []int64
 	excludedErr         error
 	excludedLimit       int32
@@ -119,6 +121,10 @@ func (f *fakeRepo) ViewedSlugs(_ context.Context, _ int64) ([]string, error) {
 
 func (f *fakeRepo) SavedSlugs(_ context.Context, _ int64) ([]string, error) {
 	return f.savedResult, f.savedErr
+}
+
+func (f *fakeRepo) DismissedSlugs(_ context.Context, _ int64) ([]string, error) {
+	return f.dismissedResult, f.dismissedErr
 }
 
 func (f *fakeRepo) ExcludedJobIDs(_ context.Context, _ int64, limit int32) ([]int64, error) {
@@ -621,6 +627,48 @@ func TestSavedSlugs_Passthrough(t *testing.T) {
 	}
 	if len(slugs) != 2 || slugs[0] != "job-a" {
 		t.Errorf("slugs = %v, want [job-a job-b]", slugs)
+	}
+}
+
+func TestDismissedSlugs_Passthrough(t *testing.T) {
+	repo := newRepo()
+	repo.dismissedResult = []string{"job-a", "job-b"}
+	svc := jobtracking.New(repo)
+
+	slugs, err := svc.DismissedSlugs(ctx(), userID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(slugs) != 2 || slugs[0] != "job-a" {
+		t.Errorf("slugs = %v, want [job-a job-b]", slugs)
+	}
+}
+
+func TestParseFilter_Dismissed(t *testing.T) {
+	f, err := jobtracking.ParseFilter("dismissed")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if f != jobtracking.FilterDismissed {
+		t.Errorf("filter = %q, want %q", f, jobtracking.FilterDismissed)
+	}
+}
+
+func TestListTracked_DismissedFilterSelectsDismissedTotal(t *testing.T) {
+	repo := newRepo()
+	repo.countResult = jobtracking.Counts{All: 9, Viewed: 4, Saved: 2, Applied: 3, Board: 5, Dismissed: 6}
+	repo.listResult = []jobtracking.TrackedJob{{Interaction: jobtracking.Interaction{JobID: jobID}}}
+	svc := jobtracking.New(repo)
+
+	listing, err := svc.ListTracked(ctx(), userID, "dismissed", 20, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if repo.listFilter != jobtracking.FilterDismissed {
+		t.Errorf("repo received filter %q, want %q", repo.listFilter, jobtracking.FilterDismissed)
+	}
+	if listing.Total() != 6 {
+		t.Errorf("Total() = %d, want 6 (the dismissed count)", listing.Total())
 	}
 }
 

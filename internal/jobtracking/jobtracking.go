@@ -27,15 +27,17 @@ type Interaction struct {
 // Filter selects which interactions a listing returns. It is a controlled
 // vocabulary owned here (mirroring userjob.Stage): "all" is every interaction,
 // "viewed" the passive history (neither saved nor applied), "saved"/"applied"
-// the respective subsets, and "board" the Kanban set (saved, applied, or staged).
+// the respective subsets, "board" the Kanban set (saved, applied, or staged),
+// and "dismissed" the jobs the user hid from the feed.
 type Filter string
 
 const (
-	FilterAll     Filter = "all"
-	FilterViewed  Filter = "viewed"
-	FilterSaved   Filter = "saved"
-	FilterApplied Filter = "applied"
-	FilterBoard   Filter = "board"
+	FilterAll       Filter = "all"
+	FilterViewed    Filter = "viewed"
+	FilterSaved     Filter = "saved"
+	FilterApplied   Filter = "applied"
+	FilterBoard     Filter = "board"
+	FilterDismissed Filter = "dismissed"
 )
 
 // ParseFilter validates a raw filter string against the vocabulary. An empty
@@ -46,7 +48,7 @@ func ParseFilter(s string) (Filter, error) {
 	switch Filter(s) {
 	case "", FilterAll:
 		return FilterAll, nil
-	case FilterViewed, FilterSaved, FilterApplied, FilterBoard:
+	case FilterViewed, FilterSaved, FilterApplied, FilterBoard, FilterDismissed:
 		return Filter(s), nil
 	}
 	return "", ErrInvalidFilter
@@ -54,11 +56,12 @@ func ParseFilter(s string) (Filter, error) {
 
 // Counts are the per-filter interaction totals for the my-jobs tab badges.
 type Counts struct {
-	All     int64
-	Viewed  int64
-	Saved   int64
-	Applied int64
-	Board   int64
+	All       int64
+	Viewed    int64
+	Saved     int64
+	Applied   int64
+	Board     int64
+	Dismissed int64
 }
 
 // Total returns the count matching the active filter — the value the listing's
@@ -73,6 +76,8 @@ func (c Counts) Total(f Filter) int64 {
 		return c.Applied
 	case FilterBoard:
 		return c.Board
+	case FilterDismissed:
+		return c.Dismissed
 	default:
 		return c.All
 	}
@@ -168,6 +173,9 @@ type Repository interface {
 	// SavedSlugs returns every public job slug the caller has saved (bookmarked).
 	SavedSlugs(ctx context.Context, userID int64) ([]string, error)
 
+	// DismissedSlugs returns every public job slug the caller has hidden (dismissed).
+	DismissedSlugs(ctx context.Context, userID int64) ([]string, error)
+
 	// ExcludedJobIDs returns up to limit job ids the caller has already interacted
 	// with (viewed, saved, applied, or dismissed), most-recently-touched first.
 	ExcludedJobIDs(ctx context.Context, userID int64, limit int32) ([]int64, error)
@@ -216,6 +224,11 @@ func (s *Service) ViewedSlugs(ctx context.Context, userID int64) ([]string, erro
 // SavedSlugs returns every public job slug the caller has saved (bookmarked).
 func (s *Service) SavedSlugs(ctx context.Context, userID int64) ([]string, error) {
 	return s.repo.SavedSlugs(ctx, userID)
+}
+
+// DismissedSlugs returns every public job slug the caller has hidden (dismissed).
+func (s *Service) DismissedSlugs(ctx context.Context, userID int64) ([]string, error) {
+	return s.repo.DismissedSlugs(ctx, userID)
 }
 
 // ExcludedJobIDs returns the job ids the caller has already interacted with

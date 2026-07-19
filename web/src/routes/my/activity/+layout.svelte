@@ -16,9 +16,16 @@
   const savedActive = $derived(path === '/my/activity');
   const historyActive = $derived(path.startsWith('/my/activity/history'));
   const matchesActive = $derived(path.startsWith('/my/activity/matches'));
+  const hiddenActive = $derived(path.startsWith('/my/activity/hidden'));
   // The id of the active tab, so the routed panel can point back at it (aria-labelledby).
   const activeTabId = $derived(
-    historyActive ? 'activity-tab-history' : matchesActive ? 'activity-tab-matches' : 'activity-tab-saved',
+    historyActive
+      ? 'activity-tab-history'
+      : matchesActive
+        ? 'activity-tab-matches'
+        : hiddenActive
+          ? 'activity-tab-hidden'
+          : 'activity-tab-saved',
   );
 
   const tabClass = (active: boolean) =>
@@ -68,6 +75,16 @@
       class={tabClass(matchesActive)}
     >
       Matches
+    </a>
+    <a
+      role="tab"
+      id="activity-tab-hidden"
+      aria-selected={hiddenActive}
+      aria-controls="activity-tabpanel"
+      href={resolve('/my/activity/hidden')}
+      class={tabClass(hiddenActive)}
+    >
+      Hidden
     </a>
   </div>
 

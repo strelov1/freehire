@@ -85,23 +85,27 @@ SELECT count(*)                                        AS "all",
        count(*) FILTER (WHERE applied_at IS NOT NULL) AS applied,
        count(*) FILTER (WHERE saved_at   IS NOT NULL
                             OR applied_at IS NOT NULL
-                            OR stage      IS NOT NULL) AS board
+                            OR stage      IS NOT NULL) AS board,
+       count(*) FILTER (WHERE dismissed_at IS NOT NULL) AS dismissed
 FROM user_jobs
 WHERE user_id = $1
 `
 
 type CountUserJobsRow struct {
-	All     int64 `json:"all"`
-	Viewed  int64 `json:"viewed"`
-	Saved   int64 `json:"saved"`
-	Applied int64 `json:"applied"`
-	Board   int64 `json:"board"`
+	All       int64 `json:"all"`
+	Viewed    int64 `json:"viewed"`
+	Saved     int64 `json:"saved"`
+	Applied   int64 `json:"applied"`
+	Board     int64 `json:"board"`
+	Dismissed int64 `json:"dismissed"`
 }
 
 // Per-filter row counts for the my-jobs tabs, in one aggregate pass. "all" is
 // every interaction row; "viewed" is the view-only subset (neither saved nor
 // applied), matching the ListUserJobs filter. "board" counts jobs on the Kanban
 // board (saved, applied, or stage set), matching the ListUserJobs board filter.
+// "dismissed" counts jobs the user hid from the feed, matching the ListUserJobs
+// dismissed filter.
 func (q *Queries) CountUserJobs(ctx context.Context, userID int64) (CountUserJobsRow, error) {
 	row := q.db.QueryRow(ctx, countUserJobs, userID)
 	var i CountUserJobsRow
@@ -111,6 +115,7 @@ func (q *Queries) CountUserJobs(ctx context.Context, userID int64) (CountUserJob
 		&i.Saved,
 		&i.Applied,
 		&i.Board,
+		&i.Dismissed,
 	)
 	return i, err
 }
@@ -186,6 +191,39 @@ func (q *Queries) ExcludedJobIDs(ctx context.Context, arg ExcludedJobIDsParams) 
 	return items, nil
 }
 
+const listDismissedJobSlugs = `-- name: ListDismissedJobSlugs :many
+SELECT jobs.public_slug
+FROM user_jobs uj
+JOIN jobs ON jobs.id = uj.job_id
+WHERE uj.user_id = $1 AND uj.dismissed_at IS NOT NULL
+`
+
+// Every public_slug the user has hidden (dismissed). Used by the SPA to exclude
+// hidden jobs from the browse feed client-side, mirroring ListSavedJobSlugs —
+// cross-referenced in the browser, never joined into ListJobs/SearchJobs. Bounded
+// by the caller's dismissed subset (typically small) and indexed by the
+// (user_id, job_id) primary key. Closed jobs are included: a hidden posting that
+// later closes stays hidden.
+func (q *Queries) ListDismissedJobSlugs(ctx context.Context, userID int64) ([]string, error) {
+	rows, err := q.db.Query(ctx, listDismissedJobSlugs, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var public_slug string
+		if err := rows.Scan(&public_slug); err != nil {
+			return nil, err
+		}
+		items = append(items, public_slug)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSavedJobSlugs = `-- name: ListSavedJobSlugs :many
 SELECT jobs.public_slug
 FROM user_jobs uj
@@ -240,12 +278,14 @@ WHERE uj.user_id = $1
        OR ($4::text = 'saved' AND uj.saved_at IS NOT NULL)
        OR ($4::text = 'applied' AND uj.applied_at IS NOT NULL)
        OR ($4::text = 'board'
-           AND (uj.saved_at IS NOT NULL OR uj.applied_at IS NOT NULL OR uj.stage IS NOT NULL)))
+           AND (uj.saved_at IS NOT NULL OR uj.applied_at IS NOT NULL OR uj.stage IS NOT NULL))
+       OR ($4::text = 'dismissed' AND uj.dismissed_at IS NOT NULL))
 ORDER BY (CASE $4::text
             WHEN 'saved' THEN uj.saved_at
             WHEN 'applied' THEN uj.applied_at
             WHEN 'viewed' THEN uj.viewed_at
             WHEN 'board' THEN GREATEST(uj.saved_at, uj.applied_at)
+            WHEN 'dismissed' THEN uj.dismissed_at
             ELSE GREATEST(uj.viewed_at, uj.saved_at, uj.applied_at)
           END) DESC NULLS LAST, uj.job_id DESC
 LIMIT $2 OFFSET $3

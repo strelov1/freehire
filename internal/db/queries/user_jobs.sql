@@ -149,12 +149,14 @@ WHERE uj.user_id = $1
        OR (sqlc.arg(filter)::text = 'saved' AND uj.saved_at IS NOT NULL)
        OR (sqlc.arg(filter)::text = 'applied' AND uj.applied_at IS NOT NULL)
        OR (sqlc.arg(filter)::text = 'board'
-           AND (uj.saved_at IS NOT NULL OR uj.applied_at IS NOT NULL OR uj.stage IS NOT NULL)))
+           AND (uj.saved_at IS NOT NULL OR uj.applied_at IS NOT NULL OR uj.stage IS NOT NULL))
+       OR (sqlc.arg(filter)::text = 'dismissed' AND uj.dismissed_at IS NOT NULL))
 ORDER BY (CASE sqlc.arg(filter)::text
             WHEN 'saved' THEN uj.saved_at
             WHEN 'applied' THEN uj.applied_at
             WHEN 'viewed' THEN uj.viewed_at
             WHEN 'board' THEN GREATEST(uj.saved_at, uj.applied_at)
+            WHEN 'dismissed' THEN uj.dismissed_at
             ELSE GREATEST(uj.viewed_at, uj.saved_at, uj.applied_at)
           END) DESC NULLS LAST, uj.job_id DESC
 LIMIT $2 OFFSET $3;
@@ -183,11 +185,25 @@ FROM user_jobs uj
 JOIN jobs ON jobs.id = uj.job_id
 WHERE uj.user_id = $1 AND uj.saved_at IS NOT NULL;
 
+-- name: ListDismissedJobSlugs :many
+-- Every public_slug the user has hidden (dismissed). Used by the SPA to exclude
+-- hidden jobs from the browse feed client-side, mirroring ListSavedJobSlugs —
+-- cross-referenced in the browser, never joined into ListJobs/SearchJobs. Bounded
+-- by the caller's dismissed subset (typically small) and indexed by the
+-- (user_id, job_id) primary key. Closed jobs are included: a hidden posting that
+-- later closes stays hidden.
+SELECT jobs.public_slug
+FROM user_jobs uj
+JOIN jobs ON jobs.id = uj.job_id
+WHERE uj.user_id = $1 AND uj.dismissed_at IS NOT NULL;
+
 -- name: CountUserJobs :one
 -- Per-filter row counts for the my-jobs tabs, in one aggregate pass. "all" is
 -- every interaction row; "viewed" is the view-only subset (neither saved nor
 -- applied), matching the ListUserJobs filter. "board" counts jobs on the Kanban
 -- board (saved, applied, or stage set), matching the ListUserJobs board filter.
+-- "dismissed" counts jobs the user hid from the feed, matching the ListUserJobs
+-- dismissed filter.
 SELECT count(*)                                        AS "all",
        count(*) FILTER (WHERE saved_at IS NULL
                           AND applied_at IS NULL)      AS viewed,
@@ -195,7 +211,8 @@ SELECT count(*)                                        AS "all",
        count(*) FILTER (WHERE applied_at IS NOT NULL) AS applied,
        count(*) FILTER (WHERE saved_at   IS NOT NULL
                             OR applied_at IS NOT NULL
-                            OR stage      IS NOT NULL) AS board
+                            OR stage      IS NOT NULL) AS board,
+       count(*) FILTER (WHERE dismissed_at IS NOT NULL) AS dismissed
 FROM user_jobs
 WHERE user_id = $1;
 

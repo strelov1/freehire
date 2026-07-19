@@ -183,11 +183,12 @@ func (r *QueriesRepository) CountInteractions(ctx context.Context, userID int64)
 		return Counts{}, err
 	}
 	return Counts{
-		All:     row.All,
-		Viewed:  row.Viewed,
-		Saved:   row.Saved,
-		Applied: row.Applied,
-		Board:   row.Board,
+		All:       row.All,
+		Viewed:    row.Viewed,
+		Saved:     row.Saved,
+		Applied:   row.Applied,
+		Board:     row.Board,
+		Dismissed: row.Dismissed,
 	}, nil
 }
 
@@ -199,6 +200,11 @@ func (r *QueriesRepository) ViewedSlugs(ctx context.Context, userID int64) ([]st
 // SavedSlugs returns every public job slug the caller has saved (bookmarked).
 func (r *QueriesRepository) SavedSlugs(ctx context.Context, userID int64) ([]string, error) {
 	return r.q.ListSavedJobSlugs(ctx, userID)
+}
+
+// DismissedSlugs returns every public job slug the caller has hidden (dismissed).
+func (r *QueriesRepository) DismissedSlugs(ctx context.Context, userID int64) ([]string, error) {
+	return r.q.ListDismissedJobSlugs(ctx, userID)
 }
 
 // ExcludedJobIDs returns up to limit job ids the caller has already interacted
