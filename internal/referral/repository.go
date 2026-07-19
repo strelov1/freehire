@@ -75,22 +75,51 @@ func (r *QueriesRepository) GetOffer(ctx context.Context, offerID int64) (Offer,
 	return offerFromRow(row), true, nil
 }
 
-// ListOffersByUser returns a member's offers, newest first.
+// ListOffersByUser returns a member's offers, newest first, each with its company name.
 func (r *QueriesRepository) ListOffersByUser(ctx context.Context, userID int64) ([]Offer, error) {
 	rows, err := r.q.ListReferralOffersByUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	return mapSlice(rows, offerFromRow), nil
+	return mapSlice(rows, func(row db.ListReferralOffersByUserRow) Offer {
+		o := offerFromRow(db.ReferralOffer{
+			ID: row.ID, UserID: row.UserID, CompanySlug: row.CompanySlug,
+			ProofObjectKey: row.ProofObjectKey, Status: row.Status,
+			DecidedBy: row.DecidedBy, DecidedAt: row.DecidedAt, CreatedAt: row.CreatedAt,
+		})
+		o.CompanyName = row.CompanyName.String
+		return o
+	}), nil
 }
 
-// ListPendingOffers returns the moderator queue, oldest first.
+// ListPendingOffers returns the moderator queue, oldest first, each with its company name.
 func (r *QueriesRepository) ListPendingOffers(ctx context.Context) ([]Offer, error) {
 	rows, err := r.q.ListPendingReferralOffers(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return mapSlice(rows, offerFromRow), nil
+	return mapSlice(rows, func(row db.ListPendingReferralOffersRow) Offer {
+		o := offerFromRow(db.ReferralOffer{
+			ID: row.ID, UserID: row.UserID, CompanySlug: row.CompanySlug,
+			ProofObjectKey: row.ProofObjectKey, Status: row.Status,
+			DecidedBy: row.DecidedBy, DecidedAt: row.DecidedAt, CreatedAt: row.CreatedAt,
+		})
+		o.CompanyName = row.CompanyName.String
+		return o
+	}), nil
+}
+
+// DeleteOffer hard-deletes a member's own offer, owner-scoped by userID. A zero-row
+// delete (absent id or another owner) maps to ErrOfferNotFound.
+func (r *QueriesRepository) DeleteOffer(ctx context.Context, offerID, userID int64) error {
+	n, err := r.q.DeleteReferralOffer(ctx, db.DeleteReferralOfferParams{ID: offerID, UserID: userID})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrOfferNotFound
+	}
+	return nil
 }
 
 // CompanyHasApprovedReferrer reports whether the company is referral-eligible.

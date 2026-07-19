@@ -468,6 +468,7 @@ func Register(app *fiber.App, cfg Config) {
 	// moderator-gated, mirroring the submissions queue above.
 	api.Post("/me/referrals/offers", keyAuth, a.SubmitReferralOffer)
 	api.Get("/me/referrals/offers", keyAuth, a.ListMyReferralOffers)
+	api.Delete("/me/referrals/offers/:id", keyAuth, a.WithdrawReferralOffer)
 	api.Post("/me/referrals/requests", keyAuth, a.CreateReferralRequest)
 	api.Get("/me/referrals/requests", keyAuth, a.ListMyReferralRequests)
 	api.Get("/me/referrals/incoming", keyAuth, a.ListIncomingReferralRequests)

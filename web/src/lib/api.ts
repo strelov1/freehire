@@ -982,6 +982,11 @@ export function createApi(
     return requestData<ReferralOffer[]>('/api/v1/me/referrals/offers');
   }
 
+  /** Stop being a referrer: delete one of the caller's own offers. */
+  async function withdrawReferralOffer(id: number): Promise<void> {
+    await call(`/api/v1/me/referrals/offers/${id}`, { method: 'DELETE' });
+  }
+
   /** The referrer inbox: open requests for the companies the caller is approved for. */
   async function listIncomingReferrals(): Promise<IncomingReferralRequest[]> {
     return requestData<IncomingReferralRequest[]>('/api/v1/me/referrals/incoming');
@@ -1301,6 +1306,7 @@ export function createApi(
     listMyReferralRequests,
     submitReferralOffer,
     listMyReferralOffers,
+    withdrawReferralOffer,
     listIncomingReferrals,
     resolveReferral,
     referralCvUrl,

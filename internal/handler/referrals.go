@@ -19,6 +19,7 @@ import (
 type referralOfferResponse struct {
 	ID          int64      `json:"id"`
 	CompanySlug string     `json:"company_slug"`
+	CompanyName string     `json:"company_name"`
 	Status      string     `json:"status"`
 	DecidedAt   *time.Time `json:"decided_at"`
 	CreatedAt   *time.Time `json:"created_at"`
@@ -26,7 +27,7 @@ type referralOfferResponse struct {
 
 func toReferralOfferResponse(o referral.Offer) referralOfferResponse {
 	return referralOfferResponse{
-		ID: o.ID, CompanySlug: o.CompanySlug, Status: o.Status,
+		ID: o.ID, CompanySlug: o.CompanySlug, CompanyName: o.CompanyName, Status: o.Status,
 		DecidedAt: o.DecidedAt, CreatedAt: o.CreatedAt,
 	}
 }
@@ -97,6 +98,8 @@ func referralError(err error) error {
 		return fiber.NewError(fiber.StatusConflict, "you already offered to refer for this company")
 	case errors.Is(err, referral.ErrOfferNotPending):
 		return fiber.NewError(fiber.StatusConflict, "this offer is not pending")
+	case errors.Is(err, referral.ErrOfferNotFound):
+		return fiber.NewError(fiber.StatusNotFound, "offer not found")
 	case errors.Is(err, referral.ErrAlreadyRequested):
 		return fiber.NewError(fiber.StatusConflict, "you already have an active request for this company")
 	case errors.Is(err, referral.ErrRequestNotOpen):
@@ -209,6 +212,23 @@ func (a *API) ListMyReferralOffers(c *fiber.Ctx) error {
 		out[i] = toReferralOfferResponse(o)
 	}
 	return c.JSON(fiber.Map{"data": out})
+}
+
+// WithdrawReferralOffer lets a member stop being a referrer by deleting their own offer.
+// RequireAuth; owner-scoped in the service. 404 when the offer is absent or not theirs.
+func (a *API) WithdrawReferralOffer(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	id, err := c.ParamsInt("id")
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid offer id")
+	}
+	if err := a.referral.WithdrawOffer(c.Context(), int64(id), userID); err != nil {
+		return referralError(err)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 // ListIncomingReferralRequests returns the open requests for every company the caller is an

@@ -8,15 +8,28 @@ RETURNING *;
 
 -- name: ListReferralOffersByUser :many
 -- The "my offers" list: one member's offers with moderation status, newest first.
-SELECT * FROM referral_offers
-WHERE user_id = $1
-ORDER BY created_at DESC;
+-- Joins the catalogue for the company's display name (LEFT so an offer survives a
+-- company the catalogue no longer knows — the UI falls back to the slug).
+SELECT o.*, c.name AS company_name
+FROM referral_offers o
+LEFT JOIN companies c ON c.slug = o.company_slug
+WHERE o.user_id = $1
+ORDER BY o.created_at DESC;
 
 -- name: ListPendingReferralOffers :many
--- The moderator queue: offers awaiting a decision, oldest first.
-SELECT * FROM referral_offers
-WHERE status = 'pending'
-ORDER BY created_at;
+-- The moderator queue: offers awaiting a decision, oldest first, with display name.
+SELECT o.*, c.name AS company_name
+FROM referral_offers o
+LEFT JOIN companies c ON c.slug = o.company_slug
+WHERE o.status = 'pending'
+ORDER BY o.created_at;
+
+-- name: DeleteReferralOffer :execrows
+-- Withdraw ("stop being a referrer"): the owner deletes their own offer. The user_id
+-- guard scopes it to the caller — a non-owner or absent id deletes zero rows, which the
+-- repository maps to ErrOfferNotFound. Hard delete frees the UNIQUE (user_id,
+-- company_slug) so the member can offer again later (fresh proof, fresh moderation).
+DELETE FROM referral_offers WHERE id = $1 AND user_id = $2;
 
 -- name: DecideReferralOffer :one
 -- Approve or reject a pending offer, recording the deciding moderator and time. The

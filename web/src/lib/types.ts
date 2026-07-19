@@ -190,6 +190,7 @@ export type ReferralCvKind = 'original' | 'built';
 export interface ReferralOffer {
   id: number;
   company_slug: string;
+  company_name: string;
   status: ReferralOfferStatus;
   decided_at: string | null;
   created_at: string | null;

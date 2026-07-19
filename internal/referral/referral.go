@@ -54,6 +54,10 @@ var (
 	// ErrOfferNotPending is a decision on an offer that is not pending — already decided,
 	// or absent; the repository maps the no-row update to this (409).
 	ErrOfferNotPending = errors.New("referral: offer is not pending")
+
+	// ErrOfferNotFound is returned when withdrawing an offer that does not exist or is
+	// not owned by the caller — the two are indistinguishable on purpose (no IDOR probe).
+	ErrOfferNotFound = errors.New("referral: offer not found")
 	// ErrNoContact is a request with neither a Telegram handle nor an email (422).
 	ErrNoContact = errors.New("referral: at least one contact required")
 	// ErrInvalidCVChoice is a CV choice that violates the kind/id invariant: an original
@@ -84,6 +88,10 @@ type Offer struct {
 	ID          int64
 	UserID      int64
 	CompanySlug string
+	// CompanyName is the catalogue display name for CompanySlug, empty when the offer
+	// is read on a path that doesn't join the catalogue (create/decide) or the company
+	// is unknown. The list paths populate it; callers fall back to the slug.
+	CompanyName string
 	ProofKey    string
 	Status      string
 	DecidedBy   *int64
@@ -146,6 +154,7 @@ type Repository interface {
 	CreateOffer(ctx context.Context, in OfferInput) (Offer, error)
 	DecideOffer(ctx context.Context, offerID, moderatorID int64, status string) (Offer, error)
 	GetOffer(ctx context.Context, offerID int64) (Offer, bool, error)
+	DeleteOffer(ctx context.Context, offerID, userID int64) error
 	ListOffersByUser(ctx context.Context, userID int64) ([]Offer, error)
 	ListPendingOffers(ctx context.Context) ([]Offer, error)
 	CompanyHasApprovedReferrer(ctx context.Context, companySlug string) (bool, error)
@@ -225,6 +234,13 @@ func (s *Service) DecideOffer(ctx context.Context, offerID, moderatorID int64, a
 // the offer does not exist.
 func (s *Service) GetOffer(ctx context.Context, offerID int64) (Offer, bool, error) {
 	return s.repo.GetOffer(ctx, offerID)
+}
+
+// WithdrawOffer lets a member stop being a referrer: it hard-deletes their own offer,
+// owner-scoped by userID. A missing offer or one owned by someone else returns
+// ErrOfferNotFound. Deleting frees the (user, company) slot so they can offer again later.
+func (s *Service) WithdrawOffer(ctx context.Context, offerID, userID int64) error {
+	return s.repo.DeleteOffer(ctx, offerID, userID)
 }
 
 // ListMyOffers returns a member's offers, newest first.

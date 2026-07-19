@@ -22,16 +22,22 @@ type fakeRepo struct {
 	getRequestOK bool
 	createErr    error
 	resolveErr   error
+	deleteErr    error
 
 	createdReq *RequestInput
 	createdOff *OfferInput
 	decided    *decidedOffer
+	deleted    *deletedOffer
 	resolved   *resolvedRequest
 }
 
 type decidedOffer struct {
 	id, moderator int64
 	status        string
+}
+
+type deletedOffer struct {
+	id, user int64
 }
 
 type resolvedRequest struct {
@@ -74,6 +80,10 @@ func (f *fakeRepo) UserHasResume(context.Context, int64) (bool, error) {
 }
 func (f *fakeRepo) GetOffer(context.Context, int64) (Offer, bool, error) {
 	return Offer{}, false, nil
+}
+func (f *fakeRepo) DeleteOffer(_ context.Context, offerID, userID int64) error {
+	f.deleted = &deletedOffer{offerID, userID}
+	return f.deleteErr
 }
 
 func (f *fakeRepo) CreateRequest(_ context.Context, in RequestInput) (Request, error) {
@@ -146,6 +156,25 @@ func TestDecideOfferMapsApproveReject(t *testing.T) {
 		if repo.decided == nil || repo.decided.status != tc.want || repo.decided.moderator != 9 {
 			t.Errorf("decided = %+v, want status %q by 9", repo.decided, tc.want)
 		}
+	}
+}
+
+func TestWithdrawOfferIsOwnerScoped(t *testing.T) {
+	repo := &fakeRepo{}
+	s := newService(repo, &fakePinger{})
+	if err := s.WithdrawOffer(context.Background(), 5, 42); err != nil {
+		t.Fatalf("withdraw: %v", err)
+	}
+	if repo.deleted == nil || repo.deleted.id != 5 || repo.deleted.user != 42 {
+		t.Errorf("deleted = %+v, want offer 5 by user 42", repo.deleted)
+	}
+}
+
+func TestWithdrawOfferPropagatesNotFound(t *testing.T) {
+	repo := &fakeRepo{deleteErr: ErrOfferNotFound}
+	s := newService(repo, &fakePinger{})
+	if err := s.WithdrawOffer(context.Background(), 5, 42); !errors.Is(err, ErrOfferNotFound) {
+		t.Errorf("err = %v, want ErrOfferNotFound", err)
 	}
 }
 

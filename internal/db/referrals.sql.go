@@ -207,6 +207,27 @@ func (q *Queries) DecideReferralOffer(ctx context.Context, arg DecideReferralOff
 	return i, err
 }
 
+const deleteReferralOffer = `-- name: DeleteReferralOffer :execrows
+DELETE FROM referral_offers WHERE id = $1 AND user_id = $2
+`
+
+type DeleteReferralOfferParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+// Withdraw ("stop being a referrer"): the owner deletes their own offer. The user_id
+// guard scopes it to the caller — a non-owner or absent id deletes zero rows, which the
+// repository maps to ErrOfferNotFound. Hard delete frees the UNIQUE (user_id,
+// company_slug) so the member can offer again later (fresh proof, fresh moderation).
+func (q *Queries) DeleteReferralOffer(ctx context.Context, arg DeleteReferralOfferParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteReferralOffer, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getReferralOffer = `-- name: GetReferralOffer :one
 SELECT id, user_id, company_slug, proof_object_key, status, decided_by, decided_at, created_at FROM referral_offers WHERE id = $1
 `
@@ -336,21 +357,35 @@ func (q *Queries) ListIncomingReferralRequests(ctx context.Context, referrerUser
 }
 
 const listPendingReferralOffers = `-- name: ListPendingReferralOffers :many
-SELECT id, user_id, company_slug, proof_object_key, status, decided_by, decided_at, created_at FROM referral_offers
-WHERE status = 'pending'
-ORDER BY created_at
+SELECT o.id, o.user_id, o.company_slug, o.proof_object_key, o.status, o.decided_by, o.decided_at, o.created_at, c.name AS company_name
+FROM referral_offers o
+LEFT JOIN companies c ON c.slug = o.company_slug
+WHERE o.status = 'pending'
+ORDER BY o.created_at
 `
 
-// The moderator queue: offers awaiting a decision, oldest first.
-func (q *Queries) ListPendingReferralOffers(ctx context.Context) ([]ReferralOffer, error) {
+type ListPendingReferralOffersRow struct {
+	ID             int64              `json:"id"`
+	UserID         int64              `json:"user_id"`
+	CompanySlug    string             `json:"company_slug"`
+	ProofObjectKey string             `json:"proof_object_key"`
+	Status         string             `json:"status"`
+	DecidedBy      pgtype.Int8        `json:"decided_by"`
+	DecidedAt      pgtype.Timestamptz `json:"decided_at"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	CompanyName    pgtype.Text        `json:"company_name"`
+}
+
+// The moderator queue: offers awaiting a decision, oldest first, with display name.
+func (q *Queries) ListPendingReferralOffers(ctx context.Context) ([]ListPendingReferralOffersRow, error) {
 	rows, err := q.db.Query(ctx, listPendingReferralOffers)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ReferralOffer{}
+	items := []ListPendingReferralOffersRow{}
 	for rows.Next() {
-		var i ReferralOffer
+		var i ListPendingReferralOffersRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,
@@ -360,6 +395,7 @@ func (q *Queries) ListPendingReferralOffers(ctx context.Context) ([]ReferralOffe
 			&i.DecidedBy,
 			&i.DecidedAt,
 			&i.CreatedAt,
+			&i.CompanyName,
 		); err != nil {
 			return nil, err
 		}
@@ -372,21 +408,37 @@ func (q *Queries) ListPendingReferralOffers(ctx context.Context) ([]ReferralOffe
 }
 
 const listReferralOffersByUser = `-- name: ListReferralOffersByUser :many
-SELECT id, user_id, company_slug, proof_object_key, status, decided_by, decided_at, created_at FROM referral_offers
-WHERE user_id = $1
-ORDER BY created_at DESC
+SELECT o.id, o.user_id, o.company_slug, o.proof_object_key, o.status, o.decided_by, o.decided_at, o.created_at, c.name AS company_name
+FROM referral_offers o
+LEFT JOIN companies c ON c.slug = o.company_slug
+WHERE o.user_id = $1
+ORDER BY o.created_at DESC
 `
 
+type ListReferralOffersByUserRow struct {
+	ID             int64              `json:"id"`
+	UserID         int64              `json:"user_id"`
+	CompanySlug    string             `json:"company_slug"`
+	ProofObjectKey string             `json:"proof_object_key"`
+	Status         string             `json:"status"`
+	DecidedBy      pgtype.Int8        `json:"decided_by"`
+	DecidedAt      pgtype.Timestamptz `json:"decided_at"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	CompanyName    pgtype.Text        `json:"company_name"`
+}
+
 // The "my offers" list: one member's offers with moderation status, newest first.
-func (q *Queries) ListReferralOffersByUser(ctx context.Context, userID int64) ([]ReferralOffer, error) {
+// Joins the catalogue for the company's display name (LEFT so an offer survives a
+// company the catalogue no longer knows — the UI falls back to the slug).
+func (q *Queries) ListReferralOffersByUser(ctx context.Context, userID int64) ([]ListReferralOffersByUserRow, error) {
 	rows, err := q.db.Query(ctx, listReferralOffersByUser, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ReferralOffer{}
+	items := []ListReferralOffersByUserRow{}
 	for rows.Next() {
-		var i ReferralOffer
+		var i ListReferralOffersByUserRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,
@@ -396,6 +448,7 @@ func (q *Queries) ListReferralOffersByUser(ctx context.Context, userID int64) ([
 			&i.DecidedBy,
 			&i.DecidedAt,
 			&i.CreatedAt,
+			&i.CompanyName,
 		); err != nil {
 			return nil, err
 		}

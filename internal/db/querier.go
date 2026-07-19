@@ -322,6 +322,11 @@ type Querier interface {
 	// by the company-info backfill are preserved: they intentionally have no job, so
 	// the NOT is_reference guard keeps the backfill directory from being swept away.
 	DeleteOrphanCompanies(ctx context.Context) (int64, error)
+	// Withdraw ("stop being a referrer"): the owner deletes their own offer. The user_id
+	// guard scopes it to the caller — a non-owner or absent id deletes zero rows, which the
+	// repository maps to ErrOfferNotFound. Hard delete frees the UNIQUE (user_id,
+	// company_slug) so the member can offer again later (fresh proof, fresh moderation).
+	DeleteReferralOffer(ctx context.Context, arg DeleteReferralOfferParams) (int64, error)
 	// Delete a saved search, scoped to its owner so a user can only delete their own.
 	// Returns the affected row count: 0 means it does not exist or is not the caller's
 	// (the handler maps that to 404).
@@ -751,8 +756,8 @@ type Querier interface {
 	// holds closed jobs, so unlike ListJobsUpdatedAfter there is nothing to delete. Served
 	// by jobs_open_enrich_freshness_idx (COALESCE(posted_at, created_at) DESC WHERE open).
 	ListOpenJobsPostedAfter(ctx context.Context, arg ListOpenJobsPostedAfterParams) ([]Job, error)
-	// The moderator queue: offers awaiting a decision, oldest first.
-	ListPendingReferralOffers(ctx context.Context) ([]ReferralOffer, error)
+	// The moderator queue: offers awaiting a decision, oldest first, with display name.
+	ListPendingReferralOffers(ctx context.Context) ([]ListPendingReferralOffersRow, error)
 	// The moderator review queue: every pending report, newest first, with the reporter's email
 	// and the reported job's slug and title so the moderator can judge it and link to it.
 	ListPendingReports(ctx context.Context) ([]ListPendingReportsRow, error)
@@ -760,7 +765,9 @@ type Querier interface {
 	// email so the moderator can judge provenance.
 	ListPendingSubmissions(ctx context.Context) ([]ListPendingSubmissionsRow, error)
 	// The "my offers" list: one member's offers with moderation status, newest first.
-	ListReferralOffersByUser(ctx context.Context, userID int64) ([]ReferralOffer, error)
+	// Joins the catalogue for the company's display name (LEFT so an offer survives a
+	// company the catalogue no longer knows — the UI falls back to the slug).
+	ListReferralOffersByUser(ctx context.Context, userID int64) ([]ListReferralOffersByUserRow, error)
 	// The seeker's "my requests" list: their requests with current status, newest first.
 	ListReferralRequestsBySeeker(ctx context.Context, seekerUserID int64) ([]ReferralRequest, error)
 	// The open postings sharing a role cluster (company_slug + role_fingerprint) with the
