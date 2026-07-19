@@ -236,7 +236,13 @@ WHERE uj.user_id = $1
        OR ($4::text = 'applied' AND uj.applied_at IS NOT NULL)
        OR ($4::text = 'board'
            AND (uj.saved_at IS NOT NULL OR uj.applied_at IS NOT NULL OR uj.stage IS NOT NULL)))
-ORDER BY GREATEST(uj.viewed_at, uj.saved_at, uj.applied_at) DESC, uj.job_id DESC
+ORDER BY (CASE $4::text
+            WHEN 'saved' THEN uj.saved_at
+            WHEN 'applied' THEN uj.applied_at
+            WHEN 'viewed' THEN uj.viewed_at
+            WHEN 'board' THEN GREATEST(uj.saved_at, uj.applied_at)
+            ELSE GREATEST(uj.viewed_at, uj.saved_at, uj.applied_at)
+          END) DESC NULLS LAST, uj.job_id DESC
 LIMIT $2 OFFSET $3
 `
 
@@ -257,12 +263,15 @@ type ListUserJobsRow struct {
 	EmailCount int64              `json:"email_count"`
 }
 
-// A user's job interactions joined with the job rows, most recently touched
-// first (GREATEST ignores NULLs; viewed_at is always set). filter narrows to
-// viewed-only/saved/applied subsets; 'all' is every interaction, 'viewed' is
-// the passive history (rows neither saved nor applied). Closed jobs stay
-// listed: a user's history must not shrink when a posting closes. email_count is
-// the caller's live (non-deleted) inbox messages linked to this job — the board's
+// A user's job interactions joined with the job rows. Each subset is ordered by
+// when the job entered *that* list, not by last touch: saved by saved_at, applied
+// by applied_at, the passive history by viewed_at, the board by when it was saved
+// or applied. This keeps a plain re-view from bumping a saved/applied job to the
+// top (viewed_at is refreshed on every view). 'all' keeps the touched-recency
+// timeline. filter narrows to viewed-only/saved/applied subsets; 'viewed' is the
+// passive history (rows neither saved nor applied). Closed jobs stay listed: a
+// user's history must not shrink when a posting closes. email_count is the
+// caller's live (non-deleted) inbox messages linked to this job — the board's
 // per-card ✉ badge; 0 for everyone without a connected mailbox.
 func (q *Queries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]ListUserJobsRow, error) {
 	rows, err := q.db.Query(ctx, listUserJobs,

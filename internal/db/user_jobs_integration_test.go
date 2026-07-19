@@ -285,4 +285,53 @@ func TestUserJobsSaveAndList(t *testing.T) {
 			t.Errorf("counts = %+v, want all=3 viewed=1 saved=1 applied=1", counts)
 		}
 	})
+
+	t.Run("saved is ordered by saved_at and a later view does not bump it", func(t *testing.T) {
+		reset(t)
+		uid := insertUser(t, pool, "orderer@example.test")
+		older := insertJob(t, pool, "saved-older")
+		newer := insertJob(t, pool, "saved-newer")
+
+		if _, err := q.SaveJob(ctx, SaveJobParams{UserID: uid, JobID: older}); err != nil {
+			t.Fatalf("save older: %v", err)
+		}
+		if _, err := q.SaveJob(ctx, SaveJobParams{UserID: uid, JobID: newer}); err != nil {
+			t.Fatalf("save newer: %v", err)
+		}
+		// Pin saved_at deterministically: `older` saved before `newer`.
+		if _, err := pool.Exec(ctx, "UPDATE user_jobs SET saved_at = $1 WHERE user_id = $2 AND job_id = $3",
+			"2020-01-01T00:00:00Z", uid, older); err != nil {
+			t.Fatalf("pin older saved_at: %v", err)
+		}
+		if _, err := pool.Exec(ctx, "UPDATE user_jobs SET saved_at = $1 WHERE user_id = $2 AND job_id = $3",
+			"2020-06-01T00:00:00Z", uid, newer); err != nil {
+			t.Fatalf("pin newer saved_at: %v", err)
+		}
+
+		wantSaved := func(t *testing.T, label string) {
+			t.Helper()
+			saved, err := q.ListUserJobs(ctx, ListUserJobsParams{UserID: uid, Filter: "saved", Limit: 10, Offset: 0})
+			if err != nil {
+				t.Fatalf("list saved (%s): %v", label, err)
+			}
+			got := []int64{}
+			for _, r := range saved {
+				got = append(got, r.Job.ID)
+			}
+			want := []int64{newer, older}
+			if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+				t.Fatalf("saved order (%s) = %v, want %v (most recently saved first)", label, got, want)
+			}
+		}
+
+		wantSaved(t, "after save")
+
+		// Re-viewing the older-saved job refreshes its viewed_at to now(), which is
+		// far newer than either saved_at. A saved list ordered by GREATEST(...) would
+		// wrongly float `older` to the top; ordering by saved_at must keep it last.
+		if _, err := q.RecordJobView(ctx, RecordJobViewParams{UserID: uid, JobID: older}); err != nil {
+			t.Fatalf("re-view older: %v", err)
+		}
+		wantSaved(t, "after re-view")
+	})
 }

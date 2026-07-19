@@ -728,12 +728,15 @@ type Querier interface {
 	// staleness stamps ride along so the handler can flag rows whose CV/job/model has since
 	// changed, and the analysis blob carries the overall score + verdict the list shows.
 	ListUserJobAnalyses(ctx context.Context, userID int64) ([]ListUserJobAnalysesRow, error)
-	// A user's job interactions joined with the job rows, most recently touched
-	// first (GREATEST ignores NULLs; viewed_at is always set). filter narrows to
-	// viewed-only/saved/applied subsets; 'all' is every interaction, 'viewed' is
-	// the passive history (rows neither saved nor applied). Closed jobs stay
-	// listed: a user's history must not shrink when a posting closes. email_count is
-	// the caller's live (non-deleted) inbox messages linked to this job — the board's
+	// A user's job interactions joined with the job rows. Each subset is ordered by
+	// when the job entered *that* list, not by last touch: saved by saved_at, applied
+	// by applied_at, the passive history by viewed_at, the board by when it was saved
+	// or applied. This keeps a plain re-view from bumping a saved/applied job to the
+	// top (viewed_at is refreshed on every view). 'all' keeps the touched-recency
+	// timeline. filter narrows to viewed-only/saved/applied subsets; 'viewed' is the
+	// passive history (rows neither saved nor applied). Closed jobs stay listed: a
+	// user's history must not shrink when a posting closes. email_count is the
+	// caller's live (non-deleted) inbox messages linked to this job — the board's
 	// per-card ✉ badge; 0 for everyone without a connected mailbox.
 	ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]ListUserJobsRow, error)
 	// Every public_slug the user has interacted with (viewed_at is always set, so
