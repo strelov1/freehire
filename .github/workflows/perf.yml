@@ -1,0 +1,161 @@
+name: Performance
+
+# Two complementary guards, per the perf suite in perf/k6/:
+#
+#  • pr-smoke     — spins up the full stack and asserts the key pages still
+#                   render (200 + HTML) within a LOOSE latency ceiling. Safe to
+#                   require as a merge check: it runs on every PR and ALWAYS
+#                   reports a status, but only does the heavy work when the PR
+#                   touches the request path (detected via git diff below). It
+#                   runs on an empty DB, so it gates correctness of the
+#                   SSR→API→Postgres→Meili path, not data-scale performance.
+#
+#  • prod-watchdog — on a schedule, run the same suite against production with
+#                    tight, headroom-based thresholds and enough samples to be
+#                    stable. A breach opens an issue. This is where real
+#                    degradation (query plans at scale, cold caches) is caught.
+#
+# NOTE: no workflow-level `paths:` filter — a path-filtered workflow never
+# reports its check on unrelated PRs, which would leave a required check stuck
+# "Expected" forever. Instead the workflow always runs and skips its own heavy
+# steps when nothing relevant changed.
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * *' # daily 06:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: perf-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-smoke:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Detect request-path changes
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if git diff --name-only "$BASE_SHA" "$HEAD_SHA" \
+            | grep -qE '^(internal/handler/|internal/search/|internal/jobview/|web/|perf/|\.github/workflows/perf\.yml)'; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+            echo "Request-path files changed — running the full smoke."
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+            echo "No request-path changes — reporting green without the heavy run."
+          fi
+
+      - name: Setup Go
+        if: steps.changes.outputs.relevant == 'true'
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install k6
+        if: steps.changes.outputs.relevant == 'true'
+        uses: grafana/setup-k6-action@v1
+
+      - name: Start the stack
+        if: steps.changes.outputs.relevant == 'true'
+        run: docker compose up -d --build
+
+      - name: Wait for API and SSR to be ready
+        if: steps.changes.outputs.relevant == 'true'
+        run: |
+          for i in $(seq 1 60); do
+            api=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/health || true)
+            web=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8090/ || true)
+            echo "attempt $i: api=$api web=$web"
+            [ "$api" = "200" ] && [ "$web" = "200" ] && exit 0
+            sleep 3
+          done
+          echo "stack did not become ready"; docker compose logs --tail=100; exit 1
+
+      - name: Initialise the search index
+        # The homepage feed reads Meilisearch, so the jobs index must exist even
+        # when empty. reindex builds it from Postgres (here: an empty index).
+        if: steps.changes.outputs.relevant == 'true'
+        env:
+          DATABASE_URL: postgres://hire:hire@localhost:5432/hire?sslmode=disable
+          MEILI_URL: http://localhost:7700
+          MEILI_MASTER_KEY: dev-insecure-meili-key
+        run: go run ./cmd/reindex
+
+      - name: Create a throwaway user for the authed scenarios
+        # A real session exercises the /me + personalized chrome path. Registering
+        # here avoids firing a doomed login (and polluting the error budget).
+        if: steps.changes.outputs.relevant == 'true'
+        run: |
+          cookie=$(curl -s -i -X POST http://localhost:8090/api/v1/auth/register \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"perf-ci@freehire.local","password":"perf-ci-password"}' \
+            | grep -i '^set-cookie: hire_token' | sed -E 's/.*(hire_token=[^;]+);.*/\1/')
+          if [ -z "$cookie" ]; then echo "could not register CI user"; exit 1; fi
+          echo "AUTH_COOKIE=$cookie" >> "$GITHUB_ENV"
+
+      - name: Run functional smoke (loose latency ceiling)
+        # Loose SLOs: this gate catches pages that error or blow up 5–10×, not
+        # fine-grained latency (a shared runner on empty data can't measure that).
+        if: steps.changes.outputs.relevant == 'true'
+        env:
+          K6_BASE_URL: http://localhost:8090
+          K6_WINDOW_SEC: '8'
+          K6_VUS: '2'
+          SLO_HOME: '8000'
+          SLO_HOME_FILTERED: '8000'
+          SLO_COMPANIES: '8000'
+          SLO_COMPANY_CARD: '8000'
+        run: k6 run --quiet perf/k6/pages.js
+
+      - name: Stack logs on failure
+        if: failure() && steps.changes.outputs.relevant == 'true'
+        run: docker compose logs --tail=200
+
+  prod-watchdog:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Run production smoke (tight, headroom-based thresholds)
+        # Anonymous by default. To also cover the authed path, add a PROD_AUTH_COOKIE
+        # repo secret (a real hire_token) and pass it as AUTH_COOKIE below.
+        env:
+          K6_BASE_URL: https://freehire.dev
+          ALLOW_NONLOCAL: '1'
+          K6_WINDOW_SEC: '20'
+          K6_VUS: '3'
+          MAX_RPS: '15'
+          THINK: '1'
+          # Baselines observed ~0.6–1.6s p95; ceilings carry generous headroom so
+          # only real degradation trips them. Tighten as baselines firm up.
+          SLO_HOME: '4000'
+          SLO_HOME_FILTERED: '5000'
+          SLO_COMPANIES: '3000'
+          SLO_COMPANY_CARD: '3500'
+          AUTH_COOKIE: ${{ secrets.PROD_AUTH_COOKIE }}
+        run: k6 run --quiet perf/k6/pages.js
+
+      - name: Open an issue on regression
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue create \
+            --title "Perf watchdog: prod page latency regression ($(date -u +%Y-%m-%d))" \
+            --label performance \
+            --body "The scheduled production performance smoke breached its latency/error thresholds. See the run: $RUN_URL"
