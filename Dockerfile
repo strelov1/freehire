@@ -37,8 +37,19 @@ RUN apk add --no-cache curl xz \
  && /usr/local/bin/typst --version
 
 # --- runtime stage ---
-FROM gcr.io/distroless/static-debian12:nonroot
+# debian-slim (not distroless/static) because résumé text extraction shells out to
+# poppler's `pdftotext`, which has no static build to bundle the way typst does. The Go
+# binaries stay CGO_ENABLED=0 static, so they run here unchanged. ca-certificates backs
+# outbound TLS (LLM/S3/Meili/OAuth); a non-root user (uid 65532, matching the previous
+# distroless nonroot) keeps volume ownership stable.
+FROM debian:stable-slim
 WORKDIR /app
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends poppler-utils ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --system --gid 65532 nonroot \
+ && useradd --system --uid 65532 --gid nonroot --home-dir /app nonroot \
+ && pdftotext -v
 COPY --from=build /out/hire /out/ingest /out/enrich /out/reindex /out/tg-ingest /out/tg-extract /out/reslug /out/backfill-derive /out/liveness /out/notify /out/import-collections /out/recount-companies /out/backfill-company-info /app/
 # CV PDF rendering: the typst binary + the env that points the server at it. Absent this
 # the CV builder still works and the PDF endpoint returns 501 (config resolves via LookPath).

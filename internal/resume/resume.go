@@ -14,15 +14,32 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/ledongthuc/pdf"
 
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/resumeextract"
 )
+
+// pdftotextBin is the poppler binary used to extract résumé PDF text, overridable via
+// PDFTOTEXT_BIN (default "pdftotext"; the production image installs poppler-utils). It is a
+// package var so tests can point it at a stub. Unlike the CV renderer's TypstBin there is
+// no "disabled" story to gate — PDF extraction is core to résumé upload — so it is resolved
+// here rather than threaded through config.
+var pdftotextBin = envOr("PDFTOTEXT_BIN", "pdftotext")
+
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
 
 var (
 	// ErrStorageDisabled is returned when object storage is unconfigured, so no résumé
@@ -230,29 +247,43 @@ func extractText(data []byte) (string, error) {
 	return string(data), nil
 }
 
-// ExtractPDFText extracts plain text from PDF bytes, shared by the résumé store and
-// the upload handler (which wraps the returned error into a 400). ledongthuc/pdf can
-// panic (not just error) on a malformed content stream, so a deferred recover maps
-// that to an error rather than crashing the request.
-func ExtractPDFText(data []byte) (text string, err error) {
-	defer func() {
-		if p := recover(); p != nil {
-			text, err = "", errors.New("resume: invalid PDF")
-		}
-	}()
-	rd, err := pdf.NewReader(bytes.NewReader(data), int64(len(data)))
+// pdfExtractTimeout bounds a single pdftotext run so a pathological PDF can never hang a
+// request; extracting a normal résumé is well under a second.
+const pdfExtractTimeout = 15 * time.Second
+
+// ExtractPDFText extracts plain text from PDF bytes, shared by the résumé store and the
+// upload handler (which wraps a returned error into a 400). It shells out to poppler's
+// pdftotext, which — unlike a pure-Go parser — decodes CID/Identity-H fonts through their
+// ToUnicode CMap (as produced by Canva and similar builders), where the previous library
+// silently returned empty text. The bytes go to a temp file (never onto argv) and the text
+// is read from stdout. A non-zero exit (corrupt/undecodable PDF) is an error; a clean run
+// yielding no text (an image-only PDF with no text layer) returns ("", nil), which the
+// handler renders as the "scan or image" rejection.
+func ExtractPDFText(data []byte) (string, error) {
+	dir, err := os.MkdirTemp("", "resume-pdf-*")
 	if err != nil {
-		return "", fmt.Errorf("resume: invalid PDF: %w", err)
+		return "", err
 	}
-	tr, err := rd.GetPlainText()
-	if err != nil {
-		return "", fmt.Errorf("resume: invalid PDF: %w", err)
+	defer os.RemoveAll(dir)
+
+	inPath := filepath.Join(dir, "in.pdf")
+	if err := os.WriteFile(inPath, data, 0o600); err != nil {
+		return "", err
 	}
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, tr); err != nil {
-		return "", fmt.Errorf("resume: invalid PDF: %w", err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), pdfExtractTimeout)
+	defer cancel()
+
+	// Only fixed flags and a temp path reach argv: -q silences warnings on slightly
+	// malformed but readable PDFs; "-" writes the extracted text to stdout.
+	cmd := exec.CommandContext(ctx, pdftotextBin, "-q", "-nopgbrk", inPath, "-")
+	var out, errBuf bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &errBuf
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("resume: invalid PDF: %w: %s", err, strings.TrimSpace(errBuf.String()))
 	}
-	return buf.String(), nil
+	return out.String(), nil
 }
 
 // QueriesRepository adapts *db.Queries to Repository, mapping the pointer to the nullable

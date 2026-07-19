@@ -2,12 +2,27 @@ package handler
 
 import (
 	"errors"
+	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/jobtracking"
+	"github.com/strelov1/freehire/internal/reminder"
 )
+
+// saveJobRequest is the optional save body carrying a per-job reminder override.
+// Absent (empty body) means "use the account default rule".
+type saveJobRequest struct {
+	Reminder *reminderOverrideRequest `json:"reminder"`
+}
+
+// reminderOverrideRequest is the save-time reminder choice: opt this job out
+// (disabled) or set a custom delay in days; both unset means "keep the default".
+type reminderOverrideRequest struct {
+	Disabled  bool `json:"disabled"`
+	DelayDays int  `json:"delay_days"`
+}
 
 // interactionResponse is the public shape of a user's interaction with a job. It
 // omits user_id (the caller is the user) and carries saved_at/applied_at/stage/
@@ -79,11 +94,14 @@ func (a *API) MarkApplied(c *fiber.Ctx) error {
 	if err != nil {
 		return trackingError(err)
 	}
+	// Applying ends the "come back and apply" intent, so drop any pending reminder.
+	a.cancelReminderBestEffort(c, userID, interaction.JobID)
 	return c.JSON(fiber.Map{"data": toResponse(interaction)})
 }
 
 // SaveJob saves (bookmarks) a job for the authenticated user and returns the
-// updated interaction.
+// updated interaction. An optional body may carry a per-job reminder override;
+// otherwise the account default rule decides whether to schedule a reminder.
 func (a *API) SaveJob(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -93,7 +111,42 @@ func (a *API) SaveJob(c *fiber.Ctx) error {
 	if err != nil {
 		return trackingError(err)
 	}
+	a.scheduleReminderOnSave(c, userID, interaction.JobID)
 	return c.JSON(fiber.Map{"data": toResponse(interaction)})
+}
+
+// scheduleReminderOnSave applies the reminder decision for a just-saved job. It is
+// a best-effort side effect of the save: any failure (including a malformed override
+// delay) is logged, never surfaced — the save already succeeded and is the primary
+// action, and the worker's fire-time re-check backstops correctness. The UI sends
+// only valid, fixed override delays.
+func (a *API) scheduleReminderOnSave(c *fiber.Ctx, userID, jobID int64) {
+	if a.reminder == nil {
+		return
+	}
+	var in saveJobRequest
+	// The body is optional (a bare save sends none); a parse failure just means no
+	// override, so the account default applies.
+	_ = c.BodyParser(&in)
+	var ov *reminder.Override
+	if in.Reminder != nil {
+		ov = &reminder.Override{Disabled: in.Reminder.Disabled, DelayDays: in.Reminder.DelayDays}
+	}
+	if err := a.reminder.ScheduleOnSave(c.Context(), userID, jobID, ov); err != nil {
+		log.Printf("reminder: schedule on save user=%d job=%d: %v", userID, jobID, err)
+	}
+}
+
+// cancelReminderBestEffort cancels a job's pending reminder after the user applied
+// or unsaved it. Best-effort: a failure is logged, not surfaced — the worker's
+// fire-time re-check cancels a missed one anyway.
+func (a *API) cancelReminderBestEffort(c *fiber.Ctx, userID, jobID int64) {
+	if a.reminder == nil {
+		return
+	}
+	if err := a.reminder.Cancel(c.Context(), userID, jobID); err != nil {
+		log.Printf("reminder: cancel user=%d job=%d: %v", userID, jobID, err)
+	}
 }
 
 // UnsaveJob clears a job's saved mark for the authenticated user. The interaction
@@ -109,6 +162,8 @@ func (a *API) UnsaveJob(c *fiber.Ctx) error {
 	if err != nil {
 		return trackingError(err)
 	}
+	// Unsaving withdraws the intent the reminder was nudging toward, so cancel it.
+	a.cancelReminderBestEffort(c, userID, interaction.JobID)
 	return c.JSON(fiber.Map{"data": toResponse(interaction)})
 }
 

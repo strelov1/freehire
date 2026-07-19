@@ -12,13 +12,14 @@ import (
 // jobview wire shape with the caller's interaction timestamps riding alongside
 // (not flattened in — the job shape stays identical to every other job surface).
 type myJobResponse struct {
-	Job        jobview.Job `json:"job"`
-	ViewedAt   *time.Time  `json:"viewed_at"`
-	SavedAt    *time.Time  `json:"saved_at"`
-	AppliedAt  *time.Time  `json:"applied_at"`
-	Stage      *string     `json:"stage"`
-	Notes      *string     `json:"notes"`
-	EmailCount int         `json:"email_count"`
+	Job            jobview.Job `json:"job"`
+	ViewedAt       *time.Time  `json:"viewed_at"`
+	SavedAt        *time.Time  `json:"saved_at"`
+	AppliedAt      *time.Time  `json:"applied_at"`
+	Stage          *string     `json:"stage"`
+	Notes          *string     `json:"notes"`
+	EmailCount     int         `json:"email_count"`
+	ReminderFireAt *time.Time  `json:"reminder_fire_at"`
 }
 
 // ListTrackedJobs returns the authenticated user's job interactions joined with the
@@ -44,13 +45,14 @@ func (a *API) ListTrackedJobs(c *fiber.Ctx) error {
 	items := make([]myJobResponse, 0, len(listing.Items))
 	for _, it := range listing.Items {
 		items = append(items, myJobResponse{
-			Job:        it.Job,
-			ViewedAt:   it.ViewedAt,
-			SavedAt:    it.SavedAt,
-			AppliedAt:  it.AppliedAt,
-			Stage:      it.Stage,
-			Notes:      it.Notes,
-			EmailCount: it.EmailCount,
+			Job:            it.Job,
+			ViewedAt:       it.ViewedAt,
+			SavedAt:        it.SavedAt,
+			AppliedAt:      it.AppliedAt,
+			Stage:          it.Stage,
+			Notes:          it.Notes,
+			EmailCount:     it.EmailCount,
+			ReminderFireAt: it.ReminderFireAt,
 		})
 	}
 

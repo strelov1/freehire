@@ -1,0 +1,25 @@
+---
+title: Tailor your CV to a job with the assistant
+date: 2026-07-19
+summary: The freehire assistant now reshapes your CV for a specific role — reframing your bullets and updating your stack to match what the job asks for, live in chat.
+type: changelog
+tags:
+  - assistant
+  - cv
+  - tailoring
+draft: false
+---
+
+Found a job worth applying to? The assistant can now tailor your CV to it.
+
+Start from a role's fit analysis and ask the assistant to tailor. It reads where
+you match and where you fall short, then edits your CV toward that specific job —
+reframing bullets in the vacancy's own language, updating the tech stack on each
+role, adjusting your skills — and you watch every change land in the live
+preview.
+
+It stays honest: it never invents experience. For a genuine gap it asks you
+first ("have you done X?") and only writes it in once you say yes. Everything
+happens through the chat, so there is nothing to download or edit by hand.
+
+Rolling out to beta testers now.

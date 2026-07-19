@@ -116,52 +116,78 @@ func (s spySource) Fetch(_ context.Context, e sources.CompanyEntry) ([]sources.J
 	return []sources.Job{{ExternalID: "1", Title: "Dev", Company: e.Company}}, nil
 }
 
-// When the recovery probe fails (the provider is still down), a cooled board stays
-// skipped by the main crawl: it is counted Cooled (not Failed), no outcome is recorded
-// (a skip is not an outcome), and its cooldown is not cleared. The adapter is touched
-// exactly once — by the probe — proving the main loop did not crawl it.
-func TestRunSkipsCooledBoardWhenProviderDown(t *testing.T) {
+// A single-board provider is never probed: probing it would crawl the whole provider (for a
+// boardless aggregator, its entire dataset) only for the main loop to crawl it again, and there
+// are no other boards to clear. So even with a healthy adapter, recovery leaves the lone cooled
+// board untouched — the adapter is never called — and the normal cooldown gate recovers it at
+// expiry instead. This is the guard against the boardless double-crawl.
+func TestRecoverSkipsSingleBoardProvider(t *testing.T) {
 	fetches := 0
-	src := spySource{provider: "greenhouse", fetches: &fetches, err: errors.New("provider down")}
+	src := spySource{provider: "gulftalent", fetches: &fetches} // healthy, but must not be probed
 	health := &fakeHealth{cooldowns: map[string]time.Time{
-		"greenhouse/acme": time.Now().Add(6 * time.Hour),
+		"gulftalent/": time.Now().Add(24 * time.Hour), // one boardless entry, cooled
 	}}
 	r := Runner{Registry: registry(src), Store: &fakeStore{}, BoardHealth: health}
 
 	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
-		{Company: "Acme", Provider: "greenhouse", Board: "acme"},
+		{Company: "GulfTalent", Provider: "gulftalent", Board: ""},
 	})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if fetches != 1 {
-		t.Errorf("adapter fetched %d times, want 1 (probe only; the main loop must skip the still-cooled board)", fetches)
-	}
-	if stats.Total().Cooled != 1 || stats.Total().Failed != 0 || stats.Total().Ingested != 0 {
-		t.Errorf("stats = %+v, want Cooled=1 Failed=0 Ingested=0", stats.Total())
+	if fetches != 0 {
+		t.Errorf("adapter fetched %d times, want 0 (a single-board provider must not be probed)", fetches)
 	}
 	if len(health.cleared) != 0 {
-		t.Errorf("a failed probe must not clear cooldowns; cleared=%v", health.cleared)
+		t.Errorf("a single-board provider must not be cleared by a probe; cleared=%v", health.cleared)
 	}
-	if len(health.successes) != 0 || len(health.failures) != 0 {
-		t.Errorf("a cooled skip records no outcome; got successes=%v failures=%v", health.successes, health.failures)
+	if stats.Total().Cooled != 1 || stats.Total().Ingested != 0 {
+		t.Errorf("stats = %+v, want Cooled=1 Ingested=0 (left cooled for the normal gate)", stats.Total())
 	}
 }
 
-// A provider whose boards were mass-cooled by a since-resolved outage recovers this cycle:
-// the pre-crawl probe reaches a cooled board, clears the provider's cooldowns, and the main
-// loop then crawls the board it would otherwise have skipped. Without recovery this board
-// stays Cooled=1/Ingested=0, so this result is unique to the half-open transition.
+// A still-down multi-board provider is never cleared or stampeded: every probe fails, so the
+// cooldowns stand and the main loop skips the cooled boards.
+func TestRecoverLeavesDownMultiBoardProviderCooled(t *testing.T) {
+	fetches := 0
+	src := spySource{provider: "workday", fetches: &fetches, err: errors.New("provider down")}
+	health := &fakeHealth{cooldowns: map[string]time.Time{
+		"workday/a": time.Now().Add(6 * time.Hour),
+		"workday/b": time.Now().Add(6 * time.Hour),
+	}}
+	r := Runner{Registry: registry(src), Store: &fakeStore{}, BoardHealth: health}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "A", Provider: "workday", Board: "a"},
+		{Company: "B", Provider: "workday", Board: "b"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(health.cleared) != 0 {
+		t.Errorf("a down provider must not be cleared; cleared=%v", health.cleared)
+	}
+	if stats.Total().Cooled != 2 || stats.Total().Ingested != 0 {
+		t.Errorf("stats = %+v, want Cooled=2 Ingested=0 (both stay cooled, main loop skips them)", stats.Total())
+	}
+}
+
+// A multi-board provider whose boards were mass-cooled by a since-resolved outage recovers this
+// cycle: the pre-crawl probe reaches a cooled board, clears the provider's cooldowns, and the
+// main loop then crawls the boards it would otherwise have skipped. Without recovery they stay
+// Cooled/Ingested=0, so this result is unique to the half-open transition.
 func TestRecoverProbeRecoversProvider(t *testing.T) {
 	fetches := 0
 	src := spySource{provider: "breezy", fetches: &fetches}
 	health := &fakeHealth{cooldowns: map[string]time.Time{
 		"breezy/acme": time.Now().Add(24 * time.Hour),
+		"breezy/beta": time.Now().Add(24 * time.Hour),
 	}}
 	r := Runner{Registry: registry(src), Store: &fakeStore{}, BoardHealth: health}
 
 	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
 		{Company: "Acme", Provider: "breezy", Board: "acme"},
+		{Company: "Beta", Provider: "breezy", Board: "beta"},
 	})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -169,8 +195,8 @@ func TestRecoverProbeRecoversProvider(t *testing.T) {
 	if len(health.cleared) != 1 || health.cleared[0] != "breezy" {
 		t.Errorf("cleared = %v, want [breezy] (a successful probe recovers the provider)", health.cleared)
 	}
-	if stats.Total().Ingested != 1 || stats.Total().Cooled != 0 {
-		t.Errorf("stats = %+v, want Ingested=1 Cooled=0 (recovered board is crawled, not skipped)", stats.Total())
+	if stats.Total().Ingested != 2 || stats.Total().Cooled != 0 {
+		t.Errorf("stats = %+v, want Ingested=2 Cooled=0 (both boards crawled after the probe cleared them)", stats.Total())
 	}
 }
 

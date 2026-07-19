@@ -186,6 +186,22 @@ func TestGeekjobPaginatesAndDedupsAnchors(t *testing.T) {
 	}
 }
 
+// A later-page failure is a truncated crawl, not a natural end. geekjob is a fullCatalog source
+// whose unseen jobs the sweep closes by source, so a partial listing returned as success would
+// mass-close every posting past the failed page. The crawl must error instead (crawlAllPagedLinks),
+// so Failed>0 steers the sweep back to the safe company-scoped close. Page 2 is left unrouted, so
+// the fake errors it; page 1 carries a job so enumeration reaches page 2.
+func TestGeekjobLaterPageErrorIsBoardError(t *testing.T) {
+	id1 := "6a5880f9186d0bddab0010e9"
+	fake := (&routedHTTP{}).
+		route("/vacancies/1", geekjobListingHTML(id1)).
+		route("/vacancy/"+id1, geekjobDetailHTML("Role 1", "Acme", "Удаленная работа"))
+	// /vacancies/2 has no route → the fake errors it, simulating a mid-listing failure.
+	if _, err := NewGeekjob(fake).Fetch(context.Background(), CompanyEntry{}); err == nil {
+		t.Fatal("want an error when a later listing page fails (a truncated fullCatalog crawl must not look complete)")
+	}
+}
+
 func TestGeekjobDropsDetailWithoutJobPosting(t *testing.T) {
 	id1 := "6a5880f9186d0bddab0010e9"
 	id2 := "6a589c8bda741b31f007fe90"

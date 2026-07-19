@@ -87,6 +87,10 @@ type TrackedJob struct {
 	// EmailCount is the caller's live inbox messages linked to this job — the
 	// board's per-card ✉ badge. 0 for users without a connected mailbox.
 	EmailCount int
+	// ReminderFireAt is the pending saved-job reminder's deadline, or nil when the
+	// job has no pending reminder — the saved list renders its "remind in N days"
+	// chip from it.
+	ReminderFireAt *time.Time
 }
 
 // Listing is the result of ListTracked: a page of tracked jobs for the active

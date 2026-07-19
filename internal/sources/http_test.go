@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -207,5 +208,49 @@ func TestClientRetriesOn429ThenSucceeds(t *testing.T) {
 	}
 	if attempts != 2 {
 		t.Errorf("attempts = %d, want 2 (429 then 200)", attempts)
+	}
+}
+
+func TestClientGetHTMLSurfacesWAFChallengeAsTypedError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// AWS-WAF Challenge action: a 202 carrying the challenge marker header and a
+		// tiny challenge shell (never the real posting).
+		w.Header().Set("x-amzn-waf-action", "challenge")
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`<html><head><script>window.gokuProps={}</script></head><body></body></html>`))
+	}))
+	defer srv.Close()
+
+	c := &Client{httpClient: srv.Client(), maxRetries: 2}
+
+	node, err := c.GetHTML(context.Background(), srv.URL)
+	if err == nil {
+		t.Fatal("expected a challenge error, got nil")
+	}
+	var chErr *ChallengeError
+	if !errors.As(err, &chErr) {
+		t.Fatalf("error = %v, want a *ChallengeError", err)
+	}
+	if node != nil {
+		t.Error("expected nil node: the challenge shell must not be decoded as content")
+	}
+}
+
+func TestClientDoesNotRetryWAFChallenge(t *testing.T) {
+	var attempts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.Header().Set("x-amzn-waf-action", "challenge")
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+
+	c := &Client{httpClient: srv.Client(), maxRetries: 2}
+
+	if _, err := c.GetHTML(context.Background(), srv.URL); err == nil {
+		t.Fatal("expected a challenge error, got nil")
+	}
+	if attempts != 1 {
+		t.Errorf("attempts = %d, want 1 (a challenge is not a transient failure)", attempts)
 	}
 }

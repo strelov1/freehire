@@ -14,8 +14,8 @@ import (
 
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/jobmatch"
+	"github.com/strelov1/freehire/internal/matchanalysis"
 )
 
 // creditsError writes the 402 Payment Required body when a metered action can't be
@@ -44,10 +44,10 @@ type matchAnalysisStore interface {
 // set on reads (GET) so the SPA can show the points balance and pre-block a new-job
 // analysis; it is omitted on the compute responses.
 type matchAnalysisResponse struct {
-	HasCV    bool             `json:"has_cv"`
-	Stale    bool             `json:"stale"`
+	HasCV    bool                    `json:"has_cv"`
+	Stale    bool                    `json:"stale"`
 	Analysis *matchanalysis.Analysis `json:"analysis"`
-	Credits  *credits.Balance `json:"credits,omitempty"`
+	Credits  *credits.Balance        `json:"credits,omitempty"`
 }
 
 // GetMatchAnalysis serves the cached fit analysis for one of the caller's jobs, never calling

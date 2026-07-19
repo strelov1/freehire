@@ -13,8 +13,8 @@ import (
 	"github.com/valyala/fasthttp"
 
 	"github.com/strelov1/freehire/internal/credits"
-	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/jobmatch"
+	"github.com/strelov1/freehire/internal/matchanalysis"
 )
 
 // StreamMatchAnalysis runs the three-stage fit chain over Server-Sent Events, emitting stage

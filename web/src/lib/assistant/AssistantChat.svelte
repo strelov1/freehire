@@ -38,6 +38,7 @@
     bashCommand,
     commandLine,
     isFreehireGroup,
+    isNoiseShellCall,
     nonEmptyInput,
     previewToolInput,
     type ToolCall,
@@ -215,7 +216,7 @@
   function groupTools(calls: readonly ToolCall[]): { family: ToolFamily; calls: ToolCall[] }[] {
     const groups: { family: ToolFamily; calls: ToolCall[] }[] = [];
     for (const c of calls) {
-      const family = classifyFamily(c.name);
+      const family = classifyFamily(c);
       const last = groups[groups.length - 1];
       if (last && last.family === family) last.calls.push(c);
       else groups.push({ family, calls: [c] });
@@ -792,7 +793,7 @@
                 </details>
               {/if}
 
-              {#each groupTools(message.tools) as g, t (t)}
+              {#each groupTools(message.tools.filter((c) => !isNoiseShellCall(c))) as g, t (t)}
                 {@const title = groupTitle(g.family, g.calls)}
                 {#if !isExpandable(g.family, g.calls)}
                   <div class="self-start flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
@@ -811,7 +812,7 @@
                     {#if g.family === 'bash' && isFreehireGroup(g.calls)}
                       <ul class="mt-2 ml-6 space-y-1 text-xs text-muted-foreground">
                         {#each g.calls as c, ci (ci)}
-                          <li>{commandLine(c.input)}</li>
+                          <li>{commandLine(c)}</li>
                         {/each}
                       </ul>
                     {:else if g.family === 'bash'}

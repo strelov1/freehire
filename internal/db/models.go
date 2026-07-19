@@ -263,6 +263,21 @@ type JobDailyStat struct {
 	ComputedAt pgtype.Timestamptz `json:"computed_at"`
 }
 
+type JobReminder struct {
+	ID          int64              `json:"id"`
+	UserID      int64              `json:"user_id"`
+	JobID       int64              `json:"job_id"`
+	FireAt      pgtype.Timestamptz `json:"fire_at"`
+	Channels    []string           `json:"channels"`
+	Status      string             `json:"status"`
+	ClaimedAt   pgtype.Timestamptz `json:"claimed_at"`
+	Attempts    int32              `json:"attempts"`
+	FailedAt    pgtype.Timestamptz `json:"failed_at"`
+	LastError   string             `json:"last_error"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	DeliveredAt pgtype.Timestamptz `json:"delivered_at"`
+}
+
 type JobReport struct {
 	ID              int64              `json:"id"`
 	ReportedBy      int64              `json:"reported_by"`
@@ -348,6 +363,14 @@ type ReferralRequest struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
+type ReminderSetting struct {
+	UserID           int64              `json:"user_id"`
+	Enabled          bool               `json:"enabled"`
+	DefaultDelayDays int32              `json:"default_delay_days"`
+	Channels         []string           `json:"channels"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
 type SavedSearch struct {
 	ID          int64              `json:"id"`
 	UserID      int64              `json:"user_id"`
@@ -427,7 +450,6 @@ type User struct {
 	ResumeStructuredModel      pgtype.Text        `json:"resume_structured_model"`
 	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
 	BetaTester                 bool               `json:"beta_tester"`
-	Points                     int32              `json:"points"`
 }
 
 type UserIdentity struct {

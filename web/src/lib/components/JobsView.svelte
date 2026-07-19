@@ -11,9 +11,9 @@
   import { ensureSavedLoaded } from '$lib/savedJobs.svelte';
   import { latestOnly } from '$lib/latestOnly';
   import { Paginator } from '$lib/paginated.svelte';
-  import { FilterStore, filtersToParams, activeFilterCount, type SortField } from '$lib/filters';
+  import { FilterStore, filtersToParams, activeFilterCount, canonicalQuery, type SortField } from '$lib/filters';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
-  import { loadJobFilters } from '$lib/filterStorage';
+  import { loadJobFilters, hasChangedFilters, DEFAULT_JOB_FILTERS } from '$lib/filterStorage';
   import {
     bannerVisible,
     loadOnboardingState,
@@ -139,6 +139,19 @@
   // didn't change the filters (back/forward re-seed, CV sign-in prompt toggle)
   // doesn't emit a spurious funnel event.
   let lastSearchKey = '';
+  // The visitor is on our server-seeded first-visit default (remote / worldwide, see
+  // +page.server.ts) rather than filters they chose: true only while this browser has
+  // never changed filters and the applied set still equals the default. Those filters
+  // are ours, not the user's choice, so the onboarding banner keeps treating the feed
+  // as "unfiltered" and still shows. Flips to false the moment they touch a filter
+  // (the set diverges and hasChangedFilters latches), retiring the banner as normal.
+  const DEFAULT_FILTERS_CANON = canonicalQuery(DEFAULT_JOB_FILTERS);
+  const seededDefault = $derived(
+    browser &&
+      standalone &&
+      !hasChangedFilters() &&
+      canonicalQuery(filtersToParams(filters.value).toString()) === DEFAULT_FILTERS_CANON,
+  );
 
   // Onboarding: the one-time nudge banner + wizard, standalone-only. The lifecycle
   // lives in localStorage (client-only); seed it at init on the client so a returning
@@ -154,7 +167,9 @@
   // so a shared search/filter link is never interrupted (activeFilterCount ignores the
   // query, so check it explicitly). Gated on `browser`: never SSR the banner.
   const showBanner = $derived(
-    browser && standalone && bannerVisible(onboardingState, filters.active > 0 || filters.value.q.trim() !== ''),
+    browser &&
+      standalone &&
+      bannerVisible(onboardingState, !seededDefault && (filters.active > 0 || filters.value.q.trim() !== '')),
   );
 
   function dismissBanner() {
@@ -271,7 +286,9 @@
         started = true;
         // Keep the SSR `initial` page unless it was loaded for a different URL than
         // the address bar (stale shallow-routing restore) or the feed is in CV mode
-        // — the SSR seed is the newest-sorted keyword feed, wrong for CV ranking.
+        // (the SSR seed is the newest-sorted keyword feed, wrong for CV ranking). The
+        // first-visit default is server-rendered (see +page.server.ts), so `initial`
+        // already matches the URL here — no forced reload needed.
         if (!initialStale && !cvMode) return;
       }
       if (blocked) return;

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ArrowLeft, ArrowRight, FileUp, LoaderCircle, X } from '@lucide/svelte';
-  import { api, ApiError } from '$lib/api';
+  import { api, ApiError, RESUME_MAX_MB } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import {
@@ -255,6 +255,8 @@
             <p class="mt-2 text-xs text-destructive">{cvError} Or fill it in below.</p>
           {:else if cvNote}
             <p class="mt-2 text-xs text-muted-foreground">{cvNote}</p>
+          {:else}
+            <p class="mt-2 text-xs text-muted-foreground">PDF with selectable text, up to {RESUME_MAX_MB} MB.</p>
           {/if}
           <div class="my-4 flex items-center gap-3 text-xs text-muted-foreground">
             <span class="h-px flex-1 bg-border"></span> or answer 2 questions <span class="h-px flex-1 bg-border"></span>

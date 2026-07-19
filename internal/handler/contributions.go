@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"log"
 	"strconv"
@@ -55,7 +56,7 @@ func contributionError(err error) error {
 	}
 }
 
-// CreateContribution records a user-contributed job link and awards a point for a novel one.
+// CreateContribution records a user-contributed job link and awards AI credits for a novel one.
 // Authenticated by cookie or API key. A non-ATS link is 422, a duplicate is 409; a novel
 // link returns 201 with the recorded contribution.
 func (a *API) CreateContribution(c *fiber.Ctx) error {
@@ -83,13 +84,18 @@ func (a *API) CreateContribution(c *fiber.Ctx) error {
 		}
 		return contributionError(err)
 	}
-	// Reward the contributor with AI credits, idempotent by the contribution id. Best-effort:
-	// the contribution is already recorded and its point awarded, so a reward error (or a
-	// zero configured reward) is logged, not surfaced.
-	if _, err := a.credits.Reward(c.Context(), userID, strconv.FormatInt(rec.ID, 10)); err != nil {
-		log.Printf("credits: contribution reward user=%d contribution=%d: %v", userID, rec.ID, err)
-	}
+	a.rewardContribution(c.Context(), userID, rec.ID)
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toContributionResponse(rec)})
+}
+
+// rewardContribution grants the AI-credits contribution reward, idempotent by the contribution
+// id, for a novel board recorded via any surface (the HTTP submit or the Telegram webhook).
+// Best-effort: the contribution is already recorded, so a reward error (or a zero configured
+// reward) is logged, not surfaced.
+func (a *API) rewardContribution(ctx context.Context, userID, contributionID int64) {
+	if _, err := a.credits.Reward(ctx, userID, strconv.FormatInt(contributionID, 10)); err != nil {
+		log.Printf("credits: contribution reward user=%d contribution=%d: %v", userID, contributionID, err)
+	}
 }
 
 // ListMyContributions returns the caller's own contributions, newest first. Scoped to the

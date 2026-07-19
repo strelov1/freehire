@@ -15,15 +15,21 @@ const paylocityListingHTML = `<html><body>
 ]};</script>
 </body></html>`
 
-// paylocityDetailHTML is a /Recruiting/Jobs/Details/<id> page: the description we read is the
-// schema.org JobPosting ld+json, whose body embeds a <script> that sanitizeHTML must strip.
-const paylocityDetailHTML = `<html><head>
-<script type="application/ld+json">
-{"@context":"https://schema.org","@type":"JobPosting","title":"Technician Aide",
-"description":"<h2>About</h2><p>Care for animals.</p><script>alert(1)<\/script>",
-"datePosted":"2026-06-29T11:55:56-05:00",
-"hiringOrganization":{"@type":"Organization","name":"Clover Basin Animal Hospital"}}
-</script></head><body></body></html>`
+// paylocityDetailHTML is a /Recruiting/Jobs/Details/<id> page. Paylocity dropped the
+// schema.org ld+json (the page is now a client-rendered shell), but the description still
+// renders server-side as the <div> following the "Description" section header. A trailing
+// <script> in that block must be stripped by sanitizeHTML; the sibling "Job Type" section
+// proves the selector picks the Description block, not the first header.
+const paylocityDetailHTML = `<html><body>
+<div class="job-preview-details">
+  <div class="vertical-padding">
+    <div class="job-listing-header">Job Type</div>
+    <div>Full-time</div>
+  </div>
+  <div class="job-listing-header">Description</div>
+  <div><h2>About</h2><p>Care for animals.</p><script>alert(1)</script></div>
+</div>
+</body></html>`
 
 func TestPaylocityProvider(t *testing.T) {
 	if got := NewPaylocity(nil).Provider(); got != "paylocity" {

@@ -186,15 +186,32 @@ func run() int {
 	for _, p := range sources.SelfClosingProviders(registry) {
 		selfClosing[p] = true
 	}
+	// A fullCatalog source (e.g. habr_career) lists its whole catalogue each run, so a clean run
+	// may close its unseen jobs by source alone — retiring a company that vanished from the feed,
+	// which the company-scoped close leaks. Gated on a zero-Failed run below (a truncated crawl,
+	// which such adapters surface as an error, must not source-close what it never reached).
+	fullCatalog := make(map[string]bool)
+	for _, p := range sources.FullCatalogProviders(registry) {
+		fullCatalog[p] = true
+	}
 	for _, provider := range sweepableProviders(runStats) {
 		if selfClosing[provider] {
 			continue
 		}
-		closed, err := queries.CloseUnseenJobs(ctx, db.CloseUnseenJobsParams{
-			Source:       provider,
-			Cutoff:       cutoff,
-			CompanySlugs: crawled.slugs(provider),
-		})
+		var closed int64
+		var err error
+		if sweepBySource(runStats[provider], fullCatalog[provider]) {
+			closed, err = queries.CloseUnseenJobsBySource(ctx, db.CloseUnseenJobsBySourceParams{
+				Source: provider,
+				Cutoff: cutoff,
+			})
+		} else {
+			closed, err = queries.CloseUnseenJobs(ctx, db.CloseUnseenJobsParams{
+				Source:       provider,
+				Cutoff:       cutoff,
+				CompanySlugs: crawled.slugs(provider),
+			})
+		}
 		if err != nil {
 			// Count and continue: one provider's sweep failure must not skip the rest,
 			// but the run still exits non-zero.
@@ -225,4 +242,14 @@ func sweepableProviders(rs pipeline.RunStats) []string {
 // jobs: a run that ingested nothing proves only that the crawl failed.
 func shouldSweep(stats pipeline.Stats) bool {
 	return stats.Ingested > 0
+}
+
+// sweepBySource reports whether a provider's run may close its unseen jobs by source alone,
+// dropping the crawled-company scope. Only a fullCatalog source qualifies (it lists the whole
+// catalogue each run, so an unseen job is truly gone), and only when the run had zero board
+// failures: a fullCatalog adapter errors a truncated crawl, so Failed>0 means the listing was
+// incomplete and a source-scoped close would mass-close the postings it never reached. Such a run
+// falls back to the safe company-scoped CloseUnseenJobs. Callers gate on shouldSweep first.
+func sweepBySource(stats pipeline.Stats, fullCatalog bool) bool {
+	return fullCatalog && stats.Failed == 0
 }

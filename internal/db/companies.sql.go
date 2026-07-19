@@ -190,6 +190,22 @@ func (q *Queries) DeleteOrphanCompanies(ctx context.Context) (int64, error) {
 	return result.RowsAffected(), nil
 }
 
+const estimateHiringCompanies = `-- name: EstimateHiringCompanies :one
+SELECT estimate_hiring_companies()::bigint
+`
+
+// Fast approximate hiring-company total (job_count > 0) for the UNFILTERED /companies
+// list's meta.total. An exact count(*) over the ~227k hiring rows is a cold-cache heap
+// scan (~17s on prod, see migration 0034); the planner's estimate is O(1). Only the
+// no-filter catalogue count uses this — every facet/search filter narrows to an index
+// and keeps CountCompanies cheap and exact. Approximate by design, like EstimateOpenJobs.
+func (q *Queries) EstimateHiringCompanies(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, estimateHiringCompanies)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const getCompany = `-- name: GetCompany :one
 SELECT slug, name, created_at, updated_at, collections, job_count, regions, countries, domains, company_types, company_sizes, industries, year_founded, employee_count, hq_country, organization_type, tagline, company_info, is_reference, company_info_at, remote_regions, yc_batch, yc_status, yc_stage, yc_flags, maturity, subindustry
 FROM companies

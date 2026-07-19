@@ -4,6 +4,7 @@
   import { Paginator } from '$lib/paginated.svelte';
   import JobRow from './JobRow.svelte';
   import LoadMore from './LoadMore.svelte';
+  import ReminderChip from './ReminderChip.svelte';
   import States from './States.svelte';
 
   const page = new Paginator(async (limit, offset) => {
@@ -25,7 +26,13 @@
 {:else}
   <ul class="flex flex-col gap-3">
     {#each page.items as item (item.job.public_slug)}
-      <li><JobRow job={item.job} dimViewed={false} /></li>
+      <li>
+        <JobRow job={item.job} dimViewed={false}>
+          {#snippet footer()}
+            <ReminderChip slug={item.job.public_slug} fireAt={item.reminder_fire_at} />
+          {/snippet}
+        </JobRow>
+      </li>
     {/each}
   </ul>
   {#if page.hasMore}

@@ -6,7 +6,6 @@
   import { isAuthenticated } from '$lib/auth.svelte';
   import { FilterStore, filtersToParams } from '$lib/filters';
   import ATSReportView from '$lib/components/ATSReportView.svelte';
-  import CreditsBalance from '$lib/components/CreditsBalance.svelte';
   import FilterSummary from '$lib/components/filters/FilterSummary.svelte';
   import FilterModal from '$lib/components/filters/FilterModal.svelte';
   import FilterEdgeTab from '$lib/components/FilterEdgeTab.svelte';
@@ -201,10 +200,6 @@
     </p>
   </div>
 
-  <div class="mb-6">
-    <CreditsBalance />
-  </div>
-
   {#if actionError}
     <p class="mb-4 text-sm text-destructive">{actionError}</p>
   {/if}
@@ -226,8 +221,9 @@
   {/snippet}
 
   {#if profile === null}
-    <!-- Set-up: the inline form only; coverage appears once a profile exists. -->
-    <div class="mx-auto w-full max-w-2xl">
+    <!-- Set-up: the inline form only; coverage appears once a profile exists. Full-width to
+         match the loaded profile tab, whose main column also spans the container (no aside). -->
+    <div class="w-full">
       <ProfileForm profile={null} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
     </div>
   {:else}

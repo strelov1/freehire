@@ -4,16 +4,15 @@
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { verdictTone, type Tone } from '$lib/matchAnalysis';
-  import type { MyAnalysisItem, AiCredits } from '$lib/types';
+  import type { MyAnalysisItem } from '$lib/types';
   import CompanyLogo from './CompanyLogo.svelte';
   import States from './States.svelte';
 
-  // The Tracking → AI fit tab: the jobs the caller has run the AI fit analysis on, with
-  // their AI-credits balance. Read-only — never triggers the LLM (each row links to the fit
-  // page, which owns compute/recompute).
+  // The Tracking → AI fit tab: the jobs the caller has run the AI fit analysis on. Read-only —
+  // never triggers the LLM (each row links to the fit page, which owns compute/recompute). The
+  // AI-credits balance lives on its own page (/my/credits), not inline here.
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   let items = $state<MyAnalysisItem[]>([]);
-  let credits = $state<AiCredits | null>(null);
 
   $effect(() => {
     if (!isAuthenticated()) return;
@@ -22,7 +21,6 @@
       .myAnalyses()
       .then((r) => {
         items = r.items;
-        credits = r.credits;
         status = 'ready';
       })
       .catch(() => {
@@ -41,17 +39,6 @@
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 </script>
-
-{#if credits}
-  <div
-    class="flex items-center justify-between gap-3 rounded-lg border border-border bg-secondary/40 px-4 py-2.5 text-sm"
-  >
-    <span class="text-muted-foreground">
-      <strong class="font-semibold text-foreground">{credits.remaining}</strong> AI credits left this month
-    </span>
-    <span class="text-xs text-muted-foreground">renews {fmtDate(credits.resets_at)}</span>
-  </div>
-{/if}
 
 {#if status === 'loading'}
   <States state="loading" />

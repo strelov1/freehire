@@ -204,6 +204,13 @@ func (r Runner) recoverProviders(ctx context.Context, entries []sources.CompanyE
 		if !ok {
 			continue
 		}
+		// The probe only pays off with leverage — a few cheap probes clearing many boards.
+		// A lone board has none: probing it crawls the whole provider (for a boardless
+		// aggregator, its entire dataset) only for the main loop to crawl it again. Skip it;
+		// the normal cooldown gate recovers a single board in one crawl at cooldown expiry.
+		if len(byProvider[provider]) < 2 {
+			continue
+		}
 		boards, err := r.BoardHealth.CooledBoards(ctx, provider, maxRecoveryProbes)
 		if err != nil {
 			log.Printf("ingest: recovery probe %s: list cooled boards: %v", provider, err)

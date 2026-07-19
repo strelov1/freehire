@@ -69,6 +69,20 @@ func TestClassify(t *testing.T) {
 			wantReason:  "expired_body",
 		},
 		{
+			// habr_career serves an archived vacancy as a healthy 200 whose only death
+			// signal is the Russian "Вакансия в архиве" banner — the source's URL is the
+			// posting itself, so this body is all the liveness worker has to close on.
+			name:     "russian archived pattern",
+			status:   200,
+			finalURL: "https://career.habr.com/vacancies/1000166878",
+			body: `Fullstack-Разработчик (PHP/Bitrix/Laravel) в компании Changellenge. Москва,
+Санкт-Петербург. Можно удаленно. Навыки: CMS «1С-Битрикс», Laravel, PHP, Git, Vue.js.
+Квалификация Middle. Полное описание вакансии, требования к кандидату, условия работы и
+контакты работодателя. Вакансия в архиве. Смотрите другие открытые вакансии компании.`,
+			wantVerdict: Expired,
+			wantReason:  "expired_body",
+		},
+		{
 			name:        "listing page instead of posting",
 			status:      200,
 			finalURL:    "https://boards.example.com/careers",

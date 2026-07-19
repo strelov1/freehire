@@ -33,12 +33,24 @@ export type {
 } from './generated/contracts';
 
 /** The caller's AI-credits balance. Present on GET reads (with a CV); `remaining` is the
- *  points left this month and `resets_at` the ISO date the monthly grant renews. A new-job
+ *  credits left this month and `resets_at` the ISO date the monthly grant renews. A new-job
  *  analysis is blocked when `remaining` is 0; a recompute of an already-analysed job is
  *  always free. */
 export interface AiCredits {
   remaining: number;
   resets_at: string;
+}
+
+/** One row of the Credits transaction history (`GET /api/v1/me/credits/history`), newest
+ *  first. `kind` is the ledger kind ('grant' | 'debit' | 'reward' | 'purchase'); `delta` is the
+ *  signed change; `label` is the display name (e.g. "Monthly grant", "Match analysis") and
+ *  `subtitle`, when present, names the job a metered debit was spent on. `created_at` is ISO. */
+export interface CreditHistoryEntry {
+  kind: string;
+  delta: number;
+  label: string;
+  subtitle?: string;
+  created_at: string;
 }
 
 /** The job-fit analysis response: `has_cv` is false when the caller has no stored CV
@@ -155,9 +167,6 @@ export interface User {
   // Beta-tester group membership, independent of `role`. Gates the agent
   // assistant (/my/assistant) in the UI.
   beta_tester: boolean;
-  // Contribution reward balance — one point per accepted link contribution
-  // (see /my/contributions).
-  points: number;
   created_at: string | null;
 }
 
@@ -330,6 +339,24 @@ export interface MyJob {
   /** Live inbox messages linked to this job — the board card's ✉ badge. 0 for
    *  users without a connected mailbox / no linked mail. */
   email_count: number;
+  /** The pending saved-job reminder's deadline (RFC3339), or null when the job
+   *  has no pending reminder. Drives the saved list's "remind in N days" chip. */
+  reminder_fire_at: string | null;
+}
+
+/** The account-level saved-job reminder rule: whether reminders are on, the
+ *  default delay applied to new saves, and the channels to deliver over. */
+export interface ReminderSettings {
+  enabled: boolean;
+  default_delay_days: number;
+  channels: string[];
+}
+
+/** The per-save reminder choice sent with a save. Omit for the account default;
+ *  set disabled to opt this job out, or delay_days for a custom delay. */
+export interface ReminderOverride {
+  disabled?: boolean;
+  delay_days?: number;
 }
 
 /** The classification/link overlay an inbox email carries: its classified status

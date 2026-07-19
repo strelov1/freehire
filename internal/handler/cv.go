@@ -272,7 +272,10 @@ func mapCVError(err error) error {
 	case errors.Is(err, cv.ErrUnknownTemplate):
 		return fiber.NewError(fiber.StatusBadRequest, "unknown template")
 	case errors.Is(err, cv.ErrInvalidPatch):
-		return fiber.NewError(fiber.StatusUnprocessableEntity, "invalid patch")
+		// Surface the specific reason (unknown field, wrong type, out-of-range index)
+		// so an LLM caller can fix the patch instead of retrying against a generic 422.
+		reason := strings.TrimPrefix(err.Error(), cv.ErrInvalidPatch.Error()+": ")
+		return fiber.NewError(fiber.StatusUnprocessableEntity, reason)
 	default:
 		return err
 	}

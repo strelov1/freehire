@@ -118,19 +118,29 @@ WHERE user_id = $1 AND job_id = $2
 RETURNING *;
 
 -- name: ListUserJobs :many
--- A user's job interactions joined with the job rows, most recently touched
--- first (GREATEST ignores NULLs; viewed_at is always set). filter narrows to
--- viewed-only/saved/applied subsets; 'all' is every interaction, 'viewed' is
--- the passive history (rows neither saved nor applied). Closed jobs stay
--- listed: a user's history must not shrink when a posting closes. email_count is
--- the caller's live (non-deleted) inbox messages linked to this job — the board's
--- per-card ✉ badge; 0 for everyone without a connected mailbox.
+-- A user's job interactions joined with the job rows. Each subset is ordered by
+-- when the job entered *that* list, not by last touch: saved by saved_at, applied
+-- by applied_at, the passive history by viewed_at, the board by when it was saved
+-- or applied. This keeps a plain re-view from bumping a saved/applied job to the
+-- top (viewed_at is refreshed on every view). 'all' keeps the touched-recency
+-- timeline. filter narrows to viewed-only/saved/applied subsets; 'viewed' is the
+-- passive history (rows neither saved nor applied). Closed jobs stay listed: a
+-- user's history must not shrink when a posting closes. email_count is the
+-- caller's live (non-deleted) inbox messages linked to this job — the board's
+-- per-card ✉ badge; 0 for everyone without a connected mailbox. reminder_fire_at is
+-- the pending saved-job reminder's deadline (NULL when none), so the saved list can
+-- show "remind in N days" with its reschedule/off controls.
 SELECT sqlc.embed(jobs), uj.viewed_at, uj.saved_at, uj.applied_at, uj.stage, uj.notes,
        (SELECT count(*)
           FROM emails e
          WHERE e.user_id = uj.user_id
            AND e.job_id = jobs.id
-           AND e.deleted_at IS NULL) AS email_count
+           AND e.deleted_at IS NULL) AS email_count,
+       (SELECT r.fire_at
+          FROM job_reminders r
+         WHERE r.user_id = uj.user_id
+           AND r.job_id = jobs.id
+           AND r.status = 'pending') AS reminder_fire_at
 FROM user_jobs uj
 JOIN jobs ON jobs.id = uj.job_id
 WHERE uj.user_id = $1
@@ -140,7 +150,13 @@ WHERE uj.user_id = $1
        OR (sqlc.arg(filter)::text = 'applied' AND uj.applied_at IS NOT NULL)
        OR (sqlc.arg(filter)::text = 'board'
            AND (uj.saved_at IS NOT NULL OR uj.applied_at IS NOT NULL OR uj.stage IS NOT NULL)))
-ORDER BY GREATEST(uj.viewed_at, uj.saved_at, uj.applied_at) DESC, uj.job_id DESC
+ORDER BY (CASE sqlc.arg(filter)::text
+            WHEN 'saved' THEN uj.saved_at
+            WHEN 'applied' THEN uj.applied_at
+            WHEN 'viewed' THEN uj.viewed_at
+            WHEN 'board' THEN GREATEST(uj.saved_at, uj.applied_at)
+            ELSE GREATEST(uj.viewed_at, uj.saved_at, uj.applied_at)
+          END) DESC NULLS LAST, uj.job_id DESC
 LIMIT $2 OFFSET $3;
 
 -- name: ListViewedJobSlugs :many

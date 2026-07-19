@@ -17,6 +17,7 @@ import {
   Inbox,
   Link2,
   Handshake,
+  Coins,
 } from '@lucide/svelte';
 import type { LucideIcon } from '@lucide/svelte';
 import type { AccountNavItem } from './accountNav';
@@ -33,4 +34,5 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   '/my/api-keys': Key,
   '/my/submissions': FileText,
   '/my/contributions': Link2,
+  '/my/credits': Coins,
 };

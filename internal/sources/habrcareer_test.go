@@ -227,15 +227,30 @@ func TestHabrCareerFirstPageErrorIsBoardError(t *testing.T) {
 	}
 }
 
-func TestHabrCareerLaterPageErrorEndsEnumeration(t *testing.T) {
+// A later-page failure is a truncated crawl, not a natural end. habr_career is a fullCatalog
+// source whose unseen jobs the sweep closes by source, so a partial listing returned as success
+// would mass-close every posting past the failed page. The crawl must error instead, so Failed>0
+// steers the sweep back to the safe company-scoped close.
+func TestHabrCareerLaterPageErrorIsBoardError(t *testing.T) {
 	fake := newHabrFake(t)
 	fake.failPage = map[int]bool{2: true}
-	jobs, err := NewHabrCareer(fake).Fetch(context.Background(), CompanyEntry{Provider: "habr_career"})
-	if err != nil {
-		t.Fatalf("a later-page failure must not error: %v", err)
+	if _, err := NewHabrCareer(fake).Fetch(context.Background(), CompanyEntry{Provider: "habr_career"}); err == nil {
+		t.Fatal("want an error when a later listing page fails (a truncated fullCatalog crawl must not look complete)")
 	}
-	if len(jobs) != 2 {
-		t.Fatalf("got %d jobs, want 2 (page 1 only, page 2 failed)", len(jobs))
+}
+
+// FullCatalogProviders drives the sweep's source-scoped close; the whole-catalogue aggregators
+// (habr_career, geekjob) must be in it and a per-company board like greenhouse must not, or a
+// vanished company's jobs never retire.
+func TestFullCatalogProviders(t *testing.T) {
+	got := FullCatalogProviders(All(nil))
+	for _, want := range []string{"habr_career", "geekjob"} {
+		if !slices.Contains(got, want) {
+			t.Errorf("FullCatalogProviders() = %v, want it to contain %q", got, want)
+		}
+	}
+	if slices.Contains(got, "greenhouse") {
+		t.Error("FullCatalogProviders() must not contain a per-company board like greenhouse")
 	}
 }
 
@@ -244,5 +259,58 @@ func TestHabrCareerIsProxied(t *testing.T) {
 	// JSON passes, but the description parse fails), so the crawl must egress through the proxy.
 	if _, ok := proxiedProviders["habr_career"]; !ok {
 		t.Error("habr_career must be in proxiedProviders (Qrator blocks detail fetches from the prod datacenter IP)")
+	}
+}
+
+func TestParseHabrPostingSingleObjectJobLocation(t *testing.T) {
+	// schema.org allows jobLocation as a single Place object, not only an array — Habr emits
+	// this form for many (often remote) vacancies. Modeling it as array-only made json.Unmarshal
+	// fail on the whole JobPosting, so the description was dropped and the vacancy stored empty.
+	// The decoder must accept both shapes.
+	const page = `<html><head><script type="application/ld+json">
+{"@context":"https://schema.org/","@type":"JobPosting",
+ "title":"Fullstack Developer (MERN / NestJS)",
+ "description":"<p>Node.js and React</p>",
+ "hiringOrganization":{"@type":"Organization","name":"Creative Code"},
+ "jobLocation":{"@type":"Place","address":"Russia"},
+ "jobLocationType":"TELECOMMUTE","employmentType":"FULL_TIME"}
+</script></head><body></body></html>`
+	node, err := html.Parse(strings.NewReader(page))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	p, ok := ParseHabrPosting(node)
+	if !ok {
+		t.Fatal("ParseHabrPosting ok=false on a single-object jobLocation — the whole posting was dropped")
+	}
+	if !strings.Contains(p.Description, "Node.js") {
+		t.Errorf("Description = %q, want the posting body", p.Description)
+	}
+	if p.Company != "Creative Code" {
+		t.Errorf("Company = %q, want Creative Code", p.Company)
+	}
+	if p.Location != "Russia" {
+		t.Errorf("Location = %q, want Russia from the single Place", p.Location)
+	}
+}
+
+func TestParseHabrPostingArrayJobLocation(t *testing.T) {
+	// The array shape must keep working after the single-object fix.
+	const page = `<html><head><script type="application/ld+json">
+{"@context":"https://schema.org/","@type":"JobPosting",
+ "title":"Backend Engineer","description":"<p>Go</p>",
+ "hiringOrganization":{"@type":"Organization","name":"Acme"},
+ "jobLocation":[{"@type":"Place","address":"Berlin"}]}
+</script></head><body></body></html>`
+	node, err := html.Parse(strings.NewReader(page))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	p, ok := ParseHabrPosting(node)
+	if !ok {
+		t.Fatal("ParseHabrPosting ok=false on an array jobLocation")
+	}
+	if p.Location != "Berlin" {
+		t.Errorf("Location = %q, want Berlin", p.Location)
 	}
 }
