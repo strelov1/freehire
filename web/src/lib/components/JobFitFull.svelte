@@ -49,6 +49,10 @@
   let stream = $state<FitStreamState>(seedFrom(initial));
   let streaming = $state(false);
   let showThinking = $state(false);
+  // While true, the stream dropped mid-compute and we're polling the cache for the result
+  // the server finishes on its own (see the EventSource error handler and recoverFromDrop).
+  let recovering = $state(false);
+  let destroyed = false;
   let es: EventSource | null = null;
   // The thinking panel tails the model's reasoning: keep it pinned to the newest tokens.
   let thinkingEl = $state<HTMLElement | null>(null);
@@ -88,19 +92,57 @@
         if (name === 'final' || name === 'stream_error') stop();
       });
     }
-    // A connection drop before the final event is a real failure (not the normal close,
-    // which we trigger via stop() on `final`). Surface it and don't let it auto-reconnect.
+    // A mid-stream drop is common on mobile: a backgrounded tab gets frozen, or a Wi-Fi↔cellular
+    // handoff resets the socket. The server keeps computing on a background context and caches
+    // the result regardless of the client, so recover by polling the cache rather than dead-ending
+    // or re-running three paid LLM stages. Only a drop after the compute actually began is
+    // recoverable; a rejected connection (no stage ever started) is a genuine failure.
     // NB: the reserved `error` event — distinct from our server's `stream_error` above.
     source.addEventListener('error', () => {
-      if (!stream.done) stream = reduceFitEvent(stream, 'stream_error', { message: 'Connection lost' });
       stop();
+      if (stream.done) return;
+      if (stream.stages.some((s) => s.state !== 'pending')) void recoverFromDrop();
+      else stream = reduceFitEvent(stream, 'stream_error', { message: 'Connection lost' });
     });
   }
 
   function stop() {
     streaming = false;
+    recovering = false;
     es?.close();
     es = null;
+  }
+
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  // Poll the cached fit after a dropped stream: the server's background compute lands the
+  // analysis in the cache even with no client attached, so a re-read recovers it without a
+  // fresh (charged) recompute. Attempts are spent only while the tab is visible, so a long
+  // background freeze on mobile doesn't exhaust the budget before the user returns; stop()
+  // (Try again / Recompute / unmount) clears `recovering` to cancel an in-flight loop.
+  async function recoverFromDrop() {
+    recovering = true;
+    let delay = 3_000;
+    for (let attempts = 0; attempts < 30; ) {
+      await sleep(delay);
+      if (destroyed || !recovering) return;
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') continue;
+      attempts++;
+      try {
+        const f = await api.getJobFit(job.public_slug);
+        if (f?.analysis) {
+          fit = f;
+          stream = seedFrom(f);
+          recovering = false;
+          return;
+        }
+      } catch {
+        /* transient — keep polling until the attempt budget is spent */
+      }
+      delay = Math.min(Math.round(delay * 1.5), 15_000);
+    }
+    recovering = false;
+    stream = reduceFitEvent(stream, 'stream_error', { message: 'Connection lost' });
   }
 
   onMount(async () => {
@@ -116,7 +158,10 @@
     }
     if (isAuthenticated() && coldStart && (fit?.has_cv ?? true) && !blockedNew && autoRun) start();
   });
-  onDestroy(stop);
+  onDestroy(() => {
+    destroyed = true;
+    stop();
+  });
 
   // Radial gauge geometry for the overall score.
   const GAUGE_R = 54;
@@ -273,6 +318,12 @@
             </div>
           {/each}
         </div>
+
+        {#if recovering}
+          <p class="mt-6 flex items-center justify-center gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
+            <Loader class="size-3.5 animate-spin" aria-hidden="true" /> Connection dropped — waiting for your result…
+          </p>
+        {/if}
 
         {#if stream.thinking}
           <div class="mt-6 border-t border-border pt-4">
