@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/pgconv"
@@ -16,16 +15,14 @@ import (
 // Compile-time proof that QueriesRepository satisfies Repository.
 var _ Repository = (*QueriesRepository)(nil)
 
-// QueriesRepository is the production Repository backed by sqlc-generated *db.Queries and a
-// *pgxpool.Pool for the record+point transaction.
+// QueriesRepository is the production Repository backed by sqlc-generated *db.Queries.
 type QueriesRepository struct {
-	q    *db.Queries
-	pool *pgxpool.Pool
+	q *db.Queries
 }
 
 // NewQueriesRepository constructs a QueriesRepository.
-func NewQueriesRepository(q *db.Queries, pool *pgxpool.Pool) *QueriesRepository {
-	return &QueriesRepository{q: q, pool: pool}
+func NewQueriesRepository(q *db.Queries) *QueriesRepository {
+	return &QueriesRepository{q: q}
 }
 
 // BoardTracked reports whether the catalogue already crawls this board (any job whose
@@ -69,33 +66,17 @@ func likePrefix(board string) string {
 	return esc + ":%"
 }
 
-// Record inserts the contribution and awards the submitter a point in one transaction, so a
-// duplicate-board race (unique violation, mapped to ErrBoardAlreadyContributed) credits no
-// point. The unique violation can surface either on the insert or at commit.
+// Record inserts the contribution. The UNIQUE (source, board) constraint rejects a
+// duplicate board (another vacancy or the listing), surfaced as ErrBoardAlreadyContributed;
+// the AI-credits reward is granted separately by the handler, keyed by the contribution id.
 func (r *QueriesRepository) Record(ctx context.Context, in RecordInput) (Contribution, error) {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return Contribution{}, err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	q := r.q.WithTx(tx)
-	row, err := q.CreateContribution(ctx, db.CreateContributionParams{
+	row, err := r.q.CreateContribution(ctx, db.CreateContributionParams{
 		SubmittedBy: in.SubmittedBy,
 		URL:         in.URL,
 		Source:      in.Source,
 		Board:       in.Board,
 	})
 	if err != nil {
-		if pgerr.IsUniqueViolation(err) {
-			return Contribution{}, ErrBoardAlreadyContributed
-		}
-		return Contribution{}, err
-	}
-	if err := q.IncrementUserPoints(ctx, in.SubmittedBy); err != nil {
-		return Contribution{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
 		if pgerr.IsUniqueViolation(err) {
 			return Contribution{}, ErrBoardAlreadyContributed
 		}

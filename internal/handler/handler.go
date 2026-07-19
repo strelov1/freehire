@@ -251,7 +251,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Contributions detect the ATS board from the URL alone (network-free, board.go), with a
 	// network fallback (boardresolve) that fetches a company careers page and detects an
 	// embedded ATS — so vanity-domain links (company.com/careers?gh_jid=…) resolve too.
-	a.contribution = contribution.New(contribution.NewQueriesRepository(queries, cfg.Pool), boardresolve.New())
+	a.contribution = contribution.New(contribution.NewQueriesRepository(queries), boardresolve.New())
 	// The report queue uses one QueriesRepository for both persistence and the
 	// job soft-close (it implements report.Repository and report.JobCloser).
 	reportRepo := report.NewQueriesRepository(queries)
@@ -434,6 +434,7 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/me/tracking/swipe", keyAuth, a.SwipeDeck)
 	api.Get("/me/tracking/analyses", keyAuth, a.ListMyAnalyses)
 	api.Get("/me/credits", keyAuth, a.GetMyCredits)
+	api.Get("/me/credits/history", keyAuth, a.GetMyCreditsHistory)
 	api.Get("/me/recommendations", keyAuth, a.Recommendations)
 
 	// API-key management is cookie-only (RequireAuth): a leaked key must not be

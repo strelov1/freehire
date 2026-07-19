@@ -24,8 +24,11 @@ export const accountNav = [
   { href: '/my/searches', label: 'Search notifications' },
   { href: '/my/api-keys', label: 'API keys' },
   { href: '/my/submissions', label: 'My submissions' },
-  // Paste a job link we don't have yet; a supported, novel link earns a point.
+  // Paste a job link we don't have yet; a supported, novel link earns AI credits.
   { href: '/my/contributions', label: 'Contributions' },
+  // The AI-credits balance and the transaction history (grants, match/tailor debits,
+  // contribution rewards).
+  { href: '/my/credits', label: 'Credits' },
 ] as const;
 
 export type AccountNavItem = (typeof accountNav)[number];

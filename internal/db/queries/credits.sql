@@ -73,3 +73,29 @@ WHERE user_id = sqlc.arg(user_id);
 SELECT period, remaining
 FROM credit_balances
 WHERE user_id = $1;
+
+-- name: ListCreditLedger :many
+-- The caller's credit-ledger entries, newest first, for the transaction-history page. Bounded
+-- by a caller-supplied limit and served by the (user_id, created_at DESC) index. The handler
+-- resolves each debit's ref to a human label (the job/CV it named).
+SELECT kind, feature, delta, ref, created_at
+FROM credit_ledger
+WHERE user_id = $1
+ORDER BY created_at DESC
+LIMIT $2;
+
+-- name: ListJobLabelsByIDs :many
+-- Resolve job ids to display labels for the credit-history page (match debits). Missing ids
+-- simply do not come back; the handler falls back to a generic label for a deleted job.
+SELECT id, title, public_slug
+FROM jobs
+WHERE id = ANY(sqlc.arg(ids)::bigint[]);
+
+-- name: ListTailoredCVLabelsByIDs :many
+-- Resolve tailored-CV ids to their target job's display labels for the credit-history page
+-- (tailor debits). Only tailored CVs (job_id set) whose job still exists resolve; the handler
+-- falls back to a generic label otherwise.
+SELECT c.id, j.title AS job_title, j.public_slug AS job_slug
+FROM cvs c
+JOIN jobs j ON j.id = c.job_id
+WHERE c.id = ANY(sqlc.arg(ids)::bigint[]);

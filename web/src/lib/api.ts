@@ -47,6 +47,7 @@ import type {
   JobMatch,
   MatchAnalysisResponse,
   AiCredits,
+  CreditHistoryEntry,
   MyAnalysisItem,
   ResumeProfile,
   ResumeMeta,
@@ -655,10 +656,16 @@ export function createApi(
     return { items: res.data, credits: res.meta.credits };
   }
 
-  /** The caller's current AI-credits balance (points left this month + reset date).
-   *  Never triggers the LLM. Powers the profile-page balance widget. */
+  /** The caller's current AI-credits balance (credits left this month + reset date).
+   *  Never triggers the LLM. Powers the Credits page balance headline. */
   async function myCredits(): Promise<AiCredits> {
     return requestData<AiCredits>('/api/v1/me/credits');
+  }
+
+  /** The caller's credit transaction history, newest first — grants, match/tailor debits,
+   *  and contribution rewards, each labelled for display. Powers the Credits page list. */
+  async function myCreditsHistory(): Promise<CreditHistoryEntry[]> {
+    return requestData<CreditHistoryEntry[]>('/api/v1/me/credits/history');
   }
 
   /** The public slugs of every job the current user has interacted with. The
@@ -1134,6 +1141,7 @@ export function createApi(
     getMyPipeline,
     myAnalyses,
     myCredits,
+    myCreditsHistory,
     listViewedSlugs,
     listSavedSlugs,
     listApiKeys,

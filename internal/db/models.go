@@ -400,7 +400,6 @@ type User struct {
 	ResumeStructuredModel      pgtype.Text        `json:"resume_structured_model"`
 	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
 	BetaTester                 bool               `json:"beta_tester"`
-	Points                     int32              `json:"points"`
 }
 
 type UserIdentity struct {

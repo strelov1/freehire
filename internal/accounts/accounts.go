@@ -34,10 +34,7 @@ type User struct {
 	Email      string
 	Role       string
 	BetaTester bool
-	// Points is the contribution reward balance (see internal/contribution). Set only by
-	// UserByID, the /auth/me path; other User-building lookups leave it zero.
-	Points    int
-	CreatedAt *time.Time
+	CreatedAt  *time.Time
 }
 
 // PasswordHasher hashes and verifies passwords (bcrypt in production). Injected

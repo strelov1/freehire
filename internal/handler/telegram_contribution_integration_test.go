@@ -2,7 +2,7 @@
 
 // Integration test for contribution-from-Telegram: a linked user pastes a board link into
 // the bot chat and the webhook runs it through the same contribution flow as the site —
-// recording the board, awarding a point, and replying. Run with:
+// recording the board, rewarding AI credits, and replying. Run with:
 // go test -tags=integration ./internal/handler/
 package handler
 
@@ -20,6 +20,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/contribution"
+	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/telegramnotify"
 )
@@ -78,7 +79,8 @@ func TestTelegramContribution(t *testing.T) {
 		telegramLinks:         telegramnotify.NewLinkTokens("test-secret", 10*time.Minute),
 		telegramBot:           telegramnotify.NewClientWithBase("bottoken", stub.URL),
 		telegramWebhookSecret: "hook-secret",
-		contribution:          contribution.New(contribution.NewQueriesRepository(queries, pool), nil),
+		contribution:          contribution.New(contribution.NewQueriesRepository(queries), nil),
+		credits:               credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 5}),
 	}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
@@ -98,12 +100,15 @@ func TestTelegramContribution(t *testing.T) {
 			t.Fatalf("webhook status = %d, want 200", res.StatusCode)
 		}
 	}
-	points := func() int {
-		var p int
-		if err := pool.QueryRow(ctx, `SELECT points FROM users WHERE id=$1`, userID).Scan(&p); err != nil {
-			t.Fatalf("read points: %v", err)
+	// balance reads the credit_balances cache; it exists only once a reward (or grant) has
+	// landed, so a missing row reads as 0.
+	balance := func() int {
+		var remaining int
+		err := pool.QueryRow(ctx, `SELECT remaining FROM credit_balances WHERE user_id=$1`, userID).Scan(&remaining)
+		if err != nil {
+			return 0
 		}
-		return p
+		return remaining
 	}
 
 	t.Run("the webhook ACKs fast, then records and rewards in the background", func(t *testing.T) {
@@ -118,8 +123,10 @@ func TestTelegramContribution(t *testing.T) {
 		if !strings.Contains(reply, "blitzy") || !strings.Contains(reply, "new board") {
 			t.Errorf("reply = %q, want a new-board confirmation naming blitzy", reply)
 		}
-		if points() != 1 {
-			t.Errorf("points = %d, want 1", points())
+		// The reward is applied in the same background goroutine as the reply, so it has landed
+		// by the time we observe the reply: 20 monthly grant + 5 contribution reward.
+		if got := balance(); got != 25 {
+			t.Errorf("credit balance = %d, want 25 (20 grant + 5 reward)", got)
 		}
 		var board string
 		if err := pool.QueryRow(ctx, `SELECT board FROM link_contributions WHERE submitted_by=$1`, userID).Scan(&board); err != nil || board != "blitzy" {
@@ -127,13 +134,13 @@ func TestTelegramContribution(t *testing.T) {
 		}
 	})
 
-	t.Run("a second link on the same board earns no point", func(t *testing.T) {
+	t.Run("a second link on the same board earns no reward", func(t *testing.T) {
 		post(chatID, "https://jobs.ashbyhq.com/blitzy") // the board listing this time
 		if reply := waitReply(t); !strings.Contains(reply, "already contributed") {
 			t.Errorf("reply = %q, want already-contributed", reply)
 		}
-		if points() != 1 {
-			t.Errorf("points = %d, want still 1", points())
+		if got := balance(); got != 25 {
+			t.Errorf("credit balance = %d, want still 25 (duplicate credits nothing)", got)
 		}
 	})
 

@@ -1,9 +1,10 @@
 //go:build integration
 
 // Integration tests for the contribution repository against a real Postgres: the
-// record+point transaction is atomic, the UNIQUE (source, external_id) constraint rejects a
-// duplicate identity (mapped to ErrAlreadyContributed) and — under a concurrent race —
-// credits exactly one point. Run with: go test -tags=integration ./internal/contribution/
+// UNIQUE (source, board) constraint rejects a duplicate identity (mapped to
+// ErrBoardAlreadyContributed) and — under a concurrent race — records exactly one board.
+// The AI-credits reward is granted by the handler, not the repository, so it is not
+// exercised here. Run with: go test -tags=integration ./internal/contribution/
 // Requires Docker (testcontainers spins up a throwaway Postgres with the migrations).
 package contribution
 
@@ -79,20 +80,10 @@ func insertJob(t *testing.T, pool *pgxpool.Pool, source, externalID string) {
 	}
 }
 
-func readPoints(t *testing.T, pool *pgxpool.Pool, userID int64) int32 {
-	t.Helper()
-	var p int32
-	if err := pool.QueryRow(context.Background(),
-		`SELECT points FROM users WHERE id = $1`, userID).Scan(&p); err != nil {
-		t.Fatalf("read points: %v", err)
-	}
-	return p
-}
-
-func TestRecordAwardsPointAndDedups(t *testing.T) {
+func TestRecordAndDedups(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
-	repo := NewQueriesRepository(db.New(pool), pool)
+	repo := NewQueriesRepository(db.New(pool))
 	userID := insertUser(t, pool, "u@example.test")
 
 	in := RecordInput{SubmittedBy: userID, URL: "https://jobs.ashbyhq.com/blitzy", Source: "ashby", Board: "blitzy"}
@@ -104,25 +95,32 @@ func TestRecordAwardsPointAndDedups(t *testing.T) {
 	if c.ID == 0 || c.Status != "pending" || c.Board != "blitzy" {
 		t.Errorf("recorded row unexpected: %+v", c)
 	}
-	if got := readPoints(t, pool, userID); got != 1 {
-		t.Fatalf("points after first = %d, want 1", got)
-	}
 
-	// Same board again (e.g. via a different vacancy URL) → rejected, no second point.
+	// Same board again (e.g. via a different vacancy URL) → rejected, no second row.
 	dup := RecordInput{SubmittedBy: userID, URL: "https://jobs.ashbyhq.com/blitzy/another-uuid", Source: "ashby", Board: "blitzy"}
 	_, err = repo.Record(ctx, dup)
 	if !errors.Is(err, ErrBoardAlreadyContributed) {
 		t.Fatalf("second Record err = %v, want ErrBoardAlreadyContributed", err)
 	}
-	if got := readPoints(t, pool, userID); got != 1 {
-		t.Errorf("points after duplicate = %d, want still 1 — rejected insert must not credit", got)
+	if n := countContributions(t, pool, userID); n != 1 {
+		t.Errorf("contributions after duplicate = %d, want still 1 — rejected insert must not record", n)
 	}
+}
+
+func countContributions(t *testing.T, pool *pgxpool.Pool, userID int64) int {
+	t.Helper()
+	var n int
+	if err := pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM link_contributions WHERE submitted_by = $1`, userID).Scan(&n); err != nil {
+		t.Fatalf("count contributions: %v", err)
+	}
+	return n
 }
 
 func TestBoardTracked(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
-	repo := NewQueriesRepository(db.New(pool), pool)
+	repo := NewQueriesRepository(db.New(pool))
 
 	insertJob(t, pool, "greenhouse", "acme:100")
 
@@ -139,10 +137,10 @@ func TestBoardTracked(t *testing.T) {
 	}
 }
 
-func TestRecordConcurrentDuplicateCreditsOnce(t *testing.T) {
+func TestRecordConcurrentDuplicateRecordsOnce(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
-	repo := NewQueriesRepository(db.New(pool), pool)
+	repo := NewQueriesRepository(db.New(pool))
 	userID := insertUser(t, pool, "race@example.test")
 
 	in := RecordInput{SubmittedBy: userID, URL: "https://jobs.lever.co/acme", Source: "lever", Board: "acme"}
@@ -172,7 +170,7 @@ func TestRecordConcurrentDuplicateCreditsOnce(t *testing.T) {
 	if ok != 1 || dup != 1 {
 		t.Errorf("race outcome ok=%d dup=%d, want 1 and 1", ok, dup)
 	}
-	if got := readPoints(t, pool, userID); got != 1 {
-		t.Errorf("points after race = %d, want exactly 1", got)
+	if got := countContributions(t, pool, userID); got != 1 {
+		t.Errorf("contributions after race = %d, want exactly 1", got)
 	}
 }

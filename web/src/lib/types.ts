@@ -33,12 +33,24 @@ export type {
 } from './generated/contracts';
 
 /** The caller's AI-credits balance. Present on GET reads (with a CV); `remaining` is the
- *  points left this month and `resets_at` the ISO date the monthly grant renews. A new-job
+ *  credits left this month and `resets_at` the ISO date the monthly grant renews. A new-job
  *  analysis is blocked when `remaining` is 0; a recompute of an already-analysed job is
  *  always free. */
 export interface AiCredits {
   remaining: number;
   resets_at: string;
+}
+
+/** One row of the Credits transaction history (`GET /api/v1/me/credits/history`), newest
+ *  first. `kind` is the ledger kind ('grant' | 'debit' | 'reward' | 'purchase'); `delta` is the
+ *  signed change; `label` is the display name (e.g. "Monthly grant", "Match analysis") and
+ *  `subtitle`, when present, names the job a metered debit was spent on. `created_at` is ISO. */
+export interface CreditHistoryEntry {
+  kind: string;
+  delta: number;
+  label: string;
+  subtitle?: string;
+  created_at: string;
 }
 
 /** The job-fit analysis response: `has_cv` is false when the caller has no stored CV
@@ -155,9 +167,6 @@ export interface User {
   // Beta-tester group membership, independent of `role`. Gates the agent
   // assistant (/my/assistant) in the UI.
   beta_tester: boolean;
-  // Contribution reward balance — one point per accepted link contribution
-  // (see /my/contributions).
-  points: number;
   created_at: string | null;
 }
 

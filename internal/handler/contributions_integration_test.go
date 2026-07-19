@@ -2,8 +2,8 @@
 
 // Integration tests for the link-contribution HTTP flow against a real Postgres: an
 // unauthenticated submit is 401, an unsupported host is 422, a novel supported link is 201
-// and credits a point (surfaced on /auth/me), a resubmit is 409, and a link already in the
-// catalogue is 409. Run with: go test -tags=integration ./internal/handler/
+// and rewards AI credits (reflected in credit_balances), a resubmit is 409, and a link
+// already in the catalogue is 409. Run with: go test -tags=integration ./internal/handler/
 package handler
 
 import (
@@ -48,7 +48,7 @@ func TestContributionsEndToEnd(t *testing.T) {
 		pool:         pool,
 		queries:      queries,
 		issuer:       iss,
-		contribution: contribution.New(contribution.NewQueriesRepository(queries, pool), nil),
+		contribution: contribution.New(contribution.NewQueriesRepository(queries), nil),
 		accounts:     accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{}),
 		credits:      credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 5}),
 	}
@@ -57,7 +57,6 @@ func TestContributionsEndToEnd(t *testing.T) {
 	keyAuth := auth.RequireAuthOrKey(iss, queries)
 	app.Post("/api/v1/me/contributions", keyAuth, h.CreateContribution)
 	app.Get("/api/v1/me/contributions", keyAuth, h.ListMyContributions)
-	app.Get("/api/v1/auth/me", keyAuth, h.Me)
 
 	submit := func(t *testing.T, url string, withCookie bool) *http.Response {
 		t.Helper()
@@ -93,7 +92,7 @@ func TestContributionsEndToEnd(t *testing.T) {
 		}
 	})
 
-	t.Run("novel board (via vacancy URL) is 201 and credits a point", func(t *testing.T) {
+	t.Run("novel board (via vacancy URL) is 201 and rewards AI credits", func(t *testing.T) {
 		resp := submit(t, "https://jobs.ashbyhq.com/acme/a741b4e8-8799-4539-b1c2-78d69ff625e7?utm_source=tg", true)
 		if resp.StatusCode != fiber.StatusCreated {
 			body, _ := io.ReadAll(resp.Body)
@@ -109,26 +108,7 @@ func TestContributionsEndToEnd(t *testing.T) {
 			t.Errorf("created = %+v, want ashby/acme", created.Data)
 		}
 
-		// /auth/me reflects the awarded point.
-		meReq := httptest.NewRequest(fiber.MethodGet, "/api/v1/auth/me", nil)
-		meReq.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
-		meResp, err := app.Test(meReq)
-		if err != nil {
-			t.Fatalf("me: %v", err)
-		}
-		var me struct {
-			Data struct {
-				Points int `json:"points"`
-			} `json:"data"`
-		}
-		if err := json.NewDecoder(meResp.Body).Decode(&me); err != nil {
-			t.Fatalf("decode me: %v", err)
-		}
-		if me.Data.Points != 1 {
-			t.Errorf("points = %d, want 1", me.Data.Points)
-		}
-
-		// The novel contribution also rewarded AI credits: 20 monthly grant + 5 reward.
+		// The novel contribution rewarded AI credits: 20 monthly grant + 5 reward.
 		var remaining int
 		if err := pool.QueryRow(ctx, `SELECT remaining FROM credit_balances WHERE user_id = $1`, userID).Scan(&remaining); err != nil {
 			t.Fatalf("read credit balance: %v", err)
@@ -139,7 +119,7 @@ func TestContributionsEndToEnd(t *testing.T) {
 	})
 
 	t.Run("a second vacancy on the same board is 409", func(t *testing.T) {
-		// A DIFFERENT vacancy on the same ashby "acme" board → same board → duplicate, no point.
+		// A DIFFERENT vacancy on the same ashby "acme" board → same board → duplicate, no reward.
 		if resp := submit(t, "https://jobs.ashbyhq.com/acme/a1c86055-bca7-43de-8542-38c94347c693", true); resp.StatusCode != fiber.StatusConflict {
 			t.Errorf("status = %d, want 409", resp.StatusCode)
 		}
@@ -147,13 +127,13 @@ func TestContributionsEndToEnd(t *testing.T) {
 		if resp := submit(t, "https://jobs.ashbyhq.com/acme", true); resp.StatusCode != fiber.StatusConflict {
 			t.Errorf("board-listing resubmit status = %d, want 409", resp.StatusCode)
 		}
-		// Still exactly one point — the rejected resubmits credited nothing.
-		var points int
-		if err := pool.QueryRow(ctx, `SELECT points FROM users WHERE id = $1`, userID).Scan(&points); err != nil {
-			t.Fatalf("read points: %v", err)
+		// Still exactly one reward — the rejected resubmits credited nothing (balance unchanged at 25).
+		var remaining int
+		if err := pool.QueryRow(ctx, `SELECT remaining FROM credit_balances WHERE user_id = $1`, userID).Scan(&remaining); err != nil {
+			t.Fatalf("read credit balance: %v", err)
 		}
-		if points != 1 {
-			t.Errorf("points after duplicates = %d, want still 1", points)
+		if remaining != 25 {
+			t.Errorf("credit balance after duplicates = %d, want still 25", remaining)
 		}
 	})
 

@@ -6,7 +6,6 @@
   import { isAuthenticated } from '$lib/auth.svelte';
   import { FilterStore, filtersToParams } from '$lib/filters';
   import ATSReportView from '$lib/components/ATSReportView.svelte';
-  import CreditsBalance from '$lib/components/CreditsBalance.svelte';
   import FilterSummary from '$lib/components/filters/FilterSummary.svelte';
   import FilterModal from '$lib/components/filters/FilterModal.svelte';
   import FilterEdgeTab from '$lib/components/FilterEdgeTab.svelte';
@@ -199,10 +198,6 @@
     <p class="text-sm text-muted-foreground">
       Your CV, skills and role — measured against live market demand.
     </p>
-  </div>
-
-  <div class="mb-6">
-    <CreditsBalance />
   </div>
 
   {#if actionError}
