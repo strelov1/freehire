@@ -149,6 +149,37 @@ func TestApply_SetSkillGroup(t *testing.T) {
 	})
 }
 
+func TestApply_SetStack(t *testing.T) {
+	in := sampleDoc()
+	in.Experience[0].Stack = []string{"Go", "DynamoDB", "AWS"}
+	before := append([]string(nil), in.Experience[0].Stack...)
+
+	out, err := Apply(in, Patch{Op: PatchSetStack, Experience: 0, Stack: []string{"Go", "AWS"}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"Go", "AWS"}
+	if !reflect.DeepEqual(out.Experience[0].Stack, want) {
+		t.Errorf("stack = %v, want %v", out.Experience[0].Stack, want)
+	}
+	// The other experience entry is untouched.
+	if !reflect.DeepEqual(out.Experience[1], in.Experience[1]) {
+		t.Errorf("set_stack touched a different experience entry")
+	}
+	// The input's stack is not mutated (fresh slices along the touched path).
+	if !reflect.DeepEqual(in.Experience[0].Stack, before) {
+		t.Errorf("set_stack mutated the input stack: got %v, want %v", in.Experience[0].Stack, before)
+	}
+}
+
+func TestApply_SetStack_outOfRange(t *testing.T) {
+	in := sampleDoc()
+	_, err := Apply(in, Patch{Op: PatchSetStack, Experience: 9, Stack: []string{"Go"}})
+	if !errors.Is(err, ErrInvalidPatch) {
+		t.Errorf("err = %v, want ErrInvalidPatch", err)
+	}
+}
+
 func TestApply_OutOfRangeExperience(t *testing.T) {
 	in := sampleDoc()
 	_, err := Apply(in, Patch{Op: PatchAddBullet, Experience: 5, Value: "x"})

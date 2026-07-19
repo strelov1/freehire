@@ -25,6 +25,7 @@ const (
 	PatchRemoveBullet   PatchOp = "remove_bullet"
 	PatchReorderBullets PatchOp = "reorder_bullets"
 	PatchSetSkillGroup  PatchOp = "set_skill_group"
+	PatchSetStack       PatchOp = "set_stack"
 )
 
 // Patch is one field-level edit to a CV Document. Op selects the operation; the remaining
@@ -40,6 +41,7 @@ type Patch struct {
 	Order      []int    `json:"order,omitempty"`      // permutation of bullet indices (reorder_bullets)
 	Group      string   `json:"group,omitempty"`      // skill group name (set_skill_group)
 	Items      []string `json:"items,omitempty"`      // skill group items (set_skill_group)
+	Stack      []string `json:"stack,omitempty"`      // per-experience technology line (set_stack)
 }
 
 // Apply returns a copy of doc with the patch applied, or ErrInvalidPatch (leaving doc
@@ -58,6 +60,8 @@ func Apply(doc Document, p Patch) (Document, error) {
 		return applyBulletOp(doc, p)
 	case PatchSetSkillGroup:
 		return applySkillGroup(doc, p)
+	case PatchSetStack:
+		return applyStack(doc, p)
 	default:
 		return doc, fmt.Errorf("%w: unknown op %q", ErrInvalidPatch, p.Op)
 	}
@@ -143,6 +147,22 @@ func permute(bullets []string, order []int) ([]string, error) {
 		out[dst] = bullets[src]
 	}
 	return out, nil
+}
+
+// applyStack replaces the whole technology line of one experience entry, mirroring
+// how set_skill_group replaces a group's items. Removing a single technology is a
+// replace with the filtered list, so no dedicated remove op is needed.
+func applyStack(doc Document, p Patch) (Document, error) {
+	if p.Experience < 0 || p.Experience >= len(doc.Experience) {
+		return doc, fmt.Errorf("%w: experience index %d out of range", ErrInvalidPatch, p.Experience)
+	}
+	entry := doc.Experience[p.Experience]
+	entry.Stack = append([]string(nil), p.Stack...) // fresh slice, never alias the caller's
+
+	out := append([]ExperienceItem(nil), doc.Experience...)
+	out[p.Experience] = entry
+	doc.Experience = out
+	return doc, nil
 }
 
 func applySkillGroup(doc Document, p Patch) (Document, error) {

@@ -19,12 +19,35 @@ function truncate(s: string, n: number): string {
 
 const FS_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS']);
 
-export function classifyFamily(name: string): ToolFamily {
+/** The shell command a call carries. roy surfaces a `freehire` invocation two
+ *  ways: as `{name:'Terminal', input:{command}}` (an explicit shell tool) or —
+ *  when the ACP tool title IS the command — as `{name:'<command>', input:{…}}`.
+ *  Read it from the input, falling back to the name so the command resolves in
+ *  both shapes. */
+function callCommand(call: ToolCall): string | null {
+  return bashCommand(call.input) ?? (call.name || null);
+}
+
+export function classifyFamily(call: ToolCall): ToolFamily {
+  const { name } = call;
   // The assistant runs the `freehire` CLI through the harness shell tool, which
   // the ACP layer surfaces as `Terminal` (Claude Code) — group it with `Bash`.
   if (name === 'Bash' || name === 'Terminal') return 'bash';
   if (FS_TOOLS.has(name)) return 'fs';
+  // A `freehire` call whose ACP title (name) is the command string itself would
+  // otherwise fall through to `other` and render as `Called <command>` + a JSON
+  // dump. Recognize it by its command and group it with bash so it reads as an
+  // intent label.
+  if (labelFor(call) !== null) return 'bash';
   return 'other';
+}
+
+/** A shell tool call carrying no command. roy relays a pending ACP tool
+ *  notification (title `Bash`, no `raw_input`) before the settled one, which
+ *  unfiltered renders as an empty "Ran command". The renderer drops these before
+ *  grouping so only the real, command-bearing call shows. */
+export function isNoiseShellCall(call: ToolCall): boolean {
+  return (call.name === 'Bash' || call.name === 'Terminal') && bashCommand(call.input) === null;
 }
 
 // Map a `freehire <subcommand>` invocation to a neutral, human-readable label so
@@ -54,21 +77,21 @@ export function freehireLabel(command: string): string | null {
 
 /** Intent label for a call's shell command, or `null` when it is not a freehire
  *  call (no command, or a non-freehire program). */
-function labelFor(input: unknown): string | null {
-  const cmd = bashCommand(input);
+function labelFor(call: ToolCall): string | null {
+  const cmd = callCommand(call);
   return cmd ? freehireLabel(cmd) : null;
 }
 
 /** True when every call in the group is a `freehire` command — render as intent
  *  labels with no shell chrome, and never surface the raw command. */
 export function isFreehireGroup(calls: readonly ToolCall[]): boolean {
-  return calls.length > 0 && calls.every((c) => labelFor(c.input) !== null);
+  return calls.length > 0 && calls.every((c) => labelFor(c) !== null);
 }
 
 /** One expanded line for a shell/terminal call: the friendly `freehire` label, or
  *  `$ <command>` for any other command. */
-export function commandLine(input: unknown): string {
-  const cmd = bashCommand(input);
+export function commandLine(call: ToolCall): string {
+  const cmd = callCommand(call);
   if (!cmd) return 'Command';
   return freehireLabel(cmd) ?? `$ ${cmd}`;
 }
@@ -82,7 +105,7 @@ export function groupTitle(family: ToolFamily, calls: readonly ToolCall[]): stri
       // Collapse to the distinct intent labels ("Reading the fit analysis ·
       // Reading your CV"), capped so the header stays short.
       const distinct = [
-        ...new Set(calls.map((c) => labelFor(c.input)).filter((l): l is string => l !== null)),
+        ...new Set(calls.map((c) => labelFor(c)).filter((l): l is string => l !== null)),
       ];
       if (distinct.length <= 2) return distinct.join(' · ');
       return `${distinct.slice(0, 2).join(' · ')} · +${distinct.length - 2}`;

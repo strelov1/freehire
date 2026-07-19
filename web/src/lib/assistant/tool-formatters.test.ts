@@ -6,14 +6,40 @@ import {
   commandLine,
   groupTitle,
   isExpandable,
+  isNoiseShellCall,
   bashCommand,
 } from './tool-formatters';
 
 describe('tool-formatters — freehire intent labels', () => {
   it('groups the Terminal tool with bash', () => {
-    expect(classifyFamily('Terminal')).toBe('bash');
-    expect(classifyFamily('Bash')).toBe('bash');
-    expect(classifyFamily('Read')).toBe('fs');
+    expect(classifyFamily({ name: 'Terminal', input: {} })).toBe('bash');
+    expect(classifyFamily({ name: 'Bash', input: {} })).toBe('bash');
+    expect(classifyFamily({ name: 'Read', input: {} })).toBe('fs');
+    expect(classifyFamily({ name: 'SomeTool', input: {} })).toBe('other');
+  });
+
+  it('classifies a freehire call as bash even when the tool name IS the command', () => {
+    // roy surfaces a Bash call with the ACP title = the command string, so `name`
+    // is the command itself ("freehire cv context 14"), not "Bash"/"Terminal".
+    const call = {
+      name: 'freehire cv context 14',
+      input: { command: 'freehire cv context 14', description: 'Load fit analysis' },
+    };
+    expect(classifyFamily(call)).toBe('bash');
+    expect(isFreehireGroup([call])).toBe(true);
+    // Flat intent label, no raw command, no JSON dump.
+    expect(groupTitle('bash', [call])).toBe('Reading the fit analysis');
+    expect(isExpandable('bash', [call])).toBe(false);
+  });
+
+  it('drops the empty pending shell frame that precedes a completed call', () => {
+    // ACP emits a pending Bash notification (no command yet) before the settled
+    // one; unfiltered it renders as a bare, empty "Ran command".
+    expect(isNoiseShellCall({ name: 'Bash', input: {} })).toBe(true);
+    expect(isNoiseShellCall({ name: 'Terminal', input: { description: 'x' } })).toBe(true);
+    expect(isNoiseShellCall({ name: 'Terminal', input: { command: 'freehire facets' } })).toBe(false);
+    expect(isNoiseShellCall({ name: 'freehire cv get 1', input: { command: 'freehire cv get 1' } })).toBe(false);
+    expect(isNoiseShellCall({ name: 'Read', input: {} })).toBe(false);
   });
 
   it('maps freehire subcommands to friendly labels (longest path wins)', () => {
@@ -64,7 +90,9 @@ describe('tool-formatters — freehire intent labels', () => {
     const calls = [{ name: 'Bash', input: { command: 'ls -la' } }];
     expect(isFreehireGroup(calls)).toBe(false);
     expect(groupTitle('bash', calls)).toBe('Ran ls -la');
-    expect(commandLine({ command: 'ls -la' })).toBe('$ ls -la');
-    expect(commandLine({ command: 'freehire cv get 1' })).toBe('Reading your CV');
+    expect(commandLine({ name: 'Bash', input: { command: 'ls -la' } })).toBe('$ ls -la');
+    expect(commandLine({ name: 'Terminal', input: { command: 'freehire cv get 1' } })).toBe(
+      'Reading your CV',
+    );
   });
 });
