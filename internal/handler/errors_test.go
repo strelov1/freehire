@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"net/http/httptest"
 	"sync"
 	"testing"
@@ -13,6 +14,8 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/strelov1/freehire/internal/search"
 )
 
 // recordingTransport captures the events a Sentry hub would deliver, so a test can
@@ -147,6 +150,10 @@ func TestClassify_ReportsOnlyUnexpected500(t *testing.T) {
 		{"fiber 4xx is routine", fiber.NewError(fiber.StatusBadRequest, "bad"), fiber.StatusBadRequest, false},
 		{"no rows maps to 404", pgx.ErrNoRows, fiber.StatusNotFound, false},
 		{"foreign-key violation maps to 404", &pgconn.PgError{Code: "23503"}, fiber.StatusNotFound, false},
+		{"client disconnect is not a fault", context.Canceled, statusClientClosedRequest, false},
+		{"wrapped client disconnect still 499", fmt.Errorf("search: query: %w", context.Canceled), statusClientClosedRequest, false},
+		{"malformed search query maps to 400", fmt.Errorf("search: query: %w: bad filter", search.ErrBadQuery), fiber.StatusBadRequest, false},
+		{"server-side timeout is still reported", context.DeadlineExceeded, fiber.StatusInternalServerError, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

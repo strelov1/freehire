@@ -489,6 +489,20 @@ type SearchResult struct {
 	Total int64
 }
 
+// ErrBadQuery marks a search request Meilisearch rejected as malformed — a 400,
+// e.g. an unparseable filter value passed through from client input. It is a
+// client mistake, not an engine fault, so handlers map it to 400 and skip Sentry
+// (see internal/handler.classify). Callers match it with errors.Is.
+var ErrBadQuery = errors.New("bad query")
+
+// isBadRequest reports whether err is a Meilisearch API rejection with a 400
+// status — the engine refusing a malformed query or filter — as opposed to a
+// transport/engine failure. Such rejections are caused by the request itself.
+func isBadRequest(err error) bool {
+	var me *meilisearch.Error
+	return errors.As(err, &me) && me.StatusCode == http.StatusBadRequest
+}
+
 // Search runs a query against the jobs index and decodes the hits.
 func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, error) {
 	req := &meilisearch.SearchRequest{
@@ -518,6 +532,16 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, erro
 
 	resp, err := idx.SearchWithContext(ctx, p.Query, req)
 	if err != nil {
+		// A cancelled/expired context surfaces here wrapped in a Meilisearch
+		// communication error that does NOT chain to context.Canceled (the SDK's
+		// *Error has no Unwrap), so re-raise the context sentinel directly to keep
+		// errors.Is working upstream — a client disconnect must not read as a fault.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return SearchResult{}, fmt.Errorf("search: query: %w", ctxErr)
+		}
+		if isBadRequest(err) {
+			return SearchResult{}, fmt.Errorf("search: query: %w: %v", ErrBadQuery, err)
+		}
 		return SearchResult{}, fmt.Errorf("search: query: %w", err)
 	}
 
@@ -567,6 +591,12 @@ func (c *Client) SimilarJobs(ctx context.Context, id int64, limit int) ([]JobDoc
 			case similarSourceMissingCode, semanticIndexMissingCode:
 				return nil, nil
 			}
+		}
+		// The caller cancelled (navigated away) — the cancellation is buried in the
+		// SDK's communication error, which has no Unwrap, so re-raise the context
+		// sentinel to keep it out of the reported-fault path upstream.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, fmt.Errorf("search: similar: %w", ctxErr)
 		}
 		return nil, fmt.Errorf("search: similar: %w", err)
 	}

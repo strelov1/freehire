@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 
 	sentryfiber "github.com/getsentry/sentry-go/fiber"
@@ -8,7 +9,13 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/pgerr"
+	"github.com/strelov1/freehire/internal/search"
 )
+
+// statusClientClosedRequest is nginx's non-standard 499: the client went away
+// before the handler finished. There is no one to receive the body, so it is not
+// an application fault — we classify it away from the reported 500s.
+const statusClientClosedRequest = 499
 
 // LocalPanicReported is a c.Locals key set by the server's recover middleware when
 // it unwinds a panic. The sentryfiber middleware has already captured that panic
@@ -54,7 +61,8 @@ func RenderError(c *fiber.Ctx, err error) error {
 
 // classify maps an error to its HTTP status and message and reports whether it is
 // an unexpected fault worth sending to Sentry. Only the fall-through 500 is
-// unexpected; a *fiber.Error and the 404-mapped DB errors are routine.
+// unexpected; a *fiber.Error, the 404-mapped DB errors, a client disconnect, and
+// a malformed search query are all routine.
 func classify(err error) (status int, msg string, report bool) {
 	var fe *fiber.Error
 	switch {
@@ -62,6 +70,17 @@ func classify(err error) (status int, msg string, report bool) {
 		return fe.Code, fe.Message, false
 	case errors.Is(err, pgx.ErrNoRows), pgerr.IsForeignKeyViolation(err):
 		return fiber.StatusNotFound, "not found", false
+	// The client cancelled the request (navigated away, closed the tab). The
+	// cancellation propagates through downstream calls (DB, Meilisearch) as
+	// context.Canceled — not a server fault, and there is no one left to answer.
+	// A server-side timeout (context.DeadlineExceeded) is deliberately NOT matched
+	// here: that is our own deadline firing and is worth reporting.
+	case errors.Is(err, context.Canceled):
+		return statusClientClosedRequest, "client closed request", false
+	// Meilisearch rejected the request as malformed (a 400) — e.g. an unparseable
+	// filter value from client input. That is a bad request, not a fault.
+	case errors.Is(err, search.ErrBadQuery):
+		return fiber.StatusBadRequest, "invalid search query", false
 	default:
 		return fiber.StatusInternalServerError, "internal server error", true
 	}
