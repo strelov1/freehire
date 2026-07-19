@@ -11,6 +11,26 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const cVBelongsToUser = `-- name: CVBelongsToUser :one
+SELECT EXISTS (
+    SELECT 1 FROM cvs WHERE id = $1 AND user_id = $2
+) AS exists
+`
+
+type CVBelongsToUserParams struct {
+	CvID   int64 `json:"cv_id"`
+	UserID int64 `json:"user_id"`
+}
+
+// Whether a builder CV is owned by a user — the authorization check before attaching a
+// 'built' CV to a request, so a seeker cannot reference someone else's cv_id.
+func (q *Queries) CVBelongsToUser(ctx context.Context, arg CVBelongsToUserParams) (bool, error) {
+	row := q.db.QueryRow(ctx, cVBelongsToUser, arg.CvID, arg.UserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const companiesWithApprovedReferrer = `-- name: CompaniesWithApprovedReferrer :many
 SELECT DISTINCT company_slug FROM referral_offers
 WHERE status = 'approved' AND company_slug = ANY($1::text[])
@@ -214,6 +234,43 @@ func (q *Queries) GetReferralRequest(ctx context.Context, id int64) (ReferralReq
 	return i, err
 }
 
+const listApprovedReferrerRecipients = `-- name: ListApprovedReferrerRecipients :many
+SELECT o.user_id, u.email, t.chat_id
+FROM referral_offers o
+JOIN users u ON u.id = o.user_id
+LEFT JOIN telegram_links t ON t.user_id = o.user_id
+WHERE o.company_slug = $1 AND o.status = 'approved'
+`
+
+type ListApprovedReferrerRecipientsRow struct {
+	UserID int64       `json:"user_id"`
+	Email  string      `json:"email"`
+	ChatID pgtype.Int8 `json:"chat_id"`
+}
+
+// The notify fan-out targets: every approved referrer of a company with their email and
+// linked Telegram chat (NULL when unlinked). Email is always present; chat_id drives the
+// optional Telegram ping.
+func (q *Queries) ListApprovedReferrerRecipients(ctx context.Context, companySlug string) ([]ListApprovedReferrerRecipientsRow, error) {
+	rows, err := q.db.Query(ctx, listApprovedReferrerRecipients, companySlug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListApprovedReferrerRecipientsRow{}
+	for rows.Next() {
+		var i ListApprovedReferrerRecipientsRow
+		if err := rows.Scan(&i.UserID, &i.Email, &i.ChatID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listIncomingReferralRequests = `-- name: ListIncomingReferralRequests :many
 SELECT r.id, r.seeker_user_id, r.company_slug, r.job_id, r.cv_kind, r.cv_id, r.contact_telegram, r.contact_email, r.note, r.status, r.acted_by, r.acted_at, r.created_at FROM referral_requests r
 JOIN referral_offers o ON o.company_slug = r.company_slug
@@ -368,6 +425,27 @@ func (q *Queries) ListReferralRequestsBySeeker(ctx context.Context, seekerUserID
 		return nil, err
 	}
 	return items, nil
+}
+
+const referrerApprovedForCompany = `-- name: ReferrerApprovedForCompany :one
+SELECT EXISTS (
+    SELECT 1 FROM referral_offers
+    WHERE user_id = $1 AND company_slug = $2 AND status = 'approved'
+) AS exists
+`
+
+type ReferrerApprovedForCompanyParams struct {
+	UserID      int64  `json:"user_id"`
+	CompanySlug string `json:"company_slug"`
+}
+
+// Whether a specific member is an approved referrer for a company — the authorization
+// check for acting on / viewing a request in that company's pool.
+func (q *Queries) ReferrerApprovedForCompany(ctx context.Context, arg ReferrerApprovedForCompanyParams) (bool, error) {
+	row := q.db.QueryRow(ctx, referrerApprovedForCompany, arg.UserID, arg.CompanySlug)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const resolveReferralRequest = `-- name: ResolveReferralRequest :one

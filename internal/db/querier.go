@@ -23,6 +23,9 @@ type Querier interface {
 	// in the URL/page). external_id is "<board>:<id>"; served by the
 	// (split_part(external_id,':',2)) WHERE source='greenhouse' partial index.
 	BoardByGreenhouseJobID(ctx context.Context, jobID string) (string, error)
+	// Whether a builder CV is owned by a user — the authorization check before attaching a
+	// 'built' CV to a request, so a seeker cannot reference someone else's cv_id.
+	CVBelongsToUser(ctx context.Context, arg CVBelongsToUserParams) (bool, error)
 	// Claim a wave of live, unleased entries by stamping claimed_at, newest email first,
 	// returning the email fields the matcher/classifier need. FOR UPDATE OF o locks only
 	// outbox rows; SKIP LOCKED lets concurrent workers take disjoint rows; the lease
@@ -554,6 +557,10 @@ type Querier interface {
 	// worker groups these by canonical(query) so each distinct filter hits the search
 	// index once regardless of how many subscriptions share it.
 	ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubscriptionsRow, error)
+	// The notify fan-out targets: every approved referrer of a company with their email and
+	// linked Telegram chat (NULL when unlinked). Email is always present; chat_id drives the
+	// optional Telegram ping.
+	ListApprovedReferrerRecipients(ctx context.Context, companySlug string) ([]ListApprovedReferrerRecipientsRow, error)
 	// A user's CVs as metadata (no data blob), newest edit first.
 	ListCVsByUser(ctx context.Context, userID int64) ([]ListCVsByUserRow, error)
 	// Catalog page: companies with their job counts, most active first. The job count
@@ -928,6 +935,9 @@ type Querier interface {
 	// left in place — its expiry gates the retry to a later run and doubles as the
 	// crash reaper, so a failed post is never reprocessed within the same run.
 	RecordTelegramPostFailure(ctx context.Context, arg RecordTelegramPostFailureParams) (RecordTelegramPostFailureRow, error)
+	// Whether a specific member is an approved referrer for a company — the authorization
+	// check for acting on / viewing a request in that company's pool.
+	ReferrerApprovedForCompany(ctx context.Context, arg ReferrerApprovedForCompanyParams) (bool, error)
 	// Recompute every company's denormalized state in one set-based pass: the open-job
 	// count plus the facet arrays derived from those open jobs — regions/countries from
 	// the jobs geography columns, remote_regions from those same regions but scoped to

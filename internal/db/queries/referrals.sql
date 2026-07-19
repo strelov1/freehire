@@ -40,6 +40,31 @@ SELECT EXISTS (
 SELECT DISTINCT company_slug FROM referral_offers
 WHERE status = 'approved' AND company_slug = ANY(sqlc.arg(slugs)::text[]);
 
+-- name: ReferrerApprovedForCompany :one
+-- Whether a specific member is an approved referrer for a company — the authorization
+-- check for acting on / viewing a request in that company's pool.
+SELECT EXISTS (
+    SELECT 1 FROM referral_offers
+    WHERE user_id = sqlc.arg(user_id) AND company_slug = sqlc.arg(company_slug) AND status = 'approved'
+) AS exists;
+
+-- name: ListApprovedReferrerRecipients :many
+-- The notify fan-out targets: every approved referrer of a company with their email and
+-- linked Telegram chat (NULL when unlinked). Email is always present; chat_id drives the
+-- optional Telegram ping.
+SELECT o.user_id, u.email, t.chat_id
+FROM referral_offers o
+JOIN users u ON u.id = o.user_id
+LEFT JOIN telegram_links t ON t.user_id = o.user_id
+WHERE o.company_slug = $1 AND o.status = 'approved';
+
+-- name: CVBelongsToUser :one
+-- Whether a builder CV is owned by a user — the authorization check before attaching a
+-- 'built' CV to a request, so a seeker cannot reference someone else's cv_id.
+SELECT EXISTS (
+    SELECT 1 FROM cvs WHERE id = sqlc.arg(cv_id) AND user_id = sqlc.arg(user_id)
+) AS exists;
+
 -- name: CreateReferralRequest :one
 -- Record a seeker's referral request into a company. The partial unique index on
 -- (seeker_user_id, company_slug) WHERE status='sent' rejects a second active request for

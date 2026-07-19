@@ -8,10 +8,10 @@
 
 ## 2. Referral domain package
 
-- [ ] 2.1 Create `internal/referral` with offer/request status vocabularies + validation (mirror `userjob/stages.go`)
-- [ ] 2.2 Implement offer lifecycle: submit (dedup on `(user, company)`, requires proof CV), moderator decide (approve/reject, record decider)
-- [ ] 2.3 Implement request lifecycle: create (validate CV choice + at least one contact + eligibility + active-dup + daily cap), mark contacted/declined (authorize acting referrer, record `acted_by`/`acted_at`)
-- [ ] 2.4 Implement referrer notification fan-out: for each approved referrer of the company, ping via SES email always + `telegramnotify` if linked; anonymous, links to cabinet
+- [x] 2.1 Create `internal/referral` with offer/request status vocabularies + validation (mirror `userjob/stages.go`)
+- [x] 2.2 Implement offer lifecycle: submit (dedup on `(user, company)`, requires proof CV), moderator decide (approve/reject, record decider)
+- [x] 2.3 Implement request lifecycle: create (validate CV choice + at least one contact + eligibility + active-dup + daily cap), mark contacted/declined (authorize acting referrer, record `acted_by`/`acted_at`)
+- [x] 2.4 Implement referrer notification fan-out: for each approved referrer of the company, ping via SES email always + `telegramnotify` if linked; anonymous, links to cabinet
 - [ ] 2.5 Implement authorized CV access: resolve `original` → `resume_object_key`, `built` → `cvs`/Typst render; gate on caller being an approved referrer of the request's company
 
 ## 3. HTTP handlers & routes
