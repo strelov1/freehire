@@ -87,6 +87,8 @@ func referralError(err error) error {
 		return fiber.NewError(fiber.StatusForbidden, "not an approved referrer for this company")
 	case errors.Is(err, referral.ErrRequestNotFound):
 		return fiber.NewError(fiber.StatusNotFound, "referral request not found")
+	case errors.Is(err, referral.ErrCompanyNotFound):
+		return fiber.NewError(fiber.StatusNotFound, "we don't have that company")
 	case errors.Is(err, referral.ErrDailyCapReached):
 		return fiber.NewError(fiber.StatusTooManyRequests, "daily referral request limit reached")
 	case errors.Is(err, referral.ErrCompanyNotEligible):

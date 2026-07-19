@@ -48,6 +48,9 @@ var (
 	// ErrAlreadyOffered is a second offer for a company the member already offered for;
 	// the repository maps the unique violation to this (409).
 	ErrAlreadyOffered = errors.New("referral: already offered for this company")
+	// ErrCompanyNotFound is an offer for a company slug not in the catalogue; the
+	// repository maps the company foreign-key violation to this (404).
+	ErrCompanyNotFound = errors.New("referral: company not found")
 	// ErrOfferNotPending is a decision on an offer that is not pending — already decided,
 	// or absent; the repository maps the no-row update to this (409).
 	ErrOfferNotPending = errors.New("referral: offer is not pending")

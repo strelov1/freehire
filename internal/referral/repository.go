@@ -38,6 +38,11 @@ func (r *QueriesRepository) CreateOffer(ctx context.Context, in OfferInput) (Off
 		if pgerr.IsUniqueViolation(err) {
 			return Offer{}, ErrAlreadyOffered
 		}
+		// The only foreign key on insert is company_slug (user_id is the authed caller),
+		// so a FK violation means the company slug is not in the catalogue.
+		if pgerr.IsForeignKeyViolation(err) {
+			return Offer{}, ErrCompanyNotFound
+		}
 		return Offer{}, err
 	}
 	return offerFromRow(row), nil

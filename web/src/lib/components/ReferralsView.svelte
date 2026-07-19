@@ -69,9 +69,11 @@
       offerError =
         err instanceof ApiError && err.status === 409
           ? 'You already offered to refer for this company.'
-          : err instanceof ApiError && err.status === 503
-            ? 'File upload is unavailable right now.'
-            : 'Could not submit the offer. Please try again.';
+          : err instanceof ApiError && err.status === 404
+            ? "We don't have that company — check the slug in its page URL."
+            : err instanceof ApiError && err.status === 503
+              ? 'File upload is unavailable right now.'
+              : 'Could not submit the offer. Please try again.';
     } finally {
       offerBusy = false;
     }
