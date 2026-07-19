@@ -1,0 +1,21 @@
+---
+title: Reminders for jobs you save
+date: 2026-07-19
+summary: Save a job and get a gentle nudge to come back and apply — over Telegram or email — before the posting goes stale.
+type: changelog
+tags:
+  - tracking
+  - notifications
+draft: false
+---
+
+Saved a job and forgot to apply? Freehire can now remind you.
+
+Turn on reminders under [Activity](/my/activity), pick when (a day, a few days,
+a week) and where (Telegram or email), and every job you save gets a one-shot
+nudge to come back. Prefer to decide per job? Right after saving, choose a time
+or skip it — and each saved job shows its pending reminder, which you can
+reschedule or turn off any time.
+
+Reminders are off until you enable them, and a reminder quietly cancels itself
+once you apply, unsave the job, or the posting closes.
