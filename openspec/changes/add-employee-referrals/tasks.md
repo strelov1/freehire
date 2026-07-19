@@ -21,7 +21,7 @@
 - [x] 3.3 Referrer: `POST` submit offer (proof-CV upload via résumé storage path) + `GET` list own offers
 - [x] 3.4 Referrer: `GET` incoming requests for my companies + `POST` mark contacted/declined + authorized CV view endpoint
 - [x] 3.5 Moderator: `GET` pending offers queue + `POST` approve/reject (behind moderator auth)
-- [ ] 3.6 Add the `referral_available` flag to the company read shape and `jobview` projection
+- [x] 3.6 Add the `referral_available` flag to the company read shape and `jobview` projection
 - [x] 3.7 Wire routes in the handler registry; return `{"data": ...}` shapes per convention
 
 ## 4. Frontend

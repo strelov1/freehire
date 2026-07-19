@@ -19,6 +19,9 @@ import (
 type companyDetailResponse struct {
 	Company companyView   `json:"company"`
 	Jobs    []jobview.Job `json:"jobs"`
+	// ReferralAvailable is true when the company has at least one approved employee
+	// referrer, so the company page can show the "ask for a referral" affordance.
+	ReferralAvailable bool `json:"referral_available"`
 }
 
 // companyView is the public projection of a company for the detail endpoint. It
@@ -219,5 +222,13 @@ func (a *API) GetCompany(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.JSON(fiber.Map{"data": companyDetailResponse{Company: companyViewFrom(company), Jobs: views}})
+	// Referral availability: best-effort — a lookup error degrades to false (block hidden),
+	// never failing the company read.
+	referralAvailable, _ := a.queries.CompanyHasApprovedReferrer(c.Context(), slug)
+
+	return c.JSON(fiber.Map{"data": companyDetailResponse{
+		Company:           companyViewFrom(company),
+		Jobs:              views,
+		ReferralAvailable: referralAvailable,
+	}})
 }

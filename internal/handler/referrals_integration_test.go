@@ -167,6 +167,38 @@ func TestReferralEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("company read exposes referral availability", func(t *testing.T) {
+		pub := fiber.New(fiber.Config{ErrorHandler: RenderError})
+		pub.Get("/api/v1/companies/:slug", h.GetCompany)
+		if _, err := pool.Exec(ctx, `INSERT INTO companies (slug, name, job_count) VALUES ('globex','Globex',0)`); err != nil {
+			t.Fatalf("seed company: %v", err)
+		}
+		avail := func() bool {
+			req, _ := http.NewRequest(http.MethodGet, "/api/v1/companies/globex", nil)
+			req.Host = "localhost"
+			resp, err := pub.Test(req, -1)
+			if err != nil {
+				t.Fatalf("get company: %v", err)
+			}
+			defer resp.Body.Close()
+			var out map[string]any
+			raw, _ := io.ReadAll(resp.Body)
+			_ = json.Unmarshal(raw, &out)
+			return out["data"].(map[string]any)["referral_available"].(bool)
+		}
+		if avail() {
+			t.Error("referral_available = true with no approved offer, want false")
+		}
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO referral_offers (user_id, company_slug, proof_object_key, status) VALUES ($1,'globex','k','approved')`,
+			refUser); err != nil {
+			t.Fatalf("seed approved offer: %v", err)
+		}
+		if !avail() {
+			t.Error("referral_available = false after an approved offer, want true")
+		}
+	})
+
 	t.Run("moderator decides a pending offer", func(t *testing.T) {
 		var offerID int64
 		if err := pool.QueryRow(ctx,

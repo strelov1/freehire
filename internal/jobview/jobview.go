@@ -94,6 +94,11 @@ type Job struct {
 	// computed at index/read time and attached by ClassifyReality — never stored, as
 	// it is time-dependent. Nil when not computed (e.g. a plain FromRow without counts).
 	Reality *Reality `json:"reality,omitempty"`
+	// ReferralAvailable is true when the job's company has at least one approved employee
+	// referrer, so the detail page can show the "ask for a referral" affordance. A
+	// read-time projection attached only by the detail handler (omitted on list rows,
+	// where FromRow leaves it false).
+	ReferralAvailable bool `json:"referral_available,omitempty"`
 }
 
 // FromRow maps a database job row to the public wire shape. It is a thin shim: it

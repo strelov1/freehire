@@ -65,5 +65,12 @@ func (a *API) GetJob(c *fiber.Ctx) error {
 	reality := jobview.ClassifyReality(job, time.Now(), int(repost), int(mass))
 	view.Reality = &reality
 
+	// Referral availability: true when the company has an approved referrer, so the detail
+	// page can show the "ask for a referral" block. Best-effort — a lookup error degrades
+	// to false (block hidden), never failing the job read.
+	if avail, err := a.queries.CompanyHasApprovedReferrer(c.Context(), job.CompanySlug); err == nil {
+		view.ReferralAvailable = avail
+	}
+
 	return c.JSON(fiber.Map{"data": view})
 }
