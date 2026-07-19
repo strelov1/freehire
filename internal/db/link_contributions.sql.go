@@ -68,8 +68,8 @@ type CreateContributionParams struct {
 
 // Record a contribution of a novel company board. The UNIQUE (source, board) constraint
 // rejects a second contribution of the same board (another vacancy or the listing); the
-// repository maps that unique violation to ErrBoardAlreadyContributed. Runs in the same
-// transaction as IncrementUserPoints.
+// repository maps that unique violation to ErrBoardAlreadyContributed. The AI-credits reward
+// is granted separately by the handler (credits.Reward), idempotent by the contribution id.
 func (q *Queries) CreateContribution(ctx context.Context, arg CreateContributionParams) (LinkContribution, error) {
 	row := q.db.QueryRow(ctx, createContribution,
 		arg.SubmittedBy,
@@ -88,17 +88,6 @@ func (q *Queries) CreateContribution(ctx context.Context, arg CreateContribution
 		&i.CreatedAt,
 	)
 	return i, err
-}
-
-const incrementUserPoints = `-- name: IncrementUserPoints :exec
-UPDATE users SET points = points + 1 WHERE id = $1
-`
-
-// Award one point to the contributor. Runs in the same transaction as CreateContribution,
-// so a rolled-back insert (e.g. a duplicate-board race) never credits a point.
-func (q *Queries) IncrementUserPoints(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, incrementUserPoints, id)
-	return err
 }
 
 const jobsExistForBoard = `-- name: JobsExistForBoard :one

@@ -246,3 +246,56 @@ func TestHabrCareerIsProxied(t *testing.T) {
 		t.Error("habr_career must be in proxiedProviders (Qrator blocks detail fetches from the prod datacenter IP)")
 	}
 }
+
+func TestParseHabrPostingSingleObjectJobLocation(t *testing.T) {
+	// schema.org allows jobLocation as a single Place object, not only an array — Habr emits
+	// this form for many (often remote) vacancies. Modeling it as array-only made json.Unmarshal
+	// fail on the whole JobPosting, so the description was dropped and the vacancy stored empty.
+	// The decoder must accept both shapes.
+	const page = `<html><head><script type="application/ld+json">
+{"@context":"https://schema.org/","@type":"JobPosting",
+ "title":"Fullstack Developer (MERN / NestJS)",
+ "description":"<p>Node.js and React</p>",
+ "hiringOrganization":{"@type":"Organization","name":"Creative Code"},
+ "jobLocation":{"@type":"Place","address":"Russia"},
+ "jobLocationType":"TELECOMMUTE","employmentType":"FULL_TIME"}
+</script></head><body></body></html>`
+	node, err := html.Parse(strings.NewReader(page))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	p, ok := ParseHabrPosting(node)
+	if !ok {
+		t.Fatal("ParseHabrPosting ok=false on a single-object jobLocation — the whole posting was dropped")
+	}
+	if !strings.Contains(p.Description, "Node.js") {
+		t.Errorf("Description = %q, want the posting body", p.Description)
+	}
+	if p.Company != "Creative Code" {
+		t.Errorf("Company = %q, want Creative Code", p.Company)
+	}
+	if p.Location != "Russia" {
+		t.Errorf("Location = %q, want Russia from the single Place", p.Location)
+	}
+}
+
+func TestParseHabrPostingArrayJobLocation(t *testing.T) {
+	// The array shape must keep working after the single-object fix.
+	const page = `<html><head><script type="application/ld+json">
+{"@context":"https://schema.org/","@type":"JobPosting",
+ "title":"Backend Engineer","description":"<p>Go</p>",
+ "hiringOrganization":{"@type":"Organization","name":"Acme"},
+ "jobLocation":[{"@type":"Place","address":"Berlin"}]}
+</script></head><body></body></html>`
+	node, err := html.Parse(strings.NewReader(page))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	p, ok := ParseHabrPosting(node)
+	if !ok {
+		t.Fatal("ParseHabrPosting ok=false on an array jobLocation")
+	}
+	if p.Location != "Berlin" {
+		t.Errorf("Location = %q, want Berlin", p.Location)
+	}
+}

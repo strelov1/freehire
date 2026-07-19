@@ -594,6 +594,7 @@ export const PatchReplaceBullet: PatchOp = "replace_bullet";
 export const PatchRemoveBullet: PatchOp = "remove_bullet";
 export const PatchReorderBullets: PatchOp = "reorder_bullets";
 export const PatchSetSkillGroup: PatchOp = "set_skill_group";
+export const PatchSetStack: PatchOp = "set_stack";
 /**
  * Patch is one field-level edit to a CV Document. Op selects the operation; the remaining
  * fields are its address and payload, and only the ones an op needs are read. A patch names
@@ -609,6 +610,7 @@ export interface Patch {
   order?: number /* int */[]; // permutation of bullet indices (reorder_bullets)
   group?: string; // skill group name (set_skill_group)
   items?: string[]; // skill group items (set_skill_group)
+  stack?: string[]; // per-experience technology line (set_stack)
 }
 
 export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'breezy', 'briefhq', 'bullhorn', 'careerplug', 'careerspage', 'catsone', 'cleverstaff', 'clinch', 'comeet', 'cornerstone', 'crelate', 'deel', 'djinni', 'earcu', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'functionalworks', 'geekjob', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'hh', 'himalayas', 'hireology', 'huntflow', 'hurma', 'icims', 'infojobs', 'inhire', 'ismartrecruit', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobscore', 'jobspresso', 'jobstash', 'jobtech', 'jobvite', 'jobylon', 'join', 'justjoin', 'lever', 'likeit', 'loxo', 'luxoft', 'manatal', 'mindsight', 'mycareersfuture', 'neogov', 'nofluffjobs', 'northstone', 'odoo', 'oracle', 'pageup', 'paycom', 'paylocity', 'peopleforce', 'personio', 'phenom', 'pinpoint', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'solides', 'spark', 'startupandvc', 'successfactors', 'talentadore', 'talentlyft', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'trudvsem', 'tyomarkkinatori', 'ukg', 'vagas', 'vention', 'vouch', 'wantapply', 'wantedkr', 'weworkremotely', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;

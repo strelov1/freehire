@@ -195,8 +195,8 @@ type Querier interface {
 	CreateCV(ctx context.Context, arg CreateCVParams) (CreateCVRow, error)
 	// Record a contribution of a novel company board. The UNIQUE (source, board) constraint
 	// rejects a second contribution of the same board (another vacancy or the listing); the
-	// repository maps that unique violation to ErrBoardAlreadyContributed. Runs in the same
-	// transaction as IncrementUserPoints.
+	// repository maps that unique violation to ErrBoardAlreadyContributed. The AI-credits reward
+	// is granted separately by the handler (credits.Reward), idempotent by the contribution id.
 	CreateContribution(ctx context.Context, arg CreateContributionParams) (LinkContribution, error)
 	// File a user complaint about a job into the moderation queue as 'pending'. The partial
 	// unique index on (reported_by, job_id) WHERE status='pending' rejects a second open report
@@ -472,8 +472,7 @@ type Querier interface {
 	// post-login wire shape.
 	GetUserByEmail(ctx context.Context, lower string) (GetUserByEmailRow, error)
 	// Profile lookup for the authenticated user. Never selects password_hash. role is
-	// included so /auth/me can tell a client whether to surface moderator-only UI; points is
-	// the contribution reward balance shown on the account.
+	// included so /auth/me can tell a client whether to surface moderator-only UI.
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
 	// OAuth sign-in fast path: resolve a provider identity straight to its user.
 	GetUserByIdentity(ctx context.Context, arg GetUserByIdentityParams) (GetUserByIdentityRow, error)
@@ -507,9 +506,6 @@ type Querier interface {
 	// request to a role-gated endpoint and needs only the role, so it does not drag the
 	// full user row (the GetJobIDBySlug precedent for a hot-path read).
 	GetUserRole(ctx context.Context, id int64) (string, error)
-	// Award one point to the contributor. Runs in the same transaction as CreateContribution,
-	// so a rolled-back insert (e.g. a duplicate-board race) never credits a point.
-	IncrementUserPoints(ctx context.Context, id int64) error
 	// Append the debit for a metered action. delta is negative (the action cost). The partial
 	// unique index on (user_id, feature, ref) WHERE kind='debit' guards against a double charge
 	// for the same ref even under a race.
@@ -591,6 +587,10 @@ type Querier interface {
 	// first — the recovery probe's candidates. The ordering rotates the sample as cooldowns
 	// lapse, so a run does not keep probing the same few boards.
 	ListCooledBoards(ctx context.Context, arg ListCooledBoardsParams) ([]string, error)
+	// The caller's credit-ledger entries, newest first, for the transaction-history page. Bounded
+	// by a caller-supplied limit and served by the (user_id, created_at DESC) index. The handler
+	// resolves each debit's ref to a human label (the job/CV it named).
+	ListCreditLedger(ctx context.Context, arg ListCreditLedgerParams) ([]ListCreditLedgerRow, error)
 	// Flat inbox listing, newest first — one row per message (no subject grouping),
 	// soft-deleted messages excluded. Optional filters (each empty/false = no filter):
 	// source narrows to one account; unread hides already-read mail; status narrows to
@@ -649,6 +649,9 @@ type Querier interface {
 	// Id-only projection of ListJobsUpdatedAfter — the corruption-degrade path for the
 	// incremental (`reindex --since`) scan, mirroring ListJobIDsAfter.
 	ListJobIDsUpdatedAfter(ctx context.Context, arg ListJobIDsUpdatedAfterParams) ([]int64, error)
+	// Resolve job ids to display labels for the credit-history page (match debits). Missing ids
+	// simply do not come back; the handler falls back to a generic label for a deleted job.
+	ListJobLabelsByIDs(ctx context.Context, ids []int64) ([]ListJobLabelsByIDsRow, error)
 	// The freshest open jobs for the sitemap: only the fields a URL needs, newest id
 	// first. Ordering by id DESC (served by jobs_open_id_idx) reads the most recently
 	// inserted rows, which sit at the physical end of the heap — a sequential, cache-warm
@@ -725,6 +728,10 @@ type Querier interface {
 	// The caller's subscriptions joined to each saved search's display name and query,
 	// newest first — the "My subscriptions" view.
 	ListSubscriptions(ctx context.Context, userID int64) ([]ListSubscriptionsRow, error)
+	// Resolve tailored-CV ids to their target job's display labels for the credit-history page
+	// (tailor debits). Only tailored CVs (job_id set) whose job still exists resolve; the handler
+	// falls back to a generic label otherwise.
+	ListTailoredCVLabelsByIDs(ctx context.Context, ids []int64) ([]ListTailoredCVLabelsByIDsRow, error)
 	// A user's TAILORED CVs (bound to a vacancy), newest edit first — the re-open list. Carries the
 	// vacancy's public slug and the bound agent session so each row links back to its workspace.
 	// Base CVs (job_id NULL) are excluded; the JOIN also drops tailored CVs whose job was deleted.
@@ -752,12 +759,15 @@ type Querier interface {
 	// staleness stamps ride along so the handler can flag rows whose CV/job/model has since
 	// changed, and the analysis blob carries the overall score + verdict the list shows.
 	ListUserJobAnalyses(ctx context.Context, userID int64) ([]ListUserJobAnalysesRow, error)
-	// A user's job interactions joined with the job rows, most recently touched
-	// first (GREATEST ignores NULLs; viewed_at is always set). filter narrows to
-	// viewed-only/saved/applied subsets; 'all' is every interaction, 'viewed' is
-	// the passive history (rows neither saved nor applied). Closed jobs stay
-	// listed: a user's history must not shrink when a posting closes. email_count is
-	// the caller's live (non-deleted) inbox messages linked to this job — the board's
+	// A user's job interactions joined with the job rows. Each subset is ordered by
+	// when the job entered *that* list, not by last touch: saved by saved_at, applied
+	// by applied_at, the passive history by viewed_at, the board by when it was saved
+	// or applied. This keeps a plain re-view from bumping a saved/applied job to the
+	// top (viewed_at is refreshed on every view). 'all' keeps the touched-recency
+	// timeline. filter narrows to viewed-only/saved/applied subsets; 'viewed' is the
+	// passive history (rows neither saved nor applied). Closed jobs stay listed: a
+	// user's history must not shrink when a posting closes. email_count is the
+	// caller's live (non-deleted) inbox messages linked to this job — the board's
 	// per-card ✉ badge; 0 for everyone without a connected mailbox. reminder_fire_at is
 	// the pending saved-job reminder's deadline (NULL when none), so the saved list can
 	// show "remind in N days" with its reschedule/off controls.

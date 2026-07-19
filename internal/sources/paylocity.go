@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"golang.org/x/net/html"
 )
@@ -60,21 +61,28 @@ func (s paylocity) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 }
 
 // detail builds a Job from a listing brief, enriching it with the description from the
-// posting's ld+json detail page. The listing brief is authoritative for the posting's
-// existence and structured fields (id/title/location/date), so a failed detail fetch only
-// costs the description, not the whole posting. ok=false only for a brief with no id (which
-// would collide on the dedup key).
+// posting's detail page. The listing brief is authoritative for the posting's existence and
+// structured fields (id/title/location/date), so a failed detail fetch only costs the
+// description, not the whole posting. ok=false only for a brief with no id (which would
+// collide on the dedup key).
 func (s paylocity) detail(ctx context.Context, e CompanyEntry, b paylocityBrief) (Job, bool) {
 	if b.JobID == 0 {
 		return Job{}, false
 	}
 	detailURL := fmt.Sprintf("%s/Recruiting/Jobs/Details/%d", paylocityBase, b.JobID)
 
-	var p paylocityPosting
 	description, company := "", e.Company
-	if root, err := s.http.GetHTML(ctx, detailURL); err == nil && ldJobPosting(root, &p) {
-		description = sanitizeHTML(html.UnescapeString(p.Description))
-		company = firstNonEmpty(e.Company, p.HiringOrganization.Name)
+	if root, err := s.http.GetHTML(ctx, detailURL); err == nil {
+		description = paylocityDescription(root)
+		if description == "" {
+			// Legacy tenants may still serve the schema.org ld+json the current page dropped.
+			var p paylocityPosting
+			if ldJobPosting(root, &p) {
+				description = html.UnescapeString(p.Description)
+				company = firstNonEmpty(e.Company, p.HiringOrganization.Name)
+			}
+		}
+		description = sanitizeHTML(description)
 	}
 
 	return Job{
@@ -87,6 +95,31 @@ func (s paylocity) detail(ctx context.Context, e CompanyEntry, b paylocityBrief)
 		Remote:      b.IsRemote || isRemote(b.LocationName),
 		PostedAt:    parseRFC3339(b.PublishedDate),
 	}, true
+}
+
+// paylocityDescription extracts the posting body from a detail page. Paylocity's current
+// pages are a client-rendered shell with no ld+json, but the description still renders
+// server-side as the <div> immediately following the "Description" section header
+// (<div class="job-listing-header">Description</div>). Returns "" when the block is absent.
+func paylocityDescription(root *html.Node) string {
+	var out string
+	walk(root, func(n *html.Node) bool {
+		if out != "" {
+			return false
+		}
+		if n.Type == html.ElementNode && n.Data == "div" && hasClass(n, "job-listing-header") &&
+			strings.EqualFold(textContent(n), "Description") {
+			for sib := n.NextSibling; sib != nil; sib = sib.NextSibling {
+				if sib.Type == html.ElementNode {
+					out = strings.TrimSpace(innerHTML(sib))
+					break
+				}
+			}
+			return false
+		}
+		return true
+	})
+	return out
 }
 
 // paylocityBrief is one entry of the listing's window.pageData Jobs[] array.

@@ -24,8 +24,8 @@ import (
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/llm"
+	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/userprofile"
 )
@@ -54,8 +54,8 @@ func (*fitModel) Call(context.Context, string, ...llms.CallOption) (string, erro
 
 type fitBody struct {
 	Data struct {
-		HasCV    bool             `json:"has_cv"`
-		Stale    bool             `json:"stale"`
+		HasCV    bool                    `json:"has_cv"`
+		Stale    bool                    `json:"stale"`
 		Analysis *matchanalysis.Analysis `json:"analysis"`
 	} `json:"data"`
 }

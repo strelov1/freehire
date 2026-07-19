@@ -19,8 +19,8 @@ import (
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/llm"
+	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/userprofile"
 )

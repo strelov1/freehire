@@ -7,6 +7,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const debitExists = `-- name: DebitExists :one
@@ -167,6 +169,126 @@ func (q *Queries) InsertReward(ctx context.Context, arg InsertRewardParams) erro
 		arg.Ref,
 	)
 	return err
+}
+
+const listCreditLedger = `-- name: ListCreditLedger :many
+SELECT kind, feature, delta, ref, created_at
+FROM credit_ledger
+WHERE user_id = $1
+ORDER BY created_at DESC
+LIMIT $2
+`
+
+type ListCreditLedgerParams struct {
+	UserID int64 `json:"user_id"`
+	Limit  int32 `json:"limit"`
+}
+
+type ListCreditLedgerRow struct {
+	Kind      string             `json:"kind"`
+	Feature   pgtype.Text        `json:"feature"`
+	Delta     int32              `json:"delta"`
+	Ref       pgtype.Text        `json:"ref"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// The caller's credit-ledger entries, newest first, for the transaction-history page. Bounded
+// by a caller-supplied limit and served by the (user_id, created_at DESC) index. The handler
+// resolves each debit's ref to a human label (the job/CV it named).
+func (q *Queries) ListCreditLedger(ctx context.Context, arg ListCreditLedgerParams) ([]ListCreditLedgerRow, error) {
+	rows, err := q.db.Query(ctx, listCreditLedger, arg.UserID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCreditLedgerRow{}
+	for rows.Next() {
+		var i ListCreditLedgerRow
+		if err := rows.Scan(
+			&i.Kind,
+			&i.Feature,
+			&i.Delta,
+			&i.Ref,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listJobLabelsByIDs = `-- name: ListJobLabelsByIDs :many
+SELECT id, title, public_slug
+FROM jobs
+WHERE id = ANY($1::bigint[])
+`
+
+type ListJobLabelsByIDsRow struct {
+	ID         int64  `json:"id"`
+	Title      string `json:"title"`
+	PublicSlug string `json:"public_slug"`
+}
+
+// Resolve job ids to display labels for the credit-history page (match debits). Missing ids
+// simply do not come back; the handler falls back to a generic label for a deleted job.
+func (q *Queries) ListJobLabelsByIDs(ctx context.Context, ids []int64) ([]ListJobLabelsByIDsRow, error) {
+	rows, err := q.db.Query(ctx, listJobLabelsByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListJobLabelsByIDsRow{}
+	for rows.Next() {
+		var i ListJobLabelsByIDsRow
+		if err := rows.Scan(&i.ID, &i.Title, &i.PublicSlug); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTailoredCVLabelsByIDs = `-- name: ListTailoredCVLabelsByIDs :many
+SELECT c.id, j.title AS job_title, j.public_slug AS job_slug
+FROM cvs c
+JOIN jobs j ON j.id = c.job_id
+WHERE c.id = ANY($1::bigint[])
+`
+
+type ListTailoredCVLabelsByIDsRow struct {
+	ID       int64  `json:"id"`
+	JobTitle string `json:"job_title"`
+	JobSlug  string `json:"job_slug"`
+}
+
+// Resolve tailored-CV ids to their target job's display labels for the credit-history page
+// (tailor debits). Only tailored CVs (job_id set) whose job still exists resolve; the handler
+// falls back to a generic label otherwise.
+func (q *Queries) ListTailoredCVLabelsByIDs(ctx context.Context, ids []int64) ([]ListTailoredCVLabelsByIDsRow, error) {
+	rows, err := q.db.Query(ctx, listTailoredCVLabelsByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTailoredCVLabelsByIDsRow{}
+	for rows.Next() {
+		var i ListTailoredCVLabelsByIDsRow
+		if err := rows.Scan(&i.ID, &i.JobTitle, &i.JobSlug); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const rewardExists = `-- name: RewardExists :one

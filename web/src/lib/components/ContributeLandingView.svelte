@@ -39,7 +39,7 @@
     {
       n: '03',
       title: 'New board? You’re rewarded',
-      body: 'If it’s a company we don’t track yet — the role isn’t in our catalogue — we add the board, crawl all of its openings, and credit you a point.',
+      body: 'If it’s a company we don’t track yet — the role isn’t in our catalogue — we add the board, crawl all of its openings, and credit you 5 AI credits.',
     },
   ];
 </script>
@@ -106,7 +106,7 @@
         <p class="text-sm leading-relaxed text-muted-foreground">
           We simplified that first step down to a single link, and we reward the community for it.
           Spot a company we’re missing? Drop its link and you’ve just made the market a little
-          more complete for everyone — and earned points for it.
+          more complete for everyone — and earned AI credits for it.
         </p>
         <div class="flex flex-wrap gap-2">
           {#each supportedAts as ats (ats)}
@@ -137,15 +137,15 @@
     <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
       The unit is the <span class="text-foreground">company board</span>, not a single vacancy —
       once we know the board, we pull in all of its jobs. So a second link to a company we already
-      cover earns nothing, and that’s the point: you’re rewarded for genuinely new coverage.
+      cover earns nothing, and that’s deliberate: you’re rewarded for genuinely new coverage.
     </p>
   </section>
 
-  <!-- What points are for -->
+  <!-- What credits are for -->
   <section class="flex flex-col gap-4 rounded-lg border border-border p-6">
-    <h2 class="text-xl font-semibold tracking-tight">What your points are for</h2>
+    <h2 class="text-xl font-semibold tracking-tight">What your credits are for</h2>
     <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-      Points are the thank-you for widening the market. Soon they’ll fund your own search: spend
+      AI credits are the thank-you for widening the market — and they fund your own search: spend
       them to check how your CV matches the live market and to get it sharper — the coverage you help
       build, working back for you.
     </p>
@@ -156,7 +156,7 @@
     <h2 class="text-xl font-semibold tracking-tight">Found a company we’re missing?</h2>
     <p class="max-w-xl text-sm leading-relaxed text-muted-foreground">
       Paste its link — a vacancy or its careers page. If we don’t track it yet, you’ve found
-      new coverage, and the points are yours.
+      new coverage, and the AI credits are yours.
     </p>
     <div class="flex flex-wrap gap-3">
       <Button href={resolve('/my/contributions')} variant="primary" size="lg">Contribute a board</Button>

@@ -5,7 +5,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/accounts"
 	"github.com/strelov1/freehire/internal/contribution"
 )
 
@@ -28,14 +27,6 @@ func TestContributionError_Mapping(t *testing.T) {
 				t.Errorf("status = %d, want %d", got, tc.want)
 			}
 		})
-	}
-}
-
-// The user wire shape carries the contribution points balance so the account UI can show it.
-func TestToUserResponse_IncludesPoints(t *testing.T) {
-	got := toUserResponse(accounts.User{ID: 1, Email: "a@b.test", Role: "user", Points: 3})
-	if got.Points != 3 {
-		t.Errorf("points = %d, want 3", got.Points)
 	}
 }
 

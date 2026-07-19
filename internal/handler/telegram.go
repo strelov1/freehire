@@ -196,11 +196,12 @@ func (a *API) processTelegramContribution(chatID int64, rawURL string) {
 	case errors.Is(err, contribution.ErrBoardAlreadyTracked):
 		a.sendTelegram(ctx, chatID, a.alreadyTrackedReply(ctx, source, board))
 	case errors.Is(err, contribution.ErrBoardAlreadyContributed):
-		a.sendTelegram(ctx, chatID, "✅ That board was already contributed — no new point, but thanks!")
+		a.sendTelegram(ctx, chatID, "✅ That board was already contributed — no new credits, but thanks!")
 	case err != nil:
 		log.Printf("telegram: submit user=%d: %v", userID, err)
 		a.sendTelegram(ctx, chatID, "⚠️ Something went wrong. Please try again.")
 	default:
-		a.sendTelegram(ctx, chatID, "🎉 <b>"+rec.Board+"</b> ("+rec.Source+") is a new board — we'll start crawling it. +1 point!")
+		a.rewardContribution(ctx, userID, rec.ID)
+		a.sendTelegram(ctx, chatID, "🎉 <b>"+rec.Board+"</b> ("+rec.Source+") is a new board — we'll start crawling it. +5 AI credits!")
 	}
 }
