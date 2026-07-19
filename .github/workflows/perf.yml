@@ -69,27 +69,39 @@ jobs:
         if: steps.changes.outputs.relevant == 'true'
         run: docker compose up -d --build
 
-      - name: Wait for API and SSR to be ready
+      - name: Wait for API and search to be ready
         if: steps.changes.outputs.relevant == 'true'
         run: |
           for i in $(seq 1 60); do
             api=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/health || true)
-            web=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8090/ || true)
-            echo "attempt $i: api=$api web=$web"
-            [ "$api" = "200" ] && [ "$web" = "200" ] && exit 0
+            meili=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:7700/health || true)
+            echo "attempt $i: api=$api meili=$meili"
+            [ "$api" = "200" ] && [ "$meili" = "200" ] && exit 0
             sleep 3
           done
-          echo "stack did not become ready"; docker compose logs --tail=100; exit 1
+          echo "API/search did not become ready"; docker compose ps; docker compose logs --tail=100; exit 1
 
       - name: Initialise the search index
-        # The homepage feed reads Meilisearch, so the jobs index must exist even
-        # when empty. reindex builds it from Postgres (here: an empty index).
+        # The homepage feed reads Meilisearch, so the jobs index must exist BEFORE
+        # the SSR homepage is hit — otherwise its search 500s and the frontend
+        # never reports ready. reindex builds it from Postgres (here: empty).
         if: steps.changes.outputs.relevant == 'true'
         env:
           DATABASE_URL: postgres://hire:hire@localhost:5432/hire?sslmode=disable
           MEILI_URL: http://localhost:7700
           MEILI_MASTER_KEY: dev-insecure-meili-key
         run: go run ./cmd/reindex
+
+      - name: Wait for the SSR frontend to render
+        if: steps.changes.outputs.relevant == 'true'
+        run: |
+          for i in $(seq 1 30); do
+            web=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8090/ || true)
+            echo "attempt $i: web=$web"
+            [ "$web" = "200" ] && exit 0
+            sleep 3
+          done
+          echo "SSR frontend did not render"; docker compose ps; docker compose logs --tail=150 web app; exit 1
 
       - name: Create a throwaway user for the authed scenarios
         # A real session exercises the /me + personalized chrome path. Registering
