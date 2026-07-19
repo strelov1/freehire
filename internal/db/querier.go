@@ -1188,7 +1188,7 @@ type Querier interface {
 	// stamps. created_at is deliberately NOT re-bumped on conflict, so it records the
 	// FIRST-analysis time — the fit-analysis quota counts distinct jobs a user first
 	// analyzed within a rolling window, and a recompute must not re-age its row into it.
-	// analysis is the sanitized jobfit.Analysis JSON.
+	// analysis is the sanitized matchanalysis.Analysis JSON.
 	UpsertUserJobAnalysis(ctx context.Context, arg UpsertUserJobAnalysisParams) error
 	// Create-or-replace the user's one profile. The PRIMARY KEY (user_id) makes this an
 	// idempotent upsert: first save inserts, later saves overwrite specializations/skills/

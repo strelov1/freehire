@@ -47,7 +47,7 @@
         const [j, rec, fit] = await Promise.all([
           api.getJob(slug),
           api.getCv(existing),
-          api.getJobFit(slug).catch(() => null),
+          api.getMatchAnalysis(slug).catch(() => null),
         ]);
         job = j;
         cvId = existing;

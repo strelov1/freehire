@@ -153,7 +153,7 @@ func (s *Store) Structured(ctx context.Context, userID int64) (resumeextract.Str
 }
 
 // stampsEqual reports whether two timestamps are both present and equal — the freshness
-// rule for the structured résumé (mirrors the jobfit cache stamp comparison).
+// rule for the structured résumé (mirrors the matchanalysis cache stamp comparison).
 func stampsEqual(a, b pgtype.Timestamptz) bool {
 	return a.Valid && b.Valid && a.Time.Equal(b.Time)
 }

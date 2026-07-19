@@ -150,7 +150,7 @@ type UpsertUserJobAnalysisParams struct {
 // stamps. created_at is deliberately NOT re-bumped on conflict, so it records the
 // FIRST-analysis time — the fit-analysis quota counts distinct jobs a user first
 // analyzed within a rolling window, and a recompute must not re-age its row into it.
-// analysis is the sanitized jobfit.Analysis JSON.
+// analysis is the sanitized matchanalysis.Analysis JSON.
 func (q *Queries) UpsertUserJobAnalysis(ctx context.Context, arg UpsertUserJobAnalysisParams) error {
 	_, err := q.db.Exec(ctx, upsertUserJobAnalysis,
 		arg.UserID,

@@ -3,8 +3,8 @@
   import { ArrowRight, FileText, ScanSearch } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { verdictTone, type Tone } from '$lib/jobFit';
-  import type { JobFitResponse } from '$lib/types';
+  import { verdictTone, type Tone } from '$lib/matchAnalysis';
+  import type { MatchAnalysisResponse } from '$lib/types';
   import { Button } from '$lib/ui';
 
   // A compact fit summary in the Profile-match sidebar: the overall %, verdict, and the
@@ -12,7 +12,7 @@
   // (which runs the live streaming compute). It never computes inline.
   let { slug }: { slug: string } = $props();
 
-  let data = $state<JobFitResponse | null>(null);
+  let data = $state<MatchAnalysisResponse | null>(null);
 
   // Read the cached summary (never runs the model); re-fetch on navigation with a guard
   // so a slow response for a previous job can't overwrite the current one.
@@ -20,7 +20,7 @@
     const forSlug = slug;
     data = null;
     if (!isAuthenticated()) return;
-    api.getJobFit(forSlug)
+    api.getMatchAnalysis(forSlug)
       .then((d) => {
         if (forSlug === slug) data = d;
       })

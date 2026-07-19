@@ -7,11 +7,11 @@
   import { ExternalLink, RefreshCw } from '@lucide/svelte';
   import { api } from '$lib/api';
   import JobDescription from '$lib/components/JobDescription.svelte';
-  import JobFitFull from '$lib/components/JobFitFull.svelte';
+  import MatchAnalysisFull from '$lib/components/MatchAnalysisFull.svelte';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import CvEditor from '$lib/components/cv/CvEditor.svelte';
   import type { Analysis } from '$lib/generated/contracts';
-  import type { Job, JobFitResponse } from '$lib/types';
+  import type { Job, MatchAnalysisResponse } from '$lib/types';
 
   let {
     cvId,
@@ -40,8 +40,8 @@
   // the Edit tab (cvVersion, bumped locally) so the preview never shows a stale render.
   let cvVersion = $state(0);
   const cvUrl = $derived(`${api.cvPdfUrl(cvId)}?v=${refreshKey + cvVersion}`);
-  // Seed JobFitFull from the already-cached analysis so it paints read-only (no recompute burn).
-  const fit = $derived<JobFitResponse>({ has_cv: true, stale: false, analysis });
+  // Seed MatchAnalysisFull from the already-cached analysis so it paints read-only (no recompute burn).
+  const fit = $derived<MatchAnalysisResponse>({ has_cv: true, stale: false, analysis });
 
   function startResize(e: PointerEvent) {
     resizing = true;
@@ -135,7 +135,7 @@
       </div>
     {:else}
       <div class="p-4">
-        <JobFitFull {job} initial={fit} autoRun={false} stacked />
+        <MatchAnalysisFull {job} initial={fit} autoRun={false} stacked />
       </div>
     {/if}
   </div>

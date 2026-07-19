@@ -18,7 +18,7 @@ import (
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/jobfit"
+	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/userprofile"
 )
@@ -48,7 +48,7 @@ func TestListMyAnalysesEndpoint(t *testing.T) {
 		return id
 	}
 	seedAnalysis := func(jobID int64, score int, verdict string, age time.Duration) {
-		blob, _ := json.Marshal(&jobfit.Analysis{OverallScore: score, Verdict: verdict})
+		blob, _ := json.Marshal(&matchanalysis.Analysis{OverallScore: score, Verdict: verdict})
 		if _, err := pool.Exec(ctx,
 			`INSERT INTO user_job_analysis (user_id, job_id, analysis, model, created_at)
 			 VALUES ($1,$2,$3,'model-x', now() - $4::interval)`,
@@ -73,7 +73,7 @@ func TestListMyAnalysesEndpoint(t *testing.T) {
 	h := &API{
 		pool: pool, queries: queries, issuer: iss,
 		userProfile: userprofile.New(ownedProfile()),
-		resume:      store, jobFit: jobfit.NewAnalyzer(nil), jobFitCache: queries,
+		resume:      store, matchAnalysis: matchanalysis.NewAnalyzer(nil), matchAnalysisCache: queries,
 		credits: credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}),
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})

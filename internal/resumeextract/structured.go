@@ -8,7 +8,7 @@ import (
 
 // This file holds ONLY the wire shape (Structured + Experience + Education) and its
 // sanitizer, so cmd/gen-contracts can generate the TypeScript type from this file alone
-// without dragging in the server-only Extractor (mirrors jobfit.go vs analyzer.go).
+// without dragging in the server-only Extractor (mirrors matchanalysis.go vs analyzer.go).
 
 // Field bounds for the untrusted, model-produced structure. Modest on purpose: the
 // structure is a display/summary artifact, not the ground-truth CV text (which the fit
@@ -85,7 +85,7 @@ type Education struct {
 // Sanitize bounds every string, coerces total-years into [0, maxYears], caps each
 // array's cardinality, and drops entries that carry no content. Only the sanitized
 // value is persisted or served, so untrusted CV text cannot inject unbounded or
-// malformed content (the same invariant as enrich/jobfit).
+// malformed content (the same invariant as enrich/matchanalysis).
 func (s *Structured) Sanitize() {
 	s.FullName = clip(s.FullName, maxNameRunes)
 	s.Headline = clip(s.Headline, maxHeadlineRunes)

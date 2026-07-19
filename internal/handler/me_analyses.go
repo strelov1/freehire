@@ -9,7 +9,7 @@ import (
 )
 
 // myAnalysisItem is one row of the Tracking → AI fit tab: a compact projection of a
-// cached fit analysis for listing (not the full jobfit.Analysis). Stale is true when the
+// cached fit analysis for listing (not the full matchanalysis.Analysis). Stale is true when the
 // caller's CV, the job content, or the model changed since the analysis was computed.
 type myAnalysisItem struct {
 	Slug         string    `json:"slug"`
@@ -54,11 +54,11 @@ func (a *API) ListMyAnalyses(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	rows, err := a.jobFitCache.ListUserJobAnalyses(c.Context(), userID)
+	rows, err := a.matchAnalysisCache.ListUserJobAnalyses(c.Context(), userID)
 	if err != nil {
 		return err
 	}
 	cvUploadedAt, _ := a.cvUploadedAt(c, userID)
-	items := buildAnalysisItems(rows, cvUploadedAt, a.jobFit.ModelID())
+	items := buildAnalysisItems(rows, cvUploadedAt, a.matchAnalysis.ModelID())
 	return c.JSON(fiber.Map{"data": items, "meta": fiber.Map{"credits": a.creditsBalance(c.Context(), userID)}})
 }

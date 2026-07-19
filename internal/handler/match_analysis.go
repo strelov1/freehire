@@ -14,7 +14,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/jobfit"
+	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/jobmatch"
 )
 
@@ -29,32 +29,32 @@ func creditsError(c *fiber.Ctx, bal credits.Balance) error {
 	})
 }
 
-// jobFitStore reads/writes the per-(user, job) cached fit analysis. *db.Queries satisfies
+// matchAnalysisStore reads/writes the per-(user, job) cached fit analysis. *db.Queries satisfies
 // it; a fake backs the DB-less handler tests.
-type jobFitStore interface {
+type matchAnalysisStore interface {
 	GetUserJobAnalysis(ctx context.Context, arg db.GetUserJobAnalysisParams) (db.GetUserJobAnalysisRow, error)
 	UpsertUserJobAnalysis(ctx context.Context, arg db.UpsertUserJobAnalysisParams) error
 	ListUserJobAnalyses(ctx context.Context, userID int64) ([]db.ListUserJobAnalysesRow, error)
 }
 
-// jobFitResponse is the wire shape for the LLM fit analysis. HasCV is false when the
+// matchAnalysisResponse is the wire shape for the LLM fit analysis. HasCV is false when the
 // caller has no stored CV — the SPA then prompts an upload instead of an empty report.
 // Stale marks a cached analysis whose CV or job changed since (the SPA offers a
 // recompute); Analysis is nil when none is cached or the LLM is unconfigured. Credits is
 // set on reads (GET) so the SPA can show the points balance and pre-block a new-job
 // analysis; it is omitted on the compute responses.
-type jobFitResponse struct {
+type matchAnalysisResponse struct {
 	HasCV    bool             `json:"has_cv"`
 	Stale    bool             `json:"stale"`
-	Analysis *jobfit.Analysis `json:"analysis"`
+	Analysis *matchanalysis.Analysis `json:"analysis"`
 	Credits  *credits.Balance `json:"credits,omitempty"`
 }
 
-// GetJobFit serves the cached fit analysis for one of the caller's jobs, never calling
+// GetMatchAnalysis serves the cached fit analysis for one of the caller's jobs, never calling
 // the LLM. It returns the cached analysis (flagged stale when the CV or job changed
 // since it was computed), or a null analysis when none is cached. Cookie or API key;
 // an unknown slug is a 404. has_cv=false (no LLM ever) when no CV is stored.
-func (a *API) GetJobFit(c *fiber.Ctx) error {
+func (a *API) GetMatchAnalysis(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -66,29 +66,29 @@ func (a *API) GetJobFit(c *fiber.Ctx) error {
 	cvUploadedAt, hasCV := a.cvUploadedAt(c, userID)
 	if !hasCV {
 		// No CV means no analysis is possible, so usage is moot — skip the count query.
-		return c.JSON(fiber.Map{"data": jobFitResponse{HasCV: false}})
+		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: false}})
 	}
 	bal := a.creditsBalance(c.Context(), userID)
-	row, err := a.jobFitCache.GetUserJobAnalysis(c.Context(), db.GetUserJobAnalysisParams{UserID: userID, JobID: job.ID})
+	row, err := a.matchAnalysisCache.GetUserJobAnalysis(c.Context(), db.GetUserJobAnalysisParams{UserID: userID, JobID: job.ID})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return c.JSON(fiber.Map{"data": jobFitResponse{HasCV: true, Credits: bal}})
+		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true, Credits: bal}})
 	}
 	if err != nil {
 		return err
 	}
 	analysis := decodeAnalysis(row.Analysis)
 	if analysis == nil {
-		return c.JSON(fiber.Map{"data": jobFitResponse{HasCV: true, Credits: bal}})
+		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true, Credits: bal}})
 	}
-	stale := !stampsFresh(row, cvUploadedAt, job.ContentHash, a.jobFit.ModelID())
-	return c.JSON(fiber.Map{"data": jobFitResponse{HasCV: true, Stale: stale, Analysis: analysis, Credits: bal}})
+	stale := !stampsFresh(row, cvUploadedAt, job.ContentHash, a.matchAnalysis.ModelID())
+	return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true, Stale: stale, Analysis: analysis, Credits: bal}})
 }
 
-// PostJobFit runs the three-stage fit prompt-chain over the caller's stored CV and the
+// PostMatchAnalysis runs the three-stage fit prompt-chain over the caller's stored CV and the
 // job, caches the result per (user, job), and returns it fresh. Best-effort: an
 // unconfigured or failing LLM returns has_cv with a null analysis (200) and caches
 // nothing. Cookie or API key; unknown slug 404; has_cv=false when no CV is stored.
-func (a *API) PostJobFit(c *fiber.Ctx) error {
+func (a *API) PostMatchAnalysis(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -102,7 +102,7 @@ func (a *API) PostJobFit(c *fiber.Ctx) error {
 		return err
 	}
 	if !hasCV {
-		return c.JSON(fiber.Map{"data": jobFitResponse{HasCV: false}})
+		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: false}})
 	}
 	// Gate on points before touching the LLM: a new job needs at least the match cost, a
 	// recompute of an already-analyzed job is always free. Only new analyses are charged,
@@ -127,7 +127,7 @@ func (a *API) PostJobFit(c *fiber.Ctx) error {
 	// dimension; a missing profile is tolerated (zero value → empty skills/preferences).
 	profile, _ := a.userProfile.Get(c.Context(), userID)
 
-	analysis, err := a.jobFit.Analyze(c.Context(), jobfit.Input{
+	analysis, err := a.matchAnalysis.Analyze(c.Context(), matchanalysis.Input{
 		JobTitle:            job.Title,
 		JobDescription:      job.Description,
 		CompanyInfo:         a.companyInfo(c, job.CompanySlug),
@@ -143,18 +143,18 @@ func (a *API) PostJobFit(c *fiber.Ctx) error {
 	})
 	if err != nil {
 		// Best-effort: log (never the CV/job text) and serve no analysis.
-		log.Printf("jobfit: analyze failed for user %d job %d: %v", userID, job.ID, err)
-		return c.JSON(fiber.Map{"data": jobFitResponse{HasCV: true}})
+		log.Printf("matchanalysis: analyze failed for user %d job %d: %v", userID, job.ID, err)
+		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true}})
 	}
 	if analysis == nil {
 		// LLM unconfigured — nothing to cache.
-		return c.JSON(fiber.Map{"data": jobFitResponse{HasCV: true}})
+		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true}})
 	}
 	a.cacheAnalysis(c.Context(), userID, job, cvUploadedAt, analysis)
 	if isNew {
 		a.debitMatch(c.Context(), userID, job.ID)
 	}
-	return c.JSON(fiber.Map{"data": jobFitResponse{HasCV: true, Stale: false, Analysis: analysis}})
+	return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true, Stale: false, Analysis: analysis}})
 }
 
 // creditsBalance reports the caller's current points, or nil on a DB error (logged).
@@ -173,7 +173,7 @@ func (a *API) creditsBalance(ctx context.Context, userID int64) *credits.Balance
 // analysis of that job — i.e. no cached row exists. A recompute (row present) is free and
 // never charged, so a legacy analysis cached before credits shipped re-runs for free.
 func (a *API) matchIsNew(ctx context.Context, userID, jobID int64) (bool, error) {
-	_, err := a.jobFitCache.GetUserJobAnalysis(ctx, db.GetUserJobAnalysisParams{UserID: userID, JobID: jobID})
+	_, err := a.matchAnalysisCache.GetUserJobAnalysis(ctx, db.GetUserJobAnalysisParams{UserID: userID, JobID: jobID})
 	if err == nil {
 		return false, nil
 	}
@@ -197,20 +197,20 @@ func (a *API) debitMatch(ctx context.Context, userID, jobID int64) {
 // content hash, and the model that produced it. It takes a plain context (not the fiber
 // ctx) so the SSE stream can cache after the request handler has returned. Best-effort:
 // a cache failure is logged, not surfaced.
-func (a *API) cacheAnalysis(ctx context.Context, userID int64, job db.Job, cvUploadedAt *time.Time, analysis *jobfit.Analysis) {
+func (a *API) cacheAnalysis(ctx context.Context, userID int64, job db.Job, cvUploadedAt *time.Time, analysis *matchanalysis.Analysis) {
 	blob, err := json.Marshal(analysis)
 	if err != nil {
 		return
 	}
-	if err := a.jobFitCache.UpsertUserJobAnalysis(ctx, db.UpsertUserJobAnalysisParams{
+	if err := a.matchAnalysisCache.UpsertUserJobAnalysis(ctx, db.UpsertUserJobAnalysisParams{
 		UserID:         userID,
 		JobID:          job.ID,
 		Analysis:       blob,
-		Model:          a.jobFit.ModelID(),
+		Model:          a.matchAnalysis.ModelID(),
 		CvUploadedAt:   tsFromPtr(cvUploadedAt),
 		JobContentHash: job.ContentHash,
 	}); err != nil {
-		log.Printf("jobfit: cache analysis for user %d job %d: %v", userID, job.ID, err)
+		log.Printf("matchanalysis: cache analysis for user %d job %d: %v", userID, job.ID, err)
 	}
 }
 
@@ -294,11 +294,11 @@ func sameText(stored, live pgtype.Text) bool {
 
 // decodeAnalysis unmarshals a cached analysis blob, returning nil on empty/corrupt data
 // (treated as "no analysis" — the caller re-offers a compute).
-func decodeAnalysis(blob []byte) *jobfit.Analysis {
+func decodeAnalysis(blob []byte) *matchanalysis.Analysis {
 	if len(blob) == 0 {
 		return nil
 	}
-	var a jobfit.Analysis
+	var a matchanalysis.Analysis
 	if err := json.Unmarshal(blob, &a); err != nil {
 		return nil
 	}

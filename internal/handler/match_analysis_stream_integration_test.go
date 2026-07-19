@@ -19,7 +19,7 @@ import (
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/jobfit"
+	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/userprofile"
@@ -39,7 +39,7 @@ func sseEvents(t *testing.T, body string) []string {
 	return names
 }
 
-func TestJobFitStreamEndpoint(t *testing.T) {
+func TestMatchAnalysisStreamEndpoint(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
 	queries := db.New(pool)
@@ -67,15 +67,15 @@ func TestJobFitStreamEndpoint(t *testing.T) {
 		return s
 	}
 
-	appFor := func(store *resume.Store, an *jobfit.Analyzer) *fiber.App {
+	appFor := func(store *resume.Store, an *matchanalysis.Analyzer) *fiber.App {
 		h := &API{
 			pool: pool, queries: queries, issuer: iss,
 			userProfile: userprofile.New(ownedProfile()),
-			resume:      store, jobFit: an, jobFitCache: queries,
+			resume:      store, matchAnalysis: an, matchAnalysisCache: queries,
 			credits: credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}),
 		}
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-		app.Get("/api/v1/jobs/:slug/fit/stream", auth.RequireAuth(iss), h.StreamJobFit)
+		app.Get("/api/v1/jobs/:slug/fit/stream", auth.RequireAuth(iss), h.StreamMatchAnalysis)
 		return app
 	}
 
@@ -101,14 +101,14 @@ func TestJobFitStreamEndpoint(t *testing.T) {
 	}
 
 	t.Run("unauthenticated is 401", func(t *testing.T) {
-		if status, _ := get(t, appFor(storeWithCV(), jobfit.NewAnalyzer(nil)), ""); status != fiber.StatusUnauthorized {
+		if status, _ := get(t, appFor(storeWithCV(), matchanalysis.NewAnalyzer(nil)), ""); status != fiber.StatusUnauthorized {
 			t.Errorf("status = %d, want 401", status)
 		}
 	})
 
 	t.Run("streams ordered events and caches", func(t *testing.T) {
 		model := &fitModel{resp: []string{fitStage1, fitStage2, fitStage3}}
-		app := appFor(storeWithCV(), jobfit.NewAnalyzer(llm.NewWithModel(model)))
+		app := appFor(storeWithCV(), matchanalysis.NewAnalyzer(llm.NewWithModel(model)))
 		status, body := get(t, app, token)
 		if status != fiber.StatusOK {
 			t.Fatalf("status = %d, want 200", status)
@@ -134,7 +134,7 @@ func TestJobFitStreamEndpoint(t *testing.T) {
 	})
 
 	t.Run("no CV closes after meta", func(t *testing.T) {
-		app := appFor(resume.New(newFakeResumeBlobs(), &fakeResumeRepo{}), jobfit.NewAnalyzer(nil))
+		app := appFor(resume.New(newFakeResumeBlobs(), &fakeResumeRepo{}), matchanalysis.NewAnalyzer(nil))
 		_, body := get(t, app, token)
 		names := sseEvents(t, body)
 		if len(names) != 1 || names[0] != "meta" {

@@ -3,7 +3,7 @@
 // tone, the ATS requirement-status → label + tone, and the SSE stream reducer. The wire
 // shapes come from the Go contract.
 
-import type { JobFitAnalysis, JobFitRequirement } from './types';
+import type { MatchAnalysis, MatchRequirement } from './types';
 
 /** A colour tone bucket the component maps to Tailwind classes. */
 export type Tone = 'strong' | 'good' | 'moderate' | 'weak' | 'poor';
@@ -39,11 +39,11 @@ export function requirementStatusMeta(status: string): { label: string; tone: To
 
 // ── SSE stream state ────────────────────────────────────────────────────────────
 // The page consumes the fit stream (server-sent events) and folds each event into this
-// state via reduceFitEvent — pure and DOM-free so the accumulation is unit-tested.
+// state via reduceMatchEvent — pure and DOM-free so the accumulation is unit-tested.
 
 export type StageState = 'pending' | 'active' | 'done';
 
-export interface FitStage {
+export interface MatchStage {
   n: number;
   label: string;
   state: StageState;
@@ -51,18 +51,18 @@ export interface FitStage {
 
 /** The full page state built up from the SSE stream. `analysis` holds the interim
  *  post-Stage-2 verdict, then the audited final; `done`/`error` are terminal. */
-export interface FitStreamState {
+export interface MatchStreamState {
   hasCV: boolean;
-  stages: FitStage[];
+  stages: MatchStage[];
   thinking: string;
-  requirements: JobFitRequirement[];
-  analysis: JobFitAnalysis | null;
+  requirements: MatchRequirement[];
+  analysis: MatchAnalysis | null;
   done: boolean;
   error: string | null;
 }
 
 /** The three stages in fixed order, all pending. */
-export function initFitStream(): FitStreamState {
+export function initMatchStream(): MatchStreamState {
   return {
     hasCV: true,
     stages: [
@@ -80,7 +80,7 @@ export function initFitStream(): FitStreamState {
 
 /** Fold one SSE event (its name + parsed JSON data) into the stream state, returning a
  *  new state (never mutates the input). Unknown events are ignored. */
-export function reduceFitEvent(prev: FitStreamState, name: string, data: unknown): FitStreamState {
+export function reduceMatchEvent(prev: MatchStreamState, name: string, data: unknown): MatchStreamState {
   const s = { ...prev, stages: prev.stages.map((x) => ({ ...x })) };
   const d = (data ?? {}) as Record<string, unknown>;
   switch (name) {
@@ -97,13 +97,13 @@ export function reduceFitEvent(prev: FitStreamState, name: string, data: unknown
       s.thinking = prev.thinking + String(d.thinking ?? '');
       return s;
     case 'requirements':
-      s.requirements = (d.requirements as JobFitRequirement[]) ?? [];
+      s.requirements = (d.requirements as MatchRequirement[]) ?? [];
       return s;
     case 'dimensions':
-      s.analysis = (d.analysis as JobFitAnalysis) ?? prev.analysis;
+      s.analysis = (d.analysis as MatchAnalysis) ?? prev.analysis;
       return s;
     case 'final':
-      s.analysis = (d.analysis as JobFitAnalysis) ?? prev.analysis;
+      s.analysis = (d.analysis as MatchAnalysis) ?? prev.analysis;
       s.done = true;
       s.stages = s.stages.map((x) => ({ ...x, state: 'done' as StageState }));
       return s;
@@ -116,7 +116,7 @@ export function reduceFitEvent(prev: FitStreamState, name: string, data: unknown
   }
 }
 
-function setStage(s: FitStreamState, n: number, state: StageState) {
+function setStage(s: MatchStreamState, n: number, state: StageState) {
   const stage = s.stages.find((x) => x.n === n);
   if (stage) stage.state = state;
 }

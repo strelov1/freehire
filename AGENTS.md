@@ -63,7 +63,7 @@ internal/
   jobview/           single public wire shape of a job, projected from Job aggregate
   normalize/         slug normalization
   companyname/       resolves real display names for slug-named companies (see companyname/AGENTS.md)
-  jobfit/            AI fit analysis: three-stage LLM prompt-chain (see jobfit/AGENTS.md)
+  matchanalysis/     AI match analysis: three-stage LLM prompt-chain (see matchanalysis/AGENTS.md)
   resumeextract/     structured résumé extraction from stored CV (see resumeextract/AGENTS.md)
   userjob/           per-user job tracking (see userjob/AGENTS.md)
   classify/          seniority/category tagging from job title (see classify/AGENTS.md)
@@ -122,7 +122,7 @@ For the full architecture and conventions, see the **module files** below. Each 
 |---|---|
 | **Enrichment** (Enrichment contract, controlled vocabularies, LLM Provider) | [internal/enrich/AGENTS.md](internal/enrich/AGENTS.md) |
 | **Semantic embedding** (semantic_outbox, incremental embeds, reconciler) | [internal/embed/AGENTS.md](internal/embed/AGENTS.md) |
-| **AI fit analysis** (three-stage LLM prompt-chain, score, verdict, stream) | [internal/jobfit/AGENTS.md](internal/jobfit/AGENTS.md) |
+| **AI fit analysis** (three-stage LLM prompt-chain, score, verdict, stream) | [internal/matchanalysis/AGENTS.md](internal/matchanalysis/AGENTS.md) |
 | **Structured résumé** (LLM parse of stored CV, stamp-and-compare) | [internal/resumeextract/AGENTS.md](internal/resumeextract/AGENTS.md) |
 
 ### Dictionary facets

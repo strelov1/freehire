@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { verdictTone, requirementStatusMeta, initFitStream, reduceFitEvent } from './jobFit';
+import { verdictTone, requirementStatusMeta, initMatchStream, reduceMatchEvent } from './matchAnalysis';
 
 describe('verdictTone', () => {
   it('buckets scores on the backend thresholds', () => {
@@ -29,41 +29,41 @@ describe('requirementStatusMeta', () => {
   });
 });
 
-describe('reduceFitEvent', () => {
+describe('reduceMatchEvent', () => {
   it('folds a full stream: meta → stages → sections → final', () => {
-    let s = initFitStream();
-    s = reduceFitEvent(s, 'meta', { has_cv: true });
-    s = reduceFitEvent(s, 'stage_start', { stage: 1 });
+    let s = initMatchStream();
+    s = reduceMatchEvent(s, 'meta', { has_cv: true });
+    s = reduceMatchEvent(s, 'stage_start', { stage: 1 });
     expect(s.stages[0]?.state).toBe('active');
-    s = reduceFitEvent(s, 'thinking', { stage: 1, thinking: 'The ' });
-    s = reduceFitEvent(s, 'thinking', { stage: 1, thinking: 'candidate' });
+    s = reduceMatchEvent(s, 'thinking', { stage: 1, thinking: 'The ' });
+    s = reduceMatchEvent(s, 'thinking', { stage: 1, thinking: 'candidate' });
     expect(s.thinking).toBe('The candidate');
-    s = reduceFitEvent(s, 'requirements', { requirements: [{ text: 'Go', priority: 'required', status: 'covered', evidence: '' }] });
+    s = reduceMatchEvent(s, 'requirements', { requirements: [{ text: 'Go', priority: 'required', status: 'covered', evidence: '' }] });
     expect(s.requirements).toHaveLength(1);
-    s = reduceFitEvent(s, 'stage_done', { stage: 1 });
+    s = reduceMatchEvent(s, 'stage_done', { stage: 1 });
     expect(s.stages[0]?.state).toBe('done');
-    s = reduceFitEvent(s, 'dimensions', { analysis: { overall_score: 50, verdict: 'Moderate Fit', dimensions: [], requirement_match: [], strengths: [], gaps: [], recommendation: '' } });
+    s = reduceMatchEvent(s, 'dimensions', { analysis: { overall_score: 50, verdict: 'Moderate Fit', dimensions: [], requirement_match: [], strengths: [], gaps: [], recommendation: '' } });
     expect(s.analysis?.overall_score).toBe(50);
-    s = reduceFitEvent(s, 'final', { analysis: { overall_score: 71, verdict: 'Good Fit', dimensions: [], requirement_match: [], strengths: [], gaps: [], recommendation: 'Apply.' } });
+    s = reduceMatchEvent(s, 'final', { analysis: { overall_score: 71, verdict: 'Good Fit', dimensions: [], requirement_match: [], strengths: [], gaps: [], recommendation: 'Apply.' } });
     expect(s.done).toBe(true);
     expect(s.analysis?.overall_score).toBe(71);
     expect(s.stages.every((x) => x.state === 'done')).toBe(true);
   });
 
   it('records has_cv=false from meta', () => {
-    const s = reduceFitEvent(initFitStream(), 'meta', { has_cv: false });
+    const s = reduceMatchEvent(initMatchStream(), 'meta', { has_cv: false });
     expect(s.hasCV).toBe(false);
   });
 
   it('captures an error event as terminal', () => {
-    const s = reduceFitEvent(initFitStream(), 'stream_error', { message: 'boom' });
+    const s = reduceMatchEvent(initMatchStream(), 'stream_error', { message: 'boom' });
     expect(s.error).toBe('boom');
     expect(s.done).toBe(true);
   });
 
   it('does not mutate the previous state', () => {
-    const prev = initFitStream();
-    const next = reduceFitEvent(prev, 'stage_start', { stage: 1 });
+    const prev = initMatchStream();
+    const next = reduceMatchEvent(prev, 'stage_start', { stage: 1 });
     expect(prev.stages[0]?.state).toBe('pending');
     expect(next).not.toBe(prev);
   });

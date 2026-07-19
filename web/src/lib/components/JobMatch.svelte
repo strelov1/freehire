@@ -8,7 +8,7 @@
   import { profileStore } from '$lib/profile.svelte';
   import type { Job, JobMatch } from '$lib/types';
   import { Button } from '$lib/ui';
-  import JobFitAnalysis from './JobFitAnalysis.svelte';
+  import MatchSummary from './MatchSummary.svelte';
 
   // The job is server-rendered; only this personal signal hydrates client-side.
   let { job }: { job: Job } = $props();
@@ -144,7 +144,7 @@
 
     <!-- The deterministic bar above is instant and free; the LLM deep-dive is opt-in
          below it, computed only on an explicit action and cached per (user, job). -->
-    <JobFitAnalysis slug={job.public_slug} />
+    <MatchSummary slug={job.public_slug} />
   {:else}
     <!-- Skeleton: the profile is still loading, or the match is in flight (ready but
          not yet fetched). A signed-in profiled viewer never sees the locked teaser. -->

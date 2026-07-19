@@ -4,7 +4,7 @@
 import type {
   Job,
   Report as ATSReportContract,
-  Analysis as JobFitAnalysisContract,
+  Analysis as MatchAnalysisContract,
 } from './generated/contracts';
 export type { Job, Enrichment, Verdict, Gap, SkillRow } from './generated/contracts';
 // Per-job profile match (how well a job's skills are covered by the caller's profile).
@@ -25,18 +25,18 @@ export interface ATSResponse {
 }
 
 // The on-demand LLM job-fit analysis wire shapes (five scored dimensions + the
-// ATS-style requirement match), generated from internal/jobfit.
+// ATS-style requirement match), generated from internal/matchanalysis.
 export type {
-  Analysis as JobFitAnalysis,
-  Dimension as JobFitDimension,
-  Requirement as JobFitRequirement,
+  Analysis as MatchAnalysis,
+  Dimension as MatchDimension,
+  Requirement as MatchRequirement,
 } from './generated/contracts';
 
 /** The caller's AI-credits balance. Present on GET reads (with a CV); `remaining` is the
  *  points left this month and `resets_at` the ISO date the monthly grant renews. A new-job
  *  analysis is blocked when `remaining` is 0; a recompute of an already-analysed job is
  *  always free. */
-export interface JobFitCredits {
+export interface AiCredits {
   remaining: number;
   resets_at: string;
 }
@@ -46,11 +46,11 @@ export interface JobFitCredits {
  *  is unconfigured; `stale` marks a cached analysis whose CV or job changed since (the
  *  block then offers a recompute); `credits` reports the points balance on reads (omitted
  *  on the no-CV read and on compute responses). */
-export interface JobFitResponse {
+export interface MatchAnalysisResponse {
   has_cv: boolean;
   stale: boolean;
-  analysis: JobFitAnalysisContract | null;
-  credits?: JobFitCredits;
+  analysis: MatchAnalysisContract | null;
+  credits?: AiCredits;
 }
 
 /** One row of the Tracking → AI fit tab: a compact projection of a cached fit analysis

@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/jobfit"
+	"github.com/strelov1/freehire/internal/matchanalysis"
 )
 
 func TestBuildAnalysisItems(t *testing.T) {
@@ -16,7 +16,7 @@ func TestBuildAnalysisItems(t *testing.T) {
 	ts := func(tm time.Time) pgtype.Timestamptz { return pgtype.Timestamptz{Time: tm, Valid: true} }
 	txt := func(s string) pgtype.Text { return pgtype.Text{String: s, Valid: true} }
 	blob := func(score int, verdict string) []byte {
-		b, _ := json.Marshal(&jobfit.Analysis{OverallScore: score, Verdict: verdict})
+		b, _ := json.Marshal(&matchanalysis.Analysis{OverallScore: score, Verdict: verdict})
 		return b
 	}
 

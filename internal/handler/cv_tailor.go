@@ -16,7 +16,7 @@ import (
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/jobfit"
+	"github.com/strelov1/freehire/internal/matchanalysis"
 )
 
 // tailoringKeyTTL bounds how long the minted CLI credential is valid. A tailoring session is
@@ -62,7 +62,7 @@ type tailorCVRequest struct {
 type tailorCVResponse struct {
 	TailorCVID int64            `json:"tailor_cv_id"`
 	BaseCVID   int64            `json:"base_cv_id"`
-	Analysis   *jobfit.Analysis `json:"analysis"`
+	Analysis   *matchanalysis.Analysis `json:"analysis"`
 	CLIToken   string           `json:"cli_token"`
 }
 
@@ -205,9 +205,9 @@ type tailorContextResponse struct {
 	Verdict        string               `json:"verdict"`
 	OverallScore   int                  `json:"overall_score"`
 	Recommendation string               `json:"recommendation"`
-	Dimensions     []jobfit.Dimension   `json:"dimensions"`
-	MissingHave    []jobfit.Requirement `json:"missing_have"`
-	MissingGap     []jobfit.Requirement `json:"missing_gap"`
+	Dimensions     []matchanalysis.Dimension   `json:"dimensions"`
+	MissingHave    []matchanalysis.Requirement `json:"missing_have"`
+	MissingGap     []matchanalysis.Requirement `json:"missing_gap"`
 	Strengths      []string             `json:"strengths"`
 	Gaps           []string             `json:"gaps"`
 }
@@ -245,8 +245,8 @@ func (a *API) TailorContext(c *fiber.Ctx) error {
 // cachedAnalysis loads the cached fit analysis for (user, job), or a 409 telling the caller to
 // run the fit analysis first when none is cached (or the cached blob is empty/corrupt). It
 // never recomputes.
-func (a *API) cachedAnalysis(c *fiber.Ctx, userID, jobID int64) (*jobfit.Analysis, error) {
-	row, err := a.jobFitCache.GetUserJobAnalysis(c.Context(), db.GetUserJobAnalysisParams{UserID: userID, JobID: jobID})
+func (a *API) cachedAnalysis(c *fiber.Ctx, userID, jobID int64) (*matchanalysis.Analysis, error) {
+	row, err := a.matchAnalysisCache.GetUserJobAnalysis(c.Context(), db.GetUserJobAnalysisParams{UserID: userID, JobID: jobID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fiber.NewError(fiber.StatusConflict, "run the fit analysis first")
 	}
@@ -262,13 +262,13 @@ func (a *API) cachedAnalysis(c *fiber.Ctx, userID, jobID int64) (*jobfit.Analysi
 
 // tailorContext projects an analysis + its vacancy to the agent's reasoning context, splitting
 // requirements into the reframe-able (missing-have) and the genuine gaps (missing-gap).
-func tailorContext(a *jobfit.Analysis, job db.Job) tailorContextResponse {
-	var have, gap []jobfit.Requirement
+func tailorContext(a *matchanalysis.Analysis, job db.Job) tailorContextResponse {
+	var have, gap []matchanalysis.Requirement
 	for _, r := range a.RequirementMatch {
 		switch r.Status {
-		case jobfit.StatusMissingHave:
+		case matchanalysis.StatusMissingHave:
 			have = append(have, r)
-		case jobfit.StatusMissingGap:
+		case matchanalysis.StatusMissingGap:
 			gap = append(gap, r)
 		}
 	}

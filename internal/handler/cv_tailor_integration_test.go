@@ -23,7 +23,7 @@ import (
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/jobfit"
+	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/resumeextract"
 )
@@ -41,7 +41,7 @@ func newTailorAPI(t *testing.T) (*API, *auth.Issuer) {
 	h := &API{pool: pool, queries: queries, issuer: iss,
 		cvStore:     cv.NewStore(cv.NewQueriesRepository(queries)),
 		resume:      resume.New(nil, resume.NewQueriesRepository(queries)),
-		jobFitCache: queries,
+		matchAnalysisCache: queries,
 		credits:     credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}),
 	}
 	return h, iss
@@ -93,12 +93,12 @@ func seedJobSlug(t *testing.T, h *API, slug string) int64 {
 
 func seedAnalysis(t *testing.T, h *API, userID, jobID int64) {
 	t.Helper()
-	blob, _ := json.Marshal(&jobfit.Analysis{
+	blob, _ := json.Marshal(&matchanalysis.Analysis{
 		Verdict: "Good Fit", OverallScore: 72, Recommendation: "Lead with Go depth.",
-		Dimensions: []jobfit.Dimension{{Key: "skills", Label: "Skills", Score: 70, Comment: "solid"}},
-		RequirementMatch: []jobfit.Requirement{
-			{Text: "Kubernetes", Priority: "required", Status: jobfit.StatusMissingGap, Evidence: "absent"},
-			{Text: "Go", Priority: "required", Status: jobfit.StatusMissingHave, Evidence: "in profile"},
+		Dimensions: []matchanalysis.Dimension{{Key: "skills", Label: "Skills", Score: 70, Comment: "solid"}},
+		RequirementMatch: []matchanalysis.Requirement{
+			{Text: "Kubernetes", Priority: "required", Status: matchanalysis.StatusMissingGap, Evidence: "absent"},
+			{Text: "Go", Priority: "required", Status: matchanalysis.StatusMissingHave, Evidence: "in profile"},
 			{Text: "REST", Priority: "preferred", Status: "covered", Evidence: "bullet 1"},
 		},
 		Strengths: []string{"Go depth"}, Gaps: []string{"K8s"},

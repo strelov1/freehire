@@ -9,7 +9,7 @@ Svelte SPA under `web/` consuming the freehire API (same-origin; Vite proxy forw
 - OAuth buttons render from `GET /api/v1/auth/oauth/providers` (lists enabled providers). OAuth callbacks 302 back to the SPA; failures 302 with `?auth_error=oauth`, never JSON.
 - `stage` in job tracking mirrors the backend controlled vocabulary (`internal/userjob/stages.go`): applied/screening/responded/interview/offer/accepted/rejected/withdrawn.
 - The SPA records a view silently when a signed-in user opens a job — failure is swallowed and must not break the page.
-- `JobFitAnalysis.svelte` is a compact summary (overall % + verdict + top gap) linking to the full `/jobs/[slug]/fit/` page; it never computes inline.
+- `MatchSummary.svelte` is a compact summary (overall % + verdict + top gap) linking to the full `/match/[slug]/` page; it never computes inline.
 - `ResumeStructuredView.svelte` is read-only — the structured resume is display-only, never editable.
 - Sentry is gated on `PUBLIC_SENTRY_DSN` (+ `PUBLIC_SENTRY_ENVIRONMENT`); source map upload only when `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT` are set (build succeeds without them).
 - PostHog product analytics is gated on `PUBLIC_POSTHOG_KEY` (inert without it — no init, no events); ingestion goes through the same-origin `/ingest` reverse proxy (nginx → `eu.i.posthog.com`), overridable via `PUBLIC_POSTHOG_HOST` (default `/ingest`). Both are injected by `freehire-ops`, never committed, and unset in dev.
@@ -19,7 +19,7 @@ The SPA is built with SvelteKit and consumes the API at `/api/v1/*`. Auth is han
 
 **Auth surface:** `register`/`login`/`logout`/`me` endpoints set and clear the session cookie. OAuth sign-in buttons are driven by the `/api/v1/auth/oauth/providers` list. The callback flow redirects back to the SPA on success or with `?auth_error=oauth` on failure.
 
-**Job-fit analysis page** (`web/src/routes/jobs/[slug]/fit/`): `+page.server.ts` SSRs a fresh cached analysis for an instant paint; otherwise the page opens an `EventSource` and renders a stepper + a thinking panel + progressive sections. The pure SSE reducer `reduceFitEvent` lives in `web/src/lib/jobFit.ts` (unit-tested). `JobFitAnalysis.svelte` (`web/src/lib/components/`) is the compact sidebar summary that links to the full page — it never computes inline.
+**Job-fit analysis page** (`web/src/routes/match/[slug]/`): `+page.server.ts` SSRs a fresh cached analysis for an instant paint; otherwise the page opens an `EventSource` and renders a stepper + a thinking panel + progressive sections. The pure SSE reducer `reduceMatchEvent` lives in `web/src/lib/matchAnalysis.ts` (unit-tested). `MatchSummary.svelte` (`web/src/lib/components/`) is the compact sidebar summary that links to the full page — it never computes inline.
 
 **Structured resume** (`ResumeStructuredView.svelte`): rendered read-only in the profile's readiness tab. The backend serves it from `GET /api/v1/me/resume` (the `structured` field, null when absent/stale/unconfigured).
 

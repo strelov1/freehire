@@ -45,8 +45,8 @@ import type {
   Verdict,
   ATSResponse,
   JobMatch,
-  JobFitResponse,
-  JobFitCredits,
+  MatchAnalysisResponse,
+  AiCredits,
   MyAnalysisItem,
   ResumeProfile,
   ResumeMeta,
@@ -295,21 +295,21 @@ export function createApi(
   /** The cached LLM fit analysis for a job (never runs the model). `has_cv` is false
    *  when no CV is stored; `analysis` is null when none is cached yet; `stale` marks a
    *  cached analysis whose CV or job changed since. Safe to call on expand. */
-  async function getJobFit(slug: string): Promise<JobFitResponse> {
-    return requestData<JobFitResponse>(`/api/v1/jobs/${slug}/fit`);
+  async function getMatchAnalysis(slug: string): Promise<MatchAnalysisResponse> {
+    return requestData<MatchAnalysisResponse>(`/api/v1/jobs/${slug}/match-analysis`);
   }
 
   /** Run the three-stage fit prompt-chain over the caller's CV and this job, cache it
    *  per (user, job), and return it fresh. Bound to the explicit compute/recompute
    *  action. With no LLM configured this returns `has_cv` with a null analysis. */
-  async function runJobFit(slug: string): Promise<JobFitResponse> {
-    return requestData<JobFitResponse>(`/api/v1/jobs/${slug}/fit`, { method: 'POST' });
+  async function runMatchAnalysis(slug: string): Promise<MatchAnalysisResponse> {
+    return requestData<MatchAnalysisResponse>(`/api/v1/jobs/${slug}/match-analysis`, { method: 'POST' });
   }
 
   /** The same-origin URL for the fit SSE stream — the fit page opens an EventSource on
    *  it (EventSource takes a URL, not our fetch wrapper; the session cookie rides along). */
-  function jobFitStreamUrl(slug: string): string {
-    return `${baseUrl}/api/v1/jobs/${slug}/fit/stream`;
+  function matchAnalysisStreamUrl(slug: string): string {
+    return `${baseUrl}/api/v1/jobs/${slug}/match-analysis/stream`;
   }
 
   /** Full-text search over jobs. `facets` carries the query text and any facet
@@ -648,8 +648,8 @@ export function createApi(
 
   /** The jobs the current user has run the AI fit analysis on (newest first), plus their
    *  AI-credits balance — powers the Tracking → AI fit tab. Never triggers the LLM. */
-  async function myAnalyses(): Promise<{ items: MyAnalysisItem[]; credits: JobFitCredits | null }> {
-    const res = await request<{ data: MyAnalysisItem[]; meta: { credits: JobFitCredits | null } }>(
+  async function myAnalyses(): Promise<{ items: MyAnalysisItem[]; credits: AiCredits | null }> {
+    const res = await request<{ data: MyAnalysisItem[]; meta: { credits: AiCredits | null } }>(
       '/api/v1/me/tracking/analyses',
     );
     return { items: res.data, credits: res.meta.credits };
@@ -657,8 +657,8 @@ export function createApi(
 
   /** The caller's current AI-credits balance (points left this month + reset date).
    *  Never triggers the LLM. Powers the profile-page balance widget. */
-  async function myCredits(): Promise<JobFitCredits> {
-    return requestData<JobFitCredits>('/api/v1/me/credits');
+  async function myCredits(): Promise<AiCredits> {
+    return requestData<AiCredits>('/api/v1/me/credits');
   }
 
   /** The public slugs of every job the current user has interacted with. The
@@ -1094,9 +1094,9 @@ export function createApi(
     getSimilarJobs,
     getJobCopies,
     getJobMatch,
-    getJobFit,
-    runJobFit,
-    jobFitStreamUrl,
+    getMatchAnalysis,
+    runMatchAnalysis,
+    matchAnalysisStreamUrl,
     searchJobs,
     swipeDeck,
     recommendations,

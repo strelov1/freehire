@@ -1,4 +1,4 @@
-package jobfit
+package matchanalysis
 
 import "strings"
 

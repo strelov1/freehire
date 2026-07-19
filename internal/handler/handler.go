@@ -21,7 +21,7 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/gmailsync"
-	"github.com/strelov1/freehire/internal/jobfit"
+	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/moderation"
@@ -47,10 +47,10 @@ const (
 	// telegramLinkTTL bounds how long a deep-link token is valid — long enough to
 	// open Telegram and tap Start, short enough to limit a leaked link's window.
 	telegramLinkTTL = 10 * time.Minute
-	// jobfitLLMTimeout is the per-stage LLM timeout for the fit analysis: its reasoning
+	// matchAnalysisLLMTimeout is the per-stage LLM timeout for the fit analysis: its reasoning
 	// model spends tens of seconds thinking before answering, so a stage needs more than
 	// the shared client's default.
-	jobfitLLMTimeout = 180 * time.Second
+	matchAnalysisLLMTimeout = 180 * time.Second
 	// resumeExtractLLMTimeout bounds the single structured-résumé extraction call. It runs
 	// off the upload response path (background) so it can be generous, but still bounded so
 	// a stalled gateway cannot leak a goroutine indefinitely.
@@ -133,11 +133,11 @@ type API struct {
 	atsAnalyzer *atscheck.Analyzer
 	// atsCache reads/writes the per-user cached CV ATS review (backed by *db.Queries).
 	atsCache atsReviewStore
-	// jobFit runs the on-demand three-stage LLM fit analysis for one (candidate, job).
+	// matchAnalysis runs the on-demand three-stage LLM fit analysis for one (candidate, job).
 	// Its client is nil when the LLM is unconfigured; Analyze then degrades to a no-op.
-	jobFit *jobfit.Analyzer
-	// jobFitCache reads/writes the per-(user, job) cached fit analysis (backed by *db.Queries).
-	jobFitCache jobFitStore
+	matchAnalysis *matchanalysis.Analyzer
+	// matchAnalysisCache reads/writes the per-(user, job) cached fit analysis (backed by *db.Queries).
+	matchAnalysisCache matchAnalysisStore
 	// credits meters the per-user AI-points balance the match and tailor features debit.
 	credits *credits.Store
 	// Telegram notification wiring. All nil/empty when the bot is unconfigured —
@@ -277,9 +277,9 @@ func Register(app *fiber.App, cfg Config) {
 	// The fit analysis shares the same LLM client but with a longer per-call timeout:
 	// its reasoning model is slow (tens of seconds per stage), so the default would time
 	// out mid-stage. Nil-safe (a nil client stays nil → Analyze is a no-op).
-	a.jobFit = jobfit.NewAnalyzer(cfg.LLM.WithTimeout(jobfitLLMTimeout))
+	a.matchAnalysis = matchanalysis.NewAnalyzer(cfg.LLM.WithTimeout(matchAnalysisLLMTimeout))
 	a.structuredExtractor = resumeextract.NewExtractor(cfg.LLM.WithTimeout(resumeExtractLLMTimeout))
-	a.jobFitCache = queries
+	a.matchAnalysisCache = queries
 	a.credits = credits.NewStore(queries, cfg.Pool, cfg.Credits)
 	// Telegram notifications are enabled only with both a bot token and a JWT
 	// secret (the link token reuses it). Absent either, the linking endpoints
@@ -375,9 +375,15 @@ func Register(app *fiber.App, cfg Config) {
 	api.Delete("/jobs/:slug/track", keyAuth, a.Untrack)
 	// Read-only per-job skill match against the caller's profile (no writes).
 	api.Get("/jobs/:slug/match", keyAuth, a.JobMatch)
-	api.Get("/jobs/:slug/fit", keyAuth, a.GetJobFit)
-	api.Post("/jobs/:slug/fit", keyAuth, a.PostJobFit)
-	api.Get("/jobs/:slug/fit/stream", keyAuth, a.StreamJobFit)
+	// The on-demand LLM match analysis (GET cached / POST run / SSE stream).
+	api.Get("/jobs/:slug/match-analysis", keyAuth, a.GetMatchAnalysis)
+	api.Post("/jobs/:slug/match-analysis", keyAuth, a.PostMatchAnalysis)
+	api.Get("/jobs/:slug/match-analysis/stream", keyAuth, a.StreamMatchAnalysis)
+	// Deprecated pre-rename aliases (was "fit") — kept so existing API-key clients and the
+	// CLI don't break; they hit the same handlers. Remove once callers have migrated.
+	api.Get("/jobs/:slug/fit", keyAuth, a.GetMatchAnalysis)
+	api.Post("/jobs/:slug/fit", keyAuth, a.PostMatchAnalysis)
+	api.Get("/jobs/:slug/fit/stream", keyAuth, a.StreamMatchAnalysis)
 
 	// Stateless market-coverage: score a caller-supplied skill list (request body)
 	// against the facet-filtered market. Cookie or API key — the CLI drives it with

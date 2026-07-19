@@ -68,7 +68,7 @@ func genStructs() (string, error) {
 	verdictTS := filepath.Join(tmp, "verdict.ts")
 	atscheckTS := filepath.Join(tmp, "atscheck.ts")
 	jobmatchTS := filepath.Join(tmp, "jobmatch.ts")
-	jobfitTS := filepath.Join(tmp, "jobfit.ts")
+	matchanalysisTS := filepath.Join(tmp, "matchanalysis.ts")
 	resumeextractTS := filepath.Join(tmp, "resumeextract.ts")
 	cvTS := filepath.Join(tmp, "cv.ts")
 
@@ -114,10 +114,10 @@ func genStructs() (string, error) {
 			},
 			{
 				// The on-demand LLM fit analysis wire shape (Analysis + Dimension +
-				// Requirement). Only jobfit.go — analyzer.go holds server-only types.
-				Path:         "github.com/strelov1/freehire/internal/jobfit",
-				OutputPath:   jobfitTS,
-				IncludeFiles: []string{"jobfit.go"},
+				// Requirement). Only matchanalysis.go — analyzer.go holds server-only types.
+				Path:         "github.com/strelov1/freehire/internal/matchanalysis",
+				OutputPath:   matchanalysisTS,
+				IncludeFiles: []string{"matchanalysis.go"},
 			},
 			{
 				// The read-only structured résumé wire shape (Structured + Experience +
@@ -166,7 +166,7 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	jobfitBody, err := readBody(jobfitTS)
+	matchanalysisBody, err := readBody(matchanalysisTS)
 	if err != nil {
 		return "", err
 	}
@@ -178,7 +178,7 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + jobmatchBody + "\n" + jobfitBody + "\n" + resumeextractBody + "\n" + cvBody, nil
+	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + jobmatchBody + "\n" + matchanalysisBody + "\n" + resumeextractBody + "\n" + cvBody, nil
 }
 
 // readBody returns a tygo output file's body with its leading preamble removed, so

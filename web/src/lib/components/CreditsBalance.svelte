@@ -1,11 +1,11 @@
 <script lang="ts">
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import type { JobFitCredits } from '$lib/types';
+  import type { AiCredits } from '$lib/types';
 
   // The caller's AI-credits balance: points spent on résumé match (1) and CV tailoring (3),
   // topped up by a monthly grant and by accepted board contributions. Read-only.
-  let credits = $state<JobFitCredits | null>(null);
+  let credits = $state<AiCredits | null>(null);
 
   $effect(() => {
     if (!isAuthenticated()) return;

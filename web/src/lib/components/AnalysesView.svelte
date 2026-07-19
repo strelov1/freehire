@@ -3,8 +3,8 @@
   import { ArrowRight } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { verdictTone, type Tone } from '$lib/jobFit';
-  import type { MyAnalysisItem, JobFitCredits } from '$lib/types';
+  import { verdictTone, type Tone } from '$lib/matchAnalysis';
+  import type { MyAnalysisItem, AiCredits } from '$lib/types';
   import CompanyLogo from './CompanyLogo.svelte';
   import States from './States.svelte';
 
@@ -13,7 +13,7 @@
   // page, which owns compute/recompute).
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   let items = $state<MyAnalysisItem[]>([]);
-  let credits = $state<JobFitCredits | null>(null);
+  let credits = $state<AiCredits | null>(null);
 
   $effect(() => {
     if (!isAuthenticated()) return;

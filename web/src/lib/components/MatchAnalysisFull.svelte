@@ -7,15 +7,15 @@
   import {
     verdictTone,
     requirementStatusMeta,
-    initFitStream,
-    reduceFitEvent,
-    type FitStreamState,
+    initMatchStream,
+    reduceMatchEvent,
+    type MatchStreamState,
     type Tone,
-  } from '$lib/jobFit';
-  import type { Job, JobFitResponse } from '$lib/types';
+  } from '$lib/matchAnalysis';
+  import type { Job, MatchAnalysisResponse } from '$lib/types';
   import { Button } from '$lib/ui';
 
-  // The full AI fit report + live SSE stream, shared by the /fit page and the
+  // The full AI fit report + live SSE stream, shared by the /match page and the
   // tracking card's Job Match tab. `initial` seeds from an SSR-cached fit (the page
   // passes its load data for an instant paint); when absent (the card, which has no
   // SSR), the cached fit is fetched on mount. `autoRun` starts the stream on a cold
@@ -28,12 +28,12 @@
     initial = null,
     autoRun = true,
     stacked = false,
-  }: { job: Job; initial?: JobFitResponse | null; autoRun?: boolean; stacked?: boolean } = $props();
+  }: { job: Job; initial?: MatchAnalysisResponse | null; autoRun?: boolean; stacked?: boolean } = $props();
 
-  let fit = $state<JobFitResponse | null>(initial);
+  let fit = $state<MatchAnalysisResponse | null>(initial);
 
-  function seedFrom(f: JobFitResponse | null): FitStreamState {
-    const s = initFitStream();
+  function seedFrom(f: MatchAnalysisResponse | null): MatchStreamState {
+    const s = initMatchStream();
     if (f && !f.has_cv) s.hasCV = false;
     if (f?.analysis) {
       s.analysis = f.analysis;
@@ -46,7 +46,7 @@
 
   // Seeded synchronously from `initial` so an SSR-cached page paints instantly; the
   // card re-seeds in onMount after its client-side fetch resolves.
-  let stream = $state<FitStreamState>(seedFrom(initial));
+  let stream = $state<MatchStreamState>(seedFrom(initial));
   let streaming = $state(false);
   let showThinking = $state(false);
   // While true, the stream dropped mid-compute and we're polling the cache for the result
@@ -79,16 +79,16 @@
 
   function start() {
     stop();
-    stream = initFitStream();
+    stream = initMatchStream();
     streaming = true;
     showThinking = true;
-    const source = new EventSource(api.jobFitStreamUrl(job.public_slug), { withCredentials: true });
+    const source = new EventSource(api.matchAnalysisStreamUrl(job.public_slug), { withCredentials: true });
     es = source;
     // NB: our server error event is `stream_error`, never `error` — `error` is
     // EventSource's own reserved connection-error event (handled by onerror below).
     for (const name of ['meta', 'stage_start', 'stage_done', 'thinking', 'requirements', 'dimensions', 'final', 'stream_error']) {
       source.addEventListener(name, (e) => {
-        stream = reduceFitEvent(stream, name, JSON.parse((e as MessageEvent).data));
+        stream = reduceMatchEvent(stream, name, JSON.parse((e as MessageEvent).data));
         if (name === 'final' || name === 'stream_error') stop();
       });
     }
@@ -102,7 +102,7 @@
       stop();
       if (stream.done) return;
       if (stream.stages.some((s) => s.state !== 'pending')) void recoverFromDrop();
-      else stream = reduceFitEvent(stream, 'stream_error', { message: 'Connection lost' });
+      else stream = reduceMatchEvent(stream, 'stream_error', { message: 'Connection lost' });
     });
   }
 
@@ -129,7 +129,7 @@
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') continue;
       attempts++;
       try {
-        const f = await api.getJobFit(job.public_slug);
+        const f = await api.getMatchAnalysis(job.public_slug);
         if (f?.analysis) {
           fit = f;
           stream = seedFrom(f);
@@ -142,7 +142,7 @@
       delay = Math.min(Math.round(delay * 1.5), 15_000);
     }
     recovering = false;
-    stream = reduceFitEvent(stream, 'stream_error', { message: 'Connection lost' });
+    stream = reduceMatchEvent(stream, 'stream_error', { message: 'Connection lost' });
   }
 
   onMount(async () => {
@@ -150,7 +150,7 @@
     // seeded from a null `initial`, so there is nothing to preserve).
     if (!fit && isAuthenticated()) {
       try {
-        fit = await api.getJobFit(job.public_slug);
+        fit = await api.getMatchAnalysis(job.public_slug);
         stream = seedFrom(fit);
       } catch {
         /* best-effort: an unconfigured/failing fit endpoint leaves the empty state */

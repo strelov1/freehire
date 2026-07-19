@@ -339,7 +339,7 @@ export const GROUPS: Group[] = [
       },
       {
         method: 'GET',
-        path: '/jobs/{slug}/fit',
+        path: '/jobs/{slug}/match-analysis',
         auth: 'cookie-or-key',
         summary: 'The cached AI fit analysis for the job (never runs the LLM).',
         description:
@@ -348,7 +348,7 @@ export const GROUPS: Group[] = [
           '`has_cv` is false when you have no stored CV. `credits` reports your AI-points ' +
           'balance and when it resets.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
-        curl: `curl "${BASE_URL}/jobs/<slug>/fit" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
+        curl: `curl "${BASE_URL}/jobs/<slug>/match-analysis" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{
   "data": {
     "has_cv": true,
@@ -368,7 +368,7 @@ export const GROUPS: Group[] = [
       },
       {
         method: 'POST',
-        path: '/jobs/{slug}/fit',
+        path: '/jobs/{slug}/match-analysis',
         auth: 'cookie-or-key',
         summary: 'Run the three-stage AI fit analysis and cache it.',
         description:
@@ -378,7 +378,7 @@ export const GROUPS: Group[] = [
           'an already-analyzed job is free. `has_cv` is false when no CV is stored; a ' +
           'failing or unconfigured LLM returns a null analysis (200).',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
-        curl: `curl -X POST "${BASE_URL}/jobs/<slug>/fit" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
+        curl: `curl -X POST "${BASE_URL}/jobs/<slug>/match-analysis" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{
   "data": {
     "has_cv": true,
@@ -389,17 +389,17 @@ export const GROUPS: Group[] = [
       },
       {
         method: 'GET',
-        path: '/jobs/{slug}/fit/stream',
+        path: '/jobs/{slug}/match-analysis/stream',
         auth: 'cookie-or-key',
         summary: 'Run the fit analysis over Server-Sent Events.',
         description:
-          'The same three-stage chain as `POST /jobs/{slug}/fit`, streamed as SSE ' +
+          'The same three-stage chain as `POST /jobs/{slug}/match-analysis`, streamed as SSE ' +
           '(`text/event-stream`) rather than a single JSON body. Each event’s `kind` ' +
           'is one of `stage_start`, `stage_done`, `thinking`, `requirements`, ' +
           '`dimensions`, `final`; the `final` event carries the completed `analysis` ' +
           '(the same shape as the fit endpoints). Not a JSON endpoint.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
-        curl: `curl -N "${BASE_URL}/jobs/<slug>/fit/stream" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
+        curl: `curl -N "${BASE_URL}/jobs/<slug>/match-analysis/stream" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `data: {"kind":"stage_start","stage":1,"label":"Extracting requirements"}
 
 data: {"kind":"requirements","requirements":[ { "...": "..." } ]}

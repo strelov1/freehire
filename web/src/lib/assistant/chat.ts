@@ -1,7 +1,7 @@
 // Pure presentation logic for the assistant chat: folds the streamed
 // `TurnEvent`s into a message list, kept out of the component so the
 // accumulation is unit-testable (vitest) without a DOM — mirroring how
-// `jobFit.ts` isolates `reduceFitEvent`.
+// `matchAnalysis.ts` isolates `reduceMatchEvent`.
 
 import type { TurnEvent } from './wire';
 import type { ToolCall } from './tool-formatters';

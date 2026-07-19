@@ -1,7 +1,7 @@
 // Package resumeextract derives a typed, sanitized structured résumé from an uploaded
 // CV via the LLM, for the read-only profile view and as pre-normalized fit input (see
 // the resume-structured-profile change). It is a self-contained, typed prompt unit —
-// the sibling of internal/jobfit and internal/enrich — kept free of storage concerns so
+// the sibling of internal/matchanalysis and internal/enrich — kept free of storage concerns so
 // the résumé Store stays free of LLM coupling. Sanitize (see structured.go) is both the
 // persist guard and the prompt-injection guard for the untrusted CV text: every value is
 // bounded and coerced to the contract before it is persisted or served, so the model can
@@ -23,7 +23,7 @@ import (
 var ErrDisabled = errors.New("resumeextract: llm not configured")
 
 // Extractor derives a Structured résumé over an llm.Client. A nil client (LLM
-// unconfigured) makes Extract return ErrDisabled, mirroring jobfit.Analyzer's no-op.
+// unconfigured) makes Extract return ErrDisabled, mirroring matchanalysis.Analyzer's no-op.
 type Extractor struct {
 	client *llm.Client
 }
@@ -58,7 +58,7 @@ func (e *Extractor) Extract(ctx context.Context, cvText string) (Structured, err
 }
 
 // maxCVRunes bounds the CV text sent to the model — a long CV covers its substance well
-// within this, and the cap keeps the call responsive (mirrors jobfit's input bounds).
+// within this, and the cap keeps the call responsive (mirrors matchanalysis's input bounds).
 const maxCVRunes = 12000
 
 const systemPrompt = `You extract a structured résumé from raw CV text and return ONLY a JSON object.

@@ -13,17 +13,17 @@ import (
 	"github.com/valyala/fasthttp"
 
 	"github.com/strelov1/freehire/internal/credits"
-	"github.com/strelov1/freehire/internal/jobfit"
+	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/jobmatch"
 )
 
-// StreamJobFit runs the three-stage fit chain over Server-Sent Events, emitting stage
+// StreamMatchAnalysis runs the three-stage fit chain over Server-Sent Events, emitting stage
 // progress, best-effort thinking tokens, and each section as it resolves, then caching
-// the final analysis exactly as PostJobFit does. Cookie or API key; unknown slug 404.
+// the final analysis exactly as PostMatchAnalysis does. Cookie or API key; unknown slug 404.
 // The stream always opens with a `meta` event (has_cv); when no CV is stored it closes
 // after that. Everything the stream needs is captured before the body writer starts,
 // because the fiber ctx is released once this handler returns.
-func (a *API) StreamJobFit(c *fiber.Ctx) error {
+func (a *API) StreamMatchAnalysis(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -55,7 +55,7 @@ func (a *API) StreamJobFit(c *fiber.Ctx) error {
 	cvUploadedAt, _ := a.cvUploadedAt(c, userID)
 	profile, _ := a.userProfile.Get(c.Context(), userID)
 
-	input := jobfit.Input{
+	input := matchanalysis.Input{
 		JobTitle:            job.Title,
 		JobDescription:      job.Description,
 		CompanyInfo:         a.companyInfo(c, job.CompanySlug),
@@ -85,7 +85,7 @@ func (a *API) StreamJobFit(c *fiber.Ctx) error {
 			_ = conn.SetWriteDeadline(time.Time{})
 		}
 		start := time.Now()
-		log.Printf("jobfit: stream start user=%d job=%d has_cv=%v", userID, job.ID, hasCV)
+		log.Printf("matchanalysis: stream start user=%d job=%d has_cv=%v", userID, job.ID, hasCV)
 		writeSSE(w, "meta", map[string]bool{"has_cv": hasCV})
 		if !hasCV {
 			return
@@ -121,7 +121,7 @@ func (a *API) StreamJobFit(c *fiber.Ctx) error {
 			}
 		}()
 
-		analysis, err := a.jobFit.AnalyzeStream(ctx, input, func(e jobfit.Event) {
+		analysis, err := a.matchAnalysis.AnalyzeStream(ctx, input, func(e matchanalysis.Event) {
 			events++
 			mu.Lock()
 			writeSSE(w, string(e.Kind), e)
@@ -130,7 +130,7 @@ func (a *API) StreamJobFit(c *fiber.Ctx) error {
 		close(stopHeartbeat)
 		heartbeat.Wait()
 		if err != nil {
-			log.Printf("jobfit: stream FAILED user=%d job=%d dur=%s events=%d: %v", userID, job.ID, time.Since(start).Round(time.Millisecond), events, err)
+			log.Printf("matchanalysis: stream FAILED user=%d job=%d dur=%s events=%d: %v", userID, job.ID, time.Since(start).Round(time.Millisecond), events, err)
 			writeSSE(w, "stream_error", map[string]string{"message": "analysis failed"})
 			return
 		}
@@ -142,7 +142,7 @@ func (a *API) StreamJobFit(c *fiber.Ctx) error {
 		if isNew {
 			a.debitMatch(ctx, userID, job.ID)
 		}
-		log.Printf("jobfit: stream DONE user=%d job=%d dur=%s events=%d overall=%d", userID, job.ID, time.Since(start).Round(time.Millisecond), events, analysis.OverallScore)
+		log.Printf("matchanalysis: stream DONE user=%d job=%d dur=%s events=%d overall=%d", userID, job.ID, time.Since(start).Round(time.Millisecond), events, analysis.OverallScore)
 	}))
 	return nil
 }

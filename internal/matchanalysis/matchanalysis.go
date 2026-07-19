@@ -1,4 +1,4 @@
-// Package jobfit computes an on-demand, LLM-driven fit analysis for a single
+// Package matchanalysis computes an on-demand, LLM-driven fit analysis for a single
 // (candidate, job) pair: a six-dimension scored verdict centered on job-title
 // alignment and relevant experience, plus an ATS-style requirement-match table.
 //
@@ -10,7 +10,7 @@
 // scoring; the model only scores the six dimensions, while overall_score and the
 // verdict label are computed here so the headline number stays consistent with the
 // dimensions. Pure and I/O-free (mirrors internal/atscheck / internal/verdict).
-package jobfit
+package matchanalysis
 
 import (
 	"math"

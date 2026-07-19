@@ -5,7 +5,7 @@
   import { currentUser } from '$lib/auth.svelte';
   import { Button } from '$lib/ui';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
-  import JobFitFull from '$lib/components/JobFitFull.svelte';
+  import MatchAnalysisFull from '$lib/components/MatchAnalysisFull.svelte';
 
   let { data } = $props();
 
@@ -46,7 +46,7 @@
     </div>
   </header>
 
-  <JobFitFull job={data.job} initial={data.fit} />
+  <MatchAnalysisFull job={data.job} initial={data.fit} />
 
   {#if canTailor}
     <section

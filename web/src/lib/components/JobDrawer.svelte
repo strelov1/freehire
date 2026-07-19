@@ -8,7 +8,7 @@
   import { tablist } from '$lib/actions/tablist';
   import { cardTags } from '$lib/enrichment';
   import CompanyLogo from './CompanyLogo.svelte';
-  import JobFitFull from './JobFitFull.svelte';
+  import MatchAnalysisFull from './MatchAnalysisFull.svelte';
   import JobMatch from './JobMatch.svelte';
   import NoteEditor from './NoteEditor.svelte';
   import { api } from '$lib/api';
@@ -279,7 +279,7 @@
       {:else if tab === 'fit'}
         <div class="flex flex-col gap-6">
           <JobMatch job={item.job} />
-          <JobFitFull job={item.job} />
+          <MatchAnalysisFull job={item.job} />
         </div>
       {:else if tab === 'emails'}
         <div class="flex flex-col gap-2">

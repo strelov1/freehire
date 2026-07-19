@@ -1,4 +1,4 @@
-package jobfit
+package matchanalysis
 
 import (
 	"context"
@@ -112,7 +112,7 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 	emit(Event{Kind: EventStageStart, Stage: 1, Label: stageLabels[1]})
 	var s1 stage1Out
 	if err := a.streamStage(ctx, 1, stage1SystemPrompt(), stage1UserPrompt(in), emit, &s1); err != nil {
-		return nil, fmt.Errorf("jobfit: stage 1: %w", err)
+		return nil, fmt.Errorf("matchanalysis: stage 1: %w", err)
 	}
 	reqs := sanitizeRequirements(s1.Requirements)
 	emit(Event{Kind: EventRequirements, Requirements: reqs})
@@ -122,7 +122,7 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 	emit(Event{Kind: EventStageStart, Stage: 2, Label: stageLabels[2]})
 	var verdict recruiterVerdict
 	if err := a.streamStage(ctx, 2, stage2SystemPrompt(), stage2UserPrompt(in, reqs), emit, &verdict); err != nil {
-		return nil, fmt.Errorf("jobfit: stage 2: %w", err)
+		return nil, fmt.Errorf("matchanalysis: stage 2: %w", err)
 	}
 	sanitizeVerdict(&verdict)
 	interim := buildAnalysis(reqs, verdict)
@@ -137,7 +137,7 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 	emit(Event{Kind: EventStageStart, Stage: 3, Label: stageLabels[3]})
 	audited := verdict
 	if err := a.streamStage(ctx, 3, stage3SystemPrompt(), stage3UserPrompt(in, reqs, verdict), emit, &audited); err != nil {
-		log.Printf("jobfit: stage 3 audit failed, serving un-audited verdict: %v", err)
+		log.Printf("matchanalysis: stage 3 audit failed, serving un-audited verdict: %v", err)
 	} else {
 		sanitizeVerdict(&audited)
 		verdict = audited
@@ -173,7 +173,7 @@ func (a *Analyzer) streamStage(ctx context.Context, stage int, system, user stri
 		}
 		parseErr = fmt.Errorf("parse: %w", parseErr)
 		if attempt < stageAttempts {
-			log.Printf("jobfit: stage %d parse failed, retrying: %v", stage, parseErr)
+			log.Printf("matchanalysis: stage %d parse failed, retrying: %v", stage, parseErr)
 		}
 	}
 	return parseErr
