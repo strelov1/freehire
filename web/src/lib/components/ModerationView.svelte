@@ -1,4 +1,8 @@
 <script lang="ts">
+  import { page } from '$app/state';
+  import { replaceState } from '$app/navigation';
+  import { FileText, Flag, Handshake } from '@lucide/svelte';
+  import type { LucideIcon } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { AsyncData } from '$lib/asyncData.svelte';
   import { currentUser } from '$lib/auth.svelte';
@@ -6,17 +10,41 @@
   import { Button } from '$lib/ui';
   import { cn, timeAgo } from '$lib/utils';
   import ReportQueue from './ReportQueue.svelte';
+  import ReferralReviewView from './ReferralReviewView.svelte';
   import States from './States.svelte';
-  import { tablist } from '$lib/actions/tablist';
 
   const isModerator = $derived(currentUser()?.role === 'moderator');
 
-  type View = 'queue' | 'reports';
-  const tabs: { value: View; label: string }[] = [
-    { value: 'queue', label: 'Moderation queue' },
-    { value: 'reports', label: 'Reported jobs' },
+  type View = 'queue' | 'reports' | 'referrals';
+  const sections: { value: View; label: string; icon: LucideIcon }[] = [
+    { value: 'queue', label: 'Moderation queue', icon: FileText },
+    { value: 'reports', label: 'Reported jobs', icon: Flag },
+    { value: 'referrals', label: 'Referral offers', icon: Handshake },
   ];
-  let view = $state<View>('queue');
+
+  // The active section is mirrored in `?tab=` so moderator deep-links (the
+  // "Review offers →" link, a bookmark) land on the right pane and back/forward
+  // works. `replaceState` swaps the URL without re-running load or scrolling.
+  function readView(): View {
+    const t = page.url.searchParams.get('tab');
+    return sections.some((s) => s.value === t) ? (t as View) : 'queue';
+  }
+  let view = $state<View>(readView());
+  function select(next: View) {
+    if (next === view) return;
+    view = next;
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- in-place query write to the current pathname; there is no route to resolve
+    replaceState(`${page.url.pathname}?tab=${next}`, {});
+  }
+
+  // Shared nav-item treatment, mirroring the account sidebar in my/+layout.svelte.
+  const itemClass = (active: boolean) =>
+    cn(
+      'flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
+      active
+        ? 'bg-secondary font-medium text-secondary-foreground'
+        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+    );
 
   // The id currently being approved/rejected, to disable its row's buttons.
   let acting = $state<number | null>(null);
@@ -75,28 +103,35 @@
   <div class="flex flex-col gap-6">
     <h1 class="text-2xl font-semibold tracking-tight">Moderation</h1>
 
-    <div role="tablist" aria-label="Moderation view" use:tablist={view} class="flex items-center gap-1">
-      {#each tabs as tab (tab.value)}
+    <!-- Same sections in two forms, mirroring the account shell: a horizontal
+         scrollable strip below lg, a vertical sidebar beside the content at lg+. -->
+    {#snippet navButtons(horizontal = false)}
+      {#each sections as s (s.value)}
+        {@const Icon = s.icon}
         <button
           type="button"
-          role="tab"
-          id="mod-tab-{tab.value}"
-          aria-selected={view === tab.value}
-          aria-controls="mod-tabpanel"
-          onclick={() => (view = tab.value)}
-          class={cn(
-            'rounded-md px-3 py-1.5 text-sm transition-colors',
-            view === tab.value
-              ? 'bg-secondary font-medium text-secondary-foreground'
-              : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-          )}
+          aria-current={view === s.value ? 'page' : undefined}
+          onclick={() => select(s.value)}
+          class={cn(itemClass(view === s.value), horizontal && 'shrink-0 whitespace-nowrap')}
         >
-          {tab.label}
+          <Icon class="size-4 shrink-0" />
+          {s.label}
         </button>
       {/each}
-    </div>
+    {/snippet}
 
-    <div role="tabpanel" id="mod-tabpanel" aria-labelledby="mod-tab-{view}" tabindex="0">
+    <nav aria-label="Moderation sections" class="flex gap-1 overflow-x-auto lg:hidden">
+      {@render navButtons(true)}
+    </nav>
+
+    <div class="lg:flex lg:gap-8">
+      <aside aria-label="Moderation sections" class="hidden shrink-0 lg:block lg:w-56">
+        <nav class="sticky top-6 flex flex-col gap-1">
+          {@render navButtons()}
+        </nav>
+      </aside>
+
+      <div class="min-w-0 flex-1">
     {#if view === 'queue'}
       <div class="flex flex-col gap-6">
         <p class="text-sm text-muted-foreground">
@@ -146,9 +181,17 @@
           </ul>
         {/if}
       </div>
-    {:else}
+    {:else if view === 'reports'}
       <ReportQueue />
+    {:else}
+      <div class="flex flex-col gap-6">
+        <p class="text-sm text-muted-foreground">
+          Applications to become a referrer. Approving lets seekers request referrals into that company.
+        </p>
+        <ReferralReviewView />
+      </div>
     {/if}
+      </div>
     </div>
   </div>
 {/if}

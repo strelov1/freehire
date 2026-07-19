@@ -118,7 +118,8 @@
     {/each}
   </div>
   {#if isModerator}
-    <a href="/my/referrals/review" class="text-sm font-medium text-brand-strong hover:underline">Review offers →</a>
+    <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- query-bearing link to a static route; resolve() can't carry the ?tab param -->
+    <a href="/moderation?tab=referrals" class="text-sm font-medium text-brand-strong hover:underline">Review offers →</a>
   {/if}
 </div>
 
