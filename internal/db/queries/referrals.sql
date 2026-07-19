@@ -1,0 +1,85 @@
+-- name: CreateReferralOffer :one
+-- Record a member's offer to refer into a company. The UNIQUE (user_id, company_slug)
+-- constraint rejects a second offer for the same company; the repository maps that unique
+-- violation to a domain "already offered" error. Starts pending, awaiting moderation.
+INSERT INTO referral_offers (user_id, company_slug, proof_object_key)
+VALUES ($1, $2, $3)
+RETURNING *;
+
+-- name: ListReferralOffersByUser :many
+-- The "my offers" list: one member's offers with moderation status, newest first.
+SELECT * FROM referral_offers
+WHERE user_id = $1
+ORDER BY created_at DESC;
+
+-- name: ListPendingReferralOffers :many
+-- The moderator queue: offers awaiting a decision, oldest first.
+SELECT * FROM referral_offers
+WHERE status = 'pending'
+ORDER BY created_at;
+
+-- name: DecideReferralOffer :one
+-- Approve or reject a pending offer, recording the deciding moderator and time. The
+-- status='pending' guard makes the decision idempotent-safe: a second decision on an
+-- already-decided offer matches no row (the repository maps that to "not pending").
+UPDATE referral_offers
+SET status = sqlc.arg(status), decided_by = sqlc.arg(decided_by), decided_at = now()
+WHERE id = sqlc.arg(id) AND status = 'pending'
+RETURNING *;
+
+-- name: CompanyHasApprovedReferrer :one
+-- Whether a company is referral-eligible — has at least one approved offer. Served by
+-- referral_offers_company_approved_idx.
+SELECT EXISTS (
+    SELECT 1 FROM referral_offers WHERE company_slug = $1 AND status = 'approved'
+) AS exists;
+
+-- name: CompaniesWithApprovedReferrer :many
+-- The subset of the given company slugs that are referral-eligible — for annotating a
+-- job/company list in one round-trip instead of a query per row.
+SELECT DISTINCT company_slug FROM referral_offers
+WHERE status = 'approved' AND company_slug = ANY(sqlc.arg(slugs)::text[]);
+
+-- name: CreateReferralRequest :one
+-- Record a seeker's referral request into a company. The partial unique index on
+-- (seeker_user_id, company_slug) WHERE status='sent' rejects a second active request for
+-- the same company; the repository maps that unique violation to "already requested".
+INSERT INTO referral_requests (
+    seeker_user_id, company_slug, job_id, cv_kind, cv_id,
+    contact_telegram, contact_email, note
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING *;
+
+-- name: ListReferralRequestsBySeeker :many
+-- The seeker's "my requests" list: their requests with current status, newest first.
+SELECT * FROM referral_requests
+WHERE seeker_user_id = $1
+ORDER BY created_at DESC;
+
+-- name: ListIncomingReferralRequests :many
+-- The referrer inbox: open (sent) requests for every company the referrer has an approved
+-- offer for. Joins the request pool to the caller's approved offers on company_slug.
+SELECT r.* FROM referral_requests r
+JOIN referral_offers o ON o.company_slug = r.company_slug
+WHERE o.user_id = sqlc.arg(referrer_user_id) AND o.status = 'approved' AND r.status = 'sent'
+ORDER BY r.created_at DESC;
+
+-- name: GetReferralRequest :one
+-- One referral request by id — for authorized CV access and marking, after the caller is
+-- verified as an approved referrer of the request's company.
+SELECT * FROM referral_requests WHERE id = $1;
+
+-- name: ResolveReferralRequest :one
+-- Mark a sent request contacted or declined, recording the acting referrer and time. The
+-- status='sent' guard makes it race-safe: whichever referrer acts first wins; a second
+-- attempt matches no row (mapped to "already resolved").
+UPDATE referral_requests
+SET status = sqlc.arg(status), acted_by = sqlc.arg(acted_by), acted_at = now()
+WHERE id = sqlc.arg(id) AND status = 'sent'
+RETURNING *;
+
+-- name: CountReferralRequestsSince :one
+-- How many requests a seeker has created since a cutoff — the per-day cap check.
+SELECT count(*) FROM referral_requests
+WHERE seeker_user_id = sqlc.arg(seeker_user_id) AND created_at >= sqlc.arg(since);

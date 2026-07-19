@@ -321,6 +321,33 @@ type Mailbox struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type ReferralOffer struct {
+	ID             int64              `json:"id"`
+	UserID         int64              `json:"user_id"`
+	CompanySlug    string             `json:"company_slug"`
+	ProofObjectKey string             `json:"proof_object_key"`
+	Status         string             `json:"status"`
+	DecidedBy      pgtype.Int8        `json:"decided_by"`
+	DecidedAt      pgtype.Timestamptz `json:"decided_at"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type ReferralRequest struct {
+	ID              int64              `json:"id"`
+	SeekerUserID    int64              `json:"seeker_user_id"`
+	CompanySlug     string             `json:"company_slug"`
+	JobID           pgtype.Int8        `json:"job_id"`
+	CvKind          string             `json:"cv_kind"`
+	CvID            pgtype.Int8        `json:"cv_id"`
+	ContactTelegram pgtype.Text        `json:"contact_telegram"`
+	ContactEmail    pgtype.Text        `json:"contact_email"`
+	Note            string             `json:"note"`
+	Status          string             `json:"status"`
+	ActedBy         pgtype.Int8        `json:"acted_by"`
+	ActedAt         pgtype.Timestamptz `json:"acted_at"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
 type SavedSearch struct {
 	ID          int64              `json:"id"`
 	UserID      int64              `json:"user_id"`

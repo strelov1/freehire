@@ -34,8 +34,9 @@ infrastructure.
 
 ### Company-pool model, not per-referrer
 
-A `referral_requests` row references `company_id`, not a specific offer or
-referrer. Every approved referrer of that company sees the request in their
+A `referral_requests` row references the company by `company_slug` (companies'
+PK is the slug — the same key `jobs.company_slug` carries), not a specific offer
+or referrer. Every approved referrer of that company sees the request in their
 inbox; whichever one acts records `acted_by`. Rationale: the seeker asked "in
 this company" (confirmed during brainstorming), never sees who the referrers
 are, and anonymity falls out for free. Alternative — request targets one chosen
@@ -44,17 +45,19 @@ pick among people they can't see.
 
 ### Two tables mirroring existing patterns
 
-- `referral_offers(id, user_id, company_id, proof_object_key, status,
-  decided_by, decided_at, created_at)` with `UNIQUE (user_id, company_id)` and a
-  `status` check (`pending|approved|rejected`). Moderation mirrors
+- `referral_offers(id, user_id, company_slug, proof_object_key, status,
+  decided_by, decided_at, created_at)` with `UNIQUE (user_id, company_slug)` and
+  a `status` check (`pending|approved|rejected`). Moderation mirrors
   `link_contributions`.
-- `referral_requests(id, seeker_user_id, company_id, job_id NULL, cv_kind,
+- `referral_requests(id, seeker_user_id, company_slug, job_id NULL, cv_kind,
   cv_id NULL, contact_telegram NULL, contact_email NULL, note, status, acted_by
   NULL, acted_at NULL, created_at)` with `status` check
-  (`sent|contacted|declined`). A partial unique index enforces one active
-  request per `(seeker_user_id, company_id)` where `status = 'sent'`. `job_id`
-  and `cv_id` are `ON DELETE SET NULL` seams so a request outlives the vacancy
-  or CV it referenced (same pattern as `cvs.job_id`).
+  (`sent|contacted|declined`), a `cv_kind` check (`original` ⟹ `cv_id` NULL;
+  `built` ⟹ `cv_id` NOT NULL), and a contact check (Telegram or email present).
+  A partial unique index enforces one active request per
+  `(seeker_user_id, company_slug)` where `status = 'sent'`. `job_id` and `cv_id`
+  are `ON DELETE SET NULL` seams so a request outlives the vacancy or CV it
+  referenced (same pattern as `cvs.job_id`).
 
 ### CV attachment reuses both stores; access is cabinet-only
 

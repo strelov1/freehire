@@ -115,6 +115,9 @@ type Querier interface {
 	// covers both. Processed one company at a time (SuppressAggregatorDuplicatesForCompany),
 	// mirroring the role-duplicate recompute's lock discipline.
 	CompaniesWithAggregatorPostings(ctx context.Context, aggregators []string) ([]string, error)
+	// The subset of the given company slugs that are referral-eligible — for annotating a
+	// job/company list in one round-trip instead of a query per row.
+	CompaniesWithApprovedReferrer(ctx context.Context, slugs []string) ([]string, error)
 	// Company slugs whose role-duplicate markers may need recomputing: a company with an
 	// open role cluster (>1 posting sharing a fingerprint) to collapse, OR one still
 	// carrying an open marker that may need clearing (its cluster shrank). The recompute
@@ -130,6 +133,9 @@ type Querier interface {
 	// slug so the bot/UI can link to /companies/<slug>. board_pattern is "<escaped board>:%" (same
 	// index-backed LIKE as JobsExistForBoard). Only rows with a resolved company_slug qualify.
 	CompanyForBoard(ctx context.Context, arg CompanyForBoardParams) (CompanyForBoardRow, error)
+	// Whether a company is referral-eligible — has at least one approved offer. Served by
+	// referral_offers_company_approved_idx.
+	CompanyHasApprovedReferrer(ctx context.Context, companySlug string) (bool, error)
 	// The denormalized open-job count for a slug (pgx.ErrNoRows if the company is
 	// absent). cmd/import-yc uses it to guard against homonym collisions: it skips
 	// enriching an existing company whose job_count dwarfs a matched YC entry's team.
@@ -162,6 +168,8 @@ type Querier interface {
 	// meter: the PK guarantees one row per (user, job), so the row count is the distinct-job
 	// count. A recompute does not add a row, so it never consumes quota.
 	CountRecentUserJobAnalyses(ctx context.Context, arg CountRecentUserJobAnalysesParams) (int64, error)
+	// How many requests a seeker has created since a cutoff — the per-day cap check.
+	CountReferralRequestsSince(ctx context.Context, arg CountReferralRequestsSinceParams) (int64, error)
 	// How many saved searches a user has — the per-user cap is enforced against this in
 	// the service before a create.
 	CountSavedSearches(ctx context.Context, userID int64) (int64, error)
@@ -184,6 +192,14 @@ type Querier interface {
 	// repository maps that unique violation to ErrBoardAlreadyContributed. Runs in the same
 	// transaction as IncrementUserPoints.
 	CreateContribution(ctx context.Context, arg CreateContributionParams) (LinkContribution, error)
+	// Record a member's offer to refer into a company. The UNIQUE (user_id, company_slug)
+	// constraint rejects a second offer for the same company; the repository maps that unique
+	// violation to a domain "already offered" error. Starts pending, awaiting moderation.
+	CreateReferralOffer(ctx context.Context, arg CreateReferralOfferParams) (ReferralOffer, error)
+	// Record a seeker's referral request into a company. The partial unique index on
+	// (seeker_user_id, company_slug) WHERE status='sent' rejects a second active request for
+	// the same company; the repository maps that unique violation to "already requested".
+	CreateReferralRequest(ctx context.Context, arg CreateReferralRequestParams) (ReferralRequest, error)
 	// File a user complaint about a job into the moderation queue as 'pending'. The partial
 	// unique index on (reported_by, job_id) WHERE status='pending' rejects a second open report
 	// of the same job by the same user (the repository maps that unique violation to a 409).
@@ -214,6 +230,10 @@ type Querier interface {
 	// Whether the caller already spent points on this (feature, ref). True means the action
 	// is a recompute/resume and must not be charged again (idempotency by ref).
 	DebitExists(ctx context.Context, arg DebitExistsParams) (bool, error)
+	// Approve or reject a pending offer, recording the deciding moderator and time. The
+	// status='pending' guard makes the decision idempotent-safe: a second decision on an
+	// already-decided offer matches no row (the repository maps that to "not pending").
+	DecideReferralOffer(ctx context.Context, arg DecideReferralOfferParams) (ReferralOffer, error)
 	// Revoke (delete) a key, scoped to its owner so a user can only delete their own.
 	// Returns the affected row count: 0 means the key does not exist or is not the
 	// caller's (the handler maps that to 404).
@@ -418,6 +438,9 @@ type Querier interface {
 	// the board's display fields; owner columns (user_id) are never selected. A NULL slug
 	// never equals the param, so private sets are unreachable. No row → 404.
 	GetPublicBoardBySlug(ctx context.Context, publicSlug pgtype.Text) (GetPublicBoardBySlugRow, error)
+	// One referral request by id — for authorized CV access and marking, after the caller is
+	// verified as an approved referrer of the request's company.
+	GetReferralRequest(ctx context.Context, id int64) (ReferralRequest, error)
 	// Load a single report by id for the review path. The resolve/dismiss flow guards the
 	// status in the service; the Mark* queries are additionally scoped to status='pending' as
 	// defense-in-depth against a concurrent second decision.
@@ -580,6 +603,9 @@ type Querier interface {
 	// top-N per facet without re-sorting. Aggregate only — per-value counts, no
 	// record-level data.
 	ListFacetStats(ctx context.Context) ([]InsightsFacetStat, error)
+	// The referrer inbox: open (sent) requests for every company the referrer has an approved
+	// offer for. Joins the request pool to the caller's approved offers on company_slug.
+	ListIncomingReferralRequests(ctx context.Context, referrerUserID int64) ([]ReferralRequest, error)
 	// The leaderboard read: companies ranked by growth (open_count - open_count_prev),
 	// '-growth' (freezing) reverses it, 'open' ranks by raw size; open_count is the
 	// tiebreak. @min_open floors the current open-count (blunts ingest-artifact spikes).
@@ -666,12 +692,18 @@ type Querier interface {
 	// holds closed jobs, so unlike ListJobsUpdatedAfter there is nothing to delete. Served
 	// by jobs_open_enrich_freshness_idx (COALESCE(posted_at, created_at) DESC WHERE open).
 	ListOpenJobsPostedAfter(ctx context.Context, arg ListOpenJobsPostedAfterParams) ([]Job, error)
+	// The moderator queue: offers awaiting a decision, oldest first.
+	ListPendingReferralOffers(ctx context.Context) ([]ReferralOffer, error)
 	// The moderator review queue: every pending report, newest first, with the reporter's email
 	// and the reported job's slug and title so the moderator can judge it and link to it.
 	ListPendingReports(ctx context.Context) ([]ListPendingReportsRow, error)
 	// The moderator review queue: every pending submission, newest first, with the submitter's
 	// email so the moderator can judge provenance.
 	ListPendingSubmissions(ctx context.Context) ([]ListPendingSubmissionsRow, error)
+	// The "my offers" list: one member's offers with moderation status, newest first.
+	ListReferralOffersByUser(ctx context.Context, userID int64) ([]ReferralOffer, error)
+	// The seeker's "my requests" list: their requests with current status, newest first.
+	ListReferralRequestsBySeeker(ctx context.Context, seekerUserID int64) ([]ReferralRequest, error)
 	// The open postings sharing a role cluster (company_slug + role_fingerprint) with the
 	// anchor job — the "N openings across cities" list for a collapsed role. Each copy keeps
 	// its own location and apply URL, so a seeker picks their city; the anchor itself is
@@ -936,6 +968,10 @@ type Querier interface {
 	// expired probes can close a job. Guarded to the non-zero case so probing an
 	// already-clean job does not churn the row.
 	ResetLivenessStrikes(ctx context.Context, id int64) error
+	// Mark a sent request contacted or declined, recording the acting referrer and time. The
+	// status='sent' guard makes it race-safe: whichever referrer acts first wins; a second
+	// attempt matches no row (mapped to "already resolved").
+	ResolveReferralRequest(ctx context.Context, arg ResolveReferralRequestParams) (ReferralRequest, error)
 	// Undo a soft-delete, scoped to the caller and idempotent. Returns 0 rows only
 	// when it is not the caller's message (→ 404).
 	RestoreEmail(ctx context.Context, arg RestoreEmailParams) (int64, error)

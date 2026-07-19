@@ -1,10 +1,10 @@
 ## 1. Data model & DB layer
 
-- [ ] 1.1 Add migration creating `referral_offers` (with `UNIQUE (user_id, company_id)`, status check `pending|approved|rejected`, `proof_object_key`, `decided_by`, `decided_at`)
-- [ ] 1.2 Add `referral_requests` to the same migration (status check `sent|contacted|declined`, `job_id`/`cv_id` `ON DELETE SET NULL`, `cv_kind` check `original|built`, contact + note columns, `acted_by`/`acted_at`) plus a partial unique index on `(seeker_user_id, company_id) WHERE status = 'sent'`
-- [ ] 1.3 Write sqlc queries: create/get/list-by-user offers, list-pending offers (moderator), decide offer; create request, list requests by seeker, list `sent` requests for a referrer's companies, mark request contacted/declined, count today's requests for a seeker
-- [ ] 1.4 Add a query (or `EXISTS`) exposing "company has ≥1 approved offer" for the availability flag
-- [ ] 1.5 Regenerate sqlc (`make sqlc`) and confirm `go build ./...`
+- [x] 1.1 Add migration creating `referral_offers` (with `UNIQUE (user_id, company_slug)`, status check `pending|approved|rejected`, `proof_object_key`, `decided_by`, `decided_at`)
+- [x] 1.2 Add `referral_requests` to the same migration (status check `sent|contacted|declined`, `job_id`/`cv_id` `ON DELETE SET NULL`, `cv_kind` check `original|built`, contact + note columns, `acted_by`/`acted_at`) plus a partial unique index on `(seeker_user_id, company_slug) WHERE status = 'sent'`
+- [x] 1.3 Write sqlc queries: create/get/list-by-user offers, list-pending offers (moderator), decide offer; create request, list requests by seeker, list `sent` requests for a referrer's companies, mark request contacted/declined, count today's requests for a seeker
+- [x] 1.4 Add a query (or `EXISTS`) exposing "company has ≥1 approved offer" for the availability flag
+- [x] 1.5 Regenerate sqlc (`make sqlc`) and confirm `go build ./...`
 
 ## 2. Referral domain package
 
