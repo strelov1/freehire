@@ -76,6 +76,17 @@
   const requirements = $derived(
     analysis?.requirement_match?.length ? analysis.requirement_match : stream.requirements,
   );
+  // Coverage tally for the ATS-view header: covered folds in synonym-only matches (both are
+  // positive, matching the hero's count), `addit` is the fixable near-miss, `gap` the genuine miss.
+  const reqTally = $derived.by(() => {
+    const t = { covered: 0, addit: 0, gap: 0 };
+    for (const r of requirements) {
+      if (r.status === 'covered' || r.status === 'synonym-only') t.covered++;
+      else if (r.status === 'missing-have') t.addit++;
+      else if (r.status === 'missing-gap') t.gap++;
+    }
+    return t;
+  });
 
   function start() {
     stop();
@@ -358,13 +369,15 @@
       </div>
     {/if}
 
-    <!-- The report -->
+    <!-- The report — full-width stacked sections, each flowing into its own multi-column
+         grid, so the short Dimensions breakdown and the long ATS checklist stay balanced
+         instead of one column towering over an empty other. -->
     {#if analysis}
-      <div class={['grid gap-8', !stacked && 'lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]']}>
-        <!-- Dimensions -->
+      <div class="flex flex-col gap-10">
+        <!-- Dimensions: 6 scored rows read as a 2-column breakdown rather than a tall list. -->
         <section class="flex flex-col gap-5">
           <h2 class="{headingClass} text-muted-foreground">Dimensions</h2>
-          <div class="flex flex-col gap-5">
+          <div class={['grid gap-x-10 gap-y-6', !stacked && 'sm:grid-cols-2']}>
             {#each dimensions as d, i (d.key)}
               {@const dt = verdictTone(d.score)}
               <div class="fit-reveal flex flex-col gap-2" style="--i:{i + 2}">
@@ -381,15 +394,24 @@
           </div>
         </section>
 
-        <!-- ATS requirements -->
-        <section class="flex flex-col gap-5">
-          <h2 class="{headingClass} text-muted-foreground">Requirements · ATS view</h2>
-          <ul class="flex flex-col divide-y divide-border overflow-hidden rounded-xl border border-border">
+        <!-- ATS requirements: a light multi-column ledger with a coverage tally, so 29 terse
+             rows read as a scannable matrix instead of a boxed-in tower. -->
+        <section class="flex flex-col gap-4">
+          <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1.5">
+            <h2 class="{headingClass} text-muted-foreground">Requirements · ATS view</h2>
+            <div class="flex items-center gap-3 text-xs font-medium tabular-nums">
+              {#if reqTally.covered}<span class="text-brand-strong">{reqTally.covered} covered</span>{/if}
+              {#if reqTally.addit}<span class="text-amber-600 dark:text-amber-500">{reqTally.addit} to add</span>{/if}
+              {#if reqTally.gap}<span class="text-destructive">{reqTally.gap} gap</span>{/if}
+            </div>
+          </div>
+          <ul class={['grid gap-x-10', !stacked && 'sm:grid-cols-2 xl:grid-cols-3']}>
             {#each requirements as r, i (i)}
               {@const meta = requirementStatusMeta(r.status)}
-              <li class="flex items-start justify-between gap-3 px-3.5 py-2.5">
+              {@const showPriority = !!r.priority && r.priority.toLowerCase() !== 'required'}
+              <li class="flex items-start justify-between gap-3 border-b border-border/60 py-2">
                 <span class="min-w-0 text-sm leading-snug">
-                  <span class="mr-1 text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">{r.priority}</span>
+                  {#if showPriority}<span class="mr-1 text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">{r.priority}</span>{/if}
                   {r.text}
                 </span>
                 <span class="mt-px shrink-0 rounded-full border px-2 py-0.5 text-[0.7rem] font-semibold {toneChip[meta.tone]}">{meta.label}</span>
