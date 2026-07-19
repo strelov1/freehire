@@ -1,7 +1,10 @@
 package handler
 
 import (
+	"context"
+	"log"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -19,12 +22,14 @@ import (
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/emailnotify"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/gmailsync"
-	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/llm"
+	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/moderation"
+	"github.com/strelov1/freehire/internal/referral"
 	"github.com/strelov1/freehire/internal/report"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/resumeextract"
@@ -102,6 +107,11 @@ type API struct {
 	// contribution owns the crowdsourced paste-a-link flow (submit a URL → detect ATS,
 	// dedup by derived identity, record + award a point); list the caller's own.
 	contribution *contribution.Service
+	// referral owns the employee-referral use cases (offer to refer, request a referral,
+	// moderate offers, notify referrers). blob is the S3 store proof CVs are written to
+	// (nil when S3 is unconfigured — offer submit then reports 503).
+	referral *referral.Service
+	blob     blobstore.Store
 	// report owns the job-report moderation queue (file/list/resolve/dismiss);
 	// resolving may soft-close the reported job through the job-lifecycle close path.
 	report *report.Service
@@ -221,6 +231,11 @@ type Config struct {
 	// Credits carries the AI-points economics (monthly grant + per-action costs) that
 	// gate the match and tailor features.
 	Credits credits.Config
+	// AWSRegion + NotifyEmailFrom enable the SES email channel for referral pings, reusing
+	// the notify worker's config. Both must be set; either empty leaves referral pings
+	// Telegram-only (email disabled). NotifyEmailFrom is the verified SES sender address.
+	AWSRegion       string
+	NotifyEmailFrom string
 }
 
 // Register wires all routes onto the application from cfg. Auth is same-origin
@@ -296,6 +311,28 @@ func Register(app *fiber.App, cfg Config) {
 		a.search = cfg.Search
 		a.facets = cfg.Search
 	}
+
+	// Referral notifications reuse the SES email transport (email is always present) and
+	// the Telegram bot when linked. Each channel is wrapped only when configured so a nil
+	// concrete pointer never hides behind a non-nil interface (see the search note above);
+	// a referrer with no reachable channel still sees the request in-cabinet.
+	a.blob = cfg.Blob
+	var referralEmail referral.EmailSender
+	if cfg.AWSRegion != "" && cfg.NotifyEmailFrom != "" {
+		if ec, err := emailnotify.NewClient(context.Background(), cfg.AWSRegion); err != nil {
+			log.Printf("referral: email pinger disabled: %v", err)
+		} else {
+			referralEmail = ec
+		}
+	}
+	var referralTelegram referral.TelegramSender
+	if a.telegramBot != nil {
+		referralTelegram = a.telegramBot
+	}
+	referralPinger := referral.NewChannelPinger(referralEmail, cfg.NotifyEmailFrom, referralTelegram)
+	referralCabinetURL := strings.TrimRight(cfg.FrontendOrigin, "/") + "/my/referrals/incoming"
+	a.referral = referral.New(referral.NewQueriesRepository(queries), referralPinger,
+		referral.Config{CabinetURL: referralCabinetURL})
 
 	app.Use(cors.New(cors.Config{AllowOrigins: cfg.FrontendOrigin}))
 
@@ -414,6 +451,19 @@ func Register(app *fiber.App, cfg Config) {
 	// reads their own contributions; the points balance rides on /auth/me.
 	api.Post("/me/contributions", keyAuth, a.CreateContribution)
 	api.Get("/me/contributions", keyAuth, a.ListMyContributions)
+
+	// Employee referrals: any authenticated user (cookie or API key) offers to refer into a
+	// company (proof CV, moderated) and requests a referral from a company's approved-referrer
+	// pool; referrers manage their own incoming requests. The offer-moderation queue is
+	// moderator-gated, mirroring the submissions queue above.
+	api.Post("/me/referrals/offers", keyAuth, a.SubmitReferralOffer)
+	api.Get("/me/referrals/offers", keyAuth, a.ListMyReferralOffers)
+	api.Post("/me/referrals/requests", keyAuth, a.CreateReferralRequest)
+	api.Get("/me/referrals/requests", keyAuth, a.ListMyReferralRequests)
+	api.Get("/me/referrals/incoming", keyAuth, a.ListIncomingReferralRequests)
+	api.Post("/me/referrals/incoming/:id/resolve", keyAuth, a.ResolveReferralRequest)
+	api.Get("/referrals/offers", keyAuth, requireModerator, a.ListPendingReferralOffers)
+	api.Post("/referrals/offers/:id/decide", keyAuth, requireModerator, a.DecideReferralOffer)
 
 	// Job reports: any authenticated user flags a problem with a live vacancy (cookie or
 	// API key), addressed by the job's public slug. The review actions (the pending queue,

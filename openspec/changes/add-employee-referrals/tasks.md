@@ -16,13 +16,13 @@
 
 ## 3. HTTP handlers & routes
 
-- [ ] 3.1 Seeker: `POST` create referral request (behind `RequireAuth`); validation errors → 400
-- [ ] 3.2 Seeker: `GET` list own referral requests (company, CV, status)
-- [ ] 3.3 Referrer: `POST` submit offer (proof-CV upload via résumé storage path) + `GET` list own offers
+- [x] 3.1 Seeker: `POST` create referral request (behind `RequireAuth`); validation errors → 400
+- [x] 3.2 Seeker: `GET` list own referral requests (company, CV, status)
+- [x] 3.3 Referrer: `POST` submit offer (proof-CV upload via résumé storage path) + `GET` list own offers
 - [ ] 3.4 Referrer: `GET` incoming requests for my companies + `POST` mark contacted/declined + authorized CV view endpoint
-- [ ] 3.5 Moderator: `GET` pending offers queue + `POST` approve/reject (behind moderator auth)
+- [x] 3.5 Moderator: `GET` pending offers queue + `POST` approve/reject (behind moderator auth)
 - [ ] 3.6 Add the `referral_available` flag to the company read shape and `jobview` projection
-- [ ] 3.7 Wire routes in the handler registry; return `{"data": ...}` shapes per convention
+- [x] 3.7 Wire routes in the handler registry; return `{"data": ...}` shapes per convention
 
 ## 4. Frontend
 

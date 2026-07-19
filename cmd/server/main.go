@@ -163,6 +163,9 @@ func main() {
 		TelegramWebhookSecret: cfg.TelegramWebhookSecret,
 
 		Credits: credits.Config(config.LoadCredits()),
+
+		AWSRegion:       cfg.AWSRegion,
+		NotifyEmailFrom: cfg.NotifyEmailFrom,
 	})
 
 	// Run the server in a goroutine so main can wait for a shutdown signal.
