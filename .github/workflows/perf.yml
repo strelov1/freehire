@@ -92,16 +92,22 @@ jobs:
           MEILI_MASTER_KEY: dev-insecure-meili-key
         run: go run ./cmd/reindex
 
-      - name: Wait for the SSR frontend to render
+      - name: Wait for the SSR frontend to respond
+        # Readiness only needs the SSR server to answer — a 2xx or 3xx both mean
+        # it's up and routing. Whether a page returns the right final status is
+        # k6's job below (it follows redirects and asserts 200 + HTML). The
+        # response headers are logged so any unexpected redirect is visible.
         if: steps.changes.outputs.relevant == 'true'
         run: |
           for i in $(seq 1 30); do
             web=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8090/ || true)
             echo "attempt $i: web=$web"
-            [ "$web" = "200" ] && exit 0
+            case "$web" in
+              2*|3*) echo "SSR responding:"; curl -sI http://localhost:8090/ | head -6; exit 0 ;;
+            esac
             sleep 3
           done
-          echo "SSR frontend did not render"; docker compose ps; docker compose logs --tail=150 web app; exit 1
+          echo "SSR did not respond"; docker compose ps; docker compose logs --tail=150 web app; exit 1
 
       - name: Create a throwaway user for the authed scenarios
         # A real session exercises the /me + personalized chrome path. Registering
