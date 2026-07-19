@@ -221,8 +221,9 @@
   {/snippet}
 
   {#if profile === null}
-    <!-- Set-up: the inline form only; coverage appears once a profile exists. -->
-    <div class="mx-auto w-full max-w-2xl">
+    <!-- Set-up: the inline form only; coverage appears once a profile exists. Full-width to
+         match the loaded profile tab, whose main column also spans the container (no aside). -->
+    <div class="w-full">
       <ProfileForm profile={null} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
     </div>
   {:else}
