@@ -98,7 +98,7 @@
     );
 </script>
 
-<section class="max-w-2xl rounded-xl border border-border bg-card p-4">
+<section class="rounded-xl border border-border bg-card p-4">
   <div class="flex items-center gap-3">
     <div class="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-muted text-brand-strong">
       <Bell class="size-4.5" aria-hidden="true" />
