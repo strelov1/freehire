@@ -87,6 +87,15 @@
     }
     return t;
   });
+  // Split the ledger so the misses stand out: `attentionReqs` are the fixable
+  // near-misses + genuine gaps, pulled into a highlighted callout; `coveredReqs`
+  // are everything already satisfied.
+  const attentionReqs = $derived(
+    requirements.filter((r) => r.status === 'missing-have' || r.status === 'missing-gap'),
+  );
+  const coveredReqs = $derived(
+    requirements.filter((r) => r.status === 'covered' || r.status === 'synonym-only'),
+  );
 
   function start() {
     stop();
@@ -405,16 +414,44 @@
               {#if reqTally.gap}<span class="text-destructive">{reqTally.gap} gap</span>{/if}
             </div>
           </div>
+          <!-- Needs attention: the near-misses + genuine gaps pulled out and
+               highlighted, so the few misses are seen at a glance instead of hunted
+               for in the covered ledger. -->
+          {#if attentionReqs.length}
+            <div class="rounded-xl border border-destructive/25 bg-destructive/5 p-4">
+              <h3 class="mb-2.5 text-[0.7rem] font-semibold uppercase tracking-wider text-destructive/90">
+                Needs attention
+              </h3>
+              <ul class={['grid gap-x-10 gap-y-0.5', !stacked && 'sm:grid-cols-2']}>
+                {#each attentionReqs as r, i (i)}
+                  {@const meta = requirementStatusMeta(r.status)}
+                  <li class="flex items-start justify-between gap-3 py-1.5">
+                    <span class="min-w-0 text-sm font-medium leading-snug text-foreground">{r.text}</span>
+                    <span class="mt-px flex shrink-0 items-center gap-2">
+                      {#if r.priority && r.priority.toLowerCase() !== 'required'}
+                        <span class="text-[0.6rem] font-medium lowercase tracking-wide text-muted-foreground/70">{r.priority}</span>
+                      {/if}
+                      <span class="rounded-full border px-2 py-0.5 text-[0.7rem] font-semibold {toneChip[meta.tone]}">{meta.label}</span>
+                    </span>
+                  </li>
+                {/each}
+              </ul>
+            </div>
+          {/if}
+
+          <!-- Covered ledger: text is left-aligned across every row; the `preferred`
+               qualifier sits on the right by the chip so it never shifts the text. -->
           <ul class={['grid gap-x-10', !stacked && 'sm:grid-cols-2 xl:grid-cols-3']}>
-            {#each requirements as r, i (i)}
+            {#each coveredReqs as r, i (i)}
               {@const meta = requirementStatusMeta(r.status)}
-              {@const showPriority = !!r.priority && r.priority.toLowerCase() !== 'required'}
               <li class="flex items-start justify-between gap-3 border-b border-border/60 py-2">
-                <span class="min-w-0 text-sm leading-snug">
-                  {#if showPriority}<span class="mr-1 text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">{r.priority}</span>{/if}
-                  {r.text}
+                <span class="min-w-0 text-sm leading-snug">{r.text}</span>
+                <span class="mt-px flex shrink-0 items-center gap-2">
+                  {#if r.priority && r.priority.toLowerCase() !== 'required'}
+                    <span class="text-[0.6rem] font-medium lowercase tracking-wide text-muted-foreground/60">{r.priority}</span>
+                  {/if}
+                  <span class="rounded-full border px-2 py-0.5 text-[0.7rem] font-semibold {toneChip[meta.tone]}">{meta.label}</span>
                 </span>
-                <span class="mt-px shrink-0 rounded-full border px-2 py-0.5 text-[0.7rem] font-semibold {toneChip[meta.tone]}">{meta.label}</span>
               </li>
             {/each}
           </ul>

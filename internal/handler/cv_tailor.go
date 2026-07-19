@@ -60,10 +60,10 @@ type tailorCVRequest struct {
 // base it was copied from, the cached analysis (so the client need not refetch), and the
 // short-lived CLI token the agent session authenticates with.
 type tailorCVResponse struct {
-	TailorCVID int64            `json:"tailor_cv_id"`
-	BaseCVID   int64            `json:"base_cv_id"`
+	TailorCVID int64                   `json:"tailor_cv_id"`
+	BaseCVID   int64                   `json:"base_cv_id"`
 	Analysis   *matchanalysis.Analysis `json:"analysis"`
-	CLIToken   string           `json:"cli_token"`
+	CLIToken   string                  `json:"cli_token"`
 }
 
 // TailorCV bootstraps a tailoring session for a vacancy: it requires a cached fit analysis
@@ -201,15 +201,15 @@ type tailorJob struct {
 // vacancy, the verdict and recommendation, per-dimension comments, and the requirement split
 // the honest wall turns on — missing_have (reframe existing evidence) vs missing_gap (ask first).
 type tailorContextResponse struct {
-	Job            tailorJob            `json:"job"`
-	Verdict        string               `json:"verdict"`
-	OverallScore   int                  `json:"overall_score"`
-	Recommendation string               `json:"recommendation"`
+	Job            tailorJob                   `json:"job"`
+	Verdict        string                      `json:"verdict"`
+	OverallScore   int                         `json:"overall_score"`
+	Recommendation string                      `json:"recommendation"`
 	Dimensions     []matchanalysis.Dimension   `json:"dimensions"`
 	MissingHave    []matchanalysis.Requirement `json:"missing_have"`
 	MissingGap     []matchanalysis.Requirement `json:"missing_gap"`
-	Strengths      []string             `json:"strengths"`
-	Gaps           []string             `json:"gaps"`
+	Strengths      []string                    `json:"strengths"`
+	Gaps           []string                    `json:"gaps"`
 }
 
 // TailorContext serves the cached fit analysis for a tailored CV, projected to the tailoring
