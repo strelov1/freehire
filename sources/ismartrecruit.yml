@@ -1,0 +1,8 @@
+# iSmartRecruit-hosted career boards. Provider is the filename; each entry is company + board.
+# board = the tenant's decoded "<domain>_<code>" (readable form of the widget's tenantId token,
+# which the adapter wraps as E7p+rawbase64+Q9e; see internal/sources/ismartrecruit.go). Keyless.
+
+- company: iSmartRecruit
+  board: inhousehiring.com_BUAVSM0UMK
+- company: CA Global
+  board: caglobalint.com_8oi10Y11UJ
