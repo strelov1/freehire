@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { page } from '$app/state';
+  import { replaceState } from '$app/navigation';
   import { FileText } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import { AsyncData } from '$lib/asyncData.svelte';
@@ -16,7 +18,21 @@
   import States from './States.svelte';
 
   type Tab = 'requests' | 'offers' | 'incoming';
-  let tab = $state<Tab>('requests');
+  const tabs: Tab[] = ['requests', 'offers', 'incoming'];
+
+  // Open on the tab named in `?tab=` so deep-links land right — notably the
+  // "new referral request" ping, which links approved referrers to `?tab=incoming`.
+  function readTab(): Tab {
+    const t = page.url.searchParams.get('tab');
+    return tabs.includes(t as Tab) ? (t as Tab) : 'requests';
+  }
+  let tab = $state<Tab>(readTab());
+  function selectTab(next: Tab) {
+    if (next === tab) return;
+    tab = next;
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- in-place query write to the current pathname; there is no route to resolve
+    replaceState(`${page.url.pathname}?tab=${next}`, {});
+  }
 
   const requests = new AsyncData<SeekerReferralRequest[]>([]);
   const offers = new AsyncData<ReferralOffer[]>([]);
@@ -102,7 +118,7 @@
         type="button"
         role="tab"
         aria-selected={tab === id}
-        onclick={() => (tab = id as Tab)}
+        onclick={() => selectTab(id as Tab)}
         class={[
           '-mb-px border-b-2 px-3 py-2.5 text-sm font-semibold',
           tab === id ? 'border-brand text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
