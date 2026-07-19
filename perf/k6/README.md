@@ -29,18 +29,18 @@ records `page_body_bytes{auth:…}` so you can see anon vs authed payload size.
 k6 run perf/k6/pages.js
 ```
 
-Defaults: `K6_BASE_URL=http://localhost:8090`, `PROFILE=smoke`, authed via the
+Defaults: `PERF_BASE_URL=http://localhost:8090`, `PROFILE=smoke`, authed via the
 local QA account (`qa@freehire.local`). The `smoke` profile runs each
 scenario in its own time window (staggered) so per-page latency doesn't contend.
 
 ## Run against prod (env swap only)
 
 All target pages are idempotent GETs. Pointing at a non-local origin requires an
-explicit `ALLOW_NONLOCAL=1` latch so a stray `K6_BASE_URL` can never quietly load
+explicit `ALLOW_NONLOCAL=1` latch so a stray `PERF_BASE_URL` can never quietly load
 prod. Prefer a real captured session cookie over prod credentials:
 
 ```bash
-K6_BASE_URL=https://freehire.dev \
+PERF_BASE_URL=https://freehire.dev \
 ALLOW_NONLOCAL=1 \
 AUTH_COOKIE='<paste hire_token value from your browser>' \
 MAX_RPS=20 \
@@ -55,7 +55,7 @@ omit `AUTH_COOKIE`.
 ## Blended load test
 
 ```bash
-PROFILE=load K6_VUS=20 K6_DURATION=2m k6 run perf/k6/pages.js
+PROFILE=load PERF_VUS=20 PERF_DURATION=2m k6 run perf/k6/pages.js
 ```
 
 Runs all scenarios concurrently under a ramping-VUs profile (local by default;
@@ -65,7 +65,7 @@ Runs all scenarios concurrently under a ramping-VUs profile (local by default;
 
 | env                    | default                       | purpose                                        |
 | ---------------------- | ----------------------------- | ---------------------------------------------- |
-| `K6_BASE_URL`          | `http://localhost:8090`       | target origin (fronts SSR + `/api`)            |
+| `PERF_BASE_URL`        | `http://localhost:8090`       | target origin (fronts SSR + `/api`)            |
 | `ALLOW_NONLOCAL`       | —                             | must be `1` for any non-localhost origin       |
 | `PROFILE`              | `smoke`                       | `smoke` (isolated) or `load` (blended)         |
 | `AUTH_COOKIE`          | —                             | reuse a `hire_token` instead of logging in     |

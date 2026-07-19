@@ -126,9 +126,9 @@ jobs:
         # fine-grained latency (a shared runner on empty data can't measure that).
         if: steps.changes.outputs.relevant == 'true'
         env:
-          K6_BASE_URL: http://localhost:8090
-          K6_WINDOW_SEC: '8'
-          K6_VUS: '2'
+          PERF_BASE_URL: http://localhost:8090
+          PERF_WINDOW_SEC: '8'
+          PERF_VUS: '2'
           SLO_HOME: '8000'
           SLO_HOME_FILTERED: '8000'
           SLO_COMPANIES: '8000'
@@ -152,10 +152,10 @@ jobs:
         # Anonymous by default. To also cover the authed path, add a PROD_AUTH_COOKIE
         # repo secret (a real hire_token) and pass it as AUTH_COOKIE below.
         env:
-          K6_BASE_URL: https://freehire.dev
+          PERF_BASE_URL: https://freehire.dev
           ALLOW_NONLOCAL: '1'
-          K6_WINDOW_SEC: '20'
-          K6_VUS: '3'
+          PERF_WINDOW_SEC: '20'
+          PERF_VUS: '3'
           MAX_RPS: '15'
           THINK: '1'
           # Baselines observed ~0.6–1.6s p95; ceilings carry generous headroom so

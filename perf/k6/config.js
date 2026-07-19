@@ -4,13 +4,17 @@
 // `make up` stack (the default) or any remote origin (staging, prod) with no
 // code changes — you only swap env vars.
 //
-//   K6_BASE_URL   origin that fronts BOTH the SSR pages and /api
+//   PERF_BASE_URL origin that fronts BOTH the SSR pages and /api
 //                 local: http://localhost:8090 (default) — prod: https://freehire.dev
 //   ALLOW_NONLOCAL=1   REQUIRED to target any non-localhost origin (a deliberate
-//                      safety latch so a stray K6_BASE_URL can't hammer prod)
+//                      safety latch so a stray PERF_BASE_URL can't hammer prod)
 //   PROFILE       'smoke' (default, isolated per-page) | 'load' (blended stress)
-//   K6_VUS        virtual users per scenario   (profile default otherwise)
-//   K6_DURATION   duration per scenario        (load profile)
+//   PERF_VUS      virtual users per scenario   (profile default otherwise)
+//   PERF_DURATION duration per scenario        (load profile)
+//
+// NOTE: custom env vars are deliberately NOT prefixed `K6_` — k6 reserves that
+// prefix for its own native options (e.g. K6_VUS would create a rogue "default"
+// scenario and ignore ours), so we use PERF_* instead.
 //   MAX_RPS       global request/sec ceiling   (0 = unlimited; auto-caps off-local)
 //   QA_EMAIL / QA_PASSWORD   credentials the authed scenarios log in with (local)
 //   AUTH_COOKIE   a full `hire_token=...` value to reuse instead of logging in
@@ -22,11 +26,11 @@ const env = (k, fallback) => (__ENV[k] !== undefined && __ENV[k] !== '' ? __ENV[
 // URL covers both the login call and every page navigation — exactly the
 // same-origin shape the browser sees (the Lax auth cookie rides along). Prod is
 // identical in shape: freehire.dev fronts both, so only the origin changes.
-export const BASE_URL = env('K6_BASE_URL', 'http://localhost:8090');
+export const BASE_URL = env('PERF_BASE_URL', 'http://localhost:8090');
 
 // Targeting anything other than localhost is a deliberate act, never an env
 // typo. This latch runs at init (top of every VU + setup), so a wrong
-// K6_BASE_URL aborts the whole run before a single request is fired at prod.
+// PERF_BASE_URL aborts the whole run before a single request is fired at prod.
 export const IS_LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/.test(BASE_URL);
 if (!IS_LOCAL && env('ALLOW_NONLOCAL', '') !== '1') {
   throw new Error(
@@ -132,8 +136,8 @@ export function buildScenarios() {
   const scenarios = {};
 
   if (PROFILE === 'load') {
-    const vus = Number(env('K6_VUS', 15));
-    const dur = env('K6_DURATION', '1m');
+    const vus = Number(env('PERF_VUS', 15));
+    const dur = env('PERF_DURATION', '1m');
     for (const page of pages) {
       for (const auth of MODES) {
         scenarios[`${page}_${auth}`] = {
@@ -153,10 +157,10 @@ export function buildScenarios() {
   }
 
   // smoke: isolate each scenario in its own time window so their latencies don't
-  // contend. Off-local we clamp VUs low regardless of K6_VUS — the rps cap and a
+  // contend. Off-local we clamp VUs low regardless of PERF_VUS — the rps cap and a
   // couple of VUs are plenty to measure latency without pressuring prod.
-  const vus = IS_LOCAL ? Number(env('K6_VUS', 2)) : Math.min(Number(env('K6_VUS', 2)), 2);
-  const windowSec = Number(env('K6_WINDOW_SEC', 15));
+  const vus = IS_LOCAL ? Number(env('PERF_VUS', 2)) : Math.min(Number(env('PERF_VUS', 2)), 2);
+  const windowSec = Number(env('PERF_WINDOW_SEC', 15));
   let i = 0;
   for (const page of pages) {
     for (const auth of MODES) {
