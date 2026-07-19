@@ -36,6 +36,8 @@
     isExpandable,
     callLine,
     bashCommand,
+    commandLine,
+    isFreehireGroup,
     nonEmptyInput,
     previewToolInput,
     type ToolCall,
@@ -806,7 +808,13 @@
                         <ChevronRight class="chev size-3.5 shrink-0 transition-transform" />
                       </span>
                     </summary>
-                    {#if g.family === 'bash'}
+                    {#if g.family === 'bash' && isFreehireGroup(g.calls)}
+                      <ul class="mt-2 ml-6 space-y-1 text-xs text-muted-foreground">
+                        {#each g.calls as c, ci (ci)}
+                          <li>{commandLine(c.input)}</li>
+                        {/each}
+                      </ul>
+                    {:else if g.family === 'bash'}
                       <div class="mt-2 overflow-hidden rounded-md border border-border bg-background">
                         <div class="border-b border-border bg-muted/40 px-3 py-1.5 text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground/80">
                           Shell

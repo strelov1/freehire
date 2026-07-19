@@ -20,9 +20,56 @@ function truncate(s: string, n: number): string {
 const FS_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS']);
 
 export function classifyFamily(name: string): ToolFamily {
-  if (name === 'Bash') return 'bash';
+  // The assistant runs the `freehire` CLI through the harness shell tool, which
+  // the ACP layer surfaces as `Terminal` (Claude Code) — group it with `Bash`.
+  if (name === 'Bash' || name === 'Terminal') return 'bash';
   if (FS_TOOLS.has(name)) return 'fs';
   return 'other';
+}
+
+// Map a `freehire <subcommand>` invocation to a neutral, human-readable label so
+// the transcript reads as intent ("Reading your CV") rather than a raw shell line
+// — the assistant's only shell tool is the freehire CLI. Longest sub-command path
+// wins (e.g. `cv context` before `cv`).
+const FREEHIRE_LABELS: Record<string, string> = {
+  'cv context': 'Reading the fit analysis',
+  'cv get': 'Reading your CV',
+  'cv edit': 'Updating your CV',
+  'cv render': 'Rendering your CV',
+  search: 'Searching jobs',
+  job: 'Reading a job posting',
+  company: 'Reading a company',
+  facets: 'Loading filters',
+  'market-fit': 'Analyzing market fit',
+};
+
+/** Friendly label for a `freehire …` command, or `null` if it is not one. */
+export function freehireLabel(command: string): string | null {
+  const parts = command.trim().split(/\s+/);
+  if (parts[0] !== 'freehire') return null;
+  const two = parts.slice(1, 3).join(' ');
+  const one = parts[1] ?? '';
+  return FREEHIRE_LABELS[two] ?? FREEHIRE_LABELS[one] ?? 'Working with freehire';
+}
+
+/** True when every call in the group is a `freehire` command — render as intent
+ *  labels with no shell chrome, and never surface the raw command. */
+export function isFreehireGroup(calls: readonly ToolCall[]): boolean {
+  return (
+    calls.length > 0 &&
+    calls.every((c) => {
+      const cmd = bashCommand(c.input);
+      return cmd != null && freehireLabel(cmd) != null;
+    })
+  );
+}
+
+/** One expanded line for a shell/terminal call: the friendly `freehire` label, or
+ *  `$ <command>` for any other command. */
+export function commandLine(input: unknown): string {
+  const cmd = bashCommand(input);
+  if (!cmd) return 'Command';
+  return freehireLabel(cmd) ?? `$ ${cmd}`;
 }
 
 /** Title shown in the collapsed header. */
@@ -30,6 +77,15 @@ export function groupTitle(family: ToolFamily, calls: readonly ToolCall[]): stri
   const first = calls[0];
   if (!first) return '';
   if (family === 'bash') {
+    if (isFreehireGroup(calls)) {
+      // Collapse to the distinct intent labels ("Reading the fit analysis ·
+      // Reading your CV"), capped so the header stays short.
+      const distinct = [
+        ...new Set(calls.map((c) => freehireLabel(bashCommand(c.input) ?? '') as string)),
+      ];
+      if (distinct.length <= 2) return distinct.join(' · ');
+      return `${distinct.slice(0, 2).join(' · ')} · +${distinct.length - 2}`;
+    }
     if (calls.length === 1) {
       const cmd = bashCommand(first.input);
       return cmd ? `Ran ${shortenCommand(cmd)}` : 'Ran command';
@@ -78,7 +134,18 @@ export function callLine(call: ToolCall): string {
 }
 
 export function bashCommand(input: unknown): string | null {
-  return readField(input, 'command', 'cmd');
+  if (typeof input === 'string') return input.length > 0 ? input : null;
+  const cmd = readField(input, 'command', 'cmd');
+  if (cmd) return cmd;
+  // ACP terminal calls may carry argv instead of a single command string.
+  if (input && typeof input === 'object') {
+    const args = (input as Record<string, unknown>).args;
+    if (Array.isArray(args)) {
+      const parts = args.filter((a): a is string => typeof a === 'string');
+      if (parts.length > 0) return parts.join(' ');
+    }
+  }
+  return null;
 }
 
 export function nonEmptyInput(input: unknown): boolean {
@@ -98,7 +165,11 @@ export function previewToolInput(input: unknown): string {
 /** Whether the group's body adds anything beyond its title — used to decide
  *  between a flat chip and an expandable `<details>` in the renderer. */
 export function isExpandable(family: ToolFamily, calls: readonly ToolCall[]): boolean {
-  if (family === 'bash') return true;
+  if (family === 'bash') {
+    // A single freehire call is fully described by its intent label — flat chip.
+    if (isFreehireGroup(calls) && calls.length === 1) return false;
+    return true;
+  }
   if (family === 'fs') return calls.length > 1;
   return calls.some((c) => nonEmptyInput(c.input));
 }
