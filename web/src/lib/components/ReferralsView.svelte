@@ -54,6 +54,15 @@
   let offerBusy = $state(false);
   let offerError = $state<string | null>(null);
 
+  function offerErrorMessage(err: unknown): string {
+    if (err instanceof ApiError) {
+      if (err.status === 409) return 'You already offered to refer for this company.';
+      if (err.status === 404) return "We don't have that company — check the slug in its page URL.";
+      if (err.status === 503) return 'File upload is unavailable right now.';
+    }
+    return 'Could not submit the offer. Please try again.';
+  }
+
   async function submitOffer(e: SubmitEvent) {
     e.preventDefault();
     const file = offerFile?.[0];
@@ -67,14 +76,7 @@
       offerFile = null;
       await offers.run(() => api.listMyReferralOffers());
     } catch (err) {
-      offerError =
-        err instanceof ApiError && err.status === 409
-          ? 'You already offered to refer for this company.'
-          : err instanceof ApiError && err.status === 404
-            ? "We don't have that company — check the slug in its page URL."
-            : err instanceof ApiError && err.status === 503
-              ? 'File upload is unavailable right now.'
-              : 'Could not submit the offer. Please try again.';
+      offerError = offerErrorMessage(err);
     } finally {
       offerBusy = false;
     }
