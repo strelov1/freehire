@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { resolve } from '$app/paths';
-  import { Bell, Bookmark, EyeOff, X } from '@lucide/svelte';
+  import { Bookmark, EyeOff, X } from '@lucide/svelte';
   import CompanyLogo from './CompanyLogo.svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
@@ -86,7 +86,6 @@
   // Suppressed in the compact (assistant) card, where the corner has no room.
   let reminderPrompt = $state(false);
   let reminderBusy = $state(false);
-  let reminderSet = $state(false);
 
   const REMINDER_CHOICES: { label: string; days: number }[] = [
     { label: 'Tomorrow', days: 1 },
@@ -99,7 +98,9 @@
     reminderBusy = true;
     try {
       await api.saveJob(job.public_slug, { delay_days: days });
-      reminderSet = true;
+      // Picking a delay is the whole gesture — closing the prompt is the
+      // confirmation, so there's no extra "done" step to dismiss.
+      reminderPrompt = false;
     } catch {
       // Best-effort: leave the prompt so the user can retry.
     } finally {
@@ -124,7 +125,6 @@
     else markSaved(job.public_slug);
     // Unsaving closes any open prompt; a fresh save opens it.
     reminderPrompt = false;
-    reminderSet = false;
     try {
       if (wasSaved) await api.unsaveJob(job.public_slug);
       else await api.saveJob(job.public_slug);
@@ -268,39 +268,33 @@
   <!-- Post-save reminder prompt: a small popover under the bookmark. Non-modal —
        dismissing it (or ignoring the card) leaves the account default in effect. -->
   <div class="absolute right-2.5 top-12 z-10 w-56 rounded-lg border border-border bg-popover p-2.5 shadow-md">
-    {#if reminderSet}
-      <p class="flex items-center gap-1.5 px-1 py-0.5 text-xs text-muted-foreground">
-        <Bell class="size-3.5 text-brand" aria-hidden="true" /> Reminder set.
-        <button type="button" onclick={() => (reminderPrompt = false)} class="ml-auto font-medium text-foreground hover:opacity-80">Done</button>
-      </p>
-    {:else}
-      <div class="flex items-center justify-between px-1 pb-1.5">
-        <span class="text-xs font-semibold">Remind me to apply?</span>
-        <button type="button" onclick={() => (reminderPrompt = false)} aria-label="Dismiss reminder prompt" class="text-muted-foreground hover:text-foreground">
-          <X class="size-3.5" aria-hidden="true" />
+    <div class="flex items-center justify-between px-1 pb-1.5">
+      <span class="text-xs font-semibold">Remind me to apply?</span>
+      <button type="button" onclick={() => (reminderPrompt = false)} aria-label="Dismiss reminder prompt" class="text-muted-foreground hover:text-foreground">
+        <X class="size-3.5" aria-hidden="true" />
+      </button>
+    </div>
+    <div class="flex flex-wrap gap-1.5">
+      {#each REMINDER_CHOICES as c (c.days)}
+        <button
+          type="button"
+          onclick={() => setReminder(c.days)}
+          disabled={reminderBusy}
+          class="rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-brand hover:text-brand disabled:opacity-50"
+        >
+          {c.label}
         </button>
-      </div>
-      <div class="flex flex-wrap gap-1.5">
-        {#each REMINDER_CHOICES as c (c.days)}
-          <button
-            type="button"
-            onclick={() => setReminder(c.days)}
-            disabled={reminderBusy}
-            class="rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-brand hover:text-brand disabled:opacity-50"
-          >
-            {c.label}
-          </button>
-        {/each}
-      </div>
-    {/if}
+      {/each}
+    </div>
   </div>
 {/if}
 
 <!-- Hide control: only the browse feed passes `onHide`, so this appears there and
      nowhere else. A quiet icon in the card's bottom-right corner, revealed on hover
-     (and on keyboard focus). It's an overlay sibling of the card link, so hiding
-     never navigates. An opaque background keeps it legible over the salary corner on
-     the minority of cards that show one. -->
+     (and on keyboard focus). Touch devices have no hover, so `pointer-coarse` keeps it
+     always visible there. It's an overlay sibling of the card link, so hiding never
+     navigates. An opaque background keeps it legible over the salary corner on the
+     minority of cards that show one. -->
 {#if onHide}
   <button
     type="button"
@@ -308,7 +302,7 @@
     disabled={hiding}
     aria-label="Hide this job"
     title="Not interested — hide this job"
-    class="absolute bottom-2.5 right-2.5 grid size-8 place-items-center rounded-lg bg-accent text-muted-foreground opacity-0 shadow-sm ring-1 ring-border transition hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-50"
+    class="absolute bottom-2.5 right-2.5 grid size-8 place-items-center rounded-lg bg-accent text-muted-foreground opacity-0 shadow-sm ring-1 ring-border transition hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100 disabled:pointer-events-none disabled:opacity-50"
   >
     <EyeOff class="size-3.5" aria-hidden="true" />
   </button>
