@@ -52,16 +52,17 @@ export function freehireLabel(command: string): string | null {
   return FREEHIRE_LABELS[two] ?? FREEHIRE_LABELS[one] ?? 'Working with freehire';
 }
 
+/** Intent label for a call's shell command, or `null` when it is not a freehire
+ *  call (no command, or a non-freehire program). */
+function labelFor(input: unknown): string | null {
+  const cmd = bashCommand(input);
+  return cmd ? freehireLabel(cmd) : null;
+}
+
 /** True when every call in the group is a `freehire` command — render as intent
  *  labels with no shell chrome, and never surface the raw command. */
 export function isFreehireGroup(calls: readonly ToolCall[]): boolean {
-  return (
-    calls.length > 0 &&
-    calls.every((c) => {
-      const cmd = bashCommand(c.input);
-      return cmd != null && freehireLabel(cmd) != null;
-    })
-  );
+  return calls.length > 0 && calls.every((c) => labelFor(c.input) !== null);
 }
 
 /** One expanded line for a shell/terminal call: the friendly `freehire` label, or
@@ -81,7 +82,7 @@ export function groupTitle(family: ToolFamily, calls: readonly ToolCall[]): stri
       // Collapse to the distinct intent labels ("Reading the fit analysis ·
       // Reading your CV"), capped so the header stays short.
       const distinct = [
-        ...new Set(calls.map((c) => freehireLabel(bashCommand(c.input) ?? '') as string)),
+        ...new Set(calls.map((c) => labelFor(c.input)).filter((l): l is string => l !== null)),
       ];
       if (distinct.length <= 2) return distinct.join(' · ');
       return `${distinct.slice(0, 2).join(' · ')} · +${distinct.length - 2}`;
