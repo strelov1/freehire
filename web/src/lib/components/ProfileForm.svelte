@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ArrowUp, Check, X } from '@lucide/svelte';
-  import { api, ApiError } from '$lib/api';
+  import { api, ApiError, RESUME_MAX_MB } from '$lib/api';
   import {
     CATEGORY_OPTIONS,
     categoryLabel,
@@ -368,7 +368,7 @@
       {/if}
     </button>
     <span class="text-xs text-muted-foreground">
-      Extracts your skills below · parsed on the server; the file is stored to score its readiness.
+      PDF with selectable text, up to {RESUME_MAX_MB} MB · extracts your skills below; the file is stored to score its readiness.
     </span>
     {#if resumeError}
       <p class="text-sm text-destructive">{resumeError}</p>

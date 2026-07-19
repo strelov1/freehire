@@ -59,9 +59,14 @@ func main() {
 		AppName:      "hire",
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
-		// Cap request bodies well under Fiber's 4MB default: the largest write is a
-		// single moderator job description, so 1MB bounds a memory-amplification body.
-		BodyLimit:    1 * 1024 * 1024,
+		// Cap request bodies at 8MB: résumé PDF uploads are the largest write (design-heavy
+		// CVs run past 1MB), and Fiber's BodyLimit is global — there is no per-route limit —
+		// so this ceiling applies to every endpoint. Keep it as tight as the résumé path
+		// allows to bound a memory-amplification body. The web client rejects oversize
+		// résumés up front so users get a clear message instead of a raw 413. Seam: if the
+		// broad ceiling ever matters, add a Content-Length guard middleware on the non-upload
+		// routes rather than lowering this.
+		BodyLimit:    8 * 1024 * 1024,
 		ErrorHandler: handler.RenderError,
 		// The app sits behind the in-network nginx proxy (web/nginx.conf). Key c.IP()
 		// (and thus the rate limiter) on X-Real-IP, which nginx OVERWRITES with the real

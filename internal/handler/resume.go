@@ -39,6 +39,12 @@ type cvProfile struct {
 	Categories []string
 }
 
+// errResumeNoText is returned when a résumé file parsed cleanly but yielded no text —
+// a scanned or image-only PDF with no selectable text layer. The message names the real
+// cause (not a bare "empty") so the user knows to upload a text-based PDF or paste the
+// text, rather than assuming the file was rejected for its size.
+const errResumeNoText = "couldn't read any text from this PDF — it looks like a scan or image. Upload a text-based PDF, or paste your résumé text instead."
+
 // headlineRunes bounds the résumé "headline" fed to the title dictionaries: wide enough to
 // clear the name + contact preamble and reach the title (and a few summary words), tight
 // enough that the career-history section below can't reach in and over-promote the grade.
@@ -119,7 +125,7 @@ func resumeProfile(text string) cvProfile {
 // (a hiccup must not fail extraction, this endpoint's contract). When storage is
 // unconfigured the résumé is parsed and discarded (only the derived fields are returned).
 // Behind RequireAuth (cookie-only). Oversize bodies are rejected by the server's global
-// BodyLimit (413) before this handler runs.
+// BodyLimit (413) before this handler runs; the web client also guards the size up front.
 func (a *API) ExtractResumeProfile(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -131,7 +137,7 @@ func (a *API) ExtractResumeProfile(c *fiber.Ctx) error {
 		return err
 	}
 	if strings.TrimSpace(up.Text) == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "resume is empty")
+		return fiber.NewError(fiber.StatusBadRequest, errResumeNoText)
 	}
 
 	prof := resumeProfile(up.Text)
@@ -193,7 +199,7 @@ func (a *API) PutResume(c *fiber.Ctx) error {
 		return err
 	}
 	if strings.TrimSpace(up.Text) == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "resume is empty")
+		return fiber.NewError(fiber.StatusBadRequest, errResumeNoText)
 	}
 	meta, err := a.resume.Put(c.Context(), userID, up.ContentType, up.Data)
 	if err != nil {
@@ -334,7 +340,7 @@ func readResumeUpload(c *fiber.Ctx) (resumeUpload, error) {
 	}
 	defer f.Close()
 	// Buffer the upload: the raw bytes go to storage and the same bytes (as a ReaderAt)
-	// feed the PDF parser. The server's 1MB BodyLimit bounds this.
+	// feed the PDF parser. The server's 8MB BodyLimit bounds this.
 	data, err := io.ReadAll(f)
 	if err != nil {
 		return resumeUpload{}, fiber.NewError(fiber.StatusBadRequest, "cannot read resume file")

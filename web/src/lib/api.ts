@@ -119,6 +119,12 @@ export interface JobCopy {
   posted_at: string | null;
 }
 
+/** Max résumé upload size, mirroring the server's BodyLimit (cmd/server/main.go). The
+ *  web client enforces it up front so an oversize PDF gets a clear message instead of the
+ *  raw 413 the server would emit before the handler runs. The UI also shows it as a hint. */
+export const RESUME_MAX_MB = 8;
+const RESUME_MAX_BYTES = RESUME_MAX_MB * 1024 * 1024;
+
 /** A non-2xx API response. Carries the HTTP status so callers can branch on it
  *  (e.g. 401 invalid credentials, 409 email taken) instead of parsing strings.
  *  `message` is the backend's `{ "error": msg }` text when present, so logs and
@@ -828,6 +834,12 @@ export function createApi(
    *  specializations and seniority resolved, ready to pre-fill a profile or the onboarding
    *  wizard. */
   async function extractResumeProfile(input: File | string): Promise<ResumeProfile> {
+    if (input instanceof File && input.size > RESUME_MAX_BYTES) {
+      throw new ApiError(
+        413,
+        `This PDF is larger than ${RESUME_MAX_MB} MB. Compress it or export a lighter PDF and try again.`,
+      );
+    }
     return requestData<ResumeProfile>(
       '/api/v1/me/resume/extract',
       resumeInit('POST', input),
