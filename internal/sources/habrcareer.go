@@ -59,6 +59,12 @@ func (habrCareer) boardless() {}
 // habr_career aggregates postings from many companies, so it stays in the source facet.
 func (habrCareer) aggregator() {}
 
+// habr_career lists its whole catalogue every run (one global, date-sorted listing paged to the
+// end), so the post-run sweep may close unseen jobs by source — retiring a company that dropped
+// out of the feed entirely, which the crawled-company scope cannot reach. Sound only because a
+// truncated crawl errors (see Fetch): a partial listing must not be mistaken for a shrunken one.
+func (habrCareer) fullCatalog() {}
+
 // habrListResponse is one /api/frontend/vacancies page: List is the page, Meta.TotalPages bounds
 // pagination.
 type habrListResponse struct {
@@ -94,10 +100,12 @@ func (h habrCareer) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 	for page := 1; page <= habrMaxPages; page++ {
 		var resp habrListResponse
 		if err := h.http.GetJSONWithHeaders(ctx, fmt.Sprintf(habrListURL, page), habrHeaders, &resp); err != nil {
-			if page == 1 {
-				return nil, fmt.Errorf("habr_career: list page %d: %w", page, err)
-			}
-			break // a later page failing ends enumeration with the vacancies gathered so far
+			// Any page failing is a board error, not a truncation to salvage: habr_career is a
+			// fullCatalog source, so the post-run sweep closes its unseen jobs by source. A
+			// partial crawl returned as success would look like a shrunken catalogue and
+			// mass-close every posting past the failed page. Fail the whole crawl instead —
+			// Failed>0 makes the sweep fall back to the safe company-scoped close.
+			return nil, fmt.Errorf("habr_career: list page %d: %w", page, err)
 		}
 		if len(resp.List) == 0 {
 			break

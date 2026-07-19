@@ -143,6 +143,29 @@ func SelfClosingProviders(reg map[string]Source) []string {
 	return out
 }
 
+// fullCatalog marks an aggregator whose every crawl lists the WHOLE catalogue in one run —
+// not a per-company board and not a subset. For such a source an open job the run did not
+// see is genuinely gone, so the post-run sweep may close it by source alone, dropping the
+// crawled-company scope that would otherwise leak the postings of a company that vanished
+// from the feed entirely (see cmd/ingest's sweep). The marker is only sound when the adapter
+// FAILS a truncated crawl (returns an error, not a partial success): a silently-truncated
+// run looks like a shrunken catalogue and a source-scoped close would retire everything it
+// never reached. cmd/ingest gates the source-scoped close on a zero-Failed run for exactly
+// this reason. See FullCatalogProviders.
+type fullCatalog interface{ fullCatalog() }
+
+// FullCatalogProviders returns the provider names in reg that list their whole catalogue each
+// run and so may be swept by source rather than by crawled company (see fullCatalog).
+func FullCatalogProviders(reg map[string]Source) []string {
+	var out []string
+	for name, src := range reg {
+		if _, ok := src.(fullCatalog); ok {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
 // AggregatorProviders returns the sorted provider names in reg that aggregate postings
 // from many companies (see aggregator). The cross-source dedup pass uses this to tell an
 // aggregator copy (which may be suppressed) from a first-party ATS posting (which wins).

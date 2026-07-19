@@ -1,7 +1,9 @@
 // Command liveness is the standalone orphan-job liveness worker. It probes the
-// posting URL of every open job the ingest sweep never re-crawls — the non-board
-// sources (telegram, habr_career, geekjob, …) whose closed_at would otherwise stay
-// NULL forever — and closes a job once two consecutive probes report it dead.
+// posting URL of every open job the ingest sweep never re-crawls — the sources not in
+// the ATS provider registry (manual/resolve-url imports and the like), whose closed_at
+// would otherwise stay NULL forever — and closes a job once two consecutive probes
+// report it dead. (Registered board providers, including aggregators like habr_career
+// and geekjob, are swept by cmd/ingest and excluded here — see excluded below.)
 //
 // It is a run-once-and-exit worker (cron-scheduled beside ingest/enrich): select
 // candidates, probe each over plain HTTP, classify, apply the strike/close/reset
@@ -47,9 +49,9 @@ const (
 // registry: their stored URL is a container that outlives the vacancy, not the
 // vacancy's own page, so a liveness probe can never reach a death verdict. Only
 // telegram qualifies today — its URL is the Telegram post (see cmd/tg-extract), which
-// stays live after the job is filled. (habr_career/geekjob are NOT here: their URL is
-// the vacancy page itself and does 404 when the posting is removed.) These jobs have
-// no lifecycle close signal at all; see the job-lifecycle spec's telegram limitation.
+// stays live after the job is filled. These jobs have no lifecycle close signal at all;
+// see the job-lifecycle spec's telegram limitation. (habr_career/geekjob are already
+// excluded as registered providers — cmd/ingest's sweep owns their closes.)
 var unprobableSources = []string{"telegram"}
 
 func main() {

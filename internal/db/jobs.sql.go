@@ -92,6 +92,35 @@ func (q *Queries) CloseUnseenJobs(ctx context.Context, arg CloseUnseenJobsParams
 	return result.RowsAffected(), nil
 }
 
+const closeUnseenJobsBySource = `-- name: CloseUnseenJobsBySource :execrows
+UPDATE jobs
+SET closed_at  = now(),
+    updated_at = now()
+WHERE closed_at IS NULL
+  AND source = $1
+  AND last_seen_at < $2
+`
+
+type CloseUnseenJobsBySourceParams struct {
+	Source string             `json:"source"`
+	Cutoff pgtype.Timestamptz `json:"cutoff"`
+}
+
+// Post-ingest sweep for a fullCatalog source (see job-lifecycle spec): close every open job of
+// ONE source not seen since the cutoff, WITHOUT the crawled-company scope. A fullCatalog adapter
+// (e.g. habr_career) lists its whole catalogue each run, so an unseen job is genuinely gone —
+// including the last posting of a company that dropped out of the feed entirely, which the
+// company-scoped CloseUnseenJobs cannot reach. cmd/ingest calls this ONLY after a zero-Failed run
+// of a fullCatalog provider (a truncated crawl, which such adapters surface as an error, would
+// otherwise mass-close everything it never reached); a partial run falls back to CloseUnseenJobs.
+func (q *Queries) CloseUnseenJobsBySource(ctx context.Context, arg CloseUnseenJobsBySourceParams) (int64, error) {
+	result, err := q.db.Exec(ctx, closeUnseenJobsBySource, arg.Source, arg.Cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const companiesWithAggregatorPostings = `-- name: CompaniesWithAggregatorPostings :many
 SELECT DISTINCT company_slug FROM jobs
 WHERE closed_at IS NULL AND company_slug <> ''

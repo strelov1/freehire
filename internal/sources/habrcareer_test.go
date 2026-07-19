@@ -227,15 +227,27 @@ func TestHabrCareerFirstPageErrorIsBoardError(t *testing.T) {
 	}
 }
 
-func TestHabrCareerLaterPageErrorEndsEnumeration(t *testing.T) {
+// A later-page failure is a truncated crawl, not a natural end. habr_career is a fullCatalog
+// source whose unseen jobs the sweep closes by source, so a partial listing returned as success
+// would mass-close every posting past the failed page. The crawl must error instead, so Failed>0
+// steers the sweep back to the safe company-scoped close.
+func TestHabrCareerLaterPageErrorIsBoardError(t *testing.T) {
 	fake := newHabrFake(t)
 	fake.failPage = map[int]bool{2: true}
-	jobs, err := NewHabrCareer(fake).Fetch(context.Background(), CompanyEntry{Provider: "habr_career"})
-	if err != nil {
-		t.Fatalf("a later-page failure must not error: %v", err)
+	if _, err := NewHabrCareer(fake).Fetch(context.Background(), CompanyEntry{Provider: "habr_career"}); err == nil {
+		t.Fatal("want an error when a later listing page fails (a truncated fullCatalog crawl must not look complete)")
 	}
-	if len(jobs) != 2 {
-		t.Fatalf("got %d jobs, want 2 (page 1 only, page 2 failed)", len(jobs))
+}
+
+// FullCatalogProviders drives the sweep's source-scoped close; habr_career must be in it (and a
+// per-company board like greenhouse must not) or a vanished company's jobs never retire.
+func TestFullCatalogProviders(t *testing.T) {
+	got := FullCatalogProviders(All(nil))
+	if !slices.Contains(got, "habr_career") {
+		t.Errorf("FullCatalogProviders() = %v, want it to contain habr_career", got)
+	}
+	if slices.Contains(got, "greenhouse") {
+		t.Error("FullCatalogProviders() must not contain a per-company board like greenhouse")
 	}
 }
 

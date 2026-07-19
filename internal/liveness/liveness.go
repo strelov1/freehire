@@ -53,8 +53,9 @@ var hardExpired = regexp.MustCompile(`(?i)` + strings.Join([]string{
 	`applications?\s+(?:(?:have|are|is)\s+)?closed`,
 	`diese stelle (ist )?(nicht mehr|bereits) besetzt`,
 	`offre (expirée|n'est plus disponible)`,
-	// RU orphan sources (habr_career, geekjob) serve a closed posting as a healthy
-	// 200 whose only death signal is a Russian archived/closed banner.
+	// A RU-language orphan source (any source the probe reaches — habr_career/geekjob are
+	// registered providers and excluded) can serve a closed posting as a healthy 200 whose
+	// only death signal is a Russian archived/closed banner.
 	`ваканси\S* (в архиве|закрыта|неактивна)`,
 }, "|"))
 

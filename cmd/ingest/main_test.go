@@ -58,3 +58,24 @@ func TestShouldSweep(t *testing.T) {
 		}
 	}
 }
+
+// A fullCatalog source may close by source only after a clean (zero-Failed) run: a truncated
+// crawl looks like a shrunken catalogue and a source-scoped close would mass-close the postings
+// it never reached, so a partial run must fall back to the company-scoped close.
+func TestSweepBySource(t *testing.T) {
+	cases := []struct {
+		name        string
+		stats       pipeline.Stats
+		fullCatalog bool
+		want        bool
+	}{
+		{"full-catalog, clean run", pipeline.Stats{Ingested: 1000, Failed: 0}, true, true},
+		{"full-catalog, a board failed", pipeline.Stats{Ingested: 1000, Failed: 1}, true, false},
+		{"not full-catalog, clean run", pipeline.Stats{Ingested: 1000, Failed: 0}, false, false},
+	}
+	for _, tc := range cases {
+		if got := sweepBySource(tc.stats, tc.fullCatalog); got != tc.want {
+			t.Errorf("%s: sweepBySource = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}

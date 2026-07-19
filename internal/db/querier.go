@@ -123,6 +123,14 @@ type Querier interface {
 	// touched. The caller passes the crawled slugs and owns the grace window (cutoff =
 	// now() - window), so neither a failed nor a partial crawl mass-closes a catalogue.
 	CloseUnseenJobs(ctx context.Context, arg CloseUnseenJobsParams) (int64, error)
+	// Post-ingest sweep for a fullCatalog source (see job-lifecycle spec): close every open job of
+	// ONE source not seen since the cutoff, WITHOUT the crawled-company scope. A fullCatalog adapter
+	// (e.g. habr_career) lists its whole catalogue each run, so an unseen job is genuinely gone —
+	// including the last posting of a company that dropped out of the feed entirely, which the
+	// company-scoped CloseUnseenJobs cannot reach. cmd/ingest calls this ONLY after a zero-Failed run
+	// of a fullCatalog provider (a truncated crawl, which such adapters surface as an error, would
+	// otherwise mass-close everything it never reached); a partial run falls back to CloseUnseenJobs.
+	CloseUnseenJobsBySource(ctx context.Context, arg CloseUnseenJobsBySourceParams) (int64, error)
 	// Company slugs with at least one OPEN aggregator posting — the drive list for the
 	// cross-source aggregator suppression pass. An open aggregator row is a candidate whether
 	// it still needs suppressing OR needs releasing (its ATS twin closed), so one predicate
