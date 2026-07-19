@@ -3,8 +3,41 @@ package cv
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
+
+func TestDecodePatch_rejectsUnknownField(t *testing.T) {
+	// The agent mis-addressed the skills section with a "skill" field on set_stack.
+	// A silent ignore + default experience 0 would clobber the wrong experience's
+	// stack, so an unknown field must fail loudly, naming the field.
+	_, err := DecodePatch([]byte(`{"op":"set_stack","skill":0,"stack":["Go"]}`))
+	if !errors.Is(err, ErrInvalidPatch) {
+		t.Fatalf("err = %v, want ErrInvalidPatch", err)
+	}
+	if !strings.Contains(err.Error(), "skill") {
+		t.Errorf("error should name the unknown field, got %q", err.Error())
+	}
+}
+
+func TestDecodePatch_rejectsWrongFieldType(t *testing.T) {
+	// group is the skill-group NAME (string); the agent sent an index (number).
+	// json can't put a number in a string field — reject with a reason.
+	_, err := DecodePatch([]byte(`{"op":"set_skill_group","group":0,"items":["Go"]}`))
+	if !errors.Is(err, ErrInvalidPatch) {
+		t.Fatalf("err = %v, want ErrInvalidPatch", err)
+	}
+}
+
+func TestDecodePatch_valid(t *testing.T) {
+	p, err := DecodePatch([]byte(`{"op":"set_stack","experience":1,"stack":["Go","Rust"]}`))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p.Op != PatchSetStack || p.Experience != 1 || !reflect.DeepEqual(p.Stack, []string{"Go", "Rust"}) {
+		t.Errorf("parsed = %+v, want set_stack exp1 stack[Go Rust]", p)
+	}
+}
 
 // sampleDoc returns a small but multi-section document for patch tests.
 func sampleDoc() Document {

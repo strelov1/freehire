@@ -176,9 +176,12 @@ func (a *API) PatchCV(c *fiber.Ctx) error {
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid id")
 	}
-	var p cv.Patch
-	if err := c.BodyParser(&p); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	// Decode strictly: reject unknown fields and type mismatches so a mis-addressed
+	// op (a stray "skill" field, a numeric "group") fails with a reason the agent can
+	// act on, instead of being silently ignored and editing the wrong section.
+	p, err := cv.DecodePatch(c.Body())
+	if err != nil {
+		return mapCVError(err)
 	}
 	meta, err := a.cvStore.Patch(c.Context(), int64(id), userID, p)
 	if err != nil {

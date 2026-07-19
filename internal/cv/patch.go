@@ -1,6 +1,8 @@
 package cv
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 )
@@ -42,6 +44,22 @@ type Patch struct {
 	Group      string   `json:"group,omitempty"`      // skill group name (set_skill_group)
 	Items      []string `json:"items,omitempty"`      // skill group items (set_skill_group)
 	Stack      []string `json:"stack,omitempty"`      // per-experience technology line (set_stack)
+}
+
+// DecodePatch parses a patch from its JSON body, rejecting unknown fields and type
+// mismatches with a reason the caller can surface. This matters for LLM callers: a
+// mis-addressed op (e.g. set_stack carrying a stray "skill" field, or set_skill_group
+// with a numeric "group" where a name is expected) would otherwise be silently ignored
+// or mutely rejected — here it fails as ErrInvalidPatch with the offending detail, so the
+// agent can correct itself instead of clobbering the wrong section.
+func DecodePatch(body []byte) (Patch, error) {
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.DisallowUnknownFields()
+	var p Patch
+	if err := dec.Decode(&p); err != nil {
+		return Patch{}, fmt.Errorf("%w: %v", ErrInvalidPatch, err)
+	}
+	return p, nil
 }
 
 // Apply returns a copy of doc with the patch applied, or ErrInvalidPatch (leaving doc
