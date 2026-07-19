@@ -282,6 +282,24 @@ export interface MyJob {
   /** Live inbox messages linked to this job — the board card's ✉ badge. 0 for
    *  users without a connected mailbox / no linked mail. */
   email_count: number;
+  /** The pending saved-job reminder's deadline (RFC3339), or null when the job
+   *  has no pending reminder. Drives the saved list's "remind in N days" chip. */
+  reminder_fire_at: string | null;
+}
+
+/** The account-level saved-job reminder rule: whether reminders are on, the
+ *  default delay applied to new saves, and the channels to deliver over. */
+export interface ReminderSettings {
+  enabled: boolean;
+  default_delay_days: number;
+  channels: string[];
+}
+
+/** The per-save reminder choice sent with a save. Omit for the account default;
+ *  set disabled to opt this job out, or delay_days for a custom delay. */
+export interface ReminderOverride {
+  disabled?: boolean;
+  delay_days?: number;
 }
 
 /** The classification/link overlay an inbox email carries: its classified status

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Bookmark } from '@lucide/svelte';
+  import { Bell, Bookmark, X } from '@lucide/svelte';
   import CompanyLogo from './CompanyLogo.svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
@@ -58,6 +58,34 @@
   // Guards against a double-click racing two requests for the same job.
   let saving = $state(false);
 
+  // The non-intrusive post-save reminder prompt: after a fresh save (not an
+  // unsave), offer quick "remind me" choices anchored under the bookmark. Ignoring
+  // it leaves the account default in effect; picking a delay schedules that reminder
+  // for this job (an explicit choice works even when reminders are off by default).
+  // Suppressed in the compact (assistant) card, where the corner has no room.
+  let reminderPrompt = $state(false);
+  let reminderBusy = $state(false);
+  let reminderSet = $state(false);
+
+  const REMINDER_CHOICES: { label: string; days: number }[] = [
+    { label: 'Tomorrow', days: 1 },
+    { label: 'In 3 days', days: 3 },
+    { label: 'In a week', days: 7 },
+  ];
+
+  async function setReminder(days: number) {
+    if (reminderBusy) return;
+    reminderBusy = true;
+    try {
+      await api.saveJob(job.public_slug, { delay_days: days });
+      reminderSet = true;
+    } catch {
+      // Best-effort: leave the prompt so the user can retry.
+    } finally {
+      reminderBusy = false;
+    }
+  }
+
   // Toggle the save mark. Optimistic: flip the shared set first so the bookmark
   // fills instantly, then confirm with the server and roll back on failure. A
   // signed-out click routes to sign-in instead (no auto-save afterwards). The
@@ -73,9 +101,13 @@
     const wasSaved = saved;
     if (wasSaved) markUnsaved(job.public_slug);
     else markSaved(job.public_slug);
+    // Unsaving closes any open prompt; a fresh save opens it.
+    reminderPrompt = false;
+    reminderSet = false;
     try {
       if (wasSaved) await api.unsaveJob(job.public_slug);
       else await api.saveJob(job.public_slug);
+      if (!wasSaved && !compact) reminderPrompt = true;
     } catch {
       if (wasSaved) markSaved(job.public_slug);
       else markUnsaved(job.public_slug);
@@ -172,4 +204,36 @@
 >
   <Bookmark class="size-[1.05rem] {saved ? 'fill-current' : ''}" aria-hidden="true" />
 </button>
+
+{#if reminderPrompt && saved}
+  <!-- Post-save reminder prompt: a small popover under the bookmark. Non-modal —
+       dismissing it (or ignoring the card) leaves the account default in effect. -->
+  <div class="absolute right-2.5 top-12 z-10 w-56 rounded-lg border border-border bg-popover p-2.5 shadow-md">
+    {#if reminderSet}
+      <p class="flex items-center gap-1.5 px-1 py-0.5 text-xs text-muted-foreground">
+        <Bell class="size-3.5 text-brand" aria-hidden="true" /> Reminder set.
+        <button type="button" onclick={() => (reminderPrompt = false)} class="ml-auto font-medium text-foreground hover:opacity-80">Done</button>
+      </p>
+    {:else}
+      <div class="flex items-center justify-between px-1 pb-1.5">
+        <span class="text-xs font-semibold">Remind me to apply?</span>
+        <button type="button" onclick={() => (reminderPrompt = false)} aria-label="Dismiss reminder prompt" class="text-muted-foreground hover:text-foreground">
+          <X class="size-3.5" aria-hidden="true" />
+        </button>
+      </div>
+      <div class="flex flex-wrap gap-1.5">
+        {#each REMINDER_CHOICES as c (c.days)}
+          <button
+            type="button"
+            onclick={() => setReminder(c.days)}
+            disabled={reminderBusy}
+            class="rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-brand hover:text-brand disabled:opacity-50"
+          >
+            {c.label}
+          </button>
+        {/each}
+      </div>
+    {/if}
+  </div>
+{/if}
 </div>

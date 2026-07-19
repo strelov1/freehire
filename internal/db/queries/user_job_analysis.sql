@@ -13,7 +13,7 @@ WHERE user_id = $1 AND job_id = $2;
 -- stamps. created_at is deliberately NOT re-bumped on conflict, so it records the
 -- FIRST-analysis time — the fit-analysis quota counts distinct jobs a user first
 -- analyzed within a rolling window, and a recompute must not re-age its row into it.
--- analysis is the sanitized jobfit.Analysis JSON.
+-- analysis is the sanitized matchanalysis.Analysis JSON.
 INSERT INTO user_job_analysis (user_id, job_id, analysis, model, cv_uploaded_at, job_content_hash, created_at)
 VALUES ($1, $2, $3, $4, $5, $6, now())
 ON CONFLICT (user_id, job_id) DO UPDATE

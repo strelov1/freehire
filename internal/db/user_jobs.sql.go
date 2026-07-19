@@ -226,7 +226,12 @@ SELECT jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.compan
           FROM emails e
          WHERE e.user_id = uj.user_id
            AND e.job_id = jobs.id
-           AND e.deleted_at IS NULL) AS email_count
+           AND e.deleted_at IS NULL) AS email_count,
+       (SELECT r.fire_at
+          FROM job_reminders r
+         WHERE r.user_id = uj.user_id
+           AND r.job_id = jobs.id
+           AND r.status = 'pending') AS reminder_fire_at
 FROM user_jobs uj
 JOIN jobs ON jobs.id = uj.job_id
 WHERE uj.user_id = $1
@@ -248,13 +253,14 @@ type ListUserJobsParams struct {
 }
 
 type ListUserJobsRow struct {
-	Job        Job                `json:"job"`
-	ViewedAt   pgtype.Timestamptz `json:"viewed_at"`
-	SavedAt    pgtype.Timestamptz `json:"saved_at"`
-	AppliedAt  pgtype.Timestamptz `json:"applied_at"`
-	Stage      pgtype.Text        `json:"stage"`
-	Notes      pgtype.Text        `json:"notes"`
-	EmailCount int64              `json:"email_count"`
+	Job            Job                `json:"job"`
+	ViewedAt       pgtype.Timestamptz `json:"viewed_at"`
+	SavedAt        pgtype.Timestamptz `json:"saved_at"`
+	AppliedAt      pgtype.Timestamptz `json:"applied_at"`
+	Stage          pgtype.Text        `json:"stage"`
+	Notes          pgtype.Text        `json:"notes"`
+	EmailCount     int64              `json:"email_count"`
+	ReminderFireAt pgtype.Timestamptz `json:"reminder_fire_at"`
 }
 
 // A user's job interactions joined with the job rows, most recently touched
@@ -263,7 +269,9 @@ type ListUserJobsRow struct {
 // the passive history (rows neither saved nor applied). Closed jobs stay
 // listed: a user's history must not shrink when a posting closes. email_count is
 // the caller's live (non-deleted) inbox messages linked to this job — the board's
-// per-card ✉ badge; 0 for everyone without a connected mailbox.
+// per-card ✉ badge; 0 for everyone without a connected mailbox. reminder_fire_at is
+// the pending saved-job reminder's deadline (NULL when none), so the saved list can
+// show "remind in N days" with its reschedule/off controls.
 func (q *Queries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]ListUserJobsRow, error) {
 	rows, err := q.db.Query(ctx, listUserJobs,
 		arg.UserID,
@@ -333,6 +341,7 @@ func (q *Queries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]L
 			&i.Stage,
 			&i.Notes,
 			&i.EmailCount,
+			&i.ReminderFireAt,
 		); err != nil {
 			return nil, err
 		}

@@ -23,6 +23,20 @@ type Querier interface {
 	// in the URL/page). external_id is "<board>:<id>"; served by the
 	// (split_part(external_id,':',2)) WHERE source='greenhouse' partial index.
 	BoardByGreenhouseJobID(ctx context.Context, jobID string) (string, error)
+	// Cancel the pending reminder for one (user, job): the per-job "turn off" control,
+	// and the eager cleanup wired into apply and unsave. Idempotent — no pending row
+	// affects 0 rows and is never an error. Cancelled rows are retained as history.
+	CancelJobReminder(ctx context.Context, arg CancelJobReminderParams) (int64, error)
+	// Lazy cancellation at fire time: the worker's re-check found the job closed or no
+	// longer saved-but-unapplied, so cancel instead of sending. This is how job closure
+	// cancels reminders without hooking every scattered close path.
+	CancelReminderAtFire(ctx context.Context, id int64) (int64, error)
+	// Lease a batch of due, pending reminders by stamping claimed_at, earliest deadline
+	// first. FOR UPDATE OF r + SKIP LOCKED lets overlapping worker passes take disjoint
+	// rows so a reminder fires at most once; the lease predicate reclaims rows whose
+	// sender died (stale claimed_at), so no separate reaper is needed. Delivery happens
+	// OUTSIDE this transaction, so no network call is held under a row lock.
+	ClaimDueReminders(ctx context.Context, arg ClaimDueRemindersParams) ([]int64, error)
 	// Claim a wave of live, unleased entries by stamping claimed_at, newest email first,
 	// returning the email fields the matcher/classifier need. FOR UPDATE OF o locks only
 	// outbox rows; SKIP LOCKED lets concurrent workers take disjoint rows; the lease
@@ -418,6 +432,16 @@ type Querier interface {
 	// the board's display fields; owner columns (user_id) are never selected. A NULL slug
 	// never equals the param, so private sets are unreachable. No row → 404.
 	GetPublicBoardBySlug(ctx context.Context, publicSlug pgtype.Text) (GetPublicBoardBySlugRow, error)
+	// The delivery context for one reminder: the job display fields, the channel set,
+	// the user's live destinations (account email; linked Telegram chat, NULL when
+	// unlinked -> that channel soft-skips), and the fire-time re-check flags. job_open
+	// and still_actionable let the worker cancel-and-skip a reminder whose job has since
+	// closed or is no longer saved-but-unapplied, closing the race between a cancel and
+	// the fire.
+	GetReminderForDelivery(ctx context.Context, id int64) (GetReminderForDeliveryRow, error)
+	// The caller's reminder default rule. No row -> pgx.ErrNoRows, which the service
+	// reads as the off-by-default state (feature never configured).
+	GetReminderSettings(ctx context.Context, userID int64) (ReminderSetting, error)
 	// Load a single report by id for the review path. The resolve/dismiss flow guards the
 	// status in the service; the Mark* queries are additionally scoped to status='pending' as
 	// defense-in-depth against a concurrent second decision.
@@ -734,7 +758,9 @@ type Querier interface {
 	// the passive history (rows neither saved nor applied). Closed jobs stay
 	// listed: a user's history must not shrink when a posting closes. email_count is
 	// the caller's live (non-deleted) inbox messages linked to this job — the board's
-	// per-card ✉ badge; 0 for everyone without a connected mailbox.
+	// per-card ✉ badge; 0 for everyone without a connected mailbox. reminder_fire_at is
+	// the pending saved-job reminder's deadline (NULL when none), so the saved list can
+	// show "remind in N days" with its reschedule/off controls.
 	ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]ListUserJobsRow, error)
 	// Every public_slug the user has interacted with (viewed_at is always set, so
 	// any interaction row counts as viewed). Used by the SPA to dim already-seen
@@ -763,6 +789,10 @@ type Querier interface {
 	// Stamp notified_at on the jobs that were just delivered for a subscription, so
 	// they leave the pending queue and are never sent again.
 	MarkMatchesNotified(ctx context.Context, arg MarkMatchesNotifiedParams) (int64, error)
+	// Terminal success: flip a fired reminder to delivered so it leaves the pending
+	// scan and is never sent again. Guarded on status='pending' for idempotency under
+	// a worker retry that already delivered.
+	MarkReminderDelivered(ctx context.Context, id int64) (int64, error)
 	// Mark a pending report dismissed with an optional reason, recording the deciding
 	// moderator. Scoped to status='pending' (see MarkReportResolved). The job is not touched.
 	MarkReportDismissed(ctx context.Context, arg MarkReportDismissedParams) (JobReport, error)
@@ -880,6 +910,10 @@ type Querier interface {
 	// is left in place — its expiry gates the retry to a later pass and doubles as the
 	// crash reaper, mirroring enrichment_outbox.
 	RecordMatchDeliveryFailure(ctx context.Context, arg RecordMatchDeliveryFailureParams) error
+	// Count a failed send: bump attempts, record the error, and dead-letter (failed_at)
+	// once attempts reach the max. claimed_at is left in place — its expiry gates the
+	// retry to a later pass and doubles as the crash reaper, mirroring subscription_matches.
+	RecordReminderDeliveryFailure(ctx context.Context, arg RecordReminderDeliveryFailureParams) error
 	// Count a failed attempt: bump attempts, record the error, and dead-letter (set
 	// failed_at) once attempts reach the max. The lease (claimed_at) is intentionally left
 	// in place — its expiry gates the retry to a later run and doubles as the crash reaper,
@@ -927,11 +961,18 @@ type Querier interface {
 	// so a soft-skipped delivery (e.g. Telegram not yet linked) is retried promptly on
 	// a later pass instead of waiting out the lease.
 	ReleaseMatchClaim(ctx context.Context, arg ReleaseMatchClaimParams) error
+	// Release the lease without counting an attempt, so a soft-skipped send (e.g. no
+	// usable destination on any configured channel) is retried promptly on a later pass
+	// instead of waiting out the lease.
+	ReleaseReminderClaim(ctx context.Context, id int64) error
 	// Apply a resolved display name to every job under a slug-like company and
 	// re-key its company_slug (computed by the caller via normalize.Slug), so the
 	// derived catalogue re-keys through SyncCompaniesFromJobs + DeleteOrphanCompanies.
 	// The name guard keeps a re-run from overwriting a name that is no longer a slug.
 	RenameSlugCompany(ctx context.Context, arg RenameSlugCompanyParams) (int64, error)
+	// Move a saved job's pending reminder to a new deadline without unsaving. No
+	// pending row for the pair -> pgx.ErrNoRows (the handler maps that to 404).
+	RescheduleJobReminder(ctx context.Context, arg RescheduleJobReminderParams) (JobReminder, error)
 	// A healthy (not-expired) probe clears any accumulated strikes, so only CONSECUTIVE
 	// expired probes can close a job. Guarded to the non-zero case so probing an
 	// already-clean job does not churn the row.
@@ -1166,6 +1207,13 @@ type Querier interface {
 	// (source, external_id) must not rewrite it, so external links stay valid even
 	// if the slug builder changes later (that would be a deliberate migration).
 	UpsertJob(ctx context.Context, arg UpsertJobParams) (UpsertJobRow, error)
+	// Schedule a one-shot reminder for a saved job, or replace the pending one if the
+	// job is re-saved with a new choice. The arbiter is the partial unique index on
+	// (user_id, job_id) WHERE status='pending', so only a live pending reminder is
+	// replaced; delivered/cancelled history rows never conflict. The conflict path
+	// resets the delivery ledger (claimed_at/attempts/last_error) since the schedule
+	// changed. Returns the pending row.
+	UpsertJobReminder(ctx context.Context, arg UpsertJobReminderParams) (JobReminder, error)
 	// Moderator-authored write: the hand-curated analogue of UpsertJob. source is the
 	// posting's real origin (e.g. 'workatastartup'), supplied by the moderator and
 	// defaulting to 'manual'; the dedup key is (source, external_id = url), so re-POSTing
@@ -1180,6 +1228,8 @@ type Querier interface {
 	// it via SetJobEnrichment's overlay). The conflict reopens a previously closed posting
 	// (closed_at = NULL) since the moderator is re-asserting it.
 	UpsertManualJob(ctx context.Context, arg UpsertManualJobParams) (Job, error)
+	// Create or replace the caller's default rule in one statement. Returns the stored row.
+	UpsertReminderSettings(ctx context.Context, arg UpsertReminderSettingsParams) (ReminderSetting, error)
 	// Link (or relink) a user's Telegram chat, captured from the inbound /start. One
 	// row per user; relinking from a different chat overwrites the chat_id.
 	UpsertTelegramLink(ctx context.Context, arg UpsertTelegramLinkParams) error

@@ -21,10 +21,11 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/gmailsync"
-	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/llm"
+	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/moderation"
+	"github.com/strelov1/freehire/internal/reminder"
 	"github.com/strelov1/freehire/internal/report"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/resumeextract"
@@ -111,6 +112,10 @@ type API struct {
 	// subscription owns the per-user filter-subscription use cases (subscribe a
 	// saved search to a channel, list/toggle/unsubscribe).
 	subscription *subscription.Service
+	// reminder owns the saved-job reminder use cases (the account default rule and
+	// per-save scheduling/cancellation); the save/apply/unsave handlers orchestrate
+	// it alongside tracking, and the cmd/remind worker fires the scheduled reminders.
+	reminder *reminder.Service
 	// userProfile owns the single-per-user profile use cases (fetch/save/clear a
 	// specialization + skills set); the handlers translate wire ↔ domain and delegate
 	// to it.
@@ -258,6 +263,7 @@ func Register(app *fiber.App, cfg Config) {
 	a.report = report.New(reportRepo, reportRepo)
 	a.savedSearch = savedsearch.New(savedsearch.NewQueriesRepository(queries))
 	a.subscription = subscription.New(subscription.NewQueriesRepository(queries))
+	a.reminder = reminder.New(reminder.NewQueriesRepository(queries))
 	a.userProfile = userprofile.New(userprofile.NewQueriesRepository(queries))
 	// Résumé storage is nil-safe: a nil Blob (S3 unconfigured) yields a disabled service
 	// whose Enabled() is false, so the upload/verdict paths degrade to in-request parsing.
@@ -370,6 +376,10 @@ func Register(app *fiber.App, cfg Config) {
 	api.Delete("/jobs/:slug/save", keyAuth, a.UnsaveJob)
 	api.Post("/jobs/:slug/dismiss", keyAuth, a.DismissJob)
 	api.Delete("/jobs/:slug/dismiss", keyAuth, a.UndismissJob)
+	// Per-job reminder controls: reschedule or turn off a saved job's pending
+	// reminder without unsaving it (scheduling itself happens on save).
+	api.Patch("/jobs/:slug/reminder", keyAuth, a.RescheduleReminder)
+	api.Delete("/jobs/:slug/reminder", keyAuth, a.CancelJobReminder)
 	api.Patch("/jobs/:slug/track", keyAuth, a.TrackJob)
 	api.Delete("/jobs/:slug/stage", keyAuth, a.ClearStage)
 	api.Delete("/jobs/:slug/track", keyAuth, a.Untrack)
@@ -542,6 +552,11 @@ func Register(app *fiber.App, cfg Config) {
 	api.Post("/me/subscriptions", saved, a.CreateSubscription)
 	api.Patch("/me/subscriptions/:id", saved, a.SetSubscriptionActive)
 	api.Delete("/me/subscriptions/:id", saved, a.DeleteSubscription)
+
+	// Saved-job reminder default rule (enable, default delay, channels). Cookie-only
+	// (RequireAuth) like subscriptions — it configures a delivery preference.
+	api.Get("/me/reminder-settings", saved, a.GetReminderSettings)
+	api.Put("/me/reminder-settings", saved, a.UpdateReminderSettings)
 	api.Post("/me/telegram/link", saved, a.LinkTelegram)
 	api.Get("/me/telegram", saved, a.TelegramLinkStatus)
 	api.Delete("/me/telegram", saved, a.UnlinkTelegram)
