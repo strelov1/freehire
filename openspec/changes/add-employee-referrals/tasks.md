@@ -37,4 +37,4 @@
 - [x] 5.1 Integration tests for offer + request lifecycle (dedup, active-dup, daily cap, eligibility, authorization)
 - [x] 5.2 Test the availability flag on company/job reads (approved vs pending/rejected/none)
 - [x] 5.3 Test authorized CV access (approved referrer allowed; others denied)
-- [ ] 5.4 `go build ./... && go vet ./... && go test ./...` green; manual end-to-end walk of both cabinets
+- [x] 5.4 `go build ./... && go vet ./... && go test ./...` green; manual end-to-end walk of both cabinets
