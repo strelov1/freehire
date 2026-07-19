@@ -25,12 +25,16 @@
     active,
     onReset,
     onOpen,
+    description,
     afterButton,
   }: {
     groups: SummaryGroup[];
     active: number;
     onReset: () => void;
     onOpen: () => void;
+    /** Optional caption under the "Filters" heading, explaining what refining does in
+     *  this context — the Market coverage tab uses it; other summaries omit it. */
+    description?: string;
     /** Optional content under the All-filters button — the job summary uses it for the
      *  "Save filter" affordance; the company summary omits it. */
     afterButton?: Snippet;
@@ -38,10 +42,15 @@
 </script>
 
 <div class="flex flex-col gap-4">
-  <div class="flex items-center justify-between">
-    <h2 class="text-base font-semibold tracking-tight">Filters</h2>
-    {#if active > 0}
-      <button type="button" class="text-xs text-muted-foreground transition-colors hover:text-foreground" onclick={onReset}>Reset all</button>
+  <div class="flex flex-col gap-1">
+    <div class="flex items-center justify-between">
+      <h2 class="text-base font-semibold tracking-tight">Filters</h2>
+      {#if active > 0}
+        <button type="button" class="text-xs text-muted-foreground transition-colors hover:text-foreground" onclick={onReset}>Reset all</button>
+      {/if}
+    </div>
+    {#if description}
+      <p class="text-xs text-muted-foreground">{description}</p>
     {/if}
   </div>
 

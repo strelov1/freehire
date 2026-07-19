@@ -322,7 +322,12 @@
         <aside class="hidden w-72 shrink-0 md:block">
           <div class="sticky top-6 flex max-h-[calc(100vh-5rem)] flex-col gap-4 overflow-y-auto">
             <div class="rounded-xl border border-border bg-card p-4">
-              <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} />
+              <FilterSummary
+                store={filters}
+                exclude={excludeFacets}
+                onOpen={() => (modalOpen = true)}
+                description="Narrow the market to see how it reshapes your CV — pick roles, regions and seniority to compare against."
+              />
             </div>
           </div>
         </aside>

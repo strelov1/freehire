@@ -11,7 +11,7 @@
   // save-then-alert control (Save filter → get it in Telegram) sits under the
   // All-filters button on the standalone list (`canSave`); the modal's "My filters"
   // tab drives the same control.
-  let { store, exclude = [], onOpen, canSave = false }: { store: FilterStore; exclude?: string[]; onOpen: () => void; canSave?: boolean } = $props();
+  let { store, exclude = [], onOpen, canSave = false, description }: { store: FilterStore; exclude?: string[]; onOpen: () => void; canSave?: boolean; description?: string } = $props();
 
   // The current filters as the saved-search / alert target (view-only sort dropped).
   const current = $derived(savedSearchQuery(store.value));
@@ -74,7 +74,7 @@
   });
 </script>
 
-<FilterSummaryShell {groups} active={store.active} onReset={() => store.clear()} {onOpen}>
+<FilterSummaryShell {groups} active={store.active} onReset={() => store.clear()} {onOpen} {description}>
   {#snippet afterButton()}
     {#if canSave}
       <SaveSearchAlert query={current} variant="full" />
