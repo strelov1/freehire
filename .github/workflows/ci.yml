@@ -23,6 +23,11 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # Résumé PDF text extraction shells out to poppler's pdftotext (prod ships it in
+      # the image / on the host); install it so the extraction tests run instead of skip.
+      - name: Install poppler-utils
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils
+
       - name: Build
         run: go build ./...
 

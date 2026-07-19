@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -139,6 +140,29 @@ func TestExtractResumeProfile_PDF(t *testing.T) {
 	got := decodeSkills(t, resp)
 	if strings.Join(got, ",") != "docker,kubernetes,postgresql" {
 		t.Errorf("skills = %v, want [docker kubernetes postgresql]", got)
+	}
+}
+
+// TestExtractResumeProfile_CanvaCIDPDF exercises the real upload endpoint (the single path
+// both the profile form and the onboarding wizard POST to) with a Canva export whose fonts
+// are subset CID TrueType / Identity-H. The old pure-Go parser returned empty text for
+// these, so the endpoint answered 400 "scan or image"; via pdftotext it must now yield the
+// résumé's skills. Skipped when poppler is absent (mirrors the extractor's own test).
+func TestExtractResumeProfile_CanvaCIDPDF(t *testing.T) {
+	if _, err := exec.LookPath("pdftotext"); err != nil {
+		t.Skip("pdftotext not on PATH; skipping Canva PDF upload test")
+	}
+	pdf, err := os.ReadFile("../resume/testdata/canva_cid_identityh.pdf")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	app, token := resumeApp(t)
+	resp := postResumeFile(t, app, "resume.pdf", pdf, token)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200 (Canva CID PDF must extract, not be rejected)", resp.StatusCode)
+	}
+	if got := decodeSkills(t, resp); len(got) == 0 {
+		t.Error("no skills extracted from the Canva résumé; text layer was not decoded")
 	}
 }
 
