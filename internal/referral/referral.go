@@ -56,6 +56,8 @@ var (
 	// ErrInvalidCVChoice is a CV choice that violates the kind/id invariant: an original
 	// carrying a cv_id, a built without one, or an unknown kind (422).
 	ErrInvalidCVChoice = errors.New("referral: invalid CV choice")
+	// ErrNoResume is an 'original' CV choice by a seeker who has no stored résumé (422).
+	ErrNoResume = errors.New("referral: no stored résumé to attach")
 	// ErrCompanyNotEligible is a request into a company with no approved referrer (409).
 	ErrCompanyNotEligible = errors.New("referral: company has no approved referrer")
 	// ErrDailyCapReached is a seeker exceeding the rolling-24h request cap (429).
@@ -140,12 +142,14 @@ type RequestInput struct {
 type Repository interface {
 	CreateOffer(ctx context.Context, in OfferInput) (Offer, error)
 	DecideOffer(ctx context.Context, offerID, moderatorID int64, status string) (Offer, error)
+	GetOffer(ctx context.Context, offerID int64) (Offer, bool, error)
 	ListOffersByUser(ctx context.Context, userID int64) ([]Offer, error)
 	ListPendingOffers(ctx context.Context) ([]Offer, error)
 	CompanyHasApprovedReferrer(ctx context.Context, companySlug string) (bool, error)
 	ReferrerApprovedForCompany(ctx context.Context, userID int64, companySlug string) (bool, error)
 	ApprovedReferrerRecipients(ctx context.Context, companySlug string) ([]Recipient, error)
 	CVBelongsToUser(ctx context.Context, cvID, userID int64) (bool, error)
+	UserHasResume(ctx context.Context, userID int64) (bool, error)
 
 	CreateRequest(ctx context.Context, in RequestInput) (Request, error)
 	CountRequestsSince(ctx context.Context, seekerID int64, since time.Time) (int64, error)
@@ -214,6 +218,12 @@ func (s *Service) DecideOffer(ctx context.Context, offerID, moderatorID int64, a
 	return s.repo.DecideOffer(ctx, offerID, moderatorID, status)
 }
 
+// GetOffer returns one offer by id — for the moderator's proof-CV view. ok is false when
+// the offer does not exist.
+func (s *Service) GetOffer(ctx context.Context, offerID int64) (Offer, bool, error) {
+	return s.repo.GetOffer(ctx, offerID)
+}
+
 // ListMyOffers returns a member's offers, newest first.
 func (s *Service) ListMyOffers(ctx context.Context, userID int64) ([]Offer, error) {
 	return s.repo.ListOffersByUser(ctx, userID)
@@ -235,16 +245,26 @@ func (s *Service) CreateRequest(ctx context.Context, in RequestInput) (Request, 
 	if err := validateCVChoice(in); err != nil {
 		return Request{}, err
 	}
-	// A built CV must belong to the seeker — the cv_id comes from the client, so its
-	// FK guarantees existence, not ownership. A foreign cv_id is treated as an invalid
-	// choice (not a distinct error) so the response never leaks that the CV exists.
-	if in.CVKind == CVBuilt {
+	// The attached CV must be one the seeker actually has. A built cv_id comes from the
+	// client, so its FK guarantees existence, not ownership — a foreign cv_id is treated as
+	// an invalid choice (not a distinct error) so the response never leaks that it exists.
+	// An original attachment requires a stored résumé, else it would serve nothing.
+	switch in.CVKind {
+	case CVBuilt:
 		owned, err := s.repo.CVBelongsToUser(ctx, *in.CVID, in.SeekerUserID)
 		if err != nil {
 			return Request{}, err
 		}
 		if !owned {
 			return Request{}, ErrInvalidCVChoice
+		}
+	case CVOriginal:
+		has, err := s.repo.UserHasResume(ctx, in.SeekerUserID)
+		if err != nil {
+			return Request{}, err
+		}
+		if !has {
+			return Request{}, ErrNoResume
 		}
 	}
 	eligible, err := s.repo.CompanyHasApprovedReferrer(ctx, in.CompanySlug)

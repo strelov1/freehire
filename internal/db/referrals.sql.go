@@ -207,6 +207,27 @@ func (q *Queries) DecideReferralOffer(ctx context.Context, arg DecideReferralOff
 	return i, err
 }
 
+const getReferralOffer = `-- name: GetReferralOffer :one
+SELECT id, user_id, company_slug, proof_object_key, status, decided_by, decided_at, created_at FROM referral_offers WHERE id = $1
+`
+
+// One offer by id — for the moderator's proof-CV view after role authorization.
+func (q *Queries) GetReferralOffer(ctx context.Context, id int64) (ReferralOffer, error) {
+	row := q.db.QueryRow(ctx, getReferralOffer, id)
+	var i ReferralOffer
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.CompanySlug,
+		&i.ProofObjectKey,
+		&i.Status,
+		&i.DecidedBy,
+		&i.DecidedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getReferralRequest = `-- name: GetReferralRequest :one
 SELECT id, seeker_user_id, company_slug, job_id, cv_kind, cv_id, contact_telegram, contact_email, note, status, acted_by, acted_at, created_at FROM referral_requests WHERE id = $1
 `
@@ -483,4 +504,19 @@ func (q *Queries) ResolveReferralRequest(ctx context.Context, arg ResolveReferra
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const userHasResume = `-- name: UserHasResume :one
+SELECT EXISTS (
+    SELECT 1 FROM users WHERE id = $1 AND resume_object_key IS NOT NULL AND resume_object_key <> ''
+) AS exists
+`
+
+// Whether a user has a stored original résumé — the check before attaching an 'original'
+// CV to a request, so a seeker cannot request with a résumé they never uploaded.
+func (q *Queries) UserHasResume(ctx context.Context, id int64) (bool, error) {
+	row := q.db.QueryRow(ctx, userHasResume, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }

@@ -58,6 +58,18 @@ func (r *QueriesRepository) DecideOffer(ctx context.Context, offerID, moderatorI
 	return offerFromRow(row), nil
 }
 
+// GetOffer returns one offer by id; ok is false when it does not exist.
+func (r *QueriesRepository) GetOffer(ctx context.Context, offerID int64) (Offer, bool, error) {
+	row, err := r.q.GetReferralOffer(ctx, offerID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Offer{}, false, nil
+	}
+	if err != nil {
+		return Offer{}, false, err
+	}
+	return offerFromRow(row), true, nil
+}
+
 // ListOffersByUser returns a member's offers, newest first.
 func (r *QueriesRepository) ListOffersByUser(ctx context.Context, userID int64) ([]Offer, error) {
 	rows, err := r.q.ListReferralOffersByUser(ctx, userID)
@@ -105,6 +117,11 @@ func (r *QueriesRepository) ApprovedReferrerRecipients(ctx context.Context, comp
 // CVBelongsToUser reports whether the builder CV is owned by the user.
 func (r *QueriesRepository) CVBelongsToUser(ctx context.Context, cvID, userID int64) (bool, error) {
 	return r.q.CVBelongsToUser(ctx, db.CVBelongsToUserParams{CvID: cvID, UserID: userID})
+}
+
+// UserHasResume reports whether the user has a stored original résumé.
+func (r *QueriesRepository) UserHasResume(ctx context.Context, userID int64) (bool, error) {
+	return r.q.UserHasResume(ctx, userID)
 }
 
 // CreateRequest inserts a request, mapping the active partial-unique violation to

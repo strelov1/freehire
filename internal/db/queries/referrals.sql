@@ -58,6 +58,17 @@ JOIN users u ON u.id = o.user_id
 LEFT JOIN telegram_links t ON t.user_id = o.user_id
 WHERE o.company_slug = $1 AND o.status = 'approved';
 
+-- name: UserHasResume :one
+-- Whether a user has a stored original résumé — the check before attaching an 'original'
+-- CV to a request, so a seeker cannot request with a résumé they never uploaded.
+SELECT EXISTS (
+    SELECT 1 FROM users WHERE id = $1 AND resume_object_key IS NOT NULL AND resume_object_key <> ''
+) AS exists;
+
+-- name: GetReferralOffer :one
+-- One offer by id — for the moderator's proof-CV view after role authorization.
+SELECT * FROM referral_offers WHERE id = $1;
+
 -- name: CVBelongsToUser :one
 -- Whether a builder CV is owned by a user — the authorization check before attaching a
 -- 'built' CV to a request, so a seeker cannot reference someone else's cv_id.

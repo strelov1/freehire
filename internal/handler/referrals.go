@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/blobstore"
+	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/referral"
 )
 
@@ -77,7 +80,8 @@ func referralError(err error) error {
 	switch {
 	case errors.Is(err, referral.ErrProofRequired),
 		errors.Is(err, referral.ErrNoContact),
-		errors.Is(err, referral.ErrInvalidCVChoice):
+		errors.Is(err, referral.ErrInvalidCVChoice),
+		errors.Is(err, referral.ErrNoResume):
 		return fiber.NewError(fiber.StatusUnprocessableEntity, err.Error())
 	case errors.Is(err, referral.ErrNotAuthorized):
 		return fiber.NewError(fiber.StatusForbidden, "not an approved referrer for this company")
@@ -296,6 +300,96 @@ func (a *API) DecideReferralOffer(c *fiber.Ctx) error {
 		return referralError(err)
 	}
 	return c.JSON(fiber.Map{"data": toReferralOfferResponse(offer)})
+}
+
+// ViewReferralRequestCV streams the CV a seeker attached to a request, to an authorized
+// referrer of the request's company: the stored original résumé from S3, or the tailored
+// builder CV rendered to PDF on the fly. AuthorizeCVAccess keeps this cabinet-only; the
+// seeker's identity is never revealed by it.
+func (a *API) ViewReferralRequestCV(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	id, err := c.ParamsInt("id")
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request id")
+	}
+	req, err := a.referral.AuthorizeCVAccess(c.Context(), int64(id), userID)
+	if err != nil {
+		return referralError(err)
+	}
+	switch req.CVKind {
+	case referral.CVOriginal:
+		return a.streamBlobPDF(c, blobstore.ResumeKey(req.SeekerUserID))
+	case referral.CVBuilt:
+		if req.CVID == nil {
+			return fiber.NewError(fiber.StatusNotFound, "the attached CV is no longer available")
+		}
+		return a.renderOwnerCV(c, *req.CVID, req.SeekerUserID)
+	default:
+		return fiber.NewError(fiber.StatusInternalServerError, "unknown CV kind")
+	}
+}
+
+// ViewReferralOfferProof streams a member's proof CV to a moderator reviewing the offer.
+// Moderator-gated at the route; the proof key never leaves the server.
+func (a *API) ViewReferralOfferProof(c *fiber.Ctx) error {
+	id, err := c.ParamsInt("id")
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid offer id")
+	}
+	offer, ok, err := a.referral.GetOffer(c.Context(), int64(id))
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fiber.NewError(fiber.StatusNotFound, "offer not found")
+	}
+	return a.streamBlobPDF(c, offer.ProofKey)
+}
+
+// streamBlobPDF streams a stored PDF object inline. 503 when the blob store is
+// unconfigured, 404 when the object is missing (e.g. the seeker deleted their résumé).
+func (a *API) streamBlobPDF(c *fiber.Ctx, key string) error {
+	if a.blob == nil {
+		return fiber.NewError(fiber.StatusServiceUnavailable, "file storage is unavailable")
+	}
+	rc, err := a.blob.Get(c.Context(), key)
+	if err != nil {
+		return fiber.NewError(fiber.StatusNotFound, "CV not available")
+	}
+	defer rc.Close()
+	data, err := io.ReadAll(rc)
+	if err != nil {
+		return err
+	}
+	c.Set(fiber.HeaderContentType, "application/pdf")
+	c.Set(fiber.HeaderContentDisposition, `inline; filename="cv.pdf"`)
+	return c.Send(data)
+}
+
+// renderOwnerCV renders a builder CV owned by ownerID to PDF. cvStore.Get is owner-scoped,
+// so it is loaded as the seeker (the owner), not the viewing referrer. 501 when no renderer.
+func (a *API) renderOwnerCV(c *fiber.Ctx, cvID, ownerID int64) error {
+	if a.cvRenderer == nil {
+		return fiber.NewError(fiber.StatusNotImplemented, "PDF rendering is not available")
+	}
+	rec, err := a.cvStore.Get(c.Context(), cvID, ownerID)
+	if err != nil {
+		return mapCVError(err)
+	}
+	tmpl, err := cv.ResolveTemplate(rec.TemplateID)
+	if err != nil {
+		return mapCVError(err)
+	}
+	pdf, err := a.cvRenderer.Render(c.Context(), rec.Document, tmpl)
+	if err != nil {
+		return err
+	}
+	c.Set(fiber.HeaderContentType, "application/pdf")
+	c.Set(fiber.HeaderContentDisposition, `inline; filename="cv.pdf"`)
+	return c.Send(pdf)
 }
 
 // referralProofKey is the S3 key of a member's proof CV for a company. One offer per

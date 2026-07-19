@@ -12,14 +12,14 @@
 - [x] 2.2 Implement offer lifecycle: submit (dedup on `(user, company)`, requires proof CV), moderator decide (approve/reject, record decider)
 - [x] 2.3 Implement request lifecycle: create (validate CV choice + at least one contact + eligibility + active-dup + daily cap), mark contacted/declined (authorize acting referrer, record `acted_by`/`acted_at`)
 - [x] 2.4 Implement referrer notification fan-out: for each approved referrer of the company, ping via SES email always + `telegramnotify` if linked; anonymous, links to cabinet
-- [ ] 2.5 Implement authorized CV access: resolve `original` → `resume_object_key`, `built` → `cvs`/Typst render; gate on caller being an approved referrer of the request's company
+- [x] 2.5 Implement authorized CV access: resolve `original` → `resume_object_key`, `built` → `cvs`/Typst render; gate on caller being an approved referrer of the request's company
 
 ## 3. HTTP handlers & routes
 
 - [x] 3.1 Seeker: `POST` create referral request (behind `RequireAuth`); validation errors → 400
 - [x] 3.2 Seeker: `GET` list own referral requests (company, CV, status)
 - [x] 3.3 Referrer: `POST` submit offer (proof-CV upload via résumé storage path) + `GET` list own offers
-- [ ] 3.4 Referrer: `GET` incoming requests for my companies + `POST` mark contacted/declined + authorized CV view endpoint
+- [x] 3.4 Referrer: `GET` incoming requests for my companies + `POST` mark contacted/declined + authorized CV view endpoint
 - [x] 3.5 Moderator: `GET` pending offers queue + `POST` approve/reject (behind moderator auth)
 - [ ] 3.6 Add the `referral_available` flag to the company read shape and `jobview` projection
 - [x] 3.7 Wire routes in the handler registry; return `{"data": ...}` shapes per convention

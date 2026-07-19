@@ -461,8 +461,10 @@ func Register(app *fiber.App, cfg Config) {
 	api.Post("/me/referrals/requests", keyAuth, a.CreateReferralRequest)
 	api.Get("/me/referrals/requests", keyAuth, a.ListMyReferralRequests)
 	api.Get("/me/referrals/incoming", keyAuth, a.ListIncomingReferralRequests)
+	api.Get("/me/referrals/incoming/:id/cv", keyAuth, a.ViewReferralRequestCV)
 	api.Post("/me/referrals/incoming/:id/resolve", keyAuth, a.ResolveReferralRequest)
 	api.Get("/referrals/offers", keyAuth, requireModerator, a.ListPendingReferralOffers)
+	api.Get("/referrals/offers/:id/proof", keyAuth, requireModerator, a.ViewReferralOfferProof)
 	api.Post("/referrals/offers/:id/decide", keyAuth, requireModerator, a.DecideReferralOffer)
 
 	// Job reports: any authenticated user flags a problem with a live vacancy (cookie or

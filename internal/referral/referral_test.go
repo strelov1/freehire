@@ -15,6 +15,7 @@ type fakeRepo struct {
 	eligible     bool
 	approved     bool
 	cvOwned      bool
+	hasResume    bool
 	countSince   int64
 	recipients   []Recipient
 	getRequest   Request
@@ -67,6 +68,12 @@ func (f *fakeRepo) ApprovedReferrerRecipients(context.Context, string) ([]Recipi
 }
 func (f *fakeRepo) CVBelongsToUser(context.Context, int64, int64) (bool, error) {
 	return f.cvOwned, nil
+}
+func (f *fakeRepo) UserHasResume(context.Context, int64) (bool, error) {
+	return f.hasResume, nil
+}
+func (f *fakeRepo) GetOffer(context.Context, int64) (Offer, bool, error) {
+	return Offer{}, false, nil
 }
 
 func (f *fakeRepo) CreateRequest(_ context.Context, in RequestInput) (Request, error) {
@@ -175,7 +182,7 @@ func TestCreateRequestEligibilityAndCap(t *testing.T) {
 	valid := RequestInput{SeekerUserID: 1, CompanySlug: "acme", CVKind: CVOriginal, ContactEmail: "s@x.test"}
 
 	t.Run("company not eligible", func(t *testing.T) {
-		repo := &fakeRepo{eligible: false}
+		repo := &fakeRepo{eligible: false, hasResume: true}
 		s := newService(repo, &fakePinger{})
 		if _, err := s.CreateRequest(context.Background(), valid); !errors.Is(err, ErrCompanyNotEligible) {
 			t.Fatalf("err = %v, want ErrCompanyNotEligible", err)
@@ -183,7 +190,7 @@ func TestCreateRequestEligibilityAndCap(t *testing.T) {
 	})
 
 	t.Run("daily cap reached", func(t *testing.T) {
-		repo := &fakeRepo{eligible: true, countSince: 3} // cap is 3
+		repo := &fakeRepo{eligible: true, hasResume: true, countSince: 3} // cap is 3
 		s := newService(repo, &fakePinger{})
 		if _, err := s.CreateRequest(context.Background(), valid); !errors.Is(err, ErrDailyCapReached) {
 			t.Fatalf("err = %v, want ErrDailyCapReached", err)
@@ -194,7 +201,7 @@ func TestCreateRequestEligibilityAndCap(t *testing.T) {
 	})
 
 	t.Run("under cap writes and pings all referrers", func(t *testing.T) {
-		repo := &fakeRepo{eligible: true, countSince: 2, recipients: []Recipient{{UserID: 10}, {UserID: 11}}}
+		repo := &fakeRepo{eligible: true, hasResume: true, countSince: 2, recipients: []Recipient{{UserID: 10}, {UserID: 11}}}
 		pinger := &fakePinger{}
 		s := newService(repo, pinger)
 		req, err := s.CreateRequest(context.Background(), valid)
@@ -210,7 +217,7 @@ func TestCreateRequestEligibilityAndCap(t *testing.T) {
 	})
 
 	t.Run("ping failure does not fail the request", func(t *testing.T) {
-		repo := &fakeRepo{eligible: true, recipients: []Recipient{{UserID: 10}}}
+		repo := &fakeRepo{eligible: true, hasResume: true, recipients: []Recipient{{UserID: 10}}}
 		s := newService(repo, &fakePinger{err: errors.New("smtp down")})
 		if _, err := s.CreateRequest(context.Background(), valid); err != nil {
 			t.Fatalf("create should swallow ping errors, got %v", err)
@@ -242,6 +249,18 @@ func TestCreateRequestBuiltCVOwnership(t *testing.T) {
 			t.Error("owned built CV should produce a request")
 		}
 	})
+}
+
+func TestCreateRequestOriginalNeedsResume(t *testing.T) {
+	original := RequestInput{SeekerUserID: 1, CompanySlug: "acme", CVKind: CVOriginal, ContactEmail: "s@x.test"}
+	repo := &fakeRepo{eligible: true, hasResume: false}
+	s := newService(repo, &fakePinger{})
+	if _, err := s.CreateRequest(context.Background(), original); !errors.Is(err, ErrNoResume) {
+		t.Fatalf("err = %v, want ErrNoResume", err)
+	}
+	if repo.createdReq != nil {
+		t.Error("must not write an original request when the seeker has no résumé")
+	}
 }
 
 // --- resolve + cv access -------------------------------------------------

@@ -441,6 +441,8 @@ type Querier interface {
 	// the board's display fields; owner columns (user_id) are never selected. A NULL slug
 	// never equals the param, so private sets are unreachable. No row → 404.
 	GetPublicBoardBySlug(ctx context.Context, publicSlug pgtype.Text) (GetPublicBoardBySlugRow, error)
+	// One offer by id — for the moderator's proof-CV view after role authorization.
+	GetReferralOffer(ctx context.Context, id int64) (ReferralOffer, error)
 	// One referral request by id — for authorized CV access and marking, after the caller is
 	// verified as an approved referrer of the request's company.
 	GetReferralRequest(ctx context.Context, id int64) (ReferralRequest, error)
@@ -1248,6 +1250,9 @@ type Querier interface {
 	// facet arrays (regions/remote_regions/countries/domains/company_types/company_sizes)
 	// are left untouched. Idempotent: re-running the same entry rewrites the same values.
 	UpsertYCCompany(ctx context.Context, arg UpsertYCCompanyParams) error
+	// Whether a user has a stored original résumé — the check before attaching an 'original'
+	// CV to a request, so a seeker cannot request with a résumé they never uploaded.
+	UserHasResume(ctx context.Context, id int64) (bool, error)
 }
 
 var _ Querier = (*Queries)(nil)

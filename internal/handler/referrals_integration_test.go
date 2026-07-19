@@ -38,6 +38,10 @@ func TestReferralEndpoints(t *testing.T) {
 	seeker := seedUser("seeker@example.test", "user")
 	refUser := seedUser("ref@example.test", "user")
 	mod := seedUser("mod@example.test", "moderator")
+	// The seeker has a stored résumé so an 'original' request is attachable.
+	if _, err := pool.Exec(ctx, `UPDATE users SET resume_object_key = 'resume/x.pdf' WHERE id = $1`, seeker); err != nil {
+		t.Fatalf("seed resume: %v", err)
+	}
 	if _, err := pool.Exec(ctx, `INSERT INTO companies (slug, name, job_count) VALUES ('acme','Acme',1)`); err != nil {
 		t.Fatalf("seed company: %v", err)
 	}
@@ -61,8 +65,10 @@ func TestReferralEndpoints(t *testing.T) {
 	app.Post("/api/v1/me/referrals/requests", auth.RequireAuth(iss), h.CreateReferralRequest)
 	app.Get("/api/v1/me/referrals/requests", auth.RequireAuth(iss), h.ListMyReferralRequests)
 	app.Get("/api/v1/me/referrals/incoming", auth.RequireAuth(iss), h.ListIncomingReferralRequests)
+	app.Get("/api/v1/me/referrals/incoming/:id/cv", auth.RequireAuth(iss), h.ViewReferralRequestCV)
 	app.Post("/api/v1/me/referrals/incoming/:id/resolve", auth.RequireAuth(iss), h.ResolveReferralRequest)
 	app.Get("/api/v1/referrals/offers", auth.RequireAuth(iss), requireMod, h.ListPendingReferralOffers)
+	app.Get("/api/v1/referrals/offers/:id/proof", auth.RequireAuth(iss), requireMod, h.ViewReferralOfferProof)
 	app.Post("/api/v1/referrals/offers/:id/decide", auth.RequireAuth(iss), requireMod, h.DecideReferralOffer)
 
 	do := func(method, path, tok string, body any) (int, map[string]any) {
@@ -129,6 +135,16 @@ func TestReferralEndpoints(t *testing.T) {
 		}
 		if rows[0].(map[string]any)["contact_email"] != "seeker@example.test" {
 			t.Errorf("inbox row = %v, want seeker contact", rows[0])
+		}
+
+		// CV access is cabinet-only: the seeker (not an approved referrer) is refused.
+		if code, _ := do(http.MethodGet, "/api/v1/me/referrals/incoming/"+itoa(reqID)+"/cv", token(seeker), nil); code != http.StatusForbidden {
+			t.Errorf("seeker viewing CV: status %d, want 403", code)
+		}
+		// The referrer is authorized; with no blob store wired the stream reports 503,
+		// which proves the request reached the storage path past the gate.
+		if code, _ := do(http.MethodGet, "/api/v1/me/referrals/incoming/"+itoa(reqID)+"/cv", token(refUser), nil); code != http.StatusServiceUnavailable {
+			t.Errorf("referrer viewing original CV (no blob): status %d, want 503", code)
 		}
 
 		// Referrer marks it contacted.
