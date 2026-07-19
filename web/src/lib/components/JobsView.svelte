@@ -13,7 +13,7 @@
   import { Paginator } from '$lib/paginated.svelte';
   import { FilterStore, filtersToParams, activeFilterCount, type SortField } from '$lib/filters';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
-  import { loadJobFilters } from '$lib/filterStorage';
+  import { loadJobFilters, hasChangedFilters, DEFAULT_JOB_FILTERS } from '$lib/filterStorage';
   import {
     bannerVisible,
     loadOnboardingState,
@@ -139,6 +139,11 @@
   // didn't change the filters (back/forward re-seed, CV sign-in prompt toggle)
   // doesn't emit a spurious funnel event.
   let lastSearchKey = '';
+  // True once we seed the first-visit default (remote / worldwide) for a brand-new
+  // visitor on a bare /jobs. Those filters are ours, not the user's choice, so the
+  // onboarding banner still treats the feed as "unfiltered" and the first reload
+  // isn't skipped as a fresh SSR page.
+  let seededDefault = $state(false);
 
   // Onboarding: the one-time nudge banner + wizard, standalone-only. The lifecycle
   // lives in localStorage (client-only); seed it at init on the client so a returning
@@ -154,7 +159,9 @@
   // so a shared search/filter link is never interrupted (activeFilterCount ignores the
   // query, so check it explicitly). Gated on `browser`: never SSR the banner.
   const showBanner = $derived(
-    browser && standalone && bannerVisible(onboardingState, filters.active > 0 || filters.value.q.trim() !== ''),
+    browser &&
+      standalone &&
+      bannerVisible(onboardingState, !seededDefault && (filters.active > 0 || filters.value.q.trim() !== '')),
   );
 
   function dismissBanner() {
@@ -217,6 +224,16 @@
   // sets stay empty). Cleanup: cancel any pending debounced reload so it can't fire
   // after this view is gone.
   onMount(() => {
+    // First-ever visit to the standalone feed: default to fully-remote, worldwide
+    // roles so a new user lands on the most relevant slice. Only on a bare /jobs (a
+    // shared filter/search link is left untouched) and only when this browser has
+    // never changed filters — a cleared set counts as changed, so it stays cleared.
+    // Client-side after hydration: the router is ready for the store's replaceState,
+    // and the seed persists like any filter set (restored normally on later visits).
+    if (standalone && location.search === '' && !hasChangedFilters()) {
+      filters.apply(DEFAULT_JOB_FILTERS);
+      seededDefault = true;
+    }
     if (isAuthenticated()) {
       ensureViewedLoaded();
       ensureSavedLoaded();
@@ -270,9 +287,10 @@
       if (firstRun) {
         started = true;
         // Keep the SSR `initial` page unless it was loaded for a different URL than
-        // the address bar (stale shallow-routing restore) or the feed is in CV mode
-        // — the SSR seed is the newest-sorted keyword feed, wrong for CV ranking.
-        if (!initialStale && !cvMode) return;
+        // the address bar (stale shallow-routing restore), the feed is in CV mode
+        // (the SSR seed is the newest-sorted keyword feed, wrong for CV ranking), or
+        // we seeded the first-visit default (the SSR page is unfiltered, now stale).
+        if (!initialStale && !cvMode && !seededDefault) return;
       }
       if (blocked) return;
       // Funnel search — only when the applied filters actually changed: not the

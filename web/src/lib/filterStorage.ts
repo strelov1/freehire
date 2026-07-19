@@ -11,6 +11,16 @@
 
 export const JOB_FILTERS_KEY = 'hire.jobFilters';
 
+// Set once this browser has made any explicit filter change — an edit, an applied
+// saved search, or a clear. It's a separate key because clearing *removes*
+// JOB_FILTERS_KEY, so the filters' absence alone can't tell a first-time visitor
+// (offer the default) from someone who deliberately cleared (respect the empty set).
+const FILTERS_TOUCHED_KEY = 'hire.jobFiltersTouched';
+
+/** The filter set a first-time visitor lands on: fully-remote roles open worldwide.
+ *  Same facet vocabulary as the `remote-worldwide` collection (see collections.ts). */
+export const DEFAULT_JOB_FILTERS = 'work_mode=remote&regions=global';
+
 /** The stored filter query string, or '' when absent/unavailable. */
 export function loadJobFilters(): string {
   if (typeof localStorage === 'undefined') return '';
@@ -21,13 +31,27 @@ export function loadJobFilters(): string {
   }
 }
 
+/** True once the visitor has changed filters at least once (including clearing them).
+ *  Absent only for a browser that has never touched the /jobs filters — the single
+ *  case offered the first-visit default. */
+export function hasChangedFilters(): boolean {
+  if (typeof localStorage === 'undefined') return false;
+  try {
+    return localStorage.getItem(FILTERS_TOUCHED_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
 /** Mirror the applied filters to storage. An empty string removes the key, so a
- *  cleared filter set leaves nothing to restore. */
+ *  cleared filter set leaves nothing to restore. Either way the change marks the
+ *  browser as touched, so the first-visit default is never re-offered. */
 export function saveJobFilters(qs: string): void {
   if (typeof localStorage === 'undefined') return;
   try {
     if (qs) localStorage.setItem(JOB_FILTERS_KEY, qs);
     else localStorage.removeItem(JOB_FILTERS_KEY);
+    localStorage.setItem(FILTERS_TOUCHED_KEY, '1');
   } catch {
     // best-effort: private mode / quota / disabled storage
   }

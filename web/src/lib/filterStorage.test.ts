@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { loadJobFilters, saveJobFilters, JOB_FILTERS_KEY } from './filterStorage';
+import { loadJobFilters, saveJobFilters, hasChangedFilters, JOB_FILTERS_KEY } from './filterStorage';
 
 // A minimal in-memory localStorage stand-in for the Node test environment (where
 // there is no browser storage). Individual tests swap in throwing/undefined
@@ -44,6 +44,34 @@ describe('filterStorage', () => {
 
     expect(store.getItem(JOB_FILTERS_KEY)).toBeNull();
     expect(loadJobFilters()).toBe('');
+  });
+
+  it('reports no filter history for a fresh browser, then history after any change', () => {
+    const store = new MemoryStorage();
+    // @ts-expect-error - install the stand-in
+    globalThis.localStorage = store;
+
+    expect(hasChangedFilters()).toBe(false);
+
+    saveJobFilters('regions=EU');
+    expect(hasChangedFilters()).toBe(true);
+  });
+
+  it('keeps filter history set after a clear, so a cleared set stays distinct from a fresh visit', () => {
+    const store = new MemoryStorage();
+    // @ts-expect-error - install the stand-in
+    globalThis.localStorage = store;
+
+    saveJobFilters('regions=EU');
+    saveJobFilters(''); // clear
+
+    expect(loadJobFilters()).toBe('');
+    expect(hasChangedFilters()).toBe(true);
+  });
+
+  it('reports no filter history when storage is unavailable (SSR)', () => {
+    // No globalThis.localStorage installed.
+    expect(hasChangedFilters()).toBe(false);
   });
 
   it('returns empty and no-ops when storage is unavailable (SSR)', () => {
