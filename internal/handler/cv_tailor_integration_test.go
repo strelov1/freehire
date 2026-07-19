@@ -39,10 +39,10 @@ func newTailorAPI(t *testing.T) (*API, *auth.Issuer) {
 	}
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &API{pool: pool, queries: queries, issuer: iss,
-		cvStore:     cv.NewStore(cv.NewQueriesRepository(queries)),
-		resume:      resume.New(nil, resume.NewQueriesRepository(queries)),
+		cvStore:            cv.NewStore(cv.NewQueriesRepository(queries)),
+		resume:             resume.New(nil, resume.NewQueriesRepository(queries)),
 		matchAnalysisCache: queries,
-		credits:     credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}),
+		credits:            credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}),
 	}
 	return h, iss
 }
