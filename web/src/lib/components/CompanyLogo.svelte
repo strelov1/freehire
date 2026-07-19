@@ -20,6 +20,15 @@
     failed = false;
   });
 
+  // SSR sends the raw <img>, so the browser fetches the logo before hydration wires
+  // `onerror`. When logo.dev 404s (its `fallback=404`), that error event fires before
+  // the handler exists and is lost — leaving an empty broken image until a reload. On
+  // mount, an already-complete image with no intrinsic width is that missed failure,
+  // so fall back to the monogram straight away.
+  function catchMissedError(node: HTMLImageElement) {
+    if (node.complete && node.naturalWidth === 0) failed = true;
+  }
+
   // Monogram fallback: the first letter over a colour hashed from the full name, so
   // a company keeps the same tile everywhere. Drawn as SVG so the glyph scales
   // crisply with whatever `size` the caller passes (16–64px).
@@ -38,6 +47,7 @@
     class="{size} shrink-0 rounded object-contain"
     loading="lazy"
     onerror={() => (failed = true)}
+    {@attach catchMissedError}
   />
 {:else if initial}
   <svg class="{size} shrink-0" viewBox="0 0 32 32" aria-hidden="true">
