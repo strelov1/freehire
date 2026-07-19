@@ -442,8 +442,8 @@ export function createApi(
     slug: string,
     limit: number,
     offset: number,
-  ): Promise<{ company: Company; jobs: Job[] }> {
-    return requestData<{ company: Company; jobs: Job[] }>(
+  ): Promise<{ company: Company; jobs: Job[]; referral_available: boolean }> {
+    return requestData<{ company: Company; jobs: Job[]; referral_available: boolean }>(
       `/api/v1/companies/${slug}${query(limit, offset)}`,
     );
   }

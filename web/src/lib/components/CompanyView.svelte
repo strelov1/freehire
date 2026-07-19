@@ -6,6 +6,7 @@
   import CompanyHeader from './CompanyHeader.svelte';
   import CompanyAbout from './CompanyAbout.svelte';
   import CompanyFacts from './CompanyFacts.svelte';
+  import ReferralBlock from './ReferralBlock.svelte';
 
   // The company entity is server-rendered (route `load`), so the header is in the
   // initial HTML. The job list is *streamed*: `initial` is a promise the route
@@ -14,11 +15,26 @@
   // search. The list reuses the same filterable, counted search view as /jobs,
   // pinned to this company: `company_slug` is fixed (not a selectable facet) and
   // the Source facet is hidden, since a single company's postings share one source.
-  let { company, initial, slug }: { company: Company; initial: Promise<Slice<Job>>; slug: string } =
-    $props();
+  let {
+    company,
+    initial,
+    slug,
+    referralAvailable = false,
+  }: {
+    company: Company;
+    initial: Promise<Slice<Job>>;
+    slug: string;
+    referralAvailable?: boolean;
+  } = $props();
 </script>
 
 <CompanyHeader {company} {slug} />
+
+{#if referralAvailable}
+  <div class="mt-4">
+    <ReferralBlock companySlug={slug} companyName={company.name} />
+  </div>
+{/if}
 
 <!-- Company facts + About sit atop the jobs sidebar on desktop (passed into JobsView
      as `sidebarTop`); the sidebar is hidden on mobile, so mirror them here as cards

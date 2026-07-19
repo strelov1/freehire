@@ -21,6 +21,9 @@ export const accountNav = [
   // CV builder is a restricted rollout — beta testers only (the server re-checks via
   // RequireModeratorOrBeta). `beta` shows a nav badge.
   { href: '/my/cvs', label: 'CV builder', betaOnly: true, beta: true },
+  // Employee referrals: request a referral, offer to refer (moderated), and — for
+  // referrers — manage incoming requests. Open to every signed-in user.
+  { href: '/my/referrals', label: 'Referrals' },
   { href: '/my/searches', label: 'Search notifications' },
   { href: '/my/api-keys', label: 'API keys' },
   { href: '/my/submissions', label: 'My submissions' },

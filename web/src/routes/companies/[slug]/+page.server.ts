@@ -30,8 +30,8 @@ export const load: PageServerLoad = async ({ params, url, fetch }) => {
     // is discarded. We can't ask for zero jobs: the API clamps `limit` to >= 1
     // (pageParams), so limit=1 is already the minimal fetch. Trimming this fully
     // needs a backend company-entity-only path — deferred to the latency follow-up.
-    const { company } = await client.getCompany(params.slug, 1, 0);
-    return { company, initial, slug: params.slug };
+    const { company, referral_available } = await client.getCompany(params.slug, 1, 0);
+    return { company, initial, slug: params.slug, referralAvailable: referral_available };
   } catch (e) {
     // The company load failed; mark the abandoned search promise handled so its
     // eventual rejection isn't an unhandled rejection on the server.

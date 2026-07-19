@@ -16,6 +16,7 @@ import {
   ScrollText,
   Inbox,
   Link2,
+  Handshake,
 } from '@lucide/svelte';
 import type { LucideIcon } from '@lucide/svelte';
 import type { AccountNavItem } from './accountNav';
@@ -24,6 +25,7 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   '/my/profile': User,
   '/my/assistant': Bot,
   '/my/cvs': ScrollText,
+  '/my/referrals': Handshake,
   '/my/tracking': LayoutList,
   '/my/activity': Activity,
   '/my/inbox': Inbox,
