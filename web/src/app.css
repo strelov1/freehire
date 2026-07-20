@@ -139,3 +139,23 @@
   margin: 0;
   background: transparent !important;
 }
+
+/* Dotted hero backdrop, shared across landing pages (the pattern HomeView pioneered
+   for /, and /about reuses). A faint dot grid faded toward the edges with a radial
+   mask, so it frames a hero without competing with the copy — visible in both themes
+   because it rides --muted-foreground. Opt in by adding `dot-grid` to a section (it
+   sets its own positioning context); pair with `-mx-4 px-4` to bleed full-width. */
+.dot-grid {
+  position: relative;
+}
+.dot-grid::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(var(--muted-foreground) 1px, transparent 1.2px);
+  background-size: 22px 22px;
+  opacity: 0.16;
+  -webkit-mask-image: radial-gradient(ellipse 90% 75% at 25% 0%, #000 18%, transparent 80%);
+  mask-image: radial-gradient(ellipse 90% 75% at 25% 0%, #000 18%, transparent 80%);
+}

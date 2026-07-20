@@ -12,6 +12,14 @@
   const browseCta = resolve('/companies');
   const referrerCta = `${resolve('/my/referrals')}?tab=offers`;
 
+  // Illustrative referrer inbox for the hero — decorative, not live data. Mirrors
+  // the real incoming-request card (ReferralsView) so the preview shows the actual
+  // anonymized view a referrer acts on: the CV and the role, never who it is.
+  const inbox = [
+    { company: 'Linear', role: 'Senior Backend Engineer', time: '2h' },
+    { company: 'Stripe', role: 'Staff Frontend Engineer', time: '5h' },
+  ];
+
   // The warm path — the honest three beats of an employee referral. Copy mirrors
   // the mechanics in ReferralsView / RequestReferralModal (anonymous referrer,
   // seeker-chosen contact channel, moderated proof).
@@ -88,42 +96,84 @@
 
 <div class="landing">
   <!-- ── Hero ─────────────────────────────────────────────────────────────── -->
-  <section class="pb-4 pt-14 sm:pt-20">
-    <p class="reveal font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground" style="--d:0ms">
-      // referrals · a warm way in
-    </p>
+  <section class="dot-grid -mx-4 px-4 pb-4 pt-14 sm:pt-20">
+    <div class="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
+      <div>
+        <p class="reveal font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground" style="--d:0ms">
+          // referrals · a warm way in
+        </p>
 
-    <h1
-      class="reveal mt-6 max-w-3xl text-balance text-5xl font-semibold leading-[0.95] tracking-tighter sm:text-7xl"
-      style="--d:80ms"
-    >
-      Referred candidates get seen.
-      <span class="mt-2 block text-muted-foreground">Everyone else waits in the pile.</span>
-    </h1>
+        <h1
+          class="reveal mt-6 max-w-2xl text-balance text-5xl font-semibold leading-[0.95] tracking-tighter sm:text-7xl"
+          style="--d:80ms"
+        >
+          Referred candidates get seen.
+          <span class="mt-2 block text-muted-foreground">Everyone else waits in the pile.</span>
+        </h1>
 
-    <p class="reveal mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground" style="--d:160ms">
-      Everyone knows a referral is the fastest way in. The hard part is finding someone inside who'll
-      make it. freehire surfaces the companies that already have a willing insider — and connects you
-      to them, so you can stop cold-DMing strangers.
-    </p>
+        <p class="reveal mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground" style="--d:160ms">
+          Everyone knows a referral is the fastest way in. The hard part is finding someone inside
+          who'll make it. freehire surfaces the companies that already have a willing insider — and
+          connects you to them, so you can stop cold-DMing strangers.
+        </p>
 
-    <!-- signature glyph: the path in one line, drawn in the muted mono register -->
-    <p class="reveal mt-7 flex flex-wrap items-center gap-2 font-mono text-xs text-muted-foreground" style="--d:220ms">
-      <span class="rounded-md border border-border px-2 py-1 text-foreground">you</span>
-      <span aria-hidden="true">→</span>
-      <span class="rounded-md border border-border px-2 py-1 text-foreground">insider</span>
-      <span aria-hidden="true">→</span>
-      <span class="rounded-md border border-border px-2 py-1 text-foreground">interview</span>
-    </p>
+        <!-- signature glyph: the path in one line, drawn in the muted mono register -->
+        <p class="reveal mt-7 flex flex-wrap items-center gap-2 font-mono text-xs text-muted-foreground" style="--d:220ms">
+          <span class="rounded-md border border-border bg-background px-2 py-1 text-foreground">you</span>
+          <span aria-hidden="true">→</span>
+          <span class="rounded-md border border-border bg-background px-2 py-1 text-foreground">insider</span>
+          <span aria-hidden="true">→</span>
+          <span class="rounded-md border border-border bg-background px-2 py-1 text-foreground">interview</span>
+        </p>
 
-    <div class="reveal mt-9 flex flex-wrap items-center gap-3" style="--d:300ms">
-      <Button href={askCta} variant="primary" size="lg">Ask for a referral</Button>
-      <Button href={referrerCta} variant="outline" size="lg">Refer someone in</Button>
+        <div class="reveal mt-9 flex flex-wrap items-center gap-3" style="--d:300ms">
+          <Button href={askCta} variant="primary" size="lg">Ask for a referral</Button>
+          <Button href={referrerCta} variant="outline" size="lg">Refer someone in</Button>
+        </div>
+
+        <p class="reveal mt-6 font-mono text-xs text-muted-foreground" style="--d:360ms">
+          free · anonymous referrers · employment verified
+        </p>
+      </div>
+
+      <!-- Referrer inbox preview: the anonymized view an insider acts on — the CV
+           and role, never who it is. Decorative, not live data. Hidden below lg. -->
+      <div class="reveal hidden lg:block" style="--d:420ms">
+        <figure class="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <figcaption class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground">
+            <span class="size-2.5 rounded-full bg-muted-foreground/30"></span>
+            Referrals · Inbox
+          </figcaption>
+          <div class="flex flex-col gap-3 p-4">
+            {#each inbox as r (r.company)}
+              <article class="rounded-lg border border-border bg-background p-4">
+                <div class="flex items-center justify-between gap-3">
+                  <p class="text-sm font-medium">Referral request · {r.company}</p>
+                  <span class="shrink-0 font-mono text-[11px] text-muted-foreground">{r.time}</span>
+                </div>
+                <div class="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                  <span
+                    class="grid size-6 shrink-0 place-items-center rounded-full border border-border"
+                    aria-hidden="true"
+                  >
+                    •
+                  </span>
+                  Anonymous candidate · {r.role}
+                </div>
+                <div class="mt-3 flex items-center gap-2">
+                  <span class="rounded-md border border-border px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
+                    CV attached
+                  </span>
+                  <span class="flex-1"></span>
+                  <span class="rounded-md bg-foreground px-2.5 py-1 text-[11px] font-medium text-background">Refer</span>
+                  <span class="rounded-md border border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground">Pass</span>
+                </div>
+              </article>
+            {/each}
+          </div>
+        </figure>
+      </div>
     </div>
-
-    <p class="reveal mt-6 font-mono text-xs text-muted-foreground" style="--d:360ms">
-      free · anonymous referrers · employment verified
-    </p>
   </section>
 
   <!-- ── The warm path ────────────────────────────────────────────────────── -->

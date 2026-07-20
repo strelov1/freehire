@@ -124,7 +124,7 @@
 
 <div class="mx-auto w-full max-w-4xl px-4 py-10 sm:py-14">
   <!-- Intro -->
-  <header class="mb-12">
+  <header class="dot-grid -mx-4 mb-12 px-4 pb-8 pt-4">
     <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// open startup</p>
     <h1 class="mt-4 text-4xl font-semibold tracking-tighter sm:text-5xl">All our numbers, live.</h1>
     <p class="mt-4 max-w-2xl text-lg leading-relaxed text-muted-foreground">
