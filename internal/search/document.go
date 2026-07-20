@@ -1,6 +1,7 @@
 package search
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/db"
@@ -71,6 +72,29 @@ func FromJob(j db.Job) (JobDocument, error) {
 		doc.PostedTS = eff.Time.Unix()
 	}
 	return doc, nil
+}
+
+// MergeClusterGeography widens a canonical document's geography facets with the union
+// across its role cluster's open rows, so a collapsed multi-city/multi-country role
+// stays findable by every city and country it is open in — not only the canon's own.
+// Each facet becomes the sorted, deduped union of the document's own values and the
+// cluster's; an empty cluster slice leaves that facet unchanged. Called by the full
+// reindex (which alone has the whole cluster in view); the single-row FromJob cannot.
+func (d *JobDocument) MergeClusterGeography(countries, regions, cities []string) {
+	d.Countries = unionSorted(d.Countries, countries)
+	d.Regions = unionSorted(d.Regions, regions)
+	d.Cities = unionSorted(d.Cities, cities)
+}
+
+// unionSorted returns the sorted, deduped union of two facet slices. A nil result
+// stays nil (no cluster addition and no own values) so an untouched facet is omitted.
+func unionSorted(own, extra []string) []string {
+	if len(extra) == 0 {
+		return own
+	}
+	merged := append(append([]string(nil), own...), extra...)
+	slices.Sort(merged)
+	return slices.Compact(merged)
 }
 
 // truncateRunes returns the first n runes of s (UTF-8 safe), backed off to the

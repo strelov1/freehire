@@ -1392,6 +1392,70 @@ func (q *Queries) RoleClusterCountsAll(ctx context.Context) ([]RoleClusterCounts
 	return items, nil
 }
 
+const roleClusterGeoAll = `-- name: RoleClusterGeoAll :many
+SELECT
+    o.company_slug,
+    o.role_fingerprint,
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'c' AND t.val <> '')::text[] AS countries,
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'r' AND t.val <> '')::text[] AS regions,
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'y' AND t.val <> '')::text[] AS cities
+FROM jobs o
+LEFT JOIN LATERAL (
+    SELECT 'c'::text AS kind, e AS val FROM unnest(o.countries) AS e
+    UNION ALL
+    SELECT 'r', e FROM unnest(o.regions) AS e
+    UNION ALL
+    SELECT 'y', e FROM unnest(o.cities) AS e
+) t ON true
+WHERE o.closed_at IS NULL AND o.role_fingerprint IS NOT NULL AND o.role_fingerprint <> ''
+GROUP BY o.company_slug, o.role_fingerprint
+HAVING count(DISTINCT o.id) > 1
+`
+
+type RoleClusterGeoAllRow struct {
+	CompanySlug     string      `json:"company_slug"`
+	RoleFingerprint pgtype.Text `json:"role_fingerprint"`
+	Countries       []string    `json:"countries"`
+	Regions         []string    `json:"regions"`
+	Cities          []string    `json:"cities"`
+}
+
+// The whole-catalogue role-cluster geography union in one pass, so the reindex can widen
+// each collapsed canon's countries/regions/cities with the union across its cluster's
+// OPEN rows (a canon in one country must still be findable by the countries of the reposts
+// it hides). Only OPEN multi-row clusters are returned — a singleton canon already carries
+// its own geography from search.FromJob, so it needs no widening (a lookup miss is the
+// no-op default). One scan of the open catalogue: a LATERAL tags each row's countries/
+// regions/cities into a single unnested stream (no cartesian across the three arrays, and
+// no repeat self-join of jobs), and the outer GROUP BY DISTINCT-aggregates per facet. LEFT
+// JOIN so a geo-less row still counts toward HAVING count(DISTINCT id) > 1 (the true cluster
+// size); blanks/NULLs are dropped by the FILTER. Mirrors RoleClusterCountsAll's single pass.
+func (q *Queries) RoleClusterGeoAll(ctx context.Context) ([]RoleClusterGeoAllRow, error) {
+	rows, err := q.db.Query(ctx, roleClusterGeoAll)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RoleClusterGeoAllRow{}
+	for rows.Next() {
+		var i RoleClusterGeoAllRow
+		if err := rows.Scan(
+			&i.CompanySlug,
+			&i.RoleFingerprint,
+			&i.Countries,
+			&i.Regions,
+			&i.Cities,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const selectOrphanLivenessCandidates = `-- name: SelectOrphanLivenessCandidates :many
 SELECT id, source, url, public_slug, liveness_strikes
 FROM jobs
@@ -1722,6 +1786,32 @@ func (q *Queries) UpdateJobFacets(ctx context.Context, arg UpdateJobFacetsParams
 		arg.ID,
 	)
 	return err
+}
+
+const updateJobRoleFingerprint = `-- name: UpdateJobRoleFingerprint :execrows
+UPDATE jobs
+SET role_fingerprint = $1,
+    updated_at       = now()
+WHERE id = $2
+  AND role_fingerprint IS DISTINCT FROM $1
+`
+
+type UpdateJobRoleFingerprintParams struct {
+	RoleFingerprint pgtype.Text `json:"role_fingerprint"`
+	ID              int64       `json:"id"`
+}
+
+// Rewrite one job's role_fingerprint (the repost-identity hash, internal/jobhash.
+// RoleFingerprint). The backfill-role-fingerprint one-shot uses this to apply a change
+// in the fingerprint's title normalization to existing rows WITHOUT a full re-ingest;
+// the IS DISTINCT FROM guard writes only rows whose fingerprint actually moved, so
+// re-runs are cheap and idempotent. Followed by a reindex, which recomputes duplicate_of.
+func (q *Queries) UpdateJobRoleFingerprint(ctx context.Context, arg UpdateJobRoleFingerprintParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateJobRoleFingerprint, arg.RoleFingerprint, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateJobSlugs = `-- name: UpdateJobSlugs :exec

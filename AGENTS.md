@@ -38,6 +38,7 @@ cmd/rollup-stats/main.go   recomputes the job_daily_stats rollup
 cmd/rollup-facets/main.go  recomputes the insights_facet_stats snapshot (/open facets)
 cmd/rollup-company/main.go recomputes insights_company_stats + insights_company_growth (per-company hiring-signal rollups; the latter backs GET /insights/companies)
 cmd/backfill-derive/main.go  re-derives all deterministic dictionary facets
+cmd/backfill-role-fingerprint/main.go  recomputes role_fingerprint (repost-identity) for existing rows
 cmd/reslug/main.go         backfills public_slug/company_slug
 cmd/backfill-company-names/main.go  resolves real display names for slug-named companies
 cmd/import-yc/main.go      enriches companies from yc-oss directory
@@ -88,6 +89,7 @@ go run ./cmd/tg-ingest                     # crawl sources/telegram.yml (path vi
 go run ./cmd/tg-extract                    # + LLM_* — drain telegram_posts into the catalogue
 go run ./cmd/liveness                      # URL-probe orphan jobs, close dead ones
 go run ./cmd/backfill-derive               # re-derive dictionary facets; follow with make reindex
+go run ./cmd/backfill-role-fingerprint     # recompute role_fingerprint for existing rows; follow with make reindex (collapses newly-clustered reposts + unions their geography)
 go run ./cmd/backfill-company-names [--dry-run]  # resolve real names for slug-named companies; follow with make reindex
 go run ./cmd/rollup-stats                  # recompute job_daily_stats (run-once, cron ~every 3h)
 go run ./cmd/rollup-facets                 # + MEILI_URL/MEILI_MASTER_KEY — recompute insights_facet_stats (run-once, cron ~daily)

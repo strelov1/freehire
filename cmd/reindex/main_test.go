@@ -67,7 +67,7 @@ func TestSplitJobs_OpenBecomeDocsClosedBecomeDeletions(t *testing.T) {
 	closed := db.Job{ID: 2, Title: "Closed", PublicSlug: "closed-x",
 		ClosedAt: pgtype.Timestamptz{Time: open.CreatedAt.Time, Valid: true}}
 
-	docs, deleteIDs, err := splitJobs([]db.Job{open, closed}, nil, time.Now())
+	docs, deleteIDs, err := splitJobs([]db.Job{open, closed}, nil, nil, time.Now())
 	if err != nil {
 		t.Fatalf("splitJobs: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestSplitJobs_RepostsDeletedNotIndexed(t *testing.T) {
 	repost := db.Job{ID: 2, Title: "Repost", PublicSlug: "repost-x",
 		DuplicateOf: pgtype.Int8{Int64: 1, Valid: true}}
 
-	docs, deleteIDs, err := splitJobs([]db.Job{canon, repost}, nil, time.Now())
+	docs, deleteIDs, err := splitJobs([]db.Job{canon, repost}, nil, nil, time.Now())
 	if err != nil {
 		t.Fatalf("splitJobs: %v", err)
 	}
@@ -95,6 +95,36 @@ func TestSplitJobs_RepostsDeletedNotIndexed(t *testing.T) {
 	}
 	if len(deleteIDs) != 1 || deleteIDs[0] != 2 {
 		t.Fatalf("deleteIDs = %v, want [2] (repost removed)", deleteIDs)
+	}
+}
+
+// A canonical row's document is widened with its role cluster's geography union, so a
+// collapsed multi-country role stays findable by every country its (hidden) reposts hold.
+func TestSplitJobs_CanonGetsClusterGeoUnion(t *testing.T) {
+	canon := db.Job{
+		ID: 1, Title: "Senior Engineer", PublicSlug: "senior-engineer-acme-x",
+		CompanySlug: "acme", RoleFingerprint: pgtype.Text{String: "fp1", Valid: true},
+		Countries: []string{"de"}, Regions: []string{"eu"}, Cities: []string{"München"},
+	}
+	geo := func(cs, fp string) ([]string, []string, []string) {
+		if cs == "acme" && fp == "fp1" {
+			return []string{"at", "de", "pl"}, []string{"eu"}, []string{"München", "Wien"}
+		}
+		return nil, nil, nil
+	}
+
+	docs, _, err := splitJobs([]db.Job{canon}, nil, geo, time.Now())
+	if err != nil {
+		t.Fatalf("splitJobs: %v", err)
+	}
+	if len(docs) != 1 {
+		t.Fatalf("docs = %+v, want one canon", docs)
+	}
+	if got, want := docs[0].Countries, []string{"at", "de", "pl"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("countries = %v, want cluster union %v", got, want)
+	}
+	if got, want := docs[0].Cities, []string{"München", "Wien"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("cities = %v, want cluster union %v", got, want)
 	}
 }
 
@@ -139,7 +169,7 @@ func TestReindexFull_PushesOpenDocsThenPromotes(t *testing.T) {
 	reader := &fakePageReader{pages: map[int64][]db.Job{0: page}}
 
 	f := &fakeRebuilder{}
-	indexed, skipped, err := reindexFull(context.Background(), reader, f, nil, time.Now())
+	indexed, skipped, err := reindexFull(context.Background(), reader, f, nil, nil, time.Now())
 	if err != nil {
 		t.Fatalf("reindexFull: %v", err)
 	}
@@ -173,7 +203,7 @@ func TestReindexFull_SkipsCorruptedRowAndPromotes(t *testing.T) {
 	}
 
 	f := &fakeRebuilder{}
-	indexed, skipped, err := reindexFull(context.Background(), reader, f, nil, time.Now())
+	indexed, skipped, err := reindexFull(context.Background(), reader, f, nil, nil, time.Now())
 	if err != nil {
 		t.Fatalf("reindexFull: %v", err)
 	}

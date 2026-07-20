@@ -145,7 +145,12 @@ func run() int {
 		log.Printf("reindex: build reality lookup: %v", err)
 		return 1
 	}
-	indexed, skipped, err := reindexFull(ctx, reader, b, lookup, time.Now())
+	geo, err := buildClusterGeoLookup(ctx, q)
+	if err != nil {
+		log.Printf("reindex: build cluster geo lookup: %v", err)
+		return 1
+	}
+	indexed, skipped, err := reindexFull(ctx, reader, b, lookup, geo, time.Now())
 	if err != nil {
 		log.Printf("reindex: %v", err)
 		return 1
@@ -226,7 +231,7 @@ type rebuilder interface {
 // index never held them, so unlike the in-place path there is nothing to delete).
 // fetch pages by keyset (id > last seen) so rows inserted or re-ordered during the
 // run cannot be skipped or repeated.
-func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, lookup realityLookup, now time.Time) (int, int, error) {
+func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, lookup realityLookup, geo clusterGeoLookup, now time.Time) (int, int, error) {
 	if err := b.Prepare(ctx); err != nil {
 		return 0, 0, err
 	}
@@ -247,7 +252,7 @@ func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, loo
 		skipped += len(corrupted)
 
 		if len(jobs) > 0 {
-			docs, _, err := splitJobs(jobs, lookup, now) // closed jobs (deleteIDs) are dropped, not indexed
+			docs, _, err := splitJobs(jobs, lookup, geo, now) // closed jobs (deleteIDs) are dropped, not indexed
 			if err != nil {
 				return int(indexed.Load()), skipped, err
 			}
@@ -277,6 +282,12 @@ func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, loo
 // yields (1, 1) — a unique, non-reposted role. A nil lookup means the counts default
 // to (1, 1) everywhere (used by tests that do not exercise clustering).
 type realityLookup func(companySlug, fingerprint string) (repost, mass int)
+
+// clusterGeoLookup returns the union of a role cluster's countries, regions, and cities
+// across its open rows, so the canon's search document can be widened beyond its own
+// geography. A miss (singleton cluster) yields nil slices — a no-op widening. A nil
+// lookup skips widening entirely (tests that do not exercise clustering).
+type clusterGeoLookup func(companySlug, fingerprint string) (countries, regions, cities []string)
 
 // recomputeRoleDuplicates refreshes jobs.duplicate_of one company at a time, returning
 // the total rows re-marked. Scoping each UPDATE to a single company keeps its lock
@@ -365,11 +376,31 @@ func buildRealityLookup(ctx context.Context, q *db.Queries) (realityLookup, erro
 	}, nil
 }
 
+// buildClusterGeoLookup precomputes the whole-catalogue role-cluster geography union once
+// (RoleClusterGeoAll returns only open multi-row clusters), so widening each canon during
+// the rebuild is a map read, not N queries. A singleton cluster is absent from the map and
+// resolves to nil slices — a no-op widening.
+func buildClusterGeoLookup(ctx context.Context, q *db.Queries) (clusterGeoLookup, error) {
+	rows, err := q.RoleClusterGeoAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	type geo struct{ countries, regions, cities []string }
+	m := make(map[string]geo, len(rows))
+	for _, r := range rows {
+		m[r.CompanySlug+"\x00"+r.RoleFingerprint.String] = geo{r.Countries, r.Regions, r.Cities}
+	}
+	return func(cs, fp string) ([]string, []string, []string) {
+		g := m[cs+"\x00"+fp]
+		return g.countries, g.regions, g.cities
+	}, nil
+}
+
 // splitJobs partitions a batch from the (deliberately unfiltered) reindex feed:
 // open jobs become index documents (each carrying its reality signal, classified
 // against `now` and its cluster counts), closed jobs become deletions so they leave
 // the index (the index contains only open jobs — see the job-search spec).
-func splitJobs(jobs []db.Job, lookup realityLookup, now time.Time) ([]search.JobDocument, []int64, error) {
+func splitJobs(jobs []db.Job, lookup realityLookup, geo clusterGeoLookup, now time.Time) ([]search.JobDocument, []int64, error) {
 	docs := make([]search.JobDocument, 0, len(jobs))
 	deleteIDs := make([]int64, 0, len(jobs))
 	for _, j := range jobs {
@@ -390,6 +421,12 @@ func splitJobs(jobs []db.Job, lookup realityLookup, now time.Time) ([]search.Job
 		}
 		reality := jobview.ClassifyReality(j, now, repost, mass)
 		doc.Reality = &reality
+		// Widen the canon's geography with its cluster's union, so a collapsed
+		// multi-country role stays findable by every country its reposts hold. A miss
+		// (singleton cluster or no lookup) leaves the canon's own geography untouched.
+		if geo != nil {
+			doc.MergeClusterGeography(geo(j.CompanySlug, j.RoleFingerprint.String))
+		}
 		docs = append(docs, doc)
 	}
 	return docs, deleteIDs, nil

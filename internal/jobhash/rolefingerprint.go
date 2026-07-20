@@ -3,6 +3,7 @@ package jobhash
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"regexp"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/db"
@@ -23,7 +24,7 @@ func RoleFingerprint(p db.UpsertJobParams) string {
 	var b strings.Builder
 	b.WriteString(p.CompanySlug)
 	b.WriteString(rs)
-	b.WriteString(normalizeRoleText(p.Title))
+	b.WriteString(normalizeRoleText(stripTrailingClause(p.Title)))
 	b.WriteString(rs)
 	b.WriteString(normalizeRoleText(p.Description))
 
@@ -36,4 +37,25 @@ func RoleFingerprint(p db.UpsertJobParams) string {
 // narrow (no stemming/punctuation stripping) to avoid over-merging distinct roles.
 func normalizeRoleText(s string) string {
 	return strings.Join(strings.Fields(strings.ToLower(s)), " ")
+}
+
+// trailingClause matches the last clause of a title: a separator — a comma, or a
+// space-delimited pipe/at/dash (`-`, en-dash, em-dash) — followed by a final segment
+// that contains no further separator, anchored to the end. RE2's leftmost match lands
+// on the LAST separator (an earlier one cannot reach `$` with a separator-free tail),
+// so only one trailing clause is removed. The dash/pipe/at require a leading space so
+// an in-word hyphen (front-end) is never a separator; a comma needs none.
+var trailingClause = regexp.MustCompile(`(\s*,\s*|\s+[|@]\s*|\s+[-–—]\s*)[^,|@\-–—]*$`)
+
+// stripTrailingClause removes a trailing location/qualifier clause from a job title
+// (e.g. "Senior Engineer, Krakau" -> "Senior Engineer") so per-city variants of one
+// role share a fingerprint. It strips only a suffix — a leading grade like "Senior"
+// is never touched — and leaves the title unchanged when stripping would drop it below
+// two words, so a too-generic single token cannot become a cluster key.
+func stripTrailingClause(title string) string {
+	stripped := trailingClause.ReplaceAllString(title, "")
+	if len(strings.Fields(stripped)) < 2 {
+		return title
+	}
+	return stripped
 }

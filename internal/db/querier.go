@@ -1083,6 +1083,17 @@ type Querier interface {
 	// more than one posting are returned (singletons are the count-1 default a lookup miss
 	// already implies), keeping the map small. NULL/empty fingerprints are excluded.
 	RoleClusterCountsAll(ctx context.Context) ([]RoleClusterCountsAllRow, error)
+	// The whole-catalogue role-cluster geography union in one pass, so the reindex can widen
+	// each collapsed canon's countries/regions/cities with the union across its cluster's
+	// OPEN rows (a canon in one country must still be findable by the countries of the reposts
+	// it hides). Only OPEN multi-row clusters are returned — a singleton canon already carries
+	// its own geography from search.FromJob, so it needs no widening (a lookup miss is the
+	// no-op default). One scan of the open catalogue: a LATERAL tags each row's countries/
+	// regions/cities into a single unnested stream (no cartesian across the three arrays, and
+	// no repeat self-join of jobs), and the outer GROUP BY DISTINCT-aggregates per facet. LEFT
+	// JOIN so a geo-less row still counts toward HAVING count(DISTINCT id) > 1 (the true cluster
+	// size); blanks/NULLs are dropped by the FILTER. Mirrors RoleClusterCountsAll's single pass.
+	RoleClusterGeoAll(ctx context.Context) ([]RoleClusterGeoAllRow, error)
 	// Save (bookmark) a job for a user. Idempotent and independent of a prior view:
 	// it inserts the row (viewed_at defaults) or refreshes saved_at in place.
 	SaveJob(ctx context.Context, arg SaveJobParams) (UserJob, error)
@@ -1239,6 +1250,12 @@ type Querier interface {
 	// as given by the caller, which preserves an already-set (possibly
 	// adapter-structured) value.
 	UpdateJobFacets(ctx context.Context, arg UpdateJobFacetsParams) error
+	// Rewrite one job's role_fingerprint (the repost-identity hash, internal/jobhash.
+	// RoleFingerprint). The backfill-role-fingerprint one-shot uses this to apply a change
+	// in the fingerprint's title normalization to existing rows WITHOUT a full re-ingest;
+	// the IS DISTINCT FROM guard writes only rows whose fingerprint actually moved, so
+	// re-runs are cheap and idempotent. Followed by a reindex, which recomputes duplicate_of.
+	UpdateJobRoleFingerprint(ctx context.Context, arg UpdateJobRoleFingerprintParams) (int64, error)
 	// One-off backfill for a deliberate slug-builder change (see the UpsertJob note on
 	// why slugs are otherwise immutable). public_slug/company_slug are deterministic
 	// from the row's immutable fields, so recomputing and rewriting them is idempotent.

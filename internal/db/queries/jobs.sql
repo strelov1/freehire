@@ -292,6 +292,47 @@ WHERE role_fingerprint IS NOT NULL AND role_fingerprint <> ''
 GROUP BY company_slug, role_fingerprint
 HAVING COUNT(*) > 1;
 
+-- name: RoleClusterGeoAll :many
+-- The whole-catalogue role-cluster geography union in one pass, so the reindex can widen
+-- each collapsed canon's countries/regions/cities with the union across its cluster's
+-- OPEN rows (a canon in one country must still be findable by the countries of the reposts
+-- it hides). Only OPEN multi-row clusters are returned — a singleton canon already carries
+-- its own geography from search.FromJob, so it needs no widening (a lookup miss is the
+-- no-op default). One scan of the open catalogue: a LATERAL tags each row's countries/
+-- regions/cities into a single unnested stream (no cartesian across the three arrays, and
+-- no repeat self-join of jobs), and the outer GROUP BY DISTINCT-aggregates per facet. LEFT
+-- JOIN so a geo-less row still counts toward HAVING count(DISTINCT id) > 1 (the true cluster
+-- size); blanks/NULLs are dropped by the FILTER. Mirrors RoleClusterCountsAll's single pass.
+SELECT
+    o.company_slug,
+    o.role_fingerprint,
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'c' AND t.val <> '')::text[] AS countries,
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'r' AND t.val <> '')::text[] AS regions,
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'y' AND t.val <> '')::text[] AS cities
+FROM jobs o
+LEFT JOIN LATERAL (
+    SELECT 'c'::text AS kind, e AS val FROM unnest(o.countries) AS e
+    UNION ALL
+    SELECT 'r', e FROM unnest(o.regions) AS e
+    UNION ALL
+    SELECT 'y', e FROM unnest(o.cities) AS e
+) t ON true
+WHERE o.closed_at IS NULL AND o.role_fingerprint IS NOT NULL AND o.role_fingerprint <> ''
+GROUP BY o.company_slug, o.role_fingerprint
+HAVING count(DISTINCT o.id) > 1;
+
+-- name: UpdateJobRoleFingerprint :execrows
+-- Rewrite one job's role_fingerprint (the repost-identity hash, internal/jobhash.
+-- RoleFingerprint). The backfill-role-fingerprint one-shot uses this to apply a change
+-- in the fingerprint's title normalization to existing rows WITHOUT a full re-ingest;
+-- the IS DISTINCT FROM guard writes only rows whose fingerprint actually moved, so
+-- re-runs are cheap and idempotent. Followed by a reindex, which recomputes duplicate_of.
+UPDATE jobs
+SET role_fingerprint = sqlc.arg(role_fingerprint),
+    updated_at       = now()
+WHERE id = sqlc.arg(id)
+  AND role_fingerprint IS DISTINCT FROM sqlc.arg(role_fingerprint);
+
 -- name: CompaniesWithRoleClusters :many
 -- Company slugs whose role-duplicate markers may need recomputing: a company with an
 -- open role cluster (>1 posting sharing a fingerprint) to collapse, OR one still

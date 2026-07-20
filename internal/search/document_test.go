@@ -58,6 +58,42 @@ func TestFromJob_RolesDerivedButIndexOnly(t *testing.T) {
 	}
 }
 
+func TestMergeClusterGeography_WidensCanonFacets(t *testing.T) {
+	doc := JobDocument{Job: jobview.Job{
+		Countries: []string{"de"},
+		Regions:   []string{"eu"},
+		Cities:    []string{"Düsseldorf"},
+	}}
+	doc.MergeClusterGeography(
+		[]string{"at", "de", "pl"},
+		[]string{"eu"},
+		[]string{"Kraków", "Wien", "Düsseldorf"},
+	)
+	if got, want := doc.Countries, []string{"at", "de", "pl"}; !slices.Equal(got, want) {
+		t.Errorf("countries = %v, want sorted union %v", got, want)
+	}
+	if got, want := doc.Regions, []string{"eu"}; !slices.Equal(got, want) {
+		t.Errorf("regions = %v, want %v", got, want)
+	}
+	if got, want := doc.Cities, []string{"Düsseldorf", "Kraków", "Wien"}; !slices.Equal(got, want) {
+		t.Errorf("cities = %v, want sorted union %v", got, want)
+	}
+}
+
+func TestMergeClusterGeography_EmptyClusterLeavesFacetsUnchanged(t *testing.T) {
+	doc := JobDocument{Job: jobview.Job{
+		Countries: []string{"de"},
+		Cities:    []string{"Düsseldorf"},
+	}}
+	doc.MergeClusterGeography(nil, nil, nil)
+	if got, want := doc.Countries, []string{"de"}; !slices.Equal(got, want) {
+		t.Errorf("countries = %v, want unchanged %v", got, want)
+	}
+	if got, want := doc.Cities, []string{"Düsseldorf"}; !slices.Equal(got, want) {
+		t.Errorf("cities = %v, want unchanged %v", got, want)
+	}
+}
+
 func TestFromJob_DocumentFlattensIDAndViewToTopLevelJSON(t *testing.T) {
 	// Meilisearch reads the primary key "id" from the top level of the document,
 	// and the embedded jobview.Job must flatten (no nesting) so its fields are
