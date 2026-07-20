@@ -92,22 +92,28 @@ func (q *Queries) CountReferralRequestsSince(ctx context.Context, arg CountRefer
 }
 
 const createReferralOffer = `-- name: CreateReferralOffer :one
-INSERT INTO referral_offers (user_id, company_slug, proof_object_key)
-VALUES ($1, $2, $3)
-RETURNING id, user_id, company_slug, proof_object_key, status, decided_by, decided_at, created_at
+INSERT INTO referral_offers (user_id, company_slug, proof_object_key, linkedin_url)
+VALUES ($1, $2, $3, $4)
+RETURNING id, user_id, company_slug, proof_object_key, status, decided_by, decided_at, created_at, linkedin_url
 `
 
 type CreateReferralOfferParams struct {
 	UserID         int64  `json:"user_id"`
 	CompanySlug    string `json:"company_slug"`
 	ProofObjectKey string `json:"proof_object_key"`
+	LinkedinUrl    string `json:"linkedin_url"`
 }
 
 // Record a member's offer to refer into a company. The UNIQUE (user_id, company_slug)
 // constraint rejects a second offer for the same company; the repository maps that unique
 // violation to a domain "already offered" error. Starts pending, awaiting moderation.
 func (q *Queries) CreateReferralOffer(ctx context.Context, arg CreateReferralOfferParams) (ReferralOffer, error) {
-	row := q.db.QueryRow(ctx, createReferralOffer, arg.UserID, arg.CompanySlug, arg.ProofObjectKey)
+	row := q.db.QueryRow(ctx, createReferralOffer,
+		arg.UserID,
+		arg.CompanySlug,
+		arg.ProofObjectKey,
+		arg.LinkedinUrl,
+	)
 	var i ReferralOffer
 	err := row.Scan(
 		&i.ID,
@@ -118,6 +124,7 @@ func (q *Queries) CreateReferralOffer(ctx context.Context, arg CreateReferralOff
 		&i.DecidedBy,
 		&i.DecidedAt,
 		&i.CreatedAt,
+		&i.LinkedinUrl,
 	)
 	return i, err
 }
@@ -125,10 +132,10 @@ func (q *Queries) CreateReferralOffer(ctx context.Context, arg CreateReferralOff
 const createReferralRequest = `-- name: CreateReferralRequest :one
 INSERT INTO referral_requests (
     seeker_user_id, company_slug, job_id, cv_kind, cv_id,
-    contact_telegram, contact_email, note
+    contact_telegram, contact_email, note, linkedin_url
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, seeker_user_id, company_slug, job_id, cv_kind, cv_id, contact_telegram, contact_email, note, status, acted_by, acted_at, created_at
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, seeker_user_id, company_slug, job_id, cv_kind, cv_id, contact_telegram, contact_email, note, status, acted_by, acted_at, created_at, linkedin_url
 `
 
 type CreateReferralRequestParams struct {
@@ -140,6 +147,7 @@ type CreateReferralRequestParams struct {
 	ContactTelegram pgtype.Text `json:"contact_telegram"`
 	ContactEmail    pgtype.Text `json:"contact_email"`
 	Note            string      `json:"note"`
+	LinkedinUrl     string      `json:"linkedin_url"`
 }
 
 // Record a seeker's referral request into a company. The partial unique index on
@@ -155,6 +163,7 @@ func (q *Queries) CreateReferralRequest(ctx context.Context, arg CreateReferralR
 		arg.ContactTelegram,
 		arg.ContactEmail,
 		arg.Note,
+		arg.LinkedinUrl,
 	)
 	var i ReferralRequest
 	err := row.Scan(
@@ -171,6 +180,7 @@ func (q *Queries) CreateReferralRequest(ctx context.Context, arg CreateReferralR
 		&i.ActedBy,
 		&i.ActedAt,
 		&i.CreatedAt,
+		&i.LinkedinUrl,
 	)
 	return i, err
 }
@@ -179,7 +189,7 @@ const decideReferralOffer = `-- name: DecideReferralOffer :one
 UPDATE referral_offers
 SET status = $1, decided_by = $2, decided_at = now()
 WHERE id = $3 AND status = 'pending'
-RETURNING id, user_id, company_slug, proof_object_key, status, decided_by, decided_at, created_at
+RETURNING id, user_id, company_slug, proof_object_key, status, decided_by, decided_at, created_at, linkedin_url
 `
 
 type DecideReferralOfferParams struct {
@@ -203,6 +213,7 @@ func (q *Queries) DecideReferralOffer(ctx context.Context, arg DecideReferralOff
 		&i.DecidedBy,
 		&i.DecidedAt,
 		&i.CreatedAt,
+		&i.LinkedinUrl,
 	)
 	return i, err
 }
@@ -229,7 +240,7 @@ func (q *Queries) DeleteReferralOffer(ctx context.Context, arg DeleteReferralOff
 }
 
 const getReferralOffer = `-- name: GetReferralOffer :one
-SELECT id, user_id, company_slug, proof_object_key, status, decided_by, decided_at, created_at FROM referral_offers WHERE id = $1
+SELECT id, user_id, company_slug, proof_object_key, status, decided_by, decided_at, created_at, linkedin_url FROM referral_offers WHERE id = $1
 `
 
 // One offer by id — for the moderator's proof-CV view after role authorization.
@@ -245,12 +256,13 @@ func (q *Queries) GetReferralOffer(ctx context.Context, id int64) (ReferralOffer
 		&i.DecidedBy,
 		&i.DecidedAt,
 		&i.CreatedAt,
+		&i.LinkedinUrl,
 	)
 	return i, err
 }
 
 const getReferralRequest = `-- name: GetReferralRequest :one
-SELECT id, seeker_user_id, company_slug, job_id, cv_kind, cv_id, contact_telegram, contact_email, note, status, acted_by, acted_at, created_at FROM referral_requests WHERE id = $1
+SELECT id, seeker_user_id, company_slug, job_id, cv_kind, cv_id, contact_telegram, contact_email, note, status, acted_by, acted_at, created_at, linkedin_url FROM referral_requests WHERE id = $1
 `
 
 // One referral request by id — for authorized CV access and marking, after the caller is
@@ -272,6 +284,7 @@ func (q *Queries) GetReferralRequest(ctx context.Context, id int64) (ReferralReq
 		&i.ActedBy,
 		&i.ActedAt,
 		&i.CreatedAt,
+		&i.LinkedinUrl,
 	)
 	return i, err
 }
@@ -314,23 +327,45 @@ func (q *Queries) ListApprovedReferrerRecipients(ctx context.Context, companySlu
 }
 
 const listIncomingReferralRequests = `-- name: ListIncomingReferralRequests :many
-SELECT r.id, r.seeker_user_id, r.company_slug, r.job_id, r.cv_kind, r.cv_id, r.contact_telegram, r.contact_email, r.note, r.status, r.acted_by, r.acted_at, r.created_at FROM referral_requests r
+SELECT r.id, r.seeker_user_id, r.company_slug, r.job_id, r.cv_kind, r.cv_id, r.contact_telegram, r.contact_email, r.note, r.status, r.acted_by, r.acted_at, r.created_at, r.linkedin_url, c.name AS company_name
+FROM referral_requests r
 JOIN referral_offers o ON o.company_slug = r.company_slug
+LEFT JOIN companies c ON c.slug = r.company_slug
 WHERE o.user_id = $1 AND o.status = 'approved' AND r.status = 'sent'
 ORDER BY r.created_at DESC
 `
 
+type ListIncomingReferralRequestsRow struct {
+	ID              int64              `json:"id"`
+	SeekerUserID    int64              `json:"seeker_user_id"`
+	CompanySlug     string             `json:"company_slug"`
+	JobID           pgtype.Int8        `json:"job_id"`
+	CvKind          string             `json:"cv_kind"`
+	CvID            pgtype.Int8        `json:"cv_id"`
+	ContactTelegram pgtype.Text        `json:"contact_telegram"`
+	ContactEmail    pgtype.Text        `json:"contact_email"`
+	Note            string             `json:"note"`
+	Status          string             `json:"status"`
+	ActedBy         pgtype.Int8        `json:"acted_by"`
+	ActedAt         pgtype.Timestamptz `json:"acted_at"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	LinkedinUrl     string             `json:"linkedin_url"`
+	CompanyName     pgtype.Text        `json:"company_name"`
+}
+
 // The referrer inbox: open (sent) requests for every company the referrer has an approved
-// offer for. Joins the request pool to the caller's approved offers on company_slug.
-func (q *Queries) ListIncomingReferralRequests(ctx context.Context, referrerUserID int64) ([]ReferralRequest, error) {
+// offer for. Joins the request pool to the caller's approved offers on company_slug, and
+// the catalogue for the company's display name (LEFT so a request survives an unknown
+// company — the UI falls back to the slug).
+func (q *Queries) ListIncomingReferralRequests(ctx context.Context, referrerUserID int64) ([]ListIncomingReferralRequestsRow, error) {
 	rows, err := q.db.Query(ctx, listIncomingReferralRequests, referrerUserID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ReferralRequest{}
+	items := []ListIncomingReferralRequestsRow{}
 	for rows.Next() {
-		var i ReferralRequest
+		var i ListIncomingReferralRequestsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.SeekerUserID,
@@ -345,6 +380,8 @@ func (q *Queries) ListIncomingReferralRequests(ctx context.Context, referrerUser
 			&i.ActedBy,
 			&i.ActedAt,
 			&i.CreatedAt,
+			&i.LinkedinUrl,
+			&i.CompanyName,
 		); err != nil {
 			return nil, err
 		}
@@ -357,7 +394,7 @@ func (q *Queries) ListIncomingReferralRequests(ctx context.Context, referrerUser
 }
 
 const listPendingReferralOffers = `-- name: ListPendingReferralOffers :many
-SELECT o.id, o.user_id, o.company_slug, o.proof_object_key, o.status, o.decided_by, o.decided_at, o.created_at, c.name AS company_name
+SELECT o.id, o.user_id, o.company_slug, o.proof_object_key, o.status, o.decided_by, o.decided_at, o.created_at, o.linkedin_url, c.name AS company_name
 FROM referral_offers o
 LEFT JOIN companies c ON c.slug = o.company_slug
 WHERE o.status = 'pending'
@@ -373,6 +410,7 @@ type ListPendingReferralOffersRow struct {
 	DecidedBy      pgtype.Int8        `json:"decided_by"`
 	DecidedAt      pgtype.Timestamptz `json:"decided_at"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	LinkedinUrl    string             `json:"linkedin_url"`
 	CompanyName    pgtype.Text        `json:"company_name"`
 }
 
@@ -395,6 +433,7 @@ func (q *Queries) ListPendingReferralOffers(ctx context.Context) ([]ListPendingR
 			&i.DecidedBy,
 			&i.DecidedAt,
 			&i.CreatedAt,
+			&i.LinkedinUrl,
 			&i.CompanyName,
 		); err != nil {
 			return nil, err
@@ -408,7 +447,7 @@ func (q *Queries) ListPendingReferralOffers(ctx context.Context) ([]ListPendingR
 }
 
 const listReferralOffersByUser = `-- name: ListReferralOffersByUser :many
-SELECT o.id, o.user_id, o.company_slug, o.proof_object_key, o.status, o.decided_by, o.decided_at, o.created_at, c.name AS company_name
+SELECT o.id, o.user_id, o.company_slug, o.proof_object_key, o.status, o.decided_by, o.decided_at, o.created_at, o.linkedin_url, c.name AS company_name
 FROM referral_offers o
 LEFT JOIN companies c ON c.slug = o.company_slug
 WHERE o.user_id = $1
@@ -424,6 +463,7 @@ type ListReferralOffersByUserRow struct {
 	DecidedBy      pgtype.Int8        `json:"decided_by"`
 	DecidedAt      pgtype.Timestamptz `json:"decided_at"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	LinkedinUrl    string             `json:"linkedin_url"`
 	CompanyName    pgtype.Text        `json:"company_name"`
 }
 
@@ -448,6 +488,7 @@ func (q *Queries) ListReferralOffersByUser(ctx context.Context, userID int64) ([
 			&i.DecidedBy,
 			&i.DecidedAt,
 			&i.CreatedAt,
+			&i.LinkedinUrl,
 			&i.CompanyName,
 		); err != nil {
 			return nil, err
@@ -461,21 +502,43 @@ func (q *Queries) ListReferralOffersByUser(ctx context.Context, userID int64) ([
 }
 
 const listReferralRequestsBySeeker = `-- name: ListReferralRequestsBySeeker :many
-SELECT id, seeker_user_id, company_slug, job_id, cv_kind, cv_id, contact_telegram, contact_email, note, status, acted_by, acted_at, created_at FROM referral_requests
-WHERE seeker_user_id = $1
-ORDER BY created_at DESC
+SELECT r.id, r.seeker_user_id, r.company_slug, r.job_id, r.cv_kind, r.cv_id, r.contact_telegram, r.contact_email, r.note, r.status, r.acted_by, r.acted_at, r.created_at, r.linkedin_url, c.name AS company_name
+FROM referral_requests r
+LEFT JOIN companies c ON c.slug = r.company_slug
+WHERE r.seeker_user_id = $1
+ORDER BY r.created_at DESC
 `
 
+type ListReferralRequestsBySeekerRow struct {
+	ID              int64              `json:"id"`
+	SeekerUserID    int64              `json:"seeker_user_id"`
+	CompanySlug     string             `json:"company_slug"`
+	JobID           pgtype.Int8        `json:"job_id"`
+	CvKind          string             `json:"cv_kind"`
+	CvID            pgtype.Int8        `json:"cv_id"`
+	ContactTelegram pgtype.Text        `json:"contact_telegram"`
+	ContactEmail    pgtype.Text        `json:"contact_email"`
+	Note            string             `json:"note"`
+	Status          string             `json:"status"`
+	ActedBy         pgtype.Int8        `json:"acted_by"`
+	ActedAt         pgtype.Timestamptz `json:"acted_at"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	LinkedinUrl     string             `json:"linkedin_url"`
+	CompanyName     pgtype.Text        `json:"company_name"`
+}
+
 // The seeker's "my requests" list: their requests with current status, newest first.
-func (q *Queries) ListReferralRequestsBySeeker(ctx context.Context, seekerUserID int64) ([]ReferralRequest, error) {
+// Joins the catalogue for the company's display name (LEFT so a request survives a
+// company the catalogue no longer knows — the UI falls back to the slug).
+func (q *Queries) ListReferralRequestsBySeeker(ctx context.Context, seekerUserID int64) ([]ListReferralRequestsBySeekerRow, error) {
 	rows, err := q.db.Query(ctx, listReferralRequestsBySeeker, seekerUserID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ReferralRequest{}
+	items := []ListReferralRequestsBySeekerRow{}
 	for rows.Next() {
-		var i ReferralRequest
+		var i ListReferralRequestsBySeekerRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.SeekerUserID,
@@ -490,6 +553,8 @@ func (q *Queries) ListReferralRequestsBySeeker(ctx context.Context, seekerUserID
 			&i.ActedBy,
 			&i.ActedAt,
 			&i.CreatedAt,
+			&i.LinkedinUrl,
+			&i.CompanyName,
 		); err != nil {
 			return nil, err
 		}
@@ -526,7 +591,7 @@ const resolveReferralRequest = `-- name: ResolveReferralRequest :one
 UPDATE referral_requests
 SET status = $1, acted_by = $2, acted_at = now()
 WHERE id = $3 AND status = 'sent'
-RETURNING id, seeker_user_id, company_slug, job_id, cv_kind, cv_id, contact_telegram, contact_email, note, status, acted_by, acted_at, created_at
+RETURNING id, seeker_user_id, company_slug, job_id, cv_kind, cv_id, contact_telegram, contact_email, note, status, acted_by, acted_at, created_at, linkedin_url
 `
 
 type ResolveReferralRequestParams struct {
@@ -555,6 +620,7 @@ func (q *Queries) ResolveReferralRequest(ctx context.Context, arg ResolveReferra
 		&i.ActedBy,
 		&i.ActedAt,
 		&i.CreatedAt,
+		&i.LinkedinUrl,
 	)
 	return i, err
 }

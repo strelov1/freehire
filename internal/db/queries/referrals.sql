@@ -2,8 +2,8 @@
 -- Record a member's offer to refer into a company. The UNIQUE (user_id, company_slug)
 -- constraint rejects a second offer for the same company; the repository maps that unique
 -- violation to a domain "already offered" error. Starts pending, awaiting moderation.
-INSERT INTO referral_offers (user_id, company_slug, proof_object_key)
-VALUES ($1, $2, $3)
+INSERT INTO referral_offers (user_id, company_slug, proof_object_key, linkedin_url)
+VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: ListReferralOffersByUser :many
@@ -95,22 +95,30 @@ SELECT EXISTS (
 -- the same company; the repository maps that unique violation to "already requested".
 INSERT INTO referral_requests (
     seeker_user_id, company_slug, job_id, cv_kind, cv_id,
-    contact_telegram, contact_email, note
+    contact_telegram, contact_email, note, linkedin_url
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING *;
 
 -- name: ListReferralRequestsBySeeker :many
 -- The seeker's "my requests" list: their requests with current status, newest first.
-SELECT * FROM referral_requests
-WHERE seeker_user_id = $1
-ORDER BY created_at DESC;
+-- Joins the catalogue for the company's display name (LEFT so a request survives a
+-- company the catalogue no longer knows — the UI falls back to the slug).
+SELECT r.*, c.name AS company_name
+FROM referral_requests r
+LEFT JOIN companies c ON c.slug = r.company_slug
+WHERE r.seeker_user_id = $1
+ORDER BY r.created_at DESC;
 
 -- name: ListIncomingReferralRequests :many
 -- The referrer inbox: open (sent) requests for every company the referrer has an approved
--- offer for. Joins the request pool to the caller's approved offers on company_slug.
-SELECT r.* FROM referral_requests r
+-- offer for. Joins the request pool to the caller's approved offers on company_slug, and
+-- the catalogue for the company's display name (LEFT so a request survives an unknown
+-- company — the UI falls back to the slug).
+SELECT r.*, c.name AS company_name
+FROM referral_requests r
 JOIN referral_offers o ON o.company_slug = r.company_slug
+LEFT JOIN companies c ON c.slug = r.company_slug
 WHERE o.user_id = sqlc.arg(referrer_user_id) AND o.status = 'approved' AND r.status = 'sent'
 ORDER BY r.created_at DESC;
 

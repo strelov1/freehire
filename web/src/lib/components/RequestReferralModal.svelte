@@ -5,6 +5,7 @@
   import type { CvTailoredItem } from '$lib/cv';
   import type { ReferralRequestInput } from '$lib/types';
   import { Button } from '$lib/ui';
+  import { isLinkedInUrl } from '$lib/utils';
 
   // The parent owns open/close; this component owns the request form. jobId is the
   // optional source-vacancy context recorded with the request.
@@ -26,6 +27,7 @@
   let cvId = $state<number | null>(null);
   let tailored = $state<CvTailoredItem[]>([]);
   let hasResume = $state(true);
+  let linkedinUrl = $state('');
   let contactTelegram = $state('');
   let contactEmail = $state('');
   let note = $state('');
@@ -33,8 +35,10 @@
   let error = $state<string | null>(null);
   let done = $state(false);
 
+  const linkedinValid = $derived(isLinkedInUrl(linkedinUrl));
   const canSubmit = $derived(
-    (contactTelegram.trim() !== '' || contactEmail.trim() !== '') &&
+    linkedinValid &&
+      (contactTelegram.trim() !== '' || contactEmail.trim() !== '') &&
       (cvKind === 'original' ? hasResume : cvId !== null),
   );
 
@@ -76,6 +80,7 @@
       job_id: jobId,
       cv_kind: cvKind,
       cv_id: cvKind === 'built' && cvId !== null ? cvId : undefined,
+      linkedin_url: linkedinUrl.trim(),
       contact_telegram: contactTelegram.trim() || undefined,
       contact_email: contactEmail.trim() || undefined,
       note: note.trim() || undefined,
@@ -179,6 +184,22 @@
             {/if}
           </label>
         </fieldset>
+
+        <label class="flex flex-col gap-1.5 text-sm">
+          <span class="font-medium">Your LinkedIn profile</span>
+          <input
+            type="url"
+            bind:value={linkedinUrl}
+            placeholder="https://linkedin.com/in/your-handle"
+            aria-invalid={linkedinUrl.trim() !== '' && !linkedinValid}
+            class="rounded-md border border-border bg-background px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-[invalid=true]:border-destructive"
+          />
+          {#if linkedinUrl.trim() !== '' && !linkedinValid}
+            <span class="text-xs text-destructive">Enter a full linkedin.com/in/… profile URL.</span>
+          {:else}
+            <span class="text-xs text-muted-foreground">The referrer vets you before reaching out.</span>
+          {/if}
+        </label>
 
         <div class="flex flex-col gap-1.5 text-sm">
           <span class="font-medium">

@@ -49,6 +49,11 @@
           </div>
         </div>
         <div class="flex shrink-0 flex-wrap gap-2">
+          {#if o.linkedin_url}
+            <Button variant="outline" size="sm" href={o.linkedin_url} target="_blank" rel="noopener">
+              LinkedIn ↗
+            </Button>
+          {/if}
           <Button variant="outline" size="sm" href={api.referralProofUrl(o.id)} target="_blank" rel="noopener">
             <FileText class="size-4" /> View proof
           </Button>

@@ -130,6 +130,9 @@ func newService(repo *fakeRepo, pinger *fakePinger) *Service {
 
 func cvID(n int64) *int64 { return &n }
 
+// linkedInURL is a valid profile URL for fixtures that must clear the required-LinkedIn gate.
+const linkedInURL = "https://www.linkedin.com/in/jane-doe"
+
 // --- offer ---------------------------------------------------------------
 
 func TestSubmitOfferRequiresProof(t *testing.T) {
@@ -140,6 +143,46 @@ func TestSubmitOfferRequiresProof(t *testing.T) {
 	}
 	if repo.createdOff != nil {
 		t.Error("repo.CreateOffer should not run when proof is missing")
+	}
+}
+
+func TestSubmitOfferRequiresLinkedIn(t *testing.T) {
+	repo := &fakeRepo{}
+	s := newService(repo, &fakePinger{})
+	if _, err := s.SubmitOffer(context.Background(), OfferInput{UserID: 1, CompanySlug: "acme", ProofKey: "k", LinkedInURL: "https://twitter.com/jane"}); !errors.Is(err, ErrInvalidLinkedIn) {
+		t.Fatalf("err = %v, want ErrInvalidLinkedIn", err)
+	}
+	if repo.createdOff != nil {
+		t.Error("repo.CreateOffer should not run when the LinkedIn URL is invalid")
+	}
+	if _, err := s.SubmitOffer(context.Background(), OfferInput{UserID: 1, CompanySlug: "acme", ProofKey: "k", LinkedInURL: linkedInURL}); err != nil {
+		t.Fatalf("valid offer: %v", err)
+	}
+	if repo.createdOff == nil || repo.createdOff.LinkedInURL != linkedInURL {
+		t.Errorf("offer LinkedIn not persisted: %+v", repo.createdOff)
+	}
+}
+
+func TestValidLinkedInURL(t *testing.T) {
+	valid := []string{
+		"https://www.linkedin.com/in/jane-doe",
+		"https://linkedin.com/in/jane-doe/",
+		"http://de.linkedin.com/in/hans",
+		"https://www.linkedin.com/in/jane-doe?trk=x",
+	}
+	for _, s := range valid {
+		if !validLinkedInURL(s) {
+			t.Errorf("validLinkedInURL(%q) = false, want true", s)
+		}
+	}
+	invalid := []string{
+		"", "   ", "linkedin.com/in/jane", "https://linkedin.com/", "https://linkedin.com/company/acme",
+		"https://notlinkedin.com/in/jane", "https://linkedin.com.evil.com/in/jane", "ftp://linkedin.com/in/jane",
+	}
+	for _, s := range invalid {
+		if validLinkedInURL(s) {
+			t.Errorf("validLinkedInURL(%q) = true, want false", s)
+		}
 	}
 }
 
@@ -181,7 +224,7 @@ func TestWithdrawOfferPropagatesNotFound(t *testing.T) {
 // --- request creation ----------------------------------------------------
 
 func TestCreateRequestValidation(t *testing.T) {
-	base := RequestInput{SeekerUserID: 1, CompanySlug: "acme", CVKind: CVOriginal, ContactEmail: "s@x.test"}
+	base := RequestInput{SeekerUserID: 1, CompanySlug: "acme", CVKind: CVOriginal, ContactEmail: "s@x.test", LinkedInURL: linkedInURL}
 
 	tests := []struct {
 		name string
@@ -208,7 +251,7 @@ func TestCreateRequestValidation(t *testing.T) {
 }
 
 func TestCreateRequestEligibilityAndCap(t *testing.T) {
-	valid := RequestInput{SeekerUserID: 1, CompanySlug: "acme", CVKind: CVOriginal, ContactEmail: "s@x.test"}
+	valid := RequestInput{SeekerUserID: 1, CompanySlug: "acme", CVKind: CVOriginal, ContactEmail: "s@x.test", LinkedInURL: linkedInURL}
 
 	t.Run("company not eligible", func(t *testing.T) {
 		repo := &fakeRepo{eligible: false, hasResume: true}
@@ -255,7 +298,7 @@ func TestCreateRequestEligibilityAndCap(t *testing.T) {
 }
 
 func TestCreateRequestBuiltCVOwnership(t *testing.T) {
-	built := RequestInput{SeekerUserID: 1, CompanySlug: "acme", CVKind: CVBuilt, CVID: cvID(42), ContactEmail: "s@x.test"}
+	built := RequestInput{SeekerUserID: 1, CompanySlug: "acme", CVKind: CVBuilt, CVID: cvID(42), ContactEmail: "s@x.test", LinkedInURL: linkedInURL}
 
 	t.Run("foreign cv is rejected as an invalid choice", func(t *testing.T) {
 		repo := &fakeRepo{eligible: true, cvOwned: false}
@@ -281,7 +324,7 @@ func TestCreateRequestBuiltCVOwnership(t *testing.T) {
 }
 
 func TestCreateRequestOriginalNeedsResume(t *testing.T) {
-	original := RequestInput{SeekerUserID: 1, CompanySlug: "acme", CVKind: CVOriginal, ContactEmail: "s@x.test"}
+	original := RequestInput{SeekerUserID: 1, CompanySlug: "acme", CVKind: CVOriginal, ContactEmail: "s@x.test", LinkedInURL: linkedInURL}
 	repo := &fakeRepo{eligible: true, hasResume: false}
 	s := newService(repo, &fakePinger{})
 	if _, err := s.CreateRequest(context.Background(), original); !errors.Is(err, ErrNoResume) {

@@ -12,7 +12,7 @@
     SeekerReferralRequest,
   } from '$lib/types';
   import { Button } from '$lib/ui';
-  import { timeAgo } from '$lib/utils';
+  import { isLinkedInUrl, timeAgo } from '$lib/utils';
   import CompanyLogo from './CompanyLogo.svelte';
   import CompanyPicker from './CompanyPicker.svelte';
   import States from './States.svelte';
@@ -64,14 +64,21 @@
   // ── Offer to refer ──────────────────────────────────────────────────────
   let offerOpen = $state(false);
   let offerSlug = $state('');
+  let offerLinkedin = $state('');
   let offerFile = $state<FileList | null>(null);
   let offerBusy = $state(false);
   let offerError = $state<string | null>(null);
+
+  const offerLinkedinValid = $derived(isLinkedInUrl(offerLinkedin));
+  const canSubmitOffer = $derived(
+    offerSlug.trim() !== '' && offerLinkedinValid && !!offerFile?.[0],
+  );
 
   function offerErrorMessage(err: unknown): string {
     if (err instanceof ApiError) {
       if (err.status === 409) return 'You already offered to refer for this company.';
       if (err.status === 404) return "We don't have that company — check the slug in its page URL.";
+      if (err.status === 422) return 'Enter a valid LinkedIn profile URL.';
       if (err.status === 503) return 'File upload is unavailable right now.';
     }
     return 'Could not submit the offer. Please try again.';
@@ -80,13 +87,14 @@
   async function submitOffer(e: SubmitEvent) {
     e.preventDefault();
     const file = offerFile?.[0];
-    if (!offerSlug.trim() || !file) return;
+    if (!canSubmitOffer || !file) return;
     offerError = null;
     offerBusy = true;
     try {
-      await api.submitReferralOffer(offerSlug.trim(), file);
+      await api.submitReferralOffer(offerSlug.trim(), offerLinkedin.trim(), file);
       offerOpen = false;
       offerSlug = '';
+      offerLinkedin = '';
       offerFile = null;
       await offers.run(() => api.listMyReferralOffers());
     } catch (err) {
@@ -173,7 +181,10 @@
         {#each requests.value as r (r.id)}
           <tr class="border-t border-border">
             <td class="py-3 pr-4 font-medium">
-              <a href="/companies/{r.company_slug}" class="hover:underline">{r.company_slug}</a>
+              <a href="/companies/{r.company_slug}" class="flex items-center gap-2 hover:underline">
+                <CompanyLogo name={r.company_name || r.company_slug} size="size-6" />
+                <span class="min-w-0 truncate">{r.company_name || r.company_slug}</span>
+              </a>
             </td>
             <td class="py-3 pr-4 text-muted-foreground">
               {r.cv_kind === 'built' ? 'Tailored CV' : 'Uploaded CV'}
@@ -208,13 +219,28 @@
         <span class="text-xs text-muted-foreground">Search and pick the company you work at.</span>
       </div>
       <label class="flex flex-col gap-1.5 text-sm">
+        <span class="font-medium">Your LinkedIn profile</span>
+        <input
+          type="url"
+          bind:value={offerLinkedin}
+          placeholder="https://linkedin.com/in/your-handle"
+          aria-invalid={offerLinkedin.trim() !== '' && !offerLinkedinValid}
+          class="rounded-md border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-[invalid=true]:border-destructive"
+        />
+        {#if offerLinkedin.trim() !== '' && !offerLinkedinValid}
+          <span class="text-xs text-destructive">Enter a full linkedin.com/in/… profile URL.</span>
+        {:else}
+          <span class="text-xs text-muted-foreground">Helps the moderator confirm you work there.</span>
+        {/if}
+      </label>
+      <label class="flex flex-col gap-1.5 text-sm">
         <span class="font-medium">Proof of employment (PDF)</span>
         <input type="file" accept="application/pdf" bind:files={offerFile} class="text-sm" />
         <span class="text-xs text-muted-foreground">A CV or letter showing you work there. A moderator reviews it.</span>
       </label>
       {#if offerError}<p class="text-sm text-destructive">{offerError}</p>{/if}
       <div class="flex justify-end">
-        <Button type="submit" variant="primary" size="sm" disabled={offerBusy || !offerSlug.trim() || !offerFile?.[0]}>
+        <Button type="submit" variant="primary" size="sm" disabled={offerBusy || !canSubmitOffer}>
           {offerBusy ? 'Submitting…' : 'Submit for review'}
         </Button>
       </div>
@@ -263,13 +289,19 @@
       {#each incoming.value as req (req.id)}
         <div class="rounded-lg border border-border p-4">
           <div class="flex items-center justify-between gap-4">
-            <b class="text-sm">Someone wants a referral into {req.company_slug}</b>
+            <b class="flex min-w-0 items-center gap-2 text-sm">
+              <CompanyLogo name={req.company_name || req.company_slug} size="size-6" />
+              <span class="min-w-0 truncate">Someone wants a referral into {req.company_name || req.company_slug}</span>
+            </b>
             <span class="shrink-0 text-xs text-muted-foreground">{req.created_at ? timeAgo(req.created_at) : ''}</span>
           </div>
-          <div class="mt-1.5 text-sm">
-            Contact:
+          <div class="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
+            <span>Contact:</span>
             {#if req.contact_telegram}<code class="rounded bg-muted px-1.5 py-0.5 text-xs">{req.contact_telegram}</code>{/if}
             {#if req.contact_email}<code class="rounded bg-muted px-1.5 py-0.5 text-xs">{req.contact_email}</code>{/if}
+            {#if req.linkedin_url}
+              <a href={req.linkedin_url} target="_blank" rel="noopener" class="text-brand-strong hover:underline">LinkedIn ↗</a>
+            {/if}
           </div>
           {#if req.note}<p class="mt-1 text-sm italic text-muted-foreground">“{req.note}”</p>{/if}
           <div class="mt-3 flex items-center gap-2">

@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -45,6 +46,8 @@ const DefaultDailyRequestCap = 10
 var (
 	// ErrProofRequired is an offer submitted without a proof CV (422).
 	ErrProofRequired = errors.New("referral: proof CV required")
+	// ErrInvalidLinkedIn is a missing or non-LinkedIn profile URL on either side (422).
+	ErrInvalidLinkedIn = errors.New("referral: a LinkedIn profile URL is required")
 	// ErrAlreadyOffered is a second offer for a company the member already offered for;
 	// the repository maps the unique violation to this (409).
 	ErrAlreadyOffered = errors.New("referral: already offered for this company")
@@ -92,6 +95,9 @@ type Offer struct {
 	// is read on a path that doesn't join the catalogue (create/decide) or the company
 	// is unknown. The list paths populate it; callers fall back to the slug.
 	CompanyName string
+	// LinkedInURL is the referrer's own profile, backing their "I work here" claim so the
+	// moderator can vet it. Required and shape-validated at submission.
+	LinkedInURL string
 	ProofKey    string
 	Status      string
 	DecidedBy   *int64
@@ -103,12 +109,19 @@ type Offer struct {
 // CVID are nil for "no source vacancy" and an original-CV attachment respectively; ActedBy
 // and ActedAt are nil until a referrer marks it.
 type Request struct {
-	ID              int64
-	SeekerUserID    int64
-	CompanySlug     string
-	JobID           *int64
-	CVKind          string
-	CVID            *int64
+	ID           int64
+	SeekerUserID int64
+	CompanySlug  string
+	// CompanyName is the catalogue display name for CompanySlug, empty on paths that don't
+	// join the catalogue or when the company is unknown. The list paths populate it; callers
+	// fall back to the slug.
+	CompanyName string
+	JobID       *int64
+	CVKind      string
+	CVID        *int64
+	// LinkedInURL is the seeker's own profile, shown to the referrer in the inbox alongside
+	// the contact channels. Required and shape-validated at submission.
+	LinkedInURL     string
 	ContactTelegram string
 	ContactEmail    string
 	Note            string
@@ -130,6 +143,7 @@ type Recipient struct {
 type OfferInput struct {
 	UserID      int64
 	CompanySlug string
+	LinkedInURL string
 	ProofKey    string
 }
 
@@ -141,6 +155,7 @@ type RequestInput struct {
 	JobID           *int64
 	CVKind          string
 	CVID            *int64
+	LinkedInURL     string
 	ContactTelegram string
 	ContactEmail    string
 	Note            string
@@ -217,6 +232,9 @@ func (s *Service) SubmitOffer(ctx context.Context, in OfferInput) (Offer, error)
 	if strings.TrimSpace(in.ProofKey) == "" {
 		return Offer{}, ErrProofRequired
 	}
+	if !validLinkedInURL(in.LinkedInURL) {
+		return Offer{}, ErrInvalidLinkedIn
+	}
 	return s.repo.CreateOffer(ctx, in)
 }
 
@@ -260,6 +278,9 @@ func (s *Service) ListPendingOffers(ctx context.Context) ([]Offer, error) {
 func (s *Service) CreateRequest(ctx context.Context, in RequestInput) (Request, error) {
 	if err := validateContact(in); err != nil {
 		return Request{}, err
+	}
+	if !validLinkedInURL(in.LinkedInURL) {
+		return Request{}, ErrInvalidLinkedIn
 	}
 	if err := validateCVChoice(in); err != nil {
 		return Request{}, err
@@ -380,6 +401,25 @@ func validateContact(in RequestInput) error {
 		return ErrNoContact
 	}
 	return nil
+}
+
+// validLinkedInURL reports whether s is a LinkedIn personal-profile URL: an http(s) URL on
+// linkedin.com (optionally a country/www subdomain) whose path is /in/<handle>. This is a
+// shape check, not a liveness check — it only asserts the link is the right kind of thing.
+func validLinkedInURL(s string) bool {
+	u, err := url.Parse(strings.TrimSpace(s))
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	if host != "linkedin.com" && !strings.HasSuffix(host, ".linkedin.com") {
+		return false
+	}
+	path := u.EscapedPath()
+	if !strings.HasPrefix(path, "/in/") {
+		return false
+	}
+	return strings.Trim(strings.TrimPrefix(path, "/in/"), "/") != ""
 }
 
 // validateCVChoice enforces the kind/id invariant the DB CHECK deliberately does not (so a

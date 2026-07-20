@@ -670,8 +670,10 @@ type Querier interface {
 	// record-level data.
 	ListFacetStats(ctx context.Context) ([]InsightsFacetStat, error)
 	// The referrer inbox: open (sent) requests for every company the referrer has an approved
-	// offer for. Joins the request pool to the caller's approved offers on company_slug.
-	ListIncomingReferralRequests(ctx context.Context, referrerUserID int64) ([]ReferralRequest, error)
+	// offer for. Joins the request pool to the caller's approved offers on company_slug, and
+	// the catalogue for the company's display name (LEFT so a request survives an unknown
+	// company — the UI falls back to the slug).
+	ListIncomingReferralRequests(ctx context.Context, referrerUserID int64) ([]ListIncomingReferralRequestsRow, error)
 	// The leaderboard read: companies ranked by growth (open_count - open_count_prev),
 	// '-growth' (freezing) reverses it, 'open' ranks by raw size; open_count is the
 	// tiebreak. @min_open floors the current open-count (blunts ingest-artifact spikes).
@@ -774,7 +776,9 @@ type Querier interface {
 	// company the catalogue no longer knows — the UI falls back to the slug).
 	ListReferralOffersByUser(ctx context.Context, userID int64) ([]ListReferralOffersByUserRow, error)
 	// The seeker's "my requests" list: their requests with current status, newest first.
-	ListReferralRequestsBySeeker(ctx context.Context, seekerUserID int64) ([]ReferralRequest, error)
+	// Joins the catalogue for the company's display name (LEFT so a request survives a
+	// company the catalogue no longer knows — the UI falls back to the slug).
+	ListReferralRequestsBySeeker(ctx context.Context, seekerUserID int64) ([]ListReferralRequestsBySeekerRow, error)
 	// The open postings sharing a role cluster (company_slug + role_fingerprint) with the
 	// anchor job — the "N openings across cities" list for a collapsed role. Each copy keeps
 	// its own location and apply URL, so a seeker picks their city; the anchor itself is

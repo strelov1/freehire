@@ -191,6 +191,7 @@ export interface ReferralOffer {
   id: number;
   company_slug: string;
   company_name: string;
+  linkedin_url: string;
   status: ReferralOfferStatus;
   decided_at: string | null;
   created_at: string | null;
@@ -200,6 +201,7 @@ export interface ReferralOffer {
 export interface SeekerReferralRequest {
   id: number;
   company_slug: string;
+  company_name: string;
   job_id: number | null;
   cv_kind: ReferralCvKind;
   cv_id: number | null;
@@ -211,8 +213,10 @@ export interface SeekerReferralRequest {
 export interface IncomingReferralRequest {
   id: number;
   company_slug: string;
+  company_name: string;
   job_id: number | null;
   cv_kind: ReferralCvKind;
+  linkedin_url?: string;
   contact_telegram?: string;
   contact_email?: string;
   note?: string;
@@ -226,6 +230,7 @@ export interface ReferralRequestInput {
   job_id?: number;
   cv_kind: ReferralCvKind;
   cv_id?: number;
+  linkedin_url: string;
   contact_telegram?: string;
   contact_email?: string;
   note?: string;

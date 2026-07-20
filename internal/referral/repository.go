@@ -33,6 +33,7 @@ func NewQueriesRepository(q *db.Queries) *QueriesRepository {
 func (r *QueriesRepository) CreateOffer(ctx context.Context, in OfferInput) (Offer, error) {
 	row, err := r.q.CreateReferralOffer(ctx, db.CreateReferralOfferParams{
 		UserID: in.UserID, CompanySlug: in.CompanySlug, ProofObjectKey: in.ProofKey,
+		LinkedinUrl: in.LinkedInURL,
 	})
 	if err != nil {
 		if pgerr.IsUniqueViolation(err) {
@@ -84,7 +85,7 @@ func (r *QueriesRepository) ListOffersByUser(ctx context.Context, userID int64) 
 	return mapSlice(rows, func(row db.ListReferralOffersByUserRow) Offer {
 		o := offerFromRow(db.ReferralOffer{
 			ID: row.ID, UserID: row.UserID, CompanySlug: row.CompanySlug,
-			ProofObjectKey: row.ProofObjectKey, Status: row.Status,
+			ProofObjectKey: row.ProofObjectKey, Status: row.Status, LinkedinUrl: row.LinkedinUrl,
 			DecidedBy: row.DecidedBy, DecidedAt: row.DecidedAt, CreatedAt: row.CreatedAt,
 		})
 		o.CompanyName = row.CompanyName.String
@@ -101,7 +102,7 @@ func (r *QueriesRepository) ListPendingOffers(ctx context.Context) ([]Offer, err
 	return mapSlice(rows, func(row db.ListPendingReferralOffersRow) Offer {
 		o := offerFromRow(db.ReferralOffer{
 			ID: row.ID, UserID: row.UserID, CompanySlug: row.CompanySlug,
-			ProofObjectKey: row.ProofObjectKey, Status: row.Status,
+			ProofObjectKey: row.ProofObjectKey, Status: row.Status, LinkedinUrl: row.LinkedinUrl,
 			DecidedBy: row.DecidedBy, DecidedAt: row.DecidedAt, CreatedAt: row.CreatedAt,
 		})
 		o.CompanyName = row.CompanyName.String
@@ -167,6 +168,7 @@ func (r *QueriesRepository) CreateRequest(ctx context.Context, in RequestInput) 
 		JobID:           int8Ptr(in.JobID),
 		CvKind:          in.CVKind,
 		CvID:            int8Ptr(in.CVID),
+		LinkedinUrl:     in.LinkedInURL,
 		ContactTelegram: textOrNull(in.ContactTelegram),
 		ContactEmail:    textOrNull(in.ContactEmail),
 		Note:            in.Note,
@@ -214,22 +216,41 @@ func (r *QueriesRepository) ResolveRequest(ctx context.Context, id, actorID int6
 	return requestFromRow(row), nil
 }
 
-// ListRequestsBySeeker returns a seeker's requests, newest first.
+// ListRequestsBySeeker returns a seeker's requests, newest first, each with its company name.
 func (r *QueriesRepository) ListRequestsBySeeker(ctx context.Context, seekerID int64) ([]Request, error) {
 	rows, err := r.q.ListReferralRequestsBySeeker(ctx, seekerID)
 	if err != nil {
 		return nil, err
 	}
-	return mapSlice(rows, requestFromRow), nil
+	return mapSlice(rows, func(row db.ListReferralRequestsBySeekerRow) Request {
+		req := requestFromRow(db.ReferralRequest{
+			ID: row.ID, SeekerUserID: row.SeekerUserID, CompanySlug: row.CompanySlug,
+			JobID: row.JobID, CvKind: row.CvKind, CvID: row.CvID, LinkedinUrl: row.LinkedinUrl,
+			ContactTelegram: row.ContactTelegram, ContactEmail: row.ContactEmail, Note: row.Note,
+			Status: row.Status, ActedBy: row.ActedBy, ActedAt: row.ActedAt, CreatedAt: row.CreatedAt,
+		})
+		req.CompanyName = row.CompanyName.String
+		return req
+	}), nil
 }
 
-// ListIncomingRequests returns the open requests for the referrer's approved companies.
+// ListIncomingRequests returns the open requests for the referrer's approved companies,
+// each with its company name.
 func (r *QueriesRepository) ListIncomingRequests(ctx context.Context, referrerID int64) ([]Request, error) {
 	rows, err := r.q.ListIncomingReferralRequests(ctx, referrerID)
 	if err != nil {
 		return nil, err
 	}
-	return mapSlice(rows, requestFromRow), nil
+	return mapSlice(rows, func(row db.ListIncomingReferralRequestsRow) Request {
+		req := requestFromRow(db.ReferralRequest{
+			ID: row.ID, SeekerUserID: row.SeekerUserID, CompanySlug: row.CompanySlug,
+			JobID: row.JobID, CvKind: row.CvKind, CvID: row.CvID, LinkedinUrl: row.LinkedinUrl,
+			ContactTelegram: row.ContactTelegram, ContactEmail: row.ContactEmail, Note: row.Note,
+			Status: row.Status, ActedBy: row.ActedBy, ActedAt: row.ActedAt, CreatedAt: row.CreatedAt,
+		})
+		req.CompanyName = row.CompanyName.String
+		return req
+	}), nil
 }
 
 func offerFromRow(row db.ReferralOffer) Offer {
@@ -237,6 +258,7 @@ func offerFromRow(row db.ReferralOffer) Offer {
 		ID:          row.ID,
 		UserID:      row.UserID,
 		CompanySlug: row.CompanySlug,
+		LinkedInURL: row.LinkedinUrl,
 		ProofKey:    row.ProofObjectKey,
 		Status:      row.Status,
 		DecidedBy:   int64PtrFrom(row.DecidedBy),
@@ -253,6 +275,7 @@ func requestFromRow(row db.ReferralRequest) Request {
 		JobID:           int64PtrFrom(row.JobID),
 		CVKind:          row.CvKind,
 		CVID:            int64PtrFrom(row.CvID),
+		LinkedInURL:     row.LinkedinUrl,
 		ContactTelegram: row.ContactTelegram.String,
 		ContactEmail:    row.ContactEmail.String,
 		Note:            row.Note,

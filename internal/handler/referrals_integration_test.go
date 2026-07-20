@@ -97,7 +97,7 @@ func TestReferralEndpoints(t *testing.T) {
 	}
 
 	// A request into a company with no approved referrer is a 409.
-	reqBody := map[string]any{"company_slug": "acme", "cv_kind": "original", "contact_email": "seeker@example.test", "note": "hi"}
+	reqBody := map[string]any{"company_slug": "acme", "cv_kind": "original", "contact_email": "seeker@example.test", "linkedin_url": "https://www.linkedin.com/in/seeker", "note": "hi"}
 	if code, _ := do(http.MethodPost, "/api/v1/me/referrals/requests", token(seeker), reqBody); code != http.StatusConflict {
 		t.Fatalf("request without referrer: status %d, want 409", code)
 	}
@@ -135,6 +135,9 @@ func TestReferralEndpoints(t *testing.T) {
 		}
 		if rows[0].(map[string]any)["contact_email"] != "seeker@example.test" {
 			t.Errorf("inbox row = %v, want seeker contact", rows[0])
+		}
+		if rows[0].(map[string]any)["linkedin_url"] != "https://www.linkedin.com/in/seeker" {
+			t.Errorf("inbox row = %v, want seeker LinkedIn", rows[0])
 		}
 
 		// CV access is cabinet-only: the seeker (not an approved referrer) is refused.

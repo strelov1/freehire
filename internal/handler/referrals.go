@@ -20,6 +20,7 @@ type referralOfferResponse struct {
 	ID          int64      `json:"id"`
 	CompanySlug string     `json:"company_slug"`
 	CompanyName string     `json:"company_name"`
+	LinkedInURL string     `json:"linkedin_url"`
 	Status      string     `json:"status"`
 	DecidedAt   *time.Time `json:"decided_at"`
 	CreatedAt   *time.Time `json:"created_at"`
@@ -27,7 +28,8 @@ type referralOfferResponse struct {
 
 func toReferralOfferResponse(o referral.Offer) referralOfferResponse {
 	return referralOfferResponse{
-		ID: o.ID, CompanySlug: o.CompanySlug, CompanyName: o.CompanyName, Status: o.Status,
+		ID: o.ID, CompanySlug: o.CompanySlug, CompanyName: o.CompanyName,
+		LinkedInURL: o.LinkedInURL, Status: o.Status,
 		DecidedAt: o.DecidedAt, CreatedAt: o.CreatedAt,
 	}
 }
@@ -37,6 +39,7 @@ func toReferralOfferResponse(o referral.Offer) referralOfferResponse {
 type seekerRequestResponse struct {
 	ID          int64      `json:"id"`
 	CompanySlug string     `json:"company_slug"`
+	CompanyName string     `json:"company_name"`
 	JobID       *int64     `json:"job_id"`
 	CVKind      string     `json:"cv_kind"`
 	CVID        *int64     `json:"cv_id"`
@@ -46,8 +49,8 @@ type seekerRequestResponse struct {
 
 func toSeekerRequestResponse(r referral.Request) seekerRequestResponse {
 	return seekerRequestResponse{
-		ID: r.ID, CompanySlug: r.CompanySlug, JobID: r.JobID, CVKind: r.CVKind,
-		CVID: r.CVID, Status: r.Status, CreatedAt: r.CreatedAt,
+		ID: r.ID, CompanySlug: r.CompanySlug, CompanyName: r.CompanyName, JobID: r.JobID,
+		CVKind: r.CVKind, CVID: r.CVID, Status: r.Status, CreatedAt: r.CreatedAt,
 	}
 }
 
@@ -57,8 +60,10 @@ func toSeekerRequestResponse(r referral.Request) seekerRequestResponse {
 type incomingRequestResponse struct {
 	ID              int64      `json:"id"`
 	CompanySlug     string     `json:"company_slug"`
+	CompanyName     string     `json:"company_name"`
 	JobID           *int64     `json:"job_id"`
 	CVKind          string     `json:"cv_kind"`
+	LinkedInURL     string     `json:"linkedin_url,omitempty"`
 	ContactTelegram string     `json:"contact_telegram,omitempty"`
 	ContactEmail    string     `json:"contact_email,omitempty"`
 	Note            string     `json:"note,omitempty"`
@@ -68,7 +73,8 @@ type incomingRequestResponse struct {
 
 func toIncomingRequestResponse(r referral.Request) incomingRequestResponse {
 	return incomingRequestResponse{
-		ID: r.ID, CompanySlug: r.CompanySlug, JobID: r.JobID, CVKind: r.CVKind,
+		ID: r.ID, CompanySlug: r.CompanySlug, CompanyName: r.CompanyName, JobID: r.JobID,
+		CVKind: r.CVKind, LinkedInURL: r.LinkedInURL,
 		ContactTelegram: r.ContactTelegram, ContactEmail: r.ContactEmail, Note: r.Note,
 		Status: r.Status, CreatedAt: r.CreatedAt,
 	}
@@ -80,6 +86,7 @@ func toIncomingRequestResponse(r referral.Request) incomingRequestResponse {
 func referralError(err error) error {
 	switch {
 	case errors.Is(err, referral.ErrProofRequired),
+		errors.Is(err, referral.ErrInvalidLinkedIn),
 		errors.Is(err, referral.ErrNoContact),
 		errors.Is(err, referral.ErrInvalidCVChoice),
 		errors.Is(err, referral.ErrNoResume):
@@ -116,6 +123,7 @@ type createReferralRequestBody struct {
 	JobID           *int64 `json:"job_id"`
 	CVKind          string `json:"cv_kind"`
 	CVID            *int64 `json:"cv_id"`
+	LinkedInURL     string `json:"linkedin_url"`
 	ContactTelegram string `json:"contact_telegram"`
 	ContactEmail    string `json:"contact_email"`
 	Note            string `json:"note"`
@@ -138,6 +146,7 @@ func (a *API) CreateReferralRequest(c *fiber.Ctx) error {
 		JobID:           in.JobID,
 		CVKind:          in.CVKind,
 		CVID:            in.CVID,
+		LinkedInURL:     in.LinkedInURL,
 		ContactTelegram: in.ContactTelegram,
 		ContactEmail:    in.ContactEmail,
 		Note:            in.Note,
@@ -189,7 +198,7 @@ func (a *API) SubmitReferralOffer(c *fiber.Ctx) error {
 		return err
 	}
 	offer, err := a.referral.SubmitOffer(c.Context(), referral.OfferInput{
-		UserID: userID, CompanySlug: companySlug, ProofKey: key,
+		UserID: userID, CompanySlug: companySlug, LinkedInURL: c.FormValue("linkedin_url"), ProofKey: key,
 	})
 	if err != nil {
 		return referralError(err)

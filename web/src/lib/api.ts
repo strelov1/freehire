@@ -969,10 +969,16 @@ export function createApi(
   }
 
   /** Submit an offer to refer into a company: a proof CV (PDF) uploaded as multipart, with
-   *  the company slug as a form field. Enters moderation. 409 on a duplicate offer. */
-  async function submitReferralOffer(companySlug: string, file: File): Promise<ReferralOffer> {
+   *  the company slug and the referrer's LinkedIn URL as form fields. Enters moderation.
+   *  409 on a duplicate offer, 422 on a bad LinkedIn URL. */
+  async function submitReferralOffer(
+    companySlug: string,
+    linkedinUrl: string,
+    file: File,
+  ): Promise<ReferralOffer> {
     const form = new FormData();
     form.append('company_slug', companySlug);
+    form.append('linkedin_url', linkedinUrl);
     form.append('file', file);
     return requestData<ReferralOffer>('/api/v1/me/referrals/offers', { method: 'POST', body: form });
   }

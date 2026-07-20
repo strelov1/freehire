@@ -14,6 +14,22 @@ export function formatDate(ts: string | null | undefined): string {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+/** Whether s is a LinkedIn personal-profile URL: an http(s) link on linkedin.com (or a
+ *  country/www subdomain) whose path is /in/<handle>. Mirrors the backend's shape check —
+ *  the server re-validates on submit, so this is just for inline form feedback. */
+export function isLinkedInUrl(s: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(s.trim());
+  } catch {
+    return false;
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+  const host = u.hostname.toLowerCase();
+  if (host !== 'linkedin.com' && !host.endsWith('.linkedin.com')) return false;
+  return /^\/in\/[^/]+/.test(u.pathname);
+}
+
 const TIME_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['year', 31536000],
   ['month', 2592000],
