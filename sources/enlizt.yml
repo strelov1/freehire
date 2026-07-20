@@ -1,4 +1,6 @@
 # Enlizt boards. Provider is the filename; each entry is company + board.
 # board = the tenant subdomain in <board>.enlizt.me (see internal/sources/enlizt.go).
+- company: PariPassu
+  board: paripassu
 - company: Tributo Devido
   board: tributodevido

@@ -19,6 +19,8 @@
   board: bestex-research
 - company: Board of Innovation
   board: boardofinnovation
+- company: Burq
+  board: burq
 - company: Cause and FX
   board: cause-and-fx-ltd
 - company: Climax Studios
@@ -201,6 +203,8 @@
   board: we-are-social-1
 - company: Wingz LatAm
   board: wingz-latam
+- company: Wisedocs AI
+  board: wisedocs-ai
 - company: Workstate
   board: workstate
 - company: ZeptoLab
