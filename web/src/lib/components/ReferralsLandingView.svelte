@@ -38,8 +38,8 @@
   const trust = [
     {
       n: '01',
-      title: 'Referrers stay anonymous',
-      body: 'A referrer never sees who you are until they choose to contact you, and you never see them. The intro happens on neutral ground.',
+      title: 'Referrers are never on the hook',
+      body: 'A referrer stays anonymous and only surfaces if they choose to reach out — so turning a request down is silent and awkward-free. No name on the line, no burned bridge, no guilt.',
     },
     {
       n: '02',
@@ -102,8 +102,9 @@
     </h1>
 
     <p class="reveal mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground" style="--d:160ms">
-      freehire quietly connects you with someone already inside the company — an employee who can put
-      your name forward. They stay anonymous, you skip the cold apply, and the intro comes warm.
+      Everyone knows a referral is the fastest way in. The hard part is finding someone inside who'll
+      make it. freehire surfaces the companies that already have a willing insider — and connects you
+      to them, so you can stop cold-DMing strangers.
     </p>
 
     <!-- signature glyph: the path in one line, drawn in the muted mono register -->
@@ -157,10 +158,11 @@
       <!-- Seeker -->
       <div class="flex flex-col bg-background p-7 sm:p-8">
         <p class="font-mono text-xs uppercase tracking-wide text-muted-foreground">for seekers</p>
-        <h3 class="mt-4 text-xl font-semibold tracking-tight">Looking for a way in</h3>
+        <h3 class="mt-4 text-xl font-semibold tracking-tight">No one on the inside? Solved.</h3>
         <p class="mt-3 text-sm leading-relaxed text-muted-foreground">
-          Find a company that has a referrer, attach your CV, and ask. If someone takes it up, they
-          reach out to you directly — no application black hole.
+          The hardest part of a referral is finding someone willing to give it. freehire shows you
+          which companies already have a referrer — attach your CV and ask, and if they see a fit they
+          reach out directly. No cold DMs, no application black hole.
         </p>
         <ul class="mt-5 flex flex-col divide-y divide-border border-y border-border">
           {#each seekerPoints as point (point)}
@@ -175,10 +177,11 @@
       <!-- Referrer -->
       <div class="flex flex-col bg-background p-7 sm:p-8">
         <p class="font-mono text-xs uppercase tracking-wide text-muted-foreground">for insiders</p>
-        <h3 class="mt-4 text-xl font-semibold tracking-tight">Already inside</h3>
+        <h3 class="mt-4 text-xl font-semibold tracking-tight">Refer without the awkward "no"</h3>
         <p class="mt-3 text-sm leading-relaxed text-muted-foreground">
-          Refer good people into your company without exposing yourself. Offer once, get vetted
-          requests, and act only on the ones you like.
+          Referring usually means putting your name on the line — and squirming when you have to turn
+          someone down. Here you stay invisible until you decide someone's worth it. Pass on anyone,
+          no explanation, and it's never tied back to you.
         </p>
         <ul class="mt-5 flex flex-col divide-y divide-border border-y border-border">
           {#each referrerPoints as point (point)}
