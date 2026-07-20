@@ -1,6 +1,5 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { ArrowRight, ShieldCheck, BadgeCheck, Timer, EyeOff, Handshake, Send } from '@lucide/svelte';
   import { Button } from '$lib/ui';
 
   // CTA destinations wired to the real feature (no invite-code program exists):
@@ -38,20 +37,33 @@
   // server-side (moderated proof, rolling 24h per-seeker cap, anonymity).
   const trust = [
     {
-      icon: EyeOff,
+      n: '01',
       title: 'Referrers stay anonymous',
       body: 'A referrer never sees who you are until they choose to contact you, and you never see them. The intro happens on neutral ground.',
     },
     {
-      icon: BadgeCheck,
+      n: '02',
       title: 'Real employees only',
       body: 'Every offer to refer is backed by proof of employment that a moderator reviews before the company becomes referral-eligible.',
     },
     {
-      icon: Timer,
+      n: '03',
       title: 'No spraying',
       body: 'A rolling daily cap keeps requests deliberate — this is a warm introduction, not a mass-apply button.',
     },
+  ];
+
+  const seekerPoints = [
+    'Browse companies and open one with a referrer',
+    'Attach your CV — uploaded or tailored',
+    'Leave a contact and a short note',
+    'Wait for a warm reply',
+  ];
+  const referrerPoints = [
+    'Offer to refer for your company',
+    'Upload proof of employment once — reviewed by a moderator',
+    'Receive matching requests, stay anonymous',
+    'Reach out to the ones worth it',
   ];
 
   const faqs = [
@@ -74,187 +86,152 @@
   ];
 </script>
 
-<div class="flex flex-col gap-20 sm:gap-28">
+<div class="landing">
   <!-- ── Hero ─────────────────────────────────────────────────────────────── -->
-  <section class="reveal-hero relative isolate flex flex-col gap-7 pt-4">
-    <!-- soft brand glow, contained; decorative only -->
-    <div class="glow pointer-events-none absolute -left-24 -top-24 -z-10 h-80 w-80 rounded-full" aria-hidden="true"></div>
-
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+  <section class="pb-4 pt-14 sm:pt-20">
+    <p class="reveal font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground" style="--d:0ms">
       // referrals · a warm way in
     </p>
 
-    <h1 class="max-w-3xl text-balance text-4xl font-semibold leading-[0.98] tracking-tighter sm:text-6xl">
+    <h1
+      class="reveal mt-6 max-w-3xl text-balance text-5xl font-semibold leading-[0.95] tracking-tighter sm:text-7xl"
+      style="--d:80ms"
+    >
       Referred candidates get seen.
-      <span class="mt-2 block text-muted-foreground sm:ml-[1.5ch]">Everyone else waits in the pile.</span>
+      <span class="mt-2 block text-muted-foreground">Everyone else waits in the pile.</span>
     </h1>
 
-    <p class="max-w-xl text-lg leading-relaxed text-muted-foreground">
+    <p class="reveal mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground" style="--d:160ms">
       freehire quietly connects you with someone already inside the company — an employee who can put
       your name forward. They stay anonymous, you skip the cold apply, and the intro comes warm.
     </p>
 
-    <!-- signature glyph: the path in one line -->
-    <p class="flex flex-wrap items-center gap-2 font-mono text-xs text-muted-foreground">
-      <span class="rounded-md bg-secondary/60 px-2 py-1 text-foreground">you</span>
-      <ArrowRight class="size-3.5" />
-      <span class="rounded-md border border-brand/25 bg-brand-muted px-2 py-1 text-brand-strong">insider</span>
-      <ArrowRight class="size-3.5" />
-      <span class="rounded-md bg-secondary/60 px-2 py-1 text-foreground">interview</span>
+    <!-- signature glyph: the path in one line, drawn in the muted mono register -->
+    <p class="reveal mt-7 flex flex-wrap items-center gap-2 font-mono text-xs text-muted-foreground" style="--d:220ms">
+      <span class="rounded-md border border-border px-2 py-1 text-foreground">you</span>
+      <span aria-hidden="true">→</span>
+      <span class="rounded-md border border-border px-2 py-1 text-foreground">insider</span>
+      <span aria-hidden="true">→</span>
+      <span class="rounded-md border border-border px-2 py-1 text-foreground">interview</span>
     </p>
 
-    <div class="flex flex-wrap items-center gap-3">
+    <div class="reveal mt-9 flex flex-wrap items-center gap-3" style="--d:300ms">
       <Button href={askCta} variant="primary" size="lg">Ask for a referral</Button>
       <Button href={referrerCta} variant="outline" size="lg">Refer someone in</Button>
     </div>
 
-    <p class="font-mono text-xs text-muted-foreground">
+    <p class="reveal mt-6 font-mono text-xs text-muted-foreground" style="--d:360ms">
       free · anonymous referrers · employment verified
     </p>
   </section>
 
   <!-- ── The warm path ────────────────────────────────────────────────────── -->
-  <section class="flex flex-col gap-8">
-    <div class="flex flex-col gap-2">
-      <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// how it happens</p>
-      <h2 class="max-w-xl text-2xl font-semibold tracking-tight">Three beats from cold list to warm intro</h2>
-    </div>
-
-    <ol class="flex flex-col gap-4 md:flex-row md:items-stretch md:gap-0">
-      {#each steps as step, i (step.n)}
-        <li class="path-node flex flex-1 flex-col gap-3 rounded-xl border border-border p-6">
-          <span class="font-mono text-sm text-brand-strong">{step.n}</span>
-          <h3 class="text-base font-semibold tracking-tight">{step.title}</h3>
-          <p class="text-sm leading-relaxed text-muted-foreground">{step.body}</p>
-        </li>
-        {#if i < steps.length - 1}
-          <div class="hidden shrink-0 items-center justify-center px-3 md:flex" aria-hidden="true">
-            <ArrowRight class="size-5 text-muted-foreground/60" />
+  <section class="border-t border-border py-16 sm:py-20">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// how it happens</p>
+    <dl class="mt-10 divide-y divide-border border-y border-border">
+      {#each steps as step (step.n)}
+        <div class="grid gap-2 py-6 sm:grid-cols-[auto_1fr] sm:gap-8">
+          <span class="font-mono text-sm text-muted-foreground">{step.n}</span>
+          <div>
+            <dt class="text-lg font-semibold tracking-tight">{step.title}</dt>
+            <dd class="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">{step.body}</dd>
           </div>
-        {/if}
+        </div>
       {/each}
-    </ol>
+    </dl>
   </section>
 
   <!-- ── The one line that matters ────────────────────────────────────────── -->
-  <section class="reveal-stat relative overflow-hidden rounded-xl border border-brand/25 bg-brand-muted px-6 py-12 sm:px-12 sm:py-16">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-brand-strong/70">// the whole pitch</p>
-    <p class="mt-4 max-w-3xl text-balance text-3xl font-semibold leading-tight tracking-tight text-brand-strong sm:text-5xl">
-      One warm intro beats a hundred cold applications.
-    </p>
-    <p class="mt-5 flex items-center gap-3 font-mono text-sm text-brand-strong/80">
-      <Handshake class="size-5" />
-      referrals are how most roles are actually filled — this is your side door in.
+  <section class="border-t border-border py-16 sm:py-20">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// the pitch</p>
+    <p class="mt-6 max-w-3xl text-2xl font-medium leading-snug tracking-tight sm:text-3xl">
+      One warm intro beats a hundred cold applications. Referrals are how most roles are actually
+      filled — this is your side door in.
     </p>
   </section>
 
   <!-- ── Two sides ────────────────────────────────────────────────────────── -->
-  <section class="flex flex-col gap-8">
-    <div class="flex flex-col gap-2">
-      <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// pick your side</p>
-      <h2 class="max-w-xl text-2xl font-semibold tracking-tight">Two ways to use it</h2>
-    </div>
-
-    <div class="grid gap-6 lg:grid-cols-2">
+  <section class="border-t border-border py-16 sm:py-20">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// pick your side</p>
+    <div class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border lg:grid-cols-2">
       <!-- Seeker -->
-      <div class="flex flex-col gap-5 rounded-xl border border-border p-7">
-        <div class="flex items-center gap-3">
-          <span class="flex size-9 items-center justify-center rounded-lg bg-secondary/70">
-            <Send class="size-4.5 text-foreground" />
-          </span>
-          <h3 class="text-lg font-semibold tracking-tight">Looking for a way in</h3>
-        </div>
-        <p class="text-sm leading-relaxed text-muted-foreground">
+      <div class="flex flex-col bg-background p-7 sm:p-8">
+        <p class="font-mono text-xs uppercase tracking-wide text-muted-foreground">for seekers</p>
+        <h3 class="mt-4 text-xl font-semibold tracking-tight">Looking for a way in</h3>
+        <p class="mt-3 text-sm leading-relaxed text-muted-foreground">
           Find a company that has a referrer, attach your CV, and ask. If someone takes it up, they
           reach out to you directly — no application black hole.
         </p>
-        <ul class="flex flex-col gap-2.5 text-sm">
-          {#each ['Browse companies and open one with a referrer', 'Attach your CV — uploaded or tailored', 'Leave a contact and a short note', 'Wait for a warm reply'] as point (point)}
-            <li class="flex items-start gap-2.5 leading-relaxed">
-              <ArrowRight class="mt-0.5 size-4 shrink-0 text-brand-strong" />
-              <span class="text-muted-foreground">{point}</span>
-            </li>
+        <ul class="mt-5 flex flex-col divide-y divide-border border-y border-border">
+          {#each seekerPoints as point (point)}
+            <li class="py-2.5 text-sm leading-relaxed text-muted-foreground">{point}</li>
           {/each}
         </ul>
-        <div class="mt-auto pt-1">
+        <div class="mt-7 pt-1">
           <Button href={browseCta} variant="primary" size="md">Find a company to ask</Button>
         </div>
       </div>
 
-      <!-- Referrer — brand-tinted to set it apart -->
-      <div class="flex flex-col gap-5 rounded-xl border border-brand/25 bg-brand-muted/50 p-7">
-        <div class="flex items-center gap-3">
-          <span class="flex size-9 items-center justify-center rounded-lg bg-brand-muted">
-            <Handshake class="size-4.5 text-brand-strong" />
-          </span>
-          <h3 class="text-lg font-semibold tracking-tight text-brand-strong">Already inside</h3>
-        </div>
-        <p class="text-sm leading-relaxed text-brand-strong/80">
+      <!-- Referrer -->
+      <div class="flex flex-col bg-background p-7 sm:p-8">
+        <p class="font-mono text-xs uppercase tracking-wide text-muted-foreground">for insiders</p>
+        <h3 class="mt-4 text-xl font-semibold tracking-tight">Already inside</h3>
+        <p class="mt-3 text-sm leading-relaxed text-muted-foreground">
           Refer good people into your company without exposing yourself. Offer once, get vetted
           requests, and act only on the ones you like.
         </p>
-        <ul class="flex flex-col gap-2.5 text-sm">
-          {#each ['Offer to refer for your company', 'Upload proof of employment once — reviewed by a moderator', 'Receive matching requests, stay anonymous', 'Reach out to the ones worth it'] as point (point)}
-            <li class="flex items-start gap-2.5 leading-relaxed">
-              <ArrowRight class="mt-0.5 size-4 shrink-0 text-brand-strong" />
-              <span class="text-brand-strong/90">{point}</span>
-            </li>
+        <ul class="mt-5 flex flex-col divide-y divide-border border-y border-border">
+          {#each referrerPoints as point (point)}
+            <li class="py-2.5 text-sm leading-relaxed text-muted-foreground">{point}</li>
           {/each}
         </ul>
-        <div class="mt-auto pt-1">
-          <Button href={referrerCta} variant="primary" size="md">Become a referrer</Button>
+        <div class="mt-7 pt-1">
+          <Button href={referrerCta} variant="outline" size="md">Become a referrer</Button>
         </div>
       </div>
     </div>
   </section>
 
   <!-- ── Trust ────────────────────────────────────────────────────────────── -->
-  <section class="flex flex-col gap-8">
-    <div class="flex flex-col gap-2">
-      <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// kept clean</p>
-      <h2 class="max-w-xl text-2xl font-semibold tracking-tight">Why it stays worth trusting</h2>
-    </div>
-    <div class="grid gap-6 sm:grid-cols-3">
-      {#each trust as t (t.title)}
-        <div class="flex flex-col gap-3 rounded-xl border border-border p-6">
-          <t.icon class="size-5 text-brand-strong" />
-          <h3 class="text-base font-semibold tracking-tight">{t.title}</h3>
-          <p class="text-sm leading-relaxed text-muted-foreground">{t.body}</p>
+  <section class="border-t border-border py-16 sm:py-20">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// kept clean</p>
+    <div class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
+      {#each trust as t (t.n)}
+        <div class="group bg-background p-6 transition-colors hover:bg-secondary/40 sm:p-7">
+          <span class="font-mono text-sm text-muted-foreground transition-colors group-hover:text-foreground">
+            {t.n}
+          </span>
+          <h3 class="mt-4 text-lg font-semibold tracking-tight">{t.title}</h3>
+          <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{t.body}</p>
         </div>
       {/each}
     </div>
   </section>
 
   <!-- ── FAQ ──────────────────────────────────────────────────────────────── -->
-  <section class="flex flex-col gap-8">
-    <div class="flex flex-col gap-2">
-      <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// good to know</p>
-      <h2 class="max-w-xl text-2xl font-semibold tracking-tight">Questions people ask first</h2>
-    </div>
-    <div class="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
+  <section class="border-t border-border py-16 sm:py-20">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// faq</p>
+    <dl class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
       {#each faqs as f (f.q)}
-        <details class="group bg-background p-6">
-          <summary class="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold tracking-tight">
-            {f.q}
-            <ArrowRight class="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
-          </summary>
-          <p class="mt-3 text-sm leading-relaxed text-muted-foreground">{f.a}</p>
-        </details>
+        <div class="bg-background p-6 sm:p-7">
+          <dt class="text-lg font-semibold tracking-tight">{f.q}</dt>
+          <dd class="mt-2 text-sm leading-relaxed text-muted-foreground">{f.a}</dd>
+        </div>
       {/each}
-    </div>
+    </dl>
   </section>
 
   <!-- ── Closing CTA ──────────────────────────────────────────────────────── -->
-  <section class="flex flex-col items-start gap-5 rounded-xl border border-border bg-secondary/40 p-8">
-    <div class="flex items-center gap-3">
-      <ShieldCheck class="size-6 text-brand-strong" />
-      <h2 class="text-xl font-semibold tracking-tight">Skip the pile</h2>
-    </div>
-    <p class="max-w-xl text-sm leading-relaxed text-muted-foreground">
-      Ask an insider to put your name forward, or open the door for someone else. Either way it takes
-      a couple of minutes and stays anonymous.
+  <section class="border-t border-border py-16 sm:py-20">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// skip the pile</p>
+    <h2 class="mt-6 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
+      Ask an insider to put your name forward.
+    </h2>
+    <p class="mt-5 max-w-xl leading-relaxed text-muted-foreground">
+      Get referred, or open the door for someone else. Either way it takes a couple of minutes and
+      stays anonymous.
     </p>
-    <div class="flex flex-wrap gap-3">
+    <div class="mt-8 flex flex-wrap gap-3">
       <Button href={askCta} variant="primary" size="lg">Ask for a referral</Button>
       <Button href={referrerCta} variant="outline" size="lg">Refer someone in</Button>
     </div>
@@ -262,60 +239,28 @@
 </div>
 
 <style>
-  /* Motion: one orchestrated page-load reveal. Staggered so the eye lands on the
-     headline first, then the supporting rows. Purely decorative — gated behind
-     prefers-reduced-motion so it never fights assistive settings. */
-  @keyframes fade-up {
+  /* One orchestrated page-load: each .reveal rises in, staggered by its --d.
+     Mirrors HomeView so the landing shares the site's motion language. */
+  .reveal {
+    opacity: 0;
+    animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+    animation-delay: var(--d, 0ms);
+  }
+  @keyframes rise {
     from {
       opacity: 0;
-      transform: translateY(12px);
+      transform: translateY(10px);
     }
     to {
       opacity: 1;
-      transform: translateY(0);
+      transform: none;
     }
   }
 
-  .reveal-hero > * {
-    animation: fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-  .reveal-hero > *:nth-child(2) {
-    animation-delay: 0.04s;
-  }
-  .reveal-hero > *:nth-child(3) {
-    animation-delay: 0.1s;
-  }
-  .reveal-hero > *:nth-child(4) {
-    animation-delay: 0.16s;
-  }
-  .reveal-hero > *:nth-child(5) {
-    animation-delay: 0.22s;
-  }
-  .reveal-hero > *:nth-child(6) {
-    animation-delay: 0.28s;
-  }
-
-  /* Soft, contained brand glow behind the hero — atmosphere without a new fill. */
-  .glow {
-    background: radial-gradient(circle at center, var(--brand-ring) 0%, transparent 68%);
-    opacity: 0.16;
-    filter: blur(8px);
-  }
-
-  .path-node {
-    animation: fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-  .path-node:nth-child(3) {
-    animation-delay: 0.06s;
-  }
-  .path-node:nth-child(5) {
-    animation-delay: 0.12s;
-  }
-
   @media (prefers-reduced-motion: reduce) {
-    .reveal-hero > *,
-    .path-node {
+    .reveal {
       animation: none;
+      opacity: 1;
     }
   }
 </style>
