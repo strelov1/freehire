@@ -154,33 +154,39 @@
             {/if}
           </label>
 
+          <!-- Column layout: the CV picker sits on its own full-width line below the
+               radio, so a long "title — company" option can't stretch the modal past
+               max-w-md (an inline flex item's min-width:auto lets a wide select do that). -->
           <label
             class={[
-              'flex items-center gap-3 rounded-md border px-3 py-2.5 text-sm transition-colors',
+              'flex flex-col gap-2 rounded-md border px-3 py-2.5 text-sm transition-colors',
               cvKind === 'built' ? 'border-brand bg-brand-muted' : 'border-border',
               tailored.length === 0 && 'opacity-50',
             ]}
           >
-            <input
-              type="radio"
-              name="cvkind"
-              checked={cvKind === 'built'}
-              disabled={tailored.length === 0}
-              onchange={pickBuilt}
-            />
-            <span class="font-medium">Tailored CV</span>
+            <span class="flex items-center gap-3">
+              <input
+                type="radio"
+                name="cvkind"
+                checked={cvKind === 'built'}
+                disabled={tailored.length === 0}
+                onchange={pickBuilt}
+              />
+              <span class="font-medium">Tailored CV</span>
+              {#if tailored.length === 0}
+                <span class="ml-auto text-xs text-muted-foreground">none yet</span>
+              {/if}
+            </span>
             {#if tailored.length > 0}
               <select
                 bind:value={cvId}
                 onclick={(e) => e.stopPropagation()}
-                class="ml-auto min-w-0 max-w-[55%] rounded-md border border-border bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                class="w-full min-w-0 rounded-md border border-border bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {#each tailored as cv (cv.id)}
                   <option value={cv.id}>{cv.job_company ? `${cv.title} — ${cv.job_company}` : cv.title}</option>
                 {/each}
               </select>
-            {:else}
-              <span class="ml-auto text-xs text-muted-foreground">none yet</span>
             {/if}
           </label>
         </fieldset>
