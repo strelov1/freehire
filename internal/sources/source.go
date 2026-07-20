@@ -355,6 +355,8 @@ func All(c HTTPClient) map[string]Source {
 		// RU-domestic single-company adapters (boardless, except Yandex which selects
 		// host+language by board).
 		NewYandex(c),
+		// Yandex Crowd: gig/support catalogue at crowd.yandex.ru, one JSON blob per landing page.
+		NewYandexCrowd(c),
 		NewOzon(c),
 		NewAvito(c),
 		NewRWB(c),

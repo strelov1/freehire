@@ -70,3 +70,6 @@
 - company: Yandex
   provider: yandex
   board: com
+# Yandex Crowd: gig/support catalogue (crowd.yandex.ru), single-company boardless.
+- company: Yandex Crowd
+  provider: yandexcrowd
