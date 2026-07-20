@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.42.1
 	github.com/aws/aws-sdk-go-v2/config v1.32.30
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.105.0
-	github.com/aws/aws-sdk-go-v2/service/sesv2 v1.63.0
+	github.com/aws/aws-sdk-go-v2/service/sesv2 v1.63.1
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.45.1
 	github.com/bogdanfinn/fhttp v0.6.8
 	github.com/bogdanfinn/tls-client v1.15.1
