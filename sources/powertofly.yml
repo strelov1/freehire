@@ -1,0 +1,5 @@
+# PowerToFly remote/diversity job board. Boardless: one public API
+# (powertofly.com/api/v1/jobs), so the entry carries no board; each job's company comes
+# from the posting, not this placeholder. The adapter paginates the whole catalogue per run.
+- company: PowerToFly
+  provider: powertofly
