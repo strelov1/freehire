@@ -19,6 +19,7 @@ func TestRecognizeBoard(t *testing.T) {
 		{"greenhouse vacancy strips utm", "https://job-boards.greenhouse.io/alpaca/jobs/5745893004?utm=x#top", "greenhouse", "alpaca", "https://job-boards.greenhouse.io/alpaca/jobs/5745893004", true},
 		{"greenhouse board listing", "https://job-boards.greenhouse.io/alpaca", "greenhouse", "alpaca", "https://job-boards.greenhouse.io/alpaca", true},
 		{"lever strips /apply", "https://jobs.lever.co/offchainlabs/52c01c91/apply", "lever", "offchainlabs", "https://jobs.lever.co/offchainlabs/52c01c91", true},
+		{"lever eu data-residency host", "https://jobs.eu.lever.co/coinspaid/244123b5-ffbb/apply?x=1", "lever", "coinspaid", "https://jobs.eu.lever.co/coinspaid/244123b5-ffbb", true},
 		{"ashby vacancy", "https://jobs.ashbyhq.com/blitzy/a741b4e8-8799", "ashby", "blitzy", "https://jobs.ashbyhq.com/blitzy/a741b4e8-8799", true},
 		{"deel path", "https://jobs.deel.com/acme/jobs/123", "deel", "acme", "https://jobs.deel.com/acme/jobs/123", true},
 		{"jobvite path", "https://jobs.jobvite.com/acme/job/oABC", "jobvite", "acme", "https://jobs.jobvite.com/acme/job/oABC", true},
@@ -36,6 +37,7 @@ func TestRecognizeBoard(t *testing.T) {
 		{"recruitee board listing", "https://acme.recruitee.com", "recruitee", "acme", "https://acme.recruitee.com", true},
 		{"bamboohr subdomain", "https://acme.bamboohr.com/careers/42", "bamboohr", "acme", "https://acme.bamboohr.com", true},
 		{"personio nested apex subdomain", "https://acme.jobs.personio.com/job/9", "personio", "acme", "https://acme.jobs.personio.com", true},
+		{"personio de host", "https://reflex-aerospace-gmbh.jobs.personio.de/job/2679152?display=en#apply", "personio", "reflex-aerospace-gmbh", "https://reflex-aerospace-gmbh.jobs.personio.de", true},
 
 		// host mode — board is the whole careers host, regional TLD varies
 		{"zoho eu vacancy strips encoded path + query", "https://be-exec.zohorecruit.eu/jobs/Careers/73534000009044079/%D0%9F%D1%80%D0%BE?source=CareerSite", "zohorecruit", "be-exec.zohorecruit.eu", "https://be-exec.zohorecruit.eu", true},

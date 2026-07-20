@@ -37,6 +37,7 @@ var atsBoards = []struct{ host, source, mode string }{
 	// --- path: board = first path segment on a fixed host ---
 	{"greenhouse.io", "greenhouse", modePath},
 	{"jobs.lever.co", "lever", modePath},
+	{"jobs.eu.lever.co", "lever", modePath}, // Lever EU data-residency host; same path shape/board as the US host
 	{"jobs.ashbyhq.com", "ashby", modePath},
 	{"apply.workable.com", "workable", modePath},
 	{"jobs.deel.com", "deel", modePath},
@@ -61,6 +62,7 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"huntflow.io", "huntflow", modeSubdomain},
 	{"peopleforce.io", "peopleforce", modeSubdomain},
 	{"jobs.personio.com", "personio", modeSubdomain},
+	{"jobs.personio.de", "personio", modeSubdomain}, // Personio DE regional host; board = same tenant subdomain
 	{"pinpointhq.com", "pinpoint", modeSubdomain},
 	{"talentlyft.com", "talentlyft", modeSubdomain},
 	{"traffit.com", "traffit", modeSubdomain},
@@ -224,6 +226,26 @@ func greenhouseJobID(rawURL string) (string, bool) {
 	segs := strings.Split(strings.Trim(u.Path, "/"), "/")
 	if last := segs[len(segs)-1]; ghNumericID.MatchString(last) {
 		return last, true
+	}
+	return "", false
+}
+
+// ashbyUUID matches an Ashby job id (a UUID) — the value Ashby's embed widget carries.
+var ashbyUUID = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+// ashbyJobID extracts an Ashby job id from a link that embeds an Ashby board on a company's own
+// domain (company.com/careers?ashby_jid=<uuid>): the ashby_jid query param the embed widget
+// carries. The board slug never appears in the URL or the (JS-rendered) markup, so the recognizer
+// and page-fetch resolver both miss it — but external_id is "<board>:<uuid>", so the id resolves
+// the board. ok=false when absent. A non-Ashby UUID won't be found downstream, so a false
+// positive is harmless.
+func ashbyJobID(rawURL string) (string, bool) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "", false
+	}
+	if id := u.Query().Get("ashby_jid"); ashbyUUID.MatchString(id) {
+		return id, true
 	}
 	return "", false
 }

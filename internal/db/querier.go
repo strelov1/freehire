@@ -18,6 +18,11 @@ type Querier interface {
 	// expiry and touching last_used_at in one atomic statement. No row means the key is
 	// unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401.
 	AuthenticateAPIKey(ctx context.Context, tokenHash string) (int64, error)
+	// Find the ashby board already carrying a job with this Ashby job id — for company careers
+	// pages that embed Ashby via the ashby_jid widget param (the board slug is JS-rendered, absent
+	// from the URL/markup). external_id is "<board>:<uuid>"; served by the
+	// (split_part(external_id,':',2)) WHERE source='ashby' partial index.
+	BoardByAshbyJobID(ctx context.Context, jobID string) (string, error)
 	// Find the greenhouse board already carrying a job with this Greenhouse job id — for links on
 	// a company's own domain that expose only the ATS job id (server-side embeds, no board token
 	// in the URL/page). external_id is "<board>:<id>"; served by the

@@ -46,6 +46,19 @@ func (r *QueriesRepository) BoardByGreenhouseJobID(ctx context.Context, jobID st
 	return board, true, nil
 }
 
+// BoardByAshbyJobID returns the ashby board already carrying a job with the given Ashby job id,
+// or ok=false when none is tracked.
+func (r *QueriesRepository) BoardByAshbyJobID(ctx context.Context, jobID string) (board string, ok bool, err error) {
+	board, err = r.q.BoardByAshbyJobID(ctx, jobID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return board, true, nil
+}
+
 // CompanyForBoard returns the company name + slug already tracked on the board, or ok=false
 // when the board has no job with a resolved company.
 func (r *QueriesRepository) CompanyForBoard(ctx context.Context, source, board string) (name, slug string, ok bool, err error) {

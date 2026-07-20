@@ -21,6 +21,7 @@ type fakeRepo struct {
 	companyName   string
 	companySlug   string
 	jobIDBoard    string // BoardByGreenhouseJobID returns this (ok when non-empty)
+	ashbyIDBoard  string // BoardByAshbyJobID returns this (ok when non-empty)
 }
 
 func (f *fakeRepo) BoardTracked(_ context.Context, _, _ string) (bool, error) {
@@ -33,6 +34,10 @@ func (f *fakeRepo) CompanyForBoard(_ context.Context, _, _ string) (string, stri
 
 func (f *fakeRepo) BoardByGreenhouseJobID(_ context.Context, _ string) (string, bool, error) {
 	return f.jobIDBoard, f.jobIDBoard != "", nil
+}
+
+func (f *fakeRepo) BoardByAshbyJobID(_ context.Context, _ string) (string, bool, error) {
+	return f.ashbyIDBoard, f.ashbyIDBoard != "", nil
 }
 
 func (f *fakeRepo) Record(_ context.Context, in RecordInput) (Contribution, error) {
@@ -191,6 +196,25 @@ func TestSubmitResolvesGreenhouseJobIDForServerSideVanity(t *testing.T) {
 	// No id in the URL → not resolved.
 	if _, _, _, err := New(repo, nil).Submit(context.Background(), 7, "https://example.com/careers/about"); !errors.Is(err, ErrUnsupportedATS) {
 		t.Errorf("err = %v, want ErrUnsupportedATS for a URL with no job id", err)
+	}
+}
+
+func TestSubmitResolvesAshbyJobIDForEmbeddedVanity(t *testing.T) {
+	// A company careers page that embeds Ashby on its own domain via the ashby_jid widget param
+	// (company.com/careers?ashby_jid=<uuid>). The slug is never in the URL/markup, but external_id
+	// is "<board>:<uuid>", so the id lookup finds the tracked board.
+	repo := &fakeRepo{ashbyIDBoard: "valon", boardTracked: true}
+	_, source, board, err := New(repo, nil).Submit(context.Background(), 7,
+		"https://www.valon.ai/about?ashby_jid=6052f210-29f1-4ef4-93cc-48029969eaf7&utm_source=x#careers")
+	if !errors.Is(err, ErrBoardAlreadyTracked) {
+		t.Fatalf("err = %v, want ErrBoardAlreadyTracked", err)
+	}
+	if source != "ashby" || board != "valon" {
+		t.Errorf("= (%q,%q), want (ashby, valon)", source, board)
+	}
+	// A non-UUID ashby_jid (or none) → not resolved.
+	if _, _, _, err := New(repo, nil).Submit(context.Background(), 7, "https://www.valon.ai/about?ashby_jid=not-a-uuid"); !errors.Is(err, ErrUnsupportedATS) {
+		t.Errorf("err = %v, want ErrUnsupportedATS for a non-UUID ashby_jid", err)
 	}
 }
 

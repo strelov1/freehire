@@ -56,6 +56,7 @@ type Repository interface {
 	BoardTracked(ctx context.Context, source, board string) (bool, error)
 	CompanyForBoard(ctx context.Context, source, board string) (name, slug string, ok bool, err error)
 	BoardByGreenhouseJobID(ctx context.Context, jobID string) (board string, ok bool, err error)
+	BoardByAshbyJobID(ctx context.Context, jobID string) (board string, ok bool, err error)
 	Record(ctx context.Context, in RecordInput) (Contribution, error)
 	ListByUser(ctx context.Context, userID int64) ([]Contribution, error)
 }
@@ -113,9 +114,9 @@ func (s *Service) Submit(ctx context.Context, submittedBy int64, rawURL string) 
 
 // resolveBoard finds the (source, board, canonical URL) a pasted link belongs to, trying the
 // cheapest strategy first: the network-free URL recognizer; then a page fetch that detects an
-// ATS embedded on a company's own careers domain; then a Greenhouse job-id lookup, for
-// server-side embeds that expose only the job id (resolves boards we already track). ok=false
-// when none resolve.
+// ATS embedded on a company's own careers domain; then a Greenhouse or Ashby job-id lookup, for
+// embeds that expose only the job id (resolves boards we already track). ok=false when none
+// resolve.
 func (s *Service) resolveBoard(ctx context.Context, rawURL string) (source, board, canonical string, ok bool) {
 	if source, board, canonical, ok := RecognizeBoard(rawURL); ok {
 		return source, board, canonical, true
@@ -128,6 +129,11 @@ func (s *Service) resolveBoard(ctx context.Context, rawURL string) (source, boar
 	if id, has := greenhouseJobID(rawURL); has {
 		if b, found, err := s.repo.BoardByGreenhouseJobID(ctx, id); err == nil && found {
 			return "greenhouse", b, stripQueryFragment(rawURL), true
+		}
+	}
+	if id, has := ashbyJobID(rawURL); has {
+		if b, found, err := s.repo.BoardByAshbyJobID(ctx, id); err == nil && found {
+			return "ashby", b, stripQueryFragment(rawURL), true
 		}
 	}
 	return "", "", "", false

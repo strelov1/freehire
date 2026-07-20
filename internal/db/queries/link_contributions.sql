@@ -26,6 +26,16 @@ FROM jobs
 WHERE source = 'greenhouse' AND split_part(external_id, ':', 2) = sqlc.arg(job_id)
 LIMIT 1;
 
+-- name: BoardByAshbyJobID :one
+-- Find the ashby board already carrying a job with this Ashby job id — for company careers
+-- pages that embed Ashby via the ashby_jid widget param (the board slug is JS-rendered, absent
+-- from the URL/markup). external_id is "<board>:<uuid>"; served by the
+-- (split_part(external_id,':',2)) WHERE source='ashby' partial index.
+SELECT split_part(external_id, ':', 1) AS board
+FROM jobs
+WHERE source = 'ashby' AND split_part(external_id, ':', 2) = sqlc.arg(job_id)
+LIMIT 1;
+
 -- name: CompanyForBoard :one
 -- The tracked company on a board — for the "already tracked" reply: a job's company name and
 -- slug so the bot/UI can link to /companies/<slug>. board_pattern is "<escaped board>:%" (same
