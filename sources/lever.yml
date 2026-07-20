@@ -183,6 +183,9 @@
   board: coingecko
 - company: coinmarketcap
   board: coinmarketcap
+- company: CoinsPaid
+  board: coinspaid
+  region: eu
 - company: commoncause
   board: commoncause
 - company: Commonwealth Fusion Systems
@@ -476,6 +479,9 @@
   board: mistral
 - company: Mixlab
   board: mixlab
+- company: Mobileye
+  board: mobileye
+  region: eu
 - company: Modulate
   board: modulate
 - company: Mom's Meals
