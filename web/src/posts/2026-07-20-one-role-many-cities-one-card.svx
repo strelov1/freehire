@@ -1,0 +1,19 @@
+---
+title: One role, many cities, one card
+date: 2026-07-20
+summary: When a company posts the same role across several cities, the catalogue now folds those postings into a single card with every city listed — instead of showing the same job five times.
+type: changelog
+tags:
+  - dedup
+  - search
+draft: false
+---
+
+Some employers post one role separately for each city they're hiring in — same
+job, same description, just a different city in the title. Until now those showed
+up as five near-identical cards in a row.
+
+They now collapse into **one card** that carries every city the role is open in,
+and stays findable when you filter by any of those cities or countries. The other
+openings are still one click away under the role. Cleaner lists, and the filters
+still reach every location.
