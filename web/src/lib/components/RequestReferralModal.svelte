@@ -173,7 +173,7 @@
               <select
                 bind:value={cvId}
                 onclick={(e) => e.stopPropagation()}
-                class="ml-auto max-w-[55%] rounded-md border border-border bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                class="ml-auto min-w-0 max-w-[55%] rounded-md border border-border bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {#each tailored as cv (cv.id)}
                   <option value={cv.id}>{cv.job_company ? `${cv.title} — ${cv.job_company}` : cv.title}</option>
