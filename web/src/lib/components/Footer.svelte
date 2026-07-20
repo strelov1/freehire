@@ -12,6 +12,7 @@
         { label: 'Jobs', href: resolve('/') },
         { label: 'Companies', href: resolve('/companies') },
         { label: 'Collections', href: resolve('/collections') },
+        { label: 'Referrals', href: resolve('/referrals') },
         { label: 'Recruiters', href: resolve('/recruiters') },
       ],
     },

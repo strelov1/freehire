@@ -20,6 +20,7 @@ export const STATIC_PATHS = [
   '/cli',
   '/chatgpt',
   '/recruiters',
+  '/referrals',
 ];
 
 /** The curated collection landing pages (`/collections/:slug`), one per collection.
