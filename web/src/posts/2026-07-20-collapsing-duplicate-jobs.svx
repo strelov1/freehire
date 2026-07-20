@@ -1,0 +1,135 @@
+---
+title: Collapsing duplicate jobs without hiding real ones
+date: 2026-07-20
+summary: One role posted across five cities showed up as five near-identical cards. Folding them into one sounds trivial — until you realize the same shape describes two entirely different problems, and the naive fix quietly hides real openings.
+type: article
+tags:
+  - dedup
+  - search
+  - engineering
+draft: false
+---
+
+Open [freehire.dev/companies/towa](https://freehire.dev/companies/towa) a week ago and
+you'd have seen the same job five times in a row:
+
+```
+Senior Fullstack Engineer (m/w/d), Krakau
+Senior Fullstack Engineer (m/w/d), Düsseldorf
+Senior Fullstack Engineer (m/w/d), Bregenz
+Senior Fullstack Engineer (m/w/d), München
+Senior Fullstack Engineer (m/w/d), Wien
+```
+
+One role, five cities, five cards. We already had a layer built to collapse exactly this —
+so why didn't it fire? The answer, and the two-week rabbit hole it opened, is a decent
+lesson in how "just deduplicate them" hides a much sharper question: **when are two
+postings the same job, and when do they only look alike?**
+
+## The collapse we already had
+
+freehire clusters reposts of one role behind a single canonical card. The key is a
+`role_fingerprint` — a hash of the company, the normalized title, and the description —
+deliberately **excluding** location, so the same role reposted in another city folds into
+one card with an "openings across cities" list underneath.
+
+The catch: that fingerprint hashes the *title*, and Personio (Towa's ATS) bakes the city
+**into the title** — `"… Engineer, Krakau"`. Five cities, five different titles, five
+different fingerprints. The layer designed to ignore location was blind to the location
+because it had smuggled itself into the one field the key trusts.
+
+The fix looks like a one-liner: strip the trailing `, <city>` before hashing. It is not a
+one-liner, because the trailing clause is not always a city.
+
+## The trailing clause is a coin with many faces
+
+Before touching the hash, we ran a read-only survey over 3.98M live postings to see what
+actually sits after that last separator. It is a zoo:
+
+- **Geography:** `USA`, `TX`, `Latin America`, `Chennai`, `Remote, Latin America`
+- **Specialty:** `Backend`, `Data Science`, `Platform`, `Infrastructure`
+- **Grade:** `Senior`, `Vice President`, `AVP`
+- **Work mode:** `Remote`, `Hybrid`, `Onsite`
+- **Brand / legal:** `Hollister`, `Inc.`
+- **Parentheses are almost never a city:** `(m/w/d)`, `(all genders)`, `(GCP)`, `(MAKO)`
+
+So there is no rule "the tail is a city." Strip it blindly and you'll merge a Backend and a
+Frontend engineer, or a senior and a staff role, into one card. That is worse than a
+duplicate — it's a *lie*.
+
+## The guard that makes aggression safe
+
+What rescues the strip is a property already baked into the fingerprint: **the description
+is part of the key.** Two postings collapse only when the stripped title *and* the
+description match. So even an aggressive title strip can only merge things whose bodies are
+already identical.
+
+The survey confirmed this holds where it matters. Take speechify, which appends the
+specialty to the title — `Software Engineer, Data Infrastructure`, `Software Engineer,
+Platform`, `Software Engineer, iOS Core Product` — and posts each across ~129 cities. Strip
+the tail and all of them become `software engineer`. Terrifying, until you check the
+descriptions: each specialty carries its own, so the fingerprint stays split by
+description. Only the pure city variants — same specialty, same body — collapse. Exactly
+right.
+
+We shipped that. Towa went from five cards to three. Not one — because Kraków and Wien turned
+out to carry genuinely different description text (a country-specific block), so the guard
+correctly refused to merge them. Conservative by design: we'd rather show a real posting
+twice than hide two distinct ones behind one card.
+
+## The detour: where cosine looked obvious and was wrong
+
+Three cards instead of five is a win, but it left a tail: same-role postings whose
+descriptions are localized per city. Across the catalogue that's a big residual — one Amazon
+"Software Development Engineer" alone is 228 separate cards.
+
+The tempting fix: we already store a semantic embedding per job, so cluster by cosine
+similarity within a company+title bucket. We spiked it before writing a line of production
+code. It fell apart on contact:
+
+- **speechify** — same specialty across cities scored cosine **0.994**, but a *different*
+  specialty (Platform) scored up to **0.992**. The bands overlap completely; no threshold
+  separates them. The embedding is dominated by shared boilerplate (company blurb, benefits,
+  EEO text), so the specialty signal drowns.
+- **Amazon SDE** — the 228 "duplicate" cards score **0.83–0.97** against each other. They're
+  not reposts of one role; they're genuinely different jobs (AWS, retail, Alexa) sharing a
+  generic title. Cosine correctly says "different."
+- And the killer: a true duplicate (Towa Kraków/Wien = 0.978) scores **lower** than a
+  distinct role (speechify Platform = 0.992). One cosine cut cannot both merge the dupe and
+  keep the distinct role apart.
+
+That last point invalidated the whole approach. It also invalidated the headline number —
+most of that "849k collapsible cards" figure is genuinely distinct jobs under a generic
+title, not duplicates. Shipping the cosine pass would have *hidden real openings*.
+
+## The signal that actually works
+
+The spike didn't just kill an idea; it pointed at the right one. The true duplicates (Towa
+Kraków/Wien) differ by ~150 characters out of ~11,000 — over 98% identical *text*. So we
+measured plain word-overlap (Jaccard of the normalized description) instead of the
+compressed embedding:
+
+| Case | embedding cosine | word overlap |
+|---|---|---|
+| Towa — same role, other city | 0.978 | **0.98** |
+| Towa — different role | 0.964 | **0.48** |
+| speechify — same specialty | 0.968 | **0.95** |
+| speechify — different specialty | 0.966 | **0.45** |
+| Amazon SDE — different jobs | 0.83–0.97 | **0.19** |
+
+Where the embedding smears everything into a narrow 0.96–0.99 band, word-overlap opens a
+wide, consistent gap: real dupes ≥0.95, distinct roles ≤0.5. The embedding compresses the
+text and loses the specialty; counting shared words keeps it. That's the next change to
+ship, and this time the signal is validated before the code exists.
+
+## The lesson
+
+"Deduplicate the listings" is one sentence hiding two opposite failure modes. Under-collapse
+and users scroll past the same job five times; over-collapse and you erase a real opening
+they'll never see. The safe path isn't a cleverer similarity score — it's picking a signal
+that *earns a wide margin* between "same" and "merely similar," and defaulting to leaving
+things split when the margin is thin.
+
+The whole pipeline is open source — the fingerprinting, the collapse, and the spikes that
+killed the wrong ideas are all in the repo. If that's your kind of thing, a
+[⭐ on GitHub](https://github.com/strelov1/freehire) helps others find it.
