@@ -29,7 +29,7 @@
 
 - [x] 5.1 Confirm no company-search surface bypasses `GET /api/v1/companies` (job-filter typeahead, referral `CompanyPicker`, `HeaderSearch`, catalog) — grep the frontend; no code change expected
 - [x] 5.2 Update `internal/search/AGENTS.md` (and `CLAUDE.md` command list) to document the companies index + `cmd/reindex-companies`
-- [~] 5.3 (deploy follow-up, external repo `../freehire-ops`) Add the `reindex-companies` cron entry in `../freehire-ops` (own flock, not stacked with the jobs reindex) — note in the change if ops lives outside this repo
+- [x] 5.3 Add the `reindex-companies` cron entry (freehire-ops: systemd timer 05:15 UTC + release.sh worker; installed & enabled on host-2 2026-07-20) in `../freehire-ops` (own flock, not stacked with the jobs reindex) — note in the change if ops lives outside this repo
 
 ## 6. Verify
 

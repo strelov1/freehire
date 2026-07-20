@@ -63,7 +63,7 @@ the filtered results is correct.
   ordered by `job_count` descending (ties broken by `name`), each carrying its
   denormalized `job_count`
 
-#### Scenario: Searching companies ranks relevance first
+#### Scenario: Searching companies by name
 
 - **WHEN** a client requests `GET /api/v1/companies?q=acme`
 - **THEN** the response contains only companies matching `acme`, ranked by search
