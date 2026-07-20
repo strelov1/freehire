@@ -108,8 +108,8 @@ github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2
 github.com/felixge/httpsnoop v1.0.4/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
 github.com/getsentry/sentry-go v0.48.0 h1:FRZNr7Uk1C86ev1bSJmYlUkL9oyivQA6YOcdYfaaMmY=
 github.com/getsentry/sentry-go v0.48.0/go.mod h1:E5UkA5wp1qR2+MDydNYlVeUiNN2xEdjYMidkgf0Qoss=
-github.com/getsentry/sentry-go/fiber v0.47.0 h1:9VRJWOH2zsMvXIe9n1imFyZ23evTnLTpbCZ/igXtaRE=
-github.com/getsentry/sentry-go/fiber v0.47.0/go.mod h1:M8PyhPc4U0T2gsx6MQ9Mtz9R4m+Lnqql8f/tl8JlTPc=
+github.com/getsentry/sentry-go/fiber v0.48.0 h1:CVA5Rt2jamC/ykXz/elshu79zXWzgZitLvRFAFRrvlI=
+github.com/getsentry/sentry-go/fiber v0.48.0/go.mod h1:wCsv9l/Y7Z6myRNw9fQ3jjG46+y242W7hMQSUG8l3Io=
 github.com/go-errors/errors v1.4.2 h1:J6MZopCL4uSllY1OfXM374weqZFFItUbrImctkmUxIA=
 github.com/go-errors/errors v1.4.2/go.mod h1:sIVyrIiJhuEF+Pj9Ebtd6P/rEYROXFi3BopGUQ5a5Og=
 github.com/go-logr/logr v1.2.2/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbVz/1A=
@@ -256,8 +256,8 @@ github.com/testcontainers/testcontainers-go v0.43.0 h1:oEQx5MW2DGd9z3AeEQfB2lPM0
 github.com/testcontainers/testcontainers-go v0.43.0/go.mod h1:+VxkT2NQnKOZPKi6praMuMKYHYyOGXr0XSBSlSMCzFo=
 github.com/testcontainers/testcontainers-go/modules/postgres v0.43.0 h1:ShNOFYAF4lKHvdIG258hi69bSxC88uXnxJkJvNs/IVs=
 github.com/testcontainers/testcontainers-go/modules/postgres v0.43.0/go.mod h1:vdq5/RqmGfWeefzyfcVI/pID1rzmc1TDvqXa15bPJks=
-github.com/tinylib/msgp v1.6.1 h1:ESRv8eL3u+DNHUoSAAQRE50Hm162zqAnBoGv9PzScPY=
-github.com/tinylib/msgp v1.6.1/go.mod h1:RSp0LW9oSxFut3KzESt5Voq4GVWyS+PSulT77roAqEA=
+github.com/tinylib/msgp v1.6.4 h1:mOwYbyYDLPj35mkA2BjjYejgJk9BuHxDdvRnb6v2ZcQ=
+github.com/tinylib/msgp v1.6.4/go.mod h1:RSp0LW9oSxFut3KzESt5Voq4GVWyS+PSulT77roAqEA=
 github.com/tklauser/go-sysconf v0.3.16 h1:frioLaCQSsF5Cy1jgRBrzr6t502KIIwQ0MArYICU0nA=
 github.com/tklauser/go-sysconf v0.3.16/go.mod h1:/qNL9xxDhc7tx3HSRsLWNnuzbVfh3e7gh/BmM179nYI=
 github.com/tklauser/numcpus v0.11.0 h1:nSTwhKH5e1dMNsCdVBukSZrURJRoHbSEQjdEbY+9RXw=
