@@ -3,7 +3,7 @@
 // crawlers and Google Jobs see structured data in the initial HTML.
 
 import type { PostMeta } from './blog';
-import { logoDevUrl } from './logo';
+import { companyLogoUrl } from './logo';
 import type { Company, Enrichment, Job } from './types';
 
 const SITE = 'freehire';
@@ -103,9 +103,9 @@ const EDUCATION_CREDENTIAL: Record<string, string> = {
  *  not open. `origin` is the absolute site origin (e.g. https://freehire.dev). */
 export function jobPostingJsonLd(job: Job, origin: string): Record<string, unknown> {
   const e = job.enrichment ?? {};
-  // logo.dev resolves a logo from the company name (404s for unknown companies,
-  // which Google silently ignores); same source the SPA and OG cards use.
-  const logo = logoDevUrl(job.company);
+  // Our logo proxy resolves a logo from the company name (404s for unknown
+  // companies, which Google silently ignores); same source the SPA and OG cards use.
+  const logo = companyLogoUrl(job.company);
   const ld: Record<string, unknown> = {
     '@context': 'https://schema.org',
     '@type': 'JobPosting',

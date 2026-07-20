@@ -1,17 +1,17 @@
 <script lang="ts">
   import { Globe } from '@lucide/svelte';
-  import { logoDevUrl } from '$lib/logo';
+  import { companyLogoUrl } from '$lib/logo';
 
-  // A company's logo from logo.dev's name endpoint. `fallback=404` makes the API
-  // return 404 when it has no logo, so the image fails to load and we fall back to
-  // our own monogram (the initial on a colour derived from the name). The globe is
-  // the last resort, only when there's no name to monogram. Shared by the job row,
-  // the job page, and the company page for one look (and by the OG-image card, via
-  // $lib/logo).
+  // A company's logo from our logo.freehire.dev proxy (faviconapi -> logo.dev
+  // fallback, both server-side). On a genuine miss the proxy 404s, so the image
+  // fails to load and we fall back to our own monogram (the initial on a colour
+  // derived from the name). The globe is the last resort, only when there's no
+  // name to monogram. Shared by the job row, the job page, and the company page
+  // for one look (and by the OG-image card, via $lib/logo).
   let { name, size = 'size-4' }: { name: string; size?: string } = $props();
 
   let failed = $state(false);
-  const src = $derived(logoDevUrl(name) ?? undefined);
+  const src = $derived(companyLogoUrl(name) ?? undefined);
 
   // A new company means a fresh attempt — clear a prior failure when the name changes
   // (the company page reuses this instance across navigations).
@@ -21,7 +21,7 @@
   });
 
   // SSR sends the raw <img>, so the browser fetches the logo before hydration wires
-  // `onerror`. When logo.dev 404s (its `fallback=404`), that error event fires before
+  // `onerror`. When the proxy 404s (a genuine miss), that error event fires before
   // the handler exists and is lost — leaving an empty broken image until a reload. On
   // mount, an already-complete image with no intrinsic width is that missed failure,
   // so fall back to the monogram straight away.

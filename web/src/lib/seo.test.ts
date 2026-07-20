@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { articleJsonLd, collectionPageJsonLd, jobPostingJsonLd, organizationJsonLd } from './seo';
-import { logoDevUrl } from './logo';
+import { companyLogoUrl } from './logo';
 import type { PostMeta } from './blog';
 import type { Company, Job } from './types';
 
@@ -135,7 +135,7 @@ describe('jobPostingJsonLd', () => {
       ORIGIN
     );
 
-    expect((ld.hiringOrganization as Record<string, unknown>).logo).toBe(logoDevUrl('Acme'));
+    expect((ld.hiringOrganization as Record<string, unknown>).logo).toBe(companyLogoUrl('Acme'));
     expect(ld.skills).toBe('Go, Kubernetes');
     expect(ld.experienceRequirements).toEqual({
       '@type': 'OccupationalExperienceRequirements',
