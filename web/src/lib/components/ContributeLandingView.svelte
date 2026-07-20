@@ -46,7 +46,7 @@
 
 <div class="flex flex-col gap-16">
   <!-- Hero -->
-  <section class="flex flex-col gap-7">
+  <section class="dot-grid -mx-4 flex flex-col gap-7 px-4 pb-4 pt-2">
     <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
       // contribute
     </p>
