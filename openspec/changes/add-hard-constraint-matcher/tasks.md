@@ -21,9 +21,9 @@
 ## 4. Integration surfaces
 
 - [ ] 4.1 Profile-match bar: assemble `JobRequirements`/`CVEvidence` at the handler and attach `blockers` to the payload when structured inputs are present; degrade to coverage-only otherwise. Handler/integration test both paths; never hide the job.
-- [ ] 4.2 matchanalysis: compute blockers before the chain; clamp the server-owned `overall_score` to `min(ScoreCap)`; derive `verdict` from the capped score. Test the cap scenario (weighted 88 → capped 60).
+- [ ] 4.2 matchanalysis: clamp `overall_score` to `min(ScoreCap)` and derive `verdict` from the capped score, applied at serve time. Test the cap scenario (weighted 88 → capped 60).
 - [ ] 4.3 matchanalysis: inject the blockers into the Stage-1 and Stage-3 prompt context as known constraints; expose blockers in the served analysis. Prompt-content test + analysis-shape test.
-- [ ] 4.4 matchanalysis: add the hard-constraint dictionary version as a fourth cache stamp; report `stale: true` when it differs. Cache-staleness test for the new stamp.
+- [ ] 4.4 matchanalysis: recompute the blockers + ceiling on read (GET) from the current job/résumé/dictionary and apply to the cached dimensions; the cache keeps its existing three stamps unchanged (D6 — no fourth stamp, no migration). Test that a dictionary change re-caps a cached analysis without marking it stale.
 - [ ] 4.5 Tailor: pass unmet blockers' `Action` strings into the tailor context as explicit "do not claim unless true" guardrails. Test the action strings reach the tailor input.
 
 ## 5. Contracts & frontend

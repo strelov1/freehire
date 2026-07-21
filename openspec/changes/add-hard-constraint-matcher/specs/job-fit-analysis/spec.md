@@ -8,10 +8,13 @@ score clamped to 0–100, plus a weighted `overall_score`, a `verdict` label dra
 controlled set {Strong Fit, Good Fit, Moderate Fit, Weak Fit, Poor Fit}, a `strengths` array,
 a `gaps` array, and a single `recommendation` string. All model output MUST be sanitized: scores
 clamped, the verdict coerced to the controlled set, and free-text fields trimmed and length/count
-bounded before it is persisted or served. The server-computed `overall_score` MUST additionally be
-clamped down to the deterministic hard-constraint ceiling (the minimum score-cap over the caller's
-unmet blockers) when any blocker is present, so a posting the caller plainly cannot meet can never
-present as a strong fit; the `verdict` label is derived from the capped `overall_score`.
+bounded before it is persisted or served. The served `overall_score` MUST additionally be clamped
+down to the deterministic hard-constraint ceiling (the minimum score-cap over the caller's unmet
+blockers) when any blocker is present, so a posting the caller plainly cannot meet can never present
+as a strong fit; the `verdict` label is derived from the capped `overall_score`. The ceiling is
+recomputed from the current job, résumé, and hard-constraint dictionary each time the analysis is
+served — for both a freshly computed and a cached analysis — so it is never stale and needs no cache
+stamp of its own.
 
 #### Scenario: Out-of-range or invalid model output
 
@@ -28,46 +31,10 @@ present as a strong fit; the `verdict` label is derived from the capped `overall
 - **WHEN** the weighted average is 88 but the caller has an unmet certification blocker with score-cap 60
 - **THEN** the served `overall_score` is 60 and the `verdict` label is derived from that capped value
 
-### Requirement: Per-(user, job) cache with staleness invalidation
+#### Scenario: Cached analysis re-caps on read after a dictionary change
 
-The system SHALL cache each analysis per `(user_id, job_id)`, stamped with the CV's upload time,
-the job's `content_hash`, the model that produced it at analysis time, and the hard-constraint
-dictionary version in effect at analysis time. `GET /api/v1/jobs/:slug/fit`
-MUST return a cached analysis only when all four stamps still equal the current CV upload time, job
-`content_hash`, model, and hard-constraint dictionary version; when any differs it MUST report the cached
-analysis as stale rather than serving it as current. A `content_hash` absent on both the stored stamp
-and the live job (a non-board job that is never re-crawled) counts as unchanged, so it does not force
-an endless recompute.
-
-#### Scenario: Fresh cache hit
-
-- **WHEN** a user GETs the fit for a job they already analyzed, and neither their CV, the job, the model, nor the hard-constraint dictionary has changed since
-- **THEN** the system returns the cached analysis with `stale: false` and makes no LLM call
-
-#### Scenario: Model upgraded since analysis
-
-- **WHEN** a user GETs the fit for a job analyzed under a previous `LLM_MODEL`
-- **THEN** the cached analysis is reported with `stale: true` so the improved model can re-analyze on request
-
-#### Scenario: CV changed since analysis
-
-- **WHEN** a user GETs the fit after re-uploading their CV
-- **THEN** the cached analysis is reported with `stale: true` so the SPA can offer a recompute, and it is not served as current
-
-#### Scenario: Job re-ingested with changed content
-
-- **WHEN** a user GETs the fit for a job whose `content_hash` changed since the analysis
-- **THEN** the cached analysis is reported with `stale: true`
-
-#### Scenario: Hard-constraint dictionary updated since analysis
-
-- **WHEN** a user GETs the fit for a job analyzed under a previous hard-constraint dictionary version
-- **THEN** the cached analysis is reported with `stale: true` so the recomputed cap reflects the current dictionary
-
-#### Scenario: No analysis yet
-
-- **WHEN** a user GETs the fit for a job they have never analyzed
-- **THEN** the system responds `200` with `has_cv` reflecting CV presence and a null analysis (no LLM call)
+- **WHEN** a cached analysis is served after the hard-constraint dictionary changed such that a blocker is now unmet
+- **THEN** the ceiling is recomputed on read and the served `overall_score` reflects the current dictionary without the cached row being marked stale
 
 ## ADDED Requirements
 
