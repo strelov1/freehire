@@ -25,8 +25,7 @@
       ? 'jobs'
       : page.url.pathname === '/companies'
         ? 'companies'
-        : /^\/companies\/[^/]+$/.test(page.url.pathname) ||
-            /^\/collections\/[^/]+$/.test(page.url.pathname)
+        : /^\/(companies|collections)\/[^/]+$/.test(page.url.pathname)
           ? 'company'
           : null,
   );
