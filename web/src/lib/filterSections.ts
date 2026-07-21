@@ -23,6 +23,8 @@ export const CATEGORY_GROUP_ORDER = [
   'Design',
   'Product & Management',
   'Go-to-market & Support',
+  'People',
+  'Business & Legal',
   'Other',
 ] as const;
 
@@ -53,9 +55,19 @@ export const CATEGORY_GROUP: Record<Category, CategoryGroup> = {
   product: 'Product & Management',
   project_management: 'Product & Management',
   management: 'Product & Management',
+  business_analysis: 'Product & Management',
+  technical_writing: 'Product & Management',
   marketing: 'Go-to-market & Support',
   sales: 'Go-to-market & Support',
   support: 'Go-to-market & Support',
+  solutions_engineering: 'Go-to-market & Support',
+  developer_relations: 'Go-to-market & Support',
+  recruiting: 'People',
+  hr: 'People',
+  finance: 'Business & Legal',
+  legal: 'Business & Legal',
+  operations: 'Business & Legal',
+  customer_success: 'Business & Legal',
   other: 'Other',
 };
 
