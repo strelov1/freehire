@@ -38,6 +38,16 @@ export const CATEGORY_LABELS: Record<string, string> = {
   marketing: 'Marketing',
   sales: 'Sales',
   support: 'Support',
+  business_analysis: 'Business Analysis',
+  solutions_engineering: 'Solutions Engineering',
+  developer_relations: 'Developer Relations',
+  technical_writing: 'Technical Writing',
+  recruiting: 'Recruiting',
+  hr: 'HR',
+  finance: 'Finance',
+  legal: 'Legal',
+  operations: 'Operations',
+  customer_success: 'Customer Success',
 };
 
 /** Seniority tokens in rank order, with labels. '' is the category-wide band. */
