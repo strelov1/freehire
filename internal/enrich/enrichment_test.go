@@ -3,6 +3,7 @@ package enrich
 import (
 	"encoding/json"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -33,7 +34,7 @@ func TestRoundTripFidelity(t *testing.T) {
 		EducationLevel:     "bachelor",
 		Skills:             []string{"go", "postgresql"},
 		Category:           "backend",
-		Domains:            []string{"fintech", "saas"},
+		Domains:            []string{"fintech", "devtools"},
 		PostingLanguage:    "en",
 		CompanyType:        "product",
 		CompanySize:        "51-200",
@@ -104,7 +105,7 @@ func TestValidateAccepts(t *testing.T) {
 	valid := []Enrichment{
 		{}, // empty payload: every field optional
 		{Seniority: "senior", WorkMode: "remote", Skills: []string{"go", "postgresql"}},
-		{Domains: []string{"fintech", "saas"}, Category: "backend"},
+		{Domains: []string{"fintech", "devtools"}, Category: "backend"},
 		// ISO and free-text fields are not enum-validated in this phase.
 		{Countries: []string{"ZZ"}, SalaryCurrency: "XXX", PostingLanguage: "qq"},
 	}
@@ -345,5 +346,18 @@ func TestSanitizeBoundsFreeTextFields(t *testing.T) {
 	}
 	if e2.SalaryCurrency != "USD" {
 		t.Errorf("SalaryCurrency = %q, want USD unchanged", e2.SalaryCurrency)
+	}
+}
+
+func TestDomainGlossCoversVocabulary(t *testing.T) {
+	for _, d := range DomainValues {
+		if strings.TrimSpace(DomainGloss[d]) == "" {
+			t.Errorf("domain %q has no gloss for the enrichment prompt", d)
+		}
+	}
+	for d := range DomainGloss {
+		if !slices.Contains(DomainValues, d) {
+			t.Errorf("DomainGloss has %q not in DomainValues", d)
+		}
 	}
 }

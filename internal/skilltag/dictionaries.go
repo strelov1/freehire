@@ -847,6 +847,79 @@ var phraseAliases = []phraseAlias{
 	{"data governance", "data-governance"},
 	{"data quality", "data-quality"},
 	{"e commerce", "ecommerce"},
+	// IT-company role skills (expand-role-taxonomy) — multi-word phrases only, so they
+	// stay precision-safe (no false match inside a larger word). Seed set; expand later.
+	// recruiting
+	{"boolean search", "boolean-search"},
+	{"talent sourcing", "talent-sourcing"},
+	{"technical screening", "technical-screening"},
+	{"candidate experience", "candidate-experience"},
+	{"employer branding", "employer-branding"},
+	{"full-cycle recruiting", "full-cycle-recruiting"}, {"full cycle recruiting", "full-cycle-recruiting"},
+	{"linkedin recruiter", "linkedin-recruiter"},
+	{"greenhouse", "greenhouse"}, {"lever", "lever"}, {"smartrecruiters", "smartrecruiters"},
+	// hr / people
+	{"employee relations", "employee-relations"},
+	{"performance management", "performance-management"},
+	{"talent management", "talent-management"},
+	{"succession planning", "succession-planning"},
+	{"compensation and benefits", "compensation-and-benefits"},
+	{"people analytics", "people-analytics"},
+	{"employee engagement", "employee-engagement"},
+	{"workday", "workday"}, {"bamboohr", "bamboohr"}, {"successfactors", "successfactors"},
+	// finance
+	{"financial modeling", "financial-modeling"},
+	{"revenue recognition", "revenue-recognition"},
+	{"accounts payable", "accounts-payable"},
+	{"accounts receivable", "accounts-receivable"},
+	{"general ledger", "general-ledger"},
+	{"financial reporting", "financial-reporting"},
+	{"quickbooks", "quickbooks"}, {"netsuite", "netsuite"}, {"xero", "xero"},
+	// legal
+	{"contract negotiation", "contract-negotiation"},
+	{"contract drafting", "contract-drafting"},
+	{"contract lifecycle management", "contract-lifecycle-management"},
+	{"due diligence", "due-diligence"},
+	{"legal research", "legal-research"},
+	{"regulatory compliance", "regulatory-compliance"},
+	{"data privacy", "data-privacy"},
+	// operations
+	{"process improvement", "process-improvement"},
+	{"vendor management", "vendor-management"},
+	{"program management", "program-management"},
+	{"strategic planning", "strategic-planning"},
+	{"stakeholder management", "stakeholder-management"},
+	// customer success
+	{"customer onboarding", "customer-onboarding"},
+	{"customer retention", "customer-retention"},
+	{"churn prevention", "churn-prevention"},
+	{"customer health score", "customer-health-score"},
+	{"gainsight", "gainsight"}, {"churnzero", "churnzero"},
+	// business analysis
+	{"requirements gathering", "requirements-gathering"},
+	{"requirements elicitation", "requirements-elicitation"},
+	{"process modeling", "process-modeling"},
+	{"gap analysis", "gap-analysis"},
+	{"user stories", "user-stories"},
+	{"acceptance criteria", "acceptance-criteria"},
+	// solutions / pre-sales
+	{"pre-sales", "pre-sales"}, {"presales", "pre-sales"},
+	{"sales engineering", "sales-engineering"},
+	{"proof of concept", "proof-of-concept"},
+	{"technical discovery", "technical-discovery"},
+	{"solution design", "solution-design"},
+	// developer relations
+	{"developer advocacy", "developer-advocacy"},
+	{"technical evangelism", "technical-evangelism"},
+	{"community management", "community-management"},
+	{"developer experience", "developer-experience"},
+	// technical writing
+	{"technical writing", "technical-writing"},
+	{"api documentation", "api-documentation"},
+	{"docs-as-code", "docs-as-code"}, {"docs as code", "docs-as-code"},
+	{"structured authoring", "structured-authoring"},
+	{"information architecture", "information-architecture"},
+	{"madcap flare", "madcap-flare"},
 }
 
 // sharedAcronyms resolve in ALL text (jobs and résumés). They are matched by their

@@ -37,17 +37,23 @@ export const CATEGORY_LABELS: Record<string, string> = {
   devops: 'DevOps',
   sre: 'SRE',
   project_management: 'Project Management',
+  hr: 'HR',
 };
 
 export const DOMAIN_LABELS: Record<string, string> = {
   fintech: 'FinTech',
   ecommerce: 'E-commerce',
-  saas: 'SaaS',
   gamedev: 'GameDev',
   edtech: 'EdTech',
   adtech: 'AdTech',
   govtech: 'GovTech',
   healthcare: 'Healthcare',
+  devtools: 'DevTools',
+  cybersecurity: 'Cybersecurity',
+  ai: 'AI',
+  hrtech: 'HRTech',
+  proptech: 'PropTech',
+  climatetech: 'ClimateTech',
 };
 
 export const COMPANY_TYPE_LABELS: Record<string, string> = { inhouse: 'In-house' };

@@ -92,7 +92,12 @@ func buildSystemPrompt(askGeo bool) string {
 	}
 	enum("relocation", RelocationValues)
 	enum("salary_period", SalaryPeriodValues)
-	enum("domains (array)", DomainValues)
+	// domains is the company's INDUSTRY (what it does), not its business model. It is
+	// glossed per-value so the model picks a real vertical; multiple may apply.
+	b.WriteString("- domains (array) — the company's industry/vertical (what it does), multiple allowed:\n")
+	for _, d := range DomainValues {
+		fmt.Fprintf(&b, "    %s: %s\n", d, DomainGloss[d])
+	}
 	enum("company_type", CompanyTypeValues)
 	enum("company_size", CompanySizeValues)
 

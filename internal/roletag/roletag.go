@@ -69,6 +69,17 @@ var categoryNoun = map[string]string{
 	"marketing":           "Marketing Specialist",
 	"sales":               "Sales Specialist",
 	"support":             "Support Specialist",
+	// IT-company roles added by expand-role-taxonomy.
+	"business_analysis":     "Business Analyst",
+	"solutions_engineering": "Solutions Engineer",
+	"developer_relations":   "Developer Advocate",
+	"technical_writing":     "Technical Writer",
+	"recruiting":            "Recruiter",
+	"hr":                    "HR Manager",
+	"finance":               "Finance Manager",
+	"legal":                 "Legal Counsel",
+	"operations":            "Operations Manager",
+	"customer_success":      "Customer Success Manager",
 }
 
 // namedRoleTable is the curated set of roles that do not decompose into the

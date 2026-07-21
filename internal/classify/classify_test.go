@@ -44,11 +44,12 @@ func TestParse(t *testing.T) {
 		{"Network Engineer", "", "network_engineering"},
 		{"Senior Network Administrator", "senior", "network_engineering"},
 		{"Сетевой инженер", "", "network_engineering"},
-		{"Reactor Operations Manager", "", "management"},
-		// A functional prefix wins over a bare "manager" (consistent precedence).
+		// A functional prefix wins over a bare "manager" (consistent precedence);
+		// "operations" is now a recognized function, so these resolve to it.
+		{"Reactor Operations Manager", "", "operations"},
 		{"Sales Manager", "", "sales"},
 		{"Support Manager", "", "support"},
-		{"Operations Manager", "", "management"},
+		{"Operations Manager", "", "operations"},
 		// AI-application roles (RAG/agents/LLM/prompt/applied AI) are their own
 		// category; classic ML and explicitly ML-carrying titles stay ml_ai.
 		{"AI Engineer", "", "ai_engineering"},
@@ -131,7 +132,7 @@ func TestParse_RoleExpansionBatch(t *testing.T) {
 		{"SDR", "sales"},
 		{"Business Development Manager", "sales"},
 		{"Account Manager", "sales"},
-		{"Customer Success Manager", "support"},
+		{"Customer Success Manager", "customer_success"}, // split out of support
 		{"Help Desk Technician", "support"},
 		{"Customer Service Specialist", "support"},
 		{"Copywriter", "marketing"},
@@ -146,10 +147,78 @@ func TestParse_RoleExpansionBatch(t *testing.T) {
 		{"Test Automation Engineer", "qa"},
 
 		// precision — existing behavior must be unchanged
-		{"Cloud Architect", "architecture"},  // not devops
-		{"Operations Manager", "management"}, // bare-manager fallback intact
-		{"Sales Manager", "sales"},           // functional prefix still wins
-		{"Growth Engineer", ""},              // "growth" deliberately not added (ambiguous)
+		{"Cloud Architect", "architecture"}, // not devops
+		{"Sales Manager", "sales"},          // functional prefix still wins
+		{"Growth Engineer", ""},             // "growth" deliberately not added (ambiguous)
+	}
+	for _, c := range cases {
+		if got := Parse(c.title).Category; got != c.wantCategory {
+			t.Errorf("Parse(%q).Category = %q, want %q", c.title, got, c.wantCategory)
+		}
+	}
+}
+
+// TestParse_ITCompanyRoles covers the ten IT-company role categories added by the
+// expand-role-taxonomy change, with the fall-through guards that keep the terminal
+// analyst->data_analytics / manager->management aliases (and bare sales / ux) from
+// stealing a more specific role.
+func TestParse_ITCompanyRoles(t *testing.T) {
+	cases := []struct{ title, wantCategory string }{
+		// recruiting
+		{"Technical Recruiter", "recruiting"},
+		{"IT Recruiter", "recruiting"},
+		{"Talent Acquisition Specialist", "recruiting"},
+		{"Рекрутер", "recruiting"},
+		// hr
+		{"HR Business Partner", "hr"},
+		{"HRBP", "hr"},
+		{"People Operations Manager", "hr"},
+		{"Менеджер по персоналу", "hr"},
+		// finance — guards against analyst-> and manager-> fall-throughs
+		{"Financial Analyst", "finance"},
+		{"Chief Financial Officer", "finance"},
+		{"Bookkeeper", "finance"},
+		{"Finance Manager", "finance"},
+		{"Главный бухгалтер", "finance"},
+		// legal
+		{"Legal Counsel", "legal"},
+		{"Compliance Officer", "legal"},
+		{"Paralegal", "legal"},
+		{"Юрисконсульт", "legal"},
+		// operations — guard against manager-> fall-through
+		{"Operations Manager", "operations"},
+		{"Office Manager", "operations"},
+		{"Chief of Staff", "operations"},
+		{"Специалист по закупкам", "operations"},
+		// customer_success — split out of support
+		{"Customer Success Manager", "customer_success"},
+		{"Onboarding Specialist", "customer_success"},
+		{"Renewals Manager", "customer_success"},
+		// business_analysis — guard against analyst-> fall-through; BI routes to analytics
+		{"Business Analyst", "business_analysis"},
+		{"Systems Analyst", "business_analysis"},
+		{"Системный аналитик", "business_analysis"},
+		{"BI Analyst", "data_analytics"},
+		{"Business Intelligence Analyst", "data_analytics"},
+		// solutions_engineering — guard: beats bare sales
+		{"Sales Engineer", "solutions_engineering"},
+		{"Solutions Consultant", "solutions_engineering"},
+		{"Пресейл-инженер", "solutions_engineering"},
+		// developer_relations
+		{"Developer Advocate", "developer_relations"},
+		{"DevRel", "developer_relations"},
+		{"Technical Evangelist", "developer_relations"},
+		// technical_writing — guard: beats ux/designer
+		{"Technical Writer", "technical_writing"},
+		{"UX Writer", "technical_writing"},
+		{"Content Designer", "technical_writing"},
+		{"Технический писатель", "technical_writing"},
+
+		// precision — existing behavior must be unchanged
+		{"Solutions Architect", "architecture"}, // stays architecture, not solutions_engineering
+		{"Content Writer", "marketing"},         // stays marketing, not technical_writing
+		{"Account Manager", "sales"},            // stays sales, not customer_success
+		{"Data Analyst", "data_analytics"},      // plain analyst role unaffected
 	}
 	for _, c := range cases {
 		if got := Parse(c.title).Category; got != c.wantCategory {

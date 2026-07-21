@@ -57,6 +57,28 @@ func TestParse(t *testing.T) {
 // Separator-insensitive matching (skilltag-matching-fixes): '-'/'_' between
 // alphanumerics are equivalent to a space, so hyphenated/underscored multi-word
 // terms resolve like their space form — without touching punctuated canonicals.
+func TestParse_ITCompanyRoleSkills(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{"recruiting", "Sourcing with boolean search and employer branding on Greenhouse", []string{"boolean-search", "employer-branding", "greenhouse"}},
+		{"finance", "Own financial modeling and revenue recognition in NetSuite", []string{"financial-modeling", "netsuite", "revenue-recognition"}},
+		{"business analysis", "Requirements gathering, process modeling and user stories", []string{"process-modeling", "requirements-gathering", "user-stories"}},
+		{"customer success", "Drive customer onboarding and churn prevention via Gainsight", []string{"churn-prevention", "customer-onboarding", "gainsight"}},
+		{"technical writing", "API documentation with a docs-as-code workflow", []string{"api", "api-documentation", "docs-as-code"}},
+		{"unknown emits nothing", "great communicator and team player", nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Parse(tc.in); !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("Parse(%q) = %#v, want %#v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestParse_SeparatorInsensitive(t *testing.T) {
 	cases := []struct {
 		name string

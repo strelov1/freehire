@@ -117,7 +117,11 @@ var (
 		"data_engineering", "data_science", "data_analytics", "ml_ai", "ai_engineering",
 		"qa", "security", "hardware", "embedded", "blockchain", "architecture",
 		"design", "product", "project_management", "management",
-		"marketing", "sales", "support", "other",
+		"marketing", "sales", "support",
+		// IT-company roles added by expand-role-taxonomy (4 technical, 6 business)
+		"business_analysis", "solutions_engineering", "developer_relations", "technical_writing",
+		"recruiting", "hr", "finance", "legal", "operations", "customer_success",
+		"other",
 	}
 	// NonTechCategories are the CategoryValues for confidently non-technical roles
 	// that are excluded from AI enrichment: the derived category is a source fact
@@ -125,26 +129,67 @@ var (
 	// keeps LLM budget off jobs no engineer will see. It is a blacklist, not a
 	// whitelist — only categories we are sure are non-technical are dropped; an
 	// empty/"other"/unrecognized category still enqueues, so a tech job the title
-	// dictionary could not place is never silently skipped.
-	NonTechCategories = []string{"marketing", "sales", "support", "management"}
+	// dictionary could not place is never silently skipped. The back-office IT-company
+	// roles (recruiting/hr/finance/legal/operations/customer_success) join this set:
+	// surfaced as facets but kept out of the LLM enrich budget, like marketing/sales.
+	NonTechCategories = []string{
+		"marketing", "sales", "support", "management",
+		"recruiting", "hr", "finance", "legal", "operations", "customer_success",
+	}
 	// TechCategories are the CategoryValues for recognized technical roles: every
 	// category that is neither a NonTechCategories member nor the residual "other".
 	// It is the single source of truth for "is this a technical category?" that the
 	// is_tech derivation reads, so the tech/non-tech/other split stays in one place;
 	// a test asserts the three sets partition CategoryValues exactly. Product/design/
-	// project_management count as technical here (IT-industry roles), matching the
-	// blacklist that treats only marketing/sales/support/management as non-tech.
+	// project_management — and the IT-product-adjacent business_analysis/
+	// solutions_engineering/developer_relations/technical_writing — count as technical
+	// here (IT-industry roles), so they are enriched; the back-office roles are not.
 	TechCategories = []string{
 		"backend", "frontend", "fullstack", "mobile", "devops", "sre",
 		"network_engineering",
 		"data_engineering", "data_science", "data_analytics", "ml_ai", "ai_engineering",
 		"qa", "security", "hardware", "embedded", "blockchain", "architecture",
 		"design", "product", "project_management",
+		"business_analysis", "solutions_engineering", "developer_relations", "technical_writing",
 	}
+	// DomainValues is the industry/vertical of the company or product behind a job
+	// (what the company does), an LLM-emitted multi-value enum glossed per-value in the
+	// enrichment prompt. Each value names a vertical, never a business model — "saas"
+	// was dropped for that reason (it overlaps every vertical); its coverage moved to
+	// "devtools" and the functional verticals. Synonyms fold into one canonical
+	// (web3->crypto, insurtech->fintech, martech->adtech, social/dating->media,
+	// biotech->healthcare, retail->ecommerce, greentech->climatetech).
 	DomainValues = []string{
-		"fintech", "gambling", "ecommerce", "crypto", "healthcare",
-		"saas", "gamedev", "edtech", "adtech", "govtech",
-		"media", "travel", "logistics", "other",
+		"fintech", "crypto", "ecommerce", "gambling", "gamedev", "media", "travel",
+		"healthcare", "edtech", "govtech",
+		"devtools", "cybersecurity", "ai", "hrtech", "adtech", "proptech",
+		"logistics", "mobility", "climatetech", "other",
+	}
+	// DomainGloss is the one-line definition of each domain, supplied to the enrichment
+	// LLM so it classifies on what the company does rather than guessing from a bare
+	// name. Every DomainValues entry has a gloss (asserted by a test). "ai" is scoped to
+	// core-product AI so it does not swallow every company that merely uses AI.
+	DomainGloss = map[string]string{
+		"fintech":       "payments, banking, lending, wealth/trading, insurtech, regtech (traditional financial rails)",
+		"crypto":        "blockchain, web3, DeFi, tokens/NFTs, exchanges, on-chain infra",
+		"ecommerce":     "online retail, marketplaces, D2C, retail/checkout/fulfillment tech",
+		"gambling":      "betting, casino/iGaming, sportsbook, lottery",
+		"gamedev":       "video-game development, publishing, game engines/infra",
+		"media":         "content, publishing, streaming, entertainment, social networks, dating, creator economy",
+		"travel":        "travel, hospitality, tourism, booking",
+		"healthcare":    "health-tech, medtech, digital health, biotech, pharma, wellness",
+		"edtech":        "education, e-learning, training, LMS",
+		"govtech":       "government, public sector, civic tech",
+		"devtools":      "developer tools, cloud infra, databases, DevOps, APIs, IT infrastructure",
+		"cybersecurity": "security software, identity, threat detection, appsec, privacy, fraud",
+		"ai":            "company whose CORE PRODUCT is AI/ML (model providers, AI/ML platforms, applied-AI) — NOT merely \"uses AI\"",
+		"hrtech":        "recruiting, HR, payroll, people-ops, staffing software",
+		"adtech":        "advertising and marketing technology (ad serving, attribution, CRM, marketing automation)",
+		"proptech":      "real-estate and construction technology",
+		"logistics":     "supply chain, freight, delivery, fleet, warehousing (goods)",
+		"mobility":      "automotive, autonomous vehicles, ride-hailing, transport of people",
+		"climatetech":   "climate, clean/renewable energy, sustainability",
+		"other":         "none of the above (incl. generic horizontal productivity/CRM SaaS with no vertical)",
 	}
 	CompanyTypeValues = []string{"product", "startup", "outsource", "outstaff", "agency", "inhouse", "government"}
 	CompanySizeValues = []string{"1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"}
