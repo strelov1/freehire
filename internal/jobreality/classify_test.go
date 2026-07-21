@@ -16,7 +16,7 @@ func base() Input {
 		HasPostedAt:      true,
 		RepostCount:      1,
 		MassPostingCount: 1,
-		EvergreenText:    false,
+		HasEvergreenText: false,
 	}
 }
 
@@ -55,7 +55,7 @@ func TestClassify_LikelyEvergreenOnConvergence(t *testing.T) {
 	in := base()
 	in.CreatedAt, in.PostedAt = daysAgo(240), daysAgo(240)
 	in.RepostCount = 6
-	in.EvergreenText = true
+	in.HasEvergreenText = true
 	res := Classify(in)
 	if res.Class != ClassLikelyEvergreen {
 		t.Errorf("class = %q, want %q", res.Class, ClassLikelyEvergreen)
@@ -95,7 +95,7 @@ func TestClassify_FakeFreshnessRecordedNotVerdict(t *testing.T) {
 	in.CreatedAt = daysAgo(240)
 	in.PostedAt, in.HasPostedAt = daysAgo(1), true
 	res := Classify(in)
-	if !res.Evidence.FakeFreshness {
+	if !res.Evidence.IsFakeFreshness {
 		t.Error("expected FakeFreshness evidence when posted recent but first-seen old")
 	}
 	if res.Class == ClassLikelyEvergreen {
@@ -106,7 +106,7 @@ func TestClassify_FakeFreshnessRecordedNotVerdict(t *testing.T) {
 func TestClassify_NoFakeFreshnessWhenPostedMatchesFirstSeen(t *testing.T) {
 	in := base()
 	in.CreatedAt, in.PostedAt = daysAgo(240), daysAgo(240)
-	if res := Classify(in); res.Evidence.FakeFreshness {
+	if res := Classify(in); res.Evidence.IsFakeFreshness {
 		t.Error("did not expect FakeFreshness when posted date matches first-seen")
 	}
 }
@@ -114,7 +114,7 @@ func TestClassify_NoFakeFreshnessWhenPostedMatchesFirstSeen(t *testing.T) {
 func TestClassify_Deterministic(t *testing.T) {
 	in := base()
 	in.CreatedAt = daysAgo(200)
-	in.RepostCount, in.MassPostingCount, in.EvergreenText = 4, 6, true
+	in.RepostCount, in.MassPostingCount, in.HasEvergreenText = 4, 6, true
 	if Classify(in) != Classify(in) {
 		t.Error("classification not deterministic for identical input")
 	}

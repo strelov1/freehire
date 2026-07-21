@@ -27,7 +27,7 @@ const (
 // Input is the history + text facts a classification reads. RepostCount is the number
 // of distinct external_ids of any status sharing the role fingerprint (repost
 // history); MassPostingCount is the same restricted to open jobs (concurrent
-// mass-posting). Both are at least 1 (the job itself). EvergreenText is the dictionary
+// mass-posting). Both are at least 1 (the job itself). HasEvergreenText is the dictionary
 // result (see HasEvergreenMarker). PostedAt is honored only when HasPostedAt is set.
 type Input struct {
 	Now              time.Time
@@ -36,7 +36,7 @@ type Input struct {
 	HasPostedAt      bool
 	RepostCount      int
 	MassPostingCount int
-	EvergreenText    bool
+	HasEvergreenText bool
 }
 
 // Evidence is the observable facts behind a classification — surfaced so the UI states
@@ -45,7 +45,7 @@ type Evidence struct {
 	AgeDays          int
 	RepostCount      int
 	MassPostingCount int
-	FakeFreshness    bool
+	IsFakeFreshness  bool
 }
 
 // Result is a classification and the evidence that produced it.
@@ -70,7 +70,7 @@ func Classify(in Input) Result {
 	reposted := in.RepostCount-in.MassPostingCount >= repostThreshold
 
 	signals := 0
-	for _, on := range []bool{old, reposted, massPosted, in.EvergreenText} {
+	for _, on := range []bool{old, reposted, massPosted, in.HasEvergreenText} {
 		if on {
 			signals++
 		}
@@ -82,7 +82,7 @@ func Classify(in Input) Result {
 	switch {
 	case signals >= convergence:
 		class = ClassLikelyEvergreen
-	case ageDays <= freshWindowDays && !in.EvergreenText:
+	case ageDays <= freshWindowDays && !in.HasEvergreenText:
 		class = ClassFresh
 	}
 
@@ -92,7 +92,7 @@ func Classify(in Input) Result {
 			AgeDays:          ageDays,
 			RepostCount:      in.RepostCount,
 			MassPostingCount: in.MassPostingCount,
-			FakeFreshness:    fakeFreshness,
+			IsFakeFreshness:  fakeFreshness,
 		},
 	}
 }

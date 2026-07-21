@@ -17,7 +17,7 @@ type Reality struct {
 	AgeDays          int    `json:"age_days"`
 	RepostCount      int    `json:"repost_count"`
 	MassPostingCount int    `json:"mass_posting_count"`
-	FakeFreshness    bool   `json:"fake_freshness"`
+	IsFakeFreshness  bool   `json:"fake_freshness"`
 }
 
 // ClassifyReality derives a job's reality signal from its row, the current time, and
@@ -31,13 +31,13 @@ func ClassifyReality(j db.Job, now time.Time, repostCount, massPostingCount int)
 		HasPostedAt:      j.PostedAt.Valid,
 		RepostCount:      repostCount,
 		MassPostingCount: massPostingCount,
-		EvergreenText:    jobreality.HasEvergreenMarker(j.Description),
+		HasEvergreenText: jobreality.HasEvergreenMarker(j.Description),
 	})
 	return Reality{
 		Class:            res.Class,
 		AgeDays:          res.Evidence.AgeDays,
 		RepostCount:      res.Evidence.RepostCount,
 		MassPostingCount: res.Evidence.MassPostingCount,
-		FakeFreshness:    res.Evidence.FakeFreshness,
+		IsFakeFreshness:  res.Evidence.IsFakeFreshness,
 	}
 }

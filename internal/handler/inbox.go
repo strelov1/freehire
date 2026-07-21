@@ -66,10 +66,10 @@ type emailBody struct {
 // inboxFilters are the shared listing filters carried by the query string:
 // ?source=(gmail|hosted), ?unread=1, ?status=<signal>, ?q=<term>.
 type inboxFilters struct {
-	Source string
-	Unread bool
-	Status string
-	Q      string
+	Source   string
+	IsUnread bool
+	Status   string
+	Q        string
 }
 
 // parseInboxFilters reads and validates the inbox filter query params. Source and
@@ -84,7 +84,7 @@ func parseInboxFilters(c *fiber.Ctx) (inboxFilters, error) {
 	if status != "" && !mailclassify.IsValidSignal(status) {
 		return inboxFilters{}, fiber.NewError(fiber.StatusBadRequest, "unknown label")
 	}
-	return inboxFilters{Source: src, Unread: c.QueryBool("unread"), Status: status, Q: c.Query("q")}, nil
+	return inboxFilters{Source: src, IsUnread: c.QueryBool("unread"), Status: status, Q: c.Query("q")}, nil
 }
 
 // GetInbox returns the caller's mail as a flat list, newest first, excluding
@@ -102,14 +102,14 @@ func (a *API) GetInbox(c *fiber.Ctx) error {
 	}
 	limit, offset := pageParams(c) // default 20, clamped
 	rows, err := a.queries.ListEmails(c.Context(), db.ListEmailsParams{
-		UserID: userID, Src: f.Source, Unread: f.Unread, Status: f.Status, Q: f.Q,
+		UserID: userID, Src: f.Source, Unread: f.IsUnread, Status: f.Status, Q: f.Q,
 		Lim: int32(limit), Off: int32(offset),
 	})
 	if err != nil {
 		return err
 	}
 	total, err := a.queries.CountEmails(c.Context(), db.CountEmailsParams{
-		UserID: userID, Src: f.Source, Unread: f.Unread, Status: f.Status, Q: f.Q,
+		UserID: userID, Src: f.Source, Unread: f.IsUnread, Status: f.Status, Q: f.Q,
 	})
 	if err != nil {
 		return err

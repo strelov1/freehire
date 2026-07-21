@@ -28,7 +28,7 @@ func TestClassifyReality_MapsConvergentSignalsToVerdict(t *testing.T) {
 	if r.RepostCount != 6 {
 		t.Errorf("repostCount = %d, want 6", r.RepostCount)
 	}
-	if !r.FakeFreshness {
+	if !r.IsFakeFreshness {
 		t.Error("expected FakeFreshness (posted 1d over first-seen 240d)")
 	}
 }
@@ -44,7 +44,7 @@ func TestClassifyReality_FreshJobHasNoEvidence(t *testing.T) {
 	if r.Class != "fresh" {
 		t.Errorf("class = %q, want fresh", r.Class)
 	}
-	if r.FakeFreshness {
+	if r.IsFakeFreshness {
 		t.Error("did not expect FakeFreshness on a genuinely new job")
 	}
 }
