@@ -89,13 +89,7 @@ func (r *QueriesRepository) Record(ctx context.Context, in RecordInput) (Contrib
 		Source:      pgconv.Text(in.Source),
 		Board:       pgconv.Text(in.Board),
 	})
-	if err != nil {
-		if pgerr.IsUniqueViolation(err) {
-			return Contribution{}, ErrBoardAlreadyContributed
-		}
-		return Contribution{}, err
-	}
-	return fromRow(row), nil
+	return recordResult(row, err)
 }
 
 // RecordReview inserts an unrecognized-but-valid link for manual review: source/board unset,
@@ -107,6 +101,13 @@ func (r *QueriesRepository) RecordReview(ctx context.Context, submittedBy int64,
 		SubmittedBy: submittedBy,
 		URL:         url,
 	})
+	return recordResult(row, err)
+}
+
+// recordResult maps an insert result to the domain type: a unique violation (a duplicate board
+// or a re-submitted review url) becomes ErrBoardAlreadyContributed, keeping that mapping in one
+// place for both insert paths.
+func recordResult(row db.LinkContribution, err error) (Contribution, error) {
 	if err != nil {
 		if pgerr.IsUniqueViolation(err) {
 			return Contribution{}, ErrBoardAlreadyContributed
