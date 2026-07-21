@@ -1,0 +1,21 @@
+---
+title: Paste any careers link — we'll review the ones we don't recognize
+date: 2026-07-21
+summary: Contributed a job link from an ATS we don't support yet? Instead of a flat rejection, we now save it for a manual look — and credit you if we can start pulling its jobs.
+type: changelog
+tags:
+  - contributions
+  - credits
+draft: false
+---
+
+When you [contribute a board](/contribute), we read the link and figure out which ATS it's
+from. If it's one we know, the company's jobs start flowing in and you earn an AI credit.
+
+Until now, a link we couldn't place got a flat "not a supported ATS" — and was lost. That
+was throwing away real leads: careers pages on tools we simply hadn't wired up yet.
+
+Now those links are kept. Paste something we don't recognize and you'll see it land in your
+contributions marked **under review** — no credit yet, but not gone either. We check by
+hand whether we can pull jobs from that source; if we can, you get the credit. Recognized
+boards still credit instantly, exactly as before.
