@@ -135,7 +135,8 @@ company facet set: **collection**, **region**, **country**, **industry** (domain
 closed-vocabulary option registries (country is a searchable select over the country
 list; the others are pill/select controls over their fixed vocabularies). On desktop
 the sidebar SHALL show the applied-facet chips plus an **All filters** button opening
-the modal; on narrow viewports the modal SHALL open from a pinned left-edge tab. As
+the modal; the modal SHALL also be opened from the header search box's filter trigger
+(see the `header-filter-trigger` capability) on every viewport. As
 in the jobs modal, facet edits SHALL be staged and applied on **Show results**;
 applying SHALL refetch the list against the corresponding repeatable API facet
 parameters and mirror the active facets into the URL query string, so a filtered view
