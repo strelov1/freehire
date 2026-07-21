@@ -113,12 +113,17 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 		t.Fatalf("seed saved search: %v", err)
 	}
 
-	// "viewed" is the all-traffic total: SUM(jobs.view_count), maintained by the
-	// nginx-log worker, not derived from user_jobs. Seed counts 5 + 3 + 0 = 8.
+	// "viewed" is the all-traffic total: SUM(job_daily_views.uniques), the nginx-log
+	// worker's rollup, not derived from user_jobs. Summed from the small rollup (not
+	// SUM over the 6M-row jobs table, which seqscans for ~90s). Seed 5 + 2 + 1 = 8
+	// across days/jobs.
 	if _, err := pool.Exec(ctx,
-		`UPDATE jobs SET view_count = CASE id WHEN $1 THEN 5 WHEN $2 THEN 3 ELSE 0 END`,
+		`INSERT INTO job_daily_views (day, job_id, uniques) VALUES
+		   (DATE '2026-07-20', $1, 5),
+		   (DATE '2026-07-20', $2, 2),
+		   (DATE '2026-07-19', $1, 1)`,
 		j1, j2); err != nil {
-		t.Fatalf("seed view_count: %v", err)
+		t.Fatalf("seed job_daily_views: %v", err)
 	}
 
 	if c := get(); c.Saved != 1 || c.Applied != 1 || c.Viewed != 8 ||

@@ -4,16 +4,18 @@
 The system SHALL expose an unauthenticated `GET /api/v1/stats/engagement` endpoint
 returning aggregate interaction counts. `saved` and `applied` are computed
 directly from `user_jobs` (rows whose respective timestamp is set). `viewed` is
-the total job views across all traffic, computed as `SUM(jobs.view_count)` so it
+the total job views across all traffic, computed as `SUM(job_daily_views.uniques)`
+(the worker's per-day rollup — a `SUM` over the multi-million-row `jobs` table would
+seqscan and time the endpoint out) so it
 reflects anonymous, signed-in, and API views (see `view-count-aggregation` and
 `job-engagement-counts`). No rollup precomputation is required.
 
 #### Scenario: Counts returned
 - **WHEN** a client requests `GET /api/v1/stats/engagement`
-- **THEN** the response is `{"data": {"saved": <n>, "applied": <n>, "viewed": <n>}}` where `saved` and `applied` are counts of `user_jobs` rows with the respective timestamp set, and `viewed` is `SUM(jobs.view_count)`
+- **THEN** the response is `{"data": {"saved": <n>, "applied": <n>, "viewed": <n>}}` where `saved` and `applied` are counts of `user_jobs` rows with the respective timestamp set, and `viewed` is `SUM(job_daily_views.uniques)`
 
 #### Scenario: viewed reflects all traffic
-- **WHEN** views have been aggregated from nginx logs into `jobs.view_count`
+- **WHEN** views have been aggregated from nginx logs into `job_daily_views`
 - **THEN** the `viewed` figure includes those anonymous and API views, not only signed-in interactions
 
 #### Scenario: No authentication required
