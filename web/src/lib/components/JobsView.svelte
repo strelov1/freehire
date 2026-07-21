@@ -218,6 +218,7 @@
   // and the "Show N jobs" total — match the list. Disjunctive so a selected facet
   // still shows its siblings' counts.
   const stagedCounts = (params: URLSearchParams) => {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient: built, mutated, passed to the API once; not reactive state
     const p = new URLSearchParams(params);
     for (const [k, v] of Object.entries(scope)) p.set(k, v);
     return api.facetCounts(p, { disjunctive: true });
@@ -304,6 +305,7 @@
   function openSwipe() {
     const params = scopedParams();
     const qs = params.toString();
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() applied to the path; the rule can't see through the appended query string
     goto(resolve('/jobs/swipe') + (qs ? `?${qs}` : ''));
   }
 

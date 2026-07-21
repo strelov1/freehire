@@ -97,6 +97,7 @@
         <RefreshCw class="size-4" />
         <span class="hidden xl:inline">Refresh</span>
       </button>
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- external CV PDF API URL, not an internal route -->
       <a
         href={cvUrl}
         target="_blank"
@@ -104,6 +105,7 @@
         title="Open the CV PDF in a new tab"
         class="inline-flex items-center gap-1 rounded px-2 py-1 text-muted-foreground transition-colors hover:text-foreground"
       >
+        <!-- eslint-enable svelte/no-navigation-without-resolve -->
         <ExternalLink class="size-4" />
         <span class="hidden xl:inline">Open PDF</span>
       </a>

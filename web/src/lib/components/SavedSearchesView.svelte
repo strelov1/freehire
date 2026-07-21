@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Check, Pencil, Share2, Trash2 } from '@lucide/svelte';
+  import { resolve } from '$app/paths';
   import { ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
@@ -287,7 +288,7 @@
               <!-- Shared: the public link, its author label, copy, and unshare. -->
               <div class="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-secondary/50 px-3 py-2">
                 <a
-                  href={`/b/${s.public_slug}`}
+                  href={resolve('/b/[slug]', { slug: s.public_slug })}
                   class="min-w-0 truncate text-xs text-brand-strong underline-offset-4 hover:underline"
                 >
                   /b/{s.public_slug}

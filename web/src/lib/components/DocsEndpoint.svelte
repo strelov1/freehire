@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Badge } from '$lib/ui';
+  import { resolve } from '$app/paths';
   import DocsCodeBlock from './DocsCodeBlock.svelte';
   import { BASE_URL, AUTH_LABELS, type Auth, type Endpoint, type Param } from '$lib/docs/api-spec';
   import { METHOD_CHIP, inlineCode } from '$lib/docs/format';
@@ -69,6 +70,7 @@
 
   <p class="mt-5 text-lg leading-relaxed text-foreground">{ep.summary}</p>
   {#if ep.description}
+    <!-- eslint-disable-next-line svelte/no-at-html-tags -- inlineCode escapes &<> then wraps static api-spec constants; no user data -->
     <p class="mt-3 leading-relaxed text-muted-foreground">{@html inlineCode(ep.description)}</p>
   {/if}
 
@@ -81,7 +83,8 @@
   {#if ep.filterable}
     <p class="mt-4 text-sm text-muted-foreground">
       Plus every filter in
-      <a href="/docs/api#filtering-jobs" class="font-medium text-brand-strong underline-offset-4 hover:underline"
+      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() applied to the /docs/api path; the rule can't see through the appended #fragment -->
+      <a href={`${resolve('/docs/api')}#filtering-jobs`} class="font-medium text-brand-strong underline-offset-4 hover:underline"
         >Filtering jobs</a
       >.
     </p>
@@ -115,6 +118,7 @@
             {/if}
           </dt>
           <dd class="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+            <!-- eslint-disable-next-line svelte/no-at-html-tags -- inlineCode escapes &<> then wraps static api-spec constants; no user data -->
             {@html inlineCode(p.description)}{#if p.example}<span class="ml-1">Example
                 <code class="rounded bg-secondary px-1 py-0.5 font-mono text-[12px] text-foreground/80">{p.example}</code
                 ></span

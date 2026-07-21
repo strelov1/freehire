@@ -3,6 +3,7 @@
   import { ArrowRight, LoaderCircle, X } from '@lucide/svelte';
   import type { RailEntry, RailSection } from '$lib/filterSections';
   import type { FacetCounts } from '$lib/types';
+  import { focusTrap } from '$lib/actions/focusTrap';
 
   // The reusable two-pane filter-modal chrome: backdrop, header, the sectioned left
   // rail, and the deferred footer (Clear all / Apply / live preview). It knows nothing
@@ -177,6 +178,7 @@
       role="dialog"
       aria-modal="true"
       aria-label={title}
+      {@attach focusTrap()}
     >
       <!-- header -->
       <div class="flex items-center gap-3 border-b border-border px-4 py-3">

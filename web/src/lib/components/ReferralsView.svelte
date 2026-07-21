@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { replaceState } from '$app/navigation';
   import { FileText } from '@lucide/svelte';
@@ -123,7 +124,7 @@
   }
 
   // ── Incoming: mark contacted / declined ─────────────────────────────────
-  async function resolve(req: IncomingReferralRequest, status: 'contacted' | 'declined') {
+  async function resolveRequest(req: IncomingReferralRequest, status: 'contacted' | 'declined') {
     try {
       await api.resolveReferral(req.id, status);
       // Drop it from the open inbox — resolved requests leave the pool.
@@ -181,7 +182,7 @@
         {#each requests.value as r (r.id)}
           <tr class="border-t border-border">
             <td class="py-3 pr-4 font-medium">
-              <a href="/companies/{r.company_slug}" class="flex items-center gap-2 hover:underline">
+              <a href={resolve('/companies/[slug]', { slug: r.company_slug })} class="flex items-center gap-2 hover:underline">
                 <CompanyLogo name={r.company_name || r.company_slug} size="size-6" />
                 <span class="min-w-0 truncate">{r.company_name || r.company_slug}</span>
               </a>
@@ -300,6 +301,7 @@
             {#if req.contact_telegram}<code class="rounded bg-muted px-1.5 py-0.5 text-xs">{req.contact_telegram}</code>{/if}
             {#if req.contact_email}<code class="rounded bg-muted px-1.5 py-0.5 text-xs">{req.contact_email}</code>{/if}
             {#if req.linkedin_url}
+              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external LinkedIn URL, not an internal route -->
               <a href={req.linkedin_url} target="_blank" rel="noopener" class="text-brand-strong hover:underline">LinkedIn ↗</a>
             {/if}
           </div>
@@ -309,8 +311,8 @@
               <FileText class="size-4" /> View CV
             </Button>
             <span class="flex-1"></span>
-            <Button variant="primary" size="sm" onclick={() => resolve(req, 'contacted')}>Mark contacted</Button>
-            <Button variant="outline" size="sm" onclick={() => resolve(req, 'declined')}>Decline</Button>
+            <Button variant="primary" size="sm" onclick={() => resolveRequest(req, 'contacted')}>Mark contacted</Button>
+            <Button variant="outline" size="sm" onclick={() => resolveRequest(req, 'declined')}>Decline</Button>
           </div>
         </div>
       {/each}

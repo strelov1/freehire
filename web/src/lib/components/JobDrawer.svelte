@@ -17,6 +17,7 @@
   import { statusLabel, statusClass } from '$lib/emailStatus';
   import { avatarInitials, avatarColor } from '$lib/avatar';
   import type { MyJob, ApplicationEmail } from '$lib/types';
+  import { focusTrap } from '$lib/actions/focusTrap';
 
   let {
     item,
@@ -147,7 +148,13 @@
 
 <!-- Fullscreen job panel (like the swipe deck): a centered column with a fixed
      header + pill tabs, a scrolling tab body, and a pinned View-job footer. -->
-<aside class="fixed inset-0 z-50 flex flex-col bg-background text-foreground" aria-label="Job details">
+<div
+  class="fixed inset-0 z-50 flex flex-col bg-background text-foreground"
+  role="dialog"
+  aria-modal="true"
+  aria-label="Job details"
+  {@attach focusTrap()}
+>
   <!-- Header: logo · title · company · close, then meta pills and tabs -->
   <div class="shrink-0 border-b border-border">
     <div class="mx-auto flex w-full max-w-2xl flex-col gap-4 px-5 pb-3 pt-5 sm:px-6">
@@ -379,7 +386,7 @@
       </Button>
     </div>
   </div>
-</aside>
+</div>
 
 <style>
   /* Tab rail scrolls horizontally on narrow screens without a visible scrollbar. */

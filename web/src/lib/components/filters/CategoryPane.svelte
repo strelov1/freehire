@@ -33,11 +33,12 @@
 
 <FacetHeader {store} param="category" label="Specialization" />
 
-<div class="mb-4 flex items-center gap-2 rounded-lg border border-input px-3">
+<div class="mb-4 flex items-center gap-2 rounded-lg border border-input px-3 focus-within:ring-2 focus-within:ring-ring">
   <Search class="size-4 shrink-0 text-muted-foreground" />
   <input
     bind:value={query}
     placeholder="Search specializations…"
+    aria-label="Search specializations"
     class="h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
   />
 </div>

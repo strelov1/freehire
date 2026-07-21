@@ -59,11 +59,12 @@
       {:else if applications.length === 0}
         <p class="p-3 text-xs text-muted-foreground">No applications yet — track a job first.</p>
       {:else}
-        <div class="flex items-center gap-1.5 border-b border-border px-2.5 py-1.5">
+        <div class="flex items-center gap-1.5 border-b border-border px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-ring">
           <Search class="size-3.5 shrink-0 text-muted-foreground" />
           <input
             bind:value={q}
             placeholder="Search applications…"
+            aria-label="Search applications"
             class="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
           />
         </div>

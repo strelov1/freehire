@@ -67,4 +67,28 @@ describe('reduceMatchEvent', () => {
     expect(prev.stages[0]?.state).toBe('pending');
     expect(next).not.toBe(prev);
   });
+
+  it('ignores a malformed requirements payload (not an array)', () => {
+    const seeded = reduceMatchEvent(
+      initMatchStream(),
+      'requirements',
+      { requirements: [{ text: 'Go', priority: 'required', status: 'covered', evidence: '' }] },
+    );
+    // A present-but-wrong-typed frame must not overwrite good data with a non-array
+    // that a component would then .filter() on and crash.
+    const next = reduceMatchEvent(seeded, 'requirements', { requirements: { bogus: true } });
+    expect(Array.isArray(next.requirements)).toBe(true);
+    expect(next.requirements).toEqual(seeded.requirements);
+  });
+
+  it('ignores a malformed analysis payload (not an object)', () => {
+    const seeded = reduceMatchEvent(
+      initMatchStream(),
+      'dimensions',
+      { analysis: { overall_score: 50, verdict: 'Moderate Fit', dimensions: [], requirement_match: [], strengths: [], gaps: [], recommendation: '' } },
+    );
+    const next = reduceMatchEvent(seeded, 'final', { analysis: 'nope' });
+    expect(next.analysis).toEqual(seeded.analysis);
+    expect(next.done).toBe(true); // final is still terminal
+  });
 });

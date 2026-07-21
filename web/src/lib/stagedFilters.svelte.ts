@@ -104,6 +104,7 @@ export class StagedFilters implements FacetStore {
    *  seeds the staged copy so selecting a set previews (and applies on Show results)
    *  rather than committing to the live URL immediately. */
   apply(query: string): void {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient: parsed inline into #f, never stored as reactive state
     this.#f = filtersFromParams(new URLSearchParams(query));
   }
 

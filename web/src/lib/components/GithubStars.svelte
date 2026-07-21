@@ -21,6 +21,7 @@
   const count = $derived(githubStars.count);
 </script>
 
+<!-- eslint-disable svelte/no-navigation-without-resolve -- external GitHub URL, not an internal route -->
 <a
   href={GITHUB_URL}
   target="_blank"
@@ -33,6 +34,7 @@
     className,
   )}
 >
+  <!-- eslint-enable svelte/no-navigation-without-resolve -->
   <ProviderIcon provider="github" />
   {#if variant === 'row'}
     <span>GitHub</span>

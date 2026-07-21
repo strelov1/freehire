@@ -22,7 +22,7 @@
   async function startTailoring() {
     // The /tailor/[slug] surface owns the bootstrap + seeded agent session; this just goes there.
     tailoring = true;
-    await goto(`/tailor/${data.job.public_slug}`);
+    await goto(resolve('/tailor/[slug]', { slug: data.job.public_slug }));
   }
 </script>
 

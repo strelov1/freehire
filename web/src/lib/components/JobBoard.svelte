@@ -1,5 +1,6 @@
 <script lang="ts">
   import { pushState } from '$app/navigation';
+  import { resolve } from '$app/paths';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import type { MyJob } from '$lib/types';
@@ -207,14 +208,14 @@
       void load();
     }
     openItem = null;
-    pushState('/my/tracking', {}); // drop the per-application slug from the URL
+    pushState(resolve('/my/tracking'), {}); // drop the per-application slug from the URL
   }
 
   function openDrawer(item: MyJob) {
     openItem = item as BoardItem;
     pendingOutcome = false;
     // Give the open application its own shareable URL without a full navigation.
-    pushState(`/my/tracking/${item.job.public_slug}`, {});
+    pushState(resolve('/my/tracking/[slug]', { slug: item.job.public_slug }), {});
   }
 </script>
 

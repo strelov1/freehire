@@ -13,6 +13,7 @@
   import type { FacetCounts } from '$lib/types';
   import { emptySelection, selectionsToQuery, type OnboardingSelection } from '$lib/onboarding';
   import SearchSelect from '../facets/SearchSelect.svelte';
+  import { focusTrap } from '$lib/actions/focusTrap';
 
   // The /jobs onboarding wizard: a skippable overlay that captures coarse feed
   // preferences and emits the equivalent filter query. It owns only its staged
@@ -197,6 +198,7 @@
       role="dialog"
       aria-modal="true"
       aria-label="Set up your feed"
+      {@attach focusTrap()}
     >
       <!-- header: step dots + skip -->
       <div class="flex items-center gap-3 border-b border-border px-5 py-3">

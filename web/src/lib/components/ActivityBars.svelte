@@ -59,7 +59,6 @@
   <p class="py-16 text-center text-sm text-muted-foreground">No activity in this range yet.</p>
 {:else}
   <figure class="flex flex-col gap-3">
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class="relative"
       role="img"

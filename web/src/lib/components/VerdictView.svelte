@@ -141,6 +141,7 @@
               <span class="w-6 shrink-0 text-sm tabular-nums text-muted-foreground">{i + 1}</span>
               <div class="flex min-w-0 flex-1 flex-col">
                 {#if gapHref}
+                  <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- href built by the gapHref prop (a job-search query), not a static route -->
                   <a href={gapHref(gap.name)} class="truncate text-sm font-medium hover:underline">{gap.name}</a>
                 {:else}
                   <span class="truncate text-sm font-medium">{gap.name}</span>
@@ -170,6 +171,7 @@
               <span class="w-6 shrink-0 text-sm tabular-nums text-muted-foreground">{i + 1}</span>
               <div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                 {#if gapHref && skill.status !== 'strong'}
+                  <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- href built by the gapHref prop (a job-search query), not a static route -->
                   <a href={gapHref(skill.name)} class="truncate text-sm font-medium hover:underline">{skill.name}</a>
                 {:else}
                   <span class="truncate text-sm font-medium">{skill.name}</span>

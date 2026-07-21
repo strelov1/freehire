@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { resolve } from '$app/paths';
   import { Bell, UserRound } from '@lucide/svelte';
   import { FACETS } from '$lib/facets';
   import { isAuthenticated } from '$lib/auth.svelte';
@@ -201,7 +202,7 @@
     </button>
   {:else}
     <a
-      href="/my/profile"
+      href={resolve('/my/profile')}
       class="flex h-9 items-center gap-1.5 rounded-lg border border-dashed border-border px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
     >
       <UserRound class="size-4 shrink-0" aria-hidden="true" />

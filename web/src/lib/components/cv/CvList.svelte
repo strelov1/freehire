@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { resolve } from '$app/paths';
   import { FileText, Download, Trash2 } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
@@ -67,7 +68,8 @@
           class="group relative flex items-center gap-4 rounded-xl border border-border bg-card p-4 transition-colors hover:border-border/80 hover:bg-muted/30"
         >
           <!-- The whole card opens the workspace; the action buttons stop propagation below. -->
-          <a href="/tailor/{cv.job_slug}?cv={cv.id}" class="absolute inset-0" aria-label="Open {cv.job_title}"></a>
+          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() applied to the path; the rule can't see through the appended ?cv= query -->
+          <a href={`${resolve('/tailor/[slug]', { slug: cv.job_slug })}?cv=${cv.id}`} class="absolute inset-0" aria-label="Open {cv.job_title}"></a>
           <CompanyLogo name={cv.job_company} size="size-11" />
           <div class="min-w-0 flex-1">
             <p class="truncate font-medium">{cv.job_title}</p>
@@ -75,6 +77,7 @@
             <p class="mt-0.5 text-xs text-muted-foreground/80">Updated {fmt(cv.updated_at)}</p>
           </div>
           <div class="relative z-10 flex items-center gap-1">
+            <!-- eslint-disable svelte/no-navigation-without-resolve -- external CV PDF API URL, not an internal route -->
             <a
               href={api.cvPdfUrl(cv.id)}
               target="_blank"
@@ -83,6 +86,7 @@
               title="Open PDF"
               class="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
+              <!-- eslint-enable svelte/no-navigation-without-resolve -->
               <Download class="h-4 w-4" />
             </a>
             <button

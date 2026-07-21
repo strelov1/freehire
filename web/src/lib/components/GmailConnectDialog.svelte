@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Mail, X, Lock, ExternalLink } from '@lucide/svelte';
   import { Button } from '$lib/ui';
+  import { focusTrap } from '$lib/actions/focusTrap';
 
   // The parent owns open/close; onConnect proceeds to the Google OAuth redirect.
   let { onClose, onConnect }: { onClose: () => void; onConnect: () => void } = $props();
@@ -42,6 +43,7 @@
     aria-modal="true"
     aria-label="Connect Gmail"
     class="relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-xl"
+    {@attach focusTrap()}
   >
     <div class="flex items-start gap-3 border-b border-border p-5">
       <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-muted">
@@ -75,12 +77,14 @@
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2">
                 <span class="text-sm font-medium">{step.title}</span>
+                <!-- eslint-disable svelte/no-navigation-without-resolve -- external setup-doc link, not an internal route -->
                 <a
                   href={step.href}
                   target="_blank"
                   rel="noopener noreferrer"
                   class="inline-flex items-center gap-0.5 text-xs text-brand-strong hover:underline"
                 >
+                  <!-- eslint-enable svelte/no-navigation-without-resolve -->
                   source <ExternalLink class="size-3" />
                 </a>
               </div>

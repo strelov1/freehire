@@ -108,10 +108,11 @@
 {/snippet}
 
 {#snippet sourceLink(href: string, label: string)}
+  <!-- eslint-disable svelte/no-navigation-without-resolve -- renders a caller-provided href (JSON API paths on /open), not an internal route -->
   <a
     {href}
     class="font-mono text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-  >
+  ><!-- eslint-enable svelte/no-navigation-without-resolve -->
     {label} ↗
   </a>
 {/snippet}
@@ -143,6 +144,7 @@
           <dt class="font-mono text-xs uppercase tracking-wide text-muted-foreground">{s.label}</dt>
           <dd class="mt-2 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">
             {#if s.href}
+              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- links to the JSON API endpoint, not a SvelteKit route -->
               <a href={s.href} class="hover:underline">{s.value}</a>
             {:else}
               {s.value}

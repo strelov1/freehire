@@ -97,13 +97,15 @@ export function reduceMatchEvent(prev: MatchStreamState, name: string, data: unk
       s.thinking = prev.thinking + String(d.thinking ?? '');
       return s;
     case 'requirements':
-      s.requirements = (d.requirements as MatchRequirement[]) ?? [];
+      // Guard the shape, not just null: a present-but-wrong-typed frame must not
+      // replace good data with a value a component would then .filter() and crash on.
+      if (Array.isArray(d.requirements)) s.requirements = d.requirements as MatchRequirement[];
       return s;
     case 'dimensions':
-      s.analysis = (d.analysis as MatchAnalysis) ?? prev.analysis;
+      if (isObject(d.analysis)) s.analysis = d.analysis as MatchAnalysis;
       return s;
     case 'final':
-      s.analysis = (d.analysis as MatchAnalysis) ?? prev.analysis;
+      if (isObject(d.analysis)) s.analysis = d.analysis as MatchAnalysis;
       s.done = true;
       s.stages = s.stages.map((x) => ({ ...x, state: 'done' as StageState }));
       return s;
@@ -119,4 +121,11 @@ export function reduceMatchEvent(prev: MatchStreamState, name: string, data: unk
 function setStage(s: MatchStreamState, n: number, state: StageState) {
   const stage = s.stages.find((x) => x.n === n);
   if (stage) stage.state = state;
+}
+
+/** Whether a value is a non-null, non-array plain object — the shape an `analysis`
+ *  payload must have. Returns a plain boolean (not a type predicate) so the caller's
+ *  value stays `unknown`, keeping the single boundary cast to MatchAnalysis honest. */
+function isObject(v: unknown): boolean {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
 }

@@ -133,11 +133,12 @@
   {/if}
 </div>
 
-<div class="mb-4 flex items-center gap-2 rounded-lg border border-input px-3">
+<div class="mb-4 flex items-center gap-2 rounded-lg border border-input px-3 focus-within:ring-2 focus-within:ring-ring">
   <Search class="size-4 shrink-0 text-muted-foreground" />
   <input
     bind:value={query}
     placeholder="Search country or city…"
+    aria-label="Search country or city"
     class="h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
   />
 </div>

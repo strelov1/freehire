@@ -3,7 +3,6 @@
   import { Marked } from 'marked';
   import DOMPurify from 'isomorphic-dompurify';
   import {
-    Bot,
     AlertTriangle,
     Terminal,
     ChevronRight,

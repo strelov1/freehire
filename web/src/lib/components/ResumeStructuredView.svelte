@@ -111,6 +111,7 @@
       <ul class="flex flex-col gap-1">
         {#each links as link (link)}
           <li>
+            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external link from the parsed résumé, not an internal route -->
             <a href={link} target="_blank" rel="noopener noreferrer" class="text-sm text-primary hover:underline break-all">{link}</a>
           </li>
         {/each}

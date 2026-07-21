@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { resolve } from '$app/paths';
   import Seo from '$lib/components/Seo.svelte';
   import DocsCodeBlock from '$lib/components/DocsCodeBlock.svelte';
   import { BASE_URL, OVERVIEW } from '$lib/docs/api-spec';
@@ -37,6 +38,7 @@
   <section id={slugify(section.title)} data-spy class="mb-12 scroll-mt-24">
     <h2 class="text-xl font-semibold tracking-tight">{section.title}</h2>
     {#each section.paragraphs as p (p)}
+      <!-- eslint-disable-next-line svelte/no-at-html-tags -- inlineCode escapes &<> then wraps static doc constants; no user data -->
       <p class="mt-3 max-w-2xl leading-relaxed text-muted-foreground">{@html inlineCode(p)}</p>
     {/each}
     {#if section.code}
@@ -61,6 +63,7 @@
     <p class="text-xs font-semibold uppercase tracking-wide text-brand-strong">Modifiers — apply to every facet</p>
     <ul class="mt-3 space-y-2 text-sm leading-relaxed text-foreground/90">
       {#each FILTER_MODIFIERS as m (m)}
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -- inlineCode escapes &<> then wraps static doc constants; no user data -->
         <li class="flex gap-2"><span class="mt-0.5 text-brand-strong/70">›</span><span>{@html inlineCode(m)}</span></li>
       {/each}
     </ul>
@@ -104,7 +107,7 @@
           {#each group.endpoints as ep (ep.slug)}
             <li>
               <a
-                href={ep.href}
+                href={resolve('/docs/api/[group]/[endpoint]', { group: group.slug, endpoint: ep.slug })}
                 class="group flex items-baseline gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-secondary"
               >
                 <span class={`w-10 shrink-0 text-[10px] font-bold tracking-wide ${METHOD_TEXT[ep.method]}`}>{ep.method}</span>

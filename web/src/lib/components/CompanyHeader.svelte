@@ -42,20 +42,24 @@
         <span class="rounded-full bg-secondary px-2.5 py-0.5 text-xs text-secondary-foreground">{industry}</span>
       {/each}
       {#if website}
+        <!-- eslint-disable svelte/no-navigation-without-resolve -- external company website, not an internal route -->
         <a
           class="text-sm font-medium text-primary hover:underline"
           href={websiteHref}
           target="_blank"
           rel="noopener noreferrer">{website} ↗</a
         >
+        <!-- eslint-enable svelte/no-navigation-without-resolve -->
       {/if}
       {#if linkedin}
+        <!-- eslint-disable svelte/no-navigation-without-resolve -- external LinkedIn URL, not an internal route -->
         <a
           class="text-sm font-medium text-primary hover:underline"
           href={linkedin}
           target="_blank"
           rel="noopener noreferrer">LinkedIn ↗</a
         >
+        <!-- eslint-enable svelte/no-navigation-without-resolve -->
       {/if}
     </div>
   {/if}

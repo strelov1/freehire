@@ -5,6 +5,7 @@
   //    store the session id on the CV so it can be re-opened.
   //  - resume (?cv=<id>): reuse the existing CV + its stored session — re-attach, NO kickoff.
   import { onMount } from 'svelte';
+  import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { api, ApiError } from '$lib/api';
   import { createSession } from '$lib/assistant/api';
@@ -107,7 +108,7 @@
   {:else if status === 'error'}
     <div class="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
       <p class="max-w-md text-sm text-destructive">{errorMsg}</p>
-      <a href={`/match/${slug}`} class="text-sm text-brand hover:underline">Back to the fit analysis</a>
+      <a href={resolve('/match/[slug]', { slug })} class="text-sm text-brand hover:underline">Back to the fit analysis</a>
     </div>
   {:else}
     <div class="flex min-w-0 flex-1">

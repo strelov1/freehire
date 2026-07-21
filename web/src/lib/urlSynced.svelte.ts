@@ -74,6 +74,7 @@ export class UrlSyncedState<T> {
     // bar still shows the filter. Seeding from location makes a restored view mirror
     // the real URL. On the server location is unavailable; the passed page.url params
     // are correct there and match the client for every non-shallow navigation.
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient: parsed immediately into `seeded`, never stored as reactive state
     const params = browser ? new URLSearchParams(location.search) : initial;
     const seeded = codec.parse(params);
     this.value = seeded;
@@ -109,6 +110,7 @@ export class UrlSyncedState<T> {
     // Read the browser's address bar, not page.url: after a shallow-routing (replaceState)
     // back/forward, page.url lags to the pre-filter URL while location.search is correct.
     // Reading page.url here would revert the constructor's location-seeded value to empty.
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient: compared/parsed inline, never stored as reactive state
     const current = browser ? new URLSearchParams(location.search) : page.url.searchParams;
     if (current.toString() === this.#codec.serialize(this.value).toString()) return;
     clearTimeout(this.#timer);

@@ -6,6 +6,7 @@
   import type { ReferralRequestInput } from '$lib/types';
   import { Button } from '$lib/ui';
   import { isLinkedInUrl } from '$lib/utils';
+  import { focusTrap } from '$lib/actions/focusTrap';
 
   // The parent owns open/close; this component owns the request form. jobId is the
   // optional source-vacancy context recorded with the request.
@@ -108,6 +109,7 @@
     aria-modal="true"
     aria-label="Ask for a referral"
     class="relative w-full max-w-md rounded-lg border border-border bg-background p-6 shadow-lg"
+    {@attach focusTrap()}
   >
     <div class="mb-4 flex items-center justify-between gap-4">
       <h2 class="text-base font-semibold tracking-tight">Ask for a referral · {companyName}</h2>

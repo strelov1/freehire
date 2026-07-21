@@ -8,6 +8,7 @@
   import HeaderListSearch from './HeaderListSearch.svelte';
   import HeaderMenu from './HeaderMenu.svelte';
   import BrandMark from './BrandMark.svelte';
+  import { safeRedirect } from '$lib/safeRedirect';
 
   // The header is three slots — logo | search | menu — identical on every
   // viewport. Nav links, the account items, the theme toggle, and the auth
@@ -43,13 +44,10 @@
   // afterNavigate covers both the initial load and every later navigation, and
   // stays off the SSR path. The replaceState clean-up below removes the params, so
   // the immediate re-run sees none and no loop forms.
-  // Only accept a same-origin rooted path as the post-login redirect — never a
-  // scheme-relative "//host" or absolute URL — mirroring the backend's
-  // SafeReturnPath, so a crafted link can't bounce the user off-site.
-  function safeRedirect(raw: string | null): string | null {
-    if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return null;
-    return raw;
-  }
+  // safeRedirect (in $lib/safeRedirect) accepts only a same-origin rooted path as
+  // the post-login redirect — never a scheme-relative "//host", absolute URL, or a
+  // backslash/control-char trick — mirroring the backend's SafeReturnPath, so a
+  // crafted link can't bounce the user off-site.
 
   afterNavigate(() => {
     const params = page.url.searchParams;

@@ -73,6 +73,7 @@
   // carries a category) — so it opens on the profile's own role, which the user can then
   // change to compare against another position without touching the saved profile.
   function buildFilters(specializations: string[]): FilterStore {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient: seeds a FilterStore once, never stored as reactive state
     const seed = new URLSearchParams(page.url.searchParams);
     if (!seed.getAll('category').some((c) => c !== '')) {
       for (const spec of specializations) seed.append('category', spec);
@@ -165,6 +166,7 @@
 
   // Link a gap skill to the job search under the current comparison role plus that skill.
   function gapHref(skill: string): string {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient: builds an href string once, never stored as reactive state
     const params = filters ? filtersToParams(filters.applied) : new URLSearchParams();
     params.append('skills', skill);
     return `/?${params}`;

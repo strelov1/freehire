@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { CONCEPTS, NAV } from '$lib/docs/nav';
   import { METHOD_TEXT } from '$lib/docs/format';
@@ -73,8 +74,9 @@
   {#if visibleConcepts.length}
     <div class="space-y-0.5">
       {#each visibleConcepts as item (item.id)}
+        <!-- eslint-disable svelte/no-navigation-without-resolve -- resolve() applied to the /docs/api path; the rule can't see through the appended #fragment -->
         <a
-          href={`/docs/api#${item.id}`}
+          href={`${resolve('/docs/api')}#${item.id}`}
           class={`block rounded-md px-2 py-1 transition-colors ${
             onLanding && activeSpy === item.id
               ? 'bg-brand-muted/60 text-brand-strong'
@@ -83,6 +85,7 @@
         >
           {item.title}
         </a>
+        <!-- eslint-enable svelte/no-navigation-without-resolve -->
       {/each}
     </div>
   {/if}
@@ -94,7 +97,7 @@
       </p>
       {#each group.endpoints as ep (ep.slug)}
         <a
-          href={ep.href}
+          href={resolve('/docs/api/[group]/[endpoint]', { group: group.slug, endpoint: ep.slug })}
           class={`flex items-center gap-2 rounded-md px-2 py-1 transition-colors ${
             pathname === ep.href
               ? 'bg-brand-muted/60 text-brand-strong'

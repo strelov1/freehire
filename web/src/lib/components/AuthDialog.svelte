@@ -6,6 +6,7 @@
   import { api, ApiError } from '$lib/api';
   import { Button } from '$lib/ui';
   import ProviderIcon from './ProviderIcon.svelte';
+  import { focusTrap } from '$lib/actions/focusTrap';
 
   // `mode` is bindable so the in-dialog toggle can switch between sign in and
   // register without the parent re-opening it. `initialError` lets the layout
@@ -97,6 +98,7 @@
     aria-modal="true"
     aria-label={title}
     class="relative w-full max-w-sm rounded-lg border border-border bg-background p-6 shadow-lg"
+    {@attach focusTrap()}
   >
     <h2 class="mb-4 text-base font-semibold tracking-tight">{title}</h2>
 

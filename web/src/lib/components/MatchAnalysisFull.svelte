@@ -113,7 +113,19 @@
     // EventSource's own reserved connection-error event (handled by onerror below).
     for (const name of ['meta', 'stage_start', 'stage_done', 'thinking', 'requirements', 'dimensions', 'final', 'stream_error']) {
       source.addEventListener(name, (e) => {
-        stream = reduceMatchEvent(stream, name, JSON.parse((e as MessageEvent).data));
+        // A malformed/truncated frame must not throw out of the listener: an
+        // uncaught error here would skip the stop() below, so a bad `final` frame
+        // would hang the UI in `streaming` and leak the EventSource. Degrade to
+        // stream_error — the same terminal path as a connection drop.
+        let data: unknown;
+        try {
+          data = JSON.parse((e as MessageEvent).data);
+        } catch {
+          stream = reduceMatchEvent(stream, 'stream_error', { message: 'Analysis failed' });
+          stop();
+          return;
+        }
+        stream = reduceMatchEvent(stream, name, data);
         if (name === 'final' || name === 'stream_error') stop();
       });
     }

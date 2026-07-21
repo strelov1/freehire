@@ -27,9 +27,9 @@ describe('filterStorage', () => {
   afterEach(() => {
     // @ts-expect-error - clean up the globals we install per test
     delete globalThis.localStorage;
-    // @ts-expect-error
+    // @ts-expect-error - test-only global, not an optional property
     delete globalThis.document;
-    // @ts-expect-error
+    // @ts-expect-error - test-only global, not an optional property
     delete globalThis.location;
   });
 

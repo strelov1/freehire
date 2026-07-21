@@ -38,6 +38,7 @@
     </button>
   </figcaption>
   {#if html}
+    <!-- eslint-disable-next-line svelte/no-at-html-tags -- Shiki-highlighted HTML from the server-side highlighter over static doc code; no user data -->
     <div class="docs-shiki overflow-x-auto p-3 leading-relaxed">{@html html}</div>
   {:else}
     <pre class="overflow-x-auto p-3 leading-relaxed">{code}</pre>

@@ -153,12 +153,14 @@
             {#each queue as s (s.id)}
               <li class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
                 <div class="flex min-w-0 flex-col gap-0.5">
+                  <!-- eslint-disable svelte/no-navigation-without-resolve -- external job posting URL, not an internal route -->
                   <a
                     href={s.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     class="truncate text-sm font-medium hover:underline"
                   >
+                    <!-- eslint-enable svelte/no-navigation-without-resolve -->
                     {s.title}
                   </a>
                   <span class="truncate text-xs text-muted-foreground">

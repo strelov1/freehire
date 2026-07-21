@@ -294,7 +294,9 @@ export function createApi(
     const res = await request<{ data: JobCopy[]; meta: { total: number } }>(
       `/api/v1/jobs/${slug}/copies${suffix}`,
     );
-    return { copies: res.data, total: res.meta?.total ?? res.data.length };
+    // Every list endpoint returns a `meta` envelope (see the backend contract), so
+    // access it directly — same convention as toSlice/listMyJobs/getInbox.
+    return { copies: res.data, total: res.meta.total };
   }
 
   /** How well the job addressed by `slug` is covered by the caller's profile skills:

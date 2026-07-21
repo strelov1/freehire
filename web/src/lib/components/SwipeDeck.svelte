@@ -38,6 +38,7 @@
   // slug so a prefetch that races a just-sent save/dismiss can't re-add a card.
   // Reassigned wholesale (never mutated in place), so raw skips per-item proxying.
   let queue = $state.raw<Job[]>([]);
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- deliberately non-reactive dedup registry; never read in a reactive context
   const seen = new Set<string>();
   // Single-step undo: the last judged card and how it was judged.
   let last = $state<{ job: Job; kind: Judgement } | null>(null);
@@ -182,6 +183,7 @@
   // reflects what the swipe session ended on.
   function close() {
     const qs = deckParams().toString();
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() applied to the path; the rule can't see through the appended query string
     goto(resolve('/') + (qs ? `?${qs}` : ''));
   }
 

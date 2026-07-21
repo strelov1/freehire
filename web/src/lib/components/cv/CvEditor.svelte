@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { resolve } from '$app/paths';
   import { ArrowLeft, Plus, Trash2 } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import { Button, Input } from '$lib/ui';
@@ -120,7 +121,7 @@
       {#if embedded}
         <span></span>
       {:else}
-        <a href="/my/cvs" class="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <a href={resolve('/my/cvs')} class="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft class="h-4 w-4" /> All CVs
         </a>
       {/if}
@@ -175,7 +176,7 @@
           <Plus class="mr-1 h-4 w-4" /> Add role
         </Button>
       </div>
-      {#each doc.experience ?? [] as entry, i (i)}
+      {#each doc.experience ?? [] as entry, i (entry)}
         <div class="space-y-3 rounded-lg border border-border p-4">
           <div class="flex items-start justify-between gap-2">
             <div class="grid flex-1 gap-3 sm:grid-cols-2">
@@ -212,7 +213,7 @@
           <Plus class="mr-1 h-4 w-4" /> Add education
         </Button>
       </div>
-      {#each doc.education ?? [] as entry, i (i)}
+      {#each doc.education ?? [] as entry, i (entry)}
         <div class="flex items-start justify-between gap-2 rounded-lg border border-border p-4">
           <div class="grid flex-1 gap-3 sm:grid-cols-2">
             <Input bind:value={entry.institution} placeholder="Institution" />
@@ -238,7 +239,7 @@
           <Plus class="mr-1 h-4 w-4" /> Add group
         </Button>
       </div>
-      {#each doc.skills ?? [] as entry, i (i)}
+      {#each doc.skills ?? [] as entry, i (entry)}
         <div class="space-y-3 rounded-lg border border-border p-4">
           <div class="flex items-center justify-between gap-2">
             <Input bind:value={entry.group} placeholder="Group (e.g. Languages)" class="flex-1" />
@@ -259,7 +260,7 @@
           <Plus class="mr-1 h-4 w-4" /> Add language
         </Button>
       </div>
-      {#each doc.languages ?? [] as entry, i (i)}
+      {#each doc.languages ?? [] as entry, i (entry)}
         <div class="flex items-center gap-2">
           <Input bind:value={entry.name} placeholder="Language" class="flex-1" />
           <Input bind:value={entry.level} placeholder="Level (e.g. C1)" class="flex-1" />
@@ -278,7 +279,7 @@
           <Plus class="mr-1 h-4 w-4" /> Add project
         </Button>
       </div>
-      {#each doc.projects ?? [] as entry, i (i)}
+      {#each doc.projects ?? [] as entry, i (entry)}
         <div class="space-y-3 rounded-lg border border-border p-4">
           <div class="flex items-center gap-2">
             <Input bind:value={entry.name} placeholder="Project name" class="flex-1" />
@@ -300,7 +301,7 @@
           <Plus class="mr-1 h-4 w-4" /> Add certification
         </Button>
       </div>
-      {#each doc.certifications ?? [] as entry, i (i)}
+      {#each doc.certifications ?? [] as entry, i (entry)}
         <div class="flex items-center gap-2">
           <Input bind:value={entry.name} placeholder="Name" class="flex-1" />
           <Input bind:value={entry.issuer} placeholder="Issuer" class="flex-1" />

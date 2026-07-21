@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import { resolve } from '$app/paths';
   import { api } from '$lib/api';
   import type {
     GmailStatus,
@@ -732,9 +733,9 @@
                 {#if statusLabel(s.status_signal)}
                   <Badge variant="outline" class={statusClass(s.status_signal)}>{statusLabel(s.status_signal)}</Badge>
                 {/if}
-                {#if linkState === 'linked'}
+                {#if linkState === 'linked' && s.linked_slug}
                   <a
-                    href="/my/tracking/{s.linked_slug}"
+                    href={resolve('/my/tracking/[slug]', { slug: s.linked_slug })}
                     class="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-brand-ring hover:text-foreground"
                   >
                     Linked to {s.linked_company || 'application'} ↗
@@ -761,12 +762,13 @@
 
               {#if s.source === 'gmail'}
                 <div class="mt-2 flex shrink-0 justify-end">
+                  <!-- eslint-disable svelte/no-navigation-without-resolve -- external Gmail deep-link, not an internal route -->
                   <a
                     href={gmailUrl(s.external_id)}
                     target="_blank"
                     rel="noopener noreferrer"
                     class="text-xs font-medium text-brand-strong hover:underline"
-                  >
+                  ><!-- eslint-enable svelte/no-navigation-without-resolve -->
                     Open in Gmail ↗
                   </a>
                 </div>

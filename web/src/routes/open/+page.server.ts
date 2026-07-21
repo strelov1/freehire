@@ -25,7 +25,7 @@ async function fetchGithub(fetchImpl: typeof fetch): Promise<GithubStats | null>
   if (ghCache && Date.now() - ghCache.at < GH_TTL_MS) return ghCache.data;
 
   const headers = { Accept: 'application/vnd.github+json' };
-  let data: GithubStats | null = null;
+  let data: GithubStats | null; // assigned on both the success and catch paths below
   try {
     const res = await fetchImpl(`https://api.github.com/repos/${GH_REPO}`, { headers });
     if (!res.ok) throw new Error(`github repo ${res.status}`);

@@ -4,6 +4,7 @@
   import { reportReasons } from '$lib/reports';
   import type { ReportReason } from '$lib/types';
   import { Button } from '$lib/ui';
+  import { focusTrap } from '$lib/actions/focusTrap';
 
   // Reports are filed against a single job, addressed by its public slug. The
   // parent owns open/close; this component owns the two-step flow within.
@@ -75,6 +76,7 @@
     aria-modal="true"
     aria-label="Report this job"
     class="relative w-full max-w-md rounded-lg border border-border bg-background p-6 shadow-lg"
+    {@attach focusTrap()}
   >
     <div class="mb-4 flex items-center justify-between gap-4">
       <h2 class="text-base font-semibold tracking-tight">Report this job</h2>
