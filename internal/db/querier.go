@@ -236,6 +236,11 @@ type Querier interface {
 	// unique index on (reported_by, job_id) WHERE status='pending' rejects a second open report
 	// of the same job by the same user (the repository maps that unique violation to a 409).
 	CreateReport(ctx context.Context, arg CreateReportParams) (JobReport, error)
+	// Record an unrecognized-but-valid link for manual review: source/board unset, status
+	// 'review', no AI credit. The partial unique index on (url) WHERE source IS NULL rejects a
+	// duplicate submission of the same url; the repository maps that violation to
+	// ErrBoardAlreadyContributed. A maintainer later resolves source/board and promotes the row.
+	CreateReviewContribution(ctx context.Context, arg CreateReviewContributionParams) (LinkContribution, error)
 	// Create a saved search for a user. The UNIQUE (user_id, name) constraint rejects a
 	// duplicate name (surfaced by the repository as a duplicate-name error). Returns the row.
 	CreateSavedSearch(ctx context.Context, arg CreateSavedSearchParams) (SavedSearch, error)

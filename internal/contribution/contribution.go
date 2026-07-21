@@ -28,6 +28,13 @@ var (
 	ErrBoardAlreadyContributed = errors.New("contribution: board already contributed")
 )
 
+// Contribution statuses. A recognized novel board is recorded StatusPending (credit awarded);
+// an unrecognized-but-valid link is recorded StatusReview (no credit) for manual triage.
+const (
+	StatusPending = "pending"
+	StatusReview  = "review"
+)
+
 // Contribution is a stored contribution row, decoupled from the generated db row. CreatedAt
 // is *time.Time because the handler serializes it.
 type Contribution struct {
@@ -56,6 +63,7 @@ type Repository interface {
 	BoardByGreenhouseJobID(ctx context.Context, jobID string) (board string, ok bool, err error)
 	BoardByAshbyJobID(ctx context.Context, jobID string) (board string, ok bool, err error)
 	Record(ctx context.Context, in RecordInput) (Contribution, error)
+	RecordReview(ctx context.Context, submittedBy int64, url string) (Contribution, error)
 	ListByUser(ctx context.Context, userID int64) ([]Contribution, error)
 }
 
@@ -87,10 +95,15 @@ func New(repo Repository, resolver Resolver) *Service {
 func (s *Service) Submit(ctx context.Context, submittedBy int64, rawURL string) (rec Contribution, source, board string, err error) {
 	source, board, canonical, ok := s.resolveBoard(ctx, rawURL)
 	if !ok {
-		// Log an unrecognized-but-plausible link (a valid http(s) URL) so a maintainer can
-		// review the feed and add support for a missed ATS. Garbage (non-URLs) is skipped.
+		// No board resolved. A non-URL is garbage → 422. A valid http(s) link is a plausible
+		// missed ATS: log it for maintainer visibility and record it in the review queue (no
+		// board, no credit) so it can be triaged by hand instead of being lost.
+		if !isHTTPURL(rawURL) {
+			return Contribution{}, "", "", ErrUnsupportedATS
+		}
 		logUnrecognized(submittedBy, rawURL)
-		return Contribution{}, "", "", ErrUnsupportedATS
+		rec, err = s.repo.RecordReview(ctx, submittedBy, stripQueryFragment(rawURL))
+		return rec, "", "", err
 	}
 
 	tracked, err := s.repo.BoardTracked(ctx, source, board)
@@ -142,12 +155,18 @@ func (s *Service) ListMine(ctx context.Context, userID int64) ([]Contribution, e
 	return s.repo.ListByUser(ctx, userID)
 }
 
-// logUnrecognized emits a log line for a rejected link that parses as an http(s) URL — a
+// isHTTPURL reports whether rawURL parses as an http(s) URL with a host. It is the review-queue
+// gate: a valid link is recorded for triage, non-URL garbage is rejected (422).
+func isHTTPURL(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
+}
+
+// logUnrecognized emits a log line for an unrecognized link that parses as an http(s) URL — a
 // review feed for missed ATS. Grep prod for "contribution: unrecognized". Non-URL garbage is
 // skipped so the feed stays signal.
 func logUnrecognized(submittedBy int64, rawURL string) {
-	u, err := url.Parse(rawURL)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+	if !isHTTPURL(rawURL) {
 		return
 	}
 	log.Printf("contribution: unrecognized link (user=%d): %s", submittedBy, rawURL)

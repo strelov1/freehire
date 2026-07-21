@@ -17,6 +17,9 @@ type fakeRepo struct {
 	recordErr     error
 	recorded      RecordInput
 	recordCalls   int
+	reviewErr     error
+	reviewedURL   string
+	reviewCalls   int
 	listByUserRet []Contribution
 	companyName   string
 	companySlug   string
@@ -52,6 +55,15 @@ func (f *fakeRepo) Record(_ context.Context, in RecordInput) (Contribution, erro
 	}, nil
 }
 
+func (f *fakeRepo) RecordReview(_ context.Context, submittedBy int64, url string) (Contribution, error) {
+	f.reviewCalls++
+	f.reviewedURL = url
+	if f.reviewErr != nil {
+		return Contribution{}, f.reviewErr
+	}
+	return Contribution{ID: 2, SubmittedBy: submittedBy, URL: url, Status: StatusReview}, nil
+}
+
 func (f *fakeRepo) ListByUser(_ context.Context, _ int64) ([]Contribution, error) {
 	return f.listByUserRet, nil
 }
@@ -73,29 +85,56 @@ func newService(repo Repository) *Service {
 	return New(repo, nil)
 }
 
-func TestSubmitRejectsUnsupportedATS(t *testing.T) {
+func TestSubmitRecordsUnknownHostForReview(t *testing.T) {
+	// An unknown host yields no board, but the link is a valid URL — record it for manual
+	// review (no board record, no credit) rather than rejecting it.
 	repo := &fakeRepo{}
-	_, _, _, err := newService(repo).Submit(context.Background(), 7, "https://example.com/careers/123")
-	if !errors.Is(err, ErrUnsupportedATS) {
-		t.Fatalf("err = %v, want ErrUnsupportedATS", err)
+	got, source, board, err := newService(repo).Submit(context.Background(), 7, "https://example.com/careers/123")
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
 	}
-	if repo.recordCalls != 0 {
-		t.Errorf("recorded %d times, want 0 — nothing should be written", repo.recordCalls)
+	if got.Status != StatusReview || source != "" || board != "" {
+		t.Errorf("got = (status %q, %q, %q), want (review, empty, empty)", got.Status, source, board)
+	}
+	if repo.reviewCalls != 1 || repo.recordCalls != 0 {
+		t.Errorf("reviewCalls=%d recordCalls=%d, want 1 and 0", repo.reviewCalls, repo.recordCalls)
+	}
+	if repo.reviewedURL != "https://example.com/careers/123" {
+		t.Errorf("reviewed URL = %q, want the pasted link", repo.reviewedURL)
 	}
 }
 
-func TestSubmitRejectsSingleTenantSource(t *testing.T) {
-	// geekjob is a single-tenant aggregator — not a per-company board.
-	_, _, _, err := newService(&fakeRepo{}).Submit(context.Background(), 7, "https://geekjob.ru/vacancy/6a1ebb85")
-	if !errors.Is(err, ErrUnsupportedATS) {
-		t.Fatalf("err = %v, want ErrUnsupportedATS", err)
+func TestSubmitRecordsSingleTenantSourceForReview(t *testing.T) {
+	// geekjob is a single-tenant aggregator — no per-company board, but a valid URL, so it
+	// enters the review queue for a maintainer to judge.
+	repo := &fakeRepo{}
+	got, _, _, err := newService(repo).Submit(context.Background(), 7, "https://geekjob.ru/vacancy/6a1ebb85")
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if got.Status != StatusReview || repo.reviewCalls != 1 {
+		t.Errorf("got status %q, reviewCalls %d, want review and 1", got.Status, repo.reviewCalls)
 	}
 }
 
 func TestSubmitRejectsNonURL(t *testing.T) {
-	_, _, _, err := newService(&fakeRepo{}).Submit(context.Background(), 7, "not a url")
+	repo := &fakeRepo{}
+	_, _, _, err := newService(repo).Submit(context.Background(), 7, "not a url")
 	if !errors.Is(err, ErrUnsupportedATS) {
 		t.Fatalf("err = %v, want ErrUnsupportedATS", err)
+	}
+	if repo.reviewCalls != 0 || repo.recordCalls != 0 {
+		t.Errorf("wrote something (review=%d record=%d), want nothing for non-URL garbage", repo.reviewCalls, repo.recordCalls)
+	}
+}
+
+func TestSubmitDeduplicatesReviewLink(t *testing.T) {
+	// A url already in the review queue surfaces the unique violation as the same
+	// "already contributed" outcome as a duplicate board.
+	repo := &fakeRepo{reviewErr: ErrBoardAlreadyContributed}
+	_, _, _, err := newService(repo).Submit(context.Background(), 7, "https://example.com/careers/123")
+	if !errors.Is(err, ErrBoardAlreadyContributed) {
+		t.Fatalf("err = %v, want ErrBoardAlreadyContributed", err)
 	}
 }
 
@@ -193,9 +232,9 @@ func TestSubmitResolvesGreenhouseJobIDForServerSideVanity(t *testing.T) {
 			t.Errorf("Submit(%q) = (%q,%q), want (greenhouse, sumup)", raw, source, board)
 		}
 	}
-	// No id in the URL → not resolved.
-	if _, _, _, err := New(repo, nil).Submit(context.Background(), 7, "https://example.com/careers/about"); !errors.Is(err, ErrUnsupportedATS) {
-		t.Errorf("err = %v, want ErrUnsupportedATS for a URL with no job id", err)
+	// No id in the URL → not resolved to a board, so it enters the review queue.
+	if got, _, _, err := New(repo, nil).Submit(context.Background(), 7, "https://example.com/careers/about"); err != nil || got.Status != StatusReview {
+		t.Errorf("got = (status %q, err %v), want (review, nil) for a URL with no job id", got.Status, err)
 	}
 }
 
@@ -212,9 +251,9 @@ func TestSubmitResolvesAshbyJobIDForEmbeddedVanity(t *testing.T) {
 	if source != "ashby" || board != "valon" {
 		t.Errorf("= (%q,%q), want (ashby, valon)", source, board)
 	}
-	// A non-UUID ashby_jid (or none) → not resolved.
-	if _, _, _, err := New(repo, nil).Submit(context.Background(), 7, "https://www.valon.ai/about?ashby_jid=not-a-uuid"); !errors.Is(err, ErrUnsupportedATS) {
-		t.Errorf("err = %v, want ErrUnsupportedATS for a non-UUID ashby_jid", err)
+	// A non-UUID ashby_jid (or none) → not resolved to a board, so it enters the review queue.
+	if got, _, _, err := New(repo, nil).Submit(context.Background(), 7, "https://www.valon.ai/about?ashby_jid=not-a-uuid"); err != nil || got.Status != StatusReview {
+		t.Errorf("got = (status %q, err %v), want (review, nil) for a non-UUID ashby_jid", got.Status, err)
 	}
 }
 

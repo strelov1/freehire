@@ -59,3 +59,22 @@ func Bool(b *bool) pgtype.Bool {
 	}
 	return pgtype.Bool{Bool: *b, Valid: true}
 }
+
+// Text maps a string to the pgtype the generated params expect, treating the empty
+// string as NULL. It is the write-side adapter for a nullable text column whose domain
+// zero value is "" — e.g. link_contributions.source/board, unset on a review-queue row.
+func Text(s string) pgtype.Text {
+	if s == "" {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: s, Valid: true}
+}
+
+// TextString maps a nullable DB text to a plain string: NULL becomes "", a valid value
+// its content. The read-side inverse of Text.
+func TextString(t pgtype.Text) string {
+	if !t.Valid {
+		return ""
+	}
+	return t.String
+}

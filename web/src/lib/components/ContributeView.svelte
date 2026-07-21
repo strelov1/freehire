@@ -27,6 +27,15 @@
   const status = $derived(contribData.status);
   const contributions = $derived(contribData.value);
 
+  // A review row carries no board — show the link's host as its label instead.
+  function hostOf(u: string): string {
+    try {
+      return new URL(u).host;
+    } catch {
+      return u;
+    }
+  }
+
   async function submit(e: SubmitEvent) {
     e.preventDefault();
     if (!canSubmit) return;
@@ -72,7 +81,12 @@
       </p>
     </div>
 
-    {#if accepted}
+    {#if accepted && accepted.status === 'review'}
+      <div class="rounded-lg border border-border bg-secondary/40 p-4 text-sm" role="status">
+        This doesn't look like a known ATS. We'll check by hand whether we can pull its jobs — if
+        we can, we'll award you a credit. <span class="font-medium">Not credited yet.</span>
+      </div>
+    {:else if accepted}
       <div class="rounded-lg border border-border bg-secondary/40 p-4 text-sm" role="status">
         Thanks — <span class="font-medium">{accepted.board}</span> ({accepted.source}) is a new
         board for us. We'll start crawling it. <span class="font-medium">+1 AI credit.</span>
@@ -121,10 +135,15 @@
                   rel="noopener noreferrer"
                   class="truncate text-sm font-medium hover:underline"
                 >
-                  {c.board}
+                  {c.board || hostOf(c.url)}
                 </a>
                 <span class="truncate text-xs text-muted-foreground">
-                  {c.source} · contributed {timeAgo(c.created_at)}
+                  {#if c.status === 'review'}
+                    <span class="font-medium text-foreground">Under review</span> · not credited yet
+                    · {timeAgo(c.created_at)}
+                  {:else}
+                    {c.source} · contributed {timeAgo(c.created_at)}
+                  {/if}
                 </span>
               </div>
             </li>

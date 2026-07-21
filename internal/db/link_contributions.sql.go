@@ -7,6 +7,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const boardByAshbyJobID = `-- name: BoardByAshbyJobID :one
@@ -78,10 +80,10 @@ RETURNING id, submitted_by, url, source, board, status, created_at
 `
 
 type CreateContributionParams struct {
-	SubmittedBy int64  `json:"submitted_by"`
-	URL         string `json:"url"`
-	Source      string `json:"source"`
-	Board       string `json:"board"`
+	SubmittedBy int64       `json:"submitted_by"`
+	URL         string      `json:"url"`
+	Source      pgtype.Text `json:"source"`
+	Board       pgtype.Text `json:"board"`
 }
 
 // Record a contribution of a novel company board. The UNIQUE (source, board) constraint
@@ -95,6 +97,36 @@ func (q *Queries) CreateContribution(ctx context.Context, arg CreateContribution
 		arg.Source,
 		arg.Board,
 	)
+	var i LinkContribution
+	err := row.Scan(
+		&i.ID,
+		&i.SubmittedBy,
+		&i.URL,
+		&i.Source,
+		&i.Board,
+		&i.Status,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createReviewContribution = `-- name: CreateReviewContribution :one
+INSERT INTO link_contributions (submitted_by, url, status)
+VALUES ($1::bigint, $2, 'review')
+RETURNING id, submitted_by, url, source, board, status, created_at
+`
+
+type CreateReviewContributionParams struct {
+	SubmittedBy int64  `json:"submitted_by"`
+	URL         string `json:"url"`
+}
+
+// Record an unrecognized-but-valid link for manual review: source/board unset, status
+// 'review', no AI credit. The partial unique index on (url) WHERE source IS NULL rejects a
+// duplicate submission of the same url; the repository maps that violation to
+// ErrBoardAlreadyContributed. A maintainer later resolves source/board and promotes the row.
+func (q *Queries) CreateReviewContribution(ctx context.Context, arg CreateReviewContributionParams) (LinkContribution, error) {
+	row := q.db.QueryRow(ctx, createReviewContribution, arg.SubmittedBy, arg.URL)
 	var i LinkContribution
 	err := row.Scan(
 		&i.ID,

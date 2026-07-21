@@ -330,8 +330,8 @@ type LinkContribution struct {
 	ID          int64              `json:"id"`
 	SubmittedBy int64              `json:"submitted_by"`
 	URL         string             `json:"url"`
-	Source      string             `json:"source"`
-	Board       string             `json:"board"`
+	Source      pgtype.Text        `json:"source"`
+	Board       pgtype.Text        `json:"board"`
 	Status      string             `json:"status"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }

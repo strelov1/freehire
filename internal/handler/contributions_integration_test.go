@@ -79,9 +79,36 @@ func TestContributionsEndToEnd(t *testing.T) {
 		}
 	})
 
-	t.Run("unsupported host is 422", func(t *testing.T) {
-		if resp := submit(t, "https://example.com/careers/1", true); resp.StatusCode != fiber.StatusUnprocessableEntity {
+	t.Run("non-URL garbage is 422", func(t *testing.T) {
+		if resp := submit(t, "not a url", true); resp.StatusCode != fiber.StatusUnprocessableEntity {
 			t.Errorf("status = %d, want 422", resp.StatusCode)
+		}
+	})
+
+	t.Run("unrecognized valid link is recorded for review (201, no credit)", func(t *testing.T) {
+		resp := submit(t, "https://example.com/careers/1", true)
+		if resp.StatusCode != fiber.StatusCreated {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("status = %d, want 201 (body %s)", resp.StatusCode, body)
+		}
+		var created struct {
+			Data contributionResponse `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if created.Data.Status != contribution.StatusReview || created.Data.Source != "" || created.Data.Board != "" {
+			t.Errorf("created = %+v, want status review with no source/board", created.Data)
+		}
+		// No credit was awarded: no reward ledger entry exists for the review row. (The novel-board
+		// subtest below confirms the balance lands at exactly 25 — grant 20 + one reward — proving
+		// the review submission added nothing.)
+		var rewards int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM credit_ledger WHERE user_id = $1`, userID).Scan(&rewards); err != nil {
+			t.Fatalf("read ledger: %v", err)
+		}
+		if rewards != 0 {
+			t.Errorf("credit ledger entries after review submit = %d, want 0", rewards)
 		}
 	})
 
@@ -150,8 +177,21 @@ func TestContributionsEndToEnd(t *testing.T) {
 		if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
 			t.Fatalf("decode: %v", err)
 		}
-		if len(list.Data) != 1 || list.Data[0].Board != "acme" || list.Data[0].Source != "ashby" {
-			t.Errorf("list = %+v, want the one recorded ashby/acme board", list.Data)
+		// Two rows: the recognized ashby/acme board and the earlier review-queue submission.
+		var board, review *contributionResponse
+		for i := range list.Data {
+			switch list.Data[i].Status {
+			case contribution.StatusReview:
+				review = &list.Data[i]
+			default:
+				board = &list.Data[i]
+			}
+		}
+		if len(list.Data) != 2 || board == nil || board.Board != "acme" || board.Source != "ashby" {
+			t.Errorf("list = %+v, want the recorded ashby/acme board", list.Data)
+		}
+		if review == nil || review.Source != "" || review.Board != "" {
+			t.Errorf("list = %+v, want a review row with no source/board", list.Data)
 		}
 	})
 }

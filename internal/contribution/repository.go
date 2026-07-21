@@ -86,8 +86,26 @@ func (r *QueriesRepository) Record(ctx context.Context, in RecordInput) (Contrib
 	row, err := r.q.CreateContribution(ctx, db.CreateContributionParams{
 		SubmittedBy: in.SubmittedBy,
 		URL:         in.URL,
-		Source:      in.Source,
-		Board:       in.Board,
+		Source:      pgconv.Text(in.Source),
+		Board:       pgconv.Text(in.Board),
+	})
+	if err != nil {
+		if pgerr.IsUniqueViolation(err) {
+			return Contribution{}, ErrBoardAlreadyContributed
+		}
+		return Contribution{}, err
+	}
+	return fromRow(row), nil
+}
+
+// RecordReview inserts an unrecognized-but-valid link for manual review: source/board unset,
+// status 'review', no AI credit. The partial unique index on (url) WHERE source IS NULL
+// rejects a duplicate submission of the same url, mapped to ErrBoardAlreadyContributed so a
+// re-paste surfaces the same "already contributed" outcome as a duplicate board.
+func (r *QueriesRepository) RecordReview(ctx context.Context, submittedBy int64, url string) (Contribution, error) {
+	row, err := r.q.CreateReviewContribution(ctx, db.CreateReviewContributionParams{
+		SubmittedBy: submittedBy,
+		URL:         url,
 	})
 	if err != nil {
 		if pgerr.IsUniqueViolation(err) {
@@ -117,8 +135,8 @@ func fromRow(row db.LinkContribution) Contribution {
 		ID:          row.ID,
 		SubmittedBy: row.SubmittedBy,
 		URL:         row.URL,
-		Source:      row.Source,
-		Board:       row.Board,
+		Source:      pgconv.TextString(row.Source),
+		Board:       pgconv.TextString(row.Board),
 		Status:      row.Status,
 		CreatedAt:   pgconv.TimePtr(row.CreatedAt),
 	}

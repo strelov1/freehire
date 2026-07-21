@@ -84,7 +84,11 @@ func (a *API) CreateContribution(c *fiber.Ctx) error {
 		}
 		return contributionError(err)
 	}
-	a.rewardContribution(c.Context(), userID, rec.ID)
+	// Credit is exclusive to a recognized novel board (status pending). An unrecognized link is
+	// recorded for manual review (status review) and earns nothing until a maintainer promotes it.
+	if rec.Status == contribution.StatusPending {
+		a.rewardContribution(c.Context(), userID, rec.ID)
+	}
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toContributionResponse(rec)})
 }
 

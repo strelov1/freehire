@@ -173,12 +173,16 @@ export interface User {
 /** A crowdsourced board contribution: a job link a user pasted for a company board we do
  *  not crawl yet. The unit is the board — `source` (ATS) + `board` (company slug) — not a
  *  single vacancy; the ingest side later scrapes all its vacancies. */
+export type ContributionStatus = 'pending' | 'onboarded' | 'rejected' | 'review';
+
 export interface Contribution {
   id: number;
   url: string;
+  // Empty for a `review` row (an unrecognized link awaiting manual triage); set once a board is
+  // recognized or a maintainer promotes the review row.
   source: string;
   board: string;
-  status: string;
+  status: ContributionStatus;
   created_at: string | null;
 }
 

@@ -7,6 +7,15 @@ INSERT INTO link_contributions (submitted_by, url, source, board)
 VALUES (sqlc.arg(submitted_by)::bigint, sqlc.arg(url), sqlc.arg(source), sqlc.arg(board))
 RETURNING *;
 
+-- name: CreateReviewContribution :one
+-- Record an unrecognized-but-valid link for manual review: source/board unset, status
+-- 'review', no AI credit. The partial unique index on (url) WHERE source IS NULL rejects a
+-- duplicate submission of the same url; the repository maps that violation to
+-- ErrBoardAlreadyContributed. A maintainer later resolves source/board and promotes the row.
+INSERT INTO link_contributions (submitted_by, url, status)
+VALUES (sqlc.arg(submitted_by)::bigint, sqlc.arg(url), 'review')
+RETURNING *;
+
 -- name: JobsExistForBoard :one
 -- Whether the catalogue already crawls this board — any job whose external_id is "<board>:…".
 -- Matched with a LIKE-prefix so the (source, external_id text_pattern_ops) index serves it as
