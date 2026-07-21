@@ -200,6 +200,10 @@ func (a *API) processTelegramContribution(chatID int64, rawURL string) {
 	case err != nil:
 		log.Printf("telegram: submit user=%d: %v", userID, err)
 		a.sendTelegram(ctx, chatID, "⚠️ Something went wrong. Please try again.")
+	case rec.Status == contribution.StatusReview:
+		// An unrecognized-but-valid link: recorded for manual review, no credit until a
+		// maintainer confirms it's ingestable (mirrors the site's review-queue message).
+		a.sendTelegram(ctx, chatID, "🤔 That doesn't look like a known ATS. We'll check by hand whether we can pull its jobs — if we can, you'll get a credit. Not credited yet.")
 	default:
 		a.rewardContribution(ctx, userID, rec.ID)
 		a.sendTelegram(ctx, chatID, "🎉 <b>"+rec.Board+"</b> ("+rec.Source+") is a new board — we'll start crawling it. +1 AI credit!")

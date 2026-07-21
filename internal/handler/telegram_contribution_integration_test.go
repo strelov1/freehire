@@ -168,4 +168,21 @@ func TestTelegramContribution(t *testing.T) {
 			t.Errorf("reply = %q, want the company name + /companies/acme-co link", reply)
 		}
 	})
+
+	t.Run("an unrecognized valid link is queued for review, no reward", func(t *testing.T) {
+		post(chatID, "https://example.com/careers/1")
+		reply := waitReply(t)
+		if !strings.Contains(reply, "Not credited") {
+			t.Errorf("reply = %q, want a not-credited review message", reply)
+		}
+		// No reward: the review row earns nothing, so the balance is unchanged from the one
+		// earlier reward (25).
+		if got := balance(); got != 25 {
+			t.Errorf("credit balance = %d, want still 25 (review credits nothing)", got)
+		}
+		var status string
+		if err := pool.QueryRow(ctx, `SELECT status FROM link_contributions WHERE submitted_by=$1 AND source IS NULL`, userID).Scan(&status); err != nil || status != contribution.StatusReview {
+			t.Errorf("review row status = %q (%v), want review", status, err)
+		}
+	})
 }
