@@ -22,6 +22,23 @@ export function resolveMatchState(input: {
   return 'ready';
 }
 
+/** A card-level match computed entirely in the browser: the exact overlap between a
+ *  job's skills and the viewer's profile skills. No adjacency (that dictionary lives on
+ *  the backend), so this is a lighter, exact-only signal than GET /jobs/:slug/match —
+ *  the trade for computing it client-side, with zero requests per card. */
+export type ClientMatch = { total: number; matched: number; percent: number };
+
+/** Count how many of a job's skills the user already has (case-insensitive set
+ *  intersection over canonical slugs) and the coverage percent. `total` is the job's
+ *  skill count; a job with no skills is a zero match (no divide-by-zero). */
+export function computeClientMatch(jobSkills: string[], profileSkills: string[]): ClientMatch {
+  const have = new Set(profileSkills.map((s) => s.toLowerCase()));
+  const total = jobSkills.length;
+  const matched = jobSkills.filter((s) => have.has(s.toLowerCase())).length;
+  const percent = total === 0 ? 0 : Math.round((matched / total) * 100);
+  return { total, matched, percent };
+}
+
 /** The two progress-bar segment widths (in percent of the track): a full-weight
  *  green segment for exact matches and a half-weight amber segment for adjacent
  *  ones. Their sum is the (unrounded) coverage percent. */

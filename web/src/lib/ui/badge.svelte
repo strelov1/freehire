@@ -8,6 +8,7 @@
         secondary: 'border-transparent bg-secondary text-secondary-foreground',
         outline: 'border-border text-muted-foreground',
         brand: 'border-transparent bg-brand-muted text-brand-strong',
+        missing: 'border-destructive/15 bg-destructive/5 text-destructive/75',
       },
     },
     defaultVariants: { variant: 'secondary' },

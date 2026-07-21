@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveMatchState, matchBarSegments } from './jobMatch';
+import { resolveMatchState, matchBarSegments, computeClientMatch } from './jobMatch';
 
 describe('resolveMatchState', () => {
   const base = { jobSkills: ['go'], authenticated: true, profileLoaded: true, profileSkills: ['go'] };
@@ -41,5 +41,37 @@ describe('matchBarSegments', () => {
       exact: 0,
       adjacent: 0,
     });
+  });
+});
+
+describe('computeClientMatch', () => {
+  it('counts the exact (case-insensitive) overlap of job skills the user has', () => {
+    // 2 of 4 job skills are in the profile → 50%.
+    expect(computeClientMatch(['go', 'kafka', 'aws', 'spark'], ['go', 'aws', 'react'])).toEqual({
+      total: 4,
+      matched: 2,
+      percent: 50,
+    });
+  });
+
+  it('matches regardless of case so canonical slugs never miss on casing', () => {
+    expect(computeClientMatch(['Go', 'Kafka'], ['go'])).toEqual({ total: 2, matched: 1, percent: 50 });
+  });
+
+  it('rounds the percent to the nearest whole', () => {
+    // 1 of 3 → 33.33 → 33.
+    expect(computeClientMatch(['go', 'kafka', 'aws'], ['go']).percent).toBe(33);
+  });
+
+  it('is a zero match, not a divide-by-zero, when the job has no skills', () => {
+    expect(computeClientMatch([], ['go'])).toEqual({ total: 0, matched: 0, percent: 0 });
+  });
+
+  it('is a zero match when the user has no skills', () => {
+    expect(computeClientMatch(['go', 'kafka'], [])).toEqual({ total: 2, matched: 0, percent: 0 });
+  });
+
+  it('does not let duplicate profile skills inflate the count', () => {
+    expect(computeClientMatch(['go', 'kafka'], ['go', 'go'])).toEqual({ total: 2, matched: 1, percent: 50 });
   });
 });

@@ -1,12 +1,15 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { resolve } from '$app/paths';
-  import { Bookmark, EyeOff, X } from '@lucide/svelte';
+  import { Bookmark, Eye, EyeOff, X } from '@lucide/svelte';
   import CompanyLogo from './CompanyLogo.svelte';
+  import JobMatchBar from './JobMatchBar.svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { cardTags, formatSalary } from '$lib/enrichment';
+  import { computeClientMatch, resolveMatchState } from '$lib/jobMatch';
+  import { profileStore } from '$lib/profile.svelte';
   import { metaDescription } from '$lib/seo';
   import type { Job } from '$lib/types';
   import { Badge } from '$lib/ui';
@@ -71,6 +74,30 @@
   const MAX_SKILLS = 5;
   const shownSkills = $derived(skills.slice(0, MAX_SKILLS));
   const extraSkills = $derived(skills.length - MAX_SKILLS);
+
+  // Card-level profile match, computed entirely in the browser (no per-card request):
+  // the exact overlap between this job's skills and the signed-in viewer's profile
+  // skills. The job is server-rendered; only the profile hydrates client-side, loaded
+  // once and deduped across every card by the store (SSR-safe no-op for guests).
+  $effect(() => {
+    if (isAuthenticated()) profileStore.ensureLoaded();
+  });
+  const profileSkills = $derived(profileStore.profile?.skills ?? []);
+  const matchState = $derived(
+    resolveMatchState({
+      jobSkills: skills,
+      authenticated: isAuthenticated(),
+      profileLoaded: profileStore.loaded,
+      profileSkills,
+    }),
+  );
+  // The viewer's skills as a lowercase set, only when there's a real match to show —
+  // used to tint each skill chip (a skill you have vs one you're missing). Null for
+  // guests / no-profile viewers, who see the plain brand chips.
+  const haveSet = $derived(
+    matchState === 'ready' ? new Set(profileSkills.map((s) => s.toLowerCase())) : null,
+  );
+  const match = $derived(matchState === 'ready' ? computeClientMatch(skills, profileSkills) : null);
 
   // Whether the signed-in user has saved this job, read from the shared saved set
   // (loaded once on the browse view). The bookmark reflects this and updates the
@@ -177,7 +204,7 @@
     'block hover:opacity-100',
     compact ? 'p-3' : 'p-4',
   ]}
-  class:opacity-60={isViewed}
+  class:opacity-80={isViewed}
 >
   <!-- Company + timestamp rail: a quiet eyebrow that yields the stage to the title.
        The name truncates to a single line, so a long company (e.g. "Veterinary
@@ -192,9 +219,16 @@
         {job.company || 'Unknown company'}
       </span>
     </div>
-    {#if posted}
-      <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{posted}</span>
-    {/if}
+    <div class="flex shrink-0 items-center gap-1.5 text-muted-foreground">
+      {#if isViewed}
+        <!-- A quiet "you've seen this" marker, paired with the lighter dim on the card
+             so viewed jobs recede without becoming hard to read. -->
+        <Eye class="size-3.5" aria-label="Viewed" />
+      {/if}
+      {#if posted}
+        <span class="text-xs tabular-nums">{posted}</span>
+      {/if}
+    </div>
   </div>
 
   <!-- The title is the card's hero — a size up from the body with tight leading, so
@@ -229,7 +263,7 @@
   <div class={['mt-3 flex items-end justify-between gap-3', onHide && 'pr-9']}>
     <div class="flex min-w-0 flex-wrap items-center gap-1.5">
       {#each shownSkills as skill (skill)}
-        <Badge variant="brand">{skill}</Badge>
+        <Badge variant={haveSet && !haveSet.has(skill.toLowerCase()) ? 'missing' : 'brand'}>{skill}</Badge>
       {/each}
       {#if extraSkills > 0}
         <span class="text-xs text-muted-foreground">+{extraSkills} skills</span>
@@ -239,6 +273,11 @@
       <span class="shrink-0 text-base font-bold tabular-nums tracking-tight">{salary}</span>
     {/if}
   </div>
+
+  <!-- Card-level profile match: a thin coverage bar shown only to a signed-in viewer with
+       a skills profile (`match` is null otherwise). `gutterRight` keeps the percent clear
+       of the feed's bottom-right hide control. -->
+  <JobMatchBar {match} gutterRight={!!onHide} />
 </a>
 
 {#if footer}
