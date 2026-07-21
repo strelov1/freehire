@@ -1158,6 +1158,9 @@ type Querier interface {
 	// Bind (or rebind) the agent session to an owned CV. Owner-scoped: returns 0 affected rows for
 	// a foreign or missing id (the handler maps that to 404).
 	SetCVSession(ctx context.Context, arg SetCVSessionParams) (int64, error)
+	// Change only a CV's template, stamping updated_at, leaving title and data untouched. Owner-
+	// scoped: returns 0 affected rows for a foreign or missing id (the handler maps that to 404).
+	SetCVTemplate(ctx context.Context, arg SetCVTemplateParams) (int64, error)
 	// Replace a company's collection set. The import worker computes the full set in Go
 	// (preserving unmanaged tags) and writes it here; updated_at is bumped for parity
 	// with the other write paths.

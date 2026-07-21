@@ -66,6 +66,12 @@ func recordResponse(rec cv.Record) cvResponse {
 	return cvResponse{cvMetaResponse: metaResponse(rec.Meta), AgentSessionID: rec.AgentSessionID, Document: rec.Document}
 }
 
+// ListCVTemplates returns the registered CV templates and their display metadata (id, label,
+// style, ats_safe) so the UI can render the template gallery. Static registry data — no DB.
+func (a *API) ListCVTemplates(c *fiber.Ctx) error {
+	return c.JSON(fiber.Map{"data": cv.Templates()})
+}
+
 // ListCVs returns the caller's TAILORED CVs (the re-open list), newest edit first, each with
 // its vacancy slug and bound agent session so the client links back to the tailoring workspace.
 func (a *API) ListCVs(c *fiber.Ctx) error {
@@ -205,6 +211,36 @@ func (a *API) SetCVSession(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
 	if err := a.cvStore.SetSession(c.Context(), int64(id), userID, in.SessionID); err != nil {
+		return mapCVError(err)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+type setCVTemplateRequest struct {
+	TemplateID string `json:"template_id"`
+}
+
+// SetCVTemplate changes only the template of an owned CV (title and document untouched). The
+// gallery uses this to switch templates without re-sending the whole document. Owner-scoped
+// (a foreign/missing id is a 404); an unknown template_id is a 400.
+func (a *API) SetCVTemplate(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	id, err := c.ParamsInt("id")
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid id")
+	}
+	var in setCVTemplateRequest
+	if err := c.BodyParser(&in); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+	tmplID, err := validCVTemplate(in.TemplateID)
+	if err != nil {
+		return err
+	}
+	if err := a.cvStore.SetTemplate(c.Context(), int64(id), userID, tmplID); err != nil {
 		return mapCVError(err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)

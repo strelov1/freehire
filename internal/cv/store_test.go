@@ -66,6 +66,16 @@ func (f *fakeRepo) SetSession(_ context.Context, id, userID int64, sessionID str
 	return 1, nil
 }
 
+func (f *fakeRepo) SetTemplate(_ context.Context, id, userID int64, templateID string) (int64, error) {
+	r, ok := f.rows[id]
+	if !ok || r.userID != userID {
+		return 0, nil
+	}
+	r.templateID = templateID
+	f.rows[id] = r
+	return 1, nil
+}
+
 func (f *fakeRepo) ListTailored(_ context.Context, userID int64) ([]db.ListTailoredCVsByUserRow, error) {
 	var out []db.ListTailoredCVsByUserRow
 	for id, r := range f.rows {

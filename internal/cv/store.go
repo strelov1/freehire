@@ -62,6 +62,7 @@ type Repository interface {
 	GetBase(ctx context.Context, userID int64) (db.GetBaseCVByUserRow, error)
 	CreateTailored(ctx context.Context, userID, jobID int64, title, templateID string, data []byte) (db.CreateTailoredCVRow, error)
 	SetSession(ctx context.Context, id, userID int64, sessionID string) (int64, error)
+	SetTemplate(ctx context.Context, id, userID int64, templateID string) (int64, error)
 	ListTailored(ctx context.Context, userID int64) ([]db.ListTailoredCVsByUserRow, error)
 }
 
@@ -145,6 +146,19 @@ func textValue(v pgtype.Text) string {
 // SetSession binds (or rebinds) the agent session to an owned CV, or returns ErrNotFound.
 func (s *Store) SetSession(ctx context.Context, id, userID int64, sessionID string) error {
 	n, err := s.repo.SetSession(ctx, id, userID, sessionID)
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetTemplate changes only the template of an owned CV, or returns ErrNotFound. Title and
+// document are left untouched.
+func (s *Store) SetTemplate(ctx context.Context, id, userID int64, templateID string) error {
+	n, err := s.repo.SetTemplate(ctx, id, userID, templateID)
 	if err != nil {
 		return err
 	}
@@ -346,6 +360,10 @@ func (r queriesRepository) SetSession(ctx context.Context, id, userID int64, ses
 		ID: id, UserID: userID,
 		AgentSessionID: pgtype.Text{String: sessionID, Valid: sessionID != ""},
 	})
+}
+
+func (r queriesRepository) SetTemplate(ctx context.Context, id, userID int64, templateID string) (int64, error) {
+	return r.q.SetCVTemplate(ctx, db.SetCVTemplateParams{ID: id, UserID: userID, TemplateID: templateID})
 }
 
 func (r queriesRepository) ListTailored(ctx context.Context, userID int64) ([]db.ListTailoredCVsByUserRow, error) {

@@ -61,6 +61,15 @@ export interface UpdateCvInput {
 
 export const DEFAULT_TEMPLATE_ID = 'classic-ats';
 
+/** A CV template the user can pick in the gallery. `ats_safe` is false for richer layouts
+ *  (e.g. the sidebar) that may not parse cleanly in some ATS. Mirrors cv.TemplateInfo. */
+export interface CvTemplate {
+  id: string;
+  label: string;
+  style: string;
+  ats_safe: boolean;
+}
+
 /** A fresh, fully-populated (but empty) document so the form can bind every section
  *  without null-guards. The server still sanitizes on save, dropping the empties. */
 export function emptyDocument(): Document {

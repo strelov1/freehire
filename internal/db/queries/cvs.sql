@@ -39,6 +39,13 @@ UPDATE cvs
 SET agent_session_id = $3
 WHERE id = $1 AND user_id = $2;
 
+-- name: SetCVTemplate :execrows
+-- Change only a CV's template, stamping updated_at, leaving title and data untouched. Owner-
+-- scoped: returns 0 affected rows for a foreign or missing id (the handler maps that to 404).
+UPDATE cvs
+SET template_id = $3, updated_at = now()
+WHERE id = $1 AND user_id = $2;
+
 -- name: UpdateCV :one
 -- Replace a CV's editable fields, stamping updated_at. Owner-scoped: no row is updated
 -- for a foreign or missing id (the handler maps the resulting no-row error to 404).

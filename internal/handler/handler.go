@@ -543,12 +543,17 @@ func Register(app *fiber.App, cfg Config) {
 	// rollout). Owner-scoped (a foreign id is a 404). The PDF endpoint 501s when no
 	// typst binary is configured; the rest still works.
 	cvGate := auth.RequireModeratorOrBeta(a.queries, a.queries)
+	// The template registry is static (no per-user data); listed behind the same beta gate
+	// so the gallery is only reachable where the CV builder itself is.
+	api.Get("/cv-templates", saved, cvGate, a.ListCVTemplates)
 	api.Get("/me/cvs", saved, cvGate, a.ListCVs)
 	api.Post("/me/cvs", saved, cvGate, a.CreateCV)
 	// Read + render accept a key too (keyAuth), so the tailoring agent's CLI can fetch a CV
 	// and its PDF; mutations stay cookie-only (POST/PUT/DELETE — the browser owns authoring).
 	api.Get("/me/cvs/:id", keyAuth, cvGate, a.GetCV)
 	api.Put("/me/cvs/:id", saved, cvGate, a.UpdateCV)
+	// Change only the template (the gallery's one-field switch); cookie-only like other mutations.
+	api.Put("/me/cvs/:id/template", saved, cvGate, a.SetCVTemplate)
 	api.Delete("/me/cvs/:id", saved, cvGate, a.DeleteCV)
 	api.Get("/me/cvs/:id/pdf", keyAuth, cvGate, a.RenderCVPDF)
 	// Tailoring: the browser starts a session (cookie-only bootstrap); the agent's CLI drives

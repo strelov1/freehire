@@ -14,6 +14,7 @@ import type {
   CvMeta,
   CvRecord,
   CvTailoredItem,
+  CvTemplate,
   UpdateCvInput,
   TailorResult,
 } from './cv';
@@ -1176,6 +1177,16 @@ export function createApi(
 
   // --- CV builder (beta-gated on the server) ---
 
+  /** List the available CV templates (id, label, style, ats_safe) for the gallery. */
+  async function listCvTemplates(): Promise<CvTemplate[]> {
+    return requestData<CvTemplate[]>('/api/v1/cv-templates');
+  }
+
+  /** Switch a CV's template only (title + document untouched). */
+  async function setCvTemplate(id: number, templateId: string): Promise<void> {
+    await call(`/api/v1/me/cvs/${id}/template`, jsonBody('PUT', { template_id: templateId }));
+  }
+
   /** List the caller's TAILORED CVs (the re-open list): each with its vacancy slug + bound
    *  agent session, newest edit first. */
   async function listCvs(): Promise<CvTailoredItem[]> {
@@ -1343,6 +1354,8 @@ export function createApi(
     linkEmail,
     unlinkEmail,
     listCvs,
+    listCvTemplates,
+    setCvTemplate,
     getCv,
     updateCv,
     deleteCv,

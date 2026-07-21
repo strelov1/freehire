@@ -42,10 +42,12 @@ func buildCVApp(h *API, iss *auth.Issuer) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	saved := auth.RequireAuth(iss)
 	gate := auth.RequireModeratorOrBeta(h.queries, h.queries)
+	app.Get("/api/v1/cv-templates", saved, gate, h.ListCVTemplates)
 	app.Get("/api/v1/me/cvs", saved, gate, h.ListCVs)
 	app.Post("/api/v1/me/cvs", saved, gate, h.CreateCV)
 	app.Get("/api/v1/me/cvs/:id", saved, gate, h.GetCV)
 	app.Put("/api/v1/me/cvs/:id", saved, gate, h.UpdateCV)
+	app.Put("/api/v1/me/cvs/:id/template", saved, gate, h.SetCVTemplate)
 	app.Delete("/api/v1/me/cvs/:id", saved, gate, h.DeleteCV)
 	app.Get("/api/v1/me/cvs/:id/pdf", saved, gate, h.RenderCVPDF)
 	return app
@@ -70,6 +72,103 @@ func doCV(t *testing.T, app *fiber.App, method, path, token string, body any) *h
 		t.Fatalf("%s %s: %v", method, path, err)
 	}
 	return resp
+}
+
+// TestCVTemplatesEndpoint_Gating checks the static templates list is behind the beta gate:
+// a beta user gets every registered template, a non-beta user is forbidden.
+func TestCVTemplatesEndpoint_Gating(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	if _, err := pool.Exec(context.Background(), "TRUNCATE cvs, users RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	h := &API{pool: pool, queries: queries, issuer: iss,
+		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
+		resume:  resume.New(nil, resume.NewQueriesRepository(queries))}
+	app := buildCVApp(h, iss)
+
+	betaTok, _ := iss.Issue(seedAccount(t, h, "beta@example.test", true))
+	plainTok, _ := iss.Issue(seedAccount(t, h, "plain@example.test", false))
+
+	if resp := doCV(t, app, fiber.MethodGet, "/api/v1/cv-templates", plainTok, nil); resp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("non-beta templates = %d, want 403", resp.StatusCode)
+	}
+
+	resp := doCV(t, app, fiber.MethodGet, "/api/v1/cv-templates", betaTok, nil)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("beta templates = %d, want 200", resp.StatusCode)
+	}
+	var body struct {
+		Data []cv.TemplateInfo `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body.Data) != len(cv.Templates()) {
+		t.Fatalf("returned %d templates, want %d", len(body.Data), len(cv.Templates()))
+	}
+}
+
+// TestSetCVTemplateEndpoint checks the set-template endpoint: a valid registered id updates
+// the template while leaving title/document intact; an unknown id is a 400; a foreign id 404.
+func TestSetCVTemplateEndpoint(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	if _, err := pool.Exec(context.Background(), "TRUNCATE cvs, users RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	h := &API{pool: pool, queries: queries, issuer: iss,
+		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
+		resume:  resume.New(nil, resume.NewQueriesRepository(queries))}
+	app := buildCVApp(h, iss)
+
+	owner := seedAccount(t, h, "owner@example.test", true)
+	ownerTok, _ := iss.Issue(owner)
+	otherTok, _ := iss.Issue(seedAccount(t, h, "other2@example.test", true))
+
+	// Create a CV to switch the template on.
+	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs", ownerTok, createCVRequest{Title: "General"})
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("create = %d, want 201", resp.StatusCode)
+	}
+	var created struct {
+		Data struct {
+			ID int64 `json:"id"`
+		} `json:"data"`
+	}
+	json.NewDecoder(resp.Body).Decode(&created)
+	path := "/api/v1/me/cvs/" + strconv.FormatInt(created.Data.ID, 10) + "/template"
+
+	// Valid registered template → 204, and it sticks on read.
+	if resp := doCV(t, app, fiber.MethodPut, path, ownerTok, map[string]string{"template_id": "modern-sans"}); resp.StatusCode != fiber.StatusNoContent {
+		t.Fatalf("set valid template = %d, want 204", resp.StatusCode)
+	}
+	resp = doCV(t, app, fiber.MethodGet, "/api/v1/me/cvs/"+strconv.FormatInt(created.Data.ID, 10), ownerTok, nil)
+	var got struct {
+		Data struct {
+			TemplateID string `json:"template_id"`
+			Title      string `json:"title"`
+		} `json:"data"`
+	}
+	json.NewDecoder(resp.Body).Decode(&got)
+	if got.Data.TemplateID != "modern-sans" {
+		t.Errorf("template = %q, want modern-sans", got.Data.TemplateID)
+	}
+	if got.Data.Title != "General" {
+		t.Errorf("title changed to %q, want General", got.Data.Title)
+	}
+
+	// Unknown template → 400.
+	if resp := doCV(t, app, fiber.MethodPut, path, ownerTok, map[string]string{"template_id": "nope"}); resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("unknown template = %d, want 400", resp.StatusCode)
+	}
+
+	// Foreign owner → 404.
+	if resp := doCV(t, app, fiber.MethodPut, path, otherTok, map[string]string{"template_id": "centered"}); resp.StatusCode != fiber.StatusNotFound {
+		t.Errorf("foreign set = %d, want 404", resp.StatusCode)
+	}
 }
 
 func TestCVEndpoints_CRUDIsolationAndGating(t *testing.T) {

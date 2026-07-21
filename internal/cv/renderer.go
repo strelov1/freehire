@@ -42,6 +42,14 @@ func NewTypstRenderer(bin string) *TypstRenderer {
 
 // Render compiles the template against the document and returns the PDF bytes.
 func (r *TypstRenderer) Render(ctx context.Context, doc Document, tmpl Template) ([]byte, error) {
+	return r.compile(ctx, doc, tmpl, "pdf")
+}
+
+// compile stages the document, template, and bundled fonts in a sandboxed temp dir and runs
+// typst, returning the output in the requested format ("pdf" for live rendering, "svg" for
+// preview generation). Shared by Render and GeneratePreviews so both use the exact same font
+// staging and sandbox flags.
+func (r *TypstRenderer) compile(ctx context.Context, doc Document, tmpl Template, format string) ([]byte, error) {
 	dir, err := os.MkdirTemp("", "cv-render-*")
 	if err != nil {
 		return nil, err
@@ -59,15 +67,25 @@ func (r *TypstRenderer) Render(ctx context.Context, doc Document, tmpl Template)
 	if err := os.WriteFile(tmplPath, tmpl.source, 0o600); err != nil {
 		return nil, err
 	}
-	outPath := filepath.Join(dir, "out.pdf")
+	// Stage the bundled fonts so --font-path exposes faces (e.g. Liberation Sans) that the
+	// Typst binary does not embed — without them --ignore-system-fonts would silently fall
+	// back to a default serif for the sans templates.
+	fontDir := filepath.Join(dir, "fonts")
+	if err := os.Mkdir(fontDir, 0o700); err != nil {
+		return nil, err
+	}
+	if err := writeFonts(fontDir); err != nil {
+		return nil, err
+	}
+	outPath := filepath.Join(dir, "out."+format)
 
 	ctx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
 
 	// Only fixed flags and temp paths reach argv — user data lives in data.json, so the
 	// command line is not an injection surface. --root confines file access to dir.
-	cmd := exec.CommandContext(ctx, r.bin, "compile",
-		"--root", dir, "--ignore-system-fonts", tmplPath, outPath)
+	cmd := exec.CommandContext(ctx, r.bin, "compile", "--format", format,
+		"--root", dir, "--ignore-system-fonts", "--font-path", fontDir, tmplPath, outPath)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("cv: typst compile: %w: %s", err, out)
 	}

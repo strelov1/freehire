@@ -309,6 +309,28 @@ func (q *Queries) SetCVSession(ctx context.Context, arg SetCVSessionParams) (int
 	return result.RowsAffected(), nil
 }
 
+const setCVTemplate = `-- name: SetCVTemplate :execrows
+UPDATE cvs
+SET template_id = $3, updated_at = now()
+WHERE id = $1 AND user_id = $2
+`
+
+type SetCVTemplateParams struct {
+	ID         int64  `json:"id"`
+	UserID     int64  `json:"user_id"`
+	TemplateID string `json:"template_id"`
+}
+
+// Change only a CV's template, stamping updated_at, leaving title and data untouched. Owner-
+// scoped: returns 0 affected rows for a foreign or missing id (the handler maps that to 404).
+func (q *Queries) SetCVTemplate(ctx context.Context, arg SetCVTemplateParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setCVTemplate, arg.ID, arg.UserID, arg.TemplateID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateCV = `-- name: UpdateCV :one
 UPDATE cvs
 SET title = $3, template_id = $4, data = $5, updated_at = now()

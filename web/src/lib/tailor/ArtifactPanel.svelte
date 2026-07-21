@@ -10,6 +10,7 @@
   import MatchAnalysisFull from '$lib/components/MatchAnalysisFull.svelte';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import CvEditor from '$lib/components/cv/CvEditor.svelte';
+  import TemplateGallery from './TemplateGallery.svelte';
   import type { Analysis } from '$lib/generated/contracts';
   import type { Job, MatchAnalysisResponse } from '$lib/types';
 
@@ -25,10 +26,11 @@
     refreshKey?: number;
   } = $props();
 
-  type Tab = 'cv' | 'edit' | 'jd' | 'verdict';
+  type Tab = 'cv' | 'edit' | 'templates' | 'jd' | 'verdict';
   const tabs: [Tab, string][] = [
     ['cv', 'CV'],
     ['edit', 'Edit'],
+    ['templates', 'Templates'],
     ['jd', 'Job description'],
     ['verdict', 'Verdict'],
   ];
@@ -116,6 +118,10 @@
     {:else if tab === 'edit'}
       <div class="p-4">
         <CvEditor id={cvId} embedded onSaved={() => (cvVersion += 1)} />
+      </div>
+    {:else if tab === 'templates'}
+      <div class="p-4">
+        <TemplateGallery {cvId} onSelected={() => (cvVersion += 1)} />
       </div>
     {:else if tab === 'jd'}
       <div class="p-4">
