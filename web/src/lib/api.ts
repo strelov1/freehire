@@ -63,6 +63,8 @@ import type {
   LocationPreferences,
   ReminderSettings,
   ReminderOverride,
+  CommunityThread,
+  CommunityReply,
 } from './types';
 
 /** A page of list items, optionally the total matching the query (endpoints that
@@ -1225,6 +1227,64 @@ export function createApi(
     return requestData<TailorResult>(`/api/v1/me/cvs/${id}/tailor-session`, jsonBody('POST', {}));
   }
 
+  /** A subject's open discussion threads, newest first. `subjectType` is 'company'
+   *  or 'job', `subjectSlug` the subject's public slug. `nextCursor` (when present)
+   *  fetches the following keyset page. Public — no auth needed to read. */
+  async function listThreads(
+    subjectType: string,
+    subjectSlug: string,
+    cursor?: string,
+  ): Promise<{ threads: CommunityThread[]; nextCursor?: string }> {
+    const qs = new URLSearchParams({ subject_type: subjectType, subject_slug: subjectSlug });
+    if (cursor) qs.set('cursor', cursor);
+    const res = await request<{ data: CommunityThread[]; meta: { next_cursor?: string } }>(
+      `/api/v1/threads?${qs}`,
+    );
+    return { threads: res.data, nextCursor: res.meta?.next_cursor };
+  }
+
+  /** How many open discussion threads a subject has — the detail-page badge. Public. */
+  async function countThreads(subjectType: string, subjectSlug: string): Promise<number> {
+    const qs = new URLSearchParams({ subject_type: subjectType, subject_slug: subjectSlug });
+    return (await requestData<{ count: number }>(`/api/v1/threads/count?${qs}`)).count;
+  }
+
+  /** A single thread with its first page of replies (oldest first). Public. */
+  async function getThread(
+    id: number,
+    cursor?: string,
+  ): Promise<{ thread: CommunityThread; replies: CommunityReply[]; nextCursor?: string }> {
+    const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+    const res = await request<{
+      data: { thread: CommunityThread; replies: CommunityReply[] };
+      meta: { next_cursor?: string };
+    }>(`/api/v1/threads/${id}${suffix}`);
+    return { thread: res.data.thread, replies: res.data.replies, nextCursor: res.meta?.next_cursor };
+  }
+
+  /** Open a thread on a subject. Requires a signed-in session (401 otherwise). */
+  async function createThread(input: {
+    subject_type: string;
+    subject_slug: string;
+    title: string;
+    body: string;
+  }): Promise<CommunityThread> {
+    return requestData<CommunityThread>('/api/v1/threads', jsonBody('POST', input));
+  }
+
+  /** Post a reply to a thread. Requires a signed-in session. `parentReplyId` nests
+   *  the reply under another reply (0/omitted = a top-level reply). */
+  async function createReply(
+    threadId: number,
+    body: string,
+    parentReplyId = 0,
+  ): Promise<CommunityReply> {
+    return requestData<CommunityReply>(
+      `/api/v1/threads/${threadId}/replies`,
+      jsonBody('POST', { body, parent_reply_id: parentReplyId }),
+    );
+  }
+
   return {
     listJobs,
     getJob,
@@ -1350,6 +1410,11 @@ export function createApi(
     cvPdfUrl,
     tailorCv,
     startTailorSession,
+    listThreads,
+    countThreads,
+    getThread,
+    createThread,
+    createReply,
   };
 }
 

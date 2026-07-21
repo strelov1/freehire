@@ -114,6 +114,8 @@ type Querier interface {
 	// cached ATS review, the derived CV embedding (no CV → no recommendations), and the
 	// derived structured résumé (the structure must not outlive the CV it describes).
 	ClearUserResume(ctx context.Context, id int64) error
+	// Moderator close: the thread leaves the open listing and rejects new replies.
+	CloseCommunityThread(ctx context.Context, id int64) error
 	// Soft-close one job now (see job-lifecycle): a moderator resolving a report with
 	// close_job=true. The third writer of closed_at, alongside the ingest sweep and the
 	// liveness probe. WHERE closed_at IS NULL keeps it idempotent — a second close on an
@@ -199,6 +201,14 @@ type Querier interface {
 	// applied_at set but no stage groups under a NULL stage. The Go layer folds these
 	// rows into the pipeline buckets.
 	CountMyJobsByStage(ctx context.Context, userID int64) ([]CountMyJobsByStageRow, error)
+	// Open-thread count for one subject — the "Discussion · N" badge on the detail page.
+	// Served by the partial index threads_subject_open_created_idx; scoped to a single
+	// subject so it stays cheap (not the cross-subject count the design rules out).
+	CountOpenThreadsBySubject(ctx context.Context, arg CountOpenThreadsBySubjectParams) (int64, error)
+	CountRecentRepliesByUser(ctx context.Context, arg CountRecentRepliesByUserParams) (int64, error)
+	// Rate-limit count: threads a user opened since a cutoff. Served by
+	// threads_author_created_idx.
+	CountRecentThreadsByUser(ctx context.Context, arg CountRecentThreadsByUserParams) (int64, error)
 	// How many distinct jobs the caller first analyzed within the window (created_at is the
 	// first-analysis time — see UpsertUserJobAnalysis). This is the fit-analysis quota
 	// meter: the PK guarantees one row per (user, job), so the row count is the distinct-job
@@ -451,6 +461,12 @@ type Querier interface {
 	// missing id returns no row (the handler maps it to 404). job_id is NULL for a base CV and
 	// the vacancy id for a tailored copy; agent_session_id is the bound roy session (or NULL).
 	GetCVByID(ctx context.Context, arg GetCVByIDParams) (GetCVByIDRow, error)
+	// Community discussion threads (see the add-community-threads change). Read paths
+	// join community_personas so a row carries the author's handle, never their user_id.
+	// A user's stable pseudonymous handle, or no row when they have never posted.
+	GetCommunityPersona(ctx context.Context, userID int64) (CommunityPersona, error)
+	// A single thread with its author handle.
+	GetCommunityThread(ctx context.Context, id int64) (GetCommunityThreadRow, error)
 	// SELECT * (not an explicit column list) so the generated row stays db.Company as
 	// the table grows columns (e.g. collections); an explicit subset makes sqlc emit a
 	// distinct row type and breaks the company-detail handler on every new column.
@@ -575,6 +591,11 @@ type Querier interface {
 	// request to a role-gated endpoint and needs only the role, so it does not drag the
 	// full user row (the GetJobIDBySlug precedent for a hot-path read).
 	GetUserRole(ctx context.Context, id int64) (string, error)
+	IncrementThreadReplyCount(ctx context.Context, id int64) error
+	// Mint a persona. ON CONFLICT (user_id) DO NOTHING makes a concurrent same-user mint
+	// return no row (the repository re-reads the winner); a handle-unique violation is a
+	// different collision the repository maps to a retry.
+	InsertCommunityPersona(ctx context.Context, arg InsertCommunityPersonaParams) (CommunityPersona, error)
 	// Append the debit for a metered action. delta is negative (the action cost). The partial
 	// unique index on (user_id, feature, ref) WHERE kind='debit' guards against a double charge
 	// for the same ref even under a race.
@@ -602,6 +623,11 @@ type Querier interface {
 	// never reset. extracted_at is non-NULL when the ingest prefilter already
 	// decided the post holds no vacancy, so it is recorded but never queued.
 	InsertTelegramPost(ctx context.Context, arg InsertTelegramPostParams) (int64, error)
+	// Open a thread. The author's handle is filled by the service from the minted
+	// persona, so no join is needed here.
+	InsertThread(ctx context.Context, arg InsertThreadParams) (Thread, error)
+	// parent_reply_id is NULL for a top-level reply, or another reply's id to nest under it.
+	InsertThreadReply(ctx context.Context, arg InsertThreadReplyParams) (ThreadReply, error)
 	// Slim beta-membership lookup for the RequireModeratorOrBeta middleware — a
 	// primitive bool so the auth package stays free of a db import (same shape as GetUserRole).
 	IsBetaTester(ctx context.Context, id int64) (bool, error)
@@ -788,6 +814,12 @@ type Querier interface {
 	// holds closed jobs, so unlike ListJobsUpdatedAfter there is nothing to delete. Served
 	// by jobs_open_enrich_freshness_idx (COALESCE(posted_at, created_at) DESC WHERE open).
 	ListOpenJobsPostedAfter(ctx context.Context, arg ListOpenJobsPostedAfterParams) ([]Job, error)
+	// Keyset continuation: rows strictly older than the cursor (created_at, id). No
+	// OFFSET, so deep pages never scan skipped rows.
+	ListOpenThreadsAfter(ctx context.Context, arg ListOpenThreadsAfterParams) ([]ListOpenThreadsAfterRow, error)
+	// First page of a subject's open threads, newest first. Served by the partial index
+	// threads_subject_open_created_idx.
+	ListOpenThreadsFirst(ctx context.Context, arg ListOpenThreadsFirstParams) ([]ListOpenThreadsFirstRow, error)
 	// The moderator queue: offers awaiting a decision, oldest first, with display name.
 	ListPendingReferralOffers(ctx context.Context) ([]ListPendingReferralOffersRow, error)
 	// The moderator review queue: every pending report, newest first, with the reporter's email
@@ -841,6 +873,10 @@ type Querier interface {
 	// vacancy's public slug and the bound agent session so each row links back to its workspace.
 	// Base CVs (job_id NULL) are excluded; the JOIN also drops tailored CVs whose job was deleted.
 	ListTailoredCVsByUser(ctx context.Context, userID int64) ([]ListTailoredCVsByUserRow, error)
+	ListThreadRepliesAfter(ctx context.Context, arg ListThreadRepliesAfterParams) ([]ListThreadRepliesAfterRow, error)
+	// First page of a thread's replies, oldest first. LEFT JOIN so a future AI reply
+	// (null author) still returns, with a null handle the API renders as the AI persona.
+	ListThreadRepliesFirst(ctx context.Context, arg ListThreadRepliesFirstParams) ([]ListThreadRepliesFirstRow, error)
 	// Every board currently failing or cooled down, worst first — the operator's
 	// "what's broken" query and the source of the per-run summary log.
 	ListUnhealthyBoards(ctx context.Context) ([]ListUnhealthyBoardsRow, error)

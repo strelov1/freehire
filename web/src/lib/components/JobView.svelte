@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { ArrowRight, Bookmark, Check, CheckCircle2, Eye, Flag } from '@lucide/svelte';
+  import { ArrowRight, Bookmark, Check, CheckCircle2, Eye, Flag, MessageSquare } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
@@ -28,6 +28,19 @@
   // yet loaded). `showApplyPrompt` is the post-click "Did you apply?" question.
   let interaction = $state.raw<UserJob | null>(null);
   let showApplyPrompt = $state(false);
+  // Open-thread count for the "Discussion · N" badge; loaded client-side so the
+  // page renders immediately and the number fills in. Failures leave it hidden.
+  let threadCount = $state<number | null>(null);
+  $effect(() => {
+    let alive = true;
+    api
+      .countThreads('job', job.public_slug)
+      .then((n) => alive && (threadCount = n))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  });
   // Set after the user confirms "Yes" on the apply prompt: surfaces a one-tap
   // link to the Tracking board where the job now sits. Reset when the job changes.
   let justApplied = $state(false);
@@ -206,6 +219,15 @@
     </div>
 
     <RealityBadge reality={job.reality} postedAt={job.posted_at} detailed />
+
+    <a
+      class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+      href={`/jobs/${job.public_slug}/discussion`}
+    >
+      <MessageSquare class="size-4" aria-hidden="true" /> Discussion{threadCount
+        ? ` · ${threadCount}`
+        : ''}
+    </a>
 
     {#if job.referral_available && job.company_slug}
       <ReferralBlock companySlug={job.company_slug} companyName={job.company} />

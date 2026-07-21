@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { MessageSquare } from '@lucide/svelte';
+  import { api } from '$lib/api';
   import type { Company } from '$lib/types';
   import CompanyLogo from './CompanyLogo.svelte';
   import CompanyFollowButton from './CompanyFollowButton.svelte';
@@ -9,6 +11,20 @@
   // mobile), so this stays compact. The card is always shown, even for an unenriched
   // company (just the identity row) — the tagline and the meta divider are present-only.
   let { company, slug }: { company: Company; slug: string } = $props();
+
+  // Open-thread count for the "Discussion · N" badge; loaded client-side so the
+  // header renders immediately and the number fills in. Failures leave it hidden.
+  let threadCount = $state<number | null>(null);
+  $effect(() => {
+    let alive = true;
+    api
+      .countThreads('company', slug)
+      .then((n) => alive && (threadCount = n))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  });
 
   const info = $derived(company.company_info ?? {});
   const industries = $derived(company.industries ?? []);
@@ -35,6 +51,16 @@
     <div class="shrink-0">
       <CompanyFollowButton {slug} companyName={company.name} />
     </div>
+  </div>
+  <div class="mt-3">
+    <a
+      class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+      href={`/companies/${slug}/discussion`}
+    >
+      <MessageSquare class="size-4" aria-hidden="true" /> Discussion{threadCount
+        ? ` · ${threadCount}`
+        : ''}
+    </a>
   </div>
   {#if hasMeta}
     <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-3">

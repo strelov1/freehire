@@ -33,6 +33,12 @@ type BoardHealth struct {
 	LastRunAt           pgtype.Timestamptz `json:"last_run_at"`
 }
 
+type CommunityPersona struct {
+	UserID    int64              `json:"user_id"`
+	Handle    string             `json:"handle"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type Company struct {
 	Slug             string             `json:"slug"`
 	Name             string             `json:"name"`
@@ -454,6 +460,29 @@ type TelegramPost struct {
 	LastError   string             `json:"last_error"`
 	ExtractedAt pgtype.Timestamptz `json:"extracted_at"`
 	Links       []byte             `json:"links"`
+}
+
+type Thread struct {
+	ID           int64              `json:"id"`
+	SubjectType  string             `json:"subject_type"`
+	SubjectRef   string             `json:"subject_ref"`
+	AnchorPath   pgtype.Text        `json:"anchor_path"`
+	Title        string             `json:"title"`
+	Body         string             `json:"body"`
+	AuthorUserID int64              `json:"author_user_id"`
+	ReplyCount   int32              `json:"reply_count"`
+	Status       string             `json:"status"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+type ThreadReply struct {
+	ID            int64              `json:"id"`
+	ThreadID      int64              `json:"thread_id"`
+	ParentReplyID pgtype.Int8        `json:"parent_reply_id"`
+	AuthorUserID  pgtype.Int8        `json:"author_user_id"`
+	IsAi          bool               `json:"is_ai"`
+	Body          string             `json:"body"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
 type User struct {

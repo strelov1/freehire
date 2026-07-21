@@ -18,6 +18,7 @@ import (
 	"github.com/strelov1/freehire/internal/auth/oauth"
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/boardresolve"
+	"github.com/strelov1/freehire/internal/community"
 	"github.com/strelov1/freehire/internal/contribution"
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/cv"
@@ -122,6 +123,10 @@ type API struct {
 	// (nil when S3 is unconfigured — offer submit then reports 503).
 	referral *referral.Service
 	blob     blobstore.Store
+	// community owns the anonymous discussion-thread use case (topics attached to a
+	// company or vacancy, pseudonymous personas, flat replies); the handlers translate
+	// wire ↔ domain and delegate to it.
+	community *community.Service
 	// report owns the job-report moderation queue (file/list/resolve/dismiss);
 	// resolving may soft-close the reported job through the job-lifecycle close path.
 	report *report.Service
@@ -350,6 +355,10 @@ func Register(app *fiber.App, cfg Config) {
 	referralCabinetURL := strings.TrimRight(cfg.FrontendOrigin, "/") + "/my/referrals?tab=incoming"
 	a.referral = referral.New(referral.NewQueriesRepository(queries), referralPinger,
 		referral.Config{CabinetURL: referralCabinetURL})
+	// One repository satisfies both the persistence port and the subject-existence
+	// port, so it is passed for each.
+	communityRepo := community.NewQueriesRepository(queries)
+	a.community = community.New(communityRepo, communityRepo, community.Config{})
 
 	app.Use(cors.New(cors.Config{AllowOrigins: cfg.FrontendOrigin}))
 
@@ -496,6 +505,19 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/reports", keyAuth, requireModerator, a.ListPendingReports)
 	api.Post("/reports/:id/resolve", keyAuth, requireModerator, a.ResolveReport)
 	api.Post("/reports/:id/dismiss", keyAuth, requireModerator, a.DismissReport)
+
+	// Community discussion threads: anonymous topics attached to a company or vacancy.
+	// Reads are public — only pseudonymous persona handles are ever exposed, never a
+	// user id — so discussions are browsable without signing in. Writing a thread or
+	// reply requires a signed-in session (cookie); closing a thread is moderator-gated.
+	cookieAuth := auth.RequireAuth(a.issuer)
+	api.Get("/threads", a.ListThreads)
+	// Registered before "/threads/:id" so "count" is not parsed as a thread id.
+	api.Get("/threads/count", a.CountThreads)
+	api.Get("/threads/:id", a.GetThread)
+	api.Post("/threads", cookieAuth, a.CreateThread)
+	api.Post("/threads/:id/replies", cookieAuth, a.CreateReply)
+	api.Post("/threads/:id/close", cookieAuth, requireModerator, a.CloseThread)
 
 	// User-scoped reads live under /me (consistent with /auth/me): the tracking
 	// listing joins the caller's interactions with the jobs they touch, viewed-slugs
