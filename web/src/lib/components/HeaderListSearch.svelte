@@ -41,7 +41,10 @@
 
 <svelte:window onkeydown={onWindowKeydown} />
 
-<div class="relative flex-1">
+<!-- `min-w-0` lets this flex item shrink below its content's intrinsic width (flex-1
+     alone keeps min-width:auto), so the box narrows to fit the header row instead of
+     overflowing it — the inner input (also min-w-0) absorbs the shrink. -->
+<div class="relative min-w-0 flex-1">
   <div
     class="flex h-11 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm focus-within:ring-2 focus-within:ring-ring"
   >
