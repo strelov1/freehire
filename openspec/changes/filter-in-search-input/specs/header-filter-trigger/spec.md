@@ -3,17 +3,19 @@
 ### Requirement: All-filters trigger in the header search box
 
 On list pages backed by a filter modal — the jobs feed (`/`), a company's jobs list
-(`/companies/[slug]`), and the companies list (`/companies`) — the shared header search
-box SHALL render an **All filters** trigger at its right edge, after the clear control
-and mirroring the location scope-prefix on the left. The trigger SHALL be shown on every
-viewport. Activating it SHALL open that page's own filter modal (the jobs `FilterModal`
-or the companies `CompanyFilterModal`) without changing the search text or its focus
-hotkey. The trigger SHALL NOT appear on pages served by the global search launcher or on
-the `/my/profile` page, whose Market-coverage filter tab is unaffected.
+(`/companies/[slug]`), a collection landing page (`/collections/[slug]`), and the
+companies list (`/companies`) — the shared header search box SHALL render an **All
+filters** trigger at its right edge, after the clear control and mirroring the location
+scope-prefix on the left. The trigger SHALL be shown on every viewport. Activating it
+SHALL open that page's own filter modal (the jobs `FilterModal` or the companies
+`CompanyFilterModal`) without changing the search text or its focus hotkey. The trigger
+SHALL NOT appear on pages served by the global search launcher or on the `/my/profile`
+page, whose Market-coverage filter tab is unaffected.
 
-#### Scenario: Trigger shown on the jobs feed
+#### Scenario: Trigger shown on a jobs-backed list
 
-- **WHEN** a user views the jobs feed (`/`) or a company's jobs list (`/companies/:slug`)
+- **WHEN** a user views the jobs feed (`/`), a company's jobs list (`/companies/:slug`),
+  or a collection landing page (`/collections/:slug`)
 - **THEN** the header search box shows an All-filters trigger at its right edge on every
   viewport
 

@@ -14,7 +14,10 @@ duplicated floating affordance.
   location/work-format scope-prefix on the left. It opens the active page's existing
   filter modal.
 - Show this trigger on all viewports across the jobs feed (`/`), the individual
-  company page (`/companies/[slug]`), and the companies list (`/companies`).
+  company page (`/companies/[slug]`), a collection landing page (`/collections/[slug]`),
+  and the companies list (`/companies`). The collection page previously showed the global
+  search launcher; it now hosts the list search box (like the company page) so its scoped
+  jobs list is both text-searchable and filterable from the header.
 - **BREAKING (UI)**: Remove both the inline toolbar filter button and the floating
   scroll-revealed filter edge button from `ListToolbar`. The sort control and the
   Swipe (Layers) affordance stay.
@@ -41,7 +44,10 @@ duplicated floating affordance.
 
 - `web/src/lib/listSearch.svelte.ts` — registered-target contract gains `activeFilters`
   and `openFilters`.
-- `web/src/lib/components/HeaderListSearch.svelte` — renders the trailing filter trigger.
+- `web/src/lib/components/HeaderListSearch.svelte` — renders the trailing filter trigger;
+  gains `min-w-0` so the search box shrinks to fit and never overflows the header row.
+- `web/src/lib/components/TopBar.svelte` — routes `/collections/[slug]` through the list
+  search box (`listKind`), so the collection page gains the header search + filter trigger.
 - `web/src/lib/components/ListToolbar.svelte` — drops the filter button (both variants)
   and its `active`/`onOpenFilters` props.
 - `web/src/lib/components/JobsView.svelte`, `web/src/lib/components/CompaniesView.svelte`

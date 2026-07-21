@@ -17,15 +17,16 @@
   // (the homepage feed `/`, /companies, and a company's own /companies/:slug jobs
   // list) it IS that page's filter (HeaderListSearch drives the list, so there's no
   // duplicate box); everywhere else it's the global launcher with the instant
-  // dropdown (HeaderSearch). A company detail page is a jobs list scoped to that
-  // company, so the header search filters its postings — hence 'company' shares the
-  // jobs proxy.
+  // dropdown (HeaderSearch). A company detail page and a collection landing page are
+  // both jobs lists scoped to that entity, so the header search filters their postings
+  // (and hosts the All-filters trigger) — hence they share the 'company' jobs proxy.
   const listKind = $derived(
     page.url.pathname === '/'
       ? 'jobs'
       : page.url.pathname === '/companies'
         ? 'companies'
-        : /^\/companies\/[^/]+$/.test(page.url.pathname)
+        : /^\/companies\/[^/]+$/.test(page.url.pathname) ||
+            /^\/collections\/[^/]+$/.test(page.url.pathname)
           ? 'company'
           : null,
   );
