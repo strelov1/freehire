@@ -26,6 +26,6 @@ reflects anonymous, signed-in, and API views (see `view-count-aggregation` and
 - **WHEN** the counts are produced
 - **THEN** the response contains only integer totals — never any user identifier, job id, or other row-level field
 
-#### Scenario: Empty database
+#### Scenario: Empty table
 - **WHEN** there are no interactions and no views
 - **THEN** the endpoint returns `{"data": {"saved": 0, "applied": 0, "viewed": 0}}` with a 200 status

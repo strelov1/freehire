@@ -5,12 +5,21 @@ TBD - created by archiving change open-engagement-stats. Update Purpose after ar
 ## Requirements
 ### Requirement: Public engagement counts
 The system SHALL expose an unauthenticated `GET /api/v1/stats/engagement` endpoint
-returning aggregate interaction counts from `user_jobs` — jobs saved, applications
-marked, and jobs viewed — computed directly from the table with no rollup.
+returning aggregate interaction counts. `saved` and `applied` are computed
+directly from `user_jobs` (rows whose respective timestamp is set). `viewed` is
+the total job views across all traffic, computed as `SUM(job_daily_views.uniques)`
+(the worker's per-day rollup — a `SUM` over the multi-million-row `jobs` table would
+seqscan and time the endpoint out) so it
+reflects anonymous, signed-in, and API views (see `view-count-aggregation` and
+`job-engagement-counts`). No rollup precomputation is required.
 
 #### Scenario: Counts returned
 - **WHEN** a client requests `GET /api/v1/stats/engagement`
-- **THEN** the response is `{"data": {"saved": <n>, "applied": <n>, "viewed": <n>}}` with each count the number of `user_jobs` rows whose respective timestamp is set
+- **THEN** the response is `{"data": {"saved": <n>, "applied": <n>, "viewed": <n>}}` where `saved` and `applied` are counts of `user_jobs` rows with the respective timestamp set, and `viewed` is `SUM(job_daily_views.uniques)`
+
+#### Scenario: viewed reflects all traffic
+- **WHEN** views have been aggregated from nginx logs into `job_daily_views`
+- **THEN** the `viewed` figure includes those anonymous and API views, not only signed-in interactions
 
 #### Scenario: No authentication required
 - **WHEN** the endpoint is requested without a session cookie or API key
@@ -21,6 +30,6 @@ marked, and jobs viewed — computed directly from the table with no rollup.
 - **THEN** the response contains only integer totals — never any user identifier, job id, or other row-level field
 
 #### Scenario: Empty table
-- **WHEN** there are no interactions
+- **WHEN** there are no interactions and no views
 - **THEN** the endpoint returns `{"data": {"saved": 0, "applied": 0, "viewed": 0}}` with a 200 status
 

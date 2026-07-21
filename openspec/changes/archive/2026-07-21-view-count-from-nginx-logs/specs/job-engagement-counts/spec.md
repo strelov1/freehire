@@ -23,7 +23,7 @@ both values directly from the `jobs` row without any per-request counting or joi
 - **THEN** the user's `user_jobs.viewed_at` is recorded
 - **AND** the job's `view_count` is not changed by that request
 
-#### Scenario: Existing data is backfilled on release
+#### Scenario: Existing interactions are backfilled on release
 
 - **WHEN** the change is released against a database that already holds
   `user_jobs` rows and retained nginx logs
