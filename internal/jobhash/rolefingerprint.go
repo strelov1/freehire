@@ -3,6 +3,7 @@ package jobhash
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"html"
 	"regexp"
 	"strings"
 
@@ -32,10 +33,23 @@ func RoleFingerprint(p db.UpsertJobParams) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// normalizeRoleText lower-cases and collapses runs of whitespace so cosmetic case or
-// spacing differences in a re-post do not split one role. The normalization stays
-// narrow (no stemming/punctuation stripping) to avoid over-merging distinct roles.
+// htmlTag matches a single HTML tag. Descriptions are stored as sanitized HTML (an
+// ingest-time bluemonday prose allowlist, see internal/sources.SanitizeHTML), so tags
+// are well-formed and their text is entity-escaped — there is no stray "<"/">" in
+// visible text for this to over-strip.
+var htmlTag = regexp.MustCompile(`<[^>]*>`)
+
+// normalizeRoleText reduces s to its visible text — HTML tags removed and HTML entities
+// decoded — then lower-cases and collapses runs of whitespace, so a re-post whose only
+// difference is markup, entity encoding, or cosmetic case/spacing still clusters to one
+// role. Tags are replaced with a space (not deleted) so words separated only by a block
+// element ("a</p><p>b") keep their boundary. The tag strip runs before entity decoding,
+// so an escaped angle bracket in visible text ("a &lt; b") is decoded only after real
+// tags are gone and is never mistaken for a tag. The normalization stays narrow beyond
+// this (no stemming/punctuation stripping) to avoid over-merging distinct roles.
 func normalizeRoleText(s string) string {
+	s = htmlTag.ReplaceAllString(s, " ")
+	s = html.UnescapeString(s)
 	return strings.Join(strings.Fields(strings.ToLower(s)), " ")
 }
 

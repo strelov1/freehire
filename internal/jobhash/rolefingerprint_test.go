@@ -157,6 +157,81 @@ func TestRoleFingerprint_DifferentDescriptionStaysSeparate(t *testing.T) {
 	}
 }
 
+// The fingerprint compares VISIBLE text, not markup: two postings whose rendered
+// title and description are identical must share a fingerprint even when their HTML
+// differs (a stray tag, a different wrapper, or an entity vs its literal). Descriptions
+// are stored as sanitized HTML, so markup churn from a re-post or a second source must
+// not split one role.
+func TestRoleFingerprint_IgnoresDescriptionMarkup(t *testing.T) {
+	base := sample()
+	base.Description = "<p>Build <strong>smart</strong> fridges. Q&amp;A included.</p>"
+	baseFP := RoleFingerprint(base)
+	cases := map[string]string{
+		"extra_br":        "<p>Build <strong>smart</strong> fridges. Q&amp;A included.</p><br>",
+		"different_wrap":  "<div>Build <b>smart</b> fridges. Q&amp;A included.</div>",
+		"entity_vs_liter": "<p>Build <strong>smart</strong> fridges. Q&A included.</p>",
+		"no_markup":       "Build smart fridges. Q&A included.",
+	}
+	for name, desc := range cases {
+		t.Run(name, func(t *testing.T) {
+			p := sample()
+			p.Description = desc
+			if got := RoleFingerprint(p); got != baseFP {
+				t.Errorf("markup-only difference %s split the fingerprint (should collapse)", name)
+			}
+		})
+	}
+}
+
+// Entity decoding applies to the title too, so a source that HTML-encodes an ampersand
+// in the title clusters with one that does not.
+func TestRoleFingerprint_DecodesEntitiesInTitle(t *testing.T) {
+	literal := sample()
+	literal.Title = "R&D Platform Engineer"
+	encoded := sample()
+	encoded.Title = "R&amp;D Platform Engineer"
+	if RoleFingerprint(literal) != RoleFingerprint(encoded) {
+		t.Error("entity-encoded title did not cluster with its decoded form")
+	}
+}
+
+// An `&nbsp;` entity folds to a plain space, so a posting that glues words with the
+// no-break-space entity clusters with one that uses a regular space.
+func TestRoleFingerprint_FoldsNonBreakingSpaceEntity(t *testing.T) {
+	nbsp := sample()
+	nbsp.Description = "Build&nbsp;smart&nbsp;fridges."
+	plain := sample()
+	plain.Description = "Build smart fridges."
+	if RoleFingerprint(nbsp) != RoleFingerprint(plain) {
+		t.Error("&nbsp;-glued description did not cluster with its space-separated form")
+	}
+}
+
+// Markup that carries no visible text (an empty or tags-only description) normalizes to
+// the same empty text, so two such postings with an equal title still share a fingerprint.
+func TestRoleFingerprint_EmptyAndTagsOnlyDescriptionCollapse(t *testing.T) {
+	empty := sample()
+	empty.Description = ""
+	tagsOnly := sample()
+	tagsOnly.Description = "<p></p><br>"
+	if RoleFingerprint(empty) != RoleFingerprint(tagsOnly) {
+		t.Error("empty and tags-only descriptions produced different fingerprints")
+	}
+}
+
+// The over-merge guard survives visible-text normalization: two postings with the same
+// markup shape but a real visible-text difference (e.g. a city-specific legal clause in
+// one and not the other, like the Austrian Kollektivvertrag case) must stay separate.
+func TestRoleFingerprint_VisibleTextDifferenceStaysSeparate(t *testing.T) {
+	withClause := sample()
+	withClause.Description = "<p>Build smart fridges.</p><p>Kollektivvertrag Wien applies.</p>"
+	without := sample()
+	without.Description = "<p>Build smart fridges.</p>"
+	if RoleFingerprint(withClause) == RoleFingerprint(without) {
+		t.Error("distinct visible descriptions collapsed: over-merge across a real text difference")
+	}
+}
+
 // Field-boundary guard: title/description content must not shift across the boundary
 // and collide.
 func TestRoleFingerprint_FieldsAreDelimited(t *testing.T) {
