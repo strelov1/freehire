@@ -158,6 +158,23 @@
   }
 </script>
 
+<!-- The apply CTA renders twice: inline in the header on desktop, and in the
+     mobile sticky bar at the end of the article. Sole difference is size + layout
+     classes, so both share this snippet. -->
+{#snippet applyCta(size: 'md' | 'lg', className: string)}
+  <Button
+    variant="primary"
+    {size}
+    href={job.url}
+    target="_blank"
+    rel="noopener noreferrer"
+    onclick={onApplyClick}
+    class={className}
+  >
+    Show <ArrowRight class="size-4" />
+  </Button>
+{/snippet}
+
 <!-- Wide layout mirroring /jobs. The company line spans the very top; below it a
      sticky left sidebar (salary + actions + metadata) starts level with the title,
      and the description reads in the right column. On mobile everything stacks:
@@ -193,16 +210,8 @@
         {/if}
       </div>
 
-      <Button
-        variant="primary"
-        href={job.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        onclick={onApplyClick}
-        class="w-full shrink-0 sm:w-auto"
-      >
-        Show <ArrowRight class="size-4" />
-      </Button>
+      <!-- Hidden below lg: on mobile the CTA lives in the sticky bottom bar instead. -->
+      {@render applyCta('md', 'hidden shrink-0 lg:inline-flex')}
     </div>
 
     <RealityBadge reality={job.reality} postedAt={job.posted_at} detailed />
@@ -378,6 +387,19 @@
     {/if}
 
     <JobDescription html={job.description} />
+  </div>
+
+  <!-- Mobile apply CTA. It sticks to the bottom of the viewport while the job
+       scrolls, then releases at the article's end so it never covers the related
+       jobs below; the safe-area padding clears the home indicator. The bar is a
+       frosted-glass panel (semi-transparent bg + backdrop-blur), full-bleed via
+       negative margins that cancel the page gutter. pointer-events-none lets the
+       description scroll under the glass, with pointer-events-auto re-enabling the
+       button. Desktop uses the inline header button instead (hidden at lg). -->
+  <div
+    class="pointer-events-none sticky bottom-0 z-30 -mx-5 border-t border-border/40 bg-background/15 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-lg sm:-mx-4 sm:px-4 lg:hidden"
+  >
+    {@render applyCta('lg', 'pointer-events-auto w-full rounded-xl font-semibold shadow-lg')}
   </div>
 </article>
 
