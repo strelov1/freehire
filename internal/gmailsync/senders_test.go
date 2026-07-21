@@ -86,19 +86,15 @@ func TestBuildQueryLearnedDomains(t *testing.T) {
 	}
 }
 
-// TestBuildQueryRecallSignals locks in the non-ATS-domain recall classes measured
-// as missed by the sender allowlist alone: interview-scheduling senders, LinkedIn
-// InMail, calendar invites, and multilingual application phrases. Everything the
-// query pulls is LLM-classified downstream, so the query is recall-first.
+// TestBuildQueryRecallSignals locks in the non-ATS-domain recall class measured as
+// missed by the sender allowlist alone: multilingual application phrases matched by
+// Gmail full-text. Everything the query pulls is LLM-classified downstream, so the
+// query is recall-first.
 func TestBuildQueryRecallSignals(t *testing.T) {
 	q := BuildQuery(1_700_000_000, nil)
 	wants := []string{
-		"cal.com",                       // booking domain (interview scheduling)
-		"oncehub.com",                   // booking domain
-		"inmail-hit-reply@linkedin.com", // LinkedIn InMail (not jobalerts)
-		"filename:ics",                  // calendar invites from any organizer
-		`"thank you for applying"`,      // strong English phrase
-		`"recebemos sua candidatura"`,   // pt: multilingual recall
+		`"thank you for applying"`,    // strong English phrase
+		`"recebemos sua candidatura"`, // pt: multilingual recall
 	}
 	for _, w := range wants {
 		if !strings.Contains(q, w) {
@@ -110,8 +106,8 @@ func TestBuildQueryRecallSignals(t *testing.T) {
 	if !strings.HasPrefix(q, "(") || !strings.Contains(q, ") after:1700000000") {
 		t.Errorf("after: must apply to the whole OR-group: %q", q)
 	}
-	// LinkedIn job-alert digests are not applications and must not be pulled.
-	if strings.Contains(q, "jobalerts-noreply") || strings.Contains(q, "jobs-noreply") {
-		t.Errorf("query should not pull LinkedIn job alerts: %q", q)
+	// LinkedIn is no longer a recall source — no linkedin.com senders in the query.
+	if strings.Contains(q, "linkedin.com") {
+		t.Errorf("query should not reference LinkedIn: %q", q)
 	}
 }

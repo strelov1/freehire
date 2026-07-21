@@ -51,60 +51,40 @@ var ATSDomains = []string{
 // hardcoded; they enter the query via the self-learning cache (see learn.go), so
 // the allowlist grows from real classifications instead of curation-by-anecdote.
 
-// Recall signals beyond the ATS sender allowlist, each measured as a class the
-// allowlist alone misses. Adding one is a single line, mirroring ATSDomains.
-// Everything the query pulls is LLM-classified downstream, so the query is
-// recall-first; precision is the classifier's job, not the gate's.
-var (
-	// bookingDomains are interview-scheduling senders whose mail carries the
-	// interview signal without ATS markers or application boilerplate.
-	bookingDomains = []string{
-		"cal.com",
-		"oncehub.com",
-		"calendly.com",
-	}
-	// inmailSenders are recruiter-outreach senders (LinkedIn InMail), listed as
-	// exact addresses to exclude LinkedIn's job-alert digests, which are not
-	// applications (jobalerts-noreply@, jobs-noreply@).
-	inmailSenders = []string{
-		"inmail-hit-reply@linkedin.com",         // InMail
-		"messaging-digest-noreply@linkedin.com", // "X just messaged you" (recruiter DMs)
-	}
-	// recallPhrases are strong application/interview phrases matched by Gmail
-	// full-text, catching job mail from senders on no allowlist (direct company
-	// domains, personal recruiters). Multilingual for a multilingual inbox.
-	recallPhrases = []string{
-		"thank you for applying",
-		"thanks for applying",
-		"your application at",
-		"we regret to inform",
-		"invite you to interview",
-		"complete your interview",
-		"recebemos sua candidatura",  // pt: we received your application
-		"convite para entrevista",    // pt: interview invitation
-		"ваш отклик",                 // ru: your application
-		"приглашаем вас",             // ru: we invite you
-		"hemos recibido tu",          // es: we have received your
-		"invitación a la entrevista", // es: interview invitation
-	}
-)
+// recallPhrases are strong application/interview phrases matched by Gmail
+// full-text, catching job mail from senders on no allowlist (direct company
+// domains, personal recruiters) that the ATS sender allowlist alone misses.
+// Multilingual for a multilingual inbox. Everything the query pulls is
+// LLM-classified downstream, so the query is recall-first; precision is the
+// classifier's job, not the gate's.
+var recallPhrases = []string{
+	"thank you for applying",
+	"thanks for applying",
+	"your application at",
+	"we regret to inform",
+	"invite you to interview",
+	"complete your interview",
+	"recebemos sua candidatura",  // pt: we received your application
+	"convite para entrevista",    // pt: interview invitation
+	"ваш отклик",                 // ru: your application
+	"приглашаем вас",             // ru: we invite you
+	"hemos recibido tu",          // es: we have received your
+	"invitación a la entrevista", // es: interview invitation
+}
 
 // BuildQuery builds a Gmail search query for job-application mail newer than the
-// given Unix watermark. It ORs the hardcoded universal core (ATS/booking/InMail
-// senders) with any learned domains (extraDomains, promoted by the self-learning
-// cache), calendar invites, and multilingual application phrases, so non-ATS-domain
-// mail is still synced; the whole union is time-bounded by after:. A zero watermark
-// omits the time clause for a first-run backfill.
+// given Unix watermark. It ORs the hardcoded ATS sender core with any learned
+// domains (extraDomains, promoted by the self-learning cache) and multilingual
+// application phrases, so non-ATS-domain mail is still synced; the whole union is
+// time-bounded by after:. A zero watermark omits the time clause for a first-run
+// backfill.
 func BuildQuery(afterUnix int64, extraDomains []string) string {
-	senders := make([]string, 0, len(ATSDomains)+len(bookingDomains)+len(inmailSenders)+len(extraDomains))
+	senders := make([]string, 0, len(ATSDomains)+len(extraDomains))
 	senders = append(senders, ATSDomains...)
-	senders = append(senders, bookingDomains...)
-	senders = append(senders, inmailSenders...)
 	senders = append(senders, extraDomains...)
 
 	clauses := []string{
 		"from:(" + strings.Join(senders, " OR ") + ")",
-		"filename:ics", // calendar invites from any organizer (e.g. Google "Приглашение")
 	}
 	for _, p := range recallPhrases {
 		clauses = append(clauses, `"`+p+`"`)
