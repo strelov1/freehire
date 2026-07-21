@@ -20,6 +20,16 @@ const StateCookieName = "hire_oauth_state"
 // page. It rides the same Lax, short-lived round-trip as the state cookie.
 const ReturnCookieName = "hire_oauth_return"
 
+// PlatformCookieName remembers that a sign-in was started by the mobile app
+// (`?platform=mobile`), so the callback finishes with a custom-scheme deep link
+// carrying a one-time code instead of setting the session cookie and redirecting
+// to the web frontend. Rides the same Lax, short-lived round-trip.
+const PlatformCookieName = "hire_oauth_platform"
+
+// PlatformMobile is the only recognized platform value; anything else means the
+// default web flow.
+const PlatformMobile = "mobile"
+
 // stateTTL bounds how long a started sign-in stays completable. Ten minutes
 // covers a slow consent screen without leaving stale states around.
 const stateTTL = 10 * time.Minute
@@ -51,6 +61,16 @@ func SetReturnCookie(c *fiber.Ctx, path string, secure bool) {
 // ClearReturnCookie removes the return cookie (single-use, like the state).
 func ClearReturnCookie(c *fiber.Ctx, secure bool) {
 	writeCookie(c, ReturnCookieName, "", time.Now().Add(-time.Hour), secure)
+}
+
+// SetPlatformCookie records the initiating platform for the callback to read.
+func SetPlatformCookie(c *fiber.Ctx, platform string, secure bool) {
+	writeCookie(c, PlatformCookieName, platform, time.Now().Add(stateTTL), secure)
+}
+
+// ClearPlatformCookie removes the platform cookie (single-use, like the state).
+func ClearPlatformCookie(c *fiber.Ctx, secure bool) {
+	writeCookie(c, PlatformCookieName, "", time.Now().Add(-time.Hour), secure)
 }
 
 // writeCookie is the single place these short-lived sign-in cookies get their

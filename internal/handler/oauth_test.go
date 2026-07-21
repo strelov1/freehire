@@ -36,12 +36,25 @@ func oauthApp(providers map[string]oauth.Provider) *fiber.App {
 	h := &API{
 		issuer:         auth.NewIssuer("test-secret", time.Hour),
 		oauth:          providers,
+		oauthCodes:     oauth.NewCodeStore(time.Minute),
 		frontendOrigin: "http://app.example",
 	}
 	app.Get("/api/v1/auth/oauth/providers", h.ListOAuthProviders)
 	app.Get("/api/v1/auth/oauth/:provider/start", h.OAuthStart)
 	app.Get("/api/v1/auth/oauth/:provider/callback", h.OAuthCallback)
+	app.Post("/api/v1/auth/oauth/exchange", h.OAuthExchange)
 	return app
+}
+
+func postOAuthJSON(t *testing.T, app *fiber.App, path, body string) *http.Response {
+	t.Helper()
+	req := httptest.NewRequest(fiber.MethodPost, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	return resp
 }
 
 func get(t *testing.T, app *fiber.App, path string, cookies ...string) *http.Response {
@@ -143,5 +156,57 @@ func TestOAuthCallback_MissingCodeRedirectsWithError(t *testing.T) {
 	resp := get(t, app, "/api/v1/auth/oauth/google/callback?state=s", oauth.StateCookieName+"=s")
 	if resp.StatusCode != fiber.StatusFound || resp.Header.Get("Location") != "http://app.example/?auth_error=oauth" {
 		t.Errorf("status/Location = %d %q, want error redirect", resp.StatusCode, resp.Header.Get("Location"))
+	}
+}
+
+// --- Mobile flow ------------------------------------------------------------
+
+func TestOAuthStart_MobileSetsPlatformCookie(t *testing.T) {
+	app := oauthApp(map[string]oauth.Provider{"google": &fakeProvider{name: "google"}})
+
+	resp := get(t, app, "/api/v1/auth/oauth/google/start?platform=mobile")
+	setCookie := strings.Join(resp.Header.Values("Set-Cookie"), "\n")
+	if !strings.Contains(setCookie, oauth.PlatformCookieName+"=mobile") {
+		t.Errorf("Set-Cookie %q missing platform=mobile", setCookie)
+	}
+
+	// A plain (web) start must not set the platform cookie.
+	web := get(t, app, "/api/v1/auth/oauth/google/start")
+	if sc := strings.Join(web.Header.Values("Set-Cookie"), "\n"); strings.Contains(sc, oauth.PlatformCookieName+"=mobile") {
+		t.Errorf("web start unexpectedly set platform cookie: %q", sc)
+	}
+}
+
+func TestOAuthCallback_MobileErrorRedirectsToScheme(t *testing.T) {
+	app := oauthApp(map[string]oauth.Provider{"google": &fakeProvider{name: "google"}})
+	// State mismatch, but the platform cookie marks this a mobile flow → the
+	// error must bounce to the app's custom scheme, not the web frontend.
+	resp := get(t, app, "/api/v1/auth/oauth/google/callback?code=x&state=evil",
+		oauth.StateCookieName+"=good", oauth.PlatformCookieName+"=mobile")
+
+	if resp.StatusCode != fiber.StatusFound {
+		t.Fatalf("status = %d, want 302", resp.StatusCode)
+	}
+	if loc := resp.Header.Get("Location"); loc != oauth.MobileCallbackURL+"?auth_error=oauth" {
+		t.Errorf("Location = %q, want mobile auth_error deep link", loc)
+	}
+}
+
+func TestOAuthExchange_InvalidCodeIs401(t *testing.T) {
+	app := oauthApp(map[string]oauth.Provider{})
+	resp := postOAuthJSON(t, app, "/api/v1/auth/oauth/exchange", `{"code":"nope"}`)
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", resp.StatusCode)
+	}
+	if sc := strings.Join(resp.Header.Values("Set-Cookie"), "\n"); strings.Contains(sc, auth.CookieName+"=") {
+		t.Errorf("session cookie set for an invalid code: %q", sc)
+	}
+}
+
+func TestOAuthExchange_BadBodyIs400(t *testing.T) {
+	app := oauthApp(map[string]oauth.Provider{})
+	resp := postOAuthJSON(t, app, "/api/v1/auth/oauth/exchange", `not json`)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("status = %d, want 400", resp.StatusCode)
 	}
 }

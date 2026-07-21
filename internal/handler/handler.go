@@ -75,6 +75,9 @@ type API struct {
 	// oauth maps enabled OAuth provider names to their implementations; empty
 	// when no provider is configured (the routes then 404 / list empty).
 	oauth map[string]oauth.Provider
+	// oauthCodes hands out the single-use codes that carry a mobile OAuth
+	// sign-in from the browser callback to the app's /exchange call.
+	oauthCodes *oauth.CodeStore
 	// frontendOrigin is where OAuth callbacks send the browser back to.
 	frontendOrigin string
 	// gmailConnector + gmailCipher back the "Connect Gmail" inbox. Both nil when
@@ -263,6 +266,7 @@ func Register(app *fiber.App, cfg Config) {
 		cookieSecure:   cfg.CookieSecure,
 		cookieDomain:   cfg.CookieDomain,
 		oauth:          cfg.OAuthProviders,
+		oauthCodes:     oauth.NewCodeStore(60 * time.Second),
 		frontendOrigin: cfg.FrontendOrigin,
 		gmailConnector: cfg.GmailConnector,
 		gmailCipher:    cfg.GmailCipher,
@@ -646,4 +650,7 @@ func Register(app *fiber.App, cfg Config) {
 	authGroup.Get("/oauth/providers", a.ListOAuthProviders)
 	authGroup.Get("/oauth/:provider/start", a.OAuthStart)
 	authGroup.Get("/oauth/:provider/callback", a.OAuthCallback)
+	// Mobile-only: redeem the one-time code from the custom-scheme callback for a
+	// session. Public; the code is the credential.
+	authGroup.Post("/oauth/exchange", a.OAuthExchange)
 }
