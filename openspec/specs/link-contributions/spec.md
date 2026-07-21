@@ -6,8 +6,8 @@ TBD - created by archiving change add-link-contributions. Update Purpose after a
 ### Requirement: Authenticated board contribution
 
 The system SHALL accept a board contribution only from an authenticated user, identified by
-session cookie or API key, and SHALL attribute every recorded board and awarded point to that
-user.
+session cookie or API key, and SHALL attribute every recorded board and awarded AI-credits
+reward to that user.
 
 #### Scenario: Anonymous request is rejected
 
@@ -17,7 +17,7 @@ user.
 #### Scenario: Authenticated request is attributed
 
 - **WHEN** an authenticated user submits a link that passes all checks
-- **THEN** the recorded board is owned by that user and their point is credited to that user
+- **THEN** the recorded board is owned by that user and the AI-credits reward is credited to that user
 
 ### Requirement: Supported-ATS board recognition
 
@@ -56,50 +56,47 @@ trailing `/apply` segment, and any trailing slash — and store the canonical fo
 
 The system SHALL reject a contribution whose board is already crawled — any job exists whose
 identity is under that board namespace — with a distinct "board already in catalogue" error,
-and SHALL NOT record it or award a point.
+and SHALL NOT record it or award AI credits.
 
 #### Scenario: A board we already crawl is rejected
 
 - **WHEN** a user submits a link for a board that already has jobs in the catalogue
-- **THEN** the system responds 409 with a "board already in catalogue" error and awards no point
+- **THEN** the system responds 409 with a "board already in catalogue" error and awards no credits
 
 ### Requirement: Reject a board already contributed
 
 The system SHALL reject a contribution whose board was already recorded (by any user), with a
-distinct "board already contributed" error, and SHALL NOT record a second row or award a point.
-The board — not the vacancy — is the uniqueness key, so any second link to the same company
-collides.
+distinct "board already contributed" error, and SHALL NOT record a second row or award AI
+credits. The board — not the vacancy — is the uniqueness key, so any second link to the same
+company collides.
 
 #### Scenario: A second vacancy on the same board is rejected
 
 - **WHEN** a user submits a link whose board matches an existing contribution
-- **THEN** the system responds 409 with a "board already contributed" error and awards no point
+- **THEN** the system responds 409 with a "board already contributed" error and awards no credits
 
 #### Scenario: Concurrent duplicate submissions credit at most one
 
 - **WHEN** two requests for the same new board race
-- **THEN** exactly one board is recorded and exactly one point is awarded; the other receives the "board already contributed" error
+- **THEN** exactly one board is recorded and exactly one AI-credits reward is awarded; the other receives the "board already contributed" error
 
-### Requirement: Recording a novel board and awarding a point
+### Requirement: Recording a novel board and awarding AI credits
 
 For a supported, non-duplicate board, the system SHALL record a contribution row — owner,
-canonical URL, source, and board slug — and SHALL increment the owner's points balance by one,
-atomically with the insert.
+canonical URL, source, and board slug — and SHALL award the owner the configured AI-credits
+contribution reward, idempotently keyed by the contribution id so retries never double-credit.
+The reward banks above the monthly grant and does not expire. The system SHALL NOT maintain any
+separate per-user "points" counter.
 
 #### Scenario: Novel board is recorded and rewarded
 
 - **WHEN** a user submits a supported link for a board we neither crawl nor already hold
-- **THEN** a contribution row is recorded and the user's points balance increases by one
+- **THEN** a contribution row is recorded and the user's AI-credits balance increases by the contribution reward
 
-### Requirement: Points balance is surfaced to the user
+#### Scenario: Reward is idempotent per contribution
 
-The system SHALL expose the authenticated user's current points balance so the frontend can
-display it.
-
-#### Scenario: Balance reflects accepted boards
-
-- **WHEN** a user who has had three boards accepted requests their account view
-- **THEN** the response includes a points balance of three
+- **WHEN** the reward for an already-recorded contribution is applied again (retry)
+- **THEN** the AI-credits balance is unchanged — the reward is credited at most once per contribution
 
 ### Requirement: My contributions view
 
@@ -122,12 +119,12 @@ not linked to any user SHALL prompt the user to link their account first.
 #### Scenario: Linked user's board link is recorded and rewarded
 
 - **WHEN** a linked user sends a supported board link to the bot chat
-- **THEN** the board is recorded, the user's point is credited, and the bot replies confirming the new board
+- **THEN** the board is recorded, the user's AI-credits reward is credited, and the bot replies confirming the new board
 
-#### Scenario: Second link on the same board earns no point
+#### Scenario: Second link on the same board earns no reward
 
 - **WHEN** a linked user sends another link for a board they already contributed
-- **THEN** no point is credited and the bot replies that the board was already contributed
+- **THEN** no AI credits are credited and the bot replies that the board was already contributed
 
 #### Scenario: Ordinary chatter is ignored
 
