@@ -32,6 +32,27 @@ func TestClassify(t *testing.T) {
 			wantKind: KindPage,
 		},
 		{
+			// SvelteKit client-side (SPA) navigation to the detail page fetches the
+			// load data, not the HTML — this is how in-app clicks show up.
+			name:     "sveltekit __data.json navigation counts as a page view",
+			rec:      Record{Method: "GET", Path: "/jobs/acme-eng-123/__data.json", Status: 200},
+			wantOK:   true,
+			wantSlug: "acme-eng-123",
+			wantKind: KindPage,
+		},
+		{
+			name:     "__data.json with sveltekit query strips both",
+			rec:      Record{Method: "GET", Path: "/jobs/acme-eng-123/__data.json?x-sveltekit-invalidated=01", Status: 200},
+			wantOK:   true,
+			wantSlug: "acme-eng-123",
+			wantKind: KindPage,
+		},
+		{
+			name:   "sub-resource __data.json is not a detail-page view",
+			rec:    Record{Method: "GET", Path: "/jobs/acme-eng-123/similar/__data.json", Status: 200},
+			wantOK: false,
+		},
+		{
 			name:   "job list is not a view",
 			rec:    Record{Method: "GET", Path: "/jobs", Status: 200},
 			wantOK: false,

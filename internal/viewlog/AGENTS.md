@@ -11,9 +11,10 @@ SSR→backend boundary) — lets us filter bots and cover anonymous + API unifor
 
 - `ParseLine(line) (Record, ok)` — one nginx `combined`-format line → `Record`
   (IP, timestamp, method, path, status, UA). Unparseable/bad-request lines → `ok=false`.
-- `Classify(Record) (Signal, ok)` — a 2xx GET of exactly `/jobs/<slug>` (`KindPage`)
-  or `/api/v1/jobs/<slug>` (`KindAPI`) → the slug; everything else ignored (a slug is
-  one path segment, so lists and sub-resources like `/similar`, `/fit` don't count).
+- `Classify(Record) (Signal, ok)` — a 2xx GET of `/jobs/<slug>` or its SvelteKit SPA
+  data request `/jobs/<slug>/__data.json` (`KindPage`), or `/api/v1/jobs/<slug>`
+  (`KindAPI`) → the slug; everything else ignored (a slug is one path segment, so
+  lists and sub-resources like `/similar`, `/fit` don't count).
 - `Aggregate(reader) map[day]map[slug]int` — dedups by `(hash(IP+UA), slug, day)`,
   the day taken from each line's timestamp (UTC); page opens from known bots are
   dropped, API reads are not bot-filtered.

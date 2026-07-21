@@ -25,8 +25,10 @@ counting or write as a side effect of serving a job.
 The worker SHALL count exactly two request signals, both requiring a successful
 (2xx) response:
 
-- a page open: `GET /jobs/<slug>` (the SSR detail page) — the worker SHALL skip
-  lines whose User-Agent matches a known-bot list;
+- a page open: `GET /jobs/<slug>` (a full/direct SSR load) or
+  `GET /jobs/<slug>/__data.json` (a SvelteKit client-side navigation, which fetches
+  the load data instead of the HTML) — the worker SHALL treat both as the same page
+  view and SHALL skip lines whose User-Agent matches a known-bot list;
 - an API read: `GET /api/v1/jobs/<slug>` — the worker SHALL NOT apply bot
   filtering to this signal.
 
@@ -38,6 +40,12 @@ counted.
 - **WHEN** the log contains `GET /jobs/acme-engineer-123 HTTP/2.0` with status 200
   and a non-bot User-Agent
 - **THEN** the worker counts one page-open view for that job's slug
+
+#### Scenario: SvelteKit SPA navigation is counted for the same slug
+
+- **WHEN** the log contains `GET /jobs/acme-engineer-123/__data.json` (with any
+  query) with status 200 and a non-bot User-Agent
+- **THEN** the worker counts one page-open view for `acme-engineer-123`
 
 #### Scenario: Known bot on the page path is skipped
 

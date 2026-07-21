@@ -30,6 +30,12 @@ func Classify(rec Record) (Signal, bool) {
 	if i := strings.IndexByte(path, '?'); i >= 0 {
 		path = path[:i]
 	}
+	// A SvelteKit client-side (SPA) navigation to the detail page fetches the load
+	// data at /jobs/<slug>/__data.json instead of re-requesting the HTML; count it
+	// as the same page view. A full/direct load hits /jobs/<slug> — the two are
+	// mutually exclusive per view, and the (visitor, slug, day) dedup collapses any
+	// overlap, so this never double-counts.
+	path = strings.TrimSuffix(path, "/__data.json")
 	if slug, ok := singleSegment(path, "/jobs/"); ok {
 		return Signal{Slug: slug, Kind: KindPage}, true
 	}
