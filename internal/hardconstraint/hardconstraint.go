@@ -153,6 +153,13 @@ func appendCertifications(out []Blocker, job JobRequirements, cv CVEvidence) []B
 		return out
 	}
 	held := canonicalSet(cv.Certifications)
+	// Both-sides-present: with no recognized certification evidence on the résumé we
+	// cannot tell "holds none" from "extraction missed it" (the field is new and
+	// often empty), so we skip rather than raise a false blocker. A résumé that DOES
+	// list certifications, just not the required one, is real evidence and blocks.
+	if len(held) == 0 {
+		return out
+	}
 	for _, req := range job.RequiredCertifications {
 		met := held[req]
 		reason := fmt.Sprintf("Requires the %s certification.", req)
@@ -207,7 +214,7 @@ func appendLocationWorkMode(out []Blocker, job JobRequirements, cv CVEvidence) [
 func bestDegreeRank(degrees []string) (int, bool) {
 	best, found := 0, false
 	for _, d := range degrees {
-		if rank, ok := degreeRank(d); ok {
+		if rank, ok := degreeMatch(d); ok {
 			found = true
 			if rank > best {
 				best = rank

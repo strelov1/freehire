@@ -54,6 +54,13 @@ func TestEducationCategory(t *testing.T) {
 			t.Fatalf("want met education, got %+v ok=%v", b, ok)
 		}
 	})
+	t.Run("a full free-text degree phrase still resolves", func(t *testing.T) {
+		// A real résumé rarely says just "bachelor" — it says the full phrase.
+		bs := Evaluate(JobRequirements{EducationLevel: "bachelor"}, CVEvidence{Degrees: []string{"Bachelor of Science in Computer Science"}})
+		if b, ok := find(bs, CategoryEducation); !ok || !b.Met {
+			t.Fatalf("want met education from full phrase, got %+v ok=%v", b, ok)
+		}
+	})
 	t.Run("lower degree is a blocker", func(t *testing.T) {
 		bs := Evaluate(JobRequirements{EducationLevel: "master"}, CVEvidence{Degrees: []string{"BSc"}})
 		if b, ok := find(bs, CategoryEducation); !ok || b.Met {
@@ -84,11 +91,20 @@ func TestCertificationCategory(t *testing.T) {
 			t.Fatalf("want met certification, got %+v ok=%v", b, ok)
 		}
 	})
-	t.Run("missing is a hard blocker", func(t *testing.T) {
-		bs := Evaluate(JobRequirements{RequiredCertifications: []string{"pmp"}}, CVEvidence{})
+	t.Run("required cert absent from a résumé that lists others is a hard blocker", func(t *testing.T) {
+		bs := Evaluate(
+			JobRequirements{RequiredCertifications: []string{"pmp"}},
+			CVEvidence{Certifications: []string{"AWS Certified Solutions Architect"}},
+		)
 		b, ok := find(bs, CategoryCertification)
 		if !ok || b.Met || b.Severity != SeverityHard || b.ScoreCap != 60 {
 			t.Fatalf("want unmet hard certification cap 60, got %+v ok=%v", b, ok)
+		}
+	})
+	t.Run("no recognized cert evidence is skipped, never a false blocker", func(t *testing.T) {
+		bs := Evaluate(JobRequirements{RequiredCertifications: []string{"pmp"}}, CVEvidence{})
+		if _, ok := find(bs, CategoryCertification); ok {
+			t.Error("certification must be skipped when the résumé carries no recognized certification")
 		}
 	})
 }
@@ -157,9 +173,11 @@ func TestLocationWorkModeCategory(t *testing.T) {
 
 func TestOverallCap(t *testing.T) {
 	t.Run("hardest unmet blocker sets the ceiling", func(t *testing.T) {
+		// Unmet certification (cap 60, résumé lists a different cert) and an unmet
+		// location conflict (cap 75) → the harder ceiling wins.
 		bs := Evaluate(
 			JobRequirements{RequiredCertifications: []string{"pmp"}, WorkMode: "onsite"},
-			CVEvidence{PrefersRemote: true},
+			CVEvidence{PrefersRemote: true, Certifications: []string{"AWS Certified Solutions Architect"}},
 		)
 		if got := OverallCap(bs); got != 60 {
 			t.Errorf("OverallCap = %d, want 60 (certification beats location)", got)

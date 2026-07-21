@@ -1,6 +1,10 @@
 package hardconstraint
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/strelov1/freehire/internal/wordmatch"
+)
 
 // degreeTiers is the education ladder in strictly increasing order; a tier's rank
 // is its index. Each tier lists the normalized aliases that resolve to it (see
@@ -24,12 +28,39 @@ var degreeIndex = buildDegreeIndex()
 
 func buildDegreeIndex() map[string]int {
 	m := make(map[string]int)
-	for rank, tier := range degreeTiers {
-		for _, a := range tier.aliases {
+	for rank, dt := range degreeTiers {
+		for _, a := range dt.aliases {
 			m[a] = rank
 		}
 	}
 	return m
+}
+
+// degreeMatch resolves a free-text résumé degree to its ladder rank. It first
+// tries a whole-string hit, then falls back to whole-word containment of any
+// alias of length >= 3 (so "Bachelor of Science in Computer Science" still ranks
+// as bachelor), taking the highest rank matched. Two-letter abbreviations (ba, ms)
+// resolve only via the exact path to avoid matching stray words in prose.
+func degreeMatch(degree string) (int, bool) {
+	norm := degreeNormalize(degree)
+	if norm == "" {
+		return 0, false
+	}
+	if rank, ok := degreeIndex[norm]; ok {
+		return rank, true
+	}
+	best, found := 0, false
+	for rank, dt := range degreeTiers {
+		for _, a := range dt.aliases {
+			if len(a) >= 3 && wordmatch.Contains(norm, a, wordmatch.UnicodeBoundary) {
+				found = true
+				if rank > best {
+					best = rank
+				}
+			}
+		}
+	}
+	return best, found
 }
 
 // degreeRank resolves a degree name (canonical enrichment value or free-text
