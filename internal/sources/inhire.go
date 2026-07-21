@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"html"
 	"strings"
+
+	"github.com/strelov1/freehire/internal/normalize"
 )
 
 // inhire adapts InHire's public careers API (api.inhire.app), the ATS behind a number of
@@ -17,9 +19,13 @@ type inhire struct {
 }
 
 const (
-	inhireListURL    = "https://api.inhire.app/job-posts/public/pages"
-	inhireDetailURL  = "https://api.inhire.app/job-posts/public/pages/%s"
-	inhireVacancyURL = "https://%s.inhire.app/vagas/%s"
+	inhireListURL   = "https://api.inhire.app/job-posts/public/pages"
+	inhireDetailURL = "https://api.inhire.app/job-posts/public/pages/%s"
+	// inhireVacancyURL is the public vacancy page. InHire's careers SPA routes on
+	// /vagas/:jobId/:slug and renders a blank page when the slug segment is absent, so the
+	// URL must carry a trailing slug. The segment is cosmetic — the SPA fetches the posting
+	// by jobId alone — so any non-empty slug renders the vacancy.
+	inhireVacancyURL = "https://%s.inhire.app/vagas/%s/%s"
 )
 
 // NewInhire builds the InHire adapter over the given HTTP client.
@@ -44,6 +50,18 @@ func (h inhire) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	return fetchDetails(posts, defaultDetailWorkers, func(p inhirePost) (Job, bool) {
 		return h.detail(ctx, e, p)
 	}), nil
+}
+
+// inhireVacancyURLFor builds the public vacancy URL, deriving the required trailing slug
+// from the title. The slug is cosmetic (see inhireVacancyURL), so a transliterated title
+// slug is enough; "vaga" stands in when the title yields no slug so the segment is never
+// empty — an empty segment collapses the URL back to /vagas/:jobId, which renders blank.
+func inhireVacancyURLFor(board, jobID, title string) string {
+	slug := normalize.Slug(title)
+	if slug == "" {
+		slug = "vaga"
+	}
+	return fmt.Sprintf(inhireVacancyURL, board, jobID, slug)
 }
 
 // tenantHeader is the per-tenant routing header every InHire call carries.
@@ -76,10 +94,11 @@ func (h inhire) detail(ctx context.Context, e CompanyEntry, p inhirePost) (Job, 
 	}
 
 	mode := workplaceTypeMode(p.WorkplaceType)
+	title := strings.TrimSpace(p.DisplayName)
 	return Job{
 		ExternalID:  p.JobID,
-		URL:         fmt.Sprintf(inhireVacancyURL, e.Board, p.JobID),
-		Title:       strings.TrimSpace(p.DisplayName),
+		URL:         inhireVacancyURLFor(e.Board, p.JobID, title),
+		Title:       title,
 		Company:     e.Company,
 		Location:    p.Location,
 		Description: sanitizeHTML(html.UnescapeString(d.Description)),

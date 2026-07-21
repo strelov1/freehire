@@ -56,8 +56,8 @@ func TestInhireFetchMapsListAndDetail(t *testing.T) {
 	if j.Location != "São Paulo, BR" {
 		t.Errorf("Location = %q", j.Location)
 	}
-	if j.URL != "https://contaazul.inhire.app/vagas/"+jobID {
-		t.Errorf("URL = %q", j.URL)
+	if j.URL != "https://contaazul.inhire.app/vagas/"+jobID+"/senior-backend-engineer" {
+		t.Errorf("URL = %q, want the vagas/:jobId/:slug shape", j.URL)
 	}
 	if j.WorkMode != "remote" {
 		t.Errorf("WorkMode = %q, want remote", j.WorkMode)
@@ -76,6 +76,25 @@ func TestInhireFetchMapsListAndDetail(t *testing.T) {
 	}
 	if got := j.PostedAt.UTC().Format("2006-01-02"); got != "2026-06-15" {
 		t.Errorf("PostedAt = %s, want 2026-06-15 (publishedAt)", got)
+	}
+}
+
+func TestInhireVacancyURLFor(t *testing.T) {
+	tests := []struct {
+		name  string
+		title string
+		want  string
+	}{
+		{"slugs the title", "Senior Backend Engineer", "https://acme.inhire.app/vagas/j1/senior-backend-engineer"},
+		{"transliterates accents", "Consultor(a) Sênior", "https://acme.inhire.app/vagas/j1/consultor-a-senior"},
+		{"falls back when title yields no slug", "!!!", "https://acme.inhire.app/vagas/j1/vaga"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := inhireVacancyURLFor("acme", "j1", tt.title); got != tt.want {
+				t.Errorf("inhireVacancyURLFor(%q) = %q, want %q", tt.title, got, tt.want)
+			}
+		})
 	}
 }
 
