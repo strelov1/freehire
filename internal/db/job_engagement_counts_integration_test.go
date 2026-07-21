@@ -34,37 +34,32 @@ func TestJobEngagementCounts(t *testing.T) {
 		}
 	}
 
-	t.Run("view_count counts distinct viewers, once each", func(t *testing.T) {
+	t.Run("view_count is not bumped by RecordJobView (worker owns it now)", func(t *testing.T) {
 		reset(t)
 		u1 := insertUser(t, pool, "v1@example.test")
 		u2 := insertUser(t, pool, "v2@example.test")
 		jid := insertJob(t, pool, "view-count-job")
 
+		// RecordJobView records the per-user view (user_jobs.viewed_at) but must not
+		// touch jobs.view_count — that counter is now maintained solely by the
+		// nginx-log aggregation worker, across all traffic.
+		for _, u := range []int64{u1, u1, u2} {
+			if _, err := q.RecordJobView(ctx, RecordJobViewParams{UserID: u, JobID: jid}); err != nil {
+				t.Fatalf("RecordJobView u=%d: %v", u, err)
+			}
+		}
 		if v, _ := jobCounts(t, pool, jid); v != 0 {
-			t.Fatalf("initial view_count = %d, want 0", v)
+			t.Fatalf("view_count = %d after views, want 0 (worker-owned, not bumped by the beacon)", v)
 		}
 
-		if _, err := q.RecordJobView(ctx, RecordJobViewParams{UserID: u1, JobID: jid}); err != nil {
-			t.Fatalf("u1 first view: %v", err)
+		// The per-user interaction rows still exist (viewed_at set): two distinct users.
+		var rows int
+		if err := pool.QueryRow(ctx,
+			"SELECT count(*) FROM user_jobs WHERE job_id = $1 AND viewed_at IS NOT NULL", jid).Scan(&rows); err != nil {
+			t.Fatalf("count user_jobs: %v", err)
 		}
-		if v, _ := jobCounts(t, pool, jid); v != 1 {
-			t.Fatalf("after u1 first view: view_count = %d, want 1", v)
-		}
-
-		// A repeat view by the same user must not increment again.
-		if _, err := q.RecordJobView(ctx, RecordJobViewParams{UserID: u1, JobID: jid}); err != nil {
-			t.Fatalf("u1 repeat view: %v", err)
-		}
-		if v, _ := jobCounts(t, pool, jid); v != 1 {
-			t.Fatalf("after u1 repeat view: view_count = %d, want 1", v)
-		}
-
-		// A different user is a new distinct viewer.
-		if _, err := q.RecordJobView(ctx, RecordJobViewParams{UserID: u2, JobID: jid}); err != nil {
-			t.Fatalf("u2 view: %v", err)
-		}
-		if v, _ := jobCounts(t, pool, jid); v != 2 {
-			t.Fatalf("after u2 view: view_count = %d, want 2", v)
+		if rows != 2 {
+			t.Fatalf("user_jobs viewed rows = %d, want 2", rows)
 		}
 	})
 

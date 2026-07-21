@@ -263,6 +263,12 @@ type JobDailyStat struct {
 	ComputedAt pgtype.Timestamptz `json:"computed_at"`
 }
 
+type JobDailyView struct {
+	Day     pgtype.Date `json:"day"`
+	JobID   int64       `json:"job_id"`
+	Uniques int32       `json:"uniques"`
+}
+
 type JobReminder struct {
 	ID          int64              `json:"id"`
 	UserID      int64              `json:"user_id"`
@@ -341,6 +347,12 @@ type Mailbox struct {
 	UserID    int64              `json:"user_id"`
 	Address   string             `json:"address"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type ProcessedViewLog struct {
+	Signature   int64              `json:"signature"`
+	Filename    string             `json:"filename"`
+	ProcessedAt pgtype.Timestamptz `json:"processed_at"`
 }
 
 type ReferralOffer struct {

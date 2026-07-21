@@ -79,7 +79,8 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 	j1, j2, j3 := jobID("j1"), jobID("j2"), jobID("j3")
 
 	// j1: viewed only; j2: viewed + saved; j3: viewed + applied.
-	// Expected: saved=1, applied=1, viewed=3 (viewed_at is set on every row).
+	// saved/applied come from user_jobs (→ saved=1, applied=1). "viewed" is now the
+	// all-traffic total SUM(jobs.view_count), independent of user_jobs, seeded below.
 	seedInteraction := func(jid int64, saved, applied bool) {
 		if _, err := pool.Exec(ctx,
 			`INSERT INTO user_jobs (user_id, job_id, viewed_at, saved_at, applied_at)
@@ -112,8 +113,16 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 		t.Fatalf("seed saved search: %v", err)
 	}
 
-	if c := get(); c.Saved != 1 || c.Applied != 1 || c.Viewed != 3 ||
+	// "viewed" is the all-traffic total: SUM(jobs.view_count), maintained by the
+	// nginx-log worker, not derived from user_jobs. Seed counts 5 + 3 + 0 = 8.
+	if _, err := pool.Exec(ctx,
+		`UPDATE jobs SET view_count = CASE id WHEN $1 THEN 5 WHEN $2 THEN 3 ELSE 0 END`,
+		j1, j2); err != nil {
+		t.Fatalf("seed view_count: %v", err)
+	}
+
+	if c := get(); c.Saved != 1 || c.Applied != 1 || c.Viewed != 8 ||
 		c.CvsUploaded != 1 || c.FitChecks != 1 || c.SavedSearches != 1 {
-		t.Errorf("got %+v, want {Saved:1 Applied:1 Viewed:3 CvsUploaded:1 FitChecks:1 SavedSearches:1}", c)
+		t.Errorf("got %+v, want {Saved:1 Applied:1 Viewed:8 CvsUploaded:1 FitChecks:1 SavedSearches:1}", c)
 	}
 }

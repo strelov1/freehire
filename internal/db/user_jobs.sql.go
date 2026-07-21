@@ -489,18 +489,10 @@ func (q *Queries) MarkJobApplied(ctx context.Context, arg MarkJobAppliedParams) 
 }
 
 const recordJobView = `-- name: RecordJobView :one
-WITH prior AS (
-    SELECT 1 AS existed FROM user_jobs uj WHERE uj.user_id = $1 AND uj.job_id = $2
-), upsert AS (
-    INSERT INTO user_jobs (user_id, job_id)
-    VALUES ($1, $2)
-    ON CONFLICT (user_id, job_id) DO UPDATE SET viewed_at = now()
-    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at
-), bump AS (
-    UPDATE jobs SET view_count = view_count + 1
-    WHERE id = $2 AND NOT EXISTS (SELECT 1 FROM prior)
-)
-SELECT user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at FROM upsert
+INSERT INTO user_jobs (user_id, job_id)
+VALUES ($1, $2)
+ON CONFLICT (user_id, job_id) DO UPDATE SET viewed_at = now()
+RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at
 `
 
 type RecordJobViewParams struct {
@@ -508,27 +500,15 @@ type RecordJobViewParams struct {
 	JobID  int64 `json:"job_id"`
 }
 
-type RecordJobViewRow struct {
-	UserID      int64              `json:"user_id"`
-	JobID       int64              `json:"job_id"`
-	ViewedAt    pgtype.Timestamptz `json:"viewed_at"`
-	AppliedAt   pgtype.Timestamptz `json:"applied_at"`
-	SavedAt     pgtype.Timestamptz `json:"saved_at"`
-	Stage       pgtype.Text        `json:"stage"`
-	Notes       pgtype.Text        `json:"notes"`
-	DismissedAt pgtype.Timestamptz `json:"dismissed_at"`
-}
-
 // Record (or refresh) a user's view of a job. Idempotent on (user_id, job_id):
 // the first view creates the row, a repeat view touches viewed_at. Returns the
-// row so the caller learns the current applied_at in the same round-trip.
-// When (and only when) the row is created for the first time — no prior
-// interaction existed — bump the job's materialized view_count in the same
-// statement. All WITH sub-statements see one snapshot, so `prior` reflects the
-// pre-upsert state regardless of execution order; a repeat view never re-bumps.
-func (q *Queries) RecordJobView(ctx context.Context, arg RecordJobViewParams) (RecordJobViewRow, error) {
+// row so the caller learns the current applied_at in the same round-trip. This
+// does NOT touch jobs.view_count — that materialized counter is maintained solely
+// by the nginx-log aggregation worker (cmd/rollup-views), which counts all traffic
+// (anonymous + signed-in + API), so the signed-in beacon must not double-count.
+func (q *Queries) RecordJobView(ctx context.Context, arg RecordJobViewParams) (UserJob, error) {
 	row := q.db.QueryRow(ctx, recordJobView, arg.UserID, arg.JobID)
-	var i RecordJobViewRow
+	var i UserJob
 	err := row.Scan(
 		&i.UserID,
 		&i.JobID,

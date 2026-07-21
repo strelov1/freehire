@@ -14,6 +14,12 @@ type Querier interface {
 	// Move an application forward to a new stage (the worker only calls this after
 	// checking the transition is strictly forward and high-confidence).
 	AdvanceUserJobStage(ctx context.Context, arg AdvanceUserJobStageParams) error
+	// Apply one (day, job) unique count additively: upsert the daily rollup and add the
+	// same delta to jobs.view_count, in one statement. The data-modifying CTE runs even
+	// though the primary query does not read it. Issued as a pgx batch (one call per
+	// tuple) so a file's rows land in a single round trip; view_count accumulates across
+	// a job's day-rows, and additivity lets a day spanning two rotated files sum right.
+	ApplyDailyView(ctx context.Context, arg []ApplyDailyViewParams) *ApplyDailyViewBatchResults
 	// Resolve a presented token (by its SHA-256 hash) to the owning user id, enforcing
 	// expiry and touching last_used_at in one atomic statement. No row means the key is
 	// unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401.
@@ -447,11 +453,12 @@ type Querier interface {
 	GetEmail(ctx context.Context, arg GetEmailParams) (GetEmailRow, error)
 	// Aggregate interaction counts for the public engagement endpoint. Aggregate-only:
 	// every column is a scalar total, so no user identifier or row-level field is
-	// selected. The user_jobs counts (saved / applied / viewed) are interaction-row
-	// totals across all users — viewed_at is NOT NULL on every row (set on RecordView),
-	// so "viewed" equals the total interaction count. The remaining three mirror that
-	// event-total semantics from their own tables: cvs_uploaded is the count of users
-	// holding a stored résumé (one per user, so also a people count), fit_checks is
+	// selected. saved / applied are user_jobs interaction-row totals across all users.
+	// "viewed" is the all-traffic view total — SUM(jobs.view_count), maintained by the
+	// nginx-log aggregation worker (anonymous + signed-in + API), not a user_jobs count,
+	// so it reflects every visitor, not only signed-in interactions. The remaining three
+	// mirror event-total semantics from their own tables: cvs_uploaded is the count of
+	// users holding a stored résumé (one per user, so also a people count), fit_checks is
 	// every job-fit analysis ever run, and saved_searches is every saved search.
 	GetEngagementStats(ctx context.Context) (GetEngagementStatsRow, error)
 	GetGmailConnection(ctx context.Context, userID int64) (GetGmailConnectionRow, error)
@@ -590,6 +597,9 @@ type Querier interface {
 	// Slim beta-membership lookup for the RequireModeratorOrBeta middleware — a
 	// primitive bool so the auth package stays free of a db import (same shape as GetUserRole).
 	IsBetaTester(ctx context.Context, id int64) (bool, error)
+	// Cursor read: has this rotated file (by content signature) been applied? The
+	// signature is stable across rename and gzip, so a re-run recognizes the same file.
+	IsViewLogFileProcessed(ctx context.Context, signature int64) (bool, error)
 	// Whether the catalogue already crawls this board — any job whose external_id is "<board>:…".
 	// Matched with a LIKE-prefix so the (source, external_id text_pattern_ops) index serves it as
 	// a range scan; starts_with()/a default-collation LIKE would seq-scan the whole source (37s
@@ -907,6 +917,9 @@ type Querier interface {
 	// Completion: the post was processed (jobs written, or no vacancy found). Run in
 	// the same transaction as the extracted jobs' UpsertJob calls.
 	MarkTelegramPostExtracted(ctx context.Context, arg MarkTelegramPostExtractedParams) error
+	// Cursor write: mark a rotated file applied. Idempotent — a concurrent/rerun mark
+	// is a no-op, so the file is never double-applied.
+	MarkViewLogFileProcessed(ctx context.Context, arg MarkViewLogFileProcessedParams) error
 	// Record one confident job-mail sighting for a sender domain, returning its running
 	// count. The classifier calls this whenever it confidently labels an email as
 	// application mail, so a recurring unknown ATS domain accrues hits toward promotion.
@@ -1003,12 +1016,11 @@ type Querier interface {
 	RecordEnrichmentFailure(ctx context.Context, arg RecordEnrichmentFailureParams) (RecordEnrichmentFailureRow, error)
 	// Record (or refresh) a user's view of a job. Idempotent on (user_id, job_id):
 	// the first view creates the row, a repeat view touches viewed_at. Returns the
-	// row so the caller learns the current applied_at in the same round-trip.
-	// When (and only when) the row is created for the first time — no prior
-	// interaction existed — bump the job's materialized view_count in the same
-	// statement. All WITH sub-statements see one snapshot, so `prior` reflects the
-	// pre-upsert state regardless of execution order; a repeat view never re-bumps.
-	RecordJobView(ctx context.Context, arg RecordJobViewParams) (RecordJobViewRow, error)
+	// row so the caller learns the current applied_at in the same round-trip. This
+	// does NOT touch jobs.view_count — that materialized counter is maintained solely
+	// by the nginx-log aggregation worker (cmd/rollup-views), which counts all traffic
+	// (anonymous + signed-in + API), so the signed-in beacon must not double-count.
+	RecordJobView(ctx context.Context, arg RecordJobViewParams) (UserJob, error)
 	// Count a failed delivery for a subscription's claimed jobs: bump attempts, record
 	// the error, and dead-letter (set failed_at) once attempts reach the max. claimed_at
 	// is left in place — its expiry gates the retry to a later pass and doubles as the
@@ -1088,6 +1100,12 @@ type Querier interface {
 	// status='sent' guard makes it race-safe: whichever referrer acts first wins; a second
 	// attempt matches no row (mapped to "already resolved").
 	ResolveReferralRequest(ctx context.Context, arg ResolveReferralRequestParams) (ReferralRequest, error)
+	// View-log aggregation queries, used by cmd/rollup-views. The worker parses nginx
+	// access logs off the request path (see internal/viewlog), then resolves slugs and
+	// applies per-(day, job) unique counts here.
+	// Map public slugs to job ids. Unknown slugs are simply absent from the result, so
+	// the worker skips views for jobs that no longer exist.
+	ResolveSlugsToJobIDs(ctx context.Context, slugs []string) ([]ResolveSlugsToJobIDsRow, error)
 	// Undo a soft-delete, scoped to the caller and idempotent. Returns 0 rows only
 	// when it is not the caller's message (→ 404).
 	RestoreEmail(ctx context.Context, arg RestoreEmailParams) (int64, error)
