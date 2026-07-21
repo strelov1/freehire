@@ -742,3 +742,5 @@
   board: talentt
 - company: "Jobler"
   board: jobler
+- company: VAAS
+  board: vaas
