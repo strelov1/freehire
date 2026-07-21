@@ -72,10 +72,14 @@ descriptions: each specialty carries its own, so the fingerprint stays split by
 description. Only the pure city variants — same specialty, same body — collapse. Exactly
 right.
 
-We shipped that. Towa went from five cards to three. Not one — because Kraków and Wien turned
-out to carry genuinely different description text (a country-specific block), so the guard
-correctly refused to merge them. Conservative by design: we'd rather show a real posting
-twice than hide two distinct ones behind one card.
+We shipped that. Towa went from five cards to three — but for two different reasons. Kraków
+stayed separate correctly: it carries a Poland-specific block (salary in złoty, a
+local-language note) with genuinely different text — exactly what the guard should refuse to
+merge. The other two, Bregenz and Wien, are the *same* Austrian posting — €54–80k, identical
+body — split by a single sentence: an Austrian collective-agreement clause that names Vienna.
+The exact-match key still treats that as distinct. Conservative by design: we'd rather show a
+real posting twice than hide two distinct ones behind one card — but that Austrian pair is the
+tell that the guard is now *too* strict.
 
 ## The detour: where cosine looked obvious and was wrong
 
@@ -94,7 +98,7 @@ code. It fell apart on contact:
 - **Amazon SDE** — the 228 "duplicate" cards score **0.83–0.97** against each other. They're
   not reposts of one role; they're genuinely different jobs (AWS, retail, Alexa) sharing a
   generic title. Cosine correctly says "different."
-- And the killer: a true duplicate (Towa Kraków/Wien = 0.978) scores **lower** than a
+- And the killer: a true duplicate (Towa Bregenz/Wien = 0.978) scores **lower** than a
   distinct role (speechify Platform = 0.992). One cosine cut cannot both merge the dupe and
   keep the distinct role apart.
 
@@ -105,7 +109,7 @@ title, not duplicates. Shipping the cosine pass would have *hidden real openings
 ## The signal that actually works
 
 The spike didn't just kill an idea; it pointed at the right one. The true duplicates (Towa
-Kraków/Wien) differ by ~150 characters out of ~11,000 — over 98% identical *text*. So we
+Bregenz/Wien) differ by ~130 characters out of ~11,000 — over 98% identical *text*. So we
 measured plain word-overlap (Jaccard of the normalized description) instead of the
 compressed embedding:
 
