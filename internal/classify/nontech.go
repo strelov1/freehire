@@ -71,7 +71,59 @@ var nonTechTitleTerms = []string{
 	"security guard", "truck driver", "delivery driver", "bus driver", "courier",
 	// Front-of-house administration
 	"receptionist", "front desk",
+	// Russian non-technical roles (the trudvsem/hh tail arrives in Russian, so the
+	// English terms above never fire and these jobs fall to unknown instead of
+	// non-tech). Same doctrine: unambiguous role nouns only, whole-word (Cyrillic
+	// boundaries handled by wordmatch.UnicodeBoundary). Deliberately ABSENT — the
+	// Russian ambiguous words that mirror the English exclusions: bare "инженер"
+	// (engineer), "техник" (IT/field technician), "оператор" (operator), bare
+	// "администратор"/"директор"/"менеджер"/"аналитик"/"специалист"/"мастер".
+	// "бухгалтер" is absent too — it already resolves to the finance category.
+	// Healthcare & care
+	"медсестра", "медицинская сестра", "медбрат", "фельдшер", "санитар", "санитарка",
+	"сиделка", "няня",
+	// Skilled trades
+	"сварщик", "электрогазосварщик", "слесарь", "сантехник", "электромонтер",
+	"электромонтёр", "электрик", "токарь", "фрезеровщик", "маляр", "штукатур",
+	"каменщик", "бетонщик", "арматурщик", "стропальщик", "монтажник", "машинист",
+	"тракторист",
+	// Food service
+	"повар", "пекарь", "кондитер", "официант", "официантка", "бармен",
+	"посудомойщик", "кухонный рабочий",
+	// Retail & warehouse
+	"продавец", "кассир", "продавец-кассир", "продавец-консультант", "кладовщик",
+	"комплектовщик", "грузчик", "упаковщик", "фасовщик", "приёмщик", "товаровед",
+	"мерчендайзер", "администратор магазина", "директор магазина",
+	// Cleaning, facilities & security
+	"уборщик", "уборщица", "дворник", "разнорабочий", "подсобный рабочий", "вахтер",
+	"вахтёр", "сторож", "охранник", "консьерж",
+	// Education & personal care
+	"воспитатель", "учитель", "логопед", "парикмахер", "маникюрша", "косметолог",
+	// Transport
+	"водитель", "курьер", "экспедитор",
+	// Portuguese (BR) non-technical roles (the gupy/BR tail). Same doctrine; bare
+	// ambiguous words absent: "técnico" (technician), "operador" (operator),
+	// "analista"/"assistente"/"vendedor"/"professor"/"segurança" (infosec collision).
+	// Retail & warehouse
+	"operador de caixa", "operador de loja", "repositor", "estoquista", "frentista",
+	"atendente de loja",
+	// Cleaning & facilities
+	"auxiliar de limpeza", "faxineiro", "zelador", "porteiro",
+	// Food service
+	"cozinheiro", "auxiliar de cozinha", "padeiro", "açougueiro", "garçom", "copeiro",
+	// Trades
+	"pedreiro", "pintor", "soldador", "eletricista", "encanador", "mecânico",
+	"servente", "ajudante geral", "jardineiro",
+	// Care, transport & front-of-house
+	"cuidador", "enfermeiro", "técnico de enfermagem", "auxiliar de enfermagem",
+	"babá", "motorista", "motoboy", "entregador", "vigilante", "camareira",
+	"recepcionista",
 }
+
+// ptGenderSuffix strips the Brazilian-Portuguese inclusive gender parentheticals
+// ("operador(a)", "enfermeiro(a)") so a phrase term matches the common written form.
+// Without it "operador(a) de caixa" would not match "operador de caixa".
+var ptGenderSuffix = strings.NewReplacer("(a)", "", "(o)", "", "(as)", "", "(os)", "", "(a/o)", "")
 
 // IsNonTech reports whether a job title states a confidently non-technical role,
 // matching any nonTechTitleTerms term on word boundaries. It never guesses: a
@@ -79,7 +131,7 @@ var nonTechTitleTerms = []string{
 // roles — a technical title yields false — so it can feed the is_tech derivation
 // without risking a technical job being mislabelled.
 func IsNonTech(title string) bool {
-	lower := strings.ToLower(title)
+	lower := ptGenderSuffix.Replace(strings.ToLower(title))
 	for _, term := range nonTechTitleTerms {
 		if wordmatch.Contains(lower, term, wordmatch.UnicodeBoundary) {
 			return true

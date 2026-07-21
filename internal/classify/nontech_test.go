@@ -25,6 +25,30 @@ func TestIsNonTech(t *testing.T) {
 		{"security guard", "Overnight Security Guard", true},
 		{"teacher", "Preschool Teacher", true},
 
+		// Russian non-tech roles (the trudvsem/hh tail) — must now flag as non-tech
+		// instead of falling to unknown.
+		{"ru cashier", "Продавец-кассир", true},
+		{"ru cleaner", "Уборщик производственных и служебных помещений", true},
+		{"ru driver", "Водитель автомобиля", true},
+		{"ru cook", "Повар", true},
+		{"ru welder", "Электрогазосварщик", true},
+		{"ru nurse", "Медицинская сестра", true},
+		{"ru loader", "Грузчик", true},
+		{"ru teacher", "Учитель математики", true},
+		{"ru courier", "Курьер", true},
+		// Portuguese (BR) non-tech roles (the gupy tail).
+		{"br cashier", "Operador(a) de Caixa", true},
+		{"br store", "Operador(a) de Loja", true},
+		{"br cleaner", "Auxiliar de Limpeza", true},
+		{"br driver", "Motorista Entregador", true},
+		{"br cook", "Cozinheiro", true},
+		// Russian/Portuguese trap negatives — ambiguous words must NOT flag.
+		{"ru engineer bare", "Инженер-программист", false},
+		{"ru technician bare", "Системный техник", false},
+		{"ru analyst bare", "Аналитик данных", false},
+		{"br analyst bare", "Analista de Sistemas", false},
+		{"br technician bare", "Técnico de TI", false},
+
 		// Trap negatives — technical titles that must NOT be flagged, including
 		// shared words ("engineer") and non-tech-adjacent substrings from real data.
 		{"software engineer", "Software Engineer II, AWS DynamoDB", false},
