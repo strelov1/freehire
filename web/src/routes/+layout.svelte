@@ -14,6 +14,9 @@
   import TopBar from '$lib/components/TopBar.svelte';
   import Footer from '$lib/components/Footer.svelte';
   import '../app.css';
+  // Country-flag icon sheet (used by $lib/components/Flag.svelte). References its
+  // SVGs by URL, so the browser only fetches flags actually rendered.
+  import 'flag-icons/css/flag-icons.min.css';
 
   let { children } = $props();
 

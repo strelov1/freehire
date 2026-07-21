@@ -31,6 +31,8 @@ export interface FacetOption {
   label: string;
   /** Number of matching jobs, for dynamic (distribution-driven) options. */
   count?: number;
+  /** ISO 3166-1 alpha-2 code for country options, so the pill shows a flag icon. */
+  flag?: string;
 }
 
 export type FacetControl = 'pills' | 'select' | 'tokens' | 'remote';
@@ -436,6 +438,7 @@ const ISO_COUNTRY_CODES = [
 const COUNTRY: FacetOption[] = ISO_COUNTRY_CODES.map((value) => ({
   value,
   label: countryLabel(value),
+  flag: value,
 })).toSorted((a, b) => a.label.localeCompare(b.label));
 
 // The full ISO country select, exported for the profile's location editor (base +

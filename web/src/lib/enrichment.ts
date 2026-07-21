@@ -4,16 +4,20 @@
 // never renders blank — the SPA never re-validates, it only formats.
 
 import type { Enrichment, Job } from './types';
+import { countryLabel } from './facets';
 import {
   REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
   CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS,
 } from './labels';
 
 /** One value within a facet row: its display text and, when the facet maps to a
- *  job-search filter, the /jobs URL that applies it. */
+ *  job-search filter, the /jobs URL that applies it. `flag` carries an ISO 3166-1
+ *  alpha-2 code for the country facet, so the renderer shows a flag icon (with
+ *  `text` as its accessible name) instead of the bare code. */
 export interface FacetValue {
   text: string;
   href?: string;
+  flag?: string;
 }
 
 /** A labelled facet row. Most facets carry a single value; the array-valued ones
@@ -162,15 +166,20 @@ export function summaryFacets(job: Job): Facet[] {
   ) => {
     if (code) facets.push({ label: name, values: [{ text: label(map, code), href: filterHref(param, code) }] });
   };
-  // An array facet (region/country/industry): one clickable value per code.
+  // An array facet (region/country/industry): one clickable value per code. When
+  // `flag` is set, each value also carries its code so the renderer shows a flag icon.
   const links = (
     name: string,
     param: string,
     codes: string[] | undefined,
     toText: (code: string) => string,
+    flag = false,
   ) => {
     if (codes?.length) {
-      facets.push({ label: name, values: codes.map((c) => ({ text: toText(c), href: filterHref(param, c) })) });
+      facets.push({
+        label: name,
+        values: codes.map((c) => ({ text: toText(c), href: filterHref(param, c), ...(flag ? { flag: c } : {}) })),
+      });
     }
   };
   // A facet with no matching filter: plain, non-clickable text.
@@ -188,7 +197,7 @@ export function summaryFacets(job: Job): Facet[] {
   const english = e.english_level && e.english_level !== 'none' ? e.english_level : null;
   link('English', 'english_level', english, ENGLISH_LEVEL);
   link('Category', 'category', e.category, CATEGORY_LABELS);
-  links('Country', 'countries', job.countries, (c) => c.toUpperCase());
+  links('Country', 'countries', job.countries, countryLabel, true);
   link('Relocation', 'relocation', e.relocation, RELOCATION);
   if (e.visa_sponsorship === true) {
     facets.push({ label: 'Visa', values: [{ text: 'Sponsored', href: filterHref('visa_sponsorship', 'true') }] });

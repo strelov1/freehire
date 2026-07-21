@@ -2,6 +2,7 @@
   import { Plus } from '@lucide/svelte';
   import { optionMatches, relatedOptions, uniqueByValue, type FacetOption } from '$lib/facets';
   import { Input } from '$lib/ui';
+  import CountryFlag from '../CountryFlag.svelte';
   import { pillClass, pillTitle } from './pill';
 
   // A searchable multi-select: a filter field over the options rendered as a
@@ -103,8 +104,9 @@
         type="button"
         onclick={() => toggle(opt.value)}
         title={pillTitle(included, excluded, excludable)}
-        class={pillClass(included || excluded, excluded, 'inline-flex max-w-full items-center px-2.5 py-1 text-sm')}
+        class={pillClass(included || excluded, excluded, 'inline-flex max-w-full items-center gap-1.5 px-2.5 py-1 text-sm')}
       >
+        {#if opt.flag}<CountryFlag code={opt.flag} class="text-base" />{/if}
         <!-- A very long value (roles like "Senior Business Development Representative")
              truncates to one line with an ellipsis instead of wrapping the pill onto
              two rows; the full label surfaces on hover via title. -->

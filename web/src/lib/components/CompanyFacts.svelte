@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Company } from '$lib/types';
   import { countryLabel } from '$lib/facets';
+  import CountryFlag from './CountryFlag.svelte';
 
   // The company's scalar facts as a self-contained card, shown in the jobs sidebar
   // (desktop) and as a fallback card under the header (mobile, where the sidebar is
@@ -41,20 +42,24 @@
   );
 
   // Ordered {term, value} pairs — present-only, so an absent field drops out of the
-  // definition list rather than showing a blank row.
+  // definition list rather than showing a blank row. `flag` (Headquarters only) makes
+  // the value render a flag icon before the country name.
+  type Fact = { term: string; value: string; flag?: string };
   const facts = $derived(
     [
       company.year_founded ? { term: 'Founded', value: String(company.year_founded) } : null,
       company.employee_count
         ? { term: 'Employees', value: company.employee_count.toLocaleString() }
         : null,
-      company.hq_country ? { term: 'Headquarters', value: countryLabel(company.hq_country) } : null,
+      company.hq_country
+        ? { term: 'Headquarters', value: countryLabel(company.hq_country), flag: company.hq_country }
+        : null,
       company.organization_type ? { term: 'Type', value: company.organization_type } : null,
       stockLine ? { term: 'Listed', value: stockLine } : null,
       fundingLine ? { term: 'Funding', value: fundingLine } : null,
       info.parent ? { term: 'Parent', value: info.parent } : null,
       info.subsidiaries?.length ? { term: 'Subsidiaries', value: info.subsidiaries.join(', ') } : null,
-    ].filter((f): f is { term: string; value: string } => !!f)
+    ].filter((f): f is Fact => !!f)
   );
 </script>
 
@@ -72,7 +77,9 @@
       <dl class="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-2 text-sm">
         {#each facts as fact (fact.term)}
           <dt class="text-muted-foreground">{fact.term}</dt>
-          <dd class="text-right font-medium">{fact.value}</dd>
+          <dd class="flex items-center justify-end gap-1.5 text-right font-medium">
+            {#if fact.flag}<CountryFlag code={fact.flag} class="text-base" />{/if}{fact.value}
+          </dd>
         {/each}
       </dl>
     {/if}

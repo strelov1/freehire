@@ -15,6 +15,7 @@
   import LoadMore from './LoadMore.svelte';
   import InfiniteScroll from './InfiniteScroll.svelte';
   import CompanyLogo from './CompanyLogo.svelte';
+  import CountryFlag from './CountryFlag.svelte';
   import CompanyFilterSummary from './filters/CompanyFilterSummary.svelte';
   import CompanyFilterModal from './filters/CompanyFilterModal.svelte';
   import ListToolbar from './ListToolbar.svelte';
@@ -132,7 +133,7 @@
               {#if industry || hq}
                 <div class="flex flex-wrap gap-1.5">
                   {#if industry}<Badge variant="secondary">{industry}</Badge>{/if}
-                  {#if hq}<Badge variant="secondary">{hq}</Badge>{/if}
+                  {#if hq}<Badge variant="secondary" class="gap-1.5"><CountryFlag code={company.hq_country ?? ''} />{hq}</Badge>{/if}
                 </div>
               {/if}
             </div>

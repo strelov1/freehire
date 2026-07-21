@@ -5,6 +5,7 @@
   import { REGION_LABELS } from '$lib/labels';
   import { COUNTRY_REGION_MAP } from '$lib/generated/contracts';
   import type { FacetCounts } from '$lib/types';
+  import CountryFlag from '../CountryFlag.svelte';
   import { pillClass, pillTitle } from '../facets/pill';
 
   // Location pane: a region → country tree plus a flat, searchable Cities list.
@@ -215,8 +216,9 @@
             type="button"
             onclick={() => store.cycle('countries', code)}
             title={pillTitle(cInc, cExc, true)}
-            class={pillClass(cInc || cExc, cExc, 'px-3 py-1.5 text-sm')}
+            class={pillClass(cInc || cExc, cExc, 'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm')}
           >
+            <CountryFlag {code} class="text-base" />
             {countryLabel(code)}
           </button>
         {/each}

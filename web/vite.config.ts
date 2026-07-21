@@ -13,6 +13,14 @@ export default defineConfig({
     __SENTRY_DEBUG__: false,
     __SENTRY_TRACING__: false,
   },
+  build: {
+    // Keep flag-icons' ~500 flag SVGs as external files instead of inlining them
+    // as data-URIs into the global CSS. They're each under Vite's 4KB inline
+    // threshold, so the default would embed the whole sheet (~100KB gzip) into the
+    // always-loaded stylesheet even though most pages show no flags. Externalizing
+    // lets the browser fetch only the handful of flags a page actually renders.
+    assetsInlineLimit: (filePath) => (filePath.includes('flag-icons/flags/') ? false : undefined),
+  },
   // SvelteKit owns routing/SSR; it provides the $lib alias, so the manual alias
   // is gone. sentrySvelteKit() must precede sveltekit(); tailwindcss() too.
   //
