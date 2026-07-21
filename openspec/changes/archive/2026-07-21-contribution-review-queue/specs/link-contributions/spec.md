@@ -11,15 +11,20 @@ value that is not a well-formed `http(s)` URL SHALL be rejected with the "unsupp
 error. Both a vacancy URL and a bare board-listing URL for the same company SHALL yield the
 same board.
 
+#### Scenario: Unsupported host is rejected
+
+- **WHEN** a user submits `https://example.com/careers/123`
+- **THEN** it is rejected as a board — no board is derived — and, being a valid URL, recorded for manual review instead
+
+#### Scenario: Single-tenant source is rejected
+
+- **WHEN** a user submits a single-tenant aggregator link (e.g. `https://geekjob.ru/vacancy/6a1e`)
+- **THEN** it is rejected as a board — not a per-company board — and, being a valid URL, recorded for manual review instead
+
 #### Scenario: Non-URL garbage is rejected
 
 - **WHEN** a user submits a value that is not a well-formed `http(s)` URL
 - **THEN** the system responds 422 with an "unsupported ATS" error and records nothing
-
-#### Scenario: Unknown host is recorded for review
-
-- **WHEN** a user submits `https://example.com/careers/123`
-- **THEN** no board is derived, so the link is recorded for manual review rather than rejected
 
 #### Scenario: Vacancy URL and board-listing URL yield the same board
 
