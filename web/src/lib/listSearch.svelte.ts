@@ -24,6 +24,14 @@ export interface ListSearchTarget {
     counts(): FacetCounts | null;
     variant: 'jobs' | 'companies';
   };
+
+  /** Opens the page's own filter modal, and reports its active-filter count, so the
+   *  header can host the All-filters trigger. Present on list pages that own a filter
+   *  modal (jobs feed, company page, companies list); absent on the launcher, where the
+   *  header renders no trigger. `activeFilters` is a getter so the badge tracks the
+   *  view's reactive filter state across the bridge. */
+  readonly openFilters?: () => void;
+  readonly activeFilters?: () => number;
 }
 
 let active = $state<ListSearchTarget | null>(null);

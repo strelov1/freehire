@@ -1,7 +1,8 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { Search, X } from '@lucide/svelte';
+  import { Search, SlidersHorizontal, X } from '@lucide/svelte';
   import { listSearchTarget } from '$lib/listSearch.svelte';
+  import { headerFilterTrigger } from '$lib/headerFilterTrigger';
   import HeaderLocationFilter from './HeaderLocationFilter.svelte';
 
   // The header's list-mode input: on /jobs and /companies it IS the page's text
@@ -16,6 +17,10 @@
   // Fall back to the URL's `q` before the view registers (SSR + first paint), so a
   // shared /jobs?q=… link shows its query immediately.
   const q = $derived(target?.value.q ?? page.url.searchParams.get('q') ?? '');
+  // The All-filters trigger: shown (with its active-filter badge) only on list pages
+  // that published `openFilters`; the count getter is called inside this $derived so
+  // the badge tracks the view's live filter state.
+  const filterTrigger = $derived(headerFilterTrigger(target));
 
   // Same global hotkeys as the launcher: Cmd/Ctrl+K always, `/` unless typing.
   function onWindowKeydown(e: KeyboardEvent) {
@@ -77,6 +82,29 @@
         class="hidden shrink-0 rounded border border-border px-1.5 text-xs text-muted-foreground sm:inline"
         >/</kbd
       >
+    {/if}
+    <!-- All-filters trigger, mirroring the Location scope-prefix on the left: divided
+         from the input and pinned to the right edge. Opens the active page's own filter
+         modal; the badge shows the active-filter count. Hidden where no list owns a
+         modal (launcher/listless pages register no `openFilters`). -->
+    {#if filterTrigger.visible}
+      <div class="h-5 w-px shrink-0 bg-border"></div>
+      <button
+        type="button"
+        onclick={() => target?.openFilters?.()}
+        aria-label="Filters"
+        title="Filters"
+        class="relative flex shrink-0 items-center text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <SlidersHorizontal class="size-4 shrink-0" />
+        {#if filterTrigger.count > 0}
+          <span
+            class="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold leading-none text-brand-foreground"
+          >
+            {filterTrigger.count}
+          </span>
+        {/if}
+      </button>
     {/if}
   </div>
 </div>

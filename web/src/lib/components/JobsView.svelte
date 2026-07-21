@@ -253,6 +253,8 @@
       },
       setQuery: (q) => filters.setQuery(q),
       filterScope: { store: filters, counts: () => counts, variant: 'jobs' },
+      openFilters: () => (modalOpen = true),
+      activeFilters: () => filters.active,
     });
     return () => {
       setListSearchTarget(null);
@@ -414,8 +416,6 @@
     <ListToolbar
       total={!cvSignInPrompt && jobs.items.length > 0 ? jobs.total : null}
       unit={jobs.total === 1 ? 'job' : 'jobs'}
-      active={filters.active}
-      onOpenFilters={() => (modalOpen = true)}
       onSwipe={standalone ? openSwipe : undefined}
       showDesktopTotal={standalone}
       sortControl={standalone && isAuthenticated() ? sortSelect : undefined}

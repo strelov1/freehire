@@ -59,6 +59,8 @@
       },
       setQuery: (q) => filters.setQuery(q),
       filterScope: { store: filters, counts: () => null, variant: 'companies' },
+      openFilters: () => (modalOpen = true),
+      activeFilters: () => filters.active,
     });
     return () => {
       setListSearchTarget(null);
@@ -100,8 +102,6 @@
     <ListToolbar
       total={companies.status === 'ready' && companies.items.length > 0 ? companies.total : null}
       unit={companies.total === 1 ? 'company' : 'companies'}
-      active={filters.active}
-      onOpenFilters={() => (modalOpen = true)}
     />
     {#if companies.status === 'loading'}
       <States state="loading" />
