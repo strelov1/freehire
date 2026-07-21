@@ -620,7 +620,7 @@ export interface Patch {
   stack?: string[]; // per-experience technology line (set_stack)
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'breezy', 'briefhq', 'bullhorn', 'careerplug', 'careerspage', 'catsone', 'cleverstaff', 'clinch', 'comeet', 'cornerstone', 'crelate', 'deel', 'djinni', 'earcu', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'functionalworks', 'geekjob', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'hh', 'himalayas', 'hireology', 'huntflow', 'hurma', 'icims', 'infojobs', 'inhire', 'ismartrecruit', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobscore', 'jobspresso', 'jobstash', 'jobtech', 'jobvite', 'jobylon', 'join', 'justjoin', 'lever', 'likeit', 'loxo', 'luxoft', 'manatal', 'mindsight', 'mycareersfuture', 'neogov', 'nofluffjobs', 'northstone', 'odoo', 'oracle', 'pageup', 'paycom', 'paylocity', 'peopleforce', 'personio', 'phenom', 'pinpoint', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'solides', 'spark', 'startupandvc', 'successfactors', 'talentadore', 'talentlyft', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'trudvsem', 'tyomarkkinatori', 'ukg', 'vagas', 'vention', 'vouch', 'wantapply', 'wantedkr', 'weworkremotely', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'breezy', 'briefhq', 'bullhorn', 'careerplug', 'careerspage', 'catsone', 'cleverstaff', 'clinch', 'comeet', 'cornerstone', 'crelate', 'deel', 'djinni', 'earcu', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'functionalworks', 'geekjob', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'hh', 'himalayas', 'hireology', 'huntflow', 'hurma', 'icims', 'infojobs', 'inhire', 'ismartrecruit', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobscore', 'jobspresso', 'jobstash', 'jobtech', 'jobvite', 'jobylon', 'join', 'justjoin', 'lever', 'likeit', 'loxo', 'luxoft', 'manatal', 'mindsight', 'mycareersfuture', 'neogov', 'nofluffjobs', 'northstone', 'odoo', 'oracle', 'pageup', 'paycom', 'paylocity', 'peopleforce', 'personio', 'phenom', 'pinpoint', 'powertofly', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'solides', 'spark', 'startupandvc', 'successfactors', 'talentadore', 'talentlyft', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'trudvsem', 'tyomarkkinatori', 'ukg', 'vagas', 'vention', 'vouch', 'wantapply', 'wantedkr', 'weworkremotely', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];
@@ -1754,7 +1754,7 @@ export const ROLE_ALIASES = {
   'embedded': ['embedded', 'firmware', 'встраиваемые', 'встраиваемых'],
   'engineering_manager': ['engineering manager'],
   'enterprise_architect': ['enterprise architect'],
-  'finance': ['accountant', 'accounting', 'bookkeeper', 'cfo', 'chief financial officer', 'finance analyst', 'finance controller', 'finance manager', 'financial analyst', 'financial controller', 'financial manager', 'fp&a', 'head of finance', 'payroll', 'tax accountant', 'treasury', 'бухгалтер', 'главбух', 'главный бухгалтер', 'казначей', 'финансовый аналитик', 'финансовый директор'],
+  'finance': ['accountant', 'accounting', 'accounts payable', 'accounts receivable', 'bookkeeper', 'cfo', 'chief financial officer', 'finance analyst', 'finance controller', 'finance manager', 'financial analyst', 'financial controller', 'financial manager', 'fp&a', 'head of finance', 'payroll', 'tax accountant', 'treasury', 'бухгалтер', 'главбух', 'главный бухгалтер', 'казначей', 'финансовый аналитик', 'финансовый директор'],
   'financial_analyst': ['financial analyst'],
   'firmware_engineer': ['firmware engineer'],
   'flutter_developer': ['flutter'],
@@ -1798,7 +1798,7 @@ export const ROLE_ALIASES = {
   'mlops_engineer': ['ml ops engineer', 'mlops engineer'],
   'mobile': ['android', 'ios', 'mobile', 'мобильная', 'мобильный', 'мобильных'],
   'network_engineering': ['network administrator', 'network engineer', 'network engineering', 'сетевой администратор', 'сетевой инженер'],
-  'operations': ['administrative assistant', 'biz ops', 'business operations', 'chief of staff', 'chief operating officer', 'coo', 'executive assistant', 'facilities manager', 'head of operations', 'office manager', 'operations analyst', 'operations manager', 'ops manager', 'procurement', 'procurement manager', 'purchasing manager', 'ассистент руководителя', 'закупщик', 'операционный директор', 'операционный менеджер', 'офис-менеджер', 'помощник руководителя', 'специалист по закупкам'],
+  'operations': ['administrative assistant', 'biz ops', 'business operations', 'chief of staff', 'chief operating officer', 'coo', 'executive assistant', 'facilities manager', 'head of operations', 'office manager', 'operations analyst', 'operations coordinator', 'operations manager', 'operations specialist', 'ops manager', 'procurement', 'procurement manager', 'purchasing manager', 'ассистент руководителя', 'закупщик', 'операционный директор', 'операционный менеджер', 'офис-менеджер', 'помощник руководителя', 'специалист по закупкам'],
   'partnerships_manager': ['partnership manager', 'partnerships manager'],
   'platform_engineer': ['platform engineer'],
   'principal': ['principal'],
@@ -1807,7 +1807,7 @@ export const ROLE_ALIASES = {
   'product_marketing_manager': ['pmm', 'product marketing manager'],
   'product_operations_manager': ['product operations manager'],
   'program_manager': ['program manager'],
-  'project_management': ['delivery manager', 'program manager', 'programme manager', 'project manager', 'scrum master', 'scrum-master', 'проджект', 'проект-менеджер', 'скрам мастер', 'скрам-мастер'],
+  'project_management': ['delivery manager', 'program coordinator', 'program manager', 'programme manager', 'project administrator', 'project coordinator', 'project manager', 'scrum master', 'scrum-master', 'проджект', 'проект-менеджер', 'скрам мастер', 'скрам-мастер'],
   'prompt_engineer': ['prompt engineer'],
   'qa': ['qa', 'quality assurance', 'sdet', 'test automation', 'test engineer', 'tester', 'тестирование', 'тестировщик'],
   'qa_automation_engineer': ['automation qa engineer', 'qa automation engineer', 'sdet', 'test automation engineer'],
@@ -1833,7 +1833,7 @@ export const ROLE_ALIASES = {
   'sre': ['site reliability', 'sre'],
   'staff': ['staff'],
   'staff_engineer': ['staff engineer'],
-  'support': ['customer service', 'help desk', 'support', 'поддержка', 'поддержки', 'техподдержка', 'техподдержки'],
+  'support': ['call center', 'call-центр', 'contact center', 'customer care', 'customer service', 'help desk', 'support', 'колл-центр', 'поддержка', 'поддержки', 'техподдержка', 'техподдержки'],
   'systems_administrator': ['systems administrator'],
   'tax_manager': ['tax manager'],
   'team_lead': ['team lead', 'teamlead'],

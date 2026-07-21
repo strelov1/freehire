@@ -42,13 +42,35 @@ export const ROLE_RELATED: Record<string, string[]> = {
   solutions_architect: ['software_architect', 'cloud_architect', 'enterprise_architect'],
 
   // Design / product / management: cross-name siblings.
-  design: ['product_designer', 'ux_designer'],
-  product: ['product_designer', 'business_analyst'],
+  design: ['product_designer', 'ux_designer', 'graphic_designer'],
+  product: ['product_designer', 'business_analyst', 'product_marketing_manager', 'product_operations_manager'],
   management: ['engineering_manager', 'team_lead', 'director', 'scrum_master'],
   engineering_manager: ['team_lead', 'director', 'management'],
   team_lead: ['engineering_manager', 'scrum_master'],
 
   // Go-to-market: sales/marketing sub-roles.
-  sales: ['account_executive', 'account_manager'],
-  marketing: ['growth_marketer', 'seo_specialist'],
+  sales: ['account_executive', 'account_manager', 'sdr', 'bdr'],
+  marketing: ['growth_marketer', 'seo_specialist', 'product_marketing_manager', 'content_strategist', 'social_media_manager', 'community_manager'],
+
+  // Customer-facing post-sale: the reactive "support" bucket vs. proactive success.
+  support: ['customer_success', 'customer_success_manager', 'technical_account_manager'],
+  customer_success: ['support', 'customer_success_manager', 'technical_account_manager', 'account_manager'],
+
+  // Delivery: the coordinator/program family a bare "project management" flattens.
+  project_management: ['program_manager', 'technical_program_manager', 'scrum_master', 'product_operations_manager'],
+  program_manager: ['project_management', 'technical_program_manager'],
+  technical_program_manager: ['program_manager', 'project_management'],
+
+  // Business operations: ops hub and its revenue/product cousins.
+  operations: ['revenue_operations', 'product_operations_manager', 'project_management', 'chief_of_staff'],
+  revenue_operations: ['operations', 'sales', 'account_manager'],
+
+  // People: HR and the recruiting siblings a broad term won't match.
+  hr: ['recruiting', 'technical_recruiter'],
+  recruiting: ['technical_recruiter', 'hr'],
+
+  // Finance & accounting: distinctly-named roles under one hub.
+  finance: ['accountant', 'financial_analyst', 'tax_manager'],
+  accountant: ['finance', 'financial_analyst', 'tax_manager'],
+  financial_analyst: ['finance', 'accountant', 'business_analyst'],
 };

@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { baseRole, optionMatches, relatedOptions, type FacetOption } from './facets';
+import { ROLE_RELATED } from './roleRelated';
+import { ROLE_LABELS } from './generated/contracts';
 
 const opt = (value: string, count = 1): FacetOption => ({ value, label: value, count });
 
@@ -70,6 +72,32 @@ describe('relatedOptions', () => {
   it('honours the limit', () => {
     const out = relatedOptions(options, ['mobile'], [], related, 2);
     expect(out).toHaveLength(2);
+  });
+});
+
+describe('ROLE_RELATED integrity', () => {
+  // Every hub key and every suggested relative must be a real catalog slug: a typo
+  // makes the suggestion silently inert (relatedOptions drops slugs absent from the
+  // distribution), so only a test catches it. Keys and values are BASE slugs and the
+  // catalog carries the base slug for every gradeable role, so a plain membership
+  // check suffices — no need to strip a grade.
+  const catalog = ROLE_LABELS as Record<string, string>;
+
+  it('every hub key exists in ROLE_LABELS', () => {
+    const missing = Object.keys(ROLE_RELATED).filter((slug) => !(slug in catalog));
+    expect(missing).toEqual([]);
+  });
+
+  it('every suggested relative exists in ROLE_LABELS', () => {
+    const missing = [...new Set(Object.values(ROLE_RELATED).flat())].filter(
+      (slug) => !(slug in catalog),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it('a hub never suggests itself', () => {
+    const selfRefs = Object.entries(ROLE_RELATED).filter(([hub, rel]) => rel.includes(hub));
+    expect(selfRefs).toEqual([]);
   });
 });
 
