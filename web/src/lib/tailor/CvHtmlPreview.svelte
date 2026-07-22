@@ -111,72 +111,73 @@
   {/if}
 {/snippet}
 
-<!-- A4 page (794px ≈ 210mm @96dpi), scaled by zoom from the top. The serif/sans + black-on-white
-     styling reads like the printed PDF; the look tracks the selected template. -->
-<div class="flex justify-center">
-  <div style="transform: scale({zoom}); transform-origin: top center;">
-    <article
-      class={[
-        'w-[794px] bg-white px-14 py-12 text-[13px] leading-snug text-neutral-900 shadow-sm',
-        isSans ? 'font-sans' : 'font-serif',
-      ]}
-    >
-      <!-- Header -->
-      <header class={['mb-3', isCentered ? 'text-center' : '']}>
-        <h1 class={['text-2xl font-bold', isSans ? 'uppercase tracking-wider' : 'tracking-tight']}>
-          {header.full_name || 'Your Name'}
-        </h1>
-        {#if !isSidebar && contacts.length}
-          <div class="mt-1">{@render contactLine()}</div>
-        {/if}
-        {#if (doc.summary ?? '').trim()}
-          <p
-            class={[
-              'mt-2 text-[12.5px] text-neutral-800',
-              isCentered ? 'mx-auto max-w-[62ch] italic' : '',
-              isSidebar ? 'italic' : '',
-            ]}
-          >
-            {doc.summary}
-          </p>
-        {/if}
-      </header>
+<!-- A4 page (794px ≈ 210mm @96dpi). The CSS `zoom` property scales the whole page box — layout
+     included — so the scroll container reserves the scaled size. (transform: scale keeps the
+     794px box, so with justify-center the left edge overflows unreachably and clips on first
+     paint.) `mx-auto` centres the page when it fits and left-aligns it when it overflows, so it
+     never clips. The serif/sans + black-on-white styling reads like the printed PDF; the look
+     tracks the selected template. -->
+<article
+  class={[
+    'mx-auto w-[794px] bg-white px-14 py-12 text-[13px] leading-snug text-neutral-900 shadow-sm',
+    isSans ? 'font-sans' : 'font-serif',
+  ]}
+  style="zoom: {zoom};"
+>
+  <!-- Header -->
+  <header class={['mb-3', isCentered ? 'text-center' : '']}>
+    <h1 class={['text-2xl font-bold', isSans ? 'uppercase tracking-wider' : 'tracking-tight']}>
+      {header.full_name || 'Your Name'}
+    </h1>
+    {#if !isSidebar && contacts.length}
+      <div class="mt-1">{@render contactLine()}</div>
+    {/if}
+    {#if (doc.summary ?? '').trim()}
+      <p
+        class={[
+          'mt-2 text-[12.5px] text-neutral-800',
+          isCentered ? 'mx-auto max-w-[62ch] italic' : '',
+          isSidebar ? 'italic' : '',
+        ]}
+      >
+        {doc.summary}
+      </p>
+    {/if}
+  </header>
 
-      <hr class={['my-2', isSans || isSidebar ? 'border-neutral-500' : 'border-neutral-300']} />
+  <hr class={['my-2', isSans || isSidebar ? 'border-neutral-500' : 'border-neutral-300']} />
 
-      {#if isSidebar}
-        <!-- Two-column body: narrow left (contact/links/skills/languages), wide right (experience/education/projects). -->
-        <div class="grid grid-cols-[35%_1fr] gap-6">
-          <div>
-            {#if contacts.length}
-              <section class="mb-3">
-                {@render sectionHeading('Contact')}
-                {#each contacts as c, i (i)}
-                  {#if isLink(c)}
-                    <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external URL from the user's CV, not an internal route -->
-                    <p class="mb-0.5 break-words"><a href={c} target="_blank" rel="noopener" class="text-[#2b6cb0] hover:underline">{c}</a></p>
-                  {:else}<p class="mb-0.5 break-words">{c}</p>{/if}
-                {/each}
-              </section>
-            {/if}
-            {@render listBlock('Skills', skills, ', ')}
-            {@render listBlock('Languages', languages, ', ')}
-            {@render listBlock('Certifications', certifications, '; ')}
-          </div>
-          <div>
-            {@render experienceBlock()}
-            {@render educationBlock()}
-            {@render projectsBlock()}
-          </div>
-        </div>
-      {:else}
-        {@render experienceBlock()}
-        {@render projectsBlock()}
-        {@render educationBlock()}
+  {#if isSidebar}
+    <!-- Two-column body: narrow left (contact/links/skills/languages), wide right (experience/education/projects). -->
+    <div class="grid grid-cols-[35%_1fr] gap-6">
+      <div>
+        {#if contacts.length}
+          <section class="mb-3">
+            {@render sectionHeading('Contact')}
+            {#each contacts as c, i (i)}
+              {#if isLink(c)}
+                <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external URL from the user's CV, not an internal route -->
+                <p class="mb-0.5 break-words"><a href={c} target="_blank" rel="noopener" class="text-[#2b6cb0] hover:underline">{c}</a></p>
+              {:else}<p class="mb-0.5 break-words">{c}</p>{/if}
+            {/each}
+          </section>
+        {/if}
         {@render listBlock('Skills', skills, ', ')}
         {@render listBlock('Languages', languages, ', ')}
         {@render listBlock('Certifications', certifications, '; ')}
-      {/if}
-    </article>
-  </div>
-</div>
+      </div>
+      <div>
+        {@render experienceBlock()}
+        {@render educationBlock()}
+        {@render projectsBlock()}
+      </div>
+    </div>
+  {:else}
+    {@render experienceBlock()}
+    {@render projectsBlock()}
+    {@render educationBlock()}
+    {@render listBlock('Skills', skills, ', ')}
+    {@render listBlock('Languages', languages, ', ')}
+    {@render listBlock('Certifications', certifications, '; ')}
+  {/if}
+</article>

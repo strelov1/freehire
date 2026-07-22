@@ -47,16 +47,16 @@ func newTailorAPI(t *testing.T) (*API, *auth.Issuer) {
 	return h, iss
 }
 
-// buildTailorApp wires the CV + tailoring routes with the real beta gate.
+// buildTailorApp wires the CV + tailoring routes. They are open to every signed-in user (the
+// beta gate was lifted when CV tailoring went public); credits meter the LLM spend instead.
 func buildTailorApp(h *API, iss *auth.Issuer) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	saved := auth.RequireAuth(iss)
 	keyAuth := auth.RequireAuthOrKey(iss, h.queries)
-	gate := auth.RequireModeratorOrBeta(h.queries, h.queries)
-	app.Get("/api/v1/me/cvs/:id", keyAuth, gate, h.GetCV)
-	app.Post("/api/v1/me/cvs/tailor", saved, gate, h.TailorCV)
-	app.Patch("/api/v1/me/cvs/:id", keyAuth, gate, h.PatchCV)
-	app.Get("/api/v1/me/cvs/:id/tailor-context", keyAuth, gate, h.TailorContext)
+	app.Get("/api/v1/me/cvs/:id", keyAuth, h.GetCV)
+	app.Post("/api/v1/me/cvs/tailor", saved, h.TailorCV)
+	app.Patch("/api/v1/me/cvs/:id", keyAuth, h.PatchCV)
+	app.Get("/api/v1/me/cvs/:id/tailor-context", keyAuth, h.TailorContext)
 	return app
 }
 

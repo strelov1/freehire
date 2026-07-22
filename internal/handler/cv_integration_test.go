@@ -1,9 +1,9 @@
 //go:build integration
 
 // Integration tests for the CV-builder HTTP surface (add-cv-builder): CRUD round-trip,
-// owner isolation (foreign id → 404), beta-tester gating (403), the 501 gate when no
-// renderer is configured, and seeding a new CV from the stored résumé structure.
-// Run with: go test -tags=integration ./internal/handler/
+// owner isolation (foreign id → 404), open access to every signed-in user (no beta gate),
+// the 501 gate when no renderer is configured, and seeding a new CV from the stored résumé
+// structure. Run with: go test -tags=integration ./internal/handler/
 package handler
 
 import (
@@ -37,19 +37,19 @@ func seedAccount(t *testing.T, h *API, email string, beta bool) int64 {
 	return id
 }
 
-// buildCVApp wires just the CV routes with the real beta gate onto a fresh fiber app.
+// buildCVApp wires just the CV routes onto a fresh fiber app. The routes are open to every
+// signed-in user (cookie auth only) — the beta gate was lifted when CV tailoring went public.
 func buildCVApp(h *API, iss *auth.Issuer) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	saved := auth.RequireAuth(iss)
-	gate := auth.RequireModeratorOrBeta(h.queries, h.queries)
-	app.Get("/api/v1/cv-templates", saved, gate, h.ListCVTemplates)
-	app.Get("/api/v1/me/cvs", saved, gate, h.ListCVs)
-	app.Post("/api/v1/me/cvs", saved, gate, h.CreateCV)
-	app.Get("/api/v1/me/cvs/:id", saved, gate, h.GetCV)
-	app.Put("/api/v1/me/cvs/:id", saved, gate, h.UpdateCV)
-	app.Put("/api/v1/me/cvs/:id/template", saved, gate, h.SetCVTemplate)
-	app.Delete("/api/v1/me/cvs/:id", saved, gate, h.DeleteCV)
-	app.Get("/api/v1/me/cvs/:id/pdf", saved, gate, h.RenderCVPDF)
+	app.Get("/api/v1/cv-templates", saved, h.ListCVTemplates)
+	app.Get("/api/v1/me/cvs", saved, h.ListCVs)
+	app.Post("/api/v1/me/cvs", saved, h.CreateCV)
+	app.Get("/api/v1/me/cvs/:id", saved, h.GetCV)
+	app.Put("/api/v1/me/cvs/:id", saved, h.UpdateCV)
+	app.Put("/api/v1/me/cvs/:id/template", saved, h.SetCVTemplate)
+	app.Delete("/api/v1/me/cvs/:id", saved, h.DeleteCV)
+	app.Get("/api/v1/me/cvs/:id/pdf", saved, h.RenderCVPDF)
 	return app
 }
 
@@ -74,9 +74,10 @@ func doCV(t *testing.T, app *fiber.App, method, path, token string, body any) *h
 	return resp
 }
 
-// TestCVTemplatesEndpoint_Gating checks the static templates list is behind the beta gate:
-// a beta user gets every registered template, a non-beta user is forbidden.
-func TestCVTemplatesEndpoint_Gating(t *testing.T) {
+// TestCVTemplatesEndpoint_OpenToAuthed checks the static templates list is open to every
+// signed-in user: an unauthenticated request is 401, while a plain (non-beta) user gets every
+// registered template.
+func TestCVTemplatesEndpoint_OpenToAuthed(t *testing.T) {
 	pool := startPostgres(t)
 	queries := db.New(pool)
 	if _, err := pool.Exec(context.Background(), "TRUNCATE cvs, users RESTART IDENTITY CASCADE"); err != nil {
@@ -88,16 +89,15 @@ func TestCVTemplatesEndpoint_Gating(t *testing.T) {
 		resume:  resume.New(nil, resume.NewQueriesRepository(queries))}
 	app := buildCVApp(h, iss)
 
-	betaTok, _ := iss.Issue(seedAccount(t, h, "beta@example.test", true))
 	plainTok, _ := iss.Issue(seedAccount(t, h, "plain@example.test", false))
 
-	if resp := doCV(t, app, fiber.MethodGet, "/api/v1/cv-templates", plainTok, nil); resp.StatusCode != fiber.StatusForbidden {
-		t.Fatalf("non-beta templates = %d, want 403", resp.StatusCode)
+	if resp := doCV(t, app, fiber.MethodGet, "/api/v1/cv-templates", "", nil); resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("unauthenticated templates = %d, want 401", resp.StatusCode)
 	}
 
-	resp := doCV(t, app, fiber.MethodGet, "/api/v1/cv-templates", betaTok, nil)
+	resp := doCV(t, app, fiber.MethodGet, "/api/v1/cv-templates", plainTok, nil)
 	if resp.StatusCode != fiber.StatusOK {
-		t.Fatalf("beta templates = %d, want 200", resp.StatusCode)
+		t.Fatalf("non-beta templates = %d, want 200", resp.StatusCode)
 	}
 	var body struct {
 		Data []cv.TemplateInfo `json:"data"`
@@ -171,7 +171,7 @@ func TestSetCVTemplateEndpoint(t *testing.T) {
 	}
 }
 
-func TestCVEndpoints_CRUDIsolationAndGating(t *testing.T) {
+func TestCVEndpoints_CRUDAndIsolation(t *testing.T) {
 	pool := startPostgres(t)
 	queries := db.New(pool)
 	if _, err := pool.Exec(context.Background(), "TRUNCATE cvs, users RESTART IDENTITY CASCADE"); err != nil {
@@ -190,9 +190,9 @@ func TestCVEndpoints_CRUDIsolationAndGating(t *testing.T) {
 	otherTok, _ := iss.Issue(other)
 	plainTok, _ := iss.Issue(plain)
 
-	// Non-beta is forbidden everywhere.
-	if resp := doCV(t, app, fiber.MethodGet, "/api/v1/me/cvs", plainTok, nil); resp.StatusCode != fiber.StatusForbidden {
-		t.Fatalf("non-beta list = %d, want 403", resp.StatusCode)
+	// A plain (non-beta) user now has full access — the CV builder is public.
+	if resp := doCV(t, app, fiber.MethodGet, "/api/v1/me/cvs", plainTok, nil); resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("non-beta list = %d, want 200", resp.StatusCode)
 	}
 
 	// Create (no seed → empty document).

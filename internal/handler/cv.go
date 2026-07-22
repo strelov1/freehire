@@ -13,8 +13,9 @@ import (
 // CV-builder HTTP surface: per-user structured CVs (CRUD + seed) and on-demand PDF
 // rendering. Mutations are cookie-only (RequireAuth); the read + render endpoints also
 // accept an API key (RequireAuthOrKey) so the tailoring agent's CLI can fetch a CV and its
-// PDF. All routes are gated to beta testers / moderators (RequireModeratorOrBeta) at
-// registration. Every operation is owner-scoped — a foreign id is a 404, never a leak.
+// PDF. All routes are open to every signed-in user (the beta gate was lifted when tailoring
+// went public; AI credits meter the LLM spend). Every operation is owner-scoped — a foreign
+// id is a 404, never a leak.
 
 const maxCVTitleRunes = 200
 

@@ -22,13 +22,11 @@
   import AccountNavRail from '$lib/components/AccountNavRail.svelte';
   import { clampWidth } from '$lib/tailor/geometry';
   import { toEditable, type CvRecord } from '$lib/cv';
-  import { currentUser } from '$lib/auth.svelte';
   import type { Analysis, Document } from '$lib/generated/contracts';
   import type { Job } from '$lib/types';
 
   const slug = $derived(page.params.slug ?? '');
   const cvParam = $derived(page.url.searchParams.get('cv'));
-  const eligible = $derived(currentUser()?.beta_tester === true);
 
   let status = $state<'loading' | 'ready' | 'error'>('loading');
   let errorMsg = $state('');
@@ -82,11 +80,6 @@
   const loadCv = async () => hydrate(await api.getCv(cvId));
 
   onMount(async () => {
-    if (!eligible) {
-      status = 'error';
-      errorMsg = 'CV tailoring is in beta and not available on your account yet.';
-      return;
-    }
     try {
       if (cvParam) {
         // Resume an existing tailored CV. If it already has a bound session, re-attach it with
@@ -280,12 +273,13 @@
           <div class="h-full overflow-auto p-4" class:hidden={leftTab !== 'editor'}>
             <CvSectionForm bind:doc bind:title />
           </div>
-          <div class="h-full" class:hidden={leftTab !== 'chat'}>
+          <div class="flex min-h-0 h-full" class:hidden={leftTab !== 'chat'}>
             <AssistantChat
               session={sessionId}
               kickoff={resuming ? undefined : kickoff}
               {sessionLabel}
               showSessionRail={false}
+              requireBeta={false}
               {onTurnComplete}
             />
           </div>

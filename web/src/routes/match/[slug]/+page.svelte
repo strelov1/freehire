@@ -2,20 +2,17 @@
   import { resolve } from '$app/paths';
   import { goto } from '$app/navigation';
   import { ArrowLeft, SquarePen } from '@lucide/svelte';
-  import { currentUser } from '$lib/auth.svelte';
   import { Button } from '$lib/ui';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import MatchAnalysisFull from '$lib/components/MatchAnalysisFull.svelte';
 
   let { data } = $props();
 
-  // Tailoring is a beta-tester feature; the CTA shows once an analysis exists for a stored
-  // CV. A stale analysis (CV or job changed since) still tailors — we nudge a recompute for
-  // the sharpest reframing (see below) rather than block, since any CV re-upload marks every
-  // past analysis stale and blocking would hide the feature too often.
-  const canTailor = $derived(
-    !!data.fit?.analysis && data.fit?.has_cv === true && currentUser()?.beta_tester === true,
-  );
+  // The tailoring CTA shows once an analysis exists for a stored CV (credits meter the AI spend).
+  // A stale analysis (CV or job changed since) still tailors — we nudge a recompute for the
+  // sharpest reframing (see below) rather than block, since any CV re-upload marks every past
+  // analysis stale and blocking would hide the feature too often.
+  const canTailor = $derived(!!data.fit?.analysis && data.fit?.has_cv === true);
 
   let tailoring = $state(false);
 
