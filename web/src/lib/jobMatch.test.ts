@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveMatchState, matchBarSegments, computeClientMatch } from './jobMatch';
+import { resolveMatchState, matchBarSegments, computeClientMatch, partitionBlockers } from './jobMatch';
 
 describe('resolveMatchState', () => {
   const base = { jobSkills: ['go'], authenticated: true, profileLoaded: true, profileSkills: ['go'] };
@@ -73,5 +73,31 @@ describe('computeClientMatch', () => {
 
   it('does not let duplicate profile skills inflate the count', () => {
     expect(computeClientMatch(['go', 'kafka'], ['go', 'go'])).toEqual({ total: 2, matched: 1, percent: 50 });
+  });
+});
+
+describe('partitionBlockers', () => {
+  const b = (category: string, severity: string, score_cap: number, met: boolean) => ({
+    category,
+    severity,
+    score_cap,
+    reason: `${category} reason`,
+    action: '',
+    met,
+  });
+
+  it('splits unmet from met and orders unmet hardest-first', () => {
+    const { unmet, met } = partitionBlockers([
+      b('location_work_mode', 'soft', 75, false),
+      b('certification', 'hard', 60, false),
+      b('education', 'medium', 65, true),
+    ]);
+    expect(unmet.map((x) => x.category)).toEqual(['certification', 'location_work_mode']);
+    expect(met.map((x) => x.category)).toEqual(['education']);
+  });
+
+  it('handles null/undefined as empty', () => {
+    expect(partitionBlockers(null)).toEqual({ unmet: [], met: [] });
+    expect(partitionBlockers(undefined)).toEqual({ unmet: [], met: [] });
   });
 });

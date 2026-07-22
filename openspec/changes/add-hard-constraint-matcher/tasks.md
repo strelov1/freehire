@@ -30,7 +30,7 @@
 ## 5. Contracts & frontend
 
 - [x] 5.1 Run `cmd/gen-contracts`; regenerate TS for `Blocker`, the new enrichment/résumé fields, and the fit payload. Verify the generated diff is limited to these.
-- [ ] 5.2 Surface blockers in the profile-match bar UI (advisory warning chips + met ✓), and show the ceiling context on the fit analysis page. Frontend unit test for the pure reducer/formatter; visual check.
+- [x] 5.2 Surface blockers in the profile-match bar UI (advisory warning chips + met ✓), and show the ceiling context on the fit analysis page. Frontend unit test for the pure reducer/formatter; visual check.
 
 ## 6. Rollout & verification
 

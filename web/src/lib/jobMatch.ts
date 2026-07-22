@@ -2,6 +2,21 @@
 // component so it is unit-testable (vitest) without a DOM: which of the four block
 // states to render, and how to size the two-colour progress bar.
 
+import type { Blocker } from './types';
+
+/** Split the hard-constraint blockers for display: the unmet ones (shown as warnings,
+ *  hardest first — a lower score_cap is a harder blocker) and the met ones (shown as
+ *  satisfied ✓). Pure, so it's unit-testable without a DOM. */
+export function partitionBlockers(blockers: Blocker[] | null | undefined): {
+  unmet: Blocker[];
+  met: Blocker[];
+} {
+  const all = blockers ?? [];
+  const unmet = all.filter((b) => !b.met).sort((a, b) => a.score_cap - b.score_cap);
+  const met = all.filter((b) => b.met);
+  return { unmet, met };
+}
+
 /** Which state the match block renders. `loading` is the brief window while an
  *  authenticated viewer's profile is still being fetched — shown before we know
  *  whether it is `no-profile` or `ready`, so the CTA doesn't flash. */

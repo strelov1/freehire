@@ -7,7 +7,7 @@ func boolp(v bool) *bool { return &v }
 
 // find returns the first blocker of a category, or ok=false if none was emitted
 // (i.e. the category was skipped).
-func find(bs []Blocker, cat Category) (Blocker, bool) {
+func find(bs []Blocker, cat BlockerCategory) (Blocker, bool) {
 	for _, b := range bs {
 		if b.Category == cat {
 			return b, true

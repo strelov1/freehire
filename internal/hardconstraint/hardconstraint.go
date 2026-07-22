@@ -19,8 +19,8 @@ import (
 
 // tier pins each category's severity and its score-cap ceiling. A lower cap is a
 // harder blocker; the caller takes the minimum cap over the unmet blockers.
-var tier = map[Category]struct {
-	severity Severity
+var tier = map[BlockerCategory]struct {
+	severity BlockerSeverity
 	scoreCap int
 }{
 	CategoryWorkAuth:         {SeverityHard, 50},
@@ -81,7 +81,7 @@ func OverallCap(blockers []Blocker) int {
 	return ceiling
 }
 
-func blocker(cat Category, met bool, reason, action string) Blocker {
+func blocker(cat BlockerCategory, met bool, reason, action string) Blocker {
 	t := tier[cat]
 	return Blocker{Category: cat, Severity: t.severity, ScoreCap: t.scoreCap, Reason: reason, Action: action, Met: met}
 }

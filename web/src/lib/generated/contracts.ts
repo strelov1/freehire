@@ -338,30 +338,30 @@ export interface JobMatch {
 }
 
 /**
- * Category names the requirement axis a blocker covers.
+ * BlockerCategory names the requirement axis a blocker covers.
  */
-export type Category = string;
-export const CategoryExperience: Category = "experience";
-export const CategoryEducation: Category = "education";
-export const CategoryLanguage: Category = "language";
-export const CategoryWorkAuth: Category = "work_authorization";
-export const CategoryLocationWorkMode: Category = "location_work_mode";
-export const CategoryCertification: Category = "certification";
+export type BlockerCategory = string;
+export const CategoryExperience: BlockerCategory = "experience";
+export const CategoryEducation: BlockerCategory = "education";
+export const CategoryLanguage: BlockerCategory = "language";
+export const CategoryWorkAuth: BlockerCategory = "work_authorization";
+export const CategoryLocationWorkMode: BlockerCategory = "location_work_mode";
+export const CategoryCertification: BlockerCategory = "certification";
 /**
- * Severity grades how hard a blocker is: legal/binary constraints are hard, fit
+ * BlockerSeverity grades how hard a blocker is: legal/binary constraints are hard, fit
  * constraints are soft.
  */
-export type Severity = string;
-export const SeverityHard: Severity = "hard";
-export const SeverityMedium: Severity = "medium";
-export const SeveritySoft: Severity = "soft";
+export type BlockerSeverity = string;
+export const SeverityHard: BlockerSeverity = "hard";
+export const SeverityMedium: BlockerSeverity = "medium";
+export const SeveritySoft: BlockerSeverity = "soft";
 /**
  * Blocker is one evaluated requirement. Met is true when the résumé satisfies it
  * (kept so the UI can show a ✓); only Met==false entries count toward the cap.
  */
 export interface Blocker {
-  category: Category;
-  severity: Severity;
+  category: BlockerCategory;
+  severity: BlockerSeverity;
   score_cap: number /* int */;
   reason: string;
   action: string;

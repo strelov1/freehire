@@ -1,12 +1,12 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { FileText, Lock } from '@lucide/svelte';
+  import { Check, FileText, Lock, TriangleAlert } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
-  import { resolveMatchState, matchBarSegments } from '$lib/jobMatch';
+  import { resolveMatchState, matchBarSegments, partitionBlockers } from '$lib/jobMatch';
   import { profileStore } from '$lib/profile.svelte';
-  import type { Job, JobMatch } from '$lib/types';
+  import type { BlockerSeverity, Job, JobMatchResult } from '$lib/types';
   import { Button } from '$lib/ui';
   import MatchSummary from './MatchSummary.svelte';
 
@@ -15,7 +15,7 @@
 
   // The fetched match — set only in the `ready` state. Read by the template/segments
   // but never by `state`, so setting it can't re-trigger the fetch effect below.
-  let match = $state.raw<JobMatch | null>(null);
+  let match = $state.raw<JobMatchResult | null>(null);
 
   // One-time profile load for signed-in viewers (SSR-safe no-op otherwise); the
   // block resolves to `loading` until it settles so the CTA doesn't flash.
@@ -45,6 +45,15 @@
   });
 
   const segments = $derived(match ? matchBarSegments(match) : { exact: 0, adjacent: 0 });
+  const blockers = $derived(partitionBlockers(match?.blockers));
+
+  // Warning tone by severity: hard constraints (work auth, certs) read as blocking,
+  // fit constraints (location, language) as softer cautions.
+  function toneText(severity: BlockerSeverity): string {
+    if (severity === 'hard') return 'text-destructive';
+    if (severity === 'medium') return 'text-amber-700 dark:text-amber-500';
+    return 'text-muted-foreground';
+  }
 
   // Static teaser for the locked states — deliberately not a real score.
   const teaser = { percent: 76, have: ['React', 'Docker', 'SQL'], missing: ['Kafka'] };
@@ -139,6 +148,30 @@
         <div class="flex flex-wrap gap-1.5">
           {#each match.missing as skill (skill)}<span class={missChip}>{skill}</span>{/each}
         </div>
+      </div>
+    {/if}
+
+    {#if blockers.unmet.length || blockers.met.length}
+      <!-- Deterministic hard-constraint checks (years, education, certs, work auth,
+           location) — advisory warnings, never hiding the job. -->
+      <div class="flex flex-col gap-1.5">
+        <span class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <span class="size-1.5 rounded-full bg-muted-foreground"></span>Requirements
+        </span>
+        <ul class="flex flex-col gap-1">
+          {#each blockers.unmet as b (b.category + b.reason)}
+            <li class="flex items-start gap-1.5 text-xs {toneText(b.severity)}">
+              <TriangleAlert class="mt-0.5 size-3.5 shrink-0" />
+              <span>{b.reason}</span>
+            </li>
+          {/each}
+          {#each blockers.met as b (b.category + b.reason)}
+            <li class="flex items-start gap-1.5 text-xs text-muted-foreground">
+              <Check class="mt-0.5 size-3.5 shrink-0 text-brand" />
+              <span>{b.reason}</span>
+            </li>
+          {/each}
+        </ul>
       </div>
     {/if}
 

@@ -3,12 +3,19 @@
 
 import type {
   Job,
+  JobMatch,
+  Blocker,
   Report as ATSReportContract,
   Analysis as MatchAnalysisContract,
 } from './generated/contracts';
 export type { Job, Enrichment, Verdict, Gap, SkillRow } from './generated/contracts';
 // Per-job profile match (how well a job's skills are covered by the caller's profile).
 export type { JobMatch, AdjacentSkill } from './generated/contracts';
+// Hard-constraint blockers (years, education, certs, work auth, location) surfaced
+// beside skill coverage. BlockerCategory/BlockerSeverity are the enum aliases.
+export type { Blocker, BlockerCategory, BlockerSeverity } from './generated/contracts';
+// The profile-match endpoint returns skill coverage plus the advisory blockers.
+export type JobMatchResult = JobMatch & { blockers: Blocker[] };
 // atscheck's Report is aliased ATSReport (a local Report — job reports — already exists);
 // its category/line-item shapes come along for the report view.
 export type {

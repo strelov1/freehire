@@ -50,6 +50,7 @@ import type {
   Verdict,
   ATSResponse,
   JobMatch,
+  JobMatchResult,
   MatchAnalysisResponse,
   AiCredits,
   CreditHistoryEntry,
@@ -306,8 +307,8 @@ export function createApi(
    *  each job skill classified exact/adjacent/missing plus a coverage percent.
    *  Requires a signed-in caller with a profile (404 otherwise); the sidebar only
    *  calls it in that state. */
-  async function getJobMatch(slug: string): Promise<JobMatch> {
-    return requestData<JobMatch>(`/api/v1/jobs/${slug}/match`);
+  async function getJobMatch(slug: string): Promise<JobMatchResult> {
+    return requestData<JobMatchResult>(`/api/v1/jobs/${slug}/match`);
   }
 
   /** The cached LLM fit analysis for a job (never runs the model). `has_cv` is false

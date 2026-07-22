@@ -56,7 +56,7 @@ func TestBuildHardConstraintInputs(t *testing.T) {
 	}
 }
 
-func findBlocker(bs []hardconstraint.Blocker, cat hardconstraint.Category) (hardconstraint.Blocker, bool) {
+func findBlocker(bs []hardconstraint.Blocker, cat hardconstraint.BlockerCategory) (hardconstraint.Blocker, bool) {
 	for _, b := range bs {
 		if b.Category == cat {
 			return b, true
