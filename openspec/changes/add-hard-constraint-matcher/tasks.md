@@ -23,9 +23,9 @@
 
 - [x] 4.1 Profile-match bar: assemble `JobRequirements`/`CVEvidence` at the handler and attach `blockers` to the payload when structured inputs are present; degrade to coverage-only otherwise. Handler/integration test both paths; never hide the job.
 - [x] 4.2 matchanalysis: clamp `overall_score` to `min(ScoreCap)` and derive `verdict` from the capped score, applied at serve time. Test the cap scenario (weighted 88 → capped 60).
-- [ ] 4.3 matchanalysis: inject the blockers into the Stage-1 and Stage-3 prompt context as known constraints; expose blockers in the served analysis. Prompt-content test + analysis-shape test.
+- [x] 4.3 matchanalysis: inject the blockers into the Stage-1 and Stage-3 prompt context as known constraints; expose blockers in the served analysis. Prompt-content test + analysis-shape test.
 - [x] 4.4 matchanalysis: recompute the blockers + ceiling on read (GET) from the current job/résumé/dictionary and apply to the cached dimensions; the cache keeps its existing three stamps unchanged (D6 — no fourth stamp, no migration). Test that a dictionary change re-caps a cached analysis without marking it stale.
-- [ ] 4.5 Tailor: pass unmet blockers' `Action` strings into the tailor context as explicit "do not claim unless true" guardrails. Test the action strings reach the tailor input.
+- [x] 4.5 Tailor: pass unmet blockers' `Action` strings into the tailor context as explicit "do not claim unless true" guardrails. Test the action strings reach the tailor input.
 
 ## 5. Contracts & frontend
 
@@ -34,6 +34,6 @@
 
 ## 6. Rollout & verification
 
-- [ ] 6.1 Verify no DB migration, no enrichment schema change, and no Meilisearch facet were added (no reindex; job side is compute-at-read). Confirm `go build ./... && go vet ./...` and full `go test ./...` are green.
-- [ ] 6.2 Confirm no catalogue backfill is required (job side is correct on read the instant the code ships); the résumé `certifications` field self-heals on the next upload. Note this in the change summary.
-- [ ] 6.3 `verification-before-completion`: drive the fit analysis end-to-end for a caller who misses a hard constraint and confirm the served score is capped and the blocker is surfaced.
+- [x] 6.1 Verify no DB migration, no enrichment schema change, and no Meilisearch facet were added (no reindex; job side is compute-at-read). Confirm `go build ./... && go vet ./...` and full `go test ./...` are green.
+- [x] 6.2 Confirm no catalogue backfill is required (job side is correct on read the instant the code ships); the résumé `certifications` field self-heals on the next upload. Note this in the change summary.
+- [x] 6.3 `verification-before-completion`: drive the fit analysis end-to-end for a caller who misses a hard constraint and confirm the served score is capped and the blocker is surfaced.

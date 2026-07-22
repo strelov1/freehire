@@ -7,6 +7,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/strelov1/freehire/internal/hardconstraint"
 	"github.com/strelov1/freehire/internal/jobmatch"
 	"github.com/strelov1/freehire/internal/llm"
 )
@@ -60,6 +61,11 @@ type Input struct {
 	// LocationPreferences is the candidate's raw profile location_preferences JSON
 	// (accepted work modes, remote reach, base, relocation); empty when unset.
 	LocationPreferences string
+
+	// Blockers are the deterministic hard-constraint results (hardconstraint.Evaluate).
+	// The unmet ones are fed into the prompt as established constraints so the model
+	// respects rather than re-derives them; the same list caps the served overall_score.
+	Blockers []hardconstraint.Blocker
 }
 
 // stage1Out is the Extract & Match stage's raw output.
@@ -247,6 +253,7 @@ func stage1UserPrompt(in Input) string {
 	var b strings.Builder
 	writeJob(&b, in)
 	writeAnchor(&b, in.Match)
+	writeBlockers(&b, in.Blockers)
 	writeStructured(&b, in)
 	writeCV(&b, in)
 	return b.String()
@@ -276,9 +283,33 @@ func stage3UserPrompt(in Input, reqs []Requirement, v recruiterVerdict) string {
 		b.Write(blob)
 		b.WriteString("\n\n")
 	}
+	writeBlockers(&b, in.Blockers)
 	writeRequirements(&b, reqs)
 	writeCV(&b, in)
 	return b.String()
+}
+
+// writeBlockers lists the deterministic hard constraints the candidate does NOT meet,
+// so the model treats them as established facts — factoring them into the scores and
+// gaps rather than re-deriving or inflating past them. Met constraints need no mention.
+func writeBlockers(b *strings.Builder, blockers []hardconstraint.Blocker) {
+	var unmet []string
+	for _, bl := range blockers {
+		if !bl.Met {
+			unmet = append(unmet, bl.Reason)
+		}
+	}
+	if len(unmet) == 0 {
+		return
+	}
+	b.WriteString("Hard constraints the candidate does NOT meet (already determined; treat as established, ")
+	b.WriteString("factor into the scores and gaps, and never claim the candidate meets them):\n")
+	for _, reason := range unmet {
+		b.WriteString("- ")
+		b.WriteString(reason)
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
 }
 
 func writeJob(b *strings.Builder, in Input) {

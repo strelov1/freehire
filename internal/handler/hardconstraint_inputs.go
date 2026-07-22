@@ -18,13 +18,23 @@ import (
 // capServedAnalysis attaches the caller's hard-constraint blockers to a fit analysis
 // and clamps its overall score to the deterministic ceiling. Recomputed on every read
 // so a dictionary change takes effect with no cache stamp; the uncapped analysis stays
-// in the cache and only the served copy is capped. No-op on a nil analysis.
+// in the cache and only the served copy is capped. No-op on a nil analysis. Used on the
+// GET path, which has no pre-computed blockers.
 func (a *API) capServedAnalysis(ctx context.Context, userID int64, job db.Job, analysis *matchanalysis.Analysis) {
 	if analysis == nil {
 		return
 	}
 	profile, _ := a.userProfile.Get(ctx, userID)
-	blockers := a.jobBlockers(ctx, userID, job, profile)
+	applyBlockers(analysis, a.jobBlockers(ctx, userID, job, profile))
+}
+
+// applyBlockers attaches blockers to the served analysis and clamps its score to the
+// deterministic ceiling. Split out so the POST path can reuse the blockers it already
+// computed for the prompt instead of evaluating them twice. No-op on a nil analysis.
+func applyBlockers(analysis *matchanalysis.Analysis, blockers []hardconstraint.Blocker) {
+	if analysis == nil {
+		return
+	}
 	if blockers == nil {
 		blockers = []hardconstraint.Blocker{}
 	}

@@ -92,6 +92,10 @@ func (a *API) TailorCV(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	// Attach the hard-constraint blockers + score ceiling to the analysis the tailoring
+	// agent receives, so its Action strings ("do not claim X unless true") guard the
+	// tailored output against fabricating a credential/degree/authorization.
+	a.capServedAnalysis(c.Context(), userID, job, analysis)
 	// Gate on points before creating anything: an out-of-credits caller is a 402 and no
 	// tailored CV or session is minted. The debit itself lands after the CV exists (below).
 	if bal := a.creditsBalance(c.Context(), userID); bal != nil && bal.Remaining < a.credits.Cost(credits.FeatureTailor) {
