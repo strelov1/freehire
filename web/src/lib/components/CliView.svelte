@@ -4,7 +4,8 @@
 
   const CLI_REPO = 'https://github.com/strelov1/freehire-cli';
   const MCP_REPO = 'https://github.com/strelov1/freehire-mcp';
-  const SKILL_URL = `${CLI_REPO}/blob/main/skills/using-freehire/SKILL.md`;
+  const SKILL_URL =
+    'https://github.com/strelov1/freehire-cli/blob/main/skills/using-freehire/SKILL.md';
   const INSTALL = 'curl -fsSL https://freehire.dev/install.sh | sh';
 
   // Command reference, mirroring the freehire-cli README/SKILL.md (the source of
