@@ -406,6 +406,10 @@ func TestParse_ExpansionBatch2(t *testing.T) {
 		// ambiguity guards: deliberately-omitted tokens must NOT tag on common uses.
 		{"windows office trap", "A bright office with big windows and a great team.", nil, []string{"windows"}},
 		{"http url trap", "Apply via http://careers.example.com by Friday.", nil, []string{"http"}},
+		// URL path extensions must not leak as skills on non-tech jobs: a retail post
+		// linking to "about-us.html" (or a ".php" page) tokenizes to html/php otherwise.
+		{"html extension in link text", "Learn more at www.dollargeneral.com/about-us.html today.", nil, []string{"html"}},
+		{"php extension in url", "See https://jobs.example.com/apply.php for details.", nil, []string{"php"}},
 		{"s3 trap", "We finished the S3 phase of the roadmap.", nil, []string{"s3"}},
 	}
 	for _, c := range cases {
