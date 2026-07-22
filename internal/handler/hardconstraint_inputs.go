@@ -24,6 +24,10 @@ func (a *API) capServedAnalysis(ctx context.Context, userID int64, job db.Job, a
 	if analysis == nil {
 		return
 	}
+	if a.userProfile == nil { // profile use case not wired (e.g. a minimal test app) → no blockers
+		applyBlockers(analysis, nil)
+		return
+	}
 	profile, _ := a.userProfile.Get(ctx, userID)
 	applyBlockers(analysis, a.jobBlockers(ctx, userID, job, profile))
 }

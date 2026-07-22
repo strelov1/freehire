@@ -49,7 +49,6 @@ import type {
   ReportInput,
   Verdict,
   ATSResponse,
-  JobMatch,
   JobMatchResult,
   MatchAnalysisResponse,
   AiCredits,
