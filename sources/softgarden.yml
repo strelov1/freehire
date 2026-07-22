@@ -1,0 +1,39 @@
+# softgarden boards. Provider is the filename; each entry is company + board.
+# board = tenant subdomain (see internal/sources/softgarden.go).
+
+- company: Autohaus Adelbert Moll GmbH & Co. KG
+  board: moll
+- company: B&O Bau GmbH
+  board: buojobs
+- company: Bundesdruckerei-Gruppe
+  board: bundesdruckerei
+- company: Contipark Parkgaragengesellschaft mbH
+  board: contipark-jobs
+- company: Damovo Deutschland GmbH & Co. KG
+  board: damovo
+- company: Dassbach Küchen Werksverkauf GmbH & Co. KG
+  board: dassbach-kuechen
+- company: diakonia Dienstleistungsbetriebe GmbH
+  board: diakonia
+- company: G. Staehle GmbH u. Co. KG - Staehle Blechpackungen
+  board: staehle-jobs
+- company: GAN Assurances Agences
+  board: ganjobs
+- company: Holtzbrinck
+  board: holtzbrinck-careers
+- company: Karl Bögner GmbH & Co. KG
+  board: holzland
+- company: Kraftanlagen Gruppe
+  board: kraftanlagen
+- company: Kulturveranstaltungen des Bundes in Berlin (KBB) GmbH
+  board: kbbjobs
+- company: L.I.T. chemical & contract logistics GmbH
+  board: litjobs
+- company: Next Kraftwerke GmbH
+  board: next-kraftwerke
+- company: STF Gruppe GmbH
+  board: stf-gruppe
+- company: Urgo GmbH
+  board: urgo
+- company: Wikimedia Deutschland - Gesellschaft zur Förderung Freien Wissens e.V.
+  board: wikimedia-deutschland
