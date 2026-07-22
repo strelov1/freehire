@@ -11,7 +11,28 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/strelov1/freehire/internal/hardconstraint/credentials"
 )
+
+// reDegreeOptional matches a posting that offers a degree with an
+// equivalent-experience alternative, so the hard-constraint evaluator can skip a
+// false education blocker. It covers "or equivalent experience" (optionally with a
+// qualifier like "work"/"practical") and the bare "degree or equivalent".
+var reDegreeOptional = regexp.MustCompile(`(?i)(equivalent(?:\s+\w+){0,2}\s+experience|degree\s+or\s+equivalent)`)
+
+// RequiredCertifications returns the canonical credential slugs the posting
+// requires, scanned deterministically from the description with the shared
+// credential vocabulary. Computed at read; nothing is stored.
+func RequiredCertifications(description string) []string {
+	return credentials.Scan(description)
+}
+
+// DegreeOptional reports whether the posting offers a degree "or equivalent
+// experience", so a candidate without the degree is not falsely blocked.
+func DegreeOptional(description string) bool {
+	return reDegreeOptional.MatchString(description)
+}
 
 // Employment-type matchers, checked in precedence order: a "full-time internship"
 // is an internship, a part-time contract is part-time, etc. "temporary" / "fixed

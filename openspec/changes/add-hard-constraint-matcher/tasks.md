@@ -14,10 +14,10 @@
 
 ## 3. Deterministic job facts + résumé field
 
-- [ ] 3.1 Add `credentials.Scan(text) []string` — the canonical slugs whose aliases appear whole-word in text, deduped. Table-test recognized/unrecognized/dedup.
-- [ ] 3.2 Add `internal/jobfacts.RequiredCertifications(description)` (thin wrapper over `credentials.Scan`) and `internal/jobfacts.DegreeOptional(description)` (regex over "or equivalent experience" / "degree or equivalent" phrasings). Table-test both; a hard requirement → DegreeOptional false.
-- [ ] 3.3 Add `DegreeOptional bool` to `hardconstraint.JobRequirements`; `appendEducation` skips the blocker when set. Table-test degree-optional → no education blocker.
-- [ ] 3.4 Résumé: add `Certifications []string` to `resumeextract.Structured` (wire + Sanitize bounds) and to the extraction prompt. Test sanitize bounds; confirm stale/absent degrades.
+- [x] 3.1 Add `credentials.Scan(text) []string` — the canonical slugs whose aliases appear whole-word in text, deduped. Table-test recognized/unrecognized/dedup.
+- [x] 3.2 Add `internal/jobfacts.RequiredCertifications(description)` (thin wrapper over `credentials.Scan`) and `internal/jobfacts.DegreeOptional(description)` (regex over "or equivalent experience" / "degree or equivalent" phrasings). Table-test both; a hard requirement → DegreeOptional false.
+- [x] 3.3 Add `DegreeOptional bool` to `hardconstraint.JobRequirements`; `appendEducation` skips the blocker when set. Table-test degree-optional → no education blocker.
+- [x] 3.4 Résumé: add `Certifications []string` to `resumeextract.Structured` (wire + Sanitize bounds) and to the extraction prompt. Test sanitize bounds; confirm stale/absent degrades.
 
 ## 4. Integration surfaces
 

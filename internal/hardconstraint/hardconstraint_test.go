@@ -79,6 +79,14 @@ func TestEducationCategory(t *testing.T) {
 			t.Error("education should be skipped when requirement is none")
 		}
 	})
+	t.Run("degree-optional posting skips the education blocker", func(t *testing.T) {
+		// Master required, CV has only a bachelor — normally a blocker — but the
+		// posting accepts equivalent experience, so no education blocker fires.
+		bs := Evaluate(JobRequirements{EducationLevel: "master", DegreeOptional: true}, CVEvidence{Degrees: []string{"BSc"}})
+		if _, ok := find(bs, CategoryEducation); ok {
+			t.Error("education must be skipped when the posting is degree-optional")
+		}
+	})
 }
 
 func TestCertificationCategory(t *testing.T) {

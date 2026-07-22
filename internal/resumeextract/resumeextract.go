@@ -72,6 +72,7 @@ Rules:
     stack is the array of technologies listed for that role, e.g. from a "Stack:" line),
   education (array of {degree, institution, year}), languages (array of strings), links (array of URLs),
   skills (array of strings — technologies/tools stated in the CV, properly cased, e.g. "Go", "PostgreSQL", "Kafka"),
+  certifications (array of strings — professional certifications/licenses the CV states the person holds, e.g. "AWS Certified Solutions Architect", "CISSP", "PMP"),
   projects (array of {name, link, highlights} — personal/side projects with their bullet points).
 - Omit any field or entry you cannot fill from the CV. Return {} if the text is not a résumé.`
 

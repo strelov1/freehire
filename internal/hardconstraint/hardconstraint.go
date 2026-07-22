@@ -70,6 +70,7 @@ type Blocker struct {
 type JobRequirements struct {
 	ExperienceYearsMin     *int
 	EducationLevel         string   // "", none, bachelor, master, phd
+	DegreeOptional         bool     // posting offers "or equivalent experience" → skip education blocker
 	EnglishLevel           string   // "" or a CEFR/level string
 	VisaSponsorship        *bool    // nil = unknown
 	WorkMode               string   // onsite, hybrid, remote, ""
@@ -131,6 +132,9 @@ func appendExperience(out []Blocker, job JobRequirements, cv CVEvidence) []Block
 }
 
 func appendEducation(out []Blocker, job JobRequirements, cv CVEvidence) []Blocker {
+	if job.DegreeOptional { // posting accepts equivalent experience → never a degree blocker
+		return out
+	}
 	needRank, ok := degreeRank(job.EducationLevel)
 	if !ok || needRank == 0 { // "" or "none" is no requirement
 		return out

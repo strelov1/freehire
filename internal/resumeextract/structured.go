@@ -24,13 +24,14 @@ const (
 	maxEntrySummaryRunes = 600
 	maxShortRunes        = 200 // title, company, degree, institution, dates, language, link
 
-	maxExperience = 30
-	maxEducation  = 20
-	maxLanguages  = 20
-	maxLinks      = 20
-	maxSkills     = 80
-	maxHighlights = 12
-	maxProjects   = 20
+	maxExperience     = 30
+	maxEducation      = 20
+	maxLanguages      = 20
+	maxLinks          = 20
+	maxSkills         = 80
+	maxCertifications = 40
+	maxHighlights     = 12
+	maxProjects       = 20
 
 	maxYears = 70
 )
@@ -39,19 +40,20 @@ const (
 // does not state is left empty rather than invented (the model is prompted accordingly
 // and Sanitize drops empty entries).
 type Structured struct {
-	FullName   string       `json:"full_name,omitempty"`
-	Headline   string       `json:"headline,omitempty"`
-	Location   string       `json:"location,omitempty"`
-	Email      string       `json:"email,omitempty"`
-	Phone      string       `json:"phone,omitempty"`
-	Summary    string       `json:"summary,omitempty"`
-	TotalYears int          `json:"total_years,omitempty"`
-	Experience []Experience `json:"experience,omitempty"`
-	Education  []Education  `json:"education,omitempty"`
-	Languages  []string     `json:"languages,omitempty"`
-	Links      []string     `json:"links,omitempty"`
-	Skills     []string     `json:"skills,omitempty"`
-	Projects   []Project    `json:"projects,omitempty"`
+	FullName       string       `json:"full_name,omitempty"`
+	Headline       string       `json:"headline,omitempty"`
+	Location       string       `json:"location,omitempty"`
+	Email          string       `json:"email,omitempty"`
+	Phone          string       `json:"phone,omitempty"`
+	Summary        string       `json:"summary,omitempty"`
+	TotalYears     int          `json:"total_years,omitempty"`
+	Experience     []Experience `json:"experience,omitempty"`
+	Education      []Education  `json:"education,omitempty"`
+	Languages      []string     `json:"languages,omitempty"`
+	Links          []string     `json:"links,omitempty"`
+	Skills         []string     `json:"skills,omitempty"`
+	Certifications []string     `json:"certifications,omitempty"`
+	Projects       []Project    `json:"projects,omitempty"`
 }
 
 // Experience is one work-history entry. Dates are kept as free-form strings as printed
@@ -106,6 +108,7 @@ func (s *Structured) Sanitize() {
 	s.Languages = limit(nonEmpty(mapStrings(s.Languages, maxShortRunes)), maxLanguages)
 	s.Links = limit(nonEmpty(mapStrings(s.Links, maxShortRunes)), maxLinks)
 	s.Skills = limit(nonEmpty(mapStrings(s.Skills, maxShortRunes)), maxSkills)
+	s.Certifications = limit(nonEmpty(mapStrings(s.Certifications, maxShortRunes)), maxCertifications)
 	s.Projects = limit(mapEntries(s.Projects, sanitizeProject), maxProjects)
 }
 

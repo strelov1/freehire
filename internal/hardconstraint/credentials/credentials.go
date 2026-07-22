@@ -94,6 +94,29 @@ func IsCanonical(slug string) bool {
 	return slugSet[slug]
 }
 
+// Scan returns the canonical slugs whose aliases appear as whole words in text,
+// in table order and deduped. It normalizes text once and matches on
+// space-delimited word boundaries (the leaf package does its own boundary check to
+// avoid a dependency), so "PMP" in prose resolves but "pmp" inside another token
+// does not. Used to derive a job's required certifications from its description.
+func Scan(text string) []string {
+	norm := normalize(text)
+	if norm == "" {
+		return nil
+	}
+	padded := " " + norm + " "
+	var out []string
+	for _, e := range table {
+		for _, a := range e.aliases {
+			if strings.Contains(padded, " "+a+" ") {
+				out = append(out, e.slug)
+				break
+			}
+		}
+	}
+	return out
+}
+
 // normalize lowercases, drops apostrophes, and collapses every other
 // non-alphanumeric run to a single space while preserving '+', so "CompTIA
 // Security+" and "commercial driver's license" match their aliases.
