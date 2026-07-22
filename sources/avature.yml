@@ -8,3 +8,6 @@
   board: jobs.ea.com
 - company: Harman
   board: jobsearch.harman.com
+# --- aggregator-harvested + live-validated 1 boards ---
+- company: Deloittecm
+  board: deloittecm.avature.net

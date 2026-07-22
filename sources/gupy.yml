@@ -2907,3 +2907,6 @@
   board: "974"
 - company: ClickBus
   board: "82405"
+# --- aggregator-harvested + live-validated 1 boards ---
+- company: Swapfinancial
+  board: 87487
