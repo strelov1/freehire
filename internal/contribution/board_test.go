@@ -38,6 +38,7 @@ func TestRecognizeBoard(t *testing.T) {
 		{"bamboohr subdomain", "https://acme.bamboohr.com/careers/42", "bamboohr", "acme", "https://acme.bamboohr.com", true},
 		{"personio nested apex subdomain", "https://acme.jobs.personio.com/job/9", "personio", "acme", "https://acme.jobs.personio.com", true},
 		{"personio de host", "https://reflex-aerospace-gmbh.jobs.personio.de/job/2679152?display=en#apply", "personio", "reflex-aerospace-gmbh", "https://reflex-aerospace-gmbh.jobs.personio.de", true},
+		{"softgarden subdomain", "https://moll.softgarden.io/job/123/apply", "softgarden", "moll", "https://moll.softgarden.io", true},
 
 		// host mode — board is the whole careers host, regional TLD varies
 		{"zoho eu vacancy strips encoded path + query", "https://be-exec.zohorecruit.eu/jobs/Careers/73534000009044079/%D0%9F%D1%80%D0%BE?source=CareerSite", "zohorecruit", "be-exec.zohorecruit.eu", "https://be-exec.zohorecruit.eu", true},
@@ -46,6 +47,9 @@ func TestRecognizeBoard(t *testing.T) {
 		{"zoho bare apex not a board", "https://zohorecruit.com/", "", "", "", false},
 		{"jazzhr applytojob", "https://acme.applytojob.com/apply/abc", "jazzhr", "acme", "https://acme.applytojob.com", true},
 		{"trakstar nested apex", "https://acme.hire.trakstar.com/x", "trakstar", "acme", "https://acme.hire.trakstar.com", true},
+		{"teamtailor host", "https://bryter.teamtailor.com/jobs/12345-senior-go", "teamtailor", "bryter.teamtailor.com", "https://bryter.teamtailor.com", true},
+		{"factorial host it", "https://muffin.factorial.it/job/1", "factorial", "muffin.factorial.it", "https://muffin.factorial.it", true},
+		{"factorialhr base-domain variant", "https://9net.factorialhr.com.br/job/2", "factorialhr", "9net.factorialhr.com.br", "https://9net.factorialhr.com.br", true},
 
 		// host+path mode — Workday: board is "<host>/<site>" (site case preserved)
 		{"workday vacancy", "https://generalmotors.wd5.myworkdayjobs.com/Careers_GM/job/Austin/Senior-Software-Engineer_JR-202614238", "workday", "generalmotors.wd5.myworkdayjobs.com/Careers_GM", "https://generalmotors.wd5.myworkdayjobs.com/Careers_GM", true},
@@ -58,6 +62,7 @@ func TestRecognizeBoard(t *testing.T) {
 		{"recruitee bare apex no tenant", "https://recruitee.com/", "", "", "", false},
 		{"personio bare apex no tenant", "https://jobs.personio.com", "", "", "", false},
 		{"single-tenant geekjob", "https://geekjob.ru/vacancy/6a1e", "", "", "", false},
+		{"teamtailor custom domain not derivable", "https://careers.arrive.com/jobs/1", "", "", "", false},
 		{"unknown host", "https://example.com/careers/1", "", "", "", false},
 		{"not http", "ftp://acme.recruitee.com", "", "", "", false},
 		{"garbage", "not a url", "", "", "", false},

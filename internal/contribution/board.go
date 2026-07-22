@@ -81,9 +81,13 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"hire.trakstar.com", "trakstar", modeSubdomain},
 	{"portaldetalentos.senior.com.br", "senior", modeSubdomain},
 	{"vagas.solides.com.br", "solides", modeSubdomain},
+	{"softgarden.io", "softgarden", modeSubdomain},
 
 	// --- host: board = the whole careers host (regional TLD varies) ---
 	{"zohorecruit", "zohorecruit", modeHost},
+	{"teamtailor", "teamtailor", modeHost},   // <tenant>.teamtailor.com; custom-domain career sites are absent (not URL-derivable)
+	{"factorial", "factorial", modeHost},     // <tenant>.factorial.<tld>
+	{"factorialhr", "factorialhr", modeHost}, // <tenant>.factorialhr.<tld> (the .com.br/.pt/… base-domain variant)
 
 	// --- hostpath: board = "<host>/<site>" (Workday tenant host + first-path-segment site) ---
 	{"myworkdayjobs.com", "workday", modeHostPath},
