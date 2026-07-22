@@ -28,6 +28,7 @@ import (
 	"github.com/strelov1/freehire/internal/database"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/llm"
+	"github.com/strelov1/freehire/internal/pii"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/resumeextract"
 )
@@ -82,8 +83,15 @@ func main() {
 		log.Fatal("backfill-resume-structured: LLM (LLM_*) is not configured")
 	}
 
+	// The extractor de-identifies each CV before it reaches the LLM; without the detector it
+	// would be fail-closed (a no-op), so a backfill run without it is pointless — require it.
+	if cfg.PIIFilterURL == "" {
+		log.Fatal("backfill-resume-structured: PII_FILTER_URL is not configured")
+	}
+	piiDetector := pii.NewHTTPDetector(cfg.PIIFilterURL, nil)
+
 	store := resume.New(blobStore, resume.NewQueriesRepository(queries))
-	extractor := resumeextract.NewExtractor(llmClient.WithTimeout(extractTimeout))
+	extractor := resumeextract.NewExtractor(llmClient.WithTimeout(extractTimeout), piiDetector)
 
 	// Eligible: a stored CV whose structured résumé is missing or stale (its stamp no
 	// longer equals the current upload time — the same freshness rule Store.Structured reads).
