@@ -27,7 +27,7 @@
     role="dialog"
     aria-modal="false"
     aria-label="Cookie consent"
-    class="fixed inset-x-4 bottom-4 z-50 rounded-lg border border-border bg-background/95 px-4 py-3 shadow-lg backdrop-blur sm:inset-x-auto sm:left-4 sm:max-w-md"
+    class="fixed inset-x-4 bottom-4 z-50 rounded-lg border border-border bg-background/95 px-4 py-3 shadow-lg backdrop-blur sm:inset-x-auto sm:right-4 sm:max-w-md"
   >
     <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
       <p class="font-mono text-sm font-semibold text-foreground">Cookies?</p>
