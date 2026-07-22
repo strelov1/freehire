@@ -1,6 +1,6 @@
 ## 1. `internal/pii` — detectors and redactor
 
-- [ ] 1.1 Add span types (`Span{Start,End,Kind}`, `Contacts`) and the regex detectors: email, phone (with `YYYY-YYYY` date-range guard), URL, `@handle`; table tests over both spike-CV shapes
+- [x] 1.1 Add span types (`Span{Start,End,Kind}`, `Contacts`) and the regex detectors: email, phone (with `YYYY-YYYY` date-range guard), URL, `@handle`; table tests over both spike-CV shapes
 - [ ] 1.2 Add the model `Detector` interface + its HTTP client (POST text → spans); tests against a faked HTTP server, incl. transport/parse failure
 - [ ] 1.3 Implement `Build(ctx, text, known Contacts, d Detector) (*Redactor, error)`: union regex ∪ model spans, numbered reversible placeholders, word-boundary replacement, full/known-value priority; tests for `Redact`, `Restore`, `Restore(Redact(x))` round-trip, distinct-value numbering, over-redaction guard
 - [ ] 1.4 Fail-closed: `Build` returns an error (no partial redactor) when the detector is unconfigured or its call fails; test
