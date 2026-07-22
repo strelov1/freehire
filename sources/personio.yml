@@ -8029,3 +8029,21 @@
   board: demicon
 - company: hamamatsu-photonics-deutschland-gmbh
   board: hamamatsu-photonics-deutschland-gmbh
+- company: foxinsights
+  board: foxinsights
+- company: globalct
+  board: globalct
+- company: gridfuse
+  board: gridfuse
+- company: hafen-und-hof
+  board: hafen-und-hof
+- company: hawar-help
+  board: hawar-help
+- company: holidaypirates
+  board: holidaypirates
+- company: lumibit
+  board: lumibit
+- company: olando-gmbh
+  board: olando-gmbh
+- company: zdf-sparks
+  board: zdf-sparks
