@@ -49,6 +49,7 @@ type Profile struct {
 	UserID              int64
 	Specializations     []string
 	Skills              []string
+	ExcludedSkills      []string
 	LocationPreferences json.RawMessage
 	CreatedAt           *time.Time
 	UpdatedAt           *time.Time
@@ -60,7 +61,7 @@ type Profile struct {
 // generated db row to Profile, so the use case never sees db.*.
 type Repository interface {
 	Get(ctx context.Context, userID int64) (Profile, error)
-	Upsert(ctx context.Context, userID int64, specializations, skills []string, locationPreferences json.RawMessage) (Profile, error)
+	Upsert(ctx context.Context, userID int64, specializations, skills, excludedSkills []string, locationPreferences json.RawMessage) (Profile, error)
 	Delete(ctx context.Context, userID int64) error
 }
 
@@ -81,10 +82,12 @@ func (s *Service) Get(ctx context.Context, userID int64) (Profile, error) {
 
 // Save validates and upserts the user's single profile. The specializations are
 // normalized (each a known category, deduped, non-empty, capped); the skills are
-// normalized and must be non-empty; the optional location block is validated and
+// normalized and must be non-empty; the excluded skills are normalized (deduped, may be
+// empty) and any that also appear in skills are dropped — a skill cannot be both wanted
+// and avoided, and the wanted set wins; the optional location block is validated and
 // normalized (or stored NULL when nil/empty). It is a create-or-replace: the first save
 // inserts, later saves overwrite.
-func (s *Service) Save(ctx context.Context, userID int64, specializations, skills []string, loc *LocationPreferences) (Profile, error) {
+func (s *Service) Save(ctx context.Context, userID int64, specializations, skills, excludedSkills []string, loc *LocationPreferences) (Profile, error) {
 	specs, err := normalizeSpecializations(specializations)
 	if err != nil {
 		return Profile{}, err
@@ -93,11 +96,12 @@ func (s *Service) Save(ctx context.Context, userID int64, specializations, skill
 	if err != nil {
 		return Profile{}, err
 	}
+	excluded := subtractSkills(normalizeExcludedSkills(excludedSkills), normalized)
 	locJSON, err := normalizeLocationPreferences(loc)
 	if err != nil {
 		return Profile{}, err
 	}
-	return s.repo.Upsert(ctx, userID, specs, normalized, locJSON)
+	return s.repo.Upsert(ctx, userID, specs, normalized, excluded, locJSON)
 }
 
 // Delete removes the user's profile. It is idempotent — deleting when none exists is not
@@ -141,6 +145,18 @@ func normalizeSpecializations(specializations []string) ([]string, error) {
 // order), dropping blanks. It returns ErrEmptySkills if nothing remains — a profile without
 // skills has no meaning.
 func normalizeSkills(skills []string) ([]string, error) {
+	out := normalizeExcludedSkills(skills)
+	if len(out) == 0 {
+		return nil, ErrEmptySkills
+	}
+	return out, nil
+}
+
+// normalizeExcludedSkills lowercases, trims, and deduplicates a skill list (preserving
+// first-seen order), dropping blanks. Unlike normalizeSkills it never errors: an empty set
+// is valid (the user need not avoid anything). It always returns a non-nil slice so the
+// value persists as an empty array, not NULL.
+func normalizeExcludedSkills(skills []string) []string {
 	out := make([]string, 0, len(skills))
 	seen := make(map[string]struct{}, len(skills))
 	for _, raw := range skills {
@@ -154,8 +170,27 @@ func normalizeSkills(skills []string) ([]string, error) {
 		seen[skill] = struct{}{}
 		out = append(out, skill)
 	}
-	if len(out) == 0 {
-		return nil, ErrEmptySkills
+	return out
+}
+
+// subtractSkills returns the values in a that are not in remove, preserving a's order. It
+// enforces the invariant that the wanted and excluded skill sets never overlap: a skill
+// listed as both wanted and avoided is dropped from the excluded set (the wanted set
+// wins), so a committed filter never emits contradictory skills = X AND skills != X.
+func subtractSkills(a, remove []string) []string {
+	if len(remove) == 0 {
+		return a
 	}
-	return out, nil
+	drop := make(map[string]struct{}, len(remove))
+	for _, s := range remove {
+		drop[s] = struct{}{}
+	}
+	out := make([]string, 0, len(a))
+	for _, s := range a {
+		if _, skip := drop[s]; skip {
+			continue
+		}
+		out = append(out, s)
+	}
+	return out
 }

@@ -39,11 +39,12 @@ func (r *QueriesRepository) Get(ctx context.Context, userID int64) (Profile, err
 }
 
 // Upsert creates or replaces the user's profile.
-func (r *QueriesRepository) Upsert(ctx context.Context, userID int64, specializations, skills []string, locationPreferences json.RawMessage) (Profile, error) {
+func (r *QueriesRepository) Upsert(ctx context.Context, userID int64, specializations, skills, excludedSkills []string, locationPreferences json.RawMessage) (Profile, error) {
 	row, err := r.q.UpsertUserProfile(ctx, db.UpsertUserProfileParams{
 		UserID:              userID,
 		Specializations:     specializations,
 		Skills:              skills,
+		ExcludedSkills:      excludedSkills,
 		LocationPreferences: locationPreferences,
 	})
 	if err != nil {
@@ -59,6 +60,7 @@ func profileFromRow(row db.UserProfile) Profile {
 		UserID:              row.UserID,
 		Specializations:     row.Specializations,
 		Skills:              row.Skills,
+		ExcludedSkills:      row.ExcludedSkills,
 		LocationPreferences: row.LocationPreferences,
 		CreatedAt:           pgconv.TimePtr(row.CreatedAt),
 		UpdatedAt:           pgconv.TimePtr(row.UpdatedAt),

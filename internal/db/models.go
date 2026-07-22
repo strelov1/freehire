@@ -537,4 +537,5 @@ type UserProfile struct {
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 	Specializations     []string           `json:"specializations"`
 	LocationPreferences json.RawMessage    `json:"location_preferences"`
+	ExcludedSkills      []string           `json:"excluded_skills"`
 }

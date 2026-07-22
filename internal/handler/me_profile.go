@@ -17,6 +17,7 @@ import (
 type profileResponse struct {
 	Specializations     []string        `json:"specializations"`
 	Skills              []string        `json:"skills"`
+	ExcludedSkills      []string        `json:"excluded_skills"`
 	LocationPreferences json.RawMessage `json:"location_preferences"`
 	CreatedAt           *time.Time      `json:"created_at"`
 	UpdatedAt           *time.Time      `json:"updated_at"`
@@ -29,6 +30,7 @@ func toProfileResponse(p userprofile.Profile) profileResponse {
 	return profileResponse{
 		Specializations:     p.Specializations,
 		Skills:              p.Skills,
+		ExcludedSkills:      p.ExcludedSkills,
 		LocationPreferences: p.LocationPreferences,
 		CreatedAt:           p.CreatedAt,
 		UpdatedAt:           p.UpdatedAt,
@@ -72,6 +74,7 @@ func profileError(err error) error {
 type saveProfileRequest struct {
 	Specializations     []string                         `json:"specializations"`
 	Skills              []string                         `json:"skills"`
+	ExcludedSkills      []string                         `json:"excluded_skills"`
 	LocationPreferences *userprofile.LocationPreferences `json:"location_preferences"`
 }
 
@@ -94,8 +97,9 @@ func (a *API) GetProfile(c *fiber.Ctx) error {
 }
 
 // PutProfile creates-or-replaces the authenticated user's profile (specializations +
-// skills + optional location preferences). A bad/empty specialization set, empty skills,
-// or an out-of-vocabulary location value is a 400. Cookie-only.
+// skills + optional excluded skills + optional location preferences). A bad/empty
+// specialization set, empty skills, or an out-of-vocabulary location value is a 400.
+// Cookie-only.
 func (a *API) PutProfile(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -107,7 +111,7 @@ func (a *API) PutProfile(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
 
-	profile, err := a.userProfile.Save(c.Context(), userID, in.Specializations, in.Skills, in.LocationPreferences)
+	profile, err := a.userProfile.Save(c.Context(), userID, in.Specializations, in.Skills, in.ExcludedSkills, in.LocationPreferences)
 	if err != nil {
 		return profileError(err)
 	}

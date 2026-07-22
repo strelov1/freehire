@@ -31,7 +31,7 @@ func TestSave_StoresCombinedLocationPreferences(t *testing.T) {
 		Base:       userprofile.BaseLocation{Country: "BR", City: " Florianópolis "},
 		Relocation: userprofile.Relocation{Open: true, Cities: []string{"Berlin"}},
 	}
-	if _, err := svc.Save(context.Background(), 7, []string{"backend"}, []string{"go"}, loc); err != nil {
+	if _, err := svc.Save(context.Background(), 7, []string{"backend"}, []string{"go"}, nil, loc); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	if !repo.upsertCalled {
@@ -58,7 +58,7 @@ func TestSave_StoresCombinedLocationPreferences(t *testing.T) {
 // No location block → NULL stored (never-set semantics), profile still saved.
 func TestSave_NilLocationStoresNull(t *testing.T) {
 	repo := &fakeRepo{}
-	if _, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend"}, []string{"go"}, nil); err != nil {
+	if _, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend"}, []string{"go"}, nil, nil); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	if repo.upserted.LocationPreferences != nil {
@@ -70,7 +70,7 @@ func TestSave_NilLocationStoresNull(t *testing.T) {
 func TestSave_EmptyLocationCollapsesToNull(t *testing.T) {
 	repo := &fakeRepo{}
 	empty := &userprofile.LocationPreferences{}
-	if _, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend"}, []string{"go"}, empty); err != nil {
+	if _, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend"}, []string{"go"}, nil, empty); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	if repo.upserted.LocationPreferences != nil {
@@ -94,7 +94,7 @@ func TestSave_RejectsInvalidLocationValues(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &fakeRepo{}
-			_, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend"}, []string{"go"}, tc.loc)
+			_, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend"}, []string{"go"}, nil, tc.loc)
 			if !errors.Is(err, tc.want) {
 				t.Errorf("Save err = %v, want %v", err, tc.want)
 			}
@@ -113,7 +113,7 @@ func TestSave_NormalizesLocationEnumCase(t *testing.T) {
 		WorkModes: []string{"Remote", "remote"},
 		Remote:    userprofile.GeoSet{Regions: []string{"LATAM", "latam"}},
 	}
-	if _, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend"}, []string{"go"}, loc); err != nil {
+	if _, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend"}, []string{"go"}, nil, loc); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	got := decodeLoc(t, repo.upserted.LocationPreferences)
@@ -135,7 +135,7 @@ func TestSave_NormalizesLocationCountriesAndCities(t *testing.T) {
 			Cities: []string{" Berlin ", "berlin ", "", "Lisbon"},
 		},
 	}
-	if _, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend"}, []string{"go"}, loc); err != nil {
+	if _, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend"}, []string{"go"}, nil, loc); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	got := decodeLoc(t, repo.upserted.LocationPreferences)

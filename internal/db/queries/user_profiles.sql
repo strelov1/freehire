@@ -7,13 +7,15 @@ WHERE user_id = $1;
 -- name: UpsertUserProfile :one
 -- Create-or-replace the user's one profile. The PRIMARY KEY (user_id) makes this an
 -- idempotent upsert: first save inserts, later saves overwrite specializations/skills/
--- location_preferences and bump updated_at. All fields are already normalized by the
--- service; location_preferences is a validated JSONB block or NULL (no preferences).
-INSERT INTO user_profiles (user_id, specializations, skills, location_preferences)
-VALUES ($1, $2, $3, $4)
+-- excluded_skills/location_preferences and bump updated_at. All fields are already
+-- normalized by the service; excluded_skills may be empty; location_preferences is a
+-- validated JSONB block or NULL (no preferences).
+INSERT INTO user_profiles (user_id, specializations, skills, excluded_skills, location_preferences)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (user_id) DO UPDATE
 SET specializations      = EXCLUDED.specializations,
     skills               = EXCLUDED.skills,
+    excluded_skills      = EXCLUDED.excluded_skills,
     location_preferences = EXCLUDED.location_preferences,
     updated_at           = now()
 RETURNING *;

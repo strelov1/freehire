@@ -43,6 +43,11 @@
   let specializations = $state.raw<string[]>(profile ? [...profile.specializations] : []);
   // svelte-ignore state_referenced_locally
   let skills = $state.raw<string[]>(profile ? [...profile.skills] : []);
+  // Skills to avoid — seeded into the jobs filter's skills EXCLUDE set by "Apply my
+  // profile". Optional (an empty set is valid), kept disjoint from `skills` (a skill can't
+  // be both wanted and avoided — the server enforces this too, dropping any overlap).
+  // svelte-ignore state_referenced_locally
+  let excludedSkills = $state.raw<string[]>(profile ? [...(profile.excluded_skills ?? [])] : []);
   let formError = $state<string | null>(null);
   let busy = $state(false);
   // Which form section is shown — the profile is long, so split it into two tabs sharing
@@ -90,12 +95,18 @@
 
   // The skills typeahead: filter the loaded distribution locally (dictionary-only, so
   // only known skills are addable). With no query, show just the popular top few; typing
-  // widens to the full match list — so the field is not a wall of skills on open.
-  function searchSkills(query: string): Promise<FacetOption[]> {
+  // widens to the full match list — so the field is not a wall of skills on open. `avoid`
+  // hides tokens already picked in the other skills control, keeping wanted and excluded
+  // disjoint.
+  function searchSkillsExcept(query: string, avoid: string[]): Promise<FacetOption[]> {
     const q = query.trim().toLowerCase();
-    const matches = q ? skillDist.filter((o) => o.label.toLowerCase().includes(q)) : skillDist;
+    const pool = skillDist.filter((o) => !avoid.includes(o.value));
+    const matches = q ? pool.filter((o) => o.label.toLowerCase().includes(q)) : pool;
     return Promise.resolve(matches.slice(0, q ? 50 : 8));
   }
+
+  const searchSkills = (query: string) => searchSkillsExcept(query, excludedSkills);
+  const searchExcludedSkills = (query: string) => searchSkillsExcept(query, skills);
 
   async function loadSkills() {
     try {
@@ -203,6 +214,12 @@
     skills = skills.includes(value) ? skills.filter((s) => s !== value) : [...skills, value];
   }
 
+  function toggleExcludedSkill(value: string) {
+    excludedSkills = excludedSkills.includes(value)
+      ? excludedSkills.filter((s) => s !== value)
+      : [...excludedSkills, value];
+  }
+
   // Toggle a value in a multi-select list (work modes, regions, countries), returning a new
   // array so $state.raw readers re-run.
   function toggleIn(list: string[], value: string): string[] {
@@ -250,7 +267,7 @@
     busy = true;
     formError = null;
     try {
-      await profileStore.save(specializations, skills, buildLocation());
+      await profileStore.save(specializations, skills, excludedSkills, buildLocation());
       onSaved?.();
     } catch (err) {
       formError =
@@ -391,6 +408,26 @@
       fallbackLabel={(v) => v}
       clearOnSelect
     />
+  </div>
+
+  <!-- Skills to avoid — optional; seeded into the filter's skills exclude set by "Apply my
+       profile". Same dictionary source as Skills, kept disjoint from it. -->
+  <div class="flex flex-col gap-2">
+    <div class="flex items-baseline justify-between">
+      <span class="text-sm font-medium">Skills to avoid</span>
+      <span class="text-xs tabular-nums text-muted-foreground">{excludedSkills.length}</span>
+    </div>
+    <RemoteSearchSelect
+      search={searchExcludedSkills}
+      include={excludedSkills}
+      placeholder="Search skills to exclude"
+      onToggle={toggleExcludedSkill}
+      fallbackLabel={(v) => v}
+      clearOnSelect
+    />
+    <span class="text-xs text-muted-foreground">
+      Filtered out when you apply your profile to the job filters.
+    </span>
   </div>
 
   <!-- Role / specializations -->

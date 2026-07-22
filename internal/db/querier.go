@@ -1431,8 +1431,9 @@ type Querier interface {
 	UpsertUserJobAnalysis(ctx context.Context, arg UpsertUserJobAnalysisParams) error
 	// Create-or-replace the user's one profile. The PRIMARY KEY (user_id) makes this an
 	// idempotent upsert: first save inserts, later saves overwrite specializations/skills/
-	// location_preferences and bump updated_at. All fields are already normalized by the
-	// service; location_preferences is a validated JSONB block or NULL (no preferences).
+	// excluded_skills/location_preferences and bump updated_at. All fields are already
+	// normalized by the service; excluded_skills may be empty; location_preferences is a
+	// validated JSONB block or NULL (no preferences).
 	UpsertUserProfile(ctx context.Context, arg UpsertUserProfileParams) (UserProfile, error)
 	// Apply one yc-oss directory entry, matched by slug. A new slug is inserted as a
 	// reference row (is_reference = true) with no jobs; an existing slug (job-backed or a

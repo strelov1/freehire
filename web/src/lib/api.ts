@@ -811,17 +811,23 @@ export function createApi(
   }
 
   /** Create-or-replace the user's profile from a non-empty set of specializations (job
-   *  categories), a non-empty set of skills, and an optional location-preferences block
-   *  (null clears it). A bad specialization, empty skills, or an out-of-vocabulary location
-   *  value is a 400. */
+   *  categories), a non-empty set of skills, an optional set of excluded skills (skills to
+   *  avoid; may be empty), and an optional location-preferences block (null clears it). A
+   *  bad specialization, empty skills, or an out-of-vocabulary location value is a 400. */
   async function saveProfile(
     specializations: string[],
     skills: string[],
+    excludedSkills: string[],
     location: LocationPreferences | null,
   ): Promise<UserProfile> {
     return requestData<UserProfile>(
       '/api/v1/me/profile',
-      jsonBody('PUT', { specializations, skills, location_preferences: location }),
+      jsonBody('PUT', {
+        specializations,
+        skills,
+        excluded_skills: excludedSkills,
+        location_preferences: location,
+      }),
     );
   }
 
