@@ -47,6 +47,7 @@
     { provider: 'github', label: 'GitHub', href: 'https://github.com/strelov1/freehire' },
     { provider: 'linkedin', label: 'LinkedIn', href: 'https://linkedin.com/company/freehire-dev/' },
     { provider: 'telegram', label: 'Telegram', href: 'https://t.me/freehiredev' },
+    { provider: 'discord', label: 'Discord', href: 'https://discord.gg/aAXS2rghW' },
   ];
 
   const year = new Date().getFullYear();
