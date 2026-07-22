@@ -7,8 +7,8 @@
 </script>
 
 <Seo
-  title="freehire CLI — search and track jobs from the terminal"
-  description="A small Go CLI over the freehire job API, built so an AI agent or a script can search, open and track jobs from the terminal — no browser. Authenticate once with an API key."
+  title="freehire CLI & MCP — search and track jobs from the terminal"
+  description="A small Go CLI and an MCP server over the freehire job API, built so an AI agent or a script can search, open and track jobs — no browser. One API key drives both CLI and MCP."
   {canonical}
 />
 

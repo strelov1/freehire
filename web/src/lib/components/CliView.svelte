@@ -3,11 +3,18 @@
   import { Button } from '$lib/ui';
 
   const CLI_REPO = 'https://github.com/strelov1/freehire-cli';
+  const MCP_REPO = 'https://github.com/strelov1/freehire-mcp';
+  const SKILL_URL = `${CLI_REPO}/blob/main/skills/using-freehire/SKILL.md`;
   const INSTALL = 'curl -fsSL https://freehire.dev/install.sh | sh';
 
-  // Command reference, mirroring the freehire-cli README verbatim. Two groups:
-  // first you find jobs, then you track your interaction with them.
+  // Command reference, mirroring the freehire-cli README/SKILL.md (the source of
+  // truth). Discover the market and its jobs first, then track your interaction.
   const discover = [
+    { cmd: 'facets', desc: "Every filter's live values + counts — the vocabulary to filter by." },
+    {
+      cmd: 'market-fit --skills go,react',
+      desc: 'How much of the live market your skills cover, and the gaps.',
+    },
     { cmd: 'search <query>', desc: 'List matching jobs (add --remote, --region, --company).' },
     { cmd: 'job <slug>', desc: "Show a job's full content." },
     { cmd: 'company <slug>', desc: 'Show a company and its open jobs.' },
@@ -55,10 +62,12 @@
         </h1>
 
         <p class="reveal mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground" style="--d:160ms">
-          <code class="font-mono text-foreground">freehire</code> is a small CLI over the same job API the
-          site runs on — so an <span class="text-foreground">AI agent</span> or a script can search and open
-          jobs, then track applications and notes without a browser. (You still apply on the employer's
-          site; the CLI records that you did.)
+          <code class="font-mono text-foreground">freehire</code> is a small CLI — and an
+          <a href="#mcp" class="text-foreground underline-offset-4 hover:underline">MCP server</a> — over the
+          same job API the site runs on. One <span class="text-foreground">API key</span> lets an
+          <span class="text-foreground">AI agent</span> or a script search and open jobs, then track
+          applications and notes without a browser. (You still apply on the employer's site; the CLI records
+          that you did.)
         </p>
 
         <div class="reveal mt-9 flex flex-wrap items-center gap-3" style="--d:240ms">
@@ -92,7 +101,8 @@ curl -fsSL <span class="text-foreground">https://freehire.dev/install.sh</span> 
 <span class="text-muted-foreground"># authenticate once (key from /my/api-keys)</span>
 freehire auth login --token <span class="text-foreground">fhk_…</span>
 
-<span class="text-muted-foreground"># search</span>
+<span class="text-muted-foreground"># discover the market, then search</span>
+freehire facets
 freehire search <span class="text-foreground">"golang"</span> --remote --region eu</pre>
       </figure>
     </div>
@@ -131,17 +141,109 @@ freehire search <span class="text-foreground">"golang"</span> --remote --region 
         </dl>
       </div>
     </div>
+
     <p class="mt-8 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-      Everything you save, apply to and stage shows up on your
-      <a href={resolve('/my/tracking')} class="font-medium text-foreground underline-offset-4 hover:underline">Tracking</a>
-      board.
-      <code class="font-mono text-foreground">stage</code> takes a controlled value:
+      Start from <code class="font-mono text-foreground">freehire facets</code> — it lists every filter's live
+      values so <code class="font-mono text-foreground">search</code> and
+      <code class="font-mono text-foreground">market-fit</code> use real values, not guesses. Everything you
+      save, apply to and stage shows up on your
+      <a href={resolve('/my/tracking')} class="font-medium text-foreground underline-offset-4 hover:underline"
+        >Tracking</a
+      >
+      board. <code class="font-mono text-foreground">stage</code> takes a controlled value:
       <span class="font-mono text-foreground"
         >applied → screening → responded → interview → offer → accepted</span
       >, plus <span class="font-mono text-foreground">rejected</span> /
-      <span class="font-mono text-foreground">withdrawn</span>. For scripts and agents, add
-      <code class="font-mono text-foreground">--json</code> for the raw API payload; results go to stdout,
-      errors to stderr, and a non-zero exit code signals failure. The same endpoints are documented in the
+      <span class="font-mono text-foreground">withdrawn</span>.
+    </p>
+
+    <!-- CV tailoring — a real feature, but CLI-only (no MCP tools yet). -->
+    <div class="mt-8 max-w-2xl rounded-lg border border-border bg-secondary/40 p-4">
+      <h3 class="flex items-center gap-2 text-sm font-semibold">
+        Tailor a CV to a vacancy
+        <span
+          class="rounded border border-border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground"
+          >CLI only</span
+        >
+      </h3>
+      <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
+        After a fit analysis, reframe your CV toward one job — grounded in what you actually did, never
+        fabricated — then export an ATS-ready PDF.
+      </p>
+      <pre
+        class="mt-3 overflow-x-auto rounded-md border border-border bg-background/60 p-3 font-mono text-sm leading-relaxed"><span class="text-muted-foreground">freehire</span> cv context &lt;id&gt;        <span class="text-muted-foreground"># the fit analysis to reframe toward</span>
+<span class="text-muted-foreground">freehire</span> cv edit &lt;id&gt; --patch …  <span class="text-muted-foreground"># apply a field-level edit</span>
+<span class="text-muted-foreground">freehire</span> cv render &lt;id&gt; --out cv.pdf</pre>
+    </div>
+  </section>
+
+  <!-- MCP — the second surface over the same API and the same key. -->
+  <section id="mcp" class="scroll-mt-20 border-t border-border py-14 sm:py-16">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// mcp</p>
+    <div class="mt-8 grid gap-x-12 gap-y-8 lg:grid-cols-[0.95fr_1.05fr]">
+      <div>
+        <h2 class="text-2xl font-semibold tracking-tight">Same key, any AI host</h2>
+        <p class="mt-4 max-w-md leading-relaxed text-muted-foreground">
+          <code class="font-mono text-foreground">freehire-mcp</code> exposes the same search, market-fit and
+          tracking tools over the
+          <a
+            href="https://modelcontextprotocol.io"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-foreground underline-offset-4 hover:underline">Model Context Protocol</a
+          > — so Claude Desktop, Claude Code or any MCP host can drive freehire directly. It runs via
+          <code class="font-mono text-foreground">npx</code>; no global install.
+        </p>
+        <p class="mt-4 max-w-md text-sm leading-relaxed text-muted-foreground">
+          It shares the CLI's credentials: if you've run
+          <code class="font-mono text-foreground">freehire auth login</code>, omit
+          <code class="font-mono text-foreground">env</code> and it reads
+          <code class="font-mono text-foreground">~/.freehire/creds.json</code>.
+        </p>
+        <div class="mt-6">
+          <Button href={MCP_REPO} target="_blank" rel="noopener noreferrer" variant="outline" size="md">
+            MCP source ↗
+          </Button>
+        </div>
+      </div>
+      <figure
+        class="overflow-hidden rounded-xl border border-border bg-secondary/60 font-mono text-sm shadow-sm"
+      >
+        <figcaption
+          class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground"
+        >
+          <span class="size-2.5 rounded-full bg-muted-foreground/30"></span>
+          ~/.claude.json
+        </figcaption>
+        <pre class="overflow-x-auto p-4 leading-relaxed">{`{
+  "mcpServers": {
+    "freehire": {
+      "command": "npx",
+      "args": ["-y", "freehire-mcp"],
+      "env": { "FREEHIRE_TOKEN": "fhk_…" }
+    }
+  }
+}`}</pre>
+      </figure>
+    </div>
+  </section>
+
+  <!-- For AI agents — the drop-in skill and the machine-readable conventions. -->
+  <section class="border-t border-border py-14 sm:py-16">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// for ai agents</p>
+    <p class="mt-6 max-w-2xl leading-relaxed text-muted-foreground">
+      A drop-in
+      <a
+        href={SKILL_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="font-medium text-foreground underline-offset-4 hover:underline">agent skill</a
+      >
+      teaches the discover → search → apply loop; drop it into a Claude Code (or compatible) skills directory.
+      Every command takes <code class="font-mono text-foreground">--json</code> for the raw API payload —
+      results go to <span class="font-mono text-foreground">stdout</span>, errors to
+      <span class="font-mono text-foreground">stderr</span>, and a non-zero exit code signals failure. The
+      same endpoints are documented in the
       <a href={resolve('/docs/api')} class="font-medium text-foreground underline-offset-4 hover:underline"
         >API reference</a
       >.
@@ -162,13 +264,20 @@ freehire jobs edit &lt;slug&gt; --title "Staff Go Developer"</pre>
   <!-- Free / open-source / transparent — the project's promise, with the source. -->
   <section class="border-t border-border py-10">
     <p class="text-sm leading-relaxed text-muted-foreground">
-      Free and open source — no tracking, no lock-in. Read every line on
+      Free and open source — no tracking, no lock-in. Read every line of the
       <a
         href={CLI_REPO}
         target="_blank"
         rel="noopener noreferrer"
-        class="font-medium text-foreground underline-offset-4 hover:underline">GitHub ↗</a
-      >.
+        class="font-medium text-foreground underline-offset-4 hover:underline">CLI ↗</a
+      >
+      and the
+      <a
+        href={MCP_REPO}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="font-medium text-foreground underline-offset-4 hover:underline">MCP server ↗</a
+      > on GitHub.
     </p>
   </section>
 </div>

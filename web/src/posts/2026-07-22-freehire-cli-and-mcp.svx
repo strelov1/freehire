@@ -1,0 +1,30 @@
+---
+title: Use freehire from your terminal — or any AI assistant
+date: 2026-07-22
+summary: One API key now drives freehire two ways — a small CLI for your terminal and an MCP server for Claude Desktop, Claude Code, or any AI host — to search, measure your skills against the market, and track applications without a browser.
+type: changelog
+tags:
+  - cli
+  - mcp
+  - agents
+draft: false
+---
+
+The [freehire CLI](/cli) has grown up, and it now has a sibling.
+
+The **CLI** lets you search jobs, browse companies, and track what you've applied to —
+straight from the terminal. Two newer commands make it more than a job list:
+`freehire facets` shows every filter's live values so you search with real terms, and
+`freehire market-fit --skills go,react` measures how much of the open market your skills
+already reach, and which missing skills would unlock the most vacancies. You can even
+tailor a CV toward a specific job and export an ATS-ready PDF.
+
+New alongside it: an **MCP server**. Add `freehire-mcp` to Claude Desktop, Claude Code, or
+any [Model Context Protocol](https://modelcontextprotocol.io) host, and your assistant can
+search and track jobs for you directly — same tools, same account. Both share one
+`fhk_…` [API key](/my/api-keys): authenticate once and the CLI and the MCP server use the
+same credentials.
+
+Everything you apply to or save shows up on your [Tracking](/my/tracking) board, exactly as
+it does on the site. Setup and the full command list are on the [CLI page](/cli); both the
+CLI and the MCP server are open source.
