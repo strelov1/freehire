@@ -101,14 +101,14 @@ func TestMatchAnalysisStreamEndpoint(t *testing.T) {
 	}
 
 	t.Run("unauthenticated is 401", func(t *testing.T) {
-		if status, _ := get(t, appFor(storeWithCV(), matchanalysis.NewAnalyzer(nil)), ""); status != fiber.StatusUnauthorized {
+		if status, _ := get(t, appFor(storeWithCV(), matchanalysis.NewAnalyzer(nil, nil)), ""); status != fiber.StatusUnauthorized {
 			t.Errorf("status = %d, want 401", status)
 		}
 	})
 
 	t.Run("streams ordered events and caches", func(t *testing.T) {
 		model := &fitModel{resp: []string{fitStage1, fitStage2, fitStage3}}
-		app := appFor(storeWithCV(), matchanalysis.NewAnalyzer(llm.NewWithModel(model)))
+		app := appFor(storeWithCV(), matchanalysis.NewAnalyzer(llm.NewWithModel(model), noopPIIDetector{}))
 		status, body := get(t, app, token)
 		if status != fiber.StatusOK {
 			t.Fatalf("status = %d, want 200", status)
@@ -134,7 +134,7 @@ func TestMatchAnalysisStreamEndpoint(t *testing.T) {
 	})
 
 	t.Run("no CV closes after meta", func(t *testing.T) {
-		app := appFor(resume.New(newFakeResumeBlobs(), &fakeResumeRepo{}), matchanalysis.NewAnalyzer(nil))
+		app := appFor(resume.New(newFakeResumeBlobs(), &fakeResumeRepo{}), matchanalysis.NewAnalyzer(nil, nil))
 		_, body := get(t, app, token)
 		names := sseEvents(t, body)
 		if len(names) != 1 || names[0] != "meta" {
