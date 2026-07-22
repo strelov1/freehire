@@ -57,12 +57,12 @@
   let leftPanelEl = $state<HTMLElement>();
   let leftResizing = false;
 
-  // Centre preview zoom.
+  // Centre preview zoom, clamped to 50–150% in 10% steps.
   let zoom = $state(1);
   const zoomPct = $derived(Math.round(zoom * 100));
+  const clampZoom = (z: number) => Math.min(1.5, Math.max(0.5, Math.round(z * 10) / 10));
   const zoomOut = () => (zoom = clampZoom(zoom - 0.1));
   const zoomIn = () => (zoom = clampZoom(zoom + 0.1));
-  const clampZoom = (z: number) => Math.min(1.5, Math.max(0.5, Math.round(z * 10) / 10));
   const pdfUrl = $derived(`${api.cvPdfUrl(cvId)}?v=${pdfVersion}`);
 
   const kickoff =

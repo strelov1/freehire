@@ -57,16 +57,18 @@
         <section class="mb-3">
           <h2 class="mb-1 text-[12px] font-bold uppercase tracking-wide">Experience</h2>
           {#each experience as e, i (i)}
+            {@const bullets = (e.bullets ?? []).filter((b) => b.trim())}
+            {@const stack = (e.stack ?? []).filter((s) => s.trim())}
             <div class="mb-2.5">
               <p class="font-bold">{experienceHeader(e)}</p>
               {#if (e.summary ?? '').trim()}<p class="text-neutral-800">{e.summary}</p>{/if}
-              {#if (e.bullets ?? []).filter((b) => b.trim()).length}
+              {#if bullets.length}
                 <ul class="ml-4 list-disc space-y-0.5">
-                  {#each (e.bullets ?? []).filter((b) => b.trim()) as b, bi (bi)}<li>{b}</li>{/each}
+                  {#each bullets as b, bi (bi)}<li>{b}</li>{/each}
                 </ul>
               {/if}
-              {#if (e.stack ?? []).filter((s) => s.trim()).length}
-                <p class="mt-0.5"><span class="font-bold">Stack:</span> {(e.stack ?? []).filter((s) => s.trim()).join(', ')}</p>
+              {#if stack.length}
+                <p class="mt-0.5"><span class="font-bold">Stack:</span> {stack.join(', ')}</p>
               {/if}
             </div>
           {/each}
@@ -79,8 +81,9 @@
           <h2 class="mb-1 text-[12px] font-bold uppercase tracking-wide">Projects</h2>
           <ul class="ml-4 list-disc space-y-0.5">
             {#each projects as p, i (i)}
+              {@const bullets = (p.bullets ?? []).filter((b) => b.trim())}
               <li>
-                <span class="font-bold">{p.name}</span>{#if (p.bullets ?? []).filter((b) => b.trim()).length}: {(p.bullets ?? []).filter((b) => b.trim()).join(' ')}{/if}
+                <span class="font-bold">{p.name}</span>{#if bullets.length}: {bullets.join(' ')}{/if}
                 {#if (p.link ?? '').trim()}
                   (<a href={p.link} target="_blank" rel="noopener" class="text-[#2b6cb0] hover:underline">{p.link}</a>)
                 {/if}
