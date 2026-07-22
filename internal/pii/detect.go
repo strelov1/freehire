@@ -30,8 +30,9 @@ var (
 	handleRe = regexp.MustCompile(`(^|[^\w])(@\w{3,})`)
 	// Phone: a run of digits/space/parens/dashes, at least a few long.
 	phoneRe = regexp.MustCompile(`\+?\d[\d()\-\s]{7,}\d`)
-	// A bare YYYY-YYYY year range that the phone regex would otherwise capture.
-	yearRangeRe = regexp.MustCompile(`^\d{4}-\d{4}$`)
+	// A bare YYYY-YYYY year range (with optional spaces around the dash) that the phone
+	// regex would otherwise capture — a common CV employment range, not a phone number.
+	yearRangeRe = regexp.MustCompile(`^\d{4}\s*-\s*\d{4}$`)
 )
 
 // regexSpans returns the high-precision regex-detectable PII spans (email, URL, @handle,

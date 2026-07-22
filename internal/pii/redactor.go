@@ -56,8 +56,25 @@ func Build(ctx context.Context, text string, known Contacts, d Detector) (*Redac
 		seen[v] = true
 		vals = append(vals, valueKind{v, kind})
 	}
+	// boundarySafe[value] is true only when EVERY detected occurrence of value sits between
+	// non-word chars, so a \b anchor masks each one. A detected span that abuts a word char
+	// (e.g. an email touching a trailing digit, or a NAME span inside a larger token) makes
+	// the value unsafe for \b — it is then masked plainly so the occurrence can never leak.
+	detected := make(map[string]bool)
+	boundarySafe := make(map[string]bool)
 	for _, s := range spans {
-		add(text[s.Start:s.End], s.Kind)
+		v := strings.TrimSpace(text[s.Start:s.End])
+		if v == "" {
+			continue
+		}
+		add(v, s.Kind)
+		ok := (s.Start == 0 || !isWord(text[s.Start-1])) && (s.End == len(text) || !isWord(text[s.End]))
+		if seen := detected[v]; seen {
+			boundarySafe[v] = boundarySafe[v] && ok
+		} else {
+			boundarySafe[v] = ok
+		}
+		detected[v] = true
 	}
 	add(known.FullName, KindName)
 	add(known.Email, KindEmail)
@@ -74,14 +91,31 @@ func Build(ctx context.Context, text string, known Contacts, d Detector) (*Redac
 			value:       vk.value,
 			placeholder: fmt.Sprintf("[REDACTED_%s_%d]", vk.kind, counts[vk.kind]),
 		}
-		if wordish(vk.value) {
+		// Word-boundary only for the "wordy" kinds AND only when every detected occurrence
+		// is boundary-complete; everything else is masked plainly (leak-proof). Specific
+		// values (email/phone/link) are always plain — they never occur inside a real word.
+		if wordish(vk.value) && wordyKind[vk.kind] && boundarySafe[vk.value] {
 			rep.re = regexp.MustCompile(`\b` + regexp.QuoteMeta(vk.value) + `\b`)
 		}
 		reps = append(reps, rep)
 	}
 	sort.SliceStable(reps, func(i, j int) bool { return len(reps[i].value) > len(reps[j].value) })
-	return &Redactor{reps: reps}, nil
+	r := &Redactor{reps: reps}
+
+	// Fail-closed self-check: masking MUST remove every detected value from the source.
+	// If any survives (a boundary quirk we did not foresee), refuse rather than leak.
+	redacted := r.Redact(text)
+	for v := range detected {
+		if strings.Count(redacted, v) >= strings.Count(text, v) {
+			return nil, fmt.Errorf("pii: redaction left detected value unmasked")
+		}
+	}
+	return r, nil
 }
+
+// wordyKind marks the kinds whose values can legitimately be a substring of a normal word
+// (a name, an address), so word-boundary matching is worth attempting to avoid over-redaction.
+var wordyKind = map[string]bool{KindName: true, KindAddress: true}
 
 // Redact replaces every detected PII value in text with its placeholder. A nil Redactor is
 // a no-op (callers that fail closed never reach Redact with nil).
