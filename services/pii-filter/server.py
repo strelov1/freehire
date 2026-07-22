@@ -9,6 +9,7 @@ PII_FILTER_ADDR (default 127.0.0.1:8099). The model loads once at startup.
 
 import json
 import os
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from detector import Model
@@ -39,11 +40,13 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", 0))
             req = json.loads(self.rfile.read(length) or b"{}")
             spans = MODEL.detect(req.get("text", ""))
+            # Observability without leaking PII: log the span COUNT only, never the text.
+            print(f"detect: {len(spans)} spans", file=sys.stderr, flush=True)
             self._json(200, {"spans": spans})
         except Exception as e:  # fail loud so the Go caller fails closed
             self._json(500, {"error": str(e)})
 
-    def log_message(self, *args):  # silence per-request stderr logging
+    def log_message(self, *args):  # suppress the default request-line noise (incl. /health)
         pass
 
 
