@@ -10,6 +10,7 @@ import (
 	"github.com/strelov1/freehire/internal/hardconstraint"
 	"github.com/strelov1/freehire/internal/jobmatch"
 	"github.com/strelov1/freehire/internal/llm"
+	"github.com/strelov1/freehire/internal/pii"
 )
 
 // Input bounds for untrusted, user/ingest-supplied text sent to the model. Kept modest
@@ -24,13 +25,19 @@ const (
 
 // Analyzer runs the fixed three-stage fit prompt-chain over an llm.Client. A nil
 // client (LLM unconfigured) makes Analyze a no-op so the endpoint degrades to no
-// analysis, mirroring atscheck.Analyzer.
+// analysis, mirroring atscheck.Analyzer. The detector de-identifies the CV before it
+// reaches the model; a nil or failing detector makes the analysis fail closed (no CV is
+// sent, no analysis produced) — the same best-effort degradation as an unconfigured LLM.
 type Analyzer struct {
-	client *llm.Client
+	client   *llm.Client
+	detector pii.Detector
 }
 
-// NewAnalyzer wraps an llm.Client; client may be nil (LLM unconfigured).
-func NewAnalyzer(client *llm.Client) *Analyzer { return &Analyzer{client: client} }
+// NewAnalyzer wraps an llm.Client and the PII detector; either may be nil (LLM
+// unconfigured / detector unavailable), in which case the analysis degrades to a no-op.
+func NewAnalyzer(client *llm.Client, detector pii.Detector) *Analyzer {
+	return &Analyzer{client: client, detector: detector}
+}
 
 // ModelID returns the underlying model id (empty when unconfigured), so a caller can
 // record which model produced a cached analysis.
@@ -114,10 +121,22 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 		return nil, nil
 	}
 
+	// De-identify the CV before any of it reaches the model. Fail-closed: a nil or failing
+	// detector yields no redactor, and we degrade to no analysis rather than leak PII —
+	// the same best-effort behaviour as an unconfigured LLM.
+	red, err := pii.Build(ctx, in.CVText, contactsFromStructured(in.StructuredResume), a.detector)
+	if err != nil {
+		log.Printf("matchanalysis: PII redactor unavailable, skipping analysis: %v", err)
+		return nil, nil
+	}
+	// Restore originals in every user-facing event; the internal reqs/verdict threaded into
+	// later stages stay masked (see redactingEmit).
+	emit = redactingEmit(red, emit)
+
 	// Stage 1 — Extract & Match (the ATS lens).
 	emit(Event{Kind: EventStageStart, Stage: 1, Label: stageLabels[1]})
 	var s1 stage1Out
-	if err := a.streamStage(ctx, 1, stage1SystemPrompt(), stage1UserPrompt(in), emit, &s1); err != nil {
+	if err := a.streamStage(ctx, 1, stage1SystemPrompt(), stage1UserPrompt(in, red), emit, &s1); err != nil {
 		return nil, fmt.Errorf("matchanalysis: stage 1: %w", err)
 	}
 	reqs := sanitizeRequirements(s1.Requirements)
@@ -127,7 +146,7 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 	// Stage 2 — Recruiter verdict (the human lens).
 	emit(Event{Kind: EventStageStart, Stage: 2, Label: stageLabels[2]})
 	var verdict recruiterVerdict
-	if err := a.streamStage(ctx, 2, stage2SystemPrompt(), stage2UserPrompt(in, reqs), emit, &verdict); err != nil {
+	if err := a.streamStage(ctx, 2, stage2SystemPrompt(), stage2UserPrompt(in, reqs, red), emit, &verdict); err != nil {
 		return nil, fmt.Errorf("matchanalysis: stage 2: %w", err)
 	}
 	sanitizeVerdict(&verdict)
@@ -142,7 +161,7 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 	// zeros. Best-effort: on a parse/transport failure keep the un-audited verdict.
 	emit(Event{Kind: EventStageStart, Stage: 3, Label: stageLabels[3]})
 	audited := verdict
-	if err := a.streamStage(ctx, 3, stage3SystemPrompt(), stage3UserPrompt(in, reqs, verdict), emit, &audited); err != nil {
+	if err := a.streamStage(ctx, 3, stage3SystemPrompt(), stage3UserPrompt(in, reqs, verdict, red), emit, &audited); err != nil {
 		log.Printf("matchanalysis: stage 3 audit failed, serving un-audited verdict: %v", err)
 	} else {
 		sanitizeVerdict(&audited)
@@ -152,7 +171,10 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 
 	analysis := buildAnalysis(reqs, verdict)
 	emit(Event{Kind: EventFinal, Analysis: &analysis})
-	return &analysis, nil
+	// The returned value is cached and served, so hand back the restored (real) analysis;
+	// the emit above already restored the streamed copy.
+	restored := restoreAnalysis(red, analysis)
+	return &restored, nil
 }
 
 // stageAttempts is how many times a stage's LLM call is tried on a PARSE failure. The
@@ -259,18 +281,18 @@ func stage3SystemPrompt() string {
 
 // stage1UserPrompt carries the (bounded) job text, CV, and the deterministic anchor,
 // plus the pre-normalized structured résumé when present (additive to the raw CV).
-func stage1UserPrompt(in Input) string {
+func stage1UserPrompt(in Input, red *pii.Redactor) string {
 	var b strings.Builder
 	writeJob(&b, in)
 	writeAnchor(&b, in.Match)
 	writeBlockers(&b, in.Blockers)
-	writeStructured(&b, in)
-	writeCV(&b, in)
+	writeStructured(&b, in, red)
+	writeCV(&b, in, red)
 	return b.String()
 }
 
 // stage2UserPrompt adds the company info and the Stage-1 requirement match.
-func stage2UserPrompt(in Input, reqs []Requirement) string {
+func stage2UserPrompt(in Input, reqs []Requirement, red *pii.Redactor) string {
 	var b strings.Builder
 	writeJob(&b, in)
 	if info := strings.TrimSpace(in.CompanyInfo); info != "" {
@@ -281,12 +303,12 @@ func stage2UserPrompt(in Input, reqs []Requirement) string {
 	writeAnchor(&b, in.Match)
 	writeLocation(&b, in)
 	writeRequirements(&b, reqs)
-	writeCV(&b, in)
+	writeCV(&b, in, red)
 	return b.String()
 }
 
 // stage3UserPrompt carries the Stage-2 verdict to audit plus the same evidence.
-func stage3UserPrompt(in Input, reqs []Requirement, v recruiterVerdict) string {
+func stage3UserPrompt(in Input, reqs []Requirement, v recruiterVerdict, red *pii.Redactor) string {
 	var b strings.Builder
 	b.WriteString("Verdict to audit (JSON):\n")
 	if blob, err := json.Marshal(v); err == nil {
@@ -295,7 +317,7 @@ func stage3UserPrompt(in Input, reqs []Requirement, v recruiterVerdict) string {
 	}
 	writeBlockers(&b, in.Blockers)
 	writeRequirements(&b, reqs)
-	writeCV(&b, in)
+	writeCV(&b, in, red)
 	return b.String()
 }
 
@@ -330,9 +352,9 @@ func writeJob(b *strings.Builder, in Input) {
 	b.WriteString("\n\n")
 }
 
-func writeCV(b *strings.Builder, in Input) {
+func writeCV(b *strings.Builder, in Input, red *pii.Redactor) {
 	b.WriteString("CV:\n")
-	b.WriteString(llm.TruncateRunes(in.CVText, maxCVRunes))
+	b.WriteString(red.Redact(llm.TruncateRunes(in.CVText, maxCVRunes)))
 	b.WriteString("\n")
 }
 
@@ -344,13 +366,13 @@ const maxStructuredRunes = 3000
 // present. Omitted entirely when empty, so an un-extracted CV yields exactly today's
 // prompt. It is labelled as a parsed summary so the model treats the raw CV as ground
 // truth and this as an aid.
-func writeStructured(b *strings.Builder, in Input) {
+func writeStructured(b *strings.Builder, in Input, red *pii.Redactor) {
 	s := strings.TrimSpace(in.StructuredResume)
 	if s == "" {
 		return
 	}
 	b.WriteString("Structured résumé (parsed summary, JSON — the CV below is ground truth):\n")
-	b.WriteString(llm.TruncateRunes(s, maxStructuredRunes))
+	b.WriteString(red.Redact(llm.TruncateRunes(s, maxStructuredRunes)))
 	b.WriteString("\n\n")
 }
 

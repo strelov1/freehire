@@ -30,6 +30,7 @@ import (
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/moderation"
+	"github.com/strelov1/freehire/internal/pii"
 	"github.com/strelov1/freehire/internal/referral"
 	"github.com/strelov1/freehire/internal/reminder"
 	"github.com/strelov1/freehire/internal/report"
@@ -233,6 +234,10 @@ type Config struct {
 	// LLM backs the optional CV ATS qualitative review. Nil disables the AI layer:
 	// the ATS score stays deterministic (the report just omits content-quality).
 	LLM *llm.Client
+	// PIIDetector de-identifies CV text before it reaches the LLM (fit analysis and
+	// structured extraction). Nil disables those CV→LLM paths (fail-closed): they degrade
+	// to no analysis rather than send PII to the model.
+	PIIDetector pii.Detector
 	// Telegram bot for notification linking/delivery confirmations. Optional: an
 	// empty TelegramBotToken disables the feature (linking endpoints report off,
 	// webhook inert). TelegramBotUsername builds the deep link; TelegramWebhookSecret
@@ -313,7 +318,7 @@ func Register(app *fiber.App, cfg Config) {
 	// The fit analysis shares the same LLM client but with a longer per-call timeout:
 	// its reasoning model is slow (tens of seconds per stage), so the default would time
 	// out mid-stage. Nil-safe (a nil client stays nil → Analyze is a no-op).
-	a.matchAnalysis = matchanalysis.NewAnalyzer(cfg.LLM.WithTimeout(matchAnalysisLLMTimeout))
+	a.matchAnalysis = matchanalysis.NewAnalyzer(cfg.LLM.WithTimeout(matchAnalysisLLMTimeout), cfg.PIIDetector)
 	a.structuredExtractor = resumeextract.NewExtractor(cfg.LLM.WithTimeout(resumeExtractLLMTimeout))
 	a.matchAnalysisCache = queries
 	a.credits = credits.NewStore(queries, cfg.Pool, cfg.Credits)

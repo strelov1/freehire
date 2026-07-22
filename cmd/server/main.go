@@ -21,6 +21,7 @@ import (
 	"github.com/strelov1/freehire/internal/handler"
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/observability"
+	"github.com/strelov1/freehire/internal/pii"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/tokencrypt"
 )
@@ -156,6 +157,14 @@ func main() {
 	// token-encryption key are configured. Both nil disables the feature.
 	gmailConnector, gmailCipher := buildGmail(cfg)
 
+	// PII detector for de-identifying CV text before it reaches the LLM. Nil when
+	// PII_FILTER_URL is unset, which fails the CV→LLM paths closed (no analysis) rather
+	// than leaking PII (see internal/pii, internal/matchanalysis, internal/resumeextract).
+	var piiDetector pii.Detector
+	if cfg.PIIFilterURL != "" {
+		piiDetector = pii.NewHTTPDetector(cfg.PIIFilterURL, nil)
+	}
+
 	handler.Register(app, handler.Config{
 		Pool:           pool,
 		FrontendOrigin: cfg.FrontendOrigin,
@@ -171,6 +180,7 @@ func main() {
 		Blob:           blobStore,
 		TypstBin:       cfg.TypstBin,
 		LLM:            llmClient,
+		PIIDetector:    piiDetector,
 
 		TelegramBotToken:      cfg.TelegramBotToken,
 		TelegramBotUsername:   cfg.TelegramBotUsername,

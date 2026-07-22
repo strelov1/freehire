@@ -16,7 +16,7 @@ func TestStage1PromptCarriesUnmetBlockers(t *testing.T) {
 			{Category: hardconstraint.CategoryEducation, Reason: "Requires a bachelor degree; résumé meets it.", Met: true},
 		},
 	}
-	p := stage1UserPrompt(in)
+	p := stage1UserPrompt(in, nil)
 	if !strings.Contains(p, "Requires 5+ years; résumé shows 3.") {
 		t.Error("stage-1 prompt should carry the unmet experience blocker")
 	}
@@ -29,7 +29,7 @@ func TestStage1PromptOmitsBlockerSectionWhenAllMet(t *testing.T) {
 	in := Input{JobTitle: "x", JobDescription: "y", Blockers: []hardconstraint.Blocker{
 		{Category: hardconstraint.CategoryLanguage, Reason: "English present.", Met: true},
 	}}
-	if strings.Contains(stage1UserPrompt(in), "Hard constraints the candidate does NOT meet") {
+	if strings.Contains(stage1UserPrompt(in, nil), "Hard constraints the candidate does NOT meet") {
 		t.Error("no blocker section when nothing is unmet")
 	}
 }

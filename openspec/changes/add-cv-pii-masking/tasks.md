@@ -11,10 +11,10 @@
 
 ## 3. `matchanalysis` integration
 
-- [ ] 3.1 Build a `Redactor` at the top of `AnalyzeStream` from `in.CVText` + `in.StructuredResume`; return no-analysis (fail-closed) when `Build` errors
-- [ ] 3.2 Run `Redact` in `writeCV` and `writeStructured` so every stage prompt carries placeholders
-- [ ] 3.3 Wrap `emit` to `Restore` a copy of each outbound event, and `Restore` the returned/cached analysis; keep internal `reqs`/`verdict` masked (no re-leak into Stage 2/3)
-- [ ] 3.4 Tests: assert known PII never appears in the Stage 1/2/3 prompt strings, that output is restored, and fail-closed on a failing detector
+- [x] 3.1 Build a `Redactor` at the top of `AnalyzeStream` from `in.CVText` + `in.StructuredResume`; return no-analysis (fail-closed) when `Build` errors
+- [x] 3.2 Run `Redact` in `writeCV` and `writeStructured` so every stage prompt carries placeholders
+- [x] 3.3 Wrap `emit` to `Restore` a copy of each outbound event, and `Restore` the returned/cached analysis; keep internal `reqs`/`verdict` masked (no re-leak into Stage 2/3)
+- [x] 3.4 Tests: assert known PII never appears in the Stage 1/2/3 prompt strings, that output is restored, and fail-closed on a failing detector
 
 ## 4. `resumeextract` integration
 

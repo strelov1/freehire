@@ -53,7 +53,7 @@ const (
 )
 
 func TestAnalyze_NilClientIsNoOp(t *testing.T) {
-	got, err := NewAnalyzer(nil).Analyze(context.Background(), sampleInput())
+	got, err := NewAnalyzer(nil, nil).Analyze(context.Background(), sampleInput())
 	if err != nil || got != nil {
 		t.Fatalf("nil analyzer = (%v,%v), want (nil,nil)", got, err)
 	}
@@ -61,7 +61,7 @@ func TestAnalyze_NilClientIsNoOp(t *testing.T) {
 
 func TestAnalyze_ThreeStageChainUsesAuditedVerdict(t *testing.T) {
 	m := &queuedModel{resp: []string{stage1JSON, stage2JSON, stage3JSON}}
-	got, err := NewAnalyzer(llm.NewWithModel(m)).Analyze(context.Background(), sampleInput())
+	got, err := NewAnalyzer(llm.NewWithModel(m), noopDetector{}).Analyze(context.Background(), sampleInput())
 	if err != nil {
 		t.Fatalf("Analyze: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestAnalyze_ThreeStageChainUsesAuditedVerdict(t *testing.T) {
 func TestAnalyze_Stage3FailFallsBackToStage2(t *testing.T) {
 	// Stage 3 fails on both attempts (the retry also gets junk), then falls back.
 	m := &queuedModel{resp: []string{stage1JSON, stage2JSON, "not json", "still not json"}}
-	got, err := NewAnalyzer(llm.NewWithModel(m)).Analyze(context.Background(), sampleInput())
+	got, err := NewAnalyzer(llm.NewWithModel(m), noopDetector{}).Analyze(context.Background(), sampleInput())
 	if err != nil {
 		t.Fatalf("Analyze should degrade, not error: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestAnalyze_Stage3PartialMergesOntoStage2(t *testing.T) {
 	// keep their Stage 2 scores, not collapse to 0 (which would corrupt a strong verdict).
 	partial := `{"experience_relevance":{"score":40},"gaps":["Thin on scale"]}`
 	m := &queuedModel{resp: []string{stage1JSON, stage2JSON, partial}}
-	got, err := NewAnalyzer(llm.NewWithModel(m)).Analyze(context.Background(), sampleInput())
+	got, err := NewAnalyzer(llm.NewWithModel(m), noopDetector{}).Analyze(context.Background(), sampleInput())
 	if err != nil {
 		t.Fatalf("Analyze: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestAnalyzeStream_RetriesATransientStageFailure(t *testing.T) {
 	// Stage 1 first returns an HTML error page (a transient gateway 502), then valid JSON
 	// on the retry; the chain must recover and produce the final analysis.
 	m := &queuedModel{resp: []string{`<html>502 Bad Gateway</html>`, stage1JSON, stage2JSON, stage3JSON}}
-	got, err := NewAnalyzer(llm.NewWithModel(m)).Analyze(context.Background(), sampleInput())
+	got, err := NewAnalyzer(llm.NewWithModel(m), noopDetector{}).Analyze(context.Background(), sampleInput())
 	if err != nil {
 		t.Fatalf("Analyze should recover on retry: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestAnalyzeStream_RetriesATransientStageFailure(t *testing.T) {
 
 func TestAnalyze_Stage1ErrorPropagates(t *testing.T) {
 	m := &queuedModel{err: errors.New("boom")}
-	if _, err := NewAnalyzer(llm.NewWithModel(m)).Analyze(context.Background(), sampleInput()); err == nil {
+	if _, err := NewAnalyzer(llm.NewWithModel(m), noopDetector{}).Analyze(context.Background(), sampleInput()); err == nil {
 		t.Fatal("want error when Stage 1 fails")
 	}
 }
@@ -146,7 +146,7 @@ func TestAnalyzeStream_EmitsOrderedEventsAndMatchesSyncFinal(t *testing.T) {
 	events := func() []Event {
 		m := &queuedModel{resp: []string{stage1JSON, stage2JSON, stage3JSON}}
 		var got []Event
-		final, err := NewAnalyzer(llm.NewWithModel(m)).AnalyzeStream(context.Background(), sampleInput(), func(e Event) {
+		final, err := NewAnalyzer(llm.NewWithModel(m), noopDetector{}).AnalyzeStream(context.Background(), sampleInput(), func(e Event) {
 			got = append(got, e)
 		})
 		if err != nil {
@@ -183,14 +183,14 @@ func TestAnalyzeStream_EmitsOrderedEventsAndMatchesSyncFinal(t *testing.T) {
 
 	// Analyze must return the identical final verdict (it is a thin collector).
 	m := &queuedModel{resp: []string{stage1JSON, stage2JSON, stage3JSON}}
-	sync, _ := NewAnalyzer(llm.NewWithModel(m)).Analyze(context.Background(), sampleInput())
+	sync, _ := NewAnalyzer(llm.NewWithModel(m), noopDetector{}).Analyze(context.Background(), sampleInput())
 	if sync == nil || sync.OverallScore != 58 {
 		t.Errorf("Analyze final = %+v, want overall 58 (same as stream)", sync)
 	}
 }
 
 func TestAnalyzeStream_NilClientIsNoOp(t *testing.T) {
-	got, err := NewAnalyzer(nil).AnalyzeStream(context.Background(), sampleInput(), func(Event) {
+	got, err := NewAnalyzer(nil, nil).AnalyzeStream(context.Background(), sampleInput(), func(Event) {
 		t.Error("no events expected from a nil client")
 	})
 	if err != nil || got != nil {
@@ -201,19 +201,19 @@ func TestAnalyzeStream_NilClientIsNoOp(t *testing.T) {
 func TestStagePrompts_CarryTheirInputs(t *testing.T) {
 	in := sampleInput()
 	reqs := []Requirement{{Text: "Go", Priority: "required", Status: "covered"}}
-	if s := stage1UserPrompt(in); !strings.Contains(s, "Senior Go Engineer") || !strings.Contains(s, "5y Go at Acme") || !strings.Contains(s, "go") {
+	if s := stage1UserPrompt(in, nil); !strings.Contains(s, "Senior Go Engineer") || !strings.Contains(s, "5y Go at Acme") || !strings.Contains(s, "go") {
 		t.Error("stage1 prompt must carry job title, CV text, and the anchor")
 	}
-	if s := stage2UserPrompt(in, reqs); !strings.Contains(s, "We ship fridges") || !strings.Contains(s, "covered") {
+	if s := stage2UserPrompt(in, reqs, nil); !strings.Contains(s, "We ship fridges") || !strings.Contains(s, "covered") {
 		t.Error("stage2 prompt must carry company_info and the Stage-1 match")
 	}
 	// Stage 2 must carry the job geography and the candidate's location preferences so
 	// the model can score location & work-mode fit.
-	if s := stage2UserPrompt(in, reqs); !strings.Contains(s, "Berlin") || !strings.Contains(s, "onsite") || !strings.Contains(s, "São Paulo") {
+	if s := stage2UserPrompt(in, reqs, nil); !strings.Contains(s, "Berlin") || !strings.Contains(s, "onsite") || !strings.Contains(s, "São Paulo") {
 		t.Error("stage2 prompt must carry job geography + candidate location preferences")
 	}
 	v := recruiterVerdict{TitleAlignment: dimScore{Score: 80}, Recommendation: "Apply."}
-	if s := stage3UserPrompt(in, reqs, v); !strings.Contains(s, "Apply.") {
+	if s := stage3UserPrompt(in, reqs, v, nil); !strings.Contains(s, "Apply.") {
 		t.Error("stage3 prompt must carry the Stage-2 verdict to audit")
 	}
 }

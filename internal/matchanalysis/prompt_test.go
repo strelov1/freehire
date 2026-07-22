@@ -6,7 +6,7 @@ import "testing"
 
 func TestStage1Prompt_IncludesStructuredResumeWhenPresent(t *testing.T) {
 	in := Input{JobTitle: "Go Engineer", CVText: "raw cv", StructuredResume: `{"full_name":"Jane"}`}
-	got := stage1UserPrompt(in)
+	got := stage1UserPrompt(in, nil)
 	if !strings.Contains(got, `{"full_name":"Jane"}`) {
 		t.Errorf("stage1 prompt missing structured résumé block:\n%s", got)
 	}
@@ -16,7 +16,7 @@ func TestStage1Prompt_IncludesStructuredResumeWhenPresent(t *testing.T) {
 }
 
 func TestStage1Prompt_OmitsStructuredBlockWhenEmpty(t *testing.T) {
-	withEmpty := stage1UserPrompt(Input{JobTitle: "Go Engineer", CVText: "raw cv"})
+	withEmpty := stage1UserPrompt(Input{JobTitle: "Go Engineer", CVText: "raw cv"}, nil)
 	// The structured header must not appear at all when there is no structured résumé,
 	// so an un-extracted CV produces exactly today's prompt.
 	if strings.Contains(withEmpty, "Structured résumé") {
@@ -36,7 +36,7 @@ func TestWriteLocation_RemoteWithinReachAddsNote(t *testing.T) {
 		JobCountries:        []string{"do"},
 		LocationPreferences: `{"base":{"country":"br"},"remote":{"regions":["global","latam","cis"]},"relocation":{"open":false}}`,
 	}
-	got := stage2UserPrompt(in, nil)
+	got := stage2UserPrompt(in, nil, nil)
 	if !strings.Contains(got, "within the candidate's stated remote reach") {
 		t.Errorf("expected remote-reach NOTE for a LATAM-remote job matching the candidate's reach:\n%s", got)
 	}
@@ -50,7 +50,7 @@ func TestWriteLocation_RemoteOutsideReachNoNote(t *testing.T) {
 		JobRegions:          []string{"latam"},
 		LocationPreferences: `{"remote":{"regions":["europe"]}}`,
 	}
-	got := stage2UserPrompt(in, nil)
+	got := stage2UserPrompt(in, nil, nil)
 	if strings.Contains(got, "within the candidate's stated remote reach") {
 		t.Errorf("must not vouch for a remote job outside the candidate's reach:\n%s", got)
 	}
