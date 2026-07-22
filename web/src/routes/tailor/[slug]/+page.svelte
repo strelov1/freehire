@@ -12,7 +12,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { ZoomIn, ZoomOut, Download } from '@lucide/svelte';
+  import { ZoomIn, ZoomOut, Download, Menu } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import { createSession } from '$lib/assistant/api';
   import AssistantChat from '$lib/assistant/AssistantChat.svelte';
@@ -75,6 +75,10 @@
     ['verdict', 'Verdict'],
   ];
   let mobileView = $state<MobileView>('chat');
+
+  // Below lg the account icon rail collapses into a drawer opened by the burger in the mobile tab
+  // bar; AccountNavRail owns the drawer and binds this open flag.
+  let navOpen = $state(false);
   function pickMobile(v: MobileView) {
     mobileView = v;
     if (v === 'chat' || v === 'editor') leftTab = v;
@@ -248,7 +252,7 @@
 <!-- Full-width workspace loses the account shell nav; the same left-edge icon rail as
      the Agent page brings the account sections back. It stays put across every state. -->
 <div class="flex h-[calc(100svh-3.5rem)]">
-  <AccountNavRail />
+  <AccountNavRail collapsible bind:open={navOpen} />
   {#if status === 'loading'}
     <div class="flex min-w-0 flex-1 items-center justify-center text-sm text-muted-foreground">
       {resuming ? 'Re-opening your tailoring session…' : 'Preparing your tailoring session…'}
@@ -263,6 +267,17 @@
       <!-- MOBILE TAB BAR: below lg the three columns collapse to one full-screen view; this flat,
            horizontally-scrollable bar switches between all of them. Hidden at lg (columns stack). -->
       <nav class="flex items-center gap-1 overflow-x-auto border-b border-border bg-background px-2 py-1.5 text-sm lg:hidden">
+        <!-- Burger opens the account nav drawer (the icon rail is hidden below lg). -->
+        <button
+          type="button"
+          onclick={() => (navOpen = true)}
+          aria-label="Open menu"
+          aria-expanded={navOpen}
+          class="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <Menu class="size-5" />
+        </button>
+        <span class="mr-0.5 h-5 w-px shrink-0 bg-border" aria-hidden="true"></span>
         {#each mobileTabs as [id, label] (id)}
           <button
             type="button"
