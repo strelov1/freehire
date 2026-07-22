@@ -71,7 +71,7 @@ func Build(ctx context.Context, text string, known Contacts, d Detector) (*Redac
 	// non-word chars, so a \b anchor masks each one. A detected span that abuts a word char
 	// (e.g. an email touching a trailing digit, or a NAME span inside a larger token) makes
 	// the value unsafe for \b — it is then masked plainly so the occurrence can never leak.
-	detected := make(map[string]bool)
+	// Its key set is exactly the detected values, so the fail-closed self-check ranges it too.
 	boundarySafe := make(map[string]bool)
 	var found Contacts
 	for _, s := range spans {
@@ -82,12 +82,11 @@ func Build(ctx context.Context, text string, known Contacts, d Detector) (*Redac
 		add(v, s.Kind)
 		fillContact(&found, s.Kind, v)
 		ok := (s.Start == 0 || !isWord(text[s.Start-1])) && (s.End == len(text) || !isWord(text[s.End]))
-		if seen := detected[v]; seen {
+		if _, seen := boundarySafe[v]; seen {
 			boundarySafe[v] = boundarySafe[v] && ok
 		} else {
 			boundarySafe[v] = ok
 		}
-		detected[v] = true
 	}
 	add(known.FullName, KindName)
 	add(known.Email, KindEmail)
@@ -118,7 +117,7 @@ func Build(ctx context.Context, text string, known Contacts, d Detector) (*Redac
 	// Fail-closed self-check: masking MUST remove every detected value from the source.
 	// If any survives (a boundary quirk we did not foresee), refuse rather than leak.
 	redacted := r.Redact(text)
-	for v := range detected {
+	for v := range boundarySafe {
 		if strings.Count(redacted, v) >= strings.Count(text, v) {
 			return nil, fmt.Errorf("pii: redaction left detected value unmasked")
 		}
@@ -191,7 +190,7 @@ func isWord(c byte) bool {
 
 // sanitizeSpans drops model spans with out-of-range or inverted offsets.
 func sanitizeSpans(spans []Span, n int) []Span {
-	out := spans[:0:0]
+	var out []Span
 	for _, s := range spans {
 		if s.Start >= 0 && s.End <= n && s.Start < s.End {
 			out = append(out, s)
