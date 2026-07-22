@@ -411,7 +411,9 @@
   </div>
 
   <!-- Skills to avoid — optional; seeded into the filter's skills exclude set by "Apply my
-       profile". Same dictionary source as Skills, kept disjoint from it. -->
+       profile". Same dictionary source as Skills, kept disjoint from it. Passed as the
+       control's `exclude` set so the chips render in the destructive (red, struck-through)
+       style, matching how an excluded facet value looks everywhere else. -->
   <div class="flex flex-col gap-2">
     <div class="flex items-baseline justify-between">
       <span class="text-sm font-medium">Skills to avoid</span>
@@ -419,7 +421,8 @@
     </div>
     <RemoteSearchSelect
       search={searchExcludedSkills}
-      include={excludedSkills}
+      include={[]}
+      exclude={excludedSkills}
       placeholder="Search skills to exclude"
       onToggle={toggleExcludedSkill}
       fallbackLabel={(v) => v}
