@@ -21,15 +21,15 @@
 
 ## 4. Integration surfaces
 
-- [ ] 4.1 Profile-match bar: assemble `JobRequirements`/`CVEvidence` at the handler and attach `blockers` to the payload when structured inputs are present; degrade to coverage-only otherwise. Handler/integration test both paths; never hide the job.
-- [ ] 4.2 matchanalysis: clamp `overall_score` to `min(ScoreCap)` and derive `verdict` from the capped score, applied at serve time. Test the cap scenario (weighted 88 → capped 60).
+- [x] 4.1 Profile-match bar: assemble `JobRequirements`/`CVEvidence` at the handler and attach `blockers` to the payload when structured inputs are present; degrade to coverage-only otherwise. Handler/integration test both paths; never hide the job.
+- [x] 4.2 matchanalysis: clamp `overall_score` to `min(ScoreCap)` and derive `verdict` from the capped score, applied at serve time. Test the cap scenario (weighted 88 → capped 60).
 - [ ] 4.3 matchanalysis: inject the blockers into the Stage-1 and Stage-3 prompt context as known constraints; expose blockers in the served analysis. Prompt-content test + analysis-shape test.
-- [ ] 4.4 matchanalysis: recompute the blockers + ceiling on read (GET) from the current job/résumé/dictionary and apply to the cached dimensions; the cache keeps its existing three stamps unchanged (D6 — no fourth stamp, no migration). Test that a dictionary change re-caps a cached analysis without marking it stale.
+- [x] 4.4 matchanalysis: recompute the blockers + ceiling on read (GET) from the current job/résumé/dictionary and apply to the cached dimensions; the cache keeps its existing three stamps unchanged (D6 — no fourth stamp, no migration). Test that a dictionary change re-caps a cached analysis without marking it stale.
 - [ ] 4.5 Tailor: pass unmet blockers' `Action` strings into the tailor context as explicit "do not claim unless true" guardrails. Test the action strings reach the tailor input.
 
 ## 5. Contracts & frontend
 
-- [ ] 5.1 Run `cmd/gen-contracts`; regenerate TS for `Blocker`, the new enrichment/résumé fields, and the fit payload. Verify the generated diff is limited to these.
+- [x] 5.1 Run `cmd/gen-contracts`; regenerate TS for `Blocker`, the new enrichment/résumé fields, and the fit payload. Verify the generated diff is limited to these.
 - [ ] 5.2 Surface blockers in the profile-match bar UI (advisory warning chips + met ✓), and show the ceiling context on the fit analysis page. Frontend unit test for the pure reducer/formatter; visual check.
 
 ## 6. Rollout & verification

@@ -80,6 +80,10 @@ func (a *API) GetMatchAnalysis(c *fiber.Ctx) error {
 	if analysis == nil {
 		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true, Credits: bal}})
 	}
+	// Recompute the hard-constraint ceiling from the current job/résumé/dictionary and
+	// apply it to the cached analysis on read — the cap is never stored, so a dictionary
+	// change takes effect without marking the cache stale.
+	a.capServedAnalysis(c.Context(), userID, job, analysis)
 	stale := !stampsFresh(row, cvUploadedAt, job.ContentHash, a.matchAnalysis.ModelID())
 	return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true, Stale: stale, Analysis: analysis, Credits: bal}})
 }
@@ -154,6 +158,9 @@ func (a *API) PostMatchAnalysis(c *fiber.Ctx) error {
 	if isNew {
 		a.debitMatch(c.Context(), userID, job.ID)
 	}
+	// Cache holds the uncapped LLM analysis; cap the served copy from the current
+	// blockers (same recompute-on-read as GET).
+	a.capServedAnalysis(c.Context(), userID, job, analysis)
 	return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true, Stale: false, Analysis: analysis}})
 }
 

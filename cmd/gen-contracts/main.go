@@ -68,6 +68,7 @@ func genStructs() (string, error) {
 	verdictTS := filepath.Join(tmp, "verdict.ts")
 	atscheckTS := filepath.Join(tmp, "atscheck.ts")
 	jobmatchTS := filepath.Join(tmp, "jobmatch.ts")
+	hardconstraintTS := filepath.Join(tmp, "hardconstraint.ts")
 	matchanalysisTS := filepath.Join(tmp, "matchanalysis.ts")
 	resumeextractTS := filepath.Join(tmp, "resumeextract.ts")
 	cvTS := filepath.Join(tmp, "cv.ts")
@@ -113,11 +114,19 @@ func genStructs() (string, error) {
 				IncludeFiles: []string{"jobmatch.go"},
 			},
 			{
+				// The hard-constraint blocker wire shape (Blocker + Category/Severity enums).
+				// Only blocker.go — the evaluator inputs/logic are server-only.
+				Path:         "github.com/strelov1/freehire/internal/hardconstraint",
+				OutputPath:   hardconstraintTS,
+				IncludeFiles: []string{"blocker.go"},
+			},
+			{
 				// The on-demand LLM fit analysis wire shape (Analysis + Dimension +
 				// Requirement). Only matchanalysis.go — analyzer.go holds server-only types.
 				Path:         "github.com/strelov1/freehire/internal/matchanalysis",
 				OutputPath:   matchanalysisTS,
 				IncludeFiles: []string{"matchanalysis.go"},
+				TypeMappings: map[string]string{"hardconstraint.Blocker": "Blocker"},
 			},
 			{
 				// The read-only structured résumé wire shape (Structured + Experience +
@@ -166,6 +175,10 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	hardconstraintBody, err := readBody(hardconstraintTS)
+	if err != nil {
+		return "", err
+	}
 	matchanalysisBody, err := readBody(matchanalysisTS)
 	if err != nil {
 		return "", err
@@ -178,7 +191,7 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + jobmatchBody + "\n" + matchanalysisBody + "\n" + resumeextractBody + "\n" + cvBody, nil
+	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + jobmatchBody + "\n" + hardconstraintBody + "\n" + matchanalysisBody + "\n" + resumeextractBody + "\n" + cvBody, nil
 }
 
 // readBody returns a tygo output file's body with its leading preamble removed, so

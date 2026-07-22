@@ -17,28 +17,6 @@ import (
 	"github.com/strelov1/freehire/internal/hardconstraint/credentials"
 )
 
-// Category names the requirement axis a blocker covers.
-type Category string
-
-const (
-	CategoryExperience       Category = "experience"
-	CategoryEducation        Category = "education"
-	CategoryLanguage         Category = "language"
-	CategoryWorkAuth         Category = "work_authorization"
-	CategoryLocationWorkMode Category = "location_work_mode"
-	CategoryCertification    Category = "certification"
-)
-
-// Severity grades how hard a blocker is: legal/binary constraints are hard, fit
-// constraints are soft.
-type Severity string
-
-const (
-	SeverityHard   Severity = "hard"
-	SeverityMedium Severity = "medium"
-	SeveritySoft   Severity = "soft"
-)
-
 // tier pins each category's severity and its score-cap ceiling. A lower cap is a
 // harder blocker; the caller takes the minimum cap over the unmet blockers.
 var tier = map[Category]struct {
@@ -51,17 +29,6 @@ var tier = map[Category]struct {
 	CategoryExperience:       {SeverityMedium, 65},
 	CategoryLanguage:         {SeveritySoft, 70},
 	CategoryLocationWorkMode: {SeveritySoft, 75},
-}
-
-// Blocker is one evaluated requirement. Met is true when the résumé satisfies it
-// (kept so the UI can show a ✓); only Met==false entries count toward the cap.
-type Blocker struct {
-	Category Category `json:"category"`
-	Severity Severity `json:"severity"`
-	ScoreCap int      `json:"score_cap"`
-	Reason   string   `json:"reason"`
-	Action   string   `json:"action"`
-	Met      bool     `json:"met"`
 }
 
 // JobRequirements is the job side, read straight from the enrichment columns

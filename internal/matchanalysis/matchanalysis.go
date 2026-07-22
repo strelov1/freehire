@@ -16,6 +16,7 @@ import (
 	"math"
 	"strings"
 
+	"github.com/strelov1/freehire/internal/hardconstraint"
 	"github.com/strelov1/freehire/internal/llm"
 )
 
@@ -108,13 +109,27 @@ type Requirement struct {
 // Analysis is the full served fit verdict — the single wire contract exported to TS
 // via cmd/gen-contracts.
 type Analysis struct {
-	Dimensions       []Dimension   `json:"dimensions"`
-	RequirementMatch []Requirement `json:"requirement_match"`
-	OverallScore     int           `json:"overall_score"`
-	Verdict          string        `json:"verdict"`
-	Strengths        []string      `json:"strengths"`
-	Gaps             []string      `json:"gaps"`
-	Recommendation   string        `json:"recommendation"`
+	Dimensions       []Dimension              `json:"dimensions"`
+	RequirementMatch []Requirement            `json:"requirement_match"`
+	OverallScore     int                      `json:"overall_score"`
+	Verdict          string                   `json:"verdict"`
+	Strengths        []string                 `json:"strengths"`
+	Gaps             []string                 `json:"gaps"`
+	Recommendation   string                   `json:"recommendation"`
+	Blockers         []hardconstraint.Blocker `json:"blockers"`
+}
+
+// ApplyCeiling clamps the analysis's OverallScore down to ceil — the deterministic
+// hard-constraint ceiling (hardconstraint.OverallCap over the caller's blockers) —
+// and re-derives the Verdict from the capped score. A ceil of 100 (no unmet blocker)
+// leaves the score untouched. Applied at serve time, not stored, so the ceiling
+// always reflects the current dictionary (see the recompute-on-read design).
+func ApplyCeiling(a *Analysis, ceil int) {
+	if a == nil || ceil >= a.OverallScore {
+		return
+	}
+	a.OverallScore = ceil
+	a.Verdict = verdictFor(ceil)
 }
 
 // dimScore is one dimension as the model returns it (score + short rationale).
