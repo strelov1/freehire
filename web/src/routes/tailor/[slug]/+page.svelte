@@ -51,7 +51,7 @@
   // Left panel: which tab is shown, and its resizable width. The chat stays mounted across tab
   // switches (hidden, not unmounted) so its live session is never dropped.
   let leftTab = $state<'chat' | 'editor'>('chat');
-  let leftWidth = $state(440);
+  let leftWidth = $state(380);
   let leftPanelEl = $state<HTMLElement>();
   let leftResizing = false;
 

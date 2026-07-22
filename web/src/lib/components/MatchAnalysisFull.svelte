@@ -23,12 +23,22 @@
   // `stacked` forces every multi-column section into a single column regardless of viewport
   // width — for the narrow tailoring artifact panel, where the viewport-based `lg:`/`sm:`
   // breakpoints would otherwise cram two columns into ~480px.
+  // `onState` surfaces the live analysis + running flag to a host (the /match page) so its Tailor
+  // CTA can unlock the moment the streamed analysis lands — the SSR fit is null on a cold match,
+  // so the page can't observe the result otherwise (it would need a reload).
   let {
     job,
     initial = null,
     autoRun = true,
     stacked = false,
-  }: { job: Job; initial?: MatchAnalysisResponse | null; autoRun?: boolean; stacked?: boolean } = $props();
+    onState = undefined,
+  }: {
+    job: Job;
+    initial?: MatchAnalysisResponse | null;
+    autoRun?: boolean;
+    stacked?: boolean;
+    onState?: (analysis: MatchAnalysisResponse['analysis'], running: boolean) => void;
+  } = $props();
 
   let fit = $state<MatchAnalysisResponse | null>(initial);
 
@@ -62,6 +72,10 @@
   });
 
   const analysis = $derived(stream.analysis);
+  // Push the analysis + running flag up to the host on every change (and on first paint).
+  $effect(() => {
+    onState?.(analysis, streaming || recovering);
+  });
   const isStale = $derived(fit?.stale ?? false);
   // Only auto-run when there is NO cached analysis at all (cold). A stale cache still
   // paints instantly and offers a manual Recompute — so a refresh never silently burns
