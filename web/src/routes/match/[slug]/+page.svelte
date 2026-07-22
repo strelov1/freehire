@@ -8,20 +8,6 @@
 
   let { data } = $props();
 
-  // The Tailor CTA sits above the analysis and unlocks the moment the fit result lands. On a cold
-  // match the SSR `data.fit.analysis` is null and MatchAnalysisFull streams the result client-side,
-  // so we track its live state (pushed up via `onState`) instead of the SSR prop — otherwise the
-  // button would only enable after a full reload. Credits meter the AI spend; a stale analysis
-  // still tailors (we nudge a recompute rather than block).
-  const hasCv = $derived(data.fit?.has_cv === true);
-  // The streamed signal from MatchAnalysisFull (null until it first reports); once set it wins,
-  // otherwise fall back to the SSR-cached fit (present on a warm revisit). Keeping `data` inside a
-  // $derived (not a one-shot $state seed) means it also reacts to a client-side navigation.
-  let streamedReady = $state<boolean | null>(null);
-  let analyzing = $state(false);
-  const analysisReady = $derived(streamedReady ?? !!data.fit?.analysis);
-  const canTailor = $derived(analysisReady && hasCv);
-
   let tailoring = $state(false);
 
   async function startTailoring() {
@@ -51,42 +37,24 @@
     </div>
   </header>
 
-  {#if hasCv}
-    <div class="flex flex-col gap-2">
-      <Button
-        variant="outline"
-        size="lg"
-        onclick={startTailoring}
-        disabled={!canTailor || tailoring}
-        aria-busy={tailoring || (analyzing && !analysisReady)}
-        class="w-full gap-2 rounded-xl border-transparent bg-brand-muted font-semibold text-brand-strong transition hover:bg-brand-muted hover:text-brand-strong hover:opacity-80 disabled:opacity-60 sm:w-fit sm:self-start sm:px-6"
-      >
-        {#if tailoring}
-          <Loader class="size-[1.15rem] animate-spin" />Preparing…
-        {:else if analyzing && !analysisReady}
-          <Loader class="size-[1.15rem] animate-spin" />Analyzing your fit…
-        {:else}
-          <SquarePen class="size-[1.15rem]" />Tailor my CV
-        {/if}
-      </Button>
-      {#if analyzing && !analysisReady}
-        <p class="text-xs text-muted-foreground">
-          The tailor button unlocks the moment your fit analysis is ready.
-        </p>
-      {:else if data.fit?.stale}
-        <p class="text-xs text-amber-600 dark:text-amber-500">
-          This analysis is out of date — recompute below for the sharpest tailoring.
-        </p>
+  <!-- The Tailor CTA renders inside the verdict card (bottom-right), so it appears exactly when
+       the analysis lands. MatchAnalysisFull owns the card; the page owns the button + navigation
+       and hands it down as a snippet. -->
+  {#snippet tailorCta()}
+    <Button
+      variant="outline"
+      size="lg"
+      onclick={startTailoring}
+      disabled={tailoring}
+      class="gap-2 rounded-xl border-transparent bg-brand-muted font-semibold text-brand-strong transition hover:bg-brand-muted hover:text-brand-strong hover:opacity-80 disabled:opacity-60"
+    >
+      {#if tailoring}
+        <Loader class="size-[1.15rem] animate-spin" />Preparing…
+      {:else}
+        <SquarePen class="size-[1.15rem]" />Tailor my CV
       {/if}
-    </div>
-  {/if}
+    </Button>
+  {/snippet}
 
-  <MatchAnalysisFull
-    job={data.job}
-    initial={data.fit}
-    onState={(a, running) => {
-      streamedReady = !!a;
-      analyzing = running;
-    }}
-  />
+  <MatchAnalysisFull job={data.job} initial={data.fit} {tailorCta} />
 </div>
