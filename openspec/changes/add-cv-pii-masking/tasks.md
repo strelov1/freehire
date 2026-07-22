@@ -24,7 +24,7 @@
 ## 5. Privacy-filter span-detection service
 
 - [x] 5.1 Build the detection HTTP service serving `openai/privacy-filter` (ONNX q4, onnxruntime, Viterbi span stitching): `POST /detect` → `[{start,end,kind}]`; verify it recovers the hidden surname and does not over-redact on the two spike CVs
-- [ ] 5.2 Deploy wiring in `freehire-ops`: ONNX q4 weights + service on the litellm box, systemd/compose unit, health-check, egress allowlist; set `PII_FILTER_URL`
+- [x] 5.2 Deploy wiring in `freehire-ops`: ONNX q4 weights + service on the litellm box, systemd/compose unit, health-check, egress allowlist; set `PII_FILTER_URL`
 
 ## 6. Verification
 
