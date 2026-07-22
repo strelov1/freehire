@@ -2,11 +2,13 @@
 
 `/tailor/[slug]` is a beta, full-width surface. Its ready state is currently two columns:
 `<AssistantChat>` on the left and `<ArtifactPanel>` (tabs: CV-as-PDF · Job description · Verdict)
-on the right. The structured editor exists as `CvEditor.svelte` (a self-contained load +
-debounced-autosave component, also used standalone on `/my/cvs/[id]`) and is surfaced as a
-right-panel tab. The CV `Document` is the single wire shape rendered to PDF server-side by Typst
-(`internal/cv/renderer.go`, `templates/<id>.typ`; only `classic-ats` registered). There is no
-HTML render of a CV anywhere.
+on the right. The structured editor exists as `CvEditor.svelte` (a self-contained load + debounced-autosave
+component) surfaced as the panel's `Edit` tab; `/my/cvs/[id]` is now only a redirect into the
+workspace, so `CvEditor` is used *nowhere else*. The panel also already has a working `Templates`
+tab (`TemplateGallery.svelte` over `listCvTemplates` / `setCvTemplate`, with SVG thumbnails) and
+four registered templates (`classic-ats`, `centered`, `modern-sans`, `sidebar`). The CV
+`Document` is the single wire shape rendered to PDF server-side by Typst
+(`internal/cv/renderer.go`, `templates/<id>.typ`). There is no HTML render of a CV anywhere.
 
 This change reshapes the ready state into three columns and adds the one genuinely new piece: an
 HTML render of the CV `Document`. Everything else (chat, section form, JD, verdict, template
@@ -48,23 +50,22 @@ both read one object. The page owns load (`getCv`) and the debounced autosave (`
   simpler and zero-refactor, but laggy and flickery; rejected for the premium feel the reference
   implies (chosen explicitly with the user).
 
-### 2. Extract `CvSectionForm` from `CvEditor`
+### 2. Extract `CvSectionForm`, fold `CvEditor` into the page
 
-Split `CvEditor.svelte` into:
-- `CvSectionForm.svelte` — controlled, presentational: `bind:doc`, `bind:title`,
-  `bind:templateId`, plus optional `embedded`. No data fetching, no autosave. This is the section
-  markup lifted verbatim.
-- `CvEditor.svelte` — thin container for `/my/cvs`: keeps the current load + debounced-autosave +
-  save-state chrome, and renders `<CvSectionForm bind:doc bind:title bind:templateId />`.
+`CvEditor.svelte` is used only by the panel's `Edit` tab, which this change removes (the editor
+moves into the left panel against the shared `doc`). So:
+- Lift the section markup + row helpers into a controlled `CvSectionForm.svelte` — `bind:doc`,
+  `bind:title`, no fetch, no autosave.
+- Fold `CvEditor`'s load + debounced-autosave + save-state into the tailoring page (which now owns
+  `doc`), then **delete `CvEditor.svelte`** as orphaned by this change.
 
-The tailoring page reuses the same autosave logic (extracted to a tiny helper or duplicated
-minimally) since it now owns `doc`.
-
-- **Why:** two consumers need the same fields bound to a document they don't own; a controlled
-  component is the clean seam. `/my/cvs` stays behaviourally identical (same props flow through
-  the container).
-- **Alternative — leave `CvEditor` intact, mount it in the left tab and mirror its `doc` out via
-  `onSaved`:** couples the preview to save timing (defeats decision 1); rejected.
+- **Why:** the editor and the centre preview must share one in-memory `doc` (decision 1), so the
+  page — not a self-contained component — has to own load/save; `CvSectionForm` is the presentational
+  seam both the left tab and (transitively) the preview read.
+- **Why delete rather than keep as a container:** with `/my/cvs/[id]` a redirect, no standalone
+  consumer remains; a kept-but-unused container is dead code this change would create.
+- **Alternative — leave `CvEditor` intact in the left tab and mirror its `doc` out via `onSaved`:**
+  couples the preview to save timing (defeats decision 1); rejected.
 
 ### 3. `CvHtmlPreview.svelte` — a pure `Document → HTML` render
 
@@ -80,10 +81,11 @@ section set the form and Typst cover. Zoom via CSS `transform: scale`. No networ
 
 ### 4. Right panel = reworked `ArtifactPanel`
 
-Drop the CV/PDF tab (moved to centre), add a `Templates` tab. Keep Job description and Verdict
-(reuse `splitRequirements`). The Templates tab lists `TemplateIDs()` (exposed to the client via
-the existing CV record's `template_id` plus a small static list, or a tiny read — no new
-write endpoint; selection just sets `templateId` in the shared state, which autosaves).
+Drop the `cv` (PDF iframe) and `edit` tabs — the CV now renders in the centre and edits in the
+left panel. Keep the three context tabs: `Templates` (the existing `TemplateGallery`, unchanged),
+`Job description`, and `Verdict` (reuse the same components). On a template switch,
+`TemplateGallery` already persists via `setCvTemplate`; its `onSelected` tells the page to refetch
+so the shared `templateId` (and the Download-PDF output) reflect the new choice.
 
 ### 5. Layout & splitters
 

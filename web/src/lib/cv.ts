@@ -133,3 +133,51 @@ export const blankCertification = (): Certification => ({ name: '', issuer: '', 
 export function cvTitle(title: string): string {
   return title.trim() || 'Untitled CV';
 }
+
+// ---- Preview projections ----
+// Pure string composers that mirror the classic-ats Typst template's layout rules, so the live
+// HTML preview reads the same as the rendered PDF. Free-form dates are shown as written (no
+// parsing), and blank parts are dropped rather than leaving stray separators.
+
+/** A free-form date range: "start – end", or whichever end is present, or ''. */
+export function dateRange(start?: string, end?: string): string {
+  const a = (start ?? '').trim();
+  const b = (end ?? '').trim();
+  if (a && b) return `${a} – ${b}`;
+  return a || b;
+}
+
+const joinNonEmpty = (parts: (string | undefined)[], sep: string): string =>
+  parts.map((p) => (p ?? '').trim()).filter((p) => p !== '').join(sep);
+
+/** An experience role header: "Company | Location | Role (start – end)", blanks dropped. */
+export function experienceHeader(e: Pick<ExperienceItem, 'company' | 'location' | 'role' | 'start' | 'end'>): string {
+  const head = joinNonEmpty([e.company, e.location, e.role], ' | ');
+  const dr = dateRange(e.start, e.end);
+  if (!dr) return head;
+  return head ? `${head} (${dr})` : `(${dr})`;
+}
+
+/** An inline education line: "Degree, Field | Institution (start – end)", blanks dropped. */
+export function educationLine(ed: Pick<EducationItem, 'degree' | 'field' | 'institution' | 'start' | 'end'>): string {
+  const degree = joinNonEmpty([ed.degree, ed.field], ', ');
+  let line = joinNonEmpty([degree, ed.institution], ' | ');
+  const dr = dateRange(ed.start, ed.end);
+  if (dr) line = line ? `${line} (${dr})` : `(${dr})`;
+  return line;
+}
+
+/** A language label: "Name (Level)" or just "Name". */
+export function languageLabel(l: Pick<Language, 'name' | 'level'>): string {
+  const name = (l.name ?? '').trim();
+  const level = (l.level ?? '').trim();
+  return level ? `${name} (${level})` : name;
+}
+
+/** An inline certification line: "Name — Issuer (Year)", trailing pieces dropped when blank. */
+export function certificationLine(c: Pick<Certification, 'name' | 'issuer' | 'year'>): string {
+  let line = (c.name ?? '').trim();
+  if ((c.issuer ?? '').trim()) line = `${line} — ${(c.issuer ?? '').trim()}`;
+  if ((c.year ?? '').trim()) line = `${line} (${(c.year ?? '').trim()})`;
+  return line;
+}

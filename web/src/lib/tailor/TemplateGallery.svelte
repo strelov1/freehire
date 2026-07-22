@@ -4,9 +4,10 @@
 
   // The template gallery for one CV: a grid of static preview thumbnails (served from
   // /cv-previews/<id>.svg) with the current template highlighted. Picking one persists it via
-  // the set-template endpoint and calls onSelected so the host can refresh the PDF preview.
-  // Non-ATS-safe templates carry an inline caution.
-  let { cvId, onSelected }: { cvId: number; onSelected: () => void } = $props();
+  // the set-template endpoint and calls onSelected(id) so the host can keep its own template id in
+  // step (autosave writes it too) and cache-bust the PDF. Non-ATS-safe templates carry an inline
+  // caution.
+  let { cvId, onSelected }: { cvId: number; onSelected: (id: string) => void } = $props();
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   let templates = $state<CvTemplate[]>([]);
@@ -43,7 +44,7 @@
     error = null;
     try {
       await api.setCvTemplate(cvId, id);
-      onSelected();
+      onSelected(id);
     } catch (e) {
       current = previous; // roll back the highlight on failure
       error = e instanceof ApiError ? e.message : 'Could not switch template.';

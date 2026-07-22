@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { emptyDocument, toEditable, cvTitle, blankExperience } from './cv';
+import {
+  emptyDocument,
+  toEditable,
+  cvTitle,
+  blankExperience,
+  dateRange,
+  experienceHeader,
+  educationLine,
+  languageLabel,
+  certificationLine,
+} from './cv';
 
 describe('emptyDocument', () => {
   it('populates every section so the form can bind without null-guards', () => {
@@ -41,5 +51,61 @@ describe('cvTitle', () => {
 describe('blankExperience', () => {
   it('starts with one empty bullet so the row shows a bullet input', () => {
     expect(blankExperience().bullets).toEqual(['']);
+  });
+});
+
+// The preview projections mirror the classic-ats Typst composition rules so the live HTML
+// preview reads the same as the rendered PDF (close, not pixel-identical).
+
+describe('dateRange', () => {
+  it('joins both ends with an en dash', () => {
+    expect(dateRange('2021', '2024')).toBe('2021 – 2024');
+  });
+  it('shows a single end when the other is blank', () => {
+    expect(dateRange('2021', '')).toBe('2021');
+    expect(dateRange('', 'Present')).toBe('Present');
+  });
+  it('is empty when both are blank', () => {
+    expect(dateRange('', '')).toBe('');
+  });
+});
+
+describe('experienceHeader', () => {
+  it('joins company | location | role with a trailing date range', () => {
+    expect(
+      experienceHeader({ company: 'Acme', location: 'Remote', role: 'Eng', start: '2021', end: '2024' }),
+    ).toBe('Acme | Remote | Eng (2021 – 2024)');
+  });
+  it('drops blank parts and omits the parens when there are no dates', () => {
+    expect(experienceHeader({ company: 'Acme', role: 'Eng' })).toBe('Acme | Eng');
+  });
+});
+
+describe('educationLine', () => {
+  it('combines degree, field, institution and dates', () => {
+    expect(
+      educationLine({ degree: 'BSc', field: 'CS', institution: 'MIT', start: '2016', end: '2020' }),
+    ).toBe('BSc, CS | MIT (2016 – 2020)');
+  });
+  it('keeps only the present parts', () => {
+    expect(educationLine({ institution: 'MIT' })).toBe('MIT');
+  });
+});
+
+describe('languageLabel', () => {
+  it('appends the level in parens', () => {
+    expect(languageLabel({ name: 'English', level: 'C1' })).toBe('English (C1)');
+  });
+  it('is just the name without a level', () => {
+    expect(languageLabel({ name: 'English' })).toBe('English');
+  });
+});
+
+describe('certificationLine', () => {
+  it('joins name — issuer (year)', () => {
+    expect(certificationLine({ name: 'CKA', issuer: 'CNCF', year: '2023' })).toBe('CKA — CNCF (2023)');
+  });
+  it('drops the missing pieces', () => {
+    expect(certificationLine({ name: 'CKA' })).toBe('CKA');
   });
 });

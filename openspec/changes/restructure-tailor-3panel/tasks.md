@@ -1,30 +1,30 @@
-## 1. Extract the controlled section form (reuse, no /my/cvs regression)
+## 1. Extract the controlled section form (CvEditor is tailor-only now)
 
-- [ ] 1.1 Create `web/src/lib/components/cv/CvSectionForm.svelte`: move the section markup out of `CvEditor.svelte` as a controlled component — props `bind:doc`, `bind:title`, `bind:templateId`, `embedded?`; no fetch, no autosave. Keep the row add/remove helpers with it.
-- [ ] 1.2 Refactor `CvEditor.svelte` into a thin container: keep load (`getCv`), debounced autosave (`updateCv`), save-state chrome + back-link; render `<CvSectionForm bind:doc bind:title bind:templateId {embedded} />`.
-- [ ] 1.3 `svelte-check` clean; visual-verify `/my/cvs` create → edit a field → autosave → reload shows persisted (regression gate for the extraction).
+- [x] 1.1 Create `web/src/lib/components/cv/CvSectionForm.svelte`: move the section markup + row add/remove helpers out of `CvEditor.svelte` as a controlled component — props `bind:doc`, `bind:title`; no fetch, no autosave. Match the current keyed-each (`(entry)`).
+- [x] 1.2 Fold `CvEditor`'s load + debounced autosave + save-state into the tailoring page (task 4); once the page owns `doc` and renders `CvSectionForm`, **delete `CvEditor.svelte`** (only consumer is the Edit tab this change removes). Confirm no remaining references.
+- [x] 1.3 `svelte-check` clean after the extraction.
 
 ## 2. Live HTML CV preview
 
-- [ ] 2.1 Create `web/src/lib/tailor/CvHtmlPreview.svelte`: pure `{ doc, templateId?, zoom? }` → resume HTML (header, summary, experience+bullets+stack, education, skills, projects, languages, certifications); CSS `transform: scale` zoom; no network.
-- [ ] 2.2 If any non-trivial projection is needed for the preview (e.g. formatting dates/links), put it in `web/src/lib/cv.ts` as a pure helper + vitest.
-- [ ] 2.3 `svelte-check` clean; render a populated document and an empty document without errors.
+- [x] 2.1 Create `web/src/lib/tailor/CvHtmlPreview.svelte`: pure `{ doc, zoom? }` → resume HTML (header, summary, experience+bullets+stack, education, skills, projects, languages, certifications); CSS `transform: scale` zoom; no network. (Template does not affect the preview layout in v1 — a documented seam.)
+- [x] 2.2 Preview projections (`dateRange`, `experienceHeader`, `educationLine`, `languageLabel`, `certificationLine`) live in `web/src/lib/cv.ts` as pure helpers + vitest (11 cases).
+- [x] 2.3 `svelte-check` clean; a populated and an empty document both render (screenshot-verified via a throwaway route).
 
 ## 3. Right panel: rework ArtifactPanel
 
-- [ ] 3.1 Rework `web/src/lib/tailor/ArtifactPanel.svelte`: drop the CV/PDF tab; tabs become `Templates` · `Job description` · `Verdict` (keep the JD text and the `splitRequirements` verdict).
-- [ ] 3.2 Templates tab: list registered templates (default `classic-ats`), indicate the CV's current one, and emit selection so the page sets `templateId` in shared state (autosaves). No new write endpoint.
-- [ ] 3.3 `svelte-check` clean; visual-verify tab switching and a template selection round-tripping to `template_id`.
+- [x] 3.1 Rework `web/src/lib/tailor/ArtifactPanel.svelte`: drop the `cv` (PDF iframe) and `edit` tabs and the PDF refresh/open chrome; tabs become `Templates` · `Job description` · `Verdict`.
+- [x] 3.2 Templates tab: keep reusing the existing `<TemplateGallery {cvId} onSelected={…} />`; `onSelected(id)` now returns the picked id so the page keeps its own `templateId` in step (autosave writes it too) and cache-busts the PDF.
+- [x] 3.3 `svelte-check` clean.
 
 ## 4. Three-column workspace page
 
-- [ ] 4.1 In `web/src/routes/tailor/[slug]/+page.svelte`, lift `doc`/`title`/`templateId` to page-owned `$state`; load via `getCv(cvId)` after bootstrap/resume; own the debounced autosave (`updateCv`).
-- [ ] 4.2 On `AssistantChat.onTurnComplete`: flush any pending autosave, then refetch `getCv(cvId)` and replace `doc`/`title`/`templateId` (keep the existing `refreshKey` bump for the right panel).
-- [ ] 4.3 Compose the three columns: left panel tabbed `Editor` (`<CvSectionForm bind:doc … embedded />`) / `Chat` (`<AssistantChat …/>`); centre `<CvHtmlPreview {doc} {templateId} />` + zoom control + Download PDF (`cvPdfUrl(cvId)`); right `<ArtifactPanel …/>`.
-- [ ] 4.4 Two resizable side panels using `clampWidth` (two widths in `$state`, pointer-capture splitters), centre `flex-1`.
+- [x] 4.1 In `web/src/routes/tailor/[slug]/+page.svelte`, lift `doc`/`title`/`templateId` to page-owned `$state`; hydrate via `getCv(cvId)` after bootstrap/resume (reusing the resume-path record); own the debounced autosave (`updateCv`).
+- [x] 4.2 On `AssistantChat.onTurnComplete`: flush any pending autosave, then refetch and replace `doc`/`title`/`templateId`; bump `pdfVersion` to cache-bust the PDF. (`refreshKey` removed — the live preview + refetch replace it.)
+- [x] 4.3 Compose the three columns: left panel tabbed `Editor` (`<CvSectionForm bind:doc bind:title />`) / `Chat` (`<AssistantChat …/>`, kept mounted across tab switches); centre `<CvHtmlPreview {doc} {zoom} />` + zoom control + Download PDF; right `<ArtifactPanel …/>`. Left panel is full-width below `lg`; centre + right are `lg`-only so the chat stays reachable on mobile.
+- [x] 4.4 Two resizable side panels using `clampWidth` (left width in `$state` sized off the panel's own left edge; right panel keeps its own splitter), centre `flex-1`.
 
 ## 5. Verify
 
-- [ ] 5.1 `npm run check` (svelte-check) + `vitest` green; `npm run build` succeeds.
-- [ ] 5.2 Drive end-to-end (visual verify): fit CTA → `/tailor/[slug]` renders three columns; Editor↔Chat tab switch; typing a field re-renders the centre preview instantly; Templates/JD/Verdict tabs; template select changes the PDF; Download PDF fetches; agent edit turn refreshes the preview; side panels resize+clamp.
-- [ ] 5.3 `/my/cvs` regression re-confirmed (send/edit/save unchanged).
+- [x] 5.1 `npm run check` (svelte-check) 0 errors + `vitest` (20 passed) green; `npm run build` succeeds.
+- [~] 5.2 Presentational + layout verified via headless-Chrome screenshots of a throwaway route: the centre `CvHtmlPreview` renders a classic-ats-style resume from a populated document, `CvSectionForm` renders the editor, and the responsive shell is full-width-left on mobile / three columns at `lg`. **Not driven end-to-end through the live agent/autosave path** — `/tailor/[slug]` is beta-gated and needs a running backend + authed beta user + a vacancy with a cached analysis + a stored résumé, which isn't available in this environment. Reactivity (shared `doc` → live preview) is structural (Svelte `$state` bound to the form, read by the preview).
+- [x] 5.3 `/my/cvs` regression: no longer applicable — `/my/cvs/[id]` is already a redirect into the workspace and `/my/cvs` (list) uses `CvList`, untouched. `CvEditor` (the deleted component) had no other consumer.

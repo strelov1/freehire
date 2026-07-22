@@ -22,9 +22,10 @@ right.
 - **Extract the structured section form** out of `CvEditor.svelte` into a controlled
   `CvSectionForm.svelte` (`bind:doc`). `CvEditor` stays a thin load-and-autosave container for
   `/my/cvs`; the tailoring page owns load/save itself and reuses `CvSectionForm`.
-- Add a **`Templates` picker** listing the registered templates (currently `classic-ats`);
-  choosing one sets `template_id`, which the PDF download honours. The centre HTML preview does
-  not visually swap per template in this iteration (a documented seam for later).
+- Keep the existing **`Templates` gallery** (`TemplateGallery` over `listCvTemplates` /
+  `setCvTemplate`, four registered templates) in the right panel; choosing one sets `template_id`,
+  which the PDF download honours. The centre HTML preview does not visually swap per template in
+  this iteration (a documented seam for later).
 - **Beta-gated. No backend / API / DB changes and no migration** — every endpoint already exists
   (bootstrap, `updateCv`, `getCv`, `cvPdfUrl`, `GET /jobs/:slug`, the cached analysis).
 
@@ -48,16 +49,15 @@ preview parity.
 - **Frontend (web/) only:**
   - New `web/src/lib/tailor/CvHtmlPreview.svelte` (Document → resume HTML + zoom).
   - New `web/src/lib/components/cv/CvSectionForm.svelte` (controlled section form, `bind:doc`),
-    extracted from `CvEditor.svelte`; `CvEditor.svelte` refactored to a thin container that
-    reuses it (behaviour on `/my/cvs` unchanged).
-  - `web/src/lib/tailor/ArtifactPanel.svelte` reworked into the right-hand panel: drop the CV/PDF
-    tab, add a `Templates` tab, keep Job description + Verdict.
+    extracted from `CvEditor.svelte`; `CvEditor.svelte` is then **removed** (its only consumer,
+    the panel's Edit tab, goes away; its load/autosave folds into the page).
+  - `web/src/lib/tailor/ArtifactPanel.svelte` reworked into the right-hand panel: drop the `cv`
+    and `edit` tabs, keep the existing `Templates` gallery + Job description + Verdict.
   - `web/src/routes/tailor/[slug]/+page.svelte` owns the shared `doc` state, three-column layout,
     two resizable splitters (reusing the tested `clampWidth`), and refetch-on-agent-turn.
 - **No Go / API / DB changes. No migration.**
-- **Tests:** pure logic (any new preview/template projections, existing `clampWidth` /
-  `splitRequirements`) → vitest; components → `svelte-check` + visual verify; `/my/cvs` editor
-  regression after the extraction.
-- **Risk:** extracting the section form from `CvEditor` (shared with `/my/cvs`) — mitigated by
-  keeping `CvEditor` behaviourally identical (same autosave, same props) and visual-verifying
-  `/my/cvs`.
+- **Tests:** pure logic (any new preview projections, existing `clampWidth` / `splitRequirements`)
+  → vitest; components → `svelte-check` + visual verify.
+- **Risk:** folding `CvEditor`'s load/autosave into the page — mitigated by carrying the exact same
+  debounce, snapshot-diff, and best-effort flush, and visual-verifying edit → autosave → the
+  preview and PDF reflect it.
