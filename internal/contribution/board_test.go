@@ -51,9 +51,13 @@ func TestRecognizeBoard(t *testing.T) {
 		{"workday vacancy", "https://generalmotors.wd5.myworkdayjobs.com/Careers_GM/job/Austin/Senior-Software-Engineer_JR-202614238", "workday", "generalmotors.wd5.myworkdayjobs.com/Careers_GM", "https://generalmotors.wd5.myworkdayjobs.com/Careers_GM", true},
 		{"workday board listing", "https://generalmotors.wd5.myworkdayjobs.com/Careers_GM", "workday", "generalmotors.wd5.myworkdayjobs.com/Careers_GM", "https://generalmotors.wd5.myworkdayjobs.com/Careers_GM", true},
 		{"workday other pod", "https://goodyear.wd1.myworkdayjobs.com/goodyearcareers/job/x", "workday", "goodyear.wd1.myworkdayjobs.com/goodyearcareers", "https://goodyear.wd1.myworkdayjobs.com/goodyearcareers", true},
+		// Workday's public URL may prefix the site with an xx-XX locale the CXS API omits — skip it
+		{"workday locale-prefixed site", "https://gm.wd5.myworkdayjobs.com/en-US/Careers_GM/job/x/Eng_JR-1", "workday", "gm.wd5.myworkdayjobs.com/Careers_GM", "https://gm.wd5.myworkdayjobs.com/Careers_GM", true},
 
 		// declined
 		{"workday bare host no site", "https://generalmotors.wd5.myworkdayjobs.com", "", "", "", false},
+		// a URL carrying only a locale has no derivable site — unrecognized, not a false "en-US" board
+		{"workday locale only no site", "https://salesforce.wd12.myworkdayjobs.com/en-US", "", "", "", false},
 		{"ashby bare host no board", "https://jobs.ashbyhq.com", "", "", "", false},
 		{"recruitee bare apex no tenant", "https://recruitee.com/", "", "", "", false},
 		{"personio bare apex no tenant", "https://jobs.personio.com", "", "", "", false},

@@ -120,10 +120,14 @@ func RecognizeBoard(rawURL string) (source, board, canonical string, ok bool) {
 
 	case modeHostPath:
 		// Workday: board = "<host>/<site>" where site is the first path segment (case-preserved,
-		// as the ingest stores it). Canonical strips to scheme://host/site.
-		site := firstPathSegment(u)
+		// as the ingest stores it). Workday's public URL may prefix the site with an xx-XX locale
+		// the CXS API omits (host/en-US/<site>), so skip a leading locale — a locale-prefixed URL
+		// and a bare one resolve to the same board. A URL carrying ONLY a locale (host/en-US, itself
+		// a 404 landing) has no derivable site and is left unrecognized rather than taken as a false
+		// "en-US" board. Canonical strips to scheme://host/site.
+		site := firstSegmentAfterLocale(u)
 		if site == "" {
-			return "", "", "", false // bare host, no site
+			return "", "", "", false // bare host or locale-only, no site
 		}
 		u.RawQuery, u.Fragment = "", ""
 		u.Path = "/" + site
@@ -133,7 +137,7 @@ func RecognizeBoard(rawURL string) (source, board, canonical string, ok bool) {
 		// Rippling: skip a leading xx-XX locale segment (ats.rippling.com/en-GB/<board>/…),
 		// which the board API omits, and collapse the canonical to the board root so a
 		// locale-prefixed vacancy, a bare vacancy, and the listing all map to one board.
-		board = boardAfterLocale(u)
+		board = firstSegmentAfterLocale(u)
 		if board == "" {
 			return "", "", "", false
 		}
@@ -191,9 +195,10 @@ func subdomainLabel(host, apex string) string {
 // lowercase (satomic, 360-fire-flood), so the uppercase country code never collides.
 var localeSegment = regexp.MustCompile(`^[a-z]{2}-[A-Z]{2}$`)
 
-// boardAfterLocale returns the first path segment that isn't a leading locale — the tenant board
-// in ats.rippling.com/<locale?>/<board>/… . "" when the path is empty or carries only a locale.
-func boardAfterLocale(u *url.URL) string {
+// firstSegmentAfterLocale returns the first path segment that isn't a leading xx-XX locale — the
+// tenant board in ats.rippling.com/<locale?>/<board>/… (Rippling) or the site in a Workday
+// host/<locale?>/<site> URL. "" when the path is empty or carries only a locale.
+func firstSegmentAfterLocale(u *url.URL) string {
 	p := strings.Trim(u.Path, "/")
 	if p == "" {
 		return ""
