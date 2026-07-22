@@ -1,0 +1,25 @@
+---
+title: Your CV is de-identified before the AI sees it
+date: 2026-07-22
+summary: The AI fit analysis no longer sends your name, email, phone or links to the model — they're stripped out on our own hardware first, and if they can't be, the CV isn't sent at all.
+type: changelog
+tags:
+  - privacy
+  - ai
+draft: false
+---
+
+When you run an [AI fit analysis](/jobs), your CV goes to a language model. Until now that
+included your name, email, phone and profile links — none of which the model needs to judge a
+match.
+
+Now we remove them first. A small model running **on our own server** detects the personal
+identifiers and replaces them with placeholders before your CV ever leaves our service; the
+result is un-masked again only for you. Employer names, cities and skills stay visible — that's
+the signal the analysis actually uses.
+
+It's **fail-closed**: if the de-identifier is unavailable, we don't send your CV to the model
+at all rather than risk leaking it.
+
+The full story — why names are the hard part, and the local model we chose — is in
+[The AI reads your CV without seeing your name](/blog/2026-07-22-ai-reads-your-cv-without-your-name).
