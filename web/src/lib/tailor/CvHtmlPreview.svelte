@@ -6,7 +6,7 @@
   // string composition lives in $lib/cv (unit-tested); this file is layout only. `zoom` scales the
   // fixed-width A4 page; the host owns the zoom control and the Download-PDF action.
   import type { Document } from '$lib/generated/contracts';
-  import { dateRange, experienceHeader, educationLine, languageLabel, certificationLine } from '$lib/cv';
+  import { experienceHeader, educationLine, languageLabel, certificationLine } from '$lib/cv';
 
   let { doc, zoom = 1 }: { doc: Document; zoom?: number } = $props();
 
@@ -40,6 +40,7 @@
             {#each contacts as c, i (i)}
               {#if i > 0}<span class="mx-1.5 text-neutral-400">|</span>{/if}
               {#if isLink(c)}
+                <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external URL from the user's CV, not an internal route -->
                 <a href={c} target="_blank" rel="noopener" class="text-[#2b6cb0] hover:underline">{c}</a>
               {:else}{c}{/if}
             {/each}
@@ -85,6 +86,7 @@
               <li>
                 <span class="font-bold">{p.name}</span>{#if bullets.length}: {bullets.join(' ')}{/if}
                 {#if (p.link ?? '').trim()}
+                  <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external URL from the user's CV, not an internal route -->
                   (<a href={p.link} target="_blank" rel="noopener" class="text-[#2b6cb0] hover:underline">{p.link}</a>)
                 {/if}
               </li>
