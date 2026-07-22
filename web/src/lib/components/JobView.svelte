@@ -209,17 +209,29 @@
 <article
   class="flex flex-col gap-4 lg:grid lg:grid-cols-[20rem_minmax(0,1fr)] lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-x-6 lg:gap-y-4"
 >
-  <div class="flex items-center gap-3 lg:col-start-2 lg:row-start-1">
-    <CompanyLogo name={job.company} size="size-8" />
-    <p class="text-sm text-muted-foreground">
-      {#if job.company_slug}
-        <a href={resolve('/companies/[slug]', { slug: job.company_slug })} class="hover:text-foreground hover:underline">
+  <div class="flex items-center justify-between gap-3 lg:col-start-2 lg:row-start-1">
+    <div class="flex items-center gap-3">
+      <CompanyLogo name={job.company} size="size-8" />
+      <p class="text-sm text-muted-foreground">
+        {#if job.company_slug}
+          <a href={resolve('/companies/[slug]', { slug: job.company_slug })} class="hover:text-foreground hover:underline">
+            {job.company || 'Unknown company'}
+          </a>
+        {:else}
           {job.company || 'Unknown company'}
-        </a>
-      {:else}
-        {job.company || 'Unknown company'}
-      {/if}
-    </p>
+        {/if}
+      </p>
+    </div>
+
+    <a
+      class="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+      href={resolve('/jobs/[slug]/discussion', { slug: job.public_slug })}
+      onclick={onDiscussionClick}
+    >
+      <MessageSquare class="size-4" aria-hidden="true" /> Discussion{threadCount
+        ? ` · ${threadCount}`
+        : ''}
+    </a>
   </div>
 
   <header class="flex flex-col gap-3 lg:col-start-2 lg:row-start-2">
