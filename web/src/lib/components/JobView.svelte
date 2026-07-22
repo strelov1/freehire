@@ -231,7 +231,7 @@
 
     <a
       class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-      href={`/jobs/${job.public_slug}/discussion`}
+      href={resolve('/jobs/[slug]/discussion', { slug: job.public_slug })}
     >
       <MessageSquare class="size-4" aria-hidden="true" /> Discussion{threadCount
         ? ` · ${threadCount}`

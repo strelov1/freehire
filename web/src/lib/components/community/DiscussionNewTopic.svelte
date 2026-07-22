@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { resolve } from '$app/paths';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
@@ -9,13 +10,17 @@
   let {
     subjectType,
     subjectSlug,
-    listPath,
   }: {
     subjectType: string;
     subjectSlug: string;
-    /** Route of the thread list this topic belongs to, e.g. "/companies/acme/discussion". */
-    listPath: string;
   } = $props();
+
+  // The thread list this topic belongs to, as a typed (compile-checked) route.
+  const listHref = $derived(
+    subjectType === 'company'
+      ? resolve('/companies/[slug]/discussion', { slug: subjectSlug })
+      : resolve('/jobs/[slug]/discussion', { slug: subjectSlug }),
+  );
 
   let title = $state('');
   let body = $state('');
@@ -37,7 +42,11 @@
         body: body.trim(),
       });
       // Land on the freshly created thread.
-      await goto(`${listPath}/${created.id}`);
+      await goto(
+        subjectType === 'company'
+          ? resolve('/companies/[slug]/discussion/[threadId]', { slug: subjectSlug, threadId: String(created.id) })
+          : resolve('/jobs/[slug]/discussion/[threadId]', { slug: subjectSlug, threadId: String(created.id) }),
+      );
     } catch (err) {
       formError = communityFormError(err);
       submitting = false;
@@ -45,7 +54,13 @@
   }
 </script>
 
-<a class="crumb" href={listPath}>← Back to discussion</a>
+<a
+  class="crumb"
+  href={subjectType === 'company'
+    ? resolve('/companies/[slug]/discussion', { slug: subjectSlug })
+    : resolve('/jobs/[slug]/discussion', { slug: subjectSlug })}>← Back to discussion</a
+>
+
 <h1 class="title">Start a topic</h1>
 <p class="sub">Anonymous — you post under a pseudonym, not your name.</p>
 
@@ -55,7 +70,7 @@
     <textarea bind:value={body} rows="6" placeholder="Say more…" class="topic-form__body"></textarea>
     {#if formError}<p class="topic-form__error">{formError}</p>{/if}
     <div class="topic-form__actions">
-      <Button variant="ghost" href={listPath}>Cancel</Button>
+      <Button variant="ghost" href={listHref}>Cancel</Button>
       <Button type="submit" disabled={!canSubmit}>{submitting ? 'Posting…' : 'Post topic'}</Button>
     </div>
   </form>

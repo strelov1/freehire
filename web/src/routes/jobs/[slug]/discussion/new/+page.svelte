@@ -5,5 +5,5 @@
 </script>
 
 <div class="mx-auto w-full max-w-3xl px-4 py-6">
-  <DiscussionNewTopic subjectType="job" subjectSlug={slug} listPath={`/jobs/${slug}/discussion`} />
+  <DiscussionNewTopic subjectType="job" subjectSlug={slug} />
 </div>

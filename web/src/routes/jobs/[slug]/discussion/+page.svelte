@@ -1,15 +1,14 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import DiscussionIndex from '$lib/components/community/DiscussionIndex.svelte';
   let { data } = $props();
-  const basePath = $derived(`/jobs/${data.slug}/discussion`);
 </script>
 
 <div class="mx-auto w-full max-w-3xl px-4 py-6">
-  <a class="crumb" href={`/jobs/${data.slug}`}>← Back to vacancy</a>
+  <a class="crumb" href={resolve('/jobs/[slug]', { slug: data.slug })}>← Back to vacancy</a>
   <DiscussionIndex
     subjectType="job"
     subjectSlug={data.slug}
-    {basePath}
     initialThreads={data.threads}
     initialCursor={data.nextCursor}
   />

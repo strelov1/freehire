@@ -1,7 +1,6 @@
 <script lang="ts">
   import DiscussionThread from '$lib/components/community/DiscussionThread.svelte';
   let { data } = $props();
-  const backPath = $derived(`/jobs/${data.slug}/discussion`);
 </script>
 
 <div class="mx-auto w-full max-w-3xl px-4 py-6">
@@ -9,6 +8,7 @@
     thread={data.thread}
     initialReplies={data.replies}
     initialCursor={data.nextCursor}
-    {backPath}
+    subjectType="job"
+    subjectSlug={data.slug}
   />
 </div>

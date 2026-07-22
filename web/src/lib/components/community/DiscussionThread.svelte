@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
@@ -12,12 +13,14 @@
     thread,
     initialReplies,
     initialCursor,
-    backPath,
+    subjectType,
+    subjectSlug,
   }: {
     thread: CommunityThread;
     initialReplies: CommunityReply[];
     initialCursor?: string;
-    backPath: string;
+    subjectType: string;
+    subjectSlug: string;
   } = $props();
 
   let replies = $state<CommunityReply[]>([...initialReplies]);
@@ -69,7 +72,12 @@
 </script>
 
 <article class="thread">
-  <a class="thread__back" href={backPath}>← Back to discussion</a>
+  <a
+    class="thread__back"
+    href={subjectType === 'company'
+      ? resolve('/companies/[slug]/discussion', { slug: subjectSlug })
+      : resolve('/jobs/[slug]/discussion', { slug: subjectSlug })}>← Back to discussion</a
+  >
 
   <header class="thread__head">
     <h1 class="thread__title">{thread.title}</h1>

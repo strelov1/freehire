@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { api } from '$lib/api';
   import type { CommunityThread } from '$lib/types';
   import { Button } from '$lib/ui';
@@ -7,17 +8,22 @@
   let {
     subjectType,
     subjectSlug,
-    basePath,
     initialThreads,
     initialCursor,
   }: {
     subjectType: string;
     subjectSlug: string;
-    /** Route prefix a thread links off, e.g. "/companies/acme/discussion". */
-    basePath: string;
     initialThreads: CommunityThread[];
     initialCursor?: string;
   } = $props();
+
+  // Typed route links built from the subject, so route validity and base-path
+  // resolution are checked at compile time (mirrors DiscussionThread/NewTopic).
+  const newHref = $derived(
+    subjectType === 'company'
+      ? resolve('/companies/[slug]/discussion/new', { slug: subjectSlug })
+      : resolve('/jobs/[slug]/discussion/new', { slug: subjectSlug }),
+  );
 
   let threads = $state<CommunityThread[]>([...initialThreads]);
   let cursor = $state<string | undefined>(initialCursor);
@@ -42,7 +48,7 @@
       <h2>Discussion</h2>
       <p class="discussion__sub">Anonymous — you post under a pseudonym, not your name.</p>
     </div>
-    <Button href={`${basePath}/new`}>Start a topic</Button>
+    <Button href={newHref}>Start a topic</Button>
   </header>
 
   {#if threads.length === 0}
@@ -51,7 +57,11 @@
     <ul class="thread-list">
       {#each threads as t (t.id)}
         <li class="thread-list__item">
-          <a class="thread-list__link" href={`${basePath}/${t.id}`}>
+          <a
+            class="thread-list__link"
+            href={subjectType === 'company'
+              ? resolve('/companies/[slug]/discussion/[threadId]', { slug: subjectSlug, threadId: String(t.id) })
+              : resolve('/jobs/[slug]/discussion/[threadId]', { slug: subjectSlug, threadId: String(t.id) })}>
             <span class="thread-list__title">{t.title}</span>
             <span class="thread-list__meta">
               {t.author} · {t.reply_count} {t.reply_count === 1 ? 'reply' : 'replies'} · {timeAgo(t.created_at)}

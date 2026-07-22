@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { MessageSquare } from '@lucide/svelte';
   import { api } from '$lib/api';
   import type { Company } from '$lib/types';
@@ -55,7 +56,7 @@
   <div class="mt-3">
     <a
       class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-      href={`/companies/${slug}/discussion`}
+      href={resolve('/companies/[slug]/discussion', { slug })}
     >
       <MessageSquare class="size-4" aria-hidden="true" /> Discussion{threadCount
         ? ` · ${threadCount}`
