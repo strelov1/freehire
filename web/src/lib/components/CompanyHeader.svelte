@@ -48,20 +48,19 @@
       {/if}
     </div>
     <!-- flex-1 above lets the name/tagline use the full width; the follow CTA stays
-         top-right and never shrinks (it collapses to an icon on mobile itself). -->
-    <div class="shrink-0">
+         top-right and never shrinks (it collapses to an icon on mobile itself).
+         The Discussion link sits right below it, right-aligned. -->
+    <div class="flex shrink-0 flex-col items-end gap-2">
       <CompanyFollowButton {slug} companyName={company.name} />
+      <a
+        class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+        href={resolve('/companies/[slug]/discussion', { slug })}
+      >
+        <MessageSquare class="size-4" aria-hidden="true" /> Discussion{threadCount
+          ? ` · ${threadCount}`
+          : ''}
+      </a>
     </div>
-  </div>
-  <div class="mt-3">
-    <a
-      class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-      href={resolve('/companies/[slug]/discussion', { slug })}
-    >
-      <MessageSquare class="size-4" aria-hidden="true" /> Discussion{threadCount
-        ? ` · ${threadCount}`
-        : ''}
-    </a>
   </div>
   {#if hasMeta}
     <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-3">
