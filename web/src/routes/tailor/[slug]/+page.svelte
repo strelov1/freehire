@@ -57,8 +57,9 @@
   let leftPanelEl = $state<HTMLElement>();
   let leftResizing = false;
 
-  // Centre preview zoom, clamped to 50–150% in 10% steps.
-  let zoom = $state(1);
+  // Centre preview zoom, clamped to 50–150% in 10% steps. Starts at 90% so the full A4 page
+  // fits the centre column on load.
+  let zoom = $state(0.9);
   const zoomPct = $derived(Math.round(zoom * 100));
   const clampZoom = (z: number) => Math.min(1.5, Math.max(0.5, Math.round(z * 10) / 10));
   const zoomOut = () => (zoom = clampZoom(zoom - 0.1));
@@ -327,7 +328,7 @@
           </a>
         </div>
         <div class="min-h-0 flex-1 overflow-auto p-6">
-          <CvHtmlPreview {doc} {zoom} />
+          <CvHtmlPreview {doc} {templateId} {zoom} />
         </div>
       </div>
 

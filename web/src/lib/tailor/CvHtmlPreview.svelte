@@ -1,14 +1,21 @@
 <script lang="ts">
-  // The live centre preview: renders a CV Document as an ATS-style HTML resume that mirrors the
-  // classic-ats Typst template (single column, serif, "Company | Location | Role (dates)" role
-  // headers, inline Education/Skills/Languages/Certifications). It is a pure function of `doc`, so
-  // it re-renders instantly as the editor mutates the shared document — no network, no PDF. The
-  // string composition lives in $lib/cv (unit-tested); this file is layout only. `zoom` scales the
-  // fixed-width A4 page; the host owns the zoom control and the Download-PDF action.
+  // The live centre preview: renders a CV Document as an ATS-style HTML resume whose look tracks
+  // the selected template (classic / centered / modern-sans / sidebar), mirroring the Typst
+  // templates' identity — font, header alignment, section-heading style, and single- vs
+  // two-column layout. It is a pure function of `doc` + `templateId`, so it re-renders instantly
+  // as the editor mutates the shared document — no network, no PDF. String composition lives in
+  // $lib/cv (unit-tested); this file is layout only. `zoom` scales the fixed-width A4 page.
   import type { Document } from '$lib/generated/contracts';
   import { experienceHeader, educationLine, languageLabel, certificationLine } from '$lib/cv';
 
-  let { doc, zoom = 1 }: { doc: Document; zoom?: number } = $props();
+  let { doc, templateId = 'classic-ats', zoom = 1 }: { doc: Document; templateId?: string; zoom?: number } = $props();
+
+  // Per-template presentation flags (default to classic for any unknown id).
+  const isCentered = $derived(templateId === 'centered');
+  const isSans = $derived(templateId === 'modern-sans');
+  const isSidebar = $derived(templateId === 'sidebar');
+  const ruled = $derived(isCentered || isSans || isSidebar); // a rule under each section heading
+  const contactSep = $derived(isSans ? '·' : '|');
 
   const header = $derived(doc.header ?? {});
   const contacts = $derived(
@@ -25,94 +32,150 @@
   const isLink = (c: string) => /^https?:\/\//i.test(c);
 </script>
 
-<!-- A4 page (794px ≈ 210mm @96dpi), scaled by zoom from the top so the ruler-like preview grows
-     downward. The serif + black-on-white styling reads like the printed PDF. -->
+{#snippet sectionHeading(title: string)}
+  <h2 class={['mb-1 mt-3 text-[12px] font-bold uppercase tracking-wide', isCentered ? 'text-center' : '']}>{title}</h2>
+  {#if ruled}<hr class="mb-2 -mt-0.5 border-neutral-300" />{/if}
+{/snippet}
+
+{#snippet contactLine()}
+  <p class={['text-[12px] text-neutral-700', isCentered ? 'text-center' : '', isSans ? 'text-neutral-500' : '']}>
+    {#each contacts as c, i (i)}
+      {#if i > 0}<span class="mx-1.5 text-neutral-400">{contactSep}</span>{/if}
+      {#if isLink(c)}
+        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external URL from the user's CV, not an internal route -->
+        <a href={c} target="_blank" rel="noopener" class="text-[#2b6cb0] hover:underline">{c}</a>
+      {:else}{c}{/if}
+    {/each}
+  </p>
+{/snippet}
+
+{#snippet experienceBlock()}
+  {#if experience.length}
+    <section class="mb-3">
+      {@render sectionHeading('Experience')}
+      {#each experience as e, i (i)}
+        {@const bullets = (e.bullets ?? []).filter((b) => b.trim())}
+        {@const stack = (e.stack ?? []).filter((s) => s.trim())}
+        <div class="mb-2.5">
+          <p class="font-bold">{experienceHeader(e)}</p>
+          {#if (e.summary ?? '').trim()}<p class="text-neutral-800">{e.summary}</p>{/if}
+          {#if bullets.length}
+            <ul class="ml-4 list-disc space-y-0.5">
+              {#each bullets as b, bi (bi)}<li>{b}</li>{/each}
+            </ul>
+          {/if}
+          {#if stack.length}
+            <p class="mt-0.5"><span class="font-bold">Stack:</span> {stack.join(', ')}</p>
+          {/if}
+        </div>
+      {/each}
+    </section>
+  {/if}
+{/snippet}
+
+{#snippet projectsBlock()}
+  {#if projects.length}
+    <section class="mb-3">
+      {@render sectionHeading('Projects')}
+      <ul class="ml-4 list-disc space-y-0.5">
+        {#each projects as p, i (i)}
+          {@const bullets = (p.bullets ?? []).filter((b) => b.trim())}
+          <li>
+            <span class="font-bold">{p.name}</span>{#if bullets.length}: {bullets.join(' ')}{/if}
+            {#if (p.link ?? '').trim()}
+              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external URL from the user's CV, not an internal route -->
+              (<a href={p.link} target="_blank" rel="noopener" class="text-[#2b6cb0] hover:underline">{p.link}</a>)
+            {/if}
+          </li>
+        {/each}
+      </ul>
+    </section>
+  {/if}
+{/snippet}
+
+{#snippet educationBlock()}
+  {#if education.length}
+    <section class="mb-3">
+      {@render sectionHeading('Education')}
+      {#each education as line, i (i)}<p class="mb-0.5">{line}</p>{/each}
+    </section>
+  {/if}
+{/snippet}
+
+{#snippet listBlock(title: string, items: string[], sep: string)}
+  {#if items.length}
+    <section class="mb-3">
+      {@render sectionHeading(title)}
+      <p>{items.join(sep)}</p>
+    </section>
+  {/if}
+{/snippet}
+
+<!-- A4 page (794px ≈ 210mm @96dpi), scaled by zoom from the top. The serif/sans + black-on-white
+     styling reads like the printed PDF; the look tracks the selected template. -->
 <div class="flex justify-center">
   <div style="transform: scale({zoom}); transform-origin: top center;">
     <article
-      class="w-[794px] bg-white px-14 py-12 font-serif text-[13px] leading-snug text-neutral-900 shadow-sm"
+      class={[
+        'w-[794px] bg-white px-14 py-12 text-[13px] leading-snug text-neutral-900 shadow-sm',
+        isSans ? 'font-sans' : 'font-serif',
+      ]}
     >
       <!-- Header -->
-      <header class="mb-3 text-center">
-        <h1 class="text-2xl font-bold tracking-tight">{header.full_name || 'Your Name'}</h1>
-        {#if contacts.length}
-          <p class="mt-1 text-[12px] text-neutral-700">
-            {#each contacts as c, i (i)}
-              {#if i > 0}<span class="mx-1.5 text-neutral-400">|</span>{/if}
-              {#if isLink(c)}
-                <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external URL from the user's CV, not an internal route -->
-                <a href={c} target="_blank" rel="noopener" class="text-[#2b6cb0] hover:underline">{c}</a>
-              {:else}{c}{/if}
-            {/each}
-          </p>
+      <header class={['mb-3', isCentered ? 'text-center' : '']}>
+        <h1 class={['text-2xl font-bold', isSans ? 'uppercase tracking-wider' : 'tracking-tight']}>
+          {header.full_name || 'Your Name'}
+        </h1>
+        {#if !isSidebar && contacts.length}
+          <div class="mt-1">{@render contactLine()}</div>
         {/if}
         {#if (doc.summary ?? '').trim()}
-          <p class="mx-auto mt-2 max-w-[62ch] text-[12.5px] text-neutral-800">{doc.summary}</p>
+          <p
+            class={[
+              'mt-2 text-[12.5px] text-neutral-800',
+              isCentered ? 'mx-auto max-w-[62ch] italic' : '',
+              isSidebar ? 'italic' : '',
+            ]}
+          >
+            {doc.summary}
+          </p>
         {/if}
       </header>
 
-      <hr class="my-2 border-neutral-300" />
+      <hr class={['my-2', isSans || isSidebar ? 'border-neutral-500' : 'border-neutral-300']} />
 
-      <!-- Experience -->
-      {#if experience.length}
-        <section class="mb-3">
-          <h2 class="mb-1 text-[12px] font-bold uppercase tracking-wide">Experience</h2>
-          {#each experience as e, i (i)}
-            {@const bullets = (e.bullets ?? []).filter((b) => b.trim())}
-            {@const stack = (e.stack ?? []).filter((s) => s.trim())}
-            <div class="mb-2.5">
-              <p class="font-bold">{experienceHeader(e)}</p>
-              {#if (e.summary ?? '').trim()}<p class="text-neutral-800">{e.summary}</p>{/if}
-              {#if bullets.length}
-                <ul class="ml-4 list-disc space-y-0.5">
-                  {#each bullets as b, bi (bi)}<li>{b}</li>{/each}
-                </ul>
-              {/if}
-              {#if stack.length}
-                <p class="mt-0.5"><span class="font-bold">Stack:</span> {stack.join(', ')}</p>
-              {/if}
-            </div>
-          {/each}
-        </section>
-      {/if}
-
-      <!-- Projects -->
-      {#if projects.length}
-        <section class="mb-3">
-          <h2 class="mb-1 text-[12px] font-bold uppercase tracking-wide">Projects</h2>
-          <ul class="ml-4 list-disc space-y-0.5">
-            {#each projects as p, i (i)}
-              {@const bullets = (p.bullets ?? []).filter((b) => b.trim())}
-              <li>
-                <span class="font-bold">{p.name}</span>{#if bullets.length}: {bullets.join(' ')}{/if}
-                {#if (p.link ?? '').trim()}
-                  <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external URL from the user's CV, not an internal route -->
-                  (<a href={p.link} target="_blank" rel="noopener" class="text-[#2b6cb0] hover:underline">{p.link}</a>)
-                {/if}
-              </li>
-            {/each}
-          </ul>
-        </section>
-      {/if}
-
-      <!-- Education (inline) -->
-      {#if education.length}
-        <p class="mb-1.5"><span class="text-[12px] font-bold uppercase tracking-wide">Education</span>&nbsp;&nbsp;{education.join('; ')}</p>
-      {/if}
-
-      <!-- Skills (inline) -->
-      {#if skills.length}
-        <p class="mb-1.5"><span class="font-bold">SKILLS:</span> {skills.join(', ')}</p>
-      {/if}
-
-      <!-- Languages (inline) -->
-      {#if languages.length}
-        <p class="mb-1.5"><span class="font-bold">LANGUAGES:</span> {languages.join(', ')}</p>
-      {/if}
-
-      <!-- Certifications (inline) -->
-      {#if certifications.length}
-        <p class="mb-1.5"><span class="font-bold">CERTIFICATIONS:</span> {certifications.join('; ')}</p>
+      {#if isSidebar}
+        <!-- Two-column body: narrow left (contact/links/skills/languages), wide right (experience/education/projects). -->
+        <div class="grid grid-cols-[35%_1fr] gap-6">
+          <div>
+            {#if contacts.length}
+              <section class="mb-3">
+                {@render sectionHeading('Contact')}
+                {#each contacts as c, i (i)}
+                  {#if isLink(c)}
+                    <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external URL from the user's CV, not an internal route -->
+                    <p class="mb-0.5 break-words"><a href={c} target="_blank" rel="noopener" class="text-[#2b6cb0] hover:underline">{c}</a></p>
+                  {:else}<p class="mb-0.5 break-words">{c}</p>{/if}
+                {/each}
+              </section>
+            {/if}
+            {@render listBlock('Skills', skills, ', ')}
+            {@render listBlock('Languages', languages, ', ')}
+            {@render listBlock('Certifications', certifications, '; ')}
+          </div>
+          <div>
+            {@render experienceBlock()}
+            {@render educationBlock()}
+            {@render projectsBlock()}
+          </div>
+        </div>
+      {:else}
+        {@render experienceBlock()}
+        {@render projectsBlock()}
+        {@render educationBlock()}
+        {@render listBlock('Skills', skills, ', ')}
+        {@render listBlock('Languages', languages, ', ')}
+        {@render listBlock('Certifications', certifications, '; ')}
       {/if}
     </article>
   </div>
