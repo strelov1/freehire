@@ -28,4 +28,4 @@
 
 ## 6. Verification
 
-- [ ] 6.1 `go build ./... && go vet ./... && go test ./...` green; end-to-end masking check against the live `/detect` endpoint on the two spike CVs (no PII in the outbound prompt, output restored)
+- [x] 6.1 `go build ./... && go vet ./... && go test ./...` green; end-to-end masking check against the live `/detect` endpoint on the two spike CVs (no PII in the outbound prompt, output restored)
