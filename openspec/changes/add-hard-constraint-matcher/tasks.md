@@ -12,11 +12,12 @@
 - [x] 2.4 Add the work-authorization and location-and-work-mode categories (visa_sponsorship + countries vs résumé location / location_preferences; work_mode conflict). Soft severities. Table-test conflict vs geo-uncertainty→skip.
 - [x] 2.5 Implement the severity/score-cap tiers and the `min(ScoreCap)` overall-cap helper. Table-test hardest-blocker-wins and no-unmet→no-cap.
 
-## 3. Schema add-fields (structured-first)
+## 3. Deterministic job facts + résumé field
 
-- [ ] 3.1 Enrichment: add `required_certifications []string` (unmarshal + Sanitize/Validate against the credential vocabulary). Add the field to the enrichment prompt and instruct it to emit canonical credential slugs. Test sanitize drops out-of-vocab slugs.
-- [ ] 3.2 Enrichment prompt: instruct the extractor to leave `education_level` unset on "degree or equivalent experience" wording. Add/adjust a prompt test asserting the instruction is present.
-- [ ] 3.3 Résumé: add `Certifications []string` to `resumeextract.Structured` (wire + Sanitize bounds) and to the extraction prompt. Test sanitize bounds; confirm stale/absent degrades.
+- [ ] 3.1 Add `credentials.Scan(text) []string` — the canonical slugs whose aliases appear whole-word in text, deduped. Table-test recognized/unrecognized/dedup.
+- [ ] 3.2 Add `internal/jobfacts.RequiredCertifications(description)` (thin wrapper over `credentials.Scan`) and `internal/jobfacts.DegreeOptional(description)` (regex over "or equivalent experience" / "degree or equivalent" phrasings). Table-test both; a hard requirement → DegreeOptional false.
+- [ ] 3.3 Add `DegreeOptional bool` to `hardconstraint.JobRequirements`; `appendEducation` skips the blocker when set. Table-test degree-optional → no education blocker.
+- [ ] 3.4 Résumé: add `Certifications []string` to `resumeextract.Structured` (wire + Sanitize bounds) and to the extraction prompt. Test sanitize bounds; confirm stale/absent degrades.
 
 ## 4. Integration surfaces
 
@@ -33,6 +34,6 @@
 
 ## 6. Rollout & verification
 
-- [ ] 6.1 Verify no DB migration is needed (both fields serialize into existing jsonb) and that `required_certifications` is not added to any Meilisearch facet (no reindex). Confirm `go build ./... && go vet ./...` and full `go test ./...` are green.
-- [ ] 6.2 Document the post-deploy catalogue re-enrich in waves via `cmd/enrich` (empty field = certification category skipped meanwhile) in the change notes; no backfill blocks the deploy.
+- [ ] 6.1 Verify no DB migration, no enrichment schema change, and no Meilisearch facet were added (no reindex; job side is compute-at-read). Confirm `go build ./... && go vet ./...` and full `go test ./...` are green.
+- [ ] 6.2 Confirm no catalogue backfill is required (job side is correct on read the instant the code ships); the résumé `certifications` field self-heals on the next upload. Note this in the change summary.
 - [ ] 6.3 `verification-before-completion`: drive the fit analysis end-to-end for a caller who misses a hard constraint and confirm the served score is capped and the blocker is surfaced.
