@@ -59,6 +59,15 @@ func main() {
 		AppName:      "hire",
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
+		// Buffer for reading the request head (request line + all headers). Fiber's
+		// 4KB default is too small for our largest legitimate GET: a filter feed
+		// carrying dozens of facets (a "use my whole profile" search is 70+ skills)
+		// puts a ~1.3KB query string in BOTH the request line AND the same-page
+		// Referer, and on top of that ride the auth cookie and Chrome's sec-ch-ua
+		// client hints — together over 4KB, so fasthttp rejected the request with a
+		// 431 before it ever reached a handler (the feed then showed "Failed to load
+		// jobs"). 16KB comfortably fits even an unusually broad filter set.
+		ReadBufferSize: 16 * 1024,
 		// Cap request bodies at 8MB: résumé PDF uploads are the largest write (design-heavy
 		// CVs run past 1MB), and Fiber's BodyLimit is global — there is no per-route limit —
 		// so this ceiling applies to every endpoint. Keep it as tight as the résumé path
