@@ -7,6 +7,7 @@
 1inch
 1password
 3commas
+4a-games
 abbyy
 acronis
 action1
@@ -46,6 +47,7 @@ betterme
 bigid
 birch
 bitfury
+bitrix24
 bolt
 brainrocket
 bumble
@@ -78,9 +80,11 @@ data-driven-lab
 dataart
 datafold
 dbeaver
+depositphotos
 dwelly
 easybrain
 ecommpay
+ecwid
 eleks
 emcd
 emerging-travel-group
@@ -99,6 +103,7 @@ exinity
 exness
 faceapp
 farel
+fibery
 findev
 finom
 fjor-health
@@ -127,6 +132,7 @@ gradient
 grammarly
 grid-dynamics
 group-ib
+gsc-game-world
 haut-ai
 headway-inc
 helio-games
@@ -183,6 +189,7 @@ moon-active
 moonpay
 movavi
 mundfish
+murka
 muse-group
 n-ix
 nebius
@@ -273,6 +280,7 @@ spotware
 spryker
 stackadapt
 stape
+starwind-software
 sumsub
 superannotate
 surfshark
@@ -323,5 +331,6 @@ xsolla
 xtx-markets
 yandex
 zeptolab
+zerion
 zero
 zimad
