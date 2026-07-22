@@ -66,6 +66,13 @@ type Settings struct {
 	LLMAPIKey  string
 	LLMModel   string
 
+	// PIIFilterURL is the co-located openai/privacy-filter span-detection endpoint used to
+	// mask PII out of CV text before it reaches the LLM (internal/pii). Optional here, but
+	// the fit-analysis and structured-résumé paths are fail-closed: an empty value disables
+	// them entirely (no CV is sent to the LLM) rather than leaking PII — enforced at the
+	// call site, not here.
+	PIIFilterURL string
+
 	LangfuseBaseURL   string
 	LangfusePublicKey string
 	LangfuseSecretKey string
@@ -143,6 +150,8 @@ func Load() Settings {
 		LLMBaseURL: os.Getenv("LLM_BASE_URL"),
 		LLMAPIKey:  os.Getenv("LLM_API_KEY"),
 		LLMModel:   os.Getenv("LLM_MODEL"),
+
+		PIIFilterURL: os.Getenv("PII_FILTER_URL"),
 
 		LangfuseBaseURL:   os.Getenv("LANGFUSE_BASE_URL"),
 		LangfusePublicKey: os.Getenv("LANGFUSE_PUBLIC_KEY"),

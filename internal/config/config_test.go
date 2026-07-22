@@ -16,6 +16,22 @@ func TestLoad_LLMFromEnv(t *testing.T) {
 	}
 }
 
+func TestLoad_PIIFilterURLFromEnv(t *testing.T) {
+	t.Setenv("PII_FILTER_URL", "http://127.0.0.1:8099/detect")
+
+	if s := Load(); s.PIIFilterURL != "http://127.0.0.1:8099/detect" {
+		t.Errorf("PIIFilterURL = %q, want the env value", s.PIIFilterURL)
+	}
+}
+
+func TestLoad_PIIFilterURLEmptyWhenUnset(t *testing.T) {
+	t.Setenv("PII_FILTER_URL", "")
+
+	if s := Load(); s.PIIFilterURL != "" {
+		t.Errorf("PIIFilterURL should be empty when unset, got %q", s.PIIFilterURL)
+	}
+}
+
 func TestLoad_LLMEmptyWhenUnset(t *testing.T) {
 	t.Setenv("LLM_BASE_URL", "")
 	t.Setenv("LLM_API_KEY", "")

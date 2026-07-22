@@ -7,7 +7,7 @@
 
 ## 2. Config
 
-- [ ] 2.1 Add `PII_FILTER_URL` to `internal/config` (server + resume/embed worker) and construct the `pii.Detector`; test that empty URL yields an unconfigured (fail-closed) detector
+- [x] 2.1 Add `PII_FILTER_URL` to `internal/config` (server + resume/embed worker) and construct the `pii.Detector`; test that empty URL yields an unconfigured (fail-closed) detector
 
 ## 3. `matchanalysis` integration
 
