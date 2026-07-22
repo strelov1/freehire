@@ -154,6 +154,16 @@
     showReport = true;
   }
 
+  // The discussion is members-only: a signed-out click is held back (the link
+  // does not navigate) and the sign-in dialog opens instead. The href stays put
+  // so the route is still SSR-linkable for signed-in visitors.
+  function onDiscussionClick(e: MouseEvent) {
+    if (!isAuthenticated()) {
+      e.preventDefault();
+      openAuthDialog('login');
+    }
+  }
+
   // The toggle flips on the server's answer, not optimistically: both endpoints
   // return the full interaction, so the button can never drift from the truth.
   async function toggleSave() {
@@ -230,8 +240,9 @@
     <RealityBadge reality={job.reality} postedAt={job.posted_at} detailed />
 
     <a
-      class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+      class="inline-flex items-center gap-1.5 self-end text-sm font-medium text-primary hover:underline"
       href={resolve('/jobs/[slug]/discussion', { slug: job.public_slug })}
+      onclick={onDiscussionClick}
     >
       <MessageSquare class="size-4" aria-hidden="true" /> Discussion{threadCount
         ? ` · ${threadCount}`
