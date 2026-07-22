@@ -55,6 +55,32 @@
   let leftPanelEl = $state<HTMLElement>();
   let leftResizing = false;
 
+  // The right context panel's tab, lifted here so the mobile tab bar can drive it (on desktop the
+  // panel's own tab bar sets it via the same binding).
+  let artifactTab = $state<'templates' | 'jd' | 'verdict'>('templates');
+
+  // Mobile-only navigation: below lg the three columns collapse to one, so a single flat tab bar
+  // picks which view fills the screen. At lg it's hidden and every column shows at once as before.
+  // mobileView is the sole source of truth for per-region visibility on mobile; picking a tab also
+  // syncs the matching column's own selector (mobile → column) so the wide layout shows the same
+  // content once revealed. The reverse (a desktop tab change updating mobileView) is not wired —
+  // switching a column tab then narrowing across lg resets the mobile view to that tab's default.
+  type MobileView = 'chat' | 'editor' | 'preview' | 'templates' | 'jd' | 'verdict';
+  const mobileTabs: [MobileView, string][] = [
+    ['chat', 'Chat'],
+    ['editor', 'Editor'],
+    ['preview', 'Preview'],
+    ['templates', 'Templates'],
+    ['jd', 'Job'],
+    ['verdict', 'Verdict'],
+  ];
+  let mobileView = $state<MobileView>('chat');
+  function pickMobile(v: MobileView) {
+    mobileView = v;
+    if (v === 'chat' || v === 'editor') leftTab = v;
+    else if (v !== 'preview') artifactTab = v;
+  }
+
   // Centre preview zoom, clamped to 50–150% in 10% steps. Starts at 90% so the full A4 page
   // fits the centre column on load.
   let zoom = $state(0.9);
@@ -233,16 +259,35 @@
       <a href={resolve('/match/[slug]', { slug })} class="text-sm text-brand hover:underline">Back to the fit analysis</a>
     </div>
   {:else}
-    <div class="flex min-w-0 flex-1">
-      <!-- LEFT: Editor / Chat tabs (chat stays mounted across tab switches). Full-width below lg
-           (the centre preview + right panel are lg-only), a splitter-sized column at lg+. The
-           width rides a CSS var so the inline style never overrides the mobile w-full. -->
+    <div class="flex min-w-0 flex-1 flex-col lg:flex-row">
+      <!-- MOBILE TAB BAR: below lg the three columns collapse to one full-screen view; this flat,
+           horizontally-scrollable bar switches between all of them. Hidden at lg (columns stack). -->
+      <nav class="flex items-center gap-1 overflow-x-auto border-b border-border bg-background px-2 py-1.5 text-sm lg:hidden">
+        {#each mobileTabs as [id, label] (id)}
+          <button
+            type="button"
+            onclick={() => pickMobile(id)}
+            aria-current={mobileView === id ? 'page' : undefined}
+            class={['shrink-0 rounded px-2 py-1 transition-colors', mobileView === id ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:text-foreground']}
+          >
+            {label}
+          </button>
+        {/each}
+      </nav>
+
+      <!-- LEFT: Editor / Chat tabs (chat stays mounted across tab switches). On mobile it shows only
+           when its tab is picked; at lg it's a splitter-sized column always shown. The width rides a
+           CSS var so the inline style never overrides the mobile w-full. -->
       <section
         bind:this={leftPanelEl}
-        class="flex w-full shrink-0 flex-col border-r border-border bg-background lg:w-[var(--lw)]"
+        class={[
+          'w-full min-h-0 flex-1 flex-col border-r border-border bg-background lg:w-[var(--lw)] lg:flex-none lg:flex',
+          mobileView === 'chat' || mobileView === 'editor' ? 'flex' : 'hidden',
+        ]}
         style="--lw: {leftWidth}px"
       >
-        <div class="flex items-center justify-between gap-2 border-b border-border px-2 py-1.5 text-sm">
+        <!-- Own tab bar (and save status) is desktop-only; the mobile bar drives the tab there. -->
+        <div class="hidden items-center justify-between gap-2 border-b border-border px-2 py-1.5 text-sm lg:flex">
           <div class="flex items-center gap-1">
             <button
               type="button"
@@ -297,9 +342,11 @@
         onpointerup={stopLeftResize}
       ></div>
 
-      <!-- CENTRE: live HTML preview + zoom + Download PDF. lg-only — below lg the left panel
-           (chat + editor) takes the whole surface. -->
-      <div class="hidden min-w-0 flex-1 flex-col bg-muted/30 lg:flex">
+      <!-- CENTRE: live HTML preview + zoom + Download PDF. On mobile it shows only when the Preview
+           tab is picked; at lg it's always shown as the middle column. -->
+      <div
+        class={['min-w-0 min-h-0 flex-1 flex-col bg-muted/30 lg:flex', mobileView === 'preview' ? 'flex' : 'hidden']}
+      >
         <div class="flex items-center justify-between gap-2 border-b border-border bg-background px-3 py-1.5 text-sm">
           <div class="flex items-center gap-1">
             <button type="button" onclick={zoomOut} aria-label="Zoom out" class="rounded p-1 text-muted-foreground transition-colors hover:text-foreground">
@@ -326,8 +373,16 @@
         </div>
       </div>
 
-      <!-- RIGHT: Templates / Job description / Verdict (renders its own splitter). -->
-      <ArtifactPanel {cvId} job={job!} {analysis} {onTemplateSelected} />
+      <!-- RIGHT: Templates / Job description / Verdict (renders its own splitter). Shown on mobile
+           only when one of its tabs is picked; always shown at lg. -->
+      <ArtifactPanel
+        {cvId}
+        job={job!}
+        {analysis}
+        {onTemplateSelected}
+        bind:tab={artifactTab}
+        mobileVisible={mobileView === 'templates' || mobileView === 'jd' || mobileView === 'verdict'}
+      />
     </div>
   {/if}
 </div>

@@ -12,25 +12,32 @@
   import type { Analysis } from '$lib/generated/contracts';
   import type { Job, MatchAnalysisResponse } from '$lib/types';
 
+  type Tab = 'templates' | 'jd' | 'verdict';
+
   let {
     cvId,
     job,
     analysis,
     onTemplateSelected,
+    // Which tab is active — bindable so the page's mobile tab bar can drive it (on desktop the
+    // panel's own tab bar sets it). mobileVisible is the page's per-breakpoint show/hide on mobile;
+    // at lg the aside is always shown regardless (lg:flex overrides the mobile hidden).
+    tab = $bindable('templates'),
+    mobileVisible = false,
   }: {
     cvId: number;
     job: Job;
     analysis: Analysis | null;
     onTemplateSelected: (id: string) => void;
+    tab?: Tab;
+    mobileVisible?: boolean;
   } = $props();
 
-  type Tab = 'templates' | 'jd' | 'verdict';
   const tabs: [Tab, string][] = [
     ['templates', 'Templates'],
     ['jd', 'Job description'],
     ['verdict', 'Verdict'],
   ];
-  let tab = $state<Tab>('templates');
   let width = $state(340);
   let resizing = false;
 
@@ -63,10 +70,14 @@
 ></div>
 
 <aside
-  class="hidden shrink-0 flex-col border-l border-border bg-background lg:flex"
-  style="width: {width}px"
+  class={[
+    'w-full min-h-0 flex-1 flex-col border-l border-border bg-background lg:w-[var(--w)] lg:flex-none lg:flex',
+    mobileVisible ? 'flex' : 'hidden',
+  ]}
+  style="--w: {width}px"
 >
-  <div class="flex items-center gap-1 border-b border-border px-2 py-1.5 text-sm">
+  <!-- Own tab bar is desktop-only; on mobile the page's flat tab bar drives the tab. -->
+  <div class="hidden items-center gap-1 border-b border-border px-2 py-1.5 text-sm lg:flex">
     {#each tabs as [id, label] (id)}
       <button
         type="button"
