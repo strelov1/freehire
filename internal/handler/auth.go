@@ -91,7 +91,7 @@ func (a *API) Login(c *fiber.Ctx) error {
 // Logout clears the auth cookie. It is public and idempotent: clearing an
 // absent or already-expired cookie is a no-op.
 func (a *API) Logout(c *fiber.Ctx) error {
-	auth.ClearTokenCookie(c, a.cookieSecure, a.cookieDomain)
+	auth.ClearTokenCookie(c, a.cookieSecure, auth.CookieDomainForHost(c.Hostname(), a.cookieDomains))
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
@@ -101,7 +101,7 @@ func (a *API) setSession(c *fiber.Ctx, userID int64) error {
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to start session")
 	}
-	auth.SetTokenCookie(c, token, a.issuer.TTL(), a.cookieSecure, a.cookieDomain)
+	auth.SetTokenCookie(c, token, a.issuer.TTL(), a.cookieSecure, auth.CookieDomainForHost(c.Hostname(), a.cookieDomains))
 	return nil
 }
 

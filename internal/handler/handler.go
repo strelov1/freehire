@@ -64,18 +64,29 @@ const (
 	resumeExtractLLMTimeout = 120 * time.Second
 )
 
+// oauthRegistry resolves OAuth providers by name, building each with a callback
+// rooted at the request origin so the flow can complete on any served domain.
+// *oauth.Registry implements it; tests supply a fake.
+type oauthRegistry interface {
+	Names() []string
+	Provider(name, origin string) (oauth.Provider, bool)
+}
+
 // API holds dependencies shared across HTTP handlers.
 type API struct {
 	pool         *pgxpool.Pool
 	queries      *db.Queries
 	issuer       *auth.Issuer
 	cookieSecure bool
-	// cookieDomain scopes the session cookie so freehire.dev and apply.freehire.dev
-	// share it (empty = host-only, for dev).
-	cookieDomain string
-	// oauth maps enabled OAuth provider names to their implementations; empty
-	// when no provider is configured (the routes then 404 / list empty).
-	oauth map[string]oauth.Provider
+	// cookieDomains are the registrable domains we serve (bare, e.g. "freehire.me").
+	// Per request the session cookie is scoped to whichever one the request host
+	// falls under (empty list = host-only, for dev); the same set gates
+	// requestOrigin. See auth.CookieDomainForHost.
+	cookieDomains []string
+	// oauth resolves enabled OAuth providers by name, building each with a redirect
+	// URL rooted at the request origin. Never nil (an empty registry 404s / lists
+	// empty). *oauth.Registry in production; a fake in tests.
+	oauth oauthRegistry
 	// oauthCodes hands out the single-use codes that carry a mobile OAuth
 	// sign-in from the browser callback to the app's /exchange call.
 	oauthCodes *oauth.CodeStore
@@ -221,8 +232,8 @@ type Config struct {
 	JWTSecret      string
 	JWTTTL         time.Duration
 	CookieSecure   bool
-	CookieDomain   string
-	OAuthProviders map[string]oauth.Provider
+	CookieDomains  []string
+	OAuthRegistry  *oauth.Registry
 	Search         *search.Client
 	// Blob backs résumé storage (internal/blobstore). Nil disables storage: résumé
 	// upload only extracts skills in-request (no regression).
@@ -269,8 +280,8 @@ func Register(app *fiber.App, cfg Config) {
 		queries:        queries,
 		issuer:         auth.NewIssuer(cfg.JWTSecret, cfg.JWTTTL),
 		cookieSecure:   cfg.CookieSecure,
-		cookieDomain:   cfg.CookieDomain,
-		oauth:          cfg.OAuthProviders,
+		cookieDomains:  cfg.CookieDomains,
+		oauth:          cfg.OAuthRegistry,
 		oauthCodes:     oauth.NewCodeStore(60 * time.Second),
 		frontendOrigin: cfg.FrontendOrigin,
 		gmailConnector: cfg.GmailConnector,
@@ -360,7 +371,15 @@ func Register(app *fiber.App, cfg Config) {
 	communityRepo := community.NewQueriesRepository(queries)
 	a.community = community.New(communityRepo, communityRepo, community.Config{})
 
-	app.Use(cors.New(cors.Config{AllowOrigins: cfg.FrontendOrigin}))
+	// Allow the canonical frontend origin plus every served domain's https apex,
+	// so a cross-origin (non-credentialed) read works from either domain during a
+	// migration. Same-origin app traffic never triggers CORS; this only covers the
+	// dev Vite origin and genuine cross-origin callers.
+	allowOrigins := cfg.FrontendOrigin
+	for _, d := range cfg.CookieDomains {
+		allowOrigins += ",https://" + d
+	}
+	app.Use(cors.New(cors.Config{AllowOrigins: allowOrigins}))
 
 	app.Get("/health", a.Health)
 

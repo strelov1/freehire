@@ -27,10 +27,15 @@ type Settings struct {
 	// any HTTPS deployment.
 	CookieSecure bool
 
-	// CookieDomain scopes the session cookie via its Domain attribute. Empty in
-	// dev (host-only). In prod set COOKIE_DOMAIN=.freehire.dev so a session minted
-	// on freehire.dev is also sent to apply.freehire.dev (unified SSO).
-	CookieDomain string
+	// CookieDomains are the registrable domains the session cookie is scoped to,
+	// one per served domain (e.g. "freehire.dev", "freehire.me"). Read from
+	// COOKIE_DOMAIN as a comma-separated list; a leading dot is accepted and
+	// stripped ("​.freehire.dev,.freehire.me"). Empty in dev (host-only cookie).
+	// Per request the cookie is scoped to whichever entry the request host falls
+	// under, so one deployment can serve — and keep SSO on — more than one domain
+	// during a migration. This same set gates the OAuth redirect origin (see
+	// handler.requestOrigin), since it is exactly the set of domains we serve.
+	CookieDomains []string
 
 	// OAuth holds per-provider client credentials keyed by provider name
 	// (google, github, linkedin). OAuth sign-in is optional: a provider with
@@ -133,7 +138,7 @@ func Load() Settings {
 		JWTSecret:      os.Getenv("JWT_SECRET"),
 		JWTTTL:         envDuration("JWT_TTL", 30*24*time.Hour),
 		CookieSecure:   envBool("COOKIE_SECURE", false),
-		CookieDomain:   os.Getenv("COOKIE_DOMAIN"),
+		CookieDomains:  splitDomains(os.Getenv("COOKIE_DOMAIN")),
 		OAuth:          loadOAuth(),
 		GmailTokenKey:  decodeKey(os.Getenv("GMAIL_TOKEN_KEY")),
 		MailboxDomain:  os.Getenv("MAILBOX_DOMAIN"),
@@ -178,6 +183,20 @@ func decodeKey(s string) []byte {
 		return nil
 	}
 	return b
+}
+
+// splitDomains parses a comma-separated COOKIE_DOMAIN into bare registrable
+// domains, trimming spaces and any leading dot (".freehire.dev" -> "freehire.dev").
+// Empty entries are dropped, so "" yields nil (host-only cookie, no extra origins).
+func splitDomains(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		p = strings.TrimPrefix(strings.TrimSpace(p), ".")
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func loadOAuth() map[string]OAuthCredentials {

@@ -31,11 +31,27 @@ func (f *fakeProvider) FetchIdentity(ctx context.Context, code string) (oauth.Id
 	return f.identity, f.err
 }
 
+// fakeRegistry adapts a name->Provider map to the handler's oauthRegistry seam;
+// origin is ignored (the fake providers carry a fixed AuthCodeURL).
+type fakeRegistry map[string]oauth.Provider
+
+func (r fakeRegistry) Names() []string {
+	names := make([]string, 0, len(r))
+	for name := range r {
+		names = append(names, name)
+	}
+	return names
+}
+func (r fakeRegistry) Provider(name, _ string) (oauth.Provider, bool) {
+	p, ok := r[name]
+	return p, ok
+}
+
 func oauthApp(providers map[string]oauth.Provider) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	h := &API{
 		issuer:         auth.NewIssuer("test-secret", time.Hour),
-		oauth:          providers,
+		oauth:          fakeRegistry(providers),
 		oauthCodes:     oauth.NewCodeStore(time.Minute),
 		frontendOrigin: "http://app.example",
 	}
@@ -156,6 +172,44 @@ func TestOAuthCallback_MissingCodeRedirectsWithError(t *testing.T) {
 	resp := get(t, app, "/api/v1/auth/oauth/google/callback?state=s", oauth.StateCookieName+"=s")
 	if resp.StatusCode != fiber.StatusFound || resp.Header.Get("Location") != "http://app.example/?auth_error=oauth" {
 		t.Errorf("status/Location = %d %q, want error redirect", resp.StatusCode, resp.Header.Get("Location"))
+	}
+}
+
+// A callback arriving on a served domain must redirect the browser back to THAT
+// domain (host-derived origin), so sign-in stays on .me during the migration; an
+// unknown Host falls back to the canonical frontendOrigin (no open redirect).
+func TestOAuthCallback_ErrorRedirectUsesRequestOrigin(t *testing.T) {
+	newApp := func() *fiber.App {
+		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+		h := &API{
+			issuer:         auth.NewIssuer("test-secret", time.Hour),
+			oauth:          fakeRegistry{"google": &fakeProvider{name: "google"}},
+			oauthCodes:     oauth.NewCodeStore(time.Minute),
+			frontendOrigin: "https://freehire.dev",
+			cookieDomains:  []string{"freehire.dev", "freehire.me"},
+		}
+		app.Get("/api/v1/auth/oauth/:provider/callback", h.OAuthCallback)
+		return app
+	}
+
+	// Force the state-mismatch error path; the redirect origin is what we assert.
+	// host drives requestOrigin, so it's set explicitly (app.Test needs Host set).
+	callback := func(host string) string {
+		req := httptest.NewRequest(fiber.MethodGet, "/api/v1/auth/oauth/google/callback?code=x&state=evil", nil)
+		req.Host = host
+		req.Header.Add("Cookie", oauth.StateCookieName+"=good")
+		resp, err := newApp().Test(req)
+		if err != nil {
+			t.Fatalf("Test: %v", err)
+		}
+		return resp.Header.Get("Location")
+	}
+
+	if loc := callback("freehire.me"); loc != "https://freehire.me/?auth_error=oauth" {
+		t.Errorf("served-domain callback Location = %q, want host-derived https://freehire.me", loc)
+	}
+	if loc := callback("evil.example"); loc != "https://freehire.dev/?auth_error=oauth" {
+		t.Errorf("unknown-host callback Location = %q, want canonical frontendOrigin fallback", loc)
 	}
 }
 

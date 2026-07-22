@@ -140,8 +140,9 @@ func main() {
 
 	// OAuth sign-in is optional: only providers with full credentials are
 	// enabled; the registry may be empty and the server still serves password
-	// auth. Redirect URLs derive from the same-origin frontend origin.
-	oauthProviders := oauth.NewRegistry(cfg.FrontendOrigin, cfg.OAuth)
+	// auth. Redirect URLs are built per request from the request origin, so one
+	// deployment can complete the flow on more than one served domain.
+	oauthRegistry := oauth.NewRegistry(cfg.OAuth)
 
 	// Connect-Gmail inbox: enabled only when the Google OAuth client and the
 	// token-encryption key are configured. Both nil disables the feature.
@@ -153,8 +154,8 @@ func main() {
 		JWTSecret:      cfg.JWTSecret,
 		JWTTTL:         cfg.JWTTTL,
 		CookieSecure:   cfg.CookieSecure,
-		CookieDomain:   cfg.CookieDomain,
-		OAuthProviders: oauthProviders,
+		CookieDomains:  cfg.CookieDomains,
+		OAuthRegistry:  oauthRegistry,
 		GmailConnector: gmailConnector,
 		GmailCipher:    gmailCipher,
 		MailboxDomain:  cfg.MailboxDomain,

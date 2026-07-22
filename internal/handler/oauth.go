@@ -9,16 +9,28 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/auth/oauth"
 )
+
+// requestOrigin returns the scheme+host origin to use for this request's OAuth
+// redirect URLs and post-login redirect. The request Host is trusted only when
+// it falls under a configured served domain — guarding against a spoofed Host
+// turning into an open redirect / a redirect_uri the provider would reject; such
+// hosts are always HTTPS in any deployment that sets COOKIE_DOMAIN. Anything else
+// (dev/localhost) falls back to the canonical frontendOrigin.
+func (a *API) requestOrigin(c *fiber.Ctx) string {
+	host := c.Hostname()
+	if auth.CookieDomainForHost(host, a.cookieDomains) != "" {
+		return "https://" + host
+	}
+	return a.frontendOrigin
+}
 
 // ListOAuthProviders returns the names of enabled OAuth providers, so the SPA
 // renders only usable sign-in buttons.
 func (a *API) ListOAuthProviders(c *fiber.Ctx) error {
-	names := make([]string, 0, len(a.oauth))
-	for name := range a.oauth {
-		names = append(names, name)
-	}
+	names := a.oauth.Names()
 	sort.Strings(names)
 	return c.JSON(fiber.Map{"data": names})
 }
@@ -28,7 +40,7 @@ func (a *API) ListOAuthProviders(c *fiber.Ctx) error {
 // page carrying the same state. `?platform=mobile` records that the flow was
 // started by the native app, so the callback finishes as a deep link.
 func (a *API) OAuthStart(c *fiber.Ctx) error {
-	p, ok := a.oauth[c.Params("provider")]
+	p, ok := a.oauth.Provider(c.Params("provider"), a.requestOrigin(c))
 	if !ok {
 		return fiber.NewError(fiber.StatusNotFound, "unknown provider")
 	}
@@ -54,7 +66,11 @@ func (a *API) OAuthStart(c *fiber.Ctx) error {
 // is minted later, by the app's own /exchange call). Every failure redirects
 // with auth_error instead of rendering JSON; details go to the server log.
 func (a *API) OAuthCallback(c *fiber.Ctx) error {
-	p, ok := a.oauth[c.Params("provider")]
+	// The callback lands on the same host the flow started on, so this origin
+	// matches the redirect_uri sent to the provider (required for the exchange)
+	// and is where the browser is sent back afterwards.
+	origin := a.requestOrigin(c)
+	p, ok := a.oauth.Provider(c.Params("provider"), origin)
 	if !ok {
 		return fiber.NewError(fiber.StatusNotFound, "unknown provider")
 	}
@@ -99,7 +115,7 @@ func (a *API) OAuthCallback(c *fiber.Ctx) error {
 	if err := a.setSession(c, userID); err != nil {
 		return a.oauthFail(c, p.Name(), returnTo, mobile, err)
 	}
-	return c.Redirect(a.frontendOrigin+returnTo, fiber.StatusFound)
+	return c.Redirect(origin+returnTo, fiber.StatusFound)
 }
 
 // OAuthExchange redeems the one-time code from a mobile OAuth callback for a
@@ -139,5 +155,5 @@ func (a *API) oauthFail(c *fiber.Ctx, provider, returnTo string, mobile bool, er
 	if strings.Contains(returnTo, "?") {
 		sep = "&"
 	}
-	return c.Redirect(a.frontendOrigin+returnTo+sep+"auth_error=oauth", fiber.StatusFound)
+	return c.Redirect(a.requestOrigin(c)+returnTo+sep+"auth_error=oauth", fiber.StatusFound)
 }

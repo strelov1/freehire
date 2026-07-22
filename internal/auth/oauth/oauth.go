@@ -29,25 +29,54 @@ type Provider interface {
 	FetchIdentity(ctx context.Context, code string) (Identity, error)
 }
 
-// NewRegistry builds the enabled-provider map from per-provider credentials.
-// A provider is enabled only when both client id and secret are set; unknown
-// provider names are ignored. Redirect URLs derive from origin (the
-// same-origin SPA/API base), so each provider's registered callback is
-// origin + /api/v1/auth/oauth/<name>/callback.
-func NewRegistry(origin string, creds map[string]config.OAuthCredentials) map[string]Provider {
-	constructors := map[string]func(clientID, clientSecret, redirectURL string) Provider{
-		"google":   NewGoogle,
-		"github":   NewGitHub,
-		"linkedin": NewLinkedIn,
-	}
+// constructors maps a provider name to its builder. The redirect URL is a build
+// argument, not baked in, so the same registry can serve OAuth on more than one
+// domain (the origin is chosen per request — see Registry.Provider).
+var constructors = map[string]func(clientID, clientSecret, redirectURL string) Provider{
+	"google":   NewGoogle,
+	"github":   NewGitHub,
+	"linkedin": NewLinkedIn,
+}
 
-	reg := make(map[string]Provider)
+// Registry holds the credentials of the enabled OAuth providers and builds a
+// Provider on demand for a given request origin. Deferring the redirect URL to
+// build time is what lets one deployment complete the flow on multiple domains
+// during a migration — each domain's callback must be registered with the
+// provider. Provider construction is a cheap struct literal (no network), so
+// building per request is free.
+type Registry struct {
+	creds map[string]config.OAuthCredentials
+}
+
+// NewRegistry keeps only providers with both a client id and secret for a known
+// provider name; unknown names and incomplete credentials are dropped, so an
+// unconfigured provider is simply absent (its routes 404 / the list omits it).
+func NewRegistry(creds map[string]config.OAuthCredentials) *Registry {
+	enabled := make(map[string]config.OAuthCredentials)
 	for name, c := range creds {
-		build, known := constructors[name]
-		if !known || c.ClientID == "" || c.ClientSecret == "" {
-			continue
+		if _, known := constructors[name]; known && c.ClientID != "" && c.ClientSecret != "" {
+			enabled[name] = c
 		}
-		reg[name] = build(c.ClientID, c.ClientSecret, origin+"/api/v1/auth/oauth/"+name+"/callback")
 	}
-	return reg
+	return &Registry{creds: enabled}
+}
+
+// Names returns the enabled provider names (unsorted; callers sort for output).
+func (r *Registry) Names() []string {
+	names := make([]string, 0, len(r.creds))
+	for name := range r.creds {
+		names = append(names, name)
+	}
+	return names
+}
+
+// Provider builds the named provider with its callback rooted at origin
+// (origin + /api/v1/auth/oauth/<name>/callback). ok is false for a name that is
+// not enabled.
+func (r *Registry) Provider(name, origin string) (Provider, bool) {
+	c, ok := r.creds[name]
+	if !ok {
+		return nil, false
+	}
+	return constructors[name](c.ClientID, c.ClientSecret, origin+"/api/v1/auth/oauth/"+name+"/callback"), true
 }
