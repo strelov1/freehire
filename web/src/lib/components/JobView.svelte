@@ -222,7 +222,7 @@
     </p>
   </div>
 
-  <header class="flex flex-col gap-4 lg:col-start-2 lg:row-start-2">
+  <header class="flex flex-col gap-3 lg:col-start-2 lg:row-start-2">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
       <div class="flex flex-wrap items-center gap-2.5">
         <h1 class="text-2xl font-semibold tracking-tight">{job.title}</h1>
@@ -237,17 +237,19 @@
       {@render applyCta('md', 'hidden shrink-0 lg:inline-flex')}
     </div>
 
-    <RealityBadge reality={job.reality} postedAt={job.posted_at} detailed />
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <RealityBadge reality={job.reality} postedAt={job.posted_at} detailed />
 
-    <a
-      class="inline-flex items-center gap-1.5 self-end text-sm font-medium text-primary hover:underline"
-      href={resolve('/jobs/[slug]/discussion', { slug: job.public_slug })}
-      onclick={onDiscussionClick}
-    >
-      <MessageSquare class="size-4" aria-hidden="true" /> Discussion{threadCount
-        ? ` · ${threadCount}`
-        : ''}
-    </a>
+      <a
+        class="ml-auto inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+        href={resolve('/jobs/[slug]/discussion', { slug: job.public_slug })}
+        onclick={onDiscussionClick}
+      >
+        <MessageSquare class="size-4" aria-hidden="true" /> Discussion{threadCount
+          ? ` · ${threadCount}`
+          : ''}
+      </a>
+    </div>
 
     {#if job.referral_available && job.company_slug}
       <ReferralBlock companySlug={job.company_slug} companyName={job.company} />
@@ -363,7 +365,7 @@
       {/if}
 
       <div class="flex flex-col gap-2 border-t border-border pt-4 first:border-t-0 first:pt-0">
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
+        <div class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
           <a href={filterHref('source', job.source)} class="inline-flex">
             <Badge variant="outline" class="transition-colors hover:bg-accent hover:text-foreground">
@@ -376,7 +378,7 @@
           {#if posted}<span>Posted {posted}</span>{/if}
         </div>
         {#if views > 0 || applies > 0}
-          <div class="flex flex-wrap items-center gap-3 text-xs leading-none text-muted-foreground">
+          <div class="flex flex-wrap items-center justify-center gap-3 text-xs leading-none text-muted-foreground">
             {#if views > 0}
               <span class="inline-flex items-center gap-1"><Eye class="size-3.5 shrink-0" />{views} {views === 1 ? 'view' : 'views'}</span>
             {/if}
