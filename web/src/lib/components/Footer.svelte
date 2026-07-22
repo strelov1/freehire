@@ -1,5 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { reopen } from '$lib/consent.svelte';
   import ProviderIcon from './ProviderIcon.svelte';
 
   // Grouped navigation over existing routes only — kept deliberately small so the
@@ -88,6 +89,15 @@
     >
       <div class="flex items-center gap-4">
         <p>© {year}</p>
+        <!-- Re-opens the consent banner so a prior cookie choice can be changed —
+             withdrawal as easy as granting (GDPR). -->
+        <button
+          type="button"
+          onclick={reopen}
+          class="text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Cookie settings
+        </button>
         <div class="flex items-center gap-3">
           {#each socials as social (social.provider)}
             <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external profile URL opened in a new tab; not an internal route -->

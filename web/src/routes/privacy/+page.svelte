@@ -11,7 +11,7 @@
 
   // Static effective date — freehire has no Date.now-driven content, and a hard
   // date is what a privacy policy needs. Bump this whenever the policy changes.
-  const lastUpdated = 'July 11, 2026';
+  const lastUpdated = 'July 22, 2026';
 </script>
 
 <Seo
@@ -67,8 +67,8 @@
         </li>
         <li>
           <span class="font-medium text-foreground">Technical data.</span> Standard request logs
-          (IP address, user agent, timestamps) and, if you opt in via your browser, cookies. We do
-          not use tracking or advertising profiles.
+          (IP address, user agent, timestamps) and, where you allow it, product-analytics cookies
+          (see “Cookies”). We do not sell your data or build advertising profiles.
         </li>
       </ul>
     </section>
@@ -88,7 +88,14 @@
         When you sign in, we set a single <code class="font-mono text-foreground">HttpOnly</code>,
         <code class="font-mono text-foreground">SameSite=Lax</code> session cookie holding a signed
         token. It is strictly necessary for keeping you logged in and cannot be read by JavaScript.
-        Logging out clears it.
+        Logging out clears it. This cookie is always set and needs no consent.
+      </p>
+      <p class="text-sm leading-relaxed text-muted-foreground">
+        For product analytics we use Google Analytics and PostHog, which set their own cookies and,
+        in PostHog's case, may record a session replay with all inputs masked. These are
+        non-essential. If you visit from the EU, EEA, or UK, they load only after you accept them in
+        the cookie banner — reject and nothing loads. You can change your choice at any time via
+        “Cookie settings” in the footer.
       </p>
     </section>
 
@@ -110,6 +117,11 @@
         <li>
           <span class="font-medium text-foreground">A language-model provider</span> — processes CV
           and job text to produce AI fit analysis, only when you request it.
+        </li>
+        <li>
+          <span class="font-medium text-foreground">Product analytics (Google Analytics, PostHog)</span>
+          — measure aggregate usage to improve the product; loaded only with your consent where
+          required (see “Cookies”). PostHog runs on its EU instance.
         </li>
         <li>
           <span class="font-medium text-foreground">Error monitoring (Sentry)</span> — captures
