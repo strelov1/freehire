@@ -249,19 +249,7 @@
       {@render applyCta('md', 'hidden shrink-0 lg:inline-flex')}
     </div>
 
-    <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-      <RealityBadge reality={job.reality} postedAt={job.posted_at} detailed />
-
-      <a
-        class="ml-auto inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-        href={resolve('/jobs/[slug]/discussion', { slug: job.public_slug })}
-        onclick={onDiscussionClick}
-      >
-        <MessageSquare class="size-4" aria-hidden="true" /> Discussion{threadCount
-          ? ` · ${threadCount}`
-          : ''}
-      </a>
-    </div>
+    <RealityBadge reality={job.reality} postedAt={job.posted_at} detailed />
 
     {#if job.referral_available && job.company_slug}
       <ReferralBlock companySlug={job.company_slug} companyName={job.company} />
