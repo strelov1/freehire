@@ -3,6 +3,7 @@
   import { resolve } from '$app/paths';
   import { Bookmark, Eye, EyeOff, X } from '@lucide/svelte';
   import CompanyLogo from './CompanyLogo.svelte';
+  import CountryFlagStack from './CountryFlagStack.svelte';
   import JobMatchBar from './JobMatchBar.svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
@@ -244,12 +245,17 @@
 
   <!-- Signal row: reality chip + the region/employment facets, grouped under the
        title as quiet outline chips so they read as metadata, not decoration. -->
-  {#if job.reality || tags.length > 0}
+  {#if job.reality || tags.length > 0 || job.countries?.length}
     <div class="mt-2 flex flex-wrap items-center gap-1.5">
       <RealityBadge reality={job.reality} />
       {#each tags as tag (tag)}
         <Badge variant="outline">{tag}</Badge>
       {/each}
+      <!-- Eligible countries as an overlapping flag cluster. Display-only here: the
+           whole card is a link, so the flags carry no nested filter links. -->
+      {#if job.countries?.length}
+        <CountryFlagStack codes={job.countries} max={5} class="ml-0.5 text-base" />
+      {/if}
     </div>
   {/if}
 

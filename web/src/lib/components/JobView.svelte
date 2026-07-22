@@ -12,7 +12,7 @@
   import { Badge, Button } from '$lib/ui';
   import { formatDate } from '$lib/utils';
   import CompanyLogo from './CompanyLogo.svelte';
-  import CountryFlag from './CountryFlag.svelte';
+  import CountryFlagStack from './CountryFlagStack.svelte';
   import JobDescription from './JobDescription.svelte';
   import JobMatch from './JobMatch.svelte';
   import RealityBadge from './RealityBadge.svelte';
@@ -325,16 +325,12 @@
             <div class="flex items-baseline justify-between gap-3">
               <dt class="shrink-0 text-muted-foreground">{facet.label}</dt>
               {#if facet.values.every((v) => v.flag)}
-                <!-- Flag facet (Country): a wrapping row of round flags, right-aligned,
-                     each linking to its filter. No comma separators — the gap reads the
-                     list on its own and stays compact for many-country remote jobs. -->
-                <dd class="flex min-w-0 flex-wrap justify-end gap-1.5 text-base">
-                  {#each facet.values as v (v.text)}
-                    {#if v.href}
-                      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal filter link from filterHref; query-only, no route to resolve -->
-                      <a href={v.href} class="transition hover:opacity-80"><CountryFlag code={v.flag ?? ''} /></a>
-                    {:else}<CountryFlag code={v.flag ?? ''} />{/if}
-                  {/each}
+                <!-- Flag facet (Country): an overlapping cluster of round flags,
+                     right-aligned, each linking to its filter. The stack laps the
+                     flags over one another so a many-country remote role stays a
+                     single compact row instead of wrapping. -->
+                <dd class="flex min-w-0 justify-end text-base">
+                  <CountryFlagStack codes={facet.values.map((v) => v.flag ?? '')} link />
                 </dd>
               {:else}
                 <dd class="min-w-0 break-words text-right font-medium"
