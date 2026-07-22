@@ -83,6 +83,21 @@ func TestKnownContactsMaskedInOtherText(t *testing.T) {
 	}
 }
 
+func TestContactsFromDetectedSpans(t *testing.T) {
+	cv := "Ivan Petrov ivan@petrov.io github.com/ivanp linkedin.com/in/ivanp"
+	r := mustBuild(t, cv, Contacts{}, nameDetector{names: []string{"Ivan Petrov"}})
+	c := r.Contacts()
+	if c.FullName != "Ivan Petrov" {
+		t.Errorf("FullName = %q, want detected name", c.FullName)
+	}
+	if c.Email != "ivan@petrov.io" {
+		t.Errorf("Email = %q, want detected email", c.Email)
+	}
+	if len(c.Links) != 2 {
+		t.Errorf("Links = %v, want the two detected URLs", c.Links)
+	}
+}
+
 func TestWordBoundaryAvoidsOverRedaction(t *testing.T) {
 	text := "Mark shipped the benchmark on Mark's branch"
 	r := mustBuild(t, text, Contacts{}, nameDetector{names: []string{"Mark"}})

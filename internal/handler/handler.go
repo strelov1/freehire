@@ -319,7 +319,7 @@ func Register(app *fiber.App, cfg Config) {
 	// its reasoning model is slow (tens of seconds per stage), so the default would time
 	// out mid-stage. Nil-safe (a nil client stays nil → Analyze is a no-op).
 	a.matchAnalysis = matchanalysis.NewAnalyzer(cfg.LLM.WithTimeout(matchAnalysisLLMTimeout), cfg.PIIDetector)
-	a.structuredExtractor = resumeextract.NewExtractor(cfg.LLM.WithTimeout(resumeExtractLLMTimeout))
+	a.structuredExtractor = resumeextract.NewExtractor(cfg.LLM.WithTimeout(resumeExtractLLMTimeout), cfg.PIIDetector)
 	a.matchAnalysisCache = queries
 	a.credits = credits.NewStore(queries, cfg.Pool, cfg.Credits)
 	// Telegram notifications are enabled only with both a bot token and a JWT

@@ -18,8 +18,8 @@
 
 ## 4. `resumeextract` integration
 
-- [ ] 4.1 Build a `Redactor`; fill `Structured` contact fields (`FullName/Email/Phone/Links`) from detected spans; send only the redacted CV to the LLM; update the prompt to state contacts are provided separately; fail-closed when `Build` errors
-- [ ] 4.2 Tests: contacts filled from detection, no PII in the LLM input, semantic fields still parsed, fail-closed leaves upload/embedding untouched
+- [x] 4.1 Build a `Redactor`; fill `Structured` contact fields (`FullName/Email/Phone/Links`) from detected spans; send only the redacted CV to the LLM; update the prompt to state contacts are provided separately; fail-closed when `Build` errors
+- [x] 4.2 Tests: contacts filled from detection, no PII in the LLM input, semantic fields still parsed, fail-closed leaves upload/embedding untouched
 
 ## 5. Privacy-filter span-detection service
 

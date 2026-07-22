@@ -22,7 +22,18 @@ type Contacts struct {
 // Redactor masks a fixed set of detected PII values into stable numbered placeholders and
 // restores them. Build it once per CV; reuse it for every text that flows to the LLM.
 type Redactor struct {
-	reps []replacement // longest value first, so a value contained in another masks first
+	reps     []replacement // longest value first, so a value contained in another masks first
+	contacts Contacts      // contact values recovered from the detected spans
+}
+
+// Contacts returns the contact values recovered from the detected spans (first name/email/
+// phone, all links). It lets a caller — e.g. resumeextract — fill contact fields from
+// deterministic detection instead of the LLM, which only ever sees the redacted CV.
+func (r *Redactor) Contacts() Contacts {
+	if r == nil {
+		return Contacts{}
+	}
+	return r.contacts
 }
 
 type replacement struct {
@@ -62,12 +73,14 @@ func Build(ctx context.Context, text string, known Contacts, d Detector) (*Redac
 	// the value unsafe for \b — it is then masked plainly so the occurrence can never leak.
 	detected := make(map[string]bool)
 	boundarySafe := make(map[string]bool)
+	var found Contacts
 	for _, s := range spans {
 		v := strings.TrimSpace(text[s.Start:s.End])
 		if v == "" {
 			continue
 		}
 		add(v, s.Kind)
+		fillContact(&found, s.Kind, v)
 		ok := (s.Start == 0 || !isWord(text[s.Start-1])) && (s.End == len(text) || !isWord(text[s.End]))
 		if seen := detected[v]; seen {
 			boundarySafe[v] = boundarySafe[v] && ok
@@ -100,7 +113,7 @@ func Build(ctx context.Context, text string, known Contacts, d Detector) (*Redac
 		reps = append(reps, rep)
 	}
 	sort.SliceStable(reps, func(i, j int) bool { return len(reps[i].value) > len(reps[j].value) })
-	r := &Redactor{reps: reps}
+	r := &Redactor{reps: reps, contacts: found}
 
 	// Fail-closed self-check: masking MUST remove every detected value from the source.
 	// If any survives (a boundary quirk we did not foresee), refuse rather than leak.
@@ -116,6 +129,27 @@ func Build(ctx context.Context, text string, known Contacts, d Detector) (*Redac
 // wordyKind marks the kinds whose values can legitimately be a substring of a normal word
 // (a name, an address), so word-boundary matching is worth attempting to avoid over-redaction.
 var wordyKind = map[string]bool{KindName: true, KindAddress: true}
+
+// fillContact records a detected value into c: the first name/email/phone wins, every link
+// is collected. Called only for detected spans, so c reflects the CV, not known input.
+func fillContact(c *Contacts, kind, v string) {
+	switch kind {
+	case KindName:
+		if c.FullName == "" {
+			c.FullName = v
+		}
+	case KindEmail:
+		if c.Email == "" {
+			c.Email = v
+		}
+	case KindPhone:
+		if c.Phone == "" {
+			c.Phone = v
+		}
+	case KindLink:
+		c.Links = append(c.Links, v)
+	}
+}
 
 // Redact replaces every detected PII value in text with its placeholder. A nil Redactor is
 // a no-op (callers that fail closed never reach Redact with nil).
