@@ -16,6 +16,7 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/resume"
+	"github.com/strelov1/freehire/internal/resumeextract"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/userprofile"
 )
@@ -113,6 +114,10 @@ func storeWithCV(t *testing.T, text string) *resume.Store {
 	store := resume.New(newFakeResumeBlobs(), &fakeResumeRepo{})
 	if _, err := store.Put(context.Background(), 1, "text/plain", []byte(text)); err != nil {
 		t.Fatalf("seed CV: %v", err)
+	}
+	// The LLM ATS review reads the structured résumé (never the raw CV), so seed one.
+	if err := store.SetStructured(context.Background(), 1, resumeextract.Structured{Summary: text, Skills: []string{"Go"}}, "test-model", resumeUploadedAt); err != nil {
+		t.Fatalf("seed structured: %v", err)
 	}
 	return store
 }

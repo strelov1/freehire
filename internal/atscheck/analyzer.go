@@ -37,15 +37,21 @@ type Review struct {
 	Suggestions    []string `json:"suggestions"`
 }
 
-// Analyze asks the model, over the CV text, for a content-quality score (0-100)
-// and a few concrete improvement suggestions. Returns (nil, nil) when unconfigured
-// so callers degrade. The model is untrusted output — the score is clamped and
-// suggestions are trimmed, length-bounded, and capped.
-func (a *Analyzer) Analyze(ctx context.Context, cvText string) (*Review, error) {
+// Analyze asks the model, over the de-identified structured résumé, for a content-quality
+// score (0-100) and a few concrete improvement suggestions. It NEVER sends the raw CV, and
+// strips the contact fields from the structure first, so no direct identifier reaches the
+// model. Returns (nil, nil) when unconfigured or when there is no usable structured résumé,
+// so callers degrade to the deterministic score. The model is untrusted output — the score
+// is clamped and suggestions are trimmed, length-bounded, and capped.
+func (a *Analyzer) Analyze(ctx context.Context, structuredJSON string) (*Review, error) {
 	if a == nil || a.client == nil {
 		return nil, nil
 	}
-	raw, err := a.client.GenerateJSON(ctx, reviewSystemPrompt(), reviewUserPrompt(cvText))
+	candidate := stripContacts(structuredJSON)
+	if candidate == "" {
+		return nil, nil
+	}
+	raw, err := a.client.GenerateJSON(ctx, reviewSystemPrompt(), reviewUserPrompt(candidate))
 	if err != nil {
 		return nil, fmt.Errorf("atscheck: analyze: %w", err)
 	}
@@ -77,21 +83,41 @@ func (r *Review) sanitize() {
 // testable buildSystemPrompt).
 func reviewSystemPrompt() string {
 	var b strings.Builder
-	b.WriteString("You are a senior technical recruiter reviewing the plain text of a candidate's CV. ")
-	b.WriteString("Return ONLY a JSON object.\n\n")
+	b.WriteString("You are a senior technical recruiter reviewing a candidate's structured résumé ")
+	b.WriteString("(JSON — experience highlights, summary, skills). Return ONLY a JSON object.\n\n")
 	b.WriteString("Return exactly these keys:\n")
 	b.WriteString("- \"content_quality\": integer 0-100. How strong the writing is for a human recruiter: ")
-	b.WriteString("action verbs over passive phrasing, quantified achievements over responsibility lists, ")
-	b.WriteString("and clean readable structure. Penalise garbled/interleaved text (a sign of a multi-column ")
-	b.WriteString("or table layout an ATS may scramble). 100 = excellent; low = weak/garbled.\n")
+	b.WriteString("action verbs over passive phrasing, quantified achievements over responsibility lists. ")
+	b.WriteString("100 = excellent; low = weak.\n")
 	b.WriteString("- \"suggestions\": an array of 3 to 6 short, concrete, actionable improvement sentences ")
-	b.WriteString("(e.g. replace a weak verb, quantify a bullet, fix a section that reads as garbled, ")
-	b.WriteString("flag a date inconsistency). Each ≤ 200 characters. Base every judgement only on the CV ")
-	b.WriteString("text provided; do not invent facts.\n")
+	b.WriteString("(e.g. replace a weak verb, quantify a bullet, flag a date inconsistency). Each ≤ 200 ")
+	b.WriteString("characters. Base every judgement only on the résumé provided; do not invent facts.\n")
 	return b.String()
 }
 
-// reviewUserPrompt carries the (bounded) CV text.
-func reviewUserPrompt(cvText string) string {
-	return "CV:\n" + llm.TruncateRunes(cvText, maxCVRunes) + "\n"
+// reviewUserPrompt carries the (bounded) de-identified structured résumé.
+func reviewUserPrompt(structured string) string {
+	return "Résumé (structured, JSON):\n" + llm.TruncateRunes(structured, maxCVRunes) + "\n"
+}
+
+// stripContacts drops the contact fields from the structured-résumé JSON, returning the
+// de-identified remainder. Empty on empty or unparseable input (the caller then serves the
+// deterministic score only), so no raw/contact identifier can reach the model.
+func stripContacts(structuredJSON string) string {
+	s := strings.TrimSpace(structuredJSON)
+	if s == "" {
+		return ""
+	}
+	var m map[string]json.RawMessage
+	if json.Unmarshal([]byte(s), &m) != nil {
+		return ""
+	}
+	for _, k := range []string{"full_name", "email", "phone", "links"} {
+		delete(m, k)
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }

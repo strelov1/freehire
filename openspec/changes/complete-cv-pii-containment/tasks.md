@@ -6,8 +6,8 @@
 
 ## 2. atscheck → structured input
 
-- [ ] 2.1 Change `atscheck.Analyzer.Analyze` to take the de-identified structured résumé (contact-stripped) instead of raw `cvText`; build the review prompt from its highlights/summary/skills; tests assert no raw CV / no contacts in the prompt
-- [ ] 2.2 Update `handler/ats_report.go` to pass the stored structured résumé (contacts excluded) and degrade to the deterministic score when it is absent; update tests
+- [x] 2.1 Change `atscheck.Analyzer.Analyze` to take the de-identified structured résumé (contact-stripped) instead of raw `cvText`; build the review prompt from its highlights/summary/skills; tests assert no raw CV / no contacts in the prompt
+- [x] 2.2 Update `handler/ats_report.go` to pass the stored structured résumé (contacts excluded) and degrade to the deterministic score when it is absent; update tests
 
 ## 3. Tailoring agent gets a contact-stripped CV
 
