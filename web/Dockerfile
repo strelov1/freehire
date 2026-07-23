@@ -15,7 +15,7 @@
 FROM node:22-alpine AS ds-build
 RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /design-system
-COPY design-system/package.json design-system/pnpm-lock.yaml ./
+COPY design-system/package.json design-system/pnpm-lock.yaml design-system/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY design-system/ ./
 RUN pnpm build
