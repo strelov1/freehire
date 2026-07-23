@@ -11,22 +11,22 @@ func TestTag(t *testing.T) {
 		{
 			name: "no query string appends with ?",
 			in:   "https://ats.example.com/job/123",
-			want: "https://ats.example.com/job/123?utm_source=freehire.dev",
+			want: "https://ats.example.com/job/123?utm_source=freehire.me",
 		},
 		{
 			name: "existing query appends with &",
 			in:   "https://ats.example.com/job?id=123",
-			want: "https://ats.example.com/job?id=123&utm_source=freehire.dev",
+			want: "https://ats.example.com/job?id=123&utm_source=freehire.me",
 		},
 		{
 			name: "existing utm_source is overwritten",
 			in:   "https://ats.example.com/job?utm_source=indeed",
-			want: "https://ats.example.com/job?utm_source=freehire.dev",
+			want: "https://ats.example.com/job?utm_source=freehire.me",
 		},
 		{
 			name: "fragment is preserved after the query",
 			in:   "https://ats.example.com/job#apply",
-			want: "https://ats.example.com/job?utm_source=freehire.dev#apply",
+			want: "https://ats.example.com/job?utm_source=freehire.me#apply",
 		},
 		{
 			name: "empty url is returned unchanged",

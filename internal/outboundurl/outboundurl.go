@@ -8,9 +8,10 @@ import "net/url"
 
 // utmSource is the fixed utm_source value stamped on every outbound link, mirroring
 // how the notification builders hardcode "telegram-bot"/"email" for internal links.
-const utmSource = "freehire.dev"
+// It is the canonical brand domain (freehire.me since the .dev -> .me migration).
+const utmSource = "freehire.me"
 
-// Tag returns raw with utm_source=freehire.dev set as a query parameter. It parses
+// Tag returns raw with utm_source=freehire.me set as a query parameter. It parses
 // the URL so an existing query string is preserved (the tag is appended with the
 // correct "?"/"&" separator) and any pre-existing utm_source is overwritten, keeping
 // attribution consistently ours. An empty or unparseable URL is returned unchanged
