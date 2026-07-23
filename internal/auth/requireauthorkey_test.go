@@ -37,7 +37,7 @@ func dualAuthApp(iss *Issuer, keys APIKeyAuthenticator) *fiber.App {
 		if !ok {
 			return fiber.NewError(fiber.StatusInternalServerError, "user id missing from context")
 		}
-		return c.JSON(fiber.Map{"id": id})
+		return c.JSON(fiber.Map{"id": id, "via_key": ViaAPIKey(c)})
 	})
 	return app
 }
@@ -70,6 +70,48 @@ func TestRequireAuthOrKey_ValidKeyAuthenticates(t *testing.T) {
 	}
 	if id := decodeID(t, resp); id != 9 {
 		t.Errorf("handler saw user id %d, want 9", id)
+	}
+}
+
+func decodeViaKey(t *testing.T, resp *http.Response) bool {
+	t.Helper()
+	var body struct {
+		ViaKey bool `json:"via_key"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	return body.ViaKey
+}
+
+func TestRequireAuthOrKey_FlagsKeyAuth(t *testing.T) {
+	iss := NewIssuer("secret", time.Hour)
+	const token = "fhk_test-key"
+	keys := fakeKeyAuth{validHash: HashAPIKey(token), userID: 9}
+
+	req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := dualAuthApp(iss, keys).Test(req)
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	if !decodeViaKey(t, resp) {
+		t.Error("ViaAPIKey should be true for key auth")
+	}
+}
+
+func TestRequireAuthOrKey_CookieIsNotViaKey(t *testing.T) {
+	iss := NewIssuer("secret", time.Hour)
+	token, _ := iss.Issue(7)
+
+	req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
+	req.AddCookie(&http.Cookie{Name: CookieName, Value: token})
+	resp, err := dualAuthApp(iss, fakeKeyAuth{}).Test(req)
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	if decodeViaKey(t, resp) {
+		t.Error("ViaAPIKey should be false for cookie auth")
 	}
 }
 

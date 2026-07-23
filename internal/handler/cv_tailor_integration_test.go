@@ -220,12 +220,24 @@ func TestPatchCVViaKey(t *testing.T) {
 	other := seedAccount(t, h, "other@example.test", true)
 
 	base, err := h.cvStore.Create(ctx, owner, "General", cv.DefaultTemplateID, cv.Document{
+		Header:     cv.Header{FullName: "Ada Lovelace", Email: "ada@x.com", Phone: "+1 415 555 0000"},
 		Experience: []cv.ExperienceItem{{Role: "Eng", Bullets: []string{"Shipped API"}}},
 	})
 	if err != nil {
 		t.Fatalf("create cv: %v", err)
 	}
 	path := "/api/v1/me/cvs/" + strconv.FormatInt(base.ID, 10)
+
+	// The agent (API key) must never see the contact block; the owner's cookie read does.
+	decodeHeader := func(resp *http.Response) cv.Header {
+		var w struct {
+			Data struct {
+				Document cv.Document `json:"document"`
+			} `json:"data"`
+		}
+		_ = json.NewDecoder(resp.Body).Decode(&w)
+		return w.Data.Document.Header
+	}
 
 	ownerKey, err := mintTailoringKey(ctx, h.queries, owner, time.Now())
 	if err != nil {
@@ -246,9 +258,26 @@ func TestPatchCVViaKey(t *testing.T) {
 	}
 
 	// The minted key can also READ the CV back (GET /me/cvs/:id is keyAuth) — the agent
-	// needs this to see the current document before patching.
+	// needs this to see the current document before patching — but the contact block is stripped.
 	if resp := doBearer(t, app, fiber.MethodGet, path, ownerKey, nil); resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("get via key = %d, want 200", resp.StatusCode)
+	} else if h := decodeHeader(resp); h.FullName != "" || h.Email != "" || h.Phone != "" {
+		t.Errorf("agent read leaked the contact block: %+v", h)
+	}
+
+	// The owner's own cookie read sees the full contact block.
+	ownerCookie, _ := iss.Issue(owner)
+	greq := httptest.NewRequest(fiber.MethodGet, path, nil)
+	greq.AddCookie(&http.Cookie{Name: auth.CookieName, Value: ownerCookie})
+	if resp, err := app.Test(greq); err != nil {
+		t.Fatalf("owner get: %v", err)
+	} else if h := decodeHeader(resp); h.FullName != "Ada Lovelace" || h.Email != "ada@x.com" {
+		t.Errorf("owner read should keep contacts, got %+v", h)
+	}
+
+	// The agent cannot WRITE a contact field either.
+	if resp := doBearer(t, app, fiber.MethodPatch, path, ownerKey, cv.Patch{Op: cv.PatchSetHeaderField, Field: "full_name", Value: "Fake Name"}); resp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("patch full_name via key = %d, want 403", resp.StatusCode)
 	}
 
 	// Bad addressing is a 422.

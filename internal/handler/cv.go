@@ -7,6 +7,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/cv"
 )
 
@@ -147,6 +148,15 @@ func (a *API) GetCV(c *fiber.Ctx) error {
 	rec, err := a.cvStore.Get(c.Context(), int64(id), userID)
 	if err != nil {
 		return mapCVError(err)
+	}
+	// An API-key caller (the CV-tailoring agent runs its own model over the CV) must not see
+	// the contact block; the owner's own cookie session sees it in full. The stored contacts
+	// are untouched and still render in the PDF.
+	if auth.ViaAPIKey(c) {
+		rec.Document.Header.FullName = ""
+		rec.Document.Header.Email = ""
+		rec.Document.Header.Phone = ""
+		rec.Document.Header.Links = nil
 	}
 	return c.JSON(fiber.Map{"data": recordResponse(rec)})
 }

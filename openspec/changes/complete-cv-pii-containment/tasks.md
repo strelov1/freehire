@@ -11,14 +11,14 @@
 
 ## 3. Tailoring agent gets a contact-stripped CV
 
-- [ ] 3.1 Distinguish the tailoring key (agent) from the owner's cookie on the CV read/patch path (auth-context flag); test the flag is set correctly for each auth mechanism
-- [ ] 3.2 On a tailoring-key read of a CV, omit `Header.{full_name,email,phone}`; the owner's cookie read and the PDF render keep them; tests on both paths
-- [ ] 3.3 Reject a tailoring-key patch that targets `full_name`/`email`/`phone`; the stored value is unchanged; test
+- [x] 3.1 Distinguish the tailoring key (agent) from the owner's cookie on the CV read/patch path (auth-context flag); test the flag is set correctly for each auth mechanism
+- [x] 3.2 On a tailoring-key read of a CV, omit `Header.{full_name,email,phone}`; the owner's cookie read and the PDF render keep them; tests on both paths
+- [x] 3.3 Reject a tailoring-key patch that targets `full_name`/`email`/`phone`; the stored value is unchanged; test
 
 ## 4. Wiring cleanup
 
-- [ ] 4.1 Drop the `PIIDetector` argument from `matchanalysis.NewAnalyzer` and `atscheck.NewAnalyzer` call sites in `handler`/`cmd`; `resumeextract` keeps its detector; `go build ./...` green
+- [x] 4.1 Drop the `PIIDetector` argument from `matchanalysis.NewAnalyzer` and `atscheck.NewAnalyzer` call sites in `handler`/`cmd`; `resumeextract` keeps its detector; `go build ./...` green
 
 ## 5. Verification
 
-- [ ] 5.1 `go build ./... && go vet ./... && go test ./...` and `go vet -tags=integration ./...` green; confirm the only remaining raw-CV→LLM path is `resumeextract` (grep the `GenerateJSON*` callers)
+- [x] 5.1 `go build ./... && go vet ./... && go test ./...` and `go vet -tags=integration ./...` green; confirm the only remaining raw-CV→LLM path is `resumeextract` (grep the `GenerateJSON*` callers)
