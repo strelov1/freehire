@@ -25,7 +25,7 @@ importers:
         version: 7.5.0
       freehire-design-system:
         specifier: file:../design-system
-        version: file:../design-system
+        version: file:../design-system(@typescript-eslint/types@8.65.0)(tailwindcss@4.3.3)
       isomorphic-dompurify:
         specifier: ^3.18.0
         version: 3.19.0
@@ -4228,7 +4228,16 @@ snapshots:
 
   flatted@3.4.2: {}
 
-  freehire-design-system@file:../design-system: {}
+  freehire-design-system@file:../design-system(@typescript-eslint/types@8.65.0)(tailwindcss@4.3.3):
+    dependencies:
+      '@lucide/svelte': 1.25.0(svelte@5.56.7(@typescript-eslint/types@8.65.0))
+      clsx: 2.1.1
+      svelte: 5.56.7(@typescript-eslint/types@8.65.0)
+      tailwind-merge: 3.6.0
+      tailwind-variants: 3.2.2(tailwind-merge@3.6.0)(tailwindcss@4.3.3)
+    transitivePeerDependencies:
+      - '@typescript-eslint/types'
+      - tailwindcss
 
   fsevents@2.3.3:
     optional: true
