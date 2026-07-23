@@ -6,3 +6,4 @@ design-system/node_modules
 design-system/dist
 .git
 openspec
+design-system/storybook-static/

@@ -1,0 +1,6 @@
+allowBuilds:
+  esbuild: set this to true or false
+  svelte-preprocess: set this to true or false
+# pnpm 11 structural config — not a workspace definition (no packages: list).
+# esbuild build script is needed for vite/storybook.
+strictDepBuilds: false
