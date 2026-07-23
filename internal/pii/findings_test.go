@@ -8,9 +8,9 @@ import (
 // Finding 1: a detected value that abuts a word character in the text must still be masked
 // (word-boundary anchoring must never leave PII in the prompt).
 func TestRedactMasksValueAbuttingWordChar(t *testing.T) {
-	text := "mail: strelov1@gmail.com2024 archived"
+	text := "mail: ada.lovelace@example.com2024 archived"
 	r := mustBuild(t, text, Contacts{}, nameDetector{})
-	if masked := r.Redact(text); strings.Contains(masked, "strelov1@gmail.com") {
+	if masked := r.Redact(text); strings.Contains(masked, "ada.lovelace@example.com") {
 		t.Fatalf("email abutting a digit leaked: %q", masked)
 	}
 }

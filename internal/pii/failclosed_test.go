@@ -14,13 +14,13 @@ func (errDetector) Detect(context.Context, string) ([]Span, error) {
 }
 
 func TestBuildFailsClosedWhenDetectorNil(t *testing.T) {
-	if _, err := Build(context.Background(), "Ilya Strelov", Contacts{}, nil); err == nil {
+	if _, err := Build(context.Background(), "Ada Lovelace", Contacts{}, nil); err == nil {
 		t.Fatal("expected error for nil detector (fail-closed), got nil")
 	}
 }
 
 func TestBuildFailsClosedWhenDetectorErrors(t *testing.T) {
-	_, err := Build(context.Background(), "Ilya Strelov", Contacts{}, errDetector{})
+	_, err := Build(context.Background(), "Ada Lovelace", Contacts{}, errDetector{})
 	if err == nil {
 		t.Fatal("expected error when detector fails (fail-closed), got nil")
 	}

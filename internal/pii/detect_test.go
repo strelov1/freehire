@@ -28,27 +28,27 @@ func TestRegexSpans(t *testing.T) {
 	}{
 		{
 			name: "email",
-			text: "reach me at strelov1@gmail.com anytime",
+			text: "reach me at ada.lovelace@example.com anytime",
 			kind: KindEmail,
-			want: []string{"strelov1@gmail.com"},
+			want: []string{"ada.lovelace@example.com"},
 		},
 		{
 			name: "linkedin and github urls",
-			text: "linkedin.com/in/istrelov | github.com/strelov1",
+			text: "linkedin.com/in/adalovelace | github.com/adalovelace",
 			kind: KindLink,
-			want: []string{"github.com/strelov1", "linkedin.com/in/istrelov"},
+			want: []string{"github.com/adalovelace", "linkedin.com/in/adalovelace"},
 		},
 		{
 			name: "https portfolio url",
-			text: "portfolio: https://alex-bes.vercel.app/ here",
+			text: "portfolio: https://portfolio.example.dev/ here",
 			kind: KindLink,
-			want: []string{"https://alex-bes.vercel.app/"},
+			want: []string{"https://portfolio.example.dev/"},
 		},
 		{
 			name: "telegram handle",
-			text: "ping @Alex_Sage on tg",
+			text: "ping @jprice_dev on tg",
 			kind: KindLink,
-			want: []string{"@Alex_Sage"},
+			want: []string{"@jprice_dev"},
 		},
 		{
 			name: "phone with country code",

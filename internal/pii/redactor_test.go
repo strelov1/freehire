@@ -29,11 +29,11 @@ func mustBuild(t *testing.T, text string, known Contacts, d Detector) *Redactor 
 }
 
 func TestRedactMasksAllPII(t *testing.T) {
-	cv := "Ilya Strelov\nstrelov1@gmail.com | github.com/strelov1\nSenior Engineer at RingCentral in London"
-	r := mustBuild(t, cv, Contacts{}, nameDetector{names: []string{"Ilya Strelov"}})
+	cv := "Ada Lovelace\nada.lovelace@example.com | github.com/adalovelace\nSenior Engineer at RingCentral in London"
+	r := mustBuild(t, cv, Contacts{}, nameDetector{names: []string{"Ada Lovelace"}})
 	masked := r.Redact(cv)
 
-	for _, leak := range []string{"Ilya Strelov", "strelov1@gmail.com", "github.com/strelov1"} {
+	for _, leak := range []string{"Ada Lovelace", "ada.lovelace@example.com", "github.com/adalovelace"} {
 		if strings.Contains(masked, leak) {
 			t.Errorf("masked text still contains PII %q:\n%s", leak, masked)
 		}
@@ -47,8 +47,8 @@ func TestRedactMasksAllPII(t *testing.T) {
 }
 
 func TestRestoreRoundTrip(t *testing.T) {
-	cv := "Ilya Strelov — strelov1@gmail.com — github.com/strelov1"
-	r := mustBuild(t, cv, Contacts{}, nameDetector{names: []string{"Ilya Strelov"}})
+	cv := "Ada Lovelace — ada.lovelace@example.com — github.com/adalovelace"
+	r := mustBuild(t, cv, Contacts{}, nameDetector{names: []string{"Ada Lovelace"}})
 	if got := r.Restore(r.Redact(cv)); got != cv {
 		t.Fatalf("round-trip mismatch:\n got %q\nwant %q", got, cv)
 	}
@@ -73,12 +73,12 @@ func TestDistinctValuesGetDistinctPlaceholders(t *testing.T) {
 func TestKnownContactsMaskedInOtherText(t *testing.T) {
 	// The CV text the Redactor is built from, plus a separate structured-JSON blob that
 	// carries the same contacts — both must mask with the SAME redactor (matchanalysis case).
-	cv := "Ilya Strelov works remotely"
-	structured := `{"full_name":"Ilya Strelov","email":"strelov1@gmail.com"}`
-	known := Contacts{FullName: "Ilya Strelov", Email: "strelov1@gmail.com"}
-	r := mustBuild(t, cv, known, nameDetector{names: []string{"Ilya Strelov"}})
+	cv := "Ada Lovelace works remotely"
+	structured := `{"full_name":"Ada Lovelace","email":"ada.lovelace@example.com"}`
+	known := Contacts{FullName: "Ada Lovelace", Email: "ada.lovelace@example.com"}
+	r := mustBuild(t, cv, known, nameDetector{names: []string{"Ada Lovelace"}})
 	masked := r.Redact(structured)
-	if strings.Contains(masked, "Ilya Strelov") || strings.Contains(masked, "strelov1@gmail.com") {
+	if strings.Contains(masked, "Ada Lovelace") || strings.Contains(masked, "ada.lovelace@example.com") {
 		t.Fatalf("known contacts leaked in structured blob: %s", masked)
 	}
 }

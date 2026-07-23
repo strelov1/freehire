@@ -26,12 +26,12 @@ if we can't de-identify it, we don't send it.
 Email, phone and URLs are easy: a handful of patterns catches them cleanly. We tested it, and
 it held.
 
-The name is the hard part. We ran the same detector against two real CVs. On a single-column
-layout it found the name fine. On a two-column CV it fell apart: the layout put a section
-header on the first line and pushed the name down, and the person's surname appeared **nowhere
-as plain text** — it lived only inside their email (`alexbessmelcev@gmail.com`) and a profile
-URL (`/alex-bessmelcev`). No pattern-matching rule recovers a name that the document never
-spells out.
+The name is the hard part. We ran the same detector against two real CVs (anonymized here).
+On a single-column layout it found the name fine. On a two-column CV it fell apart: the layout
+put a section header on the first line and pushed the name down, and the person's surname
+appeared **nowhere as plain text** — it lived only inside their email (`jordanprice@example.com`)
+and a profile URL (`/jordan-price`). No pattern-matching rule recovers a name that the document
+never spells out.
 
 That's the verdict that shaped the design: a pattern-matcher is a floor, not the whole
 solution. Names need a model that reads context.
