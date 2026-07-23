@@ -27,6 +27,7 @@ import (
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/resume"
+	"github.com/strelov1/freehire/internal/resumeextract"
 	"github.com/strelov1/freehire/internal/userprofile"
 )
 
@@ -102,6 +103,9 @@ func TestMatchAnalysisEndpoints(t *testing.T) {
 		if _, err := s.Put(ctx, userID, "text/plain", []byte("Backend engineer, 5y Go at Acme.")); err != nil {
 			t.Fatalf("seed CV: %v", err)
 		}
+		if err := s.SetStructured(ctx, userID, resumeextract.Structured{Summary: "Backend engineer, 5y Go at Acme.", Skills: []string{"Go"}}, "test-model", resumeUploadedAt); err != nil {
+			t.Fatalf("seed structured: %v", err)
+		}
 		return s
 	}
 
@@ -131,21 +135,21 @@ func TestMatchAnalysisEndpoints(t *testing.T) {
 	}
 
 	t.Run("unauthenticated is 401", func(t *testing.T) {
-		app := appFor(storeWithCVFor(t), matchanalysis.NewAnalyzer(nil, nil))
+		app := appFor(storeWithCVFor(t), matchanalysis.NewAnalyzer(nil))
 		if status, _ := do(t, app, fiber.MethodGet, "fit-job", ""); status != fiber.StatusUnauthorized {
 			t.Errorf("status = %d, want 401", status)
 		}
 	})
 
 	t.Run("unknown slug is 404", func(t *testing.T) {
-		app := appFor(storeWithCVFor(t), matchanalysis.NewAnalyzer(nil, nil))
+		app := appFor(storeWithCVFor(t), matchanalysis.NewAnalyzer(nil))
 		if status, _ := do(t, app, fiber.MethodGet, "no-such", token); status != fiber.StatusNotFound {
 			t.Errorf("status = %d, want 404", status)
 		}
 	})
 
 	t.Run("GET without a stored CV → has_cv false, no LLM", func(t *testing.T) {
-		app := appFor(resume.New(newFakeResumeBlobs(), &fakeResumeRepo{}), matchanalysis.NewAnalyzer(nil, nil))
+		app := appFor(resume.New(newFakeResumeBlobs(), &fakeResumeRepo{}), matchanalysis.NewAnalyzer(nil))
 		status, body := do(t, app, fiber.MethodGet, "fit-job", token)
 		if status != fiber.StatusOK || body.Data.HasCV {
 			t.Errorf("got status=%d has_cv=%v, want 200/false", status, body.Data.HasCV)
@@ -153,7 +157,7 @@ func TestMatchAnalysisEndpoints(t *testing.T) {
 	})
 
 	t.Run("GET never-analyzed → has_cv true, null analysis", func(t *testing.T) {
-		app := appFor(storeWithCVFor(t), matchanalysis.NewAnalyzer(nil, nil))
+		app := appFor(storeWithCVFor(t), matchanalysis.NewAnalyzer(nil))
 		status, body := do(t, app, fiber.MethodGet, "fit-job", token)
 		if status != fiber.StatusOK || !body.Data.HasCV || body.Data.Analysis != nil {
 			t.Errorf("got status=%d has_cv=%v analysis=%v, want 200/true/nil", status, body.Data.HasCV, body.Data.Analysis)
@@ -161,7 +165,7 @@ func TestMatchAnalysisEndpoints(t *testing.T) {
 	})
 
 	t.Run("POST LLM off → has_cv true, null analysis, nothing cached", func(t *testing.T) {
-		app := appFor(storeWithCVFor(t), matchanalysis.NewAnalyzer(nil, nil))
+		app := appFor(storeWithCVFor(t), matchanalysis.NewAnalyzer(nil))
 		status, body := do(t, app, fiber.MethodPost, "fit-job", token)
 		if status != fiber.StatusOK || !body.Data.HasCV || body.Data.Analysis != nil {
 			t.Errorf("got status=%d has_cv=%v analysis=%v, want 200/true/nil", status, body.Data.HasCV, body.Data.Analysis)
@@ -175,7 +179,7 @@ func TestMatchAnalysisEndpoints(t *testing.T) {
 
 	t.Run("POST computes, caches, GET returns fresh", func(t *testing.T) {
 		model := &fitModel{resp: []string{fitStage1, fitStage2, fitStage3}}
-		app := appFor(storeWithCVFor(t), matchanalysis.NewAnalyzer(llm.NewWithModel(model), noopPIIDetector{}))
+		app := appFor(storeWithCVFor(t), matchanalysis.NewAnalyzer(llm.NewWithModel(model)))
 
 		status, body := do(t, app, fiber.MethodPost, "fit-job", token)
 		if status != fiber.StatusOK || body.Data.Analysis == nil {
@@ -194,7 +198,7 @@ func TestMatchAnalysisEndpoints(t *testing.T) {
 		if n != 1 {
 			t.Fatalf("cache rows = %d, want 1", n)
 		}
-		gstatus, gbody := do(t, appFor(storeWithCVFor(t), matchanalysis.NewAnalyzer(nil, nil)), fiber.MethodGet, "fit-job", token)
+		gstatus, gbody := do(t, appFor(storeWithCVFor(t), matchanalysis.NewAnalyzer(nil)), fiber.MethodGet, "fit-job", token)
 		if gstatus != fiber.StatusOK || gbody.Data.Analysis == nil || gbody.Data.Stale {
 			t.Errorf("GET after compute = status %d stale %v analysis %v, want 200/false/present",
 				gstatus, gbody.Data.Stale, gbody.Data.Analysis)
@@ -251,6 +255,9 @@ func TestMatchAnalysisCredits(t *testing.T) {
 		if _, err := s.Put(ctx, userID, "text/plain", []byte("5y Go.")); err != nil {
 			t.Fatalf("seed CV: %v", err)
 		}
+		if err := s.SetStructured(ctx, userID, resumeextract.Structured{Summary: "5y Go.", Skills: []string{"Go"}}, "test-model", resumeUploadedAt); err != nil {
+			t.Fatalf("seed structured: %v", err)
+		}
 		return s
 	}
 	appFor := func(store *resume.Store, an *matchanalysis.Analyzer, grant int) *fiber.App {
@@ -286,7 +293,7 @@ func TestMatchAnalysisCredits(t *testing.T) {
 		userID, token := seedUser(t, "broke@example.test")
 		seedJob(t, "broke-new", "broke-new")
 		model := newModel()
-		app := appFor(storeWithCVFor(t, userID), matchanalysis.NewAnalyzer(llm.NewWithModel(model), noopPIIDetector{}), 0)
+		app := appFor(storeWithCVFor(t, userID), matchanalysis.NewAnalyzer(llm.NewWithModel(model)), 0)
 
 		status, _ := postFit(t, app, "broke-new", token)
 		if status != fiber.StatusPaymentRequired {
@@ -307,7 +314,7 @@ func TestMatchAnalysisCredits(t *testing.T) {
 		jid := seedJob(t, "rc", "rc-job")
 		seedAnalysis(t, userID, jid, time.Hour) // prior cache row → recompute, not a new job
 		model := newModel()
-		app := appFor(storeWithCVFor(t, userID), matchanalysis.NewAnalyzer(llm.NewWithModel(model), noopPIIDetector{}), 0)
+		app := appFor(storeWithCVFor(t, userID), matchanalysis.NewAnalyzer(llm.NewWithModel(model)), 0)
 
 		status, body := postFit(t, app, "rc-job", token)
 		if status != fiber.StatusOK || body.Data.Analysis == nil {
@@ -326,7 +333,7 @@ func TestMatchAnalysisCredits(t *testing.T) {
 	t.Run("a fresh analysis debits one point and GET reports the balance", func(t *testing.T) {
 		userID, token := seedUser(t, "spend@example.test")
 		seedJob(t, "spend-1", "spend-1")
-		app := appFor(storeWithCVFor(t, userID), matchanalysis.NewAnalyzer(llm.NewWithModel(newModel()), noopPIIDetector{}), 2)
+		app := appFor(storeWithCVFor(t, userID), matchanalysis.NewAnalyzer(llm.NewWithModel(newModel())), 2)
 
 		// GET before compute: full grant remaining, nothing consumed.
 		greq := httptest.NewRequest(fiber.MethodGet, "/api/v1/jobs/spend-1/fit", nil)
@@ -367,7 +374,7 @@ func TestMatchAnalysisCredits(t *testing.T) {
 		userID, token := seedUser(t, "stream-broke@example.test")
 		seedJob(t, "sb-new", "sb-new")
 		model := newModel()
-		app := appFor(storeWithCVFor(t, userID), matchanalysis.NewAnalyzer(llm.NewWithModel(model), noopPIIDetector{}), 0)
+		app := appFor(storeWithCVFor(t, userID), matchanalysis.NewAnalyzer(llm.NewWithModel(model)), 0)
 
 		req := httptest.NewRequest(fiber.MethodGet, "/api/v1/jobs/sb-new/fit/stream", nil)
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})

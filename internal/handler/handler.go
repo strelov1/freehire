@@ -329,7 +329,7 @@ func Register(app *fiber.App, cfg Config) {
 	// The fit analysis shares the same LLM client but with a longer per-call timeout:
 	// its reasoning model is slow (tens of seconds per stage), so the default would time
 	// out mid-stage. Nil-safe (a nil client stays nil → Analyze is a no-op).
-	a.matchAnalysis = matchanalysis.NewAnalyzer(cfg.LLM.WithTimeout(matchAnalysisLLMTimeout), cfg.PIIDetector)
+	a.matchAnalysis = matchanalysis.NewAnalyzer(cfg.LLM.WithTimeout(matchAnalysisLLMTimeout))
 	a.structuredExtractor = resumeextract.NewExtractor(cfg.LLM.WithTimeout(resumeExtractLLMTimeout), cfg.PIIDetector)
 	a.matchAnalysisCache = queries
 	a.credits = credits.NewStore(queries, cfg.Pool, cfg.Credits)

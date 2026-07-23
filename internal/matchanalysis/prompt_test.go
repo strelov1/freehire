@@ -4,23 +4,27 @@ import "strings"
 
 import "testing"
 
-func TestStage1Prompt_IncludesStructuredResumeWhenPresent(t *testing.T) {
-	in := Input{JobTitle: "Go Engineer", CVText: "raw cv", StructuredResume: `{"full_name":"Jane"}`}
-	got := stage1UserPrompt(in, nil)
-	if !strings.Contains(got, `{"full_name":"Jane"}`) {
-		t.Errorf("stage1 prompt missing structured résumé block:\n%s", got)
+func TestStage1Prompt_SendsDeIdentifiedStructuredNotRawCV(t *testing.T) {
+	in := Input{JobTitle: "Go Engineer", CVText: "raw cv", StructuredResume: `{"full_name":"Jane","email":"jane@x.com","summary":"Go dev"}`}
+	got := stage1UserPrompt(in, candidateContext(in.StructuredResume))
+	if !strings.Contains(got, `"summary":"Go dev"`) {
+		t.Errorf("stage1 prompt missing the structured candidate context:\n%s", got)
 	}
-	if !strings.Contains(got, "raw cv") {
-		t.Error("stage1 prompt must still include the raw CV text (structure is additive, not a replacement)")
+	if strings.Contains(got, "Jane") || strings.Contains(got, "jane@x.com") {
+		t.Errorf("contacts must be stripped from the candidate context:\n%s", got)
+	}
+	if strings.Contains(got, "raw cv") {
+		t.Errorf("the raw CV must never be sent to the model:\n%s", got)
 	}
 }
 
-func TestStage1Prompt_OmitsStructuredBlockWhenEmpty(t *testing.T) {
-	withEmpty := stage1UserPrompt(Input{JobTitle: "Go Engineer", CVText: "raw cv"}, nil)
-	// The structured header must not appear at all when there is no structured résumé,
-	// so an un-extracted CV produces exactly today's prompt.
-	if strings.Contains(withEmpty, "Structured résumé") {
-		t.Errorf("stage1 prompt should omit the structured block when empty:\n%s", withEmpty)
+func TestStage1Prompt_OmitsCandidateBlockWhenNoStructured(t *testing.T) {
+	withEmpty := stage1UserPrompt(Input{JobTitle: "Go Engineer", CVText: "raw cv"}, candidateContext(""))
+	if strings.Contains(withEmpty, "Candidate (structured résumé") {
+		t.Errorf("stage1 prompt should omit the candidate block when there is no structured résumé:\n%s", withEmpty)
+	}
+	if strings.Contains(withEmpty, "raw cv") {
+		t.Errorf("the raw CV must never be sent to the model:\n%s", withEmpty)
 	}
 }
 
@@ -36,7 +40,7 @@ func TestWriteLocation_RemoteWithinReachAddsNote(t *testing.T) {
 		JobCountries:        []string{"do"},
 		LocationPreferences: `{"base":{"country":"br"},"remote":{"regions":["global","latam","cis"]},"relocation":{"open":false}}`,
 	}
-	got := stage2UserPrompt(in, nil, nil)
+	got := stage2UserPrompt(in, nil, candidateContext(in.StructuredResume))
 	if !strings.Contains(got, "within the candidate's stated remote reach") {
 		t.Errorf("expected remote-reach NOTE for a LATAM-remote job matching the candidate's reach:\n%s", got)
 	}
@@ -50,7 +54,7 @@ func TestWriteLocation_RemoteOutsideReachNoNote(t *testing.T) {
 		JobRegions:          []string{"latam"},
 		LocationPreferences: `{"remote":{"regions":["europe"]}}`,
 	}
-	got := stage2UserPrompt(in, nil, nil)
+	got := stage2UserPrompt(in, nil, candidateContext(in.StructuredResume))
 	if strings.Contains(got, "within the candidate's stated remote reach") {
 		t.Errorf("must not vouch for a remote job outside the candidate's reach:\n%s", got)
 	}

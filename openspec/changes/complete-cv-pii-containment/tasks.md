@@ -1,8 +1,8 @@
 ## 1. matchanalysis → structured-only
 
-- [ ] 1.1 Feed the fit chain the structured résumé with contact fields (`full_name/email/phone/links`) excluded, and stop sending raw CV: drop `writeCV`, make `writeStructured` the CV context, adjust the stage prompts/labels accordingly; tests assert the raw CV text never appears in any stage prompt and contacts are absent
-- [ ] 1.2 Remove the per-analysis PII machinery now that no raw CV is sent: delete `redact.go` (redactingEmit/restoreAnalysis/contactsFromStructured), drop the `detector` field + restore path, revert `NewAnalyzer` to `(client)`; update tests
-- [ ] 1.3 Degrade to no analysis when the structured résumé is absent/stale (no raw-CV fallback); test the no-structured path returns no analysis
+- [x] 1.1 Feed the fit chain the structured résumé with contact fields (`full_name/email/phone/links`) excluded, and stop sending raw CV: drop `writeCV`, make `writeStructured` the CV context, adjust the stage prompts/labels accordingly; tests assert the raw CV text never appears in any stage prompt and contacts are absent
+- [x] 1.2 Remove the per-analysis PII machinery now that no raw CV is sent: delete `redact.go` (redactingEmit/restoreAnalysis/contactsFromStructured), drop the `detector` field + restore path, revert `NewAnalyzer` to `(client)`; update tests
+- [x] 1.3 Degrade to no analysis when the structured résumé is absent/stale (no raw-CV fallback); test the no-structured path returns no analysis
 
 ## 2. atscheck → structured input
 

@@ -73,7 +73,7 @@ func TestListMyAnalysesEndpoint(t *testing.T) {
 	h := &API{
 		pool: pool, queries: queries, issuer: iss,
 		userProfile: userprofile.New(ownedProfile()),
-		resume:      store, matchAnalysis: matchanalysis.NewAnalyzer(nil, nil), matchAnalysisCache: queries,
+		resume:      store, matchAnalysis: matchanalysis.NewAnalyzer(nil), matchAnalysisCache: queries,
 		credits: credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}),
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
