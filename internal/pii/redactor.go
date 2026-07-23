@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 // Contacts are the caller's authoritative contact values (e.g. from a structured résumé).
@@ -129,12 +130,15 @@ func Build(ctx context.Context, text string, known Contacts, d Detector) (*Redac
 // (a name, an address), so word-boundary matching is worth attempting to avoid over-redaction.
 var wordyKind = map[string]bool{KindName: true, KindAddress: true}
 
-// fillContact records a detected value into c: the first name/email/phone wins, every link
-// is collected. Called only for detected spans, so c reflects the CV, not known input.
+// fillContact records a detected value into c: the first plausible name/email/phone wins,
+// and each distinct clean link is collected. Called only for detected spans, so c reflects
+// the CV, not known input. It is defensive because the model mis-tags handles/slugs as a
+// person and its URL spans sometimes swallow neighbouring text — the redactor still masks
+// every span, but only well-formed values become the caller's stored contact fields.
 func fillContact(c *Contacts, kind, v string) {
 	switch kind {
 	case KindName:
-		if c.FullName == "" {
+		if c.FullName == "" && isPlausibleName(v) {
 			c.FullName = v
 		}
 	case KindEmail:
@@ -146,8 +150,46 @@ func fillContact(c *Contacts, kind, v string) {
 			c.Phone = v
 		}
 	case KindLink:
-		c.Links = append(c.Links, v)
+		if isCleanLink(v) && !containsString(c.Links, v) {
+			c.Links = append(c.Links, v)
+		}
 	}
+}
+
+// isPlausibleName reports whether v reads like a real full name: at least two
+// whitespace-separated tokens of letters (and name punctuation), and none of the @ / :
+// characters that mark a handle, slug, or URL the model sometimes classifies as a person.
+func isPlausibleName(v string) bool {
+	if strings.ContainsAny(v, "@/:") {
+		return false
+	}
+	fields := strings.Fields(v)
+	if len(fields) < 2 {
+		return false
+	}
+	for _, f := range fields {
+		for _, r := range f {
+			if !unicode.IsLetter(r) && r != '-' && r != '.' && r != '\'' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// isCleanLink rejects a link/handle carrying internal whitespace — the sign of a model span
+// that grabbed surrounding text (a well-formed URL or @handle has none).
+func isCleanLink(v string) bool {
+	return v != "" && !strings.ContainsAny(v, " \t\n\r")
+}
+
+func containsString(ss []string, s string) bool {
+	for _, x := range ss {
+		if x == s {
+			return true
+		}
+	}
+	return false
 }
 
 // Redact replaces every detected PII value in text with its placeholder. A nil Redactor is

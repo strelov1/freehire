@@ -83,6 +83,37 @@ func TestKnownContactsMaskedInOtherText(t *testing.T) {
 	}
 }
 
+// spansDetector returns a fixed span set, to reproduce messy real-CV detections.
+type spansDetector struct{ spans []Span }
+
+func (d spansDetector) Detect(_ context.Context, _ string) ([]Span, error) { return d.spans, nil }
+
+func TestContacts_RejectsHandleNameAndCleansLinks(t *testing.T) {
+	// A handle the model mis-tags as a person, a duplicate link, and a garbled model link
+	// span that swallowed surrounding text — as seen on a real two-column CV.
+	text := "@jprice_dev github.com/alex CONTACTS\n https://x.io"
+	det := spansDetector{spans: []Span{
+		{Start: 0, End: 10, Kind: KindName},         // "@jprice_dev" — not a real name
+		{Start: 11, End: 26, Kind: KindLink},        // "github.com/alex" (dup of regex)
+		{Start: 27, End: len(text), Kind: KindLink}, // "CONTACTS\n https://x.io" — garbled
+	}}
+	c := mustBuild(t, text, Contacts{}, det).Contacts()
+
+	if c.FullName != "" {
+		t.Errorf("FullName = %q, want empty (a @handle is not a name)", c.FullName)
+	}
+	seen := map[string]bool{}
+	for _, l := range c.Links {
+		if seen[l] {
+			t.Errorf("duplicate link %q in %v", l, c.Links)
+		}
+		seen[l] = true
+		if strings.ContainsAny(l, " \t\n") {
+			t.Errorf("garbled link with whitespace: %q", l)
+		}
+	}
+}
+
 func TestContactsFromDetectedSpans(t *testing.T) {
 	cv := "Ivan Petrov ivan@petrov.io github.com/ivanp linkedin.com/in/ivanp"
 	r := mustBuild(t, cv, Contacts{}, nameDetector{names: []string{"Ivan Petrov"}})
