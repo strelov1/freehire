@@ -20,7 +20,7 @@
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
     "tokens:build": "node scripts/build-tokens.mjs",
-    "validate:docs": "echo \"validate:docs: nothing to validate yet (phase 06 adds DSDS)\"",
+    "validate:docs": "node scripts/validate-docs.mjs",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
   },

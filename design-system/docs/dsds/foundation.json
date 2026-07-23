@@ -1,0 +1,95 @@
+{
+  "$schema": "https://designsystemds.org/schema/foundation.json",
+  "entities": [
+    {
+      "id": "foundation.color",
+      "type": "foundation",
+      "category": "color",
+      "name": "Color",
+      "description": "Semantic color tokens — background, foreground, surfaces, brand family, destructive, border, input, ring.",
+      "source": {
+        "file": "../tokens/color.tokens.json",
+        "path": ""
+      },
+      "tokens": [
+        "background", "foreground", "card", "card-foreground", "popover", "popover-foreground",
+        "primary", "primary-foreground", "secondary", "secondary-foreground",
+        "muted", "muted-foreground", "accent", "accent-foreground",
+        "destructive", "border", "input", "ring",
+        "brand", "brand-foreground", "brand-strong", "brand-muted", "brand-ring"
+      ]
+    },
+    {
+      "id": "foundation.spacing",
+      "type": "foundation",
+      "category": "spacing",
+      "name": "Spacing",
+      "description": "13-step spacing scale aligned with Tailwind's default (1 unit = 0.25rem = 4px).",
+      "source": {
+        "file": "../tokens/spacing.tokens.json",
+        "path": ""
+      },
+      "tokens": ["spacing-0", "spacing-1", "spacing-2", "spacing-3", "spacing-4", "spacing-5", "spacing-6", "spacing-8", "spacing-10", "spacing-12", "spacing-16", "spacing-20", "spacing-24"]
+    },
+    {
+      "id": "foundation.typography",
+      "type": "foundation",
+      "category": "typography",
+      "name": "Typography",
+      "description": "Font families, 8 font sizes, 4 font weights, 3 line heights.",
+      "source": {
+        "file": "../tokens/typography.tokens.json",
+        "path": ""
+      },
+      "tokens": ["font-sans", "font-mono", "font-size-xs", "font-size-sm", "font-size-base", "font-size-lg", "font-size-xl", "font-size-2xl", "font-size-3xl", "font-size-4xl", "font-weight-normal", "font-weight-medium", "font-weight-semibold", "font-weight-bold", "line-height-tight", "line-height-normal", "line-height-relaxed"]
+    },
+    {
+      "id": "foundation.radius",
+      "type": "foundation",
+      "category": "radius",
+      "name": "Radius",
+      "description": "Base radius (0.625rem) with sm/md/lg/xl derivations.",
+      "source": {
+        "file": "../tokens/radius.tokens.json",
+        "path": ""
+      },
+      "tokens": ["radius", "radius-sm", "radius-md", "radius-lg", "radius-xl"]
+    },
+    {
+      "id": "foundation.shadow",
+      "type": "foundation",
+      "category": "shadow",
+      "name": "Shadow",
+      "description": "4-step elevation scale: sm (dropdowns), md (cards), lg (dialogs), xl (overlays).",
+      "source": {
+        "file": "../tokens/shadow.tokens.json",
+        "path": ""
+      },
+      "tokens": ["shadow-sm", "shadow-md", "shadow-lg", "shadow-xl"]
+    },
+    {
+      "id": "foundation.motion",
+      "type": "foundation",
+      "category": "motion",
+      "name": "Motion",
+      "description": "3 durations (fast/normal/slow) + 3 easing curves (ease-in/ease-out/ease-in-out).",
+      "source": {
+        "file": "../tokens/motion.tokens.json",
+        "path": ""
+      },
+      "tokens": ["duration-fast", "duration-normal", "duration-slow", "ease-in", "ease-out", "ease-in-out"]
+    },
+    {
+      "id": "foundation.z-index",
+      "type": "foundation",
+      "category": "z-index",
+      "name": "Z-index",
+      "description": "6-step stacking scale: base, dropdown, sticky, modal, popover, toast.",
+      "source": {
+        "file": "../tokens/z-index.tokens.json",
+        "path": ""
+      },
+      "tokens": ["z-base", "z-dropdown", "z-sticky", "z-modal", "z-popover", "z-toast"]
+    }
+  ]
+}

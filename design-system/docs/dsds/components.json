@@ -1,0 +1,205 @@
+{
+  "$schema": "https://designsystemds.org/schema/component.json",
+  "entities": [
+    {
+      "id": "component.button",
+      "type": "component",
+      "name": "Button",
+      "description": "Action button with variant (primary/secondary/outline/ghost) and size (sm/md/lg/icon) props. Supports href for link rendering.",
+      "source": { "file": "../../src/button.svelte" },
+      "props": [
+        { "name": "variant", "type": "ButtonVariant", "default": "secondary", "values": ["primary", "secondary", "outline", "ghost"] },
+        { "name": "size", "type": "ButtonSize", "default": "md", "values": ["sm", "md", "lg", "icon"] },
+        { "name": "href", "type": "string", "default": "undefined", "description": "If set, renders an <a> instead of a <button>." },
+        { "name": "class", "type": "string", "default": "undefined" },
+        { "name": "children", "type": "Snippet", "required": true }
+      ],
+      "story": { "file": "../../src/button.stories.ts" }
+    },
+    {
+      "id": "component.badge",
+      "type": "component",
+      "name": "Badge",
+      "description": "Small status label with variant (secondary/outline/brand/missing).",
+      "source": { "file": "../../src/badge.svelte" },
+      "props": [
+        { "name": "variant", "type": "BadgeVariant", "default": "secondary", "values": ["secondary", "outline", "brand", "missing"] },
+        { "name": "class", "type": "string" },
+        { "name": "children", "type": "Snippet", "required": true }
+      ],
+      "story": { "file": "../../src/badge.stories.ts" }
+    },
+    {
+      "id": "component.input",
+      "type": "component",
+      "name": "Input",
+      "description": "Styled text input with bindable value, focus ring, and dark-mode support.",
+      "source": { "file": "../../src/input.svelte" },
+      "props": [
+        { "name": "value", "type": "string", "bindable": true },
+        { "name": "class", "type": "string" }
+      ],
+      "story": { "file": "../../src/input.stories.ts" }
+    },
+    {
+      "id": "component.card",
+      "type": "component",
+      "name": "Card",
+      "description": "Surface container with border, bg-card, and shadow-sm.",
+      "source": { "file": "../../src/card.svelte" },
+      "props": [
+        { "name": "class", "type": "string" },
+        { "name": "children", "type": "Snippet", "required": true }
+      ],
+      "story": { "file": "../../src/card.stories.ts" }
+    },
+    {
+      "id": "component.dialog",
+      "type": "component",
+      "name": "Dialog",
+      "description": "Modal with backdrop, Escape to close, and focus-visible close button. Uses z-modal/z-popover tokens.",
+      "source": { "file": "../../src/dialog.svelte" },
+      "props": [
+        { "name": "open", "type": "boolean", "bindable": true, "default": false },
+        { "name": "title", "type": "string" },
+        { "name": "description", "type": "string" },
+        { "name": "class", "type": "string" },
+        { "name": "children", "type": "Snippet", "required": true }
+      ],
+      "story": { "file": "../../src/dialog.stories.ts" }
+    },
+    {
+      "id": "component.tabs",
+      "type": "component",
+      "name": "Tabs",
+      "description": "Tab list with arrow-key navigation and ARIA roles. Active tab styled via tailwind-variants.",
+      "source": { "file": "../../src/tabs.svelte" },
+      "props": [
+        { "name": "value", "type": "string", "bindable": true },
+        { "name": "tabs", "type": "{ value: string; label: string }[]", "required": true },
+        { "name": "class", "type": "string" },
+        { "name": "children", "type": "Snippet", "required": true }
+      ]
+    },
+    {
+      "id": "component.tooltip",
+      "type": "component",
+      "name": "Tooltip",
+      "description": "Hover/focus tooltip with 4 positions (top/right/bottom/left).",
+      "source": { "file": "../../src/tooltip.svelte" },
+      "props": [
+        { "name": "content", "type": "Snippet", "required": true },
+        { "name": "side", "type": "'top' | 'right' | 'bottom' | 'left'", "default": "top" },
+        { "name": "class", "type": "string" },
+        { "name": "children", "type": "Snippet", "required": true }
+      ]
+    },
+    {
+      "id": "component.alert",
+      "type": "component",
+      "name": "Alert",
+      "description": "Inline alert with default/destructive/brand variants.",
+      "source": { "file": "../../src/alert.svelte" },
+      "props": [
+        { "name": "variant", "type": "AlertVariant", "default": "default", "values": ["default", "destructive", "brand"] },
+        { "name": "class", "type": "string" },
+        { "name": "children", "type": "Snippet", "required": true }
+      ],
+      "story": { "file": "../../src/alert.stories.ts" }
+    },
+    {
+      "id": "component.chip",
+      "type": "component",
+      "name": "Chip",
+      "description": "Pill/tag with default/primary/secondary/brand/destructive variants.",
+      "source": { "file": "../../src/chip.svelte" },
+      "props": [
+        { "name": "variant", "type": "ChipVariant", "default": "default", "values": ["default", "primary", "secondary", "brand", "destructive"] },
+        { "name": "class", "type": "string" },
+        { "name": "children", "type": "Snippet", "required": true }
+      ],
+      "story": { "file": "../../src/chip.stories.ts" }
+    },
+    {
+      "id": "component.avatar",
+      "type": "component",
+      "name": "Avatar",
+      "description": "Image-or-initials avatar with deterministic hue from name.",
+      "source": { "file": "../../src/avatar.svelte" },
+      "props": [
+        { "name": "name", "type": "string" },
+        { "name": "src", "type": "string" },
+        { "name": "size", "type": "'sm' | 'md' | 'lg'", "default": "md" },
+        { "name": "class", "type": "string" }
+      ],
+      "story": { "file": "../../src/avatar.stories.ts" }
+    },
+    {
+      "id": "component.empty-state",
+      "type": "component",
+      "name": "EmptyState",
+      "description": "Loading/empty placeholder with optional icon, description, and action slot.",
+      "source": { "file": "../../src/empty-state.svelte" },
+      "props": [
+        { "name": "title", "type": "string", "default": "Nothing here yet" },
+        { "name": "description", "type": "string" },
+        { "name": "icon", "type": "Snippet" },
+        { "name": "action", "type": "Snippet" },
+        { "name": "class", "type": "string" }
+      ],
+      "story": { "file": "../../src/empty-state.stories.ts" }
+    },
+    {
+      "id": "component.skeleton",
+      "type": "component",
+      "name": "Skeleton",
+      "description": "Animated placeholder div (animate-pulse + bg-muted).",
+      "source": { "file": "../../src/skeleton.svelte" },
+      "props": [
+        { "name": "class", "type": "string" }
+      ],
+      "story": { "file": "../../src/skeleton.stories.ts" }
+    },
+    {
+      "id": "component.pagination",
+      "type": "component",
+      "name": "Pagination",
+      "description": "Prev/next pagination with page count and ARIA nav label.",
+      "source": { "file": "../../src/pagination.svelte" },
+      "props": [
+        { "name": "page", "type": "number", "bindable": true, "default": 1 },
+        { "name": "total", "type": "number", "required": true },
+        { "name": "perPage", "type": "number", "default": 20 },
+        { "name": "class", "type": "string" }
+      ],
+      "story": { "file": "../../src/pagination.stories.ts" }
+    },
+    {
+      "id": "component.form-field",
+      "type": "component",
+      "name": "FormField",
+      "description": "Label + error + hint wrapper with auto-generated id and required indicator.",
+      "source": { "file": "../../src/form-field.svelte" },
+      "props": [
+        { "name": "label", "type": "string" },
+        { "name": "error", "type": "string" },
+        { "name": "hint", "type": "string" },
+        { "name": "required", "type": "boolean", "default": false },
+        { "name": "class", "type": "string" },
+        { "name": "children", "type": "Snippet", "required": true }
+      ]
+    },
+    {
+      "id": "component.table",
+      "type": "component",
+      "name": "Table",
+      "description": "Styled table with slots for thead/tbody/tr/th/td.",
+      "source": { "file": "../../src/table.svelte" },
+      "props": [
+        { "name": "header", "type": "Snippet" },
+        { "name": "class", "type": "string" },
+        { "name": "children", "type": "Snippet", "required": true }
+      ]
+    }
+  ]
+}

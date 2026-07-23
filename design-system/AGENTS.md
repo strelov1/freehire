@@ -5,8 +5,8 @@
 surface, so app code imports from `$lib/ui` and never reaches into the package directly.
 
 Being extracted from `web/` in phases by an external contributor; the phase inventory lives
-in `design-system/docs/`. A script that still `echo`s a placeholder (`validate:docs`) is an
-unfinished phase, not breakage.
+in `design-system/docs/`. A script that still `echo`s a placeholder is an unfinished phase,
+not breakage.
 
 ## Always true
 
@@ -74,6 +74,20 @@ to the bundler's JS parser and dies on the markup. The cost is the autodocs prop
 the Docs tab renders thin, and `argTypes` are hand-maintained: they drift from a component's
 actual variants with nothing to catch it. `Button`'s list already did, losing `destructive`.
 
+## DSDS docs
+
+`docs/dsds/*.json` describes the system as entities a docs site can render: `foundation.json`
+(one entity per token family, each listing its token names), `theme.json` (the dark mode and
+its `.dark` selector), `components.json` (one entity per primitive — props, defaults, and
+links to its source and story).
+
+`pnpm validate:docs` (`scripts/validate-docs.mjs`, run in CI) parses every file and checks
+that each entity carries `id`, `type` and `name`. **That is structure only — nothing compares
+an entity against the component or token it claims to describe.** A variant added to a `tv()`
+call, a token added to `tokens/*.tokens.json`, or a story file added under `src/` leaves the
+JSON stale and CI green, the same way hand-maintained `argTypes` drift. Touch a primitive or a
+token family, update its entity in the same commit.
+
 ## Limitations
 
-- The DSDS docs site is not configured yet.
+- The DSDS docs site itself is not configured yet — only the entity JSON it would consume.

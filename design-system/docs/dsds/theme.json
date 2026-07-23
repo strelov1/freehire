@@ -1,0 +1,17 @@
+{
+  "$schema": "https://designsystemds.org/schema/theme.json",
+  "entities": [
+    {
+      "id": "theme.dark",
+      "type": "theme",
+      "name": "Dark",
+      "description": "Dark-mode color overrides — same token paths as light, different values for all 23 color tokens.",
+      "source": {
+        "file": "../tokens/color-dark.tokens.json",
+        "path": ""
+      },
+      "mode": "dark",
+      "selector": ".dark"
+    }
+  ]
+}
