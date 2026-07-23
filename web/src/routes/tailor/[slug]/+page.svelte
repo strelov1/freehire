@@ -19,6 +19,7 @@
   import ArtifactPanel from '$lib/tailor/ArtifactPanel.svelte';
   import CvHtmlPreview from '$lib/tailor/CvHtmlPreview.svelte';
   import CvSectionForm from '$lib/components/cv/CvSectionForm.svelte';
+  import MarginSettings from '$lib/components/cv/MarginSettings.svelte';
   import AccountNavRail from '$lib/components/AccountNavRail.svelte';
   import { clampWidth } from '$lib/tailor/geometry';
   import { toEditable, emptyDocument, type CvRecord } from '$lib/cv';
@@ -50,7 +51,7 @@
 
   // Left panel: which tab is shown, and its resizable width. The chat stays mounted across tab
   // switches (hidden, not unmounted) so its live session is never dropped.
-  let leftTab = $state<'chat' | 'editor'>('chat');
+  let leftTab = $state<'chat' | 'editor' | 'settings'>('chat');
   let leftWidth = $state(380);
   let leftPanelEl = $state<HTMLElement>();
   let leftResizing = false;
@@ -65,10 +66,11 @@
   // syncs the matching column's own selector (mobile → column) so the wide layout shows the same
   // content once revealed. The reverse (a desktop tab change updating mobileView) is not wired —
   // switching a column tab then narrowing across lg resets the mobile view to that tab's default.
-  type MobileView = 'chat' | 'editor' | 'preview' | 'templates' | 'jd' | 'verdict';
+  type MobileView = 'chat' | 'editor' | 'settings' | 'preview' | 'templates' | 'jd' | 'verdict';
   const mobileTabs: [MobileView, string][] = [
     ['chat', 'Chat'],
     ['editor', 'Editor'],
+    ['settings', 'Settings'],
     ['preview', 'Preview'],
     ['templates', 'Templates'],
     ['jd', 'Job'],
@@ -81,7 +83,7 @@
   let navOpen = $state(false);
   function pickMobile(v: MobileView) {
     mobileView = v;
-    if (v === 'chat' || v === 'editor') leftTab = v;
+    if (v === 'chat' || v === 'editor' || v === 'settings') leftTab = v;
     else if (v !== 'preview') artifactTab = v;
   }
 
@@ -297,7 +299,7 @@
         bind:this={leftPanelEl}
         class={[
           'w-full min-h-0 flex-1 flex-col border-r border-border bg-background lg:w-[var(--lw)] lg:flex-none lg:flex',
-          mobileView === 'chat' || mobileView === 'editor' ? 'flex' : 'hidden',
+          mobileView === 'chat' || mobileView === 'editor' || mobileView === 'settings' ? 'flex' : 'hidden',
         ]}
         style="--lw: {leftWidth}px"
       >
@@ -313,13 +315,20 @@
             </button>
             <button
               type="button"
+              onclick={() => (leftTab = 'settings')}
+              class={['rounded px-2 py-1 transition-colors', leftTab === 'settings' ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:text-foreground']}
+            >
+              Settings
+            </button>
+            <button
+              type="button"
               onclick={() => (leftTab = 'chat')}
               class={['rounded px-2 py-1 transition-colors', leftTab === 'chat' ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:text-foreground']}
             >
               Chat
             </button>
           </div>
-          {#if leftTab === 'editor'}
+          {#if leftTab === 'editor' || leftTab === 'settings'}
             <span
               class={['pr-1 text-xs', saveState === 'error' ? 'text-destructive' : 'text-muted-foreground']}
               aria-live="polite"
@@ -332,6 +341,15 @@
         <div class="min-h-0 flex-1">
           <div class="h-full overflow-auto p-4" class:hidden={leftTab !== 'editor'}>
             <CvSectionForm bind:doc bind:title />
+          </div>
+          <div class="h-full overflow-auto p-4" class:hidden={leftTab !== 'settings'}>
+            <section class="space-y-3">
+              <div>
+                <h2 class="text-lg font-semibold">Margins <span class="text-sm font-normal text-muted-foreground">(in inches)</span></h2>
+                <p class="mt-0.5 text-sm text-muted-foreground">Page margins applied to the preview and the downloaded PDF.</p>
+              </div>
+              <MarginSettings bind:margins={doc.margins} />
+            </section>
           </div>
           <div class="flex min-h-0 h-full" class:hidden={leftTab !== 'chat'}>
             <AssistantChat

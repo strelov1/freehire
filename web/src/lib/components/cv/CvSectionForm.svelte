@@ -11,7 +11,6 @@
     blankCertification,
   } from '$lib/cv';
   import StringListEditor from './StringListEditor.svelte';
-  import MarginSettings from './MarginSettings.svelte';
 
   // The controlled section form for one CV: binds directly to a caller-owned Document (and CV
   // title) and adds/removes rows per section. It does no data-fetching and no saving — the host
@@ -44,16 +43,10 @@
     <Input id="cv-title" bind:value={title} placeholder="e.g. Backend Engineer — general" class="w-full" />
   </section>
 
-  <!-- Page margins -->
-  <section class="space-y-3">
-    <h2 class="text-lg font-semibold">Margins <span class="text-sm font-normal text-muted-foreground">(in inches)</span></h2>
-    <MarginSettings bind:margins={doc.margins} />
-  </section>
-
   <!-- Header -->
   <section class="space-y-3">
     <h2 class="text-lg font-semibold">Header</h2>
-    <div class="grid gap-3 sm:grid-cols-2">
+    <div class="grid gap-3 sm:grid-cols-2 [&>*]:w-full">
       <Input bind:value={doc.header.full_name} placeholder="Full name" />
       <Input bind:value={doc.header.email} placeholder="Email" />
       <Input bind:value={doc.header.phone} placeholder="Phone" />
@@ -87,11 +80,11 @@
     {#each doc.experience ?? [] as entry, i (entry)}
       <div class="space-y-3 rounded-lg border border-border p-4">
         <div class="flex items-start justify-between gap-2">
-          <div class="grid flex-1 gap-3 sm:grid-cols-2">
+          <div class="grid flex-1 gap-3 sm:grid-cols-2 [&>*]:w-full">
             <Input bind:value={entry.role} placeholder="Role" />
             <Input bind:value={entry.company} placeholder="Company" />
             <Input bind:value={entry.location} placeholder="Location" />
-            <div class="grid grid-cols-2 gap-3">
+            <div class="grid grid-cols-2 gap-3 [&>*]:w-full">
               <Input bind:value={entry.start} placeholder="Start (e.g. 2021)" />
               <Input bind:value={entry.end} placeholder="End / Present" />
             </div>
@@ -123,11 +116,11 @@
     </div>
     {#each doc.education ?? [] as entry, i (entry)}
       <div class="flex items-start justify-between gap-2 rounded-lg border border-border p-4">
-        <div class="grid flex-1 gap-3 sm:grid-cols-2">
+        <div class="grid flex-1 gap-3 sm:grid-cols-2 [&>*]:w-full">
           <Input bind:value={entry.institution} placeholder="Institution" />
           <Input bind:value={entry.degree} placeholder="Degree" />
           <Input bind:value={entry.field} placeholder="Field" />
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-2 gap-3 [&>*]:w-full">
             <Input bind:value={entry.start} placeholder="Start" />
             <Input bind:value={entry.end} placeholder="End" />
           </div>
