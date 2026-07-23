@@ -1,126 +1,100 @@
 # Component inventory
 
-Living doc. One row per `.svelte` component under `web/src/lib/components/` (root + `cv/`, `facets/`, `filters/`, `onboarding/`). Classified **systemized** (generic, reusable primitive or pattern; will be built from the shared primitive layer) or **bespoke** (one-off, page-specific, or content-bound; stays as-is with a stated reason).
+Living doc. Inventories `.svelte` files under `web/src/lib/components/` (root + `cv/`, `facets/`, `filters/`, `onboarding/`) and `web/src/lib/ui/`.
 
-Last updated: phase 1 investigation. Total: **99 components** (23 systemized, 76 bespoke).
+Files are classified into four buckets — **components**, **views**, **layouts**, **patterns**. Only **components** are the focus of this inventory; the other three are listed for reference and deferred to Storybook (phase 05), where their stories can capture the recurring shapes without conflating them with reusable primitives.
 
-## Migration-candidate patterns
+Last updated: post-phase-1 refinement (component vs. view distinction).
 
-These are the recurring shapes the design-system primitive layer (phase 04) should absorb. Listed by highest consolidation value.
+## Components (29)
 
-1. **Dialogs/modals — 4 implementations.** `AuthDialog`, `ReportDialog`, `GmailConnectDialog` each hand-roll backdrop + Escape + scroll-lock. `FilterModalShell` is already a clean reusable shell. The three one-offs fold into a shared `<Dialog>` primitive.
-2. **Hand-built SVG charts — 6 implementations.** `ActivityBars`, `GrowthArea`, `HomeFunnel`, `PipelineFunnel`, `RateDonut`, `FacetBreakdown`. `RateDonut` is the only generic one; the rest are bound to specific data shapes.
-3. **Empty/loading states — scattered.** `States` is the shared primitive, but several charts/views inline their own empty message (`GrowthArea`, `ActivityBars`, `HomeFunnel`). Consolidate onto `States`.
-4. **Searchable selects / dropdowns — 5 variants.** `SearchSelect`, `RemoteSearchSelect`, `TokenInput`, `ApplicationLinkPicker`, `HeaderSearch` results dropdown. Overlapping "type → filter → pick" pattern with stale-request guards.
-5. **Tabs — 5 inline implementations.** `JobRelated`, `JobDrawer`, `ModerationView`, `VerdictView`, `ProfileForm` each hand-roll a tab strip with bespoke active styling. A shared `<Tabs>` primitive absorbs all.
-6. **List-row + paginator composition — 3 near-identical.** `SavedJobs`, `JobHistory`, and the pattern inside `JobsView`/`CompaniesView` repeat `Paginator` + `States` + `JobRow` list + `LoadMore`. A `<PaginatedList>` wrapper dedupes.
-7. **Marketing "steps" sections — 5 copies.** `AboutValues`, `HomeView` (`sourced`), `ContributeLandingView`, `ForCompaniesView`, `RecruitersView` each render a numbered `01/02/03` definition-list with the same markup. Candidate `<NumberedSteps>` block.
+Self-contained UI building blocks with a defined props/slots API. Not bound to a specific route or page. These are the candidates for the design-system primitive layer (phase 04) and for Storybook stories (phase 05).
 
-## Systemized (23)
+### Existing primitives (`web/src/lib/ui/`)
 
-| file | subdir | reason |
+Migrate into `design-system/src/` in phase 04. All use Svelte 5 runes + `tailwind-variants`.
+
+| file | notes |
+|---|---|
+| button.svelte | variant: primary/secondary/outline/ghost; size: sm/md/lg/icon. `tv` with `buttonVariants`. |
+| badge.svelte | variant: secondary/outline/brand. `tv` with `badgeVariants`. |
+| input.svelte | `$bindable` value, `class` pass-through via `cn()`. Focus ring via `ring-ring/50`. |
+| skeleton.svelte | Pure `animate-pulse rounded-md bg-muted` div. |
+
+### Generic primitives (not bound to a domain)
+
+| file | subdir | classification | reason |
+|---|---|---|---|
+| Avatar.svelte | | primitive candidate | Generic email-initial avatar circle with deterministic color. Formalize in phase 04. |
+| CompanyLogo.svelte | | primitive candidate | Logo-with-monogram-fallback. Reusable across job row, job page, company page, header search. |
+| ProviderIcon.svelte | | bespoke | Brand SVG icon set (Google/GitHub/Telegram/LinkedIn). Bespoke — Lucide has no brand marks. |
+| BrandMark.svelte | | bespoke | freehire brand mark SVG. Brand asset, not a generic primitive. |
+| States.svelte | | primitive candidate | Shared loading/empty/error rendering. Formalize as "Empty state" in phase 04. |
+| LoadMore.svelte | | primitive candidate | Generic "Load more" button + error line. |
+| InfiniteScroll.svelte | | primitive candidate | Pure IntersectionObserver sentinel trigger. |
+| FilterEdgeTab.svelte | | primitive candidate | Generic floating edge-tab button. |
+| DocsCodeBlock.svelte | | primitive candidate | Generic copyable code block (label + pre/Shiki + copy button). |
+| StringListEditor.svelte | cv | primitive candidate | Generic add/remove list-of-strings editor over Input + Button. |
+| NoteEditor.svelte | | domain component | EasyMDE wrapper. Generic markdown editor, but only used in JobDrawer today. |
+
+### Data-viz components (presentational, need prop generalization)
+
+All hand-built SVG. Presentational but bound to specific data shapes — generalizing their props would make them design-system chart primitives.
+
+| file | classification | reason |
 |---|---|---|
-| Avatar.svelte | | Generic email-initial avatar circle with deterministic color. Reusable anywhere a user face is shown. |
-| ChipFacet.svelte | filters | Generic chip-facet wrapper (FacetHeader + PillGroup) driven by a facet param. Already flagged as migration candidate. |
-| CompanyLogo.svelte | | Logo-with-monogram-fallback primitive reused across job row, job page, company page, header search, board card. |
-| DocsCodeBlock.svelte | | Generic copyable code block (label + pre/Shiki + copy button). No doc-specific data coupling. |
-| FacetHeader.svelte | filters | Reusable label + Clear header shared by ChipFacet, CategoryPane, FacetSection. |
-| FacetSection.svelte | facets | One facet section (header + control dispatch) reused across job modal, company modal, sidebar. |
-| FilterEdgeTab.svelte | | Generic floating edge-tab button reused by /jobs, /companies, account profile. |
-| FilterModalShell.svelte | filters | Domain-agnostic two-pane filter-modal chrome (backdrop/rail/footer/deferred-apply) shared by FilterModal and CompanyFilterModal. |
-| FilterSummaryShell.svelte | filters | Reusable filter-summary sidebar shell shared by FilterSummary and CompanyFilterSummary. |
-| InfiniteScroll.svelte | | Pure IntersectionObserver sentinel trigger reused across jobs and companies lists. |
-| InsightsPageShell.svelte | | Shared page chrome (breadcrumb, H1, intro, rail) reused by all salary/skills/roles insight pages. |
-| ListToolbar.svelte | | Generic mobile list toolbar + scroll-revealed floating tabs reused by JobsView and CompaniesView. |
-| LoadMore.svelte | | Generic "Load more" button + error line. Already flagged as migration candidate. |
-| PillGroup.svelte | facets | Stateless three-state pill group reused by ChipFacet, FacetSection, CategoryPane. |
-| ProviderIcon.svelte | | Brand SVG icon set (Google/GitHub/Telegram/LinkedIn) reused by AuthDialog, Footer, GithubStars. |
-| RateDonut.svelte | | Purely presentational donut chart with generic percent/label props. No data-source coupling. |
-| RemoteSearchSelect.svelte | facets | Generic server-backed searchable multi-select with chips. Reusable across entity facets. |
-| SaveSearchAlert.svelte | filters | Centralized save-search + Telegram-alert control reused by sidebar, onboarding banner, modal, account page. |
-| SearchSelect.svelte | facets | Generic searchable multi-select of three-state pills. Reused by job modal, sidebar, ProfileForm, OnboardingWizard. |
-| Seo.svelte | | Generic per-page `<svelte:head>` metadata primitive used on every route. |
-| States.svelte | | Shared loading/empty/error rendering used by nearly every data view. Already flagged as migration candidate. |
-| StringListEditor.svelte | cv | Generic add/remove list-of-strings editor over Input + Button. Reusable for any token list. |
-| TokenInput.svelte | facets | Generic free-text chip input (Enter add / Backspace remove) for open-vocabulary facets. |
+| RateDonut.svelte | primitive candidate | Donut chart with generic percent/label props. Already the cleanest. |
+| ActivityBars.svelte | needs generalization | Grouped bar chart bound to `ActivityPoint` series. |
+| GrowthArea.svelte | needs generalization | Area chart bound to `UserGrowthPoint` series. |
+| PipelineFunnel.svelte | needs generalization | Sankey chart bound to `PIPELINE_BUCKETS`. |
+| HomeFunnel.svelte | needs generalization | Near-duplicate of PipelineFunnel. Consolidate into shared `SankeyFunnel` taking `buckets: {key,label,color}[]`. |
+| FacetBreakdown.svelte | needs generalization | Bar chart bound to `FacetDef` distribution. |
 
-## Bespoke (76)
+### Domain components (self-contained but bound to facet/filter system)
 
-| file | subdir | reason |
-|---|---|---|
-| ATSReportView.svelte | | Renders backend `ATSReport` shape with five fixed weighted categories and AI suggestions. |
-| AboutValues.svelte | | Hardcoded marketing values block specific to /about. |
-| ActivityBars.svelte | | Hand-built grouped bar chart bound to `ActivityPoint` catalogue-flow series. |
-| AnalysesView.svelte | | Tracking "AI fit" tab listing `MyAnalysisItem` rows tied to analyses API. |
-| AnalyticsView.svelte | | /analytics page wiring FilterModal + FacetBreakdown to facet-counts endpoint. |
-| ApiKeysView.svelte | | /my/api-keys page — create form, one-time reveal, key list tied to API-key resource. |
-| ApplicationLinkPicker.svelte | | One-off searchable popover used only by InboxView to link email to tracked application. |
-| AuthDialog.svelte | | Modal hand-rolled for auth form. Bound to login/register/OAuth logic. |
-| BoardCard.svelte | | Tracking-board card bound to `MyJob` + stage + email-count semantics. |
-| BoardColumn.svelte | | Drag-and-drop column bound to `BoardColumnId` and svelte-dnd-action. Only used by JobBoard. |
-| BrandMark.svelte | | freehire brand mark SVG. Brand asset, not a generic primitive. |
-| CategoryPane.svelte | filters | Specialization pane tied to `CATEGORY_GROUPS` and `category` facet. |
-| ChatGptView.svelte | | Marketing page for ChatGPT GPT with hardcoded hero, copy, mock chat. |
-| CliView.svelte | | Marketing page for CLI with hardcoded install one-liner and command reference. |
-| CompaniesView.svelte | | /companies list page composing its own paginator, filters, header-scope wiring. |
-| CompanyAbout.svelte | | "About" card bound to `Company.company_info.description` field. |
-| CompanyFacts.svelte | | Facts definition-list bound to `Company` scalar fields and curated YC badges. |
-| CompanyFollowButton.svelte | | Subscribe button wired to saved-search + Telegram-notification stores for one company. |
-| CompanyFilterModal.svelte | filters | Company-facets wrapper over FilterModalShell. Bound to `COMPANY_FACETS` grouping. |
-| CompanyFilterSummary.svelte | filters | Company-facets summary bound to `CompanyFilterStore` and `COMPANY_FACETS`. |
-| CompanyHeader.svelte | | Company identity header card bound to `Company` entity and follow button. |
-| CompanyView.svelte | | Company detail page composition (header + facts + streamed JobsView). |
-| ContributeLandingView.svelte | | Marketing/landing page for contributions with hardcoded steps and ATS list. |
-| ContributeView.svelte | | /contribute form page wired to submission API and reward points. |
-| DocsEndpoint.svelte | | Renders one API endpoint from docs `Endpoint` spec with method/path/params. |
-| DocsNav.svelte | | Docs navigation rail with scroll-spy tied to `CONCEPTS`/`NAV` doc registries. |
-| FacetBreakdown.svelte | | Bar chart bound to `FacetDef` distribution and `FilterStore` drill-down. |
-| FilterModal.svelte | filters | Job-filters wrapper over FilterModalShell. Bound to job `RAIL` and `StagedFilters`. |
-| FilterSummary.svelte | filters | Job-filters sidebar bound to `FilterStore`, `FACETS`, freshness/salary controls. |
-| Footer.svelte | | Site footer with hardcoded navigation groups and social links. |
-| ForCompaniesView.svelte | | Marketing page for companies with hardcoded benefits/freshness copy. |
-| GithubStars.svelte | | Star-count badge bound to `githubStars` store and freehire repo URL. |
-| GmailConnectDialog.svelte | | One-off modal with hardcoded pipeline-step marketing copy for Gmail connect. |
-| GrowthArea.svelte | | Hand-built area chart bound to `UserGrowthPoint` member-growth series. |
-| HeaderListSearch.svelte | | Header text input wired to `listSearchTarget` store and `/` / Cmd-K hotkeys. |
-| HeaderLocationFilter.svelte | | Header location popover tied to `JOBS_SCOPE`/`COMPANIES_SCOPE` and LocationPane. |
-| HeaderMenu.svelte | | Site nav + account menu + theme toggle with hardcoded primary/account link sets. |
-| HeaderSearch.svelte | | Global launcher dropdown wired to jobs + companies search endpoints. |
-| HomeFunnel.svelte | | Decorative Sankey chart for homepage with inlined bucket vocabulary. |
-| HomeView.svelte | | Homepage: hardcoded hero, sourced values, illustrative feed marquee, FAQ. |
-| InboxView.svelte | | /inbox page: Gmail/mailbox triage with own tabs, search, link picker. |
-| JobBoard.svelte | | Tracking board page owning columns, deep-link drawer, dnd state. |
-| JobDrawer.svelte | | Tracking application drawer with bespoke tabs (application/fit/description/emails). |
-| JobFitAnalysis.svelte | | Compact fit-summary block bound to cached `JobFitResponse` and quota. |
-| JobFitFull.svelte | | Full AI-fit report + live SSE stream tied to fit endpoint and reducer. |
-| JobHistory.svelte | | "Viewed jobs" list bound to `viewed` my-jobs endpoint. |
-| JobMatch.svelte | | Profile-match sidebar bound to `JobMatch`, profile store, match-state logic. |
-| JobRelated.svelte | | "More like this" tabbed block (similar/copies) tied to job's related data. |
-| JobRow.svelte | | Content-bound job card tied to `Job` shape, enrichment, save/view stores. |
-| JobView.svelte | | Job detail page with view/apply/save/report interactions wired to slug. |
-| JobsView.svelte | | /jobs list page owning filters, onboarding, infinite scroll, header-scope wiring. |
-| LocationPane.svelte | filters | Region→country tree + cities list bound to `COUNTRY_REGION_MAP` and location facets. |
-| ModerationView.svelte | | Moderator page with queue/reports tabs bound to submission/report APIs. |
-| MySubmissionsView.svelte | | "My submissions" list bound to user's `Submission` records. |
-| NoteEditor.svelte | | EasyMDE wrapper mounted only inside JobDrawer for per-application notes. |
-| OnboardingAlertBanner.svelte | onboarding | One-off post-onboarding nudge hosting quick SaveSearchAlert. |
-| OnboardingBanner.svelte | onboarding | One-off pre-onboarding nudge banner above /jobs feed. |
-| OnboardingWizard.svelte | onboarding | /jobs onboarding overlay tied to facet registries and onboarding lifecycle. |
-| PipelineFunnel.svelte | | Sankey chart bound to `PIPELINE_BUCKETS` and pipeline stats payload. |
-| PipelineView.svelte | | Pipeline page composing RateDonut + PipelineFunnel from `getMyPipeline`. |
-| ProfileForm.svelte | | Profile editor form bound to `UserProfile`, specialization caps, CV upload. |
-| RealityBadge.svelte | | Badge bound to `Reality` signal and `realityBadge`/`postingContrast` helpers. |
-| RecruitersView.svelte | | Marketing page for recruiters with hardcoded benefits/steps copy. |
-| ReportDialog.svelte | | Multi-step report-a-job modal wired to report reasons API. |
-| ReportQueue.svelte | | Moderator report queue bound to `Report` resource and resolve/dismiss actions. |
-| ResumeStructuredView.svelte | | Read-only view bound to `ResumeStructured` parsed-CV shape. |
-| SavedJobs.svelte | | "Saved jobs" list bound to `saved` my-jobs endpoint. |
-| SavedSearches.svelte | | "My filters" modal tab bound to `savedSearches` store and staged filters. |
-| SavedSearchesView.svelte | | /my/searches account page bound to saved searches + Telegram connection. |
-| StatusBoard.svelte | | /status page bound to `IngestStatus` rollup and provider-kind taxonomy. |
-| SubmitView.svelte | | /submit form wired to job-submission API. |
-| SwipeDeck.svelte | | /jobs/swipe page owning drag physics, queue, filters, save/dismiss flow. |
-| TopBar.svelte | | Site header: logo + context-swapping search + menu, auth-redirect handling. |
-| VerdictView.svelte | | Coverage/verdict body bound to `Verdict` payload and gap/skill tabs. |
-| CvEditor.svelte | cv | CV section editor bound to `Document` shape and CV API. |
-| CvList.svelte | cv | CV builder landing bound to CV list/create/delete API. |
+| file | subdir | classification | reason |
+|---|---|---|---|
+| SearchSelect.svelte | facets | pattern candidate | Searchable multi-select of three-state pills. Generic shape, but imports `FacetOption`. |
+| RemoteSearchSelect.svelte | facets | pattern candidate | Server-backed searchable multi-select. Generic shape, but imports `FacetOption`. |
+| TokenInput.svelte | facets | primitive candidate | Free-text chip input (Enter add / Backspace remove). Genuinely generic. |
+| PillGroup.svelte | facets | pattern candidate | Three-state pill group. Imports `FacetOption`. The pill shape is a primitive candidate; the three-state facet logic is a pattern. |
+| FacetHeader.svelte | filters | pattern candidate | Label + Clear header. Imports `FacetStore`. The header shape is reusable; the store coupling is a pattern. |
+| SaveSearchAlert.svelte | filters | domain component | Save-search + Telegram-alert control. Reused across 4 pages but bound to saved-search store. |
+| AuthDialog.svelte | | pattern candidate | Modal hand-rolling backdrop + Escape + scroll-lock. The Dialog *chrome* is a primitive candidate; the auth form is a view. |
+| ReportDialog.svelte | | pattern candidate | Multi-step modal. Same Dialog chrome candidate; the report form is a view. |
+| GmailConnectDialog.svelte | | pattern candidate | One-off modal. Same Dialog chrome candidate; content is a view. |
+| ApplicationLinkPicker.svelte | | pattern candidate | Searchable popover for InboxView. Popover/Select primitive candidate; the link-picker logic is a view. |
+| GithubStars.svelte | | domain component | Star-count badge bound to `githubStars` store. |
+| RealityBadge.svelte | | domain component | Badge bound to `Reality` signal. |
+
+## Views (35) — deferred to Storybook (phase 05)
+
+Page-level compositions that wire data to APIs. Not reusable UI building blocks.
+
+`ATSReportView`, `AboutValues`, `AnalysesView`, `AnalyticsView`, `ApiKeysView`, `BoardCard`, `BoardColumn`, `ChatGptView`, `CliView`, `CompaniesView`, `CompanyAbout`, `CompanyFacts`, `CompanyFollowButton`, `CompanyHeader`, `CompanyView`, `ContributeLandingView`, `ContributeView`, `DocsEndpoint`, `ForCompaniesView`, `HomeView`, `InboxView`, `JobBoard`, `JobDrawer`, `JobFitAnalysis`, `JobFitFull`, `JobHistory`, `JobMatch`, `JobRelated`, `JobRow`, `JobView`, `JobsView`, `ModerationView`, `MySubmissionsView`, `PipelineView`, `ProfileForm`, `ResumeStructuredView`, `SavedSearchesView`, `StatusBoard`, `SubmitView`, `SwipeDeck`, `VerdictView`, `CvEditor`, `CvList`
+
+## Layouts (10) — deferred to Storybook (phase 05)
+
+Structural shells: headers, footers, page chrome, navigation, head metadata.
+
+`TopBar`, `Footer`, `HeaderMenu`, `HeaderSearch`, `HeaderListSearch`, `HeaderLocationFilter`, `ListToolbar`, `InsightsPageShell`, `DocsNav`, `Seo`
+
+## Patterns (20) — deferred to Storybook (phase 05)
+
+Recurring multi-component compositions. Not single components — they combine multiple primitives into an interaction (filter modal = Dialog + FacetSection + PillGroup + footer; list+paginator = States + JobRow + LoadMore).
+
+**Filter system:** `FilterModalShell`, `FilterSummaryShell`, `FilterModal`, `FilterSummary`, `CompanyFilterModal`, `CompanyFilterSummary`
+**Facet controls:** `FacetSection`, `ChipFacet`, `CategoryPane`, `LocationPane`
+**Tracking lists:** `SavedJobs`, `SavedSearches`, `ReportQueue`
+**Onboarding flow:** `OnboardingWizard`, `OnboardingBanner`, `OnboardingAlertBanner`
+
+## Migration-candidate patterns (for phase 04 reference)
+
+These are the recurring shapes the design-system primitive layer should absorb. Each is a pattern that multiple views/layouts hand-roll today.
+
+1. **Dialog/modal chrome — 3 implementations.** `AuthDialog`, `ReportDialog`, `GmailConnectDialog` each hand-roll backdrop + Escape + scroll-lock. Extract into a shared `<Dialog>` primitive.
+2. **Data-viz — 6 implementations.** `ActivityBars`, `GrowthArea`, `HomeFunnel`, `PipelineFunnel`, `RateDonut`, `FacetBreakdown`. `RateDonut` is the only generic one; `PipelineFunnel` + `HomeFunnel` are near-duplicates.
+3. **Searchable select — 4 variants.** `SearchSelect`, `RemoteSearchSelect`, `TokenInput`, `ApplicationLinkPicker`. Overlapping "type → filter → pick" pattern.
+4. **Tabs — 5 inline implementations** (in views: `JobRelated`, `JobDrawer`, `ModerationView`, `VerdictView`, `ProfileForm`). Shared `<Tabs>` primitive absorbs all.
+5. **List + paginator — 3 near-identical** (in views: `SavedJobs`, `JobHistory`, `JobsView`/`CompaniesView`). `<PaginatedList>` wrapper.
+6. **Marketing "steps" — 5 copies** (in views: `AboutValues`, `HomeView`, `ContributeLandingView`, `ForCompaniesView`, `RecruitersView`). `<NumberedSteps>` block.

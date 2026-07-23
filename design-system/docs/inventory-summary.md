@@ -2,6 +2,8 @@
 
 Written inventory of primitives, tokens, and infrastructure touch points. Produced before any design-system code is written. Feeds phases 02 (package boundary), 03 (tokens), and 04 (primitives).
 
+Refined post-phase-1: `.svelte` files are now classified into four buckets — **components** (reusable UI building blocks), **views** (page-level compositions), **layouts** (structural shells), and **patterns** (recurring multi-component compositions). Only **components** are the focus of the design-system primitive layer; the other three are deferred to Storybook (phase 05).
+
 ## Stack
 
 - **Framework:** SvelteKit 2.66 + Svelte 5.56 (runes: `$props()`, `$state()`, `$bindable`, `$derived`).
