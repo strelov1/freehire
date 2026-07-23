@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronDown, Search, X } from '@lucide/svelte';
+  import { ChevronDown, Globe, Search, X } from '@lucide/svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import { countryLabel, REGION_UNSPECIFIED, type FacetStore } from '$lib/facets';
   import { REGION_LABELS } from '$lib/labels';
@@ -170,8 +170,9 @@
         type="button"
         onclick={() => store.cycle('regions', code)}
         title={pillTitle(rInc, rExc, true)}
-        class={pillClass(rInc || rExc, rExc, 'px-3 py-1.5 text-sm')}
+        class={pillClass(rInc || rExc, rExc, 'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm')}
       >
+        {#if code === 'global'}<Globe class="size-4 shrink-0" />{/if}
         {regionLabel(code)}
       </button>
     {/each}
