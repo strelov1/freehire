@@ -21,7 +21,7 @@
   import CvSectionForm from '$lib/components/cv/CvSectionForm.svelte';
   import AccountNavRail from '$lib/components/AccountNavRail.svelte';
   import { clampWidth } from '$lib/tailor/geometry';
-  import { toEditable, type CvRecord } from '$lib/cv';
+  import { toEditable, emptyDocument, type CvRecord } from '$lib/cv';
   import { currentUser } from '$lib/auth.svelte';
   import type { Analysis, Document } from '$lib/generated/contracts';
   import type { Job } from '$lib/types';
@@ -39,7 +39,7 @@
   let job = $state<Job | null>(null);
 
   // Page-owned CV state: the single client source of truth the Editor binds and the preview reads.
-  let doc = $state<Document>({ header: {} });
+  let doc = $state<Document>(emptyDocument());
   let title = $state('');
   let templateId = $state('classic-ats');
   let cvLoaded = $state(false);

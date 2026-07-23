@@ -141,6 +141,46 @@ func TestAllTemplatesProduceExtractableText(t *testing.T) {
 	}
 }
 
+// TestRenderAppliesMargins proves each template reads the document's page margins rather
+// than hardcoding them: rendering the same CV with tight vs. wide margins must change the
+// output. Compares SVG (deterministic, unlike PDF which embeds a creation timestamp) via
+// the internal compile so a byte-equality check is meaningful.
+func TestRenderAppliesMargins(t *testing.T) {
+	bin, err := exec.LookPath("typst")
+	if err != nil {
+		t.Skip("typst not installed; skipping margin render test")
+	}
+	doc := Document{
+		Header:  Header{FullName: "Ada Lovelace", Email: "ada@example.com", Location: "London"},
+		Summary: "Backend engineer with a decade of systems work.",
+	}
+	tight := doc
+	tight.Margins = Margins{Top: 0.25, Right: 0.25, Bottom: 0.25, Left: 0.25}
+	wide := doc
+	wide.Margins = Margins{Top: 1.5, Right: 1.5, Bottom: 1.5, Left: 1.5}
+
+	r := NewTypstRenderer(bin)
+	for _, ti := range Templates() {
+		t.Run(ti.ID, func(t *testing.T) {
+			tmpl, err := ResolveTemplate(ti.ID)
+			if err != nil {
+				t.Fatalf("resolve: %v", err)
+			}
+			a, err := r.compile(context.Background(), tight, tmpl, "svg")
+			if err != nil {
+				t.Fatalf("compile tight: %v", err)
+			}
+			b, err := r.compile(context.Background(), wide, tmpl, "svg")
+			if err != nil {
+				t.Fatalf("compile wide: %v", err)
+			}
+			if bytes.Equal(a, b) {
+				t.Errorf("template %q: margins had no effect on the rendered page", ti.ID)
+			}
+		})
+	}
+}
+
 func extractPDFText(t *testing.T, data []byte) string {
 	t.Helper()
 	rd, err := pdf.NewReader(bytes.NewReader(data), int64(len(data)))

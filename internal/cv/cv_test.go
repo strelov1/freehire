@@ -94,6 +94,30 @@ func TestSanitizeDropsEmptyEntries(t *testing.T) {
 	}
 }
 
+func TestSanitizeMargins(t *testing.T) {
+	doc := Document{Margins: Margins{Top: 0, Right: 5.0, Bottom: 0.75, Left: -1.0}}
+	doc.Sanitize()
+
+	if doc.Margins.Top != 0.5 {
+		t.Errorf("unset Top: got %v, want default 0.5", doc.Margins.Top)
+	}
+	if doc.Margins.Right != 1.5 {
+		t.Errorf("over-max Right: got %v, want clamped 1.5", doc.Margins.Right)
+	}
+	if doc.Margins.Bottom != 0.75 {
+		t.Errorf("in-range Bottom: got %v, want unchanged 0.75", doc.Margins.Bottom)
+	}
+	if doc.Margins.Left != 0.25 {
+		t.Errorf("negative Left: got %v, want clamped 0.25", doc.Margins.Left)
+	}
+
+	below := Document{Margins: Margins{Top: 0.1, Right: 0.1, Bottom: 0.1, Left: 0.1}}
+	below.Sanitize()
+	if below.Margins.Top != 0.25 {
+		t.Errorf("below-min Top: got %v, want clamped 0.25", below.Margins.Top)
+	}
+}
+
 func TestEmptyDocumentIsSanitizeStable(t *testing.T) {
 	doc := EmptyDocument()
 	before := doc

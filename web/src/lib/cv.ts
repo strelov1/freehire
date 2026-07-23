@@ -5,6 +5,7 @@
 
 import type {
   Document,
+  Margins,
   ExperienceItem,
   EducationItem,
   SkillGroup,
@@ -72,8 +73,26 @@ export interface CvTemplate {
 
 /** A fresh, fully-populated (but empty) document so the form can bind every section
  *  without null-guards. The server still sanitizes on save, dropping the empties. */
+/** The half-inch-per-side page margins a fresh CV starts with (mirrors cv.DefaultMargins). */
+export const DEFAULT_MARGIN = 0.5;
+export function defaultMargins(): Margins {
+  return { top: DEFAULT_MARGIN, right: DEFAULT_MARGIN, bottom: DEFAULT_MARGIN, left: DEFAULT_MARGIN };
+}
+
+/** Fill each margin side, defaulting any missing or non-positive value to DEFAULT_MARGIN —
+ *  mirrors the backend's zero-to-default rule so preview and PDF agree. */
+function toMargins(m?: Partial<Margins>): Margins {
+  return {
+    top: m?.top || DEFAULT_MARGIN,
+    right: m?.right || DEFAULT_MARGIN,
+    bottom: m?.bottom || DEFAULT_MARGIN,
+    left: m?.left || DEFAULT_MARGIN,
+  };
+}
+
 export function emptyDocument(): Document {
   return {
+    margins: defaultMargins(),
     header: { full_name: '', email: '', phone: '', location: '', links: [] },
     summary: '',
     experience: [],
@@ -87,9 +106,10 @@ export function emptyDocument(): Document {
 
 /** Merge a possibly-partial document (from the API, where empty sections are omitted)
  *  into a full shape the form can bind to. */
-export function toEditable(doc: Document): Document {
+export function toEditable(doc: Partial<Document>): Document {
   const base = emptyDocument();
   return {
+    margins: toMargins(doc.margins),
     header: { ...base.header, ...doc.header, links: doc.header?.links ?? [] },
     summary: doc.summary ?? '',
     experience: (doc.experience ?? []).map((e) => ({ ...e, bullets: e.bullets ?? [], stack: e.stack ?? [] })),

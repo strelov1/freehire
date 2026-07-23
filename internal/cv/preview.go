@@ -11,6 +11,7 @@ import (
 // a single .svg. Kept small on purpose — previews are illustrative, not a full CV.
 func sampleDocument() Document {
 	return Document{
+		Margins: DefaultMargins(),
 		Header: Header{
 			FullName: "Jordan Rivera",
 			Email:    "jordan.rivera@example.com",

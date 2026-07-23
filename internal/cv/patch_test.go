@@ -67,6 +67,18 @@ func TestApply_SetSummary(t *testing.T) {
 	}
 }
 
+func TestApply_PreservesMargins(t *testing.T) {
+	in := sampleDoc()
+	in.Margins = Margins{Top: 0.75, Right: 0.4, Bottom: 0.75, Left: 0.4}
+	out, err := Apply(in, Patch{Op: PatchSetSummary, Value: "reframed"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Margins != in.Margins {
+		t.Errorf("patch changed margins: got %+v, want %+v", out.Margins, in.Margins)
+	}
+}
+
 func TestApply_AddBullet(t *testing.T) {
 	in := sampleDoc()
 	out, err := Apply(in, Patch{Op: PatchAddBullet, Experience: 0, Value: "Led migration"})

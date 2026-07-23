@@ -38,6 +38,16 @@ describe('toEditable', () => {
     expect(d.experience).toHaveLength(1);
     expect(d.experience?.[0]?.role).toBe('Eng');
   });
+
+  it('defaults page margins when the document omits them', () => {
+    const d = toEditable({ header: { full_name: 'Ada' } });
+    expect(d.margins).toEqual({ top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 });
+  });
+
+  it('preserves provided page margins', () => {
+    const d = toEditable({ header: {}, margins: { top: 0.75, right: 0.4, bottom: 0.75, left: 0.4 } });
+    expect(d.margins).toEqual({ top: 0.75, right: 0.4, bottom: 0.75, left: 0.4 });
+  });
 });
 
 describe('cvTitle', () => {

@@ -36,9 +36,19 @@ const (
 	maxLinks          = 20
 )
 
+// Page margins are in inches. Sanitize clamps each side to this résumé-sane band and
+// defaults a zero (unset) side to defaultMargin, so a fresh skeleton and an old document
+// with no margin field both render at half an inch.
+const (
+	defaultMargin = 0.5
+	minMargin     = 0.25
+	maxMargin     = 1.5
+)
+
 // Document is the typed, sanitized CV. Every field is optional; sections the user has
 // not filled in are left empty rather than invented, and Sanitize drops empty entries.
 type Document struct {
+	Margins        Margins          `json:"margins"`
 	Header         Header           `json:"header"`
 	Summary        string           `json:"summary,omitempty"`
 	Experience     []ExperienceItem `json:"experience,omitempty"`
@@ -47,6 +57,45 @@ type Document struct {
 	Languages      []Language       `json:"languages,omitempty"`
 	Projects       []Project        `json:"projects,omitempty"`
 	Certifications []Certification  `json:"certifications,omitempty"`
+}
+
+// Margins is the CV's per-side page margin in inches, applied identically to the HTML
+// preview and the Typst-rendered PDF. Sanitize clamps each side and defaults an unset
+// (zero) side to defaultMargin.
+type Margins struct {
+	Top    float64 `json:"top"`
+	Right  float64 `json:"right"`
+	Bottom float64 `json:"bottom"`
+	Left   float64 `json:"left"`
+}
+
+// DefaultMargins is the half-inch-per-side margin a fresh CV starts with.
+func DefaultMargins() Margins {
+	return Margins{Top: defaultMargin, Right: defaultMargin, Bottom: defaultMargin, Left: defaultMargin}
+}
+
+// sanitized returns the margins with every side clamped to [minMargin, maxMargin] and a
+// zero (unset) side defaulted to defaultMargin.
+func (m Margins) sanitized() Margins {
+	return Margins{
+		Top:    clampMargin(m.Top),
+		Right:  clampMargin(m.Right),
+		Bottom: clampMargin(m.Bottom),
+		Left:   clampMargin(m.Left),
+	}
+}
+
+func clampMargin(v float64) float64 {
+	switch {
+	case v == 0:
+		return defaultMargin
+	case v < minMargin:
+		return minMargin
+	case v > maxMargin:
+		return maxMargin
+	default:
+		return v
+	}
 }
 
 // Header is the top-of-CV contact block. The tagline under the name is Document.Summary
@@ -111,16 +160,18 @@ type Certification struct {
 	Year   string `json:"year,omitempty"`
 }
 
-// EmptyDocument returns a zero-value skeleton that is already sanitize-stable: a valid
-// starting point when a user creates a CV with no résumé to seed from.
+// EmptyDocument returns an empty skeleton (default margins, no content) that is already
+// sanitize-stable: a valid starting point when a user creates a CV with no résumé to seed from.
 func EmptyDocument() Document {
-	return Document{}
+	return Document{Margins: DefaultMargins()}
 }
 
 // Sanitize bounds every string, caps every array's cardinality, and drops entries that
 // carry no content. Only the sanitized value is persisted or served, so untrusted CV
 // text cannot inject unbounded or malformed content.
 func (d *Document) Sanitize() {
+	d.Margins = d.Margins.sanitized()
+
 	d.Header.FullName = clip(d.Header.FullName, maxNameRunes)
 	d.Header.Email = clip(d.Header.Email, maxEmailRunes)
 	d.Header.Phone = clip(d.Header.Phone, maxPhoneRunes)

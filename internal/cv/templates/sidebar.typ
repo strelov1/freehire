@@ -11,7 +11,13 @@
 #let daterange(a, b) = if a != "" and b != "" { a + " – " + b } else { a + b }
 
 #set document(title: s(cv.header, "full_name"))
-#set page(paper: "a4", margin: (x: 1.4cm, top: 1.1cm, bottom: 1.1cm))
+// Per-side page margins (inches) from the document; any missing or non-positive side
+// falls back to 0.5in, so an unsanitized/sample document still renders sanely.
+#let mg(k) = {
+  let v = cv.at("margins", default: (:)).at(k, default: 0)
+  (if v > 0 { v } else { 0.5 }) * 1in
+}
+#set page(paper: "a4", margin: (left: mg("left"), right: mg("right"), top: mg("top"), bottom: mg("bottom")))
 #set text(font: "Libertinus Serif", size: 9.5pt)
 #set par(leading: 0.5em, justify: true)
 

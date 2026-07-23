@@ -11,6 +11,7 @@
     blankCertification,
   } from '$lib/cv';
   import StringListEditor from './StringListEditor.svelte';
+  import MarginSettings from './MarginSettings.svelte';
 
   // The controlled section form for one CV: binds directly to a caller-owned Document (and CV
   // title) and adds/removes rows per section. It does no data-fetching and no saving — the host
@@ -41,6 +42,12 @@
   <section class="space-y-3">
     <label for="cv-title" class="block text-sm font-medium">CV title</label>
     <Input id="cv-title" bind:value={title} placeholder="e.g. Backend Engineer — general" class="w-full" />
+  </section>
+
+  <!-- Page margins -->
+  <section class="space-y-3">
+    <h2 class="text-lg font-semibold">Margins <span class="text-sm font-normal text-muted-foreground">(in inches)</span></h2>
+    <MarginSettings bind:margins={doc.margins} />
   </section>
 
   <!-- Header -->
