@@ -272,6 +272,7 @@ func All(c HTTPClient) map[string]Source {
 		NewEightfold(c),
 		NewFreshteam(c),
 		NewSoftgarden(c),
+		NewBetterteam(c),
 		NewEarcu(c),
 		NewPageUp(c),
 		NewNeogov(c),

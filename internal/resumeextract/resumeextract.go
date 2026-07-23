@@ -15,6 +15,7 @@ import (
 	"fmt"
 
 	"github.com/strelov1/freehire/internal/llm"
+	"github.com/strelov1/freehire/internal/pii"
 )
 
 // ErrDisabled is returned by Extract when the LLM is not configured (nil client), so a
@@ -22,17 +23,25 @@ import (
 // failure.
 var ErrDisabled = errors.New("resumeextract: llm not configured")
 
-// Extractor derives a Structured résumé over an llm.Client. A nil client (LLM
-// unconfigured) makes Extract return ErrDisabled, mirroring matchanalysis.Analyzer's no-op.
+// Extractor derives a Structured résumé over an llm.Client. It needs both a client and a
+// PII detector: the client parses the semantic fields from the REDACTED CV, and the detector
+// both de-identifies the CV and supplies the contact fields. Either missing makes Extract
+// return ErrDisabled (fail-closed — no CV reaches the LLM), mirroring the no-op degradation.
 type Extractor struct {
-	client *llm.Client
+	client   *llm.Client
+	detector pii.Detector
 }
 
-// NewExtractor wraps an llm.Client; client may be nil (LLM unconfigured).
-func NewExtractor(client *llm.Client) *Extractor { return &Extractor{client: client} }
+// NewExtractor wraps an llm.Client and the PII detector; either may be nil, which disables
+// extraction (ErrDisabled).
+func NewExtractor(client *llm.Client, detector pii.Detector) *Extractor {
+	return &Extractor{client: client, detector: detector}
+}
 
-// Enabled reports whether extraction can run (a non-nil client).
-func (e *Extractor) Enabled() bool { return e != nil && e.client != nil }
+// Enabled reports whether extraction can run: both the client and the detector are present.
+// Without the detector the CV cannot be de-identified, so extraction is disabled rather than
+// run in the clear.
+func (e *Extractor) Enabled() bool { return e != nil && e.client != nil && e.detector != nil }
 
 // ModelID returns the underlying model id, so a caller can stamp the produced structure
 // with the model that generated it.
@@ -45,7 +54,13 @@ func (e *Extractor) Extract(ctx context.Context, cvText string) (Structured, err
 	if !e.Enabled() {
 		return Structured{}, ErrDisabled
 	}
-	raw, err := e.client.GenerateJSON(ctx, systemPrompt, userPrompt(cvText))
+	// De-identify the CV before it reaches the LLM. Fail-closed: a detector error means no
+	// CV is sent (the caller degrades best-effort, persisting no structured résumé).
+	red, err := pii.Build(ctx, cvText, pii.Contacts{}, e.detector)
+	if err != nil {
+		return Structured{}, fmt.Errorf("resumeextract: pii: %w", err)
+	}
+	raw, err := e.client.GenerateJSON(ctx, systemPrompt, userPrompt(red.Redact(cvText)))
 	if err != nil {
 		return Structured{}, fmt.Errorf("resumeextract: generate: %w", err)
 	}
@@ -53,6 +68,10 @@ func (e *Extractor) Extract(ctx context.Context, cvText string) (Structured, err
 	if err := json.Unmarshal([]byte(raw), &s); err != nil {
 		return Structured{}, fmt.Errorf("resumeextract: parse: %w", err)
 	}
+	// Contact fields come from deterministic detection, NOT the model — it only ever saw the
+	// redacted CV, so it cannot (and must not) supply them.
+	c := red.Contacts()
+	s.FullName, s.Email, s.Phone, s.Links = c.FullName, c.Email, c.Phone, c.Links
 	s.Sanitize()
 	return s, nil
 }
@@ -64,6 +83,8 @@ const maxCVRunes = 12000
 const systemPrompt = `You extract a structured résumé from raw CV text and return ONLY a JSON object.
 Rules:
 - Extract ONLY facts stated in the CV. Never invent or infer a field that is not present — omit it instead.
+- The CV has been de-identified: contact details (full_name, email, phone, links) are handled separately and
+  appear as [REDACTED_...] placeholders. Do NOT extract them and never copy a placeholder into any field.
 - Fields: full_name, headline (current role/title line), location, email, phone, summary (1-3 sentences),
   total_years (integer years of professional experience, best estimate; 0 if unclear),
   experience (array of {title, company, location, start, end, summary, highlights, stack}; keep dates as

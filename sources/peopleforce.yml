@@ -128,3 +128,7 @@
   board: trafficconnect
 - company: Akvelon
   board: akvelon
+# GSC Game World (S.T.A.L.K.E.R. 2 studio, gsc-game.com). Careers SPA apply-links point
+# at gscgameworld.peopleforce.io; eastern-roots `gsc-game-world` slug tags it once it posts.
+- company: GSC Game World
+  board: gscgameworld

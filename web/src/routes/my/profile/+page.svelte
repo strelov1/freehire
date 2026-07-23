@@ -33,7 +33,7 @@
   // independently of the filter-driven reload.
   let structured = $state<ResumeStructured | null>(null);
   let loadError = $state(false);
-  let tab = $state<'profile' | 'coverage' | 'readiness'>('profile');
+  let tab = $state<'settings' | 'structured' | 'coverage' | 'readiness'>('settings');
   let modalOpen = $state(false);
   let actionError = $state<string | null>(null);
 
@@ -235,12 +235,21 @@
         <div class="flex gap-5 border-b border-border">
           <button
             type="button"
-            onclick={() => (tab = 'profile')}
-            class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'profile'
+            onclick={() => (tab = 'settings')}
+            class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'settings'
               ? 'border-brand text-foreground'
               : 'border-transparent text-muted-foreground hover:text-foreground'}"
           >
-            Your CV
+            Settings
+          </button>
+          <button
+            type="button"
+            onclick={() => (tab = 'structured')}
+            class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'structured'
+              ? 'border-brand text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground'}"
+          >
+            Profile
           </button>
           <button
             type="button"
@@ -263,11 +272,11 @@
         </div>
 
         <!-- Body -->
-        {#if tab === 'profile'}
+        {#if tab === 'settings'}
           {#key profile.updated_at}
             <ProfileForm {profile} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
           {/key}
-          <!-- Destructive action lives at the foot of the profile-management tab, out of
+          <!-- Destructive action lives at the foot of the settings tab, out of
                the page header (where it crowded the title on narrow viewports). -->
           <div class="mt-2 flex justify-end border-t border-border pt-4">
             <Button
@@ -280,6 +289,19 @@
               Delete profile
             </Button>
           </div>
+        {:else if tab === 'structured'}
+          <!-- Profile: the read-only structured résumé parsed from the CV. Loaded
+               independently of the filter-driven reload, so no verdict gate. -->
+          {#if structured}
+            <ResumeStructuredView resume={structured} />
+          {:else}
+            <div class="flex flex-col items-start gap-2 rounded-xl border border-dashed border-border p-6">
+              <p class="text-sm font-medium">No parsed profile yet</p>
+              <p class="text-sm text-muted-foreground">
+                Upload your CV in the <button type="button" class="font-medium text-foreground underline underline-offset-2" onclick={() => (tab = 'settings')}>Settings</button> tab and we'll parse it into a structured profile.
+              </p>
+            </div>
+          {/if}
         {:else if loadError}
           <States state="error" message="Couldn't load the report." />
         {:else if verdict === null}
@@ -287,12 +309,8 @@
         {:else if tab === 'coverage'}
           <VerdictView {verdict} {gapHref} />
         {:else}
-          <!-- CV readiness: the structured résumé we parsed from the CV (read-only,
-               omitted when none is current) above the ATS-readiness score. -->
+          <!-- CV readiness: the ATS-readiness score and the optional AI review. -->
           <div class="flex flex-col gap-6">
-            {#if structured}
-              <ResumeStructuredView resume={structured} />
-            {/if}
             {#if ats?.has_cv && ats.report}
               <div class="flex flex-col gap-5">
                 {#if reviewUnavailable}
@@ -300,12 +318,12 @@
                 {/if}
                 <ATSReportView report={ats.report} action={reviewAction} />
               </div>
-            {:else if !structured}
-              <!-- No CV yet: uploaded via the Your CV tab. -->
+            {:else}
+              <!-- No CV yet: uploaded via the Settings tab. -->
               <div class="flex flex-col items-start gap-2 rounded-xl border border-dashed border-border p-6">
                 <p class="text-sm font-medium">Add your CV to score its ATS readiness</p>
                 <p class="text-sm text-muted-foreground">
-                  Upload your CV in the <button type="button" class="font-medium text-foreground underline underline-offset-2" onclick={() => (tab = 'profile')}>Your CV</button> tab to check ATS readability and this role's keywords.
+                  Upload your CV in the <button type="button" class="font-medium text-foreground underline underline-offset-2" onclick={() => (tab = 'settings')}>Settings</button> tab to check ATS readability and this role's keywords.
                 </p>
               </div>
             {/if}

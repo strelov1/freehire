@@ -5,7 +5,7 @@ On-demand, cached, three-stage LLM prompt-chain for job-fit analysis per (user, 
 
 ## Always true
 - **Fixed prompt-chain, NOT an autonomous agent.** Deterministic, typed, cacheable. Runs over the shared `internal/llm` client — provider-agnostic, no vendor baked in.
-- **Stage 1 Extract & Match:** extract posting requirements, classify each against CV as `covered`/`synonym-only`/`missing-have`/`missing-gap`. Never fabricate a skill.
+- **Stage 1 Extract & Match:** extract posting requirements, classify each against CV as `covered`/`synonym-only`/`missing-have`/`missing-gap`, and grade the cited evidence of the two positive statuses as `evidence_strength` `metric`/`scope`/`responsibility`/`keyword` (coerced to `keyword` when unknown; empty for `missing-*`). Never fabricate a skill.
 - **Stage 2 Recruiter verdict:** six scored dimensions (title alignment, experience relevance, seniority fit, skills coverage, company context, location & work-mode fit). Model only scores dimensions — the server computes `overall_score` and `verdict`.
 - **Stage 3 Adversarial audit:** skeptic pass that refines Stage 2. Stage 3 merges onto Stage 2 (unmarshalled over a copy of sanitized Stage-2 verdict); a parse failure degrades to the un-audited Stage-2 verdict.
 - **`overall_score` is server-owned** (named-weight average: Title 20 / Experience 25 / Seniority 15 / Skills 15 / Company 10 / Location 15). The model never computes this — ensures consistency and testability.

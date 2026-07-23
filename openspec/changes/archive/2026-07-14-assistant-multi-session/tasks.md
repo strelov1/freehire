@@ -30,7 +30,7 @@
 - [x] 6.4 `internal/handler/auth.go`: add `BetaTester bool \`json:"beta_tester"\`` to `userResponse` and map it in `toUserResponse` (unit test the mapping, mirroring `TestToUserResponse_IncludesRole`).
 - [x] 6.5 Frontend: add `beta_tester: boolean` to the `User` type (`web/src/lib/types.ts`); change the assistant `accountNav` item from `moderatorOnly` to `betaOnly` and extend `visibleAccountNav(isModerator, isBetaTester)` — RED-first in `accountNav.test.ts` (beta-only Assistant vs moderator-only Inbox); update the `my/+layout.svelte` caller.
 - [x] 6.6 Gate the page: `+page.svelte` guards on `currentUser()?.beta_tester` (not `role === 'moderator'`); adjust the restricted-rollout copy.
-- [x] 6.7 Grant SQL documented in `design.md` Migration Plan (`UPDATE users SET beta_tester = true WHERE lower(email) = 'strelov1@gmail.com';`). Local-DB apply + grant verification pending (needs the stack up).
+- [x] 6.7 Grant SQL documented in `design.md` Migration Plan (`UPDATE users SET beta_tester = true WHERE lower(email) = 'ada.lovelace@example.com';`). Local-DB apply + grant verification pending (needs the stack up).
 
 ## 5. Verify & finish
 

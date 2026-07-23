@@ -18,9 +18,8 @@ export const accountNav = [
   // The agent is a restricted rollout — beta testers only (a group separate from
   // the moderator role; see `beta_tester` on the user). `beta` shows a nav badge.
   { href: '/my/assistant', label: 'Agent', betaOnly: true, beta: true },
-  // CV builder is a restricted rollout — beta testers only (the server re-checks via
-  // RequireModeratorOrBeta). `beta` shows a nav badge.
-  { href: '/my/cvs', label: 'CV builder', betaOnly: true, beta: true },
+  // CV builder + AI tailoring: open to every signed-in user (credits meter the AI spend).
+  { href: '/my/cvs', label: 'CV builder' },
   // Employee referrals: request a referral, offer to refer (moderated), and — for
   // referrers — manage incoming requests. Open to every signed-in user.
   { href: '/my/referrals', label: 'Referrals' },

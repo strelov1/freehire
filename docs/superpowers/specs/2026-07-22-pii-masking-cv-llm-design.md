@@ -30,7 +30,7 @@ Ran the deterministic detectors against two real CVs (single-column and two-colu
 - **Plain-text name detection by "top-of-CV header" heuristic — INVALIDATED for
   multi-column layouts.** `pdftotext -layout` puts a section header (`ABOUT ME`) on the
   first line and pushes the visible name far down; worse, the full surname often appears
-  **only inside the email local-part / URL slug** (`alexbessmelcev`, `alex-bessmelcev`),
+  **only inside the email local-part / URL slug** (`jordanprice`, `jordan-price`),
   never as plain text. A regex/heuristic cannot reliably recover the name.
 
 **Consequence:** robust name/address detection needs a model that reads context. We use
@@ -43,9 +43,9 @@ Ran the real `openai/privacy-filter` (ONNX **q4**, `onnxruntime` on CPU, no torc
 the same two CVs. Labels are BIOES over 8 types (`private_person/email/phone/url/address`,
 `account_number`, `secret`, `private_date`).
 
-- **Ilya (single-column, 1542 tok, 2.2s):** `private_person: Ilya Strelov`, email, github/linkedin URLs.
+- **Ilya (single-column, 1542 tok, 2.2s):** `private_person: Ada Lovelace`, email, github/linkedin URLs.
 - **Alex (two-column, 1166 tok, 0.9s):** recovered the hidden surname — `private_person:
-  alex-bessmelcev`, `/alex-bessmelcev`, `@Alex_Sage`; email + portfolio URL. (Bare
+  jordan-price`, `/jordan-price`, `@jprice_dev`; email + portfolio URL. (Bare
   first-name "Alex" alone was not tagged — a weak identifier, and it is covered by the
   caught spans anyway.)
 - **No over-redaction:** employers (RingCentral, Informa, emcd.io), universities, and

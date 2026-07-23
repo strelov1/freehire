@@ -7603,3 +7603,18 @@
   board: wafer
 - company: watney
   board: watney
+- company: Linro
+  board: linro
+# a16z Speedrun talent-network (harvested 2026-07)
+- company: Forgepoint
+  board: forgepoint
+- company: Fundamental Research Labs
+  board: fundamentalresearchlabs
+- company: Ghost
+  board: ghost
+- company: Maniac
+  board: maniac
+- company: Method Security
+  board: method.security
+- company: Orchestra Bio
+  board: orchestra-bio

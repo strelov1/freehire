@@ -111,15 +111,20 @@ func TestExtract_ParsesAndSanitizes(t *testing.T) {
 		`"experience":[{"title":"Senior Go Engineer","company":"Acme","start":"2020","end":"Present"}],` +
 		`"languages":["English",""]}`
 	m := &queuedModel{resp: raw}
-	got, err := NewExtractor(llm.NewWithModel(m)).Extract(context.Background(), "some cv text")
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), "some cv text")
 	if err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
 	if m.n != 1 {
 		t.Errorf("LLM calls = %d, want 1", m.n)
 	}
-	if got.FullName != "Jane Doe" || len(got.Experience) != 1 {
-		t.Errorf("parsed = %+v, want name+1 experience", got)
+	// Contacts now come from detection (none here), so the model's full_name is ignored;
+	// the semantic fields are what this test covers.
+	if len(got.Experience) != 1 {
+		t.Errorf("parsed = %+v, want 1 experience", got)
+	}
+	if got.FullName != "" {
+		t.Errorf("FullName = %q, want empty (no detector spans, not the model's value)", got.FullName)
 	}
 	if got.TotalYears != 0 { // sanitized: negative → 0
 		t.Errorf("TotalYears = %d, want 0 (sanitized)", got.TotalYears)
@@ -130,7 +135,7 @@ func TestExtract_ParsesAndSanitizes(t *testing.T) {
 }
 
 func TestExtract_UnconfiguredReturnsErrDisabled(t *testing.T) {
-	_, err := NewExtractor(nil).Extract(context.Background(), "cv")
+	_, err := NewExtractor(nil, noopDetector{}).Extract(context.Background(), "cv")
 	if !errors.Is(err, ErrDisabled) {
 		t.Fatalf("err = %v, want ErrDisabled", err)
 	}
@@ -138,16 +143,19 @@ func TestExtract_UnconfiguredReturnsErrDisabled(t *testing.T) {
 
 func TestExtract_BadJSONErrors(t *testing.T) {
 	m := &queuedModel{resp: "not json"}
-	if _, err := NewExtractor(llm.NewWithModel(m)).Extract(context.Background(), "cv"); err == nil {
+	if _, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), "cv"); err == nil {
 		t.Fatal("want error on unparseable model output, got nil")
 	}
 }
 
 func TestExtractor_EnabledReflectsClient(t *testing.T) {
-	if NewExtractor(nil).Enabled() {
+	if NewExtractor(nil, noopDetector{}).Enabled() {
 		t.Error("nil-client extractor should be disabled")
 	}
-	if !NewExtractor(llm.NewWithModel(&queuedModel{})).Enabled() {
+	if NewExtractor(llm.NewWithModel(&queuedModel{}), nil).Enabled() {
+		t.Error("nil-detector extractor should be disabled (fail-closed)")
+	}
+	if !NewExtractor(llm.NewWithModel(&queuedModel{}), noopDetector{}).Enabled() {
 		t.Error("configured extractor should be enabled")
 	}
 }

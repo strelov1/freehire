@@ -13,6 +13,7 @@
   } from '$lib/analytics';
   import TopBar from '$lib/components/TopBar.svelte';
   import Footer from '$lib/components/Footer.svelte';
+  import CookieConsent from '$lib/components/CookieConsent.svelte';
   import '../app.css';
   // Country-flag icon sheet (used by $lib/components/Flag.svelte). References its
   // SVGs by URL, so the browser only fetches flags actually rendered.
@@ -95,6 +96,10 @@
     <Footer />
   {/if}
 </div>
+
+<!-- Consent banner: fixed-position, self-gating (renders only for a
+     consent-required visitor with no choice, or when re-opened from the footer). -->
+<CookieConsent />
 
 <style>
   /* Indeterminate sweep: the segment slides across the track on repeat while a

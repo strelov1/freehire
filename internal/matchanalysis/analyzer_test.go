@@ -36,6 +36,7 @@ func sampleInput() Input {
 		JobDescription:      "Build backends in Go. Kafka a plus.",
 		CompanyInfo:         `{"tagline":"We ship fridges"}`,
 		CVText:              "Backend engineer, 5y Go at Acme.",
+		StructuredResume:    `{"summary":"Backend engineer, 5y Go at Acme.","experience":[{"company":"Acme","title":"Backend Engineer"}],"skills":["Go"]}`,
 		Match:               jobmatch.JobMatch{Matched: []string{"go"}, Missing: []string{"kafka"}, CoveragePercent: 50},
 		JobWorkMode:         "onsite",
 		JobLocation:         "Berlin, Germany",
@@ -201,19 +202,19 @@ func TestAnalyzeStream_NilClientIsNoOp(t *testing.T) {
 func TestStagePrompts_CarryTheirInputs(t *testing.T) {
 	in := sampleInput()
 	reqs := []Requirement{{Text: "Go", Priority: "required", Status: "covered"}}
-	if s := stage1UserPrompt(in); !strings.Contains(s, "Senior Go Engineer") || !strings.Contains(s, "5y Go at Acme") || !strings.Contains(s, "go") {
+	if s := stage1UserPrompt(in, candidateContext(in.StructuredResume)); !strings.Contains(s, "Senior Go Engineer") || !strings.Contains(s, "5y Go at Acme") || !strings.Contains(s, "go") {
 		t.Error("stage1 prompt must carry job title, CV text, and the anchor")
 	}
-	if s := stage2UserPrompt(in, reqs); !strings.Contains(s, "We ship fridges") || !strings.Contains(s, "covered") {
+	if s := stage2UserPrompt(in, reqs, candidateContext(in.StructuredResume)); !strings.Contains(s, "We ship fridges") || !strings.Contains(s, "covered") {
 		t.Error("stage2 prompt must carry company_info and the Stage-1 match")
 	}
 	// Stage 2 must carry the job geography and the candidate's location preferences so
 	// the model can score location & work-mode fit.
-	if s := stage2UserPrompt(in, reqs); !strings.Contains(s, "Berlin") || !strings.Contains(s, "onsite") || !strings.Contains(s, "São Paulo") {
+	if s := stage2UserPrompt(in, reqs, candidateContext(in.StructuredResume)); !strings.Contains(s, "Berlin") || !strings.Contains(s, "onsite") || !strings.Contains(s, "São Paulo") {
 		t.Error("stage2 prompt must carry job geography + candidate location preferences")
 	}
 	v := recruiterVerdict{TitleAlignment: dimScore{Score: 80}, Recommendation: "Apply."}
-	if s := stage3UserPrompt(in, reqs, v); !strings.Contains(s, "Apply.") {
+	if s := stage3UserPrompt(in, reqs, v, candidateContext(in.StructuredResume)); !strings.Contains(s, "Apply.") {
 		t.Error("stage3 prompt must carry the Stage-2 verdict to audit")
 	}
 }

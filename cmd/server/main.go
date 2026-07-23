@@ -21,6 +21,7 @@ import (
 	"github.com/strelov1/freehire/internal/handler"
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/observability"
+	"github.com/strelov1/freehire/internal/pii"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/tokencrypt"
 )
@@ -59,6 +60,15 @@ func main() {
 		AppName:      "hire",
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
+		// Buffer for reading the request head (request line + all headers). Fiber's
+		// 4KB default is too small for our largest legitimate GET: a filter feed
+		// carrying dozens of facets (a "use my whole profile" search is 70+ skills)
+		// puts a ~1.3KB query string in BOTH the request line AND the same-page
+		// Referer, and on top of that ride the auth cookie and Chrome's sec-ch-ua
+		// client hints — together over 4KB, so fasthttp rejected the request with a
+		// 431 before it ever reached a handler (the feed then showed "Failed to load
+		// jobs"). 16KB comfortably fits even an unusually broad filter set.
+		ReadBufferSize: 16 * 1024,
 		// Cap request bodies at 8MB: résumé PDF uploads are the largest write (design-heavy
 		// CVs run past 1MB), and Fiber's BodyLimit is global — there is no per-route limit —
 		// so this ceiling applies to every endpoint. Keep it as tight as the résumé path
@@ -148,6 +158,14 @@ func main() {
 	// token-encryption key are configured. Both nil disables the feature.
 	gmailConnector, gmailCipher := buildGmail(cfg)
 
+	// PII detector for de-identifying CV text before it reaches the LLM. Nil when
+	// PII_FILTER_URL is unset, which fails the CV→LLM paths closed (no analysis) rather
+	// than leaking PII (see internal/pii, internal/matchanalysis, internal/resumeextract).
+	var piiDetector pii.Detector
+	if cfg.PIIFilterURL != "" {
+		piiDetector = pii.NewHTTPDetector(cfg.PIIFilterURL, nil)
+	}
+
 	handler.Register(app, handler.Config{
 		Pool:           pool,
 		FrontendOrigin: cfg.FrontendOrigin,
@@ -163,6 +181,7 @@ func main() {
 		Blob:           blobStore,
 		TypstBin:       cfg.TypstBin,
 		LLM:            llmClient,
+		PIIDetector:    piiDetector,
 
 		TelegramBotToken:      cfg.TelegramBotToken,
 		TelegramBotUsername:   cfg.TelegramBotUsername,

@@ -67,7 +67,7 @@ func (a *API) PostATSReport(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	report, cvText, hasCV, err := a.deterministicReport(c, userID, profile)
+	report, _, hasCV, err := a.deterministicReport(c, userID, profile)
 	if err != nil {
 		return err
 	}
@@ -75,7 +75,9 @@ func (a *API) PostATSReport(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"data": atsResponse{HasCV: false}})
 	}
 
-	review, err := a.atsAnalyzer.Analyze(c.Context(), cvText)
+	// The qualitative review reads the de-identified structured résumé, never the raw CV.
+	// Absent structure ⇒ nil review ⇒ the deterministic report is served (below).
+	review, err := a.atsAnalyzer.Analyze(c.Context(), a.structuredResumeJSON(c, userID))
 	if err != nil {
 		// Best-effort: log (never the CV text) and serve the deterministic report.
 		log.Printf("atscheck: review failed for user %d: %v", userID, err)

@@ -1,0 +1,355 @@
+# betterteam boards. Provider is the filename; each entry is company + board.
+# board = tenant subdomain (see internal/sources/betterteam.go).
+
+- company: A-Apollo Windows & Doors Ltd
+  board: apollowindows
+- company: AAA Club Alliance
+  board: aaa-7
+- company: AAA USA
+  board: aaa-usainc
+- company: ABM College
+  board: abmcollege
+- company: Acton ADU
+  board: actonconstruction
+- company: AiLO Logistics
+  board: ailo
+- company: Al Fattan Properties
+  board: alfattan
+- company: Alpha Better Landscaping
+  board: alphabetterlands
+- company: Alphanumeric Systems Inc.
+  board: alphanumericsystemsinc
+- company: Amera Trail
+  board: ameratrail
+- company: American Fleet Service, Inc
+  board: americanfleetservice
+- company: American Tax Defense
+  board: amityonetax-2
+- company: AMK Global Staffing
+  board: amkglobalstaffing
+- company: ANC Solutions
+  board: ancsolutions
+- company: Aspiration International School
+  board: aspirationis
+- company: Avis Budget Group
+  board: abg-2
+- company: Barrister Title
+  board: barristertitle
+- company: Behavior Nation
+  board: aba-5
+- company: Borden Dairy
+  board: bordendairy-6
+- company: Breathe Easy Automotive
+  board: breatheeasyauto
+- company: Building Connections Behavioral Health
+  board: bcbhinc
+- company: Burghardt Sporting Goods
+  board: bsg1881
+- company: Business Support Services of Salem
+  board: businesssupportservicesinc
+- company: C&J Automotive & Tire of Sewell
+  board: cjautomotivetireofsewell
+- company: C&J Automotive of Cherry Hill
+  board: cjautomotiveofcherryhill
+- company: Caffe Luxxe
+  board: caffeluxxe
+- company: CalTex Cashflow
+  board: truckandtrailerstorage
+- company: Canuck Express
+  board: canuckexpress
+- company: Car Lux Inc.
+  board: carluxlax
+- company: Choice in Aging
+  board: choiceinaging
+- company: City Ambulance Service
+  board: cityambu
+- company: City of North Las Vegas
+  board: cityofnorthlasvegas-2
+- company: Clean Harbors
+  board: lightfoot
+- company: Clint Wilson State Farm
+  board: clintwilsonstatefarm
+- company: Community Assessment & Treatment Services
+  board: communityassessment
+- company: Community Health Centers
+  board: chcfl
+- company: Cortica
+  board: corticacare
+- company: Coury & Buehler Physical Therapy
+  board: cbphysicaltherapy
+- company: Cox Fleet
+  board: coxfleet
+- company: D&D Automotive Repair, Inc.
+  board: ddautomotiverepair
+- company: Dal-Tile
+  board: daltile
+- company: Dali Transportation LLC dba Prime One
+  board: callprimeone
+- company: Dependable Truck & Tank Ltd
+  board: dependable
+- company: Desert Face Trading LLC
+  board: desertfacetradingllc
+- company: DiscoverU Health
+  board: discoveruhealth
+- company: Dodd Camera
+  board: doddcamera
+- company: Dr Nutrition UAE
+  board: drnutritioncenterllc
+- company: Duc de Lorraine
+  board: ducdelorraine
+- company: Dynamix Agitators
+  board: dynamixinc
+- company: Eden Foods
+  board: edenfoodsinc
+- company: Ehvert Inc
+  board: ehvert
+- company: Elite Auto Experts
+  board: eliteautoexperts
+- company: Ellis Machinery & Equipment, Inc.
+  board: ellismachineryequipmentinc
+- company: Entertainment Technology Partners
+  board: etp
+- company: Equation Staffing Solutions
+  board: eqstaffingsolutions
+- company: Equity Trust
+  board: trustetc
+- company: European Service Center
+  board: escautogroup
+- company: ExpenseAnywhere
+  board: expenseanywhere
+- company: Far East Motors Auto Repair
+  board: fareastmotors
+- company: Fatsoma Ltd
+  board: fatsoma
+- company: FC Duct Cleaning
+  board: fcduct
+- company: Ferguson Enterprises, Inc.
+  board: manpowerferguson
+- company: Flamingo Appliance Service
+  board: flamingoappliance
+- company: FleetPride, Inc.
+  board: fleetpride-6
+- company: FreshTax
+  board: freshtaxsolutions
+- company: G&H Towing
+  board: gandhtowing
+- company: GCW Engineering, Inc.
+  board: gcwengineering
+- company: Geeky Tech Ltd
+  board: geekytech
+- company: Generations Cleaning
+  board: generationscleaning
+- company: Girl Scouts of Central Indiana
+  board: girlscoutsofcentralindiana
+- company: Grassi
+  board: grassiadvisors
+- company: Greenlife Healthcare Staffing
+  board: glhstaffing
+- company: Gulbahar Tobacco International Fze
+  board: gulbahartobacco
+- company: HaloMD
+  board: halomd
+- company: Handcrafted Wines
+  board: handcraftedwines
+- company: Harris Civil Engineers
+  board: harriscivilengineers
+- company: Hawaii Senior Care
+  board: hawaiiseniorcare
+- company: Heart CPR
+  board: heartcpr
+- company: Hertz
+  board: hertz-1
+- company: Hertz
+  board: hertz-59
+- company: Hertz
+  board: hertz-62
+- company: Honda and Toyota of Seattle
+  board: hondaandtoyotaofseattle
+- company: HR Alliance
+  board: hragroup-1
+- company: Huisong Pharmaceuticals
+  board: huisong
+- company: ICI Metals
+  board: icimetals
+- company: Indeck Power Equipment Company
+  board: indeckpowerequipment
+- company: Integrated Autism Centers
+  board: integratedautismcenterllc
+- company: Jax Spine & Pain Centers
+  board: jaxspine
+- company: JK TECHNOLOGY PTE LTD
+  board: jktechnologypteltd
+- company: Kaleidoscope ABA
+  board: kfsaba
+- company: Kaleidoscope Education Solutions
+  board: kaleidoscopeeducationsolutions
+- company: Kaltire
+  board: kaltire
+- company: Kathleen M Flynn, LLC
+  board: kathleenmflynnllc-2
+- company: KGPCo
+  board: kgpco-2
+- company: Kinetic Medical Group
+  board: kineticmedicalgrp
+- company: Kroger Mountain View Foods
+  board: krogermountainviewfoods
+- company: KwikKar Automotive Services
+  board: kwikkargroup
+- company: L & R Automotive
+  board: lrautorepair
+- company: LeadAdvisors
+  board: leadadvisors
+- company: LidWorks
+  board: lidworks
+- company: Louisiana Medical Management Corporation
+  board: louisianamedicalmanagementcorporation
+- company: Mary Henry Insurance Agcy Inc
+  board: insurememary
+- company: "Master's Transportation"
+  board: masterstransportation
+- company: Medlife
+  board: medlifemovement
+- company: "Meet Me At Madison's"
+  board: meetmeatmadisons
+- company: Meineke Car Care Service 232
+  board: meinekecarcareservice232
+- company: Merit Asphalt
+  board: meritasphalt
+- company: Miami Dade College
+  board: miamidadecollege
+- company: MK Auto Group
+  board: carstarab
+- company: Motorenn
+  board: motorenn
+- company: "MrKitt's Service Center & Towing"
+  board: mrkittsservicecenerinc
+- company: MSP Diesel Solutions
+  board: mspdieselsolutions
+- company: New Leaf Behavioral Health
+  board: nlbh
+- company: North Carolina Community Health Center Association
+  board: ncchca
+- company: Nova Construction Management, LLC.
+  board: buildwithnovacm
+- company: Oakridge Landscape Contractors
+  board: oakridgelandscape
+- company: Oneflow
+  board: oneflow
+- company: OPC Contracting, Inc.
+  board: opc-inc
+- company: Openwork
+  board: openworkllc
+- company: Papyrus Software USA
+  board: isis-papyrus
+- company: Peak Technologies
+  board: peaktech
+- company: PML Sound International
+  board: pmlsound
+- company: Potawatomi Federal Solutions
+  board: pfssbu
+- company: PPG
+  board: ppg-6
+- company: Presbyterian Villages of Michigan
+  board: pvm
+- company: Prestige Transportation
+  board: prestigekc
+- company: Printerpix
+  board: printerpix-2
+- company: Protrans Automotive & Transmission
+  board: protransautomotivetransmission
+- company: PSEG
+  board: pseg-1
+- company: Q10 Property Advisors
+  board: q10pa
+- company: Quality Car Care
+  board: qualitycarcare
+- company: Rail Management Services
+  board: railmanagementservices
+- company: RBC Bearings Incorporated
+  board: rbcbearings
+- company: RE Global
+  board: re-global
+- company: Regional Federal Credit Union
+  board: regionalfcu
+- company: Reli Electric
+  board: relielectric
+- company: RJ Lieb NYC Staffing Inc.
+  board: rjliebnycstaffinginc
+- company: Rockwell Development Center
+  board: rdckids
+- company: Rosenberg Fans Canada Ltd.
+  board: rosenbergcanada
+- company: SafeTech
+  board: safetech-usa
+- company: "Salem's Fresh Eats"
+  board: salemsfresheats
+- company: SamTech Group
+  board: samtech-me
+- company: SELF Inc.
+  board: selfincorp-3
+- company: Serco
+  board: serco-1
+- company: "Southern Glazer's Wine & Spirits"
+  board: sgws-2
+- company: "Southern Glazer's Wine & Spirits"
+  board: sgws-63
+- company: Stage Windows & Doors
+  board: stagewindows
+- company: Stellar Transport
+  board: stellar-transport
+- company: Summit Placement Service, Inc.
+  board: hiresps
+- company: SuperbTech, Inc
+  board: superbtechinc-2
+- company: Swan & Gardiner CPAs
+  board: swanandgardiner
+- company: Sysco
+  board: sysco-26
+- company: Sysco
+  board: sysco-3
+- company: Sysco
+  board: sysco-30
+- company: Talis Group, Inc.
+  board: talisgroupinc
+- company: The All Star Agency LLC
+  board: theallstaragencyllc
+- company: The Club at 12 Oaks
+  board: theclubat12oaks
+- company: The Krill Co., Inc.
+  board: krill
+- company: The Surplus Line Association of California
+  board: thesurpluslineassociationofcalifornia
+- company: The V Shop
+  board: thevshopfl
+- company: Tinley Auto Repair & Towing, Inc.
+  board: tinleyautorepair
+- company: "TRACY'S AUTOMOTIVE"
+  board: tracysautomotive3
+- company: "Trad's Pest Control"
+  board: tradspestcontrol
+- company: Tsubaki of Canada Limited
+  board: tsubaki
+- company: U.S. Army
+  board: armyrecruitingohio
+- company: Universal Transportation Systems
+  board: universaltransportationsystems
+- company: University Tire & Auto Service
+  board: universitytirecenter
+- company: VIP Staffing
+  board: vip-staffing-13
+- company: VirTra, Inc.
+  board: virtra
+- company: Voda Medical Clinic
+  board: vodamedicalclinic
+- company: VSSI LLC Staffing Services
+  board: vssistaffingagency
+- company: We Achieve ABA
+  board: weachieveaba
+- company: Westin Dallas Downtown
+  board: westindallasdowntown
+- company: White Cap Canada Inc.
+  board: whitecapcanada
+- company: Williams-Sonoma Inc.
+  board: wsgc-2
+- company: WomanCare Centers
+  board: womancarecenters

@@ -1,0 +1,19 @@
+---
+title: We ask before loading analytics cookies now
+date: 2026-07-22
+summary: Visitors from the EU, EEA, and UK get a cookie banner and choose whether analytics load — and anyone can change that choice from the footer.
+type: changelog
+tags:
+  - privacy
+draft: false
+---
+
+freehire uses two analytics tools — Google Analytics and PostHog — to see which pages get
+used and fix what's rough. Until now they loaded for everyone the moment a page opened. For
+visitors in the EU, EEA, or UK, that's meant to be a choice, not a default.
+
+Now it is. If you're in one of those regions, a small banner asks first — Accept and Reject
+side by side, nothing pre-ticked — and no analytics load until you say yes. Everyone else is
+unchanged. Changed your mind? **Cookie settings** in the footer reopens the banner any time,
+and rejecting stops what was running. The [privacy policy](/privacy) now spells out exactly
+what runs and when.

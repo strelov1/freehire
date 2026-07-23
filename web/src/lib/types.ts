@@ -587,6 +587,8 @@ export interface LocationPreferences {
 export interface UserProfile {
   specializations: string[];
   skills: string[];
+  /** Canonical skill tokens the user wants to avoid; seeded into the jobs filter's skills exclude set by "Apply my profile". Empty when the user excludes nothing. */
+  excluded_skills: string[];
   location_preferences: LocationPreferences | null;
   created_at: string | null;
   updated_at: string | null;

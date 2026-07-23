@@ -33,11 +33,9 @@ export default {
           'self',
           // Anti-FOUC theme script in app.html (see WARNING above).
           'sha256-qvzE1AlG+fDQlxleonlMQaOrsjjgE6qfHfnkE0pD/bo=',
-          // Google Analytics: SHA-256 of the inline gtag bootstrap in app.html,
-          // plus the gtag.js host it injects. Same hash caveat as the theme
-          // script — editing that <script> changes this hash and silently
-          // breaks GA data collection.
-          'sha256-tf1xyFn3XkSa3dEPltHXXh1gwP9PXgX19twcwLYVszU=',
+          // Google Analytics: the gtag.js host. GA now loads from the same-origin
+          // bundle ($lib/analytics, consent-gated), so no inline-script hash is
+          // needed — only the external host it injects.
           'https://www.googletagmanager.com',
         ],
         // Cheap defence-in-depth: pin the document base (no <base> injection) and

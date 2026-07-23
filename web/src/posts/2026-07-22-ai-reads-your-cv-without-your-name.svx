@@ -1,0 +1,83 @@
+---
+title: The AI reads your CV without seeing your name
+date: 2026-07-22
+summary: Our fit analysis needs your CV to judge how well you match a job — but your name, email, phone and links were riding along to a third-party model. Now a local model strips them out first, and if it can't, we don't send the CV at all.
+type: article
+tags:
+  - privacy
+  - ai
+  - engineering
+draft: false
+---
+
+When you run an [AI fit analysis](/jobs), we send your CV to a language model so it can weigh
+your experience against the posting. That analysis is useful — but it raised a question we
+didn't like the answer to: **where does your CV actually go?**
+
+Through our gateway, to a model provider. And your CV doesn't just carry your experience — it
+carries your name, your email, your phone number, your GitHub and LinkedIn. None of which the
+model needs to decide whether you fit a backend role. They were leaving our service anyway.
+
+So we stopped sending them. Your CV is now **de-identified before it reaches the model** — and
+if we can't de-identify it, we don't send it.
+
+## The easy 80% and the hard 20%
+
+Email, phone and URLs are easy: a handful of patterns catches them cleanly. We tested it, and
+it held.
+
+The name is the hard part. We ran the same detector against two real CVs (anonymized here).
+On a single-column layout it found the name fine. On a two-column CV it fell apart: the layout
+put a section header on the first line and pushed the name down, and the person's surname
+appeared **nowhere as plain text** — it lived only inside their email (`jordanprice@example.com`)
+and a profile URL (`/jordan-price`). No pattern-matching rule recovers a name that the document
+never spells out.
+
+That's the verdict that shaped the design: a pattern-matcher is a floor, not the whole
+solution. Names need a model that reads context.
+
+## A model that never leaves our hardware
+
+The obvious move — ask a big cloud model to find the PII — defeats the point: that's the exact
+hop we're trying to avoid. So we needed something local.
+
+We use [**OpenAI's Privacy Filter**](https://huggingface.co/openai/privacy-filter) — a small,
+open-weight model purpose-built for exactly this: detecting personal information in text. It's
+a token classifier, it runs on a CPU, and it never leaves our own server. We gave it the hard
+two-column CV and it recovered the buried surname the pattern-matcher couldn't. Just as
+important: it left the employer names and cities untouched — those are signal the analysis
+needs, and over-masking them would make the verdict worse.
+
+## How a request works now
+
+Every CV that flows to the model goes through the same two steps:
+
+1. **Mask on the way in.** We detect the identifiers and replace them with placeholders
+   (`[REDACTED_NAME]`, `[REDACTED_EMAIL_1]`, …). The model provider sees the placeholders,
+   never the originals — across every stage of the analysis.
+2. **Restore on the way out.** The result comes back and we swap the real values back in for
+   *you*. You see your analysis exactly as before; the provider saw a stranger.
+
+What stays visible to the model is deliberate: employers, universities, job titles, skills,
+the country you're in. What's masked is the stuff that identifies *you personally* and adds
+nothing to a fit judgment.
+
+## Fail-closed, on purpose
+
+The important part is what happens when the de-identifier isn't available. It would be easy to
+"degrade gracefully" and send the raw CV through — and that's exactly the bug we refused to
+ship. If the detector is down or unreachable, we **do not send your CV to the model at all**.
+The analysis simply doesn't run that time. We'd rather show you nothing than leak your details.
+Privacy is the default that can't be switched off by an outage.
+
+## The trade-offs we kept
+
+- **Home addresses** are best-effort. Modern CVs rarely carry a full postal address (they list
+  a city, which we keep visible on purpose), and detecting a street address in free text is the
+  weakest case. We mask it when the model catches it and we're honest that it's not airtight.
+- **A separate model process.** The detector runs as its own small service beside the rest of
+  the backend rather than being folded into it — the cleanest way to run the model without
+  dragging its runtime into everything else. A tidy seam we can revisit later.
+
+The net effect is simple to state: the parts of your CV that identify you now **stop at our
+door**. The AI still reads your CV. It just doesn't learn your name.

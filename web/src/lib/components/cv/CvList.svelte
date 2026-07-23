@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
-  import { FileText, Download, Trash2 } from '@lucide/svelte';
+  import { FileText, Download, Trash2, ArrowRight } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import { type CvTailoredItem } from '$lib/cv';
@@ -54,12 +54,36 @@
   {#if status === 'loading'}
     <p class="text-muted-foreground">Loading…</p>
   {:else if status === 'ready' && items.length === 0}
-    <div class="rounded-lg border border-dashed border-border p-10 text-center">
-      <FileText class="mx-auto h-8 w-8 text-muted-foreground" />
-      <p class="mt-2 font-medium">No tailored CVs yet</p>
-      <p class="text-sm text-muted-foreground">
-        Open a vacancy, run the match analysis, and choose “Tailor my CV” to build one here.
-      </p>
+    <div class="rounded-lg border border-dashed border-border p-8 sm:p-10">
+      <div class="mx-auto max-w-md">
+        <FileText class="mx-auto h-8 w-8 text-muted-foreground" />
+        <p class="mt-3 text-center font-medium">No tailored CVs yet</p>
+        <p class="mt-1 text-center text-sm text-muted-foreground">
+          A tailored CV starts from a vacancy’s fit analysis. Here’s how:
+        </p>
+        <ol class="mx-auto mt-5 flex max-w-sm flex-col gap-3 text-left text-sm">
+          <li class="flex items-start gap-3">
+            <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">1</span>
+            <span>Open a vacancy you want to apply to.</span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">2</span>
+            <span>Run the fit check — press <strong class="font-medium text-foreground">Analyze match</strong> on the job page.</span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">3</span>
+            <span>On the result, choose <strong class="font-medium text-foreground">Tailor my CV</strong> — your tailored copy appears here.</span>
+          </li>
+        </ol>
+        <div class="mt-6 text-center">
+          <a
+            href={resolve('/')}
+            class="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90"
+          >
+            Browse jobs <ArrowRight class="size-4" />
+          </a>
+        </div>
+      </div>
     </div>
   {:else}
     <ul class="flex flex-col gap-3">

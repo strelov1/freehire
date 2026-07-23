@@ -30,6 +30,7 @@ import (
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/moderation"
+	"github.com/strelov1/freehire/internal/pii"
 	"github.com/strelov1/freehire/internal/referral"
 	"github.com/strelov1/freehire/internal/reminder"
 	"github.com/strelov1/freehire/internal/report"
@@ -244,6 +245,10 @@ type Config struct {
 	// LLM backs the optional CV ATS qualitative review. Nil disables the AI layer:
 	// the ATS score stays deterministic (the report just omits content-quality).
 	LLM *llm.Client
+	// PIIDetector de-identifies CV text before it reaches the LLM (fit analysis and
+	// structured extraction). Nil disables those CV→LLM paths (fail-closed): they degrade
+	// to no analysis rather than send PII to the model.
+	PIIDetector pii.Detector
 	// Telegram bot for notification linking/delivery confirmations. Optional: an
 	// empty TelegramBotToken disables the feature (linking endpoints report off,
 	// webhook inert). TelegramBotUsername builds the deep link; TelegramWebhookSecret
@@ -325,7 +330,7 @@ func Register(app *fiber.App, cfg Config) {
 	// its reasoning model is slow (tens of seconds per stage), so the default would time
 	// out mid-stage. Nil-safe (a nil client stays nil → Analyze is a no-op).
 	a.matchAnalysis = matchanalysis.NewAnalyzer(cfg.LLM.WithTimeout(matchAnalysisLLMTimeout))
-	a.structuredExtractor = resumeextract.NewExtractor(cfg.LLM.WithTimeout(resumeExtractLLMTimeout))
+	a.structuredExtractor = resumeextract.NewExtractor(cfg.LLM.WithTimeout(resumeExtractLLMTimeout), cfg.PIIDetector)
 	a.matchAnalysisCache = queries
 	a.credits = credits.NewStore(queries, cfg.Pool, cfg.Credits)
 	// Telegram notifications are enabled only with both a bot token and a JWT
@@ -580,30 +585,27 @@ func Register(app *fiber.App, cfg Config) {
 	api.Put("/me/profile", saved, a.PutProfile)
 	api.Delete("/me/profile", saved, a.DeleteProfile)
 
-	// CV builder: cookie-only and gated to beta testers / moderators (restricted
-	// rollout). Owner-scoped (a foreign id is a 404). The PDF endpoint 501s when no
-	// typst binary is configured; the rest still works.
-	cvGate := auth.RequireModeratorOrBeta(a.queries, a.queries)
-	// The template registry is static (no per-user data); listed behind the same beta gate
-	// so the gallery is only reachable where the CV builder itself is.
-	api.Get("/cv-templates", saved, cvGate, a.ListCVTemplates)
-	api.Get("/me/cvs", saved, cvGate, a.ListCVs)
-	api.Post("/me/cvs", saved, cvGate, a.CreateCV)
+	// CV builder + AI tailoring: open to every signed-in user (AI credits meter the LLM spend).
+	// Cookie-only, owner-scoped (a foreign id is a 404). The PDF endpoint 501s when no typst
+	// binary is configured; the rest still works.
+	api.Get("/cv-templates", saved, a.ListCVTemplates)
+	api.Get("/me/cvs", saved, a.ListCVs)
+	api.Post("/me/cvs", saved, a.CreateCV)
 	// Read + render accept a key too (keyAuth), so the tailoring agent's CLI can fetch a CV
 	// and its PDF; mutations stay cookie-only (POST/PUT/DELETE — the browser owns authoring).
-	api.Get("/me/cvs/:id", keyAuth, cvGate, a.GetCV)
-	api.Put("/me/cvs/:id", saved, cvGate, a.UpdateCV)
+	api.Get("/me/cvs/:id", keyAuth, a.GetCV)
+	api.Put("/me/cvs/:id", saved, a.UpdateCV)
 	// Change only the template (the gallery's one-field switch); cookie-only like other mutations.
-	api.Put("/me/cvs/:id/template", saved, cvGate, a.SetCVTemplate)
-	api.Delete("/me/cvs/:id", saved, cvGate, a.DeleteCV)
-	api.Get("/me/cvs/:id/pdf", keyAuth, cvGate, a.RenderCVPDF)
+	api.Put("/me/cvs/:id/template", saved, a.SetCVTemplate)
+	api.Delete("/me/cvs/:id", saved, a.DeleteCV)
+	api.Get("/me/cvs/:id/pdf", keyAuth, a.RenderCVPDF)
 	// Tailoring: the browser starts a session (cookie-only bootstrap); the agent's CLI drives
 	// the edit + context/get/render reads with its minted API key (keyAuth = cookie or Bearer).
-	api.Post("/me/cvs/tailor", saved, cvGate, a.TailorCV)
-	api.Post("/me/cvs/:id/tailor-session", saved, cvGate, a.StartTailorSession)
-	api.Patch("/me/cvs/:id", keyAuth, cvGate, a.PatchCV)
-	api.Put("/me/cvs/:id/session", keyAuth, cvGate, a.SetCVSession)
-	api.Get("/me/cvs/:id/tailor-context", keyAuth, cvGate, a.TailorContext)
+	api.Post("/me/cvs/tailor", saved, a.TailorCV)
+	api.Post("/me/cvs/:id/tailor-session", saved, a.StartTailorSession)
+	api.Patch("/me/cvs/:id", keyAuth, a.PatchCV)
+	api.Put("/me/cvs/:id/session", keyAuth, a.SetCVSession)
+	api.Get("/me/cvs/:id/tailor-context", keyAuth, a.TailorContext)
 
 	// Mail inbox (Gmail connect + hosted mailbox). Open to every signed-in user.
 	// The read + disconnect routes are always registered (empty/no-op when not

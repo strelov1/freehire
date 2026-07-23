@@ -33,15 +33,17 @@ class ProfileStore extends UserResource<UserProfile | null> {
     this.#profile = null;
   }
 
-  /** Create-or-replace the profile. `location` is the optional location-preferences block
-   *  (null clears it). Throws on a bad specialization, empty skills, or an out-of-vocabulary
-   *  location value (the caller shows the error). */
+  /** Create-or-replace the profile. `excludedSkills` are the skills to avoid (may be empty).
+   *  `location` is the optional location-preferences block (null clears it). Throws on a bad
+   *  specialization, empty skills, or an out-of-vocabulary location value (the caller shows
+   *  the error). */
   async save(
     specializations: string[],
     skills: string[],
+    excludedSkills: string[],
     location: LocationPreferences | null,
   ): Promise<UserProfile> {
-    const row = await api.saveProfile(specializations, skills, location);
+    const row = await api.saveProfile(specializations, skills, excludedSkills, location);
     this.#profile = row;
     this.markLoaded();
     return row;

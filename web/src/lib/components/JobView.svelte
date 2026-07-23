@@ -234,7 +234,7 @@
     </a>
   </div>
 
-  <header class="flex flex-col gap-4 lg:col-start-2 lg:row-start-2">
+  <header class="flex flex-col gap-3 lg:col-start-2 lg:row-start-2">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
       <div class="flex flex-wrap items-center gap-2.5">
         <h1 class="text-2xl font-semibold tracking-tight">{job.title}</h1>
@@ -361,7 +361,7 @@
       {/if}
 
       <div class="flex flex-col gap-2 border-t border-border pt-4 first:border-t-0 first:pt-0">
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
+        <div class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
 <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
           <a href={filterHref('source', job.source)} class="inline-flex">
             <Badge variant="outline" class="transition-colors hover:bg-accent hover:text-foreground">
@@ -374,7 +374,7 @@
           {#if posted}<span>Posted {posted}</span>{/if}
         </div>
         {#if views > 0 || applies > 0}
-          <div class="flex flex-wrap items-center gap-3 text-xs leading-none text-muted-foreground">
+          <div class="flex flex-wrap items-center justify-center gap-3 text-xs leading-none text-muted-foreground">
             {#if views > 0}
               <span class="inline-flex items-center gap-1"><Eye class="size-3.5 shrink-0" />{views} {views === 1 ? 'view' : 'views'}</span>
             {/if}

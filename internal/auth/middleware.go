@@ -11,6 +11,20 @@ import (
 // store the authenticated user id. Handlers read it via UserID.
 const localsUserID = "auth.userID"
 
+// localsViaAPIKey is set true by RequireAuthOrKey when the request authenticated with an
+// API key rather than the session cookie. Handlers read it via ViaAPIKey to give
+// programmatic callers (e.g. the CV-tailoring agent) a narrower view than the owner's own
+// browser session.
+const localsViaAPIKey = "auth.viaAPIKey"
+
+// ViaAPIKey reports whether the request authenticated via an API key (Bearer) rather than
+// the session cookie. False for cookie auth and for requests that did not pass through
+// RequireAuthOrKey.
+func ViaAPIKey(c *fiber.Ctx) bool {
+	via, _ := c.Locals(localsViaAPIKey).(bool)
+	return via
+}
+
 // RequireAuth returns middleware that validates the auth cookie and stores the
 // resolved user id in the request locals. It responds 401 on a missing,
 // expired, or invalid token.
@@ -61,6 +75,7 @@ func RequireAuthOrKey(iss *Issuer, keys APIKeyAuthenticator) fiber.Handler {
 		if key := bearerToken(c); key != "" {
 			if id, err := keys.AuthenticateAPIKey(c.Context(), HashAPIKey(key)); err == nil {
 				c.Locals(localsUserID, id)
+				c.Locals(localsViaAPIKey, true)
 				return c.Next()
 			}
 		}

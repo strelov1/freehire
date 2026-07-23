@@ -217,7 +217,8 @@
 {/snippet}
 
 <!-- Hidden measurement layer: renders every block once at the main column width so the effect can
-     read each block's height. Off-screen and aria-hidden so it never affects layout or a11y. -->
+     read each block's height. Off-screen and aria-hidden so it never affects layout or a11y. Kept
+     OUTSIDE the zoomed stack below — otherwise CSS zoom would scale the measured heights. -->
 <div
   aria-hidden="true"
   class={['pointer-events-none invisible absolute -left-[9999px] top-0 text-[13px] leading-snug text-neutral-900', isSans ? 'font-sans' : 'font-serif']}
@@ -228,25 +229,26 @@
   {/each}
 </div>
 
-<!-- Visible A4 sheets, stacked and scaled by zoom from the top. -->
-<div class="flex justify-center">
-  <div class="flex flex-col items-center gap-6" style="transform: scale({zoom}); transform-origin: top center;">
-    {#each pageBlocks as page, p (p)}
-      <article
-        class={['bg-white text-[13px] leading-snug text-neutral-900 shadow-sm', isSans ? 'font-sans' : 'font-serif']}
-        style="width: {PAGE_W}px; min-height: {PAGE_H}px; padding: {mt}px {mr}px {mb}px {ml}px;"
-      >
-        {#if isSidebar}
-          <div class="grid grid-cols-[35%_1fr] gap-6">
-            <div>{#if p === 0}{@render sidebarColumn()}{/if}</div>
-            <div>
-              {#each page as b (b.id)}{@render blockView(b)}{/each}
-            </div>
+<!-- Visible A4 sheets, stacked. The CSS `zoom` property scales the whole stack — layout included —
+     so the scroll container reserves the scaled size (transform: scale would keep the 794px box and
+     clip the left edge on first paint). `items-center` centres each sheet when it fits and lets it
+     overflow-scroll when zoomed past the column width. -->
+<div class="flex flex-col items-center gap-6" style="zoom: {zoom};">
+  {#each pageBlocks as page, p (p)}
+    <article
+      class={['bg-white text-[13px] leading-snug text-neutral-900 shadow-sm', isSans ? 'font-sans' : 'font-serif']}
+      style="width: {PAGE_W}px; min-height: {PAGE_H}px; padding: {mt}px {mr}px {mb}px {ml}px;"
+    >
+      {#if isSidebar}
+        <div class="grid grid-cols-[35%_1fr] gap-6">
+          <div>{#if p === 0}{@render sidebarColumn()}{/if}</div>
+          <div>
+            {#each page as b (b.id)}{@render blockView(b)}{/each}
           </div>
-        {:else}
-          {#each page as b (b.id)}{@render blockView(b)}{/each}
-        {/if}
-      </article>
-    {/each}
-  </div>
+        </div>
+      {:else}
+        {#each page as b (b.id)}{@render blockView(b)}{/each}
+      {/if}
+    </article>
+  {/each}
 </div>

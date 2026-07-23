@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, type Snippet } from 'svelte';
   import { resolve } from '$app/paths';
   import { RefreshCw, FileText, Check, Loader, TriangleAlert } from '@lucide/svelte';
   import { api } from '$lib/api';
@@ -23,12 +23,21 @@
   // `stacked` forces every multi-column section into a single column regardless of viewport
   // width — for the narrow tailoring artifact panel, where the viewport-based `lg:`/`sm:`
   // breakpoints would otherwise cram two columns into ~480px.
+  // `tailorCta` is an optional button the /match page hands down; it renders in the verdict hero
+  // card (bottom-right), so it appears exactly when the analysis lands. Other callers omit it.
   let {
     job,
     initial = null,
     autoRun = true,
     stacked = false,
-  }: { job: Job; initial?: MatchAnalysisResponse | null; autoRun?: boolean; stacked?: boolean } = $props();
+    tailorCta = undefined,
+  }: {
+    job: Job;
+    initial?: MatchAnalysisResponse | null;
+    autoRun?: boolean;
+    stacked?: boolean;
+    tailorCta?: Snippet;
+  } = $props();
 
   let fit = $state<MatchAnalysisResponse | null>(initial);
 
@@ -310,6 +319,11 @@
             </Button>
           </div>
         </div>
+        {#if tailorCta}
+          <div class="relative mt-6 flex justify-center sm:justify-end">
+            {@render tailorCta()}
+          </div>
+        {/if}
       </section>
     {/if}
 
@@ -484,9 +498,16 @@
               <ul class={['grid gap-x-10', !stacked && 'sm:grid-cols-2 xl:grid-cols-3']}>
                 {#each coveredReqs as r, i (i)}
                   {@const syn = r.status === 'synonym-only'}
+                  {@const weak = r.evidence_strength === 'keyword'}
                   <li class="flex items-baseline gap-2.5 border-b border-border/60 py-2">
                     <span class="shrink-0 text-xs leading-snug {syn ? 'text-muted-foreground' : 'text-brand-strong'}">{syn ? '≈' : '✓'}</span>
                     <span class={['min-w-0 flex-1 text-sm leading-snug', syn && 'border-b border-dotted border-brand-strong/50']}>{r.text}</span>
+                    {#if r.evidence_strength}
+                      <span
+                        class={['shrink-0 text-[0.6rem] font-medium lowercase tracking-wide', weak ? 'text-amber-600 dark:text-amber-500' : 'text-muted-foreground/60']}
+                        title={weak ? 'Only a bare mention in your CV — back it with a concrete result' : 'Backed by ' + r.evidence_strength + ' evidence in your CV'}
+                      >{r.evidence_strength}</span>
+                    {/if}
                     {#if r.priority && r.priority.toLowerCase() !== 'required'}
                       <span class="shrink-0 text-[0.6rem] font-medium lowercase tracking-wide text-muted-foreground/60">{r.priority}</span>
                     {/if}

@@ -1,21 +1,12 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { goto } from '$app/navigation';
-  import { ArrowLeft, SquarePen } from '@lucide/svelte';
-  import { currentUser } from '$lib/auth.svelte';
+  import { ArrowLeft, SquarePen, Loader } from '@lucide/svelte';
   import { Button } from '$lib/ui';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import MatchAnalysisFull from '$lib/components/MatchAnalysisFull.svelte';
 
   let { data } = $props();
-
-  // Tailoring is a beta-tester feature; the CTA shows once an analysis exists for a stored
-  // CV. A stale analysis (CV or job changed since) still tailors — we nudge a recompute for
-  // the sharpest reframing (see below) rather than block, since any CV re-upload marks every
-  // past analysis stale and blocking would hide the feature too often.
-  const canTailor = $derived(
-    !!data.fit?.analysis && data.fit?.has_cv === true && currentUser()?.beta_tester === true,
-  );
 
   let tailoring = $state(false);
 
@@ -46,29 +37,24 @@
     </div>
   </header>
 
-  <MatchAnalysisFull job={data.job} initial={data.fit} />
-
-  {#if canTailor}
-    <section
-      class="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-5 sm:flex-row sm:items-center sm:justify-between"
+  <!-- The Tailor CTA renders inside the verdict card (bottom-right), so it appears exactly when
+       the analysis lands. MatchAnalysisFull owns the card; the page owns the button + navigation
+       and hands it down as a snippet. -->
+  {#snippet tailorCta()}
+    <Button
+      variant="outline"
+      size="lg"
+      onclick={startTailoring}
+      disabled={tailoring}
+      class="gap-2 rounded-xl border-transparent bg-brand-muted font-semibold text-brand-strong transition hover:bg-brand-muted hover:text-brand-strong hover:opacity-80 disabled:opacity-60"
     >
-      <div class="flex flex-col gap-1">
-        <h2 class="flex items-center gap-2 text-sm font-semibold">
-          <SquarePen class="size-4 text-primary" />Tailor your CV to this role
-        </h2>
-        <p class="text-sm text-muted-foreground">
-          Create a copy of your CV reframed toward this vacancy — starting from the gaps this
-          analysis found. You can keep editing it after.
-        </p>
-        {#if data.fit?.stale}
-          <p class="text-xs text-amber-600 dark:text-amber-500">
-            This analysis is out of date — recompute above for the sharpest tailoring.
-          </p>
-        {/if}
-      </div>
-      <Button onclick={startTailoring} disabled={tailoring} class="shrink-0">
-        {tailoring ? 'Preparing…' : 'Tailor my CV'}
-      </Button>
-    </section>
-  {/if}
+      {#if tailoring}
+        <Loader class="size-[1.15rem] animate-spin" />Preparing…
+      {:else}
+        <SquarePen class="size-[1.15rem]" />Tailor my CV
+      {/if}
+    </Button>
+  {/snippet}
+
+  <MatchAnalysisFull job={data.job} initial={data.fit} {tailorCta} />
 </div>

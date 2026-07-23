@@ -57,31 +57,37 @@
 
   type Phase = 'connecting' | 'ready';
 
-  // The agent is a beta-tester-only rollout. The nav hides it for others, but
-  // guard the route directly too — the agent backend only checks the freehire
-  // cookie, not the group, so a non-beta user reaching this URL must be stopped
-  // here (never connect / spawn a session for them).
-  const isBeta = $derived(currentUser()?.beta_tester ?? false);
-
   // Reusable chat: the host (/my/assistant or /tailor) composes the layout around it.
   //  - session: open this specific session id (else the newest, else a fresh chat).
   //  - kickoff: auto-send this as the first message of a fresh session (agent starts on its own).
   //  - sessionLabel: name the session in the rail (kept separate from the kickoff text).
   //  - onTurnComplete: called when a turn finishes (the tailor host refreshes the CV preview).
   //  - showSessionRail: whether to render the session sidebar (off on the focused /tailor surface).
+  //  - requireBeta: gate the chat behind beta membership (default). The /tailor host sets this
+  //    false — CV tailoring is public, so its embedded chat must connect for non-beta users too,
+  //    while the standalone Agent (/my/assistant) keeps the default beta gate.
   let {
     session = undefined,
     kickoff = undefined,
     sessionLabel = undefined,
     onTurnComplete = undefined,
     showSessionRail = true,
+    requireBeta = true,
   }: {
     session?: string;
     kickoff?: string;
     sessionLabel?: string;
     onTurnComplete?: () => void;
     showSessionRail?: boolean;
+    requireBeta?: boolean;
   } = $props();
+
+  // The standalone Agent is a beta-tester-only rollout. The nav hides it for others, but
+  // guard the route directly too — the agent backend only checks the freehire cookie, not the
+  // group, so a non-beta user reaching /my/assistant must be stopped here (never connect / spawn
+  // a session for them). Hosts that are already public (the /tailor workspace) pass
+  // requireBeta=false to lift this UI gate.
+  const allowed = $derived(!requireBeta || (currentUser()?.beta_tester ?? false));
 
   let phase = $state<Phase>('connecting');
   let error = $state<string | null>(null);
@@ -597,7 +603,7 @@
   }
 
   onMount(() => {
-    if (!isBeta) return;
+    if (!allowed) return;
     void boot();
     return teardown;
   });
@@ -639,7 +645,7 @@
   </div>
 {/if}
 
-{#if !isBeta}
+{#if !allowed}
   <div class="m-3 rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
     The agent is a limited beta and isn't available for your account yet.
   </div>

@@ -132,3 +132,53 @@ templates and letting the user select one; selecting a template SHALL set the ta
 - **WHEN** the user opens the Templates tab
 - **THEN** it lists the registered templates (at minimum the default), with the CV's current template indicated
 
+### Requirement: The workspace collapses to a single tabbed view on mobile
+
+The workspace SHALL, below the `lg` breakpoint, collapse its three columns into
+a single full-screen view selected by one flat, horizontally-scrollable tab bar
+offering all six views: Chat, Editor, Preview, Templates, Job description, and
+Verdict. Selecting a tab SHALL show that view full-width and hide the others.
+At `lg` and up the workspace SHALL render all three columns side by side as
+before, and the flat mobile tab bar SHALL NOT be shown. The per-column tab bars
+(Editor/Chat, Templates/Job/Verdict) SHALL be desktop-only so mobile navigation
+is not duplicated.
+
+#### Scenario: The flat tab bar switches views on mobile
+
+- **WHEN** the workspace renders on a narrow (below `lg`) viewport and the user taps a tab (e.g. Preview or Verdict)
+- **THEN** that single view fills the screen and the other views are hidden, with the tab bar offering Chat, Editor, Preview, Templates, Job, and Verdict
+
+#### Scenario: Mobile selection stays consistent with the columns
+
+- **WHEN** the user taps a mobile tab that corresponds to a column sub-tab (Editor, Chat, Templates, Job, or Verdict)
+- **THEN** the matching column's own tab is selected too, so switching to a wide viewport shows the same content selected
+
+#### Scenario: The desktop layout is unchanged at lg
+
+- **WHEN** the workspace renders at `lg` or wider
+- **THEN** the three columns show side by side with their own tab bars and splitters, and the flat mobile tab bar is not shown
+
+### Requirement: The account nav collapses to a drawer on mobile
+
+The tailoring workspace SHALL, below the `lg` breakpoint, hide the fixed account
+icon rail and instead expose the account sections through a burger button in the
+mobile tab bar that opens a labelled slide-in drawer over a dimmed backdrop. The
+drawer SHALL close on backdrop click, on `Escape`, on its close button, and after
+a nav link is followed. At `lg` and up the account icon rail SHALL render as
+before and no burger SHALL be shown.
+
+#### Scenario: The burger opens the account drawer on mobile
+
+- **WHEN** the workspace renders below `lg` and the user taps the burger in the mobile tab bar
+- **THEN** a labelled drawer of account sections slides in over a dimmed backdrop, and the fixed icon rail is not shown
+
+#### Scenario: The drawer dismisses
+
+- **WHEN** the drawer is open and the user taps the backdrop, presses `Escape`, taps the close button, or follows a link
+- **THEN** the drawer closes
+
+#### Scenario: The rail is unchanged at lg
+
+- **WHEN** the workspace renders at `lg` or wider
+- **THEN** the account icon rail shows on the left edge as before and no burger button is present
+

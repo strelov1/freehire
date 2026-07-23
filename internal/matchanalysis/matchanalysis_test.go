@@ -114,3 +114,23 @@ func TestSanitizeRequirements_CoercesAndDrops(t *testing.T) {
 		t.Errorf("req[1].Priority = %q, want coerced to %q", got[1].Priority, PriorityPreferred)
 	}
 }
+
+func TestSanitizeRequirements_EvidenceStrength(t *testing.T) {
+	in := []Requirement{
+		{Text: "Go", Priority: "required", Status: "covered", EvidenceStrength: "METRIC"},         // recognised, case-folded
+		{Text: "Kafka", Priority: "preferred", Status: "synonym-only", EvidenceStrength: ""},      // blank positive → keyword
+		{Text: "Rust", Priority: "required", Status: "covered", EvidenceStrength: "off-the-wall"}, // unknown positive → keyword
+		{Text: "K8s", Priority: "required", Status: "missing-gap", EvidenceStrength: "metric"},    // missing-* → dropped
+		{Text: "SQL", Priority: "preferred", Status: "missing-have", EvidenceStrength: "scope"},   // missing-* → dropped
+	}
+	got := sanitizeRequirements(in)
+	want := []string{StrengthMetric, StrengthKeyword, StrengthKeyword, "", ""}
+	if len(got) != len(want) {
+		t.Fatalf("len = %d, want %d", len(got), len(want))
+	}
+	for i, w := range want {
+		if got[i].EvidenceStrength != w {
+			t.Errorf("req[%d] (%s/%s) EvidenceStrength = %q, want %q", i, got[i].Priority, got[i].Status, got[i].EvidenceStrength, w)
+		}
+	}
+}

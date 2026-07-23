@@ -187,11 +187,26 @@ func (a *API) PatchCV(c *fiber.Ctx) error {
 	if err != nil {
 		return mapCVError(err)
 	}
+	// The tailoring agent (API-key caller) never sees the contact block and must not be able
+	// to write it either — reject a header-contact patch so the stored identifiers stay ours.
+	if auth.ViaAPIKey(c) && p.Op == cv.PatchSetHeaderField && isContactHeaderField(p.Field) {
+		return fiber.NewError(fiber.StatusForbidden, "contact fields are not editable in a tailoring session")
+	}
 	meta, err := a.cvStore.Patch(c.Context(), int64(id), userID, p)
 	if err != nil {
 		return mapCVError(err)
 	}
 	return c.JSON(fiber.Map{"data": metaResponse(meta)})
+}
+
+// isContactHeaderField reports whether a set_header_field patch targets a direct contact
+// identifier the tailoring agent must never write (location is allowed — it is not PII).
+func isContactHeaderField(field string) bool {
+	switch field {
+	case "full_name", "email", "phone":
+		return true
+	}
+	return false
 }
 
 // tailorJob is the vacancy the agent reframes toward: enough of the posting to ground the

@@ -22,6 +22,7 @@ import (
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/resume"
+	"github.com/strelov1/freehire/internal/resumeextract"
 	"github.com/strelov1/freehire/internal/userprofile"
 )
 
@@ -63,6 +64,9 @@ func TestMatchAnalysisStreamEndpoint(t *testing.T) {
 		s := resume.New(newFakeResumeBlobs(), &fakeResumeRepo{})
 		if _, err := s.Put(ctx, userID, "text/plain", []byte("5y Go at Acme.")); err != nil {
 			t.Fatalf("seed CV: %v", err)
+		}
+		if err := s.SetStructured(ctx, userID, resumeextract.Structured{Summary: "5y Go at Acme.", Skills: []string{"Go"}}, "test-model", resumeUploadedAt); err != nil {
+			t.Fatalf("seed structured: %v", err)
 		}
 		return s
 	}

@@ -79,7 +79,12 @@ jobs:
             [ "$api" = "200" ] && [ "$meili" = "200" ] && exit 0
             sleep 3
           done
-          echo "API/search did not become ready"; docker compose ps; docker compose logs --tail=100; exit 1
+          # Dump the app + db logs specifically: a combined `logs` is drowned by
+          # Meilisearch, which logs every /health poll and floods the tail.
+          echo "API/search did not become ready"; docker compose ps
+          echo "=== app logs ==="; docker compose logs app --tail=100
+          echo "=== db logs ===";  docker compose logs db --tail=30
+          exit 1
 
       - name: Initialise the search index
         # The homepage feed reads Meilisearch, so the jobs index must exist BEFORE

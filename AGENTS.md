@@ -166,3 +166,4 @@ For the full architecture and conventions, see the **module files** below. Each 
 - **Dictionaries:** All facet dictionaries are dict-only in production (never guess, emit nothing for unknowns)
 - **Migrations:** Via Postgres initdb — single-run on first volume init only; recreate volume to re-apply
 - **Sentry:** Opt-in, env-gated, errors-only — `sentry.Init` with `SendDefaultPII:false`
+- **Naming — "CV", not "résumé":** Prefer **CV** over "résumé"/"resume" in user-facing copy, new identifiers, comments, and docs — the term is currently mixed and that inconsistency is the thing to stop. Don't mass-rename the existing `resume`/`resumeextract` packages and columns (churn without value); just default new surfaces to "CV".

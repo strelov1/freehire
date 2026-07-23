@@ -17,20 +17,24 @@ import (
 // balloons its thinking time (tens of seconds per stage). These caps keep each stage
 // responsive while still covering the substance of a CV and a posting.
 const (
-	maxCVRunes          = 10000
 	maxDescriptionRunes = 6000
 	maxCompanyRunes     = 2000
 )
 
 // Analyzer runs the fixed three-stage fit prompt-chain over an llm.Client. A nil
 // client (LLM unconfigured) makes Analyze a no-op so the endpoint degrades to no
-// analysis, mirroring atscheck.Analyzer.
+// analysis, mirroring atscheck.Analyzer. The chain scores the fit from the de-identified
+// structured résumé (see Input.StructuredResume) — it never sends the raw CV, so it carries
+// no direct identifier to the provider and needs no PII detector of its own.
 type Analyzer struct {
 	client *llm.Client
 }
 
-// NewAnalyzer wraps an llm.Client; client may be nil (LLM unconfigured).
-func NewAnalyzer(client *llm.Client) *Analyzer { return &Analyzer{client: client} }
+// NewAnalyzer wraps an llm.Client; client may be nil (LLM unconfigured), in which case the
+// analysis degrades to a no-op.
+func NewAnalyzer(client *llm.Client) *Analyzer {
+	return &Analyzer{client: client}
+}
 
 // ModelID returns the underlying model id (empty when unconfigured), so a caller can
 // record which model produced a cached analysis.
@@ -44,11 +48,12 @@ type Input struct {
 	JobTitle       string
 	JobDescription string
 	CompanyInfo    string
-	CVText         string
-	// StructuredResume is the caller's sanitized structured résumé as JSON, supplied
-	// beside CVText as pre-normalized context — never a replacement (the raw CV stays the
-	// ground truth). Empty when the caller has no current structured résumé, in which case
-	// the chain runs exactly as it does on the CV text alone.
+	// CVText is the raw CV — retained only for the caller's has-CV bookkeeping; it is NEVER
+	// sent to the model. The fit is scored from StructuredResume (contacts removed).
+	CVText string
+	// StructuredResume is the caller's de-identified structured résumé as JSON — the sole
+	// candidate context sent to the model (its contact fields are stripped by candidateContext).
+	// Empty when the caller has no current structured résumé, in which case no analysis runs.
 	StructuredResume string
 	Match            jobmatch.JobMatch
 
@@ -114,10 +119,17 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 		return nil, nil
 	}
 
+	// The fit is scored from the de-identified structured résumé; without it there is nothing
+	// to reason over, so degrade to no analysis (the raw CV is never used as a fallback).
+	candidate := candidateContext(in.StructuredResume)
+	if candidate == "" {
+		return nil, nil
+	}
+
 	// Stage 1 — Extract & Match (the ATS lens).
 	emit(Event{Kind: EventStageStart, Stage: 1, Label: stageLabels[1]})
 	var s1 stage1Out
-	if err := a.streamStage(ctx, 1, stage1SystemPrompt(), stage1UserPrompt(in), emit, &s1); err != nil {
+	if err := a.streamStage(ctx, 1, stage1SystemPrompt(), stage1UserPrompt(in, candidate), emit, &s1); err != nil {
 		return nil, fmt.Errorf("matchanalysis: stage 1: %w", err)
 	}
 	reqs := sanitizeRequirements(s1.Requirements)
@@ -127,7 +139,7 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 	// Stage 2 — Recruiter verdict (the human lens).
 	emit(Event{Kind: EventStageStart, Stage: 2, Label: stageLabels[2]})
 	var verdict recruiterVerdict
-	if err := a.streamStage(ctx, 2, stage2SystemPrompt(), stage2UserPrompt(in, reqs), emit, &verdict); err != nil {
+	if err := a.streamStage(ctx, 2, stage2SystemPrompt(), stage2UserPrompt(in, reqs, candidate), emit, &verdict); err != nil {
 		return nil, fmt.Errorf("matchanalysis: stage 2: %w", err)
 	}
 	sanitizeVerdict(&verdict)
@@ -142,7 +154,7 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 	// zeros. Best-effort: on a parse/transport failure keep the un-audited verdict.
 	emit(Event{Kind: EventStageStart, Stage: 3, Label: stageLabels[3]})
 	audited := verdict
-	if err := a.streamStage(ctx, 3, stage3SystemPrompt(), stage3UserPrompt(in, reqs, verdict), emit, &audited); err != nil {
+	if err := a.streamStage(ctx, 3, stage3SystemPrompt(), stage3UserPrompt(in, reqs, verdict, candidate), emit, &audited); err != nil {
 		log.Printf("matchanalysis: stage 3 audit failed, serving un-audited verdict: %v", err)
 	} else {
 		sanitizeVerdict(&audited)
@@ -200,6 +212,11 @@ func stage1SystemPrompt() string {
 	b.WriteString("\"missing-have\" (the CV evidences it elsewhere but never states the term), ")
 	b.WriteString("\"missing-gap\" (a genuine gap — absent, no close equivalent held).\n")
 	b.WriteString("  - \"evidence\": where it appears in the CV, or why it is absent.\n")
+	b.WriteString("  - \"evidence_strength\": for \"covered\"/\"synonym-only\" only, grade the cited evidence ")
+	b.WriteString("as \"metric\" (an accomplishment with a number, scale, or measured outcome), ")
+	b.WriteString("\"scope\" (breadth: teams, systems, regions), \"responsibility\" (clear ownership with ")
+	b.WriteString("tools or methods), or \"keyword\" (the term is present but only a bare mention or ")
+	b.WriteString("duty). Omit it for \"missing-have\"/\"missing-gap\".\n")
 	b.WriteString("Base every judgement only on the CV text. NEVER fabricate a skill the CV does not ")
 	b.WriteString("evidence — a genuine gap is \"missing-gap\", never hidden.\n")
 	return b.String()
@@ -241,26 +258,30 @@ func stage3SystemPrompt() string {
 	b.WriteString("Return ONLY a JSON object in the SAME shape as the verdict you are given.\n\n")
 	b.WriteString("Challenge it against the CV evidence: lower any inflated dimension score, remove ")
 	b.WriteString("strengths the CV does not actually support, and surface gaps that were glossed over. ")
+	b.WriteString("For any requirement marked \"required\", treat weak evidence as thin support: a ")
+	b.WriteString("\"synonym-only\" match, or a \"covered\" match graded \"keyword\" strength (a bare ")
+	b.WriteString("mention rather than a metric-, scope-, or responsibility-backed one), is adjacent ")
+	b.WriteString("exposure, not direct ownership — it may earn partial credit but must not by itself ")
+	b.WriteString("sustain a high skills_coverage score. ")
 	b.WriteString("Keep what is well-supported. Return the corrected verdict with the same keys ")
 	b.WriteString("(title_alignment, experience_relevance, seniority_fit, skills_coverage, ")
 	b.WriteString("company_context, location_fit, strengths, gaps, recommendation). Do NOT fabricate anything.\n")
 	return b.String()
 }
 
-// stage1UserPrompt carries the (bounded) job text, CV, and the deterministic anchor,
-// plus the pre-normalized structured résumé when present (additive to the raw CV).
-func stage1UserPrompt(in Input) string {
+// stage1UserPrompt carries the (bounded) job text, the deterministic anchor, and the
+// de-identified structured résumé (the candidate context — no raw CV is sent).
+func stage1UserPrompt(in Input, candidate string) string {
 	var b strings.Builder
 	writeJob(&b, in)
 	writeAnchor(&b, in.Match)
 	writeBlockers(&b, in.Blockers)
-	writeStructured(&b, in)
-	writeCV(&b, in)
+	writeCandidate(&b, candidate)
 	return b.String()
 }
 
 // stage2UserPrompt adds the company info and the Stage-1 requirement match.
-func stage2UserPrompt(in Input, reqs []Requirement) string {
+func stage2UserPrompt(in Input, reqs []Requirement, candidate string) string {
 	var b strings.Builder
 	writeJob(&b, in)
 	if info := strings.TrimSpace(in.CompanyInfo); info != "" {
@@ -271,12 +292,12 @@ func stage2UserPrompt(in Input, reqs []Requirement) string {
 	writeAnchor(&b, in.Match)
 	writeLocation(&b, in)
 	writeRequirements(&b, reqs)
-	writeCV(&b, in)
+	writeCandidate(&b, candidate)
 	return b.String()
 }
 
 // stage3UserPrompt carries the Stage-2 verdict to audit plus the same evidence.
-func stage3UserPrompt(in Input, reqs []Requirement, v recruiterVerdict) string {
+func stage3UserPrompt(in Input, reqs []Requirement, v recruiterVerdict, candidate string) string {
 	var b strings.Builder
 	b.WriteString("Verdict to audit (JSON):\n")
 	if blob, err := json.Marshal(v); err == nil {
@@ -285,7 +306,7 @@ func stage3UserPrompt(in Input, reqs []Requirement, v recruiterVerdict) string {
 	}
 	writeBlockers(&b, in.Blockers)
 	writeRequirements(&b, reqs)
-	writeCV(&b, in)
+	writeCandidate(&b, candidate)
 	return b.String()
 }
 
@@ -320,27 +341,40 @@ func writeJob(b *strings.Builder, in Input) {
 	b.WriteString("\n\n")
 }
 
-func writeCV(b *strings.Builder, in Input) {
-	b.WriteString("CV:\n")
-	b.WriteString(llm.TruncateRunes(in.CVText, maxCVRunes))
-	b.WriteString("\n")
-}
-
 // maxStructuredRunes bounds the structured-résumé JSON added to the prompt — it is a
 // compact summary, so a modest cap covers it while keeping the stage responsive.
 const maxStructuredRunes = 3000
 
-// writeStructured appends the caller's pre-normalized structured résumé as context, when
-// present. Omitted entirely when empty, so an un-extracted CV yields exactly today's
-// prompt. It is labelled as a parsed summary so the model treats the raw CV as ground
-// truth and this as an aid.
-func writeStructured(b *strings.Builder, in Input) {
-	s := strings.TrimSpace(in.StructuredResume)
+// candidateContext turns the stored structured-résumé JSON into the de-identified candidate
+// context sent to the model: the semantic résumé with its contact fields removed. Empty when
+// there is no structured résumé (the chain then produces no analysis) or the JSON is unusable.
+func candidateContext(structuredJSON string) string {
+	s := strings.TrimSpace(structuredJSON)
 	if s == "" {
+		return ""
+	}
+	var m map[string]json.RawMessage
+	if json.Unmarshal([]byte(s), &m) != nil {
+		return ""
+	}
+	for _, k := range []string{"full_name", "email", "phone", "links"} {
+		delete(m, k)
+	}
+	stripped, err := json.Marshal(m)
+	if err != nil {
+		return ""
+	}
+	return llm.TruncateRunes(string(stripped), maxStructuredRunes)
+}
+
+// writeCandidate appends the de-identified structured résumé as the candidate context.
+// Omitted when empty (the chain never reaches a stage with an empty candidate).
+func writeCandidate(b *strings.Builder, candidate string) {
+	if candidate == "" {
 		return
 	}
-	b.WriteString("Structured résumé (parsed summary, JSON — the CV below is ground truth):\n")
-	b.WriteString(llm.TruncateRunes(s, maxStructuredRunes))
+	b.WriteString("Candidate (structured résumé, JSON — contacts removed):\n")
+	b.WriteString(candidate)
 	b.WriteString("\n\n")
 }
 
@@ -445,7 +479,11 @@ func writeRequirements(b *strings.Builder, reqs []Requirement) {
 	}
 	b.WriteString("Requirement match (from the ATS stage):\n")
 	for _, r := range reqs {
-		b.WriteString("- [" + r.Priority + "/" + r.Status + "] " + r.Text + "\n")
+		tag := r.Priority + "/" + r.Status
+		if r.EvidenceStrength != "" {
+			tag += "/" + r.EvidenceStrength
+		}
+		b.WriteString("- [" + tag + "] " + r.Text + "\n")
 	}
 	b.WriteString("\n")
 }

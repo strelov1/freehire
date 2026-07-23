@@ -25,16 +25,21 @@ describe('accountNav config', () => {
 });
 
 describe('visibleAccountNav', () => {
-  it('hides the beta-only Assistant and CV builder from a plain user but shows the Inbox', () => {
+  it('hides the beta-only Assistant from a plain user but shows the Inbox and CV builder', () => {
     const hrefs = visibleAccountNav(false, false).map((i) => i.href);
     expect(hrefs).not.toContain('/my/assistant');
-    expect(hrefs).not.toContain('/my/cvs');
     expect(hrefs).toContain('/my/inbox'); // Inbox is open to everyone now
+    expect(hrefs).toContain('/my/cvs'); // CV builder is public now (credits meter the AI spend)
   });
 
-  it('shows the beta-only CV builder to a beta tester, not a plain moderator', () => {
-    expect(visibleAccountNav(false, true).map((i) => i.href)).toContain('/my/cvs');
-    expect(visibleAccountNav(true, false).map((i) => i.href)).not.toContain('/my/cvs');
+  it('shows the CV builder to every signed-in user, gate-free', () => {
+    for (const [mod, beta] of [
+      [false, false],
+      [true, false],
+      [false, true],
+    ] as const) {
+      expect(visibleAccountNav(mod, beta).map((i) => i.href)).toContain('/my/cvs');
+    }
   });
 
   it('gates the Assistant on beta membership, not the moderator role', () => {

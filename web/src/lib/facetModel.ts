@@ -192,8 +192,11 @@ export function facetRemove(st: FacetState, v: string): FacetState {
 }
 
 /** Build a fresh filter set seeded from a user profile — the reset-and-seed behind
- *  "Apply my profile". Specializations become `category` values and skills become `skills`.
- *  The optional location block flattens into the location facets: work_modes → `work_mode`;
+ *  "Apply my profile". Specializations become `category` values, skills become included
+ *  `skills` values, and excluded skills become EXCLUDED `skills` values (rendering
+ *  `skills_exclude=…` → `skills != "X"`). A skill that is somehow both wanted and avoided
+ *  stays wanted (include wins), mirroring the server's overlap rule so the two never
+ *  self-cancel. The optional location block flattens into the location facets: work_modes → `work_mode`;
  *  regions from the remote reach ∪ relocation targets; countries from the remote reach ∪
  *  base ∪ relocation targets; cities from the base ∪ relocation targets; and `relocation`
  *  staged as supported+required when the user is open to relocating. The flatten is lossy
@@ -203,7 +206,15 @@ export function filtersFromProfile(profile: UserProfile): JobFilters {
   const seed = (values: string[]) => values.reduce(facetAdd, emptyFacet());
   const f = emptyFilters();
   f.facets.category = seed(profile.specializations);
-  f.facets.skills = seed(profile.skills);
+  // Skills: wanted → include, avoided → exclude. Only stage an exclude for a token not
+  // already wanted (signOf === 'off'), so a stray overlap keeps the wanted value.
+  f.facets.skills = (profile.excluded_skills ?? []).reduce(
+    (st, raw) => {
+      const v = raw.trim();
+      return v && signOf(st, v) === 'off' ? facetSetSign(st, v, 'exclude') : st;
+    },
+    seed(profile.skills),
+  );
 
   const loc = profile.location_preferences;
   if (loc) {

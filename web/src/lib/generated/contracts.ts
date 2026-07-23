@@ -449,6 +449,30 @@ export const StatusMissingHave = "missing-have"; // profile evidences it but the
  */
 export const StatusMissingGap = "missing-gap"; // a genuine gap — absent, no close equivalent held
 /**
+ * Evidence-strength grades for a covered/synonym-only requirement, strongest first.
+ * They rank how firmly the CV backs the match, so the audit and the served verdict
+ * can tell real ownership from a bare keyword. The two missing-* statuses carry none.
+ */
+export const StrengthMetric = "metric"; // an accomplishment with a number, scale, or measured outcome
+/**
+ * Evidence-strength grades for a covered/synonym-only requirement, strongest first.
+ * They rank how firmly the CV backs the match, so the audit and the served verdict
+ * can tell real ownership from a bare keyword. The two missing-* statuses carry none.
+ */
+export const StrengthScope = "scope"; // breadth of work: teams, systems, regions
+/**
+ * Evidence-strength grades for a covered/synonym-only requirement, strongest first.
+ * They rank how firmly the CV backs the match, so the audit and the served verdict
+ * can tell real ownership from a bare keyword. The two missing-* statuses carry none.
+ */
+export const StrengthResponsibility = "responsibility"; // clear ownership with tools or methods
+/**
+ * Evidence-strength grades for a covered/synonym-only requirement, strongest first.
+ * They rank how firmly the CV backs the match, so the audit and the served verdict
+ * can tell real ownership from a bare keyword. The two missing-* statuses carry none.
+ */
+export const StrengthKeyword = "keyword"; // the term is present but the evidence is a bare mention or duty-only
+/**
  * Dimension is one scored fit dimension on the wire.
  */
 export interface Dimension {
@@ -465,6 +489,7 @@ export interface Requirement {
   priority: string; // required | preferred
   status: string; // covered | synonym-only | missing-have | missing-gap
   evidence: string; // where it appears in the CV, or why it is absent
+  evidence_strength: string; // metric|scope|responsibility|keyword for positive statuses; empty for missing-*
 }
 /**
  * Analysis is the full served fit verdict — the single wire contract exported to TS

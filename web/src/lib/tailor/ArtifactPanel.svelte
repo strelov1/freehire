@@ -38,7 +38,7 @@
     ['jd', 'Job description'],
     ['verdict', 'Verdict'],
   ];
-  let width = $state(420);
+  let width = $state(340);
   let resizing = false;
 
   // Seed MatchAnalysisFull from the already-cached analysis so it paints read-only (no recompute burn).

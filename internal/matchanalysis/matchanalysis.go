@@ -52,6 +52,16 @@ const (
 	StatusMissingGap  = "missing-gap"  // a genuine gap — absent, no close equivalent held
 )
 
+// Evidence-strength grades for a covered/synonym-only requirement, strongest first.
+// They rank how firmly the CV backs the match, so the audit and the served verdict
+// can tell real ownership from a bare keyword. The two missing-* statuses carry none.
+const (
+	StrengthMetric         = "metric"         // an accomplishment with a number, scale, or measured outcome
+	StrengthScope          = "scope"          // breadth of work: teams, systems, regions
+	StrengthResponsibility = "responsibility" // clear ownership with tools or methods
+	StrengthKeyword        = "keyword"        // the term is present but the evidence is a bare mention or duty-only
+)
+
 // dimensionSpec pins each dimension's label and its weight (percent). Title alignment
 // and experience relevance carry the most weight — the two signals an ATS keyword
 // screen and a recruiter weigh most. The weights sum to 100.
@@ -100,10 +110,11 @@ type Dimension struct {
 
 // Requirement is one vacancy requirement classified against the CV (the ATS lens).
 type Requirement struct {
-	Text     string `json:"text"`
-	Priority string `json:"priority"` // required | preferred
-	Status   string `json:"status"`   // covered | synonym-only | missing-have | missing-gap
-	Evidence string `json:"evidence"` // where it appears in the CV, or why it is absent
+	Text             string `json:"text"`
+	Priority         string `json:"priority"`          // required | preferred
+	Status           string `json:"status"`            // covered | synonym-only | missing-have | missing-gap
+	Evidence         string `json:"evidence"`          // where it appears in the CV, or why it is absent
+	EvidenceStrength string `json:"evidence_strength"` // metric|scope|responsibility|keyword for positive statuses; empty for missing-*
 }
 
 // Analysis is the full served fit verdict — the single wire contract exported to TS
@@ -237,10 +248,11 @@ func sanitizeRequirements(in []Requirement) []Requirement {
 			continue
 		}
 		out = append(out, Requirement{
-			Text:     llm.TruncateRunes(text, maxReqTextRunes),
-			Priority: coercePriority(r.Priority),
-			Status:   status,
-			Evidence: llm.TruncateRunes(strings.TrimSpace(r.Evidence), maxReqEvidenceRunes),
+			Text:             llm.TruncateRunes(text, maxReqTextRunes),
+			Priority:         coercePriority(r.Priority),
+			Status:           status,
+			Evidence:         llm.TruncateRunes(strings.TrimSpace(r.Evidence), maxReqEvidenceRunes),
+			EvidenceStrength: coerceEvidenceStrength(status, r.EvidenceStrength),
 		})
 		if len(out) >= maxRequirements {
 			break
@@ -251,6 +263,29 @@ func sanitizeRequirements(in []Requirement) []Requirement {
 
 var validStatus = map[string]bool{
 	StatusCovered: true, StatusSynonymOnly: true, StatusMissingHave: true, StatusMissingGap: true,
+}
+
+var positiveStatus = map[string]bool{
+	StatusCovered: true, StatusSynonymOnly: true,
+}
+
+var validEvidenceStrength = map[string]bool{
+	StrengthMetric: true, StrengthScope: true, StrengthResponsibility: true, StrengthKeyword: true,
+}
+
+// coerceEvidenceStrength normalises the model's evidence grade to the controlled
+// vocabulary: a covered/synonym-only requirement keeps a recognised grade and
+// defaults anything unrecognised or blank to keyword (the weakest positive tier);
+// a missing-* requirement has no evidence and so carries no strength.
+func coerceEvidenceStrength(status, strength string) string {
+	if !positiveStatus[status] {
+		return ""
+	}
+	s := strings.TrimSpace(strings.ToLower(strength))
+	if validEvidenceStrength[s] {
+		return s
+	}
+	return StrengthKeyword
 }
 
 // coercePriority normalises the priority to required/preferred, defaulting anything

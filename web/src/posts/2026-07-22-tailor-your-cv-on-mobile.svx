@@ -1,0 +1,22 @@
+---
+title: Tailor your CV from your phone
+date: 2026-07-22
+summary: The CV tailoring workspace now works on mobile — a tab bar reaches the live preview, templates, job description, and fit verdict that used to be off-screen, and the account menu tucks behind a button.
+type: changelog
+tags:
+  - cv
+  - tailoring
+  - mobile
+draft: false
+---
+
+The CV tailoring workspace was built for a wide screen: the chat and editor on the left,
+a live CV preview in the middle, and templates, the job description, and your fit verdict
+on the right. On a phone only the left column fit — everything else was off-screen with no
+way to reach it.
+
+Now the workspace collapses to a single view on mobile with a tab bar across the top. Switch
+between **Chat, Editor, Preview, Templates, Job, and Verdict** — each fills the screen, so you
+can talk to the agent, watch the CV re-render, swap a template, or re-read the role without
+leaving your phone. The account sidebar tucks behind a **☰** menu so it stays out of the way
+until you need it.

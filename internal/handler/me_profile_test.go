@@ -24,6 +24,7 @@ type profileUpsert struct {
 	UserID              int64
 	Specializations     []string
 	Skills              []string
+	ExcludedSkills      []string
 	LocationPreferences json.RawMessage
 }
 
@@ -38,8 +39,8 @@ type fakeProfileRepo struct {
 func (f *fakeProfileRepo) Get(context.Context, int64) (userprofile.Profile, error) {
 	return f.getRet, f.getErr
 }
-func (f *fakeProfileRepo) Upsert(_ context.Context, userID int64, specializations, skills []string, locationPreferences json.RawMessage) (userprofile.Profile, error) {
-	f.upserted = profileUpsert{UserID: userID, Specializations: specializations, Skills: skills, LocationPreferences: locationPreferences}
+func (f *fakeProfileRepo) Upsert(_ context.Context, userID int64, specializations, skills, excludedSkills []string, locationPreferences json.RawMessage) (userprofile.Profile, error) {
+	f.upserted = profileUpsert{UserID: userID, Specializations: specializations, Skills: skills, ExcludedSkills: excludedSkills, LocationPreferences: locationPreferences}
 	return f.upsertRet, nil
 }
 func (f *fakeProfileRepo) Delete(context.Context, int64) error { return f.delErr }
@@ -130,6 +131,40 @@ func TestPutProfile_ReturnsSpecializationsArray(t *testing.T) {
 	}
 	if strings.Join(got.Data.Specializations, ",") != "backend,devops" {
 		t.Errorf("specializations = %v, want [backend devops]", got.Data.Specializations)
+	}
+}
+
+func TestPutProfile_NormalizesExcludedSkillsAndDropsOverlap(t *testing.T) {
+	repo := &fakeProfileRepo{}
+	app, token := profileApp(t, repo)
+	// "php" is wanted and also listed as excluded → the service drops it from the
+	// excluded set; "WordPress" is normalized to "wordpress".
+	resp := doProfile(t, app, fiber.MethodPut,
+		`{"specializations":["backend"],"skills":["go","php"],"excluded_skills":["php","WordPress"]}`, token)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if strings.Join(repo.upserted.ExcludedSkills, ",") != "wordpress" {
+		t.Errorf("excluded_skills upserted = %v, want [wordpress] (overlap dropped, normalized)", repo.upserted.ExcludedSkills)
+	}
+}
+
+func TestPutProfile_EchoesExcludedSkills(t *testing.T) {
+	ret := userprofile.Profile{UserID: 1, Specializations: []string{"backend"}, Skills: []string{"go"}, ExcludedSkills: []string{"wordpress"}}
+	app, token := profileApp(t, &fakeProfileRepo{upsertRet: ret})
+	resp := doProfile(t, app, fiber.MethodPut,
+		`{"specializations":["backend"],"skills":["go"],"excluded_skills":["wordpress"]}`, token)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var got struct {
+		Data profileResponse `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if strings.Join(got.Data.ExcludedSkills, ",") != "wordpress" {
+		t.Errorf("excluded_skills = %v, want [wordpress]", got.Data.ExcludedSkills)
 	}
 }
 

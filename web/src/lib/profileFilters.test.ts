@@ -7,8 +7,16 @@ function mkProfile(
   specializations: string[],
   skills: string[],
   location: LocationPreferences | null = null,
+  excludedSkills: string[] = [],
 ): UserProfile {
-  return { specializations, skills, location_preferences: location, created_at: null, updated_at: null };
+  return {
+    specializations,
+    skills,
+    excluded_skills: excludedSkills,
+    location_preferences: location,
+    created_at: null,
+    updated_at: null,
+  };
 }
 
 // filtersFromProfile is the pure reset-and-seed used by "Apply my profile": from a
@@ -78,6 +86,21 @@ describe('filtersFromProfile', () => {
     // Relocation targets are ignored when not open (open is the gate for the whole block).
     expect(p.getAll('regions')).toEqual(['latam']);
     expect(p.getAll('cities')).toEqual([]);
+  });
+
+  it('seeds the skills exclude set from excluded_skills', () => {
+    const f = filtersFromProfile(mkProfile(['backend'], ['go'], null, ['php', 'wordpress']));
+    const p = filtersToParams(f);
+    expect(p.getAll('skills')).toEqual(['go']);
+    expect(p.getAll('skills_exclude')).toEqual(['php', 'wordpress']);
+  });
+
+  it('keeps a skill wanted when it also appears in excluded_skills (include wins)', () => {
+    // The backend already drops the overlap, but the seeder must not self-cancel either.
+    const f = filtersFromProfile(mkProfile(['backend'], ['go'], null, ['go', 'php']));
+    const p = filtersToParams(f);
+    expect(p.getAll('skills')).toEqual(['go']);
+    expect(p.getAll('skills_exclude')).toEqual(['php']);
   });
 
   it('a profile with no location block seeds only category and skills', () => {

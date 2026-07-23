@@ -12,7 +12,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { ZoomIn, ZoomOut, Download } from '@lucide/svelte';
+  import { ZoomIn, ZoomOut, Download, Menu } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import { createSession } from '$lib/assistant/api';
   import AssistantChat from '$lib/assistant/AssistantChat.svelte';
@@ -22,13 +22,11 @@
   import AccountNavRail from '$lib/components/AccountNavRail.svelte';
   import { clampWidth } from '$lib/tailor/geometry';
   import { toEditable, emptyDocument, type CvRecord } from '$lib/cv';
-  import { currentUser } from '$lib/auth.svelte';
   import type { Analysis, Document } from '$lib/generated/contracts';
   import type { Job } from '$lib/types';
 
   const slug = $derived(page.params.slug ?? '');
   const cvParam = $derived(page.url.searchParams.get('cv'));
-  const eligible = $derived(currentUser()?.beta_tester === true);
 
   let status = $state<'loading' | 'ready' | 'error'>('loading');
   let errorMsg = $state('');
@@ -53,7 +51,7 @@
   // Left panel: which tab is shown, and its resizable width. The chat stays mounted across tab
   // switches (hidden, not unmounted) so its live session is never dropped.
   let leftTab = $state<'chat' | 'editor'>('chat');
-  let leftWidth = $state(440);
+  let leftWidth = $state(380);
   let leftPanelEl = $state<HTMLElement>();
   let leftResizing = false;
 
@@ -77,6 +75,10 @@
     ['verdict', 'Verdict'],
   ];
   let mobileView = $state<MobileView>('chat');
+
+  // Below lg the account icon rail collapses into a drawer opened by the burger in the mobile tab
+  // bar; AccountNavRail owns the drawer and binds this open flag.
+  let navOpen = $state(false);
   function pickMobile(v: MobileView) {
     mobileView = v;
     if (v === 'chat' || v === 'editor') leftTab = v;
@@ -108,11 +110,6 @@
   const loadCv = async () => hydrate(await api.getCv(cvId));
 
   onMount(async () => {
-    if (!eligible) {
-      status = 'error';
-      errorMsg = 'CV tailoring is in beta and not available on your account yet.';
-      return;
-    }
     try {
       if (cvParam) {
         // Resume an existing tailored CV. If it already has a bound session, re-attach it with
@@ -255,7 +252,7 @@
 <!-- Full-width workspace loses the account shell nav; the same left-edge icon rail as
      the Agent page brings the account sections back. It stays put across every state. -->
 <div class="flex h-[calc(100svh-3.5rem)]">
-  <AccountNavRail />
+  <AccountNavRail collapsible bind:open={navOpen} />
   {#if status === 'loading'}
     <div class="flex min-w-0 flex-1 items-center justify-center text-sm text-muted-foreground">
       {resuming ? 'Re-opening your tailoring session…' : 'Preparing your tailoring session…'}
@@ -270,6 +267,17 @@
       <!-- MOBILE TAB BAR: below lg the three columns collapse to one full-screen view; this flat,
            horizontally-scrollable bar switches between all of them. Hidden at lg (columns stack). -->
       <nav class="flex items-center gap-1 overflow-x-auto border-b border-border bg-background px-2 py-1.5 text-sm lg:hidden">
+        <!-- Burger opens the account nav drawer (the icon rail is hidden below lg). -->
+        <button
+          type="button"
+          onclick={() => (navOpen = true)}
+          aria-label="Open menu"
+          aria-expanded={navOpen}
+          class="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <Menu class="size-5" />
+        </button>
+        <span class="mr-0.5 h-5 w-px shrink-0 bg-border" aria-hidden="true"></span>
         {#each mobileTabs as [id, label] (id)}
           <button
             type="button"
@@ -325,12 +333,13 @@
           <div class="h-full overflow-auto p-4" class:hidden={leftTab !== 'editor'}>
             <CvSectionForm bind:doc bind:title />
           </div>
-          <div class="h-full" class:hidden={leftTab !== 'chat'}>
+          <div class="flex min-h-0 h-full" class:hidden={leftTab !== 'chat'}>
             <AssistantChat
               session={sessionId}
               kickoff={resuming ? undefined : kickoff}
               {sessionLabel}
               showSessionRail={false}
+              requireBeta={false}
               {onTurnComplete}
             />
           </div>

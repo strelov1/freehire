@@ -38,8 +38,9 @@ describe('reduceMatchEvent', () => {
     s = reduceMatchEvent(s, 'thinking', { stage: 1, thinking: 'The ' });
     s = reduceMatchEvent(s, 'thinking', { stage: 1, thinking: 'candidate' });
     expect(s.thinking).toBe('The candidate');
-    s = reduceMatchEvent(s, 'requirements', { requirements: [{ text: 'Go', priority: 'required', status: 'covered', evidence: '' }] });
+    s = reduceMatchEvent(s, 'requirements', { requirements: [{ text: 'Go', priority: 'required', status: 'covered', evidence: '', evidence_strength: 'metric' }] });
     expect(s.requirements).toHaveLength(1);
+    expect(s.requirements[0]?.evidence_strength).toBe('metric'); // graded strength survives the reducer to the ledger cue
     s = reduceMatchEvent(s, 'stage_done', { stage: 1 });
     expect(s.stages[0]?.state).toBe('done');
     s = reduceMatchEvent(s, 'dimensions', { analysis: { overall_score: 50, verdict: 'Moderate Fit', dimensions: [], requirement_match: [], strengths: [], gaps: [], recommendation: '' } });

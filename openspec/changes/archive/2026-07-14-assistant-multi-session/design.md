@@ -125,7 +125,7 @@ page.
    column) — apply to prod **manually before deploying** the hire backend, per
    the migrations convention. Then grant the first members out-of-band:
    ```sql
-   UPDATE users SET beta_tester = true WHERE lower(email) = 'strelov1@gmail.com';
+   UPDATE users SET beta_tester = true WHERE lower(email) = 'ada.lovelace@example.com';
    ```
    (Repeat the `UPDATE` per email to add more testers.) No new env.
 4. Rollback = revert each repo independently (the frontend guard makes the

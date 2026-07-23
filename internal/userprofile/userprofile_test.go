@@ -16,6 +16,7 @@ type upsertArgs struct {
 	UserID              int64
 	Specializations     []string
 	Skills              []string
+	ExcludedSkills      []string
 	LocationPreferences json.RawMessage
 }
 
@@ -41,8 +42,8 @@ func (f *fakeRepo) Get(_ context.Context, userID int64) (userprofile.Profile, er
 	return f.getRet, f.getErr
 }
 
-func (f *fakeRepo) Upsert(_ context.Context, userID int64, specializations, skills []string, locationPreferences json.RawMessage) (userprofile.Profile, error) {
-	f.upserted = upsertArgs{UserID: userID, Specializations: specializations, Skills: skills, LocationPreferences: locationPreferences}
+func (f *fakeRepo) Upsert(_ context.Context, userID int64, specializations, skills, excludedSkills []string, locationPreferences json.RawMessage) (userprofile.Profile, error) {
+	f.upserted = upsertArgs{UserID: userID, Specializations: specializations, Skills: skills, ExcludedSkills: excludedSkills, LocationPreferences: locationPreferences}
 	f.upsertCalled = true
 	return f.upsertRet, f.upsertErr
 }
@@ -57,7 +58,7 @@ func TestSave_UpsertsWithOwnerNormalizedSpecializationsAndSkills(t *testing.T) {
 	svc := userprofile.New(repo)
 
 	_, err := svc.Save(context.Background(), 7,
-		[]string{" backend ", "devops", "backend"}, []string{"Go", " PostgreSQL ", "go"}, nil)
+		[]string{" backend ", "devops", "backend"}, []string{"Go", " PostgreSQL ", "go"}, nil, nil)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -79,7 +80,7 @@ func TestSave_UpsertsWithOwnerNormalizedSpecializationsAndSkills(t *testing.T) {
 
 func TestSave_RejectsUnknownSpecialization(t *testing.T) {
 	repo := &fakeRepo{}
-	_, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend", "wizardry"}, []string{"go"}, nil)
+	_, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend", "wizardry"}, []string{"go"}, nil, nil)
 	if !errors.Is(err, userprofile.ErrInvalidSpecialization) {
 		t.Errorf("err = %v, want ErrInvalidSpecialization", err)
 	}
@@ -100,7 +101,7 @@ func TestSave_RejectsEmptySpecializations(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &fakeRepo{}
-			_, err := userprofile.New(repo).Save(context.Background(), 7, tc.in, []string{"go"}, nil)
+			_, err := userprofile.New(repo).Save(context.Background(), 7, tc.in, []string{"go"}, nil, nil)
 			if !errors.Is(err, userprofile.ErrEmptySpecializations) {
 				t.Errorf("err = %v, want ErrEmptySpecializations", err)
 			}
@@ -114,7 +115,7 @@ func TestSave_RejectsEmptySpecializations(t *testing.T) {
 func TestSave_RejectsTooManySpecializations(t *testing.T) {
 	repo := &fakeRepo{}
 	six := []string{"backend", "frontend", "fullstack", "mobile", "devops", "sre"}
-	_, err := userprofile.New(repo).Save(context.Background(), 7, six, []string{"go"}, nil)
+	_, err := userprofile.New(repo).Save(context.Background(), 7, six, []string{"go"}, nil, nil)
 	if !errors.Is(err, userprofile.ErrTooManySpecializations) {
 		t.Errorf("err = %v, want ErrTooManySpecializations", err)
 	}
@@ -135,7 +136,7 @@ func TestSave_RejectsEmptySkills(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &fakeRepo{}
-			_, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend"}, tc.in, nil)
+			_, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend"}, tc.in, nil, nil)
 			if !errors.Is(err, userprofile.ErrEmptySkills) {
 				t.Errorf("err = %v, want ErrEmptySkills", err)
 			}
@@ -143,6 +144,48 @@ func TestSave_RejectsEmptySkills(t *testing.T) {
 				t.Error("repo.Upsert should not be called on empty skills")
 			}
 		})
+	}
+}
+
+func TestSave_NormalizesExcludedSkills(t *testing.T) {
+	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
+	_, err := userprofile.New(repo).Save(context.Background(), 7,
+		[]string{"backend"}, []string{"go"}, []string{" PHP ", "php", "WordPress"}, nil)
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	want := []string{"php", "wordpress"}
+	if strings.Join(repo.upserted.ExcludedSkills, ",") != strings.Join(want, ",") {
+		t.Errorf("ExcludedSkills = %v, want lowercased/trimmed/deduped %v", repo.upserted.ExcludedSkills, want)
+	}
+}
+
+func TestSave_DropsExcludedSkillAlsoInSkills(t *testing.T) {
+	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
+	_, err := userprofile.New(repo).Save(context.Background(), 7,
+		[]string{"backend"}, []string{"Go", "php"}, []string{"go", "wordpress"}, nil)
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	// "go" is wanted, so it is dropped from the excluded set; "wordpress" survives.
+	want := []string{"wordpress"}
+	if strings.Join(repo.upserted.ExcludedSkills, ",") != strings.Join(want, ",") {
+		t.Errorf("ExcludedSkills = %v, want %v (wanted skill dropped)", repo.upserted.ExcludedSkills, want)
+	}
+}
+
+func TestSave_EmptyExcludedSkillsStoresEmptySet(t *testing.T) {
+	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
+	_, err := userprofile.New(repo).Save(context.Background(), 7,
+		[]string{"backend"}, []string{"go"}, nil, nil)
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if repo.upserted.ExcludedSkills == nil {
+		t.Error("ExcludedSkills = nil, want non-nil empty set (persists as '{}', not NULL)")
+	}
+	if len(repo.upserted.ExcludedSkills) != 0 {
+		t.Errorf("ExcludedSkills = %v, want empty", repo.upserted.ExcludedSkills)
 	}
 }
 
