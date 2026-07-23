@@ -10,15 +10,9 @@ import (
 )
 
 const companySlugExists = `-- name: CompanySlugExists :one
-
 SELECT EXISTS (SELECT 1 FROM companies WHERE slug = $1)
 `
 
-// Per-(user, company) thumbs votes. Unlike a job vote (a nullable column on the
-// user_jobs row that persists for other marks), a company_votes row exists solely to
-// hold the vote, so clearing a vote DELETEs the row. The domain layer branches in Go
-// (read current, then delete-if-same-else-upsert) and recomputes the company's
-// materialized counters in the same transaction.
 // Whether a company with this slug exists — the cheap existence check the vote
 // path uses to return 404 before touching company_votes (whose FK would otherwise
 // surface a bad slug as an opaque error on insert, or a silent no-op on clear).
@@ -60,6 +54,24 @@ func (q *Queries) GetCompanyVote(ctx context.Context, arg GetCompanyVoteParams) 
 	var my_vote int16
 	err := row.Scan(&my_vote)
 	return my_vote, err
+}
+
+const lockCompanyForVote = `-- name: LockCompanyForVote :exec
+
+SELECT 1 FROM companies WHERE slug = $1 FOR UPDATE
+`
+
+// Per-(user, company) thumbs votes. Unlike a job vote (a nullable column on the
+// user_jobs row that persists for other marks), a company_votes row exists solely to
+// hold the vote, so clearing a vote DELETEs the row. The domain layer branches in Go
+// (read current, then delete-if-same-else-upsert) and recomputes the company's
+// materialized counters in the same transaction.
+// Take the company row's lock so concurrent votes on the same company serialize
+// (see LockJobForVote for the drift this prevents). Called first in the vote
+// transaction.
+func (q *Queries) LockCompanyForVote(ctx context.Context, slug string) error {
+	_, err := q.db.Exec(ctx, lockCompanyForVote, slug)
+	return err
 }
 
 const recountCompanyVotes = `-- name: RecountCompanyVotes :one

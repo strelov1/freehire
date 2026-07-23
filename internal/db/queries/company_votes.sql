@@ -4,6 +4,12 @@
 -- (read current, then delete-if-same-else-upsert) and recomputes the company's
 -- materialized counters in the same transaction.
 
+-- name: LockCompanyForVote :exec
+-- Take the company row's lock so concurrent votes on the same company serialize
+-- (see LockJobForVote for the drift this prevents). Called first in the vote
+-- transaction.
+SELECT 1 FROM companies WHERE slug = $1 FOR UPDATE;
+
 -- name: CompanySlugExists :one
 -- Whether a company with this slug exists — the cheap existence check the vote
 -- path uses to return 404 before touching company_votes (whose FK would otherwise

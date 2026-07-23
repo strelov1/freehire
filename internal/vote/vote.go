@@ -78,6 +78,9 @@ func (s *Service) VoteJob(ctx context.Context, userID int64, slug string, dir Di
 		return Result{}, err
 	}
 	return s.jobTx(ctx, jobID, func(q *db.Queries) (int16, error) {
+		if err := q.LockJobForVote(ctx, jobID); err != nil {
+			return 0, err
+		}
 		return q.UpsertJobVote(ctx, db.UpsertJobVoteParams{
 			UserID: userID, JobID: jobID,
 			Vote: pgtype.Int2{Int16: int16(dir), Valid: true},
@@ -93,6 +96,9 @@ func (s *Service) ClearJob(ctx context.Context, userID int64, slug string) (Resu
 		return Result{}, err
 	}
 	return s.jobTx(ctx, jobID, func(q *db.Queries) (int16, error) {
+		if err := q.LockJobForVote(ctx, jobID); err != nil {
+			return 0, err
+		}
 		return 0, q.ClearJobVote(ctx, db.ClearJobVoteParams{UserID: userID, JobID: jobID})
 	})
 }
@@ -106,6 +112,9 @@ func (s *Service) VoteCompany(ctx context.Context, userID int64, slug string, di
 		return Result{}, err
 	}
 	return s.companyTx(ctx, slug, func(q *db.Queries) (int16, error) {
+		if err := q.LockCompanyForVote(ctx, slug); err != nil {
+			return 0, err
+		}
 		cur, err := q.GetCompanyVote(ctx, db.GetCompanyVoteParams{UserID: userID, CompanySlug: slug})
 		if err != nil {
 			return 0, err
@@ -126,6 +135,9 @@ func (s *Service) ClearCompany(ctx context.Context, userID int64, slug string) (
 		return Result{}, err
 	}
 	return s.companyTx(ctx, slug, func(q *db.Queries) (int16, error) {
+		if err := q.LockCompanyForVote(ctx, slug); err != nil {
+			return 0, err
+		}
 		return 0, q.DeleteCompanyVote(ctx, db.DeleteCompanyVoteParams{UserID: userID, CompanySlug: slug})
 	})
 }

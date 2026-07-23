@@ -94,6 +94,13 @@ supporting indexes:
 The vote upsert + counter recompute run in one `pgx` transaction so a reader
 never sees a vote without its counter, matching the spec's drift guarantee.
 
+The transaction first takes the target row's lock (`SELECT 1 FROM jobs WHERE
+id = $1 FOR UPDATE`, and the companies analogue) before writing. Without it, two
+votes on the same target in the same window under READ COMMITTED would each
+recompute against a snapshot missing the other's just-inserted vote row —
+permanently undercounting. The lock serializes contending votes so each recompute
+runs after the other commits, keeping the counter exact.
+
 ### 3. Endpoints mirror the save/dismiss pair
 
 ```

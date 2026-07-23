@@ -185,11 +185,6 @@ type Querier interface {
 	// excluding the final row, so the sitemap index can list each company sub-sitemap's
 	// keyset cursor.
 	CompanySitemapBoundaries(ctx context.Context, chunkSize int64) ([]string, error)
-	// Per-(user, company) thumbs votes. Unlike a job vote (a nullable column on the
-	// user_jobs row that persists for other marks), a company_votes row exists solely to
-	// hold the vote, so clearing a vote DELETEs the row. The domain layer branches in Go
-	// (read current, then delete-if-same-else-upsert) and recomputes the company's
-	// materialized counters in the same transaction.
 	// Whether a company with this slug exists — the cheap existence check the vote
 	// path uses to return 404 before touching company_votes (whose FK would otherwise
 	// surface a bad slug as an opaque error on insert, or a silent no-op on clear).
@@ -940,6 +935,20 @@ type Querier interface {
 	// Closed jobs are included: dimming a closed posting that still shows in a
 	// history surface is correct, and the browse list filters closed jobs itself.
 	ListViewedJobSlugs(ctx context.Context, userID int64) ([]string, error)
+	// Per-(user, company) thumbs votes. Unlike a job vote (a nullable column on the
+	// user_jobs row that persists for other marks), a company_votes row exists solely to
+	// hold the vote, so clearing a vote DELETEs the row. The domain layer branches in Go
+	// (read current, then delete-if-same-else-upsert) and recomputes the company's
+	// materialized counters in the same transaction.
+	// Take the company row's lock so concurrent votes on the same company serialize
+	// (see LockJobForVote for the drift this prevents). Called first in the vote
+	// transaction.
+	LockCompanyForVote(ctx context.Context, slug string) error
+	// Take the job row's lock so concurrent votes on the same job serialize. Without
+	// it, two votes in the same window under READ COMMITTED each recompute against a
+	// snapshot missing the other's user_jobs row, permanently undercounting the target
+	// until the next uncontended vote. Called first in the vote transaction.
+	LockJobForVote(ctx context.Context, id int64) error
 	// Bulk mark-as-read for the caller, honoring the same optional filters as the
 	// listing, so "mark all read" means "everything currently shown". Only unread,
 	// live rows are touched; returns how many it marked.

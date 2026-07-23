@@ -9,6 +9,10 @@
   // are public (shown to everyone); casting requires a session, so an anonymous
   // tap opens the sign-in dialog instead of calling the endpoint. The server is the
   // source of truth — we render its returned counters and my_vote after each write.
+  //
+  // Styling is driven entirely by the design-system tokens (bg-card / border-border /
+  // text-muted-foreground / accent / destructive), so the control adapts to the dark
+  // and light themes automatically.
   let {
     target,
     slug,
@@ -40,22 +44,21 @@
       openAuthDialog();
       return;
     }
-    // Bounce the tapped thumb (unless it is the one being un-cast — a cleared vote
-    // still gets a tap acknowledgement, so animate regardless of direction of change).
     if (dir === 'up') popUp = true;
     else popDown = true;
 
     busy = true;
     try {
-      const wasMine = mine === (dir === 'up' ? 1 : -1);
-      const res: VoteResult =
+      // Re-casting the direction the user already holds clears the vote; any other
+      // tap casts it. Pick the right endpoint pair for the target, then act.
+      const endpoints =
         target === 'job'
-          ? wasMine
-            ? await api.clearJobVote(slug)
-            : await api.voteJob(slug, dir)
-          : wasMine
-            ? await api.clearCompanyVote(slug)
-            : await api.voteCompany(slug, dir);
+          ? { cast: api.voteJob, clear: api.clearJobVote }
+          : { cast: api.voteCompany, clear: api.clearCompanyVote };
+      const wasMine = mine === (dir === 'up' ? 1 : -1);
+      const res: VoteResult = wasMine
+        ? await endpoints.clear(slug)
+        : await endpoints.cast(slug, dir);
       up = res.upvote_count;
       down = res.downvote_count;
       mine = res.my_vote;
@@ -67,82 +70,55 @@
       busy = false;
     }
   }
+
+  const base =
+    'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm ' +
+    'tabular-nums transition-colors disabled:cursor-default disabled:opacity-70';
 </script>
 
-<div class="vote" role="group" aria-label="Rate this {target}">
+<div class="inline-flex items-center gap-2" role="group" aria-label={`Rate this ${target}`}>
   <button
     type="button"
-    class={['thumb', 'up', { active: mine === 1, popping: popUp }]}
+    class={[
+      base,
+      'thumb',
+      mine === 1
+        ? 'border-green-500/40 bg-green-500/10 text-green-600 dark:text-green-500'
+        : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground',
+      { popping: popUp },
+    ]}
     aria-pressed={mine === 1}
-    aria-label="Thumbs up"
+    aria-label={up > 0 ? `Thumbs up, ${up}` : 'Thumbs up'}
     disabled={busy}
     onclick={() => cast('up')}
     onanimationend={() => (popUp = false)}
   >
     <ThumbsUp size={18} />
-    {#if up > 0}<span class="count">{up}</span>{/if}
+    {#if up > 0}<span>{up}</span>{/if}
   </button>
 
   <button
     type="button"
-    class={['thumb', 'down', { active: mine === -1, popping: popDown }]}
+    class={[
+      base,
+      'thumb',
+      mine === -1
+        ? 'border-destructive/40 bg-destructive/10 text-destructive'
+        : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground',
+      { popping: popDown },
+    ]}
     aria-pressed={mine === -1}
-    aria-label="Thumbs down"
+    aria-label={down > 0 ? `Thumbs down, ${down}` : 'Thumbs down'}
     disabled={busy}
     onclick={() => cast('down')}
     onanimationend={() => (popDown = false)}
   >
     <ThumbsDown size={18} />
-    {#if down > 0}<span class="count">{down}</span>{/if}
+    {#if down > 0}<span>{down}</span>{/if}
   </button>
 </div>
 
 <style>
-  .vote {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .thumb {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.375rem;
-    padding: 0.375rem 0.75rem;
-    border: 1px solid var(--border, #d4d4d8);
-    border-radius: 999px;
-    background: var(--surface, #fff);
-    color: var(--text-muted, #52525b);
-    font-size: 0.875rem;
-    font-variant-numeric: tabular-nums;
-    cursor: pointer;
-    transition:
-      color 0.15s ease,
-      border-color 0.15s ease,
-      background 0.15s ease;
-  }
-
-  .thumb:hover:not(:disabled) {
-    border-color: var(--border-strong, #a1a1aa);
-  }
-
-  .thumb:disabled {
-    cursor: default;
-    opacity: 0.7;
-  }
-
-  .thumb.up.active {
-    color: var(--success, #16a34a);
-    border-color: var(--success, #16a34a);
-    background: color-mix(in srgb, var(--success, #16a34a) 10%, transparent);
-  }
-
-  .thumb.down.active {
-    color: var(--danger, #dc2626);
-    border-color: var(--danger, #dc2626);
-    background: color-mix(in srgb, var(--danger, #dc2626) 10%, transparent);
-  }
-
   /* YouTube-style tactile bounce on the tapped thumb's icon. */
   .thumb.popping :global(svg) {
     animation: thumb-pop 0.35s ease;

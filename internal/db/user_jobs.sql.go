@@ -472,6 +472,19 @@ func (q *Queries) ListViewedJobSlugs(ctx context.Context, userID int64) ([]strin
 	return items, nil
 }
 
+const lockJobForVote = `-- name: LockJobForVote :exec
+SELECT 1 FROM jobs WHERE id = $1 FOR UPDATE
+`
+
+// Take the job row's lock so concurrent votes on the same job serialize. Without
+// it, two votes in the same window under READ COMMITTED each recompute against a
+// snapshot missing the other's user_jobs row, permanently undercounting the target
+// until the next uncontended vote. Called first in the vote transaction.
+func (q *Queries) LockJobForVote(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, lockJobForVote, id)
+	return err
+}
+
 const markJobApplied = `-- name: MarkJobApplied :one
 WITH prior AS (
     SELECT uj.applied_at FROM user_jobs uj WHERE uj.user_id = $1 AND uj.job_id = $2

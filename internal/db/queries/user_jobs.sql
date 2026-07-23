@@ -207,6 +207,13 @@ SELECT count(*)                                        AS "all",
 FROM user_jobs
 WHERE user_id = $1;
 
+-- name: LockJobForVote :exec
+-- Take the job row's lock so concurrent votes on the same job serialize. Without
+-- it, two votes in the same window under READ COMMITTED each recompute against a
+-- snapshot missing the other's user_jobs row, permanently undercounting the target
+-- until the next uncontended vote. Called first in the vote transaction.
+SELECT 1 FROM jobs WHERE id = $1 FOR UPDATE;
+
 -- name: UpsertJobVote :one
 -- Cast a thumbs vote on a job for a user with toggle/flip semantics: casting the
 -- same direction again clears the vote (-> NULL), the opposite direction replaces it.

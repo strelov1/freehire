@@ -384,27 +384,32 @@
             {/if}
           </div>
         {/if}
-        <div class="mt-3 flex justify-center">
-          <VoteControl
-            target="job"
-            slug={job.public_slug}
-            upvoteCount={job.upvote_count ?? 0}
-            downvoteCount={job.downvote_count ?? 0}
-            myVote={job.my_vote ?? 0}
-          />
-        </div>
       </div>
 
       <div class="border-t border-border pt-4 first:border-t-0 first:pt-0">
-        <Button
-          variant="ghost"
-          size="sm"
-          onclick={onReportClick}
-          class="w-full text-muted-foreground"
-        >
-          <Flag class="size-4" />
-          Report this job
-        </Button>
+        <div class="flex items-center justify-between gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onclick={onReportClick}
+            class="text-muted-foreground"
+          >
+            <Flag class="size-4" />
+            Report this job
+          </Button>
+          <!-- Keyed on the slug so a client-side navigation to another job remounts
+               the control and re-seeds its counts/highlight (JobView itself is not
+               remounted on param change). -->
+          {#key job.public_slug}
+            <VoteControl
+              target="job"
+              slug={job.public_slug}
+              upvoteCount={job.upvote_count ?? 0}
+              downvoteCount={job.downvote_count ?? 0}
+              myVote={job.my_vote ?? 0}
+            />
+          {/key}
+        </div>
       </div>
     </div>
   </aside>
