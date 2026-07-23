@@ -5,6 +5,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobview"
 )
@@ -70,6 +71,14 @@ func (a *API) GetJob(c *fiber.Ctx) error {
 	// to false (block hidden), never failing the job read.
 	if avail, err := a.queries.CompanyHasApprovedReferrer(c.Context(), job.CompanySlug); err == nil {
 		view.ReferralAvailable = avail
+	}
+
+	// Caller's own thumbs vote, overlaid only when signed in (OptionalAuth attaches
+	// the id on this public read). Best-effort: a lookup error leaves my_vote 0.
+	if userID, ok := auth.UserID(c); ok {
+		if mv, err := a.queries.GetJobVote(c.Context(), db.GetJobVoteParams{UserID: userID, JobID: job.ID}); err == nil {
+			view.MyVote = int32(mv)
+		}
 	}
 
 	return c.JSON(fiber.Map{"data": view})

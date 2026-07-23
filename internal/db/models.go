@@ -67,6 +67,16 @@ type Company struct {
 	YcFlags          []string           `json:"yc_flags"`
 	Maturity         pgtype.Text        `json:"maturity"`
 	Subindustry      pgtype.Text        `json:"subindustry"`
+	UpvoteCount      int32              `json:"upvote_count"`
+	DownvoteCount    int32              `json:"downvote_count"`
+}
+
+type CompanyVote struct {
+	UserID      int64              `json:"user_id"`
+	CompanySlug string             `json:"company_slug"`
+	Vote        int16              `json:"vote"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 type CreditBalance struct {
@@ -260,6 +270,8 @@ type Job struct {
 	SalaryMaxManual       pgtype.Int4        `json:"salary_max_manual"`
 	SalaryCurrencyManual  string             `json:"salary_currency_manual"`
 	SalaryPeriodManual    string             `json:"salary_period_manual"`
+	UpvoteCount           int32              `json:"upvote_count"`
+	DownvoteCount         int32              `json:"downvote_count"`
 }
 
 type JobDailyStat struct {
@@ -518,6 +530,7 @@ type UserJob struct {
 	Stage       pgtype.Text        `json:"stage"`
 	Notes       pgtype.Text        `json:"notes"`
 	DismissedAt pgtype.Timestamptz `json:"dismissed_at"`
+	Vote        pgtype.Int2        `json:"vote"`
 }
 
 type UserJobAnalysis struct {

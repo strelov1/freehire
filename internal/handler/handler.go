@@ -43,6 +43,7 @@ import (
 	"github.com/strelov1/freehire/internal/telegramnotify"
 	"github.com/strelov1/freehire/internal/tokencrypt"
 	"github.com/strelov1/freehire/internal/userprofile"
+	"github.com/strelov1/freehire/internal/vote"
 )
 
 const (
@@ -118,6 +119,9 @@ type API struct {
 	// tracking owns the per-user job-interaction use cases (view/apply/save/
 	// unsave/track); the handlers translate wire ↔ domain and delegate to it.
 	tracking *jobtracking.Service
+	// votes owns thumbs up/down on jobs and companies: the per-user vote write and
+	// the target's public counter recompute, in one transaction.
+	votes *vote.Service
 	// accounts resolves external OAuth identities into local user accounts
 	// (identity-first lookup, verified-email gate, link-or-create, race retry).
 	accounts *accounts.Service
@@ -293,6 +297,7 @@ func Register(app *fiber.App, cfg Config) {
 		gmailCipher:    cfg.GmailCipher,
 		mailDomain:     cfg.MailboxDomain,
 		tracking:       jobtracking.New(jobtracking.NewQueriesRepository(queries)),
+		votes:          vote.New(queries, cfg.Pool),
 		accounts:       accounts.New(accounts.NewQueriesRepository(queries, cfg.Pool), authHasher{}),
 		moderation:     moderation.New(moderation.NewQueriesRepository(queries, cfg.Pool, enrich.Version)),
 	}
@@ -394,14 +399,18 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/jobs/search", a.SearchJobs)
 	api.Get("/jobs/facets", a.JobFacets)
 	api.Get("/jobs/sitemap", a.JobSitemap)
-	api.Get("/jobs/:slug", a.GetJob)
+	// optionalAuth attaches the caller when signed in (cookie or key) but never
+	// rejects, so these public detail reads can overlay the caller's own vote
+	// (my_vote) while staying open to anonymous visitors.
+	optionalAuth := auth.OptionalAuth(a.issuer, a.queries)
+	api.Get("/jobs/:slug", optionalAuth, a.GetJob)
 	api.Get("/jobs/:slug/similar", a.SimilarJobs)
 	api.Get("/jobs/:slug/copies", a.JobCopies)
 	api.Get("/companies", a.ListCompanies)
 	api.Get("/companies/sitemap", a.CompanySitemap)
 	api.Get("/companies/sitemap/boundaries", a.CompanySitemapBoundaries)
 	api.Get("/companies/subindustries", a.CompanySubindustries)
-	api.Get("/companies/:slug", a.GetCompany)
+	api.Get("/companies/:slug", optionalAuth, a.GetCompany)
 
 	// Public read of a shared saved-search "board" by its slug — unauthenticated, like
 	// the job/company reads above. Owner identity is never exposed (see boardResponse).
@@ -457,6 +466,12 @@ func Register(app *fiber.App, cfg Config) {
 	api.Delete("/jobs/:slug/save", keyAuth, a.UnsaveJob)
 	api.Post("/jobs/:slug/dismiss", keyAuth, a.DismissJob)
 	api.Delete("/jobs/:slug/dismiss", keyAuth, a.UndismissJob)
+	// Thumbs up/down: a signed-in vote (toggle/flip); the public counters it drives
+	// are read by everyone on the job/company shapes.
+	api.Post("/jobs/:slug/vote", keyAuth, a.VoteJob)
+	api.Delete("/jobs/:slug/vote", keyAuth, a.ClearJobVote)
+	api.Post("/companies/:slug/vote", keyAuth, a.VoteCompany)
+	api.Delete("/companies/:slug/vote", keyAuth, a.ClearCompanyVote)
 	// Per-job reminder controls: reschedule or turn off a saved job's pending
 	// reminder without unsaving it (scheduling itself happens on save).
 	api.Patch("/jobs/:slug/reminder", keyAuth, a.RescheduleReminder)

@@ -207,6 +207,44 @@ SELECT count(*)                                        AS "all",
 FROM user_jobs
 WHERE user_id = $1;
 
+-- name: UpsertJobVote :one
+-- Cast a thumbs vote on a job for a user with toggle/flip semantics: casting the
+-- same direction again clears the vote (-> NULL), the opposite direction replaces it.
+-- Upserts the (user, job) row (viewed_at defaults) so a vote can precede any other
+-- interaction. $3 is the desired direction (-1 or 1). Returns the caller's resulting
+-- vote (0 when the toggle cleared it). The caller recomputes jobs counters in the
+-- same transaction via RecountJobVotes; a CTE cannot, since a data-modifying CTE's
+-- effect is invisible to sibling sub-statements.
+WITH upsert AS (
+    INSERT INTO user_jobs (user_id, job_id, vote)
+    VALUES ($1, $2, $3)
+    ON CONFLICT (user_id, job_id) DO UPDATE
+      SET vote = CASE WHEN user_jobs.vote = EXCLUDED.vote THEN NULL ELSE EXCLUDED.vote END
+    RETURNING vote
+)
+SELECT COALESCE((SELECT vote FROM upsert), 0)::smallint AS my_vote;
+
+-- name: ClearJobVote :exec
+-- Explicitly clear a user's job vote (the DELETE endpoint). No-op when no row or no
+-- vote exists. The caller recomputes counters via RecountJobVotes in the same tx.
+UPDATE user_jobs SET vote = NULL WHERE user_id = $1 AND job_id = $2;
+
+-- name: RecountJobVotes :one
+-- Recompute a single job's materialized vote counters from user_jobs and return
+-- them. Run as its own statement AFTER the vote write within one transaction, so it
+-- sees the write (a same-statement CTE would not). Scoped to one job_id via the
+-- partial index user_jobs(job_id) WHERE vote IS NOT NULL — a cheap indexed count.
+UPDATE jobs SET
+    upvote_count   = (SELECT count(*) FROM user_jobs uj WHERE uj.job_id = $1 AND uj.vote =  1),
+    downvote_count = (SELECT count(*) FROM user_jobs uj WHERE uj.job_id = $1 AND uj.vote = -1)
+WHERE id = $1
+RETURNING upvote_count, downvote_count;
+
+-- name: GetJobVote :one
+-- The caller's current vote for a job (0 when none), for my_vote on auth-aware
+-- detail reads. Always returns one row via the COALESCE'd scalar subquery.
+SELECT COALESCE((SELECT vote FROM user_jobs WHERE user_id = $1 AND job_id = $2), 0)::smallint AS my_vote;
+
 -- name: CountMyJobsByStage :many
 -- Per-stage application counts for the Pipeline snapshot. An application is any
 -- row the user applied to or staged (saved-only rows are excluded); a row with

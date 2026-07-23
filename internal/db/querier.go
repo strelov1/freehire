@@ -96,6 +96,9 @@ type Querier interface {
 	ClaimTelegramPosts(ctx context.Context, arg ClaimTelegramPostsParams) ([]ClaimTelegramPostsRow, error)
 	// Reset a tracked job to the wishlist: drop stage and applied state, keep saved/viewed/notes.
 	ClearJobProgress(ctx context.Context, arg ClearJobProgressParams) (UserJob, error)
+	// Explicitly clear a user's job vote (the DELETE endpoint). No-op when no row or no
+	// vote exists. The caller recomputes counters via RecountJobVotes in the same tx.
+	ClearJobVote(ctx context.Context, arg ClearJobVoteParams) error
 	// Clear the active cooldown and failure count for every currently-cooled board of a
 	// provider — applied once a recovery probe proves the provider reachable again, so the
 	// run crawls them this cycle instead of each waiting out its own backoff (up to a day)
@@ -182,6 +185,15 @@ type Querier interface {
 	// excluding the final row, so the sitemap index can list each company sub-sitemap's
 	// keyset cursor.
 	CompanySitemapBoundaries(ctx context.Context, chunkSize int64) ([]string, error)
+	// Per-(user, company) thumbs votes. Unlike a job vote (a nullable column on the
+	// user_jobs row that persists for other marks), a company_votes row exists solely to
+	// hold the vote, so clearing a vote DELETEs the row. The domain layer branches in Go
+	// (read current, then delete-if-same-else-upsert) and recomputes the company's
+	// materialized counters in the same transaction.
+	// Whether a company with this slug exists — the cheap existence check the vote
+	// path uses to return 404 before touching company_votes (whose FK would otherwise
+	// surface a bad slug as an opaque error on insert, or a silent no-op on clear).
+	CompanySlugExists(ctx context.Context, slug string) (bool, error)
 	// Distinct non-NULL subindustry values with their company counts, most common first
 	// (ties broken by value), serving the searchable option list for the subindustry facet.
 	// Counts are unconditional — they do not reflect other active list filters.
@@ -336,6 +348,9 @@ type Querier interface {
 	// Delete a CV owned by the user. Returns the affected-row count so the handler can 404
 	// when nothing was deleted (foreign or missing id).
 	DeleteCV(ctx context.Context, arg DeleteCVParams) (int64, error)
+	// Remove a user's company vote (toggle-clear or the DELETE endpoint). No-op when
+	// absent.
+	DeleteCompanyVote(ctx context.Context, arg DeleteCompanyVoteParams) error
 	DeleteEmailClassificationOutbox(ctx context.Context, id int64) error
 	// Purge one source's mail for a user (Gmail disconnect passes 'gmail', mailbox
 	// release passes 'hosted') — the other source's mail is left untouched.
@@ -471,6 +486,8 @@ type Querier interface {
 	// the table grows columns (e.g. collections); an explicit subset makes sqlc emit a
 	// distinct row type and breaks the company-detail handler on every new column.
 	GetCompany(ctx context.Context, slug string) (Company, error)
+	// The caller's current vote for a company (0 when none). Always returns one row.
+	GetCompanyVote(ctx context.Context, arg GetCompanyVoteParams) (int16, error)
 	GetEmail(ctx context.Context, arg GetEmailParams) (GetEmailRow, error)
 	// Aggregate interaction counts for the public engagement endpoint. Aggregate-only:
 	// every column is a scalar total, so no user identifier or row-level field is
@@ -497,6 +514,9 @@ type Querier interface {
 	// columns over the wire on every silent view. GetJobBySlug (SELECT *) stays for the
 	// public detail handler that renders the whole row.
 	GetJobIDBySlug(ctx context.Context, publicSlug string) (int64, error)
+	// The caller's current vote for a job (0 when none), for my_vote on auth-aware
+	// detail reads. Always returns one row via the COALESCE'd scalar subquery.
+	GetJobVote(ctx context.Context, arg GetJobVoteParams) (int16, error)
 	// Batch-load the persisted rows the embed worker builds documents from. A corrupted
 	// row (SQLSTATE XX001) aborts the whole scan; the worker then retries the batch one id
 	// at a time to isolate and dead-letter the bad row.
@@ -1091,6 +1111,15 @@ type Querier interface {
 	// left in place — its expiry gates the retry to a later run and doubles as the
 	// crash reaper, so a failed post is never reprocessed within the same run.
 	RecordTelegramPostFailure(ctx context.Context, arg RecordTelegramPostFailureParams) (RecordTelegramPostFailureRow, error)
+	// Recompute a single company's materialized vote counters from company_votes and
+	// return them. Run as its own statement AFTER the vote write within one transaction.
+	// Scoped to one company_slug via company_votes_company_slug_idx.
+	RecountCompanyVotes(ctx context.Context, companySlug string) (RecountCompanyVotesRow, error)
+	// Recompute a single job's materialized vote counters from user_jobs and return
+	// them. Run as its own statement AFTER the vote write within one transaction, so it
+	// sees the write (a same-statement CTE would not). Scoped to one job_id via the
+	// partial index user_jobs(job_id) WHERE vote IS NOT NULL — a cheap indexed count.
+	RecountJobVotes(ctx context.Context, jobID int64) (RecountJobVotesRow, error)
 	// Whether a specific member is an approved referrer for a company — the authorization
 	// check for acting on / viewing a request in that company's pool.
 	ReferrerApprovedForCompany(ctx context.Context, arg ReferrerApprovedForCompanyParams) (bool, error)
@@ -1369,6 +1398,9 @@ type Querier interface {
 	// name, job_count, collections, is_reference, and the job-derived facet arrays are
 	// left untouched. Idempotent: re-running the same record rewrites the same values.
 	UpsertCompanyInfo(ctx context.Context, arg UpsertCompanyInfoParams) error
+	// Set a user's company vote to $3 (-1 or 1), inserting or overwriting in place.
+	// Toggle-to-clear is handled by DeleteCompanyVote, chosen by the domain layer.
+	UpsertCompanyVote(ctx context.Context, arg UpsertCompanyVoteParams) error
 	// Store a Gmail message, idempotent by (user_id, source, external_id) with
 	// source fixed to 'gmail'; the hosted path has its own insert (InsertHostedMessage).
 	UpsertEmail(ctx context.Context, arg UpsertEmailParams) error
@@ -1403,6 +1435,14 @@ type Querier interface {
 	// resets the delivery ledger (claimed_at/attempts/last_error) since the schedule
 	// changed. Returns the pending row.
 	UpsertJobReminder(ctx context.Context, arg UpsertJobReminderParams) (JobReminder, error)
+	// Cast a thumbs vote on a job for a user with toggle/flip semantics: casting the
+	// same direction again clears the vote (-> NULL), the opposite direction replaces it.
+	// Upserts the (user, job) row (viewed_at defaults) so a vote can precede any other
+	// interaction. $3 is the desired direction (-1 or 1). Returns the caller's resulting
+	// vote (0 when the toggle cleared it). The caller recomputes jobs counters in the
+	// same transaction via RecountJobVotes; a CTE cannot, since a data-modifying CTE's
+	// effect is invisible to sibling sub-statements.
+	UpsertJobVote(ctx context.Context, arg UpsertJobVoteParams) (int16, error)
 	// Moderator-authored write: the hand-curated analogue of UpsertJob. source is the
 	// posting's real origin (e.g. 'workatastartup'), supplied by the moderator and
 	// defaulting to 'manual'; the dedup key is (source, external_id = url), so re-POSTing

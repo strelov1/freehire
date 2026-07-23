@@ -18,6 +18,7 @@
   import RealityBadge from './RealityBadge.svelte';
   import ReferralBlock from './ReferralBlock.svelte';
   import ReportDialog from './ReportDialog.svelte';
+  import VoteControl from './VoteControl.svelte';
 
   // The job is server-rendered: it arrives as a prop from the route's `load`, so
   // the article's content is in the initial HTML. Only the per-user interactions
@@ -383,6 +384,15 @@
             {/if}
           </div>
         {/if}
+        <div class="mt-3 flex justify-center">
+          <VoteControl
+            target="job"
+            slug={job.public_slug}
+            upvoteCount={job.upvote_count ?? 0}
+            downvoteCount={job.downvote_count ?? 0}
+            myVote={job.my_vote ?? 0}
+          />
+        </div>
       </div>
 
       <div class="border-t border-border pt-4 first:border-t-0 first:pt-0">

@@ -133,6 +133,21 @@ export interface Company {
   organization_type?: string | null;
   tagline?: string | null;
   company_info?: CompanyInfo;
+  // Public thumbs counters (distinct signed-in up/down voters), served on every
+  // company read. my_vote is the caller's own vote (-1, 0, 1) — only non-zero on
+  // the auth-aware detail read.
+  upvote_count: number;
+  downvote_count: number;
+  my_vote: number;
+}
+
+/** The result of casting or clearing a thumbs vote: the target's resulting public
+ *  counters and the caller's own vote (-1, 0, 1). Returned by the vote endpoints
+ *  and shaped identically for jobs and companies. */
+export interface VoteResult {
+  upvote_count: number;
+  downvote_count: number;
+  my_vote: number;
 }
 
 /** A row of the companies catalog: company plus its computed job count and a few

@@ -5,6 +5,7 @@
   import type { Company } from '$lib/types';
   import CompanyLogo from './CompanyLogo.svelte';
   import CompanyFollowButton from './CompanyFollowButton.svelte';
+  import VoteControl from './VoteControl.svelte';
 
   // The company's header card: identity (logo + name + tagline + follow CTA) with the
   // industries and the website/LinkedIn links below a divider. The scalar company facts
@@ -52,6 +53,13 @@
          The Discussion link sits right below it, right-aligned. -->
     <div class="flex shrink-0 flex-col items-end gap-2">
       <CompanyFollowButton {slug} companyName={company.name} />
+      <VoteControl
+        target="company"
+        {slug}
+        upvoteCount={company.upvote_count ?? 0}
+        downvoteCount={company.downvote_count ?? 0}
+        myVote={company.my_vote ?? 0}
+      />
       <a
         class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
         href={resolve('/companies/[slug]/discussion', { slug })}

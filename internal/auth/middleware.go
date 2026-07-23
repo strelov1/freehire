@@ -83,6 +83,29 @@ func RequireAuthOrKey(iss *Issuer, keys APIKeyAuthenticator) fiber.Handler {
 	}
 }
 
+// OptionalAuth returns middleware that attaches the caller's user id when a valid
+// session cookie or API key is present, and otherwise passes through anonymously.
+// It NEVER rejects: an absent, expired, or invalid credential simply leaves no user
+// id in locals, so a public read still succeeds. Used on the job/company detail
+// reads to overlay the caller's own vote without gating the page behind sign-in.
+func OptionalAuth(iss *Issuer, keys APIKeyAuthenticator) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if token := c.Cookies(CookieName); token != "" {
+			if id, err := iss.Parse(token); err == nil {
+				c.Locals(localsUserID, id)
+				return c.Next()
+			}
+		}
+		if key := bearerToken(c); key != "" {
+			if id, err := keys.AuthenticateAPIKey(c.Context(), HashAPIKey(key)); err == nil {
+				c.Locals(localsUserID, id)
+				c.Locals(localsViaAPIKey, true)
+			}
+		}
+		return c.Next()
+	}
+}
+
 // RoleLoader resolves an authenticated user id to its current role. It is satisfied
 // directly by *db.Queries (GetUserRole), so this package needs no database import.
 type RoleLoader interface {

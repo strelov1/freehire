@@ -29,6 +29,9 @@ function company(overrides: Partial<Company> = {}): Company {
     collections: [],
     created_at: null,
     updated_at: null,
+    upvote_count: 0,
+    downvote_count: 0,
+    my_vote: 0,
     ...overrides,
   };
 }

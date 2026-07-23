@@ -9,6 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/search"
@@ -62,6 +63,12 @@ type companyView struct {
 	YcStage          []string        `json:"yc_stage"`
 	YcFlags          []string        `json:"yc_flags"`
 	Maturity         pgtype.Text     `json:"maturity"`
+	// UpvoteCount/DownvoteCount are the company's materialized public thumbs counters,
+	// served straight from the companies columns. MyVote is the caller's own vote
+	// (-1, 0, 1), caller-scoped — set only on the auth-aware detail read, 0 otherwise.
+	UpvoteCount   int32 `json:"upvote_count"`
+	DownvoteCount int32 `json:"downvote_count"`
+	MyVote        int32 `json:"my_vote"`
 }
 
 // companyViewFrom projects a stored company onto its public view, dropping only the
@@ -90,6 +97,8 @@ func companyViewFrom(c db.Company) companyView {
 		YcStage:          c.YcStage,
 		YcFlags:          c.YcFlags,
 		Maturity:         c.Maturity,
+		UpvoteCount:      c.UpvoteCount,
+		DownvoteCount:    c.DownvoteCount,
 	}
 }
 
@@ -277,8 +286,17 @@ func (a *API) GetCompany(c *fiber.Ctx) error {
 	// never failing the company read.
 	referralAvailable, _ := a.queries.CompanyHasApprovedReferrer(c.Context(), slug)
 
+	view := companyViewFrom(company)
+	// Caller's own thumbs vote, overlaid only when signed in (OptionalAuth attaches
+	// the id on this public read). Best-effort: a lookup error leaves my_vote 0.
+	if userID, ok := auth.UserID(c); ok {
+		if mv, err := a.queries.GetCompanyVote(c.Context(), db.GetCompanyVoteParams{UserID: userID, CompanySlug: slug}); err == nil {
+			view.MyVote = int32(mv)
+		}
+	}
+
 	return c.JSON(fiber.Map{"data": companyDetailResponse{
-		Company:           companyViewFrom(company),
+		Company:           view,
 		Jobs:              views,
 		ReferralAvailable: referralAvailable,
 	}})

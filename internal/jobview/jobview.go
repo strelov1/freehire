@@ -90,6 +90,15 @@ type Job struct {
 	// from the jobs columns (no read-time counting). Displayed on the detail page.
 	ViewCount    int32 `json:"view_count"`
 	AppliedCount int32 `json:"applied_count"`
+	// UpvoteCount/DownvoteCount are the job's materialized public thumbs counters —
+	// distinct signed-in users whose current vote is up / down — served straight from
+	// the jobs columns on every read.
+	UpvoteCount   int32 `json:"upvote_count"`
+	DownvoteCount int32 `json:"downvote_count"`
+	// MyVote is the caller's own vote (-1, 0, 1). It is caller-scoped, so it is only
+	// populated on auth-aware detail reads (GetJob with OptionalAuth); list, search,
+	// and the index-build path leave it 0 and never persist a real user's vote.
+	MyVote int32 `json:"my_vote"`
 	// Reality is the job-reality signal (fresh/stale/likely-evergreen + evidence),
 	// computed at index/read time and attached by ClassifyReality — never stored, as
 	// it is time-dependent. Nil when not computed (e.g. a plain FromRow without counts).
@@ -170,6 +179,8 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 		EnrichmentVersion: f.EnrichmentVersion,
 		ViewCount:         x.ViewCount,
 		AppliedCount:      x.AppliedCount,
+		UpvoteCount:       x.UpvoteCount,
+		DownvoteCount:     x.DownvoteCount,
 	}, nil
 }
 

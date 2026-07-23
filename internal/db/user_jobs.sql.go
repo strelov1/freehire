@@ -15,7 +15,7 @@ const clearJobProgress = `-- name: ClearJobProgress :one
 UPDATE user_jobs
 SET stage = NULL, applied_at = NULL
 WHERE user_id = $1 AND job_id = $2
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at
+RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote
 `
 
 type ClearJobProgressParams struct {
@@ -36,8 +36,25 @@ func (q *Queries) ClearJobProgress(ctx context.Context, arg ClearJobProgressPara
 		&i.Stage,
 		&i.Notes,
 		&i.DismissedAt,
+		&i.Vote,
 	)
 	return i, err
+}
+
+const clearJobVote = `-- name: ClearJobVote :exec
+UPDATE user_jobs SET vote = NULL WHERE user_id = $1 AND job_id = $2
+`
+
+type ClearJobVoteParams struct {
+	UserID int64 `json:"user_id"`
+	JobID  int64 `json:"job_id"`
+}
+
+// Explicitly clear a user's job vote (the DELETE endpoint). No-op when no row or no
+// vote exists. The caller recomputes counters via RecountJobVotes in the same tx.
+func (q *Queries) ClearJobVote(ctx context.Context, arg ClearJobVoteParams) error {
+	_, err := q.db.Exec(ctx, clearJobVote, arg.UserID, arg.JobID)
+	return err
 }
 
 const countMyJobsByStage = `-- name: CountMyJobsByStage :many
@@ -124,7 +141,7 @@ const dismissJob = `-- name: DismissJob :one
 INSERT INTO user_jobs (user_id, job_id, dismissed_at)
 VALUES ($1, $2, now())
 ON CONFLICT (user_id, job_id) DO UPDATE SET dismissed_at = now()
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at
+RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote
 `
 
 type DismissJobParams struct {
@@ -147,6 +164,7 @@ func (q *Queries) DismissJob(ctx context.Context, arg DismissJobParams) (UserJob
 		&i.Stage,
 		&i.Notes,
 		&i.DismissedAt,
+		&i.Vote,
 	)
 	return i, err
 }
@@ -189,6 +207,24 @@ func (q *Queries) ExcludedJobIDs(ctx context.Context, arg ExcludedJobIDsParams) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const getJobVote = `-- name: GetJobVote :one
+SELECT COALESCE((SELECT vote FROM user_jobs WHERE user_id = $1 AND job_id = $2), 0)::smallint AS my_vote
+`
+
+type GetJobVoteParams struct {
+	UserID int64 `json:"user_id"`
+	JobID  int64 `json:"job_id"`
+}
+
+// The caller's current vote for a job (0 when none), for my_vote on auth-aware
+// detail reads. Always returns one row via the COALESCE'd scalar subquery.
+func (q *Queries) GetJobVote(ctx context.Context, arg GetJobVoteParams) (int16, error) {
+	row := q.db.QueryRow(ctx, getJobVote, arg.UserID, arg.JobID)
+	var my_vote int16
+	err := row.Scan(&my_vote)
+	return my_vote, err
 }
 
 const listDismissedJobSlugs = `-- name: ListDismissedJobSlugs :many
@@ -259,7 +295,7 @@ func (q *Queries) ListSavedJobSlugs(ctx context.Context, userID int64) ([]string
 }
 
 const listUserJobs = `-- name: ListUserJobs :many
-SELECT jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.company, jobs.location, jobs.remote, jobs.description, jobs.posted_at, jobs.created_at, jobs.updated_at, jobs.company_slug, jobs.enrichment, jobs.enriched_at, jobs.enrichment_version, jobs.public_slug, jobs.last_seen_at, jobs.closed_at, jobs.countries, jobs.regions, jobs.work_mode, jobs.liveness_strikes, jobs.skills, jobs.seniority, jobs.category, jobs.created_by, jobs.updated_by, jobs.posting_language, jobs.employment_type, jobs.education_level, jobs.experience_years_min, jobs.collections, jobs.content_hash, jobs.english_level, jobs.cities, jobs.view_count, jobs.applied_count, jobs.role_fingerprint, jobs.semantic_embedded_model, jobs.semantic_embedded_hash, jobs.duplicate_of, jobs.is_tech, jobs.semantic_embedding, jobs.salary_min_manual, jobs.salary_max_manual, jobs.salary_currency_manual, jobs.salary_period_manual, uj.viewed_at, uj.saved_at, uj.applied_at, uj.stage, uj.notes,
+SELECT jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.company, jobs.location, jobs.remote, jobs.description, jobs.posted_at, jobs.created_at, jobs.updated_at, jobs.company_slug, jobs.enrichment, jobs.enriched_at, jobs.enrichment_version, jobs.public_slug, jobs.last_seen_at, jobs.closed_at, jobs.countries, jobs.regions, jobs.work_mode, jobs.liveness_strikes, jobs.skills, jobs.seniority, jobs.category, jobs.created_by, jobs.updated_by, jobs.posting_language, jobs.employment_type, jobs.education_level, jobs.experience_years_min, jobs.collections, jobs.content_hash, jobs.english_level, jobs.cities, jobs.view_count, jobs.applied_count, jobs.role_fingerprint, jobs.semantic_embedded_model, jobs.semantic_embedded_hash, jobs.duplicate_of, jobs.is_tech, jobs.semantic_embedding, jobs.salary_min_manual, jobs.salary_max_manual, jobs.salary_currency_manual, jobs.salary_period_manual, jobs.upvote_count, jobs.downvote_count, uj.viewed_at, uj.saved_at, uj.applied_at, uj.stage, uj.notes,
        (SELECT count(*)
           FROM emails e
          WHERE e.user_id = uj.user_id
@@ -384,6 +420,8 @@ func (q *Queries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]L
 			&i.Job.SalaryMaxManual,
 			&i.Job.SalaryCurrencyManual,
 			&i.Job.SalaryPeriodManual,
+			&i.Job.UpvoteCount,
+			&i.Job.DownvoteCount,
 			&i.ViewedAt,
 			&i.SavedAt,
 			&i.AppliedAt,
@@ -442,12 +480,12 @@ WITH prior AS (
     VALUES ($1, $2, now(), 'applied')
     ON CONFLICT (user_id, job_id) DO UPDATE
       SET applied_at = now(), stage = COALESCE(user_jobs.stage, 'applied')
-    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at
+    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote
 ), bump AS (
     UPDATE jobs SET applied_count = applied_count + 1
     WHERE id = $2 AND NOT EXISTS (SELECT 1 FROM prior WHERE prior.applied_at IS NOT NULL)
 )
-SELECT user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at FROM upsert
+SELECT user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote FROM upsert
 `
 
 type MarkJobAppliedParams struct {
@@ -464,6 +502,7 @@ type MarkJobAppliedRow struct {
 	Stage       pgtype.Text        `json:"stage"`
 	Notes       pgtype.Text        `json:"notes"`
 	DismissedAt pgtype.Timestamptz `json:"dismissed_at"`
+	Vote        pgtype.Int2        `json:"vote"`
 }
 
 // Mark a job as applied for a user. Idempotent and independent of a prior view:
@@ -484,6 +523,7 @@ func (q *Queries) MarkJobApplied(ctx context.Context, arg MarkJobAppliedParams) 
 		&i.Stage,
 		&i.Notes,
 		&i.DismissedAt,
+		&i.Vote,
 	)
 	return i, err
 }
@@ -492,7 +532,7 @@ const recordJobView = `-- name: RecordJobView :one
 INSERT INTO user_jobs (user_id, job_id)
 VALUES ($1, $2)
 ON CONFLICT (user_id, job_id) DO UPDATE SET viewed_at = now()
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at
+RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote
 `
 
 type RecordJobViewParams struct {
@@ -518,7 +558,32 @@ func (q *Queries) RecordJobView(ctx context.Context, arg RecordJobViewParams) (U
 		&i.Stage,
 		&i.Notes,
 		&i.DismissedAt,
+		&i.Vote,
 	)
+	return i, err
+}
+
+const recountJobVotes = `-- name: RecountJobVotes :one
+UPDATE jobs SET
+    upvote_count   = (SELECT count(*) FROM user_jobs uj WHERE uj.job_id = $1 AND uj.vote =  1),
+    downvote_count = (SELECT count(*) FROM user_jobs uj WHERE uj.job_id = $1 AND uj.vote = -1)
+WHERE id = $1
+RETURNING upvote_count, downvote_count
+`
+
+type RecountJobVotesRow struct {
+	UpvoteCount   int32 `json:"upvote_count"`
+	DownvoteCount int32 `json:"downvote_count"`
+}
+
+// Recompute a single job's materialized vote counters from user_jobs and return
+// them. Run as its own statement AFTER the vote write within one transaction, so it
+// sees the write (a same-statement CTE would not). Scoped to one job_id via the
+// partial index user_jobs(job_id) WHERE vote IS NOT NULL — a cheap indexed count.
+func (q *Queries) RecountJobVotes(ctx context.Context, jobID int64) (RecountJobVotesRow, error) {
+	row := q.db.QueryRow(ctx, recountJobVotes, jobID)
+	var i RecountJobVotesRow
+	err := row.Scan(&i.UpvoteCount, &i.DownvoteCount)
 	return i, err
 }
 
@@ -526,7 +591,7 @@ const saveJob = `-- name: SaveJob :one
 INSERT INTO user_jobs (user_id, job_id, saved_at)
 VALUES ($1, $2, now())
 ON CONFLICT (user_id, job_id) DO UPDATE SET saved_at = now()
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at
+RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote
 `
 
 type SaveJobParams struct {
@@ -548,6 +613,7 @@ func (q *Queries) SaveJob(ctx context.Context, arg SaveJobParams) (UserJob, erro
 		&i.Stage,
 		&i.Notes,
 		&i.DismissedAt,
+		&i.Vote,
 	)
 	return i, err
 }
@@ -558,7 +624,7 @@ VALUES ($1, $2, $3, $4)
 ON CONFLICT (user_id, job_id) DO UPDATE
   SET stage = COALESCE(EXCLUDED.stage, user_jobs.stage),
       notes = COALESCE(EXCLUDED.notes, user_jobs.notes)
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at
+RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote
 `
 
 type TrackJobParams struct {
@@ -589,6 +655,7 @@ func (q *Queries) TrackJob(ctx context.Context, arg TrackJobParams) (UserJob, er
 		&i.Stage,
 		&i.Notes,
 		&i.DismissedAt,
+		&i.Vote,
 	)
 	return i, err
 }
@@ -597,7 +664,7 @@ const undismissJob = `-- name: UndismissJob :one
 UPDATE user_jobs
 SET dismissed_at = NULL
 WHERE user_id = $1 AND job_id = $2
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at
+RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote
 `
 
 type UndismissJobParams struct {
@@ -621,6 +688,7 @@ func (q *Queries) UndismissJob(ctx context.Context, arg UndismissJobParams) (Use
 		&i.Stage,
 		&i.Notes,
 		&i.DismissedAt,
+		&i.Vote,
 	)
 	return i, err
 }
@@ -629,7 +697,7 @@ const unsaveJob = `-- name: UnsaveJob :one
 UPDATE user_jobs
 SET saved_at = NULL
 WHERE user_id = $1 AND job_id = $2
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at
+RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote
 `
 
 type UnsaveJobParams struct {
@@ -652,6 +720,7 @@ func (q *Queries) UnsaveJob(ctx context.Context, arg UnsaveJobParams) (UserJob, 
 		&i.Stage,
 		&i.Notes,
 		&i.DismissedAt,
+		&i.Vote,
 	)
 	return i, err
 }
@@ -660,7 +729,7 @@ const untrackJob = `-- name: UntrackJob :one
 UPDATE user_jobs
 SET saved_at = NULL, applied_at = NULL, stage = NULL, notes = NULL
 WHERE user_id = $1 AND job_id = $2
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at
+RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote
 `
 
 type UntrackJobParams struct {
@@ -682,6 +751,38 @@ func (q *Queries) UntrackJob(ctx context.Context, arg UntrackJobParams) (UserJob
 		&i.Stage,
 		&i.Notes,
 		&i.DismissedAt,
+		&i.Vote,
 	)
 	return i, err
+}
+
+const upsertJobVote = `-- name: UpsertJobVote :one
+WITH upsert AS (
+    INSERT INTO user_jobs (user_id, job_id, vote)
+    VALUES ($1, $2, $3)
+    ON CONFLICT (user_id, job_id) DO UPDATE
+      SET vote = CASE WHEN user_jobs.vote = EXCLUDED.vote THEN NULL ELSE EXCLUDED.vote END
+    RETURNING vote
+)
+SELECT COALESCE((SELECT vote FROM upsert), 0)::smallint AS my_vote
+`
+
+type UpsertJobVoteParams struct {
+	UserID int64       `json:"user_id"`
+	JobID  int64       `json:"job_id"`
+	Vote   pgtype.Int2 `json:"vote"`
+}
+
+// Cast a thumbs vote on a job for a user with toggle/flip semantics: casting the
+// same direction again clears the vote (-> NULL), the opposite direction replaces it.
+// Upserts the (user, job) row (viewed_at defaults) so a vote can precede any other
+// interaction. $3 is the desired direction (-1 or 1). Returns the caller's resulting
+// vote (0 when the toggle cleared it). The caller recomputes jobs counters in the
+// same transaction via RecountJobVotes; a CTE cannot, since a data-modifying CTE's
+// effect is invisible to sibling sub-statements.
+func (q *Queries) UpsertJobVote(ctx context.Context, arg UpsertJobVoteParams) (int16, error) {
+	row := q.db.QueryRow(ctx, upsertJobVote, arg.UserID, arg.JobID, arg.Vote)
+	var my_vote int16
+	err := row.Scan(&my_vote)
+	return my_vote, err
 }

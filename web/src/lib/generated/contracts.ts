@@ -147,6 +147,19 @@ export interface Job {
   view_count: number /* int32 */;
   applied_count: number /* int32 */;
   /**
+   * UpvoteCount/DownvoteCount are the job's materialized public thumbs counters —
+   * distinct signed-in users whose current vote is up / down — served straight from
+   * the jobs columns on every read.
+   */
+  upvote_count: number /* int32 */;
+  downvote_count: number /* int32 */;
+  /**
+   * MyVote is the caller's own vote (-1, 0, 1). It is caller-scoped, so it is only
+   * populated on auth-aware detail reads (GetJob with OptionalAuth); list, search,
+   * and the index-build path leave it 0 and never persist a real user's vote.
+   */
+  my_vote: number /* int32 */;
+  /**
    * Reality is the job-reality signal (fresh/stale/likely-evergreen + evidence),
    * computed at index/read time and attached by ClassifyReality — never stored, as
    * it is time-dependent. Nil when not computed (e.g. a plain FromRow without counts).
@@ -690,7 +703,7 @@ export interface Patch {
   stack?: string[]; // per-experience technology line (set_stack)
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'breezy', 'briefhq', 'bullhorn', 'careerplug', 'careerspage', 'catsone', 'cleverstaff', 'clinch', 'comeet', 'cornerstone', 'crelate', 'deel', 'djinni', 'earcu', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'functionalworks', 'geekjob', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'hh', 'himalayas', 'hireology', 'huntflow', 'hurma', 'icims', 'infojobs', 'inhire', 'ismartrecruit', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobscore', 'jobspresso', 'jobstash', 'jobtech', 'jobvite', 'jobylon', 'join', 'justjoin', 'lever', 'likeit', 'loxo', 'luxoft', 'manatal', 'mindsight', 'mycareersfuture', 'neogov', 'nofluffjobs', 'northstone', 'odoo', 'oracle', 'pageup', 'paycom', 'paylocity', 'peopleforce', 'personio', 'phenom', 'pinpoint', 'powertofly', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'softgarden', 'solides', 'spark', 'startupandvc', 'successfactors', 'talentadore', 'talentlyft', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'trudvsem', 'tyomarkkinatori', 'ukg', 'vagas', 'vention', 'vouch', 'wantapply', 'wantedkr', 'weworkremotely', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'betterteam', 'breezy', 'briefhq', 'bullhorn', 'careerplug', 'careerspage', 'catsone', 'cleverstaff', 'clinch', 'comeet', 'cornerstone', 'crelate', 'deel', 'djinni', 'earcu', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'functionalworks', 'geekjob', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'hh', 'himalayas', 'hireology', 'huntflow', 'hurma', 'icims', 'infojobs', 'inhire', 'ismartrecruit', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobscore', 'jobspresso', 'jobstash', 'jobtech', 'jobvite', 'jobylon', 'join', 'justjoin', 'lever', 'likeit', 'loxo', 'luxoft', 'manatal', 'mindsight', 'mycareersfuture', 'neogov', 'nofluffjobs', 'northstone', 'odoo', 'oracle', 'pageup', 'paycom', 'paylocity', 'peopleforce', 'personio', 'phenom', 'pinpoint', 'powertofly', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'softgarden', 'solides', 'spark', 'startupandvc', 'successfactors', 'talentadore', 'talentlyft', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'trudvsem', 'tyomarkkinatori', 'ukg', 'vagas', 'vention', 'vouch', 'wantapply', 'wantedkr', 'weworkremotely', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];

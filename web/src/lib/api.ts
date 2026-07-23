@@ -31,6 +31,7 @@ import type {
   PipelineStats,
   User,
   UserJob,
+  VoteResult,
   ApiKey,
   CreatedApiKey,
   SavedSearch,
@@ -635,6 +636,27 @@ export function createApi(
    *  dismissed" is success. */
   function undismissJob(slug: string): Promise<UserJob> {
     return jobInteraction(slug, 'dismiss', 'DELETE');
+  }
+
+  /** Cast a thumbs vote on a job (toggle/flip). Returns the job's resulting public
+   *  counters and the caller's own vote. Requires a session — gate on auth first. */
+  function voteJob(slug: string, dir: 'up' | 'down'): Promise<VoteResult> {
+    return requestData<VoteResult>(`/api/v1/jobs/${slug}/vote`, jsonBody('POST', { vote: dir }));
+  }
+
+  /** Clear the caller's thumbs vote on a job. Idempotent (no-op when none). */
+  function clearJobVote(slug: string): Promise<VoteResult> {
+    return requestData<VoteResult>(`/api/v1/jobs/${slug}/vote`, { method: 'DELETE' });
+  }
+
+  /** Cast a thumbs vote on a company (toggle/flip). Requires a session. */
+  function voteCompany(slug: string, dir: 'up' | 'down'): Promise<VoteResult> {
+    return requestData<VoteResult>(`/api/v1/companies/${slug}/vote`, jsonBody('POST', { vote: dir }));
+  }
+
+  /** Clear the caller's thumbs vote on a company. Idempotent (no-op when none). */
+  function clearCompanyVote(slug: string): Promise<VoteResult> {
+    return requestData<VoteResult>(`/api/v1/companies/${slug}/vote`, { method: 'DELETE' });
   }
 
   /** Drop a job's pipeline progress (stage + applied), keeping its saved mark —
@@ -1343,6 +1365,10 @@ export function createApi(
     unsaveJob,
     dismissJob,
     undismissJob,
+    voteJob,
+    clearJobVote,
+    voteCompany,
+    clearCompanyVote,
     clearJobStage,
     untrackJob,
     trackJob,

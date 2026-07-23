@@ -19,9 +19,11 @@ import (
 // only by FromRow. It lives here (not in jobview) so a load can return it without
 // the domain importing the wire layer.
 type Extras struct {
-	ViewCount    int32
-	AppliedCount int32
-	Collections  []string
+	ViewCount     int32
+	AppliedCount  int32
+	UpvoteCount   int32
+	DownvoteCount int32
+	Collections   []string
 }
 
 // FromRow is the anti-corruption mapping from a persistence row to the domain
@@ -94,9 +96,11 @@ func jobFromRow(r db.Job) (Job, error) {
 // jobFromRow so the aggregate mapping stays free of non-aggregate fields.
 func extrasFromRow(r db.Job) Extras {
 	return Extras{
-		ViewCount:    r.ViewCount,
-		AppliedCount: r.AppliedCount,
-		Collections:  r.Collections,
+		ViewCount:     r.ViewCount,
+		AppliedCount:  r.AppliedCount,
+		UpvoteCount:   r.UpvoteCount,
+		DownvoteCount: r.DownvoteCount,
+		Collections:   r.Collections,
 	}
 }
 
