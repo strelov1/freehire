@@ -50,14 +50,20 @@ var sepRE = regexp.MustCompile(`[-_\s]+`)
 // HTML tags, so hrefs inside <a …> are already gone and only visible link text remains).
 var urlRE = regexp.MustCompile(`(?i)\b(?:https?://|www\.)\S+`)
 
-// normalize strips HTML tags, lowercases the text, and trims. Tags are replaced
+// stripMarkup drops HTML tags and URLs from raw description text, replacing each
 // with a space (not empty) to preserve word boundaries so "<b>Go</b>Engineer"
-// cannot fuse. Separators are deliberately left intact — the phrase matcher makes
+// cannot fuse and a URL's segments cannot tokenize into skill aliases. Used by
+// both the case-preserved acronym pass and normalize.
+func stripMarkup(text string) string {
+	return urlRE.ReplaceAllString(htmlTagRE.ReplaceAllString(text, " "), " ")
+}
+
+// normalize strips markup (see stripMarkup), lowercases the text, and trims.
+// Separators are deliberately left intact — the phrase matcher makes
 // '-'/'_'/space equivalent inside multi-word terms without losing the boundary
 // information that keeps "objective-c" from leaking a bare "c".
 func normalize(text string) string {
-	stripped := urlRE.ReplaceAllString(htmlTagRE.ReplaceAllString(text, " "), " ")
-	return strings.TrimSpace(strings.ToLower(stripped))
+	return strings.TrimSpace(strings.ToLower(stripMarkup(text)))
 }
 
 // phraseMatcher resolves one phrase alias against normalized text. A multi-word
@@ -162,7 +168,7 @@ func Parse(text string, opts ...Option) []string {
 	// UPPERCASE acronym resolves while its ambiguous lowercase form does not. Uses a
 	// Unicode word boundary because the text is not lowercased here (ASCIIBoundary's
 	// word test is lowercase-only and would misjudge uppercase neighbours).
-	cased := urlRE.ReplaceAllString(htmlTagRE.ReplaceAllString(text, " "), " ")
+	cased := stripMarkup(text)
 	matchAcronyms(cased, sharedAcronyms, strong)
 	if o.resumeAcronyms {
 		matchAcronyms(cased, resumeAcronyms, strong)
