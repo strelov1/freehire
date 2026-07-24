@@ -484,7 +484,7 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 				}
 				return
 			}
-			st.Ingested++
+			// A close is not counted as ingested — Stats.Ingested is saved jobs only.
 			return
 		}
 		r.saveOne(ctx, e, j, &st, &firstErr)

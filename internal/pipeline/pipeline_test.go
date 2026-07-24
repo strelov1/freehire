@@ -195,8 +195,8 @@ func TestRunStreamClosesRemovedJobs(t *testing.T) {
 	if len(store.closed) != 1 || store.closed[0] != [2]string{"jobtech", ":2"} {
 		t.Fatalf("closed = %v, want one close of (jobtech, :2)", store.closed)
 	}
-	if stats.Total().Ingested != 2 || stats.Total().Failed != 0 {
-		t.Fatalf("stats = %+v, want Ingested=2 Failed=0 (one save + one close)", stats.Total())
+	if stats.Total().Ingested != 1 || stats.Total().Failed != 0 {
+		t.Fatalf("stats = %+v, want Ingested=1 Failed=0 (a close is not a saved job)", stats.Total())
 	}
 }
 
