@@ -847,12 +847,18 @@ type Querier interface {
 	// threads_subject_open_created_idx.
 	ListOpenThreadsFirst(ctx context.Context, arg ListOpenThreadsFirstParams) ([]ListOpenThreadsFirstRow, error)
 	// The moderator queue: offers awaiting a decision, oldest first, with display name.
+	// Capped at 500 as a runaway-growth guard — far above any plausible backlog; a
+	// queue that deep needs bulk triage, not a longer page.
 	ListPendingReferralOffers(ctx context.Context) ([]ListPendingReferralOffersRow, error)
-	// The moderator review queue: every pending report, newest first, with the reporter's email
+	// The moderator review queue: pending reports, newest first, with the reporter's email
 	// and the reported job's slug and title so the moderator can judge it and link to it.
+	// Capped at 500 as a runaway-growth guard — far above any plausible backlog; a queue
+	// that deep needs bulk triage, not a longer page.
 	ListPendingReports(ctx context.Context) ([]ListPendingReportsRow, error)
-	// The moderator review queue: every pending submission, newest first, with the submitter's
-	// email so the moderator can judge provenance.
+	// The moderator review queue: pending submissions, newest first, with the submitter's
+	// email so the moderator can judge provenance. Capped at 500 as a runaway-growth
+	// guard — far above any plausible backlog; a queue that deep needs bulk triage,
+	// not a longer page.
 	ListPendingSubmissions(ctx context.Context) ([]ListPendingSubmissionsRow, error)
 	// The "my offers" list: one member's offers with moderation status, newest first.
 	// Joins the catalogue for the company's display name (LEFT so an offer survives a
@@ -921,10 +927,12 @@ type Querier interface {
 	// email, or other personal field is selected. With no members the series is empty
 	// (min(day) is NULL, so generate_series yields no rows).
 	ListUserGrowth(ctx context.Context) ([]ListUserGrowthRow, error)
-	// Every job the caller has analyzed, newest first, joined to the job for display. Powers
+	// Jobs the caller has analyzed, newest first, joined to the job for display. Powers
 	// the Tracking → AI fit tab. Includes closed jobs (surfaced with a badge). The stored
 	// staleness stamps ride along so the handler can flag rows whose CV/job/model has since
 	// changed, and the analysis blob carries the overall score + verdict the list shows.
+	// Capped at 500 — the quota window (see CountRecentUserJobAnalyses) keeps real usage
+	// far below that, and each row drags a full analysis JSONB over the wire.
 	ListUserJobAnalyses(ctx context.Context, userID int64) ([]ListUserJobAnalysesRow, error)
 	// A user's job interactions joined with the job rows. Each subset is ordered by
 	// when the job entered *that* list, not by last touch: saved by saved_at, applied
