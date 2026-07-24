@@ -20,7 +20,7 @@ import {
 import { fuzzyMatch } from './fuzzy';
 import {
   REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
-  CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS,
+  CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS, ENGLISH_LEVEL_LABELS,
 } from './labels';
 import { COLLECTIONS } from './collections';
 import { ROLE_RELATED } from './roleRelated';
@@ -351,9 +351,7 @@ const EMPLOYMENT: FacetOption[] = options(EMPLOYMENT_TYPE_VALUES, EMPLOYMENT_LAB
 const RELOCATION: FacetOption[] = options(RELOCATION_VALUES, {
   not_supported: 'None', supported: 'Supported', required: 'Required',
 });
-const ENGLISH: FacetOption[] = options(ENGLISH_LEVEL_VALUES, {
-  a1: 'A1', a2: 'A2', b1: 'B1', b2: 'B2', c1: 'C1', c2: 'C2', native: 'Native', none: 'None',
-});
+const ENGLISH: FacetOption[] = options(ENGLISH_LEVEL_VALUES, ENGLISH_LEVEL_LABELS);
 const CATEGORY: FacetOption[] = options(CATEGORY_VALUES, CATEGORY_LABELS);
 
 // The category facet options, exported for reuse outside the filter panel (the search
