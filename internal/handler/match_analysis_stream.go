@@ -55,6 +55,11 @@ func (a *API) StreamMatchAnalysis(c *fiber.Ctx) error {
 	cvUploadedAt, _ := a.cvUploadedAt(c, userID)
 	profile, _ := a.userProfile.Get(c.Context(), userID)
 
+	// Compute the hard-constraint blockers exactly as the POST path does: the unmet
+	// ones ground the prompt. The served-score cap needs no handling here — the cache
+	// holds the uncapped analysis and GET recomputes the cap on read.
+	blockers := a.jobBlockers(c.Context(), userID, job, profile)
+
 	input := matchanalysis.Input{
 		JobTitle:            job.Title,
 		JobDescription:      job.Description,
@@ -68,6 +73,7 @@ func (a *API) StreamMatchAnalysis(c *fiber.Ctx) error {
 		JobRegions:          job.Regions,
 		JobCountries:        job.Countries,
 		LocationPreferences: string(profile.LocationPreferences),
+		Blockers:            blockers,
 	}
 
 	c.Set(fiber.HeaderContentType, "text/event-stream")
