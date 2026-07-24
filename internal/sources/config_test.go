@@ -123,7 +123,7 @@ func TestLoadConfigInfersProviderFromFilename(t *testing.T) {
 }
 
 func TestConfigValidateRejectsUnknownProvider(t *testing.T) {
-	cfg := Config{Provider: "myspace", Sources: []CompanyEntry{{Company: "Acme", Board: "acme"}}}
+	cfg := Config{Provider: "myspace", Sources: []CompanyEntry{{Company: "Acme", Provider: "myspace", Board: "acme"}}}
 
 	err := cfg.Validate(reg(fakeSource{"greenhouse"}))
 	if err == nil {
@@ -135,7 +135,7 @@ func TestConfigValidateRejectsUnknownProvider(t *testing.T) {
 }
 
 func TestConfigValidateRejectsEmptyBoard(t *testing.T) {
-	cfg := Config{Provider: "greenhouse", Sources: []CompanyEntry{{Company: "Cohere", Board: ""}}}
+	cfg := Config{Provider: "greenhouse", Sources: []CompanyEntry{{Company: "Cohere", Provider: "greenhouse"}}}
 
 	err := cfg.Validate(reg(fakeSource{"greenhouse"}))
 	if err == nil {
@@ -147,7 +147,7 @@ func TestConfigValidateRejectsEmptyBoard(t *testing.T) {
 }
 
 func TestConfigValidateRejectsEmptyCompany(t *testing.T) {
-	cfg := Config{Provider: "greenhouse", Sources: []CompanyEntry{{Company: "", Board: "cohere"}}}
+	cfg := Config{Provider: "greenhouse", Sources: []CompanyEntry{{Provider: "greenhouse", Board: "cohere"}}}
 
 	if err := cfg.Validate(reg(fakeSource{"greenhouse"})); err == nil {
 		t.Fatal("expected error for empty company, got nil")
@@ -155,7 +155,7 @@ func TestConfigValidateRejectsEmptyCompany(t *testing.T) {
 }
 
 func TestConfigValidateAcceptsKnownProviders(t *testing.T) {
-	cfg := Config{Provider: "greenhouse", Sources: []CompanyEntry{{Company: "Cohere", Board: "cohere"}}}
+	cfg := Config{Provider: "greenhouse", Sources: []CompanyEntry{{Company: "Cohere", Provider: "greenhouse", Board: "cohere"}}}
 
 	if err := cfg.Validate(reg(fakeSource{"greenhouse"})); err != nil {
 		t.Errorf("Validate: unexpected error %v", err)
@@ -164,7 +164,7 @@ func TestConfigValidateAcceptsKnownProviders(t *testing.T) {
 
 // A single-company adapter that declares itself boardless may omit board.
 func TestConfigValidateAcceptsEmptyBoardForBoardlessProvider(t *testing.T) {
-	cfg := Config{Provider: "ozon", Sources: []CompanyEntry{{Company: "Ozon", Board: ""}}}
+	cfg := Config{Provider: "ozon", Sources: []CompanyEntry{{Company: "Ozon", Provider: "ozon"}}}
 
 	if err := cfg.Validate(reg(fakeBoardlessSource{"ozon"})); err != nil {
 		t.Errorf("Validate: boardless provider with empty board should be accepted, got %v", err)
@@ -173,7 +173,7 @@ func TestConfigValidateAcceptsEmptyBoardForBoardlessProvider(t *testing.T) {
 
 // A boardless provider still needs a company.
 func TestConfigValidateRejectsEmptyCompanyEvenForBoardlessProvider(t *testing.T) {
-	cfg := Config{Provider: "ozon", Sources: []CompanyEntry{{Company: "", Board: ""}}}
+	cfg := Config{Provider: "ozon", Sources: []CompanyEntry{{Provider: "ozon"}}}
 
 	if err := cfg.Validate(reg(fakeBoardlessSource{"ozon"})); err == nil {
 		t.Fatal("expected error for empty company, got nil")
@@ -223,11 +223,15 @@ func TestConfigValidateAcceptsMixedPerEntryProviders(t *testing.T) {
 }
 
 // An entry whose resolved provider has no adapter fails fast — including the custom.yml
-// case where the file name "custom" is not a provider and the entry omitted one.
+// case where the file name "custom" is not a provider: ParseConfig resolves the entry's
+// omitted provider to the file name, which then has no adapter.
 func TestConfigValidateRejectsUnknownPerEntryProvider(t *testing.T) {
-	cfg := Config{Provider: "custom", Sources: []CompanyEntry{{Company: "Orphan", Board: "x"}}}
+	cfg, err := ParseConfig("custom", []byte("- company: Orphan\n  board: x\n"))
+	if err != nil {
+		t.Fatalf("ParseConfig: %v", err)
+	}
 
-	err := cfg.Validate(reg(fakeSource{"greenhouse"}))
+	err = cfg.Validate(reg(fakeSource{"greenhouse"}))
 	if err == nil {
 		t.Fatal("expected error for an entry resolving to an unregistered provider, got nil")
 	}
