@@ -468,10 +468,14 @@ const YC_FLAGS: FacetOption[] = options(['top_company', 'hiring'], {
 });
 // YC batch labels are the verbatim source strings ("Winter 2012"). Generate the full
 // season×year grid so the searchable select covers any batch; phantom combinations
-// that no company has simply match nothing.
-const YC_BATCH: FacetOption[] = Array.from({ length: 2027 - 2005 + 1 }, (_, i) => 2027 - i).flatMap((y) =>
-  ['Winter', 'Spring', 'Summer', 'Fall'].map((s) => ({ value: `${s} ${y}`, label: `${s} ${y}` })),
-);
+// that no company has simply match nothing. The grid runs from the first YC batch
+// (2005) through next year so a fresh batch is covered as soon as it appears.
+const YC_BATCH: FacetOption[] = (() => {
+  const max = new Date().getFullYear() + 1;
+  return Array.from({ length: max - 2005 + 1 }, (_, i) => max - i).flatMap((y) =>
+    ['Winter', 'Spring', 'Summer', 'Fall'].map((s) => ({ value: `${s} ${y}`, label: `${s} ${y}` })),
+  );
+})();
 export const COMPANY_FACETS: FacetDef[] = [
   { param: 'collections', label: 'Collection', control: 'pills', options: COLLECTION, excludable: false },
   { param: 'regions', label: 'Region', control: 'pills', options: REGION, excludable: false },
