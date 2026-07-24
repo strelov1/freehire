@@ -97,25 +97,42 @@ func run() int {
 		return 1
 	}
 
-	// Refresh the role-cluster canonical markers before reading jobs, so the collapse
-	// (splitJobs drops non-canonical reposts) reflects the current catalogue and a closed
-	// canon has failed over. Done per company in short transactions (never a table-wide
-	// lock that would stall ingest). Best-effort: a hiccup here must not block the reindex
-	// (which also owns settings/compaction), so it degrades to the prior markers.
-	if n, err := recomputeRoleDuplicates(ctx, q); err != nil {
-		log.Printf("reindex: recompute role duplicates (continuing with prior markers): %v", err)
-	} else if n > 0 {
-		log.Printf("reindex: recomputed role duplicates (%d rows re-marked)", n)
-	}
+	// A from-Postgres rehydration is in-place (reset + re-fill the live index from the
+	// vectors already in Postgres): no 2× disk copy, no swap. It reuses the duplicate_of
+	// markers already in the DB, so it skips BOTH the disk-guard AND the per-company marker
+	// recompute below — the latter is the dominant cost on prod (one query per company, so
+	// tens of thousands of round-trips), and stale-by-one-run markers are fine for a vector
+	// rehydration.
+	inPlaceSemantic := semantic && fromPG
+	if !inPlaceSemantic {
+		// Guard free disk for the swap rebuilds up front — BEFORE the expensive recompute —
+		// so a disk refusal is a true no-op (no prod writes, no full-catalogue scans).
+		rcfg := config.LoadReindex()
+		if err := guardDisk(rcfg.MeiliDataDir, rcfg.MinFreeGB, statfsFree); err != nil {
+			log.Printf("reindex: %v", err)
+			return 1
+		}
 
-	// Then suppress aggregator postings that duplicate a first-party ATS posting, so the
-	// aggregator copy drops out of this rebuild (and out of embedding/enrichment). Run
-	// AFTER the role recompute so ATS reposts have collapsed to their canon first. Same
-	// per-company, best-effort discipline as the role pass.
-	if n, err := suppressAggregatorDuplicates(ctx, q); err != nil {
-		log.Printf("reindex: suppress aggregator duplicates (continuing with prior markers): %v", err)
-	} else if n > 0 {
-		log.Printf("reindex: suppressed aggregator duplicates (%d rows re-marked)", n)
+		// Refresh the role-cluster canonical markers before reading jobs, so the collapse
+		// (splitJobs drops non-canonical reposts) reflects the current catalogue and a closed
+		// canon has failed over. Done per company in short transactions (never a table-wide
+		// lock that would stall ingest). Best-effort: a hiccup here must not block the reindex
+		// (which also owns settings/compaction), so it degrades to the prior markers.
+		if n, err := recomputeRoleDuplicates(ctx, q); err != nil {
+			log.Printf("reindex: recompute role duplicates (continuing with prior markers): %v", err)
+		} else if n > 0 {
+			log.Printf("reindex: recomputed role duplicates (%d rows re-marked)", n)
+		}
+
+		// Then suppress aggregator postings that duplicate a first-party ATS posting, so the
+		// aggregator copy drops out of this rebuild (and out of embedding/enrichment). Run
+		// AFTER the role recompute so ATS reposts have collapsed to their canon first. Same
+		// per-company, best-effort discipline as the role pass.
+		if n, err := suppressAggregatorDuplicates(ctx, q); err != nil {
+			log.Printf("reindex: suppress aggregator duplicates (continuing with prior markers): %v", err)
+		} else if n > 0 {
+			log.Printf("reindex: suppressed aggregator duplicates (%d rows re-marked)", n)
+		}
 	}
 
 	// The rebuild optionally scopes to a fresh posting window (--posted-within); every
@@ -140,8 +157,8 @@ func run() int {
 
 	// --from-pg rehydrates the semantic index IN PLACE from the vectors already in Postgres:
 	// reset the live index and re-fill it with no TEI embedding, no rebuild copy, and no
-	// swap. Peak disk is a single copy, so this path skips the disk-guard entirely.
-	if semantic && fromPG {
+	// swap.
+	if inPlaceSemantic {
 		log.Printf("reindex: target=semantic scope=%s mode=in-place vectors=pg", scope)
 		rh := semanticFromPG{c: client}
 		indexed, skipped, err := reindexSemanticFromPG(ctx, reader, rh, lookup, geo, time.Now())
@@ -154,13 +171,7 @@ func run() int {
 	}
 
 	// Every other pass builds a fresh index and atomically swaps it in — transiently a
-	// second full copy of the index. On a tight disk that fills the volume and aborts
-	// before the swap, orphaning the rebuild index; guard the free space before starting.
-	rcfg := config.LoadReindex()
-	if err := guardDisk(rcfg.MeiliDataDir, rcfg.MinFreeGB, statfsFree); err != nil {
-		log.Printf("reindex: %v", err)
-		return 1
-	}
+	// second full copy of the index (disk already guarded up front, before the recompute).
 	var b rebuilder = client.NewFacetRebuild()
 	vectors := "n/a"
 	if semantic {
