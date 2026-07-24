@@ -98,6 +98,11 @@
   let reconnecting = $state(false);
   let reconnectAttempts = 0;
   const MAX_RECONNECT = 3;
+  // Pending backoff timer for the next auto-reconnect attempt; cancelled on unmount so a
+  // dead component never opens a fresh socket.
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  // Set by the onMount cleanup; boot() checks it after each await and bails out.
+  let destroyed = false;
 
   // Transport: one RoyClient per page. `activeId` is the session currently
   // attached and shown in the chat pane; `frameUnsub` is that session's frame
@@ -297,6 +302,11 @@
         }),
       );
       await client.connect(assistantWsUrl());
+      // Unmounted while connecting: drop the fresh socket instead of going live.
+      if (destroyed) {
+        teardown();
+        return;
+      }
 
       sessions = newestFirst(
         summaries.map((s) =>
@@ -326,6 +336,11 @@
       } else {
         await createAndOpen();
       }
+      // Unmounted mid-attach: drop the session we just opened.
+      if (destroyed) {
+        teardown();
+        return;
+      }
       phase = 'ready';
 
       // Autostart: the host can pass a kickoff prompt so the agent begins immediately instead
@@ -351,6 +366,7 @@
   // chat repaints intact). Auto-retries with backoff up to MAX_RECONNECT, then leaves a manual
   // Reconnect button.
   async function reconnect() {
+    if (destroyed) return;
     reconnecting = true;
     connectionLost = false;
     error = null;
@@ -376,7 +392,10 @@
     reconnecting = false;
     if (reconnectAttempts < MAX_RECONNECT) {
       reconnectAttempts += 1;
-      setTimeout(() => void reconnect(), 800 * 2 ** (reconnectAttempts - 1));
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        void reconnect();
+      }, 800 * 2 ** (reconnectAttempts - 1));
     } else {
       connectionLost = true;
       error = 'Could not reconnect to the agent.';
@@ -594,6 +613,10 @@
   }
 
   function teardown() {
+    if (reconnectTimer !== null) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
     frameUnsub?.();
     frameUnsub = null;
     for (const off of statusUnsubs) off();
@@ -605,7 +628,10 @@
   onMount(() => {
     if (!allowed) return;
     void boot();
-    return teardown;
+    return () => {
+      destroyed = true;
+      teardown();
+    };
   });
 </script>
 
