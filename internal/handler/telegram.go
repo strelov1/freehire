@@ -53,9 +53,14 @@ func (a *API) TelegramLinkStatus(c *fiber.Ctx) error {
 	}
 	out := fiber.Map{"enabled": a.telegramEnabled(), "linked": false}
 	link, err := a.queries.GetTelegramLink(c.Context(), userID)
-	if err == nil {
+	switch {
+	case err == nil:
 		out["linked"] = true
 		out["chat_id"] = link.ChatID
+	case errors.Is(err, pgx.ErrNoRows):
+		// No link row yet — linked stays false.
+	default:
+		return err
 	}
 	return c.JSON(fiber.Map{"data": out})
 }
