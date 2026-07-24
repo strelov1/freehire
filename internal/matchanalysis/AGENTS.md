@@ -18,7 +18,7 @@ On-demand, cached, three-stage LLM prompt-chain for job-fit analysis per (user, 
 
 ## How it works
 
-`internal/matchanalysis` is complemented by the deterministic `internal/jobmatch` bar (skills-only, instant, free). The LLM analysis is opt-in and reads the whole vacancy + `company_info` + the caller's stored CV.
+`internal/matchanalysis` is complemented by the deterministic `internal/jobmatch` bar (skills-only, instant, free). The LLM analysis is opt-in and reads the whole vacancy + `company_info` + the caller's de-identified structured résumé.
 
 **The chain:** `matchanalysis.go` defines the `Analysis` wire shape and `AnalyzeStream(ctx, in, emit)` — the one chain implementation. `analyzer.go` is a thin collector over it. `Analyze` is the sync entry point that collects stream events into the final `Analysis`.
 
@@ -26,7 +26,7 @@ On-demand, cached, three-stage LLM prompt-chain for job-fit analysis per (user, 
 
 **Frontend:** a dedicated full-width analysis page SSRs a fresh cached analysis via `+page.server.ts` for instant paint; otherwise opens an `EventSource` with a stepper, thinking panel, and progressive sections. The pure SSE reducer `reduceMatchEvent` lives in `web/src/lib/matchAnalysis.ts` (unit-tested). The Profile-match sidebar block (`MatchSummary.svelte`) is a compact summary linking to the page — it never computes inline.
 
-**Structured resume context:** the `resumeextract` wire shape is fed into the fit chain as pre-normalized Stage-1 context (`matchanalysis.Input.StructuredResume`) — additive, never a replacement. A missing/failed extraction degrades to text-only analysis.
+**Structured resume context:** the `resumeextract` wire shape (contact fields stripped) is the SOLE candidate context of the fit chain (`matchanalysis.Input.StructuredResume`) — the raw CV text is never sent to the model. A missing/failed extraction means NO analysis is produced (the endpoint degrades to `has_cv` with a null analysis); there is deliberately no text-only fallback.
 
 **Code generation:** wire shape generated to TS via `cmd/gen-contracts`.
 

@@ -12,7 +12,7 @@ Best-effort, read-only LLM parse of the stored user CV into a typed `Structured`
 - **An unconfigured/failing LLM leaves upload, embedding, and the deterministic extractors untouched.**
 - **Deletion clears the columns** (`ClearUserResume`).
 - **No new env** — reuses `LLM_*`.
-- **Additive to fit analysis, never a replacement:** the structured shape is fed as Stage-1 context to `matchanalysis`; missing/failed extraction degrades to text-only analysis.
+- **Sole candidate context of the fit analysis, never an add-on:** the structured shape (contacts stripped) is the ONLY candidate text `matchanalysis` sends to the model; a missing/failed extraction means the fit chain produces no analysis — there is deliberately no raw-CV/text-only fallback.
 
 ## How it works
 
@@ -22,7 +22,7 @@ Best-effort, read-only LLM parse of the stored user CV into a typed `Structured`
 
 **Persistence:** stored read-only per user on `users` (`resume_structured` jsonb + `resume_structured_model` + `resume_structured_uploaded_at`, migration `0011`), stamped with the résumé upload time it was derived from (captured up front, not `now()`). The `resume_structured_model` column is kept only as provenance for a future backfill.
 
-**Serving:** exposed on `GET /api/v1/me/resume` (new `structured` field, null when absent/stale/unconfigured). Rendered read-only in the profile's readiness tab (`ResumeStructuredView.svelte`). Fed into the fit chain as `matchanalysis.Input.StructuredResume` — pre-normalized Stage-1 context beside the raw CV text.
+**Serving:** exposed on `GET /api/v1/me/resume` (new `structured` field, null when absent/stale/unconfigured). Rendered read-only in the profile's readiness tab (`ResumeStructuredView.svelte`). Fed into the fit chain as `matchanalysis.Input.StructuredResume` — the sole (de-identified) candidate context.
 
 **Wire shape:** generated to TS via `cmd/gen-contracts`.
 

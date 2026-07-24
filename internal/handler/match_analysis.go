@@ -236,8 +236,8 @@ func (a *API) cvUploadedAt(c *fiber.Ctx, userID int64) (*time.Time, bool) {
 
 // structuredResumeJSON returns the caller's current structured résumé as JSON for the
 // fit input, or "" when the caller has none current (no résumé, unconfigured LLM, not
-// yet extracted, or stale) — the fit chain then runs on the CV text alone. Best-effort:
-// a read/marshal error degrades to "".
+// yet extracted, or stale) — the fit chain then produces no analysis (the raw CV is
+// never sent as a fallback). Best-effort: a read/marshal error degrades to "".
 func (a *API) structuredResumeJSON(c *fiber.Ctx, userID int64) string {
 	if !a.resume.Enabled() {
 		return ""
