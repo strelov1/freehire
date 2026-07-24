@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/strelov1/freehire/internal/job"
+	"github.com/strelov1/freehire/internal/jobderive"
 	"github.com/strelov1/freehire/internal/normalize"
 )
 
@@ -12,14 +13,14 @@ import (
 // internally, so a constructed Job always carries facets consistent with its
 // source fields. A caller never touches the facet fields.
 func TestNew_DerivesFacetsFromDraft(t *testing.T) {
-	j, err := job.New(job.Draft{
+	j, err := job.New(job.Draft{Input: jobderive.Input{
 		Source:      "manual",
 		ExternalID:  "https://acme.example/jobs/1",
 		Title:       "Senior Go Developer",
 		Company:     "Acme",
 		Location:    "Remote - Germany",
 		Description: "We use Golang and PostgreSQL.",
-	})
+	}})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -53,7 +54,7 @@ func TestNew_DerivesFacetsFromDraft(t *testing.T) {
 // A freshly constructed Job is open and unenriched: no lifecycle or enrichment
 // state until the write/enrich paths set it.
 func TestNew_FreshJobIsOpenAndUnenriched(t *testing.T) {
-	j, err := job.New(job.Draft{Source: "manual", ExternalID: "1", Title: "Engineer", Company: "Acme"})
+	j, err := job.New(job.Draft{Input: jobderive.Input{Source: "manual", ExternalID: "1", Title: "Engineer", Company: "Acme"}})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -72,12 +73,12 @@ func TestNew_FreshJobIsOpenAndUnenriched(t *testing.T) {
 // single construction door delivers — the tg-extract inline-derive divergence is
 // now unrepresentable.
 func TestNew_FacetsIndependentOfWritePath(t *testing.T) {
-	content := job.Draft{
+	content := job.Draft{Input: jobderive.Input{
 		Title:       "Senior Go Developer",
 		Company:     "Acme",
 		Location:    "Remote - Germany",
 		Description: "We use Golang and Kubernetes.",
-	}
+	}}
 	tg := content
 	tg.Source, tg.ExternalID = "telegram", "chan/1/0"
 	board := content
@@ -108,9 +109,9 @@ func TestNew_FacetsIndependentOfWritePath(t *testing.T) {
 // the dedup key, and a title-less posting is not a job.
 func TestNew_RejectsMissingIdentity(t *testing.T) {
 	cases := map[string]job.Draft{
-		"no source":      {ExternalID: "1", Title: "Engineer"},
-		"no external id": {Source: "manual", Title: "Engineer"},
-		"no title":       {Source: "manual", ExternalID: "1"},
+		"no source":      {Input: jobderive.Input{ExternalID: "1", Title: "Engineer"}},
+		"no external id": {Input: jobderive.Input{Source: "manual", Title: "Engineer"}},
+		"no title":       {Input: jobderive.Input{Source: "manual", ExternalID: "1"}},
 	}
 	for name, d := range cases {
 		if _, err := job.New(d); err == nil {
@@ -122,7 +123,7 @@ func TestNew_RejectsMissingIdentity(t *testing.T) {
 // An explicit region/city on the draft is authoritative: it overrides what the location
 // dictionary would derive, while an unsupplied facet still derives (see jobderive).
 func TestNew_ExplicitRegionCityOverrideDerivation(t *testing.T) {
-	j, err := job.New(job.Draft{
+	j, err := job.New(job.Draft{Input: jobderive.Input{
 		Source:      "manual",
 		ExternalID:  "https://acme.example/jobs/1",
 		Title:       "Senior Go Developer",
@@ -131,7 +132,7 @@ func TestNew_ExplicitRegionCityOverrideDerivation(t *testing.T) {
 		Description: "We use Golang.",
 		Regions:     []string{"north_america"},
 		Cities:      []string{"Austin"},
-	})
+	}})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -149,10 +150,7 @@ func TestNew_ExplicitRegionCityOverrideDerivation(t *testing.T) {
 func TestNew_CarriesManualSalary(t *testing.T) {
 	min, max := 90000, 120000
 	j, err := job.New(job.Draft{
-		Source:       "manual",
-		ExternalID:   "https://acme.example/jobs/1",
-		Title:        "Senior Go Developer",
-		Company:      "Acme",
+		Input:        jobderive.Input{Source: "manual", ExternalID: "https://acme.example/jobs/1", Title: "Senior Go Developer", Company: "Acme"},
 		ManualSalary: &job.Salary{Min: &min, Max: &max, Currency: "EUR", Period: "year"},
 	})
 	if err != nil {
@@ -171,7 +169,7 @@ func TestNew_CarriesManualSalary(t *testing.T) {
 }
 
 func TestNew_NoManualSalaryByDefault(t *testing.T) {
-	j, err := job.New(job.Draft{Source: "manual", ExternalID: "u", Title: "Go Dev", Company: "Acme"})
+	j, err := job.New(job.Draft{Input: jobderive.Input{Source: "manual", ExternalID: "u", Title: "Go Dev", Company: "Acme"}})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

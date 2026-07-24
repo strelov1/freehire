@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/strelov1/freehire/internal/job"
+	"github.com/strelov1/freehire/internal/jobderive"
 )
 
 func TestFromDomain_IsTechFacet(t *testing.T) {
@@ -18,7 +19,7 @@ func TestFromDomain_IsTechFacet(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			j, err := job.New(job.Draft{Source: "src", ExternalID: "ext", Title: tt.title})
+			j, err := job.New(job.Draft{Input: jobderive.Input{Source: "src", ExternalID: "ext", Title: tt.title}})
 			if err != nil {
 				t.Fatalf("New: %v", err)
 			}

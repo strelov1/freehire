@@ -17,6 +17,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/job"
+	"github.com/strelov1/freehire/internal/jobderive"
 	"github.com/strelov1/freehire/internal/sources"
 )
 
@@ -241,16 +242,18 @@ func derive(source, externalID, title, company, location, description string, re
 		workMode = remoteWorkMode(remote)
 	}
 	j, err := job.New(job.Draft{
-		Source:       source,
-		ExternalID:   externalID,
-		Title:        title,
-		Company:      company,
-		Location:     location,
-		Description:  description,
-		WorkMode:     workMode,
-		Regions:      s.Regions,
-		Cities:       s.Cities,
-		Skills:       s.Skills,
+		Input: jobderive.Input{
+			Source:      source,
+			ExternalID:  externalID,
+			Title:       title,
+			Company:     company,
+			Location:    location,
+			Description: description,
+			WorkMode:    workMode,
+			Regions:     s.Regions,
+			Cities:      s.Cities,
+			Skills:      s.Skills,
+		},
 		ManualSalary: s.Salary,
 	})
 	if err != nil {
