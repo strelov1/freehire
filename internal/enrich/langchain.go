@@ -15,6 +15,12 @@ import (
 // oversized posting from amplifying per-call token cost.
 const maxDescriptionRunes = 24000
 
+// maxFieldRunes caps the short untrusted header fields (title, company, location, URL)
+// the same way: they come from the same scraped source as the description and deserve
+// a symmetric bound. 500 runes never fires on a real posting — even a slug-based ATS
+// URL with tracking params fits — it only stops garbage.
+const maxFieldRunes = 500
+
 // LangChainProvider implements Provider over any OpenAI-compatible endpoint via
 // the shared llm client. The model is asked for a JSON object matching the
 // Enrichment contract.
@@ -140,12 +146,12 @@ func buildSystemPrompt(askGeo bool) string {
 
 func userPrompt(job JobInput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Title: %s\n", job.Title)
-	fmt.Fprintf(&b, "Company: %s\n", job.Company)
-	fmt.Fprintf(&b, "Location: %s\n", job.Location)
+	fmt.Fprintf(&b, "Title: %s\n", llm.TruncateRunes(job.Title, maxFieldRunes))
+	fmt.Fprintf(&b, "Company: %s\n", llm.TruncateRunes(job.Company, maxFieldRunes))
+	fmt.Fprintf(&b, "Location: %s\n", llm.TruncateRunes(job.Location, maxFieldRunes))
 	// The URL path can encode the location/role on some ATS even when the Location
 	// field is empty (e.g. SuccessFactors /job/<City>-<Title>/<id>/).
-	fmt.Fprintf(&b, "URL: %s\n", job.URL)
+	fmt.Fprintf(&b, "URL: %s\n", llm.TruncateRunes(job.URL, maxFieldRunes))
 	// Source-provided remote hint (from the ATS API or the location text) — a
 	// prior for the model, not a guarantee of scope.
 	fmt.Fprintf(&b, "Remote flag: %t\n", job.Remote)
