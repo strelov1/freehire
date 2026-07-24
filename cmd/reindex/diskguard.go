@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"syscall"
 )
 
@@ -18,7 +19,13 @@ func guardDisk(dir string, minFreeGB int, probe func(string) (uint64, error)) er
 	}
 	free, err := probe(dir)
 	if err != nil {
-		return fmt.Errorf("reindex: measure free disk on %s: %w", dir, err)
+		// Fail open: the guard is a best-effort safety net, not a correctness gate. If the
+		// dir cannot be measured (e.g. it does not exist off the prod host, as in CI/dev),
+		// skip the guard rather than block reindex everywhere. A misconfigured MEILI_DATA_DIR
+		// on prod thus silently disables the guard, so log it loudly — the disk alert is the
+		// backstop.
+		log.Printf("reindex: disk-guard skipped — cannot measure free space on %s: %v", dir, err)
+		return nil
 	}
 	required := uint64(minFreeGB) << 30
 	if free < required {

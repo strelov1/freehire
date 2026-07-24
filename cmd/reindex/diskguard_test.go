@@ -38,11 +38,14 @@ func TestGuardDisk_DisabledWhenFloorZero(t *testing.T) {
 	}
 }
 
-func TestGuardDisk_PropagatesProbeError(t *testing.T) {
-	sentinel := errors.New("statfs boom")
-	probe := func(string) (uint64, error) { return 0, sentinel }
+// The guard is a best-effort safety net, not a correctness gate: if it cannot measure
+// the dir (e.g. MEILI_DATA_DIR does not exist off the prod host, as in CI/dev), it must
+// fail OPEN — skip the guard and let reindex proceed — rather than block reindex
+// everywhere it cannot statfs the path.
+func TestGuardDisk_SkipsWhenProbeFails(t *testing.T) {
+	probe := func(string) (uint64, error) { return 0, errors.New("statfs boom") }
 
-	if err := guardDisk("/data/meili", 70, probe); !errors.Is(err, sentinel) {
-		t.Fatalf("expected probe error to propagate, got: %v", err)
+	if err := guardDisk("/data/meili", 70, probe); err != nil {
+		t.Fatalf("probe failure must fail open (skip guard), got: %v", err)
 	}
 }
