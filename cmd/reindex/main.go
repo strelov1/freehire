@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/strelov1/freehire/internal/config"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/search"
@@ -117,29 +118,15 @@ func run() int {
 		log.Printf("reindex: suppressed aggregator duplicates (%d rows re-marked)", n)
 	}
 
-	var b rebuilder = client.NewFacetRebuild()
-	if semantic {
-		b = client.NewSemanticRebuild()
-		if fromPG {
-			b = client.NewSemanticRebuildFromPG()
-		}
-	}
-	// The semantic rebuild optionally scopes to a fresh posting window (--posted-within);
-	// every other full pass scans the whole table. A scoped reader returns open jobs only,
-	// which the swap rebuild wants anyway (closed jobs are simply absent).
+	// The rebuild optionally scopes to a fresh posting window (--posted-within); every
+	// other pass scans the whole table. A scoped reader returns open jobs only, which the
+	// rebuild wants anyway (closed jobs are simply absent).
 	reader := worker.NewFullScanReader(q)
 	scope := "full"
 	if scoped {
 		reader = worker.NewPostedSinceReader(q, time.Now().Add(-postedWithin))
 		scope = "posted-within " + postedWithin.String()
 	}
-	vectors := "n/a"
-	if semantic {
-		if vectors = "tei"; fromPG {
-			vectors = "pg"
-		}
-	}
-	log.Printf("reindex: target=%s scope=%s mode=swap vectors=%s", target, scope, vectors)
 	lookup, err := buildRealityLookup(ctx, q)
 	if err != nil {
 		log.Printf("reindex: build reality lookup: %v", err)
@@ -150,13 +137,55 @@ func run() int {
 		log.Printf("reindex: build cluster geo lookup: %v", err)
 		return 1
 	}
+
+	// --from-pg rehydrates the semantic index IN PLACE from the vectors already in Postgres:
+	// reset the live index and re-fill it with no TEI embedding, no rebuild copy, and no
+	// swap. Peak disk is a single copy, so this path skips the disk-guard entirely.
+	if semantic && fromPG {
+		log.Printf("reindex: target=semantic scope=%s mode=in-place vectors=pg", scope)
+		rh := semanticFromPG{c: client}
+		indexed, skipped, err := reindexSemanticFromPG(ctx, reader, rh, lookup, geo, time.Now())
+		if err != nil {
+			log.Printf("reindex: %v", err)
+			return 1
+		}
+		log.Printf("reindex done: target=semantic scope=%s mode=in-place indexed=%d skipped=%d", scope, indexed, skipped)
+		return 0
+	}
+
+	// Every other pass builds a fresh index and atomically swaps it in — transiently a
+	// second full copy of the index. On a tight disk that fills the volume and aborts
+	// before the swap, orphaning the rebuild index; guard the free space before starting.
+	rcfg := config.LoadReindex()
+	if err := guardDisk(rcfg.MeiliDataDir, rcfg.MinFreeGB, statfsFree); err != nil {
+		log.Printf("reindex: %v", err)
+		return 1
+	}
+	var b rebuilder = client.NewFacetRebuild()
+	vectors := "n/a"
+	if semantic {
+		b = client.NewSemanticRebuild()
+		vectors = "tei"
+	}
+	log.Printf("reindex: target=%s scope=%s mode=swap vectors=%s", target, scope, vectors)
 	indexed, skipped, err := reindexFull(ctx, reader, b, lookup, geo, time.Now())
 	if err != nil {
 		log.Printf("reindex: %v", err)
 		return 1
 	}
-	log.Printf("reindex done: target=%s scope=full indexed=%d skipped=%d", target, indexed, skipped)
+	log.Printf("reindex done: target=%s scope=%s indexed=%d skipped=%d", target, scope, indexed, skipped)
 	return 0
+}
+
+// semanticFromPG adapts the search client to the semanticRehydrator orchestration used by
+// reindexSemanticFromPG: a Reset that clears the live jobs_semantic index and a PushFromPG
+// that upserts Postgres-persisted vectors straight into it, both in place (no swap).
+type semanticFromPG struct{ c *search.Client }
+
+func (s semanticFromPG) Reset(ctx context.Context) error { return s.c.ResetSemanticIndex(ctx) }
+
+func (s semanticFromPG) PushFromPG(ctx context.Context, docs []search.JobDocument) error {
+	return s.c.IndexSemanticJobsFromPG(ctx, docs)
 }
 
 // postedWithinFrom parses an optional --posted-within <duration> / --posted-within=<duration>
@@ -224,6 +253,9 @@ type rebuilder interface {
 	Prepare(ctx context.Context) error
 	Push(ctx context.Context, docs []search.JobDocument) error
 	Promote(ctx context.Context) error
+	// Cleanup drops a half-built rebuild index. reindexFull defers it so a run that
+	// aborts before Promote's swap-and-drop does not leave an orphan index eating disk.
+	Cleanup(ctx context.Context) error
 }
 
 // reindexFull rebuilds the index from scratch and swaps it in. It streams ONLY
@@ -236,6 +268,41 @@ func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, loo
 		return 0, 0, err
 	}
 
+	// Promote ends the happy path by swapping the rebuild index in and dropping the old
+	// one; any earlier return is an abort that leaves the half-built rebuild index behind.
+	// Drop it in a defer so an aborted run never orphans an index that eats disk until the
+	// next run's Prepare clears it. Best-effort on a cancellation-immune context so it can
+	// still reach Meilisearch when the abort was the parent ctx being cancelled.
+	promoted := false
+	defer func() {
+		if promoted {
+			return
+		}
+		cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		if err := b.Cleanup(cctx); err != nil {
+			log.Printf("reindex: cleanup aborted rebuild index (best-effort): %v", err)
+		}
+	}()
+
+	indexed, skipped, err := streamOpenDocs(ctx, reader, lookup, geo, now, b.Push)
+	if err != nil {
+		return indexed, skipped, err
+	}
+
+	if err := b.Promote(ctx); err != nil {
+		return indexed, skipped, err
+	}
+	promoted = true
+	return indexed, skipped, nil
+}
+
+// streamOpenDocs pages the reindex feed by keyset and pushes each batch's open-job
+// documents through push, returning the running indexed/skipped totals. Shared by the
+// swap rebuild (reindexFull) and the in-place semantic rehydration
+// (reindexSemanticFromPG): only the per-batch sink and the surrounding index lifecycle
+// differ.
+func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realityLookup, geo clusterGeoLookup, now time.Time, push func(context.Context, []search.JobDocument) error) (int, int, error) {
 	var indexed atomic.Int64
 	stopHeartbeat := worker.Heartbeat(progressInterval, func() {
 		log.Printf("reindex: progress indexed=%d", indexed.Load())
@@ -256,7 +323,7 @@ func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, loo
 			if err != nil {
 				return int(indexed.Load()), skipped, err
 			}
-			if err := b.Push(ctx, docs); err != nil {
+			if err := push(ctx, docs); err != nil {
 				return int(indexed.Load()), skipped, err
 			}
 			indexed.Add(int64(len(docs)))
@@ -270,11 +337,30 @@ func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, loo
 		}
 		afterID = lastID
 	}
-
-	if err := b.Promote(ctx); err != nil {
-		return int(indexed.Load()), skipped, err
-	}
 	return int(indexed.Load()), skipped, nil
+}
+
+// semanticRehydrator rebuilds jobs_semantic IN PLACE from the vectors already stored in
+// Postgres: Reset clears the live index to empty, PushFromPG upserts open-job vectors
+// straight into it. No rebuild copy and no swap, so it never transiently doubles disk
+// usage the way the swap rebuild (rebuilder) does — the reason a from-PG rebuild takes
+// this path. The tradeoff is that /similar and recommendations see a partial index while
+// the rehydration runs; acceptable because the semantic index is disposable (Postgres is
+// the source of truth for the vectors).
+type semanticRehydrator interface {
+	Reset(ctx context.Context) error
+	PushFromPG(ctx context.Context, docs []search.JobDocument) error
+}
+
+// reindexSemanticFromPG resets the live jobs_semantic index and re-fills it in place from
+// the vectors persisted in Postgres, streaming only open jobs. Unlike reindexFull there
+// is no Prepare/Promote/swap and thus no disk-guard need — dropping the old index before
+// the fill means the peak footprint is ~one copy, never two.
+func reindexSemanticFromPG(ctx context.Context, reader worker.PageReader, rh semanticRehydrator, lookup realityLookup, geo clusterGeoLookup, now time.Time) (int, int, error) {
+	if err := rh.Reset(ctx); err != nil {
+		return 0, 0, err
+	}
+	return streamOpenDocs(ctx, reader, lookup, geo, now, rh.PushFromPG)
 }
 
 // realityLookup returns a role cluster's repost and concurrent-open counts for the

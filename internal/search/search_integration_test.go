@@ -702,9 +702,6 @@ func TestIntegration_RebuildSwapsFreshIndexAndDropsOld(t *testing.T) {
 func TestIntegration_SemanticRebuildFromPG(t *testing.T) {
 	ctx := context.Background()
 	c := startMeili(t)
-	if err := c.EnsureSemanticIndex(ctx); err != nil {
-		t.Fatalf("EnsureSemanticIndex: %v", err)
-	}
 
 	vec := func(seed float32) []float32 {
 		v := make([]float32, embedderDimensions)
@@ -726,15 +723,13 @@ func TestIntegration_SemanticRebuildFromPG(t *testing.T) {
 			Enrichment:  enrichedJSON(t, enrich.Enrichment{})}, // no persisted vector
 	}
 
-	b := c.NewSemanticRebuildFromPG()
-	if err := b.Prepare(ctx); err != nil {
-		t.Fatalf("Prepare: %v", err)
+	// In-place rehydration: reset the live index to empty, then upsert the Postgres
+	// vectors straight into it (no rebuild copy, no swap).
+	if err := c.ResetSemanticIndex(ctx); err != nil {
+		t.Fatalf("ResetSemanticIndex: %v", err)
 	}
-	if err := b.Push(ctx, toDocs(t, jobs)); err != nil {
-		t.Fatalf("Push: %v", err)
-	}
-	if err := b.Promote(ctx); err != nil {
-		t.Fatalf("Promote: %v", err)
+	if err := c.IndexSemanticJobsFromPG(ctx, toDocs(t, jobs)); err != nil {
+		t.Fatalf("IndexSemanticJobsFromPG: %v", err)
 	}
 
 	got, err := c.ListSemanticVectors(ctx, 0, 100)

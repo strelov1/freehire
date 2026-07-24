@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -132,8 +134,9 @@ func TestSplitJobs_CanonGetsClusterGeoUnion(t *testing.T) {
 // pushed batch, so a unit test can pin the full-rebuild orchestration without a
 // real Meilisearch.
 type fakeRebuilder struct {
-	calls  []string
-	pushed [][]int64
+	calls   []string
+	pushed  [][]int64
+	pushErr error // when set, Push returns it after recording — simulates a mid-build abort
 }
 
 func (f *fakeRebuilder) Prepare(context.Context) error {
@@ -148,11 +151,16 @@ func (f *fakeRebuilder) Push(_ context.Context, docs []search.JobDocument) error
 		ids[i] = d.ID
 	}
 	f.pushed = append(f.pushed, ids)
-	return nil
+	return f.pushErr
 }
 
 func (f *fakeRebuilder) Promote(context.Context) error {
 	f.calls = append(f.calls, "promote")
+	return nil
+}
+
+func (f *fakeRebuilder) Cleanup(context.Context) error {
+	f.calls = append(f.calls, "cleanup")
 	return nil
 }
 
@@ -188,6 +196,39 @@ func TestReindexFull_PushesOpenDocsThenPromotes(t *testing.T) {
 	}
 }
 
+// An aborted rebuild (Push fails mid-build, so Promote's swap-and-drop never runs)
+// must drop its half-built rebuild index via the deferred Cleanup — otherwise the
+// orphan index eats disk until the next run's Prepare clears it.
+func TestReindexFull_CleansUpOnAbort(t *testing.T) {
+	reader := &fakePageReader{pages: map[int64][]db.Job{0: {{ID: 1, Title: "A", PublicSlug: "a"}}}}
+	f := &fakeRebuilder{pushErr: errors.New("push boom")}
+
+	_, _, err := reindexFull(context.Background(), reader, f, nil, nil, time.Now())
+	if err == nil {
+		t.Fatal("expected reindexFull to return the push error")
+	}
+	if !slices.Contains(f.calls, "cleanup") {
+		t.Errorf("expected cleanup after abort, calls = %v", f.calls)
+	}
+	if slices.Contains(f.calls, "promote") {
+		t.Errorf("promote must not run after a push abort, calls = %v", f.calls)
+	}
+}
+
+// A successful rebuild swaps-and-drops in Promote, so the deferred Cleanup must NOT
+// run — a second drop of the (already-swapped) rebuild uid is pointless work.
+func TestReindexFull_NoCleanupOnSuccess(t *testing.T) {
+	reader := &fakePageReader{pages: map[int64][]db.Job{0: {{ID: 1, Title: "A", PublicSlug: "a"}}}}
+	f := &fakeRebuilder{}
+
+	if _, _, err := reindexFull(context.Background(), reader, f, nil, nil, time.Now()); err != nil {
+		t.Fatalf("reindexFull: %v", err)
+	}
+	if slices.Contains(f.calls, "cleanup") {
+		t.Errorf("cleanup must not run on success, calls = %v", f.calls)
+	}
+}
+
 // A corrupted row (its Batch read faults with XX001) must not abort the rebuild:
 // ResilientPage degrades to per-row reads, the corrupted row is skipped, the rest
 // are indexed, and the fresh index still promotes.
@@ -215,6 +256,58 @@ func TestReindexFull_SkipsCorruptedRowAndPromotes(t *testing.T) {
 	}
 	if f.calls[len(f.calls)-1] != "promote" {
 		t.Errorf("expected promote at the end, calls = %v", f.calls)
+	}
+}
+
+// fakeRehydrator records the in-place semantic-rehydration orchestration without a
+// real Meilisearch: it resets the live index once, then upserts open-job batches.
+type fakeRehydrator struct {
+	calls   []string
+	pushed  [][]int64
+	pushErr error
+}
+
+func (f *fakeRehydrator) Reset(context.Context) error {
+	f.calls = append(f.calls, "reset")
+	return nil
+}
+
+func (f *fakeRehydrator) PushFromPG(_ context.Context, docs []search.JobDocument) error {
+	f.calls = append(f.calls, "push")
+	ids := make([]int64, len(docs))
+	for i, d := range docs {
+		ids[i] = d.ID
+	}
+	f.pushed = append(f.pushed, ids)
+	return f.pushErr
+}
+
+// An in-place from-PG rebuild resets the live jobs_semantic to empty ONCE, then upserts
+// only open jobs' vectors straight into it — no rebuild copy, no swap. Closed jobs are
+// absent (the fresh index never held them).
+func TestReindexSemanticFromPG_ResetsThenPushesOpen(t *testing.T) {
+	open1 := db.Job{ID: 1, Title: "A", PublicSlug: "a"}
+	closed := db.Job{ID: 2, Title: "B", PublicSlug: "b",
+		ClosedAt: pgtype.Timestamptz{Time: time.Unix(1, 0), Valid: true}}
+	open3 := db.Job{ID: 3, Title: "C", PublicSlug: "c"}
+	reader := &fakePageReader{pages: map[int64][]db.Job{0: {open1, closed, open3}}}
+
+	f := &fakeRehydrator{}
+	indexed, skipped, err := reindexSemanticFromPG(context.Background(), reader, f, nil, nil, time.Now())
+	if err != nil {
+		t.Fatalf("reindexSemanticFromPG: %v", err)
+	}
+	if indexed != 2 || skipped != 0 {
+		t.Errorf("indexed=%d skipped=%d, want indexed=2 skipped=0", indexed, skipped)
+	}
+	if len(f.calls) == 0 || f.calls[0] != "reset" {
+		t.Errorf("reset must run first, calls = %v", f.calls)
+	}
+	if slices.Contains(f.calls, "promote") {
+		t.Errorf("in-place rebuild must not swap/promote, calls = %v", f.calls)
+	}
+	if len(f.pushed) != 1 || !slices.Equal(f.pushed[0], []int64{1, 3}) {
+		t.Errorf("pushed = %v, want [[1 3]] (closed job 2 absent)", f.pushed)
 	}
 }
 

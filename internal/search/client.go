@@ -165,11 +165,8 @@ type Rebuild struct {
 	// semantic marks this a hybrid-index rebuild: Push embeds each batch (via TEI) and
 	// attaches the vectors, since the semantic index uses a userProvided embedder.
 	semantic bool
-	// fromPG makes a semantic rebuild rehydrate from the vectors persisted in Postgres
-	// (jobs.semantic_embedding) instead of re-embedding via TEI — the fast recovery path.
-	fromPG  bool
-	rebuild meilisearch.IndexManager
-	tasks   []int64
+	rebuild  meilisearch.IndexManager
+	tasks    []int64
 }
 
 // NewFacetRebuild starts a full rebuild of the facet/keyword production index.
@@ -180,15 +177,6 @@ func (c *Client) NewFacetRebuild() *Rebuild {
 // NewSemanticRebuild starts a full rebuild of the hybrid semantic index.
 func (c *Client) NewSemanticRebuild() *Rebuild {
 	return &Rebuild{c: c, liveUID: semanticIndexUID, rebuildUID: semanticRebuildUID, settings: semanticSettings(), semantic: true}
-}
-
-// NewSemanticRebuildFromPG starts a full rebuild of the hybrid semantic index that
-// rehydrates from the vectors already stored in Postgres instead of re-embedding via
-// TEI. Jobs without a persisted vector are left out of the rebuild (the embed worker
-// fills them incrementally). Use it to restore the index after a Meili data loss
-// without paying the weeks-long re-embedding cost.
-func (c *Client) NewSemanticRebuildFromPG() *Rebuild {
-	return &Rebuild{c: c, liveUID: semanticIndexUID, rebuildUID: semanticRebuildUID, settings: semanticSettings(), semantic: true, fromPG: true}
 }
 
 // Prepare creates a fresh, empty rebuild index with this pass's settings, ready to
@@ -229,23 +217,16 @@ func (r *Rebuild) Push(ctx context.Context, docs []JobDocument) error {
 	}
 	// The semantic index stores userProvided vectors, so a semantic rebuild embeds each
 	// batch (via TEI) and pushes documents carrying their vectors; the facet rebuild
-	// pushes the plain documents.
+	// pushes the plain documents. (A from-Postgres rehydration does NOT use this swap
+	// path — see the in-place ResetSemanticIndex/IndexSemanticJobsFromPG.)
 	var payload any = docs
 	if r.semantic {
-		var sdocs []semanticDocument
-		if r.fromPG {
-			// Rehydrate: reuse the vectors already stored in Postgres, no TEI call.
-			// Documents without a persisted vector are dropped from this batch (the
-			// embed worker fills them incrementally).
-			sdocs = semanticDocsFromPG(docs)
-		} else {
-			var err error
-			if sdocs, err = r.c.embedDocs(ctx, docs); err != nil {
-				return err
-			}
+		sdocs, err := r.c.embedDocs(ctx, docs)
+		if err != nil {
+			return err
 		}
 		if len(sdocs) == 0 {
-			return nil // nothing to push this batch (e.g. none carried a persisted vector)
+			return nil // nothing to push this batch
 		}
 		payload = sdocs
 	}
@@ -271,6 +252,14 @@ func (r *Rebuild) Promote(ctx context.Context) error {
 		return err
 	}
 	// After the swap the old data lives under the rebuild uid; drop it.
+	return r.c.dropIndex(ctx, r.rebuildUID)
+}
+
+// Cleanup drops the rebuild index, tolerating its absence. reindexFull defers it so a
+// run that aborts before Promote (whose swap-and-drop is the normal teardown) does not
+// leave an orphan rebuild index — which otherwise eats ~index-size of disk until the
+// next run's Prepare clears it. Idempotent.
+func (r *Rebuild) Cleanup(ctx context.Context) error {
 	return r.c.dropIndex(ctx, r.rebuildUID)
 }
 
@@ -385,6 +374,34 @@ func (c *Client) IndexSemanticJobs(ctx context.Context, docs []JobDocument) (map
 		return nil, err
 	}
 	return vectorsByID(sdocs), nil
+}
+
+// ResetSemanticIndex drops the live semantic index and recreates it empty with the
+// semantic settings, so an in-place from-Postgres rehydration starts from a clean slate.
+// Dropping BEFORE the re-fill (instead of building a rebuild copy and swapping) keeps the
+// peak on-disk footprint at one index, never two — the reason the from-PG path is in-place.
+func (c *Client) ResetSemanticIndex(ctx context.Context) error {
+	if err := c.dropIndex(ctx, semanticIndexUID); err != nil {
+		return err
+	}
+	return c.EnsureSemanticIndex(ctx)
+}
+
+// IndexSemanticJobsFromPG upserts a batch into the live semantic index using the vector
+// each document already carries from Postgres (jobs.semantic_embedding), with no TEI call.
+// Documents without a persisted vector are dropped from the batch (semanticDocsFromPG). It
+// is the in-place rehydration counterpart of IndexSemanticJobs (which embeds via TEI).
+func (c *Client) IndexSemanticJobsFromPG(ctx context.Context, docs []JobDocument) error {
+	sdocs := semanticDocsFromPG(docs)
+	if len(sdocs) == 0 {
+		return nil
+	}
+	pk := primaryKey
+	task, err := c.semantic.UpdateDocumentsWithContext(ctx, sdocs, &meilisearch.DocumentOptions{PrimaryKey: &pk})
+	if err != nil {
+		return fmt.Errorf("search: index semantic documents from pg: %w", err)
+	}
+	return c.awaitTask(ctx, c.semantic, task.TaskUID)
 }
 
 // EmbedJobs computes each document's vector WITHOUT touching Meilisearch, returning them
