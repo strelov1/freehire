@@ -93,7 +93,7 @@
   // Load the first page for the current search term + source filter, then top up
   // until the list overflows its pane so infinite scroll has room to work.
   async function fetchFirstPage() {
-    const res = await api.getInbox(search, PAGE_SIZE, 0, source, unread, label);
+    const res = await api.getInbox({ q: search, limit: PAGE_SIZE, offset: 0, source, unread, status: label });
     messages = res.messages;
     total = res.total;
     await fillViewport();
@@ -126,7 +126,7 @@
 
   async function loadMore() {
     try {
-      const res = await api.getInbox(search, PAGE_SIZE, messages.length, source, unread, label);
+      const res = await api.getInbox({ q: search, limit: PAGE_SIZE, offset: messages.length, source, unread, status: label });
       messages = [...messages, ...res.messages];
       total = res.total;
     } catch (e) {

@@ -1120,18 +1120,23 @@ export function createApi(
    *  Optional search term filters by subject, sender, or body; optional source
    *  narrows to one account (the switcher). */
   async function getInbox(
-    q = '',
-    limit = 20,
-    offset = 0,
-    source: InboxSource = '',
-    unread = false,
-    status = '',
+    opts: {
+      q?: string;
+      limit?: number;
+      offset?: number;
+      source?: InboxSource;
+      unread?: boolean;
+      status?: string;
+    } = {},
   ): Promise<{ messages: InboxMessage[]; total: number }> {
-    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-    if (q) params.set('q', q);
-    if (source) params.set('source', source);
-    if (unread) params.set('unread', '1');
-    if (status) params.set('status', status);
+    const params = new URLSearchParams({
+      limit: String(opts.limit ?? 20),
+      offset: String(opts.offset ?? 0),
+    });
+    if (opts.q) params.set('q', opts.q);
+    if (opts.source) params.set('source', opts.source);
+    if (opts.unread) params.set('unread', '1');
+    if (opts.status) params.set('status', opts.status);
     const res = await request<{ data: InboxMessage[]; meta: { total: number } }>(
       `/api/v1/me/inbox?${params.toString()}`,
     );
