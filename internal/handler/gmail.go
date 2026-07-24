@@ -14,6 +14,12 @@ import (
 	"github.com/strelov1/freehire/internal/gmailsync"
 )
 
+// gmailStateCookieName carries the Gmail-connect CSRF state. It is NOT
+// oauth.StateCookieName: a signed-in user can start a Gmail connect while an
+// OAuth sign-in is in flight in another tab, and one shared cookie would
+// overwrite the other flow's state.
+const gmailStateCookieName = "hire_gmail_state"
+
 // GmailConnect starts the "Connect Gmail" incremental-OAuth flow for the
 // signed-in user: it sets a CSRF state cookie and redirects to Google's consent
 // screen for gmail.readonly.
@@ -22,7 +28,7 @@ func (a *API) GmailConnect(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	oauth.SetStateCookie(c, state, a.cookieSecure)
+	oauth.SetStateCookieNamed(c, gmailStateCookieName, state, a.cookieSecure)
 	return c.Redirect(a.gmailConnector.AuthCodeURL(state), fiber.StatusFound)
 }
 
@@ -40,8 +46,8 @@ func (a *API) GmailCallback(c *fiber.Ctx) error {
 	if !ok {
 		return redirect("gmail_error=auth", errors.New("no authenticated user"))
 	}
-	cookieState := c.Cookies(oauth.StateCookieName)
-	oauth.ClearStateCookie(c, a.cookieSecure)
+	cookieState := c.Cookies(gmailStateCookieName)
+	oauth.ClearStateCookieNamed(c, gmailStateCookieName, a.cookieSecure)
 	if cookieState == "" || c.Query("state") != cookieState {
 		return redirect("gmail_error=state", errors.New("state cookie missing or mismatched"))
 	}
