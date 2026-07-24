@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
-	"strings"
 
 	"github.com/strelov1/freehire/internal/sources"
 )
@@ -86,9 +85,4 @@ func (h habrCareer) Resolve(ctx context.Context, raw string) (sources.Job, bool,
 		// datetime> element, so read that; a missing element leaves posted_at unset.
 		PostedAt: sources.ParseRFC3339(sources.ElementAttr(node, "time", "basic-date", "datetime")),
 	}, true, nil
-}
-
-// host returns u's lowercased hostname with a leading "www." stripped.
-func host(u *url.URL) string {
-	return strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
 }

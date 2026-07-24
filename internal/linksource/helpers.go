@@ -2,6 +2,7 @@ package linksource
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 )
 
@@ -70,4 +71,9 @@ func humanizeBoard(slug string) string {
 		}
 	}
 	return strings.Join(words, " ")
+}
+
+// host returns u's lowercased hostname with a leading "www." stripped.
+func host(u *url.URL) string {
+	return strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
 }
