@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -148,7 +149,9 @@ func (a *API) GetEmail(c *fiber.Ctx) error {
 	if err != nil {
 		return err // pgx.ErrNoRows → 404 via the central error handler
 	}
-	_ = a.queries.MarkEmailRead(c.Context(), db.MarkEmailReadParams{ID: row.ID, UserID: userID})
+	if err := a.queries.MarkEmailRead(c.Context(), db.MarkEmailReadParams{ID: row.ID, UserID: userID}); err != nil {
+		log.Printf("inbox: mark read user=%d email=%d: %v", userID, row.ID, err)
+	}
 	return c.JSON(fiber.Map{"data": emailBody{
 		ID: row.ID, Source: row.Source, ExternalID: row.ExternalID,
 		FromAddr: row.FromAddr, FromName: row.FromName, Subject: row.Subject,
