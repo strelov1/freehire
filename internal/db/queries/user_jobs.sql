@@ -17,6 +17,10 @@ RETURNING *;
 -- a re-apply, via COALESCE). When (and only when) applied_at transitions from
 -- unset to set, bump the job's materialized applied_count in the same statement;
 -- `prior` sees the pre-upsert applied_at, so a re-apply never re-bumps.
+-- MUST run inside a transaction that took LockJobForApply first: `prior` reads
+-- the per-statement snapshot, so without the serializing lock two concurrent
+-- applies would both see applied_at unset and double-bump (same pattern as
+-- LockJobForVote for the vote counters).
 WITH prior AS (
     SELECT uj.applied_at FROM user_jobs uj WHERE uj.user_id = $1 AND uj.job_id = $2
 ), upsert AS (
@@ -206,6 +210,13 @@ SELECT count(*)                                        AS "all",
        count(*) FILTER (WHERE dismissed_at IS NOT NULL) AS dismissed
 FROM user_jobs
 WHERE user_id = $1;
+
+-- name: LockJobForApply :exec
+-- Take the job row's lock so concurrent applies on the same job serialize. Without
+-- it, two applies in the same window under READ COMMITTED each read a snapshot
+-- missing the other's user_jobs row and both bump applied_count. Called first in
+-- the apply transaction, before MarkJobApplied (same pattern as LockJobForVote).
+SELECT 1 FROM jobs WHERE id = $1 FOR UPDATE;
 
 -- name: LockJobForVote :exec
 -- Take the job row's lock so concurrent votes on the same job serialize. Without

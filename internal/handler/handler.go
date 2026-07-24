@@ -321,7 +321,7 @@ func Register(app *fiber.App, cfg Config) {
 		gmailCipher:    cfg.GmailCipher,
 		mailDomain:     cfg.MailboxDomain,
 		browserTools:   browsertools.New(),
-		tracking:       jobtracking.New(jobtracking.NewQueriesRepository(queries)),
+		tracking:       jobtracking.New(jobtracking.NewQueriesRepository(queries, cfg.Pool)),
 		votes:          vote.New(queries, cfg.Pool),
 		accounts:       accounts.New(accounts.NewQueriesRepository(queries, cfg.Pool), authHasher{}),
 		moderation:     moderation.New(moderation.NewQueriesRepository(queries, cfg.Pool, enrich.Version)),
@@ -499,6 +499,10 @@ func Register(app *fiber.App, cfg Config) {
 	// unauthenticated. Jobs are addressed by their public slug; the handlers
 	// resolve it to the internal id before writing user_jobs.
 	keyAuth := auth.RequireAuthOrKey(a.issuer, a.queries)
+	// cookieAuth is the single cookie-only gate (RequireAuth) for the
+	// browser-convenience surfaces below — key management, saved searches, the CV
+	// builder, the inbox, subscriptions — where a leaked API key must not act.
+	cookieAuth := auth.RequireAuth(a.issuer)
 	api.Post("/jobs/:slug/view", keyAuth, a.RecordView)
 	api.Post("/jobs/:slug/apply", keyAuth, a.MarkApplied)
 	api.Post("/jobs/:slug/save", keyAuth, a.SaveJob)
@@ -603,7 +607,6 @@ func Register(app *fiber.App, cfg Config) {
 	// Reads are public — only pseudonymous persona handles are ever exposed, never a
 	// user id — so discussions are browsable without signing in. Writing a thread or
 	// reply requires a signed-in session (cookie); closing a thread is moderator-gated.
-	cookieAuth := auth.RequireAuth(a.issuer)
 	api.Get("/threads", a.ListThreads)
 	// Registered before "/threads/:id" so "count" is not parsed as a thread id.
 	api.Get("/threads/count", a.CountThreads)
@@ -630,48 +633,47 @@ func Register(app *fiber.App, cfg Config) {
 	// API-key management is cookie-only (RequireAuth): a leaked key must not be
 	// able to create, list, or revoke keys. The create endpoint returns the
 	// plaintext token exactly once.
-	api.Post("/me/api-keys", auth.RequireAuth(a.issuer), a.CreateAPIKey)
-	api.Get("/me/api-keys", auth.RequireAuth(a.issuer), a.ListAPIKeys)
-	api.Delete("/me/api-keys/:id", auth.RequireAuth(a.issuer), a.RevokeAPIKey)
+	api.Post("/me/api-keys", cookieAuth, a.CreateAPIKey)
+	api.Get("/me/api-keys", cookieAuth, a.ListAPIKeys)
+	api.Delete("/me/api-keys/:id", cookieAuth, a.RevokeAPIKey)
 
 	// Saved searches are cookie-only (RequireAuth) like API-key management: they are a
 	// browser convenience (the "My filters" picker), not a scripting primitive. Each
 	// operation is owner-scoped; an id that is not the caller's is a 404.
-	saved := auth.RequireAuth(a.issuer)
-	api.Get("/me/searches", saved, a.ListSavedSearches)
-	api.Post("/me/searches", saved, a.CreateSavedSearch)
-	api.Patch("/me/searches/:id", saved, a.UpdateSavedSearch)
-	api.Delete("/me/searches/:id", saved, a.DeleteSavedSearch)
+	api.Get("/me/searches", cookieAuth, a.ListSavedSearches)
+	api.Post("/me/searches", cookieAuth, a.CreateSavedSearch)
+	api.Patch("/me/searches/:id", cookieAuth, a.UpdateSavedSearch)
+	api.Delete("/me/searches/:id", cookieAuth, a.DeleteSavedSearch)
 	// Publish/unpublish a saved search as a public board. Cookie-only (same as the rest
 	// of /me/searches); the public read is GET /boards/:slug above.
-	api.Post("/me/searches/:id/share", saved, a.ShareSavedSearch)
-	api.Delete("/me/searches/:id/share", saved, a.UnshareSavedSearch)
+	api.Post("/me/searches/:id/share", cookieAuth, a.ShareSavedSearch)
+	api.Delete("/me/searches/:id/share", cookieAuth, a.UnshareSavedSearch)
 
 	// The user profile is a cookie-only (RequireAuth) singleton — one per user, keyed
 	// by the session, no id in the path. GET returns the profile or null; PUT upserts
 	// (create-or-replace); DELETE clears it (idempotent).
-	api.Get("/me/profile", saved, a.GetProfile)
-	api.Put("/me/profile", saved, a.PutProfile)
-	api.Delete("/me/profile", saved, a.DeleteProfile)
+	api.Get("/me/profile", cookieAuth, a.GetProfile)
+	api.Put("/me/profile", cookieAuth, a.PutProfile)
+	api.Delete("/me/profile", cookieAuth, a.DeleteProfile)
 
 	// CV builder + AI tailoring: open to every signed-in user (AI credits meter the LLM spend).
 	// Cookie-only, owner-scoped (a foreign id is a 404). The PDF endpoint 501s when no typst
 	// binary is configured; the rest still works.
-	api.Get("/cv-templates", saved, a.ListCVTemplates)
-	api.Get("/me/cvs", saved, a.ListCVs)
-	api.Post("/me/cvs", saved, a.CreateCV)
+	api.Get("/cv-templates", cookieAuth, a.ListCVTemplates)
+	api.Get("/me/cvs", cookieAuth, a.ListCVs)
+	api.Post("/me/cvs", cookieAuth, a.CreateCV)
 	// Read + render accept a key too (keyAuth), so the tailoring agent's CLI can fetch a CV
 	// and its PDF; mutations stay cookie-only (POST/PUT/DELETE — the browser owns authoring).
 	api.Get("/me/cvs/:id", keyAuth, a.GetCV)
-	api.Put("/me/cvs/:id", saved, a.UpdateCV)
+	api.Put("/me/cvs/:id", cookieAuth, a.UpdateCV)
 	// Change only the template (the gallery's one-field switch); cookie-only like other mutations.
-	api.Put("/me/cvs/:id/template", saved, a.SetCVTemplate)
-	api.Delete("/me/cvs/:id", saved, a.DeleteCV)
+	api.Put("/me/cvs/:id/template", cookieAuth, a.SetCVTemplate)
+	api.Delete("/me/cvs/:id", cookieAuth, a.DeleteCV)
 	api.Get("/me/cvs/:id/pdf", keyAuth, a.RenderCVPDF)
 	// Tailoring: the browser starts a session (cookie-only bootstrap); the agent's CLI drives
 	// the edit + context/get/render reads with its minted API key (keyAuth = cookie or Bearer).
-	api.Post("/me/cvs/tailor", saved, a.TailorCV)
-	api.Post("/me/cvs/:id/tailor-session", saved, a.StartTailorSession)
+	api.Post("/me/cvs/tailor", cookieAuth, a.TailorCV)
+	api.Post("/me/cvs/:id/tailor-session", cookieAuth, a.StartTailorSession)
 	api.Patch("/me/cvs/:id", keyAuth, a.PatchCV)
 	api.Put("/me/cvs/:id/session", keyAuth, a.SetCVSession)
 	api.Get("/me/cvs/:id/tailor-context", keyAuth, a.TailorContext)
@@ -679,70 +681,70 @@ func Register(app *fiber.App, cfg Config) {
 	// Mail inbox (Gmail connect + hosted mailbox). Open to every signed-in user.
 	// The read + disconnect routes are always registered (empty/no-op when not
 	// connected); the OAuth connect routes only when configured. Cookie-or-key auth.
-	api.Get("/me/gmail", saved, a.GmailStatus)
-	api.Delete("/me/gmail", saved, a.GmailDisconnect)
-	api.Get("/me/inbox", saved, a.GetInbox)
-	api.Post("/me/inbox/read-all", saved, a.MarkAllReadInbox)
-	api.Get("/me/emails/:id", saved, a.GetEmail)
-	api.Post("/me/emails/:id/delete", saved, a.DeleteEmail)
-	api.Post("/me/emails/:id/restore", saved, a.RestoreEmail)
+	api.Get("/me/gmail", cookieAuth, a.GmailStatus)
+	api.Delete("/me/gmail", cookieAuth, a.GmailDisconnect)
+	api.Get("/me/inbox", cookieAuth, a.GetInbox)
+	api.Post("/me/inbox/read-all", cookieAuth, a.MarkAllReadInbox)
+	api.Get("/me/emails/:id", cookieAuth, a.GetEmail)
+	api.Post("/me/emails/:id/delete", cookieAuth, a.DeleteEmail)
+	api.Post("/me/emails/:id/restore", cookieAuth, a.RestoreEmail)
 	// Email → application linking. :slug is registered after the static
 	// /me/tracking/* routes above so it does not shadow them.
-	api.Get("/me/tracking/:slug", saved, a.GetTrackedApplication)
-	api.Post("/me/emails/:id/link", saved, a.LinkEmail)
-	api.Post("/me/emails/:id/unlink", saved, a.UnlinkEmail)
-	api.Post("/me/emails/:id/confirm", saved, a.ConfirmEmailLink)
-	api.Post("/me/emails/:id/reject", saved, a.RejectEmailLink)
+	api.Get("/me/tracking/:slug", cookieAuth, a.GetTrackedApplication)
+	api.Post("/me/emails/:id/link", cookieAuth, a.LinkEmail)
+	api.Post("/me/emails/:id/unlink", cookieAuth, a.UnlinkEmail)
+	api.Post("/me/emails/:id/confirm", cookieAuth, a.ConfirmEmailLink)
+	api.Post("/me/emails/:id/reject", cookieAuth, a.RejectEmailLink)
 	if a.gmailReady() {
-		api.Get("/me/gmail/connect", saved, a.GmailConnect)
-		api.Get("/me/gmail/callback", saved, a.GmailCallback)
-		api.Post("/me/gmail/sync", saved, a.SyncGmail)
+		api.Get("/me/gmail/connect", cookieAuth, a.GmailConnect)
+		api.Get("/me/gmail/callback", cookieAuth, a.GmailCallback)
+		api.Post("/me/gmail/sync", cookieAuth, a.SyncGmail)
 	}
 	// Hosted-mailbox option: status is always available (reports unavailable when
 	// the feature is off); claim/release only when a receiving domain is configured.
-	api.Get("/me/mailbox", saved, a.GetMailbox)
+	api.Get("/me/mailbox", cookieAuth, a.GetMailbox)
 	if a.mailboxReady() {
-		api.Post("/me/mailbox", saved, a.ClaimMailbox)
-		api.Delete("/me/mailbox", saved, a.ReleaseMailbox)
+		api.Post("/me/mailbox", cookieAuth, a.ClaimMailbox)
+		api.Delete("/me/mailbox", cookieAuth, a.ReleaseMailbox)
 	}
 	// The résumé verdict is a profile sub-resource: GET computes the live
 	// market-coverage verdict from the profile's skills against the selected role.
 	// Cookie-only and session-scoped, like the profile it hangs off (no profile → 404).
-	api.Get("/me/profile/verdict", saved, a.GetResumeVerdict)
+	api.Get("/me/profile/verdict", cookieAuth, a.GetResumeVerdict)
 	// The CV ATS-readiness report is a sibling profile sub-resource: GET scores the
 	// caller's stored CV (structure + role keyword-match); POST runs the optional LLM
 	// qualitative review over it and caches it. Cookie-only, session-scoped.
-	api.Get("/me/profile/ats-report", saved, a.GetATSReport)
-	api.Post("/me/profile/ats-report", saved, a.PostATSReport)
+	api.Get("/me/profile/ats-report", cookieAuth, a.GetATSReport)
+	api.Post("/me/profile/ats-report", cookieAuth, a.PostATSReport)
 
 	// Resume skill extraction is cookie-only (RequireAuth): it feeds the profile edit
 	// modal (extracted skills merge into the profile). When S3 storage is configured it
 	// also stores the résumé once (the single upload point); when not, it stays stateless
 	// (parsed and discarded, only canonical slugs returned).
-	api.Post("/me/resume/extract", saved, a.ExtractResumeProfile)
+	api.Post("/me/resume/extract", cookieAuth, a.ExtractResumeProfile)
 
 	// Résumé storage (cookie-only): store the résumé once so the verdict's coherence can
 	// reuse it without a second upload. PUT stores/replaces, GET reports status (enabled +
 	// present + uploaded_at), DELETE removes it. 501 from PUT/DELETE when S3 is
 	// unconfigured — the SPA then falls back to per-request upload on the verdict page.
-	api.Put("/me/resume", saved, a.PutResume)
-	api.Get("/me/resume", saved, a.GetResume)
-	api.Delete("/me/resume", saved, a.DeleteResume)
+	api.Put("/me/resume", cookieAuth, a.PutResume)
+	api.Get("/me/resume", cookieAuth, a.GetResume)
+	api.Delete("/me/resume", cookieAuth, a.DeleteResume)
 
 	// Filter subscriptions + Telegram linking are cookie-only (RequireAuth) like
 	// saved searches: a browser convenience, owner-scoped (a non-owned id is 404).
-	api.Get("/me/subscriptions", saved, a.ListSubscriptions)
-	api.Post("/me/subscriptions", saved, a.CreateSubscription)
-	api.Patch("/me/subscriptions/:id", saved, a.SetSubscriptionActive)
-	api.Delete("/me/subscriptions/:id", saved, a.DeleteSubscription)
+	api.Get("/me/subscriptions", cookieAuth, a.ListSubscriptions)
+	api.Post("/me/subscriptions", cookieAuth, a.CreateSubscription)
+	api.Patch("/me/subscriptions/:id", cookieAuth, a.SetSubscriptionActive)
+	api.Delete("/me/subscriptions/:id", cookieAuth, a.DeleteSubscription)
 
 	// Saved-job reminder default rule (enable, default delay, channels). Cookie-only
 	// (RequireAuth) like subscriptions — it configures a delivery preference.
-	api.Get("/me/reminder-settings", saved, a.GetReminderSettings)
-	api.Put("/me/reminder-settings", saved, a.UpdateReminderSettings)
-	api.Post("/me/telegram/link", saved, a.LinkTelegram)
-	api.Get("/me/telegram", saved, a.TelegramLinkStatus)
-	api.Delete("/me/telegram", saved, a.UnlinkTelegram)
+	api.Get("/me/reminder-settings", cookieAuth, a.GetReminderSettings)
+	api.Put("/me/reminder-settings", cookieAuth, a.UpdateReminderSettings)
+	api.Post("/me/telegram/link", cookieAuth, a.LinkTelegram)
+	api.Get("/me/telegram", cookieAuth, a.TelegramLinkStatus)
+	api.Delete("/me/telegram", cookieAuth, a.UnlinkTelegram)
 
 	// The Telegram webhook is the only unauthenticated POST: it is guarded by the
 	// shared secret token Telegram echoes in a header (see TelegramWebhook).
@@ -776,7 +778,6 @@ func Register(app *fiber.App, cfg Config) {
 	// like key management — a leaked key must not mint further keys. GET shows the
 	// consent screen; POST mints a named key and redirects the token in the
 	// fragment. Both refuse any redirect outside the configured allowlist.
-	extAuth := auth.RequireAuth(a.issuer)
-	authGroup.Get("/extension/connect", extAuth, a.ExtensionConnect)
-	authGroup.Post("/extension/connect", extAuth, a.ExtensionConnectSubmit)
+	authGroup.Get("/extension/connect", cookieAuth, a.ExtensionConnect)
+	authGroup.Post("/extension/connect", cookieAuth, a.ExtensionConnectSubmit)
 }

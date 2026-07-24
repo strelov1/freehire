@@ -472,6 +472,19 @@ func (q *Queries) ListViewedJobSlugs(ctx context.Context, userID int64) ([]strin
 	return items, nil
 }
 
+const lockJobForApply = `-- name: LockJobForApply :exec
+SELECT 1 FROM jobs WHERE id = $1 FOR UPDATE
+`
+
+// Take the job row's lock so concurrent applies on the same job serialize. Without
+// it, two applies in the same window under READ COMMITTED each read a snapshot
+// missing the other's user_jobs row and both bump applied_count. Called first in
+// the apply transaction, before MarkJobApplied (same pattern as LockJobForVote).
+func (q *Queries) LockJobForApply(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, lockJobForApply, id)
+	return err
+}
+
 const lockJobForVote = `-- name: LockJobForVote :exec
 SELECT 1 FROM jobs WHERE id = $1 FOR UPDATE
 `
@@ -524,6 +537,10 @@ type MarkJobAppliedRow struct {
 // a re-apply, via COALESCE). When (and only when) applied_at transitions from
 // unset to set, bump the job's materialized applied_count in the same statement;
 // `prior` sees the pre-upsert applied_at, so a re-apply never re-bumps.
+// MUST run inside a transaction that took LockJobForApply first: `prior` reads
+// the per-statement snapshot, so without the serializing lock two concurrent
+// applies would both see applied_at unset and double-bump (same pattern as
+// LockJobForVote for the vote counters).
 func (q *Queries) MarkJobApplied(ctx context.Context, arg MarkJobAppliedParams) (MarkJobAppliedRow, error) {
 	row := q.db.QueryRow(ctx, markJobApplied, arg.UserID, arg.JobID)
 	var i MarkJobAppliedRow

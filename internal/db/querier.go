@@ -959,6 +959,11 @@ type Querier interface {
 	// (see LockJobForVote for the drift this prevents). Called first in the vote
 	// transaction.
 	LockCompanyForVote(ctx context.Context, slug string) error
+	// Take the job row's lock so concurrent applies on the same job serialize. Without
+	// it, two applies in the same window under READ COMMITTED each read a snapshot
+	// missing the other's user_jobs row and both bump applied_count. Called first in
+	// the apply transaction, before MarkJobApplied (same pattern as LockJobForVote).
+	LockJobForApply(ctx context.Context, id int64) error
 	// Take the job row's lock so concurrent votes on the same job serialize. Without
 	// it, two votes in the same window under READ COMMITTED each recompute against a
 	// snapshot missing the other's user_jobs row, permanently undercounting the target
@@ -976,6 +981,10 @@ type Querier interface {
 	// a re-apply, via COALESCE). When (and only when) applied_at transitions from
 	// unset to set, bump the job's materialized applied_count in the same statement;
 	// `prior` sees the pre-upsert applied_at, so a re-apply never re-bumps.
+	// MUST run inside a transaction that took LockJobForApply first: `prior` reads
+	// the per-statement snapshot, so without the serializing lock two concurrent
+	// applies would both see applied_at unset and double-bump (same pattern as
+	// LockJobForVote for the vote counters).
 	MarkJobApplied(ctx context.Context, arg MarkJobAppliedParams) (MarkJobAppliedRow, error)
 	// Record one expired probe: increment the strike counter and, in the same write,
 	// close the job (closed_at) once it reaches the threshold the caller owns — the

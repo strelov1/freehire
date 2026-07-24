@@ -48,7 +48,7 @@ func TestExtensionConnectEndToEnd(t *testing.T) {
 		pool:                       pool,
 		queries:                    queries,
 		issuer:                     iss,
-		tracking:                   jobtracking.New(jobtracking.NewQueriesRepository(queries)),
+		tracking:                   jobtracking.New(jobtracking.NewQueriesRepository(queries, pool)),
 		extensionRedirectAllowlist: []string{extID},
 	}
 

@@ -56,7 +56,7 @@ func TestDismissUndismissEndpoints(t *testing.T) {
 	}
 
 	queries := db.New(pool)
-	h := &API{pool: pool, queries: queries, issuer: iss, tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries))}
+	h := &API{pool: pool, queries: queries, issuer: iss, tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, queries)
 	app.Post("/api/v1/jobs/:slug/dismiss", keyAuth, h.DismissJob)
