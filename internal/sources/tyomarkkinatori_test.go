@@ -40,7 +40,7 @@ func (f *tmtFake) PostJSON(_ context.Context, _ string, body, v any) error {
 func (f *tmtFake) GetJSON(_ context.Context, url string, v any) error {
 	id := url[strings.LastIndex(url, "/")+1:]
 	if f.forbidden[id] {
-		return &StatusError{Code: 403, URL: url}
+		return &StatusError{Method: "GET", Code: 403, URL: url}
 	}
 	body, ok := f.details[id]
 	if !ok {

@@ -31,7 +31,7 @@ func (r *rateLimitedHTTP) GetJSON(_ context.Context, url string, v any) error {
 	r.detailCalls++
 	if r.detailFails > 0 {
 		r.detailFails--
-		return &StatusError{Code: r.failCode, URL: url}
+		return &StatusError{Method: "GET", Code: r.failCode, URL: url}
 	}
 	return json.Unmarshal([]byte(r.detail), v)
 }
