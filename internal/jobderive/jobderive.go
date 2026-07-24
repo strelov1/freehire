@@ -7,7 +7,6 @@ package jobderive
 
 import (
 	"slices"
-	"sort"
 
 	"github.com/strelov1/freehire/internal/classify"
 	"github.com/strelov1/freehire/internal/enrich"
@@ -16,6 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/location"
 	"github.com/strelov1/freehire/internal/normalize"
 	"github.com/strelov1/freehire/internal/skilltag"
+	"github.com/strelov1/freehire/internal/stringset"
 )
 
 // Input is the raw job content the derivation reads. Source and ExternalID are the
@@ -225,10 +225,5 @@ func unionSkills(source, dict []string) []string {
 	for _, s := range dict {
 		set[s] = struct{}{}
 	}
-	out := make([]string, 0, len(set))
-	for s := range set {
-		out = append(out, s)
-	}
-	sort.Strings(out)
-	return out
+	return stringset.Sorted(set)
 }
