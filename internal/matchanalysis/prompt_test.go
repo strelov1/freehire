@@ -4,8 +4,8 @@ import "strings"
 
 import "testing"
 
-func TestStage1Prompt_SendsDeIdentifiedStructuredNotRawCV(t *testing.T) {
-	in := Input{JobTitle: "Go Engineer", CVText: "raw cv", StructuredResume: `{"full_name":"Jane","email":"jane@x.com","summary":"Go dev"}`}
+func TestStage1Prompt_SendsDeIdentifiedStructured(t *testing.T) {
+	in := Input{JobTitle: "Go Engineer", StructuredResume: `{"full_name":"Jane","email":"jane@x.com","summary":"Go dev"}`}
 	got := stage1UserPrompt(in, candidateContext(in.StructuredResume))
 	if !strings.Contains(got, `"summary":"Go dev"`) {
 		t.Errorf("stage1 prompt missing the structured candidate context:\n%s", got)
@@ -13,18 +13,12 @@ func TestStage1Prompt_SendsDeIdentifiedStructuredNotRawCV(t *testing.T) {
 	if strings.Contains(got, "Jane") || strings.Contains(got, "jane@x.com") {
 		t.Errorf("contacts must be stripped from the candidate context:\n%s", got)
 	}
-	if strings.Contains(got, "raw cv") {
-		t.Errorf("the raw CV must never be sent to the model:\n%s", got)
-	}
 }
 
 func TestStage1Prompt_OmitsCandidateBlockWhenNoStructured(t *testing.T) {
-	withEmpty := stage1UserPrompt(Input{JobTitle: "Go Engineer", CVText: "raw cv"}, candidateContext(""))
+	withEmpty := stage1UserPrompt(Input{JobTitle: "Go Engineer"}, candidateContext(""))
 	if strings.Contains(withEmpty, "Candidate (structured résumé") {
 		t.Errorf("stage1 prompt should omit the candidate block when there is no structured résumé:\n%s", withEmpty)
-	}
-	if strings.Contains(withEmpty, "raw cv") {
-		t.Errorf("the raw CV must never be sent to the model:\n%s", withEmpty)
 	}
 }
 

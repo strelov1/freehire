@@ -32,10 +32,7 @@ func (a *API) StreamMatchAnalysis(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	cvText, hasCV, err := a.storedCVText(c, userID)
-	if err != nil {
-		return err
-	}
+	cvUploadedAt, hasCV := a.cvUploadedAt(c, userID)
 	// Gate on points before opening the stream (the fiber ctx is still valid here, so an
 	// out-of-credits new job returns a real 402 instead of an SSE error). Only a CV-backed
 	// request would run the LLM; without one the stream just reports has_cv. A recompute is
@@ -52,7 +49,6 @@ func (a *API) StreamMatchAnalysis(c *fiber.Ctx) error {
 			}
 		}
 	}
-	cvUploadedAt, _ := a.cvUploadedAt(c, userID)
 	profile, _ := a.userProfile.Get(c.Context(), userID)
 
 	// Compute the hard-constraint blockers exactly as the POST path does: the unmet
@@ -64,7 +60,6 @@ func (a *API) StreamMatchAnalysis(c *fiber.Ctx) error {
 		JobTitle:            job.Title,
 		JobDescription:      job.Description,
 		CompanyInfo:         a.companyInfo(c, job.CompanySlug),
-		CVText:              cvText,
 		StructuredResume:    a.structuredResumeJSON(c, userID),
 		Match:               jobmatch.Compute(job.Skills, profile.Skills),
 		JobWorkMode:         job.WorkMode,

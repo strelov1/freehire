@@ -41,16 +41,13 @@ func NewAnalyzer(client *llm.Client) *Analyzer {
 func (a *Analyzer) ModelID() string { return a.client.ModelID() }
 
 // Input is everything the chain needs, gathered by the handler before the first call:
-// the job text, the raw company_info JSON, the candidate's CV text, the deterministic
-// skills match used as the grounding anchor, and the job geography + the candidate's
-// location preferences (raw JSON) used to score location & work-mode fit.
+// the job text, the raw company_info JSON, the candidate's structured résumé, the
+// deterministic skills match used as the grounding anchor, and the job geography + the
+// candidate's location preferences (raw JSON) used to score location & work-mode fit.
 type Input struct {
 	JobTitle       string
 	JobDescription string
 	CompanyInfo    string
-	// CVText is the raw CV — retained only for the caller's has-CV bookkeeping; it is NEVER
-	// sent to the model. The fit is scored from StructuredResume (contacts removed).
-	CVText string
 	// StructuredResume is the caller's de-identified structured résumé as JSON — the sole
 	// candidate context sent to the model (its contact fields are stripped by candidateContext).
 	// Empty when the caller has no current structured résumé, in which case no analysis runs.

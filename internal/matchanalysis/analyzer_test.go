@@ -35,7 +35,6 @@ func sampleInput() Input {
 		JobTitle:            "Senior Go Engineer",
 		JobDescription:      "Build backends in Go. Kafka a plus.",
 		CompanyInfo:         `{"tagline":"We ship fridges"}`,
-		CVText:              "Backend engineer, 5y Go at Acme.",
 		StructuredResume:    `{"summary":"Backend engineer, 5y Go at Acme.","experience":[{"company":"Acme","title":"Backend Engineer"}],"skills":["Go"]}`,
 		Match:               jobmatch.JobMatch{Matched: []string{"go"}, Missing: []string{"kafka"}, CoveragePercent: 50},
 		JobWorkMode:         "onsite",

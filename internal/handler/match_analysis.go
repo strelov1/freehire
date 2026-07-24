@@ -101,13 +101,14 @@ func (a *API) PostMatchAnalysis(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	cvText, hasCV, err := a.storedCVText(c, userID)
-	if err != nil {
-		return err
-	}
+	cvUploadedAt, hasCV := a.cvUploadedAt(c, userID)
 	if !hasCV {
 		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: false}})
 	}
+	// The upload time above doubles as the cache stamp, captured up front so the cache
+	// is stamped with the CV that was actually analyzed even if the user re-uploads
+	// mid-analysis (the three-stage chain takes seconds); re-reading it afterwards would
+	// risk stamping a newer CV's time on an older CV's analysis.
 	// Gate on points before touching the LLM: a new job needs at least the match cost, a
 	// recompute of an already-analyzed job is always free. Only new analyses are charged,
 	// and only after they persist (below), so a legacy cached job re-runs for free.
@@ -121,11 +122,6 @@ func (a *API) PostMatchAnalysis(c *fiber.Ctx) error {
 			return creditsError(c, *bal)
 		}
 	}
-	// Capture the CV upload time up front, so the cache is stamped with the CV that was
-	// actually analyzed even if the user re-uploads mid-analysis (the three-stage chain
-	// takes seconds); re-reading it afterwards would risk stamping a newer CV's time on
-	// an older CV's analysis.
-	cvUploadedAt, _ := a.cvUploadedAt(c, userID)
 
 	// The caller's profile drives both the deterministic skills anchor and the location
 	// dimension; a missing profile is tolerated (zero value → empty skills/preferences).
@@ -139,7 +135,6 @@ func (a *API) PostMatchAnalysis(c *fiber.Ctx) error {
 		JobTitle:            job.Title,
 		JobDescription:      job.Description,
 		CompanyInfo:         a.companyInfo(c, job.CompanySlug),
-		CVText:              cvText,
 		StructuredResume:    a.structuredResumeJSON(c, userID),
 		Match:               jobmatch.Compute(job.Skills, profile.Skills),
 		JobWorkMode:         job.WorkMode,
