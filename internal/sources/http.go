@@ -241,8 +241,9 @@ func (c *Client) GetXML(ctx context.Context, url string, v any) error {
 const maxTextBody = 2 << 20 // 2 MiB
 
 // GetText fetches url and returns its raw response body as a string (capped at
-// maxTextBody). Used by the domain-following harvest, which regex-scans a careers
-// page's HTML for an embedded ATS link rather than parsing a DOM.
+// maxTextBody). It serves adapters whose endpoint is a raw page they scan or slice
+// themselves rather than parse as a DOM (paylocity, taleo, infojobs, …) and the
+// harvest/board-resolve probes that regex-scan a careers page for an embedded ATS link.
 func (c *Client) GetText(ctx context.Context, url string) (string, error) {
 	return c.GetTextWithHeaders(ctx, url, nil)
 }
