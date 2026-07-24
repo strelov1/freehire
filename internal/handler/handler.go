@@ -374,6 +374,12 @@ func Register(app *fiber.App, cfg Config) {
 		a.telegramBot = telegramnotify.NewClient(cfg.TelegramBotToken)
 		a.telegramBotUsername = cfg.TelegramBotUsername
 		a.telegramWebhookSecret = cfg.TelegramWebhookSecret
+		// The webhook fails closed on an empty secret (see TelegramWebhook), so a
+		// bot without TELEGRAM_WEBHOOK_SECRET can never link accounts — say so at
+		// startup instead of letting every update 403 silently.
+		if cfg.TelegramWebhookSecret == "" {
+			log.Printf("telegram: TELEGRAM_WEBHOOK_SECRET is empty; the webhook rejects every update (account linking via the bot will not work)")
+		}
 	}
 	// Assign only when configured: a nil *search.Client wrapped in the searcher
 	// interface would be a non-nil interface and defeat the nil check.

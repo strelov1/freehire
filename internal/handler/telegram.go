@@ -85,8 +85,11 @@ func (a *API) TelegramWebhook(c *fiber.Ctx) error {
 	}
 	// Reject forged updates: the secret token must match the one registered with
 	// setWebhook. Compared in constant time so a timing side-channel cannot be used
-	// to recover the secret byte by byte; a mismatch is a 403.
-	if subtle.ConstantTimeCompare([]byte(c.Get("X-Telegram-Bot-Api-Secret-Token")), []byte(a.telegramWebhookSecret)) != 1 {
+	// to recover the secret byte by byte; a mismatch is a 403. An empty configured
+	// secret also fails closed — otherwise a request with no header at all would
+	// pass the comparison.
+	if a.telegramWebhookSecret == "" ||
+		subtle.ConstantTimeCompare([]byte(c.Get("X-Telegram-Bot-Api-Secret-Token")), []byte(a.telegramWebhookSecret)) != 1 {
 		return fiber.NewError(fiber.StatusForbidden, "forbidden")
 	}
 
