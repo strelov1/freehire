@@ -4,8 +4,10 @@
 // (one Meilisearch task per wave, not per job) so a bulk backfill isn't bottlenecked on
 // Meili's serial task queue; on a batch failure it falls back to per-item processing so
 // a single poison/corrupted row can't sink the whole batch. It mirrors internal/enrich:
-// the Runner is independent of the DB and search layers (Store + Indexer ports), so the
-// batch/fallback logic is unit-tested with fakes; cmd/embed wires the real adapters.
+// the batch/fallback logic is unit-tested with fakes of the Store + Indexer ports and
+// cmd/embed wires the real adapters. The ports trade in db.Job rows (not a domain
+// type), so the runner is independent of the pool/queries, not of the generated row
+// shape.
 package embed
 
 import (
@@ -27,9 +29,10 @@ type Claimed struct {
 	Closed   bool
 }
 
-// Store is the persistence the runner needs, in domain terms so the runner is
-// independent of the DB layer. The real implementation wraps the generated queries and
-// a pool (running CompleteOpen/CompleteClosed in a transaction); tests use a fake.
+// Store is the persistence the runner needs. The real implementation wraps the
+// generated queries and a pool (running CompleteOpen/CompleteClosed in a transaction);
+// tests use a fake. Jobs and CompleteOpen trade in db.Job rows — the port hides the
+// pool and the transaction boundaries, not the generated row type.
 type Store interface {
 	// Enqueue adds outbox entries for jobs needing (re-)embedding or removal at model.
 	Enqueue(ctx context.Context, targetModel string) (int64, error)
