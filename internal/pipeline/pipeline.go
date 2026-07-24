@@ -165,15 +165,15 @@ func (r Runner) Run(ctx context.Context, entries []sources.CompanyEntry) (RunSta
 				return
 			}
 
-			ingested, failed, skipped, cooled := r.ingestBoard(ctx, e)
+			st := r.ingestBoard(ctx, e)
 			crawled.Add(1)
 
 			mu.Lock()
 			s := byProv[e.Provider]
-			s.Ingested += ingested
-			s.Failed += failed
-			s.Skipped += skipped
-			s.Cooled += cooled
+			s.Ingested += st.Ingested
+			s.Failed += st.Failed
+			s.Skipped += st.Skipped
+			s.Cooled += st.Cooled
 			byProv[e.Provider] = s
 			mu.Unlock()
 		}(e)
@@ -274,24 +274,25 @@ func sortedProviders(byProvider map[string]map[string]sources.CompanyEntry) []st
 	return providers
 }
 
-// ingestBoard fetches and saves one board, returning how many jobs it ingested, whether
-// the board itself failed (1) or not (0), how many jobs were skipped on a save error, and
-// whether the board was skipped for cooldown (1). A missing adapter or a fetch error fails
-// the board; a per-job save error skips that job without failing the board, but is counted
-// and logged so it is never silently swallowed. A board in cooldown is skipped before its
-// adapter is touched, and each crawl's board-level outcome is recorded to BoardHealth.
-func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) (ingested, failed, skipped, cooled int) {
+// ingestBoard fetches and saves one board and returns its Stats: Ingested counts saved
+// jobs, Failed is 1 when the board itself errored, Skipped counts jobs that fetched fine
+// but failed to persist, and Cooled is 1 when the board was skipped for cooldown. A
+// missing adapter or a fetch error fails the board; a per-job save error skips that job
+// without failing the board, but is counted and logged so it is never silently swallowed.
+// A board in cooldown is skipped before its adapter is touched, and each crawl's
+// board-level outcome is recorded to BoardHealth.
+func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 	// Cooldown gate — before the adapter lookup, so a backed-off board costs nothing.
 	if r.cooledDown(ctx, e) {
 		log.Printf("ingest: %s board %q (%s) in cooldown — skipping", e.Provider, e.Board, e.Company)
-		return 0, 0, 0, 1
+		return Stats{Cooled: 1}
 	}
 
 	src, ok := r.Registry[e.Provider]
 	if !ok {
 		log.Printf("ingest: %s/%s: unknown provider %q", e.Company, e.Board, e.Provider)
 		r.recordFailure(ctx, e, "unknown provider "+e.Provider)
-		return 0, 1, 0, 0
+		return Stats{Failed: 1}
 	}
 
 	// A streaming adapter persists postings as it crawls, so a long rate-limited board's
@@ -306,7 +307,7 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) (ingest
 		} else {
 			r.recordSuccess(ctx, e, ing)
 		}
-		return ing, fail, skip, 0
+		return Stats{Ingested: ing, Failed: fail, Skipped: skip}
 	}
 
 	raw, err := r.fetchBoard(ctx, e, src)
@@ -315,7 +316,7 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) (ingest
 		// the HTTP status / timeout); the run still isolates and continues.
 		log.Printf("ingest: %s board %q (%s) failed: %v", e.Provider, e.Board, e.Company, err)
 		r.recordFailure(ctx, e, err.Error())
-		return 0, 1, 0, 0
+		return Stats{Failed: 1}
 	}
 
 	var (
@@ -349,7 +350,7 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) (ingest
 	// The board was reachable (Fetch succeeded), so it is healthy regardless of per-job
 	// save skips — those are stats.Skipped, not a board outage.
 	r.recordSuccess(ctx, e, st.Ingested)
-	return st.Ingested, 0, st.Skipped, 0
+	return st
 }
 
 // saveOne normalizes one posting and saves it, tallying the outcome into st and keeping
