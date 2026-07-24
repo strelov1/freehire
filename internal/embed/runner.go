@@ -184,7 +184,10 @@ func (rn *run) processOpenOne(ctx context.Context, entry Claimed) {
 		return
 	}
 	if len(jobs) == 0 {
-		rn.fail(entry, fmt.Errorf("job %d not found", entry.JobID))
+		// A missing row is just as deterministic as a corrupted one — the job was
+		// hard-deleted after enqueue, so no future run can load it either. Dead-letter
+		// immediately rather than burning the attempt budget across cron runs.
+		rn.failN(entry, fmt.Errorf("job %d not found", entry.JobID), 1)
 		return
 	}
 	vectors, err := rn.indexer.IndexOpen(callCtx, jobs)
