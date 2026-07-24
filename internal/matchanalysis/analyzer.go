@@ -37,8 +37,13 @@ func NewAnalyzer(client *llm.Client) *Analyzer {
 }
 
 // ModelID returns the underlying model id (empty when unconfigured), so a caller can
-// record which model produced a cached analysis.
-func (a *Analyzer) ModelID() string { return a.client.ModelID() }
+// record which model produced a cached analysis. Nil-safe, like AnalyzeStream.
+func (a *Analyzer) ModelID() string {
+	if a == nil {
+		return ""
+	}
+	return a.client.ModelID()
+}
 
 // Input is everything the chain needs, gathered by the handler before the first call:
 // the job text, the raw company_info JSON, the candidate's structured résumé, the

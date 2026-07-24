@@ -57,6 +57,10 @@ func TestAnalyze_NilClientIsNoOp(t *testing.T) {
 	if err != nil || got != nil {
 		t.Fatalf("nil analyzer = (%v,%v), want (nil,nil)", got, err)
 	}
+	var nilAnalyzer *Analyzer
+	if id := nilAnalyzer.ModelID(); id != "" {
+		t.Errorf("nil-receiver ModelID = %q, want \"\"", id)
+	}
 }
 
 func TestAnalyze_ThreeStageChainUsesAuditedVerdict(t *testing.T) {
