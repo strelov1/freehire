@@ -177,13 +177,6 @@ function toSlice<T>(page: Page<T>, offset: number): Slice<T> {
   };
 }
 
-/** Build an API client bound to a specific fetch and base URL.
- *
- *  - Browser: the default `api` uses global fetch and an empty base, so requests
- *    are relative and same-origin (the auth cookie rides along; see SPA-era note).
- *  - SvelteKit server `load`: pass `event.fetch` and the internal API origin
- *    (`serverApi`), because a server-side relative `/api` would hit the Node app
- *    itself, not nginx→Go. `baseUrl` resolves that to a real server-to-server call. */
 // --- Gmail inbox wire shapes ---------------------------------------------
 
 export interface GmailStatus {
@@ -230,6 +223,13 @@ export interface EmailBody extends EmailLinking {
   read: boolean;
 }
 
+/** Build an API client bound to a specific fetch and base URL.
+ *
+ *  - Browser: the default `api` uses global fetch and an empty base, so requests
+ *    are relative and same-origin (the auth cookie rides along; see SPA-era note).
+ *  - SvelteKit server `load`: pass `event.fetch` and the internal API origin
+ *    (`serverApi`), because a server-side relative `/api` would hit the Node app
+ *    itself, not nginx→Go. `baseUrl` resolves that to a real server-to-server call. */
 export function createApi(
   fetchImpl: typeof fetch = fetch,
   baseUrl = '',
