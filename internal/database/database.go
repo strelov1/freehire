@@ -3,9 +3,9 @@ package database
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -43,11 +43,20 @@ func Connect(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 // poolConfig parses the DSN and applies defaultMaxConns unless the DSN sets its
 // own pool_max_conns, so an explicit override always wins.
 func poolConfig(dsn string) (*pgxpool.Config, error) {
+	// pgxpool.ParseConfig CONSUMES pool_max_conns, so detect the override on a
+	// pgx-level parse first (unknown settings land in RuntimeParams). A substring
+	// match on the raw DSN could false-positive on a password containing the text.
+	connConfig, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("parse pool config: %w", err)
+	}
+	_, maxConnsSet := connConfig.RuntimeParams["pool_max_conns"]
+
 	config, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("parse pool config: %w", err)
 	}
-	if !strings.Contains(dsn, "pool_max_conns") {
+	if !maxConnsSet {
 		config.MaxConns = defaultMaxConns
 	}
 	return config, nil
