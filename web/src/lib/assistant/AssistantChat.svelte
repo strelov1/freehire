@@ -14,6 +14,7 @@
     RefreshCw,
   } from '@lucide/svelte';
   import { currentUser } from '$lib/auth.svelte';
+  import { errorMessage } from '$lib/utils';
   import { createSession, listSessions, deleteSession, assistantWsUrl } from '$lib/assistant/api';
   import { RoyClient } from '$lib/assistant/client';
   import { initChat, reduceTurnEvent, type ChatState } from '$lib/assistant/chat';
@@ -349,7 +350,7 @@
         await dispatch(kickoff);
       }
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Could not reach the agent backend.';
+      error = errorMessage(err, 'Could not reach the agent backend.');
       teardown();
     }
   }
@@ -464,7 +465,7 @@
     try {
       await createAndOpen();
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Could not start a new chat.';
+      error = errorMessage(err, 'Could not start a new chat.');
     }
   }
 
@@ -510,7 +511,7 @@
         if (next) await openSession(next);
         else await createAndOpen();
       } catch (err) {
-        error = err instanceof Error ? err.message : 'Could not open a chat.';
+        error = errorMessage(err, 'Could not open a chat.');
       }
     }
   }
@@ -604,7 +605,7 @@
     } catch (err) {
       turnActive = false;
       inputAcquired = false;
-      error = err instanceof Error ? err.message : 'Could not send the message.';
+      error = errorMessage(err, 'Could not send the message.');
     }
   }
 

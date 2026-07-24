@@ -16,7 +16,7 @@
   import GmailConnectDialog from './GmailConnectDialog.svelte';
   import ApplicationLinkPicker from './ApplicationLinkPicker.svelte';
   import { Mail, AtSign, Copy, Search, RefreshCw, ChevronLeft, CheckCheck, Trash2 } from '@lucide/svelte';
-  import { timeAgo } from '$lib/utils';
+  import { timeAgo, errorMessage } from '$lib/utils';
   import { avatarInitials, avatarColor } from '$lib/avatar';
 
   const PAGE_SIZE = 7;
@@ -84,7 +84,7 @@
       if (hasAnySource) await fetchFirstPage();
       else tab = 'settings'; // nothing to read yet — land on setup
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to load the inbox.';
+      error = errorMessage(e, 'Failed to load the inbox.');
     } finally {
       loading = false;
     }
@@ -106,7 +106,7 @@
     try {
       await fetchFirstPage();
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to load the inbox.';
+      error = errorMessage(e, 'Failed to load the inbox.');
     }
   }
 
@@ -118,7 +118,7 @@
     try {
       await fetchFirstPage();
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Refresh failed.';
+      error = errorMessage(e, 'Refresh failed.');
     } finally {
       refreshing = false;
     }
@@ -130,7 +130,7 @@
       messages = [...messages, ...res.messages];
       total = res.total;
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to load more.';
+      error = errorMessage(e, 'Failed to load more.');
     }
   }
 
@@ -197,7 +197,7 @@
         if (selected) selected = { ...selected, read: true };
       }
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to mark all read.';
+      error = errorMessage(e, 'Failed to mark all read.');
       await reloadList();
     } finally {
       markingAll = false;
@@ -221,7 +221,7 @@
     } catch (e) {
       messages = prev; // put the row back
       total += 1;
-      error = e instanceof Error ? e.message : 'Failed to delete.';
+      error = errorMessage(e, 'Failed to delete.');
     }
   }
 
@@ -234,7 +234,7 @@
       await api.restoreEmail(id);
       await reloadList();
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to restore.';
+      error = errorMessage(e, 'Failed to restore.');
     }
   }
 
@@ -259,7 +259,7 @@
       // the picker has the caller's applications ready.
       if (!selected.linked_slug && !selected.suggested_slug) void ensureTrackedApps();
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to load the message.';
+      error = errorMessage(e, 'Failed to load the message.');
     } finally {
       bodyLoading = false;
     }
@@ -306,7 +306,7 @@
     try {
       applyLinkUpdate(await api.confirmEmailLink(selected.id));
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to link.';
+      error = errorMessage(e, 'Failed to link.');
     }
   }
 
@@ -317,7 +317,7 @@
       // Dismissing the suggestion drops the email into the manual picker — load its data.
       void ensureTrackedApps();
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to dismiss.';
+      error = errorMessage(e, 'Failed to dismiss.');
     }
   }
 
@@ -332,7 +332,7 @@
       // The row now also offers the picker (to link elsewhere) — make sure it has data.
       void ensureTrackedApps();
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to unlink.';
+      error = errorMessage(e, 'Failed to unlink.');
     }
   }
 
@@ -343,7 +343,7 @@
       applyLinkUpdate(await api.linkEmail(selected.id, slug));
       lastUnlinked = null;
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to link.';
+      error = errorMessage(e, 'Failed to link.');
     }
   }
 
@@ -376,7 +376,7 @@
         await fetchFirstPage();
       }
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Sync failed.';
+      error = errorMessage(e, 'Sync failed.');
     } finally {
       syncing = false;
     }
@@ -390,7 +390,7 @@
       if (source === 'gmail') source = '';
       await refresh();
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to disconnect.';
+      error = errorMessage(e, 'Failed to disconnect.');
     }
   }
 
@@ -408,7 +408,7 @@
       mailbox = await api.claimMailbox();
       await refresh();
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to create a mailbox.';
+      error = errorMessage(e, 'Failed to create a mailbox.');
     } finally {
       claiming = false;
     }
@@ -421,7 +421,7 @@
       if (source === 'hosted') source = '';
       await refresh();
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to release the mailbox.';
+      error = errorMessage(e, 'Failed to release the mailbox.');
     }
   }
 
