@@ -3085,3 +3085,8 @@
   board: toppansecurity.teamtailor.com
 - company: Veoneer Safety Systems USA
   board: veoneerus.teamtailor.com
+# --- contributed boards ---
+- company: Phorest
+  board: careers.phorest.com
+- company: INEXTO
+  board: careers.inexto.com

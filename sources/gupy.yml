@@ -2910,3 +2910,6 @@
 # --- aggregator-harvested + live-validated 1 boards ---
 - company: Swapfinancial
   board: 87487
+# --- contributed boards ---
+- company: Realco Soluções em Gestão de Pessoas
+  board: "21289"
