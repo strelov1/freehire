@@ -62,7 +62,7 @@ internal/
   location/          curated dictionary deriving country/region codes + work-mode hint (see location/AGENTS.md)
   ycdir/             yc-oss directory to company-info mapping (see ycdir/AGENTS.md)
   job/               Job domain aggregate: sealed type built only through job.New
-  jobview/           single public wire shape of a job, projected from Job aggregate
+  jobview/           single public wire shape of a job, projected from Job aggregate (see jobview/AGENTS.md)
   normalize/         slug normalization
   companyname/       resolves real display names for slug-named companies (see companyname/AGENTS.md)
   matchanalysis/     AI match analysis: three-stage LLM prompt-chain (see matchanalysis/AGENTS.md)
