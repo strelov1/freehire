@@ -136,7 +136,7 @@ WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 -- name: EstimateOpenJobs :one
 -- Fast approximate open-job total for the DB-backed /jobs list's meta.total. An
 -- exact count(*) over ~millions of open rows was a per-request full scan; the
--- planner's estimate (see estimate_open_jobs(), migration 0033) is O(1) and
+-- planner's estimate (see estimate_open_jobs(), migrations/0001_init.sql) is O(1) and
 -- tracks the closed_at IS NULL filter. The total is approximate by design.
 SELECT estimate_open_jobs()::bigint;
 

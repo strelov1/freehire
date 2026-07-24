@@ -432,7 +432,7 @@ type Querier interface {
 	EstimateHiringCompanies(ctx context.Context) (int64, error)
 	// Fast approximate open-job total for the DB-backed /jobs list's meta.total. An
 	// exact count(*) over ~millions of open rows was a per-request full scan; the
-	// planner's estimate (see estimate_open_jobs(), migration 0033) is O(1) and
+	// planner's estimate (see estimate_open_jobs(), migrations/0001_init.sql) is O(1) and
 	// tracks the closed_at IS NULL filter. The total is approximate by design.
 	EstimateOpenJobs(ctx context.Context) (int64, error)
 	// Job ids the user has already interacted with (viewed, saved, applied, or
@@ -653,9 +653,6 @@ type Querier interface {
 	InsertThread(ctx context.Context, arg InsertThreadParams) (Thread, error)
 	// parent_reply_id is NULL for a top-level reply, or another reply's id to nest under it.
 	InsertThreadReply(ctx context.Context, arg InsertThreadReplyParams) (ThreadReply, error)
-	// Slim beta-membership lookup for the RequireModeratorOrBeta middleware — a
-	// primitive bool so the auth package stays free of a db import (same shape as GetUserRole).
-	IsBetaTester(ctx context.Context, id int64) (bool, error)
 	// Cursor read: has this rotated file (by content signature) been applied? The
 	// signature is stable across rename and gzip, so a re-run recognizes the same file.
 	IsViewLogFileProcessed(ctx context.Context, signature int64) (bool, error)
