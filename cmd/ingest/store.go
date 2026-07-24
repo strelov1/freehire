@@ -54,7 +54,8 @@ func (s *dbStore) Save(ctx context.Context, j job.Job) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	// Rollback after Commit is a no-op; suppress its error (matches the other stores).
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// The aggregate's read projection carries every persistable field; the write path
 	// never touches enrichment (SetJobEnrichment owns those columns), so it is not mapped.
