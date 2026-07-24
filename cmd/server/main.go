@@ -169,6 +169,10 @@ func main() {
 		piiDetector = pii.NewHTTPDetector(cfg.PIIFilterURL, nil)
 	}
 
+	// Credits metering config, loaded alongside the other optional dependencies rather
+	// than inline in the handler registration.
+	creditsConfig := credits.Config(config.LoadCredits())
+
 	handler.Register(app, handler.Config{
 		Pool:           pool,
 		FrontendOrigin: cfg.FrontendOrigin,
@@ -190,7 +194,7 @@ func main() {
 		TelegramBotUsername:   cfg.TelegramBotUsername,
 		TelegramWebhookSecret: cfg.TelegramWebhookSecret,
 
-		Credits: credits.Config(config.LoadCredits()),
+		Credits: creditsConfig,
 
 		AWSRegion:       cfg.AWSRegion,
 		NotifyEmailFrom: cfg.NotifyEmailFrom,
@@ -227,6 +231,8 @@ func buildGmail(cfg config.Settings) (*gmailsync.Connector, *tokencrypt.Cipher) 
 	}
 	cipher, err := tokencrypt.New(cfg.GmailTokenKey)
 	if err != nil {
+		// A configured-but-broken key must not silently disable the feature.
+		log.Printf("gmail: token cipher init failed, Connect-Gmail disabled: %v", err)
 		return nil, nil
 	}
 	return gmailsync.NewConnector(g.ClientID, g.ClientSecret, cfg.FrontendOrigin), cipher
