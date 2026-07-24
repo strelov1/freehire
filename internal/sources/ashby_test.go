@@ -64,7 +64,8 @@ func TestAshbyFetch(t *testing.T) {
 	if strings.Contains(j.Description, "<script") {
 		t.Errorf("Description retained a script tag, got %q", j.Description)
 	}
-	// Remote comes from Ashby's explicit isRemote flag, not the location heuristic.
+	// Remote unions Ashby's explicit isRemote flag with the location heuristic (see
+	// MapAshbyPosting); here the flag alone sets it.
 	if !j.Remote {
 		t.Error("Remote = false, want true from the explicit isRemote field")
 	}

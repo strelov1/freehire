@@ -3,7 +3,6 @@ package linksource
 import (
 	"context"
 	"fmt"
-	"html"
 	"net/url"
 	"regexp"
 	"strings"
@@ -55,17 +54,7 @@ func (g greenhouse) Resolve(ctx context.Context, raw string) (sources.Job, bool,
 	}
 	api := fmt.Sprintf("https://%s/v1/boards/%s/jobs/%s?content=true", apiHost, board, id)
 
-	var j struct {
-		ID          int64  `json:"id"`
-		Title       string `json:"title"`
-		AbsoluteURL string `json:"absolute_url"`
-		UpdatedAt   string `json:"updated_at"`
-		Content     string `json:"content"`
-		CompanyName string `json:"company_name"`
-		Location    struct {
-			Name string `json:"name"`
-		} `json:"location"`
-	}
+	var j sources.GreenhousePosting
 	if err := g.http.GetJSON(ctx, api, &j); err != nil {
 		return sources.Job{}, false, err
 	}
@@ -73,14 +62,11 @@ func (g greenhouse) Resolve(ctx context.Context, raw string) (sources.Job, bool,
 		return sources.Job{}, false, nil // not a live posting (closed/removed) — skip
 	}
 
-	return sources.Job{
-		ExternalID:  sources.NamespaceExternalID(board, id),
-		URL:         j.AbsoluteURL,
-		Title:       j.Title,
-		Company:     j.CompanyName,
-		Location:    j.Location.Name,
-		Description: sources.SanitizeHTML(html.UnescapeString(j.Content)),
-		Remote:      sources.IsRemote(j.Location.Name),
-		PostedAt:    sources.ParseRFC3339(j.UpdatedAt),
-	}, true, nil
+	// The posting→Job mapping is shared with the greenhouse board adapter so the two
+	// produce identical facets; only the identity differs (namespaced id, and the company
+	// from the API's company_name — the board list endpoint does not serve it).
+	job := sources.MapGreenhousePosting(j)
+	job.ExternalID = sources.NamespaceExternalID(board, id)
+	job.Company = j.CompanyName
+	return job, true, nil
 }
