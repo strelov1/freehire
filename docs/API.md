@@ -231,6 +231,39 @@ curl "https://freehire.dev/api/v1/jobs/search?q=golang&seniority=senior&work_mod
 }
 ```
 
+### `GET /agent/jobs/search`
+
+**Auth:** Public
+
+Search with full descriptions, for programmatic/agent consumers.
+
+Same query and filters as `/jobs/search`, but each result carries the `description` in full (verbatim from the database) instead of the truncated index preview. Use `description_format` to choose how it is rendered.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `q` | string | no | Full-text query over title, company, and description. (e.g. `golang`) |
+| `description_format` | string | no | One of `html` (default, verbatim), `text` (tags stripped), `markdown` (HTML converted to Markdown). Unknown values fall back to `html`. (e.g. `markdown`) |
+| `sort` | string | no | One of `created_at`, `posted_at`, `salary_min`, `salary_max`. Omit for relevance/newest. (e.g. `posted_at`) |
+| `order` | string | no | `asc` or `desc` (default `desc`). (e.g. `desc`) |
+| `semantic_ratio` | number | no | Opt-in hybrid search, 0–1 (default 0 = pure keyword). Needs the optional semantic index. (e.g. `0`) |
+| `limit` | integer | no | Page size, 1–100. (e.g. `20`) |
+| `offset` | integer | no | Rows to skip; `offset + limit` ≤ 10000. (e.g. `0`) |
+
+Plus every filter in [Filtering jobs](#filtering-jobs).
+
+```bash
+curl "https://freehire.dev/api/v1/agent/jobs/search?q=golang&work_mode=remote&description_format=markdown"
+```
+
+```json
+{
+  "data": [ { "public_slug": "...", "title": "Senior Go Engineer", "description": "## About the role\n...", "...": "..." } ],
+  "meta": { "total": 137, "limit": 20, "offset": 0 }
+}
+```
+
 ### `GET /jobs/facets`
 
 **Auth:** Public
