@@ -224,5 +224,54 @@ func (f Fields) UpsertParams() db.UpsertJobParams {
 	}
 }
 
+// UpsertManualParams is the moderator-write analogue of UpsertParams: it maps the
+// same Fields columns to the generated UpsertManualJob params, so the manual write
+// path shares the one column mapping instead of re-listing them. It additionally
+// seeds the salary_*_manual columns from the authoritative ManualSalary (nil when
+// none) and stamps the moderator's id as created_by/updated_by.
+func (f Fields) UpsertManualParams(actorID int64) db.UpsertManualJobParams {
+	var salMin, salMax *int
+	var salCurrency, salPeriod string
+	if f.ManualSalary != nil {
+		salMin, salMax = f.ManualSalary.Min, f.ManualSalary.Max
+		salCurrency, salPeriod = f.ManualSalary.Currency, f.ManualSalary.Period
+	}
+	return db.UpsertManualJobParams{
+		Source:      f.Source,
+		ExternalID:  f.ExternalID,
+		URL:         f.URL,
+		Title:       f.Title,
+		Company:     f.Company,
+		CompanySlug: f.CompanySlug,
+		Location:    f.Location,
+		Remote:      f.Remote,
+		Description: f.Description,
+		PostedAt:    pgconv.Timestamptz(f.PostedAt),
+		PublicSlug:  f.PublicSlug,
+		Countries:   f.Countries,
+		Regions:     f.Regions,
+		Cities:      f.Cities,
+		WorkMode:    f.WorkMode,
+		Skills:      f.Skills,
+		Seniority:   f.Seniority,
+		Category:    f.Category,
+		IsTech:      pgconv.Bool(f.IsTech),
+
+		PostingLanguage:    f.PostingLanguage,
+		EmploymentType:     f.EmploymentType,
+		EducationLevel:     f.EducationLevel,
+		EnglishLevel:       f.EnglishLevel,
+		ExperienceYearsMin: pgconv.Int4(f.ExperienceYearsMin),
+
+		SalaryMinManual:      pgconv.Int4(salMin),
+		SalaryMaxManual:      pgconv.Int4(salMax),
+		SalaryCurrencyManual: salCurrency,
+		SalaryPeriodManual:   salPeriod,
+
+		CreatedBy: actorID,
+		UpdatedBy: actorID,
+	}
+}
+
 // IsOpen reports whether the job is live (not soft-closed).
 func (j Job) IsOpen() bool { return j.f.ClosedAt == nil }
