@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/search"
 )
+
+var errTest = errors.New("push boom")
 
 // fakeReader serves companies in keyset pages: each Page returns rows with slug >
 // afterSlug, capped at limit, over the pre-sorted input.
