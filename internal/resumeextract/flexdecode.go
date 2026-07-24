@@ -7,16 +7,18 @@ import (
 	"strings"
 )
 
-// flexString decodes from a JSON string OR a bare number. The model is asked to keep
-// years and dates as written (strings), but it routinely emits them as numbers
-// (e.g. "year": 2019). encoding/json aborts the whole unmarshal on the first type
-// mismatch, so a single numeric date would otherwise silently discard the entire
-// structured résumé. Used only for the free-form date/year fields via the UnmarshalJSON
-// shims below; the exported struct fields stay plain string so the contract, Sanitize,
-// and every consumer are untouched.
-type flexString string
+// verbatimString decodes from a JSON string OR a bare number, kept VERBATIM as the
+// string value. The model is asked to keep years and dates as written (strings), but it
+// routinely emits them as numbers (e.g. "year": 2019). encoding/json aborts the whole
+// unmarshal on the first type mismatch, so a single numeric date would otherwise
+// silently discard the entire structured résumé. Used only for the free-form date/year
+// fields via the UnmarshalJSON shims below; the exported struct fields stay plain
+// string so the contract, Sanitize, and every consumer are untouched. Deliberately not
+// a flexjson type: flexjson coerces numerically, while a date is text — the scalar
+// token must survive as written.
+type verbatimString string
 
-func (f *flexString) UnmarshalJSON(b []byte) error {
+func (f *verbatimString) UnmarshalJSON(b []byte) error {
 	b = bytes.TrimSpace(b)
 	if len(b) == 0 || string(b) == "null" {
 		*f = ""
@@ -27,20 +29,23 @@ func (f *flexString) UnmarshalJSON(b []byte) error {
 		if err := json.Unmarshal(b, &s); err != nil {
 			return err
 		}
-		*f = flexString(s)
+		*f = verbatimString(s)
 		return nil
 	}
 	// Bare number (or other scalar token) — keep it verbatim as the string value.
-	*f = flexString(b)
+	*f = verbatimString(b)
 	return nil
 }
 
-// flexInt decodes from a JSON number OR a string ("5", "5+ years"). total_years is
-// prompted as an integer, but the model can return it as a string or a phrase; a string
-// there would abort the whole decode. Non-numeric or empty input yields 0.
-type flexInt int
+// truncInt decodes from a JSON number OR a string ("5", "5+ years"), taking the
+// LEADING integer and TRUNCATING any fraction — never rounding, unlike flexjson.Int
+// (round-half): a stray "5.9" must not inflate the candidate's years of experience.
+// total_years is prompted as an integer, but the model can return it as a string or a
+// phrase; a string there would abort the whole decode. Non-numeric or empty input
+// yields 0.
+type truncInt int
 
-func (f *flexInt) UnmarshalJSON(b []byte) error {
+func (f *truncInt) UnmarshalJSON(b []byte) error {
 	b = bytes.TrimSpace(b)
 	if len(b) == 0 || string(b) == "null" {
 		*f = 0
@@ -51,7 +56,7 @@ func (f *flexInt) UnmarshalJSON(b []byte) error {
 		if err := json.Unmarshal(b, &s); err != nil {
 			return err
 		}
-		*f = flexInt(leadingInt(s))
+		*f = truncInt(leadingInt(s))
 		return nil
 	}
 	// JSON number: parse as float first so "5.0" (or a stray decimal) truncates cleanly.
@@ -59,7 +64,7 @@ func (f *flexInt) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
-	*f = flexInt(int(n))
+	*f = truncInt(int(n))
 	return nil
 }
 
@@ -78,12 +83,12 @@ func leadingInt(s string) int {
 	return n
 }
 
-// UnmarshalJSON tolerates a string/phrase "total_years" (e.g. "5+ years") via flexInt,
+// UnmarshalJSON tolerates a string/phrase "total_years" (e.g. "5+ years") via truncInt,
 // then delegates the rest to the normal struct decode via an alias (no recursion).
 func (s *Structured) UnmarshalJSON(b []byte) error {
 	type alias Structured
 	aux := struct {
-		TotalYears flexInt `json:"total_years"`
+		TotalYears truncInt `json:"total_years"`
 		*alias
 	}{alias: (*alias)(s)}
 	if err := json.Unmarshal(b, &aux); err != nil {
@@ -93,12 +98,12 @@ func (s *Structured) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// UnmarshalJSON tolerates a numeric "year" (e.g. 2019) by decoding it through flexString,
+// UnmarshalJSON tolerates a numeric "year" (e.g. 2019) by decoding it through verbatimString,
 // then delegates the rest to the normal struct decode via an alias (no recursion).
 func (e *Education) UnmarshalJSON(b []byte) error {
 	type alias Education
 	aux := struct {
-		Year flexString `json:"year"`
+		Year verbatimString `json:"year"`
 		*alias
 	}{alias: (*alias)(e)}
 	if err := json.Unmarshal(b, &aux); err != nil {
@@ -112,8 +117,8 @@ func (e *Education) UnmarshalJSON(b []byte) error {
 func (x *Experience) UnmarshalJSON(b []byte) error {
 	type alias Experience
 	aux := struct {
-		Start flexString `json:"start"`
-		End   flexString `json:"end"`
+		Start verbatimString `json:"start"`
+		End   verbatimString `json:"end"`
 		*alias
 	}{alias: (*alias)(x)}
 	if err := json.Unmarshal(b, &aux); err != nil {
