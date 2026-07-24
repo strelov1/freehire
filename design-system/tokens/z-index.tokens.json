@@ -1,0 +1,10 @@
+{
+  "$description": "Z-index stacking scale. No z-index tokens existed before — values were inline.",
+  "$type": "number",
+  "z-base": { "$value": 0, "$description": "Default stacking context." },
+  "z-dropdown": { "$value": 1000, "$description": "Dropdowns, select menus." },
+  "z-sticky": { "$value": 1100, "$description": "Sticky headers, toolbars." },
+  "z-modal": { "$value": 1200, "$description": "Dialogs, modals." },
+  "z-popover": { "$value": 1300, "$description": "Popovers, tooltips above modals." },
+  "z-toast": { "$value": 1400, "$description": "Toast notifications — top of stack." }
+}

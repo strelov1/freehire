@@ -1,0 +1,28 @@
+{
+  "$description": "Typography tokens. Font families ported from web/src/app.css @theme inline. Size/weight/line-height scales fill the gap.",
+  "font-sans": {
+    "$type": "fontFamily",
+    "$value": "ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+    "$description": "Default body font. System font stack for instant paint."
+  },
+  "font-mono": {
+    "$type": "fontFamily",
+    "$value": "ui-monospace, \"SF Mono\", SFMono-Regular, Menlo, Consolas, monospace",
+    "$description": "Code blocks, inline code, monospace data."
+  },
+  "font-size-xs": { "$type": "dimension", "$value": "0.75rem", "$description": "12px — captions, fine print." },
+  "font-size-sm": { "$type": "dimension", "$value": "0.875rem", "$description": "14px — secondary text, input text on sm+." },
+  "font-size-base": { "$type": "dimension", "$value": "1rem", "$description": "16px — body text. Mobile input text (prevents Safari zoom)." },
+  "font-size-lg": { "$type": "dimension", "$value": "1.125rem", "$description": "18px — card titles." },
+  "font-size-xl": { "$type": "dimension", "$value": "1.25rem", "$description": "20px — section headings." },
+  "font-size-2xl": { "$type": "dimension", "$value": "1.5rem", "$description": "24px — page headings." },
+  "font-size-3xl": { "$type": "dimension", "$value": "1.875rem", "$description": "30px — hero subheading." },
+  "font-size-4xl": { "$type": "dimension", "$value": "2.25rem", "$description": "36px — hero heading." },
+  "font-weight-normal": { "$type": "fontWeight", "$value": 400, "$description": "Body text." },
+  "font-weight-medium": { "$type": "fontWeight", "$value": 500, "$description": "Emphasized labels, nav items." },
+  "font-weight-semibold": { "$type": "fontWeight", "$value": 600, "$description": "Card titles, buttons." },
+  "font-weight-bold": { "$type": "fontWeight", "$value": 700, "$description": "Headings, strong emphasis." },
+  "line-height-tight": { "$type": "number", "$value": 1.25, "$description": "Headings." },
+  "line-height-normal": { "$type": "number", "$value": 1.5, "$description": "Body text." },
+  "line-height-relaxed": { "$type": "number", "$value": 1.75, "$description": "Long-form reading." }
+}

@@ -1,0 +1,9 @@
+{
+  "$description": "Border radius scale. Base --radius ported from web/src/app.css :root (0.625rem). Derived sizes match the @theme inline calc() derivations.",
+  "$type": "dimension",
+  "radius": { "$value": "0.625rem", "$description": "Base radius (10px). The scale derives from this." },
+  "radius-sm": { "$value": "calc(0.625rem * 0.6)", "$description": "6px — chips, badges, small inputs." },
+  "radius-md": { "$value": "calc(0.625rem * 0.8)", "$description": "8px — buttons, inputs." },
+  "radius-lg": { "$value": "0.625rem", "$description": "10px — cards, dialogs." },
+  "radius-xl": { "$value": "calc(0.625rem * 1.4)", "$description": "14px — large containers." }
+}

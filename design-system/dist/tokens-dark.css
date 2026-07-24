@@ -1,0 +1,76 @@
+.dark {
+  --background: oklch(0.16 0.006 110);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.155 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.21 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.155 0 0);
+  --secondary: oklch(0.31 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.24 0 0);
+  --muted-foreground: oklch(0.72 0 0);
+  --accent: oklch(0.27 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.6 0.09 118);
+  --brand: oklch(0.72 0.095 121); /** Oats green on dark — calmer olive (not neon) with dark ink. */
+  --brand-foreground: oklch(0.18 0.02 120);
+  --brand-strong: oklch(0.79 0.1 118);
+  --brand-muted: oklch(0.31 0.045 118);
+  --brand-ring: oklch(0.6 0.09 118);
+  --spacing-0: 0; /** No spacing. */
+  --spacing-1: 0.25rem; /** 4px — tight icon gap. */
+  --spacing-2: 0.5rem; /** 8px — compact padding. */
+  --spacing-3: 0.75rem; /** 12px — default chip/badge padding. */
+  --spacing-4: 1rem; /** 16px — base card/input padding. */
+  --spacing-5: 1.25rem; /** 20px. */
+  --spacing-6: 1.5rem; /** 24px — section gap. */
+  --spacing-8: 2rem; /** 32px — card stack gap. */
+  --spacing-10: 2.5rem; /** 40px. */
+  --spacing-12: 3rem; /** 48px — page section gap. */
+  --spacing-16: 4rem; /** 64px — large vertical rhythm. */
+  --spacing-20: 5rem; /** 80px. */
+  --spacing-24: 6rem; /** 96px — hero spacing. */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; /** Default body font. System font stack for instant paint. */
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace; /** Code blocks, inline code, monospace data. */
+  --font-size-xs: 0.75rem; /** 12px — captions, fine print. */
+  --font-size-sm: 0.875rem; /** 14px — secondary text, input text on sm+. */
+  --font-size-base: 1rem; /** 16px — body text. Mobile input text (prevents Safari zoom). */
+  --font-size-lg: 1.125rem; /** 18px — card titles. */
+  --font-size-xl: 1.25rem; /** 20px — section headings. */
+  --font-size-2xl: 1.5rem; /** 24px — page headings. */
+  --font-size-3xl: 1.875rem; /** 30px — hero subheading. */
+  --font-size-4xl: 2.25rem; /** 36px — hero heading. */
+  --font-weight-normal: 400; /** Body text. */
+  --font-weight-medium: 500; /** Emphasized labels, nav items. */
+  --font-weight-semibold: 600; /** Card titles, buttons. */
+  --font-weight-bold: 700; /** Headings, strong emphasis. */
+  --line-height-tight: 1.25; /** Headings. */
+  --line-height-normal: 1.5; /** Body text. */
+  --line-height-relaxed: 1.75; /** Long-form reading. */
+  --radius: 0.625rem; /** Base radius (10px). The scale derives from this. */
+  --radius-sm: calc(0.625rem * 0.6); /** 6px — chips, badges, small inputs. */
+  --radius-md: calc(0.625rem * 0.8); /** 8px — buttons, inputs. */
+  --radius-lg: 0.625rem; /** 10px — cards, dialogs. */
+  --radius-xl: calc(0.625rem * 1.4); /** 14px — large containers. */
+  --shadow-sm: 0px 1px 2px 0px oklch(0 0 0 / 0.05); /** Subtle elevation — dropdowns, tooltips. */
+  --shadow-md: 0px 2px 4px 0px oklch(0 0 0 / 0.1); /** Default elevation — cards, popovers. */
+  --shadow-lg: 0px 4px 12px 0px oklch(0 0 0 / 0.15); /** High elevation — dialogs, modals. */
+  --shadow-xl: 0px 8px 24px 0px oklch(0 0 0 / 0.2); /** Maximum elevation — overlays, toasts. */
+  --duration-fast: 150ms; /** Quick feedback — hover, focus, toggle. */
+  --duration-normal: 250ms; /** Standard transition — color, opacity. */
+  --duration-slow: 400ms; /** Deliberate motion — dialog open, panel expand. */
+  --ease-in: cubic-bezier(0.4, 0, 1, 1); /** Accelerating exit. */
+  --ease-out: cubic-bezier(0, 0, 0.2, 1); /** Decelerating entrance. */
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1); /** Symmetric — default for most transitions. */
+  --z-base: 0; /** Default stacking context. */
+  --z-dropdown: 1000; /** Dropdowns, select menus. */
+  --z-sticky: 1100; /** Sticky headers, toolbars. */
+  --z-modal: 1200; /** Dialogs, modals. */
+  --z-popover: 1300; /** Popovers, tooltips above modals. */
+  --z-toast: 1400; /** Toast notifications — top of stack. */
+}

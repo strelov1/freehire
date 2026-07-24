@@ -1,0 +1,96 @@
+{
+  "$description": "Semantic color tokens. Light-mode values; dark overrides in color-dark.tokens.json. Ported from web/src/app.css :root block — do not drop or rename without reason.",
+  "$type": "color",
+  "background": {
+    "$value": "oklch(0.997 0.003 130)",
+    "$description": "Page background. One fill for the whole canvas; separation comes from spacing and thin borders."
+  },
+  "foreground": {
+    "$value": "oklch(0.13 0 0)",
+    "$description": "Default text color."
+  },
+  "card": {
+    "$value": "oklch(1 0 0)",
+    "$description": "Card surface fill."
+  },
+  "card-foreground": {
+    "$value": "oklch(0.13 0 0)",
+    "$description": "Text on card surface."
+  },
+  "popover": {
+    "$value": "oklch(1 0 0)",
+    "$description": "Popover/dropdown surface fill."
+  },
+  "popover-foreground": {
+    "$value": "oklch(0.13 0 0)",
+    "$description": "Text on popover surface."
+  },
+  "primary": {
+    "$value": "oklch(0.13 0 0)",
+    "$description": "Primary action color (high-contrast neutral)."
+  },
+  "primary-foreground": {
+    "$value": "oklch(1 0 0)",
+    "$description": "Text/icon on primary surface."
+  },
+  "secondary": {
+    "$value": "oklch(0.955 0 0)",
+    "$description": "Secondary surface fill."
+  },
+  "secondary-foreground": {
+    "$value": "oklch(0.13 0 0)",
+    "$description": "Text on secondary surface."
+  },
+  "muted": {
+    "$value": "oklch(0.955 0 0)",
+    "$description": "Muted surface fill (same as secondary in light)."
+  },
+  "muted-foreground": {
+    "$value": "oklch(0.43 0 0)",
+    "$description": "Low-emphasis text (captions, placeholders)."
+  },
+  "accent": {
+    "$value": "oklch(0.93 0 0)",
+    "$description": "Accent surface fill (hover states, highlights)."
+  },
+  "accent-foreground": {
+    "$value": "oklch(0.13 0 0)",
+    "$description": "Text on accent surface."
+  },
+  "destructive": {
+    "$value": "oklch(0.577 0.245 27.325)",
+    "$description": "Destructive action color (delete, remove, error)."
+  },
+  "border": {
+    "$value": "oklch(0.92 0 0)",
+    "$description": "Default border color."
+  },
+  "input": {
+    "$value": "oklch(0.93 0 0)",
+    "$description": "Input border/fill color."
+  },
+  "ring": {
+    "$value": "{brand-ring}",
+    "$description": "Focus ring color. Aliases brand-ring so focus follows the brand accent."
+  },
+  "brand": {
+    "$value": "#5b6f00",
+    "$description": "Brand CTA fill — oats green, dark olive (Granola palette)."
+  },
+  "brand-foreground": {
+    "$value": "#f3f6e2",
+    "$description": "Text/icon on brand surface."
+  },
+  "brand-strong": {
+    "$value": "#4c5c00",
+    "$description": "Darker brand tone for readable text/links."
+  },
+  "brand-muted": {
+    "$value": "#e5eacd",
+    "$description": "Soft brand tint for chips/badges."
+  },
+  "brand-ring": {
+    "$value": "#b2c248",
+    "$description": "Focus outline color on brand surfaces."
+  }
+}

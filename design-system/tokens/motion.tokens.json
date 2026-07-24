@@ -1,0 +1,9 @@
+{
+  "$description": "Motion tokens. No duration/easing tokens existed before — transitions used inline Tailwind utilities.",
+  "duration-fast": { "$type": "duration", "$value": "150ms", "$description": "Quick feedback — hover, focus, toggle." },
+  "duration-normal": { "$type": "duration", "$value": "250ms", "$description": "Standard transition — color, opacity." },
+  "duration-slow": { "$type": "duration", "$value": "400ms", "$description": "Deliberate motion — dialog open, panel expand." },
+  "ease-in": { "$type": "cubicBezier", "$value": [0.4, 0, 1, 1], "$description": "Accelerating exit." },
+  "ease-out": { "$type": "cubicBezier", "$value": [0, 0, 0.2, 1], "$description": "Decelerating entrance." },
+  "ease-in-out": { "$type": "cubicBezier", "$value": [0.4, 0, 0.2, 1], "$description": "Symmetric — default for most transitions." }
+}

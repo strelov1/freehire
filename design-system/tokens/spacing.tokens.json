@@ -1,0 +1,17 @@
+{
+  "$description": "Spacing scale. Aligns with Tailwind's default spacing (1 unit = 0.25rem = 4px).",
+  "$type": "dimension",
+  "spacing-0": { "$value": "0", "$description": "No spacing." },
+  "spacing-1": { "$value": "0.25rem", "$description": "4px — tight icon gap." },
+  "spacing-2": { "$value": "0.5rem", "$description": "8px — compact padding." },
+  "spacing-3": { "$value": "0.75rem", "$description": "12px — default chip/badge padding." },
+  "spacing-4": { "$value": "1rem", "$description": "16px — base card/input padding." },
+  "spacing-5": { "$value": "1.25rem", "$description": "20px." },
+  "spacing-6": { "$value": "1.5rem", "$description": "24px — section gap." },
+  "spacing-8": { "$value": "2rem", "$description": "32px — card stack gap." },
+  "spacing-10": { "$value": "2.5rem", "$description": "40px." },
+  "spacing-12": { "$value": "3rem", "$description": "48px — page section gap." },
+  "spacing-16": { "$value": "4rem", "$description": "64px — large vertical rhythm." },
+  "spacing-20": { "$value": "5rem", "$description": "80px." },
+  "spacing-24": { "$value": "6rem", "$description": "96px — hero spacing." }
+}

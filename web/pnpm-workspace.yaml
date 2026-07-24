@@ -1,6 +1,6 @@
 allowBuilds:
-  '@sentry/cli': set this to true or false
-  core-js: set this to true or false
+  '@sentry/cli': false
+  core-js: false
 # pnpm 11 structural config — not a workspace definition (no packages: list).
 # strictDepBuilds: false lets install proceed when @sentry/cli and core-js
 # build scripts are skipped. @sentry/cli is only needed for source-map upload

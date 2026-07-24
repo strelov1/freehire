@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Generated design tokens — source of truth is design-system/tokens/*.tokens.json.
+   Built by `pnpm tokens:build` in design-system/ (Style Dictionary → CSS vars).
+   Do not edit these files directly; edit the .tokens.json source and rebuild. */
+@import "freehire-design-system/dist/tokens-light.css";
+@import "freehire-design-system/dist/tokens-dark.css";
+
 /* Typography plugin: the `prose` classes style the mdsvex-rendered blog post body
    (web/src/routes/blog/[slug]). Opt-in, so no other page is affected. */
 @plugin "@tailwindcss/typography";
@@ -34,72 +40,12 @@
   --color-brand-strong: var(--brand-strong);
   --color-brand-muted: var(--brand-muted);
   --color-brand-ring: var(--brand-ring);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
-}
-
-/* Flat neutral palette. One background fills the whole canvas in both modes;
-   separation comes from spacing and thin borders, not competing fills. */
-:root {
-  --background: oklch(0.997 0.003 130);
-  --foreground: oklch(0.13 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.13 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.13 0 0);
-  --primary: oklch(0.13 0 0);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.955 0 0);
-  --secondary-foreground: oklch(0.13 0 0);
-  --muted: oklch(0.955 0 0);
-  --muted-foreground: oklch(0.43 0 0);
-  --accent: oklch(0.93 0 0);
-  --accent-foreground: oklch(0.13 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.92 0 0);
-  --input: oklch(0.93 0 0);
-  --ring: var(--brand-ring);
-  --radius: 0.625rem;
-
-  /* oats green — dark olive CTA, pale tint, mid ring (Granola palette) */
-  --brand: #5b6f00;
-  --brand-foreground: #f3f6e2;
-  --brand-strong: #4c5c00;
-  --brand-muted: #e5eacd;
-  --brand-ring: #b2c248;
-}
-
-.dark {
-  --background: oklch(0.16 0.006 110);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.155 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.21 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.155 0 0);
-  --secondary: oklch(0.31 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.24 0 0);
-  --muted-foreground: oklch(0.72 0 0);
-  --accent: oklch(0.27 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 8%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: var(--brand-ring);
-
-  /* oats green on dark — a calmer olive CTA (not neon) with dark ink, deep tint */
-  --brand: oklch(0.72 0.095 121);
-  --brand-foreground: oklch(0.18 0.02 120);
-  --brand-strong: oklch(0.79 0.1 118);
-  --brand-muted: oklch(0.31 0.045 118);
-  --brand-ring: oklch(0.6 0.09 118);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
 }
 
 @layer base {
