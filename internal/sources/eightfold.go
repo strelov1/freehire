@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,11 +22,11 @@ const eightfoldPageLimit = 10
 const eightfoldDetailWorkers = 2
 
 // eightfoldMaxRetries bounds how many times a rate-limited (403/429) request is retried before
-// giving up. eightfoldRetryBase is the first backoff delay (doubled each attempt, capped); it
-// is a var so tests can set it to 0 and not sleep.
-const eightfoldMaxRetries = 6
-
-var eightfoldRetryBase = time.Second
+// giving up. eightfoldRetryBase is the first backoff delay (doubled each attempt, capped).
+const (
+	eightfoldMaxRetries = 6
+	eightfoldRetryBase  = time.Second
+)
 
 // eightfold adapts Eightfold AI career sites (e.g. apply.careers.microsoft.com). Both
 // endpoints are public GET JSON. Two list-API generations exist and a tenant supports exactly
@@ -34,10 +35,13 @@ var eightfoldRetryBase = time.Second
 // both generations) is fetched to assemble the description and canonical URL.
 type eightfold struct {
 	http JSONGetter
+	// retryBase is the first backoff delay for a rate-limited request — a field, not a
+	// package var, so tests disable sleeping without touching shared state.
+	retryBase time.Duration
 }
 
 // NewEightfold builds the Eightfold adapter over the given HTTP client.
-func NewEightfold(c JSONGetter) Source { return eightfold{http: c} }
+func NewEightfold(c JSONGetter) Source { return eightfold{http: c, retryBase: eightfoldRetryBase} }
 
 func (eightfold) Provider() string { return "eightfold" }
 
@@ -110,8 +114,8 @@ func (s eightfold) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 
 // FetchStream lists the board's positions, then fetches each one's detail concurrently and
 // emits the assembled Job the moment its detail completes — so the pipeline persists a long,
-// rate-limited crawl incrementally. A failed detail is dropped (not emitted); only a listing
-// failure is returned as a board-level error.
+// rate-limited crawl incrementally. A failed detail degrades to a list-only job (logged),
+// never a dropped posting; only a listing failure is returned as a board-level error.
 func (s eightfold) FetchStream(ctx context.Context, e CompanyEntry, emit func(Job)) error {
 	b, err := parseEightfoldBoard(e.Board)
 	if err != nil {
@@ -132,7 +136,7 @@ func (s eightfold) FetchStream(ctx context.Context, e CompanyEntry, emit func(Jo
 // Eightfold returns for rate-limiting (not auth) here, and longer waits to clear a full window.
 // A non-rate-limit error (e.g. 404) returns immediately so retry stays scoped.
 func (s eightfold) getJSONRetrying(ctx context.Context, url string, v any) error {
-	delay := eightfoldRetryBase
+	delay := s.retryBase
 	var err error
 	for attempt := 0; attempt <= eightfoldMaxRetries; attempt++ {
 		if attempt > 0 {
@@ -224,16 +228,17 @@ func (s eightfold) v2Page(ctx context.Context, b eightfoldBoard, start int) ([]e
 	return resp.Positions, resp.Count, nil
 }
 
-// detail fetches one position's detail and maps it to a Job, returning ok=false when the
-// detail request fails so the caller can skip just that position. Metadata comes from the
-// list position; the description and canonical URL come from the detail (with the list
-// position's canonical URL and a host fallback for the URL).
+// detail fetches one position's detail and maps it to a Job. Metadata comes from the list
+// position; the description and canonical URL come from the detail (with the list position's
+// canonical URL and a host fallback for the URL). A failed detail request is isolated like
+// the justjoin/nofluffjobs siblings: logged and ingested list-only (no description) rather
+// than dropping the posting — a missing description back-fills on a later crawl.
 func (s eightfold) detail(ctx context.Context, e CompanyEntry, b eightfoldBoard, p eightfoldPosition) (Job, bool) {
 	id := strconv.FormatInt(p.ID, 10)
 	url := fmt.Sprintf("https://%s/api/apply/v2/jobs/%s?domain=%s", b.host, id, b.domain)
 	var d eightfoldDetail
 	if err := s.getJSONRetrying(ctx, url, &d); err != nil {
-		return Job{}, false
+		log.Printf("eightfold: detail %s failed; ingesting list-only: %v", id, err)
 	}
 
 	location := firstNonEmpty(p.Location, firstNonEmpty(p.Locations...))
