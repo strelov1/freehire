@@ -154,6 +154,15 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 	if err := a.streamStage(ctx, 3, stage3SystemPrompt(), stage3UserPrompt(in, reqs, verdict, candidate), emit, &audited); err != nil {
 		log.Printf("matchanalysis: stage 3 audit failed, serving un-audited verdict: %v", err)
 	} else {
+		// An explicit JSON null ("strengths": null) unmarshals to a nil slice, overriding
+		// Stage 2's list — but the audit may only refine, never hollow out (an empty
+		// array is a deliberate prune and is kept). Restore the Stage 2 value on null.
+		if audited.Strengths == nil {
+			audited.Strengths = verdict.Strengths
+		}
+		if audited.Gaps == nil {
+			audited.Gaps = verdict.Gaps
+		}
 		sanitizeVerdict(&audited)
 		verdict = audited
 	}

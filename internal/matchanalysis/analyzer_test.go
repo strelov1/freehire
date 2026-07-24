@@ -119,6 +119,23 @@ func TestAnalyze_Stage3PartialMergesOntoStage2(t *testing.T) {
 	}
 }
 
+func TestAnalyze_Stage3NullListsKeepStage2(t *testing.T) {
+	// An explicit JSON null in the audit would unmarshal to a nil slice and hollow out
+	// Stage 2's strengths — the audit may only refine, never hollow out.
+	nulls := `{"title_alignment":{"score":80},"strengths":null,"gaps":null}`
+	m := &queuedModel{resp: []string{stage1JSON, stage2JSON, nulls}}
+	got, err := NewAnalyzer(llm.NewWithModel(m)).Analyze(context.Background(), sampleInput())
+	if err != nil {
+		t.Fatalf("Analyze: %v", err)
+	}
+	if len(got.Strengths) != 1 || got.Strengths[0] != "Strong Go" {
+		t.Errorf("strengths = %v, want Stage-2 list preserved on null", got.Strengths)
+	}
+	if len(got.Gaps) != 1 || got.Gaps[0] != "No Kafka" {
+		t.Errorf("gaps = %v, want Stage-2 list preserved on null", got.Gaps)
+	}
+}
+
 func TestAnalyzeStream_RetriesATransientStageFailure(t *testing.T) {
 	// Stage 1 first returns an HTML error page (a transient gateway 502), then valid JSON
 	// on the retry; the chain must recover and produce the final analysis.

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/strelov1/freehire/internal/job"
+	"github.com/strelov1/freehire/internal/jobderive"
 	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/worker"
 )
@@ -521,20 +522,22 @@ func jobIdentity(e sources.CompanyEntry, j sources.Job) (source, externalID stri
 func normalizeJob(e sources.CompanyEntry, j sources.Job) (job.Job, error) {
 	source, externalID := jobIdentity(e, j)
 	return job.New(job.Draft{
-		Source:             source,
-		ExternalID:         externalID,
-		URL:                j.URL,
-		Title:              j.Title,
-		Company:            j.Company,
-		Location:           j.Location,
-		Remote:             j.Remote,
-		Description:        j.Description,
-		PostedAt:           j.PostedAt,
-		WorkMode:           j.WorkMode,
-		Seniority:          j.Seniority,
-		Category:           j.Category,
-		EmploymentType:     j.EmploymentType,
-		Skills:             j.Skills,
-		ExperienceYearsMin: j.ExperienceYearsMin,
+		Input: jobderive.Input{
+			Source:             source,
+			ExternalID:         externalID,
+			Title:              j.Title,
+			Company:            j.Company,
+			Location:           j.Location,
+			Description:        j.Description,
+			WorkMode:           j.WorkMode,
+			Seniority:          j.Seniority,
+			Category:           j.Category,
+			EmploymentType:     j.EmploymentType,
+			Skills:             j.Skills,
+			ExperienceYearsMin: j.ExperienceYearsMin,
+		},
+		URL:      j.URL,
+		Remote:   j.Remote,
+		PostedAt: j.PostedAt,
 	})
 }
