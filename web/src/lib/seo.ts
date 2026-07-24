@@ -3,6 +3,7 @@
 // crawlers and Google Jobs see structured data in the initial HTML.
 
 import type { PostMeta } from './blog';
+import { REGION_NAMES } from './labels';
 import { companyLogoUrl } from './logo';
 import type { Company, Enrichment, Job } from './types';
 
@@ -49,25 +50,9 @@ const SALARY_UNIT: Record<string, string> = {
   year: 'YEAR',
 };
 
-// Region codes that name a place for applicantLocationRequirements. Broad or
-// worldwide reaches ('global') intentionally omit a requirement.
-const REGION_NAME: Record<string, string> = {
-  eu: 'European Union',
-  eea: 'European Economic Area',
-  uk: 'United Kingdom',
-  us: 'United States',
-  ru: 'Russia',
-  americas: 'Americas',
-  north_america: 'North America',
-  latam: 'Latin America',
-  apac: 'Asia-Pacific',
-  emea: 'EMEA',
-  mena: 'MENA',
-  africa: 'Africa',
-  cis: 'CIS',
-  central_asia: 'Central Asia',
-};
-
+// Full region names for applicantLocationRequirements come from the shared
+// REGIONS table (labels.ts). Broad or worldwide reaches ('global') carry no
+// name there and intentionally omit a requirement.
 function baseSalary(e: Enrichment): Record<string, unknown> {
   const value: Record<string, unknown> = { '@type': 'QuantitativeValue' };
   if (e.salary_min != null) value.minValue = e.salary_min;
@@ -82,7 +67,7 @@ function baseSalary(e: Enrichment): Record<string, unknown> {
 
 function applicantRegions(regions?: string[]): unknown {
   const named = (regions ?? [])
-    .map((r) => REGION_NAME[r])
+    .map((r) => REGION_NAMES[r])
     .filter((name): name is string => Boolean(name))
     .map((name) => ({ '@type': 'Country', name }));
   if (named.length === 0) return undefined;
