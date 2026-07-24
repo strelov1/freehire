@@ -162,11 +162,10 @@ func meiliDocExists(t *testing.T, meiliURL, key string, id int64) bool {
 
 func TestIntegration_EmbedWorkerDrainsQueue(t *testing.T) {
 	ctx := context.Background()
-	t.Setenv("EMBED_URL", fakeTEI(t)) // search.NewClient reads EMBED_URL → stub TEI
 	meiliURL, key := startMeili(t)
 	pool := startPostgres(t)
 
-	client := search.NewClient(meiliURL, key)
+	client := search.NewClient(meiliURL, key, search.WithEmbedURL(fakeTEI(t))) // stub TEI
 	if err := client.EnsureSemanticIndex(ctx); err != nil {
 		t.Fatalf("EnsureSemanticIndex: %v", err)
 	}
@@ -297,11 +296,10 @@ func jobStamp(t *testing.T, pool *pgxpool.Pool, id int64) (model, hash *string) 
 // path that Meili's serial task queue cannot gate.
 func TestIntegration_EmbedWorkerPGOnly(t *testing.T) {
 	ctx := context.Background()
-	t.Setenv("EMBED_URL", fakeTEI(t))
 	meiliURL, key := startMeili(t)
 	pool := startPostgres(t)
 
-	client := search.NewClient(meiliURL, key)
+	client := search.NewClient(meiliURL, key, search.WithEmbedURL(fakeTEI(t)))
 	// Create the (empty) semantic index up front so we can assert pg-only leaves it empty.
 	if err := client.EnsureSemanticIndex(ctx); err != nil {
 		t.Fatalf("EnsureSemanticIndex: %v", err)

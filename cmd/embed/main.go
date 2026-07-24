@@ -46,7 +46,9 @@ func run() int {
 	pgOnly := os.Getenv("EMBED_PG_ONLY") != ""
 
 	ecfg := config.LoadEmbed()
-	client := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
+	ec := config.LoadEmbedClient()
+	client := search.NewClient(cfg.MeiliURL, cfg.MeiliKey,
+		search.WithEmbedURL(ec.URL), search.WithEmbedAPIKey(ec.APIKey), search.WithEmbedConcurrency(ec.Concurrency))
 
 	// Ensure the semantic index exists WITH its userProvided embedder before pushing
 	// vectors. Unlike the incremental facet path (a plain index), a semantic upsert into

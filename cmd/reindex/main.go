@@ -66,7 +66,9 @@ func run() int {
 		return 1
 	}
 
-	client := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
+	ec := config.LoadEmbedClient()
+	client := search.NewClient(cfg.MeiliURL, cfg.MeiliKey,
+		search.WithEmbedURL(ec.URL), search.WithEmbedAPIKey(ec.APIKey), search.WithEmbedConcurrency(ec.Concurrency))
 	q := db.New(pool)
 
 	semantic := semanticRequested(os.Args[1:])

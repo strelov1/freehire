@@ -110,9 +110,12 @@ func main() {
 
 	// Search is optional: without a Meilisearch key the client stays nil and the
 	// search endpoint reports 503, leaving the rest of the API fully functional.
+	// The embed options wire the EMBED_* env (CV embedding shares the jobs TEI path).
 	var searchClient *search.Client
 	if cfg.MeiliKey != "" {
-		searchClient = search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
+		ec := config.LoadEmbedClient()
+		searchClient = search.NewClient(cfg.MeiliURL, cfg.MeiliKey,
+			search.WithEmbedURL(ec.URL), search.WithEmbedAPIKey(ec.APIKey), search.WithEmbedConcurrency(ec.Concurrency))
 	}
 
 	// Résumé storage is optional: only when all four S3 settings are present does
