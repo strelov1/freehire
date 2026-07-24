@@ -267,7 +267,9 @@ ON CONFLICT (slug) DO UPDATE SET
 -- reports real churn. This is cmd/recount-companies' whole job; run periodically
 -- (eventual consistency). The facet aggregates are each their own non-correlated
 -- GROUP BY so the row-multiplying unnest of one array never distorts another's count.
-WITH oj AS (
+-- oj is referenced by all eight aggregates, so it is pinned MATERIALIZED: without the
+-- keyword the planner is free to inline it and re-scan the open-jobs set per aggregate.
+WITH oj AS MATERIALIZED (
     -- duplicate_of IS NULL counts one canonical job per role cluster, so the company
     -- job_count matches the collapsed /jobs and company lists (reposts share facets, so
     -- the DISTINCT region/country aggregates are unaffected — only the count changes).

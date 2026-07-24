@@ -1154,6 +1154,8 @@ type Querier interface {
 	// reports real churn. This is cmd/recount-companies' whole job; run periodically
 	// (eventual consistency). The facet aggregates are each their own non-correlated
 	// GROUP BY so the row-multiplying unnest of one array never distorts another's count.
+	// oj is referenced by all eight aggregates, so it is pinned MATERIALIZED: without the
+	// keyword the planner is free to inline it and re-scan the open-jobs set per aggregate.
 	// gov marks a company whose open jobs come from an exclusively-government source
 	// (usajobs = US federal, neogov = US state/local gov ATS). Generic ATS (workday,
 	// greenhouse, …) carry government jobs too, so they are deliberately NOT a signal.
