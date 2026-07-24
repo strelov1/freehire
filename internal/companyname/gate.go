@@ -20,7 +20,6 @@ var (
 	// (chetwood-bank, gs1ca).
 	nonAlnum = regexp.MustCompile(`[^a-z0-9]+`)
 	words    = regexp.MustCompile(`[A-Za-z0-9]+`)
-	jobsAt   = regexp.MustCompile(`(?i)Jobs at (.+?)\s*\|`)
 	// A careers-page lead-in that precedes the real name: "Jobs at X",
 	// "Careers at X", "Employment Opportunities at X", "Open roles at X".
 	leadInAt = regexp.MustCompile(`(?i)^(?:jobs|careers|employment opportunities|open (?:roles|positions|jobs)) at (.+)$`)
@@ -52,13 +51,11 @@ func SlugLike(name string) bool {
 // ExtractTitleName pulls a company name out of a careers-page <title>. It
 // handles the shapes ATS careers pages use — a "<lead-in> at {Name}" prefix
 // (Jobs/Careers/Employment Opportunities at …) and a trailing "{Name} Careers" —
-// then cleans a stray " | …" section and collapsed whitespace off the result.
+// then cleans a stray "| …" section and collapsed whitespace off the result.
 // Returns "" when no shape matches.
 func ExtractTitleName(title string) string {
 	title = strings.TrimSpace(html.UnescapeString(title))
 	switch {
-	case jobsAt.MatchString(title):
-		return clean(jobsAt.FindStringSubmatch(title)[1])
 	case leadInAt.MatchString(title):
 		return clean(leadInAt.FindStringSubmatch(title)[1])
 	default:
@@ -69,10 +66,11 @@ func ExtractTitleName(title string) string {
 	}
 }
 
-// clean drops a trailing " | …" fragment (careers titles append a section name
-// after the company) and collapses runs of whitespace to single spaces.
+// clean drops a trailing "| …" fragment (careers titles append a section name
+// after the company, with or without spaces around the pipe — "Acme | Careers"
+// and "Acme|Careers" alike) and collapses runs of whitespace to single spaces.
 func clean(s string) string {
-	if i := strings.Index(s, " | "); i >= 0 {
+	if i := strings.Index(s, "|"); i >= 0 {
 		s = s[:i]
 	}
 	return strings.Join(strings.Fields(s), " ")

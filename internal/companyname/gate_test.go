@@ -32,6 +32,8 @@ func TestExtractTitleName(t *testing.T) {
 	}{
 		{"Jobs at Centellic | Centellic Careers", "Centellic"},
 		{"Jobs at AFC Bournemouth | AFC Bournemouth Careers", "AFC Bournemouth"},
+		// A pipe without surrounding spaces is the same section separator.
+		{"Jobs at Centellic|Centellic Careers", "Centellic"},
 		{"Bath Spa University Careers", "Bath Spa University"},
 		// A non-"Jobs at" lead-in prefix is stripped too.
 		{"Employment Opportunities at BuzzFeed, Inc.", "BuzzFeed, Inc."},
