@@ -2,9 +2,11 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5"
 )
 
 // LocalsUserID is the c.Locals key under which RequireAuth and RequireAuthOrKey
@@ -65,7 +67,9 @@ type APIKeyAuthenticator interface {
 // key, storing the resolved user id in the same locals as RequireAuth — so every
 // handler behind it works unchanged. The cookie is tried first, leaving the
 // browser path identical; a missing or invalid cookie falls through to the key.
-// It responds 401 when neither credential resolves.
+// It responds 401 when neither credential resolves. A key-lookup failure that is
+// not "no such key" (pgx.ErrNoRows) is a real error and is returned — it must not
+// be masked as a 401.
 func RequireAuthOrKey(iss *Issuer, keys APIKeyAuthenticator) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if token := c.Cookies(CookieName); token != "" {
@@ -74,7 +78,13 @@ func RequireAuthOrKey(iss *Issuer, keys APIKeyAuthenticator) fiber.Handler {
 				return c.Next()
 			}
 		}
-		if id, viaKey, ok := resolveBearer(c, iss, keys); ok {
+		id, viaKey, ok, err := resolveBearer(c, iss, keys)
+		if err != nil {
+			// A lookup failure (DB down, etc.) is not "unauthenticated":
+			// surface it as a 500 rather than masking it as a 401.
+			return err
+		}
+		if ok {
 			c.Locals(LocalsUserID, id)
 			if viaKey {
 				c.Locals(localsViaAPIKey, true)
@@ -87,9 +97,11 @@ func RequireAuthOrKey(iss *Issuer, keys APIKeyAuthenticator) fiber.Handler {
 
 // OptionalAuth returns middleware that attaches the caller's user id when a valid
 // session cookie or API key is present, and otherwise passes through anonymously.
-// It NEVER rejects: an absent, expired, or invalid credential simply leaves no user
-// id in locals, so a public read still succeeds. Used on the job/company detail
-// reads to overlay the caller's own vote without gating the page behind sign-in.
+// An absent, expired, or unknown credential simply leaves no user id in locals, so
+// a public read still succeeds. Used on the job/company detail reads to overlay the
+// caller's own vote without gating the page behind sign-in. A key-lookup failure
+// that is not "no such key" (pgx.ErrNoRows) is a real error and is returned — it
+// must not be silently degraded to anonymous.
 func OptionalAuth(iss *Issuer, keys APIKeyAuthenticator) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if token := c.Cookies(CookieName); token != "" {
@@ -98,7 +110,12 @@ func OptionalAuth(iss *Issuer, keys APIKeyAuthenticator) fiber.Handler {
 				return c.Next()
 			}
 		}
-		if id, viaKey, ok := resolveBearer(c, iss, keys); ok {
+		id, viaKey, ok, err := resolveBearer(c, iss, keys)
+		if err != nil {
+			// A lookup outage is a real error, not "anonymous": surface it.
+			return err
+		}
+		if ok {
 			c.Locals(LocalsUserID, id)
 			if viaKey {
 				c.Locals(localsViaAPIKey, true)
@@ -172,19 +189,28 @@ func RequireModeratorOrBeta(roles RoleLoader, beta BetaLoader) fiber.Handler {
 // accepting EITHER a session JWT or an API key. The browser extension presents
 // its session JWT here (it has no cross-origin cookie), so a JWT bearer is a full
 // session — viaKey is false; only an actual API key sets viaKey. Returns ok=false
-// when there is no bearer or neither interpretation resolves.
-func resolveBearer(c *fiber.Ctx, iss *Issuer, keys APIKeyAuthenticator) (id int64, viaKey bool, ok bool) {
+// when there is no bearer or neither interpretation resolves. An API-key lookup
+// failure that is not "no such key" (pgx.ErrNoRows) is a real error and is
+// returned — it must not be silently masked as an unauthenticated request.
+func resolveBearer(c *fiber.Ctx, iss *Issuer, keys APIKeyAuthenticator) (id int64, viaKey bool, ok bool, err error) {
 	tok := bearerToken(c)
 	if tok == "" {
-		return 0, false, false
+		return 0, false, false, nil
 	}
 	if id, err := iss.Parse(tok); err == nil {
-		return id, false, true
+		return id, false, true, nil
 	}
-	if id, err := keys.AuthenticateAPIKey(c.Context(), HashAPIKey(tok)); err == nil {
-		return id, true, true
+	id, err = keys.AuthenticateAPIKey(c.Context(), HashAPIKey(tok))
+	switch {
+	case err == nil:
+		return id, true, true, nil
+	case errors.Is(err, pgx.ErrNoRows):
+		// No live key matches — no credential resolved.
+		return 0, false, false, nil
+	default:
+		// A lookup failure (DB down, etc.) is real: surface it to the caller.
+		return 0, false, false, err
 	}
-	return 0, false, false
 }
 
 // bearerToken extracts the credential from an `Authorization: Bearer <token>`

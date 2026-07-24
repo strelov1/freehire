@@ -10,11 +10,12 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5"
 )
 
 // fakeKeyAuth authenticates exactly one token hash to a user id; any other hash
-// errors, standing in for an unknown, revoked, or expired key (the real DB layer
-// distinguishes those; the middleware treats every error as "not authenticated").
+// returns pgx.ErrNoRows, standing in for an unknown, revoked, or expired key —
+// mirroring the real db layer, which reports all of those as ErrNoRows.
 type fakeKeyAuth struct {
 	validHash string
 	userID    int64
@@ -24,7 +25,15 @@ func (f fakeKeyAuth) AuthenticateAPIKey(_ context.Context, tokenHash string) (in
 	if tokenHash == f.validHash {
 		return f.userID, nil
 	}
-	return 0, errors.New("no such key")
+	return 0, pgx.ErrNoRows
+}
+
+// errKeyAuth fails every lookup with a generic error, standing in for a database
+// outage — which the middleware must NOT mask as a 401/anonymous.
+type errKeyAuth struct{ err error }
+
+func (f errKeyAuth) AuthenticateAPIKey(_ context.Context, _ string) (int64, error) {
+	return 0, f.err
 }
 
 // dualAuthApp mounts a route behind RequireAuthOrKey that echoes the resolved user
@@ -202,6 +211,58 @@ func TestRequireAuthOrKey_JWTBearerAuthenticatesAsSession(t *testing.T) {
 	}
 	if body.ViaKey {
 		t.Error("a JWT bearer is a session credential, not via-key")
+	}
+}
+
+func TestRequireAuthOrKey_KeyLookupErrorIsNot401(t *testing.T) {
+	iss := NewIssuer("secret", time.Hour)
+	keys := errKeyAuth{err: errors.New("connection refused")}
+
+	req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
+	req.Header.Set("Authorization", "Bearer fhk_whatever")
+
+	resp, err := dualAuthApp(iss, keys).Test(req)
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Errorf("status = %d, want 500 (a lookup outage must not masquerade as 401)", resp.StatusCode)
+	}
+}
+
+func TestOptionalAuth_KeyLookupErrorPropagates(t *testing.T) {
+	iss := NewIssuer("secret", time.Hour)
+
+	newApp := func(keys APIKeyAuthenticator) *fiber.App {
+		app := fiber.New()
+		app.Get("/job", OptionalAuth(iss, keys), func(c *fiber.Ctx) error {
+			_, ok := UserID(c)
+			return c.JSON(fiber.Map{"authed": ok})
+		})
+		return app
+	}
+	newReq := func() *http.Request {
+		req := httptest.NewRequest(fiber.MethodGet, "/job", nil)
+		req.Header.Set("Authorization", "Bearer fhk_whatever")
+		return req
+	}
+
+	// Unknown key (ErrNoRows) passes through anonymously.
+	resp, err := newApp(fakeKeyAuth{}).Test(newReq())
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("unknown key: status = %d, want 200", resp.StatusCode)
+	}
+
+	// A lookup outage is surfaced, not silently degraded to anonymous.
+	resp, err = newApp(errKeyAuth{err: errors.New("connection refused")}).Test(newReq())
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Errorf("outage: status = %d, want 500", resp.StatusCode)
 	}
 }
 
