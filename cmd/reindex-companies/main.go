@@ -12,6 +12,7 @@ package main
 import (
 	"context"
 	"log"
+	"time"
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/search"
@@ -74,6 +75,9 @@ type companyRebuilder interface {
 	Prepare(ctx context.Context) error
 	Push(ctx context.Context, docs []search.CompanyDocument) error
 	Promote(ctx context.Context) error
+	// Cleanup drops a half-built rebuild index. reindexCompanies defers it so a run
+	// that aborts before Promote's swap-and-drop does not leave an orphan index.
+	Cleanup(ctx context.Context) error
 }
 
 // reindexCompanies streams every hiring company into a fresh index and swaps it in.
@@ -85,6 +89,25 @@ func reindexCompanies(ctx context.Context, r companyReader, b companyRebuilder, 
 	if err := b.Prepare(ctx); err != nil {
 		return 0, err
 	}
+
+	// Promote ends the happy path by swapping the rebuild index in and dropping the old
+	// one; any earlier return is an abort that leaves the half-built rebuild index
+	// behind. Drop it in a defer (mirrors the jobs reindexFull) so an aborted run never
+	// orphans an index that eats disk until the next run's Prepare clears it.
+	// Best-effort on a cancellation-immune context so it can still reach Meilisearch
+	// when the abort was the parent ctx being cancelled.
+	promoted := false
+	defer func() {
+		if promoted {
+			return
+		}
+		cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		if err := b.Cleanup(cctx); err != nil {
+			log.Printf("reindex-companies: cleanup aborted rebuild index (best-effort): %v", err)
+		}
+	}()
+
 	var indexed int
 	afterSlug := ""
 	for {
@@ -111,5 +134,6 @@ func reindexCompanies(ctx context.Context, r companyReader, b companyRebuilder, 
 	if err := b.Promote(ctx); err != nil {
 		return indexed, err
 	}
+	promoted = true
 	return indexed, nil
 }

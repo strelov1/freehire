@@ -256,3 +256,10 @@ func (r *CompanyRebuild) Promote(ctx context.Context) error {
 	}
 	return r.c.dropIndex(ctx, companyRebuildUID)
 }
+
+// Cleanup drops the rebuild index, tolerating its absence. reindexCompanies defers it
+// so a run that aborts before Promote (whose swap-and-drop is the normal teardown)
+// does not leave an orphan rebuild index — mirroring the jobs Rebuild. Idempotent.
+func (r *CompanyRebuild) Cleanup(ctx context.Context) error {
+	return r.c.dropIndex(ctx, companyRebuildUID)
+}

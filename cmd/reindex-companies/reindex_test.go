@@ -30,16 +30,21 @@ func (f *fakeReader) Page(_ context.Context, afterSlug string, limit int32) ([]d
 
 // fakeRebuild records the documents pushed and the lifecycle calls.
 type fakeRebuild struct {
-	prepared, promoted int
-	pushed             []search.CompanyDocument
+	prepared, promoted, cleaned int
+	pushErr                     error
+	pushed                      []search.CompanyDocument
 }
 
 func (f *fakeRebuild) Prepare(context.Context) error { f.prepared++; return nil }
 func (f *fakeRebuild) Push(_ context.Context, docs []search.CompanyDocument) error {
+	if f.pushErr != nil {
+		return f.pushErr
+	}
 	f.pushed = append(f.pushed, docs...)
 	return nil
 }
 func (f *fakeRebuild) Promote(context.Context) error { f.promoted++; return nil }
+func (f *fakeRebuild) Cleanup(context.Context) error { f.cleaned++; return nil }
 
 func TestReindexCompanies_StreamsAllRowsAcrossPages(t *testing.T) {
 	rows := []db.Company{
@@ -84,5 +89,32 @@ func TestReindexCompanies_EmptyPromotesEmptyIndex(t *testing.T) {
 	// emptied catalogue swaps in cleanly rather than leaving a stale index live.
 	if b.prepared != 1 || b.promoted != 1 {
 		t.Errorf("lifecycle: prepared=%d promoted=%d, want 1/1", b.prepared, b.promoted)
+	}
+}
+
+func TestReindexCompanies_CleansUpOnAbort(t *testing.T) {
+	rows := []db.Company{{Slug: "acme", Name: "Acme", JobCount: 3}}
+	b := &fakeRebuild{pushErr: errTest}
+
+	if _, err := reindexCompanies(context.Background(), &fakeReader{rows: rows}, b, 2); err == nil {
+		t.Fatal("reindexCompanies: want the push error propagated")
+	}
+	if b.promoted != 0 {
+		t.Errorf("promoted = %d, want 0 (aborted before Promote)", b.promoted)
+	}
+	if b.cleaned != 1 {
+		t.Errorf("cleaned = %d, want 1 (an aborted run drops the half-built rebuild index)", b.cleaned)
+	}
+}
+
+func TestReindexCompanies_NoCleanupOnSuccess(t *testing.T) {
+	rows := []db.Company{{Slug: "acme", Name: "Acme", JobCount: 3}}
+	b := &fakeRebuild{}
+
+	if _, err := reindexCompanies(context.Background(), &fakeReader{rows: rows}, b, 2); err != nil {
+		t.Fatalf("reindexCompanies: %v", err)
+	}
+	if b.cleaned != 0 {
+		t.Errorf("cleaned = %d, want 0 (Promote's swap-and-drop is the happy-path teardown)", b.cleaned)
 	}
 }
