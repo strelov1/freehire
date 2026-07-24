@@ -32,13 +32,16 @@ FROM user_job_analysis
 WHERE user_id = $1 AND created_at >= $2;
 
 -- name: ListUserJobAnalyses :many
--- Every job the caller has analyzed, newest first, joined to the job for display. Powers
+-- Jobs the caller has analyzed, newest first, joined to the job for display. Powers
 -- the Tracking → AI fit tab. Includes closed jobs (surfaced with a badge). The stored
 -- staleness stamps ride along so the handler can flag rows whose CV/job/model has since
 -- changed, and the analysis blob carries the overall score + verdict the list shows.
+-- Capped at 500 — the quota window (see CountRecentUserJobAnalyses) keeps real usage
+-- far below that, and each row drags a full analysis JSONB over the wire.
 SELECT j.public_slug, j.title, j.company, j.closed_at, j.content_hash,
        a.analysis, a.model, a.cv_uploaded_at, a.job_content_hash, a.created_at
 FROM user_job_analysis a
 JOIN jobs j ON j.id = a.job_id
 WHERE a.user_id = $1
-ORDER BY a.created_at DESC;
+ORDER BY a.created_at DESC
+LIMIT 500;

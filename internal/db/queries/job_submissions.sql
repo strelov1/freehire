@@ -22,13 +22,16 @@ RETURNING *;
 SELECT * FROM job_submissions WHERE id = $1;
 
 -- name: ListPendingSubmissions :many
--- The moderator review queue: every pending submission, newest first, with the submitter's
--- email so the moderator can judge provenance.
+-- The moderator review queue: pending submissions, newest first, with the submitter's
+-- email so the moderator can judge provenance. Capped at 500 as a runaway-growth
+-- guard — far above any plausible backlog; a queue that deep needs bulk triage,
+-- not a longer page.
 SELECT s.*, u.email AS submitter_email
 FROM job_submissions s
 JOIN users u ON u.id = s.submitted_by
 WHERE s.status = 'pending'
-ORDER BY s.created_at DESC;
+ORDER BY s.created_at DESC
+LIMIT 500;
 
 -- name: ListSubmissionsByUser :many
 -- "My submissions": one user's submissions, newest first, whatever their status.

@@ -18,11 +18,14 @@ ORDER BY o.created_at DESC;
 
 -- name: ListPendingReferralOffers :many
 -- The moderator queue: offers awaiting a decision, oldest first, with display name.
+-- Capped at 500 as a runaway-growth guard — far above any plausible backlog; a
+-- queue that deep needs bulk triage, not a longer page.
 SELECT o.*, c.name AS company_name
 FROM referral_offers o
 LEFT JOIN companies c ON c.slug = o.company_slug
 WHERE o.status = 'pending'
-ORDER BY o.created_at;
+ORDER BY o.created_at
+LIMIT 500;
 
 -- name: DeleteReferralOffer :execrows
 -- Withdraw ("stop being a referrer"): the owner deletes their own offer. The user_id
