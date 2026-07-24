@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import { resolve } from '$app/paths';
   import { api } from '$lib/api';
   import type {
@@ -70,7 +70,11 @@
   const hasAnySource = $derived(hasGmail || hasMailbox);
   const bothConnected = $derived(hasGmail && hasMailbox);
 
+  let destroyed = false;
   onMount(load);
+  onDestroy(() => {
+    destroyed = true;
+  });
 
   async function load() {
     loading = true;
@@ -367,6 +371,8 @@
       await api.syncGmail();
       for (let i = 0; i < 8; i++) {
         await new Promise((r) => setTimeout(r, 2500));
+        // Stop polling once the page is gone — no requests for a dead view.
+        if (destroyed) return;
         await fetchFirstPage();
       }
     } catch (e) {
