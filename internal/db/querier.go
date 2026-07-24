@@ -450,8 +450,11 @@ type Querier interface {
 	// reopens it via the upsert regardless). Keyed by source alone; the caller namespaces the
 	// adapter's raw posting id to match the stored external_id.
 	ExistingExternalIDs(ctx context.Context, source string) ([]string, error)
-	// Record a failed attempt: bump attempts, release the lease, store the error, and
-	// dead-letter (set failed_at) once attempts reach max_attempts.
+	// Record a failed attempt: bump attempts, store the error, and dead-letter (set
+	// failed_at) once attempts reach max_attempts. The lease (claimed_at) is
+	// intentionally left in place — its expiry gates the retry to a later run and
+	// doubles as the crash reaper, so a failed entry is never reprocessed within the
+	// same run. Mirrors RecordEnrichmentFailure / RecordSemanticFailure.
 	FailEmailClassification(ctx context.Context, arg FailEmailClassificationParams) error
 	// Read-only balance for display (no lock, no LLM). Returns no rows for a user who has never
 	// had credit activity; the caller treats that as a full monthly grant remaining.
