@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"log"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
@@ -27,36 +28,39 @@ func (a *API) GmailConnect(c *fiber.Ctx) error {
 
 // GmailCallback finishes the flow: it verifies state, exchanges the code for a
 // refresh token + the connected address, stores the token encrypted, and
-// redirects back to the inbox. Failures redirect with ?gmail_error (never JSON).
+// redirects back to the inbox. Failures redirect with ?gmail_error (never JSON);
+// the underlying cause is logged server-side first (like oauthFail), since the
+// generic redirect marker tells the user nothing.
 func (a *API) GmailCallback(c *fiber.Ctx) error {
-	redirect := func(qs string) error {
+	redirect := func(qs string, err error) error {
+		log.Printf("gmail connect: %s: %v", qs, err)
 		return c.Redirect(a.frontendOrigin+"/my/inbox?"+qs, fiber.StatusFound)
 	}
 	userID, ok := auth.UserID(c)
 	if !ok {
-		return redirect("gmail_error=auth")
+		return redirect("gmail_error=auth", errors.New("no authenticated user"))
 	}
 	cookieState := c.Cookies(oauth.StateCookieName)
 	oauth.ClearStateCookie(c, a.cookieSecure)
 	if cookieState == "" || c.Query("state") != cookieState {
-		return redirect("gmail_error=state")
+		return redirect("gmail_error=state", errors.New("state cookie missing or mismatched"))
 	}
 	if code := c.Query("code"); code != "" {
 		refresh, email, err := a.gmailConnector.Exchange(c.Context(), code)
 		if err != nil {
-			return redirect("gmail_error=exchange")
+			return redirect("gmail_error=exchange", err)
 		}
 		enc, err := a.gmailCipher.Encrypt(refresh)
 		if err != nil {
-			return redirect("gmail_error=exchange")
+			return redirect("gmail_error=exchange", err)
 		}
 		if err := a.queries.UpsertGmailConnection(c.Context(), db.UpsertGmailConnectionParams{
 			UserID: userID, Email: email, RefreshTokenEnc: enc,
 		}); err != nil {
-			return redirect("gmail_error=exchange")
+			return redirect("gmail_error=exchange", err)
 		}
 	}
-	return redirect("gmail=connected")
+	return c.Redirect(a.frontendOrigin+"/my/inbox?gmail=connected", fiber.StatusFound)
 }
 
 // GmailStatus reports whether the caller has connected Gmail.
