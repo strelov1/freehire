@@ -5,7 +5,7 @@
 // the generated contracts so it stays in lock-step with the Go StringFacets.
 
 /** Production base URL for every path below. */
-export const BASE_URL = 'https://freehire.dev/api/v1';
+export const BASE_URL = 'https://freehire.me/api/v1';
 
 /** Authentication requirement for an endpoint, rendered as a badge. */
 export type Auth = 'none' | 'cookie-or-key' | 'cookie' | 'moderator';

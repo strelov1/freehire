@@ -2,7 +2,7 @@
 
 # freehire API
 
-Base URL: `https://freehire.dev/api/v1`
+Base URL: `https://freehire.me/api/v1`
 
 ## Contents
 
@@ -27,7 +27,7 @@ Base URL: `https://freehire.dev/api/v1`
 
 ## Base URL
 
-All endpoints are served under `https://freehire.dev/api/v1`. The API is read-first and open: the job, search, facet, and company endpoints need no authentication and may be called cross-origin.
+All endpoints are served under `https://freehire.me/api/v1`. The API is read-first and open: the job, search, facet, and company endpoints need no authentication and may be called cross-origin.
 
 Authenticated endpoints accept either the browser session cookie (set by sign-in, same-origin) or a personal API key sent as a Bearer token — see Authentication and API keys below.
 
@@ -135,7 +135,7 @@ List jobs, newest first, with limit/offset pagination.
 | `offset` | integer | no | Rows to skip. (e.g. `0`) |
 
 ```bash
-curl "https://freehire.dev/api/v1/jobs?limit=20&offset=0"
+curl "https://freehire.me/api/v1/jobs?limit=20&offset=0"
 ```
 
 ```json
@@ -221,7 +221,7 @@ Combine free-text `q` with any of the filter params below. Repeated facet params
 Plus every filter in [Filtering jobs](#filtering-jobs).
 
 ```bash
-curl "https://freehire.dev/api/v1/jobs/search?q=golang&seniority=senior&work_mode=remote&regions=cis&sort=posted_at"
+curl "https://freehire.me/api/v1/jobs/search?q=golang&seniority=senior&work_mode=remote&regions=cis&sort=posted_at"
 ```
 
 ```json
@@ -254,7 +254,7 @@ Same query and filters as `/jobs/search`, but each result carries the `descripti
 Plus every filter in [Filtering jobs](#filtering-jobs).
 
 ```bash
-curl "https://freehire.dev/api/v1/agent/jobs/search?q=golang&work_mode=remote&description_format=markdown"
+curl "https://freehire.me/api/v1/agent/jobs/search?q=golang&work_mode=remote&description_format=markdown"
 ```
 
 ```json
@@ -280,7 +280,7 @@ Takes the same `q` and filter params as search, but returns the distribution of 
 | `(any filter)` | string | no | Any search filter param narrows the counted set. (e.g. `work_mode=remote`) |
 
 ```bash
-curl "https://freehire.dev/api/v1/jobs/facets?work_mode=remote"
+curl "https://freehire.me/api/v1/jobs/facets?work_mode=remote"
 ```
 
 ```json
@@ -311,7 +311,7 @@ A single job by its public slug (serves closed jobs too).
 | `slug` | string | yes | The job `public_slug`. (e.g. `senior-go-engineer-acme-1a2b`) |
 
 ```bash
-curl "https://freehire.dev/api/v1/jobs/senior-go-engineer-acme-1a2b"
+curl "https://freehire.me/api/v1/jobs/senior-go-engineer-acme-1a2b"
 ```
 
 ```json
@@ -339,7 +339,7 @@ Backed by the optional semantic index. Returns an empty list (not an error) when
 | `limit` | integer | no | Max similar jobs. (e.g. `10`) |
 
 ```bash
-curl "https://freehire.dev/api/v1/jobs/senior-go-engineer-acme-1a2b/similar?limit=10"
+curl "https://freehire.me/api/v1/jobs/senior-go-engineer-acme-1a2b/similar?limit=10"
 ```
 
 ```json
@@ -368,7 +368,7 @@ The per-city openings folded under one canonical card by content-dedup — each 
 | `offset` | integer | no | Rows to skip. (e.g. `0`) |
 
 ```bash
-curl "https://freehire.dev/api/v1/jobs/senior-go-engineer-acme-1a2b/copies"
+curl "https://freehire.me/api/v1/jobs/senior-go-engineer-acme-1a2b/copies"
 ```
 
 ```json
@@ -404,7 +404,7 @@ How well the job’s skills are covered by your profile skills — exact, adjace
 | `slug` | string | yes | The job `public_slug`. |
 
 ```bash
-curl "https://freehire.dev/api/v1/jobs/<slug>/match" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl "https://freehire.me/api/v1/jobs/<slug>/match" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
@@ -436,7 +436,7 @@ Returns the cached analysis, flagged `stale` when your CV or the job changed sin
 | `slug` | string | yes | The job `public_slug`. |
 
 ```bash
-curl "https://freehire.dev/api/v1/jobs/<slug>/fit" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl "https://freehire.me/api/v1/jobs/<slug>/fit" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
@@ -473,7 +473,7 @@ Runs the fit prompt-chain over your stored CV and the job, caches the result, an
 | `slug` | string | yes | The job `public_slug`. |
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/jobs/<slug>/fit" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl -X POST "https://freehire.me/api/v1/jobs/<slug>/fit" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
@@ -501,7 +501,7 @@ The same three-stage chain as `POST /jobs/{slug}/fit`, streamed as SSE (`text/ev
 | `slug` | string | yes | The job `public_slug`. |
 
 ```bash
-curl -N "https://freehire.dev/api/v1/jobs/<slug>/fit/stream" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl -N "https://freehire.me/api/v1/jobs/<slug>/fit/stream" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
@@ -528,7 +528,7 @@ Ranks jobs by your persisted CV embedding, constrained by the same facet filter 
 | `offset` | integer | no | Rows to skip; `offset + limit` ≤ 10000. (e.g. `0`) |
 
 ```bash
-curl "https://freehire.dev/api/v1/me/recommendations" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl "https://freehire.me/api/v1/me/recommendations" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
@@ -559,7 +559,7 @@ Stateless sibling of the CV verdict: skills come from the request body, the mark
 | `skills` | string[] | yes | The skill list to score (max 100). (e.g. `["go","postgresql"]`) |
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/market/coverage?category=backend" \
+curl -X POST "https://freehire.me/api/v1/market/coverage?category=backend" \
   -H "Authorization: Bearer $FREEHIRE_API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"skills":["go","postgresql"]}'
@@ -615,7 +615,7 @@ Most active first. Facet params are repeatable and filter by array overlap (OR w
 | `offset` | integer | no | Rows to skip. (e.g. `0`) |
 
 ```bash
-curl "https://freehire.dev/api/v1/companies?q=acme&collections=yc"
+curl "https://freehire.me/api/v1/companies?q=acme&collections=yc"
 ```
 
 ```json
@@ -670,7 +670,7 @@ A company and a page of its open jobs.
 | `offset` | integer | no | Rows to skip in the jobs list. (e.g. `0`) |
 
 ```bash
-curl "https://freehire.dev/api/v1/companies/acme"
+curl "https://freehire.me/api/v1/companies/acme"
 ```
 
 ```json
@@ -714,7 +714,7 @@ Distinct company subindustry vocabulary with company counts.
 Backs the searchable “Industry” facet’s option list, most common first. Counts are unconditional (they do not reflect other active list filters).
 
 ```bash
-curl "https://freehire.dev/api/v1/companies/subindustries"
+curl "https://freehire.me/api/v1/companies/subindustries"
 ```
 
 ```json
@@ -739,7 +739,7 @@ Create an account and start a session.
 | `password` | string | yes | Account password. |
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/auth/register" \
+curl -X POST "https://freehire.me/api/v1/auth/register" \
   -H 'Content-Type: application/json' \
   -c cookies.txt \
   -d '{"email":"me@example.com","password":"hunter2hunter2"}'
@@ -763,7 +763,7 @@ Sign in and start a session.
 | `password` | string | yes | Account password. |
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/auth/login" \
+curl -X POST "https://freehire.me/api/v1/auth/login" \
   -H 'Content-Type: application/json' \
   -c cookies.txt \
   -d '{"email":"me@example.com","password":"hunter2hunter2"}'
@@ -780,7 +780,7 @@ curl -X POST "https://freehire.dev/api/v1/auth/login" \
 Clear the session cookie.
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/auth/logout" -b cookies.txt
+curl -X POST "https://freehire.me/api/v1/auth/logout" -b cookies.txt
 ```
 
 ```json
@@ -794,7 +794,7 @@ curl -X POST "https://freehire.dev/api/v1/auth/logout" -b cookies.txt
 The current user (cookie or API key).
 
 ```bash
-curl "https://freehire.dev/api/v1/auth/me" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl "https://freehire.me/api/v1/auth/me" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
@@ -808,7 +808,7 @@ curl "https://freehire.dev/api/v1/auth/me" -H "Authorization: Bearer $FREEHIRE_A
 List the enabled OAuth providers.
 
 ```bash
-curl "https://freehire.dev/api/v1/auth/oauth/providers"
+curl "https://freehire.me/api/v1/auth/oauth/providers"
 ```
 
 ```json
@@ -831,7 +831,7 @@ Browser-only: redirects to the provider, then back to `/auth/oauth/{provider}/ca
 
 ```bash
 # open in a browser:
-https://freehire.dev/api/v1/auth/oauth/google/start
+https://freehire.me/api/v1/auth/oauth/google/start
 ```
 
 ## API keys
@@ -852,7 +852,7 @@ Create a key; returns the plaintext token once.
 | `expires_at` | string (RFC3339) | no | Optional expiry; omit for no expiry. |
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/me/api-keys" \
+curl -X POST "https://freehire.me/api/v1/me/api-keys" \
   -H 'Content-Type: application/json' \
   -b cookies.txt \
   -d '{"name":"cli-laptop"}'
@@ -869,7 +869,7 @@ curl -X POST "https://freehire.dev/api/v1/me/api-keys" \
 List your keys (metadata only, never the token).
 
 ```bash
-curl "https://freehire.dev/api/v1/me/api-keys" -b cookies.txt
+curl "https://freehire.me/api/v1/me/api-keys" -b cookies.txt
 ```
 
 ```json
@@ -889,7 +889,7 @@ Revoke a key.
 | `id` | integer | yes | The key id. (e.g. `7`) |
 
 ```bash
-curl -X DELETE "https://freehire.dev/api/v1/me/api-keys/7" -b cookies.txt
+curl -X DELETE "https://freehire.me/api/v1/me/api-keys/7" -b cookies.txt
 ```
 
 ```json
@@ -913,7 +913,7 @@ Record that you viewed the job.
 | `slug` | string | yes | The job `public_slug`. |
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/jobs/<slug>/view" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl -X POST "https://freehire.me/api/v1/jobs/<slug>/view" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
@@ -933,7 +933,7 @@ Mark the job as applied to.
 | `slug` | string | yes | The job `public_slug`. |
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/jobs/<slug>/apply" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl -X POST "https://freehire.me/api/v1/jobs/<slug>/apply" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
@@ -953,7 +953,7 @@ Save (bookmark) the job.
 | `slug` | string | yes | The job `public_slug`. |
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/jobs/<slug>/save" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl -X POST "https://freehire.me/api/v1/jobs/<slug>/save" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
@@ -973,7 +973,7 @@ Unsave the job (no-op if not saved).
 | `slug` | string | yes | The job `public_slug`. |
 
 ```bash
-curl -X DELETE "https://freehire.dev/api/v1/jobs/<slug>/save" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl -X DELETE "https://freehire.me/api/v1/jobs/<slug>/save" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
@@ -1002,7 +1002,7 @@ A null field is left unchanged. `stage` is a controlled vocabulary: `applied`, `
 | `notes` | string | no | Free-text notes. |
 
 ```bash
-curl -X PATCH "https://freehire.dev/api/v1/jobs/<slug>/track" \
+curl -X PATCH "https://freehire.me/api/v1/jobs/<slug>/track" \
   -H "Authorization: Bearer $FREEHIRE_API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"stage":"interview","notes":"call on Friday"}'
@@ -1025,7 +1025,7 @@ Clear the application stage.
 | `slug` | string | yes | The job `public_slug`. |
 
 ```bash
-curl -X DELETE "https://freehire.dev/api/v1/jobs/<slug>/stage" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl -X DELETE "https://freehire.me/api/v1/jobs/<slug>/stage" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
@@ -1045,7 +1045,7 @@ Remove the interaction record entirely.
 | `slug` | string | yes | The job `public_slug`. |
 
 ```bash
-curl -X DELETE "https://freehire.dev/api/v1/jobs/<slug>/track" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl -X DELETE "https://freehire.me/api/v1/jobs/<slug>/track" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
@@ -1067,7 +1067,7 @@ Only keeps the job out of the swipe deck; it stays visible in the public `/jobs`
 | `slug` | string | yes | The job `public_slug`. |
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/jobs/<slug>/dismiss" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl -X POST "https://freehire.me/api/v1/jobs/<slug>/dismiss" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
@@ -1087,7 +1087,7 @@ Undismiss the job (no-op if not dismissed).
 | `slug` | string | yes | The job `public_slug`. |
 
 ```bash
-curl -X DELETE "https://freehire.dev/api/v1/jobs/<slug>/dismiss" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl -X DELETE "https://freehire.me/api/v1/jobs/<slug>/dismiss" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
@@ -1111,7 +1111,7 @@ Each item carries the job in the shared wire shape with your interaction timesta
 | `offset` | integer | no | Rows to skip. (e.g. `0`) |
 
 ```bash
-curl "https://freehire.dev/api/v1/me/tracking?filter=applied" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl "https://freehire.me/api/v1/me/tracking?filter=applied" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
@@ -1142,7 +1142,7 @@ curl "https://freehire.dev/api/v1/me/tracking?filter=applied" -H "Authorization:
 Slugs of jobs you have viewed.
 
 ```bash
-curl "https://freehire.dev/api/v1/me/tracking/viewed" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl "https://freehire.me/api/v1/me/tracking/viewed" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
@@ -1158,7 +1158,7 @@ Jobs you have run the AI fit analysis on.
 Newest first, closed jobs included (with `closed: true`). Each item carries the overall score and verdict; `stale` marks an analysis whose CV, job, or model has changed since. `meta.quota` reports your monthly fit-analysis usage. Never runs the LLM.
 
 ```bash
-curl "https://freehire.dev/api/v1/me/tracking/analyses" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl "https://freehire.me/api/v1/me/tracking/analyses" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
@@ -1188,7 +1188,7 @@ Slugs of jobs you have saved.
 Lets the SPA render the save toggle as filled without authenticating the public job reads.
 
 ```bash
-curl "https://freehire.dev/api/v1/me/tracking/saved" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl "https://freehire.me/api/v1/me/tracking/saved" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
@@ -1204,7 +1204,7 @@ Your application-pipeline snapshot (counts per stage bucket).
 The total application count and its distribution across the seven status buckets, aggregated server-side over all of your applications.
 
 ```bash
-curl "https://freehire.dev/api/v1/me/tracking/pipeline" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl "https://freehire.me/api/v1/me/tracking/pipeline" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
@@ -1241,7 +1241,7 @@ Runs the same query as search (same facets, `q`, and sort), then excludes the jo
 | `offset` | integer | no | Rows to skip; `offset + limit` ≤ 10000. (e.g. `0`) |
 
 ```bash
-curl "https://freehire.dev/api/v1/me/tracking/swipe" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl "https://freehire.me/api/v1/me/tracking/swipe" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
@@ -1275,7 +1275,7 @@ Submit a vacancy for review.
 | `posted_at` | string (RFC3339) | no | Original posting date (optional). |
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/submissions" \
+curl -X POST "https://freehire.me/api/v1/submissions" \
   -H "Authorization: Bearer $FREEHIRE_API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"url":"https://acme.com/careers/123","title":"Senior Go Engineer","company":"Acme","remote":true}'
@@ -1292,7 +1292,7 @@ curl -X POST "https://freehire.dev/api/v1/submissions" \
 Your own submission queue.
 
 ```bash
-curl "https://freehire.dev/api/v1/me/submissions" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+curl "https://freehire.me/api/v1/me/submissions" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ```json
@@ -1306,7 +1306,7 @@ curl "https://freehire.dev/api/v1/me/submissions" -H "Authorization: Bearer $FRE
 The pending submission queue (moderators).
 
 ```bash
-curl "https://freehire.dev/api/v1/submissions" -H "Authorization: Bearer $MODERATOR_API_KEY"
+curl "https://freehire.me/api/v1/submissions" -H "Authorization: Bearer $MODERATOR_API_KEY"
 ```
 
 ```json
@@ -1326,7 +1326,7 @@ Approve a submission, minting a live job.
 | `id` | integer | yes | The submission id. (e.g. `9`) |
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/submissions/9/approve" -H "Authorization: Bearer $MODERATOR_API_KEY"
+curl -X POST "https://freehire.me/api/v1/submissions/9/approve" -H "Authorization: Bearer $MODERATOR_API_KEY"
 ```
 
 ```json
@@ -1352,7 +1352,7 @@ Reject a submission with a reason.
 | `reason` | string | no | Why it was rejected. (e.g. `duplicate`) |
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/submissions/9/reject" \
+curl -X POST "https://freehire.me/api/v1/submissions/9/reject" \
   -H "Authorization: Bearer $MODERATOR_API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"reason":"duplicate"}'
@@ -1387,7 +1387,7 @@ Report a problem with a job.
 | `contact_telegram` | string | no | Optional contact handle. |
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/jobs/<slug>/reports" \
+curl -X POST "https://freehire.me/api/v1/jobs/<slug>/reports" \
   -H "Authorization: Bearer $FREEHIRE_API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"reason":"expired","details":"posting returns 404"}'
@@ -1404,7 +1404,7 @@ curl -X POST "https://freehire.dev/api/v1/jobs/<slug>/reports" \
 The pending report queue (moderators).
 
 ```bash
-curl "https://freehire.dev/api/v1/reports" -H "Authorization: Bearer $MODERATOR_API_KEY"
+curl "https://freehire.me/api/v1/reports" -H "Authorization: Bearer $MODERATOR_API_KEY"
 ```
 
 ```json
@@ -1430,7 +1430,7 @@ Resolve a report, optionally closing the job.
 | `close_job` | boolean | no | Soft-close the reported job. (e.g. `true`) |
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/reports/3/resolve" \
+curl -X POST "https://freehire.me/api/v1/reports/3/resolve" \
   -H "Authorization: Bearer $MODERATOR_API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"close_job":true}'
@@ -1459,7 +1459,7 @@ Dismiss a report with a reason.
 | `reason` | string | no | Why it was dismissed. (e.g. `not an issue`) |
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/reports/3/dismiss" \
+curl -X POST "https://freehire.me/api/v1/reports/3/dismiss" \
   -H "Authorization: Bearer $MODERATOR_API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"reason":"not an issue"}'
@@ -1493,7 +1493,7 @@ Create a curated job.
 | `posted_at` | string (RFC3339) | no | Posting date. |
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/jobs" \
+curl -X POST "https://freehire.me/api/v1/jobs" \
   -H "Authorization: Bearer $MODERATOR_API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"url":"https://acme.com/careers/123","title":"Senior Go Engineer","company":"Acme"}'
@@ -1522,7 +1522,7 @@ Edit a curated job.
 | `(any job field)` | varies | no | Same fields as create; provided fields are updated. |
 
 ```bash
-curl -X PATCH "https://freehire.dev/api/v1/jobs/<slug>" \
+curl -X PATCH "https://freehire.me/api/v1/jobs/<slug>" \
   -H "Authorization: Bearer $MODERATOR_API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"title":"Staff Go Engineer"}'
@@ -1543,7 +1543,7 @@ Your career profile and stored CV, session-only (a browser feature, like saved s
 Your career profile, or null if you have not saved one.
 
 ```bash
-curl "https://freehire.dev/api/v1/me/profile" -b cookies.txt
+curl "https://freehire.me/api/v1/me/profile" -b cookies.txt
 ```
 
 ```json
@@ -1575,7 +1575,7 @@ The whole profile is replaced on each save. An unknown specialization (must be a
 | `location_preferences` | object | no | Optional location block (`work_modes`, `remote`, `base`, `relocation`); omit or null to clear. |
 
 ```bash
-curl -X PUT "https://freehire.dev/api/v1/me/profile" \
+curl -X PUT "https://freehire.me/api/v1/me/profile" \
   -H 'Content-Type: application/json' -b cookies.txt \
   -d '{"specializations":["backend"],"skills":["go","postgresql"]}'
 ```
@@ -1593,7 +1593,7 @@ Clear your profile (idempotent).
 Returns `204 No Content`.
 
 ```bash
-curl -X DELETE "https://freehire.dev/api/v1/me/profile" -b cookies.txt
+curl -X DELETE "https://freehire.me/api/v1/me/profile" -b cookies.txt
 ```
 
 ### `GET /me/profile/verdict`
@@ -1611,7 +1611,7 @@ How many of your selected role’s open vacancies your skills reach, and which m
 | `(any search filter)` | string | no | Any search facet param scopes the role (the `skills` facet is ignored; your profile skills are the measured set). (e.g. `category=backend`) |
 
 ```bash
-curl "https://freehire.dev/api/v1/me/profile/verdict" -b cookies.txt
+curl "https://freehire.me/api/v1/me/profile/verdict" -b cookies.txt
 ```
 
 ```json
@@ -1637,7 +1637,7 @@ CV ATS-readiness report (deterministic + any cached LLM review).
 Scores your stored CV’s structure and its keyword match against the selected role. `has_cv` is false when no CV is stored; no profile is a `404`; `503` when search is unavailable.
 
 ```bash
-curl "https://freehire.dev/api/v1/me/profile/ats-report" -b cookies.txt
+curl "https://freehire.me/api/v1/me/profile/ats-report" -b cookies.txt
 ```
 
 ```json
@@ -1665,7 +1665,7 @@ Run the optional LLM qualitative ATS review and cache it.
 Runs the LLM review over your stored CV and folds it into the report (`reviewed: true`). Best-effort: an unconfigured or failing LLM returns the deterministic report (200).
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/me/profile/ats-report" -b cookies.txt
+curl -X POST "https://freehire.me/api/v1/me/profile/ats-report" -b cookies.txt
 ```
 
 ```json
@@ -1687,7 +1687,7 @@ Accepts a PDF (`multipart/form-data` field `file`) or plain text (`application/j
 | `text` | string | no | Résumé plain text (JSON path); or send a PDF as multipart field `file`. |
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/me/resume/extract" \
+curl -X POST "https://freehire.me/api/v1/me/resume/extract" \
   -H 'Content-Type: application/json' -b cookies.txt \
   -d '{"text":"Senior Go engineer, 6 years..."}'
 ```
@@ -1711,7 +1711,7 @@ Accepts a PDF (multipart `file`) or JSON `{ "text": ... }`. Returns the résumé
 | `text` | string | no | Résumé plain text (JSON path); or send a PDF as multipart field `file`. |
 
 ```bash
-curl -X PUT "https://freehire.dev/api/v1/me/resume" \
+curl -X PUT "https://freehire.me/api/v1/me/resume" \
   -H 'Content-Type: application/json' -b cookies.txt \
   -d '{"text":"Senior Go engineer, 6 years..."}'
 ```
@@ -1729,7 +1729,7 @@ Your résumé status (enabled / present / uploaded_at).
 Always `200`: unconfigured storage or no résumé is a normal state. `structured` carries the read-only structured résumé, or null when none is current.
 
 ```bash
-curl "https://freehire.dev/api/v1/me/resume" -b cookies.txt
+curl "https://freehire.me/api/v1/me/resume" -b cookies.txt
 ```
 
 ```json
@@ -1745,7 +1745,7 @@ Delete your stored résumé.
 Returns `204 No Content`. `501` when object storage is unconfigured.
 
 ```bash
-curl -X DELETE "https://freehire.dev/api/v1/me/resume" -b cookies.txt
+curl -X DELETE "https://freehire.me/api/v1/me/resume" -b cookies.txt
 ```
 
 ## Trends & Insights
@@ -1768,7 +1768,7 @@ Roles (category × seniority) ranked by the number of open jobs, with a growth m
 | `limit` | integer | no | Result cap, 1–200 (default 20). |
 
 ```bash
-curl "https://freehire.dev/api/v1/insights/roles?category=backend&sort=growth"
+curl "https://freehire.me/api/v1/insights/roles?category=backend&sort=growth"
 ```
 
 ```json
@@ -1796,7 +1796,7 @@ Skills ranked by the number of open jobs that list them, with the same growth me
 | `limit` | integer | no | Result cap, 1–200 (default 20). |
 
 ```bash
-curl "https://freehire.dev/api/v1/insights/skills?category=backend"
+curl "https://freehire.me/api/v1/insights/skills?category=backend"
 ```
 
 ```json
@@ -1824,7 +1824,7 @@ Added vs. removed vacancies per period, optionally scoped to a single facet. Sam
 | `country` | string | no | Facet scope (ISO 3166-1 alpha-2). |
 
 ```bash
-curl "https://freehire.dev/api/v1/insights/velocity?granularity=week&category=backend"
+curl "https://freehire.me/api/v1/insights/velocity?granularity=week&category=backend"
 ```
 
 ```json
@@ -1852,9 +1852,9 @@ Passing `category` alone (no `seniority`, no `country`) returns the **per-senior
 
 ```bash
 # Exact scope (one grade):
-curl "https://freehire.dev/api/v1/insights/salary?category=backend&seniority=senior"
+curl "https://freehire.me/api/v1/insights/salary?category=backend&seniority=senior"
 # Per-seniority breakdown for a category (the salary page's read):
-curl "https://freehire.dev/api/v1/insights/salary?category=backend"
+curl "https://freehire.me/api/v1/insights/salary?category=backend"
 ```
 
 ```json
@@ -1886,9 +1886,9 @@ The company hiring-signal leaderboard: companies ranked by how their number of o
 
 ```bash
 # Companies ramping up hiring the fastest:
-curl "https://freehire.dev/api/v1/insights/companies?sort=growth"
+curl "https://freehire.me/api/v1/insights/companies?sort=growth"
 # Companies pulling back:
-curl "https://freehire.dev/api/v1/insights/companies?sort=-growth&min_open=10"
+curl "https://freehire.me/api/v1/insights/companies?sort=-growth&min_open=10"
 ```
 
 ```json
@@ -1921,7 +1921,7 @@ Aggregated to the requested granularity over a date range; the series is dense (
 | `to` | string (YYYY-MM-DD) | no | End date (UTC). Defaults to today. (e.g. `2026-06-30`) |
 
 ```bash
-curl "https://freehire.dev/api/v1/stats/jobs-activity?granularity=week"
+curl "https://freehire.me/api/v1/stats/jobs-activity?granularity=week"
 ```
 
 ```json
@@ -1949,7 +1949,7 @@ Public, no owner-scoping — returns only display fields (`name`, the canonical 
 | `slug` | string | yes | The board public slug. (e.g. `senior-go-remote-3f9a`) |
 
 ```bash
-curl "https://freehire.dev/api/v1/boards/senior-go-remote-3f9a"
+curl "https://freehire.me/api/v1/boards/senior-go-remote-3f9a"
 ```
 
 ```json
@@ -1977,7 +1977,7 @@ Mints (or keeps) the board slug and sets the optional author label. Owner-scoped
 | `author_label` | string | no | Label shown on the board; blank/omitted renders it anonymously. (e.g. `Jane D.`) |
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/me/searches/2/share" \
+curl -X POST "https://freehire.me/api/v1/me/searches/2/share" \
   -H 'Content-Type: application/json' -b cookies.txt \
   -d '{"author_label":"Jane D."}'
 ```
@@ -2001,7 +2001,7 @@ Owner-scoped and idempotent (already-private is a no-op). Returns `204 No Conten
 | `id` | integer | yes | The saved-search id. (e.g. `2`) |
 
 ```bash
-curl -X DELETE "https://freehire.dev/api/v1/me/searches/2/share" -b cookies.txt
+curl -X DELETE "https://freehire.me/api/v1/me/searches/2/share" -b cookies.txt
 ```
 
 ## Saved searches & subscriptions
@@ -2015,7 +2015,7 @@ Browser conveniences, session-only. A saved search stores a canonical filter que
 List your saved searches.
 
 ```bash
-curl "https://freehire.dev/api/v1/me/searches" -b cookies.txt
+curl "https://freehire.me/api/v1/me/searches" -b cookies.txt
 ```
 
 ```json
@@ -2036,7 +2036,7 @@ Save a search.
 | `query` | string | yes | Canonical filter query string. (e.g. `q=go&seniority=senior&work_mode=remote`) |
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/me/searches" \
+curl -X POST "https://freehire.me/api/v1/me/searches" \
   -H 'Content-Type: application/json' -b cookies.txt \
   -d '{"name":"Senior Go remote","query":"q=go&seniority=senior&work_mode=remote"}'
 ```
@@ -2065,7 +2065,7 @@ Rename or re-query a saved search.
 | `query` | string | no | New query (optional). |
 
 ```bash
-curl -X PATCH "https://freehire.dev/api/v1/me/searches/2" \
+curl -X PATCH "https://freehire.me/api/v1/me/searches/2" \
   -H 'Content-Type: application/json' -b cookies.txt \
   -d '{"name":"Senior Go — EU remote"}'
 ```
@@ -2087,7 +2087,7 @@ Delete a saved search.
 | `id` | integer | yes | The saved-search id. (e.g. `2`) |
 
 ```bash
-curl -X DELETE "https://freehire.dev/api/v1/me/searches/2" -b cookies.txt
+curl -X DELETE "https://freehire.me/api/v1/me/searches/2" -b cookies.txt
 ```
 
 ```json
@@ -2101,7 +2101,7 @@ curl -X DELETE "https://freehire.dev/api/v1/me/searches/2" -b cookies.txt
 List your subscriptions.
 
 ```bash
-curl "https://freehire.dev/api/v1/me/subscriptions" -b cookies.txt
+curl "https://freehire.me/api/v1/me/subscriptions" -b cookies.txt
 ```
 
 ```json
@@ -2122,7 +2122,7 @@ Subscribe a saved search to a digest channel.
 | `channel` | string | yes | Delivery channel. (e.g. `telegram`) |
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/me/subscriptions" \
+curl -X POST "https://freehire.me/api/v1/me/subscriptions" \
   -H 'Content-Type: application/json' -b cookies.txt \
   -d '{"saved_search_id":2,"channel":"telegram"}'
 ```
@@ -2150,7 +2150,7 @@ Pause or resume a subscription.
 | `active` | boolean | yes | Whether the subscription is active. (e.g. `false`) |
 
 ```bash
-curl -X PATCH "https://freehire.dev/api/v1/me/subscriptions/1" \
+curl -X PATCH "https://freehire.me/api/v1/me/subscriptions/1" \
   -H 'Content-Type: application/json' -b cookies.txt \
   -d '{"active":false}'
 ```
@@ -2172,7 +2172,7 @@ Delete a subscription.
 | `id` | integer | yes | The subscription id. (e.g. `1`) |
 
 ```bash
-curl -X DELETE "https://freehire.dev/api/v1/me/subscriptions/1" -b cookies.txt
+curl -X DELETE "https://freehire.me/api/v1/me/subscriptions/1" -b cookies.txt
 ```
 
 ```json
@@ -2186,7 +2186,7 @@ curl -X DELETE "https://freehire.dev/api/v1/me/subscriptions/1" -b cookies.txt
 Your Telegram link status (for digests).
 
 ```bash
-curl "https://freehire.dev/api/v1/me/telegram" -b cookies.txt
+curl "https://freehire.me/api/v1/me/telegram" -b cookies.txt
 ```
 
 ```json
@@ -2200,7 +2200,7 @@ curl "https://freehire.dev/api/v1/me/telegram" -b cookies.txt
 Start linking your Telegram account.
 
 ```bash
-curl -X POST "https://freehire.dev/api/v1/me/telegram/link" -b cookies.txt
+curl -X POST "https://freehire.me/api/v1/me/telegram/link" -b cookies.txt
 ```
 
 ```json
@@ -2214,7 +2214,7 @@ curl -X POST "https://freehire.dev/api/v1/me/telegram/link" -b cookies.txt
 Unlink your Telegram account.
 
 ```bash
-curl -X DELETE "https://freehire.dev/api/v1/me/telegram" -b cookies.txt
+curl -X DELETE "https://freehire.me/api/v1/me/telegram" -b cookies.txt
 ```
 
 ```json
