@@ -18,22 +18,23 @@ func ptr[T any](v T) *T { return &v }
 // it is what both the display posted_at (RFC3339) and the index posted_ts (epoch)
 // derive from, so the null/future fallback must hold independent of FromRow.
 func TestEffectivePostedAt(t *testing.T) {
+	now := time.Date(2026, 7, 24, 12, 0, 0, 0, time.UTC)
 	created := pgtype.Timestamptz{Time: time.Date(2026, 6, 18, 12, 0, 0, 0, time.UTC), Valid: true}
 
 	// A real, past posted_at is returned unchanged.
 	past := pgtype.Timestamptz{Time: time.Date(2026, 6, 10, 9, 0, 0, 0, time.UTC), Valid: true}
-	if got := EffectivePostedAt(past, created); !got.Time.Equal(past.Time) {
+	if got := EffectivePostedAt(past, created, now); !got.Time.Equal(past.Time) {
 		t.Errorf("past posted_at: got %v, want %v", got.Time, past.Time)
 	}
 
 	// A future posted_at falls back to the ingest time (created_at).
-	future := pgtype.Timestamptz{Time: time.Now().Add(24 * time.Hour), Valid: true}
-	if got := EffectivePostedAt(future, created); !got.Time.Equal(created.Time) {
+	future := pgtype.Timestamptz{Time: now.Add(24 * time.Hour), Valid: true}
+	if got := EffectivePostedAt(future, created, now); !got.Time.Equal(created.Time) {
 		t.Errorf("future posted_at: got %v, want created %v", got.Time, created.Time)
 	}
 
 	// A missing (invalid) posted_at also falls back to created_at.
-	if got := EffectivePostedAt(pgtype.Timestamptz{}, created); !got.Time.Equal(created.Time) {
+	if got := EffectivePostedAt(pgtype.Timestamptz{}, created, now); !got.Time.Equal(created.Time) {
 		t.Errorf("missing posted_at: got %v, want created %v", got.Time, created.Time)
 	}
 }
