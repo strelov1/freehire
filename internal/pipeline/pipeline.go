@@ -318,50 +318,61 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) (ingest
 		return 0, 1, 0, 0
 	}
 
-	var firstErr error
+	var (
+		st       Stats
+		firstErr error
+	)
 	for _, j := range raw {
 		// A HydratingSource marks an already-ingested posting it re-listed but did not
 		// re-fetch: refresh its liveness by identity instead of re-upserting content-less
 		// (which would wipe the description/facets hydrated when it was new).
 		if j.SeenRefresh {
 			if err := r.touch(ctx, e, j); err != nil {
-				skipped++
+				st.Skipped++
 				if firstErr == nil {
 					firstErr = err
 				}
 				continue
 			}
-			ingested++
+			st.Ingested++
 			continue
 		}
-		dj, err := normalizeJob(e, j)
-		if err != nil {
-			skipped++
-			if firstErr == nil {
-				firstErr = err
-			}
-			continue
-		}
-		if err := r.Store.Save(ctx, dj); err != nil {
-			skipped++
-			if firstErr == nil {
-				firstErr = err
-			}
-			continue
-		}
-		ingested++
+		r.saveOne(ctx, e, j, &st, &firstErr)
 	}
 	// One line per board with skips (not one per job), so a systemic failure — e.g.
 	// the DB behind a migration, or a board whose postings won't construct — is visible
 	// without flooding the log.
-	if skipped > 0 {
+	if st.Skipped > 0 {
 		log.Printf("ingest: %s board %q (%s): skipped %d/%d jobs on construct or save error (e.g. %v)",
-			e.Provider, e.Board, e.Company, skipped, len(raw), firstErr)
+			e.Provider, e.Board, e.Company, st.Skipped, len(raw), firstErr)
 	}
 	// The board was reachable (Fetch succeeded), so it is healthy regardless of per-job
 	// save skips — those are stats.Skipped, not a board outage.
-	r.recordSuccess(ctx, e, ingested)
-	return ingested, 0, skipped, 0
+	r.recordSuccess(ctx, e, st.Ingested)
+	return st.Ingested, 0, st.Skipped, 0
+}
+
+// saveOne normalizes one posting and saves it, tallying the outcome into st and keeping
+// the first error for the board's skip-summary log line. Both the buffered (ingestBoard)
+// and the streaming (ingestStream) save loops share it so the normalize→save→count step
+// behaves identically; the SeenRefresh and Removed branches stay on the caller.
+func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, st *Stats, firstErr *error) {
+	dj, err := normalizeJob(e, j)
+	if err != nil {
+		st.Skipped++
+		if *firstErr == nil {
+			*firstErr = err
+		}
+		return
+	}
+	if err := r.Store.Save(ctx, dj); err != nil {
+		st.Skipped++
+		if *firstErr == nil {
+			*firstErr = err
+		}
+		return
+	}
+	st.Ingested++
 }
 
 // fetchBoard fetches a board's postings, preferring a hydrating adapter's FetchNew — which
@@ -448,6 +459,7 @@ func (r Runner) recordFailure(ctx context.Context, e sources.CompanyEntry, msg s
 func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sources.StreamingSource) (ingested, failed, skipped int) {
 	var (
 		mu       sync.Mutex
+		st       Stats
 		firstErr error
 		total    int
 	)
@@ -465,44 +477,29 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 			}
 			source, externalID := jobIdentity(e, j)
 			if err := c.Close(ctx, source, externalID); err != nil {
-				skipped++
+				st.Skipped++
 				if firstErr == nil {
 					firstErr = err
 				}
 				return
 			}
-			ingested++
+			st.Ingested++
 			return
 		}
-		dj, err := normalizeJob(e, j)
-		if err != nil {
-			skipped++
-			if firstErr == nil {
-				firstErr = err
-			}
-			return
-		}
-		if err := r.Store.Save(ctx, dj); err != nil {
-			skipped++
-			if firstErr == nil {
-				firstErr = err
-			}
-			return
-		}
-		ingested++
+		r.saveOne(ctx, e, j, &st, &firstErr)
 	}
 
 	err := ss.FetchStream(ctx, e, emit)
-	if skipped > 0 {
+	if st.Skipped > 0 {
 		log.Printf("ingest: %s board %q (%s): skipped %d/%d jobs on save error (e.g. %v)",
-			e.Provider, e.Board, e.Company, skipped, total, firstErr)
+			e.Provider, e.Board, e.Company, st.Skipped, total, firstErr)
 	}
 	if err != nil {
 		log.Printf("ingest: %s board %q (%s) failed after %d saved: %v",
-			e.Provider, e.Board, e.Company, ingested, err)
-		return ingested, 1, skipped
+			e.Provider, e.Board, e.Company, st.Ingested, err)
+		return st.Ingested, 1, st.Skipped
 	}
-	return ingested, 0, skipped
+	return st.Ingested, 0, st.Skipped
 }
 
 // jobIdentity is the dedup key a posting persists under: the provider is the source, and the
