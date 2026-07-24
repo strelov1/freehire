@@ -160,7 +160,9 @@ type InsertRewardParams struct {
 }
 
 // Append a reward: points earned (e.g. for an accepted board contribution), delta positive,
-// feature NULL. Rewards bank above the monthly grant and survive the period reset.
+// feature NULL. Rewards bank above the monthly grant and survive the period reset. The
+// partial unique index on (user_id, ref) WHERE kind='reward' guards against a double
+// grant for the same ref even under a race.
 func (q *Queries) InsertReward(ctx context.Context, arg InsertRewardParams) error {
 	_, err := q.db.Exec(ctx, insertReward,
 		arg.UserID,

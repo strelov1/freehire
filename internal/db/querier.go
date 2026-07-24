@@ -639,7 +639,9 @@ type Querier interface {
 	// reads-back on a user conflict and retries the next suffix on an address conflict.
 	InsertMailbox(ctx context.Context, arg InsertMailboxParams) (Mailbox, error)
 	// Append a reward: points earned (e.g. for an accepted board contribution), delta positive,
-	// feature NULL. Rewards bank above the monthly grant and survive the period reset.
+	// feature NULL. Rewards bank above the monthly grant and survive the period reset. The
+	// partial unique index on (user_id, ref) WHERE kind='reward' guards against a double
+	// grant for the same ref even under a race.
 	InsertReward(ctx context.Context, arg InsertRewardParams) error
 	// Crawl write path: store a fetched post once. ON CONFLICT DO NOTHING makes
 	// re-crawling idempotent — a stored post (pending, done, or dead-lettered) is
