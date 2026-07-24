@@ -73,6 +73,13 @@ const (
 	taskPollInterval = 50 * time.Millisecond
 )
 
+// rawClient serves the package's raw Meilisearch calls that bypass the SDK (the
+// swap-indexes POST in client.go and the vector-listing GET in semantic_vectors.go).
+// http.DefaultClient has no timeout of its own, so a hung engine would otherwise
+// block a reindex indefinitely. (The TEI embed calls in embed.go are a different
+// backend with their own per-attempt timeout — see embedAttemptTimeout.)
+var rawClient = &http.Client{Timeout: 30 * time.Second}
+
 // Client is a thin wrapper over the Meilisearch service scoped to the two job
 // indexes: facet (keyword + facets, no embedder) and semantic (adds the embedder).
 // url/key are kept for the one raw call (swap-indexes) the SDK cannot make against
@@ -279,7 +286,7 @@ func (c *Client) swapIndexes(ctx context.Context, a, b string) error {
 	}
 	req.Header.Set("Authorization", "Bearer "+c.key)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := rawClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("search: swap indexes: %w", err)
 	}
