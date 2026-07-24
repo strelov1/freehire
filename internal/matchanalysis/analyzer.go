@@ -436,7 +436,7 @@ func writeLocation(b *strings.Builder, in Input) {
 	}
 	if hasPref {
 		b.WriteString("- candidate location preferences (JSON): ")
-		b.WriteString(llm.TruncateRunes(strings.TrimSpace(in.LocationPreferences), maxCompanyRunes))
+		b.WriteString(llm.TrimTruncateRunes(in.LocationPreferences, maxCompanyRunes))
 		b.WriteString("\n")
 	}
 	if remoteWithinReach(in) {

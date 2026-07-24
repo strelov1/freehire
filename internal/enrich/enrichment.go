@@ -18,7 +18,8 @@ package enrich
 import (
 	"fmt"
 	"slices"
-	"strings"
+
+	"github.com/strelov1/freehire/internal/llm"
 )
 
 // maxSummaryRunes bounds the model-written Summary. It is synthesized free text
@@ -268,9 +269,9 @@ func (e *Enrichment) Sanitize() {
 	// served payload stays bounded (guards a runaway model; the prompt asks for
 	// 1–2 sentences). timezone_note and salary_currency are extracted from the same
 	// untrusted description and also served raw, so bound them identically.
-	e.Summary = truncateRunes(strings.TrimSpace(e.Summary), maxSummaryRunes)
-	e.TimezoneNote = truncateRunes(strings.TrimSpace(e.TimezoneNote), maxTimezoneNoteRunes)
-	e.SalaryCurrency = truncateRunes(strings.TrimSpace(e.SalaryCurrency), maxSalaryCurrencyRunes)
+	e.Summary = llm.TrimTruncateRunes(e.Summary, maxSummaryRunes)
+	e.TimezoneNote = llm.TrimTruncateRunes(e.TimezoneNote, maxTimezoneNoteRunes)
+	e.SalaryCurrency = llm.TrimTruncateRunes(e.SalaryCurrency, maxSalaryCurrencyRunes)
 
 	for _, s := range e.servedScalarEnums() {
 		if *s.ptr != "" && !slices.Contains(s.vocab, *s.ptr) {
@@ -299,17 +300,6 @@ func positiveOrNil(n *int) *int {
 		return n
 	}
 	return nil
-}
-
-// truncateRunes clips s to at most max runes, trimming a trailing space left by a
-// mid-word cut so the served value never ends on whitespace. It counts runes (not
-// bytes) so a multibyte summary is bounded by visible length.
-func truncateRunes(s string, max int) string {
-	r := []rune(s)
-	if len(r) <= max {
-		return s
-	}
-	return strings.TrimRight(string(r[:max]), " ")
 }
 
 // keepKnown returns values restricted to those present in vocab, preserving order;
