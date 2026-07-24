@@ -124,6 +124,15 @@ SELECT id
 FROM jobs
 WHERE public_slug = $1;
 
+-- name: GetJobDescriptionsByIDs :many
+-- Batch-load full descriptions by internal id to rehydrate the truncated preview
+-- the search index serves — the agent search endpoint replaces each hit's preview
+-- with the full text. Narrow projection (no SELECT *) so it drags only the one
+-- field it patches, not the whole wide row, for a page of at most maxLimit ids.
+SELECT id, description
+FROM jobs
+WHERE id = ANY(sqlc.arg(ids)::bigint[]);
+
 -- name: EstimateOpenJobs :one
 -- Fast approximate open-job total for the DB-backed /jobs list's meta.total. An
 -- exact count(*) over ~millions of open rows was a per-request full scan; the

@@ -464,6 +464,41 @@ func (q *Queries) GetJobBySourceExternalID(ctx context.Context, arg GetJobBySour
 	return i, err
 }
 
+const getJobDescriptionsByIDs = `-- name: GetJobDescriptionsByIDs :many
+SELECT id, description
+FROM jobs
+WHERE id = ANY($1::bigint[])
+`
+
+type GetJobDescriptionsByIDsRow struct {
+	ID          int64  `json:"id"`
+	Description string `json:"description"`
+}
+
+// Batch-load full descriptions by internal id to rehydrate the truncated preview
+// the search index serves — the agent search endpoint replaces each hit's preview
+// with the full text. Narrow projection (no SELECT *) so it drags only the one
+// field it patches, not the whole wide row, for a page of at most maxLimit ids.
+func (q *Queries) GetJobDescriptionsByIDs(ctx context.Context, ids []int64) ([]GetJobDescriptionsByIDsRow, error) {
+	rows, err := q.db.Query(ctx, getJobDescriptionsByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetJobDescriptionsByIDsRow{}
+	for rows.Next() {
+		var i GetJobDescriptionsByIDsRow
+		if err := rows.Scan(&i.ID, &i.Description); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getJobIDBySlug = `-- name: GetJobIDBySlug :one
 SELECT id
 FROM jobs

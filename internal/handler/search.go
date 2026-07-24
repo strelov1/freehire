@@ -51,13 +51,33 @@ var searchSortable = map[string]string{
 // "meta": {total, limit, offset}} — results carry public_slug and never the
 // internal id.
 func (a *API) SearchJobs(c *fiber.Ctx) error {
+	res, limit, offset, err := a.runJobSearch(c)
+	if err != nil {
+		return err
+	}
+
+	views := make([]jobview.Job, len(res.Hits))
+	for i, hit := range res.Hits {
+		views[i] = hit.Job
+	}
+
+	return listResponse(c, views, res.Total, limit, offset)
+}
+
+// runJobSearch performs the request handling shared by both job-search endpoints:
+// the availability check, the pagination-window guard, the semantic ratio, and the
+// index query. It is the single place the query is built, so the public and agent
+// search endpoints cannot drift. The availability and deep-pagination guards return
+// a fiber *Error the caller can return directly; on success it returns the raw hits
+// and the applied limit/offset.
+func (a *API) runJobSearch(c *fiber.Ctx) (search.SearchResult, int, int, error) {
 	if a.search == nil {
-		return fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
+		return search.SearchResult{}, 0, 0, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
 
 	limit, offset := pageParams(c)
 	if offset+limit > maxSearchWindow {
-		return fiber.NewError(fiber.StatusBadRequest, "pagination too deep")
+		return search.SearchResult{}, 0, 0, fiber.NewError(fiber.StatusBadRequest, "pagination too deep")
 	}
 	ratio := min(max(c.QueryFloat("semantic_ratio", defaultSemanticRatio), 0), 1)
 
@@ -72,15 +92,10 @@ func (a *API) SearchJobs(c *fiber.Ctx) error {
 	if err != nil {
 		// RenderError renders a generic 500; returning the error keeps the
 		// Meilisearch failure cause visible to logging instead of swallowing it.
-		return err
+		return search.SearchResult{}, 0, 0, err
 	}
 
-	views := make([]jobview.Job, len(res.Hits))
-	for i, hit := range res.Hits {
-		views[i] = hit.Job
-	}
-
-	return listResponse(c, views, res.Total, limit, offset)
+	return res, limit, offset, nil
 }
 
 // searchSort builds the Meilisearch sort directive from ?sort=<field>&order=<dir>.
