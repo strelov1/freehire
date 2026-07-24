@@ -31,8 +31,9 @@ var seniorityTable = []aliasEntry{
 	{"teamlead", "lead"},
 	{"team lead", "lead"},
 	{"senior", "senior"},
+	// "sr" already covers the dotted "Sr." form: '.' is a non-word boundary, so a
+	// separate "sr." alias could never match anything "sr" does not.
 	{"sr", "senior"},
-	{"sr.", "senior"},
 	{"старший", "senior"},
 	{"синьор", "senior"},
 	{"сеньор", "senior"},
@@ -43,8 +44,8 @@ var seniorityTable = []aliasEntry{
 	{"средний", "middle"},
 	{"мидл", "middle"},
 	{"junior", "junior"},
+	// Like "sr", the bare "jr" covers "Jr." — a dotted alias would be dead.
 	{"jr", "junior"},
-	{"jr.", "junior"},
 	{"младший", "junior"},
 	{"джуниор", "junior"},
 	{"джун", "junior"},
@@ -72,6 +73,9 @@ var categoryTable = []aliasEntry{
 	{"инженер данных", "data_engineering"},
 	{"data scientist", "data_science"},
 	{"data science", "data_science"},
+	// "data scien" fires only on a title truncated mid-word ("Senior Data Scien…"),
+	// which ATS feeds produce: the full forms above win the boundary check in any
+	// complete title, so this alias is their truncated-tail recall, not a duplicate.
 	{"data scien", "data_science"},
 	{"дата-сайентист", "data_science"},
 	{"data analyst", "data_analytics"},

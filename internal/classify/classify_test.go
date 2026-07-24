@@ -15,6 +15,14 @@ func TestParse(t *testing.T) {
 	}{
 		{"Senior Backend Engineer", "senior", "backend"},
 		{"Junior Frontend Developer", "junior", "frontend"},
+		// The dotted abbreviations resolve through the bare "sr"/"jr" aliases —
+		// '.' is a non-word boundary, so no separate dotted alias is needed.
+		{"Sr. Backend Engineer", "senior", "backend"},
+		{"Jr. Frontend Developer", "junior", "frontend"},
+		// A title truncated mid-word by the feed still resolves via the
+		// truncated-tail alias (the full "data science"/"data scientist" forms
+		// win in any complete title).
+		{"Senior Data Scien", "senior", "data_science"},
 		{"Lead DevOps Engineer", "lead", "devops"},
 		{"Staff Software Engineer", "staff", ""},
 		{"Full Stack Developer", "", "fullstack"},
