@@ -12,14 +12,11 @@ Per-user job interactions: view/apply/save/track endpoints backed by the `user_j
 
 ## How it works
 
-`internal/userjob` owns the domain logic for per-user job tracking:
+The per-user job-tracking use cases — **`RecordView`** (touches `viewed_at`), **`MarkApplied`** (sets `applied_at`), **`SaveJob`/`UnsaveJob`** (toggles the saved mark), **`TrackJob`** (sets application `stage` and/or `notes`) — live in **`internal/jobtracking`** (Fiber/pgx-free service; the HTTP handlers in `internal/handler/user_jobs.go` translate the wire format). The SPA records views silently — failures are swallowed and must not break the page.
 
-- **`RecordView`** (touches `viewed_at`): called when a signed-in user opens a job. The SPA records views silently — failures are swallowed and must not break the page.
-- **`MarkApplied`** (sets `applied_at`): idempotent upsert; the application read filters `applied_at IS NOT NULL`.
-- **`SaveJob`/`UnsaveJob`** (toggles the saved mark): unsave is a no-op when no row exists; the SPA drives save UI off this endpoint.
-- **`TrackJob`** (sets application `stage` and/or `notes`): a nil field is left unchanged; supports partial updates.
+`internal/userjob` itself keeps the shared tracking vocabulary: `stages.go` defines the controlled stage vocabulary with validation (`ValidStage`), and `buckets.go` provides the job-status buckets (saved, viewed, applied, etc.) used by the tracking UI and the pipeline aggregation.
 
-The `/me/tracking` read joins the caller's interactions with the jobs they touch. View history = all rows; applications = `applied_at IS NOT NULL`. The `buckets.go` module provides job-status buckets (saved, viewed, applied, etc.) used by the tracking UI. `stages.go` defines the controlled vocabulary with validation (`ValidStage`).
+The `/me/tracking` read joins the caller's interactions with the jobs they touch. View history = all rows; applications = `applied_at IS NOT NULL`.
 
 ## Limitations
 - No bulk operations (e.g. "mark all viewed"); each interaction is an individual per-(user, job) upsert.

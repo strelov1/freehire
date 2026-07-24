@@ -16,9 +16,9 @@ type Settings struct {
 	FrontendOrigin string
 
 	// JWT settings for the auth surface. JWTSecret has no default: it is read
-	// as-is and the server fails fast when it is empty (see cmd/server). The
-	// enrich worker shares Load but ignores these, so the requirement lives at
-	// the server entry point, not here.
+	// as-is and the server fails fast when it is empty (see cmd/server). Only
+	// the server calls Load — the enrich worker reads its own LoadEnrich — so
+	// the requirement lives at the server entry point, not here.
 	JWTSecret string
 	JWTTTL    time.Duration
 
