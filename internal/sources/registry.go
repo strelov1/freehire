@@ -96,8 +96,8 @@ func All(c HTTPClient) map[string]Source {
 		NewTeamtailor(c),
 		NewHurma(c),
 		NewICIMS(c),
-		// careerspage is rate-paced (pacedCareerPageGetter); the proxied path paces it too.
-		NewCareerPage(pacedCareerPageGetter(c)),
+		// careerspage is rate-paced (pacedHTMLGetter); the proxied path paces it too.
+		NewCareerPage(pacedHTMLGetter(c, careerspageRequestInterval, careerspageRequestBurst)),
 		NewCleverstaff(c),
 		NewNorthstone(c),
 		NewBriefHQ(c),
@@ -128,10 +128,10 @@ func All(c HTTPClient) map[string]Source {
 		NewADP(c),
 		NewITechArt(c),
 		NewVention(c),
-		// Detail hydration is rate-paced (pacedClinchGetter) to hold the run's request rate
+		// Detail hydration is rate-paced (pacedHTMLGetter) to hold the run's request rate
 		// under ClinchTalent's per-IP AWS-WAF challenge window; the sitemap fetch is a single
 		// request and needs no pacing.
-		NewClinch(c, pacedClinchGetter(c)),
+		NewClinch(c, pacedHTMLGetter(c, clinchRequestInterval, clinchRequestBurst)),
 		NewOracle(c),
 		NewEightfold(c),
 		NewFreshteam(c),

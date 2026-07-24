@@ -30,9 +30,11 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// stays green) and even the single-request listing 429s during the cooldown. Unlike the
 	// others this is volume rate-limiting, not a hard blocklist (spaced requests from the prod
 	// IP pass), so egressing through a fresh proxy IP keeps its crawl off the penalised prod IP.
-	// Also rate-paced (pacedCareerPageGetter) so a full run stays under the window even on the
+	// Also rate-paced (pacedHTMLGetter) so a full run stays under the window even on the
 	// fresh proxy IP — concurrency limits the burst, pacing limits the total-per-window.
-	"careerspage": func(c HTTPClient) Source { return NewCareerPage(pacedCareerPageGetter(c)) },
+	"careerspage": func(c HTTPClient) Source {
+		return NewCareerPage(pacedHTMLGetter(c, careerspageRequestInterval, careerspageRequestBurst))
+	},
 	// cleverstaff.net is untested from the prod datacenter IP (the spike ran from a residential
 	// IP). It is pre-wired here so that, if the prod IP is blocked like djinni's, setting
 	// SOURCES_PROXY_URL routes only this provider through the proxy with no code change; while
@@ -59,9 +61,9 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// hh.ru's detail pages 403 the direct datacenter IP, so on prod it egresses through the proxy;
 	// its high-volume per-vacancy detail fan-out then 429s the single proxy IP unless paced (the
 	// first prod run landed only ~34% of descriptions unpaced), so — like careerspage/vagas — it is
-	// rate-paced (pacedHHGetter) to hold the aggregate rate under the proxy window. While
+	// rate-paced (pacedHTMLGetter) to hold the aggregate rate under the proxy window. While
 	// SOURCES_PROXY_URL is unset this entry is inert (direct crawl is unpaced, fine for local/dev).
-	"hh": func(c HTTPClient) Source { return NewHH(pacedHHGetter(c)) },
+	"hh": func(c HTTPClient) Source { return NewHH(pacedHTMLGetter(c, hhRequestInterval, hhRequestBurst)) },
 	// career.habr.com sits behind Qrator, which challenges the per-vacancy detail HTML from the
 	// prod datacenter IP (the listing JSON passes, but the description parse fails, leaving jobs
 	// with empty descriptions and so no derived skills/geo/enrichment). A residential IP is served
@@ -70,11 +72,13 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	"habr_career": func(c HTTPClient) Source { return NewHabrCareer(c) },
 	// vagas.com.br blocks the prod datacenter IP (403 on the first listing GET) AND rate-limits
 	// by a per-IP request budget (429 once a full crawl's volume hits one IP). So it egresses
-	// through the proxy like careerspage AND is rate-paced (pacedVagasGetter) to hold its
+	// through the proxy like careerspage AND is rate-paced (pacedHTMLGetter) to hold its
 	// aggregate request rate under vagas's window on the single proxy IP — concurrency bounds the
 	// burst, pacing bounds the total-per-window. NewVagas takes an HTMLGetter, which HTTPClient
 	// satisfies, and the pacer wraps it before NewVagas.
-	"vagas": func(c HTTPClient) Source { return NewVagas(pacedVagasGetter(c)) },
+	"vagas": func(c HTTPClient) Source {
+		return NewVagas(pacedHTMLGetter(c, vagasRequestInterval, vagasRequestBurst))
+	},
 	// enlizt.me hard-blocks the prod datacenter IP (403 on the board listing even with a
 	// browser User-Agent, so it is IP reputation, not a bot tell), while the residential
 	// proxy IP is served 200. NewEnlizt takes an HTMLGetter, which HTTPClient satisfies.

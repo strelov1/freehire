@@ -32,6 +32,17 @@ func (g rateLimitedHTMLGetter) GetHTML(ctx context.Context, url string) (*html.N
 	return g.inner.GetHTML(ctx, url)
 }
 
+// pacedHTMLGetter wraps a getter with a fresh limiter (one token per interval, burst bucket)
+// shared across one registry build, so all of a provider's requests in a run are paced under
+// its per-IP window budget. The per-provider interval/burst constants below carry the
+// rationale for each rate.
+func pacedHTMLGetter(c HTMLGetter, interval time.Duration, burst int) HTMLGetter {
+	return rateLimitedHTMLGetter{
+		inner:   c,
+		limiter: rate.NewLimiter(rate.Every(interval), burst),
+	}
+}
+
 // careers-page.com rate-limits by a per-IP request budget per time window, so a full run must
 // hold its aggregate request rate under it (proxy egress and a narrow worker pool cap the
 // burst, not the total-per-window — see the careerspage-request-pacer change). The interval is
@@ -41,15 +52,6 @@ const (
 	careerspageRequestInterval = 800 * time.Millisecond // ~1.25 req/s
 	careerspageRequestBurst    = 2
 )
-
-// pacedCareerPageGetter wraps a getter with a fresh limiter shared across one registry build,
-// so all of careerspage's requests in a run are paced under careers-page.com's window budget.
-func pacedCareerPageGetter(c HTMLGetter) HTMLGetter {
-	return rateLimitedHTMLGetter{
-		inner:   c,
-		limiter: rate.NewLimiter(rate.Every(careerspageRequestInterval), careerspageRequestBurst),
-	}
-}
 
 // vagas.com.br rate-limits by a per-IP request budget: a full national-board crawl (three area
 // listings paginated + a detail fan-out over hundreds of postings) fired unpaced through the
@@ -61,15 +63,6 @@ const (
 	vagasRequestInterval = time.Second // ~1 req/s
 	vagasRequestBurst    = 1
 )
-
-// pacedVagasGetter wraps a getter with a fresh limiter shared across one registry build, so all
-// of vagas's requests in a run stay under vagas.com.br's per-IP window on the single proxy IP.
-func pacedVagasGetter(c HTMLGetter) HTMLGetter {
-	return rateLimitedHTMLGetter{
-		inner:   c,
-		limiter: rate.NewLimiter(rate.Every(vagasRequestInterval), vagasRequestBurst),
-	}
-}
 
 // ClinchTalent fronts detail pages with a rate-based AWS-WAF Challenge action: a cold IP is
 // served a handful of clean pages (spike observed ~6) before the WAF flips to a 202 challenge
@@ -83,15 +76,6 @@ const (
 	clinchRequestInterval = 1500 * time.Millisecond // ~0.67 req/s
 	clinchRequestBurst    = 1
 )
-
-// pacedClinchGetter wraps a getter with a fresh limiter shared across one registry build, so all
-// of clinch's detail requests in a run stay under ClinchTalent's per-IP AWS-WAF challenge window.
-func pacedClinchGetter(c HTMLGetter) HTMLGetter {
-	return rateLimitedHTMLGetter{
-		inner:   c,
-		limiter: rate.NewLimiter(rate.Every(clinchRequestInterval), clinchRequestBurst),
-	}
-}
 
 // concurrencyLimitedJSONGetter bounds how many GetJSON calls are in flight at once via a shared
 // semaphore, independent of the pipeline's board-worker pool. Unlike a rate limiter — which caps
@@ -141,12 +125,3 @@ const (
 	hhRequestInterval = 250 * time.Millisecond // ~4 req/s
 	hhRequestBurst    = 4
 )
-
-// pacedHHGetter wraps a getter with a fresh limiter shared across one registry build, so all of
-// hh.ru's search and detail requests in a run stay under the proxy IP's per-window budget.
-func pacedHHGetter(c HTMLGetter) HTMLGetter {
-	return rateLimitedHTMLGetter{
-		inner:   c,
-		limiter: rate.NewLimiter(rate.Every(hhRequestInterval), hhRequestBurst),
-	}
-}
