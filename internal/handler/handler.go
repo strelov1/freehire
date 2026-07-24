@@ -222,8 +222,8 @@ func pageParams(c *fiber.Ctx) (limit, offset int) {
 // pageParamsMax is pageParams with a caller-supplied limit ceiling, for endpoints
 // whose page is bounded differently than the shared list cap (e.g. the tracking
 // board, which is unpaginated and needs the whole set).
-func pageParamsMax(c *fiber.Ctx, maxLimit int) (limit, offset int) {
-	limit = min(max(c.QueryInt("limit", defaultLimit), 1), maxLimit)
+func pageParamsMax(c *fiber.Ctx, ceiling int) (limit, offset int) {
+	limit = min(max(c.QueryInt("limit", defaultLimit), 1), ceiling)
 	offset = min(max(c.QueryInt("offset", 0), 0), math.MaxInt32)
 	return limit, offset
 }
