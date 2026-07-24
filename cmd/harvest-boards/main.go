@@ -66,8 +66,15 @@ func run() int {
 	log.Printf("harvest-boards: %s candidates=%d existing=%d new-candidates=%d",
 		provider, len(raw), len(existing), len(candidates))
 
-	kept := probeAll(ctx, client, p, candidates, companyByBoard)
-	log.Printf("harvest-boards: live boards found=%d", len(kept))
+	kept, failures := probeAll(ctx, client, p, candidates, companyByBoard)
+	log.Printf("harvest-boards: live boards found=%d probe-failures=%d", len(kept), failures)
+	// Every candidate erroring means the probe itself is broken (an API change, an
+	// auth wall, a network outage) — not "no new boards". Fail loudly so the empty
+	// result is not mistaken for an exhausted candidate list.
+	if failures > 0 && failures == len(candidates) {
+		log.Printf("harvest-boards: all %d probes failed", failures)
+		return 1
+	}
 	if len(kept) == 0 {
 		return 0
 	}
@@ -82,7 +89,14 @@ func run() int {
 		log.Printf("harvest-boards: %v", err)
 		return 1
 	}
-	if err := os.WriteFile(boardPath, []byte(merged), 0o644); err != nil {
+	// Write via a temp file + rename so a crash mid-write cannot leave a truncated
+	// board file (the committed source of truth ingest crawls).
+	tmp := boardPath + ".tmp"
+	if err := os.WriteFile(tmp, []byte(merged), 0o644); err != nil {
+		log.Printf("harvest-boards: %v", err)
+		return 1
+	}
+	if err := os.Rename(tmp, boardPath); err != nil {
 		log.Printf("harvest-boards: %v", err)
 		return 1
 	}
@@ -123,15 +137,18 @@ func resolveCandidates(ctx context.Context, p prober, c httpClient, seedPath str
 }
 
 // probeAll probes every candidate concurrently (bounded), returning the live boards as
-// emit-ready entries sorted by board. A probe error is logged and the candidate skipped, so
-// one dead board never aborts the harvest. companyByBoard supplies a fallback employer name
-// for boards whose own API exposes none (see chooseCompany).
-func probeAll(ctx context.Context, client httpClient, p prober, candidates []string, companyByBoard map[string]string) []entry {
+// emit-ready entries sorted by board plus the number of candidates whose probe errored.
+// A probe error is logged and the candidate skipped, so one dead board never aborts the
+// harvest; the caller uses the failure count to fail the run when EVERY probe errored
+// (a broken probe or outage, not a legitimately empty harvest). companyByBoard supplies
+// a fallback employer name for boards whose own API exposes none (see chooseCompany).
+func probeAll(ctx context.Context, client httpClient, p prober, candidates []string, companyByBoard map[string]string) ([]entry, int) {
 	sem := make(chan struct{}, probeWorkers)
 	var (
-		mu   sync.Mutex
-		kept []entry
-		wg   sync.WaitGroup
+		mu       sync.Mutex
+		kept     []entry
+		failures int
+		wg       sync.WaitGroup
 	)
 	for _, slug := range candidates {
 		wg.Add(1)
@@ -142,6 +159,9 @@ func probeAll(ctx context.Context, client httpClient, p prober, candidates []str
 			name, n, err := p.probe(ctx, client, slug)
 			if err != nil {
 				log.Printf("harvest-boards: probe %s: %v", slug, err)
+				mu.Lock()
+				failures++
+				mu.Unlock()
 				return
 			}
 			if n == 0 {
@@ -154,5 +174,5 @@ func probeAll(ctx context.Context, client httpClient, p prober, candidates []str
 	}
 	wg.Wait()
 	sort.Slice(kept, func(i, j int) bool { return kept[i].Board < kept[j].Board })
-	return kept
+	return kept, failures
 }

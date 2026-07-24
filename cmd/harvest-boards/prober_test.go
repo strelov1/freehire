@@ -4,11 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"strings"
 	"testing"
 
 	"golang.org/x/net/html"
 )
+
+// errMissing is the sentinel the fake getter returns for an unmapped URL. In production the
+// real client returns its own transport error for a missing board, treated identically.
+var errMissing = errors.New("harvest: not found")
 
 // fakeGetter decodes a canned body per URL into v; an unmapped URL is an error, standing
 // in for the real client's response to a missing/moved board. It serves JSON (the API

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -10,10 +9,6 @@ import (
 	"github.com/strelov1/freehire/internal/sources"
 	"golang.org/x/net/html"
 )
-
-// errMissing is the sentinel a test getter returns for an unmapped URL. In production the
-// real client returns its own transport error for a missing board, treated identically.
-var errMissing = errors.New("harvest: not found")
 
 // greenhouseBoardsAPI is the public boards API root (mirrors sources.greenhouseBaseURL,
 // which is unexported; this tool lives outside the sources package).

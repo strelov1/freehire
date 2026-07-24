@@ -51,7 +51,7 @@ func (gupyProber) probe(ctx context.Context, c httpClient, companyID string) (st
 		return "", 0, nil
 	}
 	name := companyID
-	if len(resp.Data) > 0 && resp.Data[0].CareerPageName != "" {
+	if resp.Data[0].CareerPageName != "" {
 		name = resp.Data[0].CareerPageName
 	}
 	return name, resp.Pagination.Total, nil
