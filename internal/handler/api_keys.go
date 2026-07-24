@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -37,6 +38,28 @@ type createAPIKeyRequest struct {
 	ExpiresAt *time.Time `json:"expires_at"`
 }
 
+// mintAPIKey generates a new API key for the user and persists it (only the hash
+// is stored), returning the plaintext token — revealed to the caller exactly once —
+// and the stored row. Shared by the key-management endpoint and the
+// browser-extension connect flow.
+func (a *API) mintAPIKey(ctx context.Context, userID int64, name string, expiresAt pgtype.Timestamptz) (string, db.CreateAPIKeyRow, error) {
+	token, hash, prefix, err := auth.GenerateAPIKey()
+	if err != nil {
+		return "", db.CreateAPIKeyRow{}, fiber.NewError(fiber.StatusInternalServerError, "failed to generate key")
+	}
+	row, err := a.queries.CreateAPIKey(ctx, db.CreateAPIKeyParams{
+		UserID:      userID,
+		Name:        name,
+		TokenHash:   hash,
+		TokenPrefix: prefix,
+		ExpiresAt:   expiresAt,
+	})
+	if err != nil {
+		return "", db.CreateAPIKeyRow{}, err
+	}
+	return token, row, nil
+}
+
 // CreateAPIKey mints a new API key for the authenticated user and returns the
 // plaintext token exactly once. Behind RequireAuth (cookie-only): a leaked key
 // must not be able to mint more keys.
@@ -55,23 +78,12 @@ func (a *API) CreateAPIKey(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "name is required")
 	}
 
-	token, hash, prefix, err := auth.GenerateAPIKey()
-	if err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to generate key")
-	}
-
 	var expiresAt pgtype.Timestamptz
 	if in.ExpiresAt != nil {
 		expiresAt = pgtype.Timestamptz{Time: *in.ExpiresAt, Valid: true}
 	}
 
-	row, err := a.queries.CreateAPIKey(c.Context(), db.CreateAPIKeyParams{
-		UserID:      userID,
-		Name:        name,
-		TokenHash:   hash,
-		TokenPrefix: prefix,
-		ExpiresAt:   expiresAt,
-	})
+	token, row, err := a.mintAPIKey(c.Context(), userID, name, expiresAt)
 	if err != nil {
 		return err
 	}
