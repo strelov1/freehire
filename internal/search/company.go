@@ -15,8 +15,8 @@ const (
 	// jobs index, so building it cannot regress jobs search. companyRebuildUID is the
 	// throwaway index a full rebuild streams into before the atomic swap (see
 	// CompanyRebuild). companyPrimaryKey is `slug` (the natural company key), not the
-	// jobs index's numeric `id`, so companies get their own create/ensure path rather
-	// than sharing the id-keyed helpers.
+	// jobs index's numeric `id`; the shared ensure/create helpers are parameterized on
+	// the primary key, so both index families share one code path.
 	companyIndexUID   = "companies"
 	companyRebuildUID = "companies_rebuild"
 	companyPrimaryKey = "slug"
@@ -216,14 +216,14 @@ func (c *Client) NewCompanyRebuild() *CompanyRebuild { return &CompanyRebuild{c:
 // and creates a fresh, empty rebuild index with the companies settings, discarding
 // any leftover rebuild index from an aborted prior run.
 func (r *CompanyRebuild) Prepare(ctx context.Context) error {
-	if err := r.c.ensureCompanyIndex(ctx, r.c.manager.Index(companyIndexUID), companyIndexUID); err != nil {
+	if err := r.c.ensure(ctx, r.c.manager.Index(companyIndexUID), companyIndexUID, companyPrimaryKey, companySettings()); err != nil {
 		return err
 	}
 	if err := r.c.dropIndex(ctx, companyRebuildUID); err != nil {
 		return err
 	}
 	r.rebuild = r.c.manager.Index(companyRebuildUID)
-	return r.c.ensureCompanyIndex(ctx, r.rebuild, companyRebuildUID)
+	return r.c.ensure(ctx, r.rebuild, companyRebuildUID, companyPrimaryKey, companySettings())
 }
 
 // Push enqueues a batch into the rebuild index WITHOUT waiting for it to finish —
@@ -255,38 +255,4 @@ func (r *CompanyRebuild) Promote(ctx context.Context) error {
 		return err
 	}
 	return r.c.dropIndex(ctx, companyRebuildUID)
-}
-
-// ensureCompanyIndex creates the named companies index (keyed by slug) if absent
-// and applies the companies settings. It is the slug-keyed counterpart to the jobs
-// ensure path, kept separate so the shared id-keyed helpers stay untouched.
-func (c *Client) ensureCompanyIndex(ctx context.Context, idx meilisearch.IndexManager, uid string) error {
-	if err := c.createCompanyIndex(ctx, uid); err != nil {
-		return err
-	}
-	st, err := idx.UpdateSettingsWithContext(ctx, companySettings())
-	if err != nil {
-		return fmt.Errorf("search: update company settings: %w", err)
-	}
-	return c.awaitTask(ctx, idx, st.TaskUID)
-}
-
-// createCompanyIndex creates the companies index (keyed by slug) if absent. An
-// already-existing index is the idempotent happy path, not a failure.
-func (c *Client) createCompanyIndex(ctx context.Context, uid string) error {
-	create, err := c.manager.CreateIndexWithContext(ctx, &meilisearch.IndexConfig{
-		Uid:        uid,
-		PrimaryKey: companyPrimaryKey,
-	})
-	if err != nil {
-		return fmt.Errorf("search: create company index: %w", err)
-	}
-	created, err := c.manager.WaitForTaskWithContext(ctx, create.TaskUID, taskPollInterval)
-	if err != nil {
-		return fmt.Errorf("search: await create company index: %w", err)
-	}
-	if created.Status == meilisearch.TaskStatusFailed && created.Error.Code != "index_already_exists" {
-		return fmt.Errorf("search: create company index failed: %s", created.Error.Message)
-	}
-	return nil
 }

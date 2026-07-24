@@ -134,7 +134,7 @@ func NewClient(url, key string) *Client {
 // settings. It is idempotent — safe to call on every reindex. This is the fast
 // production index that all default (keyword) traffic and faceting hit.
 func (c *Client) EnsureIndex(ctx context.Context) error {
-	if err := c.ensure(ctx, c.facet, facetIndexUID, facetSettings()); err != nil {
+	if err := c.ensure(ctx, c.facet, facetIndexUID, primaryKey, facetSettings()); err != nil {
 		return err
 	}
 	// Meilisearch settings updates MERGE: facetSettings omits the embedder, but an
@@ -153,7 +153,7 @@ func (c *Client) EnsureIndex(ctx context.Context) error {
 // and applies its settings. It is built by the separate reindex --semantic pass, which
 // computes the vectors against TEI, so it is kept off the default reindex path.
 func (c *Client) EnsureSemanticIndex(ctx context.Context) error {
-	return c.ensure(ctx, c.semantic, semanticIndexUID, semanticSettings())
+	return c.ensure(ctx, c.semantic, semanticIndexUID, primaryKey, semanticSettings())
 }
 
 // Rebuild is a fresh-index build session for a full reindex. Documents are streamed
@@ -191,7 +191,7 @@ func (c *Client) NewSemanticRebuild() *Rebuild {
 // Promote needs both — on a first-ever run the live index is created empty and the
 // swap replaces its contents and settings wholesale.
 func (r *Rebuild) Prepare(ctx context.Context) error {
-	if err := r.c.createIndex(ctx, r.c.manager.Index(r.liveUID), r.liveUID); err != nil {
+	if err := r.c.createIndex(ctx, r.c.manager.Index(r.liveUID), r.liveUID, primaryKey); err != nil {
 		return err
 	}
 	// Discard any leftover rebuild index from an aborted prior run, then create it
@@ -200,7 +200,7 @@ func (r *Rebuild) Prepare(ctx context.Context) error {
 		return err
 	}
 	r.rebuild = r.c.manager.Index(r.rebuildUID)
-	if err := r.c.ensure(ctx, r.rebuild, r.rebuildUID, r.settings); err != nil {
+	if err := r.c.ensure(ctx, r.rebuild, r.rebuildUID, primaryKey, r.settings); err != nil {
 		return err
 	}
 	// The facet index carries no embedder; reset it in case a prior version left one
@@ -303,10 +303,11 @@ func (c *Client) swapIndexes(ctx context.Context, a, b string) error {
 	return c.awaitManagerTask(ctx, task.TaskUID)
 }
 
-// ensure creates the named index (keyed by the internal id) if absent and applies
-// its settings. Shared by the facet and semantic ensure paths.
-func (c *Client) ensure(ctx context.Context, idx meilisearch.IndexManager, uid string, settings *meilisearch.Settings) error {
-	if err := c.createIndex(ctx, idx, uid); err != nil {
+// ensure creates the named index (keyed by pk) if absent and applies its settings.
+// Shared by every ensure/prepare path — the jobs indexes (id-keyed) and the companies
+// index (slug-keyed, see company.go) differ only in uid, primary key, and settings.
+func (c *Client) ensure(ctx context.Context, idx meilisearch.IndexManager, uid, pk string, settings *meilisearch.Settings) error {
+	if err := c.createIndex(ctx, idx, uid, pk); err != nil {
 		return err
 	}
 	st, err := idx.UpdateSettingsWithContext(ctx, settings)
@@ -316,12 +317,12 @@ func (c *Client) ensure(ctx context.Context, idx meilisearch.IndexManager, uid s
 	return c.awaitTask(ctx, idx, st.TaskUID)
 }
 
-// createIndex creates the index (keyed by the internal id) if absent. An
-// already-existing index is the idempotent happy path, not a failure.
-func (c *Client) createIndex(ctx context.Context, idx meilisearch.IndexManager, uid string) error {
+// createIndex creates the index (keyed by pk) if absent. An already-existing index is
+// the idempotent happy path, not a failure.
+func (c *Client) createIndex(ctx context.Context, idx meilisearch.IndexManager, uid, pk string) error {
 	create, err := c.manager.CreateIndexWithContext(ctx, &meilisearch.IndexConfig{
 		Uid:        uid,
-		PrimaryKey: primaryKey,
+		PrimaryKey: pk,
 	})
 	if err != nil {
 		return fmt.Errorf("search: create index: %w", err)
