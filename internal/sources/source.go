@@ -346,6 +346,7 @@ func All(c HTTPClient) map[string]Source {
 		NewDataArt(c),
 		NewOnstrider(c),
 		NewAlignerr(c),
+		NewTalentHR(c),
 		NewMicro1(c),
 		NewBairesDev(c),
 		// RU federal open-data aggregator: board-based, sharded per region (board = OKATO code).
