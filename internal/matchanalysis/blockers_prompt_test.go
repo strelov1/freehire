@@ -49,9 +49,9 @@ func TestAnalyzeStreamFeedsBlockersToPrompts(t *testing.T) {
 	if len(m.users) != 3 {
 		t.Fatalf("captured %d user prompts, want 3", len(m.users))
 	}
-	for _, stage := range []int{0, 2} { // stages 1 and 3 write blockers today
-		if !strings.Contains(m.users[stage], "BLOCKER-REASON-X") {
-			t.Errorf("stage %d prompt should carry the unmet blocker:\n%s", stage+1, m.users[stage])
+	for stage, prompt := range m.users { // every scoring stage writes blockers
+		if !strings.Contains(prompt, "BLOCKER-REASON-X") {
+			t.Errorf("stage %d prompt should carry the unmet blocker:\n%s", stage+1, prompt)
 		}
 	}
 }

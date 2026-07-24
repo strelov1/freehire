@@ -291,6 +291,7 @@ func stage2UserPrompt(in Input, reqs []Requirement, candidate string) string {
 	}
 	writeAnchor(&b, in.Match)
 	writeLocation(&b, in)
+	writeBlockers(&b, in.Blockers)
 	writeRequirements(&b, reqs)
 	writeCandidate(&b, candidate)
 	return b.String()
