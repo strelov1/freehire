@@ -42,12 +42,14 @@ cmd/rollup-views/main.go   aggregates nginx access logs into jobs.view_count + j
 cmd/backfill-derive/main.go  re-derives every deterministic column in one keyset pass — dictionary facets, role_fingerprint (repost-identity), and public_slug/company_slug — matching what ingest writes for the same raw fields
 cmd/backfill-company-names/main.go  resolves real display names for slug-named companies
 cmd/import-yc/main.go      enriches companies from yc-oss directory
+cmd/migrate/main.go        versioned migration runner — applies pending migrations/*.sql, records them in schema_migrations, auto-baselines pre-runner databases (see db/AGENTS.md)
 sources/                   board files + sources/custom.yml + sources/telegram.yml
 internal/
   config/            env config (server: PORT, DATABASE_URL, FRONTEND_ORIGIN, JWT_SECRET/JWT_TTL, COOKIE_SECURE, MEILI_URL/MEILI_MASTER_KEY, OAUTH_*, EXTENSION_REDIRECT_ALLOWLIST, SENTRY_*; workers: LLM_BASE_URL/LLM_API_KEY/LLM_MODEL, EMBED_*)
   observability/     optional Sentry error reporting (see observability/AGENTS.md)
   database/          pgxpool connection pool
   db/                GENERATED sqlc code + queries/*.sql (see db/AGENTS.md)
+  migrate/           versioned migration runner (schema_migrations, baseline, advisory lock; see db/AGENTS.md)
   handler/           HTTP handlers + route wiring (see handler/AGENTS.md)
   auth/              auth primitives: bcrypt, JWT Issuer, API-key hashing, cookie transport (see auth/AGENTS.md)
   auth/oauth/        OAuth sign-in: Provider interface, registry, CSRF state cookie (see auth/oauth/AGENTS.md)
@@ -91,6 +93,7 @@ go run ./cmd/embed                         # + MEILI_URL/MEILI_MASTER_KEY (+ EMB
 go run ./cmd/tg-ingest                     # crawl sources/telegram.yml (path via CHANNELS_FILE)
 go run ./cmd/tg-extract                    # + LLM_* — drain telegram_posts into the catalogue
 go run ./cmd/liveness                      # URL-probe orphan jobs, close dead ones
+go run ./cmd/migrate                       # apply pending migrations (run BEFORE deploying code that reads new schema; -baseline records all on-disk files without executing; first run on a pre-runner database auto-baselines)
 go run ./cmd/backfill-derive               # re-derive every deterministic column (facets + role_fingerprint + slugs) in one pass; BACKFILL_CONCURRENCY tunes the worker pool; follow with make reindex (collapses newly-clustered reposts + unions their geography)
 go run ./cmd/backfill-company-names [--dry-run]  # resolve real names for slug-named companies; follow with make reindex
 go run ./cmd/rollup-stats                  # recompute job_daily_stats (run-once, cron ~every 3h)
@@ -167,6 +170,6 @@ For the full architecture and conventions, see the **module files** below. Each 
 - **Enrichment:** Queue-driven (`enrichment_outbox`), provider-agnostic LLM, `Sanitize` + `Validate` gate
 - **Embeddings:** Queue-driven (`semantic_outbox`), incremental, reconciled by `reindex --semantic`
 - **Dictionaries:** All facet dictionaries are dict-only in production (never guess, emit nothing for unknowns)
-- **Migrations:** Via Postgres initdb — single-run on first volume init only; recreate volume to re-apply
+- **Migrations:** `cmd/migrate` applies pending `migrations/*.sql` in filename order and records them in `schema_migrations` (version = filename, one tx per file, advisory lock). Fresh volumes still get the full dir via Postgres initdb; a pre-runner database is auto-baselined on first run. Never edit an applied migration — add a new file.
 - **Sentry:** Opt-in, env-gated, errors-only — `sentry.Init` with `SendDefaultPII:false`
 - **Naming — "CV", not "résumé":** Prefer **CV** over "résumé"/"resume" in user-facing copy, new identifiers, comments, and docs — the term is currently mixed and that inconsistency is the thing to stop. Don't mass-rename the existing `resume`/`resumeextract` packages and columns (churn without value); just default new surfaces to "CV".

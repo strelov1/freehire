@@ -4,9 +4,6 @@
   import DOMPurify from 'isomorphic-dompurify';
   import {
     AlertTriangle,
-    Terminal,
-    ChevronRight,
-    ArrowUp,
     Loader2,
     Trash2,
     Plus,
@@ -20,6 +17,9 @@
   import { initChat, reduceTurnEvent, type ChatState } from '$lib/assistant/chat';
   import { parseJobSegments } from '$lib/assistant/unfurl';
   import JobCardUnfurl from '$lib/assistant/JobCardUnfurl.svelte';
+  import SessionRail from '$lib/assistant/SessionRail.svelte';
+  import ToolGroupList from '$lib/assistant/ToolGroupList.svelte';
+  import Composer from '$lib/assistant/Composer.svelte';
   import {
     fromSummary,
     newestFirst,
@@ -30,20 +30,6 @@
     labelFromMessage,
     type SessionItem,
   } from '$lib/assistant/sessions';
-  import {
-    classifyFamily,
-    groupTitle,
-    isExpandable,
-    callLine,
-    bashCommand,
-    commandLine,
-    isFreehireGroup,
-    isNoiseShellCall,
-    nonEmptyInput,
-    previewToolInput,
-    type ToolCall,
-    type ToolFamily,
-  } from '$lib/assistant/tool-formatters';
   import type { TurnEvent } from '$lib/assistant/wire';
 
   // The agent chat. Auth is UNIFIED with freehire: the /my shell already gates
@@ -131,7 +117,6 @@
   let sidebarOpen = $state(true);
 
   let scroller = $state<HTMLDivElement | null>(null);
-  let textareaEl = $state<HTMLTextAreaElement | null>(null);
 
   // Whether we currently hold the session's input lease. Held across a queued
   // run of turns (acquired lazily on the first dispatch, released on idle when
@@ -188,16 +173,6 @@
     sessions = setLabel(sessions, id, label);
   }
 
-  // Auto-grow the composer textarea up to a cap (px), like roy-web's `autosize`.
-  const COMPOSER_CAP = 200;
-  $effect(() => {
-    void draft;
-    const el = textareaEl;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, COMPOSER_CAP)}px`;
-  });
-
   // --- Markdown rendering (sanitized) --------------------------------------
   // freehire is a PUBLIC app and the model output is untrusted, so — unlike
   // roy-web — we never render raw model HTML: marked's output is run through
@@ -220,19 +195,6 @@
     const clean = DOMPurify.sanitize(html);
     DOMPurify.removeHook('afterSanitizeAttributes');
     return clean;
-  }
-
-  // Fold a message's flat tool-call list into consecutive same-family groups,
-  // so the renderer shows one card per run of e.g. bash commands or file reads.
-  function groupTools(calls: readonly ToolCall[]): { family: ToolFamily; calls: ToolCall[] }[] {
-    const groups: { family: ToolFamily; calls: ToolCall[] }[] = [];
-    for (const c of calls) {
-      const family = classifyFamily(c);
-      const last = groups[groups.length - 1];
-      if (last && last.family === family) last.calls.push(c);
-      else groups.push({ family, calls: [c] });
-    }
-    return groups;
   }
 
   // --- Streaming spinner / thinking timers ---------------------------------
@@ -549,12 +511,11 @@
     void scrollToBottom();
   }
 
-  // Composer submit: while a turn is in flight (or the queue is non-empty) the
-  // message is queued and drained later; otherwise it dispatches immediately.
-  function submit(e: SubmitEvent) {
-    e.preventDefault();
-    const text = draft.trim();
-    if (!text || !client || phase !== 'ready' || connectionLost || switching || !activeId) return;
+  // Composer submit (the Composer child already trimmed the draft and checked
+  // the disabled state): while a turn is in flight (or the queue is non-empty)
+  // the message is queued and drained later; otherwise it dispatches immediately.
+  function submit(text: string) {
+    if (!client || phase !== 'ready' || connectionLost || switching || !activeId) return;
     draft = '';
     if (turnActive || queue.length > 0) {
       enqueue(text);
@@ -680,45 +641,15 @@
   <div class="flex min-h-0 flex-1">
     <!-- Session rail (desktop): collapsible; hidden entirely when the host disables it. -->
     {#if showSessionRail && sidebarOpen}
-      <aside class="hidden w-64 shrink-0 flex-col border-r border-border bg-muted/20 md:flex">
-      <div class="p-2">
-        <button
-          type="button"
-          onclick={newChat}
-          disabled={switching || phase !== 'ready'}
-          class="flex w-full items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Plus class="size-4" />
-          New chat
-        </button>
-      </div>
-      <ul class="flex-1 space-y-1 overflow-y-auto px-2 pb-2">
-        {#each sessions as s (s.id)}
-          <li class="group relative">
-            <button
-              type="button"
-              onclick={() => selectSession(s.id)}
-              disabled={switching}
-              class={[
-                'flex w-full items-center rounded-lg py-2 pl-3 pr-9 text-left text-sm transition-colors',
-                s.id === activeId ? 'bg-secondary text-secondary-foreground' : 'hover:bg-muted',
-              ]}
-            >
-              <span class="min-w-0 flex-1 truncate">{s.label}</span>
-            </button>
-            <button
-              type="button"
-              aria-label="Delete chat"
-              title="Delete chat"
-              onclick={() => removeChat(s.id)}
-              class="absolute right-1 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
-            >
-              <Trash2 class="size-4" />
-            </button>
-          </li>
-        {/each}
-      </ul>
-    </aside>
+      <SessionRail
+        {sessions}
+        {activeId}
+        {switching}
+        ready={phase === 'ready'}
+        onNew={newChat}
+        onSelect={selectSession}
+        onDelete={removeChat}
+      />
     {/if}
 
     <!-- Chat pane -->
@@ -825,58 +756,7 @@
                 </details>
               {/if}
 
-              {#each groupTools(message.tools.filter((c) => !isNoiseShellCall(c))) as g, t (t)}
-                {@const title = groupTitle(g.family, g.calls)}
-                {#if !isExpandable(g.family, g.calls)}
-                  <div class="self-start flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-                    <Terminal class="size-4 shrink-0" />
-                    <span>{title}</span>
-                  </div>
-                {:else}
-                  <details class="self-start max-w-[90%]">
-                    <summary class="flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground hover:bg-muted/70 [&::-webkit-details-marker]:hidden [&::marker]:hidden [&[open]>span>svg.chev]:rotate-90">
-                      <Terminal class="size-4 shrink-0" />
-                      <span class="flex items-center gap-1.5">
-                        {title}
-                        <ChevronRight class="chev size-3.5 shrink-0 transition-transform" />
-                      </span>
-                    </summary>
-                    {#if g.family === 'bash' && isFreehireGroup(g.calls)}
-                      <ul class="mt-2 ml-6 space-y-1 text-xs text-muted-foreground">
-                        {#each g.calls as c, ci (ci)}
-                          <li>{commandLine(c)}</li>
-                        {/each}
-                      </ul>
-                    {:else if g.family === 'bash'}
-                      <div class="mt-2 overflow-hidden rounded-md border border-border bg-background">
-                        <div class="border-b border-border bg-muted/40 px-3 py-1.5 text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground/80">
-                          Shell
-                        </div>
-                        {#each g.calls as c, ci (ci)}
-                          <pre class={['m-0 whitespace-pre-wrap break-words px-3 py-2 font-mono text-xs', ci > 0 && 'border-t border-border']}>$ {bashCommand(c.input) ?? ''}</pre>
-                        {/each}
-                      </div>
-                    {:else if g.family === 'fs'}
-                      <ul class="mt-2 ml-6 space-y-1 text-xs text-muted-foreground">
-                        {#each g.calls as c, ci (ci)}
-                          <li>{callLine(c)}</li>
-                        {/each}
-                      </ul>
-                    {:else}
-                      <ul class="mt-2 ml-6 space-y-1 text-xs text-muted-foreground">
-                        {#each g.calls as c, ci (ci)}
-                          <li class="flex flex-wrap items-baseline gap-1.5">
-                            <span class="font-medium text-foreground/80">{c.name}</span>
-                            {#if nonEmptyInput(c.input)}
-                              <code class="rounded bg-muted px-1.5 py-0.5 font-mono">{previewToolInput(c.input)}</code>
-                            {/if}
-                          </li>
-                        {/each}
-                      </ul>
-                    {/if}
-                  </details>
-                {/if}
-              {/each}
+              <ToolGroupList calls={message.tools} />
 
               {#if message.text}
                 {#if message.streaming}
@@ -927,71 +807,14 @@
       </div>
 
       <!-- Composer -->
-      <div class="border-t border-border p-3">
-        <div class="mx-auto w-full max-w-3xl">
-          {#if queue.length > 0}
-            <!-- Queued messages: sent one-by-one as each turn finishes. -->
-            <div class="mb-2 overflow-hidden rounded-2xl border border-border/60 bg-card">
-              <div class="px-4 py-2 text-xs font-medium text-brand">{queue.length} queued</div>
-              <ul class="divide-y divide-border/40 border-t border-border/40">
-                {#each queue as item (item.id)}
-                  <li class="group flex items-start gap-3 px-4 py-2">
-                    <span class="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm text-foreground">{item.text}</span>
-                    <button
-                      type="button"
-                      aria-label="Remove from queue"
-                      title="Remove"
-                      onclick={() => removeQueued(item.id)}
-                      class="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-60 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
-                    >
-                      <Trash2 class="size-4" />
-                    </button>
-                  </li>
-                {/each}
-              </ul>
-            </div>
-          {/if}
-
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-          <form
-            onsubmit={submit}
-            onclick={(e) => {
-              if ((e.target as HTMLElement).closest('button')) return;
-              textareaEl?.focus();
-            }}
-            class="relative flex w-full cursor-text items-end gap-2 rounded-3xl border border-border/60 bg-card px-4 py-2.5 shadow-sm transition-colors focus-within:border-ring/60"
-          >
-            <textarea
-              bind:this={textareaEl}
-              bind:value={draft}
-              rows="1"
-              placeholder="Message the agent — Enter to send, Shift+Enter for newline"
-              disabled={phase !== 'ready' || connectionLost || switching}
-              onkeydown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
-                }
-              }}
-              class="block max-h-[200px] min-h-[1.5rem] flex-1 resize-none cursor-text bg-transparent py-1 text-sm leading-6 text-foreground placeholder:text-muted-foreground/70 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-            ></textarea>
-            <button
-              type="submit"
-              aria-label={turnActive ? 'Queue message' : 'Send message'}
-              aria-busy={turnActive}
-              disabled={phase !== 'ready' || connectionLost || switching || !draft.trim()}
-              class="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {#if turnActive}
-                <Loader2 class="size-4 animate-spin" />
-              {:else}
-                <ArrowUp class="size-4" strokeWidth={2.5} />
-              {/if}
-            </button>
-          </form>
-        </div>
-      </div>
+      <Composer
+        bind:draft
+        {queue}
+        {turnActive}
+        disabled={phase !== 'ready' || connectionLost || switching}
+        onSubmit={submit}
+        onRemoveQueued={removeQueued}
+      />
     </div>
 
   </div>
