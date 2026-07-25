@@ -143,7 +143,8 @@ func (r *QueriesRepository) CreateUser(ctx context.Context, email, passwordHash 
 		return User{}, err
 	}
 	return User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester,
-		EmailVerified: row.EmailVerified, CreatedAt: pgconv.TimePtr(row.CreatedAt)}, nil
+		EmailVerified: row.EmailVerified, HasPassword: true,
+		CreatedAt: pgconv.TimePtr(row.CreatedAt)}, nil
 }
 
 // MarkEmailVerified records that control of the account's address was proven, by an
@@ -209,5 +210,6 @@ func (r *QueriesRepository) UserByID(ctx context.Context, id int64) (User, error
 		return User{}, err
 	}
 	return User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester,
-		EmailVerified: row.EmailVerified, CreatedAt: pgconv.TimePtr(row.CreatedAt)}, nil
+		EmailVerified: row.EmailVerified, HasPassword: row.HasPassword,
+		CreatedAt: pgconv.TimePtr(row.CreatedAt)}, nil
 }

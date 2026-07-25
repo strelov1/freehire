@@ -596,8 +596,10 @@ type Querier interface {
 	// post-login wire shape. email_verified drives both the "confirm your email" prompt
 	// and the OAuth merge policy (an unverified account is seized, not silently joined).
 	GetUserByEmail(ctx context.Context, lower string) (GetUserByEmailRow, error)
-	// Profile lookup for the authenticated user. Never selects password_hash. role is
-	// included so /auth/me can tell a client whether to surface moderator-only UI.
+	// Profile lookup for the authenticated user. role is included so /auth/me can tell a
+	// client whether to surface moderator-only UI. The password hash itself never leaves
+	// the database — only whether one exists, which is what lets the SPA offer a password
+	// change to password accounts and explain itself to OAuth-only ones.
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
 	// OAuth sign-in fast path: resolve a provider identity straight to its user.
 	GetUserByIdentity(ctx context.Context, arg GetUserByIdentityParams) (GetUserByIdentityRow, error)

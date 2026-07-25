@@ -256,3 +256,51 @@ func TestChangePasswordKeepsTheCallerSignedInAndRevokesOthers(t *testing.T) {
 		t.Errorf("other device status = %d, want 401 after a password change", other.StatusCode)
 	}
 }
+
+// The SPA needs to know whether the account even has a password, so the security page can
+// offer the change form to password accounts and explain itself to OAuth-only ones. It
+// cannot infer this from being signed in.
+func TestMeReportsWhetherTheAccountHasAPassword(t *testing.T) {
+	app, _, queries, iss := recoveryApp(t)
+	ctx := context.Background()
+
+	reg := postAuthJSON(t, app, "/api/v1/auth/register",
+		`{"email":"withpw@example.test","password":"original-pw"}`, "")
+	defer reg.Body.Close()
+	if got := decodeHasPassword(t, reg); !got {
+		t.Error("a password registration must report has_password true")
+	}
+
+	// A provider-created account is passwordless.
+	oauthUser, err := queries.CreateUser(ctx, db.CreateUserParams{
+		Email: "oauthonly@example.test", EmailVerified: true,
+	})
+	if err != nil {
+		t.Fatalf("seed OAuth account: %v", err)
+	}
+	cookie, _ := iss.Issue(oauthUser.ID, 1)
+
+	req := httptest.NewRequest(fiber.MethodGet, "/api/v1/auth/me", nil)
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("me: %v", err)
+	}
+	defer resp.Body.Close()
+	if got := decodeHasPassword(t, resp); got {
+		t.Error("a passwordless OAuth account must report has_password false")
+	}
+}
+
+func decodeHasPassword(t *testing.T, resp *http.Response) bool {
+	t.Helper()
+	var body struct {
+		Data struct {
+			HasPassword bool `json:"has_password"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	return body.Data.HasPassword
+}

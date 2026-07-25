@@ -192,6 +192,9 @@ export interface User {
   // Whether the account has proven control of its email address. Drives the
   // "confirm your email" prompt; a UI affordance only, re-checked server-side.
   email_verified: boolean;
+  // Whether a password is set at all. False for an OAuth-only account, which has
+  // nothing to change and must use the reset flow to set one.
+  has_password: boolean;
   created_at: string | null;
 }
 

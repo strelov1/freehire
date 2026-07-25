@@ -35,7 +35,11 @@ type User struct {
 	Role          string
 	BetaTester    bool
 	EmailVerified bool
-	CreatedAt     *time.Time
+	// HasPassword is whether a password is set at all. False for an OAuth-only account,
+	// which must go through the reset flow to set one. The hash itself never leaves the
+	// database.
+	HasPassword bool
+	CreatedAt   *time.Time
 }
 
 // PasswordHasher hashes and verifies passwords (bcrypt in production). Injected

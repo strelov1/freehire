@@ -137,7 +137,9 @@ func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (GetUserByEm
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, role, beta_tester, email_verified, created_at
+SELECT id, email, role, beta_tester, email_verified,
+       (password_hash IS NOT NULL)::boolean AS has_password,
+       created_at
 FROM users
 WHERE id = $1
 `
@@ -148,11 +150,14 @@ type GetUserByIDRow struct {
 	Role          string             `json:"role"`
 	BetaTester    bool               `json:"beta_tester"`
 	EmailVerified bool               `json:"email_verified"`
+	HasPassword   bool               `json:"has_password"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
-// Profile lookup for the authenticated user. Never selects password_hash. role is
-// included so /auth/me can tell a client whether to surface moderator-only UI.
+// Profile lookup for the authenticated user. role is included so /auth/me can tell a
+// client whether to surface moderator-only UI. The password hash itself never leaves
+// the database — only whether one exists, which is what lets the SPA offer a password
+// change to password accounts and explain itself to OAuth-only ones.
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error) {
 	row := q.db.QueryRow(ctx, getUserByID, id)
 	var i GetUserByIDRow
@@ -162,6 +167,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, er
 		&i.Role,
 		&i.BetaTester,
 		&i.EmailVerified,
+		&i.HasPassword,
 		&i.CreatedAt,
 	)
 	return i, err

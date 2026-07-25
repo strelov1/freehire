@@ -10,8 +10,9 @@
 
   const user = $derived(currentUser());
   // An OAuth-only account has no password to change; it sets one through the
-  // forgotten-password flow, which proves the address instead.
-  const hasPassword = $derived(user !== null);
+  // forgotten-password flow, which proves the address instead. This has to come from
+  // the server — being signed in says nothing about whether a password exists.
+  const hasPassword = $derived(user?.has_password ?? false);
 
   let currentPassword = $state('');
   let password = $state('');

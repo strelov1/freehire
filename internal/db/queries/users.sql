@@ -19,9 +19,13 @@ FROM users
 WHERE lower(email) = lower($1);
 
 -- name: GetUserByID :one
--- Profile lookup for the authenticated user. Never selects password_hash. role is
--- included so /auth/me can tell a client whether to surface moderator-only UI.
-SELECT id, email, role, beta_tester, email_verified, created_at
+-- Profile lookup for the authenticated user. role is included so /auth/me can tell a
+-- client whether to surface moderator-only UI. The password hash itself never leaves
+-- the database — only whether one exists, which is what lets the SPA offer a password
+-- change to password accounts and explain itself to OAuth-only ones.
+SELECT id, email, role, beta_tester, email_verified,
+       (password_hash IS NOT NULL)::boolean AS has_password,
+       created_at
 FROM users
 WHERE id = $1;
 

@@ -23,8 +23,11 @@ type userResponse struct {
 	BetaTester bool   `json:"beta_tester"`
 	// EmailVerified drives the SPA's "confirm your email" prompt. It is an affordance
 	// only: the server never trusts the client's copy of it.
-	EmailVerified bool       `json:"email_verified"`
-	CreatedAt     *time.Time `json:"created_at"`
+	EmailVerified bool `json:"email_verified"`
+	// HasPassword lets the SPA offer a password change to password accounts and explain
+	// itself to OAuth-only ones, instead of guessing from "is signed in".
+	HasPassword bool       `json:"has_password"`
+	CreatedAt   *time.Time `json:"created_at"`
 }
 
 type credentials struct {
@@ -35,7 +38,7 @@ type credentials struct {
 // toUserResponse maps an accounts.User to its public response shape.
 func toUserResponse(u accounts.User) userResponse {
 	return userResponse{ID: u.ID, Email: u.Email, Role: u.Role, BetaTester: u.BetaTester,
-		EmailVerified: u.EmailVerified, CreatedAt: u.CreatedAt}
+		EmailVerified: u.EmailVerified, HasPassword: u.HasPassword, CreatedAt: u.CreatedAt}
 }
 
 // accountsError maps the accounts service sentinels to HTTP errors, preserving
