@@ -10,10 +10,10 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 )
 
-// statsHandlers serves the public transparency reads: catalogue activity, member
-// growth, engagement counts, the facet snapshot, and the ingest-fleet status. All
-// are unauthenticated, aggregate-only reads — no record-level field or user
-// identifier is exposed.
+// statsHandlers serves the public transparency and market-insights reads:
+// catalogue activity, member growth, engagement counts, the facet snapshot, the
+// insights rollups, and the ingest-fleet status. All are unauthenticated,
+// aggregate-only reads — no record-level field or user identifier is exposed.
 type statsHandlers struct {
 	queries *db.Queries
 }
@@ -45,6 +45,16 @@ func (h *statsHandlers) register(api fiber.Router) {
 	// section stays off the live Meilisearch facet count. Aggregate-only — per-value
 	// counts only.
 	api.Get("/stats/facets", h.StatsFacets)
+
+	// Public Trends & Insights reads: aggregate market intelligence (role & skill
+	// demand, hiring velocity, salary bands) served from the insights_* rollups
+	// (cmd/rollup-stats), unauthenticated like the other public reads. Aggregate-only
+	// — no record-level field is exposed.
+	api.Get("/insights/roles", h.InsightsRoles)
+	api.Get("/insights/skills", h.InsightsSkills)
+	api.Get("/insights/velocity", h.InsightsVelocity)
+	api.Get("/insights/salary", h.InsightsSalary)
+	api.Get("/insights/companies", h.InsightsCompanies)
 
 	// Public ingest-fleet status, unauthenticated like the other public reads.
 	// A per-provider health rollup over board_health, sanitized (no error text or

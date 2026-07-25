@@ -96,7 +96,7 @@ func TestInsightsEndpoints(t *testing.T) {
 	seedInsightsHandlerJob(t, ctx, pool, q, "4", "design", "junior", []string{"fr"}, []string{"figma"}, 0)
 	rebuildInsightsForTest(t, ctx, q)
 
-	h := &API{pool: pool, queries: q}
+	h := &statsHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/insights/roles", h.InsightsRoles)
 	app.Get("/api/v1/insights/skills", h.InsightsSkills)

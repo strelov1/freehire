@@ -303,16 +303,6 @@ func Register(app *fiber.App, cfg Config) {
 	// ingest-status reads (see statsHandlers).
 	statsH.register(api)
 
-	// Public Trends & Insights reads: aggregate market intelligence (role & skill
-	// demand, hiring velocity, salary bands) served from the insights_* rollups
-	// (cmd/rollup-stats), unauthenticated like the other public reads. Aggregate-only
-	// — no record-level field is exposed.
-	api.Get("/insights/roles", a.InsightsRoles)
-	api.Get("/insights/skills", a.InsightsSkills)
-	api.Get("/insights/velocity", a.InsightsVelocity)
-	api.Get("/insights/salary", a.InsightsSalary)
-	api.Get("/insights/companies", a.InsightsCompanies)
-
 	// Per-user job interactions, tracking reads, and reminder controls
 	// (see trackingHandlers). The interaction writes precede the vote routes,
 	// mirroring the previous registration order.
