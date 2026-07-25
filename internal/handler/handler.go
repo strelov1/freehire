@@ -21,7 +21,6 @@ import (
 	"github.com/strelov1/freehire/internal/browsertools"
 	"github.com/strelov1/freehire/internal/contribution"
 	"github.com/strelov1/freehire/internal/credits"
-	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/emailnotify"
 	"github.com/strelov1/freehire/internal/enrich"
@@ -133,33 +132,6 @@ type API struct {
 	// contribution owns the crowdsourced paste-a-link flow (submit a URL → detect ATS,
 	// dedup by derived identity, record + award a point); list the caller's own.
 	contribution *contribution.Service
-	// userProfile owns the single-per-user profile use cases (fetch/save/clear a
-	// specialization + skills set); the handlers translate wire ↔ domain and delegate
-	// to it.
-	userProfile *userprofile.Service
-	// resume owns the per-user stored-résumé use cases (store/status/delete + derive
-	// text for the verdict). Its blob store is nil when S3 is unconfigured; Enabled()
-	// then reports false and callers degrade to per-request résumé upload.
-	resume *resume.Store
-	// cvStore owns the CV-builder use cases (per-user structured CVs, CRUD + seed).
-	cvStore *cv.Store
-	// cvRenderer renders a CV to PDF. Nil when no typst binary is configured; the PDF
-	// endpoint then returns 501 while the rest of the CV builder still works.
-	cvRenderer cv.Renderer
-	// structuredExtractor derives the read-only structured résumé from an uploaded CV
-	// (best-effort, background). Its client is nil when the LLM is unconfigured; extraction
-	// then no-ops and the profile simply shows no structured section.
-	structuredExtractor *resumeextract.Extractor
-	// atsAnalyzer runs the optional LLM qualitative review for the CV ATS report.
-	// Its client is nil when the LLM is unconfigured; Analyze then degrades to a no-op.
-	atsAnalyzer *atscheck.Analyzer
-	// atsCache reads/writes the per-user cached CV ATS review (backed by *db.Queries).
-	atsCache atsReviewStore
-	// matchAnalysis runs the on-demand three-stage LLM fit analysis for one (candidate, job).
-	// Its client is nil when the LLM is unconfigured; Analyze then degrades to a no-op.
-	matchAnalysis *matchanalysis.Analyzer
-	// matchAnalysisCache reads/writes the per-(user, job) cached fit analysis (backed by *db.Queries).
-	matchAnalysisCache matchAnalysisStore
 	// credits meters the per-user AI-points balance the match and tailor features debit.
 	credits *credits.Store
 	// Telegram notification wiring. All nil/empty when the bot is unconfigured —
@@ -312,35 +284,27 @@ func Register(app *fiber.App, cfg Config) {
 	reportsH := newReportHandlers(queries)
 	savedSearchH := newSavedSearchHandlers(queries)
 	subscriptionH := newSubscriptionHandlers(queries)
-	a.userProfile = userprofile.New(userprofile.NewQueriesRepository(queries))
-	profileH := newProfileHandlers(a.userProfile)
+	profileSvc := userprofile.New(userprofile.NewQueriesRepository(queries))
+	profileH := newProfileHandlers(profileSvc)
 	// Résumé storage is nil-safe: a nil Blob (S3 unconfigured) yields a disabled service
 	// whose Enabled() is false, so the upload/verdict paths degrade to in-request parsing.
-	a.resume = resume.New(cfg.Blob, resume.NewQueriesRepository(queries))
-
-	// CV builder: store is always available; the renderer is enabled only when a typst
-	// binary was resolved (assign only a non-nil renderer so the interface stays nil when
-	// disabled — a typed-nil would defeat the 501 gate).
-	a.cvStore = cv.NewStore(cv.NewQueriesRepository(queries))
-	if r := cv.NewTypstRenderer(cfg.TypstBin); r != nil {
-		a.cvRenderer = r
-	}
+	resumeStore := resume.New(cfg.Blob, resume.NewQueriesRepository(queries))
 	// Nil-safe: NewAnalyzer(nil) is a no-op analyzer, so the ATS report works whether
 	// or not the LLM is configured.
-	a.atsAnalyzer = atscheck.NewAnalyzer(cfg.LLM)
-	a.atsCache = queries
+	atsAnalyzer := atscheck.NewAnalyzer(cfg.LLM)
 	// The fit analysis shares the same LLM client but with a longer per-call timeout:
 	// its reasoning model is slow (tens of seconds per stage), so the default would time
 	// out mid-stage. Nil-safe (a nil client stays nil → Analyze is a no-op).
-	a.matchAnalysis = matchanalysis.NewAnalyzer(cfg.LLM.WithTimeout(matchAnalysisLLMTimeout))
-	a.structuredExtractor = resumeextract.NewExtractor(cfg.LLM.WithTimeout(resumeExtractLLMTimeout), cfg.PIIDetector)
-	a.matchAnalysisCache = queries
+	matchAnalyzer := matchanalysis.NewAnalyzer(cfg.LLM.WithTimeout(matchAnalysisLLMTimeout))
+	structuredExtractor := resumeextract.NewExtractor(cfg.LLM.WithTimeout(resumeExtractLLMTimeout), cfg.PIIDetector)
 	// The autofill planner is one cheap structured call per run; the shared client's
 	// default timeout is right for it.
 	a.autofillPlanner = cfg.LLM
 	a.credits = credits.NewStore(queries, cfg.Pool, cfg.Credits)
 	contributionsH := newContributionHandlers(a.contribution, a.credits)
 	creditsH := newCreditsHandlers(a.credits, queries)
+	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, a.credits)
+	cvH := newCVHandlers(queries, cfg.TypstBin, resumeStore, a.credits, matchH)
 	// Telegram notifications are enabled only with both a bot token and a JWT
 	// secret (the link token reuses it). Absent either, the linking endpoints
 	// report the feature off and the webhook is inert (see telegramEnabled).
@@ -366,6 +330,7 @@ func Register(app *fiber.App, cfg Config) {
 	}
 	companiesH := newCompaniesHandlers(queries, companySearch)
 	trackingH := newTrackingHandlers(queries, cfg.Pool, a.search)
+	resumeH := newResumeHandlers(resumeStore, structuredExtractor, a.search, a.facets, profileSvc, atsAnalyzer, queries)
 
 	// Referral notifications reuse the SES email transport (email is always present) and
 	// the Telegram bot when linked. Each channel is wrapped only when configured so a nil
@@ -387,7 +352,7 @@ func Register(app *fiber.App, cfg Config) {
 	referralCabinetURL := strings.TrimRight(cfg.FrontendOrigin, "/") + "/my/referrals?tab=incoming"
 	referralSvc := referral.New(referral.NewQueriesRepository(queries), referralPinger,
 		referral.Config{CabinetURL: referralCabinetURL})
-	referralsH := newReferralHandlers(referralSvc, cfg.Blob, a.cvRenderer, a.cvStore)
+	referralsH := newReferralHandlers(referralSvc, cfg.Blob, cvH.cvRenderer, cvH.cvStore)
 
 	// Allow the canonical frontend origin plus every served domain's https apex,
 	// so a cross-origin (non-credentialed) read works from either domain during a
@@ -455,11 +420,8 @@ func Register(app *fiber.App, cfg Config) {
 	// mirroring the previous registration order.
 	trackingH.register(api, mw)
 	votesH.register(api, mw)
-	// Read-only per-job skill match against the caller's profile (no writes).
-	api.Get("/jobs/:slug/match", keyAuth, a.JobMatch)
-	// Ad-hoc skill match for a job posting scraped off any page (title + text),
-	// no catalog job required — powers the browser extension's on-any-page card.
-	api.Post("/me/match-text", keyAuth, a.MatchText)
+	// Per-job skill match + the on-demand LLM fit analysis (see matchHandlers).
+	matchH.register(api, mw)
 	// Canonical autofill fields (name/email/phone/location/links) for the browser
 	// extension to write into application forms. keyAuth (Bearer).
 	api.Get("/me/autofill-profile", keyAuth, a.AutofillProfile)
@@ -472,20 +434,6 @@ func Register(app *fiber.App, cfg Config) {
 	// Agent-driven autofill: the caller's own browser is driven over that wire.
 	// keyAuth (Bearer) so the extension can trigger it.
 	api.Post("/me/autofill/run", keyAuth, a.RunAgentAutofill)
-	// The on-demand LLM match analysis (GET cached / POST run / SSE stream).
-	api.Get("/jobs/:slug/match-analysis", keyAuth, a.GetMatchAnalysis)
-	api.Post("/jobs/:slug/match-analysis", keyAuth, a.PostMatchAnalysis)
-	api.Get("/jobs/:slug/match-analysis/stream", keyAuth, a.StreamMatchAnalysis)
-	// Deprecated pre-rename aliases (was "fit") — kept so existing API-key clients and the
-	// CLI don't break; they hit the same handlers. Remove once callers have migrated.
-	api.Get("/jobs/:slug/fit", keyAuth, a.GetMatchAnalysis)
-	api.Post("/jobs/:slug/fit", keyAuth, a.PostMatchAnalysis)
-	api.Get("/jobs/:slug/fit/stream", keyAuth, a.StreamMatchAnalysis)
-
-	// Stateless market-coverage: score a caller-supplied skill list (request body)
-	// against the facet-filtered market. Cookie or API key — the CLI drives it with
-	// a key. No user data is stored; it is the stateless sibling of the CV verdict.
-	api.Post("/market/coverage", keyAuth, a.MarketCoverage)
 
 	// Moderator-authored jobs: create a hand-curated vacancy and edit it. Authenticated
 	// by cookie or API key (the CLI uses a key), then gated on the moderator role. The
@@ -508,10 +456,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Community discussion threads (see communityHandlers).
 	communityH.register(api, mw)
 
-	// analyses lists the jobs the caller has run the AI fit analysis on.
-	api.Get("/me/tracking/analyses", keyAuth, a.ListMyAnalyses)
 	creditsH.register(api, mw)
-	api.Get("/me/recommendations", keyAuth, a.Recommendations)
 
 	// API-key management is cookie-only (RequireAuth): a leaked key must not be
 	// able to create, list, or revoke keys. The create endpoint returns the
@@ -523,27 +468,8 @@ func Register(app *fiber.App, cfg Config) {
 	// The per-user profile singleton (see profileHandlers).
 	profileH.register(api, mw)
 
-	// CV builder + AI tailoring: open to every signed-in user (AI credits meter the LLM spend).
-	// Cookie-only, owner-scoped (a foreign id is a 404). The PDF endpoint 501s when no typst
-	// binary is configured; the rest still works.
-	api.Get("/cv-templates", cookieAuth, a.ListCVTemplates)
-	api.Get("/me/cvs", cookieAuth, a.ListCVs)
-	api.Post("/me/cvs", cookieAuth, a.CreateCV)
-	// Read + render accept a key too (keyAuth), so the tailoring agent's CLI can fetch a CV
-	// and its PDF; mutations stay cookie-only (POST/PUT/DELETE — the browser owns authoring).
-	api.Get("/me/cvs/:id", keyAuth, a.GetCV)
-	api.Put("/me/cvs/:id", cookieAuth, a.UpdateCV)
-	// Change only the template (the gallery's one-field switch); cookie-only like other mutations.
-	api.Put("/me/cvs/:id/template", cookieAuth, a.SetCVTemplate)
-	api.Delete("/me/cvs/:id", cookieAuth, a.DeleteCV)
-	api.Get("/me/cvs/:id/pdf", keyAuth, a.RenderCVPDF)
-	// Tailoring: the browser starts a session (cookie-only bootstrap); the agent's CLI drives
-	// the edit + context/get/render reads with its minted API key (keyAuth = cookie or Bearer).
-	api.Post("/me/cvs/tailor", cookieAuth, a.TailorCV)
-	api.Post("/me/cvs/:id/tailor-session", cookieAuth, a.StartTailorSession)
-	api.Patch("/me/cvs/:id", keyAuth, a.PatchCV)
-	api.Put("/me/cvs/:id/session", keyAuth, a.SetCVSession)
-	api.Get("/me/cvs/:id/tailor-context", keyAuth, a.TailorContext)
+	// CV builder + AI tailoring (see cvHandlers).
+	cvH.register(api, mw)
 
 	// Mail inbox (Gmail connect + hosted mailbox). Open to every signed-in user.
 	// The read + disconnect routes are always registered (empty/no-op when not
@@ -574,29 +500,9 @@ func Register(app *fiber.App, cfg Config) {
 		api.Post("/me/mailbox", cookieAuth, a.ClaimMailbox)
 		api.Delete("/me/mailbox", cookieAuth, a.ReleaseMailbox)
 	}
-	// The résumé verdict is a profile sub-resource: GET computes the live
-	// market-coverage verdict from the profile's skills against the selected role.
-	// Cookie-only and session-scoped, like the profile it hangs off (no profile → 404).
-	api.Get("/me/profile/verdict", cookieAuth, a.GetResumeVerdict)
-	// The CV ATS-readiness report is a sibling profile sub-resource: GET scores the
-	// caller's stored CV (structure + role keyword-match); POST runs the optional LLM
-	// qualitative review over it and caches it. Cookie-only, session-scoped.
-	api.Get("/me/profile/ats-report", cookieAuth, a.GetATSReport)
-	api.Post("/me/profile/ats-report", cookieAuth, a.PostATSReport)
-
-	// Resume skill extraction is cookie-only (RequireAuth): it feeds the profile edit
-	// modal (extracted skills merge into the profile). When S3 storage is configured it
-	// also stores the résumé once (the single upload point); when not, it stays stateless
-	// (parsed and discarded, only canonical slugs returned).
-	api.Post("/me/resume/extract", cookieAuth, a.ExtractResumeProfile)
-
-	// Résumé storage (cookie-only): store the résumé once so the verdict's coherence can
-	// reuse it without a second upload. PUT stores/replaces, GET reports status (enabled +
-	// present + uploaded_at), DELETE removes it. 501 from PUT/DELETE when S3 is
-	// unconfigured — the SPA then falls back to per-request upload on the verdict page.
-	api.Put("/me/resume", cookieAuth, a.PutResume)
-	api.Get("/me/resume", cookieAuth, a.GetResume)
-	api.Delete("/me/resume", cookieAuth, a.DeleteResume)
+	// Résumé/CV surfaces: verdict, ATS report, extraction, storage, recommendations
+	// (see resumeHandlers).
+	resumeH.register(api, mw)
 
 	// Filter subscriptions (see subscriptionHandlers).
 	subscriptionH.register(api, mw)

@@ -71,7 +71,7 @@ type tailorCVResponse struct {
 // they have none), creates a vacancy-bound tailored copy, mints the CLI credential, and
 // returns the ids plus the analysis. Cookie-only (the browser starts tailoring); never calls
 // the LLM.
-func (a *API) TailorCV(c *fiber.Ctx) error {
+func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -84,31 +84,31 @@ func (a *API) TailorCV(c *fiber.Ctx) error {
 	if slug == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "job_slug is required")
 	}
-	job, err := a.queries.GetJobBySlug(c.Context(), slug)
+	job, err := h.queries.GetJobBySlug(c.Context(), slug)
 	if err != nil {
 		return err // unknown slug → pgx.ErrNoRows → 404 via RenderError
 	}
-	analysis, err := a.cachedAnalysis(c, userID, job.ID)
+	analysis, err := h.cachedAnalysis(c, userID, job.ID)
 	if err != nil {
 		return err
 	}
 	// Attach the hard-constraint blockers + score ceiling to the analysis the tailoring
 	// agent receives, so its Action strings ("do not claim X unless true") guard the
 	// tailored output against fabricating a credential/degree/authorization.
-	a.capServedAnalysis(c.Context(), userID, job, analysis)
+	h.match.capServedAnalysis(c.Context(), userID, job, analysis)
 	// Gate on points before creating anything: an out-of-credits caller is a 402 and no
 	// tailored CV or session is minted. The debit itself lands after the CV exists (below).
-	if bal := a.creditsBalance(c.Context(), userID); bal != nil && bal.Remaining < a.credits.Cost(credits.FeatureTailor) {
+	if bal := h.match.creditsBalance(c.Context(), userID); bal != nil && bal.Remaining < h.credits.Cost(credits.FeatureTailor) {
 		return creditsError(c, *bal)
 	}
-	base, tailored, err := a.cvStore.Tailor(c.Context(), userID, job.ID, tailoredCVTitle(job.Title), a.resume)
+	base, tailored, err := h.cvStore.Tailor(c.Context(), userID, job.ID, tailoredCVTitle(job.Title), h.resume)
 	if errors.Is(err, cv.ErrNoResume) {
 		return fiber.NewError(fiber.StatusConflict, "add a résumé before tailoring")
 	}
 	if err != nil {
 		return mapCVError(err)
 	}
-	token, err := mintTailoringKey(c.Context(), a.queries, userID, time.Now())
+	token, err := mintTailoringKey(c.Context(), h.queries, userID, time.Now())
 	if err != nil {
 		return err
 	}
@@ -117,7 +117,7 @@ func (a *API) TailorCV(c *fiber.Ctx) error {
 	// charge again). Idempotent by the new CV id; resuming an existing CV (a different
 	// endpoint) never debits. The session already exists, so a debit error — including a
 	// rare insufficient-balance race the pre-check let through — is logged, not surfaced.
-	if _, err := a.credits.Debit(c.Context(), userID, credits.FeatureTailor, strconv.FormatInt(tailored.ID, 10)); err != nil {
+	if _, err := h.credits.Debit(c.Context(), userID, credits.FeatureTailor, strconv.FormatInt(tailored.ID, 10)); err != nil {
 		log.Printf("credits: tailor debit user=%d cv=%d: %v", userID, tailored.ID, err)
 	}
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": tailorCVResponse{
@@ -137,7 +137,7 @@ type tailorSessionResponse struct {
 // StartTailorSession mints a CLI credential for an existing tailored CV so the workspace can
 // resume tailoring when the CV has no bound agent session yet. Cookie-only (the browser starts
 // it); 409 when the CV is not a tailored copy. Never calls the LLM.
-func (a *API) StartTailorSession(c *fiber.Ctx) error {
+func (h *cvHandlers) StartTailorSession(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -146,21 +146,21 @@ func (a *API) StartTailorSession(c *fiber.Ctx) error {
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid id")
 	}
-	rec, err := a.cvStore.Get(c.Context(), int64(id), userID)
+	rec, err := h.cvStore.Get(c.Context(), int64(id), userID)
 	if err != nil {
 		return mapCVError(err)
 	}
 	if rec.JobID == 0 {
 		return fiber.NewError(fiber.StatusConflict, "not a tailored CV")
 	}
-	base, ok, err := a.cvStore.BaseCV(c.Context(), userID)
+	base, ok, err := h.cvStore.BaseCV(c.Context(), userID)
 	if err != nil {
 		return err
 	}
 	if !ok {
 		return fiber.NewError(fiber.StatusConflict, "no base CV")
 	}
-	token, err := mintTailoringKey(c.Context(), a.queries, userID, time.Now())
+	token, err := mintTailoringKey(c.Context(), h.queries, userID, time.Now())
 	if err != nil {
 		return err
 	}
@@ -171,7 +171,7 @@ func (a *API) StartTailorSession(c *fiber.Ctx) error {
 
 // PatchCV applies one field-level patch to an owned CV. Cookie or API key (the agent's CLI
 // uses the key). Bad addressing is a 422; a foreign/missing id is a 404.
-func (a *API) PatchCV(c *fiber.Ctx) error {
+func (h *cvHandlers) PatchCV(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -192,7 +192,7 @@ func (a *API) PatchCV(c *fiber.Ctx) error {
 	if auth.ViaAPIKey(c) && p.Op == cv.PatchSetHeaderField && isContactHeaderField(p.Field) {
 		return fiber.NewError(fiber.StatusForbidden, "contact fields are not editable in a tailoring session")
 	}
-	meta, err := a.cvStore.Patch(c.Context(), int64(id), userID, p)
+	meta, err := h.cvStore.Patch(c.Context(), int64(id), userID, p)
 	if err != nil {
 		return mapCVError(err)
 	}
@@ -237,7 +237,7 @@ type tailorContextResponse struct {
 // TailorContext serves the cached fit analysis for a tailored CV, projected to the tailoring
 // reasoning context. Cookie or API key. 409 when the CV is not a tailored copy (no bound
 // vacancy) or has no cached analysis; never calls the LLM.
-func (a *API) TailorContext(c *fiber.Ctx) error {
+func (h *cvHandlers) TailorContext(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -246,18 +246,18 @@ func (a *API) TailorContext(c *fiber.Ctx) error {
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid id")
 	}
-	rec, err := a.cvStore.Get(c.Context(), int64(id), userID)
+	rec, err := h.cvStore.Get(c.Context(), int64(id), userID)
 	if err != nil {
 		return mapCVError(err)
 	}
 	if rec.JobID == 0 {
 		return fiber.NewError(fiber.StatusConflict, "not a tailored CV")
 	}
-	analysis, err := a.cachedAnalysis(c, userID, rec.JobID)
+	analysis, err := h.cachedAnalysis(c, userID, rec.JobID)
 	if err != nil {
 		return err
 	}
-	job, err := a.queries.GetJob(c.Context(), rec.JobID)
+	job, err := h.queries.GetJob(c.Context(), rec.JobID)
 	if err != nil {
 		return err
 	}
@@ -267,8 +267,8 @@ func (a *API) TailorContext(c *fiber.Ctx) error {
 // cachedAnalysis loads the cached fit analysis for (user, job), or a 409 telling the caller to
 // run the fit analysis first when none is cached (or the cached blob is empty/corrupt). It
 // never recomputes.
-func (a *API) cachedAnalysis(c *fiber.Ctx, userID, jobID int64) (*matchanalysis.Analysis, error) {
-	row, err := a.matchAnalysisCache.GetUserJobAnalysis(c.Context(), db.GetUserJobAnalysisParams{UserID: userID, JobID: jobID})
+func (h *cvHandlers) cachedAnalysis(c *fiber.Ctx, userID, jobID int64) (*matchanalysis.Analysis, error) {
+	row, err := h.matchAnalysisCache.GetUserJobAnalysis(c.Context(), db.GetUserJobAnalysisParams{UserID: userID, JobID: jobID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fiber.NewError(fiber.StatusConflict, "run the fit analysis first")
 	}

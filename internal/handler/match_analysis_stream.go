@@ -23,16 +23,16 @@ import (
 // The stream always opens with a `meta` event (has_cv); when no CV is stored it closes
 // after that. Everything the stream needs is captured before the body writer starts,
 // because the fiber ctx is released once this handler returns.
-func (a *API) StreamMatchAnalysis(c *fiber.Ctx) error {
+func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	job, err := a.queries.GetJobBySlug(c.Context(), c.Params("slug"))
+	job, err := h.queries.GetJobBySlug(c.Context(), c.Params("slug"))
 	if err != nil {
 		return err
 	}
-	cvUploadedAt, hasCV := a.cvUploadedAt(c, userID)
+	cvUploadedAt, hasCV := h.cvUploadedAt(c, userID)
 	// Gate on points before opening the stream (the fiber ctx is still valid here, so an
 	// out-of-credits new job returns a real 402 instead of an SSE error). Only a CV-backed
 	// request would run the LLM; without one the stream just reports has_cv. A recompute is
@@ -40,27 +40,27 @@ func (a *API) StreamMatchAnalysis(c *fiber.Ctx) error {
 	isNew := false
 	if hasCV {
 		var err error
-		if isNew, err = a.matchIsNew(c.Context(), userID, job.ID); err != nil {
+		if isNew, err = h.matchIsNew(c.Context(), userID, job.ID); err != nil {
 			return err
 		}
 		if isNew {
-			if bal := a.creditsBalance(c.Context(), userID); bal != nil && bal.Remaining < a.credits.Cost(credits.FeatureMatch) {
+			if bal := h.creditsBalance(c.Context(), userID); bal != nil && bal.Remaining < h.credits.Cost(credits.FeatureMatch) {
 				return creditsError(c, *bal)
 			}
 		}
 	}
-	profile, _ := a.userProfile.Get(c.Context(), userID)
+	profile, _ := h.userProfile.Get(c.Context(), userID)
 
 	// Compute the hard-constraint blockers exactly as the POST path does: the unmet
 	// ones ground the prompt. The served-score cap needs no handling here — the cache
 	// holds the uncapped analysis and GET recomputes the cap on read.
-	blockers := a.jobBlockers(c.Context(), userID, job, profile)
+	blockers := h.jobBlockers(c.Context(), userID, job, profile)
 
 	input := matchanalysis.Input{
 		JobTitle:            job.Title,
 		JobDescription:      job.Description,
-		CompanyInfo:         a.companyInfo(c, job.CompanySlug),
-		StructuredResume:    a.structuredResumeJSON(c, userID),
+		CompanyInfo:         h.companyInfo(c, job.CompanySlug),
+		StructuredResume:    structuredResumeJSON(h.resume, c, userID),
 		Match:               jobmatch.Compute(job.Skills, profile.Skills),
 		JobWorkMode:         job.WorkMode,
 		JobRemote:           job.Remote,
@@ -122,7 +122,7 @@ func (a *API) StreamMatchAnalysis(c *fiber.Ctx) error {
 			}
 		}()
 
-		analysis, err := a.matchAnalysis.AnalyzeStream(ctx, input, func(e matchanalysis.Event) {
+		analysis, err := h.matchAnalysis.AnalyzeStream(ctx, input, func(e matchanalysis.Event) {
 			events++
 			mu.Lock()
 			writeSSE(w, string(e.Kind), e)
@@ -139,9 +139,9 @@ func (a *API) StreamMatchAnalysis(c *fiber.Ctx) error {
 			writeSSE(w, "stream_error", map[string]string{"message": "analysis unavailable"})
 			return
 		}
-		a.cacheAnalysis(ctx, userID, job, cvUploadedAt, analysis)
+		h.cacheAnalysis(ctx, userID, job, cvUploadedAt, analysis)
 		if isNew {
-			a.debitMatch(ctx, userID, job.ID)
+			h.debitMatch(ctx, userID, job.ID)
 		}
 		log.Printf("matchanalysis: stream DONE user=%d job=%d dur=%s events=%d overall=%d", userID, job.ID, time.Since(start).Round(time.Millisecond), events, analysis.OverallScore)
 	}))

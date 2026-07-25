@@ -40,7 +40,7 @@ func (r *recordingFacetCounter) callFilter(n int) [][]string {
 }
 
 func coverageApp(fc facetCounter) *fiber.App {
-	h := &API{facets: fc}
+	h := &resumeHandlers{facets: fc}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Post("/market/coverage", h.MarketCoverage)
 	return app

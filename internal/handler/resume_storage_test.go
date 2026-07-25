@@ -122,7 +122,7 @@ func resumeStorageApp(t *testing.T, store *resume.Store) (*fiber.App, string) {
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
-	h := &API{issuer: iss, resume: store}
+	h := &resumeHandlers{resume: store}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	g := auth.RequireAuth(iss)
 	app.Put("/me/resume", g, h.PutResume)

@@ -49,8 +49,8 @@ func TestJobMatchEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
-	h := &API{
-		pool: pool, queries: queries, issuer: iss,
+	h := &matchHandlers{
+		queries:     queries,
 		userProfile: userprofile.New(userprofile.NewQueriesRepository(queries)),
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})

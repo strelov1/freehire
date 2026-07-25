@@ -49,16 +49,16 @@ func buildAnalysisItems(rows []db.ListUserJobAnalysesRow, cvUploadedAt *time.Tim
 
 // ListMyAnalyses lists the jobs the caller has run the AI fit analysis on (newest first),
 // with the caller's points balance in meta. Never calls the LLM. Cookie or API key.
-func (a *API) ListMyAnalyses(c *fiber.Ctx) error {
+func (h *matchHandlers) ListMyAnalyses(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	rows, err := a.matchAnalysisCache.ListUserJobAnalyses(c.Context(), userID)
+	rows, err := h.matchAnalysisCache.ListUserJobAnalyses(c.Context(), userID)
 	if err != nil {
 		return err
 	}
-	cvUploadedAt, _ := a.cvUploadedAt(c, userID)
-	items := buildAnalysisItems(rows, cvUploadedAt, a.matchAnalysis.ModelID())
-	return c.JSON(fiber.Map{"data": items, "meta": fiber.Map{"credits": a.creditsBalance(c.Context(), userID)}})
+	cvUploadedAt, _ := h.cvUploadedAt(c, userID)
+	items := buildAnalysisItems(rows, cvUploadedAt, h.matchAnalysis.ModelID())
+	return c.JSON(fiber.Map{"data": items, "meta": fiber.Map{"credits": h.creditsBalance(c.Context(), userID)}})
 }

@@ -62,8 +62,7 @@ func atsAppWith(t *testing.T, repo *fakeProfileRepo, fc facetCounter, store *res
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
-	h := &API{
-		issuer:      iss,
+	h := &resumeHandlers{
 		userProfile: userprofile.New(repo),
 		facets:      fc,
 		resume:      store,

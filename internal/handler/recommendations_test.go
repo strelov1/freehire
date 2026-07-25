@@ -23,7 +23,7 @@ func recsApp(t *testing.T, store *resume.Store, s searcher) (*fiber.App, string)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
-	h := &API{issuer: iss, resume: store, search: s}
+	h := &resumeHandlers{resume: store, search: s}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/me/recommendations", auth.RequireAuth(iss), h.Recommendations)
 	return app, token

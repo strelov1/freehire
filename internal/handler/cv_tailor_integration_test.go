@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/credits"
@@ -28,8 +29,8 @@ import (
 	"github.com/strelov1/freehire/internal/resumeextract"
 )
 
-// newTailorAPI builds an API wired for the tailoring endpoints and truncates the tables.
-func newTailorAPI(t *testing.T) (*API, *auth.Issuer) {
+// newTailorAPI builds a handler wired for the tailoring endpoints and truncates the tables.
+func newTailorAPI(t *testing.T) (*cvHandlers, *auth.Issuer, *pgxpool.Pool) {
 	t.Helper()
 	pool := startPostgres(t)
 	queries := db.New(pool)
@@ -38,18 +39,20 @@ func newTailorAPI(t *testing.T) (*API, *auth.Issuer) {
 		t.Fatalf("truncate: %v", err)
 	}
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	h := &API{pool: pool, queries: queries, issuer: iss,
+	creditsStore := credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3})
+	h := &cvHandlers{queries: queries,
 		cvStore:            cv.NewStore(cv.NewQueriesRepository(queries)),
 		resume:             resume.New(nil, resume.NewQueriesRepository(queries)),
 		matchAnalysisCache: queries,
-		credits:            credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}),
+		credits:            creditsStore,
+		match:              &matchHandlers{credits: creditsStore},
 	}
-	return h, iss
+	return h, iss, pool
 }
 
 // buildTailorApp wires the CV + tailoring routes. They are open to every signed-in user (the
 // beta gate was lifted when CV tailoring went public); credits meter the LLM spend instead.
-func buildTailorApp(h *API, iss *auth.Issuer) *fiber.App {
+func buildTailorApp(h *cvHandlers, iss *auth.Issuer) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	saved := auth.RequireAuth(iss)
 	keyAuth := auth.RequireAuthOrKey(iss, h.queries)
@@ -79,10 +82,10 @@ func doBearer(t *testing.T, app *fiber.App, method, path, token string, body any
 	return resp
 }
 
-func seedJobSlug(t *testing.T, h *API, slug string) int64 {
+func seedJobSlug(t *testing.T, pool *pgxpool.Pool, slug string) int64 {
 	t.Helper()
 	var id int64
-	if err := h.pool.QueryRow(context.Background(),
+	if err := pool.QueryRow(context.Background(),
 		`INSERT INTO jobs (source, external_id, url, title, public_slug)
 		 VALUES ('test', $1, 'https://e.test/'||$1, 'Backend Engineer', $1) RETURNING id`,
 		slug).Scan(&id); err != nil {
@@ -91,7 +94,7 @@ func seedJobSlug(t *testing.T, h *API, slug string) int64 {
 	return id
 }
 
-func seedAnalysis(t *testing.T, h *API, userID, jobID int64) {
+func seedAnalysis(t *testing.T, h *cvHandlers, userID, jobID int64) {
 	t.Helper()
 	blob, _ := json.Marshal(&matchanalysis.Analysis{
 		Verdict: "Good Fit", OverallScore: 72, Recommendation: "Lead with Go depth.",
@@ -112,11 +115,11 @@ func seedAnalysis(t *testing.T, h *API, userID, jobID int64) {
 
 // seedFreshResume writes a structured résumé whose stamp matches the résumé upload time, so
 // resume.Structured serves it (ok=true) and the base CV can be seeded from it.
-func seedFreshResume(t *testing.T, h *API, userID int64) {
+func seedFreshResume(t *testing.T, pool *pgxpool.Pool, userID int64) {
 	t.Helper()
 	st, _ := json.Marshal(resumeextract.Structured{FullName: "Ada Lovelace", Summary: "Engineer", Skills: []string{"Go"}})
 	at := time.Now().Truncate(time.Microsecond)
-	if _, err := h.pool.Exec(context.Background(),
+	if _, err := pool.Exec(context.Background(),
 		`UPDATE users SET resume_object_key = 'k', resume_uploaded_at = $2,
 		 resume_structured = $3, resume_structured_uploaded_at = $2, resume_structured_model = 'test-model'
 		 WHERE id = $1`, userID, at, st); err != nil {
@@ -125,12 +128,12 @@ func seedFreshResume(t *testing.T, h *API, userID int64) {
 }
 
 func TestTailorCVBootstrap(t *testing.T) {
-	h, iss := newTailorAPI(t)
+	h, iss, pool := newTailorAPI(t)
 	app := buildTailorApp(h, iss)
 
-	user := seedAccount(t, h, "tailor@example.test", true)
+	user := seedAccount(t, pool, "tailor@example.test", true)
 	tok, _ := iss.Issue(user)
-	jobID := seedJobSlug(t, h, "backend-eng")
+	jobID := seedJobSlug(t, pool, "backend-eng")
 
 	// No cached analysis yet → 409.
 	if resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/tailor", tok, tailorCVRequest{JobSlug: "backend-eng"}); resp.StatusCode != fiber.StatusConflict {
@@ -144,7 +147,7 @@ func TestTailorCVBootstrap(t *testing.T) {
 		t.Fatalf("no-résumé = %d, want 409", resp.StatusCode)
 	}
 
-	seedFreshResume(t, h, user)
+	seedFreshResume(t, pool, user)
 
 	// Now bootstrap succeeds.
 	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/tailor", tok, tailorCVRequest{JobSlug: "backend-eng"})
@@ -167,12 +170,12 @@ func TestTailorCVBootstrap(t *testing.T) {
 	}
 	// Creating the tailored CV debited the tailor cost (3) from the monthly grant (20).
 	var remaining int
-	_ = h.pool.QueryRow(context.Background(), `SELECT remaining FROM credit_balances WHERE user_id=$1`, user).Scan(&remaining)
+	_ = pool.QueryRow(context.Background(), `SELECT remaining FROM credit_balances WHERE user_id=$1`, user).Scan(&remaining)
 	if remaining != 17 {
 		t.Errorf("remaining after tailor = %d, want 17 (20 - 3)", remaining)
 	}
 	var debits int
-	_ = h.pool.QueryRow(context.Background(),
+	_ = pool.QueryRow(context.Background(),
 		`SELECT count(*) FROM credit_ledger WHERE user_id=$1 AND kind='debit' AND feature='tailor'`, user).Scan(&debits)
 	if debits != 1 {
 		t.Errorf("tailor debit rows = %d, want 1", debits)
@@ -182,19 +185,19 @@ func TestTailorCVBootstrap(t *testing.T) {
 // TestTailorCVOutOfCredits: a caller with no points gets a 402 and no tailored CV or
 // session is created, even with a cached analysis and a résumé present.
 func TestTailorCVOutOfCredits(t *testing.T) {
-	h, iss := newTailorAPI(t)
+	h, iss, pool := newTailorAPI(t)
 	app := buildTailorApp(h, iss)
 	ctx := context.Background()
 
-	user := seedAccount(t, h, "poor@example.test", true)
+	user := seedAccount(t, pool, "poor@example.test", true)
 	tok, _ := iss.Issue(user)
-	jobID := seedJobSlug(t, h, "backend-eng")
+	jobID := seedJobSlug(t, pool, "backend-eng")
 	seedAnalysis(t, h, user, jobID)
-	seedFreshResume(t, h, user)
+	seedFreshResume(t, pool, user)
 
 	// Force the current-period balance to zero so the tailor pre-check fails.
 	period := time.Now().UTC().Format("2006-01")
-	if _, err := h.pool.Exec(ctx,
+	if _, err := pool.Exec(ctx,
 		`INSERT INTO credit_balances (user_id, period, remaining) VALUES ($1, $2, 0)`, user, period); err != nil {
 		t.Fatalf("seed zero balance: %v", err)
 	}
@@ -205,19 +208,19 @@ func TestTailorCVOutOfCredits(t *testing.T) {
 	}
 	resp.Body.Close()
 	var cvs int
-	_ = h.pool.QueryRow(ctx, `SELECT count(*) FROM cvs WHERE user_id=$1`, user).Scan(&cvs)
+	_ = pool.QueryRow(ctx, `SELECT count(*) FROM cvs WHERE user_id=$1`, user).Scan(&cvs)
 	if cvs != 0 {
 		t.Errorf("cvs created on 402 = %d, want 0", cvs)
 	}
 }
 
 func TestPatchCVViaKey(t *testing.T) {
-	h, iss := newTailorAPI(t)
+	h, iss, pool := newTailorAPI(t)
 	app := buildTailorApp(h, iss)
 	ctx := context.Background()
 
-	owner := seedAccount(t, h, "owner@example.test", true)
-	other := seedAccount(t, h, "other@example.test", true)
+	owner := seedAccount(t, pool, "owner@example.test", true)
+	other := seedAccount(t, pool, "other@example.test", true)
 
 	base, err := h.cvStore.Create(ctx, owner, "General", cv.DefaultTemplateID, cv.Document{
 		Header:     cv.Header{FullName: "Ada Lovelace", Email: "ada@x.com", Phone: "+1 415 555 0000"},
@@ -292,12 +295,12 @@ func TestPatchCVViaKey(t *testing.T) {
 }
 
 func TestTailorContextSplit(t *testing.T) {
-	h, iss := newTailorAPI(t)
+	h, iss, pool := newTailorAPI(t)
 	app := buildTailorApp(h, iss)
 	ctx := context.Background()
 
-	user := seedAccount(t, h, "ctx@example.test", true)
-	jobID := seedJobSlug(t, h, "backend-eng")
+	user := seedAccount(t, pool, "ctx@example.test", true)
+	jobID := seedJobSlug(t, pool, "backend-eng")
 	seedAnalysis(t, h, user, jobID)
 
 	// A tailored CV bound to the vacancy.
@@ -341,10 +344,10 @@ func TestTailorContextSplit(t *testing.T) {
 // round-trips on Get, ListTailored returns the vacancy slug + session (and excludes base CVs),
 // and SetSession is owner-scoped.
 func TestCVSessionAndTailoredList(t *testing.T) {
-	h, _ := newTailorAPI(t)
+	h, _, pool := newTailorAPI(t)
 	ctx := context.Background()
-	user := seedAccount(t, h, "sess@example.test", true)
-	jobID := seedJobSlug(t, h, "backend-eng")
+	user := seedAccount(t, pool, "sess@example.test", true)
+	jobID := seedJobSlug(t, pool, "backend-eng")
 
 	// A base CV (job_id NULL) must NOT appear in the tailored list.
 	if _, err := h.cvStore.Create(ctx, user, "Base", cv.DefaultTemplateID, cv.Document{}); err != nil {
@@ -377,7 +380,7 @@ func TestCVSessionAndTailoredList(t *testing.T) {
 		t.Errorf("tailored item = %+v, want slug backend-eng + session sess-xyz", items[0])
 	}
 
-	other := seedAccount(t, h, "other-sess@example.test", true)
+	other := seedAccount(t, pool, "other-sess@example.test", true)
 	if err := h.cvStore.SetSession(ctx, tailored.ID, other, "hijack"); !errors.Is(err, cv.ErrNotFound) {
 		t.Errorf("foreign set-session err = %v, want ErrNotFound", err)
 	}

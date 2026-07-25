@@ -27,7 +27,7 @@ func textMatch(title, text string, profileSkills []string) jobmatch.JobMatch {
 // coverage as GET /jobs/:slug/match, but for a page that need not be in the
 // freehire catalog. This is what lets the browser extension show a match on any
 // job page. Cookie or API key; a caller without a profile is a 404.
-func (a *API) MatchText(c *fiber.Ctx) error {
+func (h *matchHandlers) MatchText(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -36,7 +36,7 @@ func (a *API) MatchText(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	profile, err := a.userProfile.Get(c.Context(), userID)
+	profile, err := h.userProfile.Get(c.Context(), userID)
 	if err != nil {
 		return profileError(err)
 	}

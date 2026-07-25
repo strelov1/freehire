@@ -14,7 +14,7 @@ import (
 // one produced by a superseded embedder (stale, so not comparable to the current jobs),
 // or the search backend / semantic index is unavailable. A profile edit needing a
 // re-embed happens on the user's next CV upload.
-func (a *API) Recommendations(c *fiber.Ctx) error {
+func (h *resumeHandlers) Recommendations(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -25,11 +25,11 @@ func (a *API) Recommendations(c *fiber.Ctx) error {
 	}
 
 	empty := func() error { return listResponse(c, []jobview.Job{}, 0, limit, offset) }
-	if a.search == nil {
+	if h.search == nil {
 		return empty()
 	}
 
-	vec, model, err := a.resume.Embedding(c.Context(), userID)
+	vec, model, err := h.resume.Embedding(c.Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -39,7 +39,7 @@ func (a *API) Recommendations(c *fiber.Ctx) error {
 
 	// The same facet params the search endpoint accepts constrain the candidate set;
 	// the CV vector then ranks only the jobs that pass the filter.
-	res, err := a.search.RecommendByVector(c.Context(), vec, buildSearchFilter(c), limit, offset)
+	res, err := h.search.RecommendByVector(c.Context(), vec, buildSearchFilter(c), limit, offset)
 	if err != nil {
 		return err
 	}

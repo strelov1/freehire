@@ -13,7 +13,7 @@ func TestEmbedResume_PersistsVector(t *testing.T) {
 	repo := &fakeResumeRepo{}
 	store := resume.New(newFakeResumeBlobs(), repo)
 	fs := &fakeSearcher{embedVec: []float64{0.1, 0.2, 0.3}, embedModel: "test-embedder"}
-	h := &API{resume: store, search: fs}
+	h := &resumeHandlers{resume: store, search: fs}
 
 	h.embedResume(1, "Go and PostgreSQL and Kubernetes")
 
@@ -31,7 +31,7 @@ func TestEmbedResume_FailureClearsVector(t *testing.T) {
 	repo := &fakeResumeRepo{embVec: []float64{9, 9}, embModel: "stale-model"}
 	store := resume.New(newFakeResumeBlobs(), repo)
 	fs := &fakeSearcher{embedErr: errors.New("embedder down")}
-	h := &API{resume: store, search: fs}
+	h := &resumeHandlers{resume: store, search: fs}
 
 	h.embedResume(1, "resume text")
 
@@ -43,7 +43,7 @@ func TestEmbedResume_FailureClearsVector(t *testing.T) {
 // No search backend → embedResume is a no-op (never panics, persists nothing).
 func TestEmbedResume_NoSearchBackend(t *testing.T) {
 	repo := &fakeResumeRepo{}
-	h := &API{resume: resume.New(newFakeResumeBlobs(), repo), search: nil}
+	h := &resumeHandlers{resume: resume.New(newFakeResumeBlobs(), repo), search: nil}
 	h.embedResume(1, "text") // must not panic
 	if repo.embModel != "" || repo.embVec != nil {
 		t.Error("no-op embedResume must not persist anything")

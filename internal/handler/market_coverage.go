@@ -28,8 +28,8 @@ type coverageRequest struct {
 // stateless, API-key sibling of the CV-based verdict — skills come from the request
 // body, the market filter from the facet query params. 400 on empty skills, 503
 // when search is unconfigured.
-func (a *API) MarketCoverage(c *fiber.Ctx) error {
-	if a.facets == nil {
+func (h *resumeHandlers) MarketCoverage(c *fiber.Ctx) error {
+	if h.facets == nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
 
@@ -47,7 +47,7 @@ func (a *API) MarketCoverage(c *fiber.Ctx) error {
 
 	// A flat list has no CV declared/body sections, so declared and all are the
 	// same list and body is empty (statuses collapse to strong/adjacent/missing).
-	v, err := a.coverageFor(c.Context(), marketFilter(c), skills, skills, nil, skills)
+	v, err := h.coverageFor(c.Context(), marketFilter(c), skills, skills, nil, skills)
 	if err != nil {
 		return err
 	}

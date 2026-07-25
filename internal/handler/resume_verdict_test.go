@@ -64,7 +64,7 @@ func verdictApp(t *testing.T, repo *fakeProfileRepo, fc facetCounter) (*fiber.Ap
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
-	h := &API{issuer: iss, userProfile: userprofile.New(repo), facets: fc}
+	h := &resumeHandlers{userProfile: userprofile.New(repo), facets: fc}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/me/profile/verdict", auth.RequireAuth(iss), h.GetResumeVerdict)
 	return app, token
