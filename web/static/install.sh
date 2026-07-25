@@ -3,8 +3,9 @@
 # latest GitHub release and place it on PATH.
 #   curl -fsSL https://freehire.me/install.sh | sh
 #
-# Served at https://freehire.me/install.sh (Vite copies web/public/ into the SPA
-# build). Kept in sync with the canonical script in the freehire-cli repo.
+# Served at https://freehire.me/install.sh as a SvelteKit static asset — it must
+# live in web/static/, the only directory adapter-node serves. Kept in sync with
+# the canonical script in the freehire-cli repo.
 set -eu
 
 REPO="strelov1/freehire-cli"

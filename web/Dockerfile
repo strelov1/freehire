@@ -52,8 +52,6 @@ WORKDIR /app
 COPY --from=build /src/build ./build
 COPY --from=build /src/node_modules ./node_modules
 COPY --from=build /src/package.json ./package.json
-# The CLI install script is served as a static file by nginx (see nginx.conf).
-COPY --from=build /src/public/install.sh /usr/share/nginx/html/install.sh
 COPY web/nginx.conf /etc/nginx/http.d/default.conf
 COPY web/docker-entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
