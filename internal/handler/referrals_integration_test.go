@@ -55,8 +55,7 @@ func TestReferralEndpoints(t *testing.T) {
 		return tok
 	}
 
-	h := &API{
-		pool: pool, queries: queries, issuer: iss,
+	h := &referralHandlers{
 		referral: referral.New(referral.NewQueriesRepository(queries),
 			referral.NewChannelPinger(nil, "", nil), referral.Config{}),
 	}

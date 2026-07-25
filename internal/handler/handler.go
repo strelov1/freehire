@@ -33,12 +33,10 @@ import (
 	"github.com/strelov1/freehire/internal/pii"
 	"github.com/strelov1/freehire/internal/referral"
 	"github.com/strelov1/freehire/internal/reminder"
-	"github.com/strelov1/freehire/internal/report"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/resumeextract"
 	"github.com/strelov1/freehire/internal/savedsearch"
 	"github.com/strelov1/freehire/internal/search"
-	"github.com/strelov1/freehire/internal/submission"
 	"github.com/strelov1/freehire/internal/subscription"
 	"github.com/strelov1/freehire/internal/telegramnotify"
 	"github.com/strelov1/freehire/internal/tokencrypt"
@@ -139,20 +137,9 @@ type API struct {
 	// moderation owns the moderator-authored job use cases (create/edit a manual
 	// vacancy); the handlers translate wire ↔ domain and delegate to it.
 	moderation *moderation.Service
-	// submission owns the public job-submission queue (submit/list/approve/reject);
-	// approval mints a live job by delegating to moderation.
-	submission *submission.Service
 	// contribution owns the crowdsourced paste-a-link flow (submit a URL → detect ATS,
 	// dedup by derived identity, record + award a point); list the caller's own.
 	contribution *contribution.Service
-	// referral owns the employee-referral use cases (offer to refer, request a referral,
-	// moderate offers, notify referrers). blob is the S3 store proof CVs are written to
-	// (nil when S3 is unconfigured — offer submit then reports 503).
-	referral *referral.Service
-	blob     blobstore.Store
-	// report owns the job-report moderation queue (file/list/resolve/dismiss);
-	// resolving may soft-close the reported job through the job-lifecycle close path.
-	report *report.Service
 	// savedSearch owns the per-user saved-search use cases (list/create/update/delete
 	// named filter snapshots); the handlers translate wire ↔ domain and delegate to it.
 	savedSearch *savedsearch.Service
@@ -335,17 +322,12 @@ func Register(app *fiber.App, cfg Config) {
 	statsH := newStatsHandlers(queries)
 	votesH := newVoteHandlers(queries, cfg.Pool)
 	communityH := newCommunityHandlers(queries)
-	// submission approval mints through the same moderation service, so derivation,
-	// dedup, and the enrichment enqueue are reused rather than duplicated.
-	a.submission = submission.New(submission.NewQueriesRepository(queries), a.moderation)
+	submissionsH := newSubmissionHandlers(queries, a.moderation)
 	// Contributions detect the ATS board from the URL alone (network-free, board.go), with a
 	// network fallback (boardresolve) that fetches a company careers page and detects an
 	// embedded ATS — so vanity-domain links (company.com/careers?gh_jid=…) resolve too.
 	a.contribution = contribution.New(contribution.NewQueriesRepository(queries), boardresolve.New())
-	// The report queue uses one QueriesRepository for both persistence and the
-	// job soft-close (it implements report.Repository and report.JobCloser).
-	reportRepo := report.NewQueriesRepository(queries)
-	a.report = report.New(reportRepo, reportRepo)
+	reportsH := newReportHandlers(queries)
 	a.savedSearch = savedsearch.New(savedsearch.NewQueriesRepository(queries))
 	a.subscription = subscription.New(subscription.NewQueriesRepository(queries))
 	a.reminder = reminder.New(reminder.NewQueriesRepository(queries))
@@ -375,6 +357,7 @@ func Register(app *fiber.App, cfg Config) {
 	// default timeout is right for it.
 	a.autofillPlanner = cfg.LLM
 	a.credits = credits.NewStore(queries, cfg.Pool, cfg.Credits)
+	contributionsH := newContributionHandlers(a.contribution, a.credits)
 	// Telegram notifications are enabled only with both a bot token and a JWT
 	// secret (the link token reuses it). Absent either, the linking endpoints
 	// report the feature off and the webhook is inert (see telegramEnabled).
@@ -404,7 +387,6 @@ func Register(app *fiber.App, cfg Config) {
 	// the Telegram bot when linked. Each channel is wrapped only when configured so a nil
 	// concrete pointer never hides behind a non-nil interface (see the search note above);
 	// a referrer with no reachable channel still sees the request in-cabinet.
-	a.blob = cfg.Blob
 	var referralEmail referral.EmailSender
 	if cfg.AWSRegion != "" && cfg.NotifyEmailFrom != "" {
 		if ec, err := emailnotify.NewClient(context.Background(), cfg.AWSRegion); err != nil {
@@ -419,8 +401,9 @@ func Register(app *fiber.App, cfg Config) {
 	}
 	referralPinger := referral.NewChannelPinger(referralEmail, cfg.NotifyEmailFrom, referralTelegram)
 	referralCabinetURL := strings.TrimRight(cfg.FrontendOrigin, "/") + "/my/referrals?tab=incoming"
-	a.referral = referral.New(referral.NewQueriesRepository(queries), referralPinger,
+	referralSvc := referral.New(referral.NewQueriesRepository(queries), referralPinger,
 		referral.Config{CabinetURL: referralCabinetURL})
+	referralsH := newReferralHandlers(referralSvc, cfg.Blob, a.cvRenderer, a.cvStore)
 
 	// Allow the canonical frontend origin plus every served domain's https apex,
 	// so a cross-origin (non-credentialed) read works from either domain during a
@@ -536,47 +519,17 @@ func Register(app *fiber.App, cfg Config) {
 	api.Post("/jobs", keyAuth, requireModerator, a.CreateJob)
 	api.Patch("/jobs/:slug", keyAuth, requireModerator, a.UpdateJob)
 
-	// Public job submissions: any authenticated user submits a vacancy for review
-	// (cookie or API key) and reads their own queue; the review actions (the pending
-	// queue, approve, reject) are moderator-gated. Approval mints a live job — the same
-	// path CreateJob uses — so an approved submission is indistinguishable from a
-	// hand-curated one.
-	api.Post("/submissions", keyAuth, a.CreateSubmission)
-	api.Get("/me/submissions", keyAuth, a.ListMySubmissions)
-	api.Get("/submissions", keyAuth, requireModerator, a.ListPendingSubmissions)
-	api.Post("/submissions/:id/approve", keyAuth, requireModerator, a.ApproveSubmission)
-	api.Post("/submissions/:id/reject", keyAuth, requireModerator, a.RejectSubmission)
+	// Public job submissions + review queue (see submissionHandlers).
+	submissionsH.register(api, mw)
 
-	// Link contributions: any authenticated user pastes a job URL (cookie or API key);
-	// a supported, novel link is recorded and earns a point. No moderation queue — the
-	// derived-identity dedup and the supported-ATS gate are the only guards. The caller
-	// reads their own contributions; the points balance rides on /auth/me.
-	api.Post("/me/contributions", keyAuth, a.CreateContribution)
-	api.Get("/me/contributions", keyAuth, a.ListMyContributions)
+	// Link contributions (see contributionHandlers).
+	contributionsH.register(api, mw)
 
-	// Employee referrals: any authenticated user (cookie or API key) offers to refer into a
-	// company (proof CV, moderated) and requests a referral from a company's approved-referrer
-	// pool; referrers manage their own incoming requests. The offer-moderation queue is
-	// moderator-gated, mirroring the submissions queue above.
-	api.Post("/me/referrals/offers", keyAuth, a.SubmitReferralOffer)
-	api.Get("/me/referrals/offers", keyAuth, a.ListMyReferralOffers)
-	api.Delete("/me/referrals/offers/:id", keyAuth, a.WithdrawReferralOffer)
-	api.Post("/me/referrals/requests", keyAuth, a.CreateReferralRequest)
-	api.Get("/me/referrals/requests", keyAuth, a.ListMyReferralRequests)
-	api.Get("/me/referrals/incoming", keyAuth, a.ListIncomingReferralRequests)
-	api.Get("/me/referrals/incoming/:id/cv", keyAuth, a.ViewReferralRequestCV)
-	api.Post("/me/referrals/incoming/:id/resolve", keyAuth, a.ResolveReferralRequest)
-	api.Get("/referrals/offers", keyAuth, requireModerator, a.ListPendingReferralOffers)
-	api.Get("/referrals/offers/:id/proof", keyAuth, requireModerator, a.ViewReferralOfferProof)
-	api.Post("/referrals/offers/:id/decide", keyAuth, requireModerator, a.DecideReferralOffer)
+	// Employee referrals (see referralHandlers).
+	referralsH.register(api, mw)
 
-	// Job reports: any authenticated user flags a problem with a live vacancy (cookie or
-	// API key), addressed by the job's public slug. The review actions (the pending queue,
-	// resolve, dismiss) are moderator-gated; resolve may soft-close the reported job.
-	api.Post("/jobs/:slug/reports", keyAuth, a.CreateReport)
-	api.Get("/reports", keyAuth, requireModerator, a.ListPendingReports)
-	api.Post("/reports/:id/resolve", keyAuth, requireModerator, a.ResolveReport)
-	api.Post("/reports/:id/dismiss", keyAuth, requireModerator, a.DismissReport)
+	// Job reports + review queue (see reportHandlers).
+	reportsH.register(api, mw)
 
 	// Community discussion threads (see communityHandlers).
 	communityH.register(api, mw)

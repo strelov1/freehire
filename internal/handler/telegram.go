@@ -213,7 +213,7 @@ func (a *API) processTelegramContribution(chatID int64, rawURL string) {
 		// maintainer confirms it's ingestable (mirrors the site's review-queue message).
 		a.sendTelegram(ctx, chatID, "🤔 That doesn't look like a known ATS. We'll check by hand whether we can pull its jobs — if we can, you'll get a credit. Not credited yet.")
 	default:
-		a.rewardContribution(ctx, userID, rec.ID)
+		rewardContribution(ctx, a.credits, userID, rec.ID)
 		a.sendTelegram(ctx, chatID, "🎉 <b>"+rec.Board+"</b> ("+rec.Source+") is a new board — we'll start crawling it. +1 AI credit!")
 	}
 }

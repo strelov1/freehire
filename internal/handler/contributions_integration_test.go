@@ -44,19 +44,21 @@ func TestContributionsEndToEnd(t *testing.T) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	cookie, _ := iss.Issue(userID)
 	queries := db.New(pool)
+	creditsStore := credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 5})
 	h := &API{
 		pool:         pool,
 		queries:      queries,
 		issuer:       iss,
 		contribution: contribution.New(contribution.NewQueriesRepository(queries), nil),
 		accounts:     accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{}),
-		credits:      credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 5}),
+		credits:      creditsStore,
 	}
+	ch := &contributionHandlers{contribution: h.contribution, credits: creditsStore}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, queries)
-	app.Post("/api/v1/me/contributions", keyAuth, h.CreateContribution)
-	app.Get("/api/v1/me/contributions", keyAuth, h.ListMyContributions)
+	app.Post("/api/v1/me/contributions", keyAuth, ch.CreateContribution)
+	app.Get("/api/v1/me/contributions", keyAuth, ch.ListMyContributions)
 
 	submit := func(t *testing.T, url string, withCookie bool) *http.Response {
 		t.Helper()

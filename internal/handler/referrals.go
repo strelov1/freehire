@@ -14,6 +14,39 @@ import (
 	"github.com/strelov1/freehire/internal/referral"
 )
 
+// referralHandlers serves the employee-referral use cases (offer to refer, request a
+// referral, moderate offers, notify referrers), delegated to referral.Service. blob is
+// the S3 store proof CVs are written to (nil when S3 is unconfigured — offer submit then
+// reports 503); cvStore + cvRenderer render a stored builder CV as an alternative proof.
+type referralHandlers struct {
+	referral   *referral.Service
+	blob       blobstore.Store
+	cvRenderer cv.Renderer
+	cvStore    *cv.Store
+}
+
+func newReferralHandlers(referral *referral.Service, blob blobstore.Store, cvRenderer cv.Renderer, cvStore *cv.Store) *referralHandlers {
+	return &referralHandlers{referral: referral, blob: blob, cvRenderer: cvRenderer, cvStore: cvStore}
+}
+
+func (h *referralHandlers) register(api fiber.Router, mw middleware) {
+	// Employee referrals: any authenticated user (cookie or API key) offers to refer into a
+	// company (proof CV, moderated) and requests a referral from a company's approved-referrer
+	// pool; referrers manage their own incoming requests. The offer-moderation queue is
+	// moderator-gated, mirroring the submissions queue above.
+	api.Post("/me/referrals/offers", mw.key, h.SubmitReferralOffer)
+	api.Get("/me/referrals/offers", mw.key, h.ListMyReferralOffers)
+	api.Delete("/me/referrals/offers/:id", mw.key, h.WithdrawReferralOffer)
+	api.Post("/me/referrals/requests", mw.key, h.CreateReferralRequest)
+	api.Get("/me/referrals/requests", mw.key, h.ListMyReferralRequests)
+	api.Get("/me/referrals/incoming", mw.key, h.ListIncomingReferralRequests)
+	api.Get("/me/referrals/incoming/:id/cv", mw.key, h.ViewReferralRequestCV)
+	api.Post("/me/referrals/incoming/:id/resolve", mw.key, h.ResolveReferralRequest)
+	api.Get("/referrals/offers", mw.key, mw.moderator, h.ListPendingReferralOffers)
+	api.Get("/referrals/offers/:id/proof", mw.key, mw.moderator, h.ViewReferralOfferProof)
+	api.Post("/referrals/offers/:id/decide", mw.key, mw.moderator, h.DecideReferralOffer)
+}
+
 // referralOfferResponse is the public shape of an offer. user_id is omitted (ownership,
 // internal); proof_object_key is never exposed (it points at a private S3 object).
 type referralOfferResponse struct {
@@ -131,7 +164,7 @@ type createReferralRequestBody struct {
 
 // CreateReferralRequest records a seeker's request into a company's referrer pool and pings
 // the approved referrers. RequireAuth. Validation failures 422, no referrer 409, cap 429.
-func (a *API) CreateReferralRequest(c *fiber.Ctx) error {
+func (h *referralHandlers) CreateReferralRequest(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -140,7 +173,7 @@ func (a *API) CreateReferralRequest(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	req, err := a.referral.CreateRequest(c.Context(), referral.RequestInput{
+	req, err := h.referral.CreateRequest(c.Context(), referral.RequestInput{
 		SeekerUserID:    userID,
 		CompanySlug:     in.CompanySlug,
 		JobID:           in.JobID,
@@ -158,12 +191,12 @@ func (a *API) CreateReferralRequest(c *fiber.Ctx) error {
 }
 
 // ListMyReferralRequests returns the caller's own referral requests, newest first.
-func (a *API) ListMyReferralRequests(c *fiber.Ctx) error {
+func (h *referralHandlers) ListMyReferralRequests(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	rows, err := a.referral.ListMyRequests(c.Context(), userID)
+	rows, err := h.referral.ListMyRequests(c.Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -177,12 +210,12 @@ func (a *API) ListMyReferralRequests(c *fiber.Ctx) error {
 // SubmitReferralOffer records a member's offer to refer into a company. The proof CV is a
 // multipart "file" stored to S3; company_slug is a form field. RequireAuth; the offer waits
 // on moderation. 503 when the blob store is unconfigured, 409 on a duplicate offer.
-func (a *API) SubmitReferralOffer(c *fiber.Ctx) error {
+func (h *referralHandlers) SubmitReferralOffer(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	if a.blob == nil {
+	if h.blob == nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "proof upload is unavailable")
 	}
 	companySlug := c.FormValue("company_slug")
@@ -194,10 +227,10 @@ func (a *API) SubmitReferralOffer(c *fiber.Ctx) error {
 		return err
 	}
 	key := referralProofKey(userID, companySlug)
-	if err := a.blob.Put(c.Context(), key, up.ContentType, bytes.NewReader(up.Data), int64(len(up.Data))); err != nil {
+	if err := h.blob.Put(c.Context(), key, up.ContentType, bytes.NewReader(up.Data), int64(len(up.Data))); err != nil {
 		return err
 	}
-	offer, err := a.referral.SubmitOffer(c.Context(), referral.OfferInput{
+	offer, err := h.referral.SubmitOffer(c.Context(), referral.OfferInput{
 		UserID: userID, CompanySlug: companySlug, LinkedInURL: c.FormValue("linkedin_url"), ProofKey: key,
 	})
 	if err != nil {
@@ -207,12 +240,12 @@ func (a *API) SubmitReferralOffer(c *fiber.Ctx) error {
 }
 
 // ListMyReferralOffers returns the caller's own offers with moderation status, newest first.
-func (a *API) ListMyReferralOffers(c *fiber.Ctx) error {
+func (h *referralHandlers) ListMyReferralOffers(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	rows, err := a.referral.ListMyOffers(c.Context(), userID)
+	rows, err := h.referral.ListMyOffers(c.Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -225,7 +258,7 @@ func (a *API) ListMyReferralOffers(c *fiber.Ctx) error {
 
 // WithdrawReferralOffer lets a member stop being a referrer by deleting their own offer.
 // RequireAuth; owner-scoped in the service. 404 when the offer is absent or not theirs.
-func (a *API) WithdrawReferralOffer(c *fiber.Ctx) error {
+func (h *referralHandlers) WithdrawReferralOffer(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -234,7 +267,7 @@ func (a *API) WithdrawReferralOffer(c *fiber.Ctx) error {
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid offer id")
 	}
-	if err := a.referral.WithdrawOffer(c.Context(), int64(id), userID); err != nil {
+	if err := h.referral.WithdrawOffer(c.Context(), int64(id), userID); err != nil {
 		return referralError(err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
@@ -242,12 +275,12 @@ func (a *API) WithdrawReferralOffer(c *fiber.Ctx) error {
 
 // ListIncomingReferralRequests returns the open requests for every company the caller is an
 // approved referrer of — their inbox.
-func (a *API) ListIncomingReferralRequests(c *fiber.Ctx) error {
+func (h *referralHandlers) ListIncomingReferralRequests(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	rows, err := a.referral.ListIncoming(c.Context(), userID)
+	rows, err := h.referral.ListIncoming(c.Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -265,7 +298,7 @@ type resolveReferralRequestBody struct {
 
 // ResolveReferralRequest marks an incoming request contacted or declined on the caller's
 // behalf, after verifying they are an approved referrer of the request's company.
-func (a *API) ResolveReferralRequest(c *fiber.Ctx) error {
+func (h *referralHandlers) ResolveReferralRequest(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -287,7 +320,7 @@ func (a *API) ResolveReferralRequest(c *fiber.Ctx) error {
 	default:
 		return fiber.NewError(fiber.StatusBadRequest, "status must be contacted or declined")
 	}
-	req, err := a.referral.ResolveRequest(c.Context(), int64(id), userID, contacted)
+	req, err := h.referral.ResolveRequest(c.Context(), int64(id), userID, contacted)
 	if err != nil {
 		return referralError(err)
 	}
@@ -295,8 +328,8 @@ func (a *API) ResolveReferralRequest(c *fiber.Ctx) error {
 }
 
 // ListPendingReferralOffers returns the moderator queue of offers awaiting a decision.
-func (a *API) ListPendingReferralOffers(c *fiber.Ctx) error {
-	rows, err := a.referral.ListPendingOffers(c.Context())
+func (h *referralHandlers) ListPendingReferralOffers(c *fiber.Ctx) error {
+	rows, err := h.referral.ListPendingOffers(c.Context())
 	if err != nil {
 		return err
 	}
@@ -313,7 +346,7 @@ type decideReferralOfferBody struct {
 }
 
 // DecideReferralOffer approves or rejects a pending offer. Moderator-gated.
-func (a *API) DecideReferralOffer(c *fiber.Ctx) error {
+func (h *referralHandlers) DecideReferralOffer(c *fiber.Ctx) error {
 	moderatorID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -326,7 +359,7 @@ func (a *API) DecideReferralOffer(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	offer, err := a.referral.DecideOffer(c.Context(), int64(id), moderatorID, in.Approve)
+	offer, err := h.referral.DecideOffer(c.Context(), int64(id), moderatorID, in.Approve)
 	if err != nil {
 		return referralError(err)
 	}
@@ -337,7 +370,7 @@ func (a *API) DecideReferralOffer(c *fiber.Ctx) error {
 // referrer of the request's company: the stored original résumé from S3, or the tailored
 // builder CV rendered to PDF on the fly. AuthorizeCVAccess keeps this cabinet-only; the
 // seeker's identity is never revealed by it.
-func (a *API) ViewReferralRequestCV(c *fiber.Ctx) error {
+func (h *referralHandlers) ViewReferralRequestCV(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -346,18 +379,18 @@ func (a *API) ViewReferralRequestCV(c *fiber.Ctx) error {
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request id")
 	}
-	req, err := a.referral.AuthorizeCVAccess(c.Context(), int64(id), userID)
+	req, err := h.referral.AuthorizeCVAccess(c.Context(), int64(id), userID)
 	if err != nil {
 		return referralError(err)
 	}
 	switch req.CVKind {
 	case referral.CVOriginal:
-		return a.streamBlobPDF(c, blobstore.ResumeKey(req.SeekerUserID))
+		return h.streamBlobPDF(c, blobstore.ResumeKey(req.SeekerUserID))
 	case referral.CVBuilt:
 		if req.CVID == nil {
 			return fiber.NewError(fiber.StatusNotFound, "the attached CV is no longer available")
 		}
-		return a.renderOwnerCV(c, *req.CVID, req.SeekerUserID)
+		return h.renderOwnerCV(c, *req.CVID, req.SeekerUserID)
 	default:
 		return fiber.NewError(fiber.StatusInternalServerError, "unknown CV kind")
 	}
@@ -365,28 +398,28 @@ func (a *API) ViewReferralRequestCV(c *fiber.Ctx) error {
 
 // ViewReferralOfferProof streams a member's proof CV to a moderator reviewing the offer.
 // Moderator-gated at the route; the proof key never leaves the server.
-func (a *API) ViewReferralOfferProof(c *fiber.Ctx) error {
+func (h *referralHandlers) ViewReferralOfferProof(c *fiber.Ctx) error {
 	id, err := c.ParamsInt("id")
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid offer id")
 	}
-	offer, ok, err := a.referral.GetOffer(c.Context(), int64(id))
+	offer, ok, err := h.referral.GetOffer(c.Context(), int64(id))
 	if err != nil {
 		return err
 	}
 	if !ok {
 		return fiber.NewError(fiber.StatusNotFound, "offer not found")
 	}
-	return a.streamBlobPDF(c, offer.ProofKey)
+	return h.streamBlobPDF(c, offer.ProofKey)
 }
 
 // streamBlobPDF streams a stored PDF object inline. 503 when the blob store is
 // unconfigured, 404 when the object is missing (e.g. the seeker deleted their résumé).
-func (a *API) streamBlobPDF(c *fiber.Ctx, key string) error {
-	if a.blob == nil {
+func (h *referralHandlers) streamBlobPDF(c *fiber.Ctx, key string) error {
+	if h.blob == nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "file storage is unavailable")
 	}
-	rc, err := a.blob.Get(c.Context(), key)
+	rc, err := h.blob.Get(c.Context(), key)
 	if err != nil {
 		return fiber.NewError(fiber.StatusNotFound, "CV not available")
 	}
@@ -402,11 +435,11 @@ func (a *API) streamBlobPDF(c *fiber.Ctx, key string) error {
 
 // renderOwnerCV renders a builder CV owned by ownerID to PDF. cvStore.Get is owner-scoped,
 // so it is loaded as the seeker (the owner), not the viewing referrer. 501 when no renderer.
-func (a *API) renderOwnerCV(c *fiber.Ctx, cvID, ownerID int64) error {
-	if a.cvRenderer == nil {
+func (h *referralHandlers) renderOwnerCV(c *fiber.Ctx, cvID, ownerID int64) error {
+	if h.cvRenderer == nil {
 		return fiber.NewError(fiber.StatusNotImplemented, "PDF rendering is not available")
 	}
-	rec, err := a.cvStore.Get(c.Context(), cvID, ownerID)
+	rec, err := h.cvStore.Get(c.Context(), cvID, ownerID)
 	if err != nil {
 		return mapCVError(err)
 	}
@@ -414,7 +447,7 @@ func (a *API) renderOwnerCV(c *fiber.Ctx, cvID, ownerID int64) error {
 	if err != nil {
 		return mapCVError(err)
 	}
-	pdf, err := a.cvRenderer.Render(c.Context(), rec.Document, tmpl)
+	pdf, err := h.cvRenderer.Render(c.Context(), rec.Document, tmpl)
 	if err != nil {
 		return err
 	}

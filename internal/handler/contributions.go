@@ -10,7 +10,29 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/contribution"
+	"github.com/strelov1/freehire/internal/credits"
 )
+
+// contributionHandlers serves the crowdsourced paste-a-link flow: submit a URL →
+// detect ATS, dedup by derived identity, record + award a point; list the caller's
+// own. The use cases live in contribution.Service.
+type contributionHandlers struct {
+	contribution *contribution.Service
+	credits      *credits.Store
+}
+
+func newContributionHandlers(contribution *contribution.Service, credits *credits.Store) *contributionHandlers {
+	return &contributionHandlers{contribution: contribution, credits: credits}
+}
+
+func (h *contributionHandlers) register(api fiber.Router, mw middleware) {
+	// Link contributions: any authenticated user pastes a job URL (cookie or API key);
+	// a supported, novel link is recorded and earns a point. No moderation queue — the
+	// derived-identity dedup and the supported-ATS gate are the only guards. The caller
+	// reads their own contributions; the points balance rides on /auth/me.
+	api.Post("/me/contributions", mw.key, h.CreateContribution)
+	api.Get("/me/contributions", mw.key, h.ListMyContributions)
+}
 
 // contributionRequest is the submit body: just the pasted job URL.
 type contributionRequest struct {
@@ -59,7 +81,7 @@ func contributionError(err error) error {
 // CreateContribution records a user-contributed job link and awards AI credits for a novel one.
 // Authenticated by cookie or API key. A non-ATS link is 422, a duplicate is 409; a novel
 // link returns 201 with the recorded contribution.
-func (a *API) CreateContribution(c *fiber.Ctx) error {
+func (h *contributionHandlers) CreateContribution(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -70,13 +92,13 @@ func (a *API) CreateContribution(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
 
-	rec, source, board, err := a.contribution.Submit(c.Context(), userID, in.URL)
+	rec, source, board, err := h.contribution.Submit(c.Context(), userID, in.URL)
 	if err != nil {
 		// On "already tracked", enrich the 409 with the company we cover so the UI can link to
 		// it (and say the exact role will land on the next crawl).
 		if errors.Is(err, contribution.ErrBoardAlreadyTracked) {
 			body := fiber.Map{"error": "this board is already in the catalogue"}
-			if name, slug, ok := a.contribution.CompanyForBoard(c.Context(), source, board); ok {
+			if name, slug, ok := h.contribution.CompanyForBoard(c.Context(), source, board); ok {
 				body["company_name"] = name
 				body["company_slug"] = slug
 			}
@@ -87,7 +109,7 @@ func (a *API) CreateContribution(c *fiber.Ctx) error {
 	// Credit is exclusive to a recognized novel board (status pending). An unrecognized link is
 	// recorded for manual review (status review) and earns nothing until a maintainer promotes it.
 	if rec.Status == contribution.StatusPending {
-		a.rewardContribution(c.Context(), userID, rec.ID)
+		rewardContribution(c.Context(), h.credits, userID, rec.ID)
 	}
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toContributionResponse(rec)})
 }
@@ -96,21 +118,21 @@ func (a *API) CreateContribution(c *fiber.Ctx) error {
 // id, for a novel board recorded via any surface (the HTTP submit or the Telegram webhook).
 // Best-effort: the contribution is already recorded, so a reward error (or a zero configured
 // reward) is logged, not surfaced.
-func (a *API) rewardContribution(ctx context.Context, userID, contributionID int64) {
-	if _, err := a.credits.Reward(ctx, userID, strconv.FormatInt(contributionID, 10)); err != nil {
+func rewardContribution(ctx context.Context, credits *credits.Store, userID, contributionID int64) {
+	if _, err := credits.Reward(ctx, userID, strconv.FormatInt(contributionID, 10)); err != nil {
 		log.Printf("credits: contribution reward user=%d contribution=%d: %v", userID, contributionID, err)
 	}
 }
 
 // ListMyContributions returns the caller's own contributions, newest first. Scoped to the
 // authenticated user, so it never reveals another user's.
-func (a *API) ListMyContributions(c *fiber.Ctx) error {
+func (h *contributionHandlers) ListMyContributions(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
 
-	rows, err := a.contribution.ListMine(c.Context(), userID)
+	rows, err := h.contribution.ListMine(c.Context(), userID)
 	if err != nil {
 		return err
 	}

@@ -6,8 +6,33 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/report"
 )
+
+// reportHandlers serves the job-report moderation queue (file/list/resolve/dismiss);
+// resolving may soft-close the reported job through the job-lifecycle close path.
+type reportHandlers struct {
+	report  *report.Service
+	queries *db.Queries
+}
+
+func newReportHandlers(queries *db.Queries) *reportHandlers {
+	// The report queue uses one QueriesRepository for both persistence and the
+	// job soft-close (it implements report.Repository and report.JobCloser).
+	repo := report.NewQueriesRepository(queries)
+	return &reportHandlers{report: report.New(repo, repo), queries: queries}
+}
+
+func (h *reportHandlers) register(api fiber.Router, mw middleware) {
+	// Job reports: any authenticated user flags a problem with a live vacancy (cookie or
+	// API key), addressed by the job's public slug. The review actions (the pending queue,
+	// resolve, dismiss) are moderator-gated; resolve may soft-close the reported job.
+	api.Post("/jobs/:slug/reports", mw.key, h.CreateReport)
+	api.Get("/reports", mw.key, mw.moderator, h.ListPendingReports)
+	api.Post("/reports/:id/resolve", mw.key, mw.moderator, h.ResolveReport)
+	api.Post("/reports/:id/dismiss", mw.key, mw.moderator, h.DismissReport)
+}
 
 // reportResponse is the public shape of a job report. reported_by is omitted (ownership,
 // internal); reporter_email and job_slug/job_title are set only on the moderator queue so
@@ -88,13 +113,13 @@ type createReportRequest struct {
 // API key; the slug is resolved to the internal id (a miss is a 404 via RenderError) before
 // any write, the content is validated by the service (a bad body is a 400), and a second
 // open report of the same job by the same user is a 409. Returns the pending report with 201.
-func (a *API) CreateReport(c *fiber.Ctx) error {
+func (h *reportHandlers) CreateReport(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
 
-	jobID, err := a.queries.GetJobIDBySlug(c.Context(), c.Params("slug"))
+	jobID, err := h.queries.GetJobIDBySlug(c.Context(), c.Params("slug"))
 	if err != nil {
 		return err // pgx.ErrNoRows → 404 in RenderError
 	}
@@ -104,7 +129,7 @@ func (a *API) CreateReport(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
 
-	rep, err := a.report.File(c.Context(), userID, jobID, report.FileInput{
+	rep, err := h.report.File(c.Context(), userID, jobID, report.FileInput{
 		Reason:          in.Reason,
 		Details:         in.Details,
 		ContactTelegram: in.ContactTelegram,
@@ -117,8 +142,8 @@ func (a *API) CreateReport(c *fiber.Ctx) error {
 
 // ListPendingReports returns the moderator review queue (with reporter email and job
 // slug/title). The route is role-gated, so reaching this handler already implies a moderator.
-func (a *API) ListPendingReports(c *fiber.Ctx) error {
-	rows, err := a.report.ListPending(c.Context())
+func (h *reportHandlers) ListPendingReports(c *fiber.Ctx) error {
+	rows, err := h.report.ListPending(c.Context())
 	if err != nil {
 		return err
 	}
@@ -137,7 +162,7 @@ type resolveReportRequest struct {
 // ResolveReport marks a pending report resolved, optionally soft-closing the reported job.
 // Role-gated. An unknown id is a 404; a report already decided is a 409. The body is
 // optional (a parse failure leaves close_job false).
-func (a *API) ResolveReport(c *fiber.Ctx) error {
+func (h *reportHandlers) ResolveReport(c *fiber.Ctx) error {
 	reviewerID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -150,7 +175,7 @@ func (a *API) ResolveReport(c *fiber.Ctx) error {
 	var in resolveReportRequest
 	_ = c.BodyParser(&in)
 
-	rep, err := a.report.Resolve(c.Context(), reviewerID, id, in.CloseJob)
+	rep, err := h.report.Resolve(c.Context(), reviewerID, id, in.CloseJob)
 	if err != nil {
 		return reportError(err)
 	}
@@ -164,7 +189,7 @@ type dismissReportRequest struct {
 
 // DismissReport marks a pending report dismissed with an optional reason, leaving the job
 // unchanged. Role-gated. The reason body is optional, so a parse failure leaves it blank.
-func (a *API) DismissReport(c *fiber.Ctx) error {
+func (h *reportHandlers) DismissReport(c *fiber.Ctx) error {
 	reviewerID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -177,7 +202,7 @@ func (a *API) DismissReport(c *fiber.Ctx) error {
 	var in dismissReportRequest
 	_ = c.BodyParser(&in)
 
-	rep, err := a.report.Dismiss(c.Context(), reviewerID, id, in.Reason)
+	rep, err := h.report.Dismiss(c.Context(), reviewerID, id, in.Reason)
 	if err != nil {
 		return reportError(err)
 	}
