@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/vocab"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/pgconv"
 )
@@ -53,7 +53,7 @@ func (r *QueriesRepository) Create(ctx context.Context, f job.Fields, actorID in
 	if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
 		TargetVersion:     r.targetVersion,
 		JobID:             row.ID,
-		ExcludeCategories: enrich.NonTechCategories,
+		ExcludeCategories: vocab.NonTechCategories,
 	}); err != nil {
 		return job.Job{}, job.Extras{}, fmt.Errorf("enqueue enrichment: %w", err)
 	}

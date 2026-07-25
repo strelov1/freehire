@@ -325,7 +325,7 @@ func TestEnrichmentQueue(t *testing.T) {
 }
 
 // TestEnqueueGatesNonTechCategory covers the AI-budget gate: both enqueue paths skip a
-// job whose derived category is blacklisted (enrich.NonTechCategories), while tech and
+// job whose derived category is blacklisted (vocab.NonTechCategories), while tech and
 // empty/unrecognized categories still enqueue. The empty string (” — the NOT NULL
 // column default for a title the classify dictionary could not place) must pass the
 // `<> ALL` gate, so a tech job with an unrecognized title is never silently dropped.

@@ -26,7 +26,7 @@ import (
 	"github.com/strelov1/freehire/internal/wordmatch"
 )
 
-// seniorityLabel maps each enrich.SeniorityValues canonical to its display word.
+// seniorityLabel maps each vocab.SeniorityValues canonical to its display word.
 var seniorityLabel = map[string]string{
 	"intern":    "Intern",
 	"junior":    "Junior",
@@ -38,7 +38,7 @@ var seniorityLabel = map[string]string{
 	"c_level":   "C-Level",
 }
 
-// categoryNoun maps each enrich.CategoryValues canonical (except "other", which
+// categoryNoun maps each vocab.CategoryValues canonical (except "other", which
 // yields no useful natural role) to its role noun. It is the decomposable-category
 // set: the bare role's label and the base of every composite label
 // ("{seniorityLabel} {categoryNoun}", e.g. senior + backend → "Senior Backend

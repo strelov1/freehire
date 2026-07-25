@@ -5,7 +5,7 @@ package location
 // the names/cities that show up unresolved, not a full gazetteer up front.
 
 // regionCountries groups ISO 3166-1 alpha-2 country codes under one canonical
-// region code from enrich.RegionValues. Each country maps to exactly one region
+// region code from vocab.RegionValues. Each country maps to exactly one region
 // (the coarse facet a user filters on); countryToRegion is the inverted lookup.
 // "eu" is used in the broad geographic sense of Europe (not only EU members).
 var regionCountries = map[string][]string{

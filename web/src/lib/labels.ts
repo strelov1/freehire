@@ -3,10 +3,10 @@
 // Values come from the generated contracts; only the codes whose label differs
 // from the title-cased fallback are listed here. Keeping ONE map prevents the
 // drift that previously left stale region codes and inconsistent casing in two
-// places. REGIONS is the curated macro-region set (enrich.RegionValues) — keep it
+// places. REGIONS is the curated macro-region set (vocab.RegionValues) — keep it
 // in sync with the backend vocabulary.
 
-// Region code → display names, one row per enrich.RegionValues entry. `short`
+// Region code → display names, one row per vocab.RegionValues entry. `short`
 // is the compact UI label (filter pills, facet rows); `long` is the full place
 // name schema.org gets for applicantLocationRequirements. `global` has no
 // `long` — a worldwide reach intentionally carries no location requirement.
@@ -34,7 +34,7 @@ export const REGION_NAMES: Record<string, string> = Object.fromEntries(
 
 export const SENIORITY_LABELS: Record<string, string> = { c_level: 'C-level' };
 
-// English proficiency levels (enrich.EnglishLevelValues); `none` is the
+// English proficiency levels (vocab.EnglishLevelValues); `none` is the
 // no-requirement sentinel — detail pages filter it out before rendering.
 export const ENGLISH_LEVEL_LABELS: Record<string, string> = {
   a1: 'A1', a2: 'A2', b1: 'B1', b2: 'B2', c1: 'C1', c2: 'C2', native: 'Native', none: 'None',

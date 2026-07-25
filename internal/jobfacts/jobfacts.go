@@ -3,8 +3,8 @@
 // internal/classify and internal/location it is a curated matcher, not a model:
 // it resolves explicit signals and emits nothing ("" / nil) for what it cannot
 // resolve — it never guesses. Canonical enum values are members of the controlled
-// vocabularies the enrichment contract defines (enrich.EmploymentTypeValues /
-// enrich.EducationLevelValues).
+// vocabularies the enrichment contract defines (vocab.EmploymentTypeValues /
+// vocab.EducationLevelValues).
 package jobfacts
 
 import (
@@ -56,7 +56,7 @@ var (
 )
 
 // EmploymentType resolves the work arrangement from the title and description,
-// returning one of enrich.EmploymentTypeValues or "" when nothing is stated. It
+// returning one of vocab.EmploymentTypeValues or "" when nothing is stated. It
 // never assumes full-time for an unstated posting.
 func EmploymentType(title, description string) string {
 	s := strings.ToLower(title + "\n" + description)
@@ -90,7 +90,7 @@ var (
 )
 
 // EducationLevel resolves the required education from the description, returning
-// one of enrich.EducationLevelValues or "" when nothing is stated. A named degree
+// one of vocab.EducationLevelValues or "" when nothing is stated. A named degree
 // wins over a "no degree" phrase (a posting that says "Bachelor's or equivalent;
 // no degree required for exceptional candidates" still has a degree signal).
 func EducationLevel(description string) string {
@@ -155,7 +155,7 @@ func ExperienceYearsMin(description string) *int {
 // sources are Russian-heavy) and emits "" when nothing is stated. Every signal must
 // sit near an English keyword, so a bare "B2"/"advanced"/"native" is not misread out
 // of context ("B2B SaaS", "advanced degree", "native macOS app"). Values are members
-// of enrich.EnglishLevelValues.
+// of vocab.EnglishLevelValues.
 var (
 	// reEnglishKw gates the whole parse and anchors every phrase: english_level is
 	// about English, so a description that never names it yields nothing.
@@ -186,7 +186,7 @@ var englishRank = map[string]int{"a1": 1, "a2": 2, "b1": 3, "b2": 4, "c1": 5, "c
 const englishWindow = 30
 
 // EnglishLevel resolves the required English level from the description, returning
-// one of enrich.EnglishLevelValues or "" when nothing is stated. When several levels
+// one of vocab.EnglishLevelValues or "" when nothing is stated. When several levels
 // are named it returns the lowest (the minimum requirement); an explicit "no English"
 // phrase resolves to "none" only when no positive level is present.
 func EnglishLevel(description string) string {

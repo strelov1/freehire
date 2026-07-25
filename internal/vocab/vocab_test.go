@@ -1,7 +1,8 @@
-package enrich
+package vocab
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -47,5 +48,18 @@ func TestTechCategoriesExcludesNonTech(t *testing.T) {
 	}
 	if slices.Contains(TechCategories, "other") {
 		t.Error("TechCategories must not contain the residual \"other\"")
+	}
+}
+
+func TestDomainGlossCoversVocabulary(t *testing.T) {
+	for _, d := range DomainValues {
+		if strings.TrimSpace(DomainGloss[d]) == "" {
+			t.Errorf("domain %q has no gloss for the enrichment prompt", d)
+		}
+	}
+	for d := range DomainGloss {
+		if !slices.Contains(DomainValues, d) {
+			t.Errorf("DomainGloss has %q not in DomainValues", d)
+		}
 	}
 }

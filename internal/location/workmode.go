@@ -39,7 +39,7 @@ var descriptionWorkModePhrases = []struct {
 // returning "" when no anchored arrangement phrase is present. It is the
 // lowest-priority work-mode source (after the structured ATS signal and the parsed
 // location marker), so it only ever fills a value the others left empty. Values are
-// from enrich.WorkModeValues.
+// from vocab.WorkModeValues.
 func WorkModeFromDescription(desc string) string {
 	lower := strings.ToLower(desc)
 	for _, wm := range descriptionWorkModePhrases {

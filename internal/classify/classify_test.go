@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 func TestParse(t *testing.T) {
@@ -119,12 +119,12 @@ func TestCategories(t *testing.T) {
 
 func TestCanonicalValuesAreInVocabulary(t *testing.T) {
 	for _, e := range seniorityTable {
-		if !slices.Contains(enrich.SeniorityValues, e.canonical) {
+		if !slices.Contains(vocab.SeniorityValues, e.canonical) {
 			t.Errorf("seniority alias %q -> %q not in SeniorityValues", e.alias, e.canonical)
 		}
 	}
 	for _, e := range categoryTable {
-		if !slices.Contains(enrich.CategoryValues, e.canonical) {
+		if !slices.Contains(vocab.CategoryValues, e.canonical) {
 			t.Errorf("category alias %q -> %q not in CategoryValues", e.alias, e.canonical)
 		}
 	}

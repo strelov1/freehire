@@ -6,7 +6,7 @@ Incremental semantic embedding via the `semantic_outbox` queue, mirroring the en
 ## Always true
 - Work flows through `semantic_outbox` — a reference-only queue (`job_id` + `target_model` + lease/retry, not a copy of the job).
 - Paired with `jobs.semantic_embedded_model`/`semantic_embedded_hash` provenance stamps (the "done" marker, like `enriched_at`/`enrichment_version`).
-- `EnqueuePendingSemanticJobs` enqueues open jobs where `semantic_embedded_model IS DISTINCT FROM target_model OR semantic_embedded_hash IS DISTINCT FROM content_hash` (one predicate covers add + content-update + model-migration) and closed-but-still-embedded jobs (for removal), excluding non-tech via `enrich.NonTechCategories`.
+- `EnqueuePendingSemanticJobs` enqueues open jobs where `semantic_embedded_model IS DISTINCT FROM target_model OR semantic_embedded_hash IS DISTINCT FROM content_hash` (one predicate covers add + content-update + model-migration) and closed-but-still-embedded jobs (for removal), excluding non-tech via `vocab.NonTechCategories`.
 - `target_model` is `search.CurrentEmbedderModel()`, the single source of truth shared with the CV-vector staleness guard.
 - `ClaimSemanticBatch` does not filter `closed_at` out (the removal signal must reach the worker), returning a `closed` flag so the worker branches.
 - Open → `IndexSemanticJobs` (embed `passage:` + in-place upsert with `_vectors`, built from the persisted row via `search.FromJob`, so enrichment facets survive) then stamp + delete the outbox row in one txn.

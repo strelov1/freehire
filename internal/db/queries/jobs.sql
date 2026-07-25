@@ -772,7 +772,7 @@ WHERE id = sqlc.arg(id) AND liveness_strikes <> 0;
 -- enrichment, gated on the same conditions the backfill uses (unenriched or below the
 -- target schema version, and a non-blacklisted category), so an already-enriched job
 -- is not re-queued and a confidently non-technical role (exclude_categories =
--- enrich.NonTechCategories) never consumes LLM budget. category is NOT NULL DEFAULT '',
+-- vocab.NonTechCategories) never consumes LLM budget. category is NOT NULL DEFAULT '',
 -- so an empty/unrecognized category still enqueues (empty string <> ALL). Idempotent
 -- via the outbox's UNIQUE (job_id, target_version). Run in the same transaction as the
 -- job's UpsertJob so a newly ingested job is queued atomically with its write.

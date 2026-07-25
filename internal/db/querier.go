@@ -385,7 +385,7 @@ type Querier interface {
 	// enrichment, gated on the same conditions the backfill uses (unenriched or below the
 	// target schema version, and a non-blacklisted category), so an already-enriched job
 	// is not re-queued and a confidently non-technical role (exclude_categories =
-	// enrich.NonTechCategories) never consumes LLM budget. category is NOT NULL DEFAULT '',
+	// vocab.NonTechCategories) never consumes LLM budget. category is NOT NULL DEFAULT '',
 	// so an empty/unrecognized category still enqueues (empty string <> ALL). Idempotent
 	// via the outbox's UNIQUE (job_id, target_version). Run in the same transaction as the
 	// job's UpsertJob so a newly ingested job is queued atomically with its write.
@@ -397,7 +397,7 @@ type Querier interface {
 	// Idempotent backfill: enqueue every OPEN job that is unenriched or below the target
 	// schema version. Closed jobs (closed_at IS NOT NULL) are skipped — a dead posting no
 	// user will see should not consume LLM budget. Jobs whose derived category is in
-	// exclude_categories (enrich.NonTechCategories) are skipped too, so LLM budget stays
+	// exclude_categories (vocab.NonTechCategories) are skipped too, so LLM budget stays
 	// on technical roles; category is NOT NULL DEFAULT '', so an empty/unrecognized
 	// category is never excluded (empty string <> ALL keeps the row). ON CONFLICT keeps
 	// exactly one entry per (job_id, target_version), so running this every command
@@ -408,7 +408,7 @@ type Querier interface {
 	//   1. OPEN jobs whose stored vector is missing, content-stale, or model-stale —
 	//      i.e. semantic_embedded_model differs from the target OR semantic_embedded_hash
 	//      differs from the job's current content_hash. Jobs whose derived category is in
-	//      exclude_categories (enrich.NonTechCategories) are skipped so embed budget stays
+	//      exclude_categories (vocab.NonTechCategories) are skipped so embed budget stays
 	//      on technical roles; category is NOT NULL DEFAULT '', so an empty/unrecognized
 	//      category is never excluded (empty string <> ALL keeps the row).
 	//   2. UNINDEXABLE jobs that still carry an embed stamp (were embedded while open and

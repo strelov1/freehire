@@ -3,6 +3,8 @@ package enrich
 import (
 	"strings"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // The per-call timeout / generate / choices behavior now lives in internal/llm
@@ -44,7 +46,7 @@ func TestSystemPromptIncludesRegionVocabulary(t *testing.T) {
 	if !strings.Contains(p, "regions") {
 		t.Errorf("prompt must mention regions, got:\n%s", p)
 	}
-	for _, v := range RegionValues {
+	for _, v := range vocab.RegionValues {
 		if !strings.Contains(p, v) {
 			t.Errorf("prompt must list region value %q", v)
 		}

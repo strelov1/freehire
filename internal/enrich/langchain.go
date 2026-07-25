@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/llm"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // maxDescriptionRunes caps the job description sent to the model. Descriptions are
@@ -94,18 +95,18 @@ func buildSystemPrompt(askGeo bool) string {
 	// deterministic dictionaries (internal/jobderive), so the LLM's copies were never
 	// served — asking for them only burned output tokens (see enrich-prompt-trim).
 	if askGeo {
-		enum("regions (array)", RegionValues)
+		enum("regions (array)", vocab.RegionValues)
 	}
-	enum("relocation", RelocationValues)
-	enum("salary_period", SalaryPeriodValues)
+	enum("relocation", vocab.RelocationValues)
+	enum("salary_period", vocab.SalaryPeriodValues)
 	// domains is the company's INDUSTRY (what it does), not its business model. It is
 	// glossed per-value so the model picks a real vertical; multiple may apply.
 	b.WriteString("- domains (array) — the company's industry/vertical (what it does), multiple allowed:\n")
-	for _, d := range DomainValues {
-		fmt.Fprintf(&b, "    %s: %s\n", d, DomainGloss[d])
+	for _, d := range vocab.DomainValues {
+		fmt.Fprintf(&b, "    %s: %s\n", d, vocab.DomainGloss[d])
 	}
-	enum("company_type", CompanyTypeValues)
-	enum("company_size", CompanySizeValues)
+	enum("company_type", vocab.CompanyTypeValues)
+	enum("company_size", vocab.CompanySizeValues)
 
 	if askGeo {
 		// Discovery facets: countries/regions are served as a dict-then-LLM hybrid (the

@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/vocab"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobhash"
 	"github.com/strelov1/freehire/internal/jobview"
@@ -76,7 +76,7 @@ func (s *dbStore) Save(ctx context.Context, j job.Job) error {
 	if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
 		TargetVersion:     s.targetVersion,
 		JobID:             saved.Job.ID,
-		ExcludeCategories: enrich.NonTechCategories,
+		ExcludeCategories: vocab.NonTechCategories,
 	}); err != nil {
 		return fmt.Errorf("enqueue enrichment: %w", err)
 	}

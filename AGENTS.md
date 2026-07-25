@@ -59,6 +59,7 @@ internal/
   telegram/          Telegram crawl + LLM vacancy extraction (see telegram/AGENTS.md)
   pipeline/          ingest Runner (fetch → normalize → dedup → upsert) (see pipeline/AGENTS.md)
   enrich/            enrichment contract + LLM Provider + queue-draining Runner (see enrich/AGENTS.md)
+  vocab/             shared controlled vocabularies for enum facets (seniority, category, regions, …) — neutral, dependency-free
   embed/             incremental semantic embedding (see embed/AGENTS.md)
   search/            Meilisearch-backed job search
   location/          curated dictionary deriving country/region codes + work-mode hint (see location/AGENTS.md)
@@ -130,7 +131,7 @@ For the full architecture and conventions, see the **module files** below. Each 
 
 | Area | Reference |
 |---|---|
-| **Enrichment** (Enrichment contract, controlled vocabularies, LLM Provider) | [internal/enrich/AGENTS.md](internal/enrich/AGENTS.md) |
+| **Enrichment** (Enrichment contract, LLM Provider; enum vocabularies live in `internal/vocab`) | [internal/enrich/AGENTS.md](internal/enrich/AGENTS.md) |
 | **Semantic embedding** (semantic_outbox, incremental embeds, reconciler) | [internal/embed/AGENTS.md](internal/embed/AGENTS.md) |
 | **AI fit analysis** (three-stage LLM prompt-chain, score, verdict, stream) | [internal/matchanalysis/AGENTS.md](internal/matchanalysis/AGENTS.md) |
 | **Structured résumé** (LLM parse of stored CV, stamp-and-compare) | [internal/resumeextract/AGENTS.md](internal/resumeextract/AGENTS.md) |

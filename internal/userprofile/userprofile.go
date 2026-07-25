@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // Sentinel errors mapped to HTTP statuses by the handler.
@@ -126,7 +126,7 @@ func normalizeSpecializations(specializations []string) ([]string, error) {
 		if _, dup := seen[spec]; dup {
 			continue
 		}
-		if !slices.Contains(enrich.CategoryValues, spec) {
+		if !slices.Contains(vocab.CategoryValues, spec) {
 			return nil, ErrInvalidSpecialization
 		}
 		seen[spec] = struct{}{}

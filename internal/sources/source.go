@@ -45,8 +45,8 @@ type Job struct {
 	WorkMode string
 	// Seniority, Category, EmploymentType, Skills, and ExperienceYearsMin are the
 	// platform's STRUCTURED facet signals, already mapped into freehire's controlled
-	// vocabularies (enrich.SeniorityValues / enrich.CategoryValues /
-	// enrich.EmploymentTypeValues / canonical skill names). They mirror WorkMode: an
+	// vocabularies (vocab.SeniorityValues / vocab.CategoryValues /
+	// vocab.EmploymentTypeValues / canonical skill names). They mirror WorkMode: an
 	// adapter sets them only when the platform states the value in a structured field
 	// (e.g. an ATS timeType / typeOfEmployment enum), never a heuristic inferred from
 	// free text, and leaves them empty/nil otherwise so the pipeline's dictionaries

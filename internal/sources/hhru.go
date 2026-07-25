@@ -272,7 +272,7 @@ func (v hhVacancy) workMode() string {
 	}
 }
 
-// hhEmploymentType maps hh's employment @type enum into enrich.EmploymentTypeValues, leaving
+// hhEmploymentType maps hh's employment @type enum into vocab.EmploymentTypeValues, leaving
 // unmapped types empty so the pipeline's dictionaries decide.
 func hhEmploymentType(t string) string {
 	switch strings.ToUpper(strings.TrimSpace(t)) {

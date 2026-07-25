@@ -9,7 +9,7 @@ import (
 	"slices"
 
 	"github.com/strelov1/freehire/internal/classify"
-	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/vocab"
 	"github.com/strelov1/freehire/internal/jobfacts"
 	"github.com/strelov1/freehire/internal/lang"
 	"github.com/strelov1/freehire/internal/location"
@@ -183,11 +183,11 @@ func Derive(in Input) Derived {
 // Engineer", "COBOL Programmer") that resolve no sub-category. A non-software
 // "…Engineer" (mechanical, drainage) matches neither detector and stays unknown.
 func deriveIsTech(category, title string) *bool {
-	if slices.Contains(enrich.TechCategories, category) || classify.IsTech(title) {
+	if slices.Contains(vocab.TechCategories, category) || classify.IsTech(title) {
 		t := true
 		return &t
 	}
-	if slices.Contains(enrich.NonTechCategories, category) || classify.IsNonTech(title) {
+	if slices.Contains(vocab.NonTechCategories, category) || classify.IsNonTech(title) {
 		f := false
 		return &f
 	}

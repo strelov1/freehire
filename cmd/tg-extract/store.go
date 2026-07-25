@@ -12,6 +12,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/vocab"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobderive"
 	"github.com/strelov1/freehire/internal/jobhash"
@@ -128,7 +129,7 @@ func (s *extractStore) Complete(ctx context.Context, post telegram.PendingPost, 
 		if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
 			TargetVersion:     int32(enrich.Version),
 			JobID:             saved.Job.ID,
-			ExcludeCategories: enrich.NonTechCategories,
+			ExcludeCategories: vocab.NonTechCategories,
 		}); err != nil {
 			return fmt.Errorf("enqueue enrichment %s: %w", externalID, err)
 		}
@@ -180,7 +181,7 @@ func (s *extractStore) CompleteLinks(
 		if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
 			TargetVersion:     int32(enrich.Version),
 			JobID:             saved.Job.ID,
-			ExcludeCategories: enrich.NonTechCategories,
+			ExcludeCategories: vocab.NonTechCategories,
 		}); err != nil {
 			return fmt.Errorf("enqueue enrichment %s/%s: %w", j.Source, j.ExternalID, err)
 		}

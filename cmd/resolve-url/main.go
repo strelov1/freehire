@@ -27,6 +27,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/vocab"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobderive"
 	"github.com/strelov1/freehire/internal/jobhash"
@@ -138,7 +139,7 @@ func upsert(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, idx *search.
 	if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
 		TargetVersion:     int32(enrich.Version),
 		JobID:             res.Job.ID,
-		ExcludeCategories: enrich.NonTechCategories,
+		ExcludeCategories: vocab.NonTechCategories,
 	}); err != nil {
 		return err
 	}

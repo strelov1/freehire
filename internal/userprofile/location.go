@@ -6,14 +6,14 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // Location-preference sentinel errors, mapped to 400 by the handler.
 var (
-	// ErrInvalidWorkMode is a work mode outside enrich.WorkModeValues.
+	// ErrInvalidWorkMode is a work mode outside vocab.WorkModeValues.
 	ErrInvalidWorkMode = errors.New("userprofile: work mode is not a known value")
-	// ErrInvalidRegion is a region outside enrich.RegionValues.
+	// ErrInvalidRegion is a region outside vocab.RegionValues.
 	ErrInvalidRegion = errors.New("userprofile: region is not a known value")
 	// ErrInvalidCountry is a country code that is not a well-formed ISO 3166-1 alpha-2 shape.
 	ErrInvalidCountry = errors.New("userprofile: country is not a valid two-letter code")
@@ -83,7 +83,7 @@ func normalizeLocationPreferences(loc *LocationPreferences) (json.RawMessage, er
 		return nil, nil
 	}
 
-	workModes, err := normalizeEnum(loc.WorkModes, enrich.WorkModeValues, ErrInvalidWorkMode)
+	workModes, err := normalizeEnum(loc.WorkModes, vocab.WorkModeValues, ErrInvalidWorkMode)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +91,7 @@ func normalizeLocationPreferences(loc *LocationPreferences) (json.RawMessage, er
 	if err != nil {
 		return nil, err
 	}
-	relocationRegions, err := normalizeEnum(loc.Relocation.Regions, enrich.RegionValues, ErrInvalidRegion)
+	relocationRegions, err := normalizeEnum(loc.Relocation.Regions, vocab.RegionValues, ErrInvalidRegion)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func normalizeLocationPreferences(loc *LocationPreferences) (json.RawMessage, er
 
 // normalizeGeoSet normalizes a reach's regions (controlled vocabulary) and countries (ISO).
 func normalizeGeoSet(g GeoSet) (GeoSet, error) {
-	regions, err := normalizeEnum(g.Regions, enrich.RegionValues, ErrInvalidRegion)
+	regions, err := normalizeEnum(g.Regions, vocab.RegionValues, ErrInvalidRegion)
 	if err != nil {
 		return GeoSet{}, err
 	}

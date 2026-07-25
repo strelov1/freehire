@@ -12,7 +12,7 @@ type aliasEntry struct {
 }
 
 // seniorityTable lists seniority aliases in precedence order (most specific /
-// highest rank first), each paired with its enrich.SeniorityValues canonical.
+// highest rank first), each paired with its vocab.SeniorityValues canonical.
 var seniorityTable = []aliasEntry{
 	{"head of", "c_level"},
 	{"chief", "c_level"},
@@ -60,7 +60,7 @@ var seniorityTable = []aliasEntry{
 // categoryTable lists category aliases in precedence order — multi-word and more
 // specific terms first, so "data analyst" wins over a bare "data" and "fullstack"
 // is not shadowed by "backend"/"frontend" — each paired with its
-// enrich.CategoryValues canonical.
+// vocab.CategoryValues canonical.
 var categoryTable = []aliasEntry{
 	{"full stack", "fullstack"},
 	{"full-stack", "fullstack"},

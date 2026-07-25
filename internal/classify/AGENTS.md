@@ -5,7 +5,7 @@ Deterministic seniority/category tagging from job title, feeding enrichment face
 ## Design
 
 - Parses the **job title** at ingest into canonical `jobs.seniority`/`jobs.category` columns.
-- Values from `enrich.SeniorityValues`/`enrich.CategoryValues` — EN+RU aliases, whole-word matched. Russian forms listed as full surface forms (not stems) since matcher requires word boundaries. **Never guesses**.
+- Values from `vocab.SeniorityValues`/`vocab.CategoryValues` — EN+RU aliases, whole-word matched. Russian forms listed as full surface forms (not stems) since matcher requires word boundaries. **Never guesses**.
 - Same alias→canonical dictionary design as `internal/location` and `internal/skilltag`.
 
 ## Serving: dict-only
@@ -14,5 +14,5 @@ Deterministic seniority/category tagging from job title, feeding enrichment face
 
 ## Convention
 
-- Adding a value: add it to `enrich.SeniorityValues`/`enrich.CategoryValues` and the title-matching dictionary.
+- Adding a value: add it to `vocab.SeniorityValues`/`vocab.CategoryValues` and the title-matching dictionary.
 - Dictionary change needs `cmd/backfill-derive` + `cmd/reindex` to reach existing jobs (same caveat as geography/skills).

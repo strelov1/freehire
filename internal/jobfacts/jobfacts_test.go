@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 func TestEmploymentType(t *testing.T) {
@@ -101,18 +101,18 @@ func TestExperienceYearsMin(t *testing.T) {
 // served enum never drift apart.
 func TestValuesAreInVocabulary(t *testing.T) {
 	for _, v := range []string{"internship", "part_time", "contract", "full_time"} {
-		if !slices.Contains(enrich.EmploymentTypeValues, v) {
-			t.Errorf("employment_type %q not in enrich.EmploymentTypeValues", v)
+		if !slices.Contains(vocab.EmploymentTypeValues, v) {
+			t.Errorf("employment_type %q not in vocab.EmploymentTypeValues", v)
 		}
 	}
 	for _, v := range []string{"none", "bachelor", "master", "phd"} {
-		if !slices.Contains(enrich.EducationLevelValues, v) {
-			t.Errorf("education_level %q not in enrich.EducationLevelValues", v)
+		if !slices.Contains(vocab.EducationLevelValues, v) {
+			t.Errorf("education_level %q not in vocab.EducationLevelValues", v)
 		}
 	}
 	for _, v := range []string{"none", "a1", "a2", "b1", "b2", "c1", "native"} {
-		if !slices.Contains(enrich.EnglishLevelValues, v) {
-			t.Errorf("english_level %q not in enrich.EnglishLevelValues", v)
+		if !slices.Contains(vocab.EnglishLevelValues, v) {
+			t.Errorf("english_level %q not in vocab.EnglishLevelValues", v)
 		}
 	}
 }

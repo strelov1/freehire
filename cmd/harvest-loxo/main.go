@@ -22,7 +22,7 @@ import (
 	"sync"
 
 	"github.com/strelov1/freehire/internal/classify"
-	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/vocab"
 	"github.com/strelov1/freehire/internal/sources"
 )
 
@@ -206,7 +206,7 @@ func isTechCategory(category string) bool {
 	if category == "" {
 		return false
 	}
-	for _, nt := range enrich.NonTechCategories {
+	for _, nt := range vocab.NonTechCategories {
 		if category == nt {
 			return false
 		}

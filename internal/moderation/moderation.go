@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/vocab"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobderive"
 	"github.com/strelov1/freehire/internal/sources"
@@ -221,8 +221,8 @@ type structuredFacets struct {
 // salary is present only when a positive bound is stated.
 func (in CreateInput) structured() structuredFacets {
 	return structuredFacets{
-		WorkMode: validEnum(in.WorkMode, enrich.WorkModeValues),
-		Regions:  filterVocab(in.Regions, enrich.RegionValues),
+		WorkMode: validEnum(in.WorkMode, vocab.WorkModeValues),
+		Regions:  filterVocab(in.Regions, vocab.RegionValues),
 		Cities:   nonBlank(in.Cities),
 		Skills:   nonBlank(in.Skills),
 		Salary:   manualSalary(in.SalaryMin, in.SalaryMax, in.SalaryCurrency, in.SalaryPeriod),
@@ -307,7 +307,7 @@ func manualSalary(min, max *int, currency, period string) *job.Salary {
 		Min:      lo,
 		Max:      hi,
 		Currency: strings.ToUpper(strings.TrimSpace(currency)),
-		Period:   validEnum(period, enrich.SalaryPeriodValues),
+		Period:   validEnum(period, vocab.SalaryPeriodValues),
 	}
 }
 

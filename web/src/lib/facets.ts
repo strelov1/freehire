@@ -325,7 +325,7 @@ export function sourceLabel(value: string): string {
   return SOURCE_LABELS[value] ?? humanize(value);
 }
 
-// The backend's `regions` reach vocabulary (enrich.RegionValues): one consistent
+// The backend's `regions` reach vocabulary (vocab.RegionValues): one consistent
 // macro level (continents/macro-regions, plus `global` and the distinct `uk`).
 // Country-level filtering lives in the Countries facet, so the US sits under
 // `north_america` and Russia under `cis`. Built from the shared REGION_LABELS
@@ -403,7 +403,7 @@ export const CURRENCY_OPTIONS: FacetOption[] = CURRENCY;
 // registry the /collections hub renders so the label/slug pairs never drift.
 const COLLECTION: FacetOption[] = COLLECTIONS.map((c) => ({ value: c.slug, label: c.title }));
 
-// Company-size buckets — the enrich.CompanySizeValues vocabulary. Not exported as
+// Company-size buckets — the vocab.CompanySizeValues vocabulary. Not exported as
 // a generated values array (it's a scalar enrichment field, not a search facet on
 // jobs), so the closed set is spelled out here like CURRENCY; the values are
 // already display-ready.
