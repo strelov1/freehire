@@ -326,6 +326,8 @@ func Register(app *fiber.App, cfg Config) {
 		accounts:       accounts.New(accounts.NewQueriesRepository(queries, cfg.Pool), authHasher{}),
 		moderation:     moderation.New(moderation.NewQueriesRepository(queries, cfg.Pool, enrich.Version)),
 	}
+	sitemapH := newSitemapHandlers(queries)
+	statsH := newStatsHandlers(queries)
 	// submission approval mints through the same moderation service, so derivation,
 	// dedup, and the enrichment enqueue are reused rather than duplicated.
 	a.submission = submission.New(submission.NewQueriesRepository(queries), a.moderation)
@@ -435,7 +437,7 @@ func Register(app *fiber.App, cfg Config) {
 	// selectable format for programmatic consumers. Public, like the other reads.
 	api.Get("/agent/jobs/search", a.AgentSearchJobs)
 	api.Get("/jobs/facets", a.JobFacets)
-	api.Get("/jobs/sitemap", a.JobSitemap)
+	sitemapH.register(api)
 	// optionalAuth attaches the caller when signed in (cookie or key) but never
 	// rejects, so these public detail reads can overlay the caller's own vote
 	// (my_vote) while staying open to anonymous visitors.
@@ -446,8 +448,6 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/jobs/:slug/similar", a.SimilarJobs)
 	api.Get("/jobs/:slug/copies", a.JobCopies)
 	api.Get("/companies", a.ListCompanies)
-	api.Get("/companies/sitemap", a.CompanySitemap)
-	api.Get("/companies/sitemap/boundaries", a.CompanySitemapBoundaries)
 	api.Get("/companies/subindustries", a.CompanySubindustries)
 	api.Get("/companies/:slug", optionalAuth, a.GetCompany)
 
@@ -455,28 +455,9 @@ func Register(app *fiber.App, cfg Config) {
 	// the job/company reads above. Owner identity is never exposed (see boardResponse).
 	api.Get("/boards/:slug", a.GetBoard)
 
-	// Public catalogue-activity time series (added vs. removed vacancies per period),
-	// unauthenticated like the other public reads. Served from the job_daily_stats
-	// rollup (cmd/rollup-stats); the /trends SPA page renders it as a bar chart.
-	api.Get("/stats/jobs-activity", a.JobsActivity)
-
-	// Public member-growth time series (cumulative registrations per UTC day),
-	// unauthenticated like the other public reads. Computed on the fly from
-	// users.created_at (no rollup); the /open transparency page renders it as a
-	// bar chart. Aggregate-only — no user identifier is exposed.
-	api.Get("/stats/user-growth", a.UserGrowth)
-
-	// Public engagement counts (jobs saved / applied / viewed across all users),
-	// unauthenticated like the other public reads. Aggregate-only from user_jobs;
-	// the /open transparency page renders them as a stat-strip.
-	api.Get("/stats/engagement", a.EngagementStats)
-
-	// Public facet-distribution snapshot (countries, skills, seniority, work_mode),
-	// unauthenticated like the other public reads. Served from the insights_facet_stats
-	// rollup (cmd/rollup-facets) so the /open transparency page's "what's inside"
-	// section stays off the live Meilisearch facet count. Aggregate-only — per-value
-	// counts only.
-	api.Get("/stats/facets", a.StatsFacets)
+	// Public catalogue-activity, member-growth, engagement, facet-snapshot, and
+	// ingest-status reads (see statsHandlers).
+	statsH.register(api)
 
 	// Public Trends & Insights reads: aggregate market intelligence (role & skill
 	// demand, hiring velocity, salary bands) served from the insights_* rollups
@@ -487,11 +468,6 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/insights/velocity", a.InsightsVelocity)
 	api.Get("/insights/salary", a.InsightsSalary)
 	api.Get("/insights/companies", a.InsightsCompanies)
-
-	// Public ingest-fleet status, unauthenticated like the other public reads.
-	// A per-provider health rollup over board_health, sanitized (no error text or
-	// board identifiers); the /status page renders it as a status board.
-	api.Get("/status", a.IngestStatus)
 
 	// Per-user job interactions and the user-scoped reads accept either the
 	// session cookie or an API key (RequireAuthOrKey), so a script holding a key

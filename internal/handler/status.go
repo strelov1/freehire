@@ -111,8 +111,8 @@ type statusProvider struct {
 // construction — the DTO carries no error text or board identifier — so no
 // internal detail can leak. An empty fleet yields overall "operational" with no
 // providers.
-func (a *API) IngestStatus(c *fiber.Ctx) error {
-	rows, err := a.queries.ProviderHealthRollup(c.Context())
+func (h *statsHandlers) IngestStatus(c *fiber.Ctx) error {
+	rows, err := h.queries.ProviderHealthRollup(c.Context())
 	if err != nil {
 		return err
 	}

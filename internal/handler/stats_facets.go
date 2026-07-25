@@ -35,8 +35,8 @@ func groupFacetStats(rows []db.InsightsFacetStat) map[string]map[string]int64 {
 // from the snapshot keeps /open off the live Meilisearch facet count. Aggregate-only
 // — the query selects nothing but per-value counts. An unpopulated snapshot yields
 // the four empty facet maps (200), not an error.
-func (a *API) StatsFacets(c *fiber.Ctx) error {
-	rows, err := a.queries.ListFacetStats(c.Context())
+func (h *statsHandlers) StatsFacets(c *fiber.Ctx) error {
+	rows, err := h.queries.ListFacetStats(c.Context())
 	if err != nil {
 		return err
 	}

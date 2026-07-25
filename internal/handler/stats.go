@@ -10,6 +10,48 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 )
 
+// statsHandlers serves the public transparency reads: catalogue activity, member
+// growth, engagement counts, the facet snapshot, and the ingest-fleet status. All
+// are unauthenticated, aggregate-only reads — no record-level field or user
+// identifier is exposed.
+type statsHandlers struct {
+	queries *db.Queries
+}
+
+func newStatsHandlers(queries *db.Queries) *statsHandlers {
+	return &statsHandlers{queries: queries}
+}
+
+func (h *statsHandlers) register(api fiber.Router) {
+	// Public catalogue-activity time series (added vs. removed vacancies per period),
+	// unauthenticated like the other public reads. Served from the job_daily_stats
+	// rollup (cmd/rollup-stats); the /trends SPA page renders it as a bar chart.
+	api.Get("/stats/jobs-activity", h.JobsActivity)
+
+	// Public member-growth time series (cumulative registrations per UTC day),
+	// unauthenticated like the other public reads. Computed on the fly from
+	// users.created_at (no rollup); the /open transparency page renders it as a
+	// bar chart. Aggregate-only — no user identifier is exposed.
+	api.Get("/stats/user-growth", h.UserGrowth)
+
+	// Public engagement counts (jobs saved / applied / viewed across all users),
+	// unauthenticated like the other public reads. Aggregate-only from user_jobs;
+	// the /open transparency page renders them as a stat-strip.
+	api.Get("/stats/engagement", h.EngagementStats)
+
+	// Public facet-distribution snapshot (countries, skills, seniority, work_mode),
+	// unauthenticated like the other public reads. Served from the insights_facet_stats
+	// rollup (cmd/rollup-facets) so the /open transparency page's "what's inside"
+	// section stays off the live Meilisearch facet count. Aggregate-only — per-value
+	// counts only.
+	api.Get("/stats/facets", h.StatsFacets)
+
+	// Public ingest-fleet status, unauthenticated like the other public reads.
+	// A per-provider health rollup over board_health, sanitized (no error text or
+	// board identifiers); the /status page renders it as a status board.
+	api.Get("/status", h.IngestStatus)
+}
+
 // dateLayout is the wire format for every date the activity endpoint reads and
 // writes (ISO 8601 calendar date, UTC).
 const dateLayout = "2006-01-02"
@@ -106,8 +148,8 @@ type growthPoint struct {
 // produced by the SQL query; this handler only maps rows to the wire envelope.
 // Aggregate-only — the query selects no user identifier, so no personal field can
 // leak here. An empty catalogue yields an empty series (200 with data: []).
-func (a *API) UserGrowth(c *fiber.Ctx) error {
-	rows, err := a.queries.ListUserGrowth(c.Context())
+func (h *statsHandlers) UserGrowth(c *fiber.Ctx) error {
+	rows, err := h.queries.ListUserGrowth(c.Context())
 	if err != nil {
 		return err
 	}
@@ -125,8 +167,8 @@ func (a *API) UserGrowth(c *fiber.Ctx) error {
 // have been uploaded, job-fit analyses run, and searches saved. Aggregate-only —
 // the query selects nothing but integer totals, so no per-user field can leak. An
 // empty database yields all zeros (200).
-func (a *API) EngagementStats(c *fiber.Ctx) error {
-	s, err := a.queries.GetEngagementStats(c.Context())
+func (h *statsHandlers) EngagementStats(c *fiber.Ctx) error {
+	s, err := h.queries.GetEngagementStats(c.Context())
 	if err != nil {
 		return err
 	}
@@ -148,13 +190,13 @@ func (a *API) EngagementStats(c *fiber.Ctx) error {
 // over a date range. The dense, gap-free series (missing periods → 0) is produced
 // by the SQL generate_series queries; this handler only validates the window,
 // picks the matching query, and maps rows to the wire envelope.
-func (a *API) JobsActivity(c *fiber.Ctx) error {
+func (h *statsHandlers) JobsActivity(c *fiber.Ctx) error {
 	q, err := parseActivityQuery(c.Query("granularity"), c.Query("from"), c.Query("to"), time.Now().UTC())
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 
-	rows, err := a.queries.ListJobActivity(c.Context(), db.ListJobActivityParams{
+	rows, err := h.queries.ListJobActivity(c.Context(), db.ListJobActivityParams{
 		Unit:   q.Granularity,
 		FromTs: pgtype.Timestamp{Time: q.From, Valid: true},
 		ToTs:   pgtype.Timestamp{Time: q.To, Valid: true},

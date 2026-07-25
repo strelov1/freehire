@@ -109,7 +109,7 @@ func TestParseActivityQuery(t *testing.T) {
 // by the integration test against a real Postgres.
 func TestJobsActivityValidation(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	h := &API{}
+	h := &statsHandlers{}
 	app.Get("/api/v1/stats/jobs-activity", h.JobsActivity)
 
 	req := httptest.NewRequest(fiber.MethodGet, "/api/v1/stats/jobs-activity?granularity=hour", nil)
