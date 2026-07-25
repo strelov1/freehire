@@ -44,7 +44,7 @@ cmd/backfill-company-names/main.go  resolves real display names for slug-named c
 cmd/import-yc/main.go      enriches companies from yc-oss directory
 sources/                   board files + sources/custom.yml + sources/telegram.yml
 internal/
-  config/            env config (server: PORT, DATABASE_URL, FRONTEND_ORIGIN, JWT_SECRET/JWT_TTL, COOKIE_SECURE, MEILI_URL/MEILI_MASTER_KEY, OAUTH_*, EXTENSION_REDIRECT_ALLOWLIST, SENTRY_*; workers: LLM_BASE_URL/LLM_API_KEY/LLM_MODEL, EMBED_*)
+  config/            env config (server: PORT, DATABASE_URL, FRONTEND_ORIGIN, SERVED_HOSTS, JWT_SECRET/JWT_TTL, COOKIE_SECURE, MEILI_URL/MEILI_MASTER_KEY, OAUTH_*, EXTENSION_REDIRECT_ALLOWLIST, SENTRY_*; workers: LLM_BASE_URL/LLM_API_KEY/LLM_MODEL, EMBED_*)
   observability/     optional Sentry error reporting (see observability/AGENTS.md)
   database/          pgxpool connection pool
   db/                GENERATED sqlc code + queries/*.sql (see db/AGENTS.md)
@@ -161,8 +161,9 @@ For the full architecture and conventions, see the **module files** below. Each 
 
 - **Response shapes:** Lists: `{"data": ..., "meta": {...}}`; single items: `{"data": ...}`; errors: `{"error": msg}`
 - **Dedup key:** `jobs.UNIQUE (source, external_id)` — `UpsertJob` is `ON CONFLICT` on it
-- **Auth:** Stateless JWT in httpOnly cookie, same-origin. `RequireAuth` (cookie only) / `RequireAuthOrKey` (cookie or Bearer)
-- **API keys:** Hashed at rest (SHA-256). Key management (create/list/revoke) is cookie-only
+- **Auth:** JWT in httpOnly cookie, same-origin, carrying the account's `token_version` so sessions are revocable. `RequireAuth` (cookie only) / `RequireAuthOrKey` (cookie or full-scope Bearer) / `RequireAuthOrScopedKey` (also admits a narrow key)
+- **Email ownership:** `users.email_verified`; a password registration starts unverified and is confirmed by a mailed six-digit code. An unverified, password-backed account is **seized** (password cleared, sessions revoked) when a provider-verified OAuth identity arrives for its address — the account-pre-hijacking defence
+- **API keys:** Hashed at rest (SHA-256), scoped `full` or `cv`. Key management (create/list/revoke) and password change are cookie-only
 - **Enrichment:** Queue-driven (`enrichment_outbox`), provider-agnostic LLM, `Sanitize` + `Validate` gate
 - **Embeddings:** Queue-driven (`semantic_outbox`), incremental, reconciled by `reindex --semantic`
 - **Dictionaries:** All facet dictionaries are dict-only in production (never guess, emit nothing for unknowns)
