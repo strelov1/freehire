@@ -12,19 +12,20 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// fakeKeyAuth authenticates exactly one token hash to a user id; any other hash
-// errors, standing in for an unknown, revoked, or expired key (the real DB layer
-// distinguishes those; the middleware treats every error as "not authenticated").
+// fakeKeyAuth authenticates exactly one token hash to a full-scope key for a user id;
+// any other hash errors, standing in for an unknown, revoked, or expired key (the real
+// DB layer distinguishes those; the middleware treats every error as "not
+// authenticated"). Scope behaviour has its own tests in keyscope_test.go.
 type fakeKeyAuth struct {
 	validHash string
 	userID    int64
 }
 
-func (f fakeKeyAuth) AuthenticateAPIKey(_ context.Context, tokenHash string) (int64, error) {
+func (f fakeKeyAuth) AuthenticateAPIKey(_ context.Context, tokenHash string) (APIKeyIdentity, error) {
 	if tokenHash == f.validHash {
-		return f.userID, nil
+		return APIKeyIdentity{UserID: f.userID, Scope: ScopeFull}, nil
 	}
-	return 0, errors.New("no such key")
+	return APIKeyIdentity{}, errors.New("no such key")
 }
 
 // dualAuthApp mounts a route behind RequireAuthOrKey that echoes the resolved user
@@ -32,7 +33,7 @@ func (f fakeKeyAuth) AuthenticateAPIKey(_ context.Context, tokenHash string) (in
 // handler via the shared c.Locals.
 func dualAuthApp(iss *Issuer, keys APIKeyAuthenticator) *fiber.App {
 	app := fiber.New()
-	app.Get("/me", RequireAuthOrKey(iss, keys), func(c *fiber.Ctx) error {
+	app.Get("/me", RequireAuthOrKey(iss, anyVersion{1}, keys), func(c *fiber.Ctx) error {
 		id, ok := UserID(c)
 		if !ok {
 			return fiber.NewError(fiber.StatusInternalServerError, "user id missing from context")
@@ -102,7 +103,7 @@ func TestRequireAuthOrKey_FlagsKeyAuth(t *testing.T) {
 
 func TestRequireAuthOrKey_CookieIsNotViaKey(t *testing.T) {
 	iss := NewIssuer("secret", time.Hour)
-	token, _ := iss.Issue(7)
+	token, _ := iss.Issue(7, 1)
 
 	req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
 	req.AddCookie(&http.Cookie{Name: CookieName, Value: token})
@@ -118,7 +119,7 @@ func TestRequireAuthOrKey_CookieIsNotViaKey(t *testing.T) {
 func TestRequireAuthOrKey_ValidCookieAuthenticates(t *testing.T) {
 	iss := NewIssuer("secret", time.Hour)
 	keys := fakeKeyAuth{} // no valid key; the cookie must carry the identity
-	token, _ := iss.Issue(7)
+	token, _ := iss.Issue(7, 1)
 
 	req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
 	req.AddCookie(&http.Cookie{Name: CookieName, Value: token})
@@ -139,7 +140,7 @@ func TestRequireAuthOrKey_CookieTakesPrecedenceOverKey(t *testing.T) {
 	iss := NewIssuer("secret", time.Hour)
 	const token = "fhk_test-key"
 	keys := fakeKeyAuth{validHash: HashAPIKey(token), userID: 9}
-	cookie, _ := iss.Issue(7)
+	cookie, _ := iss.Issue(7, 1)
 
 	req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
 	req.AddCookie(&http.Cookie{Name: CookieName, Value: cookie})
