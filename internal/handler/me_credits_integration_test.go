@@ -31,7 +31,7 @@ func TestGetMyCredits(t *testing.T) {
 	}
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	tok, _ := iss.Issue(userID)
-	h := &API{pool: pool, queries: queries, issuer: iss,
+	h := &creditsHandlers{queries: queries,
 		credits: credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 5})}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})

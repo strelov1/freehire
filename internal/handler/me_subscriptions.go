@@ -6,8 +6,29 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/subscription"
 )
+
+// subscriptionHandlers serves the per-user filter subscriptions: subscribe a saved
+// search to a channel, list/toggle/unsubscribe. The use cases live in
+// subscription.Service.
+type subscriptionHandlers struct {
+	subscription *subscription.Service
+}
+
+func newSubscriptionHandlers(queries *db.Queries) *subscriptionHandlers {
+	return &subscriptionHandlers{subscription: subscription.New(subscription.NewQueriesRepository(queries))}
+}
+
+func (h *subscriptionHandlers) register(api fiber.Router, mw middleware) {
+	// Filter subscriptions are cookie-only (RequireAuth) like saved searches: a
+	// browser convenience, owner-scoped (a non-owned id is 404).
+	api.Get("/me/subscriptions", mw.cookie, h.ListSubscriptions)
+	api.Post("/me/subscriptions", mw.cookie, h.CreateSubscription)
+	api.Patch("/me/subscriptions/:id", mw.cookie, h.SetSubscriptionActive)
+	api.Delete("/me/subscriptions/:id", mw.cookie, h.DeleteSubscription)
+}
 
 // subscriptionResponse is the public shape of a subscription. user_id and the
 // internal start_at cursor are omitted; saved_search_name is included on list so
@@ -74,12 +95,12 @@ type setSubscriptionActiveRequest struct {
 
 // ListSubscriptions returns the authenticated user's subscriptions, newest first.
 // Cookie-only (RequireAuth), owner-scoped.
-func (a *API) ListSubscriptions(c *fiber.Ctx) error {
+func (h *subscriptionHandlers) ListSubscriptions(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	rows, err := a.subscription.List(c.Context(), userID)
+	rows, err := h.subscription.List(c.Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -92,7 +113,7 @@ func (a *API) ListSubscriptions(c *fiber.Ctx) error {
 
 // CreateSubscription subscribes one of the caller's saved searches to a channel.
 // A non-owned saved search is a 404, a duplicate is a 409. Cookie-only.
-func (a *API) CreateSubscription(c *fiber.Ctx) error {
+func (h *subscriptionHandlers) CreateSubscription(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -105,7 +126,7 @@ func (a *API) CreateSubscription(c *fiber.Ctx) error {
 	if channel == "" {
 		channel = subscription.ChannelTelegram
 	}
-	sub, err := a.subscription.Create(c.Context(), userID, in.SavedSearchID, channel)
+	sub, err := h.subscription.Create(c.Context(), userID, in.SavedSearchID, channel)
 	if err != nil {
 		return subscriptionError(err)
 	}
@@ -114,7 +135,7 @@ func (a *API) CreateSubscription(c *fiber.Ctx) error {
 
 // SetSubscriptionActive pauses/resumes a subscription, scoped to its owner. A
 // missing or non-owned id is a 404. Cookie-only.
-func (a *API) SetSubscriptionActive(c *fiber.Ctx) error {
+func (h *subscriptionHandlers) SetSubscriptionActive(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -127,7 +148,7 @@ func (a *API) SetSubscriptionActive(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	sub, err := a.subscription.SetActive(c.Context(), userID, id, in.Active)
+	sub, err := h.subscription.SetActive(c.Context(), userID, id, in.Active)
 	if err != nil {
 		return subscriptionError(err)
 	}
@@ -136,7 +157,7 @@ func (a *API) SetSubscriptionActive(c *fiber.Ctx) error {
 
 // DeleteSubscription unsubscribes by id, scoped to its owner. A missing or
 // non-owned id is a 404. Cookie-only.
-func (a *API) DeleteSubscription(c *fiber.Ctx) error {
+func (h *subscriptionHandlers) DeleteSubscription(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -145,7 +166,7 @@ func (a *API) DeleteSubscription(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if err := a.subscription.Delete(c.Context(), userID, id); err != nil {
+	if err := h.subscription.Delete(c.Context(), userID, id); err != nil {
 		return subscriptionError(err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)

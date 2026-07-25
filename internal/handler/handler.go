@@ -35,9 +35,7 @@ import (
 	"github.com/strelov1/freehire/internal/reminder"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/resumeextract"
-	"github.com/strelov1/freehire/internal/savedsearch"
 	"github.com/strelov1/freehire/internal/search"
-	"github.com/strelov1/freehire/internal/subscription"
 	"github.com/strelov1/freehire/internal/telegramnotify"
 	"github.com/strelov1/freehire/internal/tokencrypt"
 	"github.com/strelov1/freehire/internal/userprofile"
@@ -140,12 +138,6 @@ type API struct {
 	// contribution owns the crowdsourced paste-a-link flow (submit a URL → detect ATS,
 	// dedup by derived identity, record + award a point); list the caller's own.
 	contribution *contribution.Service
-	// savedSearch owns the per-user saved-search use cases (list/create/update/delete
-	// named filter snapshots); the handlers translate wire ↔ domain and delegate to it.
-	savedSearch *savedsearch.Service
-	// subscription owns the per-user filter-subscription use cases (subscribe a
-	// saved search to a channel, list/toggle/unsubscribe).
-	subscription *subscription.Service
 	// reminder owns the saved-job reminder use cases (the account default rule and
 	// per-save scheduling/cancellation); the save/apply/unsave handlers orchestrate
 	// it alongside tracking, and the cmd/remind worker fires the scheduled reminders.
@@ -328,10 +320,11 @@ func Register(app *fiber.App, cfg Config) {
 	// embedded ATS — so vanity-domain links (company.com/careers?gh_jid=…) resolve too.
 	a.contribution = contribution.New(contribution.NewQueriesRepository(queries), boardresolve.New())
 	reportsH := newReportHandlers(queries)
-	a.savedSearch = savedsearch.New(savedsearch.NewQueriesRepository(queries))
-	a.subscription = subscription.New(subscription.NewQueriesRepository(queries))
+	savedSearchH := newSavedSearchHandlers(queries)
+	subscriptionH := newSubscriptionHandlers(queries)
 	a.reminder = reminder.New(reminder.NewQueriesRepository(queries))
 	a.userProfile = userprofile.New(userprofile.NewQueriesRepository(queries))
+	profileH := newProfileHandlers(a.userProfile)
 	// Résumé storage is nil-safe: a nil Blob (S3 unconfigured) yields a disabled service
 	// whose Enabled() is false, so the upload/verdict paths degrade to in-request parsing.
 	a.resume = resume.New(cfg.Blob, resume.NewQueriesRepository(queries))
@@ -358,6 +351,7 @@ func Register(app *fiber.App, cfg Config) {
 	a.autofillPlanner = cfg.LLM
 	a.credits = credits.NewStore(queries, cfg.Pool, cfg.Credits)
 	contributionsH := newContributionHandlers(a.contribution, a.credits)
+	creditsH := newCreditsHandlers(a.credits, queries)
 	// Telegram notifications are enabled only with both a bot token and a JWT
 	// secret (the link token reuses it). Absent either, the linking endpoints
 	// report the feature off and the webhook is inert (see telegramEnabled).
@@ -449,9 +443,8 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/jobs/:slug/copies", a.JobCopies)
 	companiesH.register(api, mw)
 
-	// Public read of a shared saved-search "board" by its slug — unauthenticated, like
-	// the job/company reads above. Owner identity is never exposed (see boardResponse).
-	api.Get("/boards/:slug", a.GetBoard)
+	// Saved searches + the public shared-board read (see savedSearchHandlers).
+	savedSearchH.register(api, mw)
 
 	// Public catalogue-activity, member-growth, engagement, facet-snapshot, and
 	// ingest-status reads (see statsHandlers).
@@ -545,8 +538,7 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/me/tracking/pipeline", keyAuth, a.TrackingPipeline)
 	api.Get("/me/tracking/swipe", keyAuth, a.SwipeDeck)
 	api.Get("/me/tracking/analyses", keyAuth, a.ListMyAnalyses)
-	api.Get("/me/credits", keyAuth, a.GetMyCredits)
-	api.Get("/me/credits/history", keyAuth, a.GetMyCreditsHistory)
+	creditsH.register(api, mw)
 	api.Get("/me/recommendations", keyAuth, a.Recommendations)
 
 	// API-key management is cookie-only (RequireAuth): a leaked key must not be
@@ -556,24 +548,8 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/me/api-keys", cookieAuth, a.ListAPIKeys)
 	api.Delete("/me/api-keys/:id", cookieAuth, a.RevokeAPIKey)
 
-	// Saved searches are cookie-only (RequireAuth) like API-key management: they are a
-	// browser convenience (the "My filters" picker), not a scripting primitive. Each
-	// operation is owner-scoped; an id that is not the caller's is a 404.
-	api.Get("/me/searches", cookieAuth, a.ListSavedSearches)
-	api.Post("/me/searches", cookieAuth, a.CreateSavedSearch)
-	api.Patch("/me/searches/:id", cookieAuth, a.UpdateSavedSearch)
-	api.Delete("/me/searches/:id", cookieAuth, a.DeleteSavedSearch)
-	// Publish/unpublish a saved search as a public board. Cookie-only (same as the rest
-	// of /me/searches); the public read is GET /boards/:slug above.
-	api.Post("/me/searches/:id/share", cookieAuth, a.ShareSavedSearch)
-	api.Delete("/me/searches/:id/share", cookieAuth, a.UnshareSavedSearch)
-
-	// The user profile is a cookie-only (RequireAuth) singleton — one per user, keyed
-	// by the session, no id in the path. GET returns the profile or null; PUT upserts
-	// (create-or-replace); DELETE clears it (idempotent).
-	api.Get("/me/profile", cookieAuth, a.GetProfile)
-	api.Put("/me/profile", cookieAuth, a.PutProfile)
-	api.Delete("/me/profile", cookieAuth, a.DeleteProfile)
+	// The per-user profile singleton (see profileHandlers).
+	profileH.register(api, mw)
 
 	// CV builder + AI tailoring: open to every signed-in user (AI credits meter the LLM spend).
 	// Cookie-only, owner-scoped (a foreign id is a 404). The PDF endpoint 501s when no typst
@@ -650,12 +626,8 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/me/resume", cookieAuth, a.GetResume)
 	api.Delete("/me/resume", cookieAuth, a.DeleteResume)
 
-	// Filter subscriptions + Telegram linking are cookie-only (RequireAuth) like
-	// saved searches: a browser convenience, owner-scoped (a non-owned id is 404).
-	api.Get("/me/subscriptions", cookieAuth, a.ListSubscriptions)
-	api.Post("/me/subscriptions", cookieAuth, a.CreateSubscription)
-	api.Patch("/me/subscriptions/:id", cookieAuth, a.SetSubscriptionActive)
-	api.Delete("/me/subscriptions/:id", cookieAuth, a.DeleteSubscription)
+	// Filter subscriptions (see subscriptionHandlers).
+	subscriptionH.register(api, mw)
 
 	// Saved-job reminder default rule (enable, default delay, channels). Cookie-only
 	// (RequireAuth) like subscriptions — it configures a delivery preference.

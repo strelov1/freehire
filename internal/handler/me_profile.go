@@ -10,6 +10,26 @@ import (
 	"github.com/strelov1/freehire/internal/userprofile"
 )
 
+// profileHandlers serves the single-per-user profile (a specialization + skills set).
+// The use cases live in userprofile.Service; the handlers translate wire ↔ domain and
+// delegate to it.
+type profileHandlers struct {
+	userProfile *userprofile.Service
+}
+
+func newProfileHandlers(userProfile *userprofile.Service) *profileHandlers {
+	return &profileHandlers{userProfile: userProfile}
+}
+
+func (h *profileHandlers) register(api fiber.Router, mw middleware) {
+	// The user profile is a cookie-only (RequireAuth) singleton — one per user, keyed
+	// by the session, no id in the path. GET returns the profile or null; PUT upserts
+	// (create-or-replace); DELETE clears it (idempotent).
+	api.Get("/me/profile", mw.cookie, h.GetProfile)
+	api.Put("/me/profile", mw.cookie, h.PutProfile)
+	api.Delete("/me/profile", mw.cookie, h.DeleteProfile)
+}
+
 // profileResponse is the public shape of the user's single profile. user_id is omitted
 // (ownership, internal); there is no id or name. specializations are one or more job
 // categories; skills are canonical lowercase tokens; location_preferences is the stored
@@ -80,13 +100,13 @@ type saveProfileRequest struct {
 
 // GetProfile returns the authenticated user's single profile, or {"data": null} when they
 // have not saved one yet. Behind RequireAuth (cookie-only): profiles are a browser feature.
-func (a *API) GetProfile(c *fiber.Ctx) error {
+func (h *profileHandlers) GetProfile(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
 
-	profile, err := a.userProfile.Get(c.Context(), userID)
+	profile, err := h.userProfile.Get(c.Context(), userID)
 	if errors.Is(err, userprofile.ErrNotFound) {
 		return c.JSON(fiber.Map{"data": nil})
 	}
@@ -100,7 +120,7 @@ func (a *API) GetProfile(c *fiber.Ctx) error {
 // skills + optional excluded skills + optional location preferences). A bad/empty
 // specialization set, empty skills, or an out-of-vocabulary location value is a 400.
 // Cookie-only.
-func (a *API) PutProfile(c *fiber.Ctx) error {
+func (h *profileHandlers) PutProfile(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -111,7 +131,7 @@ func (a *API) PutProfile(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
 
-	profile, err := a.userProfile.Save(c.Context(), userID, in.Specializations, in.Skills, in.ExcludedSkills, in.LocationPreferences)
+	profile, err := h.userProfile.Save(c.Context(), userID, in.Specializations, in.Skills, in.ExcludedSkills, in.LocationPreferences)
 	if err != nil {
 		return profileError(err)
 	}
@@ -120,13 +140,13 @@ func (a *API) PutProfile(c *fiber.Ctx) error {
 
 // DeleteProfile clears the authenticated user's profile. Idempotent: deleting when none
 // exists is still a 204. Cookie-only.
-func (a *API) DeleteProfile(c *fiber.Ctx) error {
+func (h *profileHandlers) DeleteProfile(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
 
-	if err := a.userProfile.Delete(c.Context(), userID); err != nil {
+	if err := h.userProfile.Delete(c.Context(), userID); err != nil {
 		return err
 	}
 	return c.SendStatus(fiber.StatusNoContent)

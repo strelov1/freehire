@@ -47,7 +47,7 @@ func TestSubscriptionsEndToEnd(t *testing.T) {
 	ownerCookie, _ := iss.Issue(ownerID)
 	otherCookie, _ := iss.Issue(otherID)
 	queries := db.New(pool)
-	h := &API{pool: pool, queries: queries, issuer: iss, subscription: subscription.New(subscription.NewQueriesRepository(queries))}
+	h := &subscriptionHandlers{subscription: subscription.New(subscription.NewQueriesRepository(queries))}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	guard := auth.RequireAuth(iss)

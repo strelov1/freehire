@@ -54,7 +54,7 @@ func profileApp(t *testing.T, repo *fakeProfileRepo) (*fiber.App, string) {
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
-	h := &API{issuer: iss, userProfile: userprofile.New(repo)}
+	h := &profileHandlers{userProfile: userprofile.New(repo)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	g := auth.RequireAuth(iss)
 	app.Get("/me/profile", g, h.GetProfile)

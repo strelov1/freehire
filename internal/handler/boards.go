@@ -26,8 +26,8 @@ func toBoardResponse(b savedsearch.Board) boardResponse {
 
 // GetBoard serves a shared board by its public slug — unauthenticated, no owner-scoping.
 // An unknown or unshared slug is a 404 (mapped from the saved-search not-found sentinel).
-func (a *API) GetBoard(c *fiber.Ctx) error {
-	board, err := a.savedSearch.GetPublicBoard(c.Context(), c.Params("slug"))
+func (h *savedSearchHandlers) GetBoard(c *fiber.Ctx) error {
+	board, err := h.savedSearch.GetPublicBoard(c.Context(), c.Params("slug"))
 	if err != nil {
 		return savedSearchError(err)
 	}
