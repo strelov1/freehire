@@ -500,11 +500,15 @@ func TestLogin_WrongPassword(t *testing.T) {
 	}
 }
 
-// Login success → returns user.
+// Login success → returns user, flagged as password-backed.
 func TestLogin_Happy(t *testing.T) {
-	wantUser := User{ID: 5, Email: "user@example.com"}
+	stored := User{ID: 5, Email: "user@example.com"}
+	// The lookup row does not carry HasPassword; Login sets it, because authenticating
+	// by password is itself the proof that one exists.
+	wantUser := stored
+	wantUser.HasPassword = true
 	repo := &fakeRepo{
-		userByEmailResults: []userByEmailResult{{user: wantUser, passwordHash: "hashed:correct", hasPassword: true}},
+		userByEmailResults: []userByEmailResult{{user: stored, passwordHash: "hashed:correct", hasPassword: true}},
 	}
 	svc := New(repo, &fakeHasher{})
 
@@ -548,5 +552,22 @@ func TestUserByID_NotFound(t *testing.T) {
 	_, err := svc.UserByID(context.Background(), 99)
 	if !errors.Is(err, ErrUserNotFound) {
 		t.Errorf("want ErrUserNotFound, got %v", err)
+	}
+}
+
+// Login answers with the same wire shape as /auth/me, so a client that renders the
+// password UI from it must not be told the account is passwordless when it is not.
+func TestLoginReportsThatTheAccountHasAPassword(t *testing.T) {
+	repo := &fakeRepo{userByEmailResults: []userByEmailResult{
+		{user: User{ID: 7, Email: "user@example.test"}, passwordHash: "hashed:pw", hasPassword: true},
+	}}
+	s := New(repo, &fakeHasher{})
+
+	user, err := s.Login(context.Background(), "user@example.test", "pw")
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if !user.HasPassword {
+		t.Error("login returned HasPassword false for an account that just authenticated by password")
 	}
 }

@@ -235,6 +235,10 @@ func (s *Service) Login(ctx context.Context, email, password string) (User, erro
 	if s.hasher.Check(hash, password) != nil {
 		return User{}, ErrInvalidCredentials
 	}
+	// The caller just proved a password exists, but the lookup row does not carry the
+	// flag — set it so login answers the same shape as /auth/me and a client cannot be
+	// told the account is passwordless right after it signed in with a password.
+	user.HasPassword = true
 	return user, nil
 }
 

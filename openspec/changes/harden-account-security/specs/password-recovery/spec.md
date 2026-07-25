@@ -8,8 +8,10 @@ an account-enumeration oracle.
 
 - A reset code SHALL be six decimal digits from a cryptographically secure source, stored
   only as a hash, single-use, and valid for 15 minutes.
-- A code SHALL be mailed only when the address has an account with a password; a
-  passwordless (OAuth-only) account SHALL receive no code.
+- A code SHALL be mailed whenever the address has an account, including a passwordless
+  (OAuth-only) one — its owner may use this flow to set a first password and gain a
+  second way in. Receiving the code proves control of the address, the same proof the
+  provider offers, so refusing would strand the user without buying safety.
 - Requests SHALL be rate-limited per address and per client IP.
 
 #### Scenario: Known address receives a code
@@ -22,10 +24,10 @@ an account-enumeration oracle.
 - **WHEN** a client POSTs an address that has no account
 - **THEN** the system responds `202` with the same body and timing class as for a known address, and mails nothing
 
-#### Scenario: OAuth-only account gets no reset code
+#### Scenario: OAuth-only account may set a first password
 
 - **WHEN** a client requests a reset for an address whose account has no password
-- **THEN** the system responds `202`, mails no code, and leaves the account untouched
+- **THEN** the system responds `202` and mails a code, and completing the reset gives that account its first password
 
 ### Requirement: Password reset by code
 
@@ -33,6 +35,7 @@ The system SHALL set a new password when presented with a valid, unexpired reset
 address, and SHALL treat a successful reset as proof of email ownership.
 
 - The new password SHALL satisfy the same rules as registration (8–72 characters).
+- The account MAY have had no password before; the reset then sets its first one.
 - A successful reset SHALL mark the account's email verified.
 - A successful reset SHALL revoke every existing session for that account.
 - The code SHALL be consumed on success and invalidated after 5 failed attempts.

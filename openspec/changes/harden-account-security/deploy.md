@@ -36,53 +36,69 @@ SELECT DISTINCT scope FROM api_keys;    -- expect only 'full'
 \dt user_email_codes                    -- Owner must be hire
 ```
 
-## 2. Do NOT set SERVED_HOSTS on this deploy
+## 2. SERVED_HOSTS must list every served host
 
-An earlier draft of this runbook said to set `SERVED_HOSTS=freehire.me,apply.freehire.me`.
-That was written from the code's own docs, not from prod, and it is wrong here.
+**This one bit in production.** An earlier draft said to leave `SERVED_HOSTS` unset,
+reasoning that prod runs a single origin. That was checked against `/opt/freehire/.env`
+alone — but the API also reads `/opt/freehire/env/hire-api.env`, and the cookie domain
+lives there:
 
-Prod has `FRONTEND_ORIGIN=https://freehire.dev` and **no** `COOKIE_DOMAIN`, so today
-`requestOrigin` returns the canonical frontend origin for *every* request. Leaving
-`SERVED_HOSTS` unset reproduces that behaviour exactly (it defaults to the frontend
-origin's own host). Setting it to include `freehire.me` would make an OAuth flow started
-on `freehire.me` use `https://freehire.me` as its `redirect_uri` for the first time — which
-fails unless that URI is registered with Google, GitHub and LinkedIn.
+```
+COOKIE_DOMAIN=.freehire.dev,.freehire.me
+FRONTEND_ORIGIN=https://freehire.dev
+```
 
-Set it only as part of a deliberate multi-domain OAuth change, after registering the
-redirect URIs with each provider.
+So prod answers on **both** domains. The old suffix rule trusted any host under either;
+the exact allowlist, left unset, narrows to `freehire.dev` alone. Sign-in on
+`freehire.me` then sets its state cookie on `freehire.me`, while the provider is told to
+call back to `freehire.dev` — the state can never match, and every OAuth attempt fails
+with `state mismatch`.
+
+Set it to every host the app serves (nginx `server_name`s minus the sibling services):
+
+```
+SERVED_HOSTS=freehire.dev,www.freehire.dev,freehire.me,www.freehire.me
+```
+
+in `/opt/freehire/env/hire-api.env`, then restart the active colour
+(`systemctl restart freehire-api@blue`). Verify per host:
+
+```bash
+for h in freehire.dev freehire.me; do
+  curl -sD - -o /dev/null "https://$h/api/v1/auth/oauth/google/start" | grep -i '^location'
+done   # each redirect_uri must name the host it was requested on
+```
+
+The server now logs this misconfiguration at startup (`COOKIE_DOMAIN is set but
+SERVED_HOSTS is not`), so it surfaces in seconds rather than as a broken sign-in.
+
+Adding a **new** domain still needs its redirect URI registered with Google, GitHub and
+LinkedIn before it is listed here.
 
 `TELEGRAM_WEBHOOK_SECRET` is present on prod (verified: the webhook answers 403 to an
 unauthenticated POST), so the feature survives its new enable condition.
 
-## 3. Account email needs the us-east-1 path
+## 3. Account email (DONE 2026-07-25)
 
-The verification and password-reset flows are **inert** until the API can send mail. As of
-2026-07-25 it cannot, for two independent reasons:
+Account mail sends through **us-east-1**, not the `eu-west-1` the rest of the stack uses.
+`eu-west-1` is sandboxed and its production-access request was DENIED (case
+`178385855400669`); `us-east-1` already has production access (50k/day).
 
-- **SES in `eu-west-1` is sandboxed and its production-access request was DENIED**
-  (case `178385855400669`). Only `strelov1@gmail.com` can receive there.
-- The API reads `/opt/freehire/.env`, whose `AWS_*` key belongs to apply's mail worker
-  (S3+SQS only) and cannot call `ses:SendEmail`.
+What was wired, for the record:
 
-`us-east-1` **does** have production access (50k/day). The fix, once
-`mail.freehire.me` is DKIM-verified there:
+- `mail.freehire.me` verified for sending in us-east-1 (Easy DKIM; three CNAMEs plus an
+  SPF TXT at Namecheap, which holds DNS manually — it is not in terraform).
+- `/opt/freehire/.env.notify` gained `AWS_REGION=us-east-1`, and its
+  `NOTIFY_EMAIL_FROM` was corrected from `notifications@mail.freehire.dev` to
+  `…@mail.freehire.me`. The IAM policy only ever allowed the `.me` address, so the
+  notify worker could not have delivered a single digest either — that bug is fixed by
+  the same line.
+- A drop-in (`/etc/systemd/system/freehire-api@.service.d/mail.conf`) loads that file on
+  the API **after** the shared `.env`, so only the API moves region. Safe because the API
+  builds exactly one AWS client (SES); its S3 use is static MinIO-style credentials.
 
-```bash
-# One region line, in the file that already holds the SES-capable key and sender.
-ssh root@89.167.94.146 "grep -q '^AWS_REGION=' /opt/freehire/.env.notify \
-  || echo 'AWS_REGION=us-east-1' >> /opt/freehire/.env.notify"
-```
-
-Then add that file as a **second** `EnvironmentFile` on `freehire-api@.service` (systemd
-applies them in order, so it overrides `AWS_REGION` for the API alone and leaves the other
-twelve units on `eu-west-1` for their SQS/S3 work), and `daemon-reload`.
-
-The notify IAM key is already scoped to `ses:SendEmail` with
-`ses:FromAddress = notifications@mail.freehire.me` and carries no region condition, so no
-new IAM user or policy is needed.
-
-Until this is done, `/auth/verify/request` and `/auth/password/forgot` answer 503 and the
-SPA's confirm-email banner offers a button that reports delivery is unavailable.
+No new IAM user was needed: the notify key is scoped to `ses:SendEmail` with
+`ses:FromAddress = notifications@mail.freehire.me` and carries no region condition.
 
 ## 4. Deploy
 

@@ -45,9 +45,10 @@ func TestRequestPasswordResetIsSilentAboutUnknownAddresses(t *testing.T) {
 	}
 }
 
-// An OAuth-only account has no password to reset; mailing a code would be a way to
-// bolt a password onto an account whose owner never chose one.
-func TestRequestPasswordResetSkipsPasswordlessAccounts(t *testing.T) {
+// An OAuth-only account can set a password through this flow. Receiving the mailed code
+// proves control of the address — the same proof the provider offers — so refusing would
+// only strand a user who wants a second way in, without buying any safety.
+func TestRequestPasswordResetServesPasswordlessAccounts(t *testing.T) {
 	repo := &fakeRepo{userByEmailResults: []userByEmailResult{
 		{user: User{ID: 7, Email: "oauth@example.test"}, hasPassword: false},
 	}}
@@ -55,10 +56,31 @@ func TestRequestPasswordResetSkipsPasswordlessAccounts(t *testing.T) {
 	s := recoveryService(repo, newFakeCodes(), mailer)
 
 	if err := s.RequestPasswordReset(context.Background(), "oauth@example.test"); err != nil {
-		t.Errorf("err = %v, want nil (same answer as every other address)", err)
+		t.Fatalf("RequestPasswordReset: %v", err)
 	}
-	if len(mailer.reset) != 0 {
-		t.Error("a reset code was mailed for a passwordless account")
+	if len(mailer.reset) != 1 {
+		t.Fatalf("mailed %d codes, want 1 — a passwordless account may set a password", len(mailer.reset))
+	}
+}
+
+// Setting the first password on an OAuth-only account works the same way as replacing
+// an existing one.
+func TestResetPasswordSetsAFirstPassword(t *testing.T) {
+	repo := &fakeRepo{userByEmailResults: []userByEmailResult{
+		{user: User{ID: 7, Email: "oauth@example.test"}, hasPassword: false},
+		{user: User{ID: 7, Email: "oauth@example.test"}, hasPassword: false},
+	}}
+	codes, mailer := newFakeCodes(), &fakeMailer{}
+	s := recoveryService(repo, codes, mailer)
+
+	if err := s.RequestPasswordReset(context.Background(), "oauth@example.test"); err != nil {
+		t.Fatalf("RequestPasswordReset: %v", err)
+	}
+	if err := s.ResetPassword(context.Background(), "oauth@example.test", mailer.reset[0], "first-password"); err != nil {
+		t.Fatalf("ResetPassword: %v", err)
+	}
+	if repo.resetHash != "hashed:first-password" {
+		t.Errorf("stored hash = %q, want the new password's hash", repo.resetHash)
 	}
 }
 

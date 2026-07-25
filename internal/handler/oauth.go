@@ -32,6 +32,16 @@ func (a *API) requestOrigin(c *fiber.Ctx) string {
 	return a.frontendOrigin
 }
 
+// needsExplicitServedHosts reports a deployment that answers on several hosts while
+// leaving SERVED_HOSTS unset. A configured COOKIE_DOMAIN is that signal: the session
+// cookie is only ever scoped to a registrable domain when more than one host shares it.
+// The default (the frontend origin's host alone) then silently breaks sign-in on every
+// other domain — the state cookie is set on the host the flow started from, while the
+// callback is sent to the canonical origin, so the state can never match.
+func needsExplicitServedHosts(configured, cookieDomains []string) bool {
+	return len(configured) == 0 && len(cookieDomains) > 0
+}
+
 // servedHostsOrDefault falls back to the frontend origin's own host when SERVED_HOSTS
 // is unset, so a deployment that never sets it keeps working on its canonical domain
 // (and every other Host simply gets the canonical origin).

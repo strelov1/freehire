@@ -5,10 +5,13 @@ import (
 	"errors"
 )
 
-// RequestPasswordReset mails a reset code for the address, if it has a password-backed
-// account. It reports nil for every well-formed address — unknown, passwordless, or real —
-// so the endpoint cannot be used to discover which addresses have accounts. The caller
-// answers 202 either way.
+// RequestPasswordReset mails a reset code for the address, if it has an account. It
+// reports nil for every well-formed address — known or not — so the endpoint cannot be
+// used to discover which addresses have accounts. The caller answers 202 either way.
+//
+// A passwordless (OAuth-only) account is served too, so its owner can set a password and
+// gain a second way in. Receiving the code proves control of the address, which is the
+// same proof the provider offers, so refusing would strand the user without buying safety.
 //
 // It reports an error only for conditions the caller itself must act on: mail being
 // unconfigured, or the resend cooldown. Neither leaks whether the account exists, because
@@ -21,10 +24,8 @@ func (s *Service) RequestPasswordReset(ctx context.Context, email string) error 
 	if err != nil {
 		return nil // a malformed address has no account either; stay silent
 	}
-	user, _, hasPassword, err := s.repo.UserByEmail(ctx, addr)
-	if errors.Is(err, ErrUserNotFound) || !hasPassword {
-		// No account, or an OAuth-only one. Mailing a code for a passwordless account
-		// would be a way to bolt a password onto an account whose owner never chose one.
+	user, _, _, err := s.repo.UserByEmail(ctx, addr)
+	if errors.Is(err, ErrUserNotFound) {
 		return nil
 	}
 	if err != nil {
@@ -38,8 +39,8 @@ func (s *Service) RequestPasswordReset(ctx context.Context, email string) error 
 	return s.mailer.SendPasswordResetCode(ctx, user.Email, code)
 }
 
-// ResetPassword sets a new password when the presented code matches the outstanding one
-// for the address. A completed reset proves control of the address, so it also marks the
+// ResetPassword sets a password when the presented code matches the outstanding one for
+// the address — replacing an existing one, or giving an OAuth-only account its first. A completed reset proves control of the address, so it also marks the
 // account verified, and it revokes every existing session — a reset is exactly the moment
 // a user suspects someone else is signed in.
 func (s *Service) ResetPassword(ctx context.Context, email, code, newPassword string) error {
@@ -50,8 +51,8 @@ func (s *Service) ResetPassword(ctx context.Context, email, code, newPassword st
 	if err != nil {
 		return ErrInvalidCode // no account, so no code can match
 	}
-	user, _, hasPassword, err := s.repo.UserByEmail(ctx, addr)
-	if errors.Is(err, ErrUserNotFound) || !hasPassword {
+	user, _, _, err := s.repo.UserByEmail(ctx, addr)
+	if errors.Is(err, ErrUserNotFound) {
 		return ErrInvalidCode
 	}
 	if err != nil {

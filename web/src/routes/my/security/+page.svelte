@@ -80,7 +80,9 @@
 
   {#if !hasPassword}
     <p class="text-sm text-muted-foreground">
-      This account signs in with a provider and has no password.
+      This account signs in with a provider and has no password. To add one — a second way
+      in, independent of the provider — sign out, choose “Forgot your password?” on the
+      sign-in screen, and set it with the code we email you.
     </p>
   {:else}
     <form class="flex max-w-sm flex-col gap-3" onsubmit={changePassword}>

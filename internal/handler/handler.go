@@ -338,6 +338,13 @@ func Register(app *fiber.App, cfg Config) {
 	// submission approval mints through the same moderation service, so derivation,
 	// dedup, and the enrichment enqueue are reused rather than duplicated.
 	a.submission = submission.New(submission.NewQueriesRepository(queries), a.moderation)
+	if needsExplicitServedHosts(cfg.ServedHosts, cfg.CookieDomains) {
+		log.Printf("oauth: COOKIE_DOMAIN is set (%v) but SERVED_HOSTS is not — "+
+			"the redirect origin falls back to %s for every other host, which breaks "+
+			"sign-in on them (state mismatch). List every served host in SERVED_HOSTS.",
+			cfg.CookieDomains, cfg.FrontendOrigin)
+	}
+
 	// Contributions detect the ATS board from the URL alone (network-free, board.go), with a
 	// network fallback (boardresolve) that fetches a company careers page and detects an
 	// embedded ATS — so vanity-domain links (company.com/careers?gh_jid=…) resolve too.
