@@ -12,6 +12,7 @@
     resetIdentity,
   } from '$lib/analytics';
   import TopBar from '$lib/components/TopBar.svelte';
+  import EmailVerificationBanner from '$lib/components/EmailVerificationBanner.svelte';
   import Footer from '$lib/components/Footer.svelte';
   import CookieConsent from '$lib/components/CookieConsent.svelte';
   import '../app.css';
@@ -87,6 +88,9 @@
 
 <div class="flex min-h-svh flex-col">
   <TopBar />
+
+  <!-- Self-gating: renders only for a signed-in, unverified account. -->
+  <EmailVerificationBanner />
 
   <main class="flex-1">
     {@render children()}

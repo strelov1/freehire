@@ -31,6 +31,9 @@ export const accountNav = [
   // The AI-credits balance and the transaction history (grants, match/tailor debits,
   // contribution rewards).
   { href: '/my/credits', label: 'Credits' },
+  // Password and sessions: change the password, and sign out everywhere when a
+  // device is lost or a session is suspect.
+  { href: '/my/security', label: 'Security' },
 ] as const;
 
 export type AccountNavItem = (typeof accountNav)[number];

@@ -189,6 +189,9 @@ export interface User {
   // Beta-tester group membership, independent of `role`. Gates the agent
   // assistant (/my/assistant) in the UI.
   beta_tester: boolean;
+  // Whether the account has proven control of its email address. Drives the
+  // "confirm your email" prompt; a UI affordance only, re-checked server-side.
+  email_verified: boolean;
   created_at: string | null;
 }
 

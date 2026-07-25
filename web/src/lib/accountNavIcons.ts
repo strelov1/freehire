@@ -18,6 +18,7 @@ import {
   Link2,
   Handshake,
   Coins,
+  ShieldCheck,
 } from '@lucide/svelte';
 import type { LucideIcon } from '@lucide/svelte';
 import type { AccountNavItem } from './accountNav';
@@ -35,4 +36,5 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   '/my/submissions': FileText,
   '/my/contributions': Link2,
   '/my/credits': Coins,
+  '/my/security': ShieldCheck,
 };
