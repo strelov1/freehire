@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // The Trends & Insights endpoints are public, unauthenticated, aggregate-only reads
@@ -145,7 +145,7 @@ func parseCategory(s string) (string, error) {
 		return "", nil
 	}
 	v := strings.ToLower(strings.TrimSpace(s))
-	if !slices.Contains(enrich.CategoryValues, v) {
+	if !slices.Contains(vocab.CategoryValues, v) {
 		return "", fmt.Errorf("unknown category %q", s)
 	}
 	return v, nil
@@ -158,7 +158,7 @@ func parseSeniority(s string) (string, error) {
 		return "", nil
 	}
 	v := strings.ToLower(strings.TrimSpace(s))
-	if !slices.Contains(enrich.SeniorityValues, v) {
+	if !slices.Contains(vocab.SeniorityValues, v) {
 		return "", fmt.Errorf("unknown seniority %q", s)
 	}
 	return v, nil

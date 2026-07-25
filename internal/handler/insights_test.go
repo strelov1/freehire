@@ -3,7 +3,7 @@ package handler
 import (
 	"testing"
 
-	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 func TestParseInsightsSort(t *testing.T) {
@@ -78,8 +78,8 @@ func TestParseCountry(t *testing.T) {
 }
 
 func TestParseCategoryAndSeniorityAgainstVocab(t *testing.T) {
-	validCat := enrich.CategoryValues[0]
-	validSen := enrich.SeniorityValues[0]
+	validCat := vocab.CategoryValues[0]
+	validSen := vocab.SeniorityValues[0]
 
 	if got, err := parseCategory(""); err != nil || got != "" {
 		t.Errorf("parseCategory(\"\") = %q, %v, want \"\", nil", got, err)
