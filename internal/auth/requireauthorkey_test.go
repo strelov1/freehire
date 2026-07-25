@@ -176,6 +176,36 @@ func TestRequireAuthOrKey_InvalidCookieFallsThroughToKey(t *testing.T) {
 	}
 }
 
+func TestRequireAuthOrKey_JWTBearerAuthenticatesAsSession(t *testing.T) {
+	iss := NewIssuer("secret", time.Hour)
+	token, _ := iss.Issue(42, 1) // a session JWT presented as a Bearer header
+	keys := fakeKeyAuth{}        // no valid API key — the JWT must carry the identity
+
+	req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := dualAuthApp(iss, keys).Test(req)
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var body struct {
+		ID     int64 `json:"id"`
+		ViaKey bool  `json:"via_key"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.ID != 42 {
+		t.Errorf("handler saw user id %d, want 42", body.ID)
+	}
+	if body.ViaKey {
+		t.Error("a JWT bearer is a session credential, not via-key")
+	}
+}
+
 func TestRequireAuthOrKey_RejectsUnauthorized(t *testing.T) {
 	iss := NewIssuer("secret", time.Hour)
 	const token = "fhk_valid"

@@ -1,4 +1,5 @@
-export { default as Button } from './button.svelte';
-export { default as Badge } from './badge.svelte';
-export { default as Input } from './input.svelte';
-export { default as Skeleton } from './skeleton.svelte';
+export { cn } from 'freehire-design-system';
+export { Button } from 'freehire-design-system';
+export { Badge } from 'freehire-design-system';
+export { Input } from 'freehire-design-system';
+export { Skeleton } from 'freehire-design-system';

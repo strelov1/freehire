@@ -26,7 +26,7 @@ func modBetaApp(loader fakeModBeta, inject bool) *fiber.App {
 	app := fiber.New()
 	if inject {
 		app.Use(func(c *fiber.Ctx) error {
-			c.Locals(localsUserID, int64(5))
+			c.Locals(LocalsUserID, int64(5))
 			return c.Next()
 		})
 	}

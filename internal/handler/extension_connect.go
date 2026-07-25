@@ -8,18 +8,11 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
-
-	"github.com/strelov1/freehire/internal/auth"
-	"github.com/strelov1/freehire/internal/db"
 )
 
 // chromiumappSuffix is the host suffix Chrome's identity redirect URLs carry:
 // launchWebAuthFlow only resolves a redirect to https://<extension-id>.chromiumapp.org.
 const chromiumappSuffix = ".chromiumapp.org"
-
-// extensionKeyName is the display name given to keys minted through the connect
-// flow, so they are recognizable and revocable in the user's key list.
-const extensionKeyName = "Browser extension"
 
 // validateExtensionRedirect reports whether redirectURI is a safe target for the
 // browser-extension connect flow to hand a minted token to. It accepts only an
@@ -110,23 +103,19 @@ func (a *API) ExtensionConnectSubmit(c *fiber.Ctx) error {
 		return redirect(url.Values{"error": {"access_denied"}, "state": {state}})
 	}
 
-	token, hash, prefix, err := auth.GenerateAPIKey()
+	// Unify on the session JWT: hire and the agent (Roy) both verify it with the
+	// shared HS256 secret, so one token authenticates everywhere (hire via
+	// Authorization: Bearer, Roy via cookie/WS-subprotocol). The token carries the
+	// account's session generation, so "sign out everywhere" evicts the extension too —
+	// re-running connect mints a fresh one.
+	version, err := a.queries.GetUserTokenVersion(c.Context(), userID)
 	if err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to generate key")
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to issue token")
 	}
-	if _, err := a.queries.CreateAPIKey(c.Context(), db.CreateAPIKeyParams{
-		UserID:      userID,
-		Name:        extensionKeyName,
-		TokenHash:   hash,
-		TokenPrefix: prefix,
-		// The extension acts as the user across the whole product (tracking, applying,
-		// autofill), so it needs an unrestricted credential — unlike the CV-tailoring
-		// agent, whose key is minted narrow.
-		Scope: auth.ScopeFull,
-	}); err != nil {
-		return err
+	token, err := a.issuer.Issue(userID, version)
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to issue token")
 	}
-
 	return redirect(url.Values{"token": {token}, "state": {state}})
 }
 

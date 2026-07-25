@@ -74,6 +74,11 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # The primitives live in the package, so web's svelte-check never sees
+      # them — it skips node_modules, which is where web resolves them from.
+      - name: Check
+        run: pnpm check
+
       - name: Test
         run: pnpm test
 

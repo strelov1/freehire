@@ -7,10 +7,17 @@
   "packageManager": "pnpm@11.7.0",
   "exports": {
     "./dist/*": "./dist/*",
-    "./tokens/*": "./tokens/*"
+    "./tokens/*": "./tokens/*",
+    ".": {
+      "types": "./src/index.ts",
+      "svelte": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./*": "./src/*"
   },
   "scripts": {
     "build": "pnpm tokens:build",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "echo \"test: no tests yet\"",
     "tokens:build": "node scripts/build-tokens.mjs",
     "validate:docs": "echo \"validate:docs: nothing to validate yet (phase 06 adds DSDS)\"",
@@ -18,6 +25,19 @@
     "build-storybook": "echo \"build-storybook: not configured yet (phase 05)\""
   },
   "devDependencies": {
-    "style-dictionary": "^5.5.0"
+    "style-dictionary": "^5.5.0",
+    "svelte": "^5.56.7",
+    "svelte-check": "^4.7.2",
+    "typescript": "^6.0.3"
+  },
+  "peerDependencies": {
+    "svelte": "^5",
+    "tailwindcss": "^4"
+  },
+  "dependencies": {
+    "@lucide/svelte": "^1.25.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.6.0",
+    "tailwind-variants": "^3.2.2"
   }
 }

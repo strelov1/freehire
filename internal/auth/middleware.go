@@ -7,9 +7,11 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// localsUserID is the c.Locals key under which RequireAuth and RequireAuthOrKey
-// store the authenticated user id. Handlers read it via UserID.
-const localsUserID = "auth.userID"
+// LocalsUserID is the c.Locals key under which RequireAuth and RequireAuthOrKey
+// store the authenticated user id. Handlers read it via UserID; it is exported
+// because a websocket handler is handed a Conn rather than a Ctx and has to read
+// the inherited local by key.
+const LocalsUserID = "auth.userID"
 
 // localsViaAPIKey is set true by RequireAuthOrKey when the request authenticated with an
 // API key rather than the session cookie. Handlers read it via ViaAPIKey to give
@@ -64,7 +66,7 @@ func RequireAuth(iss *Issuer, versions TokenVersionLoader) fiber.Handler {
 		if !ok {
 			return fiber.NewError(fiber.StatusUnauthorized, "invalid or expired session")
 		}
-		c.Locals(localsUserID, id)
+		c.Locals(LocalsUserID, id)
 		return c.Next()
 	}
 }
@@ -88,7 +90,7 @@ func resolveSession(c *fiber.Ctx, iss *Issuer, versions TokenVersionLoader, toke
 // RequireAuthOrKey. The second result is false when the request did not pass
 // through either middleware.
 func UserID(c *fiber.Ctx) (int64, bool) {
-	id, ok := c.Locals(localsUserID).(int64)
+	id, ok := c.Locals(LocalsUserID).(int64)
 	return id, ok
 }
 
@@ -128,20 +130,20 @@ func RequireAuthOrScopedKey(iss *Issuer, versions TokenVersionLoader, keys APIKe
 	return func(c *fiber.Ctx) error {
 		if token := c.Cookies(CookieName); token != "" {
 			if id, ok := resolveSession(c, iss, versions, token); ok {
-				c.Locals(localsUserID, id)
+				c.Locals(LocalsUserID, id)
 				return c.Next()
 			}
 		}
-		if key := bearerToken(c); key != "" {
-			if identity, err := keys.AuthenticateAPIKey(c.Context(), HashAPIKey(key)); err == nil {
-				if !scopeAllowed(identity.Scope, allowed) {
-					return fiber.NewError(fiber.StatusForbidden, "api key scope is insufficient for this endpoint")
-				}
-				c.Locals(localsUserID, identity.UserID)
-				c.Locals(localsViaAPIKey, true)
-				c.Locals(localsKeyScope, identity.Scope)
-				return c.Next()
+		if b, ok := resolveBearer(c, iss, versions, keys); ok {
+			if b.viaKey && !scopeAllowed(b.scope, allowed) {
+				return fiber.NewError(fiber.StatusForbidden, "api key scope is insufficient for this endpoint")
 			}
+			c.Locals(LocalsUserID, b.userID)
+			if b.viaKey {
+				c.Locals(localsViaAPIKey, true)
+				c.Locals(localsKeyScope, b.scope)
+			}
+			return c.Next()
 		}
 		return fiber.NewError(fiber.StatusUnauthorized, "not authenticated")
 	}
@@ -170,15 +172,17 @@ func OptionalAuth(iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthentic
 	return func(c *fiber.Ctx) error {
 		if token := c.Cookies(CookieName); token != "" {
 			if id, ok := resolveSession(c, iss, versions, token); ok {
-				c.Locals(localsUserID, id)
+				c.Locals(LocalsUserID, id)
 				return c.Next()
 			}
 		}
-		if key := bearerToken(c); key != "" {
-			if identity, err := keys.AuthenticateAPIKey(c.Context(), HashAPIKey(key)); err == nil {
-				c.Locals(localsUserID, identity.UserID)
+		// No scope gate here: this never rejects, and an under-scoped key on a public
+		// read only enriches the response with its own owner's overlay.
+		if b, ok := resolveBearer(c, iss, versions, keys); ok {
+			c.Locals(LocalsUserID, b.userID)
+			if b.viaKey {
 				c.Locals(localsViaAPIKey, true)
-				c.Locals(localsKeyScope, identity.Scope)
+				c.Locals(localsKeyScope, b.scope)
 			}
 		}
 		return c.Next()
@@ -243,6 +247,43 @@ func RequireModeratorOrBeta(roles RoleLoader, beta BetaLoader) fiber.Handler {
 		}
 		return c.Next()
 	}
+}
+
+// resolveBearer authenticates an `Authorization: Bearer <token>` credential,
+// accepting EITHER a session JWT or an API key. The browser extension presents
+// its session JWT here (it has no cross-origin cookie), so a JWT bearer is a full
+// session — viaKey is false; only an actual API key sets viaKey. Returns ok=false
+// when there is no bearer or neither interpretation resolves.
+func resolveBearer(c *fiber.Ctx, iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthenticator) (bearerIdentity, bool) {
+	return resolveCredential(c, iss, versions, keys, bearerToken(c))
+}
+
+// resolveCredential interprets one opaque credential string as either a session JWT or
+// an API key. Split from resolveBearer because the websocket handshake carries the same
+// credential in a subprotocol rather than a header, and both must agree on what a token
+// means.
+func resolveCredential(c *fiber.Ctx, iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthenticator, tok string) (bearerIdentity, bool) {
+	if tok == "" {
+		return bearerIdentity{}, false
+	}
+	// A JWT bearer IS a session, so it takes the same revocation check as the cookie —
+	// otherwise "sign out everywhere" would leave the extension's copy of the token
+	// working, which is exactly the device a user reaches for that button to evict.
+	if id, ok := resolveSession(c, iss, versions, tok); ok {
+		return bearerIdentity{userID: id}, true
+	}
+	if identity, err := keys.AuthenticateAPIKey(c.Context(), HashAPIKey(tok)); err == nil {
+		return bearerIdentity{userID: identity.UserID, viaKey: true, scope: identity.Scope}, true
+	}
+	return bearerIdentity{}, false
+}
+
+// bearerIdentity is what a Bearer credential resolved to. viaKey distinguishes an API
+// key (scoped, flagged to handlers) from a session JWT (a full session, like the cookie).
+type bearerIdentity struct {
+	userID int64
+	viaKey bool
+	scope  string
 }
 
 // bearerToken extracts the credential from an `Authorization: Bearer <token>`
