@@ -26,13 +26,11 @@ import (
 	"github.com/strelov1/freehire/internal/emailnotify"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/gmailsync"
-	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/moderation"
 	"github.com/strelov1/freehire/internal/pii"
 	"github.com/strelov1/freehire/internal/referral"
-	"github.com/strelov1/freehire/internal/reminder"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/resumeextract"
 	"github.com/strelov1/freehire/internal/search"
@@ -126,9 +124,6 @@ type API struct {
 	// form with. Nil when the LLM is unconfigured: the run then reports the feature
 	// is off, and the extension's deterministic autofill still works.
 	autofillPlanner *llm.Client
-	// tracking owns the per-user job-interaction use cases (view/apply/save/
-	// unsave/track); the handlers translate wire ↔ domain and delegate to it.
-	tracking *jobtracking.Service
 	// accounts resolves external OAuth identities into local user accounts
 	// (identity-first lookup, verified-email gate, link-or-create, race retry).
 	accounts *accounts.Service
@@ -138,10 +133,6 @@ type API struct {
 	// contribution owns the crowdsourced paste-a-link flow (submit a URL → detect ATS,
 	// dedup by derived identity, record + award a point); list the caller's own.
 	contribution *contribution.Service
-	// reminder owns the saved-job reminder use cases (the account default rule and
-	// per-save scheduling/cancellation); the save/apply/unsave handlers orchestrate
-	// it alongside tracking, and the cmd/remind worker fires the scheduled reminders.
-	reminder *reminder.Service
 	// userProfile owns the single-per-user profile use cases (fetch/save/clear a
 	// specialization + skills set); the handlers translate wire ↔ domain and delegate
 	// to it.
@@ -306,7 +297,6 @@ func Register(app *fiber.App, cfg Config) {
 		gmailCipher:    cfg.GmailCipher,
 		mailDomain:     cfg.MailboxDomain,
 		browserTools:   browsertools.New(),
-		tracking:       jobtracking.New(jobtracking.NewQueriesRepository(queries, cfg.Pool)),
 		accounts:       accounts.New(accounts.NewQueriesRepository(queries, cfg.Pool), authHasher{}),
 		moderation:     moderation.New(moderation.NewQueriesRepository(queries, cfg.Pool, enrich.Version)),
 	}
@@ -322,7 +312,6 @@ func Register(app *fiber.App, cfg Config) {
 	reportsH := newReportHandlers(queries)
 	savedSearchH := newSavedSearchHandlers(queries)
 	subscriptionH := newSubscriptionHandlers(queries)
-	a.reminder = reminder.New(reminder.NewQueriesRepository(queries))
 	a.userProfile = userprofile.New(userprofile.NewQueriesRepository(queries))
 	profileH := newProfileHandlers(a.userProfile)
 	// Résumé storage is nil-safe: a nil Blob (S3 unconfigured) yields a disabled service
@@ -376,6 +365,7 @@ func Register(app *fiber.App, cfg Config) {
 		companySearch = cfg.Search
 	}
 	companiesH := newCompaniesHandlers(queries, companySearch)
+	trackingH := newTrackingHandlers(queries, cfg.Pool, a.search)
 
 	// Referral notifications reuse the SES email transport (email is always present) and
 	// the Telegram bot when linked. Each channel is wrapped only when configured so a nil
@@ -460,20 +450,11 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/insights/salary", a.InsightsSalary)
 	api.Get("/insights/companies", a.InsightsCompanies)
 
-	api.Post("/jobs/:slug/view", keyAuth, a.RecordView)
-	api.Post("/jobs/:slug/apply", keyAuth, a.MarkApplied)
-	api.Post("/jobs/:slug/save", keyAuth, a.SaveJob)
-	api.Delete("/jobs/:slug/save", keyAuth, a.UnsaveJob)
-	api.Post("/jobs/:slug/dismiss", keyAuth, a.DismissJob)
-	api.Delete("/jobs/:slug/dismiss", keyAuth, a.UndismissJob)
+	// Per-user job interactions, tracking reads, and reminder controls
+	// (see trackingHandlers). The interaction writes precede the vote routes,
+	// mirroring the previous registration order.
+	trackingH.register(api, mw)
 	votesH.register(api, mw)
-	// Per-job reminder controls: reschedule or turn off a saved job's pending
-	// reminder without unsaving it (scheduling itself happens on save).
-	api.Patch("/jobs/:slug/reminder", keyAuth, a.RescheduleReminder)
-	api.Delete("/jobs/:slug/reminder", keyAuth, a.CancelJobReminder)
-	api.Patch("/jobs/:slug/track", keyAuth, a.TrackJob)
-	api.Delete("/jobs/:slug/stage", keyAuth, a.ClearStage)
-	api.Delete("/jobs/:slug/track", keyAuth, a.Untrack)
 	// Read-only per-job skill match against the caller's profile (no writes).
 	api.Get("/jobs/:slug/match", keyAuth, a.JobMatch)
 	// Ad-hoc skill match for a job posting scraped off any page (title + text),
@@ -527,16 +508,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Community discussion threads (see communityHandlers).
 	communityH.register(api, mw)
 
-	// User-scoped reads live under /me (consistent with /auth/me): the tracking
-	// listing joins the caller's interactions with the jobs they touch, viewed-slugs
-	// lets the SPA dim already-seen cards without authenticating the public browse
-	// list, and analyses lists the jobs the caller has run the AI fit analysis on.
-	api.Get("/me/tracking", keyAuth, a.ListTrackedJobs)
-	api.Get("/me/tracking/viewed", keyAuth, a.ListViewedSlugs)
-	api.Get("/me/tracking/saved", keyAuth, a.ListSavedSlugs)
-	api.Get("/me/tracking/dismissed", keyAuth, a.ListDismissedSlugs)
-	api.Get("/me/tracking/pipeline", keyAuth, a.TrackingPipeline)
-	api.Get("/me/tracking/swipe", keyAuth, a.SwipeDeck)
+	// analyses lists the jobs the caller has run the AI fit analysis on.
 	api.Get("/me/tracking/analyses", keyAuth, a.ListMyAnalyses)
 	creditsH.register(api, mw)
 	api.Get("/me/recommendations", keyAuth, a.Recommendations)
@@ -629,10 +601,6 @@ func Register(app *fiber.App, cfg Config) {
 	// Filter subscriptions (see subscriptionHandlers).
 	subscriptionH.register(api, mw)
 
-	// Saved-job reminder default rule (enable, default delay, channels). Cookie-only
-	// (RequireAuth) like subscriptions — it configures a delivery preference.
-	api.Get("/me/reminder-settings", cookieAuth, a.GetReminderSettings)
-	api.Put("/me/reminder-settings", cookieAuth, a.UpdateReminderSettings)
 	api.Post("/me/telegram/link", cookieAuth, a.LinkTelegram)
 	api.Get("/me/telegram", cookieAuth, a.TelegramLinkStatus)
 	api.Delete("/me/telegram", cookieAuth, a.UnlinkTelegram)

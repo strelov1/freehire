@@ -73,7 +73,7 @@ func TestListDismissedSlugsEndpoint(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	h := &API{pool: pool, queries: queries, issuer: iss, tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
+	h := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/me/tracking/dismissed", auth.RequireAuthOrKey(iss, queries), h.ListDismissedSlugs)
 	app.Get("/api/v1/me/tracking", auth.RequireAuthOrKey(iss, queries), h.ListTrackedJobs)

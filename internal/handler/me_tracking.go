@@ -30,14 +30,14 @@ type myJobResponse struct {
 // counts for the tab badges — which is also why this writes its own envelope
 // instead of listResponse. Closed jobs stay listed: a user's history must not
 // shrink when a posting closes.
-func (a *API) ListTrackedJobs(c *fiber.Ctx) error {
+func (h *trackingHandlers) ListTrackedJobs(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
 
 	limit, offset := pageParamsMax(c, trackingMaxLimit)
-	listing, err := a.tracking.ListTracked(c.Context(), userID, c.Query("filter"), int32(limit), int32(offset))
+	listing, err := h.tracking.ListTracked(c.Context(), userID, c.Query("filter"), int32(limit), int32(offset))
 	if err != nil {
 		return trackingError(err)
 	}
@@ -78,13 +78,13 @@ func (a *API) ListTrackedJobs(c *fiber.Ctx) error {
 // the total application count and its distribution across the seven status
 // buckets, aggregated server-side over all of the caller's applications. The SPA
 // Pipeline tab renders the Sankey and the interview/offer rate cards from this.
-func (a *API) TrackingPipeline(c *fiber.Ctx) error {
+func (h *trackingHandlers) TrackingPipeline(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
 
-	pipeline, err := a.tracking.Pipeline(c.Context(), userID)
+	pipeline, err := h.tracking.Pipeline(c.Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -98,13 +98,13 @@ func (a *API) TrackingPipeline(c *fiber.Ctx) error {
 // authenticating the public job-read path — viewed state is cross-referenced
 // client-side, never joined into ListJobs/SearchJobs. The response is a flat
 // {"data": [slug, ...]} list scoped to the caller.
-func (a *API) ListViewedSlugs(c *fiber.Ctx) error {
+func (h *trackingHandlers) ListViewedSlugs(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
 
-	slugs, err := a.tracking.ViewedSlugs(c.Context(), userID)
+	slugs, err := h.tracking.ViewedSlugs(c.Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -118,13 +118,13 @@ func (a *API) ListViewedSlugs(c *fiber.Ctx) error {
 // authenticating the public job-read path — saved state is cross-referenced
 // client-side, never joined into ListJobs/SearchJobs. The response is a flat
 // {"data": [slug, ...]} list scoped to the caller.
-func (a *API) ListSavedSlugs(c *fiber.Ctx) error {
+func (h *trackingHandlers) ListSavedSlugs(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
 
-	slugs, err := a.tracking.SavedSlugs(c.Context(), userID)
+	slugs, err := h.tracking.SavedSlugs(c.Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -137,13 +137,13 @@ func (a *API) ListSavedSlugs(c *fiber.Ctx) error {
 // browse feed client-side, mirroring ListSavedSlugs — dismissed state is
 // cross-referenced client-side, never joined into ListJobs/SearchJobs. The
 // response is a flat {"data": [slug, ...]} list scoped to the caller.
-func (a *API) ListDismissedSlugs(c *fiber.Ctx) error {
+func (h *trackingHandlers) ListDismissedSlugs(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
 
-	slugs, err := a.tracking.DismissedSlugs(c.Context(), userID)
+	slugs, err := h.tracking.DismissedSlugs(c.Context(), userID)
 	if err != nil {
 		return err
 	}

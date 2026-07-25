@@ -46,14 +46,15 @@ func TestAPIKeysEndToEnd(t *testing.T) {
 	ownerCookie, _ := iss.Issue(ownerID)
 	otherCookie, _ := iss.Issue(otherID)
 	queries := db.New(pool)
-	h := &API{pool: pool, queries: queries, issuer: iss, tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
+	h := &API{pool: pool, queries: queries, issuer: iss}
+	th := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, h.queries)
 	app.Post("/api/v1/me/api-keys", auth.RequireAuth(iss), h.CreateAPIKey)
 	app.Get("/api/v1/me/api-keys", auth.RequireAuth(iss), h.ListAPIKeys)
 	app.Delete("/api/v1/me/api-keys/:id", auth.RequireAuth(iss), h.RevokeAPIKey)
-	app.Post("/api/v1/jobs/:slug/apply", keyAuth, h.MarkApplied)
+	app.Post("/api/v1/jobs/:slug/apply", keyAuth, th.MarkApplied)
 
 	const applyPath = "/api/v1/jobs/go-dev-acme-t35nijto/apply"
 

@@ -45,7 +45,7 @@ func TestSaveUnsaveEndpoints(t *testing.T) {
 	}
 
 	queries := db.New(pool)
-	h := &API{pool: pool, queries: queries, issuer: iss, tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
+	h := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Post("/api/v1/jobs/:slug/save", auth.RequireAuth(iss), h.SaveJob)
 	app.Delete("/api/v1/jobs/:slug/save", auth.RequireAuth(iss), h.UnsaveJob)

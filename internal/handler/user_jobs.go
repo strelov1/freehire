@@ -6,10 +6,68 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/reminder"
 )
+
+// trackingHandlers serves the per-user job interactions (view/apply/save/dismiss/
+// track), the user-scoped tracking reads (the Kanban listing, slug sets, pipeline,
+// swipe deck), and the saved-job reminder controls. The interaction use cases live
+// in jobtracking.Service, the reminder scheduling in reminder.Service — the save/
+// apply/unsave handlers orchestrate both; the cmd/remind worker fires the scheduled
+// reminders.
+type trackingHandlers struct {
+	tracking *jobtracking.Service
+	reminder *reminder.Service
+	search   searcher
+}
+
+func newTrackingHandlers(queries *db.Queries, pool *pgxpool.Pool, search searcher) *trackingHandlers {
+	return &trackingHandlers{
+		tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool)),
+		reminder: reminder.New(reminder.NewQueriesRepository(queries)),
+		search:   search,
+	}
+}
+
+func (h *trackingHandlers) register(api fiber.Router, mw middleware) {
+	// Per-user job interactions accept either the session cookie or an API key
+	// (RequireAuthOrKey), so a script holding a key can drive the same flow as the
+	// browser. Jobs are addressed by their public slug; the handlers resolve it to
+	// the internal id before writing user_jobs. All writes are idempotent upserts.
+	api.Post("/jobs/:slug/view", mw.key, h.RecordView)
+	api.Post("/jobs/:slug/apply", mw.key, h.MarkApplied)
+	api.Post("/jobs/:slug/save", mw.key, h.SaveJob)
+	api.Delete("/jobs/:slug/save", mw.key, h.UnsaveJob)
+	api.Post("/jobs/:slug/dismiss", mw.key, h.DismissJob)
+	api.Delete("/jobs/:slug/dismiss", mw.key, h.UndismissJob)
+	// Per-job reminder controls: reschedule or turn off a saved job's pending
+	// reminder without unsaving it (scheduling itself happens on save).
+	api.Patch("/jobs/:slug/reminder", mw.key, h.RescheduleReminder)
+	api.Delete("/jobs/:slug/reminder", mw.key, h.CancelJobReminder)
+	api.Patch("/jobs/:slug/track", mw.key, h.TrackJob)
+	api.Delete("/jobs/:slug/stage", mw.key, h.ClearStage)
+	api.Delete("/jobs/:slug/track", mw.key, h.Untrack)
+
+	// User-scoped reads live under /me (consistent with /auth/me): the tracking
+	// listing joins the caller's interactions with the jobs they touch, viewed-slugs
+	// lets the SPA dim already-seen cards without authenticating the public browse
+	// list, and analyses lists the jobs the caller has run the AI fit analysis on.
+	api.Get("/me/tracking", mw.key, h.ListTrackedJobs)
+	api.Get("/me/tracking/viewed", mw.key, h.ListViewedSlugs)
+	api.Get("/me/tracking/saved", mw.key, h.ListSavedSlugs)
+	api.Get("/me/tracking/dismissed", mw.key, h.ListDismissedSlugs)
+	api.Get("/me/tracking/pipeline", mw.key, h.TrackingPipeline)
+	api.Get("/me/tracking/swipe", mw.key, h.SwipeDeck)
+
+	// Saved-job reminder default rule (enable, default delay, channels). Cookie-only
+	// (RequireAuth) like subscriptions — it configures a delivery preference.
+	api.Get("/me/reminder-settings", mw.cookie, h.GetReminderSettings)
+	api.Put("/me/reminder-settings", mw.cookie, h.UpdateReminderSettings)
+}
 
 // saveJobRequest is the optional save body carrying a per-job reminder override.
 // Absent (empty body) means "use the account default rule".
@@ -71,12 +129,12 @@ func trackingError(err error) error {
 
 // RecordView records that the authenticated user viewed a job and returns the
 // resulting interaction, including whether they have already applied.
-func (a *API) RecordView(c *fiber.Ctx) error {
+func (h *trackingHandlers) RecordView(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	interaction, err := a.tracking.RecordView(c.Context(), userID, c.Params("slug"))
+	interaction, err := h.tracking.RecordView(c.Context(), userID, c.Params("slug"))
 	if err != nil {
 		return trackingError(err)
 	}
@@ -85,33 +143,33 @@ func (a *API) RecordView(c *fiber.Ctx) error {
 
 // MarkApplied marks a job as applied for the authenticated user and returns the
 // updated interaction.
-func (a *API) MarkApplied(c *fiber.Ctx) error {
+func (h *trackingHandlers) MarkApplied(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	interaction, err := a.tracking.MarkApplied(c.Context(), userID, c.Params("slug"))
+	interaction, err := h.tracking.MarkApplied(c.Context(), userID, c.Params("slug"))
 	if err != nil {
 		return trackingError(err)
 	}
 	// Applying ends the "come back and apply" intent, so drop any pending reminder.
-	a.cancelReminderBestEffort(c, userID, interaction.JobID)
+	h.cancelReminderBestEffort(c, userID, interaction.JobID)
 	return c.JSON(fiber.Map{"data": toResponse(interaction)})
 }
 
 // SaveJob saves (bookmarks) a job for the authenticated user and returns the
 // updated interaction. An optional body may carry a per-job reminder override;
 // otherwise the account default rule decides whether to schedule a reminder.
-func (a *API) SaveJob(c *fiber.Ctx) error {
+func (h *trackingHandlers) SaveJob(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	interaction, err := a.tracking.SaveJob(c.Context(), userID, c.Params("slug"))
+	interaction, err := h.tracking.SaveJob(c.Context(), userID, c.Params("slug"))
 	if err != nil {
 		return trackingError(err)
 	}
-	a.scheduleReminderOnSave(c, userID, interaction.JobID)
+	h.scheduleReminderOnSave(c, userID, interaction.JobID)
 	return c.JSON(fiber.Map{"data": toResponse(interaction)})
 }
 
@@ -120,8 +178,8 @@ func (a *API) SaveJob(c *fiber.Ctx) error {
 // delay) is logged, never surfaced — the save already succeeded and is the primary
 // action, and the worker's fire-time re-check backstops correctness. The UI sends
 // only valid, fixed override delays.
-func (a *API) scheduleReminderOnSave(c *fiber.Ctx, userID, jobID int64) {
-	if a.reminder == nil {
+func (h *trackingHandlers) scheduleReminderOnSave(c *fiber.Ctx, userID, jobID int64) {
+	if h.reminder == nil {
 		return
 	}
 	var in saveJobRequest
@@ -132,7 +190,7 @@ func (a *API) scheduleReminderOnSave(c *fiber.Ctx, userID, jobID int64) {
 	if in.Reminder != nil {
 		ov = &reminder.Override{Disabled: in.Reminder.Disabled, DelayDays: in.Reminder.DelayDays}
 	}
-	if err := a.reminder.ScheduleOnSave(c.Context(), userID, jobID, ov); err != nil {
+	if err := h.reminder.ScheduleOnSave(c.Context(), userID, jobID, ov); err != nil {
 		log.Printf("reminder: schedule on save user=%d job=%d: %v", userID, jobID, err)
 	}
 }
@@ -140,11 +198,11 @@ func (a *API) scheduleReminderOnSave(c *fiber.Ctx, userID, jobID int64) {
 // cancelReminderBestEffort cancels a job's pending reminder after the user applied
 // or unsaved it. Best-effort: a failure is logged, not surfaced — the worker's
 // fire-time re-check cancels a missed one anyway.
-func (a *API) cancelReminderBestEffort(c *fiber.Ctx, userID, jobID int64) {
-	if a.reminder == nil {
+func (h *trackingHandlers) cancelReminderBestEffort(c *fiber.Ctx, userID, jobID int64) {
+	if h.reminder == nil {
 		return
 	}
-	if err := a.reminder.Cancel(c.Context(), userID, jobID); err != nil {
+	if err := h.reminder.Cancel(c.Context(), userID, jobID); err != nil {
 		log.Printf("reminder: cancel user=%d job=%d: %v", userID, jobID, err)
 	}
 }
@@ -153,29 +211,29 @@ func (a *API) cancelReminderBestEffort(c *fiber.Ctx, userID, jobID int64) {
 // row (view/apply history) survives; if no row exists at all, unsaving is a no-op
 // that answers with the zero interaction state — DELETE is idempotent, so "already
 // not saved" is success, not an error (the service resolves that case).
-func (a *API) UnsaveJob(c *fiber.Ctx) error {
+func (h *trackingHandlers) UnsaveJob(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	interaction, err := a.tracking.Unsave(c.Context(), userID, c.Params("slug"))
+	interaction, err := h.tracking.Unsave(c.Context(), userID, c.Params("slug"))
 	if err != nil {
 		return trackingError(err)
 	}
 	// Unsaving withdraws the intent the reminder was nudging toward, so cancel it.
-	a.cancelReminderBestEffort(c, userID, interaction.JobID)
+	h.cancelReminderBestEffort(c, userID, interaction.JobID)
 	return c.JSON(fiber.Map{"data": toResponse(interaction)})
 }
 
 // DismissJob marks a job dismissed (swiped away) for the authenticated user and
 // returns the updated interaction. Dismissal only keeps the job out of the swipe
 // deck; it stays visible in the public /jobs list and search.
-func (a *API) DismissJob(c *fiber.Ctx) error {
+func (h *trackingHandlers) DismissJob(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	interaction, err := a.tracking.Dismiss(c.Context(), userID, c.Params("slug"))
+	interaction, err := h.tracking.Dismiss(c.Context(), userID, c.Params("slug"))
 	if err != nil {
 		return trackingError(err)
 	}
@@ -186,12 +244,12 @@ func (a *API) DismissJob(c *fiber.Ctx) error {
 // interaction row survives; if no row exists at all, undismissing is a no-op that
 // answers with the zero interaction state — DELETE is idempotent, so "already not
 // dismissed" is success, not an error (the service resolves that case).
-func (a *API) UndismissJob(c *fiber.Ctx) error {
+func (h *trackingHandlers) UndismissJob(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	interaction, err := a.tracking.Undismiss(c.Context(), userID, c.Params("slug"))
+	interaction, err := h.tracking.Undismiss(c.Context(), userID, c.Params("slug"))
 	if err != nil {
 		return trackingError(err)
 	}
@@ -201,12 +259,12 @@ func (a *API) UndismissJob(c *fiber.Ctx) error {
 // ClearStage drops a job's pipeline progress (stage and applied_at) for the
 // authenticated user while keeping saved_at, viewed_at, and notes intact. Used
 // when dragging a Kanban card back to the "Saved" column.
-func (a *API) ClearStage(c *fiber.Ctx) error {
+func (h *trackingHandlers) ClearStage(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	interaction, err := a.tracking.ClearProgress(c.Context(), userID, c.Params("slug"))
+	interaction, err := h.tracking.ClearProgress(c.Context(), userID, c.Params("slug"))
 	if err != nil {
 		return trackingError(err)
 	}
@@ -216,12 +274,12 @@ func (a *API) ClearStage(c *fiber.Ctx) error {
 // Untrack removes a job from the board for the authenticated user: clears
 // saved_at, applied_at, stage, and notes while keeping viewed_at so the job
 // stays in the user's view history.
-func (a *API) Untrack(c *fiber.Ctx) error {
+func (h *trackingHandlers) Untrack(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	interaction, err := a.tracking.Untrack(c.Context(), userID, c.Params("slug"))
+	interaction, err := h.tracking.Untrack(c.Context(), userID, c.Params("slug"))
 	if err != nil {
 		return trackingError(err)
 	}
@@ -233,7 +291,7 @@ func (a *API) Untrack(c *fiber.Ctx) error {
 // the service before the slug lookup, so a bad request never touches the DB: an
 // empty body or an unknown stage is a 400. A nil field is left unchanged by the
 // upsert. Returns the updated interaction.
-func (a *API) TrackJob(c *fiber.Ctx) error {
+func (h *trackingHandlers) TrackJob(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -244,7 +302,7 @@ func (a *API) TrackJob(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
 
-	interaction, err := a.tracking.Track(c.Context(), userID, c.Params("slug"), in.Stage, in.Notes)
+	interaction, err := h.tracking.Track(c.Context(), userID, c.Params("slug"), in.Stage, in.Notes)
 	if err != nil {
 		return trackingError(err)
 	}

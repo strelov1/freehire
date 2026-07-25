@@ -47,14 +47,13 @@ func (r *stubReminderRepo) RescheduleReminder(context.Context, int64, int64, tim
 	return nil
 }
 
-// remindersApp mounts the save/apply/unsave + reminder routes on an API whose
+// remindersApp mounts the save/apply/unsave + reminder routes on a handler whose
 // tracking and reminder services are backed by DB-free stubs. The returned repo
 // lets tests assert the orchestration (a save schedules, an apply/unsave cancels).
 func remindersApp(settings reminder.Settings) (*fiber.App, *auth.Issuer, *stubReminderRepo) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	repo := &stubReminderRepo{settings: settings}
-	h := &API{
-		issuer:   iss,
+	h := &trackingHandlers{
 		tracking: jobtracking.New(stubTrackingRepo{}),
 		reminder: reminder.New(repo),
 	}

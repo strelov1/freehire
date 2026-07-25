@@ -48,16 +48,18 @@ func TestExtensionConnectEndToEnd(t *testing.T) {
 		pool:                       pool,
 		queries:                    queries,
 		issuer:                     iss,
-		tracking:                   jobtracking.New(jobtracking.NewQueriesRepository(queries, pool)),
 		extensionRedirectAllowlist: []string{extID},
 	}
+	th := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	cookieAuth := auth.RequireAuth(iss)
 	keyAuth := auth.RequireAuthOrKey(iss, queries)
 	app.Get("/api/v1/auth/extension/connect", cookieAuth, h.ExtensionConnect)
 	app.Post("/api/v1/auth/extension/connect", cookieAuth, h.ExtensionConnectSubmit)
-	app.Post("/api/v1/jobs/:slug/apply", keyAuth, h.MarkApplied)
+	app.Get("/api/v1/me/api-keys", cookieAuth, h.ListAPIKeys)
+	app.Delete("/api/v1/me/api-keys/:id", cookieAuth, h.RevokeAPIKey)
+	app.Post("/api/v1/jobs/:slug/apply", keyAuth, th.MarkApplied)
 
 	const connectPath = "/api/v1/auth/extension/connect"
 
