@@ -36,7 +36,7 @@ function company(overrides: Partial<Company> = {}): Company {
   };
 }
 
-const ORIGIN = 'https://freehire.dev';
+const ORIGIN = 'https://freehire.me';
 
 describe('organizationJsonLd', () => {
   it('emits every company-info fact the company provides', () => {
@@ -57,7 +57,7 @@ describe('organizationJsonLd', () => {
 
     expect(ld['@type']).toBe('Organization');
     expect(ld.name).toBe('Acme');
-    expect(ld.url).toBe('https://freehire.dev/companies/acme');
+    expect(ld.url).toBe('https://freehire.me/companies/acme');
     expect(ld.logo).toBe('https://logo.dev/acme.png');
     expect(ld.description).toBe('Acme builds rockets.');
     expect(ld.sameAs).toEqual([
@@ -82,7 +82,7 @@ describe('organizationJsonLd', () => {
       '@context': 'https://schema.org',
       '@type': 'Organization',
       name: 'Acme',
-      url: 'https://freehire.dev/companies/acme',
+      url: 'https://freehire.me/companies/acme',
     });
   });
 
@@ -190,7 +190,7 @@ describe('jobPostingJsonLd', () => {
 });
 
 describe('collectionPageJsonLd', () => {
-  const URL = 'https://freehire.dev/collections/react';
+  const URL = 'https://freehire.me/collections/react';
 
   it('wraps the jobs in a CollectionPage → ItemList of summary ListItems', () => {
     const ld = collectionPageJsonLd(
@@ -212,13 +212,13 @@ describe('collectionPageJsonLd', () => {
           '@type': 'ListItem',
           position: 1,
           name: 'Senior React Engineer',
-          url: 'https://freehire.dev/jobs/senior-react-engineer-abc',
+          url: 'https://freehire.me/jobs/senior-react-engineer-abc',
         },
         {
           '@type': 'ListItem',
           position: 2,
           name: 'React Native Dev',
-          url: 'https://freehire.dev/jobs/react-native-dev-xyz',
+          url: 'https://freehire.me/jobs/react-native-dev-xyz',
         },
       ],
     });
@@ -246,7 +246,7 @@ function post(overrides: Partial<PostMeta> = {}): PostMeta {
 }
 
 describe('articleJsonLd', () => {
-  const ORIGIN = 'https://freehire.dev';
+  const ORIGIN = 'https://freehire.me';
 
   it('builds an Article with headline, description, date, url and keywords', () => {
     const ld = articleJsonLd(post(), ORIGIN);
@@ -254,7 +254,7 @@ describe('articleJsonLd', () => {
     expect(ld.headline).toBe('Launch');
     expect(ld.description).toBe('We shipped it.');
     expect(ld.datePublished).toBe('2026-01-15');
-    expect(ld.url).toBe('https://freehire.dev/blog/launch');
+    expect(ld.url).toBe('https://freehire.me/blog/launch');
     expect(ld.keywords).toBe('product, launch');
   });
 

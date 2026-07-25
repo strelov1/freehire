@@ -36,7 +36,7 @@ export function buildBrandCard(opts: { stats: BrandStat[] }): string {
   <div style="display:flex;max-width:940px;font-size:64px;font-weight:700;letter-spacing:-0.03em;line-height:1.05">${esc(HEADLINE)}</div>
   <div style="display:flex;align-items:flex-end;justify-content:space-between">
     <div style="display:flex;gap:64px">${statStrip}</div>
-    <div style="display:flex;font-size:22px;color:#a3a3a3">freehire.dev</div>
+    <div style="display:flex;font-size:22px;color:#a3a3a3">freehire.me</div>
   </div>
 </div>`.trim();
 }

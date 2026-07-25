@@ -7,7 +7,7 @@ import (
 )
 
 func TestAuthCodeURL(t *testing.T) {
-	c := NewConnector("client-123", "secret", "https://freehire.dev")
+	c := NewConnector("client-123", "secret", "https://freehire.me")
 	raw := c.AuthCodeURL("state-xyz")
 
 	u, err := url.Parse(raw)
@@ -35,7 +35,7 @@ func TestAuthCodeURL(t *testing.T) {
 	if !strings.Contains(q.Get("scope"), "gmail.readonly") {
 		t.Errorf("scope missing gmail.readonly: %q", q.Get("scope"))
 	}
-	if q.Get("redirect_uri") != "https://freehire.dev/api/v1/me/gmail/callback" {
+	if q.Get("redirect_uri") != "https://freehire.me/api/v1/me/gmail/callback" {
 		t.Errorf("redirect_uri = %q", q.Get("redirect_uri"))
 	}
 }

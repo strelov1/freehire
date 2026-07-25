@@ -6,7 +6,7 @@ import (
 )
 
 const sampleMIME = "From: Acme Careers <careers@acme.com>\r\n" +
-	"To: ivan@inbox.freehire.dev\r\n" +
+	"To: ivan@inbox.freehire.me\r\n" +
 	"Subject: Interview invite\r\n" +
 	"Message-ID: <abc123@acme.com>\r\n" +
 	"Date: Mon, 12 Jul 2026 10:00:00 +0000\r\n" +

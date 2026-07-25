@@ -16,15 +16,15 @@ const CookieName = "hire_token"
 // deployment) sends it on the app's own requests while blocking it on
 // cross-site ones, which covers CSRF for the current endpoints. secure comes
 // from config so dev (http://localhost) and HTTPS deployments both work. domain
-// scopes the cookie: empty in dev (host-only cookie); ".freehire.dev" in prod so
-// freehire.dev and apply.freehire.dev send the same cookie (unified SSO).
+// scopes the cookie: empty in dev (host-only cookie); ".freehire.me" in prod so
+// freehire.me and apply.freehire.me send the same cookie (unified SSO).
 func SetTokenCookie(c *fiber.Ctx, token string, ttl time.Duration, secure bool, domain string) {
 	writeTokenCookie(c, token, time.Now().Add(ttl), secure, domain)
 }
 
 // ClearTokenCookie expires the auth cookie (logout). The browser only
 // overwrites a cookie whose attributes match, so during a cookie-domain
-// migration a `.freehire.dev` clear can't remove a leftover host-only cookie
+// migration a `.freehire.me` clear can't remove a leftover host-only cookie
 // (minted before COOKIE_DOMAIN was set). So when a Domain is configured, also
 // emit a host-only expiry — clearing both scopes makes logout reliable
 // regardless of which cookie the browser is still holding.
@@ -34,7 +34,7 @@ func ClearTokenCookie(c *fiber.Ctx, secure bool, domain string) {
 	if domain != "" {
 		// fasthttp dedups Set-Cookie by name, so a second `c.Cookie()` for the
 		// same name would replace the first. Emit the host-only clear as a raw
-		// header so both the `.freehire.dev` cookie and any leftover host-only
+		// header so both the `.freehire.me` cookie and any leftover host-only
 		// cookie are expired.
 		raw := CookieName + "=; Path=/; Expires=" + expired.UTC().Format(http.TimeFormat) + "; HttpOnly; SameSite=Lax"
 		if secure {

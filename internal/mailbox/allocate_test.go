@@ -34,31 +34,31 @@ func (f *fakeStore) Insert(_ context.Context, userID int64, address string) erro
 
 func TestGetOrCreate_FreshUser(t *testing.T) {
 	s := newFakeStore()
-	addr, err := GetOrCreate(context.Background(), s, 1, "ivan@gmail.com", "inbox.freehire.dev")
+	addr, err := GetOrCreate(context.Background(), s, 1, "ivan@gmail.com", "inbox.freehire.me")
 	if err != nil {
 		t.Fatalf("GetOrCreate: %v", err)
 	}
-	if addr != "ivan@inbox.freehire.dev" {
+	if addr != "ivan@inbox.freehire.me" {
 		t.Errorf("addr = %q", addr)
 	}
 }
 
 func TestGetOrCreate_Collision(t *testing.T) {
 	s := newFakeStore()
-	s.taken["ivan@inbox.freehire.dev"] = 999 // someone else already holds the bare handle
-	addr, err := GetOrCreate(context.Background(), s, 1, "ivan@gmail.com", "inbox.freehire.dev")
+	s.taken["ivan@inbox.freehire.me"] = 999 // someone else already holds the bare handle
+	addr, err := GetOrCreate(context.Background(), s, 1, "ivan@gmail.com", "inbox.freehire.me")
 	if err != nil {
 		t.Fatalf("GetOrCreate: %v", err)
 	}
-	if addr != "ivan-2@inbox.freehire.dev" {
+	if addr != "ivan-2@inbox.freehire.me" {
 		t.Errorf("addr = %q, want suffixed", addr)
 	}
 }
 
 func TestGetOrCreate_Idempotent(t *testing.T) {
 	s := newFakeStore()
-	first, _ := GetOrCreate(context.Background(), s, 1, "ivan@gmail.com", "inbox.freehire.dev")
-	second, err := GetOrCreate(context.Background(), s, 1, "ivan@gmail.com", "inbox.freehire.dev")
+	first, _ := GetOrCreate(context.Background(), s, 1, "ivan@gmail.com", "inbox.freehire.me")
+	second, err := GetOrCreate(context.Background(), s, 1, "ivan@gmail.com", "inbox.freehire.me")
 	if err != nil {
 		t.Fatalf("GetOrCreate second: %v", err)
 	}

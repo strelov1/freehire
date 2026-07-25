@@ -5,7 +5,7 @@
 // code changes — you only swap env vars.
 //
 //   PERF_BASE_URL origin that fronts BOTH the SSR pages and /api
-//                 local: http://localhost:8090 (default) — prod: https://freehire.dev
+//                 local: http://localhost:8090 (default) — prod: https://freehire.me
 //   ALLOW_NONLOCAL=1   REQUIRED to target any non-localhost origin (a deliberate
 //                      safety latch so a stray PERF_BASE_URL can't hammer prod)
 //   PROFILE       'smoke' (default, isolated per-page) | 'load' (blended stress)
@@ -25,7 +25,7 @@ const env = (k, fallback) => (__ENV[k] !== undefined && __ENV[k] !== '' ? __ENV[
 // The local stack fronts SSR + /api behind one nginx origin, so a single base
 // URL covers both the login call and every page navigation — exactly the
 // same-origin shape the browser sees (the Lax auth cookie rides along). Prod is
-// identical in shape: freehire.dev fronts both, so only the origin changes.
+// identical in shape: freehire.me fronts both, so only the origin changes.
 export const BASE_URL = env('PERF_BASE_URL', 'http://localhost:8090');
 
 // Targeting anything other than localhost is a deliberate act, never an env

@@ -100,7 +100,7 @@ const EDUCATION_CREDENTIAL: Record<string, string> = {
 
 /** schema.org JobPosting for a job-detail page, eligible for Google Jobs. A
  *  closed posting sets `validThrough` to its close time so it reads as expired,
- *  not open. `origin` is the absolute site origin (e.g. https://freehire.dev). */
+ *  not open. `origin` is the absolute site origin (e.g. https://freehire.me). */
 export function jobPostingJsonLd(job: Job, origin: string): Record<string, unknown> {
   const e = job.enrichment ?? {};
   // Our logo proxy resolves a logo from the company name (404s for unknown

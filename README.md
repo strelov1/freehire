@@ -11,9 +11,9 @@
 
 **3.4M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**
 
-[**Try it live →**](https://freehire.dev) · [Sources](#sources) · [API](#api) · [Add a source](#adding-a-source) · [Contributing](CONTRIBUTING.md)
+[**Try it live →**](https://freehire.me) · [Sources](#sources) · [API](#api) · [Add a source](#adding-a-source) · [Contributing](CONTRIBUTING.md)
 
-[![Live](https://img.shields.io/badge/live-freehire.dev-0a0a0a)](https://freehire.dev)
+[![Live](https://img.shields.io/badge/live-freehire.me-0a0a0a)](https://freehire.me)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Go version](https://img.shields.io/github/go-mod/go-version/strelov1/freehire)
 ![Last commit](https://img.shields.io/github/last-commit/strelov1/freehire)

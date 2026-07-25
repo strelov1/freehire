@@ -10,10 +10,10 @@
   },
   "api": {
     "type": "openapi",
-    "url": "https://freehire.dev/openapi.yaml",
+    "url": "https://freehire.me/openapi.yaml",
     "is_user_authenticated": true
   },
-  "logo_url": "https://freehire.dev/favicon.png",
-  "contact_email": "support@freehire.dev",
-  "legal_info_url": "https://freehire.dev"
+  "logo_url": "https://freehire.me/favicon.png",
+  "contact_email": "support@freehire.me",
+  "legal_info_url": "https://freehire.me"
 }

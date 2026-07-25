@@ -36,7 +36,7 @@ func digest() notify.Digest {
 }
 
 func TestNotifier_RenderSubject(t *testing.T) {
-	n := NewNotifier(&fakeSender{}, "notifications@freehire.dev", "https://freehire.dev/")
+	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me/")
 
 	got := n.render(digest())
 	if want := `3 new jobs for "Go & <remote>"`; got.subject != want {
@@ -50,7 +50,7 @@ func TestNotifier_RenderSubject(t *testing.T) {
 }
 
 func TestNotifier_RenderHTML(t *testing.T) {
-	n := NewNotifier(&fakeSender{}, "notifications@freehire.dev", "https://freehire.dev/")
+	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me/")
 	got := n.render(digest()).html
 
 	// The saved-search name and a hostile title are auto-escaped by html/template.
@@ -64,7 +64,7 @@ func TestNotifier_RenderHTML(t *testing.T) {
 		t.Errorf("raw unescaped title leaked into HTML: %q", got)
 	}
 	// Each job links to its on-platform freehire page tagged with the email UTM.
-	if !strings.Contains(got, "https://freehire.dev/jobs/go-dev-acme?utm_source=email") {
+	if !strings.Contains(got, "https://freehire.me/jobs/go-dev-acme?utm_source=email") {
 		t.Errorf("missing job link: %q", got)
 	}
 	// Company + salary render for the first job.
@@ -75,13 +75,13 @@ func TestNotifier_RenderHTML(t *testing.T) {
 	if !strings.Contains(got, "1 more") {
 		t.Errorf("missing overflow tail: %q", got)
 	}
-	if !strings.Contains(got, "https://freehire.dev/my/notifications") {
+	if !strings.Contains(got, "https://freehire.me/my/notifications") {
 		t.Errorf("missing manage-alerts footer link: %q", got)
 	}
 }
 
 func TestNotifier_RenderTextAlternative(t *testing.T) {
-	n := NewNotifier(&fakeSender{}, "notifications@freehire.dev", "https://freehire.dev")
+	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me")
 	got := n.render(digest()).text
 
 	// The text alternative carries the same content in plain form (unescaped).
@@ -91,7 +91,7 @@ func TestNotifier_RenderTextAlternative(t *testing.T) {
 	if !strings.Contains(got, "Acme") || !strings.Contains(got, "$130K—$170K / year") {
 		t.Errorf("text missing company/salary: %q", got)
 	}
-	if !strings.Contains(got, "https://freehire.dev/jobs/go-dev-acme?utm_source=email") {
+	if !strings.Contains(got, "https://freehire.me/jobs/go-dev-acme?utm_source=email") {
 		t.Errorf("text missing job link: %q", got)
 	}
 	if !strings.Contains(got, "1 more") {
@@ -101,7 +101,7 @@ func TestNotifier_RenderTextAlternative(t *testing.T) {
 
 func TestNotifier_Send(t *testing.T) {
 	fs := &fakeSender{}
-	n := NewNotifier(fs, "notifications@freehire.dev", "https://freehire.dev")
+	n := NewNotifier(fs, "notifications@freehire.me", "https://freehire.me")
 
 	err := n.Send(context.Background(), notify.ChannelEmail, "user@acme.com", digest())
 	if err != nil {
@@ -110,8 +110,8 @@ func TestNotifier_Send(t *testing.T) {
 	if fs.calls != 1 {
 		t.Fatalf("sender calls = %d, want 1", fs.calls)
 	}
-	if fs.from != "notifications@freehire.dev" || fs.to != "user@acme.com" {
-		t.Errorf("from/to = %q/%q, want notifications@freehire.dev/user@acme.com", fs.from, fs.to)
+	if fs.from != "notifications@freehire.me" || fs.to != "user@acme.com" {
+		t.Errorf("from/to = %q/%q, want notifications@freehire.me/user@acme.com", fs.from, fs.to)
 	}
 	if !strings.HasPrefix(fs.subject, "3 new jobs for") {
 		t.Errorf("subject = %q", fs.subject)
@@ -123,7 +123,7 @@ func TestNotifier_Send(t *testing.T) {
 
 func TestNotifier_SendPropagatesError(t *testing.T) {
 	fs := &fakeSender{err: errors.New("ses throttled")}
-	n := NewNotifier(fs, "notifications@freehire.dev", "https://freehire.dev")
+	n := NewNotifier(fs, "notifications@freehire.me", "https://freehire.me")
 
 	if err := n.Send(context.Background(), notify.ChannelEmail, "user@acme.com", digest()); err == nil {
 		t.Error("Send should propagate the sender error so the delivery retries")

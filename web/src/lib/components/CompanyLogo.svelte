@@ -2,7 +2,7 @@
   import { Globe } from '@lucide/svelte';
   import { companyLogoUrl } from '$lib/logo';
 
-  // A company's logo from our logo.freehire.dev proxy (faviconapi -> logo.dev
+  // A company's logo from our logo.freehire.me proxy (faviconapi -> logo.dev
   // fallback, both server-side). On a genuine miss the proxy 404s, so the image
   // fails to load and we fall back to our own monogram (the initial on a colour
   // derived from the name). The globe is the last resort, only when there's no

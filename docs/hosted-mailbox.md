@@ -5,7 +5,7 @@ can claim an address on our receiving domain and read mail sent there, in the sa
 `/my/inbox` as their Gmail mail. The application code is inert until the AWS SES
 inbound pipeline below exists — **this infra is the critical path**.
 
-Flow: `sender → MX(inbox.freehire.dev) → SES receipt rule → raw MIME in S3 +
+Flow: `sender → MX(inbox.freehire.me) → SES receipt rule → raw MIME in S3 +
 SNS→SQS notification → cmd/mail-ingest drains SQS → parse → resolve recipient to a
 mailbox → store as a hosted message`.
 
@@ -20,7 +20,7 @@ migration discipline.
 
 ## 2. Receiving domain + MX
 
-- Use a dedicated subdomain, e.g. `inbox.freehire.dev` — **not** the apex domain,
+- Use a dedicated subdomain, e.g. `inbox.freehire.me` — **not** the apex domain,
   whose MX serves real mail. This is `MAILBOX_DOMAIN`.
 - Verify the subdomain in SES **for receiving** (SES email receiving is only
   available in a subset of regions — pick one and use it for `AWS_REGION`).
@@ -69,7 +69,7 @@ exits cleanly (nothing to drain).
 
 ## Verify
 
-1. `openssl s_client` / send a test mail to `<you>@inbox.freehire.dev`.
+1. `openssl s_client` / send a test mail to `<you>@inbox.freehire.me`.
 2. Confirm the object appears in S3 and a message in SQS.
 3. `cmd/mail-ingest` logs the drain; the mail appears in `/my/inbox` (Mailbox
    account), unread until opened.

@@ -3,13 +3,13 @@ import type { SessionSummary } from './sessions';
 
 // Fetch helpers for the agent backend (`freehire-agent`). Auth is UNIFIED with
 // freehire: the agent verifies the same httpOnly `hire_token` cookie (shared JWT
-// secret + `.freehire.dev` cookie domain), so `credentials: 'include'` carries
+// secret + `.freehire.me` cookie domain), so `credentials: 'include'` carries
 // it and there is no separate agent login.
 //
 // Base origin:
-//  - prod: `PUBLIC_ASSISTANT_ORIGIN=https://agent.freehire.dev` — a cross-origin
+//  - prod: `PUBLIC_ASSISTANT_ORIGIN=https://agent.freehire.me` — a cross-origin
 //    but SAME-SITE subdomain (shared eTLD+1), so the Lax cookie is still sent;
-//    the agent's nginx adds the CORS headers for the freehire.dev origin.
+//    the agent's nginx adds the CORS headers for the freehire.me origin.
 //  - dev: unset → the same-origin `/assistant-api` path (the Vite proxy).
 const BASE = env.PUBLIC_ASSISTANT_ORIGIN || '/assistant-api';
 

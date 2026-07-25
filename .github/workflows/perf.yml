@@ -157,7 +157,7 @@ jobs:
         # Anonymous by default. To also cover the authed path, add a PROD_AUTH_COOKIE
         # repo secret (a real hire_token) and pass it as AUTH_COOKIE below.
         env:
-          PERF_BASE_URL: https://freehire.dev
+          PERF_BASE_URL: https://freehire.me
           ALLOW_NONLOCAL: '1'
           PERF_WINDOW_SEC: '20'
           PERF_VUS: '3'

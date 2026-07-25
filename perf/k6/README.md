@@ -40,7 +40,7 @@ explicit `ALLOW_NONLOCAL=1` latch so a stray `PERF_BASE_URL` can never quietly l
 prod. Prefer a real captured session cookie over prod credentials:
 
 ```bash
-PERF_BASE_URL=https://freehire.dev \
+PERF_BASE_URL=https://freehire.me \
 ALLOW_NONLOCAL=1 \
 AUTH_COOKIE='<paste hire_token value from your browser>' \
 MAX_RPS=20 \

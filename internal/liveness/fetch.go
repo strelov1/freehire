@@ -7,7 +7,7 @@ import (
 )
 
 // userAgent identifies the probe to employer sites, matching the ingest client.
-const userAgent = "freehire/0.1 (+https://freehire.dev)"
+const userAgent = "freehire/0.1 (+https://freehire.me)"
 
 // maxBody caps how much of a response we read: enough to find an expired phrase or
 // judge content length, without buffering a pathologically large page.

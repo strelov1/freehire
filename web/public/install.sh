@@ -1,9 +1,9 @@
 #!/bin/sh
 # Install the freehire CLI: download the prebuilt binary for this OS/arch from the
 # latest GitHub release and place it on PATH.
-#   curl -fsSL https://freehire.dev/install.sh | sh
+#   curl -fsSL https://freehire.me/install.sh | sh
 #
-# Served at https://freehire.dev/install.sh (Vite copies web/public/ into the SPA
+# Served at https://freehire.me/install.sh (Vite copies web/public/ into the SPA
 # build). Kept in sync with the canonical script in the freehire-cli repo.
 set -eu
 
@@ -43,4 +43,4 @@ fi
 trap - EXIT
 
 echo "Installed ${BIN} → ${target}"
-echo "Next: ${BIN} auth login --token fhk_…    (create a key at https://freehire.dev → API keys)"
+echo "Next: ${BIN} auth login --token fhk_…    (create a key at https://freehire.me → API keys)"

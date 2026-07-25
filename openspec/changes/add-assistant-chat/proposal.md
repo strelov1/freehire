@@ -25,7 +25,7 @@ freehire. It is the MVP slice: prove a working streamed chat. What the agent can
   a server-side env var, so there is no per-user harness onboarding.
 
 Out of scope (later seams): giving the agent access to freehire data
-(MCP/context), the prod cookie `Domain=.freehire.dev` for `agent.freehire.dev`,
+(MCP/context), the prod cookie `Domain=.freehire.me` for `agent.freehire.me`,
 and host-2 deployment.
 
 ## Capabilities

@@ -64,10 +64,10 @@ the SES path; no new vendor.
 
 ### D3: Receiving subdomain with its own MX, not the apex domain
 
-`freehire.dev`'s MX serves real mail and cannot be repurposed. The mailbox domain is a
-dedicated **receiving subdomain** `inbox.freehire.dev` (default `MAIL_DOMAIN`) whose MX
+`freehire.me`'s MX serves real mail and cannot be repurposed. The mailbox domain is a
+dedicated **receiving subdomain** `inbox.freehire.me` (default `MAIL_DOMAIN`) whose MX
 points at SES inbound — exactly why apply used a separate domain (`careermails.net`).
-Address = `<handle>@inbox.freehire.dev`, handle derived from the user's email local-part,
+Address = `<handle>@inbox.freehire.me`, handle derived from the user's email local-part,
 lowercased, `[a-z0-9.-]` only, collision-suffixed (`-2`, `-3`, …). *Alternative:* a brand
 new domain — viable but an extra registration; a subdomain keeps it "on our domain" as asked.
 
@@ -129,6 +129,6 @@ accounts) without reshaping the store.
 
 ## Open Questions
 
-- Final mailbox domain: `inbox.freehire.dev` (default) vs a dedicated domain — DNS/SES choice.
+- Final mailbox domain: `inbox.freehire.me` (default) vs a dedicated domain — DNS/SES choice.
 - SES inbound region (must be a receiving-capable region; may differ from the app region).
 - Whether to ATS-scope hosted mail at ingest or store-all + filter-at-display (start store-all).

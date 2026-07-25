@@ -125,7 +125,7 @@ func (p *fakePinger) PingReferrer(_ context.Context, r Recipient, _ string) erro
 }
 
 func newService(repo *fakeRepo, pinger *fakePinger) *Service {
-	return New(repo, pinger, Config{DailyRequestCap: 3, CabinetURL: "https://freehire.dev/my/referrals"})
+	return New(repo, pinger, Config{DailyRequestCap: 3, CabinetURL: "https://freehire.me/my/referrals"})
 }
 
 func cvID(n int64) *int64 { return &n }

@@ -26,7 +26,7 @@ async function main() {
   assert('ends with single newline', a.endsWith('\n') && !a.endsWith('\n\n'));
 
   // Base URL and core sections.
-  assert('has base URL', a.includes('https://freehire.dev/api/v1'));
+  assert('has base URL', a.includes('https://freehire.me/api/v1'));
   assert('has filtering section', a.includes('## Filtering jobs'));
   assert('documents the search endpoint', a.includes('GET /jobs/search'));
   assert('documents the facets endpoint', a.includes('GET /jobs/facets'));

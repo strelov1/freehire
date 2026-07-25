@@ -42,10 +42,10 @@ func TestCandidate(t *testing.T) {
 }
 
 func TestAddress(t *testing.T) {
-	if got := Address("ivan", 1, "inbox.freehire.dev"); got != "ivan@inbox.freehire.dev" {
+	if got := Address("ivan", 1, "inbox.freehire.me"); got != "ivan@inbox.freehire.me" {
 		t.Errorf("Address n=1 = %q", got)
 	}
-	if got := Address("ivan", 3, "inbox.freehire.dev"); got != "ivan-3@inbox.freehire.dev" {
+	if got := Address("ivan", 3, "inbox.freehire.me"); got != "ivan-3@inbox.freehire.me" {
 		t.Errorf("Address n=3 = %q", got)
 	}
 }

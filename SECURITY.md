@@ -24,7 +24,7 @@ coordinate disclosure as appropriate.
 
 ## In Scope
 
-The hosted service at `freehire.dev` and the code in this repository, in
+The hosted service at `freehire.me` and the code in this repository, in
 particular:
 
 - **Authentication and session handling** — bypass of the JWT session cookie,
@@ -40,7 +40,7 @@ particular:
   URLs could be steered at internal addresses or used to exfiltrate metadata.
 - **Injection** reachable through the API or the ingest pipeline.
 - **Secret exposure** — credentials owned by the project or granting access to
-  `freehire.dev` infrastructure.
+  `freehire.me` infrastructure.
 
 ## Out of Scope
 

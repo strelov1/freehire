@@ -171,10 +171,10 @@ func TestLoad_OAuthUnsetProviderIsZero(t *testing.T) {
 
 func TestLoad_EmailNotifyFromEnv(t *testing.T) {
 	t.Setenv("AWS_REGION", "eu-central-1")
-	t.Setenv("NOTIFY_EMAIL_FROM", "notifications@freehire.dev")
+	t.Setenv("NOTIFY_EMAIL_FROM", "notifications@freehire.me")
 
 	s := Load()
-	if s.AWSRegion != "eu-central-1" || s.NotifyEmailFrom != "notifications@freehire.dev" {
+	if s.AWSRegion != "eu-central-1" || s.NotifyEmailFrom != "notifications@freehire.me" {
 		t.Errorf("email-notify settings = %q/%q, want the env values", s.AWSRegion, s.NotifyEmailFrom)
 	}
 }

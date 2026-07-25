@@ -6,7 +6,7 @@ restricted-scope verification — until the app is verified, only manually-added
 users can connect, so it cannot be offered to everyone.
 
 We want a **second, self-contained option that works for every user with no Google
-dependency**: give each user a **mailbox on our own domain** (`<handle>@inbox.freehire.dev`)
+dependency**: give each user a **mailbox on our own domain** (`<handle>@inbox.freehire.me`)
 that they can use as their apply address (or forward ATS mail to). Mail sent there is
 received by us, parsed, and shown in the **same inbox** as their Gmail mail. The two
 sources sit side by side ("two options") and land in one unified inbox.

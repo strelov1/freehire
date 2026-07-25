@@ -152,7 +152,7 @@ func newClientWithProxy(proxy *url.URL) *Client {
 		// given to trusted, curated providers — never the link-following path.
 		httpClient:   safehttp.NewClientWithProxy(15*time.Second, proxy),
 		streamClient: safehttp.NewClientWithProxy(streamTimeout, proxy),
-		userAgent:    "freehire/0.1 (+https://freehire.dev)",
+		userAgent:    "freehire/0.1 (+https://freehire.me)",
 		maxRetries:   2,
 		retryDelay:   500 * time.Millisecond,
 	}

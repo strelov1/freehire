@@ -10,11 +10,13 @@ export type Segment =
 // A public slug: alphanumerics + dashes, no leading/trailing dash (so trailing
 // punctuation like `.`/`,` is naturally excluded from the capture).
 const SLUG = '[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?';
-const HOST = '(?:https?:\\/\\/(?:www\\.)?freehire\\.dev)';
+// Both TLDs: freehire.me is the front door, but freehire.dev still 301s to it and
+// the agent's deployed skill may still emit .dev links — accept either, emit .me.
+const HOST = '(?:https?:\\/\\/(?:www\\.)?freehire\\.(?:me|dev))';
 // Two forms, matched left-to-right by position:
 //  1. a markdown link `[label](…/jobs/<slug>)` (host optional — the parens bound
 //     it, so a host-relative link is safe to match), or
-//  2. a bare job URL `https://freehire.dev/jobs/<slug>` (host REQUIRED, so a
+//  2. a bare job URL `https://freehire.me/jobs/<slug>` (host REQUIRED, so a
 //     stray `/jobs/…` path in prose is never mistaken for a job link).
 // Group 1 = slug from the markdown-link form; group 2 = slug from the bare form.
 const JOB_RE = new RegExp(
@@ -37,7 +39,7 @@ export function parseJobSegments(text: string): Segment[] {
     if (at > last) {
       segments.push({ kind: 'markdown', text: text.slice(last, at) });
     }
-    segments.push({ kind: 'job', slug, url: `https://freehire.dev/jobs/${slug}` });
+    segments.push({ kind: 'job', slug, url: `https://freehire.me/jobs/${slug}` });
     last = at + m[0].length;
   }
   if (last < text.length) {

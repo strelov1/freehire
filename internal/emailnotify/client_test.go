@@ -27,15 +27,15 @@ func TestClient_SendBuildsSimpleEmail(t *testing.T) {
 	fake := &fakeSES{}
 	c := &Client{ses: fake}
 
-	err := c.Send(context.Background(), "from@freehire.dev", "to@acme.com", "Subj", "<b>hi</b>", "hi")
+	err := c.Send(context.Background(), "from@freehire.me", "to@acme.com", "Subj", "<b>hi</b>", "hi")
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	if fake.in == nil {
 		t.Fatal("SendEmail was not called")
 	}
-	if got := deref(fake.in.FromEmailAddress); got != "from@freehire.dev" {
-		t.Errorf("from = %q, want from@freehire.dev", got)
+	if got := deref(fake.in.FromEmailAddress); got != "from@freehire.me" {
+		t.Errorf("from = %q, want from@freehire.me", got)
 	}
 	if len(fake.in.Destination.ToAddresses) != 1 || fake.in.Destination.ToAddresses[0] != "to@acme.com" {
 		t.Errorf("to = %v, want [to@acme.com]", fake.in.Destination.ToAddresses)

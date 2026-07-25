@@ -6,13 +6,13 @@ TBD - created by archiving change assistant-job-cards. Update Purpose after arch
 ### Requirement: Job links in an assistant reply render as job cards
 
 An assistant message SHALL render every freehire job reference
-(`https://freehire.dev/jobs/<slug>`, protocol/host-optional bare `/jobs/<slug>`)
+(`https://freehire.me/jobs/<slug>`, protocol/host-optional bare `/jobs/<slug>`)
 as a job card showing the posting's real data, rather than a plain link. The
 surrounding prose SHALL still render as markdown, in order.
 
 #### Scenario: A reply listing jobs shows cards
 
-- **WHEN** the agent replies with several `https://freehire.dev/jobs/<slug>` links (e.g. a recommended shortlist)
+- **WHEN** the agent replies with several `https://freehire.me/jobs/<slug>` links (e.g. a recommended shortlist)
 - **THEN** each link is replaced, in place, by a job card with the posting's logo, title, tags, skills, and posted time, and any text between links renders as normal markdown
 
 #### Scenario: A non-job link is left alone
@@ -64,12 +64,12 @@ spacing) so the reply reads as one coherent surface.
 ### Requirement: The agent produces unfurlable job links
 
 The `using-freehire` skill SHALL direct the agent to present each recommended or
-listed job as its canonical `https://freehire.dev/jobs/<public_slug>` URL, so the
+listed job as its canonical `https://freehire.me/jobs/<public_slug>` URL, so the
 chat can unfurl it into a card. The `public_slug` comes from the CLI's job
 payload; the skill SHALL construct (or copy) the canonical URL from it.
 
 #### Scenario: Recommending jobs yields cards
 
 - **WHEN** the agent uses the freehire CLI to find jobs and then recommends them to the user
-- **THEN** each recommendation includes the job's `https://freehire.dev/jobs/<public_slug>` URL, which the chat renders as a card
+- **THEN** each recommendation includes the job's `https://freehire.me/jobs/<public_slug>` URL, which the chat renders as a card
 

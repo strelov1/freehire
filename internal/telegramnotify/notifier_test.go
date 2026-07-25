@@ -14,7 +14,7 @@ import (
 )
 
 func TestNotifier_Render(t *testing.T) {
-	n := NewNotifier(NewClient("t"), "https://freehire.dev/")
+	n := NewNotifier(NewClient("t"), "https://freehire.me/")
 	d := notify.Digest{
 		SavedSearchName: "Go & <remote>",
 		Total:           3,
@@ -35,11 +35,11 @@ func TestNotifier_Render(t *testing.T) {
 	}
 	// Line: a bullet whose escaped title links to the freehire job page (trailing
 	// slash trimmed) tagged with the telegram UTM, then " — Company · salary".
-	if want := `• <a href="https://freehire.dev/jobs/go-dev-acme?utm_source=telegram-bot">Go Dev &lt;x&gt;</a> — Acme · $130K—$170K / year`; !strings.Contains(got, want) {
+	if want := `• <a href="https://freehire.me/jobs/go-dev-acme?utm_source=telegram-bot">Go Dev &lt;x&gt;</a> — Acme · $130K—$170K / year`; !strings.Contains(got, want) {
 		t.Errorf("line missing %q in: %q", want, got)
 	}
 	// A job with no company/salary omits those suffixes but still renders the link.
-	if want := `• <a href="https://freehire.dev/jobs/rustacean-foo?utm_source=telegram-bot">Rustacean</a>` + "\n"; !strings.Contains(got, want) {
+	if want := `• <a href="https://freehire.me/jobs/rustacean-foo?utm_source=telegram-bot">Rustacean</a>` + "\n"; !strings.Contains(got, want) {
 		t.Errorf("company/salary-less line wrong: %q", got)
 	}
 	if strings.Contains(got, " — ·") || strings.Count(got, "·") != 1 {
@@ -52,7 +52,7 @@ func TestNotifier_Render(t *testing.T) {
 }
 
 func TestNotifier_RenderSingularNoOverflow(t *testing.T) {
-	n := NewNotifier(NewClient("t"), "https://freehire.dev")
+	n := NewNotifier(NewClient("t"), "https://freehire.me")
 	got := n.render(notify.Digest{SavedSearchName: "x", Total: 1, Jobs: []notify.DigestJob{{Title: "A", Slug: "a"}}})
 	if !strings.Contains(got, "<b>1</b> new job for") || strings.Contains(got, "more") {
 		t.Errorf("singular render wrong: %q", got)
@@ -64,7 +64,7 @@ func TestNotifier_RenderSingularNoOverflow(t *testing.T) {
 // re-fails, and the whole batch is dead-lettered (the user loses all of it). The
 // jobs that don't fit fall into the "+ N more" tail, and none are lost.
 func TestNotifier_RenderCapsAtTelegramLimit(t *testing.T) {
-	n := NewNotifier(NewClient("t"), "https://freehire.dev")
+	n := NewNotifier(NewClient("t"), "https://freehire.me")
 	const total = 20                                                              // DigestCap
 	longTitle := strings.Repeat("Senior Staff Platform Reliability Engineer ", 6) // ~258 chars
 	jobs := make([]notify.DigestJob, total)
@@ -102,7 +102,7 @@ func TestNotifier_Send(t *testing.T) {
 
 	c := NewClient("BOTTOKEN")
 	c.base = srv.URL
-	n := NewNotifier(c, "https://freehire.dev")
+	n := NewNotifier(c, "https://freehire.me")
 
 	err := n.Send(context.Background(), notify.ChannelTelegram, "12345", notify.Digest{SavedSearchName: "x", Total: 1, Jobs: []notify.DigestJob{{Title: "A", Slug: "a"}}})
 	if err != nil {
@@ -120,7 +120,7 @@ func TestNotifier_Send(t *testing.T) {
 }
 
 func TestNotifier_SendBadChatID(t *testing.T) {
-	n := NewNotifier(NewClient("t"), "https://freehire.dev")
+	n := NewNotifier(NewClient("t"), "https://freehire.me")
 	if err := n.Send(context.Background(), notify.ChannelTelegram, "not-a-number", notify.Digest{}); err == nil {
 		t.Error("Send with non-numeric dest succeeded, want error")
 	}

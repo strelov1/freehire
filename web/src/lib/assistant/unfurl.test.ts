@@ -8,25 +8,25 @@ describe('parseJobSegments', () => {
   });
 
   it('splits a bare job URL out of surrounding prose, in order', () => {
-    const segs = parseJobSegments('Check https://freehire.dev/jobs/senior-go-dev now');
+    const segs = parseJobSegments('Check https://freehire.me/jobs/senior-go-dev now');
     expect(segs).toEqual([
       { kind: 'markdown', text: 'Check ' },
-      { kind: 'job', slug: 'senior-go-dev', url: 'https://freehire.dev/jobs/senior-go-dev' },
+      { kind: 'job', slug: 'senior-go-dev', url: 'https://freehire.me/jobs/senior-go-dev' },
       { kind: 'markdown', text: ' now' },
     ]);
   });
 
   it('unfurls a markdown-link form and drops the label (card shows the real title)', () => {
-    const segs = parseJobSegments('- [Senior Go Engineer](https://freehire.dev/jobs/senior-go)');
+    const segs = parseJobSegments('- [Senior Go Engineer](https://freehire.me/jobs/senior-go)');
     // The leading "- " list marker is dropped once the link becomes a card.
     expect(segs).toEqual([
-      { kind: 'job', slug: 'senior-go', url: 'https://freehire.dev/jobs/senior-go' },
+      { kind: 'job', slug: 'senior-go', url: 'https://freehire.me/jobs/senior-go' },
     ]);
   });
 
   it('stacks multiple links, dropping the whitespace between them', () => {
     const segs = parseJobSegments(
-      'Top picks:\nhttps://freehire.dev/jobs/a\nhttps://freehire.dev/jobs/b',
+      'Top picks:\nhttps://freehire.me/jobs/a\nhttps://freehire.me/jobs/b',
     );
     // The lone "\n" between the two cards is whitespace-only → dropped, so the
     // cards stack cleanly.
@@ -39,21 +39,21 @@ describe('parseJobSegments', () => {
 
   it('drops list-marker-only fragments so a bulleted job list renders as clean cards', () => {
     const segs = parseJobSegments(
-      '- [Role A](https://freehire.dev/jobs/a)\n- [Role B](https://freehire.dev/jobs/b)',
+      '- [Role A](https://freehire.me/jobs/a)\n- [Role B](https://freehire.me/jobs/b)',
     );
     // The "- " and "\n- " fragments are list-marker-only → dropped.
     expect(segs.map((s) => s.kind)).toEqual(['job', 'job']);
   });
 
   it('keeps prose segments that merely contain a list marker', () => {
-    const segs = parseJobSegments('Here are roles:\n\nhttps://freehire.dev/jobs/a');
+    const segs = parseJobSegments('Here are roles:\n\nhttps://freehire.me/jobs/a');
     expect(segs[0]).toEqual({ kind: 'markdown', text: 'Here are roles:\n\n' });
     expect(segs[1]?.kind).toBe('job');
   });
 
   it('emits a card for each occurrence of a duplicated slug', () => {
     const segs = parseJobSegments(
-      'https://freehire.dev/jobs/dup and again https://freehire.dev/jobs/dup',
+      'https://freehire.me/jobs/dup and again https://freehire.me/jobs/dup',
     );
     const jobs = segs.filter((s) => s.kind === 'job');
     expect(jobs).toHaveLength(2);
@@ -61,23 +61,28 @@ describe('parseJobSegments', () => {
   });
 
   it('excludes trailing punctuation from the slug', () => {
-    const segs = parseJobSegments('See https://freehire.dev/jobs/foo.');
+    const segs = parseJobSegments('See https://freehire.me/jobs/foo.');
     expect(segs).toEqual([
       { kind: 'markdown', text: 'See ' },
-      { kind: 'job', slug: 'foo', url: 'https://freehire.dev/jobs/foo' },
+      { kind: 'job', slug: 'foo', url: 'https://freehire.me/jobs/foo' },
       { kind: 'markdown', text: '.' },
     ]);
   });
 
   it('matches the www host', () => {
-    const segs = parseJobSegments('https://www.freehire.dev/jobs/abc');
+    const segs = parseJobSegments('https://www.freehire.me/jobs/abc');
     expect(segs).toEqual([
-      { kind: 'job', slug: 'abc', url: 'https://freehire.dev/jobs/abc' },
+      { kind: 'job', slug: 'abc', url: 'https://freehire.me/jobs/abc' },
     ]);
   });
 
+  it('matches the legacy freehire.dev host and canonicalizes to freehire.me', () => {
+    const segs = parseJobSegments('https://freehire.dev/jobs/abc');
+    expect(segs).toEqual([{ kind: 'job', slug: 'abc', url: 'https://freehire.me/jobs/abc' }]);
+  });
+
   it('leaves non-job freehire links as markdown', () => {
-    const text = 'Company: https://freehire.dev/companies/acme and board https://freehire.dev/b/x';
+    const text = 'Company: https://freehire.me/companies/acme and board https://freehire.me/b/x';
     expect(parseJobSegments(text)).toEqual([{ kind: 'markdown', text }]);
   });
 

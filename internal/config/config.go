@@ -49,7 +49,7 @@ type Settings struct {
 	GmailTokenKey []byte
 
 	// MailboxDomain is the receiving domain hosted mailboxes live on
-	// (<handle>@MailboxDomain, e.g. inbox.freehire.dev). Empty = the hosted-mailbox
+	// (<handle>@MailboxDomain, e.g. inbox.freehire.me). Empty = the hosted-mailbox
 	// option is off (claim route unregistered, status reports unavailable). It is
 	// deliberately NOT named MAIL_DOMAIN — that shared var already holds the SES
 	// *sending* identity (notifications), a different, non-receiving domain.
@@ -121,7 +121,7 @@ type Settings struct {
 	// NotifyEmailFrom are set — either empty and the worker still delivers Telegram
 	// (enforced at the cmd/notify call site, not here). AWS credentials come from the
 	// default AWS chain (env/role), never config. NotifyEmailFrom is the verified SES
-	// sender address (e.g. notifications@freehire.dev).
+	// sender address (e.g. notifications@freehire.me).
 	AWSRegion       string
 	NotifyEmailFrom string
 
@@ -214,7 +214,7 @@ func decodeKey(s string) []byte {
 }
 
 // splitDomains parses a comma-separated COOKIE_DOMAIN into bare registrable
-// domains, trimming spaces and any leading dot (".freehire.dev" -> "freehire.dev").
+// domains, trimming spaces and any leading dot (".freehire.me" -> "freehire.me").
 // Empty entries are dropped, so "" yields nil (host-only cookie, no extra origins).
 func splitDomains(s string) []string {
 	var out []string

@@ -26,13 +26,13 @@ func setCookieHeader(t *testing.T, domain string) string {
 }
 
 // A non-empty domain must appear as the cookie's Domain attribute so the session
-// is shared across freehire.dev and apply.freehire.dev (unified SSO).
+// is shared across freehire.me and apply.freehire.me (unified SSO).
 func TestSetTokenCookieSetsDomain(t *testing.T) {
-	sc := setCookieHeader(t, ".freehire.dev")
+	sc := setCookieHeader(t, ".freehire.me")
 	if !strings.Contains(sc, CookieName+"=tok") {
 		t.Fatalf("cookie value missing in %q", sc)
 	}
-	if !strings.Contains(strings.ToLower(sc), "domain=.freehire.dev") {
+	if !strings.Contains(strings.ToLower(sc), "domain=.freehire.me") {
 		t.Fatalf("expected domain attribute, got %q", sc)
 	}
 }
@@ -63,10 +63,10 @@ func clearCookieHeaders(t *testing.T, domain string) []string {
 }
 
 // Logout during the cookie-domain migration must clear BOTH the configured
-// `.freehire.dev` cookie and any leftover host-only cookie — otherwise a user
+// `.freehire.me` cookie and any leftover host-only cookie — otherwise a user
 // still holding an old host-only cookie can never log out.
 func TestClearTokenCookieClearsBothScopesWithDomain(t *testing.T) {
-	scs := clearCookieHeaders(t, ".freehire.dev")
+	scs := clearCookieHeaders(t, ".freehire.me")
 	if len(scs) != 2 {
 		t.Fatalf("expected 2 Set-Cookie headers (domain + host-only), got %d: %q", len(scs), scs)
 	}
@@ -76,14 +76,14 @@ func TestClearTokenCookieClearsBothScopesWithDomain(t *testing.T) {
 			t.Fatalf("expected an expiring clear, got %q", sc)
 		}
 		low := strings.ToLower(sc)
-		if strings.Contains(low, "domain=.freehire.dev") {
+		if strings.Contains(low, "domain=.freehire.me") {
 			haveDomain = true
 		} else if !strings.Contains(low, "domain=") {
 			haveHostOnly = true
 		}
 	}
 	if !haveDomain || !haveHostOnly {
-		t.Fatalf("expected both a .freehire.dev clear and a host-only clear, got %q", scs)
+		t.Fatalf("expected both a .freehire.me clear and a host-only clear, got %q", scs)
 	}
 }
 

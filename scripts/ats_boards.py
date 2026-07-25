@@ -18,7 +18,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 SOURCES_DIR = REPO / "sources"
-UA = "freehire-harvest/1.0 (+https://freehire.dev)"
+UA = "freehire-harvest/1.0 (+https://freehire.me)"
 
 # (compiled regex, provider). Group 1 (first non-empty group) is the board slug.
 SLUG_PATTERNS = [
