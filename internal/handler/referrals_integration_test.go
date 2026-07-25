@@ -172,7 +172,7 @@ func TestReferralEndpoints(t *testing.T) {
 
 	t.Run("company read exposes referral availability", func(t *testing.T) {
 		pub := fiber.New(fiber.Config{ErrorHandler: RenderError})
-		pub.Get("/api/v1/companies/:slug", h.GetCompany)
+		pub.Get("/api/v1/companies/:slug", (&companiesHandlers{queries: queries}).GetCompany)
 		if _, err := pool.Exec(ctx, `INSERT INTO companies (slug, name, job_count) VALUES ('globex','Globex',0)`); err != nil {
 			t.Fatalf("seed company: %v", err)
 		}

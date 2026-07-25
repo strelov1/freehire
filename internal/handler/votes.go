@@ -4,9 +4,30 @@ import (
 	"errors"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/vote"
 )
+
+// voteHandlers serves thumbs up/down on jobs and companies: the per-user vote
+// write and the target's public counter recompute, delegated to vote.Service.
+type voteHandlers struct {
+	votes *vote.Service
+}
+
+func newVoteHandlers(queries *db.Queries, pool *pgxpool.Pool) *voteHandlers {
+	return &voteHandlers{votes: vote.New(queries, pool)}
+}
+
+func (h *voteHandlers) register(api fiber.Router, mw middleware) {
+	// Thumbs up/down: a signed-in vote (toggle/flip); the public counters it drives
+	// are read by everyone on the job/company shapes.
+	api.Post("/jobs/:slug/vote", mw.key, h.VoteJob)
+	api.Delete("/jobs/:slug/vote", mw.key, h.ClearJobVote)
+	api.Post("/companies/:slug/vote", mw.key, h.VoteCompany)
+	api.Delete("/companies/:slug/vote", mw.key, h.ClearCompanyVote)
+}
 
 // voteRequest is the cast-vote body: the direction of the thumb tapped.
 type voteRequest struct {
@@ -37,7 +58,7 @@ func parseVoteDirection(c *fiber.Ctx) (vote.Direction, error) {
 
 // VoteJob casts the caller's thumbs vote on a job (toggle/flip) and returns the
 // job's resulting public counters and the caller's own vote.
-func (a *API) VoteJob(c *fiber.Ctx) error {
+func (h *voteHandlers) VoteJob(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -46,7 +67,7 @@ func (a *API) VoteJob(c *fiber.Ctx) error {
 	if err != nil {
 		return voteError(err)
 	}
-	res, err := a.votes.VoteJob(c.Context(), userID, c.Params("slug"), dir)
+	res, err := h.votes.VoteJob(c.Context(), userID, c.Params("slug"), dir)
 	if err != nil {
 		return voteError(err)
 	}
@@ -54,12 +75,12 @@ func (a *API) VoteJob(c *fiber.Ctx) error {
 }
 
 // ClearJobVote removes the caller's thumbs vote on a job (no-op when none).
-func (a *API) ClearJobVote(c *fiber.Ctx) error {
+func (h *voteHandlers) ClearJobVote(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	res, err := a.votes.ClearJob(c.Context(), userID, c.Params("slug"))
+	res, err := h.votes.ClearJob(c.Context(), userID, c.Params("slug"))
 	if err != nil {
 		return voteError(err)
 	}
@@ -67,7 +88,7 @@ func (a *API) ClearJobVote(c *fiber.Ctx) error {
 }
 
 // VoteCompany casts the caller's thumbs vote on a company (toggle/flip).
-func (a *API) VoteCompany(c *fiber.Ctx) error {
+func (h *voteHandlers) VoteCompany(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -76,7 +97,7 @@ func (a *API) VoteCompany(c *fiber.Ctx) error {
 	if err != nil {
 		return voteError(err)
 	}
-	res, err := a.votes.VoteCompany(c.Context(), userID, c.Params("slug"), dir)
+	res, err := h.votes.VoteCompany(c.Context(), userID, c.Params("slug"), dir)
 	if err != nil {
 		return voteError(err)
 	}
@@ -84,12 +105,12 @@ func (a *API) VoteCompany(c *fiber.Ctx) error {
 }
 
 // ClearCompanyVote removes the caller's thumbs vote on a company (no-op when none).
-func (a *API) ClearCompanyVote(c *fiber.Ctx) error {
+func (h *voteHandlers) ClearCompanyVote(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	res, err := a.votes.ClearCompany(c.Context(), userID, c.Params("slug"))
+	res, err := h.votes.ClearCompany(c.Context(), userID, c.Params("slug"))
 	if err != nil {
 		return voteError(err)
 	}

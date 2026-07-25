@@ -19,7 +19,6 @@ import (
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/boardresolve"
 	"github.com/strelov1/freehire/internal/browsertools"
-	"github.com/strelov1/freehire/internal/community"
 	"github.com/strelov1/freehire/internal/contribution"
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/cv"
@@ -44,7 +43,6 @@ import (
 	"github.com/strelov1/freehire/internal/telegramnotify"
 	"github.com/strelov1/freehire/internal/tokencrypt"
 	"github.com/strelov1/freehire/internal/userprofile"
-	"github.com/strelov1/freehire/internal/vote"
 )
 
 const (
@@ -135,9 +133,6 @@ type API struct {
 	// tracking owns the per-user job-interaction use cases (view/apply/save/
 	// unsave/track); the handlers translate wire ↔ domain and delegate to it.
 	tracking *jobtracking.Service
-	// votes owns thumbs up/down on jobs and companies: the per-user vote write and
-	// the target's public counter recompute, in one transaction.
-	votes *vote.Service
 	// accounts resolves external OAuth identities into local user accounts
 	// (identity-first lookup, verified-email gate, link-or-create, race retry).
 	accounts *accounts.Service
@@ -155,10 +150,6 @@ type API struct {
 	// (nil when S3 is unconfigured — offer submit then reports 503).
 	referral *referral.Service
 	blob     blobstore.Store
-	// community owns the anonymous discussion-thread use case (topics attached to a
-	// company or vacancy, pseudonymous personas, flat replies); the handlers translate
-	// wire ↔ domain and delegate to it.
-	community *community.Service
 	// report owns the job-report moderation queue (file/list/resolve/dismiss);
 	// resolving may soft-close the reported job through the job-lifecycle close path.
 	report *report.Service
@@ -210,6 +201,21 @@ type API struct {
 	telegramBot           *telegramnotify.Client
 	telegramBotUsername   string
 	telegramWebhookSecret string
+}
+
+// middleware bundles the auth gates the feature handlers mount their routes
+// behind. optional attaches the caller when signed in (cookie or key) but never
+// rejects, so public detail reads can overlay the caller's own state (my_vote)
+// while staying open to anonymous visitors. key accepts the session cookie or an
+// API key (RequireAuthOrKey), so a script holding a key can drive the same flow as
+// the browser. cookie is the cookie-only gate (RequireAuth) for the
+// browser-convenience surfaces where a leaked API key must not act. moderator
+// gates on the moderator role and is stacked after key or cookie.
+type middleware struct {
+	optional  fiber.Handler
+	key       fiber.Handler
+	cookie    fiber.Handler
+	moderator fiber.Handler
 }
 
 // pageParams reads and clamps the shared limit/offset pagination query params.
@@ -322,12 +328,13 @@ func Register(app *fiber.App, cfg Config) {
 		mailDomain:     cfg.MailboxDomain,
 		browserTools:   browsertools.New(),
 		tracking:       jobtracking.New(jobtracking.NewQueriesRepository(queries, cfg.Pool)),
-		votes:          vote.New(queries, cfg.Pool),
 		accounts:       accounts.New(accounts.NewQueriesRepository(queries, cfg.Pool), authHasher{}),
 		moderation:     moderation.New(moderation.NewQueriesRepository(queries, cfg.Pool, enrich.Version)),
 	}
 	sitemapH := newSitemapHandlers(queries)
 	statsH := newStatsHandlers(queries)
+	votesH := newVoteHandlers(queries, cfg.Pool)
+	communityH := newCommunityHandlers(queries)
 	// submission approval mints through the same moderation service, so derivation,
 	// dedup, and the enrichment enqueue are reused rather than duplicated.
 	a.submission = submission.New(submission.NewQueriesRepository(queries), a.moderation)
@@ -385,11 +392,13 @@ func Register(app *fiber.App, cfg Config) {
 	}
 	// Assign only when configured: a nil *search.Client wrapped in the searcher
 	// interface would be a non-nil interface and defeat the nil check.
+	var companySearch companySearcher
 	if cfg.Search != nil {
 		a.search = cfg.Search
 		a.facets = cfg.Search
-		a.companySearch = cfg.Search
+		companySearch = cfg.Search
 	}
+	companiesH := newCompaniesHandlers(queries, companySearch)
 
 	// Referral notifications reuse the SES email transport (email is always present) and
 	// the Telegram bot when linked. Each channel is wrapped only when configured so a nil
@@ -412,10 +421,6 @@ func Register(app *fiber.App, cfg Config) {
 	referralCabinetURL := strings.TrimRight(cfg.FrontendOrigin, "/") + "/my/referrals?tab=incoming"
 	a.referral = referral.New(referral.NewQueriesRepository(queries), referralPinger,
 		referral.Config{CabinetURL: referralCabinetURL})
-	// One repository satisfies both the persistence port and the subject-existence
-	// port, so it is passed for each.
-	communityRepo := community.NewQueriesRepository(queries)
-	a.community = community.New(communityRepo, communityRepo, community.Config{})
 
 	// Allow the canonical frontend origin plus every served domain's https apex,
 	// so a cross-origin (non-credentialed) read works from either domain during a
@@ -430,6 +435,22 @@ func Register(app *fiber.App, cfg Config) {
 	app.Get("/health", a.Health)
 
 	api := app.Group("/api/v1")
+	// optionalAuth attaches the caller when signed in (cookie or key) but never
+	// rejects, so these public detail reads can overlay the caller's own vote
+	// (my_vote) while staying open to anonymous visitors.
+	optionalAuth := auth.OptionalAuth(a.issuer, a.queries)
+	// keyAuth (RequireAuthOrKey) accepts the session cookie or an API key, so a
+	// script holding a key can drive the same flow as the browser. The public job
+	// reads stay unauthenticated. Jobs are addressed by their public slug; the
+	// handlers resolve it to the internal id before writing user_jobs.
+	keyAuth := auth.RequireAuthOrKey(a.issuer, a.queries)
+	// cookieAuth is the single cookie-only gate (RequireAuth) for the
+	// browser-convenience surfaces below — key management, saved searches, the CV
+	// builder, the inbox, subscriptions — where a leaked API key must not act.
+	cookieAuth := auth.RequireAuth(a.issuer)
+	requireModerator := auth.RequireRole(a.queries, "moderator")
+	mw := middleware{optional: optionalAuth, key: keyAuth, cookie: cookieAuth, moderator: requireModerator}
+
 	api.Get("/jobs", a.ListJobs)
 	// Literal routes before the :slug param route so they are not read as slugs.
 	api.Get("/jobs/search", a.SearchJobs)
@@ -438,18 +459,12 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/agent/jobs/search", a.AgentSearchJobs)
 	api.Get("/jobs/facets", a.JobFacets)
 	sitemapH.register(api)
-	// optionalAuth attaches the caller when signed in (cookie or key) but never
-	// rejects, so these public detail reads can overlay the caller's own vote
-	// (my_vote) while staying open to anonymous visitors.
-	optionalAuth := auth.OptionalAuth(a.issuer, a.queries)
 	// Static route registered before /jobs/:slug so it isn't captured as a slug.
 	api.Get("/jobs/find", a.FindJob)
 	api.Get("/jobs/:slug", optionalAuth, a.GetJob)
 	api.Get("/jobs/:slug/similar", a.SimilarJobs)
 	api.Get("/jobs/:slug/copies", a.JobCopies)
-	api.Get("/companies", a.ListCompanies)
-	api.Get("/companies/subindustries", a.CompanySubindustries)
-	api.Get("/companies/:slug", optionalAuth, a.GetCompany)
+	companiesH.register(api, mw)
 
 	// Public read of a shared saved-search "board" by its slug — unauthenticated, like
 	// the job/company reads above. Owner identity is never exposed (see boardResponse).
@@ -469,28 +484,13 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/insights/salary", a.InsightsSalary)
 	api.Get("/insights/companies", a.InsightsCompanies)
 
-	// Per-user job interactions and the user-scoped reads accept either the
-	// session cookie or an API key (RequireAuthOrKey), so a script holding a key
-	// can drive the same flow as the browser. The public job reads above stay
-	// unauthenticated. Jobs are addressed by their public slug; the handlers
-	// resolve it to the internal id before writing user_jobs.
-	keyAuth := auth.RequireAuthOrKey(a.issuer, a.queries)
-	// cookieAuth is the single cookie-only gate (RequireAuth) for the
-	// browser-convenience surfaces below — key management, saved searches, the CV
-	// builder, the inbox, subscriptions — where a leaked API key must not act.
-	cookieAuth := auth.RequireAuth(a.issuer)
 	api.Post("/jobs/:slug/view", keyAuth, a.RecordView)
 	api.Post("/jobs/:slug/apply", keyAuth, a.MarkApplied)
 	api.Post("/jobs/:slug/save", keyAuth, a.SaveJob)
 	api.Delete("/jobs/:slug/save", keyAuth, a.UnsaveJob)
 	api.Post("/jobs/:slug/dismiss", keyAuth, a.DismissJob)
 	api.Delete("/jobs/:slug/dismiss", keyAuth, a.UndismissJob)
-	// Thumbs up/down: a signed-in vote (toggle/flip); the public counters it drives
-	// are read by everyone on the job/company shapes.
-	api.Post("/jobs/:slug/vote", keyAuth, a.VoteJob)
-	api.Delete("/jobs/:slug/vote", keyAuth, a.ClearJobVote)
-	api.Post("/companies/:slug/vote", keyAuth, a.VoteCompany)
-	api.Delete("/companies/:slug/vote", keyAuth, a.ClearCompanyVote)
+	votesH.register(api, mw)
 	// Per-job reminder controls: reschedule or turn off a saved job's pending
 	// reminder without unsaving it (scheduling itself happens on save).
 	api.Patch("/jobs/:slug/reminder", keyAuth, a.RescheduleReminder)
@@ -533,7 +533,6 @@ func Register(app *fiber.App, cfg Config) {
 	// Moderator-authored jobs: create a hand-curated vacancy and edit it. Authenticated
 	// by cookie or API key (the CLI uses a key), then gated on the moderator role. The
 	// public job reads above stay unauthenticated; a non-moderator gets 403.
-	requireModerator := auth.RequireRole(a.queries, "moderator")
 	api.Post("/jobs", keyAuth, requireModerator, a.CreateJob)
 	api.Patch("/jobs/:slug", keyAuth, requireModerator, a.UpdateJob)
 
@@ -579,17 +578,8 @@ func Register(app *fiber.App, cfg Config) {
 	api.Post("/reports/:id/resolve", keyAuth, requireModerator, a.ResolveReport)
 	api.Post("/reports/:id/dismiss", keyAuth, requireModerator, a.DismissReport)
 
-	// Community discussion threads: anonymous topics attached to a company or vacancy.
-	// Reads are public — only pseudonymous persona handles are ever exposed, never a
-	// user id — so discussions are browsable without signing in. Writing a thread or
-	// reply requires a signed-in session (cookie); closing a thread is moderator-gated.
-	api.Get("/threads", a.ListThreads)
-	// Registered before "/threads/:id" so "count" is not parsed as a thread id.
-	api.Get("/threads/count", a.CountThreads)
-	api.Get("/threads/:id", a.GetThread)
-	api.Post("/threads", cookieAuth, a.CreateThread)
-	api.Post("/threads/:id/replies", cookieAuth, a.CreateReply)
-	api.Post("/threads/:id/close", cookieAuth, requireModerator, a.CloseThread)
+	// Community discussion threads (see communityHandlers).
+	communityH.register(api, mw)
 
 	// User-scoped reads live under /me (consistent with /auth/me): the tracking
 	// listing joins the caller's interactions with the jobs they touch, viewed-slugs

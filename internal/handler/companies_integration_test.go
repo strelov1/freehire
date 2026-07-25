@@ -78,7 +78,7 @@ func TestListCompaniesSearchEndpoint(t *testing.T) {
 		}
 	}
 
-	h := &API{pool: pool, queries: db.New(pool)}
+	h := &companiesHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/companies", h.ListCompanies)
 
@@ -152,7 +152,7 @@ func TestListCompaniesMeiliFallback(t *testing.T) {
 	}
 
 	// A searcher that always errors forces the fallback on every search request.
-	h := &API{pool: pool, queries: db.New(pool), companySearch: &fakeCompanySearcher{err: errors.New("meili down")}}
+	h := &companiesHandlers{queries: db.New(pool), companySearch: &fakeCompanySearcher{err: errors.New("meili down")}}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/companies", h.ListCompanies)
 
@@ -193,7 +193,7 @@ func TestListCompaniesUnfilteredSkipsMeili(t *testing.T) {
 	}
 
 	fake := &fakeCompanySearcher{}
-	h := &API{pool: pool, queries: db.New(pool), companySearch: fake}
+	h := &companiesHandlers{queries: db.New(pool), companySearch: fake}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/companies", h.ListCompanies)
 
@@ -230,7 +230,7 @@ func TestListCompaniesFacetFilterEndpoint(t *testing.T) {
 	seed("euro-corp", "Euro Corp", []string{"bigtech"}, []string{"europe"}, []string{"enterprise"})
 	seed("global-lab", "Global Lab", []string{"yc"}, []string{"north_america"}, []string{"enterprise"})
 
-	h := &API{pool: pool, queries: db.New(pool)}
+	h := &companiesHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/companies", h.ListCompanies)
 
@@ -323,7 +323,7 @@ func TestListCompaniesSubindustryFacet(t *testing.T) {
 	seed("diagco", "Diagnostics")
 	seed("plainco", nil) // NULL subindustry
 
-	h := &API{pool: pool, queries: db.New(pool)}
+	h := &companiesHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/companies", h.ListCompanies)
 
@@ -408,7 +408,7 @@ func TestCompanySubindustriesEndpoint(t *testing.T) {
 	seed("diagco", "Diagnostics")
 	seed("plainco", nil) // NULL — excluded from the vocabulary
 
-	h := &API{pool: pool, queries: db.New(pool)}
+	h := &companiesHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/companies/subindustries", h.CompanySubindustries)
 
@@ -463,7 +463,7 @@ func TestListCompaniesRemoteRegionsFacet(t *testing.T) {
 	seed("na-remote", []string{"north_america"}, []string{"eu"})
 	seed("global-remote", []string{"global"}, []string{})
 
-	h := &API{pool: pool, queries: db.New(pool)}
+	h := &companiesHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/companies", h.ListCompanies)
 
@@ -529,7 +529,7 @@ func TestListCompaniesYCFacets(t *testing.T) {
 	seed("newco", []string{"Winter 2024"}, []string{"Active"})
 	seed("nonyc", []string{}, []string{}) // no YC facets
 
-	h := &API{pool: pool, queries: db.New(pool)}
+	h := &companiesHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/companies", h.ListCompanies)
 
@@ -594,7 +594,7 @@ func TestListCompaniesYCStageFlags(t *testing.T) {
 	seed("earlyhiring", []string{"Early"}, []string{"hiring"})
 	seed("growthplain", []string{"Growth"}, []string{})
 
-	h := &API{pool: pool, queries: db.New(pool)}
+	h := &companiesHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/companies", h.ListCompanies)
 
