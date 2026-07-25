@@ -5,7 +5,7 @@ const meta = {
   title: 'Primitives/Pagination',
   component: Pagination,
   tags: ['autodocs'],
-} satisfies Meta<Pagination>;
+} satisfies Meta<typeof Pagination>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

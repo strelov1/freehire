@@ -8,7 +8,7 @@ const meta = {
   argTypes: {
     size: { control: 'select', options: ['sm', 'md', 'lg'] },
   },
-} satisfies Meta<Avatar>;
+} satisfies Meta<typeof Avatar>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

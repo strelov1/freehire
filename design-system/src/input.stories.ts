@@ -5,7 +5,7 @@ const meta = {
   title: 'Primitives/Input',
   component: Input,
   tags: ['autodocs'],
-} satisfies Meta<Input>;
+} satisfies Meta<typeof Input>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

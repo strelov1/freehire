@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/svelte';
+import { text } from './story-text.js';
 import Badge from './badge.svelte';
 
 const meta = {
@@ -8,12 +9,12 @@ const meta = {
   argTypes: {
     variant: { control: 'select', options: ['secondary', 'outline', 'brand', 'missing'] },
   },
-} satisfies Meta<Badge>;
+} satisfies Meta<typeof Badge>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Secondary: Story = { args: { variant: 'secondary', children: 'Badge' } };
-export const Outline: Story = { args: { variant: 'outline', children: 'Badge' } };
-export const Brand: Story = { args: { variant: 'brand', children: 'New' } };
-export const Missing: Story = { args: { variant: 'missing', children: 'Missing' } };
+export const Secondary: Story = { args: { variant: 'secondary', children: text('Badge') } };
+export const Outline: Story = { args: { variant: 'outline', children: text('Badge') } };
+export const Brand: Story = { args: { variant: 'brand', children: text('New') } };
+export const Missing: Story = { args: { variant: 'missing', children: text('Missing') } };

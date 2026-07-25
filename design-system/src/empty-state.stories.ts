@@ -5,7 +5,7 @@ const meta = {
   title: 'Primitives/EmptyState',
   component: EmptyState,
   tags: ['autodocs'],
-} satisfies Meta<EmptyState>;
+} satisfies Meta<typeof EmptyState>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
