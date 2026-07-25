@@ -75,12 +75,12 @@ func TestListDismissedSlugsEndpoint(t *testing.T) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &API{pool: pool, queries: queries, issuer: iss, tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/tracking/dismissed", auth.RequireAuthOrKey(iss, queries), h.ListDismissedSlugs)
-	app.Get("/api/v1/me/tracking", auth.RequireAuthOrKey(iss, queries), h.ListTrackedJobs)
+	app.Get("/api/v1/me/tracking/dismissed", auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}), h.ListDismissedSlugs)
+	app.Get("/api/v1/me/tracking", auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}), h.ListTrackedJobs)
 
 	getSlugs := func(t *testing.T, userID int64) []string {
 		t.Helper()
-		token, err := iss.Issue(userID)
+		token, err := iss.Issue(userID, testTokenVersion)
 		if err != nil {
 			t.Fatalf("issue token: %v", err)
 		}
@@ -128,7 +128,7 @@ func TestListDismissedSlugsEndpoint(t *testing.T) {
 	})
 
 	t.Run("dismissed filter lists the hidden job, excludes the viewed-only one", func(t *testing.T) {
-		token, err := iss.Issue(hider)
+		token, err := iss.Issue(hider, testTokenVersion)
 		if err != nil {
 			t.Fatalf("issue token: %v", err)
 		}

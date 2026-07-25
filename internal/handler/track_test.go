@@ -73,13 +73,13 @@ func trackApp() (*fiber.App, *auth.Issuer) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &API{issuer: iss, tracking: jobtracking.New(stubTrackingRepo{})}
 	app := fiber.New()
-	app.Patch("/jobs/:slug/track", auth.RequireAuth(iss), h.TrackJob)
+	app.Patch("/jobs/:slug/track", auth.RequireAuth(iss, testVersions), h.TrackJob)
 	return app, iss
 }
 
 func TestTrackJob_RejectsEmptyAndUnknownStage(t *testing.T) {
 	app, iss := trackApp()
-	token, _ := iss.Issue(7)
+	token, _ := iss.Issue(7, testTokenVersion)
 	cases := []struct {
 		name, body string
 	}{

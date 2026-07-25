@@ -44,7 +44,7 @@ func TestTelegramLinkAndWebhook(t *testing.T) {
 	defer stub.Close()
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	cookie, _ := iss.Issue(userID)
+	cookie, _ := iss.Issue(userID, testTokenVersion)
 	queries := db.New(pool)
 	h := &API{
 		pool:                  pool,
@@ -57,7 +57,7 @@ func TestTelegramLinkAndWebhook(t *testing.T) {
 	}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	guard := auth.RequireAuth(iss)
+	guard := auth.RequireAuth(iss, testVersions)
 	app.Post("/api/v1/me/telegram/link", guard, h.LinkTelegram)
 	app.Get("/api/v1/me/telegram", guard, h.TelegramLinkStatus)
 	app.Delete("/api/v1/me/telegram", guard, h.UnlinkTelegram)
@@ -178,12 +178,12 @@ func TestTelegramDisabledWhenUnconfigured(t *testing.T) {
 		t.Fatalf("seed user: %v", err)
 	}
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	cookie, _ := iss.Issue(userID)
+	cookie, _ := iss.Issue(userID, testTokenVersion)
 	// No telegram* fields set → feature disabled.
 	h := &API{pool: pool, queries: db.New(pool), issuer: iss}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Post("/api/v1/me/telegram/link", auth.RequireAuth(iss), h.LinkTelegram)
+	app.Post("/api/v1/me/telegram/link", auth.RequireAuth(iss, testVersions), h.LinkTelegram)
 	app.Post("/api/v1/telegram/webhook", h.TelegramWebhook)
 
 	rq := httptest.NewRequest(http.MethodPost, "/api/v1/me/telegram/link", nil)

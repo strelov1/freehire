@@ -58,7 +58,7 @@ func atsApp(t *testing.T, repo *fakeProfileRepo, fc facetCounter, store *resume.
 func atsAppWith(t *testing.T, repo *fakeProfileRepo, fc facetCounter, store *resume.Store, analyzer *atscheck.Analyzer, cache atsReviewStore) (*fiber.App, string) {
 	t.Helper()
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	token, err := iss.Issue(1)
+	token, err := iss.Issue(1, testTokenVersion)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
@@ -71,7 +71,7 @@ func atsAppWith(t *testing.T, repo *fakeProfileRepo, fc facetCounter, store *res
 		atsCache:    cache,
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	g := auth.RequireAuth(iss)
+	g := auth.RequireAuth(iss, testVersions)
 	app.Get("/me/profile/ats-report", g, h.GetATSReport)
 	app.Post("/me/profile/ats-report", g, h.PostATSReport)
 	return app, token

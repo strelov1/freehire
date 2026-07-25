@@ -82,9 +82,14 @@ type API struct {
 	cookieSecure bool
 	// cookieDomains are the registrable domains we serve (bare, e.g. "freehire.me").
 	// Per request the session cookie is scoped to whichever one the request host
-	// falls under (empty list = host-only, for dev); the same set gates
-	// requestOrigin. See auth.CookieDomainForHost.
+	// falls under (empty list = host-only, for dev). See auth.CookieDomainForHost.
+	// It governs cookie scope ONLY: the OAuth redirect origin reads servedHosts,
+	// because a suffix match would let any subdomain steer the flow.
 	cookieDomains []string
+	// servedHosts are the exact hostnames this deployment answers on (e.g.
+	// "freehire.me", "apply.freehire.me"). Only these are honoured as an OAuth
+	// redirect origin; anything else falls back to frontendOrigin.
+	servedHosts []string
 	// oauth resolves enabled OAuth providers by name, building each with a redirect
 	// URL rooted at the request origin. Never nil (an empty registry 404s / lists
 	// empty). *oauth.Registry in production; a fake in tests.
@@ -286,6 +291,9 @@ type Config struct {
 	// https://<id>.chromiumapp.org redirects whose <id> is listed may receive a
 	// minted token. Empty leaves the connect endpoint refusing every redirect.
 	ExtensionRedirectAllowlist []string
+	// ServedHosts are the exact hostnames honoured as an OAuth redirect origin.
+	// Empty defaults to the frontend origin's own host.
+	ServedHosts []string
 }
 
 // Register wires all routes onto the application from cfg. Auth is same-origin
@@ -305,6 +313,7 @@ func Register(app *fiber.App, cfg Config) {
 		oauth:          cfg.OAuthRegistry,
 		oauthCodes:     oauth.NewCodeStore(60 * time.Second),
 		frontendOrigin: cfg.FrontendOrigin,
+		servedHosts:    servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin),
 
 		extensionRedirectAllowlist: cfg.ExtensionRedirectAllowlist,
 
@@ -356,7 +365,13 @@ func Register(app *fiber.App, cfg Config) {
 	// Telegram notifications are enabled only with both a bot token and a JWT
 	// secret (the link token reuses it). Absent either, the linking endpoints
 	// report the feature off and the webhook is inert (see telegramEnabled).
-	if cfg.TelegramBotToken != "" && cfg.JWTSecret != "" {
+	// The webhook secret is part of the enable condition, not a check inside the handler:
+	// its constant-time compare treats an unset secret as "matches an absent header", so a
+	// deployment with a bot token but no secret would expose an unauthenticated POST.
+	if cfg.TelegramBotToken != "" && cfg.JWTSecret != "" && cfg.TelegramWebhookSecret == "" {
+		log.Print("telegram: TELEGRAM_BOT_TOKEN is set but TELEGRAM_WEBHOOK_SECRET is not — feature disabled")
+	}
+	if cfg.TelegramBotToken != "" && cfg.JWTSecret != "" && cfg.TelegramWebhookSecret != "" {
 		a.telegramLinks = telegramnotify.NewLinkTokens(cfg.JWTSecret, telegramLinkTTL)
 		a.telegramBot = telegramnotify.NewClient(cfg.TelegramBotToken)
 		a.telegramBotUsername = cfg.TelegramBotUsername
@@ -381,7 +396,16 @@ func Register(app *fiber.App, cfg Config) {
 			log.Printf("referral: email pinger disabled: %v", err)
 		} else {
 			referralEmail = ec
+			// The same SES client carries the account mails (verification and password
+			// reset). Without it the accounts service keeps registering and
+			// authenticating; only the code-backed flows report 503.
+			a.accounts.WithCodes(
+				accounts.NewQueriesCodeStore(queries),
+				emailnotify.NewAuthMailer(ec, cfg.NotifyEmailFrom, cfg.FrontendOrigin),
+			)
 		}
+	} else {
+		log.Print("accounts: AWS_REGION/NOTIFY_EMAIL_FROM unset — email verification and password reset are unavailable")
 	}
 	var referralTelegram referral.TelegramSender
 	if a.telegramBot != nil {
@@ -420,7 +444,7 @@ func Register(app *fiber.App, cfg Config) {
 	// optionalAuth attaches the caller when signed in (cookie or key) but never
 	// rejects, so these public detail reads can overlay the caller's own vote
 	// (my_vote) while staying open to anonymous visitors.
-	optionalAuth := auth.OptionalAuth(a.issuer, a.queries)
+	optionalAuth := auth.OptionalAuth(a.issuer, a.queries, apiKeys{a.queries})
 	api.Get("/jobs/:slug", optionalAuth, a.GetJob)
 	api.Get("/jobs/:slug/similar", a.SimilarJobs)
 	api.Get("/jobs/:slug/copies", a.JobCopies)
@@ -477,7 +501,12 @@ func Register(app *fiber.App, cfg Config) {
 	// can drive the same flow as the browser. The public job reads above stay
 	// unauthenticated. Jobs are addressed by their public slug; the handlers
 	// resolve it to the internal id before writing user_jobs.
-	keyAuth := auth.RequireAuthOrKey(a.issuer, a.queries)
+	keyAuth := auth.RequireAuthOrKey(a.issuer, a.queries, apiKeys{a.queries})
+	// cvKeyAuth additionally admits the narrow `cv` key the tailoring bootstrap mints.
+	// Only the CV surface (and the caller's own identity read) uses it; every other
+	// key-accepting route stays on keyAuth, which is full-scope-only — so a new endpoint
+	// is out of a leaked agent credential's reach unless it deliberately opts in.
+	cvKeyAuth := auth.RequireAuthOrScopedKey(a.issuer, a.queries, apiKeys{a.queries}, auth.ScopeCV)
 	api.Post("/jobs/:slug/view", keyAuth, a.RecordView)
 	api.Post("/jobs/:slug/apply", keyAuth, a.MarkApplied)
 	api.Post("/jobs/:slug/save", keyAuth, a.SaveJob)
@@ -536,7 +565,7 @@ func Register(app *fiber.App, cfg Config) {
 	// a supported, novel link is recorded and earns a point. No moderation queue — the
 	// derived-identity dedup and the supported-ATS gate are the only guards. The caller
 	// reads their own contributions; the points balance rides on /auth/me.
-	api.Post("/me/contributions", keyAuth, a.CreateContribution)
+	api.Post("/me/contributions", keyAuth, contributionLimiter(), a.CreateContribution)
 	api.Get("/me/contributions", keyAuth, a.ListMyContributions)
 
 	// Employee referrals: any authenticated user (cookie or API key) offers to refer into a
@@ -567,7 +596,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Reads are public — only pseudonymous persona handles are ever exposed, never a
 	// user id — so discussions are browsable without signing in. Writing a thread or
 	// reply requires a signed-in session (cookie); closing a thread is moderator-gated.
-	cookieAuth := auth.RequireAuth(a.issuer)
+	cookieAuth := auth.RequireAuth(a.issuer, a.queries)
 	api.Get("/threads", a.ListThreads)
 	// Registered before "/threads/:id" so "count" is not parsed as a thread id.
 	api.Get("/threads/count", a.CountThreads)
@@ -594,14 +623,17 @@ func Register(app *fiber.App, cfg Config) {
 	// API-key management is cookie-only (RequireAuth): a leaked key must not be
 	// able to create, list, or revoke keys. The create endpoint returns the
 	// plaintext token exactly once.
-	api.Post("/me/api-keys", auth.RequireAuth(a.issuer), a.CreateAPIKey)
-	api.Get("/me/api-keys", auth.RequireAuth(a.issuer), a.ListAPIKeys)
-	api.Delete("/me/api-keys/:id", auth.RequireAuth(a.issuer), a.RevokeAPIKey)
+	// Changing the password is cookie-only for the same reason key management is: a
+	// leaked credential must not be able to change the credential it would outlive.
+	api.Post("/me/password", auth.RequireAuth(a.issuer, a.queries), a.ChangePassword)
+	api.Post("/me/api-keys", auth.RequireAuth(a.issuer, a.queries), a.CreateAPIKey)
+	api.Get("/me/api-keys", auth.RequireAuth(a.issuer, a.queries), a.ListAPIKeys)
+	api.Delete("/me/api-keys/:id", auth.RequireAuth(a.issuer, a.queries), a.RevokeAPIKey)
 
 	// Saved searches are cookie-only (RequireAuth) like API-key management: they are a
 	// browser convenience (the "My filters" picker), not a scripting primitive. Each
 	// operation is owner-scoped; an id that is not the caller's is a 404.
-	saved := auth.RequireAuth(a.issuer)
+	saved := auth.RequireAuth(a.issuer, a.queries)
 	api.Get("/me/searches", saved, a.ListSavedSearches)
 	api.Post("/me/searches", saved, a.CreateSavedSearch)
 	api.Patch("/me/searches/:id", saved, a.UpdateSavedSearch)
@@ -626,19 +658,19 @@ func Register(app *fiber.App, cfg Config) {
 	api.Post("/me/cvs", saved, a.CreateCV)
 	// Read + render accept a key too (keyAuth), so the tailoring agent's CLI can fetch a CV
 	// and its PDF; mutations stay cookie-only (POST/PUT/DELETE — the browser owns authoring).
-	api.Get("/me/cvs/:id", keyAuth, a.GetCV)
+	api.Get("/me/cvs/:id", cvKeyAuth, a.GetCV)
 	api.Put("/me/cvs/:id", saved, a.UpdateCV)
 	// Change only the template (the gallery's one-field switch); cookie-only like other mutations.
 	api.Put("/me/cvs/:id/template", saved, a.SetCVTemplate)
 	api.Delete("/me/cvs/:id", saved, a.DeleteCV)
-	api.Get("/me/cvs/:id/pdf", keyAuth, a.RenderCVPDF)
+	api.Get("/me/cvs/:id/pdf", cvKeyAuth, a.RenderCVPDF)
 	// Tailoring: the browser starts a session (cookie-only bootstrap); the agent's CLI drives
 	// the edit + context/get/render reads with its minted API key (keyAuth = cookie or Bearer).
 	api.Post("/me/cvs/tailor", saved, a.TailorCV)
 	api.Post("/me/cvs/:id/tailor-session", saved, a.StartTailorSession)
-	api.Patch("/me/cvs/:id", keyAuth, a.PatchCV)
-	api.Put("/me/cvs/:id/session", keyAuth, a.SetCVSession)
-	api.Get("/me/cvs/:id/tailor-context", keyAuth, a.TailorContext)
+	api.Patch("/me/cvs/:id", cvKeyAuth, a.PatchCV)
+	api.Put("/me/cvs/:id/session", cvKeyAuth, a.SetCVSession)
+	api.Get("/me/cvs/:id/tailor-context", cvKeyAuth, a.TailorContext)
 
 	// Mail inbox (Gmail connect + hosted mailbox). Open to every signed-in user.
 	// The read + disconnect routes are always registered (empty/no-op when not
@@ -720,11 +752,26 @@ func Register(app *fiber.App, cfg Config) {
 	// stuffing. Keyed on c.IP() (the real client, via the trusted-proxy config); the
 	// per-instance in-memory window is enough friction for a single-node deployment.
 	authLimiter := limiter.New(limiter.Config{Max: 10, Expiration: time.Minute})
+	cookieOnly := auth.RequireAuth(a.issuer, a.queries)
 	authGroup := api.Group("/auth")
 	authGroup.Post("/register", authLimiter, a.Register)
 	authGroup.Post("/login", authLimiter, a.Login)
 	authGroup.Post("/logout", a.Logout)
-	authGroup.Get("/me", auth.RequireAuthOrKey(a.issuer, a.queries), a.Me)
+	// Email verification. Cookie-only and identified by the session, never by a body
+	// field, so neither endpoint can be pointed at someone else's address. Both ride the
+	// credential limiter: confirm is a code-guessing surface, request is a mail-sending one.
+	authGroup.Post("/verify/request", authLimiter, cookieOnly, a.RequestEmailVerification)
+	authGroup.Post("/verify/confirm", authLimiter, cookieOnly, a.ConfirmEmailVerification)
+	// Password recovery. Public — the mailed code is the credential. forgot always answers
+	// 202 (never an enumeration oracle); reset revokes every session on success.
+	authGroup.Post("/password/forgot", authLimiter, a.ForgotPassword)
+	authGroup.Post("/password/reset", authLimiter, a.ResetPassword)
+	// Sign out everywhere. Cookie-only (like key management): revoking a human's sessions
+	// is not something a programmatic credential should be able to do.
+	authGroup.Post("/logout-all", cookieOnly, a.LogoutAll)
+	// The agent needs to resolve who its key belongs to, so the identity read admits the
+	// narrow scope too; it exposes nothing the key holder cannot already infer.
+	authGroup.Get("/me", auth.RequireAuthOrScopedKey(a.issuer, a.queries, apiKeys{a.queries}, auth.ScopeCV), a.Me)
 
 	// OAuth sign-in: provider listing plus the authorization-code start and
 	// callback redirects. All public; the callback sets the session cookie.
@@ -740,7 +787,7 @@ func Register(app *fiber.App, cfg Config) {
 	// like key management — a leaked key must not mint further keys. GET shows the
 	// consent screen; POST mints a named key and redirects the token in the
 	// fragment. Both refuse any redirect outside the configured allowlist.
-	extAuth := auth.RequireAuth(a.issuer)
+	extAuth := auth.RequireAuth(a.issuer, a.queries)
 	authGroup.Get("/extension/connect", extAuth, a.ExtensionConnect)
 	authGroup.Post("/extension/connect", extAuth, a.ExtensionConnectSubmit)
 }

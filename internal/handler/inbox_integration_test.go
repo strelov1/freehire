@@ -52,11 +52,11 @@ func TestInboxReadSideEndToEnd(t *testing.T) {
 	_ = seed("m-plain", "Plain", "", false)
 
 	iss := auth.NewIssuer("test-secret-that-is-long-enough-0001", time.Hour)
-	cookie, _ := iss.Issue(uid)
+	cookie, _ := iss.Issue(uid, testTokenVersion)
 	h := &API{pool: pool, queries: db.New(pool), issuer: iss, mailDomain: "inbox.freehire.test"}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	ra := auth.RequireAuth(iss)
+	ra := auth.RequireAuth(iss, testVersions)
 	app.Get("/api/v1/me/inbox", ra, h.GetInbox)
 	app.Get("/api/v1/me/emails/:id", ra, h.GetEmail)
 	app.Post("/api/v1/me/inbox/read-all", ra, h.MarkAllReadInbox)

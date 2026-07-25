@@ -14,12 +14,15 @@ import (
 // apiKeyResponse is the public, secret-free shape of an API key: the display prefix
 // identifies it in a list, but the plaintext token and its stored hash never appear.
 type apiKeyResponse struct {
-	ID          int64              `json:"id"`
-	Name        string             `json:"name"`
-	TokenPrefix string             `json:"token_prefix"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	LastUsedAt  pgtype.Timestamptz `json:"last_used_at"`
-	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	TokenPrefix string `json:"token_prefix"`
+	// Scope is what this credential may reach: "full" for a user-created key, "cv" for
+	// one minted for the tailoring agent. Shown so a user can see what a key can do.
+	Scope      string             `json:"scope"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	LastUsedAt pgtype.Timestamptz `json:"last_used_at"`
+	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
 }
 
 // createdAPIKeyResponse adds the plaintext token to the key metadata. It is the
@@ -70,7 +73,10 @@ func (a *API) CreateAPIKey(c *fiber.Ctx) error {
 		Name:        name,
 		TokenHash:   hash,
 		TokenPrefix: prefix,
-		ExpiresAt:   expiresAt,
+		// Always full: the scope is a server decision, and the create body has no field
+		// for it, so a client cannot mint itself anything narrower or wider.
+		Scope:     auth.ScopeFull,
+		ExpiresAt: expiresAt,
 	})
 	if err != nil {
 		return err
@@ -82,6 +88,7 @@ func (a *API) CreateAPIKey(c *fiber.Ctx) error {
 				ID:          row.ID,
 				Name:        row.Name,
 				TokenPrefix: row.TokenPrefix,
+				Scope:       row.Scope,
 				CreatedAt:   row.CreatedAt,
 				LastUsedAt:  row.LastUsedAt,
 				ExpiresAt:   row.ExpiresAt,
@@ -110,6 +117,7 @@ func (a *API) ListAPIKeys(c *fiber.Ctx) error {
 			ID:          r.ID,
 			Name:        r.Name,
 			TokenPrefix: r.TokenPrefix,
+			Scope:       r.Scope,
 			CreatedAt:   r.CreatedAt,
 			LastUsedAt:  r.LastUsedAt,
 			ExpiresAt:   r.ExpiresAt,

@@ -63,7 +63,7 @@ func TestListMyAnalysesEndpoint(t *testing.T) {
 	seedAnalysis(closedID, 44, "Weak Fit", 48*time.Hour) // older
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	token, _ := iss.Issue(userID)
+	token, _ := iss.Issue(userID, testTokenVersion)
 
 	store := resume.New(newFakeResumeBlobs(), &fakeResumeRepo{})
 	if _, err := store.Put(ctx, userID, "text/plain", []byte("5y Go.")); err != nil {
@@ -77,7 +77,7 @@ func TestListMyAnalysesEndpoint(t *testing.T) {
 		credits: credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}),
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/tracking/analyses", auth.RequireAuth(iss), h.ListMyAnalyses)
+	app.Get("/api/v1/me/tracking/analyses", auth.RequireAuth(iss, testVersions), h.ListMyAnalyses)
 
 	req := httptest.NewRequest(fiber.MethodGet, "/api/v1/me/tracking/analyses", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})

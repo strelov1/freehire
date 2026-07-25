@@ -55,9 +55,9 @@ func TestReportsEndToEnd(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	modCookie, _ := iss.Issue(modID)
-	user1Cookie, _ := iss.Issue(user1ID)
-	user2Cookie, _ := iss.Issue(user2ID)
+	modCookie, _ := iss.Issue(modID, testTokenVersion)
+	user1Cookie, _ := iss.Issue(user1ID, testTokenVersion)
+	user2Cookie, _ := iss.Issue(user2ID, testTokenVersion)
 	queries := db.New(pool)
 	reportRepo := report.NewQueriesRepository(queries)
 	h := &API{
@@ -68,7 +68,7 @@ func TestReportsEndToEnd(t *testing.T) {
 	}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	keyAuth := auth.RequireAuthOrKey(iss, queries)
+	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
 	requireMod := auth.RequireRole(queries, "moderator")
 	app.Post("/api/v1/jobs/:slug/reports", keyAuth, h.CreateReport)
 	app.Get("/api/v1/reports", keyAuth, requireMod, h.ListPendingReports)

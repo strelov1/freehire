@@ -30,7 +30,7 @@ func newCommunityApp(queries *db.Queries, iss *auth.Issuer, cfg community.Config
 	repo := community.NewQueriesRepository(queries)
 	h := &API{queries: queries, issuer: iss, community: community.New(repo, repo, cfg)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	cookieAuth := auth.RequireAuth(iss)
+	cookieAuth := auth.RequireAuth(iss, testVersions)
 	requireModerator := auth.RequireRole(queries, "moderator")
 	app.Get("/api/v1/threads", h.ListThreads)
 	app.Get("/api/v1/threads/:id", h.GetThread)
@@ -91,8 +91,8 @@ func TestCommunityThreadsEndToEnd(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	cookie1, _ := iss.Issue(user1)
-	cookie2, _ := iss.Issue(user2)
+	cookie1, _ := iss.Issue(user1, testTokenVersion)
+	cookie2, _ := iss.Issue(user2, testTokenVersion)
 	queries := db.New(pool)
 	app := newCommunityApp(queries, iss, community.Config{})
 
@@ -177,7 +177,7 @@ func TestCommunityThreadsEndToEnd(t *testing.T) {
 		// Close the thread as a moderator, then a reply is 409 and it leaves the listing.
 		var modID int64
 		_ = pool.QueryRow(ctx, `INSERT INTO users (email, role) VALUES ('mod@example.test', 'moderator') RETURNING id`).Scan(&modID)
-		modCookie, _ := iss.Issue(modID)
+		modCookie, _ := iss.Issue(modID, testTokenVersion)
 		cr := httptest.NewRequest(fiber.MethodPost, "/api/v1/threads/"+itoa(threadID)+"/close", nil)
 		cr.AddCookie(&http.Cookie{Name: auth.CookieName, Value: modCookie})
 		cresp, _ := app.Test(cr)
@@ -218,7 +218,7 @@ func TestCommunityThreadRateLimit(t *testing.T) {
 		t.Fatalf("seed company: %v", err)
 	}
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	cookie, _ := iss.Issue(userID)
+	cookie, _ := iss.Issue(userID, testTokenVersion)
 	app := newCommunityApp(db.New(pool), iss, community.Config{ThreadCap: 2})
 
 	for i := 0; i < 2; i++ {

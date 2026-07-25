@@ -30,12 +30,12 @@ func TestGetMyCredits(t *testing.T) {
 		t.Fatalf("seed user: %v", err)
 	}
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	tok, _ := iss.Issue(userID)
+	tok, _ := iss.Issue(userID, testTokenVersion)
 	h := &API{pool: pool, queries: queries, issuer: iss,
 		credits: credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 5})}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/credits", auth.RequireAuthOrKey(iss, queries), h.GetMyCredits)
+	app.Get("/api/v1/me/credits", auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}), h.GetMyCredits)
 
 	req := httptest.NewRequest(fiber.MethodGet, "/api/v1/me/credits", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: tok})

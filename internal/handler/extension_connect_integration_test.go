@@ -42,7 +42,7 @@ func TestExtensionConnectEndToEnd(t *testing.T) {
 	redirectURI := "https://" + extID + ".chromiumapp.org/"
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	cookie, _ := iss.Issue(userID)
+	cookie, _ := iss.Issue(userID, testTokenVersion)
 	queries := db.New(pool)
 	h := &API{
 		pool:                       pool,
@@ -53,8 +53,8 @@ func TestExtensionConnectEndToEnd(t *testing.T) {
 	}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	cookieAuth := auth.RequireAuth(iss)
-	keyAuth := auth.RequireAuthOrKey(iss, queries)
+	cookieAuth := auth.RequireAuth(iss, testVersions)
+	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
 	app.Get("/api/v1/auth/extension/connect", cookieAuth, h.ExtensionConnect)
 	app.Post("/api/v1/auth/extension/connect", cookieAuth, h.ExtensionConnectSubmit)
 	app.Get("/api/v1/me/api-keys", cookieAuth, h.ListAPIKeys)

@@ -50,13 +50,13 @@ func (f *fakeProfileRepo) Delete(context.Context, int64) error { return f.delErr
 func profileApp(t *testing.T, repo *fakeProfileRepo) (*fiber.App, string) {
 	t.Helper()
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	token, err := iss.Issue(1)
+	token, err := iss.Issue(1, testTokenVersion)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
 	h := &API{issuer: iss, userProfile: userprofile.New(repo)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	g := auth.RequireAuth(iss)
+	g := auth.RequireAuth(iss, testVersions)
 	app.Get("/me/profile", g, h.GetProfile)
 	app.Put("/me/profile", g, h.PutProfile)
 	app.Delete("/me/profile", g, h.DeleteProfile)

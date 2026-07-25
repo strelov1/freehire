@@ -20,9 +20,9 @@ func apiKeysApp() *fiber.App {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &API{issuer: iss}
 	app := fiber.New()
-	app.Post("/api/v1/me/api-keys", auth.RequireAuth(iss), h.CreateAPIKey)
-	app.Get("/api/v1/me/api-keys", auth.RequireAuth(iss), h.ListAPIKeys)
-	app.Delete("/api/v1/me/api-keys/:id", auth.RequireAuth(iss), h.RevokeAPIKey)
+	app.Post("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), h.CreateAPIKey)
+	app.Get("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), h.ListAPIKeys)
+	app.Delete("/api/v1/me/api-keys/:id", auth.RequireAuth(iss, testVersions), h.RevokeAPIKey)
 	return app
 }
 

@@ -26,8 +26,15 @@ func (fakeRepo) UserIDByIdentity(context.Context, string, string) (int64, error)
 func (fakeRepo) LinkOrCreateByEmail(context.Context, string, string, string) (int64, error) {
 	return 0, nil
 }
-func (fakeRepo) CreateUser(context.Context, string, string) (accounts.User, error) {
+func (fakeRepo) CreateUser(context.Context, string, string, bool) (accounts.User, error) {
 	return accounts.User{}, nil
+}
+func (fakeRepo) MarkEmailVerified(context.Context, int64) error { return nil }
+func (fakeRepo) SetPassword(context.Context, int64, string) (int32, error) {
+	return 0, nil
+}
+func (fakeRepo) ResetPassword(context.Context, int64, string) (int32, error) {
+	return 0, nil
 }
 func (fakeRepo) UserByEmail(context.Context, string) (accounts.User, string, bool, error) {
 	return accounts.User{}, "", false, accounts.ErrUserNotFound

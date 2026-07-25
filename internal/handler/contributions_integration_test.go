@@ -42,7 +42,7 @@ func TestContributionsEndToEnd(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	cookie, _ := iss.Issue(userID)
+	cookie, _ := iss.Issue(userID, testTokenVersion)
 	queries := db.New(pool)
 	h := &API{
 		pool:         pool,
@@ -54,7 +54,7 @@ func TestContributionsEndToEnd(t *testing.T) {
 	}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	keyAuth := auth.RequireAuthOrKey(iss, queries)
+	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
 	app.Post("/api/v1/me/contributions", keyAuth, h.CreateContribution)
 	app.Get("/api/v1/me/contributions", keyAuth, h.ListMyContributions)
 

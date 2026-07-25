@@ -18,13 +18,13 @@ import (
 func meJobsApp(t *testing.T) (*fiber.App, string) {
 	t.Helper()
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	token, err := iss.Issue(1)
+	token, err := iss.Issue(1, testTokenVersion)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
 	h := &API{issuer: iss}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/me/tracking", auth.RequireAuth(iss), h.ListTrackedJobs)
+	app.Get("/me/tracking", auth.RequireAuth(iss, testVersions), h.ListTrackedJobs)
 	return app, token
 }
 

@@ -50,15 +50,15 @@ func TestVoteEndpoints(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	cookie, err := iss.Issue(userID)
+	cookie, err := iss.Issue(userID, testTokenVersion)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
 
 	h := &API{pool: pool, queries: queries, issuer: iss, votes: vote.New(queries, pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	keyAuth := auth.RequireAuthOrKey(iss, queries)
-	optionalAuth := auth.OptionalAuth(iss, queries)
+	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
+	optionalAuth := auth.OptionalAuth(iss, testVersions, apiKeys{queries})
 	app.Post("/api/v1/jobs/:slug/vote", keyAuth, h.VoteJob)
 	app.Delete("/api/v1/jobs/:slug/vote", keyAuth, h.ClearJobVote)
 	app.Post("/api/v1/companies/:slug/vote", keyAuth, h.VoteCompany)

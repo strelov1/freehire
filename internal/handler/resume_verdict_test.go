@@ -60,13 +60,13 @@ func ownedProfile() *fakeProfileRepo {
 func verdictApp(t *testing.T, repo *fakeProfileRepo, fc facetCounter) (*fiber.App, string) {
 	t.Helper()
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	token, err := iss.Issue(1)
+	token, err := iss.Issue(1, testTokenVersion)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
 	h := &API{issuer: iss, userProfile: userprofile.New(repo), facets: fc}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/me/profile/verdict", auth.RequireAuth(iss), h.GetResumeVerdict)
+	app.Get("/me/profile/verdict", auth.RequireAuth(iss, testVersions), h.GetResumeVerdict)
 	return app, token
 }
 

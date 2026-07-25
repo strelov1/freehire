@@ -43,16 +43,16 @@ func TestAPIKeysEndToEnd(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	ownerCookie, _ := iss.Issue(ownerID)
-	otherCookie, _ := iss.Issue(otherID)
+	ownerCookie, _ := iss.Issue(ownerID, testTokenVersion)
+	otherCookie, _ := iss.Issue(otherID, testTokenVersion)
 	queries := db.New(pool)
 	h := &API{pool: pool, queries: queries, issuer: iss, tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries))}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	keyAuth := auth.RequireAuthOrKey(iss, h.queries)
-	app.Post("/api/v1/me/api-keys", auth.RequireAuth(iss), h.CreateAPIKey)
-	app.Get("/api/v1/me/api-keys", auth.RequireAuth(iss), h.ListAPIKeys)
-	app.Delete("/api/v1/me/api-keys/:id", auth.RequireAuth(iss), h.RevokeAPIKey)
+	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{h.queries})
+	app.Post("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), h.CreateAPIKey)
+	app.Get("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), h.ListAPIKeys)
+	app.Delete("/api/v1/me/api-keys/:id", auth.RequireAuth(iss, testVersions), h.RevokeAPIKey)
 	app.Post("/api/v1/jobs/:slug/apply", keyAuth, h.MarkApplied)
 
 	const applyPath = "/api/v1/jobs/go-dev-acme-t35nijto/apply"

@@ -186,6 +186,7 @@ func main() {
 		TelegramBotToken:      cfg.TelegramBotToken,
 		TelegramBotUsername:   cfg.TelegramBotUsername,
 		TelegramWebhookSecret: cfg.TelegramWebhookSecret,
+		ServedHosts:           cfg.ServedHosts,
 
 		Credits: credits.Config(config.LoadCredits()),
 

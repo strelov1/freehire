@@ -9,22 +9,41 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/auth/oauth"
 )
 
 // requestOrigin returns the scheme+host origin to use for this request's OAuth
-// redirect URLs and post-login redirect. The request Host is trusted only when
-// it falls under a configured served domain — guarding against a spoofed Host
-// turning into an open redirect / a redirect_uri the provider would reject; such
-// hosts are always HTTPS in any deployment that sets COOKIE_DOMAIN. Anything else
-// (dev/localhost) falls back to the canonical frontendOrigin.
+// redirect URLs and post-login redirect. The request Host is honoured only when it
+// matches a configured served host EXACTLY; anything else (dev/localhost, a spoofed
+// Host, a subdomain we do not serve) falls back to the canonical frontendOrigin.
+//
+// The exact match is the point. This used to accept any suffix of a cookie domain,
+// which meant a hijacked or third-party-hosted subdomain of freehire.me could steer
+// the provider redirect and the post-login redirect. Cookie scope still uses the
+// suffix rule — that is what SSO across subdomains needs — but a redirect target is
+// not a cookie scope, and conflating them is what produced the finding.
 func (a *API) requestOrigin(c *fiber.Ctx) string {
 	host := c.Hostname()
-	if auth.CookieDomainForHost(host, a.cookieDomains) != "" {
-		return "https://" + host
+	for _, served := range a.servedHosts {
+		if host == served {
+			return "https://" + host
+		}
 	}
 	return a.frontendOrigin
+}
+
+// servedHostsOrDefault falls back to the frontend origin's own host when SERVED_HOSTS
+// is unset, so a deployment that never sets it keeps working on its canonical domain
+// (and every other Host simply gets the canonical origin).
+func servedHostsOrDefault(configured []string, frontendOrigin string) []string {
+	if len(configured) > 0 {
+		return configured
+	}
+	u, err := url.Parse(frontendOrigin)
+	if err != nil || u.Host == "" {
+		return nil
+	}
+	return []string{u.Hostname()}
 }
 
 // ListOAuthProviders returns the names of enabled OAuth providers, so the SPA

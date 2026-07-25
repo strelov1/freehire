@@ -26,6 +26,15 @@ func (a *API) telegramEnabled() bool {
 	return a.telegramLinks != nil && a.telegramBot != nil
 }
 
+// webhookSecured reports whether the inbound webhook may be served at all. It is
+// deliberately separate from telegramEnabled: the secret compare below is a constant-time
+// equality, and two empty strings ARE equal — so with an unset secret a request carrying
+// no header would authenticate. Gating the endpoint on a non-empty secret makes "bot live,
+// webhook open" unrepresentable rather than merely guarded against.
+func (a *API) webhookSecured() bool {
+	return a.telegramEnabled() && a.telegramWebhookSecret != ""
+}
+
 // LinkTelegram mints a one-time deep-link token and returns the t.me URL the user
 // opens to link their chat. Cookie-only. 503 when the feature is unconfigured.
 func (a *API) LinkTelegram(c *fiber.Ctx) error {
@@ -80,7 +89,7 @@ func (a *API) UnlinkTelegram(c *fiber.Ctx) error {
 // It always returns 200 so Telegram does not retry; problems are reported to the
 // user via the bot, not via the HTTP status.
 func (a *API) TelegramWebhook(c *fiber.Ctx) error {
-	if !a.telegramEnabled() {
+	if !a.webhookSecured() {
 		return fiber.NewError(fiber.StatusNotFound, "not found")
 	}
 	// Reject forged updates: the secret token must match the one registered with

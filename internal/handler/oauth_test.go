@@ -187,6 +187,7 @@ func TestOAuthCallback_ErrorRedirectUsesRequestOrigin(t *testing.T) {
 			oauthCodes:     oauth.NewCodeStore(time.Minute),
 			frontendOrigin: "https://freehire.dev",
 			cookieDomains:  []string{"freehire.dev", "freehire.me"},
+			servedHosts:    []string{"freehire.dev", "freehire.me"},
 		}
 		app.Get("/api/v1/auth/oauth/:provider/callback", h.OAuthCallback)
 		return app

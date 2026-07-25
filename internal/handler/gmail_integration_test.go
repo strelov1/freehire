@@ -53,11 +53,11 @@ func TestGmailInboxEndToEnd(t *testing.T) {
 	foreign := insEmail(other, "m4", "Other mail", "secret")
 
 	iss := auth.NewIssuer("test-secret-that-is-long-enough-0001", time.Hour)
-	cookie, _ := iss.Issue(uid)
+	cookie, _ := iss.Issue(uid, testTokenVersion)
 	h := &API{pool: pool, queries: db.New(pool), issuer: iss}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	ra := auth.RequireAuth(iss)
+	ra := auth.RequireAuth(iss, testVersions)
 	app.Get("/api/v1/me/gmail", ra, h.GmailStatus)
 	app.Delete("/api/v1/me/gmail", ra, h.GmailDisconnect)
 	app.Get("/api/v1/me/inbox", ra, h.GetInbox)

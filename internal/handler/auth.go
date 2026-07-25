@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/accounts"
 	"github.com/strelov1/freehire/internal/auth"
+	"github.com/strelov1/freehire/internal/db"
 )
 
 // userResponse is the public shape of a user. It deliberately omits
@@ -15,11 +17,14 @@ import (
 // decide whether to surface moderator-only UI; it is an affordance only, as RequireRole
 // re-checks the DB-stored role on every privileged request.
 type userResponse struct {
-	ID         int64      `json:"id"`
-	Email      string     `json:"email"`
-	Role       string     `json:"role"`
-	BetaTester bool       `json:"beta_tester"`
-	CreatedAt  *time.Time `json:"created_at"`
+	ID         int64  `json:"id"`
+	Email      string `json:"email"`
+	Role       string `json:"role"`
+	BetaTester bool   `json:"beta_tester"`
+	// EmailVerified drives the SPA's "confirm your email" prompt. It is an affordance
+	// only: the server never trusts the client's copy of it.
+	EmailVerified bool       `json:"email_verified"`
+	CreatedAt     *time.Time `json:"created_at"`
 }
 
 type credentials struct {
@@ -29,7 +34,8 @@ type credentials struct {
 
 // toUserResponse maps an accounts.User to its public response shape.
 func toUserResponse(u accounts.User) userResponse {
-	return userResponse{ID: u.ID, Email: u.Email, Role: u.Role, BetaTester: u.BetaTester, CreatedAt: u.CreatedAt}
+	return userResponse{ID: u.ID, Email: u.Email, Role: u.Role, BetaTester: u.BetaTester,
+		EmailVerified: u.EmailVerified, CreatedAt: u.CreatedAt}
 }
 
 // accountsError maps the accounts service sentinels to HTTP errors, preserving
@@ -95,9 +101,38 @@ func (a *API) Logout(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-// setSession issues a token for userID and writes it as the auth cookie.
+// LogoutAll revokes every session for the caller's account — including this one — by
+// advancing the account's token generation, then clears the caller's cookie. Cookie-only:
+// a leaked API key must not be able to sign the owner out of their browser, and an agent
+// has no business ending human sessions.
+func (a *API) LogoutAll(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	if _, err := a.queries.BumpUserTokenVersion(c.Context(), userID); err != nil {
+		return err
+	}
+	auth.ClearTokenCookie(c, a.cookieSecure, auth.CookieDomainForHost(c.Hostname(), a.cookieDomains))
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// setSession issues a token for userID and writes it as the auth cookie. The token is
+// stamped with the account's current session generation, so it is born valid and any
+// later revocation strands it.
 func (a *API) setSession(c *fiber.Ctx, userID int64) error {
-	token, err := a.issuer.Issue(userID)
+	version, err := a.queries.GetUserTokenVersion(c.Context(), userID)
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to start session")
+	}
+	return a.setSessionAt(c, userID, version)
+}
+
+// setSessionAt writes a session cookie for a known generation. Callers that just bumped
+// the counter (password change, sign-out-everywhere) pass the value they got back, so the
+// caller's replacement cookie cannot race the bump they themselves performed.
+func (a *API) setSessionAt(c *fiber.Ctx, userID int64, version int32) error {
+	token, err := a.issuer.Issue(userID, version)
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to start session")
 	}
@@ -125,3 +160,15 @@ type authHasher struct{}
 
 func (authHasher) Hash(plain string) (string, error) { return auth.HashPassword(plain) }
 func (authHasher) Check(hash, plain string) error    { return auth.CheckPassword(hash, plain) }
+
+// apiKeys adapts the generated query row to auth.APIKeyIdentity. The auth package stays
+// free of a database import, which is why it cannot name the sqlc row type directly.
+type apiKeys struct{ q *db.Queries }
+
+func (a apiKeys) AuthenticateAPIKey(ctx context.Context, tokenHash string) (auth.APIKeyIdentity, error) {
+	row, err := a.q.AuthenticateAPIKey(ctx, tokenHash)
+	if err != nil {
+		return auth.APIKeyIdentity{}, err
+	}
+	return auth.APIKeyIdentity{UserID: row.UserID, Scope: row.Scope}, nil
+}

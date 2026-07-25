@@ -119,6 +119,10 @@ func (a *API) ExtensionConnectSubmit(c *fiber.Ctx) error {
 		Name:        extensionKeyName,
 		TokenHash:   hash,
 		TokenPrefix: prefix,
+		// The extension acts as the user across the whole product (tracking, applying,
+		// autofill), so it needs an unrestricted credential — unlike the CV-tailoring
+		// agent, whose key is minted narrow.
+		Scope: auth.ScopeFull,
 	}); err != nil {
 		return err
 	}

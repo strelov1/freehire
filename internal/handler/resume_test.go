@@ -24,13 +24,13 @@ import (
 func resumeApp(t *testing.T) (*fiber.App, string) {
 	t.Helper()
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	token, err := iss.Issue(1)
+	token, err := iss.Issue(1, testTokenVersion)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
 	h := &API{issuer: iss}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Post("/me/resume/extract", auth.RequireAuth(iss), h.ExtractResumeProfile)
+	app.Post("/me/resume/extract", auth.RequireAuth(iss, testVersions), h.ExtractResumeProfile)
 	return app, token
 }
 
