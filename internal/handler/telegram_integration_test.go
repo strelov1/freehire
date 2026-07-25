@@ -46,10 +46,8 @@ func TestTelegramLinkAndWebhook(t *testing.T) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	cookie, _ := iss.Issue(userID)
 	queries := db.New(pool)
-	h := &API{
-		pool:                  pool,
+	h := &telegramHandlers{
 		queries:               queries,
-		issuer:                iss,
 		telegramLinks:         telegramnotify.NewLinkTokens("test-secret", 10*time.Minute),
 		telegramBot:           telegramnotify.NewClientWithBase("bottoken", stub.URL),
 		telegramBotUsername:   "freehirebot",
@@ -180,7 +178,7 @@ func TestTelegramDisabledWhenUnconfigured(t *testing.T) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	cookie, _ := iss.Issue(userID)
 	// No telegram* fields set → feature disabled.
-	h := &API{pool: pool, queries: db.New(pool), issuer: iss}
+	h := &telegramHandlers{queries: db.New(pool)}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Post("/api/v1/me/telegram/link", auth.RequireAuth(iss), h.LinkTelegram)

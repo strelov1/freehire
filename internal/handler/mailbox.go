@@ -20,16 +20,16 @@ type mailboxStatus struct {
 }
 
 // mailboxReady reports whether the hosted-mailbox feature is configured.
-func (a *API) mailboxReady() bool { return a.mailDomain != "" }
+func (h *inboxHandlers) mailboxReady() bool { return h.mailDomain != "" }
 
 // GetMailbox returns the caller's mailbox address (or null) and feature availability.
-func (a *API) GetMailbox(c *fiber.Ctx) error {
+func (h *inboxHandlers) GetMailbox(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	st := mailboxStatus{Available: a.mailboxReady()}
-	mb, err := a.queries.GetMailboxByUser(c.Context(), userID)
+	st := mailboxStatus{Available: h.mailboxReady()}
+	mb, err := h.queries.GetMailboxByUser(c.Context(), userID)
 	if err == nil {
 		st.Address = &mb.Address
 	} else if !errors.Is(err, pgx.ErrNoRows) {
@@ -39,16 +39,16 @@ func (a *API) GetMailbox(c *fiber.Ctx) error {
 }
 
 // ClaimMailbox allocates (or returns) the caller's hosted mailbox address.
-func (a *API) ClaimMailbox(c *fiber.Ctx) error {
+func (h *inboxHandlers) ClaimMailbox(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	user, err := a.queries.GetUserByID(c.Context(), userID)
+	user, err := h.queries.GetUserByID(c.Context(), userID)
 	if err != nil {
 		return err
 	}
-	addr, err := mailbox.GetOrCreate(c.Context(), dbMailboxStore{a.queries}, userID, user.Email, a.mailDomain)
+	addr, err := mailbox.GetOrCreate(c.Context(), dbMailboxStore{h.queries}, userID, user.Email, h.mailDomain)
 	if err != nil {
 		return err
 	}
@@ -57,15 +57,15 @@ func (a *API) ClaimMailbox(c *fiber.Ctx) error {
 
 // ReleaseMailbox drops the caller's mailbox and purges its received mail; Gmail
 // mail is untouched.
-func (a *API) ReleaseMailbox(c *fiber.Ctx) error {
+func (h *inboxHandlers) ReleaseMailbox(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	if err := a.queries.DeleteMailbox(c.Context(), userID); err != nil {
+	if err := h.queries.DeleteMailbox(c.Context(), userID); err != nil {
 		return err
 	}
-	if err := a.queries.DeleteEmailsBySource(c.Context(), db.DeleteEmailsBySourceParams{UserID: userID, Source: "hosted"}); err != nil {
+	if err := h.queries.DeleteEmailsBySource(c.Context(), db.DeleteEmailsBySourceParams{UserID: userID, Source: "hosted"}); err != nil {
 		return err
 	}
 	return c.JSON(fiber.Map{"data": mailboxStatus{Available: true, Address: nil}})

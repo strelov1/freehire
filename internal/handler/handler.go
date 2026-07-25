@@ -33,7 +33,6 @@ import (
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/resumeextract"
 	"github.com/strelov1/freehire/internal/search"
-	"github.com/strelov1/freehire/internal/telegramnotify"
 	"github.com/strelov1/freehire/internal/tokencrypt"
 	"github.com/strelov1/freehire/internal/userprofile"
 )
@@ -89,15 +88,6 @@ type API struct {
 	// extensionRedirectAllowlist bounds the browser-extension connect flow to the
 	// chromiumapp.org redirect ids listed here. Empty refuses every redirect.
 	extensionRedirectAllowlist []string
-	// gmailConnector + gmailCipher back the "Connect Gmail" inbox. Both nil when
-	// the feature is unconfigured (Google creds / token key absent) — the connect
-	// routes are then not registered and the inbox reads empty.
-	gmailConnector *gmailsync.Connector
-	gmailCipher    *tokencrypt.Cipher
-	// mailDomain is the receiving domain hosted mailboxes live on (<handle>@mailDomain).
-	// Empty = the hosted-mailbox feature is off: the claim route is unregistered and
-	// status reports unavailable.
-	mailDomain string
 	// companySearch is the company-search backend backing GET /api/v1/companies,
 	// kept separate from `search` so the companies index stays fully decoupled from
 	// jobs search. Nil when Meilisearch is unconfigured, or on any query error, the
@@ -115,20 +105,6 @@ type API struct {
 	// accounts resolves external OAuth identities into local user accounts
 	// (identity-first lookup, verified-email gate, link-or-create, race retry).
 	accounts *accounts.Service
-	// contribution owns the crowdsourced paste-a-link flow (submit a URL → detect ATS,
-	// dedup by derived identity, record + award a point); list the caller's own.
-	contribution *contribution.Service
-	// credits meters the per-user AI-points balance the match and tailor features debit.
-	credits *credits.Store
-	// Telegram notification wiring. All nil/empty when the bot is unconfigured —
-	// the linking endpoints then report the feature off and the webhook is inert.
-	// telegramLinks mints/verifies the deep-link token; telegramBot replies to the
-	// inbound /start; telegramBotUsername builds the t.me URL; telegramWebhookSecret
-	// guards the inbound webhook.
-	telegramLinks         *telegramnotify.LinkTokens
-	telegramBot           *telegramnotify.Client
-	telegramBotUsername   string
-	telegramWebhookSecret string
 }
 
 // middleware bundles the auth gates the feature handlers mount their routes
@@ -250,9 +226,6 @@ func Register(app *fiber.App, cfg Config) {
 
 		extensionRedirectAllowlist: cfg.ExtensionRedirectAllowlist,
 
-		gmailConnector: cfg.GmailConnector,
-		gmailCipher:    cfg.GmailCipher,
-		mailDomain:     cfg.MailboxDomain,
 		browserTools:   browsertools.New(),
 		accounts:       accounts.New(accounts.NewQueriesRepository(queries, cfg.Pool), authHasher{}),
 	}
@@ -265,7 +238,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Contributions detect the ATS board from the URL alone (network-free, board.go), with a
 	// network fallback (boardresolve) that fetches a company careers page and detects an
 	// embedded ATS — so vanity-domain links (company.com/careers?gh_jid=…) resolve too.
-	a.contribution = contribution.New(contribution.NewQueriesRepository(queries), boardresolve.New())
+	contributionSvc := contribution.New(contribution.NewQueriesRepository(queries), boardresolve.New())
 	reportsH := newReportHandlers(queries)
 	savedSearchH := newSavedSearchHandlers(queries)
 	subscriptionH := newSubscriptionHandlers(queries)
@@ -285,26 +258,13 @@ func Register(app *fiber.App, cfg Config) {
 	// The autofill planner is one cheap structured call per run; the shared client's
 	// default timeout is right for it.
 	a.autofillPlanner = cfg.LLM
-	a.credits = credits.NewStore(queries, cfg.Pool, cfg.Credits)
-	contributionsH := newContributionHandlers(a.contribution, a.credits)
-	creditsH := newCreditsHandlers(a.credits, queries)
-	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, a.credits)
-	cvH := newCVHandlers(queries, cfg.TypstBin, resumeStore, a.credits, matchH)
-	// Telegram notifications are enabled only with both a bot token and a JWT
-	// secret (the link token reuses it). Absent either, the linking endpoints
-	// report the feature off and the webhook is inert (see telegramEnabled).
-	if cfg.TelegramBotToken != "" && cfg.JWTSecret != "" {
-		a.telegramLinks = telegramnotify.NewLinkTokens(cfg.JWTSecret, telegramLinkTTL)
-		a.telegramBot = telegramnotify.NewClient(cfg.TelegramBotToken)
-		a.telegramBotUsername = cfg.TelegramBotUsername
-		a.telegramWebhookSecret = cfg.TelegramWebhookSecret
-		// The webhook fails closed on an empty secret (see TelegramWebhook), so a
-		// bot without TELEGRAM_WEBHOOK_SECRET can never link accounts — say so at
-		// startup instead of letting every update 403 silently.
-		if cfg.TelegramWebhookSecret == "" {
-			log.Printf("telegram: TELEGRAM_WEBHOOK_SECRET is empty; the webhook rejects every update (account linking via the bot will not work)")
-		}
-	}
+	creditsStore := credits.NewStore(queries, cfg.Pool, cfg.Credits)
+	contributionsH := newContributionHandlers(contributionSvc, creditsStore)
+	creditsH := newCreditsHandlers(creditsStore, queries)
+	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, creditsStore)
+	cvH := newCVHandlers(queries, cfg.TypstBin, resumeStore, creditsStore, matchH)
+	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionSvc, creditsStore)
+	inboxH := newInboxHandlers(queries, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)
 	// Assign only when configured: a nil *search.Client wrapped in the searcher
 	// interface would be a non-nil interface and defeat the nil check.
 	var jobSearch searcher
@@ -333,8 +293,8 @@ func Register(app *fiber.App, cfg Config) {
 		}
 	}
 	var referralTelegram referral.TelegramSender
-	if a.telegramBot != nil {
-		referralTelegram = a.telegramBot
+	if telegramH.telegramBot != nil {
+		referralTelegram = telegramH.telegramBot
 	}
 	referralPinger := referral.NewChannelPinger(referralEmail, cfg.NotifyEmailFrom, referralTelegram)
 	referralCabinetURL := strings.TrimRight(cfg.FrontendOrigin, "/") + "/my/referrals?tab=incoming"
@@ -445,35 +405,10 @@ func Register(app *fiber.App, cfg Config) {
 	// CV builder + AI tailoring (see cvHandlers).
 	cvH.register(api, mw)
 
-	// Mail inbox (Gmail connect + hosted mailbox). Open to every signed-in user.
-	// The read + disconnect routes are always registered (empty/no-op when not
-	// connected); the OAuth connect routes only when configured. Cookie-or-key auth.
-	api.Get("/me/gmail", cookieAuth, a.GmailStatus)
-	api.Delete("/me/gmail", cookieAuth, a.GmailDisconnect)
-	api.Get("/me/inbox", cookieAuth, a.GetInbox)
-	api.Post("/me/inbox/read-all", cookieAuth, a.MarkAllReadInbox)
-	api.Get("/me/emails/:id", cookieAuth, a.GetEmail)
-	api.Post("/me/emails/:id/delete", cookieAuth, a.DeleteEmail)
-	api.Post("/me/emails/:id/restore", cookieAuth, a.RestoreEmail)
-	// Email → application linking. :slug is registered after the static
-	// /me/tracking/* routes above so it does not shadow them.
-	api.Get("/me/tracking/:slug", cookieAuth, a.GetTrackedApplication)
-	api.Post("/me/emails/:id/link", cookieAuth, a.LinkEmail)
-	api.Post("/me/emails/:id/unlink", cookieAuth, a.UnlinkEmail)
-	api.Post("/me/emails/:id/confirm", cookieAuth, a.ConfirmEmailLink)
-	api.Post("/me/emails/:id/reject", cookieAuth, a.RejectEmailLink)
-	if a.gmailReady() {
-		api.Get("/me/gmail/connect", cookieAuth, a.GmailConnect)
-		api.Get("/me/gmail/callback", cookieAuth, a.GmailCallback)
-		api.Post("/me/gmail/sync", cookieAuth, a.SyncGmail)
-	}
-	// Hosted-mailbox option: status is always available (reports unavailable when
-	// the feature is off); claim/release only when a receiving domain is configured.
-	api.Get("/me/mailbox", cookieAuth, a.GetMailbox)
-	if a.mailboxReady() {
-		api.Post("/me/mailbox", cookieAuth, a.ClaimMailbox)
-		api.Delete("/me/mailbox", cookieAuth, a.ReleaseMailbox)
-	}
+	// Mail inbox (Gmail connect + hosted mailbox) and email ↔ application linking
+	// (see inboxHandlers). Registered after the static /me/tracking/* routes so
+	// /me/tracking/:slug does not shadow them.
+	inboxH.register(api, mw)
 	// Résumé/CV surfaces: verdict, ATS report, extraction, storage, recommendations
 	// (see resumeHandlers).
 	resumeH.register(api, mw)
@@ -481,13 +416,8 @@ func Register(app *fiber.App, cfg Config) {
 	// Filter subscriptions (see subscriptionHandlers).
 	subscriptionH.register(api, mw)
 
-	api.Post("/me/telegram/link", cookieAuth, a.LinkTelegram)
-	api.Get("/me/telegram", cookieAuth, a.TelegramLinkStatus)
-	api.Delete("/me/telegram", cookieAuth, a.UnlinkTelegram)
-
-	// The Telegram webhook is the only unauthenticated POST: it is guarded by the
-	// shared secret token Telegram echoes in a header (see TelegramWebhook).
-	api.Post("/telegram/webhook", a.TelegramWebhook)
+	// Telegram linking + the inbound bot webhook (see telegramHandlers).
+	telegramH.register(api, mw)
 
 	// Auth: register/login/logout are public (logout just clears the cookie).
 	// me is guarded and accepts a session cookie OR an API key, so a non-browser

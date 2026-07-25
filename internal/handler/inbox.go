@@ -92,7 +92,7 @@ func parseInboxFilters(c *fiber.Ctx) (inboxFilters, error) {
 // soft-deleted messages. Optional filters: ?source= (account switcher), ?unread=1
 // (hide read), ?status= (one classified label), ?q= (subject/sender/body search);
 // standard limit/offset pagination.
-func (a *API) GetInbox(c *fiber.Ctx) error {
+func (h *inboxHandlers) GetInbox(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -102,14 +102,14 @@ func (a *API) GetInbox(c *fiber.Ctx) error {
 		return err
 	}
 	limit, offset := pageParams(c) // default 20, clamped
-	rows, err := a.queries.ListEmails(c.Context(), db.ListEmailsParams{
+	rows, err := h.queries.ListEmails(c.Context(), db.ListEmailsParams{
 		UserID: userID, Src: f.Source, Unread: f.IsUnread, Status: f.Status, Q: f.Q,
 		Lim: int32(limit), Off: int32(offset),
 	})
 	if err != nil {
 		return err
 	}
-	total, err := a.queries.CountEmails(c.Context(), db.CountEmailsParams{
+	total, err := h.queries.CountEmails(c.Context(), db.CountEmailsParams{
 		UserID: userID, Src: f.Source, Unread: f.IsUnread, Status: f.Status, Q: f.Q,
 	})
 	if err != nil {
@@ -136,7 +136,7 @@ func (a *API) GetInbox(c *fiber.Ctx) error {
 
 // GetEmail returns one message body, scoped to the caller (404 for another user's),
 // and marks it read on open (best-effort — a failed mark never blocks reading).
-func (a *API) GetEmail(c *fiber.Ctx) error {
+func (h *inboxHandlers) GetEmail(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -145,11 +145,11 @@ func (a *API) GetEmail(c *fiber.Ctx) error {
 	if err != nil {
 		return fiber.NewError(fiber.StatusNotFound, "not found")
 	}
-	row, err := a.queries.GetEmail(c.Context(), db.GetEmailParams{ID: int64(id), UserID: userID})
+	row, err := h.queries.GetEmail(c.Context(), db.GetEmailParams{ID: int64(id), UserID: userID})
 	if err != nil {
 		return err // pgx.ErrNoRows → 404 via the central error handler
 	}
-	if err := a.queries.MarkEmailRead(c.Context(), db.MarkEmailReadParams{ID: row.ID, UserID: userID}); err != nil {
+	if err := h.queries.MarkEmailRead(c.Context(), db.MarkEmailReadParams{ID: row.ID, UserID: userID}); err != nil {
 		log.Printf("inbox: mark read user=%d email=%d: %v", userID, row.ID, err)
 	}
 	return c.JSON(fiber.Map{"data": emailBody{
@@ -171,7 +171,7 @@ func (a *API) GetEmail(c *fiber.Ctx) error {
 // MarkAllReadInbox marks every unread message matching the caller's active
 // filters (source/status/search) as read and reports how many it marked. The
 // unread filter is implicit — the query only ever touches unread rows.
-func (a *API) MarkAllReadInbox(c *fiber.Ctx) error {
+func (h *inboxHandlers) MarkAllReadInbox(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -180,7 +180,7 @@ func (a *API) MarkAllReadInbox(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	marked, err := a.queries.MarkAllEmailsRead(c.Context(), db.MarkAllEmailsReadParams{
+	marked, err := h.queries.MarkAllEmailsRead(c.Context(), db.MarkAllEmailsReadParams{
 		UserID: userID, Src: f.Source, Status: f.Status, Q: f.Q,
 	})
 	if err != nil {
@@ -190,18 +190,18 @@ func (a *API) MarkAllReadInbox(c *fiber.Ctx) error {
 }
 
 // DeleteEmail soft-deletes one message, scoped to the caller (404 if not theirs).
-func (a *API) DeleteEmail(c *fiber.Ctx) error {
-	return a.setEmailDeleted(c, true)
+func (h *inboxHandlers) DeleteEmail(c *fiber.Ctx) error {
+	return h.setEmailDeleted(c, true)
 }
 
 // RestoreEmail undoes a soft-delete, scoped to the caller (404 if not theirs).
-func (a *API) RestoreEmail(c *fiber.Ctx) error {
-	return a.setEmailDeleted(c, false)
+func (h *inboxHandlers) RestoreEmail(c *fiber.Ctx) error {
+	return h.setEmailDeleted(c, false)
 }
 
 // setEmailDeleted flips one message's soft-delete flag (delete or restore),
 // scoped to the caller. A message that is not theirs matches no row → 404.
-func (a *API) setEmailDeleted(c *fiber.Ctx, deleted bool) error {
+func (h *inboxHandlers) setEmailDeleted(c *fiber.Ctx, deleted bool) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -212,9 +212,9 @@ func (a *API) setEmailDeleted(c *fiber.Ctx, deleted bool) error {
 	}
 	var n int64
 	if deleted {
-		n, err = a.queries.SoftDeleteEmail(c.Context(), db.SoftDeleteEmailParams{ID: int64(id), UserID: userID})
+		n, err = h.queries.SoftDeleteEmail(c.Context(), db.SoftDeleteEmailParams{ID: int64(id), UserID: userID})
 	} else {
-		n, err = a.queries.RestoreEmail(c.Context(), db.RestoreEmailParams{ID: int64(id), UserID: userID})
+		n, err = h.queries.RestoreEmail(c.Context(), db.RestoreEmailParams{ID: int64(id), UserID: userID})
 	}
 	if err != nil {
 		return err

@@ -14,7 +14,7 @@ import (
 // webhookApp mounts the webhook on an enabled handler with the given secret. No
 // DB is needed: the secret guard runs before any query.
 func webhookApp(secret string) *fiber.App {
-	h := &API{
+	h := &telegramHandlers{
 		telegramLinks:         telegramnotify.NewLinkTokens("test-secret", 10*time.Minute),
 		telegramBot:           telegramnotify.NewClient("bottoken"),
 		telegramWebhookSecret: secret,

@@ -18,7 +18,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/accounts"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/contribution"
 	"github.com/strelov1/freehire/internal/credits"
@@ -45,15 +44,7 @@ func TestContributionsEndToEnd(t *testing.T) {
 	cookie, _ := iss.Issue(userID)
 	queries := db.New(pool)
 	creditsStore := credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 5})
-	h := &API{
-		pool:         pool,
-		queries:      queries,
-		issuer:       iss,
-		contribution: contribution.New(contribution.NewQueriesRepository(queries), nil),
-		accounts:     accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{}),
-		credits:      creditsStore,
-	}
-	ch := &contributionHandlers{contribution: h.contribution, credits: creditsStore}
+	ch := &contributionHandlers{contribution: contribution.New(contribution.NewQueriesRepository(queries), nil), credits: creditsStore}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, queries)
