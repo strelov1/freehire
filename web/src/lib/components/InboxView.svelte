@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { resolve } from '$app/paths';
   import { api } from '$lib/api';
   import type {
@@ -12,9 +12,11 @@
   import type { EmailLinking } from '$lib/types';
   import { statusLabel, statusClass, STATUS_LABELS } from '$lib/emailStatus';
   import { inboxLinkState, type LastUnlinked } from '$lib/inboxLink';
+  import { Paginator } from '$lib/paginated.svelte';
   import { Badge, Button } from '$lib/ui';
   import GmailConnectDialog from './GmailConnectDialog.svelte';
   import ApplicationLinkPicker from './ApplicationLinkPicker.svelte';
+  import InfiniteScroll from './InfiniteScroll.svelte';
   import { Mail, AtSign, Copy, Search, RefreshCw, ChevronLeft, CheckCheck, Trash2 } from '@lucide/svelte';
   import { timeAgo, errorMessage } from '$lib/utils';
   import { avatarInitials, avatarColor } from '$lib/avatar';
@@ -23,8 +25,6 @@
 
   let gmail = $state<GmailStatus | null>(null);
   let mailbox = $state<MailboxStatus | null>(null);
-  let messages = $state<InboxMessage[]>([]);
-  let total = $state(0);
   let loading = $state(true);
   let error = $state<string | null>(null);
 
@@ -41,6 +41,14 @@
   // The dropdown offers only signals with a human label (drops 'other' → blank).
   const LABEL_OPTIONS = Object.entries(STATUS_LABELS).filter(([, l]) => l !== '');
   const filterActive = $derived(unread || label !== '' || search !== '');
+
+  // The mail list pages over the inbox endpoint with the shared Paginator; the
+  // fetch closure reads the live filters (search, account, unread, label) at
+  // call time, so a filter change just re-fetches the first page.
+  const pager = new Paginator<InboxMessage>(
+    (limit, offset) => api.getInbox({ q: search, limit, offset, source, unread, status: label }),
+    PAGE_SIZE,
+  );
 
   let syncing = $state(false);
   let claiming = $state(false);
@@ -81,7 +89,7 @@
     error = null;
     try {
       [gmail, mailbox] = await Promise.all([api.gmailStatus(), api.mailboxStatus()]);
-      if (hasAnySource) await fetchFirstPage();
+      if (hasAnySource) await fetchFirstPage('Failed to load the inbox.');
       else tab = 'settings'; // nothing to read yet — land on setup
     } catch (e) {
       error = errorMessage(e, 'Failed to load the inbox.');
@@ -90,13 +98,19 @@
     }
   }
 
-  // Load the first page for the current search term + source filter, then top up
-  // until the list overflows its pane so infinite scroll has room to work.
-  async function fetchFirstPage() {
-    const res = await api.getInbox({ q: search, limit: PAGE_SIZE, offset: 0, source, unread, status: label });
-    messages = res.messages;
-    total = res.total;
-    await fillViewport();
+  // Re-fetch the first page for the current filters, replacing the list. The
+  // Paginator swallows fetch errors into its status, so rethrow with the
+  // caller's message to surface it like the old manual paging did. `reloading`
+  // keeps the infinite-scroll sentinel from paging while a reload is in flight.
+  let reloading = $state(false);
+  async function fetchFirstPage(failMessage: string) {
+    reloading = true;
+    try {
+      await pager.start();
+      if (pager.status === 'error') throw new Error(failMessage);
+    } finally {
+      reloading = false;
+    }
   }
 
   // Reload the first page; clears the reading pane.
@@ -104,7 +118,7 @@
     selectedId = null;
     selected = null;
     try {
-      await fetchFirstPage();
+      await fetchFirstPage('Failed to load the inbox.');
     } catch (e) {
       error = errorMessage(e, 'Failed to load the inbox.');
     }
@@ -116,7 +130,7 @@
     refreshing = true;
     error = null;
     try {
-      await fetchFirstPage();
+      await fetchFirstPage('Refresh failed.');
     } catch (e) {
       error = errorMessage(e, 'Refresh failed.');
     } finally {
@@ -124,45 +138,13 @@
     }
   }
 
-  async function loadMore() {
-    try {
-      const res = await api.getInbox({ q: search, limit: PAGE_SIZE, offset: messages.length, source, unread, status: label });
-      messages = [...messages, ...res.messages];
-      total = res.total;
-    } catch (e) {
-      error = errorMessage(e, 'Failed to load more.');
-    }
-  }
-
   // Infinite scroll: the list is a fixed-height scroll pane (the page itself does
-  // not grow), and nearing its bottom pulls the next page in place.
-  let listEl = $state<HTMLElement>();
-  let loadingMore = $state(false);
-  function onListScroll() {
-    if (!listEl || loadingMore || messages.length >= total) return;
-    if (listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 240) {
-      loadingMore = true;
-      loadMore().finally(() => (loadingMore = false));
-    }
-  }
-
-  // After a fresh first page, keep pulling until the list overflows its pane (so
-  // there is something to scroll into) or the mailbox is exhausted — otherwise a
-  // short first page in a tall pane would never trigger the scroll load.
-  async function fillViewport() {
-    if (loadingMore) return;
-    loadingMore = true;
-    try {
-      await tick();
-      let guard = 0;
-      while (listEl && messages.length < total && listEl.scrollHeight <= listEl.clientHeight + 4 && guard < 40) {
-        await loadMore();
-        await tick();
-        guard++;
-      }
-    } finally {
-      loadingMore = false;
-    }
+  // not grow); the bottom sentinel pulls the next page in place. A short first
+  // page in a tall pane leaves the sentinel visible, so it keeps firing until
+  // the list overflows its pane or the mailbox is exhausted.
+  async function loadMore() {
+    await pager.loadMore();
+    if (pager.loadMoreError) error = 'Failed to load more.';
   }
 
   function onSearchInput() {
@@ -193,7 +175,7 @@
       if (unread) {
         await reloadList();
       } else {
-        messages = messages.map((m) => ({ ...m, read: true }));
+        pager.items = pager.items.map((m) => ({ ...m, read: true }));
         if (selected) selected = { ...selected, read: true };
       }
     } catch (e) {
@@ -210,17 +192,17 @@
     if (!selected) return;
     const id = selected.id;
     const subject = selected.subject;
-    const prev = messages;
-    messages = messages.filter((m) => m.id !== id);
-    total = Math.max(0, total - 1);
+    const prev = pager.items;
+    pager.items = pager.items.filter((m) => m.id !== id);
+    pager.total = Math.max(0, pager.total - 1);
     selectedId = null;
     selected = null;
     try {
       await api.deleteEmail(id);
       lastDeleted = { id, subject };
     } catch (e) {
-      messages = prev; // put the row back
-      total += 1;
+      pager.items = prev; // put the row back
+      pager.total += 1;
       error = errorMessage(e, 'Failed to delete.');
     }
   }
@@ -254,7 +236,7 @@
     try {
       selected = await api.getEmail(id);
       // Reflect the just-opened message as read in the list without a refetch.
-      messages = messages.map((m) => (m.id === id ? { ...m, read: true } : m));
+      pager.items = pager.items.map((m) => (m.id === id ? { ...m, read: true } : m));
       // An email with no link and no suggestion can be linked by hand — make sure
       // the picker has the caller's applications ready.
       if (!selected.linked_slug && !selected.suggested_slug) void ensureTrackedApps();
@@ -298,7 +280,7 @@
       suggested_slug: updated.suggested_slug,
       suggested_company: updated.suggested_company,
     };
-    messages = messages.map((m) => (m.id === updated.id ? { ...m, ...overlay } : m));
+    pager.items = pager.items.map((m) => (m.id === updated.id ? { ...m, ...overlay } : m));
   }
 
   async function confirmLink() {
@@ -373,7 +355,7 @@
         await new Promise((r) => setTimeout(r, 2500));
         // Stop polling once the page is gone — no requests for a dead view.
         if (destroyed) return;
-        await fetchFirstPage();
+        await fetchFirstPage('Sync failed.');
       }
     } catch (e) {
       error = errorMessage(e, 'Sync failed.');
@@ -432,8 +414,7 @@
   // Refresh the listing after a source is added/removed; empties it when none left.
   async function refresh() {
     if (!hasAnySource) {
-      messages = [];
-      total = 0;
+      pager.seed({ items: [], total: 0, hasMore: false });
       selectedId = null;
       selected = null;
       return;
@@ -614,7 +595,7 @@
         </div>
       {/if}
 
-      {#if messages.length === 0}
+      {#if pager.items.length === 0}
         <p class="py-12 text-center text-sm text-muted-foreground">
           {filterActive ? 'No mail matches your filters.' : 'No mail yet — it appears here as it arrives.'}
         </p>
@@ -624,12 +605,10 @@
              md a master-detail (open a message → the reading pane replaces the list). -->
         <div class="grid h-[calc(100dvh-12rem)] min-h-[26rem] gap-5 md:grid-cols-[minmax(0,19rem)_1fr]">
           <div
-            bind:this={listEl}
-            onscroll={onListScroll}
             class="min-h-0 flex-col gap-1 overflow-y-auto pr-1 {selectedId === null ? 'flex' : 'hidden md:flex'}"
           >
             <ul class="flex flex-col gap-1">
-              {#each messages as m, i (m.id)}
+              {#each pager.items as m, i (m.id)}
                 <li class="row-in" style="animation-delay: {Math.min(i, 14) * 15}ms">
                   <button
                     type="button"
@@ -681,7 +660,14 @@
               {/each}
             </ul>
 
-            {#if loadingMore}
+            {#if pager.hasMore}
+              <!-- Scroll-to-bottom auto-load (inside the list's own scroll pane). -->
+              <InfiniteScroll
+                onLoad={loadMore}
+                enabled={!pager.loadingMore && !pager.loadMoreError && !reloading}
+              />
+            {/if}
+            {#if pager.loadingMore}
               <p class="py-3 text-center text-xs text-muted-foreground">Loading…</p>
             {/if}
           </div>

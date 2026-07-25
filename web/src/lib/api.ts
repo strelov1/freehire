@@ -1116,9 +1116,10 @@ export function createApi(
     await requestData<unknown>('/api/v1/me/gmail/sync', { method: 'POST' });
   }
 
-  /** A page of the flat inbox listing, newest first, with the total message count.
-   *  Optional search term filters by subject, sender, or body; optional source
-   *  narrows to one account (the switcher). */
+  /** A page of the flat inbox listing, newest first. Optional search term filters
+   *  by subject, sender, or body; optional source narrows to one account (the
+   *  switcher). `meta.total` reflects the filtered count, so the Paginator pages
+   *  over the matches. */
   async function getInbox(
     opts: {
       q?: string;
@@ -1128,7 +1129,7 @@ export function createApi(
       unread?: boolean;
       status?: string;
     } = {},
-  ): Promise<{ messages: InboxMessage[]; total: number }> {
+  ): Promise<Slice<InboxMessage>> {
     const params = new URLSearchParams({
       limit: String(opts.limit ?? 20),
       offset: String(opts.offset ?? 0),
@@ -1137,10 +1138,7 @@ export function createApi(
     if (opts.source) params.set('source', opts.source);
     if (opts.unread) params.set('unread', '1');
     if (opts.status) params.set('status', opts.status);
-    const res = await request<{ data: InboxMessage[]; meta: { total: number } }>(
-      `/api/v1/me/inbox?${params.toString()}`,
-    );
-    return { messages: res.data, total: res.meta.total };
+    return toSlice(await request<Page<InboxMessage>>(`/api/v1/me/inbox?${params.toString()}`), opts.offset ?? 0);
   }
 
   /** Mark every unread message matching the active filters as read; returns the
