@@ -19,6 +19,7 @@ type ApiKey struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	LastUsedAt  pgtype.Timestamptz `json:"last_used_at"`
 	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	Scope       string             `json:"scope"`
 }
 
 type BoardHealth struct {
@@ -512,6 +513,17 @@ type User struct {
 	ResumeStructuredModel      pgtype.Text        `json:"resume_structured_model"`
 	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
 	BetaTester                 bool               `json:"beta_tester"`
+	EmailVerified              bool               `json:"email_verified"`
+	TokenVersion               int32              `json:"token_version"`
+}
+
+type UserEmailCode struct {
+	UserID    int64              `json:"user_id"`
+	Purpose   string             `json:"purpose"`
+	CodeHash  string             `json:"code_hash"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	Attempts  int32              `json:"attempts"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type UserIdentity struct {
