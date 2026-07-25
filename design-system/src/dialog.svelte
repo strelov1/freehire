@@ -1,3 +1,23 @@
+<script lang="ts" module>
+  // Counted, not captured per dialog: with two open, the inner one to close
+  // would otherwise restore the overflow it read *after* the outer one had
+  // already set it to hidden, leaving the page locked for good.
+  let locks = 0;
+  let restore = '';
+
+  function lockPageScroll() {
+    if (locks === 0) {
+      restore = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+    }
+    locks++;
+    return () => {
+      locks--;
+      if (locks === 0) document.body.style.overflow = restore;
+    };
+  }
+</script>
+
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { cn } from './cn.js';
@@ -35,11 +55,7 @@
   // The one thing showModal() does not do is stop the page behind from scrolling.
   $effect(() => {
     if (!open) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previous;
-    };
+    return lockPageScroll();
   });
 
   // The backdrop is a pseudo-element of the dialog, so clicks on it surface as

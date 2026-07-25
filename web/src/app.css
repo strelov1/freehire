@@ -10,8 +10,10 @@
 /* The design-system package is linked through node_modules, which Tailwind's
    automatic source detection skips — without this the utilities used inside
    design-system/src/*.svelte are never emitted and its primitives render
-   unstyled. Path is relative to this file. */
-@source "../../design-system/src";
+   unstyled. Path is relative to this file. Components only: the .ts files
+   alongside them hold no classes, and the tests mention class names as
+   assertions, which would mint utilities nothing renders. */
+@source "../../design-system/src/**/*.svelte";
 
 /* Typography plugin: the `prose` classes style the mdsvex-rendered blog post body
    (web/src/routes/blog/[slug]). Opt-in, so no other page is affected. */
