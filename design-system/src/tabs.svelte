@@ -35,6 +35,12 @@
     children: Snippet;
   } = $props();
 
+  const uid = $props.id();
+  const tabId = (v: string) => `${uid}-tab-${v}`;
+  const panelId = `${uid}-panel`;
+
+  let triggers: HTMLButtonElement[] = $state([]);
+
   function activate(v: string) {
     value = v;
   }
@@ -47,6 +53,9 @@
       const dir = e.key === 'ArrowRight' ? 1 : -1;
       const next = (idx + dir + tabs.length) % tabs.length;
       activate(tabs[next].value);
+      // Roving tabindex: the old trigger just became tabindex="-1", so focus
+      // has to follow the selection or it lands nowhere.
+      triggers[next]?.focus();
     }
   }
 </script>
@@ -57,10 +66,13 @@
     role="tablist"
     onkeydown={onKeydown}
   >
-    {#each tabs as tab (tab.value)}
+    {#each tabs as tab, i (tab.value)}
       <button
+        bind:this={triggers[i]}
         type="button"
         role="tab"
+        id={tabId(tab.value)}
+        aria-controls={panelId}
         aria-selected={value === tab.value}
         tabindex={value === tab.value ? 0 : -1}
         class={tabsTriggerVariants({ active: value === tab.value })}
@@ -70,7 +82,7 @@
       </button>
     {/each}
   </div>
-  <div role="tabpanel">
+  <div role="tabpanel" id={panelId} aria-labelledby={value ? tabId(value) : undefined}>
     {@render children()}
   </div>
 </div>

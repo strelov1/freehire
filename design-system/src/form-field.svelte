@@ -15,10 +15,15 @@
     hint?: string;
     required?: boolean;
     class?: string;
-    children: Snippet;
+    /** Receives the ids to spread onto the control: `{@render children({ id, describedBy })}`. */
+    children: Snippet<[{ id: string; describedBy: string | undefined }]>;
   } = $props();
 
-  let id = `field-${crypto.randomUUID().slice(0, 8)}`;
+  // $props.id() is stable across SSR and hydration — crypto.randomUUID() is not.
+  const uid = $props.id();
+  const id = `${uid}-control`;
+  const messageId = `${uid}-message`;
+  let describedBy = $derived(error || hint ? messageId : undefined);
 </script>
 
 <div class={cn('flex flex-col gap-1.5', className)}>
@@ -30,10 +35,10 @@
       {/if}
     </label>
   {/if}
-  {@render children()}
+  {@render children({ id, describedBy })}
   {#if error}
-    <p class="text-sm text-destructive" role="alert">{error}</p>
+    <p id={messageId} class="text-sm text-destructive" role="alert">{error}</p>
   {:else if hint}
-    <p class="text-sm text-muted-foreground">{hint}</p>
+    <p id={messageId} class="text-sm text-muted-foreground">{hint}</p>
   {/if}
 </div>

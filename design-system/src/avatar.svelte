@@ -1,8 +1,6 @@
 <script lang="ts">
   import { cn } from './cn.js';
 
-  // Deterministic color from a string — uses the hue range of the brand
-  // palette so avatars feel on-brand rather than random rainbow.
   let {
     name,
     src,
@@ -21,6 +19,9 @@
     lg: 'size-12 text-base',
   };
 
+  // Deterministic hue from the name, across the full circle — what keeps the
+  // result calm is the fixed low saturation and high lightness below, not the
+  // hue itself. Kept as an inline colour because a token per hue makes no sense.
   function hashHue(s: string): number {
     let h = 0;
     for (let i = 0; i < s.length; i++) {
