@@ -35,6 +35,15 @@ type fakeRepo struct {
 	// UserByID responses
 	userByIDResults []userByIDResult
 	userByIDCallIdx int
+
+	// markedVerified records that MarkEmailVerified was called.
+	markedVerified bool
+
+	// setHash / resetHash record the hash each password path stored;
+	// setPasswordVersion is the generation SetPassword reports back.
+	setHash            string
+	resetHash          string
+	setPasswordVersion int32
 }
 
 type idResult struct {
@@ -59,8 +68,9 @@ type createUserResult struct {
 }
 
 type createUserCall struct {
-	email        string
-	passwordHash string
+	email         string
+	passwordHash  string
+	emailVerified bool
 }
 
 type userByEmailResult struct {
@@ -94,8 +104,8 @@ func (f *fakeRepo) LinkOrCreateByEmail(_ context.Context, provider, providerUser
 	return r.id, r.err
 }
 
-func (f *fakeRepo) CreateUser(_ context.Context, email, passwordHash string) (User, error) {
-	f.createUserCalls = append(f.createUserCalls, createUserCall{email, passwordHash})
+func (f *fakeRepo) CreateUser(_ context.Context, email, passwordHash string, emailVerified bool) (User, error) {
+	f.createUserCalls = append(f.createUserCalls, createUserCall{email, passwordHash, emailVerified})
 	if f.createUserCallIdx >= len(f.createUserResults) {
 		return User{}, errors.New("fakeRepo: unexpected CreateUser call")
 	}
@@ -111,6 +121,21 @@ func (f *fakeRepo) UserByEmail(_ context.Context, email string) (User, string, b
 	r := f.userByEmailResults[f.userByEmailCallIdx]
 	f.userByEmailCallIdx++
 	return r.user, r.passwordHash, r.hasPassword, r.err
+}
+
+func (f *fakeRepo) MarkEmailVerified(_ context.Context, _ int64) error {
+	f.markedVerified = true
+	return nil
+}
+
+func (f *fakeRepo) SetPassword(_ context.Context, _ int64, passwordHash string) (int32, error) {
+	f.setHash = passwordHash
+	return f.setPasswordVersion, nil
+}
+
+func (f *fakeRepo) ResetPassword(_ context.Context, _ int64, passwordHash string) (int32, error) {
+	f.resetHash = passwordHash
+	return f.setPasswordVersion, nil
 }
 
 func (f *fakeRepo) UserByID(_ context.Context, id int64) (User, error) {

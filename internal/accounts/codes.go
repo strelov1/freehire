@@ -1,0 +1,199 @@
+package accounts
+
+import (
+	"context"
+	"crypto/rand"
+	"errors"
+	"fmt"
+	"log"
+	"math/big"
+	"time"
+)
+
+// Purposes a mailed code can serve. They share one store keyed by (user, purpose), so a
+// pending verification and a pending reset never overwrite each other.
+const (
+	PurposeVerifyEmail   = "verify_email"
+	PurposeResetPassword = "password_reset"
+)
+
+const (
+	// codeTTL bounds how long a mailed code is usable. Long enough to switch to a mail
+	// client and back, short enough that a code sitting in an inbox is not a standing key.
+	codeTTL = 15 * time.Minute
+
+	// maxCodeAttempts is how many wrong guesses a code survives. Six digits is a million
+	// possibilities; five tries makes online guessing hopeless without frustrating a human
+	// who mistyped.
+	maxCodeAttempts = 5
+
+	// resendCooldown keeps the endpoint from being used to flood an address with mail.
+	resendCooldown = 60 * time.Second
+)
+
+var (
+	// ErrNoCode is returned by a CodeStore when nothing is outstanding for that purpose.
+	ErrNoCode = errors.New("accounts: no outstanding code")
+
+	// ErrInvalidCode covers a wrong, already-consumed, or burnt code. It deliberately does
+	// not say which: a caller learns only that this code does not work.
+	ErrInvalidCode = errors.New("accounts: invalid code")
+
+	// ErrCodeExpired is separate from ErrInvalidCode because the remedy differs — the
+	// caller should request a new code rather than re-read the mail.
+	ErrCodeExpired = errors.New("accounts: code expired")
+
+	// ErrResendTooSoon reports a resend inside the cooldown window.
+	ErrResendTooSoon = errors.New("accounts: code was just sent")
+
+	// ErrMailUnavailable reports that no outbound mail transport is configured, so no code
+	// can be delivered. Surfaced as 503 — never as a silent success.
+	ErrMailUnavailable = errors.New("accounts: email delivery is not configured")
+
+	// ErrAlreadyVerified reports a verification request for an account that is already
+	// verified, so the client can stop prompting.
+	ErrAlreadyVerified = errors.New("accounts: email already verified")
+)
+
+// StoredCode is one outstanding code as the store holds it: the hash (never the code),
+// when it dies, how many wrong guesses it has taken, and when it was issued (which is
+// what the resend cooldown reads).
+type StoredCode struct {
+	Hash      string
+	ExpiresAt time.Time
+	Attempts  int32
+	IssuedAt  time.Time
+}
+
+// CodeStore persists at most one outstanding code per (user, purpose).
+type CodeStore interface {
+	UpsertCode(ctx context.Context, userID int64, purpose, codeHash string, expiresAt time.Time) error
+	Code(ctx context.Context, userID int64, purpose string) (StoredCode, error)
+	BumpAttempts(ctx context.Context, userID int64, purpose string) (int32, error)
+	DeleteCode(ctx context.Context, userID int64, purpose string) error
+}
+
+// CodeMailer delivers the two transactional mails. It is a port so accounts stays free of
+// the AWS/SES dependency graph.
+type CodeMailer interface {
+	SendVerificationCode(ctx context.Context, email, code string) error
+	SendPasswordResetCode(ctx context.Context, email, code string) error
+}
+
+// WithCodes enables the code-backed flows (email verification, password reset). Without
+// it the Service still registers and authenticates; the code endpoints report the feature
+// unavailable rather than pretending a mail was sent.
+func (s *Service) WithCodes(codes CodeStore, mailer CodeMailer) {
+	s.codes = codes
+	s.mailer = mailer
+}
+
+// codesEnabled reports whether both the store and a transport are wired.
+func (s *Service) codesEnabled() bool { return s.codes != nil && s.mailer != nil }
+
+// newCode returns a six-digit code from a cryptographically secure source. Six digits is
+// safe here only because the code is short-lived and attempt-limited — both enforced below.
+func newCode() (string, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%06d", n.Int64()), nil
+}
+
+// issueCode mints, stores, and returns a fresh code for one purpose, refusing a resend
+// inside the cooldown. The code is stored only as a hash — a stolen snapshot must not
+// yield live codes.
+func (s *Service) issueCode(ctx context.Context, userID int64, purpose string) (string, error) {
+	existing, err := s.codes.Code(ctx, userID, purpose)
+	switch {
+	case err == nil:
+		if s.now().Sub(existing.IssuedAt) < resendCooldown {
+			return "", ErrResendTooSoon
+		}
+	case !errors.Is(err, ErrNoCode):
+		return "", err
+	}
+
+	code, err := newCode()
+	if err != nil {
+		return "", err
+	}
+	hash, err := s.hasher.Hash(code)
+	if err != nil {
+		return "", err
+	}
+	if err := s.codes.UpsertCode(ctx, userID, purpose, hash, s.now().Add(codeTTL)); err != nil {
+		return "", err
+	}
+	return code, nil
+}
+
+// consumeCode checks a presented code against the outstanding one and, on success, deletes
+// it so it cannot be replayed. A wrong guess counts toward the ceiling; reaching the
+// ceiling burns the code, so even the right value stops working until a new one is issued.
+// Absent, burnt, and wrong all surface as ErrInvalidCode — the caller learns only that this
+// code does not work.
+func (s *Service) consumeCode(ctx context.Context, userID int64, purpose, presented string) error {
+	stored, err := s.codes.Code(ctx, userID, purpose)
+	if errors.Is(err, ErrNoCode) {
+		return ErrInvalidCode
+	}
+	if err != nil {
+		return err
+	}
+	if s.now().After(stored.ExpiresAt) {
+		return ErrCodeExpired
+	}
+	if s.hasher.Check(stored.Hash, presented) != nil {
+		attempts, err := s.codes.BumpAttempts(ctx, userID, purpose)
+		if err != nil {
+			return err
+		}
+		if attempts >= maxCodeAttempts {
+			if err := s.codes.DeleteCode(ctx, userID, purpose); err != nil {
+				return err
+			}
+		}
+		return ErrInvalidCode
+	}
+	return s.codes.DeleteCode(ctx, userID, purpose)
+}
+
+// IssueVerificationCode mails a fresh email-verification code to the account's address.
+// Reports ErrMailUnavailable when no transport is configured and ErrResendTooSoon inside
+// the cooldown.
+func (s *Service) IssueVerificationCode(ctx context.Context, userID int64, email string) error {
+	if !s.codesEnabled() {
+		return ErrMailUnavailable
+	}
+	code, err := s.issueCode(ctx, userID, PurposeVerifyEmail)
+	if err != nil {
+		return err
+	}
+	return s.mailer.SendVerificationCode(ctx, email, code)
+}
+
+// ConfirmVerification marks the account verified when the presented code matches the
+// outstanding one.
+func (s *Service) ConfirmVerification(ctx context.Context, userID int64, code string) error {
+	if !s.codesEnabled() {
+		return ErrMailUnavailable
+	}
+	if err := s.consumeCode(ctx, userID, PurposeVerifyEmail, code); err != nil {
+		return err
+	}
+	return s.repo.MarkEmailVerified(ctx, userID)
+}
+
+// sendVerificationOnRegister mails the new account's first code, best-effort: a mail
+// failure must not undo a registration that already succeeded, so it is logged and the
+// user is left to ask for a resend.
+func (s *Service) sendVerificationOnRegister(ctx context.Context, userID int64, email string) {
+	if !s.codesEnabled() {
+		return
+	}
+	if err := s.IssueVerificationCode(ctx, userID, email); err != nil {
+		log.Printf("accounts: verification mail for user=%d: %v", userID, err)
+	}
+}

@@ -69,10 +69,30 @@ func (r *QueriesRepository) LinkOrCreateByEmail(
 	switch {
 	case err == nil:
 		userID = existing.ID
+		// Account pre-hijacking defence. Reaching here means a provider has vouched for
+		// this address, but the account it matches may have been registered by someone
+		// who never proved they own it — the squatter would keep password access to
+		// everything the real owner does from now on. So an unverified, password-backed
+		// account is not joined, it is SEIZED: the password is destroyed and every
+		// session revoked, in this same transaction. A verified account is joined as
+		// before (its owner already proved the address), and a passwordless one has
+		// nothing to seize — it is only marked verified.
+		if !existing.EmailVerified {
+			if existing.PasswordHash.Valid {
+				if _, err := q.SeizeUnverifiedAccount(ctx, userID); err != nil {
+					return 0, err
+				}
+			} else if err := q.SetUserEmailVerified(ctx, userID); err != nil {
+				return 0, err
+			}
+		}
 	case errors.Is(err, pgx.ErrNoRows):
 		created, err := q.CreateUser(ctx, db.CreateUserParams{
 			Email:        email,
 			PasswordHash: pgtype.Text{}, // passwordless OAuth account
+			// Born verified: the caller only reaches this path with a provider-verified
+			// email (ResolveOAuthAccount's gate), so ownership is already proven.
+			EmailVerified: true,
 		})
 		if err != nil {
 			if pgerr.IsUniqueViolation(err) {
@@ -110,10 +130,11 @@ func (r *QueriesRepository) LinkOrCreateByEmail(
 
 // CreateUser inserts a new account and returns it. Returns ErrEmailTaken on a
 // unique-constraint violation.
-func (r *QueriesRepository) CreateUser(ctx context.Context, email, passwordHash string) (User, error) {
+func (r *QueriesRepository) CreateUser(ctx context.Context, email, passwordHash string, emailVerified bool) (User, error) {
 	row, err := r.q.CreateUser(ctx, db.CreateUserParams{
-		Email:        email,
-		PasswordHash: pgtype.Text{String: passwordHash, Valid: true},
+		Email:         email,
+		PasswordHash:  pgtype.Text{String: passwordHash, Valid: true},
+		EmailVerified: emailVerified,
 	})
 	if pgerr.IsUniqueViolation(err) {
 		return User{}, ErrEmailTaken
@@ -121,7 +142,32 @@ func (r *QueriesRepository) CreateUser(ctx context.Context, email, passwordHash 
 	if err != nil {
 		return User{}, err
 	}
-	return User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester, CreatedAt: pgconv.TimePtr(row.CreatedAt)}, nil
+	return User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester,
+		EmailVerified: row.EmailVerified, CreatedAt: pgconv.TimePtr(row.CreatedAt)}, nil
+}
+
+// MarkEmailVerified records that control of the account's address was proven, by an
+// emailed code or by a provider. Idempotent.
+func (r *QueriesRepository) MarkEmailVerified(ctx context.Context, userID int64) error {
+	return r.q.SetUserEmailVerified(ctx, userID)
+}
+
+// SetPassword replaces a known password, revoking every session in the same statement.
+// Returns the account's new session generation.
+func (r *QueriesRepository) SetPassword(ctx context.Context, userID int64, passwordHash string) (int32, error) {
+	return r.q.SetUserPassword(ctx, db.SetUserPasswordParams{
+		ID:           userID,
+		PasswordHash: pgtype.Text{String: passwordHash, Valid: true},
+	})
+}
+
+// ResetPassword sets a password after a mailed code proved the address, marking the
+// account verified and revoking every session. Returns the new session generation.
+func (r *QueriesRepository) ResetPassword(ctx context.Context, userID int64, passwordHash string) (int32, error) {
+	return r.q.ResetUserPassword(ctx, db.ResetUserPasswordParams{
+		ID:           userID,
+		PasswordHash: pgtype.Text{String: passwordHash, Valid: true},
+	})
 }
 
 // UserByEmail looks up the account with the given (already-normalised) email.
@@ -135,7 +181,8 @@ func (r *QueriesRepository) UserByEmail(ctx context.Context, email string) (User
 	if err != nil {
 		return User{}, "", false, err
 	}
-	u := User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester, CreatedAt: pgconv.TimePtr(row.CreatedAt)}
+	u := User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester,
+		EmailVerified: row.EmailVerified, CreatedAt: pgconv.TimePtr(row.CreatedAt)}
 	return u, row.PasswordHash.String, row.PasswordHash.Valid, nil
 }
 
@@ -148,5 +195,6 @@ func (r *QueriesRepository) UserByID(ctx context.Context, id int64) (User, error
 	if err != nil {
 		return User{}, err
 	}
-	return User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester, CreatedAt: pgconv.TimePtr(row.CreatedAt)}, nil
+	return User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester,
+		EmailVerified: row.EmailVerified, CreatedAt: pgconv.TimePtr(row.CreatedAt)}, nil
 }
