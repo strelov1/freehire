@@ -32,7 +32,9 @@ func (m *recordingModel) GenerateContent(_ context.Context, msgs []llms.MessageC
 	m.resp = m.resp[1:]
 	return &llms.ContentResponse{Choices: []*llms.ContentChoice{{Content: r}}}, nil
 }
-func (*recordingModel) Call(context.Context, string, ...llms.CallOption) (string, error) { return "", nil }
+func (*recordingModel) Call(context.Context, string, ...llms.CallOption) (string, error) {
+	return "", nil
+}
 
 // TestAnalyzeStreamFeedsBlockersToPrompts locks the contract the SSE handler relies on:
 // blockers placed on the Input reach the stage prompts (the stream path passes them into

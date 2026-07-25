@@ -88,27 +88,27 @@ type enrichmentJSON struct {
 	WorkMode        stringOrFirst `json:"work_mode,omitempty"`
 	EmploymentType  stringOrFirst `json:"employment_type,omitempty"`
 	Relocation      stringOrFirst `json:"relocation,omitempty"`
-	VisaSponsorship *bool      `json:"visa_sponsorship,omitempty"`
+	VisaSponsorship *bool         `json:"visa_sponsorship,omitempty"`
 
-	Regions      sliceOrWrap `json:"regions,omitempty"`
-	Countries    sliceOrWrap `json:"countries,omitempty"`
-	Cities       sliceOrWrap `json:"cities,omitempty"`
-	TimezoneNote stringOrFirst      `json:"timezone_note,omitempty"`
+	Regions      sliceOrWrap   `json:"regions,omitempty"`
+	Countries    sliceOrWrap   `json:"countries,omitempty"`
+	Cities       sliceOrWrap   `json:"cities,omitempty"`
+	TimezoneNote stringOrFirst `json:"timezone_note,omitempty"`
 
-	SalaryMin      *roundInt   `json:"salary_min,omitempty"`
-	SalaryMax      *roundInt   `json:"salary_max,omitempty"`
+	SalaryMin      *roundInt     `json:"salary_min,omitempty"`
+	SalaryMax      *roundInt     `json:"salary_max,omitempty"`
 	SalaryCurrency stringOrFirst `json:"salary_currency,omitempty"`
 	SalaryPeriod   stringOrFirst `json:"salary_period,omitempty"`
 
-	Seniority          stringOrFirst      `json:"seniority,omitempty"`
-	ExperienceYearsMin *roundInt        `json:"experience_years_min,omitempty"`
-	EnglishLevel       stringOrFirst      `json:"english_level,omitempty"`
-	EducationLevel     stringOrFirst      `json:"education_level,omitempty"`
-	Skills             sliceOrWrap `json:"skills,omitempty"`
+	Seniority          stringOrFirst `json:"seniority,omitempty"`
+	ExperienceYearsMin *roundInt     `json:"experience_years_min,omitempty"`
+	EnglishLevel       stringOrFirst `json:"english_level,omitempty"`
+	EducationLevel     stringOrFirst `json:"education_level,omitempty"`
+	Skills             sliceOrWrap   `json:"skills,omitempty"`
 
-	Category        stringOrFirst      `json:"category,omitempty"`
-	Domains         sliceOrWrap `json:"domains,omitempty"`
-	PostingLanguage stringOrFirst      `json:"posting_language,omitempty"`
+	Category        stringOrFirst `json:"category,omitempty"`
+	Domains         sliceOrWrap   `json:"domains,omitempty"`
+	PostingLanguage stringOrFirst `json:"posting_language,omitempty"`
 
 	CompanyType stringOrFirst `json:"company_type,omitempty"`
 	CompanySize stringOrFirst `json:"company_size,omitempty"`
