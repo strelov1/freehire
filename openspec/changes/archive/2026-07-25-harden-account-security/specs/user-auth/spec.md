@@ -104,9 +104,9 @@ password credential.
 - **WHEN** a user signs in via a provider identity that already exists
 - **THEN** the system starts a session for the linked user without touching `users` or creating rows
 
-#### Scenario: First OAuth sign-in linking an existing verified account
+#### Scenario: First OAuth sign-in linking an existing password account
 
-- **WHEN** a user signs in via a new provider identity whose verified email matches an existing verified account
+- **WHEN** a user signs in via a new provider identity whose verified email matches an existing **verified** account
 - **THEN** the system adds the identity linked to that account and starts a session for it, leaving the password intact
 
 #### Scenario: First OAuth sign-in seizing an unverified account
