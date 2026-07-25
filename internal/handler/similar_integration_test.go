@@ -36,7 +36,7 @@ func TestSimilarJobsEndToEnd(t *testing.T) {
 		{ID: 2, Job: jobview.Job{PublicSlug: "py-dev-beta-bbbb2222", Title: "Py Dev"}},
 		{ID: 3, Job: jobview.Job{PublicSlug: "rust-dev-ceta-cccc3333", Title: "Rust Dev"}},
 	}}
-	h := &API{pool: pool, queries: db.New(pool), search: fake}
+	h := &searchHandlers{search: fake, queries: db.New(pool)}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/jobs/:slug/similar", h.SimilarJobs)

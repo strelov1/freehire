@@ -98,23 +98,12 @@ type API struct {
 	// Empty = the hosted-mailbox feature is off: the claim route is unregistered and
 	// status reports unavailable.
 	mailDomain string
-	// search is the job-search backend. Nil when Meilisearch is unconfigured —
-	// the search endpoint then reports 503 and the rest of the API is unaffected.
-	search searcher
-	// descriptions loads full job descriptions by internal id when the agent
-	// search endpoint explicitly asks to include them. *db.Queries in production;
-	// a fake in tests.
-	descriptions jobDescriptions
 	// companySearch is the company-search backend backing GET /api/v1/companies,
 	// kept separate from `search` so the companies index stays fully decoupled from
 	// jobs search. Nil when Meilisearch is unconfigured, or on any query error, the
 	// list falls back to the Postgres substring path so /companies never depends on
 	// Meilisearch being up.
 	companySearch companySearcher
-	// facets is the analytics (facet-distribution) backend — the same Meilisearch
-	// client viewed through a narrower interface, kept separate from search so the
-	// two concerns stay decoupled. Nil when unconfigured (endpoint reports 503).
-	facets facetCounter
 	// browserTools relays browser-tool frames between a user's harness and that
 	// user's browser extension (the /tools/ws wire). In-memory and per-instance:
 	// both ends of a channel are live connections to this process.
@@ -126,9 +115,6 @@ type API struct {
 	// accounts resolves external OAuth identities into local user accounts
 	// (identity-first lookup, verified-email gate, link-or-create, race retry).
 	accounts *accounts.Service
-	// moderation owns the moderator-authored job use cases (create/edit a manual
-	// vacancy); the handlers translate wire ↔ domain and delegate to it.
-	moderation *moderation.Service
 	// contribution owns the crowdsourced paste-a-link flow (submit a URL → detect ATS,
 	// dedup by derived identity, record + award a point); list the caller's own.
 	contribution *contribution.Service
@@ -255,7 +241,6 @@ func Register(app *fiber.App, cfg Config) {
 	a := &API{
 		pool:           cfg.Pool,
 		queries:        queries,
-		descriptions:   queries,
 		issuer:         auth.NewIssuer(cfg.JWTSecret, cfg.JWTTTL),
 		cookieSecure:   cfg.CookieSecure,
 		cookieDomains:  cfg.CookieDomains,
@@ -270,13 +255,13 @@ func Register(app *fiber.App, cfg Config) {
 		mailDomain:     cfg.MailboxDomain,
 		browserTools:   browsertools.New(),
 		accounts:       accounts.New(accounts.NewQueriesRepository(queries, cfg.Pool), authHasher{}),
-		moderation:     moderation.New(moderation.NewQueriesRepository(queries, cfg.Pool, enrich.Version)),
 	}
+	jobsH := newJobsHandlers(queries, moderation.New(moderation.NewQueriesRepository(queries, cfg.Pool, enrich.Version)))
 	sitemapH := newSitemapHandlers(queries)
 	statsH := newStatsHandlers(queries)
 	votesH := newVoteHandlers(queries, cfg.Pool)
 	communityH := newCommunityHandlers(queries)
-	submissionsH := newSubmissionHandlers(queries, a.moderation)
+	submissionsH := newSubmissionHandlers(queries, jobsH.moderation)
 	// Contributions detect the ATS board from the URL alone (network-free, board.go), with a
 	// network fallback (boardresolve) that fetches a company careers page and detects an
 	// embedded ATS — so vanity-domain links (company.com/careers?gh_jid=…) resolve too.
@@ -322,15 +307,18 @@ func Register(app *fiber.App, cfg Config) {
 	}
 	// Assign only when configured: a nil *search.Client wrapped in the searcher
 	// interface would be a non-nil interface and defeat the nil check.
+	var jobSearch searcher
+	var facets facetCounter
 	var companySearch companySearcher
 	if cfg.Search != nil {
-		a.search = cfg.Search
-		a.facets = cfg.Search
+		jobSearch = cfg.Search
+		facets = cfg.Search
 		companySearch = cfg.Search
 	}
+	searchH := newSearchHandlers(jobSearch, facets, queries)
 	companiesH := newCompaniesHandlers(queries, companySearch)
-	trackingH := newTrackingHandlers(queries, cfg.Pool, a.search)
-	resumeH := newResumeHandlers(resumeStore, structuredExtractor, a.search, a.facets, profileSvc, atsAnalyzer, queries)
+	trackingH := newTrackingHandlers(queries, cfg.Pool, jobSearch)
+	resumeH := newResumeHandlers(resumeStore, structuredExtractor, jobSearch, facets, profileSvc, atsAnalyzer, queries)
 
 	// Referral notifications reuse the SES email transport (email is always present) and
 	// the Telegram bot when linked. Each channel is wrapped only when configured so a nil
@@ -383,19 +371,11 @@ func Register(app *fiber.App, cfg Config) {
 	requireModerator := auth.RequireRole(a.queries, "moderator")
 	mw := middleware{optional: optionalAuth, key: keyAuth, cookie: cookieAuth, moderator: requireModerator}
 
-	api.Get("/jobs", a.ListJobs)
-	// Literal routes before the :slug param route so they are not read as slugs.
-	api.Get("/jobs/search", a.SearchJobs)
-	// Agent search: same query as /jobs/search, with opt-in full descriptions in a
-	// selectable format for programmatic consumers. Public, like the other reads.
-	api.Get("/agent/jobs/search", a.AgentSearchJobs)
-	api.Get("/jobs/facets", a.JobFacets)
+	// Job search surfaces first: their literal /jobs/* routes must precede the
+	// /jobs/:slug param route so they are not read as slugs (see searchHandlers).
+	searchH.register(api, mw)
 	sitemapH.register(api)
-	// Static route registered before /jobs/:slug so it isn't captured as a slug.
-	api.Get("/jobs/find", a.FindJob)
-	api.Get("/jobs/:slug", optionalAuth, a.GetJob)
-	api.Get("/jobs/:slug/similar", a.SimilarJobs)
-	api.Get("/jobs/:slug/copies", a.JobCopies)
+	jobsH.register(api, mw)
 	companiesH.register(api, mw)
 
 	// Saved searches + the public shared-board read (see savedSearchHandlers).
@@ -434,12 +414,6 @@ func Register(app *fiber.App, cfg Config) {
 	// Agent-driven autofill: the caller's own browser is driven over that wire.
 	// keyAuth (Bearer) so the extension can trigger it.
 	api.Post("/me/autofill/run", keyAuth, a.RunAgentAutofill)
-
-	// Moderator-authored jobs: create a hand-curated vacancy and edit it. Authenticated
-	// by cookie or API key (the CLI uses a key), then gated on the moderator role. The
-	// public job reads above stay unauthenticated; a non-moderator gets 403.
-	api.Post("/jobs", keyAuth, requireModerator, a.CreateJob)
-	api.Patch("/jobs/:slug", keyAuth, requireModerator, a.UpdateJob)
 
 	// Public job submissions + review queue (see submissionHandlers).
 	submissionsH.register(api, mw)

@@ -29,8 +29,8 @@ type jobCopy struct {
 // :slug — the per-city openings folded under one canonical card by the content-dedup
 // collapse. Public (unauthenticated) like the other job reads; the anchor itself is
 // included (it is one of the openings). Response: {"data": [copy...]}.
-func (a *API) JobCopies(c *fiber.Ctx) error {
-	id, err := a.queries.GetJobIDBySlug(c.Context(), c.Params("slug"))
+func (h *jobsHandlers) JobCopies(c *fiber.Ctx) error {
+	id, err := h.queries.GetJobIDBySlug(c.Context(), c.Params("slug"))
 	if err != nil {
 		// RenderError maps pgx.ErrNoRows to 404, anything else to 500.
 		return err
@@ -38,7 +38,7 @@ func (a *API) JobCopies(c *fiber.Ctx) error {
 
 	limit := min(max(c.QueryInt("limit", defaultCopiesLimit), 1), maxCopiesLimit)
 	offset := max(c.QueryInt("offset", 0), 0)
-	rows, err := a.queries.ListRoleClusterCopies(c.Context(), db.ListRoleClusterCopiesParams{
+	rows, err := h.queries.ListRoleClusterCopies(c.Context(), db.ListRoleClusterCopiesParams{
 		JobID:     id,
 		RowLimit:  int32(limit),
 		RowOffset: int32(offset),

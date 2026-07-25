@@ -22,13 +22,13 @@ import (
 // from the column), so it degenerated into a sequential scan of millions of rows
 // and timed out in production. It was also guesswork, and a page title is not
 // something to guess from — the extension was sending "reCAPTCHA".
-func (a *API) FindJob(c *fiber.Ctx) error {
+func (h *jobsHandlers) FindJob(c *fiber.Ctx) error {
 	ref, ok := sources.RefFromURL(c.Query("url"))
 	if !ok {
 		return c.JSON(fiber.Map{"data": nil})
 	}
 
-	job, err := a.queries.GetJobBySourceExternalID(c.Context(), db.GetJobBySourceExternalIDParams{
+	job, err := h.queries.GetJobBySourceExternalID(c.Context(), db.GetJobBySourceExternalIDParams{
 		Source:     ref.Source,
 		ExternalID: ref.ExternalID,
 	})

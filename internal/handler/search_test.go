@@ -54,7 +54,7 @@ func (f *fakeSearcher) RecommendByVector(_ context.Context, v []float64, filter 
 }
 
 func searchApp(s searcher) *fiber.App {
-	h := &API{search: s}
+	h := &searchHandlers{search: s}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/jobs/search", h.SearchJobs)
 	return app

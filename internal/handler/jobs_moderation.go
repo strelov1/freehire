@@ -88,7 +88,7 @@ func moderationError(err error) error {
 // CreateJob creates a hand-curated vacancy (moderator only). The body is validated by the
 // service, so a missing required field or a bad URL is a 400 before any DB write. Returns
 // the created job in the public wire shape with 201.
-func (a *API) CreateJob(c *fiber.Ctx) error {
+func (h *jobsHandlers) CreateJob(c *fiber.Ctx) error {
 	actorID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -99,7 +99,7 @@ func (a *API) CreateJob(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
 
-	domainJob, extras, err := a.moderation.Create(c.Context(), actorID, in.toCreateInput())
+	domainJob, extras, err := h.moderation.Create(c.Context(), actorID, in.toCreateInput())
 	if err != nil {
 		return moderationError(err)
 	}
@@ -113,7 +113,7 @@ func (a *API) CreateJob(c *fiber.Ctx) error {
 
 // UpdateJob partially edits a manual vacancy (moderator only), addressed by public slug.
 // A non-manual or unknown slug is a 404. Returns the updated job in the public wire shape.
-func (a *API) UpdateJob(c *fiber.Ctx) error {
+func (h *jobsHandlers) UpdateJob(c *fiber.Ctx) error {
 	actorID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -124,7 +124,7 @@ func (a *API) UpdateJob(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
 
-	domainJob, extras, err := a.moderation.Update(c.Context(), actorID, c.Params("slug"), moderation.UpdatePatch{
+	domainJob, extras, err := h.moderation.Update(c.Context(), actorID, c.Params("slug"), moderation.UpdatePatch{
 		Title:       in.Title,
 		Company:     in.Company,
 		Location:    in.Location,

@@ -18,19 +18,19 @@ const (
 // from the semantic index. Public (unauthenticated) like the other job reads.
 // Response: {"data": [job view...]} — neighbours carry public_slug and never the
 // internal id, and the source job is excluded by the search backend.
-func (a *API) SimilarJobs(c *fiber.Ctx) error {
-	if a.search == nil {
+func (h *searchHandlers) SimilarJobs(c *fiber.Ctx) error {
+	if h.search == nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
 
-	id, err := a.queries.GetJobIDBySlug(c.Context(), c.Params("slug"))
+	id, err := h.queries.GetJobIDBySlug(c.Context(), c.Params("slug"))
 	if err != nil {
 		// RenderError maps pgx.ErrNoRows to 404, anything else to 500.
 		return err
 	}
 
 	limit := min(max(c.QueryInt("limit", defaultSimilarLimit), 1), maxSimilarLimit)
-	hits, err := a.search.SimilarJobs(c.Context(), id, limit)
+	hits, err := h.search.SimilarJobs(c.Context(), id, limit)
 	if err != nil {
 		return err
 	}

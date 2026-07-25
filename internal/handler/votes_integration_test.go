@@ -62,7 +62,7 @@ func TestVoteEndpoints(t *testing.T) {
 	app.Post("/api/v1/jobs/:slug/vote", keyAuth, h.VoteJob)
 	app.Delete("/api/v1/jobs/:slug/vote", keyAuth, h.ClearJobVote)
 	app.Post("/api/v1/companies/:slug/vote", keyAuth, h.VoteCompany)
-	app.Get("/api/v1/jobs/:slug", optionalAuth, (&API{pool: pool, queries: queries}).GetJob)
+	app.Get("/api/v1/jobs/:slug", optionalAuth, (&jobsHandlers{queries: queries}).GetJob)
 
 	post := func(t *testing.T, path, body string, authed bool) *http.Response {
 		t.Helper()

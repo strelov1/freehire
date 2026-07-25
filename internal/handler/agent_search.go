@@ -23,15 +23,15 @@ type jobDescriptions interface {
 // rehydrates each result with the full description from Postgres in a selectable
 // format. Public and unauthenticated like the other job reads; full descriptions
 // are already public via the detail endpoint.
-func (a *API) AgentSearchJobs(c *fiber.Ctx) error {
-	res, limit, offset, err := a.runJobSearch(c)
+func (h *searchHandlers) AgentSearchJobs(c *fiber.Ctx) error {
+	res, limit, offset, err := h.runJobSearch(c)
 	if err != nil {
 		return err
 	}
 
 	includeDescription := c.QueryBool("include_description")
 	if includeDescription && len(res.Hits) > 0 {
-		if err := a.hydrateDescriptions(c.Context(), res.Hits); err != nil {
+		if err := h.hydrateDescriptions(c.Context(), res.Hits); err != nil {
 			return err
 		}
 	}
@@ -52,12 +52,12 @@ func (a *API) AgentSearchJobs(c *fiber.Ctx) error {
 // job's full description read from Postgres, keyed by internal id. Best-effort: a
 // hit whose id has no row (index lag vs a just-removed job) keeps its preview
 // rather than being dropped.
-func (a *API) hydrateDescriptions(ctx context.Context, hits []search.JobDocument) error {
+func (h *searchHandlers) hydrateDescriptions(ctx context.Context, hits []search.JobDocument) error {
 	ids := make([]int64, len(hits))
 	for i := range hits {
 		ids[i] = hits[i].ID
 	}
-	rows, err := a.descriptions.GetJobDescriptionsByIDs(ctx, ids)
+	rows, err := h.descriptions.GetJobDescriptionsByIDs(ctx, ids)
 	if err != nil {
 		return err
 	}

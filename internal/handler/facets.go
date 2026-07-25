@@ -134,8 +134,8 @@ func facetParamByAttr() map[string]string {
 // filters (the same query params as SearchJobs), instead of a page of jobs. It
 // is public like the other job reads. The response is keyed by the public facet
 // param names. Response: {"data": {total, facets, stats}}.
-func (a *API) JobFacets(c *fiber.Ctx) error {
-	if a.facets == nil {
+func (h *searchHandlers) JobFacets(c *fiber.Ctx) error {
+	if h.facets == nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
 
@@ -147,9 +147,9 @@ func (a *API) JobFacets(c *fiber.Ctx) error {
 		// selection, so a selected facet still shows its siblings (the live-modal
 		// experience). The total stays the full-filter count.
 		vals := queryValues(c)
-		res, err = a.facets.DisjunctiveFacetCounts(c.Context(), q, facetReqs(vals), search.FilterFromValues(vals))
+		res, err = h.facets.DisjunctiveFacetCounts(c.Context(), q, facetReqs(vals), search.FilterFromValues(vals))
 	} else {
-		res, err = a.facets.FacetCounts(c.Context(), search.FacetParams{
+		res, err = h.facets.FacetCounts(c.Context(), search.FacetParams{
 			Query:  q,
 			Filter: buildSearchFilter(c),
 			Facets: facetAttributes(),
