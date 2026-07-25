@@ -9,10 +9,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/strelov1/freehire/internal/accounts"
 	"github.com/strelov1/freehire/internal/atscheck"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/auth/oauth"
@@ -57,43 +55,14 @@ const (
 	resumeExtractLLMTimeout = 120 * time.Second
 )
 
-// oauthRegistry resolves OAuth providers by name, building each with a callback
-// rooted at the request origin so the flow can complete on any served domain.
-// *oauth.Registry implements it; tests supply a fake.
-type oauthRegistry interface {
-	Names() []string
-	Provider(name, origin string) (oauth.Provider, bool)
-}
-
-// API holds dependencies shared across HTTP handlers.
+// API holds the cross-cutting dependencies every route shares: the DB pool, the
+// sqlc queries, and the token issuer the auth middleware is built from. Feature
+// handlers carry their own dependencies (see the *Handlers structs) and register
+// their own routes; Register wires them onto the app.
 type API struct {
-	pool         *pgxpool.Pool
-	queries      *db.Queries
-	issuer       *auth.Issuer
-	cookieSecure bool
-	// cookieDomains are the registrable domains we serve (bare, e.g. "freehire.me").
-	// Per request the session cookie is scoped to whichever one the request host
-	// falls under (empty list = host-only, for dev); the same set gates
-	// requestOrigin. See auth.CookieDomainForHost.
-	cookieDomains []string
-	// oauth resolves enabled OAuth providers by name, building each with a redirect
-	// URL rooted at the request origin. Never nil (an empty registry 404s / lists
-	// empty). *oauth.Registry in production; a fake in tests.
-	oauth oauthRegistry
-	// oauthCodes hands out the single-use codes that carry a mobile OAuth
-	// sign-in from the browser callback to the app's /exchange call.
-	oauthCodes *oauth.CodeStore
-	// frontendOrigin is where OAuth callbacks send the browser back to.
-	frontendOrigin string
-	// extensionRedirectAllowlist bounds the browser-extension connect flow to the
-	// chromiumapp.org redirect ids listed here. Empty refuses every redirect.
-	extensionRedirectAllowlist []string
-	// companySearch is the company-search backend backing GET /api/v1/companies,
-	// kept separate from `search` so the companies index stays fully decoupled from
-	// jobs search. Nil when Meilisearch is unconfigured, or on any query error, the
-	// list falls back to the Postgres substring path so /companies never depends on
-	// Meilisearch being up.
-	companySearch companySearcher
+	pool    *pgxpool.Pool
+	queries *db.Queries
+	issuer  *auth.Issuer
 	// browserTools relays browser-tool frames between a user's harness and that
 	// user's browser extension (the /tools/ws wire). In-memory and per-instance:
 	// both ends of a channel are live connections to this process.
@@ -102,9 +71,6 @@ type API struct {
 	// form with. Nil when the LLM is unconfigured: the run then reports the feature
 	// is off, and the extension's deterministic autofill still works.
 	autofillPlanner *llm.Client
-	// accounts resolves external OAuth identities into local user accounts
-	// (identity-first lookup, verified-email gate, link-or-create, race retry).
-	accounts *accounts.Service
 }
 
 // middleware bundles the auth gates the feature handlers mount their routes
@@ -215,20 +181,12 @@ type Config struct {
 func Register(app *fiber.App, cfg Config) {
 	queries := db.New(cfg.Pool)
 	a := &API{
-		pool:           cfg.Pool,
-		queries:        queries,
-		issuer:         auth.NewIssuer(cfg.JWTSecret, cfg.JWTTTL),
-		cookieSecure:   cfg.CookieSecure,
-		cookieDomains:  cfg.CookieDomains,
-		oauth:          cfg.OAuthRegistry,
-		oauthCodes:     oauth.NewCodeStore(60 * time.Second),
-		frontendOrigin: cfg.FrontendOrigin,
-
-		extensionRedirectAllowlist: cfg.ExtensionRedirectAllowlist,
-
-		browserTools:   browsertools.New(),
-		accounts:       accounts.New(accounts.NewQueriesRepository(queries, cfg.Pool), authHasher{}),
+		pool:         cfg.Pool,
+		queries:      queries,
+		issuer:       auth.NewIssuer(cfg.JWTSecret, cfg.JWTTTL),
+		browserTools: browsertools.New(),
 	}
+	authH := newAuthHandlers(queries, cfg.Pool, a.issuer, cfg.CookieSecure, cfg.CookieDomains, cfg.OAuthRegistry, cfg.FrontendOrigin, cfg.ExtensionRedirectAllowlist)
 	jobsH := newJobsHandlers(queries, moderation.New(moderation.NewQueriesRepository(queries, cfg.Pool, enrich.Version)))
 	sitemapH := newSitemapHandlers(queries)
 	statsH := newStatsHandlers(queries)
@@ -392,12 +350,8 @@ func Register(app *fiber.App, cfg Config) {
 
 	creditsH.register(api, mw)
 
-	// API-key management is cookie-only (RequireAuth): a leaked key must not be
-	// able to create, list, or revoke keys. The create endpoint returns the
-	// plaintext token exactly once.
-	api.Post("/me/api-keys", cookieAuth, a.CreateAPIKey)
-	api.Get("/me/api-keys", cookieAuth, a.ListAPIKeys)
-	api.Delete("/me/api-keys/:id", cookieAuth, a.RevokeAPIKey)
+	// API-key management and the auth surface (see authHandlers).
+	authH.register(api, mw)
 
 	// The per-user profile singleton (see profileHandlers).
 	profileH.register(api, mw)
@@ -419,34 +373,4 @@ func Register(app *fiber.App, cfg Config) {
 	// Telegram linking + the inbound bot webhook (see telegramHandlers).
 	telegramH.register(api, mw)
 
-	// Auth: register/login/logout are public (logout just clears the cookie).
-	// me is guarded and accepts a session cookie OR an API key, so a non-browser
-	// client (e.g. the CLI) can resolve its own identity with its key. It stays a
-	// read of the caller's own user — not key management, which is cookie-only.
-	// Throttle the credential endpoints against online brute-force / credential
-	// stuffing. Keyed on c.IP() (the real client, via the trusted-proxy config); the
-	// per-instance in-memory window is enough friction for a single-node deployment.
-	authLimiter := limiter.New(limiter.Config{Max: 10, Expiration: time.Minute})
-	authGroup := api.Group("/auth")
-	authGroup.Post("/register", authLimiter, a.Register)
-	authGroup.Post("/login", authLimiter, a.Login)
-	authGroup.Post("/logout", a.Logout)
-	authGroup.Get("/me", auth.RequireAuthOrKey(a.issuer, a.queries), a.Me)
-
-	// OAuth sign-in: provider listing plus the authorization-code start and
-	// callback redirects. All public; the callback sets the session cookie.
-	authGroup.Get("/oauth/providers", a.ListOAuthProviders)
-	authGroup.Get("/oauth/:provider/start", a.OAuthStart)
-	authGroup.Get("/oauth/:provider/callback", a.OAuthCallback)
-	// Mobile-only: redeem the one-time code from the custom-scheme callback for a
-	// session. Public; the code is the credential.
-	authGroup.Post("/oauth/exchange", a.OAuthExchange)
-
-	// Browser-extension sign-in ("Sign in with freehire"): the extension opens
-	// this in the freehire origin via launchWebAuthFlow. Cookie-only (RequireAuth)
-	// like key management — a leaked key must not mint further keys. GET shows the
-	// consent screen; POST mints a named key and redirects the token in the
-	// fragment. Both refuse any redirect outside the configured allowlist.
-	authGroup.Get("/extension/connect", cookieAuth, a.ExtensionConnect)
-	authGroup.Post("/extension/connect", cookieAuth, a.ExtensionConnectSubmit)
 }

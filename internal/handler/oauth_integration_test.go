@@ -16,11 +16,11 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 )
 
-func oauthHandler(t *testing.T) *API {
+func oauthHandler(t *testing.T) *authHandlers {
 	t.Helper()
 	pool := startPostgres(t)
 	queries := db.New(pool)
-	return &API{pool: pool, queries: queries, accounts: accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{})}
+	return &authHandlers{queries: queries, accounts: accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{})}
 }
 
 func TestResolveOAuthUser_CreatesPasswordlessUser(t *testing.T) {

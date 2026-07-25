@@ -63,13 +63,13 @@ func redirectWithFragment(base string, vals url.Values) (string, error) {
 // Cookie-only (RequireAuth): a leaked API key must not drive it. It validates the
 // redirect target before showing anything, so an invalid redirect never reaches a
 // consent step.
-func (a *API) ExtensionConnect(c *fiber.Ctx) error {
+func (h *authHandlers) ExtensionConnect(c *fiber.Ctx) error {
 	if _, err := requireUserID(c); err != nil {
 		return err
 	}
 	redirectURI := c.Query("redirect_uri")
 	state := c.Query("state")
-	if err := validateExtensionRedirect(redirectURI, a.extensionRedirectAllowlist); err != nil {
+	if err := validateExtensionRedirect(redirectURI, h.extensionRedirectAllowlist); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid redirect_uri")
 	}
 	c.Type("html")
@@ -79,7 +79,7 @@ func (a *API) ExtensionConnect(c *fiber.Ctx) error {
 // ExtensionConnectSubmit acts on the consent decision. On approval it mints a
 // named API key and 302-redirects the token back in the fragment; on anything
 // else it mints nothing and 302-redirects an error. Cookie-only (RequireAuth).
-func (a *API) ExtensionConnectSubmit(c *fiber.Ctx) error {
+func (h *authHandlers) ExtensionConnectSubmit(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -88,7 +88,7 @@ func (a *API) ExtensionConnectSubmit(c *fiber.Ctx) error {
 	state := c.FormValue("state")
 	// Re-validate: never trust that the GET consent step ran, and never redirect
 	// to an unvetted target.
-	if err := validateExtensionRedirect(redirectURI, a.extensionRedirectAllowlist); err != nil {
+	if err := validateExtensionRedirect(redirectURI, h.extensionRedirectAllowlist); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid redirect_uri")
 	}
 	redirect := func(vals url.Values) error {
@@ -107,7 +107,7 @@ func (a *API) ExtensionConnectSubmit(c *fiber.Ctx) error {
 	// shared HS256 secret, so one token authenticates everywhere (hire via
 	// Authorization: Bearer, Roy via cookie/WS-subprotocol). No per-token
 	// revocation — the token is short-lived and re-minted by re-running connect.
-	token, err := a.issuer.Issue(userID)
+	token, err := h.issuer.Issue(userID)
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to issue token")
 	}

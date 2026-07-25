@@ -49,7 +49,7 @@ func (r fakeRegistry) Provider(name, _ string) (oauth.Provider, bool) {
 
 func oauthApp(providers map[string]oauth.Provider) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	h := &API{
+	h := &authHandlers{
 		issuer:         auth.NewIssuer("test-secret", time.Hour),
 		oauth:          fakeRegistry(providers),
 		oauthCodes:     oauth.NewCodeStore(time.Minute),
@@ -181,7 +181,7 @@ func TestOAuthCallback_MissingCodeRedirectsWithError(t *testing.T) {
 func TestOAuthCallback_ErrorRedirectUsesRequestOrigin(t *testing.T) {
 	newApp := func() *fiber.App {
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-		h := &API{
+		h := &authHandlers{
 			issuer:         auth.NewIssuer("test-secret", time.Hour),
 			oauth:          fakeRegistry{"google": &fakeProvider{name: "google"}},
 			oauthCodes:     oauth.NewCodeStore(time.Minute),

@@ -45,7 +45,7 @@ func TestMarketCoverageEndpoint(t *testing.T) {
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, queries)
-	app.Post("/api/v1/me/api-keys", auth.RequireAuth(iss), (&API{pool: pool, queries: queries}).CreateAPIKey)
+	app.Post("/api/v1/me/api-keys", auth.RequireAuth(iss), (&authHandlers{queries: queries}).CreateAPIKey)
 	app.Post("/api/v1/market/coverage", keyAuth, h.MarketCoverage)
 
 	const path = "/api/v1/market/coverage?category=backend"

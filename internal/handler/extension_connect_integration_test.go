@@ -44,10 +44,8 @@ func TestExtensionConnectEndToEnd(t *testing.T) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	cookie, _ := iss.Issue(userID)
 	queries := db.New(pool)
-	h := &API{
-		pool:                       pool,
+	h := &authHandlers{
 		queries:                    queries,
-		issuer:                     iss,
 		extensionRedirectAllowlist: []string{extID},
 	}
 	th := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}

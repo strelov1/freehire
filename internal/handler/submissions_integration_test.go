@@ -53,10 +53,8 @@ func TestSubmissionsEndToEnd(t *testing.T) {
 	user2Cookie, _ := iss.Issue(user2ID)
 	queries := db.New(pool)
 	mod := moderation.New(moderation.NewQueriesRepository(queries, pool, enrich.Version))
-	h := &API{
-		pool:     pool,
+	h := &authHandlers{
 		queries:  queries,
-		issuer:   iss,
 		accounts: accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{}),
 	}
 	sh := &submissionHandlers{submission: submission.New(submission.NewQueriesRepository(queries), mod)}

@@ -42,12 +42,12 @@ type createAPIKeyRequest struct {
 // is stored), returning the plaintext token — revealed to the caller exactly once —
 // and the stored row. Shared by the key-management endpoint and the
 // browser-extension connect flow.
-func (a *API) mintAPIKey(ctx context.Context, userID int64, name string, expiresAt pgtype.Timestamptz) (string, db.CreateAPIKeyRow, error) {
+func (h *authHandlers) mintAPIKey(ctx context.Context, userID int64, name string, expiresAt pgtype.Timestamptz) (string, db.CreateAPIKeyRow, error) {
 	token, hash, prefix, err := auth.GenerateAPIKey()
 	if err != nil {
 		return "", db.CreateAPIKeyRow{}, fiber.NewError(fiber.StatusInternalServerError, "failed to generate key")
 	}
-	row, err := a.queries.CreateAPIKey(ctx, db.CreateAPIKeyParams{
+	row, err := h.queries.CreateAPIKey(ctx, db.CreateAPIKeyParams{
 		UserID:      userID,
 		Name:        name,
 		TokenHash:   hash,
@@ -63,7 +63,7 @@ func (a *API) mintAPIKey(ctx context.Context, userID int64, name string, expires
 // CreateAPIKey mints a new API key for the authenticated user and returns the
 // plaintext token exactly once. Behind RequireAuth (cookie-only): a leaked key
 // must not be able to mint more keys.
-func (a *API) CreateAPIKey(c *fiber.Ctx) error {
+func (h *authHandlers) CreateAPIKey(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -83,7 +83,7 @@ func (a *API) CreateAPIKey(c *fiber.Ctx) error {
 		expiresAt = pgtype.Timestamptz{Time: *in.ExpiresAt, Valid: true}
 	}
 
-	token, row, err := a.mintAPIKey(c.Context(), userID, name, expiresAt)
+	token, row, err := h.mintAPIKey(c.Context(), userID, name, expiresAt)
 	if err != nil {
 		return err
 	}
@@ -105,13 +105,13 @@ func (a *API) CreateAPIKey(c *fiber.Ctx) error {
 
 // ListAPIKeys returns the authenticated user's keys, newest first, as metadata only
 // (never the token or its hash). Cookie-only.
-func (a *API) ListAPIKeys(c *fiber.Ctx) error {
+func (h *authHandlers) ListAPIKeys(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
 
-	rows, err := a.queries.ListAPIKeysByUser(c.Context(), userID)
+	rows, err := h.queries.ListAPIKeysByUser(c.Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -135,7 +135,7 @@ func (a *API) ListAPIKeys(c *fiber.Ctx) error {
 // RevokeAPIKey deletes one of the authenticated user's keys by id. Owner-scoped: an
 // id that does not exist or belongs to another user deletes nothing and is a 404,
 // revealing nothing about it. Cookie-only.
-func (a *API) RevokeAPIKey(c *fiber.Ctx) error {
+func (h *authHandlers) RevokeAPIKey(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -145,7 +145,7 @@ func (a *API) RevokeAPIKey(c *fiber.Ctx) error {
 		return err
 	}
 
-	affected, err := a.queries.DeleteAPIKey(c.Context(), db.DeleteAPIKeyParams{ID: id, UserID: userID})
+	affected, err := h.queries.DeleteAPIKey(c.Context(), db.DeleteAPIKeyParams{ID: id, UserID: userID})
 	if err != nil {
 		return err
 	}
