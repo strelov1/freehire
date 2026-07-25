@@ -30,6 +30,9 @@ func (fakeRepo) CreateUser(context.Context, string, string, bool) (accounts.User
 	return accounts.User{}, nil
 }
 func (fakeRepo) MarkEmailVerified(context.Context, int64) error { return nil }
+func (fakeRepo) PasswordHash(context.Context, int64) (string, bool, error) {
+	return "", false, nil
+}
 func (fakeRepo) SetPassword(context.Context, int64, string) (int32, error) {
 	return 0, nil
 }

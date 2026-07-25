@@ -134,14 +134,10 @@
     }
   }
 
-  function toggleMode() {
-    mode = mode === 'login' ? 'register' : 'login';
-    error = null;
-    notice = null;
-  }
-
-  function startRecovery() {
-    mode = 'forgot';
+  // Every mode change clears whatever the previous step was saying, so a stale error
+  // or notice never bleeds into the next screen.
+  function switchMode(next: typeof mode) {
+    mode = next;
     error = null;
     notice = null;
   }
@@ -240,7 +236,7 @@
       <p class="mt-3 text-center text-sm">
         <button
           type="button"
-          onclick={startRecovery}
+          onclick={() => switchMode('forgot')}
           class="text-muted-foreground underline-offset-4 hover:underline"
         >
           Forgot your password?
@@ -252,27 +248,23 @@
       <p class="mt-4 text-center text-sm text-muted-foreground">
         <button
           type="button"
-          onclick={() => {
-            mode = 'login';
-            error = null;
-            notice = null;
-          }}
+          onclick={() => switchMode('login')}
           class="font-medium text-foreground underline-offset-4 hover:underline"
         >
           Back to sign in
         </button>
       </p>
     {:else}
-    <p class="mt-4 text-center text-sm text-muted-foreground">
-      {mode === 'login' ? 'No account?' : 'Already have an account?'}
-      <button
-        type="button"
-        onclick={toggleMode}
-        class="font-medium text-foreground underline-offset-4 hover:underline"
-      >
-        {mode === 'login' ? 'Create one' : 'Sign in'}
-      </button>
-    </p>
+      <p class="mt-4 text-center text-sm text-muted-foreground">
+        {mode === 'login' ? 'No account?' : 'Already have an account?'}
+        <button
+          type="button"
+          onclick={() => switchMode(mode === 'login' ? 'register' : 'login')}
+          class="font-medium text-foreground underline-offset-4 hover:underline"
+        >
+          {mode === 'login' ? 'Create one' : 'Sign in'}
+        </button>
+      </p>
     {/if}
   </div>
 </div>

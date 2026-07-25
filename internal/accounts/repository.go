@@ -152,6 +152,19 @@ func (r *QueriesRepository) MarkEmailVerified(ctx context.Context, userID int64)
 	return r.q.SetUserEmailVerified(ctx, userID)
 }
 
+// PasswordHash returns the account's stored bcrypt hash; hasPassword is false for a
+// passwordless (OAuth-only) account and for one that no longer exists.
+func (r *QueriesRepository) PasswordHash(ctx context.Context, userID int64) (string, bool, error) {
+	hash, err := r.q.GetUserPasswordHash(ctx, userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, ErrUserNotFound
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return hash.String, hash.Valid, nil
+}
+
 // SetPassword replaces a known password, revoking every session in the same statement.
 // Returns the account's new session generation.
 func (r *QueriesRepository) SetPassword(ctx context.Context, userID int64, passwordHash string) (int32, error) {

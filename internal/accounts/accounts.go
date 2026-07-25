@@ -96,6 +96,10 @@ type Repository interface {
 	// MarkEmailVerified records that control of the account's address was proven.
 	MarkEmailVerified(ctx context.Context, userID int64) error
 
+	// PasswordHash returns the account's stored bcrypt hash. hasPassword is false for a
+	// passwordless (OAuth-only) account.
+	PasswordHash(ctx context.Context, userID int64) (hash string, hasPassword bool, err error)
+
 	// SetPassword replaces a known password and revokes every session, returning the
 	// account's new session generation.
 	SetPassword(ctx context.Context, userID int64, passwordHash string) (int32, error)

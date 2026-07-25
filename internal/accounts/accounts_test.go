@@ -128,6 +128,15 @@ func (f *fakeRepo) MarkEmailVerified(_ context.Context, _ int64) error {
 	return nil
 }
 
+func (f *fakeRepo) PasswordHash(_ context.Context, _ int64) (string, bool, error) {
+	if f.userByEmailCallIdx >= len(f.userByEmailResults) {
+		return "", false, ErrUserNotFound
+	}
+	r := f.userByEmailResults[f.userByEmailCallIdx]
+	f.userByEmailCallIdx++
+	return r.passwordHash, r.hasPassword, r.err
+}
+
 func (f *fakeRepo) SetPassword(_ context.Context, _ int64, passwordHash string) (int32, error) {
 	f.setHash = passwordHash
 	return f.setPasswordVersion, nil

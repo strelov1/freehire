@@ -167,6 +167,22 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, er
 	return i, err
 }
 
+const getUserPasswordHash = `-- name: GetUserPasswordHash :one
+SELECT password_hash
+FROM users
+WHERE id = $1
+`
+
+// The account's stored password hash, for verifying a current password on change.
+// NULL when the account is passwordless (OAuth-only), which the caller treats the same
+// as a wrong password: there is nothing to verify against.
+func (q *Queries) GetUserPasswordHash(ctx context.Context, id int64) (pgtype.Text, error) {
+	row := q.db.QueryRow(ctx, getUserPasswordHash, id)
+	var password_hash pgtype.Text
+	err := row.Scan(&password_hash)
+	return password_hash, err
+}
+
 const getUserResume = `-- name: GetUserResume :one
 SELECT resume_object_key, resume_uploaded_at
 FROM users

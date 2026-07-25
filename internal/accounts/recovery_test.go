@@ -123,10 +123,9 @@ func TestResetPasswordEnforcesPasswordRules(t *testing.T) {
 }
 
 func TestChangePasswordRequiresTheCurrentOne(t *testing.T) {
-	repo := &fakeRepo{userByIDResults: []userByIDResult{{user: User{ID: 7, Email: "user@example.test"}}},
-		userByEmailResults: []userByEmailResult{
-			{user: User{ID: 7, Email: "user@example.test"}, passwordHash: "hashed:current", hasPassword: true},
-		}}
+	repo := &fakeRepo{userByEmailResults: []userByEmailResult{
+		{passwordHash: "hashed:current", hasPassword: true},
+	}}
 	s := recoveryService(repo, newFakeCodes(), &fakeMailer{})
 
 	if _, err := s.ChangePassword(context.Background(), 7, "not-the-current-one", "brand-new-pw"); !errors.Is(err, ErrInvalidCredentials) {
@@ -139,9 +138,8 @@ func TestChangePasswordRequiresTheCurrentOne(t *testing.T) {
 
 func TestChangePasswordStoresTheNewHashAndReturnsTheNewGeneration(t *testing.T) {
 	repo := &fakeRepo{
-		userByIDResults: []userByIDResult{{user: User{ID: 7, Email: "user@example.test"}}},
 		userByEmailResults: []userByEmailResult{
-			{user: User{ID: 7, Email: "user@example.test"}, passwordHash: "hashed:current", hasPassword: true},
+			{passwordHash: "hashed:current", hasPassword: true},
 		},
 		setPasswordVersion: 9,
 	}
@@ -162,10 +160,7 @@ func TestChangePasswordStoresTheNewHashAndReturnsTheNewGeneration(t *testing.T) 
 // An account with no password must set one through the reset flow, which proves the
 // address — not here, where there is no current password to check.
 func TestChangePasswordRefusesAPasswordlessAccount(t *testing.T) {
-	repo := &fakeRepo{
-		userByIDResults:    []userByIDResult{{user: User{ID: 7, Email: "oauth@example.test"}}},
-		userByEmailResults: []userByEmailResult{{user: User{ID: 7, Email: "oauth@example.test"}, hasPassword: false}},
-	}
+	repo := &fakeRepo{userByEmailResults: []userByEmailResult{{hasPassword: false}}}
 	s := recoveryService(repo, newFakeCodes(), &fakeMailer{})
 
 	if _, err := s.ChangePassword(context.Background(), 7, "anything", "brand-new-pw"); !errors.Is(err, ErrInvalidCredentials) {

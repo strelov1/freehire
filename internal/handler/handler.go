@@ -368,14 +368,15 @@ func Register(app *fiber.App, cfg Config) {
 	// The webhook secret is part of the enable condition, not a check inside the handler:
 	// its constant-time compare treats an unset secret as "matches an absent header", so a
 	// deployment with a bot token but no secret would expose an unauthenticated POST.
-	if cfg.TelegramBotToken != "" && cfg.JWTSecret != "" && cfg.TelegramWebhookSecret == "" {
-		log.Print("telegram: TELEGRAM_BOT_TOKEN is set but TELEGRAM_WEBHOOK_SECRET is not — feature disabled")
-	}
-	if cfg.TelegramBotToken != "" && cfg.JWTSecret != "" && cfg.TelegramWebhookSecret != "" {
-		a.telegramLinks = telegramnotify.NewLinkTokens(cfg.JWTSecret, telegramLinkTTL)
-		a.telegramBot = telegramnotify.NewClient(cfg.TelegramBotToken)
-		a.telegramBotUsername = cfg.TelegramBotUsername
-		a.telegramWebhookSecret = cfg.TelegramWebhookSecret
+	if cfg.TelegramBotToken != "" && cfg.JWTSecret != "" {
+		if cfg.TelegramWebhookSecret == "" {
+			log.Print("telegram: TELEGRAM_BOT_TOKEN is set but TELEGRAM_WEBHOOK_SECRET is not — feature disabled")
+		} else {
+			a.telegramLinks = telegramnotify.NewLinkTokens(cfg.JWTSecret, telegramLinkTTL)
+			a.telegramBot = telegramnotify.NewClient(cfg.TelegramBotToken)
+			a.telegramBotUsername = cfg.TelegramBotUsername
+			a.telegramWebhookSecret = cfg.TelegramWebhookSecret
+		}
 	}
 	// Assign only when configured: a nil *search.Client wrapped in the searcher
 	// interface would be a non-nil interface and defeat the nil check.

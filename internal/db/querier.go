@@ -612,6 +612,10 @@ type Querier interface {
 	// The caller's current stage for one application (empty string when unset), so the
 	// worker can decide a monotonic-forward advancement.
 	GetUserJobStage(ctx context.Context, arg GetUserJobStageParams) (string, error)
+	// The account's stored password hash, for verifying a current password on change.
+	// NULL when the account is passwordless (OAuth-only), which the caller treats the same
+	// as a wrong password: there is nothing to verify against.
+	GetUserPasswordHash(ctx context.Context, id int64) (pgtype.Text, error)
 	// The caller's single profile, keyed by user_id. No matching row means the user has not
 	// saved a profile yet (the handler maps that to a null payload / 404 on sub-resources).
 	GetUserProfile(ctx context.Context, userID int64) (UserProfile, error)

@@ -80,11 +80,7 @@ func (s *Service) ResetPassword(ctx context.Context, email, code, newPassword st
 // An account with no password cannot use this — there is nothing to verify against. Those
 // users go through the reset flow, which proves the address instead.
 func (s *Service) ChangePassword(ctx context.Context, userID int64, current, next string) (int32, error) {
-	user, err := s.repo.UserByID(ctx, userID)
-	if err != nil {
-		return 0, err
-	}
-	_, hash, hasPassword, err := s.repo.UserByEmail(ctx, user.Email)
+	hash, hasPassword, err := s.repo.PasswordHash(ctx, userID)
 	if err != nil {
 		return 0, err
 	}

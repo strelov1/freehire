@@ -25,6 +25,14 @@ SELECT id, email, role, beta_tester, email_verified, created_at
 FROM users
 WHERE id = $1;
 
+-- name: GetUserPasswordHash :one
+-- The account's stored password hash, for verifying a current password on change.
+-- NULL when the account is passwordless (OAuth-only), which the caller treats the same
+-- as a wrong password: there is nothing to verify against.
+SELECT password_hash
+FROM users
+WHERE id = $1;
+
 -- name: GetUserTokenVersion :one
 -- The account's current session generation, read on every authenticated request to
 -- decide whether a correctly-signed token was revoked. One primary-key lookup; this
