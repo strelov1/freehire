@@ -2,13 +2,18 @@
   import { goto, invalidateAll } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { ApiError, api } from '$lib/api';
+  import { focusTrap } from '$lib/actions/focusTrap';
   import { currentUser } from '$lib/auth.svelte';
   import { Button, Input } from '$lib/ui';
 
   // Account deletion, stated plainly. This is the one action on the site that cannot
   // be undone on either side — there is no soft-delete, no grace period and no
-  // restore — so the surface leads with what disappears and gates the button behind
+  // restore — so the warning leads with what disappears and the button is gated behind
   // the member typing their own address. An accidental click costs everything.
+  //
+  // It is a button that opens a dialog rather than a card on the page: the warning is
+  // long by necessity, and a settings tab is no place to keep a wall of red text
+  // permanently in view.
   let open = $state(false);
   let confirmation = $state('');
   let busy = $state(false);
@@ -25,6 +30,15 @@
     'AI credits, saved searches, filters and API keys',
     'Your anonymous community handle',
   ];
+
+  // Closing mid-delete would hide the outcome of a request that cannot be repeated, so
+  // the dialog holds until the call resolves.
+  function close() {
+    if (busy) return;
+    open = false;
+    confirmation = '';
+    error = null;
+  }
 
   async function remove() {
     if (!matches || busy) return;
@@ -46,65 +60,68 @@
   }
 </script>
 
-<section class="mt-8 rounded-xl border border-destructive/30 bg-destructive/5 p-5">
-  <h2 class="text-sm font-semibold text-destructive">Delete account</h2>
-  <p class="mt-1.5 text-sm text-muted-foreground">
-    Permanently erases your account and everything in it. This cannot be undone, and we
-    cannot restore any of it afterwards.
-  </p>
+<Button
+  variant="ghost"
+  size="sm"
+  class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+  onclick={() => (open = true)}
+>
+  Delete account
+</Button>
 
-  {#if !open}
-    <Button
-      variant="ghost"
-      size="sm"
-      class="mt-3 text-destructive hover:bg-destructive/10 hover:text-destructive"
-      onclick={() => (open = true)}
+<svelte:window onkeydown={(e) => open && e.key === 'Escape' && close()} />
+
+{#if open}
+  <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <!-- Backdrop is a real button so closing on click is keyboard-accessible. -->
+    <button type="button" aria-label="Close dialog" class="absolute inset-0 bg-black/50" onclick={close}
+    ></button>
+
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Delete account"
+      class="relative flex max-h-[85vh] w-full max-w-md flex-col overflow-y-auto rounded-lg border border-destructive/30 bg-background p-6 shadow-lg"
+      {@attach focusTrap()}
     >
-      Delete my account
-    </Button>
-  {:else}
-    <ul class="mt-4 flex list-disc flex-col gap-1 pl-5 text-sm text-muted-foreground">
-      {#each erased as item (item)}
-        <li>{item}</li>
-      {/each}
-    </ul>
-    <p class="mt-3 text-sm text-muted-foreground">
-      Discussions you started stay up so other members don't lose their replies, but your
-      handle is removed from them — they are shown as written by a deleted member.
-    </p>
+      <h2 class="text-base font-semibold tracking-tight text-destructive">Delete account</h2>
+      <p class="mt-1.5 text-sm text-muted-foreground">
+        This permanently erases your account and everything in it. It cannot be undone, and
+        we cannot restore any of it afterwards.
+      </p>
 
-    <label class="mt-4 block text-sm font-medium" for="delete-account-confirm">
-      Type <span class="font-mono">{email}</span> to confirm
-    </label>
-    <Input
-      id="delete-account-confirm"
-      class="mt-1.5 max-w-sm"
-      autocomplete="off"
-      bind:value={confirmation}
-      placeholder={email}
-      disabled={busy}
-    />
+      <ul class="mt-4 flex list-disc flex-col gap-1 pl-5 text-sm text-muted-foreground">
+        {#each erased as item (item)}
+          <li>{item}</li>
+        {/each}
+      </ul>
+      <p class="mt-3 text-sm text-muted-foreground">
+        Discussions you started stay up so other members don't lose their replies, but your
+        handle is removed from them — they are shown as written by a deleted member.
+      </p>
 
-    {#if error}
-      <p class="mt-3 text-sm text-destructive">{error}</p>
-    {/if}
-
-    <div class="mt-4 flex items-center gap-2">
-      <Button variant="destructive" size="sm" disabled={!matches || busy} onclick={remove}>
-        {busy ? 'Deleting…' : 'Delete account permanently'}
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
+      <label class="mt-4 block text-sm font-medium" for="delete-account-confirm">
+        Type <span class="font-mono">{email}</span> to confirm
+      </label>
+      <Input
+        id="delete-account-confirm"
+        class="mt-1.5"
+        autocomplete="off"
+        bind:value={confirmation}
+        placeholder={email}
         disabled={busy}
-        onclick={() => {
-          open = false;
-          confirmation = '';
-          error = null;
-        }}
-      >
-        Cancel
-      </Button>
+      />
+
+      {#if error}
+        <p class="mt-3 text-sm text-destructive">{error}</p>
+      {/if}
+
+      <div class="mt-5 flex items-center justify-end gap-2">
+        <Button variant="ghost" size="sm" disabled={busy} onclick={close}>Cancel</Button>
+        <Button variant="destructive" size="sm" disabled={!matches || busy} onclick={remove}>
+          {busy ? 'Deleting…' : 'Delete account permanently'}
+        </Button>
+      </div>
     </div>
-  {/if}
-</section>
+  </div>
+{/if}
