@@ -19,7 +19,7 @@
 
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { cn } from './cn.js';
+  import { cn } from '$lib/utils';
 
   let {
     variant = 'secondary',

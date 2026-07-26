@@ -34,6 +34,17 @@ export interface TailoringSession {
 /** Create the assistant session. For a normal chat the client sends an empty body and the
  *  backend decides everything (harness, persona, sandbox, scope). Passing `tailoring` seeds
  *  a CV-tailoring session instead (persona + FREEHIRE_TOKEN); the backend still owns the rest. */
+/** Thrown when the assistant runs on the user's own machine and no runner is
+ *  connected. Carried as its own type so the UI can show setup instructions
+ *  instead of an error banner — this is a "you have not finished setting up"
+ *  state, not a failure. */
+export class NoDeviceError extends Error {
+  constructor() {
+    super('no runner connected');
+    this.name = 'NoDeviceError';
+  }
+}
+
 export async function createSession(tailoring?: TailoringSession): Promise<string> {
   const res = await fetch(`${BASE}/sessions`, {
     method: 'POST',
@@ -41,6 +52,10 @@ export async function createSession(tailoring?: TailoringSession): Promise<strin
     credentials: 'include',
     body: JSON.stringify(tailoring ? { tailoring } : {}),
   });
+  if (res.status === 409) {
+    const body = await res.text();
+    if (body.includes('no_device')) throw new NoDeviceError();
+  }
   if (!res.ok) throw new Error(`could not create session (${res.status})`);
   const body = (await res.json()) as { session_id?: string };
   if (!body?.session_id) throw new Error('session response missing session_id');

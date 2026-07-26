@@ -57,6 +57,8 @@ func TestExtensionConnectEndToEnd(t *testing.T) {
 	keyAuth := auth.RequireAuthOrKey(iss, queries)
 	app.Get("/api/v1/auth/extension/connect", cookieAuth, h.ExtensionConnect)
 	app.Post("/api/v1/auth/extension/connect", cookieAuth, h.ExtensionConnectSubmit)
+	app.Get("/api/v1/me/api-keys", cookieAuth, h.ListAPIKeys)
+	app.Delete("/api/v1/me/api-keys/:id", cookieAuth, h.RevokeAPIKey)
 	app.Post("/api/v1/jobs/:slug/apply", keyAuth, h.MarkApplied)
 
 	const connectPath = "/api/v1/auth/extension/connect"
@@ -136,10 +138,11 @@ func TestExtensionConnectEndToEnd(t *testing.T) {
 		}
 	})
 
-	// 4.3 Approve issues a session JWT (not an API key) in the fragment, with state.
+	// 4.3 + 4.5 Approve mints a named key and returns the token in the fragment;
+	// the token then behaves as an ordinary revocable API key.
 	var mintedToken string
-	t.Run("approve returns a session JWT in the fragment", func(t *testing.T) {
-		before := keyCount()
+	var mintedKeyID int64
+	t.Run("approve mints a key and returns the token in the fragment", func(t *testing.T) {
 		resp, _ := app.Test(withCookie(form(url.Values{
 			"redirect_uri": {redirectURI},
 			"state":        {"abc"},
@@ -156,26 +159,47 @@ func TestExtensionConnectEndToEnd(t *testing.T) {
 		if mintedToken == "" {
 			t.Fatalf("no token in fragment: %q", resp.Header.Get("Location"))
 		}
-		// The token rides the fragment, never the query.
+		// The token must be in the fragment, never the query.
 		loc, _ := url.Parse(resp.Header.Get("Location"))
 		if loc.Query().Get("token") != "" {
 			t.Fatalf("token leaked into the query string")
 		}
-		// It is a session JWT for the user — not an API key (no api_keys row written).
-		if id, err := iss.Parse(mintedToken); err != nil || id != userID {
-			t.Fatalf("token is not a valid JWT for the user: id=%d err=%v", id, err)
+
+		rows, err := queries.ListAPIKeysByUser(ctx, userID)
+		if err != nil {
+			t.Fatalf("list keys: %v", err)
 		}
-		if after := keyCount(); after != before {
-			t.Fatalf("connect wrote an api_keys row (%d -> %d); it should issue a JWT only", before, after)
+		var found bool
+		for _, r := range rows {
+			if r.Name == extensionKeyName {
+				found, mintedKeyID = true, r.ID
+			}
+		}
+		if !found {
+			t.Fatalf("no key named %q after approve", extensionKeyName)
 		}
 	})
 
-	t.Run("the JWT authenticates a per-user endpoint via Bearer", func(t *testing.T) {
+	t.Run("minted token authenticates as the user", func(t *testing.T) {
 		r := httptest.NewRequest(fiber.MethodPost, applyPath, nil)
 		r.Header.Set("Authorization", "Bearer "+mintedToken)
 		resp, _ := app.Test(r)
 		if resp.StatusCode != fiber.StatusOK && resp.StatusCode != fiber.StatusNoContent {
-			t.Fatalf("apply with minted JWT = %d, want 2xx", resp.StatusCode)
+			t.Fatalf("apply with minted token = %d, want 2xx", resp.StatusCode)
+		}
+	})
+
+	t.Run("revoking the key stops the token", func(t *testing.T) {
+		resp, _ := app.Test(withCookie(httptest.NewRequest(fiber.MethodDelete,
+			"/api/v1/me/api-keys/"+itoa(mintedKeyID), nil)))
+		if resp.StatusCode != fiber.StatusNoContent && resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("revoke = %d, want 2xx", resp.StatusCode)
+		}
+		r := httptest.NewRequest(fiber.MethodPost, applyPath, nil)
+		r.Header.Set("Authorization", "Bearer "+mintedToken)
+		resp2, _ := app.Test(r)
+		if resp2.StatusCode != fiber.StatusUnauthorized {
+			t.Fatalf("revoked token = %d, want 401", resp2.StatusCode)
 		}
 	})
 }

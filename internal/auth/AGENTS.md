@@ -39,27 +39,16 @@ key management — a leaked key must not mint further keys:
 
 - `GET` validates `redirect_uri` (`validateExtensionRedirect`: https +
   `<id>.chromiumapp.org` + `<id>` on the allowlist) and renders a consent page.
-- `POST` re-validates, then on `decision=allow` **issues a session JWT**
-  (`Issuer.Issue`) and 302s to `redirect_uri#token=…&state=…` — the token rides the
-  **fragment**, never the query, so it is not logged or sent in `Referer`. Any
-  other decision issues nothing and 302s `#error=access_denied`.
+- `POST` re-validates, then on `decision=allow` **mints an ordinary named API key**
+  (`extensionKeyName`, via `GenerateAPIKey`/`CreateAPIKey`) and 302s to
+  `redirect_uri#token=…&state=…` — the token rides the **fragment**, never the
+  query, so it is not logged or sent in `Referer`. Any other decision mints
+  nothing and 302s `#error=access_denied`.
 
 The redirect target is bounded by `EXTENSION_REDIRECT_ALLOWLIST` (comma-separated
 extension ids, parsed in `internal/config`); an empty allowlist disables the flow.
-
-**Unified credential.** The extension holds one token — the session JWT — and it
-authenticates everywhere via the shared HS256 secret: hire endpoints accept it as
-`Authorization: Bearer <jwt>` (`RequireAuthOrKey`/`OptionalAuth` try the bearer as a
-JWT first, then as an API key; a JWT bearer is a full session, so `ViaAPIKey` is
-false), and the agent (Roy) verifies the same JWT (cookie / WS-subprotocol). No
-`/me/agent-token` bridge, no Roy change. Trade-off: a JWT is short-lived and not
-individually revocable — it is re-minted by re-running connect (the freehire origin
-still has the cookie). Cookie-only endpoints (`RequireAuth`: key management, profile
-edit) stay cookie-only — the extension's JWT does not reach them.
-
-This replaced the flow's original behaviour, which minted an ordinary named API
-key: one credential that both hire and Roy verify is simpler than a key plus a
-token bridge, at the cost of per-token revocation.
+The minted key is a normal revocable key — it shows up in `/me/api-keys` and
+authenticates per-user endpoints via `Authorization: Bearer`.
 
 ## Limitations
 - No token revocation/refresh (logout clears the cookie but the JWT lives until `exp`; modest TTL instead).

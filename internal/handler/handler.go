@@ -18,7 +18,6 @@ import (
 	"github.com/strelov1/freehire/internal/auth/oauth"
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/boardresolve"
-	"github.com/strelov1/freehire/internal/browsertools"
 	"github.com/strelov1/freehire/internal/community"
 	"github.com/strelov1/freehire/internal/contribution"
 	"github.com/strelov1/freehire/internal/credits"
@@ -124,14 +123,6 @@ type API struct {
 	// client viewed through a narrower interface, kept separate from search so the
 	// two concerns stay decoupled. Nil when unconfigured (endpoint reports 503).
 	facets facetCounter
-	// browserTools relays browser-tool frames between a user's harness and that
-	// user's browser extension (the /tools/ws wire). In-memory and per-instance:
-	// both ends of a channel are live connections to this process.
-	browserTools *browsertools.Hub
-	// autofillPlanner is the model the agent-driven autofill maps a profile onto a
-	// form with. Nil when the LLM is unconfigured: the run then reports the feature
-	// is off, and the extension's deterministic autofill still works.
-	autofillPlanner *llm.Client
 	// tracking owns the per-user job-interaction use cases (view/apply/save/
 	// unsave/track); the handlers translate wire ↔ domain and delegate to it.
 	tracking *jobtracking.Service
@@ -320,7 +311,6 @@ func Register(app *fiber.App, cfg Config) {
 		gmailConnector: cfg.GmailConnector,
 		gmailCipher:    cfg.GmailCipher,
 		mailDomain:     cfg.MailboxDomain,
-		browserTools:   browsertools.New(),
 		tracking:       jobtracking.New(jobtracking.NewQueriesRepository(queries)),
 		votes:          vote.New(queries, cfg.Pool),
 		accounts:       accounts.New(accounts.NewQueriesRepository(queries, cfg.Pool), authHasher{}),
@@ -362,9 +352,6 @@ func Register(app *fiber.App, cfg Config) {
 	a.matchAnalysis = matchanalysis.NewAnalyzer(cfg.LLM.WithTimeout(matchAnalysisLLMTimeout))
 	a.structuredExtractor = resumeextract.NewExtractor(cfg.LLM.WithTimeout(resumeExtractLLMTimeout), cfg.PIIDetector)
 	a.matchAnalysisCache = queries
-	// The autofill planner is one cheap structured call per run; the shared client's
-	// default timeout is right for it.
-	a.autofillPlanner = cfg.LLM
 	a.credits = credits.NewStore(queries, cfg.Pool, cfg.Credits)
 	// Telegram notifications are enabled only with both a bot token and a JWT
 	// secret (the link token reuses it). Absent either, the linking endpoints
@@ -434,8 +421,6 @@ func Register(app *fiber.App, cfg Config) {
 	// rejects, so these public detail reads can overlay the caller's own vote
 	// (my_vote) while staying open to anonymous visitors.
 	optionalAuth := auth.OptionalAuth(a.issuer, a.queries)
-	// Static route registered before /jobs/:slug so it isn't captured as a slug.
-	api.Get("/jobs/find", a.FindJob)
 	api.Get("/jobs/:slug", optionalAuth, a.GetJob)
 	api.Get("/jobs/:slug/similar", a.SimilarJobs)
 	api.Get("/jobs/:slug/copies", a.JobCopies)
@@ -514,21 +499,6 @@ func Register(app *fiber.App, cfg Config) {
 	api.Delete("/jobs/:slug/track", keyAuth, a.Untrack)
 	// Read-only per-job skill match against the caller's profile (no writes).
 	api.Get("/jobs/:slug/match", keyAuth, a.JobMatch)
-	// Ad-hoc skill match for a job posting scraped off any page (title + text),
-	// no catalog job required — powers the browser extension's on-any-page card.
-	api.Post("/me/match-text", keyAuth, a.MatchText)
-	// Canonical autofill fields (name/email/phone/location/links) for the browser
-	// extension to write into application forms. keyAuth (Bearer).
-	api.Get("/me/autofill-profile", keyAuth, a.AutofillProfile)
-	// The browser-tool wire: a harness on one end, the caller's browser extension
-	// on the other, exchanging raw tool frames. Both ends authenticate with the
-	// session JWT (Bearer for a server-side harness, the subprotocol for the
-	// extension, which can set no headers); the relay routes strictly within one
-	// user's channel. See internal/browsertools.
-	api.Get("/tools/ws", auth.RequireAuthWS(a.issuer, a.queries), a.BrowserToolsWS())
-	// Agent-driven autofill: the caller's own browser is driven over that wire.
-	// keyAuth (Bearer) so the extension can trigger it.
-	api.Post("/me/autofill/run", keyAuth, a.RunAgentAutofill)
 	// The on-demand LLM match analysis (GET cached / POST run / SSE stream).
 	api.Get("/jobs/:slug/match-analysis", keyAuth, a.GetMatchAnalysis)
 	api.Post("/jobs/:slug/match-analysis", keyAuth, a.PostMatchAnalysis)

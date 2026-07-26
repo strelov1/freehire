@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { HTMLInputAttributes } from 'svelte/elements';
-  import { cn } from './cn.js';
+  import { cn } from '$lib/utils';
 
   // The shared text/search input surface — one styled <input> primitive so the
   // search boxes and the facet filter cannot drift in border/focus/dark styling.

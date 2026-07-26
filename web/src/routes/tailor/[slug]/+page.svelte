@@ -14,7 +14,8 @@
   import { page } from '$app/state';
   import { ZoomIn, ZoomOut, Download, Menu } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
-  import { createSession } from '$lib/assistant/api';
+  import { createSession, NoDeviceError } from '$lib/assistant/api';
+  import RunnerSetup from '$lib/assistant/RunnerSetup.svelte';
   import AssistantChat from '$lib/assistant/AssistantChat.svelte';
   import ArtifactPanel from '$lib/tailor/ArtifactPanel.svelte';
   import CvHtmlPreview from '$lib/tailor/CvHtmlPreview.svelte';
@@ -29,7 +30,7 @@
   const slug = $derived(page.params.slug ?? '');
   const cvParam = $derived(page.url.searchParams.get('cv'));
 
-  let status = $state<'loading' | 'ready' | 'error'>('loading');
+  let status = $state<'loading' | 'ready' | 'error' | 'needs-runner'>('loading');
   let errorMsg = $state('');
   let sessionId = $state<string | undefined>(undefined);
   let resuming = $state(false);
@@ -155,6 +156,12 @@
       }
       status = 'ready';
     } catch (e) {
+      if (e instanceof NoDeviceError) {
+        // Tailoring runs on the user's own machine and none is connected. Show
+        // how to connect one rather than an error — nothing is broken.
+        status = 'needs-runner';
+        return;
+      }
       if (e instanceof ApiError && e.status === 402) {
         // Out of AI credits: surface the message plus when the monthly grant renews.
         const resetsAt = typeof e.body?.resets_at === 'string' ? e.body.resets_at : null;
@@ -258,6 +265,15 @@
   {#if status === 'loading'}
     <div class="flex min-w-0 flex-1 items-center justify-center text-sm text-muted-foreground">
       {resuming ? 'Re-opening your tailoring session…' : 'Preparing your tailoring session…'}
+    </div>
+  {:else if status === 'needs-runner'}
+    <div class="flex min-w-0 flex-1 items-start justify-center overflow-y-auto p-4">
+      <div class="w-full max-w-2xl">
+        <RunnerSetup />
+        <p class="px-3 pb-6 text-center text-xs text-muted-foreground">
+          Once it is running, reload this page to start tailoring.
+        </p>
+      </div>
     </div>
   {:else if status === 'error'}
     <div class="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center">

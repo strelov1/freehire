@@ -51,9 +51,6 @@ export default defineConfig({
       '/api': {
         target: process.env.VITE_API_URL ?? 'http://localhost:8080',
         changeOrigin: true,
-        // `/api/v1/tools/ws` (the browser-tool wire) upgrades to a WebSocket;
-        // without this the dev proxy would answer the handshake with the SPA.
-        ws: true,
       },
       '/health': {
         target: process.env.VITE_API_URL ?? 'http://localhost:8080',

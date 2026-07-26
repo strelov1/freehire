@@ -53,7 +53,6 @@ internal/
   auth/oauth/        OAuth sign-in: Provider interface, registry, CSRF state cookie (see auth/oauth/AGENTS.md)
   sources/           ATS source adapters + registry + HTTP client + board-file parsing (see sources/AGENTS.md)
   linksource/        resolves outbound job-detail URLs (see linksource/AGENTS.md)
-  browsertools/      relays browser-tool frames between a user's agent harness and their browser extension (see browsertools/AGENTS.md)
   telegram/          Telegram crawl + LLM vacancy extraction (see telegram/AGENTS.md)
   pipeline/          ingest Runner (fetch → normalize → dedup → upsert) (see pipeline/AGENTS.md)
   enrich/            enrichment contract + LLM Provider + queue-draining Runner (see enrich/AGENTS.md)

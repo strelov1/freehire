@@ -8,11 +8,18 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/strelov1/freehire/internal/auth"
+	"github.com/strelov1/freehire/internal/db"
 )
 
 // chromiumappSuffix is the host suffix Chrome's identity redirect URLs carry:
 // launchWebAuthFlow only resolves a redirect to https://<extension-id>.chromiumapp.org.
 const chromiumappSuffix = ".chromiumapp.org"
+
+// extensionKeyName is the display name given to keys minted through the connect
+// flow, so they are recognizable and revocable in the user's key list.
+const extensionKeyName = "Browser extension"
 
 // validateExtensionRedirect reports whether redirectURI is a safe target for the
 // browser-extension connect flow to hand a minted token to. It accepts only an
@@ -103,14 +110,19 @@ func (a *API) ExtensionConnectSubmit(c *fiber.Ctx) error {
 		return redirect(url.Values{"error": {"access_denied"}, "state": {state}})
 	}
 
-	// Unify on the session JWT: hire and the agent (Roy) both verify it with the
-	// shared HS256 secret, so one token authenticates everywhere (hire via
-	// Authorization: Bearer, Roy via cookie/WS-subprotocol). No per-token
-	// revocation — the token is short-lived and re-minted by re-running connect.
-	token, err := a.issuer.Issue(userID)
+	token, hash, prefix, err := auth.GenerateAPIKey()
 	if err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to issue token")
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to generate key")
 	}
+	if _, err := a.queries.CreateAPIKey(c.Context(), db.CreateAPIKeyParams{
+		UserID:      userID,
+		Name:        extensionKeyName,
+		TokenHash:   hash,
+		TokenPrefix: prefix,
+	}); err != nil {
+		return err
+	}
+
 	return redirect(url.Values{"token": {token}, "state": {state}})
 }
 

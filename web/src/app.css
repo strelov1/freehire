@@ -7,12 +7,6 @@
 @import "freehire-design-system/dist/tokens-light.css";
 @import "freehire-design-system/dist/tokens-dark.css";
 
-/* The design-system package is linked through node_modules, which Tailwind's
-   automatic source detection skips — without this the utilities used inside
-   design-system/src/*.svelte are never emitted and its primitives render
-   unstyled. Path is relative to this file. */
-@source "../../design-system/src";
-
 /* Typography plugin: the `prose` classes style the mdsvex-rendered blog post body
    (web/src/routes/blog/[slug]). Opt-in, so no other page is affected. */
 @plugin "@tailwindcss/typography";
@@ -52,13 +46,6 @@
   --radius-xl: var(--radius-xl);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
-  /* The z-index tokens ship as plain custom properties; Tailwind only mints
-     `z-<name>` utilities from the --z-index-* namespace. */
-  --z-index-dropdown: var(--z-dropdown);
-  --z-index-sticky: var(--z-sticky);
-  --z-index-modal: var(--z-modal);
-  --z-index-popover: var(--z-popover);
-  --z-index-toast: var(--z-toast);
 }
 
 @layer base {

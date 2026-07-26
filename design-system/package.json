@@ -7,13 +7,7 @@
   "packageManager": "pnpm@11.7.0",
   "exports": {
     "./dist/*": "./dist/*",
-    "./tokens/*": "./tokens/*",
-    ".": {
-      "types": "./src/index.ts",
-      "svelte": "./src/index.ts",
-      "default": "./src/index.ts"
-    },
-    "./*": "./src/*"
+    "./tokens/*": "./tokens/*"
   },
   "scripts": {
     "build": "pnpm tokens:build",
@@ -25,12 +19,5 @@
   },
   "devDependencies": {
     "style-dictionary": "^5.5.0"
-  },
-  "dependencies": {
-    "@lucide/svelte": "^1.25.0",
-    "clsx": "^2.1.1",
-    "svelte": "^5.56.7",
-    "tailwind-merge": "^3.6.0",
-    "tailwind-variants": "^3.2.2"
   }
 }

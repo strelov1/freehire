@@ -7,11 +7,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// LocalsUserID is the c.Locals key under which RequireAuth and RequireAuthOrKey
-// store the authenticated user id. Handlers read it via UserID; it is exported
-// because a websocket handler is handed a Conn rather than a Ctx and has to read
-// the inherited local by key.
-const LocalsUserID = "auth.userID"
+// localsUserID is the c.Locals key under which RequireAuth and RequireAuthOrKey
+// store the authenticated user id. Handlers read it via UserID.
+const localsUserID = "auth.userID"
 
 // localsViaAPIKey is set true by RequireAuthOrKey when the request authenticated with an
 // API key rather than the session cookie. Handlers read it via ViaAPIKey to give
@@ -40,7 +38,7 @@ func RequireAuth(iss *Issuer) fiber.Handler {
 		if err != nil {
 			return fiber.NewError(fiber.StatusUnauthorized, "invalid or expired session")
 		}
-		c.Locals(LocalsUserID, id)
+		c.Locals(localsUserID, id)
 		return c.Next()
 	}
 }
@@ -49,7 +47,7 @@ func RequireAuth(iss *Issuer) fiber.Handler {
 // RequireAuthOrKey. The second result is false when the request did not pass
 // through either middleware.
 func UserID(c *fiber.Ctx) (int64, bool) {
-	id, ok := c.Locals(LocalsUserID).(int64)
+	id, ok := c.Locals(localsUserID).(int64)
 	return id, ok
 }
 
@@ -70,16 +68,16 @@ func RequireAuthOrKey(iss *Issuer, keys APIKeyAuthenticator) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if token := c.Cookies(CookieName); token != "" {
 			if id, err := iss.Parse(token); err == nil {
-				c.Locals(LocalsUserID, id)
+				c.Locals(localsUserID, id)
 				return c.Next()
 			}
 		}
-		if id, viaKey, ok := resolveBearer(c, iss, keys); ok {
-			c.Locals(LocalsUserID, id)
-			if viaKey {
+		if key := bearerToken(c); key != "" {
+			if id, err := keys.AuthenticateAPIKey(c.Context(), HashAPIKey(key)); err == nil {
+				c.Locals(localsUserID, id)
 				c.Locals(localsViaAPIKey, true)
+				return c.Next()
 			}
-			return c.Next()
 		}
 		return fiber.NewError(fiber.StatusUnauthorized, "not authenticated")
 	}
@@ -94,13 +92,13 @@ func OptionalAuth(iss *Issuer, keys APIKeyAuthenticator) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if token := c.Cookies(CookieName); token != "" {
 			if id, err := iss.Parse(token); err == nil {
-				c.Locals(LocalsUserID, id)
+				c.Locals(localsUserID, id)
 				return c.Next()
 			}
 		}
-		if id, viaKey, ok := resolveBearer(c, iss, keys); ok {
-			c.Locals(LocalsUserID, id)
-			if viaKey {
+		if key := bearerToken(c); key != "" {
+			if id, err := keys.AuthenticateAPIKey(c.Context(), HashAPIKey(key)); err == nil {
+				c.Locals(localsUserID, id)
 				c.Locals(localsViaAPIKey, true)
 			}
 		}
@@ -166,25 +164,6 @@ func RequireModeratorOrBeta(roles RoleLoader, beta BetaLoader) fiber.Handler {
 		}
 		return c.Next()
 	}
-}
-
-// resolveBearer authenticates an `Authorization: Bearer <token>` credential,
-// accepting EITHER a session JWT or an API key. The browser extension presents
-// its session JWT here (it has no cross-origin cookie), so a JWT bearer is a full
-// session — viaKey is false; only an actual API key sets viaKey. Returns ok=false
-// when there is no bearer or neither interpretation resolves.
-func resolveBearer(c *fiber.Ctx, iss *Issuer, keys APIKeyAuthenticator) (id int64, viaKey bool, ok bool) {
-	tok := bearerToken(c)
-	if tok == "" {
-		return 0, false, false
-	}
-	if id, err := iss.Parse(tok); err == nil {
-		return id, false, true
-	}
-	if id, err := keys.AuthenticateAPIKey(c.Context(), HashAPIKey(tok)); err == nil {
-		return id, true, true
-	}
-	return 0, false, false
 }
 
 // bearerToken extracts the credential from an `Authorization: Bearer <token>`
