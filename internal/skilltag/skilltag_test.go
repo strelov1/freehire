@@ -63,12 +63,40 @@ func TestParse_ITCompanyRoleSkills(t *testing.T) {
 		in   string
 		want []string
 	}{
-		{"recruiting", "Sourcing with boolean search and employer branding on Greenhouse", []string{"boolean-search", "employer-branding", "greenhouse"}},
+		{"recruiting", "Sourcing with boolean search and employer branding", []string{"boolean-search", "employer-branding"}},
 		{"finance", "Own financial modeling and revenue recognition in NetSuite", []string{"financial-modeling", "netsuite", "revenue-recognition"}},
 		{"business analysis", "Requirements gathering, process modeling and user stories", []string{"process-modeling", "requirements-gathering", "user-stories"}},
 		{"customer success", "Drive customer onboarding and churn prevention via Gainsight", []string{"churn-prevention", "customer-onboarding", "gainsight"}},
 		{"technical writing", "API documentation with a docs-as-code workflow", []string{"api", "api-documentation", "docs-as-code"}},
 		{"unknown emits nothing", "great communicator and team player", nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Parse(tc.in); !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("Parse(%q) = %#v, want %#v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// Boilerplate sections — the pay-transparency block, the GDPR notice, the ATS
+// footer — appear in postings for EVERY role, so a dictionary term that matches
+// them tags the whole corpus instead of describing the job (an ML Platform
+// Engineer came back with "compensation-and-benefits"). Such a term is not a
+// requirement signal at all, so it is out of the vocabulary entirely; the same
+// applies to an ATS name whose bare token doubles as an English word
+// ("a key lever", "a flexible workday").
+func TestParse_BoilerplateSectionsAreNotSkills(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{"pay transparency block", "Compensation and Benefits: we offer a competitive salary and equity.", nil},
+		{"privacy notice", "Data Privacy Notice: we process your application data as described here.", nil},
+		{"ats footer", "Powered by Greenhouse. Apply via Lever.", nil},
+		{"culture blurb", "We invest in employee engagement and do our due diligence.", nil},
+		{"boilerplate does not pollute a real stack", "We use Python and Kafka. A flexible workday, applications via Greenhouse.", []string{"kafka", "python"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -849,6 +849,17 @@ var phraseAliases = []phraseAlias{
 	{"e commerce", "ecommerce"},
 	// IT-company role skills (expand-role-taxonomy) — multi-word phrases only, so they
 	// stay precision-safe (no false match inside a larger word). Seed set; expand later.
+	//
+	// Two kinds of term are deliberately absent, because a job description is not only
+	// its requirements:
+	//   - Boilerplate sections. The pay-transparency block ("Compensation and
+	//     Benefits"), the GDPR notice ("Data Privacy Notice"), the ATS footer
+	//     ("Powered by Greenhouse", "Apply via Lever") and the culture blurb
+	//     ("employee engagement", "due diligence") appear for EVERY role, so matching
+	//     them tags the whole corpus instead of describing the job.
+	//   - ATS product names whose bare token is an English word (lever, workday) —
+	//     "a key lever", "a flexible workday". Same doctrine as burp/druid above: such
+	//     a name may only return through a qualifying phrase, never as a bare token.
 	// recruiting
 	{"boolean search", "boolean-search"},
 	{"talent sourcing", "talent-sourcing"},
@@ -857,16 +868,14 @@ var phraseAliases = []phraseAlias{
 	{"employer branding", "employer-branding"},
 	{"full-cycle recruiting", "full-cycle-recruiting"}, {"full cycle recruiting", "full-cycle-recruiting"},
 	{"linkedin recruiter", "linkedin-recruiter"},
-	{"greenhouse", "greenhouse"}, {"lever", "lever"}, {"smartrecruiters", "smartrecruiters"},
+	{"smartrecruiters", "smartrecruiters"},
 	// hr / people
 	{"employee relations", "employee-relations"},
 	{"performance management", "performance-management"},
 	{"talent management", "talent-management"},
 	{"succession planning", "succession-planning"},
-	{"compensation and benefits", "compensation-and-benefits"},
 	{"people analytics", "people-analytics"},
-	{"employee engagement", "employee-engagement"},
-	{"workday", "workday"}, {"bamboohr", "bamboohr"}, {"successfactors", "successfactors"},
+	{"bamboohr", "bamboohr"}, {"successfactors", "successfactors"},
 	// finance
 	{"financial modeling", "financial-modeling"},
 	{"revenue recognition", "revenue-recognition"},
@@ -879,10 +888,8 @@ var phraseAliases = []phraseAlias{
 	{"contract negotiation", "contract-negotiation"},
 	{"contract drafting", "contract-drafting"},
 	{"contract lifecycle management", "contract-lifecycle-management"},
-	{"due diligence", "due-diligence"},
 	{"legal research", "legal-research"},
 	{"regulatory compliance", "regulatory-compliance"},
-	{"data privacy", "data-privacy"},
 	// operations
 	{"process improvement", "process-improvement"},
 	{"vendor management", "vendor-management"},
