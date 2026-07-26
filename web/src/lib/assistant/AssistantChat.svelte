@@ -22,6 +22,7 @@
     NoDeviceError,
   } from '$lib/assistant/api';
   import RunnerSetup from '$lib/assistant/RunnerSetup.svelte';
+  import RunnerBadge from '$lib/assistant/RunnerBadge.svelte';
   import { RoyClient } from '$lib/assistant/client';
   import { initChat, reduceTurnEvent, type ChatState } from '$lib/assistant/chat';
   import { parseJobSegments } from '$lib/assistant/unfurl';
@@ -737,6 +738,9 @@
               <Plus class="size-4" />New chat
             </button>
           {/if}
+          <!-- Where the assistant is running. Visible before a message is sent,
+               so "my machine or theirs?" is never a guess. -->
+          <div class="ml-auto"><RunnerBadge /></div>
         </div>
       {/if}
       <!-- Mobile session switcher -->

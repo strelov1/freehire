@@ -62,6 +62,24 @@ export async function createSession(tailoring?: TailoringSession): Promise<strin
   return body.session_id;
 }
 
+export type RunnerStatus = {
+  /** Whether the caller has a machine connected right now. */
+  connected: boolean;
+  /** Their device ids. */
+  devices: string[];
+  /** Whether sessions are required to run on the caller's own machine. */
+  required: boolean;
+};
+
+/** Whether the caller's own machine is connected and running the harness.
+ *  Polled by the UI so the state is visible before a message is sent, not
+ *  after one fails. */
+export async function runnerStatus(): Promise<RunnerStatus> {
+  const res = await fetch(`${BASE}/runners`, { credentials: 'include' });
+  if (!res.ok) throw new Error(`could not read runner status (${res.status})`);
+  return (await res.json()) as RunnerStatus;
+}
+
 /** List the caller's held sessions from the agent backend. The list is
  *  owner-scoped and newest-first server-side (only the caller's own sessions;
  *  orphans excluded). */
