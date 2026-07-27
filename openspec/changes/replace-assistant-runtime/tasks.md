@@ -14,7 +14,7 @@
 - [x] 3.1 ~~Extract the facet-filter construction out of `buildSearchFilter`~~ — not needed. `buildSearchFilter` already delegates to `search.FilterFromValues(url.Values)`, which is fiber-free, so the tool renders its typed arguments as `url.Values` and reuses it. No refactor; design.md updated to match.
 - [x] 3.2 Define the tool contract in `internal/assistant`: a tool is a name + description + JSON schema + `func(ctx, userID, json.RawMessage) (any, error)`; add a registry that renders `[]llms.Tool` and dispatches a call by name, decoding arguments strictly and returning decode/exec errors as tool results.
 - [x] 3.3 Implement the discovery tools — `facets`, `search_jobs` (full descriptions, `public_slug` present), `get_job`, `get_company`, `market_fit` — over the same services the handlers use.
-- [ ] 3.4 Implement the tracking tools — `save_job`, `unsave_job`, `apply_job`, `track_job`, `my_jobs` — over `internal/userjob`/`internal/jobtracking`, owner-scoped.
+- [x] 3.4 Implement the tracking tools — `save_job`, `unsave_job`, `apply_job`, `track_job`, `my_jobs` — over `internal/userjob`/`internal/jobtracking`, owner-scoped.
 - [ ] 3.5 Implement the CV tools — `cv_context`, `cv_get`, `cv_edit`, `cv_render` — over `internal/cv`, reusing `cv.DecodePatch` and rejecting contact-header edits as the HTTP path does.
 - [ ] 3.6 Add the result-size cap: truncate an oversized tool result with an explicit marker before it enters history; unit-test the boundary.
 
