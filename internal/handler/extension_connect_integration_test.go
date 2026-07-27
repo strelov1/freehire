@@ -46,6 +46,7 @@ func TestExtensionConnectEndToEnd(t *testing.T) {
 	queries := db.New(pool)
 	h := &authHandlers{
 		queries:                    queries,
+		issuer:                     iss,
 		extensionRedirectAllowlist: []string{extID},
 	}
 	th := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
