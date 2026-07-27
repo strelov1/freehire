@@ -1,7 +1,7 @@
 ## 1. LLM tool-calling foundation
 
-- [ ] 1.1 Add a conversational generate method to `internal/llm`: takes `[]llms.MessageContent`, a `[]llms.Tool` list and a token-delta callback, returns the full `*llms.ContentChoice` (text, `ToolCalls`, usage); reuses the existing timeout, tracer and usage extraction. `GenerateJSON`/`GenerateJSONStream` signatures stay untouched.
-- [ ] 1.2 Cover it with unit tests against a fake `llms.Model`: a tool-call response, a plain-text response, an empty-choices guard, and a timeout.
+- [x] 1.1 Add a conversational generate method to `internal/llm`: takes `[]llms.MessageContent`, a `[]llms.Tool` list and a token-delta callback, returns the full `*llms.ContentChoice` (text, `ToolCalls`, usage); reuses the existing timeout, tracer and usage extraction. `GenerateJSON`/`GenerateJSONStream` signatures stay untouched.
+- [x] 1.2 Cover it with unit tests against a fake `llms.Model`: a tool-call response, a plain-text response, an empty-choices guard, and a timeout.
 
 ## 2. Session and transcript persistence
 
