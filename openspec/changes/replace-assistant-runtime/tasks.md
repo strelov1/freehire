@@ -16,7 +16,7 @@
 - [x] 3.3 Implement the discovery tools — `facets`, `search_jobs` (full descriptions, `public_slug` present), `get_job`, `get_company`, `market_fit` — over the same services the handlers use.
 - [x] 3.4 Implement the tracking tools — `save_job`, `unsave_job`, `apply_job`, `track_job`, `my_jobs` — over `internal/userjob`/`internal/jobtracking`, owner-scoped.
 - [x] 3.5 Implement the CV tools — `cv_context`, `cv_get`, `cv_edit` — over `internal/cv`, reusing `cv.DecodePatch` and rejecting contact-header edits as the HTTP path does. The ids are closed over from the session binding, not taken as arguments. `cv_render` dropped: the workspace previews the CV beside the chat, so a render tool returns bytes the model cannot read (spec updated).
-- [ ] 3.6 Add the result-size cap: truncate an oversized tool result with an explicit marker before it enters history; unit-test the boundary.
+- [x] 3.6 Add the result-size cap: truncate an oversized tool result with an explicit marker before it enters history; unit-test the boundary.
 
 ## 4. Agent loop
 

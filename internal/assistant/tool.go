@@ -36,6 +36,12 @@ type Result struct {
 type Registry struct {
 	order []string
 	tools map[string]Tool
+
+	// MaxResultBytes caps how much of a tool's payload enters the conversation.
+	// One search over full descriptions can otherwise fill the context window on
+	// its own, and everything after it — including the user's question — falls out.
+	// Zero means no cap.
+	MaxResultBytes int
 }
 
 // NewRegistry registers the tools in the given order. A later tool with the same
@@ -94,7 +100,28 @@ func (r *Registry) Call(ctx context.Context, userID int64, name string, args jso
 	if err != nil {
 		return failed(fmt.Sprintf("tool %q produced a result that could not be encoded: %v", name, err))
 	}
-	return Result{Content: string(payload)}
+	return Result{Content: r.capped(string(payload))}
+}
+
+// capped bounds one payload. An oversized result is replaced by an envelope
+// carrying its opening bytes and saying it was cut, rather than by a raw prefix:
+// a truncated JSON document is not JSON, and a model handed one either reports a
+// parse failure or invents the rest. Error envelopes never reach here — a
+// truncated correction is worse than none.
+func (r *Registry) capped(payload string) string {
+	if r.MaxResultBytes <= 0 || len(payload) <= r.MaxResultBytes {
+		return payload
+	}
+	envelope, err := json.Marshal(map[string]any{
+		"truncated": true,
+		"note": fmt.Sprintf("result was %d bytes, truncated to %d — narrow the call (fewer results, a tighter filter) to see the rest",
+			len(payload), r.MaxResultBytes),
+		"partial": payload[:r.MaxResultBytes],
+	})
+	if err != nil {
+		return `{"truncated":true,"note":"result too large"}`
+	}
+	return string(envelope)
 }
 
 // failed renders an error as the JSON envelope the model reads.
