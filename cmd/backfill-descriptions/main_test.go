@@ -119,3 +119,44 @@ func TestBackfillScopedToSource(t *testing.T) {
 		t.Fatalf("updates = %+v, want only taleo job 1", store.updates)
 	}
 }
+
+// TestBackfillDecodesEntityEncodedDescriptions covers the second way a source can store its
+// markup as text: HTML entity-encoding ("&lt;p&gt;") rather than percent-encoding. arbeitnow
+// served bodies this way, and its feed is a rolling window, so rows that aged out of it can
+// never be repaired by a re-ingest — only in place.
+func TestBackfillDecodesEntityEncodedDescriptions(t *testing.T) {
+	store := &fakeStore{jobs: []db.Job{
+		// The arbeitnow shape: entity-encoded body plus the board's live-HTML promo footer.
+		{ID: 1, Source: "arbeitnow", Title: "A", Description: `&lt;h2&gt;Role&lt;/h2&gt;&lt;ul&gt;&lt;li&gt;Go&lt;/li&gt;&lt;/ul&gt;<p>Find more <a href="https://x.test/jobs">jobs</a></p>`},
+		// Prose that deliberately encodes a less-than sign: live tags dominate, so decoding
+		// it would corrupt the row. Must be left alone.
+		{ID: 2, Source: "arbeitnow", Title: "B", Description: `<p>Standort Düsseldorf</p><p>--&gt; Let´s go Live &lt;--</p><p>Wir suchen dich.</p>`},
+		// Already clean.
+		{ID: 3, Source: "arbeitnow", Title: "C", Description: "<p>Clean HTML.</p>"},
+	}}
+
+	scanned, updated, err := backfillAll(context.Background(), store, "arbeitnow")
+	if err != nil {
+		t.Fatalf("backfillAll: %v", err)
+	}
+	if scanned != 3 || updated != 1 {
+		t.Fatalf("scanned=%d updated=%d, want 3/1 (only the entity-encoded body)", scanned, updated)
+	}
+	if len(store.updates) != 1 || store.updates[0].ID != 1 {
+		t.Fatalf("updates = %+v, want only job 1", store.updates)
+	}
+
+	u := store.updates[0]
+	for _, want := range []string{"<h2>Role</h2>", "<li>Go</li>", `href="https://x.test/jobs"`} {
+		if !strings.Contains(u.Description, want) {
+			t.Errorf("job 1 missing decoded markup %q: %q", want, u.Description)
+		}
+	}
+	if strings.Contains(u.Description, "&lt;") {
+		t.Errorf("job 1 still entity-encoded: %q", u.Description)
+	}
+	want := jobhash.Of(hashParams(store.jobs[0], u.Description))
+	if !u.ContentHash.Valid || u.ContentHash.String != want {
+		t.Errorf("job 1 ContentHash = %+v, want %q", u.ContentHash, want)
+	}
+}

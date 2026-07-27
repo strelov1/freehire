@@ -77,6 +77,10 @@ var (
 // turned into real tags and then stripped, silently losing the content — whereas a wholly
 // encoded body stays dominated by encoded openers even when the feed wraps it in live HTML of
 // its own (arbeitnow appends a promo footer).
+// UnescapeEncodedHTML is the exported form of the entity-encoding repair, for the
+// description backfill worker that re-runs the adapter pipeline over stored rows.
+func UnescapeEncodedHTML(s string) string { return unescapeEncodedHTML(s) }
+
 func unescapeEncodedHTML(s string) string {
 	// Fast path: no encoded markup to weigh.
 	if !strings.Contains(s, "&lt;") {
