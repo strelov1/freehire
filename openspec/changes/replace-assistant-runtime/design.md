@@ -90,11 +90,13 @@ registered with an `llms.Tool` JSON schema. It calls the same service the HTTP
 handler calls. This removes the minted API key entirely: the tool already knows
 the caller.
 
-`search_jobs` needs a seam that does not exist yet — `runJobSearch` reads its
-filters straight off `*fiber.Ctx`. The facet-filter construction moves out of
-`buildSearchFilter(c)` into a function over a typed filter struct, which both the
-HTTP handler and the tool build. This is the one pre-existing shape this change
-reworks, and it is required, not opportunistic.
+`search_jobs` needs no new seam: `buildSearchFilter(c)` is already a one-line
+delegation to `search.FilterFromValues(url.Values)`, and `a.search.Search` takes
+a plain `search.SearchParams`. The tool renders its typed arguments as
+`url.Values` and calls the same two functions the handler calls, so facet
+semantics — disjunctive groups, `_mode=and`, `_exclude`, the location OR group —
+are identical by construction rather than by duplication. Nothing in the search
+handler is reshaped.
 
 *Alternative considered:* have tools issue in-process HTTP requests
 (`app.Test(req)`). Rejected: it re-serialises everything, re-runs auth, and keeps
