@@ -1,0 +1,31 @@
+---
+title: Confirm your email, reset your password, sign out everywhere
+date: 2026-07-25
+summary: Accounts now prove they own their email address, a forgotten password can be reset with a code we email you, and you can end sessions on every device from one button.
+type: changelog
+tags:
+  - accounts
+  - security
+draft: false
+---
+
+Until now an account had no way to prove it owned its email address, and no way back in if
+you forgot your password — there was no reset, no password change, and no way to end a
+session you no longer trusted. That is all fixed.
+
+**Confirm your email.** New sign-ups get a six-digit code by email. Existing accounts are
+already confirmed — you will not be asked for anything.
+
+**Forgotten password.** Ask for a code on the sign-in screen and set a new password with it.
+If you signed up with Google, GitHub or LinkedIn and never had a password, you can use the
+same flow to add one — a second way in that does not depend on the provider.
+
+**Sign out everywhere.** [Account → Security](/my/security) now has a password change and a
+button that ends every session, including the one you are using. Reach for it if you left
+yourself signed in somewhere you should not have. Your API keys keep working; revoke those
+individually.
+
+Confirming your address also protects the account itself: an unconfirmed account can no
+longer be quietly joined by someone signing in with a provider for the same address.
+
+One-off: this release signed everyone out. Sign back in as usual — nothing was lost.

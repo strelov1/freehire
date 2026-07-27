@@ -36,7 +36,7 @@ func TestMarketCoverageEndpoint(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	cookie, _ := iss.Issue(userID)
+	cookie, _ := iss.Issue(userID, testTokenVersion)
 	fake := &recordingFacetCounter{res: search.FacetResult{
 		Total:  500,
 		Facets: map[string]map[string]int64{"skills": {"go": 300}},
@@ -44,8 +44,8 @@ func TestMarketCoverageEndpoint(t *testing.T) {
 	h := &resumeHandlers{facets: fake}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	keyAuth := auth.RequireAuthOrKey(iss, queries)
-	app.Post("/api/v1/me/api-keys", auth.RequireAuth(iss), (&authHandlers{queries: queries}).CreateAPIKey)
+	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
+	app.Post("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), (&authHandlers{queries: queries}).CreateAPIKey)
 	app.Post("/api/v1/market/coverage", keyAuth, h.MarketCoverage)
 
 	const path = "/api/v1/market/coverage?category=backend"

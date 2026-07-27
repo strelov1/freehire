@@ -48,9 +48,9 @@ func TestSubmissionsEndToEnd(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	modCookie, _ := iss.Issue(modID)
-	user1Cookie, _ := iss.Issue(user1ID)
-	user2Cookie, _ := iss.Issue(user2ID)
+	modCookie, _ := iss.Issue(modID, testTokenVersion)
+	user1Cookie, _ := iss.Issue(user1ID, testTokenVersion)
+	user2Cookie, _ := iss.Issue(user2ID, testTokenVersion)
 	queries := db.New(pool)
 	mod := moderation.New(moderation.NewQueriesRepository(queries, pool, enrich.Version))
 	h := &authHandlers{
@@ -60,7 +60,7 @@ func TestSubmissionsEndToEnd(t *testing.T) {
 	sh := &submissionHandlers{submission: submission.New(submission.NewQueriesRepository(queries), mod)}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	keyAuth := auth.RequireAuthOrKey(iss, queries)
+	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
 	requireMod := auth.RequireRole(queries, "moderator")
 	app.Post("/api/v1/submissions", keyAuth, sh.CreateSubmission)
 	app.Get("/api/v1/me/submissions", keyAuth, sh.ListMySubmissions)
@@ -349,13 +349,13 @@ func TestSubmissionStructuredFacetsEndToEnd(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	modCookie, _ := iss.Issue(modID)
-	userCookie, _ := iss.Issue(userID)
+	modCookie, _ := iss.Issue(modID, testTokenVersion)
+	userCookie, _ := iss.Issue(userID, testTokenVersion)
 	queries := db.New(pool)
 	mod := moderation.New(moderation.NewQueriesRepository(queries, pool, enrich.Version))
 	sh := &submissionHandlers{submission: submission.New(submission.NewQueriesRepository(queries), mod)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	keyAuth := auth.RequireAuthOrKey(iss, queries)
+	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
 	requireMod := auth.RequireRole(queries, "moderator")
 	app.Post("/api/v1/submissions", keyAuth, sh.CreateSubmission)
 	app.Post("/api/v1/submissions/:id/approve", keyAuth, requireMod, sh.ApproveSubmission)

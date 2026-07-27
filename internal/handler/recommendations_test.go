@@ -19,13 +19,13 @@ import (
 func recsApp(t *testing.T, store *resume.Store, s searcher) (*fiber.App, string) {
 	t.Helper()
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	token, err := iss.Issue(1)
+	token, err := iss.Issue(1, testTokenVersion)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
 	h := &resumeHandlers{resume: store, search: s}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/me/recommendations", auth.RequireAuth(iss), h.Recommendations)
+	app.Get("/me/recommendations", auth.RequireAuth(iss, testVersions), h.Recommendations)
 	return app, token
 }
 

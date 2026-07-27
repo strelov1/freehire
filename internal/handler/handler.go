@@ -11,6 +11,8 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/accountdelete"
+	"github.com/strelov1/freehire/internal/accounts"
 	"github.com/strelov1/freehire/internal/atscheck"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/auth/oauth"
@@ -23,6 +25,7 @@ import (
 	"github.com/strelov1/freehire/internal/emailnotify"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/gmailsync"
+	"github.com/strelov1/freehire/internal/linkimport"
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/moderation"
@@ -31,6 +34,7 @@ import (
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/resumeextract"
 	"github.com/strelov1/freehire/internal/search"
+	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/tokencrypt"
 	"github.com/strelov1/freehire/internal/userprofile"
 )
@@ -82,10 +86,19 @@ type API struct {
 // browser-convenience surfaces where a leaked API key must not act. moderator
 // gates on the moderator role and is stacked after key or cookie.
 type middleware struct {
-	optional  fiber.Handler
-	key       fiber.Handler
+	optional fiber.Handler
+	key      fiber.Handler
+	// cvKey is keyAuth widened to admit the narrow `cv` key the tailoring bootstrap
+	// mints. Only the CV surface (and the caller's own identity read) mounts it; every
+	// other key-accepting route stays on key, which is full-scope-only — so a new
+	// endpoint is out of a leaked agent credential's reach unless it opts in.
+	cvKey     fiber.Handler
 	cookie    fiber.Handler
 	moderator fiber.Handler
+	// outboundFetch throttles every endpoint that makes the server fetch a
+	// caller-supplied URL, so one user's budget is spent across them rather than
+	// granted once per route.
+	outboundFetch fiber.Handler
 }
 
 // pageParams reads and clamps the shared limit/offset pagination query params.
@@ -171,6 +184,9 @@ type Config struct {
 	// https://<id>.chromiumapp.org redirects whose <id> is listed may receive a
 	// minted token. Empty leaves the connect endpoint refusing every redirect.
 	ExtensionRedirectAllowlist []string
+	// ServedHosts are the exact hostnames honoured as an OAuth redirect origin.
+	// Empty defaults to the frontend origin's own host.
+	ServedHosts []string
 }
 
 // Register wires all routes onto the application from cfg. Auth is same-origin
@@ -186,7 +202,14 @@ func Register(app *fiber.App, cfg Config) {
 		issuer:       auth.NewIssuer(cfg.JWTSecret, cfg.JWTTTL),
 		browserTools: browsertools.New(),
 	}
-	authH := newAuthHandlers(queries, cfg.Pool, a.issuer, cfg.CookieSecure, cfg.CookieDomains, cfg.OAuthRegistry, cfg.FrontendOrigin, cfg.ExtensionRedirectAllowlist)
+	authH := newAuthHandlers(queries, cfg.Pool, a.issuer, cfg.CookieSecure, cfg.CookieDomains, cfg.OAuthRegistry, cfg.FrontendOrigin, cfg.ExtensionRedirectAllowlist,
+		servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin))
+	if needsExplicitServedHosts(cfg.ServedHosts, cfg.CookieDomains) {
+		log.Printf("oauth: COOKIE_DOMAIN is set (%v) but SERVED_HOSTS is not — "+
+			"the redirect origin falls back to %s for every other host, which breaks "+
+			"sign-in on them (state mismatch). List every served host in SERVED_HOSTS.",
+			cfg.CookieDomains, cfg.FrontendOrigin)
+	}
 	jobsH := newJobsHandlers(queries, moderation.New(moderation.NewQueriesRepository(queries, cfg.Pool, enrich.Version)))
 	sitemapH := newSitemapHandlers(queries)
 	statsH := newStatsHandlers(queries)
@@ -217,12 +240,20 @@ func Register(app *fiber.App, cfg Config) {
 	// default timeout is right for it.
 	a.autofillPlanner = cfg.LLM
 	creditsStore := credits.NewStore(queries, cfg.Pool, cfg.Credits)
-	contributionsH := newContributionHandlers(contributionSvc, creditsStore)
+	// Imports fetch a user-supplied page, so they dial through the same SSRF-guarded
+	// client the crawlers use (sources.NewClient). cfg.Search may be nil (no engine
+	// configured), which only skips the index push.
+	importer := linkimport.New(cfg.Pool, queries, cfg.Search, sources.NewClient())
+	contributionsH := newContributionHandlers(contributionSvc, creditsStore, queries, importer)
 	creditsH := newCreditsHandlers(creditsStore, queries)
 	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, creditsStore)
 	cvH := newCVHandlers(queries, cfg.TypstBin, resumeStore, creditsStore, matchH)
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionSvc, creditsStore)
 	inboxH := newInboxHandlers(queries, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)
+	// Account deletion reaches past the FK cascade: cfg.Blob is nil when storage is
+	// unconfigured and the revoker is nil when Gmail is — either way there is nothing
+	// to erase there, which must not stop a member from leaving.
+	authH.withAccountDeletion(accountdelete.New(accountdelete.NewQueriesRepository(queries), cfg.Blob, inboxH.revokeGmailGrant), queries)
 	// Assign only when configured: a nil *search.Client wrapped in the searcher
 	// interface would be a non-nil interface and defeat the nil check.
 	var jobSearch searcher
@@ -248,7 +279,16 @@ func Register(app *fiber.App, cfg Config) {
 			log.Printf("referral: email pinger disabled: %v", err)
 		} else {
 			referralEmail = ec
+			// The same SES client carries the account mails (verification and password
+			// reset). Without it the accounts service keeps registering and
+			// authenticating; only the code-backed flows report 503.
+			authH.accounts.WithCodes(
+				accounts.NewQueriesCodeStore(queries),
+				emailnotify.NewAuthMailer(ec, cfg.NotifyEmailFrom, cfg.FrontendOrigin),
+			)
 		}
+	} else {
+		log.Print("accounts: AWS_REGION/NOTIFY_EMAIL_FROM unset — email verification and password reset are unavailable")
 	}
 	var referralTelegram referral.TelegramSender
 	if telegramH.telegramBot != nil {
@@ -276,18 +316,26 @@ func Register(app *fiber.App, cfg Config) {
 	// optionalAuth attaches the caller when signed in (cookie or key) but never
 	// rejects, so these public detail reads can overlay the caller's own vote
 	// (my_vote) while staying open to anonymous visitors.
-	optionalAuth := auth.OptionalAuth(a.issuer, a.queries)
+	optionalAuth := auth.OptionalAuth(a.issuer, a.queries, apiKeys{a.queries})
 	// keyAuth (RequireAuthOrKey) accepts the session cookie or an API key, so a
 	// script holding a key can drive the same flow as the browser. The public job
 	// reads stay unauthenticated. Jobs are addressed by their public slug; the
 	// handlers resolve it to the internal id before writing user_jobs.
-	keyAuth := auth.RequireAuthOrKey(a.issuer, a.queries)
+	keyAuth := auth.RequireAuthOrKey(a.issuer, a.queries, apiKeys{a.queries})
+	cvKeyAuth := auth.RequireAuthOrScopedKey(a.issuer, a.queries, apiKeys{a.queries}, auth.ScopeCV)
 	// cookieAuth is the single cookie-only gate (RequireAuth) for the
 	// browser-convenience surfaces below — key management, saved searches, the CV
 	// builder, the inbox, subscriptions — where a leaked API key must not act.
-	cookieAuth := auth.RequireAuth(a.issuer)
+	cookieAuth := auth.RequireAuth(a.issuer, a.queries)
 	requireModerator := auth.RequireRole(a.queries, "moderator")
-	mw := middleware{optional: optionalAuth, key: keyAuth, cookie: cookieAuth, moderator: requireModerator}
+	mw := middleware{
+		optional:      optionalAuth,
+		key:           keyAuth,
+		cvKey:         cvKeyAuth,
+		cookie:        cookieAuth,
+		moderator:     requireModerator,
+		outboundFetch: contributionLimiter(),
+	}
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
 	// /jobs/:slug param route so they are not read as slugs (see searchHandlers).
@@ -318,7 +366,7 @@ func Register(app *fiber.App, cfg Config) {
 	// session JWT (Bearer for a server-side harness, the subprotocol for the
 	// extension, which can set no headers); the relay routes strictly within one
 	// user's channel. See internal/browsertools.
-	api.Get("/tools/ws", auth.RequireAuthWS(a.issuer, a.queries), a.BrowserToolsWS())
+	api.Get("/tools/ws", auth.RequireAuthWS(a.issuer, a.queries, apiKeys{a.queries}), a.BrowserToolsWS())
 	// Agent-driven autofill: the caller's own browser is driven over that wire.
 	// keyAuth (Bearer) so the extension can trigger it.
 	api.Post("/me/autofill/run", keyAuth, a.RunAgentAutofill)

@@ -12,11 +12,11 @@ import (
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
-	"github.com/strelov1/freehire/internal/vocab"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobderive"
 	"github.com/strelov1/freehire/internal/jobhash"
 	"github.com/strelov1/freehire/internal/telegram"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // buildParams constructs the UpsertJob params for one Telegram-sourced job through

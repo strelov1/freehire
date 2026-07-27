@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/strelov1/freehire/internal/vocab"
 	"github.com/strelov1/freehire/internal/skilltag"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // nofluffjobs adapts nofluffjobs.com, a Polish/CEE IT job board (the complement to justjoin).

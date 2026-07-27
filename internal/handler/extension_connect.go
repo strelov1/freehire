@@ -105,9 +105,14 @@ func (h *authHandlers) ExtensionConnectSubmit(c *fiber.Ctx) error {
 
 	// Unify on the session JWT: hire and the agent (Roy) both verify it with the
 	// shared HS256 secret, so one token authenticates everywhere (hire via
-	// Authorization: Bearer, Roy via cookie/WS-subprotocol). No per-token
-	// revocation — the token is short-lived and re-minted by re-running connect.
-	token, err := h.issuer.Issue(userID)
+	// Authorization: Bearer, Roy via cookie/WS-subprotocol). The token carries the
+	// account's session generation, so "sign out everywhere" evicts the extension too —
+	// re-running connect mints a fresh one.
+	version, err := h.queries.GetUserTokenVersion(c.Context(), userID)
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to issue token")
+	}
+	token, err := h.issuer.Issue(userID, version)
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to issue token")
 	}

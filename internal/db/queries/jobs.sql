@@ -115,6 +115,24 @@ SELECT *
 FROM jobs
 WHERE source = $1 AND external_id = $2;
 
+-- name: FindOpenJobByURL :one
+-- Resolve a job page URL to the posting stored under it — the second tier of
+-- /api/v1/jobs/find, used when no (source, external_id) identity can be read out of the
+-- URL. Both sides go through normalize_job_url (migration 0042), so a link differing only
+-- by scheme, www., tracking query, fragment, case or trailing slash still matches; the
+-- same expression backs jobs_normalized_url_idx, so this is an index lookup.
+-- Scoped to open canonical rows, matching that partial index: a closed or suppressed
+-- posting is not one to show a match card for. Two open rows may share a URL (an
+-- aggregator and an ATS row the dedup passes have not collapsed), so the most recently
+-- confirmed one wins, with id as the deterministic tiebreak.
+SELECT public_slug
+FROM jobs
+WHERE normalize_job_url(url) = normalize_job_url(@url)
+  AND closed_at IS NULL
+  AND duplicate_of IS NULL
+ORDER BY last_seen_at DESC, id DESC
+LIMIT 1;
+
 -- name: GetJobIDBySlug :one
 -- Slim slug->id lookup for the view/apply interaction path, which needs only the
 -- internal id (the user_jobs FK) and must not drag the wide description/enrichment

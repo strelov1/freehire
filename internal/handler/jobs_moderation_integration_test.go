@@ -46,8 +46,8 @@ func TestModeratorJobsEndToEnd(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	modCookie, _ := iss.Issue(modID)
-	userCookie, _ := iss.Issue(userID)
+	modCookie, _ := iss.Issue(modID, testTokenVersion)
+	userCookie, _ := iss.Issue(userID, testTokenVersion)
 	queries := db.New(pool)
 	h := &jobsHandlers{
 		queries:    queries,
@@ -55,7 +55,7 @@ func TestModeratorJobsEndToEnd(t *testing.T) {
 	}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	keyAuth := auth.RequireAuthOrKey(iss, queries)
+	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
 	requireMod := auth.RequireRole(queries, "moderator")
 	app.Post("/api/v1/jobs", keyAuth, requireMod, h.CreateJob)
 	app.Patch("/api/v1/jobs/:slug", keyAuth, requireMod, h.UpdateJob)

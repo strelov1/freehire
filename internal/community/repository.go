@@ -59,7 +59,8 @@ func (r *QueriesRepository) InsertPersona(ctx context.Context, userID int64, han
 
 func (r *QueriesRepository) InsertThread(ctx context.Context, subjectType, subjectRef, title, body string, authorUserID int64) (Thread, error) {
 	row, err := r.q.InsertThread(ctx, db.InsertThreadParams{
-		SubjectType: subjectType, SubjectRef: subjectRef, Title: title, Body: body, AuthorUserID: authorUserID,
+		SubjectType: subjectType, SubjectRef: subjectRef, Title: title, Body: body,
+		AuthorUserID: pgtype.Int8{Int64: authorUserID, Valid: true},
 	})
 	if err != nil {
 		return Thread{}, err
@@ -82,7 +83,7 @@ func (r *QueriesRepository) GetThread(ctx context.Context, id int64) (Thread, er
 	return Thread{
 		ID: row.ID, SubjectType: row.SubjectType, SubjectRef: row.SubjectRef,
 		AnchorPath: pgconv.TextString(row.AnchorPath), Title: row.Title, Body: row.Body,
-		AuthorHandle: row.AuthorHandle, ReplyCount: row.ReplyCount, Status: row.Status,
+		AuthorHandle: pgconv.TextString(row.AuthorHandle), ReplyCount: row.ReplyCount, Status: row.Status,
 		CreatedAt: row.CreatedAt.Time,
 	}, nil
 }
@@ -100,7 +101,7 @@ func (r *QueriesRepository) ListOpenThreads(ctx context.Context, subjectType, su
 			out[i] = Thread{
 				ID: row.ID, SubjectType: row.SubjectType, SubjectRef: row.SubjectRef,
 				AnchorPath: pgconv.TextString(row.AnchorPath), Title: row.Title, Body: row.Body,
-				AuthorHandle: row.AuthorHandle, ReplyCount: row.ReplyCount, Status: row.Status,
+				AuthorHandle: pgconv.TextString(row.AuthorHandle), ReplyCount: row.ReplyCount, Status: row.Status,
 				CreatedAt: row.CreatedAt.Time,
 			}
 		}
@@ -118,7 +119,7 @@ func (r *QueriesRepository) ListOpenThreads(ctx context.Context, subjectType, su
 		out[i] = Thread{
 			ID: row.ID, SubjectType: row.SubjectType, SubjectRef: row.SubjectRef,
 			AnchorPath: pgconv.TextString(row.AnchorPath), Title: row.Title, Body: row.Body,
-			AuthorHandle: row.AuthorHandle, ReplyCount: row.ReplyCount, Status: row.Status,
+			AuthorHandle: pgconv.TextString(row.AuthorHandle), ReplyCount: row.ReplyCount, Status: row.Status,
 			CreatedAt: row.CreatedAt.Time,
 		}
 	}
@@ -192,7 +193,7 @@ func (r *QueriesRepository) ListReplies(ctx context.Context, threadID int64, cur
 
 func (r *QueriesRepository) CountRecentThreads(ctx context.Context, userID int64, since time.Time) (int64, error) {
 	return r.q.CountRecentThreadsByUser(ctx, db.CountRecentThreadsByUserParams{
-		AuthorUserID: userID, CreatedAt: pgconv.Timestamptz(&since),
+		AuthorUserID: pgtype.Int8{Int64: userID, Valid: true}, CreatedAt: pgconv.Timestamptz(&since),
 	})
 }
 

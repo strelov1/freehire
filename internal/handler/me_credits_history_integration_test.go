@@ -75,14 +75,14 @@ func TestGetMyCreditsHistoryEndpoint(t *testing.T) {
 	seed(otherID, "grant", "", "", 20, 5)                                // another user's row — must not leak
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	token, _ := iss.Issue(userID)
+	token, _ := iss.Issue(userID, testTokenVersion)
 
 	h := &creditsHandlers{
 		queries: queries,
 		credits: credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 5}),
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/credits/history", auth.RequireAuthOrKey(iss, queries), h.GetMyCreditsHistory)
+	app.Get("/api/v1/me/credits/history", auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}), h.GetMyCreditsHistory)
 
 	req := httptest.NewRequest(fiber.MethodGet, "/api/v1/me/credits/history", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})

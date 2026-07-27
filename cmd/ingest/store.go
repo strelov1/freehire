@@ -10,11 +10,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/vocab"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobhash"
 	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/search"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // jobIndexer buffers a persisted job's document for the live search index. It is

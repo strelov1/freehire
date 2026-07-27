@@ -71,3 +71,37 @@ func TestLenientPercentUnescape(t *testing.T) {
 		}
 	}
 }
+
+func TestUnescapeEncodedHTML(t *testing.T) {
+	cases := map[string]struct{ in, want string }{
+		// Live markup is the common case and must survive byte for byte: unescaping it
+		// would decode entities the posting meant literally.
+		"live markup":        {"<p>Build &amp; ship.</p>", "<p>Build &amp; ship.</p>"},
+		"entities, no tags":  {"R&amp;D team", "R&amp;D team"},
+		"plain text":         {"Just text", "Just text"},
+		"encoded body":       {"&lt;p&gt;Hi&lt;/p&gt;", "<p>Hi</p>"},
+		"encoded attributes": {"&lt;p class=&quot;x&quot;&gt;Hi&lt;/p&gt;", `<p class="x">Hi</p>`},
+		// The shape arbeitnow actually serves: an encoded employer body followed by the
+		// board's own live-HTML promo footer. Encoded openers dominate, so the whole
+		// string is decoded — a no-op on the footer, which carries no entities.
+		"encoded body, live footer": {
+			`&lt;p&gt;Role&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Go&lt;/li&gt;&lt;/ul&gt;<p>Find more <a href="x">jobs</a></p>`,
+			`<p>Role</p><ul><li>Go</li></ul><p>Find more <a href="x">jobs</a></p>`,
+		},
+		// A posting that deliberately shows markup as an example: live openers outnumber
+		// encoded ones, so the example is left encoded instead of becoming real tags
+		// (which sanitizeHTML would then strip, silently losing the content).
+		"escaped code sample": {
+			"<p>Use <code>&lt;div&gt;&lt;/div&gt;</code> in JSX</p>",
+			"<p>Use <code>&lt;div&gt;&lt;/div&gt;</code> in JSX</p>",
+		},
+		// A bare "<" or "&lt;" used as a less-than sign is not a tag opener, so it never
+		// tips the decision either way.
+		"less-than in prose": {"<p>salary &lt; 100k</p>", "<p>salary &lt; 100k</p>"},
+	}
+	for name, c := range cases {
+		if got := unescapeEncodedHTML(c.in); got != c.want {
+			t.Errorf("%s: unescapeEncodedHTML(%q) = %q, want %q", name, c.in, got, c.want)
+		}
+	}
+}

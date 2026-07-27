@@ -16,6 +16,7 @@
   "accent": { "$value": "oklch(0.27 0 0)" },
   "accent-foreground": { "$value": "oklch(0.985 0 0)" },
   "destructive": { "$value": "oklch(0.704 0.191 22.216)" },
+  "destructive-foreground": { "$value": "oklch(0.16 0 0)" },
   "border": { "$value": "oklch(1 0 0 / 8%)" },
   "input": { "$value": "oklch(1 0 0 / 12%)" },
   "ring": { "$value": "{brand-ring}" },

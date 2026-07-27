@@ -111,3 +111,94 @@ func TestHimalayasErrorsWhenFirstPageFails(t *testing.T) {
 		t.Error("Fetch should return an error when the first page fails")
 	}
 }
+
+func TestStripHimalayasSelfPromo(t *testing.T) {
+	// Bodies are stored post-sanitize, so the anchors carry the rel="nofollow" bluemonday
+	// adds; the raw feed serves them without it. Both shapes must strip.
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "trailer as stored (sanitized, rel=nofollow)",
+			in:   `<p>Apply today.</p><p>Originally posted on <a href="https://himalayas.app" rel="nofollow">Himalayas</a></p>`,
+			want: `<p>Apply today.</p>`,
+		},
+		{
+			name: "trailer as served (raw feed, no rel)",
+			in:   `<p>Apply today.</p><p>Originally posted on <a href="https://himalayas.app">Himalayas</a></p>`,
+			want: `<p>Apply today.</p>`,
+		},
+		{
+			name: "company mention rewritten into a self-backlink is unwrapped to its text",
+			in:   `<p>At <a href="https://himalayas.app/companies/ptc" rel="nofollow">PTC</a>, we build things.</p>`,
+			want: `<p>At PTC, we build things.</p>`,
+		},
+		{
+			name: "unwrapping keeps the punctuation glued, which is what defeats fingerprinting",
+			in:   `<p>a signed agreement with <a href="https://himalayas.app/companies/oasis" rel="nofollow">Oasis</a>.</p>`,
+			want: `<p>a signed agreement with Oasis.</p>`,
+		},
+		{
+			name: "markup nested inside the self-backlink survives the unwrap",
+			in:   `<p><a href="https://himalayas.app/companies/x" rel="nofollow"><strong>Acme</strong></a> hires.</p>`,
+			want: `<p><strong>Acme</strong> hires.</p>`,
+		},
+		{
+			name: "the posting's own outbound links are left alone",
+			in:   `<p>Read our <a href="https://ptc.com/privacy" rel="nofollow">Privacy Policy</a>.</p>`,
+			want: `<p>Read our <a href="https://ptc.com/privacy" rel="nofollow">Privacy Policy</a>.</p>`,
+		},
+		{
+			name: "a body that merely names the mountains is not a promo trailer",
+			in:   `<p>Lead treks across the Himalayas.</p>`,
+			want: `<p>Lead treks across the Himalayas.</p>`,
+		},
+		{
+			name: "a clean body is returned byte-for-byte",
+			in:   `<p>Build web.</p>`,
+			want: `<p>Build web.</p>`,
+		},
+		{
+			name: "trailer and self-backlinks in the same body both go",
+			in:   `<p>Join <a href="https://himalayas.app/companies/x" rel="nofollow">X</a>.</p><p>Originally posted on <a href="https://himalayas.app" rel="nofollow">Himalayas</a></p>`,
+			want: `<p>Join X.</p>`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := StripHimalayasSelfPromo(tc.in); got != tc.want {
+				t.Errorf("StripHimalayasSelfPromo():\n got %q\nwant %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestStripHimalayasSelfPromoIsIdempotent(t *testing.T) {
+	// The backfill re-runs over rows a previous run already cleaned, so a second pass must
+	// rewrite nothing.
+	in := `<p>At <a href="https://himalayas.app/companies/ptc" rel="nofollow">PTC</a>, we build.</p><p>Originally posted on <a href="https://himalayas.app" rel="nofollow">Himalayas</a></p>`
+	once := StripHimalayasSelfPromo(in)
+	if twice := StripHimalayasSelfPromo(once); twice != once {
+		t.Errorf("second pass changed the body:\n got %q\nwant %q", twice, once)
+	}
+}
+
+func TestHimalayasFetchStripsSelfPromo(t *testing.T) {
+	// The adapter must yield an already-clean body, so a re-crawl writes the same text the
+	// backfill leaves behind.
+	page := `{"totalCount":1,"jobs":[
+{"title":"Web Engineer","companyName":"KraftPixel","applicationLink":"https://himalayas.app/x","guid":"https://himalayas.app/x","description":"<p>Join <a href=\"https://himalayas.app/companies/kraftpixel\">KraftPixel</a>.</p><p>Originally posted on <a href=\"https://himalayas.app\">Himalayas</a></p>","pubDate":1747699200}
+]}`
+	jobs, err := NewHimalayas((&routedHTTP{}).route("offset=0", page)).Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1", len(jobs))
+	}
+	if want := `<p>Join KraftPixel.</p>`; jobs[0].Description != want {
+		t.Errorf("Description = %q, want %q", jobs[0].Description, want)
+	}
+}

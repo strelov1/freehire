@@ -73,3 +73,42 @@ func TestArbeitnowFetchPaginatesAndMaps(t *testing.T) {
 		t.Error("PostedAt nil, want parsed epoch")
 	}
 }
+
+// About a tenth of the arbeitnow feed serves the employer's body with its HTML
+// entity-encoded, then appends the board's own live-HTML promo footer. sanitizeHTML alone
+// cannot recover that: bluemonday reads "&lt;h2&gt;" as a text node and re-encodes it, so
+// the tags used to reach the catalogue as literals visible to the reader.
+func TestArbeitnowDecodesEntityEncodedDescription(t *testing.T) {
+	page1 := `{"data":[
+{"slug":"senior-cloud-platform-engineer-140883","company_name":"Prolific","title":"Senior Cloud Platform Engineer","description":"&lt;h2 style=&quot;text-align: center;&quot;&gt;&lt;strong&gt;Senior Cloud Platform Engineer&lt;/strong&gt;&lt;/h2&gt;\n&lt;p&gt;&amp;nbsp;&lt;/p&gt;\n&lt;ul&gt;&lt;li&gt;Kubernetes at scale&lt;/li&gt;&lt;/ul&gt;<p>Find more <a href=\"https://www.arbeitnow.co.uk/english-speaking-jobs\">jobs</a> on Arbeitnow</p>","remote":true,"url":"https://www.arbeitnow.co.uk/jobs/companies/prolific/senior-cloud-platform-engineer-140883","location":"Remote","created_at":1781713837}
+],"links":{"next":null}}`
+	fake := (&routedHTTP{}).route("job-board-api", page1)
+
+	jobs, err := NewArbeitnow(fake).Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1", len(jobs))
+	}
+	got := jobs[0].Description
+
+	// The encoded body is now real markup the browser renders as structure.
+	for _, want := range []string{"<h2>", "<strong>Senior Cloud Platform Engineer</strong>", "<li>Kubernetes at scale</li>"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("Description missing decoded markup %q\ngot: %s", want, got)
+		}
+	}
+	// No encoded tag may survive, or the reader sees the tag text itself.
+	if strings.Contains(got, "&lt;") {
+		t.Errorf("Description still carries encoded markup\ngot: %s", got)
+	}
+	// Decoding turns style="..." into a real attribute, which the policy then drops.
+	if strings.Contains(got, "text-align") {
+		t.Errorf("Description kept a disallowed style attribute\ngot: %s", got)
+	}
+	// The board's live-HTML footer passes through untouched.
+	if !strings.Contains(got, `href="https://www.arbeitnow.co.uk/english-speaking-jobs"`) {
+		t.Errorf("Description lost the live footer link\ngot: %s", got)
+	}
+}

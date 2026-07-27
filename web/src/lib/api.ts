@@ -582,6 +582,46 @@ export function createApi(
     return requestData<User>('/api/v1/auth/me');
   }
 
+  // --- Account recovery -----------------------------------------------------
+  //
+  // Email verification and password recovery are code-based: the server mails a
+  // six-digit code and these endpoints exchange it. The code is never in a URL,
+  // so nothing here takes one from the query string.
+
+  /** Ask the server to mail a fresh email-verification code to the signed-in
+   *  user's address. 429 while a code issued in the last minute is outstanding. */
+  async function requestEmailVerification(): Promise<void> {
+    await call('/api/v1/auth/verify/request', { method: 'POST' });
+  }
+
+  /** Confirm the signed-in user's address with the mailed code; returns the
+   *  updated user (email_verified true). */
+  function confirmEmailVerification(code: string): Promise<User> {
+    return requestData<User>('/api/v1/auth/verify/confirm', jsonBody('POST', { code }));
+  }
+
+  /** Ask for a password-reset code. Always succeeds, whether or not the address
+   *  has an account — the response deliberately says nothing either way. */
+  async function forgotPassword(email: string): Promise<void> {
+    await call('/api/v1/auth/password/forgot', jsonBody('POST', { email }));
+  }
+
+  /** Set a new password with a mailed reset code. Every existing session is
+   *  revoked, so the caller signs in again afterwards. */
+  async function resetPassword(email: string, code: string, password: string): Promise<void> {
+    await call('/api/v1/auth/password/reset', jsonBody('POST', { email, code, password }));
+  }
+
+  /** Change a known password. Other sessions are revoked; this one is re-issued. */
+  async function changePassword(currentPassword: string, password: string): Promise<void> {
+    await call('/api/v1/me/password', jsonBody('POST', { current_password: currentPassword, password }));
+  }
+
+  /** Sign out everywhere: revokes every session for the account, including this one. */
+  async function logoutEverywhere(): Promise<void> {
+    await call('/api/v1/auth/logout-all', { method: 'POST' });
+  }
+
   // --- Per-user job interactions --------------------------------------------
   //
   // Both require a session (the auth cookie). Callers gate on auth state before
@@ -856,6 +896,18 @@ export function createApi(
   /** Clear the user's profile. Idempotent. */
   async function deleteProfile(): Promise<void> {
     await call('/api/v1/me/profile', { method: 'DELETE' });
+  }
+
+  /** Permanently erase the signed-in account and everything it owns. Irreversible:
+   *  there is no restore path on either side. `email` is the confirmation — it must be
+   *  the caller's own address, or the server answers 400. A 503 means nothing was
+   *  deleted (stored files were unreachable) and the request can be retried. */
+  async function deleteAccount(email: string): Promise<void> {
+    await call('/api/v1/me', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
   }
 
   /** Build the request init for a résumé payload: pasted text goes as JSON, a `File`
@@ -1359,6 +1411,12 @@ export function createApi(
     sitemapCompanyBoundaries,
     register,
     login,
+    requestEmailVerification,
+    confirmEmailVerification,
+    forgotPassword,
+    resetPassword,
+    changePassword,
+    logoutEverywhere,
     oauthProviders,
     logout,
     me,
@@ -1400,6 +1458,7 @@ export function createApi(
     getProfile,
     saveProfile,
     deleteProfile,
+    deleteAccount,
     extractResumeProfile,
     getResume,
     getProfileVerdict,

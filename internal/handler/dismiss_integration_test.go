@@ -50,7 +50,7 @@ func TestDismissUndismissEndpoints(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	cookie, err := iss.Issue(userID)
+	cookie, err := iss.Issue(userID, testTokenVersion)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestDismissUndismissEndpoints(t *testing.T) {
 	queries := db.New(pool)
 	h := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	keyAuth := auth.RequireAuthOrKey(iss, queries)
+	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
 	app.Post("/api/v1/jobs/:slug/dismiss", keyAuth, h.DismissJob)
 	app.Delete("/api/v1/jobs/:slug/dismiss", keyAuth, h.UndismissJob)
 

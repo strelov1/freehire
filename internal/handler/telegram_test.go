@@ -28,14 +28,16 @@ func TestTelegramWebhook_emptySecretFailsClosed(t *testing.T) {
 	app := webhookApp("")
 
 	// A request with no secret header must NOT pass when the configured secret is
-	// empty — a naive ConstantTimeCompare("", "") would let a forged update in.
+	// empty — a naive ConstantTimeCompare("", "") would let a forged update in. The
+	// endpoint is not served at all in that state, so the refusal is a 404: an
+	// unsecurable webhook is unrepresentable, not merely guarded.
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/telegram/webhook", nil)
 	res, err := app.Test(req, -1)
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
-	if res.StatusCode != http.StatusForbidden {
-		t.Errorf("status = %d, want 403", res.StatusCode)
+	if res.StatusCode != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", res.StatusCode)
 	}
 }
 

@@ -9,9 +9,9 @@ import (
 
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/credits"
+	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/resume"
-	"github.com/strelov1/freehire/internal/cv"
 )
 
 // CV-builder HTTP surface: per-user structured CVs (CRUD + seed) and on-demand PDF
@@ -27,23 +27,23 @@ import (
 // (blocker capping, credits balance) it reuses.
 type cvHandlers struct {
 	// cvStore owns the CV-builder use cases (per-user structured CVs, CRUD + seed).
-	cvStore *cv.Store
-	cvRenderer cv.Renderer
-	resume     *resume.Store
-	queries    *db.Queries
-	credits    *credits.Store
+	cvStore            *cv.Store
+	cvRenderer         cv.Renderer
+	resume             *resume.Store
+	queries            *db.Queries
+	credits            *credits.Store
 	matchAnalysisCache matchAnalysisStore
-	match *matchHandlers
+	match              *matchHandlers
 }
 
 func newCVHandlers(queries *db.Queries, typstBin string, resumeStore *resume.Store, creditsStore *credits.Store, match *matchHandlers) *cvHandlers {
 	h := &cvHandlers{
-		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
-		resume: resumeStore,
-		queries: queries,
-		credits: creditsStore,
+		cvStore:            cv.NewStore(cv.NewQueriesRepository(queries)),
+		resume:             resumeStore,
+		queries:            queries,
+		credits:            creditsStore,
 		matchAnalysisCache: queries,
-		match: match,
+		match:              match,
 	}
 	// The renderer is enabled only when a typst binary was resolved (assign only a
 	// non-nil renderer so the interface stays nil when disabled — a typed-nil would

@@ -45,7 +45,7 @@ func TestJobMatchEndpoint(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	token, err := iss.Issue(userID)
+	token, err := iss.Issue(userID, testTokenVersion)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestJobMatchEndpoint(t *testing.T) {
 		userProfile: userprofile.New(userprofile.NewQueriesRepository(queries)),
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/jobs/:slug/match", auth.RequireAuth(iss), h.JobMatch)
+	app.Get("/api/v1/jobs/:slug/match", auth.RequireAuth(iss, testVersions), h.JobMatch)
 
 	type adj struct {
 		Name string `json:"name"`
@@ -119,7 +119,7 @@ func TestJobMatchEndpoint(t *testing.T) {
 			`INSERT INTO users (email) VALUES ('noprofile@example.test') RETURNING id`).Scan(&otherID); err != nil {
 			t.Fatalf("seed user: %v", err)
 		}
-		otherToken, err := iss.Issue(otherID)
+		otherToken, err := iss.Issue(otherID, testTokenVersion)
 		if err != nil {
 			t.Fatalf("issue token: %v", err)
 		}

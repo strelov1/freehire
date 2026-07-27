@@ -41,13 +41,13 @@ func TestContributionsEndToEnd(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	cookie, _ := iss.Issue(userID)
+	cookie, _ := iss.Issue(userID, testTokenVersion)
 	queries := db.New(pool)
 	creditsStore := credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 5})
 	ch := &contributionHandlers{contribution: contribution.New(contribution.NewQueriesRepository(queries), nil), credits: creditsStore}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	keyAuth := auth.RequireAuthOrKey(iss, queries)
+	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
 	app.Post("/api/v1/me/contributions", keyAuth, ch.CreateContribution)
 	app.Get("/api/v1/me/contributions", keyAuth, ch.ListMyContributions)
 

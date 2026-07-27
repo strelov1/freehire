@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/strelov1/freehire/internal/vocab"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobderive"
 	"github.com/strelov1/freehire/internal/sources"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // Sentinel errors. ErrInvalid wraps every validation failure (the handler maps it to

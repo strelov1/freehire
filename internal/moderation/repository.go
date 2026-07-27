@@ -9,9 +9,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/vocab"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/pgconv"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // Compile-time proof that QueriesRepository satisfies Repository.

@@ -10,13 +10,13 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	classifydict "github.com/strelov1/freehire/internal/classify"
-	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/atscheck"
+	classifydict "github.com/strelov1/freehire/internal/classify"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/resumeextract"
-	"github.com/strelov1/freehire/internal/userprofile"
 	"github.com/strelov1/freehire/internal/skilltag"
+	"github.com/strelov1/freehire/internal/userprofile"
 )
 
 // resumeHandlers serves the résumé/CV surfaces: skill extraction, stored-résumé

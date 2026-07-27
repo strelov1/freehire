@@ -41,12 +41,19 @@ func (h *communityHandlers) register(api fiber.Router, mw middleware) {
 	api.Post("/threads/:id/close", mw.cookie, mw.moderator, h.CloseThread)
 }
 
-// aiAuthor is the display name used for a reply with no persona (a future AI-authored
+// aiAuthor is the display name used for a reply flagged is_ai (a future AI-authored
 // reply). No AI posts exist at MVP; this keeps the wire shape stable for when they do.
 const aiAuthor = "AI"
 
+// deletedAuthor is the display name for content whose author deleted their account.
+// Threads and replies outlive their author (the FK nulls the reference), and the
+// persona — the handle — goes with the account, so there is nothing left to show. The
+// brackets keep it out of the handle namespace, which is "adjective-noun-NN".
+const deletedAuthor = "[deleted]"
+
 // threadResponse is the public shape of a thread: the persona handle is the only
-// author identity — the author's user_id is never projected here.
+// author identity — the author's user_id is never projected here. A thread whose
+// author deleted their account carries the deleted-member marker instead.
 type threadResponse struct {
 	ID          int64     `json:"id"`
 	SubjectType string    `json:"subject_type"`
@@ -59,8 +66,8 @@ type threadResponse struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-// replyResponse is the public shape of a reply: handle only, or the AI persona for a
-// system reply.
+// replyResponse is the public shape of a reply: the persona handle, the AI persona for
+// a system reply, or the deleted-member marker once the author's account is gone.
 type replyResponse struct {
 	ID        int64     `json:"id"`
 	ThreadID  int64     `json:"thread_id"`
@@ -70,17 +77,26 @@ type replyResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// personaOrDeleted is the author display name for a handle: an empty one means the
+// persona is gone with its account, leaving the content de-authored.
+func personaOrDeleted(handle string) string {
+	if handle == "" {
+		return deletedAuthor
+	}
+	return handle
+}
+
 func toThreadResponse(t community.Thread) threadResponse {
 	return threadResponse{
 		ID: t.ID, SubjectType: t.SubjectType, SubjectSlug: t.SubjectRef, Title: t.Title,
-		Body: t.Body, Author: t.AuthorHandle, ReplyCount: t.ReplyCount, Status: t.Status,
-		CreatedAt: t.CreatedAt,
+		Body: t.Body, Author: personaOrDeleted(t.AuthorHandle), ReplyCount: t.ReplyCount,
+		Status: t.Status, CreatedAt: t.CreatedAt,
 	}
 }
 
 func toReplyResponse(r community.Reply) replyResponse {
-	author := r.AuthorHandle
-	if r.IsAI || author == "" {
+	author := personaOrDeleted(r.AuthorHandle)
+	if r.IsAI {
 		author = aiAuthor
 	}
 	return replyResponse{

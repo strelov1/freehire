@@ -15,7 +15,7 @@ import (
 // identity propagates into the handler.
 func protectedApp(iss *Issuer) *fiber.App {
 	app := fiber.New()
-	app.Get("/me", RequireAuth(iss), func(c *fiber.Ctx) error {
+	app.Get("/me", RequireAuth(iss, anyVersion{1}), func(c *fiber.Ctx) error {
 		id, ok := UserID(c)
 		if !ok {
 			return fiber.NewError(fiber.StatusInternalServerError, "user id missing from context")
@@ -27,7 +27,7 @@ func protectedApp(iss *Issuer) *fiber.App {
 
 func TestRequireAuth_ValidTokenGrantsAccessAndPropagatesID(t *testing.T) {
 	iss := NewIssuer("secret", time.Hour)
-	token, err := iss.Issue(7)
+	token, err := iss.Issue(7, 1)
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestRequireAuth_ValidTokenGrantsAccessAndPropagatesID(t *testing.T) {
 func TestRequireAuth_RejectsUnauthorized(t *testing.T) {
 	iss := NewIssuer("secret", time.Hour)
 	expired := NewIssuer("secret", -time.Minute)
-	expiredToken, _ := expired.Issue(7)
+	expiredToken, _ := expired.Issue(7, 1)
 
 	cases := []struct {
 		name  string

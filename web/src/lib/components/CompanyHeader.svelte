@@ -43,59 +43,74 @@
   <div class="flex items-start gap-3">
     <CompanyLogo name={company.name} size="size-11" />
     <div class="min-w-0 flex-1">
-      <h1 class="text-2xl font-semibold tracking-tight">{company.name}</h1>
+      <!-- break-words: a long single word ("International") is wider than the phone
+           column and would otherwise overflow the card instead of wrapping. -->
+      <h1 class="break-words text-xl font-semibold tracking-tight sm:text-2xl">{company.name}</h1>
       {#if company.tagline}
         <p class="mt-1 text-sm text-muted-foreground">{company.tagline}</p>
       {/if}
     </div>
     <!-- flex-1 above lets the name/tagline use the full width; the follow CTA stays
-         top-right and never shrinks (it collapses to an icon on mobile itself).
-         The Discussion link sits right below it, right-aligned. -->
-    <div class="flex shrink-0 flex-col items-end gap-2">
+         top-right and never shrinks (it collapses to an icon on mobile itself). -->
+    <div class="shrink-0">
       <CompanyFollowButton {slug} companyName={company.name} />
-      <div class="flex items-center gap-3">
-        <a
-          class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-          href={resolve('/companies/[slug]/discussion', { slug })}
-        >
-          <MessageSquare class="size-4" aria-hidden="true" /> Discussion{threadCount
-            ? ` · ${threadCount}`
-            : ''}
-        </a>
-        <VoteControl
-          target="company"
-          {slug}
-          upvoteCount={company.upvote_count ?? 0}
-          downvoteCount={company.downvote_count ?? 0}
-          myVote={company.my_vote ?? 0}
-        />
-      </div>
     </div>
   </div>
+  <!-- Discussion + votes get their own right-aligned row instead of sharing the
+       identity row: together they are ~220px of non-shrinking width, which on a phone
+       would leave the name/tagline column too narrow to hold a word. -->
+  <div class="mt-3 flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
+    <a
+      class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+      href={resolve('/companies/[slug]/discussion', { slug })}
+    >
+      <MessageSquare class="size-4" aria-hidden="true" /> Discussion{threadCount
+        ? ` · ${threadCount}`
+        : ''}
+    </a>
+    <VoteControl
+      target="company"
+      {slug}
+      upvoteCount={company.upvote_count ?? 0}
+      downvoteCount={company.downvote_count ?? 0}
+      myVote={company.my_vote ?? 0}
+    />
+  </div>
   {#if hasMeta}
+    <!-- Industries and links are two groups, not one flat wrap list: on a phone a flat
+         list mixes a chip and a URL on the same line. Grouping keeps them on one row
+         on desktop (both groups fit) and wraps them as whole blocks on mobile. -->
     <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-3">
-      {#each industries as industry (industry)}
-        <span class="rounded-full bg-secondary px-2.5 py-0.5 text-xs text-secondary-foreground">{industry}</span>
-      {/each}
-      {#if website}
-        <!-- eslint-disable svelte/no-navigation-without-resolve -- external company website, not an internal route -->
-        <a
-          class="text-sm font-medium text-primary hover:underline"
-          href={websiteHref}
-          target="_blank"
-          rel="noopener noreferrer">{website} ↗</a
-        >
-        <!-- eslint-enable svelte/no-navigation-without-resolve -->
+      {#if industries.length}
+        <div class="flex flex-wrap items-center gap-2">
+          {#each industries as industry (industry)}
+            <span class="rounded-full bg-secondary px-2.5 py-0.5 text-xs text-secondary-foreground">{industry}</span>
+          {/each}
+        </div>
       {/if}
-      {#if linkedin}
-        <!-- eslint-disable svelte/no-navigation-without-resolve -- external LinkedIn URL, not an internal route -->
-        <a
-          class="text-sm font-medium text-primary hover:underline"
-          href={linkedin}
-          target="_blank"
-          rel="noopener noreferrer">LinkedIn ↗</a
-        >
-        <!-- eslint-enable svelte/no-navigation-without-resolve -->
+      {#if website || linkedin}
+        <div class="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+          {#if website}
+            <!-- eslint-disable svelte/no-navigation-without-resolve -- external company website, not an internal route -->
+            <a
+              class="min-w-0 break-all text-sm font-medium text-primary hover:underline"
+              href={websiteHref}
+              target="_blank"
+              rel="noopener noreferrer">{website} ↗</a
+            >
+            <!-- eslint-enable svelte/no-navigation-without-resolve -->
+          {/if}
+          {#if linkedin}
+            <!-- eslint-disable svelte/no-navigation-without-resolve -- external LinkedIn URL, not an internal route -->
+            <a
+              class="text-sm font-medium text-primary hover:underline"
+              href={linkedin}
+              target="_blank"
+              rel="noopener noreferrer">LinkedIn ↗</a
+            >
+            <!-- eslint-enable svelte/no-navigation-without-resolve -->
+          {/if}
+        </div>
       {/if}
     </div>
   {/if}

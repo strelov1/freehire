@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/strelov1/freehire/internal/vocab"
 	"github.com/strelov1/freehire/internal/skilltag"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // getmatch adapts getmatch.ru, a curated Russian IT job marketplace. Its public, keyless feed

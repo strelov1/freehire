@@ -155,8 +155,8 @@ func run() int {
 	}
 
 	total := runStats.Total()
-	log.Printf("ingest done: file=%s providers=%d ingested=%d failed=%d skipped=%d",
-		path, len(runStats), total.Ingested, total.Failed, total.Skipped)
+	log.Printf("ingest done: file=%s providers=%d ingested=%d failed=%d skipped=%d rejected=%d",
+		path, len(runStats), total.Ingested, total.Failed, total.Skipped, total.Rejected)
 
 	// A failed board is counted in total.Failed; surface it (and any sweep failure
 	// below) through the exit code so cron alerts on a degraded run.

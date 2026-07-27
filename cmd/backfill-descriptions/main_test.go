@@ -119,3 +119,100 @@ func TestBackfillScopedToSource(t *testing.T) {
 		t.Fatalf("updates = %+v, want only taleo job 1", store.updates)
 	}
 }
+
+// TestBackfillDecodesEntityEncodedDescriptions covers the second way a source can store its
+// markup as text: HTML entity-encoding ("&lt;p&gt;") rather than percent-encoding. arbeitnow
+// served bodies this way, and its feed is a rolling window, so rows that aged out of it can
+// never be repaired by a re-ingest — only in place.
+func TestBackfillDecodesEntityEncodedDescriptions(t *testing.T) {
+	store := &fakeStore{jobs: []db.Job{
+		// The arbeitnow shape: entity-encoded body plus the board's live-HTML promo footer.
+		{ID: 1, Source: "arbeitnow", Title: "A", Description: `&lt;h2&gt;Role&lt;/h2&gt;&lt;ul&gt;&lt;li&gt;Go&lt;/li&gt;&lt;/ul&gt;<p>Find more <a href="https://x.test/jobs">jobs</a></p>`},
+		// Prose that deliberately encodes a less-than sign: live tags dominate, so decoding
+		// it would corrupt the row. Must be left alone.
+		{ID: 2, Source: "arbeitnow", Title: "B", Description: `<p>Standort Düsseldorf</p><p>--&gt; Let´s go Live &lt;--</p><p>Wir suchen dich.</p>`},
+		// Already clean.
+		{ID: 3, Source: "arbeitnow", Title: "C", Description: "<p>Clean HTML.</p>"},
+	}}
+
+	scanned, updated, err := backfillAll(context.Background(), store, "arbeitnow")
+	if err != nil {
+		t.Fatalf("backfillAll: %v", err)
+	}
+	if scanned != 3 || updated != 1 {
+		t.Fatalf("scanned=%d updated=%d, want 3/1 (only the entity-encoded body)", scanned, updated)
+	}
+	if len(store.updates) != 1 || store.updates[0].ID != 1 {
+		t.Fatalf("updates = %+v, want only job 1", store.updates)
+	}
+
+	u := store.updates[0]
+	for _, want := range []string{"<h2>Role</h2>", "<li>Go</li>", `href="https://x.test/jobs"`} {
+		if !strings.Contains(u.Description, want) {
+			t.Errorf("job 1 missing decoded markup %q: %q", want, u.Description)
+		}
+	}
+	if strings.Contains(u.Description, "&lt;") {
+		t.Errorf("job 1 still entity-encoded: %q", u.Description)
+	}
+	want := jobhash.Of(hashParams(store.jobs[0], u.Description))
+	if !u.ContentHash.Valid || u.ContentHash.String != want {
+		t.Errorf("job 1 ContentHash = %+v, want %q", u.ContentHash, want)
+	}
+}
+
+// TestBackfillStripsHimalayasSelfPromo covers the third way a stored body carries text the
+// employer never wrote: Himalayas brands what it mirrors. Unlike the encoding repairs this one
+// is provider-scoped — the markers are Himalayas' own links, and only its rows may be rewritten
+// on sight of them. It is also the only repair that must fire on an otherwise well-formed body,
+// so it cannot ride on the "did anything decode?" gate the encoding repairs share.
+func TestBackfillStripsHimalayasSelfPromo(t *testing.T) {
+	promo := `<p>Join <a href="https://himalayas.app/companies/x" rel="nofollow">X</a>.</p>` +
+		`<p>Originally posted on <a href="https://himalayas.app" rel="nofollow">Himalayas</a></p>`
+	store := &fakeStore{jobs: []db.Job{
+		{ID: 1, Source: "himalayas", Title: "A", Description: promo},
+		// Same body under another provider: not ours to rewrite. A greenhouse posting that
+		// genuinely links to himalayas.app is the employer's own text.
+		{ID: 2, Source: "greenhouse", Title: "B", Description: promo},
+		// A himalayas row already cleaned by an earlier run must not be rewritten again.
+		{ID: 3, Source: "himalayas", Title: "C", Description: `<p>Join X.</p>`},
+	}}
+
+	scanned, updated, err := backfillAll(context.Background(), store, "")
+	if err != nil {
+		t.Fatalf("backfillAll: %v", err)
+	}
+	if scanned != 3 || updated != 1 {
+		t.Fatalf("scanned=%d updated=%d, want 3/1 (only the himalayas promo row)", scanned, updated)
+	}
+	if len(store.updates) != 1 || store.updates[0].ID != 1 {
+		t.Fatalf("updates = %+v, want only himalayas job 1", store.updates)
+	}
+	if want := `<p>Join X.</p>`; store.updates[0].Description != want {
+		t.Errorf("Description = %q, want %q", store.updates[0].Description, want)
+	}
+	// The row re-indexes only if content_hash moves with the text.
+	want := jobhash.Of(hashParams(store.jobs[0], store.updates[0].Description))
+	if !store.updates[0].ContentHash.Valid || store.updates[0].ContentHash.String != want {
+		t.Errorf("ContentHash = %+v, want %q", store.updates[0].ContentHash, want)
+	}
+}
+
+// TestBackfillRepairsEncodedHimalayasBody asserts the repairs compose: a himalayas row that is
+// also entity-encoded is decoded, re-sanitized, and then stripped of the branding the decode
+// just made visible.
+func TestBackfillRepairsEncodedHimalayasBody(t *testing.T) {
+	store := &fakeStore{jobs: []db.Job{{ID: 1, Source: "himalayas", Title: "A",
+		Description: `&lt;p&gt;Join us.&lt;/p&gt;&lt;p&gt;Originally posted on &lt;a href="https://himalayas.app"&gt;Himalayas&lt;/a&gt;&lt;/p&gt;`}}}
+
+	if _, updated, err := backfillAll(context.Background(), store, "himalayas"); err != nil || updated != 1 {
+		t.Fatalf("backfillAll: updated=%d err=%v, want 1/nil", updated, err)
+	}
+	got := store.updates[0].Description
+	if strings.Contains(got, "himalayas.app") || strings.Contains(got, "Originally posted on") {
+		t.Errorf("branding survived the decode: %q", got)
+	}
+	if !strings.Contains(got, "Join us.") {
+		t.Errorf("body lost: %q", got)
+	}
+}

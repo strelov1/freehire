@@ -16,7 +16,7 @@ Migrate into `design-system/src/` in phase 04. All use Svelte 5 runes + `tailwin
 
 | file | notes |
 |---|---|
-| button.svelte | variant: primary/secondary/outline/ghost; size: sm/md/lg/icon. `tv` with `buttonVariants`. |
+| button.svelte | variant: primary/secondary/outline/ghost/destructive; size: sm/md/lg/icon. `tv` with `buttonVariants`. `destructive` is the filled, irreversible-action fill (account deletion) — reversible removes stay `ghost` + destructive text. |
 | badge.svelte | variant: secondary/outline/brand. `tv` with `badgeVariants`. |
 | input.svelte | `$bindable` value, `class` pass-through via `cn()`. Focus ring via `ring-ring/50`. |
 | skeleton.svelte | Pure `animate-pulse rounded-md bg-muted` div. |

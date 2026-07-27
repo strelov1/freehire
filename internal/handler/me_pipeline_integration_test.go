@@ -82,13 +82,13 @@ func TestMyPipelineEndpoint(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	token, err := iss.Issue(userID)
+	token, err := iss.Issue(userID, testTokenVersion)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
 	h := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/tracking/pipeline", auth.RequireAuth(iss), h.TrackingPipeline)
+	app.Get("/api/v1/me/tracking/pipeline", auth.RequireAuth(iss, testVersions), h.TrackingPipeline)
 
 	t.Run("aggregates applications into buckets", func(t *testing.T) {
 		req := httptest.NewRequest(fiber.MethodGet, "/api/v1/me/tracking/pipeline", nil)

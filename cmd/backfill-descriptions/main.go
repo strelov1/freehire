@@ -6,18 +6,34 @@
 // decodes leniently (internal/sources.LenientPercentUnescape); this one-off worker fixes the
 // rows already in the catalogue.
 //
-// It pages by keyset and re-decodes every row whose description still carries the "%3C"
-// (encoded "<") marker, re-running the same sanitize+decode pipeline the fixed adapter uses and
-// refreshing content_hash so the row re-indexes. The marker is source-agnostic: any
-// percent-encoded description is repaired the same way, open or closed. Idempotent — a
-// re-decoded row no longer matches the marker, so a second run rewrites nothing.
+// It also repairs the other way a source can store markup as text: HTML entity-encoding
+// ("&lt;p&gt;"), which arbeitnow serves for part of its feed. sanitizeHTML cannot recover that on
+// its own — bluemonday reads "&lt;p&gt;" as a text node and re-encodes it — so the adapter now
+// decodes it (internal/sources.UnescapeEncodedHTML). Because the arbeitnow job-board API is a
+// rolling window of recent postings, rows that aged out of it can never be reached by a
+// re-ingest; in-place repair is the only route.
+//
+// A third kind of damage is not an encoding at all: Himalayas brands the bodies it mirrors,
+// ending every posting with an "Originally posted on Himalayas" trailer and rewriting each
+// mention of the hiring company into a backlink to its own page. The adapter now strips both
+// (internal/sources.StripHimalayasSelfPromo); because the feed is a recency-ordered window the
+// crawl only ever revisits its freshest slice, so the rows already in the catalogue can only be
+// repaired in place. Scope this one to its provider (`backfill-descriptions himalayas`).
+//
+// It pages by keyset and re-decodes every row whose description still carries an encoding marker
+// ("%3C" or "&lt;"), re-running the same sanitize+decode pipeline the fixed adapters use and
+// refreshing content_hash so the row re-indexes. The markers are source-agnostic: any encoded
+// description is repaired the same way, open or closed. Idempotent — a re-decoded row no longer
+// decodes to anything different, so a second run rewrites nothing.
 //
 // With no argument it sweeps the whole catalogue (universal). Pass a source name as the first
 // argument (e.g. `backfill-descriptions taleo`) to scope the sweep to that provider — the
 // affected rows are known to be a single provider's, and scoping skips detoasting every other
 // row, so a targeted repair does not read the whole table.
 //
-// Follow it with `make reindex` so the search/recommendation index picks up the fixed text.
+// Follow it with `cmd/backfill-derive` — the rewritten body changes what the deterministic
+// columns derive from, and role_fingerprint hashes the description — and then `make reindex` so
+// the search/recommendation index picks up the fixed text.
 package main
 
 import (
@@ -37,10 +53,20 @@ import (
 // backfillBatchSize bounds how many rows are read per keyset page.
 const backfillBatchSize = 500
 
-// encodedMarker is the fingerprint of a still-percent-encoded description: the encoded "<"
-// ("%3C") that opens every mangled HTML blob. A cleanly decoded description never contains it,
-// so it precisely selects the rows to repair without a content-scanning SQL predicate.
-const encodedMarker = "%3C"
+// A description stored still encoded carries its "<" encoded one of two ways, each the
+// signature of a different upstream habit: percent-encoded ("%3C", the strict-PathUnescape
+// fallback the Taleo adapter used to hit) or HTML entity-encoded ("&lt;", which arbeitnow
+// serves for part of its feed). Either marker selects candidate rows cheaply, without a
+// content-scanning SQL predicate.
+const (
+	percentEncodedMarker = "%3C"
+	entityEncodedMarker  = "&lt;"
+)
+
+// himalayasSource is the one provider whose stored bodies carry the aggregator's own branding
+// (a promo trailer plus self-backlinks over every company mention). Unlike the encoding markers
+// this repair is not source-agnostic: the same links under another provider are the employer's.
+const himalayasSource = "himalayas"
 
 // jobStore is the slice of the data layer the backfill needs: page rows by keyset (whole table or
 // one source) and rewrite a row's description + content_hash. *db.Queries satisfies it; the test
@@ -100,12 +126,9 @@ func backfillAll(ctx context.Context, store jobStore, source string) (scanned, u
 
 		for _, j := range jobs {
 			scanned++
-			if !strings.Contains(j.Description, encodedMarker) {
-				continue
-			}
-			desc := sources.SanitizeHTML(sources.LenientPercentUnescape(j.Description))
+			desc := repairDescription(j.Source, j.Description)
 			if desc == j.Description {
-				continue // nothing recovered — leave it be (defensive; a marker row always changes)
+				continue // clean row, or an encoding marker that turned out to be real prose
 			}
 			hash := jobhash.Of(hashParams(j, desc))
 			if _, err := store.UpdateJobDescription(ctx, db.UpdateJobDescriptionParams{
@@ -123,6 +146,40 @@ func backfillAll(ctx context.Context, store jobStore, source string) (scanned, u
 		}
 	}
 	return scanned, updated, nil
+}
+
+// repairDescription reproduces the fixed adapters' pipeline for a stored description: decode
+// whichever encoding the row was stored with, then re-sanitize, then drop the branding the
+// serving aggregator added. It returns stored unchanged when there was nothing to repair, so a
+// clean row is never rewritten (and never re-sanitized, keeping the pass free of any dependence
+// on sanitizeHTML being byte-for-byte idempotent).
+//
+// Each decoder runs only when its own marker is present, so a row mangled by one encoding is
+// never put through the other's decoder — percent-decoding an entity-encoded body would rewrite
+// unrelated "%NN"-looking prose. The entity decode is itself conditional on encoded markup
+// outweighing live markup (see sources.UnescapeEncodedHTML), which is what leaves a posting that
+// merely writes "&lt;" as a less-than sign alone.
+//
+// The de-branding is keyed on source, not on a marker: the markers are the aggregator's own
+// links, and a posting from any other provider that links to them wrote that link itself. It
+// also runs on a body nothing decoded, which is the normal case — branding rides on well-formed
+// HTML — so it sits outside the decode gate.
+func repairDescription(source, stored string) string {
+	decoded := stored
+	if strings.Contains(decoded, percentEncodedMarker) {
+		decoded = sources.LenientPercentUnescape(decoded)
+	}
+	if strings.Contains(decoded, entityEncodedMarker) {
+		decoded = sources.UnescapeEncodedHTML(decoded)
+	}
+	repaired := stored
+	if decoded != stored {
+		repaired = sources.SanitizeHTML(decoded)
+	}
+	if source == himalayasSource {
+		repaired = sources.StripHimalayasSelfPromo(repaired)
+	}
+	return repaired
 }
 
 // pageJobs fetches one keyset page after afterID — from the whole table when source is empty, or

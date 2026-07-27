@@ -16,23 +16,29 @@ UPDATE api_keys
 SET last_used_at = now()
 WHERE token_hash = $1
   AND (expires_at IS NULL OR expires_at > now())
-RETURNING user_id
+RETURNING user_id, scope
 `
 
-// Resolve a presented token (by its SHA-256 hash) to the owning user id, enforcing
-// expiry and touching last_used_at in one atomic statement. No row means the key is
-// unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401.
-func (q *Queries) AuthenticateAPIKey(ctx context.Context, tokenHash string) (int64, error) {
+type AuthenticateAPIKeyRow struct {
+	UserID int64  `json:"user_id"`
+	Scope  string `json:"scope"`
+}
+
+// Resolve a presented token (by its SHA-256 hash) to the owning user id and the key's
+// scope, enforcing expiry and touching last_used_at in one atomic statement. No row
+// means the key is unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401
+// and an insufficient scope as 403.
+func (q *Queries) AuthenticateAPIKey(ctx context.Context, tokenHash string) (AuthenticateAPIKeyRow, error) {
 	row := q.db.QueryRow(ctx, authenticateAPIKey, tokenHash)
-	var user_id int64
-	err := row.Scan(&user_id)
-	return user_id, err
+	var i AuthenticateAPIKeyRow
+	err := row.Scan(&i.UserID, &i.Scope)
+	return i, err
 }
 
 const createAPIKey = `-- name: CreateAPIKey :one
-INSERT INTO api_keys (user_id, name, token_hash, token_prefix, expires_at)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, name, token_prefix, created_at, last_used_at, expires_at
+INSERT INTO api_keys (user_id, name, token_hash, token_prefix, expires_at, scope)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, name, token_prefix, scope, created_at, last_used_at, expires_at
 `
 
 type CreateAPIKeyParams struct {
@@ -41,12 +47,14 @@ type CreateAPIKeyParams struct {
 	TokenHash   string             `json:"token_hash"`
 	TokenPrefix string             `json:"token_prefix"`
 	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	Scope       string             `json:"scope"`
 }
 
 type CreateAPIKeyRow struct {
 	ID          int64              `json:"id"`
 	Name        string             `json:"name"`
 	TokenPrefix string             `json:"token_prefix"`
+	Scope       string             `json:"scope"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	LastUsedAt  pgtype.Timestamptz `json:"last_used_at"`
 	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
@@ -54,8 +62,9 @@ type CreateAPIKeyRow struct {
 
 // Create an API key for a user. The caller passes the SHA-256 token_hash and the
 // display token_prefix; the plaintext token is shown once and never stored.
-// expires_at NULL means the key never expires. Returns display fields only, never
-// the hash.
+// expires_at NULL means the key never expires. scope confines the credential to a
+// surface ('full' for a user-created key, 'cv' for the tailoring agent's); it comes
+// from the server, never from client input. Returns display fields only, never the hash.
 func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (CreateAPIKeyRow, error) {
 	row := q.db.QueryRow(ctx, createAPIKey,
 		arg.UserID,
@@ -63,12 +72,14 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Cre
 		arg.TokenHash,
 		arg.TokenPrefix,
 		arg.ExpiresAt,
+		arg.Scope,
 	)
 	var i CreateAPIKeyRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.TokenPrefix,
+		&i.Scope,
 		&i.CreatedAt,
 		&i.LastUsedAt,
 		&i.ExpiresAt,
@@ -98,7 +109,7 @@ func (q *Queries) DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) (int
 }
 
 const listAPIKeysByUser = `-- name: ListAPIKeysByUser :many
-SELECT id, name, token_prefix, created_at, last_used_at, expires_at
+SELECT id, name, token_prefix, scope, created_at, last_used_at, expires_at
 FROM api_keys
 WHERE user_id = $1
 ORDER BY created_at DESC
@@ -108,12 +119,14 @@ type ListAPIKeysByUserRow struct {
 	ID          int64              `json:"id"`
 	Name        string             `json:"name"`
 	TokenPrefix string             `json:"token_prefix"`
+	Scope       string             `json:"scope"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	LastUsedAt  pgtype.Timestamptz `json:"last_used_at"`
 	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
 }
 
-// A user's API keys, newest first. Metadata only — never the token_hash.
+// A user's API keys, newest first. Metadata only — never the token_hash. scope is
+// included so a user can see what each credential is allowed to do.
 func (q *Queries) ListAPIKeysByUser(ctx context.Context, userID int64) ([]ListAPIKeysByUserRow, error) {
 	rows, err := q.db.Query(ctx, listAPIKeysByUser, userID)
 	if err != nil {
@@ -127,6 +140,7 @@ func (q *Queries) ListAPIKeysByUser(ctx context.Context, userID int64) ([]ListAP
 			&i.ID,
 			&i.Name,
 			&i.TokenPrefix,
+			&i.Scope,
 			&i.CreatedAt,
 			&i.LastUsedAt,
 			&i.ExpiresAt,

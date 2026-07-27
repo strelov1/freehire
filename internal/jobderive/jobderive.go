@@ -9,13 +9,13 @@ import (
 	"slices"
 
 	"github.com/strelov1/freehire/internal/classify"
-	"github.com/strelov1/freehire/internal/vocab"
 	"github.com/strelov1/freehire/internal/jobfacts"
 	"github.com/strelov1/freehire/internal/lang"
 	"github.com/strelov1/freehire/internal/location"
 	"github.com/strelov1/freehire/internal/normalize"
 	"github.com/strelov1/freehire/internal/skilltag"
 	"github.com/strelov1/freehire/internal/stringset"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // Input is the raw job content the derivation reads. Source and ExternalID are the
@@ -183,7 +183,7 @@ func Derive(in Input) Derived {
 // Engineer", "COBOL Programmer") that resolve no sub-category. A non-software
 // "…Engineer" (mechanical, drainage) matches neither detector and stays unknown.
 func deriveIsTech(category, title string) *bool {
-	if slices.Contains(vocab.TechCategories, category) || classify.IsTech(title) {
+	if TechEvidence(category, title) {
 		t := true
 		return &t
 	}
@@ -192,6 +192,16 @@ func deriveIsTech(category, title string) *bool {
 		return &f
 	}
 	return nil
+}
+
+// TechEvidence reports whether a job's category or title states a confidently technical
+// role. It is the positive half of the is_tech derivation, exposed because the ordering
+// it enforces — technical evidence before the non-tech dictionary — is load-bearing
+// outside this package too: the ingest filter and the prune rule both delete on the
+// non-tech dictionary, and that dictionary matches anywhere in a title, so without this
+// veto "Backend Engineer — Teller Systems" is removed on its accidental match.
+func TechEvidence(category, title string) bool {
+	return slices.Contains(vocab.TechCategories, category) || classify.IsTech(title)
 }
 
 // usOnly reports whether a job's geography is unpinned by the location dictionary —

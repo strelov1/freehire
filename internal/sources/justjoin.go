@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/strelov1/freehire/internal/vocab"
 	"github.com/strelov1/freehire/internal/skilltag"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // justjoin adapts justjoin.it, a Polish/CEE IT job marketplace. Boardless (one public API,

@@ -54,8 +54,12 @@ func newTailorAPI(t *testing.T) (*cvHandlers, *auth.Issuer, *pgxpool.Pool) {
 // beta gate was lifted when CV tailoring went public); credits meter the LLM spend instead.
 func buildTailorApp(h *cvHandlers, iss *auth.Issuer) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	saved := auth.RequireAuth(iss)
-	keyAuth := auth.RequireAuthOrKey(iss, h.queries)
+	saved := auth.RequireAuth(iss, testVersions)
+	// The CV surface mounts the SCOPED middleware in production, because the key the
+	// tailoring bootstrap mints is narrow (auth.ScopeCV). Mirroring that here is the
+	// point of the test: a harness on the full-scope-only middleware would reject the
+	// very credential the flow issues.
+	keyAuth := auth.RequireAuthOrScopedKey(iss, testVersions, apiKeys{h.queries}, auth.ScopeCV)
 	app.Get("/api/v1/me/cvs/:id", keyAuth, h.GetCV)
 	app.Post("/api/v1/me/cvs/tailor", saved, h.TailorCV)
 	app.Patch("/api/v1/me/cvs/:id", keyAuth, h.PatchCV)
@@ -132,7 +136,7 @@ func TestTailorCVBootstrap(t *testing.T) {
 	app := buildTailorApp(h, iss)
 
 	user := seedAccount(t, pool, "tailor@example.test", true)
-	tok, _ := iss.Issue(user)
+	tok, _ := iss.Issue(user, testTokenVersion)
 	jobID := seedJobSlug(t, pool, "backend-eng")
 
 	// No cached analysis yet → 409.
@@ -190,7 +194,7 @@ func TestTailorCVOutOfCredits(t *testing.T) {
 	ctx := context.Background()
 
 	user := seedAccount(t, pool, "poor@example.test", true)
-	tok, _ := iss.Issue(user)
+	tok, _ := iss.Issue(user, testTokenVersion)
 	jobID := seedJobSlug(t, pool, "backend-eng")
 	seedAnalysis(t, h, user, jobID)
 	seedFreshResume(t, pool, user)
@@ -269,7 +273,7 @@ func TestPatchCVViaKey(t *testing.T) {
 	}
 
 	// The owner's own cookie read sees the full contact block.
-	ownerCookie, _ := iss.Issue(owner)
+	ownerCookie, _ := iss.Issue(owner, testTokenVersion)
 	greq := httptest.NewRequest(fiber.MethodGet, path, nil)
 	greq.AddCookie(&http.Cookie{Name: auth.CookieName, Value: ownerCookie})
 	if resp, err := app.Test(greq); err != nil {

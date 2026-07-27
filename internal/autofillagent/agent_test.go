@@ -58,6 +58,12 @@ func (p plannerFunc) Plan(_ context.Context, f []autofillagent.Field, pr autofil
 	return p(f, pr)
 }
 
+// None of the forms in this file has a widget the plan targets, so reaching
+// Choose means the loop drove something it was not asked to.
+func (p plannerFunc) Choose(context.Context, autofillagent.Field, []string, autofillagent.Profile) (string, error) {
+	return "", errors.New("Choose was called for a form with no widget targets")
+}
+
 func profile() autofillagent.Profile {
 	return autofillagent.Profile{
 		"full_name": "Ilya Strelov",

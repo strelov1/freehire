@@ -111,7 +111,9 @@ type Settings struct {
 	// webhook are inert and the notify worker has nothing to deliver through.
 	// TelegramBotUsername builds the t.me deep link the SPA shows; its presence
 	// is what the public config reports as "enabled". TelegramWebhookSecret is the
-	// shared secret verified on the inbound webhook (the bot's secret_token).
+	// shared secret verified on the inbound webhook (the bot's secret_token); without
+	// it the whole feature stays off, because an empty expected secret would make the
+	// webhook admit any caller.
 	TelegramBotToken      string
 	TelegramBotUsername   string
 	TelegramWebhookSecret string
@@ -124,6 +126,12 @@ type Settings struct {
 	// sender address (e.g. notifications@freehire.me).
 	AWSRegion       string
 	NotifyEmailFrom string
+
+	// ServedHosts are the exact hostnames this deployment answers on (e.g.
+	// "freehire.me,apply.freehire.me"). Only these are honoured as an OAuth redirect
+	// origin; anything else falls back to FrontendOrigin. Empty defaults to the
+	// frontend origin's own host, so a deployment that never sets it keeps working.
+	ServedHosts []string
 
 	// ExtensionRedirectAllowlist bounds where the browser-extension connect flow
 	// may hand back a minted token: only https://<id>.chromiumapp.org redirects
@@ -184,6 +192,7 @@ func Load() Settings {
 		AWSRegion:       os.Getenv("AWS_REGION"),
 		NotifyEmailFrom: os.Getenv("NOTIFY_EMAIL_FROM"),
 
+		ServedHosts:                splitCSV(os.Getenv("SERVED_HOSTS")),
 		ExtensionRedirectAllowlist: splitCSV(os.Getenv("EXTENSION_REDIRECT_ALLOWLIST")),
 	}
 }

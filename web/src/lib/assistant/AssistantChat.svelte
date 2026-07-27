@@ -12,7 +12,15 @@
   } from '@lucide/svelte';
   import { currentUser } from '$lib/auth.svelte';
   import { errorMessage } from '$lib/utils';
-  import { createSession, listSessions, deleteSession, assistantWsUrl } from '$lib/assistant/api';
+  import {
+    createSession,
+    listSessions,
+    deleteSession,
+    assistantWsUrl,
+    NoDeviceError,
+  } from '$lib/assistant/api';
+  import RunnerSetup from '$lib/assistant/RunnerSetup.svelte';
+  import RunnerBadge from '$lib/assistant/RunnerBadge.svelte';
   import { RoyClient } from '$lib/assistant/client';
   import { initChat, reduceTurnEvent, type ChatState } from '$lib/assistant/chat';
   import { parseJobSegments } from '$lib/assistant/unfurl';
@@ -50,16 +58,16 @@
   //  - sessionLabel: name the session in the rail (kept separate from the kickoff text).
   //  - onTurnComplete: called when a turn finishes (the tailor host refreshes the CV preview).
   //  - showSessionRail: whether to render the session sidebar (off on the focused /tailor surface).
-  //  - requireBeta: gate the chat behind beta membership (default). The /tailor host sets this
-  //    false — CV tailoring is public, so its embedded chat must connect for non-beta users too,
-  //    while the standalone Agent (/my/assistant) keeps the default beta gate.
+  //  - requireBeta: kept so an embedder can still gate the chat, but the
+  //    standalone Agent no longer does. The assistant runs on the user's own
+  //    machine with their own Claude, so there is nothing to ration.
   let {
     session = undefined,
     kickoff = undefined,
     sessionLabel = undefined,
     onTurnComplete = undefined,
     showSessionRail = true,
-    requireBeta = true,
+    requireBeta = false,
   }: {
     session?: string;
     kickoff?: string;
@@ -78,6 +86,9 @@
 
   let phase = $state<Phase>('connecting');
   let error = $state<string | null>(null);
+  // Distinct from `error`: the assistant runs on the user's machine and no
+  // runner is connected. A setup step, not a failure, so it gets instructions.
+  let needsRunner = $state(false);
   // Set when the socket drops after we were live AND auto-reconnect has given up — the composer
   // disables and offers a manual Reconnect button (never a full page reload).
   let connectionLost = $state(false);
@@ -103,6 +114,10 @@
   // composer and list while a detach→attach is in flight.
   let sessions = $state<SessionItem[]>([]);
   let switching = $state(false);
+  // Creating a chat is a round trip before `switching` is ever set, and each
+  // click that lands in that window creates a real session on the server. Own
+  // flag, set on entry rather than inside openSession.
+  let creating = $state(false);
 
   // Chat (active session).
   let chat = $state<ChatState>(initChat());
@@ -385,12 +400,37 @@
       chat = initChat();
       pendingEcho = null;
       activeId = id;
+
+      // A session whose harness has exited — the runner was stopped, the
+      // laptop slept — has to be restarted before it can take input. Attaching
+      // alone would replay the transcript read-only, which looks like the chat
+      // is working right up until the first message goes nowhere.
+      if (!sessions.find((s) => s.id === id)?.live) {
+        try {
+          await client.call({ op: 'resume', session: id }, 'resumed');
+          sessions = sessions.map((s) => (s.id === id ? { ...s, live: true } : s));
+        } catch (err) {
+          // Reading it is still useful, so attach anyway and say why it cannot
+          // be continued.
+          error = resumeMessage(err);
+        }
+      }
+
       frameUnsub = client.subscribeFrames(id, (entry) => onFrame(entry.event));
       await client.call({ op: 'attach', session: id, from_seq: 0 }, 'attached');
     } finally {
       switching = false;
     }
     void scrollToBottom();
+  }
+
+  /** Why a session could not be reopened, in the user's terms. */
+  function resumeMessage(err: unknown): string {
+    const text = err instanceof Error ? err.message : String(err);
+    if (text.includes('runner_unavailable') || text.includes('device')) {
+      return 'This chat ran on your computer. Start `freehire runner` to continue it — you can still read it here.';
+    }
+    return 'This chat could not be reopened, so it is read-only.';
   }
 
   // Unwind the current attach: stop its frames, drop any in-flight turn/queue,
@@ -422,12 +462,19 @@
   }
 
   async function newChat() {
-    if (!client || switching || phase !== 'ready') return;
+    if (!client || creating || switching || phase !== 'ready') return;
+    creating = true;
     error = null;
     try {
       await createAndOpen();
     } catch (err) {
+      if (err instanceof NoDeviceError) {
+        needsRunner = true;
+        return;
+      }
       error = errorMessage(err, 'Could not start a new chat.');
+    } finally {
+      creating = false;
     }
   }
 
@@ -633,6 +680,10 @@
   </div>
 {/if}
 
+{#if needsRunner}
+  <RunnerSetup />
+{/if}
+
 {#if !allowed}
   <div class="m-3 rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
     The agent is a limited beta and isn't available for your account yet.
@@ -645,6 +696,7 @@
         {sessions}
         {activeId}
         {switching}
+        {creating}
         ready={phase === 'ready'}
         onNew={newChat}
         onSelect={selectSession}
@@ -670,13 +722,16 @@
             <button
               type="button"
               onclick={newChat}
-              disabled={switching || phase !== 'ready'}
+              disabled={creating || switching || phase !== 'ready'}
               class="flex items-center gap-1.5 rounded px-1.5 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
               title="New chat"
             >
               <Plus class="size-4" />New chat
             </button>
           {/if}
+          <!-- Where the assistant is running. Visible before a message is sent,
+               so "my machine or theirs?" is never a guess. -->
+          <div class="ml-auto"><RunnerBadge /></div>
         </div>
       {/if}
       <!-- Mobile session switcher -->
@@ -696,7 +751,7 @@
         <button
           type="button"
           onclick={newChat}
-          disabled={switching || phase !== 'ready'}
+          disabled={creating || switching || phase !== 'ready'}
           aria-label="New chat"
           title="New chat"
           class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted disabled:opacity-50"

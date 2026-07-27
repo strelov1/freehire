@@ -35,6 +35,15 @@ type fakeRepo struct {
 	// UserByID responses
 	userByIDResults []userByIDResult
 	userByIDCallIdx int
+
+	// markedVerified records that MarkEmailVerified was called.
+	markedVerified bool
+
+	// setHash / resetHash record the hash each password path stored;
+	// setPasswordVersion is the generation SetPassword reports back.
+	setHash            string
+	resetHash          string
+	setPasswordVersion int32
 }
 
 type idResult struct {
@@ -59,8 +68,9 @@ type createUserResult struct {
 }
 
 type createUserCall struct {
-	email        string
-	passwordHash string
+	email         string
+	passwordHash  string
+	emailVerified bool
 }
 
 type userByEmailResult struct {
@@ -94,8 +104,8 @@ func (f *fakeRepo) LinkOrCreateByEmail(_ context.Context, provider, providerUser
 	return r.id, r.err
 }
 
-func (f *fakeRepo) CreateUser(_ context.Context, email, passwordHash string) (User, error) {
-	f.createUserCalls = append(f.createUserCalls, createUserCall{email, passwordHash})
+func (f *fakeRepo) CreateUser(_ context.Context, email, passwordHash string, emailVerified bool) (User, error) {
+	f.createUserCalls = append(f.createUserCalls, createUserCall{email, passwordHash, emailVerified})
 	if f.createUserCallIdx >= len(f.createUserResults) {
 		return User{}, errors.New("fakeRepo: unexpected CreateUser call")
 	}
@@ -111,6 +121,30 @@ func (f *fakeRepo) UserByEmail(_ context.Context, email string) (User, string, b
 	r := f.userByEmailResults[f.userByEmailCallIdx]
 	f.userByEmailCallIdx++
 	return r.user, r.passwordHash, r.hasPassword, r.err
+}
+
+func (f *fakeRepo) MarkEmailVerified(_ context.Context, _ int64) error {
+	f.markedVerified = true
+	return nil
+}
+
+func (f *fakeRepo) PasswordHash(_ context.Context, _ int64) (string, bool, error) {
+	if f.userByEmailCallIdx >= len(f.userByEmailResults) {
+		return "", false, ErrUserNotFound
+	}
+	r := f.userByEmailResults[f.userByEmailCallIdx]
+	f.userByEmailCallIdx++
+	return r.passwordHash, r.hasPassword, r.err
+}
+
+func (f *fakeRepo) SetPassword(_ context.Context, _ int64, passwordHash string) (int32, error) {
+	f.setHash = passwordHash
+	return f.setPasswordVersion, nil
+}
+
+func (f *fakeRepo) ResetPassword(_ context.Context, _ int64, passwordHash string) (int32, error) {
+	f.resetHash = passwordHash
+	return f.setPasswordVersion, nil
 }
 
 func (f *fakeRepo) UserByID(_ context.Context, id int64) (User, error) {
@@ -466,11 +500,15 @@ func TestLogin_WrongPassword(t *testing.T) {
 	}
 }
 
-// Login success → returns user.
+// Login success → returns user, flagged as password-backed.
 func TestLogin_Happy(t *testing.T) {
-	wantUser := User{ID: 5, Email: "user@example.com"}
+	stored := User{ID: 5, Email: "user@example.com"}
+	// The lookup row does not carry HasPassword; Login sets it, because authenticating
+	// by password is itself the proof that one exists.
+	wantUser := stored
+	wantUser.HasPassword = true
 	repo := &fakeRepo{
-		userByEmailResults: []userByEmailResult{{user: wantUser, passwordHash: "hashed:correct", hasPassword: true}},
+		userByEmailResults: []userByEmailResult{{user: stored, passwordHash: "hashed:correct", hasPassword: true}},
 	}
 	svc := New(repo, &fakeHasher{})
 
@@ -514,5 +552,22 @@ func TestUserByID_NotFound(t *testing.T) {
 	_, err := svc.UserByID(context.Background(), 99)
 	if !errors.Is(err, ErrUserNotFound) {
 		t.Errorf("want ErrUserNotFound, got %v", err)
+	}
+}
+
+// Login answers with the same wire shape as /auth/me, so a client that renders the
+// password UI from it must not be told the account is passwordless when it is not.
+func TestLoginReportsThatTheAccountHasAPassword(t *testing.T) {
+	repo := &fakeRepo{userByEmailResults: []userByEmailResult{
+		{user: User{ID: 7, Email: "user@example.test"}, passwordHash: "hashed:pw", hasPassword: true},
+	}}
+	s := New(repo, &fakeHasher{})
+
+	user, err := s.Login(context.Background(), "user@example.test", "pw")
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if !user.HasPassword {
+		t.Error("login returned HasPassword false for an account that just authenticated by password")
 	}
 }

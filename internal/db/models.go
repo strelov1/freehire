@@ -19,6 +19,7 @@ type ApiKey struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	LastUsedAt  pgtype.Timestamptz `json:"last_used_at"`
 	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	Scope       string             `json:"scope"`
 }
 
 type BoardHealth struct {
@@ -373,6 +374,16 @@ type ProcessedViewLog struct {
 	ProcessedAt pgtype.Timestamptz `json:"processed_at"`
 }
 
+type PrunedJob struct {
+	ID          int64              `json:"id"`
+	Source      string             `json:"source"`
+	ExternalID  string             `json:"external_id"`
+	Title       string             `json:"title"`
+	CompanySlug string             `json:"company_slug"`
+	Rule        string             `json:"rule"`
+	PrunedAt    pgtype.Timestamptz `json:"pruned_at"`
+}
+
 type ReferralOffer struct {
 	ID             int64              `json:"id"`
 	UserID         int64              `json:"user_id"`
@@ -481,7 +492,7 @@ type Thread struct {
 	AnchorPath   pgtype.Text        `json:"anchor_path"`
 	Title        string             `json:"title"`
 	Body         string             `json:"body"`
-	AuthorUserID int64              `json:"author_user_id"`
+	AuthorUserID pgtype.Int8        `json:"author_user_id"`
 	ReplyCount   int32              `json:"reply_count"`
 	Status       string             `json:"status"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
@@ -512,6 +523,17 @@ type User struct {
 	ResumeStructuredModel      pgtype.Text        `json:"resume_structured_model"`
 	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
 	BetaTester                 bool               `json:"beta_tester"`
+	EmailVerified              bool               `json:"email_verified"`
+	TokenVersion               int32              `json:"token_version"`
+}
+
+type UserEmailCode struct {
+	UserID    int64              `json:"user_id"`
+	Purpose   string             `json:"purpose"`
+	CodeHash  string             `json:"code_hash"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	Attempts  int32              `json:"attempts"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type UserIdentity struct {

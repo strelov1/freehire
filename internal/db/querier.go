@@ -20,10 +20,11 @@ type Querier interface {
 	// tuple) so a file's rows land in a single round trip; view_count accumulates across
 	// a job's day-rows, and additivity lets a day spanning two rotated files sum right.
 	ApplyDailyView(ctx context.Context, arg []ApplyDailyViewParams) *ApplyDailyViewBatchResults
-	// Resolve a presented token (by its SHA-256 hash) to the owning user id, enforcing
-	// expiry and touching last_used_at in one atomic statement. No row means the key is
-	// unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401.
-	AuthenticateAPIKey(ctx context.Context, tokenHash string) (int64, error)
+	// Resolve a presented token (by its SHA-256 hash) to the owning user id and the key's
+	// scope, enforcing expiry and touching last_used_at in one atomic statement. No row
+	// means the key is unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401
+	// and an insufficient scope as 403.
+	AuthenticateAPIKey(ctx context.Context, tokenHash string) (AuthenticateAPIKeyRow, error)
 	// Find the ashby board already carrying a job with this Ashby job id — for company careers
 	// pages that embed Ashby via the ashby_jid widget param (the board slug is JS-rendered, absent
 	// from the URL/markup). external_id is "<board>:<uuid>"; served by the
@@ -34,6 +35,13 @@ type Querier interface {
 	// in the URL/page). external_id is "<board>:<id>"; served by the
 	// (split_part(external_id,':',2)) WHERE source='greenhouse' partial index.
 	BoardByGreenhouseJobID(ctx context.Context, jobID string) (string, error)
+	// Count one failed confirmation and return the new total, so the caller can burn the code
+	// once it reaches the ceiling. Atomic, so concurrent guesses cannot share an attempt.
+	BumpEmailCodeAttempts(ctx context.Context, arg BumpEmailCodeAttemptsParams) (int32, error)
+	// Invalidate every token issued for this account (sign out everywhere) by advancing
+	// the generation, returning the new value so the caller can immediately mint a
+	// replacement session for whoever asked.
+	BumpUserTokenVersion(ctx context.Context, id int64) (int32, error)
 	// Whether a builder CV is owned by a user — the authorization check before attaching a
 	// 'built' CV to a request, so a seeker cannot reference someone else's cv_id.
 	CVBelongsToUser(ctx context.Context, arg CVBelongsToUserParams) (bool, error)
@@ -193,6 +201,21 @@ type Querier interface {
 	// (ties broken by value), serving the searchable option list for the subindustry facet.
 	// Counts are unconditional — they do not reflect other active list filters.
 	CompanySubindustries(ctx context.Context) ([]CompanySubindustriesRow, error)
+	// Whether each company has EVER shown technical evidence, over its entire history
+	// including closed and duplicate rows. "This company never posts anything technical"
+	// is the premise of the company-scoped pruning rules, and it has to rest on the
+	// maximum available evidence — restricting it to open jobs would let a company whose
+	// one engineering role closed last month read as having none.
+	//
+	// any_skills is the weaker second signal: the skill dictionary firing on a description
+	// means the posting had technical content even when neither the title nor the category
+	// resolved. A company with neither signal has shown nothing technical at all.
+	// Postings with no company are excluded: they would otherwise pool into one
+	// pseudo-company per source whose combined evidence then decides every one of them.
+	//
+	// This is an uncapped full-table GROUP BY over the whole jobs table, returning a row
+	// per company. It is computed once per prune run, not per batch.
+	CompanyTechEvidence(ctx context.Context) ([]CompanyTechEvidenceRow, error)
 	// Promote a suggested link to a confirmed one: the suggestion becomes job_id with
 	// link_source 'manual'. No-op (0 rows) when there is no pending suggestion.
 	ConfirmEmailLink(ctx context.Context, arg ConfirmEmailLinkParams) (int64, error)
@@ -235,8 +258,9 @@ type Querier interface {
 	CountUserJobs(ctx context.Context, userID int64) (CountUserJobsRow, error)
 	// Create an API key for a user. The caller passes the SHA-256 token_hash and the
 	// display token_prefix; the plaintext token is shown once and never stored.
-	// expires_at NULL means the key never expires. Returns display fields only, never
-	// the hash.
+	// expires_at NULL means the key never expires. scope confines the credential to a
+	// surface ('full' for a user-created key, 'cv' for the tailoring agent's); it comes
+	// from the server, never from client input. Returns display fields only, never the hash.
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (CreateAPIKeyRow, error)
 	// Insert a new CV for a user. data is the sanitized structured document (JSON). job_id
 	// defaults NULL (the tailoring seam is unused in phase 1). Returns the metadata the list
@@ -283,6 +307,9 @@ type Querier interface {
 	// Register a new account. email is stored as given (the handler lowercases it);
 	// the unique index on lower(email) rejects duplicates regardless of case. role is
 	// returned so the new account's wire shape carries it (always 'user' at creation).
+	// email_verified is a parameter, not a default: a password registration starts
+	// unverified, while an account created from an OAuth sign-in is verified at birth
+	// because the provider already proved the address.
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
 	// Link a provider identity to an account (first OAuth sign-in). The composite
 	// primary key rejects a duplicate identity.
@@ -347,6 +374,9 @@ type Querier interface {
 	// absent.
 	DeleteCompanyVote(ctx context.Context, arg DeleteCompanyVoteParams) error
 	DeleteEmailClassificationOutbox(ctx context.Context, id int64) error
+	// Consume the code (on success) or burn it (on too many attempts). Idempotent: deleting
+	// an absent code is a no-op, so a double submit cannot fail the request.
+	DeleteEmailCode(ctx context.Context, arg DeleteEmailCodeParams) error
 	// Purge one source's mail for a user (Gmail disconnect passes 'gmail', mailbox
 	// release passes 'hosted') — the other source's mail is left untouched.
 	DeleteEmailsBySource(ctx context.Context, arg DeleteEmailsBySourceParams) error
@@ -374,6 +404,12 @@ type Querier interface {
 	DeleteSubscription(ctx context.Context, arg DeleteSubscriptionParams) (int64, error)
 	// Unlink Telegram. Returns the affected row count: 0 means there was no link.
 	DeleteTelegramLink(ctx context.Context, userID int64) (int64, error)
+	// Erase the account. Every user-owned table declares ON DELETE CASCADE, so this one
+	// statement is the whole database side of account deletion; the trails that outlive
+	// the member (jobs.created_by, *.reviewed_by, referral decisions, thread authorship)
+	// are ON DELETE SET NULL by design. Objects in storage are NOT reachable from here —
+	// the caller deletes them first (see ListUserBlobKeys).
+	DeleteUser(ctx context.Context, id int64) error
 	// Remove the caller's profile. Returns the affected row count (0 when none existed); the
 	// handler treats delete as idempotent (204 either way).
 	DeleteUserProfile(ctx context.Context, userID int64) (int64, error)
@@ -456,6 +492,16 @@ type Querier interface {
 	// doubles as the crash reaper, so a failed entry is never reprocessed within the
 	// same run. Mirrors RecordEnrichmentFailure / RecordSemanticFailure.
 	FailEmailClassification(ctx context.Context, arg FailEmailClassificationParams) error
+	// Resolve a job page URL to the posting stored under it — the second tier of
+	// /api/v1/jobs/find, used when no (source, external_id) identity can be read out of the
+	// URL. Both sides go through normalize_job_url (migration 0042), so a link differing only
+	// by scheme, www., tracking query, fragment, case or trailing slash still matches; the
+	// same expression backs jobs_normalized_url_idx, so this is an index lookup.
+	// Scoped to open canonical rows, matching that partial index: a closed or suppressed
+	// posting is not one to show a match card for. Two open rows may share a URL (an
+	// aggregator and an ATS row the dedup passes have not collapsed), so the most recently
+	// confirmed one wins, with id as the deterministic tiebreak.
+	FindOpenJobByURL(ctx context.Context, url string) (string, error)
 	// Read-only balance for display (no lock, no LLM). Returns no rows for a user who has never
 	// had credit activity; the caller treats that as a full monthly grant remaining.
 	GetBalance(ctx context.Context, userID int64) (GetBalanceRow, error)
@@ -476,6 +522,10 @@ type Querier interface {
 	GetCVByID(ctx context.Context, arg GetCVByIDParams) (GetCVByIDRow, error)
 	// Community discussion threads (see the add-community-threads change). Read paths
 	// join community_personas so a row carries the author's handle, never their user_id.
+	// Every such join is a LEFT JOIN: content outlives its author (a deleted account
+	// leaves author_user_id NULL), and an inner join would drop it from the listings
+	// instead. A null handle therefore means "no live author", which the API renders as
+	// either a deleted member or the AI persona.
 	// A user's stable pseudonymous handle, or no row when they have never posted.
 	GetCommunityPersona(ctx context.Context, userID int64) (CommunityPersona, error)
 	// A single thread with its author handle.
@@ -487,6 +537,10 @@ type Querier interface {
 	// The caller's current vote for a company (0 when none). Always returns one row.
 	GetCompanyVote(ctx context.Context, arg GetCompanyVoteParams) (int16, error)
 	GetEmail(ctx context.Context, arg GetEmailParams) (GetEmailRow, error)
+	// The outstanding code for a purpose. No row means nothing was issued or it was consumed;
+	// the caller treats pgx.ErrNoRows as "request a new code". Expiry and the attempt ceiling
+	// are enforced by the caller, which must fail identically for expired and wrong codes.
+	GetEmailCode(ctx context.Context, arg GetEmailCodeParams) (GetEmailCodeRow, error)
 	// Aggregate interaction counts for the public engagement endpoint. Aggregate-only:
 	// every column is a scalar total, so no user identifier or row-level field is
 	// selected. saved / applied are user_jobs interaction-row totals across all users.
@@ -577,10 +631,13 @@ type Querier interface {
 	GetUserApplication(ctx context.Context, arg GetUserApplicationParams) (GetUserApplicationRow, error)
 	// Login lookup. Case-insensitive on email; returns password_hash so the handler
 	// can verify the password (and reject accounts that have none). role feeds the
-	// post-login wire shape.
+	// post-login wire shape. email_verified drives both the "confirm your email" prompt
+	// and the OAuth merge policy (an unverified account is seized, not silently joined).
 	GetUserByEmail(ctx context.Context, lower string) (GetUserByEmailRow, error)
-	// Profile lookup for the authenticated user. Never selects password_hash. role is
-	// included so /auth/me can tell a client whether to surface moderator-only UI.
+	// Profile lookup for the authenticated user. role is included so /auth/me can tell a
+	// client whether to surface moderator-only UI. The password hash itself never leaves
+	// the database — only whether one exists, which is what lets the SPA offer a password
+	// change to password accounts and explain itself to OAuth-only ones.
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
 	// OAuth sign-in fast path: resolve a provider identity straight to its user.
 	GetUserByIdentity(ctx context.Context, arg GetUserByIdentityParams) (GetUserByIdentityRow, error)
@@ -595,6 +652,10 @@ type Querier interface {
 	// The caller's current stage for one application (empty string when unset), so the
 	// worker can decide a monotonic-forward advancement.
 	GetUserJobStage(ctx context.Context, arg GetUserJobStageParams) (string, error)
+	// The account's stored password hash, for verifying a current password on change.
+	// NULL when the account is passwordless (OAuth-only), which the caller treats the same
+	// as a wrong password: there is nothing to verify against.
+	GetUserPasswordHash(ctx context.Context, id int64) (pgtype.Text, error)
 	// The caller's single profile, keyed by user_id. No matching row means the user has not
 	// saved a profile yet (the handler maps that to a null payload / 404 on sub-resources).
 	GetUserProfile(ctx context.Context, userID int64) (UserProfile, error)
@@ -614,6 +675,10 @@ type Querier interface {
 	// request to a role-gated endpoint and needs only the role, so it does not drag the
 	// full user row (the GetJobIDBySlug precedent for a hot-path read).
 	GetUserRole(ctx context.Context, id int64) (string, error)
+	// The account's current session generation, read on every authenticated request to
+	// decide whether a correctly-signed token was revoked. One primary-key lookup; this
+	// is the price of making a stateless JWT revocable at all.
+	GetUserTokenVersion(ctx context.Context, id int64) (int32, error)
 	IncrementThreadReplyCount(ctx context.Context, id int64) error
 	// Mint a persona. ON CONFLICT (user_id) DO NOTHING makes a concurrent same-user mint
 	// return no row (the repository re-reads the winner); a handle-unique violation is a
@@ -664,7 +729,8 @@ type Querier interface {
 	// Manually link (or relink) an email to a chosen application, overriding any
 	// auto-link or suggestion.
 	LinkEmailToJob(ctx context.Context, arg LinkEmailToJobParams) (int64, error)
-	// A user's API keys, newest first. Metadata only — never the token_hash.
+	// A user's API keys, newest first. Metadata only — never the token_hash. scope is
+	// included so a user can see what each credential is allowed to do.
 	ListAPIKeysByUser(ctx context.Context, userID int64) ([]ListAPIKeysByUserRow, error)
 	// Every active subscription with the data the matching worker needs: the saved
 	// search query to translate into a filter, plus identity/channel for fan-out. The
@@ -903,8 +969,8 @@ type Querier interface {
 	// Base CVs (job_id NULL) are excluded; the JOIN also drops tailored CVs whose job was deleted.
 	ListTailoredCVsByUser(ctx context.Context, userID int64) ([]ListTailoredCVsByUserRow, error)
 	ListThreadRepliesAfter(ctx context.Context, arg ListThreadRepliesAfterParams) ([]ListThreadRepliesAfterRow, error)
-	// First page of a thread's replies, oldest first. LEFT JOIN so a future AI reply
-	// (null author) still returns, with a null handle the API renders as the AI persona.
+	// First page of a thread's replies, oldest first. LEFT JOIN so an authorless reply
+	// still returns — a future AI reply, or one whose author deleted their account.
 	ListThreadRepliesFirst(ctx context.Context, arg ListThreadRepliesFirstParams) ([]ListThreadRepliesFirstRow, error)
 	// Every board currently failing or cooled down, worst first — the operator's
 	// "what's broken" query and the source of the per-run summary log.
@@ -912,6 +978,13 @@ type Querier interface {
 	// The caller's open applications offered to the matcher (applied, saved, or staged),
 	// as (job_id, company). Closed postings are excluded.
 	ListUserApplicationsForMatch(ctx context.Context, userID int64) ([]ListUserApplicationsForMatchRow, error)
+	// Every object-storage key the account owns, in one read: the stored CV, each
+	// referral-proof PDF, and the raw MIME of each hosted email. Account deletion
+	// collects these BEFORE deleting any row — the mail and proof keys live in the rows
+	// themselves, so once those are gone the objects are unreachable and would sit in
+	// the bucket forever. Empty keys are filtered out so a caller never asks storage to
+	// delete "".
+	ListUserBlobKeys(ctx context.Context, id int64) ([]pgtype.Text, error)
 	// Existing thread→application links for the caller, so the matcher can continue a
 	// thread already attached to an application.
 	ListUserEmailThreadLinks(ctx context.Context, userID int64) ([]ListUserEmailThreadLinksRow, error)
@@ -1041,6 +1114,49 @@ type Querier interface {
 	// coalesced/cast to bigint so it reads as a plain int64 (an all-failing provider
 	// yields 0, not NULL).
 	ProviderHealthRollup(ctx context.Context) ([]ProviderHealthRollupRow, error)
+	// One keyset page of rows the prune rule evaluates, ordered by id.
+	//
+	// Closed rows are included deliberately. Once ingest rejects a board's non-technical
+	// postings, the 48-hour unseen sweep closes the ones already in the catalogue — so a
+	// scan restricted to open jobs would leave exactly the rows the campaign is about to
+	// stop replacing, permanently. Duplicates are included too: one may match a rule while
+	// its canonical does not, and nothing references a duplicate, so removing it alone is
+	// safe.
+	//
+	// external_id carries the board: the write path namespaces it as "<board>:<native id>",
+	// and the board is what the source files are keyed on. Matching on it is exact, where
+	// matching on company_slug is not — many adapters take the company name from the
+	// posting payload rather than the board entry, so the two spellings diverge.
+	PruneCandidates(ctx context.Context, arg PruneCandidatesParams) ([]PruneCandidatesRow, error)
+	// Permanently remove a batch of jobs and record what was removed, in ONE statement.
+	// Splitting the two would let the archive drift from the deletion, and the archive is
+	// the only way to answer, after an irreversible removal, whether something was taken
+	// that should have been kept.
+	//
+	// The batch extends to each target's whole duplicate CHAIN, not just its immediate
+	// duplicates. jobs.duplicate_of is the one foreign key to jobs that restricts, and it
+	// chains: RecomputeRoleDuplicatesForCompany and the aggregator suppression both scope
+	// to open jobs, so a closed row's pointer is never repointed when its parent later
+	// becomes a duplicate itself — and the prune scan reaches closed rows by design. A
+	// one-level extension would leave the tail pointing at a deleted row and the whole
+	// batch would abort on the foreign key. UNION (not UNION ALL) terminates a cycle.
+	//
+	// Semantically the chain belongs together anyway: the duplicates of a cook posting are
+	// cook postings, and they inherit the rule that named their root.
+	//
+	// DISTINCT ON collapses a row reachable more than once, which would otherwise violate
+	// the archive's primary key and take the batch down. It orders direct matches first so
+	// a row named outright keeps its own rule rather than an arbitrary one — the archive's
+	// purpose is auditing a rule in isolation, which a nondeterministic rule defeats.
+	//
+	// Every other reference to jobs cascades or nulls, so a user's saved job goes with it.
+	// That is an accepted cost of the campaign, not an oversight.
+	//
+	// Returns the ids actually deleted, which the caller mirrors into the search index.
+	// The two parameter arrays are positionally paired. They are unnested separately and
+	// rejoined on ordinality because sqlc cannot infer the types of a multi-argument
+	// unnest over query parameters.
+	PruneJobs(ctx context.Context, arg PruneJobsParams) ([]int64, error)
 	// One row per company with its current open-count and the open-count as of @prev_ts,
 	// from a single scan of jobs over canonical rows only (same count(*) FILTER idiom as
 	// insights_role_stats). open_count uses closed_at IS NULL (open now); open_count_prev
@@ -1205,6 +1321,48 @@ type Querier interface {
 	// expired probes can close a job. Guarded to the non-zero case so probing an
 	// already-clean job does not churn the row.
 	ResetLivenessStrikes(ctx context.Context, id int64) error
+	// Complete a reset-by-emailed-code: set the new hash, revoke every session, and mark
+	// the address verified — receiving the code IS proof of control, so a reset doubles as
+	// verification and an unverified account stops being a merge target.
+	ResetUserPassword(ctx context.Context, arg ResetUserPasswordParams) (int32, error)
+	// Catalogue pruning: the queries that find, and eventually remove, jobs that do not
+	// belong on an IT job board. See the catalog-pruning capability spec.
+	// The residual unclassified mass grouped into clusters an operator can act on: the
+	// word groups occurring most often in the titles of live jobs that carry no is_tech
+	// signal. Grouping is by word group, not by whole title, because boards append
+	// location, schedule and requisition detail — half the unclassified mass has a title
+	// that occurs exactly once, so whole-title grouping splits one role into singletons.
+	// A word group is also the unit the non-tech dictionary accepts, so a reported
+	// cluster is directly usable as an anchored term.
+	//
+	// A title is first split at punctuation into runs, and groups are formed only WITHIN
+	// a run. Without that, adjacency spans separators and invents phrases that never
+	// occur: "Personal Care Aide - Honolulu" would yield "aide honolulu", and a term
+	// copied from that cluster into the dictionary would match none of the jobs that
+	// produced it, because the dictionary matches contiguous text. It also inflated the
+	// counts of legitimate clusters by every occurrence that straddled punctuation.
+	//
+	// Two-word groups carry the ordinary case. Three-word groups exist only to bridge a
+	// connector: in Portuguese and Spanish the preposition is part of the role name
+	// ("operador de caixa"), while the two-word fragments around it ("analista de") are
+	// noise, so a connector is allowed mid-group and never at an edge. Every other edge
+	// token must be at least three characters and non-numeric, which keeps requisition
+	// numbers and shredded schedule notation ("m w", "req 12345") out of the ranking.
+	// The vocabularies are COALESCEd: a NULL parameter would make every <> ALL(...)
+	// comparison NULL and silently return zero rows — indistinguishable from the
+	// campaign having exhausted the residual mass, which is the one wrong answer this
+	// report must never give.
+	//
+	// Tokenizing on [^[:alnum:]]+ is Unicode-aware, so accented Latin and Cyrillic
+	// survive whole — an ASCII class would split "Técnico" and lose the cluster.
+	// Closed and duplicate rows are excluded: only a live, canonical posting is worth a
+	// dictionary term.
+	// count(*) is the job count, not an approximation of it: the two branches cannot
+	// emit the same group (a group's space count fixes its branch, and tokens hold no
+	// spaces), and each branch already emits DISTINCT (id, source, group) — which is
+	// what stops a group repeated inside one verbose title from outranking a real
+	// cluster. A second count(DISTINCT id) would only add a per-group sort.
+	ResidualTitleGroups(ctx context.Context, arg ResidualTitleGroupsParams) ([]ResidualTitleGroupsRow, error)
 	// Mark a sent request contacted or declined, recording the acting referrer and time. The
 	// status='sent' guard makes it race-safe: whichever referrer acts first wins; a second
 	// attempt matches no row (mapped to "already resolved").
@@ -1247,6 +1405,11 @@ type Querier interface {
 	// Save (bookmark) a job for a user. Idempotent and independent of a prior view:
 	// it inserts the row (viewed_at defaults) or refreshes saved_at in place.
 	SaveJob(ctx context.Context, arg SaveJobParams) (UserJob, error)
+	// Hand an unverified, password-backed account to the proven owner of its address when a
+	// provider-verified OAuth identity arrives for it: the password is destroyed and every
+	// session revoked, so a squatter who registered the address first loses both ways in.
+	// Returns the new generation for the session the sign-in is about to mint.
+	SeizeUnverifiedAccount(ctx context.Context, id int64) (int32, error)
 	// Orphan-job liveness (probe-orphan-job-liveness): open jobs whose source is NOT a
 	// registered ATS board provider — the sources no ingest run re-crawls and the sweep
 	// therefore never closes (telegram, habr_career, geekjob, …). The caller passes the
@@ -1300,6 +1463,13 @@ type Querier interface {
 	SetSubscriptionActive(ctx context.Context, arg SetSubscriptionActiveParams) (Subscription, error)
 	// Cache the derived CV ATS review for the user (keyed to their stored CV).
 	SetUserATSAnalysis(ctx context.Context, arg SetUserATSAnalysisParams) error
+	// Record that control of the address was proven. Idempotent — confirming twice is a
+	// no-op rather than an error, so a double-submitted code does not fail the request.
+	SetUserEmailVerified(ctx context.Context, id int64) error
+	// Change a known password. Revokes every other session in the same statement, so a
+	// stolen token cannot outlive the password it was minted under. Does NOT touch
+	// email_verified: knowing the current password proves nothing about the address.
+	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (int32, error)
 	// Record (or replace) the user's stored-résumé pointer, stamping the upload time.
 	// Owner-scoped by id; the object key is derived from the id, never client input.
 	// Also clears any cached ATS review so a new CV is never scored with a stale one.
@@ -1439,6 +1609,11 @@ type Querier interface {
 	// Store a Gmail message, idempotent by (user_id, source, external_id) with
 	// source fixed to 'gmail'; the hosted path has its own insert (InsertHostedMessage).
 	UpsertEmail(ctx context.Context, arg UpsertEmailParams) error
+	// Issue (or replace) the outstanding code for one purpose. The composite primary key
+	// makes this the whole "at most one live code per (user, purpose)" rule: a resend
+	// overwrites the hash and expiry and resets attempts, so a burnt code never lingers
+	// beside a fresh one. created_at is re-stamped, which is what the resend cooldown reads.
+	UpsertEmailCode(ctx context.Context, arg UpsertEmailCodeParams) error
 	// Connect (or reconnect) a user's Gmail: store the encrypted refresh token and
 	// mark connected, preserving the sync cursor on reconnect.
 	UpsertGmailConnection(ctx context.Context, arg UpsertGmailConnectionParams) error
@@ -1517,6 +1692,10 @@ type Querier interface {
 	// facet arrays (regions/remote_regions/countries/domains/company_types/company_sizes)
 	// are left untouched. Idempotent: re-running the same entry rewrites the same values.
 	UpsertYCCompany(ctx context.Context, arg UpsertYCCompanyParams) error
+	// Slim email lookup for the delete-account confirmation, which compares the typed
+	// address against the caller's own. A primitive so the handler needs no full user row
+	// (same shape as GetUserRole).
+	UserEmail(ctx context.Context, id int64) (string, error)
 	// Whether a user has a stored original résumé — the check before attaching an 'original'
 	// CV to a request, so a seeker cannot request with a résumé they never uploaded.
 	UserHasResume(ctx context.Context, id int64) (bool, error)

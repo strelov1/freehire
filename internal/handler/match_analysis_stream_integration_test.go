@@ -58,7 +58,7 @@ func TestMatchAnalysisStreamEndpoint(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	token, _ := iss.Issue(userID)
+	token, _ := iss.Issue(userID, testTokenVersion)
 
 	storeWithCV := func() *resume.Store {
 		s := resume.New(newFakeResumeBlobs(), &fakeResumeRepo{})
@@ -73,13 +73,13 @@ func TestMatchAnalysisStreamEndpoint(t *testing.T) {
 
 	appFor := func(store *resume.Store, an *matchanalysis.Analyzer) *fiber.App {
 		h := &matchHandlers{
-			queries: queries,
+			queries:     queries,
 			userProfile: userprofile.New(ownedProfile()),
 			resume:      store, matchAnalysis: an, matchAnalysisCache: queries,
 			credits: credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}),
 		}
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-		app.Get("/api/v1/jobs/:slug/fit/stream", auth.RequireAuth(iss), h.StreamMatchAnalysis)
+		app.Get("/api/v1/jobs/:slug/fit/stream", auth.RequireAuth(iss, testVersions), h.StreamMatchAnalysis)
 		return app
 	}
 

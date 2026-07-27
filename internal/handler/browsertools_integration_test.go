@@ -20,8 +20,8 @@ import (
 // rather than a nil interface.
 type noKeys struct{}
 
-func (noKeys) AuthenticateAPIKey(context.Context, string) (int64, error) {
-	return 0, errors.New("no such key")
+func (noKeys) AuthenticateAPIKey(context.Context, string) (auth.APIKeyIdentity, error) {
+	return auth.APIKeyIdentity{}, errors.New("no such key")
 }
 
 // wireServer starts the /tools/ws route on a real listener — a WebSocket needs an
@@ -30,7 +30,7 @@ func wireServer(t *testing.T, iss *auth.Issuer) string {
 	t.Helper()
 	a := &API{issuer: iss, browserTools: browsertools.New()}
 	app := fiber.New()
-	app.Get("/api/v1/tools/ws", auth.RequireAuthWS(iss, noKeys{}), a.BrowserToolsWS())
+	app.Get("/api/v1/tools/ws", auth.RequireAuthWS(iss, testVersions, noKeys{}), a.BrowserToolsWS())
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -76,7 +76,7 @@ func readFrame(t *testing.T, conn *ws.Conn) string {
 
 func TestBrowserToolsWS_CarriesACallAndItsResultBetweenTheUsersOwnEnds(t *testing.T) {
 	iss := auth.NewIssuer("secret", time.Hour)
-	token, err := iss.Issue(7)
+	token, err := iss.Issue(7, testTokenVersion)
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestBrowserToolsWS_CarriesACallAndItsResultBetweenTheUsersOwnEnds(t *testin
 
 func TestBrowserToolsWS_AnswersACallWithNoExtensionInsteadOfHanging(t *testing.T) {
 	iss := auth.NewIssuer("secret", time.Hour)
-	token, _ := iss.Issue(7)
+	token, _ := iss.Issue(7, testTokenVersion)
 	harness := dial(t, wireServer(t, iss), "harness", token)
 
 	if err := harness.WriteMessage(ws.TextMessage, []byte(`{"id":"c9","tool":"read_form"}`)); err != nil {
@@ -125,8 +125,8 @@ func TestBrowserToolsWS_AnswersACallWithNoExtensionInsteadOfHanging(t *testing.T
 
 func TestBrowserToolsWS_DoesNotBridgeBetweenUsers(t *testing.T) {
 	iss := auth.NewIssuer("secret", time.Hour)
-	tokenA, _ := iss.Issue(1)
-	tokenB, _ := iss.Issue(2)
+	tokenA, _ := iss.Issue(1, testTokenVersion)
+	tokenB, _ := iss.Issue(2, testTokenVersion)
 	base := wireServer(t, iss)
 
 	extensionB := dial(t, base, "extension", tokenB)
@@ -165,7 +165,7 @@ func TestBrowserToolsWS_RefusesAnUnauthenticatedHandshake(t *testing.T) {
 
 func TestBrowserToolsWS_EchoesOnlyTheSubprotocolMarkerNeverTheToken(t *testing.T) {
 	iss := auth.NewIssuer("secret", time.Hour)
-	token, _ := iss.Issue(7)
+	token, _ := iss.Issue(7, testTokenVersion)
 
 	conn := dial(t, wireServer(t, iss), "extension", token)
 

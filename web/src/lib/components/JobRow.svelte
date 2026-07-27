@@ -263,13 +263,36 @@
     <p class="mt-2 line-clamp-2 text-sm text-muted-foreground">{blurb}</p>
   {/if}
 
-  <!-- pr-9 (when the hide control is present) reserves the bottom-right corner for
+  <!-- sm:pr-9 (when the hide control is present) reserves the bottom-right corner for
        it — the counterpart to the header's pr-9 for the save button — so the skills
-       tail and the salary never slide under the icon. -->
-  <div class={['mt-3 flex items-end justify-between gap-3', onHide && 'pr-9']}>
-    <div class="flex min-w-0 flex-wrap items-center gap-1.5">
+       tail and the salary never slide under the icon. Only from `sm` up: below it the
+       salary sits on its own line, well clear of the corner.
+       On a phone the salary is ~160px of the ~360px card, so sharing a row with it
+       squeezed the chips into a five-line stack. Stacking the two below `sm` gives the
+       chips the full width (three lines become two); from `sm` up the original
+       chips-left / salary-right row is unchanged. -->
+  <div
+    class={[
+      'mt-3 flex flex-col items-start gap-1.5 sm:flex-row sm:items-end sm:justify-between sm:gap-3',
+      onHide && 'sm:pr-9',
+    ]}
+  >
+    <!-- flex-1 (not the default basis:auto) so the chips get every pixel the salary
+         doesn't need. With basis:auto the row's width is derived from its max-content
+         width, so shorter chips would ironically shrink the row and cause *more*
+         wrapping. -->
+    <div class="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:w-auto sm:flex-1">
+      <!-- A long dictionary slug ("event-driven-architecture") would wrap inside its
+           own chip and stretch the row to two lines, breaking the card's rhythm on a
+           phone. Each chip stays one line and ellipsises past max-w; the full skill is
+           in `title` for anyone who needs it. -->
       {#each shownSkills as skill (skill)}
-        <Badge variant={haveSet && !haveSet.has(skill.toLowerCase()) ? 'missing' : 'brand'}>{skill}</Badge>
+        <Badge
+          variant={haveSet && !haveSet.has(skill.toLowerCase()) ? 'missing' : 'brand'}
+          class="max-w-[9rem]"
+        >
+          <span class="truncate" title={skill}>{skill}</span>
+        </Badge>
       {/each}
       {#if extraSkills > 0}
         <span class="text-xs text-muted-foreground">+{extraSkills} skills</span>

@@ -18,7 +18,11 @@ The ingest pipeline runner — fetch → normalize → dedup → upsert — and 
 - The incremental push is wired only when the worker has `MEILI_MASTER_KEY` (absent, ingest runs unchanged).
 - The incremental doc is built from the persisted row (`search.FromJob`), so a re-ingested already-enriched job keeps its enrichment facets.
 - `cmd/tg-extract` shares `UpsertJob` but is not wired for incremental indexing (its jobs reconcile via reindex).
-- A job is open while `closed_at IS NULL`; closing is a soft state, never a delete.
+- A job is open while `closed_at IS NULL`; closing is a soft state. The lifecycle never deletes — `cmd/prune` does, as a separate operator-driven campaign (see [docs/agents/job-lifecycle.md](../../docs/agents/job-lifecycle.md)).
+- A crawled posting the non-tech title dictionary recognises is REJECTED before the write path, counted in `stats.Rejected` (never `Skipped` — a rejection is the filter working, a skip is something broken). The rule is `classify.ConfirmedNonTech`, so technical evidence vetoes it: the dictionary matches anywhere in a title and was written assuming the tech check runs first.
+- The filter is only on the crawled board paths. `cmd/tg-extract`, submissions and link-source imports write through `job.New` untouched, because nothing re-crawls them and a dictionary mistake there could not be undone.
+- A `SeenRefresh` posting from a hydrating adapter goes to `touch`, not `Save`, so it never meets the filter and an already-stored non-tech row stays open (and is reopened) until prune removes it. On non-hydrating boards the same row closes in 48h instead. The asymmetry is correct — touching is what keeps a not-yet-pruned row consistent — but it surprises.
+- A posting pruned from a hydrating source leaves the seen-set permanently, so the adapter re-fetches its detail page every crawl and the filter rejects it again. That cost grows as the campaign deletes more.
 - Self-closing sources are excluded from the unseen sweep (`sources.SelfClosingProviders`).
 
 ## How it works

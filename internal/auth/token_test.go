@@ -8,12 +8,12 @@ import (
 func TestIssuer_IssueParseRoundTrip(t *testing.T) {
 	iss := NewIssuer("test-secret", time.Hour)
 
-	token, err := iss.Issue(42)
+	token, err := iss.Issue(42, 1)
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
 
-	got, err := iss.Parse(token)
+	got, _, err := iss.Parse(token)
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
@@ -25,11 +25,11 @@ func TestIssuer_IssueParseRoundTrip(t *testing.T) {
 func TestIssuer_RejectsExpiredToken(t *testing.T) {
 	iss := NewIssuer("test-secret", -time.Minute) // already expired on issue
 
-	token, err := iss.Issue(42)
+	token, err := iss.Issue(42, 1)
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
-	if _, err := iss.Parse(token); err == nil {
+	if _, _, err := iss.Parse(token); err == nil {
 		t.Error("Parse should reject an expired token")
 	}
 }
@@ -38,11 +38,11 @@ func TestIssuer_RejectsWrongSignature(t *testing.T) {
 	signed := NewIssuer("real-secret", time.Hour)
 	other := NewIssuer("different-secret", time.Hour)
 
-	token, err := signed.Issue(42)
+	token, err := signed.Issue(42, 1)
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
-	if _, err := other.Parse(token); err == nil {
+	if _, _, err := other.Parse(token); err == nil {
 		t.Error("Parse should reject a token signed with a different secret")
 	}
 }

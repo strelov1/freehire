@@ -1,5 +1,9 @@
 -- Community discussion threads (see the add-community-threads change). Read paths
 -- join community_personas so a row carries the author's handle, never their user_id.
+-- Every such join is a LEFT JOIN: content outlives its author (a deleted account
+-- leaves author_user_id NULL), and an inner join would drop it from the listings
+-- instead. A null handle therefore means "no live author", which the API renders as
+-- either a deleted member or the AI persona.
 
 -- name: GetCommunityPersona :one
 -- A user's stable pseudonymous handle, or no row when they have never posted.
@@ -25,7 +29,7 @@ RETURNING *;
 -- A single thread with its author handle.
 SELECT t.*, p.handle AS author_handle
 FROM threads t
-JOIN community_personas p ON p.user_id = t.author_user_id
+LEFT JOIN community_personas p ON p.user_id = t.author_user_id
 WHERE t.id = $1;
 
 -- name: ListOpenThreadsFirst :many
@@ -33,7 +37,7 @@ WHERE t.id = $1;
 -- threads_subject_open_created_idx.
 SELECT t.*, p.handle AS author_handle
 FROM threads t
-JOIN community_personas p ON p.user_id = t.author_user_id
+LEFT JOIN community_personas p ON p.user_id = t.author_user_id
 WHERE t.subject_type = $1 AND t.subject_ref = $2 AND t.status = 'open'
 ORDER BY t.created_at DESC, t.id DESC
 LIMIT $3;
@@ -43,7 +47,7 @@ LIMIT $3;
 -- OFFSET, so deep pages never scan skipped rows.
 SELECT t.*, p.handle AS author_handle
 FROM threads t
-JOIN community_personas p ON p.user_id = t.author_user_id
+LEFT JOIN community_personas p ON p.user_id = t.author_user_id
 WHERE t.subject_type = $1 AND t.subject_ref = $2 AND t.status = 'open'
   AND (t.created_at < sqlc.arg(cursor_created_at)
        OR (t.created_at = sqlc.arg(cursor_created_at) AND t.id < sqlc.arg(cursor_id)))
@@ -71,8 +75,8 @@ RETURNING *;
 UPDATE threads SET reply_count = reply_count + 1 WHERE id = $1;
 
 -- name: ListThreadRepliesFirst :many
--- First page of a thread's replies, oldest first. LEFT JOIN so a future AI reply
--- (null author) still returns, with a null handle the API renders as the AI persona.
+-- First page of a thread's replies, oldest first. LEFT JOIN so an authorless reply
+-- still returns — a future AI reply, or one whose author deleted their account.
 SELECT r.*, p.handle AS author_handle
 FROM thread_replies r
 LEFT JOIN community_personas p ON p.user_id = r.author_user_id

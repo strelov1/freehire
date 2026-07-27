@@ -34,6 +34,17 @@ export interface TailoringSession {
 /** Create the assistant session. For a normal chat the client sends an empty body and the
  *  backend decides everything (harness, persona, sandbox, scope). Passing `tailoring` seeds
  *  a CV-tailoring session instead (persona + FREEHIRE_TOKEN); the backend still owns the rest. */
+/** Thrown when the assistant runs on the user's own machine and no runner is
+ *  connected. Carried as its own type so the UI can show setup instructions
+ *  instead of an error banner — this is a "you have not finished setting up"
+ *  state, not a failure. */
+export class NoDeviceError extends Error {
+  constructor() {
+    super('no runner connected');
+    this.name = 'NoDeviceError';
+  }
+}
+
 export async function createSession(tailoring?: TailoringSession): Promise<string> {
   const res = await fetch(`${BASE}/sessions`, {
     method: 'POST',
@@ -41,10 +52,32 @@ export async function createSession(tailoring?: TailoringSession): Promise<strin
     credentials: 'include',
     body: JSON.stringify(tailoring ? { tailoring } : {}),
   });
+  if (res.status === 409) {
+    const body = await res.text();
+    if (body.includes('no_device')) throw new NoDeviceError();
+  }
   if (!res.ok) throw new Error(`could not create session (${res.status})`);
   const body = (await res.json()) as { session_id?: string };
   if (!body?.session_id) throw new Error('session response missing session_id');
   return body.session_id;
+}
+
+export type RunnerStatus = {
+  /** Whether the caller has a machine connected right now. */
+  connected: boolean;
+  /** Their device ids. */
+  devices: string[];
+  /** Whether sessions are required to run on the caller's own machine. */
+  required: boolean;
+};
+
+/** Whether the caller's own machine is connected and running the harness.
+ *  Polled by the UI so the state is visible before a message is sent, not
+ *  after one fails. */
+export async function runnerStatus(): Promise<RunnerStatus> {
+  const res = await fetch(`${BASE}/runners`, { credentials: 'include' });
+  if (!res.ok) throw new Error(`could not read runner status (${res.status})`);
+  return (await res.json()) as RunnerStatus;
 }
 
 /** List the caller's held sessions from the agent backend. The list is

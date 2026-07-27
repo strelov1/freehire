@@ -63,7 +63,7 @@ type fitBody struct {
 
 func fitAPI(pool *pgxpool.Pool, queries *db.Queries, iss *auth.Issuer, store *resume.Store, an *matchanalysis.Analyzer) *matchHandlers {
 	return &matchHandlers{
-		queries: queries,
+		queries:     queries,
 		userProfile: userprofile.New(ownedProfile()),
 		resume:      store, matchAnalysis: an, matchAnalysisCache: queries,
 		credits: credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}),
@@ -92,7 +92,7 @@ func TestMatchAnalysisEndpoints(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	token, err := iss.Issue(userID)
+	token, err := iss.Issue(userID, testTokenVersion)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestMatchAnalysisEndpoints(t *testing.T) {
 	appFor := func(store *resume.Store, an *matchanalysis.Analyzer) *fiber.App {
 		h := fitAPI(pool, queries, iss, store, an)
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-		g := auth.RequireAuth(iss)
+		g := auth.RequireAuth(iss, testVersions)
 		app.Get("/api/v1/jobs/:slug/fit", g, h.GetMatchAnalysis)
 		app.Post("/api/v1/jobs/:slug/fit", g, h.PostMatchAnalysis)
 		return app
@@ -221,7 +221,7 @@ func TestMatchAnalysisCredits(t *testing.T) {
 		if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ($1) RETURNING id`, email).Scan(&id); err != nil {
 			t.Fatalf("seed user: %v", err)
 		}
-		tok, err := iss.Issue(id)
+		tok, err := iss.Issue(id, testTokenVersion)
 		if err != nil {
 			t.Fatalf("issue token: %v", err)
 		}
@@ -262,13 +262,13 @@ func TestMatchAnalysisCredits(t *testing.T) {
 	}
 	appFor := func(store *resume.Store, an *matchanalysis.Analyzer, grant int) *fiber.App {
 		h := &matchHandlers{
-			queries: queries,
+			queries:     queries,
 			userProfile: userprofile.New(ownedProfile()),
 			resume:      store, matchAnalysis: an, matchAnalysisCache: queries,
 			credits: credits.NewStore(queries, pool, credits.Config{MonthlyGrant: grant, CostMatch: 1, CostTailor: 3}),
 		}
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-		g := auth.RequireAuth(iss)
+		g := auth.RequireAuth(iss, testVersions)
 		app.Get("/api/v1/jobs/:slug/fit", g, h.GetMatchAnalysis)
 		app.Post("/api/v1/jobs/:slug/fit", g, h.PostMatchAnalysis)
 		app.Get("/api/v1/jobs/:slug/fit/stream", g, h.StreamMatchAnalysis)

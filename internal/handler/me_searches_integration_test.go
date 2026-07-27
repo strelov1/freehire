@@ -39,13 +39,13 @@ func TestSavedSearchesEndToEnd(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	ownerCookie, _ := iss.Issue(ownerID)
-	otherCookie, _ := iss.Issue(otherID)
+	ownerCookie, _ := iss.Issue(ownerID, testTokenVersion)
+	otherCookie, _ := iss.Issue(otherID, testTokenVersion)
 	queries := db.New(pool)
 	h := &savedSearchHandlers{savedSearch: savedsearch.New(savedsearch.NewQueriesRepository(queries))}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	guard := auth.RequireAuth(iss)
+	guard := auth.RequireAuth(iss, testVersions)
 	app.Post("/api/v1/me/searches", guard, h.CreateSavedSearch)
 	app.Get("/api/v1/me/searches", guard, h.ListSavedSearches)
 	app.Patch("/api/v1/me/searches/:id", guard, h.UpdateSavedSearch)
@@ -164,13 +164,13 @@ func TestSavedSearchBoardsEndToEnd(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	ownerCookie, _ := iss.Issue(ownerID)
-	otherCookie, _ := iss.Issue(otherID)
+	ownerCookie, _ := iss.Issue(ownerID, testTokenVersion)
+	otherCookie, _ := iss.Issue(otherID, testTokenVersion)
 	queries := db.New(pool)
 	h := &savedSearchHandlers{savedSearch: savedsearch.New(savedsearch.NewQueriesRepository(queries))}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	guard := auth.RequireAuth(iss)
+	guard := auth.RequireAuth(iss, testVersions)
 	app.Post("/api/v1/me/searches", guard, h.CreateSavedSearch)
 	app.Post("/api/v1/me/searches/:id/share", guard, h.ShareSavedSearch)
 	app.Delete("/api/v1/me/searches/:id/share", guard, h.UnshareSavedSearch)
@@ -293,12 +293,12 @@ func TestSavedSearchesCapEnforced(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	cookie, _ := iss.Issue(userID)
+	cookie, _ := iss.Issue(userID, testTokenVersion)
 	queries := db.New(pool)
 	h := &savedSearchHandlers{savedSearch: savedsearch.New(savedsearch.NewQueriesRepository(queries))}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Post("/api/v1/me/searches", auth.RequireAuth(iss), h.CreateSavedSearch)
+	app.Post("/api/v1/me/searches", auth.RequireAuth(iss, testVersions), h.CreateSavedSearch)
 
 	rq := httptest.NewRequest(http.MethodPost, "/api/v1/me/searches", bytes.NewBufferString(`{"name":"one too many","query":""}`))
 	rq.Header.Set("Content-Type", "application/json")

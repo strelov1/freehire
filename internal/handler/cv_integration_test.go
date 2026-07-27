@@ -42,7 +42,7 @@ func seedAccount(t *testing.T, pool *pgxpool.Pool, email string, beta bool) int6
 // signed-in user (cookie auth only) — the beta gate was lifted when CV tailoring went public.
 func buildCVApp(h *cvHandlers, iss *auth.Issuer) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	saved := auth.RequireAuth(iss)
+	saved := auth.RequireAuth(iss, testVersions)
 	app.Get("/api/v1/cv-templates", saved, h.ListCVTemplates)
 	app.Get("/api/v1/me/cvs", saved, h.ListCVs)
 	app.Post("/api/v1/me/cvs", saved, h.CreateCV)
@@ -90,7 +90,7 @@ func TestCVTemplatesEndpoint_OpenToAuthed(t *testing.T) {
 		resume:  resume.New(nil, resume.NewQueriesRepository(queries))}
 	app := buildCVApp(h, iss)
 
-	plainTok, _ := iss.Issue(seedAccount(t, pool, "plain@example.test", false))
+	plainTok, _ := iss.Issue(seedAccount(t, pool, "plain@example.test", false), testTokenVersion)
 
 	if resp := doCV(t, app, fiber.MethodGet, "/api/v1/cv-templates", "", nil); resp.StatusCode != fiber.StatusUnauthorized {
 		t.Fatalf("unauthenticated templates = %d, want 401", resp.StatusCode)
@@ -126,8 +126,8 @@ func TestSetCVTemplateEndpoint(t *testing.T) {
 	app := buildCVApp(h, iss)
 
 	owner := seedAccount(t, pool, "owner@example.test", true)
-	ownerTok, _ := iss.Issue(owner)
-	otherTok, _ := iss.Issue(seedAccount(t, pool, "other2@example.test", true))
+	ownerTok, _ := iss.Issue(owner, testTokenVersion)
+	otherTok, _ := iss.Issue(seedAccount(t, pool, "other2@example.test", true), testTokenVersion)
 
 	// Create a CV to switch the template on.
 	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs", ownerTok, createCVRequest{Title: "General"})
@@ -187,9 +187,9 @@ func TestCVEndpoints_CRUDAndIsolation(t *testing.T) {
 	beta := seedAccount(t, pool, "beta@example.test", true)
 	other := seedAccount(t, pool, "other@example.test", true)
 	plain := seedAccount(t, pool, "plain@example.test", false)
-	betaTok, _ := iss.Issue(beta)
-	otherTok, _ := iss.Issue(other)
-	plainTok, _ := iss.Issue(plain)
+	betaTok, _ := iss.Issue(beta, testTokenVersion)
+	otherTok, _ := iss.Issue(other, testTokenVersion)
+	plainTok, _ := iss.Issue(plain, testTokenVersion)
 
 	// A plain (non-beta) user now has full access — the CV builder is public.
 	if resp := doCV(t, app, fiber.MethodGet, "/api/v1/me/cvs", plainTok, nil); resp.StatusCode != fiber.StatusOK {
@@ -275,7 +275,7 @@ func TestCVCreate_SeedsFromStructuredResume(t *testing.T) {
 	app := buildCVApp(h, iss)
 
 	user := seedAccount(t, pool, "seed@example.test", true)
-	tok, _ := iss.Issue(user)
+	tok, _ := iss.Issue(user, testTokenVersion)
 
 	// Seed a structured résumé directly. Both stamps take the same statement-time now(),
 	// so the structure reads as current (the store's freshness gate requires them equal).

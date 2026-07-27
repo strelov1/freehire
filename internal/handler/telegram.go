@@ -48,16 +48,19 @@ func newTelegramHandlers(queries *db.Queries, jwtSecret, botToken, botUsername, 
 		contribution:   contribution,
 		credits:        credits,
 	}
+	// The webhook secret is part of the enable condition, not a check inside the handler:
+	// the handler's constant-time compare treats an unset secret as "matches an absent
+	// header", so a deployment with a bot token but no secret would expose an
+	// unauthenticated POST. Requiring it here makes "bot live, webhook open"
+	// unrepresentable rather than merely guarded against.
 	if botToken != "" && jwtSecret != "" {
-		h.telegramLinks = telegramnotify.NewLinkTokens(jwtSecret, telegramLinkTTL)
-		h.telegramBot = telegramnotify.NewClient(botToken)
-		h.telegramBotUsername = botUsername
-		h.telegramWebhookSecret = webhookSecret
-		// The webhook fails closed on an empty secret (see TelegramWebhook), so a
-		// bot without TELEGRAM_WEBHOOK_SECRET can never link accounts — say so at
-		// startup instead of letting every update 403 silently.
 		if webhookSecret == "" {
-			log.Printf("telegram: TELEGRAM_WEBHOOK_SECRET is empty; the webhook rejects every update (account linking via the bot will not work)")
+			log.Print("telegram: TELEGRAM_BOT_TOKEN is set but TELEGRAM_WEBHOOK_SECRET is not — feature disabled")
+		} else {
+			h.telegramLinks = telegramnotify.NewLinkTokens(jwtSecret, telegramLinkTTL)
+			h.telegramBot = telegramnotify.NewClient(botToken)
+			h.telegramBotUsername = botUsername
+			h.telegramWebhookSecret = webhookSecret
 		}
 	}
 	return h
@@ -80,6 +83,15 @@ func (h *telegramHandlers) register(api fiber.Router, mw middleware) {
 // the feature off and the webhook is inert.
 func (h *telegramHandlers) telegramEnabled() bool {
 	return h.telegramLinks != nil && h.telegramBot != nil
+}
+
+// webhookSecured reports whether the inbound webhook may be served at all. It is
+// deliberately separate from telegramEnabled: the secret compare below is a constant-time
+// equality, and two empty strings ARE equal — so with an unset secret a request carrying
+// no header would authenticate. Gating the endpoint on a non-empty secret makes "bot live,
+// webhook open" unrepresentable rather than merely guarded against.
+func (h *telegramHandlers) webhookSecured() bool {
+	return h.telegramEnabled() && h.telegramWebhookSecret != ""
 }
 
 // LinkTelegram mints a one-time deep-link token and returns the t.me URL the user
@@ -141,7 +153,7 @@ func (h *telegramHandlers) UnlinkTelegram(c *fiber.Ctx) error {
 // It always returns 200 so Telegram does not retry; problems are reported to the
 // user via the bot, not via the HTTP status.
 func (h *telegramHandlers) TelegramWebhook(c *fiber.Ctx) error {
-	if !h.telegramEnabled() {
+	if !h.webhookSecured() {
 		return fiber.NewError(fiber.StatusNotFound, "not found")
 	}
 	// Reject forged updates: the secret token must match the one registered with

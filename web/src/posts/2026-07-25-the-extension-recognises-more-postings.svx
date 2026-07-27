@@ -1,0 +1,32 @@
+---
+title: The extension recognises far more postings — and takes the ones we miss
+date: 2026-07-25
+summary: The side panel now matches a job page against the posting's own address, so aggregators and most ATS boards are recognised instead of guessed at. When we genuinely do not carry a vacancy, you can hand it to us with one button.
+type: changelog
+tags:
+  - extension
+  - catalogue
+draft: false
+---
+
+Open a job page with the freehire panel and it tells you how you match. To do that it has
+to know *which* posting you are looking at. Until now it could only work that out for
+Greenhouse links: every other site fell back to reading the page and matching its text — a
+card with the site's name where the company should be, and a match score built from
+whatever the page happened to say. On some pages that came out as "This page — 0%", for a
+vacancy that was in our catalogue the whole time.
+
+**Now the page is matched by its own address.** Every posting we carry stores the link it
+was found at, so the panel compares the page you are on against that — tracking parameters,
+`www.`, and trailing slashes ignored. Aggregator postings and the large ATS boards
+(Ashby, Lever, Workable, BambooHR, iCIMS, Recruitee, SmartRecruiters, Workday and the rest)
+are now recognised as the postings they are, and you get the real card: the company, the
+skills you have, the ones you are missing.
+
+**And when we really do not have it, you can give it to us.** A page freehire does not
+carry now offers **Add to freehire**. We read the posting and add it to the catalogue on
+the spot — the card appears without you reloading anything. If the page is one we cannot
+read, the link goes to us to look at, so the gap gets closed rather than forgotten.
+
+Postings added this way behave like any other: they are searchable, they get the same AI
+enrichment, and they close when the vacancy does.

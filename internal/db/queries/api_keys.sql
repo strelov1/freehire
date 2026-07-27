@@ -1,28 +1,31 @@
 -- name: CreateAPIKey :one
 -- Create an API key for a user. The caller passes the SHA-256 token_hash and the
 -- display token_prefix; the plaintext token is shown once and never stored.
--- expires_at NULL means the key never expires. Returns display fields only, never
--- the hash.
-INSERT INTO api_keys (user_id, name, token_hash, token_prefix, expires_at)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, name, token_prefix, created_at, last_used_at, expires_at;
+-- expires_at NULL means the key never expires. scope confines the credential to a
+-- surface ('full' for a user-created key, 'cv' for the tailoring agent's); it comes
+-- from the server, never from client input. Returns display fields only, never the hash.
+INSERT INTO api_keys (user_id, name, token_hash, token_prefix, expires_at, scope)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, name, token_prefix, scope, created_at, last_used_at, expires_at;
 
 -- name: ListAPIKeysByUser :many
--- A user's API keys, newest first. Metadata only — never the token_hash.
-SELECT id, name, token_prefix, created_at, last_used_at, expires_at
+-- A user's API keys, newest first. Metadata only — never the token_hash. scope is
+-- included so a user can see what each credential is allowed to do.
+SELECT id, name, token_prefix, scope, created_at, last_used_at, expires_at
 FROM api_keys
 WHERE user_id = $1
 ORDER BY created_at DESC;
 
 -- name: AuthenticateAPIKey :one
--- Resolve a presented token (by its SHA-256 hash) to the owning user id, enforcing
--- expiry and touching last_used_at in one atomic statement. No row means the key is
--- unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401.
+-- Resolve a presented token (by its SHA-256 hash) to the owning user id and the key's
+-- scope, enforcing expiry and touching last_used_at in one atomic statement. No row
+-- means the key is unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401
+-- and an insufficient scope as 403.
 UPDATE api_keys
 SET last_used_at = now()
 WHERE token_hash = $1
   AND (expires_at IS NULL OR expires_at > now())
-RETURNING user_id;
+RETURNING user_id, scope;
 
 -- name: DeleteAPIKey :execrows
 -- Revoke (delete) a key, scoped to its owner so a user can only delete their own.

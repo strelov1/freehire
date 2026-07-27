@@ -42,7 +42,7 @@ func TestExtensionConnectEndToEnd(t *testing.T) {
 	redirectURI := "https://" + extID + ".chromiumapp.org/"
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	cookie, _ := iss.Issue(userID)
+	cookie, _ := iss.Issue(userID, testTokenVersion)
 	queries := db.New(pool)
 	h := &authHandlers{
 		queries:                    queries,
@@ -51,8 +51,8 @@ func TestExtensionConnectEndToEnd(t *testing.T) {
 	th := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	cookieAuth := auth.RequireAuth(iss)
-	keyAuth := auth.RequireAuthOrKey(iss, queries)
+	cookieAuth := auth.RequireAuth(iss, testVersions)
+	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
 	app.Get("/api/v1/auth/extension/connect", cookieAuth, h.ExtensionConnect)
 	app.Post("/api/v1/auth/extension/connect", cookieAuth, h.ExtensionConnectSubmit)
 	app.Get("/api/v1/me/api-keys", cookieAuth, h.ListAPIKeys)
@@ -161,9 +161,14 @@ func TestExtensionConnectEndToEnd(t *testing.T) {
 		if loc.Query().Get("token") != "" {
 			t.Fatalf("token leaked into the query string")
 		}
-		// It is a session JWT for the user — not an API key (no api_keys row written).
-		if id, err := iss.Parse(mintedToken); err != nil || id != userID {
+		// It is a session JWT for the user — not an API key (no api_keys row written) —
+		// and it carries the account's session generation, so logout-all evicts it.
+		id, version, err := iss.Parse(mintedToken)
+		if err != nil || id != userID {
 			t.Fatalf("token is not a valid JWT for the user: id=%d err=%v", id, err)
+		}
+		if version != testTokenVersion {
+			t.Fatalf("token version = %d, want the account's current generation %d", version, testTokenVersion)
 		}
 		if after := keyCount(); after != before {
 			t.Fatalf("connect wrote an api_keys row (%d -> %d); it should issue a JWT only", before, after)

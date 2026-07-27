@@ -62,7 +62,7 @@ SELECT count(*) FROM threads WHERE author_user_id = $1 AND created_at > $2
 `
 
 type CountRecentThreadsByUserParams struct {
-	AuthorUserID int64              `json:"author_user_id"`
+	AuthorUserID pgtype.Int8        `json:"author_user_id"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
@@ -82,6 +82,10 @@ SELECT user_id, handle, created_at FROM community_personas WHERE user_id = $1
 
 // Community discussion threads (see the add-community-threads change). Read paths
 // join community_personas so a row carries the author's handle, never their user_id.
+// Every such join is a LEFT JOIN: content outlives its author (a deleted account
+// leaves author_user_id NULL), and an inner join would drop it from the listings
+// instead. A null handle therefore means "no live author", which the API renders as
+// either a deleted member or the AI persona.
 // A user's stable pseudonymous handle, or no row when they have never posted.
 func (q *Queries) GetCommunityPersona(ctx context.Context, userID int64) (CommunityPersona, error) {
 	row := q.db.QueryRow(ctx, getCommunityPersona, userID)
@@ -93,7 +97,7 @@ func (q *Queries) GetCommunityPersona(ctx context.Context, userID int64) (Commun
 const getCommunityThread = `-- name: GetCommunityThread :one
 SELECT t.id, t.subject_type, t.subject_ref, t.anchor_path, t.title, t.body, t.author_user_id, t.reply_count, t.status, t.created_at, p.handle AS author_handle
 FROM threads t
-JOIN community_personas p ON p.user_id = t.author_user_id
+LEFT JOIN community_personas p ON p.user_id = t.author_user_id
 WHERE t.id = $1
 `
 
@@ -104,11 +108,11 @@ type GetCommunityThreadRow struct {
 	AnchorPath   pgtype.Text        `json:"anchor_path"`
 	Title        string             `json:"title"`
 	Body         string             `json:"body"`
-	AuthorUserID int64              `json:"author_user_id"`
+	AuthorUserID pgtype.Int8        `json:"author_user_id"`
 	ReplyCount   int32              `json:"reply_count"`
 	Status       string             `json:"status"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	AuthorHandle string             `json:"author_handle"`
+	AuthorHandle pgtype.Text        `json:"author_handle"`
 }
 
 // A single thread with its author handle.
@@ -169,11 +173,11 @@ RETURNING id, subject_type, subject_ref, anchor_path, title, body, author_user_i
 `
 
 type InsertThreadParams struct {
-	SubjectType  string `json:"subject_type"`
-	SubjectRef   string `json:"subject_ref"`
-	Title        string `json:"title"`
-	Body         string `json:"body"`
-	AuthorUserID int64  `json:"author_user_id"`
+	SubjectType  string      `json:"subject_type"`
+	SubjectRef   string      `json:"subject_ref"`
+	Title        string      `json:"title"`
+	Body         string      `json:"body"`
+	AuthorUserID pgtype.Int8 `json:"author_user_id"`
 }
 
 // Open a thread. The author's handle is filled by the service from the minted
@@ -239,7 +243,7 @@ func (q *Queries) InsertThreadReply(ctx context.Context, arg InsertThreadReplyPa
 const listOpenThreadsAfter = `-- name: ListOpenThreadsAfter :many
 SELECT t.id, t.subject_type, t.subject_ref, t.anchor_path, t.title, t.body, t.author_user_id, t.reply_count, t.status, t.created_at, p.handle AS author_handle
 FROM threads t
-JOIN community_personas p ON p.user_id = t.author_user_id
+LEFT JOIN community_personas p ON p.user_id = t.author_user_id
 WHERE t.subject_type = $1 AND t.subject_ref = $2 AND t.status = 'open'
   AND (t.created_at < $3
        OR (t.created_at = $3 AND t.id < $4))
@@ -262,11 +266,11 @@ type ListOpenThreadsAfterRow struct {
 	AnchorPath   pgtype.Text        `json:"anchor_path"`
 	Title        string             `json:"title"`
 	Body         string             `json:"body"`
-	AuthorUserID int64              `json:"author_user_id"`
+	AuthorUserID pgtype.Int8        `json:"author_user_id"`
 	ReplyCount   int32              `json:"reply_count"`
 	Status       string             `json:"status"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	AuthorHandle string             `json:"author_handle"`
+	AuthorHandle pgtype.Text        `json:"author_handle"`
 }
 
 // Keyset continuation: rows strictly older than the cursor (created_at, id). No
@@ -312,7 +316,7 @@ func (q *Queries) ListOpenThreadsAfter(ctx context.Context, arg ListOpenThreadsA
 const listOpenThreadsFirst = `-- name: ListOpenThreadsFirst :many
 SELECT t.id, t.subject_type, t.subject_ref, t.anchor_path, t.title, t.body, t.author_user_id, t.reply_count, t.status, t.created_at, p.handle AS author_handle
 FROM threads t
-JOIN community_personas p ON p.user_id = t.author_user_id
+LEFT JOIN community_personas p ON p.user_id = t.author_user_id
 WHERE t.subject_type = $1 AND t.subject_ref = $2 AND t.status = 'open'
 ORDER BY t.created_at DESC, t.id DESC
 LIMIT $3
@@ -331,11 +335,11 @@ type ListOpenThreadsFirstRow struct {
 	AnchorPath   pgtype.Text        `json:"anchor_path"`
 	Title        string             `json:"title"`
 	Body         string             `json:"body"`
-	AuthorUserID int64              `json:"author_user_id"`
+	AuthorUserID pgtype.Int8        `json:"author_user_id"`
 	ReplyCount   int32              `json:"reply_count"`
 	Status       string             `json:"status"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	AuthorHandle string             `json:"author_handle"`
+	AuthorHandle pgtype.Text        `json:"author_handle"`
 }
 
 // First page of a subject's open threads, newest first. Served by the partial index
@@ -460,8 +464,8 @@ type ListThreadRepliesFirstRow struct {
 	AuthorHandle  pgtype.Text        `json:"author_handle"`
 }
 
-// First page of a thread's replies, oldest first. LEFT JOIN so a future AI reply
-// (null author) still returns, with a null handle the API renders as the AI persona.
+// First page of a thread's replies, oldest first. LEFT JOIN so an authorless reply
+// still returns — a future AI reply, or one whose author deleted their account.
 func (q *Queries) ListThreadRepliesFirst(ctx context.Context, arg ListThreadRepliesFirstParams) ([]ListThreadRepliesFirstRow, error) {
 	rows, err := q.db.Query(ctx, listThreadRepliesFirst, arg.ThreadID, arg.Limit)
 	if err != nil {

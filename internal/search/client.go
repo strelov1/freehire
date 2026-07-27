@@ -513,8 +513,41 @@ func (c *Client) DeleteSemanticJobs(ctx context.Context, ids []int64) error {
 }
 
 func (c *Client) deleteFrom(ctx context.Context, idx meilisearch.IndexManager, ids []int64) error {
+	task, err := c.submitDelete(ctx, idx, ids)
+	if err != nil || task == 0 {
+		return err
+	}
+	return c.awaitTask(ctx, idx, task)
+}
+
+// SubmitJobDeletion enqueues a facet-index deletion WITHOUT waiting for it, and
+// SubmitSemanticJobDeletion does the same for the semantic index.
+//
+// Meilisearch runs one task per index at a time and a delete-by-id rebuilds the
+// affected parts of the inverted index, so its cost tracks the size of the index
+// rather than the number of ids: measured on prod, one batch took minutes while the
+// database sat idle waiting for it. A bulk campaign that awaits every batch spends
+// almost all of its time not deleting.
+//
+// The trade this accepts is real and visible: until the tasks drain, search serves
+// documents whose rows are gone and those results 404. Use it only for a bulk pass
+// that ends in a full reindex, never on a path a user waits on.
+func (c *Client) SubmitJobDeletion(ctx context.Context, ids []int64) error {
+	_, err := c.submitDelete(ctx, c.facet, ids)
+	return err
+}
+
+func (c *Client) SubmitSemanticJobDeletion(ctx context.Context, ids []int64) error {
+	_, err := c.submitDelete(ctx, c.semantic, ids)
+	return err
+}
+
+// submitDelete enqueues the deletion and returns its task id, or 0 when there was
+// nothing to delete. Deleting an id that is not indexed is a no-op, so re-runs stay
+// idempotent.
+func (c *Client) submitDelete(ctx context.Context, idx meilisearch.IndexManager, ids []int64) (int64, error) {
 	if len(ids) == 0 {
-		return nil
+		return 0, nil
 	}
 	keys := make([]string, len(ids))
 	for i, id := range ids {
@@ -522,9 +555,9 @@ func (c *Client) deleteFrom(ctx context.Context, idx meilisearch.IndexManager, i
 	}
 	task, err := idx.DeleteDocumentsWithContext(ctx, keys, nil)
 	if err != nil {
-		return fmt.Errorf("search: delete documents: %w", err)
+		return 0, fmt.Errorf("search: delete documents: %w", err)
 	}
-	return c.awaitTask(ctx, idx, task.TaskUID)
+	return task.TaskUID, nil
 }
 
 // SearchParams is a backend-agnostic search request. Filter is the value built

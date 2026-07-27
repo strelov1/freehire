@@ -38,7 +38,7 @@ func SubprotocolToken(header string) string {
 // than a short-lived token it has no way to re-mint.
 //
 // Rejects with 401 when neither interpretation resolves.
-func RequireAuthWS(iss *Issuer, keys APIKeyAuthenticator) fiber.Handler {
+func RequireAuthWS(iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthenticator) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		token := bearerToken(c)
 		if token == "" {
@@ -47,14 +47,24 @@ func RequireAuthWS(iss *Issuer, keys APIKeyAuthenticator) fiber.Handler {
 		if token == "" {
 			return fiber.NewError(fiber.StatusUnauthorized, "not authenticated")
 		}
-		if id, err := iss.Parse(token); err == nil {
-			c.Locals(LocalsUserID, id)
-			return c.Next()
+		// Full-scope only, like every other non-CV surface: driving a browser as the
+		// user is well outside what a CV-tailoring credential was minted for.
+		b, ok, err := resolveCredential(c, iss, versions, keys, token)
+		if err != nil {
+			// A key-lookup outage is a real error, not a rejected handshake.
+			return err
 		}
-		if id, err := keys.AuthenticateAPIKey(c.Context(), HashAPIKey(token)); err == nil {
-			c.Locals(LocalsUserID, id)
-			return c.Next()
+		if !ok {
+			return fiber.NewError(fiber.StatusUnauthorized, "not authenticated")
 		}
-		return fiber.NewError(fiber.StatusUnauthorized, "not authenticated")
+		if b.viaKey && b.scope != ScopeFull {
+			return fiber.NewError(fiber.StatusForbidden, "api key scope is insufficient for this endpoint")
+		}
+		c.Locals(LocalsUserID, b.userID)
+		if b.viaKey {
+			c.Locals(localsViaAPIKey, true)
+			c.Locals(localsKeyScope, b.scope)
+		}
+		return c.Next()
 	}
 }

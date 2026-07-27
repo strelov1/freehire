@@ -265,6 +265,32 @@ func (q *Queries) ExistingExternalIDs(ctx context.Context, source string) ([]str
 	return items, nil
 }
 
+const findOpenJobByURL = `-- name: FindOpenJobByURL :one
+SELECT public_slug
+FROM jobs
+WHERE normalize_job_url(url) = normalize_job_url($1)
+  AND closed_at IS NULL
+  AND duplicate_of IS NULL
+ORDER BY last_seen_at DESC, id DESC
+LIMIT 1
+`
+
+// Resolve a job page URL to the posting stored under it — the second tier of
+// /api/v1/jobs/find, used when no (source, external_id) identity can be read out of the
+// URL. Both sides go through normalize_job_url (migration 0042), so a link differing only
+// by scheme, www., tracking query, fragment, case or trailing slash still matches; the
+// same expression backs jobs_normalized_url_idx, so this is an index lookup.
+// Scoped to open canonical rows, matching that partial index: a closed or suppressed
+// posting is not one to show a match card for. Two open rows may share a URL (an
+// aggregator and an ATS row the dedup passes have not collapsed), so the most recently
+// confirmed one wins, with id as the deterministic tiebreak.
+func (q *Queries) FindOpenJobByURL(ctx context.Context, url string) (string, error) {
+	row := q.db.QueryRow(ctx, findOpenJobByURL, url)
+	var public_slug string
+	err := row.Scan(&public_slug)
+	return public_slug, err
+}
+
 const getJob = `-- name: GetJob :one
 SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count
 FROM jobs

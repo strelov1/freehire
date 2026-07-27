@@ -24,6 +24,12 @@ import (
 var nonTechTitleTerms = []string{
 	// Healthcare & care. "…technician" collides with IT/field-service technician, so
 	// only anchored forms ("pharmacy technician", "surgical technician") are listed.
+	// The behavior-technician cluster is the largest single unclassified group in the
+	// catalogue (~26k), all ABA therapy; "rbt" is its universal abbreviation and is not
+	// a word in any technical title.
+	"behavior technician", "registered behavior technician", "rbt",
+	"behavioral health", "speech language pathologist", "language pathologist",
+	"therapy assistant", "care aide", "care assistant", "social worker",
 	"nurse", "nursing", "registered nurse", "nurse practitioner",
 	"certified nursing assistant", "cna", "lpn", "licensed practical nurse",
 	"caregiver", "caretaker", "home health aide", "home health", "hospice",
@@ -50,7 +56,8 @@ var nonTechTitleTerms = []string{
 	"cashier", "stocker", "merchandiser", "retail associate", "retail sales",
 	"sales associate", "sales clerk", "store associate", "store clerk",
 	"warehouse associate", "warehouse worker", "order picker", "picker", "packer",
-	"material handler", "package handler", "cdl driver",
+	"material handler", "package handler", "cdl driver", "machine operator",
+	"crew member", "car rental",
 	// Personal care & fitness
 	"pilates instructor", "yoga instructor", "fitness instructor",
 	"personal trainer", "cosmetologist", "hair stylist", "hairstylist",
@@ -66,7 +73,7 @@ var nonTechTitleTerms = []string{
 	"administrative assistant", "office assistant", "data entry clerk", "file clerk",
 	// Facilities & cleaning
 	"janitor", "janitorial", "cleaner", "custodian", "custodial", "groundskeeper",
-	"maintenance worker", "parking attendant", "flight attendant",
+	"maintenance worker", "maintenance technician", "parking attendant", "flight attendant",
 	// Security & transport
 	"security guard", "truck driver", "delivery driver", "bus driver", "courier",
 	// Front-of-house administration
@@ -118,6 +125,25 @@ var nonTechTitleTerms = []string{
 	"cuidador", "enfermeiro", "técnico de enfermagem", "auxiliar de enfermagem",
 	"babá", "motorista", "motoboy", "entregador", "vigilante", "camareira",
 	"recepcionista",
+}
+
+// ConfirmedNonTech reports whether a title states a non-technical role AND nothing
+// technical overrides it. It exists because IsNonTech alone is not a safe basis for
+// removing a posting: the dictionary matches its terms anywhere in a title, and it was
+// written on the contract stated above — consulted only after the tech check. Callers
+// that DELETE on this signal (the ingest filter, the prune rule) must go through here,
+// so the precedence cannot be forgotten in one of them and not the other.
+func ConfirmedNonTech(title string, hasTechEvidence bool) bool {
+	return !hasTechEvidence && IsNonTech(title)
+}
+
+// NonTechTerms returns the curated non-tech title terms. Exposed so the catalogue
+// miner can check its stop-word list against them: a stop word that is also a token
+// of a known non-tech role would drop every word pair built from that phrase, hiding
+// the whole role family from mining rather than merely filtering it. Returns a copy;
+// the dictionary stays immutable.
+func NonTechTerms() []string {
+	return append([]string(nil), nonTechTitleTerms...)
 }
 
 // ptGenderSuffix strips the Brazilian-Portuguese inclusive gender parentheticals

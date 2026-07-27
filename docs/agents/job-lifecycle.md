@@ -4,7 +4,8 @@
 The open/closed state of a job row, the three mechanisms that write `closed_at`, and the filtering semantics that depend on it.
 
 ## Always true
-- A job is open while `closed_at IS NULL`. Closing is a soft state, never a delete.
+- A job is open while `closed_at IS NULL`. Closing is a soft state, and the lifecycle never deletes.
+- The one exception is `cmd/prune` (catalogue pruning), which hard-deletes jobs that do not belong on an IT job board. It is a deliberate, operator-driven campaign, not part of the lifecycle: `closed_at` keeps meaning "the employer took this down", and "not our profile" is expressed by the row being gone and archived in `pruned_jobs`. Overloading `closed_at` with the second meaning would corrupt a signal three mechanisms already write.
 - A closed row keeps its `public_slug`, enrichment, and `user_jobs` references, and reopens for free.
 - List, search, and company surfaces filter `closed_at IS NULL`. Detail still serves a closed job (with `closed_at`) so links and history don't break.
 - `UpsertJob` stamps `last_seen_at` on every crawl; the post-run sweep closes a provider's jobs unseen for 48h.
@@ -14,6 +15,8 @@ The open/closed state of a job row, the three mechanisms that write `closed_at`,
 
 ## How it works
 Closing is a soft state on one column (`closed_at`) written by three independent mechanisms, each covering a gap the others can't reach.
+
+One interaction with catalogue pruning is worth knowing. Once ingest starts rejecting a board's non-technical postings, the ones already stored stop being seen and the unseen sweep closes them after 48h — so `closed_at` fills with rows the campaign is about to delete. That is why `cmd/prune`'s scan covers closed rows: a scan over open jobs only would leave exactly the rows nothing will ever replace.
 
 **(1) Ingest sweep** (`cmd/ingest`, `CloseUnseenJobs`): for board sources, `UpsertJob` stamps `last_seen_at` every crawl. The post-run sweep closes a provider's jobs unseen for 48h — if a posting drops off a board we crawl, it closes. A reappearing posting reopens via the upsert (the `ON CONFLICT` path clears `closed_at`). The sweep runs per provider, and only for providers that ingested at least one job, so a total crawl outage can't mass-close a catalogue. It is further scoped to the `company_slug`s the run actually crawled, so a partial or targeted run closes only the companies it saw — a deliberate under-close that *leaks the last postings of a company that vanished from the feed entirely* (its slug drops out of the crawled set), since the scope can't tell "company gone" from "company not reached this run".
 
@@ -27,3 +30,35 @@ Closing is a soft state on one column (`closed_at`) written by three independent
 - A missed liveness cron run leaves orphans open longer; no reconciliation beyond the next run.
 - The liveness probe uses pure heuristics (no browser, no LLM) — a posting that returns a 200 with a "position filled" message in a language or phrasing not in the curated set stays open.
 - Self-closing sources trade missed-run safety for feed-accuracy: a skipped cron leaves orphans open until the next run's change window catches up.
+
+## Catalogue pruning (cmd/prune)
+
+A separate, operator-driven campaign that permanently removes jobs which do not belong on an IT job board — roughly 1.5M of a 3.5M catalogue. It is the only hard delete in the system.
+
+**The loop.** `cmd/mine-titles` reports the word groups still carrying no `is_tech` signal, an operator picks the next real cluster, its anchored terms go into `classify.nonTechTitleTerms` by PR, and `cmd/prune` removes what the dictionary now recognises. Ingest applies the same dictionary, so what is removed does not come back.
+
+**Three rules, and the boolean that gates them.** A posting's board is either still in `sources/*.yml` or not, and the two rule families read that in opposite directions:
+
+| rule | needs the board | why |
+|---|---|---|
+| `title` — the non-tech dictionary recognises it | **listed** | a listed board is re-crawled, so withdrawing an over-broad term brings the postings back; an unlisted board makes the same deletion permanent |
+| `business_at_nontech_company` | **absent** | no counterpart at crawl time, so what it removes returns within the hour unless the board is gone |
+| `unknown_at_empty_company` | **absent** | same |
+
+The board is resolved from `external_id` (`"<board>:<native id>"`), never from the company slug: many adapters take the company name from the posting payload, so on `jazzhr` only 2453 of 3940 companies match their board file and on `careerplug` only 71 of 8014.
+
+**Gates.** `--apply` is required to delete anything and demands an explicit `--limit`. A dry run prints a random sample of matched titles plus a breakdown by rule and by source — a batch dominated by one board is a broken board title, not a real cluster. Every removal is archived to `pruned_jobs` with the rule that matched.
+
+**Retiring a board.** A board is retired by MOVING its entry from
+`sources/<provider>.yml` to `sources/retired/<provider>.yml`, never by deleting the
+line. Ingest takes one board file by path and `cmd/prune` globs `sources/*.y*ml` without
+descending, so an entry there is neither crawled nor counted as live — the retirement is
+expressed by where the line lives, and a mistake is undone by moving it back. See
+`sources/retired/README.md`.
+
+**Operational notes.**
+- Migration `0041_pruned_jobs.sql` must be applied to prod by hand before the first run.
+- `--apply` refuses to start without Meili configured: deleting rows the index keeps serving would 404 every result. Both the facet and the semantic index are mirrored.
+- A run that fails partway leaves earlier batches committed. `SELECT rule, count(*) FROM pruned_jobs WHERE pruned_at > $since GROUP BY rule` is the durable record; re-running is safe, since deleted rows no longer match.
+- Prune a provider's boards *before* moving its last entry to `sources/retired/`. Once a provider has no entries left in `sources/`, none of its jobs are re-crawlable and every rule refuses them — the dead weight becomes permanent.
+- End of campaign: one `cmd/backfill-derive` to resynchronise `is_tech` on survivors, then one `make reindex`. `is_tech` is absent from `content_hash`, so a flip on a surviving row does not reach the index on its own.

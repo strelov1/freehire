@@ -22,10 +22,10 @@ func userJobsApp() (*fiber.App, *auth.Issuer) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &trackingHandlers{tracking: jobtracking.New(stubTrackingRepo{})}
 	app := fiber.New()
-	app.Post("/jobs/:slug/view", auth.RequireAuth(iss), h.RecordView)
-	app.Post("/jobs/:slug/apply", auth.RequireAuth(iss), h.MarkApplied)
-	app.Post("/jobs/:slug/save", auth.RequireAuth(iss), h.SaveJob)
-	app.Delete("/jobs/:slug/save", auth.RequireAuth(iss), h.UnsaveJob)
+	app.Post("/jobs/:slug/view", auth.RequireAuth(iss, testVersions), h.RecordView)
+	app.Post("/jobs/:slug/apply", auth.RequireAuth(iss, testVersions), h.MarkApplied)
+	app.Post("/jobs/:slug/save", auth.RequireAuth(iss, testVersions), h.SaveJob)
+	app.Delete("/jobs/:slug/save", auth.RequireAuth(iss, testVersions), h.UnsaveJob)
 	return app, iss
 }
 

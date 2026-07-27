@@ -17,7 +17,7 @@ func wsApp(iss *Issuer, keys ...APIKeyAuthenticator) *fiber.App {
 		authenticator = keys[0]
 	}
 	app := fiber.New()
-	app.Get("/tools/ws", RequireAuthWS(iss, authenticator), func(c *fiber.Ctx) error {
+	app.Get("/tools/ws", RequireAuthWS(iss, anyVersion{1}, authenticator), func(c *fiber.Ctx) error {
 		id, _ := UserID(c)
 		return c.JSON(fiber.Map{"id": id})
 	})
@@ -94,7 +94,7 @@ func TestSubprotocolToken(t *testing.T) {
 
 func TestRequireAuthWS_AcceptsTheJWTFromEitherCarrier(t *testing.T) {
 	iss := NewIssuer("secret", time.Hour)
-	token, err := iss.Issue(7)
+	token, err := iss.Issue(7, 1)
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
@@ -123,8 +123,8 @@ func TestRequireAuthWS_AcceptsTheJWTFromEitherCarrier(t *testing.T) {
 func TestRequireAuthWS_RefusesAnUnauthenticatedHandshake(t *testing.T) {
 	iss := NewIssuer("secret", time.Hour)
 	expired := NewIssuer("secret", -time.Minute)
-	expiredToken, _ := expired.Issue(7)
-	otherSecret, _ := NewIssuer("other", time.Hour).Issue(7)
+	expiredToken, _ := expired.Issue(7, 1)
+	otherSecret, _ := NewIssuer("other", time.Hour).Issue(7, 1)
 
 	for _, tt := range []struct{ name, header, value string }{
 		{"no credential at all", "", ""},

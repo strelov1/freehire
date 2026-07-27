@@ -48,7 +48,7 @@ func TestReferralEndpoints(t *testing.T) {
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	token := func(uid int64) string {
-		tok, err := iss.Issue(uid)
+		tok, err := iss.Issue(uid, testTokenVersion)
 		if err != nil {
 			t.Fatalf("issue: %v", err)
 		}
@@ -61,14 +61,14 @@ func TestReferralEndpoints(t *testing.T) {
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	requireMod := auth.RequireRole(queries, "moderator")
-	app.Post("/api/v1/me/referrals/requests", auth.RequireAuth(iss), h.CreateReferralRequest)
-	app.Get("/api/v1/me/referrals/requests", auth.RequireAuth(iss), h.ListMyReferralRequests)
-	app.Get("/api/v1/me/referrals/incoming", auth.RequireAuth(iss), h.ListIncomingReferralRequests)
-	app.Get("/api/v1/me/referrals/incoming/:id/cv", auth.RequireAuth(iss), h.ViewReferralRequestCV)
-	app.Post("/api/v1/me/referrals/incoming/:id/resolve", auth.RequireAuth(iss), h.ResolveReferralRequest)
-	app.Get("/api/v1/referrals/offers", auth.RequireAuth(iss), requireMod, h.ListPendingReferralOffers)
-	app.Get("/api/v1/referrals/offers/:id/proof", auth.RequireAuth(iss), requireMod, h.ViewReferralOfferProof)
-	app.Post("/api/v1/referrals/offers/:id/decide", auth.RequireAuth(iss), requireMod, h.DecideReferralOffer)
+	app.Post("/api/v1/me/referrals/requests", auth.RequireAuth(iss, testVersions), h.CreateReferralRequest)
+	app.Get("/api/v1/me/referrals/requests", auth.RequireAuth(iss, testVersions), h.ListMyReferralRequests)
+	app.Get("/api/v1/me/referrals/incoming", auth.RequireAuth(iss, testVersions), h.ListIncomingReferralRequests)
+	app.Get("/api/v1/me/referrals/incoming/:id/cv", auth.RequireAuth(iss, testVersions), h.ViewReferralRequestCV)
+	app.Post("/api/v1/me/referrals/incoming/:id/resolve", auth.RequireAuth(iss, testVersions), h.ResolveReferralRequest)
+	app.Get("/api/v1/referrals/offers", auth.RequireAuth(iss, testVersions), requireMod, h.ListPendingReferralOffers)
+	app.Get("/api/v1/referrals/offers/:id/proof", auth.RequireAuth(iss, testVersions), requireMod, h.ViewReferralOfferProof)
+	app.Post("/api/v1/referrals/offers/:id/decide", auth.RequireAuth(iss, testVersions), requireMod, h.DecideReferralOffer)
 
 	do := func(method, path, tok string, body any) (int, map[string]any) {
 		var buf io.Reader

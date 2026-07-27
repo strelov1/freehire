@@ -9,6 +9,7 @@
     sessions,
     activeId,
     switching,
+    creating,
     ready,
     onNew,
     onSelect,
@@ -17,6 +18,9 @@
     sessions: SessionItem[];
     activeId: string | null;
     switching: boolean;
+    // creating is true while a new session is in flight, so the button cannot mint a
+    // second one on a double click (the parent guards too; this is the visible half).
+    creating: boolean;
     ready: boolean;
     onNew: () => void;
     onSelect: (id: string) => void;
@@ -29,7 +33,7 @@
     <button
       type="button"
       onclick={onNew}
-      disabled={switching || !ready}
+      disabled={creating || switching || !ready}
       class="flex w-full items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
     >
       <Plus class="size-4" />

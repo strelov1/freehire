@@ -9,6 +9,10 @@
         secondary: 'bg-secondary text-secondary-foreground hover:bg-accent',
         outline: 'border border-border bg-background hover:bg-accent hover:text-accent-foreground',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
+        // Filled, for the action that destroys something and cannot be undone —
+        // account deletion, not every remove button. A soft `ghost` + destructive
+        // text is the right weight for the reversible ones.
+        destructive: 'bg-destructive text-destructive-foreground hover:opacity-90',
       },
       size: {
         sm: 'h-8 px-3',

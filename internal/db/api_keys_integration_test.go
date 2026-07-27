@@ -37,7 +37,7 @@ func TestAPIKeyQueries(t *testing.T) {
 
 	const liveHash = "hash-alice-live"
 	live, err := q.CreateAPIKey(ctx, CreateAPIKeyParams{
-		UserID: alice, Name: "ci", TokenHash: liveHash, TokenPrefix: "fhk_alice1",
+		UserID: alice, Name: "ci", TokenHash: liveHash, TokenPrefix: "fhk_alice1", Scope: "full",
 	})
 	if err != nil {
 		t.Fatalf("CreateAPIKey: %v", err)
@@ -51,8 +51,8 @@ func TestAPIKeyQueries(t *testing.T) {
 		if err != nil {
 			t.Fatalf("AuthenticateAPIKey: %v", err)
 		}
-		if got != alice {
-			t.Errorf("user id = %d, want %d", got, alice)
+		if got.UserID != alice {
+			t.Errorf("user id = %d, want %d", got.UserID, alice)
 		}
 		var lastUsed pgtype.Timestamptz
 		if err := pool.QueryRow(ctx, "SELECT last_used_at FROM api_keys WHERE id = $1", live.ID).Scan(&lastUsed); err != nil {
@@ -72,7 +72,7 @@ func TestAPIKeyQueries(t *testing.T) {
 	t.Run("expired key returns no row", func(t *testing.T) {
 		const expiredHash = "hash-expired"
 		if _, err := q.CreateAPIKey(ctx, CreateAPIKeyParams{
-			UserID: alice, Name: "old", TokenHash: expiredHash, TokenPrefix: "fhk_old123",
+			UserID: alice, Name: "old", TokenHash: expiredHash, TokenPrefix: "fhk_old123", Scope: "full",
 			ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(-time.Hour), Valid: true},
 		}); err != nil {
 			t.Fatalf("CreateAPIKey(expired): %v", err)

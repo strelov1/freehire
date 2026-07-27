@@ -11,6 +11,8 @@ import (
 
 	"github.com/strelov1/freehire/internal/contribution"
 	"github.com/strelov1/freehire/internal/credits"
+	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/linkimport"
 )
 
 // contributionHandlers serves the crowdsourced paste-a-link flow: submit a URL →
@@ -19,10 +21,15 @@ import (
 type contributionHandlers struct {
 	contribution *contribution.Service
 	credits      *credits.Store
+	// queries backs the catalog lookup /jobs/resolve does before importing anything.
+	queries *db.Queries
+	// imports turns one job page URL into a catalog posting (the engine cmd/resolve-url
+	// runs), backing "add this page" from the browser extension.
+	imports *linkimport.Importer
 }
 
-func newContributionHandlers(contribution *contribution.Service, credits *credits.Store) *contributionHandlers {
-	return &contributionHandlers{contribution: contribution, credits: credits}
+func newContributionHandlers(contribution *contribution.Service, credits *credits.Store, queries *db.Queries, imports *linkimport.Importer) *contributionHandlers {
+	return &contributionHandlers{contribution: contribution, credits: credits, queries: queries, imports: imports}
 }
 
 func (h *contributionHandlers) register(api fiber.Router, mw middleware) {
@@ -30,8 +37,13 @@ func (h *contributionHandlers) register(api fiber.Router, mw middleware) {
 	// a supported, novel link is recorded and earns a point. No moderation queue — the
 	// derived-identity dedup and the supported-ATS gate are the only guards. The caller
 	// reads their own contributions; the points balance rides on /auth/me.
-	api.Post("/me/contributions", mw.key, h.CreateContribution)
+	api.Post("/me/contributions", mw.key, mw.outboundFetch, h.CreateContribution)
 	api.Get("/me/contributions", mw.key, h.ListMyContributions)
+
+	// The extension's "add this page": resolve the page to a catalog posting, importing it
+	// when a link-source adapter can read the page and queueing the link for triage when
+	// none can. Same limiter as a contribution — both make the server fetch a caller URL.
+	api.Post("/jobs/resolve", mw.key, mw.outboundFetch, h.ResolveJob)
 }
 
 // contributionRequest is the submit body: just the pasted job URL.

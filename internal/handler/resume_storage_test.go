@@ -118,13 +118,13 @@ func (r *fakeResumeRepo) GetStructured(_ context.Context, _ int64) (db.GetUserRe
 func resumeStorageApp(t *testing.T, store *resume.Store) (*fiber.App, string) {
 	t.Helper()
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	token, err := iss.Issue(1)
+	token, err := iss.Issue(1, testTokenVersion)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
 	h := &resumeHandlers{resume: store}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	g := auth.RequireAuth(iss)
+	g := auth.RequireAuth(iss, testVersions)
 	app.Put("/me/resume", g, h.PutResume)
 	app.Get("/me/resume", g, h.GetResume)
 	app.Delete("/me/resume", g, h.DeleteResume)

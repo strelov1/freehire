@@ -30,11 +30,16 @@ const dummyPasswordHash = "$2a$10$uAK6XQv2KNKj0KXGXHcgAe3fn70C1tZiCUeG4ZCkdGGJ60
 // gates the in-app agent assistant and likewise rides the wire shape as a UI
 // affordance.
 type User struct {
-	ID         int64
-	Email      string
-	Role       string
-	BetaTester bool
-	CreatedAt  *time.Time
+	ID            int64
+	Email         string
+	Role          string
+	BetaTester    bool
+	EmailVerified bool
+	// HasPassword is whether a password is set at all. False for an OAuth-only account,
+	// which must go through the reset flow to set one. The hash itself never leaves the
+	// database.
+	HasPassword bool
+	CreatedAt   *time.Time
 }
 
 // PasswordHasher hashes and verifies passwords (bcrypt in production). Injected
@@ -87,8 +92,26 @@ type Repository interface {
 	LinkOrCreateByEmail(ctx context.Context, provider, providerUserID, email string) (int64, error)
 
 	// CreateUser creates a new account with the given email and bcrypt password
-	// hash. Returns ErrEmailTaken on a unique-constraint violation.
-	CreateUser(ctx context.Context, email, passwordHash string) (User, error)
+	// hash. emailVerified is false for a password registration and true for an account
+	// born from a provider-verified OAuth sign-in. Returns ErrEmailTaken on a
+	// unique-constraint violation.
+	CreateUser(ctx context.Context, email, passwordHash string, emailVerified bool) (User, error)
+
+	// MarkEmailVerified records that control of the account's address was proven.
+	MarkEmailVerified(ctx context.Context, userID int64) error
+
+	// PasswordHash returns the account's stored bcrypt hash. hasPassword is false for a
+	// passwordless (OAuth-only) account.
+	PasswordHash(ctx context.Context, userID int64) (hash string, hasPassword bool, err error)
+
+	// SetPassword replaces a known password and revokes every session, returning the
+	// account's new session generation.
+	SetPassword(ctx context.Context, userID int64, passwordHash string) (int32, error)
+
+	// ResetPassword sets a password after a mailed code proved the address: it also
+	// marks the account verified and revokes every session, returning the new
+	// generation.
+	ResetPassword(ctx context.Context, userID int64, passwordHash string) (int32, error)
 
 	// UserByEmail looks up the user with the given (already-normalised) email.
 	// Returns ErrUserNotFound when absent. hasPassword is true when the account
@@ -100,15 +123,23 @@ type Repository interface {
 }
 
 // Service resolves external OAuth identities and handles password auth for
-// local user accounts.
+// local user accounts. codes/mailer are optional (see WithCodes): without them the
+// service still registers and authenticates, and the code-backed flows report the
+// feature unavailable.
 type Service struct {
 	repo   Repository
 	hasher PasswordHasher
+	codes  CodeStore
+	mailer CodeMailer
+
+	// now is the clock the code TTL and resend cooldown read. A field so tests can
+	// freeze time instead of sleeping.
+	now func() time.Time
 }
 
 // New returns a Service backed by the given Repository and PasswordHasher.
 func New(repo Repository, hasher PasswordHasher) *Service {
-	return &Service{repo: repo, hasher: hasher}
+	return &Service{repo: repo, hasher: hasher, now: time.Now}
 }
 
 // ResolveOAuthAccount maps a provider identity to a local user id, following
@@ -167,17 +198,21 @@ func (s *Service) Register(ctx context.Context, email, password string) (User, e
 	if err != nil {
 		return User{}, ErrInvalidEmail
 	}
-	if len(password) < minPasswordLen {
-		return User{}, ErrPasswordTooShort
-	}
-	if len(password) > maxPasswordLen {
-		return User{}, ErrPasswordTooLong
+	if err := validatePassword(password); err != nil {
+		return User{}, err
 	}
 	hash, err := s.hasher.Hash(password)
 	if err != nil {
 		return User{}, err
 	}
-	return s.repo.CreateUser(ctx, addr, hash)
+	// A password registration proves nothing about the address, so the account starts
+	// unverified — which is what stops it from being a silent OAuth merge target.
+	user, err := s.repo.CreateUser(ctx, addr, hash, false)
+	if err != nil {
+		return User{}, err
+	}
+	s.sendVerificationOnRegister(ctx, user.ID, user.Email)
+	return user, nil
 }
 
 // Login verifies the email/password pair and returns the matching user.
@@ -200,6 +235,10 @@ func (s *Service) Login(ctx context.Context, email, password string) (User, erro
 	if s.hasher.Check(hash, password) != nil {
 		return User{}, ErrInvalidCredentials
 	}
+	// The caller just proved a password exists, but the lookup row does not carry the
+	// flag — set it so login answers the same shape as /auth/me and a client cannot be
+	// told the account is passwordless right after it signed in with a password.
+	user.HasPassword = true
 	return user, nil
 }
 

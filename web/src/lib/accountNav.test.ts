@@ -2,8 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { accountNav, isSectionActive, visibleAccountNav } from './accountNav';
 
 describe('accountNav config', () => {
-  it('lists the twelve account sections', () => {
-    expect(accountNav).toHaveLength(12);
+  it('lists the thirteen account sections', () => {
+    expect(accountNav).toHaveLength(13);
+  });
+
+  it('offers a security section for password and session management', () => {
+    expect(accountNav.map((i) => i.href)).toContain('/my/security');
   });
 
   it('leads with the four everyday sections in use order', () => {
@@ -25,10 +29,12 @@ describe('accountNav config', () => {
 });
 
 describe('visibleAccountNav', () => {
-  it('hides the beta-only Assistant from a plain user but shows the Inbox and CV builder', () => {
+  it('shows the Assistant, Inbox and CV builder to a plain user', () => {
     const hrefs = visibleAccountNav(false, false).map((i) => i.href);
-    expect(hrefs).not.toContain('/my/assistant');
-    expect(hrefs).toContain('/my/inbox'); // Inbox is open to everyone now
+    // The Assistant left its beta rollout: it runs on the user's own machine
+    // with their own Claude, so there is nothing left to ration.
+    expect(hrefs).toContain('/my/assistant');
+    expect(hrefs).toContain('/my/inbox');
     expect(hrefs).toContain('/my/cvs'); // CV builder is public now (credits meter the AI spend)
   });
 
@@ -42,17 +48,16 @@ describe('visibleAccountNav', () => {
     }
   });
 
-  it('gates the Assistant on beta membership, not the moderator role', () => {
-    // A moderator who is not a beta tester sees the Inbox but NOT the Assistant.
-    const modOnly = visibleAccountNav(true, false).map((i) => i.href);
-    expect(modOnly).toContain('/my/inbox');
-    expect(modOnly).not.toContain('/my/assistant');
-
-    // A beta tester who is not a moderator sees the Assistant (and, like everyone,
-    // the Inbox).
-    const betaOnly = visibleAccountNav(false, true).map((i) => i.href);
-    expect(betaOnly).toContain('/my/assistant');
-    expect(betaOnly).toContain('/my/inbox');
+  it('shows the Assistant regardless of role or beta membership', () => {
+    for (const [mod, beta] of [
+      [false, false],
+      [true, false],
+      [false, true],
+    ] as const) {
+      const hrefs = visibleAccountNav(mod, beta).map((i) => i.href);
+      expect(hrefs).toContain('/my/assistant');
+      expect(hrefs).toContain('/my/inbox');
+    }
   });
 
   it('shows every section to a moderator who is also a beta tester', () => {

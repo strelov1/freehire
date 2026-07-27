@@ -31,7 +31,7 @@ func deckApp(s searcher, excluded []int64) (*fiber.App, *auth.Issuer) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &trackingHandlers{search: s, tracking: jobtracking.New(deckRepo{excluded: excluded})}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/tracking/swipe", auth.RequireAuth(iss), h.SwipeDeck)
+	app.Get("/api/v1/me/tracking/swipe", auth.RequireAuth(iss, testVersions), h.SwipeDeck)
 	return app, iss
 }
 
@@ -39,7 +39,7 @@ func deckGet(t *testing.T, app *fiber.App, iss *auth.Issuer, target string) (int
 	t.Helper()
 	req := httptest.NewRequest(fiber.MethodGet, target, nil)
 	if iss != nil {
-		token, _ := iss.Issue(7)
+		token, _ := iss.Issue(7, testTokenVersion)
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	}
 	resp, err := app.Test(req)

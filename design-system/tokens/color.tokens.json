@@ -61,6 +61,10 @@
     "$value": "oklch(0.577 0.245 27.325)",
     "$description": "Destructive action color (delete, remove, error)."
   },
+  "destructive-foreground": {
+    "$value": "oklch(0.985 0 0)",
+    "$description": "Text/icon on a filled destructive surface."
+  },
   "border": {
     "$value": "oklch(0.92 0 0)",
     "$description": "Default border color."

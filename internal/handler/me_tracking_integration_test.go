@@ -57,13 +57,13 @@ func TestListMyJobsEndpoint(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	token, err := iss.Issue(userID)
+	token, err := iss.Issue(userID, testTokenVersion)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
 	h := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss), h.ListTrackedJobs)
+	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), h.ListTrackedJobs)
 
 	type item struct {
 		Job       map[string]json.RawMessage `json:"job"`
@@ -198,13 +198,13 @@ func TestListMyJobsBoardFilter(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	token, err := iss.Issue(userID)
+	token, err := iss.Issue(userID, testTokenVersion)
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
 	h := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss), h.ListTrackedJobs)
+	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), h.ListTrackedJobs)
 
 	req := httptest.NewRequest(fiber.MethodGet, "/api/v1/me/tracking?filter=board", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})

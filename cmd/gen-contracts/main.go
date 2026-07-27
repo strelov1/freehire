@@ -15,11 +15,11 @@ import (
 	"github.com/gzuidhof/tygo/tygo"
 
 	"github.com/strelov1/freehire/internal/classify"
-	"github.com/strelov1/freehire/internal/vocab"
 	"github.com/strelov1/freehire/internal/location"
 	"github.com/strelov1/freehire/internal/roletag"
 	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/userjob"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 const outputPath = "web/src/lib/generated/contracts.ts"

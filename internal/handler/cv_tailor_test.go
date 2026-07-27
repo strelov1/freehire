@@ -40,4 +40,9 @@ func TestMintTailoringKey(t *testing.T) {
 	if !f.got.ExpiresAt.Valid || !f.got.ExpiresAt.Time.Equal(now.Add(tailoringKeyTTL)) {
 		t.Errorf("expiry = %v, want %v", f.got.ExpiresAt.Time, now.Add(tailoringKeyTTL))
 	}
+	// Narrow: the credential is handed to an external agent, so it must not carry the
+	// owner's whole account (third-party referral CVs, credit spend).
+	if f.got.Scope != auth.ScopeCV {
+		t.Errorf("scope = %q, want %q", f.got.Scope, auth.ScopeCV)
+	}
 }

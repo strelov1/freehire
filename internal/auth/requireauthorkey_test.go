@@ -13,27 +13,28 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// fakeKeyAuth authenticates exactly one token hash to a user id; any other hash
-// returns pgx.ErrNoRows, standing in for an unknown, revoked, or expired key —
-// mirroring the real db layer, which reports all of those as ErrNoRows.
+// fakeKeyAuth authenticates exactly one token hash to a full-scope key for a user id;
+// any other hash returns pgx.ErrNoRows, standing in for an unknown, revoked, or expired
+// key — mirroring the real db layer, which reports all of those as ErrNoRows. Scope
+// behaviour has its own tests in keyscope_test.go.
 type fakeKeyAuth struct {
 	validHash string
 	userID    int64
 }
 
-func (f fakeKeyAuth) AuthenticateAPIKey(_ context.Context, tokenHash string) (int64, error) {
+func (f fakeKeyAuth) AuthenticateAPIKey(_ context.Context, tokenHash string) (APIKeyIdentity, error) {
 	if tokenHash == f.validHash {
-		return f.userID, nil
+		return APIKeyIdentity{UserID: f.userID, Scope: ScopeFull}, nil
 	}
-	return 0, pgx.ErrNoRows
+	return APIKeyIdentity{}, pgx.ErrNoRows
 }
 
 // errKeyAuth fails every lookup with a generic error, standing in for a database
 // outage — which the middleware must NOT mask as a 401/anonymous.
 type errKeyAuth struct{ err error }
 
-func (f errKeyAuth) AuthenticateAPIKey(_ context.Context, _ string) (int64, error) {
-	return 0, f.err
+func (f errKeyAuth) AuthenticateAPIKey(_ context.Context, _ string) (APIKeyIdentity, error) {
+	return APIKeyIdentity{}, f.err
 }
 
 // dualAuthApp mounts a route behind RequireAuthOrKey that echoes the resolved user
@@ -41,7 +42,7 @@ func (f errKeyAuth) AuthenticateAPIKey(_ context.Context, _ string) (int64, erro
 // handler via the shared c.Locals.
 func dualAuthApp(iss *Issuer, keys APIKeyAuthenticator) *fiber.App {
 	app := fiber.New()
-	app.Get("/me", RequireAuthOrKey(iss, keys), func(c *fiber.Ctx) error {
+	app.Get("/me", RequireAuthOrKey(iss, anyVersion{1}, keys), func(c *fiber.Ctx) error {
 		id, ok := UserID(c)
 		if !ok {
 			return fiber.NewError(fiber.StatusInternalServerError, "user id missing from context")
@@ -111,7 +112,7 @@ func TestRequireAuthOrKey_FlagsKeyAuth(t *testing.T) {
 
 func TestRequireAuthOrKey_CookieIsNotViaKey(t *testing.T) {
 	iss := NewIssuer("secret", time.Hour)
-	token, _ := iss.Issue(7)
+	token, _ := iss.Issue(7, 1)
 
 	req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
 	req.AddCookie(&http.Cookie{Name: CookieName, Value: token})
@@ -127,7 +128,7 @@ func TestRequireAuthOrKey_CookieIsNotViaKey(t *testing.T) {
 func TestRequireAuthOrKey_ValidCookieAuthenticates(t *testing.T) {
 	iss := NewIssuer("secret", time.Hour)
 	keys := fakeKeyAuth{} // no valid key; the cookie must carry the identity
-	token, _ := iss.Issue(7)
+	token, _ := iss.Issue(7, 1)
 
 	req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
 	req.AddCookie(&http.Cookie{Name: CookieName, Value: token})
@@ -148,7 +149,7 @@ func TestRequireAuthOrKey_CookieTakesPrecedenceOverKey(t *testing.T) {
 	iss := NewIssuer("secret", time.Hour)
 	const token = "fhk_test-key"
 	keys := fakeKeyAuth{validHash: HashAPIKey(token), userID: 9}
-	cookie, _ := iss.Issue(7)
+	cookie, _ := iss.Issue(7, 1)
 
 	req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
 	req.AddCookie(&http.Cookie{Name: CookieName, Value: cookie})
@@ -186,8 +187,8 @@ func TestRequireAuthOrKey_InvalidCookieFallsThroughToKey(t *testing.T) {
 
 func TestRequireAuthOrKey_JWTBearerAuthenticatesAsSession(t *testing.T) {
 	iss := NewIssuer("secret", time.Hour)
-	token, _ := iss.Issue(42) // a session JWT presented as a Bearer header
-	keys := fakeKeyAuth{}     // no valid API key — the JWT must carry the identity
+	token, _ := iss.Issue(42, 1) // a session JWT presented as a Bearer header
+	keys := fakeKeyAuth{}        // no valid API key — the JWT must carry the identity
 
 	req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -235,7 +236,7 @@ func TestOptionalAuth_KeyLookupErrorPropagates(t *testing.T) {
 
 	newApp := func(keys APIKeyAuthenticator) *fiber.App {
 		app := fiber.New()
-		app.Get("/job", OptionalAuth(iss, keys), func(c *fiber.Ctx) error {
+		app.Get("/job", OptionalAuth(iss, anyVersion{1}, keys), func(c *fiber.Ctx) error {
 			_, ok := UserID(c)
 			return c.JSON(fiber.Map{"authed": ok})
 		})

@@ -5,14 +5,14 @@ go 1.25.12
 require (
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
 	github.com/abadojack/whatlanggo v1.0.1
-	github.com/aws/aws-sdk-go-v2 v1.42.1
+	github.com/aws/aws-sdk-go-v2 v1.43.0
 	github.com/aws/aws-sdk-go-v2/config v1.32.30
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.105.0
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.106.0
 	github.com/aws/aws-sdk-go-v2/service/sesv2 v1.63.1
-	github.com/aws/aws-sdk-go-v2/service/sqs v1.45.1
+	github.com/aws/aws-sdk-go-v2/service/sqs v1.46.0
 	github.com/bogdanfinn/fhttp v0.6.8
 	github.com/bogdanfinn/tls-client v1.15.1
-	github.com/fasthttp/websocket v1.5.8
+	github.com/fasthttp/websocket v1.5.12
 	github.com/getsentry/sentry-go v0.48.0
 	github.com/getsentry/sentry-go/fiber v0.48.0
 	github.com/gofiber/contrib/websocket v1.3.4
@@ -31,7 +31,7 @@ require (
 	github.com/testcontainers/testcontainers-go v0.43.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.43.0
 	github.com/tmc/langchaingo v0.1.14
-	github.com/valyala/fasthttp v1.72.0
+	github.com/valyala/fasthttp v1.73.0
 	github.com/yuin/goldmark v1.8.4
 	golang.org/x/crypto v0.54.0
 	golang.org/x/net v0.57.0
@@ -46,17 +46,17 @@ require (
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/JohannesKaufmann/dom v0.3.1 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
-	github.com/andybalholm/brotli v1.2.1 // indirect
+	github.com/andybalholm/brotli v1.2.2 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.14 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.29 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.30 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.30 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.30 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.31 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.31 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.31 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.32 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.13 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.23 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.30 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.31 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.24 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.31 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.32 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.4.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.32.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.37.1 // indirect
@@ -94,7 +94,7 @@ require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
-	github.com/klauspost/compress v1.18.6 // indirect
+	github.com/klauspost/compress v1.19.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.11 // indirect
 	github.com/klauspost/crc32 v1.3.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20250317134145-8bc96cf8fc35 // indirect
@@ -123,7 +123,7 @@ require (
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/rs/xid v1.6.0 // indirect
-	github.com/savsgio/gotils v0.0.0-20240303185622-093b76447511 // indirect
+	github.com/savsgio/gotils v0.0.0-20240704082632-aef3928b8a38 // indirect
 	github.com/shirou/gopsutil/v4 v4.26.5 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect
 	github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf // indirect

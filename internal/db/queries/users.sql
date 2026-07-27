@@ -2,24 +2,92 @@
 -- Register a new account. email is stored as given (the handler lowercases it);
 -- the unique index on lower(email) rejects duplicates regardless of case. role is
 -- returned so the new account's wire shape carries it (always 'user' at creation).
-INSERT INTO users (email, password_hash)
-VALUES ($1, $2)
-RETURNING id, email, role, beta_tester, created_at;
+-- email_verified is a parameter, not a default: a password registration starts
+-- unverified, while an account created from an OAuth sign-in is verified at birth
+-- because the provider already proved the address.
+INSERT INTO users (email, password_hash, email_verified)
+VALUES ($1, $2, $3)
+RETURNING id, email, role, beta_tester, email_verified, created_at;
 
 -- name: GetUserByEmail :one
 -- Login lookup. Case-insensitive on email; returns password_hash so the handler
 -- can verify the password (and reject accounts that have none). role feeds the
--- post-login wire shape.
-SELECT id, email, role, beta_tester, password_hash, created_at
+-- post-login wire shape. email_verified drives both the "confirm your email" prompt
+-- and the OAuth merge policy (an unverified account is seized, not silently joined).
+SELECT id, email, role, beta_tester, email_verified, password_hash, created_at
 FROM users
 WHERE lower(email) = lower($1);
 
 -- name: GetUserByID :one
--- Profile lookup for the authenticated user. Never selects password_hash. role is
--- included so /auth/me can tell a client whether to surface moderator-only UI.
-SELECT id, email, role, beta_tester, created_at
+-- Profile lookup for the authenticated user. role is included so /auth/me can tell a
+-- client whether to surface moderator-only UI. The password hash itself never leaves
+-- the database — only whether one exists, which is what lets the SPA offer a password
+-- change to password accounts and explain itself to OAuth-only ones.
+SELECT id, email, role, beta_tester, email_verified,
+       (password_hash IS NOT NULL)::boolean AS has_password,
+       created_at
 FROM users
 WHERE id = $1;
+
+-- name: GetUserPasswordHash :one
+-- The account's stored password hash, for verifying a current password on change.
+-- NULL when the account is passwordless (OAuth-only), which the caller treats the same
+-- as a wrong password: there is nothing to verify against.
+SELECT password_hash
+FROM users
+WHERE id = $1;
+
+-- name: GetUserTokenVersion :one
+-- The account's current session generation, read on every authenticated request to
+-- decide whether a correctly-signed token was revoked. One primary-key lookup; this
+-- is the price of making a stateless JWT revocable at all.
+SELECT token_version
+FROM users
+WHERE id = $1;
+
+-- name: BumpUserTokenVersion :one
+-- Invalidate every token issued for this account (sign out everywhere) by advancing
+-- the generation, returning the new value so the caller can immediately mint a
+-- replacement session for whoever asked.
+UPDATE users
+SET token_version = token_version + 1
+WHERE id = $1
+RETURNING token_version;
+
+-- name: SetUserEmailVerified :exec
+-- Record that control of the address was proven. Idempotent — confirming twice is a
+-- no-op rather than an error, so a double-submitted code does not fail the request.
+UPDATE users
+SET email_verified = true
+WHERE id = $1;
+
+-- name: SetUserPassword :one
+-- Change a known password. Revokes every other session in the same statement, so a
+-- stolen token cannot outlive the password it was minted under. Does NOT touch
+-- email_verified: knowing the current password proves nothing about the address.
+UPDATE users
+SET password_hash = $2, token_version = token_version + 1
+WHERE id = $1
+RETURNING token_version;
+
+-- name: ResetUserPassword :one
+-- Complete a reset-by-emailed-code: set the new hash, revoke every session, and mark
+-- the address verified — receiving the code IS proof of control, so a reset doubles as
+-- verification and an unverified account stops being a merge target.
+UPDATE users
+SET password_hash = $2, email_verified = true, token_version = token_version + 1
+WHERE id = $1
+RETURNING token_version;
+
+-- name: SeizeUnverifiedAccount :one
+-- Hand an unverified, password-backed account to the proven owner of its address when a
+-- provider-verified OAuth identity arrives for it: the password is destroyed and every
+-- session revoked, so a squatter who registered the address first loses both ways in.
+-- Returns the new generation for the session the sign-in is about to mint.
+UPDATE users
+SET password_hash = NULL, email_verified = true, token_version = token_version + 1
+WHERE id = $1
+RETURNING token_version;
 
 -- name: GetUserResume :one
 -- The authenticated user's résumé pointer (object key + upload time), or NULLs when
@@ -101,5 +169,37 @@ WHERE id = $1 AND resume_uploaded_at = $4;
 -- request to a role-gated endpoint and needs only the role, so it does not drag the
 -- full user row (the GetJobIDBySlug precedent for a hot-path read).
 SELECT role
+FROM users
+WHERE id = $1;
+
+-- name: ListUserBlobKeys :many
+-- Every object-storage key the account owns, in one read: the stored CV, each
+-- referral-proof PDF, and the raw MIME of each hosted email. Account deletion
+-- collects these BEFORE deleting any row — the mail and proof keys live in the rows
+-- themselves, so once those are gone the objects are unreachable and would sit in
+-- the bucket forever. Empty keys are filtered out so a caller never asks storage to
+-- delete "".
+SELECT u.resume_object_key AS key FROM users u
+WHERE u.id = $1 AND u.resume_object_key IS NOT NULL AND u.resume_object_key <> ''
+UNION
+SELECT o.proof_object_key FROM referral_offers o
+WHERE o.user_id = $1 AND o.proof_object_key <> ''
+UNION
+SELECT e.s3_key FROM emails e
+WHERE e.user_id = $1 AND e.s3_key IS NOT NULL AND e.s3_key <> '';
+
+-- name: DeleteUser :exec
+-- Erase the account. Every user-owned table declares ON DELETE CASCADE, so this one
+-- statement is the whole database side of account deletion; the trails that outlive
+-- the member (jobs.created_by, *.reviewed_by, referral decisions, thread authorship)
+-- are ON DELETE SET NULL by design. Objects in storage are NOT reachable from here —
+-- the caller deletes them first (see ListUserBlobKeys).
+DELETE FROM users WHERE id = $1;
+
+-- name: UserEmail :one
+-- Slim email lookup for the delete-account confirmation, which compares the typed
+-- address against the caller's own. A primitive so the handler needs no full user row
+-- (same shape as GetUserRole).
+SELECT email
 FROM users
 WHERE id = $1;

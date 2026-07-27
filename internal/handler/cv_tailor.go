@@ -31,10 +31,11 @@ type apiKeyMinter interface {
 }
 
 // mintTailoringKey issues a short-lived API key the tailoring agent's CLI uses to act as the
-// user against the CV endpoints. It reuses the api_keys machinery; there is no per-endpoint
-// scope, so the key is owner-scoped only — the CV endpoints' own owner checks confine it to
-// this user's CVs. The plaintext token is returned once (to hand to the agent session) and
-// only its hash is stored.
+// user against the CV endpoints. It reuses the api_keys machinery and is minted at the narrow
+// `cv` scope: the CV endpoints' own owner checks confine it to this user's CVs, and the scope
+// confines it to the CV surface, so a credential that leaks out of an agent's environment
+// cannot read third-party referral CVs or spend the owner's AI credits. The plaintext token
+// is returned once (to hand to the agent session) and only its hash is stored.
 func mintTailoringKey(ctx context.Context, q apiKeyMinter, userID int64, now time.Time) (string, error) {
 	token, hash, prefix, err := auth.GenerateAPIKey()
 	if err != nil {
@@ -45,6 +46,7 @@ func mintTailoringKey(ctx context.Context, q apiKeyMinter, userID int64, now tim
 		Name:        "CV tailoring session",
 		TokenHash:   hash,
 		TokenPrefix: prefix,
+		Scope:       auth.ScopeCV,
 		ExpiresAt:   pgtype.Timestamptz{Time: now.Add(tailoringKeyTTL), Valid: true},
 	}); err != nil {
 		return "", err

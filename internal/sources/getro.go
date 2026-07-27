@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/strelov1/freehire/internal/vocab"
 	"github.com/strelov1/freehire/internal/skilltag"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // getro adapts Getro-powered job boards (<label>.getro.com), the platform many VC/accelerator

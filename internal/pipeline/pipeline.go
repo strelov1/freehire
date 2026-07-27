@@ -85,14 +85,30 @@ type BoardHealth interface {
 
 // Stats reports what a run did: Ingested counts saved jobs, Failed counts boards that
 // errored (unknown provider or a fetch failure), Skipped counts jobs that fetched fine
-// but failed to persist, and Cooled counts boards skipped because they are in cooldown
-// (a deliberate back-off, distinct from a failure). Skipped is surfaced so a run whose
+// but failed to persist, Cooled counts boards skipped because they are in cooldown (a
+// deliberate back-off, distinct from a failure), and Rejected counts postings the
+// catalogue filter turned away before the write path. Skipped is surfaced so a run whose
 // every save fails (e.g. a DB schema drift) is not mistaken for a clean success.
+//
+// Rejected is kept apart from Skipped because the two mean opposite things: a rejection
+// is the filter working as intended, a skip is something broken. Folded together, a board
+// whose every save fails would read as a board full of non-technical postings.
 type Stats struct {
 	Ingested int
 	Failed   int
 	Skipped  int
 	Cooled   int
+	Rejected int
+}
+
+// add accumulates another Stats into s, so the per-board and per-provider merges cannot
+// drift apart when a counter is added.
+func (s *Stats) add(o Stats) {
+	s.Ingested += o.Ingested
+	s.Failed += o.Failed
+	s.Skipped += o.Skipped
+	s.Cooled += o.Cooled
+	s.Rejected += o.Rejected
 }
 
 // RunStats is a run's outcome broken down by provider. A run may cover several providers
@@ -104,10 +120,7 @@ type RunStats map[string]Stats
 func (rs RunStats) Total() Stats {
 	var t Stats
 	for _, s := range rs {
-		t.Ingested += s.Ingested
-		t.Failed += s.Failed
-		t.Skipped += s.Skipped
-		t.Cooled += s.Cooled
+		t.add(s)
 	}
 	return t
 }
@@ -165,15 +178,12 @@ func (r Runner) Run(ctx context.Context, entries []sources.CompanyEntry) (RunSta
 				return
 			}
 
-			st := r.ingestBoard(ctx, e)
+			boardStats := r.ingestBoard(ctx, e)
 			crawled.Add(1)
 
 			mu.Lock()
 			s := byProv[e.Provider]
-			s.Ingested += st.Ingested
-			s.Failed += st.Failed
-			s.Skipped += st.Skipped
-			s.Cooled += st.Cooled
+			s.add(boardStats)
 			byProv[e.Provider] = s
 			mu.Unlock()
 		}(e)
@@ -274,13 +284,14 @@ func sortedProviders(byProvider map[string]map[string]sources.CompanyEntry) []st
 	return providers
 }
 
-// ingestBoard fetches and saves one board and returns its Stats: Ingested counts saved
-// jobs, Failed is 1 when the board itself errored, Skipped counts jobs that fetched fine
-// but failed to persist, and Cooled is 1 when the board was skipped for cooldown. A
-// missing adapter or a fetch error fails the board; a per-job save error skips that job
-// without failing the board, but is counted and logged so it is never silently swallowed.
-// A board in cooldown is skipped before its adapter is touched, and each crawl's
-// board-level outcome is recorded to BoardHealth.
+// ingestBoard fetches and saves one board, returning that board's contribution to the
+// run stats: Ingested counts saved jobs, Failed is 1 when the board itself errored,
+// Skipped counts jobs that fetched fine but failed to persist, Rejected counts postings
+// the catalogue filter turned away, and Cooled is 1 when the board was skipped for
+// cooldown. A missing adapter or a fetch error fails the board; a per-job save error
+// skips that job without failing the board, but is counted and logged so it is never
+// silently swallowed. A board in cooldown is skipped before its adapter is touched, and
+// each crawl's board-level outcome is recorded to BoardHealth.
 func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 	// Cooldown gate — before the adapter lookup, so a backed-off board costs nothing.
 	if r.cooledDown(ctx, e) {
@@ -299,15 +310,18 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 	// progress is saved incrementally (and survives an interrupted run) rather than buffered
 	// until the whole board finishes.
 	if ss, streaming := src.(sources.StreamingSource); streaming {
-		ing, fail, skip := r.ingestStream(ctx, e, ss)
-		// A streaming board that saved nothing AND failed is a true outage; partial progress
-		// (some jobs saved before a mid-crawl error) is a success signal, not a board failure.
-		if fail > 0 && ing == 0 {
+		st := r.ingestStream(ctx, e, ss)
+		// A streaming board that made no progress at all AND failed is a true outage;
+		// partial progress is a success signal, not a board failure. A rejected posting
+		// is progress: the crawl reached it and the filter turned it away. Without that,
+		// a mid-crawl error on an all-rejected board — the normal case on the non-tech-heavy
+		// national feeds — would count as a failure and cool a healthy board for hours.
+		if st.Failed > 0 && st.Ingested == 0 && st.Rejected == 0 {
 			r.recordFailure(ctx, e, "streaming board failed with no progress")
 		} else {
-			r.recordSuccess(ctx, e, ing)
+			r.recordSuccess(ctx, e, st.Ingested)
 		}
-		return Stats{Ingested: ing, Failed: fail, Skipped: skip}
+		return st
 	}
 
 	raw, err := r.fetchBoard(ctx, e, src)
@@ -321,6 +335,7 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 
 	var (
 		st       Stats
+		rej      rejections
 		firstErr error
 	)
 	for _, j := range raw {
@@ -338,7 +353,7 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 			st.Ingested++
 			continue
 		}
-		r.saveOne(ctx, e, j, &st, &firstErr)
+		r.saveOne(ctx, e, j, &st, &rej, &firstErr)
 	}
 	// One line per board with skips (not one per job), so a systemic failure — e.g.
 	// the DB behind a migration, or a board whose postings won't construct — is visible
@@ -347,23 +362,32 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 		log.Printf("ingest: %s board %q (%s): skipped %d/%d jobs on construct or save error (e.g. %v)",
 			e.Provider, e.Board, e.Company, st.Skipped, len(raw), firstErr)
 	}
+	rej.log(e)
 	// The board was reachable (Fetch succeeded), so it is healthy regardless of per-job
 	// save skips — those are stats.Skipped, not a board outage.
 	r.recordSuccess(ctx, e, st.Ingested)
+	st.Rejected = rej.rejected
 	return st
 }
 
-// saveOne normalizes one posting and saves it, tallying the outcome into st and keeping
-// the first error for the board's skip-summary log line. Both the buffered (ingestBoard)
-// and the streaming (ingestStream) save loops share it so the normalize→save→count step
-// behaves identically; the SeenRefresh and Removed branches stay on the caller.
-func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, st *Stats, firstErr *error) {
+// saveOne normalizes one posting, puts it through the catalogue filter, and saves what
+// survives, tallying the outcome into st and keeping the first error for the board's
+// skip-summary log line. Both the buffered (ingestBoard) and the streaming (ingestStream)
+// save loops share it so the normalize→filter→save→count step behaves identically; the
+// SeenRefresh and Removed branches stay on the caller, which is why neither reaches the
+// filter's candidate denominator.
+func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, st *Stats, rej *rejections, firstErr *error) {
 	dj, err := normalizeJob(e, j)
 	if err != nil {
 		st.Skipped++
 		if *firstErr == nil {
 			*firstErr = err
 		}
+		return
+	}
+	rej.candidate()
+	if outOfCatalogue(dj) {
+		rej.reject(dj.Fields().Title)
 		return
 	}
 	if err := r.Store.Save(ctx, dj); err != nil {
@@ -457,10 +481,11 @@ func (r Runner) recordFailure(ctx context.Context, e sources.CompanyEntry, msg s
 // (the adapter may emit concurrently) and tallies the same ingested/skipped counts as the
 // buffered path; a board-level FetchStream error counts the board failed but keeps whatever was
 // already saved (the 48h unseen-sweep guards against a short crawl closing the un-reached tail).
-func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sources.StreamingSource) (ingested, failed, skipped int) {
+func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sources.StreamingSource) Stats {
 	var (
 		mu       sync.Mutex
 		st       Stats
+		rej      rejections
 		firstErr error
 		total    int
 	)
@@ -487,10 +512,11 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 			// A close is not counted as ingested — Stats.Ingested is saved jobs only.
 			return
 		}
-		r.saveOne(ctx, e, j, &st, &firstErr)
+		r.saveOne(ctx, e, j, &st, &rej, &firstErr)
 	}
 
 	err := ss.FetchStream(ctx, e, emit)
+	rej.log(e)
 	if st.Skipped > 0 {
 		log.Printf("ingest: %s board %q (%s): skipped %d/%d jobs on save error (e.g. %v)",
 			e.Provider, e.Board, e.Company, st.Skipped, total, firstErr)
@@ -498,9 +524,12 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 	if err != nil {
 		log.Printf("ingest: %s board %q (%s) failed after %d saved: %v",
 			e.Provider, e.Board, e.Company, st.Ingested, err)
-		return st.Ingested, 1, st.Skipped
+		st.Failed = 1
+		st.Rejected = rej.rejected
+		return st
 	}
-	return st.Ingested, 0, st.Skipped
+	st.Rejected = rej.rejected
+	return st
 }
 
 // jobIdentity is the dedup key a posting persists under: the provider is the source, and the

@@ -6,6 +6,7 @@
   import { isAuthenticated } from '$lib/auth.svelte';
   import { FilterStore, filtersToParams } from '$lib/filters';
   import ATSReportView from '$lib/components/ATSReportView.svelte';
+  import DeleteAccountButton from '$lib/components/DeleteAccountButton.svelte';
   import FilterSummary from '$lib/components/filters/FilterSummary.svelte';
   import FilterModal from '$lib/components/filters/FilterModal.svelte';
   import FilterEdgeTab from '$lib/components/FilterEdgeTab.svelte';
@@ -227,6 +228,12 @@
          match the loaded profile tab, whose main column also spans the container (no aside). -->
     <div class="w-full">
       <ProfileForm profile={null} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
+      <!-- Set-up is the settings tab before there are tabs, so leaving is offered here
+           too: someone who signed up, filled in nothing and wants out must not have to
+           create a profile first to find the way back out. -->
+      <div class="mt-2 flex justify-end border-t border-border pt-4">
+        <DeleteAccountButton />
+      </div>
     </div>
   {:else}
     <div class="flex gap-6">
@@ -276,9 +283,11 @@
           {#key profile.updated_at}
             <ProfileForm {profile} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
           {/key}
-          <!-- Destructive action lives at the foot of the settings tab, out of
-               the page header (where it crowded the title on narrow viewports). -->
-          <div class="mt-2 flex justify-end border-t border-border pt-4">
+          <!-- Destructive actions live at the foot of the settings tab, out of
+               the page header (where they crowded the title on narrow viewports) and
+               off the other tabs, which are readings of the market, not account
+               settings. Both open behind a confirmation. -->
+          <div class="mt-2 flex justify-end gap-2 border-t border-border pt-4">
             <Button
               variant="ghost"
               size="sm"
@@ -288,6 +297,7 @@
               <Trash2 class="size-4" />
               Delete profile
             </Button>
+            <DeleteAccountButton />
           </div>
         {:else if tab === 'structured'}
           <!-- Profile: the read-only structured résumé parsed from the CV. Loaded

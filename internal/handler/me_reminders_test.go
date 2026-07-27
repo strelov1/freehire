@@ -58,7 +58,7 @@ func remindersApp(settings reminder.Settings) (*fiber.App, *auth.Issuer, *stubRe
 		reminder: reminder.New(repo),
 	}
 	app := fiber.New()
-	gate := auth.RequireAuth(iss)
+	gate := auth.RequireAuth(iss, testVersions)
 	app.Post("/jobs/:slug/apply", gate, h.MarkApplied)
 	app.Post("/jobs/:slug/save", gate, h.SaveJob)
 	app.Delete("/jobs/:slug/save", gate, h.UnsaveJob)
@@ -100,7 +100,7 @@ func TestReminderSettings_RequiresAuth(t *testing.T) {
 
 func TestSaveJob_SchedulesReminderFromDefault(t *testing.T) {
 	app, iss, repo := remindersApp(reminder.Settings{Enabled: true, DefaultDelayDays: 3, Channels: []string{"email"}})
-	token, _ := iss.Issue(7)
+	token, _ := iss.Issue(7, testTokenVersion)
 	if got := do(t, app, fiber.MethodPost, "/jobs/go-dev/save", token, "").StatusCode; got != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", got)
 	}
@@ -111,7 +111,7 @@ func TestSaveJob_SchedulesReminderFromDefault(t *testing.T) {
 
 func TestSaveJob_OptOutOverrideCancels(t *testing.T) {
 	app, iss, repo := remindersApp(reminder.Settings{Enabled: true, DefaultDelayDays: 3, Channels: []string{"email"}})
-	token, _ := iss.Issue(7)
+	token, _ := iss.Issue(7, testTokenVersion)
 	do(t, app, fiber.MethodPost, "/jobs/go-dev/save", token, `{"reminder":{"disabled":true}}`)
 	if repo.upserts != 0 {
 		t.Errorf("opt-out must not schedule, got %d upserts", repo.upserts)
@@ -123,7 +123,7 @@ func TestSaveJob_OptOutOverrideCancels(t *testing.T) {
 
 func TestSaveJob_DisabledRuleSchedulesNothing(t *testing.T) {
 	app, iss, repo := remindersApp(reminder.Settings{Enabled: false})
-	token, _ := iss.Issue(7)
+	token, _ := iss.Issue(7, testTokenVersion)
 	do(t, app, fiber.MethodPost, "/jobs/go-dev/save", token, "")
 	if repo.upserts != 0 || repo.cancels != 0 {
 		t.Errorf("off-by-default save must be a no-op: upserts=%d cancels=%d", repo.upserts, repo.cancels)
@@ -132,7 +132,7 @@ func TestSaveJob_DisabledRuleSchedulesNothing(t *testing.T) {
 
 func TestApplyAndUnsave_CancelReminder(t *testing.T) {
 	app, iss, repo := remindersApp(reminder.Settings{Enabled: true, DefaultDelayDays: 3, Channels: []string{"email"}})
-	token, _ := iss.Issue(7)
+	token, _ := iss.Issue(7, testTokenVersion)
 	do(t, app, fiber.MethodPost, "/jobs/go-dev/apply", token, "")
 	do(t, app, fiber.MethodDelete, "/jobs/go-dev/save", token, "")
 	if repo.cancels != 2 {
@@ -142,7 +142,7 @@ func TestApplyAndUnsave_CancelReminder(t *testing.T) {
 
 func TestRescheduleReminder_UpdatesFireAt(t *testing.T) {
 	app, iss, repo := remindersApp(reminder.Settings{})
-	token, _ := iss.Issue(7)
+	token, _ := iss.Issue(7, testTokenVersion)
 	resp := do(t, app, fiber.MethodPatch, "/jobs/go-dev/reminder", token, `{"delay_days":7}`)
 	if resp.StatusCode != fiber.StatusNoContent {
 		t.Fatalf("status = %d, want 204", resp.StatusCode)
@@ -154,7 +154,7 @@ func TestRescheduleReminder_UpdatesFireAt(t *testing.T) {
 
 func TestRescheduleReminder_RejectsBadDelay(t *testing.T) {
 	app, iss, _ := remindersApp(reminder.Settings{})
-	token, _ := iss.Issue(7)
+	token, _ := iss.Issue(7, testTokenVersion)
 	resp := do(t, app, fiber.MethodPatch, "/jobs/go-dev/reminder", token, `{"delay_days":9999}`)
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
@@ -163,7 +163,7 @@ func TestRescheduleReminder_RejectsBadDelay(t *testing.T) {
 
 func TestCancelJobReminder_Cancels(t *testing.T) {
 	app, iss, repo := remindersApp(reminder.Settings{})
-	token, _ := iss.Issue(7)
+	token, _ := iss.Issue(7, testTokenVersion)
 	resp := do(t, app, fiber.MethodDelete, "/jobs/go-dev/reminder", token, "")
 	if resp.StatusCode != fiber.StatusNoContent {
 		t.Fatalf("status = %d, want 204", resp.StatusCode)
@@ -175,7 +175,7 @@ func TestCancelJobReminder_Cancels(t *testing.T) {
 
 func TestUpdateReminderSettings_RejectsEnabledWithoutChannels(t *testing.T) {
 	app, iss, _ := remindersApp(reminder.Settings{})
-	token, _ := iss.Issue(7)
+	token, _ := iss.Issue(7, testTokenVersion)
 	resp := do(t, app, fiber.MethodPut, "/me/reminder-settings", token, `{"enabled":true,"default_delay_days":3,"channels":[]}`)
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Errorf("status = %d, want 400", resp.StatusCode)

@@ -20,5 +20,11 @@
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true
   },
-  "include": ["src/**/*.ts", "src/**/*.svelte", "scripts/**/*.mjs"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.svelte",
+    "scripts/**/*.mjs",
+    "vitest.config.ts",
+    "vitest.setup.ts"
+  ]
 }

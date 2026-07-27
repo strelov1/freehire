@@ -4,7 +4,7 @@
 Auth primitives: bcrypt password hashing, JWT cookie transport, API-key hashing/auth, and the `RequireAuth`/`RequireAuthOrKey` Fiber middleware.
 
 ## Always true
-- **JWT is stateless, HS256, carries only `sub` (user id).** It survives new sign-in methods and a later swap to opaque sessions.
+- **JWT is HS256 and carries `sub` (user id) plus `tv` (the account's session generation).** It survives new sign-in methods and a later swap to opaque sessions. `tv` is what makes a stateless token revocable: it is compared against `users.token_version` on every authenticated request, so a bump (sign-out-everywhere, password change or reset, an OAuth seizure of an unverified account) strands every outstanding token. Accounts start at generation **1**, so a token minted before versioning — which has no `tv` claim, decoding to zero — can never match. The version load **fails closed**, which is also what terminates a *deleted* account's sessions everywhere: the row is gone, the read errors, every outstanding cookie is 401. Do not soften that error path into "tolerate a hiccup" — it would re-admit deleted accounts, whose writes then hit foreign-key 500s instead of a clean 401.
 - **Transport is an `HttpOnly; SameSite=Lax` cookie**, never a `Bearer` header or `localStorage` — XSS-safe, same-origin CSRF defense (no CSRF token needed yet).
 - **SPA and API must be same-origin.** In dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the backend.
 - `users.password_hash` is **nullable** — passwordless sign-in creates accounts with no password; password login rejects a null hash with a generic `401`.
@@ -20,9 +20,11 @@ Auth primitives: bcrypt password hashing, JWT cookie transport, API-key hashing/
 `internal/auth` owns four responsibilities:
 
 1. **Password hashing** (`password.go`): bcrypt between register and login.
-2. **JWT Issuer** (`token.go`): issues and verifies HS256 tokens carrying only `sub`.
+2. **JWT Issuer** (`token.go`): issues and verifies HS256 tokens carrying `sub` and `tv`. `Parse` returns both and rejects a claimless (pre-versioning) token with `ErrNoTokenVersion`.
 3. **Cookie transport** (`cookie.go`): `SetTokenCookie`/`ClearTokenCookie` with `HttpOnly; SameSite=Lax; Path=/`.
-4. **Middleware** (`middleware.go`): `RequireAuth` reads the JWT cookie and puts `user_id` in `c.Locals`; `RequireAuthOrKey` tries the cookie first, falls through to API-key hash lookup.
+4. **Middleware** (`middleware.go`): `RequireAuth(iss, versions)` reads the JWT cookie, confirms the token's generation against the database, and puts `user_id` in `c.Locals`; `RequireAuthOrKey(iss, versions, keys)` tries the cookie first, then a **full-scope** API key. `RequireAuthOrScopedKey(..., allowed...)` additionally admits the listed narrow scopes — only the CV surface and `/auth/me` use it. A live key on a route its scope does not cover is **403** (insufficient scope), not 401.
+
+   **API-key scopes:** `api_keys.scope` is `full` (user-created keys; the create body has no scope field, so a client cannot choose) or `cv` (the short-lived credential `mintTailoringKey` hands to the tailoring agent). Full-scope-only is the default on every route, so a new endpoint is out of a leaked agent credential's reach unless it deliberately opts in.
 
 OAuth sign-in (`internal/auth/oauth/`) adds a provider registry (Google/GitHub/LinkedIn), each implementing the `Provider` interface. The authorization-code flow redirects to `/start` (sets CSRF state cookie), then `/callback` (verifies state, exchanges code, fetches verified email, resolves account, sets JWT cookie, 302s back to SPA). Resolution is identity-first (keyed `user_identities (provider, provider_user_id)`), then verified-email link to existing account, then new passwordless user — all in one transaction. **Never link or create by an unverified email.**
 
@@ -62,7 +64,7 @@ key: one credential that both hire and Roy verify is simpler than a key plus a
 token bridge, at the cost of per-token revocation.
 
 ## Limitations
-- No token revocation/refresh (logout clears the cookie but the JWT lives until `exp`; modest TTL instead).
+- No refresh tokens (a session is re-minted on sign-in). Revocation exists: `POST /auth/logout-all` bumps `users.token_version`. The cost is one primary-key lookup per authenticated request; `auth.TokenVersionLoader` is the seam a cache would drop into.
 - No CSRF token — only `SameSite=Lax` + same-origin defense; a CSRF token is needed only if a future need forces `SameSite=None`.
 - Identity unlinking/management UI.
 - Magic-link sign-in.
