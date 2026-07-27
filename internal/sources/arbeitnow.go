@@ -73,6 +73,8 @@ func (a arbeitnow) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 // toJob maps an inline posting to a Job, returning ok=false for an unusable posting (no
 // native id, which would collide on the dedup key, or no company, which would break the
 // slug). The structured remote flag sets the work mode; the location text is a fallback.
+// The feed is inconsistent about the body: most postings carry live HTML, but a minority
+// arrive entity-encoded, so the description passes through unescapeEncodedHTML first.
 func (p arbeitnowPosting) toJob() (Job, bool) {
 	if p.Slug == "" || p.CompanyName == "" {
 		return Job{}, false
@@ -83,7 +85,7 @@ func (p arbeitnowPosting) toJob() (Job, bool) {
 		Title:       p.Title,
 		Company:     p.CompanyName,
 		Location:    p.Location,
-		Description: sanitizeHTML(p.Description),
+		Description: sanitizeHTML(unescapeEncodedHTML(p.Description)),
 		Remote:      p.Remote || isRemote(p.Location),
 		WorkMode:    workModeFromRemote(p.Remote),
 		PostedAt:    parseEpochSeconds(p.CreatedAt),
