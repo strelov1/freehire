@@ -12,7 +12,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.45.1
 	github.com/bogdanfinn/fhttp v0.6.8
 	github.com/bogdanfinn/tls-client v1.15.1
-	github.com/fasthttp/websocket v1.5.8
+	github.com/fasthttp/websocket v1.5.12
 	github.com/getsentry/sentry-go v0.48.0
 	github.com/getsentry/sentry-go/fiber v0.48.0
 	github.com/gofiber/contrib/websocket v1.3.4
@@ -123,7 +123,7 @@ require (
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/rs/xid v1.6.0 // indirect
-	github.com/savsgio/gotils v0.0.0-20240303185622-093b76447511 // indirect
+	github.com/savsgio/gotils v0.0.0-20240704082632-aef3928b8a38 // indirect
 	github.com/shirou/gopsutil/v4 v4.26.5 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect
 	github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf // indirect
