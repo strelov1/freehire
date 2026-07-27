@@ -70,7 +70,10 @@ vacancies with keyword and facet filters (`search_jobs`), reading one vacancy
 (`market_fit`), saving, unsaving and applying to a vacancy, setting an
 application stage or note (`track_job`), listing the caller's tracked jobs
 (`my_jobs`), and — in a tailoring session — reading the tailoring context and CV
-document and applying a CV patch or rendering the CV. Each tool SHALL declare a
+document and applying a CV patch. Rendering the CV SHALL NOT be a tool: the
+workspace already previews the document beside the chat, so a render would return
+bytes the model cannot read and the user a copy of what is on screen. Each tool
+SHALL declare a
 JSON schema for its arguments and return structured data, not human-formatted
 text. Moderator-only operations (job authoring, submission review) SHALL NOT be
 exposed.

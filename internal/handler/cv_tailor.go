@@ -90,7 +90,7 @@ func (a *API) TailorCV(c *fiber.Ctx) error {
 	if err != nil {
 		return err // unknown slug → pgx.ErrNoRows → 404 via RenderError
 	}
-	analysis, err := a.cachedAnalysis(c, userID, job.ID)
+	analysis, err := a.cachedAnalysis(c.Context(), userID, job.ID)
 	if err != nil {
 		return err
 	}
@@ -255,7 +255,7 @@ func (a *API) TailorContext(c *fiber.Ctx) error {
 	if rec.JobID == 0 {
 		return fiber.NewError(fiber.StatusConflict, "not a tailored CV")
 	}
-	analysis, err := a.cachedAnalysis(c, userID, rec.JobID)
+	analysis, err := a.cachedAnalysis(c.Context(), userID, rec.JobID)
 	if err != nil {
 		return err
 	}
@@ -269,8 +269,8 @@ func (a *API) TailorContext(c *fiber.Ctx) error {
 // cachedAnalysis loads the cached fit analysis for (user, job), or a 409 telling the caller to
 // run the fit analysis first when none is cached (or the cached blob is empty/corrupt). It
 // never recomputes.
-func (a *API) cachedAnalysis(c *fiber.Ctx, userID, jobID int64) (*matchanalysis.Analysis, error) {
-	row, err := a.matchAnalysisCache.GetUserJobAnalysis(c.Context(), db.GetUserJobAnalysisParams{UserID: userID, JobID: jobID})
+func (a *API) cachedAnalysis(ctx context.Context, userID, jobID int64) (*matchanalysis.Analysis, error) {
+	row, err := a.matchAnalysisCache.GetUserJobAnalysis(ctx, db.GetUserJobAnalysisParams{UserID: userID, JobID: jobID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fiber.NewError(fiber.StatusConflict, "run the fit analysis first")
 	}
