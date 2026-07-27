@@ -159,10 +159,26 @@ func (a *API) JobFacets(c *fiber.Ctx) error {
 		return err
 	}
 
+	return c.JSON(fiber.Map{"data": facetView(res)})
+}
+
+// facetPayload is the public shape of a facet result: distributions and numeric
+// stats keyed by the query-param names callers filter by, never by the internal
+// Meilisearch attributes.
+type facetPayload struct {
+	Total  int64                       `json:"total"`
+	Facets map[string]map[string]int64 `json:"facets"`
+	Stats  map[string]search.FacetStat `json:"stats"`
+}
+
+// facetView re-keys a raw facet result to the public param names. It is shared by
+// the HTTP endpoint and the assistant's facets tool, so the vocabulary the agent
+// filters by is exactly the vocabulary the API publishes.
+func facetView(res search.FacetResult) facetPayload {
 	param := facetParamByAttr()
 
-	// Re-key distributions to public param names, dropping the noisy per-value
-	// distribution of the continuous numeric facets (kept only as stats below).
+	// Distributions, dropping the noisy per-value distribution of the continuous
+	// numeric facets (kept only as stats below).
 	facets := make(map[string]map[string]int64, len(res.Facets))
 	for attr, dist := range res.Facets {
 		p, ok := param[attr]
@@ -172,17 +188,11 @@ func (a *API) JobFacets(c *fiber.Ctx) error {
 		facets[p] = dist
 	}
 
-	// Re-key numeric stats to public param names.
 	stats := make(map[string]search.FacetStat, len(res.Stats))
 	for attr, st := range res.Stats {
 		if p, ok := param[attr]; ok {
 			stats[p] = st
 		}
 	}
-
-	return c.JSON(fiber.Map{"data": fiber.Map{
-		"total":  res.Total,
-		"facets": facets,
-		"stats":  stats,
-	}})
+	return facetPayload{Total: res.Total, Facets: facets, Stats: stats}
 }
