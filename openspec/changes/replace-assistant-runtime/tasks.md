@@ -5,9 +5,9 @@
 
 ## 2. Session and transcript persistence
 
-- [ ] 2.1 Add migration `00XX_assistant_sessions.sql`: `assistant_sessions` (id, user_id, preset, label, cv_id, job_id, created_at, updated_at) and `assistant_messages` (session_id, seq, role, content jsonb, created_at) with owner and ordering indexes and cascade delete.
-- [ ] 2.2 Add sqlc queries for create/list/get/delete session (all owner-scoped) and append/read messages; regenerate `internal/db`.
-- [ ] 2.3 Add a store in `internal/assistant` over those queries that maps stored messages to and from `llms.MessageContent`, including assistant tool calls and tool results; unit-test the round trip.
+- [x] 2.1 Add migration `00XX_assistant_sessions.sql`: `assistant_sessions` (id, user_id, preset, label, cv_id, job_id, created_at, updated_at) and `assistant_messages` (session_id, seq, role, content jsonb, created_at) with owner and ordering indexes and cascade delete.
+- [x] 2.2 Add sqlc queries for create/list/get/delete session (all owner-scoped) and append/read messages; regenerate `internal/db`.
+- [x] 2.3 Add a store in `internal/assistant` over those queries that maps stored messages to and from `llms.MessageContent`, including assistant tool calls and tool results; unit-test the round trip.
 
 ## 3. Tool registry and tools
 

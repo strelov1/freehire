@@ -29,3 +29,8 @@ sql:
           # bytes marshal straight through to the profile response (null stays null).
           - column: "user_profiles.location_preferences"
             go_type: "encoding/json.RawMessage"
+          # An assistant message's payload: prose, a tool call, or a tool result. It is
+          # stored and replayed verbatim, so raw JSON round-trips whole — a []byte would
+          # base64-encode it into the transcript response.
+          - column: "assistant_messages.content"
+            go_type: "encoding/json.RawMessage"

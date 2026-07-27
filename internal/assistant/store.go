@@ -1,0 +1,182 @@
+package assistant
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/strelov1/freehire/internal/db"
+)
+
+// Presets a session can run under. The preset selects the system prompt and the
+// registered tools, and nothing else — the same chat surface serves both.
+const (
+	PresetChat   = "chat"
+	PresetTailor = "tailor"
+)
+
+// ErrNotFound is returned for a session the caller does not own and for one that
+// does not exist. The two are deliberately indistinguishable: telling them apart
+// would let a caller probe for other users' session ids.
+var ErrNotFound = errors.New("assistant: session not found")
+
+// Session is one conversation, owner-scoped. CVID and JobID are set only for a
+// tailoring session; nil pointers say "unbound" without leaking pgtype into
+// callers.
+type Session struct {
+	ID     int64
+	UserID int64
+	Preset string
+	Label  string
+	CVID   *int64
+	JobID  *int64
+}
+
+// Queries is the slice of the generated query surface the store needs.
+// *db.Queries satisfies it; tests supply a fake.
+type Queries interface {
+	CreateAssistantSession(ctx context.Context, arg db.CreateAssistantSessionParams) (db.AssistantSession, error)
+	ListAssistantSessionsByUser(ctx context.Context, userID int64) ([]db.AssistantSession, error)
+	GetAssistantSession(ctx context.Context, arg db.GetAssistantSessionParams) (db.AssistantSession, error)
+	DeleteAssistantSession(ctx context.Context, arg db.DeleteAssistantSessionParams) (int64, error)
+	TouchAssistantSession(ctx context.Context, id int64) error
+	SetAssistantSessionLabel(ctx context.Context, arg db.SetAssistantSessionLabelParams) error
+	AppendAssistantMessage(ctx context.Context, arg db.AppendAssistantMessageParams) (db.AssistantMessage, error)
+	ListAssistantMessages(ctx context.Context, sessionID int64) ([]db.AssistantMessage, error)
+}
+
+// Store persists sessions and their transcripts. Every session read and write is
+// scoped to an owner, so ownership needs no separate enforcement layer.
+type Store struct{ q Queries }
+
+// NewStore wraps the query surface.
+func NewStore(q Queries) *Store { return &Store{q: q} }
+
+// CreateSession starts a conversation. cvID/jobID bind a tailoring session to its
+// CV and vacancy and are nil for a chat.
+func (s *Store) CreateSession(ctx context.Context, userID int64, preset string, cvID, jobID *int64) (Session, error) {
+	row, err := s.q.CreateAssistantSession(ctx, db.CreateAssistantSessionParams{
+		UserID: userID,
+		Preset: preset,
+		CvID:   nullableInt(cvID),
+		JobID:  nullableInt(jobID),
+	})
+	if err != nil {
+		return Session{}, fmt.Errorf("assistant: create session: %w", err)
+	}
+	return sessionFrom(row), nil
+}
+
+// Sessions lists the caller's conversations, most recently active first.
+func (s *Store) Sessions(ctx context.Context, userID int64) ([]Session, error) {
+	rows, err := s.q.ListAssistantSessionsByUser(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("assistant: list sessions: %w", err)
+	}
+	out := make([]Session, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, sessionFrom(r))
+	}
+	return out, nil
+}
+
+// Session reads one conversation the caller owns.
+func (s *Store) Session(ctx context.Context, id, userID int64) (Session, error) {
+	row, err := s.q.GetAssistantSession(ctx, db.GetAssistantSessionParams{ID: id, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Session{}, ErrNotFound
+	}
+	if err != nil {
+		return Session{}, fmt.Errorf("assistant: get session: %w", err)
+	}
+	return sessionFrom(row), nil
+}
+
+// DeleteSession removes an owned conversation and its transcript.
+func (s *Store) DeleteSession(ctx context.Context, id, userID int64) error {
+	n, err := s.q.DeleteAssistantSession(ctx, db.DeleteAssistantSessionParams{ID: id, UserID: userID})
+	if err != nil {
+		return fmt.Errorf("assistant: delete session: %w", err)
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Touch marks a session as the most recently active, so the rail follows real use.
+func (s *Store) Touch(ctx context.Context, id int64) error {
+	if err := s.q.TouchAssistantSession(ctx, id); err != nil {
+		return fmt.Errorf("assistant: touch session: %w", err)
+	}
+	return nil
+}
+
+// LabelSession names a session from its first user message. The query applies it
+// only while the label is unset, so this is safe to call on every turn.
+func (s *Store) LabelSession(ctx context.Context, id int64, label string) error {
+	err := s.q.SetAssistantSessionLabel(ctx, db.SetAssistantSessionLabelParams{
+		ID:    id,
+		Label: pgtype.Text{String: label, Valid: label != ""},
+	})
+	if err != nil {
+		return fmt.Errorf("assistant: label session: %w", err)
+	}
+	return nil
+}
+
+// Append writes one message to a session's transcript and returns it with the
+// sequence number the database assigned.
+func (s *Store) Append(ctx context.Context, sessionID int64, m Message) (Message, error) {
+	row, err := s.q.AppendAssistantMessage(ctx, db.AppendAssistantMessageParams{
+		SessionID: sessionID,
+		Role:      m.Role,
+		Content:   m.Content,
+	})
+	if err != nil {
+		return Message{}, fmt.Errorf("assistant: append message: %w", err)
+	}
+	return Message{Seq: row.Seq, Role: row.Role, Content: row.Content}, nil
+}
+
+// Transcript reads a session's messages in order.
+func (s *Store) Transcript(ctx context.Context, sessionID int64) ([]Message, error) {
+	rows, err := s.q.ListAssistantMessages(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("assistant: read transcript: %w", err)
+	}
+	out := make([]Message, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, Message{Seq: r.Seq, Role: r.Role, Content: r.Content})
+	}
+	return out, nil
+}
+
+func sessionFrom(r db.AssistantSession) Session {
+	return Session{
+		ID:     r.ID,
+		UserID: r.UserID,
+		Preset: r.Preset,
+		Label:  r.Label.String,
+		CVID:   optionalInt(r.CvID),
+		JobID:  optionalInt(r.JobID),
+	}
+}
+
+func nullableInt(v *int64) pgtype.Int8 {
+	if v == nil {
+		return pgtype.Int8{}
+	}
+	return pgtype.Int8{Int64: *v, Valid: true}
+}
+
+func optionalInt(v pgtype.Int8) *int64 {
+	if !v.Valid {
+		return nil
+	}
+	n := v.Int64
+	return &n
+}

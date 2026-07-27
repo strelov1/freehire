@@ -22,6 +22,25 @@ type ApiKey struct {
 	Scope       string             `json:"scope"`
 }
 
+type AssistantMessage struct {
+	SessionID int64              `json:"session_id"`
+	Seq       int32              `json:"seq"`
+	Role      string             `json:"role"`
+	Content   json.RawMessage    `json:"content"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type AssistantSession struct {
+	ID        int64              `json:"id"`
+	UserID    int64              `json:"user_id"`
+	Preset    string             `json:"preset"`
+	Label     pgtype.Text        `json:"label"`
+	CvID      pgtype.Int8        `json:"cv_id"`
+	JobID     pgtype.Int8        `json:"job_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 type BoardHealth struct {
 	Provider            string             `json:"provider"`
 	Board               string             `json:"board"`
