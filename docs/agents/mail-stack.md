@@ -45,6 +45,15 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
   (`ashbyhq.com`, `greenhouse-mail.io`, …), not from employer domains. `mailmatch` matches on
   thread continuity and the company name carried in the sender *name* / subject. A
   domain-based shortcut looks obvious and is wrong.
+- **The sender *name* is a relay too, and `atsPseudoNames` is the only thing saying so.**
+  The rule above bans the domain but not the display name, and relays sign mail with their
+  own brand: a message reading `From: Workable` / `Subject: Thanks for applying to Derq` is
+  about Derq. Because `ExtractCompany` prefers the sender name over the subject, a brand
+  missing from that list wins over the employer the subject names. `workable` was missing,
+  and one catalog company called Workable auto-collected 23 acknowledgements belonging to 23
+  other employers — an application that then could never look silent, while the real ones
+  lost their mail. Adding a brand there is deliberately lossy (that brand's own mail stops
+  auto-linking, degrading to a suggestion) and that trade is always worth taking.
 - **Read the body via `readableBody(text, html)`, never `body_text` alone.** Many ATS senders
   (Gem, Ashby, Greenhouse) send **HTML-only** mail with no `text/plain` part, so `body_text`
   is empty and a classifier fed only that judges from the subject line — which once turned a
