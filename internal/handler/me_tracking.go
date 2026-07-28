@@ -20,6 +20,13 @@ type myJobResponse struct {
 	Notes          *string     `json:"notes"`
 	EmailCount     int         `json:"email_count"`
 	ReminderFireAt *time.Time  `json:"reminder_fire_at"`
+	// The silence fields are null together on any row that is not an application
+	// awaiting a reply — a job merely viewed or saved, or one in a settled stage.
+	// Null means "nothing is owed here", which the board must be able to tell
+	// apart from "owed and answered promptly".
+	LastActivityAt *time.Time `json:"last_activity_at"`
+	DaysSilent     *int       `json:"days_silent"`
+	SilenceState   *string    `json:"silence_state"`
 }
 
 // ListTrackedJobs returns the authenticated user's job interactions joined with the
@@ -42,9 +49,12 @@ func (h *trackingHandlers) ListTrackedJobs(c *fiber.Ctx) error {
 		return trackingError(err)
 	}
 
+	// One clock for the whole page: silence is derived against now(), and two rows
+	// read a moment apart must not disagree about what "now" was.
+	now := time.Now()
 	items := make([]myJobResponse, 0, len(listing.Items))
 	for _, it := range listing.Items {
-		items = append(items, myJobResponse{
+		item := myJobResponse{
 			Job:            it.Job,
 			ViewedAt:       it.ViewedAt,
 			SavedAt:        it.SavedAt,
@@ -53,7 +63,13 @@ func (h *trackingHandlers) ListTrackedJobs(c *fiber.Ctx) error {
 			Notes:          it.Notes,
 			EmailCount:     it.EmailCount,
 			ReminderFireAt: it.ReminderFireAt,
-		})
+		}
+		if s := it.Silence(now); s != nil {
+			item.LastActivityAt = &s.LastActivityAt
+			item.DaysSilent = &s.DaysSilent
+			item.SilenceState = &s.State
+		}
+		items = append(items, item)
 	}
 
 	return c.JSON(fiber.Map{

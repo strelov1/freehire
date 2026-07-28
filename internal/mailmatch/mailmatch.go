@@ -14,11 +14,32 @@ import (
 // atsPseudoNames are ATS platform brand names that surface where a company name
 // is expected ("Thank you for applying to Greenhouse!", "Your Workday
 // Application"). They are not employers and must never be treated as a company.
+//
+// Blocking a name here is deliberately lossy: some of these brands are also real
+// employers people apply to, and their own mail will no longer auto-link. That
+// asymmetry is the point. A missed auto-link degrades to an LLM suggestion the
+// caller confirms — a moment's work. A wrong auto-link silently hands one
+// application everyone else's mail, and the damage compounds: on a live mailbox
+// `workable` was absent from this list, and one catalog company named Workable
+// collected 23 acknowledgements meant for 23 other employers, leaving it
+// permanently unable to look silent.
+//
+// The list is sender *display names*, not the provider slugs in sources/ — a new
+// board file does not automatically belong here, and a brand that never appears
+// as a display name does not need to be. When adding an ATS board, ask whether
+// its relay signs mail with its own brand.
 var atsPseudoNames = map[string]bool{
 	"greenhouse": true, "workday": true, "myworkday": true, "lever": true,
 	"ashby": true, "smartrecruiters": true, "teamtailor": true, "recruitee": true,
 	"icims": true, "gem": true, "eightfold": true, "rippling": true,
-	"bamboohr": true, "wellfound": true,
+	"bamboohr": true, "wellfound": true, "workable": true, "jobvite": true,
+	"taleo": true, "breezy": true, "breezyhr": true, "jazzhr": true,
+	"comeet": true, "personio": true, "pinpoint": true, "freshteam": true,
+	"zoho recruit": true, "zohorecruit": true, "manatal": true, "traffit": true,
+	"phenom": true, "avature": true, "cornerstone": true, "successfactors": true,
+	"bullhorn": true, "jobylon": true, "loxo": true, "neogov": true,
+	"softgarden": true, "talentlyft": true, "trakstar": true, "applicantpro": true,
+	"catsone": true, "crelate": true, "jobscore": true, "hireology": true,
 }
 
 // nameSuffixes are the recruiting-team suffixes ATS "from" names carry.

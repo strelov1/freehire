@@ -199,6 +199,26 @@ func Parse(text string, opts ...Option) []string {
 	return stringset.Sorted(strong)
 }
 
+// HasEngineering reports whether any of the canonicals in skills names engineering
+// work. It exists because "carries a tagged skill" is not the same claim as "is a
+// technical posting": the dictionary deliberately covers the recruiting, HR, finance,
+// legal, operations and customer-success roles a technical company hires for, so a
+// recruiting coordinator comes back tagged {stakeholder-management,
+// candidate-experience} — a correct facet, and no evidence at all about the employer.
+//
+// A canonical the dictionary does not place is treated as engineering. Every caller so
+// far is deciding whether to act against a company on the grounds that it has never
+// posted anything technical, and for that decision an unrecognised skill must not read
+// as proof of absence.
+func HasEngineering(skills []string) bool {
+	for _, s := range skills {
+		if !nonEngineeringCanonicals[s] {
+			return true
+		}
+	}
+	return false
+}
+
 // matchAcronyms adds the canonical of each acronym whose exact surface form occurs
 // as a standalone token in cased (case-preserved) text.
 func matchAcronyms(cased string, acronyms map[string]string, set map[string]struct{}) {

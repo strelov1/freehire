@@ -4,8 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
+
+	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/assistant"
+	"github.com/strelov1/freehire/internal/resumeextract"
+	"github.com/strelov1/freehire/internal/skilltag"
 	"github.com/strelov1/freehire/internal/userprofile"
 )
 
@@ -34,7 +39,9 @@ func (h *assistantHandlers) getProfileTool() assistant.Tool {
 			"want, the skills they want to avoid, where and how they will work, and their CV " +
 			"(headline, years, experience, education — contacts are not included). Call this " +
 			"before asking the user what they are looking for; only ask about what the profile " +
-			"does not answer. Takes no arguments.",
+			"does not answer. The experience section reports the SHAPE of what they have told us — " +
+			"which roles we know and how much evidence each carries — not the achievements " +
+			"themselves; read those with experience_search when you need them. Takes no arguments.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{}},
 		Run: func(ctx context.Context, userID int64, _ json.RawMessage) (any, error) {
 			profile, err := h.profile.userProfile.Get(ctx, userID)
@@ -48,7 +55,112 @@ func (h *assistantHandlers) getProfileTool() assistant.Tool {
 			if err != nil {
 				return nil, err
 			}
-			return toProfileResponse(profile, h.profile.structuredCV(ctx, userID)), nil
+			return h.profileToolResult(ctx, userID, profile), nil
 		},
 	}
+}
+
+// profileToolResult is what the agent sees. It differs from the HTTP profile response in
+// one deliberate way: the experience bank is reported as a SHAPE — the roles, how much
+// evidence each carries, and which stated skills have none — rather than as content.
+//
+// A tool result is persisted in the transcript and replayed into the model's context on
+// every later turn. A two-hundred-atom bank replayed each turn would consume the window
+// and defeat trimming, so content is fetched per question through experience_search and
+// the summary tells the agent where it is worth asking one.
+type profileToolResult struct {
+	Specializations     []string                    `json:"specializations"`
+	Skills              []string                    `json:"skills"`
+	ExcludedSkills      []string                    `json:"excluded_skills,omitempty"`
+	LocationPreferences any                         `json:"location_preferences,omitempty"`
+	CV                  *resumeextract.Professional `json:"cv,omitempty"`
+	Experience          *experienceSummary          `json:"experience,omitempty"`
+}
+
+// experienceSummary is the bank at a glance.
+type experienceSummary struct {
+	Employments []employmentSummary `json:"employments"`
+	// SkillsWithoutEvidence are skills the candidate claims on their profile that nothing
+	// in the bank supports. This is the interviewer's work list, and the tailoring agent's
+	// warning: a skill here cannot be written onto a CV, however central the vacancy makes it.
+	SkillsWithoutEvidence []string `json:"skills_without_evidence,omitempty"`
+	TotalAchievements     int      `json:"total_achievements"`
+}
+
+type employmentSummary struct {
+	ID           uuid.UUID `json:"id"`
+	Company      string    `json:"company,omitempty"`
+	Role         string    `json:"role,omitempty"`
+	Period       string    `json:"period,omitempty"`
+	Current      bool      `json:"current,omitempty"`
+	Achievements int       `json:"achievements"`
+}
+
+// profileToolResult assembles the agent's view of a caller's profile.
+func (h *assistantHandlers) profileToolResult(ctx context.Context, userID int64, profile userprofile.Profile) profileToolResult {
+	out := profileToolResult{
+		Specializations:     profile.Specializations,
+		Skills:              profile.Skills,
+		ExcludedSkills:      profile.ExcludedSkills,
+		LocationPreferences: profile.LocationPreferences,
+		CV:                  h.profile.structuredCV(ctx, userID),
+	}
+	// The CV block already carries the whole work history, which is the very thing this
+	// summary exists to keep out of the transcript.
+	if out.CV != nil {
+		trimmed := *out.CV
+		trimmed.Experience = nil
+		out.CV = &trimmed
+	}
+	if summary := h.experienceSummary(ctx, userID, profile.Skills); summary != nil {
+		out.Experience = summary
+	}
+	return out
+}
+
+// experienceSummary counts the bank rather than reading it out.
+func (h *assistantHandlers) experienceSummary(ctx context.Context, userID int64, claimed []string) *experienceSummary {
+	if h.experience == nil {
+		return nil
+	}
+	employments, err := h.experience.ListEmployments(ctx, userID)
+	if err != nil {
+		return nil
+	}
+	atoms, err := h.experience.ListAtoms(ctx, userID)
+	if err != nil {
+		return nil
+	}
+	if len(employments) == 0 && len(atoms) == 0 {
+		return nil
+	}
+
+	counts := map[uuid.UUID]int{}
+	evidenced := map[string]bool{}
+	for _, a := range atoms {
+		if a.EmploymentID != nil {
+			counts[*a.EmploymentID]++
+		}
+		for _, skill := range a.Skills {
+			evidenced[skill] = true
+		}
+	}
+
+	out := &experienceSummary{TotalAchievements: len(atoms)}
+	for _, e := range employments {
+		out.Employments = append(out.Employments, employmentSummary{
+			ID: e.ID, Company: e.Company, Role: e.Role, Current: e.Current,
+			Period:       strings.TrimSpace(e.Start + " – " + e.End),
+			Achievements: counts[e.ID],
+		})
+		for _, skill := range e.Stack {
+			evidenced[skill] = true
+		}
+	}
+	for _, skill := range skilltag.Canonicalize(claimed) {
+		if !evidenced[skill] {
+			out.SkillsWithoutEvidence = append(out.SkillsWithoutEvidence, skill)
+		}
+	}
+	return out
 }

@@ -147,7 +147,33 @@ SELECT sqlc.embed(jobs), uj.viewed_at, uj.saved_at, uj.applied_at, uj.stage, uj.
           FROM job_reminders r
          WHERE r.user_id = uj.user_id
            AND r.job_id = jobs.id
-           AND r.status = 'pending') AS reminder_fire_at
+           AND r.status = 'pending') AS reminder_fire_at,
+       -- last_activity_at is when this application last moved: its apply date, or
+       -- the newest message linked to it when that is later. GREATEST ignores a
+       -- NULL aggregate, so an application with no mail falls back to applied_at
+       -- rather than reporting nothing — a clock that only starts once mail
+       -- arrives would never fire on the applications ignored outright, which are
+       -- the ones worth reporting. NULL on a row that is not an application: a job
+       -- merely viewed or saved is not waiting on anyone.
+       (CASE WHEN uj.applied_at IS NOT NULL THEN
+          GREATEST(uj.applied_at,
+                   (SELECT max(e.received_at)
+                      FROM emails e
+                     WHERE e.user_id = uj.user_id
+                       AND e.job_id = jobs.id
+                       AND e.deleted_at IS NULL))
+        END)::timestamptz AS last_activity_at,
+       -- has_pending_suggestion is mail the matcher believes belongs to this
+       -- application that the caller has neither confirmed nor rejected. Such mail
+       -- contradicts a claim that nobody replied, so the reader downgrades a
+       -- silence verdict to a question rather than asserting it.
+       (uj.applied_at IS NOT NULL AND EXISTS (
+          SELECT 1
+            FROM emails e
+           WHERE e.user_id = uj.user_id
+             AND e.suggested_job_id = jobs.id
+             AND e.job_id IS NULL
+             AND e.deleted_at IS NULL))::boolean AS has_pending_suggestion
 FROM user_jobs uj
 JOIN jobs ON jobs.id = uj.job_id
 WHERE uj.user_id = $1

@@ -13,6 +13,7 @@ import (
 	"github.com/strelov1/freehire/internal/atscheck"
 	classifydict "github.com/strelov1/freehire/internal/classify"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/experience"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/resumeextract"
 	"github.com/strelov1/freehire/internal/skilltag"
@@ -41,6 +42,10 @@ type resumeHandlers struct {
 	atsAnalyzer *atscheck.Analyzer
 	// atsCache reads/writes the per-user cached CV ATS review (backed by *db.Queries).
 	atsCache atsReviewStore
+	// bank receives the work history of every successfully-extracted CV and serves it back
+	// on the status read. Nil when the queries are unavailable; both then no-op, exactly
+	// like the other best-effort derivations.
+	bank experienceBank
 }
 
 func newResumeHandlers(resumeStore *resume.Store, structuredExtractor *resumeextract.Extractor, search searcher, facets facetCounter, userProfile *userprofile.Service, atsAnalyzer *atscheck.Analyzer, queries *db.Queries) *resumeHandlers {
@@ -52,7 +57,18 @@ func newResumeHandlers(resumeStore *resume.Store, structuredExtractor *resumeext
 		userProfile:         userProfile,
 		atsAnalyzer:         atsAnalyzer,
 		atsCache:            queries,
+		bank:                newExperienceBank(queries),
 	}
+}
+
+// newExperienceBank builds the bank the upload path feeds, or nil when there are no
+// queries to build it over — a nil bank is the "banking disabled" state the import
+// already tolerates.
+func newExperienceBank(queries *db.Queries) experienceBank {
+	if queries == nil {
+		return nil
+	}
+	return experience.NewStore(experience.NewQueriesRepository(queries))
 }
 
 func (h *resumeHandlers) register(api fiber.Router, mw middleware) {
@@ -343,6 +359,12 @@ func (h *resumeHandlers) extractStructuredResume(userID int64, text string, uplo
 	if err := h.resume.SetStructured(ctx, userID, st, h.structuredExtractor.ModelID(), *uploadedAt); err != nil {
 		log.Printf("resume structured persist: user %d: %v", userID, err)
 	}
+	// The bank is fed from the SAME extraction, inside the same guard: an unconfigured
+	// LLM or a failed extract has already returned above, so there is no path where the
+	// bank sees a CV the structured résumé did not. Unlike the structure, the import is
+	// additive and unstamped — a slow extraction for an already-replaced CV adds atoms
+	// that are still true, so it is not gated on the upload time matching.
+	h.importExperience(ctx, userID, st, uploadedAt.UTC().Format(time.RFC3339))
 }
 
 // GetResume reports whether the caller has a stored résumé (and when). Always 200:
@@ -361,11 +383,30 @@ func (h *resumeHandlers) GetResume(c *fiber.Ctx) error {
 		return err
 	}
 	resp := newResumeMeta(true, meta)
-	// Attach the read-only structured résumé when a current one exists (best-effort: a
-	// read hiccup or stale/absent structure simply leaves it null, never failing status).
-	if st, ok, err := h.resume.Structured(c.Context(), userID); err != nil {
+	// Attach the parsed résumé, with its WORK HISTORY taken from the experience bank
+	// rather than from the stored structure. The rest of the structure — contacts,
+	// education, languages, the years estimate — still comes from the file, and is still
+	// governed by its staleness rule; the bank is not, so a pending extraction costs
+	// those sections and no longer hides the career the user has confirmed.
+	//
+	// This read is cookie-only, which is why it is the one surface that carries contacts.
+	var st resumeextract.Structured
+	var haveStructure bool
+	if stored, ok, err := h.resume.Structured(c.Context(), userID); err != nil {
 		log.Printf("resume structured read: user %d: %v", userID, err)
 	} else if ok {
+		st, haveStructure = stored, true
+	}
+	st.Experience = nil
+	if h.bank != nil {
+		history, err := h.bank.WorkHistory(c.Context(), userID)
+		if err != nil {
+			log.Printf("resume work history: user %d: %v", userID, err)
+		} else {
+			st.Experience = history
+		}
+	}
+	if haveStructure || len(st.Experience) > 0 {
 		resp.Structured = &st
 	}
 	return c.JSON(fiber.Map{"data": resp})

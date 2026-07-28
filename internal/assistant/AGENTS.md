@@ -49,22 +49,23 @@ contract, registry and strict argument decoding; `message.go` the stored-message
 encoding and its round trip to `[]llms.MessageContent`; `store.go` the
 owner-scoped persistence; `prompt.go` the per-preset system prompts.
 
-**Presets.** A session records `chat`, `tailor` or `browse`. The preset selects the
-system prompt and the registered tools and nothing else, which is why the same chat
-component serves `/my/assistant`, the CV-tailoring workspace and the extension's
-side panel. A tailoring session's CV tools close over the CV and vacancy ids from
-the session binding, so the model cannot address another CV even by guessing an id.
+**Presets.** A session records `chat`, `tailor`, `profile` or `browse`. The vocabulary
+is pinned by a CHECK constraint on `assistant_sessions.preset`, so adding one is a
+schema change and not just a Go constant. The preset selects the system prompt and the
+registered tools and nothing else, which is why one chat component serves
+`/my/assistant`, the CV-tailoring workspace, the experience interview and the
+extension's side panel. A tailoring session's CV tools close over the CV and vacancy
+ids from the session binding, so the model cannot address another CV even by guessing
+an id.
 
-A `browse` session is one held from the browser extension. It is the only preset
-whose agent can see something outside this process: `read_current_page` attaches to
-the caller's browser-tool channel (`internal/browsertools`) as an in-process harness
-for the length of one call, the same way `/me/autofill/run` does. That tool is
-deliberately absent from the other two presets — nothing is attached to their
-channel, and a tool that can only fail teaches the model to stop calling tools.
-Reaching no browser is a tool error naming the remedy, never a failed turn.
-
-`preset` carries a CHECK in the schema (0044, widened by 0047), so a fourth preset
-is a migration, not just a constant.
+A `browse` session is one held from the browser extension. It is the only preset whose
+agent can see something outside this process: `read_current_page` attaches to the
+caller's browser-tool channel (`internal/browsertools`) as an in-process harness for the
+length of one call, the same way `/me/autofill/run` does. That tool is deliberately
+absent from every other preset — nothing is attached to their channel, and a tool that
+can only fail teaches the model to stop calling tools. Reaching no browser is a tool
+error naming the remedy, never a failed turn; the call carries its own deadline, because
+it is the only tool whose completion depends on a client we do not control.
 
 **History trimming.** `trim` keeps the most recent N messages and then drops any
 leading tool results whose originating call was trimmed away — providers reject a
@@ -82,7 +83,11 @@ is never mistaken for the answer.
    HTTP handler calls.
 2. Register it in `assistantRegistry` under the presets that should offer it.
 3. Return structured data, not prose. Include the fields the model needs to act
-   (a vacancy's `public_slug`, not just its title).
+   (a vacancy's `public_slug`, not just its title; an achievement's id and whether it may
+   be written to a CV, not just its text).
+3b. Keep the result small. It is persisted in the transcript and replayed into the model's
+   context on EVERY later turn — this is why `get_profile` reports the experience bank's
+   shape and counts while `experience_search` returns its content per question.
 4. Give errors a message the model can act on — name the invalid value and list
    the valid ones. That message is the model's only path to self-correction.
 

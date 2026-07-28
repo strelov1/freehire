@@ -18,6 +18,7 @@ import (
 	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/browsertools"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/experience"
 	"github.com/strelov1/freehire/internal/llm"
 )
 
@@ -38,6 +39,8 @@ type assistantHandlers struct {
 	// services underneath keeps the tool and GET /me/profile on one assembly, so the
 	// agent cannot drift from what the profile page shows.
 	profile *profileHandlers
+	// experience backs the bank tools, which every preset offers.
+	experience experienceBankTools
 	// browserTools backs read_current_page in a browsing session. It is the same hub
 	// the agentic autofill drives, so the assistant is a second in-process harness on
 	// the user's channel rather than a second wire to their browser.
@@ -51,6 +54,7 @@ func newAssistantHandlers(queries *db.Queries, model *llm.Client, maxSteps int,
 	search *searchHandlers, resumeH *resumeHandlers, tracking *trackingHandlers, cvH *cvHandlers,
 	profileH *profileHandlers, browserTools *browsertools.Hub) *assistantHandlers {
 	h := &assistantHandlers{
+		experience:   experience.NewStore(experience.NewQueriesRepository(queries)),
 		store:        assistant.NewStore(queries),
 		queries:      queries,
 		search:       search,
@@ -153,23 +157,19 @@ func assistantSessionID(c *fiber.Ctx) (uuid.UUID, error) {
 	return id, nil
 }
 
-// CreateAssistantSession starts a new conversation for the caller, in the preset
-// they ask for: a general chat, or a browsing session held from the extension's
-// side panel. Tailoring sessions are created by the tailoring bootstrap, which
-// knows the CV and vacancy to bind; this endpoint deliberately cannot mint one,
-// since an unbound tailoring session registers no CV tools and can do nothing.
+// CreateAssistantSession starts a new unbound conversation for the caller — a general
+// chat, the experience interviewer with `?preset=profile`, or a browsing session held
+// from the extension's side panel with `?preset=browse`.
+//
+// Only the presets that bind to NOTHING can be minted here. A tailoring session is
+// created by the tailoring bootstrap, which knows the CV and the vacancy to bind; letting
+// this endpoint name that preset would produce a session whose tools point at nothing.
 func (h *assistantHandlers) CreateAssistantSession(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	var body struct {
-		Preset string `json:"preset"`
-	}
-	// An absent or unreadable body is the plain "start a chat" case, which several
-	// clients send as an empty object or as nothing at all.
-	_ = c.BodyParser(&body)
-	preset, err := creatablePreset(body.Preset)
+	preset, err := creatablePreset(c.Query("preset"))
 	if err != nil {
 		return err
 	}
@@ -180,19 +180,20 @@ func (h *assistantHandlers) CreateAssistantSession(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": sessionView(sess)})
 }
 
-// creatablePreset resolves the preset a client asked for. Naming the value it
-// rejected and the ones it accepts matters: this endpoint is now the extension's
-// too, and a bare 400 leaves a client author guessing.
+// creatablePreset resolves the preset a client asked for, admitting only those that
+// bind to nothing. Naming the value it rejected and the ones it accepts matters:
+// this endpoint serves the web app and the extension both, and a bare 400 leaves a
+// client author guessing.
 func creatablePreset(asked string) (string, error) {
 	switch asked {
 	case "":
 		return assistant.PresetChat, nil
-	case assistant.PresetChat, assistant.PresetBrowse:
+	case assistant.PresetChat, assistant.PresetProfile, assistant.PresetBrowse:
 		return asked, nil
 	default:
 		return "", fiber.NewError(fiber.StatusBadRequest,
-			fmt.Sprintf("preset %q cannot be created here; use %q or %q",
-				asked, assistant.PresetChat, assistant.PresetBrowse))
+			fmt.Sprintf("preset %q cannot be created here; use %q, %q or %q — a tailoring session is created from its CV",
+				asked, assistant.PresetChat, assistant.PresetProfile, assistant.PresetBrowse))
 	}
 }
 

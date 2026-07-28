@@ -591,6 +591,84 @@ func TestParse_AmbiguousCorroboration(t *testing.T) {
 	}
 }
 
+// Job-posting boilerplate that happens to spell a tech name. Unlike the collisions
+// above — which read as ordinary English anywhere — these are the words that recur in
+// the prose of NON-TECHNICAL postings specifically: an "agile" retail supervisor, the
+// drivers who are "the backbone" of a haulier, a "restful" night in a care home, the
+// factory "assembly" line, the rugby "scrum", tree "sap" on a guard rail, a "sentry"
+// post, a bank "vault", the fire-code "firewall", a "rancher", a "postman", "braze"d
+// copper joints.
+//
+// Each was a strong alias, so one of them alone tagged the posting — and worse, a
+// strong match lifts the corroboration gate off EVERY weak word in the same text, so a
+// single boilerplate hit also legitimises the react/rust/spring collisions beside it.
+// That is how a Highway Maintenance Supervisor came out of the pipeline tagged
+// {react, sap}. Measured on prod, 20855 boards holding 475625 postings were kept off
+// the retirement report by the skills dictionary alone, with no technical posting
+// anywhere.
+//
+// Gating them costs nothing a real posting needs: a genuine SAP role names ABAP, a
+// REST role says "REST API" (a strong phrase), a security role names its stack.
+func TestParse_BoilerplateWordsNeedCorroboration(t *testing.T) {
+	contains := func(hay []string, needle string) bool {
+		for _, h := range hay {
+			if h == needle {
+				return true
+			}
+		}
+		return false
+	}
+	cases := []struct {
+		name   string
+		in     string
+		want   []string
+		absent []string
+	}{
+		// Boilerplate in non-technical prose, no other tech token → dropped.
+		{"agile as a temperament", "We want an agile, hands-on retail supervisor.", nil, []string{"agile"}},
+		{"backbone of the team", "Our drivers are the backbone of this haulage firm.", nil, []string{"backbone"}},
+		{"restful care home", "Help residents enjoy a restful night in our care home.", nil, []string{"rest"}},
+		{"assembly line", "Work the assembly line fitting door panels.", nil, []string{"assembly"}},
+		{"rugby scrum", "Coach the scrum and play tight-head prop.", nil, []string{"scrum"}},
+		{"tree sap", "Clear vegetation and wash tree sap off the guard rails.", nil, []string{"sap"}},
+		{"sentry duty", "Stand sentry at the north gate on night shifts.", nil, []string{"sentry"}},
+		{"bank vault", "Count the drawer and lock the vault at close.", nil, []string{"vault"}},
+		{"fire-code firewall", "Inspect the firewall between the garage and the dwelling.", nil, []string{"firewall"}},
+		{"ranch hand", "Assist the rancher with calving and fence repair.", nil, []string{"rancher"}},
+		{"postal round", "Cover the postman's round while they are on leave.", nil, []string{"postman"}},
+		{"brazing copper", "Braze copper joints on refrigeration units.", nil, []string{"braze"}},
+		// Corroborated by an unambiguous tech token → kept, exactly as before.
+		{"agile + jira", "Agile delivery tracked in Jira and Kubernetes.", []string{"agile", "jira", "kubernetes"}, nil},
+		{"sap + abap", "SAP ABAP developer for our finance modules.", []string{"sap", "abap"}, nil},
+		{"assembly + c", "Assembly and C programming for embedded targets.", []string{"assembly", "c"}, nil},
+		{"firewall + linux", "Configure firewalls and BGP on Linux.", []string{"firewall", "bgp", "linux"}, nil},
+		{"sentry + typescript", "Error tracking with Sentry in a TypeScript app.", []string{"sentry", "typescript"}, nil},
+		{"vault + kubernetes", "HashiCorp Vault secrets on Kubernetes.", []string{"vault", "kubernetes"}, nil},
+		{"scrum + jira", "Scrum ceremonies tracked in Jira.", []string{"scrum", "jira"}, nil},
+		{"rancher + kubernetes", "Rancher-managed Kubernetes clusters.", []string{"rancher", "kubernetes"}, nil},
+		{"backbone + jquery", "A legacy Backbone and jQuery front end.", []string{"backbone", "jquery"}, nil},
+		{"braze + typescript", "Braze lifecycle campaigns instrumented in TypeScript.", []string{"braze", "typescript"}, nil},
+		// The unambiguous phrase form still tags on its own — "REST API" is not prose.
+		{"rest api phrase", "Design REST APIs in Python.", []string{"rest", "python"}, nil},
+		{"postman + rest api", "API testing with Postman against our REST APIs.", []string{"postman", "rest"}, nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := Parse(c.in)
+			for _, w := range c.want {
+				if !contains(got, w) {
+					t.Errorf("Parse(%q) = %v, missing %q", c.in, got, w)
+				}
+			}
+			for _, a := range c.absent {
+				if contains(got, a) {
+					t.Errorf("Parse(%q) = %v, must NOT contain %q", c.in, got, a)
+				}
+			}
+		})
+	}
+}
+
 // Every ambiguousWords key must be a real wordAliases entry — an ambiguous marker
 // on a token the word pass never emits would be dead config.
 func TestAmbiguousWordsSubsetOfAliases(t *testing.T) {

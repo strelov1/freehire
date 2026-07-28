@@ -157,7 +157,7 @@ func (q *Queries) GetAssistantSession(ctx context.Context, arg GetAssistantSessi
 const listAssistantChatSessions = `-- name: ListAssistantChatSessions :many
 SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at
 FROM assistant_sessions
-WHERE user_id = $1 AND preset IN ('chat', 'browse')
+WHERE user_id = $1 AND preset IN ('chat', 'profile', 'browse')
 ORDER BY updated_at DESC, id DESC
 `
 
@@ -172,13 +172,17 @@ type ListAssistantChatSessionsRow struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
-// The caller's session rail: their general chats and the browsing conversations they held
-// from the extension's side panel, most recently active first. Owner-scoped by construction
-// — another user's sessions can never appear. A browsing session belongs here because it is
-// one the candidate can pick up at their desk; it simply cannot see a page from there.
-// Tailoring conversations are deliberately excluded: they belong to the CV that owns them
-// and are reached through the tailoring workspace, so listing them here would put a chat in
-// the rail that leads nowhere useful and cannot be continued without its CV.
+// The caller's session rail: their unbound conversations, most recently active first.
+// Owner-scoped by construction — another user's sessions can never appear.
+//
+// The rail carries every preset that binds to NOTHING: chat, profile and browse alike. An
+// experience interview is resumable and would otherwise be lost the moment its author
+// navigated away; a browsing conversation begun in the extension's side panel is one the
+// candidate can pick up at their desk, where it simply cannot see a page any more.
+// Tailoring conversations are deliberately excluded for the opposite reason — they belong
+// to the CV that owns them and are reached through the tailoring workspace, so listing one
+// here would put a conversation in the rail that leads nowhere useful and cannot be
+// continued without its CV.
 func (q *Queries) ListAssistantChatSessions(ctx context.Context, userID int64) ([]ListAssistantChatSessionsRow, error) {
 	rows, err := q.db.Query(ctx, listAssistantChatSessions, userID)
 	if err != nil {

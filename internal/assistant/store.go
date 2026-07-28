@@ -14,10 +14,15 @@ import (
 )
 
 // Presets a session can run under. The preset selects the system prompt and the
-// registered tools, and nothing else — the same chat surface serves both.
+// registered tools, and nothing else — one chat surface serves all of them. The
+// vocabulary is also a CHECK on the column (0044, widened by 0048 and 0049), so a
+// new preset is a migration and not only a constant.
 const (
 	PresetChat   = "chat"
 	PresetTailor = "tailor"
+	// PresetProfile is the experience interviewer: the same tools as a chat session, and a
+	// prompt that goes looking for what the bank does not yet know.
+	PresetProfile = "profile"
 	// PresetBrowse is a conversation held from the browser extension's side panel.
 	// It is the only preset whose agent can see the page the candidate is on.
 	PresetBrowse = "browse"

@@ -67,6 +67,8 @@ import type {
   ReminderOverride,
   CommunityThread,
   CommunityReply,
+  ExperienceAtom,
+  ExperienceBank,
 } from './types';
 
 /** A page of list items, optionally the total matching the query (endpoints that
@@ -867,6 +869,33 @@ export function createApi(
     return requestData<Board>(`/api/v1/boards/${encodeURIComponent(slug)}`);
   }
 
+  // The experience bank: what the product has recorded about what the user has done.
+
+  /** The caller's whole experience bank, grouped by role. */
+  async function getExperience(): Promise<ExperienceBank> {
+    return requestData<ExperienceBank>('/api/v1/me/experience');
+  }
+
+  /** Rewrite one achievement. Editing it re-stamps it as the owner's own statement, which
+   *  is how something the assistant inferred becomes usable on a CV. */
+  async function updateExperienceAtom(id: string, atom: Partial<ExperienceAtom>): Promise<ExperienceAtom> {
+    return requestData<ExperienceAtom>(`/api/v1/me/experience/atoms/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(atom),
+    });
+  }
+
+  /** Remove one achievement. This is the only path that takes evidence out of the bank. */
+  async function deleteExperienceAtom(id: string): Promise<void> {
+    await call(`/api/v1/me/experience/atoms/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  /** Remove a role, and with it the achievements that were evidence of it. */
+  async function deleteExperienceEmployment(id: string): Promise<void> {
+    await call(`/api/v1/me/experience/employments/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
   // The single per-user profile: a specialization + skills set (cookie-only on the server).
 
   /** The current user's profile, or null when they have not saved one yet. */
@@ -1457,6 +1486,10 @@ export function createApi(
     shareSavedSearch,
     unshareSavedSearch,
     getBoard,
+    getExperience,
+    updateExperienceAtom,
+    deleteExperienceAtom,
+    deleteExperienceEmployment,
     getProfile,
     saveProfile,
     deleteProfile,

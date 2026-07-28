@@ -1,5 +1,7 @@
 # workday boards. Provider is the filename; each entry is company + board.
-# board = platform-specific id (see internal/sources/workday.go).
+# board = platform-specific id (see internal/sources/workday.go): "host/site" for a
+# per-tenant host, or "host/tenant/site" when the host is shared between tenants
+# (wd1.myworkdaysite.com) and the tenant has to be spelled out.
 
 - company: Carbon Health
   board: carbonhealth.wd1.myworkdayjobs.com/Careers
@@ -12867,3 +12869,7 @@
   board: wwecorp.wd5.myworkdayjobs.com/PRIVATE_Postings
 - company: xavier
   board: xavier.wd108.myworkdayjobs.com/XavierCareers
+- company: Unity
+  board: unitytech.wd1.myworkdayjobs.com/Unity
+- company: Snap
+  board: wd1.myworkdaysite.com/snapchat/snap

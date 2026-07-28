@@ -393,6 +393,11 @@ counts of all four filters. Closed jobs SHALL remain in
 the listing (their job view carries `closed_at`). An unknown `filter` value
 SHALL be a `400`.
 
+Each row that represents an application SHALL additionally carry its
+`last_activity_at`, its `days_silent`, and its `silence_state`. A row that is not
+an application — no `applied_at` — carries all three as null: a job merely viewed
+or saved is not waiting on anyone.
+
 #### Scenario: Listing all interactions
 
 - **WHEN** an authenticated user requests `GET /api/v1/me/tracking`
@@ -434,6 +439,16 @@ SHALL be a `400`.
 - **WHEN** a request to `GET /api/v1/me/tracking` carries no valid auth cookie
 - **THEN** the system responds `401`
 
+#### Scenario: An application carries its silence fields
+
+- **WHEN** the listing returns a row whose `applied_at` is set
+- **THEN** that row carries `last_activity_at`, `days_silent` and
+  `silence_state`
+
+#### Scenario: A non-application carries none of them
+
+- **WHEN** the listing returns a row the user only viewed or saved
+- **THEN** its `last_activity_at`, `days_silent` and `silence_state` are all null
 
 ### Requirement: Analysed-jobs list endpoint
 
@@ -481,3 +496,4 @@ The frontend personal-jobs section SHALL be presented as **Tracking** and served
 
 - **WHEN** a signed-in user opens the tracking section
 - **THEN** the navigation and heading read "Tracking", with tabs for Board, Pipeline, History, and AI fit
+

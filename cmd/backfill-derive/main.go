@@ -52,6 +52,7 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -64,6 +65,13 @@ import (
 
 // backfillBatchSize bounds how many jobs are read per keyset page.
 const backfillBatchSize = 500
+
+// progressEvery is how many rows pass between progress lines. A full pass covers over
+// five million rows and used to print nothing between "starting" and "done" — hours in
+// which a working run and a wedged one were indistinguishable, and "how much longer"
+// had no answer short of reading pg_stat_activity. 100k is roughly a line every few
+// minutes at prod's rate: enough to see movement, not enough to bury the log.
+const progressEvery = 100_000
 
 // deriveStore is the slice of the data layer the concurrent pass needs: page the
 // table by keyset and rewrite a row's derived columns. *db.Queries satisfies it;
@@ -197,6 +205,20 @@ func deriveRow(j db.Job) (params db.UpdateJobDerivedParams, changed, slugMoved b
 // so the caller knows whether to reconcile companies. The first store error cancels the
 // run and is returned.
 func backfillAll(ctx context.Context, store deriveStore, concurrency int) (scanned, updated, slugsMoved int, err error) {
+	start := time.Now()
+	return backfillProgress(ctx, store, concurrency, progressEvery, func(scanned, updated, slugs int64) {
+		log.Printf("backfill-derive: scanned %d, updated %d, slugs_moved %d, %s elapsed",
+			scanned, updated, slugs, time.Since(start).Round(time.Second))
+	})
+}
+
+// backfillProgress is backfillAll with the reporting cadence and sink injected, so the
+// cadence is a tested property rather than something only prod can demonstrate.
+//
+// report fires ON each multiple of every, from whichever worker happens to cross it —
+// the counter is atomic, so exactly one goroutine observes each multiple whatever the
+// concurrency. It runs on the worker's goroutine, so it must stay cheap.
+func backfillProgress(ctx context.Context, store deriveStore, concurrency int, every int64, report func(scanned, updated, slugsMoved int64)) (scanned, updated, slugsMoved int, err error) {
 	if concurrency < 1 {
 		concurrency = 1
 	}
@@ -252,7 +274,10 @@ func backfillAll(ctx context.Context, store deriveStore, concurrency int) (scann
 		go func() {
 			defer workerWG.Done()
 			for j := range jobsCh {
-				atomic.AddInt64(&scannedN, 1)
+				n := atomic.AddInt64(&scannedN, 1)
+				if every > 0 && n%every == 0 && report != nil {
+					report(n, atomic.LoadInt64(&updatedN), atomic.LoadInt64(&slugsN))
+				}
 				params, changed, slugMoved := deriveRow(j)
 				if !changed {
 					continue

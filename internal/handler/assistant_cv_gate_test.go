@@ -1,0 +1,278 @@
+package handler
+
+import (
+	"context"
+	"encoding/json"
+	"sort"
+	"strings"
+	"testing"
+
+	"github.com/google/uuid"
+
+	"github.com/strelov1/freehire/internal/cv"
+	"github.com/strelov1/freehire/internal/experience"
+)
+
+// stubBank is an in-memory experienceBankTools, so the gate — the one rule the whole
+// capability exists to keep — is exercised without a database.
+type stubBank struct {
+	atoms       map[uuid.UUID]experience.Atom
+	owner       map[uuid.UUID]int64
+	list        []experience.Atom
+	employments []experience.Employment
+	matches     []experience.Match
+	addErr      error
+	// readAs is the owner the list reads belong to, since the stub serves one caller.
+	readAs int64
+}
+
+func newStubBank() *stubBank {
+	return &stubBank{atoms: map[uuid.UUID]experience.Atom{}, owner: map[uuid.UUID]int64{}, readAs: 1}
+}
+
+func (b *stubBank) add(userID int64, a experience.Atom) experience.Atom {
+	a.ID = uuid.New()
+	b.atoms[a.ID] = a
+	b.owner[a.ID] = userID
+	return a
+}
+
+func (b *stubBank) GetAtom(_ context.Context, id uuid.UUID, userID int64) (experience.Atom, error) {
+	if a, ok := b.atoms[id]; ok && b.owner[id] == userID {
+		return a, nil
+	}
+	return experience.Atom{}, experience.ErrNotFound
+}
+
+func (b *stubBank) Retrieve(context.Context, int64, experience.Query, int) ([]experience.Match, error) {
+	return b.matches, nil
+}
+func (b *stubBank) ListEmployments(context.Context, int64) ([]experience.Employment, error) {
+	return b.employments, nil
+}
+func (b *stubBank) ListAtoms(context.Context, int64) ([]experience.Atom, error) { return b.list, nil }
+func (b *stubBank) AddAtom(_ context.Context, userID int64, a experience.Atom) (experience.Atom, error) {
+	if b.addErr != nil {
+		return experience.Atom{}, b.addErr
+	}
+	if strings.TrimSpace(a.Claim) == "" {
+		return experience.Atom{}, experience.ErrEmptyClaim
+	}
+	stored := b.add(userID, a)
+	b.reindex()
+	return stored, nil
+}
+func (b *stubBank) UpdateAtom(_ context.Context, id uuid.UUID, userID int64, a experience.Atom) (experience.Atom, error) {
+	if _, ok := b.atoms[id]; !ok || b.owner[id] != userID {
+		return experience.Atom{}, experience.ErrNotFound
+	}
+	a.ID = id
+	b.atoms[id] = a
+	b.reindex()
+	return a, nil
+}
+
+func (b *stubBank) UpdateEmployment(_ context.Context, id uuid.UUID, userID int64, e experience.Employment) (experience.Employment, error) {
+	for i, existing := range b.employments {
+		if existing.ID == id && b.owner[id] == userID {
+			e.ID = id
+			b.employments[i] = e
+			return e, nil
+		}
+	}
+	return experience.Employment{}, experience.ErrNotFound
+}
+
+func (b *stubBank) DeleteEmployment(_ context.Context, id uuid.UUID, userID int64) error {
+	for i, existing := range b.employments {
+		if existing.ID == id && b.owner[id] == userID {
+			b.employments = append(b.employments[:i], b.employments[i+1:]...)
+			for aid, a := range b.atoms {
+				if a.EmploymentID != nil && *a.EmploymentID == id {
+					delete(b.atoms, aid)
+				}
+			}
+			b.reindex()
+			return nil
+		}
+	}
+	return experience.ErrNotFound
+}
+
+func (b *stubBank) DeleteAtom(_ context.Context, id uuid.UUID, userID int64) error {
+	if _, ok := b.atoms[id]; !ok || b.owner[id] != userID {
+		return experience.ErrNotFound
+	}
+	delete(b.atoms, id)
+	b.reindex()
+	return nil
+}
+
+// reindex rebuilds the owner-filtered list the read paths walk.
+func (b *stubBank) reindex() {
+	b.list = b.list[:0]
+	for id, a := range b.atoms {
+		if b.owner[id] == b.readAs {
+			b.list = append(b.list, a)
+		}
+	}
+	sort.Slice(b.list, func(i, j int) bool { return b.list[i].Claim < b.list[j].Claim })
+}
+
+// addEmployment records a place for readAs.
+func (b *stubBank) addEmployment(userID int64, e experience.Employment) experience.Employment {
+	e.ID = uuid.New()
+	b.owner[e.ID] = userID
+	b.employments = append(b.employments, e)
+	return e
+}
+
+func gateHandlers(t *testing.T) (*assistantHandlers, *stubBank) {
+	t.Helper()
+	bank := newStubBank()
+	return &assistantHandlers{experience: bank}, bank
+}
+
+// This is the requirement the whole change exists to make durable. Until now it lived in a
+// paragraph of the system prompt, which a long conversation eventually loses; here it is a
+// branch in the service path that no amount of context can talk its way past.
+func TestCVEditGateRefusesEvidenceTheCandidateNeverGave(t *testing.T) {
+	h, bank := gateHandlers(t)
+	ctx := context.Background()
+
+	inferred := bank.add(1, experience.Atom{
+		Claim:      "Probably led the Kubernetes migration",
+		Provenance: experience.ProvenanceAgentInferred,
+	})
+
+	err := h.requireEvidence(ctx, 1, cv.PatchAddBullet, inferred.ID.String())
+	if err == nil {
+		t.Fatal("an agent's own inference was allowed onto the CV")
+	}
+	// The message is the model's only route to correcting itself inside the turn, so it
+	// has to say what to do rather than merely that something was wrong.
+	for _, want := range []string{"confirm", "experience_add"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("refusal %q does not tell the model to %q", err, want)
+		}
+	}
+}
+
+func TestCVEditGateAllowsWhatTheCandidateAsserted(t *testing.T) {
+	h, bank := gateHandlers(t)
+	ctx := context.Background()
+
+	for _, provenance := range []experience.Provenance{
+		experience.ProvenanceCVImport,
+		experience.ProvenanceStatedInChat,
+		experience.ProvenanceManual,
+	} {
+		atom := bank.add(1, experience.Atom{
+			Claim:      "Cut latency 20s to 1s via " + string(provenance),
+			Provenance: provenance,
+		})
+		if err := h.requireEvidence(ctx, 1, cv.PatchAddBullet, atom.ID.String()); err != nil {
+			t.Errorf("evidence with provenance %s was refused: %v", provenance, err)
+		}
+	}
+}
+
+// Omitting the id must not be a way around the gate — that would make it decorative.
+func TestCVEditGateRefusesAnUncitedBullet(t *testing.T) {
+	h, _ := gateHandlers(t)
+
+	err := h.requireEvidence(context.Background(), 1, cv.PatchAddBullet, "")
+	if err == nil {
+		t.Fatal("a bullet with no evidence at all was allowed")
+	}
+	if !strings.Contains(err.Error(), "experience_search") {
+		t.Errorf("refusal %q does not point the model at experience_search", err)
+	}
+}
+
+func TestCVEditGateRefusesAnUnknownOrForeignAtom(t *testing.T) {
+	h, bank := gateHandlers(t)
+	ctx := context.Background()
+
+	if err := h.requireEvidence(ctx, 1, cv.PatchAddBullet, uuid.New().String()); err == nil {
+		t.Error("an id matching no achievement was accepted")
+	}
+	if err := h.requireEvidence(ctx, 1, cv.PatchAddBullet, "not-a-uuid"); err == nil {
+		t.Error("a malformed id was accepted")
+	}
+
+	// Another user's evidence is not evidence for this candidate.
+	theirs := bank.add(2, experience.Atom{Claim: "Ran the cluster", Provenance: experience.ProvenanceManual})
+	if err := h.requireEvidence(ctx, 1, cv.PatchAddBullet, theirs.ID.String()); err == nil {
+		t.Error("one candidate cited another candidate's achievement")
+	}
+}
+
+// The gate covers claims, not housekeeping. Reordering, removing and the technology line
+// rearrange or delete what is already on the page and assert nothing new; requiring
+// evidence for them would make the agent useless without protecting anything.
+func TestCVEditGateOnlyCoversOpsThatAssertSomething(t *testing.T) {
+	h, _ := gateHandlers(t)
+	ctx := context.Background()
+
+	for _, op := range []cv.PatchOp{
+		cv.PatchRemoveBullet, cv.PatchReorderBullets, cv.PatchSetStack,
+		cv.PatchSetSkillGroup, cv.PatchSetSummary, cv.PatchSetHeaderField,
+	} {
+		if err := h.requireEvidence(ctx, 1, op, ""); err != nil {
+			t.Errorf("op %q was gated: %v", op, err)
+		}
+	}
+	for _, op := range []cv.PatchOp{cv.PatchAddBullet, cv.PatchReplaceBullet} {
+		if err := h.requireEvidence(ctx, 1, op, ""); err == nil {
+			t.Errorf("op %q was not gated", op)
+		}
+	}
+}
+
+// A tool result is replayed into the model's context on every later turn, so the profile
+// read must report the bank's SHAPE and not its contents. A few hundred achievements
+// replayed each turn would consume the window and defeat trimming.
+func TestProfileToolReportsShapeNotContents(t *testing.T) {
+	h, bank := gateHandlers(t)
+	h.profile = &profileHandlers{}
+	ctx := context.Background()
+
+	role := uuid.New()
+	bank.employments = []experience.Employment{
+		{ID: role, Kind: experience.KindJob, Company: "RingCentral", Role: "SWE", Current: true, Stack: []string{"go"}},
+	}
+	for i := 0; i < 200; i++ {
+		bank.list = append(bank.list, experience.Atom{
+			EmploymentID: &role,
+			Claim:        "A very specific achievement number " + string(rune('A'+i%26)),
+			Skills:       []string{"go"},
+			Provenance:   experience.ProvenanceCVImport,
+		})
+	}
+
+	summary := h.experienceSummary(ctx, 1, []string{"go", "kubernetes"})
+	if summary == nil {
+		t.Fatal("no experience summary for a populated bank")
+	}
+	if summary.TotalAchievements != 200 {
+		t.Errorf("total = %d, want 200", summary.TotalAchievements)
+	}
+	if len(summary.Employments) != 1 || summary.Employments[0].Achievements != 200 {
+		t.Errorf("employments = %+v, want one role carrying all 200", summary.Employments)
+	}
+
+	blob, err := json.Marshal(summary)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(blob), "A very specific achievement") {
+		t.Error("the summary carries achievement text — that is what experience_search is for")
+	}
+
+	// A skill the candidate claims with nothing to show for it is the interviewer's work
+	// list and the tailoring agent's warning.
+	if len(summary.SkillsWithoutEvidence) != 1 || summary.SkillsWithoutEvidence[0] != "kubernetes" {
+		t.Errorf("skills without evidence = %q, want [kubernetes]", summary.SkillsWithoutEvidence)
+	}
+}

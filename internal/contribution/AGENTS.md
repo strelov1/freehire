@@ -13,9 +13,15 @@ contributions are URL-only, auto-validated, unmoderated.
   we know the board, the ingest side onboards it and crawls ALL its vacancies — a second
   vacancy from the same board adds nothing.
 - **Board recognition is a pure, network-free URL parse** (`board.go`, `recognizeBoard`): the
-  host maps to a source + extraction `mode` via the `atsBoards` table. Two modes: `path` (board
-  = first path segment, e.g. `jobs.lever.co/<board>`) and `subdomain` (board = leftmost DNS
-  label, e.g. `<board>.recruitee.com` — the canonical URL collapses to the bare host). This is
+  host maps to a source + extraction `mode` via the `atsBoards` table. `path` (first path
+  segment, `jobs.lever.co/<board>`), `pathlocale` (same, skipping a leading `xx-XX` locale —
+  Rippling), `pathportal` (the segment before the posting, because SmartRecruiters also serves a
+  posting behind a portal segment), `subdomain` (leftmost DNS label, `<board>.recruitee.com`),
+  `host` (the whole careers host, whose regional TLD varies — Zoho, Teamtailor), and `hostpath`
+  (`<host>/<site>` — Workday). For subdomain/host/hostpath the canonical URL collapses to the
+  board itself. Whatever a mode yields, the platform's **own** product hosts (`app.`,
+  `dashboard.`, …) are never a tenant — a career site links to them, and `boardresolve` takes
+  the first recognized ATS URL it finds in a page. This is
   deliberately a small local table, NOT a per-adapter method on `linksource` — adding an ATS is
   one row + a test. Covers ~37 multi-tenant ATS (greenhouse, lever, ashby, workable, recruitee,
   smartrecruiters, bamboohr, personio, peopleforce, gupy, freshteam, jazzhr, huntflow, deel,

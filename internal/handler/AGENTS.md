@@ -46,6 +46,7 @@ Fiber HTTP handlers: feature handler structs, route registration, auth surface, 
 
 - `view`/`apply`/`save`/`track` interaction endpoints. Addressed by job's public `:slug` (resolved to internal id before write). All writes are idempotent upserts behind `RequireAuthOrKey`.
 - Return `{"data": interaction}` with `user_id` omitted; public job reads stay unauthenticated.
+- **The `/me/tracking` silence fields are null together or set together.** `last_activity_at`, `days_silent` and `silence_state` describe an application awaiting a reply; a row that is merely viewed or saved, or one in a settled stage, carries all three as null. Null means "nothing is owed here", which the board must be able to tell apart from "owed and answered promptly" — so never substitute a zero-day `active`. The derivation lives on `jobtracking.TrackedJob.Silence`; the handler takes **one** `now()` for the whole page, so two rows cannot disagree about when the page was rendered.
 
 ## Mail Inbox + Agent Surface (`gmail.go`, `inbox.go`, `inbox_linking.go`, `inbox_agent.go`)
 

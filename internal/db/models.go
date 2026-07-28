@@ -176,6 +176,37 @@ type EnrichmentOutbox struct {
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
+type ExperienceAtom struct {
+	ID           uuid.UUID          `json:"id"`
+	UserID       int64              `json:"user_id"`
+	EmploymentID *uuid.UUID         `json:"employment_id"`
+	Claim        string             `json:"claim"`
+	ClaimKey     string             `json:"claim_key"`
+	Context      string             `json:"context"`
+	Metrics      []string           `json:"metrics"`
+	Skills       []string           `json:"skills"`
+	Provenance   string             `json:"provenance"`
+	SourceRef    string             `json:"source_ref"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ExperienceEmployment struct {
+	ID          uuid.UUID          `json:"id"`
+	UserID      int64              `json:"user_id"`
+	Kind        string             `json:"kind"`
+	Company     string             `json:"company"`
+	Role        string             `json:"role"`
+	Location    string             `json:"location"`
+	PeriodStart string             `json:"period_start"`
+	PeriodEnd   string             `json:"period_end"`
+	IsCurrent   bool               `json:"is_current"`
+	Summary     string             `json:"summary"`
+	Stack       []string           `json:"stack"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
 type GmailConnection struct {
 	UserID          int64              `json:"user_id"`
 	Email           string             `json:"email"`

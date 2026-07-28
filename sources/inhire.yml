@@ -744,3 +744,5 @@
   board: jobler
 - company: VAAS
   board: vaas
+- company: "ed"
+  board: somosed

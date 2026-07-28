@@ -11,6 +11,9 @@ import (
 //   - pathlocale: like path, but a leading xx-XX locale segment is skipped first — Rippling's
 //     public site prefixes the board with a locale (ats.rippling.com/en-GB/<board>/…) that its
 //     board API omits, so both URL shapes must resolve to the same board.
+//   - pathportal: board = the segment before the posting segment, because SmartRecruiters serves
+//     the same posting both bare (<company>/<posting>) and behind a portal segment
+//     (<portal>/<company>/<posting>). Taking the first segment reads the portal slug as a board.
 //   - subdomain: board = the leftmost DNS label under a fixed apex (<board>.recruitee.com).
 //   - host:      board = the whole careers host (the tenant identity IS the host, and the TLD
 //     varies by region, e.g. <tenant>.zohorecruit.eu / .com / .in).
@@ -22,6 +25,7 @@ import (
 const (
 	modePath       = "path"
 	modePathLocale = "pathlocale"
+	modePathPortal = "pathportal"
 	modeSubdomain  = "subdomain"
 	modeHost       = "host"
 	modeHostPath   = "hostpath"
@@ -48,9 +52,11 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"careers.pageuppeople.com", "pageup", modePath},
 	{"oportunidades.mindsight.com.br", "mindsight", modePath},
 	{"careers.hireology.com", "hireology", modePath},
-	{"jobs.smartrecruiters.com", "smartrecruiters", modePath},
-	{"careers.smartrecruiters.com", "smartrecruiters", modePath},
 	{"recruiting.ultipro.com", "ukg", modePath},
+
+	// --- pathportal: board = the segment before the posting segment ---
+	{"jobs.smartrecruiters.com", "smartrecruiters", modePathPortal},
+	{"careers.smartrecruiters.com", "smartrecruiters", modePathPortal},
 
 	// --- pathlocale: like path, skipping a leading xx-XX locale segment ---
 	{"ats.rippling.com", "rippling", modePathLocale},
@@ -83,6 +89,7 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"portaldetalentos.senior.com.br", "senior", modeSubdomain},
 	{"vagas.solides.com.br", "solides", modeSubdomain},
 	{"softgarden.io", "softgarden", modeSubdomain},
+	{"careers.hibob.com", "hibob", modeSubdomain}, // HiBob's careers module: <tenant>.careers.hibob.com
 
 	// --- host: board = the whole careers host (regional TLD varies) ---
 	{"zohorecruit", "zohorecruit", modeHost},
@@ -112,7 +119,7 @@ func RecognizeBoard(rawURL string) (source, board, canonical string, ok bool) {
 	case modeSubdomain, modeHost:
 		if mode == modeSubdomain {
 			board = subdomainLabel(host, apex)
-		} else {
+		} else if !platformHost(host) {
 			board = host // the whole careers host is the tenant identity
 		}
 		if board == "" {
@@ -137,6 +144,18 @@ func RecognizeBoard(rawURL string) (source, board, canonical string, ok bool) {
 		u.RawQuery, u.Fragment = "", ""
 		u.Path = "/" + site
 		return src, host + "/" + site, u.String(), true
+
+	case modePathPortal:
+		// SmartRecruiters: the employer is the segment immediately before the posting, which is
+		// the first segment on a bare URL and the second behind a portal segment. Only a
+		// recognizable posting segment shifts the board along; any other shape falls through to
+		// the first segment, so an unknown URL shape can't invent a board.
+		board = segmentBeforePosting(u, smartrecruitersPosting)
+		if board == "" {
+			return "", "", "", false
+		}
+		u.RawQuery, u.Fragment = "", ""
+		return src, board, u.String(), true
 
 	case modePathLocale:
 		// Rippling: skip a leading xx-XX locale segment (ats.rippling.com/en-GB/<board>/…),
@@ -193,6 +212,41 @@ func subdomainLabel(host, apex string) string {
 		return sub[:i]
 	}
 	return sub
+}
+
+// platformLabels are the leftmost DNS labels a multi-tenant ATS uses for its own product hosts
+// rather than for a tenant. In host mode the whole host is the board, so without this a link to
+// the platform's own app (which every tenant career site carries) reads as a tenant — and
+// boardresolve, which accepts the first recognized ATS URL found in a page, then records that
+// as the employer's board.
+var platformLabels = map[string]bool{
+	"app": true, "dashboard": true, "admin": true, "api": true,
+	"support": true, "help": true, "blog": true, "docs": true,
+}
+
+// platformHost reports whether host is the ATS's own product host rather than a tenant's.
+func platformHost(host string) bool {
+	label, _, ok := strings.Cut(host, ".")
+	return ok && platformLabels[label]
+}
+
+// smartrecruitersPosting matches a SmartRecruiters posting segment: the posting id (numeric or a
+// UUID) followed by the title slug.
+var smartrecruitersPosting = regexp.MustCompile(`^(?:[0-9]{6,}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-`)
+
+// segmentBeforePosting returns the path segment immediately before the last segment when that
+// last segment is a posting (per isPosting), and the first segment otherwise — a board listing
+// URL carries no posting, and an unfamiliar shape must not shift the board off the first segment.
+func segmentBeforePosting(u *url.URL, isPosting *regexp.Regexp) string {
+	p := strings.Trim(u.Path, "/")
+	if p == "" {
+		return ""
+	}
+	segs := strings.Split(p, "/")
+	if n := len(segs); n >= 2 && isPosting.MatchString(segs[n-1]) {
+		return segs[n-2]
+	}
+	return segs[0]
 }
 
 // localeSegment matches an xx-XX language-COUNTRY locale (e.g. en-GB) — the optional leading

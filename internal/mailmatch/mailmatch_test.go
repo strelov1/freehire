@@ -20,6 +20,16 @@ func TestExtractCompany(t *testing.T) {
 		{"ats pseudo-name from subject dropped", "", "Thank you for applying to Greenhouse!", ""},
 		{"ats pseudo-name your-x-application dropped", "", "Your Greenhouse Application", ""},
 		{"nothing extractable", "", "Ilya, we've received your resume", ""},
+		// A relay whose display name is the ATS brand must not shadow the employer
+		// the subject names. Observed on a live mailbox: 23 acknowledgements from
+		// "Workable", each about a different employer, all resolved to the one
+		// catalog company literally called Workable — so one application collected
+		// everyone else's mail and could never look silent again.
+		{"ats relay display name falls through to the subject",
+			"Workable", "Thanks for applying to Derq", "derq"},
+		{"ats relay display name alone extracts nothing", "Workable", "", ""},
+		{"employer named in both still wins",
+			"Sardine Hiring Team", "Thanks for applying to Sardine", "sardine"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

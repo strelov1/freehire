@@ -96,6 +96,11 @@ type TrackedJob struct {
 	// job has no pending reminder — the saved list renders its "remind in N days"
 	// chip from it.
 	ReminderFireAt *time.Time
+	// LastActivityAt and HasPendingSuggestion are the raw silence inputs the
+	// repository supplies; Silence turns them into a verdict. They are kept
+	// separate so the adapter carries facts and the domain does the judging.
+	LastActivityAt       *time.Time
+	HasPendingSuggestion bool
 }
 
 // Listing is the result of ListTracked: a page of tracked jobs for the active

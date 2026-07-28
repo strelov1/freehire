@@ -254,9 +254,10 @@ func TestCreateAssistantSessionTakesThePresetTheClientAsksFor(t *testing.T) {
 	app, _ := newAssistantApp(pool, iss, nil)
 	_, cookie := assistantUser(t, pool, iss, "presets@example.test", true)
 
-	preset := func(t *testing.T, body any) (int, string) {
+	// The preset rides the query string, as `?preset=profile` already does.
+	preset := func(t *testing.T, query string) (int, string) {
 		t.Helper()
-		resp := assistantRequest(t, app, fiber.MethodPost, "/api/v1/assistant/sessions", cookie, body)
+		resp := assistantRequest(t, app, fiber.MethodPost, "/api/v1/assistant/sessions"+query, cookie, map[string]any{})
 		var out struct {
 			Data struct {
 				Preset string `json:"preset"`
@@ -266,13 +267,13 @@ func TestCreateAssistantSessionTakesThePresetTheClientAsksFor(t *testing.T) {
 		return resp.StatusCode, out.Data.Preset
 	}
 
-	if status, got := preset(t, map[string]any{"preset": "browse"}); status != fiber.StatusCreated || got != "browse" {
+	if status, got := preset(t, "?preset=browse"); status != fiber.StatusCreated || got != assistant.PresetBrowse {
 		t.Errorf("asking for browse: status %d preset %q, want 201 and %q", status, got, assistant.PresetBrowse)
 	}
-	if status, got := preset(t, map[string]any{}); status != fiber.StatusCreated || got != "chat" {
+	if status, got := preset(t, ""); status != fiber.StatusCreated || got != assistant.PresetChat {
 		t.Errorf("asking for nothing: status %d preset %q, want 201 and a chat", status, got)
 	}
-	if status, _ := preset(t, map[string]any{"preset": "tailor"}); status != fiber.StatusBadRequest {
+	if status, _ := preset(t, "?preset=tailor"); status != fiber.StatusBadRequest {
 		t.Errorf("asking for tailor: status %d, want 400 — a tailoring session needs its CV binding", status)
 	}
 }
