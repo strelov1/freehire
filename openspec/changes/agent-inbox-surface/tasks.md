@@ -8,8 +8,8 @@
 
 ## 2. Route auth
 
-- [ ] 2.1 Move every route in `inboxHandlers.register` (`internal/handler/gmail.go`) from `mw.cookie` to `mw.key`, updating the block comment to state that a full-scope key is admitted and a `cv` key is not
-- [ ] 2.2 Integration test: a full-scope key lists the inbox and reads a message; no credential is 401; a key never reaches another user's message (404)
+- [x] 2.1 Move every route in `inboxHandlers.register` (`internal/handler/gmail.go`) from `mw.cookie` to `mw.key`, updating the block comment to state that a full-scope key is admitted and a `cv` key is not. Exception kept cookie-only: the Gmail OAuth connect/callback pair, which redirects a browser to Google's consent screen and back and is meaningless to a keyed client
+- [x] 2.2 Integration test: a full-scope key lists the inbox and reads a message; no credential is 401; a key never reaches another user's message (404). Wired through `register` rather than hand-mounted middleware, so a revert to `mw.cookie` fails the test
 
 ## 3. Agent listing
 

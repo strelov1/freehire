@@ -45,32 +45,42 @@ func newInboxHandlers(queries *db.Queries, gmailConnector *gmailsync.Connector, 
 func (h *inboxHandlers) register(api fiber.Router, mw middleware) {
 	// Mail inbox (Gmail connect + hosted mailbox). Open to every signed-in user.
 	// The read + disconnect routes are always registered (empty/no-op when not
-	// connected); the OAuth connect routes only when configured. Cookie-only.
-	api.Get("/me/gmail", mw.cookie, h.GmailStatus)
-	api.Delete("/me/gmail", mw.cookie, h.GmailDisconnect)
-	api.Get("/me/inbox", mw.cookie, h.GetInbox)
-	api.Post("/me/inbox/read-all", mw.cookie, h.MarkAllReadInbox)
-	api.Get("/me/emails/:id", mw.cookie, h.GetEmail)
-	api.Post("/me/emails/:id/delete", mw.cookie, h.DeleteEmail)
-	api.Post("/me/emails/:id/restore", mw.cookie, h.RestoreEmail)
+	// connected); the OAuth connect routes only when configured.
+	//
+	// mw.key, not mw.cookie: a user running their own agent harness drives this
+	// surface with their full-scope API key, the same credential the tracker
+	// routes already accept — reading mail and linking it to applications is the
+	// harness's job. mw.key is full-scope-only, so the narrow `cv` key a tailoring
+	// bootstrap mints stays refused here.
+	//
+	// The OAuth connect flow is the exception and stays cookie-only: it redirects
+	// a browser to Google's consent screen and back, so it is meaningless to a
+	// keyed client and must not be reachable by one.
+	api.Get("/me/gmail", mw.key, h.GmailStatus)
+	api.Delete("/me/gmail", mw.key, h.GmailDisconnect)
+	api.Get("/me/inbox", mw.key, h.GetInbox)
+	api.Post("/me/inbox/read-all", mw.key, h.MarkAllReadInbox)
+	api.Get("/me/emails/:id", mw.key, h.GetEmail)
+	api.Post("/me/emails/:id/delete", mw.key, h.DeleteEmail)
+	api.Post("/me/emails/:id/restore", mw.key, h.RestoreEmail)
 	// Email → application linking. :slug is registered after the static
 	// /me/tracking/* routes (see Register) so it does not shadow them.
-	api.Get("/me/tracking/:slug", mw.cookie, h.GetTrackedApplication)
-	api.Post("/me/emails/:id/link", mw.cookie, h.LinkEmail)
-	api.Post("/me/emails/:id/unlink", mw.cookie, h.UnlinkEmail)
-	api.Post("/me/emails/:id/confirm", mw.cookie, h.ConfirmEmailLink)
-	api.Post("/me/emails/:id/reject", mw.cookie, h.RejectEmailLink)
+	api.Get("/me/tracking/:slug", mw.key, h.GetTrackedApplication)
+	api.Post("/me/emails/:id/link", mw.key, h.LinkEmail)
+	api.Post("/me/emails/:id/unlink", mw.key, h.UnlinkEmail)
+	api.Post("/me/emails/:id/confirm", mw.key, h.ConfirmEmailLink)
+	api.Post("/me/emails/:id/reject", mw.key, h.RejectEmailLink)
 	if h.gmailReady() {
 		api.Get("/me/gmail/connect", mw.cookie, h.GmailConnect)
 		api.Get("/me/gmail/callback", mw.cookie, h.GmailCallback)
-		api.Post("/me/gmail/sync", mw.cookie, h.SyncGmail)
+		api.Post("/me/gmail/sync", mw.key, h.SyncGmail)
 	}
 	// Hosted-mailbox option: status is always available (reports unavailable when
 	// the feature is off); claim/release only when a receiving domain is configured.
-	api.Get("/me/mailbox", mw.cookie, h.GetMailbox)
+	api.Get("/me/mailbox", mw.key, h.GetMailbox)
 	if h.mailboxReady() {
-		api.Post("/me/mailbox", mw.cookie, h.ClaimMailbox)
-		api.Delete("/me/mailbox", mw.cookie, h.ReleaseMailbox)
+		api.Post("/me/mailbox", mw.key, h.ClaimMailbox)
+		api.Delete("/me/mailbox", mw.key, h.ReleaseMailbox)
 	}
 }
 
