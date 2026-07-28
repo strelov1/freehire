@@ -89,6 +89,7 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"portaldetalentos.senior.com.br", "senior", modeSubdomain},
 	{"vagas.solides.com.br", "solides", modeSubdomain},
 	{"softgarden.io", "softgarden", modeSubdomain},
+	{"careers.hibob.com", "hibob", modeSubdomain}, // HiBob's careers module: <tenant>.careers.hibob.com
 
 	// --- host: board = the whole careers host (regional TLD varies) ---
 	{"zohorecruit", "zohorecruit", modeHost},

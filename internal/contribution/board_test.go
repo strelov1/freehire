@@ -47,6 +47,8 @@ func TestRecognizeBoard(t *testing.T) {
 		{"personio nested apex subdomain", "https://acme.jobs.personio.com/job/9", "personio", "acme", "https://acme.jobs.personio.com", true},
 		{"personio de host", "https://reflex-aerospace-gmbh.jobs.personio.de/job/2679152?display=en#apply", "personio", "reflex-aerospace-gmbh", "https://reflex-aerospace-gmbh.jobs.personio.de", true},
 		{"softgarden subdomain", "https://moll.softgarden.io/job/123/apply", "softgarden", "moll", "https://moll.softgarden.io", true},
+		{"hibob careers subdomain", "https://qogita.careers.hibob.com/jobs/ceb6c947-c906-44d1-a56b-bb33ae5599fa", "hibob", "qogita", "https://qogita.careers.hibob.com", true},
+		{"hibob apply tail collapses to the same board", "https://unique.careers.hibob.com/jobs/f8d9a0bc/apply", "hibob", "unique", "https://unique.careers.hibob.com", true},
 
 		// host mode — board is the whole careers host, regional TLD varies
 		{"zoho eu vacancy strips encoded path + query", "https://be-exec.zohorecruit.eu/jobs/Careers/73534000009044079/%D0%9F%D1%80%D0%BE?source=CareerSite", "zohorecruit", "be-exec.zohorecruit.eu", "https://be-exec.zohorecruit.eu", true},
@@ -73,6 +75,7 @@ func TestRecognizeBoard(t *testing.T) {
 		{"ashby bare host no board", "https://jobs.ashbyhq.com", "", "", "", false},
 		{"recruitee bare apex no tenant", "https://recruitee.com/", "", "", "", false},
 		{"personio bare apex no tenant", "https://jobs.personio.com", "", "", "", false},
+		{"hibob bare apex no tenant", "https://careers.hibob.com", "", "", "", false},
 		{"single-tenant geekjob", "https://geekjob.ru/vacancy/6a1e", "", "", "", false},
 		{"teamtailor custom domain not derivable", "https://careers.arrive.com/jobs/1", "", "", "", false},
 		// A Teamtailor career site links to the platform's own app host. In host mode the whole
