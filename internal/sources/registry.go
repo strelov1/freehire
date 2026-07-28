@@ -161,6 +161,9 @@ func All(c HTTPClient) map[string]Source {
 		NewCrelate(c),
 		// Ashby boards whose public Posting API is disabled, served via the embed GraphQL.
 		NewAshbyGraphQL(c),
+		// VC talent network, board = portfolio company slug: listed only for the early-stage
+		// companies that host their application there instead of on an ATS of their own.
+		NewSpeedrun(c),
 		// Multi-company aggregators (boardless): one global feed, company per posting.
 		NewTecla(c),
 		NewTeamex(c),
