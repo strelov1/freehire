@@ -65,6 +65,20 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
 - **Only a deterministic tier (`TierThread` / `TierName`) can auto-link.** A confident LLM
   pick becomes a *suggestion*, never a link. Keep that asymmetry: the LLM reads untrusted
   text.
+- **The classifier prompt carries the same three lessons the matcher learned.** The
+  sender display name is usually the ATS, not the employer; a calendar invite the
+  candidate organised themselves is `other`, not `interview_invitation`; and an
+  employer absent from the candidate list means `matched_job_id = 0`, because an
+  unlinked classification is useful while a wrong link transplants one employer's
+  history onto another. `prompt_test.go` pins the prompt and `validSignals` to each
+  other in both directions — a signal valid but undescribed can never be produced,
+  and one described but invalid is coerced to `other`, so the model is asked for an
+  answer that is thrown away.
+- **A corroboration guard was measured and rejected.** Dropping any LLM pick whose
+  company is not named in the message looks obviously right and would have caught
+  the three mislinks that prompted this. Measured against 99 confirmed-correct links
+  on a live mailbox, it would also have dropped **16** of them — recruiters routinely
+  write without naming the employer. Prompt guidance carries this, not a hard rule.
 - **`mailclassify` is the prompt-injection and out-of-vocabulary guard.** Email bodies are
   attacker-controlled. An unknown signal is sanitized to `other` before anything is
   persisted or served — do not persist a raw model string.
