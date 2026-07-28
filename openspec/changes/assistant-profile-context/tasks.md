@@ -22,28 +22,28 @@
 
 ## 2. The profile response carries the cv block
 
-- [ ] 2.1 Wire the résumé store into `profileHandlers` (`internal/handler/me_profile.go`,
+- [x] 2.1 Wire the résumé store into `profileHandlers` (`internal/handler/me_profile.go`,
   constructed in `internal/handler/handler.go`) so the profile read can reach the
   caller's structured résumé. Keep it optional — a handler built without it (as the
   narrow tests do) must still serve the profile.
   Test: `GetProfile` succeeds with a nil résumé store and returns `cv: null`.
-- [ ] 2.2 Add `cv` to `profileResponse` and populate it from the caller's current
+- [x] 2.2 Add `cv` to `profileResponse` and populate it from the caller's current
   structured résumé, projected through 1.1.
   Test: a caller with a stored structured résumé gets the professional fields under
   `cv`, with no contact keys; a caller without one gets `cv: null`.
-- [ ] 2.3 Test that the résumé lookup failing degrades rather than breaking the read:
+- [x] 2.3 Test that the résumé lookup failing degrades rather than breaking the read:
   the profile is still served with `cv: null`.
 
 ## 3. The profile read admits a key
 
-- [ ] 3.1 Move `GET /me/profile` from `mw.cookie` to `mw.cvKey`, leaving `PUT` and
+- [x] 3.1 Move `GET /me/profile` from `mw.cookie` to `mw.cvKey`, leaving `PUT` and
   `DELETE` on `mw.cookie`. `mw.cvKey` rather than `mw.key` so the CV-tailoring
   agent — which holds a narrow `cv`-scoped key — can read the profile too; `mw.key`
   admits only full-scope keys and would answer it `403`.
   Test: a request authenticated by a full-scope API key alone reads the profile, and
   so does one authenticated by a `cv`-scoped key; either key gets `401` from `PUT`
   and from `DELETE`, and the stored profile is unchanged.
-- [ ] 3.2 Update the comment above the route block — it currently states the profile
+- [x] 3.2 Update the comment above the route block — it currently states the profile
   is cookie-only — to record the read/write split and why (a leaked key must not
   rewrite a profile).
 

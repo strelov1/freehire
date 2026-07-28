@@ -231,10 +231,12 @@ func Register(app *fiber.App, cfg Config) {
 	savedSearchH := newSavedSearchHandlers(queries)
 	subscriptionH := newSubscriptionHandlers(queries)
 	profileSvc := userprofile.New(userprofile.NewQueriesRepository(queries))
-	profileH := newProfileHandlers(profileSvc)
 	// Résumé storage is nil-safe: a nil Blob (S3 unconfigured) yields a disabled service
 	// whose Enabled() is false, so the upload/verdict paths degrade to in-request parsing.
 	resumeStore := resume.New(cfg.Blob, resume.NewQueriesRepository(queries))
+	// The profile read serves the structured résumé beside the profile, so it needs the
+	// résumé store — hence constructed after it.
+	profileH := newProfileHandlers(profileSvc, resumeStore)
 	// Nil-safe: NewAnalyzer(nil) is a no-op analyzer, so the ATS report works whether
 	// or not the LLM is configured.
 	atsAnalyzer := atscheck.NewAnalyzer(cfg.LLM)
