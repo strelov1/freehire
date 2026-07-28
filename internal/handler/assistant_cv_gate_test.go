@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -14,8 +15,10 @@ import (
 // stubBank is an in-memory experienceBankTools, so the gate — the one rule the whole
 // capability exists to keep — is exercised without a database.
 type stubBank struct {
-	atoms map[uuid.UUID]experience.Atom
-	owner map[uuid.UUID]int64
+	atoms       map[uuid.UUID]experience.Atom
+	owner       map[uuid.UUID]int64
+	list        []experience.Atom
+	employments []experience.Employment
 }
 
 func newStubBank() *stubBank {
@@ -40,8 +43,9 @@ func (b *stubBank) Retrieve(context.Context, int64, experience.Query, int) ([]ex
 	return nil, nil
 }
 func (b *stubBank) ListEmployments(context.Context, int64) ([]experience.Employment, error) {
-	return nil, nil
+	return b.employments, nil
 }
+func (b *stubBank) ListAtoms(context.Context, int64) ([]experience.Atom, error) { return b.list, nil }
 func (b *stubBank) AddAtom(_ context.Context, userID int64, a experience.Atom) (experience.Atom, error) {
 	return b.add(userID, a), nil
 }
@@ -151,5 +155,52 @@ func TestCVEditGateOnlyCoversOpsThatAssertSomething(t *testing.T) {
 		if err := h.requireEvidence(ctx, 1, op, ""); err == nil {
 			t.Errorf("op %q was not gated", op)
 		}
+	}
+}
+
+// A tool result is replayed into the model's context on every later turn, so the profile
+// read must report the bank's SHAPE and not its contents. A few hundred achievements
+// replayed each turn would consume the window and defeat trimming.
+func TestProfileToolReportsShapeNotContents(t *testing.T) {
+	h, bank := gateHandlers(t)
+	h.profile = &profileHandlers{}
+	ctx := context.Background()
+
+	role := uuid.New()
+	bank.employments = []experience.Employment{
+		{ID: role, Kind: experience.KindJob, Company: "RingCentral", Role: "SWE", Current: true, Stack: []string{"go"}},
+	}
+	for i := 0; i < 200; i++ {
+		bank.list = append(bank.list, experience.Atom{
+			EmploymentID: &role,
+			Claim:        "A very specific achievement number " + string(rune('A'+i%26)),
+			Skills:       []string{"go"},
+			Provenance:   experience.ProvenanceCVImport,
+		})
+	}
+
+	summary := h.experienceSummary(ctx, 1, []string{"go", "kubernetes"})
+	if summary == nil {
+		t.Fatal("no experience summary for a populated bank")
+	}
+	if summary.TotalAchievements != 200 {
+		t.Errorf("total = %d, want 200", summary.TotalAchievements)
+	}
+	if len(summary.Employments) != 1 || summary.Employments[0].Achievements != 200 {
+		t.Errorf("employments = %+v, want one role carrying all 200", summary.Employments)
+	}
+
+	blob, err := json.Marshal(summary)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(blob), "A very specific achievement") {
+		t.Error("the summary carries achievement text — that is what experience_search is for")
+	}
+
+	// A skill the candidate claims with nothing to show for it is the interviewer's work
+	// list and the tailoring agent's warning.
+	if len(summary.SkillsWithoutEvidence) != 1 || summary.SkillsWithoutEvidence[0] != "kubernetes" {
+		t.Errorf("skills without evidence = %q, want [kubernetes]", summary.SkillsWithoutEvidence)
 	}
 }

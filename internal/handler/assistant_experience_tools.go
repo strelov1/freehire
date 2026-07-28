@@ -19,6 +19,7 @@ import (
 type experienceBankTools interface {
 	Retrieve(ctx context.Context, userID int64, q experience.Query, limit int) ([]experience.Match, error)
 	ListEmployments(ctx context.Context, userID int64) ([]experience.Employment, error)
+	ListAtoms(ctx context.Context, userID int64) ([]experience.Atom, error)
 	GetAtom(ctx context.Context, id uuid.UUID, userID int64) (experience.Atom, error)
 	AddAtom(ctx context.Context, userID int64, a experience.Atom) (experience.Atom, error)
 	UpdateAtom(ctx context.Context, id uuid.UUID, userID int64, a experience.Atom) (experience.Atom, error)

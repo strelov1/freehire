@@ -31,13 +31,13 @@
 - [x] 3.2 ~~Derive `provenance` from turn position~~ — **the spec was wrong and is corrected here.** Turn position cannot distinguish the two: every turn opens with a user message, and the model may call `experience_add` at step 1 or step 5. The working mechanism is a **citation**: `experience_add` takes a `said` field holding the candidate's words verbatim, and `assistant.UserSaid` checks it against the session transcript. A quote that checks out makes the atom `stated_in_chat`; anything else — a paraphrase, an invention, an unreadable transcript — is `agent_inferred`. The model supplies evidence, not a verdict, which is what the spec scenario actually demands
 - [x] 3.3 Register the experience tools under every preset in `assistantRegistry`
 - [ ] 3.4 Test tool behaviour: a malformed call and a rejected write both come back as `{"error": ...}` naming the invalid field, and neither fails the turn; an atom for a known company attaches to the existing employment
-- [ ] 3.5a Migration: extend the `assistant_sessions_preset_check` constraint to admit `'profile'` — a CHECK pins the preset vocabulary in `0044`, so a new preset is a schema change, not just a Go constant
-- [ ] 3.5 Add the `PresetProfile` constant and its interviewer system prompt in `internal/assistant/prompt.go` — find employments with no atoms, profile skills with no evidence, achievements with no metric, and ask about those
-- [ ] 3.6 Reduce `get_profile` to the bank's shape: employments, per-employment atom counts, and which saved profile skills lack evidence — no atom bodies
-- [ ] 3.7 Test that a several-hundred-atom bank produces a bounded `get_profile` result and that an uncovered profile skill is marked
+- [x] 3.5a Migration: extend the `assistant_sessions_preset_check` constraint to admit `'profile'` — a CHECK pins the preset vocabulary in `0044`, so a new preset is a schema change, not just a Go constant
+- [x] 3.5 Add the `PresetProfile` constant and its interviewer system prompt in `internal/assistant/prompt.go` — find employments with no atoms, profile skills with no evidence, achievements with no metric, and ask about those
+- [x] 3.6 Reduce `get_profile` to the bank's shape: employments, per-employment atom counts, and which saved profile skills lack evidence — no atom bodies
+- [x] 3.7 Test that a several-hundred-atom bank produces a bounded `get_profile` result and that an uncovered profile skill is marked
 - [x] 3.8 Gate `cv_edit` on provenance in the service path — **strengthened beyond the written spec.** The spec assumed a patch arrives with a known backing atom; nothing made it arrive. So `add_bullet`/`replace_bullet` now REQUIRE `evidence_id`, and an omitted id is refused like a non-publishable one. Every bullet traces to something the candidate asserted, or it does not reach the page. Ops that rearrange or delete (`remove_bullet`, `reorder_bullets`, `set_stack`, `set_skill_group`) assert nothing new and are not gated
 - [x] 3.9 Test the gate directly — it is the requirement the whole change exists to make durable
-- [ ] 3.10 Revise `tailorPrompt`: search the bank before asking, for `missing_have` and `missing_gap` alike; persist a confirmed answer before writing it into the CV; a declined question writes nothing
+- [x] 3.10 Revise `tailorPrompt`: search the bank before asking, for `missing_have` and `missing_gap` alike; persist a confirmed answer before writing it into the CV; a declined question writes nothing
 
 ## 4. Stage 4 — the user can see and correct what was recorded
 
