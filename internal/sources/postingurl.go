@@ -78,3 +78,54 @@ func isDigits(s string) bool {
 	}
 	return s != ""
 }
+
+// applyFormSuffix is the path an ATS appends to a posting for its application
+// form, per host. The form is the same posting — a candidate reaches it from the
+// detail page and spends most of their time there, so it is the page a browser
+// extension asks about most.
+//
+// Keyed by host and kept to providers whose shape has been checked against the
+// catalog, because the assumption does not generalise: on plenty of career sites a
+// path segment is a different vacancy, and collapsing it would answer with the
+// wrong one.
+var applyFormSuffix = map[string]string{
+	"jobs.ashbyhq.com":   "/application",
+	"jobs.lever.co":      "/apply",
+	"jobs.eu.lever.co":   "/apply",
+	"apply.workable.com": "/apply",
+}
+
+// CanonicalPostingURL rewrites a posting's application-form URL to the posting
+// itself, and returns everything else unchanged.
+//
+// It exists because the catalog stores one URL per job — the detail page — and a
+// lookup by URL is a string match against it. Without this, standing on the form
+// (`…/<id>/application`) reports a posting freehire does not have, when it is the
+// very posting it is showing on the page behind.
+//
+// Deliberately NOT part of `normalize_job_url` in the database: that function backs
+// an expression index, so changing it means rebuilding the index on a live table,
+// and it is applied to both sides of the comparison — including the stored URLs,
+// which never carry an apply suffix. This is a property of the query, not of the
+// data.
+func CanonicalPostingURL(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Host == "" {
+		return raw
+	}
+	suffix, known := applyFormSuffix[strings.ToLower(u.Hostname())]
+	if !known {
+		return raw
+	}
+	trimmed := strings.TrimSuffix(u.Path, "/")
+	if !strings.HasSuffix(strings.ToLower(trimmed), suffix) {
+		return raw
+	}
+	// A bare "/apply" is not a posting with a form; it is a page named apply.
+	stripped := strings.TrimSuffix(trimmed, suffix)
+	if stripped == "" {
+		return raw
+	}
+	u.Path = stripped
+	return u.String()
+}

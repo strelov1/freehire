@@ -49,7 +49,10 @@ func catalogSlugForURL(ctx context.Context, queries *db.Queries, pageURL string)
 		}
 	}
 
-	slug, err := queries.FindOpenJobByURL(ctx, pageURL)
+	// The apply form is the same posting under a different path, and it is where a
+	// candidate stands when they ask about a vacancy. The catalog stores only the
+	// detail page, so the form has to be rewritten to it before the match.
+	slug, err := queries.FindOpenJobByURL(ctx, sources.CanonicalPostingURL(pageURL))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", nil

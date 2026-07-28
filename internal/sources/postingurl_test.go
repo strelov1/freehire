@@ -90,3 +90,61 @@ func TestRefFromURL_IsCaseInsensitiveAboutTheBoard(t *testing.T) {
 		t.Fatalf("external id = %q, want the lowercased board", ref.ExternalID)
 	}
 }
+
+// The apply form is a different URL for the same posting, and it is where a
+// candidate spends most of their time — so the extension asks about it more often
+// than about the detail page. Every one of these is a real shape from the catalog.
+func TestCanonicalPostingURL_DropsTheApplyForm(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+		want string
+	}{
+		{
+			name: "ashby application",
+			url:  "https://jobs.ashbyhq.com/truelogic/c6d2719d-3935-4e59-8446-26135d01957a/application",
+			want: "https://jobs.ashbyhq.com/truelogic/c6d2719d-3935-4e59-8446-26135d01957a",
+		},
+		{
+			name: "lever apply",
+			url:  "https://jobs.eu.lever.co/avara/3c71c090-60d1-4563-b90f-6fba1a1f8419/apply",
+			want: "https://jobs.eu.lever.co/avara/3c71c090-60d1-4563-b90f-6fba1a1f8419",
+		},
+		{
+			name: "workable apply, trailing slash",
+			url:  "https://apply.workable.com/1kosmos/j/435C7BA5E4/apply/",
+			want: "https://apply.workable.com/1kosmos/j/435C7BA5E4",
+		},
+		{
+			name: "a query string survives — the caller's normalisation drops it",
+			url:  "https://jobs.ashbyhq.com/truelogic/c6d2719d/application?utm_source=freehire.me",
+			want: "https://jobs.ashbyhq.com/truelogic/c6d2719d?utm_source=freehire.me",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sources.CanonicalPostingURL(tt.url); got != tt.want {
+				t.Errorf("CanonicalPostingURL(%q)\n = %q\nwant %q", tt.url, got, tt.want)
+			}
+		})
+	}
+}
+
+// Only where the suffix is known to be the same posting. Elsewhere a path segment
+// is a different page, and collapsing it would hand back the wrong vacancy.
+func TestCanonicalPostingURL_LeavesEverythingElseAlone(t *testing.T) {
+	for _, raw := range []string{
+		"https://jobs.ashbyhq.com/truelogic/c6d2719d",
+		"https://jobs.lever.co/avara/3c71c090",
+		"https://careers.example.test/jobs/42/apply",
+		"https://boards.greenhouse.io/stripe/jobs/7826765",
+		"https://jobs.ashbyhq.com/truelogic",
+		"not a url",
+		"",
+	} {
+		if got := sources.CanonicalPostingURL(raw); got != raw {
+			t.Errorf("CanonicalPostingURL(%q) = %q, want it unchanged", raw, got)
+		}
+	}
+}

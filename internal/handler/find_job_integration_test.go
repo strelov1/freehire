@@ -60,7 +60,9 @@ func TestFindJobResolvesByIdentityAndByURL(t *testing.T) {
 		`INSERT INTO jobs (source, external_id, url, title, public_slug) VALUES
 		 ('greenhouse', 'vgw-eu:8617539002', 'https://job-boards.greenhouse.io/vgw-eu/jobs/8617539002', 'Engineer', 'engineer-vgw-eu'),
 		 ('himalayas', ':https://himalayas.app/companies/mindera/jobs/staff-java-backend-developer',
-		  'https://himalayas.app/companies/mindera/jobs/staff-java-backend-developer', 'Staff Java Backend Developer', 'staff-java-mindera')`); err != nil {
+		  'https://himalayas.app/companies/mindera/jobs/staff-java-backend-developer', 'Staff Java Backend Developer', 'staff-java-mindera'),
+		 ('ashby', 'truelogic:c6d2719d-3935-4e59-8446-26135d01957a',
+		  'https://jobs.ashbyhq.com/truelogic/c6d2719d-3935-4e59-8446-26135d01957a', 'Senior Go Engineer', 'senior-go-truelogic')`); err != nil {
 		t.Fatalf("seed jobs: %v", err)
 	}
 
@@ -79,6 +81,16 @@ func TestFindJobResolvesByIdentityAndByURL(t *testing.T) {
 		const page = "https%3A%2F%2Fhimalayas.app%2Fcompanies%2Fmindera%2Fjobs%2Fstaff-java-backend-developer%3Futm_source%3Dfreehire.me"
 		if slug := findSlug(t, app, page); slug != "staff-java-mindera" {
 			t.Errorf("slug = %q, want staff-java-mindera", slug)
+		}
+	})
+
+	// The form is where a candidate stands when they ask about a vacancy, and it is a
+	// different URL from the one the catalog stores. Without collapsing it the panel
+	// tells them freehire does not have the posting it is showing on the page behind.
+	t.Run("an apply form resolves to its posting", func(t *testing.T) {
+		const form = "https%3A%2F%2Fjobs.ashbyhq.com%2Ftruelogic%2Fc6d2719d-3935-4e59-8446-26135d01957a%2Fapplication%3Futm_source%3Dfreehire.me"
+		if slug := findSlug(t, app, form); slug != "senior-go-truelogic" {
+			t.Errorf("slug = %q, want senior-go-truelogic", slug)
 		}
 	})
 
