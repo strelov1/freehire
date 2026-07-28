@@ -595,7 +595,7 @@ var wordAliases = map[string]string{
 
 // ambiguousWords marks the wordAliases keys whose word-pass match is "weak": Parse
 // tags it ONLY when the same text carries at least one strong tech token
-// (corroboration). Two groups qualify:
+// (corroboration). Three groups qualify:
 //
 //   - English-word collisions — a common word that doubles as a tech name
 //     (react/swift/spring/rust/ruby/…). Alone it is noise: a cook's "must react to
@@ -606,6 +606,8 @@ var wordAliases = map[string]string{
 //     they are too low-precision to stand alone AND too low-precision to corroborate
 //     one another — only a concrete named technology (python, kubernetes, typescript,
 //     a phrase, an acronym) is a trustworthy corroborator.
+//   - Job-posting boilerplate — words that recur in the prose of NON-technical
+//     postings in particular, listed below.
 //
 // The unambiguous alias forms of the collision canonicals stay strong (reactjs,
 // "react native", "spring boot", expressjs, "ruby on rails"), so a genuinely-named
@@ -649,6 +651,27 @@ var ambiguousWords = map[string]bool{
 	"seo":        true,
 	"ecommerce":  true,
 	"fintech":    true,
+	// job-posting boilerplate — the word belongs to the prose of NON-tech postings
+	// (an "agile" supervisor, the drivers who are "the backbone", a "restful" night in
+	// a care home, the "assembly" line, the rugby "scrum", tree "sap", a "sentry" post,
+	// a bank "vault", the fire-code "firewall", a "rancher", a "postman", "braze"d
+	// copper). As strong aliases they did double damage: each tagged its posting on its
+	// own, AND lifted the gate off every weak word beside it — one "sap" on a road-
+	// maintenance description turned "guard rails" into Ruby on Rails. The real roles
+	// name their stack (SAP→ABAP, REST→the "rest api" phrase), so nothing is lost.
+	"agile":     true,
+	"backbone":  true,
+	"restful":   true,
+	"assembly":  true,
+	"scrum":     true,
+	"sap":       true,
+	"sentry":    true,
+	"vault":     true,
+	"firewall":  true,
+	"firewalls": true,
+	"rancher":   true,
+	"postman":   true,
+	"braze":     true,
 }
 
 // phraseAlias is a punctuated or multi-word term matched against the normalized
@@ -680,6 +703,10 @@ var phraseAliases = []phraseAlias{
 	{"machine learning", "machine-learning"},
 	// additional phrases
 	{"rest api", "rest"}, {"rest apis", "rest"},
+	// The bare word "restful" is gated (a care home offers a restful night), so the
+	// spelled-out form carries the real postings that say "RESTful API" rather than
+	// "REST API" — it is the phrase, not the adjective, that names the style.
+	{"restful api", "rest"}, {"restful apis", "rest"},
 	{"github actions", "github-actions"},
 	{"cloudformation", "cloudformation"},
 	{"scikit-learn", "scikit-learn"},
