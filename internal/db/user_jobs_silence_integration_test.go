@@ -14,21 +14,71 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// listOne returns the caller's single tracked row.
-func listOne(t *testing.T, q *Queries, uid int64) ListUserJobsRow {
+// applyAt records an application dated at, the state every test here starts from.
+func applyAt(t *testing.T, q *Queries, uid, jobID int64, at time.Time) {
+	t.Helper()
+	if _, err := q.MarkJobApplied(context.Background(), MarkJobAppliedParams{
+		UserID: uid, JobID: jobID, At: pgtype.Timestamptz{Time: at, Valid: true},
+	}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+}
+
+// mail is one seeded message. A zero JobID or SuggestedID leaves that column
+// NULL, which is how the three link states are expressed: linked, suggested but
+// unconfirmed, or neither.
+type mail struct {
+	ExternalID  string
+	At          time.Time
+	JobID       int64
+	SuggestedID int64
+	Deleted     bool
+}
+
+func seedMail(t *testing.T, pool *pgxpool.Pool, uid int64, m mail) {
+	t.Helper()
+	nullable := func(id int64) any {
+		if id == 0 {
+			return nil
+		}
+		return id
+	}
+	var deletedAt any
+	if m.Deleted {
+		deletedAt = time.Now()
+	}
+	_, err := pool.Exec(context.Background(),
+		`INSERT INTO emails (user_id, source, external_id, subject, body_text,
+		                     received_at, job_id, suggested_job_id, deleted_at)
+		 VALUES ($1, 'hosted', $2, 'subject', 'body', $3, $4, $5, $6)`,
+		uid, m.ExternalID, m.At, nullable(m.JobID), nullable(m.SuggestedID), deletedAt)
+	if err != nil {
+		t.Fatalf("seed mail %s: %v", m.ExternalID, err)
+	}
+}
+
+// trackedRow returns the caller's single tracked row under the given filter.
+func trackedRow(t *testing.T, q *Queries, uid int64, filter string) ListUserJobsRow {
 	t.Helper()
 	rows, err := q.ListUserJobs(context.Background(), ListUserJobsParams{
-		UserID: uid, Filter: "all", Limit: 10, Offset: 0,
+		UserID: uid, Filter: filter, Limit: 10,
 	})
 	if err != nil {
-		t.Fatalf("ListUserJobs: %v", err)
+		t.Fatalf("ListUserJobs(%s): %v", filter, err)
 	}
 	if len(rows) != 1 {
 		t.Fatalf("listing returned %d rows, want 1", len(rows))
 	}
 	return rows[0]
+}
+
+// sameSecond compares a returned timestamp against an expected one, which the
+// tests build at second precision.
+func sameSecond(got pgtype.Timestamptz, want time.Time) bool {
+	return got.Valid && got.Time.UTC().Truncate(time.Second).Equal(want)
 }
 
 // TestLastActivityFallsBackToTheApplyDate asserts an application with no linked
@@ -38,23 +88,15 @@ func listOne(t *testing.T, q *Queries, uid int64) ListUserJobsRow {
 func TestLastActivityFallsBackToTheApplyDate(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
-	ctx := context.Background()
 
 	uid := seedAPIKeyUser(t, pool, "silence-nomail@example.test")
 	jid := insertJob(t, pool, "silence-1")
 	applied := time.Now().Add(-30 * 24 * time.Hour).UTC().Truncate(time.Second)
-	if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{
-		UserID: uid, JobID: jid, At: pgtype.Timestamptz{Time: applied, Valid: true},
-	}); err != nil {
-		t.Fatalf("apply: %v", err)
-	}
+	applyAt(t, q, uid, jid, applied)
 
-	row := listOne(t, q, uid)
-	if !row.LastActivityAt.Valid {
-		t.Fatal("last_activity_at is NULL, want the apply date")
-	}
-	if got := row.LastActivityAt.Time.UTC().Truncate(time.Second); !got.Equal(applied) {
-		t.Errorf("last_activity_at = %v, want the apply date %v", got, applied)
+	row := trackedRow(t, q, uid, "all")
+	if !sameSecond(row.LastActivityAt, applied) {
+		t.Errorf("last_activity_at = %v, want the apply date %v", row.LastActivityAt, applied)
 	}
 	if row.HasPendingSuggestion {
 		t.Error("has_pending_suggestion = true with no mail at all")
@@ -67,33 +109,18 @@ func TestLastActivityFallsBackToTheApplyDate(t *testing.T) {
 func TestLastActivityMovesForwardWithMail(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
-	ctx := context.Background()
 
 	uid := seedAPIKeyUser(t, pool, "silence-mail@example.test")
 	jid := insertJob(t, pool, "silence-2")
 	applied := time.Now().Add(-30 * 24 * time.Hour).UTC().Truncate(time.Second)
-	if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{
-		UserID: uid, JobID: jid, At: pgtype.Timestamptz{Time: applied, Valid: true},
-	}); err != nil {
-		t.Fatalf("apply: %v", err)
-	}
+	applyAt(t, q, uid, jid, applied)
 
-	older := applied.Add(-5 * 24 * time.Hour)
 	newer := applied.Add(9 * 24 * time.Hour)
-	for _, m := range []struct {
-		ext string
-		at  time.Time
-	}{{"sil-old", older}, {"sil-new", newer}} {
-		if _, err := pool.Exec(ctx,
-			`INSERT INTO emails (user_id, source, external_id, subject, body_text, received_at, job_id)
-			 VALUES ($1,'hosted',$2,'s','b',$3,$4)`, uid, m.ext, m.at, jid); err != nil {
-			t.Fatalf("seed mail %s: %v", m.ext, err)
-		}
-	}
+	seedMail(t, pool, uid, mail{ExternalID: "sil-old", At: applied.Add(-5 * 24 * time.Hour), JobID: jid})
+	seedMail(t, pool, uid, mail{ExternalID: "sil-new", At: newer, JobID: jid})
 
-	row := listOne(t, q, uid)
-	if got := row.LastActivityAt.Time.UTC().Truncate(time.Second); !got.Equal(newer) {
-		t.Errorf("last_activity_at = %v, want the newest linked message %v", got, newer)
+	if row := trackedRow(t, q, uid, "all"); !sameSecond(row.LastActivityAt, newer) {
+		t.Errorf("last_activity_at = %v, want the newest linked message %v", row.LastActivityAt, newer)
 	}
 }
 
@@ -104,48 +131,22 @@ func TestLastActivityMovesForwardWithMail(t *testing.T) {
 func TestLastActivityIgnoresUnlinkedAndDeletedMail(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
-	ctx := context.Background()
 
 	uid := seedAPIKeyUser(t, pool, "silence-ignore@example.test")
 	jid := insertJob(t, pool, "silence-3")
 	other := insertJob(t, pool, "silence-3-other")
 	applied := time.Now().Add(-30 * 24 * time.Hour).UTC().Truncate(time.Second)
-	if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{
-		UserID: uid, JobID: jid, At: pgtype.Timestamptz{Time: applied, Valid: true},
-	}); err != nil {
-		t.Fatalf("apply: %v", err)
-	}
+	applyAt(t, q, uid, jid, applied)
+
 	recent := time.Now().Add(-time.Hour)
+	seedMail(t, pool, uid, mail{ExternalID: "sil-sug", At: recent, SuggestedID: jid})
+	seedMail(t, pool, uid, mail{ExternalID: "sil-other", At: recent, JobID: other})
+	seedMail(t, pool, uid, mail{ExternalID: "sil-del", At: recent, JobID: jid, Deleted: true})
 
-	// A suggestion awaiting confirmation.
-	if _, err := pool.Exec(ctx,
-		`INSERT INTO emails (user_id, source, external_id, subject, body_text, received_at, suggested_job_id)
-		 VALUES ($1,'hosted','sil-sug','s','b',$2,$3)`, uid, recent, jid); err != nil {
-		t.Fatalf("seed suggestion: %v", err)
-	}
-	// Mail linked to a different application.
-	if _, err := pool.Exec(ctx,
-		`INSERT INTO emails (user_id, source, external_id, subject, body_text, received_at, job_id)
-		 VALUES ($1,'hosted','sil-other','s','b',$2,$3)`, uid, recent, other); err != nil {
-		t.Fatalf("seed other-job mail: %v", err)
-	}
-	// Linked but soft-deleted.
-	if _, err := pool.Exec(ctx,
-		`INSERT INTO emails (user_id, source, external_id, subject, body_text, received_at, job_id, deleted_at)
-		 VALUES ($1,'hosted','sil-del','s','b',$2,$3, now())`, uid, recent, jid); err != nil {
-		t.Fatalf("seed deleted mail: %v", err)
-	}
-
-	rows, err := q.ListUserJobs(ctx, ListUserJobsParams{UserID: uid, Filter: "applied", Limit: 10})
-	if err != nil {
-		t.Fatalf("ListUserJobs: %v", err)
-	}
-	if len(rows) != 1 {
-		t.Fatalf("applied listing returned %d rows, want 1", len(rows))
-	}
-	row := rows[0]
-	if got := row.LastActivityAt.Time.UTC().Truncate(time.Second); !got.Equal(applied) {
-		t.Errorf("last_activity_at = %v, want the apply date %v — none of that mail is activity", got, applied)
+	row := trackedRow(t, q, uid, "applied")
+	if !sameSecond(row.LastActivityAt, applied) {
+		t.Errorf("last_activity_at = %v, want the apply date %v — none of that mail is activity",
+			row.LastActivityAt, applied)
 	}
 	if !row.HasPendingSuggestion {
 		t.Error("has_pending_suggestion = false, want true — a suggestion is pending on this application")
@@ -161,19 +162,11 @@ func TestPendingSuggestionClearsOnceConfirmed(t *testing.T) {
 
 	uid := seedAPIKeyUser(t, pool, "silence-confirm@example.test")
 	jid := insertJob(t, pool, "silence-4")
-	applied := time.Now().Add(-30 * 24 * time.Hour).UTC().Truncate(time.Second)
-	if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{
-		UserID: uid, JobID: jid, At: pgtype.Timestamptz{Time: applied, Valid: true},
-	}); err != nil {
-		t.Fatalf("apply: %v", err)
-	}
+	applyAt(t, q, uid, jid, time.Now().Add(-30*24*time.Hour).UTC().Truncate(time.Second))
+
 	recent := time.Now().Add(-time.Hour).UTC().Truncate(time.Second)
-	if _, err := pool.Exec(ctx,
-		`INSERT INTO emails (user_id, source, external_id, subject, body_text, received_at, suggested_job_id)
-		 VALUES ($1,'hosted','sil-c','s','b',$2,$3)`, uid, recent, jid); err != nil {
-		t.Fatalf("seed suggestion: %v", err)
-	}
-	if !listOne(t, q, uid).HasPendingSuggestion {
+	seedMail(t, pool, uid, mail{ExternalID: "sil-c", At: recent, SuggestedID: jid})
+	if !trackedRow(t, q, uid, "all").HasPendingSuggestion {
 		t.Fatal("suggestion not reported as pending before confirmation")
 	}
 
@@ -183,12 +176,12 @@ func TestPendingSuggestionClearsOnceConfirmed(t *testing.T) {
 		t.Fatalf("confirm: %v", err)
 	}
 
-	row := listOne(t, q, uid)
+	row := trackedRow(t, q, uid, "all")
 	if row.HasPendingSuggestion {
 		t.Error("has_pending_suggestion is still true after confirming")
 	}
-	if got := row.LastActivityAt.Time.UTC().Truncate(time.Second); !got.Equal(recent) {
-		t.Errorf("last_activity_at = %v, want the now-linked message %v", got, recent)
+	if !sameSecond(row.LastActivityAt, recent) {
+		t.Errorf("last_activity_at = %v, want the now-linked message %v", row.LastActivityAt, recent)
 	}
 }
 
@@ -198,15 +191,14 @@ func TestPendingSuggestionClearsOnceConfirmed(t *testing.T) {
 func TestLastActivityNullForNonApplications(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
-	ctx := context.Background()
 
 	uid := seedAPIKeyUser(t, pool, "silence-saved@example.test")
 	jid := insertJob(t, pool, "silence-5")
-	if _, err := q.SaveJob(ctx, SaveJobParams{UserID: uid, JobID: jid}); err != nil {
+	if _, err := q.SaveJob(context.Background(), SaveJobParams{UserID: uid, JobID: jid}); err != nil {
 		t.Fatalf("SaveJob: %v", err)
 	}
 
-	row := listOne(t, q, uid)
+	row := trackedRow(t, q, uid, "all")
 	if row.LastActivityAt.Valid {
 		t.Errorf("last_activity_at = %v on a saved-only job, want NULL", row.LastActivityAt.Time)
 	}
