@@ -401,6 +401,11 @@ type boardVerdict struct {
 func boardsToRetire(ctx context.Context, q candidateSource, brd boards) ([]boardKey, int, error) {
 	evidence := map[boardKey]boardVerdict{}
 	var after int64
+	// Same accounting the scan above keeps, and for the same reason: this walks the
+	// whole catalogue too, so without it the report is twenty silent minutes in which
+	// a working run and a wedged one look identical.
+	var scanned, reported int64
+	start := time.Now()
 	for {
 		rows, err := q.PruneCandidates(ctx, db.PruneCandidatesParams{AfterID: after, PageSize: scanPage})
 		if err != nil {
@@ -408,6 +413,12 @@ func boardsToRetire(ctx context.Context, q candidateSource, brd boards) ([]board
 		}
 		if len(rows) == 0 {
 			break
+		}
+		scanned += int64(len(rows))
+		if scanned-reported >= progressEvery {
+			reported = scanned
+			log.Printf("prune: board report scanned %d rows, %d boards seen, %s elapsed",
+				scanned, len(evidence), time.Since(start).Round(time.Second))
 		}
 		for _, row := range rows {
 			after = row.ID

@@ -212,3 +212,63 @@ func TestBackfill_Concurrent(t *testing.T) {
 		}
 	}
 }
+
+// A full pass rewrites five million rows and, until now, said nothing at all between
+// "starting" and "done" — a silence measured in hours during which a run that was
+// working and a run that had wedged looked identical. The only way to tell them apart
+// was pg_stat_activity, and the only way to answer "how much longer" was to guess.
+//
+// cmd/prune's scan already learned this ("the first prod run was impossible to
+// distinguish from a hang"); this is the same fix on the other long worker.
+func TestBackfill_ReportsProgressWhileItRuns(t *testing.T) {
+	jobs := make([]db.Job, 0, 25)
+	for i := 1; i <= 25; i++ {
+		jobs = append(jobs, db.Job{
+			ID: int64(i), Title: "Senior Go Developer", Company: "Acme",
+			Source: "manual", ExternalID: "x", Location: "Berlin, Germany",
+			Description: backfillJobDescription,
+		})
+	}
+	store := &fakeStore{jobs: jobs}
+
+	var mu sync.Mutex
+	var seen []int64
+	// One worker, so the cadence is deterministic; the counter itself is atomic, so
+	// exactly one goroutine observes each multiple whatever the concurrency.
+	scanned, _, _, err := backfillProgress(context.Background(), store, 1, 10,
+		func(n, updated, slugs int64) {
+			mu.Lock()
+			defer mu.Unlock()
+			seen = append(seen, n)
+		})
+	if err != nil {
+		t.Fatalf("backfillProgress: %v", err)
+	}
+	if scanned != 25 {
+		t.Fatalf("scanned=%d, want 25", scanned)
+	}
+	if len(seen) != 2 {
+		t.Fatalf("reported at %v, want two reports (at 10 and 20) for 25 rows every 10", seen)
+	}
+	if seen[0] != 10 || seen[1] != 20 {
+		t.Errorf("reported at %v, want [10 20] — the report must fire ON the multiple", seen)
+	}
+}
+
+// Progress reporting must not change what a pass does. The default entry point keeps
+// its signature and its counts.
+func TestBackfill_ProgressDoesNotChangeTheResult(t *testing.T) {
+	job := db.Job{
+		ID: 7, Title: "Senior Go Developer", Company: "Acme",
+		Source: "manual", ExternalID: "x", Location: "Berlin, Germany",
+		Description: backfillJobDescription,
+	}
+	store := &fakeStore{jobs: []db.Job{job}}
+	scanned, updated, slugsMoved, err := backfillAll(context.Background(), store, 1)
+	if err != nil {
+		t.Fatalf("backfillAll: %v", err)
+	}
+	if scanned != 1 || updated != 1 || slugsMoved != 1 {
+		t.Errorf("scanned=%d updated=%d slugsMoved=%d, want 1/1/1", scanned, updated, slugsMoved)
+	}
+}
