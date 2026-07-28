@@ -56,7 +56,7 @@
 
 - [x] 9.1 Delete `RunnerSetup.svelte`, `RunnerBadge.svelte` and every runner branch in `AssistantChat.svelte` and `/tailor/[slug]/+page.svelte`, keeping the rest of the markup and behaviour identical.
 - [x] 9.2 Remove the `/assistant-api` Vite proxy and the `PUBLIC_ASSISTANT_ORIGIN` reference from the web build.
-- [ ] 9.3 Verify both surfaces in a browser: `/my/assistant` (send, stream, tool cards, job cards, session rail, switch, delete) and `/tailor/<slug>` (kickoff, CV edit through the agent, preview refresh on turn complete).
+- [x] 9.3 Verify both surfaces in a browser: `/my/assistant` (send, stream, tool cards, job cards, session rail, switch, delete) and `/tailor/<slug>` (kickoff, CV edit through the agent, preview refresh on turn complete). Verified against a local stack on the real model (privateclaw/flagship behind the production litellm), which is what surfaced the streamed-tool-call, 10s-stream-cut, iOS-zoom and cancelled-transcript defects.
 
 ## 10. Documentation
 
