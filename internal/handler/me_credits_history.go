@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
 )
@@ -90,20 +92,31 @@ func (h *creditsHandlers) GetMyCreditsHistory(c *fiber.Ctx) error {
 // CV id that happen to share a numeric value never collide. A ref whose subject was deleted is
 // simply absent, so the caller falls back to a generic label.
 func (h *creditsHandlers) resolveDebitSubjects(c *fiber.Ctx, rows []db.ListCreditLedgerRow) (map[string]string, error) {
-	var jobRefs, cvRefs []int64
+	// The two features reference different kinds of subject: a match debit carries a
+	// job's numeric id, a tailor debit carries a CV's UUID. Parsing both as integers
+	// silently dropped every tailor ref once CV ids stopped being numbers — the label
+	// just went missing, with nothing to notice.
+	var jobRefs []int64
+	// The generated query takes the array as pgtype.UUID; the column override only
+	// covers the column itself.
+	var cvRefs []pgtype.UUID
 	for _, r := range rows {
 		if r.Kind != "debit" || !r.Ref.Valid {
 			continue
 		}
-		id, err := strconv.ParseInt(r.Ref.String, 10, 64)
-		if err != nil {
-			continue // a non-numeric ref never resolves; the generic label stands
-		}
 		switch r.Feature.String {
 		case "match":
+			id, err := strconv.ParseInt(r.Ref.String, 10, 64)
+			if err != nil {
+				continue // a ref that is not a job id never resolves; the generic label stands
+			}
 			jobRefs = append(jobRefs, id)
 		case "tailor":
-			cvRefs = append(cvRefs, id)
+			id, err := uuid.Parse(r.Ref.String)
+			if err != nil {
+				continue // pre-migration refs are numeric and no longer resolve
+			}
+			cvRefs = append(cvRefs, pgtype.UUID{Bytes: id, Valid: true})
 		}
 	}
 

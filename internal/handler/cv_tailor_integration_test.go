@@ -13,7 +13,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"testing"
 	"time"
 
@@ -168,8 +167,8 @@ func TestTailorCVBootstrap(t *testing.T) {
 	}
 	json.NewDecoder(resp.Body).Decode(&got)
 	resp.Body.Close()
-	if got.Data.TailorCVID == 0 || got.Data.BaseCVID == 0 || got.Data.TailorCVID == got.Data.BaseCVID {
-		t.Errorf("ids = %+v, want distinct non-zero", got.Data)
+	if got.Data.TailorCVID == "" || got.Data.BaseCVID == "" || got.Data.TailorCVID == got.Data.BaseCVID {
+		t.Errorf("ids = %+v, want two distinct ids", got.Data)
 	}
 	// The bootstrap mints the tailoring conversation itself: a tailor-preset session
 	// bound to this CV and vacancy, already stored on the CV so reopening the
@@ -177,8 +176,8 @@ func TestTailorCVBootstrap(t *testing.T) {
 	if got.Data.SessionID == "" {
 		t.Fatalf("bootstrap returned no session id")
 	}
-	var boundPreset, boundSession string
-	var boundCV, boundJob int64
+	var boundPreset, boundSession, boundCV string
+	var boundJob int64
 	if err := pool.QueryRow(context.Background(),
 		`SELECT s.preset, s.cv_id, s.job_id, c.agent_session_id
 		   FROM assistant_sessions s JOIN cvs c ON c.id = s.cv_id
@@ -186,7 +185,7 @@ func TestTailorCVBootstrap(t *testing.T) {
 		t.Fatalf("read the minted session: %v", err)
 	}
 	if boundPreset != assistant.PresetTailor || boundCV != got.Data.TailorCVID || boundJob != jobID {
-		t.Errorf("session = preset %q cv %d job %d, want a tailor session bound to cv %d / job %d",
+		t.Errorf("session = preset %q cv %s job %d, want a tailor session bound to cv %s / job %d",
 			boundPreset, boundCV, boundJob, got.Data.TailorCVID, jobID)
 	}
 	if boundSession != got.Data.SessionID {
@@ -256,7 +255,7 @@ func TestPatchCVViaKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create cv: %v", err)
 	}
-	path := "/api/v1/me/cvs/" + strconv.FormatInt(base.ID, 10)
+	path := "/api/v1/me/cvs/" + base.ID.String()
 
 	// The agent (API key) must never see the contact block; the owner's cookie read does.
 	decodeHeader := func(resp *http.Response) cv.Header {
@@ -331,7 +330,7 @@ func TestTailorContextSplit(t *testing.T) {
 	}
 	key := cvScopedKey(t, h, user)
 
-	resp := doBearer(t, app, fiber.MethodGet, "/api/v1/me/cvs/"+strconv.FormatInt(tailored.ID, 10)+"/tailor-context", key, nil)
+	resp := doBearer(t, app, fiber.MethodGet, "/api/v1/me/cvs/"+tailored.ID.String()+"/tailor-context", key, nil)
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("context = %d, want 200", resp.StatusCode)
 	}
@@ -356,7 +355,7 @@ func TestTailorContextSplit(t *testing.T) {
 
 	// A base CV (no bound vacancy) is not tailorable-context → 409.
 	base, _ := h.cvStore.Create(ctx, user, "Base", cv.DefaultTemplateID, cv.Document{})
-	if resp := doBearer(t, app, fiber.MethodGet, "/api/v1/me/cvs/"+strconv.FormatInt(base.ID, 10)+"/tailor-context", key, nil); resp.StatusCode != fiber.StatusConflict {
+	if resp := doBearer(t, app, fiber.MethodGet, "/api/v1/me/cvs/"+base.ID.String()+"/tailor-context", key, nil); resp.StatusCode != fiber.StatusConflict {
 		t.Fatalf("base-cv context = %d, want 409", resp.StatusCode)
 	}
 }

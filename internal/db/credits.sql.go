@@ -262,7 +262,7 @@ const listTailoredCVLabelsByIDs = `-- name: ListTailoredCVLabelsByIDs :many
 SELECT c.id, j.title AS job_title, j.public_slug AS job_slug
 FROM cvs c
 JOIN jobs j ON j.id = c.job_id
-WHERE c.id = ANY($1::bigint[])
+WHERE c.id = ANY($1::uuid[])
 `
 
 type ListTailoredCVLabelsByIDsRow struct {
@@ -274,7 +274,7 @@ type ListTailoredCVLabelsByIDsRow struct {
 // Resolve tailored-CV ids to their target job's display labels for the credit-history page
 // (tailor debits). Only tailored CVs (job_id set) whose job still exists resolve; the handler
 // falls back to a generic label otherwise.
-func (q *Queries) ListTailoredCVLabelsByIDs(ctx context.Context, ids []int64) ([]ListTailoredCVLabelsByIDsRow, error) {
+func (q *Queries) ListTailoredCVLabelsByIDs(ctx context.Context, ids []pgtype.UUID) ([]ListTailoredCVLabelsByIDsRow, error) {
 	rows, err := q.db.Query(ctx, listTailoredCVLabelsByIDs, ids)
 	if err != nil {
 		return nil, err

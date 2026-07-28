@@ -987,7 +987,7 @@ type Querier interface {
 	// Resolve tailored-CV ids to their target job's display labels for the credit-history page
 	// (tailor debits). Only tailored CVs (job_id set) whose job still exists resolve; the handler
 	// falls back to a generic label otherwise.
-	ListTailoredCVLabelsByIDs(ctx context.Context, ids []int64) ([]ListTailoredCVLabelsByIDsRow, error)
+	ListTailoredCVLabelsByIDs(ctx context.Context, ids []pgtype.UUID) ([]ListTailoredCVLabelsByIDsRow, error)
 	// A user's TAILORED CVs (bound to a vacancy), newest edit first — the re-open list. Carries the
 	// vacancy's public slug and the bound agent session so each row links back to its workspace.
 	// Base CVs (job_id NULL) are excluded; the JOIN also drops tailored CVs whose job was deleted.

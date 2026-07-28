@@ -50,14 +50,26 @@ ALTER TABLE public.cvs DROP COLUMN id;
 ALTER TABLE public.cvs RENAME COLUMN new_id TO id;
 ALTER TABLE public.cvs ADD CONSTRAINT cvs_pkey PRIMARY KEY (id);
 
--- 5. Re-establish the references against the new key, with the same delete rules.
+-- 5. Re-establish what the dropped column took with it. DROP COLUMN silently drops
+--    every CHECK that mentions the column, so referral_requests' cv_kind rule —
+--    "an original CV never carries a cv_id" — vanished with the old cv_id. The
+--    foreign keys were dropped explicitly above; this one goes quietly, which is
+--    exactly why it needs restating. (Caught by the integration suite, not by
+--    reading the DDL.)
+ALTER TABLE public.referral_requests
+    ADD CONSTRAINT referral_requests_cv_kind_check CHECK (
+        ((cv_kind = 'original'::text) AND (cv_id IS NULL)) OR
+        (cv_kind = 'built'::text)
+    );
+
+-- 6. Re-establish the references against the new key, with the same delete rules.
 ALTER TABLE public.referral_requests
     ADD CONSTRAINT referral_requests_cv_id_fkey FOREIGN KEY (cv_id) REFERENCES public.cvs(id) ON DELETE SET NULL;
 
 ALTER TABLE public.assistant_sessions
     ADD CONSTRAINT assistant_sessions_cv_id_fkey FOREIGN KEY (cv_id) REFERENCES public.cvs(id) ON DELETE CASCADE;
 
--- A referencing column needs its own index: Postgres indexes only the referenced
+-- 7. A referencing column needs its own index: Postgres indexes only the referenced
 -- side, so without these, deleting a CV scans both tables.
 CREATE INDEX IF NOT EXISTS referral_requests_cv_id_idx ON public.referral_requests (cv_id);
 CREATE INDEX IF NOT EXISTS assistant_sessions_cv_id_idx ON public.assistant_sessions (cv_id);

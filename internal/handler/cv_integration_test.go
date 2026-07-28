@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
-	"strconv"
 	"testing"
 	"time"
 
@@ -136,17 +135,17 @@ func TestSetCVTemplateEndpoint(t *testing.T) {
 	}
 	var created struct {
 		Data struct {
-			ID int64 `json:"id"`
+			ID string `json:"id"`
 		} `json:"data"`
 	}
 	json.NewDecoder(resp.Body).Decode(&created)
-	path := "/api/v1/me/cvs/" + strconv.FormatInt(created.Data.ID, 10) + "/template"
+	path := "/api/v1/me/cvs/" + created.Data.ID + "/template"
 
 	// Valid registered template → 204, and it sticks on read.
 	if resp := doCV(t, app, fiber.MethodPut, path, ownerTok, map[string]string{"template_id": "modern-sans"}); resp.StatusCode != fiber.StatusNoContent {
 		t.Fatalf("set valid template = %d, want 204", resp.StatusCode)
 	}
-	resp = doCV(t, app, fiber.MethodGet, "/api/v1/me/cvs/"+strconv.FormatInt(created.Data.ID, 10), ownerTok, nil)
+	resp = doCV(t, app, fiber.MethodGet, "/api/v1/me/cvs/"+created.Data.ID, ownerTok, nil)
 	var got struct {
 		Data struct {
 			TemplateID string `json:"template_id"`
@@ -207,13 +206,13 @@ func TestCVEndpoints_CRUDAndIsolation(t *testing.T) {
 	json.NewDecoder(resp.Body).Decode(&created)
 	resp.Body.Close()
 	id := created.Data.ID
-	if created.Data.Title != "General" || id == 0 {
+	if created.Data.Title != "General" || id == "" {
 		t.Fatalf("create returned %+v", created.Data)
 	}
 
 	// Update with a real document.
 	doc := cv.Document{Header: cv.Header{FullName: "Ada Lovelace"}, Skills: []cv.SkillGroup{{Group: "Lang", Items: []string{"Go"}}}}
-	upPath := "/api/v1/me/cvs/" + strconv.FormatInt(id, 10)
+	upPath := "/api/v1/me/cvs/" + id
 	if resp := doCV(t, app, fiber.MethodPut, upPath, betaTok, updateCVRequest{Title: "Tailored", Document: doc}); resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("update = %d, want 200", resp.StatusCode)
 	}
