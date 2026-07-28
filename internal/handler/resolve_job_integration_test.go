@@ -106,7 +106,7 @@ func TestResolveJobEndpoint(t *testing.T) {
 	h := &contributionHandlers{
 		queries:      queries,
 		contribution: contribution.New(contribution.NewQueriesRepository(pool, queries), nil),
-		imports:      linkimport.New(pool, queries, nil, pages, nil),
+		imports:      linkimport.New(pool, queries, nil, pages, nil, nil),
 	}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})

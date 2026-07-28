@@ -60,7 +60,7 @@ func TestImport_WritesTheParsedVacancy(t *testing.T) {
 	q := db.New(pool)
 	ctx := context.Background()
 
-	im := New(pool, q, nil, pageClient{body: jobPostingPage}, nil)
+	im := New(pool, q, nil, pageClient{body: jobPostingPage}, nil, nil)
 
 	res, ok, err := im.Import(ctx, pageURL)
 	if err != nil {
@@ -106,7 +106,7 @@ func TestImport_IsIdempotentForTheSameURL(t *testing.T) {
 	q := db.New(pool)
 	ctx := context.Background()
 
-	im := New(pool, q, nil, pageClient{body: jobPostingPage}, nil)
+	im := New(pool, q, nil, pageClient{body: jobPostingPage}, nil, nil)
 
 	first, _, err := im.Import(ctx, pageURL)
 	if err != nil {
@@ -134,7 +134,7 @@ func TestImport_ReportsAPageThatIsNotAVacancy(t *testing.T) {
 	q := db.New(pool)
 	ctx := context.Background()
 
-	im := New(pool, q, nil, pageClient{body: plainPage}, nil)
+	im := New(pool, q, nil, pageClient{body: plainPage}, nil, nil)
 
 	res, ok, err := im.Import(ctx, "https://careers.mindera.test/about-us")
 	if err != nil {

@@ -259,7 +259,7 @@ func Register(app *fiber.App, cfg Config) {
 	// board share transport and rate limits. cfg.Search may be nil (no engine configured),
 	// which only skips the index push.
 	ingestClient := sources.NewClient()
-	importer := linkimport.New(cfg.Pool, queries, cfg.Search, ingestClient, sources.All(ingestClient))
+	importer := linkimport.New(cfg.Pool, queries, cfg.Search, ingestClient, sources.All(ingestClient), boardresolve.New())
 	contributionsH := newContributionHandlers(contributionSvc, creditsStore, queries, importer)
 	creditsH := newCreditsHandlers(creditsStore, queries)
 	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, creditsStore)

@@ -32,7 +32,7 @@
   in `sources.All` → `Fetch` the tenant board → select the posting matching the link
 - [x] 4.3 Failing test then implementation: a board fetched successfully but not containing
   the link resolves nothing (no error); a fetch failure is an error
-- [ ] 4.4 Add the `boardresolve` network fallback for vanity domains in `linkimport` (not in
+- [x] 4.4 Add the `boardresolve` network fallback for vanity domains in `linkimport` (not in
   the adapter: `ResolveLinks` picks a single adapter via `Find` and never tries the next,
   so a network guess cannot live in `Match`), guarding against taking a platform apex
   (e.g. `app.teamtailor.com`) as a tenant board

@@ -112,3 +112,35 @@ func TestVacancyAndListingSameBoard(t *testing.T) {
 		}
 	}
 }
+
+// TestRecognizeDeclinesPlatformOwnHosts guards a defect the contribution queue actually hit:
+// every Teamtailor career site links to app.teamtailor.com, and in host mode the whole host
+// IS the board — so the platform's own console was recorded as an employer's board. The
+// reserved labels are infrastructure subdomains no tenant is served under.
+func TestRecognizeDeclinesPlatformOwnHosts(t *testing.T) {
+	platform := []string{
+		"https://app.teamtailor.com/companies/123",
+		"https://www.teamtailor.com/",
+		"https://api.teamtailor.com/v1/jobs",
+		"https://app.factorialhr.com/dashboard",
+		"https://support.zohorecruit.com/help",
+		"https://app.recruitee.com/dashboard",
+		"https://www.bamboohr.com/pricing",
+	}
+	for _, raw := range platform {
+		if src, board, _, ok := Recognize(raw); ok {
+			t.Errorf("Recognize(%q) = (%q, %q), want declined — that is the platform's own host, not a tenant board", raw, src, board)
+		}
+	}
+
+	// A real tenant on the same platforms must still resolve.
+	tenants := []struct{ raw, wantBoard string }{
+		{"https://bryter.teamtailor.com/jobs/12345", "bryter.teamtailor.com"},
+		{"https://acme.recruitee.com/o/senior-go", "acme"},
+	}
+	for _, c := range tenants {
+		if _, board, _, ok := Recognize(c.raw); !ok || board != c.wantBoard {
+			t.Errorf("Recognize(%q) = (%q, ok %v), want board %q", c.raw, board, ok, c.wantBoard)
+		}
+	}
+}

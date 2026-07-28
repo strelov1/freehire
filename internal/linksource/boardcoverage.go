@@ -79,8 +79,21 @@ func (b boardCoverage) Resolve(ctx context.Context, raw string) (sources.Job, bo
 	if !ok || board == "" {
 		return sources.Job{}, false, nil
 	}
-	adapter, has := b.reg[source]
-	if !has {
+	return ResolveOnBoard(ctx, b.reg, source, board, raw)
+}
+
+// ResolveOnBoard fetches one tenant board through its ingest adapter and returns the posting
+// raw points at. It is exported for the caller that already knows the board by other means:
+// a vanity careers domain, where the host says nothing and only fetching the page reveals the
+// embedded ATS (see internal/boardresolve). That path cannot go through Match — Find picks a
+// single adapter and never tries the next — so the fallback is orchestrated a level up, and
+// this is the piece it reuses.
+//
+// ok=false means the board carries no such posting; an error means the board could not be
+// fetched, which the caller must not mistake for the posting being absent.
+func ResolveOnBoard(ctx context.Context, reg map[string]sources.Source, source, board, raw string) (sources.Job, bool, error) {
+	adapter, has := reg[source]
+	if !has || board == "" {
 		return sources.Job{}, false, nil
 	}
 

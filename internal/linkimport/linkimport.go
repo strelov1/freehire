@@ -38,6 +38,13 @@ type Result struct {
 	PublicSlug string
 }
 
+// BoardResolver detects the ATS board embedded in a page whose host says nothing — a company
+// careers site on its own domain. internal/boardresolve satisfies it. Optional: a nil one
+// simply drops the vanity-domain fallback.
+type BoardResolver interface {
+	Resolve(ctx context.Context, rawURL string) (source, board, canonical string, ok bool)
+}
+
 // Importer resolves job URLs and writes what it parses. idx may be nil (no search engine
 // configured), which skips the index push.
 type Importer struct {
@@ -45,6 +52,10 @@ type Importer struct {
 	q    *db.Queries
 	idx  *search.Client
 	reg  []linksource.Source
+	// ingest is the provider-keyed crawl registry, kept alongside reg because the
+	// vanity-domain fallback reaches a board directly rather than through an adapter's Match.
+	ingest map[string]sources.Source
+	boards BoardResolver
 }
 
 // New builds an Importer over the given database and HTTP transport. ingest is the
@@ -52,12 +63,14 @@ type Importer struct {
 // that has a crawler but no single-page adapter; a nil registry disables that step and is
 // what tests with a canned page pass. The resolver order itself lives in
 // linksource.ImportRegistry, so it is stated once.
-func New(pool *pgxpool.Pool, q *db.Queries, idx *search.Client, c linksource.Client, ingest map[string]sources.Source) *Importer {
+func New(pool *pgxpool.Pool, q *db.Queries, idx *search.Client, c linksource.Client, ingest map[string]sources.Source, boards BoardResolver) *Importer {
 	return &Importer{
-		pool: pool,
-		q:    q,
-		idx:  idx,
-		reg:  linksource.ImportRegistry(c, ingest),
+		pool:   pool,
+		q:      q,
+		idx:    idx,
+		reg:    linksource.ImportRegistry(c, ingest),
+		ingest: ingest,
+		boards: boards,
 	}
 }
 
@@ -71,9 +84,39 @@ func (im *Importer) Import(ctx context.Context, raw string) (Result, bool, error
 		return Result{}, false, err
 	}
 	if len(resolved) == 0 {
+		if r, ok := im.resolveVanityDomain(ctx, raw); ok {
+			return im.write(ctx, r)
+		}
 		return Result{}, false, nil
 	}
 	return im.write(ctx, resolved[0])
+}
+
+// resolveVanityDomain is the last thing tried before a link is given up on: a company careers
+// page on its OWN domain, whose host tells us nothing but whose markup links to the ATS board
+// behind it. Fetching the page reveals (source, board), and from there it is an ordinary board
+// read.
+//
+// It cannot be a link-source adapter, because an adapter is chosen by Match — a pure, offline
+// predicate — and ResolveLinks commits to the single adapter Find returns. So the page fetch
+// is orchestrated here, after every offline resolver has passed.
+func (im *Importer) resolveVanityDomain(ctx context.Context, raw string) (linksource.Resolved, bool) {
+	if im.boards == nil || im.ingest == nil {
+		return linksource.Resolved{}, false
+	}
+	source, board, _, ok := im.boards.Resolve(ctx, raw)
+	if !ok {
+		return linksource.Resolved{}, false
+	}
+	job, ok, err := linksource.ResolveOnBoard(ctx, im.ingest, source, board, raw)
+	if err != nil {
+		log.Printf("linkimport: board %s/%s for vanity link %s: %v", source, board, raw, err)
+		return linksource.Resolved{}, false
+	}
+	if !ok {
+		return linksource.Resolved{}, false
+	}
+	return linksource.Resolved{Source: source, Job: job}, true
 }
 
 // write persists one resolved job through the Job aggregate factory and the canonical

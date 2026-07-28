@@ -125,8 +125,12 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		} else {
 			board = host // the whole careers host is the tenant identity
 		}
-		if board == "" {
-			return "", "", "", false // bare apex, no tenant label
+		if board == "" || reservedLabels[leftmostLabel(host)] {
+			// Either a bare apex with no tenant label, or one of the platform's OWN hosts.
+			// The second case is not hypothetical: every Teamtailor career site links to
+			// app.teamtailor.com, and in host mode the whole host is the board — so the
+			// platform's console was once recorded as an employer's board.
+			return "", "", "", false
 		}
 		// The board IS the host, so the canonical URL is the bare host — collapsing a vacancy
 		// URL and the board listing to one board.
@@ -190,6 +194,27 @@ func matchHost(host string) (source, mode, apex string, ok bool) {
 		}
 	}
 	return "", "", "", false
+}
+
+// reservedLabels are subdomains an ATS serves ITSELF under — its console, marketing site, or
+// API — never a customer tenant. They matter because in host and subdomain mode the host IS
+// the board, so without this an intake pointing at the vendor's own console records the
+// vendor as an employer. Erring towards declining is safe: a declined link is merely
+// unrecognised, whereas a false board pollutes the catalogue under a name nobody can crawl.
+var reservedLabels = map[string]bool{
+	"app": true, "api": true, "www": true, "admin": true, "portal": true,
+	"help": true, "support": true, "docs": true, "blog": true, "status": true,
+	"login": true, "auth": true, "account": true, "accounts": true,
+	"static": true, "cdn": true, "assets": true, "media": true, "img": true,
+	"mail": true, "email": true, "go": true, "partners": true, "developers": true,
+}
+
+// leftmostLabel returns the first DNS label of a host ("app.teamtailor.com" → "app").
+func leftmostLabel(host string) string {
+	if i := strings.IndexByte(host, '.'); i >= 0 {
+		return host[:i]
+	}
+	return host
 }
 
 // subdomainLabel returns the leftmost DNS label of host under apex:
