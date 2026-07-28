@@ -1,11 +1,11 @@
 ## 1. Shared board recogniser
 
-- [ ] 1.1 Move `RecognizeBoard`, the `atsBoards` table and the extraction modes from
+- [x] 1.1 Move `RecognizeBoard`, the `atsBoards` table and the extraction modes from
   `internal/contribution/board.go` into a new `internal/atsboard` package, keeping the
   existing table tests with them
-- [ ] 1.2 Repoint `internal/contribution` at `internal/atsboard`; leave the job-id helpers
+- [x] 1.2 Repoint `internal/contribution` at `internal/atsboard`; leave the job-id helpers
   (`greenhouseJobID`, `ashbyJobID`) in `contribution`, they are service logic
-- [ ] 1.3 `go build ./... && go vet ./... && go test ./internal/atsboard/ ./internal/contribution/`
+- [x] 1.3 `go build ./... && go vet ./... && go test ./internal/atsboard/ ./internal/contribution/`
 
 ## 2. Schema
 

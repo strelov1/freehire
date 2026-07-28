@@ -13,6 +13,8 @@ import (
 	"log"
 	"net/url"
 	"time"
+
+	"github.com/strelov1/freehire/internal/atsboard"
 )
 
 // Sentinel errors mapped to HTTP statuses by the handler.
@@ -129,7 +131,7 @@ func (s *Service) Submit(ctx context.Context, submittedBy int64, rawURL string) 
 // embeds that expose only the job id (resolves boards we already track). ok=false when none
 // resolve.
 func (s *Service) resolveBoard(ctx context.Context, rawURL string) (source, board, canonical string, ok bool) {
-	if source, board, canonical, ok := RecognizeBoard(rawURL); ok {
+	if source, board, canonical, ok := atsboard.Recognize(rawURL); ok {
 		return source, board, canonical, true
 	}
 	if s.resolver != nil {

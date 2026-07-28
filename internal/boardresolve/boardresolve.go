@@ -14,8 +14,8 @@ import (
 	"net/url"
 	"regexp"
 
+	"github.com/strelov1/freehire/internal/atsboard"
 	"github.com/strelov1/freehire/internal/atsdetect"
-	"github.com/strelov1/freehire/internal/contribution"
 	"github.com/strelov1/freehire/internal/sources"
 )
 
@@ -52,7 +52,7 @@ var absURLRe = regexp.MustCompile(`https?://[^\s"'<>)\\]+`)
 //  1. the Greenhouse embed shape (script for=<board>) via atsdetect — which the URL recognizer
 //     can't parse (it would read the path word "embed" as the board);
 //  2. any supported ATS apply/board URL embedded in the page, run through the full
-//     contribution.RecognizeBoard (all ~40 ATS, all modes) — this catches a company careers page
+//     atsboard.Recognize (all ~40 ATS, all modes) — this catches a company careers page
 //     that links to its recruitee/peopleforce/zoho/workday board.
 //
 // ok=false when the fetch fails or no board is found.
@@ -70,7 +70,7 @@ func (r *Resolver) Resolve(ctx context.Context, rawURL string) (source, board, c
 	// 2. Any supported ATS URL in the page, via the full recognizer. First recognized wins;
 	//    a Greenhouse embed URL misparses to board "embed" (step 1 owns Greenhouse), so skip it.
 	for _, u := range absURLRe.FindAllString(html, -1) {
-		if s, b, _, matched := contribution.RecognizeBoard(u); matched && b != "embed" {
+		if s, b, _, matched := atsboard.Recognize(u); matched && b != "embed" {
 			return s, b, stripTails(rawURL), true
 		}
 	}

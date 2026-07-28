@@ -1,12 +1,12 @@
-package contribution
+package atsboard
 
 import "testing"
 
-// TestRecognizeBoard checks the network-free URL→(source, board, canonical) parse across both
+// TestRecognize checks the network-free URL→(source, board, canonical) parse across both
 // extraction modes: path (board = first path segment on a fixed host) and subdomain (board =
 // leftmost DNS label, canonical collapses to the bare host). A single-tenant/unknown host or a
 // board-less URL is declined.
-func TestRecognizeBoard(t *testing.T) {
+func TestRecognize(t *testing.T) {
 	cases := []struct {
 		name          string
 		raw           string
@@ -74,15 +74,15 @@ func TestRecognizeBoard(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			src, board, canon, ok := RecognizeBoard(c.raw)
+			src, board, canon, ok := Recognize(c.raw)
 			if ok != c.wantOK {
-				t.Fatalf("RecognizeBoard(%q) ok = %v, want %v", c.raw, ok, c.wantOK)
+				t.Fatalf("Recognize(%q) ok = %v, want %v", c.raw, ok, c.wantOK)
 			}
 			if !ok {
 				return
 			}
 			if src != c.wantSource || board != c.wantBoard || canon != c.wantCanonical {
-				t.Errorf("RecognizeBoard(%q) = (%q, %q, %q), want (%q, %q, %q)",
+				t.Errorf("Recognize(%q) = (%q, %q, %q), want (%q, %q, %q)",
 					c.raw, src, board, canon, c.wantSource, c.wantBoard, c.wantCanonical)
 			}
 		})
@@ -105,8 +105,8 @@ func TestVacancyAndListingSameBoard(t *testing.T) {
 		{"https://gm.wd5.myworkdayjobs.com/Careers_GM/job/x/Eng_JR-1", "https://gm.wd5.myworkdayjobs.com/Careers_GM"},
 	}
 	for _, p := range pairs {
-		sa, ba, _, oka := RecognizeBoard(p[0])
-		sb, bb, _, okb := RecognizeBoard(p[1])
+		sa, ba, _, oka := Recognize(p[0])
+		sb, bb, _, okb := Recognize(p[1])
 		if !oka || !okb || sa != sb || ba != bb {
 			t.Errorf("boards diverged: (%q,%q,%v) vs (%q,%q,%v)", sa, ba, oka, sb, bb, okb)
 		}
