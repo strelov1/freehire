@@ -186,3 +186,55 @@ func TestParseWorkdayBoardRejectsMalformed(t *testing.T) {
 		}
 	}
 }
+
+// Workday publishes a career site under either of two host shapes. On myworkdayjobs.com the
+// tenant is the host's own first label; on myworkdaysite.com the host is shared across
+// tenants (wd1.myworkdaysite.com) and the tenant lives in the path instead, so the board
+// spells it out as a third segment.
+func TestParseWorkdayBoardTakesTenantFromPathWhenSpelledOut(t *testing.T) {
+	cases := map[string]workdayBoard{
+		"acme.wd1.myworkdayjobs.com/Careers": {
+			host: "acme.wd1.myworkdayjobs.com", tenant: "acme", site: "Careers",
+			publicPath: "Careers",
+		},
+		"wd1.myworkdaysite.com/snapchat/snap": {
+			host: "wd1.myworkdaysite.com", tenant: "snapchat", site: "snap",
+			publicPath: "recruiting/snapchat/snap",
+		},
+	}
+	for board, want := range cases {
+		got, err := parseWorkdayBoard(board)
+		if err != nil {
+			t.Errorf("parseWorkdayBoard(%q): %v", board, err)
+			continue
+		}
+		if got != want {
+			t.Errorf("parseWorkdayBoard(%q) = %+v, want %+v", board, got, want)
+		}
+	}
+}
+
+// The routes below are the assertion: routedHTTP answers by URL substring, so the board only
+// yields a posting if the adapter addressed the shared host with the path tenant — i.e. built
+// /wday/cxs/snapchat/snap/jobs rather than /wday/cxs/wd1/snapchat%2Fsnap/jobs.
+func TestWorkdayFetchesPathTenantBoard(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("https://wd1.myworkdaysite.com/wday/cxs/snapchat/snap/jobs",
+			`{"total":1,"jobPostings":[{"title":"Engineer","externalPath":"/job/X/JR-1","locationsText":"Berlin"}]}`).
+		route("/job/X/JR-1", `{"jobPostingInfo":{"title":"Engineer","jobDescription":"<p>ok</p>","location":"Berlin"}}`)
+
+	jobs, err := NewWorkday(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Snap", Provider: "workday", Board: "wd1.myworkdaysite.com/snapchat/snap",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1", len(jobs))
+	}
+	// The public site is not served at the CXS path: /snap/job/... answers 500, the posting
+	// lives under /recruiting/<tenant>/<site>.
+	if jobs[0].URL != "https://wd1.myworkdaysite.com/recruiting/snapchat/snap/job/X/JR-1" {
+		t.Errorf("URL = %q, want the posting's public /recruiting path", jobs[0].URL)
+	}
+}
