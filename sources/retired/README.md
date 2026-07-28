@@ -42,6 +42,11 @@ Order matters: **prune first, then move the provider's last entry.** Once a prov
 no entries left in `sources/`, none of its jobs are re-crawlable, and every pruning rule
 refuses them — the dead weight becomes permanent.
 
+The report enforces the reminder rather than leaving it here: when its list covers every
+board a provider has, it prints a `CAUTION` line naming that provider. The entries are
+still genuine candidates — move them, but move the ones that empty a provider last, once
+its jobs are gone.
+
 ## Why keep them
 
 They cost nothing, they record what was considered and rejected, and a board that turns

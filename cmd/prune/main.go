@@ -44,6 +44,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"sort"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -445,5 +446,44 @@ func reportBoards(ctx context.Context, w io.Writer, q candidateSource, brd board
 			return err
 		}
 	}
-	return tw.Flush()
+	if err := tw.Flush(); err != nil {
+		return err
+	}
+	return warnDrainedProviders(w, retire, brd)
+}
+
+// warnDrainedProviders names the providers the list above would leave with no boards at
+// all. Those entries are still genuine candidates, but the order in which they move is
+// load-bearing and irreversible: cmd/ingest takes one board file by path, so a provider
+// with nothing left in sources/ is never crawled again — and the company-scoped rules
+// refuse a job they cannot re-crawl, so its postings can never be pruned either. Move
+// such an entry and the dead weight is permanent.
+//
+// sources/retired/README.md states the rule (prune the provider's jobs first, move its
+// last entry after), but a rule that lives only in prose is enforced by whoever happens
+// to read it. The report is the thing an operator actually has in front of them.
+func warnDrainedProviders(w io.Writer, retire []boardKey, brd boards) error {
+	retiring := map[string]int{}
+	for _, k := range retire {
+		retiring[k.Provider]++
+	}
+	var drained []string
+	for provider, n := range retiring {
+		if n == len(brd.byProvider[provider]) {
+			drained = append(drained, provider)
+		}
+	}
+	if len(drained) == 0 {
+		return nil
+	}
+	sort.Strings(drained)
+	_, err := fmt.Fprintf(w,
+		"\nCAUTION — every listed board of these providers is above, so moving them all "+
+			"empties the provider: %s\n"+
+			"Prune their jobs FIRST. A provider with no entry in sources/ is never crawled "+
+			"again, and the company-scoped rules refuse a job they cannot re-crawl — its\n"+
+			"postings would become permanently un-prunable. Move the last entry of each only "+
+			"after its jobs are gone.\n",
+		strings.Join(drained, ", "))
+	return err
 }

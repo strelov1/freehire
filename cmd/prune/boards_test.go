@@ -258,3 +258,56 @@ func TestReportBoardsIgnoresNonEngineeringSkills(t *testing.T) {
 		t.Errorf("a board with an engineering tag must stay off the list; got:\n%s", got)
 	}
 }
+
+// Retiring every board a provider has is a one-way door, and the report is where it
+// has to be caught. Ingest takes one board file by path, so a provider with nothing
+// left in sources/ is never crawled again — and the company-scoped rules refuse a job
+// they cannot re-crawl, so its postings can never be pruned either. The dead weight
+// becomes permanent. sources/retired/README.md states the order (prune the jobs first,
+// move the last entry after), but stating it in prose leaves it to whoever reads the
+// report at 2am.
+//
+// The boards are still listed — they are genuine candidates — but the report names the
+// providers it would empty, so the entry that empties one is moved last, deliberately.
+func TestReportBoardsNamesProvidersItWouldEmpty(t *testing.T) {
+	brd := boards{
+		listed: map[boardKey]bool{
+			// Every board this provider has is about to be retired.
+			{"tinyats", "one"}: true, {"tinyats", "two"}: true,
+			// This one keeps a board, so it is not emptied.
+			{"greenhouse", "dead"}: true, {"greenhouse", "alive"}: true,
+		},
+		byProvider: map[string]map[string]bool{
+			"tinyats":    {"one": true, "two": true},
+			"greenhouse": {"dead": true, "alive": true},
+		},
+	}
+	q := &fakeCandidates{rows: []db.PruneCandidatesRow{
+		boardRow(1, "tinyats", "one:1", boolp(false), nil),
+		boardRow(2, "tinyats", "two:1", boolp(false), nil),
+		boardRow(3, "greenhouse", "dead:1", boolp(false), nil),
+		boardRow(4, "greenhouse", "alive:1", boolp(true), nil),
+	}}
+
+	var out strings.Builder
+	if err := reportBoards(context.Background(), &out, q, brd); err != nil {
+		t.Fatalf("reportBoards: %v", err)
+	}
+	got := out.String()
+
+	if !strings.Contains(got, "tinyats") {
+		t.Fatalf("the provider's boards must still be listed; got:\n%s", got)
+	}
+	// The warning has to name the provider AND say what the hazard is, or it reads as
+	// decoration and gets moved with everything else.
+	if !strings.Contains(got, "every listed board") {
+		t.Fatalf("the report must warn that a provider would be left with no boards; got:\n%s", got)
+	}
+	warning := got[strings.Index(got, "every listed board"):]
+	if !strings.Contains(warning, "tinyats") {
+		t.Errorf("the warning must name tinyats; got:\n%s", warning)
+	}
+	if strings.Contains(warning, "greenhouse") {
+		t.Errorf("greenhouse keeps a board and must not be named as emptied; got:\n%s", warning)
+	}
+}
