@@ -75,8 +75,11 @@ func (h *resumeHandlers) PostATSReport(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"data": atsResponse{HasCV: false}})
 	}
 
-	// The qualitative review reads the de-identified structured résumé, never the raw CV.
-	// Absent structure ⇒ nil review ⇒ the deterministic report is served (below).
+	// The qualitative review reads the de-identified structure OF THE UPLOADED FILE, never
+	// the raw CV — and deliberately not the experience bank. This report judges the
+	// document, not the person: feeding it banked evidence would have it praise a CV for
+	// experience that appears nowhere in the CV. Absent structure ⇒ nil review ⇒ the
+	// deterministic report is served (below).
 	review, err := h.atsAnalyzer.Analyze(c.Context(), structuredResumeJSON(h.resume, c, userID))
 	if err != nil {
 		// Best-effort: log (never the CV text) and serve the deterministic report.
@@ -189,4 +192,25 @@ func topRoleSkills(facet map[string]int64, n int) []string {
 		out[i] = r.slug
 	}
 	return out
+}
+
+// structuredResumeJSON marshals the structure of the user's stored CV, or "" when there is
+// none, none current, or storage is unconfigured.
+//
+// This is the FILE's structure, and it is what surfaces judging the document read. The fit
+// chain reads matchHandlers.candidateProfileJSON instead — a composition of the experience
+// bank and this structure — because it judges the candidate rather than their CV.
+func structuredResumeJSON(resumeStore *resume.Store, c *fiber.Ctx, userID int64) string {
+	if resumeStore == nil || !resumeStore.Enabled() {
+		return ""
+	}
+	st, ok, err := resumeStore.Structured(c.Context(), userID)
+	if err != nil || !ok {
+		return ""
+	}
+	blob, err := json.Marshal(st)
+	if err != nil {
+		return ""
+	}
+	return string(blob)
 }

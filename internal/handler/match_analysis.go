@@ -14,9 +14,11 @@ import (
 
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/experience"
 	"github.com/strelov1/freehire/internal/jobmatch"
 	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/resume"
+	"github.com/strelov1/freehire/internal/resumeextract"
 	"github.com/strelov1/freehire/internal/userprofile"
 )
 
@@ -41,6 +43,9 @@ type matchHandlers struct {
 	matchAnalysisCache matchAnalysisStore
 	// credits meters the per-user AI-points balance the analysis debits.
 	credits *credits.Store
+	// bank supplies the candidate's work history. Nil when there are no queries to build
+	// it over, which reads as an empty bank — and an empty bank means no analysis.
+	bank candidateProfiler
 }
 
 func newMatchHandlers(queries *db.Queries, userProfile *userprofile.Service, resumeStore *resume.Store, analyzer *matchanalysis.Analyzer, creditsStore *credits.Store) *matchHandlers {
@@ -50,6 +55,7 @@ func newMatchHandlers(queries *db.Queries, userProfile *userprofile.Service, res
 		resume:             resumeStore,
 		matchAnalysis:      analyzer,
 		matchAnalysisCache: queries,
+		bank:               newCandidateProfiler(queries),
 		credits:            creditsStore,
 	}
 }
@@ -190,7 +196,7 @@ func (h *matchHandlers) PostMatchAnalysis(c *fiber.Ctx) error {
 		JobTitle:            job.Title,
 		JobDescription:      job.Description,
 		CompanyInfo:         h.companyInfo(c, job.CompanySlug),
-		StructuredResume:    structuredResumeJSON(h.resume, c, userID),
+		StructuredResume:    h.candidateProfileJSON(c, userID),
 		Match:               jobmatch.Compute(job.Skills, profile.Skills),
 		JobWorkMode:         job.WorkMode,
 		JobRemote:           job.Remote,
@@ -293,19 +299,51 @@ func (h *matchHandlers) cvUploadedAt(c *fiber.Ctx, userID int64) (*time.Time, bo
 // fit input, or "" when the caller has none current (no résumé, unconfigured LLM, not
 // yet extracted, or stale) — the fit chain then produces no analysis (the raw CV is
 // never sent as a fallback). Best-effort: a read/marshal error degrades to "".
-func structuredResumeJSON(resumeStore *resume.Store, c *fiber.Ctx, userID int64) string {
-	if !resumeStore.Enabled() {
+func (h *matchHandlers) candidateProfileJSON(c *fiber.Ctx, userID int64) string {
+	if h.bank == nil {
 		return ""
 	}
-	st, ok, err := resumeStore.Structured(c.Context(), userID)
-	if err != nil || !ok {
+	// The structured résumé still owns education, languages, the summary and the years
+	// estimate, and is read best-effort: a stale or absent structure now costs those
+	// sections, not the whole analysis.
+	var st resumeextract.Structured
+	if h.resume.Enabled() {
+		if stored, ok, err := h.resume.Structured(c.Context(), userID); err == nil && ok {
+			st = stored
+		}
+	}
+
+	profile, err := h.bank.Professional(c.Context(), userID, st)
+	if err != nil {
+		log.Printf("candidate profile: user %d: %v", userID, err)
 		return ""
 	}
-	blob, err := json.Marshal(st)
+	// An empty bank is the one state that stops the chain. There is deliberately no
+	// fallback to the structure's own copy of the work history: scoring a candidate
+	// against experience nothing owns is worse than not scoring them, and a silent
+	// fallback would hide a failed backfill for months.
+	if len(profile.Experience) == 0 {
+		return ""
+	}
+	blob, err := json.Marshal(profile)
 	if err != nil {
 		return ""
 	}
 	return string(blob)
+}
+
+// candidateProfiler is the one operation the fit chain needs from the experience bank.
+type candidateProfiler interface {
+	Professional(ctx context.Context, userID int64, st resumeextract.Structured) (resumeextract.Professional, error)
+}
+
+// newCandidateProfiler builds the bank the fit chain reads, or nil when there are no
+// queries to build it over.
+func newCandidateProfiler(queries *db.Queries) candidateProfiler {
+	if queries == nil {
+		return nil
+	}
+	return experience.NewStore(experience.NewQueriesRepository(queries))
 }
 
 // companyInfo returns the raw company_info JSON for the job's company, or "" when the
