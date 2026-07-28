@@ -310,15 +310,23 @@
           Bring your own mail client.
         </h2>
         <p class="mt-5 max-w-md leading-relaxed text-muted-foreground">
-          If your own harness already fetches mail, push it to
-          <code class="font-mono text-foreground">POST /me/emails</code> and triage it yourself.
-          freehire stores it, links it and shows it on the board like any other message — but never
-          classifies it, so that tier costs nothing to run and nothing to use. Ask the listing for
-          <code class="font-mono text-foreground">?unclassified=1</code> and your harness has its own backlog.
+          The whole inbox is in the freehire CLI, so your own client — himalaya, mbsync, anything
+          that speaks IMAP — can fetch the mail and hand it over with
+          <code class="font-mono text-foreground">inbox push</code>. Each message is keyed by its
+          Message-ID, so a nightly re-sync updates rather than duplicates. freehire stores it, links
+          it and shows it on the board like any other message, but never classifies it: that tier
+          costs nothing to run and nothing to use.
+        </p>
+        <p class="mt-4 max-w-md leading-relaxed text-muted-foreground">
+          <code class="font-mono text-foreground">inbox list --unclassified --body</code> is then
+          your agent's work queue — a whole page of messages to judge in one call, and unlike
+          <code class="font-mono text-foreground">inbox read</code> it marks nothing read.
+          <code class="font-mono text-foreground">inbox triage</code> records the verdict and moves
+          the application's stage.
         </p>
         <div class="mt-8 flex flex-wrap gap-3">
-          <Button href={resolve('/docs')} variant="primary" size="lg">Read the API docs</Button>
-          <Button href={resolve('/cli')} variant="ghost" size="lg">Explore the CLI</Button>
+          <Button href={resolve('/cli')} variant="primary" size="lg">Get the CLI</Button>
+          <Button href={resolve('/docs/api')} variant="ghost" size="lg">API reference</Button>
         </div>
       </div>
 
@@ -327,13 +335,19 @@
           <span class="size-2.5 rounded-full bg-muted-foreground/30"></span>
           terminal
         </figcaption>
-        <pre class="overflow-x-auto p-4 leading-relaxed"><span class="text-muted-foreground"># push a message your own client fetched</span>
-curl -X POST <span class="text-foreground">https://freehire.me/api/v1/me/emails</span> \
-  -H <span class="text-foreground">"Authorization: Bearer fhk_…"</span> \
-  -d <span class="text-foreground">'&lbrace;"subject":"…","from":"…"&rbrace;'</span>
+        <pre class="overflow-x-auto p-4 leading-relaxed"><span class="text-muted-foreground"># hand over a batch your client fetched (external_id = Message-ID,</span>
+<span class="text-muted-foreground"># so re-pushing updates instead of duplicating)</span>
+freehire <span class="text-foreground">inbox push --file mail.json</span>
 
-<span class="text-muted-foreground"># then work through what you haven't triaged</span>
-curl <span class="text-foreground">".../me/emails?unclassified=1&amp;body=1"</span></pre>
+<span class="text-muted-foreground"># the work queue: unjudged mail, bodies inline, nothing marked read</span>
+freehire <span class="text-foreground">inbox list --unclassified --body</span>
+
+<span class="text-muted-foreground"># record the verdict; the application's stage follows</span>
+freehire <span class="text-foreground">inbox triage &lt;id&gt; interview_invitation --slug &lt;job&gt;</span>
+
+<span class="text-muted-foreground"># the queues the matcher won't guess at</span>
+freehire <span class="text-foreground">inbox list --link suggested</span>   <span class="text-muted-foreground"># confirm / reject</span>
+freehire <span class="text-foreground">inbox list --link unlinked</span>    <span class="text-muted-foreground"># inbox application</span></pre>
       </figure>
     </div>
   </section>

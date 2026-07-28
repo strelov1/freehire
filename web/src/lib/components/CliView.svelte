@@ -1,6 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { Button } from '$lib/ui';
+  import SectionLabel from '$lib/components/SectionLabel.svelte';
 
   const CLI_REPO = 'https://github.com/strelov1/freehire-cli';
   const MCP_REPO = 'https://github.com/strelov1/freehire-mcp';
@@ -27,6 +28,25 @@
     { cmd: 'stage <slug> <stage>', desc: 'Set the application stage.' },
     { cmd: 'note <slug> <text>', desc: 'Attach a free-text note.' },
     { cmd: 'my --filter applied', desc: 'Your tracked jobs (all|viewed|saved|applied).' },
+    { cmd: 'profile', desc: 'Your saved search profile — skills, seniority, regions.' },
+  ];
+
+  // Application mail. The whole inbox surface is here because freehire fetches
+  // nothing on this tier: your own client does, and `inbox push` hands it over.
+  const inbox = [
+    { cmd: 'inbox push --file mail.json', desc: 'Upload a batch your own client fetched (keyed by Message-ID, so a re-sync updates instead of duplicating).' },
+    { cmd: 'inbox list --unclassified --body', desc: "The agent's work queue: unjudged mail with bodies inline, and nothing gets marked read." },
+    { cmd: 'inbox triage <id> <signal>', desc: 'Record what a message is; a confident verdict moves the application forward.' },
+    { cmd: 'inbox list --link suggested', desc: 'Proposed links awaiting your word — inbox confirm / inbox reject.' },
+    { cmd: 'inbox list --link unlinked', desc: 'Mail with no application to attach to — inbox application records one from the message.' },
+  ];
+
+  // Widening the catalogue, and the moderator queue behind it.
+  const contribute = [
+    { cmd: 'contribute <url>', desc: "Hand freehire a job link; a board we don't track yet earns a credit." },
+    { cmd: 'contributions', desc: "The boards you've contributed and their state." },
+    { cmd: 'submissions', desc: 'Jobs you submitted; the review queue with pending/approve/reject (moderator).' },
+    { cmd: 'jobs add | edit <slug>', desc: 'Create or edit a job posting (moderator).' },
   ];
 
   // Tasteful micro-interaction: copy the install one-liner, flash a confirmation.
@@ -51,9 +71,7 @@
   <section class="grid-bg relative -mx-4 px-4 pb-16 pt-12 sm:pt-16">
     <div class="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
       <div>
-        <p class="reveal font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground" style="--d:0ms">
-          // freehire on the command line
-        </p>
+        <SectionLabel text="freehire on the command line" class="reveal" style="--d:0ms" />
 
         <h1
           class="reveal mt-6 max-w-2xl text-balance text-4xl font-semibold leading-[0.98] tracking-tighter sm:text-6xl"
@@ -66,9 +84,13 @@
           <code class="font-mono text-foreground">freehire</code> is a small CLI — and an
           <a href="#mcp" class="text-foreground underline-offset-4 hover:underline">MCP server</a> — over the
           same job API the site runs on. One <span class="text-foreground">API key</span> lets an
-          <span class="text-foreground">AI agent</span> or a script search and open jobs, then track
-          applications and notes without a browser. (You still apply on the employer's site; the CLI records
-          that you did.)
+          <span class="text-foreground">AI agent</span> or a script search and open jobs, track
+          applications, work through your
+          <a href={resolve('/features/inbox')} class="text-foreground underline-offset-4 hover:underline"
+            >application mail</a
+          >
+          and tailor a CV to a vacancy — all without a browser. (You still apply on the employer's site;
+          the CLI records that you did.)
         </p>
 
         <div class="reveal mt-9 flex flex-wrap items-center gap-3" style="--d:240ms">
@@ -111,7 +133,7 @@ freehire search <span class="text-foreground">"golang"</span> --remote --region 
 
   <!-- Commands — the whole reference, compact. -->
   <section class="border-t border-border py-14 sm:py-16">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// commands</p>
+    <SectionLabel text="commands" />
     <div class="mt-8 grid gap-x-12 gap-y-8 sm:grid-cols-2">
       <div>
         <h2 class="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Discover</h2>
@@ -132,6 +154,36 @@ freehire search <span class="text-foreground">"golang"</span> --remote --region 
         </h2>
         <dl class="mt-4 space-y-3">
           {#each track as row (row.cmd)}
+            <div>
+              <dt class="font-mono text-sm">
+                <span class="text-muted-foreground">freehire</span> {row.cmd}
+              </dt>
+              <dd class="text-sm leading-relaxed text-muted-foreground">{row.desc}</dd>
+            </div>
+          {/each}
+        </dl>
+      </div>
+      <div>
+        <h2 class="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Application mail
+        </h2>
+        <dl class="mt-4 space-y-3">
+          {#each inbox as row (row.cmd)}
+            <div>
+              <dt class="font-mono text-sm">
+                <span class="text-muted-foreground">freehire</span> {row.cmd}
+              </dt>
+              <dd class="text-sm leading-relaxed text-muted-foreground">{row.desc}</dd>
+            </div>
+          {/each}
+        </dl>
+      </div>
+      <div>
+        <h2 class="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Contribute &amp; moderate
+        </h2>
+        <dl class="mt-4 space-y-3">
+          {#each contribute as row (row.cmd)}
             <div>
               <dt class="font-mono text-sm">
                 <span class="text-muted-foreground">freehire</span> {row.cmd}
@@ -169,18 +221,22 @@ freehire search <span class="text-foreground">"golang"</span> --remote --region 
       </h3>
       <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
         After a fit analysis, reframe your CV toward one job — grounded in what you actually did, never
-        fabricated — then export an ATS-ready PDF.
+        fabricated — then export an ATS-ready PDF. <code class="font-mono text-foreground">cv context</code>
+        is the honest part: it splits the job's requirements into the ones your history already covers but
+        buries (reframe those) and the ones it doesn't (ask, don't invent), so an agent editing your CV
+        knows which is which.
       </p>
       <pre
         class="mt-3 overflow-x-auto rounded-md border border-border bg-background/60 p-3 font-mono text-sm leading-relaxed"><span class="text-muted-foreground">freehire</span> cv context &lt;id&gt;        <span class="text-muted-foreground"># the fit analysis to reframe toward</span>
-<span class="text-muted-foreground">freehire</span> cv edit &lt;id&gt; --patch …  <span class="text-muted-foreground"># apply a field-level edit</span>
+<span class="text-muted-foreground">freehire</span> cv get &lt;id&gt;            <span class="text-muted-foreground"># the CV document as JSON</span>
+<span class="text-muted-foreground">freehire</span> cv edit &lt;id&gt; --patch …  <span class="text-muted-foreground"># apply one field-level edit</span>
 <span class="text-muted-foreground">freehire</span> cv render &lt;id&gt; --out cv.pdf</pre>
     </div>
   </section>
 
   <!-- MCP — the second surface over the same API and the same key. -->
   <section id="mcp" class="scroll-mt-20 border-t border-border py-14 sm:py-16">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// mcp</p>
+    <SectionLabel text="mcp" />
     <div class="mt-8 grid gap-x-12 gap-y-8 lg:grid-cols-[0.95fr_1.05fr]">
       <div>
         <h2 class="text-2xl font-semibold tracking-tight">Same key, any AI host</h2>
@@ -231,7 +287,7 @@ freehire search <span class="text-foreground">"golang"</span> --remote --region 
 
   <!-- For AI agents — the drop-in skill and the machine-readable conventions. -->
   <section class="border-t border-border py-14 sm:py-16">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// for ai agents</p>
+    <SectionLabel text="for ai agents" />
     <p class="mt-6 max-w-2xl leading-relaxed text-muted-foreground">
       A drop-in
       <a
@@ -253,7 +309,7 @@ freehire search <span class="text-foreground">"golang"</span> --remote --region 
 
   <!-- Moderators — gated authoring, kept to one line + two commands. -->
   <section class="border-t border-border py-14 sm:py-16">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// moderators</p>
+    <SectionLabel text="moderators" />
     <p class="mt-6 max-w-2xl leading-relaxed text-muted-foreground">
       With the <code class="font-mono text-foreground">moderator</code> role you can author postings:
     </p>
