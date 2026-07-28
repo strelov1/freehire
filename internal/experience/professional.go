@@ -16,15 +16,27 @@ import (
 // Professional composes the owner's de-identified candidate profile: work history from the
 // bank, everything else from the structured résumé.
 func (s *Store) Professional(ctx context.Context, userID int64, st resumeextract.Structured) (resumeextract.Professional, error) {
-	employments, err := s.ListEmployments(ctx, userID)
+	history, err := s.WorkHistory(ctx, userID)
 	if err != nil {
 		return resumeextract.Professional{}, err
+	}
+	out := st.Professional()
+	out.Experience = history
+	return out, nil
+}
+
+// WorkHistory renders the owner's bank as résumé work-history entries — the single shape
+// every reader of the bank's experience shares, whether or not it also carries contacts.
+func (s *Store) WorkHistory(ctx context.Context, userID int64) ([]resumeextract.Experience, error) {
+	employments, err := s.ListEmployments(ctx, userID)
+	if err != nil {
+		return nil, err
 	}
 	atoms, err := s.ListAtoms(ctx, userID)
 	if err != nil {
-		return resumeextract.Professional{}, err
+		return nil, err
 	}
-	return ProfessionalFrom(st, employments, atoms), nil
+	return experienceFromBank(employments, atoms), nil
 }
 
 // ProfessionalFrom builds the candidate profile from a bank and a structured résumé.

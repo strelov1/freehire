@@ -8,11 +8,12 @@ import (
 	"github.com/strelov1/freehire/internal/resumeextract"
 )
 
-// experienceBank is the one operation the résumé upload path needs from the experience
-// bank. Narrow on purpose: the upload feeds the bank and never reads it, so nothing else
-// belongs behind this seam.
+// experienceBank is what the résumé surfaces need from the experience bank: the upload
+// feeds it, and the status read serves the work history back. Narrow on purpose — nothing
+// else belongs behind this seam.
 type experienceBank interface {
 	Import(ctx context.Context, userID int64, entries []experience.ImportEntry, sourceRef string) (experience.ImportResult, error)
+	WorkHistory(ctx context.Context, userID int64) ([]resumeextract.Experience, error)
 }
 
 // importExperience banks the work history of a freshly-extracted résumé. Best-effort in

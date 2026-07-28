@@ -20,10 +20,10 @@
 - [x] 2.3 Compose the `Professional` projection from the bank (experience) plus `Structured` (education, languages, summary, total years), keeping the contact whitelist intact so a new field is withheld until explicitly projected
 - [x] 2.4 Test the projection: contacts never appear; a populated bank with a stale structure yields experience and no education; an `agent_inferred` atom is absent
 - [x] 2.5 Move `matchanalysis.Input.StructuredResume` to the composed projection; an empty bank means no analysis, a stale structure no longer blocks one
-- [ ] 2.6 Serve banked experience on `GET /api/v1/me/resume` and in `GET /api/v1/me/profile`'s `cv` block; regenerate the TS contract via `cmd/gen-contracts`
+- [x] 2.6 Serve banked experience on `GET /api/v1/me/resume` and in `GET /api/v1/me/profile`'s `cv` block; regenerate the TS contract via `cmd/gen-contracts`
 - [ ] 2.7 Move `cv.Seed` to the bank for the work history and `Structured` for the rest, omitting non-publishable atoms
 - [ ] 2.8 Test seeding: experience confirmed in chat reaches a newly created CV; an `agent_inferred` atom does not; an empty bank and no structure still yields a valid empty skeleton
-- [ ] 2.9 Update `ResumeStructuredView.svelte` to render the banked experience section
+- [x] 2.9 ~~Update `ResumeStructuredView.svelte`~~ — **no change needed**: the wire shape is byte-identical (`structured.experience` is still `resumeextract.Experience[]`), only its source moved, so the component renders the banked history as-is. `make gen-contracts` produced no diff, which is the evidence
 
 ## 3. Stage 3 — the agent gets hands
 

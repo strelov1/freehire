@@ -240,7 +240,7 @@ func Register(app *fiber.App, cfg Config) {
 	resumeStore := resume.New(cfg.Blob, resume.NewQueriesRepository(queries))
 	// The profile read serves the structured résumé beside the profile, so it needs the
 	// résumé store — hence constructed after it.
-	profileH := newProfileHandlers(profileSvc, resumeStore)
+	profileH := newProfileHandlers(profileSvc, resumeStore, newCandidateProfiler(queries))
 	// Nil-safe: NewAnalyzer(nil) is a no-op analyzer, so the ATS report works whether
 	// or not the LLM is configured.
 	atsAnalyzer := atscheck.NewAnalyzer(cfg.LLM)

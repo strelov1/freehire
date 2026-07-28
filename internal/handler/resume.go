@@ -42,9 +42,9 @@ type resumeHandlers struct {
 	atsAnalyzer *atscheck.Analyzer
 	// atsCache reads/writes the per-user cached CV ATS review (backed by *db.Queries).
 	atsCache atsReviewStore
-	// bank receives the work history of every successfully-extracted CV. Nil when the
-	// queries are unavailable; the import then no-ops, exactly like the other
-	// best-effort derivations.
+	// bank receives the work history of every successfully-extracted CV and serves it back
+	// on the status read. Nil when the queries are unavailable; both then no-op, exactly
+	// like the other best-effort derivations.
 	bank experienceBank
 }
 
@@ -383,11 +383,30 @@ func (h *resumeHandlers) GetResume(c *fiber.Ctx) error {
 		return err
 	}
 	resp := newResumeMeta(true, meta)
-	// Attach the read-only structured résumé when a current one exists (best-effort: a
-	// read hiccup or stale/absent structure simply leaves it null, never failing status).
-	if st, ok, err := h.resume.Structured(c.Context(), userID); err != nil {
+	// Attach the parsed résumé, with its WORK HISTORY taken from the experience bank
+	// rather than from the stored structure. The rest of the structure — contacts,
+	// education, languages, the years estimate — still comes from the file, and is still
+	// governed by its staleness rule; the bank is not, so a pending extraction costs
+	// those sections and no longer hides the career the user has confirmed.
+	//
+	// This read is cookie-only, which is why it is the one surface that carries contacts.
+	var st resumeextract.Structured
+	var haveStructure bool
+	if stored, ok, err := h.resume.Structured(c.Context(), userID); err != nil {
 		log.Printf("resume structured read: user %d: %v", userID, err)
 	} else if ok {
+		st, haveStructure = stored, true
+	}
+	st.Experience = nil
+	if h.bank != nil {
+		history, err := h.bank.WorkHistory(c.Context(), userID)
+		if err != nil {
+			log.Printf("resume work history: user %d: %v", userID, err)
+		} else {
+			st.Experience = history
+		}
+	}
+	if haveStructure || len(st.Experience) > 0 {
 		resp.Structured = &st
 	}
 	return c.JSON(fiber.Map{"data": resp})

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -26,10 +27,12 @@ type structuredResumeReader interface {
 type profileHandlers struct {
 	userProfile *userprofile.Service
 	resume      structuredResumeReader
+	// bank supplies the work history the cv block reports. Nil reads as an empty bank.
+	bank candidateProfiler
 }
 
-func newProfileHandlers(userProfile *userprofile.Service, resume structuredResumeReader) *profileHandlers {
-	return &profileHandlers{userProfile: userProfile, resume: resume}
+func newProfileHandlers(userProfile *userprofile.Service, resume structuredResumeReader, bank candidateProfiler) *profileHandlers {
+	return &profileHandlers{userProfile: userProfile, resume: resume, bank: bank}
 }
 
 func (h *profileHandlers) register(api fiber.Router, mw middleware) {
@@ -87,14 +90,34 @@ func toProfileResponse(p userprofile.Profile, cv *resumeextract.Professional) pr
 // an unconfigured reader or a failing lookup degrades to a null cv block rather than
 // denying the caller their own profile.
 func (h *profileHandlers) structuredCV(ctx context.Context, userID int64) *resumeextract.Professional {
-	if h.resume == nil {
-		return nil
+	// The structure still owns education, languages, the summary and the years estimate,
+	// and is read best-effort: absent or stale, the caller loses those sections rather
+	// than the whole block. The work history comes from the bank either way.
+	var structured resumeextract.Structured
+	if h.resume != nil {
+		if stored, ok, err := h.resume.Structured(ctx, userID); err == nil && ok {
+			structured = stored
+		}
 	}
-	structured, ok, err := h.resume.Structured(ctx, userID)
-	if err != nil || !ok {
-		return nil
-	}
+
+	// A missing bank reads as an EMPTY bank, not as "no CV". The two are different claims:
+	// one says the candidate has no banked work history, the other throws away the
+	// headline and education the structure still knows.
 	professional := structured.Professional()
+	professional.Experience = nil
+	if h.bank != nil {
+		composed, err := h.bank.Professional(ctx, userID, structured)
+		if err != nil {
+			log.Printf("profile cv block: user %d: %v", userID, err)
+		} else {
+			professional = composed
+		}
+	}
+	// Nothing known at all reads as no CV, exactly as before — an empty object would tell
+	// an agent there is a profile to work from when there is not.
+	if len(professional.Experience) == 0 && len(professional.Education) == 0 && professional.Headline == "" {
+		return nil
+	}
 	return &professional
 }
 
