@@ -112,7 +112,7 @@ SHALL be served from a client cache.
 - **WHEN** a card mounts for a slug the tool has validated
 - **THEN** it shows a loading placeholder, fetches the jobview once, and renders the `JobRow` card with that data plus the model's rationale
 
-#### Scenario: A failed fetch degrades to a link
+#### Scenario: Unknown or failed slug degrades to a link
 
 - **WHEN** the jobview fetch errors for a slug the tool accepted (for example the network is down)
 - **THEN** that entry renders the job URL as a plain link and the rest of the deck is unaffected

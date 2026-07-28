@@ -1,48 +1,32 @@
 # assistant-job-cards Specification
 
 ## Purpose
-TBD - created by archiving change assistant-job-cards. Update Purpose after archive.
+How a vacancy reaches the user inside the in-app assistant. The agent never writes
+a job link into its reply: it calls `present_jobs` with the vacancies it chose, in
+its own ranking, each carrying the rationale only it knows. The chat renders that
+call as one contiguous deck and fetches every card's facts by slug, so the vacancy's
+own data is always ours and never model-authored.
+
 ## Requirements
-### Requirement: Job links in an assistant reply render as job cards
-
-An assistant message SHALL render every freehire job reference
-(`https://freehire.me/jobs/<slug>`, protocol/host-optional bare `/jobs/<slug>`)
-as a job card showing the posting's real data, rather than a plain link. The
-surrounding prose SHALL still render as markdown, in order.
-
-#### Scenario: A reply listing jobs shows cards
-
-- **WHEN** the agent replies with several `https://freehire.me/jobs/<slug>` links (e.g. a recommended shortlist)
-- **THEN** each link is replaced, in place, by a job card with the posting's logo, title, tags, skills, and posted time, and any text between links renders as normal markdown
-
-#### Scenario: A non-job link is left alone
-
-- **WHEN** the reply contains a link that is not a freehire job link (e.g. a company page or an external URL)
-- **THEN** it renders as an ordinary markdown link, not a card
-
-#### Scenario: Duplicate and punctuation-adjacent links
-
-- **WHEN** the same job link appears twice, or a link is immediately followed by punctuation (`…/jobs/foo.`)
-- **THEN** each occurrence renders a card for the correct slug (trailing punctuation excluded), and the two cards for the same slug do not trigger a second fetch
-
 ### Requirement: Cards are hydrated from the structured job API
 
 A job card SHALL fetch the posting's structured jobview by slug
 (`api.getJob` → `GET /api/v1/jobs/:slug`) and render the shared `JobRow`
-component from that data, so the card is always accurate (never model-authored).
-While loading it SHALL show a placeholder; on a fetch error or unknown slug it
-SHALL fall back to a plain link, never breaking the message. Repeated slugs
-within a session SHALL be served from a client cache.
+component from that data, so the vacancy's own facts are always accurate and
+never model-authored — the model contributes only the rationale attached to the
+card. While loading it SHALL show a placeholder; if the fetch fails it SHALL fall
+back to a plain link, never breaking the message. Repeated slugs within a session
+SHALL be served from a client cache.
 
 #### Scenario: Successful hydration
 
-- **WHEN** a card mounts for a valid slug
-- **THEN** it shows a loading placeholder, fetches the jobview once, and renders the `JobRow` card with that data
+- **WHEN** a card mounts for a slug the tool has validated
+- **THEN** it shows a loading placeholder, fetches the jobview once, and renders the `JobRow` card with that data plus the model's rationale
 
 #### Scenario: Unknown or failed slug degrades to a link
 
-- **WHEN** the jobview fetch 404s or errors
-- **THEN** the card renders the original job URL as a plain link and the rest of the message is unaffected
+- **WHEN** the jobview fetch errors for a slug the tool accepted (for example the network is down)
+- **THEN** that entry renders the job URL as a plain link and the rest of the deck is unaffected
 
 #### Scenario: Cached on repeat
 
@@ -53,28 +37,112 @@ within a session SHALL be served from a client cache.
 
 A job card SHALL be the same `JobRow` used elsewhere in freehire (its bookmark
 and styling), and SHALL open the job detail in a **new tab** so the chat session
-stays open. Cards SHALL be laid out to match the chat column (bounded width,
-spacing) so the reply reads as one coherent surface.
+stays open. A deck SHALL be laid out to match the chat column, and its cards
+SHALL be spaced as one group rather than as independent blocks, so a
+recommendation reads as one surface.
 
 #### Scenario: Opening a card keeps the chat
 
 - **WHEN** the user clicks a job card in the chat
 - **THEN** the job detail opens in a new browser tab and the assistant chat remains open and attached in the current tab
 
-### Requirement: The agent produces unfurlable job links
+#### Scenario: A card in a deck is still bookmarkable
 
-The assistant's system prompt SHALL direct the agent to present each recommended
-or listed vacancy as its canonical `https://freehire.me/jobs/<public_slug>` URL,
-one per line, and MUST NOT present the posting's original ATS URL in its place.
-The `public_slug` SHALL be carried by the job-search and job-read tool results,
-so the agent copies it rather than constructing it from a title.
+- **WHEN** the user saves a vacancy from a card inside a deck
+- **THEN** it is saved exactly as it would be from the same card elsewhere in the app
 
-#### Scenario: Recommending jobs yields cards
+### Requirement: The agent presents vacancies through a typed tool
 
-- **WHEN** the agent uses its search tool to find vacancies and then recommends them to the user
-- **THEN** each recommendation includes the job's `https://freehire.me/jobs/<public_slug>` URL, which the chat renders as a card
+The agent SHALL present every vacancy it shows the user by calling a
+`present_jobs` tool, and SHALL NOT write a job link into its prose. One call
+carries an optional group `heading` and one to ten entries, each of which is a
+vacancy's `public_slug` copied from a search or read result, a one-sentence
+`note`, and optionally up to four `why_fits` phrases and up to three `concerns`.
+The `note` SHALL NOT restate the vacancy's title, company, location or seniority,
+because the card already shows them.
 
-#### Scenario: The slug comes from the tool result
+Presenting two groups (for example a shortlist and a wider set) SHALL be two
+calls with different headings, not one call with prose between the entries.
 
-- **WHEN** a job-search or job-read tool returns a vacancy
-- **THEN** the result includes that vacancy's `public_slug`
+#### Scenario: A recommendation is a tool call, not prose
+
+- **WHEN** the agent has screened search results and is ready to recommend vacancies
+- **THEN** it calls `present_jobs` with those vacancies' `public_slug` values and a rationale for each, and its own text carries no job link
+
+#### Scenario: The rationale does not duplicate the card
+
+- **WHEN** the agent writes a `note` for a presented vacancy
+- **THEN** the note explains why the vacancy is worth the user's time without repeating the title, company, location or seniority the card renders
+
+#### Scenario: Two groups are two calls
+
+- **WHEN** the agent wants to separate strong matches from weaker ones
+- **THEN** it makes one `present_jobs` call per group, each with its own heading
+
+### Requirement: A presented slug is validated before the deck is shown
+
+The `present_jobs` tool SHALL resolve every submitted slug against the catalogue
+before the deck reaches the user. Slugs that resolve are reported as `presented`;
+slugs that do not are dropped and reported as `dropped` with the offending slug
+and a reason, so the model can correct itself within the same turn. A call in
+which no slug resolves SHALL fail with an error naming the unresolved slugs.
+
+The result SHALL be a receipt of slugs, not the vacancies' payload: the search
+result that produced them is already in the model's history, and repeating it
+would duplicate the most expensive part of the context.
+
+#### Scenario: Every slug resolves
+
+- **WHEN** the model calls `present_jobs` with slugs that all exist
+- **THEN** the result lists them as `presented`, `dropped` is empty, and no vacancy payload is echoed back into the conversation
+
+#### Scenario: Some slugs do not resolve
+
+- **WHEN** the model calls `present_jobs` with a mix of real and unknown slugs
+- **THEN** the real ones are `presented`, the unknown ones appear in `dropped` with their reason, and the model may present a replacement without regenerating the rationale for the entries that survived
+
+#### Scenario: No slug resolves
+
+- **WHEN** every slug in a `present_jobs` call is unknown
+- **THEN** the call returns an error naming the unresolved slugs, and no deck is rendered
+
+### Requirement: A presented set renders as one contiguous deck
+
+The chat SHALL render one `present_jobs` call as a single deck: its heading, if
+given, followed by its cards in the order the model listed them, with no prose
+between the cards. Each card SHALL carry the model's `note`, its `why_fits` and
+its `concerns` inside the card's own border, below the vacancy's data.
+
+A `present_jobs` call SHALL NOT also appear in the transcript's tool-activity
+list, which would put a redundant progress chip above the deck it produced.
+
+#### Scenario: Cards are not split by prose
+
+- **WHEN** a reply presents six vacancies in one call
+- **THEN** the six cards render as one uninterrupted stack under a single heading
+
+#### Scenario: The rationale sits inside the card
+
+- **WHEN** a presented vacancy has a note, `why_fits` and `concerns`
+- **THEN** all three render within that card's border, beneath the vacancy's own data, and not as separate paragraphs in the message
+
+#### Scenario: The presenting call is not shown as tool activity
+
+- **WHEN** a turn contains a `present_jobs` call alongside other tool calls
+- **THEN** the other calls appear in the tool-activity list and `present_jobs` does not, because its deck is already on screen
+
+### Requirement: A deck renders only after its call has succeeded
+
+The chat SHALL render a deck only once the `present_jobs` call's result has
+arrived and is not an error. A call still in flight SHALL render a placeholder,
+and a failed call SHALL render nothing.
+
+Rendering from the call's arguments alone would show a deck built from
+unvalidated slugs and then replace it when the model corrected itself; waiting
+for the result means the user never sees a deck that the backend rejected.
+
+#### Scenario: A rejected call shows no deck
+
+- **WHEN** a `present_jobs` call fails because none of its slugs resolve, and the model retries with corrected slugs
+- **THEN** only the corrected deck is ever shown
+

@@ -7,7 +7,6 @@ The agent executes inside the freehire backend as the authenticated caller, so i
 reach is its tool list rather than a sandbox — anything it must not touch is a tool
 that does not exist.
 ## Requirements
-
 ### Requirement: The assistant runs inside the freehire backend
 
 The assistant SHALL execute in the freehire API process. A conversation turn
@@ -79,10 +78,12 @@ vacancies with keyword and facet filters (`search_jobs`), reading one vacancy
 (`market_fit`), saving, unsaving and applying to a vacancy, setting an
 application stage or note (`track_job`), listing the caller's tracked jobs
 (`my_jobs`), and — in a tailoring session — reading the tailoring context and CV
-document and applying a CV patch. Rendering the CV SHALL NOT be a tool: the
-workspace already previews the document beside the chat, so a render would return
-bytes the model cannot read and the user a copy of what is on screen. Each tool
-SHALL declare a
+document and applying a CV patch. It SHALL additionally be given `present_jobs`,
+the one tool whose purpose is presentation rather than retrieval or state change:
+it is how a vacancy reaches the user's screen. Rendering the CV SHALL NOT be a
+tool: the workspace already previews the document beside the chat, so a render
+would return bytes the model cannot read and the user a copy of what is on
+screen. Each tool SHALL declare a
 JSON schema for its arguments and return structured data, not human-formatted
 text. Moderator-only operations (job authoring, submission review) SHALL NOT be
 exposed.
@@ -96,6 +97,11 @@ exposed.
 
 - **WHEN** the model calls the apply tool for a vacancy on the user's behalf
 - **THEN** the vacancy is recorded as applied for that user, exactly as the equivalent HTTP endpoint would record it, and the result reports the new state
+
+#### Scenario: A presentation tool changes nothing
+
+- **WHEN** the model calls `present_jobs`
+- **THEN** no user state is written; the call only validates the submitted slugs and reports which of them will be shown
 
 #### Scenario: Moderator operations are unavailable
 
@@ -225,3 +231,4 @@ conversation rather than restarting it.
 
 - **WHEN** the user sends "save the second one" after an earlier turn listed vacancies
 - **THEN** the model's history contains that earlier turn's tool calls and results, and it can act on the referenced vacancy without searching again
+
