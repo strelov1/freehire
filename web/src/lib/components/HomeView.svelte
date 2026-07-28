@@ -2,6 +2,8 @@
   import { resolve } from '$app/paths';
   import { Button } from '$lib/ui';
   import HomeFunnel from '$lib/components/HomeFunnel.svelte';
+  import NumberedGrid from '$lib/components/NumberedGrid.svelte';
+  import SectionLabel from '$lib/components/SectionLabel.svelte';
   import { HOME_FAQ } from '$lib/homeFaq';
 
   // Live catalogue totals from the page's server load; either may be null on an
@@ -97,6 +99,23 @@
     },
   };
 
+  // The feature landings, each of which explains one surface in depth. Kept here
+  // rather than only in the footer so the story on / and /about has a doorway.
+  const features = [
+    {
+      href: resolve('/features/inbox'),
+      title: 'Inbox',
+      body: 'Connect your mail and every recruiter reply is tagged with what it says, attached to the application it belongs to, and walked forward on your board.',
+      cta: 'How the inbox works',
+    },
+    {
+      href: resolve('/features/referrals'),
+      title: 'Referrals',
+      body: 'Ask an employee inside the company to put your name forward — anonymously and for free — instead of applying cold.',
+      cta: 'How referrals work',
+    },
+  ];
+
   const steps = [
     {
       n: '01',
@@ -122,9 +141,7 @@
   <section class="grid-bg relative -mx-4 px-4 pb-16 pt-14 sm:pt-20">
     <div class="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
       <div>
-        <p class="reveal font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground" style="--d:0ms">
-          // open-source · free &amp; transparent
-        </p>
+        <SectionLabel text="open-source · free &amp; transparent" class="reveal" style="--d:0ms" />
 
         <h1
           class="reveal mt-6 max-w-2xl text-balance text-5xl font-semibold leading-[0.95] tracking-tighter sm:text-7xl"
@@ -181,7 +198,7 @@
   <!-- Catalogue scale, right under the fold: two live totals (server-loaded, with
        a static "+" fallback) and two constants. The first proof of the hero's claim. -->
   <section class="py-10 sm:py-12">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// the catalogue</p>
+    <SectionLabel text="the catalogue" />
     <dl class="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">
       {#each figures as f (f.label)}
         <div class="bg-background p-5 sm:p-6">
@@ -194,18 +211,8 @@
 
   <!-- Straight from the source — what separates freehire from an aggregator. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// straight from the source</p>
-    <div class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
-      {#each sourced as item (item.n)}
-        <div class="group bg-background p-6 transition-colors hover:bg-secondary/40 sm:p-7">
-          <span class="font-mono text-sm text-muted-foreground transition-colors group-hover:text-foreground">
-            {item.n}
-          </span>
-          <h3 class="mt-4 text-lg font-semibold tracking-tight">{item.title}</h3>
-          <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{item.body}</p>
-        </div>
-      {/each}
-    </div>
+    <SectionLabel text="straight from the source" />
+    <NumberedGrid items={sourced} class="mt-10 sm:grid-cols-3" />
   </section>
 
   <!-- Sourced-from marquee: the real adapters, scrolling. Honest list only. -->
@@ -225,7 +232,7 @@
 
   <!-- Mission. A single large statement carries this section. -->
   <section class="py-16 sm:py-20">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// mission</p>
+    <SectionLabel text="mission" />
     <p class="mt-6 max-w-3xl text-2xl font-medium leading-snug tracking-tight sm:text-3xl">
       A job board that works for you, not for recruiters. No paywalls, no sponsored listings, no CV
       harvesting. Free to use, and free to fork.
@@ -234,24 +241,14 @@
 
   <!-- How it works — three steps that mirror the actual ingest pipeline. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// how it works</p>
-    <div class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
-      {#each steps as step (step.n)}
-        <div class="group bg-background p-6 transition-colors hover:bg-secondary/40 sm:p-7">
-          <span class="font-mono text-sm text-muted-foreground transition-colors group-hover:text-foreground">
-            {step.n}
-          </span>
-          <h3 class="mt-4 text-lg font-semibold tracking-tight">{step.title}</h3>
-          <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{step.body}</p>
-        </div>
-      {/each}
-    </div>
+    <SectionLabel text="how it works" />
+    <NumberedGrid items={steps} class="mt-10 sm:grid-cols-3" />
   </section>
 
   <!-- Track your search — the per-user My jobs board. A polished, hero-style
        preview of the real kanban; the board data is illustrative, not live. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// track your search</p>
+    <SectionLabel text="track your search" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">
         Track every application on your board.
@@ -265,6 +262,12 @@
         <code class="font-mono text-foreground">save</code>,
         <code class="font-mono text-foreground">stage</code> and
         <code class="font-mono text-foreground">note</code> any job from a script or an agent.
+      </p>
+      <p class="mt-4 leading-relaxed text-muted-foreground">
+        You don't have to move the cards by hand either: connect your mail and the
+        <a href={resolve('/features/inbox')} class="font-medium text-foreground underline-offset-4 hover:underline">freehire inbox</a>
+        tags each recruiter reply, attaches it to the application it belongs to, and walks the card
+        forward for you.
       </p>
       <div class="mt-8 flex flex-wrap gap-3">
         <Button href={resolve('/my/tracking')} variant="primary" size="lg">Open Tracking</Button>
@@ -317,7 +320,7 @@
        Sankey snapshot of where applications land. The counts are illustrative,
        not live data (see `funnel` above). -->
   <section class="border-t border-border py-16 sm:py-20">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// your pipeline</p>
+    <SectionLabel text="your pipeline" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">
         See where every application lands.
@@ -344,9 +347,26 @@
     </figure>
   </section>
 
+  <!-- The feature landings. Each has a page of its own; this is the doorway. -->
+  <section class="border-t border-border py-16 sm:py-20">
+    <SectionLabel text="features" />
+    <div class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
+      {#each features as f (f.href)}
+        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal route already passed through resolve() when building `features`; the linter can't trace it via the variable -->
+        <a href={f.href} class="group bg-background p-6 transition-colors hover:bg-secondary/40 sm:p-7">
+          <h3 class="text-lg font-semibold tracking-tight">{f.title}</h3>
+          <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{f.body}</p>
+          <span class="mt-4 inline-block text-sm font-medium text-foreground underline-offset-4 group-hover:underline">
+            {f.cta} →
+          </span>
+        </a>
+      {/each}
+    </div>
+  </section>
+
   <!-- Notifications — save a filter, get matching jobs pushed to Telegram. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// stay in the loop</p>
+    <SectionLabel text="stay in the loop" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">New jobs, straight to Telegram.</h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
@@ -366,7 +386,7 @@
   <!-- CLI / agents — the same API from the terminal. Mirrors the open-source
        section's two-column copy + terminal figure. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// for agents</p>
+    <SectionLabel text="for agents" />
     <div class="mt-6 grid gap-10 lg:grid-cols-2 lg:items-center">
       <div>
         <h2 class="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -408,7 +428,7 @@ freehire save <span class="text-foreground">&lt;slug&gt;</span></pre>
 
   <!-- Open source / contribute. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// open source</p>
+    <SectionLabel text="open source" />
     <div class="mt-6">
       <h2 class="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
         Built in the open. Add your own source.
@@ -431,7 +451,7 @@ freehire save <span class="text-foreground">&lt;slug&gt;</span></pre>
   <!-- FAQ. Visible answers mirror the FAQPage JSON-LD (see homeFaq.ts) so the
        structured data always matches what's on the page. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// faq</p>
+    <SectionLabel text="faq" />
     <h2 class="mt-6 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
       Frequently asked questions.
     </h2>

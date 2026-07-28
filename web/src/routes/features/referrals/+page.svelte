@@ -3,7 +3,7 @@
   import ReferralsLandingView from '$lib/components/ReferralsLandingView.svelte';
   import Seo from '$lib/components/Seo.svelte';
 
-  const canonical = $derived(`${page.url.origin}/referrals`);
+  const canonical = $derived(`${page.url.origin}/features/referrals`);
 </script>
 
 <Seo

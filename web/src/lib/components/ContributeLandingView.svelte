@@ -1,6 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { Button } from '$lib/ui';
+  import SectionLabel from '$lib/components/SectionLabel.svelte';
 
   const repoUrl = 'https://github.com/strelov1/freehire';
   const telegramUrl = 'https://t.me/freehiredev';
@@ -47,9 +48,7 @@
 <div class="flex flex-col gap-16">
   <!-- Hero -->
   <section class="dot-grid -mx-4 flex flex-col gap-7 px-4 pb-4 pt-2">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
-      // contribute
-    </p>
+    <SectionLabel text="contribute" />
     <h1 class="max-w-3xl text-balance text-4xl font-semibold leading-[1.0] tracking-tighter sm:text-6xl">
       A search engine is only as good as its coverage.
     </h1>

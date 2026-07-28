@@ -13,8 +13,14 @@
         { label: 'Jobs', href: resolve('/') },
         { label: 'Companies', href: resolve('/companies') },
         { label: 'Collections', href: resolve('/collections') },
-        { label: 'Referrals', href: resolve('/referrals') },
         { label: 'Recruiters', href: resolve('/recruiters') },
+      ],
+    },
+    {
+      title: 'Features',
+      links: [
+        { label: 'Inbox', href: resolve('/features/inbox') },
+        { label: 'Referrals', href: resolve('/features/referrals') },
       ],
     },
     {
@@ -56,7 +62,7 @@
 
 <footer class="border-t border-border">
   <div class="mx-auto max-w-6xl px-4 py-8 sm:py-12">
-    <div class="grid grid-cols-3 gap-x-6 gap-y-7 sm:gap-6">
+    <div class="grid grid-cols-2 gap-x-6 gap-y-7 sm:grid-cols-4 sm:gap-6">
       <!-- Navigation groups. Each is a named landmark (aria-label) so screen readers
            get a title without adding headings to the page outline. -->
       {#each groups as group (group.title)}

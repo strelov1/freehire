@@ -1,4 +1,6 @@
 <script lang="ts">
+  import SectionLabel from '$lib/components/SectionLabel.svelte';
+
   // The About page's values block — the promises behind the mission, shown only
   // on /about (HomeView carries the mission and renders on / too, so these live
   // in a standalone component to keep them off the landing page).
@@ -32,7 +34,7 @@
 </script>
 
 <section class="border-t border-border py-16 sm:py-20">
-  <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// values</p>
+  <SectionLabel text="values" />
   <dl class="mt-10 divide-y divide-border border-y border-border">
     {#each values as v (v.n)}
       <div class="grid gap-2 py-6 sm:grid-cols-[auto_1fr] sm:gap-8">

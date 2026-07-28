@@ -6,6 +6,17 @@ describe('sitemap static paths', () => {
     expect(STATIC_PATHS).toContain('/collections');
     expect(STATIC_PATHS).toContain('/for-companies');
   });
+
+  it('includes the feature landings', () => {
+    expect(STATIC_PATHS).toContain('/features/inbox');
+    expect(STATIC_PATHS).toContain('/features/referrals');
+  });
+
+  // /referrals now answers with a 301 to its new home. Listing a redirect in the
+  // sitemap tells crawlers to index the address that no longer serves the page.
+  it('drops the moved referrals URL', () => {
+    expect(STATIC_PATHS).not.toContain('/referrals');
+  });
 });
 
 describe('collectionPaths', () => {
