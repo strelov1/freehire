@@ -1,32 +1,32 @@
 ## 1. Adapter — listing
 
-- [ ] 1.1 Add `internal/sources/opencats_test.go` with builder functions for two fixture
+- [x] 1.1 Add `internal/sources/opencats_test.go` with builder functions for two fixture
       shapes: the stock XHTML template and a rewritten template with different classes and
       column order. Assert the listing yields one posting per `p=showJob&ID=<n>` link, with
       the anchor text as title and the captured `<n>` as `ExternalID`, identically for both
       shapes.
-- [ ] 1.2 Add `internal/sources/opencats.go` with `NewOpencats`, `Provider() == "opencats"`,
+- [x] 1.2 Add `internal/sources/opencats.go` with `NewOpencats`, `Provider() == "opencats"`,
       and listing parsing that satisfies 1.1.
-- [ ] 1.3 Test and implement board resolution: a root-mounted board
+- [x] 1.3 Test and implement board resolution: a root-mounted board
       (`atscareers.g4s.com`) and a path-prefixed board (`careers.boomit.pt/careers`) both
       build the correct listing URL over HTTPS.
-- [ ] 1.4 Test and implement de-duplication of repeated posting links within one listing
+- [x] 1.4 Test and implement de-duplication of repeated posting links within one listing
       (title link plus separate apply link → one posting).
-- [ ] 1.5 Test and implement exclusion of the general-application entry ("Can't find what
+- [x] 1.5 Test and implement exclusion of the general-application entry ("Can't find what
       you're looking for? Apply here").
-- [ ] 1.6 Test and implement listing-fetch failure: an unreachable listing returns an error
+- [x] 1.6 Test and implement listing-fetch failure: an unreachable listing returns an error
       for the board.
 
 ## 2. Adapter — detail
 
-- [ ] 2.1 Test and implement detail-page parsing: location and description read from the
+- [x] 2.1 Test and implement detail-page parsing: location and description read from the
       detail page, description passed through `sanitizeHTML` (assert an embedded `<script>`
       is stripped).
-- [ ] 2.2 Test and implement per-posting failure isolation: one failing detail page skips
+- [x] 2.2 Test and implement per-posting failure isolation: one failing detail page skips
       that posting and leaves the rest of the board intact.
-- [ ] 2.3 Wire the detail fan-out through the shared `fetchDetails` helper at
+- [x] 2.3 Wire the detail fan-out through the shared `fetchDetails` helper at
       `defaultDetailWorkers`.
-- [ ] 2.4 Register the adapter in `sources.All` under key `opencats`; confirm it is absent
+- [x] 2.4 Register the adapter in `sources.All` under key `opencats`; confirm it is absent
       from `sources.SelfClosingProviders`.
 
 ## 3. Harvest prober
