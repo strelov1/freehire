@@ -1,15 +1,15 @@
 ## 1. The silence vocabulary and thresholds
 
-- [ ] 1.1 Add the stage→threshold table to `internal/userjob`, alongside the existing stage vocabulary in `stages.go`, with each value's provenance recorded at the point of definition (measured / interpolated / judgement)
-- [ ] 1.2 Add the silence-state vocabulary (`active`, `silent`, `unconfirmed`) and the pure function mapping (stage, days silent, has-pending-suggestion) to a state
-- [ ] 1.3 Cover the pure mapping: below/at/past each threshold, the same silence judged differently by stage, unset stage judged as `applied`, and terminal stages yielding no state at all
-- [ ] 1.4 Cover the precedence rule: a pending suggestion turns what would be `silent` into `unconfirmed`, but never turns `active` into anything
+- [x] 1.1 Add the stage→threshold table to `internal/userjob`, alongside the existing stage vocabulary in `stages.go`, with each value's provenance recorded at the point of definition (measured / interpolated / judgement)
+- [x] 1.2 Add the silence-state vocabulary (`active`, `silent`, `unconfirmed`) and the pure function mapping (stage, days silent, has-pending-suggestion) to a state
+- [x] 1.3 Cover the pure mapping: below/at/past each threshold, the same silence judged differently by stage, unset stage judged as `applied`, and terminal stages yielding no state at all
+- [x] 1.4 Cover the precedence rule: a pending suggestion turns what would be `silent` into `unconfirmed`, but never turns `active` into anything
 
 ## 2. Deriving last activity
 
-- [ ] 2.1 Extend the `/me/tracking` query with the last-activity aggregate — `GREATEST(applied_at, max(received_at))` over linked, non-deleted mail — and a flag for whether any unconfirmed suggestion points at the application
-- [ ] 2.2 Cover the aggregate against a real Postgres: no linked mail falls back to `applied_at`; linked mail moves it forward; another application's mail is ignored; an unconfirmed suggestion is not activity; soft-deleted mail is excluded
-- [ ] 2.3 Confirm the partial `emails_job_id_idx` serves the aggregate and record the plan in the task notes; do not add an index speculatively
+- [x] 2.1 Extend the `/me/tracking` query with the last-activity aggregate — `GREATEST(applied_at, max(received_at))` over linked, non-deleted mail — and a flag for whether any unconfirmed suggestion points at the application
+- [x] 2.2 Cover the aggregate against a real Postgres: no linked mail falls back to `applied_at`; linked mail moves it forward; another application's mail is ignored; an unconfirmed suggestion is not activity; soft-deleted mail is excluded
+- [x] 2.3 Confirmed against prod: `EXPLAIN (ANALYZE)` on the last-activity aggregate takes a `Bitmap Index Scan on emails_job_id_idx`, 16ms on the busiest application. The existing partial index serves it; no index added
 
 ## 3. Wire shape
 
