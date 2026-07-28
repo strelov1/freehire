@@ -290,6 +290,7 @@ type Querier interface {
 	// repository maps that unique violation to ErrBoardAlreadyContributed. The AI-credits reward
 	// is granted separately by the handler (credits.Reward), idempotent by the contribution id.
 	CreateContribution(ctx context.Context, arg CreateContributionParams) (LinkContribution, error)
+	CreateExperienceEmployment(ctx context.Context, arg CreateExperienceEmploymentParams) (ExperienceEmployment, error)
 	// Record a member's offer to refer into a company. The UNIQUE (user_id, company_slug)
 	// constraint rejects a second offer for the same company; the repository maps that unique
 	// violation to a domain "already offered" error. Starts pending, awaiting moderation.
@@ -403,6 +404,11 @@ type Querier interface {
 	// release passes 'hosted') — the other source's mail is left untouched.
 	DeleteEmailsBySource(ctx context.Context, arg DeleteEmailsBySourceParams) error
 	DeleteEnrichmentEntry(ctx context.Context, id int64) error
+	// The only path that removes an atom, and it belongs to the user. Import never deletes.
+	DeleteExperienceAtom(ctx context.Context, arg DeleteExperienceAtomParams) (int64, error)
+	// Remove an owned employment; its atoms go with it (ON DELETE CASCADE) because they are
+	// evidence OF that role. Returns 0 affected rows for a foreign or missing id.
+	DeleteExperienceEmployment(ctx context.Context, arg DeleteExperienceEmploymentParams) (int64, error)
 	DeleteGmailConnection(ctx context.Context, userID int64) error
 	DeleteMailbox(ctx context.Context, userID int64) error
 	// Drop companies no longer referenced by any job — the stale rows left behind
@@ -520,6 +526,16 @@ type Querier interface {
 	// doubles as the crash reaper, so a failed entry is never reprocessed within the
 	// same run. Mirrors RecordEnrichmentFailure / RecordSemanticFailure.
 	FailEmailClassification(ctx context.Context, arg FailEmailClassificationParams) error
+	// Import's write: fill only the fields the bank has nothing for, and never overwrite a value
+	// already there. A user who corrected their job title must not have that correction undone by
+	// re-uploading the CV it came from. is_current is not touched at all — a CV that still says
+	// "Present" for a role the user has left would otherwise resurrect it.
+	FillExperienceEmploymentBlanks(ctx context.Context, arg FillExperienceEmploymentBlanksParams) (ExperienceEmployment, error)
+	// Import's match: the caller's employment with this company and role, compared case-
+	// insensitively because a CV, a chat and a form will each capitalise them differently.
+	// There is no unique constraint behind this on purpose (a second stint at the same employer
+	// in the same role is a real career shape), so the oldest match wins and stays stable.
+	FindExperienceEmployment(ctx context.Context, arg FindExperienceEmploymentParams) (ExperienceEmployment, error)
 	// Resolve a job page URL to the posting stored under it — the second tier of
 	// /api/v1/jobs/find, used when no (source, external_id) identity can be read out of the
 	// URL. Both sides go through normalize_job_url (migration 0042), so a link differing only
@@ -585,6 +601,10 @@ type Querier interface {
 	// people count), fit_checks is every job-fit analysis ever run, and saved_searches is
 	// every saved search.
 	GetEngagementStats(ctx context.Context) (GetEngagementStatsRow, error)
+	GetExperienceAtom(ctx context.Context, arg GetExperienceAtomParams) (ExperienceAtom, error)
+	// One employment owned by the caller. A foreign or missing id returns no row, which the
+	// handler maps to 404 — so a probe cannot tell the two apart.
+	GetExperienceEmployment(ctx context.Context, arg GetExperienceEmploymentParams) (ExperienceEmployment, error)
 	GetGmailConnection(ctx context.Context, userID int64) (GetGmailConnectionRow, error)
 	GetGmailRefreshToken(ctx context.Context, userID int64) (GetGmailRefreshTokenRow, error)
 	GetJob(ctx context.Context, id int64) (Job, error)
@@ -719,6 +739,12 @@ type Querier interface {
 	// unique index on (user_id, feature, ref) WHERE kind='debit' guards against a double charge
 	// for the same ref even under a race.
 	InsertDebit(ctx context.Context, arg InsertDebitParams) error
+	// The only insert. ON CONFLICT DO NOTHING against the (user_id, claim_key) unique index makes
+	// "the same claim is never banked twice" a database guarantee rather than a property of the
+	// import code — so re-uploading a CV cannot duplicate atoms no matter what the caller does.
+	// Returns no row when the claim is already banked, which callers report rather than treat as
+	// an error: the user learns it is already recorded.
+	InsertExperienceAtomIfNew(ctx context.Context, arg InsertExperienceAtomIfNewParams) (ExperienceAtom, error)
 	// Second half of the atomic rebuild: one row per (facet, value). Called once per
 	// value the worker computed, inside the same transaction as DeleteAllFacetStats.
 	InsertFacetStat(ctx context.Context, arg InsertFacetStatParams) error
@@ -851,6 +877,13 @@ type Querier interface {
 	// snippet already detoasts body_text, so the extra column costs no extra read;
 	// it is guarded only to keep the web inbox's payload small.
 	ListEmails(ctx context.Context, arg ListEmailsParams) ([]ListEmailsRow, error)
+	// Every atom the caller owns. Retrieval reads the whole set and scores it in Go: a
+	// requirement can match on skills OR on text alone, so there is no prefilter that would not
+	// drop real evidence. Ordered by employment so a consumer can group without a second pass.
+	ListExperienceAtoms(ctx context.Context, userID int64) ([]ExperienceAtom, error)
+	// The caller's places of work, current roles first and most recent within that. Owner-scoped
+	// by construction — another user's employments can never appear.
+	ListExperienceEmployments(ctx context.Context, userID int64) ([]ExperienceEmployment, error)
 	// The whole snapshot, ordered by facet then count DESC so the reader can take the
 	// top-N per facet without re-sorting. Aggregate only — per-value counts, no
 	// record-level data.
@@ -1609,6 +1642,12 @@ type Querier interface {
 	// Replace a CV's editable fields, stamping updated_at. Owner-scoped: no row is updated
 	// for a foreign or missing id (the handler maps the resulting no-row error to 404).
 	UpdateCV(ctx context.Context, arg UpdateCVParams) (UpdateCVRow, error)
+	// Owner-scoped edit. claim_key moves with the claim, so the uniqueness guarantee holds after
+	// an edit as well as after an insert.
+	UpdateExperienceAtom(ctx context.Context, arg UpdateExperienceAtomParams) (ExperienceAtom, error)
+	// A full owner-scoped replacement, used by the profile UI where the user is editing the
+	// fields directly and means what they typed — including blanking one.
+	UpdateExperienceEmployment(ctx context.Context, arg UpdateExperienceEmploymentParams) (ExperienceEmployment, error)
 	// One-off re-derive (cmd/backfill-derive): rewrite in a single pass every column that
 	// ingest computes as a pure function of a row's own raw/immutable fields — the
 	// deterministic dictionary facets (countries, regions, cities, work_mode, skills,
