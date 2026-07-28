@@ -1,0 +1,29 @@
+---
+title: Vacancies from companies that run their own hiring software
+date: 2026-07-28
+summary: freehire now crawls self-hosted OpenCATS career portals — 251 vacancies from nine employers who put their hiring software on their own domain instead of renting it.
+type: changelog
+tags:
+  - catalogue
+  - sources
+draft: false
+---
+
+Almost every hiring system a company uses is rented: Greenhouse, Lever, Workday and the
+rest each host thousands of employers, so reading one of them puts thousands of career
+pages in the catalogue at once. Some companies do the opposite — they install the software
+on their own server, on their own domain, and answer to nobody's directory. There is no
+list of them anywhere. Until now their vacancies were simply outside our reach.
+
+**We now read those portals too.** The first batch is 251 vacancies from nine employers
+running OpenCATS, an open-source hiring system: security work at
+[G4S](/companies/g4s), telecom and network engineering at
+[Indovision Services](/companies/indovision-services-pvt-ltd), development roles at
+[Crewlogix](/companies/crewlogix-technologies) and [Boomit](/companies/boomit), retail
+positions at [Gorgany](/companies/gorgany), and a few smaller employers besides. You can
+see them all under [this filter](/?source=opencats).
+
+These postings behave like every other vacancy here: they are searchable, they carry the
+same AI enrichment, and they close when the employer takes them down. Several of these
+companies do not appear on any job board at all — their own careers page was the only place
+their openings existed.
