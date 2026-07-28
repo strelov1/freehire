@@ -49,7 +49,7 @@
 
 ## 4. Web contract
 
-- [ ] 4.1 Run `make gen-contracts` and add `cv` to the hand-written `UserProfile`
+- [x] 4.1 Run `make gen-contracts` and add `cv` to the hand-written `UserProfile`
   interface in `web/src/lib/types.ts`, typed against the generated projection type.
   Verify: `go build ./...`, `go vet ./...`, `go test ./...`, and the web build.
 
