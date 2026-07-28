@@ -14,17 +14,17 @@
   import { page } from '$app/state';
   import AssistantChat from '$lib/assistant/AssistantChat.svelte';
   import AccountNavRail from '$lib/components/AccountNavRail.svelte';
-  import { entryFromQuery } from '$lib/assistant/presets';
+  import { entryFromQuery, historyModeFor } from '$lib/assistant/presets';
 
   const session = $derived(page.params.id);
-  const entry = $derived(entryFromQuery(page.url.searchParams));
+  // Read once, not reactively: the query says what this ARRIVAL asked for, and the
+  // address is rewritten to the session's own URL — dropping the query — moments later.
+  const entry = entryFromQuery(page.url.searchParams);
 
   function onSessionChange(id: string) {
-    if (id === page.params.id) return;
-    // Arriving without an id is a redirect to where the caller belongs, so it replaces
-    // this entry; choosing a different chat is a real move, so it pushes one and Back
-    // returns to the chat they came from.
-    void goto(resolve('/my/assistant/[[id]]', { id }), { replaceState: !page.params.id });
+    const mode = historyModeFor(page.params.id, id);
+    if (mode === 'none') return;
+    void goto(resolve('/my/assistant/[[id]]', { id }), { replaceState: mode === 'replace' });
   }
 </script>
 
@@ -32,5 +32,11 @@
 
 <div class="flex h-[calc(100dvh-3.5rem)]">
   <AccountNavRail />
-  <AssistantChat {session} preset={entry.preset} kickoff={entry.kickoff} {onSessionChange} showSessionRail />
+  <AssistantChat
+    {session}
+    preset={entry.preset}
+    kickoff={entry.kickoff}
+    {onSessionChange}
+    showSessionRail
+  />
 </div>

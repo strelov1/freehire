@@ -112,7 +112,7 @@
       you confirm is kept here and reused in every CV you build.
     </p>
     <div class="flex flex-col items-center gap-1.5">
-      {@render interviewEntry()}
+      {@render interviewEntry('bank-empty-example')}
     </div>
   </div>
 {:else}
@@ -130,7 +130,7 @@
       <div
         class="flex max-w-[16rem] shrink-0 flex-col items-start gap-1.5 text-left sm:items-end sm:text-right"
       >
-        {@render interviewEntry()}
+        {@render interviewEntry('bank-example')}
       </div>
     </div>
 
@@ -189,11 +189,16 @@
      that produces it, and the example carries the rest: it shows the grain of an answer
      the interviewer is after — one result, ideally with a number — before the chat is
      even open. The caller wraps this to set its alignment. -->
-{#snippet interviewEntry()}
-  <Button href="/my/assistant?preset=profile" size="sm" variant="secondary">
+{#snippet interviewEntry(id: string)}
+  <Button
+    href="/my/assistant?preset=profile"
+    size="sm"
+    variant="secondary"
+    aria-describedby={id}
+  >
     Add an achievement
   </Button>
-  <p class="text-xs text-muted-foreground">
+  <p {id} class="text-xs text-muted-foreground">
     Tell the assistant what you did — “I cut checkout latency by 40% in one quarter.”
   </p>
 {/snippet}

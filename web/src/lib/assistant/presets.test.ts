@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { entryFromQuery } from './presets';
+import { entryFromQuery, historyModeFor } from './presets';
 
 const entry = (query: string) => entryFromQuery(new URLSearchParams(query));
 
@@ -25,5 +25,25 @@ describe('entryFromQuery', () => {
     // never by a URL. An unknown value is a typo, not an instruction.
     expect(entry('preset=tailor')).toEqual({ preset: 'chat' });
     expect(entry('preset=nonsense')).toEqual({ preset: 'chat' });
+  });
+
+  it('matches the preset exactly', () => {
+    expect(entry('preset=Profile')).toEqual({ preset: 'chat' });
+  });
+});
+
+describe('historyModeFor', () => {
+  it('replaces the bare address, which is a redirect and not a step', () => {
+    expect(historyModeFor(undefined, 'a')).toBe('replace');
+  });
+
+  it('pushes a switch between two chats so Back returns to the one left', () => {
+    expect(historyModeFor('a', 'b')).toBe('push');
+  });
+
+  it('does nothing when the address already names that chat', () => {
+    // Opening a chat by its own URL calls back with the id already in the path; a
+    // navigation here would be a history entry for standing still.
+    expect(historyModeFor('a', 'a')).toBe('none');
   });
 });

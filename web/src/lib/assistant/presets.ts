@@ -31,3 +31,16 @@ export function entryFromQuery(params: URLSearchParams): AssistantEntry {
   if (params.get('preset') === 'profile') return { preset: 'profile', kickoff: PROFILE_KICKOFF };
   return { preset: 'chat' };
 }
+
+/**
+ * How the address should follow the chat that just opened. Arriving without an id is a
+ * redirect to where the caller belongs, so it replaces the entry rather than becoming a
+ * step they can press Back into; choosing another chat is a real move and pushes one.
+ */
+export function historyModeFor(
+  currentId: string | undefined,
+  nextId: string,
+): 'replace' | 'push' | 'none' {
+  if (currentId === nextId) return 'none';
+  return currentId ? 'push' : 'replace';
+}

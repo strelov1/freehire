@@ -4,6 +4,7 @@
 // WebSocket, and no credential to hand anywhere.
 
 import type { SessionSummary, StoredMessage } from './wire';
+import type { ChatPreset } from './presets';
 
 const BASE = '/api/v1/assistant';
 
@@ -42,7 +43,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 /** Start a new unbound conversation: a general chat, or the experience interviewer.
  *  Tailoring conversations are created by the tailoring bootstrap instead, which knows
  *  the CV and vacancy to bind them to — a preset that binds cannot be minted here. */
-export function createSession(preset: 'chat' | 'profile' = 'chat'): Promise<SessionSummary> {
+export function createSession(preset: ChatPreset = 'chat'): Promise<SessionSummary> {
   const query = preset === 'chat' ? '' : `?preset=${preset}`;
   return request<SessionSummary>(`/sessions${query}`, { method: 'POST', body: '{}' });
 }

@@ -42,6 +42,21 @@
 
 ## Verification notes
 
+- The 4.4 regression pass originally checked only the address bar, which was not enough:
+  a review flagged it, and a re-run watching the RAIL showed Back moving the URL while the
+  pane stayed on the chat it was already showing. Two defects behind it, both fixed here:
+  `navigatingTo` was raised even when the open was the pane FOLLOWING the address (no
+  navigation would follow, so nothing ever cleared it), and the clearing branch sat below
+  an early return that always won. Back, Forward and Back again now all repaint.
+- Merging the routes made the dead-link panel's "Open your chats" a no-op: it targets the
+  bare address, which is now the same route node, so nothing remounted and `notFound` was
+  never reset. The address-following effect now treats "no id" as a request to boot again,
+  which also restores the nav rail's own entry.
+- `preset` and `kickoff` are read once at mount and each spent once. They describe the
+  ARRIVAL, and this component now outlives the rewrite that strips the query; left
+  reactive, the kickoff raced the rewrite, and left standing, a later boot() minted a
+  second interview and "New chat" inherited the interviewer preset.
+
 - 4.3 was run against a local stack with no LLM credentials, so the agent's reply itself
   could not be observed: the turn reached the backend and was refused there with 503 "the
   assistant is not available". That is the part this change is responsible for — the

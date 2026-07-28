@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { Marked } from 'marked';
   import DOMPurify from 'isomorphic-dompurify';
   import { AlertTriangle, PanelLeft, Plus, Trash2 } from '@lucide/svelte';
@@ -113,6 +113,18 @@
 
   const NEW_CHAT_LABEL = 'New chat';
 
+  /**
+   * What the URL this component mounted on asked for: which conversation to mint, and the
+   * opening message to send into it. Read once, and each half spent once.
+   *
+   * Both are properties of the ARRIVAL, not of the surface. The address is rewritten to
+   * the session's own URL moments later — reading them reactively would race that rewrite
+   * — and this component outlives the rewrite now that one route node serves every chat.
+   * Left standing, they would mint a second interview on the next `boot()` and put the
+   * same words in the caller's mouth again.
+   */
+  const arrival: { preset: ChatPreset; kickoff?: string } = { preset, kickoff };
+
   /** The conversation the host is currently being navigated to, or null. Held until the
    *  `session` prop catches up, so a switch we started is never undone by the stale URL. */
   let navigatingTo = $state<string | null>(null);
@@ -203,7 +215,7 @@
       // ?preset=profile is a request to START an experience interview, not to reopen
       // whatever was last discussed. Without this the link did nothing at all for anyone
       // who already had a chat, which is everyone after their first visit.
-      if (!session && preset !== 'chat') {
+      if (!session && arrival.preset !== 'chat') {
         await createAndOpen();
       } else if (session) {
         // The tailoring host opens a conversation the rail never lists, so seed it
@@ -224,10 +236,14 @@
       }
       phase = 'ready';
 
-      // Autostart: the host can pass a kickoff prompt so the agent begins
-      // immediately instead of waiting for the user to type. Only on an empty session.
-      if (kickoff && chat.messages.length === 0) {
-        void dispatch(kickoff);
+      // Autostart: the host can pass a kickoff prompt so the agent begins immediately
+      // instead of waiting for the user to type. Only on an empty session, and only once
+      // — boot() runs again whenever the caller returns to the bare address, and putting
+      // the same words in their mouth a second time is not what they asked for.
+      if (arrival.kickoff && chat.messages.length === 0) {
+        const opening = arrival.kickoff;
+        arrival.kickoff = undefined;
+        void dispatch(opening);
       }
     } catch (err) {
       report(err, 'Could not reach the assistant.');
@@ -238,22 +254,40 @@
   // The host navigates between conversations, so the requested id arrives as a prop
   // change — including on Back and Forward. Follow it without re-booting the list.
   //
-  // Except while a switch WE started is still in flight. Opening a conversation asks the
-  // host to navigate, and that navigation is async: for the moment between setting
-  // activeId and the URL catching up, this effect sees a `session` that disagrees with
-  // activeId and would "follow" the URL straight back to the conversation just left.
-  // That is what made a new chat snap back to the old one — the chat was created, and the
-  // stale URL immediately evicted it.
+  // The body runs untracked: it reads and writes activeId, navigatingTo and notFound, and
+  // subscribing to what it also assigns is how this becomes a loop. The address and the
+  // ready phase are the only things that should wake it.
   $effect(() => {
     const requested = session;
-    if (!requested || phase !== 'ready' || requested === activeId) return;
-    if (navigatingTo) {
-      // The host has caught up; stop holding the effect off.
-      if (requested === navigatingTo) navigatingTo = null;
+    if (phase !== 'ready') return;
+    untrack(() => followAddress(requested));
+  });
+
+  /** Reconcile the pane with the address the host is showing. */
+  function followAddress(requested: string | undefined) {
+    // A switch WE started asked the host to navigate, and that navigation is async: for
+    // the moment between setting activeId and the URL catching up, `session` disagrees
+    // with activeId and following it would go straight back to the chat just left. That
+    // is what evicted a newly created chat. Clear the guard the moment the host lands —
+    // BEFORE any early return, or the guard outlives its navigation and the pane stops
+    // following the URL at all, which is Back and Forward silently doing nothing.
+    if (navigatingTo && requested === navigatingTo) navigatingTo = null;
+    if (navigatingTo) return;
+
+    // The bare address. Since one route node serves both it and a chat's own URL, getting
+    // here is a prop change rather than a fresh mount: nothing re-runs on its own, so a
+    // dead link's "Open your chats" and the nav rail's own entry would both leave the
+    // caller staring at whatever was already on screen. Boot again, which is what a
+    // remount used to do for us — open the newest chat and re-address to it.
+    if (!requested) {
+      notFound = false;
+      void boot();
       return;
     }
-    openSession(requested).catch((err: unknown) => report(err, 'Could not open that chat.'));
-  });
+
+    if (requested === activeId) return;
+    openSession(requested, true).catch((err: unknown) => report(err, 'Could not open that chat.'));
+  }
 
   /** Surface a failure. A conversation the caller cannot open is a dead link, not
    *  a broken assistant, so it gets the explanation panel rather than an error. */
@@ -267,7 +301,12 @@
 
   // Open a session and repaint its stored transcript. The replay folds through the
   // same reducer live events do, so history and a running turn render identically.
-  async function openSession(id: string) {
+  //
+  // `fromAddress` says the address ALREADY names this chat — we are following it, not
+  // asking the host to change it. That distinction is the guard's whole life: raising it
+  // when no navigation will follow leaves it raised forever, and the pane then ignores
+  // every later address change, which is Forward appearing to do nothing.
+  async function openSession(id: string, fromAddress = false) {
     if (activeId === id && chat.messages.length > 0) return;
     switching = true;
     cancelTurn();
@@ -278,7 +317,7 @@
       // Raise the guard HERE, not after the fetch below: the URL-following effect reruns
       // the moment activeId changes, which is during the await — set it late and the
       // effect has already reopened the conversation we just left.
-      navigatingTo = id;
+      navigatingTo = fromAddress ? null : id;
       const { session: meta, messages } = await getSession(id);
       // A tailoring conversation is reachable by id but belongs to a CV and only makes
       // sense beside it. Opening one here would show a conversation the rail cannot list
@@ -300,7 +339,9 @@
   }
 
   async function createAndOpen() {
-    const created = await createSession(preset);
+    const created = await createSession(arrival.preset);
+    // Spent: the next chat minted here — "New chat", or a later boot() — is a plain one.
+    arrival.preset = 'chat';
     sessions = upsertSession(sessions, fromSummary(created, NEW_CHAT_LABEL));
     await openSession(created.id);
   }
