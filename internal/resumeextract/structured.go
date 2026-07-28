@@ -54,6 +54,44 @@ type Structured struct {
 	Projects       []Project    `json:"projects,omitempty"`
 }
 
+// Professional is Structured with the contact fields left out — the résumé's substance
+// (what the person has done) without the identity (who they are). It is what goes to a
+// consumer that has no business knowing the candidate's name: the LLM fit chain, and an
+// agent reading the profile over the API.
+//
+// The field set is a whitelist, deliberately: a field later added to Structured is
+// withheld until it is added here too. A blacklist — dropping the four known contact
+// keys — would disclose that new field by default, which is the wrong way round for a
+// projection whose whole job is to hold personal data back.
+type Professional struct {
+	Headline       string       `json:"headline,omitempty"`
+	Location       string       `json:"location,omitempty"`
+	Summary        string       `json:"summary,omitempty"`
+	TotalYears     int          `json:"total_years,omitempty"`
+	Experience     []Experience `json:"experience,omitempty"`
+	Education      []Education  `json:"education,omitempty"`
+	Languages      []string     `json:"languages,omitempty"`
+	Skills         []string     `json:"skills,omitempty"`
+	Certifications []string     `json:"certifications,omitempty"`
+	Projects       []Project    `json:"projects,omitempty"`
+}
+
+// Professional projects the résumé onto its contact-free view.
+func (s Structured) Professional() Professional {
+	return Professional{
+		Headline:       s.Headline,
+		Location:       s.Location,
+		Summary:        s.Summary,
+		TotalYears:     s.TotalYears,
+		Experience:     s.Experience,
+		Education:      s.Education,
+		Languages:      s.Languages,
+		Skills:         s.Skills,
+		Certifications: s.Certifications,
+		Projects:       s.Projects,
+	}
+}
+
 // Experience is one work-history entry. Dates are kept as free-form strings as printed
 // on the CV (e.g. "2021-03", "Mar 2021", "Present") — no date parsing is attempted.
 // Summary is the role/company one-line context; Highlights are the achievement bullets.
