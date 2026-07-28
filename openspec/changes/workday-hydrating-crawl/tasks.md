@@ -26,6 +26,6 @@
 
 ## 5. Rollout (ops — executed at Finish)
 
-- [ ] 5.1 Deploy, then watch the next `workday` shard run: `board_health` for `dollartree.wd5.myworkdayjobs.com/dollartreeus` records a `last_success_at` and a non-zero `last_ingested_count`.
-- [ ] 5.2 48h later, confirm the sweep closed the removed postings — `manager-inventory-management-dollar-tree-a3hqkgo6` carries a `closed_at`, and Dollar Tree's open count falls from 22,756 toward the live board's tech-relevant remainder.
-- [ ] 5.3 Check the other boards that have never succeeded (`board_health WHERE last_success_at IS NULL`, 32 on `workday`) — report which recovered and which fail for an unrelated reason.
+- [x] 5.1 Deployed 2026-07-28 (`release.sh freehire`, hire-green). A manual single-board reingest gave `ingested=22936 failed=0 skipped=0 rejected=570`; `board_health` now records `last_success_at=2026-07-28 22:44:14` and `last_ingested_count=22936`, where it had been NULL since the board was added.
+- [x] 5.2 The sweep ran in the same pass (the unseen rows were 26 days stale, well past the 48h cutoff): `closed 2243 stale workday jobs`, and `manager-inventory-management-dollar-tree-a3hqkgo6` carries `closed_at=2026-07-28 22:44:14`. Dollar Tree's open rows are now the live board's own 22,925 rather than a month-old snapshot. NOTE: a sweep-closed job leaves the Meili index only on the next `cmd/reindex` — incremental indexing hangs off `UpsertJob` and `CloseUnseenJobs` bypasses it.
+- [x] 5.3 31 workday boards still have `last_success_at IS NULL`, by cause: **422 x18, 429 x7, 403 x4, 404 x2**. Only the seven 429s are what this change addresses — they are the same rate-limit shape as Dollar Tree and should recover as their shard next fires. The other 24 fail for unrelated reasons (a wrong or retired board id, or the tenant blocking our egress) and need their own pass; out of scope here.
