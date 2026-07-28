@@ -10,13 +10,15 @@
 
 ## 2. Schema-constrained generation — `internal/llm`
 
-- [ ] 2.1 Retain the constructor settings on `Client` so a second model can be built from them, without changing `NewClient`'s signature or the tracer/timeout wiring
-- [ ] 2.2 Add `GenOption` and `WithSchema(name string, s llmschema.Schema) GenOption`; make `GenerateJSON` and `GenerateJSONStream` variadic so the nine existing call sites compile untouched
-- [ ] 2.3 Build the schema-bound model lazily and cache it per schema name under a mutex, since langchaingo binds `ResponseFormat` to the client while `WithJSONMode` is a call option
-- [ ] 2.4 Test that a call with no schema sends exactly what it sends today (plain JSON mode, no response format) — the regression that protects every unmigrated call site
-- [ ] 2.5 Test that a call with a schema sends it as a strict `json_schema` response format under the given name, in both the streaming and non-streaming paths
-- [ ] 2.6 Test that repeated calls with one schema construct one model, and that a second schema does not disturb the first
-- [ ] 2.7 Test that timeout, tracing/observation and the empty-choices guard behave identically on the schema path
+- [x] 2.1 Retain the constructor settings on `Client` so a second model can be built from them, without changing `NewClient`'s signature or the tracer/timeout wiring
+- [x] 2.2 Add `GenOption` and `WithSchema(name string, s llmschema.Schema) GenOption`; make `GenerateJSON` and `GenerateJSONStream` variadic so the nine existing call sites compile untouched
+- [x] 2.3 Build the schema-bound model lazily and cache it per schema name under a mutex, since langchaingo binds `ResponseFormat` to the client while `WithJSONMode` is a call option
+- [x] 2.3a Install the schema through an `http.RoundTripper` given to `openai.WithHTTPClient`, rewriting `response_format` in the outgoing body — langchaingo's `ResponseFormatJSONSchemaProperty.Type` is a `string` and cannot carry the nullable type strict mode needs
+- [x] 2.3b Test the injector directly: a body carrying `json_object` comes out carrying the strict `json_schema`, every other field of the request is preserved byte-identical, and a non-chat request passes through untouched
+- [x] 2.4 Test that a call with no schema sends exactly what it sends today (plain JSON mode, no response format) — the regression that protects every unmigrated call site
+- [x] 2.5 Test that a call with a schema sends it as a strict `json_schema` response format under the given name, in both the streaming and non-streaming paths
+- [x] 2.6 Test that repeated calls with one schema construct one model, and that a second schema does not disturb the first
+- [x] 2.7 Test that timeout, tracing/observation and the empty-choices guard behave identically on the schema path
 
 ## 3. Migrate `resumeextract` — the measured call site
 

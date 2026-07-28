@@ -14,7 +14,7 @@ const maxBodyRunes = 4000
 // gen is the minimal slice of *llm.Client this package needs, so Classify is
 // unit-testable with a fake.
 type gen interface {
-	GenerateJSON(ctx context.Context, system, user string) (string, error)
+	GenerateJSON(ctx context.Context, system, user string, opts ...llm.GenOption) (string, error)
 }
 
 // Classifier turns one inbox email into a sanitized Classification via the LLM.

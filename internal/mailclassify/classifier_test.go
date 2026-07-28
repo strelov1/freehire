@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/llm"
 )
 
 type fakeGen struct {
@@ -14,7 +16,7 @@ type fakeGen struct {
 	called    bool
 }
 
-func (f *fakeGen) GenerateJSON(_ context.Context, system, user string) (string, error) {
+func (f *fakeGen) GenerateJSON(_ context.Context, system, user string, _ ...llm.GenOption) (string, error) {
 	f.called = true
 	f.gotSystem, f.gotUser = system, user
 	return f.raw, f.err

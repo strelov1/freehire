@@ -34,6 +34,17 @@ type Client struct {
 	timeout time.Duration
 	tracer  Tracer
 	source  string
+
+	// baseURL and apiKey are retained so a schema-bound model can be built against
+	// the same endpoint: langchaingo binds the response format to the client, not to
+	// the call, so one model can carry at most one schema. Both are empty when the
+	// model was injected (NewWithModel), which is the tests-only seam.
+	baseURL string
+	apiKey  string
+
+	// schemaModels is held by pointer so WithTimeout can keep cloning the Client: a
+	// mutex embedded by value would be copied along with it.
+	schemaModels *modelCache
 }
 
 // ModelID returns the configured model id, so a caller can record which model
@@ -83,7 +94,14 @@ func New(baseURL, apiKey, model string, opts ...Option) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("llm: build client: %w", err)
 	}
-	c := &Client{model: m, modelID: model, timeout: DefaultTimeout}
+	c := &Client{
+		model:        m,
+		modelID:      model,
+		timeout:      DefaultTimeout,
+		baseURL:      baseURL,
+		apiKey:       apiKey,
+		schemaModels: newModelCache(),
+	}
 	for _, o := range opts {
 		o(c)
 	}
@@ -147,7 +165,7 @@ func NewClient(s Settings, source string) (*Client, func(), error) {
 // timeout. It is the seam for callers' tests that inject a fake model instead of
 // dialing a real endpoint.
 func NewWithModel(m llms.Model, opts ...Option) *Client {
-	c := &Client{model: m, timeout: DefaultTimeout}
+	c := &Client{model: m, timeout: DefaultTimeout, schemaModels: newModelCache()}
 	for _, o := range opts {
 		o(c)
 	}
@@ -158,7 +176,17 @@ func NewWithModel(m llms.Model, opts ...Option) *Client {
 // raw response content with any markdown code fence stripped. The call is bounded
 // by the client timeout. The returned string is unparsed — the caller unmarshals
 // it into its own contract type.
-func (c *Client) GenerateJSON(ctx context.Context, system, user string) (string, error) {
+//
+// Given WithSchema the response is additionally constrained to that schema, which
+// forecloses the type and vocabulary drift the callers' decoders otherwise absorb.
+// It is not a guarantee: a gateway that stops honouring a schema reports success, so
+// every existing validation stays where it is.
+func (c *Client) GenerateJSON(ctx context.Context, system, user string, opts ...GenOption) (string, error) {
+	model, err := c.modelFor(newGenConfig(opts))
+	if err != nil {
+		return "", err
+	}
+
 	if c.timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, c.timeout)
@@ -176,7 +204,7 @@ func (c *Client) GenerateJSON(ctx context.Context, system, user string) (string,
 		return Generation{Model: c.modelID, System: system, User: user, Start: start, End: time.Now(), Source: c.source}
 	}
 
-	resp, err := c.model.GenerateContent(ctx, messages, llms.WithJSONMode())
+	resp, err := model.GenerateContent(ctx, messages, llms.WithJSONMode())
 	if err != nil {
 		wrapped := fmt.Errorf("llm: generate: %w", err)
 		g := gen()
@@ -207,7 +235,17 @@ func (c *Client) GenerateJSON(ctx context.Context, system, user string) (string,
 // provider surfaces them (best-effort — a model that emits none simply never calls it).
 // The raw partial JSON is never surfaced. Bounded by the client timeout and observed
 // like GenerateJSON.
-func (c *Client) GenerateJSONStream(ctx context.Context, system, user string, onThinking func(string)) (string, error) {
+func (c *Client) GenerateJSONStream(
+	ctx context.Context,
+	system, user string,
+	onThinking func(string),
+	opts ...GenOption,
+) (string, error) {
+	model, err := c.modelFor(newGenConfig(opts))
+	if err != nil {
+		return "", err
+	}
+
 	if c.timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, c.timeout)
@@ -232,7 +270,7 @@ func (c *Client) GenerateJSONStream(ctx context.Context, system, user string, on
 		return nil
 	})
 
-	resp, err := c.model.GenerateContent(ctx, messages, llms.WithJSONMode(), stream)
+	resp, err := model.GenerateContent(ctx, messages, llms.WithJSONMode(), stream)
 	// The fit model is slow (tens of seconds per call); log the duration so per-stage
 	// cost stays observable without a tracer.
 	log.Printf("llm: stream model=%s dur=%s err=%v", c.modelID, time.Since(start).Round(time.Millisecond), err)

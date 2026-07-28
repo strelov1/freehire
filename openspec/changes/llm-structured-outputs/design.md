@@ -81,6 +81,38 @@ one place, and one no compiler would catch drifting. An override naming a field 
 type lacks is an error, not a no-op, so a renamed field cannot silently shed its
 constraint.
 
+### The schema is injected into the request body, not passed through langchaingo's type
+
+langchaingo cannot express the schema this change needs.
+`ResponseFormatJSONSchemaProperty.Type` is a `string`, so a nullable type — the
+`["string", "null"]` that strict mode requires to express an optional field — has
+nowhere to go.
+
+A second spike (2026-07-28, five runs per mode on one job ad against
+`privateclaw/mid`) settled that nullable is not negotiable:
+
+| Mode | Outcome over 5 runs |
+|---|---|
+| `strict: true` + nullable | 5/5 exact: `null` for every unstated field, nothing invented |
+| `strict: false`, partial `required` | 3/5 invented `visa: "no"` for an ad silent on visas; 2/5 returned `null` against a non-nullable type; **1/5 returned the schema itself instead of data** |
+
+Without nullable, a required field the source does not state leaves the model no
+legal way to decline, so it fills one in — the exact behaviour "fields not
+determinable SHALL NOT be guessed" forbids. Dropping `strict` instead makes the
+whole constraint advisory, and one run in five came back unusable.
+
+So the schema is written into the outgoing request by an `http.RoundTripper`
+installed via `openai.WithHTTPClient`: it decodes the body langchaingo produced,
+replaces `response_format`, and re-encodes. Everything else on the path — streaming,
+usage accounting, tracing, the error and empty-choices handling — stays langchaingo's.
+
+*Alternative considered:* a private HTTP path for schema calls, bypassing langchaingo
+for `GenerateJSON`. Rejected — it doubles the transport inside one package and leaves
+two request paths to keep in step on timeouts, tracing and usage, for the sake of one
+field. The repo already carries two langchaingo streaming workarounds; this is a third
+of the same kind, and it is covered by a test that asserts on the body actually sent
+rather than on internal state.
+
 ### One model per schema, cached on the client
 
 `Client` keeps the settings it was built from and gains a small map from schema name
