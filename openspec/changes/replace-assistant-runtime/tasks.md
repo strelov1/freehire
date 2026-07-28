@@ -28,9 +28,9 @@
 
 ## 5. Presets and prompts
 
-- [ ] 5.1 Define the two presets: `chat` (discovery + tracking tools) and `tailor` (those plus CV tools, bound to a CV id and job id), each selecting its system prompt.
-- [ ] 5.2 Write the system prompts, carrying the `using-freehire` playbook: read `facets` before filtering, canonical skill slugs, present vacancies as `/jobs/<public_slug>` one per line, and the tailoring honesty rules (`missing_have` reframe vs `missing_gap` ask-first).
-- [ ] 5.3 Assert in tests that a chat session offers no CV tool and that no moderator tool is ever registered.
+- [x] 5.1 Define the two presets: `chat` (discovery + tracking tools) and `tailor` (those plus CV tools, bound to a CV id and job id), each selecting its system prompt.
+- [x] 5.2 Write the system prompts, carrying the `using-freehire` playbook: read `facets` before filtering, canonical skill slugs, present vacancies as `/jobs/<public_slug>` one per line, and the tailoring honesty rules (`missing_have` reframe vs `missing_gap` ask-first).
+- [x] 5.3 Assert in tests that a chat session offers no CV tool and that no moderator tool is ever registered.
 
 ## 6. HTTP surface
 

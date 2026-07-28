@@ -327,3 +327,23 @@ func assistantFilterSchema(description string) map[string]any {
 		"additionalProperties": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 	}
 }
+
+// assistantResultCap bounds one tool result inside the conversation. Twenty
+// vacancies with full descriptions run to tens of thousands of tokens; without a
+// cap a single search can push the user's own question out of the window.
+const assistantResultCap = 60_000
+
+// assistantRegistry builds the tool set a session runs with. The preset decides:
+// every session gets the discovery and tracking tools, and a tailoring session
+// bound to a CV also gets the CV tools, with the binding closed over. A tailoring
+// session whose binding is gone degrades to a plain chat rather than registering
+// tools pointed at nothing.
+func (a *API) assistantRegistry(sess assistant.Session) *assistant.Registry {
+	tools := append(a.assistantDiscoveryTools(), a.assistantTrackingTools()...)
+	if sess.Preset == assistant.PresetTailor && sess.CVID != nil && sess.JobID != nil {
+		tools = append(tools, a.assistantCVTools(*sess.CVID, *sess.JobID)...)
+	}
+	reg := assistant.NewRegistry(tools...)
+	reg.MaxResultBytes = assistantResultCap
+	return reg
+}
