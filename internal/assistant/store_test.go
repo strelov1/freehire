@@ -5,10 +5,17 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
+)
+
+// Fixed ids so a failure names a stable value rather than a fresh random one.
+var (
+	sessionID = uuid.MustParse("11111111-1111-4111-8111-111111111111")
+	otherID   = uuid.MustParse("22222222-2222-4222-8222-222222222222")
 )
 
 // fakeQueries is an in-memory stand-in for the generated queries, holding one
@@ -21,12 +28,12 @@ type fakeQueries struct {
 
 	gotUserID int64
 	labelSet  string
-	touched   int64
+	touched   uuid.UUID
 }
 
 func (f *fakeQueries) CreateAssistantSession(_ context.Context, arg db.CreateAssistantSessionParams) (db.AssistantSession, error) {
 	return db.AssistantSession{
-		ID: 7, UserID: arg.UserID, Preset: arg.Preset, CvID: arg.CvID, JobID: arg.JobID,
+		ID: sessionID, UserID: arg.UserID, Preset: arg.Preset, CvID: arg.CvID, JobID: arg.JobID,
 	}, nil
 }
 
@@ -56,7 +63,7 @@ func (f *fakeQueries) DeleteAssistantSession(_ context.Context, _ db.DeleteAssis
 	return f.deleted, nil
 }
 
-func (f *fakeQueries) TouchAssistantSession(_ context.Context, id int64) error {
+func (f *fakeQueries) TouchAssistantSession(_ context.Context, id uuid.UUID) error {
 	f.touched = id
 	return nil
 }
@@ -74,7 +81,7 @@ func (f *fakeQueries) AppendAssistantMessage(_ context.Context, arg db.AppendAss
 	return db.AssistantMessage{SessionID: arg.SessionID, Seq: seq, Role: arg.Role, Content: arg.Content}, nil
 }
 
-func (f *fakeQueries) ListAssistantMessages(_ context.Context, sessionID int64) ([]db.AssistantMessage, error) {
+func (f *fakeQueries) ListAssistantMessages(_ context.Context, sessionID uuid.UUID) ([]db.AssistantMessage, error) {
 	var out []db.AssistantMessage
 	for _, m := range f.messages {
 		if m.SessionID == sessionID {
@@ -86,14 +93,14 @@ func (f *fakeQueries) ListAssistantMessages(_ context.Context, sessionID int64) 
 
 func TestGetSessionMapsNullableColumns(t *testing.T) {
 	f := &fakeQueries{session: db.AssistantSession{
-		ID: 7, UserID: 3, Preset: PresetTailor,
+		ID: sessionID, UserID: 3, Preset: PresetTailor,
 		Label: pgtype.Text{String: "Tailor for Acme", Valid: true},
-		CvID:  pgtype.Int8{Int64: 42, Valid: true},
-		JobID: pgtype.Int8{}, // never set
+		CvID:  ptr(int64(42)),
+		JobID: nil, // never set
 	}}
 	s := NewStore(f)
 
-	got, err := s.Session(context.Background(), 7, 3)
+	got, err := s.Session(context.Background(), sessionID, 3)
 	if err != nil {
 		t.Fatalf("Session: %v", err)
 	}
@@ -109,10 +116,10 @@ func TestGetSessionMapsNullableColumns(t *testing.T) {
 }
 
 func TestSessionOfAnotherUserIsNotFound(t *testing.T) {
-	f := &fakeQueries{session: db.AssistantSession{ID: 7, UserID: 3, Preset: PresetChat}}
+	f := &fakeQueries{session: db.AssistantSession{ID: sessionID, UserID: 3, Preset: PresetChat}}
 	s := NewStore(f)
 
-	_, err := s.Session(context.Background(), 7, 99)
+	_, err := s.Session(context.Background(), sessionID, 99)
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound for a session owned by someone else", err)
 	}
@@ -120,14 +127,14 @@ func TestSessionOfAnotherUserIsNotFound(t *testing.T) {
 
 func TestDeleteSessionThatAffectedNoRowIsNotFound(t *testing.T) {
 	s := NewStore(&fakeQueries{deleted: 0})
-	if err := s.DeleteSession(context.Background(), 7, 3); !errors.Is(err, ErrNotFound) {
+	if err := s.DeleteSession(context.Background(), sessionID, 3); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound when the delete matched nothing", err)
 	}
 }
 
 func TestDeleteOwnedSessionSucceeds(t *testing.T) {
 	s := NewStore(&fakeQueries{deleted: 1})
-	if err := s.DeleteSession(context.Background(), 7, 3); err != nil {
+	if err := s.DeleteSession(context.Background(), sessionID, 3); err != nil {
 		t.Fatalf("DeleteSession: %v", err)
 	}
 }
@@ -138,15 +145,15 @@ func TestAppendAndReadTranscript(t *testing.T) {
 	ctx := context.Background()
 
 	user, _ := EncodeUser("hi")
-	if _, err := s.Append(ctx, 7, user); err != nil {
+	if _, err := s.Append(ctx, sessionID, user); err != nil {
 		t.Fatalf("Append: %v", err)
 	}
 	answer, _ := EncodeAssistant("hello", nil)
-	if _, err := s.Append(ctx, 7, answer); err != nil {
+	if _, err := s.Append(ctx, sessionID, answer); err != nil {
 		t.Fatalf("Append: %v", err)
 	}
 
-	got, err := s.Transcript(ctx, 7)
+	got, err := s.Transcript(ctx, sessionID)
 	if err != nil {
 		t.Fatalf("Transcript: %v", err)
 	}
@@ -169,7 +176,7 @@ func TestAppendAndReadTranscript(t *testing.T) {
 func TestLabelSessionUsesTheFirstMessage(t *testing.T) {
 	f := &fakeQueries{}
 	s := NewStore(f)
-	if err := s.LabelSession(context.Background(), 7, "find go jobs"); err != nil {
+	if err := s.LabelSession(context.Background(), sessionID, "find go jobs"); err != nil {
 		t.Fatalf("LabelSession: %v", err)
 	}
 	if f.labelSet != "find go jobs" {
@@ -197,10 +204,10 @@ func TestTranscriptReturnsTheStoredBytesUnchanged(t *testing.T) {
 	s := NewStore(f)
 	ctx := context.Background()
 	stored, _ := EncodeToolResult("c1", "facets", `{"skills":["go"]}`)
-	if _, err := s.Append(ctx, 7, stored); err != nil {
+	if _, err := s.Append(ctx, sessionID, stored); err != nil {
 		t.Fatalf("Append: %v", err)
 	}
-	got, err := s.Transcript(ctx, 7)
+	got, err := s.Transcript(ctx, sessionID)
 	if err != nil {
 		t.Fatalf("Transcript: %v", err)
 	}
@@ -212,7 +219,7 @@ func TestTranscriptReturnsTheStoredBytesUnchanged(t *testing.T) {
 func TestChatSessionsExcludesTailoringConversations(t *testing.T) {
 	// A tailoring conversation belongs to a CV and is opened from the tailoring
 	// workspace; listing it in the chat rail would offer a chat that leads nowhere.
-	f := &fakeQueries{session: db.AssistantSession{ID: 7, UserID: 3, Preset: PresetTailor}}
+	f := &fakeQueries{session: db.AssistantSession{ID: sessionID, UserID: 3, Preset: PresetTailor}}
 	got, err := NewStore(f).ChatSessions(context.Background(), 3)
 	if err != nil {
 		t.Fatalf("ChatSessions: %v", err)
@@ -223,12 +230,15 @@ func TestChatSessionsExcludesTailoringConversations(t *testing.T) {
 }
 
 func TestChatSessionsListsChats(t *testing.T) {
-	f := &fakeQueries{session: db.AssistantSession{ID: 7, UserID: 3, Preset: PresetChat}}
+	f := &fakeQueries{session: db.AssistantSession{ID: sessionID, UserID: 3, Preset: PresetChat}}
 	got, err := NewStore(f).ChatSessions(context.Background(), 3)
 	if err != nil {
 		t.Fatalf("ChatSessions: %v", err)
 	}
-	if len(got) != 1 || got[0].ID != 7 {
+	if len(got) != 1 || got[0].ID != sessionID {
 		t.Errorf("rail = %+v, want the one chat", got)
 	}
 }
+
+// ptr is the shorthand for the nullable columns the queries model as pointers.
+func ptr[T any](v T) *T { return &v }

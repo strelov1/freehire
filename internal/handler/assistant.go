@@ -7,12 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/valyala/fasthttp"
 
 	"github.com/strelov1/freehire/internal/assistant"
@@ -40,7 +40,7 @@ type sessionResponse struct {
 // client treats session ids as opaque and a CV stores its bound session id as text.
 func sessionView(s assistant.Session) sessionResponse {
 	return sessionResponse{
-		ID:     assistantSessionID(s.ID),
+		ID:     s.ID.String(),
 		Preset: s.Preset,
 		Label:  s.Label,
 		CVID:   s.CVID,
@@ -48,7 +48,17 @@ func sessionView(s assistant.Session) sessionResponse {
 	}
 }
 
-func assistantSessionID(id int64) string { return strconv.FormatInt(id, 10) }
+// assistantSessionID parses the :id route param. A session id is a UUID, so
+// anything else cannot name a session at all — report it as missing rather than as
+// a bad request, keeping "not yours" and "not a session" one indistinguishable
+// answer.
+func assistantSessionID(c *fiber.Ctx) (uuid.UUID, error) {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return uuid.Nil, fiber.NewError(fiber.StatusNotFound, "session not found")
+	}
+	return id, nil
+}
 
 // CreateAssistantSession starts a new chat conversation for the caller. Tailoring
 // sessions are created by the tailoring bootstrap, which knows the CV and vacancy
@@ -107,7 +117,7 @@ func (a *API) DeleteAssistantSession(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	id, err := pathID(c)
+	id, err := assistantSessionID(c)
 	if err != nil {
 		return err
 	}
@@ -216,7 +226,7 @@ func (a *API) PostAssistantMessage(c *fiber.Ctx) error {
 		heartbeat.Wait()
 		if err != nil {
 			// The loop has already emitted its terminal error event; this is for us.
-			log.Printf("assistant: turn failed session=%d: %v", sess.ID, err)
+			log.Printf("assistant: turn failed session=%s: %v", sess.ID, err)
 		}
 	}))
 	return nil
@@ -228,7 +238,7 @@ func (a *API) ownedSession(c *fiber.Ctx) (assistant.Session, error) {
 	if err != nil {
 		return assistant.Session{}, err
 	}
-	id, err := pathID(c)
+	id, err := assistantSessionID(c)
 	if err != nil {
 		return assistant.Session{}, err
 	}

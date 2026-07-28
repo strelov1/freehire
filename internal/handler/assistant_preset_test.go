@@ -14,7 +14,7 @@ func presetAPI() *API {
 }
 
 func TestChatPresetOffersDiscoveryAndTrackingTools(t *testing.T) {
-	reg := presetAPI().assistantRegistry(assistant.Session{ID: 7, UserID: 3, Preset: assistant.PresetChat})
+	reg := presetAPI().assistantRegistry(assistant.Session{UserID: 3, Preset: assistant.PresetChat})
 
 	for _, want := range []string{"facets", "search_jobs", "get_job", "get_company", "market_fit",
 		"save_job", "unsave_job", "apply_job", "track_job", "my_jobs"} {
@@ -25,7 +25,7 @@ func TestChatPresetOffersDiscoveryAndTrackingTools(t *testing.T) {
 }
 
 func TestChatPresetHasNoCVTools(t *testing.T) {
-	reg := presetAPI().assistantRegistry(assistant.Session{ID: 7, UserID: 3, Preset: assistant.PresetChat})
+	reg := presetAPI().assistantRegistry(assistant.Session{UserID: 3, Preset: assistant.PresetChat})
 
 	for _, name := range reg.Names() {
 		if strings.HasPrefix(name, "cv_") {
@@ -37,7 +37,7 @@ func TestChatPresetHasNoCVTools(t *testing.T) {
 func TestTailorPresetAddsTheCVTools(t *testing.T) {
 	cvID, jobID := int64(5), int64(9)
 	reg := presetAPI().assistantRegistry(assistant.Session{
-		ID: 7, UserID: 3, Preset: assistant.PresetTailor, CVID: &cvID, JobID: &jobID,
+		UserID: 3, Preset: assistant.PresetTailor, CVID: &cvID, JobID: &jobID,
 	})
 
 	for _, want := range []string{"cv_context", "cv_get", "cv_edit", "search_jobs"} {
@@ -50,7 +50,7 @@ func TestTailorPresetAddsTheCVTools(t *testing.T) {
 func TestTailorPresetWithoutABindingHasNoCVTools(t *testing.T) {
 	// A tailoring session whose CV was deleted must degrade to a plain chat rather
 	// than register CV tools bound to a zero id.
-	reg := presetAPI().assistantRegistry(assistant.Session{ID: 7, UserID: 3, Preset: assistant.PresetTailor})
+	reg := presetAPI().assistantRegistry(assistant.Session{UserID: 3, Preset: assistant.PresetTailor})
 
 	for _, name := range reg.Names() {
 		if strings.HasPrefix(name, "cv_") {
@@ -66,8 +66,8 @@ func TestNoModeratorToolIsEverRegistered(t *testing.T) {
 	cvID, jobID := int64(5), int64(9)
 
 	for _, sess := range []assistant.Session{
-		{ID: 7, UserID: 3, Preset: assistant.PresetChat},
-		{ID: 7, UserID: 3, Preset: assistant.PresetTailor, CVID: &cvID, JobID: &jobID},
+		{UserID: 3, Preset: assistant.PresetChat},
+		{UserID: 3, Preset: assistant.PresetTailor, CVID: &cvID, JobID: &jobID},
 	} {
 		reg := presetAPI().assistantRegistry(sess)
 		for _, name := range reg.Names() {
@@ -79,7 +79,7 @@ func TestNoModeratorToolIsEverRegistered(t *testing.T) {
 }
 
 func TestRegistryCarriesTheResultCap(t *testing.T) {
-	reg := presetAPI().assistantRegistry(assistant.Session{ID: 7, UserID: 3, Preset: assistant.PresetChat})
+	reg := presetAPI().assistantRegistry(assistant.Session{UserID: 3, Preset: assistant.PresetChat})
 	if reg.MaxResultBytes <= 0 {
 		t.Error("the registry has no result cap; one search over full descriptions can fill the context window")
 	}

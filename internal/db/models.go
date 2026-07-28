@@ -7,6 +7,7 @@ package db
 import (
 	"encoding/json"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -23,7 +24,7 @@ type ApiKey struct {
 }
 
 type AssistantMessage struct {
-	SessionID int64              `json:"session_id"`
+	SessionID uuid.UUID          `json:"session_id"`
 	Seq       int32              `json:"seq"`
 	Role      string             `json:"role"`
 	Content   json.RawMessage    `json:"content"`
@@ -31,12 +32,12 @@ type AssistantMessage struct {
 }
 
 type AssistantSession struct {
-	ID        int64              `json:"id"`
+	ID        uuid.UUID          `json:"id"`
 	UserID    int64              `json:"user_id"`
 	Preset    string             `json:"preset"`
 	Label     pgtype.Text        `json:"label"`
-	CvID      pgtype.Int8        `json:"cv_id"`
-	JobID     pgtype.Int8        `json:"job_id"`
+	CvID      *int64             `json:"cv_id"`
+	JobID     *int64             `json:"job_id"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }

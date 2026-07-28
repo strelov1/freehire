@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -24,7 +25,7 @@ RETURNING session_id, seq, role, content, created_at
 `
 
 type AppendAssistantMessageParams struct {
-	SessionID int64           `json:"session_id"`
+	SessionID uuid.UUID       `json:"session_id"`
 	Role      string          `json:"role"`
 	Content   json.RawMessage `json:"content"`
 }
@@ -52,10 +53,10 @@ RETURNING id, user_id, preset, label, cv_id, job_id, created_at, updated_at
 `
 
 type CreateAssistantSessionParams struct {
-	UserID int64       `json:"user_id"`
-	Preset string      `json:"preset"`
-	CvID   pgtype.Int8 `json:"cv_id"`
-	JobID  pgtype.Int8 `json:"job_id"`
+	UserID int64  `json:"user_id"`
+	Preset string `json:"preset"`
+	CvID   *int64 `json:"cv_id"`
+	JobID  *int64 `json:"job_id"`
 }
 
 // Start a conversation for a user. preset selects the prompt and tool set ('chat' or
@@ -88,8 +89,8 @@ WHERE id = $1 AND user_id = $2
 `
 
 type DeleteAssistantSessionParams struct {
-	ID     int64 `json:"id"`
-	UserID int64 `json:"user_id"`
+	ID     uuid.UUID `json:"id"`
+	UserID int64     `json:"user_id"`
 }
 
 // Remove an owned session; its transcript goes with it (ON DELETE CASCADE). Returns 0
@@ -109,8 +110,8 @@ WHERE id = $1 AND user_id = $2
 `
 
 type GetAssistantSessionParams struct {
-	ID     int64 `json:"id"`
-	UserID int64 `json:"user_id"`
+	ID     uuid.UUID `json:"id"`
+	UserID int64     `json:"user_id"`
 }
 
 // One session owned by the caller. Owner-scoped: a foreign or missing id returns no row,
@@ -181,7 +182,7 @@ ORDER BY seq
 
 // A session's whole transcript in order. It is both what the client replays and what the
 // model's history is rebuilt from, so tool calls and tool results are included.
-func (q *Queries) ListAssistantMessages(ctx context.Context, sessionID int64) ([]AssistantMessage, error) {
+func (q *Queries) ListAssistantMessages(ctx context.Context, sessionID uuid.UUID) ([]AssistantMessage, error) {
 	rows, err := q.db.Query(ctx, listAssistantMessages, sessionID)
 	if err != nil {
 		return nil, err
@@ -214,7 +215,7 @@ WHERE id = $1 AND label IS NULL
 `
 
 type SetAssistantSessionLabelParams struct {
-	ID    int64       `json:"id"`
+	ID    uuid.UUID   `json:"id"`
 	Label pgtype.Text `json:"label"`
 }
 
@@ -232,7 +233,7 @@ WHERE id = $1
 `
 
 // Mark a session as the most recently active, so the rail's order follows real use.
-func (q *Queries) TouchAssistantSession(ctx context.Context, id int64) error {
+func (q *Queries) TouchAssistantSession(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, touchAssistantSession, id)
 	return err
 }

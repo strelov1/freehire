@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tmc/langchaingo/llms"
 
@@ -320,5 +321,35 @@ func TestSlugAddressedToolsReadRealRows(t *testing.T) {
 	// An unknown slug is a tool error naming what was wrong, not a crash.
 	if _, err := toolByName(t, tools, "get_job").Run(ctx, 1, json.RawMessage(`{"slug":"nope"}`)); err == nil {
 		t.Error("get_job on an unknown slug returned no error")
+	}
+}
+
+func TestASessionIdIsNotGuessable(t *testing.T) {
+	// The id is a random UUID, so it publishes nothing about how many conversations
+	// exist — and a malformed one is reported as missing, exactly like a foreign id,
+	// so probing cannot tell the two apart.
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, _ := newAssistantApp(pool, iss, nil)
+	_, cookie := assistantUser(t, pool, iss, "opaque@example.test", true)
+
+	first := createSession(t, app, cookie)
+	second := createSession(t, app, cookie)
+	if _, err := uuid.Parse(first); err != nil {
+		t.Fatalf("session id %q is not a UUID: %v", first, err)
+	}
+	if first == second {
+		t.Fatal("two sessions share an id")
+	}
+	// Sequential ids would differ by one; random ones cannot be walked.
+	if len(first) != len(second) || first[:8] == second[:8] {
+		t.Errorf("ids %q and %q look related; they must be independently random", first, second)
+	}
+
+	for _, bad := range []string{"9", "0", "not-a-uuid", "00000000-0000-0000-0000-000000000000"} {
+		resp := assistantRequest(t, app, fiber.MethodGet, "/api/v1/assistant/sessions/"+bad, cookie, nil)
+		if resp.StatusCode != fiber.StatusNotFound {
+			t.Errorf("GET session %q: status %d, want 404", bad, resp.StatusCode)
+		}
 	}
 }

@@ -18,15 +18,20 @@
 -- tool call and a tool result are structured, not prose. seq orders the
 -- conversation within its session and is assigned by the writer.
 --
--- Note on ids: cvs.agent_session_id stays `text` and now carries this table's id
--- rendered as a decimal string. A CV still holding an old roy UUID simply fails to
--- resolve, which the workspace already handles by starting a fresh session.
+-- Note on ids: a session id is a random UUID, not a sequence. Ownership is already
+-- enforced on every read and write (a foreign id is reported as missing), so the id
+-- is not a capability — but a sequential one would still publish how many
+-- conversations the platform has created, and it would turn a single forgotten
+-- owner check on some future endpoint into bulk extraction rather than one
+-- unusable request. cvs.agent_session_id stays `text` and carries this id; a CV
+-- still holding an old roy session id simply fails to resolve, which the workspace
+-- already handles by starting a fresh session.
 --
 -- Applied to a fresh volume by initdb after 0043; on an existing prod volume run
 -- these statements manually (SET ROLE hire) BEFORE deploying code that reads them.
 
 CREATE TABLE public.assistant_sessions (
-    id bigint NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id bigint NOT NULL,
     preset text NOT NULL,
     label text,
@@ -35,15 +40,6 @@ CREATE TABLE public.assistant_sessions (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT assistant_sessions_preset_check CHECK ((preset = ANY (ARRAY['chat'::text, 'tailor'::text])))
-);
-
-ALTER TABLE public.assistant_sessions ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
-    SEQUENCE NAME public.assistant_sessions_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
 );
 
 ALTER TABLE ONLY public.assistant_sessions
@@ -64,7 +60,7 @@ CREATE INDEX assistant_sessions_user_updated_idx
     ON public.assistant_sessions (user_id, updated_at DESC, id DESC);
 
 CREATE TABLE public.assistant_messages (
-    session_id bigint NOT NULL,
+    session_id uuid NOT NULL,
     seq integer NOT NULL,
     role text NOT NULL,
     content jsonb NOT NULL,

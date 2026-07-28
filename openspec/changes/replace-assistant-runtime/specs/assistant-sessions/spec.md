@@ -60,6 +60,25 @@ history and live turn events render identically.
 
 ## ADDED Requirements
 
+### Requirement: A session id is unguessable
+
+A session's id SHALL be random, not sequential. Access is confined by ownership
+on every operation, so the id is not a capability — but a countable id would
+publish how many conversations the platform has created, and would turn a single
+missing owner check on any future endpoint into bulk extraction rather than one
+unusable request. An id that is not well-formed SHALL be reported as a missing
+session, so "not a session" and "not yours" stay one answer.
+
+#### Scenario: Two sessions get unrelated ids
+
+- **WHEN** the same caller creates two conversations in a row
+- **THEN** their ids are independently random, so neither reveals the other nor how many exist
+
+#### Scenario: A malformed id is missing, not invalid
+
+- **WHEN** a request names a session id that is not well-formed
+- **THEN** it is refused as not found, indistinguishable from a session the caller does not own
+
 ### Requirement: A conversation has its own address
 
 Each chat SHALL be addressable by a URL carrying its id, so it can be

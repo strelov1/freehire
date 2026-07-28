@@ -99,7 +99,7 @@ func TestTurnWithoutToolsEndsInAnAnswer(t *testing.T) {
 	q := &fakeQueries{}
 	r := testRunner(m, q)
 
-	events, err := collect(t, r, Session{ID: 7, UserID: 3, Preset: PresetChat}, NewRegistry(), "hi")
+	events, err := collect(t, r, Session{ID: sessionID, UserID: 3, Preset: PresetChat}, NewRegistry(), "hi")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestTurnRunsAToolThenAnswers(t *testing.T) {
 	q := &fakeQueries{}
 	r := testRunner(m, q)
 
-	events, err := collect(t, r, Session{ID: 7, UserID: 3}, NewRegistry(echoTool()), "say hi")
+	events, err := collect(t, r, Session{ID: sessionID, UserID: 3}, NewRegistry(echoTool()), "say hi")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestStepCapForcesAFinalAnswerWithoutTools(t *testing.T) {
 	q := &fakeQueries{}
 	r := NewRunner(m, NewStore(q), RunnerConfig{MaxSteps: 3, HistoryLimit: 50})
 
-	events, err := collect(t, r, Session{ID: 7, UserID: 3}, NewRegistry(echoTool()), "go")
+	events, err := collect(t, r, Session{ID: sessionID, UserID: 3}, NewRegistry(echoTool()), "go")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestAMalformedToolCallIsCorrectableInTheSameTurn(t *testing.T) {
 	q := &fakeQueries{}
 	r := testRunner(m, q)
 
-	events, err := collect(t, r, Session{ID: 7, UserID: 3}, NewRegistry(echoTool()), "go")
+	events, err := collect(t, r, Session{ID: sessionID, UserID: 3}, NewRegistry(echoTool()), "go")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -217,7 +217,7 @@ func TestAFailingToolDoesNotAbortTheTurn(t *testing.T) {
 	}}
 	r := testRunner(m, &fakeQueries{})
 
-	events, err := collect(t, r, Session{ID: 7, UserID: 3}, NewRegistry(boom), "go")
+	events, err := collect(t, r, Session{ID: sessionID, UserID: 3}, NewRegistry(boom), "go")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -230,7 +230,7 @@ func TestAModelFailureEndsTheTurnWithAnErrorResult(t *testing.T) {
 	m := &scriptedModel{err: errors.New("gateway boom")}
 	r := testRunner(m, &fakeQueries{})
 
-	events, err := collect(t, r, Session{ID: 7, UserID: 3}, NewRegistry(), "hi")
+	events, err := collect(t, r, Session{ID: sessionID, UserID: 3}, NewRegistry(), "hi")
 	if err == nil {
 		t.Fatal("Run should surface the model failure to its caller")
 	}
@@ -252,7 +252,7 @@ func TestCancellationStopsBeforeTheNextModelCall(t *testing.T) {
 	r := testRunner(m, q)
 
 	var events []Event
-	err := r.Run(ctx, Session{ID: 7, UserID: 3}, NewRegistry(echoTool()), "sys", "go", func(e Event) { events = append(events, e) })
+	err := r.Run(ctx, Session{ID: sessionID, UserID: 3}, NewRegistry(echoTool()), "sys", "go", func(e Event) { events = append(events, e) })
 	if err != nil {
 		t.Fatalf("a cancelled turn is not a failure: %v", err)
 	}
@@ -273,14 +273,14 @@ func TestHistoryIsBoundedToTheMostRecentMessages(t *testing.T) {
 	ctx := context.Background()
 	for i := range 10 {
 		msg, _ := EncodeUser(strings.Repeat("old ", i+1))
-		if _, err := store.Append(ctx, 7, msg); err != nil {
+		if _, err := store.Append(ctx, sessionID, msg); err != nil {
 			t.Fatalf("seed: %v", err)
 		}
 	}
 	m := &scriptedModel{replies: []*llms.ContentChoice{textReply("ok")}}
 	r := NewRunner(m, store, RunnerConfig{MaxSteps: 3, HistoryLimit: 4})
 
-	if _, err := collect(t, r, Session{ID: 7, UserID: 3}, NewRegistry(), "new question"); err != nil {
+	if _, err := collect(t, r, Session{ID: sessionID, UserID: 3}, NewRegistry(), "new question"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	// system prompt + the 4 most recent transcript messages (the new prompt included).
@@ -300,7 +300,7 @@ func TestHistoryNeverStartsWithAnOrphanToolResult(t *testing.T) {
 	result, _ := EncodeToolResult("c1", "echo", `{"ok":true}`)
 	answer, _ := EncodeAssistant("done", nil)
 	for _, msg := range []Message{call, result, answer} {
-		if _, err := store.Append(ctx, 7, msg); err != nil {
+		if _, err := store.Append(ctx, sessionID, msg); err != nil {
 			t.Fatalf("seed: %v", err)
 		}
 	}
@@ -308,7 +308,7 @@ func TestHistoryNeverStartsWithAnOrphanToolResult(t *testing.T) {
 	// A window of 3 would start at the tool result, whose originating call is gone.
 	r := NewRunner(m, store, RunnerConfig{MaxSteps: 3, HistoryLimit: 3})
 
-	if _, err := collect(t, r, Session{ID: 7, UserID: 3}, NewRegistry(), "next"); err != nil {
+	if _, err := collect(t, r, Session{ID: sessionID, UserID: 3}, NewRegistry(), "next"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	first := m.gotHist[0][1] // [0] is the system prompt
@@ -322,7 +322,7 @@ func TestTheFirstUserMessageLabelsTheSession(t *testing.T) {
 	m := &scriptedModel{replies: []*llms.ContentChoice{textReply("ok")}}
 	r := testRunner(m, q)
 
-	if _, err := collect(t, r, Session{ID: 7, UserID: 3}, NewRegistry(), "find me go jobs"); err != nil {
+	if _, err := collect(t, r, Session{ID: sessionID, UserID: 3}, NewRegistry(), "find me go jobs"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if q.labelSet != "find me go jobs" {

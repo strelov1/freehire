@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 
+	"github.com/google/uuid"
 	"github.com/tmc/langchaingo/llms"
 
 	"github.com/strelov1/freehire/internal/llm"
@@ -183,10 +184,10 @@ func (r *Runner) recordPrompt(ctx context.Context, sess Session, prompt string, 
 	// Label and activity stamp are conveniences, not correctness: a failure here
 	// must not cost the user their turn.
 	if err := r.store.LabelSession(ctx, sess.ID, prompt); err != nil {
-		log.Printf("assistant: label session %d: %v", sess.ID, err)
+		log.Printf("assistant: label session %s: %v", sess.ID, err)
 	}
 	if err := r.store.Touch(ctx, sess.ID); err != nil {
-		log.Printf("assistant: touch session %d: %v", sess.ID, err)
+		log.Printf("assistant: touch session %s: %v", sess.ID, err)
 	}
 	emit(Event{Kind: EventUserPrompt, Text: prompt})
 	return nil
@@ -225,7 +226,7 @@ func (r *Runner) runToolCalls(ctx context.Context, sess Session, reg *Registry, 
 }
 
 // appendAssistant persists one model turn and appends it to the working history.
-func (r *Runner) appendAssistant(ctx context.Context, sessionID int64, history []llms.MessageContent, choice *llms.ContentChoice) []llms.MessageContent {
+func (r *Runner) appendAssistant(ctx context.Context, sessionID uuid.UUID, history []llms.MessageContent, choice *llms.ContentChoice) []llms.MessageContent {
 	msg, err := EncodeAssistant(choice.Content, choice.ToolCalls)
 	if err != nil {
 		log.Printf("assistant: encode assistant message: %v", err)
@@ -244,7 +245,7 @@ func (r *Runner) appendAssistant(ctx context.Context, sessionID int64, history [
 
 // history rebuilds the model's conversation: the session's system prompt followed
 // by its most recent messages.
-func (r *Runner) history(ctx context.Context, sessionID int64, system string) ([]llms.MessageContent, error) {
+func (r *Runner) history(ctx context.Context, sessionID uuid.UUID, system string) ([]llms.MessageContent, error) {
 	stored, err := r.store.Transcript(ctx, sessionID)
 	if err != nil {
 		return nil, err

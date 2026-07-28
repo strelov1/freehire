@@ -7,6 +7,7 @@ package db
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -761,7 +762,7 @@ type Querier interface {
 	ListAssistantChatSessions(ctx context.Context, userID int64) ([]AssistantSession, error)
 	// A session's whole transcript in order. It is both what the client replays and what the
 	// model's history is rebuilt from, so tool calls and tool results are included.
-	ListAssistantMessages(ctx context.Context, sessionID int64) ([]AssistantMessage, error)
+	ListAssistantMessages(ctx context.Context, sessionID uuid.UUID) ([]AssistantMessage, error)
 	// A user's CVs as metadata (no data blob), newest edit first.
 	ListCVsByUser(ctx context.Context, userID int64) ([]ListCVsByUserRow, error)
 	// Catalog page: companies with their job counts, most active first. The job count
@@ -1525,7 +1526,7 @@ type Querier interface {
 	// name variants; ON CONFLICT folds collisions and refreshes existing rows.
 	SyncCompaniesFromJobs(ctx context.Context) error
 	// Mark a session as the most recently active, so the rail's order follows real use.
-	TouchAssistantSession(ctx context.Context, id int64) error
+	TouchAssistantSession(ctx context.Context, id uuid.UUID) error
 	// Liveness refresh for a hydrating source's already-ingested posting (see source-ingest): the
 	// crawl re-listed the offer but fetched no fresh content (detail is fetched only for new
 	// offers), so refresh last_seen_at and reopen if it had been closed — WITHOUT touching the

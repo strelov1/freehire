@@ -146,7 +146,7 @@ func (a *API) startTailoringSession(ctx context.Context, userID, cvID, jobID int
 	if err != nil {
 		return "", err
 	}
-	id := assistantSessionID(sess.ID)
+	id := sess.ID.String()
 	if err := a.cvStore.SetSession(ctx, cvID, userID, id); err != nil {
 		return "", err
 	}

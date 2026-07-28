@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -23,11 +24,13 @@ const (
 // would let a caller probe for other users' session ids.
 var ErrNotFound = errors.New("assistant: session not found")
 
-// Session is one conversation, owner-scoped. CVID and JobID are set only for a
-// tailoring session; nil pointers say "unbound" without leaking pgtype into
-// callers.
+// Session is one conversation, owner-scoped. Its id is a random UUID rather than a
+// sequence: ownership already confines every read, but a countable id would still
+// publish how many conversations exist and would make one forgotten owner check
+// enumerable. CVID and JobID are set only for a tailoring session; nil pointers
+// say "unbound" without leaking pgtype into callers.
 type Session struct {
-	ID     int64
+	ID     uuid.UUID
 	UserID int64
 	Preset string
 	Label  string
@@ -42,10 +45,10 @@ type Queries interface {
 	ListAssistantChatSessions(ctx context.Context, userID int64) ([]db.AssistantSession, error)
 	GetAssistantSession(ctx context.Context, arg db.GetAssistantSessionParams) (db.AssistantSession, error)
 	DeleteAssistantSession(ctx context.Context, arg db.DeleteAssistantSessionParams) (int64, error)
-	TouchAssistantSession(ctx context.Context, id int64) error
+	TouchAssistantSession(ctx context.Context, id uuid.UUID) error
 	SetAssistantSessionLabel(ctx context.Context, arg db.SetAssistantSessionLabelParams) error
 	AppendAssistantMessage(ctx context.Context, arg db.AppendAssistantMessageParams) (db.AssistantMessage, error)
-	ListAssistantMessages(ctx context.Context, sessionID int64) ([]db.AssistantMessage, error)
+	ListAssistantMessages(ctx context.Context, sessionID uuid.UUID) ([]db.AssistantMessage, error)
 }
 
 // Store persists sessions and their transcripts. Every session read and write is
@@ -61,8 +64,8 @@ func (s *Store) CreateSession(ctx context.Context, userID int64, preset string, 
 	row, err := s.q.CreateAssistantSession(ctx, db.CreateAssistantSessionParams{
 		UserID: userID,
 		Preset: preset,
-		CvID:   nullableInt(cvID),
-		JobID:  nullableInt(jobID),
+		CvID:   cvID,
+		JobID:  jobID,
 	})
 	if err != nil {
 		return Session{}, fmt.Errorf("assistant: create session: %w", err)
@@ -86,7 +89,7 @@ func (s *Store) ChatSessions(ctx context.Context, userID int64) ([]Session, erro
 }
 
 // Session reads one conversation the caller owns.
-func (s *Store) Session(ctx context.Context, id, userID int64) (Session, error) {
+func (s *Store) Session(ctx context.Context, id uuid.UUID, userID int64) (Session, error) {
 	row, err := s.q.GetAssistantSession(ctx, db.GetAssistantSessionParams{ID: id, UserID: userID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Session{}, ErrNotFound
@@ -98,7 +101,7 @@ func (s *Store) Session(ctx context.Context, id, userID int64) (Session, error) 
 }
 
 // DeleteSession removes an owned conversation and its transcript.
-func (s *Store) DeleteSession(ctx context.Context, id, userID int64) error {
+func (s *Store) DeleteSession(ctx context.Context, id uuid.UUID, userID int64) error {
 	n, err := s.q.DeleteAssistantSession(ctx, db.DeleteAssistantSessionParams{ID: id, UserID: userID})
 	if err != nil {
 		return fmt.Errorf("assistant: delete session: %w", err)
@@ -110,7 +113,7 @@ func (s *Store) DeleteSession(ctx context.Context, id, userID int64) error {
 }
 
 // Touch marks a session as the most recently active, so the rail follows real use.
-func (s *Store) Touch(ctx context.Context, id int64) error {
+func (s *Store) Touch(ctx context.Context, id uuid.UUID) error {
 	if err := s.q.TouchAssistantSession(ctx, id); err != nil {
 		return fmt.Errorf("assistant: touch session: %w", err)
 	}
@@ -119,7 +122,7 @@ func (s *Store) Touch(ctx context.Context, id int64) error {
 
 // LabelSession names a session from its first user message. The query applies it
 // only while the label is unset, so this is safe to call on every turn.
-func (s *Store) LabelSession(ctx context.Context, id int64, label string) error {
+func (s *Store) LabelSession(ctx context.Context, id uuid.UUID, label string) error {
 	err := s.q.SetAssistantSessionLabel(ctx, db.SetAssistantSessionLabelParams{
 		ID:    id,
 		Label: pgtype.Text{String: label, Valid: label != ""},
@@ -132,7 +135,7 @@ func (s *Store) LabelSession(ctx context.Context, id int64, label string) error 
 
 // Append writes one message to a session's transcript and returns it with the
 // sequence number the database assigned.
-func (s *Store) Append(ctx context.Context, sessionID int64, m Message) (Message, error) {
+func (s *Store) Append(ctx context.Context, sessionID uuid.UUID, m Message) (Message, error) {
 	row, err := s.q.AppendAssistantMessage(ctx, db.AppendAssistantMessageParams{
 		SessionID: sessionID,
 		Role:      m.Role,
@@ -145,7 +148,7 @@ func (s *Store) Append(ctx context.Context, sessionID int64, m Message) (Message
 }
 
 // Transcript reads a session's messages in order.
-func (s *Store) Transcript(ctx context.Context, sessionID int64) ([]Message, error) {
+func (s *Store) Transcript(ctx context.Context, sessionID uuid.UUID) ([]Message, error) {
 	rows, err := s.q.ListAssistantMessages(ctx, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("assistant: read transcript: %w", err)
@@ -163,22 +166,7 @@ func sessionFrom(r db.AssistantSession) Session {
 		UserID: r.UserID,
 		Preset: r.Preset,
 		Label:  r.Label.String,
-		CVID:   optionalInt(r.CvID),
-		JobID:  optionalInt(r.JobID),
+		CVID:   r.CvID,
+		JobID:  r.JobID,
 	}
-}
-
-func nullableInt(v *int64) pgtype.Int8 {
-	if v == nil {
-		return pgtype.Int8{}
-	}
-	return pgtype.Int8{Int64: *v, Valid: true}
-}
-
-func optionalInt(v pgtype.Int8) *int64 {
-	if !v.Valid {
-		return nil
-	}
-	n := v.Int64
-	return &n
 }

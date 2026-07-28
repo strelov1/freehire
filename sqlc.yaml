@@ -29,6 +29,22 @@ sql:
           # bytes marshal straight through to the profile response (null stays null).
           - column: "user_profiles.location_preferences"
             go_type: "encoding/json.RawMessage"
+          # A session id is a random UUID the client treats as an opaque string.
+          # google/uuid gives it a real type (parse errors surface at the edge)
+          # rather than pgtype.UUID's byte array, which every caller would have to
+          # convert by hand.
+          - column: "assistant_sessions.id"
+            go_type: "github.com/google/uuid.UUID"
+          - column: "assistant_messages.session_id"
+            go_type: "github.com/google/uuid.UUID"
+          - column: "assistant_sessions.cv_id"
+            go_type:
+              type: "int64"
+              pointer: true
+          - column: "assistant_sessions.job_id"
+            go_type:
+              type: "int64"
+              pointer: true
           # An assistant message's payload: prose, a tool call, or a tool result. It is
           # stored and replayed verbatim, so raw JSON round-trips whole — a []byte would
           # base64-encode it into the transcript response.
