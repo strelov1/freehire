@@ -339,3 +339,50 @@ func TestOpencatsListingsCollapseRepeatedLinks(t *testing.T) {
 		t.Errorf("URL = %q, want %q", got[0].URL, want)
 	}
 }
+
+// opencatsOnclickListingHTML is a listing from an install that makes the whole table row
+// clickable instead of linking the title — rms.adgonline.ca (Vancouver Police Department)
+// ships this. The careers route is intact, but it rides an onclick handler, so there is no
+// anchor and therefore no anchor text: the title is the row's first cell.
+func opencatsOnclickListingHTML(rows ...[3]string) string { // row = {id, title, location}
+	var b strings.Builder
+	b.WriteString(`<html><body><table><tr><th>Job Title</th><th>Location</th></tr>`)
+	for _, r := range rows {
+		b.WriteString(`<tr class="oddTableRow" style="cursor: pointer;" ` +
+			`onclick="window.location.href='index.php?m=careers&amp;p=showJob&amp;ID=` + r[0] + `';">` +
+			`<td>` + r[1] + `</td><td>` + r[2] + `</td></tr>`)
+	}
+	b.WriteString(`</table></body></html>`)
+	return b.String()
+}
+
+// TestOpencatsListingsReadClickableRows covers a portal that carries the posting route on a
+// row handler rather than an anchor. The routing invariant still holds, so the postings must
+// still be found — an anchor is one carrier of the route, not the definition of a posting.
+func TestOpencatsListingsReadClickableRows(t *testing.T) {
+	base, err := url.Parse("https://rms.adgonline.ca/careers/")
+	if err != nil {
+		t.Fatalf("parse base: %v", err)
+	}
+	rows := [][3]string{
+		{"11", "Home Guard Recruitment 2024", "Vancouver, Vancouver"},
+		{"12", "Police Constable", "Vancouver, Vancouver"},
+	}
+
+	got := opencatsListings(base, parseHTML(t, opencatsOnclickListingHTML(rows...)))
+	if len(got) != 2 {
+		t.Fatalf("got %d postings, want 2: %+v", len(got), got)
+	}
+	for i, want := range rows {
+		if got[i].ID != want[0] {
+			t.Errorf("posting %d: ID = %q, want %q", i, got[i].ID, want[0])
+		}
+		if got[i].Title != want[1] {
+			t.Errorf("posting %d: Title = %q, want the row's first cell %q", i, got[i].Title, want[1])
+		}
+		wantURL := "https://rms.adgonline.ca/careers/index.php?m=careers&p=showJob&ID=" + want[0]
+		if got[i].URL != wantURL {
+			t.Errorf("posting %d: URL = %q, want %q", i, got[i].URL, wantURL)
+		}
+	}
+}

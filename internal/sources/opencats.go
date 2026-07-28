@@ -215,30 +215,29 @@ func opencatsJobID(loc string) string {
 
 // opencatsListings parses each posting from a portal listing. Installs customise the template
 // freely — CSS classes, element types, column order, and column count differ between them — so
-// this reads the two things a rewrite cannot change without breaking the portal itself: the
-// showJob route, which carries the id, and the anchor text, which is the title. Postings are
-// de-duplicated by id, keeping the first anchor, because a listing commonly links one posting
-// twice (its title and an apply button) and the title link comes first.
+// this reads the one thing a rewrite cannot change without breaking the portal itself: the
+// showJob route. Postings are de-duplicated by id, keeping the first carrier, because a
+// listing commonly points at one posting twice (its title and an apply button) and the title
+// comes first.
 func opencatsListings(base *url.URL, root *html.Node) []opencatsListing {
 	var out []opencatsListing
 	seen := map[string]struct{}{}
 	walk(root, func(n *html.Node) bool {
-		if n.Type != html.ElementNode || n.Data != "a" {
+		if n.Type != html.ElementNode {
 			return true
 		}
-		href := attr(n, "href")
-		id := opencatsJobID(href)
+		loc, title := opencatsRouteCarrier(n)
+		id := opencatsJobID(loc)
 		if id == "" {
 			return true
 		}
 		if _, ok := seen[id]; ok {
 			return true
 		}
-		title := strings.TrimSpace(textContent(n))
 		if opencatsIsGeneralApplication(title) {
 			return true
 		}
-		ref, err := url.Parse(href)
+		ref, err := url.Parse(loc)
 		if err != nil {
 			return true
 		}
@@ -251,4 +250,30 @@ func opencatsListings(base *url.URL, root *html.Node) []opencatsListing {
 		return true
 	})
 	return out
+}
+
+// opencatsRouteCarrier returns the posting URL an element points at and the title that goes
+// with it, or ("", "") when the element points at no posting. Two carriers exist in the wild:
+// an anchor, whose own text is the title, and a clickable table row, which navigates from an
+// onclick handler and has no anchor text — there the title is the row's first cell. Both are
+// the same routing invariant; only the carrier differs.
+func opencatsRouteCarrier(n *html.Node) (loc, title string) {
+	if n.Data == "a" {
+		return attr(n, "href"), strings.TrimSpace(textContent(n))
+	}
+	if target := opencatsClickTarget(attr(n, "onclick")); target != "" {
+		return target, strings.TrimSpace(nodeText(firstElementChild(n)))
+	}
+	return "", ""
+}
+
+// opencatsClickTargetPattern captures the URL a row's onclick handler navigates to.
+var opencatsClickTargetPattern = regexp.MustCompile(`location\.href\s*=\s*['"]([^'"]+)['"]`)
+
+// opencatsClickTarget extracts the navigation target from an onclick handler, or "".
+func opencatsClickTarget(onclick string) string {
+	if onclick == "" {
+		return ""
+	}
+	return firstSubmatch(opencatsClickTargetPattern, onclick)
 }
