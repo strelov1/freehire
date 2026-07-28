@@ -49,6 +49,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/search"
+	"github.com/strelov1/freehire/internal/skilltag"
 	"github.com/strelov1/freehire/internal/worker"
 )
 
@@ -345,7 +346,10 @@ type (
 // "everything was classified as non-technical".
 type boardVerdict struct {
 	// technical is the evidence that keeps a board: a posting resolved as technical,
-	// or one carrying a tagged skill.
+	// or one carrying a tagged ENGINEERING skill. Any tag will not do — the dictionary
+	// covers the recruiting, HR, finance, legal and operations craft a technical company
+	// hires for, so a recruiting coordinator carries skills without saying anything
+	// about the employer.
 	technical bool
 	// determined is whether ANY posting got an is_tech verdict either way. is_tech is
 	// tri-state on purpose — jobderive leaves it NULL rather than coercing, so that the
@@ -355,7 +359,7 @@ type boardVerdict struct {
 
 // reportBoards lists the boards still in the source files whose postings were classified
 // and none of them came out technical — no technical title or category, and not one
-// tagged skill. Each is a candidate for the retirement PR — move the entry to
+// tagged engineering skill. Each is a candidate for the retirement PR — move the entry to
 // sources/retired/<provider>.yml — which is the precondition for pruning its jobs under
 // a company-scoped rule.
 //
@@ -390,7 +394,7 @@ func reportBoards(ctx context.Context, w io.Writer, q candidateSource, brd board
 			}
 			key := boardKey{Provider: row.Source, Board: board}
 			v := evidence[key]
-			v.technical = v.technical || (row.IsTech.Valid && row.IsTech.Bool) || row.HasSkills
+			v.technical = v.technical || (row.IsTech.Valid && row.IsTech.Bool) || skilltag.HasEngineering(row.Skills)
 			v.determined = v.determined || row.IsTech.Valid
 			evidence[key] = v
 		}

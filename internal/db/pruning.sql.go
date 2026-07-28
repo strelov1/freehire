@@ -68,8 +68,7 @@ func (q *Queries) CompanyTechEvidence(ctx context.Context) ([]CompanyTechEvidenc
 }
 
 const pruneCandidates = `-- name: PruneCandidates :many
-SELECT id, source, external_id, company_slug, title, category, is_tech,
-       cardinality(skills) > 0 AS has_skills
+SELECT id, source, external_id, company_slug, title, category, is_tech, skills
 FROM jobs
 WHERE id > $1
 ORDER BY id
@@ -89,7 +88,7 @@ type PruneCandidatesRow struct {
 	Title       string      `json:"title"`
 	Category    string      `json:"category"`
 	IsTech      pgtype.Bool `json:"is_tech"`
-	HasSkills   bool        `json:"has_skills"`
+	Skills      []string    `json:"skills"`
 }
 
 // One keyset page of rows the prune rule evaluates, ordered by id.
@@ -105,6 +104,11 @@ type PruneCandidatesRow struct {
 // and the board is what the source files are keyed on. Matching on it is exact, where
 // matching on company_slug is not — many adapters take the company name from the
 // posting payload rather than the board entry, so the two spellings diverge.
+// skills comes back whole rather than as a cardinality test: whether a posting is
+// technical depends on WHICH skills it carries, and only skilltag knows that. The
+// dictionary covers the recruiting, HR, finance, legal and operations craft a technical
+// company hires for, so "has any skill" answers a different question than the caller
+// is asking.
 func (q *Queries) PruneCandidates(ctx context.Context, arg PruneCandidatesParams) ([]PruneCandidatesRow, error) {
 	rows, err := q.db.Query(ctx, pruneCandidates, arg.AfterID, arg.PageSize)
 	if err != nil {
@@ -122,7 +126,7 @@ func (q *Queries) PruneCandidates(ctx context.Context, arg PruneCandidatesParams
 			&i.Title,
 			&i.Category,
 			&i.IsTech,
-			&i.HasSkills,
+			&i.Skills,
 		); err != nil {
 			return nil, err
 		}

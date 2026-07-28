@@ -1231,6 +1231,11 @@ type Querier interface {
 	// and the board is what the source files are keyed on. Matching on it is exact, where
 	// matching on company_slug is not — many adapters take the company name from the
 	// posting payload rather than the board entry, so the two spellings diverge.
+	// skills comes back whole rather than as a cardinality test: whether a posting is
+	// technical depends on WHICH skills it carries, and only skilltag knows that. The
+	// dictionary covers the recruiting, HR, finance, legal and operations craft a technical
+	// company hires for, so "has any skill" answers a different question than the caller
+	// is asking.
 	PruneCandidates(ctx context.Context, arg PruneCandidatesParams) ([]PruneCandidatesRow, error)
 	// Permanently remove a batch of jobs and record what was removed, in ONE statement.
 	// Splitting the two would let the archive drift from the deletion, and the archive is

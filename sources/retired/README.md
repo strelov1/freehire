@@ -19,9 +19,15 @@ the rules that need a retired board would stop firing.
 ## How an entry gets here
 
 `cmd/prune --boards` lists the boards whose postings were classified and none of them
-came out technical — no technical title or category, and not one tagged skill, across
-their whole history. Move those entries out of `sources/<provider>.yml` and into
-`sources/retired/<provider>.yml`, in the same PR that prunes their jobs.
+came out technical — no technical title or category, and not one tagged **engineering**
+skill, across their whole history. Move those entries out of `sources/<provider>.yml`
+and into `sources/retired/<provider>.yml`, in the same PR that prunes their jobs.
+
+Engineering is the operative word. The skills dictionary deliberately covers the
+recruiting, HR, finance, legal, operations and customer-success craft a technical
+company hires for, because the facet describes every posting. Counting any tag as
+technical evidence let a recruiting coordinator vouch for a whole board; the report
+asks `skilltag.HasEngineering` instead.
 
 Boards no posting of which has been classified are withheld from that list and counted
 at the top of the report. They are not safe to retire; nothing is known about them.

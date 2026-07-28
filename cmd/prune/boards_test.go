@@ -140,8 +140,8 @@ func TestLoadBoardsIgnoresRetiredSubdirectory(t *testing.T) {
 
 // boardRow builds one candidate on a board, carrying the tri-state is_tech the
 // derivation writes: a nil isTech is the "unknown" the dictionaries leave behind.
-func boardRow(id int64, source, externalID string, isTech *bool, hasSkills bool) db.PruneCandidatesRow {
-	r := db.PruneCandidatesRow{ID: id, Source: source, ExternalID: externalID, HasSkills: hasSkills}
+func boardRow(id int64, source, externalID string, isTech *bool, skills []string) db.PruneCandidatesRow {
+	r := db.PruneCandidatesRow{ID: id, Source: source, ExternalID: externalID, Skills: skills}
 	if isTech != nil {
 		r.IsTech = pgtype.Bool{Bool: *isTech, Valid: true}
 	}
@@ -171,13 +171,13 @@ func TestReportBoardsWithholdsBoardsWithNoVerdict(t *testing.T) {
 	}
 	q := &fakeCandidates{rows: []db.PruneCandidatesRow{
 		// Classified, and the verdict was "not technical": the report may act on it.
-		boardRow(1, "greenhouse", "determined:1", boolp(false), false),
+		boardRow(1, "greenhouse", "determined:1", boolp(false), nil),
 		// Never classified either way — the 62% case. Nothing is known about it.
-		boardRow(2, "greenhouse", "unknown:1", nil, false),
+		boardRow(2, "greenhouse", "unknown:1", nil, nil),
 		// A verdict of "technical" keeps a board off the list, as before.
-		boardRow(3, "greenhouse", "technical:1", boolp(true), false),
+		boardRow(3, "greenhouse", "technical:1", boolp(true), nil),
 		// So does a tagged skill, even with no verdict on the row.
-		boardRow(4, "greenhouse", "skilled:1", nil, true),
+		boardRow(4, "greenhouse", "skilled:1", nil, []string{"python"}),
 	}}
 
 	var out strings.Builder
@@ -206,7 +206,7 @@ func TestReportBoardsCountsWhatItWithheld(t *testing.T) {
 		byProvider: map[string]map[string]bool{"greenhouse": {"unknown": true}},
 	}
 	q := &fakeCandidates{rows: []db.PruneCandidatesRow{
-		boardRow(1, "greenhouse", "unknown:1", nil, false),
+		boardRow(1, "greenhouse", "unknown:1", nil, nil),
 	}}
 
 	var out strings.Builder
@@ -215,5 +215,46 @@ func TestReportBoardsCountsWhatItWithheld(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "1") || !strings.Contains(out.String(), "classified") {
 		t.Errorf("the report must say how many boards it withheld for want of a verdict; got:\n%s", out.String())
+	}
+}
+
+// "Carries a tagged skill" is not the claim the report needs. The skills dictionary
+// deliberately covers the non-engineering roles a technical company hires for —
+// recruiting, HR, finance, legal, operations, customer success — because the facet
+// describes every posting. Reading any tag as technical evidence therefore let a
+// recruiting coordinator tagged {stakeholder-management, candidate-experience} vouch
+// for a whole board, and a road-maintenance description vouch for its own.
+//
+// Measured on a 0.5% prod sample: of the postings the classifier calls non-technical
+// yet that still carry skills, 37% carry nothing but non-engineering ones.
+func TestReportBoardsIgnoresNonEngineeringSkills(t *testing.T) {
+	brd := boards{
+		listed: map[boardKey]bool{
+			{"greenhouse", "staffing"}: true, {"greenhouse", "software"}: true,
+		},
+		byProvider: map[string]map[string]bool{"greenhouse": {
+			"staffing": true, "software": true,
+		}},
+	}
+	q := &fakeCandidates{rows: []db.PruneCandidatesRow{
+		// Classified non-technical, and every tag on it names a non-engineering craft.
+		boardRow(1, "greenhouse", "staffing:1", boolp(false),
+			[]string{"stakeholder-management", "candidate-experience"}),
+		// One engineering tag is evidence, exactly as before.
+		boardRow(2, "greenhouse", "software:1", boolp(false),
+			[]string{"talent-sourcing", "kubernetes"}),
+	}}
+
+	var out strings.Builder
+	if err := reportBoards(context.Background(), &out, q, brd); err != nil {
+		t.Fatalf("reportBoards: %v", err)
+	}
+	got := out.String()
+
+	if !strings.Contains(got, "staffing") {
+		t.Errorf("a board whose only tags name non-engineering craft must be listed; got:\n%s", got)
+	}
+	if strings.Contains(got, "software\n") {
+		t.Errorf("a board with an engineering tag must stay off the list; got:\n%s", got)
 	}
 }

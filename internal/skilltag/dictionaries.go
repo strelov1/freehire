@@ -1,6 +1,9 @@
 package skilltag
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // trimLower is the canonical-slug normal form used by the invariant test: lowercase
 // with no surrounding or internal spaces. A canonical equal to its trimLower form is
@@ -682,10 +685,15 @@ type phraseAlias struct {
 	canonical string
 }
 
-// phraseAliases covers terms the word pass cannot see because they contain
+// phraseAliases is every phrase the engine matches — the engineering vocabulary plus
+// the non-engineering professional one. The two are declared separately only so
+// HasEngineering can tell them apart; Parse treats them identically.
+var phraseAliases = slices.Concat(engineeringPhraseAliases, professionalPhraseAliases)
+
+// engineeringPhraseAliases covers terms the word pass cannot see because they contain
 // non-alphanumeric characters or spaces. Includes the ONLY routes by which an
 // ambiguous canonical (c) may be emitted.
-var phraseAliases = []phraseAlias{
+var engineeringPhraseAliases = []phraseAlias{
 	{"c++", "cpp"}, {"c/c++", "cpp"},
 	{"c#", "csharp"},
 	{".net", "dotnet"}, {"asp.net", "dotnet"},
@@ -887,6 +895,48 @@ var phraseAliases = []phraseAlias{
 	//   - ATS product names whose bare token is an English word (lever, workday) —
 	//     "a key lever", "a flexible workday". Same doctrine as burp/druid above: such
 	//     a name may only return through a qualifying phrase, never as a bare token.
+	//
+	// The recruiting/HR/finance/legal/operations/customer-success half of this seed set
+	// lives in professionalPhraseAliases below — same matching, separate list.
+	// business analysis
+	{"requirements gathering", "requirements-gathering"},
+	{"requirements elicitation", "requirements-elicitation"},
+	{"process modeling", "process-modeling"},
+	{"gap analysis", "gap-analysis"},
+	{"user stories", "user-stories"},
+	{"acceptance criteria", "acceptance-criteria"},
+	// solutions / pre-sales
+	{"pre-sales", "pre-sales"}, {"presales", "pre-sales"},
+	{"sales engineering", "sales-engineering"},
+	{"proof of concept", "proof-of-concept"},
+	{"technical discovery", "technical-discovery"},
+	{"solution design", "solution-design"},
+	// developer relations
+	{"developer advocacy", "developer-advocacy"},
+	{"technical evangelism", "technical-evangelism"},
+	{"community management", "community-management"},
+	{"developer experience", "developer-experience"},
+	// technical writing
+	{"technical writing", "technical-writing"},
+	{"api documentation", "api-documentation"},
+	{"docs-as-code", "docs-as-code"}, {"docs as code", "docs-as-code"},
+	{"structured authoring", "structured-authoring"},
+	{"information architecture", "information-architecture"},
+	{"madcap flare", "madcap-flare"},
+}
+
+// professionalPhraseAliases is the non-engineering half of the IT-company role
+// vocabulary: the recruiting, HR, finance, legal, operations and customer-success
+// craft a technical company hires for without hiring an engineer. Parse matches these
+// exactly like any other phrase — a skills facet describes every posting, not only the
+// technical ones — but they are declared apart so a caller can ask the narrower
+// question HasEngineering answers.
+//
+// What is NOT here is the point: developer relations, technical writing, business
+// analysis and pre-sales stay in engineeringPhraseAliases. They are tech-industry
+// craft, posted by technical employers, and the conservative error for every caller of
+// HasEngineering is to keep a board rather than retire a live one.
+var professionalPhraseAliases = []phraseAlias{
 	// recruiting
 	{"boolean search", "boolean-search"},
 	{"talent sourcing", "talent-sourcing"},
@@ -929,32 +979,18 @@ var phraseAliases = []phraseAlias{
 	{"churn prevention", "churn-prevention"},
 	{"customer health score", "customer-health-score"},
 	{"gainsight", "gainsight"}, {"churnzero", "churnzero"},
-	// business analysis
-	{"requirements gathering", "requirements-gathering"},
-	{"requirements elicitation", "requirements-elicitation"},
-	{"process modeling", "process-modeling"},
-	{"gap analysis", "gap-analysis"},
-	{"user stories", "user-stories"},
-	{"acceptance criteria", "acceptance-criteria"},
-	// solutions / pre-sales
-	{"pre-sales", "pre-sales"}, {"presales", "pre-sales"},
-	{"sales engineering", "sales-engineering"},
-	{"proof of concept", "proof-of-concept"},
-	{"technical discovery", "technical-discovery"},
-	{"solution design", "solution-design"},
-	// developer relations
-	{"developer advocacy", "developer-advocacy"},
-	{"technical evangelism", "technical-evangelism"},
-	{"community management", "community-management"},
-	{"developer experience", "developer-experience"},
-	// technical writing
-	{"technical writing", "technical-writing"},
-	{"api documentation", "api-documentation"},
-	{"docs-as-code", "docs-as-code"}, {"docs as code", "docs-as-code"},
-	{"structured authoring", "structured-authoring"},
-	{"information architecture", "information-architecture"},
-	{"madcap flare", "madcap-flare"},
 }
+
+// nonEngineeringCanonicals is derived from professionalPhraseAliases, never written by
+// hand: a term added to that list is non-engineering by construction, so the two cannot
+// drift apart.
+var nonEngineeringCanonicals = func() map[string]bool {
+	out := make(map[string]bool, len(professionalPhraseAliases))
+	for _, p := range professionalPhraseAliases {
+		out[p.canonical] = true
+	}
+	return out
+}()
 
 // sharedAcronyms resolve in ALL text (jobs and résumés). They are matched by their
 // exact UPPERCASE surface form as a whole word (case-preserved pass), because their
