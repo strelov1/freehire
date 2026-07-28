@@ -31,16 +31,16 @@
 
 ## 3. Harvest prober
 
-- [ ] 3.1 Add `cmd/harvest-boards/opencats_prober_test.go`: probing a host whose portal lists
+- [x] 3.1 Add `cmd/harvest-boards/opencats_prober_test.go`: probing a host whose portal lists
       postings returns the company name and a positive count; a host with an unreachable or
       empty portal returns a silent skip (`"", 0, nil`).
-- [ ] 3.2 Add `cmd/harvest-boards/opencats_prober.go` implementing `prober` to satisfy 3.1,
+- [x] 3.2 Add `cmd/harvest-boards/opencats_prober.go` implementing `prober` to satisfy 3.1,
       including company name from the portal page title with a host fallback.
-- [ ] 3.3 Test and implement candidate filtering: `*.catsone.com` hosts, bare IP addresses,
+- [x] 3.3 Test and implement candidate filtering: `*.catsone.com` hosts, bare IP addresses,
       and the project's own documentation/demo sites are rejected.
-- [ ] 3.4 Test and implement `discoverer`: results from the page-title and URL-routing
+- [x] 3.4 Test and implement `discoverer`: results from the page-title and URL-routing
       signature queries are unioned and de-duplicated into one candidate host list.
-- [ ] 3.5 Register the prober in the `probers` map so `go run ./cmd/harvest-boards opencats`
+- [x] 3.5 Register the prober in the `probers` map so `go run ./cmd/harvest-boards opencats`
       runs without a seed file.
 
 ## 4. Harvest run and board file
