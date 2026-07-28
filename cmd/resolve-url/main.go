@@ -53,7 +53,10 @@ func run() int {
 		idx = search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
 	}
 
-	im := linkimport.New(pool, q, idx, sources.NewClient())
+	// One SSRF-guarded client backs both the single-page resolvers and the ingest registry
+	// board coverage falls back to, so a resolve and a crawl share transport and rate limits.
+	ingestClient := sources.NewClient()
+	im := linkimport.New(pool, q, idx, ingestClient, sources.All(ingestClient))
 
 	var saved, skipped, failed int
 	for _, raw := range urls {

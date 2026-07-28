@@ -254,9 +254,12 @@ func Register(app *fiber.App, cfg Config) {
 	a.autofillPlanner = cfg.LLM
 	creditsStore := credits.NewStore(queries, cfg.Pool, cfg.Credits)
 	// Imports fetch a user-supplied page, so they dial through the same SSRF-guarded
-	// client the crawlers use (sources.NewClient). cfg.Search may be nil (no engine
-	// configured), which only skips the index push.
-	importer := linkimport.New(cfg.Pool, queries, cfg.Search, sources.NewClient())
+	// client the crawlers use (sources.NewClient). That one client also backs the ingest
+	// registry board coverage reads a vacancy through, so an import and a crawl of the same
+	// board share transport and rate limits. cfg.Search may be nil (no engine configured),
+	// which only skips the index push.
+	ingestClient := sources.NewClient()
+	importer := linkimport.New(cfg.Pool, queries, cfg.Search, ingestClient, sources.All(ingestClient))
 	contributionsH := newContributionHandlers(contributionSvc, creditsStore, queries, importer)
 	creditsH := newCreditsHandlers(creditsStore, queries)
 	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, creditsStore)

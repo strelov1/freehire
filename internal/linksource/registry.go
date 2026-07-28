@@ -37,6 +37,16 @@ type Source interface {
 	Resolve(ctx context.Context, raw string) (job sources.Job, ok bool, err error)
 }
 
+// PerLinkSource is a Source that serves more than one platform, so the identity a resolved
+// job is stored under depends on the link rather than on the adapter. Board coverage — one
+// adapter over every recognised multi-tenant ATS — is the only such source; every other
+// adapter is host-scoped and its Source() is the answer. ResolveLinks prefers SourceFor when
+// an adapter implements this, mirroring how sources opts into StreamingSource/HydratingSource.
+type PerLinkSource interface {
+	Source
+	SourceFor(u *url.URL) string
+}
+
 // All assembles the registered link-source adapters, sharing one HTTP client. Adding a
 // destination is a new adapter plus one line here.
 func All(c Client) []Source {
@@ -50,6 +60,25 @@ func All(c Client) []Source {
 		NewWorkable(c),
 		NewBairesDev(c),
 	}
+}
+
+// ImportRegistry is the resolver order for importing one job page on demand, and the reason
+// the order is stated once here rather than at each call site:
+//
+//  1. the host-scoped adapters — a platform with a cheap per-job API must keep using it;
+//  2. board coverage — every other recognised ATS, answered by fetching that tenant's board
+//     through its ingest adapter, which is far more expensive than (1);
+//  3. the generic JobPosting resolver — a last resort that matches ANY page, so nothing may
+//     follow it (Find picks one adapter and never tries the next).
+//
+// ingest is the provider-keyed ingest registry; a nil one simply disables step 2. Generic is
+// absent from All on purpose — its always-true Match must not leak into the Telegram crawl,
+// where every outbound link would then look like a vacancy. Here the URL is a deliberate
+// input, which is what makes a last-resort resolver safe.
+func ImportRegistry(c Client, ingest map[string]sources.Source) []Source {
+	reg := All(c)
+	reg = append(reg, NewBoardCoverage(ingest))
+	return append(reg, NewGeneric(c))
 }
 
 // Find returns the first adapter that matches u, or nil when no destination handles it.

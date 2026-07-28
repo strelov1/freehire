@@ -78,7 +78,7 @@ func TestTelegramContribution(t *testing.T) {
 		telegramLinks:         telegramnotify.NewLinkTokens("test-secret", 10*time.Minute),
 		telegramBot:           telegramnotify.NewClientWithBase("bottoken", stub.URL),
 		telegramWebhookSecret: "hook-secret",
-		contribution:          contribution.New(contribution.NewQueriesRepository(queries), nil),
+		contribution:          contribution.New(contribution.NewQueriesRepository(pool, queries), nil),
 		credits:               credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 5}),
 	}
 

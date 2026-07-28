@@ -26,6 +26,7 @@ import (
 	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/linksource"
 	"github.com/strelov1/freehire/internal/search"
+	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/vocab"
 )
 
@@ -46,18 +47,17 @@ type Importer struct {
 	reg  []linksource.Source
 }
 
-// New builds an Importer over the given database and HTTP transport. The generic
-// JobPosting resolver is appended AFTER the host-scoped adapters, so a known ATS is still
-// handled by its richer API-based adapter and generic only catches the rest. It is
-// deliberately absent from linksource.All: its always-true Match must not leak into the
-// Telegram crawl, where every outbound link would then look like a vacancy. Here the URL
-// is a deliberate input, which is what makes the last-resort resolver safe to include.
-func New(pool *pgxpool.Pool, q *db.Queries, idx *search.Client, c linksource.Client) *Importer {
+// New builds an Importer over the given database and HTTP transport. ingest is the
+// provider-keyed ingest registry, which board coverage reuses to read a vacancy on any ATS
+// that has a crawler but no single-page adapter; a nil registry disables that step and is
+// what tests with a canned page pass. The resolver order itself lives in
+// linksource.ImportRegistry, so it is stated once.
+func New(pool *pgxpool.Pool, q *db.Queries, idx *search.Client, c linksource.Client, ingest map[string]sources.Source) *Importer {
 	return &Importer{
 		pool: pool,
 		q:    q,
 		idx:  idx,
-		reg:  append(linksource.All(c), linksource.NewGeneric(c)),
+		reg:  linksource.ImportRegistry(c, ingest),
 	}
 }
 

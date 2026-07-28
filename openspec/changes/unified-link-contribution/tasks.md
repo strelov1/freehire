@@ -26,17 +26,19 @@
 
 ## 4. Board-coverage link source
 
-- [ ] 4.1 Failing test: a vacancy on a recognised board with no host-scoped adapter
+- [x] 4.1 Failing test: a vacancy on a recognised board with no host-scoped adapter
   resolves with the identity the ingest crawl would produce
-- [ ] 4.2 Implement the adapter: recognise `(source, board)` → look up the ingest adapter
+- [x] 4.2 Implement the adapter: recognise `(source, board)` → look up the ingest adapter
   in `sources.All` → `Fetch` the tenant board → select the posting matching the link
-- [ ] 4.3 Failing test then implementation: a board fetched successfully but not containing
+- [x] 4.3 Failing test then implementation: a board fetched successfully but not containing
   the link resolves nothing (no error); a fetch failure is an error
-- [ ] 4.4 Extend step 1 with the `boardresolve` network fallback for vanity domains, and
-  guard against taking a platform apex (e.g. `app.teamtailor.com`) as a tenant board
-- [ ] 4.5 Register it in the importer's registry after the host-scoped adapters and before
+- [ ] 4.4 Add the `boardresolve` network fallback for vanity domains in `linkimport` (not in
+  the adapter: `ResolveLinks` picks a single adapter via `Find` and never tries the next,
+  so a network guess cannot live in `Match`), guarding against taking a platform apex
+  (e.g. `app.teamtailor.com`) as a tenant board
+- [x] 4.5 Register it in the importer's registry after the host-scoped adapters and before
   `generic`; test that a Greenhouse link still takes the dedicated adapter
-- [ ] 4.6 `go test ./internal/linksource/ ./internal/linkimport/`
+- [x] 4.6 `go test ./internal/linksource/ ./internal/linkimport/`
 
 ## 5. Attribution through the import path
 

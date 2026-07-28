@@ -50,13 +50,26 @@ func ResolveLinks(ctx context.Context, reg []Source, urls []string) ([]Resolved,
 		if !ok {
 			continue // matched host but not a single vacancy — skip
 		}
-		out = append(out, Resolved{Source: ls.Source(), Job: job})
+		out = append(out, Resolved{Source: sourceOf(ls, u), Job: job})
 	}
 
 	if len(out) == 0 && failed > 0 {
 		return nil, fmt.Errorf("linksource: all %d resolvable link(s) failed: %w", failed, firstErr)
 	}
 	return out, nil
+}
+
+// sourceOf is the identity a resolved job is stored under: the adapter's own Source for a
+// host-scoped adapter, or the platform this particular link belongs to for one that serves
+// many (see PerLinkSource). An adapter that cannot name a platform for the link falls back to
+// its own key rather than yielding an empty jobs.source.
+func sourceOf(ls Source, u *url.URL) string {
+	if per, ok := ls.(PerLinkSource); ok {
+		if s := per.SourceFor(u); s != "" {
+			return s
+		}
+	}
+	return ls.Source()
 }
 
 // MatchesAny reports whether any url is a link a destination adapter handles. The crawl
