@@ -39,12 +39,16 @@ type cvHandlers struct {
 	// assistantSessions mints the conversation a tailoring workspace runs in.
 	// Assigned after construction (see withAssistantSessions).
 	assistantSessions *assistant.Store
+	// seeder answers what a new CV starts from: the banked work history plus the sections
+	// the stored structure still owns.
+	seeder cv.Seeder
 }
 
 func newCVHandlers(queries *db.Queries, typstBin string, resumeStore *resume.Store, creditsStore *credits.Store, match *matchHandlers) *cvHandlers {
 	h := &cvHandlers{
 		cvStore:            cv.NewStore(cv.NewQueriesRepository(queries)),
 		resume:             resumeStore,
+		seeder:             bankedSeeder{resume: resumeStore, bank: newWorkHistoryReader(queries)},
 		queries:            queries,
 		credits:            creditsStore,
 		matchAnalysisCache: queries,
@@ -185,12 +189,12 @@ func (h *cvHandlers) CreateCV(c *fiber.Ctx) error {
 		return err
 	}
 
-	// Seeding pulls from the stored résumé's structured extraction, which lives in
-	// Postgres (resume_structured) — independent of S3 object storage, so it is NOT gated
-	// on résumé-storage being enabled. A missing structure degrades to an empty skeleton.
+	// Seeding pulls the work history from the experience bank and the rest from the stored
+	// structure — both in Postgres, independent of S3 object storage, so it is NOT gated on
+	// résumé-storage being enabled. Nothing known degrades to an empty skeleton.
 	doc := cv.EmptyDocument()
-	if in.Seed {
-		if st, ok, err := h.resume.Structured(c.Context(), userID); err == nil && ok {
+	if in.Seed && h.seeder != nil {
+		if st, ok, err := h.seeder.Structured(c.Context(), userID); err == nil && ok {
 			doc = cv.Seed(st)
 		}
 	}
