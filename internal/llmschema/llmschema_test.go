@@ -158,6 +158,71 @@ func TestEnum_NullableFieldKeepsNullAmongItsValues(t *testing.T) {
 	}
 }
 
+// A contract can hold fields the model must never supply — résumé contacts come from
+// deterministic PII detection over text the model never sees. Under strict mode every
+// property is required, so leaving such a field in the schema would order the model to
+// invent it.
+func TestOmit_RemovesAFieldFromPropertiesAndRequired(t *testing.T) {
+	s, err := Of[contract](Omit("name", "years"))
+	if err != nil {
+		t.Fatalf("Of: %v", err)
+	}
+
+	for _, gone := range []string{"name", "years"} {
+		if _, ok := properties(t, s)[gone]; ok {
+			t.Errorf("property %q survived Omit", gone)
+		}
+		if slices.Contains(stringSlice(t, object(t, s)["required"]), gone) {
+			t.Errorf("required still lists the omitted %q, which strict mode would demand", gone)
+		}
+	}
+	if _, ok := properties(t, s)["nickname"]; !ok {
+		t.Error("Omit removed a field it was not given")
+	}
+}
+
+// Constrained decoding coerces a number to the declared type but rounds the value.
+// Where the receiving decoder truncates on purpose — a fractional year count must not
+// round up into experience the candidate does not have — the field is asked for as
+// text and the arithmetic stays on this side.
+func TestAsText_RetypesAFieldToStringKeepingItsNullability(t *testing.T) {
+	s, err := Of[contract](AsText("years"))
+	if err != nil {
+		t.Fatalf("Of: %v", err)
+	}
+
+	years := object(t, properties(t, s)["years"])
+	if years["type"] != "string" {
+		t.Errorf("years type = %v, want string", years["type"])
+	}
+	if propAdmitsNull(t, properties(t, s)["years"]) {
+		t.Error("years became nullable; AsText must not change whether a field is optional")
+	}
+}
+
+func TestAsText_KeepsAnOptionalFieldOptional(t *testing.T) {
+	s, err := Of[contract](AsText("tags"))
+	if err != nil {
+		t.Fatalf("Of: %v", err)
+	}
+
+	if !propAdmitsNull(t, properties(t, s)["tags"]) {
+		t.Error("an omitempty field lost its null after AsText, leaving the model no way to decline")
+	}
+}
+
+func TestAsText_UnknownFieldIsAnError(t *testing.T) {
+	if _, err := Of[contract](AsText("no_such_field")); err == nil {
+		t.Fatal("Of returned no error for an AsText naming a field the contract lacks")
+	}
+}
+
+func TestOmit_UnknownFieldIsAnError(t *testing.T) {
+	if _, err := Of[contract](Omit("no_such_field")); err == nil {
+		t.Fatal("Of returned no error for an omit naming a field the contract lacks")
+	}
+}
+
 // An override that silently does nothing is the dangerous failure: the field keeps
 // generating freely and only the validator downstream would ever notice.
 func TestEnum_UnknownFieldIsAnError(t *testing.T) {

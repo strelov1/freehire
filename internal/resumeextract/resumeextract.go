@@ -60,7 +60,12 @@ func (e *Extractor) Extract(ctx context.Context, cvText string) (Structured, err
 	if err != nil {
 		return Structured{}, fmt.Errorf("resumeextract: pii: %w", err)
 	}
-	raw, err := e.client.GenerateJSON(ctx, systemPrompt, userPrompt(red.Redact(cvText)))
+	schema, err := requestSchema()
+	if err != nil {
+		return Structured{}, err
+	}
+	raw, err := e.client.GenerateJSON(ctx, systemPrompt, userPrompt(red.Redact(cvText)),
+		llm.WithSchema(schemaName, schema))
 	if err != nil {
 		return Structured{}, fmt.Errorf("resumeextract: generate: %w", err)
 	}

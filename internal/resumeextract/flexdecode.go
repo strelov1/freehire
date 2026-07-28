@@ -16,6 +16,12 @@ import (
 // string so the contract, Sanitize, and every consumer are untouched. Deliberately not
 // a flexjson type: flexjson coerces numerically, while a date is text — the scalar
 // token must survive as written.
+//
+// The request schema now declares these fields as strings, so a gateway honouring it
+// makes this shim unreachable. It stays anyway, for the same reason Validate stays: a
+// provider that quietly stops honouring a schema answers 200 with ordinary JSON, and
+// nothing on the path would notice. Twenty-five tested lines are a cheap standing
+// guard against silently losing a whole parsed CV to one numeric year.
 type verbatimString string
 
 func (f *verbatimString) UnmarshalJSON(b []byte) error {

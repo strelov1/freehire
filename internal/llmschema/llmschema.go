@@ -99,6 +99,58 @@ func Enum(field string, values []string) Override {
 	}
 }
 
+// AsText retypes top-level fields to string, keeping whatever nullability they had.
+// Use it where the contract's Go type would hand the arithmetic to the model: asked
+// for an integer, a model given "5.9 years" returns 6, while a decoder that truncates
+// on purpose returns 5 — and the difference is experience the candidate does not have.
+func AsText(fields ...string) Override {
+	return func(schema Schema) error {
+		for _, field := range fields {
+			prop, ok := propertyOf(schema, field)
+			if !ok {
+				return fmt.Errorf("llmschema: text override names %q, which the contract type has no field for", field)
+			}
+
+			// Read the nullability before overwriting the type, or it is gone.
+			optional := admitsNull(prop)
+
+			prop["type"] = "string"
+			if optional {
+				widenToNull(prop)
+			}
+		}
+
+		return nil
+	}
+}
+
+// Omit drops top-level fields from the schema, for the parts of a contract the model
+// is not the source of. Strict mode requires every property, so a field left in is a
+// field the model is ordered to produce — for a value it may have no honest way to
+// know, such as a contact detail redacted out of the text it was given.
+func Omit(fields ...string) Override {
+	return func(schema Schema) error {
+		props, ok := schema["properties"].(map[string]any)
+		if !ok {
+			return fmt.Errorf("llmschema: omit override on a schema with no properties")
+		}
+
+		for _, field := range fields {
+			if _, ok := props[field]; !ok {
+				return fmt.Errorf("llmschema: omit override names %q, which the contract type has no field for", field)
+			}
+			delete(props, field)
+		}
+
+		required, _ := schema["required"].([]string)
+		schema["required"] = slices.DeleteFunc(required, func(name string) bool {
+			return slices.Contains(fields, name)
+		})
+
+		return nil
+	}
+}
+
 // strict rewrites node and everything below it for strict mode: no additional
 // properties, every property required, and each property the reflector left optional
 // widened to admit null.
