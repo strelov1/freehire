@@ -63,6 +63,81 @@ func opencatsStockDetailHTML() string {
 </div></body></html>`
 }
 
+// opencatsLocalisedDetailHTML is a posting page from an install serving a non-English portal
+// (opencats.gorgany.com serves Ukrainian): the shipped template's row order survives, but the
+// field labels are translated, so an English label match finds nothing.
+func opencatsLocalisedDetailHTML() string {
+	return `<html><body><div id="careerContent">
+<h1>Position Details: Адміністратор магазину</h1>
+<table id="detailsTable">
+<tr><td class="detailsHeader"><strong>Місцезнаходження:</strong></td><td>Київ, Україна</td></tr>
+<tr><td class="detailsHeader"><strong>Openings:</strong></td><td>2</td></tr>
+<tr><td class="detailsHeader"><strong>Зарплата:</strong></td><td></td></tr>
+</table>
+<div id="descriptive"><p>Робота в магазині.</p></div>
+</div></body></html>`
+}
+
+// opencatsRenamedBodyDetailHTML is a posting page from an install that renamed the body
+// container — careers.crewlogix.com ships it as "job-decription", typo and all — and dropped
+// the table id. The labels survive, so only the body lookup has to cope.
+func opencatsRenamedBodyDetailHTML() string {
+	return `<html><body><div id="careerContent">
+<h1>Position Details: Sr. PHP Developer</h1>
+<table>
+<tr><td class="detailsHeader"><strong>Location:</strong></td><td>Gulberg 3, Lahore</td></tr>
+<tr><td class="detailsHeader"><strong>Openings:</strong></td><td>1</td></tr>
+</table>
+<div class="job-decription"><p>Build and maintain PHP services.</p></div>
+</div></body></html>`
+}
+
+// TestOpencatsDetailReadsLocalisedLocation covers the 33 postings on the Ukrainian install that
+// a label-only lookup silently dropped: the label is translated, but the shipped template's row
+// order is not, so the first row of the details table is still the location.
+func TestOpencatsDetailReadsLocalisedLocation(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("p=showJob&ID=406", opencatsLocalisedDetailHTML()).
+		route("p=showAll", opencatsStockListingHTML([3]string{"406", "Адміністратор магазину", "Київ"}))
+
+	jobs, err := NewOpencats(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Gorgany", Board: "opencats.gorgany.com/careers",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1", len(jobs))
+	}
+	if jobs[0].Location != "Київ, Україна" {
+		t.Errorf("Location = %q, want the first details row when the label is not English", jobs[0].Location)
+	}
+}
+
+// TestOpencatsDetailReadsRenamedBody covers the 8 postings that came back with an empty
+// description because the install renamed the body container.
+func TestOpencatsDetailReadsRenamedBody(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("p=showJob&ID=114", opencatsRenamedBodyDetailHTML()).
+		route("p=showAll", opencatsStockListingHTML([3]string{"114", "Sr. PHP Developer", "Lahore"}))
+
+	jobs, err := NewOpencats(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Crewlogix Technologies", Board: "careers.crewlogix.com/careers",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1", len(jobs))
+	}
+	if !strings.Contains(jobs[0].Description, "Build and maintain PHP services") {
+		t.Errorf("Description = %q, want the renamed body container's text", jobs[0].Description)
+	}
+	if jobs[0].Location != "Gulberg 3, Lahore" {
+		t.Errorf("Location = %q", jobs[0].Location)
+	}
+}
+
 func TestOpencatsFetchMapsListingAndDetail(t *testing.T) {
 	fake := (&routedHTTP{}).
 		route("p=showJob&ID=51", opencatsStockDetailHTML()).

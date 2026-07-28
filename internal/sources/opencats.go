@@ -50,9 +50,9 @@ func (s opencats) detail(ctx context.Context, e CompanyEntry, c opencatsListing)
 	if err != nil {
 		return Job{}, false
 	}
-	location := opencatsLabelledField(root, "location")
+	location := opencatsLocation(root)
 	description := ""
-	if body := firstByAttr(root, "id", "descriptive"); body != nil {
+	if body := opencatsBody(root); body != nil {
 		description = sanitizeHTML(innerHTML(body))
 	}
 	return Job{
@@ -64,6 +64,74 @@ func (s opencats) detail(ctx context.Context, e CompanyEntry, c opencatsListing)
 		Description: description,
 		Remote:      isRemote(location),
 	}, true
+}
+
+// opencatsBodyContainers name the elements installs put the posting body in, as an id or a
+// class. The shipped template uses "descriptive"; installs that rebuilt the page rename it, and
+// one carries the rename's typo (careers.crewlogix.com ships "job-decription"). This is a
+// dictionary rather than a fuzzy match on purpose: an unknown container yields no description,
+// which is visible and fixable, where guessing yields navigation chrome stored as a job body.
+var opencatsBodyContainers = []string{
+	"descriptive",
+	"job-description",
+	"job-decription",
+	"description",
+}
+
+// opencatsBody returns the element holding the posting body, or nil when the install uses a
+// container we do not know.
+func opencatsBody(root *html.Node) *html.Node {
+	for _, name := range opencatsBodyContainers {
+		if n := firstByAttr(root, "id", name); n != nil {
+			return n
+		}
+		if n := firstByClass(root, name); n != nil {
+			return n
+		}
+	}
+	return nil
+}
+
+// opencatsLocation reads the posting's location, preferring the labelled field and falling back
+// to the first row of the details table. The fallback exists because installs serve the portal
+// in their own language (opencats.gorgany.com labels it "Місцезнаходження"), and while the label
+// text is translated, the shipped template's row order is not: location is the first row.
+func opencatsLocation(root *html.Node) string {
+	if v := opencatsLabelledField(root, "location"); v != "" {
+		return v
+	}
+	return opencatsFirstDetailValue(root)
+}
+
+// opencatsFirstDetailValue returns the value cell of the details table's first row, or "".
+func opencatsFirstDetailValue(root *html.Node) string {
+	table := firstByAttr(root, "id", "detailsTable")
+	if table == nil {
+		return ""
+	}
+	var value string
+	walk(table, func(n *html.Node) bool {
+		if value != "" || n.Type != html.ElementNode || n.Data != "tr" {
+			return true
+		}
+		if label := firstElementChild(n); label != nil {
+			if next := nextElement(label); next != nil {
+				value = strings.TrimSpace(textContent(next))
+			}
+		}
+		return false
+	})
+	return value
+}
+
+// firstElementChild returns the node's first element child, skipping text nodes.
+func firstElementChild(n *html.Node) *html.Node {
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type == html.ElementNode {
+			return c
+		}
+	}
+	return nil
 }
 
 // opencatsLabelledField reads a value from the posting's details table by its label, matching

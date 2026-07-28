@@ -45,16 +45,16 @@
 
 ## 4. Harvest run and board file
 
-- [ ] 4.1 Run `go run ./cmd/harvest-boards opencats` and review the resulting diff.
-- [ ] 4.2 Correct the proposed company names by hand where the portal title is unhelpful
+- [x] 4.1 Run `go run ./cmd/harvest-boards opencats` and review the resulting diff.
+- [x] 4.2 Correct the proposed company names by hand where the portal title is unhelpful
       (e.g. a title that is just the hostname), and add the provider header comment to
       `sources/opencats.yml` describing the board format.
-- [ ] 4.3 Verify the board file loads: `sources.LoadConfig` validation passes for every entry.
+- [x] 4.3 Verify the board file loads: `sources.LoadConfig` validation passes for every entry.
 
 ## 5. Verification
 
-- [ ] 5.1 `go build ./... && go vet ./... && go test ./...` all green.
-- [ ] 5.2 Crawl one real board end-to-end against the live portal and confirm titles,
+- [x] 5.1 `go build ./... && go vet ./... && go test ./...` all green.
+- [x] 5.2 Crawl one real board end-to-end against the live portal and confirm titles,
       locations, and descriptions are populated and sane.
-- [ ] 5.3 Confirm no cross-provider duplication: no board in `sources/opencats.yml` also
+- [x] 5.3 Confirm no cross-provider duplication: no board in `sources/opencats.yml` also
       appears in `sources/catsone.yml`.
