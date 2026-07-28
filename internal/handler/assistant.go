@@ -159,8 +159,16 @@ func (a *API) PostAssistantMessage(c *fiber.Ctx) error {
 	conn := c.Context().Conn()
 
 	c.Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
-		if conn != nil {
-			_ = conn.SetWriteDeadline(time.Time{})
+		// Clear the connection's write deadline before EVERY write, not once up
+		// front: fasthttp runs this stream writer on its own goroutine while the
+		// serving goroutine arms the server's WriteTimeout, so a single clear races
+		// with it and loses about half the time — the turn then dies at exactly ten
+		// seconds, mid-answer, for no reason the user can see.
+		write := func(event string, data any) bool {
+			if conn != nil {
+				_ = conn.SetWriteDeadline(time.Time{})
+			}
+			return writeEvent(w, event, data)
 		}
 		// The request context is gone once the handler returns, so the turn runs on
 		// its own cancellable context. Cancellation comes from the client going away,
@@ -184,6 +192,9 @@ func (a *API) PostAssistantMessage(c *fiber.Ctx) error {
 					return
 				case <-t.C:
 					mu.Lock()
+					if conn != nil {
+						_ = conn.SetWriteDeadline(time.Time{})
+					}
 					writeComment(w, "keepalive")
 					mu.Unlock()
 				}
@@ -193,7 +204,7 @@ func (a *API) PostAssistantMessage(c *fiber.Ctx) error {
 		err := a.assistantRunner.Run(ctx, sess, registry, system, prompt, func(e assistant.Event) {
 			mu.Lock()
 			defer mu.Unlock()
-			if !writeEvent(w, string(e.Kind), e) {
+			if !write(string(e.Kind), e) {
 				// The client is gone. Stop the loop at its next boundary rather than
 				// finishing a turn nobody is reading.
 				cancel()

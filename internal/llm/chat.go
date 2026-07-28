@@ -90,11 +90,49 @@ func (c *Client) Chat(ctx context.Context, msgs []llms.MessageContent, tools []l
 	}
 
 	choice := resp.Choices[0]
+	choice.ToolCalls = mergeToolCallFragments(choice.ToolCalls)
 	g := gen()
 	g.Output = choice.Content
 	g.Usage = usageFrom(choice)
 	c.observe(g)
 	return choice, nil
+}
+
+// mergeToolCallFragments folds a streamed tool call back into one call.
+//
+// A gateway streams a tool call as a first delta carrying the id and name, then
+// deltas carrying only fragments of the argument JSON. langchaingo appends a
+// fragment to the open call ONLY when the delta's `type` is empty
+// (llms/openai/internal/openaiclient/chat.go, updateToolCalls) — but litellm sets
+// `type: "function"` on every delta, so each fragment is filed as its own
+// nameless call. The model's arguments then never reach the tool: it runs with an
+// empty object while three bogus "unknown tool" calls burn the step cap.
+//
+// A call with no function name is therefore a continuation of the one before it.
+// A leading nameless call has nothing to continue and is dropped — it cannot be
+// dispatched to anything.
+func mergeToolCallFragments(calls []llms.ToolCall) []llms.ToolCall {
+	if len(calls) == 0 {
+		return calls
+	}
+	out := make([]llms.ToolCall, 0, len(calls))
+	for _, call := range calls {
+		if call.FunctionCall == nil {
+			continue
+		}
+		if call.FunctionCall.Name == "" {
+			if len(out) == 0 {
+				continue
+			}
+			out[len(out)-1].FunctionCall.Arguments += call.FunctionCall.Arguments
+			continue
+		}
+		// Copy the function call so appending fragments never mutates the
+		// provider's own response value.
+		fc := *call.FunctionCall
+		out = append(out, llms.ToolCall{ID: call.ID, Type: call.Type, FunctionCall: &fc})
+	}
+	return out
 }
 
 // isToolCallChunk reports whether a streamed chunk is a tool-call payload rather

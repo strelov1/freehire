@@ -326,3 +326,84 @@ func TestChatStillStreamsProseAlongsideAToolCall(t *testing.T) {
 		t.Errorf("streamed = %q, want only the prose", streamed)
 	}
 }
+
+// fragmentedToolCallModel reproduces what a real gateway (litellm) plus
+// langchaingo produce for a streamed tool call: the name arrives on the first
+// delta and the arguments in fragments afterwards, and because each delta also
+// carries `type: "function"`, langchaingo's accumulator files every fragment as
+// its OWN nameless tool call instead of appending to the first.
+type fragmentedToolCallModel struct{}
+
+func (fragmentedToolCallModel) GenerateContent(context.Context, []llms.MessageContent, ...llms.CallOption) (*llms.ContentResponse, error) {
+	return &llms.ContentResponse{Choices: []*llms.ContentChoice{{
+		ToolCalls: []llms.ToolCall{
+			{ID: "call_1", Type: "function", FunctionCall: &llms.FunctionCall{Name: "search_jobs", Arguments: ""}},
+			{ID: "", Type: "function", FunctionCall: &llms.FunctionCall{Name: "", Arguments: `{"query"`}},
+			{ID: "", Type: "function", FunctionCall: &llms.FunctionCall{Name: "", Arguments: `:"go"}`}},
+		},
+	}}}, nil
+}
+
+func (fragmentedToolCallModel) Call(context.Context, string, ...llms.CallOption) (string, error) {
+	return "", nil
+}
+
+func TestChatReassemblesFragmentedToolCalls(t *testing.T) {
+	c := &Client{model: fragmentedToolCallModel{}, timeout: time.Second}
+
+	choice, err := c.Chat(context.Background(),
+		[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "find go jobs")},
+		[]llms.Tool{searchTool()}, ChatStream{})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if len(choice.ToolCalls) != 1 {
+		t.Fatalf("got %d tool calls, want the fragments folded into one", len(choice.ToolCalls))
+	}
+	call := choice.ToolCalls[0]
+	if call.FunctionCall.Name != "search_jobs" {
+		t.Errorf("name = %q, want search_jobs", call.FunctionCall.Name)
+	}
+	if call.FunctionCall.Arguments != `{"query":"go"}` {
+		t.Errorf("arguments = %q, want the reassembled object — otherwise the tool runs with none", call.FunctionCall.Arguments)
+	}
+	if call.ID != "call_1" {
+		t.Errorf("id = %q, want the id from the opening delta", call.ID)
+	}
+}
+
+func TestChatKeepsSeveralDistinctToolCallsApart(t *testing.T) {
+	// Two real calls in one round must not be merged into one.
+	c := &Client{model: twoToolCallModel{}, timeout: time.Second}
+
+	choice, err := c.Chat(context.Background(),
+		[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "go")},
+		[]llms.Tool{searchTool()}, ChatStream{})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if len(choice.ToolCalls) != 2 {
+		t.Fatalf("got %d tool calls, want both kept", len(choice.ToolCalls))
+	}
+	if choice.ToolCalls[0].FunctionCall.Arguments != `{"a":1}` ||
+		choice.ToolCalls[1].FunctionCall.Arguments != `{"b":2}` {
+		t.Errorf("arguments got crossed: %+v", choice.ToolCalls)
+	}
+}
+
+type twoToolCallModel struct{}
+
+func (twoToolCallModel) GenerateContent(context.Context, []llms.MessageContent, ...llms.CallOption) (*llms.ContentResponse, error) {
+	return &llms.ContentResponse{Choices: []*llms.ContentChoice{{
+		ToolCalls: []llms.ToolCall{
+			{ID: "c1", Type: "function", FunctionCall: &llms.FunctionCall{Name: "facets", Arguments: `{"a"`}},
+			{ID: "", Type: "function", FunctionCall: &llms.FunctionCall{Name: "", Arguments: `:1}`}},
+			{ID: "c2", Type: "function", FunctionCall: &llms.FunctionCall{Name: "search_jobs", Arguments: `{"b"`}},
+			{ID: "", Type: "function", FunctionCall: &llms.FunctionCall{Name: "", Arguments: `:2}`}},
+		},
+	}}}, nil
+}
+
+func (twoToolCallModel) Call(context.Context, string, ...llms.CallOption) (string, error) {
+	return "", nil
+}
