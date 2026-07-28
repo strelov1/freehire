@@ -110,7 +110,7 @@ func TestInboxReadSideEndToEnd(t *testing.T) {
 	}
 
 	// Soft-delete the rejection: it drops out of the listing.
-	if code, _ := do("POST", "/api/v1/me/emails/"+strconv.FormatInt(rejID, 10)+"/delete"); code != 200 {
+	if code, _ := do("POST", "/api/v1/me/emails/"+strconv.FormatInt(rejID, 10)+"/delete"); code != 204 {
 		t.Errorf("delete status = %d", code)
 	}
 	if n := listLen("/api/v1/me/inbox"); n != 2 {
@@ -122,7 +122,7 @@ func TestInboxReadSideEndToEnd(t *testing.T) {
 		t.Errorf("GET deleted email = %d, want 404", code)
 	}
 	// Restore brings it back.
-	if code, _ := do("POST", "/api/v1/me/emails/"+strconv.FormatInt(rejID, 10)+"/restore"); code != 200 {
+	if code, _ := do("POST", "/api/v1/me/emails/"+strconv.FormatInt(rejID, 10)+"/restore"); code != 204 {
 		t.Errorf("restore status = %d", code)
 	}
 	if n := listLen("/api/v1/me/inbox"); n != 3 {
@@ -138,6 +138,57 @@ func TestInboxReadSideEndToEnd(t *testing.T) {
 		 VALUES ($1, 'hosted', 'x1', 'Theirs', 'body', now()) RETURNING id`, otherUID).Scan(&otherID)
 	if code, _ := do("POST", "/api/v1/me/emails/"+strconv.FormatInt(otherID, 10)+"/delete"); code != 404 {
 		t.Errorf("cross-user delete = %d, want 404", code)
+	}
+}
+
+// Delete and restore change state and return nothing, so they answer 204 with an
+// empty body — the shape every other void mutation here uses (saved searches,
+// referrals, logout, the Telegram unlink).
+//
+// The body is the point, not just the status. Fiber's SendStatus(200) writes the
+// status text "OK" as the payload, which is neither of this API's two documented
+// shapes, and any client that decodes a 2xx body chokes on it: the freehire CLI's
+// `inbox delete` reported `decode response: invalid character 'O'` on a delete that
+// had in fact succeeded. The browser client never noticed because it discards the
+// body. This asserts on the bytes so the next non-browser caller is safe.
+func TestSoftDeleteAndRestoreReturnNoBody(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+
+	var uid int64
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('nobody@example.test') RETURNING id`).Scan(&uid); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	var id int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO emails (user_id, source, external_id, subject, body_text, received_at)
+		 VALUES ($1, 'hosted', 'm-nobody', 'Subject', 'body', now()) RETURNING id`, uid).Scan(&id); err != nil {
+		t.Fatalf("seed email: %v", err)
+	}
+
+	iss := auth.NewIssuer("test-secret-that-is-long-enough-0001", time.Hour)
+	cookie, _ := iss.Issue(uid, testTokenVersion)
+	h := &inboxHandlers{queries: db.New(pool)}
+
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	ra := auth.RequireAuth(iss, testVersions)
+	app.Post("/api/v1/me/emails/:id/delete", ra, h.DeleteEmail)
+	app.Post("/api/v1/me/emails/:id/restore", ra, h.RestoreEmail)
+
+	for _, action := range []string{"delete", "restore"} {
+		r := httptest.NewRequest("POST", "/api/v1/me/emails/"+strconv.FormatInt(id, 10)+"/"+action, nil)
+		r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+		resp, err := app.Test(r, -1)
+		if err != nil {
+			t.Fatalf("%s: %v", action, err)
+		}
+		if resp.StatusCode != fiber.StatusNoContent {
+			t.Errorf("%s status = %d, want %d", action, resp.StatusCode, fiber.StatusNoContent)
+		}
+		b, _ := io.ReadAll(resp.Body)
+		if len(b) != 0 {
+			t.Errorf("%s body = %q, want empty — a JSON client cannot decode it", action, b)
+		}
 	}
 }
 

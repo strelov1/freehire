@@ -240,6 +240,10 @@ func (h *inboxHandlers) RestoreEmail(c *fiber.Ctx) error {
 
 // setEmailDeleted flips one message's soft-delete flag (delete or restore),
 // scoped to the caller. A message that is not theirs matches no row → 404.
+//
+// It answers 204, not Fiber's SendStatus(200): that helper writes the status text
+// "OK" as the body, which is neither of this API's response shapes, and a client
+// that decodes a 2xx body fails on a call that actually succeeded.
 func (h *inboxHandlers) setEmailDeleted(c *fiber.Ctx, deleted bool) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -261,5 +265,5 @@ func (h *inboxHandlers) setEmailDeleted(c *fiber.Ctx, deleted bool) error {
 	if n == 0 {
 		return fiber.NewError(fiber.StatusNotFound, "not found")
 	}
-	return c.SendStatus(fiber.StatusOK)
+	return c.SendStatus(fiber.StatusNoContent)
 }
