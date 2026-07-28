@@ -8,8 +8,8 @@
 - [x] 1.6 Implement `experience.Store` — owner-scoped CRUD over both entities, `WHERE user_id = $1` on every path, a not-owned entry reported as missing. Unit-tested over an in-memory fake (`internal/cv`'s pattern); the two guarantees a fake cannot prove — the unique index behind `InsertAtomIfNew` and the `coalesce/nullif` blanks fill — are covered by `internal/db/experience_integration_test.go` against a real Postgres
 - [x] 1.7 Implement `experience.Import(userID, entries, sourceRef)` — takes `[]ImportEntry` rather than `resumeextract.Structured`, so the bank is not coupled to one importer and the CV mapping lives at the handler seam: employments matched case-insensitively on (company, role) filling only empty fields; atoms matched on a normalized claim; provenance `cv_import`, `source_ref` = upload stamp; never deletes
 - [x] 1.8 Test import reconciliation: a trimmed re-upload does not shrink the bank; a repeat upload creates no duplicates; a user-edited employment field survives re-import; a late extraction for a superseded CV still lands
-- [ ] 1.9 Wire `Import` into `deriveResumeArtifacts` beside `embedResume`, so the storage path and the extract path cannot drift; an LLM/PII failure leaves the bank untouched
-- [ ] 1.10 Test the upload path end to end: successful upload populates the bank; unconfigured LLM, unavailable PII detector and a failing extraction each leave the bank exactly as it was
+- [x] 1.9 Wire `Import` into `deriveResumeArtifacts` beside `embedResume`, so the storage path and the extract path cannot drift; an LLM/PII failure leaves the bank untouched
+- [x] 1.10 Test the upload path end to end: successful upload populates the bank; unconfigured LLM, unavailable PII detector and a failing extraction each leave the bank exactly as it was
 - [ ] 1.11 Add `cmd/backfill-experience` — keyset pass over users with a stored CV, reusing a fresh `resume_structured` where present and invoking the extractor only where absent; idempotent, exits non-zero on failure
 - [ ] 1.12 Test the backfill: a user with a stored structure costs no model call, and a second run creates no duplicates
 
