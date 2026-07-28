@@ -120,6 +120,22 @@ export const OVERVIEW: Overview[] = [
         'endpoints additionally require the moderator role.',
     ],
   },
+  {
+    title: 'What is not here',
+    paragraphs: [
+      'This reference covers every endpoint you can call. A handful are ' +
+        'deliberately left out because calling them directly is meaningless: the ' +
+        'Gmail consent redirect (`/me/gmail/connect` and its callback), which only ' +
+        'a browser can complete; the Telegram bot webhook; the browser-tool ' +
+        'websocket relay; and the sitemap-cursor helpers behind `/sitemap.xml`.',
+      'The `/jobs/{slug}/fit` endpoints are pre-rename aliases of ' +
+        '`/jobs/{slug}/match-analysis` and hit the same handlers. They still work, ' +
+        'so existing clients do not break — use the match-analysis paths in new code.',
+      'Most of this API is also a CLI. If you are writing an agent rather than an ' +
+        'integration, `freehire` covers the same surface with less ceremony — ' +
+        'search, tracking, the inbox and CV tailoring — over one API key.',
+    ],
+  },
 ];
 
 export const GROUPS: Group[] = [
@@ -1491,6 +1507,1084 @@ ${BASE_URL}/auth/oauth/google/start`,
         summary: 'Unlink your Telegram account.',
         curl: `curl -X DELETE "${BASE_URL}/me/telegram" -b cookies.txt`,
         responseExample: `{ "data": { "ok": true } }`,
+      },
+    ],
+  },
+  {
+    title: 'Account, credits & extension',
+    intro:
+      'The rest of the account surface: the password, deleting the account, the ' +
+      'AI-credit ledger, and the two endpoints the browser extension runs on. ' +
+      'Password and deletion are session-only — an API key must not be able to ' +
+      'change or destroy the credential it would outlive.',
+    endpoints: [
+      {
+        method: 'POST',
+        path: '/me/password',
+        auth: 'cookie',
+        summary: 'Change a known password.',
+        description:
+          'Revokes every session; your own cookie is re-issued at the new ' +
+          'generation, so you stay signed in and everyone else is signed out.',
+        body: [
+          { name: 'current_password', type: 'string', required: true, description: 'Your existing password.' },
+          { name: 'new_password', type: 'string', required: true, description: 'The replacement.' },
+        ],
+        curl: `curl -X POST "${BASE_URL}/me/password" -b cookies.txt \\
+  -H 'Content-Type: application/json' -d '{"current_password":"…","new_password":"…"}'`,
+        responseExample: `{ "data": { "ok": true } }`,
+      },
+      {
+        method: 'DELETE',
+        path: '/me',
+        auth: 'cookie',
+        summary: 'Delete your account and everything under it.',
+        curl: `curl -X DELETE "${BASE_URL}/me" -b cookies.txt`,
+      },
+      {
+        method: 'GET',
+        path: '/me/credits/history',
+        auth: 'cookie-or-key',
+        summary: 'Your AI-credit ledger, newest first.',
+        description: 'Each debit is labelled with what it bought — the job a fit analysis was run on, the vacancy a CV was tailored for — rather than an opaque reference.',
+        query: [
+          { name: 'limit', type: 'integer', description: 'Page size.' },
+          { name: 'offset', type: 'integer', description: 'Page offset.' },
+        ],
+        curl: `curl "${BASE_URL}/me/credits/history" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": [ { "delta": -1, "reason": "match_analysis", "label": "Senior Backend Engineer at Acme", "created_at": "2026-07-28T09:00:00Z" } ] }`,
+      },
+      {
+        method: 'GET',
+        path: '/me/tracking/{slug}',
+        auth: 'cookie-or-key',
+        summary: 'One tracked application, with the mail linked to it.',
+        description: 'A slug you do not track is a 404.',
+        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
+        curl: `curl "${BASE_URL}/me/tracking/senior-backend-engineer-acme-1a2b" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": { "slug": "senior-backend-engineer-acme-1a2b", "stage": "interview", "applied_at": "2026-07-24T09:00:00Z", "emails": [ { "id": 4821, "subject": "Interview for …", "status_signal": "interview_invitation" } ] } }`,
+      },
+      {
+        method: 'GET',
+        path: '/me/tracking/dismissed',
+        auth: 'cookie-or-key',
+        summary: 'The slugs you dismissed, so a client can hide them.',
+        curl: `curl "${BASE_URL}/me/tracking/dismissed" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": [ "junior-php-developer-acme-9z8y" ] }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/match-text',
+        auth: 'cookie-or-key',
+        summary: 'Score any job text against your profile.',
+        description:
+          'The same deterministic skill coverage as `GET /jobs/{slug}/match`, but ' +
+          'for a page that need not be in the catalogue — this is what lets the ' +
+          'extension show a match on any job page. A caller with no profile is a 404. ' +
+          'No LLM, no credits.',
+        body: [
+          { name: 'title', type: 'string', required: true, description: 'The posting title.' },
+          { name: 'text', type: 'string', required: true, description: 'The scraped posting text.' },
+        ],
+        curl: `curl -X POST "${BASE_URL}/me/match-text" \\
+  -H "Authorization: Bearer fhk_…" -H 'Content-Type: application/json' \\
+  -d '{"title":"Senior Backend Engineer","text":"We are looking for …"}'`,
+        responseExample: `{ "data": { "score": 68, "matched": ["go","postgresql"], "missing": ["kubernetes"] } }`,
+      },
+      {
+        method: 'GET',
+        path: '/me/autofill-profile',
+        auth: 'cookie-or-key',
+        summary: 'Your contact details in canonical autofill fields.',
+        description: "Projected from your CV header, with the account email as a fallback — what the extension writes into application forms.",
+        curl: `curl "${BASE_URL}/me/autofill-profile" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": { "first_name": "Ilya", "last_name": "Strelov", "email": "you@example.com", "phone": "+1…", "linkedin": "https://linkedin.com/in/you", "portfolio": "https://ilya.dev" } }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/autofill/run',
+        auth: 'cookie-or-key',
+        summary: 'Drive your own browser to fill an application form.',
+        description:
+          'Runs the autofill agent over the browser-tool wire — your extension on ' +
+          'one end, the agent on the other, routed strictly within your own channel. ' +
+          'Requires the extension to be connected.',
+        curl: `curl -X POST "${BASE_URL}/me/autofill/run" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": { "filled": 11, "skipped": 2 } }`,
+      },
+    ],
+  },
+  {
+    title: 'Link intake & discovery',
+    intro:
+      'Turning a URL in the wild into something freehire knows about. One intake ' +
+      'sequence serves every surface — the website, the bot, the extension and the ' +
+      'CLI — deliberately, so a pasted link gets the same answer everywhere.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/jobs/find',
+        auth: 'none',
+        summary: 'Resolve a posting URL to a catalogue slug.',
+        description:
+          'Answers `{"data": null}` when the posting cannot be identified, rather ' +
+          'than 404 — "we do not carry this" is a normal answer here. Used by the ' +
+          'extension to tell whether the page you are on is a job we already have.',
+        query: [{ name: 'url', type: 'string', required: true, description: "The posting's URL in the wild.", example: 'https://boards.greenhouse.io/acme/jobs/123' }],
+        curl: `curl "${BASE_URL}/jobs/find?url=https%3A%2F%2Fboards.greenhouse.io%2Facme%2Fjobs%2F123"`,
+        responseExample: `{ "data": { "public_slug": "senior-backend-engineer-acme-1a2b" } }`,
+      },
+      {
+        method: 'POST',
+        path: '/jobs/resolve',
+        auth: 'cookie-or-key',
+        summary: 'Hand freehire a link: import the posting, and the board behind it.',
+        description:
+          'Four outcomes in one shape, distinguished by status: **200 found** — the ' +
+          'catalogue already carries it, nothing fetched or written; **201 tracked** ' +
+          '— we crawl that board already and the posting just had not landed, so it ' +
+          'was imported now; **201 imported** — imported, and its board queued for ' +
+          'onboarding; **202 queued** — nothing could read the page, so the link went ' +
+          'to manual triage. Rate-limited, because it makes the server fetch a URL ' +
+          'you chose. A URL that is not http(s) is a 422.',
+        body: [
+          { name: 'url', type: 'string', required: true, description: 'The job page to resolve.' },
+          { name: 'surface', type: 'string', description: 'Where the link came from (website, extension, cli, bot) — recorded, not validated against a whitelist.' },
+        ],
+        curl: `curl -X POST "${BASE_URL}/jobs/resolve" \\
+  -H "Authorization: Bearer fhk_…" -H 'Content-Type: application/json' \\
+  -d '{"url":"https://boards.greenhouse.io/acme/jobs/123","surface":"cli"}'`,
+        responseExample: `{ "data": { "outcome": "tracked", "public_slug": "senior-backend-engineer-acme-1a2b", "company": "Acme" } }`,
+      },
+      {
+        method: 'GET',
+        path: '/me/contributions',
+        auth: 'cookie-or-key',
+        summary: 'The boards you contributed, and their onboarding state.',
+        curl: `curl "${BASE_URL}/me/contributions" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": [ { "url": "https://boards.greenhouse.io/acme", "source": "greenhouse", "board": "acme", "state": "onboarded", "created_at": "2026-07-20T12:00:00Z" } ] }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/contributions',
+        auth: 'cookie-or-key',
+        summary: 'Contribute a board by link.',
+        body: [{ name: 'url', type: 'string', required: true, description: "A vacancy or a company's careers page." }],
+        curl: `curl -X POST "${BASE_URL}/me/contributions" \\
+  -H "Authorization: Bearer fhk_…" -H 'Content-Type: application/json' \\
+  -d '{"url":"https://boards.greenhouse.io/acme"}'`,
+        responseExample: `{ "data": { "source": "greenhouse", "board": "acme", "state": "pending" } }`,
+      },
+    ],
+  },
+  {
+    title: 'Votes, reminders & discussions',
+    intro:
+      'The lighter per-user surfaces: a vote on a job or company, a reminder to ' +
+      'come back to an application, and the public discussion threads. Votes and ' +
+      'reminders take a key; posting to a thread is browser-owned.',
+    endpoints: [
+      {
+        method: 'POST',
+        path: '/jobs/{slug}/vote',
+        auth: 'cookie-or-key',
+        summary: 'Vote on a job.',
+        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
+        body: [{ name: 'value', type: 'integer', required: true, description: '`1` or `-1`.' }],
+        curl: `curl -X POST "${BASE_URL}/jobs/senior-backend-engineer-acme-1a2b/vote" \\
+  -H "Authorization: Bearer fhk_…" -H 'Content-Type: application/json' -d '{"value":1}'`,
+        responseExample: `{ "data": { "score": 14, "my_vote": 1 } }`,
+      },
+      {
+        method: 'DELETE',
+        path: '/jobs/{slug}/vote',
+        auth: 'cookie-or-key',
+        summary: 'Clear your vote on a job.',
+        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
+        curl: `curl -X DELETE "${BASE_URL}/jobs/senior-backend-engineer-acme-1a2b/vote" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": { "score": 13, "my_vote": 0 } }`,
+      },
+      {
+        method: 'POST',
+        path: '/companies/{slug}/vote',
+        auth: 'cookie-or-key',
+        summary: 'Vote on a company.',
+        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The company slug.' }],
+        body: [{ name: 'value', type: 'integer', required: true, description: '`1` or `-1`.' }],
+        curl: `curl -X POST "${BASE_URL}/companies/acme/vote" \\
+  -H "Authorization: Bearer fhk_…" -H 'Content-Type: application/json' -d '{"value":1}'`,
+        responseExample: `{ "data": { "score": 42, "my_vote": 1 } }`,
+      },
+      {
+        method: 'DELETE',
+        path: '/companies/{slug}/vote',
+        auth: 'cookie-or-key',
+        summary: 'Clear your vote on a company.',
+        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The company slug.' }],
+        curl: `curl -X DELETE "${BASE_URL}/companies/acme/vote" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": { "score": 41, "my_vote": 0 } }`,
+      },
+      {
+        method: 'PATCH',
+        path: '/jobs/{slug}/reminder',
+        auth: 'cookie-or-key',
+        summary: 'Set or move the reminder on a saved job.',
+        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
+        body: [{ name: 'fire_at', type: 'string (RFC3339)', required: true, description: 'When to remind you.' }],
+        curl: `curl -X PATCH "${BASE_URL}/jobs/senior-backend-engineer-acme-1a2b/reminder" \\
+  -H "Authorization: Bearer fhk_…" -H 'Content-Type: application/json' -d '{"fire_at":"2026-08-04T09:00:00Z"}'`,
+        responseExample: `{ "data": { "fire_at": "2026-08-04T09:00:00Z" } }`,
+      },
+      {
+        method: 'DELETE',
+        path: '/jobs/{slug}/reminder',
+        auth: 'cookie-or-key',
+        summary: 'Cancel the reminder.',
+        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
+        curl: `curl -X DELETE "${BASE_URL}/jobs/senior-backend-engineer-acme-1a2b/reminder" -H "Authorization: Bearer fhk_…"`,
+      },
+      {
+        method: 'GET',
+        path: '/me/reminder-settings',
+        auth: 'cookie',
+        summary: 'Your reminder defaults.',
+        curl: `curl "${BASE_URL}/me/reminder-settings" -b cookies.txt`,
+        responseExample: `{ "data": { "enabled": true, "default_days": 7 } }`,
+      },
+      {
+        method: 'PUT',
+        path: '/me/reminder-settings',
+        auth: 'cookie',
+        summary: 'Change your reminder defaults.',
+        body: [
+          { name: 'enabled', type: 'boolean', description: 'Turn reminders on or off.' },
+          { name: 'default_days', type: 'integer', description: 'How long after saving to remind you.' },
+        ],
+        curl: `curl -X PUT "${BASE_URL}/me/reminder-settings" -b cookies.txt \\
+  -H 'Content-Type: application/json' -d '{"enabled":true,"default_days":5}'`,
+        responseExample: `{ "data": { "enabled": true, "default_days": 5 } }`,
+      },
+      {
+        method: 'GET',
+        path: '/threads',
+        auth: 'none',
+        summary: 'Public discussion threads.',
+        query: [
+          { name: 'limit', type: 'integer', description: 'Page size.' },
+          { name: 'offset', type: 'integer', description: 'Page offset.' },
+        ],
+        curl: `curl "${BASE_URL}/threads?limit=20"`,
+        responseExample: `{ "data": [ { "id": 31, "title": "Anyone interviewed at Acme lately?", "replies": 12, "created_at": "2026-07-25T10:00:00Z" } ], "meta": { "total": 214 } }`,
+      },
+      {
+        method: 'GET',
+        path: '/threads/count',
+        auth: 'none',
+        summary: 'How many threads there are.',
+        curl: `curl "${BASE_URL}/threads/count"`,
+        responseExample: `{ "data": { "count": 214 } }`,
+      },
+      {
+        method: 'GET',
+        path: '/threads/{id}',
+        auth: 'none',
+        summary: 'One thread with its replies.',
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The thread id.' }],
+        curl: `curl "${BASE_URL}/threads/31"`,
+        responseExample: `{ "data": { "id": 31, "title": "Anyone interviewed at Acme lately?", "body": "…", "replies": [ { "id": 88, "body": "…", "created_at": "2026-07-25T12:00:00Z" } ] } }`,
+      },
+      {
+        method: 'POST',
+        path: '/threads',
+        auth: 'cookie',
+        summary: 'Start a thread.',
+        body: [
+          { name: 'title', type: 'string', required: true, description: 'Thread title.' },
+          { name: 'body', type: 'string', required: true, description: 'Opening post.' },
+        ],
+        curl: `curl -X POST "${BASE_URL}/threads" -b cookies.txt \\
+  -H 'Content-Type: application/json' -d '{"title":"Anyone interviewed at Acme lately?","body":"…"}'`,
+        responseExample: `{ "data": { "id": 31 } }`,
+      },
+      {
+        method: 'POST',
+        path: '/threads/{id}/replies',
+        auth: 'cookie',
+        summary: 'Reply to a thread.',
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The thread id.' }],
+        body: [{ name: 'body', type: 'string', required: true, description: 'Your reply.' }],
+        curl: `curl -X POST "${BASE_URL}/threads/31/replies" -b cookies.txt \\
+  -H 'Content-Type: application/json' -d '{"body":"Two rounds, both technical."}'`,
+        responseExample: `{ "data": { "id": 88 } }`,
+      },
+      {
+        method: 'POST',
+        path: '/threads/{id}/close',
+        auth: 'moderator',
+        summary: 'Close a thread.',
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The thread id.' }],
+        curl: `curl -X POST "${BASE_URL}/threads/31/close" -b cookies.txt`,
+        responseExample: `{ "data": { "id": 31, "closed": true } }`,
+      },
+    ],
+  },
+  {
+    title: 'Market insights & stats',
+    intro:
+      'Aggregate market intelligence, all public and all unauthenticated. Every ' +
+      'figure is served from a precomputed rollup rather than counted live, and ' +
+      'nothing here exposes a record-level field or a user identifier — these are ' +
+      'counts over the catalogue, not a way to read it.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/insights/roles',
+        auth: 'none',
+        summary: 'Roles (category × seniority) ranked by openings or growth.',
+        query: [
+          { name: 'country', type: 'string', description: 'Scope to one country (ISO code).', example: 'de' },
+          { name: 'sort', type: 'string', description: 'Rank by open count or by growth.', example: 'growth' },
+          { name: 'limit', type: 'integer', description: 'How many rows.' },
+          { name: 'category', type: 'string', description: 'Scope to one job category.', example: 'backend' },
+        ],
+        curl: `curl "${BASE_URL}/insights/roles?country=de&sort=growth&limit=20"`,
+        responseExample: `{ "data": [ { "category": "backend", "seniority": "senior", "open": 1840, "growth_pct": 12.4 } ] }`,
+      },
+      {
+        method: 'GET',
+        path: '/insights/skills',
+        auth: 'none',
+        summary: 'Skills ranked by openings or growth.',
+        description: 'Scope by category or by country, but not both — the rollup behind it is single-dimensional, so asking for both is a 400.',
+        query: [
+          { name: 'category', type: 'string', description: 'Scope to one category.' },
+          { name: 'country', type: 'string', description: 'Scope to one country.' },
+          { name: 'sort', type: 'string', description: 'Rank by open count or growth.' },
+          { name: 'limit', type: 'integer', description: 'How many rows.' },
+        ],
+        curl: `curl "${BASE_URL}/insights/skills?category=backend&sort=growth"`,
+        responseExample: `{ "data": [ { "skill": "go", "open": 4210, "growth_pct": 8.1 } ] }`,
+      },
+      {
+        method: 'GET',
+        path: '/insights/salary',
+        auth: 'none',
+        summary: 'Salary bands by category, seniority and country.',
+        query: [
+          { name: 'category', type: 'string', description: 'Scope to one category.' },
+          { name: 'seniority', type: 'string', description: 'Scope to one seniority.' },
+          { name: 'country', type: 'string', description: 'Scope to one country.' },
+          { name: 'limit', type: 'integer', description: 'How many rows.' },
+        ],
+        curl: `curl "${BASE_URL}/insights/salary?category=backend&seniority=senior"`,
+        responseExample: `{ "data": [ { "category": "backend", "seniority": "senior", "currency": "USD", "p25": 130000, "p50": 165000, "p75": 200000, "samples": 412 } ] }`,
+      },
+      {
+        method: 'GET',
+        path: '/insights/velocity',
+        auth: 'none',
+        summary: 'How fast a slice of the market is hiring, over time.',
+        query: [
+          { name: 'granularity', type: 'string', description: 'Bucket size for the series.', example: 'week' },
+          { name: 'from', type: 'string (date)', description: 'Start of the window.' },
+          { name: 'to', type: 'string (date)', description: 'End of the window.' },
+          { name: 'category', type: 'string', description: 'Scope to one category.' },
+          { name: 'seniority', type: 'string', description: 'Scope to one seniority.' },
+        ],
+        curl: `curl "${BASE_URL}/insights/velocity?granularity=week&category=backend"`,
+        responseExample: `{ "data": [ { "period": "2026-07-20", "added": 3120, "removed": 2740 } ] }`,
+      },
+      {
+        method: 'GET',
+        path: '/insights/companies',
+        auth: 'none',
+        summary: 'Companies ranked by hiring activity.',
+        query: [
+          { name: 'sort', type: 'string', description: 'Rank by openings or by growth.' },
+          { name: 'min_open', type: 'integer', description: 'Ignore companies below this many open roles.' },
+          { name: 'limit', type: 'integer', description: 'How many rows.' },
+        ],
+        curl: `curl "${BASE_URL}/insights/companies?sort=growth&min_open=10"`,
+        responseExample: `{ "data": [ { "slug": "acme", "name": "Acme", "open": 87, "growth_pct": 21.0 } ] }`,
+      },
+      {
+        method: 'GET',
+        path: '/stats/facets',
+        auth: 'none',
+        summary: 'Facet distribution snapshot: countries, skills, seniority, work mode.',
+        description: 'Served from the facet rollup rather than a live Meilisearch facet count, so a page can show "what\'s inside" without paying search for it.',
+        curl: `curl "${BASE_URL}/stats/facets"`,
+        responseExample: `{ "data": { "countries": [ { "value": "de", "count": 18420 } ], "skills": [ { "value": "go", "count": 4210 } ], "seniority": [ … ], "work_mode": [ … ] } }`,
+      },
+      {
+        method: 'GET',
+        path: '/stats/user-growth',
+        auth: 'none',
+        summary: 'Cumulative member growth per UTC day.',
+        description: 'Aggregate-only — no user identifier is exposed.',
+        curl: `curl "${BASE_URL}/stats/user-growth"`,
+        responseExample: `{ "data": [ { "day": "2026-07-27", "total": 12840 } ] }`,
+      },
+      {
+        method: 'GET',
+        path: '/stats/engagement',
+        auth: 'none',
+        summary: 'Jobs saved, applied to and viewed across all users.',
+        curl: `curl "${BASE_URL}/stats/engagement"`,
+        responseExample: `{ "data": { "saved": 41200, "applied": 18730, "viewed": 903400 } }`,
+      },
+      {
+        method: 'GET',
+        path: '/status',
+        auth: 'none',
+        summary: 'Ingest-fleet health, per provider.',
+        description: 'Sanitized: which boards are healthy, cooled or failing, without error text or internal identifiers.',
+        curl: `curl "${BASE_URL}/status"`,
+        responseExample: `{ "data": { "providers": [ { "source": "greenhouse", "boards": 812, "failing": 14, "last_run_at": "2026-07-28T18:00:00Z" } ] } }`,
+      },
+    ],
+  },
+  {
+    title: 'Employee referrals',
+    intro:
+      'Two sides of the same marketplace: an employee offers to refer into the ' +
+      'company they work at (proof required, moderated), and a candidate asks one ' +
+      'of that company\'s approved referrers for an intro. A candidate never sees ' +
+      "who the referrer is, and a referrer sees the candidate's CV only through a " +
+      'short-lived view. Moderation of offers is moderator-gated.',
+    endpoints: [
+      {
+        method: 'POST',
+        path: '/me/referrals/offers',
+        auth: 'cookie-or-key',
+        summary: 'Offer to refer into a company. Multipart — proof required.',
+        description:
+          'The proof (an offer letter, badge, anything showing you work there) is ' +
+          'stored privately and shown only to a moderator; its storage key is never ' +
+          'exposed on the wire. The offer is pending until decided.',
+        body: [
+          { name: 'company_slug', type: 'string (form field)', required: true, description: 'The company you can refer into.' },
+          { name: 'linkedin_url', type: 'string (form field)', description: 'Your profile, for the moderator to check against.' },
+          { name: 'proof', type: 'file (form field)', required: true, description: 'Evidence you work there.' },
+        ],
+        curl: `curl -X POST "${BASE_URL}/me/referrals/offers" \\
+  -H "Authorization: Bearer fhk_…" \\
+  -F company_slug=acme -F linkedin_url=https://linkedin.com/in/you -F proof=@badge.pdf`,
+        responseExample: `{ "data": { "id": "b71e…", "company_slug": "acme", "company_name": "Acme", "status": "pending", "created_at": "2026-07-28T20:00:00Z" } }`,
+      },
+      {
+        method: 'GET',
+        path: '/me/referrals/offers',
+        auth: 'cookie-or-key',
+        summary: 'Your referral offers and their moderation state.',
+        curl: `curl "${BASE_URL}/me/referrals/offers" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": [ { "id": "b71e…", "company_slug": "acme", "status": "approved", "decided_at": "2026-07-28T21:00:00Z" } ] }`,
+      },
+      {
+        method: 'DELETE',
+        path: '/me/referrals/offers/{id}',
+        auth: 'cookie-or-key',
+        summary: 'Withdraw an offer.',
+        pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The offer id.' }],
+        curl: `curl -X DELETE "${BASE_URL}/me/referrals/offers/b71e…" -H "Authorization: Bearer fhk_…"`,
+      },
+      {
+        method: 'POST',
+        path: '/me/referrals/requests',
+        auth: 'cookie-or-key',
+        summary: 'Ask a company\'s approved referrers for an intro.',
+        description:
+          'Validation failures answer 422; a company with no approved referrer ' +
+          'answers 409; too many open requests answers 429.',
+        body: [
+          { name: 'company_slug', type: 'string', required: true, description: 'The company to ask.' },
+          { name: 'job_id', type: 'integer', description: 'The specific opening, when there is one.' },
+          { name: 'cv_kind', type: 'string', description: 'Which CV to attach: your stored one, or a built CV.' },
+          { name: 'cv_id', type: 'string (uuid)', description: 'The built CV to attach, when `cv_kind` names one.' },
+          { name: 'linkedin_url', type: 'string', description: 'Your profile.' },
+          { name: 'contact_telegram', type: 'string', description: 'How the referrer reaches you.' },
+          { name: 'contact_email', type: 'string', description: 'How the referrer reaches you.' },
+          { name: 'note', type: 'string', description: 'A short message to the referrer.' },
+        ],
+        curl: `curl -X POST "${BASE_URL}/me/referrals/requests" \\
+  -H "Authorization: Bearer fhk_…" -H 'Content-Type: application/json' \\
+  -d '{"company_slug":"acme","cv_kind":"stored","contact_email":"you@example.com"}'`,
+        responseExample: `{ "data": { "id": "c92f…", "company_slug": "acme", "status": "open", "created_at": "2026-07-28T20:05:00Z" } }`,
+      },
+      {
+        method: 'GET',
+        path: '/me/referrals/requests',
+        auth: 'cookie-or-key',
+        summary: 'The intros you asked for, and where they stand.',
+        curl: `curl "${BASE_URL}/me/referrals/requests" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": [ { "id": "c92f…", "company_slug": "acme", "status": "contacted" } ] }`,
+      },
+      {
+        method: 'GET',
+        path: '/me/referrals/incoming',
+        auth: 'cookie-or-key',
+        summary: 'Requests waiting on you as an approved referrer.',
+        curl: `curl "${BASE_URL}/me/referrals/incoming" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": [ { "id": "c92f…", "company_slug": "acme", "cv_kind": "stored", "status": "open", "note": "Backend, 8 years Go" } ] }`,
+      },
+      {
+        method: 'GET',
+        path: '/me/referrals/incoming/{id}/cv',
+        auth: 'cookie-or-key',
+        summary: "View the candidate's CV for one incoming request.",
+        pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The request id.' }],
+        curl: `curl "${BASE_URL}/me/referrals/incoming/c92f…/cv" -H "Authorization: Bearer fhk_…" -o candidate.pdf`,
+      },
+      {
+        method: 'POST',
+        path: '/me/referrals/incoming/{id}/resolve',
+        auth: 'cookie-or-key',
+        summary: 'Mark an incoming request contacted or declined.',
+        pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The request id.' }],
+        body: [{ name: 'status', type: 'string', required: true, description: '`contacted` or `declined`.', example: 'contacted' }],
+        curl: `curl -X POST "${BASE_URL}/me/referrals/incoming/c92f…/resolve" \\
+  -H "Authorization: Bearer fhk_…" -H 'Content-Type: application/json' -d '{"status":"contacted"}'`,
+        responseExample: `{ "data": { "id": "c92f…", "status": "contacted" } }`,
+      },
+      {
+        method: 'GET',
+        path: '/referrals/offers',
+        auth: 'moderator',
+        summary: 'The offer-moderation queue.',
+        curl: `curl "${BASE_URL}/referrals/offers" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": [ { "id": "b71e…", "company_slug": "acme", "linkedin_url": "https://linkedin.com/in/you", "status": "pending" } ] }`,
+      },
+      {
+        method: 'GET',
+        path: '/referrals/offers/{id}/proof',
+        auth: 'moderator',
+        summary: "View an offer's proof document.",
+        pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The offer id.' }],
+        curl: `curl "${BASE_URL}/referrals/offers/b71e…/proof" -H "Authorization: Bearer fhk_…" -o proof.pdf`,
+      },
+      {
+        method: 'POST',
+        path: '/referrals/offers/{id}/decide',
+        auth: 'moderator',
+        summary: 'Approve or reject an offer.',
+        pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The offer id.' }],
+        body: [{ name: 'approve', type: 'boolean', required: true, description: 'True approves the referrer; false rejects the offer.' }],
+        curl: `curl -X POST "${BASE_URL}/referrals/offers/b71e…/decide" \\
+  -H "Authorization: Bearer fhk_…" -H 'Content-Type: application/json' -d '{"approve":true}'`,
+        responseExample: `{ "data": { "id": "b71e…", "status": "approved", "decided_at": "2026-07-28T21:00:00Z" } }`,
+      },
+    ],
+  },
+  {
+    title: 'CV builder & tailoring',
+    intro:
+      'Your CVs, and the tailoring flow that reframes one toward a single ' +
+      'vacancy. Authoring is browser-owned — create, update and delete are ' +
+      'session-only — while reading a CV, patching it, and rendering the PDF also ' +
+      'accept an API key, because that is the half a tailoring agent drives. Every ' +
+      'CV is owner-scoped: an id you do not own is a 404, not a 403.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/me/cvs',
+        auth: 'cookie',
+        summary: 'List your CVs, without their documents.',
+        curl: `curl "${BASE_URL}/me/cvs" -b cookies.txt`,
+        responseExample: `{ "data": [ { "id": "0f2c…", "title": "Backend engineer", "template_id": "classic", "created_at": "2026-07-01T10:00:00Z", "updated_at": "2026-07-20T18:30:00Z" } ] }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/cvs',
+        auth: 'cookie',
+        summary: 'Create a CV, optionally seeded from your stored history.',
+        body: [
+          { name: 'title', type: 'string', description: 'Label; up to 200 characters.' },
+          { name: 'template_id', type: 'string', description: 'Which template to render with.', example: 'classic' },
+          { name: 'seed', type: 'boolean', description: 'Pre-fill from your parsed CV / experience bank instead of starting blank.' },
+        ],
+        curl: `curl -X POST "${BASE_URL}/me/cvs" -b cookies.txt \\
+  -H 'Content-Type: application/json' -d '{"title":"Backend engineer","seed":true}'`,
+        responseExample: `{ "data": { "id": "0f2c…", "title": "Backend engineer", "template_id": "classic", "document": { "header": { … }, "experience": [ … ] } } }`,
+      },
+      {
+        method: 'GET',
+        path: '/me/cvs/{id}',
+        auth: 'cookie-or-key',
+        summary: 'One CV with its full document.',
+        pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The CV id.' }],
+        curl: `curl "${BASE_URL}/me/cvs/0f2c…" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": { "id": "0f2c…", "title": "Backend engineer", "template_id": "classic", "agent_session_id": "s_9f…", "document": { … } } }`,
+      },
+      {
+        method: 'PUT',
+        path: '/me/cvs/{id}',
+        auth: 'cookie',
+        summary: 'Replace a CV — title, template and document.',
+        pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The CV id.' }],
+        body: [
+          { name: 'title', type: 'string', description: 'New label.' },
+          { name: 'template_id', type: 'string', description: 'New template.' },
+          { name: 'document', type: 'object', required: true, description: 'The whole CV document.' },
+        ],
+        curl: `curl -X PUT "${BASE_URL}/me/cvs/0f2c…" -b cookies.txt \\
+  -H 'Content-Type: application/json' -d '{"title":"Backend engineer","document":{…}}'`,
+        responseExample: `{ "data": { "id": "0f2c…", "updated_at": "2026-07-28T20:10:00Z" } }`,
+      },
+      {
+        method: 'PATCH',
+        path: '/me/cvs/{id}',
+        auth: 'cookie-or-key',
+        summary: 'Apply one field-level edit.',
+        description:
+          'The agent write path, deliberately narrow: one operation at a time, ' +
+          'addressed by index, so an edit can be reviewed and reversed. Ops: ' +
+          '`set_summary`, `set_header_field`, `add_bullet`, `replace_bullet`, ' +
+          '`remove_bullet`, `reorder_bullets`, `set_skill_group`, `set_stack`. An ' +
+          'unknown op or an out-of-range index is refused rather than partially applied.',
+        pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The CV id.' }],
+        body: [
+          { name: 'op', type: 'string', required: true, description: 'One of the operations above.', example: 'replace_bullet' },
+          { name: 'experience', type: 'integer', description: 'Index into the document\'s experience entries.' },
+          { name: 'bullet', type: 'integer', description: 'Index into that entry\'s bullets (replace/remove).' },
+          { name: 'field', type: 'string', description: 'Header field name (`set_header_field`).' },
+          { name: 'value', type: 'string', description: 'Summary, bullet or header value.' },
+          { name: 'order', type: 'integer[]', description: 'Permutation of bullet indices (`reorder_bullets`).' },
+          { name: 'group', type: 'string', description: 'Skill group name (`set_skill_group`).' },
+          { name: 'items', type: 'string[]', description: 'Skill group items (`set_skill_group`).' },
+          { name: 'stack', type: 'string[]', description: 'Per-experience technology line (`set_stack`).' },
+        ],
+        curl: `curl -X PATCH "${BASE_URL}/me/cvs/0f2c…" \\
+  -H "Authorization: Bearer fhk_…" \\
+  -H 'Content-Type: application/json' \\
+  -d '{"op":"replace_bullet","experience":0,"bullet":1,"value":"Cut p99 checkout latency 40% by …"}'`,
+        responseExample: `{ "data": { "id": "0f2c…", "document": { … } } }`,
+      },
+      {
+        method: 'PUT',
+        path: '/me/cvs/{id}/template',
+        auth: 'cookie',
+        summary: 'Switch the template only.',
+        pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The CV id.' }],
+        body: [{ name: 'template_id', type: 'string', required: true, description: 'A template id from `/cv-templates`.' }],
+        curl: `curl -X PUT "${BASE_URL}/me/cvs/0f2c…/template" -b cookies.txt \\
+  -H 'Content-Type: application/json' -d '{"template_id":"compact"}'`,
+        responseExample: `{ "data": { "id": "0f2c…", "template_id": "compact" } }`,
+      },
+      {
+        method: 'DELETE',
+        path: '/me/cvs/{id}',
+        auth: 'cookie',
+        summary: 'Delete a CV.',
+        pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The CV id.' }],
+        curl: `curl -X DELETE "${BASE_URL}/me/cvs/0f2c…" -b cookies.txt`,
+      },
+      {
+        method: 'GET',
+        path: '/me/cvs/{id}/pdf',
+        auth: 'cookie-or-key',
+        summary: 'Render the CV to PDF.',
+        description: 'Answers 501 on a deployment with no typst binary configured; everything else still works.',
+        pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The CV id.' }],
+        curl: `curl "${BASE_URL}/me/cvs/0f2c…/pdf" -H "Authorization: Bearer fhk_…" -o cv.pdf`,
+      },
+      {
+        method: 'GET',
+        path: '/cv-templates',
+        auth: 'cookie',
+        summary: 'The template gallery.',
+        curl: `curl "${BASE_URL}/cv-templates" -b cookies.txt`,
+        responseExample: `{ "data": [ { "id": "classic", "name": "Classic" }, { "id": "compact", "name": "Compact" } ] }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/cvs/tailor',
+        auth: 'cookie',
+        summary: 'Start tailoring a CV toward one vacancy.',
+        description:
+          'Copies your base CV into a vacancy-bound tailored one and mints the ' +
+          'short-lived credential its agent session runs on. Requires a cached fit ' +
+          'analysis for the job (409 otherwise) and a base CV — one is seeded from ' +
+          'your stored history when you have none, and it is a 409 when there is ' +
+          'nothing to seed from. Calls no LLM itself.',
+        body: [{ name: 'job_slug', type: 'string', required: true, description: 'The vacancy to tailor toward.' }],
+        curl: `curl -X POST "${BASE_URL}/me/cvs/tailor" -b cookies.txt \\
+  -H 'Content-Type: application/json' -d '{"job_slug":"senior-backend-engineer-acme-1a2b"}'`,
+        responseExample: `{ "data": { "tailor_cv_id": "7d1a…", "base_cv_id": "0f2c…", "session_id": "s_9f…", "analysis": { "overall_score": 72, "verdict": "worth_applying" } } }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/cvs/{id}/tailor-session',
+        auth: 'cookie',
+        summary: 'Mint a fresh agent session for an existing tailored CV.',
+        description: 'For a tailored CV whose session was lost or never bound. 409 when the CV is not a tailored copy.',
+        pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The tailored CV id.' }],
+        curl: `curl -X POST "${BASE_URL}/me/cvs/7d1a…/tailor-session" -b cookies.txt`,
+        responseExample: `{ "data": { "tailor_cv_id": "7d1a…", "base_cv_id": "0f2c…", "session_id": "s_9f…" } }`,
+      },
+      {
+        method: 'GET',
+        path: '/me/cvs/{id}/tailor-context',
+        auth: 'cookie-or-key',
+        summary: 'The fit analysis a tailored CV should reframe toward.',
+        description:
+          'The split that keeps tailoring honest: `missing_have` are requirements ' +
+          'your history already covers but the CV buries — reframe those — and ' +
+          '`missing_gap` are the ones it does not, which an agent must ask about ' +
+          'rather than invent. Served from cache; calls no LLM. 409 when the CV is ' +
+          'not a tailored copy or has no analysis.',
+        pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The tailored CV id.' }],
+        curl: `curl "${BASE_URL}/me/cvs/7d1a…/tailor-context" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{
+  "data": {
+    "job": { "slug": "senior-backend-engineer-acme-1a2b", "title": "Senior Backend Engineer", "company": "Acme" },
+    "verdict": "worth_applying",
+    "overall_score": 72,
+    "recommendation": "Lead with the payments migration …",
+    "missing_have": [ { "requirement": "Kafka at scale", "evidence": "Ran the event bus at …" } ],
+    "missing_gap": [ { "requirement": "Kubernetes operators" } ],
+    "strengths": [ "Go", "payments" ],
+    "gaps": [ "k8s operators" ]
+  }
+}`,
+      },
+      {
+        method: 'PUT',
+        path: '/me/cvs/{id}/session',
+        auth: 'cookie-or-key',
+        summary: 'Bind an agent session to a CV.',
+        pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The CV id.' }],
+        body: [{ name: 'session_id', type: 'string', required: true, description: 'The agent session to bind.' }],
+        curl: `curl -X PUT "${BASE_URL}/me/cvs/7d1a…/session" -H "Authorization: Bearer fhk_…" \\
+  -H 'Content-Type: application/json' -d '{"session_id":"s_9f…"}'`,
+        responseExample: `{ "data": { "id": "7d1a…", "agent_session_id": "s_9f…" } }`,
+      },
+    ],
+  },
+  {
+    title: 'Experience bank',
+    intro:
+      'The durable record a CV is built from: employments, and the evidence atoms ' +
+      'under them. Every atom carries who asserted it — you, or a model that ' +
+      'inferred it — and only your own assertions may be written into a CV. ' +
+      'Reading accepts an API key; editing is session-only.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/me/experience',
+        auth: 'cookie-or-key',
+        summary: 'Your employments and their evidence atoms.',
+        curl: `curl "${BASE_URL}/me/experience" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": { "employments": [ { "id": 12, "company": "Acme", "title": "Senior Backend Engineer", "started_at": "2023-02-01", "ended_at": null, "atoms": [ { "id": 88, "text": "Cut p99 checkout latency 40%", "source": "cv_import" } ] } ] } }`,
+      },
+      {
+        method: 'PUT',
+        path: '/me/experience/employments/{id}',
+        auth: 'cookie',
+        summary: 'Edit one employment.',
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The employment id.' }],
+        curl: `curl -X PUT "${BASE_URL}/me/experience/employments/12" -b cookies.txt \\
+  -H 'Content-Type: application/json' -d '{"company":"Acme","title":"Staff Engineer"}'`,
+        responseExample: `{ "data": { "id": 12, "company": "Acme", "title": "Staff Engineer" } }`,
+      },
+      {
+        method: 'DELETE',
+        path: '/me/experience/employments/{id}',
+        auth: 'cookie',
+        summary: 'Remove an employment and its atoms.',
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The employment id.' }],
+        curl: `curl -X DELETE "${BASE_URL}/me/experience/employments/12" -b cookies.txt`,
+      },
+      {
+        method: 'PUT',
+        path: '/me/experience/atoms/{id}',
+        auth: 'cookie',
+        summary: 'Edit one evidence atom.',
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The atom id.' }],
+        curl: `curl -X PUT "${BASE_URL}/me/experience/atoms/88" -b cookies.txt \\
+  -H 'Content-Type: application/json' -d '{"text":"Cut p99 checkout latency 40% (12k rps)"}'`,
+        responseExample: `{ "data": { "id": 88, "text": "Cut p99 checkout latency 40% (12k rps)", "source": "manual" } }`,
+      },
+      {
+        method: 'DELETE',
+        path: '/me/experience/atoms/{id}',
+        auth: 'cookie',
+        summary: 'Remove an evidence atom.',
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The atom id.' }],
+        curl: `curl -X DELETE "${BASE_URL}/me/experience/atoms/88" -b cookies.txt`,
+      },
+    ],
+  },
+  {
+    title: 'Application mail',
+    intro:
+      'Your job mail, and the link between a message and the application it ' +
+      'belongs to. Mail arrives three ways: a connected Gmail account, the hosted ' +
+      "freehire address, or a batch your own client pushed. Only the first two are " +
+      'classified by freehire — pushed mail is yours to triage, which is what makes ' +
+      'that tier free. Everything here takes a full-scope API key, so a harness can ' +
+      'drive the whole surface; the Gmail consent redirect is the one exception and ' +
+      'stays browser-only.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/me/inbox',
+        auth: 'cookie-or-key',
+        summary: 'List your mail, newest first, excluding deleted.',
+        description:
+          '`?body=1` returns each message\'s readable text inline and marks nothing ' +
+          'read — that is the agent read path, so sweeping a backlog never zeroes ' +
+          "the owner's unread count (`GET /me/emails/{id}` does mark read). Pages " +
+          'carrying bodies are capped at 50. An unknown `source`, `status` or `link` ' +
+          'value is a 400, never a silently empty page.',
+        query: [
+          { name: 'source', type: 'string', description: 'One account: `gmail`, `hosted`, or `external`.' },
+          { name: 'status', type: 'string', description: 'One classified label (see the triage vocabulary below).', example: 'rejection' },
+          { name: 'unclassified', type: 'boolean', description: "Only mail nothing has judged yet — the agent's work queue." },
+          { name: 'unread', type: 'boolean', description: 'Only messages you have not opened.' },
+          { name: 'link', type: 'string', description: 'One link state: `linked`, `suggested` (awaiting your word), or `unlinked`.' },
+          { name: 'q', type: 'string', description: 'Match subject, sender, or body.' },
+          { name: 'body', type: 'boolean', description: 'Include each message body; caps the page at 50.' },
+          { name: 'limit', type: 'integer', description: 'Page size.' },
+          { name: 'offset', type: 'integer', description: 'Page offset.' },
+        ],
+        curl: `curl "${BASE_URL}/me/inbox?unclassified=1&body=1&limit=50" \\
+  -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{
+  "data": [
+    {
+      "id": 4821,
+      "source": "gmail",
+      "external_id": "<CAF...@mail.gmail.com>",
+      "from_addr": "no-reply@us.greenhouse-mail.io",
+      "from_name": "Speechify Recruiting",
+      "subject": "Thank you for applying to Speechify",
+      "snippet": "We have received your application…",
+      "received_at": "2026-07-24T09:12:00Z",
+      "read": false,
+      "status_signal": "acknowledgement",
+      "link_source": "thread",
+      "linked_slug": "tech-lead-web-core-speechify-a1b2"
+    }
+  ],
+  "meta": { "total": 137, "limit": 50, "offset": 0 }
+}`,
+      },
+      {
+        method: 'GET',
+        path: '/me/emails/{id}',
+        auth: 'cookie-or-key',
+        summary: 'One message in full. Marks it read.',
+        description:
+          'Use `GET /me/inbox?body=1` instead when sweeping a backlog — `read_at` ' +
+          'means "a human saw this", and this endpoint sets it.',
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The message id.', example: '4821' }],
+        curl: `curl "${BASE_URL}/me/emails/4821" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": { "id": 4821, "subject": "Thank you for applying to Speechify", "body_text": "Dear …", "status_signal": "acknowledgement", "linked_slug": "tech-lead-web-core-speechify-a1b2" } }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/emails',
+        auth: 'cookie-or-key',
+        summary: 'Push a batch your own mail client fetched.',
+        description:
+          'Stored under source `external`. freehire provides no transport here and ' +
+          'never classifies this mail — that is the point of the tier. `external_id` ' +
+          '(the Message-ID in practice) is the dedup key: re-pushing the same id ' +
+          'updates that message instead of storing a copy, so a nightly re-sync is ' +
+          'safe. Content columns are refreshed; your read, deleted and triage state ' +
+          'is not, so a re-sync cannot resurrect deleted mail or wipe a verdict. At ' +
+          'most 100 messages per call, applied as one transaction — an oversized ' +
+          'batch is refused, never truncated.',
+        body: [
+          { name: 'messages', type: 'array', required: true, description: 'Up to 100 messages.' },
+          { name: 'messages[].external_id', type: 'string', required: true, description: 'Dedup key; the Message-ID header.', example: '<CAF...@mail.gmail.com>' },
+          { name: 'messages[].thread_id', type: 'string', description: 'Provider thread id, if you have one.' },
+          { name: 'messages[].from_addr', type: 'string', description: 'Sender address.' },
+          { name: 'messages[].from_name', type: 'string', description: 'Sender display name — the matcher reads the company name from here.' },
+          { name: 'messages[].subject', type: 'string', description: 'Subject line.' },
+          { name: 'messages[].body_text', type: 'string', description: 'Plain-text body.' },
+          { name: 'messages[].body_html', type: 'string', description: 'HTML body; used when there is no text part.' },
+          { name: 'messages[].received_at', type: 'string (RFC3339)', description: 'When the message arrived.' },
+        ],
+        curl: `curl -X POST "${BASE_URL}/me/emails" \\
+  -H "Authorization: Bearer fhk_…" \\
+  -H 'Content-Type: application/json' \\
+  -d '{"messages":[{"external_id":"<CAF...@mail.gmail.com>","from_addr":"no-reply@us.greenhouse-mail.io","subject":"Thank you for applying","received_at":"2026-07-24T09:12:00Z"}]}'`,
+        responseExample: `{ "data": { "inserted": 1, "updated": 0 } }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/emails/{id}/triage',
+        auth: 'cookie-or-key',
+        summary: 'Record what a message is, and optionally which application it belongs to.',
+        description:
+          'The vocabulary is closed: `acknowledgement`, `screening`, ' +
+          '`interview_invitation`, `assessment`, `offer`, `rejection`, ' +
+          '`info_request`, `incomplete_application`, `other`. Anything else is ' +
+          'refused. A confident verdict on a linked message advances the ' +
+          "application's stage — strictly forward, never out of a settled stage, and " +
+          'a rejection never advances anything by itself.',
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The message id.' }],
+        body: [
+          { name: 'signal', type: 'string', required: true, description: 'One value from the vocabulary above.', example: 'interview_invitation' },
+          { name: 'slug', type: 'string', description: 'Link the message to this application at the same time.' },
+          { name: 'confidence', type: 'number', description: 'Your confidence in the verdict, 0–1. Below the stage threshold the message is classified but the card does not move.' },
+        ],
+        curl: `curl -X POST "${BASE_URL}/me/emails/4821/triage" \\
+  -H "Authorization: Bearer fhk_…" \\
+  -H 'Content-Type: application/json' \\
+  -d '{"signal":"interview_invitation","slug":"tech-lead-web-core-speechify-a1b2","confidence":0.9}'`,
+        responseExample: `{ "data": { "id": 4821, "subject": "Interview for …", "status_signal": "interview_invitation", "linked_slug": "tech-lead-web-core-speechify-a1b2" } }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/emails/{id}/link',
+        auth: 'cookie-or-key',
+        summary: 'Attach a message to one of your applications.',
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The message id.' }],
+        body: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug` to attach to.' }],
+        curl: `curl -X POST "${BASE_URL}/me/emails/4821/link" \\
+  -H "Authorization: Bearer fhk_…" \\
+  -H 'Content-Type: application/json' -d '{"slug":"tech-lead-web-core-speechify-a1b2"}'`,
+        responseExample: `{ "data": { "id": 4821, "linked_slug": "tech-lead-web-core-speechify-a1b2", "link_source": "manual" } }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/emails/{id}/unlink',
+        auth: 'cookie-or-key',
+        summary: "Clear a message's application link; its classification stays.",
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The message id.' }],
+        curl: `curl -X POST "${BASE_URL}/me/emails/4821/unlink" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": { "id": 4821, "linked_slug": "", "status_signal": "acknowledgement" } }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/emails/{id}/confirm',
+        auth: 'cookie-or-key',
+        summary: 'Accept a suggested link.',
+        description:
+          'Only a deterministic match — the mail thread, or the company name in the ' +
+          "sender or subject — links itself. A model's pick lands here as a " +
+          'suggestion instead, and `?link=suggested` is the queue of them.',
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The message id.' }],
+        curl: `curl -X POST "${BASE_URL}/me/emails/4821/confirm" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": { "id": 4821, "linked_slug": "tech-lead-web-core-speechify-a1b2", "link_source": "confirmed" } }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/emails/{id}/reject',
+        auth: 'cookie-or-key',
+        summary: 'Dismiss a suggested link without attaching it.',
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The message id.' }],
+        curl: `curl -X POST "${BASE_URL}/me/emails/4821/reject" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": { "id": 4821, "suggested_slug": "" } }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/emails/{id}/application',
+        auth: 'cookie-or-key',
+        summary: 'Record an application from a message, and link the message to it.',
+        description:
+          'The way out of `?link=unlinked`: mail about a job you never tracked. The ' +
+          "application is dated by the mail's `received_at`, not by now — the " +
+          'application demonstrably existed by the time the employer wrote.',
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The message id.' }],
+        body: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug` to record an application for.' }],
+        curl: `curl -X POST "${BASE_URL}/me/emails/4821/application" \\
+  -H "Authorization: Bearer fhk_…" \\
+  -H 'Content-Type: application/json' -d '{"slug":"tech-lead-web-core-speechify-a1b2"}'`,
+        responseExample: `{ "data": { "id": 4821, "linked_slug": "tech-lead-web-core-speechify-a1b2", "applied_at": "2026-07-24T09:12:00Z" } }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/inbox/read-all',
+        auth: 'cookie-or-key',
+        summary: 'Mark every unread message matching the filters as read.',
+        query: [
+          { name: 'source', type: 'string', description: 'Narrow to one account.' },
+          { name: 'status', type: 'string', description: 'Narrow to one label.' },
+          { name: 'link', type: 'string', description: 'Narrow to one link state.' },
+          { name: 'q', type: 'string', description: 'Narrow by search.' },
+        ],
+        curl: `curl -X POST "${BASE_URL}/me/inbox/read-all" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": { "marked": 12 } }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/emails/{id}/delete',
+        auth: 'cookie-or-key',
+        summary: 'Soft-delete a message. Answers 204.',
+        description: 'A later re-sync will not resurrect it — deletion is reader state, not mail-server state.',
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The message id.' }],
+        curl: `curl -X POST "${BASE_URL}/me/emails/4821/delete" -H "Authorization: Bearer fhk_…"`,
+      },
+      {
+        method: 'POST',
+        path: '/me/emails/{id}/restore',
+        auth: 'cookie-or-key',
+        summary: 'Undo a soft-delete. Answers 204.',
+        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The message id.' }],
+        curl: `curl -X POST "${BASE_URL}/me/emails/4821/restore" -H "Authorization: Bearer fhk_…"`,
+      },
+      {
+        method: 'GET',
+        path: '/me/mailbox',
+        auth: 'cookie-or-key',
+        summary: 'Your hosted freehire address, and whether the feature is configured.',
+        description: '`address` is null until you claim one; `available` is false when the instance runs without a mailbox domain.',
+        curl: `curl "${BASE_URL}/me/mailbox" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": { "available": true, "address": "you@mail.freehire.me" } }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/mailbox',
+        auth: 'cookie-or-key',
+        summary: 'Claim your hosted address.',
+        curl: `curl -X POST "${BASE_URL}/me/mailbox" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": { "available": true, "address": "you@mail.freehire.me" } }`,
+      },
+      {
+        method: 'DELETE',
+        path: '/me/mailbox',
+        auth: 'cookie-or-key',
+        summary: 'Release the address; it stops receiving.',
+        curl: `curl -X DELETE "${BASE_URL}/me/mailbox" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": { "available": true, "address": null } }`,
+      },
+      {
+        method: 'GET',
+        path: '/me/gmail',
+        auth: 'cookie-or-key',
+        summary: 'Gmail connection status.',
+        description:
+          '`available` reflects whether the instance has Gmail OAuth configured. ' +
+          '`status` is `needs_reconsent` when Google revoked the grant. Connecting ' +
+          'itself is a browser redirect (`/me/gmail/connect`), so it is session-only ' +
+          'and not part of the key-driven surface.',
+        curl: `curl "${BASE_URL}/me/gmail" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": { "available": true, "connected": true, "email": "you@gmail.com", "status": "ok" } }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/gmail/sync',
+        auth: 'cookie-or-key',
+        summary: 'Start an incremental sync.',
+        description:
+          'Returns as soon as the sync is queued — a full backfill outlives the ' +
+          'request — so poll the inbox for results rather than reading counts here.',
+        curl: `curl -X POST "${BASE_URL}/me/gmail/sync" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": { "started": true } }`,
+      },
+      {
+        method: 'DELETE',
+        path: '/me/gmail',
+        auth: 'cookie-or-key',
+        summary: 'Disconnect Gmail and purge the mail it synced.',
+        description:
+          'Best-effort revokes the grant at Google, deletes the stored token, and ' +
+          'removes the Gmail-sourced mail. Mail from the hosted address stays.',
+        curl: `curl -X DELETE "${BASE_URL}/me/gmail" -H "Authorization: Bearer fhk_…"`,
+        responseExample: `{ "data": { "connected": false } }`,
       },
     ],
   },
