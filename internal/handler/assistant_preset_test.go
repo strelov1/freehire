@@ -18,7 +18,7 @@ func TestChatPresetOffersDiscoveryAndTrackingTools(t *testing.T) {
 
 	for _, want := range []string{"facets", "search_jobs", "get_job", "get_company", "market_fit",
 		"save_job", "unsave_job", "apply_job", "track_job", "my_jobs"} {
-		if !reg.Has(want) {
+		if !slices.Contains(reg.Names(), want) {
 			t.Errorf("chat preset is missing the %q tool; registered: %v", want, reg.Names())
 		}
 	}
@@ -41,7 +41,7 @@ func TestTailorPresetAddsTheCVTools(t *testing.T) {
 	})
 
 	for _, want := range []string{"cv_context", "cv_get", "cv_edit", "search_jobs"} {
-		if !reg.Has(want) {
+		if !slices.Contains(reg.Names(), want) {
 			t.Errorf("tailor preset is missing the %q tool; registered: %v", want, reg.Names())
 		}
 	}

@@ -119,8 +119,7 @@ func (r *Runner) Run(ctx context.Context, sess Session, reg *Registry, system, p
 
 	for step := 0; step < r.cfg.MaxSteps; step++ {
 		if ctx.Err() != nil {
-			emit(Event{Kind: EventResult, StopReason: StopCancelled})
-			return nil
+			return end(emit, StopCancelled)
 		}
 
 		choice, err := r.model.Chat(ctx, history, reg.Definitions(), stream(emit))
@@ -128,8 +127,7 @@ func (r *Runner) Run(ctx context.Context, sess Session, reg *Registry, system, p
 			// A cancelled context surfaces as a model error; report it as the
 			// cancellation it is rather than as a failure the user must act on.
 			if ctx.Err() != nil {
-				emit(Event{Kind: EventResult, StopReason: StopCancelled})
-				return nil
+				return end(emit, StopCancelled)
 			}
 			return r.fail(emit, err)
 		}
@@ -138,8 +136,7 @@ func (r *Runner) Run(ctx context.Context, sess Session, reg *Registry, system, p
 
 		if len(choice.ToolCalls) == 0 {
 			emitUsage(emit, choice)
-			emit(Event{Kind: EventResult, StopReason: StopEndTurn})
-			return nil
+			return end(emit, StopEndTurn)
 		}
 
 		history = r.runToolCalls(ctx, sess, reg, history, choice.ToolCalls, emit)
@@ -147,8 +144,7 @@ func (r *Runner) Run(ctx context.Context, sess Session, reg *Registry, system, p
 		// Cancelled mid-round: the tools that already ran are committed and
 		// persisted; stop before spending another model call.
 		if ctx.Err() != nil {
-			emit(Event{Kind: EventResult, StopReason: StopCancelled})
-			return nil
+			return end(emit, StopCancelled)
 		}
 	}
 
@@ -157,14 +153,20 @@ func (r *Runner) Run(ctx context.Context, sess Session, reg *Registry, system, p
 	choice, err := r.model.Chat(ctx, history, nil, stream(emit))
 	if err != nil {
 		if ctx.Err() != nil {
-			emit(Event{Kind: EventResult, StopReason: StopCancelled})
-			return nil
+			return end(emit, StopCancelled)
 		}
 		return r.fail(emit, err)
 	}
 	r.appendAssistant(ctx, sess.ID, history, choice)
 	emitUsage(emit, choice)
-	emit(Event{Kind: EventResult, StopReason: StopMaxSteps})
+	return end(emit, StopMaxSteps)
+}
+
+// end closes a turn with its terminal event. Every exit from the loop goes
+// through here or through fail, so a turn can never finish without telling the
+// client why.
+func end(emit func(Event), reason string) error {
+	emit(Event{Kind: EventResult, StopReason: reason})
 	return nil
 }
 
@@ -289,26 +291,15 @@ func stream(emit func(Event)) llm.ChatStream {
 	}
 }
 
-// emitUsage reports token counts when the provider surfaced them.
+// emitUsage reports token counts when the provider surfaced them. It reads them
+// through the LLM client's own extraction, so the stream and the tracer never
+// disagree about what a turn cost.
 func emitUsage(emit func(Event), choice *llms.ContentChoice) {
-	in, okIn := usageInt(choice.GenerationInfo["PromptTokens"])
-	out, okOut := usageInt(choice.GenerationInfo["CompletionTokens"])
-	if !okIn && !okOut {
+	usage := llm.UsageFrom(choice)
+	if usage == nil {
 		return
 	}
-	emit(Event{Kind: EventUsage, InputTokens: in, OutputTokens: out})
-}
-
-func usageInt(v any) (int, bool) {
-	switch n := v.(type) {
-	case int:
-		return n, true
-	case int64:
-		return int(n), true
-	case float64:
-		return int(n), true
-	}
-	return 0, false
+	emit(Event{Kind: EventUsage, InputTokens: usage.Input, OutputTokens: usage.Output})
 }
 
 // validJSON renders tool arguments for the UI, falling back to a JSON string when

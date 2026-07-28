@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -28,12 +29,11 @@ const assistantKeepalive = 15 * time.Second
 
 // sessionResponse is the wire shape of one conversation.
 type sessionResponse struct {
-	ID        string `json:"id"`
-	Preset    string `json:"preset"`
-	Label     string `json:"label"`
-	CVID      *int64 `json:"cv_id,omitempty"`
-	JobID     *int64 `json:"job_id,omitempty"`
-	UpdatedAt string `json:"updated_at,omitempty"`
+	ID     string `json:"id"`
+	Preset string `json:"preset"`
+	Label  string `json:"label"`
+	CVID   *int64 `json:"cv_id,omitempty"`
+	JobID  *int64 `json:"job_id,omitempty"`
 }
 
 // sessionView renders a session for the client. The id is a string because the
@@ -48,7 +48,7 @@ func sessionView(s assistant.Session) sessionResponse {
 	}
 }
 
-func assistantSessionID(id int64) string { return fmt.Sprintf("%d", id) }
+func assistantSessionID(id int64) string { return strconv.FormatInt(id, 10) }
 
 // CreateAssistantSession starts a new chat conversation for the caller. Tailoring
 // sessions are created by the tailoring bootstrap, which knows the CV and vacancy

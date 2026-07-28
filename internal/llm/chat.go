@@ -93,7 +93,7 @@ func (c *Client) Chat(ctx context.Context, msgs []llms.MessageContent, tools []l
 	choice.ToolCalls = mergeToolCallFragments(choice.ToolCalls)
 	g := gen()
 	g.Output = choice.Content
-	g.Usage = usageFrom(choice)
+	g.Usage = UsageFrom(choice)
 	c.observe(g)
 	return choice, nil
 }

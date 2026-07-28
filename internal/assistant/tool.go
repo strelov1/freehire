@@ -60,12 +60,6 @@ func NewRegistry(tools ...Tool) *Registry {
 // Names lists the registered tool names in order.
 func (r *Registry) Names() []string { return r.order }
 
-// Has reports whether a tool is registered.
-func (r *Registry) Has(name string) bool {
-	_, ok := r.tools[name]
-	return ok
-}
-
 // Definitions renders the registry as the model-facing tool list.
 func (r *Registry) Definitions() []llms.Tool {
 	out := make([]llms.Tool, 0, len(r.order))

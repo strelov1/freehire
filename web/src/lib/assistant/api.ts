@@ -13,12 +13,24 @@ export interface SessionTranscript {
   messages: StoredMessage[];
 }
 
+/** Thrown when a conversation is not the caller's to open: deleted, or someone
+ *  else's (the API reports both as 404 so ids stay unprobeable). Carried as its
+ *  own type so the UI can tell a dead link apart from a broken assistant without
+ *  matching on an error message. */
+export class SessionNotFound extends Error {
+  constructor() {
+    super('session not found');
+    this.name = 'SessionNotFound';
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     credentials: 'include',
     headers: { 'content-type': 'application/json' },
     ...init,
   });
+  if (res.status === 404) throw new SessionNotFound();
   if (!res.ok) {
     throw new Error(`assistant request failed (${res.status})`);
   }

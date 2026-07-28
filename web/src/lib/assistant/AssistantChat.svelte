@@ -15,7 +15,13 @@
   } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { currentUser } from '$lib/auth.svelte';
-  import { createSession, listSessions, getSession, deleteSession } from '$lib/assistant/api';
+  import {
+    createSession,
+    listSessions,
+    getSession,
+    deleteSession,
+    SessionNotFound,
+  } from '$lib/assistant/api';
   import { sendTurn, type Turn } from '$lib/assistant/client';
   import { initChat, reduceTurnEvent, type ChatState } from '$lib/assistant/chat';
   import { parseJobSegments } from '$lib/assistant/unfurl';
@@ -235,13 +241,8 @@
         void dispatch(kickoff);
       }
     } catch (err) {
-      // A 404 on the requested conversation is a dead link, not a broken assistant.
-      if (session && err instanceof Error && err.message.includes('404')) {
-        notFound = true;
-        phase = 'ready';
-        return;
-      }
-      error = err instanceof Error ? err.message : 'Could not reach the assistant.';
+      report(err, 'Could not reach the assistant.');
+      phase = 'ready';
     }
   }
 
@@ -250,10 +251,18 @@
   $effect(() => {
     const requested = session;
     if (!requested || phase !== 'ready' || requested === activeId) return;
-    void openSession(requested).catch(() => {
-      notFound = true;
-    });
+    openSession(requested).catch((err: unknown) => report(err, 'Could not open that chat.'));
   });
+
+  /** Surface a failure. A conversation the caller cannot open is a dead link, not
+   *  a broken assistant, so it gets the explanation panel rather than an error. */
+  function report(err: unknown, fallback: string) {
+    if (err instanceof SessionNotFound) {
+      notFound = true;
+      return;
+    }
+    error = err instanceof Error ? err.message : fallback;
+  }
 
   // Open a session and repaint its stored transcript. The replay folds through the
   // same reducer live events do, so history and a running turn render identically.
@@ -308,8 +317,8 @@
     error = null;
     try {
       await openSession(id);
-    } catch {
-      error = 'Could not open that chat.';
+    } catch (err) {
+      report(err, 'Could not open that chat.');
     }
   }
 
