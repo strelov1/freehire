@@ -8,9 +8,7 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -70,10 +68,8 @@ func TestGmailInboxEndToEnd(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s %s: %v", method, path, err)
 		}
-		b, _ := io.ReadAll(resp.Body)
 		var body map[string]any
-		_ = json.Unmarshal(b, &body)
-		return resp.StatusCode, body
+		return decodeJSON(t, resp, &body), body
 	}
 
 	// Status: connected.

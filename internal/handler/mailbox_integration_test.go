@@ -8,8 +8,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -54,10 +52,8 @@ func TestHostedMailboxEndToEnd(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s %s: %v", method, path, err)
 		}
-		b, _ := io.ReadAll(resp.Body)
 		var body map[string]any
-		_ = json.Unmarshal(b, &body)
-		return resp.StatusCode, body
+		return decodeJSON(t, resp, &body), body
 	}
 
 	// Status: no mailbox yet, feature available.

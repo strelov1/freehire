@@ -11,7 +11,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -119,10 +118,8 @@ func TestMatchAnalysisEndpoints(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s fit: %v", method, err)
 		}
-		defer resp.Body.Close()
 		var body fitBody
-		_ = json.NewDecoder(resp.Body).Decode(&body)
-		return resp.StatusCode, body
+		return decodeJSON(t, resp, &body), body
 	}
 
 	appFor := func(store *resume.Store, an *matchanalysis.Analyzer) *fiber.App {
@@ -282,10 +279,8 @@ func TestMatchAnalysisCredits(t *testing.T) {
 		if err != nil {
 			t.Fatalf("POST fit: %v", err)
 		}
-		defer resp.Body.Close()
 		var body fitBody
-		_ = json.NewDecoder(resp.Body).Decode(&body)
-		return resp.StatusCode, body
+		return decodeJSON(t, resp, &body), body
 	}
 	newModel := func() *fitModel { return &fitModel{resp: []string{fitStage1, fitStage2, fitStage3}} }
 
@@ -344,8 +339,7 @@ func TestMatchAnalysisCredits(t *testing.T) {
 				Credits *credits.Balance `json:"credits"`
 			} `json:"data"`
 		}
-		_ = json.NewDecoder(gresp.Body).Decode(&gbody)
-		gresp.Body.Close()
+		decodeJSON(t, gresp, &gbody)
 		if gbody.Data.Credits == nil || gbody.Data.Credits.Remaining != 2 {
 			t.Fatalf("GET credits = %+v, want remaining=2", gbody.Data.Credits)
 		}

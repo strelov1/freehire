@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"net/http/httptest"
 	"testing"
 
@@ -67,8 +66,7 @@ func doGet(t *testing.T, app *fiber.App, target string) (int, map[string]any) {
 		t.Fatalf("request: %v", err)
 	}
 	var body map[string]any
-	_ = json.NewDecoder(resp.Body).Decode(&body)
-	return resp.StatusCode, body
+	return decodeJSON(t, resp, &body), body
 }
 
 func TestSearchJobs_DisabledReturns503(t *testing.T) {

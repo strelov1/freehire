@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -47,8 +46,7 @@ func deckGet(t *testing.T, app *fiber.App, iss *auth.Issuer, target string) (int
 		t.Fatalf("request: %v", err)
 	}
 	var body map[string]any
-	_ = json.NewDecoder(resp.Body).Decode(&body)
-	return resp.StatusCode, body
+	return decodeJSON(t, resp, &body), body
 }
 
 func TestSwipeDeck_ExcludesJudgedJobsAndForwardsFilters(t *testing.T) {
