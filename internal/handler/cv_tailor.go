@@ -6,12 +6,11 @@ import (
 	"log"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/cv"
@@ -19,53 +18,19 @@ import (
 	"github.com/strelov1/freehire/internal/matchanalysis"
 )
 
-// tailoringKeyTTL bounds how long the minted CLI credential is valid. A tailoring session is
-// interactive and short; a couple of hours covers it while limiting the blast radius of a key
-// that leaks out of the agent's environment.
-const tailoringKeyTTL = 2 * time.Hour
-
-// apiKeyMinter is the slice of the query surface mintTailoringKey needs (*db.Queries satisfies
-// it), kept narrow so the mint logic is unit-testable without a database.
-type apiKeyMinter interface {
-	CreateAPIKey(ctx context.Context, arg db.CreateAPIKeyParams) (db.CreateAPIKeyRow, error)
-}
-
-// mintTailoringKey issues a short-lived API key the tailoring agent's CLI uses to act as the
-// user against the CV endpoints. It reuses the api_keys machinery and is minted at the narrow
-// `cv` scope: the CV endpoints' own owner checks confine it to this user's CVs, and the scope
-// confines it to the CV surface, so a credential that leaks out of an agent's environment
-// cannot read third-party referral CVs or spend the owner's AI credits. The plaintext token
-// is returned once (to hand to the agent session) and only its hash is stored.
-func mintTailoringKey(ctx context.Context, q apiKeyMinter, userID int64, now time.Time) (string, error) {
-	token, hash, prefix, err := auth.GenerateAPIKey()
-	if err != nil {
-		return "", err
-	}
-	if _, err := q.CreateAPIKey(ctx, db.CreateAPIKeyParams{
-		UserID:      userID,
-		Name:        "CV tailoring session",
-		TokenHash:   hash,
-		TokenPrefix: prefix,
-		Scope:       auth.ScopeCV,
-		ExpiresAt:   pgtype.Timestamptz{Time: now.Add(tailoringKeyTTL), Valid: true},
-	}); err != nil {
-		return "", err
-	}
-	return token, nil
-}
-
 type tailorCVRequest struct {
 	JobSlug string `json:"job_slug"`
 }
 
 // tailorCVResponse is what the fit-page CTA gets back: the ids of the new tailored CV and the
-// base it was copied from, the cached analysis (so the client need not refetch), and the
-// short-lived CLI token the agent session authenticates with.
+// base it was copied from, the cached analysis (so the client need not refetch), and the id of
+// the tailoring conversation the agent will run in. There is no credential: the agent runs
+// in-process as the caller.
 type tailorCVResponse struct {
 	TailorCVID int64                   `json:"tailor_cv_id"`
 	BaseCVID   int64                   `json:"base_cv_id"`
 	Analysis   *matchanalysis.Analysis `json:"analysis"`
-	CLIToken   string                  `json:"cli_token"`
+	SessionID  string                  `json:"session_id"`
 }
 
 // TailorCV bootstraps a tailoring session for a vacancy: it requires a cached fit analysis
@@ -110,7 +75,7 @@ func (a *API) TailorCV(c *fiber.Ctx) error {
 	if err != nil {
 		return mapCVError(err)
 	}
-	token, err := mintTailoringKey(c.Context(), a.queries, userID, time.Now())
+	sessionID, err := a.startTailoringSession(c.Context(), userID, tailored.ID, job.ID)
 	if err != nil {
 		return err
 	}
@@ -123,17 +88,17 @@ func (a *API) TailorCV(c *fiber.Ctx) error {
 		log.Printf("credits: tailor debit user=%d cv=%d: %v", userID, tailored.ID, err)
 	}
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": tailorCVResponse{
-		TailorCVID: tailored.ID, BaseCVID: base.ID, Analysis: analysis, CLIToken: token,
+		TailorCVID: tailored.ID, BaseCVID: base.ID, Analysis: analysis, SessionID: sessionID,
 	}})
 }
 
 // tailorSessionResponse re-establishes a tailoring session for an EXISTING tailored CV (one
-// created before session binding, or whose session was lost): the CV + base ids and a freshly
-// minted CLI token, so the browser can seed a new agent session bound to the same CV.
+// created before session binding, or whose session was lost): the CV + base ids and a fresh
+// conversation bound to the same CV.
 type tailorSessionResponse struct {
 	TailorCVID int64  `json:"tailor_cv_id"`
 	BaseCVID   int64  `json:"base_cv_id"`
-	CLIToken   string `json:"cli_token"`
+	SessionID  string `json:"session_id"`
 }
 
 // StartTailorSession mints a CLI credential for an existing tailored CV so the workspace can
@@ -162,13 +127,30 @@ func (a *API) StartTailorSession(c *fiber.Ctx) error {
 	if !ok {
 		return fiber.NewError(fiber.StatusConflict, "no base CV")
 	}
-	token, err := mintTailoringKey(c.Context(), a.queries, userID, time.Now())
+	sessionID, err := a.startTailoringSession(c.Context(), userID, rec.ID, rec.JobID)
 	if err != nil {
 		return err
 	}
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": tailorSessionResponse{
-		TailorCVID: rec.ID, BaseCVID: base.ID, CLIToken: token,
+		TailorCVID: rec.ID, BaseCVID: base.ID, SessionID: sessionID,
 	}})
+}
+
+// startTailoringSession creates the conversation a tailoring workspace runs in: a
+// tailor-preset session bound to the CV and its vacancy, stored on the CV so reopening
+// the workspace resumes the same chat instead of starting over. The binding is what
+// confines the CV tools — they close over these ids rather than taking them from the
+// model — so it is created here, where the ownership of both is already established.
+func (a *API) startTailoringSession(ctx context.Context, userID, cvID, jobID int64) (string, error) {
+	sess, err := a.assistant.CreateSession(ctx, userID, assistant.PresetTailor, &cvID, &jobID)
+	if err != nil {
+		return "", err
+	}
+	id := assistantSessionID(sess.ID)
+	if err := a.cvStore.SetSession(ctx, cvID, userID, id); err != nil {
+		return "", err
+	}
+	return id, nil
 }
 
 // PatchCV applies one field-level patch to an owned CV. Cookie or API key (the agent's CLI

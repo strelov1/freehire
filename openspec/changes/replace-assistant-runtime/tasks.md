@@ -41,8 +41,8 @@
 
 ## 7. Tailoring bootstrap
 
-- [ ] 7.1 Remove `mintTailoringKey` and the `cli_token` field from `TailorCV` and `StartTailorSession`; update their tests. The `cv` API-key scope itself stays for the public CLI.
-- [ ] 7.2 Have the tailoring bootstrap create a `tailor`-preset assistant session bound to the tailored CV and its vacancy, and return its id where the workspace expects a session id.
+- [x] 7.1 Remove `mintTailoringKey` and the `cli_token` field from `TailorCV` and `StartTailorSession`; update their tests. The `cv` API-key scope itself stays for the public CLI.
+- [x] 7.2 Have the tailoring bootstrap create a `tailor`-preset assistant session bound to the tailored CV and its vacancy, and return its id where the workspace expects a session id.
 
 ## 8. Frontend transport
 
