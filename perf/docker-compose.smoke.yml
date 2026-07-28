@@ -1,0 +1,14 @@
+# Overlay for the CI page smoke (.github/workflows/perf.yml), applied via
+# COMPOSE_FILE. The smoke boots the server and hits pages through it; the twelve
+# run-once workers in the image are never invoked, so building them is time the
+# gate can't spend. Everything else about the image is untouched — same base,
+# same runtime stage, same server binary — so what the smoke boots still
+# differs from the prod image only by binaries it would never run.
+#
+# WORKER_PKGS lives in the Dockerfile with the full list as its default: nothing
+# outside this file shortens it.
+services:
+  app:
+    build:
+      args:
+        WORKER_PKGS: ""

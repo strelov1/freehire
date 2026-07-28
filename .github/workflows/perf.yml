@@ -34,6 +34,10 @@ jobs:
   pr-smoke:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    env:
+      # Every `docker compose` below picks up the overlay, which builds the app
+      # image without the twelve worker binaries this smoke never invokes.
+      COMPOSE_FILE: docker-compose.yml:perf/docker-compose.smoke.yml
     steps:
       - uses: actions/checkout@v7
         with:

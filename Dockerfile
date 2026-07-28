@@ -14,13 +14,18 @@ COPY . .
 # Two invocations rather than one per binary: with `-o /out/` (a directory) Go
 # names each binary after its cmd dir — which is already how they're named — and
 # building them together shares one dependency compile and links them in
-# parallel. Cold-cache: 26s -> 17s locally, 72s -> ~50s on a CI runner. Only the
+# parallel. Cold-cache: 26s -> 17s locally, 72s -> 66s on a CI runner. Only the
 # server needs an output name of its own.
+#
+# WORKER_PKGS is the full list by default, so an ordinary `docker build` still
+# produces the complete image. The ONLY thing that overrides it is the CI page
+# smoke (perf/docker-compose.smoke.yml), which boots nothing but the server and
+# has no use for the workers' compile time.
+ARG WORKER_PKGS="./cmd/ingest ./cmd/enrich ./cmd/reindex ./cmd/tg-ingest ./cmd/tg-extract ./cmd/backfill-derive ./cmd/liveness ./cmd/notify ./cmd/import-collections ./cmd/recount-companies ./cmd/migrate ./cmd/backfill-company-info"
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/hire ./cmd/server \
- && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/ \
-      ./cmd/ingest ./cmd/enrich ./cmd/reindex ./cmd/tg-ingest ./cmd/tg-extract \
-      ./cmd/backfill-derive ./cmd/liveness ./cmd/notify ./cmd/import-collections \
-      ./cmd/recount-companies ./cmd/migrate ./cmd/backfill-company-info
+ && if [ -n "$WORKER_PKGS" ]; then \
+      CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/ $WORKER_PKGS; \
+    fi
 
 # --- typst stage: fetch the pinned, statically-linked typst binary used to render CV
 # PDFs (internal/cv). The musl build is fully static, so it runs on distroless/static;
@@ -48,7 +53,8 @@ RUN apt-get update \
  && groupadd --system --gid 65532 nonroot \
  && useradd --system --uid 65532 --gid nonroot --home-dir /app nonroot \
  && pdftotext -v
-COPY --from=build /out/hire /out/ingest /out/enrich /out/reindex /out/tg-ingest /out/tg-extract /out/backfill-derive /out/liveness /out/notify /out/import-collections /out/recount-companies /out/migrate /out/backfill-company-info /app/
+# The whole /out, not a list of names: WORKER_PKGS decides what's in it.
+COPY --from=build /out/ /app/
 # The migration runner reads its *.sql files from the image (WORKDIR /app, default
 # -dir migrations), so /app/migrate works the same as `go run ./cmd/migrate` on the host.
 COPY --from=build /src/migrations /app/migrations
