@@ -116,6 +116,14 @@ func TestCanonicalPostingURL_DropsTheApplyForm(t *testing.T) {
 			want: "https://apply.workable.com/1kosmos/j/435C7BA5E4",
 		},
 		{
+			// The check that got us here is case-insensitive, so the cut must be too —
+			// otherwise the suffix matches, nothing is removed, and the URL comes back
+			// quietly altered instead of untouched.
+			name: "a shouting suffix is still the apply form",
+			url:  "https://jobs.ashbyhq.com/truelogic/c6d2719d/APPLICATION",
+			want: "https://jobs.ashbyhq.com/truelogic/c6d2719d",
+		},
+		{
 			name: "a query string survives — the caller's normalisation drops it",
 			url:  "https://jobs.ashbyhq.com/truelogic/c6d2719d/application?utm_source=freehire.me",
 			want: "https://jobs.ashbyhq.com/truelogic/c6d2719d?utm_source=freehire.me",

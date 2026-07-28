@@ -121,8 +121,12 @@ func CanonicalPostingURL(raw string) string {
 	if !strings.HasSuffix(strings.ToLower(trimmed), suffix) {
 		return raw
 	}
+	// Cut by length rather than by value: the match above ignored case, so cutting
+	// the literal would leave a shouting suffix in place and hand back a URL that
+	// was altered (its trailing slash gone) but not canonicalised.
+	//
 	// A bare "/apply" is not a posting with a form; it is a page named apply.
-	stripped := strings.TrimSuffix(trimmed, suffix)
+	stripped := trimmed[:len(trimmed)-len(suffix)]
 	if stripped == "" {
 		return raw
 	}
