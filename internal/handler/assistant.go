@@ -39,7 +39,7 @@ type assistantHandlers struct {
 	// agent cannot drift from what the profile page shows.
 	profile *profileHandlers
 	// experience backs the bank tools, which every preset offers.
-	experience *experience.Store
+	experience experienceBankTools
 }
 
 // newAssistantHandlers wires the agent. A nil LLM client leaves the runner nil:

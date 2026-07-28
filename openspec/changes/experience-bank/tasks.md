@@ -35,8 +35,8 @@
 - [ ] 3.5 Add the `PresetProfile` constant and its interviewer system prompt in `internal/assistant/prompt.go` — find employments with no atoms, profile skills with no evidence, achievements with no metric, and ask about those
 - [ ] 3.6 Reduce `get_profile` to the bank's shape: employments, per-employment atom counts, and which saved profile skills lack evidence — no atom bodies
 - [ ] 3.7 Test that a several-hundred-atom bank produces a bounded `get_profile` result and that an uncovered profile skill is marked
-- [ ] 3.8 Gate `cv_edit` on provenance in the service path: content backed only by an `agent_inferred` atom is rejected with a message the model can act on, and the document is unchanged
-- [ ] 3.9 Test the gate directly — it is the requirement the whole change exists to make durable
+- [x] 3.8 Gate `cv_edit` on provenance in the service path — **strengthened beyond the written spec.** The spec assumed a patch arrives with a known backing atom; nothing made it arrive. So `add_bullet`/`replace_bullet` now REQUIRE `evidence_id`, and an omitted id is refused like a non-publishable one. Every bullet traces to something the candidate asserted, or it does not reach the page. Ops that rearrange or delete (`remove_bullet`, `reorder_bullets`, `set_stack`, `set_skill_group`) assert nothing new and are not gated
+- [x] 3.9 Test the gate directly — it is the requirement the whole change exists to make durable
 - [ ] 3.10 Revise `tailorPrompt`: search the bank before asking, for `missing_have` and `missing_gap` alike; persist a confirmed answer before writing it into the CV; a declined question writes nothing
 
 ## 4. Stage 4 — the user can see and correct what was recorded

@@ -12,6 +12,18 @@ import (
 	"github.com/strelov1/freehire/internal/experience"
 )
 
+// experienceBankTools is what the assistant needs from the experience bank. Narrow
+// handler-side interface, as everywhere else in this layer: it makes the provenance gate
+// testable without a database, which matters most for the one rule the whole capability
+// exists to keep.
+type experienceBankTools interface {
+	Retrieve(ctx context.Context, userID int64, q experience.Query, limit int) ([]experience.Match, error)
+	ListEmployments(ctx context.Context, userID int64) ([]experience.Employment, error)
+	GetAtom(ctx context.Context, id uuid.UUID, userID int64) (experience.Atom, error)
+	AddAtom(ctx context.Context, userID int64, a experience.Atom) (experience.Atom, error)
+	UpdateAtom(ctx context.Context, id uuid.UUID, userID int64, a experience.Atom) (experience.Atom, error)
+}
+
 // experienceSearchLimit caps what one search puts into the transcript. A tool result is
 // replayed into the model's context on every later turn, so an unbounded bank read would
 // consume the window a few searches in.
