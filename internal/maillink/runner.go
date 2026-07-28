@@ -156,7 +156,7 @@ func (r *Runner) process(ctx context.Context, c Claimed) error {
 		candidates = classifyCandidates(apps)
 	}
 	cls, err := r.classifier.Classify(ctx, mailclassify.Input{
-		FromName: c.FromName, Subject: c.Subject, Body: readableBody(c.Body, c.BodyHTML), Candidates: candidates,
+		FromName: c.FromName, Subject: c.Subject, Body: ReadableBody(c.Body, c.BodyHTML), Candidates: candidates,
 	})
 	if err != nil {
 		return err

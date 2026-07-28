@@ -13,10 +13,10 @@
 
 ## 3. Agent listing
 
-- [ ] 3.1 Export `maillink.readableBody` as `ReadableBody` and repoint its callers
-- [ ] 3.2 Add `external` to `inboxSources` and parse `?body=1` / `?unclassified=1` in `parseInboxFilters`, rejecting an unknown source as today
-- [ ] 3.3 Serve bodies inline when `body=1`, using `maillink.ReadableBody`, with the agent page size capped at 50
-- [ ] 3.4 Integration test: `?body=1` returns readable bodies and marks nothing read; `?unclassified=1` returns only unstamped mail and composes with the existing filters; a triaged message leaves the queue
+- [x] 3.1 Export `maillink.readableBody` as `ReadableBody` and repoint its callers
+- [x] 3.2 Add `external` to `inboxSources` and parse `?body=1` / `?unclassified=1` in `parseInboxFilters`, rejecting an unknown source as today
+- [x] 3.3 Serve bodies inline when `body=1`, using `maillink.ReadableBody`, with the agent page size capped at 50
+- [x] 3.4 Integration test: `?body=1` returns readable bodies and marks nothing read; `?unclassified=1` returns only unstamped mail and composes with the existing filters; a triaged message leaves the queue
 
 ## 4. Ingest endpoint
 
