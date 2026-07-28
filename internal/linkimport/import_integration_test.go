@@ -10,13 +10,12 @@ package linkimport
 import (
 	"context"
 	"fmt"
-	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 
+	"github.com/strelov1/freehire/internal/testdb"
+
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"golang.org/x/net/html"
 
 	"github.com/strelov1/freehire/internal/db"
@@ -24,40 +23,7 @@ import (
 
 func startPostgres(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	ctx := context.Background()
-
-	migrationsDir, err := filepath.Abs(filepath.Join("..", "..", "migrations"))
-	if err != nil {
-		t.Fatalf("resolve migrations dir: %v", err)
-	}
-	scripts, err := filepath.Glob(filepath.Join(migrationsDir, "*.sql"))
-	if err != nil || len(scripts) == 0 {
-		t.Fatalf("list migrations: %v (found %d)", err, len(scripts))
-	}
-	sort.Strings(scripts)
-
-	pg, err := postgres.Run(ctx, "postgres:18-alpine",
-		postgres.WithDatabase("hire"),
-		postgres.WithUsername("hire"),
-		postgres.WithPassword("hire"),
-		postgres.WithInitScripts(scripts...),
-		postgres.BasicWaitStrategies(),
-	)
-	if err != nil {
-		t.Fatalf("start postgres: %v", err)
-	}
-	t.Cleanup(func() { _ = pg.Terminate(ctx) })
-
-	dsn, err := pg.ConnectionString(ctx, "sslmode=disable")
-	if err != nil {
-		t.Fatalf("connection string: %v", err)
-	}
-	pool, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	return pool
+	return testdb.Pool(t)
 }
 
 // pageClient is a test linksource.Client serving one canned HTML body for any URL.
