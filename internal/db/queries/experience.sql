@@ -1,7 +1,7 @@
 -- name: ListExperienceEmployments :many
 -- The caller's places of work, current roles first and most recent within that. Owner-scoped
 -- by construction — another user's employments can never appear.
-SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, created_at, updated_at
+SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at
 FROM experience_employments
 WHERE user_id = $1
 ORDER BY is_current DESC, period_start DESC, id;
@@ -9,7 +9,7 @@ ORDER BY is_current DESC, period_start DESC, id;
 -- name: GetExperienceEmployment :one
 -- One employment owned by the caller. A foreign or missing id returns no row, which the
 -- handler maps to 404 — so a probe cannot tell the two apart.
-SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, created_at, updated_at
+SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at
 FROM experience_employments
 WHERE id = $1 AND user_id = $2;
 
@@ -18,25 +18,25 @@ WHERE id = $1 AND user_id = $2;
 -- insensitively because a CV, a chat and a form will each capitalise them differently.
 -- There is no unique constraint behind this on purpose (a second stint at the same employer
 -- in the same role is a real career shape), so the oldest match wins and stays stable.
-SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, created_at, updated_at
+SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at
 FROM experience_employments
 WHERE user_id = @user_id AND lower(company) = lower(@company) AND lower(role) = lower(@role)
 ORDER BY created_at, id
 LIMIT 1;
 
 -- name: CreateExperienceEmployment :one
-INSERT INTO experience_employments (user_id, kind, company, role, location, period_start, period_end, is_current, summary)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, created_at, updated_at;
+INSERT INTO experience_employments (user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at;
 
 -- name: UpdateExperienceEmployment :one
 -- A full owner-scoped replacement, used by the profile UI where the user is editing the
 -- fields directly and means what they typed — including blanking one.
 UPDATE experience_employments
 SET kind = $3, company = $4, role = $5, location = $6, period_start = $7, period_end = $8,
-    is_current = $9, summary = $10, updated_at = now()
+    is_current = $9, summary = $10, stack = $11, updated_at = now()
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, created_at, updated_at;
+RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at;
 
 -- name: FillExperienceEmploymentBlanks :one
 -- Import's write: fill only the fields the bank has nothing for, and never overwrite a value
@@ -44,15 +44,22 @@ RETURNING id, user_id, kind, company, role, location, period_start, period_end, 
 -- re-uploading the CV it came from. is_current is not touched at all — a CV that still says
 -- "Present" for a role the user has left would otherwise resurrect it.
 UPDATE experience_employments
-SET company      = coalesce(nullif(company, ''), $3),
-    role         = coalesce(nullif(role, ''), $4),
-    location     = coalesce(nullif(location, ''), $5),
-    period_start = coalesce(nullif(period_start, ''), $6),
-    period_end   = coalesce(nullif(period_end, ''), $7),
-    summary      = coalesce(nullif(summary, ''), $8),
+SET company      = coalesce(nullif(company, ''), @company),
+    role         = coalesce(nullif(role, ''), @role),
+    location     = coalesce(nullif(location, ''), @location),
+    period_start = coalesce(nullif(period_start, ''), @period_start),
+    period_end   = coalesce(nullif(period_end, ''), @period_end),
+    summary      = coalesce(nullif(summary, ''), @summary),
+    -- The stack is unioned, not filled-if-blank: a CV listing one more technology for a
+    -- role is new knowledge, and import must never take a technology away. coalesce
+    -- guards the empty case — array_agg over no rows is NULL, and the column is NOT NULL.
+    stack        = coalesce(
+                       (SELECT array_agg(DISTINCT s ORDER BY s) FROM unnest(stack || @stack::text[]) AS s),
+                       '{}'::text[]
+                   ),
     updated_at   = now()
-WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, created_at, updated_at;
+WHERE id = @id AND user_id = @user_id
+RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at;
 
 -- name: DeleteExperienceEmployment :execrows
 -- Remove an owned employment; its atoms go with it (ON DELETE CASCADE) because they are

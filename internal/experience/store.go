@@ -224,7 +224,7 @@ func employmentFromRow(row db.ExperienceEmployment) Employment {
 	return Employment{
 		ID: row.ID, Kind: row.Kind, Company: row.Company, Role: row.Role,
 		Location: row.Location, Start: row.PeriodStart, End: row.PeriodEnd,
-		Current: row.IsCurrent, Summary: row.Summary,
+		Current: row.IsCurrent, Summary: row.Summary, Stack: row.Stack,
 	}
 }
 

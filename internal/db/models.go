@@ -202,6 +202,7 @@ type ExperienceEmployment struct {
 	PeriodEnd   string             `json:"period_end"`
 	IsCurrent   bool               `json:"is_current"`
 	Summary     string             `json:"summary"`
+	Stack       []string           `json:"stack"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }

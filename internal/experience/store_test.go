@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/stringset"
 )
 
 // fakeRepo is an in-memory owner-scoped Repository, so the Store's rules — sanitize
@@ -66,7 +67,7 @@ func (f *fakeRepo) CreateEmployment(_ context.Context, userID int64, e Employmen
 	row := db.ExperienceEmployment{
 		ID: id, UserID: userID, Kind: e.Kind, Company: e.Company, Role: e.Role,
 		Location: e.Location, PeriodStart: e.Start, PeriodEnd: e.End,
-		IsCurrent: e.Current, Summary: e.Summary, CreatedAt: stamp(), UpdatedAt: stamp(),
+		IsCurrent: e.Current, Summary: e.Summary, Stack: e.Stack, CreatedAt: stamp(), UpdatedAt: stamp(),
 	}
 	f.employments[id] = row
 	f.order = append(f.order, id)
@@ -80,7 +81,7 @@ func (f *fakeRepo) UpdateEmployment(_ context.Context, id uuid.UUID, userID int6
 	}
 	row.Kind, row.Company, row.Role = e.Kind, e.Company, e.Role
 	row.Location, row.PeriodStart, row.PeriodEnd = e.Location, e.Start, e.End
-	row.IsCurrent, row.Summary = e.Current, e.Summary
+	row.IsCurrent, row.Summary, row.Stack = e.Current, e.Summary, e.Stack
 	f.employments[id] = row
 	return row, nil
 }
@@ -96,8 +97,18 @@ func (f *fakeRepo) FillEmploymentBlanks(_ context.Context, id uuid.UUID, userID 
 	row.PeriodStart = orExisting(row.PeriodStart, e.Start)
 	row.PeriodEnd = orExisting(row.PeriodEnd, e.End)
 	row.Summary = orExisting(row.Summary, e.Summary)
+	row.Stack = unionSorted(row.Stack, e.Stack)
 	f.employments[id] = row
 	return row, nil
+}
+
+// unionSorted mirrors the query's array_agg(DISTINCT ... ORDER BY ...) union.
+func unionSorted(existing, incoming []string) []string {
+	set := map[string]struct{}{}
+	for _, v := range append(append([]string{}, existing...), incoming...) {
+		set[v] = struct{}{}
+	}
+	return stringset.Sorted(set)
 }
 
 func orExisting(existing, incoming string) string {

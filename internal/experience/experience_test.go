@@ -216,3 +216,30 @@ func TestEmploymentValidate(t *testing.T) {
 		})
 	}
 }
+
+// The array columns are NOT NULL and pgx sends a nil slice as SQL NULL, so a Sanitize
+// that leaves a slice nil produces a row Postgres rejects (SQLSTATE 23502). This is the
+// unit-level guard for a failure that otherwise only appears against a real database.
+func TestSanitizeNeverLeavesANilSlice(t *testing.T) {
+	atom := Atom{Claim: "Did a thing", Provenance: ProvenanceManual}
+	atom.Sanitize()
+	if atom.Metrics == nil {
+		t.Error("metrics is nil after Sanitize — the column is NOT NULL")
+	}
+	if atom.Skills == nil {
+		t.Error("skills is nil after Sanitize — the column is NOT NULL")
+	}
+
+	// Every skill failing to resolve is the realistic path to nil, not the empty input.
+	atom = Atom{Claim: "Did a thing", Skills: []string{"blorptech"}, Provenance: ProvenanceManual}
+	atom.Sanitize()
+	if atom.Skills == nil {
+		t.Error("skills is nil after every token failed to resolve — the column is NOT NULL")
+	}
+
+	e := Employment{Kind: KindJob, Company: "RingCentral", Stack: []string{"blorptech"}}
+	e.Sanitize()
+	if e.Stack == nil {
+		t.Error("stack is nil after Sanitize — the column is NOT NULL")
+	}
+}

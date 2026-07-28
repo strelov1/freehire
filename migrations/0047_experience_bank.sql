@@ -53,6 +53,12 @@ CREATE TABLE public.experience_employments (
     period_end text DEFAULT ''::text NOT NULL,
     is_current boolean DEFAULT false NOT NULL,
     summary text DEFAULT ''::text NOT NULL,
+    -- The role's technologies, as printed on the CV's per-role stack line. Kept on the
+    -- employment rather than copied onto each of its atoms: a bullet about hiring would
+    -- otherwise carry a Kafka tag. Retrieval reads both — an atom whose own text never
+    -- names MongoDB still surfaces for a MongoDB requirement when the role ran on it,
+    -- just with less weight than one that names it.
+    stack text[] DEFAULT '{}'::text[] NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT experience_employments_kind_check CHECK ((kind = ANY (ARRAY['job'::text, 'project'::text])))

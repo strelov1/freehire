@@ -34,6 +34,7 @@ func (r queriesRepository) CreateEmployment(ctx context.Context, userID int64, e
 	return r.q.CreateExperienceEmployment(ctx, db.CreateExperienceEmploymentParams{
 		UserID: userID, Kind: e.Kind, Company: e.Company, Role: e.Role, Location: e.Location,
 		PeriodStart: e.Start, PeriodEnd: e.End, IsCurrent: e.Current, Summary: e.Summary,
+		Stack: e.Stack,
 	})
 }
 
@@ -41,6 +42,7 @@ func (r queriesRepository) UpdateEmployment(ctx context.Context, id uuid.UUID, u
 	return r.q.UpdateExperienceEmployment(ctx, db.UpdateExperienceEmploymentParams{
 		ID: id, UserID: userID, Kind: e.Kind, Company: e.Company, Role: e.Role, Location: e.Location,
 		PeriodStart: e.Start, PeriodEnd: e.End, IsCurrent: e.Current, Summary: e.Summary,
+		Stack: e.Stack,
 	})
 }
 
@@ -49,7 +51,7 @@ func (r queriesRepository) UpdateEmployment(ctx context.Context, id uuid.UUID, u
 func (r queriesRepository) FillEmploymentBlanks(ctx context.Context, id uuid.UUID, userID int64, e Employment) (db.ExperienceEmployment, error) {
 	return r.q.FillExperienceEmploymentBlanks(ctx, db.FillExperienceEmploymentBlanksParams{
 		ID: id, UserID: userID, Company: e.Company, Role: e.Role, Location: e.Location,
-		PeriodStart: e.Start, PeriodEnd: e.End, Summary: e.Summary,
+		PeriodStart: e.Start, PeriodEnd: e.End, Summary: e.Summary, Stack: e.Stack,
 	})
 }
 

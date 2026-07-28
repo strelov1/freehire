@@ -89,6 +89,7 @@ func TestExperienceFillBlanksNeverOverwrites(t *testing.T) {
 		UserID: alice, Kind: "job",
 		Company: "RingCentral", Role: "Staff Engineer", // the user's own correction
 		Location: "", PeriodStart: "2023-09", PeriodEnd: "", IsCurrent: false, Summary: "",
+		Stack: []string{"go"},
 	})
 	if err != nil {
 		t.Fatalf("CreateExperienceEmployment: %v", err)
@@ -99,6 +100,7 @@ func TestExperienceFillBlanksNeverOverwrites(t *testing.T) {
 		Company: "RingCentral", Role: "Senior Software Engineer", // what the CV says
 		Location: "USA, Remote", PeriodStart: "2023-01", PeriodEnd: "Present",
 		Summary: "Global SaaS leader in business communications",
+		Stack:   []string{"kubernetes", "go"},
 	})
 	if err != nil {
 		t.Fatalf("FillExperienceEmploymentBlanks: %v", err)
@@ -122,6 +124,11 @@ func TestExperienceFillBlanksNeverOverwrites(t *testing.T) {
 	if filled.IsCurrent {
 		t.Error("is_current became true — a CV reading \"Present\" must not resurrect an ended role")
 	}
+	// The stack unions rather than fills-if-blank: the CV adds a technology, and the one
+	// already banked survives.
+	if len(filled.Stack) != 2 || filled.Stack[0] != "go" || filled.Stack[1] != "kubernetes" {
+		t.Errorf("stack = %q, want [go kubernetes] — unioned and sorted", filled.Stack)
+	}
 }
 
 // Deleting a role takes its evidence with it, and only the owner can do it.
@@ -134,7 +141,7 @@ func TestExperienceDeleteEmploymentCascadesToAtoms(t *testing.T) {
 	bob := seedExperienceUser(t, pool, "cascade-bob@example.test")
 
 	job, err := q.CreateExperienceEmployment(ctx, CreateExperienceEmploymentParams{
-		UserID: alice, Kind: "job", Company: "RingCentral", Role: "SWE",
+		UserID: alice, Kind: "job", Company: "RingCentral", Role: "SWE", Stack: []string{},
 	})
 	if err != nil {
 		t.Fatalf("CreateExperienceEmployment: %v", err)

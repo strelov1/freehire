@@ -111,6 +111,10 @@ type Employment struct {
 	End      string    `json:"end,omitempty"`
 	Current  bool      `json:"current,omitempty"`
 	Summary  string    `json:"summary,omitempty"`
+	// Stack is the role's technologies, as printed on the CV's per-role stack line.
+	// It lives here rather than on each atom: copying it down would tag a bullet about
+	// hiring with the role's message broker.
+	Stack []string `json:"stack,omitempty"`
 }
 
 // Atom is one piece of evidence. Claim is the sentence a CV bullet would carry; Context
@@ -136,8 +140,8 @@ func (a *Atom) Sanitize() {
 	a.Claim = clip(a.Claim, maxClaimRunes)
 	a.Context = clip(a.Context, maxContextRunes)
 	a.SourceRef = clip(a.SourceRef, maxShortRunes)
-	a.Metrics = limit(nonEmpty(mapStrings(a.Metrics, maxShortRunes)), maxMetrics)
-	a.Skills = limit(skilltag.Canonicalize(a.Skills), maxSkills)
+	a.Metrics = orEmpty(limit(nonEmpty(mapStrings(a.Metrics, maxShortRunes)), maxMetrics))
+	a.Skills = orEmpty(limit(skilltag.Canonicalize(a.Skills), maxSkills))
 }
 
 // Validate reports the first reason this atom cannot be persisted. It runs after
@@ -160,6 +164,7 @@ func (e *Employment) Sanitize() {
 	e.Start = clip(e.Start, maxShortRunes)
 	e.End = clip(e.End, maxShortRunes)
 	e.Summary = clip(e.Summary, maxSummaryRunes)
+	e.Stack = orEmpty(limit(skilltag.Canonicalize(e.Stack), maxSkills))
 }
 
 // Validate reports the first reason this employment cannot be persisted.
@@ -218,6 +223,18 @@ func mapStrings(in []string, max int) []string {
 		out[i] = clip(v, max)
 	}
 	return out
+}
+
+// orEmpty turns a nil slice into an empty one. The array columns are NOT NULL, and pgx
+// sends a nil slice as SQL NULL — a column DEFAULT does not apply to an explicitly-passed
+// NULL, so an atom whose skills all failed to resolve would be rejected by the database
+// (SQLSTATE 23502) rather than stored with none. Coercing here is the sanitizer's job:
+// it is what makes the value one the schema will accept.
+func orEmpty(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }
 
 // nonEmpty drops blank strings, preserving order; returns nil when nothing remains.

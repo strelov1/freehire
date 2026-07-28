@@ -12,21 +12,22 @@ import (
 )
 
 const createExperienceEmployment = `-- name: CreateExperienceEmployment :one
-INSERT INTO experience_employments (user_id, kind, company, role, location, period_start, period_end, is_current, summary)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, created_at, updated_at
+INSERT INTO experience_employments (user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at
 `
 
 type CreateExperienceEmploymentParams struct {
-	UserID      int64  `json:"user_id"`
-	Kind        string `json:"kind"`
-	Company     string `json:"company"`
-	Role        string `json:"role"`
-	Location    string `json:"location"`
-	PeriodStart string `json:"period_start"`
-	PeriodEnd   string `json:"period_end"`
-	IsCurrent   bool   `json:"is_current"`
-	Summary     string `json:"summary"`
+	UserID      int64    `json:"user_id"`
+	Kind        string   `json:"kind"`
+	Company     string   `json:"company"`
+	Role        string   `json:"role"`
+	Location    string   `json:"location"`
+	PeriodStart string   `json:"period_start"`
+	PeriodEnd   string   `json:"period_end"`
+	IsCurrent   bool     `json:"is_current"`
+	Summary     string   `json:"summary"`
+	Stack       []string `json:"stack"`
 }
 
 func (q *Queries) CreateExperienceEmployment(ctx context.Context, arg CreateExperienceEmploymentParams) (ExperienceEmployment, error) {
@@ -40,6 +41,7 @@ func (q *Queries) CreateExperienceEmployment(ctx context.Context, arg CreateExpe
 		arg.PeriodEnd,
 		arg.IsCurrent,
 		arg.Summary,
+		arg.Stack,
 	)
 	var i ExperienceEmployment
 	err := row.Scan(
@@ -53,6 +55,7 @@ func (q *Queries) CreateExperienceEmployment(ctx context.Context, arg CreateExpe
 		&i.PeriodEnd,
 		&i.IsCurrent,
 		&i.Summary,
+		&i.Stack,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -100,26 +103,34 @@ func (q *Queries) DeleteExperienceEmployment(ctx context.Context, arg DeleteExpe
 
 const fillExperienceEmploymentBlanks = `-- name: FillExperienceEmploymentBlanks :one
 UPDATE experience_employments
-SET company      = coalesce(nullif(company, ''), $3),
-    role         = coalesce(nullif(role, ''), $4),
-    location     = coalesce(nullif(location, ''), $5),
-    period_start = coalesce(nullif(period_start, ''), $6),
-    period_end   = coalesce(nullif(period_end, ''), $7),
-    summary      = coalesce(nullif(summary, ''), $8),
+SET company      = coalesce(nullif(company, ''), $1),
+    role         = coalesce(nullif(role, ''), $2),
+    location     = coalesce(nullif(location, ''), $3),
+    period_start = coalesce(nullif(period_start, ''), $4),
+    period_end   = coalesce(nullif(period_end, ''), $5),
+    summary      = coalesce(nullif(summary, ''), $6),
+    -- The stack is unioned, not filled-if-blank: a CV listing one more technology for a
+    -- role is new knowledge, and import must never take a technology away. coalesce
+    -- guards the empty case — array_agg over no rows is NULL, and the column is NOT NULL.
+    stack        = coalesce(
+                       (SELECT array_agg(DISTINCT s ORDER BY s) FROM unnest(stack || $7::text[]) AS s),
+                       '{}'::text[]
+                   ),
     updated_at   = now()
-WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, created_at, updated_at
+WHERE id = $8 AND user_id = $9
+RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at
 `
 
 type FillExperienceEmploymentBlanksParams struct {
-	ID          uuid.UUID `json:"id"`
-	UserID      int64     `json:"user_id"`
 	Company     string    `json:"company"`
 	Role        string    `json:"role"`
 	Location    string    `json:"location"`
 	PeriodStart string    `json:"period_start"`
 	PeriodEnd   string    `json:"period_end"`
 	Summary     string    `json:"summary"`
+	Stack       []string  `json:"stack"`
+	ID          uuid.UUID `json:"id"`
+	UserID      int64     `json:"user_id"`
 }
 
 // Import's write: fill only the fields the bank has nothing for, and never overwrite a value
@@ -128,14 +139,15 @@ type FillExperienceEmploymentBlanksParams struct {
 // "Present" for a role the user has left would otherwise resurrect it.
 func (q *Queries) FillExperienceEmploymentBlanks(ctx context.Context, arg FillExperienceEmploymentBlanksParams) (ExperienceEmployment, error) {
 	row := q.db.QueryRow(ctx, fillExperienceEmploymentBlanks,
-		arg.ID,
-		arg.UserID,
 		arg.Company,
 		arg.Role,
 		arg.Location,
 		arg.PeriodStart,
 		arg.PeriodEnd,
 		arg.Summary,
+		arg.Stack,
+		arg.ID,
+		arg.UserID,
 	)
 	var i ExperienceEmployment
 	err := row.Scan(
@@ -149,6 +161,7 @@ func (q *Queries) FillExperienceEmploymentBlanks(ctx context.Context, arg FillEx
 		&i.PeriodEnd,
 		&i.IsCurrent,
 		&i.Summary,
+		&i.Stack,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -156,7 +169,7 @@ func (q *Queries) FillExperienceEmploymentBlanks(ctx context.Context, arg FillEx
 }
 
 const findExperienceEmployment = `-- name: FindExperienceEmployment :one
-SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, created_at, updated_at
+SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at
 FROM experience_employments
 WHERE user_id = $1 AND lower(company) = lower($2) AND lower(role) = lower($3)
 ORDER BY created_at, id
@@ -187,6 +200,7 @@ func (q *Queries) FindExperienceEmployment(ctx context.Context, arg FindExperien
 		&i.PeriodEnd,
 		&i.IsCurrent,
 		&i.Summary,
+		&i.Stack,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -225,7 +239,7 @@ func (q *Queries) GetExperienceAtom(ctx context.Context, arg GetExperienceAtomPa
 }
 
 const getExperienceEmployment = `-- name: GetExperienceEmployment :one
-SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, created_at, updated_at
+SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at
 FROM experience_employments
 WHERE id = $1 AND user_id = $2
 `
@@ -251,6 +265,7 @@ func (q *Queries) GetExperienceEmployment(ctx context.Context, arg GetExperience
 		&i.PeriodEnd,
 		&i.IsCurrent,
 		&i.Summary,
+		&i.Stack,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -355,7 +370,7 @@ func (q *Queries) ListExperienceAtoms(ctx context.Context, userID int64) ([]Expe
 }
 
 const listExperienceEmployments = `-- name: ListExperienceEmployments :many
-SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, created_at, updated_at
+SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at
 FROM experience_employments
 WHERE user_id = $1
 ORDER BY is_current DESC, period_start DESC, id
@@ -383,6 +398,7 @@ func (q *Queries) ListExperienceEmployments(ctx context.Context, userID int64) (
 			&i.PeriodEnd,
 			&i.IsCurrent,
 			&i.Summary,
+			&i.Stack,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -451,9 +467,9 @@ func (q *Queries) UpdateExperienceAtom(ctx context.Context, arg UpdateExperience
 const updateExperienceEmployment = `-- name: UpdateExperienceEmployment :one
 UPDATE experience_employments
 SET kind = $3, company = $4, role = $5, location = $6, period_start = $7, period_end = $8,
-    is_current = $9, summary = $10, updated_at = now()
+    is_current = $9, summary = $10, stack = $11, updated_at = now()
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, created_at, updated_at
+RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at
 `
 
 type UpdateExperienceEmploymentParams struct {
@@ -467,6 +483,7 @@ type UpdateExperienceEmploymentParams struct {
 	PeriodEnd   string    `json:"period_end"`
 	IsCurrent   bool      `json:"is_current"`
 	Summary     string    `json:"summary"`
+	Stack       []string  `json:"stack"`
 }
 
 // A full owner-scoped replacement, used by the profile UI where the user is editing the
@@ -483,6 +500,7 @@ func (q *Queries) UpdateExperienceEmployment(ctx context.Context, arg UpdateExpe
 		arg.PeriodEnd,
 		arg.IsCurrent,
 		arg.Summary,
+		arg.Stack,
 	)
 	var i ExperienceEmployment
 	err := row.Scan(
@@ -496,6 +514,7 @@ func (q *Queries) UpdateExperienceEmployment(ctx context.Context, arg UpdateExpe
 		&i.PeriodEnd,
 		&i.IsCurrent,
 		&i.Summary,
+		&i.Stack,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
