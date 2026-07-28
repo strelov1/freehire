@@ -67,7 +67,7 @@ func parseEnrichment(raw string) (Enrichment, error) {
 	return e, nil
 }
 
-// buildSystemPrompt instructs the model to emit only stated fields and to draw the
+// buildSystemPrompt instructs the model to null out unstated fields and to draw the
 // SERVED enum values from the controlled vocabularies — the same lists Validate
 // enforces. The dictionary-covered discovery facets (work_mode, regions,
 // seniority, category, employment_type, education_level, english_level) are
@@ -84,13 +84,13 @@ func buildSystemPrompt(askGeo bool) string {
 	var b strings.Builder
 	b.WriteString("You read an IT job posting and return ONLY a JSON object.\n")
 	// summary is the one SYNTHESIZED field and must lead: stating it first, and
-	// exempting it from the omit rule up front, stops a budget model from dropping it
-	// under the "omit anything not stated" directive that governs every other key.
+	// exempting it from the null rule up front, stops a budget model from emptying it
+	// under the "null for anything not stated" directive that governs every other key.
 	b.WriteString("ALWAYS include \"summary\" as the FIRST key: a 1-2 sentence, plain-English synopsis of ")
 	b.WriteString("the role — what the person does day to day and the core technologies. You WRITE this ")
 	b.WriteString("from the posting (the one field you synthesize, not extract); keep it under 400 ")
 	b.WriteString("characters and never invent facts the posting does not support.\n")
-	b.WriteString("For every OTHER key: include it only when the posting clearly states it; omit anything not stated. Never guess.\n")
+	b.WriteString("For every OTHER key: fill it only when the posting clearly states it; return null for anything not stated. Never guess.\n")
 	b.WriteString("Enum fields MUST use exactly one of the allowed values below.\n\n")
 	b.WriteString("Allowed enum values:\n")
 
@@ -122,10 +122,10 @@ func buildSystemPrompt(askGeo bool) string {
 		// above stay strict.
 		b.WriteString("\nException for countries and regions: prefer an allowed value above, but if none ")
 		b.WriteString("accurately fits, you MAY return a concise lowercase label of your own. ")
-		b.WriteString("Still omit the key when the posting does not state it.\n")
+		b.WriteString("Still return null when the posting does not state it.\n")
 	}
 
-	b.WriteString("\nOther keys (omit when unstated): ")
+	b.WriteString("\nOther keys (null when unstated): ")
 	b.WriteString("visa_sponsorship (boolean), ")
 	if askGeo {
 		b.WriteString("countries (array of ISO 3166-1 alpha-2), ")
@@ -145,7 +145,7 @@ func buildSystemPrompt(askGeo bool) string {
 		b.WriteString("reach or an onsite/hybrid role's location: ")
 		b.WriteString("use 'global' ONLY when the posting explicitly says the role is open worldwide / ")
 		b.WriteString("anywhere / from any country; otherwise list the region(s) or country code(s) ")
-		b.WriteString("the role covers, from the allowed values. Omit when unstated (unknown is not global).\n")
+		b.WriteString("the role covers, from the allowed values. Return null when unstated (unknown is not global).\n")
 	}
 	b.WriteString("\nIf the Location field is empty, the URL path may still encode the location ")
 	b.WriteString("(e.g. a city as the first slug segment); read it as a location signal.\n")

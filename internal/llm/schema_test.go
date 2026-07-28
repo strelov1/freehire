@@ -191,6 +191,53 @@ func TestGenerateJSON_BuildsOneModelPerSchemaAndReusesIt(t *testing.T) {
 	}
 }
 
+// Keying the cache on the name alone would serve the first shape to every later caller
+// that reused the name — a response decoded against the wrong contract is a
+// zero-valued success nothing would report.
+func TestGenerateJSON_OneNameWithTwoShapesGetsTwoModels(t *testing.T) {
+	proxy := newRecordingProxy(t)
+	c := proxy.client(t)
+
+	type other struct {
+		Reason string `json:"reason"`
+	}
+	second, err := llmschema.Of[other]()
+	if err != nil {
+		t.Fatalf("llmschema.Of: %v", err)
+	}
+
+	for _, s := range []llmschema.Schema{testSchema(t), second} {
+		if _, err := c.GenerateJSON(context.Background(), "sys", "user", WithSchema("stage", s)); err != nil {
+			t.Fatalf("GenerateJSON: %v", err)
+		}
+	}
+
+	if got := c.schemaModelCount(); got != 2 {
+		t.Fatalf("two shapes under one name built %d models, want 2", got)
+	}
+
+	sent, _ := proxy.lastRequest(t)["response_format"].(map[string]any)
+	schema, _ := sent["json_schema"].(map[string]any)["schema"].(map[string]any)
+	props, _ := schema["properties"].(map[string]any)
+	if _, ok := props["reason"]; !ok {
+		t.Errorf("the second call was constrained by the first shape: %v", props)
+	}
+}
+
+// Both degrade silently otherwise: an unconstrained call that looks constrained, and a
+// nameless schema most gateways reject.
+func TestWithSchema_RejectsANilSchemaAndAnEmptyName(t *testing.T) {
+	proxy := newRecordingProxy(t)
+	c := proxy.client(t)
+
+	if _, err := c.GenerateJSON(context.Background(), "sys", "user", WithSchema("verdict", nil)); err == nil {
+		t.Error("a nil schema was accepted and the call ran unconstrained")
+	}
+	if _, err := c.GenerateJSON(context.Background(), "sys", "user", WithSchema("", testSchema(t))); err == nil {
+		t.Error("an empty schema name was accepted")
+	}
+}
+
 // A client built from an injected model has no endpoint to rebuild against. Callers'
 // tests inject fakes, and they must keep working once their call site passes a schema.
 func TestGenerateJSON_InjectedModelIgnoresTheSchemaRatherThanFailing(t *testing.T) {
@@ -266,4 +313,13 @@ func TestGenerateJSON_SchemaPathIsObservedLikeThePlainPath(t *testing.T) {
 	if g := tracer.got[0]; g.Source != "test" || !strings.Contains(g.System, "sys") {
 		t.Errorf("generation = %+v, want the same fields the plain path records", g)
 	}
+}
+
+// schemaModelCount reports how many schema-bound models the client has built. It lives
+// here rather than beside the cache because only a test needs it.
+func (c *Client) schemaModelCount() int {
+	c.schemaModels.mu.Lock()
+	defer c.schemaModels.mu.Unlock()
+
+	return len(c.schemaModels.models)
 }

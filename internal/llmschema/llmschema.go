@@ -13,6 +13,7 @@ package llmschema
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -62,7 +63,9 @@ func Of[T any](overrides ...Override) (Schema, error) {
 	delete(schema, "$schema")
 	delete(schema, "$id")
 
-	strict(schema)
+	if err := strict(schema); err != nil {
+		return nil, err
+	}
 
 	for _, override := range overrides {
 		if err := override(schema); err != nil {
@@ -151,7 +154,10 @@ func Omit(fields ...string) Override {
 			delete(props, field)
 		}
 
-		required, _ := schema["required"].([]string)
+		required, ok := schema["required"].([]string)
+		if !ok {
+			return fmt.Errorf("llmschema: omit override on a schema whose required list is not the strict pass's")
+		}
 		schema["required"] = slices.DeleteFunc(required, func(name string) bool {
 			return slices.Contains(fields, name)
 		})
@@ -163,13 +169,22 @@ func Omit(fields ...string) Override {
 // strict rewrites node and everything below it for strict mode: no additional
 // properties, every property required, and each property the reflector left optional
 // widened to admit null.
-func strict(node map[string]any) {
+//
+// It reports an error for a node it cannot make strict — a map field, say, which
+// reflects to an object with an open additionalProperties and no property list. Left
+// alone that document would be rejected by the provider at call time, hundreds of
+// lines from the contract that produced it.
+func strict(node map[string]any) error {
 	props, ok := node["properties"].(map[string]any)
 	if !ok {
 		if items, ok := node["items"].(map[string]any); ok {
-			strict(items)
+			return strict(items)
 		}
-		return
+		if err := rejectOpenObject(node); err != nil {
+			return err
+		}
+
+		return nil
 	}
 
 	optional := optionalFields(node, props)
@@ -185,12 +200,29 @@ func strict(node map[string]any) {
 		if optional[name] {
 			widenToNull(prop)
 		}
-		strict(prop)
+		if err := strict(prop); err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
 	}
 	slices.Sort(names)
 
 	node["required"] = names
 	node["additionalProperties"] = false
+
+	return nil
+}
+
+// rejectOpenObject fails on an object node the strict pass cannot close: one whose
+// additionalProperties is a schema (a Go map) rather than the bool it would set.
+func rejectOpenObject(node map[string]any) error {
+	if node["type"] != "object" {
+		return nil
+	}
+	if _, isSchema := node["additionalProperties"].(map[string]any); !isSchema {
+		return nil
+	}
+
+	return errors.New("llmschema: contract holds a map-typed field, which strict mode cannot express")
 }
 
 // optionalFields returns the properties the reflector did NOT mark required — the

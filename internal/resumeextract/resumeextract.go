@@ -85,22 +85,29 @@ func (e *Extractor) Extract(ctx context.Context, cvText string) (Structured, err
 // within this, and the cap keeps the call responsive (mirrors matchanalysis's input bounds).
 const maxCVRunes = 12000
 
+// systemPrompt pairs with the request schema (schema.go): the schema fixes the shape,
+// this fixes the meaning. Every field is required by the schema, so "I cannot fill
+// this" is expressed as null — never as an absent key, which the schema forbids and a
+// model with no legal way to decline answers by inventing.
 const systemPrompt = `You extract a structured résumé from raw CV text and return ONLY a JSON object.
 Rules:
-- Extract ONLY facts stated in the CV. Never invent or infer a field that is not present — omit it instead.
-- The CV has been de-identified: contact details (full_name, email, phone, links) are handled separately and
-  appear as [REDACTED_...] placeholders. Do NOT extract them and never copy a placeholder into any field.
-- Fields: full_name, headline (current role/title line), location, email, phone, summary (1-3 sentences),
-  total_years (integer years of professional experience, best estimate; 0 if unclear),
+- Extract ONLY facts stated in the CV. Never invent or infer a field that is not present — return null for it.
+- The CV has been de-identified: contact details are handled separately and appear as [REDACTED_...]
+  placeholders. Never copy a placeholder into any field.
+- location is the CANDIDATE's own location. An employer's office in a job entry is that job's location,
+  not the candidate's; return null when the CV does not state where the person is.
+- Fields: headline (current role/title line), location, summary (1-3 sentences),
+  total_years (years of professional experience as a plain number written as a string, e.g. "6";
+    best estimate; "0" if unclear),
   experience (array of {title, company, location, start, end, summary, highlights, stack}; keep dates as
     written, e.g. "2021-03" or "Present"; summary is the one-line company/role context; highlights is the
     array of achievement bullet points for that role, each a full sentence copied faithfully from the CV;
     stack is the array of technologies listed for that role, e.g. from a "Stack:" line),
-  education (array of {degree, institution, year}), languages (array of strings), links (array of URLs),
+  education (array of {degree, institution, year}), languages (array of strings),
   skills (array of strings — technologies/tools stated in the CV, properly cased, e.g. "Go", "PostgreSQL", "Kafka"),
   certifications (array of strings — professional certifications/licenses the CV states the person holds, e.g. "AWS Certified Solutions Architect", "CISSP", "PMP"),
   projects (array of {name, link, highlights} — personal/side projects with their bullet points).
-- Omit any field or entry you cannot fill from the CV. Return {} if the text is not a résumé.`
+- Return null for any field you cannot fill from the CV, and null for every field if the text is not a résumé.`
 
 func userPrompt(cvText string) string {
 	return "CV text:\n" + clip(cvText, maxCVRunes)

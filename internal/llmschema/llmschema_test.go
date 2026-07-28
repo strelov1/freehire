@@ -2,6 +2,7 @@ package llmschema
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -252,6 +253,24 @@ func TestOmit_UnknownFieldIsAnError(t *testing.T) {
 func TestEnum_UnknownFieldIsAnError(t *testing.T) {
 	if _, err := Of[contract](Enum("no_such_field", []string{"a"})); err == nil {
 		t.Fatal("Of returned no error for an override naming a field the contract lacks")
+	}
+}
+
+// A map reflects to an object with an open additionalProperties and no property list,
+// which strict mode cannot express. Failing here names the contract; letting it through
+// would surface as a 400 from the gateway, far from the type that caused it.
+func TestOf_MapTypedFieldIsAnError(t *testing.T) {
+	type withMap struct {
+		Name  string            `json:"name"`
+		Extra map[string]string `json:"extra"`
+	}
+
+	_, err := Of[withMap]()
+	if err == nil {
+		t.Fatal("Of accepted a map-typed field, which strict mode cannot close")
+	}
+	if !strings.Contains(err.Error(), "extra") {
+		t.Errorf("error = %q, want it to name the offending field", err)
 	}
 }
 
