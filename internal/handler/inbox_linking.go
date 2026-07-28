@@ -139,7 +139,16 @@ func (h *inboxHandlers) mutateEmailLink(c *fiber.Ctx, do func(userID, id int64) 
 	if rows == 0 {
 		return fiber.NewError(fiber.StatusNotFound, "not found")
 	}
-	row, err := h.queries.GetEmail(c.Context(), db.GetEmailParams{ID: int64(id), UserID: userID})
+	return h.renderEmail(c, userID, int64(id))
+}
+
+// renderEmail responds with one message in the single-message wire shape, freshly
+// read. It is the shared tail of every mutation that returns the message it just
+// changed (link, unlink, confirm, reject, triage), so those cannot drift from one
+// another or from GetEmail. Unlike GetEmail it does not mark the message read: the
+// caller is acting on the message, not opening it.
+func (h *inboxHandlers) renderEmail(c *fiber.Ctx, userID, id int64) error {
+	row, err := h.queries.GetEmail(c.Context(), db.GetEmailParams{ID: id, UserID: userID})
 	if err != nil {
 		return err
 	}

@@ -193,8 +193,10 @@ export interface MailboxStatus {
   address: string | null;
 }
 
-/** The account switcher value: '' = all sources. */
-export type InboxSource = '' | 'gmail' | 'hosted';
+/** The account switcher value: '' = all sources. 'external' is mail the caller's
+ *  own agent harness pushed — it has no connection to configure, it simply
+ *  arrives. */
+export type InboxSource = '' | 'gmail' | 'hosted' | 'external';
 
 /** One row in the flat inbox listing. */
 export interface InboxMessage extends EmailLinking {

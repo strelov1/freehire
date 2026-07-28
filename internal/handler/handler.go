@@ -249,7 +249,7 @@ func Register(app *fiber.App, cfg Config) {
 	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, creditsStore)
 	cvH := newCVHandlers(queries, cfg.TypstBin, resumeStore, creditsStore, matchH)
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionSvc, creditsStore)
-	inboxH := newInboxHandlers(queries, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)
+	inboxH := newInboxHandlers(queries, cfg.Pool, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)
 	// Account deletion reaches past the FK cascade: cfg.Blob is nil when storage is
 	// unconfigured and the revoker is nil when Gmail is — either way there is nothing
 	// to erase there, which must not stop a member from leaving.

@@ -64,7 +64,7 @@ func newAgentInboxFixture(t *testing.T, email string) *agentInboxFixture {
 		t.Fatalf("store key: %v", err)
 	}
 
-	h := &inboxHandlers{queries: queries, mailDomain: "inbox.freehire.test"}
+	h := &inboxHandlers{queries: queries, pool: pool, mailDomain: "inbox.freehire.test"}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	h.register(app.Group("/api/v1"), middleware{
 		cookie: auth.RequireAuth(iss, testVersions),
@@ -287,5 +287,216 @@ func TestAgentListingCapsThePage(t *testing.T) {
 	meta, _ := body["meta"].(map[string]any)
 	if limit, _ := meta["limit"].(float64); limit != 50 {
 		t.Errorf("limit = %v, want it clamped to 50", limit)
+	}
+}
+
+// pushBody builds an ingest batch payload of n messages.
+func pushBody(msgs ...map[string]any) map[string]any {
+	return map[string]any{"messages": msgs}
+}
+
+func message(externalID, subject, body string) map[string]any {
+	return map[string]any{
+		"external_id": externalID,
+		"from_addr":   "ats@acme.example",
+		"from_name":   "Acme Hiring",
+		"subject":     subject,
+		"body_text":   body,
+		"received_at": time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+// TestIngestStoresPushedMail asserts the core of the bring-your-own-harness tier:
+// a caller's own mail client hands over messages, they land in the ordinary inbox
+// under source 'external', and a re-sync updates rather than duplicates.
+func TestIngestStoresPushedMail(t *testing.T) {
+	f := newAgentInboxFixture(t, "ingest@example.test")
+
+	code, body := f.callKey("POST", "/api/v1/me/emails", pushBody(
+		message("<a@acme>", "Application received", "thanks for applying"),
+		message("<b@acme>", "Interview invitation", "are you free Tuesday?"),
+	))
+	if code != 200 {
+		t.Fatalf("ingest = %d, want 200 (body %v)", code, body)
+	}
+	data, _ := body["data"].(map[string]any)
+	if inserted, _ := data["inserted"].(float64); inserted != 2 {
+		t.Errorf("inserted = %v, want 2", inserted)
+	}
+	if updated, _ := data["updated"].(float64); updated != 0 {
+		t.Errorf("updated = %v, want 0", updated)
+	}
+
+	_, listing := f.callKey("GET", "/api/v1/me/inbox?source=external", nil)
+	if rows := messages(t, listing); len(rows) != 2 {
+		t.Fatalf("pushed mail listed %d messages, want 2", len(rows))
+	}
+
+	// A re-sync of one of them reports an update, not a second row.
+	_, body = f.callKey("POST", "/api/v1/me/emails", pushBody(
+		message("<a@acme>", "Application received", "thanks for applying"),
+	))
+	data, _ = body["data"].(map[string]any)
+	if inserted, _ := data["inserted"].(float64); inserted != 0 {
+		t.Errorf("re-push inserted = %v, want 0", inserted)
+	}
+	if updated, _ := data["updated"].(float64); updated != 1 {
+		t.Errorf("re-push updated = %v, want 1", updated)
+	}
+	_, listing = f.callKey("GET", "/api/v1/me/inbox?source=external", nil)
+	if rows := messages(t, listing); len(rows) != 2 {
+		t.Errorf("re-push left %d messages, want 2", len(rows))
+	}
+}
+
+// TestIngestRejectsBadBatches asserts a malformed batch is refused whole rather
+// than partly written: the caller's harness retries, and a half-stored batch would
+// make "inserted" a lie.
+func TestIngestRejectsBadBatches(t *testing.T) {
+	f := newAgentInboxFixture(t, "badbatch@example.test")
+
+	if code, _ := f.callKey("POST", "/api/v1/me/emails", pushBody(
+		message("<ok@acme>", "Fine", "body"),
+		message("", "No id", "body"),
+	)); code != 400 {
+		t.Errorf("batch with an empty external id = %d, want 400", code)
+	}
+	_, listing := f.callKey("GET", "/api/v1/me/inbox", nil)
+	if rows := messages(t, listing); len(rows) != 0 {
+		t.Errorf("a rejected batch stored %d messages; it must be all-or-nothing", len(rows))
+	}
+
+	oversized := make([]map[string]any, 101)
+	for i := range oversized {
+		oversized[i] = message("<bulk-"+strconv.Itoa(i)+"@acme>", "Bulk", "body")
+	}
+	if code, _ := f.callKey("POST", "/api/v1/me/emails", pushBody(oversized...)); code != 400 {
+		t.Errorf("oversized batch = %d, want 400", code)
+	}
+
+	if code, _ := f.callKey("POST", "/api/v1/me/emails", pushBody()); code != 400 {
+		t.Errorf("empty batch = %d, want 400", code)
+	}
+}
+
+// applyToJob makes the fixture's user an applicant of a job at a given stage.
+func (f *agentInboxFixture) applyToJob(slug, stage string) int64 {
+	f.t.Helper()
+	ctx := context.Background()
+	var jobID int64
+	err := f.pool.QueryRow(ctx,
+		`INSERT INTO jobs (source, external_id, url, title, company, public_slug)
+		 VALUES ('test', $1, 'http://example.test/'||$1, 'Go Dev', 'Acme', $1) RETURNING id`, slug).Scan(&jobID)
+	if err != nil {
+		f.t.Fatalf("seed job: %v", err)
+	}
+	if _, err := f.pool.Exec(ctx,
+		`INSERT INTO user_jobs (user_id, job_id, applied_at, stage) VALUES ($1, $2, now(), $3)`,
+		f.userID, jobID, stage); err != nil {
+		f.t.Fatalf("seed application: %v", err)
+	}
+	return jobID
+}
+
+func (f *agentInboxFixture) stageOf(jobID int64) string {
+	f.t.Helper()
+	var stage *string
+	if err := f.pool.QueryRow(context.Background(),
+		`SELECT stage FROM user_jobs WHERE user_id = $1 AND job_id = $2`, f.userID, jobID).Scan(&stage); err != nil {
+		f.t.Fatalf("read stage: %v", err)
+	}
+	if stage == nil {
+		return ""
+	}
+	return *stage
+}
+
+// TestTriageRecordsTheVerdictAndAdvancesTheStage asserts one call does what the
+// classification worker does: classify, link, stamp, and move the application
+// forward — so an agent-run inbox behaves like a server-classified one.
+func TestTriageRecordsTheVerdictAndAdvancesTheStage(t *testing.T) {
+	f := newAgentInboxFixture(t, "triage@example.test")
+	jobID := f.applyToJob("go-dev-acme-aaaaaaaa", "applied")
+	id := f.seedEmail(f.userID, "external", "t-1", "Interview invitation", "are you free?")
+
+	code, body := f.callKey("POST", "/api/v1/me/emails/"+strconv.FormatInt(id, 10)+"/triage",
+		map[string]any{"signal": "interview_invitation", "slug": "go-dev-acme-aaaaaaaa", "confidence": 0.9})
+	if code != 200 {
+		t.Fatalf("triage = %d, want 200 (body %v)", code, body)
+	}
+	data, _ := body["data"].(map[string]any)
+	if got := data["status_signal"]; got != "interview_invitation" {
+		t.Errorf("status_signal = %v, want interview_invitation", got)
+	}
+	if got := data["linked_slug"]; got != "go-dev-acme-aaaaaaaa" {
+		t.Errorf("linked_slug = %v, want the linked application", got)
+	}
+	if got := data["link_source"]; got != "agent" {
+		t.Errorf("link_source = %v, want agent", got)
+	}
+	if got := f.stageOf(jobID); got != "interview" {
+		t.Errorf("stage = %q, want interview — a forward signal must advance the application", got)
+	}
+
+	// The triaged message leaves the work queue.
+	_, listing := f.callKey("GET", "/api/v1/me/inbox?unclassified=1", nil)
+	if rows := messages(t, listing); len(rows) != 0 {
+		t.Errorf("triaged message still in the work queue: %d rows", len(rows))
+	}
+}
+
+// TestTriageNeverResurrectsASettledApplication asserts the guard that cost a prod
+// incident once: a forward signal onto a rejected application must not drag it
+// back into the active pipeline.
+func TestTriageNeverResurrectsASettledApplication(t *testing.T) {
+	f := newAgentInboxFixture(t, "settled@example.test")
+	jobID := f.applyToJob("go-dev-acme-bbbbbbbb", "rejected")
+	id := f.seedEmail(f.userID, "external", "t-2", "Interview invitation", "are you free?")
+
+	if code, _ := f.callKey("POST", "/api/v1/me/emails/"+strconv.FormatInt(id, 10)+"/triage",
+		map[string]any{"signal": "interview_invitation", "slug": "go-dev-acme-bbbbbbbb"}); code != 200 {
+		t.Fatalf("triage = %d, want 200", code)
+	}
+	if got := f.stageOf(jobID); got != "rejected" {
+		t.Errorf("stage = %q, want it left rejected", got)
+	}
+}
+
+// TestTriageRejectsBadInput asserts an out-of-vocabulary signal and an unknown
+// slug change nothing — the agent is not trusted to invent labels or job ids.
+func TestTriageRejectsBadInput(t *testing.T) {
+	f := newAgentInboxFixture(t, "badtriage@example.test")
+	id := f.seedEmail(f.userID, "external", "t-3", "Something", "body")
+	path := "/api/v1/me/emails/" + strconv.FormatInt(id, 10) + "/triage"
+
+	if code, _ := f.callKey("POST", path, map[string]any{"signal": "vibes"}); code != 400 {
+		t.Errorf("unknown signal = %d, want 400", code)
+	}
+	if code, _ := f.callKey("POST", path, map[string]any{"signal": "rejection", "slug": "no-such-job"}); code != 404 {
+		t.Errorf("unknown slug = %d, want 404", code)
+	}
+	var signal *string
+	if err := f.pool.QueryRow(context.Background(),
+		`SELECT status_signal FROM emails WHERE id = $1`, id).Scan(&signal); err != nil {
+		t.Fatalf("read signal: %v", err)
+	}
+	if signal != nil {
+		t.Errorf("a rejected triage still wrote signal %q", *signal)
+	}
+}
+
+// TestTriageIsScopedToTheCaller asserts a key cannot triage another user's mail.
+func TestTriageIsScopedToTheCaller(t *testing.T) {
+	f := newAgentInboxFixture(t, "triageowner@example.test")
+	var strangerID int64
+	if err := f.pool.QueryRow(context.Background(),
+		`INSERT INTO users (email) VALUES ('triagestranger@example.test') RETURNING id`).Scan(&strangerID); err != nil {
+		t.Fatalf("seed stranger: %v", err)
+	}
+	theirs := f.seedEmail(strangerID, "external", "t-4", "Theirs", "body")
+
+	if code, _ := f.callKey("POST", "/api/v1/me/emails/"+strconv.FormatInt(theirs, 10)+"/triage",
+		map[string]any{"signal": "offer"}); code != 404 {
+		t.Errorf("triaging another user's message = %d, want 404", code)
 	}
 }

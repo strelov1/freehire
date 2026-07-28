@@ -7,6 +7,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/auth/oauth"
@@ -23,7 +24,10 @@ import (
 // hosted-mailbox feature is off (the claim route is unregistered and status
 // reports unavailable).
 type inboxHandlers struct {
-	queries        *db.Queries
+	queries *db.Queries
+	// pool backs the one write here that spans several statements: an ingest batch
+	// is committed whole or not at all.
+	pool           *pgxpool.Pool
 	gmailConnector *gmailsync.Connector
 	gmailCipher    *tokencrypt.Cipher
 	frontendOrigin string
@@ -31,9 +35,10 @@ type inboxHandlers struct {
 	mailDomain     string
 }
 
-func newInboxHandlers(queries *db.Queries, gmailConnector *gmailsync.Connector, gmailCipher *tokencrypt.Cipher, frontendOrigin string, cookieSecure bool, mailDomain string) *inboxHandlers {
+func newInboxHandlers(queries *db.Queries, pool *pgxpool.Pool, gmailConnector *gmailsync.Connector, gmailCipher *tokencrypt.Cipher, frontendOrigin string, cookieSecure bool, mailDomain string) *inboxHandlers {
 	return &inboxHandlers{
 		queries:        queries,
+		pool:           pool,
 		gmailConnector: gmailConnector,
 		gmailCipher:    gmailCipher,
 		frontendOrigin: frontendOrigin,
@@ -63,6 +68,10 @@ func (h *inboxHandlers) register(api fiber.Router, mw middleware) {
 	api.Get("/me/emails/:id", mw.key, h.GetEmail)
 	api.Post("/me/emails/:id/delete", mw.key, h.DeleteEmail)
 	api.Post("/me/emails/:id/restore", mw.key, h.RestoreEmail)
+	// Agent surface: a caller's own harness pushes mail it fetched itself and
+	// records its triage verdict.
+	api.Post("/me/emails", mw.key, h.IngestEmails)
+	api.Post("/me/emails/:id/triage", mw.key, h.TriageEmail)
 	// Email → application linking. :slug is registered after the static
 	// /me/tracking/* routes (see Register) so it does not shadow them.
 	api.Get("/me/tracking/:slug", mw.key, h.GetTrackedApplication)

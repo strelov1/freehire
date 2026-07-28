@@ -75,8 +75,22 @@
 
   const hasGmail = $derived(!!gmail?.connected);
   const hasMailbox = $derived(!!mailbox?.address);
-  const hasAnySource = $derived(hasGmail || hasMailbox);
-  const bothConnected = $derived(hasGmail && hasMailbox);
+  // Mail pushed by the caller's own agent harness has no connection to report —
+  // it simply exists. So presence is the signal: if the inbox holds anything, the
+  // user has a source, whatever set it up.
+  let hasPushedMail = $state(false);
+  const hasAnySource = $derived(hasGmail || hasMailbox || hasPushedMail);
+  // The account switcher only lists sources the caller actually has, and is only
+  // worth showing when there is more than one to switch between.
+  const sourceOptions = $derived(
+    [
+      { value: '' as InboxSource, label: 'All', show: true },
+      { value: 'gmail' as InboxSource, label: 'Gmail', show: hasGmail },
+      { value: 'hosted' as InboxSource, label: 'Mailbox', show: hasMailbox },
+      { value: 'external' as InboxSource, label: 'Pushed', show: hasPushedMail },
+    ].filter((o) => o.show),
+  );
+  const sourceCount = $derived(sourceOptions.length - 1); // minus the 'All' entry
 
   let destroyed = false;
   onMount(load);
@@ -88,7 +102,15 @@
     loading = true;
     error = null;
     try {
-      [gmail, mailbox] = await Promise.all([api.gmailStatus(), api.mailboxStatus()]);
+      const [gmailStatus, mailboxStatus, pushed] = await Promise.all([
+        api.gmailStatus(),
+        api.mailboxStatus(),
+        // One cheap probe for harness-pushed mail, which reports no connection.
+        api.getInbox({ source: 'external', limit: 1 }),
+      ]);
+      gmail = gmailStatus;
+      mailbox = mailboxStatus;
+      hasPushedMail = (pushed.total ?? 0) > 0;
       if (hasAnySource) await fetchFirstPage('Failed to load the inbox.');
       else tab = 'settings'; // nothing to read yet — land on setup
     } catch (e) {
@@ -509,9 +531,9 @@
       <!-- Toolbar: account switcher + label filter + search on the left; a compact
            icon cluster (unread filter, mark-all-read, refresh) on the right. -->
       <div class="flex flex-wrap items-center gap-2">
-        {#if bothConnected}
+        {#if sourceCount > 1}
           <div class="flex gap-1 rounded-lg border border-border p-1 text-sm">
-            {#each [{ value: '', label: 'All' }, { value: 'gmail', label: 'Gmail' }, { value: 'hosted', label: 'Mailbox' }] as opt (opt.value)}
+            {#each sourceOptions as opt (opt.value)}
               <button
                 type="button"
                 onclick={() => setSource(opt.value as InboxSource)}

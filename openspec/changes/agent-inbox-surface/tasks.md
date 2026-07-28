@@ -20,18 +20,18 @@
 
 ## 4. Ingest endpoint
 
-- [ ] 4.1 Give `inboxHandlers` the `*pgxpool.Pool` it needs for a batch transaction, wired through `newInboxHandlers`
-- [ ] 4.2 Add `POST /api/v1/me/emails` in a new `internal/handler/inbox_agent.go` (methods on `inboxHandlers`): decode the batch, reject an empty external id and a batch over 100, write in one transaction, respond with inserted/updated counts
-- [ ] 4.3 Integration test: a batch is stored under `source='external'`; a re-push updates rather than duplicates and counts as updated; a re-push does not clear `read_at`, `deleted_at`, or a triage verdict; an empty external id and an oversized batch are 400 with nothing stored
+- [x] 4.1 Give `inboxHandlers` the `*pgxpool.Pool` it needs for a batch transaction, wired through `newInboxHandlers`
+- [x] 4.2 Add `POST /api/v1/me/emails` in a new `internal/handler/inbox_agent.go` (methods on `inboxHandlers`): decode the batch, reject an empty external id and a batch over 100, write in one transaction, respond with inserted/updated counts
+- [x] 4.3 Integration test: a batch is stored under `source='external'`; a re-push updates rather than duplicates and counts as updated; a re-push does not clear `read_at`, `deleted_at`, or a triage verdict; an empty external id and an oversized batch are 400 with nothing stored
 
 ## 5. Triage endpoint
 
-- [ ] 5.1 Add `POST /api/v1/me/emails/:id/triage`: validate the signal against `mailclassify.IsValidSignal`, resolve an optional slug (404 when unknown), write the verdict, then advance the stage via `mailclassify.AdvanceStage`; respond with the refreshed message in the existing `emailBody` shape
-- [ ] 5.2 Integration test: classify-and-link in one call; classify-only leaves the link; unknown signal is 400 and unknown slug is 404 with nothing changed; a forward signal advances the stage; a settled application is not resurrected; another user's message is 404; re-triage overwrites
+- [x] 5.1 Add `POST /api/v1/me/emails/:id/triage`: validate the signal against `mailclassify.IsValidSignal`, resolve an optional slug (404 when unknown), write the verdict, then advance the stage via `mailclassify.AdvanceStage`; respond with the refreshed message in the existing `emailBody` shape
+- [x] 5.2 Integration test: classify-and-link in one call; classify-only leaves the link; unknown signal is 400 and unknown slug is 404 with nothing changed; a forward signal advances the stage; a settled application is not resurrected; another user's message is 404; re-triage overwrites
 
 ## 6. Web
 
-- [ ] 6.1 Add `external` to the inbox source switcher and its type, so pushed mail is reachable in `/my/inbox`
+- [x] 6.1 Add `external` to the inbox source switcher and its type, so pushed mail is reachable in `/my/inbox`
 
 ## 7. CLI (`../freehire-cli`, separate repo)
 
