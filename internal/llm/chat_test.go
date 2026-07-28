@@ -253,3 +253,76 @@ func TestChatSeparatesThinkingFromAnswer(t *testing.T) {
 		t.Errorf("content = %q, want the answer without the reasoning", choice.Content)
 	}
 }
+
+// toolCallStreamModel reproduces what langchaingo does for a tool-calling
+// response: it hands the SAME streaming callback the marshalled tool calls
+// instead of content (llms/openai/internal/openaiclient/chat.go replaces the
+// chunk when a delta carries tool calls). Anything forwarding that verbatim
+// prints raw JSON into the user's chat.
+type toolCallStreamModel struct{ then string }
+
+func (m *toolCallStreamModel) GenerateContent(ctx context.Context, _ []llms.MessageContent, opts ...llms.CallOption) (*llms.ContentResponse, error) {
+	var co llms.CallOptions
+	for _, o := range opts {
+		o(&co)
+	}
+	if co.StreamingFunc != nil {
+		toolChunk := []byte(`[{"id":"call_1","type":"function","function":{"name":"get_job","arguments":"{\"slug\":\"go-dev\"}"}}]`)
+		if err := co.StreamingFunc(ctx, toolChunk); err != nil {
+			return nil, err
+		}
+		if m.then != "" {
+			if err := co.StreamingFunc(ctx, []byte(m.then)); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return &llms.ContentResponse{Choices: []*llms.ContentChoice{{
+		Content: m.then,
+		ToolCalls: []llms.ToolCall{{
+			ID: "call_1", Type: "function",
+			FunctionCall: &llms.FunctionCall{Name: "get_job", Arguments: `{"slug":"go-dev"}`},
+		}},
+	}}}, nil
+}
+
+func (*toolCallStreamModel) Call(context.Context, string, ...llms.CallOption) (string, error) {
+	return "", nil
+}
+
+func TestChatDoesNotStreamToolCallsAsText(t *testing.T) {
+	c := &Client{model: &toolCallStreamModel{}, timeout: time.Second}
+
+	var streamed string
+	choice, err := c.Chat(context.Background(),
+		[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "find a job")},
+		[]llms.Tool{searchTool()},
+		ChatStream{OnText: func(s string) { streamed += s }})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if streamed != "" {
+		t.Errorf("streamed = %q, want nothing — a tool call is not prose and must not print into the chat", streamed)
+	}
+	if len(choice.ToolCalls) != 1 {
+		t.Errorf("the tool call itself must still be returned: %+v", choice.ToolCalls)
+	}
+}
+
+func TestChatStillStreamsProseAlongsideAToolCall(t *testing.T) {
+	// A model may narrate before calling a tool; that text is the answer and must
+	// survive the filter.
+	c := &Client{model: &toolCallStreamModel{then: "Let me look that up."}, timeout: time.Second}
+
+	var streamed string
+	_, err := c.Chat(context.Background(),
+		[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "find a job")},
+		[]llms.Tool{searchTool()},
+		ChatStream{OnText: func(s string) { streamed += s }})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if streamed != "Let me look that up." {
+		t.Errorf("streamed = %q, want only the prose", streamed)
+	}
+}

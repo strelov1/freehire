@@ -1,7 +1,9 @@
 package llm
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -52,7 +54,7 @@ func (c *Client) Chat(ctx context.Context, msgs []llms.MessageContent, tools []l
 	}
 
 	opts := []llms.CallOption{llms.WithStreamingFunc(func(_ context.Context, chunk []byte) error {
-		if stream.OnText != nil && len(chunk) > 0 {
+		if stream.OnText != nil && len(chunk) > 0 && !isToolCallChunk(chunk) {
 			stream.OnText(string(chunk))
 		}
 		return nil
@@ -93,6 +95,44 @@ func (c *Client) Chat(ctx context.Context, msgs []llms.MessageContent, tools []l
 	g.Usage = usageFrom(choice)
 	c.observe(g)
 	return choice, nil
+}
+
+// isToolCallChunk reports whether a streamed chunk is a tool-call payload rather
+// than prose. langchaingo hands the SAME streaming callback the marshalled tool
+// calls in place of content when a delta carries them
+// (llms/openai/internal/openaiclient/chat.go), so forwarding every chunk verbatim
+// prints raw JSON into the user's chat. Nothing is lost by dropping these: the
+// tool calls arrive properly typed on the returned choice.
+//
+// The check is by shape, and deliberately narrow — a JSON array or object whose
+// entries carry a `function` member. Prose that happens to look like that is
+// still recorded in the choice's full content; only the live delta is suppressed.
+func isToolCallChunk(chunk []byte) bool {
+	trimmed := bytes.TrimSpace(chunk)
+	if len(trimmed) == 0 {
+		return false
+	}
+	type call struct {
+		Type     string          `json:"type"`
+		Function json.RawMessage `json:"function"`
+		Name     json.RawMessage `json:"name"`
+	}
+	switch trimmed[0] {
+	case '[':
+		var calls []call
+		if err := json.Unmarshal(trimmed, &calls); err != nil || len(calls) == 0 {
+			return false
+		}
+		return calls[0].Function != nil || calls[0].Type == "function"
+	case '{':
+		// A legacy function_call delta is marshalled as a bare object.
+		var one call
+		if err := json.Unmarshal(trimmed, &one); err != nil {
+			return false
+		}
+		return one.Function != nil || one.Name != nil
+	}
+	return false
 }
 
 // firstMessageText returns the text of the first message with the given role,
