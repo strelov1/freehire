@@ -186,6 +186,7 @@ func All(c HTTPClient) map[string]Source {
 		NewFourDayWeek(c),
 		NewFunctionalWorks(c),
 		NewTheHub(c),
+		NewCompleo(c),
 		NewInstaffo(c),
 		NewGetonbrd(c),
 		NewVagas(c),
