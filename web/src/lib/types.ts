@@ -212,7 +212,24 @@ export interface Contribution {
   source: string;
   board: string;
   status: ContributionStatus;
+  /** Which door the link came through — web, telegram, extension, cli, or unknown for a row
+   *  recorded before surfaces were tracked (or by a client that sends no tag). */
+  surface: string;
   created_at: string | null;
+}
+
+/** What became of a link handed to the intake.
+ *  - `found`    the catalog already carried the posting
+ *  - `tracked`  imported, and we already crawl this company's board
+ *  - `imported` imported, and the board behind it is now queued for onboarding
+ *  - `queued`   nothing could read the page, so the link went to manual triage */
+export type IntakeStatus = 'found' | 'tracked' | 'imported' | 'queued';
+
+export interface ResolvedLink {
+  public_slug: string | null;
+  status: IntakeStatus;
+  /** Set only for `tracked`: the company we already cover, so the UI can link to it. */
+  company_slug?: string;
 }
 
 /** Employee referrals. An offer is a member's moderated "I can refer into company X". */

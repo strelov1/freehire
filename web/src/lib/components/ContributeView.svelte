@@ -3,7 +3,7 @@
   import { api, ApiError } from '$lib/api';
   import { AsyncData } from '$lib/asyncData.svelte';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import type { Contribution } from '$lib/types';
+  import type { Contribution, ResolvedLink } from '$lib/types';
   import { Button, Input } from '$lib/ui';
   import { timeAgo } from '$lib/utils';
   import States from './States.svelte';
@@ -11,11 +11,9 @@
   let url = $state('');
   let submitting = $state(false);
   let formError = $state<string | null>(null);
-  // The just-accepted contribution, shown as confirmation (and whether it opened a new board).
-  let accepted = $state.raw<Contribution | null>(null);
-  // Set when the submitted board is already tracked: the company we cover, so we can link to it
-  // instead of a bare "already tracked" error.
-  let tracked = $state.raw<{ name: string; slug: string } | null>(null);
+  // What became of the last link handed in — the intake answers with one of four outcomes
+  // rather than an accepted/rejected pair, so there is a single piece of state to render from.
+  let resolved = $state.raw<ResolvedLink | null>(null);
 
   const canSubmit = $derived(url.trim() !== '' && !submitting);
 
@@ -26,6 +24,12 @@
   });
   const status = $derived(contribData.status);
   const contributions = $derived(contribData.value);
+
+  // Where a row came from, appended to its line. Rows recorded before surfaces were tracked
+  // (or by a client that sends no tag) read "unknown" and are better left unlabelled.
+  function surfaceLabel(surface: string): string {
+    return !surface || surface === 'unknown' || surface === 'web' ? '' : ` · via ${surface}`;
+  }
 
   // A review row carries no board — show the link's host as its label instead.
   function hostOf(u: string): string {
@@ -41,25 +45,17 @@
     if (!canSubmit) return;
     submitting = true;
     formError = null;
-    accepted = null;
-    tracked = null;
+    resolved = null;
     try {
-      accepted = await api.submitContribution(url.trim());
+      resolved = await api.resolveJobLink(url.trim());
       url = '';
-      // Refresh the list so the just-accepted board shows up without a manual reload.
+      // Refresh the list so a newly recorded board shows up without a manual reload.
       await contribData.run(() => api.listMyContributions());
     } catch (err) {
-      // A 409 for a board we already track carries the company, so link to it instead of a
-      // bare error. Otherwise (422 unsupported, 409 already-contributed) surface the message.
-      if (err instanceof ApiError && err.status === 409 && typeof err.body?.company_slug === 'string') {
-        tracked = {
-          name: typeof err.body.company_name === 'string' ? err.body.company_name : 'This company',
-          slug: err.body.company_slug,
-        };
-      } else {
-        formError =
-          err instanceof ApiError ? err.message : 'Could not submit the link. Please try again.';
-      }
+      // Only a malformed link is an error now: a board we already crawl, or one someone already
+      // contributed, comes back as an ordinary outcome rather than a 409.
+      formError =
+        err instanceof ApiError ? err.message : 'Could not submit the link. Please try again.';
     } finally {
       submitting = false;
     }
@@ -81,23 +77,36 @@
       </p>
     </div>
 
-    {#if accepted && accepted.status === 'review'}
+    {#if resolved}
       <div class="rounded-lg border border-border bg-secondary/40 p-4 text-sm" role="status">
-        This doesn't look like a known ATS. We'll check by hand whether we can pull its jobs — if
-        we can, we'll award you a credit. <span class="font-medium">Not credited yet.</span>
-      </div>
-    {:else if accepted}
-      <div class="rounded-lg border border-border bg-secondary/40 p-4 text-sm" role="status">
-        Thanks — <span class="font-medium">{accepted.board}</span> ({accepted.source}) is a new
-        board for us. We'll start crawling it. <span class="font-medium">+1 AI credit.</span>
-      </div>
-    {:else if tracked}
-      <div class="rounded-lg border border-border bg-secondary/40 p-4 text-sm" role="status">
-        We already cover <span class="font-medium">{tracked.name}</span>. That exact role might not
-        be in the catalogue yet, but it'll appear on the next crawl.
-        <a href={resolve('/companies/[slug]', { slug: tracked.slug })} class="font-medium underline underline-offset-4">
-          View {tracked.name} →
-        </a>
+        {#if resolved.status === 'found'}
+          We already have this one.
+        {:else if resolved.status === 'tracked'}
+          Added — and we already track this company, so the rest of its roles will follow on the
+          next crawl.
+        {:else if resolved.status === 'imported'}
+          Added, and this company is new to us — we'll start crawling its board.
+          <span class="font-medium">+1 AI credit.</span>
+        {:else}
+          We couldn't read that page. We'll check by hand whether we can pull its jobs — if we
+          can, we'll award you a credit. <span class="font-medium">Not credited yet.</span>
+        {/if}
+        {#if resolved.public_slug}
+          <a
+            href={resolve('/jobs/[slug]', { slug: resolved.public_slug })}
+            class="font-medium underline underline-offset-4"
+          >
+            View the job →
+          </a>
+        {/if}
+        {#if resolved.company_slug}
+          <a
+            href={resolve('/companies/[slug]', { slug: resolved.company_slug })}
+            class="font-medium underline underline-offset-4"
+          >
+            View the company →
+          </a>
+        {/if}
       </div>
     {/if}
 
@@ -140,9 +149,9 @@
                 <span class="truncate text-xs text-muted-foreground">
                   {#if c.status === 'review'}
                     <span class="font-medium text-foreground">Under review</span> · not credited yet
-                    · {timeAgo(c.created_at)}
+                    · {timeAgo(c.created_at)}{surfaceLabel(c.surface)}
                   {:else}
-                    {c.source} · contributed {timeAgo(c.created_at)}
+                    {c.source} · contributed {timeAgo(c.created_at)}{surfaceLabel(c.surface)}
                   {/if}
                 </span>
               </div>

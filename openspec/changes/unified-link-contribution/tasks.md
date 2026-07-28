@@ -74,10 +74,10 @@ needs no surface for the same reason: it imports without recording.
 ## 8. Website
 
 - [x] 8.1 Remove `POST /me/contributions`; keep the `GET` list
-- [ ] 8.2 Point `web/src/lib/api.ts` and `/contribute` at the intake endpoint with
+- [x] 8.2 Point `web/src/lib/api.ts` and `/contribute` at the intake endpoint with
   `surface: "web"`, rendering all four outcomes
-- [ ] 8.3 Show the surface column in `/my/contributions`
-- [ ] 8.4 `cd web && pnpm lint && pnpm build`
+- [x] 8.3 Show the surface column in `/my/contributions`
+- [x] 8.4 `cd web && pnpm lint && pnpm build`
 
 ## 9. freehire-cli (`../freehire-cli`)
 
