@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -265,9 +266,9 @@ WHERE c.id = ANY($1::bigint[])
 `
 
 type ListTailoredCVLabelsByIDsRow struct {
-	ID       int64  `json:"id"`
-	JobTitle string `json:"job_title"`
-	JobSlug  string `json:"job_slug"`
+	ID       uuid.UUID `json:"id"`
+	JobTitle string    `json:"job_title"`
+	JobSlug  string    `json:"job_slug"`
 }
 
 // Resolve tailored-CV ids to their target job's display labels for the credit-history page

@@ -1270,7 +1270,7 @@ export function createApi(
   }
 
   /** Switch a CV's template only (title + document untouched). */
-  async function setCvTemplate(id: number, templateId: string): Promise<void> {
+  async function setCvTemplate(id: string, templateId: string): Promise<void> {
     await call(`/api/v1/me/cvs/${id}/template`, jsonBody('PUT', { template_id: templateId }));
   }
 
@@ -1281,27 +1281,27 @@ export function createApi(
   }
 
   /** Bind a roy agent session to a CV so its workspace can re-open that exact session. */
-  async function setCvSession(id: number, sessionId: string): Promise<void> {
+  async function setCvSession(id: string, sessionId: string): Promise<void> {
     await call(`/api/v1/me/cvs/${id}/session`, jsonBody('PUT', { session_id: sessionId }));
   }
 
   /** Fetch one CV with its full document. */
-  async function getCv(id: number): Promise<CvRecord> {
+  async function getCv(id: string): Promise<CvRecord> {
     return requestData<CvRecord>(`/api/v1/me/cvs/${id}`);
   }
 
   /** Replace a CV's title, template, and document. */
-  async function updateCv(id: number, input: UpdateCvInput): Promise<CvMeta> {
+  async function updateCv(id: string, input: UpdateCvInput): Promise<CvMeta> {
     return requestData<CvMeta>(`/api/v1/me/cvs/${id}`, jsonBody('PUT', input));
   }
 
   /** Delete a CV. */
-  async function deleteCv(id: number): Promise<void> {
+  async function deleteCv(id: string): Promise<void> {
     await call(`/api/v1/me/cvs/${id}`, { method: 'DELETE' });
   }
 
   /** The authenticated PDF URL for a CV (same-origin cookie rides along on download). */
-  function cvPdfUrl(id: number): string {
+  function cvPdfUrl(id: string): string {
     return `${baseUrl}/api/v1/me/cvs/${id}/pdf`;
   }
 
@@ -1319,7 +1319,7 @@ export function createApi(
    * (one created before session binding): mints a fresh CLI token and returns the CV + base ids
    * so the workspace can seed a new agent session against the same CV.
    */
-  async function startTailorSession(id: number): Promise<TailorResult> {
+  async function startTailorSession(id: string): Promise<TailorResult> {
     return requestData<TailorResult>(`/api/v1/me/cvs/${id}/tailor-session`, jsonBody('POST', {}));
   }
 

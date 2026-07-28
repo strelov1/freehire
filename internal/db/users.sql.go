@@ -305,21 +305,6 @@ func (q *Queries) GetUserTokenVersion(ctx context.Context, id int64) (int32, err
 	return token_version, err
 }
 
-const isBetaTester = `-- name: IsBetaTester :one
-SELECT beta_tester
-FROM users
-WHERE id = $1
-`
-
-// Slim beta-membership lookup for the RequireModeratorOrBeta middleware — a
-// primitive bool so the auth package stays free of a db import (same shape as GetUserRole).
-func (q *Queries) IsBetaTester(ctx context.Context, id int64) (bool, error) {
-	row := q.db.QueryRow(ctx, isBetaTester, id)
-	var beta_tester bool
-	err := row.Scan(&beta_tester)
-	return beta_tester, err
-}
-
 const listUserBlobKeys = `-- name: ListUserBlobKeys :many
 SELECT u.resume_object_key AS key FROM users u
 WHERE u.id = $1 AND u.resume_object_key IS NOT NULL AND u.resume_object_key <> ''

@@ -32,29 +32,29 @@ type fakeQueries struct {
 	touched   uuid.UUID
 }
 
-func (f *fakeQueries) CreateAssistantSession(_ context.Context, arg db.CreateAssistantSessionParams) (db.AssistantSession, error) {
-	return db.AssistantSession{
+func (f *fakeQueries) CreateAssistantSession(_ context.Context, arg db.CreateAssistantSessionParams) (db.CreateAssistantSessionRow, error) {
+	return db.CreateAssistantSessionRow{
 		ID: sessionID, UserID: arg.UserID, Preset: arg.Preset, CvID: arg.CvID, JobID: arg.JobID,
 	}, nil
 }
 
-func (f *fakeQueries) ListAssistantChatSessions(_ context.Context, userID int64) ([]db.AssistantSession, error) {
+func (f *fakeQueries) ListAssistantChatSessions(_ context.Context, userID int64) ([]db.ListAssistantChatSessionsRow, error) {
 	f.gotUserID = userID
 	if f.session.UserID != userID || f.session.Preset != PresetChat {
 		return nil, nil
 	}
-	return []db.AssistantSession{{
+	return []db.ListAssistantChatSessionsRow{{
 		ID: f.session.ID, UserID: f.session.UserID, Preset: f.session.Preset,
 		Label: f.session.Label, CvID: f.session.CvID, JobID: f.session.JobID,
 	}}, nil
 }
 
-func (f *fakeQueries) GetAssistantSession(_ context.Context, arg db.GetAssistantSessionParams) (db.AssistantSession, error) {
+func (f *fakeQueries) GetAssistantSession(_ context.Context, arg db.GetAssistantSessionParams) (db.GetAssistantSessionRow, error) {
 	f.gotUserID = arg.UserID
 	if f.session.ID != arg.ID || f.session.UserID != arg.UserID {
-		return db.AssistantSession{}, pgx.ErrNoRows
+		return db.GetAssistantSessionRow{}, pgx.ErrNoRows
 	}
-	return db.AssistantSession{
+	return db.GetAssistantSessionRow{
 		ID: f.session.ID, UserID: f.session.UserID, Preset: f.session.Preset,
 		Label: f.session.Label, CvID: f.session.CvID, JobID: f.session.JobID,
 	}, nil
@@ -102,7 +102,7 @@ func TestGetSessionMapsNullableColumns(t *testing.T) {
 	f := &fakeQueries{session: db.AssistantSession{
 		ID: sessionID, UserID: 3, Preset: PresetTailor,
 		Label: pgtype.Text{String: "Tailor for Acme", Valid: true},
-		CvID:  ptr(int64(42)),
+		CvID:  ptr(uuid.MustParse("33333333-3333-4333-8333-333333333333")),
 		JobID: nil, // never set
 	}}
 	s := NewStore(f)
@@ -114,8 +114,8 @@ func TestGetSessionMapsNullableColumns(t *testing.T) {
 	if got.Preset != PresetTailor || got.Label != "Tailor for Acme" {
 		t.Errorf("session = %+v, want the stored preset and label", got)
 	}
-	if got.CVID == nil || *got.CVID != 42 {
-		t.Errorf("CVID = %v, want 42", got.CVID)
+	if got.CVID == nil || got.CVID.String() != "33333333-3333-4333-8333-333333333333" {
+		t.Errorf("CVID = %v, want the bound CV", got.CVID)
 	}
 	if got.JobID != nil {
 		t.Errorf("JobID = %v, want nil for an unset column", got.JobID)
@@ -194,15 +194,15 @@ func TestLabelSessionUsesTheFirstMessage(t *testing.T) {
 func TestCreateSessionPassesTheBinding(t *testing.T) {
 	f := &fakeQueries{}
 	s := NewStore(f)
-	cv := int64(42)
+	cv := uuid.MustParse("44444444-4444-4444-8444-444444444444")
 	job := int64(9)
 
 	got, err := s.CreateSession(context.Background(), 3, PresetTailor, &cv, &job)
 	if err != nil {
 		t.Fatalf("CreateSession: %v", err)
 	}
-	if got.Preset != PresetTailor || got.CVID == nil || *got.CVID != 42 || got.JobID == nil || *got.JobID != 9 {
-		t.Errorf("session = %+v, want a tailoring session bound to cv 42 / job 9", got)
+	if got.Preset != PresetTailor || got.CVID == nil || *got.CVID != cv || got.JobID == nil || *got.JobID != 9 {
+		t.Errorf("session = %+v, want a tailoring session bound to that cv / job 9", got)
 	}
 }
 

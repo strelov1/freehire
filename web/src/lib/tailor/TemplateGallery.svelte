@@ -7,7 +7,7 @@
   // the set-template endpoint and calls onSelected(id) so the host can keep its own template id in
   // step (autosave writes it too) and cache-bust the PDF. Non-ATS-safe templates carry an inline
   // caution.
-  let { cvId, onSelected }: { cvId: number; onSelected: (id: string) => void } = $props();
+  let { cvId, onSelected }: { cvId: string; onSelected: (id: string) => void } = $props();
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   let templates = $state<CvTemplate[]>([]);

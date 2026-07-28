@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/cv"
@@ -75,15 +76,28 @@ type seekerRequestResponse struct {
 	CompanyName string     `json:"company_name"`
 	JobID       *int64     `json:"job_id"`
 	CVKind      string     `json:"cv_kind"`
-	CVID        *int64     `json:"cv_id"`
+	CVID        *string    `json:"cv_id"`
 	Status      string     `json:"status"`
 	CreatedAt   *time.Time `json:"created_at"`
+}
+
+// optionalCVID parses an optional CV id from a request body. Absent stays absent;
+// present-but-malformed is a client error, not a lookup that quietly finds nothing.
+func optionalCVID(raw *string) (*uuid.UUID, error) {
+	if raw == nil || *raw == "" {
+		return nil, nil
+	}
+	id, err := uuid.Parse(*raw)
+	if err != nil {
+		return nil, fiber.NewError(fiber.StatusUnprocessableEntity, "cv_id is not a valid id")
+	}
+	return &id, nil
 }
 
 func toSeekerRequestResponse(r referral.Request) seekerRequestResponse {
 	return seekerRequestResponse{
 		ID: r.ID, CompanySlug: r.CompanySlug, CompanyName: r.CompanyName, JobID: r.JobID,
-		CVKind: r.CVKind, CVID: r.CVID, Status: r.Status, CreatedAt: r.CreatedAt,
+		CVKind: r.CVKind, CVID: cvIDString(r.CVID), Status: r.Status, CreatedAt: r.CreatedAt,
 	}
 }
 
@@ -152,14 +166,14 @@ func referralError(err error) error {
 // createReferralRequestBody is the seeker's submit payload. Exactly one of the CV fields is
 // meaningful per cv_kind (validated in the domain); the contact is Telegram and/or email.
 type createReferralRequestBody struct {
-	CompanySlug     string `json:"company_slug"`
-	JobID           *int64 `json:"job_id"`
-	CVKind          string `json:"cv_kind"`
-	CVID            *int64 `json:"cv_id"`
-	LinkedInURL     string `json:"linkedin_url"`
-	ContactTelegram string `json:"contact_telegram"`
-	ContactEmail    string `json:"contact_email"`
-	Note            string `json:"note"`
+	CompanySlug     string  `json:"company_slug"`
+	JobID           *int64  `json:"job_id"`
+	CVKind          string  `json:"cv_kind"`
+	CVID            *string `json:"cv_id"`
+	LinkedInURL     string  `json:"linkedin_url"`
+	ContactTelegram string  `json:"contact_telegram"`
+	ContactEmail    string  `json:"contact_email"`
+	Note            string  `json:"note"`
 }
 
 // CreateReferralRequest records a seeker's request into a company's referrer pool and pings
@@ -173,12 +187,18 @@ func (h *referralHandlers) CreateReferralRequest(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
+	// The attached CV is addressed by its opaque id; a malformed one names no CV,
+	// which the service reports as an unusable attachment rather than a 500.
+	cvID, err := optionalCVID(in.CVID)
+	if err != nil {
+		return err
+	}
 	req, err := h.referral.CreateRequest(c.Context(), referral.RequestInput{
 		SeekerUserID:    userID,
 		CompanySlug:     in.CompanySlug,
 		JobID:           in.JobID,
 		CVKind:          in.CVKind,
-		CVID:            in.CVID,
+		CVID:            cvID,
 		LinkedInURL:     in.LinkedInURL,
 		ContactTelegram: in.ContactTelegram,
 		ContactEmail:    in.ContactEmail,
@@ -435,7 +455,7 @@ func (h *referralHandlers) streamBlobPDF(c *fiber.Ctx, key string) error {
 
 // renderOwnerCV renders a builder CV owned by ownerID to PDF. cvStore.Get is owner-scoped,
 // so it is loaded as the seeker (the owner), not the viewing referrer. 501 when no renderer.
-func (h *referralHandlers) renderOwnerCV(c *fiber.Ctx, cvID, ownerID int64) error {
+func (h *referralHandlers) renderOwnerCV(c *fiber.Ctx, cvID uuid.UUID, ownerID int64) error {
 	if h.cvRenderer == nil {
 		return fiber.NewError(fiber.StatusNotImplemented, "PDF rendering is not available")
 	}

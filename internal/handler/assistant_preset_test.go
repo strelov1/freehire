@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/strelov1/freehire/internal/assistant"
 )
 
@@ -39,7 +41,7 @@ func TestChatPresetHasNoCVTools(t *testing.T) {
 }
 
 func TestTailorPresetAddsTheCVTools(t *testing.T) {
-	cvID, jobID := int64(5), int64(9)
+	cvID, jobID := uuid.MustParse("66666666-6666-4666-8666-666666666666"), int64(9)
 	reg := presetAPI().registry(assistant.Session{
 		UserID: 3, Preset: assistant.PresetTailor, CVID: &cvID, JobID: &jobID,
 	})
@@ -67,7 +69,7 @@ func TestNoModeratorToolIsEverRegistered(t *testing.T) {
 	// Job authoring and submission review are moderator surfaces; the agent must
 	// not reach them whatever the session or the caller's role.
 	forbidden := []string{"create_job", "edit_job", "submit_job", "submissions", "approve_submission", "reject_submission"}
-	cvID, jobID := int64(5), int64(9)
+	cvID, jobID := uuid.MustParse("66666666-6666-4666-8666-666666666666"), int64(9)
 
 	for _, sess := range []assistant.Session{
 		{UserID: 3, Preset: assistant.PresetChat},

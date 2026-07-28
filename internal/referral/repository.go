@@ -3,6 +3,7 @@ package referral
 import (
 	"context"
 	"errors"
+	"github.com/google/uuid"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -150,7 +151,7 @@ func (r *QueriesRepository) ApprovedReferrerRecipients(ctx context.Context, comp
 }
 
 // CVBelongsToUser reports whether the builder CV is owned by the user.
-func (r *QueriesRepository) CVBelongsToUser(ctx context.Context, cvID, userID int64) (bool, error) {
+func (r *QueriesRepository) CVBelongsToUser(ctx context.Context, cvID uuid.UUID, userID int64) (bool, error) {
 	return r.q.CVBelongsToUser(ctx, db.CVBelongsToUserParams{CvID: cvID, UserID: userID})
 }
 
@@ -167,7 +168,7 @@ func (r *QueriesRepository) CreateRequest(ctx context.Context, in RequestInput) 
 		CompanySlug:     in.CompanySlug,
 		JobID:           int8Ptr(in.JobID),
 		CvKind:          in.CVKind,
-		CvID:            int8Ptr(in.CVID),
+		CvID:            in.CVID,
 		LinkedinUrl:     in.LinkedInURL,
 		ContactTelegram: textOrNull(in.ContactTelegram),
 		ContactEmail:    textOrNull(in.ContactEmail),
@@ -274,7 +275,7 @@ func requestFromRow(row db.ReferralRequest) Request {
 		CompanySlug:     row.CompanySlug,
 		JobID:           int64PtrFrom(row.JobID),
 		CVKind:          row.CvKind,
-		CVID:            int64PtrFrom(row.CvID),
+		CVID:            row.CvID,
 		LinkedInURL:     row.LinkedinUrl,
 		ContactTelegram: row.ContactTelegram.String,
 		ContactEmail:    row.ContactEmail.String,

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
+
 	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/cv"
 )
@@ -14,7 +16,7 @@ import (
 // ones. They are bound to the session's own CV and vacancy: the ids are closed
 // over here rather than taken as arguments, so the model has no way to address a
 // different CV — not even by guessing an id.
-func (h *assistantHandlers) assistantCVTools(cvID, jobID int64) []assistant.Tool {
+func (h *assistantHandlers) assistantCVTools(cvID uuid.UUID, jobID int64) []assistant.Tool {
 	return []assistant.Tool{
 		h.cvContextTool(jobID),
 		h.cvGetTool(cvID),
@@ -51,7 +53,7 @@ func (h *assistantHandlers) cvContextTool(jobID int64) assistant.Tool {
 }
 
 // cvGetTool reads the tailored CV document the session is editing.
-func (h *assistantHandlers) cvGetTool(cvID int64) assistant.Tool {
+func (h *assistantHandlers) cvGetTool(cvID uuid.UUID) assistant.Tool {
 	return assistant.Tool{
 		Name:        "cv_get",
 		Description: "Read the current CV document being tailored, so edits are grounded in what it actually says.",
@@ -71,7 +73,7 @@ func (h *assistantHandlers) cvGetTool(cvID int64) assistant.Tool {
 }
 
 // cvEditTool applies one field-level patch to the tailored CV.
-func (h *assistantHandlers) cvEditTool(cvID int64) assistant.Tool {
+func (h *assistantHandlers) cvEditTool(cvID uuid.UUID) assistant.Tool {
 	return assistant.Tool{
 		Name: "cv_edit",
 		Description: "Apply ONE field-level patch to the CV. Ops: set_summary, set_header_field, add_bullet, " +

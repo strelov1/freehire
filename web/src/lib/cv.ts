@@ -17,7 +17,9 @@ import type {
 
 /** CV metadata (list rows and mutation responses). */
 export interface CvMeta {
-  id: number;
+  /** A CV id is a random UUID the client treats as opaque — never parsed, never
+   *  compared for order, only passed back. */
+  id: string;
   title: string;
   template_id: string;
   created_at: string;
@@ -47,8 +49,8 @@ export interface CvTailoredItem extends CvMeta {
  * backend as the caller.
  */
 export interface TailorResult {
-  tailor_cv_id: number;
-  base_cv_id: number;
+  tailor_cv_id: string;
+  base_cv_id: string;
   analysis: Analysis | null;
   session_id: string;
 }

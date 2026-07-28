@@ -35,16 +35,16 @@ type Session struct {
 	UserID int64
 	Preset string
 	Label  string
-	CVID   *int64
+	CVID   *uuid.UUID
 	JobID  *int64
 }
 
 // Queries is the slice of the generated query surface the store needs.
 // *db.Queries satisfies it; tests supply a fake.
 type Queries interface {
-	CreateAssistantSession(ctx context.Context, arg db.CreateAssistantSessionParams) (db.AssistantSession, error)
-	ListAssistantChatSessions(ctx context.Context, userID int64) ([]db.AssistantSession, error)
-	GetAssistantSession(ctx context.Context, arg db.GetAssistantSessionParams) (db.AssistantSession, error)
+	CreateAssistantSession(ctx context.Context, arg db.CreateAssistantSessionParams) (db.CreateAssistantSessionRow, error)
+	ListAssistantChatSessions(ctx context.Context, userID int64) ([]db.ListAssistantChatSessionsRow, error)
+	GetAssistantSession(ctx context.Context, arg db.GetAssistantSessionParams) (db.GetAssistantSessionRow, error)
 	DeleteAssistantSession(ctx context.Context, arg db.DeleteAssistantSessionParams) (int64, error)
 	TouchAssistantSession(ctx context.Context, id uuid.UUID) error
 	SetAssistantSessionLabel(ctx context.Context, arg db.SetAssistantSessionLabelParams) error
@@ -61,7 +61,7 @@ func NewStore(q Queries) *Store { return &Store{q: q} }
 
 // CreateSession starts a conversation. cvID/jobID bind a tailoring session to its
 // CV and vacancy and are nil for a chat.
-func (s *Store) CreateSession(ctx context.Context, userID int64, preset string, cvID, jobID *int64) (Session, error) {
+func (s *Store) CreateSession(ctx context.Context, userID int64, preset string, cvID *uuid.UUID, jobID *int64) (Session, error) {
 	row, err := s.q.CreateAssistantSession(ctx, db.CreateAssistantSessionParams{
 		UserID: userID,
 		Preset: preset,
@@ -71,7 +71,7 @@ func (s *Store) CreateSession(ctx context.Context, userID int64, preset string, 
 	if err != nil {
 		return Session{}, fmt.Errorf("assistant: create session: %w", err)
 	}
-	return sessionFrom(row), nil
+	return session(row.ID, row.UserID, row.Preset, row.Label, row.CvID, row.JobID), nil
 }
 
 // ChatSessions lists the caller's general chats, most recently active first.
@@ -84,7 +84,7 @@ func (s *Store) ChatSessions(ctx context.Context, userID int64) ([]Session, erro
 	}
 	out := make([]Session, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, sessionFrom(r))
+		out = append(out, session(r.ID, r.UserID, r.Preset, r.Label, r.CvID, r.JobID))
 	}
 	return out, nil
 }
@@ -98,7 +98,7 @@ func (s *Store) Session(ctx context.Context, id uuid.UUID, userID int64) (Sessio
 	if err != nil {
 		return Session{}, fmt.Errorf("assistant: get session: %w", err)
 	}
-	return sessionFrom(row), nil
+	return session(row.ID, row.UserID, row.Preset, row.Label, row.CvID, row.JobID), nil
 }
 
 // DeleteSession removes an owned conversation and its transcript.
@@ -178,13 +178,9 @@ func (s *Store) Transcript(ctx context.Context, sessionID uuid.UUID) ([]Message,
 	return out, nil
 }
 
-func sessionFrom(r db.AssistantSession) Session {
-	return Session{
-		ID:     r.ID,
-		UserID: r.UserID,
-		Preset: r.Preset,
-		Label:  r.Label.String,
-		CVID:   r.CvID,
-		JobID:  r.JobID,
-	}
+// session builds the domain shape from the columns every session query selects.
+// sqlc emits a distinct row type per query — same columns, three names — so the
+// mapping lives here once and each caller adapts its row into it.
+func session(id uuid.UUID, userID int64, preset string, label pgtype.Text, cvID *uuid.UUID, jobID *int64) Session {
+	return Session{ID: id, UserID: userID, Preset: preset, Label: label.String, CVID: cvID, JobID: jobID}
 }

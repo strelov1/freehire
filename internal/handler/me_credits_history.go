@@ -123,7 +123,7 @@ func (h *creditsHandlers) resolveDebitSubjects(c *fiber.Ctx, rows []db.ListCredi
 			return nil, err
 		}
 		for _, cv := range cvs {
-			subjects[subjectKey("tailor", strconv.FormatInt(cv.ID, 10))] = jobLabel(cv.JobTitle, cv.JobSlug)
+			subjects[subjectKey("tailor", cv.ID.String())] = jobLabel(cv.JobTitle, cv.JobSlug)
 		}
 	}
 	return subjects, nil

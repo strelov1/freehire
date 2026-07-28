@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/auth"
@@ -92,7 +93,7 @@ func (h *cvHandlers) register(api fiber.Router, mw middleware) {
 const maxCVTitleRunes = 200
 
 type cvMetaResponse struct {
-	ID         int64     `json:"id"`
+	ID         string    `json:"id"`
 	Title      string    `json:"title"`
 	TemplateID string    `json:"template_id"`
 	CreatedAt  time.Time `json:"created_at"`
@@ -132,7 +133,7 @@ type updateCVRequest struct {
 }
 
 func metaResponse(m cv.Meta) cvMetaResponse {
-	return cvMetaResponse{ID: m.ID, Title: m.Title, TemplateID: m.TemplateID, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}
+	return cvMetaResponse{ID: m.ID.String(), Title: m.Title, TemplateID: m.TemplateID, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}
 }
 
 func recordResponse(rec cv.Record) cvResponse {
@@ -212,11 +213,11 @@ func (h *cvHandlers) GetCV(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	id, err := c.ParamsInt("id")
+	id, err := cvPathID(c)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid id")
+		return err
 	}
-	rec, err := h.cvStore.Get(c.Context(), int64(id), userID)
+	rec, err := h.cvStore.Get(c.Context(), id, userID)
 	if err != nil {
 		return mapCVError(err)
 	}
@@ -238,9 +239,9 @@ func (h *cvHandlers) UpdateCV(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	id, err := c.ParamsInt("id")
+	id, err := cvPathID(c)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid id")
+		return err
 	}
 	var in updateCVRequest
 	if err := c.BodyParser(&in); err != nil {
@@ -250,7 +251,7 @@ func (h *cvHandlers) UpdateCV(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	meta, err := h.cvStore.Update(c.Context(), int64(id), userID, cvTitle(in.Title), tmplID, in.Document)
+	meta, err := h.cvStore.Update(c.Context(), id, userID, cvTitle(in.Title), tmplID, in.Document)
 	if err != nil {
 		return mapCVError(err)
 	}
@@ -263,11 +264,11 @@ func (h *cvHandlers) DeleteCV(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	id, err := c.ParamsInt("id")
+	id, err := cvPathID(c)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid id")
+		return err
 	}
-	if err := h.cvStore.Delete(c.Context(), int64(id), userID); err != nil {
+	if err := h.cvStore.Delete(c.Context(), id, userID); err != nil {
 		return mapCVError(err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
@@ -284,15 +285,15 @@ func (h *cvHandlers) SetCVSession(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	id, err := c.ParamsInt("id")
+	id, err := cvPathID(c)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid id")
+		return err
 	}
 	var in setCVSessionRequest
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	if err := h.cvStore.SetSession(c.Context(), int64(id), userID, in.SessionID); err != nil {
+	if err := h.cvStore.SetSession(c.Context(), id, userID, in.SessionID); err != nil {
 		return mapCVError(err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
@@ -310,9 +311,9 @@ func (h *cvHandlers) SetCVTemplate(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	id, err := c.ParamsInt("id")
+	id, err := cvPathID(c)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid id")
+		return err
 	}
 	var in setCVTemplateRequest
 	if err := c.BodyParser(&in); err != nil {
@@ -322,7 +323,7 @@ func (h *cvHandlers) SetCVTemplate(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if err := h.cvStore.SetTemplate(c.Context(), int64(id), userID, tmplID); err != nil {
+	if err := h.cvStore.SetTemplate(c.Context(), id, userID, tmplID); err != nil {
 		return mapCVError(err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
@@ -338,11 +339,11 @@ func (h *cvHandlers) RenderCVPDF(c *fiber.Ctx) error {
 	if h.cvRenderer == nil {
 		return fiber.NewError(fiber.StatusNotImplemented, "PDF rendering is not available")
 	}
-	id, err := c.ParamsInt("id")
+	id, err := cvPathID(c)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid id")
+		return err
 	}
-	rec, err := h.cvStore.Get(c.Context(), int64(id), userID)
+	rec, err := h.cvStore.Get(c.Context(), id, userID)
 	if err != nil {
 		return mapCVError(err)
 	}
@@ -397,4 +398,16 @@ func mapCVError(err error) error {
 	default:
 		return err
 	}
+}
+
+// cvPathID parses the :id route param as a CV's UUID. A malformed id cannot name
+// any CV, so it is reported as missing rather than as a bad request — keeping
+// "not a CV" and "not yours" the same answer, which is what stops the id from
+// being probeable.
+func cvPathID(c *fiber.Ctx) (uuid.UUID, error) {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return uuid.Nil, fiber.NewError(fiber.StatusNotFound, "cv not found")
+	}
+	return id, nil
 }

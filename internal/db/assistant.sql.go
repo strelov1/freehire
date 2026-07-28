@@ -53,23 +53,34 @@ RETURNING id, user_id, preset, label, cv_id, job_id, created_at, updated_at
 `
 
 type CreateAssistantSessionParams struct {
-	UserID int64  `json:"user_id"`
-	Preset string `json:"preset"`
-	CvID   *int64 `json:"cv_id"`
-	JobID  *int64 `json:"job_id"`
+	UserID int64      `json:"user_id"`
+	Preset string     `json:"preset"`
+	CvID   *uuid.UUID `json:"cv_id"`
+	JobID  *int64     `json:"job_id"`
+}
+
+type CreateAssistantSessionRow struct {
+	ID        uuid.UUID          `json:"id"`
+	UserID    int64              `json:"user_id"`
+	Preset    string             `json:"preset"`
+	Label     pgtype.Text        `json:"label"`
+	CvID      *uuid.UUID         `json:"cv_id"`
+	JobID     *int64             `json:"job_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
 // Start a conversation for a user. preset selects the prompt and tool set ('chat' or
 // 'tailor'); cv_id/job_id bind a tailoring session to its CV and vacancy and are NULL
 // for a chat. The label is set later, from the first user message.
-func (q *Queries) CreateAssistantSession(ctx context.Context, arg CreateAssistantSessionParams) (AssistantSession, error) {
+func (q *Queries) CreateAssistantSession(ctx context.Context, arg CreateAssistantSessionParams) (CreateAssistantSessionRow, error) {
 	row := q.db.QueryRow(ctx, createAssistantSession,
 		arg.UserID,
 		arg.Preset,
 		arg.CvID,
 		arg.JobID,
 	)
-	var i AssistantSession
+	var i CreateAssistantSessionRow
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
@@ -114,11 +125,22 @@ type GetAssistantSessionParams struct {
 	UserID int64     `json:"user_id"`
 }
 
+type GetAssistantSessionRow struct {
+	ID        uuid.UUID          `json:"id"`
+	UserID    int64              `json:"user_id"`
+	Preset    string             `json:"preset"`
+	Label     pgtype.Text        `json:"label"`
+	CvID      *uuid.UUID         `json:"cv_id"`
+	JobID     *int64             `json:"job_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 // One session owned by the caller. Owner-scoped: a foreign or missing id returns no row,
 // which the handler maps to 404 — so a probe cannot tell the two apart.
-func (q *Queries) GetAssistantSession(ctx context.Context, arg GetAssistantSessionParams) (AssistantSession, error) {
+func (q *Queries) GetAssistantSession(ctx context.Context, arg GetAssistantSessionParams) (GetAssistantSessionRow, error) {
 	row := q.db.QueryRow(ctx, getAssistantSession, arg.ID, arg.UserID)
-	var i AssistantSession
+	var i GetAssistantSessionRow
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
@@ -139,20 +161,31 @@ WHERE user_id = $1 AND preset = 'chat'
 ORDER BY updated_at DESC, id DESC
 `
 
+type ListAssistantChatSessionsRow struct {
+	ID        uuid.UUID          `json:"id"`
+	UserID    int64              `json:"user_id"`
+	Preset    string             `json:"preset"`
+	Label     pgtype.Text        `json:"label"`
+	CvID      *uuid.UUID         `json:"cv_id"`
+	JobID     *int64             `json:"job_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 // The caller's session rail: their general chats, most recently active first. Owner-scoped
 // by construction — another user's sessions can never appear. Tailoring conversations are
 // deliberately excluded: they belong to the CV that owns them and are reached through the
 // tailoring workspace, so listing them here would put a chat in the rail that leads nowhere
 // useful and cannot be continued without its CV.
-func (q *Queries) ListAssistantChatSessions(ctx context.Context, userID int64) ([]AssistantSession, error) {
+func (q *Queries) ListAssistantChatSessions(ctx context.Context, userID int64) ([]ListAssistantChatSessionsRow, error) {
 	rows, err := q.db.Query(ctx, listAssistantChatSessions, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []AssistantSession{}
+	items := []ListAssistantChatSessionsRow{}
 	for rows.Next() {
-		var i AssistantSession
+		var i ListAssistantChatSessionsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,

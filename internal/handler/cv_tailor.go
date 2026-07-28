@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"log"
-	"strconv"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/assistant"
@@ -26,8 +26,8 @@ type tailorCVRequest struct {
 // base it was copied from, the cached analysis (so the client need not refetch), and the
 // short-lived CLI token the agent session authenticates with.
 type tailorCVResponse struct {
-	TailorCVID int64                   `json:"tailor_cv_id"`
-	BaseCVID   int64                   `json:"base_cv_id"`
+	TailorCVID string                  `json:"tailor_cv_id"`
+	BaseCVID   string                  `json:"base_cv_id"`
 	Analysis   *matchanalysis.Analysis `json:"analysis"`
 	SessionID  string                  `json:"session_id"`
 }
@@ -83,11 +83,11 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	// charge again). Idempotent by the new CV id; resuming an existing CV (a different
 	// endpoint) never debits. The session already exists, so a debit error — including a
 	// rare insufficient-balance race the pre-check let through — is logged, not surfaced.
-	if _, err := h.credits.Debit(c.Context(), userID, credits.FeatureTailor, strconv.FormatInt(tailored.ID, 10)); err != nil {
+	if _, err := h.credits.Debit(c.Context(), userID, credits.FeatureTailor, tailored.ID.String()); err != nil {
 		log.Printf("credits: tailor debit user=%d cv=%d: %v", userID, tailored.ID, err)
 	}
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": tailorCVResponse{
-		TailorCVID: tailored.ID, BaseCVID: base.ID, Analysis: analysis, SessionID: sessionID,
+		TailorCVID: tailored.ID.String(), BaseCVID: base.ID.String(), Analysis: analysis, SessionID: sessionID,
 	}})
 }
 
@@ -95,8 +95,8 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 // created before session binding, or whose session was lost): the CV + base ids and a freshly
 // minted CLI token, so the browser can seed a new agent session bound to the same CV.
 type tailorSessionResponse struct {
-	TailorCVID int64  `json:"tailor_cv_id"`
-	BaseCVID   int64  `json:"base_cv_id"`
+	TailorCVID string `json:"tailor_cv_id"`
+	BaseCVID   string `json:"base_cv_id"`
 	SessionID  string `json:"session_id"`
 }
 
@@ -108,11 +108,11 @@ func (h *cvHandlers) StartTailorSession(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	id, err := c.ParamsInt("id")
+	id, err := cvPathID(c)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid id")
+		return err
 	}
-	rec, err := h.cvStore.Get(c.Context(), int64(id), userID)
+	rec, err := h.cvStore.Get(c.Context(), id, userID)
 	if err != nil {
 		return mapCVError(err)
 	}
@@ -131,7 +131,7 @@ func (h *cvHandlers) StartTailorSession(c *fiber.Ctx) error {
 		return err
 	}
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": tailorSessionResponse{
-		TailorCVID: rec.ID, BaseCVID: base.ID, SessionID: sessionID,
+		TailorCVID: rec.ID.String(), BaseCVID: base.ID.String(), SessionID: sessionID,
 	}})
 }
 
@@ -141,7 +141,7 @@ func (h *cvHandlers) StartTailorSession(c *fiber.Ctx) error {
 // binding is what confines the CV tools — they close over these ids rather than
 // taking them from the model — so it is created here, where ownership of both is
 // already established.
-func (h *cvHandlers) startTailoringSession(ctx context.Context, userID, cvID, jobID int64) (string, error) {
+func (h *cvHandlers) startTailoringSession(ctx context.Context, userID int64, cvID uuid.UUID, jobID int64) (string, error) {
 	if h.assistantSessions == nil {
 		return "", fiber.NewError(fiber.StatusServiceUnavailable, "the assistant is not available")
 	}
@@ -163,9 +163,9 @@ func (h *cvHandlers) PatchCV(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	id, err := c.ParamsInt("id")
+	id, err := cvPathID(c)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid id")
+		return err
 	}
 	// Decode strictly: reject unknown fields and type mismatches so a mis-addressed
 	// op (a stray "skill" field, a numeric "group") fails with a reason the agent can
@@ -179,7 +179,7 @@ func (h *cvHandlers) PatchCV(c *fiber.Ctx) error {
 	if auth.ViaAPIKey(c) && p.Op == cv.PatchSetHeaderField && isContactHeaderField(p.Field) {
 		return fiber.NewError(fiber.StatusForbidden, "contact fields are not editable in a tailoring session")
 	}
-	meta, err := h.cvStore.Patch(c.Context(), int64(id), userID, p)
+	meta, err := h.cvStore.Patch(c.Context(), id, userID, p)
 	if err != nil {
 		return mapCVError(err)
 	}
@@ -229,11 +229,11 @@ func (h *cvHandlers) TailorContext(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	id, err := c.ParamsInt("id")
+	id, err := cvPathID(c)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid id")
+		return err
 	}
-	rec, err := h.cvStore.Get(c.Context(), int64(id), userID)
+	rec, err := h.cvStore.Get(c.Context(), id, userID)
 	if err != nil {
 		return mapCVError(err)
 	}

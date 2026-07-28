@@ -236,7 +236,7 @@ export interface SeekerReferralRequest {
   company_name: string;
   job_id: number | null;
   cv_kind: ReferralCvKind;
-  cv_id: number | null;
+  cv_id: string | null;
   status: ReferralRequestStatus;
   created_at: string | null;
 }
@@ -261,7 +261,7 @@ export interface ReferralRequestInput {
   company_slug: string;
   job_id?: number;
   cv_kind: ReferralCvKind;
-  cv_id?: number;
+  cv_id?: string;
   linkedin_url: string;
   contact_telegram?: string;
   contact_email?: string;

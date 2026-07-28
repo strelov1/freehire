@@ -10,6 +10,7 @@ package referral
 import (
 	"context"
 	"errors"
+	"github.com/google/uuid"
 	"log"
 	"net/url"
 	"strings"
@@ -118,7 +119,7 @@ type Request struct {
 	CompanyName string
 	JobID       *int64
 	CVKind      string
-	CVID        *int64
+	CVID        *uuid.UUID
 	// LinkedInURL is the seeker's own profile, shown to the referrer in the inbox alongside
 	// the contact channels. Required and shape-validated at submission.
 	LinkedInURL     string
@@ -154,7 +155,7 @@ type RequestInput struct {
 	CompanySlug     string
 	JobID           *int64
 	CVKind          string
-	CVID            *int64
+	CVID            *uuid.UUID
 	LinkedInURL     string
 	ContactTelegram string
 	ContactEmail    string
@@ -175,7 +176,7 @@ type Repository interface {
 	CompanyHasApprovedReferrer(ctx context.Context, companySlug string) (bool, error)
 	ReferrerApprovedForCompany(ctx context.Context, userID int64, companySlug string) (bool, error)
 	ApprovedReferrerRecipients(ctx context.Context, companySlug string) ([]Recipient, error)
-	CVBelongsToUser(ctx context.Context, cvID, userID int64) (bool, error)
+	CVBelongsToUser(ctx context.Context, cvID uuid.UUID, userID int64) (bool, error)
 	UserHasResume(ctx context.Context, userID int64) (bool, error)
 
 	CreateRequest(ctx context.Context, in RequestInput) (Request, error)

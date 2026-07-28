@@ -5,20 +5,20 @@
 
 ## 2. Query layer
 
-- [ ] 2.1 Change the CV queries in `internal/db/queries/cvs.sql` to take and return uuid ids; regenerate `internal/db` with `make sqlc` (add the `google/uuid` override for `cvs.id`, `referral_requests.cv_id` and `assistant_sessions.cv_id`).
-- [ ] 2.2 Update `internal/cv`: `Meta.ID`, `Record`, and every `Store` method that takes an id.
-- [ ] 2.3 Update the other packages that hold a CV id — `internal/referral` and the assistant's session binding.
+- [x] 2.1 Change the CV queries in `internal/db/queries/cvs.sql` to take and return uuid ids; regenerate `internal/db` with `make sqlc` (add the `google/uuid` override for `cvs.id`, `referral_requests.cv_id` and `assistant_sessions.cv_id`).
+- [x] 2.2 Update `internal/cv`: `Meta.ID`, `Record`, and every `Store` method that takes an id.
+- [x] 2.3 Update the other packages that hold a CV id — `internal/referral` and the assistant's session binding.
 
 ## 3. HTTP surface
 
-- [ ] 3.1 Parse the `:id` route param as a uuid across the nine `/me/cvs/:id/*` endpoints; a malformed id is a 404, not a 400.
-- [ ] 3.2 Update the tailoring bootstrap's response ids and the assistant's CV tools (they close over the bound CV id).
-- [ ] 3.3 Update the handler tests and the CV integration tests for the new id type.
+- [x] 3.1 Parse the `:id` route param as a uuid across the nine `/me/cvs/:id/*` endpoints; a malformed id is a 404, not a 400.
+- [x] 3.2 Update the tailoring bootstrap's response ids and the assistant's CV tools (they close over the bound CV id).
+- [x] 3.3 Update the handler tests and the CV integration tests for the new id type.
 
 ## 4. Web
 
-- [ ] 4.1 Type a CV id as `string` in `web/src/lib/cv.ts` and `api.ts`; update the `/my/cvs/[id]` route and the tailoring workspace's `?cv=` parameter.
-- [ ] 4.2 Run `svelte-check`, eslint, vitest and the production build.
+- [x] 4.1 Type a CV id as `string` in `web/src/lib/cv.ts` and `api.ts`; update the `/my/cvs/[id]` route and the tailoring workspace's `?cv=` parameter.
+- [x] 4.2 Run `svelte-check`, eslint, vitest and the production build.
 
 ## 5. Published clients (released after the backend)
 

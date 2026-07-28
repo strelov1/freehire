@@ -96,11 +96,11 @@ const assistantKeepalive = 15 * time.Second
 
 // sessionResponse is the wire shape of one conversation.
 type sessionResponse struct {
-	ID     string `json:"id"`
-	Preset string `json:"preset"`
-	Label  string `json:"label"`
-	CVID   *int64 `json:"cv_id,omitempty"`
-	JobID  *int64 `json:"job_id,omitempty"`
+	ID     string  `json:"id"`
+	Preset string  `json:"preset"`
+	Label  string  `json:"label"`
+	CVID   *string `json:"cv_id,omitempty"`
+	JobID  *int64  `json:"job_id,omitempty"`
 }
 
 // sessionView renders a session for the client. The id is a string because the
@@ -110,7 +110,7 @@ func sessionView(s assistant.Session) sessionResponse {
 		ID:     s.ID.String(),
 		Preset: s.Preset,
 		Label:  s.Label,
-		CVID:   s.CVID,
+		CVID:   cvIDString(s.CVID),
 		JobID:  s.JobID,
 	}
 }
@@ -119,6 +119,17 @@ func sessionView(s assistant.Session) sessionResponse {
 // anything else cannot name a session at all — report it as missing rather than as
 // a bad request, keeping "not yours" and "not a session" one indistinguishable
 // answer.
+// cvIDString renders a tailoring session's CV binding for the wire. A CV id is a
+// UUID the client treats as opaque, so it travels as a string like the session's
+// own id.
+func cvIDString(id *uuid.UUID) *string {
+	if id == nil {
+		return nil
+	}
+	s := id.String()
+	return &s
+}
+
 func assistantSessionID(c *fiber.Ctx) (uuid.UUID, error) {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {

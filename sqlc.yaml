@@ -29,6 +29,16 @@ sql:
           # bytes marshal straight through to the profile response (null stays null).
           - column: "user_profiles.location_preferences"
             go_type: "encoding/json.RawMessage"
+          # A CV id is a random UUID the client treats as an opaque string, and the
+          # two columns that reference it follow. google/uuid gives them a real
+          # type, so a mis-typed id fails at the edge rather than deep in a query.
+          - column: "cvs.id"
+            go_type: "github.com/google/uuid.UUID"
+          - column: "referral_requests.cv_id"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+              pointer: true
           # A session id is a random UUID the client treats as an opaque string.
           # google/uuid gives it a real type (parse errors surface at the edge)
           # rather than pgtype.UUID's byte array, which every caller would have to
@@ -39,7 +49,8 @@ sql:
             go_type: "github.com/google/uuid.UUID"
           - column: "assistant_sessions.cv_id"
             go_type:
-              type: "int64"
+              import: "github.com/google/uuid"
+              type: "UUID"
               pointer: true
           - column: "assistant_sessions.job_id"
             go_type:

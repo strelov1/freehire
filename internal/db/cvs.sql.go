@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -25,7 +26,7 @@ type CreateCVParams struct {
 }
 
 type CreateCVRow struct {
-	ID         int64              `json:"id"`
+	ID         uuid.UUID          `json:"id"`
 	Title      string             `json:"title"`
 	TemplateID string             `json:"template_id"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
@@ -68,7 +69,7 @@ type CreateTailoredCVParams struct {
 }
 
 type CreateTailoredCVRow struct {
-	ID         int64              `json:"id"`
+	ID         uuid.UUID          `json:"id"`
 	Title      string             `json:"title"`
 	TemplateID string             `json:"template_id"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
@@ -102,8 +103,8 @@ WHERE id = $1 AND user_id = $2
 `
 
 type DeleteCVParams struct {
-	ID     int64 `json:"id"`
-	UserID int64 `json:"user_id"`
+	ID     uuid.UUID `json:"id"`
+	UserID int64     `json:"user_id"`
 }
 
 // Delete a CV owned by the user. Returns the affected-row count so the handler can 404
@@ -125,7 +126,7 @@ LIMIT 1
 `
 
 type GetBaseCVByUserRow struct {
-	ID         int64              `json:"id"`
+	ID         uuid.UUID          `json:"id"`
 	Title      string             `json:"title"`
 	TemplateID string             `json:"template_id"`
 	Data       []byte             `json:"data"`
@@ -157,12 +158,12 @@ WHERE id = $1 AND user_id = $2
 `
 
 type GetCVByIDParams struct {
-	ID     int64 `json:"id"`
-	UserID int64 `json:"user_id"`
+	ID     uuid.UUID `json:"id"`
+	UserID int64     `json:"user_id"`
 }
 
 type GetCVByIDRow struct {
-	ID             int64              `json:"id"`
+	ID             uuid.UUID          `json:"id"`
 	Title          string             `json:"title"`
 	TemplateID     string             `json:"template_id"`
 	Data           []byte             `json:"data"`
@@ -199,7 +200,7 @@ ORDER BY updated_at DESC
 `
 
 type ListCVsByUserRow struct {
-	ID         int64              `json:"id"`
+	ID         uuid.UUID          `json:"id"`
 	Title      string             `json:"title"`
 	TemplateID string             `json:"template_id"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
@@ -243,7 +244,7 @@ ORDER BY c.updated_at DESC
 `
 
 type ListTailoredCVsByUserRow struct {
-	ID             int64              `json:"id"`
+	ID             uuid.UUID          `json:"id"`
 	Title          string             `json:"title"`
 	TemplateID     string             `json:"template_id"`
 	AgentSessionID pgtype.Text        `json:"agent_session_id"`
@@ -294,7 +295,7 @@ WHERE id = $1 AND user_id = $2
 `
 
 type SetCVSessionParams struct {
-	ID             int64       `json:"id"`
+	ID             uuid.UUID   `json:"id"`
 	UserID         int64       `json:"user_id"`
 	AgentSessionID pgtype.Text `json:"agent_session_id"`
 }
@@ -316,9 +317,9 @@ WHERE id = $1 AND user_id = $2
 `
 
 type SetCVTemplateParams struct {
-	ID         int64  `json:"id"`
-	UserID     int64  `json:"user_id"`
-	TemplateID string `json:"template_id"`
+	ID         uuid.UUID `json:"id"`
+	UserID     int64     `json:"user_id"`
+	TemplateID string    `json:"template_id"`
 }
 
 // Change only a CV's template, stamping updated_at, leaving title and data untouched. Owner-
@@ -339,15 +340,15 @@ RETURNING id, title, template_id, created_at, updated_at
 `
 
 type UpdateCVParams struct {
-	ID         int64  `json:"id"`
-	UserID     int64  `json:"user_id"`
-	Title      string `json:"title"`
-	TemplateID string `json:"template_id"`
-	Data       []byte `json:"data"`
+	ID         uuid.UUID `json:"id"`
+	UserID     int64     `json:"user_id"`
+	Title      string    `json:"title"`
+	TemplateID string    `json:"template_id"`
+	Data       []byte    `json:"data"`
 }
 
 type UpdateCVRow struct {
-	ID         int64              `json:"id"`
+	ID         uuid.UUID          `json:"id"`
 	Title      string             `json:"title"`
 	TemplateID string             `json:"template_id"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`

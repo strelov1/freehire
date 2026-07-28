@@ -8,7 +8,7 @@
   import { page } from '$app/state';
   import { api } from '$lib/api';
 
-  const id = $derived(Number(page.params.id));
+  const id = $derived(page.params.id);
 
   onMount(async () => {
     try {

@@ -3,6 +3,7 @@ package referral
 import (
 	"context"
 	"errors"
+	"github.com/google/uuid"
 	"testing"
 	"time"
 )
@@ -72,7 +73,11 @@ func (f *fakeRepo) ReferrerApprovedForCompany(context.Context, int64, string) (b
 func (f *fakeRepo) ApprovedReferrerRecipients(context.Context, string) ([]Recipient, error) {
 	return f.recipients, nil
 }
-func (f *fakeRepo) CVBelongsToUser(context.Context, int64, int64) (bool, error) {
+
+// testCVID is the attached CV these cases address.
+var testCVID = uuid.MustParse("77777777-7777-4777-8777-777777777777")
+
+func (f *fakeRepo) CVBelongsToUser(context.Context, uuid.UUID, int64) (bool, error) {
 	return f.cvOwned, nil
 }
 func (f *fakeRepo) UserHasResume(context.Context, int64) (bool, error) {
@@ -128,7 +133,7 @@ func newService(repo *fakeRepo, pinger *fakePinger) *Service {
 	return New(repo, pinger, Config{DailyRequestCap: 3, CabinetURL: "https://freehire.me/my/referrals"})
 }
 
-func cvID(n int64) *int64 { return &n }
+func cvID(n uuid.UUID) *uuid.UUID { return &n }
 
 // linkedInURL is a valid profile URL for fixtures that must clear the required-LinkedIn gate.
 const linkedInURL = "https://www.linkedin.com/in/jane-doe"
@@ -232,7 +237,7 @@ func TestCreateRequestValidation(t *testing.T) {
 		want error
 	}{
 		{"no contact", RequestInput{SeekerUserID: 1, CompanySlug: "acme", CVKind: CVOriginal}, ErrNoContact},
-		{"original with cv id", withCV(base, CVOriginal, cvID(4)), ErrInvalidCVChoice},
+		{"original with cv id", withCV(base, CVOriginal, cvID(testCVID)), ErrInvalidCVChoice},
 		{"built without cv id", withCV(base, CVBuilt, nil), ErrInvalidCVChoice},
 		{"unknown kind", withCV(base, "weird", nil), ErrInvalidCVChoice},
 	}
@@ -298,7 +303,7 @@ func TestCreateRequestEligibilityAndCap(t *testing.T) {
 }
 
 func TestCreateRequestBuiltCVOwnership(t *testing.T) {
-	built := RequestInput{SeekerUserID: 1, CompanySlug: "acme", CVKind: CVBuilt, CVID: cvID(42), ContactEmail: "s@x.test", LinkedInURL: linkedInURL}
+	built := RequestInput{SeekerUserID: 1, CompanySlug: "acme", CVKind: CVBuilt, CVID: cvID(testCVID), ContactEmail: "s@x.test", LinkedInURL: linkedInURL}
 
 	t.Run("foreign cv is rejected as an invalid choice", func(t *testing.T) {
 		repo := &fakeRepo{eligible: true, cvOwned: false}
@@ -387,7 +392,7 @@ func TestAuthorizeCVAccess(t *testing.T) {
 }
 
 // withCV returns a copy of in with the CV choice replaced.
-func withCV(in RequestInput, kind string, id *int64) RequestInput {
+func withCV(in RequestInput, kind string, id *uuid.UUID) RequestInput {
 	in.CVKind = kind
 	in.CVID = id
 	return in

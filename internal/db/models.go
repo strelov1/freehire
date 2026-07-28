@@ -36,10 +36,10 @@ type AssistantSession struct {
 	UserID    int64              `json:"user_id"`
 	Preset    string             `json:"preset"`
 	Label     pgtype.Text        `json:"label"`
-	CvID      *int64             `json:"cv_id"`
 	JobID     *int64             `json:"job_id"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	CvID      *uuid.UUID         `json:"cv_id"`
 }
 
 type BoardHealth struct {
@@ -119,7 +119,6 @@ type CreditLedger struct {
 }
 
 type Cv struct {
-	ID             int64              `json:"id"`
 	UserID         int64              `json:"user_id"`
 	Title          string             `json:"title"`
 	TemplateID     string             `json:"template_id"`
@@ -128,6 +127,7 @@ type Cv struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 	AgentSessionID pgtype.Text        `json:"agent_session_id"`
+	ID             uuid.UUID          `json:"id"`
 }
 
 type Email struct {
@@ -422,7 +422,6 @@ type ReferralRequest struct {
 	CompanySlug     string             `json:"company_slug"`
 	JobID           pgtype.Int8        `json:"job_id"`
 	CvKind          string             `json:"cv_kind"`
-	CvID            pgtype.Int8        `json:"cv_id"`
 	ContactTelegram pgtype.Text        `json:"contact_telegram"`
 	ContactEmail    pgtype.Text        `json:"contact_email"`
 	Note            string             `json:"note"`
@@ -431,6 +430,7 @@ type ReferralRequest struct {
 	ActedAt         pgtype.Timestamptz `json:"acted_at"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	LinkedinUrl     string             `json:"linkedin_url"`
+	CvID            *uuid.UUID         `json:"cv_id"`
 }
 
 type ReminderSetting struct {

@@ -32,7 +32,7 @@
   let errorMsg = $state('');
   let sessionId = $state<string | undefined>(undefined);
   let resuming = $state(false);
-  let cvId = $state(0);
+  let cvId = $state('');
   let analysis = $state<Analysis | null>(null);
   let job = $state<Job | null>(null);
 
@@ -116,7 +116,7 @@
         // Resume an existing tailored CV. If it already has a bound session, re-attach it with
         // no kickoff. If it has none (a CV created before session binding), mint a fresh
         // tailoring session for it and let the kickoff orient the agent.
-        const existing = Number(cvParam);
+        const existing = cvParam;
         const [j, fit] = await Promise.all([
           api.getJob(slug),
           api.getMatchAnalysis(slug).catch(() => null),
