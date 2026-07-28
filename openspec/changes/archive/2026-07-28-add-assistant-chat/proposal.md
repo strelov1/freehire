@@ -1,3 +1,13 @@
+> **Superseded and archived.** This change shipped in July 2026 and its
+> implementation was replaced by `replace-assistant-runtime`: the agent moved
+> into the freehire backend, the roy WebSocket control protocol gave way to an
+> SSE turn stream, and the `/assistant-api` dev proxy is gone. Its requirements
+> now live in `openspec/specs/assistant-agent-runtime` (the turn loop and its
+> streamed events) and `openspec/specs/assistant-sessions` (the page, the rail
+> and the session contract). The delta spec here is kept as the historical
+> record of the first version and was deliberately NOT synced into the main
+> specs — it describes a transport that no longer exists.
+
 ## Why
 
 freehire has no in-app conversational surface. A trimmed `roy` backend

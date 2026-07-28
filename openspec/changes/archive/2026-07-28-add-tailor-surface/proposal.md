@@ -1,3 +1,10 @@
+> **Superseded and archived.** This change shipped in July 2026. Its workspace
+> requirements now live in `openspec/specs/tailor-workspace`, and the tailoring
+> flow itself in `openspec/specs/cv-tailoring`; `replace-assistant-runtime` later
+> replaced the chat inside it. The delta spec here is kept as the historical
+> record and was deliberately NOT synced — it describes the roy-backed session
+> bootstrap, which no longer exists.
+
 ## Why
 
 CV tailoring currently runs inside the generic `/my/assistant` chat: cramped under the /my
