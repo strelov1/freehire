@@ -89,9 +89,11 @@ type middleware struct {
 	optional fiber.Handler
 	key      fiber.Handler
 	// cvKey is keyAuth widened to admit the narrow `cv` key the tailoring bootstrap
-	// mints. Only the CV surface (and the caller's own identity read) mounts it; every
-	// other key-accepting route stays on key, which is full-scope-only — so a new
-	// endpoint is out of a leaked agent credential's reach unless it opts in.
+	// mints. Three surfaces mount it: the CV surface, the caller's own identity read,
+	// and the profile read — that last one so an agent can ground itself in what the
+	// user is looking for. Every other key-accepting route stays on key, which is
+	// full-scope-only, so a new endpoint is out of a leaked agent credential's reach
+	// unless it opts in. Nothing a `cv` key reaches is a write.
 	cvKey     fiber.Handler
 	cookie    fiber.Handler
 	moderator fiber.Handler

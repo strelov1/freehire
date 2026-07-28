@@ -10,8 +10,10 @@ cookie-only besides. The assistant asks because, to the API, it is nobody.
 ## What Changes
 
 - `GET /api/v1/me/profile` accepts an API key or a bearer session token in addition
-  to the session cookie (`RequireAuthOrKey`). `PUT` and `DELETE` stay cookie-only —
-  a leaked key must not be able to rewrite the profile.
+  to the session cookie (`RequireAuthOrScopedKey` admitting `ScopeCV`, i.e. the
+  handler's `mw.cvKey`). The narrow scope is admitted so the CV-tailoring agent can
+  read the profile too; `mw.key` would answer its `cv`-scoped credential `403`.
+  `PUT` and `DELETE` stay cookie-only — a leaked key must not rewrite the profile.
 - The `GET /api/v1/me/profile` response gains a `cv` block: the caller's structured
   résumé projected through a field whitelist that omits `full_name`, `email`,
   `phone` and `links`. It is `null` when the caller has no current structured

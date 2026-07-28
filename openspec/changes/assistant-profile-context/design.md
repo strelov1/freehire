@@ -93,12 +93,20 @@ because the model never saw one.
 Whitelist rather than blacklist so the failure mode is safe: a field added to
 `Structured` later is withheld by default instead of leaking until someone notices.
 
-### The read widens to `mw.key`; writes stay cookie-only
+### The read widens to `mw.cvKey`; writes stay cookie-only
 
 This is the pattern the CV endpoints already use, with the reasoning recorded there:
 reads accept a key so an agent's CLI can fetch, mutations stay cookie-only because
 the browser owns authoring. The same split applies here — a leaked key must not be
 able to rewrite or clear someone's profile.
+
+`mw.cvKey` rather than `mw.key`, because `mw.key` is `RequireAuthOrKey`, which is
+`RequireAuthOrScopedKey` with no admitted scopes — only a full-scope key passes, and
+anything narrower gets `403`. The CV-tailoring agent holds a `cv`-scoped key, and it
+benefits from the profile for the same reason the assistant does: it should tailor
+toward the roles and skills the user actually targets. So the profile read joins the
+CV surface and `/auth/me` as the third mount of the scoped gate. This slightly widens
+what a leaked tailoring credential reaches — by one contact-free read, and no write.
 
 ## Risks / Trade-offs
 

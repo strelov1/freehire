@@ -30,6 +30,10 @@ projected. Contact details remain available only through `GET /api/v1/me/resume`
 - **WHEN** a request carrying a valid API key as a bearer credential, and no session cookie, sends `GET /api/v1/me/profile`
 - **THEN** the system responds `200` with the key owner's profile
 
+#### Scenario: The profile read accepts the narrow CV-scoped key
+- **WHEN** a request authenticated by the narrow `cv`-scoped key minted for a CV-tailoring session sends `GET /api/v1/me/profile`
+- **THEN** the system responds `200` with that user's profile — the tailoring agent reads the roles and skills the user targets, rather than being told its credential is out of scope
+
 #### Scenario: The cv block carries the structured résumé without contacts
 - **WHEN** an authenticated user who has a saved profile and a current structured résumé sends `GET /api/v1/me/profile`
 - **THEN** the response's `cv` carries the résumé's professional content — headline, location, summary, total years, experience, education, languages, skills, certifications and projects — and contains no `full_name`, `email`, `phone` or `links`
@@ -37,6 +41,53 @@ projected. Contact details remain available only through `GET /api/v1/me/resume`
 #### Scenario: The cv block is null without a structured résumé
 - **WHEN** an authenticated user who has a saved profile but no current structured résumé sends `GET /api/v1/me/profile`
 - **THEN** the response's `cv` is `null` and the rest of the profile is served as usual
+
+### Requirement: Save the profile
+
+A signed-in user SHALL be able to create-or-replace their single profile via
+`PUT /api/v1/me/profile` with a non-empty set of `specializations` (job
+categories), a non-empty set of `skills`, an optional set of `excluded_skills`,
+and an optional `location_preferences` block. The write is an upsert keyed by the
+calling user: it creates the profile if none exists and overwrites it otherwise.
+All skill sets are stored trimmed and deduplicated as canonical lowercase tokens;
+`excluded_skills` MAY be empty and defaults to empty when omitted; the location
+block is validated and normalized per the Location & work-mode preferences
+requirement, or stored as absent when omitted. Any skill that appears in both
+`skills` and `excluded_skills` after normalization SHALL be dropped from
+`excluded_skills` — a skill cannot be both wanted and avoided, and the wanted set
+wins (no error is raised). The system does NOT create an empty profile — a profile
+exists only once saved with valid content.
+
+The response SHALL be the same representation the read serves, `cv` included, so a
+client that saves and a client that fetches see one shape for one resource.
+
+#### Scenario: Create the profile on first save
+- **WHEN** an authenticated user with no profile sends `PUT /api/v1/me/profile` with a non-empty `specializations` array drawn from the category vocabulary and a non-empty `skills` array
+- **THEN** the system stores the profile for that user and responds `200` with `{"data": {specializations, skills, excluded_skills, location_preferences, cv, updated_at}}`
+
+#### Scenario: Overwrite an existing profile
+- **WHEN** an authenticated user who already has a profile sends `PUT /api/v1/me/profile` with new valid `specializations`, `skills`, `excluded_skills`, and `location_preferences`
+- **THEN** the system replaces the stored values (including the excluded-skills set and the location block), bumps `updated_at`, and responds `200`
+
+#### Scenario: Specializations are deduplicated
+- **WHEN** an authenticated user saves a profile whose `specializations` contain duplicate categories
+- **THEN** the system stores each category once, preserving first-seen order
+
+#### Scenario: Skills are normalized
+- **WHEN** an authenticated user saves a profile with skills containing mixed case, surrounding whitespace, or duplicates
+- **THEN** the system stores each skill lowercased, trimmed, and deduplicated
+
+#### Scenario: Excluded skills are normalized
+- **WHEN** an authenticated user saves a profile with `excluded_skills` containing mixed case, surrounding whitespace, or duplicates
+- **THEN** the system stores each excluded skill lowercased, trimmed, and deduplicated
+
+#### Scenario: A skill present in both sets is dropped from excluded skills
+- **WHEN** an authenticated user saves a profile whose `skills` contain `go` and whose `excluded_skills` contain `go` and `php`
+- **THEN** the system stores `excluded_skills` as `[php]` (the overlapping `go` is dropped) and the save succeeds
+
+#### Scenario: Excluded skills may be empty
+- **WHEN** an authenticated user saves a profile with valid `specializations` and `skills` and no `excluded_skills`
+- **THEN** the system stores an empty `excluded_skills` set and the save succeeds
 
 ### Requirement: Session-scoped single profile
 

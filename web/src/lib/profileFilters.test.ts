@@ -14,6 +14,7 @@ function mkProfile(
     skills,
     excluded_skills: excludedSkills,
     location_preferences: location,
+    cv: null,
     created_at: null,
     updated_at: null,
   };
