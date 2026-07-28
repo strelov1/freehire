@@ -27,9 +27,9 @@
 
 ## 3. Stage 3 — the agent gets hands
 
-- [ ] 3.1 Add `internal/handler/assistant_experience_tools.go` with `experience_search`, `experience_add`, `experience_update` and `experience_employments`, each decoding via `assistant.DecodeArgs`, acting as the session owner, and returning structured data
-- [ ] 3.2 Derive `provenance` from turn position rather than from the model's argument — a write following a user assertion is `stated_in_chat`, a model-originated write is `agent_inferred`
-- [ ] 3.3 Register the experience tools under every preset in `assistantRegistry`
+- [x] 3.1 Add `internal/handler/assistant_experience_tools.go` with `experience_search`, `experience_add`, `experience_update` and `experience_employments`, each decoding via `assistant.DecodeArgs`, acting as the session owner, and returning structured data
+- [x] 3.2 ~~Derive `provenance` from turn position~~ — **the spec was wrong and is corrected here.** Turn position cannot distinguish the two: every turn opens with a user message, and the model may call `experience_add` at step 1 or step 5. The working mechanism is a **citation**: `experience_add` takes a `said` field holding the candidate's words verbatim, and `assistant.UserSaid` checks it against the session transcript. A quote that checks out makes the atom `stated_in_chat`; anything else — a paraphrase, an invention, an unreadable transcript — is `agent_inferred`. The model supplies evidence, not a verdict, which is what the spec scenario actually demands
+- [x] 3.3 Register the experience tools under every preset in `assistantRegistry`
 - [ ] 3.4 Test tool behaviour: a malformed call and a rejected write both come back as `{"error": ...}` naming the invalid field, and neither fails the turn; an atom for a known company attaches to the existing employment
 - [ ] 3.5a Migration: extend the `assistant_sessions_preset_check` constraint to admit `'profile'` — a CHECK pins the preset vocabulary in `0044`, so a new preset is a schema change, not just a Go constant
 - [ ] 3.5 Add the `PresetProfile` constant and its interviewer system prompt in `internal/assistant/prompt.go` — find employments with no atoms, profile skills with no evidence, achievements with no metric, and ask about those

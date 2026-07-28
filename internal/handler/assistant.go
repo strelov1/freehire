@@ -17,6 +17,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/experience"
 	"github.com/strelov1/freehire/internal/llm"
 )
 
@@ -37,6 +38,8 @@ type assistantHandlers struct {
 	// services underneath keeps the tool and GET /me/profile on one assembly, so the
 	// agent cannot drift from what the profile page shows.
 	profile *profileHandlers
+	// experience backs the bank tools, which every preset offers.
+	experience *experience.Store
 }
 
 // newAssistantHandlers wires the agent. A nil LLM client leaves the runner nil:
@@ -46,13 +49,14 @@ func newAssistantHandlers(queries *db.Queries, model *llm.Client, maxSteps int,
 	search *searchHandlers, resumeH *resumeHandlers, tracking *trackingHandlers, cvH *cvHandlers,
 	profileH *profileHandlers) *assistantHandlers {
 	h := &assistantHandlers{
-		store:    assistant.NewStore(queries),
-		queries:  queries,
-		search:   search,
-		resume:   resumeH,
-		tracking: tracking,
-		cv:       cvH,
-		profile:  profileH,
+		experience: experience.NewStore(experience.NewQueriesRepository(queries)),
+		store:      assistant.NewStore(queries),
+		queries:    queries,
+		search:     search,
+		resume:     resumeH,
+		tracking:   tracking,
+		cv:         cvH,
+		profile:    profileH,
 	}
 	if model != nil {
 		h.runner = assistant.NewRunner(model, h.store, assistant.RunnerConfig{MaxSteps: maxSteps})
