@@ -35,12 +35,16 @@ contributions are URL-only, auto-validated, unmoderated.
 - **Checks run cheapest-first.** unsupported ATS (`ErrUnsupportedATS`, 422) before any DB read;
   board already crawled (`ErrBoardAlreadyTracked`, 409 — a job exists with `external_id`
   prefixed by `<board>:`, via `starts_with`) before any write; the record+point transaction
-  last, where a duplicate board (the `UNIQUE (source, board)` on `link_contributions`) surfaces
-  as `ErrBoardAlreadyContributed` (409).
+  last, where a duplicate board (the partial unique index on `link_contributions (source, board)
+  WHERE status <> 'rejected'`) surfaces as `ErrBoardAlreadyContributed` (409).
 - **`Record` is a single insert** (`QueriesRepository.Record`, the `accounts` repo pattern): it
-  persists the contribution row and maps the `UNIQUE (source, board)` violation — including the
+  persists the contribution row and maps the unique violation — including the
   concurrent-duplicate race — to `ErrBoardAlreadyContributed`. Verified by the build-tagged
   integration test.
+- **A rejected board releases its identity.** The uniqueness covers the LIVE statuses only
+  (`pending`/`review`/`onboarded`), so a board turned down as dead can be contributed again once
+  the employer resumes posting — which opens a new pending row. Spanning `rejected` too would
+  have made a single bad day permanent (migration 0049).
 - **The reward is AI credits, granted separately by the handler** (keyed by the contribution id,
   not inside `Record`). The legacy `users.points` counter was dropped in migration
   `0034_drop_users_points.sql`; the credit balance is the unified per-user reward now.

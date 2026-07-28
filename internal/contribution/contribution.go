@@ -23,8 +23,9 @@ var (
 	// ErrBoardAlreadyTracked is a board the catalogue already crawls (a job exists for it) —
 	// contributing it adds nothing, so no reward (409).
 	ErrBoardAlreadyTracked = errors.New("contribution: board already in catalogue")
-	// ErrBoardAlreadyContributed is a board already recorded by any user — the repository maps
-	// the unique violation to this (409).
+	// ErrBoardAlreadyContributed is a board already recorded by any user and still live in the
+	// queue (pending/review/onboarded) — the repository maps the unique violation to this (409).
+	// A rejected row does not reserve its board: that one can be contributed again.
 	ErrBoardAlreadyContributed = errors.New("contribution: board already contributed")
 )
 
