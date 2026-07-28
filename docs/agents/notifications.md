@@ -1,0 +1,47 @@
+# Notifications
+
+Two independent delivery use cases share one channel abstraction:
+
+| Package | Use case | Worker |
+|---|---|---|
+| `internal/notify` | Filter subscriptions — new jobs matching a saved search | `cmd/notify` |
+| `internal/reminder` | Saved-job nudges — come back before the vacancy goes stale | `cmd/remind` |
+| `internal/emailnotify` | Email channel (SES) — implements both `Notifier` interfaces | — |
+| `internal/telegramnotify` | Telegram channel (Bot API, deep-link token) | — |
+
+## Always true
+
+- **A new channel is a new `Notifier` implementation, never an engine change.** Both engines
+  depend only on their `Notifier` interface plus a `Router` (a `map[channel]Notifier`).
+  Adding webhooks means adding a package, not touching `notify` or `reminder`.
+- **`notify.Channels` is the single source of truth** for the channel vocabulary, shared by
+  the router's dispatch and the subscription use case's create-time allowlist so the two
+  cannot drift. Add a channel there or it will be creatable but undeliverable.
+- **An unconfigured channel is a soft-skip, not a failure.** `Router.Send` returns
+  `ErrChannelNotConfigured` (e.g. email while SES is unset) and the engine skips it. Don't
+  promote that to a delivery error — it would fail every run in environments without SES.
+- **Matching is O(distinct queries), not O(subscribers).** `notify.Runner.Run` groups
+  subscriptions sharing a saved-search query so the search index is hit once regardless of
+  how many people subscribed to it. A per-subscription loop would multiply index load by
+  subscriber count.
+- **The dedup ledger's primary key is what makes matching idempotent.** MATCH records
+  matched jobs, DELIVER leases them and marks them notified — so re-scanning recent jobs
+  never delivers twice. Preserve the two-stage split; merging match and send loses the
+  guarantee.
+- `Digest.Jobs` is capped to the configured digest size while `Digest.Total` carries the true
+  count, so a renderer can show the "and N more" tail. Don't derive the count from `len(Jobs)`.
+- `DigestJob` deliberately carries **no internal job id** — only the public slug and URL.
+- Salary fields are projected from enrichment; zero min/max or an empty currency means
+  unknown, and the renderer omits the line rather than printing a zero.
+
+## Note on naming
+
+`internal/telegramnotify` (outbound, notifications) is the sibling of `internal/telegram`
+(inbound, channel crawling for vacancies). They are unrelated concerns that both talk to the
+Bot API — check which one you're in.
+
+## Limitations
+
+- Delivery is cron-driven and run-once; there is no retry queue. A channel outage means that
+  pass's digests are skipped, and the ledger redelivers them on the next pass only if they
+  were never marked notified.

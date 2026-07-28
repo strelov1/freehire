@@ -10,32 +10,16 @@ Fiber HTTP handlers: feature handler structs, route registration, auth surface, 
   in an order that keeps literal routes before param routes (e.g. `/jobs/search` before
   `/jobs/:slug`, `/threads/count` before `/threads/:id`, the static `/me/tracking/*`
   before `/me/tracking/:slug`).
-- Each feature area owns a struct with its own dependencies, a constructor
-  (`newXHandlers`), and a `register(api fiber.Router, mw middleware)` method that mounts
-  its routes. Handlers are thin — auth primitives, user job operations, API key
-  management, errors live in separate files. The features and their files:
-  - `authHandlers` — auth.go (register/login/logout/me), oauth.go, api_keys.go,
-    extension_connect.go
-  - `jobsHandlers` — jobs.go, copies.go, jobs_moderation.go (moderator-authored writes)
-  - `searchHandlers` — search.go, agent_search.go, similar.go, facets.go
-  - `companiesHandlers` — companies.go
-  - `sitemapHandlers` — sitemap.go; `statsHandlers` — stats.go, stats_facets.go,
-    status.go, insights.go
-  - `trackingHandlers` — user_jobs.go, me_tracking.go, me_reminders.go, swipe.go
-  - `voteHandlers` — votes.go; `communityHandlers` — community.go
-  - `submissionHandlers` — submissions.go; `contributionHandlers` — contributions.go;
-    `reportHandlers` — reports.go; `referralHandlers` — referrals.go
-  - `savedSearchHandlers` — me_searches.go, boards.go; `subscriptionHandlers` —
-    me_subscriptions.go; `profileHandlers` — me_profile.go; `creditsHandlers` —
-    me_credits.go, me_credits_history.go
-  - `matchHandlers` — match_analysis.go, match_analysis_stream.go, me_analyses.go,
-    job_match.go, hardconstraint_inputs.go
-  - `cvHandlers` — cv.go, cv_tailor.go (holds a `*matchHandlers` for the blocker/credits
-    helpers tailoring reuses)
-  - `resumeHandlers` — resume.go, resume_verdict.go, ats_report.go, recommendations.go,
-    market_coverage.go
-  - `inboxHandlers` — inbox.go, inbox_linking.go, gmail.go, mailbox.go;
-    `telegramHandlers` — telegram.go
+- Each feature area owns a `<feature>Handlers` struct with its own dependencies, a
+  `new<Feature>Handlers` constructor, and a `register(api fiber.Router, mw middleware)`
+  method that mounts its routes — `grep 'Handlers struct' *.go` lists them all. Files are
+  named after the routes they serve, so a feature spans several files (`matchHandlers` →
+  `match_analysis.go`, `match_analysis_stream.go`, `job_match.go`, …). Handlers are thin;
+  auth primitives, user job operations, API key management and error rendering live in
+  their own files.
+- Two couplings worth knowing: `cvHandlers` holds a `*matchHandlers` (it reuses the
+  blocker/credits helpers for tailoring), and `jobs_moderation.go` carries the
+  moderator-authored writes behind the `moderator` gate.
 - The `middleware` bundle (`handler.go`) carries the shared auth gates features mount
   behind: `optional` (attach caller, never reject), `key` (cookie or API key), `cookie`
   (cookie-only), `moderator` (role gate, stacked after `key`/`cookie`).
