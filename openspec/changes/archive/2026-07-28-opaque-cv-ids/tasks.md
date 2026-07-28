@@ -22,11 +22,11 @@
 
 ## 5. Published clients (released after the backend)
 
-- [ ] 5.1 `freehire-cli`: accept a string id in `cv get|edit|render|context`, update the request paths, and fix the skill's stale line about acting "via the session key" — the tailoring session is minted in the browser now, and the CLI acts with the user's own API key.
-- [ ] 5.2 `freehire-mcp`: `cvId` becomes a string rather than `z.number().int()`, with the tool descriptions updated; bump the version and publish.
-- [ ] 5.3 Update both READMEs where they show a numeric CV id.
+- [x] 5.1 `freehire-cli`: accept a string id in `cv get|edit|render|context`, update the request paths, and fix the skill's stale line about acting "via the session key" — the tailoring session is minted in the browser now, and the CLI acts with the user's own API key.
+- [x] 5.2 `freehire-mcp`: `cvId` becomes a string rather than `z.number().int()`, with the tool descriptions updated; bump the version and publish.
+- [x] 5.3 Update both READMEs where they show a numeric CV id.
 
 ## 6. Deploy
 
-- [ ] 6.1 Apply the migration manually on production ahead of the API that reads it.
-- [ ] 6.2 Release the backend + web, then the CLI, then the MCP publish. Between the first and the rest, `cv` commands on an un-updated client answer "not found" — expected, and the reason the order is fixed.
+- [x] 6.1 Apply the migration manually on production ahead of the API that reads it.
+- [x] 6.2 Release the backend + web, then the CLI, then the MCP publish. Between the first and the rest, `cv` commands on an un-updated client answer "not found" — expected, and the reason the order is fixed.
