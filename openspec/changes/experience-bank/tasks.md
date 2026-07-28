@@ -47,7 +47,7 @@
 > GDPR one. It should be the next thing built, and it must ship before the feature is
 > shown to anyone outside the rollout gate.
 
-- [ ] 4.1 Add the owner-scoped HTTP surface for the bank (list, update, delete) under `/api/v1/me/experience`, cookie-or-key per the existing profile conventions
+- [x] 4.1 Add the owner-scoped HTTP surface for the bank (list, update, delete) under `/api/v1/me/experience`, cookie-or-key per the existing profile conventions
 - [ ] 4.2 Add the experience tab to `/my/profile` — employments with their atoms, provenance shown per atom, inline edit and delete
 - [ ] 4.3 Add the entry point that opens an assistant session in the `profile` preset from the profile page
 - [ ] 4.4 Verify the tab against a real account: an atom deleted in the UI disappears from search results and from CV seeding

@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"strings"
 	"testing"
 
@@ -21,10 +22,12 @@ type stubBank struct {
 	employments []experience.Employment
 	matches     []experience.Match
 	addErr      error
+	// readAs is the owner the list reads belong to, since the stub serves one caller.
+	readAs int64
 }
 
 func newStubBank() *stubBank {
-	return &stubBank{atoms: map[uuid.UUID]experience.Atom{}, owner: map[uuid.UUID]int64{}}
+	return &stubBank{atoms: map[uuid.UUID]experience.Atom{}, owner: map[uuid.UUID]int64{}, readAs: 1}
 }
 
 func (b *stubBank) add(userID int64, a experience.Atom) experience.Atom {
@@ -55,12 +58,73 @@ func (b *stubBank) AddAtom(_ context.Context, userID int64, a experience.Atom) (
 	if strings.TrimSpace(a.Claim) == "" {
 		return experience.Atom{}, experience.ErrEmptyClaim
 	}
-	return b.add(userID, a), nil
+	stored := b.add(userID, a)
+	b.reindex()
+	return stored, nil
 }
-func (b *stubBank) UpdateAtom(_ context.Context, id uuid.UUID, _ int64, a experience.Atom) (experience.Atom, error) {
+func (b *stubBank) UpdateAtom(_ context.Context, id uuid.UUID, userID int64, a experience.Atom) (experience.Atom, error) {
+	if _, ok := b.atoms[id]; !ok || b.owner[id] != userID {
+		return experience.Atom{}, experience.ErrNotFound
+	}
 	a.ID = id
 	b.atoms[id] = a
+	b.reindex()
 	return a, nil
+}
+
+func (b *stubBank) UpdateEmployment(_ context.Context, id uuid.UUID, userID int64, e experience.Employment) (experience.Employment, error) {
+	for i, existing := range b.employments {
+		if existing.ID == id && b.owner[id] == userID {
+			e.ID = id
+			b.employments[i] = e
+			return e, nil
+		}
+	}
+	return experience.Employment{}, experience.ErrNotFound
+}
+
+func (b *stubBank) DeleteEmployment(_ context.Context, id uuid.UUID, userID int64) error {
+	for i, existing := range b.employments {
+		if existing.ID == id && b.owner[id] == userID {
+			b.employments = append(b.employments[:i], b.employments[i+1:]...)
+			for aid, a := range b.atoms {
+				if a.EmploymentID != nil && *a.EmploymentID == id {
+					delete(b.atoms, aid)
+				}
+			}
+			b.reindex()
+			return nil
+		}
+	}
+	return experience.ErrNotFound
+}
+
+func (b *stubBank) DeleteAtom(_ context.Context, id uuid.UUID, userID int64) error {
+	if _, ok := b.atoms[id]; !ok || b.owner[id] != userID {
+		return experience.ErrNotFound
+	}
+	delete(b.atoms, id)
+	b.reindex()
+	return nil
+}
+
+// reindex rebuilds the owner-filtered list the read paths walk.
+func (b *stubBank) reindex() {
+	b.list = b.list[:0]
+	for id, a := range b.atoms {
+		if b.owner[id] == b.readAs {
+			b.list = append(b.list, a)
+		}
+	}
+	sort.Slice(b.list, func(i, j int) bool { return b.list[i].Claim < b.list[j].Claim })
+}
+
+// addEmployment records a place for readAs.
+func (b *stubBank) addEmployment(userID int64, e experience.Employment) experience.Employment {
+	e.ID = uuid.New()
+	b.owner[e.ID] = userID
+	b.employments = append(b.employments, e)
+	return e
 }
 
 func gateHandlers(t *testing.T) (*assistantHandlers, *stubBank) {
