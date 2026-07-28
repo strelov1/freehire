@@ -19,6 +19,9 @@ type opencats struct {
 	http HTMLGetter
 }
 
+// opencatsListingQuery is the portal's "show all" route, appended to the board root.
+const opencatsListingQuery = "index.php?m=careers&p=showAll"
+
 // NewOpencats builds the OpenCATS adapter over the given HTML client.
 func NewOpencats(c HTMLGetter) Source { return opencats{http: c} }
 
@@ -38,13 +41,10 @@ func (s opencats) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}), nil
 }
 
-// opencatsListingQuery is the portal's "show all" route, appended to the board root.
-const opencatsListingQuery = "index.php?m=careers&p=showAll"
-
 // detail fetches one posting's page for the fields the listing cannot be trusted to carry,
-// returning ok=false when the fetch fails so the caller skips just that posting. Location comes
-// from the labelled details table rather than a listing column: column order and count differ
-// per install, but the label does not.
+// returning ok=false when the fetch fails so the caller skips just that posting. Location and
+// body come from the detail page rather than a listing column because listing columns are
+// positional and differ per install; the detail page names its fields.
 func (s opencats) detail(ctx context.Context, e CompanyEntry, c opencatsListing) (Job, bool) {
 	root, err := s.http.GetHTML(ctx, c.URL)
 	if err != nil {
@@ -82,7 +82,7 @@ var opencatsBodyContainers = []string{
 // container we do not know.
 func opencatsBody(root *html.Node) *html.Node {
 	for _, name := range opencatsBodyContainers {
-		if n := firstByAttr(root, "id", name); n != nil {
+		if n := firstByID(root, name); n != nil {
 			return n
 		}
 		if n := firstByClass(root, name); n != nil {
@@ -105,7 +105,7 @@ func opencatsLocation(root *html.Node) string {
 
 // opencatsFirstDetailValue returns the value cell of the details table's first row, or "".
 func opencatsFirstDetailValue(root *html.Node) string {
-	table := firstByAttr(root, "id", "detailsTable")
+	table := firstByID(root, "detailsTable")
 	if table == nil {
 		return ""
 	}
