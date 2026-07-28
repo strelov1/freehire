@@ -9,17 +9,27 @@ import (
 	"github.com/tmc/langchaingo/llms"
 )
 
+// ChatStream carries the per-delta callbacks of a streamed chat. Both are
+// optional. OnText receives the answer as it is produced; OnThinking receives the
+// model's reasoning, when the provider surfaces any — the two are kept apart
+// because the chat renders them differently, and reasoning must never be mistaken
+// for the answer.
+type ChatStream struct {
+	OnText     func(string)
+	OnThinking func(string)
+}
+
 // Chat is the conversational sibling of GenerateJSON: instead of one system+user
 // prompt in JSON mode it sends a whole conversation, offers the model a set of
 // tools, and returns the chosen completion — which may be text, tool calls, or
-// both. Content deltas are forwarded to onText as they stream (nil is fine); the
-// full text is also on the returned choice, so a caller that does not stream
-// loses nothing.
+// both. Deltas are forwarded through stream as they arrive (a zero ChatStream is
+// fine); the full text is also on the returned choice, so a caller that does not
+// stream loses nothing.
 //
 // The caller owns the loop: it inspects choice.ToolCalls, runs them, appends the
 // results to msgs, and calls Chat again. Bounded by the client timeout and
 // observed like the JSON helpers.
-func (c *Client) Chat(ctx context.Context, msgs []llms.MessageContent, tools []llms.Tool, onText func(string)) (*llms.ContentChoice, error) {
+func (c *Client) Chat(ctx context.Context, msgs []llms.MessageContent, tools []llms.Tool, stream ChatStream) (*llms.ContentChoice, error) {
 	if c.timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, c.timeout)
@@ -42,11 +52,21 @@ func (c *Client) Chat(ctx context.Context, msgs []llms.MessageContent, tools []l
 	}
 
 	opts := []llms.CallOption{llms.WithStreamingFunc(func(_ context.Context, chunk []byte) error {
-		if onText != nil && len(chunk) > 0 {
-			onText(string(chunk))
+		if stream.OnText != nil && len(chunk) > 0 {
+			stream.OnText(string(chunk))
 		}
 		return nil
 	})}
+	// Reasoning arrives on its own callback; the provider calls both, so this one
+	// reads only the reasoning half and leaves the content to OnText above.
+	if stream.OnThinking != nil {
+		opts = append(opts, llms.WithStreamingReasoningFunc(func(_ context.Context, reasoning, _ []byte) error {
+			if len(reasoning) > 0 {
+				stream.OnThinking(string(reasoning))
+			}
+			return nil
+		}))
+	}
 	if len(tools) > 0 {
 		opts = append(opts, llms.WithTools(tools))
 	}

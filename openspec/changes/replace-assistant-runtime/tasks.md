@@ -20,11 +20,11 @@
 
 ## 4. Agent loop
 
-- [ ] 4.1 Implement the turn loop in `internal/assistant`: model call with tools → execute tool calls → append results → repeat, stopping on a text answer or the configured step cap, and making one final tool-less call when the cap is hit.
-- [ ] 4.2 Emit turn events from the loop (`user_prompt`, `assistant_text`, `assistant_thought`, `tool_use`, `tool_result`, `usage`, `result`) through a callback, and persist each to the transcript as it is produced.
-- [ ] 4.3 Honour context cancellation: stop before the next model call, persist the partial transcript, end with a cancelled stop reason.
-- [ ] 4.4 Bound the replayed history to the most recent N messages when composing a turn.
-- [ ] 4.5 Unit-test the loop with a scripted fake model: tool-then-answer, cap reached, malformed tool arguments corrected in-turn, tool error surfaced to the model, cancellation mid-turn.
+- [x] 4.1 Implement the turn loop in `internal/assistant`: model call with tools → execute tool calls → append results → repeat, stopping on a text answer or the configured step cap, and making one final tool-less call when the cap is hit.
+- [x] 4.2 Emit turn events from the loop (`user_prompt`, `assistant_text`, `assistant_thought`, `tool_use`, `tool_result`, `usage`, `result`) through a callback, and persist each to the transcript as it is produced.
+- [x] 4.3 Honour context cancellation: stop before the next model call, persist the partial transcript, end with a cancelled stop reason.
+- [x] 4.4 Bound the replayed history to the most recent N messages when composing a turn.
+- [x] 4.5 Unit-test the loop with a scripted fake model: tool-then-answer, cap reached, malformed tool arguments corrected in-turn, tool error surfaced to the model, cancellation mid-turn.
 
 ## 5. Presets and prompts
 

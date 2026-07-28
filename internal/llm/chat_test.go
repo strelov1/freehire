@@ -68,7 +68,7 @@ func TestChatOffersToolsAndReturnsToolCalls(t *testing.T) {
 	choice, err := c.Chat(context.Background(), []llms.MessageContent{
 		llms.TextParts(llms.ChatMessageTypeSystem, "sys"),
 		llms.TextParts(llms.ChatMessageTypeHuman, "find go jobs"),
-	}, []llms.Tool{searchTool()}, nil)
+	}, []llms.Tool{searchTool()}, ChatStream{})
 	if err != nil {
 		t.Fatalf("Chat: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestChatStreamsTextDeltas(t *testing.T) {
 	choice, err := c.Chat(context.Background(),
 		[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "hi")},
 		nil,
-		func(s string) { streamed += s },
+		ChatStream{OnText: func(s string) { streamed += s }},
 	)
 	if err != nil {
 		t.Fatalf("Chat: %v", err)
@@ -108,7 +108,7 @@ func TestChatWithoutCallbackDoesNotPanic(t *testing.T) {
 	m := &chatModel{chunks: []string{"ok"}}
 	c := &Client{model: m, timeout: time.Second}
 	if _, err := c.Chat(context.Background(),
-		[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "hi")}, nil, nil); err != nil {
+		[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "hi")}, nil, ChatStream{}); err != nil {
 		t.Fatalf("Chat with a nil callback: %v", err)
 	}
 }
@@ -116,7 +116,7 @@ func TestChatWithoutCallbackDoesNotPanic(t *testing.T) {
 func TestChatEmptyChoicesIsAnError(t *testing.T) {
 	c := &Client{model: emptyChoiceModel{}, timeout: time.Second}
 	if _, err := c.Chat(context.Background(),
-		[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "hi")}, nil, nil); err == nil {
+		[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "hi")}, nil, ChatStream{}); err == nil {
 		t.Fatal("Chat returned nil error for a response with no choices")
 	}
 }
@@ -143,7 +143,7 @@ func TestChatObservesGenerationWithUsage(t *testing.T) {
 	if _, err := c.Chat(context.Background(), []llms.MessageContent{
 		llms.TextParts(llms.ChatMessageTypeSystem, "sys"),
 		llms.TextParts(llms.ChatMessageTypeHuman, "hi"),
-	}, nil, nil); err != nil {
+	}, nil, ChatStream{}); err != nil {
 		t.Fatalf("Chat: %v", err)
 	}
 	if len(ct.got) != 1 {
@@ -164,7 +164,7 @@ func TestChatObservesModelError(t *testing.T) {
 	c := &Client{model: &chatModel{err: sentinel}, timeout: time.Second, tracer: ct, source: "assistant"}
 
 	_, err := c.Chat(context.Background(),
-		[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "hi")}, nil, nil)
+		[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "hi")}, nil, ChatStream{})
 	if !errors.Is(err, sentinel) {
 		t.Errorf("returned error %v does not wrap the model error", err)
 	}
@@ -178,7 +178,7 @@ func TestChatTimesOutOnStalledModel(t *testing.T) {
 	done := make(chan error, 1)
 	go func() {
 		_, err := c.Chat(context.Background(),
-			[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "hi")}, nil, nil)
+			[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "hi")}, nil, ChatStream{})
 		done <- err
 	}()
 	select {
@@ -188,5 +188,68 @@ func TestChatTimesOutOnStalledModel(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Chat did not return; the per-call timeout did not fire")
+	}
+}
+
+// reasoningModel emits reasoning deltas alongside its content, as a thinking
+// model behind the gateway does.
+type reasoningModel struct{ thoughts, content []string }
+
+func (m *reasoningModel) GenerateContent(ctx context.Context, _ []llms.MessageContent, opts ...llms.CallOption) (*llms.ContentResponse, error) {
+	var co llms.CallOptions
+	for _, o := range opts {
+		o(&co)
+	}
+	full := ""
+	for i, c := range m.content {
+		thought := ""
+		if i < len(m.thoughts) {
+			thought = m.thoughts[i]
+		}
+		if co.StreamingFunc != nil {
+			if err := co.StreamingFunc(ctx, []byte(c)); err != nil {
+				return nil, err
+			}
+		}
+		if co.StreamingReasoningFunc != nil {
+			if err := co.StreamingReasoningFunc(ctx, []byte(thought), []byte(c)); err != nil {
+				return nil, err
+			}
+		}
+		full += c
+	}
+	return &llms.ContentResponse{Choices: []*llms.ContentChoice{{Content: full}}}, nil
+}
+
+func (*reasoningModel) Call(context.Context, string, ...llms.CallOption) (string, error) {
+	return "", nil
+}
+
+func TestChatSeparatesThinkingFromAnswer(t *testing.T) {
+	m := &reasoningModel{
+		thoughts: []string{"They want ", "remote work. "},
+		content:  []string{"Here are ", "two roles."},
+	}
+	c := &Client{model: m, timeout: time.Second}
+
+	var text, thinking string
+	choice, err := c.Chat(context.Background(),
+		[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "hi")},
+		nil,
+		ChatStream{
+			OnText:     func(s string) { text += s },
+			OnThinking: func(s string) { thinking += s },
+		})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if text != "Here are two roles." {
+		t.Errorf("text = %q, want only the answer deltas", text)
+	}
+	if thinking != "They want remote work. " {
+		t.Errorf("thinking = %q, want only the reasoning deltas", thinking)
+	}
+	if choice.Content != "Here are two roles." {
+		t.Errorf("content = %q, want the answer without the reasoning", choice.Content)
 	}
 }
