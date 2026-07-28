@@ -8,7 +8,13 @@
 // --boards is the report the company-scoped rules depend on. Those rules have no
 // counterpart at crawl time, so a deletion under one is undone by the next hourly crawl
 // unless the board leaves sources/ in the same step. This lists the candidates: boards
-// still listed whose company shows no technical evidence across its entire history.
+// still listed whose postings were classified and none of them came out technical.
+//
+// Boards nothing of which has been classified are withheld and counted, not listed. Most
+// of the catalogue carries no is_tech verdict — 62% of rows when this was measured — and
+// a board whose postings the dictionaries could not place has shown no technical signal
+// for want of any signal at all. Reading that as "never posted anything technical" struck
+// live IT employers on the first run of this report.
 //
 // Retiring a board means MOVING its entry to sources/retired/<provider>.yml, not
 // deleting it. Ingest takes one file by path and a glob does not descend, so an entry
@@ -331,17 +337,42 @@ type (
 	}
 )
 
-// reportBoards lists the boards still in the source files whose postings have never
-// shown anything technical — no technical title or category, and not one tagged skill.
-// Each is a candidate for the retirement PR — move the entry to
+// boardVerdict is what one board's postings collectively said about it.
+//
+// The two fields answer different questions and the report needs both. A board is a
+// retirement candidate only when something was classified AND none of it was technical;
+// with only the first field, "nothing was classified" is indistinguishable from
+// "everything was classified as non-technical".
+type boardVerdict struct {
+	// technical is the evidence that keeps a board: a posting resolved as technical,
+	// or one carrying a tagged skill.
+	technical bool
+	// determined is whether ANY posting got an is_tech verdict either way. is_tech is
+	// tri-state on purpose — jobderive leaves it NULL rather than coercing, so that the
+	// unclassified mass stays measurable — and this is where that third state is read.
+	determined bool
+}
+
+// reportBoards lists the boards still in the source files whose postings were classified
+// and none of them came out technical — no technical title or category, and not one
+// tagged skill. Each is a candidate for the retirement PR — move the entry to
 // sources/retired/<provider>.yml — which is the precondition for pruning its jobs under
 // a company-scoped rule.
+//
+// A board no posting of which has been classified is WITHHELD, not listed. The report's
+// premise is "this board has never posted anything technical", and absence of a
+// technical signal only carries that meaning where a signal was possible at all: a
+// posting the dictionaries could not place leaves is_tech NULL, which is not evidence of
+// anything. Measured on prod the distinction decided most of the report — 11023 of 17841
+// listed boards had no verdict on a single posting, 62% of the list, against 10.6% among
+// the boards the same run kept. Retiring on that basis would have struck live IT
+// employers whose only fault was a title the dictionary does not carry.
 //
 // It groups by BOARD rather than by company because that is the identity the source
 // files and the catalogue share exactly; the company slug diverges wherever an adapter
 // takes the name from the posting payload, which on some providers is most of them.
 func reportBoards(ctx context.Context, w io.Writer, q candidateSource, brd boards) error {
-	evidence := map[boardKey]bool{}
+	evidence := map[boardKey]boardVerdict{}
 	var after int64
 	for {
 		rows, err := q.PruneCandidates(ctx, db.PruneCandidatesParams{AfterID: after, PageSize: scanPage})
@@ -358,18 +389,37 @@ func reportBoards(ctx context.Context, w io.Writer, q candidateSource, brd board
 				continue // not from a listed board: nothing to retire
 			}
 			key := boardKey{Provider: row.Source, Board: board}
-			evidence[key] = evidence[key] || (row.IsTech.Valid && row.IsTech.Bool) || row.HasSkills
+			v := evidence[key]
+			v.technical = v.technical || (row.IsTech.Valid && row.IsTech.Bool) || row.HasSkills
+			v.determined = v.determined || row.IsTech.Valid
+			evidence[key] = v
 		}
 	}
 
 	var retire []boardKey
-	for key, hasEvidence := range evidence {
-		if !hasEvidence {
+	var withheld int
+	for key, v := range evidence {
+		switch {
+		case v.technical:
+			// Something technical: the board stays, as before.
+		case v.determined:
 			retire = append(retire, key)
+		default:
+			withheld++
+		}
+	}
+	// Say what the guard held back. A report that silently shrinks reads as "this is
+	// everything", and the withheld boards never come back into view — the same reason
+	// the scan counts its own refusals rather than dropping them.
+	if withheld > 0 {
+		if _, err := fmt.Fprintf(w,
+			"withheld %d boards: no posting of theirs has been classified either way, so nothing is known about them\n\n",
+			withheld); err != nil {
+			return err
 		}
 	}
 	if len(retire) == 0 {
-		_, err := fmt.Fprintln(w, "every listed board has posted something technical")
+		_, err := fmt.Fprintln(w, "every listed board that has been classified has posted something technical")
 		return err
 	}
 	sort.Slice(retire, func(i, j int) bool {

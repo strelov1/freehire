@@ -18,10 +18,19 @@ the rules that need a retired board would stop firing.
 
 ## How an entry gets here
 
-`cmd/prune --boards` lists the boards whose companies have never posted anything
-technical — no technical title or category, and not one tagged skill, across their whole
-history. Move those entries out of `sources/<provider>.yml` and into
+`cmd/prune --boards` lists the boards whose postings were classified and none of them
+came out technical — no technical title or category, and not one tagged skill, across
+their whole history. Move those entries out of `sources/<provider>.yml` and into
 `sources/retired/<provider>.yml`, in the same PR that prunes their jobs.
+
+Boards no posting of which has been classified are withheld from that list and counted
+at the top of the report. They are not safe to retire; nothing is known about them.
+`is_tech` is tri-state and most of the catalogue carries no verdict, so a board whose
+titles the dictionaries could not place shows no technical signal for want of any
+signal — the first full run of this report named 11023 such boards out of 17841, and
+among them live IT employers whose only listed posting was "Open Application". A
+withheld board returns to the list when classification reaches it, which is what
+expanding the dictionaries (see `cmd/mine-titles`) is for.
 
 Order matters: **prune first, then move the provider's last entry.** Once a provider has
 no entries left in `sources/`, none of its jobs are re-crawlable, and every pruning rule
