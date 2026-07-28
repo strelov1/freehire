@@ -5,6 +5,7 @@ import type {
   Job,
   JobMatch,
   Blocker,
+  Professional,
   Report as ATSReportContract,
   Analysis as MatchAnalysisContract,
 } from './generated/contracts';
@@ -611,6 +612,11 @@ export interface UserProfile {
   /** Canonical skill tokens the user wants to avoid; seeded into the jobs filter's skills exclude set by "Apply my profile". Empty when the user excludes nothing. */
   excluded_skills: string[];
   location_preferences: LocationPreferences | null;
+  /** The caller's structured CV without its contact fields — served beside the profile so
+   *  one read covers both what the user wants and what they have done. Null when no current
+   *  structure exists. Contacts come from GET /me/resume instead (the profile page's contact
+   *  card reads them there). */
+  cv: Professional | null;
   created_at: string | null;
   updated_at: string | null;
 }

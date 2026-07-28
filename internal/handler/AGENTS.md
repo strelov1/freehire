@@ -66,10 +66,18 @@ The turn endpoint writes with `writeEvent`, which — unlike `writeSSE` — repo
 failed write. That is how a streamed turn learns the client is gone: the failure
 cancels the loop's context, so it stops before spending another model call.
 
-`assistant_tools.go` / `assistant_tracking_tools.go` / `assistant_cv_tools.go`
-build the agent's tools from the same services these handlers use, and
-`assistantRegistry` picks the set for a session's preset. The loop itself lives in
-[internal/assistant](../assistant/AGENTS.md).
+`assistant_tools.go` / `assistant_tracking_tools.go` / `assistant_cv_tools.go` /
+`assistant_profile_tool.go` build the agent's tools from the same services these
+handlers use, and `assistantRegistry` picks the set for a session's preset. The loop
+itself lives in [internal/assistant](../assistant/AGENTS.md).
+
+`get_profile` is built on `profileHandlers` rather than the services under it, so the
+tool and `GET /me/profile` share one assembly and cannot drift. It returns the CV as
+`resumeextract.Professional` — **contacts omitted**, and not merely as good manners: a
+tool result is persisted in the transcript and replayed into the model's context on
+every later turn, so a name that lands there stays for the conversation's life. A
+caller with no profile gets a result naming `/my/profile`, never an error and never an
+empty profile the model would read as "no preferences".
 
 ## Error Convention
 

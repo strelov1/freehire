@@ -10,6 +10,7 @@ import (
 	"github.com/strelov1/freehire/internal/hardconstraint"
 	"github.com/strelov1/freehire/internal/jobmatch"
 	"github.com/strelov1/freehire/internal/llm"
+	"github.com/strelov1/freehire/internal/resumeextract"
 )
 
 // Input bounds for untrusted, user/ingest-supplied text sent to the model. Kept modest
@@ -360,19 +361,21 @@ const maxStructuredRunes = 3000
 // candidateContext turns the stored structured-résumé JSON into the de-identified candidate
 // context sent to the model: the semantic résumé with its contact fields removed. Empty when
 // there is no structured résumé (the chain then produces no analysis) or the JSON is unusable.
+//
+// The de-identification is resumeextract's own projection rather than a list of contact keys
+// to delete. Routing through the typed shape means a field the projection does not name never
+// reaches the prompt — including one that does not exist yet. Deleting known keys would have
+// sent every future addition to the model until somebody remembered to extend the list.
 func candidateContext(structuredJSON string) string {
 	s := strings.TrimSpace(structuredJSON)
 	if s == "" {
 		return ""
 	}
-	var m map[string]json.RawMessage
-	if json.Unmarshal([]byte(s), &m) != nil {
+	var structured resumeextract.Structured
+	if json.Unmarshal([]byte(s), &structured) != nil {
 		return ""
 	}
-	for _, k := range []string{"full_name", "email", "phone", "links"} {
-		delete(m, k)
-	}
-	stripped, err := json.Marshal(m)
+	stripped, err := json.Marshal(structured.Professional())
 	if err != nil {
 		return ""
 	}

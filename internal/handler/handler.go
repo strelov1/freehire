@@ -88,10 +88,10 @@ type API struct {
 type middleware struct {
 	optional fiber.Handler
 	key      fiber.Handler
-	// cvKey is keyAuth widened to admit the narrow `cv` key the tailoring bootstrap
-	// mints. Only the CV surface (and the caller's own identity read) mounts it; every
-	// other key-accepting route stays on key, which is full-scope-only — so a new
-	// endpoint is out of a leaked agent credential's reach unless it opts in.
+	// cvKey is keyAuth widened to admit the narrow `cv` key. Only the CV surface (and
+	// the caller's own identity read) mounts it; every other key-accepting route stays
+	// on key, which is full-scope-only — so a new endpoint is out of a leaked agent
+	// credential's reach unless it opts in.
 	cvKey     fiber.Handler
 	cookie    fiber.Handler
 	moderator fiber.Handler
@@ -231,10 +231,12 @@ func Register(app *fiber.App, cfg Config) {
 	savedSearchH := newSavedSearchHandlers(queries)
 	subscriptionH := newSubscriptionHandlers(queries)
 	profileSvc := userprofile.New(userprofile.NewQueriesRepository(queries))
-	profileH := newProfileHandlers(profileSvc)
 	// Résumé storage is nil-safe: a nil Blob (S3 unconfigured) yields a disabled service
 	// whose Enabled() is false, so the upload/verdict paths degrade to in-request parsing.
 	resumeStore := resume.New(cfg.Blob, resume.NewQueriesRepository(queries))
+	// The profile read serves the structured résumé beside the profile, so it needs the
+	// résumé store — hence constructed after it.
+	profileH := newProfileHandlers(profileSvc, resumeStore)
 	// Nil-safe: NewAnalyzer(nil) is a no-op analyzer, so the ATS report works whether
 	// or not the LLM is configured.
 	atsAnalyzer := atscheck.NewAnalyzer(cfg.LLM)
@@ -279,7 +281,7 @@ func Register(app *fiber.App, cfg Config) {
 	// the same services their endpoints do, so a tool result and the API can never
 	// disagree. The tailoring bootstrap mints its conversations through the same
 	// store, which is why the CV handlers get it back.
-	assistantH := newAssistantHandlers(queries, cfg.AssistantLLM, cfg.AssistantMaxSteps, searchH, resumeH, trackingH, cvH)
+	assistantH := newAssistantHandlers(queries, cfg.AssistantLLM, cfg.AssistantMaxSteps, searchH, resumeH, trackingH, cvH, profileH)
 	cvH.withAssistantSessions(assistantH.store)
 
 	// Referral notifications reuse the SES email transport (email is always present) and

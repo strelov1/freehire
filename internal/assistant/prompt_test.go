@@ -17,6 +17,17 @@ func TestEachPresetHasItsOwnPrompt(t *testing.T) {
 	}
 }
 
+// The candidate has already told the product their roles, skills and geography on
+// the profile page. A prompt that does not say to read it produces an agent that
+// opens every conversation with a questionnaire.
+func TestChatPromptReadsTheProfileBeforeInterrogating(t *testing.T) {
+	p := SystemPrompt(PresetChat)
+
+	if !strings.Contains(p, "get_profile") {
+		t.Error("the chat prompt never mentions get_profile, so the agent will ask for what the profile already answers")
+	}
+}
+
 func TestChatPromptCarriesTheSearchPlaybook(t *testing.T) {
 	p := SystemPrompt(PresetChat)
 
