@@ -1,36 +1,45 @@
 package handler
 
 import (
-	"errors"
-	"log"
 	"net/url"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
-
-	"github.com/strelov1/freehire/internal/contribution"
 )
 
-// resolveJobRequest is the one field the endpoint takes: the page the caller is looking at.
+// resolveJobRequest is what the endpoint takes: the page the caller is looking at, and
+// optionally which surface they are on. The surface is recorded, never enforced — an older
+// client that sends none is served exactly the same.
 type resolveJobRequest struct {
-	URL string `json:"url"`
+	URL     string `json:"url"`
+	Surface string `json:"surface"`
 }
 
-// ResolveJob answers "is this page a vacancy freehire carries, and if not, take it" — the
-// endpoint behind the browser extension's "add this page". Authenticated, and rate limited
-// with board contributions because both make the server fetch a user-supplied URL.
+// Intake outcomes. They differ only in what the system already knew about the link, which is
+// precisely what the caller needs to be told.
+const (
+	// outcomeFound — the catalog already carries this posting. No fetch, no write.
+	outcomeFound = "found"
+	// outcomeTracked — we already crawl the board; this posting just had not landed yet, so it
+	// was imported now and the company we cover is named.
+	outcomeTracked = "tracked"
+	// outcomeImported — imported, and the board behind it queued for onboarding.
+	outcomeImported = "imported"
+	// outcomeQueued — nothing could read the page; the link went to manual triage.
+	outcomeQueued = "queued"
+)
+
+// ResolveJob is the HTTP door onto the shared intake sequence (see intakeService), used by the
+// website, the browser extension and the CLI. Authenticated, and rate limited with board
+// contributions because both make the server fetch a user-supplied URL.
 //
-// Three outcomes, one shape:
+// Four outcomes, one shape:
 //
 //	200 found    — the catalog already carries the posting (no fetch, no write)
-//	201 imported — a link-source adapter parsed the page and it is now in the catalog
-//	202 queued   — nothing could parse it, so the link went to manual triage
-//
-// The catalog lookup runs FIRST, and not only to save a fetch: the last-resort resolver
-// writes under source "weblink" keyed by the page URL, so importing a posting we already
-// carry from an aggregator would add a second row under a different identity — a duplicate
-// the ingest dedup passes (which work per company+title) would not collapse. Checking
-// first is what makes this safe to point at any page.
+//	201 tracked  — we crawl this board already; the posting had not landed, so it was imported
+//	               now, and the company we cover is named
+//	201 imported — imported, and the board behind it queued for onboarding
+//	202 queued   — nothing could read the page, so the link went to manual triage
 func (h *contributionHandlers) ResolveJob(c *fiber.Ctx) error {
 	var in resolveJobRequest
 	if err := c.BodyParser(&in); err != nil {
@@ -46,56 +55,22 @@ func (h *contributionHandlers) ResolveJob(c *fiber.Ctx) error {
 		return err
 	}
 
-	slug, err := catalogSlugForURL(c.Context(), h.queries, pageURL)
+	out, err := h.intake.Resolve(c.Context(), userID, pageURL, in.Surface)
 	if err != nil {
 		return err
 	}
-	if slug != "" {
-		return c.JSON(fiber.Map{"data": fiber.Map{"public_slug": slug, "status": "found"}})
+	switch out.Status {
+	case outcomeFound:
+		return c.JSON(fiber.Map{"data": fiber.Map{"public_slug": out.PublicSlug, "status": out.Status}})
+	case outcomeQueued:
+		return c.Status(fiber.StatusAccepted).
+			JSON(fiber.Map{"data": fiber.Map{"public_slug": nil, "status": out.Status}})
 	}
-
-	res, imported, err := h.imports.Import(c.Context(), pageURL)
-	if err != nil {
-		// A transient fetch or parse failure, not a verdict on the page: the link is worth
-		// keeping, so it falls through to triage rather than surfacing as a 5xx.
-		log.Printf("resolve-job: import %s: %v", pageURL, err)
+	body := fiber.Map{"public_slug": out.PublicSlug, "status": out.Status}
+	if out.Status == outcomeTracked {
+		body["company_slug"] = out.CompanySlug
 	}
-	if imported {
-		return c.Status(fiber.StatusCreated).
-			JSON(fiber.Map{"data": fiber.Map{"public_slug": res.PublicSlug, "status": "imported"}})
-	}
-
-	// Nothing read the page. Record the link so a maintainer can see what we are missing —
-	// the contribution service triages a recognised novel board as pending (and the
-	// submitter is rewarded for it) and anything else as review.
-	if err := h.queueForTriage(c, userID, pageURL); err != nil {
-		return err
-	}
-	return c.Status(fiber.StatusAccepted).
-		JSON(fiber.Map{"data": fiber.Map{"public_slug": nil, "status": "queued"}})
-}
-
-// queueForTriage hands an unimportable link to the contribution service. A board we
-// already crawl, or one someone already contributed, is not an error the caller can act
-// on — the link is known to us either way — so both are treated as queued.
-func (h *contributionHandlers) queueForTriage(c *fiber.Ctx, userID int64, pageURL string) error {
-	res, err := h.contribution.Submit(c.Context(), contribution.SubmitInput{
-		SubmittedBy: userID,
-		URL:         pageURL,
-		Surface:     contribution.SurfaceExtension,
-	})
-	switch {
-	case err == nil:
-		if res.Rewardable && res.Contribution.Status == contribution.StatusPending {
-			rewardContribution(c.Context(), h.credits, userID, res.Contribution.ID)
-		}
-		return nil
-	case errors.Is(err, contribution.ErrBoardAlreadyTracked),
-		errors.Is(err, contribution.ErrBoardAlreadyContributed):
-		return nil
-	default:
-		return err
-	}
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": body})
 }
 
 // isHTTPURL reports whether raw is an absolute http(s) URL — the only thing worth

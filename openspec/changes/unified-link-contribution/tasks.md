@@ -40,37 +40,40 @@
   `generic`; test that a Greenhouse link still takes the dedicated adapter
 - [x] 4.6 `go test ./internal/linksource/ ./internal/linkimport/`
 
-## 5. Attribution through the import path
+## 5. Attribution
 
-- [ ] 5.1 Failing test: an import records the submitting user and surface
-- [ ] 5.2 Give `linkimport.Import` a submitter+surface parameter; thread it to the
-  contribution record
-- [ ] 5.3 Update `cmd/resolve-url` (the operator surface) to pass an explicit surface
-- [ ] 5.4 `go test ./internal/linkimport/` and `go test -tags=integration ./internal/linkimport/`
+Revised during implementation. The plan was to give `linkimport.Import` a submitter and have
+it record the contribution itself. That would make `linkimport` depend on `contribution`
+purely to carry an attribution, while the handler already calls both — so the importer stays
+a pure importer and attribution rides on the intake call, which is task 6.3. `cmd/resolve-url`
+needs no surface for the same reason: it imports without recording.
+
+- [x] 5.1 Keep `linkimport` free of `contribution`; attribution is carried by the intake call
+- [x] 5.2 `surface` reaches the store through `contribution.SubmitInput` (done in group 3)
 
 ## 6. Intake sequence: the four outcomes
 
-- [ ] 6.1 Failing handler tests for each outcome: `found`, `tracked`, `imported`, `queued`
-- [ ] 6.2 Add the `tracked` branch to `ResolveJob`: board crawled + posting absent → import
+- [x] 6.1 Failing handler tests for each outcome: `found`, `tracked`, `imported`, `queued`
+- [x] 6.2 Add the `tracked` branch to `ResolveJob`: board crawled + posting absent → import
   and answer with `company_slug`
-- [ ] 6.3 Move contribution recording out of the `imported == false` branch so a successful
+- [x] 6.3 Move contribution recording out of the `imported == false` branch so a successful
   import also queues an uncrawled board
-- [ ] 6.4 Accept and validate the `surface` request field; unknown/absent records `unknown`
-- [ ] 6.5 `go test ./internal/handler/` and `go test -tags=integration ./internal/handler/`
+- [x] 6.4 Accept and validate the `surface` request field; unknown/absent records `unknown`
+- [x] 6.5 `go test ./internal/handler/` and `go test -tags=integration ./internal/handler/`
 
 ## 7. Telegram onto the unified sequence
 
-- [ ] 7.1 Failing test: a linked user sending a readable vacancy link gets a reply carrying
+- [x] 7.1 Failing test: a linked user sending a readable vacancy link gets a reply carrying
   the posting URL
-- [ ] 7.2 Replace the direct `contribution.Submit` call with the intake service; map the
+- [x] 7.2 Replace the direct `contribution.Submit` call with the intake service; map the
   four outcomes to bot replies
-- [ ] 7.3 Raise `telegramContribTimeout` to cover a board fetch and reply on timeout rather
+- [x] 7.3 Raise `telegramContribTimeout` to cover a board fetch and reply on timeout rather
   than going silent
-- [ ] 7.4 `go test ./internal/handler/ -run Telegram` and the tagged integration test
+- [x] 7.4 `go test ./internal/handler/ -run Telegram` and the tagged integration test
 
 ## 8. Website
 
-- [ ] 8.1 Remove `POST /me/contributions`; keep the `GET` list
+- [x] 8.1 Remove `POST /me/contributions`; keep the `GET` list
 - [ ] 8.2 Point `web/src/lib/api.ts` and `/contribute` at the intake endpoint with
   `surface: "web"`, rendering all four outcomes
 - [ ] 8.3 Show the surface column in `/my/contributions`

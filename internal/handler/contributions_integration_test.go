@@ -1,13 +1,14 @@
 //go:build integration
 
-// Integration tests for the link-contribution HTTP flow against a real Postgres: an
-// unauthenticated submit is 401, an unsupported host is 422, a novel supported link is 201
-// and rewards AI credits (reflected in credit_balances), a resubmit is 409, and a link
-// already in the catalogue is 409. Run with: go test -tags=integration ./internal/handler/
+// Integration test for GET /api/v1/me/contributions, the caller's own list.
+//
+// Submitting no longer has an endpoint of its own: every surface enters through the shared
+// intake (POST /jobs/resolve), so the recording, dedup, reward and review-queue behaviour is
+// exercised by TestResolveJobEndpoint and the contribution package's own tests rather than
+// duplicated here. Run with: go test -tags=integration ./internal/handler/
 package handler
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -20,171 +21,84 @@ import (
 
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/contribution"
-	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/db"
 )
 
-func TestContributionsEndToEnd(t *testing.T) {
+func TestMyContributionsList(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
 
-	var userID int64
-	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('contrib@example.test') RETURNING id`).Scan(&userID); err != nil {
+	var mine, theirs int64
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('contrib@example.test') RETURNING id`).Scan(&mine); err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
-	// A board already in the catalogue (a job on greenhouse board "beta"), to exercise the
-	// "board already tracked" reject.
-	if _, err := pool.Exec(ctx,
-		`INSERT INTO jobs (source, external_id, url, title, public_slug)
-		 VALUES ('greenhouse', 'beta:2', 'http://example.test', 'Taken', 'taken-beta-2')`); err != nil {
-		t.Fatalf("seed job: %v", err)
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('other@example.test') RETURNING id`).Scan(&theirs); err != nil {
+		t.Fatalf("seed other user: %v", err)
+	}
+
+	queries := db.New(pool)
+	repo := contribution.NewQueriesRepository(pool, queries)
+	if _, _, err := repo.Record(ctx, contribution.RecordInput{
+		SubmittedBy: mine, URL: "https://jobs.ashbyhq.com/acme", Source: "ashby", Board: "acme",
+		Surface: contribution.SurfaceCLI,
+	}); err != nil {
+		t.Fatalf("record own: %v", err)
+	}
+	if _, err := repo.RecordReview(ctx, mine, "https://example.com/careers/1", contribution.SurfaceWeb); err != nil {
+		t.Fatalf("record review: %v", err)
+	}
+	if _, _, err := repo.Record(ctx, contribution.RecordInput{
+		SubmittedBy: theirs, URL: "https://jobs.lever.co/globex", Source: "lever", Board: "globex",
+		Surface: contribution.SurfaceWeb,
+	}); err != nil {
+		t.Fatalf("record other user's: %v", err)
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	cookie, _ := iss.Issue(userID, testTokenVersion)
-	queries := db.New(pool)
-	creditsStore := credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 5})
-	ch := &contributionHandlers{contribution: contribution.New(contribution.NewQueriesRepository(pool, queries), nil), credits: creditsStore}
+	cookie, _ := iss.Issue(mine, testTokenVersion)
+	ch := &contributionHandlers{contribution: contribution.New(repo, nil)}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
-	app.Post("/api/v1/me/contributions", keyAuth, ch.CreateContribution)
-	app.Get("/api/v1/me/contributions", keyAuth, ch.ListMyContributions)
+	app.Get("/api/v1/me/contributions", auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}), ch.ListMyContributions)
 
-	submit := func(t *testing.T, url string, withCookie bool) *http.Response {
-		t.Helper()
-		body, _ := json.Marshal(map[string]string{"url": url})
-		r := httptest.NewRequest(fiber.MethodPost, "/api/v1/me/contributions", bytes.NewReader(body))
-		r.Header.Set("Content-Type", "application/json")
-		if withCookie {
-			r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
-		}
-		resp, err := app.Test(r)
-		if err != nil {
-			t.Fatalf("submit: %v", err)
-		}
-		return resp
+	r := httptest.NewRequest(fiber.MethodGet, "/api/v1/me/contributions", nil)
+	r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+	resp, err := app.Test(r)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
 
-	t.Run("anonymous submit is 401", func(t *testing.T) {
-		if resp := submit(t, "https://job-boards.greenhouse.io/acme/jobs/456", false); resp.StatusCode != fiber.StatusUnauthorized {
-			t.Errorf("status = %d, want 401", resp.StatusCode)
-		}
-	})
+	var out struct {
+		Data []struct {
+			URL     string `json:"url"`
+			Source  string `json:"source"`
+			Board   string `json:"board"`
+			Status  string `json:"status"`
+			Surface string `json:"surface"`
+		} `json:"data"`
+	}
+	raw, _ := io.ReadAll(resp.Body)
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
 
-	t.Run("non-URL garbage is 422", func(t *testing.T) {
-		if resp := submit(t, "not a url", true); resp.StatusCode != fiber.StatusUnprocessableEntity {
-			t.Errorf("status = %d, want 422", resp.StatusCode)
+	if len(out.Data) != 2 {
+		t.Fatalf("list has %d rows, want the caller's 2 and nobody else's: %+v", len(out.Data), out.Data)
+	}
+	// Newest first: the review row was recorded after the board row.
+	if out.Data[0].Status != contribution.StatusReview || out.Data[0].Board != "" {
+		t.Errorf("first row = %+v, want the review row with no board", out.Data[0])
+	}
+	if out.Data[1].Board != "acme" || out.Data[1].Surface != contribution.SurfaceCLI {
+		t.Errorf("second row = %+v, want the ashby/acme board submitted from the CLI", out.Data[1])
+	}
+	for _, row := range out.Data {
+		if row.Board == "globex" {
+			t.Error("another user's contribution leaked into the caller's list")
 		}
-	})
-
-	t.Run("unrecognized valid link is recorded for review (201, no credit)", func(t *testing.T) {
-		resp := submit(t, "https://example.com/careers/1", true)
-		if resp.StatusCode != fiber.StatusCreated {
-			body, _ := io.ReadAll(resp.Body)
-			t.Fatalf("status = %d, want 201 (body %s)", resp.StatusCode, body)
-		}
-		var created struct {
-			Data contributionResponse `json:"data"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
-			t.Fatalf("decode: %v", err)
-		}
-		if created.Data.Status != contribution.StatusReview || created.Data.Source != "" || created.Data.Board != "" {
-			t.Errorf("created = %+v, want status review with no source/board", created.Data)
-		}
-		// No credit was awarded: no reward ledger entry exists for the review row. (The novel-board
-		// subtest below confirms the balance lands at exactly 25 — grant 20 + one reward — proving
-		// the review submission added nothing.)
-		var rewards int
-		if err := pool.QueryRow(ctx, `SELECT count(*) FROM credit_ledger WHERE user_id = $1`, userID).Scan(&rewards); err != nil {
-			t.Fatalf("read ledger: %v", err)
-		}
-		if rewards != 0 {
-			t.Errorf("credit ledger entries after review submit = %d, want 0", rewards)
-		}
-	})
-
-	t.Run("board already tracked is 409", func(t *testing.T) {
-		// The "beta" board has a job → contributing any beta link (vacancy or listing) is rejected.
-		if resp := submit(t, "https://job-boards.greenhouse.io/beta/jobs/2?utm=x", true); resp.StatusCode != fiber.StatusConflict {
-			t.Errorf("status = %d, want 409", resp.StatusCode)
-		}
-	})
-
-	t.Run("novel board (via vacancy URL) is 201 and rewards AI credits", func(t *testing.T) {
-		resp := submit(t, "https://jobs.ashbyhq.com/acme/a741b4e8-8799-4539-b1c2-78d69ff625e7?utm_source=tg", true)
-		if resp.StatusCode != fiber.StatusCreated {
-			body, _ := io.ReadAll(resp.Body)
-			t.Fatalf("status = %d, want 201 (body %s)", resp.StatusCode, body)
-		}
-		var created struct {
-			Data contributionResponse `json:"data"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
-			t.Fatalf("decode: %v", err)
-		}
-		if created.Data.Source != "ashby" || created.Data.Board != "acme" {
-			t.Errorf("created = %+v, want ashby/acme", created.Data)
-		}
-
-		// The novel contribution rewarded AI credits: 20 monthly grant + 5 reward.
-		var remaining int
-		if err := pool.QueryRow(ctx, `SELECT remaining FROM credit_balances WHERE user_id = $1`, userID).Scan(&remaining); err != nil {
-			t.Fatalf("read credit balance: %v", err)
-		}
-		if remaining != 25 {
-			t.Errorf("credit balance after contribution = %d, want 25 (20 grant + 5 reward)", remaining)
-		}
-	})
-
-	t.Run("a second vacancy on the same board is 409", func(t *testing.T) {
-		// A DIFFERENT vacancy on the same ashby "acme" board → same board → duplicate, no reward.
-		if resp := submit(t, "https://jobs.ashbyhq.com/acme/a1c86055-bca7-43de-8542-38c94347c693", true); resp.StatusCode != fiber.StatusConflict {
-			t.Errorf("status = %d, want 409", resp.StatusCode)
-		}
-		// The bare board-listing URL for the same board is also a duplicate.
-		if resp := submit(t, "https://jobs.ashbyhq.com/acme", true); resp.StatusCode != fiber.StatusConflict {
-			t.Errorf("board-listing resubmit status = %d, want 409", resp.StatusCode)
-		}
-		// Still exactly one reward — the rejected resubmits credited nothing (balance unchanged at 25).
-		var remaining int
-		if err := pool.QueryRow(ctx, `SELECT remaining FROM credit_balances WHERE user_id = $1`, userID).Scan(&remaining); err != nil {
-			t.Fatalf("read credit balance: %v", err)
-		}
-		if remaining != 25 {
-			t.Errorf("credit balance after duplicates = %d, want still 25", remaining)
-		}
-	})
-
-	t.Run("my contributions lists the caller's own", func(t *testing.T) {
-		r := httptest.NewRequest(fiber.MethodGet, "/api/v1/me/contributions", nil)
-		r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
-		resp, err := app.Test(r)
-		if err != nil {
-			t.Fatalf("list: %v", err)
-		}
-		var list struct {
-			Data []contributionResponse `json:"data"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
-			t.Fatalf("decode: %v", err)
-		}
-		// Two rows: the recognized ashby/acme board and the earlier review-queue submission.
-		var board, review *contributionResponse
-		for i := range list.Data {
-			switch list.Data[i].Status {
-			case contribution.StatusReview:
-				review = &list.Data[i]
-			default:
-				board = &list.Data[i]
-			}
-		}
-		if len(list.Data) != 2 || board == nil || board.Board != "acme" || board.Source != "ashby" {
-			t.Errorf("list = %+v, want the recorded ashby/acme board", list.Data)
-		}
-		if review == nil || review.Source != "" || review.Board != "" {
-			t.Errorf("list = %+v, want a review row with no source/board", list.Data)
-		}
-	})
+	}
 }

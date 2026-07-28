@@ -1,8 +1,8 @@
 //go:build integration
 
-// Integration test for contribution-from-Telegram: a linked user pastes a board link into
-// the bot chat and the webhook runs it through the same contribution flow as the site —
-// recording the board, rewarding AI credits, and replying. Run with:
+// Integration test for link-intake-from-Telegram: a linked user pastes a link into the bot
+// chat and the webhook runs it through the SAME intake sequence as the website — look, import,
+// record — replying with whichever of the four outcomes applies. Run with:
 // go test -tags=integration ./internal/handler/
 package handler
 
@@ -22,6 +22,7 @@ import (
 	"github.com/strelov1/freehire/internal/contribution"
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/linkimport"
 	"github.com/strelov1/freehire/internal/telegramnotify"
 )
 
@@ -72,14 +73,22 @@ func TestTelegramContribution(t *testing.T) {
 	}
 
 	queries := db.New(pool)
+	contributionSvc := contribution.New(contribution.NewQueriesRepository(pool, queries), nil)
+	creditsStore := credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 5})
 	h := &telegramHandlers{
 		queries:               queries,
 		frontendOrigin:        "https://freehire.test",
 		telegramLinks:         telegramnotify.NewLinkTokens("test-secret", 10*time.Minute),
 		telegramBot:           telegramnotify.NewClientWithBase("bottoken", stub.URL),
 		telegramWebhookSecret: "hook-secret",
-		contribution:          contribution.New(contribution.NewQueriesRepository(pool, queries), nil),
-		credits:               credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 5}),
+		intake: &intakeService{
+			queries:      queries,
+			contribution: contributionSvc,
+			// No page client and no ingest registry: this test is about the bot's replies, so
+			// nothing is importable and every link takes the record-only path.
+			imports: linkimport.New(pool, queries, nil, pagesClient{}, nil, nil),
+			credits: creditsStore,
+		},
 	}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
@@ -118,9 +127,11 @@ func TestTelegramContribution(t *testing.T) {
 		if d := time.Since(start); d > 2*time.Second {
 			t.Errorf("webhook took %v to ACK, want fast (reply is async)", d)
 		}
+		// Nothing is importable in this test, so the page itself cannot be read — but the board
+		// behind it IS recognised, taken, and paid for, and the reply must say so.
 		reply := waitReply(t)
-		if !strings.Contains(reply, "blitzy") || !strings.Contains(reply, "new board") {
-			t.Errorf("reply = %q, want a new-board confirmation naming blitzy", reply)
+		if !strings.Contains(reply, "blitzy") || !strings.Contains(reply, "AI credit") {
+			t.Errorf("reply = %q, want the accepted-board confirmation naming blitzy", reply)
 		}
 		// The reward is applied in the same background goroutine as the reply, so it has landed
 		// by the time we observe the reply: 20 monthly grant + 5 contribution reward.
@@ -133,13 +144,20 @@ func TestTelegramContribution(t *testing.T) {
 		}
 	})
 
-	t.Run("a second link on the same board earns no reward", func(t *testing.T) {
+	t.Run("a second link on the same board is recorded but earns no second reward", func(t *testing.T) {
 		post(chatID, "https://jobs.ashbyhq.com/blitzy") // the board listing this time
-		if reply := waitReply(t); !strings.Contains(reply, "already contributed") {
-			t.Errorf("reply = %q, want already-contributed", reply)
-		}
+		waitReply(t)
 		if got := balance(); got != 25 {
-			t.Errorf("credit balance = %d, want still 25 (duplicate credits nothing)", got)
+			t.Errorf("credit balance = %d, want still 25 (a repeat board credits nothing)", got)
+		}
+		// The repeat IS kept — it names its own submitter and is more evidence the board matters.
+		var rows int
+		if err := pool.QueryRow(ctx,
+			`SELECT count(*) FROM link_contributions WHERE source='ashby' AND board='blitzy'`).Scan(&rows); err != nil {
+			t.Fatalf("count board rows: %v", err)
+		}
+		if rows != 2 {
+			t.Errorf("board rows = %d, want 2 — every submission is kept", rows)
 		}
 	})
 
@@ -160,11 +178,12 @@ func TestTelegramContribution(t *testing.T) {
 		}
 	})
 
-	t.Run("an already-tracked board replies with the company link", func(t *testing.T) {
+	t.Run("a posting we already carry is answered with its link", func(t *testing.T) {
+		// The catalog lookup matches this greenhouse posting by its identity in the URL, so the
+		// bot hands the user the job rather than talking about boards.
 		post(chatID, "https://job-boards.greenhouse.io/acmeco/jobs/1")
-		reply := waitReply(t)
-		if !strings.Contains(reply, "Acme Co") || !strings.Contains(reply, "https://freehire.test/companies/acme-co") {
-			t.Errorf("reply = %q, want the company name + /companies/acme-co link", reply)
+		if reply := waitReply(t); !strings.Contains(reply, "https://freehire.test/jobs/go-dev-acmeco") {
+			t.Errorf("reply = %q, want a link to the posting we already carry", reply)
 		}
 	})
 

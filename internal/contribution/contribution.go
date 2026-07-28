@@ -135,7 +135,60 @@ type SubmitResult struct {
 	Rewardable   bool
 }
 
-// Submit validates and records a contributed board so the caller can reward a novel one. The
+// Intake is what a link is, before anything is written: the board it belongs to, and whether
+// the catalogue already crawls that board. Recognized is false for a link no board can be
+// derived from, which is destined for the review queue rather than the board queue.
+type Intake struct {
+	Source     string
+	Board      string
+	Canonical  string
+	Recognized bool
+	Tracked    bool
+}
+
+// Inspect resolves a link to its board and reports whether the catalogue already crawls it,
+// WITHOUT writing anything. It exists because the answer changes the moment a vacancy from
+// that board is imported: a caller that imports first and asks afterwards is told the board is
+// tracked by the very posting it just wrote. Ask first, import second, record third.
+func (s *Service) Inspect(ctx context.Context, rawURL string) (Intake, error) {
+	source, board, canonical, ok := s.resolveBoard(ctx, rawURL)
+	if !ok {
+		return Intake{}, nil
+	}
+	tracked, err := s.repo.BoardTracked(ctx, source, board)
+	if err != nil {
+		return Intake{}, err
+	}
+	return Intake{Source: source, Board: board, Canonical: canonical, Recognized: true, Tracked: tracked}, nil
+}
+
+// RecordIntake persists a link already inspected, so the board is resolved once even when
+// resolving it cost a page fetch. A tracked board is not recorded — it needs no onboarding —
+// and an unrecognised link goes to the review queue.
+func (s *Service) RecordIntake(ctx context.Context, in SubmitInput, it Intake) (SubmitResult, error) {
+	surface := NormalizeSurface(in.Surface)
+	if !it.Recognized {
+		if !isHTTPURL(in.URL) {
+			return SubmitResult{}, ErrUnsupportedATS
+		}
+		logUnrecognized(in.SubmittedBy, in.URL)
+		rec, err := s.repo.RecordReview(ctx, in.SubmittedBy, stripQueryFragment(in.URL), surface)
+		return SubmitResult{Contribution: rec}, err
+	}
+	if it.Tracked {
+		return SubmitResult{Source: it.Source, Board: it.Board}, ErrBoardAlreadyTracked
+	}
+	rec, rewardable, err := s.repo.Record(ctx, RecordInput{
+		SubmittedBy: in.SubmittedBy,
+		URL:         it.Canonical,
+		Source:      it.Source,
+		Board:       it.Board,
+		Surface:     surface,
+	})
+	return SubmitResult{Contribution: rec, Source: it.Source, Board: it.Board, Rewardable: rewardable}, err
+}
+
+// Submit inspects and records in one call, for the callers that do not import first. The
 // checks run cheapest-first: unsupported ATS before any DB read; already-tracked before any
 // write; the record insert last, which no longer competes with a unique constraint — a repeat
 // board is recorded, it simply is not rewardable.

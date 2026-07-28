@@ -3,40 +3,20 @@ package handler
 import (
 	"testing"
 
-	"github.com/gofiber/fiber/v2"
-
 	"github.com/strelov1/freehire/internal/contribution"
 )
 
-// contributionError maps the contribution sentinels onto HTTP statuses; assert each mapping
-// through RenderError (the errorApp/errorStatus helpers live in errors_test.go).
-func TestContributionError_Mapping(t *testing.T) {
-	cases := []struct {
-		name string
-		err  error
-		want int
-	}{
-		{"unsupported ATS", contribution.ErrUnsupportedATS, fiber.StatusUnprocessableEntity},
-		{"board already tracked", contribution.ErrBoardAlreadyTracked, fiber.StatusConflict},
-		{"board already contributed", contribution.ErrBoardAlreadyContributed, fiber.StatusConflict},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			app := errorApp(func(*fiber.Ctx) error { return contributionError(tc.err) })
-			if got := errorStatus(t, app); got != tc.want {
-				t.Errorf("status = %d, want %d", got, tc.want)
-			}
-		})
-	}
-}
-
-// A recorded contribution's wire shape exposes the source and board it discovered.
+// A recorded contribution's wire shape exposes the board it discovered and the surface it was
+// submitted through.
 func TestToContributionResponse_Shape(t *testing.T) {
 	got := toContributionResponse(contribution.Contribution{
 		ID: 9, URL: "https://jobs.ashbyhq.com/blitzy", Source: "ashby",
-		Board: "blitzy", Status: "pending",
+		Board: "blitzy", Status: "pending", Surface: contribution.SurfaceCLI,
 	})
 	if got.Source != "ashby" || got.Board != "blitzy" {
 		t.Errorf("response = %+v, want source + board surfaced", got)
+	}
+	if got.Surface != contribution.SurfaceCLI {
+		t.Errorf("surface = %q, want it surfaced so a caller can see where a row came from", got.Surface)
 	}
 }

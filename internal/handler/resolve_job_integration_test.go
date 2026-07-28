@@ -1,9 +1,10 @@
 //go:build integration
 
-// Integration tests for POST /api/v1/jobs/resolve, the endpoint behind the extension's
-// "add this page to freehire". Three outcomes share one wire shape: a page we already
-// carry answers found, a page an adapter parses is imported, and a page nothing can read
-// is queued for manual triage. Run with: go test -tags=integration ./internal/handler/
+// Integration tests for POST /api/v1/jobs/resolve, the one intake every surface enters
+// through. Four outcomes share one wire shape: a page we already carry answers found; a
+// vacancy on a board we crawl is imported and answered tracked; any other readable vacancy is
+// imported and its board queued for onboarding; a page nothing can read is queued for triage.
+// Run with: go test -tags=integration ./internal/handler/
 package handler
 
 import (
@@ -25,6 +26,7 @@ import (
 	"github.com/strelov1/freehire/internal/contribution"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/linkimport"
+	"github.com/strelov1/freehire/internal/sources"
 )
 
 // vacancyPage carries the schema.org block the generic resolver reads; aboutPage does not.
@@ -73,9 +75,25 @@ func (c pagesClient) GetJSON(_ context.Context, url string, _ any) error {
 
 type resolveReply struct {
 	Data *struct {
-		PublicSlug *string `json:"public_slug"`
-		Status     string  `json:"status"`
+		PublicSlug  *string `json:"public_slug"`
+		Status      string  `json:"status"`
+		CompanySlug string  `json:"company_slug"`
 	} `json:"data"`
+}
+
+// fakeRecruitee is a stand-in ingest adapter for a platform with no single-page link adapter,
+// so the intake reaches it through board coverage — the path most pasted links now take.
+type fakeRecruitee struct{}
+
+func (fakeRecruitee) Provider() string { return "recruitee" }
+
+func (fakeRecruitee) Fetch(_ context.Context, e sources.CompanyEntry) ([]sources.Job, error) {
+	return []sources.Job{{
+		ExternalID: "222",
+		URL:        "https://" + e.Board + ".recruitee.com/o/senior-go",
+		Title:      "Senior Go Engineer",
+		Company:    strings.ToTitle(e.Board),
+	}}, nil
 }
 
 func TestResolveJobEndpoint(t *testing.T) {
@@ -103,10 +121,15 @@ func TestResolveJobEndpoint(t *testing.T) {
 		"/jobs/staff-java-backend-developer": vacancyPage,
 		"/about-us":                          aboutPage,
 	}
+	contributionSvc := contribution.New(contribution.NewQueriesRepository(pool, queries), nil)
 	h := &contributionHandlers{
-		queries:      queries,
-		contribution: contribution.New(contribution.NewQueriesRepository(pool, queries), nil),
-		imports:      linkimport.New(pool, queries, nil, pages, nil, nil),
+		contribution: contributionSvc,
+		intake: &intakeService{
+			queries:      queries,
+			contribution: contributionSvc,
+			imports: linkimport.New(pool, queries, nil, pages,
+				map[string]sources.Source{"recruitee": fakeRecruitee{}}, nil),
+		},
 	}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
@@ -115,7 +138,8 @@ func TestResolveJobEndpoint(t *testing.T) {
 
 	resolve := func(t *testing.T, url string, withCookie bool) (*http.Response, resolveReply) {
 		t.Helper()
-		body, _ := json.Marshal(map[string]string{"url": url})
+		// Every surface tags its intakes; the extension is the one this test stands in for.
+		body, _ := json.Marshal(map[string]string{"url": url, "surface": contribution.SurfaceExtension})
 		r := httptest.NewRequest(fiber.MethodPost, "/api/v1/jobs/resolve", bytes.NewReader(body))
 		r.Header.Set("Content-Type", "application/json")
 		if withCookie {
@@ -210,6 +234,76 @@ func TestResolveJobEndpoint(t *testing.T) {
 		resp, _ := resolve(t, "not a url", true)
 		if resp.StatusCode != http.StatusUnprocessableEntity {
 			t.Errorf("status = %d, want 422", resp.StatusCode)
+		}
+	})
+
+	t.Run("importing a vacancy also queues its board for onboarding", func(t *testing.T) {
+		// The whole point of the change: reading one posting must not hide the board it came
+		// from, or the other vacancies on it stay invisible to us forever.
+		const page = "https://globex.recruitee.com/o/senior-go"
+		resp, out := resolve(t, page, true)
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("status = %d, want 201", resp.StatusCode)
+		}
+		if out.Data == nil || out.Data.Status != "imported" || out.Data.PublicSlug == nil {
+			t.Fatalf("body = %+v, want status imported with a slug", out.Data)
+		}
+		var status, surface string
+		if err := pool.QueryRow(ctx,
+			`SELECT status, surface FROM link_contributions WHERE source = 'recruitee' AND board = 'globex'`).
+			Scan(&status, &surface); err != nil {
+			t.Fatalf("the imported vacancy's board was not queued: %v", err)
+		}
+		if status != contribution.StatusPending {
+			t.Errorf("queued board status = %q, want pending", status)
+		}
+		if surface != contribution.SurfaceExtension {
+			t.Errorf("surface = %q, want %q — an intake must say which door it came through",
+				surface, contribution.SurfaceExtension)
+		}
+		// The posting carries the identity the ingest crawl of that board would give it, so a
+		// later crawl dedups onto this row.
+		var source, externalID string
+		if err := pool.QueryRow(ctx,
+			`SELECT source, external_id FROM jobs WHERE public_slug = $1`, *out.Data.PublicSlug).
+			Scan(&source, &externalID); err != nil {
+			t.Fatalf("read imported posting: %v", err)
+		}
+		if source != "recruitee" || externalID != "globex:222" {
+			t.Errorf("identity = (%q, %q), want (recruitee, globex:222)", source, externalID)
+		}
+	})
+
+	t.Run("a vacancy on a board we already crawl is tracked, not queued", func(t *testing.T) {
+		// The company is already being crawled; this posting simply has not landed yet. Import
+		// it now and say so, rather than asking the user to wait for a board we cover.
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO jobs (source, external_id, url, title, public_slug, company, company_slug)
+			 VALUES ('recruitee', 'acme:111', 'https://acme.recruitee.com/o/junior-go',
+			         'Junior Go', 'junior-go-acme', 'Acme', 'acme')`); err != nil {
+			t.Fatalf("seed crawled board: %v", err)
+		}
+		resp, out := resolve(t, "https://acme.recruitee.com/o/senior-go", true)
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("status = %d, want 201", resp.StatusCode)
+		}
+		if out.Data == nil || out.Data.Status != "tracked" {
+			t.Fatalf("body = %+v, want status tracked", out.Data)
+		}
+		if out.Data.PublicSlug == nil {
+			t.Error("tracked answer carries no slug, want the imported posting")
+		}
+		if out.Data.CompanySlug != "acme" {
+			t.Errorf("company_slug = %q, want acme — the caller is told who is already covered", out.Data.CompanySlug)
+		}
+		var queued int
+		if err := pool.QueryRow(ctx,
+			`SELECT count(*) FROM link_contributions WHERE source = 'recruitee' AND board = 'acme'`).
+			Scan(&queued); err != nil {
+			t.Fatalf("read triage queue: %v", err)
+		}
+		if queued != 0 {
+			t.Errorf("queued %d rows for an already-crawled board, want 0 — it needs no onboarding", queued)
 		}
 	})
 }

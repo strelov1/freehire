@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/subtle"
 	"errors"
-	"fmt"
 	"html"
 	"log"
 	"regexp"
@@ -15,7 +14,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/contribution"
-	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/telegramnotify"
 )
@@ -34,19 +32,19 @@ type telegramHandlers struct {
 	telegramBotUsername   string
 	telegramWebhookSecret string
 	frontendOrigin        string
-	contribution          *contribution.Service
-	credits               *credits.Store
+	// intake is the shared look-import-record sequence, so a link pasted into the bot gets
+	// exactly the outcome the same link would get on the website.
+	intake *intakeService
 }
 
 // newTelegramHandlers wires the bot only with both a bot token and a JWT secret
 // (the link token reuses it). Absent either, the linking endpoints report the
 // feature off and the webhook is inert (see telegramEnabled).
-func newTelegramHandlers(queries *db.Queries, jwtSecret, botToken, botUsername, webhookSecret, frontendOrigin string, contribution *contribution.Service, credits *credits.Store) *telegramHandlers {
+func newTelegramHandlers(queries *db.Queries, jwtSecret, botToken, botUsername, webhookSecret, frontendOrigin string, intake *intakeService) *telegramHandlers {
 	h := &telegramHandlers{
 		queries:        queries,
 		frontendOrigin: frontendOrigin,
-		contribution:   contribution,
-		credits:        credits,
+		intake:         intake,
 	}
 	// The webhook secret is part of the enable condition, not a check inside the handler:
 	// the handler's constant-time compare treats an unset secret as "matches an absent
@@ -209,22 +207,11 @@ func (h *telegramHandlers) sendTelegram(ctx context.Context, chatID int64, msg s
 	}
 }
 
-// alreadyTrackedReply is the "we already cover this" message, linking to the company page when
-// the board resolves to a tracked company; otherwise a plain acknowledgement.
-func (h *telegramHandlers) alreadyTrackedReply(ctx context.Context, source, board string) string {
-	name, slug, ok := h.contribution.CompanyForBoard(ctx, source, board)
-	if !ok || slug == "" || h.frontendOrigin == "" {
-		return "👍 We already track that board — nothing to add."
-	}
-	return fmt.Sprintf(
-		"👍 <b>%s</b> is already tracked. That exact role might not be in the catalogue yet, but it'll appear on the next crawl.\n%s/companies/%s",
-		html.EscapeString(name), h.frontendOrigin, slug,
-	)
-}
-
-// telegramContribTimeout bounds the background contribution work spawned from a webhook
-// update — the DB lookups plus the outbound reply — so a stuck goroutine cannot leak.
-const telegramContribTimeout = 15 * time.Second
+// telegramContribTimeout bounds the background intake work spawned from a webhook update — the
+// catalog lookup, the import, the record, and the outbound reply — so a stuck goroutine cannot
+// leak. It is generous because the intake may now fetch a whole ATS board to read one vacancy;
+// the webhook itself has already ACKed, so this budget delays nobody.
+const telegramContribTimeout = 60 * time.Second
 
 // telegramURL matches the first http(s) link in a message.
 var telegramURL = regexp.MustCompile(`https?://[^\s]+`)
@@ -265,28 +252,50 @@ func (h *telegramHandlers) processTelegramContribution(chatID int64, rawURL stri
 		return
 	}
 
-	res, err := h.contribution.Submit(ctx, contribution.SubmitInput{
-		SubmittedBy: userID,
-		URL:         rawURL,
-		Surface:     contribution.SurfaceTelegram,
-	})
-	rec, source, board := res.Contribution, res.Source, res.Board
-	switch {
-	case errors.Is(err, contribution.ErrUnsupportedATS):
-		h.sendTelegram(ctx, chatID, "🤔 That link isn't from a supported ATS board. Send a link from a company's careers page on a supported ATS (Greenhouse, Lever, Ashby, Recruitee, BambooHR, SmartRecruiters, and many more).")
-	case errors.Is(err, contribution.ErrBoardAlreadyTracked):
-		h.sendTelegram(ctx, chatID, h.alreadyTrackedReply(ctx, source, board))
-	case errors.Is(err, contribution.ErrBoardAlreadyContributed):
-		h.sendTelegram(ctx, chatID, "✅ That board was already contributed — no new credits, but thanks!")
-	case err != nil:
-		log.Printf("telegram: submit user=%d: %v", userID, err)
+	out, err := h.intake.Resolve(ctx, userID, rawURL, contribution.SurfaceTelegram)
+	if err != nil {
+		log.Printf("telegram: intake user=%d: %v", userID, err)
 		h.sendTelegram(ctx, chatID, "⚠️ Something went wrong. Please try again.")
-	case rec.Status == contribution.StatusReview:
-		// An unrecognized-but-valid link: recorded for manual review, no credit until a
-		// maintainer confirms it's ingestable (mirrors the site's review-queue message).
-		h.sendTelegram(ctx, chatID, "🤔 That doesn't look like a known ATS. We'll check by hand whether we can pull its jobs — if we can, you'll get a credit. Not credited yet.")
-	default:
-		rewardContribution(ctx, h.credits, userID, rec.ID)
-		h.sendTelegram(ctx, chatID, "🎉 <b>"+rec.Board+"</b> ("+rec.Source+") is a new board — we'll start crawling it. +1 AI credit!")
+		return
 	}
+	h.sendTelegram(ctx, chatID, h.intakeReply(out))
+}
+
+// intakeReply puts one intake outcome into words. A readable vacancy now comes back as a link
+// to the posting — before, a Telegram user was only ever told about the board, even when we
+// could have handed them the job.
+func (h *telegramHandlers) intakeReply(out intakeOutcome) string {
+	switch out.Status {
+	case outcomeFound:
+		return "👍 We already have this one:\n" + h.jobURL(out.PublicSlug)
+	case outcomeTracked:
+		reply := "✅ Added — and we already track this company, so the rest of its roles will follow on the next crawl.\n" + h.jobURL(out.PublicSlug)
+		if out.CompanySlug != "" && h.frontendOrigin != "" {
+			reply += "\n" + h.frontendOrigin + "/companies/" + out.CompanySlug
+		}
+		return reply
+	case outcomeImported:
+		return "🎉 Added, and this company is new to us — we'll start crawling its board.\n" + h.jobURL(out.PublicSlug)
+	}
+	// outcomeQueued. Failing to read the page says nothing about whether we recognised the
+	// board behind it, and answering only "couldn't read" would hide a contribution we just
+	// accepted — and paid for.
+	switch {
+	case out.Rewarded:
+		return "🎉 We couldn't open that page, but <b>" + html.EscapeString(out.Board) +
+			"</b> is a company we don't crawl yet — added to the queue. +1 AI credit!"
+	case out.Board != "":
+		return "👍 We couldn't open that page, but that company's board is already known to us — nothing to add."
+	default:
+		return "🤔 We couldn't read that page. We'll check by hand whether we can pull its jobs — if we can, you'll get a credit. Not credited yet."
+	}
+}
+
+// jobURL renders a posting link, or an empty string when the frontend origin is unset (the
+// slug alone would be meaningless to a reader).
+func (h *telegramHandlers) jobURL(slug string) string {
+	if slug == "" || h.frontendOrigin == "" {
+		return ""
+	}
+	return h.frontendOrigin + "/jobs/" + slug
 }
