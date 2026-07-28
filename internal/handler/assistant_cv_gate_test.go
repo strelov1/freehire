@@ -19,6 +19,8 @@ type stubBank struct {
 	owner       map[uuid.UUID]int64
 	list        []experience.Atom
 	employments []experience.Employment
+	matches     []experience.Match
+	addErr      error
 }
 
 func newStubBank() *stubBank {
@@ -40,13 +42,19 @@ func (b *stubBank) GetAtom(_ context.Context, id uuid.UUID, userID int64) (exper
 }
 
 func (b *stubBank) Retrieve(context.Context, int64, experience.Query, int) ([]experience.Match, error) {
-	return nil, nil
+	return b.matches, nil
 }
 func (b *stubBank) ListEmployments(context.Context, int64) ([]experience.Employment, error) {
 	return b.employments, nil
 }
 func (b *stubBank) ListAtoms(context.Context, int64) ([]experience.Atom, error) { return b.list, nil }
 func (b *stubBank) AddAtom(_ context.Context, userID int64, a experience.Atom) (experience.Atom, error) {
+	if b.addErr != nil {
+		return experience.Atom{}, b.addErr
+	}
+	if strings.TrimSpace(a.Claim) == "" {
+		return experience.Atom{}, experience.ErrEmptyClaim
+	}
 	return b.add(userID, a), nil
 }
 func (b *stubBank) UpdateAtom(_ context.Context, id uuid.UUID, _ int64, a experience.Atom) (experience.Atom, error) {
