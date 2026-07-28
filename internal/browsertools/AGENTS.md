@@ -21,6 +21,20 @@ against whatever page the user is on and sends results back.
 - **Last connection wins.** Re-joining in a role replaces the previous socket; the
   displaced connection's `leave` is a no-op, so it cannot evict its successor.
 
+## Who the harness is
+
+Two in-process harnesses take a `Caller` on a user's channel, both briefly:
+
+- `RunAgentAutofill` (`/me/autofill/run`), for the length of one autofill run.
+- the assistant's `read_current_page` tool, for the length of one tool call, in a
+  `browse` session.
+
+Because a channel has one harness end and the last connection wins, these two evict
+each other if they overlap. In practice a person clicks "Autofill" or sends a
+message, not both at once, so this is left as it is. Fixing it means several
+harnesses per channel, each addressed by the id it is waiting on — the seam is
+`Hub`, and it is the same seam a multi-node deployment needs.
+
 ## Transport
 
 `internal/handler/browsertools.go` upgrades `GET /api/v1/tools/ws?role=…` behind

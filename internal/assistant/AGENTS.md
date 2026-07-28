@@ -49,11 +49,22 @@ contract, registry and strict argument decoding; `message.go` the stored-message
 encoding and its round trip to `[]llms.MessageContent`; `store.go` the
 owner-scoped persistence; `prompt.go` the per-preset system prompts.
 
-**Presets.** A session records `chat` or `tailor`. The preset selects the system
-prompt and the registered tools and nothing else, which is why the same chat
-component serves `/my/assistant` and the CV-tailoring workspace. A tailoring
-session's CV tools close over the CV and vacancy ids from the session binding, so
-the model cannot address another CV even by guessing an id.
+**Presets.** A session records `chat`, `tailor` or `browse`. The preset selects the
+system prompt and the registered tools and nothing else, which is why the same chat
+component serves `/my/assistant`, the CV-tailoring workspace and the extension's
+side panel. A tailoring session's CV tools close over the CV and vacancy ids from
+the session binding, so the model cannot address another CV even by guessing an id.
+
+A `browse` session is one held from the browser extension. It is the only preset
+whose agent can see something outside this process: `read_current_page` attaches to
+the caller's browser-tool channel (`internal/browsertools`) as an in-process harness
+for the length of one call, the same way `/me/autofill/run` does. That tool is
+deliberately absent from the other two presets — nothing is attached to their
+channel, and a tool that can only fail teaches the model to stop calling tools.
+Reaching no browser is a tool error naming the remedy, never a failed turn.
+
+`preset` carries a CHECK in the schema (0044, widened by 0047), so a fourth preset
+is a migration, not just a constant.
 
 **History trimming.** `trim` keeps the most recent N messages and then drops any
 leading tool results whose originating call was trimmed away — providers reject a

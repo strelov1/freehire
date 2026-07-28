@@ -284,8 +284,9 @@ func Register(app *fiber.App, cfg Config) {
 	// The in-app agent is a facade over the feature handlers above: its tools call
 	// the same services their endpoints do, so a tool result and the API can never
 	// disagree. The tailoring bootstrap mints its conversations through the same
-	// store, which is why the CV handlers get it back.
-	assistantH := newAssistantHandlers(queries, cfg.AssistantLLM, cfg.AssistantMaxSteps, searchH, resumeH, trackingH, cvH, profileH)
+	// store, which is why the CV handlers get it back. It also takes the browser-tool
+	// hub, which a browsing session reads the caller's open page through.
+	assistantH := newAssistantHandlers(queries, cfg.AssistantLLM, cfg.AssistantMaxSteps, searchH, resumeH, trackingH, cvH, profileH, a.browserTools)
 	cvH.withAssistantSessions(assistantH.store)
 
 	// Referral notifications reuse the SES email transport (email is always present) and

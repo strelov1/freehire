@@ -44,6 +44,35 @@ func TestTailorPresetCanAlsoPresentJobs(t *testing.T) {
 	}
 }
 
+// The panel's agent is the only one with a browser on the other end of the relay.
+func TestBrowsePresetOffersThePageTool(t *testing.T) {
+	reg := presetAPI().registry(assistant.Session{UserID: 3, Preset: assistant.PresetBrowse})
+
+	if !slices.Contains(reg.Names(), "read_current_page") {
+		t.Errorf("browse preset is missing read_current_page; registered: %v", reg.Names())
+	}
+	// It is still the job-search assistant — the page is an addition, not a swap.
+	if !slices.Contains(reg.Names(), "search_jobs") {
+		t.Errorf("browse preset lost the discovery tools; registered: %v", reg.Names())
+	}
+}
+
+// A session held anywhere but the panel has no page to read. A tool that can only
+// fail spends the model's context and teaches it to stop calling tools.
+func TestOnlyTheBrowsePresetOffersThePageTool(t *testing.T) {
+	cvID, jobID := uuid.MustParse("66666666-6666-4666-8666-666666666666"), int64(9)
+
+	for _, sess := range []assistant.Session{
+		{UserID: 3, Preset: assistant.PresetChat},
+		{UserID: 3, Preset: assistant.PresetTailor, CVID: &cvID, JobID: &jobID},
+	} {
+		reg := presetAPI().registry(sess)
+		if slices.Contains(reg.Names(), "read_current_page") {
+			t.Errorf("preset %q offers read_current_page, but has no browser to read", sess.Preset)
+		}
+	}
+}
+
 func TestChatPresetHasNoCVTools(t *testing.T) {
 	reg := presetAPI().registry(assistant.Session{UserID: 3, Preset: assistant.PresetChat})
 

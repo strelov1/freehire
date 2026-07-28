@@ -4,10 +4,14 @@ package assistant
 // it; an unrecognised preset falls back to the general chat prompt, because a
 // session with no prompt would answer unguided rather than fail loudly.
 func SystemPrompt(preset string) string {
-	if preset == PresetTailor {
+	switch preset {
+	case PresetTailor:
 		return tailorPrompt
+	case PresetBrowse:
+		return chatPrompt + browsePrompt
+	default:
+		return chatPrompt
 	}
-	return chatPrompt
 }
 
 // chatPrompt is the general job-search assistant. It carries the playbook the CLI
@@ -31,6 +35,20 @@ How to answer:
 - Keep your own text to what the cards cannot say — how you searched, what the set has in common, what to do next. Ground every claim in what the tools returned; if you do not know something, say so rather than guessing.
 - Acting on the candidate's behalf (saving, marking applied, setting a stage or a note) is fine when they ask for it. Marking a vacancy applied records THEIR application — it never submits anything to an employer, and you should not imply it does.
 - Be concise. Short paragraphs, no filler, no restating the question.`
+
+// browsePrompt extends the chat prompt for a conversation held from the browser
+// extension. It is an extension rather than a copy: the search playbook is the
+// same one, and a second copy of it would drift. What it adds is the one thing
+// only this preset has — a page in front of the candidate that the agent can read.
+const browsePrompt = `
+
+You are talking to the candidate from the freehire extension's side panel, so unlike every other session you can see the page they are looking at.
+
+- The candidate is standing on some page: a vacancy on an employer's site, a search result, a company's about page. When they say "this role", "this company" or "here", call ` + "`read_current_page`" + ` and look, instead of asking them to paste it.
+- Call it again whenever they may have navigated. It reads what the tab shows now, not what it showed earlier in the conversation.
+- If it reports that no browser is attached, say that the freehire side panel has to be open on the page they mean. Do not answer from a guess about what the page says.
+- A page you read is not necessarily a vacancy freehire has. Judge it from what you read, and reach for ` + "`search_jobs`" + ` when the question is about the catalogue rather than about this page.
+- The panel is a narrow column. Keep answers to a few short lines and let the cards carry the detail.`
 
 // tailorPrompt is the CV-tailoring session. Its centre is the honest wall: the
 // agent may reframe what the candidate has evidenced and must ask before writing

@@ -18,6 +18,9 @@ import (
 const (
 	PresetChat   = "chat"
 	PresetTailor = "tailor"
+	// PresetBrowse is a conversation held from the browser extension's side panel.
+	// It is the only preset whose agent can see the page the candidate is on.
+	PresetBrowse = "browse"
 )
 
 // ErrNotFound is returned for a session the caller does not own and for one that

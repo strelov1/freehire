@@ -336,14 +336,19 @@ func assistantFilterSchema(description string) map[string]any {
 const assistantResultCap = 60_000
 
 // assistantRegistry builds the tool set a session runs with. The preset decides:
-// every session gets the discovery and tracking tools, and a tailoring session
-// bound to a CV also gets the CV tools, with the binding closed over. A tailoring
-// session whose binding is gone degrades to a plain chat rather than registering
-// tools pointed at nothing.
+// every session gets the discovery and tracking tools, a tailoring session bound to
+// a CV also gets the CV tools with the binding closed over, and a browsing session
+// gets the page tool. A tailoring session whose binding is gone degrades to a plain
+// chat rather than registering tools pointed at nothing.
 func (h *assistantHandlers) registry(sess assistant.Session) *assistant.Registry {
 	tools := append(h.assistantDiscoveryTools(), h.assistantTrackingTools()...)
 	if sess.Preset == assistant.PresetTailor && sess.CVID != nil && sess.JobID != nil {
 		tools = append(tools, h.assistantCVTools(*sess.CVID, *sess.JobID)...)
+	}
+	// Only a browsing session has a browser on the other end of the relay. Offering
+	// the page tool anywhere else would give the model a call that can only fail.
+	if sess.Preset == assistant.PresetBrowse {
+		tools = append(tools, h.readCurrentPageTool())
 	}
 	reg := assistant.NewRegistry(tools...)
 	reg.MaxResultBytes = assistantResultCap

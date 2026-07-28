@@ -76,7 +76,7 @@ func newProfileAssistantApp(pool *pgxpool.Pool, iss *auth.Issuer, model assistan
 	h.runner = assistant.NewRunner(model, h.store, assistant.RunnerConfig{MaxSteps: 3})
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	h.register(app.Group("/api/v1"), middleware{cookie: auth.RequireAuth(iss, testVersions)})
+	h.register(app.Group("/api/v1"), middleware{key: auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})})
 	return app
 }
 

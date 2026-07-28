@@ -8,12 +8,24 @@ import (
 func TestEachPresetHasItsOwnPrompt(t *testing.T) {
 	chat := SystemPrompt(PresetChat)
 	tailor := SystemPrompt(PresetTailor)
+	browse := SystemPrompt(PresetBrowse)
 
-	if chat == "" || tailor == "" {
-		t.Fatal("both presets need a system prompt; an unprompted agent has no job to do")
+	if chat == "" || tailor == "" || browse == "" {
+		t.Fatal("every preset needs a system prompt; an unprompted agent has no job to do")
 	}
-	if chat == tailor {
-		t.Error("the two presets share a prompt; the preset is what makes them different")
+	if chat == tailor || chat == browse || tailor == browse {
+		t.Error("two presets share a prompt; the preset is what makes them different")
+	}
+}
+
+// The panel's agent is the only one with eyes. A prompt that does not say so
+// produces an agent that asks the candidate to paste the vacancy it could have
+// read itself.
+func TestBrowsePromptTellsTheAgentToReadThePage(t *testing.T) {
+	p := SystemPrompt(PresetBrowse)
+
+	if !strings.Contains(p, "read_current_page") {
+		t.Error("the browse prompt never names read_current_page, so the agent will not know it can see the page")
 	}
 }
 
