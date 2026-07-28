@@ -29,7 +29,12 @@ func NewLangChainExtractor(c *llm.Client) *LangChainExtractor {
 // Extract asks the model to classify the post and extract its vacancies. It does
 // not validate the result — the runner validates before persisting.
 func (e *LangChainExtractor) Extract(ctx context.Context, text string, kind Kind) (Extraction, error) {
-	raw, err := e.client.GenerateJSON(ctx, extractSystemPrompt(kind), llm.TruncateRunes(text, maxInputRunes))
+	schema, err := requestSchema()
+	if err != nil {
+		return Extraction{}, err
+	}
+	raw, err := e.client.GenerateJSON(ctx, extractSystemPrompt(kind), llm.TruncateRunes(text, maxInputRunes),
+		llm.WithSchema(schemaName, schema))
 	if err != nil {
 		return Extraction{}, fmt.Errorf("telegram: %w", err)
 	}

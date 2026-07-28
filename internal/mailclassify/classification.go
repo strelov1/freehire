@@ -23,12 +23,30 @@ const (
 	SignalOther                 StatusSignal = "other"
 )
 
-var validSignals = map[StatusSignal]bool{
-	SignalAcknowledgement: true, SignalScreening: true,
-	SignalInterviewInvitation: true, SignalAssessment: true,
-	SignalOffer: true, SignalRejection: true,
-	SignalInfoRequest: true, SignalIncompleteApplication: true, SignalOther: true,
+// SignalValues is the ordered, canonical vocabulary of classification labels. It is
+// the one definition: the request schema constrains the model to it, and validSignals
+// — the check that still runs on receipt — is built from it, so a label added here
+// cannot reach one and miss the other.
+var SignalValues = []string{
+	string(SignalAcknowledgement),
+	string(SignalScreening),
+	string(SignalInterviewInvitation),
+	string(SignalAssessment),
+	string(SignalOffer),
+	string(SignalRejection),
+	string(SignalInfoRequest),
+	string(SignalIncompleteApplication),
+	string(SignalOther),
 }
+
+var validSignals = func() map[StatusSignal]bool {
+	valid := make(map[StatusSignal]bool, len(SignalValues))
+	for _, s := range SignalValues {
+		valid[StatusSignal(s)] = true
+	}
+
+	return valid
+}()
 
 // IsValidSignal reports whether s is a known classification label — used to
 // validate a caller-supplied inbox label filter before it reaches the query.

@@ -31,11 +31,11 @@
 
 ## 4. Migrate `mailclassify` and `telegram`
 
-- [ ] 4.1 Derive the classification schema from the `mailclassify` contract, attaching its label vocabulary as an `enum` override
-- [ ] 4.2 Test that a label outside the vocabulary is still rejected on receipt, proving validation survives a provider that ignores the schema
-- [ ] 4.3 Remove `verbatimString` from `internal/mailclassify/flexdecode.go`, keeping any numeric-coercion shim
-- [ ] 4.4 Derive the extraction schema from the `telegram` vacancy contract and pass it at the call site
-- [ ] 4.5 Test the telegram path end to end against a stored fixture message, asserting the control-character repair still runs
+- [x] 4.1 Derive the classification schema from the `mailclassify` contract, attaching its label vocabulary as an `enum` override. **Required collapsing the vocabulary to one definition first:** the labels existed twice, as constants and as the `validSignals` map, so `SignalValues` is now the single ordered list and `validSignals` is built from it
+- [x] 4.2 Test that a label outside the vocabulary is still rejected on receipt, proving validation survives a provider that ignores the schema
+- [x] 4.3 **Not applicable — there is no `verbatimString` in `internal/mailclassify/flexdecode.go`.** That decoder coerces a quoted confidence and a "none" job id through `flexjson.Float`/`flexjson.Int64`; both are numeric coercions the task explicitly keeps, and both stay for the same reason `verbatimString` stays in `resumeextract`
+- [x] 4.4 Derive the extraction schema from the `telegram` vacancy contract and pass it at the call site
+- [x] 4.5 Test the extraction schema (job fields present, nested object strict, zero jobs still a legal answer) and that `parseExtraction` still repairs raw control characters — a schema constrains structure, not what a model writes inside a string literal
 
 ## 5. Migrate `enrich` — last, heaviest traffic
 

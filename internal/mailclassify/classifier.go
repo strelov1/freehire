@@ -54,7 +54,11 @@ func (c *Classifier) Classify(ctx context.Context, in Input) (Classification, er
 			return Classification{Signal: sig, Confidence: KeywordConfidence}, nil
 		}
 	}
-	raw, err := c.gen.GenerateJSON(ctx, systemPrompt, userPrompt(in))
+	schema, err := requestSchema()
+	if err != nil {
+		return Classification{}, err
+	}
+	raw, err := c.gen.GenerateJSON(ctx, systemPrompt, userPrompt(in), llm.WithSchema(schemaName, schema))
 	if err != nil {
 		return Classification{}, err
 	}
