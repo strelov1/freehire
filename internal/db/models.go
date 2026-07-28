@@ -405,7 +405,6 @@ type PrunedJob struct {
 }
 
 type ReferralOffer struct {
-	ID             int64              `json:"id"`
 	UserID         int64              `json:"user_id"`
 	CompanySlug    string             `json:"company_slug"`
 	ProofObjectKey string             `json:"proof_object_key"`
@@ -414,10 +413,10 @@ type ReferralOffer struct {
 	DecidedAt      pgtype.Timestamptz `json:"decided_at"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	LinkedinUrl    string             `json:"linkedin_url"`
+	ID             uuid.UUID          `json:"id"`
 }
 
 type ReferralRequest struct {
-	ID              int64              `json:"id"`
 	SeekerUserID    int64              `json:"seeker_user_id"`
 	CompanySlug     string             `json:"company_slug"`
 	JobID           pgtype.Int8        `json:"job_id"`
@@ -431,6 +430,7 @@ type ReferralRequest struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	LinkedinUrl     string             `json:"linkedin_url"`
 	CvID            *uuid.UUID         `json:"cv_id"`
+	ID              uuid.UUID          `json:"id"`
 }
 
 type ReminderSetting struct {

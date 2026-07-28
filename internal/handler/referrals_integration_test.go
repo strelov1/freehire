@@ -113,7 +113,7 @@ func TestReferralEndpoints(t *testing.T) {
 		if code != http.StatusCreated {
 			t.Fatalf("create request: status %d body %v, want 201", code, body)
 		}
-		reqID := int64(body["data"].(map[string]any)["id"].(float64))
+		reqID := body["data"].(map[string]any)["id"].(string)
 
 		// Duplicate active request → 409.
 		if code, _ := do(http.MethodPost, "/api/v1/me/referrals/requests", token(seeker), reqBody); code != http.StatusConflict {
@@ -140,17 +140,24 @@ func TestReferralEndpoints(t *testing.T) {
 		}
 
 		// CV access is cabinet-only: the seeker (not an approved referrer) is refused.
-		if code, _ := do(http.MethodGet, "/api/v1/me/referrals/incoming/"+itoa(reqID)+"/cv", token(seeker), nil); code != http.StatusForbidden {
+		if code, _ := do(http.MethodGet, "/api/v1/me/referrals/incoming/"+reqID+"/cv", token(seeker), nil); code != http.StatusForbidden {
 			t.Errorf("seeker viewing CV: status %d, want 403", code)
 		}
 		// The referrer is authorized; with no blob store wired the stream reports 503,
 		// which proves the request reached the storage path past the gate.
-		if code, _ := do(http.MethodGet, "/api/v1/me/referrals/incoming/"+itoa(reqID)+"/cv", token(refUser), nil); code != http.StatusServiceUnavailable {
+		if code, _ := do(http.MethodGet, "/api/v1/me/referrals/incoming/"+reqID+"/cv", token(refUser), nil); code != http.StatusServiceUnavailable {
 			t.Errorf("referrer viewing original CV (no blob): status %d, want 503", code)
 		}
 
+		// An id that is not a uuid cannot name a request; it reads as missing, with
+		// the same body a request the caller may not see would produce.
+		code, missing := do(http.MethodGet, "/api/v1/me/referrals/incoming/9/cv", token(refUser), nil)
+		if code != http.StatusNotFound || missing["error"] != "referral request not found" {
+			t.Errorf("malformed request id: status %d body %v, want 404 referral request not found", code, missing)
+		}
+
 		// Referrer marks it contacted.
-		code, marked := do(http.MethodPost, "/api/v1/me/referrals/incoming/"+itoa(reqID)+"/resolve",
+		code, marked := do(http.MethodPost, "/api/v1/me/referrals/incoming/"+reqID+"/resolve",
 			token(refUser), map[string]any{"status": "contacted"})
 		if code != http.StatusOK {
 			t.Fatalf("resolve: status %d body %v, want 200", code, marked)
@@ -202,13 +209,13 @@ func TestReferralEndpoints(t *testing.T) {
 	})
 
 	t.Run("moderator decides a pending offer", func(t *testing.T) {
-		var offerID int64
+		var offerID string
 		if err := pool.QueryRow(ctx,
 			`INSERT INTO referral_offers (user_id, company_slug, proof_object_key) VALUES ($1,'acme','k2') RETURNING id`,
 			seeker).Scan(&offerID); err != nil {
 			t.Fatalf("seed pending offer: %v", err)
 		}
-		code, body := do(http.MethodPost, "/api/v1/referrals/offers/"+itoa(offerID)+"/decide",
+		code, body := do(http.MethodPost, "/api/v1/referrals/offers/"+offerID+"/decide",
 			token(mod), map[string]any{"approve": true})
 		if code != http.StatusOK {
 			t.Fatalf("decide: status %d body %v, want 200", code, body)

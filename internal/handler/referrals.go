@@ -51,7 +51,7 @@ func (h *referralHandlers) register(api fiber.Router, mw middleware) {
 // referralOfferResponse is the public shape of an offer. user_id is omitted (ownership,
 // internal); proof_object_key is never exposed (it points at a private S3 object).
 type referralOfferResponse struct {
-	ID          int64      `json:"id"`
+	ID          string     `json:"id"`
 	CompanySlug string     `json:"company_slug"`
 	CompanyName string     `json:"company_name"`
 	LinkedInURL string     `json:"linkedin_url"`
@@ -62,7 +62,7 @@ type referralOfferResponse struct {
 
 func toReferralOfferResponse(o referral.Offer) referralOfferResponse {
 	return referralOfferResponse{
-		ID: o.ID, CompanySlug: o.CompanySlug, CompanyName: o.CompanyName,
+		ID: o.ID.String(), CompanySlug: o.CompanySlug, CompanyName: o.CompanyName,
 		LinkedInURL: o.LinkedInURL, Status: o.Status,
 		DecidedAt: o.DecidedAt, CreatedAt: o.CreatedAt,
 	}
@@ -71,7 +71,7 @@ func toReferralOfferResponse(o referral.Offer) referralOfferResponse {
 // seekerRequestResponse is what a seeker sees of their own request: no referrer identity
 // (there is none to show — the request targets a pool), just the target and status.
 type seekerRequestResponse struct {
-	ID          int64      `json:"id"`
+	ID          string     `json:"id"`
 	CompanySlug string     `json:"company_slug"`
 	CompanyName string     `json:"company_name"`
 	JobID       *int64     `json:"job_id"`
@@ -96,7 +96,7 @@ func optionalCVID(raw *string) (*uuid.UUID, error) {
 
 func toSeekerRequestResponse(r referral.Request) seekerRequestResponse {
 	return seekerRequestResponse{
-		ID: r.ID, CompanySlug: r.CompanySlug, CompanyName: r.CompanyName, JobID: r.JobID,
+		ID: r.ID.String(), CompanySlug: r.CompanySlug, CompanyName: r.CompanyName, JobID: r.JobID,
 		CVKind: r.CVKind, CVID: cvIDString(r.CVID), Status: r.Status, CreatedAt: r.CreatedAt,
 	}
 }
@@ -105,7 +105,7 @@ func toSeekerRequestResponse(r referral.Request) seekerRequestResponse {
 // contact and CV choice to act on, plus the source vacancy. The seeker's user id stays
 // hidden — the referrer reaches out over the contact the seeker chose to share.
 type incomingRequestResponse struct {
-	ID              int64      `json:"id"`
+	ID              string     `json:"id"`
 	CompanySlug     string     `json:"company_slug"`
 	CompanyName     string     `json:"company_name"`
 	JobID           *int64     `json:"job_id"`
@@ -120,7 +120,7 @@ type incomingRequestResponse struct {
 
 func toIncomingRequestResponse(r referral.Request) incomingRequestResponse {
 	return incomingRequestResponse{
-		ID: r.ID, CompanySlug: r.CompanySlug, CompanyName: r.CompanyName, JobID: r.JobID,
+		ID: r.ID.String(), CompanySlug: r.CompanySlug, CompanyName: r.CompanyName, JobID: r.JobID,
 		CVKind: r.CVKind, LinkedInURL: r.LinkedInURL,
 		ContactTelegram: r.ContactTelegram, ContactEmail: r.ContactEmail, Note: r.Note,
 		Status: r.Status, CreatedAt: r.CreatedAt,
@@ -283,11 +283,11 @@ func (h *referralHandlers) WithdrawReferralOffer(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	id, err := c.ParamsInt("id")
+	id, err := referralPathID(c, "offer not found")
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid offer id")
+		return err
 	}
-	if err := h.referral.WithdrawOffer(c.Context(), int64(id), userID); err != nil {
+	if err := h.referral.WithdrawOffer(c.Context(), id, userID); err != nil {
 		return referralError(err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
@@ -323,9 +323,9 @@ func (h *referralHandlers) ResolveReferralRequest(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	id, err := c.ParamsInt("id")
+	id, err := referralPathID(c, "referral request not found")
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request id")
+		return err
 	}
 	var in resolveReferralRequestBody
 	if err := c.BodyParser(&in); err != nil {
@@ -340,7 +340,7 @@ func (h *referralHandlers) ResolveReferralRequest(c *fiber.Ctx) error {
 	default:
 		return fiber.NewError(fiber.StatusBadRequest, "status must be contacted or declined")
 	}
-	req, err := h.referral.ResolveRequest(c.Context(), int64(id), userID, contacted)
+	req, err := h.referral.ResolveRequest(c.Context(), id, userID, contacted)
 	if err != nil {
 		return referralError(err)
 	}
@@ -371,15 +371,15 @@ func (h *referralHandlers) DecideReferralOffer(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	id, err := c.ParamsInt("id")
+	id, err := referralPathID(c, "offer not found")
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid offer id")
+		return err
 	}
 	var in decideReferralOfferBody
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	offer, err := h.referral.DecideOffer(c.Context(), int64(id), moderatorID, in.Approve)
+	offer, err := h.referral.DecideOffer(c.Context(), id, moderatorID, in.Approve)
 	if err != nil {
 		return referralError(err)
 	}
@@ -395,11 +395,11 @@ func (h *referralHandlers) ViewReferralRequestCV(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	id, err := c.ParamsInt("id")
+	id, err := referralPathID(c, "referral request not found")
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid request id")
+		return err
 	}
-	req, err := h.referral.AuthorizeCVAccess(c.Context(), int64(id), userID)
+	req, err := h.referral.AuthorizeCVAccess(c.Context(), id, userID)
 	if err != nil {
 		return referralError(err)
 	}
@@ -419,11 +419,11 @@ func (h *referralHandlers) ViewReferralRequestCV(c *fiber.Ctx) error {
 // ViewReferralOfferProof streams a member's proof CV to a moderator reviewing the offer.
 // Moderator-gated at the route; the proof key never leaves the server.
 func (h *referralHandlers) ViewReferralOfferProof(c *fiber.Ctx) error {
-	id, err := c.ParamsInt("id")
+	id, err := referralPathID(c, "offer not found")
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid offer id")
+		return err
 	}
-	offer, ok, err := h.referral.GetOffer(c.Context(), int64(id))
+	offer, ok, err := h.referral.GetOffer(c.Context(), id)
 	if err != nil {
 		return err
 	}
@@ -480,4 +480,18 @@ func (h *referralHandlers) renderOwnerCV(c *fiber.Ctx, cvID uuid.UUID, ownerID i
 // (user, company) makes it stable, so a re-upload overwrites the same object.
 func referralProofKey(userID int64, companySlug string) string {
 	return fmt.Sprintf("referral-proof/%d/%s.pdf", userID, companySlug)
+}
+
+// referralPathID parses the :id route param as a referral's UUID. A malformed id
+// cannot name any referral, so it answers exactly as a missing one does, down to
+// the message referralError would render. That matters more here than elsewhere:
+// an incoming request's CV is read by an approved referrer rather than by the
+// owner, so "not visible to you" is a membership answer, and none of the ways to
+// miss should be told apart.
+func referralPathID(c *fiber.Ctx, notFound string) (uuid.UUID, error) {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return uuid.Nil, fiber.NewError(fiber.StatusNotFound, notFound)
+	}
+	return id, nil
 }

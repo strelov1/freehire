@@ -605,10 +605,10 @@ type Querier interface {
 	// never equals the param, so private sets are unreachable. No row → 404.
 	GetPublicBoardBySlug(ctx context.Context, publicSlug pgtype.Text) (GetPublicBoardBySlugRow, error)
 	// One offer by id — for the moderator's proof-CV view after role authorization.
-	GetReferralOffer(ctx context.Context, id int64) (ReferralOffer, error)
+	GetReferralOffer(ctx context.Context, id uuid.UUID) (ReferralOffer, error)
 	// One referral request by id — for authorized CV access and marking, after the caller is
 	// verified as an approved referrer of the request's company.
-	GetReferralRequest(ctx context.Context, id int64) (ReferralRequest, error)
+	GetReferralRequest(ctx context.Context, id uuid.UUID) (ReferralRequest, error)
 	// The delivery context for one reminder: the job display fields, the channel set,
 	// the user's live destinations (account email; linked Telegram chat, NULL when
 	// unlinked -> that channel soft-skips), and the fire-time re-check flags. job_open

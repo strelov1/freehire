@@ -221,7 +221,7 @@ export type ReferralRequestStatus = 'sent' | 'contacted' | 'declined';
 export type ReferralCvKind = 'original' | 'built';
 
 export interface ReferralOffer {
-  id: number;
+  id: string;
   company_slug: string;
   company_name: string;
   linkedin_url: string;
@@ -232,7 +232,7 @@ export interface ReferralOffer {
 
 /** What a seeker sees of their own request — no referrer identity (the request targets a pool). */
 export interface SeekerReferralRequest {
-  id: number;
+  id: string;
   company_slug: string;
   company_name: string;
   job_id: number | null;
@@ -244,7 +244,7 @@ export interface SeekerReferralRequest {
 
 /** What a referrer sees of an incoming request — the seeker's chosen contact and CV, no identity. */
 export interface IncomingReferralRequest {
-  id: number;
+  id: string;
   company_slug: string;
   company_name: string;
   job_id: number | null;
