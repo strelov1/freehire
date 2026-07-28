@@ -1,0 +1,31 @@
+---
+title: The assistant shows vacancies as cards, with its reasoning on each one
+date: 2026-07-28
+summary: Ask the in-app assistant for work and the vacancies now arrive as a clean stack of cards, each carrying its own one-line reason, what matched your experience and what to watch out for.
+type: changelog
+tags:
+  - assistant
+draft: false
+---
+
+Ask the assistant for roles and you used to get a wall of text with cards wedged into it.
+It wrote out the title, the company and the location, the card underneath repeated all
+three, and its actual reasoning — the part worth reading — trailed off in a loose paragraph
+below. Three blocks per vacancy, two of them saying the same thing, and prose splitting the
+list wherever the model felt like a sentence.
+
+**Now a recommendation is a set of cards and nothing else.** They arrive as one stack under
+a heading, in the order the assistant ranked them, and each card carries its own reasoning
+inside its border: one sentence on what the role actually is, the concrete overlaps with
+your experience, and any real caveat it found. Nothing is repeated — the card already shows
+the title, the company, the location and how fresh the posting is, so the assistant spends
+its line on what those cannot tell you.
+
+Two small things go with it. The assistant can no longer hand you a vacancy that does not
+exist: every posting is checked against the catalogue before its card is drawn, so an
+invented link cannot reach you. And when it separates a shortlist from a wider set, those
+are two labelled groups rather than a run-on list.
+
+Everything on a card is still the real posting, pulled from the catalogue — save it,
+open it, track it exactly as anywhere else on the site. Try it on
+[the assistant](/my/assistant).
