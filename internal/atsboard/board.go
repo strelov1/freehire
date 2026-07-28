@@ -96,9 +96,9 @@ var atsBoards = []struct{ host, source, mode string }{
 
 	// --- host: board = the whole careers host (regional TLD varies) ---
 	{"zohorecruit", "zohorecruit", modeHost},
-	{"teamtailor", "teamtailor", modeHost},   // <tenant>.teamtailor.com; custom-domain career sites are absent (not URL-derivable)
-	{"factorial", "factorial", modeHost},     // <tenant>.factorial.<tld>
-	{"factorialhr", "factorialhr", modeHost}, // <tenant>.factorialhr.<tld> (the .com.br/.pt/… base-domain variant)
+	{"teamtailor", "teamtailor", modeHost}, // <tenant>.teamtailor.com; custom-domain career sites are absent (not URL-derivable)
+	{"factorial", "factorial", modeHost},   // <tenant>.factorial.<tld>
+	{"factorialhr", "factorial", modeHost}, // the .com.br/.pt/… base-domain variant — ONE ingest adapter serves both, and it reports "factorial"
 
 	// --- hostpath: board = "<host>/<site>" (Workday tenant host + first-path-segment site) ---
 	{"myworkdayjobs.com", "workday", modeHostPath},

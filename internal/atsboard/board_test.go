@@ -50,7 +50,7 @@ func TestRecognize(t *testing.T) {
 		{"trakstar nested apex", "https://acme.hire.trakstar.com/x", "trakstar", "acme", "https://acme.hire.trakstar.com", true},
 		{"teamtailor host", "https://bryter.teamtailor.com/jobs/12345-senior-go", "teamtailor", "bryter.teamtailor.com", "https://bryter.teamtailor.com", true},
 		{"factorial host it", "https://muffin.factorial.it/job/1", "factorial", "muffin.factorial.it", "https://muffin.factorial.it", true},
-		{"factorialhr base-domain variant", "https://9net.factorialhr.com.br/job/2", "factorialhr", "9net.factorialhr.com.br", "https://9net.factorialhr.com.br", true},
+		{"factorialhr base-domain variant", "https://9net.factorialhr.com.br/job/2", "factorial", "9net.factorialhr.com.br", "https://9net.factorialhr.com.br", true},
 
 		// host+path mode — Workday: board is "<host>/<site>" (site case preserved)
 		{"workday vacancy", "https://generalmotors.wd5.myworkdayjobs.com/Careers_GM/job/Austin/Senior-Software-Engineer_JR-202614238", "workday", "generalmotors.wd5.myworkdayjobs.com/Careers_GM", "https://generalmotors.wd5.myworkdayjobs.com/Careers_GM", true},
@@ -141,6 +141,28 @@ func TestRecognizeDeclinesPlatformOwnHosts(t *testing.T) {
 	for _, c := range tenants {
 		if _, board, _, ok := Recognize(c.raw); !ok || board != c.wantBoard {
 			t.Errorf("Recognize(%q) = (%q, ok %v), want board %q", c.raw, board, ok, c.wantBoard)
+		}
+	}
+}
+
+// TestRecognizeMapsHostsToTheIngestProviderName pins that a recognised host resolves to the
+// source key the CATALOGUE uses, not to a name derived from the domain. Getting this wrong is
+// silently expensive: the board-tracked check looks jobs up by (source, board), so a board we
+// already crawl under one name looks brand new under another — it is recorded as a fresh
+// contribution and paid for, and board coverage finds no ingest adapter to read it with.
+//
+// Factorial is the case in point: one adapter serves <tenant>.factorial.<tld> and
+// <tenant>.factorialhr.<tld>, and it reports "factorial" for both.
+func TestRecognizeMapsHostsToTheIngestProviderName(t *testing.T) {
+	cases := []struct{ raw, wantSource string }{
+		{"https://muffin.factorial.it/job/1", "factorial"},
+		{"https://9net.factorialhr.com.br/job/2", "factorial"},
+		{"https://4farma.factorialhr.pt/job/3", "factorial"},
+	}
+	for _, c := range cases {
+		src, _, _, ok := Recognize(c.raw)
+		if !ok || src != c.wantSource {
+			t.Errorf("Recognize(%q) source = %q (ok %v), want %q", c.raw, src, ok, c.wantSource)
 		}
 	}
 }

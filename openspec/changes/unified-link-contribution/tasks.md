@@ -81,28 +81,31 @@ needs no surface for the same reason: it imports without recording.
 
 ## 9. freehire-cli (`../freehire-cli`)
 
-- [ ] 9.1 Remove `newSubmitCmd` and its `submit` registration; keep `submissions`
+- [x] 9.1 Remove `newSubmitCmd` and its `submit` registration; keep `submissions`
   (moderator review is a separate feature)
-- [ ] 9.2 Add `freehire contribute <url>` calling the intake endpoint with
+- [x] 9.2 Add `freehire contribute <url>` calling the intake endpoint with
   `surface: "cli"`, printing the outcome and the posting URL when there is one
-- [ ] 9.3 Add `freehire contributions` listing the caller's own
-- [ ] 9.4 Tests for both commands, including `--json`
-- [ ] 9.5 Document both in `skills/using-freehire` and the README command list
-- [ ] 9.6 `go build ./... && go test ./...`
+- [x] 9.3 Add `freehire contributions` listing the caller's own
+- [x] 9.4 Tests for both commands, including `--json`
+- [x] 9.5 Document both in `skills/using-freehire` and the README command list
+- [x] 9.6 `go build ./... && go test ./...`
 
 ## 10. freehire-extension (`../freehire-extension`)
 
-- [ ] 10.1 Send `surface: "extension"` from `resolveJob`
-- [ ] 10.2 Add a `tracked` case to `resolveNotice` and its test
-- [ ] 10.3 `pnpm test && pnpm build`
+- [x] 10.1 Send `surface: "extension"` from `resolveJob`
+- [x] 10.2 Add a `tracked` case to `resolveNotice` and its test
+- [x] 10.3 `pnpm test && pnpm build`
 
 ## 11. Coverage audit and close-out
 
-- [ ] 11.1 Produce the coverage table — hosts recognised by `atsboard`, providers with an
-  ingest adapter, and hosts with a dedicated link-source adapter — and record the gaps
-  worth a follow-up change
-- [ ] 11.2 Update `internal/contribution/AGENTS.md`, `internal/linksource/AGENTS.md` and
+- [x] 11.1 Coverage audit: 49 hosts / 45 providers recognised by `atsboard`, 153 ingest
+  adapters, 8 host-scoped link adapters + generic. **45 of 45 recognised providers have an
+  ingest adapter**, so board coverage reaches all of them — single-page coverage went from 8
+  adapters to 45 providers. The audit found one real defect (`factorialhr` mapped to a source
+  that does not exist; fixed). Remaining gap is vanity domains, handled by `boardresolve`
+  rather than by the recogniser.
+- [x] 11.2 Update `internal/contribution/AGENTS.md`, `internal/linksource/AGENTS.md` and
   the new `internal/atsboard` docs for the moved recogniser and the new flow
-- [ ] 11.3 Update the `onboard-contributions` skill to group the queue by `(source, board)`
+- [x] 11.3 Update the `onboard-contributions` skill to group the queue by `(source, board)`
   now that a board may have several rows
-- [ ] 11.4 Full check: `go build ./... && go vet ./... && go test ./...`
+- [x] 11.4 Full check: `go build ./... && go vet ./... && go test ./...`

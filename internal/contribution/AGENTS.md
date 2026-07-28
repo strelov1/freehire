@@ -7,12 +7,18 @@ with AI credits. Distinct from `internal/submission` (the manual full-card moder
 contributions are URL-only, auto-validated, unmoderated.
 
 ## Always true
-- **The unit is the BOARD, not the vacancy.** A contribution is `(source, board)` — the ATS
-  provider and the company slug. Two links to the same company (two vacancies, or the bare
-  board-listing URL) collapse to one board, so only the first earns a point. Rationale: once
-  we know the board, the ingest side onboards it and crawls ALL its vacancies — a second
-  vacancy from the same board adds nothing.
-- **Board recognition is a pure, network-free URL parse** (`board.go`, `recognizeBoard`): the
+- **The board is the unit of REWARD, not the identity of a row.** Only the first submission of
+  a `(source, board)` earns credits; later links to the same company are still recorded, each
+  naming its own submitter. `UNIQUE (source, board)` was dropped in migration 0047 — it was a
+  reward trap (two Microsoft links resolved to one Eightfold board and the promote transaction
+  aborted on the duplicate key, so nobody could contribute an already-named employer). "One
+  board, one reward" now lives in `Record`: an advisory lock on the board, then an EXISTS test,
+  then the insert, all in one transaction. A bare EXISTS would NOT do — two concurrent
+  submissions read the same snapshot, both find nothing, and both get paid.
+- **Board recognition lives in `internal/atsboard`**, shared with link resolution and
+  boardresolve. What remains in `board.go` is the Greenhouse/Ashby job-id parsing, which is
+  service logic (it looks the board up in the catalogue by that id). The recogniser is a pure,
+  network-free URL parse: the
   host maps to a source + extraction `mode` via the `atsBoards` table. Two modes: `path` (board
   = first path segment, e.g. `jobs.lever.co/<board>`) and `subdomain` (board = leftmost DNS
   label, e.g. `<board>.recruitee.com` — the canonical URL collapses to the bare host). This is
@@ -39,20 +45,29 @@ contributions are URL-only, auto-validated, unmoderated.
   not inside `Record`). The legacy `users.points` counter was dropped in migration
   `0034_drop_users_points.sql`; the credit balance is the unified per-user reward now.
 
-## Entry points (same `Service.Submit`, two front doors)
-- **Website:** `POST /api/v1/me/contributions` (`RequireAuthOrKey`), body `{url}`; 201 with the
-  recorded board, 422 unsupported, 409 tracked/contributed. `GET /api/v1/me/contributions`
-  lists the caller's own.
-- **Telegram:** a linked user pastes a board link into the bot chat; `TelegramWebhook`
-  (`handler/telegram.go`, `handleTelegramContribution`) resolves the chat to its user
-  (`GetUserIDByTelegramChat`), runs the same `Submit`, and replies with the outcome. A message
-  with no link is ignored; a link from an unlinked chat prompts the user to link first.
+## Entry points (one sequence, four doors)
+There is no "contribute a board" endpoint any more. Every surface — the website's contribute
+form, the Telegram bot, the browser extension, the CLI — posts to `POST /api/v1/jobs/resolve`,
+whose sequence lives in `handler/intake.go`: catalog lookup, then import, then record. A second
+door onto the same flow is a second behaviour waiting to drift.
+
+`GET /api/v1/me/contributions` still lists the caller's own, now carrying the `surface` each
+row came through (`web` | `telegram` | `extension` | `cli` | `unknown`).
+
+Two orderings inside that sequence are load-bearing, both pinned by tests:
+- the catalog lookup runs FIRST, or a posting we carry from an aggregator gets a second row
+  under `weblink`;
+- the board is inspected BEFORE the import (`Service.Inspect`), because the import writes a
+  posting under that very board — asking afterwards reports every freshly imported board as
+  already tracked.
+
+`Submit` (inspect + record in one call) remains for callers that do not import first.
 
 ## Limitations
-- Credits are awarded before the board is verified to fetch (no network on submit). Onboarding
-  the board into `sources` and any claw-back for an unreachable board are deferred to a
-  background ingest worker; the `status` column keeps that option open.
-- Coverage is the 4 path-based multi-tenant ATS. Subdomain-based and the long tail are a
-  follow-up (one `atsBoards`-style rule + test each).
-- Migration `0025_link_contributions.sql` (table + `users.points`) applies via Postgres initdb
-  only on first volume init — **apply it manually to an existing prod volume BEFORE deploying**.
+- Credits are awarded before the board is verified to fetch. Onboarding the board into
+  `sources` is still manual (the `onboard-contributions` skill drains the queue); the `status`
+  column keeps a background worker open as an option.
+- A board may now have SEVERAL rows, so any queue view must group by `(source, board)`.
+- Migrations apply via Postgres initdb only on first volume init — **apply
+  `0047_link_contributions_surface.sql` manually to an existing prod volume BEFORE deploying**,
+  as with `0025` and `0037`.
