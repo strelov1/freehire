@@ -60,20 +60,8 @@ func (h *inboxHandlers) IngestEmails(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
 	}
-	if len(req.Messages) == 0 {
-		return fiber.NewError(fiber.StatusBadRequest, "messages required")
-	}
-	if len(req.Messages) > maxIngestBatch {
-		return fiber.NewError(fiber.StatusBadRequest,
-			"batch too large: at most "+strconv.Itoa(maxIngestBatch)+" messages per request")
-	}
-	// Validate the whole batch before writing any of it, so a bad message at the
-	// end cannot leave the earlier ones stored under a 400.
-	for i, m := range req.Messages {
-		if m.ExternalID == "" {
-			return fiber.NewError(fiber.StatusBadRequest,
-				"messages["+strconv.Itoa(i)+"]: external_id is required — it is the deduplication key")
-		}
+	if err := validateIngestBatch(req.Messages); err != nil {
+		return err
 	}
 
 	tx, err := h.pool.Begin(c.Context())
@@ -85,21 +73,7 @@ func (h *inboxHandlers) IngestEmails(c *fiber.Ctx) error {
 	qtx := h.queries.WithTx(tx)
 	var out ingestResult
 	for _, m := range req.Messages {
-		receivedAt := m.ReceivedAt
-		if receivedAt.IsZero() {
-			receivedAt = time.Now()
-		}
-		row, err := qtx.UpsertExternalEmail(c.Context(), db.UpsertExternalEmailParams{
-			UserID:     userID,
-			ExternalID: m.ExternalID,
-			ThreadID:   m.ThreadID,
-			FromAddr:   m.FromAddr,
-			FromName:   m.FromName,
-			Subject:    m.Subject,
-			BodyText:   m.BodyText,
-			BodyHtml:   m.BodyHTML,
-			ReceivedAt: pgtype.Timestamptz{Time: receivedAt, Valid: true},
-		})
+		row, err := qtx.UpsertExternalEmail(c.Context(), m.upsertParams(userID))
 		if err != nil {
 			return err
 		}
@@ -113,6 +87,45 @@ func (h *inboxHandlers) IngestEmails(c *fiber.Ctx) error {
 		return err
 	}
 	return c.JSON(fiber.Map{"data": out})
+}
+
+// validateIngestBatch rejects a batch before any of it is written, so a bad
+// message at the end cannot leave the earlier ones stored under a 400.
+func validateIngestBatch(msgs []ingestMessage) error {
+	if len(msgs) == 0 {
+		return fiber.NewError(fiber.StatusBadRequest, "messages required")
+	}
+	if len(msgs) > maxIngestBatch {
+		return fiber.NewError(fiber.StatusBadRequest,
+			"batch too large: at most "+strconv.Itoa(maxIngestBatch)+" messages per request")
+	}
+	for i, m := range msgs {
+		if m.ExternalID == "" {
+			return fiber.NewError(fiber.StatusBadRequest,
+				"messages["+strconv.Itoa(i)+"]: external_id is required — it is the deduplication key")
+		}
+	}
+	return nil
+}
+
+// upsertParams projects a pushed message onto the store's parameters, defaulting
+// a missing timestamp to now so a client that omits one still orders sensibly.
+func (m ingestMessage) upsertParams(userID int64) db.UpsertExternalEmailParams {
+	receivedAt := m.ReceivedAt
+	if receivedAt.IsZero() {
+		receivedAt = time.Now()
+	}
+	return db.UpsertExternalEmailParams{
+		UserID:     userID,
+		ExternalID: m.ExternalID,
+		ThreadID:   m.ThreadID,
+		FromAddr:   m.FromAddr,
+		FromName:   m.FromName,
+		Subject:    m.Subject,
+		BodyText:   m.BodyText,
+		BodyHtml:   m.BodyHTML,
+		ReceivedAt: pgtype.Timestamptz{Time: receivedAt, Valid: true},
+	}
 }
 
 // triageRequest is an agent's verdict for one message: what the message is, and
@@ -181,20 +194,20 @@ func (h *inboxHandlers) TriageEmail(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusNotFound, "not found")
 	}
 
-	h.advanceStageAfterTriage(c, userID, jobID, mailclassify.StatusSignal(req.Signal))
+	if jobID.Valid {
+		h.advanceStage(c, userID, jobID.Int64, mailclassify.StatusSignal(req.Signal))
+	}
 	return h.renderEmail(c, userID, int64(id))
 }
 
-// advanceStageAfterTriage moves the linked application forward when the verdict
-// implies progress. It is best-effort: the verdict is already durable, and a
-// failed advance must not fail the triage the agent successfully recorded.
-func (h *inboxHandlers) advanceStageAfterTriage(c *fiber.Ctx, userID int64, jobID pgtype.Int8, sig mailclassify.StatusSignal) {
-	if !jobID.Valid {
-		return
-	}
-	current, err := h.queries.GetUserJobStage(c.Context(), db.GetUserJobStageParams{UserID: userID, JobID: jobID.Int64})
+// advanceStage moves a linked application forward when the verdict implies
+// progress, by the same monotonic-forward rules the classification worker uses.
+// It is best-effort: the verdict is already durable, and a failed advance must
+// not fail the triage the agent successfully recorded.
+func (h *inboxHandlers) advanceStage(c *fiber.Ctx, userID, jobID int64, sig mailclassify.StatusSignal) {
+	current, err := h.queries.GetUserJobStage(c.Context(), db.GetUserJobStageParams{UserID: userID, JobID: jobID})
 	if err != nil {
-		// No application row means the caller links mail to a job they do not
+		// No application row means the caller linked mail to a job they do not
 		// track; there is simply no stage to advance.
 		return
 	}
@@ -203,9 +216,9 @@ func (h *inboxHandlers) advanceStageAfterTriage(c *fiber.Ctx, userID int64, jobI
 		return
 	}
 	err = h.queries.AdvanceUserJobStage(c.Context(), db.AdvanceUserJobStageParams{
-		UserID: userID, JobID: jobID.Int64, Stage: pgtype.Text{String: next, Valid: true},
+		UserID: userID, JobID: jobID, Stage: pgtype.Text{String: next, Valid: true},
 	})
 	if err != nil {
-		log.Printf("inbox: advance stage user=%d job=%d: %v", userID, jobID.Int64, err)
+		log.Printf("inbox: advance stage user=%d job=%d: %v", userID, jobID, err)
 	}
 }

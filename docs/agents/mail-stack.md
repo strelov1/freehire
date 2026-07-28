@@ -11,14 +11,24 @@ how they compose and where the traps are.
 inbound mail ────┤                                        ├──→ emails table
                  └── SES→S3→SQS ──→ internal/mailingest ──┘    (source = gmail|hosted)
                                                                       │
-                                          email_classification_outbox │
+                                          email_classification_outbox │  ← excludes 'external'
                                                                       ▼
                                                         internal/maillink (runner)
                                                           ├─ internal/mailmatch   deterministic
                                                           └─ internal/mailclassify  LLM + vocabulary
                                                                       │
                                                         link + monotonic stage advance
+
+the caller's own harness ──→ POST /me/emails ──→ emails table (source = external)
+                                                                      │
+                                             the harness classifies it itself, then
+                                             POST /me/emails/:id/triage ──→ same columns,
+                                                        same stage-advance rules
 ```
+
+There is a **third source with no worker behind it**. `external` is mail a user's own
+client fetched and pushed; we provide no transport for it and never classify it. That is
+the point: it is the tier that costs us nothing. See the `external` bullets below.
 
 | Package | Role |
 |---|---|
@@ -55,8 +65,21 @@ inbound mail ────┤                                        ├──→
   still separate settings with separate IAM.
 - Recipient lookup in `mailingest` is **case-insensitive**; addresses are allocated
   lowercase.
-- The whole `/me/gmail|inbox|emails|mailbox` surface is `RequireRole("moderator")` — exact
-  match, admin is *not* admitted.
+- **`EnqueuePendingEmailClassification` must keep excluding `source = 'external'`.** That
+  one predicate is what makes the bring-your-own-harness tier free; drop it and every
+  pushed message gets picked up by `cmd/classify-mail` on the next cron run and billed to
+  us. Such mail stays `classified_at IS NULL` forever by design — `?unclassified=1` on the
+  listing is how the harness finds its own backlog.
+- **`UpsertExternalEmail` refreshes content columns only.** `read_at`, `deleted_at` and
+  every classification column are the *reader's* state, not the mail server's, so a nightly
+  re-sync cannot resurrect deleted mail, un-read a message, or wipe a triage verdict.
+- **Bodies reach an agent through the listing (`?body=1`), not `GET /me/emails/:id`.** That
+  endpoint marks the message read, and `read_at` means "a human saw this" — a harness
+  sweeping the backlog through it would silently zero its owner's unread count.
+- The whole `/me/gmail|inbox|emails|mailbox` surface is `mw.key` — a session cookie **or** a
+  full-scope API key, so a user's own agent harness drives it. The lone exception is the
+  Gmail OAuth connect/callback pair, which stays cookie-only: it redirects a browser to
+  Google's consent screen and a keyed client cannot complete it.
 
 ## Infrastructure notes
 

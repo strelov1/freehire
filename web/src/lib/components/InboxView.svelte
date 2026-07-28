@@ -82,15 +82,14 @@
   const hasAnySource = $derived(hasGmail || hasMailbox || hasPushedMail);
   // The account switcher only lists sources the caller actually has, and is only
   // worth showing when there is more than one to switch between.
-  const sourceOptions = $derived(
+  const presentSources = $derived(
     [
-      { value: '' as InboxSource, label: 'All', show: true },
-      { value: 'gmail' as InboxSource, label: 'Gmail', show: hasGmail },
-      { value: 'hosted' as InboxSource, label: 'Mailbox', show: hasMailbox },
-      { value: 'external' as InboxSource, label: 'Pushed', show: hasPushedMail },
-    ].filter((o) => o.show),
+      { value: 'gmail' as InboxSource, label: 'Gmail', present: hasGmail },
+      { value: 'hosted' as InboxSource, label: 'Mailbox', present: hasMailbox },
+      { value: 'external' as InboxSource, label: 'Pushed', present: hasPushedMail },
+    ].filter((s) => s.present),
   );
-  const sourceCount = $derived(sourceOptions.length - 1); // minus the 'All' entry
+  const sourceOptions = $derived([{ value: '' as InboxSource, label: 'All' }, ...presentSources]);
 
   let destroyed = false;
   onMount(load);
@@ -531,7 +530,7 @@
       <!-- Toolbar: account switcher + label filter + search on the left; a compact
            icon cluster (unread filter, mark-all-read, refresh) on the right. -->
       <div class="flex flex-wrap items-center gap-2">
-        {#if sourceCount > 1}
+        {#if presentSources.length > 1}
           <div class="flex gap-1 rounded-lg border border-border p-1 text-sm">
             {#each sourceOptions as opt (opt.value)}
               <button
