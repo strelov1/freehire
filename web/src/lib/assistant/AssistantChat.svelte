@@ -112,6 +112,10 @@
 
   const NEW_CHAT_LABEL = 'New chat';
 
+  /** The conversation the host is currently being navigated to, or null. Held until the
+   *  `session` prop catches up, so a switch we started is never undone by the stale URL. */
+  let navigatingTo = $state<string | null>(null);
+
   // Auto-grow the composer textarea up to a cap (px).
   const COMPOSER_CAP = 200;
   $effect(() => {
@@ -193,7 +197,14 @@
 
       // Open the requested session (the host prop), else the newest, else a fresh
       // chat. A host (the /tailor route) seeds `session` + `sessionLabel`.
-      if (session) {
+      //
+      // An explicitly-asked-for preset overrides "resume the newest": arriving at
+      // ?preset=profile is a request to START an experience interview, not to reopen
+      // whatever was last discussed. Without this the link did nothing at all for anyone
+      // who already had a chat, which is everyone after their first visit.
+      if (!session && preset !== 'chat') {
+        await createAndOpen();
+      } else if (session) {
         // The tailoring host opens a conversation the rail never lists, so seed it
         // into the local list to give it a name; the chat host's sessions all come
         // from the list already.
@@ -225,9 +236,21 @@
 
   // The host navigates between conversations, so the requested id arrives as a prop
   // change — including on Back and Forward. Follow it without re-booting the list.
+  //
+  // Except while a switch WE started is still in flight. Opening a conversation asks the
+  // host to navigate, and that navigation is async: for the moment between setting
+  // activeId and the URL catching up, this effect sees a `session` that disagrees with
+  // activeId and would "follow" the URL straight back to the conversation just left.
+  // That is what made a new chat snap back to the old one — the chat was created, and the
+  // stale URL immediately evicted it.
   $effect(() => {
     const requested = session;
     if (!requested || phase !== 'ready' || requested === activeId) return;
+    if (navigatingTo) {
+      // The host has caught up; stop holding the effect off.
+      if (requested === navigatingTo) navigatingTo = null;
+      return;
+    }
     openSession(requested).catch((err: unknown) => report(err, 'Could not open that chat.'));
   });
 
@@ -251,6 +274,10 @@
       chat = initChat();
       queue = [];
       activeId = id;
+      // Raise the guard HERE, not after the fetch below: the URL-following effect reruns
+      // the moment activeId changes, which is during the await — set it late and the
+      // effect has already reopened the conversation we just left.
+      navigatingTo = id;
       const { session: meta, messages } = await getSession(id);
       // A tailoring conversation is reachable by id but belongs to a CV and only makes
       // sense beside it. Opening one here would show a conversation the rail cannot list
@@ -490,15 +517,20 @@
             <option value={s.id}>{s.label}</option>
           {/each}
         </select>
+        <!-- Starting a conversation is the primary action here and it is what people came
+             to do, so on mobile it is a labelled button rather than a bare glyph, and it is
+             a real 44px touch target. Delete is pushed to the far side with a gap: an
+             unlabelled trash icon sitting flush against the "new" control is a mis-tap that
+             destroys a conversation. -->
         <button
           type="button"
           onclick={newChat}
           disabled={creating || switching || phase !== 'ready'}
-          aria-label="New chat"
           title="New chat"
-          class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted disabled:opacity-50"
+          class="flex h-11 shrink-0 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-medium text-brand-foreground disabled:opacity-50"
         >
           <Plus class="size-4" />
+          New
         </button>
         {#if activeId}
           <button
@@ -506,7 +538,7 @@
             onclick={() => removeChat(activeId as string)}
             aria-label="Delete chat"
             title="Delete chat"
-            class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted"
+            class="ml-1 flex size-11 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted"
           >
             <Trash2 class="size-4" />
           </button>
