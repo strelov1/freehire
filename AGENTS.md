@@ -44,7 +44,7 @@ cmd/backfill-company-names/main.go  resolves real display names for slug-named c
 cmd/import-yc/main.go      enriches companies from yc-oss directory
 sources/                   board files + sources/custom.yml + sources/telegram.yml
 internal/
-  config/            env config (server: PORT, DATABASE_URL, FRONTEND_ORIGIN, SERVED_HOSTS, JWT_SECRET/JWT_TTL, COOKIE_SECURE, MEILI_URL/MEILI_MASTER_KEY, OAUTH_*, EXTENSION_REDIRECT_ALLOWLIST, SENTRY_*; workers: LLM_BASE_URL/LLM_API_KEY/LLM_MODEL, EMBED_*)
+  config/            env config (server: PORT, DATABASE_URL, FRONTEND_ORIGIN, SERVED_HOSTS, JWT_SECRET/JWT_TTL, COOKIE_SECURE, MEILI_URL/MEILI_MASTER_KEY, OAUTH_*, EXTENSION_REDIRECT_ALLOWLIST, SENTRY_*, ASSISTANT_MODEL/ASSISTANT_MAX_STEPS; workers: LLM_BASE_URL/LLM_API_KEY/LLM_MODEL, EMBED_*)
   observability/     optional Sentry error reporting (see observability/AGENTS.md)
   database/          pgxpool connection pool
   db/                GENERATED sqlc code + queries/*.sql (see db/AGENTS.md)
@@ -65,6 +65,7 @@ internal/
   jobview/           single public wire shape of a job, projected from Job aggregate
   normalize/         slug normalization
   companyname/       resolves real display names for slug-named companies (see companyname/AGENTS.md)
+  assistant/         in-app AI agent: bounded tool-calling loop, typed tool registry, session transcripts (see assistant/AGENTS.md)
   matchanalysis/     AI match analysis: three-stage LLM prompt-chain (see matchanalysis/AGENTS.md)
   resumeextract/     structured résumé extraction from stored CV (see resumeextract/AGENTS.md)
   userjob/           per-user job tracking (see userjob/AGENTS.md)
@@ -129,6 +130,7 @@ For the full architecture and conventions, see the **module files** below. Each 
 |---|---|
 | **Enrichment** (Enrichment contract, controlled vocabularies, LLM Provider) | [internal/enrich/AGENTS.md](internal/enrich/AGENTS.md) |
 | **Semantic embedding** (semantic_outbox, incremental embeds, reconciler) | [internal/embed/AGENTS.md](internal/embed/AGENTS.md) |
+| **In-app assistant** (turn loop, tool registry, presets, transcripts) | [internal/assistant/AGENTS.md](internal/assistant/AGENTS.md) |
 | **AI fit analysis** (three-stage LLM prompt-chain, score, verdict, stream) | [internal/matchanalysis/AGENTS.md](internal/matchanalysis/AGENTS.md) |
 | **Structured résumé** (LLM parse of stored CV, stamp-and-compare) | [internal/resumeextract/AGENTS.md](internal/resumeextract/AGENTS.md) |
 
@@ -170,5 +172,6 @@ For the full architecture and conventions, see the **module files** below. Each 
 - **Dictionaries:** All facet dictionaries are dict-only in production (never guess, emit nothing for unknowns)
 - **Migrations:** Via Postgres initdb — single-run on first volume init only; recreate volume to re-apply
 - **Job deletion:** The lifecycle only soft-closes. `cmd/prune` is the sole hard-delete path — an operator-driven catalogue-pruning campaign, dry-run by default, archiving every removal to `pruned_jobs`
+- **In-app assistant:** a bounded tool-calling loop in-process (`internal/assistant`), streamed over SSE, gated to the restricted rollout. Tools act as the authenticated caller — no credential is minted for an agent
 - **Sentry:** Opt-in, env-gated, errors-only — `sentry.Init` with `SendDefaultPII:false`
 - **Naming — "CV", not "résumé":** Prefer **CV** over "résumé"/"resume" in user-facing copy, new identifiers, comments, and docs — the term is currently mixed and that inconsistency is the thing to stop. Don't mass-rename the existing `resume`/`resumeextract` packages and columns (churn without value); just default new surfaces to "CV".

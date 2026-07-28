@@ -60,5 +60,5 @@
 
 ## 10. Documentation
 
-- [ ] 10.1 Write `internal/assistant/AGENTS.md` covering the loop, the tool contract, the presets and the persistence model; link it from `CLAUDE.md`'s module table.
-- [ ] 10.2 Update `internal/handler/AGENTS.md` with the new routes, and note in the ops repo's `docs/agent-deploy.md` that the vhost and units are retired once this ships.
+- [x] 10.1 Write `internal/assistant/AGENTS.md` covering the loop, the tool contract, the presets and the persistence model; link it from `CLAUDE.md`'s module table.
+- [x] 10.2 Update `internal/handler/AGENTS.md` with the new routes, and note in the ops repo's `docs/agent-deploy.md` that the vhost and units are retired once this ships.

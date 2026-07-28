@@ -24,6 +24,30 @@ Fiber HTTP handlers: API struct, route registration, auth surface, user job endp
 - `view`/`apply`/`save`/`track` interaction endpoints. Addressed by job's public `:slug` (resolved to internal id before write). All writes are idempotent upserts behind `RequireAuthOrKey`.
 - Return `{"data": interaction}` with `user_id` omitted; public job reads stay unauthenticated.
 
+## Assistant (`assistant.go`, `assistant_*_tools.go`)
+
+Routes (all cookie-only, behind `auth.RequireModeratorOrBeta` — inference is
+billed to us, so the assistant is not open to everyone while it is free):
+
+| Route | Does |
+|---|---|
+| `POST /assistant/sessions` | start a chat conversation (a tailoring one is minted by the CV bootstrap, which knows the CV and vacancy to bind) |
+| `GET /assistant/sessions` | the caller's conversations, most recently active first |
+| `GET /assistant/sessions/:id` | one conversation with its stored transcript, for replay |
+| `DELETE /assistant/sessions/:id` | remove a conversation and its transcript |
+| `POST /assistant/sessions/:id/messages` | run one turn, streamed as named SSE events |
+
+A session the caller does not own is a 404, never a 403, so ids stay unprobeable.
+
+The turn endpoint writes with `writeEvent`, which — unlike `writeSSE` — reports a
+failed write. That is how a streamed turn learns the client is gone: the failure
+cancels the loop's context, so it stops before spending another model call.
+
+`assistant_tools.go` / `assistant_tracking_tools.go` / `assistant_cv_tools.go`
+build the agent's tools from the same services these handlers use, and
+`assistantRegistry` picks the set for a session's preset. The loop itself lives in
+[internal/assistant](../assistant/AGENTS.md).
+
 ## Error Convention
 
 - Genuinely domain-specific status choices (e.g. `Me` returning 401 for a gone user token) stay in the handler.
