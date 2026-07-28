@@ -39,8 +39,18 @@ func TestDerive_IsTech(t *testing.T) {
 			want: boolp(true),
 		},
 		{
-			name: "non-software engineer stays unknown → nil",
+			// The second mining wave anchors the named physical disciplines, so these
+			// leave the unclassified mass instead of sitting in it forever.
+			name: "named non-software discipline → false",
 			in:   Input{Title: "Senior Mechanical Engineer"},
+			want: boolp(false),
+		},
+		{
+			// A discipline neither dictionary names still stays unknown rather than
+			// being coerced: the tech detector is software-anchored and the non-tech
+			// one carries no bare "engineer".
+			name: "unnamed non-software engineer stays unknown → nil",
+			in:   Input{Title: "Drainage Engineer"},
 			want: nil,
 		},
 	}

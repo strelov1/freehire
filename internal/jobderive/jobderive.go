@@ -181,7 +181,9 @@ func Derive(in Input) Derived {
 // unclassified mass stays measurable. The tech title detector is the symmetric
 // counterpart to IsNonTech — it rescues generic software titles ("Software
 // Engineer", "COBOL Programmer") that resolve no sub-category. A non-software
-// "…Engineer" (mechanical, drainage) matches neither detector and stays unknown.
+// "…Engineer" matches the non-tech detector only where its discipline is named
+// outright — "mechanical engineer", "civil engineer" and the rest of that anchored
+// family — so "Drainage Engineer" still matches neither detector and stays unknown.
 func deriveIsTech(category, title string) *bool {
 	if TechEvidence(category, title) {
 		t := true

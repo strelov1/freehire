@@ -125,6 +125,61 @@ var nonTechTitleTerms = []string{
 	"cuidador", "enfermeiro", "técnico de enfermagem", "auxiliar de enfermagem",
 	"babá", "motorista", "motoboy", "entregador", "vigilante", "camareira",
 	"recepcionista",
+
+	// ---- Second mining wave (cmd/mine-titles over the residual mass, 2026-07-28) ----
+	//
+	// The report ranks clusters by volume, and volume alone would have wrecked the
+	// catalogue: its largest groups were "team member", "systems engineer" (80
+	// sources), "team lead" (93), "tech lead" (78), "technical lead" (65),
+	// "software engineering" (55), "product management", "data center", and the bare
+	// seniorities "vice president"/"senior director"/"senior associate". Those name
+	// the roles this board exists to carry and are deliberately absent. So are the
+	// borderline "quality/process/project/service engineer" and "service technician",
+	// which are mostly industrial but collide with QA and IT field-service titles;
+	// they need their own decision, not a bulk import.
+	//
+	// Absent for a different reason: "banco de talentos" (29 sources), "general
+	// application" (34), "ausbildung zum" (18), "jovem aprendiz", "sökes till". These
+	// are not non-technical roles but ABSENT ones — speculative-application
+	// placeholders — and a technical company's talent pool matches them exactly.
+	// "são paulo" (23 sources) is a city, and "and older" is the tail of an age
+	// requirement; neither is a role at all.
+	//
+	// Non-software engineering. Anchored to a physical discipline, so a software role
+	// in the same domain ("Manufacturing Execution Systems Engineer") does not contain
+	// the phrase. "maintenance engineer" is deliberately NOT here: "Software
+	// Maintenance Engineer" already stands as a negative in this file's tests.
+	"electrical engineer", "mechanical engineer", "civil engineer",
+	"structural engineer", "manufacturing engineer", "quantity surveyor",
+	// Healthcare, continued. "mental health", "clinical research", "primary care" and
+	// "advanced practice" are domain words health-tech companies put in their own
+	// engineering titles, so only the anchored role forms are listed.
+	"mental health technician", "mental health counselor", "mental health therapist",
+	"mental health associate", "clinical research coordinator",
+	"clinical research associate", "primary care physician", "primary care provider",
+	"advanced practice provider", "advanced practice nurse",
+	"physician assistant", "family medicine", "medical director", "care coordinator",
+	"dietary aide", "radiology technologist", "mri technologist",
+	// Hospitality & food service, continued. Bare "chef" stays absent (Progress Chef,
+	// the config-management tool); the anchored brigade titles do not collide.
+	"sous chef", "chef de partie", "restaurant team", "room attendant", "guest service",
+	// Automotive service
+	"automotive technician", "automotive service", "service advisor", "auto body",
+	"oil change", "lube technician",
+	// Production & heavy equipment. Bare "production" names an SRE-adjacent role
+	// ("Production Engineer"), so only the anchored non-engineering forms are listed.
+	"production operator", "production associate", "production supervisor",
+	"maintenance supervisor", "equipment operator", "heavy equipment",
+	// Banking, insurance & the retail floor. "wealth management" and "client advisor"
+	// are absent: both are ordinary fintech engineering-title words.
+	"personal banker", "relationship banker", "associate banker", "financial advisor",
+	"insurance agent", "merchandise associate", "retail keyholder", "beauty advisor",
+	"store mgr", "store manager",
+	// Education, laboratory & facilities
+	"adjunct faculty", "assistant professor", "lab technician",
+	"environmental services", "community liaison",
+	// The Spanish/Portuguese and Russian tails of the same wave
+	"auxiliar administrativo", "охране труда", "охрана труда",
 }
 
 // ConfirmedNonTech reports whether a title states a non-technical role AND nothing
