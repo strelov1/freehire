@@ -29,6 +29,7 @@
     type SessionItem,
   } from '$lib/assistant/sessions';
   import { eventsFromTranscript, type TurnEvent } from '$lib/assistant/wire';
+  import type { ChatPreset } from '$lib/assistant/presets';
 
   // The agent chat. The agent runs inside the freehire backend, so this is an
   // ordinary authenticated API surface: the session list, one session's stored
@@ -67,7 +68,7 @@
     requireBeta?: boolean;
     /** Which unbound conversation a NEW session starts as. An existing session keeps
      *  whatever preset it was created with. */
-    preset?: 'chat' | 'profile';
+    preset?: ChatPreset;
   } = $props();
 
   // The API gates the assistant to the restricted rollout; this mirrors it in the
@@ -450,7 +451,7 @@
       This chat no longer exists, or it belongs to a CV you are tailoring.
     </p>
     <a
-      href={resolve('/my/assistant')}
+      href={resolve('/my/assistant/[[id]]', {})}
       class="mt-4 inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
     >
       Open your chats

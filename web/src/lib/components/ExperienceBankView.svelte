@@ -7,7 +7,7 @@
    * claims is a trust problem before it is a compliance one — so provenance is shown on
    * every entry, and the assistant's own readings are surfaced first rather than buried.
    */
-  import { Sparkles, Trash2, Pencil, Check, X } from '@lucide/svelte';
+  import { Trash2, Pencil, Check, X } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { Button } from '$lib/ui';
   import States from '$lib/components/States.svelte';
@@ -104,23 +104,34 @@
 {:else if error}
   <States state="error" message={error} />
 {:else if !bank || (bank.employments.length === 0 && bank.unplaced.length === 0)}
-  <States
-    state="empty"
-    message="Nothing recorded yet. Upload a CV, or talk it through with the assistant — whatever you confirm is kept here and reused in every CV you build."
-  />
+  <!-- An empty bank is the one that most needs filling, so this state carries the same
+       way in as a full one rather than a sentence and a dead end. -->
+  <div class="flex flex-col items-center gap-4 py-12 text-center">
+    <p class="max-w-prose text-sm text-muted-foreground">
+      Nothing recorded yet. Upload a CV, or talk it through with the assistant — whatever
+      you confirm is kept here and reused in every CV you build.
+    </p>
+    <div class="flex flex-col items-center gap-1.5">
+      {@render interviewEntry()}
+    </div>
+  </div>
 {:else}
   <div class="flex flex-col gap-6">
     <!-- The header states what this page is FOR, because "experience bank" means nothing
          to someone meeting it for the first time. -->
-    <div class="flex flex-wrap items-baseline justify-between gap-3">
-      <p class="text-sm text-muted-foreground">
+    <div class="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+      <p class="max-w-prose flex-1 text-sm text-muted-foreground">
         {totalAtoms} achievement{totalAtoms === 1 ? '' : 's'} on record. These are what your
         tailored CVs are built from — edit or remove anything that is not right.
       </p>
-      <Button href="/my/assistant?preset=profile" size="sm" variant="secondary">
-        <Sparkles class="size-4" />
-        Add more with the assistant
-      </Button>
+      <!-- Capped, and right-aligned only once it shares the row: the example is two lines
+           of hint, and letting it set the row's width pushed the whole action under the
+           paragraph. Narrow, it wraps to its own line and follows the text's edge. -->
+      <div
+        class="flex max-w-[16rem] shrink-0 flex-col items-start gap-1.5 text-left sm:items-end sm:text-right"
+      >
+        {@render interviewEntry()}
+      </div>
     </div>
 
     {#if needsConfirming > 0}
@@ -173,6 +184,19 @@
     {/if}
   </div>
 {/if}
+
+<!-- The way into the interviewer. The label names what the owner gets, not the machine
+     that produces it, and the example carries the rest: it shows the grain of an answer
+     the interviewer is after — one result, ideally with a number — before the chat is
+     even open. The caller wraps this to set its alignment. -->
+{#snippet interviewEntry()}
+  <Button href="/my/assistant?preset=profile" size="sm" variant="secondary">
+    Add an achievement
+  </Button>
+  <p class="text-xs text-muted-foreground">
+    Tell the assistant what you did — “I cut checkout latency by 40% in one quarter.”
+  </p>
+{/snippet}
 
 {#snippet achievement(atom: ExperienceAtom)}
   <li
