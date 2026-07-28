@@ -15,6 +15,21 @@ func TestStage1Prompt_SendsDeIdentifiedStructured(t *testing.T) {
 	}
 }
 
+// TestCandidateContext_DropsFieldsOutsideTheProjection covers the field nobody has
+// added yet. The candidate context is built by projecting onto the résumé's
+// contact-free view, so a key the projection does not name falls away — including one
+// carrying personal data that no contact-key blacklist would have known to remove.
+func TestCandidateContext_DropsFieldsOutsideTheProjection(t *testing.T) {
+	got := candidateContext(`{"summary":"Go dev","national_id":"123-45-6789"}`)
+
+	if strings.Contains(got, "national_id") || strings.Contains(got, "123-45-6789") {
+		t.Errorf("a field outside the projection reached the candidate context:\n%s", got)
+	}
+	if !strings.Contains(got, "Go dev") {
+		t.Errorf("the projected fields must survive:\n%s", got)
+	}
+}
+
 func TestStage1Prompt_OmitsCandidateBlockWhenNoStructured(t *testing.T) {
 	withEmpty := stage1UserPrompt(Input{JobTitle: "Go Engineer"}, candidateContext(""))
 	if strings.Contains(withEmpty, "Candidate (structured résumé") {

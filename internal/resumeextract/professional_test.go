@@ -3,6 +3,7 @@ package resumeextract
 import (
 	"encoding/json"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -56,37 +57,21 @@ func TestProfessional_OmitsContactFields(t *testing.T) {
 
 func TestProfessional_KeepsProfessionalFields(t *testing.T) {
 	s := fullStructured()
-	p := s.Professional()
+	want := Professional{
+		Headline:       s.Headline,
+		Location:       s.Location,
+		Summary:        s.Summary,
+		TotalYears:     s.TotalYears,
+		Experience:     s.Experience,
+		Education:      s.Education,
+		Languages:      s.Languages,
+		Skills:         s.Skills,
+		Certifications: s.Certifications,
+		Projects:       s.Projects,
+	}
 
-	if p.Headline != s.Headline {
-		t.Errorf("Headline = %q, want %q", p.Headline, s.Headline)
-	}
-	if p.Location != s.Location {
-		t.Errorf("Location = %q, want %q", p.Location, s.Location)
-	}
-	if p.Summary != s.Summary {
-		t.Errorf("Summary = %q, want %q", p.Summary, s.Summary)
-	}
-	if p.TotalYears != s.TotalYears {
-		t.Errorf("TotalYears = %d, want %d", p.TotalYears, s.TotalYears)
-	}
-	if !reflect.DeepEqual(p.Experience, s.Experience) {
-		t.Errorf("Experience = %+v, want %+v", p.Experience, s.Experience)
-	}
-	if !reflect.DeepEqual(p.Education, s.Education) {
-		t.Errorf("Education = %+v, want %+v", p.Education, s.Education)
-	}
-	if !reflect.DeepEqual(p.Languages, s.Languages) {
-		t.Errorf("Languages = %v, want %v", p.Languages, s.Languages)
-	}
-	if !reflect.DeepEqual(p.Skills, s.Skills) {
-		t.Errorf("Skills = %v, want %v", p.Skills, s.Skills)
-	}
-	if !reflect.DeepEqual(p.Certifications, s.Certifications) {
-		t.Errorf("Certifications = %v, want %v", p.Certifications, s.Certifications)
-	}
-	if !reflect.DeepEqual(p.Projects, s.Projects) {
-		t.Errorf("Projects = %+v, want %+v", p.Projects, s.Projects)
+	if got := s.Professional(); !reflect.DeepEqual(got, want) {
+		t.Errorf("projection = %+v, want %+v", got, want)
 	}
 }
 
@@ -95,29 +80,21 @@ func TestProfessional_KeepsProfessionalFields(t *testing.T) {
 // known contact keys) would leak the new field instead. Enumerating the expected field
 // set here makes that a test failure rather than a silent disclosure.
 func TestProfessional_IsAWhitelist(t *testing.T) {
-	want := map[string]struct{}{
-		"headline": {}, "location": {}, "summary": {}, "total_years": {},
-		"experience": {}, "education": {}, "languages": {}, "skills": {},
-		"certifications": {}, "projects": {},
+	want := []string{
+		"headline", "location", "summary", "total_years", "experience",
+		"education", "languages", "skills", "certifications", "projects",
 	}
 
 	typ := reflect.TypeOf(Professional{})
-	got := make(map[string]struct{}, typ.NumField())
+	got := make([]string, typ.NumField())
 	for i := range typ.NumField() {
-		name, _, _ := strings.Cut(typ.Field(i).Tag.Get("json"), ",")
-		got[name] = struct{}{}
+		got[i], _, _ = strings.Cut(typ.Field(i).Tag.Get("json"), ",")
 	}
+	slices.Sort(got)
+	slices.Sort(want)
 
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Professional fields = %v, want %v — a field was added to the projection "+
-			"without being reviewed for personal data", keys(got), keys(want))
+	if !slices.Equal(got, want) {
+		t.Errorf("Professional fields = %v, want %v — a field reached the projection "+
+			"without being reviewed for personal data", got, want)
 	}
-}
-
-func keys(m map[string]struct{}) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	return out
 }

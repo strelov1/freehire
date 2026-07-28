@@ -12,12 +12,13 @@
 - [x] 1.2 Test that the projection is a whitelist, not a blacklist: the projection
   type's field set is enumerated explicitly, so a field added to `Structured` is
   absent from the projection until it is added there too.
-- [ ] 1.3 Move `matchanalysis.candidateContext` onto the same projection. It strips
+- [x] 1.3 Move `matchanalysis.candidateContext` onto the same projection. It strips
   the same four fields today, but by deleting keys from an unmarshalled JSON map — a
-  blacklist, so a field added to `Structured` would reach the LLM prompt. Feeding it
-  the typed projection also drops a marshal→unmarshal→marshal round trip.
-  Test: the candidate context still omits the four contact fields and keeps the
-  professional ones, and the truncation bound still applies.
+  blacklist, so a field added to `Structured` reaches the LLM prompt verbatim. Route
+  the JSON through the typed shape instead, so anything the projection does not name
+  falls away.
+  Test: a key outside the projection (personal data the blacklist could not have
+  known about) does not reach the candidate context, and the projected fields survive.
 
 ## 2. The profile response carries the cv block
 
