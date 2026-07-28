@@ -9,11 +9,11 @@
 
 ## 2. Schema
 
-- [ ] 2.1 New migration: drop `UNIQUE (source, board)` on `link_contributions`, add
+- [x] 2.1 New migration: drop `UNIQUE (source, board)` on `link_contributions`, add
   `surface text NOT NULL DEFAULT 'unknown'`
-- [ ] 2.2 Update `internal/db/queries/*.sql`: record with a surface, and a query answering
+- [x] 2.2 Update `internal/db/queries/*.sql`: record with a surface, and a query answering
   "is this the first row for `(source, board)`" for reward gating
-- [ ] 2.3 `make sqlc`, then `go build ./...`
+- [x] 2.3 `make sqlc`, then `go build ./...`
 
 ## 3. Reward gating without the constraint
 

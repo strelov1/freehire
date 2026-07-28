@@ -47,6 +47,27 @@ func (q *Queries) BoardByGreenhouseJobID(ctx context.Context, jobID string) (str
 	return board, err
 }
 
+const boardContributed = `-- name: BoardContributed :one
+SELECT EXISTS (
+    SELECT 1 FROM link_contributions WHERE source = $1 AND board = $2
+) AS exists
+`
+
+type BoardContributedParams struct {
+	Source pgtype.Text `json:"source"`
+	Board  pgtype.Text `json:"board"`
+}
+
+// Whether this board has been recorded before — the reward gate, read under
+// LockBoardForReward. True means the board is already known, so this submission is recorded
+// but earns nothing.
+func (q *Queries) BoardContributed(ctx context.Context, arg BoardContributedParams) (bool, error) {
+	row := q.db.QueryRow(ctx, boardContributed, arg.Source, arg.Board)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const companyForBoard = `-- name: CompanyForBoard :one
 SELECT company, company_slug FROM jobs
 WHERE source = $1 AND external_id LIKE $2 AND company_slug <> ''
@@ -74,9 +95,9 @@ func (q *Queries) CompanyForBoard(ctx context.Context, arg CompanyForBoardParams
 }
 
 const createContribution = `-- name: CreateContribution :one
-INSERT INTO link_contributions (submitted_by, url, source, board)
-VALUES ($1::bigint, $2, $3, $4)
-RETURNING id, submitted_by, url, source, board, status, created_at
+INSERT INTO link_contributions (submitted_by, url, source, board, surface)
+VALUES ($1::bigint, $2, $3, $4, $5)
+RETURNING id, submitted_by, url, source, board, status, created_at, surface
 `
 
 type CreateContributionParams struct {
@@ -84,18 +105,22 @@ type CreateContributionParams struct {
 	URL         string      `json:"url"`
 	Source      pgtype.Text `json:"source"`
 	Board       pgtype.Text `json:"board"`
+	Surface     string      `json:"surface"`
 }
 
-// Record a contribution of a novel company board. The UNIQUE (source, board) constraint
-// rejects a second contribution of the same board (another vacancy or the listing); the
-// repository maps that unique violation to ErrBoardAlreadyContributed. The AI-credits reward
-// is granted separately by the handler (credits.Reward), idempotent by the contribution id.
+// Record a contribution of a company board. Several links may legitimately point at one
+// board — each is evidence it is worth onboarding, and each carries its own submitter — so
+// unlike before there is no unique constraint to trip. Whether THIS row is the first for its
+// board (and so earns the reward) is decided by LockBoardForReward + BoardContributed in the
+// same transaction. The AI-credits reward itself is granted by the handler (credits.Reward),
+// idempotent by the contribution id.
 func (q *Queries) CreateContribution(ctx context.Context, arg CreateContributionParams) (LinkContribution, error) {
 	row := q.db.QueryRow(ctx, createContribution,
 		arg.SubmittedBy,
 		arg.URL,
 		arg.Source,
 		arg.Board,
+		arg.Surface,
 	)
 	var i LinkContribution
 	err := row.Scan(
@@ -106,19 +131,21 @@ func (q *Queries) CreateContribution(ctx context.Context, arg CreateContribution
 		&i.Board,
 		&i.Status,
 		&i.CreatedAt,
+		&i.Surface,
 	)
 	return i, err
 }
 
 const createReviewContribution = `-- name: CreateReviewContribution :one
-INSERT INTO link_contributions (submitted_by, url, status)
-VALUES ($1::bigint, $2, 'review')
-RETURNING id, submitted_by, url, source, board, status, created_at
+INSERT INTO link_contributions (submitted_by, url, status, surface)
+VALUES ($1::bigint, $2, 'review', $3)
+RETURNING id, submitted_by, url, source, board, status, created_at, surface
 `
 
 type CreateReviewContributionParams struct {
 	SubmittedBy int64  `json:"submitted_by"`
 	URL         string `json:"url"`
+	Surface     string `json:"surface"`
 }
 
 // Record an unrecognized-but-valid link for manual review: source/board unset, status
@@ -126,7 +153,7 @@ type CreateReviewContributionParams struct {
 // duplicate submission of the same url; the repository maps that violation to
 // ErrBoardAlreadyContributed. A maintainer later resolves source/board and promotes the row.
 func (q *Queries) CreateReviewContribution(ctx context.Context, arg CreateReviewContributionParams) (LinkContribution, error) {
-	row := q.db.QueryRow(ctx, createReviewContribution, arg.SubmittedBy, arg.URL)
+	row := q.db.QueryRow(ctx, createReviewContribution, arg.SubmittedBy, arg.URL, arg.Surface)
 	var i LinkContribution
 	err := row.Scan(
 		&i.ID,
@@ -136,6 +163,7 @@ func (q *Queries) CreateReviewContribution(ctx context.Context, arg CreateReview
 		&i.Board,
 		&i.Status,
 		&i.CreatedAt,
+		&i.Surface,
 	)
 	return i, err
 }
@@ -163,7 +191,7 @@ func (q *Queries) JobsExistForBoard(ctx context.Context, arg JobsExistForBoardPa
 }
 
 const listContributionsByUser = `-- name: ListContributionsByUser :many
-SELECT id, submitted_by, url, source, board, status, created_at FROM link_contributions
+SELECT id, submitted_by, url, source, board, status, created_at, surface FROM link_contributions
 WHERE submitted_by = $1
 ORDER BY created_at DESC
 `
@@ -186,6 +214,7 @@ func (q *Queries) ListContributionsByUser(ctx context.Context, submittedBy int64
 			&i.Board,
 			&i.Status,
 			&i.CreatedAt,
+			&i.Surface,
 		); err != nil {
 			return nil, err
 		}
@@ -195,4 +224,24 @@ func (q *Queries) ListContributionsByUser(ctx context.Context, submittedBy int64
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockBoardForReward = `-- name: LockBoardForReward :exec
+SELECT pg_advisory_xact_lock(hashtextextended($1::text || ':' || $2::text, 0))
+`
+
+type LockBoardForRewardParams struct {
+	Source string `json:"source"`
+	Board  string `json:"board"`
+}
+
+// Serialise reward decisions for one board. Dropping UNIQUE (source, board) also dropped the
+// arbiter that made "one board, one reward" safe under concurrency: a plain EXISTS check
+// cannot replace it, because two concurrent transactions read the same snapshot, both see no
+// rows, and both pay out. This transaction-scoped advisory lock is keyed on the board itself,
+// so it serialises only the submissions actually competing and is released on commit or
+// rollback without any cleanup.
+func (q *Queries) LockBoardForReward(ctx context.Context, arg LockBoardForRewardParams) error {
+	_, err := q.db.Exec(ctx, lockBoardForReward, arg.Source, arg.Board)
+	return err
 }

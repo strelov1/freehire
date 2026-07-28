@@ -81,10 +81,16 @@ This is what forces the schema change: with the board no longer the row identity
 ### "One board, one reward" moves from a constraint to an explicit check
 
 Dropping the unique index removes the mechanism that currently makes the reward
-single-shot, including under a race. Replacement: award only when the insert is the first
-row for that `(source, board)`, decided inside the same transaction as the insert —
-`INSERT … RETURNING`, with the "is this the first" test as a correlated `NOT EXISTS` over
-the same table, so two concurrent inserts cannot both see themselves as first.
+single-shot, including under a race. Award only when the insert is the first row for that
+`(source, board)` — but a bare `NOT EXISTS` cannot decide that: two concurrent
+transactions read the same snapshot, both see no rows, and both pay out. Snapshot
+isolation is not an arbiter; the dropped unique index was.
+
+The replacement is an explicit one: inside the recording transaction, take
+`pg_advisory_xact_lock` keyed on the board, then test `EXISTS`, then insert. The lock is
+scoped to the board, so it serialises only the submissions genuinely competing, and it is
+released on commit or rollback with nothing to clean up. `Record` therefore becomes
+transactional, where it used to be a single insert.
 
 This is not a hypothetical: draining the queue on 2026-07-28 hit it — two Microsoft links
 resolved to one Eightfold board and the promote transaction aborted on the duplicate key.

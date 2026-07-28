@@ -50,6 +50,10 @@ type Querier interface {
 	// in the URL/page). external_id is "<board>:<id>"; served by the
 	// (split_part(external_id,':',2)) WHERE source='greenhouse' partial index.
 	BoardByGreenhouseJobID(ctx context.Context, jobID string) (string, error)
+	// Whether this board has been recorded before — the reward gate, read under
+	// LockBoardForReward. True means the board is already known, so this submission is recorded
+	// but earns nothing.
+	BoardContributed(ctx context.Context, arg BoardContributedParams) (bool, error)
 	// Count one failed confirmation and return the new total, so the caller can burn the code
 	// once it reaches the ceiling. Atomic, so concurrent guesses cannot share an attempt.
 	BumpEmailCodeAttempts(ctx context.Context, arg BumpEmailCodeAttemptsParams) (int32, error)
@@ -285,10 +289,12 @@ type Querier interface {
 	// defaults NULL (the tailoring seam is unused in phase 1). Returns the metadata the list
 	// and detail responses need.
 	CreateCV(ctx context.Context, arg CreateCVParams) (CreateCVRow, error)
-	// Record a contribution of a novel company board. The UNIQUE (source, board) constraint
-	// rejects a second contribution of the same board (another vacancy or the listing); the
-	// repository maps that unique violation to ErrBoardAlreadyContributed. The AI-credits reward
-	// is granted separately by the handler (credits.Reward), idempotent by the contribution id.
+	// Record a contribution of a company board. Several links may legitimately point at one
+	// board — each is evidence it is worth onboarding, and each carries its own submitter — so
+	// unlike before there is no unique constraint to trip. Whether THIS row is the first for its
+	// board (and so earns the reward) is decided by LockBoardForReward + BoardContributed in the
+	// same transaction. The AI-credits reward itself is granted by the handler (credits.Reward),
+	// idempotent by the contribution id.
 	CreateContribution(ctx context.Context, arg CreateContributionParams) (LinkContribution, error)
 	// Record a member's offer to refer into a company. The UNIQUE (user_id, company_slug)
 	// constraint rejects a second offer for the same company; the repository maps that unique
@@ -1077,6 +1083,13 @@ type Querier interface {
 	// Closed jobs are included: dimming a closed posting that still shows in a
 	// history surface is correct, and the browse list filters closed jobs itself.
 	ListViewedJobSlugs(ctx context.Context, userID int64) ([]string, error)
+	// Serialise reward decisions for one board. Dropping UNIQUE (source, board) also dropped the
+	// arbiter that made "one board, one reward" safe under concurrency: a plain EXISTS check
+	// cannot replace it, because two concurrent transactions read the same snapshot, both see no
+	// rows, and both pay out. This transaction-scoped advisory lock is keyed on the board itself,
+	// so it serialises only the submissions actually competing and is released on commit or
+	// rollback without any cleanup.
+	LockBoardForReward(ctx context.Context, arg LockBoardForRewardParams) error
 	// Per-(user, company) thumbs votes. Unlike a job vote (a nullable column on the
 	// user_jobs row that persists for other marks), a company_votes row exists solely to
 	// hold the vote, so clearing a vote DELETEs the row. The domain layer branches in Go

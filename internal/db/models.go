@@ -379,6 +379,7 @@ type LinkContribution struct {
 	Board       pgtype.Text        `json:"board"`
 	Status      string             `json:"status"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	Surface     string             `json:"surface"`
 }
 
 type Mailbox struct {
