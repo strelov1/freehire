@@ -42,7 +42,8 @@ Start by calling ` + "`cv_context`" + ` (the fit analysis for this vacancy) and 
 Never invent, inflate or imply experience the candidate has not confirmed. That is the one rule that outranks making the CV look good.
 
 Mechanics:
-- ` + "`cv_edit`" + ` applies ONE patch per call: set_summary, set_header_field, add_bullet, replace_bullet, remove_bullet, reorder_bullets, set_skill_group. Make several calls for several edits.
+- ` + "`cv_edit`" + ` applies ONE patch per call; its schema lists the ops and the fields each one reads. Make several calls for several edits.
+- Address an experience entry and a bullet by their 0-based index in what ` + "`cv_get`" + ` returned — ` + "`bullet`" + ` is that index, never the bullet's text; the new text always goes in ` + "`value`" + `.
 - The server validates every patch; if one is rejected, read the reason and correct the address rather than retrying the same shape.
 - Contact details cannot be edited here — do not try.
 - Keep the CV to one or two pages. Prefer sharpening existing bullets over adding new ones.

@@ -123,6 +123,78 @@ func TestCVEditToolRejectsAMisaddressedPatch(t *testing.T) {
 	}
 }
 
+// cvEditPatchSchema returns the JSON Schema cv_edit advertises for its patch argument.
+func cvEditPatchSchema(t *testing.T) map[string]any {
+	t.Helper()
+	a, _ := cvToolsAPI(t, oneExperienceCV)
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9), "cv_edit")
+	props, _ := tool.Schema["properties"].(map[string]any)
+	patch, _ := props["patch"].(map[string]any)
+	fields, _ := patch["properties"].(map[string]any)
+	if len(fields) == 0 {
+		t.Fatal("cv_edit advertises the patch as a bare object; the model has to guess its fields")
+	}
+	return fields
+}
+
+func TestCVEditToolSchemaTypesEveryPatchField(t *testing.T) {
+	// A patch advertised as a shapeless object made the model fill it in by analogy:
+	// it sent replace_bullet with the new TEXT in `bullet` — the index field — and no
+	// `value` at all. Typing each field is what stops that before the call is spent.
+	fields := cvEditPatchSchema(t)
+
+	for field, want := range map[string]string{
+		"op":         "string",
+		"experience": "integer",
+		"bullet":     "integer",
+		"field":      "string",
+		"value":      "string",
+		"group":      "string",
+		"order":      "array",
+		"items":      "array",
+		"stack":      "array",
+	} {
+		spec, ok := fields[field].(map[string]any)
+		if !ok {
+			t.Errorf("patch schema does not declare %q", field)
+			continue
+		}
+		if spec["type"] != want {
+			t.Errorf("patch field %q is typed %v, want %s", field, spec["type"], want)
+		}
+	}
+}
+
+func TestCVEditToolSchemaOffersEveryPatchOp(t *testing.T) {
+	// The prose list drifted once already: it named seven ops while Apply accepted
+	// eight, so set_stack was unreachable. The enum comes from the cv package so the
+	// two cannot diverge again.
+	fields := cvEditPatchSchema(t)
+
+	op, _ := fields["op"].(map[string]any)
+	enum, _ := op["enum"].([]string)
+	if len(enum) != len(cv.PatchOps) {
+		t.Fatalf("op enum = %v, want every op in cv.PatchOps (%v)", enum, cv.PatchOps)
+	}
+	for i, want := range cv.PatchOps {
+		if enum[i] != want {
+			t.Errorf("op enum[%d] = %q, want %q", i, enum[i], want)
+		}
+	}
+}
+
+func TestCVEditToolSchemaOffersOnlyTheEditableHeaderField(t *testing.T) {
+	// Contact identifiers are refused at runtime, so advertising them only buys a
+	// wasted turn: location is the one header field a tailoring session can write.
+	fields := cvEditPatchSchema(t)
+
+	field, _ := fields["field"].(map[string]any)
+	enum, _ := field["enum"].([]string)
+	if len(enum) != 1 || enum[0] != "location" {
+		t.Errorf("field enum = %v, want only location", enum)
+	}
+}
+
 func TestCVToolsAreBoundToTheSessionsCV(t *testing.T) {
 	// The CV id is closed over by the session's binding, never taken as an
 	// argument, so the model cannot address another CV even by guessing an id.

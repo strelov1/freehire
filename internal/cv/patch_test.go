@@ -259,3 +259,15 @@ func TestApply_DoesNotMutateInput(t *testing.T) {
 		t.Errorf("Apply mutated its input: got %+v, want %+v", in, before)
 	}
 }
+
+func TestPatchOps_AreAllAcceptedByApply(t *testing.T) {
+	// PatchOps is what the tailoring tool advertises to the model. An op listed there
+	// that Apply does not know would be an invitation to spend a turn on a call that
+	// can only fail.
+	for _, op := range PatchOps {
+		_, err := Apply(sampleDoc(), Patch{Op: PatchOp(op)})
+		if err != nil && strings.Contains(err.Error(), "unknown op") {
+			t.Errorf("PatchOps advertises %q but Apply rejects it as unknown", op)
+		}
+	}
+}
