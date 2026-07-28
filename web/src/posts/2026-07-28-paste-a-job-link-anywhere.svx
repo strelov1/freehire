@@ -1,0 +1,38 @@
+---
+title: Paste a job link anywhere and get the job back
+date: 2026-07-28
+summary: Send us a vacancy we don't have — on the site, to the Telegram bot, from the extension or the CLI — and we now read the page and hand you the posting, instead of filing the company for later.
+type: changelog
+tags:
+  - contribute
+  - telegram
+  - coverage
+draft: false
+---
+
+Four places let you hand us a job link, and until now they behaved differently. The browser
+extension would read the page and add the vacancy. The [contribute form](/contribute) and the
+Telegram bot would not: they recorded the *company* for us to crawl later and thanked you.
+So the same link got you a job in one place and a promise in another — and if you were after
+that specific role, the promise was the wrong answer.
+
+**Now all four run the same thing.** Paste a link on the site, send it to the bot, use the
+extension or run `freehire contribute <url>`, and you get one of four answers:
+
+- **We already have it.** Here is the posting.
+- **We already follow this company** — the role just hadn't landed yet. Added now, and the
+  rest of its roles arrive on the next crawl.
+- **Added, and the company is new to us.** We'll start crawling its board, and you earn an
+  AI credit for finding it.
+- **We couldn't read that page.** A maintainer will look at it by hand.
+
+**We can also read a great deal more than before.** Reading a single vacancy page used to
+work on eight job platforms; it now works on all 45 we crawl — Recruitee, Personio, BambooHR,
+Workday, Teamtailor, SmartRecruiters and the rest. If we crawl the platform, we can read one
+posting on it, so a link that would have gone into a queue last week usually comes back as
+the job itself.
+
+One thing that has not changed: the credit is for the **company**, not the vacancy. The first
+person to point us at a board we don't cover earns it, because that is what adds every one of
+its jobs to the catalogue. A second link to a company already on the list is still useful to
+us, it just doesn't pay twice.
