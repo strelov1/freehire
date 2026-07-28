@@ -13,6 +13,7 @@
     Trash2,
     Wrench,
   } from '@lucide/svelte';
+  import { resolve } from '$app/paths';
   import { currentUser } from '$lib/auth.svelte';
   import { createSession, listSessions, getSession, deleteSession } from '$lib/assistant/api';
   import { sendTurn, type Turn } from '$lib/assistant/client';
@@ -52,6 +53,9 @@
   //  - kickoff: auto-send this as the first message of a fresh session.
   //  - sessionLabel: name the session in the rail until its first message names it.
   //  - onTurnComplete: called when a turn finishes (the tailor host refreshes the CV preview).
+  //  - onSessionChange: the active conversation changed. The /my/assistant host turns this
+  //    into a navigation so each chat has its own URL and Back works; the tailor host,
+  //    whose chat is bound to one CV, passes nothing.
   //  - showSessionRail: whether to render the session sidebar (off on the focused /tailor surface).
   //  - requireBeta: kept so an embedder can gate the chat in the UI as well as at the API.
   let {
@@ -59,6 +63,7 @@
     kickoff = undefined,
     sessionLabel = undefined,
     onTurnComplete = undefined,
+    onSessionChange = undefined,
     showSessionRail = true,
     requireBeta = false,
   }: {
@@ -66,6 +71,7 @@
     kickoff?: string;
     sessionLabel?: string;
     onTurnComplete?: () => void;
+    onSessionChange?: (id: string) => void;
     showSessionRail?: boolean;
     requireBeta?: boolean;
   } = $props();
@@ -76,6 +82,10 @@
 
   let phase = $state<Phase>('loading');
   let error = $state<string | null>(null);
+  // Distinct from `error`: the URL names a conversation that is not the caller's to
+  // open — deleted, someone else's, or a tailoring chat that belongs to a CV. It is
+  // a dead link, not a failure, so it gets an explanation and a way out.
+  let notFound = $state(false);
 
   // Sidebar: the caller's conversations, newest activity first. `switching`
   // disables the composer and list while a session load is in flight.
@@ -201,7 +211,10 @@
       // Open the requested session (the host prop), else the newest, else a fresh
       // chat. A host (the /tailor route) seeds `session` + `sessionLabel`.
       if (session) {
-        if (!sessions.some((s) => s.id === session)) {
+        // The tailoring host opens a conversation the rail never lists, so seed it
+        // into the local list to give it a name; the chat host's sessions all come
+        // from the list already.
+        if (!showSessionRail) {
           sessions = upsertSession(sessions, {
             id: session,
             label: sessionLabel ?? NEW_CHAT_LABEL,
@@ -222,9 +235,25 @@
         void dispatch(kickoff);
       }
     } catch (err) {
+      // A 404 on the requested conversation is a dead link, not a broken assistant.
+      if (session && err instanceof Error && err.message.includes('404')) {
+        notFound = true;
+        phase = 'ready';
+        return;
+      }
       error = err instanceof Error ? err.message : 'Could not reach the assistant.';
     }
   }
+
+  // The host navigates between conversations, so the requested id arrives as a prop
+  // change — including on Back and Forward. Follow it without re-booting the list.
+  $effect(() => {
+    const requested = session;
+    if (!requested || phase !== 'ready' || requested === activeId) return;
+    void openSession(requested).catch(() => {
+      notFound = true;
+    });
+  });
 
   // Open a session and repaint its stored transcript. The replay folds through the
   // same reducer live events do, so history and a running turn render identically.
@@ -237,10 +266,18 @@
       queue = [];
       activeId = id;
       const { session: meta, messages } = await getSession(id);
+      // A tailoring conversation is reachable by id but is not a chat: it belongs to
+      // a CV and only makes sense beside it. Opening one here would show a chat the
+      // rail cannot list and the user cannot get back to.
+      if (showSessionRail && meta.preset !== 'chat') {
+        notFound = true;
+        return;
+      }
       let next = initChat();
       for (const event of eventsFromTranscript(messages)) next = reduceTurnEvent(next, event);
       chat = next;
       if (meta.label?.trim()) sessions = setLabel(sessions, id, labelFromMessage(meta.label));
+      onSessionChange?.(id);
     } finally {
       switching = false;
     }
@@ -394,7 +431,19 @@
   </div>
 {/if}
 
-{#if !allowed}
+{#if notFound}
+  <div class="m-3 rounded-xl border border-border bg-card p-8 text-center">
+    <p class="text-sm text-muted-foreground">
+      This chat no longer exists, or it belongs to a CV you are tailoring.
+    </p>
+    <a
+      href={resolve('/my/assistant')}
+      class="mt-4 inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+    >
+      Open your chats
+    </a>
+  </div>
+{:else if !allowed}
   <div class="m-3 rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
     The agent is a limited beta and isn't available for your account yet.
   </div>

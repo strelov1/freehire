@@ -131,6 +131,47 @@ func (q *Queries) GetAssistantSession(ctx context.Context, arg GetAssistantSessi
 	return i, err
 }
 
+const listAssistantChatSessions = `-- name: ListAssistantChatSessions :many
+SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at
+FROM assistant_sessions
+WHERE user_id = $1 AND preset = 'chat'
+ORDER BY updated_at DESC, id DESC
+`
+
+// The caller's session rail: their general chats, most recently active first. Owner-scoped
+// by construction — another user's sessions can never appear. Tailoring conversations are
+// deliberately excluded: they belong to the CV that owns them and are reached through the
+// tailoring workspace, so listing them here would put a chat in the rail that leads nowhere
+// useful and cannot be continued without its CV.
+func (q *Queries) ListAssistantChatSessions(ctx context.Context, userID int64) ([]AssistantSession, error) {
+	rows, err := q.db.Query(ctx, listAssistantChatSessions, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AssistantSession{}
+	for rows.Next() {
+		var i AssistantSession
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Preset,
+			&i.Label,
+			&i.CvID,
+			&i.JobID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAssistantMessages = `-- name: ListAssistantMessages :many
 SELECT session_id, seq, role, content, created_at
 FROM assistant_messages
@@ -155,44 +196,6 @@ func (q *Queries) ListAssistantMessages(ctx context.Context, sessionID int64) ([
 			&i.Role,
 			&i.Content,
 			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listAssistantSessionsByUser = `-- name: ListAssistantSessionsByUser :many
-SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at
-FROM assistant_sessions
-WHERE user_id = $1
-ORDER BY updated_at DESC, id DESC
-`
-
-// The caller's session rail: their conversations, most recently active first. Owner-scoped
-// by construction — another user's sessions can never appear.
-func (q *Queries) ListAssistantSessionsByUser(ctx context.Context, userID int64) ([]AssistantSession, error) {
-	rows, err := q.db.Query(ctx, listAssistantSessionsByUser, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []AssistantSession{}
-	for rows.Next() {
-		var i AssistantSession
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Preset,
-			&i.Label,
-			&i.CvID,
-			&i.JobID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}

@@ -753,12 +753,15 @@ type Querier interface {
 	// linked Telegram chat (NULL when unlinked). Email is always present; chat_id drives the
 	// optional Telegram ping.
 	ListApprovedReferrerRecipients(ctx context.Context, companySlug string) ([]ListApprovedReferrerRecipientsRow, error)
+	// The caller's session rail: their general chats, most recently active first. Owner-scoped
+	// by construction — another user's sessions can never appear. Tailoring conversations are
+	// deliberately excluded: they belong to the CV that owns them and are reached through the
+	// tailoring workspace, so listing them here would put a chat in the rail that leads nowhere
+	// useful and cannot be continued without its CV.
+	ListAssistantChatSessions(ctx context.Context, userID int64) ([]AssistantSession, error)
 	// A session's whole transcript in order. It is both what the client replays and what the
 	// model's history is rebuilt from, so tool calls and tool results are included.
 	ListAssistantMessages(ctx context.Context, sessionID int64) ([]AssistantMessage, error)
-	// The caller's session rail: their conversations, most recently active first. Owner-scoped
-	// by construction — another user's sessions can never appear.
-	ListAssistantSessionsByUser(ctx context.Context, userID int64) ([]AssistantSession, error)
 	// A user's CVs as metadata (no data blob), newest edit first.
 	ListCVsByUser(ctx context.Context, userID int64) ([]ListCVsByUserRow, error)
 	// Catalog page: companies with their job counts, most active first. The job count

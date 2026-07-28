@@ -30,9 +30,9 @@ func (f *fakeQueries) CreateAssistantSession(_ context.Context, arg db.CreateAss
 	}, nil
 }
 
-func (f *fakeQueries) ListAssistantSessionsByUser(_ context.Context, userID int64) ([]db.AssistantSession, error) {
+func (f *fakeQueries) ListAssistantChatSessions(_ context.Context, userID int64) ([]db.AssistantSession, error) {
 	f.gotUserID = userID
-	if f.session.UserID != userID {
+	if f.session.UserID != userID || f.session.Preset != PresetChat {
 		return nil, nil
 	}
 	return []db.AssistantSession{{
@@ -206,5 +206,29 @@ func TestTranscriptReturnsTheStoredBytesUnchanged(t *testing.T) {
 	}
 	if string(got[0].Content) != string(stored.Content) {
 		t.Errorf("content = %s, want the bytes as appended", got[0].Content)
+	}
+}
+
+func TestChatSessionsExcludesTailoringConversations(t *testing.T) {
+	// A tailoring conversation belongs to a CV and is opened from the tailoring
+	// workspace; listing it in the chat rail would offer a chat that leads nowhere.
+	f := &fakeQueries{session: db.AssistantSession{ID: 7, UserID: 3, Preset: PresetTailor}}
+	got, err := NewStore(f).ChatSessions(context.Background(), 3)
+	if err != nil {
+		t.Fatalf("ChatSessions: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("rail lists %d sessions, want none — the only one is a tailoring chat", len(got))
+	}
+}
+
+func TestChatSessionsListsChats(t *testing.T) {
+	f := &fakeQueries{session: db.AssistantSession{ID: 7, UserID: 3, Preset: PresetChat}}
+	got, err := NewStore(f).ChatSessions(context.Background(), 3)
+	if err != nil {
+		t.Fatalf("ChatSessions: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != 7 {
+		t.Errorf("rail = %+v, want the one chat", got)
 	}
 }

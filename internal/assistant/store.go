@@ -39,7 +39,7 @@ type Session struct {
 // *db.Queries satisfies it; tests supply a fake.
 type Queries interface {
 	CreateAssistantSession(ctx context.Context, arg db.CreateAssistantSessionParams) (db.AssistantSession, error)
-	ListAssistantSessionsByUser(ctx context.Context, userID int64) ([]db.AssistantSession, error)
+	ListAssistantChatSessions(ctx context.Context, userID int64) ([]db.AssistantSession, error)
 	GetAssistantSession(ctx context.Context, arg db.GetAssistantSessionParams) (db.AssistantSession, error)
 	DeleteAssistantSession(ctx context.Context, arg db.DeleteAssistantSessionParams) (int64, error)
 	TouchAssistantSession(ctx context.Context, id int64) error
@@ -70,9 +70,11 @@ func (s *Store) CreateSession(ctx context.Context, userID int64, preset string, 
 	return sessionFrom(row), nil
 }
 
-// Sessions lists the caller's conversations, most recently active first.
-func (s *Store) Sessions(ctx context.Context, userID int64) ([]Session, error) {
-	rows, err := s.q.ListAssistantSessionsByUser(ctx, userID)
+// ChatSessions lists the caller's general chats, most recently active first.
+// Tailoring conversations are excluded: each belongs to a CV and is opened from
+// the tailoring workspace, so it has no place in the chat rail.
+func (s *Store) ChatSessions(ctx context.Context, userID int64) ([]Session, error) {
+	rows, err := s.q.ListAssistantChatSessions(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("assistant: list sessions: %w", err)
 	}

@@ -65,13 +65,15 @@ func (a *API) CreateAssistantSession(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": sessionView(sess)})
 }
 
-// ListAssistantSessions returns the caller's conversations, newest activity first.
+// ListAssistantSessions returns the caller's chat conversations, newest activity
+// first. Tailoring conversations are not chats — each belongs to a CV — so they
+// never appear here.
 func (a *API) ListAssistantSessions(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	sessions, err := a.assistant.Sessions(c.Context(), userID)
+	sessions, err := a.assistant.ChatSessions(c.Context(), userID)
 	if err != nil {
 		return err
 	}

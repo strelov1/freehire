@@ -6,12 +6,15 @@ INSERT INTO assistant_sessions (user_id, preset, cv_id, job_id)
 VALUES ($1, $2, $3, $4)
 RETURNING id, user_id, preset, label, cv_id, job_id, created_at, updated_at;
 
--- name: ListAssistantSessionsByUser :many
--- The caller's session rail: their conversations, most recently active first. Owner-scoped
--- by construction — another user's sessions can never appear.
+-- name: ListAssistantChatSessions :many
+-- The caller's session rail: their general chats, most recently active first. Owner-scoped
+-- by construction — another user's sessions can never appear. Tailoring conversations are
+-- deliberately excluded: they belong to the CV that owns them and are reached through the
+-- tailoring workspace, so listing them here would put a chat in the rail that leads nowhere
+-- useful and cannot be continued without its CV.
 SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at
 FROM assistant_sessions
-WHERE user_id = $1
+WHERE user_id = $1 AND preset = 'chat'
 ORDER BY updated_at DESC, id DESC;
 
 -- name: GetAssistantSession :one

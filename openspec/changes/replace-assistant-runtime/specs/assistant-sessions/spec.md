@@ -14,7 +14,12 @@ SHALL fail without side effects and MUST NOT reveal whether the session exists.
 #### Scenario: List is filtered by owner
 
 - **WHEN** the session list is requested with a valid session cookie
-- **THEN** the response contains every session owned by the caller and no session owned by anyone else
+- **THEN** the response contains every chat owned by the caller and no session owned by anyone else
+
+#### Scenario: A tailoring conversation is not a chat
+
+- **WHEN** the caller has a CV-tailoring conversation and requests the session list
+- **THEN** it is absent from the response, and the chat sidebar therefore never offers it
 
 #### Scenario: Delete an owned session
 
@@ -52,3 +57,29 @@ history and live turn events render identically.
 
 - **WHEN** the user switches sessions while a turn is streaming in the current one
 - **THEN** the page ends the in-flight turn cleanly for the old session and does not interleave its events into the newly selected session
+
+## ADDED Requirements
+
+### Requirement: A conversation has its own address
+
+Each chat SHALL be addressable by a URL carrying its id, so it can be
+bookmarked, reopened later, and reached with the browser's Back button.
+Selecting a chat SHALL navigate to that chat's address, adding a history entry;
+entering the assistant without an id SHALL open the newest chat (or start one)
+and replace the address with that chat's own, so landing there is not itself a
+step in the user's history.
+
+#### Scenario: Switching chats changes the address
+
+- **WHEN** the user selects a different chat in the sidebar
+- **THEN** the address becomes that chat's URL, and pressing Back returns to the chat they came from
+
+#### Scenario: A saved link reopens its chat
+
+- **WHEN** the user opens a previously saved chat URL
+- **THEN** that chat is opened and its transcript is repainted
+
+#### Scenario: A dead link explains itself
+
+- **WHEN** the URL names a conversation the caller cannot open — deleted, another user's, or a tailoring conversation that belongs to a CV
+- **THEN** the page says the chat is unavailable and offers a way back to the chat list, rather than silently opening a different conversation
