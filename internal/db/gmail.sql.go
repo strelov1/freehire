@@ -19,21 +19,23 @@ WHERE user_id = $1
   AND ($2::text = '' OR source = $2)
   AND ($3::bool = false OR read_at IS NULL)
   AND ($4::text = '' OR status_signal = $4)
+  AND ($5::bool = false OR classified_at IS NULL)
   AND (
-    $5::text = ''
-    OR subject   ILIKE '%' || $5 || '%'
-    OR from_name ILIKE '%' || $5 || '%'
-    OR from_addr ILIKE '%' || $5 || '%'
-    OR body_text ILIKE '%' || $5 || '%'
+    $6::text = ''
+    OR subject   ILIKE '%' || $6 || '%'
+    OR from_name ILIKE '%' || $6 || '%'
+    OR from_addr ILIKE '%' || $6 || '%'
+    OR body_text ILIKE '%' || $6 || '%'
   )
 `
 
 type CountEmailsParams struct {
-	UserID int64  `json:"user_id"`
-	Src    string `json:"src"`
-	Unread bool   `json:"unread"`
-	Status string `json:"status"`
-	Q      string `json:"q"`
+	UserID       int64  `json:"user_id"`
+	Src          string `json:"src"`
+	Unread       bool   `json:"unread"`
+	Status       string `json:"status"`
+	Unclassified bool   `json:"unclassified"`
+	Q            string `json:"q"`
 }
 
 // Total live messages for the caller (same optional filters as ListEmails), for
@@ -44,6 +46,7 @@ func (q *Queries) CountEmails(ctx context.Context, arg CountEmailsParams) (int64
 		arg.Src,
 		arg.Unread,
 		arg.Status,
+		arg.Unclassified,
 		arg.Q,
 	)
 	var count int64
@@ -226,6 +229,8 @@ func (q *Queries) ListConnectedGmailUsers(ctx context.Context) ([]ListConnectedG
 const listEmails = `-- name: ListEmails :many
 SELECT emails.id, emails.source, emails.external_id, emails.from_addr, emails.from_name, emails.subject,
     left(regexp_replace(emails.body_text, E'\\s+', ' ', 'g'), 160)::text AS snippet,
+    (CASE WHEN $2::bool THEN emails.body_text ELSE '' END)::text AS body_text,
+    (CASE WHEN $2::bool THEN emails.body_html ELSE '' END)::text AS body_html,
     emails.received_at, (emails.read_at IS NOT NULL)::boolean AS read,
     emails.job_id, emails.suggested_job_id, emails.status_signal, emails.link_source,
     lj.public_slug AS linked_slug, lj.company AS linked_company,
@@ -235,28 +240,31 @@ LEFT JOIN jobs lj ON lj.id = emails.job_id
 LEFT JOIN jobs sj ON sj.id = emails.suggested_job_id
 WHERE emails.user_id = $1
   AND emails.deleted_at IS NULL
-  AND ($2::text = '' OR emails.source = $2)
-  AND ($3::bool = false OR emails.read_at IS NULL)
-  AND ($4::text = '' OR emails.status_signal = $4)
+  AND ($3::text = '' OR emails.source = $3)
+  AND ($4::bool = false OR emails.read_at IS NULL)
+  AND ($5::text = '' OR emails.status_signal = $5)
+  AND ($6::bool = false OR emails.classified_at IS NULL)
   AND (
-    $5::text = ''
-    OR emails.subject   ILIKE '%' || $5 || '%'
-    OR emails.from_name ILIKE '%' || $5 || '%'
-    OR emails.from_addr ILIKE '%' || $5 || '%'
-    OR emails.body_text ILIKE '%' || $5 || '%'
+    $7::text = ''
+    OR emails.subject   ILIKE '%' || $7 || '%'
+    OR emails.from_name ILIKE '%' || $7 || '%'
+    OR emails.from_addr ILIKE '%' || $7 || '%'
+    OR emails.body_text ILIKE '%' || $7 || '%'
   )
 ORDER BY emails.received_at DESC, emails.id DESC
-LIMIT $7 OFFSET $6
+LIMIT $9 OFFSET $8
 `
 
 type ListEmailsParams struct {
-	UserID int64  `json:"user_id"`
-	Src    string `json:"src"`
-	Unread bool   `json:"unread"`
-	Status string `json:"status"`
-	Q      string `json:"q"`
-	Off    int32  `json:"off"`
-	Lim    int32  `json:"lim"`
+	UserID       int64  `json:"user_id"`
+	WithBody     bool   `json:"with_body"`
+	Src          string `json:"src"`
+	Unread       bool   `json:"unread"`
+	Status       string `json:"status"`
+	Unclassified bool   `json:"unclassified"`
+	Q            string `json:"q"`
+	Off          int32  `json:"off"`
+	Lim          int32  `json:"lim"`
 }
 
 type ListEmailsRow struct {
@@ -267,6 +275,8 @@ type ListEmailsRow struct {
 	FromName         string             `json:"from_name"`
 	Subject          string             `json:"subject"`
 	Snippet          string             `json:"snippet"`
+	BodyText         string             `json:"body_text"`
+	BodyHtml         string             `json:"body_html"`
 	ReceivedAt       pgtype.Timestamptz `json:"received_at"`
 	Read             bool               `json:"read"`
 	JobID            pgtype.Int8        `json:"job_id"`
@@ -282,17 +292,26 @@ type ListEmailsRow struct {
 // Flat inbox listing, newest first — one row per message (no subject grouping),
 // soft-deleted messages excluded. Optional filters (each empty/false = no filter):
 // source narrows to one account; unread hides already-read mail; status narrows to
-// one classified signal; the search term matches subject, sender, or body. The
-// snippet is the body's leading text with whitespace collapsed, for the list row.
+// one classified signal; unclassified narrows to mail awaiting triage (the agent's
+// work queue, since 'external' mail is never enqueued for the worker); the search
+// term matches subject, sender, or body. The snippet is the body's leading text
+// with whitespace collapsed, for the list row.
 // The link/classification columns ride alongside so the inbox can render the
 // confirm chip and application link without a second lookup; the LEFT JOINs
 // resolve the linked/suggested application's public slug + company for display.
+//
+// with_body sends the full bodies too, for an agent that classifies a whole page
+// without a GetEmail per message — which would also mark each one read. The
+// snippet already detoasts body_text, so the extra column costs no extra read;
+// it is guarded only to keep the web inbox's payload small.
 func (q *Queries) ListEmails(ctx context.Context, arg ListEmailsParams) ([]ListEmailsRow, error) {
 	rows, err := q.db.Query(ctx, listEmails,
 		arg.UserID,
+		arg.WithBody,
 		arg.Src,
 		arg.Unread,
 		arg.Status,
+		arg.Unclassified,
 		arg.Q,
 		arg.Off,
 		arg.Lim,
@@ -312,6 +331,8 @@ func (q *Queries) ListEmails(ctx context.Context, arg ListEmailsParams) ([]ListE
 			&i.FromName,
 			&i.Subject,
 			&i.Snippet,
+			&i.BodyText,
+			&i.BodyHtml,
 			&i.ReceivedAt,
 			&i.Read,
 			&i.JobID,
@@ -494,6 +515,65 @@ func (q *Queries) UpsertEmail(ctx context.Context, arg UpsertEmailParams) error 
 		arg.ReceivedAt,
 	)
 	return err
+}
+
+const upsertExternalEmail = `-- name: UpsertExternalEmail :one
+INSERT INTO emails (
+    user_id, source, external_id, thread_id, from_addr, from_name,
+    subject, body_text, body_html, received_at
+) VALUES ($1, 'external', $2, $3, $4, $5, $6, $7, $8, $9)
+ON CONFLICT (user_id, source, external_id) DO UPDATE
+SET thread_id   = EXCLUDED.thread_id,
+    from_addr   = EXCLUDED.from_addr,
+    from_name   = EXCLUDED.from_name,
+    subject     = EXCLUDED.subject,
+    body_text   = EXCLUDED.body_text,
+    body_html   = EXCLUDED.body_html,
+    received_at = EXCLUDED.received_at
+RETURNING id, (xmax = 0)::boolean AS inserted
+`
+
+type UpsertExternalEmailParams struct {
+	UserID     int64              `json:"user_id"`
+	ExternalID string             `json:"external_id"`
+	ThreadID   string             `json:"thread_id"`
+	FromAddr   string             `json:"from_addr"`
+	FromName   string             `json:"from_name"`
+	Subject    string             `json:"subject"`
+	BodyText   string             `json:"body_text"`
+	BodyHtml   string             `json:"body_html"`
+	ReceivedAt pgtype.Timestamptz `json:"received_at"`
+}
+
+type UpsertExternalEmailRow struct {
+	ID       int64 `json:"id"`
+	Inserted bool  `json:"inserted"`
+}
+
+// Store a message the caller's own harness fetched, under source 'external' and
+// idempotent by (user_id, source, external_id) so a re-sync updates rather than
+// duplicates. `inserted` distinguishes a first push from a re-push (xmax is 0 only
+// on a genuine insert), so the ingest endpoint can report both counts.
+//
+// The conflict branch refreshes ONLY the content columns. read_at, deleted_at and
+// every classification column are the reader's state, not the mail server's: a
+// nightly re-sync must not un-read a message, resurrect a deleted one, or wipe the
+// agent's triage verdict.
+func (q *Queries) UpsertExternalEmail(ctx context.Context, arg UpsertExternalEmailParams) (UpsertExternalEmailRow, error) {
+	row := q.db.QueryRow(ctx, upsertExternalEmail,
+		arg.UserID,
+		arg.ExternalID,
+		arg.ThreadID,
+		arg.FromAddr,
+		arg.FromName,
+		arg.Subject,
+		arg.BodyText,
+		arg.BodyHtml,
+		arg.ReceivedAt,
+	)
+	var i UpsertExternalEmailRow
+	err := row.Scan(&i.ID, &i.Inserted)
+	return i, err
 }
 
 const upsertGmailConnection = `-- name: UpsertGmailConnection :exec

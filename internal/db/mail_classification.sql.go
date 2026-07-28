@@ -28,6 +28,49 @@ func (q *Queries) AdvanceUserJobStage(ctx context.Context, arg AdvanceUserJobSta
 	return err
 }
 
+const agentTriageEmail = `-- name: AgentTriageEmail :execrows
+UPDATE emails
+SET status_signal        = $1,
+    job_id               = COALESCE($2, job_id),
+    link_source          = CASE WHEN $2 IS NOT NULL THEN 'agent' ELSE link_source END,
+    match_confidence     = $3,
+    suggested_job_id     = NULL,
+    classification_model = 'agent',
+    classified_at        = now()
+WHERE id = $4 AND user_id = $5
+`
+
+type AgentTriageEmailParams struct {
+	StatusSignal pgtype.Text   `json:"status_signal"`
+	JobID        pgtype.Int8   `json:"job_id"`
+	Confidence   pgtype.Float4 `json:"confidence"`
+	ID           int64         `json:"id"`
+	UserID       int64         `json:"user_id"`
+}
+
+// Persist an agent-produced verdict for one message, scoped to the caller (0 rows
+// when the message is not theirs → 404). This is SetEmailClassification's sibling:
+// the same columns, written in one update, so a message is never left classified
+// but unstamped or linked but unclassified.
+//
+// A NULL job_id means "I am not deciding the link" — the existing link and its
+// provenance are kept. Clearing a link stays the explicit UnlinkEmail action, so a
+// classify-only triage can never silently detach an application. Any pending
+// suggestion is dropped either way: the agent's verdict supersedes it.
+func (q *Queries) AgentTriageEmail(ctx context.Context, arg AgentTriageEmailParams) (int64, error) {
+	result, err := q.db.Exec(ctx, agentTriageEmail,
+		arg.StatusSignal,
+		arg.JobID,
+		arg.Confidence,
+		arg.ID,
+		arg.UserID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const claimEmailClassificationBatch = `-- name: ClaimEmailClassificationBatch :many
 WITH claimable AS (
     SELECT o.id, o.email_id
@@ -110,13 +153,19 @@ func (q *Queries) DeleteEmailClassificationOutbox(ctx context.Context, id int64)
 
 const enqueuePendingEmailClassification = `-- name: EnqueuePendingEmailClassification :execrows
 INSERT INTO email_classification_outbox (email_id)
-SELECT id FROM emails WHERE classified_at IS NULL
+SELECT id FROM emails WHERE classified_at IS NULL AND source <> 'external'
 ON CONFLICT (email_id) DO NOTHING
 `
 
 // Idempotent backfill: enqueue every email not yet classified. classified_at is the
 // "done" marker; ON CONFLICT keeps one entry per email, so running this each worker
 // invocation never duplicates work.
+//
+// 'external' mail is excluded: it was pushed by the caller's own harness, which
+// brings its own classifier, so classifying it here would spend our LLM tokens on
+// the one tier that is meant to cost us nothing. Such mail stays unclassified
+// indefinitely by design — the agent finds its backlog via the inbox listing's
+// unclassified filter.
 func (q *Queries) EnqueuePendingEmailClassification(ctx context.Context) (int64, error) {
 	result, err := q.db.Exec(ctx, enqueuePendingEmailClassification)
 	if err != nil {

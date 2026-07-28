@@ -14,6 +14,16 @@ type Querier interface {
 	// Move an application forward to a new stage (the worker only calls this after
 	// checking the transition is strictly forward and high-confidence).
 	AdvanceUserJobStage(ctx context.Context, arg AdvanceUserJobStageParams) error
+	// Persist an agent-produced verdict for one message, scoped to the caller (0 rows
+	// when the message is not theirs → 404). This is SetEmailClassification's sibling:
+	// the same columns, written in one update, so a message is never left classified
+	// but unstamped or linked but unclassified.
+	//
+	// A NULL job_id means "I am not deciding the link" — the existing link and its
+	// provenance are kept. Clearing a link stays the explicit UnlinkEmail action, so a
+	// classify-only triage can never silently detach an application. Any pending
+	// suggestion is dropped either way: the agent's verdict supersedes it.
+	AgentTriageEmail(ctx context.Context, arg AgentTriageEmailParams) (int64, error)
 	// Apply one (day, job) unique count additively: upsert the daily rollup and add the
 	// same delta to jobs.view_count, in one statement. The data-modifying CTE runs even
 	// though the primary query does not read it. Issued as a pgx batch (one call per
@@ -429,6 +439,12 @@ type Querier interface {
 	// Idempotent backfill: enqueue every email not yet classified. classified_at is the
 	// "done" marker; ON CONFLICT keeps one entry per email, so running this each worker
 	// invocation never duplicates work.
+	//
+	// 'external' mail is excluded: it was pushed by the caller's own harness, which
+	// brings its own classifier, so classifying it here would spend our LLM tokens on
+	// the one tier that is meant to cost us nothing. Such mail stays unclassified
+	// indefinitely by design — the agent finds its backlog via the inbox listing's
+	// unclassified filter.
 	EnqueuePendingEmailClassification(ctx context.Context) (int64, error)
 	// Idempotent backfill: enqueue every OPEN job that is unenriched or below the target
 	// schema version. Closed jobs (closed_at IS NOT NULL) are skipped — a dead posting no
@@ -798,11 +814,18 @@ type Querier interface {
 	// Flat inbox listing, newest first — one row per message (no subject grouping),
 	// soft-deleted messages excluded. Optional filters (each empty/false = no filter):
 	// source narrows to one account; unread hides already-read mail; status narrows to
-	// one classified signal; the search term matches subject, sender, or body. The
-	// snippet is the body's leading text with whitespace collapsed, for the list row.
+	// one classified signal; unclassified narrows to mail awaiting triage (the agent's
+	// work queue, since 'external' mail is never enqueued for the worker); the search
+	// term matches subject, sender, or body. The snippet is the body's leading text
+	// with whitespace collapsed, for the list row.
 	// The link/classification columns ride alongside so the inbox can render the
 	// confirm chip and application link without a second lookup; the LEFT JOINs
 	// resolve the linked/suggested application's public slug + company for display.
+	//
+	// with_body sends the full bodies too, for an agent that classifies a whole page
+	// without a GetEmail per message — which would also mark each one read. The
+	// snippet already detoasts body_text, so the extra column costs no extra read;
+	// it is guarded only to keep the web inbox's payload small.
 	ListEmails(ctx context.Context, arg ListEmailsParams) ([]ListEmailsRow, error)
 	// The whole snapshot, ordered by facet then count DESC so the reader can take the
 	// top-N per facet without re-sorting. Aggregate only — per-value counts, no
@@ -1614,6 +1637,16 @@ type Querier interface {
 	// overwrites the hash and expiry and resets attempts, so a burnt code never lingers
 	// beside a fresh one. created_at is re-stamped, which is what the resend cooldown reads.
 	UpsertEmailCode(ctx context.Context, arg UpsertEmailCodeParams) error
+	// Store a message the caller's own harness fetched, under source 'external' and
+	// idempotent by (user_id, source, external_id) so a re-sync updates rather than
+	// duplicates. `inserted` distinguishes a first push from a re-push (xmax is 0 only
+	// on a genuine insert), so the ingest endpoint can report both counts.
+	//
+	// The conflict branch refreshes ONLY the content columns. read_at, deleted_at and
+	// every classification column are the reader's state, not the mail server's: a
+	// nightly re-sync must not un-read a message, resurrect a deleted one, or wipe the
+	// agent's triage verdict.
+	UpsertExternalEmail(ctx context.Context, arg UpsertExternalEmailParams) (UpsertExternalEmailRow, error)
 	// Connect (or reconnect) a user's Gmail: store the encrypted refresh token and
 	// mark connected, preserving the sync cursor on reconnect.
 	UpsertGmailConnection(ctx context.Context, arg UpsertGmailConnectionParams) error

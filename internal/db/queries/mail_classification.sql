@@ -2,8 +2,14 @@
 -- Idempotent backfill: enqueue every email not yet classified. classified_at is the
 -- "done" marker; ON CONFLICT keeps one entry per email, so running this each worker
 -- invocation never duplicates work.
+--
+-- 'external' mail is excluded: it was pushed by the caller's own harness, which
+-- brings its own classifier, so classifying it here would spend our LLM tokens on
+-- the one tier that is meant to cost us nothing. Such mail stays unclassified
+-- indefinitely by design — the agent finds its backlog via the inbox listing's
+-- unclassified filter.
 INSERT INTO email_classification_outbox (email_id)
-SELECT id FROM emails WHERE classified_at IS NULL
+SELECT id FROM emails WHERE classified_at IS NULL AND source <> 'external'
 ON CONFLICT (email_id) DO NOTHING;
 
 -- name: ClaimEmailClassificationBatch :many
@@ -40,6 +46,26 @@ SET job_id               = sqlc.narg(job_id),
     match_confidence     = sqlc.narg(match_confidence),
     status_signal        = sqlc.narg(status_signal),
     classification_model = sqlc.arg(model),
+    classified_at        = now()
+WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
+
+-- name: AgentTriageEmail :execrows
+-- Persist an agent-produced verdict for one message, scoped to the caller (0 rows
+-- when the message is not theirs → 404). This is SetEmailClassification's sibling:
+-- the same columns, written in one update, so a message is never left classified
+-- but unstamped or linked but unclassified.
+--
+-- A NULL job_id means "I am not deciding the link" — the existing link and its
+-- provenance are kept. Clearing a link stays the explicit UnlinkEmail action, so a
+-- classify-only triage can never silently detach an application. Any pending
+-- suggestion is dropped either way: the agent's verdict supersedes it.
+UPDATE emails
+SET status_signal        = sqlc.narg(status_signal),
+    job_id               = COALESCE(sqlc.narg(job_id), job_id),
+    link_source          = CASE WHEN sqlc.narg(job_id) IS NOT NULL THEN 'agent' ELSE link_source END,
+    match_confidence     = sqlc.narg(confidence),
+    suggested_job_id     = NULL,
+    classification_model = 'agent',
     classified_at        = now()
 WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
 

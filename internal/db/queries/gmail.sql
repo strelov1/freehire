@@ -49,17 +49,50 @@ INSERT INTO emails (
 ) VALUES ($1, 'gmail', $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (user_id, source, external_id) DO NOTHING;
 
+-- name: UpsertExternalEmail :one
+-- Store a message the caller's own harness fetched, under source 'external' and
+-- idempotent by (user_id, source, external_id) so a re-sync updates rather than
+-- duplicates. `inserted` distinguishes a first push from a re-push (xmax is 0 only
+-- on a genuine insert), so the ingest endpoint can report both counts.
+--
+-- The conflict branch refreshes ONLY the content columns. read_at, deleted_at and
+-- every classification column are the reader's state, not the mail server's: a
+-- nightly re-sync must not un-read a message, resurrect a deleted one, or wipe the
+-- agent's triage verdict.
+INSERT INTO emails (
+    user_id, source, external_id, thread_id, from_addr, from_name,
+    subject, body_text, body_html, received_at
+) VALUES ($1, 'external', $2, $3, $4, $5, $6, $7, $8, $9)
+ON CONFLICT (user_id, source, external_id) DO UPDATE
+SET thread_id   = EXCLUDED.thread_id,
+    from_addr   = EXCLUDED.from_addr,
+    from_name   = EXCLUDED.from_name,
+    subject     = EXCLUDED.subject,
+    body_text   = EXCLUDED.body_text,
+    body_html   = EXCLUDED.body_html,
+    received_at = EXCLUDED.received_at
+RETURNING id, (xmax = 0)::boolean AS inserted;
+
 -- name: ListEmails :many
 -- Flat inbox listing, newest first — one row per message (no subject grouping),
 -- soft-deleted messages excluded. Optional filters (each empty/false = no filter):
 -- source narrows to one account; unread hides already-read mail; status narrows to
--- one classified signal; the search term matches subject, sender, or body. The
--- snippet is the body's leading text with whitespace collapsed, for the list row.
+-- one classified signal; unclassified narrows to mail awaiting triage (the agent's
+-- work queue, since 'external' mail is never enqueued for the worker); the search
+-- term matches subject, sender, or body. The snippet is the body's leading text
+-- with whitespace collapsed, for the list row.
 -- The link/classification columns ride alongside so the inbox can render the
 -- confirm chip and application link without a second lookup; the LEFT JOINs
 -- resolve the linked/suggested application's public slug + company for display.
+--
+-- with_body sends the full bodies too, for an agent that classifies a whole page
+-- without a GetEmail per message — which would also mark each one read. The
+-- snippet already detoasts body_text, so the extra column costs no extra read;
+-- it is guarded only to keep the web inbox's payload small.
 SELECT emails.id, emails.source, emails.external_id, emails.from_addr, emails.from_name, emails.subject,
     left(regexp_replace(emails.body_text, E'\\s+', ' ', 'g'), 160)::text AS snippet,
+    (CASE WHEN sqlc.arg(with_body)::bool THEN emails.body_text ELSE '' END)::text AS body_text,
+    (CASE WHEN sqlc.arg(with_body)::bool THEN emails.body_html ELSE '' END)::text AS body_html,
     emails.received_at, (emails.read_at IS NOT NULL)::boolean AS read,
     emails.job_id, emails.suggested_job_id, emails.status_signal, emails.link_source,
     lj.public_slug AS linked_slug, lj.company AS linked_company,
@@ -72,6 +105,7 @@ WHERE emails.user_id = $1
   AND (sqlc.arg(src)::text = '' OR emails.source = sqlc.arg(src))
   AND (sqlc.arg(unread)::bool = false OR emails.read_at IS NULL)
   AND (sqlc.arg(status)::text = '' OR emails.status_signal = sqlc.arg(status))
+  AND (sqlc.arg(unclassified)::bool = false OR emails.classified_at IS NULL)
   AND (
     sqlc.arg(q)::text = ''
     OR emails.subject   ILIKE '%' || sqlc.arg(q) || '%'
@@ -92,6 +126,7 @@ WHERE user_id = $1
   AND (sqlc.arg(src)::text = '' OR source = sqlc.arg(src))
   AND (sqlc.arg(unread)::bool = false OR read_at IS NULL)
   AND (sqlc.arg(status)::text = '' OR status_signal = sqlc.arg(status))
+  AND (sqlc.arg(unclassified)::bool = false OR classified_at IS NULL)
   AND (
     sqlc.arg(q)::text = ''
     OR subject   ILIKE '%' || sqlc.arg(q) || '%'
