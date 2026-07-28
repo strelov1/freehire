@@ -30,6 +30,12 @@
 //	go run ./cmd/prune                       # dry run: what would go, and why
 //	go run ./cmd/prune --apply --limit=50000 # remove at most 50k rows
 //	go run ./cmd/prune --boards              # board-retirement report
+//	go run ./cmd/prune --retire              # perform the move the report describes
+//
+// --retire edits the board files rather than the database, and the edit is line-based
+// so the files keep their comments and the diff stays reviewable. It never moves a
+// provider's last entry: that is the one irreversible step here, because a job nobody
+// can re-crawl can never be pruned either.
 //
 // Needs DATABASE_URL; MEILI_URL/MEILI_MASTER_KEY when applying, so the search index
 // loses the documents in the same step.
@@ -82,6 +88,7 @@ const (
 
 func run() int {
 	boardReport := flag.Bool("boards", false, "report board entries whose company has never posted anything technical")
+	retire := flag.Bool("retire", false, "move the boards --boards lists into sources/retired/ (edits the source files; review the diff)")
 	sourcesDir := flag.String("sources", "sources", "directory holding the board files")
 	apply := flag.Bool("apply", false, "actually delete; without it the run only reports")
 	flag.Bool("dry-run", false, "no-op: reporting is the default, --apply is what deletes")
@@ -131,6 +138,35 @@ func run() int {
 		if err := reportBoards(ctx, os.Stdout, q, brd); err != nil {
 			log.Printf("prune: write report: %v", err)
 			return 1
+		}
+		return 0
+	}
+
+	// --retire performs the move the report describes. It edits source files, not the
+	// database, and it is reversible by moving a line back — but it is still the step
+	// that stops a board being crawled, so it prints the whole list before acting and
+	// leaves the review to the diff.
+	if *retire {
+		list, withheld, err := boardsToRetire(ctx, q, brd)
+		if err != nil {
+			log.Printf("prune: board evidence: %v", err)
+			return 1
+		}
+		log.Printf("prune: %d boards to retire (%d withheld for want of a verdict)", len(list), withheld)
+		if len(list) == 0 {
+			return 0
+		}
+		moved, held, err := retireBoards(*sourcesDir, list)
+		if err != nil {
+			log.Printf("prune: retire: %v (files already written stay written)", err)
+			return 1
+		}
+		log.Printf("prune: moved %d entries into %s/retired/", moved, *sourcesDir)
+		if len(held) > 0 {
+			// Not a failure: the entries are real candidates whose turn has not come.
+			log.Printf("prune: held back every entry of %s — moving them would leave the provider "+
+				"with no board at all, and a job that cannot be re-crawled can never be pruned. "+
+				"Prune their jobs first, then move these deliberately.", strings.Join(held, ", "))
 		}
 		return 0
 	}
@@ -358,31 +394,17 @@ type boardVerdict struct {
 	determined bool
 }
 
-// reportBoards lists the boards still in the source files whose postings were classified
-// and none of them came out technical — no technical title or category, and not one
-// tagged engineering skill. Each is a candidate for the retirement PR — move the entry to
-// sources/retired/<provider>.yml — which is the precondition for pruning its jobs under
-// a company-scoped rule.
-//
-// A board no posting of which has been classified is WITHHELD, not listed. The report's
-// premise is "this board has never posted anything technical", and absence of a
-// technical signal only carries that meaning where a signal was possible at all: a
-// posting the dictionaries could not place leaves is_tech NULL, which is not evidence of
-// anything. Measured on prod the distinction decided most of the report — 11023 of 17841
-// listed boards had no verdict on a single posting, 62% of the list, against 10.6% among
-// the boards the same run kept. Retiring on that basis would have struck live IT
-// employers whose only fault was a title the dictionary does not carry.
-//
-// It groups by BOARD rather than by company because that is the identity the source
-// files and the catalogue share exactly; the company slug diverges wherever an adapter
-// takes the name from the posting payload, which on some providers is most of them.
-func reportBoards(ctx context.Context, w io.Writer, q candidateSource, brd boards) error {
+// boardsToRetire walks the catalogue once and sorts every listed board into the three
+// states boardVerdict describes, returning the retirement candidates and how many were
+// withheld for want of any verdict. Both --boards and --retire go through it, so the
+// list an operator reads and the list the mover acts on cannot diverge.
+func boardsToRetire(ctx context.Context, q candidateSource, brd boards) ([]boardKey, int, error) {
 	evidence := map[boardKey]boardVerdict{}
 	var after int64
 	for {
 		rows, err := q.PruneCandidates(ctx, db.PruneCandidatesParams{AfterID: after, PageSize: scanPage})
 		if err != nil {
-			return err
+			return nil, 0, err
 		}
 		if len(rows) == 0 {
 			break
@@ -413,6 +435,38 @@ func reportBoards(ctx context.Context, w io.Writer, q candidateSource, brd board
 			withheld++
 		}
 	}
+	sort.Slice(retire, func(i, j int) bool {
+		if retire[i].Provider != retire[j].Provider {
+			return retire[i].Provider < retire[j].Provider
+		}
+		return retire[i].Board < retire[j].Board
+	})
+	return retire, withheld, nil
+}
+
+// reportBoards lists the boards still in the source files whose postings were classified
+// and none of them came out technical — no technical title or category, and not one
+// tagged engineering skill. Each is a candidate for the retirement PR — move the entry to
+// sources/retired/<provider>.yml — which is the precondition for pruning its jobs under
+// a company-scoped rule.
+//
+// A board no posting of which has been classified is WITHHELD, not listed. The report's
+// premise is "this board has never posted anything technical", and absence of a
+// technical signal only carries that meaning where a signal was possible at all: a
+// posting the dictionaries could not place leaves is_tech NULL, which is not evidence of
+// anything. Measured on prod the distinction decided most of the report — 11023 of 17841
+// listed boards had no verdict on a single posting, 62% of the list, against 10.6% among
+// the boards the same run kept. Retiring on that basis would have struck live IT
+// employers whose only fault was a title the dictionary does not carry.
+//
+// It groups by BOARD rather than by company because that is the identity the source
+// files and the catalogue share exactly; the company slug diverges wherever an adapter
+// takes the name from the posting payload, which on some providers is most of them.
+func reportBoards(ctx context.Context, w io.Writer, q candidateSource, brd boards) error {
+	retire, withheld, err := boardsToRetire(ctx, q, brd)
+	if err != nil {
+		return err
+	}
 	// Say what the guard held back. A report that silently shrinks reads as "this is
 	// everything", and the withheld boards never come back into view — the same reason
 	// the scan counts its own refusals rather than dropping them.
@@ -427,13 +481,6 @@ func reportBoards(ctx context.Context, w io.Writer, q candidateSource, brd board
 		_, err := fmt.Fprintln(w, "every listed board that has been classified has posted something technical")
 		return err
 	}
-	sort.Slice(retire, func(i, j int) bool {
-		if retire[i].Provider != retire[j].Provider {
-			return retire[i].Provider < retire[j].Provider
-		}
-		return retire[i].Board < retire[j].Board
-	})
-
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	if _, err := fmt.Fprint(w, "move these entries to sources/retired/<provider>.yml:\n\n"); err != nil {
 		return err

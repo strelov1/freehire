@@ -47,6 +47,12 @@ board a provider has, it prints a `CAUTION` line naming that provider. The entri
 still genuine candidates — move them, but move the ones that empty a provider last, once
 its jobs are gone.
 
+`cmd/prune --retire` performs the move. It computes the same list the report prints (both
+go through one function, so the list you read and the list it acts on cannot diverge),
+edits the files line by line so their headers and group comments survive, and **refuses**
+the entries that would empty a provider — naming them, so the refusal reads as "later",
+not as "nothing to do". Review the diff; that is the gate.
+
 ## Why keep them
 
 They cost nothing, they record what was considered and rejected, and a board that turns
