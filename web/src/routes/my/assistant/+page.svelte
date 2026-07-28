@@ -20,5 +20,9 @@
 
 <div class="flex h-[calc(100dvh-3.5rem)]">
   <AccountNavRail />
-  <AssistantChat {onSessionChange} showSessionRail />
+  <AssistantChat
+    preset={page.url.searchParams.get('preset') === 'profile' ? 'profile' : 'chat'}
+    {onSessionChange}
+    showSessionRail
+  />
 </div>

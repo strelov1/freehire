@@ -798,10 +798,14 @@ type Querier interface {
 	// linked Telegram chat (NULL when unlinked). Email is always present; chat_id drives the
 	// optional Telegram ping.
 	ListApprovedReferrerRecipients(ctx context.Context, companySlug string) ([]ListApprovedReferrerRecipientsRow, error)
-	// The caller's session rail: their general chats, most recently active first. Owner-scoped
-	// by construction — another user's sessions can never appear. Tailoring conversations are
-	// deliberately excluded: they belong to the CV that owns them and are reached through the
-	// tailoring workspace, so listing them here would put a chat in the rail that leads nowhere
+	// The caller's session rail: their unbound conversations, most recently active first.
+	// Owner-scoped by construction — another user's sessions can never appear.
+	//
+	// The rail carries every preset that binds to NOTHING, which is chat and profile alike: an
+	// experience interview is resumable and would otherwise be lost the moment its author
+	// navigated away. Tailoring conversations are deliberately excluded for the opposite
+	// reason — they belong to the CV that owns them and are reached through the tailoring
+	// workspace, so listing one here would put a conversation in the rail that leads nowhere
 	// useful and cannot be continued without its CV.
 	ListAssistantChatSessions(ctx context.Context, userID int64) ([]ListAssistantChatSessionsRow, error)
 	// A session's whole transcript in order. It is both what the client replays and what the

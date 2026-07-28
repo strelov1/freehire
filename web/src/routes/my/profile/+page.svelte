@@ -7,6 +7,7 @@
   import { FilterStore, filtersToParams } from '$lib/filters';
   import ATSReportView from '$lib/components/ATSReportView.svelte';
   import DeleteAccountButton from '$lib/components/DeleteAccountButton.svelte';
+  import ExperienceBankView from '$lib/components/ExperienceBankView.svelte';
   import FilterSummary from '$lib/components/filters/FilterSummary.svelte';
   import FilterModal from '$lib/components/filters/FilterModal.svelte';
   import FilterEdgeTab from '$lib/components/FilterEdgeTab.svelte';
@@ -34,7 +35,7 @@
   // independently of the filter-driven reload.
   let structured = $state<ResumeStructured | null>(null);
   let loadError = $state(false);
-  let tab = $state<'settings' | 'structured' | 'coverage' | 'readiness'>('settings');
+  let tab = $state<'settings' | 'structured' | 'experience' | 'coverage' | 'readiness'>('settings');
   let modalOpen = $state(false);
   let actionError = $state<string | null>(null);
 
@@ -260,6 +261,15 @@
           </button>
           <button
             type="button"
+            onclick={() => (tab = 'experience')}
+            class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'experience'
+              ? 'border-brand text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground'}"
+          >
+            Experience
+          </button>
+          <button
+            type="button"
             onclick={() => (tab = 'coverage')}
             class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'coverage'
               ? 'border-brand text-foreground'
@@ -279,7 +289,11 @@
         </div>
 
         <!-- Body -->
-        {#if tab === 'settings'}
+        {#if tab === 'experience'}
+          <!-- What the product has recorded about what this person has done, and the only
+               place they can correct or remove it. -->
+          <ExperienceBankView />
+        {:else if tab === 'settings'}
           {#key profile.updated_at}
             <ProfileForm {profile} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
           {/key}

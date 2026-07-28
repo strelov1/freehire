@@ -41,15 +41,13 @@
 
 ## 4. Stage 4 — the user can see and correct what was recorded
 
-> **NOT STARTED.** Stages 1–3 are complete and internally consistent, but this stage is
-> what makes the bank *reviewable*. Until it lands, a user cannot see or delete what the
-> agent recorded about them except through SQL — which is a trust problem before it is a
-> GDPR one. It should be the next thing built, and it must ship before the feature is
-> shown to anyone outside the rollout gate.
+> 4.1–4.3 are done: the bank is readable, editable and deletable by its owner, and the
+> profile page links into the interviewer. **4.4 — the visual pass against a real account —
+> is the one thing left**, and it is not something automated tests substitute for.
 
 - [x] 4.1 Add the owner-scoped HTTP surface for the bank (list, update, delete) under `/api/v1/me/experience`, cookie-or-key per the existing profile conventions
-- [ ] 4.2 Add the experience tab to `/my/profile` — employments with their atoms, provenance shown per atom, inline edit and delete
-- [ ] 4.3 Add the entry point that opens an assistant session in the `profile` preset from the profile page
+- [x] 4.2 Add the experience tab to `/my/profile` — employments with their atoms, provenance shown per atom, inline edit and delete
+- [x] 4.3 Add the entry point that opens an assistant session in the `profile` preset from the profile page
 - [ ] 4.4 Verify the tab against a real account: an atom deleted in the UI disappears from search results and from CV seeding
 
 ## 5. Documentation and close-out

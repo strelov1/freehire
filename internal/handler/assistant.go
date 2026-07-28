@@ -148,15 +148,27 @@ func assistantSessionID(c *fiber.Ctx) (uuid.UUID, error) {
 	return id, nil
 }
 
-// CreateAssistantSession starts a new chat conversation for the caller. Tailoring
-// sessions are created by the tailoring bootstrap, which knows the CV and vacancy
-// to bind; this endpoint deliberately cannot mint one.
+// CreateAssistantSession starts a new unbound conversation for the caller — a general
+// chat, or the experience interviewer when `?preset=profile` is given.
+//
+// Only the presets that bind to NOTHING can be minted here. A tailoring session is
+// created by the tailoring bootstrap, which knows the CV and the vacancy to bind; letting
+// this endpoint name that preset would produce a session whose tools point at nothing.
 func (h *assistantHandlers) CreateAssistantSession(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	sess, err := h.store.CreateSession(c.Context(), userID, assistant.PresetChat, nil, nil)
+	preset := assistant.PresetChat
+	switch requested := c.Query("preset"); requested {
+	case "", assistant.PresetChat:
+	case assistant.PresetProfile:
+		preset = assistant.PresetProfile
+	default:
+		return fiber.NewError(fiber.StatusBadRequest,
+			"preset must be chat or profile — a tailoring session is created from its CV")
+	}
+	sess, err := h.store.CreateSession(c.Context(), userID, preset, nil, nil)
 	if err != nil {
 		return err
 	}

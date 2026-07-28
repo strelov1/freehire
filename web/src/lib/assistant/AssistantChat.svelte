@@ -56,6 +56,7 @@
     onSessionChange = undefined,
     showSessionRail = true,
     requireBeta = false,
+    preset = 'chat',
   }: {
     session?: string;
     kickoff?: string;
@@ -64,6 +65,9 @@
     onSessionChange?: (id: string) => void;
     showSessionRail?: boolean;
     requireBeta?: boolean;
+    /** Which unbound conversation a NEW session starts as. An existing session keeps
+     *  whatever preset it was created with. */
+    preset?: 'chat' | 'profile';
   } = $props();
 
   // The API gates the assistant to the restricted rollout; this mirrors it in the
@@ -248,10 +252,11 @@
       queue = [];
       activeId = id;
       const { session: meta, messages } = await getSession(id);
-      // A tailoring conversation is reachable by id but is not a chat: it belongs to
-      // a CV and only makes sense beside it. Opening one here would show a chat the
-      // rail cannot list and the user cannot get back to.
-      if (showSessionRail && meta.preset !== 'chat') {
+      // A tailoring conversation is reachable by id but belongs to a CV and only makes
+      // sense beside it. Opening one here would show a conversation the rail cannot list
+      // and the user cannot get back to. The unbound presets — chat and the experience
+      // interviewer — are both at home here.
+      if (showSessionRail && meta.preset !== 'chat' && meta.preset !== 'profile') {
         notFound = true;
         return;
       }
@@ -267,7 +272,7 @@
   }
 
   async function createAndOpen() {
-    const created = await createSession();
+    const created = await createSession(preset);
     sessions = upsertSession(sessions, fromSummary(created, NEW_CHAT_LABEL));
     await openSession(created.id);
   }
