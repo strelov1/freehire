@@ -70,6 +70,19 @@ func (h *cvHandlers) withAssistantSessions(store *assistant.Store) {
 	h.assistantSessions = store
 }
 
+// seedSource returns what a new CV starts from, and is never nil.
+//
+// A handler assembled without a seeder still seeds from the stored structure. "There is
+// nothing to seed from" and "the seeder was not wired" are different statements:
+// collapsing them hands a client that asked for a pre-filled CV a blank one, and passing
+// the nil interface down to cv.Store.Tailor panics on the first tailoring bootstrap.
+func (h *cvHandlers) seedSource() cv.Seeder {
+	if h.seeder != nil {
+		return h.seeder
+	}
+	return bankedSeeder{resume: h.resume}
+}
+
 func (h *cvHandlers) register(api fiber.Router, mw middleware) {
 	// CV builder + AI tailoring: open to every signed-in user (AI credits meter the LLM spend).
 	// Cookie-only, owner-scoped (a foreign id is a 404). The PDF endpoint 501s when no typst
@@ -193,8 +206,8 @@ func (h *cvHandlers) CreateCV(c *fiber.Ctx) error {
 	// structure — both in Postgres, independent of S3 object storage, so it is NOT gated on
 	// résumé-storage being enabled. Nothing known degrades to an empty skeleton.
 	doc := cv.EmptyDocument()
-	if in.Seed && h.seeder != nil {
-		if st, ok, err := h.seeder.Structured(c.Context(), userID); err == nil && ok {
+	if in.Seed {
+		if st, ok, err := h.seedSource().Structured(c.Context(), userID); err == nil && ok {
 			doc = cv.Seed(st)
 		}
 	}

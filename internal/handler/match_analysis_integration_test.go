@@ -11,6 +11,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -23,6 +24,7 @@ import (
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/experience"
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/resume"
@@ -58,6 +60,41 @@ type fitBody struct {
 		Stale    bool                    `json:"stale"`
 		Analysis *matchanalysis.Analysis `json:"analysis"`
 	} `json:"data"`
+}
+
+// seedBankedCareer gives a fixture user the banked work history the fit chain now scores.
+//
+// Before the experience bank, "a candidate with a CV" meant a row in resume_structured.
+// It no longer does: the work history comes from the bank, and an empty bank means no
+// analysis by design — there is deliberately no fallback to the structure's own copy,
+// because a silent one would hide a failed backfill. These fixtures therefore have to
+// state the whole precondition rather than half of it.
+func seedBankedCareer(t *testing.T, queries *db.Queries, userID int64) {
+	t.Helper()
+	// Idempotent: a fixture runs once per subtest, and banking the same claim twice is
+	// refused by design.
+	ctx := context.Background()
+	bank := experience.NewStore(experience.NewQueriesRepository(queries))
+
+	const company, role = "Acme", "Backend Engineer"
+	place, err := bank.FindEmployment(ctx, userID, company, role)
+	if errors.Is(err, experience.ErrNotFound) {
+		place, err = bank.CreateEmployment(ctx, userID, experience.Employment{
+			Kind: experience.KindJob, Company: company, Role: role,
+			Start: "2019-01", End: "Present", Current: true, Stack: []string{"go"},
+		})
+	}
+	if err != nil {
+		t.Fatalf("seed employment: %v", err)
+	}
+
+	_, err = bank.AddAtom(ctx, userID, experience.Atom{
+		EmploymentID: &place.ID, Claim: "Built and ran the Go services behind Acme's API",
+		Skills: []string{"go"}, Provenance: experience.ProvenanceCVImport,
+	})
+	if err != nil && !errors.Is(err, experience.ErrAlreadyBanked) {
+		t.Fatalf("seed atom: %v", err)
+	}
 }
 
 func fitAPI(pool *pgxpool.Pool, queries *db.Queries, iss *auth.Issuer, store *resume.Store, an *matchanalysis.Analyzer) *matchHandlers {
@@ -105,6 +142,7 @@ func TestMatchAnalysisEndpoints(t *testing.T) {
 		if err := s.SetStructured(ctx, userID, resumeextract.Structured{Summary: "Backend engineer, 5y Go at Acme.", Skills: []string{"Go"}}, "test-model", resumeUploadedAt); err != nil {
 			t.Fatalf("seed structured: %v", err)
 		}
+		seedBankedCareer(t, queries, userID)
 		return s
 	}
 
@@ -255,6 +293,7 @@ func TestMatchAnalysisCredits(t *testing.T) {
 		if err := s.SetStructured(ctx, userID, resumeextract.Structured{Summary: "5y Go.", Skills: []string{"Go"}}, "test-model", resumeUploadedAt); err != nil {
 			t.Fatalf("seed structured: %v", err)
 		}
+		seedBankedCareer(t, queries, userID)
 		return s
 	}
 	appFor := func(store *resume.Store, an *matchanalysis.Analyzer, grant int) *fiber.App {

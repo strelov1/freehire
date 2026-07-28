@@ -78,11 +78,18 @@ func TestCandidateProfileJSONSurvivesAFailingBank(t *testing.T) {
 	}
 }
 
-func TestCandidateProfileJSONWithoutABankIsEmpty(t *testing.T) {
+// A handler with neither a bank nor the queries to build one has nothing to say. But the
+// nil FIELD alone must not mean that: a handler holding queries reaches the bank anyway,
+// because "not wired" and "this candidate has no experience" are different statements and
+// collapsing them would deny someone their fit analysis over an assembly detail.
+func TestCandidateProfileJSONWithNothingToReadFrom(t *testing.T) {
 	h := &matchHandlers{}
 
 	if got := h.candidateProfileJSON(fiberCtx(), 7); got != "" {
-		t.Errorf("candidate context = %q, want empty when there is no bank", got)
+		t.Errorf("candidate context = %q, want empty when there is no bank and no queries", got)
+	}
+	if h.candidateBank() != nil {
+		t.Error("a handler with no queries produced a bank")
 	}
 }
 

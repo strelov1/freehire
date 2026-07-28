@@ -300,9 +300,6 @@ func (h *matchHandlers) cvUploadedAt(c *fiber.Ctx, userID int64) (*time.Time, bo
 // yet extracted, or stale) — the fit chain then produces no analysis (the raw CV is
 // never sent as a fallback). Best-effort: a read/marshal error degrades to "".
 func (h *matchHandlers) candidateProfileJSON(c *fiber.Ctx, userID int64) string {
-	if h.bank == nil {
-		return ""
-	}
 	// The structured résumé still owns education, languages, the summary and the years
 	// estimate, and is read best-effort: a stale or absent structure now costs those
 	// sections, not the whole analysis.
@@ -313,7 +310,11 @@ func (h *matchHandlers) candidateProfileJSON(c *fiber.Ctx, userID int64) string 
 		}
 	}
 
-	profile, err := h.bank.Professional(c.Context(), userID, st)
+	bank := h.candidateBank()
+	if bank == nil {
+		return ""
+	}
+	profile, err := bank.Professional(c.Context(), userID, st)
 	if err != nil {
 		log.Printf("candidate profile: user %d: %v", userID, err)
 		return ""
@@ -330,6 +331,20 @@ func (h *matchHandlers) candidateProfileJSON(c *fiber.Ctx, userID int64) string 
 		return ""
 	}
 	return string(blob)
+}
+
+// candidateBank returns the bank the fit chain reads, building it from the handler's
+// queries when the field was not wired. A nil field must not be read as "this candidate
+// has no experience": those are different statements, and collapsing them would deny
+// someone their fit analysis over an assembly detail.
+func (h *matchHandlers) candidateBank() candidateProfiler {
+	if h.bank != nil {
+		return h.bank
+	}
+	if h.queries == nil {
+		return nil
+	}
+	return experience.NewStore(experience.NewQueriesRepository(h.queries))
 }
 
 // candidateProfiler is the one operation the fit chain needs from the experience bank.

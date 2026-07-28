@@ -68,6 +68,7 @@ func TestMatchAnalysisStreamEndpoint(t *testing.T) {
 		if err := s.SetStructured(ctx, userID, resumeextract.Structured{Summary: "5y Go at Acme.", Skills: []string{"Go"}}, "test-model", resumeUploadedAt); err != nil {
 			t.Fatalf("seed structured: %v", err)
 		}
+		seedBankedCareer(t, queries, userID)
 		return s
 	}
 

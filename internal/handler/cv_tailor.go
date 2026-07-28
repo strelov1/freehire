@@ -67,7 +67,7 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	if bal := h.match.creditsBalance(c.Context(), userID); bal != nil && bal.Remaining < h.credits.Cost(credits.FeatureTailor) {
 		return creditsError(c, *bal)
 	}
-	base, tailored, err := h.cvStore.Tailor(c.Context(), userID, job.ID, tailoredCVTitle(job.Title), h.seeder)
+	base, tailored, err := h.cvStore.Tailor(c.Context(), userID, job.ID, tailoredCVTitle(job.Title), h.seedSource())
 	if errors.Is(err, cv.ErrNoResume) {
 		return fiber.NewError(fiber.StatusConflict, "add a résumé before tailoring")
 	}
