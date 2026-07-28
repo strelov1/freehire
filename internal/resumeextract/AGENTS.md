@@ -3,8 +3,11 @@
 ## Scope
 Best-effort, read-only LLM parse of the stored user CV into a typed `Structured` shape. Extracted in the background on every CV upload.
 
+**It no longer owns work experience.** Since the experience-bank change the parse also feeds `internal/experience`, which is the durable home of what the candidate has done; this package keeps the sections that have no accumulation problem — contacts, summary, education, languages, links, the total-years estimate. The staleness rule below governs those and only those.
+
 ## Always true
 - **Derived in the background on every upload** (both `PutResume` and `ExtractResumeProfile`), folded into `deriveResumeArtifacts` beside `embedResume` so the two paths can't drift.
+- **Staleness governs the sections this package still owns, and NOT the work history.** Experience is imported into the bank, which is additive and unstamped: a pending extraction, a superseded structure or a deleted résumé must not hide banked experience. Before the bank, a stale structure took the whole fit analysis with it.
 - **Staleness is keyed on upload time ALONE, not the model stamp.** A superseded structure reads as absent (self-healing on the next extract), the same stamp-and-compare discipline as the matchanalysis cache.
 - **`resume.Store.Structured` serves ONLY while the derive stamp equals the current `resume_uploaded_at`.**
 - **Write is monotonic:** `SetUserResumeStructured ... WHERE resume_uploaded_at = $stamp` — a slow extraction for an already-replaced CV is dropped instead of clobbering the fresh one (a lost-update that would otherwise hide the structure forever).
@@ -12,7 +15,7 @@ Best-effort, read-only LLM parse of the stored user CV into a typed `Structured`
 - **An unconfigured/failing LLM leaves upload, embedding, and the deterministic extractors untouched.**
 - **Deletion clears the columns** (`ClearUserResume`).
 - **No new env** — reuses `LLM_*`.
-- **Sole candidate context of the fit analysis, never an add-on:** the structured shape (contacts stripped) is the ONLY candidate text `matchanalysis` sends to the model; a missing/failed extraction means the fit chain produces no analysis — there is deliberately no raw-CV/text-only fallback.
+- **The fit analysis reads a COMPOSITION, not this shape alone:** `experience.ProfessionalFrom` takes the work history from the bank and everything else from here, and that is the only candidate text `matchanalysis` sends. An empty bank means no analysis; a stale structure now costs education and languages rather than the whole thing. There is still deliberately no raw-CV fallback, and there is deliberately no fallback to this package's own copy of the experience either — a silent one would hide a failed backfill for months.
 
 ## How it works
 

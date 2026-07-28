@@ -49,7 +49,7 @@ contract, registry and strict argument decoding; `message.go` the stored-message
 encoding and its round trip to `[]llms.MessageContent`; `store.go` the
 owner-scoped persistence; `prompt.go` the per-preset system prompts.
 
-**Presets.** A session records `chat` or `tailor`. The preset selects the system
+**Presets.** A session records `chat`, `tailor` or `profile`. The vocabulary is pinned by a CHECK constraint on `assistant_sessions.preset`, so adding one is a schema change and not just a Go constant. The preset selects the system
 prompt and the registered tools and nothing else, which is why the same chat
 component serves `/my/assistant` and the CV-tailoring workspace. A tailoring
 session's CV tools close over the CV and vacancy ids from the session binding, so
@@ -71,7 +71,11 @@ is never mistaken for the answer.
    HTTP handler calls.
 2. Register it in `assistantRegistry` under the presets that should offer it.
 3. Return structured data, not prose. Include the fields the model needs to act
-   (a vacancy's `public_slug`, not just its title).
+   (a vacancy's `public_slug`, not just its title; an achievement's id and whether it may
+   be written to a CV, not just its text).
+3b. Keep the result small. It is persisted in the transcript and replayed into the model's
+   context on EVERY later turn — this is why `get_profile` reports the experience bank's
+   shape and counts while `experience_search` returns its content per question.
 4. Give errors a message the model can act on — name the invalid value and list
    the valid ones. That message is the model's only path to self-correction.
 

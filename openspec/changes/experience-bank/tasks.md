@@ -41,6 +41,12 @@
 
 ## 4. Stage 4 — the user can see and correct what was recorded
 
+> **NOT STARTED.** Stages 1–3 are complete and internally consistent, but this stage is
+> what makes the bank *reviewable*. Until it lands, a user cannot see or delete what the
+> agent recorded about them except through SQL — which is a trust problem before it is a
+> GDPR one. It should be the next thing built, and it must ship before the feature is
+> shown to anyone outside the rollout gate.
+
 - [ ] 4.1 Add the owner-scoped HTTP surface for the bank (list, update, delete) under `/api/v1/me/experience`, cookie-or-key per the existing profile conventions
 - [ ] 4.2 Add the experience tab to `/my/profile` — employments with their atoms, provenance shown per atom, inline edit and delete
 - [ ] 4.3 Add the entry point that opens an assistant session in the `profile` preset from the profile page
@@ -48,8 +54,8 @@
 
 ## 5. Documentation and close-out
 
-- [ ] 5.1 Write `internal/experience/AGENTS.md` — the provenance rule, additive import, the retrieval contract, and the boundaries against `resumeextract`, `cv` and `userprofile`
-- [ ] 5.2 Update `internal/resumeextract/AGENTS.md` (it is an importer now; the staleness rule governs only the sections it still owns) and `internal/assistant/AGENTS.md` (third preset, experience tools everywhere)
-- [ ] 5.3 Add the experience-bank row and the new module reference to the table in `CLAUDE.md`
-- [ ] 5.4 `go build ./... && go vet ./... && go test ./...`, plus `make sqlc` diff check
+- [x] 5.1 Write `internal/experience/AGENTS.md` — the provenance rule, additive import, the retrieval contract, and the boundaries against `resumeextract`, `cv` and `userprofile`
+- [x] 5.2 Update `internal/resumeextract/AGENTS.md` (it is an importer now; the staleness rule governs only the sections it still owns) and `internal/assistant/AGENTS.md` (third preset, experience tools everywhere)
+- [x] 5.3 Add the experience-bank row and the new module reference to the table in `CLAUDE.md`
+- [x] 5.4 `go build ./... && go vet ./... && go test ./...` (107 packages), `go vet`, `gofmt`, `make sqlc` and `make gen-contracts` both drift-free, and the full `-tags=integration ./internal/db/` suite green
 - [ ] 5.5 Offer a `/blog` changelog entry — this is user-facing
