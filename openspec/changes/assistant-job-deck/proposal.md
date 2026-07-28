@@ -59,10 +59,11 @@ nothing validated it before render.
 
 ## Impact
 
-**Backend** — `internal/handler/assistant_tools.go` (the new tool, registered in
-`assistantDiscoveryTools` so both presets offer it),
+**Backend** — `internal/handler/assistant_present_tool.go` (the new tool),
+registered in `assistantDiscoveryTools` so both presets offer it;
 `internal/assistant/prompt.go` (the presentation rule). No schema or migration:
-the tool reads through the existing `GetJobBySlug` query and stores nothing.
+the tool reads through the existing `ResolveSlugsToJobIDs` query and stores
+nothing.
 
 **Frontend** — `web/src/lib/assistant/`: new `JobDeck.svelte` and
 `JobDeckCard.svelte`; `AssistantChat.svelte` withholds `present_jobs` from

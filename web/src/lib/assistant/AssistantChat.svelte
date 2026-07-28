@@ -551,9 +551,11 @@
               <!-- A recommendation is a `present_jobs` call, not prose. Its cards
                    render as a deck here and the call itself is withheld from the
                    activity list, so no progress chip sits above the deck it
-                   produced. The remaining calls read chronologically: the search
-                   that found the vacancies, then the vacancies. -->
-              {@const { decks, rest } = splitPresentingCalls(message.tools)}
+                   produced — the work that found the vacancies stays in the
+                   activity list above them. `message.streaming` decides what an
+                   unanswered call means: a placeholder mid-turn, nothing once the
+                   turn has closed without its result. -->
+              {@const { decks, rest } = splitPresentingCalls(message.tools, message.streaming)}
               <ToolGroupList calls={rest} />
               {#each decks as slot, di (di)}
                 <div class="self-start w-full">

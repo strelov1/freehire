@@ -28,6 +28,10 @@ const (
 // so the tool can be unit-tested without a database — `assistantHandlers.queries`
 // is a concrete *db.Queries, and a tool that called it directly would need
 // Postgres to test at all.
+//
+// There is deliberately no nil guard on the implementation: `*db.Queries` arrives
+// here as a typed nil, which no `== nil` check would catch, and every other tool
+// relies on the same invariant that handlers are built with real queries.
 type jobSlugResolver interface {
 	ResolveSlugsToJobIDs(ctx context.Context, slugs []string) ([]db.ResolveSlugsToJobIDsRow, error)
 }
@@ -129,13 +133,13 @@ func presentJobsTool(resolver jobSlugResolver) assistant.Tool {
 			if err := in.validate(); err != nil {
 				return nil, err
 			}
-			if resolver == nil {
-				return nil, fmt.Errorf("cannot present vacancies: the catalogue is unavailable")
-			}
-
+			// Trimmed, and stored back, so a slug the model padded with whitespace
+			// resolves instead of being reported as nonexistent — and so the receipt
+			// names the same string the client will look up.
 			slugs := make([]string, len(in.Jobs))
-			for i, job := range in.Jobs {
-				slugs[i] = job.Slug
+			for i := range in.Jobs {
+				in.Jobs[i].Slug = strings.TrimSpace(in.Jobs[i].Slug)
+				slugs[i] = in.Jobs[i].Slug
 			}
 			rows, err := resolver.ResolveSlugsToJobIDs(ctx, slugs)
 			if err != nil {
@@ -178,10 +182,19 @@ func (a presentJobsArgs) validate() error {
 		return fmt.Errorf("jobs has %d entries; show at most %d in one call, and use a second call for a further group",
 			len(a.Jobs), presentJobsMaxEntries)
 	}
+	// A slug shown twice is a card shown twice, and the client keys its cards by
+	// slug — a repeat there is a render error, not a cosmetic duplicate. Refusing
+	// it here is what keeps one out of the transcript in the first place.
+	seen := make(map[string]bool, len(a.Jobs))
 	for i, job := range a.Jobs {
-		if strings.TrimSpace(job.Slug) == "" {
+		slug := strings.TrimSpace(job.Slug)
+		if slug == "" {
 			return fmt.Errorf("jobs[%d] has no slug; copy the vacancy's public_slug from a search or read result", i)
 		}
+		if seen[slug] {
+			return fmt.Errorf("jobs[%d] repeats slug %q; show each vacancy once per call", i, slug)
+		}
+		seen[slug] = true
 		if strings.TrimSpace(job.Note) == "" {
 			return fmt.Errorf("jobs[%d] (%s) has no note; say in one sentence why this vacancy is worth the user's time", i, job.Slug)
 		}

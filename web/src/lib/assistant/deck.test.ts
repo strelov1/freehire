@@ -99,7 +99,9 @@ describe('splitPresentingCalls', () => {
     ]);
 
     expect(rest).toHaveLength(0);
-    expect(decks).toEqual([{ status: 'pending' }]);
+    // Two placeholders because the call names two vacancies — a count, not a
+    // slug, so nothing unvalidated is on screen.
+    expect(decks).toEqual([{ status: 'pending', count: 2 }]);
   });
 
   it('renders nothing for a call the backend rejected', () => {
@@ -124,6 +126,62 @@ describe('splitPresentingCalls', () => {
     for (const call of cases) {
       expect(splitPresentingCalls([call]).decks).toHaveLength(0);
     }
+  });
+
+  // Svelte throws `each_key_duplicate` on a repeated key in production as well as
+  // in dev, and the offending call is already in the transcript — so a duplicate
+  // that reached the client would not merely render twice, it would break the
+  // session on every reload. The backend refuses duplicates going forward; these
+  // guard the transcripts that already contain one.
+  it('shows a repeated slug once', () => {
+    const { decks } = splitPresentingCalls([
+      presented(
+        {
+          jobs: [
+            { slug: 'go-dev-acme', note: 'first' },
+            { slug: 'go-dev-acme', note: 'again' },
+          ],
+        },
+        { presented: ['go-dev-acme', 'go-dev-acme'], dropped: [] },
+      ),
+    ]);
+
+    const deck = decks[0]?.status === 'ready' ? decks[0].deck : null;
+    expect(deck?.entries.map((e) => e.slug)).toEqual(['go-dev-acme']);
+    // The rationale the model led with, not whatever it repeated.
+    expect(deck?.entries[0]?.note).toBe('first');
+  });
+
+  it('shows a repeated why_fits or concerns phrase once', () => {
+    const { decks } = splitPresentingCalls([
+      presented(
+        {
+          jobs: [
+            {
+              slug: 'go-dev-acme',
+              note: 'n',
+              why_fits: ['Go', 'Go', 'Postgres'],
+              concerns: ['On-site', 'On-site'],
+            },
+          ],
+        },
+        { presented: ['go-dev-acme'], dropped: [] },
+      ),
+    ]);
+
+    const entry = decks[0]?.status === 'ready' ? decks[0].deck.entries[0] : null;
+    expect(entry?.whyFits).toEqual(['Go', 'Postgres']);
+    expect(entry?.concerns).toEqual(['On-site']);
+  });
+
+  it('renders nothing for an unanswered call on a settled message', () => {
+    const inFlight: ToolCall[] = [{ name: PRESENT_JOBS_TOOL, input: twoJobs }];
+
+    // Still running: a placeholder is right.
+    expect(splitPresentingCalls(inFlight, true).decks).toEqual([{ status: 'pending', count: 2 }]);
+    // Settled with no result — the stream dropped between the call and its
+    // result. Skeletons would pulse forever under a finished message.
+    expect(splitPresentingCalls(inFlight, false).decks).toHaveLength(0);
   });
 
   it('keeps several decks in the order they were called', () => {

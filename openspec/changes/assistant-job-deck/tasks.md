@@ -3,7 +3,7 @@
 - [x] 1.1 Write failing tests in `internal/handler/assistant_tools_test.go` for the tool's argument decoding: a missing `slug`, a missing `note`, an empty `jobs` array and an eleventh entry are each rejected with a message naming what is wrong.
 - [x] 1.2 Write failing tests for slug resolution: all slugs resolve → every one in `presented` and `dropped` empty; a mix → the real ones in `presented`, the unknown ones in `dropped` with slug and reason; none resolve → an error naming the unresolved slugs.
 - [x] 1.3 Write a failing test asserting the result carries no vacancy payload — only slugs and reasons — so the receipt cannot silently grow into a second copy of the search result.
-- [x] 1.4 Implement `presentJobsTool()` in `internal/handler/assistant_tools.go`: the JSON schema (`heading?`, `jobs[1..10]` of `{slug, note, why_fits?[≤4], concerns?[≤3]}`), argument decoding via `assistant.DecodeArgs`, and resolution through `h.queries.GetJobBySlug`.
+- [x] 1.4 Implement `presentJobsTool()` in `internal/handler/assistant_present_tool.go`: the JSON schema (`heading?`, `jobs[1..10]` of `{slug, note, why_fits?[≤4], concerns?[≤3]}`), argument decoding via `assistant.DecodeArgs`, and batched resolution through `ResolveSlugsToJobIDs`.
 - [x] 1.5 Write the schema's field descriptions as the model reads them: `note` explicitly forbids restating title, company, location or seniority; `why_fits` and `concerns` instruct omission over invention.
 - [x] 1.6 Register the tool in `assistantDiscoveryTools()` so both presets offer it, and extend `assistant_preset_test.go` to assert it is present for `chat` and `tailor`.
 

@@ -67,9 +67,15 @@ failed write. That is how a streamed turn learns the client is gone: the failure
 cancels the loop's context, so it stops before spending another model call.
 
 `assistant_tools.go` / `assistant_tracking_tools.go` / `assistant_cv_tools.go` /
-`assistant_profile_tool.go` build the agent's tools from the same services these
-handlers use, and `assistantRegistry` picks the set for a session's preset. The loop
-itself lives in [internal/assistant](../assistant/AGENTS.md).
+`assistant_profile_tool.go` / `assistant_present_tool.go` build the agent's tools
+from the same services these handlers use, and `assistantRegistry` picks the set for
+a session's preset. The loop itself lives in
+[internal/assistant](../assistant/AGENTS.md).
+
+`present_jobs` is the odd one out: it is the only tool whose purpose is presentation
+rather than retrieval or state change. It writes nothing and returns a receipt of
+slugs, not vacancies — the client renders the deck and fetches each card's data by
+slug, so a recommendation costs the model's context once, not twice.
 
 `get_profile` is built on `profileHandlers` rather than the services under it, so the
 tool and `GET /me/profile` share one assembly and cannot drift. It returns the CV as

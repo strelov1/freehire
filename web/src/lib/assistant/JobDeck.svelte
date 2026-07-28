@@ -15,7 +15,7 @@
          backend has not said which slugs exist, and a deck built from unvalidated
          slugs would be replaced the moment the model corrected itself. -->
     <div class="space-y-2">
-      {#each [0, 1] as i (i)}
+      {#each { length: slot.count }, i (i)}
         <JobCardSkeleton />
       {/each}
     </div>

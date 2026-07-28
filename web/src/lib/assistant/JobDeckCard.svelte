@@ -17,6 +17,13 @@
   // so a failed fetch here means the network — not an invented slug. The card
   // still shows the rationale in that case: it is the part the user came for.
   let { entry }: { entry: DeckEntry } = $props();
+
+  // Captured once, not re-read in the template. The chat reassigns its state on
+  // every streamed token, so a `loadJob(entry.slug)` call inside `{#await}` would
+  // re-run per token — and `jobCache` evicts a rejected promise so a later render
+  // can retry, which would turn one failing card into a request per token. The
+  // deck keys its cards by slug, so this instance's slug never changes.
+  const jobRequest = loadJob(entry.slug);
 </script>
 
 {#snippet rationale()}
@@ -26,12 +33,12 @@
     {/if}
     {#if entry.whyFits.length > 0}
       <div class="flex flex-wrap gap-1.5">
-        {#each entry.whyFits as fit (fit)}
+        {#each entry.whyFits as fit, i (i)}
           <Badge variant="brand">{fit}</Badge>
         {/each}
       </div>
     {/if}
-    {#each entry.concerns as concern (concern)}
+    {#each entry.concerns as concern, i (i)}
       <p class="flex items-start gap-1.5 text-xs leading-relaxed text-muted-foreground">
         <TriangleAlert class="mt-0.5 size-3.5 shrink-0 text-destructive/60" aria-hidden="true" />
         <span>{concern}</span>
@@ -40,7 +47,7 @@
   </div>
 {/snippet}
 
-{#await loadJob(entry.slug)}
+{#await jobRequest}
   <JobCardSkeleton />
 {:then job}
   <JobRow {job} dimViewed={false} newTab compact footer={rationale} />

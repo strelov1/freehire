@@ -49,6 +49,9 @@ func TestPresentJobsToolRejectsMalformedEntries(t *testing.T) {
 		{"no note", `{"jobs":[{"slug":"go-dev-acme"}]}`, "note"},
 		{"no entries", `{"jobs":[]}`, "at least one"},
 		{"over the cap", `{"jobs":[` + entries(11) + `]}`, "10"},
+		// A repeated slug would render as a repeated card key on the client, which
+		// throws. Refusing it here is what stops one reaching a transcript at all.
+		{"a repeated slug", `{"jobs":[{"slug":"go-dev-acme","note":"a"},{"slug":"go-dev-acme","note":"b"}]}`, "go-dev-acme"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

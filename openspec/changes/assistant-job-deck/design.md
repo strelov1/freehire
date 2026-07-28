@@ -159,7 +159,7 @@ not through an invented slug.
 ## Migration Plan
 
 No schema change, no migration, no worker. The tool reads through the existing
-`GetJobBySlug` query and writes nothing.
+`ResolveSlugsToJobIDs` query and writes nothing.
 
 Deploy is a single release: the backend gains the tool and the prompt rule, the
 frontend gains the deck and loses the unfurl path. Rollback is a revert — no

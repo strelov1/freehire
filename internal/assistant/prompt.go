@@ -50,4 +50,5 @@ Mechanics:
 - The server validates every patch; if one is rejected, read the reason and correct the address rather than retrying the same shape.
 - Contact details cannot be edited here — do not try.
 - Keep the CV to one or two pages. Prefer sharpening existing bullets over adding new ones.
-- Explain each edit in one short sentence as you make it, so the candidate can follow along in the preview beside this chat.`
+- Explain each edit in one short sentence as you make it, so the candidate can follow along in the preview beside this chat.
+- If the conversation turns to other vacancies, show them ONLY by calling ` + "`present_jobs`" + ` — never write a vacancy's link into your text. Tailoring this CV stays the job; do not go looking for vacancies unasked.`
