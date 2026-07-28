@@ -180,6 +180,9 @@ func (s *Store) AddAtom(ctx context.Context, userID int64, a Atom) (Atom, error)
 	if err := a.Validate(); err != nil {
 		return Atom{}, err
 	}
+	if err := s.ownsEmployment(ctx, userID, a.EmploymentID); err != nil {
+		return Atom{}, err
+	}
 	row, err := s.repo.InsertAtomIfNew(ctx, userID, a, ClaimKey(a.Claim))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Atom{}, ErrAlreadyBanked
@@ -195,6 +198,9 @@ func (s *Store) AddAtom(ctx context.Context, userID int64, a Atom) (Atom, error)
 func (s *Store) UpdateAtom(ctx context.Context, id uuid.UUID, userID int64, a Atom) (Atom, error) {
 	a.Sanitize()
 	if err := a.Validate(); err != nil {
+		return Atom{}, err
+	}
+	if err := s.ownsEmployment(ctx, userID, a.EmploymentID); err != nil {
 		return Atom{}, err
 	}
 	row, err := s.repo.UpdateAtom(ctx, id, userID, a, ClaimKey(a.Claim))
@@ -216,6 +222,29 @@ func (s *Store) DeleteAtom(ctx context.Context, id uuid.UUID, userID int64) erro
 	}
 	if n == 0 {
 		return ErrNotFound
+	}
+	return nil
+}
+
+// ownsEmployment refuses an atom pointed at a place its owner does not own — including one
+// that does not exist. The foreign key alone does not cover this: it references
+// experience_employments(id) with no user in it.
+//
+// The damage this prevents is not a leak but a disappearance. Every read is scoped by
+// user_id, so an atom attached to someone else's place is absent from its owner's
+// employment list, files under no place when the surfaces group by it, and drops out of
+// their view entirely — a silently lost achievement, which is the worst thing this package
+// can do to someone.
+func (s *Store) ownsEmployment(ctx context.Context, userID int64, employmentID *uuid.UUID) error {
+	if employmentID == nil {
+		return nil
+	}
+	_, err := s.repo.GetEmployment(ctx, *employmentID, userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("verify employment: %w", err)
 	}
 	return nil
 }

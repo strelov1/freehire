@@ -176,3 +176,33 @@ func TestExperienceRoutesRequireAuth(t *testing.T) {
 		t.Errorf("unauthenticated delete = %d, want 401", resp.StatusCode)
 	}
 }
+
+// Nothing may be invisible on the page whose purpose is that nothing is invisible. An
+// achievement whose place is unknown is shown as unplaced rather than filed under a
+// heading that never renders — otherwise the owner loses something they cannot even delete.
+func TestListExperienceShowsAnAchievementWithAnUnknownPlace(t *testing.T) {
+	app, token, bank := experienceApp(t)
+
+	ghost := uuid.New()
+	bank.add(1, experience.Atom{
+		EmploymentID: &ghost, Claim: "Ran the cluster", Provenance: experience.ProvenanceManual,
+	})
+	bank.reindex()
+
+	resp := experienceReq(t, app, http.MethodGet, "/me/experience", "", token)
+	var body struct {
+		Data struct {
+			Unplaced []struct {
+				Claim string `json:"claim"`
+			} `json:"unplaced"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	resp.Body.Close()
+
+	if len(body.Data.Unplaced) != 1 || body.Data.Unplaced[0].Claim != "Ran the cluster" {
+		t.Errorf("unplaced = %+v, want the achievement visible despite its unknown place", body.Data.Unplaced)
+	}
+}

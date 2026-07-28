@@ -77,13 +77,23 @@ func (h *experienceHandlers) ListExperience(c *fiber.Ctx) error {
 		return err
 	}
 
+	known := make(map[uuid.UUID]bool, len(employments))
+	for _, e := range employments {
+		known[e.ID] = true
+	}
+
 	grouped := make(map[uuid.UUID][]experience.Atom, len(employments))
 	resp := experienceResponse{
 		Employments: make([]employmentWithAtoms, 0, len(employments)),
 		Unplaced:    []experience.Atom{},
 	}
 	for _, a := range atoms {
-		if a.EmploymentID == nil {
+		// An achievement whose place is unknown is shown as unplaced rather than filed
+		// under a heading that will never be rendered. The store refuses to create that
+		// state, but grouping by a pointer without checking it means any state nobody
+		// anticipated costs the owner an achievement they can no longer see or delete —
+		// and this view exists precisely so nothing is invisible to them.
+		if a.EmploymentID == nil || !known[*a.EmploymentID] {
 			resp.Unplaced = append(resp.Unplaced, a)
 			continue
 		}

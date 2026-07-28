@@ -169,22 +169,31 @@ func TestRetrieveIsOwnerScoped(t *testing.T) {
 	}
 }
 
-// The employment lookup must not blow up on an atom pointing at a role that is gone.
-func TestRetrieveToleratesAnOrphanedAtom(t *testing.T) {
-	s, _ := newStore()
+// An atom pointing at a role that is gone should be unreachable — AddAtom refuses a
+// foreign or unknown employment, and deleting a role cascades to its atoms. This asserts
+// the defensive path anyway, by planting the state the API cannot produce: retrieval must
+// score such an atom on its own signals rather than dropping or panicking on it, because
+// the alternative is losing evidence to a state nobody can explain.
+func TestRetrieveToleratesADanglingEmploymentPointer(t *testing.T) {
+	s, repo := newStore()
 	ctx := context.Background()
 
 	ghost := uuid.New()
-	if _, err := s.AddAtom(ctx, owner, Atom{
-		EmploymentID: &ghost, Claim: "Ran the cluster", Skills: []string{"kubernetes"}, Provenance: ProvenanceManual,
-	}); err != nil {
-		t.Fatalf("AddAtom: %v", err)
+	if _, err := repo.InsertAtomIfNew(ctx, owner, Atom{
+		EmploymentID: &ghost, Claim: "Ran the cluster", Skills: []string{"kubernetes"},
+		Provenance: ProvenanceManual,
+	}, ClaimKey("Ran the cluster")); err != nil {
+		t.Fatalf("plant atom: %v", err)
 	}
+
 	matches, err := s.Retrieve(ctx, owner, Query{Skills: []string{"kubernetes"}}, 5)
 	if err != nil {
 		t.Fatalf("Retrieve: %v", err)
 	}
 	if len(matches) != 1 {
-		t.Errorf("matches = %d, want the orphan still scored on its own skills", len(matches))
+		t.Fatalf("matches = %d, want the atom still scored on its own skills", len(matches))
+	}
+	if matches[0].Employment != nil {
+		t.Error("a dangling pointer resolved to an employment")
 	}
 }

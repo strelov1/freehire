@@ -353,3 +353,43 @@ func TestStoreDeleteEmploymentTakesItsAtoms(t *testing.T) {
 		t.Errorf("ListAtoms = %d atoms, want 0 — the atoms belonged to the deleted role", len(atoms))
 	}
 }
+
+// An atom may only attach to a place its own owner owns. Without the check the atom does
+// not leak to the other user — it VANISHES from its own owner's view, because every read
+// is scoped by user_id and the grouping then finds no place to file it under. A silently
+// lost achievement is the worst failure this package has.
+func TestStoreAtomCannotAttachToAnotherOwnersEmployment(t *testing.T) {
+	s, _ := newStore()
+	ctx := context.Background()
+
+	theirs, err := s.CreateEmployment(ctx, stranger, Employment{
+		Kind: KindJob, Company: "Someone Else", Role: "SWE",
+	})
+	if err != nil {
+		t.Fatalf("CreateEmployment: %v", err)
+	}
+
+	_, err = s.AddAtom(ctx, owner, Atom{
+		EmploymentID: &theirs.ID, Claim: "Cut latency", Provenance: ProvenanceManual,
+	})
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("AddAtom with a foreign employment = %v, want ErrNotFound", err)
+	}
+
+	mine, err := s.AddAtom(ctx, owner, Atom{Claim: "Cut latency", Provenance: ProvenanceManual})
+	if err != nil {
+		t.Fatalf("AddAtom: %v", err)
+	}
+	mine.EmploymentID = &theirs.ID
+	if _, err := s.UpdateAtom(ctx, mine.ID, owner, mine); !errors.Is(err, ErrNotFound) {
+		t.Errorf("UpdateAtom onto a foreign employment = %v, want ErrNotFound", err)
+	}
+
+	// A ghost id is refused for the same reason, and by the same check.
+	ghost := uuid.New()
+	if _, err := s.AddAtom(ctx, owner, Atom{
+		EmploymentID: &ghost, Claim: "Ran the cluster", Provenance: ProvenanceManual,
+	}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("AddAtom with an unknown employment = %v, want ErrNotFound", err)
+	}
+}
