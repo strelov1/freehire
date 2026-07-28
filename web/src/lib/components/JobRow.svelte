@@ -310,9 +310,11 @@
 </a>
 
 {#if footer}
-  <!-- Optional in-card actions row (e.g. the saved list's reminder chip), divided
-       from the content and rendered outside the <a> so its controls stay clickable. -->
-  <div class="border-t border-border px-4 py-2.5">
+  <!-- Optional in-card actions row (e.g. the saved list's reminder chip, the
+       assistant deck's rationale), divided from the content and rendered outside
+       the <a> so its controls stay clickable. Its inline padding tracks the card's
+       own, or the row would sit 4px out of line in a compact card. -->
+  <div class={['border-t border-border py-2.5', compact ? 'px-3' : 'px-4']}>
     {@render footer()}
   </div>
 {/if}

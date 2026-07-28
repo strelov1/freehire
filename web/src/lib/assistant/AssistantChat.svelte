@@ -14,8 +14,8 @@
   } from '$lib/assistant/api';
   import { sendTurn, type Turn } from '$lib/assistant/client';
   import { initChat, reduceTurnEvent, type ChatState } from '$lib/assistant/chat';
-  import { parseJobSegments } from '$lib/assistant/unfurl';
-  import JobCardUnfurl from '$lib/assistant/JobCardUnfurl.svelte';
+  import { splitPresentingCalls } from '$lib/assistant/deck';
+  import JobDeck from '$lib/assistant/JobDeck.svelte';
   import SessionRail from '$lib/assistant/SessionRail.svelte';
   import ToolGroupList from '$lib/assistant/ToolGroupList.svelte';
   import Composer from '$lib/assistant/Composer.svelte';
@@ -548,36 +548,24 @@
                 </details>
               {/if}
 
-              <ToolGroupList calls={message.tools} />
+              <!-- A recommendation is a `present_jobs` call, not prose. Its cards
+                   render as a deck here and the call itself is withheld from the
+                   activity list, so no progress chip sits above the deck it
+                   produced. The remaining calls read chronologically: the search
+                   that found the vacancies, then the vacancies. -->
+              {@const { decks, rest } = splitPresentingCalls(message.tools)}
+              <ToolGroupList calls={rest} />
+              {#each decks as slot, di (di)}
+                <div class="self-start w-full">
+                  <JobDeck {slot} />
+                </div>
+              {/each}
 
               {#if message.text}
-                {#if message.streaming}
-                  <!-- While streaming, render plain markdown — the text arrives
-                       token-by-token, so a half-typed job URL would otherwise
-                       match each prefix as a bogus slug (spurious 404s + card
-                       flicker). Unfurl only once the reply is settled. -->
-                  <article class="md self-start max-w-[88%] px-1 py-1 text-sm leading-relaxed text-foreground">
-                    <!-- eslint-disable-next-line svelte/no-at-html-tags -- DOMPurify-sanitized markdown -->
-                    {@html renderMarkdown(message.text)}
-                  </article>
-                {:else}
-                  <!-- Settled reply: split into markdown + job-link segments so
-                       freehire job links unfurl into real JobRow cards while the
-                       prose stays sanitized markdown. Cards take the column
-                       width; prose keeps a readable measure. -->
-                  <div class="self-start w-full">
-                    {#each parseJobSegments(message.text) as seg, si (si)}
-                      {#if seg.kind === 'job'}
-                        <JobCardUnfurl slug={seg.slug} />
-                      {:else}
-                        <article class="md max-w-[88%] px-1 py-1 text-sm leading-relaxed text-foreground">
-                          <!-- eslint-disable-next-line svelte/no-at-html-tags -- DOMPurify-sanitized markdown -->
-                          {@html renderMarkdown(seg.text)}
-                        </article>
-                      {/if}
-                    {/each}
-                  </div>
-                {/if}
+                <article class="md self-start max-w-[88%] px-1 py-1 text-sm leading-relaxed text-foreground">
+                  <!-- eslint-disable-next-line svelte/no-at-html-tags -- DOMPurify-sanitized markdown -->
+                  {@html renderMarkdown(message.text)}
+                </article>
               {/if}
 
               {#if message.errored}

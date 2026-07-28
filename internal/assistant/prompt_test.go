@@ -36,10 +36,18 @@ func TestChatPromptCarriesTheSearchPlaybook(t *testing.T) {
 	if !strings.Contains(p, "facets") {
 		t.Error("the chat prompt does not tell the agent to read the facet vocabulary first")
 	}
-	// Vacancies must be presented as canonical links, which the chat unfurls into
-	// job cards.
-	if !strings.Contains(p, "/jobs/") {
-		t.Error("the chat prompt does not tell the agent to link vacancies by public_slug")
+}
+
+func TestChatPromptShowsVacanciesOnlyThroughTheTool(t *testing.T) {
+	p := SystemPrompt(PresetChat)
+
+	if !strings.Contains(p, "present_jobs") {
+		t.Error("the chat prompt does not tell the agent to show vacancies through present_jobs")
+	}
+	// A link in prose no longer renders as a card, so an instruction to write one
+	// would produce exactly the bare link this change exists to remove.
+	if strings.Contains(p, "/jobs/") {
+		t.Errorf("the chat prompt still asks for a job URL in prose; a vacancy reaches the user only through present_jobs\n%s", p)
 	}
 }
 

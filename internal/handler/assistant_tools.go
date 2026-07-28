@@ -24,9 +24,9 @@ const assistantMaxSearchLimit = 20
 const assistantDefaultSearchLimit = 10
 
 // assistantDiscoveryTools are the read-only tools every session gets: the filter
-// vocabulary, vacancy search and reads, and the market-fit score. They call the
-// same services the HTTP handlers call, so a tool result and the public API can
-// never disagree.
+// vocabulary, vacancy search and reads, the market-fit score, and the one tool
+// that puts a vacancy on the user's screen. They call the same services the HTTP
+// handlers call, so a tool result and the public API can never disagree.
 func (h *assistantHandlers) assistantDiscoveryTools() []assistant.Tool {
 	return []assistant.Tool{
 		h.getProfileTool(),
@@ -35,6 +35,7 @@ func (h *assistantHandlers) assistantDiscoveryTools() []assistant.Tool {
 		h.getJobTool(),
 		h.getCompanyTool(),
 		h.marketFitTool(),
+		presentJobsTool(h.queries),
 	}
 }
 

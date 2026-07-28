@@ -23,10 +23,24 @@ func TestChatPresetOffersDiscoveryAndTrackingTools(t *testing.T) {
 	reg := presetAPI().registry(assistant.Session{UserID: 3, Preset: assistant.PresetChat})
 
 	for _, want := range []string{"facets", "search_jobs", "get_job", "get_company", "market_fit",
-		"save_job", "unsave_job", "apply_job", "track_job", "my_jobs"} {
+		"present_jobs", "save_job", "unsave_job", "apply_job", "track_job", "my_jobs"} {
 		if !slices.Contains(reg.Names(), want) {
 			t.Errorf("chat preset is missing the %q tool; registered: %v", want, reg.Names())
 		}
+	}
+}
+
+// A tailoring session still recommends vacancies — the workspace's chat is the
+// same chat. Without present_jobs it would have no way to show one at all, since
+// a job link in prose is no longer rendered as a card.
+func TestTailorPresetCanAlsoPresentJobs(t *testing.T) {
+	cvID, jobID := uuid.MustParse("66666666-6666-4666-8666-666666666666"), int64(9)
+	reg := presetAPI().registry(assistant.Session{
+		UserID: 3, Preset: assistant.PresetTailor, CVID: &cvID, JobID: &jobID,
+	})
+
+	if !slices.Contains(reg.Names(), "present_jobs") {
+		t.Errorf("tailor preset is missing present_jobs; registered: %v", reg.Names())
 	}
 }
 

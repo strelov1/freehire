@@ -1,6 +1,7 @@
-// A tiny non-reactive fetch cache for job-card unfurls, shared across every card
-// on the page so a repeated slug (same or later message) is fetched once. Lives
-// in a plain module (not a component) so it's a plain Map, not reactive state.
+// A tiny non-reactive fetch cache for the chat's job cards, shared across every
+// card on the page so a repeated slug (same or later message) is fetched once.
+// Lives in a plain module (not a component) so it's a plain Map, not reactive
+// state.
 
 import { api } from '$lib/api';
 import type { Job } from '$lib/types';
