@@ -17,8 +17,8 @@
 
 - [x] 2.1 Implement `experience.Retrieve(userID, query, skills)` — deterministic scoring on canonical skill intersection (dominant), claim/context token overlap, employment recency, and an `agent_inferred` penalty, returning a bounded top-N
 - [x] 2.2 Test retrieval: skill-carrying evidence outranks incidental text overlap; a large bank returns a capped result; no LLM call is made
-- [ ] 2.3 Compose the `Professional` projection from the bank (experience) plus `Structured` (education, languages, summary, total years), keeping the contact whitelist intact so a new field is withheld until explicitly projected
-- [ ] 2.4 Test the projection: contacts never appear; a populated bank with a stale structure yields experience and no education; an `agent_inferred` atom is absent
+- [x] 2.3 Compose the `Professional` projection from the bank (experience) plus `Structured` (education, languages, summary, total years), keeping the contact whitelist intact so a new field is withheld until explicitly projected
+- [x] 2.4 Test the projection: contacts never appear; a populated bank with a stale structure yields experience and no education; an `agent_inferred` atom is absent
 - [ ] 2.5 Move `matchanalysis.Input.StructuredResume` to the composed projection; an empty bank means no analysis, a stale structure no longer blocks one
 - [ ] 2.6 Serve banked experience on `GET /api/v1/me/resume` and in `GET /api/v1/me/profile`'s `cv` block; regenerate the TS contract via `cmd/gen-contracts`
 - [ ] 2.7 Move `cv.Seed` to the bank for the work history and `Structured` for the rest, omitting non-publishable atoms
