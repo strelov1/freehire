@@ -33,6 +33,24 @@ export function entryFromQuery(params: URLSearchParams): AssistantEntry {
 }
 
 /**
+ * Whether this surface may open a conversation running under `preset`.
+ *
+ * Stated as a refusal, not a whitelist, and that is the point: `ListAssistantSessions`
+ * decides what the rail carries (chat, profile and browse today), and a client that
+ * whitelists presets goes stale the moment the backend gains one. It did — `browse`
+ * arrived with the extension's side panel and this check did not follow, so anyone whose
+ * newest conversation came from the extension landed on the dead-link panel, which
+ * replaces the rail they would have escaped through.
+ *
+ * Only a conversation BOUND to another artifact is refused: a tailoring chat belongs to
+ * the CV that owns it, is reached through the tailoring workspace, and its tools close
+ * over ids this surface knows nothing about.
+ */
+export function opensInRail(preset: string): boolean {
+  return preset !== 'tailor';
+}
+
+/**
  * How the address should follow the chat that just opened. Arriving without an id is a
  * redirect to where the caller belongs, so it replaces the entry rather than becoming a
  * step they can press Back into; choosing another chat is a real move and pushes one.

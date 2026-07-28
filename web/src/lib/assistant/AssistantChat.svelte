@@ -29,7 +29,7 @@
     type SessionItem,
   } from '$lib/assistant/sessions';
   import { eventsFromTranscript, type TurnEvent } from '$lib/assistant/wire';
-  import type { ChatPreset } from '$lib/assistant/presets';
+  import { opensInRail, type ChatPreset } from '$lib/assistant/presets';
 
   // The agent chat. The agent runs inside the freehire backend, so this is an
   // ordinary authenticated API surface: the session list, one session's stored
@@ -229,9 +229,7 @@
           });
         }
         await openSession(session);
-      } else if (sessions[0]) {
-        await openSession(sessions[0].id);
-      } else {
+      } else if (!(await openNewestOpenable())) {
         await createAndOpen();
       }
       phase = 'ready';
@@ -323,7 +321,7 @@
       // sense beside it. Opening one here would show a conversation the rail cannot list
       // and the user cannot get back to. The unbound presets — chat and the experience
       // interviewer — are both at home here.
-      if (showSessionRail && meta.preset !== 'chat' && meta.preset !== 'profile') {
+      if (showSessionRail && !opensInRail(meta.preset)) {
         notFound = true;
         return;
       }
@@ -336,6 +334,29 @@
       switching = false;
     }
     void scrollToBottom();
+  }
+
+  /**
+   * Open the most recent conversation that will actually open, newest first.
+   *
+   * Nobody asked for a SPECIFIC chat here — we picked one on their behalf — so a chat
+   * that will not open is our problem to route around, not a dead link to report. Saying
+   * "this chat no longer exists" for a pick they never made replaces the rail with a
+   * panel, and its only way out lands on this same code, which picks the same chat: a
+   * loop with no exit but a manual URL.
+   *
+   * Returns false when the caller has nothing openable, so boot() can start them a chat.
+   */
+  async function openNewestOpenable(): Promise<boolean> {
+    for (const candidate of sessions) {
+      // Sequential on purpose: we want the FIRST one that opens, and opening them in
+      // parallel would race several transcripts into the same pane.
+      // eslint-disable-next-line no-await-in-loop
+      await openSession(candidate.id);
+      if (!notFound) return true;
+      notFound = false;
+    }
+    return false;
   }
 
   async function createAndOpen() {
