@@ -88,13 +88,17 @@ type API struct {
 type middleware struct {
 	optional fiber.Handler
 	key      fiber.Handler
-	// cvKey is keyAuth widened to admit the narrow `cv` key the tailoring bootstrap
-	// mints. Only the CV surface (and the caller's own identity read) mounts it; every
-	// other key-accepting route stays on key, which is full-scope-only — so a new
-	// endpoint is out of a leaked agent credential's reach unless it opts in.
-	cvKey     fiber.Handler
-	cookie    fiber.Handler
-	moderator fiber.Handler
+	// cvKey is keyAuth widened to admit the narrow `cv` key. Only the CV surface (and
+	// the caller's own identity read) mounts it; every other key-accepting route stays
+	// on key, which is full-scope-only — so a new endpoint is out of a leaked agent
+	// credential's reach unless it opts in.
+	cvKey  fiber.Handler
+	cookie fiber.Handler
+	// optionalCookie attaches a cookie session when there is one but never rejects.
+	// It exists for provider callbacks, which are browser navigations: a 401 there
+	// renders JSON into the address bar instead of sending the user back to the app.
+	optionalCookie fiber.Handler
+	moderator      fiber.Handler
 	// outboundFetch throttles every endpoint that makes the server fetch a
 	// caller-supplied URL, so one user's budget is spent across them rather than
 	// granted once per route.
@@ -154,6 +158,13 @@ type Config struct {
 	// LLM backs the optional CV ATS qualitative review. Nil disables the AI layer:
 	// the ATS score stays deterministic (the report just omits content-quality).
 	LLM *llm.Client
+	// AssistantLLM backs the in-app agent. It is a separate client because the agent
+	// runs on its own model (ASSISTANT_MODEL) — chosen for tool calling and context
+	// size rather than for cheap JSON extraction. Nil disables new turns.
+	AssistantLLM *llm.Client
+	// AssistantMaxSteps bounds the tool-calling rounds of one turn; zero uses the
+	// assistant package's default.
+	AssistantMaxSteps int
 	// PIIDetector de-identifies CV text before it reaches the LLM (fit analysis and
 	// structured extraction). Nil disables those CV→LLM paths (fail-closed): they degrade
 	// to no analysis rather than send PII to the model.
@@ -224,10 +235,12 @@ func Register(app *fiber.App, cfg Config) {
 	savedSearchH := newSavedSearchHandlers(queries)
 	subscriptionH := newSubscriptionHandlers(queries)
 	profileSvc := userprofile.New(userprofile.NewQueriesRepository(queries))
-	profileH := newProfileHandlers(profileSvc)
 	// Résumé storage is nil-safe: a nil Blob (S3 unconfigured) yields a disabled service
 	// whose Enabled() is false, so the upload/verdict paths degrade to in-request parsing.
 	resumeStore := resume.New(cfg.Blob, resume.NewQueriesRepository(queries))
+	// The profile read serves the structured résumé beside the profile, so it needs the
+	// résumé store — hence constructed after it.
+	profileH := newProfileHandlers(profileSvc, resumeStore)
 	// Nil-safe: NewAnalyzer(nil) is a no-op analyzer, so the ATS report works whether
 	// or not the LLM is configured.
 	atsAnalyzer := atscheck.NewAnalyzer(cfg.LLM)
@@ -268,6 +281,12 @@ func Register(app *fiber.App, cfg Config) {
 	companiesH := newCompaniesHandlers(queries, companySearch)
 	trackingH := newTrackingHandlers(queries, cfg.Pool, jobSearch)
 	resumeH := newResumeHandlers(resumeStore, structuredExtractor, jobSearch, facets, profileSvc, atsAnalyzer, queries)
+	// The in-app agent is a facade over the feature handlers above: its tools call
+	// the same services their endpoints do, so a tool result and the API can never
+	// disagree. The tailoring bootstrap mints its conversations through the same
+	// store, which is why the CV handlers get it back.
+	assistantH := newAssistantHandlers(queries, cfg.AssistantLLM, cfg.AssistantMaxSteps, searchH, resumeH, trackingH, cvH, profileH)
+	cvH.withAssistantSessions(assistantH.store)
 
 	// Referral notifications reuse the SES email transport (email is always present) and
 	// the Telegram bot when linked. Each channel is wrapped only when configured so a nil
@@ -329,12 +348,13 @@ func Register(app *fiber.App, cfg Config) {
 	cookieAuth := auth.RequireAuth(a.issuer, a.queries)
 	requireModerator := auth.RequireRole(a.queries, "moderator")
 	mw := middleware{
-		optional:      optionalAuth,
-		key:           keyAuth,
-		cvKey:         cvKeyAuth,
-		cookie:        cookieAuth,
-		moderator:     requireModerator,
-		outboundFetch: contributionLimiter(),
+		optional:       optionalAuth,
+		key:            keyAuth,
+		cvKey:          cvKeyAuth,
+		cookie:         cookieAuth,
+		optionalCookie: auth.OptionalCookieAuth(a.issuer, a.queries),
+		moderator:      requireModerator,
+		outboundFetch:  contributionLimiter(),
 	}
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
@@ -404,6 +424,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Résumé/CV surfaces: verdict, ATS report, extraction, storage, recommendations
 	// (see resumeHandlers).
 	resumeH.register(api, mw)
+	assistantH.register(api, mw)
 
 	// Filter subscriptions (see subscriptionHandlers).
 	subscriptionH.register(api, mw)

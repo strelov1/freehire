@@ -107,7 +107,7 @@
 
   // Stop being a referrer: delete the offer after a confirm, then drop it optimistically
   // (reloading on failure to resurface it). `withdrawing` disables the acting row's button.
-  let withdrawing = $state<number | null>(null);
+  let withdrawing = $state<string | null>(null);
   async function withdrawOffer(o: ReferralOffer) {
     if (withdrawing !== null) return;
     const name = o.company_name || o.company_slug;

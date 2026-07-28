@@ -1,31 +1,48 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/resumeextract"
 	"github.com/strelov1/freehire/internal/userprofile"
 )
 
-// profileHandlers serves the single-per-user profile (a specialization + skills set).
-// The use cases live in userprofile.Service; the handlers translate wire ↔ domain and
-// delegate to it.
-type profileHandlers struct {
-	userProfile *userprofile.Service
+// structuredResumeReader is the slice of the résumé store the profile read needs
+// (*resume.Store satisfies it), kept narrow so the handler is unit-testable without a
+// database. The bool reports whether a structure current with the stored CV exists.
+type structuredResumeReader interface {
+	Structured(ctx context.Context, userID int64) (resumeextract.Structured, bool, error)
 }
 
-func newProfileHandlers(userProfile *userprofile.Service) *profileHandlers {
-	return &profileHandlers{userProfile: userProfile}
+// profileHandlers serves the single-per-user profile (a specialization + skills set).
+// The use cases live in userprofile.Service; the handlers translate wire ↔ domain and
+// delegate to it. resume supplies the structured résumé the read carries alongside the
+// profile, and may be nil where the résumé surface is not configured.
+type profileHandlers struct {
+	userProfile *userprofile.Service
+	resume      structuredResumeReader
+}
+
+func newProfileHandlers(userProfile *userprofile.Service, resume structuredResumeReader) *profileHandlers {
+	return &profileHandlers{userProfile: userProfile, resume: resume}
 }
 
 func (h *profileHandlers) register(api fiber.Router, mw middleware) {
-	// The user profile is a cookie-only (RequireAuth) singleton — one per user, keyed
-	// by the session, no id in the path. GET returns the profile or null; PUT upserts
-	// (create-or-replace); DELETE clears it (idempotent).
-	api.Get("/me/profile", mw.cookie, h.GetProfile)
+	// The user profile is a singleton — one per user, keyed by the authenticated caller,
+	// no id in the path. GET returns the profile or null; PUT upserts (create-or-replace);
+	// DELETE clears it (idempotent).
+	//
+	// The read takes a key so the CLI can ground itself in what the user is actually
+	// looking for instead of interrogating them for it. The writes stay cookie-only: a
+	// key that leaks out of a script's environment must not rewrite or clear a profile.
+	// (The in-app assistant does not come through here at all — its tools run in-process
+	// with the user id in hand, no credential.)
+	api.Get("/me/profile", mw.key, h.GetProfile)
 	api.Put("/me/profile", mw.cookie, h.PutProfile)
 	api.Delete("/me/profile", mw.cookie, h.DeleteProfile)
 }
@@ -34,27 +51,51 @@ func (h *profileHandlers) register(api fiber.Router, mw middleware) {
 // (ownership, internal); there is no id or name. specializations are one or more job
 // categories; skills are canonical lowercase tokens; location_preferences is the stored
 // location block echoed verbatim, or null when the user set none.
+//
+// cv is the caller's structured résumé projected onto its contact-free view, so one
+// authenticated read gives a programmatic consumer both what the user is looking for and
+// what they have done. Null when no current structure exists. Contacts are served only
+// by GET /me/resume — a profile is a professional self, and the agents that read this
+// have no business knowing the candidate's name.
 type profileResponse struct {
-	Specializations     []string        `json:"specializations"`
-	Skills              []string        `json:"skills"`
-	ExcludedSkills      []string        `json:"excluded_skills"`
-	LocationPreferences json.RawMessage `json:"location_preferences"`
-	CreatedAt           *time.Time      `json:"created_at"`
-	UpdatedAt           *time.Time      `json:"updated_at"`
+	Specializations     []string                    `json:"specializations"`
+	Skills              []string                    `json:"skills"`
+	ExcludedSkills      []string                    `json:"excluded_skills"`
+	LocationPreferences json.RawMessage             `json:"location_preferences"`
+	CV                  *resumeextract.Professional `json:"cv"`
+	CreatedAt           *time.Time                  `json:"created_at"`
+	UpdatedAt           *time.Time                  `json:"updated_at"`
 }
 
 // toProfileResponse maps a stored profile to its wire shape (no user id). The location
 // block is the raw JSONB (json.RawMessage), which marshals through unchanged — a NULL
 // column stays null.
-func toProfileResponse(p userprofile.Profile) profileResponse {
+func toProfileResponse(p userprofile.Profile, cv *resumeextract.Professional) profileResponse {
 	return profileResponse{
 		Specializations:     p.Specializations,
 		Skills:              p.Skills,
 		ExcludedSkills:      p.ExcludedSkills,
 		LocationPreferences: p.LocationPreferences,
+		CV:                  cv,
 		CreatedAt:           p.CreatedAt,
 		UpdatedAt:           p.UpdatedAt,
 	}
+}
+
+// structuredCV reads the caller's structured résumé as its contact-free projection, or
+// nil when there is none. Best-effort by design: the résumé supplements the profile, so
+// an unconfigured reader or a failing lookup degrades to a null cv block rather than
+// denying the caller their own profile.
+func (h *profileHandlers) structuredCV(ctx context.Context, userID int64) *resumeextract.Professional {
+	if h.resume == nil {
+		return nil
+	}
+	structured, ok, err := h.resume.Structured(ctx, userID)
+	if err != nil || !ok {
+		return nil
+	}
+	professional := structured.Professional()
+	return &professional
 }
 
 // profileError maps the user-profile sentinels onto HTTP statuses: an unknown/empty/
@@ -99,7 +140,7 @@ type saveProfileRequest struct {
 }
 
 // GetProfile returns the authenticated user's single profile, or {"data": null} when they
-// have not saved one yet. Behind RequireAuth (cookie-only): profiles are a browser feature.
+// have not saved one yet.
 func (h *profileHandlers) GetProfile(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -113,7 +154,7 @@ func (h *profileHandlers) GetProfile(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return c.JSON(fiber.Map{"data": toProfileResponse(profile)})
+	return c.JSON(fiber.Map{"data": toProfileResponse(profile, h.structuredCV(c.Context(), userID))})
 }
 
 // PutProfile creates-or-replaces the authenticated user's profile (specializations +
@@ -135,7 +176,9 @@ func (h *profileHandlers) PutProfile(c *fiber.Ctx) error {
 	if err != nil {
 		return profileError(err)
 	}
-	return c.JSON(fiber.Map{"data": toProfileResponse(profile)})
+	// The same representation the read serves — one resource, one shape, so a client that
+	// saves and a client that fetches see the same profile.
+	return c.JSON(fiber.Map{"data": toProfileResponse(profile, h.structuredCV(c.Context(), userID))})
 }
 
 // DeleteProfile clears the authenticated user's profile. Idempotent: deleting when none

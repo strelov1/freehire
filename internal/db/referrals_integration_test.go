@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -222,7 +223,7 @@ func TestReferralRequests(t *testing.T) {
 		// cv_kind='original' with a cv_id → cv_kind CHECK violation. (The "built
 		// requires a cv_id" invariant is a domain-layer concern, not a DB CHECK,
 		// so ON DELETE SET NULL can null a built request's cv_id without failing.)
-		var cvID int64
+		var cvID uuid.UUID
 		if err := pool.QueryRow(ctx,
 			`INSERT INTO cvs (user_id, title, data) VALUES ($1, 'CV', '{}') RETURNING id`,
 			seeker).Scan(&cvID); err != nil {
@@ -230,7 +231,7 @@ func TestReferralRequests(t *testing.T) {
 		}
 		if _, err := q.CreateReferralRequest(ctx, CreateReferralRequestParams{
 			SeekerUserID: seeker, CompanySlug: "acme", CvKind: "original",
-			CvID: pgtype.Int8{Int64: cvID, Valid: true}, ContactEmail: text("seeker@example.test"),
+			CvID: &cvID, ContactEmail: text("seeker@example.test"),
 		}); err == nil {
 			t.Error("original CV carrying a cv_id should violate cv_kind CHECK")
 		}
@@ -243,7 +244,7 @@ func TestReferralRequests(t *testing.T) {
 		insertCompany(t, pool, "acme", "acme")
 		approvedOffer(t, referrer, "acme")
 
-		var cvID int64
+		var cvID uuid.UUID
 		if err := pool.QueryRow(ctx,
 			`INSERT INTO cvs (user_id, title, data) VALUES ($1, 'CV', '{}') RETURNING id`,
 			seeker).Scan(&cvID); err != nil {
@@ -251,7 +252,7 @@ func TestReferralRequests(t *testing.T) {
 		}
 		req, err := q.CreateReferralRequest(ctx, CreateReferralRequestParams{
 			SeekerUserID: seeker, CompanySlug: "acme", CvKind: "built",
-			CvID: pgtype.Int8{Int64: cvID, Valid: true}, ContactEmail: text("seeker@example.test"),
+			CvID: &cvID, ContactEmail: text("seeker@example.test"),
 		})
 		if err != nil {
 			t.Fatalf("create built request: %v", err)
@@ -266,7 +267,7 @@ func TestReferralRequests(t *testing.T) {
 		if err != nil {
 			t.Fatalf("get request after cv delete: %v", err)
 		}
-		if got.CvID.Valid {
+		if got.CvID != nil {
 			t.Errorf("cv_id = %v, want NULL after CV deletion", got.CvID)
 		}
 		if got.CvKind != "built" {

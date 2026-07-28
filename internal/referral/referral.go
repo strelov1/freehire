@@ -10,6 +10,7 @@ package referral
 import (
 	"context"
 	"errors"
+	"github.com/google/uuid"
 	"log"
 	"net/url"
 	"strings"
@@ -88,7 +89,9 @@ var (
 // Offer is a stored referral offer, decoupled from the generated db row. The pointer
 // timestamps and DecidedBy are nil until a moderator decides.
 type Offer struct {
-	ID          int64
+	// ID is a random UUID: these ids name resources whose reader is not always their
+	// owner, so a countable one would make a single authorization slip enumerable.
+	ID          uuid.UUID
 	UserID      int64
 	CompanySlug string
 	// CompanyName is the catalogue display name for CompanySlug, empty when the offer
@@ -109,7 +112,7 @@ type Offer struct {
 // CVID are nil for "no source vacancy" and an original-CV attachment respectively; ActedBy
 // and ActedAt are nil until a referrer marks it.
 type Request struct {
-	ID           int64
+	ID           uuid.UUID
 	SeekerUserID int64
 	CompanySlug  string
 	// CompanyName is the catalogue display name for CompanySlug, empty on paths that don't
@@ -118,7 +121,7 @@ type Request struct {
 	CompanyName string
 	JobID       *int64
 	CVKind      string
-	CVID        *int64
+	CVID        *uuid.UUID
 	// LinkedInURL is the seeker's own profile, shown to the referrer in the inbox alongside
 	// the contact channels. Required and shape-validated at submission.
 	LinkedInURL     string
@@ -154,7 +157,7 @@ type RequestInput struct {
 	CompanySlug     string
 	JobID           *int64
 	CVKind          string
-	CVID            *int64
+	CVID            *uuid.UUID
 	LinkedInURL     string
 	ContactTelegram string
 	ContactEmail    string
@@ -167,21 +170,21 @@ type RequestInput struct {
 // no-row update (the status guard) to ErrOfferNotPending / ErrRequestNotOpen.
 type Repository interface {
 	CreateOffer(ctx context.Context, in OfferInput) (Offer, error)
-	DecideOffer(ctx context.Context, offerID, moderatorID int64, status string) (Offer, error)
-	GetOffer(ctx context.Context, offerID int64) (Offer, bool, error)
-	DeleteOffer(ctx context.Context, offerID, userID int64) error
+	DecideOffer(ctx context.Context, offerID uuid.UUID, moderatorID int64, status string) (Offer, error)
+	GetOffer(ctx context.Context, offerID uuid.UUID) (Offer, bool, error)
+	DeleteOffer(ctx context.Context, offerID uuid.UUID, userID int64) error
 	ListOffersByUser(ctx context.Context, userID int64) ([]Offer, error)
 	ListPendingOffers(ctx context.Context) ([]Offer, error)
 	CompanyHasApprovedReferrer(ctx context.Context, companySlug string) (bool, error)
 	ReferrerApprovedForCompany(ctx context.Context, userID int64, companySlug string) (bool, error)
 	ApprovedReferrerRecipients(ctx context.Context, companySlug string) ([]Recipient, error)
-	CVBelongsToUser(ctx context.Context, cvID, userID int64) (bool, error)
+	CVBelongsToUser(ctx context.Context, cvID uuid.UUID, userID int64) (bool, error)
 	UserHasResume(ctx context.Context, userID int64) (bool, error)
 
 	CreateRequest(ctx context.Context, in RequestInput) (Request, error)
 	CountRequestsSince(ctx context.Context, seekerID int64, since time.Time) (int64, error)
-	GetRequest(ctx context.Context, id int64) (Request, bool, error)
-	ResolveRequest(ctx context.Context, id, actorID int64, status string) (Request, error)
+	GetRequest(ctx context.Context, id uuid.UUID) (Request, bool, error)
+	ResolveRequest(ctx context.Context, id uuid.UUID, actorID int64, status string) (Request, error)
 	ListRequestsBySeeker(ctx context.Context, seekerID int64) ([]Request, error)
 	ListIncomingRequests(ctx context.Context, referrerID int64) ([]Request, error)
 }
@@ -240,7 +243,7 @@ func (s *Service) SubmitOffer(ctx context.Context, in OfferInput) (Offer, error)
 
 // DecideOffer approves or rejects a pending offer, recording the moderator. A decision on an
 // already-decided or absent offer returns ErrOfferNotPending.
-func (s *Service) DecideOffer(ctx context.Context, offerID, moderatorID int64, approve bool) (Offer, error) {
+func (s *Service) DecideOffer(ctx context.Context, offerID uuid.UUID, moderatorID int64, approve bool) (Offer, error) {
 	status := OfferApproved
 	if !approve {
 		status = OfferRejected
@@ -250,14 +253,14 @@ func (s *Service) DecideOffer(ctx context.Context, offerID, moderatorID int64, a
 
 // GetOffer returns one offer by id — for the moderator's proof-CV view. ok is false when
 // the offer does not exist.
-func (s *Service) GetOffer(ctx context.Context, offerID int64) (Offer, bool, error) {
+func (s *Service) GetOffer(ctx context.Context, offerID uuid.UUID) (Offer, bool, error) {
 	return s.repo.GetOffer(ctx, offerID)
 }
 
 // WithdrawOffer lets a member stop being a referrer: it hard-deletes their own offer,
 // owner-scoped by userID. A missing offer or one owned by someone else returns
 // ErrOfferNotFound. Deleting frees the (user, company) slot so they can offer again later.
-func (s *Service) WithdrawOffer(ctx context.Context, offerID, userID int64) error {
+func (s *Service) WithdrawOffer(ctx context.Context, offerID uuid.UUID, userID int64) error {
 	return s.repo.DeleteOffer(ctx, offerID, userID)
 }
 
@@ -332,7 +335,7 @@ func (s *Service) CreateRequest(ctx context.Context, in RequestInput) (Request, 
 // ResolveRequest marks a sent request contacted or declined on behalf of a referrer, after
 // verifying they are an approved referrer of the request's company. A missing request is
 // ErrRequestNotFound; a request already resolved by another referrer is ErrRequestNotOpen.
-func (s *Service) ResolveRequest(ctx context.Context, requestID, referrerID int64, contacted bool) (Request, error) {
+func (s *Service) ResolveRequest(ctx context.Context, requestID uuid.UUID, referrerID int64, contacted bool) (Request, error) {
 	if _, err := s.authorizedRequest(ctx, requestID, referrerID); err != nil {
 		return Request{}, err
 	}
@@ -346,7 +349,7 @@ func (s *Service) ResolveRequest(ctx context.Context, requestID, referrerID int6
 // AuthorizeCVAccess returns the request when referrerID is an approved referrer of its
 // company, so the handler can serve the attached CV — the authorization gate that keeps CV
 // access cabinet-only. ErrNotAuthorized otherwise; ErrRequestNotFound for a missing request.
-func (s *Service) AuthorizeCVAccess(ctx context.Context, requestID, referrerID int64) (Request, error) {
+func (s *Service) AuthorizeCVAccess(ctx context.Context, requestID uuid.UUID, referrerID int64) (Request, error) {
 	return s.authorizedRequest(ctx, requestID, referrerID)
 }
 
@@ -362,7 +365,7 @@ func (s *Service) ListIncoming(ctx context.Context, referrerID int64) ([]Request
 
 // authorizedRequest fetches a request and verifies the caller is an approved referrer of its
 // company, the shared gate behind acting on and viewing a request.
-func (s *Service) authorizedRequest(ctx context.Context, requestID, referrerID int64) (Request, error) {
+func (s *Service) authorizedRequest(ctx context.Context, requestID uuid.UUID, referrerID int64) (Request, error) {
 	req, ok, err := s.repo.GetRequest(ctx, requestID)
 	if err != nil {
 		return Request{}, err

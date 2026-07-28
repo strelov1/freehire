@@ -28,9 +28,8 @@ jobs:
       - name: Install poppler-utils
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils
 
-      - name: Build
-        run: go build ./...
-
+      # No separate `go build ./...`: vet type-checks every package and the test
+      # steps compile them, including the test-less cmd/* binaries.
       - name: Vet
         run: go vet ./...
 
@@ -91,7 +90,9 @@ jobs:
 
   web:
     runs-on: ubuntu-latest
-    needs: [design-system]
+    # Not gated on design-system: web consumes the package's *source* (its
+    # "svelte" export is ./src/index.ts) plus the two committed dist/tokens-*.css,
+    # so nothing here waits on that job's build.
     defaults:
       run:
         working-directory: web

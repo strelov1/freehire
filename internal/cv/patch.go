@@ -30,6 +30,21 @@ const (
 	PatchSetStack       PatchOp = "set_stack"
 )
 
+// PatchOps is the closed vocabulary of ops, in the order a caller meets them. LLM-facing
+// callers render it as the enum of their patch schema rather than restating the list in
+// prose — a hand-written list drifts (set_stack was missing from one for a release), and a
+// model that cannot see an op cannot use it.
+var PatchOps = []string{
+	string(PatchSetSummary),
+	string(PatchSetHeaderField),
+	string(PatchAddBullet),
+	string(PatchReplaceBullet),
+	string(PatchRemoveBullet),
+	string(PatchReorderBullets),
+	string(PatchSetSkillGroup),
+	string(PatchSetStack),
+}
+
 // Patch is one field-level edit to a CV Document. Op selects the operation; the remaining
 // fields are its address and payload, and only the ones an op needs are read. A patch names
 // the single field it changes rather than re-emitting the document, so an LLM tailoring a CV

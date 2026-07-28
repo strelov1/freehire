@@ -7,8 +7,9 @@ TBD - created by archiving change add-cv-tailoring. Update Purpose after archive
 
 The system SHALL, on a tailoring bootstrap request for a vacancy, create a new CV row bound to
 that vacancy (`cvs.job_id` set) whose document is copied from the user's base CV (`job_id = NULL`),
-and SHALL return the tailored CV id, the base CV id, and the cached fit analysis. The base CV MUST
-remain unchanged by the bootstrap, and the tailored CV MUST be owner-scoped to the requesting user.
+and SHALL return the tailored CV id, the base CV id, and the cached fit analysis. Both ids SHALL be
+the CVs' unguessable ids. The base CV MUST remain unchanged by the bootstrap, and the tailored CV
+MUST be owner-scoped to the requesting user.
 
 #### Scenario: Bootstrap creates a tailored copy bound to the vacancy
 
@@ -19,6 +20,11 @@ remain unchanged by the bootstrap, and the tailored CV MUST be owner-scoped to t
 
 - **WHEN** the tailoring bootstrap creates a tailored copy
 - **THEN** the base CV's document and `updated_at` are unchanged
+
+#### Scenario: The returned ids are not guessable
+
+- **WHEN** the bootstrap responds
+- **THEN** `tailor_cv_id` and `base_cv_id` are random ids, and neither can be derived from the other or from any previously issued id
 
 ### Requirement: The base CV is seeded from the structured résumé when absent
 
@@ -90,24 +96,6 @@ an authenticated caller (session cookie or API key).
 
 - **WHEN** an authenticated owner reads the tailoring context for their tailored CV
 - **THEN** the response lists the verdict, recommendation, dimension comments, and requirements labelled `missing-have` versus `missing-gap`
-
-### Requirement: The tailoring agent acts as the user via a scoped, short-lived credential
-
-The system SHALL, at tailoring bootstrap, mint a short-lived API key scoped to the CV surface
-for the requesting user and return it so the agent's CLI can authenticate to the CV endpoints
-as that user. Patches and reads made with that key MUST be owner-scoped to the same user, so
-the agent can never read or edit another user's CV, and the key's scope MUST confine it to the
-CV endpoints, so a leaked tailoring credential cannot reach the rest of the owner's account.
-
-#### Scenario: The minted key edits only its owner's CVs
-
-- **WHEN** the agent uses the minted key to patch a CV id that belongs to a different user
-- **THEN** the request is rejected as not found / forbidden and no document is mutated
-
-#### Scenario: The minted key is confined to the CV surface
-
-- **WHEN** the minted key is presented to an endpoint outside the CV surface — a referral CV read, or a credit-spending analysis
-- **THEN** the request is refused with `403` for insufficient scope
 
 ### Requirement: Tailoring is beta-gated and surfaced only after analysis
 

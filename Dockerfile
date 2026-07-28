@@ -10,19 +10,17 @@ COPY . .
 # One image carries every binary: the HTTP server (default entrypoint) plus the
 # run-once workers (ingest/enrich/reindex and the Telegram crawl/extract pair),
 # which prod invokes on a schedule via `docker compose run --rm app /app/<worker>`.
+#
+# Two invocations rather than one per binary: with `-o /out/` (a directory) Go
+# names each binary after its cmd dir — which is already how they're named — and
+# building them together shares one dependency compile and links them in
+# parallel. Cold-cache: 26s -> 17s locally, 72s -> ~50s on a CI runner. Only the
+# server needs an output name of its own.
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/hire ./cmd/server \
- && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/ingest ./cmd/ingest \
- && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/enrich ./cmd/enrich \
- && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/reindex ./cmd/reindex \
- && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/tg-ingest ./cmd/tg-ingest \
- && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/tg-extract ./cmd/tg-extract \
- && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/backfill-derive ./cmd/backfill-derive \
- && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/liveness ./cmd/liveness \
- && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/notify ./cmd/notify \
- && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/import-collections ./cmd/import-collections \
- && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/recount-companies ./cmd/recount-companies \
- && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/migrate ./cmd/migrate \
- && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/backfill-company-info ./cmd/backfill-company-info
+ && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/ \
+      ./cmd/ingest ./cmd/enrich ./cmd/reindex ./cmd/tg-ingest ./cmd/tg-extract \
+      ./cmd/backfill-derive ./cmd/liveness ./cmd/notify ./cmd/import-collections \
+      ./cmd/recount-companies ./cmd/migrate ./cmd/backfill-company-info
 
 # --- typst stage: fetch the pinned, statically-linked typst binary used to render CV
 # PDFs (internal/cv). The musl build is fully static, so it runs on distroless/static;

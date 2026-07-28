@@ -195,7 +195,7 @@ func (c *Client) GenerateJSON(ctx context.Context, system, user string) (string,
 	out := StripJSONFence(resp.Choices[0].Content)
 	g := gen()
 	g.Output = out
-	g.Usage = usageFrom(resp.Choices[0])
+	g.Usage = UsageFrom(resp.Choices[0])
 	c.observe(g)
 	return out, nil
 }
@@ -254,7 +254,7 @@ func (c *Client) GenerateJSONStream(ctx context.Context, system, user string, on
 	out := StripJSONFence(resp.Choices[0].Content)
 	g := gen()
 	g.Output = out
-	g.Usage = usageFrom(resp.Choices[0])
+	g.Usage = UsageFrom(resp.Choices[0])
 	c.observe(g)
 	return out, nil
 }
@@ -268,10 +268,12 @@ func (c *Client) observe(g Generation) {
 	c.tracer.Observe(g)
 }
 
-// usageFrom pulls token counts out of langchaingo's per-choice GenerationInfo.
+// UsageFrom pulls token counts out of langchaingo's per-choice GenerationInfo.
 // Providers vary, so it reads defensively and returns nil when no counts are
-// present — an absent usage is reported as absent, never as zeros.
-func usageFrom(choice *llms.ContentChoice) *Usage {
+// present — an absent usage is reported as absent, never as zeros. Exported so a
+// caller that streams a conversation reports the same counts the tracer records,
+// from the same reading of the same map.
+func UsageFrom(choice *llms.ContentChoice) *Usage {
 	in, ok1 := intFrom(choice.GenerationInfo["PromptTokens"])
 	out, ok2 := intFrom(choice.GenerationInfo["CompletionTokens"])
 	total, ok3 := intFrom(choice.GenerationInfo["TotalTokens"])

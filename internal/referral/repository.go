@@ -3,6 +3,7 @@ package referral
 import (
 	"context"
 	"errors"
+	"github.com/google/uuid"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -51,7 +52,7 @@ func (r *QueriesRepository) CreateOffer(ctx context.Context, in OfferInput) (Off
 
 // DecideOffer applies a moderator decision, mapping the no-row update (offer absent or
 // already decided) to ErrOfferNotPending.
-func (r *QueriesRepository) DecideOffer(ctx context.Context, offerID, moderatorID int64, status string) (Offer, error) {
+func (r *QueriesRepository) DecideOffer(ctx context.Context, offerID uuid.UUID, moderatorID int64, status string) (Offer, error) {
 	row, err := r.q.DecideReferralOffer(ctx, db.DecideReferralOfferParams{
 		ID: offerID, Status: status, DecidedBy: int8Val(moderatorID),
 	})
@@ -65,7 +66,7 @@ func (r *QueriesRepository) DecideOffer(ctx context.Context, offerID, moderatorI
 }
 
 // GetOffer returns one offer by id; ok is false when it does not exist.
-func (r *QueriesRepository) GetOffer(ctx context.Context, offerID int64) (Offer, bool, error) {
+func (r *QueriesRepository) GetOffer(ctx context.Context, offerID uuid.UUID) (Offer, bool, error) {
 	row, err := r.q.GetReferralOffer(ctx, offerID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Offer{}, false, nil
@@ -112,7 +113,7 @@ func (r *QueriesRepository) ListPendingOffers(ctx context.Context) ([]Offer, err
 
 // DeleteOffer hard-deletes a member's own offer, owner-scoped by userID. A zero-row
 // delete (absent id or another owner) maps to ErrOfferNotFound.
-func (r *QueriesRepository) DeleteOffer(ctx context.Context, offerID, userID int64) error {
+func (r *QueriesRepository) DeleteOffer(ctx context.Context, offerID uuid.UUID, userID int64) error {
 	n, err := r.q.DeleteReferralOffer(ctx, db.DeleteReferralOfferParams{ID: offerID, UserID: userID})
 	if err != nil {
 		return err
@@ -150,7 +151,7 @@ func (r *QueriesRepository) ApprovedReferrerRecipients(ctx context.Context, comp
 }
 
 // CVBelongsToUser reports whether the builder CV is owned by the user.
-func (r *QueriesRepository) CVBelongsToUser(ctx context.Context, cvID, userID int64) (bool, error) {
+func (r *QueriesRepository) CVBelongsToUser(ctx context.Context, cvID uuid.UUID, userID int64) (bool, error) {
 	return r.q.CVBelongsToUser(ctx, db.CVBelongsToUserParams{CvID: cvID, UserID: userID})
 }
 
@@ -167,7 +168,7 @@ func (r *QueriesRepository) CreateRequest(ctx context.Context, in RequestInput) 
 		CompanySlug:     in.CompanySlug,
 		JobID:           int8Ptr(in.JobID),
 		CvKind:          in.CVKind,
-		CvID:            int8Ptr(in.CVID),
+		CvID:            in.CVID,
 		LinkedinUrl:     in.LinkedInURL,
 		ContactTelegram: textOrNull(in.ContactTelegram),
 		ContactEmail:    textOrNull(in.ContactEmail),
@@ -190,7 +191,7 @@ func (r *QueriesRepository) CountRequestsSince(ctx context.Context, seekerID int
 }
 
 // GetRequest returns a request by id; ok is false when it does not exist.
-func (r *QueriesRepository) GetRequest(ctx context.Context, id int64) (Request, bool, error) {
+func (r *QueriesRepository) GetRequest(ctx context.Context, id uuid.UUID) (Request, bool, error) {
 	row, err := r.q.GetReferralRequest(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Request{}, false, nil
@@ -203,7 +204,7 @@ func (r *QueriesRepository) GetRequest(ctx context.Context, id int64) (Request, 
 
 // ResolveRequest applies a referrer's mark, mapping the no-row update (already resolved) to
 // ErrRequestNotOpen.
-func (r *QueriesRepository) ResolveRequest(ctx context.Context, id, actorID int64, status string) (Request, error) {
+func (r *QueriesRepository) ResolveRequest(ctx context.Context, id uuid.UUID, actorID int64, status string) (Request, error) {
 	row, err := r.q.ResolveReferralRequest(ctx, db.ResolveReferralRequestParams{
 		ID: id, Status: status, ActedBy: int8Val(actorID),
 	})
@@ -274,7 +275,7 @@ func requestFromRow(row db.ReferralRequest) Request {
 		CompanySlug:     row.CompanySlug,
 		JobID:           int64PtrFrom(row.JobID),
 		CVKind:          row.CvKind,
-		CVID:            int64PtrFrom(row.CvID),
+		CVID:            row.CvID,
 		LinkedInURL:     row.LinkedinUrl,
 		ContactTelegram: row.ContactTelegram.String,
 		ContactEmail:    row.ContactEmail.String,

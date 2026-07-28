@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/google/uuid"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -23,7 +24,10 @@ var ErrNoResume = errors.New("cv: no résumé to seed a base CV")
 
 // Meta is a CV without its document body — the shape the list and mutation responses use.
 type Meta struct {
-	ID         int64
+	// ID is a random UUID, not a counter: a CV is a résumé, and a countable id
+	// would both publish how many exist and make one forgotten owner check
+	// enumerable. See the opaque-cv-ids change.
+	ID         uuid.UUID
 	Title      string
 	TemplateID string
 	CreatedAt  time.Time
@@ -56,13 +60,13 @@ type TailoredItem struct {
 type Repository interface {
 	Create(ctx context.Context, userID int64, title, templateID string, data []byte) (db.CreateCVRow, error)
 	List(ctx context.Context, userID int64) ([]db.ListCVsByUserRow, error)
-	Get(ctx context.Context, id, userID int64) (db.GetCVByIDRow, error)
-	Update(ctx context.Context, id, userID int64, title, templateID string, data []byte) (db.UpdateCVRow, error)
-	Delete(ctx context.Context, id, userID int64) (int64, error)
+	Get(ctx context.Context, id uuid.UUID, userID int64) (db.GetCVByIDRow, error)
+	Update(ctx context.Context, id uuid.UUID, userID int64, title, templateID string, data []byte) (db.UpdateCVRow, error)
+	Delete(ctx context.Context, id uuid.UUID, userID int64) (int64, error)
 	GetBase(ctx context.Context, userID int64) (db.GetBaseCVByUserRow, error)
 	CreateTailored(ctx context.Context, userID, jobID int64, title, templateID string, data []byte) (db.CreateTailoredCVRow, error)
-	SetSession(ctx context.Context, id, userID int64, sessionID string) (int64, error)
-	SetTemplate(ctx context.Context, id, userID int64, templateID string) (int64, error)
+	SetSession(ctx context.Context, id uuid.UUID, userID int64, sessionID string) (int64, error)
+	SetTemplate(ctx context.Context, id uuid.UUID, userID int64, templateID string) (int64, error)
 	ListTailored(ctx context.Context, userID int64) ([]db.ListTailoredCVsByUserRow, error)
 }
 
@@ -110,7 +114,7 @@ func (s *Store) List(ctx context.Context, userID int64) ([]Meta, error) {
 }
 
 // Get returns one owned CV with its document, or ErrNotFound.
-func (s *Store) Get(ctx context.Context, id, userID int64) (Record, error) {
+func (s *Store) Get(ctx context.Context, id uuid.UUID, userID int64) (Record, error) {
 	row, err := s.repo.Get(ctx, id, userID)
 	if err != nil {
 		return Record{}, mapNotFound(err)
@@ -144,7 +148,7 @@ func textValue(v pgtype.Text) string {
 }
 
 // SetSession binds (or rebinds) the agent session to an owned CV, or returns ErrNotFound.
-func (s *Store) SetSession(ctx context.Context, id, userID int64, sessionID string) error {
+func (s *Store) SetSession(ctx context.Context, id uuid.UUID, userID int64, sessionID string) error {
 	n, err := s.repo.SetSession(ctx, id, userID, sessionID)
 	if err != nil {
 		return err
@@ -157,7 +161,7 @@ func (s *Store) SetSession(ctx context.Context, id, userID int64, sessionID stri
 
 // SetTemplate changes only the template of an owned CV, or returns ErrNotFound. Title and
 // document are left untouched.
-func (s *Store) SetTemplate(ctx context.Context, id, userID int64, templateID string) error {
+func (s *Store) SetTemplate(ctx context.Context, id uuid.UUID, userID int64, templateID string) error {
 	n, err := s.repo.SetTemplate(ctx, id, userID, templateID)
 	if err != nil {
 		return err
@@ -189,7 +193,7 @@ func (s *Store) ListTailored(ctx context.Context, userID int64) ([]TailoredItem,
 }
 
 // Update sanitizes and replaces an owned CV's editable fields, or returns ErrNotFound.
-func (s *Store) Update(ctx context.Context, id, userID int64, title, templateID string, doc Document) (Meta, error) {
+func (s *Store) Update(ctx context.Context, id uuid.UUID, userID int64, title, templateID string, doc Document) (Meta, error) {
 	data, err := marshalSanitized(doc)
 	if err != nil {
 		return Meta{}, err
@@ -203,7 +207,7 @@ func (s *Store) Update(ctx context.Context, id, userID int64, title, templateID 
 }
 
 // Delete removes an owned CV, or returns ErrNotFound when nothing matched.
-func (s *Store) Delete(ctx context.Context, id, userID int64) error {
+func (s *Store) Delete(ctx context.Context, id uuid.UUID, userID int64) error {
 	n, err := s.repo.Delete(ctx, id, userID)
 	if err != nil {
 		return err
@@ -217,7 +221,7 @@ func (s *Store) Delete(ctx context.Context, id, userID int64) error {
 // Patch loads an owned CV, applies one field-level edit, and persists the sanitized result.
 // It returns ErrInvalidPatch (leaving the stored CV untouched) when the patch addresses a
 // field or index that does not exist, or ErrNotFound for a foreign/missing id.
-func (s *Store) Patch(ctx context.Context, id, userID int64, p Patch) (Meta, error) {
+func (s *Store) Patch(ctx context.Context, id uuid.UUID, userID int64, p Patch) (Meta, error) {
 	rec, err := s.Get(ctx, id, userID)
 	if err != nil {
 		return Meta{}, err
@@ -332,15 +336,15 @@ func (r queriesRepository) List(ctx context.Context, userID int64) ([]db.ListCVs
 	return r.q.ListCVsByUser(ctx, userID)
 }
 
-func (r queriesRepository) Get(ctx context.Context, id, userID int64) (db.GetCVByIDRow, error) {
+func (r queriesRepository) Get(ctx context.Context, id uuid.UUID, userID int64) (db.GetCVByIDRow, error) {
 	return r.q.GetCVByID(ctx, db.GetCVByIDParams{ID: id, UserID: userID})
 }
 
-func (r queriesRepository) Update(ctx context.Context, id, userID int64, title, templateID string, data []byte) (db.UpdateCVRow, error) {
+func (r queriesRepository) Update(ctx context.Context, id uuid.UUID, userID int64, title, templateID string, data []byte) (db.UpdateCVRow, error) {
 	return r.q.UpdateCV(ctx, db.UpdateCVParams{ID: id, UserID: userID, Title: title, TemplateID: templateID, Data: data})
 }
 
-func (r queriesRepository) Delete(ctx context.Context, id, userID int64) (int64, error) {
+func (r queriesRepository) Delete(ctx context.Context, id uuid.UUID, userID int64) (int64, error) {
 	return r.q.DeleteCV(ctx, db.DeleteCVParams{ID: id, UserID: userID})
 }
 
@@ -355,14 +359,14 @@ func (r queriesRepository) CreateTailored(ctx context.Context, userID, jobID int
 	})
 }
 
-func (r queriesRepository) SetSession(ctx context.Context, id, userID int64, sessionID string) (int64, error) {
+func (r queriesRepository) SetSession(ctx context.Context, id uuid.UUID, userID int64, sessionID string) (int64, error) {
 	return r.q.SetCVSession(ctx, db.SetCVSessionParams{
 		ID: id, UserID: userID,
 		AgentSessionID: pgtype.Text{String: sessionID, Valid: sessionID != ""},
 	})
 }
 
-func (r queriesRepository) SetTemplate(ctx context.Context, id, userID int64, templateID string) (int64, error) {
+func (r queriesRepository) SetTemplate(ctx context.Context, id uuid.UUID, userID int64, templateID string) (int64, error) {
 	return r.q.SetCVTemplate(ctx, db.SetCVTemplateParams{ID: id, UserID: userID, TemplateID: templateID})
 }
 

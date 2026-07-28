@@ -13,13 +13,14 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"testing"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/cv"
@@ -35,7 +36,7 @@ func newTailorAPI(t *testing.T) (*cvHandlers, *auth.Issuer, *pgxpool.Pool) {
 	pool := startPostgres(t)
 	queries := db.New(pool)
 	if _, err := pool.Exec(context.Background(),
-		"TRUNCATE cvs, users, jobs, user_job_analysis, api_keys RESTART IDENTITY CASCADE"); err != nil {
+		"TRUNCATE cvs, users, jobs, user_job_analysis, api_keys, assistant_sessions RESTART IDENTITY CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	iss := auth.NewIssuer("test-secret", time.Hour)
@@ -47,6 +48,9 @@ func newTailorAPI(t *testing.T) (*cvHandlers, *auth.Issuer, *pgxpool.Pool) {
 		credits:            creditsStore,
 		match:              &matchHandlers{credits: creditsStore},
 	}
+	// The tailoring bootstrap mints its conversation through the assistant's store,
+	// exactly as Register wires it.
+	h.withAssistantSessions(assistant.NewStore(queries))
 	return h, iss, pool
 }
 
@@ -163,11 +167,29 @@ func TestTailorCVBootstrap(t *testing.T) {
 	}
 	json.NewDecoder(resp.Body).Decode(&got)
 	resp.Body.Close()
-	if got.Data.TailorCVID == 0 || got.Data.BaseCVID == 0 || got.Data.TailorCVID == got.Data.BaseCVID {
-		t.Errorf("ids = %+v, want distinct non-zero", got.Data)
+	if got.Data.TailorCVID == "" || got.Data.BaseCVID == "" || got.Data.TailorCVID == got.Data.BaseCVID {
+		t.Errorf("ids = %+v, want two distinct ids", got.Data)
 	}
-	if got.Data.CLIToken == "" {
-		t.Errorf("empty cli_token")
+	// The bootstrap mints the tailoring conversation itself: a tailor-preset session
+	// bound to this CV and vacancy, already stored on the CV so reopening the
+	// workspace resumes it instead of starting over.
+	if got.Data.SessionID == "" {
+		t.Fatalf("bootstrap returned no session id")
+	}
+	var boundPreset, boundSession, boundCV string
+	var boundJob int64
+	if err := pool.QueryRow(context.Background(),
+		`SELECT s.preset, s.cv_id, s.job_id, c.agent_session_id
+		   FROM assistant_sessions s JOIN cvs c ON c.id = s.cv_id
+		  WHERE s.id = $1`, got.Data.SessionID).Scan(&boundPreset, &boundCV, &boundJob, &boundSession); err != nil {
+		t.Fatalf("read the minted session: %v", err)
+	}
+	if boundPreset != assistant.PresetTailor || boundCV != got.Data.TailorCVID || boundJob != jobID {
+		t.Errorf("session = preset %q cv %s job %d, want a tailor session bound to cv %s / job %d",
+			boundPreset, boundCV, boundJob, got.Data.TailorCVID, jobID)
+	}
+	if boundSession != got.Data.SessionID {
+		t.Errorf("cv.agent_session_id = %q, want the minted session %q", boundSession, got.Data.SessionID)
 	}
 	if got.Data.Analysis == nil || got.Data.Analysis.Verdict != "Good Fit" {
 		t.Errorf("analysis not returned: %+v", got.Data.Analysis)
@@ -233,7 +255,7 @@ func TestPatchCVViaKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create cv: %v", err)
 	}
-	path := "/api/v1/me/cvs/" + strconv.FormatInt(base.ID, 10)
+	path := "/api/v1/me/cvs/" + base.ID.String()
 
 	// The agent (API key) must never see the contact block; the owner's cookie read does.
 	decodeHeader := func(resp *http.Response) cv.Header {
@@ -246,14 +268,8 @@ func TestPatchCVViaKey(t *testing.T) {
 		return w.Data.Document.Header
 	}
 
-	ownerKey, err := mintTailoringKey(ctx, h.queries, owner, time.Now())
-	if err != nil {
-		t.Fatalf("mint owner key: %v", err)
-	}
-	otherKey, err := mintTailoringKey(ctx, h.queries, other, time.Now())
-	if err != nil {
-		t.Fatalf("mint other key: %v", err)
-	}
+	ownerKey := cvScopedKey(t, h, owner)
+	otherKey := cvScopedKey(t, h, other)
 
 	// A valid patch applies.
 	if resp := doBearer(t, app, fiber.MethodPatch, path, ownerKey, cv.Patch{Op: cv.PatchAddBullet, Experience: 0, Value: "Cut latency"}); resp.StatusCode != fiber.StatusOK {
@@ -312,9 +328,9 @@ func TestTailorContextSplit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create tailored: %v", err)
 	}
-	key, _ := mintTailoringKey(ctx, h.queries, user, time.Now())
+	key := cvScopedKey(t, h, user)
 
-	resp := doBearer(t, app, fiber.MethodGet, "/api/v1/me/cvs/"+strconv.FormatInt(tailored.ID, 10)+"/tailor-context", key, nil)
+	resp := doBearer(t, app, fiber.MethodGet, "/api/v1/me/cvs/"+tailored.ID.String()+"/tailor-context", key, nil)
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("context = %d, want 200", resp.StatusCode)
 	}
@@ -339,7 +355,7 @@ func TestTailorContextSplit(t *testing.T) {
 
 	// A base CV (no bound vacancy) is not tailorable-context → 409.
 	base, _ := h.cvStore.Create(ctx, user, "Base", cv.DefaultTemplateID, cv.Document{})
-	if resp := doBearer(t, app, fiber.MethodGet, "/api/v1/me/cvs/"+strconv.FormatInt(base.ID, 10)+"/tailor-context", key, nil); resp.StatusCode != fiber.StatusConflict {
+	if resp := doBearer(t, app, fiber.MethodGet, "/api/v1/me/cvs/"+base.ID.String()+"/tailor-context", key, nil); resp.StatusCode != fiber.StatusConflict {
 		t.Fatalf("base-cv context = %d, want 409", resp.StatusCode)
 	}
 }
@@ -388,4 +404,26 @@ func TestCVSessionAndTailoredList(t *testing.T) {
 	if err := h.cvStore.SetSession(ctx, tailored.ID, other, "hijack"); !errors.Is(err, cv.ErrNotFound) {
 		t.Errorf("foreign set-session err = %v, want ErrNotFound", err)
 	}
+}
+
+// cvScopedKey issues a user-created `cv`-scoped API key — the credential the public
+// CLI authenticates its CV commands with. The in-app agent no longer uses one (it
+// runs as the caller), but the scope and its owner checks still guard this surface.
+func cvScopedKey(t *testing.T, h *cvHandlers, userID int64) string {
+	t.Helper()
+	token, hash, prefix, err := auth.GenerateAPIKey()
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	if _, err := h.queries.CreateAPIKey(context.Background(), db.CreateAPIKeyParams{
+		UserID:      userID,
+		Name:        "cv scope",
+		TokenHash:   hash,
+		TokenPrefix: prefix,
+		Scope:       auth.ScopeCV,
+		ExpiresAt:   pgtype.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true},
+	}); err != nil {
+		t.Fatalf("create key: %v", err)
+	}
+	return token
 }

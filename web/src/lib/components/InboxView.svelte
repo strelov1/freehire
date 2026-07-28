@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { page } from '$app/state';
+  import { replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { api } from '$lib/api';
   import type {
@@ -91,8 +93,42 @@
   );
   const sourceOptions = $derived([{ value: '' as InboxSource, label: 'All' }, ...presentSources]);
 
+  // The Gmail connect flow ends as a top-level browser navigation back to this page
+  // carrying its verdict in the URL: ?gmail=connected, or ?gmail_error=<reason> when
+  // the backend gave up. It is a banner and not the fatal `error` screen — the inbox
+  // itself is fine, only the connect attempt is not. The URL is cleaned afterwards so
+  // a reload does not replay a stale verdict. onMount (not afterNavigate, as in
+  // TopBar) is enough: this page is only ever reached from the callback by a cold
+  // load, never by an in-app navigation.
+  const GMAIL_CONNECT_ERRORS: Record<string, string> = {
+    auth: 'Your session ended before Gmail finished connecting. Sign in, then try again.',
+    state: 'That connect link expired or was opened out of order. Start the connection again.',
+    exchange: 'Google did not finish handing over access. Try connecting again.',
+  };
+  let connectNotice = $state<{ ok: boolean; text: string } | null>(null);
+
+  function readConnectVerdict() {
+    const params = page.url.searchParams;
+    const failed = params.get('gmail_error');
+    if (failed) {
+      connectNotice = {
+        ok: false,
+        text: GMAIL_CONNECT_ERRORS[failed] ?? 'Connecting Gmail failed. Try again.',
+      };
+    } else if (params.get('gmail') === 'connected') {
+      connectNotice = { ok: true, text: 'Gmail connected — your ATS mail will show up here shortly.' };
+    } else {
+      return;
+    }
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- shallow same-page URL clean-up to the current pathname; nothing to resolve
+    replaceState(page.url.pathname, {});
+  }
+
   let destroyed = false;
-  onMount(load);
+  onMount(() => {
+    readConnectVerdict();
+    void load();
+  });
   onDestroy(() => {
     destroyed = true;
   });
@@ -450,6 +486,15 @@
   <p class="text-sm text-destructive">{error}</p>
 {:else}
   <div class="flex flex-col gap-4">
+    {#if connectNotice}
+      <p
+        class="rounded-md border px-3 py-2 text-sm {connectNotice.ok
+          ? 'border-brand/30 bg-brand/10 text-foreground'
+          : 'border-destructive/30 bg-destructive/10 text-destructive'}"
+      >
+        {connectNotice.text}
+      </p>
+    {/if}
     <!-- Tabs: keep the mail list and the account setup on separate panes. -->
     <div class="flex gap-4 border-b border-border text-sm">
       {#each [{ id: 'inbox', label: 'Inbox' }, { id: 'settings', label: 'Settings' }] as t (t.id)}

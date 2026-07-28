@@ -17,7 +17,9 @@ import type {
 
 /** CV metadata (list rows and mutation responses). */
 export interface CvMeta {
-  id: number;
+  /** A CV id is a random UUID the client treats as opaque — never parsed, never
+   *  compared for order, only passed back. */
+  id: string;
   title: string;
   template_id: string;
   created_at: string;
@@ -42,15 +44,15 @@ export interface CvTailoredItem extends CvMeta {
 
 /**
  * Result of bootstrapping a tailoring session: the ids of the new vacancy-bound CV and the
- * base it was copied from, the cached fit analysis, and the short-lived token the agent's CLI
- * authenticates with. `cli_token` is handed to the agent session; the browser only needs the
- * ids (to open the tailored CV) and the analysis (to show context).
+ * base it was copied from, the cached fit analysis, and the id of the tailoring conversation
+ * the backend minted and bound to that CV. There is no credential — the agent runs inside the
+ * backend as the caller.
  */
 export interface TailorResult {
-  tailor_cv_id: number;
-  base_cv_id: number;
+  tailor_cv_id: string;
+  base_cv_id: string;
   analysis: Analysis | null;
-  cli_token: string;
+  session_id: string;
 }
 
 /** Request body for replacing a CV. */

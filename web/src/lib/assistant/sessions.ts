@@ -1,25 +1,19 @@
-// Pure session-list logic for the assistant sidebar: label derivation, ordering,
-// and the add/remove/select reducers. Kept out of the Svelte component so it is
+// Pure session-list logic for the assistant sidebar: label derivation and the
+// add/remove/select reducers. Kept out of the Svelte component so it is
 // unit-testable (vitest) without a DOM — mirroring how `chat.ts` isolates
-// `reduceTurnEvent`. Everything here is pure; localStorage/label caching and the
-// backend fetches live in the component and `api.ts`.
+// `reduceTurnEvent`. Everything here is pure; the fetches live in `api.ts`.
+//
+// Ordering is the backend's: `GET /assistant/sessions` returns the caller's
+// conversations most-recently-active first, so the list needs no client-side sort
+// and carries no timestamps.
 
-/** One row of the owner-scoped `GET /sessions` response. `project_id`,
- *  `agent_name`, and `tags` also come over the wire but the sidebar ignores
- *  them, so they are omitted from this shape. */
-export interface SessionSummary {
-  session_id: string;
-  display_label: string | null;
-  created_at: number;
-  live: boolean;
-}
+import type { SessionSummary } from './wire';
 
 /** A session as rendered in the sidebar. */
 export interface SessionItem {
   id: string;
   label: string;
-  createdAt: number;
-  live: boolean;
+  preset: string;
 }
 
 const MAX_LABEL = 60;
@@ -32,42 +26,17 @@ export function labelFromMessage(text: string): string {
   return oneLine.slice(0, MAX_LABEL - 1).trimEnd() + '…';
 }
 
-/** Resolve a session's display label by priority: a derived/cached label (e.g.
- *  from the first user message) > the backend `display_label` > the supplied
- *  timezone-formatted `fallback`. Blank strings are ignored so an empty label is
- *  never shown. */
-export function resolveLabel(
-  s: SessionSummary,
-  cached: string | undefined,
-  fallback: string,
-): string {
-  if (cached && cached.trim()) return cached;
-  if (s.display_label && s.display_label.trim()) return s.display_label;
-  return fallback;
+/** Map a wire row to a `SessionItem`. The backend names a session after its first
+ *  user message; a conversation with no turns yet has none, so the caller supplies
+ *  a fallback. */
+export function fromSummary(s: SessionSummary, fallback: string): SessionItem {
+  const label = s.label?.trim() ? labelFromMessage(s.label) : fallback;
+  return { id: s.id, label, preset: s.preset };
 }
 
-/** Map a wire row to a `SessionItem`, resolving its label. */
-export function fromSummary(
-  s: SessionSummary,
-  cached: string | undefined,
-  fallback: string,
-): SessionItem {
-  return {
-    id: s.session_id,
-    label: resolveLabel(s, cached, fallback),
-    createdAt: s.created_at,
-    live: s.live,
-  };
-}
-
-/** Newest-first by `createdAt`, without mutating the input. */
-export function newestFirst(items: SessionItem[]): SessionItem[] {
-  return [...items].sort((a, b) => b.createdAt - a.createdAt);
-}
-
-/** Insert or replace a session by id (no duplicates), keeping newest-first order. */
+/** Insert or replace a session by id (no duplicates), newest first. */
 export function upsertSession(items: SessionItem[], item: SessionItem): SessionItem[] {
-  return newestFirst([item, ...items.filter((i) => i.id !== item.id)]);
+  return [item, ...items.filter((i) => i.id !== item.id)];
 }
 
 /** Drop the session with `id` (no-op if absent). */
@@ -82,7 +51,7 @@ export function setLabel(items: SessionItem[], id: string, label: string): Sessi
 
 /** Which session should be active after a deletion. `remaining` is the list
  *  AFTER removal. If the deleted session was the active one, activate the newest
- *  remaining (or `null` if none are left, so the caller can spawn a fresh one);
+ *  remaining (or `null` if none are left, so the caller can start a fresh one);
  *  otherwise keep `currentActive`. */
 export function activeAfterDelete(
   remaining: SessionItem[],
@@ -90,5 +59,5 @@ export function activeAfterDelete(
   currentActive: string | null,
 ): string | null {
   if (!deletedWasActive) return currentActive;
-  return newestFirst(remaining)[0]?.id ?? null;
+  return remaining[0]?.id ?? null;
 }

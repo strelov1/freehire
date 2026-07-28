@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowUp, Loader2, Trash2 } from '@lucide/svelte';
+  import { ArrowUp, Loader2, Trash2, Square } from '@lucide/svelte';
 
   // The composer: the queued-message panel (messages typed mid-turn, sent
   // one-by-one as turns finish) plus the auto-growing textarea form. Queue and
@@ -13,6 +13,7 @@
     disabled,
     onSubmit,
     onRemoveQueued,
+    onCancel = undefined,
   }: {
     draft?: string;
     queue: { id: string; text: string }[];
@@ -20,6 +21,8 @@
     disabled: boolean;
     onSubmit: (text: string) => void;
     onRemoveQueued: (id: string) => void;
+    /** Stop the turn in flight. Absent when the host cannot cancel. */
+    onCancel?: () => void;
   } = $props();
 
   let textareaEl = $state<HTMLTextAreaElement | null>(null);
@@ -89,21 +92,32 @@
             (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
           }
         }}
-        class="block max-h-[200px] min-h-[1.5rem] flex-1 resize-none cursor-text bg-transparent py-1 text-sm leading-6 text-foreground placeholder:text-muted-foreground/70 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        class="block max-h-[200px] min-h-[1.5rem] flex-1 resize-none cursor-text bg-transparent py-1 text-base leading-6 text-foreground placeholder:text-muted-foreground/70 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
       ></textarea>
-      <button
-        type="submit"
-        aria-label={turnActive ? 'Queue message' : 'Send message'}
-        aria-busy={turnActive}
-        disabled={disabled || !draft.trim()}
-        class="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {#if turnActive}
-          <Loader2 class="size-4 animate-spin" />
-        {:else}
-          <ArrowUp class="size-4" strokeWidth={2.5} />
-        {/if}
-      </button>
+      {#if turnActive && onCancel && !draft.trim()}
+        <button
+          type="button"
+          aria-label="Stop the assistant"
+          onclick={onCancel}
+          class="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-90"
+        >
+          <Square class="size-3.5" fill="currentColor" />
+        </button>
+      {:else}
+        <button
+          type="submit"
+          aria-label={turnActive ? 'Queue message' : 'Send message'}
+          aria-busy={turnActive}
+          disabled={disabled || !draft.trim()}
+          class="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {#if turnActive}
+            <Loader2 class="size-4 animate-spin" />
+          {:else}
+            <ArrowUp class="size-4" strokeWidth={2.5} />
+          {/if}
+        </button>
+      {/if}
     </form>
   </div>
 </div>

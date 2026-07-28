@@ -100,4 +100,4 @@ WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 SELECT c.id, j.title AS job_title, j.public_slug AS job_slug
 FROM cvs c
 JOIN jobs j ON j.id = c.job_id
-WHERE c.id = ANY(sqlc.arg(ids)::bigint[]);
+WHERE c.id = ANY(sqlc.arg(ids)::uuid[]);

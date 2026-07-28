@@ -4,7 +4,9 @@
 
 -- name: ResolveSlugsToJobIDs :many
 -- Map public slugs to job ids. Unknown slugs are simply absent from the result, so
--- the worker skips views for jobs that no longer exist.
+-- the worker skips views for jobs that no longer exist. The assistant's
+-- `present_jobs` tool uses it for the same absence: a slug the model invented is
+-- missing here, and is dropped from the deck rather than shown to the user.
 SELECT id, public_slug
 FROM jobs
 WHERE public_slug = ANY(sqlc.arg('slugs')::text[]);

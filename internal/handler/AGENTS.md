@@ -55,6 +55,43 @@ Pipeline and cross-package invariants live in [docs/agents/mail-stack.md](../../
 - `TriageEmail` is `SetEmailClassification`'s sibling: status, link, provenance (`link_source = 'agent'`) and the classified stamp in **one** update, then `mailclassify.AdvanceStage`. Splitting it would manufacture states the worker never produces. An omitted slug means "not deciding the link", never "clear it". The stage advance is best-effort — the verdict is already durable.
 - `IngestEmails` validates the whole batch before writing any of it and commits in one transaction, so a bad message at the end cannot leave earlier ones stored under a 400.
 - `renderEmail` is the shared tail of every mutation that returns the message it changed (link, unlink, confirm, reject, triage), so those cannot drift from one another or from `GetEmail`.
+## Assistant (`assistant.go`, `assistant_*_tools.go`)
+
+Routes (all cookie-only, behind `auth.RequireModeratorOrBeta` — inference is
+billed to us, so the assistant is not open to everyone while it is free):
+
+| Route | Does |
+|---|---|
+| `POST /assistant/sessions` | start a chat conversation (a tailoring one is minted by the CV bootstrap, which knows the CV and vacancy to bind) |
+| `GET /assistant/sessions` | the caller's conversations, most recently active first |
+| `GET /assistant/sessions/:id` | one conversation with its stored transcript, for replay |
+| `DELETE /assistant/sessions/:id` | remove a conversation and its transcript |
+| `POST /assistant/sessions/:id/messages` | run one turn, streamed as named SSE events |
+
+A session the caller does not own is a 404, never a 403, so ids stay unprobeable.
+
+The turn endpoint writes with `writeEvent`, which — unlike `writeSSE` — reports a
+failed write. That is how a streamed turn learns the client is gone: the failure
+cancels the loop's context, so it stops before spending another model call.
+
+`assistant_tools.go` / `assistant_tracking_tools.go` / `assistant_cv_tools.go` /
+`assistant_profile_tool.go` / `assistant_present_tool.go` build the agent's tools
+from the same services these handlers use, and `assistantRegistry` picks the set for
+a session's preset. The loop itself lives in
+[internal/assistant](../assistant/AGENTS.md).
+
+`present_jobs` is the odd one out: it is the only tool whose purpose is presentation
+rather than retrieval or state change. It writes nothing and returns a receipt of
+slugs, not vacancies — the client renders the deck and fetches each card's data by
+slug, so a recommendation costs the model's context once, not twice.
+
+`get_profile` is built on `profileHandlers` rather than the services under it, so the
+tool and `GET /me/profile` share one assembly and cannot drift. It returns the CV as
+`resumeextract.Professional` — **contacts omitted**, and not merely as good manners: a
+tool result is persisted in the transcript and replayed into the model's context on
+every later turn, so a name that lands there stays for the conversation's life. A
+caller with no profile gets a result naming `/my/profile`, never an error and never an
+empty profile the model would read as "no preferences".
 
 ## Error Convention
 

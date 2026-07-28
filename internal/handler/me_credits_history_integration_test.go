@@ -9,6 +9,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"github.com/google/uuid"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -43,7 +44,7 @@ func TestGetMyCreditsHistoryEndpoint(t *testing.T) {
 		 VALUES ('test','job:1','http://e.test','Senior Go Engineer','Acme','senior-go-engineer','h') RETURNING id`).Scan(&jobID); err != nil {
 		t.Fatalf("seed job: %v", err)
 	}
-	var cvID int64
+	var cvID uuid.UUID
 	if err := pool.QueryRow(ctx,
 		`INSERT INTO cvs (user_id, title, template_id, data, job_id)
 		 VALUES ($1, 'Tailored', 'default', '{}'::jsonb, $2) RETURNING id`, userID, jobID).Scan(&cvID); err != nil {
@@ -70,7 +71,7 @@ func TestGetMyCreditsHistoryEndpoint(t *testing.T) {
 	seed(userID, "grant", "", "", 20, 50)                                // oldest
 	seed(userID, "reward", "", "1", 5, 40)                               // contribution reward
 	seed(userID, "debit", "match", strconv.FormatInt(jobID, 10), -1, 30) // match → job title
-	seed(userID, "debit", "tailor", strconv.FormatInt(cvID, 10), -3, 20) // tailor → job title
+	seed(userID, "debit", "tailor", cvID.String(), -3, 20)               // tailor → job title
 	seed(userID, "debit", "match", "9999999", -1, 10)                    // deleted job → fallback (newest)
 	seed(otherID, "grant", "", "", 20, 5)                                // another user's row — must not leak
 

@@ -7,6 +7,7 @@ package db
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -24,6 +25,10 @@ type Querier interface {
 	// classify-only triage can never silently detach an application. Any pending
 	// suggestion is dropped either way: the agent's verdict supersedes it.
 	AgentTriageEmail(ctx context.Context, arg AgentTriageEmailParams) (int64, error)
+	// Append one message to a session's transcript, assigning the next sequence number in the
+	// same statement so concurrent writers cannot collide on (session_id, seq) — the primary
+	// key rejects a duplicate rather than silently reordering the conversation.
+	AppendAssistantMessage(ctx context.Context, arg AppendAssistantMessageParams) (AssistantMessage, error)
 	// Apply one (day, job) unique count additively: upsert the daily rollup and add the
 	// same delta to jobs.view_count, in one statement. The data-modifying CTE runs even
 	// though the primary query does not read it. Issued as a pgx batch (one call per
@@ -272,6 +277,10 @@ type Querier interface {
 	// surface ('full' for a user-created key, 'cv' for the tailoring agent's); it comes
 	// from the server, never from client input. Returns display fields only, never the hash.
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (CreateAPIKeyRow, error)
+	// Start a conversation for a user. preset selects the prompt and tool set ('chat' or
+	// 'tailor'); cv_id/job_id bind a tailoring session to its CV and vacancy and are NULL
+	// for a chat. The label is set later, from the first user message.
+	CreateAssistantSession(ctx context.Context, arg CreateAssistantSessionParams) (CreateAssistantSessionRow, error)
 	// Insert a new CV for a user. data is the sanitized structured document (JSON). job_id
 	// defaults NULL (the tailoring seam is unused in phase 1). Returns the metadata the list
 	// and detail responses need.
@@ -377,6 +386,9 @@ type Querier interface {
 	// days (a day that had only closures, now reopened) are dropped rather than left
 	// stale.
 	DeleteAllJobDailyStats(ctx context.Context) error
+	// Remove an owned session; its transcript goes with it (ON DELETE CASCADE). Returns 0
+	// affected rows for a foreign or missing id.
+	DeleteAssistantSession(ctx context.Context, arg DeleteAssistantSessionParams) (int64, error)
 	// Delete a CV owned by the user. Returns the affected-row count so the handler can 404
 	// when nothing was deleted (foreign or missing id).
 	DeleteCV(ctx context.Context, arg DeleteCVParams) (int64, error)
@@ -518,6 +530,9 @@ type Querier interface {
 	// aggregator and an ATS row the dedup passes have not collapsed), so the most recently
 	// confirmed one wins, with id as the deterministic tiebreak.
 	FindOpenJobByURL(ctx context.Context, url string) (string, error)
+	// One session owned by the caller. Owner-scoped: a foreign or missing id returns no row,
+	// which the handler maps to 404 — so a probe cannot tell the two apart.
+	GetAssistantSession(ctx context.Context, arg GetAssistantSessionParams) (GetAssistantSessionRow, error)
 	// Read-only balance for display (no lock, no LLM). Returns no rows for a user who has never
 	// had credit activity; the caller treats that as a full monthly grant remaining.
 	GetBalance(ctx context.Context, userID int64) (GetBalanceRow, error)
@@ -606,10 +621,10 @@ type Querier interface {
 	// never equals the param, so private sets are unreachable. No row → 404.
 	GetPublicBoardBySlug(ctx context.Context, publicSlug pgtype.Text) (GetPublicBoardBySlugRow, error)
 	// One offer by id — for the moderator's proof-CV view after role authorization.
-	GetReferralOffer(ctx context.Context, id int64) (ReferralOffer, error)
+	GetReferralOffer(ctx context.Context, id uuid.UUID) (ReferralOffer, error)
 	// One referral request by id — for authorized CV access and marking, after the caller is
 	// verified as an approved referrer of the request's company.
-	GetReferralRequest(ctx context.Context, id int64) (ReferralRequest, error)
+	GetReferralRequest(ctx context.Context, id uuid.UUID) (ReferralRequest, error)
 	// The delivery context for one reminder: the job display fields, the channel set,
 	// the user's live destinations (account email; linked Telegram chat, NULL when
 	// unlinked -> that channel soft-skips), and the fire-time re-check flags. job_open
@@ -757,6 +772,15 @@ type Querier interface {
 	// linked Telegram chat (NULL when unlinked). Email is always present; chat_id drives the
 	// optional Telegram ping.
 	ListApprovedReferrerRecipients(ctx context.Context, companySlug string) ([]ListApprovedReferrerRecipientsRow, error)
+	// The caller's session rail: their general chats, most recently active first. Owner-scoped
+	// by construction — another user's sessions can never appear. Tailoring conversations are
+	// deliberately excluded: they belong to the CV that owns them and are reached through the
+	// tailoring workspace, so listing them here would put a chat in the rail that leads nowhere
+	// useful and cannot be continued without its CV.
+	ListAssistantChatSessions(ctx context.Context, userID int64) ([]ListAssistantChatSessionsRow, error)
+	// A session's whole transcript in order. It is both what the client replays and what the
+	// model's history is rebuilt from, so tool calls and tool results are included.
+	ListAssistantMessages(ctx context.Context, sessionID uuid.UUID) ([]AssistantMessage, error)
 	// A user's CVs as metadata (no data blob), newest edit first.
 	ListCVsByUser(ctx context.Context, userID int64) ([]ListCVsByUserRow, error)
 	// Catalog page: companies with their job counts, most active first. The job count
@@ -986,7 +1010,7 @@ type Querier interface {
 	// Resolve tailored-CV ids to their target job's display labels for the credit-history page
 	// (tailor debits). Only tailored CVs (job_id set) whose job still exists resolve; the handler
 	// falls back to a generic label otherwise.
-	ListTailoredCVLabelsByIDs(ctx context.Context, ids []int64) ([]ListTailoredCVLabelsByIDsRow, error)
+	ListTailoredCVLabelsByIDs(ctx context.Context, ids []pgtype.UUID) ([]ListTailoredCVLabelsByIDsRow, error)
 	// A user's TAILORED CVs (bound to a vacancy), newest edit first — the re-open list. Carries the
 	// vacancy's public slug and the bound agent session so each row links back to its workspace.
 	// Base CVs (job_id NULL) are excluded; the JOIN also drops tailored CVs whose job was deleted.
@@ -1394,7 +1418,9 @@ type Querier interface {
 	// access logs off the request path (see internal/viewlog), then resolves slugs and
 	// applies per-(day, job) unique counts here.
 	// Map public slugs to job ids. Unknown slugs are simply absent from the result, so
-	// the worker skips views for jobs that no longer exist.
+	// the worker skips views for jobs that no longer exist. The assistant's
+	// `present_jobs` tool uses it for the same absence: a slug the model invented is
+	// missing here, and is dropped from the deck rather than shown to the user.
 	ResolveSlugsToJobIDs(ctx context.Context, slugs []string) ([]ResolveSlugsToJobIDsRow, error)
 	// Undo a soft-delete, scoped to the caller and idempotent. Returns 0 rows only
 	// when it is not the caller's message (→ 404).
@@ -1439,6 +1465,9 @@ type Querier interface {
 	// ATS provider set from the sources registry; <> ALL excludes them, so a new adapter
 	// never silently becomes a probe target. Closed jobs are skipped (already not open).
 	SelectOrphanLivenessCandidates(ctx context.Context, atsProviders []string) ([]SelectOrphanLivenessCandidatesRow, error)
+	// Name a session from its first user message. Applied only while the label is still unset,
+	// so a long conversation keeps the name it was born with.
+	SetAssistantSessionLabel(ctx context.Context, arg SetAssistantSessionLabelParams) error
 	// Apply the Go-computed cooldown window to a board (called only when the backoff
 	// policy says to cool down).
 	SetBoardCooldown(ctx context.Context, arg SetBoardCooldownParams) error
@@ -1542,6 +1571,8 @@ type Querier interface {
 	// re-keys jobs, this re-keys companies to match. DISTINCT ON collapses a slug's
 	// name variants; ON CONFLICT folds collisions and refreshes existing rows.
 	SyncCompaniesFromJobs(ctx context.Context) error
+	// Mark a session as the most recently active, so the rail's order follows real use.
+	TouchAssistantSession(ctx context.Context, id uuid.UUID) error
 	// Liveness refresh for a hydrating source's already-ingested posting (see source-ingest): the
 	// crawl re-listed the offer but fetched no fresh content (detail is fetched only for new
 	// offers), so refresh last_seen_at and reopen if it had been closed — WITHOUT touching the

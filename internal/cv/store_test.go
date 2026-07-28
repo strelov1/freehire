@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -14,11 +15,16 @@ import (
 
 // fakeRepo is an in-memory owner-scoped Repository for unit-testing Store without a DB.
 type fakeRepo struct {
-	rows map[int64]fakeRow
-	next int64
+	rows map[uuid.UUID]fakeRow
+	// writes counts insertions, so a row can record the order it arrived in.
+	writes int
 }
 
 type fakeRow struct {
+	// seq is the insertion order. The real query breaks the "newest base CV" tie
+	// with `updated_at DESC, id DESC`; random ids carry no order, so the fake keeps
+	// the one thing that still models "newest" — when the row was written.
+	seq        int
 	userID     int64
 	title      string
 	templateID string
@@ -27,14 +33,14 @@ type fakeRow struct {
 	sessionID  string
 }
 
-func newFakeRepo() *fakeRepo { return &fakeRepo{rows: map[int64]fakeRow{}, next: 1} }
+func newFakeRepo() *fakeRepo { return &fakeRepo{rows: map[uuid.UUID]fakeRow{}} }
 
 func stamp() pgtype.Timestamptz { return pgtype.Timestamptz{Valid: true} }
 
 func (f *fakeRepo) Create(_ context.Context, userID int64, title, templateID string, data []byte) (db.CreateCVRow, error) {
-	id := f.next
-	f.next++
-	f.rows[id] = fakeRow{userID: userID, title: title, templateID: templateID, data: data}
+	id := uuid.New()
+	f.writes++
+	f.rows[id] = fakeRow{seq: f.writes, userID: userID, title: title, templateID: templateID, data: data}
 	return db.CreateCVRow{ID: id, Title: title, TemplateID: templateID, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
 }
 
@@ -48,7 +54,7 @@ func (f *fakeRepo) List(_ context.Context, userID int64) ([]db.ListCVsByUserRow,
 	return out, nil
 }
 
-func (f *fakeRepo) Get(_ context.Context, id, userID int64) (db.GetCVByIDRow, error) {
+func (f *fakeRepo) Get(_ context.Context, id uuid.UUID, userID int64) (db.GetCVByIDRow, error) {
 	r, ok := f.rows[id]
 	if !ok || r.userID != userID {
 		return db.GetCVByIDRow{}, pgx.ErrNoRows
@@ -56,7 +62,7 @@ func (f *fakeRepo) Get(_ context.Context, id, userID int64) (db.GetCVByIDRow, er
 	return db.GetCVByIDRow{ID: id, Title: r.title, TemplateID: r.templateID, Data: r.data, JobID: pgtype.Int8{Int64: r.jobID, Valid: r.jobID != 0}, AgentSessionID: pgtype.Text{String: r.sessionID, Valid: r.sessionID != ""}, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
 }
 
-func (f *fakeRepo) SetSession(_ context.Context, id, userID int64, sessionID string) (int64, error) {
+func (f *fakeRepo) SetSession(_ context.Context, id uuid.UUID, userID int64, sessionID string) (int64, error) {
 	r, ok := f.rows[id]
 	if !ok || r.userID != userID {
 		return 0, nil
@@ -66,7 +72,7 @@ func (f *fakeRepo) SetSession(_ context.Context, id, userID int64, sessionID str
 	return 1, nil
 }
 
-func (f *fakeRepo) SetTemplate(_ context.Context, id, userID int64, templateID string) (int64, error) {
+func (f *fakeRepo) SetTemplate(_ context.Context, id uuid.UUID, userID int64, templateID string) (int64, error) {
 	r, ok := f.rows[id]
 	if !ok || r.userID != userID {
 		return 0, nil
@@ -90,16 +96,16 @@ func (f *fakeRepo) ListTailored(_ context.Context, userID int64) ([]db.ListTailo
 	return out, nil
 }
 
-func (f *fakeRepo) Update(_ context.Context, id, userID int64, title, templateID string, data []byte) (db.UpdateCVRow, error) {
+func (f *fakeRepo) Update(_ context.Context, id uuid.UUID, userID int64, title, templateID string, data []byte) (db.UpdateCVRow, error) {
 	r, ok := f.rows[id]
 	if !ok || r.userID != userID {
 		return db.UpdateCVRow{}, pgx.ErrNoRows
 	}
-	f.rows[id] = fakeRow{userID: userID, title: title, templateID: templateID, data: data, jobID: r.jobID, sessionID: r.sessionID}
+	f.rows[id] = fakeRow{seq: r.seq, userID: userID, title: title, templateID: templateID, data: data, jobID: r.jobID, sessionID: r.sessionID}
 	return db.UpdateCVRow{ID: id, Title: title, TemplateID: templateID, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
 }
 
-func (f *fakeRepo) Delete(_ context.Context, id, userID int64) (int64, error) {
+func (f *fakeRepo) Delete(_ context.Context, id uuid.UUID, userID int64) (int64, error) {
 	if r, ok := f.rows[id]; !ok || r.userID != userID {
 		return 0, nil
 	}
@@ -108,15 +114,15 @@ func (f *fakeRepo) Delete(_ context.Context, id, userID int64) (int64, error) {
 }
 
 func (f *fakeRepo) GetBase(_ context.Context, userID int64) (db.GetBaseCVByUserRow, error) {
-	// Newest base CV = the highest id among the user's non-tailored rows (mirrors the
-	// query's updated_at DESC, id DESC tiebreak).
-	var bestID int64
+	// Newest base CV = the most recently written of the user's non-tailored rows.
+	var bestID uuid.UUID
+	best := 0
 	for id, r := range f.rows {
-		if r.userID == userID && r.jobID == 0 && id > bestID {
-			bestID = id
+		if r.userID == userID && r.jobID == 0 && r.seq > best {
+			best, bestID = r.seq, id
 		}
 	}
-	if bestID == 0 {
+	if best == 0 {
 		return db.GetBaseCVByUserRow{}, pgx.ErrNoRows
 	}
 	r := f.rows[bestID]
@@ -124,8 +130,7 @@ func (f *fakeRepo) GetBase(_ context.Context, userID int64) (db.GetBaseCVByUserR
 }
 
 func (f *fakeRepo) CreateTailored(_ context.Context, userID, jobID int64, title, templateID string, data []byte) (db.CreateTailoredCVRow, error) {
-	id := f.next
-	f.next++
+	id := uuid.New()
 	f.rows[id] = fakeRow{userID: userID, title: title, templateID: templateID, data: data, jobID: jobID}
 	return db.CreateTailoredCVRow{ID: id, Title: title, TemplateID: templateID, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
 }

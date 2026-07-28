@@ -1076,8 +1076,8 @@ export function createApi(
   }
 
   /** Stop being a referrer: delete one of the caller's own offers. */
-  async function withdrawReferralOffer(id: number): Promise<void> {
-    await call(`/api/v1/me/referrals/offers/${id}`, { method: 'DELETE' });
+  async function withdrawReferralOffer(id: string): Promise<void> {
+    await call(`/api/v1/me/referrals/offers/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
 
   /** The referrer inbox: open requests for the companies the caller is approved for. */
@@ -1087,18 +1087,18 @@ export function createApi(
 
   /** Mark an incoming request contacted or declined on the caller's behalf. */
   async function resolveReferral(
-    id: number,
+    id: string,
     status: 'contacted' | 'declined',
   ): Promise<IncomingReferralRequest> {
     return requestData<IncomingReferralRequest>(
-      `/api/v1/me/referrals/incoming/${id}/resolve`,
+      `/api/v1/me/referrals/incoming/${encodeURIComponent(id)}/resolve`,
       jsonBody('POST', { status }),
     );
   }
 
   /** The URL that streams an incoming request's attached CV (opened in a new tab). */
-  function referralCvUrl(id: number): string {
-    return `${baseUrl}/api/v1/me/referrals/incoming/${id}/cv`;
+  function referralCvUrl(id: string): string {
+    return `${baseUrl}/api/v1/me/referrals/incoming/${encodeURIComponent(id)}/cv`;
   }
 
   /** The moderator queue: referral offers awaiting a decision, oldest first. */
@@ -1107,13 +1107,13 @@ export function createApi(
   }
 
   /** Approve or reject a pending offer. Moderator-only. */
-  async function decideReferralOffer(id: number, approve: boolean): Promise<ReferralOffer> {
-    return requestData<ReferralOffer>(`/api/v1/referrals/offers/${id}/decide`, jsonBody('POST', { approve }));
+  async function decideReferralOffer(id: string, approve: boolean): Promise<ReferralOffer> {
+    return requestData<ReferralOffer>(`/api/v1/referrals/offers/${encodeURIComponent(id)}/decide`, jsonBody('POST', { approve }));
   }
 
   /** The URL that streams an offer's proof CV (moderator-only, opened in a new tab). */
-  function referralProofUrl(id: number): string {
-    return `${baseUrl}/api/v1/referrals/offers/${id}/proof`;
+  function referralProofUrl(id: string): string {
+    return `${baseUrl}/api/v1/referrals/offers/${encodeURIComponent(id)}/proof`;
   }
 
   /** The moderator review queue: pending submissions, with submitter emails. */
@@ -1272,7 +1272,7 @@ export function createApi(
   }
 
   /** Switch a CV's template only (title + document untouched). */
-  async function setCvTemplate(id: number, templateId: string): Promise<void> {
+  async function setCvTemplate(id: string, templateId: string): Promise<void> {
     await call(`/api/v1/me/cvs/${id}/template`, jsonBody('PUT', { template_id: templateId }));
   }
 
@@ -1283,27 +1283,27 @@ export function createApi(
   }
 
   /** Bind a roy agent session to a CV so its workspace can re-open that exact session. */
-  async function setCvSession(id: number, sessionId: string): Promise<void> {
+  async function setCvSession(id: string, sessionId: string): Promise<void> {
     await call(`/api/v1/me/cvs/${id}/session`, jsonBody('PUT', { session_id: sessionId }));
   }
 
   /** Fetch one CV with its full document. */
-  async function getCv(id: number): Promise<CvRecord> {
+  async function getCv(id: string): Promise<CvRecord> {
     return requestData<CvRecord>(`/api/v1/me/cvs/${id}`);
   }
 
   /** Replace a CV's title, template, and document. */
-  async function updateCv(id: number, input: UpdateCvInput): Promise<CvMeta> {
+  async function updateCv(id: string, input: UpdateCvInput): Promise<CvMeta> {
     return requestData<CvMeta>(`/api/v1/me/cvs/${id}`, jsonBody('PUT', input));
   }
 
   /** Delete a CV. */
-  async function deleteCv(id: number): Promise<void> {
+  async function deleteCv(id: string): Promise<void> {
     await call(`/api/v1/me/cvs/${id}`, { method: 'DELETE' });
   }
 
   /** The authenticated PDF URL for a CV (same-origin cookie rides along on download). */
-  function cvPdfUrl(id: number): string {
+  function cvPdfUrl(id: string): string {
     return `${baseUrl}/api/v1/me/cvs/${id}/pdf`;
   }
 
@@ -1321,7 +1321,7 @@ export function createApi(
    * (one created before session binding): mints a fresh CLI token and returns the CV + base ids
    * so the workspace can seed a new agent session against the same CV.
    */
-  async function startTailorSession(id: number): Promise<TailorResult> {
+  async function startTailorSession(id: string): Promise<TailorResult> {
     return requestData<TailorResult>(`/api/v1/me/cvs/${id}/tailor-session`, jsonBody('POST', {}));
   }
 

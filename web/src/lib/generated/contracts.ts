@@ -541,6 +541,28 @@ export interface Structured {
   projects?: Project[];
 }
 /**
+ * Professional is Structured with the contact fields left out — the résumé's substance
+ * (what the person has done) without the identity (who they are). It is what goes to a
+ * consumer that has no business knowing the candidate's name: the LLM fit chain, and an
+ * agent reading the profile over the API.
+ * The field set is a whitelist, deliberately: a field later added to Structured is
+ * withheld until it is added here too. A blacklist — dropping the four known contact
+ * keys — would disclose that new field by default, which is the wrong way round for a
+ * projection whose whole job is to hold personal data back.
+ */
+export interface Professional {
+  headline?: string;
+  location?: string;
+  summary?: string;
+  total_years?: number /* int */;
+  experience?: Experience[];
+  education?: Education[];
+  languages?: string[];
+  skills?: string[];
+  certifications?: string[];
+  projects?: Project[];
+}
+/**
  * Experience is one work-history entry. Dates are kept as free-form strings as printed
  * on the CV (e.g. "2021-03", "Mar 2021", "Present") — no date parsing is attempted.
  * Summary is the role/company one-line context; Highlights are the achievement bullets.
@@ -703,7 +725,7 @@ export interface Patch {
   stack?: string[]; // per-experience technology line (set_stack)
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'betterteam', 'breezy', 'briefhq', 'bullhorn', 'careerplug', 'careerspage', 'catsone', 'cleverstaff', 'clinch', 'comeet', 'cornerstone', 'crelate', 'deel', 'djinni', 'earcu', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'functionalworks', 'geekjob', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'hh', 'himalayas', 'hireology', 'huntflow', 'hurma', 'icims', 'infojobs', 'inhire', 'ismartrecruit', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobscore', 'jobspresso', 'jobstash', 'jobtech', 'jobvite', 'jobylon', 'join', 'justjoin', 'lever', 'likeit', 'loxo', 'luxoft', 'manatal', 'mindsight', 'mycareersfuture', 'neogov', 'nofluffjobs', 'northstone', 'odoo', 'oracle', 'pageup', 'paycom', 'paylocity', 'peopleforce', 'personio', 'phenom', 'pinpoint', 'powertofly', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'softgarden', 'solides', 'spark', 'startupandvc', 'successfactors', 'talentadore', 'talentlyft', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'trudvsem', 'tyomarkkinatori', 'ukg', 'vagas', 'vention', 'vouch', 'wantapply', 'wantedkr', 'weworkremotely', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'betterteam', 'breezy', 'briefhq', 'bullhorn', 'careerplug', 'careerspage', 'catsone', 'cleverstaff', 'clinch', 'comeet', 'cornerstone', 'crelate', 'deel', 'djinni', 'earcu', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'functionalworks', 'geekjob', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'hh', 'himalayas', 'hireology', 'huntflow', 'hurma', 'icims', 'infojobs', 'inhire', 'ismartrecruit', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobscore', 'jobspresso', 'jobstash', 'jobtech', 'jobvite', 'jobylon', 'join', 'justjoin', 'lever', 'likeit', 'loxo', 'luxoft', 'manatal', 'mindsight', 'mycareersfuture', 'neogov', 'nofluffjobs', 'northstone', 'odoo', 'oracle', 'pageup', 'paycom', 'paylocity', 'peopleforce', 'personio', 'phenom', 'pinpoint', 'powertofly', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'softgarden', 'solides', 'spark', 'startupandvc', 'successfactors', 'talentadore', 'talenthr', 'talentlyft', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'trudvsem', 'tyomarkkinatori', 'ukg', 'vagas', 'vention', 'vouch', 'wantapply', 'wantedkr', 'weworkremotely', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];
@@ -1870,7 +1892,7 @@ export const ROLE_ALIASES = {
   'interior_designer': ['interior designer'],
   'intern': ['intern', 'internship', 'trainee', 'стажер', 'стажировка', 'стажёр'],
   'ios_developer': ['ios developer', 'ios engineer', 'ios software engineer'],
-  'junior': ['jr', 'jr.', 'junior', 'джун', 'джуниор', 'младший'],
+  'junior': ['jr', 'junior', 'джун', 'джуниор', 'младший'],
   'lead': ['lead', 'team lead', 'teamlead', 'ведущий', 'тимлид'],
   'legal': ['attorney', 'compliance analyst', 'compliance manager', 'compliance officer', 'contract manager', 'contracts manager', 'corporate counsel', 'data protection officer', 'general counsel', 'lawyer', 'legal assistant', 'legal counsel', 'legal manager', 'paralegal', 'regulatory affairs', 'комплаенс', 'корпоративный юрист', 'юрисконсульт', 'юрист'],
   'management': ['engineering manager', 'manager', 'team manager', 'менеджер'],
@@ -1904,7 +1926,7 @@ export const ROLE_ALIASES = {
   'sdr': ['sales development representative', 'sdr'],
   'security': ['appsec', 'cyber security', 'cybersecurity', 'infosec', 'security', 'безопасности', 'безопасность', 'кибербезопасность'],
   'security_officer': ['security officer'],
-  'senior': ['senior', 'sr', 'sr.', 'сеньор', 'синьор', 'старший'],
+  'senior': ['senior', 'sr', 'сеньор', 'синьор', 'старший'],
   'seo_specialist': ['seo manager', 'seo specialist'],
   'social_media_manager': ['social media manager'],
   'software_architect': ['software architect'],

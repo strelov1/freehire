@@ -3,6 +3,7 @@ package referral
 import (
 	"context"
 	"errors"
+	"github.com/google/uuid"
 	"testing"
 	"time"
 )
@@ -32,17 +33,20 @@ type fakeRepo struct {
 }
 
 type decidedOffer struct {
-	id, moderator int64
-	status        string
+	id        uuid.UUID
+	moderator int64
+	status    string
 }
 
 type deletedOffer struct {
-	id, user int64
+	id   uuid.UUID
+	user int64
 }
 
 type resolvedRequest struct {
-	id, actor int64
-	status    string
+	id     uuid.UUID
+	actor  int64
+	status string
 }
 
 func (f *fakeRepo) CreateOffer(_ context.Context, in OfferInput) (Offer, error) {
@@ -50,10 +54,10 @@ func (f *fakeRepo) CreateOffer(_ context.Context, in OfferInput) (Offer, error) 
 	if f.createErr != nil {
 		return Offer{}, f.createErr
 	}
-	return Offer{ID: 1, UserID: in.UserID, CompanySlug: in.CompanySlug, Status: OfferPending}, nil
+	return Offer{ID: testOfferID, UserID: in.UserID, CompanySlug: in.CompanySlug, Status: OfferPending}, nil
 }
 
-func (f *fakeRepo) DecideOffer(_ context.Context, offerID, moderatorID int64, status string) (Offer, error) {
+func (f *fakeRepo) DecideOffer(_ context.Context, offerID uuid.UUID, moderatorID int64, status string) (Offer, error) {
 	f.decided = &decidedOffer{offerID, moderatorID, status}
 	if f.resolveErr != nil {
 		return Offer{}, f.resolveErr
@@ -72,16 +76,26 @@ func (f *fakeRepo) ReferrerApprovedForCompany(context.Context, int64, string) (b
 func (f *fakeRepo) ApprovedReferrerRecipients(context.Context, string) ([]Recipient, error) {
 	return f.recipients, nil
 }
-func (f *fakeRepo) CVBelongsToUser(context.Context, int64, int64) (bool, error) {
+
+// The ids these cases address. Fixed so a failure names a stable value.
+var (
+	testOfferID   = uuid.MustParse("aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa")
+	testRequestID = uuid.MustParse("bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb")
+)
+
+// testCVID is the attached CV these cases address.
+var testCVID = uuid.MustParse("77777777-7777-4777-8777-777777777777")
+
+func (f *fakeRepo) CVBelongsToUser(context.Context, uuid.UUID, int64) (bool, error) {
 	return f.cvOwned, nil
 }
 func (f *fakeRepo) UserHasResume(context.Context, int64) (bool, error) {
 	return f.hasResume, nil
 }
-func (f *fakeRepo) GetOffer(context.Context, int64) (Offer, bool, error) {
+func (f *fakeRepo) GetOffer(context.Context, uuid.UUID) (Offer, bool, error) {
 	return Offer{}, false, nil
 }
-func (f *fakeRepo) DeleteOffer(_ context.Context, offerID, userID int64) error {
+func (f *fakeRepo) DeleteOffer(_ context.Context, offerID uuid.UUID, userID int64) error {
 	f.deleted = &deletedOffer{offerID, userID}
 	return f.deleteErr
 }
@@ -91,18 +105,18 @@ func (f *fakeRepo) CreateRequest(_ context.Context, in RequestInput) (Request, e
 	if f.createErr != nil {
 		return Request{}, f.createErr
 	}
-	return Request{ID: 7, SeekerUserID: in.SeekerUserID, CompanySlug: in.CompanySlug, Status: RequestSent}, nil
+	return Request{ID: testRequestID, SeekerUserID: in.SeekerUserID, CompanySlug: in.CompanySlug, Status: RequestSent}, nil
 }
 
 func (f *fakeRepo) CountRequestsSince(_ context.Context, _ int64, _ time.Time) (int64, error) {
 	return f.countSince, nil
 }
 
-func (f *fakeRepo) GetRequest(context.Context, int64) (Request, bool, error) {
+func (f *fakeRepo) GetRequest(context.Context, uuid.UUID) (Request, bool, error) {
 	return f.getRequest, f.getRequestOK, nil
 }
 
-func (f *fakeRepo) ResolveRequest(_ context.Context, id, actorID int64, status string) (Request, error) {
+func (f *fakeRepo) ResolveRequest(_ context.Context, id uuid.UUID, actorID int64, status string) (Request, error) {
 	f.resolved = &resolvedRequest{id, actorID, status}
 	if f.resolveErr != nil {
 		return Request{}, f.resolveErr
@@ -128,7 +142,7 @@ func newService(repo *fakeRepo, pinger *fakePinger) *Service {
 	return New(repo, pinger, Config{DailyRequestCap: 3, CabinetURL: "https://freehire.me/my/referrals"})
 }
 
-func cvID(n int64) *int64 { return &n }
+func cvID(n uuid.UUID) *uuid.UUID { return &n }
 
 // linkedInURL is a valid profile URL for fixtures that must clear the required-LinkedIn gate.
 const linkedInURL = "https://www.linkedin.com/in/jane-doe"
@@ -193,7 +207,7 @@ func TestDecideOfferMapsApproveReject(t *testing.T) {
 	}{{true, OfferApproved}, {false, OfferRejected}} {
 		repo := &fakeRepo{}
 		s := newService(repo, &fakePinger{})
-		if _, err := s.DecideOffer(context.Background(), 5, 9, tc.approve); err != nil {
+		if _, err := s.DecideOffer(context.Background(), testOfferID, 9, tc.approve); err != nil {
 			t.Fatalf("decide: %v", err)
 		}
 		if repo.decided == nil || repo.decided.status != tc.want || repo.decided.moderator != 9 {
@@ -205,10 +219,10 @@ func TestDecideOfferMapsApproveReject(t *testing.T) {
 func TestWithdrawOfferIsOwnerScoped(t *testing.T) {
 	repo := &fakeRepo{}
 	s := newService(repo, &fakePinger{})
-	if err := s.WithdrawOffer(context.Background(), 5, 42); err != nil {
+	if err := s.WithdrawOffer(context.Background(), testOfferID, 42); err != nil {
 		t.Fatalf("withdraw: %v", err)
 	}
-	if repo.deleted == nil || repo.deleted.id != 5 || repo.deleted.user != 42 {
+	if repo.deleted == nil || repo.deleted.id != testOfferID || repo.deleted.user != 42 {
 		t.Errorf("deleted = %+v, want offer 5 by user 42", repo.deleted)
 	}
 }
@@ -216,7 +230,7 @@ func TestWithdrawOfferIsOwnerScoped(t *testing.T) {
 func TestWithdrawOfferPropagatesNotFound(t *testing.T) {
 	repo := &fakeRepo{deleteErr: ErrOfferNotFound}
 	s := newService(repo, &fakePinger{})
-	if err := s.WithdrawOffer(context.Background(), 5, 42); !errors.Is(err, ErrOfferNotFound) {
+	if err := s.WithdrawOffer(context.Background(), testOfferID, 42); !errors.Is(err, ErrOfferNotFound) {
 		t.Errorf("err = %v, want ErrOfferNotFound", err)
 	}
 }
@@ -232,7 +246,7 @@ func TestCreateRequestValidation(t *testing.T) {
 		want error
 	}{
 		{"no contact", RequestInput{SeekerUserID: 1, CompanySlug: "acme", CVKind: CVOriginal}, ErrNoContact},
-		{"original with cv id", withCV(base, CVOriginal, cvID(4)), ErrInvalidCVChoice},
+		{"original with cv id", withCV(base, CVOriginal, cvID(testCVID)), ErrInvalidCVChoice},
 		{"built without cv id", withCV(base, CVBuilt, nil), ErrInvalidCVChoice},
 		{"unknown kind", withCV(base, "weird", nil), ErrInvalidCVChoice},
 	}
@@ -298,7 +312,7 @@ func TestCreateRequestEligibilityAndCap(t *testing.T) {
 }
 
 func TestCreateRequestBuiltCVOwnership(t *testing.T) {
-	built := RequestInput{SeekerUserID: 1, CompanySlug: "acme", CVKind: CVBuilt, CVID: cvID(42), ContactEmail: "s@x.test", LinkedInURL: linkedInURL}
+	built := RequestInput{SeekerUserID: 1, CompanySlug: "acme", CVKind: CVBuilt, CVID: cvID(testCVID), ContactEmail: "s@x.test", LinkedInURL: linkedInURL}
 
 	t.Run("foreign cv is rejected as an invalid choice", func(t *testing.T) {
 		repo := &fakeRepo{eligible: true, cvOwned: false}
@@ -341,15 +355,15 @@ func TestResolveRequestAuthorization(t *testing.T) {
 	t.Run("missing request", func(t *testing.T) {
 		repo := &fakeRepo{getRequestOK: false}
 		s := newService(repo, &fakePinger{})
-		if _, err := s.ResolveRequest(context.Background(), 7, 9, true); !errors.Is(err, ErrRequestNotFound) {
+		if _, err := s.ResolveRequest(context.Background(), testRequestID, 9, true); !errors.Is(err, ErrRequestNotFound) {
 			t.Fatalf("err = %v, want ErrRequestNotFound", err)
 		}
 	})
 
 	t.Run("not an approved referrer", func(t *testing.T) {
-		repo := &fakeRepo{getRequestOK: true, getRequest: Request{ID: 7, CompanySlug: "acme"}, approved: false}
+		repo := &fakeRepo{getRequestOK: true, getRequest: Request{ID: testRequestID, CompanySlug: "acme"}, approved: false}
 		s := newService(repo, &fakePinger{})
-		if _, err := s.ResolveRequest(context.Background(), 7, 9, true); !errors.Is(err, ErrNotAuthorized) {
+		if _, err := s.ResolveRequest(context.Background(), testRequestID, 9, true); !errors.Is(err, ErrNotAuthorized) {
 			t.Fatalf("err = %v, want ErrNotAuthorized", err)
 		}
 		if repo.resolved != nil {
@@ -358,9 +372,9 @@ func TestResolveRequestAuthorization(t *testing.T) {
 	})
 
 	t.Run("authorized decline maps status", func(t *testing.T) {
-		repo := &fakeRepo{getRequestOK: true, getRequest: Request{ID: 7, CompanySlug: "acme"}, approved: true}
+		repo := &fakeRepo{getRequestOK: true, getRequest: Request{ID: testRequestID, CompanySlug: "acme"}, approved: true}
 		s := newService(repo, &fakePinger{})
-		if _, err := s.ResolveRequest(context.Background(), 7, 9, false); err != nil {
+		if _, err := s.ResolveRequest(context.Background(), testRequestID, 9, false); err != nil {
 			t.Fatalf("resolve: %v", err)
 		}
 		if repo.resolved == nil || repo.resolved.status != RequestDeclined || repo.resolved.actor != 9 {
@@ -370,24 +384,24 @@ func TestResolveRequestAuthorization(t *testing.T) {
 }
 
 func TestAuthorizeCVAccess(t *testing.T) {
-	repo := &fakeRepo{getRequestOK: true, getRequest: Request{ID: 7, CompanySlug: "acme", CVKind: CVOriginal}, approved: true}
+	repo := &fakeRepo{getRequestOK: true, getRequest: Request{ID: testRequestID, CompanySlug: "acme", CVKind: CVOriginal}, approved: true}
 	s := newService(repo, &fakePinger{})
-	got, err := s.AuthorizeCVAccess(context.Background(), 7, 9)
+	got, err := s.AuthorizeCVAccess(context.Background(), testRequestID, 9)
 	if err != nil {
 		t.Fatalf("authorize: %v", err)
 	}
-	if got.ID != 7 {
-		t.Errorf("request id = %d, want 7", got.ID)
+	if got.ID != testRequestID {
+		t.Errorf("request id = %s, want %s", got.ID, testRequestID)
 	}
 
 	repo.approved = false
-	if _, err := s.AuthorizeCVAccess(context.Background(), 7, 9); !errors.Is(err, ErrNotAuthorized) {
+	if _, err := s.AuthorizeCVAccess(context.Background(), testRequestID, 9); !errors.Is(err, ErrNotAuthorized) {
 		t.Fatalf("err = %v, want ErrNotAuthorized", err)
 	}
 }
 
 // withCV returns a copy of in with the CV choice replaced.
-func withCV(in RequestInput, kind string, id *int64) RequestInput {
+func withCV(in RequestInput, kind string, id *uuid.UUID) RequestInput {
 	in.CVKind = kind
 	in.CVID = id
 	return in

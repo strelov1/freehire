@@ -18,16 +18,15 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 	"time"
 	"unicode"
 
+	"github.com/strelov1/freehire/internal/testdb"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/strelov1/freehire/internal/db"
@@ -105,34 +104,7 @@ func startMeili(t *testing.T) (url, key string) {
 
 func startPostgres(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	ctx := context.Background()
-	migrationsDir, err := filepath.Abs(filepath.Join("..", "..", "migrations"))
-	if err != nil {
-		t.Fatalf("resolve migrations dir: %v", err)
-	}
-	scripts, err := filepath.Glob(filepath.Join(migrationsDir, "*.sql"))
-	if err != nil || len(scripts) == 0 {
-		t.Fatalf("list migrations: %v (found %d)", err, len(scripts))
-	}
-	sort.Strings(scripts)
-	pg, err := postgres.Run(ctx, "postgres:18-alpine",
-		postgres.WithDatabase("hire"), postgres.WithUsername("hire"), postgres.WithPassword("hire"),
-		postgres.WithInitScripts(scripts...), postgres.BasicWaitStrategies(),
-	)
-	if err != nil {
-		t.Fatalf("start postgres: %v", err)
-	}
-	t.Cleanup(func() { _ = pg.Terminate(ctx) })
-	dsn, err := pg.ConnectionString(ctx, "sslmode=disable")
-	if err != nil {
-		t.Fatalf("connection string: %v", err)
-	}
-	pool, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("pool: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	return pool
+	return testdb.Pool(t)
 }
 
 // meiliDocExists reports whether the semantic index holds a document with the given id.

@@ -58,7 +58,9 @@ type ResolveSlugsToJobIDsRow struct {
 // access logs off the request path (see internal/viewlog), then resolves slugs and
 // applies per-(day, job) unique counts here.
 // Map public slugs to job ids. Unknown slugs are simply absent from the result, so
-// the worker skips views for jobs that no longer exist.
+// the worker skips views for jobs that no longer exist. The assistant's
+// `present_jobs` tool uses it for the same absence: a slug the model invented is
+// missing here, and is dropped from the deck rather than shown to the user.
 func (q *Queries) ResolveSlugsToJobIDs(ctx context.Context, slugs []string) ([]ResolveSlugsToJobIDsRow, error) {
 	rows, err := q.db.Query(ctx, resolveSlugsToJobIDs, slugs)
 	if err != nil {

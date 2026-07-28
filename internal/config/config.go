@@ -71,6 +71,15 @@ type Settings struct {
 	LLMAPIKey  string
 	LLMModel   string
 
+	// AssistantModel is the model the in-app agent runs on. It is separate from
+	// LLMModel because the two jobs differ: LLMModel is chosen for cheap, one-shot
+	// JSON extraction, while the assistant needs reliable tool calling and a large
+	// context. Empty falls back to LLMModel. AssistantMaxSteps bounds how many
+	// tool-calling rounds one turn may take before the agent is forced to answer;
+	// zero uses the package default.
+	AssistantModel    string
+	AssistantMaxSteps int
+
 	// PIIFilterURL is the co-located openai/privacy-filter span-detection endpoint used to
 	// mask PII out of CV text before it reaches the LLM (internal/pii). Optional here, but
 	// the fit-analysis and structured-résumé paths are fail-closed: an empty value disables
@@ -168,6 +177,9 @@ func Load() Settings {
 		LLMBaseURL: os.Getenv("LLM_BASE_URL"),
 		LLMAPIKey:  os.Getenv("LLM_API_KEY"),
 		LLMModel:   os.Getenv("LLM_MODEL"),
+
+		AssistantModel:    os.Getenv("ASSISTANT_MODEL"),
+		AssistantMaxSteps: envInt("ASSISTANT_MAX_STEPS", 0),
 
 		PIIFilterURL: os.Getenv("PII_FILTER_URL"),
 

@@ -25,7 +25,7 @@
     tab = $bindable('templates'),
     mobileVisible = false,
   }: {
-    cvId: number;
+    cvId: string;
     job: Job;
     analysis: Analysis | null;
     onTemplateSelected: (id: string) => void;

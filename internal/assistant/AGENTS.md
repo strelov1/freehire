@@ -1,0 +1,84 @@
+# The in-app assistant
+
+## Scope
+The `internal/assistant` package — the agent's turn loop, its tool contract, the
+session/transcript store, and the prompts each preset runs under. The tools
+themselves live in `internal/handler` (`assistant_*_tools.go`), because they are
+built from the same services the HTTP handlers use.
+
+## Always true
+- **The agent runs in this process.** There is no external runtime, no shell, and
+  no credential: a tool receives the session owner's `userID` and calls a Go
+  service directly. Anything a tool must not reach is a tool that does not exist.
+- **A tool failure is not a turn failure.** `Registry.Call` never returns a Go
+  error — an unknown tool, malformed arguments and a failing service all come
+  back as `{"error": "..."}` for the model to read and correct within the same
+  turn. Only a model/transport failure ends a turn as errored.
+- **Every turn ends with exactly one `result` event.** A client that receives no
+  terminal event waits forever, so the loop emits one on every path: an answer,
+  the step cap, cancellation, and failure.
+- **A turn is bounded three ways**: `MaxSteps` tool-calling rounds, the LLM
+  client's per-call timeout, and cancellation. Zero/negative bounds fall back to
+  defaults rather than meaning "unbounded" — an unbounded loop on a metered
+  gateway is a runaway bill.
+- **The transcript IS the model's history.** One table holds both, including the
+  assistant's tool calls and each tool's result, with the model's argument string
+  stored verbatim. Two stores would drift; re-encoding parsed arguments would
+  change the bytes the model saw.
+- **Ownership is a `WHERE user_id = $1`.** A session the caller does not own is
+  reported as missing, never as forbidden.
+
+## How it works
+
+```
+POST /api/v1/assistant/sessions/:id/messages
+  └─ handler: owner check → registry for the session's preset → SSE writer
+       └─ Runner.Run
+            ├─ persist the prompt, label the session, emit user_prompt
+            ├─ history = system prompt + last N transcript messages
+            └─ loop (≤ MaxSteps):
+                 llm.Chat(history, tools) ──► text? → emit result(end_turn), stop
+                                          └─► tool calls? → Registry.Call each,
+                                              emit tool_use/tool_result,
+                                              persist, append to history
+            └─ cap reached → one final Chat with NO tools → result(max_steps)
+```
+
+**Files.** `runner.go` is the loop and the event shapes; `tool.go` the tool
+contract, registry and strict argument decoding; `message.go` the stored-message
+encoding and its round trip to `[]llms.MessageContent`; `store.go` the
+owner-scoped persistence; `prompt.go` the per-preset system prompts.
+
+**Presets.** A session records `chat` or `tailor`. The preset selects the system
+prompt and the registered tools and nothing else, which is why the same chat
+component serves `/my/assistant` and the CV-tailoring workspace. A tailoring
+session's CV tools close over the CV and vacancy ids from the session binding, so
+the model cannot address another CV even by guessing an id.
+
+**History trimming.** `trim` keeps the most recent N messages and then drops any
+leading tool results whose originating call was trimmed away — providers reject a
+tool result that answers no call in the conversation, so an orphan at the head
+turns a context loss into a failed turn.
+
+**Streaming.** `llm.Chat` splits the model's two delta channels: answer text goes
+to `OnText`, reasoning to `OnThinking`. The chat renders them apart, so reasoning
+is never mistaken for the answer.
+
+## Adding a tool
+1. Write it in `internal/handler/assistant_*_tools.go` as an `assistant.Tool`:
+   a name, a one-paragraph description the model reads, a JSON schema, and a
+   `Run` that decodes with `assistant.DecodeArgs` and calls the same service the
+   HTTP handler calls.
+2. Register it in `assistantRegistry` under the presets that should offer it.
+3. Return structured data, not prose. Include the fields the model needs to act
+   (a vacancy's `public_slug`, not just its title).
+4. Give errors a message the model can act on — name the invalid value and list
+   the valid ones. That message is the model's only path to self-correction.
+
+## Limitations
+- No metering. The assistant is free behind the restricted-rollout gate;
+  `internal/credits` is the seam for a per-turn debit.
+- No summarisation: a long session loses its oldest messages to the window rather
+  than compacting them.
+- One tool round runs its calls sequentially. Parallel execution would need
+  per-call result ordering the transcript does not currently model.

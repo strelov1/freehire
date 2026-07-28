@@ -25,7 +25,7 @@
   } = $props();
 
   let cvKind = $state<'original' | 'built'>('original');
-  let cvId = $state<number | null>(null);
+  let cvId = $state<string | null>(null);
   let tailored = $state<CvTailoredItem[]>([]);
   let hasResume = $state(true);
   let linkedinUrl = $state('');

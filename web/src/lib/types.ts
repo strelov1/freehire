@@ -5,6 +5,7 @@ import type {
   Job,
   JobMatch,
   Blocker,
+  Professional,
   Report as ATSReportContract,
   Analysis as MatchAnalysisContract,
 } from './generated/contracts';
@@ -220,7 +221,7 @@ export type ReferralRequestStatus = 'sent' | 'contacted' | 'declined';
 export type ReferralCvKind = 'original' | 'built';
 
 export interface ReferralOffer {
-  id: number;
+  id: string;
   company_slug: string;
   company_name: string;
   linkedin_url: string;
@@ -231,19 +232,19 @@ export interface ReferralOffer {
 
 /** What a seeker sees of their own request — no referrer identity (the request targets a pool). */
 export interface SeekerReferralRequest {
-  id: number;
+  id: string;
   company_slug: string;
   company_name: string;
   job_id: number | null;
   cv_kind: ReferralCvKind;
-  cv_id: number | null;
+  cv_id: string | null;
   status: ReferralRequestStatus;
   created_at: string | null;
 }
 
 /** What a referrer sees of an incoming request — the seeker's chosen contact and CV, no identity. */
 export interface IncomingReferralRequest {
-  id: number;
+  id: string;
   company_slug: string;
   company_name: string;
   job_id: number | null;
@@ -261,7 +262,7 @@ export interface ReferralRequestInput {
   company_slug: string;
   job_id?: number;
   cv_kind: ReferralCvKind;
-  cv_id?: number;
+  cv_id?: string;
   linkedin_url: string;
   contact_telegram?: string;
   contact_email?: string;
@@ -611,6 +612,11 @@ export interface UserProfile {
   /** Canonical skill tokens the user wants to avoid; seeded into the jobs filter's skills exclude set by "Apply my profile". Empty when the user excludes nothing. */
   excluded_skills: string[];
   location_preferences: LocationPreferences | null;
+  /** The caller's structured CV without its contact fields — served beside the profile so
+   *  one read covers both what the user wants and what they have done. Null when no current
+   *  structure exists. Contacts come from GET /me/resume instead (the profile page's contact
+   *  card reads them there). */
+  cv: Professional | null;
   created_at: string | null;
   updated_at: string | null;
 }

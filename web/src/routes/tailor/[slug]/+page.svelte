@@ -14,8 +14,6 @@
   import { page } from '$app/state';
   import { ZoomIn, ZoomOut, Download, Menu } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
-  import { createSession, NoDeviceError } from '$lib/assistant/api';
-  import RunnerSetup from '$lib/assistant/RunnerSetup.svelte';
   import AssistantChat from '$lib/assistant/AssistantChat.svelte';
   import ArtifactPanel from '$lib/tailor/ArtifactPanel.svelte';
   import CvHtmlPreview from '$lib/tailor/CvHtmlPreview.svelte';
@@ -30,11 +28,11 @@
   const slug = $derived(page.params.slug ?? '');
   const cvParam = $derived(page.url.searchParams.get('cv'));
 
-  let status = $state<'loading' | 'ready' | 'error' | 'needs-runner'>('loading');
+  let status = $state<'loading' | 'ready' | 'error'>('loading');
   let errorMsg = $state('');
   let sessionId = $state<string | undefined>(undefined);
   let resuming = $state(false);
-  let cvId = $state(0);
+  let cvId = $state('');
   let analysis = $state<Analysis | null>(null);
   let job = $state<Job | null>(null);
 
@@ -118,7 +116,7 @@
         // Resume an existing tailored CV. If it already has a bound session, re-attach it with
         // no kickoff. If it has none (a CV created before session binding), mint a fresh
         // tailoring session for it and let the kickoff orient the agent.
-        const existing = Number(cvParam);
+        const existing = cvParam;
         const [j, fit] = await Promise.all([
           api.getJob(slug),
           api.getMatchAnalysis(slug).catch(() => null),
@@ -132,13 +130,10 @@
           resuming = true;
           sessionId = rec.agent_session_id;
         } else {
+          // A CV created before session binding: the backend mints a tailoring
+          // conversation bound to it and stores it on the CV.
           const s = await api.startTailorSession(existing);
-          sessionId = await createSession({
-            cli_token: s.cli_token,
-            cv_id: existing,
-            base_cv_id: s.base_cv_id,
-          });
-          await api.setCvSession(existing, sessionId).catch(() => {}); // best-effort
+          sessionId = s.session_id;
         }
       } else {
         // Bootstrap: create the tailored CV + a seeded session, then bind the session to the CV.
@@ -146,22 +141,11 @@
         job = j;
         cvId = tailor.tailor_cv_id;
         analysis = tailor.analysis;
-        sessionId = await createSession({
-          cli_token: tailor.cli_token,
-          cv_id: tailor.tailor_cv_id,
-          base_cv_id: tailor.base_cv_id,
-        });
-        await api.setCvSession(tailor.tailor_cv_id, sessionId).catch(() => {}); // best-effort
+        sessionId = tailor.session_id;
         await loadCv(); // bootstrap has no CV record in hand yet — fetch the fresh tailored copy
       }
       status = 'ready';
     } catch (e) {
-      if (e instanceof NoDeviceError) {
-        // Tailoring runs on the user's own machine and none is connected. Show
-        // how to connect one rather than an error — nothing is broken.
-        status = 'needs-runner';
-        return;
-      }
       if (e instanceof ApiError && e.status === 402) {
         // Out of AI credits: surface the message plus when the monthly grant renews.
         const resetsAt = typeof e.body?.resets_at === 'string' ? e.body.resets_at : null;
@@ -260,20 +244,11 @@
 
 <!-- Full-width workspace loses the account shell nav; the same left-edge icon rail as
      the Agent page brings the account sections back. It stays put across every state. -->
-<div class="flex h-[calc(100svh-3.5rem)]">
+<div class="flex h-[calc(100dvh-3.5rem)]">
   <AccountNavRail collapsible bind:open={navOpen} />
   {#if status === 'loading'}
     <div class="flex min-w-0 flex-1 items-center justify-center text-sm text-muted-foreground">
       {resuming ? 'Re-opening your tailoring session…' : 'Preparing your tailoring session…'}
-    </div>
-  {:else if status === 'needs-runner'}
-    <div class="flex min-w-0 flex-1 items-start justify-center overflow-y-auto p-4">
-      <div class="w-full max-w-2xl">
-        <RunnerSetup />
-        <p class="px-3 pb-6 text-center text-xs text-muted-foreground">
-          Once it is running, reload this page to start tailoring.
-        </p>
-      </div>
     </div>
   {:else if status === 'error'}
     <div class="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center">

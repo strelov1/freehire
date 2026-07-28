@@ -10,7 +10,7 @@
   import States from './States.svelte';
 
   const pending = new AsyncData<ReferralOffer[]>([]);
-  let busy = $state<number | null>(null);
+  let busy = $state<string | null>(null);
 
   onMount(() => void pending.run(() => api.listPendingReferralOffers()));
 

@@ -73,6 +73,7 @@ Each is self-contained and can be read independently.
 | **Company names** (real display names for slug-named companies) | [internal/companyname/AGENTS.md](internal/companyname/AGENTS.md) |
 | **Enrichment** (Enrichment contract, LLM Provider; enums live in `internal/vocab`) | [internal/enrich/AGENTS.md](internal/enrich/AGENTS.md) |
 | **Semantic embedding** (semantic_outbox, incremental embeds, reconciler) | [internal/embed/AGENTS.md](internal/embed/AGENTS.md) |
+| **In-app assistant** (turn loop, tool registry, presets, transcripts) | [internal/assistant/AGENTS.md](internal/assistant/AGENTS.md) |
 | **AI fit analysis** (three-stage LLM prompt-chain, score, verdict, stream) | [internal/matchanalysis/AGENTS.md](internal/matchanalysis/AGENTS.md) |
 | **Structured CV** (LLM parse of stored CV, stamp-and-compare) | [internal/resumeextract/AGENTS.md](internal/resumeextract/AGENTS.md) |
 | **CV rendering** (templates, fonts, previews) | [internal/cv/AGENTS.md](internal/cv/AGENTS.md) |
@@ -100,5 +101,6 @@ Each is self-contained and can be read independently.
 - **Embeddings:** Queue-driven (`semantic_outbox`), incremental, reconciled by `reindex --semantic`
 - **Dictionaries:** All facet dictionaries are dict-only in production — never guess, emit nothing for unknowns
 - **Job deletion:** The lifecycle only soft-closes; `cmd/prune` is the sole hard-delete path
+- **In-app assistant:** a bounded tool-calling loop in-process (`internal/assistant`), streamed over SSE, gated to the restricted rollout. Tools act as the authenticated caller — no credential is minted for an agent
 - **Sentry:** Opt-in, env-gated, errors-only — `sentry.Init` with `SendDefaultPII:false`
 - **Naming — "CV", not "résumé":** Default new surfaces to **CV**. Don't mass-rename the existing `resume`/`resumeextract` packages and columns — churn without value

@@ -1,0 +1,33 @@
+---
+title: The assistant reads your profile instead of asking you again
+date: 2026-07-28
+summary: Ask the in-app assistant for help finding work and it now starts from the roles, skills and locations you already saved, rather than opening with a questionnaire about them.
+type: changelog
+tags:
+  - assistant
+  - profile
+draft: false
+---
+
+Until now, "help me find a job" got you a list of questions: which role, which stack,
+remote or office, what seniority, what salary. Every one of those you had already answered
+on [your profile](/my/profile) — the assistant simply had no way to look. It could search
+the market, open a vacancy, score your skills against demand, but it could not read the one
+thing that was about *you*.
+
+**Now it reads the profile before it asks anything.** It takes your specializations, your
+skills, the skills you would rather avoid, and where and how you want to work, then searches
+on that and tells you what it searched on. Your CV goes in too — the headline, the years,
+the roles you have held — so it can judge seniority without asking. Questions are for what
+the profile genuinely does not answer.
+
+**Your contact details are not part of it.** The assistant is handed your CV's substance —
+what you have done — and never your name, email, phone or links. That is deliberate:
+anything a tool hands the model stays in the conversation, so contacts are kept out of it
+from the start rather than trimmed afterwards.
+
+If you have not filled the profile in yet, the assistant will say so and point you at
+[the profile page](/my/profile) instead of collecting the same answers in chat. Worth doing
+once: what you save there also drives your recommendations, your saved-search alerts and
+the fit analysis on every vacancy — where an answer typed into a conversation helps that
+conversation only.

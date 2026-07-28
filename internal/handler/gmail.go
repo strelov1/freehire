@@ -58,9 +58,9 @@ func (h *inboxHandlers) register(api fiber.Router, mw middleware) {
 	// harness's job. mw.key is full-scope-only, so the narrow `cv` key a tailoring
 	// bootstrap mints stays refused here.
 	//
-	// The OAuth connect flow is the exception and stays cookie-only: it redirects
-	// a browser to Google's consent screen and back, so it is meaningless to a
-	// keyed client and must not be reachable by one.
+	// The OAuth connect flow is the exception and stays browser-bound: it
+	// redirects a browser to Google's consent screen and back, so it is
+	// meaningless to a keyed client and must not be reachable by one.
 	api.Get("/me/gmail", mw.key, h.GmailStatus)
 	api.Delete("/me/gmail", mw.key, h.GmailDisconnect)
 	api.Get("/me/inbox", mw.key, h.GetInbox)
@@ -81,7 +81,12 @@ func (h *inboxHandlers) register(api fiber.Router, mw middleware) {
 	api.Post("/me/emails/:id/reject", mw.key, h.RejectEmailLink)
 	if h.gmailReady() {
 		api.Get("/me/gmail/connect", mw.cookie, h.GmailConnect)
-		api.Get("/me/gmail/callback", mw.cookie, h.GmailCallback)
+		// The callback is the browser returning from Google, not an XHR — so it is
+		// mounted on optionalCookie, not cookie. Under RequireAuth a session that did
+		// not survive the round-trip (expired mid-consent, or a callback landing on a
+		// host the cookie is not scoped to) renders a JSON 401 into the address bar and
+		// strands the user; GmailCallback answers that case itself with a redirect.
+		api.Get("/me/gmail/callback", mw.optionalCookie, h.GmailCallback)
 		api.Post("/me/gmail/sync", mw.key, h.SyncGmail)
 	}
 	// Hosted-mailbox option: status is always available (reports unavailable when
