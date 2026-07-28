@@ -29,6 +29,7 @@ const assistantDefaultSearchLimit = 10
 // never disagree.
 func (h *assistantHandlers) assistantDiscoveryTools() []assistant.Tool {
 	return []assistant.Tool{
+		h.getProfileTool(),
 		h.facetsTool(),
 		h.searchJobsTool(),
 		h.getJobTool(),

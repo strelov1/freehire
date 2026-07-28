@@ -88,12 +88,10 @@ type API struct {
 type middleware struct {
 	optional fiber.Handler
 	key      fiber.Handler
-	// cvKey is keyAuth widened to admit the narrow `cv` key the tailoring bootstrap
-	// mints. Three surfaces mount it: the CV surface, the caller's own identity read,
-	// and the profile read — that last one so an agent can ground itself in what the
-	// user is looking for. Every other key-accepting route stays on key, which is
-	// full-scope-only, so a new endpoint is out of a leaked agent credential's reach
-	// unless it opts in. Nothing a `cv` key reaches is a write.
+	// cvKey is keyAuth widened to admit the narrow `cv` key. Only the CV surface (and
+	// the caller's own identity read) mounts it; every other key-accepting route stays
+	// on key, which is full-scope-only — so a new endpoint is out of a leaked agent
+	// credential's reach unless it opts in.
 	cvKey     fiber.Handler
 	cookie    fiber.Handler
 	moderator fiber.Handler
@@ -283,7 +281,7 @@ func Register(app *fiber.App, cfg Config) {
 	// the same services their endpoints do, so a tool result and the API can never
 	// disagree. The tailoring bootstrap mints its conversations through the same
 	// store, which is why the CV handlers get it back.
-	assistantH := newAssistantHandlers(queries, cfg.AssistantLLM, cfg.AssistantMaxSteps, searchH, resumeH, trackingH, cvH)
+	assistantH := newAssistantHandlers(queries, cfg.AssistantLLM, cfg.AssistantMaxSteps, searchH, resumeH, trackingH, cvH, profileH)
 	cvH.withAssistantSessions(assistantH.store)
 
 	// Referral notifications reuse the SES email transport (email is always present) and

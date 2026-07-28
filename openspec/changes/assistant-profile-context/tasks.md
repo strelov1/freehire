@@ -36,13 +36,11 @@
 
 ## 3. The profile read admits a key
 
-- [x] 3.1 Move `GET /me/profile` from `mw.cookie` to `mw.cvKey`, leaving `PUT` and
-  `DELETE` on `mw.cookie`. `mw.cvKey` rather than `mw.key` so the CV-tailoring
-  agent — which holds a narrow `cv`-scoped key — can read the profile too; `mw.key`
-  admits only full-scope keys and would answer it `403`.
-  Test: a request authenticated by a full-scope API key alone reads the profile, and
-  so does one authenticated by a `cv`-scoped key; either key gets `401` from `PUT`
-  and from `DELETE`, and the stored profile is unchanged.
+- [x] 3.1 Move `GET /me/profile` from `mw.cookie` to `mw.key`, leaving `PUT` and
+  `DELETE` on `mw.cookie`, so the `freehire` CLI can read a profile with the user's
+  own API key while a leaked key can never rewrite one. (The in-app agent does not
+  come through here — its tools run in-process with the user id in hand.)
+  Test: the gate behind each profile route, pinned against the real `register()`.
 - [x] 3.2 Update the comment above the route block — it currently states the profile
   is cookie-only — to record the read/write split and why (a leaked key must not
   rewrite a profile).
@@ -53,20 +51,27 @@
   interface in `web/src/lib/types.ts`, typed against the generated projection type.
   Verify: `go build ./...`, `go vet ./...`, `go test ./...`, and the web build.
 
-## 5. Outside this repository
+## 5. The get_profile tool
 
-These are required before the assistant benefits and are tracked here for
-visibility; they are edits to sibling repositories, not to this one.
+- [x] 5.1 Add `get_profile` to the agent's discovery tools
+  (`internal/handler/assistant_profile_tool.go`), built on `profileHandlers` so the
+  tool and `GET /me/profile` share one assembly and cannot drift. `assistantHandlers`
+  gains the profile handlers; `newAssistantHandlers` and its call site follow.
+  Test: the tool is registered for every session; its result carries the profile and
+  the CV's professional fields and none of the four contact fields.
+- [x] 5.2 A caller with no saved profile gets a result that names the profile page,
+  not an error and not an empty profile the model might read as "no preferences".
+  Test: `Run` returns successfully and the payload mentions `/my/profile`.
+- [x] 5.3 Teach the chat prompt to call it before interrogating the user, to say what
+  it searched on, and to send a profile-less user to `/my/profile`.
+  Test: the chat prompt mentions `get_profile`.
 
-- [ ] 5.1 `~/Projects/freehire-cli`: add a `freehire profile [--json]` command over
-  `GET /me/profile`, with the client method and tests alongside the existing
-  commands.
-- [ ] 5.2 `~/Projects/freehire-agent`: in `crates/roy-management/src/http.rs`, pass
-  the caller's `hire_token` into an assistant session's `extra_env` as
-  `FREEHIRE_TOKEN`, beside the branch that already does this for tailoring sessions.
-- [ ] 5.3 Update `using-freehire` in **both** copies —
-  `~/Projects/freehire-cli/skills/using-freehire/SKILL.md` and
-  `~/Projects/freehire-agent/docker/skills/using-freehire/SKILL.md` — to read the
-  profile before interrogating the user, to send a user with no profile to
-  `/my/profile` rather than collecting the same data in chat, and to treat a `401`
-  as "start a new chat". Reconcile the drift between the two copies while editing.
+## 6. Documentation
+
+- [x] 6.1 Update `internal/resumeextract/AGENTS.md` for the projection and its two
+  serving surfaces, and `internal/handler/AGENTS.md` for the new tool.
+
+Superseded: an earlier revision of this change routed the assistant through the
+`freehire` CLI with a credential injected into a sandbox. That runtime was replaced
+by the in-process agent (#1165) before this change was written; the tool above is the
+same feature against the runtime that actually exists.

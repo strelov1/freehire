@@ -3,7 +3,7 @@
 ### Requirement: Retrieve the profile
 
 A caller SHALL be able to fetch their single profile via `GET /api/v1/me/profile`,
-authenticating with the session cookie, an API key, or a bearer session token. When
+authenticating with the session cookie or a full-scope API key. When
 the user has saved a profile the system responds `200` with
 `{"data": {specializations, skills, excluded_skills, location_preferences, cv, created_at, updated_at}}`,
 where `excluded_skills` is the saved set (an empty array when the user set none) and
@@ -29,10 +29,6 @@ projected. Contact details remain available only through `GET /api/v1/me/resume`
 #### Scenario: The profile read accepts an API key
 - **WHEN** a request carrying a valid API key as a bearer credential, and no session cookie, sends `GET /api/v1/me/profile`
 - **THEN** the system responds `200` with the key owner's profile
-
-#### Scenario: The profile read accepts the narrow CV-scoped key
-- **WHEN** a request authenticated by the narrow `cv`-scoped key minted for a CV-tailoring session sends `GET /api/v1/me/profile`
-- **THEN** the system responds `200` with that user's profile — the tailoring agent reads the roles and skills the user targets, rather than being told its credential is out of scope
 
 #### Scenario: The cv block carries the structured résumé without contacts
 - **WHEN** an authenticated user who has a saved profile and a current structured résumé sends `GET /api/v1/me/profile`
@@ -93,9 +89,9 @@ client that saves and a client that fetches see one shape for one resource.
 
 Every profile operation SHALL be scoped to the calling user, and each user SHALL
 have at most one profile. There is no profile id in any path; the authenticated user
-is the key. The read admits the session cookie, an API key, or a bearer session
-token; the write and delete admit only the session cookie, so a leaked API key can
-read a profile but never change or clear one.
+is the key. The read admits the session cookie or an API key; the write and delete
+admit only the session cookie, so a leaked API key can read a profile but never
+change or clear one.
 
 #### Scenario: Unauthenticated request is rejected
 - **WHEN** a request carrying no valid credential hits any `/api/v1/me/profile` endpoint

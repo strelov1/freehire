@@ -33,13 +33,18 @@ type assistantHandlers struct {
 	resume   *resumeHandlers
 	tracking *trackingHandlers
 	cv       *cvHandlers
+	// profile backs the get_profile tool. Reusing the profile handlers rather than the
+	// services underneath keeps the tool and GET /me/profile on one assembly, so the
+	// agent cannot drift from what the profile page shows.
+	profile *profileHandlers
 }
 
 // newAssistantHandlers wires the agent. A nil LLM client leaves the runner nil:
 // old conversations stay readable and a new turn reports the assistant as
 // unavailable, rather than the whole surface disappearing.
 func newAssistantHandlers(queries *db.Queries, model *llm.Client, maxSteps int,
-	search *searchHandlers, resumeH *resumeHandlers, tracking *trackingHandlers, cvH *cvHandlers) *assistantHandlers {
+	search *searchHandlers, resumeH *resumeHandlers, tracking *trackingHandlers, cvH *cvHandlers,
+	profileH *profileHandlers) *assistantHandlers {
 	h := &assistantHandlers{
 		store:    assistant.NewStore(queries),
 		queries:  queries,
@@ -47,6 +52,7 @@ func newAssistantHandlers(queries *db.Queries, model *llm.Client, maxSteps int,
 		resume:   resumeH,
 		tracking: tracking,
 		cv:       cvH,
+		profile:  profileH,
 	}
 	if model != nil {
 		h.runner = assistant.NewRunner(model, h.store, assistant.RunnerConfig{MaxSteps: maxSteps})

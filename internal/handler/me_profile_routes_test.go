@@ -11,9 +11,6 @@ import (
 
 // namedGate answers with its own name instead of calling the handler, so a request
 // reveals which gate a route was registered behind.
-//
-// TODO: fold into the identical probe in cv_routes_test.go once #1172 lands — both
-// branches grew one independently.
 func namedGate(name string) fiber.Handler {
 	return func(c *fiber.Ctx) error { return c.SendString(name) }
 }
@@ -21,11 +18,9 @@ func namedGate(name string) fiber.Handler {
 // TestProfileRegister_ReadTakesAKeyAndWritesDoNot pins the gate behind each profile
 // route against the real register().
 //
-// The read is cvKey (cookie, full key, or the narrow `cv` key) so both agents can reach
-// it: the assistant, which authenticates with the caller's session token, and the CV
-// tailoring agent, whose minted key is `cv`-scoped and would be 403'd by key. The writes
-// stay cookie-only — a key that leaks out of an agent's environment must not be able to
-// rewrite or clear somebody's profile.
+// The read is key, so the CLI can fetch a profile with the user's own API key. The
+// writes stay cookie-only — a key that leaks out of a script's environment must not be
+// able to rewrite or clear somebody's profile.
 func TestProfileRegister_ReadTakesAKeyAndWritesDoNot(t *testing.T) {
 	app := fiber.New()
 	api := app.Group("/api/v1")
@@ -38,7 +33,7 @@ func TestProfileRegister_ReadTakesAKeyAndWritesDoNot(t *testing.T) {
 	for _, tc := range []struct {
 		method, want string
 	}{
-		{http.MethodGet, "cvKey"},
+		{http.MethodGet, "key"},
 		{http.MethodPut, "cookie"},
 		{http.MethodDelete, "cookie"},
 	} {

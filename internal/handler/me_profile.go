@@ -37,13 +37,12 @@ func (h *profileHandlers) register(api fiber.Router, mw middleware) {
 	// no id in the path. GET returns the profile or null; PUT upserts (create-or-replace);
 	// DELETE clears it (idempotent).
 	//
-	// The read takes a key so an agent's CLI can ground itself in what the user is
-	// actually looking for instead of interrogating them for it. cvKey rather than key,
-	// so the CV-tailoring agent's narrow `cv`-scoped credential reaches it too — key
-	// admits full-scope keys only and would answer that agent 403. The writes stay
-	// cookie-only: a key that leaks out of an agent's environment must not be able to
-	// rewrite or clear a profile.
-	api.Get("/me/profile", mw.cvKey, h.GetProfile)
+	// The read takes a key so the CLI can ground itself in what the user is actually
+	// looking for instead of interrogating them for it. The writes stay cookie-only: a
+	// key that leaks out of a script's environment must not rewrite or clear a profile.
+	// (The in-app assistant does not come through here at all — its tools run in-process
+	// with the user id in hand, no credential.)
+	api.Get("/me/profile", mw.key, h.GetProfile)
 	api.Put("/me/profile", mw.cookie, h.PutProfile)
 	api.Delete("/me/profile", mw.cookie, h.DeleteProfile)
 }
