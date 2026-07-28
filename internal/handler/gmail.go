@@ -62,7 +62,12 @@ func (h *inboxHandlers) register(api fiber.Router, mw middleware) {
 	api.Post("/me/emails/:id/reject", mw.cookie, h.RejectEmailLink)
 	if h.gmailReady() {
 		api.Get("/me/gmail/connect", mw.cookie, h.GmailConnect)
-		api.Get("/me/gmail/callback", mw.cookie, h.GmailCallback)
+		// The callback is the browser returning from Google, not an XHR — so it is
+		// mounted on optionalCookie, not cookie. Under RequireAuth a session that did
+		// not survive the round-trip (expired mid-consent, or a callback landing on a
+		// host the cookie is not scoped to) renders a JSON 401 into the address bar and
+		// strands the user; GmailCallback answers that case itself with a redirect.
+		api.Get("/me/gmail/callback", mw.optionalCookie, h.GmailCallback)
 		api.Post("/me/gmail/sync", mw.cookie, h.SyncGmail)
 	}
 	// Hosted-mailbox option: status is always available (reports unavailable when

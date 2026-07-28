@@ -73,6 +73,27 @@ func RequireAuth(iss *Issuer, versions TokenVersionLoader) fiber.Handler {
 	}
 }
 
+// OptionalCookieAuth returns middleware that attaches the caller's user id when a
+// valid session cookie is present and otherwise passes through anonymously. It is
+// OptionalAuth without the Bearer path: for a surface a leaked API key must not
+// reach (the mail inbox), admitting a key here would widen that key's reach for no
+// gain — the only caller is a browser returning from a provider redirect, which
+// carries a cookie or nothing.
+//
+// The OAuth-style callbacks mount this rather than RequireAuth: they are top-level
+// navigations, so a 401 renders JSON into the browser and strands the user, while an
+// anonymous pass-through lets the handler redirect back with an error marker.
+func OptionalCookieAuth(iss *Issuer, versions TokenVersionLoader) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if token := c.Cookies(CookieName); token != "" {
+			if id, ok := resolveSession(c, iss, versions, token); ok {
+				c.Locals(LocalsUserID, id)
+			}
+		}
+		return c.Next()
+	}
+}
+
 // resolveSession validates a cookie token and confirms it was not revoked, returning the
 // user id it authenticates. A version-load failure (deleted account, database trouble)
 // fails closed, matching RequireRole: an unverifiable session is not a session.

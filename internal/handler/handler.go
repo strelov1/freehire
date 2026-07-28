@@ -92,9 +92,13 @@ type middleware struct {
 	// the caller's own identity read) mounts it; every other key-accepting route stays
 	// on key, which is full-scope-only — so a new endpoint is out of a leaked agent
 	// credential's reach unless it opts in.
-	cvKey     fiber.Handler
-	cookie    fiber.Handler
-	moderator fiber.Handler
+	cvKey  fiber.Handler
+	cookie fiber.Handler
+	// optionalCookie attaches a cookie session when there is one but never rejects.
+	// It exists for provider callbacks, which are browser navigations: a 401 there
+	// renders JSON into the address bar instead of sending the user back to the app.
+	optionalCookie fiber.Handler
+	moderator      fiber.Handler
 	// outboundFetch throttles every endpoint that makes the server fetch a
 	// caller-supplied URL, so one user's budget is spent across them rather than
 	// granted once per route.
@@ -344,12 +348,13 @@ func Register(app *fiber.App, cfg Config) {
 	cookieAuth := auth.RequireAuth(a.issuer, a.queries)
 	requireModerator := auth.RequireRole(a.queries, "moderator")
 	mw := middleware{
-		optional:      optionalAuth,
-		key:           keyAuth,
-		cvKey:         cvKeyAuth,
-		cookie:        cookieAuth,
-		moderator:     requireModerator,
-		outboundFetch: contributionLimiter(),
+		optional:       optionalAuth,
+		key:            keyAuth,
+		cvKey:          cvKeyAuth,
+		cookie:         cookieAuth,
+		optionalCookie: auth.OptionalCookieAuth(a.issuer, a.queries),
+		moderator:      requireModerator,
+		outboundFetch:  contributionLimiter(),
 	}
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the
