@@ -45,8 +45,11 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          # Dockerfile and docker-compose.yml count: they define the image and the
+          # stack this smoke boots, so a change there alters the request path's
+          # runtime even when no Go or Svelte file moved.
           if git diff --name-only "$BASE_SHA" "$HEAD_SHA" \
-            | grep -qE '^(internal/handler/|internal/search/|internal/jobview/|web/|perf/|\.github/workflows/perf\.yml)'; then
+            | grep -qE '^(internal/handler/|internal/search/|internal/jobview/|web/|perf/|Dockerfile|docker-compose\.yml|\.github/workflows/perf\.yml)'; then
             echo "relevant=true" >> "$GITHUB_OUTPUT"
             echo "Request-path files changed — running the full smoke."
           else
