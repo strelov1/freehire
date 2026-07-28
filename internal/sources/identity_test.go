@@ -18,3 +18,24 @@ func TestNamespaceExternalID(t *testing.T) {
 		}
 	}
 }
+
+// A third of the workday board names carry an underscore (Capital_One, RingCentral_Careers),
+// which LIKE reads as "any one character" — so the pattern MUST escape it, or one board's
+// seen-set would claim a sibling board's postings.
+func TestBoardIDPattern(t *testing.T) {
+	cases := []struct {
+		name  string
+		board string
+		want  string
+	}{
+		{"plain board matches only its own namespace", "acme", `acme:%`},
+		{"underscore is escaped, not a single-character wildcard", "Capital_One", `Capital\_One:%`},
+		{"percent is escaped", "a%b", `a\%b:%`},
+		{"backslash is escaped first, so its own escape is not re-read", `a\b`, `a\\b:%`},
+	}
+	for _, tc := range cases {
+		if got := BoardIDPattern(tc.board); got != tc.want {
+			t.Errorf("%s: BoardIDPattern(%q) = %q, want %q", tc.name, tc.board, got, tc.want)
+		}
+	}
+}

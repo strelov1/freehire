@@ -102,6 +102,92 @@ func TestWorkdayFetchListsAndFetchesDetail(t *testing.T) {
 	}
 }
 
+// A Workday board costs one detail request per posting, and the large ones carry tens of
+// thousands — re-fetching all of them every hour is what rate-limits the crawl into failure. So
+// FetchNew hydrates only what the catalogue lacks and re-lists the rest for a liveness refresh.
+func TestWorkdayFetchNewHydratesOnlyUnseenPostings(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("/Careers/jobs", `{"total": 2, "jobPostings": [
+			{"title": "Backend Engineer", "externalPath": "/job/Berlin/Backend_JR-1", "locationsText": "Berlin, Germany"},
+			{"title": "Data Engineer", "externalPath": "/job/Remote/Data_JR-2", "locationsText": "Remote, US"}
+		]}`).
+		route("Data_JR-2", `{"jobPostingInfo": {
+			"title": "Data Engineer",
+			"jobDescription": "<p>Crunch data.</p>",
+			"location": "Remote, US",
+			"remoteType": "Remote"
+		}}`)
+	// Backend_JR-1 has no detail route on purpose: requesting it would be an error, which is
+	// exactly the request this path must not make.
+	seen := func(externalID string) bool { return externalID == "/job/Berlin/Backend_JR-1" }
+
+	jobs, err := NewWorkday(fake).(HydratingSource).FetchNew(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "workday", Board: "acme.wd1.myworkdayjobs.com/Careers",
+	}, seen)
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("len(jobs) = %d, want 2 (both listed postings are emitted)", len(jobs))
+	}
+	if fake.calls != 2 {
+		t.Errorf("http calls = %d, want 2 (one listing page + one detail for the unseen posting)", fake.calls)
+	}
+
+	byID := map[string]Job{}
+	for _, j := range jobs {
+		byID[j.ExternalID] = j
+	}
+
+	refresh, ok := byID["/job/Berlin/Backend_JR-1"]
+	if !ok {
+		t.Fatal("the seen posting must still be emitted, as a liveness refresh")
+	}
+	if !refresh.SeenRefresh {
+		t.Error("SeenRefresh = false, want true — the pipeline must route it to touch, not upsert")
+	}
+	if refresh.Title != "Backend Engineer" {
+		t.Errorf("Title = %q, want the listing title so the row stays resolvable", refresh.Title)
+	}
+	if refresh.URL != "https://acme.wd1.myworkdayjobs.com/Careers/job/Berlin/Backend_JR-1" {
+		t.Errorf("URL = %q, want the listing-derived URL", refresh.URL)
+	}
+	if refresh.Description != "" {
+		t.Errorf("Description = %q, want empty — no detail was fetched", refresh.Description)
+	}
+
+	hydrated := byID["/job/Remote/Data_JR-2"]
+	if hydrated.SeenRefresh {
+		t.Error("SeenRefresh = true for an unseen posting, want false")
+	}
+	if !strings.Contains(hydrated.Description, "Crunch data.") {
+		t.Errorf("Description = %q, want the hydrated detail", hydrated.Description)
+	}
+}
+
+// Without a seen-set the pipeline cannot say what the catalogue has, so the adapter must behave
+// as it always did rather than skip every description.
+func TestWorkdayFetchNewWithoutSeenSetHydratesEverything(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("/Careers/jobs", `{"total": 1, "jobPostings": [
+			{"title": "Backend Engineer", "externalPath": "/job/Berlin/Backend_JR-1", "locationsText": "Berlin, Germany"}
+		]}`).
+		route("Backend_JR-1", `{"jobPostingInfo": {"title": "Backend Engineer", "jobDescription": "<p>Build.</p>"}}`)
+
+	jobs, err := NewWorkday(fake).(HydratingSource).FetchNew(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "workday", Board: "acme.wd1.myworkdayjobs.com/Careers",
+	}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].SeenRefresh {
+		t.Fatalf("jobs = %+v, want one hydrated posting", jobs)
+	}
+	if !strings.Contains(jobs[0].Description, "Build.") {
+		t.Errorf("Description = %q, want the hydrated detail", jobs[0].Description)
+	}
+}
+
 func TestWorkdayFetchSkipsFailedDetail(t *testing.T) {
 	// JR-2 has no detail route -> its detail fetch errors and the posting is skipped,
 	// but JR-1 still comes through.

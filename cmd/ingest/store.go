@@ -14,6 +14,7 @@ import (
 	"github.com/strelov1/freehire/internal/jobhash"
 	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/search"
+	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/vocab"
 )
 
@@ -143,17 +144,40 @@ func (s *dbStore) Close(ctx context.Context, source, externalID string) error {
 	return nil
 }
 
-// ExistingExternalIDs returns the set of external_ids already stored for a provider — the
-// pipeline's seen-set for a hydrating source (justjoin), so per-posting detail is fetched only
+// ExistingExternalIDs returns the set of external_ids already stored for the board about to be
+// crawled — the pipeline's seen-set for a hydrating source, so per-posting detail is fetched only
 // for postings the catalogue lacks. Implements pipeline.seenLookup.
-func (s *dbStore) ExistingExternalIDs(ctx context.Context, source string) (map[string]struct{}, error) {
-	ids, err := s.q.ExistingExternalIDs(ctx, source)
+//
+// The lookup runs once per board, so a board-bearing provider reads only its own namespace: on
+// workday the provider-wide query returns 1.27M ids in ~168s against ~1.8s for a board's 25k. A
+// boardless adapter has no namespace to scope by and reads the provider's whole set, which is what
+// its single "board" means anyway.
+//
+// Each id maps to its row's tech evidence (is_tech IS TRUE), which the refresh path judges the
+// catalogue filter on — a re-listed posting carries no description to derive it from.
+func (s *dbStore) ExistingExternalIDs(ctx context.Context, source, board string) (map[string]bool, error) {
+	set := map[string]bool{}
+	if board == "" {
+		rows, err := s.q.ExistingExternalIDs(ctx, source)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range rows {
+			set[r.ExternalID] = r.IsTech.Valid && r.IsTech.Bool
+		}
+		return set, nil
+	}
+	// The pattern is escaped by sources.BoardIDPattern: a board name may contain LIKE syntax,
+	// and a third of the workday board names carry an underscore.
+	rows, err := s.q.ExistingExternalIDsByBoard(ctx, db.ExistingExternalIDsByBoardParams{
+		Source:  source,
+		Pattern: sources.BoardIDPattern(board),
+	})
 	if err != nil {
 		return nil, err
 	}
-	set := make(map[string]struct{}, len(ids))
-	for _, id := range ids {
-		set[id] = struct{}{}
+	for _, r := range rows {
+		set[r.ExternalID] = r.IsTech.Valid && r.IsTech.Bool
 	}
 	return set, nil
 }

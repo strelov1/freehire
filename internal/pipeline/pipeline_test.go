@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"sync"
 	"testing"
 
@@ -17,18 +18,26 @@ import (
 // It also implements the optional seenLookup capability (ExistingExternalIDs), so a hydrating
 // source can be driven by a canned seen-set.
 type fakeStore struct {
-	mu      sync.Mutex
-	saved   []job.Job
-	closed  [][2]string
-	touched [][2]string
-	err     error
-	seenIDs map[string]struct{} // stored (namespaced) external_ids for ExistingExternalIDs
-	seenErr error               // when set, ExistingExternalIDs fails
+	mu        sync.Mutex
+	saved     []job.Job
+	closed    [][2]string
+	touched   [][2]string
+	err       error
+	seenIDs   map[string]bool            // stored (namespaced) external_id -> is_tech evidence
+	seenByBrd map[string]map[string]bool // per-board sets, keyed by the requested board
+	seenAsked []string                   // every board the runner scoped a lookup to
+	seenErr   error                      // when set, ExistingExternalIDs fails
 }
 
-func (s *fakeStore) ExistingExternalIDs(_ context.Context, _ string) (map[string]struct{}, error) {
+func (s *fakeStore) ExistingExternalIDs(_ context.Context, _, board string) (map[string]bool, error) {
+	s.mu.Lock()
+	s.seenAsked = append(s.seenAsked, board)
+	s.mu.Unlock()
 	if s.seenErr != nil {
 		return nil, s.seenErr
+	}
+	if s.seenByBrd != nil {
+		return s.seenByBrd[board], nil
 	}
 	return s.seenIDs, nil
 }
@@ -229,7 +238,7 @@ func TestRunDrivesHydratingSourceWithSeenSet(t *testing.T) {
 		{ExternalID: "seen", Title: "A", Company: "C", URL: "u"},
 		{ExternalID: "new", Title: "B", Company: "C", URL: "u"},
 	}}
-	store := &fakeStore{seenIDs: map[string]struct{}{":seen": {}}}
+	store := &fakeStore{seenIDs: map[string]bool{":seen": true}}
 	r := Runner{Registry: registry(src), Store: store}
 
 	if _, err := r.Run(context.Background(), []sources.CompanyEntry{
@@ -253,6 +262,38 @@ func TestRunDrivesHydratingSourceWithSeenSet(t *testing.T) {
 	}
 	if len(store.touched) != 1 || store.touched[0] != [2]string{"justjoin", ":seen"} {
 		t.Errorf("touched = %v, want one touch of (justjoin, :seen)", store.touched)
+	}
+}
+
+// TestRunScopesSeenSetToTheCrawledBoard proves the seen-set of a multi-board provider is read per
+// board, not per provider: each board's lookup is scoped to its own board id, so a posting stored
+// under a sibling board is NOT reported as seen. Without the scope a provider-wide read would cost
+// the whole catalogue on every one of the provider's boards.
+func TestRunScopesSeenSetToTheCrawledBoard(t *testing.T) {
+	src := &fakeHydratingSource{provider: "workday", jobs: []sources.Job{
+		{ExternalID: "1", Title: "A", Company: "C", URL: "u"},
+	}}
+	store := &fakeStore{seenByBrd: map[string]map[string]bool{
+		"boardA": {"boardA:1": true},
+		"boardB": {"boardB:9": true},
+	}}
+	r := Runner{Registry: registry(src), Store: store}
+
+	// Crawl boardB, whose stored posting is a different id: posting "1" belongs to boardA and
+	// must not read as seen here.
+	if _, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "C", Provider: "workday", Board: "boardB"},
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !slices.Equal(store.seenAsked, []string{"boardB"}) {
+		t.Errorf("seen-set scoped to %v, want [boardB]", store.seenAsked)
+	}
+	if src.seenResults["1"] {
+		t.Error("seen(\"1\") = true, want false — boardA:1 belongs to another board")
+	}
+	if len(store.saved) != 1 || store.saved[0].Fields().ExternalID != "boardB:1" {
+		t.Errorf("saved = %+v, want the posting hydrated as boardB:1", store.saved)
 	}
 }
 

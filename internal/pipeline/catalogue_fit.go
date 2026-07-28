@@ -40,7 +40,16 @@ import (
 // the postings on the next pass.
 func outOfCatalogue(j job.Job) bool {
 	f := j.Fields()
-	return classify.ConfirmedNonTech(f.Title, f.IsTech != nil && *f.IsTech)
+	return outOfCatalogueTitle(f.Title, f.IsTech != nil && *f.IsTech)
+}
+
+// outOfCatalogueTitle is the same rule stated over the two fields it actually reads, for the
+// liveness-refresh path — which has a title and the stored row's tech evidence but no job.Job,
+// because a hydrating adapter re-lists a posting without re-fetching its content. Passing the
+// STORED evidence is what keeps the two paths equivalent: judged on the content-less listing
+// instead, 1.7% of the titles the catalogue holds as technical would be turned away.
+func outOfCatalogueTitle(title string, hasTechEvidence bool) bool {
+	return classify.ConfirmedNonTech(title, hasTechEvidence)
 }
 
 // loggedRejectionSamples is how many rejected titles a board's log line carries. A
@@ -49,10 +58,11 @@ func outOfCatalogue(j job.Job) bool {
 const loggedRejectionSamples = 2
 
 // rejections accumulates a board's catalogue-filter outcome for its one log line.
-// Candidates counts only postings that actually reached the filter, so liveness
-// refreshes and stream removals — neither of which can be rejected — stay out of the
-// denominator: without that, a feed emitting a thousand removals and five rejected
-// postings would report 0% and hide the very signature the line exists to surface.
+// Candidates counts only postings that actually reached the filter, so stream removals —
+// which cannot be rejected — stay out of the denominator: without that, a feed emitting a
+// thousand removals and five rejected postings would report 0% and hide the very signature
+// the line exists to surface. A liveness refresh DOES reach the filter (it can be rejected,
+// which is how a stored non-tech row ages out), so it counts as a candidate.
 type rejections struct {
 	rejected   int
 	candidates int

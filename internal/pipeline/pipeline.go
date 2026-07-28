@@ -52,13 +52,21 @@ type toucher interface {
 	Touch(ctx context.Context, source, externalID string) error
 }
 
-// seenLookup is the optional Store capability a HydratingSource needs: the set of external_ids
-// already stored for a provider, so the adapter fetches expensive per-posting detail only for
-// postings the catalogue lacks. Only the ingest dbStore implements it; the runner type-asserts
-// for it and falls back to the list-only Fetch when a Store lacks it (test fakes, non-DB
-// callers), so other Store implementations are unaffected.
+// seenLookup is the optional Store capability a HydratingSource needs: the external_ids already
+// stored for the board about to be crawled, so the adapter fetches expensive per-posting detail
+// only for postings the catalogue lacks. Only the ingest dbStore implements it; the runner
+// type-asserts for it and falls back to the list-only Fetch when a Store lacks it (test fakes,
+// non-DB callers), so other Store implementations are unaffected.
+//
+// The lookup is board-scoped because it runs once per crawled board: reading the provider's whole
+// catalogue for each of its boards is affordable only for a boardless adapter, which passes an
+// empty board and gets the provider-wide set.
+//
+// Each id maps to whether its stored row carries tech evidence (is_tech). Membership drives the
+// hydration decision; the flag lets a liveness refresh face the catalogue filter on the same
+// evidence a write would, which a content-less listing cannot supply.
 type seenLookup interface {
-	ExistingExternalIDs(ctx context.Context, source string) (map[string]struct{}, error)
+	ExistingExternalIDs(ctx context.Context, source, board string) (map[string]bool, error)
 }
 
 // BoardHealth is the optional per-board health port: it tells the Runner whether a
@@ -251,7 +259,7 @@ func (r Runner) providerAnswers(ctx context.Context, src sources.Source, boards 
 		if !ok {
 			continue
 		}
-		if _, err := r.fetchBoard(ctx, e, src); err == nil {
+		if _, _, err := r.fetchBoard(ctx, e, src); err == nil {
 			return true
 		}
 	}
@@ -324,7 +332,7 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 		return st
 	}
 
-	raw, err := r.fetchBoard(ctx, e, src)
+	raw, seen, err := r.fetchBoard(ctx, e, src)
 	if err != nil {
 		// Log the cause so a failed board is diagnosable (the source error carries
 		// the HTTP status / timeout); the run still isolates and continues.
@@ -343,6 +351,18 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 		// re-fetch: refresh its liveness by identity instead of re-upserting content-less
 		// (which would wipe the description/facets hydrated when it was new).
 		if j.SeenRefresh {
+			// A refresh faces the same catalogue filter as a write, so a posting the
+			// dictionary turns away ages out of the catalogue instead of being kept alive
+			// by its own re-listing. Judged on the STORED tech evidence, not on the
+			// content-less listing: the dictionary matches its terms anywhere in a title,
+			// and a title alone would condemn engineering roles whose evidence lives in
+			// the description they were hydrated from.
+			rej.candidate()
+			_, externalID := jobIdentity(e, j)
+			if outOfCatalogueTitle(j.Title, seen[externalID]) {
+				rej.reject(j.Title)
+				continue
+			}
 			if err := r.touch(ctx, e, j); err != nil {
 				st.Skipped++
 				if firstErr == nil {
@@ -402,30 +422,35 @@ func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.J
 
 // fetchBoard fetches a board's postings, preferring a hydrating adapter's FetchNew — which
 // fetches per-posting detail (e.g. the description the list omits) only for postings not already
-// ingested — when the adapter opts in AND the Store can supply the provider's seen-set. It falls
+// ingested — when the adapter opts in AND the Store can supply the board's seen-set. It falls
 // back to the list-only Fetch otherwise. The seen predicate namespaces the adapter's raw posting
 // id the same way the write path does, so it matches the stored external_id. A seen-set lookup
 // error fails OPEN (empty set → every posting treated as new), so a health hiccup never skips the
 // board.
-func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sources.Source) ([]sources.Job, error) {
-	hs, ok := src.(sources.HydratingSource)
-	if !ok {
-		return src.Fetch(ctx, e)
+//
+// It returns the seen-set alongside the postings: it maps each stored external_id to that row's
+// tech evidence, which the caller needs to judge a liveness refresh against the same rule as a
+// write. A non-hydrating board has no seen-set and returns nil, which reads as "no evidence" for
+// every lookup — harmless, because such a board yields no refreshes.
+func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sources.Source) ([]sources.Job, map[string]bool, error) {
+	hs, hydrating := src.(sources.HydratingSource)
+	sl, canLookUp := r.Store.(seenLookup)
+	if !hydrating || !canLookUp {
+		jobs, err := src.Fetch(ctx, e)
+		return jobs, nil, err
 	}
-	sl, ok := r.Store.(seenLookup)
-	if !ok {
-		return src.Fetch(ctx, e)
-	}
-	set, err := sl.ExistingExternalIDs(ctx, e.Provider)
+	set, err := sl.ExistingExternalIDs(ctx, e.Provider, e.Board)
 	if err != nil {
-		log.Printf("ingest: %s seen-set lookup failed, hydrating every posting as new: %v", e.Provider, err)
+		log.Printf("ingest: %s board %q seen-set lookup failed, hydrating every posting as new: %v",
+			e.Provider, e.Board, err)
 		set = nil
 	}
 	seen := func(externalID string) bool {
 		_, ok := set[sources.NamespaceExternalID(e.Board, externalID)]
 		return ok
 	}
-	return hs.FetchNew(ctx, e, seen)
+	jobs, err := hs.FetchNew(ctx, e, seen)
+	return jobs, set, err
 }
 
 // touch refreshes an already-ingested posting's liveness (last_seen_at, reopen) by identity,

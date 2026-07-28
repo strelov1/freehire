@@ -37,6 +37,67 @@ func TestRunRejectsNonTechPostings(t *testing.T) {
 	}
 }
 
+// A liveness refresh is subject to the same filter as a write. Catalogue pruning depends on it:
+// once the dictionary recognises a board's non-technical postings, the stored ones must stop
+// being seen so the unseen sweep closes them. A hydrating adapter re-lists them every crawl, so
+// refreshing without the filter would keep exactly the rows the campaign is retiring alive
+// forever — on one Workday board that is 25k of its 25.6k stored postings.
+func TestRunDoesNotRefreshARejectedPosting(t *testing.T) {
+	src := &fakeHydratingSource{provider: "workday", jobs: []sources.Job{
+		{ExternalID: "1", Title: "Registered Nurse", Company: "Acme", URL: "u"},
+		{ExternalID: "2", Title: "Backend Engineer", Company: "Acme", URL: "u"},
+	}}
+	// Both are already ingested, so both come back as liveness refreshes. Neither row carries
+	// tech evidence, so the dictionary alone decides.
+	store := &fakeStore{seenByBrd: map[string]map[string]bool{
+		"acme": {"acme:1": false, "acme:2": false},
+	}}
+	r := Runner{Registry: registry(src), Store: store}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Acme", Provider: "workday", Board: "acme"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(store.touched) != 1 || store.touched[0] != [2]string{"workday", "acme:2"} {
+		t.Errorf("touched = %v, want only the technical posting (workday, acme:2)", store.touched)
+	}
+	if got := stats.Total(); got.Rejected != 1 || got.Skipped != 0 {
+		t.Errorf("stats = %+v, want Rejected=1 Skipped=0 — a rejection is not a malfunction", got)
+	}
+}
+
+// The refresh filter reads the tech evidence STORED with the row, not what the listing alone
+// implies. A hydrating crawl carries no description, and the dictionary matches its terms
+// anywhere in a title — measured against prod, 1,601 of 96,218 titles the catalogue holds as
+// technical (1.7%) are flagged when the title is judged alone. Judging a refresh on the listing
+// would close them: real hardware and electrical engineering roles whose evidence lives in the
+// description. So the row's own is_tech overrides the dictionary here exactly as it does on the
+// write path.
+func TestRunRefreshesAFlaggedTitleThatTheRowProvesTechnical(t *testing.T) {
+	src := &fakeHydratingSource{provider: "workday", jobs: []sources.Job{
+		{ExternalID: "1", Title: "Associate Hardware Mechanical Engineer", Company: "Acme", URL: "u"},
+	}}
+	store := &fakeStore{seenByBrd: map[string]map[string]bool{
+		"acme": {"acme:1": true}, // stored as is_tech = true, evidence the listing cannot show
+	}}
+	r := Runner{Registry: registry(src), Store: store}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Acme", Provider: "workday", Board: "acme"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(store.touched) != 1 || store.touched[0] != [2]string{"workday", "acme:1"} {
+		t.Errorf("touched = %v, want the posting refreshed — its row proves it technical", store.touched)
+	}
+	if got := stats.Total(); got.Rejected != 0 {
+		t.Errorf("stats = %+v, want Rejected=0", got)
+	}
+}
+
 // The ingest filter reads the non-tech TITLE dictionary, not the tri-state is_tech.
 // A business role at an IT company resolves is_tech=false through its category, and
 // whether it belongs in the catalogue depends on the company — a judgement the crawl

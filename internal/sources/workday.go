@@ -80,7 +80,28 @@ type workdayPosting struct {
 	LocationsText string `json:"locationsText"`
 }
 
+// Fetch is the list-only-plus-detail crawl: it hydrates every posting. Kept for callers that do
+// not drive hydration; ingest goes through FetchNew.
 func (s workday) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+	return s.crawl(ctx, e, func(string) bool { return false })
+}
+
+// FetchNew is the hydrating crawl: it lists the board exactly as Fetch does, but fetches a
+// posting's detail — the description the listing omits — only for a posting the catalogue lacks.
+// A seen posting yields the listing-only job as a liveness refresh, costing no request at all.
+//
+// This is what makes a large board crawlable. Workday serves 20 postings per listing page and one
+// posting per detail request, so a 24k-posting board spends 24k requests per crawl on descriptions
+// it already stores — enough for the platform to rate-limit the crawl into failure, after which
+// the board is never seen again and its whole catalogue leaks as permanently-open jobs.
+func (s workday) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
+	return s.crawl(ctx, e, seen)
+}
+
+// crawl is the shared walk behind Fetch and FetchNew: page the board, then map each posting to a
+// Job — hydrating the ones seen reports as new, and marking the rest for a liveness refresh.
+// Detail fetches run under the shared bounded worker pool.
+func (s workday) crawl(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	b, err := parseWorkdayBoard(e.Board)
 	if err != nil {
 		return nil, err
@@ -91,11 +112,29 @@ func (s workday) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		return nil, err
 	}
 
-	// Each posting's description comes from its own detail request, fanned out under a
-	// bounded worker pool.
 	return fetchDetails(postings, defaultDetailWorkers, func(p workdayPosting) (Job, bool) {
+		if seen(p.ExternalPath) {
+			// Already ingested: refresh liveness only, no detail request. The job carries just
+			// the identity the listing supplies — the pipeline resolves the stored row from it
+			// and must not re-upsert content, which would wipe the hydrated description.
+			return s.listingJob(e, b, p), true
+		}
 		return s.detail(ctx, e, b, p)
 	}), nil
+}
+
+// listingJob builds the identity-only Job a liveness refresh needs from the listing alone: the
+// same external id and URL the hydrated path would produce, so the refresh resolves to the row
+// that posting was stored as.
+func (s workday) listingJob(e CompanyEntry, b workdayBoard, p workdayPosting) Job {
+	return Job{
+		ExternalID:  p.ExternalPath,
+		URL:         fmt.Sprintf("https://%s/%s%s", b.host, b.publicPath, p.ExternalPath),
+		Title:       strings.TrimSpace(p.Title),
+		Company:     e.Company,
+		Location:    p.LocationsText,
+		SeenRefresh: true,
+	}
 }
 
 // listPostings pages through the board's postings via the POST-only jobs endpoint,

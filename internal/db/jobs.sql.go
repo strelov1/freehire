@@ -236,8 +236,13 @@ func (q *Queries) EstimateOpenJobs(ctx context.Context) (int64, error) {
 }
 
 const existingExternalIDs = `-- name: ExistingExternalIDs :many
-SELECT external_id FROM jobs WHERE source = $1
+SELECT external_id, is_tech FROM jobs WHERE source = $1
 `
+
+type ExistingExternalIDsRow struct {
+	ExternalID string      `json:"external_id"`
+	IsTech     pgtype.Bool `json:"is_tech"`
+}
 
 // Seen-set for a hydrating source (see source-ingest): all external_ids stored for one
 // provider, so an adapter with expensive per-posting detail (justjoin, ~20k live offers)
@@ -245,19 +250,66 @@ SELECT external_id FROM jobs WHERE source = $1
 // included — a closed posting is still "seen" (no need to re-fetch its detail; a reappearance
 // reopens it via the upsert regardless). Keyed by source alone; the caller namespaces the
 // adapter's raw posting id to match the stored external_id.
-func (q *Queries) ExistingExternalIDs(ctx context.Context, source string) ([]string, error) {
+//
+// is_tech rides along because a hydrating crawl re-lists a posting without its description: it is
+// the evidence the catalogue filter reads, and only the stored row still has it.
+func (q *Queries) ExistingExternalIDs(ctx context.Context, source string) ([]ExistingExternalIDsRow, error) {
 	rows, err := q.db.Query(ctx, existingExternalIDs, source)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []string{}
+	items := []ExistingExternalIDsRow{}
 	for rows.Next() {
-		var external_id string
-		if err := rows.Scan(&external_id); err != nil {
+		var i ExistingExternalIDsRow
+		if err := rows.Scan(&i.ExternalID, &i.IsTech); err != nil {
 			return nil, err
 		}
-		items = append(items, external_id)
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const existingExternalIDsByBoard = `-- name: ExistingExternalIDsByBoard :many
+SELECT external_id, is_tech FROM jobs WHERE source = $1 AND external_id LIKE $2
+`
+
+type ExistingExternalIDsByBoardParams struct {
+	Source  string `json:"source"`
+	Pattern string `json:"pattern"`
+}
+
+type ExistingExternalIDsByBoardRow struct {
+	ExternalID string      `json:"external_id"`
+	IsTech     pgtype.Bool `json:"is_tech"`
+}
+
+// Seen-set of ONE board of a multi-board provider. The lookup runs once per crawled board, so a
+// provider-wide read is unaffordable where the provider is large: on workday it returns 1.27M ids
+// in ~168s, against ~1.8s for a board's own 25k.
+//
+// Matched as a LIKE prefix so it rides jobs_source_extid_pattern_idx (source, external_id
+// text_pattern_ops), whose operator class compares byte-wise. A range predicate over the plain
+// index (external_id >= 'board:' AND < 'board;') looks equivalent and is NOT: under the database's
+// collation punctuation carries only a secondary weight, so that range returns nothing at all.
+// The caller passes an escaped pattern (sources.BoardIDPattern) — a board name may contain LIKE
+// syntax, and an unescaped underscore would match a sibling board.
+func (q *Queries) ExistingExternalIDsByBoard(ctx context.Context, arg ExistingExternalIDsByBoardParams) ([]ExistingExternalIDsByBoardRow, error) {
+	rows, err := q.db.Query(ctx, existingExternalIDsByBoard, arg.Source, arg.Pattern)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ExistingExternalIDsByBoardRow{}
+	for rows.Next() {
+		var i ExistingExternalIDsByBoardRow
+		if err := rows.Scan(&i.ExternalID, &i.IsTech); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

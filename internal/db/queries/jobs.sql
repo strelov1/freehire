@@ -717,7 +717,23 @@ WHERE closed_at IS NULL
 -- included — a closed posting is still "seen" (no need to re-fetch its detail; a reappearance
 -- reopens it via the upsert regardless). Keyed by source alone; the caller namespaces the
 -- adapter's raw posting id to match the stored external_id.
-SELECT external_id FROM jobs WHERE source = sqlc.arg(source);
+--
+-- is_tech rides along because a hydrating crawl re-lists a posting without its description: it is
+-- the evidence the catalogue filter reads, and only the stored row still has it.
+SELECT external_id, is_tech FROM jobs WHERE source = sqlc.arg(source);
+
+-- name: ExistingExternalIDsByBoard :many
+-- Seen-set of ONE board of a multi-board provider. The lookup runs once per crawled board, so a
+-- provider-wide read is unaffordable where the provider is large: on workday it returns 1.27M ids
+-- in ~168s, against ~1.8s for a board's own 25k.
+--
+-- Matched as a LIKE prefix so it rides jobs_source_extid_pattern_idx (source, external_id
+-- text_pattern_ops), whose operator class compares byte-wise. A range predicate over the plain
+-- index (external_id >= 'board:' AND < 'board;') looks equivalent and is NOT: under the database's
+-- collation punctuation carries only a secondary weight, so that range returns nothing at all.
+-- The caller passes an escaped pattern (sources.BoardIDPattern) — a board name may contain LIKE
+-- syntax, and an unescaped underscore would match a sibling board.
+SELECT external_id, is_tech FROM jobs WHERE source = sqlc.arg(source) AND external_id LIKE sqlc.arg(pattern);
 
 -- name: TouchJob :one
 -- Liveness refresh for a hydrating source's already-ingested posting (see source-ingest): the
