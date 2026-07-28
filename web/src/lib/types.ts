@@ -381,6 +381,17 @@ export interface MyJob {
   /** The pending saved-job reminder's deadline (RFC3339), or null when the job
    *  has no pending reminder. Drives the saved list's "remind in N days" chip. */
   reminder_fire_at: string | null;
+  /** When this application last moved: its apply date, or the newest message
+   *  linked to it when that is later. Null on any row that is not an
+   *  application awaiting a reply. */
+  last_activity_at: string | null;
+  /** Whole days since last_activity_at. Null together with the others. */
+  days_silent: number | null;
+  /** 'active' — inside the tolerated silence for its stage; 'silent' — past it;
+   *  'unconfirmed' — it would read as silent, but mail awaiting confirmation may
+   *  say otherwise. Null means nothing is owed here (viewed/saved only, or a
+   *  settled application), which is not the same as owed-and-answered-promptly. */
+  silence_state: 'active' | 'silent' | 'unconfirmed' | null;
 }
 
 /** The account-level saved-job reminder rule: whether reminders are on, the

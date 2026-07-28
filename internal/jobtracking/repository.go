@@ -205,8 +205,10 @@ func (r *QueriesRepository) ListInteractions(
 				Stage:     textPtr(row.Stage),
 				Notes:     textPtr(row.Notes),
 			},
-			EmailCount:     int(row.EmailCount),
-			ReminderFireAt: pgconv.TimePtr(row.ReminderFireAt),
+			EmailCount:           int(row.EmailCount),
+			ReminderFireAt:       pgconv.TimePtr(row.ReminderFireAt),
+			LastActivityAt:       pgconv.TimePtr(row.LastActivityAt),
+			HasPendingSuggestion: row.HasPendingSuggestion,
 		})
 	}
 	return items, nil

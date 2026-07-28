@@ -13,18 +13,18 @@
 
 ## 3. Wire shape
 
-- [ ] 3.1 Add `last_activity_at`, `days_silent` and `silence_state` to the `/me/tracking` row, null on any row that is not an application
-- [ ] 3.2 Cover the wire shape: an application carries all three; a viewed-or-saved-only row carries none
-- [ ] 3.3 Regenerate the API contract and check the new fields appear
-- [ ] 3.4 Update `internal/userjob/AGENTS.md` and `internal/handler/AGENTS.md`
+- [x] 3.1 Add `last_activity_at`, `days_silent` and `silence_state` to the `/me/tracking` row, null on any row that is not an application
+- [x] 3.2 Cover the wire shape: an application carries all three; a viewed-or-saved-only row carries none
+- [x] 3.3 Regenerated the API contract: no diff — `MyJob` in `web/src/lib/types.ts` is hand-maintained rather than generated, so the three fields were added there directly
+- [x] 3.4 Update `internal/userjob/AGENTS.md` and `internal/handler/AGENTS.md`
 
 ## 4. Tracking board
 
-- [ ] 4.1 Render the silence marker on the application card: days silent when `silent`, an invitation to confirm the pending mail when `unconfirmed`, nothing when `active` or terminal
-- [ ] 4.2 Verify visually that a board of mixed states reads correctly, and that a board with no silent applications shows no markers at all
-- [ ] 4.3 Confirm the `unconfirmed` card links to the mail awaiting confirmation, so the question it asks can be answered in one step
+- [x] 4.1 Render the silence marker on the application card: days silent when `silent`, an invitation to confirm the pending mail when `unconfirmed`, nothing when `active` or terminal
+- [ ] 4.2 **Not done — blocked.** Visual verification of a mixed-state board needs the API deployed; prod does not serve these fields yet. Only the absent-fields case is provable by reading: `silence_state` is `undefined` there, every branch tests `=== 'silent'` / `=== 'unconfirmed'`, so no marker renders and nothing dereferences `days_silent`
+- [ ] 4.3 **Not done.** The `unconfirmed` marker explains itself in a tooltip but is not a link; answering the question still means opening the card and finding the mail. Worth doing, and deliberately not claimed
 
 ## 5. Verification
 
-- [ ] 5.1 `gofmt`, `go build ./...`, `go vet ./...`, `go test ./...`, and the integration suites for `./internal/db/` and `./internal/handler/`
-- [ ] 5.2 Compare the live account's flagged applications against the measurement in the proposal (15 of 92 at `applied`, 3 of 6 at `interview`); an unexplained divergence means the implementation and the measurement disagree about what silence is
+- [x] 5.1 `gofmt`, `go build ./...`, `go vet ./...`, `go test ./...`, and the integration suites for `./internal/db/` and `./internal/handler/`
+- [x] 5.2 Verified against prod with the shipped ladder: 15 of 92 at `applied`, 3 of 6 at `interview`, 0 of 1 at `screening` — matching the proposal exactly, using the same floor-to-whole-days rule the code applies
