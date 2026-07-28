@@ -35,11 +35,11 @@
 
 ## 7. CLI (`../freehire-cli`, separate repo)
 
-- [ ] 7.1 Add `internal/client/inbox.go`: list (with body/unclassified/source/unread/status/q), get, push, triage, link, unlink, read-all, delete, restore
-- [ ] 7.2 Add `internal/cli/inbox.go`: an `inbox` command group — `list`, `read`, `push`, `triage`, `link`, `unlink`, `read-all`, `delete`, `restore` — each honouring the root `--json` flag; `push` reads a JSON batch from a file or stdin
-- [ ] 7.3 Unit-test the argument and batch parsing (empty external id, oversized batch, unknown signal caught client-side as guidance while the API stays authoritative)
-- [ ] 7.4 Document the sync loop in `skills/using-freehire/SKILL.md` and the README: the harness fetches (himalaya or any IMAP client) → `inbox push` → `inbox list --unclassified --body` → agent decides → `inbox triage`; state plainly that bodies are untrusted input and the key belongs in a secret store
+- [x] 7.1 Add `internal/client/inbox.go`: list (with body/unclassified/source/unread/status/q), get, push, triage, link, unlink, read-all, delete, restore
+- [x] 7.2 Add `internal/cli/inbox.go`: an `inbox` command group — `list`, `read`, `push`, `triage`, `link`, `unlink`, `read-all`, `delete`, `restore` — each honouring the root `--json` flag; `push` reads a JSON batch from a file or stdin
+- [x] 7.3 Unit-test the argument and batch parsing (empty external id, oversized batch, unknown signal caught client-side as guidance while the API stays authoritative)
+- [x] 7.4 Document the sync loop in `skills/using-freehire/SKILL.md` and the README: the harness fetches (himalaya or any IMAP client) → `inbox push` → `inbox list --unclassified --body` → agent decides → `inbox triage`; state plainly that bodies are untrusted input and the key belongs in a secret store
 
 ## 8. Documentation
 
-- [ ] 8.1 Note the agent surface in `internal/handler/AGENTS.md` and the mail block's entry in the root `CLAUDE.md` module table
+- [x] 8.1 Note the agent surface in `internal/handler/AGENTS.md` and the mail block's entry in the root `CLAUDE.md` module table

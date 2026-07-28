@@ -47,6 +47,16 @@ Fiber HTTP handlers: feature handler structs, route registration, auth surface, 
 - `view`/`apply`/`save`/`track` interaction endpoints. Addressed by job's public `:slug` (resolved to internal id before write). All writes are idempotent upserts behind `RequireAuthOrKey`.
 - Return `{"data": interaction}` with `user_id` omitted; public job reads stay unauthenticated.
 
+## Mail Inbox + Agent Surface (`gmail.go`, `inbox.go`, `inbox_linking.go`, `inbox_agent.go`)
+
+- All mail routes are `mw.key` (`RequireAuthOrKey`), so a user's own agent harness drives the inbox with the same full-scope key it already uses for the tracker. `mw.key` is full-scope-only, so a `cv` key stays refused. **The one exception is the Gmail OAuth connect/callback pair, which stays `mw.cookie`** — it redirects a browser to Google's consent screen and a keyed client cannot complete it.
+- Three mail sources share the `emails` table, discriminated by `source`: `gmail`, `hosted`, and `external` — the last being mail the caller's own client fetched and pushed. freehire provides **no transport** for `external`; `POST /me/emails` is where a harness's output enters.
+- **`external` mail is never classified server-side.** `EnqueuePendingEmailClassification` excludes it, which is the single line that makes the bring-your-own-harness tier cost us nothing. Such mail stays `classified_at IS NULL` indefinitely by design; `?unclassified=1` is how the agent finds its backlog.
+- **Bodies live in the listing (`?body=1`), not in a per-message fetch.** `GetEmail` marks a message read, and `read_at` means "a human saw this" — an agent sweeping the backlog through `GetEmail` would zero the user's unread count. The listing has no such side effect. Pages carrying bodies cap at `agentPageMax` (50). The text is `maillink.ReadableBody`, the same the classification worker reads, so the two cannot drift.
+- `TriageEmail` is `SetEmailClassification`'s sibling: status, link, provenance (`link_source = 'agent'`) and the classified stamp in **one** update, then `mailclassify.AdvanceStage`. Splitting it would manufacture states the worker never produces. An omitted slug means "not deciding the link", never "clear it" — unlinking stays the explicit action. The stage advance is best-effort: the verdict is already durable.
+- `IngestEmails` validates the whole batch before writing any of it and commits in one transaction, so a bad message at the end cannot leave earlier ones stored under a 400. Its upsert refreshes content columns only — `read_at`, `deleted_at` and every classification column are the reader's state, and a nightly re-sync must not resurrect deleted mail or wipe a verdict.
+- `renderEmail` is the shared tail of every mutation that returns the message it changed (link, unlink, confirm, reject, triage), so those cannot drift from one another or from `GetEmail`.
+
 ## Error Convention
 
 - Genuinely domain-specific status choices (e.g. `Me` returning 401 for a gone user token) stay in the handler.
