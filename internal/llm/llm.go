@@ -3,6 +3,12 @@
 // owns only the langchaingo client construction, the per-call timeout + generate
 // + empty-choices guard, and the markdown-fence cleanup some models add despite
 // JSON mode. Callers keep their own prompts and typed-contract parsing.
+//
+// A call may additionally constrain its response to a JSON schema (WithSchema, and
+// internal/llmschema for deriving one from a contract type), which forecloses the
+// type and vocabulary drift callers' decoders otherwise absorb. It is a first line,
+// never a proof: a gateway that stops honouring a schema answers 200 with ordinary
+// JSON, so every caller-side sanitiser and validator stays exactly where it was.
 package llm
 
 import (

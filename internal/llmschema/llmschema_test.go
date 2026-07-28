@@ -140,6 +140,30 @@ func TestEnum_ConstrainsOneFieldAndLeavesSiblingsAlone(t *testing.T) {
 	}
 }
 
+// On an array field the vocabulary constrains each element. Put on the array itself it
+// would say the whole list equals one of the values, which no model could satisfy.
+func TestEnum_OnAnArrayFieldConstrainsTheItems(t *testing.T) {
+	regions := []string{"eu", "apac"}
+
+	s, err := Of[contract](Enum("tags", regions))
+	if err != nil {
+		t.Fatalf("Of: %v", err)
+	}
+
+	tags := object(t, properties(t, s)["tags"])
+	if _, ok := tags["enum"]; ok {
+		t.Error("the array itself carries an enum; the constraint belongs on its items")
+	}
+
+	items, ok := tags["items"].(map[string]any)
+	if !ok {
+		t.Fatal("tags carries no items schema")
+	}
+	if got := stringSlice(t, items["enum"]); !slices.Equal(got, regions) {
+		t.Errorf("items enum = %v, want %v", got, regions)
+	}
+}
+
 // enum is the narrower of the two constraints: on a field whose type admits null, a
 // vocabulary that omitted null would forbid the very absence the contract permits,
 // leaving the model no legal way to decline.

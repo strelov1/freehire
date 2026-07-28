@@ -38,7 +38,14 @@ func NewLangChainProvider(c *llm.Client) *LangChainProvider {
 // Enrich asks the model for a structured Enrichment for the job and parses the JSON
 // response. It does not validate the result — the caller validates before persisting.
 func (p *LangChainProvider) Enrich(ctx context.Context, job JobInput) (Enrichment, error) {
-	raw, err := p.client.GenerateJSON(ctx, buildSystemPrompt(!job.GeoPinned), userPrompt(job))
+	askGeo := !job.GeoPinned
+
+	schema, name, err := requestSchema(askGeo)
+	if err != nil {
+		return Enrichment{}, err
+	}
+	raw, err := p.client.GenerateJSON(ctx, buildSystemPrompt(askGeo), userPrompt(job),
+		llm.WithSchema(name, schema))
 	if err != nil {
 		return Enrichment{}, fmt.Errorf("enrich: %w", err)
 	}

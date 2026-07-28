@@ -39,15 +39,15 @@
 
 ## 5. Migrate `enrich` — last, heaviest traffic
 
-- [ ] 5.1 Derive the schema from the `Enrichment` contract with `Enum` overrides for every controlled vocabulary in `internal/vocab` that the prompt asks for
-- [ ] 5.2 Test that each enum property carries exactly its `vocab` list, so a vocabulary edit reaches the schema without a second edit
-- [ ] 5.3 Verify `Sanitize` and `Validate` treat an explicit `null` exactly as they treat an absent field — the behaviour the `ai-enrichment` delta now requires
-- [ ] 5.4 Trim from the prompt only the field-shape instructions the schema now carries, leaving the salary rounding rule and every semantic instruction in place
-- [ ] 5.5 Test that a provider returning an out-of-vocabulary value despite the schema still has that field dropped and the rest of the enrichment kept
-- [ ] 5.6 Run `enrich` against a handful of real jobs with `LLM_*` pointed at the proxy and confirm the contract fills as before
+- [x] 5.1 Derive the schema from the `Enrichment` contract. **Two corrections the design did not foresee:** the prompt deliberately does not ask for the dictionary-covered facets, so the schema omits them too (strict mode would have ordered the model to produce values `jobview` discards — the token burn `enrich-prompt-trim` removed); and `regions`/`countries` are left UNCONSTRAINED, because the prompt lets the model coin its own label there and an enum would foreclose the discovery the hybrid facet exists for. Two schemas, keyed on `askGeo`, mirroring the prompt's own switch
+- [x] 5.2 Test that each served enum carries exactly its `vocab` list, that the discovery facets carry none, and that the geo-pinned variant drops the geo fields while keeping `cities`. **Required `Enum` to place the vocabulary on an array's items** rather than on the array itself
+- [x] 5.3 Verified by `TestParseEnrichment_TreatsExplicitNullAsUnset`: null strings decode empty, null pointers stay nil, a null array stays empty — indistinguishable from the absent key they replace
+- [x] 5.4 **Prompt left intact, deliberately.** The trimmable part is the type annotations (`(boolean)`, `(int)`, `(array of strings)`) — a few dozen tokens against a schema that is itself sent on every call. The vocabularies must stay regardless: they are the prompt's own second line for the same reason `Validate` is kept, and for `regions`/`countries` the prompt is the ONLY place the allowed values now appear. Trimming would buy nothing and cost the fallback
+- [x] 5.5 Covered by the existing `Validate` tests, which are untouched by this change and still drop an out-of-vocabulary field while keeping the rest
+- [x] 5.6 Live run against the proxy (`live_measure_test.go`, tag `llmlive`): salary 85000–110000 EUR/year, `relocation=supported`, `visa_sponsorship=true`, `domains=[logistics]`, `company_type=product`, `company_size=201-500`, `regions=[eu]`, `countries=[DE]` — and not one dictionary-covered facet returned
 
 ## 6. Finish
 
-- [ ] 6.1 `go build ./... && go vet ./... && go test ./...` clean
-- [ ] 6.2 Update `internal/llm`'s package doc and `internal/enrich/AGENTS.md` to state that vocabularies are enforced by the request schema and validated again on receipt
-- [ ] 6.3 Note in `internal/resumeextract/AGENTS.md` why `total_years` is requested as a string
+- [x] 6.1 `go build ./... && go vet ./... && go test ./...` clean
+- [x] 6.2 Update `internal/llm`'s package doc and `internal/enrich/AGENTS.md` to state that vocabularies are enforced by the request schema and validated again on receipt
+- [x] 6.3 Note in `internal/resumeextract/AGENTS.md` why `total_years` is requested as a string

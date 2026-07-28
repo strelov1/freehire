@@ -8,7 +8,9 @@ The typed enrichment contract, the LLM provider abstraction, and the queue-drain
 - `enrichment_outbox` is a reference-only queue (`job_id` + `target_version` + lease/retry bookkeeping), not a copy of the job; `jobs` stays canonical.
 - Enqueue open jobs only — closed postings are skipped so a dead vacancy never burns LLM budget.
 - Claims a wave of open jobs freshest-first (`ORDER BY COALESCE(posted_at, created_at) DESC, id DESC`) with `FOR UPDATE OF o SKIP LOCKED` + a `claimed_at` lease.
-- `Enrichment.Sanitize` drops out-of-vocabulary enum values rather than dead-lettering the whole job — the invariant is "never persist an out-of-vocabulary value".
+- **The request carries a schema derived from the `Enrichment` contract** (`schema.go`, via `internal/llmschema`), so the served enums are constrained where they are generated rather than only cleaned afterwards. Two things it deliberately does NOT do: it omits the dictionary-covered facets the prompt does not ask for (strict mode requires every property, so leaving one in would order the model to produce a value `jobview` discards), and it leaves `regions`/`countries` unconstrained — those are the dict-then-LLM discovery facets, where the prompt invites a label of the model's own and an enum would foreclose it. The schema mirrors the prompt's `askGeo` switch, so the two cannot describe different requests.
+- `Enrichment.Sanitize` drops out-of-vocabulary enum values rather than dead-lettering the whole job — the invariant is "never persist an out-of-vocabulary value". **It stays on the schema path**: a gateway that stops honouring a schema answers 200 with ordinary JSON, so the schema is a first line, never a proof.
+- Under a strict schema there is no absent key — an unstated field arrives as `null`, which decodes to the same zero value the omitted key produced.
 - `Validate` as a guard: an LLM/parse error retries once, then dead-letters.
 - On success, writes via `SetJobEnrichment` + deletes the outbox row in one transaction.
 - `SetJobEnrichment` is deliberately separate from `UpsertJob` so ingest and enrichment stay decoupled.

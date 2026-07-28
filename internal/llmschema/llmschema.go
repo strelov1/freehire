@@ -88,6 +88,15 @@ func Enum(field string, values []string) Override {
 		for _, v := range values {
 			allowed = append(allowed, v)
 		}
+
+		// On an array the vocabulary constrains each element: put on the array itself
+		// it would demand the whole list equal one of the values.
+		if items, ok := prop["items"].(map[string]any); ok {
+			items["enum"] = allowed
+
+			return nil
+		}
+
 		// A nullable field needs null inside the enum too: enum is the narrower
 		// constraint, and would otherwise forbid the very absence the type permits.
 		if admitsNull(prop) {

@@ -5,20 +5,23 @@
 The system SHALL define a `Provider` abstraction in `internal/enrich` that, given a
 job's source fields (at minimum `title`, `company`, `location`, `remote`,
 `description`), returns a populated `Enrichment` value. The provider SHALL constrain
-the enum fields it asks for to their allowed values by carrying the controlled
-vocabularies from the phase-1 contract in the **request schema**, so a value outside
-a vocabulary cannot be generated rather than merely being discarded after the fact;
-the vocabularies SHALL continue to be validated on receipt, because a provider that
-stops honouring the schema reports no error. The provider SHALL NOT ask the LLM for
-the dictionary-covered facets that the read layer serves from the deterministic
-dictionaries (see "Unserved discovery facets are captured raw, not validated"); those
-are derived by `internal/jobderive`, not the LLM. Fields not determinable from the
-input SHALL be returned as `null`, not guessed — a strict request schema admits no
-absent key — and a `null` SHALL be indistinguishable downstream from the omitted
-field it replaces. The provider SHALL instruct the LLM that salary amounts are whole
-units of the currency: a fractional rate written with cents (e.g. an hourly `$26.08`)
-MUST be rounded to the nearest whole unit (`26`), and the decimal point MUST NEVER be
-stripped (`26.08` MUST NOT become `2608`).
+the **served** enum fields to their allowed values by carrying the controlled
+vocabularies in the **request schema**, so a value outside a vocabulary cannot be
+generated rather than merely being discarded after the fact; those vocabularies SHALL
+continue to be validated on receipt, because a provider that stops honouring the
+schema reports no error. The **discovery** facets `regions` and `countries` SHALL NOT
+be constrained by the schema: the prompt permits a label of the model's own when no
+allowed value fits, and an enum would foreclose the novel value that mechanism exists
+to collect (see "Unserved discovery facets are captured raw, not validated"). The
+request schema SHALL describe exactly the fields the prompt asks for and no others,
+so the dictionary-covered facets served by `internal/jobderive` are absent from both;
+under a strict schema a field left in is a field the model is required to produce.
+Fields not determinable from the input SHALL be returned as `null`, not guessed — a
+strict request schema admits no absent key — and a `null` SHALL be indistinguishable
+downstream from the omitted field it replaces. The provider SHALL instruct the LLM
+that salary amounts are whole units of the currency: a fractional rate written with
+cents (e.g. an hourly `$26.08`) MUST be rounded to the nearest whole unit (`26`), and
+the decimal point MUST NEVER be stripped (`26.08` MUST NOT become `2608`).
 
 #### Scenario: Description fields are mapped into the contract
 
@@ -51,11 +54,17 @@ stripped (`26.08` MUST NOT become `2608`).
 - **THEN** the resulting `Enrichment` treats that field exactly as it treated an
   absent key before — unset, not written back, and not stamped as provenance
 
-#### Scenario: An enum value outside its vocabulary cannot be produced
+#### Scenario: A served enum value outside its vocabulary cannot be produced
 
-- **WHEN** a job description describes a seniority the vocabulary has no value for
+- **WHEN** a job description describes a company size the vocabulary has no value for
 - **THEN** the request schema restricts the field to the vocabulary, so the model
   returns one of the allowed values or `null`, and never invents a new one
+
+#### Scenario: A discovery facet may still carry a label of the model's own
+
+- **WHEN** a posting states a geographic reach no region value fits
+- **THEN** the schema leaves `regions` and `countries` unconstrained, so the model's
+  own concise label is returned and captured raw, exactly as before this change
 
 #### Scenario: A provider that ignores the schema is still caught
 
