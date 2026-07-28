@@ -289,6 +289,14 @@ func TestSessionListSpansBrowsingConversations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create browsing session: %v", err)
 	}
+	// The other half of the same predicate: widening it must not have swept tailoring
+	// conversations in. Only a real query can prove that — the store's own unit tests
+	// run against a fake that never sees the WHERE clause. The binding is left unset
+	// because what is on trial here is the preset filter, not the CV it points at.
+	tailoring, err := h.store.CreateSession(context.Background(), userID, assistant.PresetTailor, nil, nil)
+	if err != nil {
+		t.Fatalf("create tailoring session: %v", err)
+	}
 
 	resp := assistantRequest(t, app, fiber.MethodGet, "/api/v1/assistant/sessions", cookie, nil)
 	var list struct {
@@ -300,12 +308,18 @@ func TestSessionListSpansBrowsingConversations(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
+	var sawBrowsing bool
 	for _, s := range list.Data {
 		if s.ID == browsing.ID.String() {
-			return
+			sawBrowsing = true
+		}
+		if s.ID == tailoring.ID.String() {
+			t.Errorf("the rail contains the tailoring session %s; it is reached through its CV, not here", tailoring.ID)
 		}
 	}
-	t.Errorf("the rail = %+v, want it to contain the browsing session %s", list.Data, browsing.ID)
+	if !sawBrowsing {
+		t.Errorf("the rail = %+v, want it to contain the browsing session %s", list.Data, browsing.ID)
+	}
 }
 
 // Widening the carrier must not widen the rollout: the gate reads group membership

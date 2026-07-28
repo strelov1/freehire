@@ -59,12 +59,15 @@ Pipeline and cross-package invariants live in [docs/agents/mail-stack.md](../../
 - `CreateApplicationFromEmail` records an application from mail and links it in one call. It **borrows `jobtracking`** rather than writing its own apply, so the `applied_count`-increments-once rule stays in one place; the application is dated by the email's `received_at`, never `now()`. Mail carrying a pending suggestion is a **409** — the matcher already proposed an answer, and overwriting it silently would make `link_source = 'manual'` a lie about a decision the caller never saw.
 ## Assistant (`assistant.go`, `assistant_*_tools.go`)
 
-Routes (all cookie-only, behind `auth.RequireModeratorOrBeta` — inference is
-billed to us, so the assistant is not open to everyone while it is free):
+Routes (all on `mw.key` — the session cookie, the session JWT the extension's
+connect flow minted, or a full-scope API key — then `requireRollout`, because
+inference is billed to us and the assistant is not open to everyone while it is
+free). The gate is `key` rather than `cookie` because the extension's side panel
+holds conversations too and cannot send an httpOnly cookie across origins:
 
 | Route | Does |
 |---|---|
-| `POST /assistant/sessions` | start a chat conversation (a tailoring one is minted by the CV bootstrap, which knows the CV and vacancy to bind) |
+| `POST /assistant/sessions` | start a conversation in the preset asked for — `chat` or `browse`; a tailoring one is minted by the CV bootstrap, which knows the CV and vacancy to bind |
 | `GET /assistant/sessions` | the caller's conversations, most recently active first |
 | `GET /assistant/sessions/:id` | one conversation with its stored transcript, for replay |
 | `DELETE /assistant/sessions/:id` | remove a conversation and its transcript |
@@ -77,10 +80,16 @@ failed write. That is how a streamed turn learns the client is gone: the failure
 cancels the loop's context, so it stops before spending another model call.
 
 `assistant_tools.go` / `assistant_tracking_tools.go` / `assistant_cv_tools.go` /
-`assistant_profile_tool.go` / `assistant_present_tool.go` build the agent's tools
-from the same services these handlers use, and `assistantRegistry` picks the set for
-a session's preset. The loop itself lives in
+`assistant_profile_tool.go` / `assistant_present_tool.go` / `assistant_page_tools.go`
+build the agent's tools from the same services these handlers use, and
+`assistantRegistry` picks the set for a session's preset. The loop itself lives in
 [internal/assistant](../assistant/AGENTS.md).
+
+`read_current_page` (`assistant_page_tools.go`) is the only tool that leaves this
+process for something we do not control: it drives the caller's browser through the
+relay in [internal/browsertools](../browsertools/AGENTS.md). It is registered for the
+`browse` preset alone, and it carries its own deadline, because every other tool is
+bounded by a database or a search call and this one waits on a tab.
 
 `present_jobs` is the odd one out: it is the only tool whose purpose is presentation
 rather than retrieval or state change. It writes nothing and returns a receipt of

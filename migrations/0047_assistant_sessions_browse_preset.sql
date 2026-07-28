@@ -10,14 +10,22 @@
 -- and re-added rather than altered: Postgres has no ALTER CONSTRAINT for a CHECK's
 -- expression.
 --
--- Safe to run against a live database: the rewritten constraint is strictly wider
--- than the one it replaces, so no existing row can violate it, and the validation
--- scan only reads the table. Rolling back means redeploying the old binary — rows
--- already recorded as `browse` would then fail the narrower CHECK, so restore this
--- constraint only after none remain.
+-- Safe to run against a live database at this table's size: the rewritten
+-- constraint is strictly wider than the one it replaces, so no existing row can
+-- violate it. The ADD does hold ACCESS EXCLUSIVE while it validates, which is
+-- nothing here and would not be on a large table — there the shape is
+-- `ADD ... NOT VALID` followed by `VALIDATE CONSTRAINT`.
+--
+-- Rolling back means redeploying the old binary — rows already recorded as `browse`
+-- would then fail the narrower CHECK, so restore this constraint only after none
+-- remain.
 --
 -- Applied to a fresh volume by initdb after 0046; on an existing prod volume run
 -- these statements manually (SET ROLE hire) BEFORE deploying code that writes them.
+
+-- Wrapped in a transaction so the column is never briefly unconstrained: between
+-- the DROP and the ADD there is a window in which any value would be accepted.
+BEGIN;
 
 ALTER TABLE public.assistant_sessions
     DROP CONSTRAINT IF EXISTS assistant_sessions_preset_check;
@@ -25,3 +33,5 @@ ALTER TABLE public.assistant_sessions
 ALTER TABLE public.assistant_sessions
     ADD CONSTRAINT assistant_sessions_preset_check
     CHECK ((preset = ANY (ARRAY['chat'::text, 'tailor'::text, 'browse'::text])));
+
+COMMIT;

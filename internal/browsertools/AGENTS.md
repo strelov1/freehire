@@ -29,11 +29,21 @@ Two in-process harnesses take a `Caller` on a user's channel, both briefly:
 - the assistant's `read_current_page` tool, for the length of one tool call, in a
   `browse` session.
 
-Because a channel has one harness end and the last connection wins, these two evict
-each other if they overlap. In practice a person clicks "Autofill" or sends a
-message, not both at once, so this is left as it is. Fixing it means several
-harnesses per channel, each addressed by the id it is waiting on — the seam is
-`Hub`, and it is the same seam a multi-node deployment needs.
+A channel has one harness end and the last connection wins, so **any** harness
+evicts any other — including the long-running one holding an API key (the shape
+`freehire-cli` uses). An evicted harness's in-flight call is answered into its
+successor's `Caller`, which drops it as a late answer to an abandoned call, so the
+evicted caller waits out its own deadline.
+
+In practice a person clicks "Autofill" or sends a message, not both at once, so this
+is left as it is. Fixing it means several harnesses per channel, each addressed by
+the id it is waiting on — the seam is `Hub`, and it is the same seam a multi-node
+deployment needs.
+
+This is why `read_current_page` carries a deadline: the relay answers by itself only
+when NO extension is attached, so every other way a call can go unanswered — an
+evicted harness, a panel closed mid-call, a wedged tab — is bounded by the caller or
+not at all.
 
 ## Transport
 

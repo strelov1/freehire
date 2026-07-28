@@ -33,6 +33,8 @@ on — is written up in the sibling repository at
   primitives stay behind `/me/autofill/run`, which is a deterministic, reviewable
   flow. An agent that can fill a form mid-conversation is a different feature with
   a different consent story.
+- Deciding *which* pages may be read. See the cross-repo obligation below — that
+  gate belongs in the extension, which is the only side that can enforce it.
 - Fixing the one-harness-per-channel limit (see Risks).
 - Correcting the `extension-auth` spec's drift from the code.
 
@@ -69,6 +71,24 @@ already that a tool failure is not a turn failure: `Registry.Call` never returns
 Go error, so the model reads `{"error": ...}` and corrects within the same turn.
 Here the correction is a sentence to the user — "open the side panel" — which is
 strictly better than a failed turn with no explanation.
+
+## The extension owes a consent gate
+
+`read_current_page` returns whatever tab the panel is attached to. That may be a
+vacancy — or a bank, a private inbox, an internal wiki. The result is sent to the
+model provider and **persisted verbatim into `assistant_messages`**, where it stays
+for the life of the conversation. The model chooses when to call it, and the
+browsing prompt actively tells it to call again after any navigation.
+
+Nothing here can gate that, because this side cannot see what the page is until it
+has already read it. The extension can: it knows the url before it scrapes, and it
+owns the surface where a user could be shown what is about to be sent. So the
+obligation is recorded as a cross-repo dependency rather than left implicit —
+`freehire-extension` decides which pages `read_page` will serve, and this side reads
+whatever it is given.
+
+Worth weighing against the fact that this product already runs a PII-masking service
+for CVs; page text arriving unfiltered is an inconsistency, not a settled position.
 
 ## Risks / Trade-offs
 

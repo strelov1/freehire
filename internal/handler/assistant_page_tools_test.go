@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/browsertools"
@@ -98,8 +99,8 @@ func TestReadCurrentPageReturnsWhatTheBrowserIsShowing(t *testing.T) {
 }
 
 // The common case is no panel open — a web session, or one the user closed. The
-// model has to be able to say "open the side panel", which means the turn must
-// survive and the message must name the remedy.
+// model has to be able to say "open the side panel", so the failure must arrive as
+// a readable result rather than as anything that ends the turn.
 func TestReadCurrentPageWithNoBrowserAttachedIsARecoverableToolError(t *testing.T) {
 	hub := browsertools.New()
 	h := &assistantHandlers{browserTools: hub}
@@ -112,6 +113,41 @@ func TestReadCurrentPageWithNoBrowserAttachedIsARecoverableToolError(t *testing.
 	}
 	if !strings.Contains(res.Content, "side panel") {
 		t.Errorf("error = %s, want it to name the side panel as the remedy", res.Content)
+	}
+}
+
+// silentExtension takes the call and never answers, as a panel closed between the
+// frame's delivery and its reply does. The relay only synthesises an answer when
+// NO extension is attached, so nothing else rescues this call.
+type silentExtension struct{}
+
+func (silentExtension) Send([]byte) error { return nil }
+
+// Without a deadline this deadlocks rather than merely hanging: Caller.Close, which
+// would unblock the waiter, runs in a defer that cannot fire until Call returns.
+func TestReadCurrentPageGivesUpOnABrowserThatNeverAnswers(t *testing.T) {
+	restore := readCurrentPageTimeout
+	readCurrentPageTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { readCurrentPageTimeout = restore })
+
+	hub := browsertools.New()
+	t.Cleanup(hub.Join(7, browsertools.RoleExtension, silentExtension{}))
+	h := &assistantHandlers{browserTools: hub}
+	reg := assistant.NewRegistry(h.readCurrentPageTool())
+
+	done := make(chan assistant.Result, 1)
+	go func() { done <- reg.Call(context.Background(), 7, "read_current_page", json.RawMessage(`{}`)) }()
+
+	select {
+	case res := <-done:
+		if !res.Failed {
+			t.Fatalf("a silent browser rendered as a success: %s", res.Content)
+		}
+		if strings.Contains(res.Content, "side panel") {
+			t.Errorf("error = %s; the panel IS open, so telling the user to open it is wrong advice", res.Content)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the tool never returned; a turn that calls it would stream keepalives forever")
 	}
 }
 
@@ -134,7 +170,7 @@ func TestReadCurrentPageWithoutARelayAnswersRatherThanPanicking(t *testing.T) {
 // supplies.
 func TestReadCurrentPageReachesOnlyTheCallersOwnBrowser(t *testing.T) {
 	hub := browsertools.New()
-	attachExtension(t, hub, 7, `{"url":"https://jobs.example.test/seven","title":"Seven","headline":"Seven","text":"seven"}`)
+	stub := attachExtension(t, hub, 7, `{"url":"https://jobs.example.test/seven","title":"Seven","headline":"Seven","text":"seven"}`)
 	h := &assistantHandlers{browserTools: hub}
 	reg := assistant.NewRegistry(h.readCurrentPageTool())
 
@@ -142,5 +178,10 @@ func TestReadCurrentPageReachesOnlyTheCallersOwnBrowser(t *testing.T) {
 
 	if !res.Failed {
 		t.Fatalf("user 8 read user 7's browser: %s", res.Content)
+	}
+	// The failure alone would also be satisfied by a call that reached user 7 and was
+	// rejected downstream; what must be true is that their browser was never asked.
+	if asked := stub.tools(); len(asked) != 0 {
+		t.Errorf("user 7's browser was asked for %v on user 8's turn", asked)
 	}
 }
