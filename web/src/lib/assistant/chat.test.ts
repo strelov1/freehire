@@ -62,12 +62,7 @@ describe('reduceTurnEvent', () => {
   it('closes the turn on a terminal result event', () => {
     let s = initChat();
     s = reduceTurnEvent(s, { type: 'assistant_text', text: 'Reply' });
-    s = reduceTurnEvent(s, {
-      type: 'result',
-      cost_usd: 0.01,
-      stop_reason: 'end_turn',
-      is_error: false,
-    });
+    s = reduceTurnEvent(s, { type: 'result', stop_reason: 'end_turn', is_error: false });
     expect(s.messages[0]?.streaming).toBe(false);
     expect(s.messages[0]?.errored).toBe(false);
   });
@@ -75,7 +70,7 @@ describe('reduceTurnEvent', () => {
   it('marks the message errored when the turn ends with an error', () => {
     let s = initChat();
     s = reduceTurnEvent(s, { type: 'assistant_text', text: 'partial' });
-    s = reduceTurnEvent(s, { type: 'result', cost_usd: null, stop_reason: 'error', is_error: true });
+    s = reduceTurnEvent(s, { type: 'result', stop_reason: 'error', is_error: true });
     expect(s.messages[0]?.streaming).toBe(false);
     expect(s.messages[0]?.errored).toBe(true);
   });
@@ -83,7 +78,7 @@ describe('reduceTurnEvent', () => {
   it('opens a new assistant message for the next turn after a result', () => {
     let s = initChat();
     s = reduceTurnEvent(s, { type: 'assistant_text', text: 'First' });
-    s = reduceTurnEvent(s, { type: 'result', cost_usd: null, stop_reason: 'end_turn', is_error: false });
+    s = reduceTurnEvent(s, { type: 'result', stop_reason: 'end_turn', is_error: false });
     s = reduceTurnEvent(s, { type: 'assistant_text', text: 'Second' });
     expect(s.messages).toHaveLength(2);
     expect(s.messages[1]?.text).toBe('Second');
@@ -93,24 +88,62 @@ describe('reduceTurnEvent', () => {
   it('ignores a result with no open turn instead of creating a message', () => {
     const s = reduceTurnEvent(initChat(), {
       type: 'result',
-      cost_usd: null,
       stop_reason: 'end_turn',
       is_error: false,
     });
     expect(s.messages).toHaveLength(0);
   });
 
-  it('ignores unmodeled/raw event kinds without throwing', () => {
+  it('ignores unrendered event kinds without throwing', () => {
     let s = initChat();
     s = reduceTurnEvent(s, { type: 'assistant_text', text: 'Hi' });
     const before = s;
-    s = reduceTurnEvent(s, { type: 'raw', value: { anything: true } });
-    s = reduceTurnEvent(s, { type: 'usage', input_tokens: 1, output_tokens: 2, cost_usd: null });
-    s = reduceTurnEvent(s, { type: 'system', subtype: 'init' });
+    s = reduceTurnEvent(s, { type: 'usage', input_tokens: 1, output_tokens: 2 });
     // An unknown kind not in the union must also be a no-op, not a throw.
     s = reduceTurnEvent(s, { type: 'totally_unknown' } as unknown as TurnEvent);
     expect(s).toBe(before);
     expect(s.messages).toHaveLength(1);
+  });
+
+  it('attaches a tool result to the call it answers', () => {
+    let s = initChat();
+    s = reduceTurnEvent(s, { type: 'tool_use', name: 'search_jobs', input: { query: 'go' } });
+    s = reduceTurnEvent(s, { type: 'tool_result', name: 'search_jobs', result: '{"total":2}' });
+    expect(s.messages[0]?.tools[0]).toMatchObject({
+      name: 'search_jobs',
+      result: '{"total":2}',
+      isError: false,
+    });
+  });
+
+  it('marks a failed tool call so the reason is reachable', () => {
+    let s = initChat();
+    s = reduceTurnEvent(s, { type: 'tool_use', name: 'facets', input: {} });
+    s = reduceTurnEvent(s, {
+      type: 'tool_result',
+      name: 'facets',
+      result: '{"error":"down"}',
+      is_error: true,
+    });
+    expect(s.messages[0]?.tools[0]?.isError).toBe(true);
+  });
+
+  it('answers the most recent unanswered call of that name', () => {
+    // Two searches in one turn: the first result belongs to the first call.
+    let s = initChat();
+    s = reduceTurnEvent(s, { type: 'tool_use', name: 'search_jobs', input: { query: 'a' } });
+    s = reduceTurnEvent(s, { type: 'tool_use', name: 'search_jobs', input: { query: 'b' } });
+    s = reduceTurnEvent(s, { type: 'tool_result', name: 'search_jobs', result: 'first' });
+    expect(s.messages[0]?.tools[0]?.result).toBe('first');
+    expect(s.messages[0]?.tools[1]?.result).toBeUndefined();
+  });
+
+  it('drops a result for a call it never saw rather than inventing a card', () => {
+    let s = initChat();
+    s = reduceTurnEvent(s, { type: 'assistant_text', text: 'hi' });
+    const before = s;
+    s = reduceTurnEvent(s, { type: 'tool_result', name: 'ghost', result: '{}' });
+    expect(s.messages[0]?.tools).toEqual(before.messages[0]?.tools);
   });
 
   it('does not mutate the previous state', () => {

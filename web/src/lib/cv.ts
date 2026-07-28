@@ -42,15 +42,15 @@ export interface CvTailoredItem extends CvMeta {
 
 /**
  * Result of bootstrapping a tailoring session: the ids of the new vacancy-bound CV and the
- * base it was copied from, the cached fit analysis, and the short-lived token the agent's CLI
- * authenticates with. `cli_token` is handed to the agent session; the browser only needs the
- * ids (to open the tailored CV) and the analysis (to show context).
+ * base it was copied from, the cached fit analysis, and the id of the tailoring conversation
+ * the backend minted and bound to that CV. There is no credential — the agent runs inside the
+ * backend as the caller.
  */
 export interface TailorResult {
   tailor_cv_id: number;
   base_cv_id: number;
   analysis: Analysis | null;
-  cli_token: string;
+  session_id: string;
 }
 
 /** Request body for replacing a CV. */

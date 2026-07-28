@@ -1,100 +1,49 @@
-import { env } from '$env/dynamic/public';
-import type { SessionSummary } from './sessions';
+// Fetch helpers for the assistant. The agent now runs inside the freehire
+// backend, so everything is same-origin under `/api/v1/assistant` and the session
+// cookie authenticates it — there is no separate agent service, no cross-origin
+// WebSocket, and no credential to hand anywhere.
 
-// Fetch helpers for the agent backend (`freehire-agent`). Auth is UNIFIED with
-// freehire: the agent verifies the same httpOnly `hire_token` cookie (shared JWT
-// secret + `.freehire.me` cookie domain), so `credentials: 'include'` carries
-// it and there is no separate agent login.
-//
-// Base origin:
-//  - prod: `PUBLIC_ASSISTANT_ORIGIN=https://agent.freehire.me` — a cross-origin
-//    but SAME-SITE subdomain (shared eTLD+1), so the Lax cookie is still sent;
-//    the agent's nginx adds the CORS headers for the freehire.me origin.
-//  - dev: unset → the same-origin `/assistant-api` path (the Vite proxy).
-const BASE = env.PUBLIC_ASSISTANT_ORIGIN || '/assistant-api';
+import type { SessionSummary, StoredMessage } from './wire';
 
-/** The agent's WebSocket URL, derived from the same base as the fetch calls. */
-export function assistantWsUrl(): string {
-  if (env.PUBLIC_ASSISTANT_ORIGIN) {
-    return env.PUBLIC_ASSISTANT_ORIGIN.replace(/^http/, 'ws') + '/ws';
-  }
-  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${proto}//${location.host}/assistant-api/ws`;
+const BASE = '/api/v1/assistant';
+
+/** One conversation plus its stored transcript. */
+export interface SessionTranscript {
+  session: SessionSummary;
+  messages: StoredMessage[];
 }
 
-/** Optional context that turns the new session into a CV-tailoring session: the agent is
- *  seeded to reframe the given CV toward a vacancy, acting on the freehire API with the
- *  short-lived key the tailoring bootstrap minted. */
-export interface TailoringSession {
-  cli_token: string;
-  cv_id: number;
-  base_cv_id: number;
-}
-
-/** Create the assistant session. For a normal chat the client sends an empty body and the
- *  backend decides everything (harness, persona, sandbox, scope). Passing `tailoring` seeds
- *  a CV-tailoring session instead (persona + FREEHIRE_TOKEN); the backend still owns the rest. */
-/** Thrown when the assistant runs on the user's own machine and no runner is
- *  connected. Carried as its own type so the UI can show setup instructions
- *  instead of an error banner — this is a "you have not finished setting up"
- *  state, not a failure. */
-export class NoDeviceError extends Error {
-  constructor() {
-    super('no runner connected');
-    this.name = 'NoDeviceError';
-  }
-}
-
-export async function createSession(tailoring?: TailoringSession): Promise<string> {
-  const res = await fetch(`${BASE}/sessions`, {
-    method: 'POST',
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    credentials: 'include',
     headers: { 'content-type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(tailoring ? { tailoring } : {}),
+    ...init,
   });
-  if (res.status === 409) {
-    const body = await res.text();
-    if (body.includes('no_device')) throw new NoDeviceError();
+  if (!res.ok) {
+    throw new Error(`assistant request failed (${res.status})`);
   }
-  if (!res.ok) throw new Error(`could not create session (${res.status})`);
-  const body = (await res.json()) as { session_id?: string };
-  if (!body?.session_id) throw new Error('session response missing session_id');
-  return body.session_id;
+  if (res.status === 204) return undefined as T;
+  const body = (await res.json()) as { data: T };
+  return body.data;
 }
 
-export type RunnerStatus = {
-  /** Whether the caller has a machine connected right now. */
-  connected: boolean;
-  /** Their device ids. */
-  devices: string[];
-  /** Whether sessions are required to run on the caller's own machine. */
-  required: boolean;
-};
-
-/** Whether the caller's own machine is connected and running the harness.
- *  Polled by the UI so the state is visible before a message is sent, not
- *  after one fails. */
-export async function runnerStatus(): Promise<RunnerStatus> {
-  const res = await fetch(`${BASE}/runners`, { credentials: 'include' });
-  if (!res.ok) throw new Error(`could not read runner status (${res.status})`);
-  return (await res.json()) as RunnerStatus;
+/** Start a new chat conversation. Tailoring conversations are created by the
+ *  tailoring bootstrap, which knows the CV and vacancy to bind them to. */
+export function createSession(): Promise<SessionSummary> {
+  return request<SessionSummary>('/sessions', { method: 'POST', body: '{}' });
 }
 
-/** List the caller's held sessions from the agent backend. The list is
- *  owner-scoped and newest-first server-side (only the caller's own sessions;
- *  orphans excluded). */
-export async function listSessions(): Promise<SessionSummary[]> {
-  const res = await fetch(`${BASE}/sessions`, { credentials: 'include' });
-  if (!res.ok) throw new Error(`could not list sessions (${res.status})`);
-  return (await res.json()) as SessionSummary[];
+/** The caller's conversations, most recently active first. */
+export function listSessions(): Promise<SessionSummary[]> {
+  return request<SessionSummary[]>('/sessions');
 }
 
-/** Delete one of the caller's sessions by id (204 on success; the backend 404s
- *  for a session the caller does not own). */
-export async function deleteSession(id: string): Promise<void> {
-  const res = await fetch(`${BASE}/sessions/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    credentials: 'include',
-  });
-  if (!res.ok) throw new Error(`could not delete session (${res.status})`);
+/** One conversation with its full transcript, for replay. */
+export function getSession(id: string): Promise<SessionTranscript> {
+  return request<SessionTranscript>(`/sessions/${encodeURIComponent(id)}`);
+}
+
+/** Delete one of the caller's conversations. */
+export function deleteSession(id: string): Promise<void> {
+  return request<void>(`/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }

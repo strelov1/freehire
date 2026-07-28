@@ -46,16 +46,16 @@
 
 ## 8. Frontend transport
 
-- [ ] 8.1 Rewrite `web/src/lib/assistant/wire.ts` as the new turn-event union (drop `ClientCommand`/`ServerEvent`, `system`, `note`, `raw`; add `tool_result`).
-- [ ] 8.2 Replace `client.ts`'s `RoyClient` with an SSE turn client: send a message, stream events, cancel; keep the same callback shape `AssistantChat.svelte` consumes.
-- [ ] 8.3 Point `api.ts` at `/api/v1/assistant` (same-origin, `credentials: 'include'`), drop `assistantWsUrl`, `NoDeviceError`, `runnerStatus` and the tailoring `cli_token` field.
-- [ ] 8.4 Update `chat.ts`'s reducer for the new union and add `tool_result` handling; keep its existing tests green and extend them.
-- [ ] 8.5 Trim `tool-formatters.ts` of the shell branches (`bashCommand`, `isNoiseShellCall`, `isFreehireGroup`, `commandLine`) and format tool cards from tool name + typed arguments; update its tests.
+- [x] 8.1 Rewrite `web/src/lib/assistant/wire.ts` as the new turn-event union (drop `ClientCommand`/`ServerEvent`, `system`, `note`, `raw`; add `tool_result`).
+- [x] 8.2 Replace `client.ts`'s `RoyClient` with an SSE turn client: send a message, stream events, cancel; keep the same callback shape `AssistantChat.svelte` consumes.
+- [x] 8.3 Point `api.ts` at `/api/v1/assistant` (same-origin, `credentials: 'include'`), drop `assistantWsUrl`, `NoDeviceError`, `runnerStatus` and the tailoring `cli_token` field.
+- [x] 8.4 Update `chat.ts`'s reducer for the new union and add `tool_result` handling; keep its existing tests green and extend them.
+- [x] 8.5 Trim `tool-formatters.ts` of the shell branches (`bashCommand`, `isNoiseShellCall`, `isFreehireGroup`, `commandLine`) and format tool cards from tool name + typed arguments; update its tests.
 
 ## 9. Frontend cleanup
 
-- [ ] 9.1 Delete `RunnerSetup.svelte`, `RunnerBadge.svelte` and every runner branch in `AssistantChat.svelte` and `/tailor/[slug]/+page.svelte`, keeping the rest of the markup and behaviour identical.
-- [ ] 9.2 Remove the `/assistant-api` Vite proxy and the `PUBLIC_ASSISTANT_ORIGIN` reference from the web build.
+- [x] 9.1 Delete `RunnerSetup.svelte`, `RunnerBadge.svelte` and every runner branch in `AssistantChat.svelte` and `/tailor/[slug]/+page.svelte`, keeping the rest of the markup and behaviour identical.
+- [x] 9.2 Remove the `/assistant-api` Vite proxy and the `PUBLIC_ASSISTANT_ORIGIN` reference from the web build.
 - [ ] 9.3 Verify both surfaces in a browser: `/my/assistant` (send, stream, tool cards, job cards, session rail, switch, delete) and `/tailor/<slug>` (kickoff, CV edit through the agent, preview refresh on turn complete).
 
 ## 10. Documentation

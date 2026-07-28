@@ -1,98 +1,126 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  classifyFamily,
-  freehireLabel,
-  isFreehireGroup,
-  commandLine,
+  callLine,
   groupTitle,
   isExpandable,
-  isNoiseShellCall,
-  bashCommand,
+  nonEmptyInput,
+  previewToolInput,
+  toolErrorMessage,
+  toolLabel,
+  type ToolCall,
 } from './tool-formatters';
 
-describe('tool-formatters — freehire intent labels', () => {
-  it('groups the Terminal tool with bash', () => {
-    expect(classifyFamily({ name: 'Terminal', input: {} })).toBe('bash');
-    expect(classifyFamily({ name: 'Bash', input: {} })).toBe('bash');
-    expect(classifyFamily({ name: 'Read', input: {} })).toBe('fs');
-    expect(classifyFamily({ name: 'SomeTool', input: {} })).toBe('other');
+const call = (name: string, input: unknown = {}, extra: Partial<ToolCall> = {}): ToolCall => ({
+  name,
+  input,
+  ...extra,
+});
+
+describe('toolLabel', () => {
+  it('reads as intent, not as a function name', () => {
+    expect(toolLabel(call('search_jobs'))).toBe('Searching jobs');
+    expect(toolLabel(call('cv_edit'))).toBe('Updating your CV');
   });
 
-  it('classifies a freehire call as bash even when the tool name IS the command', () => {
-    // roy surfaces a Bash call with the ACP title = the command string, so `name`
-    // is the command itself ("freehire cv context 14"), not "Bash"/"Terminal".
-    const call = {
-      name: 'freehire cv context 14',
-      input: { command: 'freehire cv context 14', description: 'Load fit analysis' },
-    };
-    expect(classifyFamily(call)).toBe('bash');
-    expect(isFreehireGroup([call])).toBe(true);
-    // Flat intent label, no raw command, no JSON dump.
-    expect(groupTitle('bash', [call])).toBe('Reading the fit analysis');
-    expect(isExpandable('bash', [call])).toBe(false);
+  it('falls back to the tool name for a tool the map does not know yet', () => {
+    // A tool added on the backend must still render rather than showing blank.
+    expect(toolLabel(call('brand_new_tool'))).toBe('brand_new_tool');
+  });
+});
+
+describe('groupTitle', () => {
+  it('collapses repeated calls to their distinct intents', () => {
+    const title = groupTitle([call('search_jobs'), call('search_jobs'), call('facets')]);
+    expect(title).toBe('Searching jobs · Loading filters');
   });
 
-  it('drops the empty pending shell frame that precedes a completed call', () => {
-    // ACP emits a pending Bash notification (no command yet) before the settled
-    // one; unfiltered it renders as a bare, empty "Ran command".
-    expect(isNoiseShellCall({ name: 'Bash', input: {} })).toBe(true);
-    expect(isNoiseShellCall({ name: 'Terminal', input: { description: 'x' } })).toBe(true);
-    expect(isNoiseShellCall({ name: 'Terminal', input: { command: 'freehire facets' } })).toBe(false);
-    expect(isNoiseShellCall({ name: 'freehire cv get 1', input: { command: 'freehire cv get 1' } })).toBe(false);
-    expect(isNoiseShellCall({ name: 'Read', input: {} })).toBe(false);
+  it('caps a long group with a counter', () => {
+    const title = groupTitle([call('facets'), call('search_jobs'), call('get_job'), call('cv_get')]);
+    expect(title).toBe('Loading filters · Searching jobs · +2');
   });
 
-  it('maps freehire subcommands to friendly labels (longest path wins)', () => {
-    expect(freehireLabel('freehire cv context 12')).toBe('Reading the fit analysis');
-    expect(freehireLabel('freehire cv get 12')).toBe('Reading your CV');
-    expect(freehireLabel('freehire cv edit 12 --patch x')).toBe('Updating your CV');
-    expect(freehireLabel('freehire search golang --json')).toBe('Searching jobs');
-    expect(freehireLabel('freehire whatever-new-cmd')).toBe('Working with freehire');
-    expect(freehireLabel('printenv')).toBeNull();
-    expect(freehireLabel('ls -la')).toBeNull();
+  it('is empty for no calls', () => {
+    expect(groupTitle([])).toBe('');
+  });
+});
+
+describe('callLine', () => {
+  it('shows the query a search ran', () => {
+    expect(callLine(call('search_jobs', { query: 'golang' }))).toBe('Searching jobs: golang');
   });
 
-  it('reads the command from command/cmd, an argv array, or a bare string', () => {
-    expect(bashCommand({ command: 'freehire cv get 1' })).toBe('freehire cv get 1');
-    expect(bashCommand({ args: ['freehire', 'cv', 'get', '1'] })).toBe('freehire cv get 1');
-    expect(bashCommand('freehire facets')).toBe('freehire facets');
-    expect(bashCommand({})).toBeNull();
-  });
-
-  it('titles a freehire group with distinct intent labels, not the raw command', () => {
-    const calls = [
-      { name: 'Terminal', input: { command: 'freehire cv context 12' } },
-      { name: 'Terminal', input: { command: 'freehire cv get 12' } },
-    ];
-    expect(isFreehireGroup(calls)).toBe(true);
-    const title = groupTitle('bash', calls);
-    expect(title).toBe('Reading the fit analysis · Reading your CV');
-    expect(title).not.toContain('freehire');
-    expect(title).not.toContain('$');
-  });
-
-  it('caps a long freehire group title', () => {
-    const calls = [
-      { name: 'Terminal', input: { command: 'freehire cv context 1' } },
-      { name: 'Terminal', input: { command: 'freehire cv get 1' } },
-      { name: 'Terminal', input: { command: 'freehire search go' } },
-    ];
-    expect(groupTitle('bash', calls)).toBe('Reading the fit analysis · Reading your CV · +1');
-  });
-
-  it('a single freehire call is a flat chip (not expandable) and hides the command', () => {
-    const calls = [{ name: 'Terminal', input: { command: 'freehire cv get 12' } }];
-    expect(groupTitle('bash', calls)).toBe('Reading your CV');
-    expect(isExpandable('bash', calls)).toBe(false);
-  });
-
-  it('non-freehire shell commands keep the raw shell rendering', () => {
-    const calls = [{ name: 'Bash', input: { command: 'ls -la' } }];
-    expect(isFreehireGroup(calls)).toBe(false);
-    expect(groupTitle('bash', calls)).toBe('Ran ls -la');
-    expect(commandLine({ name: 'Bash', input: { command: 'ls -la' } })).toBe('$ ls -la');
-    expect(commandLine({ name: 'Terminal', input: { command: 'freehire cv get 1' } })).toBe(
-      'Reading your CV',
+  it('summarises the filters when a search has no keyword', () => {
+    const line = callLine(
+      call('search_jobs', { filters: { seniority: ['senior'], regions: ['eu'] } }),
     );
+    expect(line).toBe('Searching jobs: seniority=senior, regions=eu');
+  });
+
+  it('shows the slug a vacancy call addresses', () => {
+    expect(callLine(call('apply_job', { slug: 'go-dev-acme' }))).toBe(
+      'Marking as applied: go-dev-acme',
+    );
+  });
+
+  it('shows the patch op a CV edit applied', () => {
+    expect(callLine(call('cv_edit', { patch: { op: 'add_bullet', experience: 0 } }))).toBe(
+      'Updating your CV: add_bullet',
+    );
+  });
+
+  it('shows the label alone when there is nothing identifying to add', () => {
+    expect(callLine(call('facets'))).toBe('Loading filters');
+  });
+});
+
+describe('toolErrorMessage', () => {
+  it('unwraps the error envelope the backend sends the model', () => {
+    const failed = call(
+      'search_jobs',
+      {},
+      { isError: true, result: '{"error":"search is not available"}' },
+    );
+    expect(toolErrorMessage(failed)).toBe('search is not available');
+  });
+
+  it('is null for a call that succeeded', () => {
+    expect(toolErrorMessage(call('facets', {}, { result: '{"total":5}' }))).toBeNull();
+  });
+
+  it('falls back to the raw payload when it is not an envelope', () => {
+    const failed = call('facets', {}, { isError: true, result: 'boom' });
+    expect(toolErrorMessage(failed)).toBe('boom');
+  });
+});
+
+describe('isExpandable', () => {
+  it('is flat for a single argument-less call', () => {
+    expect(isExpandable([call('facets')])).toBe(false);
+  });
+
+  it('expands a call that carries arguments', () => {
+    expect(isExpandable([call('search_jobs', { query: 'go' })])).toBe(true);
+  });
+
+  it('expands a failed call even with no arguments, so the reason is reachable', () => {
+    expect(isExpandable([call('facets', {}, { isError: true, result: '{"error":"down"}' })])).toBe(
+      true,
+    );
+  });
+
+  it('expands any group of more than one call', () => {
+    expect(isExpandable([call('facets'), call('facets')])).toBe(true);
+  });
+});
+
+describe('input helpers', () => {
+  it('treats an empty object as no input', () => {
+    expect(nonEmptyInput({})).toBe(false);
+    expect(nonEmptyInput({ a: 1 })).toBe(true);
+    expect(nonEmptyInput(null)).toBe(false);
+  });
+
+  it('previews input as truncated JSON', () => {
+    expect(previewToolInput({ query: 'go' })).toBe('{"query":"go"}');
   });
 });
