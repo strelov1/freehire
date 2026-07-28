@@ -105,3 +105,20 @@ RETURNING id, user_id, employment_id, claim, claim_key, context, metrics, skills
 -- The only path that removes an atom, and it belongs to the user. Import never deletes.
 DELETE FROM experience_atoms
 WHERE id = $1 AND user_id = $2;
+
+-- name: ListExperienceBackfillTargets :many
+-- Every user with a stored CV, carrying their structured résumé ONLY when its stamp still
+-- matches the upload time. That CASE is what makes the backfill cheap: a user whose
+-- structure is current costs no model call, and one whose structure is stale or missing
+-- falls through to extraction. The freshness test is the same one resume.Store.Structured
+-- applies, so the worker never reuses a structure the app itself treats as absent.
+SELECT id,
+       resume_uploaded_at,
+       CASE WHEN resume_structured_uploaded_at IS NOT DISTINCT FROM resume_uploaded_at
+            THEN resume_structured
+       END::jsonb AS current_structured
+FROM users
+WHERE resume_object_key IS NOT NULL
+  AND resume_uploaded_at IS NOT NULL
+  AND (@user_id::bigint = 0 OR id = @user_id::bigint)
+ORDER BY id;

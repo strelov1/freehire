@@ -881,6 +881,12 @@ type Querier interface {
 	// requirement can match on skills OR on text alone, so there is no prefilter that would not
 	// drop real evidence. Ordered by employment so a consumer can group without a second pass.
 	ListExperienceAtoms(ctx context.Context, userID int64) ([]ExperienceAtom, error)
+	// Every user with a stored CV, carrying their structured résumé ONLY when its stamp still
+	// matches the upload time. That CASE is what makes the backfill cheap: a user whose
+	// structure is current costs no model call, and one whose structure is stale or missing
+	// falls through to extraction. The freshness test is the same one resume.Store.Structured
+	// applies, so the worker never reuses a structure the app itself treats as absent.
+	ListExperienceBackfillTargets(ctx context.Context, userID int64) ([]ListExperienceBackfillTargetsRow, error)
 	// The caller's places of work, current roles first and most recent within that. Owner-scoped
 	// by construction — another user's employments can never appear.
 	ListExperienceEmployments(ctx context.Context, userID int64) ([]ExperienceEmployment, error)

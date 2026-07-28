@@ -10,8 +10,8 @@
 - [x] 1.8 Test import reconciliation: a trimmed re-upload does not shrink the bank; a repeat upload creates no duplicates; a user-edited employment field survives re-import; a late extraction for a superseded CV still lands
 - [x] 1.9 Wire `Import` into `deriveResumeArtifacts` beside `embedResume`, so the storage path and the extract path cannot drift; an LLM/PII failure leaves the bank untouched
 - [x] 1.10 Test the upload path end to end: successful upload populates the bank; unconfigured LLM, unavailable PII detector and a failing extraction each leave the bank exactly as it was
-- [ ] 1.11 Add `cmd/backfill-experience` — keyset pass over users with a stored CV, reusing a fresh `resume_structured` where present and invoking the extractor only where absent; idempotent, exits non-zero on failure
-- [ ] 1.12 Test the backfill: a user with a stored structure costs no model call, and a second run creates no duplicates
+- [x] 1.11 Add `cmd/backfill-experience` — keyset pass over users with a stored CV, reusing a fresh `resume_structured` where present and invoking the extractor only where absent; idempotent, exits non-zero on failure
+- [x] 1.12 Test the backfill: a user with a stored structure costs no model call, and a second run creates no duplicates
 
 ## 2. Stage 2 — the read path moves to the bank
 

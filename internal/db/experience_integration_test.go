@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -175,5 +176,72 @@ func TestExperienceDeleteEmploymentCascadesToAtoms(t *testing.T) {
 	}
 	if len(atoms) != 0 {
 		t.Errorf("alice has %d atoms after deleting the role, want 0", len(atoms))
+	}
+}
+
+// The backfill's cost claim is a SQL CASE, not Go: a user whose structured résumé is
+// current must come back WITH it (no model call), and one whose structure is stale or
+// missing must come back without it (extraction needed). Getting that inverted would
+// either re-extract the whole user base through the LLM or seed the bank from structures
+// the app itself treats as absent.
+func TestExperienceBackfillTargetsCarryOnlyCurrentStructures(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	fresh := seedExperienceUser(t, pool, "backfill-fresh@example.test")
+	stale := seedExperienceUser(t, pool, "backfill-stale@example.test")
+	none := seedExperienceUser(t, pool, "backfill-none@example.test")
+	noCV := seedExperienceUser(t, pool, "backfill-nocv@example.test")
+
+	const structure = `{"experience":[{"company":"RingCentral"}]}`
+	// One timestamp passed to both columns. Inside a single UPDATE the SET expressions
+	// read the OLD row, so `resume_structured_uploaded_at = resume_uploaded_at` would
+	// copy the pre-update value (NULL) rather than the one being written.
+	uploadedAt := time.Now().UTC()
+	mustExec(t, pool, `UPDATE users SET resume_object_key = 'k', resume_uploaded_at = $2,
+	                   resume_structured = $3::jsonb, resume_structured_uploaded_at = $2
+	                   WHERE id = $1`, fresh, uploadedAt, structure)
+	mustExec(t, pool, `UPDATE users SET resume_object_key = 'k', resume_uploaded_at = $2::timestamptz,
+	                   resume_structured = $3::jsonb, resume_structured_uploaded_at = $2::timestamptz - interval '1 day'
+	                   WHERE id = $1`, stale, uploadedAt, structure)
+	mustExec(t, pool, `UPDATE users SET resume_object_key = 'k', resume_uploaded_at = $2 WHERE id = $1`, none, uploadedAt)
+
+	rows, err := q.ListExperienceBackfillTargets(ctx, 0)
+	if err != nil {
+		t.Fatalf("ListExperienceBackfillTargets: %v", err)
+	}
+
+	carried := map[int64]bool{}
+	for _, row := range rows {
+		carried[row.ID] = len(row.CurrentStructured) > 0
+	}
+	if _, listed := carried[noCV]; listed {
+		t.Error("a user with no stored CV was listed as a backfill target")
+	}
+	if !carried[fresh] {
+		t.Error("the current structure was not carried — that user would cost a needless model call")
+	}
+	if carried[stale] {
+		t.Error("a stale structure was carried — the app treats it as absent, and so must the backfill")
+	}
+	if carried[none] {
+		t.Error("a missing structure was reported as present")
+	}
+
+	// The single-user form narrows to exactly one row.
+	one, err := q.ListExperienceBackfillTargets(ctx, fresh)
+	if err != nil {
+		t.Fatalf("ListExperienceBackfillTargets(one): %v", err)
+	}
+	if len(one) != 1 || one[0].ID != fresh {
+		t.Errorf("single-user query returned %d rows, want just user %d", len(one), fresh)
+	}
+}
+
+func mustExec(t *testing.T, pool *pgxpool.Pool, sql string, args ...any) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(), sql, args...); err != nil {
+		t.Fatalf("exec: %v", err)
 	}
 }

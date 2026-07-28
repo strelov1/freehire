@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createExperienceEmployment = `-- name: CreateExperienceEmployment :one
@@ -359,6 +360,50 @@ func (q *Queries) ListExperienceAtoms(ctx context.Context, userID int64) ([]Expe
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listExperienceBackfillTargets = `-- name: ListExperienceBackfillTargets :many
+SELECT id,
+       resume_uploaded_at,
+       CASE WHEN resume_structured_uploaded_at IS NOT DISTINCT FROM resume_uploaded_at
+            THEN resume_structured
+       END::jsonb AS current_structured
+FROM users
+WHERE resume_object_key IS NOT NULL
+  AND resume_uploaded_at IS NOT NULL
+  AND ($1::bigint = 0 OR id = $1::bigint)
+ORDER BY id
+`
+
+type ListExperienceBackfillTargetsRow struct {
+	ID                int64              `json:"id"`
+	ResumeUploadedAt  pgtype.Timestamptz `json:"resume_uploaded_at"`
+	CurrentStructured []byte             `json:"current_structured"`
+}
+
+// Every user with a stored CV, carrying their structured résumé ONLY when its stamp still
+// matches the upload time. That CASE is what makes the backfill cheap: a user whose
+// structure is current costs no model call, and one whose structure is stale or missing
+// falls through to extraction. The freshness test is the same one resume.Store.Structured
+// applies, so the worker never reuses a structure the app itself treats as absent.
+func (q *Queries) ListExperienceBackfillTargets(ctx context.Context, userID int64) ([]ListExperienceBackfillTargetsRow, error) {
+	rows, err := q.db.Query(ctx, listExperienceBackfillTargets, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListExperienceBackfillTargetsRow{}
+	for rows.Next() {
+		var i ListExperienceBackfillTargetsRow
+		if err := rows.Scan(&i.ID, &i.ResumeUploadedAt, &i.CurrentStructured); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
