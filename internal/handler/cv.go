@@ -61,21 +61,23 @@ func (h *cvHandlers) register(api fiber.Router, mw middleware) {
 	api.Get("/cv-templates", mw.cookie, h.ListCVTemplates)
 	api.Get("/me/cvs", mw.cookie, h.ListCVs)
 	api.Post("/me/cvs", mw.cookie, h.CreateCV)
-	// Read + render accept a key too (keyAuth), so the tailoring agent's CLI can fetch a CV
-	// and its PDF; mutations stay cookie-only (POST/PUT/DELETE — the browser owns authoring).
-	api.Get("/me/cvs/:id", mw.key, h.GetCV)
+	// Read + render accept a key too, so the tailoring agent's CLI can fetch a CV and its
+	// PDF; mutations stay cookie-only (POST/PUT/DELETE — the browser owns authoring).
+	// cvKey, not key: the bootstrap mints the agent a narrow `cv`-scoped key, and key
+	// (RequireAuthOrKey) admits full-scope keys only — it would answer the agent 403.
+	api.Get("/me/cvs/:id", mw.cvKey, h.GetCV)
 	api.Put("/me/cvs/:id", mw.cookie, h.UpdateCV)
 	// Change only the template (the gallery's one-field switch); cookie-only like other mutations.
 	api.Put("/me/cvs/:id/template", mw.cookie, h.SetCVTemplate)
 	api.Delete("/me/cvs/:id", mw.cookie, h.DeleteCV)
-	api.Get("/me/cvs/:id/pdf", mw.key, h.RenderCVPDF)
+	api.Get("/me/cvs/:id/pdf", mw.cvKey, h.RenderCVPDF)
 	// Tailoring: the browser starts a session (cookie-only bootstrap); the agent's CLI drives
-	// the edit + context/get/render reads with its minted API key (keyAuth = cookie or Bearer).
+	// the edit + context/get/render reads with its minted `cv`-scoped key.
 	api.Post("/me/cvs/tailor", mw.cookie, h.TailorCV)
 	api.Post("/me/cvs/:id/tailor-session", mw.cookie, h.StartTailorSession)
-	api.Patch("/me/cvs/:id", mw.key, h.PatchCV)
-	api.Put("/me/cvs/:id/session", mw.key, h.SetCVSession)
-	api.Get("/me/cvs/:id/tailor-context", mw.key, h.TailorContext)
+	api.Patch("/me/cvs/:id", mw.cvKey, h.PatchCV)
+	api.Put("/me/cvs/:id/session", mw.cvKey, h.SetCVSession)
+	api.Get("/me/cvs/:id/tailor-context", mw.cvKey, h.TailorContext)
 }
 
 const maxCVTitleRunes = 200
