@@ -9,46 +9,34 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/accountdelete"
 	"github.com/strelov1/freehire/internal/accounts"
-	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/atscheck"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/auth/oauth"
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/boardresolve"
 	"github.com/strelov1/freehire/internal/browsertools"
-	"github.com/strelov1/freehire/internal/community"
 	"github.com/strelov1/freehire/internal/contribution"
 	"github.com/strelov1/freehire/internal/credits"
-	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/emailnotify"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/gmailsync"
-	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/linkimport"
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/moderation"
 	"github.com/strelov1/freehire/internal/pii"
 	"github.com/strelov1/freehire/internal/referral"
-	"github.com/strelov1/freehire/internal/reminder"
-	"github.com/strelov1/freehire/internal/report"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/resumeextract"
-	"github.com/strelov1/freehire/internal/savedsearch"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/sources"
-	"github.com/strelov1/freehire/internal/submission"
-	"github.com/strelov1/freehire/internal/subscription"
-	"github.com/strelov1/freehire/internal/telegramnotify"
 	"github.com/strelov1/freehire/internal/tokencrypt"
 	"github.com/strelov1/freehire/internal/userprofile"
-	"github.com/strelov1/freehire/internal/vote"
 )
 
 const (
@@ -71,74 +59,14 @@ const (
 	resumeExtractLLMTimeout = 120 * time.Second
 )
 
-// oauthRegistry resolves OAuth providers by name, building each with a callback
-// rooted at the request origin so the flow can complete on any served domain.
-// *oauth.Registry implements it; tests supply a fake.
-type oauthRegistry interface {
-	Names() []string
-	Provider(name, origin string) (oauth.Provider, bool)
-}
-
-// API holds dependencies shared across HTTP handlers.
+// API holds the cross-cutting dependencies every route shares: the DB pool, the
+// sqlc queries, and the token issuer the auth middleware is built from. Feature
+// handlers carry their own dependencies (see the *Handlers structs) and register
+// their own routes; Register wires them onto the app.
 type API struct {
-	pool         *pgxpool.Pool
-	queries      *db.Queries
-	issuer       *auth.Issuer
-	cookieSecure bool
-	// cookieDomains are the registrable domains we serve (bare, e.g. "freehire.me").
-	// Per request the session cookie is scoped to whichever one the request host
-	// falls under (empty list = host-only, for dev). See auth.CookieDomainForHost.
-	// It governs cookie scope ONLY: the OAuth redirect origin reads servedHosts,
-	// because a suffix match would let any subdomain steer the flow.
-	cookieDomains []string
-	// servedHosts are the exact hostnames this deployment answers on (e.g.
-	// "freehire.me", "apply.freehire.me"). Only these are honoured as an OAuth
-	// redirect origin; anything else falls back to frontendOrigin.
-	servedHosts []string
-	// oauth resolves enabled OAuth providers by name, building each with a redirect
-	// URL rooted at the request origin. Never nil (an empty registry 404s / lists
-	// empty). *oauth.Registry in production; a fake in tests.
-	oauth oauthRegistry
-	// oauthCodes hands out the single-use codes that carry a mobile OAuth
-	// sign-in from the browser callback to the app's /exchange call.
-	oauthCodes *oauth.CodeStore
-	// frontendOrigin is where OAuth callbacks send the browser back to.
-	frontendOrigin string
-	// extensionRedirectAllowlist bounds the browser-extension connect flow to the
-	// chromiumapp.org redirect ids listed here. Empty refuses every redirect.
-	extensionRedirectAllowlist []string
-	// gmailConnector + gmailCipher back the "Connect Gmail" inbox. Both nil when
-	// the feature is unconfigured (Google creds / token key absent) — the connect
-	// routes are then not registered and the inbox reads empty.
-	gmailConnector *gmailsync.Connector
-	gmailCipher    *tokencrypt.Cipher
-	// mailDomain is the receiving domain hosted mailboxes live on (<handle>@mailDomain).
-	// Empty = the hosted-mailbox feature is off: the claim route is unregistered and
-	// status reports unavailable.
-	mailDomain string
-	// assistant persists the in-app agent's conversations; assistantRunner executes
-	// their turns. The runner is nil when no LLM is configured — the session
-	// endpoints still work (a user can read and delete old chats) and a turn reports
-	// the assistant as unavailable rather than 500ing.
-	assistant       *assistant.Store
-	assistantRunner *assistant.Runner
-	// search is the job-search backend. Nil when Meilisearch is unconfigured —
-	// the search endpoint then reports 503 and the rest of the API is unaffected.
-	search searcher
-	// descriptions loads full job descriptions by internal id when the agent
-	// search endpoint explicitly asks to include them. *db.Queries in production;
-	// a fake in tests.
-	descriptions jobDescriptions
-	// companySearch is the company-search backend backing GET /api/v1/companies,
-	// kept separate from `search` so the companies index stays fully decoupled from
-	// jobs search. Nil when Meilisearch is unconfigured, or on any query error, the
-	// list falls back to the Postgres substring path so /companies never depends on
-	// Meilisearch being up.
-	companySearch companySearcher
-	// facets is the analytics (facet-distribution) backend — the same Meilisearch
-	// client viewed through a narrower interface, kept separate from search so the
-	// two concerns stay decoupled. Nil when unconfigured (endpoint reports 503).
-	facets facetCounter
+	pool    *pgxpool.Pool
+	queries *db.Queries
+	issuer  *auth.Issuer
 	// browserTools relays browser-tool frames between a user's harness and that
 	// user's browser extension (the /tools/ws wire). In-memory and per-instance:
 	// both ends of a channel are live connections to this process.
@@ -147,91 +75,30 @@ type API struct {
 	// form with. Nil when the LLM is unconfigured: the run then reports the feature
 	// is off, and the extension's deterministic autofill still works.
 	autofillPlanner *llm.Client
-	// tracking owns the per-user job-interaction use cases (view/apply/save/
-	// unsave/track); the handlers translate wire ↔ domain and delegate to it.
-	tracking *jobtracking.Service
-	// votes owns thumbs up/down on jobs and companies: the per-user vote write and
-	// the target's public counter recompute, in one transaction.
-	votes *vote.Service
-	// accounts resolves external OAuth identities into local user accounts
-	// (identity-first lookup, verified-email gate, link-or-create, race retry).
-	accounts *accounts.Service
-	// moderation owns the moderator-authored job use cases (create/edit a manual
-	// vacancy); the handlers translate wire ↔ domain and delegate to it.
-	moderation *moderation.Service
-	// submission owns the public job-submission queue (submit/list/approve/reject);
-	// approval mints a live job by delegating to moderation.
-	submission *submission.Service
-	// contribution owns the crowdsourced paste-a-link flow (submit a URL → detect ATS,
-	// dedup by derived identity, record + award a point); list the caller's own.
-	contribution *contribution.Service
-	// imports turns one job page URL into a catalog posting (the engine cmd/resolve-url
-	// runs), backing "add this page" from the browser extension.
-	imports *linkimport.Importer
-	// referral owns the employee-referral use cases (offer to refer, request a referral,
-	// moderate offers, notify referrers). blob is the S3 store proof CVs are written to
-	// (nil when S3 is unconfigured — offer submit then reports 503).
-	referral *referral.Service
-	blob     blobstore.Store
-	// community owns the anonymous discussion-thread use case (topics attached to a
-	// company or vacancy, pseudonymous personas, flat replies); the handlers translate
-	// wire ↔ domain and delegate to it.
-	community *community.Service
-	// report owns the job-report moderation queue (file/list/resolve/dismiss);
-	// resolving may soft-close the reported job through the job-lifecycle close path.
-	report *report.Service
-	// savedSearch owns the per-user saved-search use cases (list/create/update/delete
-	// named filter snapshots); the handlers translate wire ↔ domain and delegate to it.
-	savedSearch *savedsearch.Service
-	// subscription owns the per-user filter-subscription use cases (subscribe a
-	// saved search to a channel, list/toggle/unsubscribe).
-	subscription *subscription.Service
-	// reminder owns the saved-job reminder use cases (the account default rule and
-	// per-save scheduling/cancellation); the save/apply/unsave handlers orchestrate
-	// it alongside tracking, and the cmd/remind worker fires the scheduled reminders.
-	reminder *reminder.Service
-	// userProfile owns the single-per-user profile use cases (fetch/save/clear a
-	// specialization + skills set); the handlers translate wire ↔ domain and delegate
-	// to it.
-	userProfile *userprofile.Service
-	// resume owns the per-user stored-résumé use cases (store/status/delete + derive
-	// text for the verdict). Its blob store is nil when S3 is unconfigured; Enabled()
-	// then reports false and callers degrade to per-request résumé upload.
-	resume *resume.Store
-	// accountDelete erases an account for good — rows, objects, and the Gmail grant.
-	// accountEmails resolves the caller's own email for the typed confirmation.
-	accountDelete accountEraser
-	accountEmails accountEmailLookup
-	// cvStore owns the CV-builder use cases (per-user structured CVs, CRUD + seed).
-	cvStore *cv.Store
-	// cvRenderer renders a CV to PDF. Nil when no typst binary is configured; the PDF
-	// endpoint then returns 501 while the rest of the CV builder still works.
-	cvRenderer cv.Renderer
-	// structuredExtractor derives the read-only structured résumé from an uploaded CV
-	// (best-effort, background). Its client is nil when the LLM is unconfigured; extraction
-	// then no-ops and the profile simply shows no structured section.
-	structuredExtractor *resumeextract.Extractor
-	// atsAnalyzer runs the optional LLM qualitative review for the CV ATS report.
-	// Its client is nil when the LLM is unconfigured; Analyze then degrades to a no-op.
-	atsAnalyzer *atscheck.Analyzer
-	// atsCache reads/writes the per-user cached CV ATS review (backed by *db.Queries).
-	atsCache atsReviewStore
-	// matchAnalysis runs the on-demand three-stage LLM fit analysis for one (candidate, job).
-	// Its client is nil when the LLM is unconfigured; Analyze then degrades to a no-op.
-	matchAnalysis *matchanalysis.Analyzer
-	// matchAnalysisCache reads/writes the per-(user, job) cached fit analysis (backed by *db.Queries).
-	matchAnalysisCache matchAnalysisStore
-	// credits meters the per-user AI-points balance the match and tailor features debit.
-	credits *credits.Store
-	// Telegram notification wiring. All nil/empty when the bot is unconfigured —
-	// the linking endpoints then report the feature off and the webhook is inert.
-	// telegramLinks mints/verifies the deep-link token; telegramBot replies to the
-	// inbound /start; telegramBotUsername builds the t.me URL; telegramWebhookSecret
-	// guards the inbound webhook.
-	telegramLinks         *telegramnotify.LinkTokens
-	telegramBot           *telegramnotify.Client
-	telegramBotUsername   string
-	telegramWebhookSecret string
+}
+
+// middleware bundles the auth gates the feature handlers mount their routes
+// behind. optional attaches the caller when signed in (cookie or key) but never
+// rejects, so public detail reads can overlay the caller's own state (my_vote)
+// while staying open to anonymous visitors. key accepts the session cookie or an
+// API key (RequireAuthOrKey), so a script holding a key can drive the same flow as
+// the browser. cookie is the cookie-only gate (RequireAuth) for the
+// browser-convenience surfaces where a leaked API key must not act. moderator
+// gates on the moderator role and is stacked after key or cookie.
+type middleware struct {
+	optional fiber.Handler
+	key      fiber.Handler
+	// cvKey is keyAuth widened to admit the narrow `cv` key the tailoring bootstrap
+	// mints. Only the CV surface (and the caller's own identity read) mounts it; every
+	// other key-accepting route stays on key, which is full-scope-only — so a new
+	// endpoint is out of a leaked agent credential's reach unless it opts in.
+	cvKey     fiber.Handler
+	cookie    fiber.Handler
+	moderator fiber.Handler
+	// outboundFetch throttles every endpoint that makes the server fetch a
+	// caller-supplied URL, so one user's budget is spent across them rather than
+	// granted once per route.
+	outboundFetch fiber.Handler
 }
 
 // pageParams reads and clamps the shared limit/offset pagination query params.
@@ -244,8 +111,8 @@ func pageParams(c *fiber.Ctx) (limit, offset int) {
 // pageParamsMax is pageParams with a caller-supplied limit ceiling, for endpoints
 // whose page is bounded differently than the shared list cap (e.g. the tracking
 // board, which is unpaginated and needs the whole set).
-func pageParamsMax(c *fiber.Ctx, maxLimit int) (limit, offset int) {
-	limit = min(max(c.QueryInt("limit", defaultLimit), 1), maxLimit)
+func pageParamsMax(c *fiber.Ctx, ceiling int) (limit, offset int) {
+	limit = min(max(c.QueryInt("limit", defaultLimit), 1), ceiling)
 	offset = min(max(c.QueryInt("offset", 0), 0), math.MaxInt32)
 	return limit, offset
 }
@@ -337,119 +204,88 @@ type Config struct {
 func Register(app *fiber.App, cfg Config) {
 	queries := db.New(cfg.Pool)
 	a := &API{
-		pool:           cfg.Pool,
-		queries:        queries,
-		descriptions:   queries,
-		issuer:         auth.NewIssuer(cfg.JWTSecret, cfg.JWTTTL),
-		cookieSecure:   cfg.CookieSecure,
-		cookieDomains:  cfg.CookieDomains,
-		oauth:          cfg.OAuthRegistry,
-		oauthCodes:     oauth.NewCodeStore(60 * time.Second),
-		frontendOrigin: cfg.FrontendOrigin,
-		servedHosts:    servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin),
-
-		extensionRedirectAllowlist: cfg.ExtensionRedirectAllowlist,
-
-		gmailConnector: cfg.GmailConnector,
-		gmailCipher:    cfg.GmailCipher,
-		mailDomain:     cfg.MailboxDomain,
-		browserTools:   browsertools.New(),
-		tracking:       jobtracking.New(jobtracking.NewQueriesRepository(queries)),
-		votes:          vote.New(queries, cfg.Pool),
-		accounts:       accounts.New(accounts.NewQueriesRepository(queries, cfg.Pool), authHasher{}),
-		moderation:     moderation.New(moderation.NewQueriesRepository(queries, cfg.Pool, enrich.Version)),
+		pool:         cfg.Pool,
+		queries:      queries,
+		issuer:       auth.NewIssuer(cfg.JWTSecret, cfg.JWTTTL),
+		browserTools: browsertools.New(),
 	}
-	// submission approval mints through the same moderation service, so derivation,
-	// dedup, and the enrichment enqueue are reused rather than duplicated.
-	a.submission = submission.New(submission.NewQueriesRepository(queries), a.moderation)
+	authH := newAuthHandlers(queries, cfg.Pool, a.issuer, cfg.CookieSecure, cfg.CookieDomains, cfg.OAuthRegistry, cfg.FrontendOrigin, cfg.ExtensionRedirectAllowlist,
+		servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin))
 	if needsExplicitServedHosts(cfg.ServedHosts, cfg.CookieDomains) {
 		log.Printf("oauth: COOKIE_DOMAIN is set (%v) but SERVED_HOSTS is not — "+
 			"the redirect origin falls back to %s for every other host, which breaks "+
 			"sign-in on them (state mismatch). List every served host in SERVED_HOSTS.",
 			cfg.CookieDomains, cfg.FrontendOrigin)
 	}
-
+	jobsH := newJobsHandlers(queries, moderation.New(moderation.NewQueriesRepository(queries, cfg.Pool, enrich.Version)))
+	sitemapH := newSitemapHandlers(queries)
+	statsH := newStatsHandlers(queries)
+	votesH := newVoteHandlers(queries, cfg.Pool)
+	communityH := newCommunityHandlers(queries)
+	submissionsH := newSubmissionHandlers(queries, jobsH.moderation)
 	// Contributions detect the ATS board from the URL alone (network-free, board.go), with a
 	// network fallback (boardresolve) that fetches a company careers page and detects an
 	// embedded ATS — so vanity-domain links (company.com/careers?gh_jid=…) resolve too.
-	a.contribution = contribution.New(contribution.NewQueriesRepository(queries), boardresolve.New())
-	// Imports fetch a user-supplied page, so they dial through the same SSRF-guarded
-	// client the crawlers use (sources.NewClient). cfg.Search may be nil (no engine
-	// configured), which only skips the index push.
-	a.imports = linkimport.New(cfg.Pool, queries, cfg.Search, sources.NewClient())
-	// The report queue uses one QueriesRepository for both persistence and the
-	// job soft-close (it implements report.Repository and report.JobCloser).
-	reportRepo := report.NewQueriesRepository(queries)
-	a.report = report.New(reportRepo, reportRepo)
-	a.savedSearch = savedsearch.New(savedsearch.NewQueriesRepository(queries))
-	a.subscription = subscription.New(subscription.NewQueriesRepository(queries))
-	a.reminder = reminder.New(reminder.NewQueriesRepository(queries))
-	a.userProfile = userprofile.New(userprofile.NewQueriesRepository(queries))
+	contributionSvc := contribution.New(contribution.NewQueriesRepository(queries), boardresolve.New())
+	reportsH := newReportHandlers(queries)
+	savedSearchH := newSavedSearchHandlers(queries)
+	subscriptionH := newSubscriptionHandlers(queries)
+	profileSvc := userprofile.New(userprofile.NewQueriesRepository(queries))
+	profileH := newProfileHandlers(profileSvc)
 	// Résumé storage is nil-safe: a nil Blob (S3 unconfigured) yields a disabled service
 	// whose Enabled() is false, so the upload/verdict paths degrade to in-request parsing.
-	a.resume = resume.New(cfg.Blob, resume.NewQueriesRepository(queries))
-	// Account deletion reaches past the FK cascade: cfg.Blob is nil when storage is
-	// unconfigured and the revoker is nil when Gmail is — either way there is nothing
-	// to erase there, which must not stop a member from leaving.
-	a.accountDelete = accountdelete.New(accountdelete.NewQueriesRepository(queries), cfg.Blob, a.revokeGmailGrant)
-	a.accountEmails = queries
-
-	// CV builder: store is always available; the renderer is enabled only when a typst
-	// binary was resolved (assign only a non-nil renderer so the interface stays nil when
-	// disabled — a typed-nil would defeat the 501 gate).
-	a.cvStore = cv.NewStore(cv.NewQueriesRepository(queries))
-	// The in-app agent. Its store is always available; its runner needs a model, so
-	// an unconfigured LLM leaves old conversations readable and new turns refused.
-	a.assistant = assistant.NewStore(queries)
-	if cfg.AssistantLLM != nil {
-		a.assistantRunner = assistant.NewRunner(cfg.AssistantLLM, a.assistant, assistant.RunnerConfig{MaxSteps: cfg.AssistantMaxSteps})
-	}
-	if r := cv.NewTypstRenderer(cfg.TypstBin); r != nil {
-		a.cvRenderer = r
-	}
+	resumeStore := resume.New(cfg.Blob, resume.NewQueriesRepository(queries))
 	// Nil-safe: NewAnalyzer(nil) is a no-op analyzer, so the ATS report works whether
 	// or not the LLM is configured.
-	a.atsAnalyzer = atscheck.NewAnalyzer(cfg.LLM)
-	a.atsCache = queries
+	atsAnalyzer := atscheck.NewAnalyzer(cfg.LLM)
 	// The fit analysis shares the same LLM client but with a longer per-call timeout:
 	// its reasoning model is slow (tens of seconds per stage), so the default would time
 	// out mid-stage. Nil-safe (a nil client stays nil → Analyze is a no-op).
-	a.matchAnalysis = matchanalysis.NewAnalyzer(cfg.LLM.WithTimeout(matchAnalysisLLMTimeout))
-	a.structuredExtractor = resumeextract.NewExtractor(cfg.LLM.WithTimeout(resumeExtractLLMTimeout), cfg.PIIDetector)
-	a.matchAnalysisCache = queries
+	matchAnalyzer := matchanalysis.NewAnalyzer(cfg.LLM.WithTimeout(matchAnalysisLLMTimeout))
+	structuredExtractor := resumeextract.NewExtractor(cfg.LLM.WithTimeout(resumeExtractLLMTimeout), cfg.PIIDetector)
 	// The autofill planner is one cheap structured call per run; the shared client's
 	// default timeout is right for it.
 	a.autofillPlanner = cfg.LLM
-	a.credits = credits.NewStore(queries, cfg.Pool, cfg.Credits)
-	// Telegram notifications are enabled only with both a bot token and a JWT
-	// secret (the link token reuses it). Absent either, the linking endpoints
-	// report the feature off and the webhook is inert (see telegramEnabled).
-	// The webhook secret is part of the enable condition, not a check inside the handler:
-	// its constant-time compare treats an unset secret as "matches an absent header", so a
-	// deployment with a bot token but no secret would expose an unauthenticated POST.
-	if cfg.TelegramBotToken != "" && cfg.JWTSecret != "" {
-		if cfg.TelegramWebhookSecret == "" {
-			log.Print("telegram: TELEGRAM_BOT_TOKEN is set but TELEGRAM_WEBHOOK_SECRET is not — feature disabled")
-		} else {
-			a.telegramLinks = telegramnotify.NewLinkTokens(cfg.JWTSecret, telegramLinkTTL)
-			a.telegramBot = telegramnotify.NewClient(cfg.TelegramBotToken)
-			a.telegramBotUsername = cfg.TelegramBotUsername
-			a.telegramWebhookSecret = cfg.TelegramWebhookSecret
-		}
-	}
+	creditsStore := credits.NewStore(queries, cfg.Pool, cfg.Credits)
+	// Imports fetch a user-supplied page, so they dial through the same SSRF-guarded
+	// client the crawlers use (sources.NewClient). cfg.Search may be nil (no engine
+	// configured), which only skips the index push.
+	importer := linkimport.New(cfg.Pool, queries, cfg.Search, sources.NewClient())
+	contributionsH := newContributionHandlers(contributionSvc, creditsStore, queries, importer)
+	creditsH := newCreditsHandlers(creditsStore, queries)
+	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, creditsStore)
+	cvH := newCVHandlers(queries, cfg.TypstBin, resumeStore, creditsStore, matchH)
+	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionSvc, creditsStore)
+	inboxH := newInboxHandlers(queries, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)
+	// Account deletion reaches past the FK cascade: cfg.Blob is nil when storage is
+	// unconfigured and the revoker is nil when Gmail is — either way there is nothing
+	// to erase there, which must not stop a member from leaving.
+	authH.withAccountDeletion(accountdelete.New(accountdelete.NewQueriesRepository(queries), cfg.Blob, inboxH.revokeGmailGrant), queries)
 	// Assign only when configured: a nil *search.Client wrapped in the searcher
 	// interface would be a non-nil interface and defeat the nil check.
+	var jobSearch searcher
+	var facets facetCounter
+	var companySearch companySearcher
 	if cfg.Search != nil {
-		a.search = cfg.Search
-		a.facets = cfg.Search
-		a.companySearch = cfg.Search
+		jobSearch = cfg.Search
+		facets = cfg.Search
+		companySearch = cfg.Search
 	}
+	searchH := newSearchHandlers(jobSearch, facets, queries)
+	companiesH := newCompaniesHandlers(queries, companySearch)
+	trackingH := newTrackingHandlers(queries, cfg.Pool, jobSearch)
+	resumeH := newResumeHandlers(resumeStore, structuredExtractor, jobSearch, facets, profileSvc, atsAnalyzer, queries)
+	// The in-app agent is a facade over the feature handlers above: its tools call
+	// the same services their endpoints do, so a tool result and the API can never
+	// disagree. The tailoring bootstrap mints its conversations through the same
+	// store, which is why the CV handlers get it back.
+	assistantH := newAssistantHandlers(queries, cfg.AssistantLLM, cfg.AssistantMaxSteps, searchH, resumeH, trackingH, cvH)
+	cvH.withAssistantSessions(assistantH.store)
 
 	// Referral notifications reuse the SES email transport (email is always present) and
 	// the Telegram bot when linked. Each channel is wrapped only when configured so a nil
 	// concrete pointer never hides behind a non-nil interface (see the search note above);
 	// a referrer with no reachable channel still sees the request in-cabinet.
-	a.blob = cfg.Blob
 	var referralEmail referral.EmailSender
 	if cfg.AWSRegion != "" && cfg.NotifyEmailFrom != "" {
 		if ec, err := emailnotify.NewClient(context.Background(), cfg.AWSRegion); err != nil {
@@ -459,7 +295,7 @@ func Register(app *fiber.App, cfg Config) {
 			// The same SES client carries the account mails (verification and password
 			// reset). Without it the accounts service keeps registering and
 			// authenticating; only the code-backed flows report 503.
-			a.accounts.WithCodes(
+			authH.accounts.WithCodes(
 				accounts.NewQueriesCodeStore(queries),
 				emailnotify.NewAuthMailer(ec, cfg.NotifyEmailFrom, cfg.FrontendOrigin),
 			)
@@ -468,17 +304,14 @@ func Register(app *fiber.App, cfg Config) {
 		log.Print("accounts: AWS_REGION/NOTIFY_EMAIL_FROM unset — email verification and password reset are unavailable")
 	}
 	var referralTelegram referral.TelegramSender
-	if a.telegramBot != nil {
-		referralTelegram = a.telegramBot
+	if telegramH.telegramBot != nil {
+		referralTelegram = telegramH.telegramBot
 	}
 	referralPinger := referral.NewChannelPinger(referralEmail, cfg.NotifyEmailFrom, referralTelegram)
 	referralCabinetURL := strings.TrimRight(cfg.FrontendOrigin, "/") + "/my/referrals?tab=incoming"
-	a.referral = referral.New(referral.NewQueriesRepository(queries), referralPinger,
+	referralSvc := referral.New(referral.NewQueriesRepository(queries), referralPinger,
 		referral.Config{CabinetURL: referralCabinetURL})
-	// One repository satisfies both the persistence port and the subject-existence
-	// port, so it is passed for each.
-	communityRepo := community.NewQueriesRepository(queries)
-	a.community = community.New(communityRepo, communityRepo, community.Config{})
+	referralsH := newReferralHandlers(referralSvc, cfg.Blob, cvH.cvRenderer, cvH.cvStore)
 
 	// Allow the canonical frontend origin plus every served domain's https apex,
 	// so a cross-origin (non-credentialed) read works from either domain during a
@@ -493,106 +326,51 @@ func Register(app *fiber.App, cfg Config) {
 	app.Get("/health", a.Health)
 
 	api := app.Group("/api/v1")
-	api.Get("/jobs", a.ListJobs)
-	// Literal routes before the :slug param route so they are not read as slugs.
-	api.Get("/jobs/search", a.SearchJobs)
-	// Agent search: same query as /jobs/search, with opt-in full descriptions in a
-	// selectable format for programmatic consumers. Public, like the other reads.
-	api.Get("/agent/jobs/search", a.AgentSearchJobs)
-	api.Get("/jobs/facets", a.JobFacets)
-	api.Get("/jobs/sitemap", a.JobSitemap)
 	// optionalAuth attaches the caller when signed in (cookie or key) but never
 	// rejects, so these public detail reads can overlay the caller's own vote
 	// (my_vote) while staying open to anonymous visitors.
 	optionalAuth := auth.OptionalAuth(a.issuer, a.queries, apiKeys{a.queries})
-	// Static route registered before /jobs/:slug so it isn't captured as a slug.
-	api.Get("/jobs/find", a.FindJob)
-	api.Get("/jobs/:slug", optionalAuth, a.GetJob)
-	api.Get("/jobs/:slug/similar", a.SimilarJobs)
-	api.Get("/jobs/:slug/copies", a.JobCopies)
-	api.Get("/companies", a.ListCompanies)
-	api.Get("/companies/sitemap", a.CompanySitemap)
-	api.Get("/companies/sitemap/boundaries", a.CompanySitemapBoundaries)
-	api.Get("/companies/subindustries", a.CompanySubindustries)
-	api.Get("/companies/:slug", optionalAuth, a.GetCompany)
-
-	// Public read of a shared saved-search "board" by its slug — unauthenticated, like
-	// the job/company reads above. Owner identity is never exposed (see boardResponse).
-	api.Get("/boards/:slug", a.GetBoard)
-
-	// Public catalogue-activity time series (added vs. removed vacancies per period),
-	// unauthenticated like the other public reads. Served from the job_daily_stats
-	// rollup (cmd/rollup-stats); the /trends SPA page renders it as a bar chart.
-	api.Get("/stats/jobs-activity", a.JobsActivity)
-
-	// Public member-growth time series (cumulative registrations per UTC day),
-	// unauthenticated like the other public reads. Computed on the fly from
-	// users.created_at (no rollup); the /open transparency page renders it as a
-	// bar chart. Aggregate-only — no user identifier is exposed.
-	api.Get("/stats/user-growth", a.UserGrowth)
-
-	// Public engagement counts (jobs saved / applied / viewed across all users),
-	// unauthenticated like the other public reads. Aggregate-only from user_jobs;
-	// the /open transparency page renders them as a stat-strip.
-	api.Get("/stats/engagement", a.EngagementStats)
-
-	// Public facet-distribution snapshot (countries, skills, seniority, work_mode),
-	// unauthenticated like the other public reads. Served from the insights_facet_stats
-	// rollup (cmd/rollup-facets) so the /open transparency page's "what's inside"
-	// section stays off the live Meilisearch facet count. Aggregate-only — per-value
-	// counts only.
-	api.Get("/stats/facets", a.StatsFacets)
-
-	// Public Trends & Insights reads: aggregate market intelligence (role & skill
-	// demand, hiring velocity, salary bands) served from the insights_* rollups
-	// (cmd/rollup-stats), unauthenticated like the other public reads. Aggregate-only
-	// — no record-level field is exposed.
-	api.Get("/insights/roles", a.InsightsRoles)
-	api.Get("/insights/skills", a.InsightsSkills)
-	api.Get("/insights/velocity", a.InsightsVelocity)
-	api.Get("/insights/salary", a.InsightsSalary)
-	api.Get("/insights/companies", a.InsightsCompanies)
-
-	// Public ingest-fleet status, unauthenticated like the other public reads.
-	// A per-provider health rollup over board_health, sanitized (no error text or
-	// board identifiers); the /status page renders it as a status board.
-	api.Get("/status", a.IngestStatus)
-
-	// Per-user job interactions and the user-scoped reads accept either the
-	// session cookie or an API key (RequireAuthOrKey), so a script holding a key
-	// can drive the same flow as the browser. The public job reads above stay
-	// unauthenticated. Jobs are addressed by their public slug; the handlers
-	// resolve it to the internal id before writing user_jobs.
+	// keyAuth (RequireAuthOrKey) accepts the session cookie or an API key, so a
+	// script holding a key can drive the same flow as the browser. The public job
+	// reads stay unauthenticated. Jobs are addressed by their public slug; the
+	// handlers resolve it to the internal id before writing user_jobs.
 	keyAuth := auth.RequireAuthOrKey(a.issuer, a.queries, apiKeys{a.queries})
-	// cvKeyAuth additionally admits the narrow `cv` key the tailoring bootstrap mints.
-	// Only the CV surface (and the caller's own identity read) uses it; every other
-	// key-accepting route stays on keyAuth, which is full-scope-only — so a new endpoint
-	// is out of a leaked agent credential's reach unless it deliberately opts in.
 	cvKeyAuth := auth.RequireAuthOrScopedKey(a.issuer, a.queries, apiKeys{a.queries}, auth.ScopeCV)
-	api.Post("/jobs/:slug/view", keyAuth, a.RecordView)
-	api.Post("/jobs/:slug/apply", keyAuth, a.MarkApplied)
-	api.Post("/jobs/:slug/save", keyAuth, a.SaveJob)
-	api.Delete("/jobs/:slug/save", keyAuth, a.UnsaveJob)
-	api.Post("/jobs/:slug/dismiss", keyAuth, a.DismissJob)
-	api.Delete("/jobs/:slug/dismiss", keyAuth, a.UndismissJob)
-	// Thumbs up/down: a signed-in vote (toggle/flip); the public counters it drives
-	// are read by everyone on the job/company shapes.
-	api.Post("/jobs/:slug/vote", keyAuth, a.VoteJob)
-	api.Delete("/jobs/:slug/vote", keyAuth, a.ClearJobVote)
-	api.Post("/companies/:slug/vote", keyAuth, a.VoteCompany)
-	api.Delete("/companies/:slug/vote", keyAuth, a.ClearCompanyVote)
-	// Per-job reminder controls: reschedule or turn off a saved job's pending
-	// reminder without unsaving it (scheduling itself happens on save).
-	api.Patch("/jobs/:slug/reminder", keyAuth, a.RescheduleReminder)
-	api.Delete("/jobs/:slug/reminder", keyAuth, a.CancelJobReminder)
-	api.Patch("/jobs/:slug/track", keyAuth, a.TrackJob)
-	api.Delete("/jobs/:slug/stage", keyAuth, a.ClearStage)
-	api.Delete("/jobs/:slug/track", keyAuth, a.Untrack)
-	// Read-only per-job skill match against the caller's profile (no writes).
-	api.Get("/jobs/:slug/match", keyAuth, a.JobMatch)
-	// Ad-hoc skill match for a job posting scraped off any page (title + text),
-	// no catalog job required — powers the browser extension's on-any-page card.
-	api.Post("/me/match-text", keyAuth, a.MatchText)
+	// cookieAuth is the single cookie-only gate (RequireAuth) for the
+	// browser-convenience surfaces below — key management, saved searches, the CV
+	// builder, the inbox, subscriptions — where a leaked API key must not act.
+	cookieAuth := auth.RequireAuth(a.issuer, a.queries)
+	requireModerator := auth.RequireRole(a.queries, "moderator")
+	mw := middleware{
+		optional:      optionalAuth,
+		key:           keyAuth,
+		cvKey:         cvKeyAuth,
+		cookie:        cookieAuth,
+		moderator:     requireModerator,
+		outboundFetch: contributionLimiter(),
+	}
+
+	// Job search surfaces first: their literal /jobs/* routes must precede the
+	// /jobs/:slug param route so they are not read as slugs (see searchHandlers).
+	searchH.register(api, mw)
+	sitemapH.register(api)
+	jobsH.register(api, mw)
+	companiesH.register(api, mw)
+
+	// Saved searches + the public shared-board read (see savedSearchHandlers).
+	savedSearchH.register(api, mw)
+
+	// Public catalogue-activity, member-growth, engagement, facet-snapshot, and
+	// ingest-status reads (see statsHandlers).
+	statsH.register(api)
+
+	// Per-user job interactions, tracking reads, and reminder controls
+	// (see trackingHandlers). The interaction writes precede the vote routes,
+	// mirroring the previous registration order.
+	trackingH.register(api, mw)
+	votesH.register(api, mw)
+	// Per-job skill match + the on-demand LLM fit analysis (see matchHandlers).
+	matchH.register(api, mw)
 	// Canonical autofill fields (name/email/phone/location/links) for the browser
 	// extension to write into application forms. keyAuth (Bearer).
 	api.Get("/me/autofill-profile", keyAuth, a.AutofillProfile)
@@ -605,292 +383,46 @@ func Register(app *fiber.App, cfg Config) {
 	// Agent-driven autofill: the caller's own browser is driven over that wire.
 	// keyAuth (Bearer) so the extension can trigger it.
 	api.Post("/me/autofill/run", keyAuth, a.RunAgentAutofill)
-	// The on-demand LLM match analysis (GET cached / POST run / SSE stream).
-	api.Get("/jobs/:slug/match-analysis", keyAuth, a.GetMatchAnalysis)
-	api.Post("/jobs/:slug/match-analysis", keyAuth, a.PostMatchAnalysis)
-	api.Get("/jobs/:slug/match-analysis/stream", keyAuth, a.StreamMatchAnalysis)
-	// Deprecated pre-rename aliases (was "fit") — kept so existing API-key clients and the
-	// CLI don't break; they hit the same handlers. Remove once callers have migrated.
-	api.Get("/jobs/:slug/fit", keyAuth, a.GetMatchAnalysis)
-	api.Post("/jobs/:slug/fit", keyAuth, a.PostMatchAnalysis)
-	api.Get("/jobs/:slug/fit/stream", keyAuth, a.StreamMatchAnalysis)
 
-	// The in-app AI assistant. Cookie-only (the browser drives it) and gated to the
-	// restricted rollout: inference is billed to us, so it is not open to everyone
-	// while it is free. Sessions and their transcripts are owner-scoped rows; a turn
-	// streams as SSE.
-	assistantAuth := auth.RequireAuth(a.issuer, a.queries)
-	assistantGate := auth.RequireModeratorOrBeta(a.queries, a.queries)
-	api.Post("/assistant/sessions", assistantAuth, assistantGate, a.CreateAssistantSession)
-	api.Get("/assistant/sessions", assistantAuth, assistantGate, a.ListAssistantSessions)
-	api.Get("/assistant/sessions/:id", assistantAuth, assistantGate, a.GetAssistantSession)
-	api.Delete("/assistant/sessions/:id", assistantAuth, assistantGate, a.DeleteAssistantSession)
-	api.Post("/assistant/sessions/:id/messages", assistantAuth, assistantGate, a.PostAssistantMessage)
+	// Public job submissions + review queue (see submissionHandlers).
+	submissionsH.register(api, mw)
 
-	// Stateless market-coverage: score a caller-supplied skill list (request body)
-	// against the facet-filtered market. Cookie or API key — the CLI drives it with
-	// a key. No user data is stored; it is the stateless sibling of the CV verdict.
-	api.Post("/market/coverage", keyAuth, a.MarketCoverage)
+	// Link contributions (see contributionHandlers).
+	contributionsH.register(api, mw)
 
-	// Moderator-authored jobs: create a hand-curated vacancy and edit it. Authenticated
-	// by cookie or API key (the CLI uses a key), then gated on the moderator role. The
-	// public job reads above stay unauthenticated; a non-moderator gets 403.
-	requireModerator := auth.RequireRole(a.queries, "moderator")
-	api.Post("/jobs", keyAuth, requireModerator, a.CreateJob)
-	api.Patch("/jobs/:slug", keyAuth, requireModerator, a.UpdateJob)
+	// Employee referrals (see referralHandlers).
+	referralsH.register(api, mw)
 
-	// Public job submissions: any authenticated user submits a vacancy for review
-	// (cookie or API key) and reads their own queue; the review actions (the pending
-	// queue, approve, reject) are moderator-gated. Approval mints a live job — the same
-	// path CreateJob uses — so an approved submission is indistinguishable from a
-	// hand-curated one.
-	api.Post("/submissions", keyAuth, a.CreateSubmission)
-	api.Get("/me/submissions", keyAuth, a.ListMySubmissions)
-	api.Get("/submissions", keyAuth, requireModerator, a.ListPendingSubmissions)
-	api.Post("/submissions/:id/approve", keyAuth, requireModerator, a.ApproveSubmission)
-	api.Post("/submissions/:id/reject", keyAuth, requireModerator, a.RejectSubmission)
+	// Job reports + review queue (see reportHandlers).
+	reportsH.register(api, mw)
 
-	// One limiter for every endpoint that makes the server fetch a caller-supplied URL,
-	// so a user's budget is spent across them rather than granted twice.
-	outboundFetch := contributionLimiter()
+	// Community discussion threads (see communityHandlers).
+	communityH.register(api, mw)
 
-	// Link contributions: any authenticated user pastes a job URL (cookie or API key);
-	// a supported, novel link is recorded and earns a point. No moderation queue — the
-	// derived-identity dedup and the supported-ATS gate are the only guards. The caller
-	// reads their own contributions; the points balance rides on /auth/me.
-	api.Post("/me/contributions", keyAuth, outboundFetch, a.CreateContribution)
-	api.Get("/me/contributions", keyAuth, a.ListMyContributions)
+	creditsH.register(api, mw)
 
-	// The extension's "add this page": resolve the page to a catalog posting, importing it
-	// when a link-source adapter can read the page and queueing the link for triage when
-	// none can.
-	api.Post("/jobs/resolve", keyAuth, outboundFetch, a.ResolveJob)
+	// API-key management and the auth surface (see authHandlers).
+	authH.register(api, mw)
 
-	// Employee referrals: any authenticated user (cookie or API key) offers to refer into a
-	// company (proof CV, moderated) and requests a referral from a company's approved-referrer
-	// pool; referrers manage their own incoming requests. The offer-moderation queue is
-	// moderator-gated, mirroring the submissions queue above.
-	api.Post("/me/referrals/offers", keyAuth, a.SubmitReferralOffer)
-	api.Get("/me/referrals/offers", keyAuth, a.ListMyReferralOffers)
-	api.Delete("/me/referrals/offers/:id", keyAuth, a.WithdrawReferralOffer)
-	api.Post("/me/referrals/requests", keyAuth, a.CreateReferralRequest)
-	api.Get("/me/referrals/requests", keyAuth, a.ListMyReferralRequests)
-	api.Get("/me/referrals/incoming", keyAuth, a.ListIncomingReferralRequests)
-	api.Get("/me/referrals/incoming/:id/cv", keyAuth, a.ViewReferralRequestCV)
-	api.Post("/me/referrals/incoming/:id/resolve", keyAuth, a.ResolveReferralRequest)
-	api.Get("/referrals/offers", keyAuth, requireModerator, a.ListPendingReferralOffers)
-	api.Get("/referrals/offers/:id/proof", keyAuth, requireModerator, a.ViewReferralOfferProof)
-	api.Post("/referrals/offers/:id/decide", keyAuth, requireModerator, a.DecideReferralOffer)
+	// The per-user profile singleton (see profileHandlers).
+	profileH.register(api, mw)
 
-	// Job reports: any authenticated user flags a problem with a live vacancy (cookie or
-	// API key), addressed by the job's public slug. The review actions (the pending queue,
-	// resolve, dismiss) are moderator-gated; resolve may soft-close the reported job.
-	api.Post("/jobs/:slug/reports", keyAuth, a.CreateReport)
-	api.Get("/reports", keyAuth, requireModerator, a.ListPendingReports)
-	api.Post("/reports/:id/resolve", keyAuth, requireModerator, a.ResolveReport)
-	api.Post("/reports/:id/dismiss", keyAuth, requireModerator, a.DismissReport)
+	// CV builder + AI tailoring (see cvHandlers).
+	cvH.register(api, mw)
 
-	// Community discussion threads: anonymous topics attached to a company or vacancy.
-	// Reads are public — only pseudonymous persona handles are ever exposed, never a
-	// user id — so discussions are browsable without signing in. Writing a thread or
-	// reply requires a signed-in session (cookie); closing a thread is moderator-gated.
-	cookieAuth := auth.RequireAuth(a.issuer, a.queries)
-	api.Get("/threads", a.ListThreads)
-	// Registered before "/threads/:id" so "count" is not parsed as a thread id.
-	api.Get("/threads/count", a.CountThreads)
-	api.Get("/threads/:id", a.GetThread)
-	api.Post("/threads", cookieAuth, a.CreateThread)
-	api.Post("/threads/:id/replies", cookieAuth, a.CreateReply)
-	api.Post("/threads/:id/close", cookieAuth, requireModerator, a.CloseThread)
+	// Mail inbox (Gmail connect + hosted mailbox) and email ↔ application linking
+	// (see inboxHandlers). Registered after the static /me/tracking/* routes so
+	// /me/tracking/:slug does not shadow them.
+	inboxH.register(api, mw)
+	// Résumé/CV surfaces: verdict, ATS report, extraction, storage, recommendations
+	// (see resumeHandlers).
+	resumeH.register(api, mw)
+	assistantH.register(api, mw)
 
-	// User-scoped reads live under /me (consistent with /auth/me): the tracking
-	// listing joins the caller's interactions with the jobs they touch, viewed-slugs
-	// lets the SPA dim already-seen cards without authenticating the public browse
-	// list, and analyses lists the jobs the caller has run the AI fit analysis on.
-	api.Get("/me/tracking", keyAuth, a.ListTrackedJobs)
-	api.Get("/me/tracking/viewed", keyAuth, a.ListViewedSlugs)
-	api.Get("/me/tracking/saved", keyAuth, a.ListSavedSlugs)
-	api.Get("/me/tracking/dismissed", keyAuth, a.ListDismissedSlugs)
-	api.Get("/me/tracking/pipeline", keyAuth, a.TrackingPipeline)
-	api.Get("/me/tracking/swipe", keyAuth, a.SwipeDeck)
-	api.Get("/me/tracking/analyses", keyAuth, a.ListMyAnalyses)
-	api.Get("/me/credits", keyAuth, a.GetMyCredits)
-	api.Get("/me/credits/history", keyAuth, a.GetMyCreditsHistory)
-	api.Get("/me/recommendations", keyAuth, a.Recommendations)
+	// Filter subscriptions (see subscriptionHandlers).
+	subscriptionH.register(api, mw)
 
-	// Account deletion is permanent and cookie-only, for the same reason key
-	// management is: a leaked API key must not be able to destroy the account that
-	// issued it. The body confirms the caller's own email address.
-	api.Delete("/me", auth.RequireAuth(a.issuer, a.queries), a.DeleteAccount)
+	// Telegram linking + the inbound bot webhook (see telegramHandlers).
+	telegramH.register(api, mw)
 
-	// API-key management is cookie-only (RequireAuth): a leaked key must not be
-	// able to create, list, or revoke keys. The create endpoint returns the
-	// plaintext token exactly once.
-	// Changing the password is cookie-only for the same reason key management is: a
-	// leaked credential must not be able to change the credential it would outlive.
-	api.Post("/me/password", auth.RequireAuth(a.issuer, a.queries), a.ChangePassword)
-	api.Post("/me/api-keys", auth.RequireAuth(a.issuer, a.queries), a.CreateAPIKey)
-	api.Get("/me/api-keys", auth.RequireAuth(a.issuer, a.queries), a.ListAPIKeys)
-	api.Delete("/me/api-keys/:id", auth.RequireAuth(a.issuer, a.queries), a.RevokeAPIKey)
-
-	// Saved searches are cookie-only (RequireAuth) like API-key management: they are a
-	// browser convenience (the "My filters" picker), not a scripting primitive. Each
-	// operation is owner-scoped; an id that is not the caller's is a 404.
-	saved := auth.RequireAuth(a.issuer, a.queries)
-	api.Get("/me/searches", saved, a.ListSavedSearches)
-	api.Post("/me/searches", saved, a.CreateSavedSearch)
-	api.Patch("/me/searches/:id", saved, a.UpdateSavedSearch)
-	api.Delete("/me/searches/:id", saved, a.DeleteSavedSearch)
-	// Publish/unpublish a saved search as a public board. Cookie-only (same as the rest
-	// of /me/searches); the public read is GET /boards/:slug above.
-	api.Post("/me/searches/:id/share", saved, a.ShareSavedSearch)
-	api.Delete("/me/searches/:id/share", saved, a.UnshareSavedSearch)
-
-	// The user profile is a cookie-only (RequireAuth) singleton — one per user, keyed
-	// by the session, no id in the path. GET returns the profile or null; PUT upserts
-	// (create-or-replace); DELETE clears it (idempotent).
-	api.Get("/me/profile", saved, a.GetProfile)
-	api.Put("/me/profile", saved, a.PutProfile)
-	api.Delete("/me/profile", saved, a.DeleteProfile)
-
-	// CV builder + AI tailoring: open to every signed-in user (AI credits meter the LLM spend).
-	// Cookie-only, owner-scoped (a foreign id is a 404). The PDF endpoint 501s when no typst
-	// binary is configured; the rest still works.
-	api.Get("/cv-templates", saved, a.ListCVTemplates)
-	api.Get("/me/cvs", saved, a.ListCVs)
-	api.Post("/me/cvs", saved, a.CreateCV)
-	// Read + render accept a key too (keyAuth), so the tailoring agent's CLI can fetch a CV
-	// and its PDF; mutations stay cookie-only (POST/PUT/DELETE — the browser owns authoring).
-	api.Get("/me/cvs/:id", cvKeyAuth, a.GetCV)
-	api.Put("/me/cvs/:id", saved, a.UpdateCV)
-	// Change only the template (the gallery's one-field switch); cookie-only like other mutations.
-	api.Put("/me/cvs/:id/template", saved, a.SetCVTemplate)
-	api.Delete("/me/cvs/:id", saved, a.DeleteCV)
-	api.Get("/me/cvs/:id/pdf", cvKeyAuth, a.RenderCVPDF)
-	// Tailoring: the browser starts a session (cookie-only bootstrap); the agent's CLI drives
-	// the edit + context/get/render reads with its minted API key (keyAuth = cookie or Bearer).
-	api.Post("/me/cvs/tailor", saved, a.TailorCV)
-	api.Post("/me/cvs/:id/tailor-session", saved, a.StartTailorSession)
-	api.Patch("/me/cvs/:id", cvKeyAuth, a.PatchCV)
-	api.Put("/me/cvs/:id/session", cvKeyAuth, a.SetCVSession)
-	api.Get("/me/cvs/:id/tailor-context", cvKeyAuth, a.TailorContext)
-
-	// Mail inbox (Gmail connect + hosted mailbox). Open to every signed-in user.
-	// The read + disconnect routes are always registered (empty/no-op when not
-	// connected); the OAuth connect routes only when configured. Cookie-or-key auth.
-	api.Get("/me/gmail", saved, a.GmailStatus)
-	api.Delete("/me/gmail", saved, a.GmailDisconnect)
-	api.Get("/me/inbox", saved, a.GetInbox)
-	api.Post("/me/inbox/read-all", saved, a.MarkAllReadInbox)
-	api.Get("/me/emails/:id", saved, a.GetEmail)
-	api.Post("/me/emails/:id/delete", saved, a.DeleteEmail)
-	api.Post("/me/emails/:id/restore", saved, a.RestoreEmail)
-	// Email → application linking. :slug is registered after the static
-	// /me/tracking/* routes above so it does not shadow them.
-	api.Get("/me/tracking/:slug", saved, a.GetTrackedApplication)
-	api.Post("/me/emails/:id/link", saved, a.LinkEmail)
-	api.Post("/me/emails/:id/unlink", saved, a.UnlinkEmail)
-	api.Post("/me/emails/:id/confirm", saved, a.ConfirmEmailLink)
-	api.Post("/me/emails/:id/reject", saved, a.RejectEmailLink)
-	if a.gmailReady() {
-		api.Get("/me/gmail/connect", saved, a.GmailConnect)
-		api.Get("/me/gmail/callback", saved, a.GmailCallback)
-		api.Post("/me/gmail/sync", saved, a.SyncGmail)
-	}
-	// Hosted-mailbox option: status is always available (reports unavailable when
-	// the feature is off); claim/release only when a receiving domain is configured.
-	api.Get("/me/mailbox", saved, a.GetMailbox)
-	if a.mailboxReady() {
-		api.Post("/me/mailbox", saved, a.ClaimMailbox)
-		api.Delete("/me/mailbox", saved, a.ReleaseMailbox)
-	}
-	// The résumé verdict is a profile sub-resource: GET computes the live
-	// market-coverage verdict from the profile's skills against the selected role.
-	// Cookie-only and session-scoped, like the profile it hangs off (no profile → 404).
-	api.Get("/me/profile/verdict", saved, a.GetResumeVerdict)
-	// The CV ATS-readiness report is a sibling profile sub-resource: GET scores the
-	// caller's stored CV (structure + role keyword-match); POST runs the optional LLM
-	// qualitative review over it and caches it. Cookie-only, session-scoped.
-	api.Get("/me/profile/ats-report", saved, a.GetATSReport)
-	api.Post("/me/profile/ats-report", saved, a.PostATSReport)
-
-	// Resume skill extraction is cookie-only (RequireAuth): it feeds the profile edit
-	// modal (extracted skills merge into the profile). When S3 storage is configured it
-	// also stores the résumé once (the single upload point); when not, it stays stateless
-	// (parsed and discarded, only canonical slugs returned).
-	api.Post("/me/resume/extract", saved, a.ExtractResumeProfile)
-
-	// Résumé storage (cookie-only): store the résumé once so the verdict's coherence can
-	// reuse it without a second upload. PUT stores/replaces, GET reports status (enabled +
-	// present + uploaded_at), DELETE removes it. 501 from PUT/DELETE when S3 is
-	// unconfigured — the SPA then falls back to per-request upload on the verdict page.
-	api.Put("/me/resume", saved, a.PutResume)
-	api.Get("/me/resume", saved, a.GetResume)
-	api.Delete("/me/resume", saved, a.DeleteResume)
-
-	// Filter subscriptions + Telegram linking are cookie-only (RequireAuth) like
-	// saved searches: a browser convenience, owner-scoped (a non-owned id is 404).
-	api.Get("/me/subscriptions", saved, a.ListSubscriptions)
-	api.Post("/me/subscriptions", saved, a.CreateSubscription)
-	api.Patch("/me/subscriptions/:id", saved, a.SetSubscriptionActive)
-	api.Delete("/me/subscriptions/:id", saved, a.DeleteSubscription)
-
-	// Saved-job reminder default rule (enable, default delay, channels). Cookie-only
-	// (RequireAuth) like subscriptions — it configures a delivery preference.
-	api.Get("/me/reminder-settings", saved, a.GetReminderSettings)
-	api.Put("/me/reminder-settings", saved, a.UpdateReminderSettings)
-	api.Post("/me/telegram/link", saved, a.LinkTelegram)
-	api.Get("/me/telegram", saved, a.TelegramLinkStatus)
-	api.Delete("/me/telegram", saved, a.UnlinkTelegram)
-
-	// The Telegram webhook is the only unauthenticated POST: it is guarded by the
-	// shared secret token Telegram echoes in a header (see TelegramWebhook).
-	api.Post("/telegram/webhook", a.TelegramWebhook)
-
-	// Auth: register/login/logout are public (logout just clears the cookie).
-	// me is guarded and accepts a session cookie OR an API key, so a non-browser
-	// client (e.g. the CLI) can resolve its own identity with its key. It stays a
-	// read of the caller's own user — not key management, which is cookie-only.
-	// Throttle the credential endpoints against online brute-force / credential
-	// stuffing. Keyed on c.IP() (the real client, via the trusted-proxy config); the
-	// per-instance in-memory window is enough friction for a single-node deployment.
-	authLimiter := limiter.New(limiter.Config{Max: 10, Expiration: time.Minute})
-	cookieOnly := auth.RequireAuth(a.issuer, a.queries)
-	authGroup := api.Group("/auth")
-	authGroup.Post("/register", authLimiter, a.Register)
-	authGroup.Post("/login", authLimiter, a.Login)
-	authGroup.Post("/logout", a.Logout)
-	// Email verification. Cookie-only and identified by the session, never by a body
-	// field, so neither endpoint can be pointed at someone else's address. Both ride the
-	// credential limiter: confirm is a code-guessing surface, request is a mail-sending one.
-	authGroup.Post("/verify/request", authLimiter, cookieOnly, a.RequestEmailVerification)
-	authGroup.Post("/verify/confirm", authLimiter, cookieOnly, a.ConfirmEmailVerification)
-	// Password recovery. Public — the mailed code is the credential. forgot always answers
-	// 202 (never an enumeration oracle); reset revokes every session on success.
-	authGroup.Post("/password/forgot", authLimiter, a.ForgotPassword)
-	authGroup.Post("/password/reset", authLimiter, a.ResetPassword)
-	// Sign out everywhere. Cookie-only (like key management): revoking a human's sessions
-	// is not something a programmatic credential should be able to do.
-	authGroup.Post("/logout-all", cookieOnly, a.LogoutAll)
-	// The agent needs to resolve who its key belongs to, so the identity read admits the
-	// narrow scope too; it exposes nothing the key holder cannot already infer.
-	authGroup.Get("/me", auth.RequireAuthOrScopedKey(a.issuer, a.queries, apiKeys{a.queries}, auth.ScopeCV), a.Me)
-
-	// OAuth sign-in: provider listing plus the authorization-code start and
-	// callback redirects. All public; the callback sets the session cookie.
-	authGroup.Get("/oauth/providers", a.ListOAuthProviders)
-	authGroup.Get("/oauth/:provider/start", a.OAuthStart)
-	authGroup.Get("/oauth/:provider/callback", a.OAuthCallback)
-	// Mobile-only: redeem the one-time code from the custom-scheme callback for a
-	// session. Public; the code is the credential.
-	authGroup.Post("/oauth/exchange", a.OAuthExchange)
-
-	// Browser-extension sign-in ("Sign in with freehire"): the extension opens
-	// this in the freehire origin via launchWebAuthFlow. Cookie-only (RequireAuth)
-	// like key management — a leaked key must not mint further keys. GET shows the
-	// consent screen; POST mints a named key and redirects the token in the
-	// fragment. Both refuse any redirect outside the configured allowlist.
-	extAuth := auth.RequireAuth(a.issuer, a.queries)
-	authGroup.Get("/extension/connect", extAuth, a.ExtensionConnect)
-	authGroup.Post("/extension/connect", extAuth, a.ExtensionConnectSubmit)
 }

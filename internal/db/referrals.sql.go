@@ -399,6 +399,7 @@ FROM referral_offers o
 LEFT JOIN companies c ON c.slug = o.company_slug
 WHERE o.status = 'pending'
 ORDER BY o.created_at
+LIMIT 500
 `
 
 type ListPendingReferralOffersRow struct {
@@ -415,6 +416,8 @@ type ListPendingReferralOffersRow struct {
 }
 
 // The moderator queue: offers awaiting a decision, oldest first, with display name.
+// Capped at 500 as a runaway-growth guard — far above any plausible backlog; a
+// queue that deep needs bulk triage, not a longer page.
 func (q *Queries) ListPendingReferralOffers(ctx context.Context) ([]ListPendingReferralOffersRow, error) {
 	rows, err := q.db.Query(ctx, listPendingReferralOffers)
 	if err != nil {

@@ -15,6 +15,28 @@ import (
 	"github.com/strelov1/freehire/internal/search"
 )
 
+// companiesHandlers serves the public company catalogue reads: the ranked,
+// filterable list, the subindustry vocabulary, and the single-company detail.
+type companiesHandlers struct {
+	queries *db.Queries
+	// companySearch is the company-search backend backing GET /api/v1/companies,
+	// kept separate from the jobs search so the companies index stays fully decoupled
+	// from it. Nil when Meilisearch is unconfigured, or on any query error, the list
+	// falls back to the Postgres substring path so /companies never depends on
+	// Meilisearch being up.
+	companySearch companySearcher
+}
+
+func newCompaniesHandlers(queries *db.Queries, companySearch companySearcher) *companiesHandlers {
+	return &companiesHandlers{queries: queries, companySearch: companySearch}
+}
+
+func (h *companiesHandlers) register(api fiber.Router, mw middleware) {
+	api.Get("/companies", h.ListCompanies)
+	api.Get("/companies/subindustries", h.CompanySubindustries)
+	api.Get("/companies/:slug", mw.optional, h.GetCompany)
+}
+
 // companySearcher is the company-search backend the list handler depends on.
 // *search.Client satisfies it; the unit tests inject a fake. A nil companySearcher
 // (Meilisearch unconfigured) routes every request to the Postgres path, as does any
@@ -111,7 +133,7 @@ func companyViewFrom(c db.Company) companyView {
 // job-derived remote-hiring facet; `yc_batch`/`yc_status` are the curated YC
 // directory facets. meta.total reports the count matching the full filter so
 // pagination is correct.
-func (a *API) ListCompanies(c *fiber.Ctx) error {
+func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 	limit, offset := pageParams(c)
 	search := c.Query("q")
 	vals := queryValues(c)
@@ -140,16 +162,16 @@ func (a *API) ListCompanies(c *fiber.Ctx) error {
 	// Postgres ordering (job_count DESC, name) and its O(1) total estimate, so it is
 	// deliberately not routed to Meili. On ANY Meili error the request falls through to
 	// the Postgres substring path below, so /companies never depends on Meili being up.
-	if a.companySearch != nil && isCompanyFilter(search, collections, regions, countries,
+	if h.companySearch != nil && isCompanyFilter(search, collections, regions, countries,
 		domains, companyTypes, companySizes, remoteRegions, ycBatch, ycStatus, ycStage, ycFlags, maturity, subindustries) {
-		rows, total, err := a.companyHitsViaMeili(c.Context(), search, vals, limit, offset)
+		rows, total, err := h.companyHitsViaMeili(c.Context(), search, vals, limit, offset)
 		if err == nil {
 			return listResponse(c, rows, total, limit, offset)
 		}
 		log.Printf("companies: meili search fell back to postgres (q=%q): %v", search, err)
 	}
 
-	companies, err := a.queries.ListCompanies(c.Context(), db.ListCompaniesParams{
+	companies, err := h.queries.ListCompanies(c.Context(), db.ListCompaniesParams{
 		Search:        search,
 		Collections:   collections,
 		Regions:       regions,
@@ -178,7 +200,7 @@ func (a *API) ListCompanies(c *fiber.Ctx) error {
 	var total int64
 	if isCompanyFilter(search, collections, regions, countries, domains, companyTypes,
 		companySizes, remoteRegions, ycBatch, ycStatus, ycStage, ycFlags, maturity, subindustries) {
-		total, err = a.queries.CountCompanies(c.Context(), db.CountCompaniesParams{
+		total, err = h.queries.CountCompanies(c.Context(), db.CountCompaniesParams{
 			Search:        search,
 			Collections:   collections,
 			Regions:       regions,
@@ -195,7 +217,7 @@ func (a *API) ListCompanies(c *fiber.Ctx) error {
 			Subindustries: subindustries,
 		})
 	} else {
-		total, err = a.queries.EstimateHiringCompanies(c.Context())
+		total, err = h.queries.EstimateHiringCompanies(c.Context())
 	}
 	if err != nil {
 		return err
@@ -229,8 +251,8 @@ type subindustryFacet struct {
 // CompanySubindustries serves the distinct subindustry vocabulary with company counts,
 // most common first, backing the searchable "Industry" facet's option list. Counts are
 // unconditional (they do not reflect other active list filters).
-func (a *API) CompanySubindustries(c *fiber.Ctx) error {
-	rows, err := a.queries.CompanySubindustries(c.Context())
+func (h *companiesHandlers) CompanySubindustries(c *fiber.Ctx) error {
+	rows, err := h.queries.CompanySubindustries(c.Context())
 	if err != nil {
 		return err
 	}
@@ -257,10 +279,10 @@ func facetValues(vals url.Values, key string) []string {
 // GetCompany returns a single company together with a page of its jobs. The
 // company is read from companies and its jobs from a single-table filter on
 // company_slug — no join between the two tables.
-func (a *API) GetCompany(c *fiber.Ctx) error {
+func (h *companiesHandlers) GetCompany(c *fiber.Ctx) error {
 	slug := c.Params("slug")
 
-	company, err := a.queries.GetCompany(c.Context(), slug)
+	company, err := h.queries.GetCompany(c.Context(), slug)
 	if err != nil {
 		// RenderError maps pgx.ErrNoRows to 404, anything else to 500.
 		return err
@@ -268,7 +290,7 @@ func (a *API) GetCompany(c *fiber.Ctx) error {
 
 	limit, offset := pageParams(c)
 
-	jobs, err := a.queries.ListJobsByCompany(c.Context(), db.ListJobsByCompanyParams{
+	jobs, err := h.queries.ListJobsByCompany(c.Context(), db.ListJobsByCompanyParams{
 		CompanySlug: slug,
 		Limit:       int32(limit),
 		Offset:      int32(offset),
@@ -284,13 +306,13 @@ func (a *API) GetCompany(c *fiber.Ctx) error {
 
 	// Referral availability: best-effort — a lookup error degrades to false (block hidden),
 	// never failing the company read.
-	referralAvailable, _ := a.queries.CompanyHasApprovedReferrer(c.Context(), slug)
+	referralAvailable, _ := h.queries.CompanyHasApprovedReferrer(c.Context(), slug)
 
 	view := companyViewFrom(company)
 	// Caller's own thumbs vote, overlaid only when signed in (OptionalAuth attaches
 	// the id on this public read). Best-effort: a lookup error leaves my_vote 0.
 	if userID, ok := auth.UserID(c); ok {
-		if mv, err := a.queries.GetCompanyVote(c.Context(), db.GetCompanyVoteParams{UserID: userID, CompanySlug: slug}); err == nil {
+		if mv, err := h.queries.GetCompanyVote(c.Context(), db.GetCompanyVoteParams{UserID: userID, CompanySlug: slug}); err == nil {
 			view.MyVote = int32(mv)
 		}
 	}
@@ -306,8 +328,8 @@ func (a *API) GetCompany(c *fiber.Ctx) error {
 // the db.ListCompaniesRow wire shape, so the Meili path is byte-for-byte compatible
 // with the Postgres path. meta.total is Meilisearch's estimated filtered total, which
 // backs list pagination exactly as CountCompanies does on the Postgres path.
-func (a *API) companyHitsViaMeili(ctx context.Context, query string, vals url.Values, limit, offset int) ([]db.ListCompaniesRow, int64, error) {
-	res, err := a.companySearch.SearchCompanies(ctx, search.CompanySearchParams{
+func (h *companiesHandlers) companyHitsViaMeili(ctx context.Context, query string, vals url.Values, limit, offset int) ([]db.ListCompaniesRow, int64, error) {
+	res, err := h.companySearch.SearchCompanies(ctx, search.CompanySearchParams{
 		Query:  query,
 		Filter: search.CompanyFilterFromValues(vals),
 		Limit:  limit,

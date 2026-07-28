@@ -24,4 +24,14 @@ func TestPoolConfig_MaxConns(t *testing.T) {
 			t.Errorf("MaxConns = %d, want 30", cfg.MaxConns)
 		}
 	})
+
+	t.Run("a password containing the text is not an override", func(t *testing.T) {
+		cfg, err := poolConfig("postgres://u:pool_max_conns%3D99@localhost:5432/db")
+		if err != nil {
+			t.Fatalf("poolConfig: %v", err)
+		}
+		if cfg.MaxConns != defaultMaxConns {
+			t.Errorf("MaxConns = %d, want %d (the substring sits in the password, not the settings)", cfg.MaxConns, defaultMaxConns)
+		}
+	})
 }

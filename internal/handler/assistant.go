@@ -16,7 +16,74 @@ import (
 	"github.com/valyala/fasthttp"
 
 	"github.com/strelov1/freehire/internal/assistant"
+	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/llm"
 )
+
+// assistantHandlers is the in-app agent. It owns the conversation store and the
+// turn runner, and reaches the other feature handlers for the services its tools
+// call — the assistant is a facade over the same use cases the HTTP surface
+// exposes, so it must not grow a second copy of any of them.
+type assistantHandlers struct {
+	store  *assistant.Store
+	runner *assistant.Runner
+
+	queries  *db.Queries
+	search   *searchHandlers
+	resume   *resumeHandlers
+	tracking *trackingHandlers
+	cv       *cvHandlers
+}
+
+// newAssistantHandlers wires the agent. A nil LLM client leaves the runner nil:
+// old conversations stay readable and a new turn reports the assistant as
+// unavailable, rather than the whole surface disappearing.
+func newAssistantHandlers(queries *db.Queries, model *llm.Client, maxSteps int,
+	search *searchHandlers, resumeH *resumeHandlers, tracking *trackingHandlers, cvH *cvHandlers) *assistantHandlers {
+	h := &assistantHandlers{
+		store:    assistant.NewStore(queries),
+		queries:  queries,
+		search:   search,
+		resume:   resumeH,
+		tracking: tracking,
+		cv:       cvH,
+	}
+	if model != nil {
+		h.runner = assistant.NewRunner(model, h.store, assistant.RunnerConfig{MaxSteps: maxSteps})
+	}
+	return h
+}
+
+// register mounts the assistant. Cookie-only (the browser drives it) and gated to
+// the restricted rollout: inference is billed to us, so it is not open to everyone
+// while it is free.
+func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
+	gate := h.requireRollout
+	api.Post("/assistant/sessions", mw.cookie, gate, h.CreateAssistantSession)
+	api.Get("/assistant/sessions", mw.cookie, gate, h.ListAssistantSessions)
+	api.Get("/assistant/sessions/:id", mw.cookie, gate, h.GetAssistantSession)
+	api.Delete("/assistant/sessions/:id", mw.cookie, gate, h.DeleteAssistantSession)
+	api.Post("/assistant/sessions/:id/messages", mw.cookie, gate, h.PostAssistantMessage)
+}
+
+// requireRollout admits moderators and beta testers. Membership is read fresh per
+// request rather than from the token, so revoking it takes effect immediately, and
+// a read failure fails closed — the assistant spends our money, so an unresolvable
+// caller is refused rather than let through.
+func (h *assistantHandlers) requireRollout(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	u, err := h.queries.GetUserByID(c.Context(), userID)
+	if err != nil {
+		return fiber.NewError(fiber.StatusUnauthorized, "not authenticated")
+	}
+	if u.Role != "moderator" && !u.BetaTester {
+		return fiber.NewError(fiber.StatusForbidden, "forbidden")
+	}
+	return c.Next()
+}
 
 // assistantMaxPrompt bounds one user message. The agent's context is finite and a
 // pasted job board is not a question; the limit is generous for prose.
@@ -63,12 +130,12 @@ func assistantSessionID(c *fiber.Ctx) (uuid.UUID, error) {
 // CreateAssistantSession starts a new chat conversation for the caller. Tailoring
 // sessions are created by the tailoring bootstrap, which knows the CV and vacancy
 // to bind; this endpoint deliberately cannot mint one.
-func (a *API) CreateAssistantSession(c *fiber.Ctx) error {
+func (h *assistantHandlers) CreateAssistantSession(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	sess, err := a.assistant.CreateSession(c.Context(), userID, assistant.PresetChat, nil, nil)
+	sess, err := h.store.CreateSession(c.Context(), userID, assistant.PresetChat, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -78,12 +145,12 @@ func (a *API) CreateAssistantSession(c *fiber.Ctx) error {
 // ListAssistantSessions returns the caller's chat conversations, newest activity
 // first. Tailoring conversations are not chats — each belongs to a CV — so they
 // never appear here.
-func (a *API) ListAssistantSessions(c *fiber.Ctx) error {
+func (h *assistantHandlers) ListAssistantSessions(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	sessions, err := a.assistant.ChatSessions(c.Context(), userID)
+	sessions, err := h.store.ChatSessions(c.Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -96,12 +163,12 @@ func (a *API) ListAssistantSessions(c *fiber.Ctx) error {
 
 // GetAssistantSession returns one owned conversation with its full transcript, so
 // the client can repaint it through the same reducer live events fold through.
-func (a *API) GetAssistantSession(c *fiber.Ctx) error {
-	sess, err := a.ownedSession(c)
+func (h *assistantHandlers) GetAssistantSession(c *fiber.Ctx) error {
+	sess, err := h.ownedSession(c)
 	if err != nil {
 		return err
 	}
-	messages, err := a.assistant.Transcript(c.Context(), sess.ID)
+	messages, err := h.store.Transcript(c.Context(), sess.ID)
 	if err != nil {
 		return err
 	}
@@ -112,7 +179,7 @@ func (a *API) GetAssistantSession(c *fiber.Ctx) error {
 }
 
 // DeleteAssistantSession removes an owned conversation and its transcript.
-func (a *API) DeleteAssistantSession(c *fiber.Ctx) error {
+func (h *assistantHandlers) DeleteAssistantSession(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -121,7 +188,7 @@ func (a *API) DeleteAssistantSession(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if err := a.assistant.DeleteSession(c.Context(), id, userID); err != nil {
+	if err := h.store.DeleteSession(c.Context(), id, userID); err != nil {
 		return mapAssistantError(err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
@@ -137,12 +204,12 @@ type assistantTurnRequest struct {
 // its result, the token usage, and exactly one terminal result — is written as a
 // named event. A write failure means the client is gone, which cancels the turn's
 // context so the loop stops before spending another model call.
-func (a *API) PostAssistantMessage(c *fiber.Ctx) error {
-	sess, err := a.ownedSession(c)
+func (h *assistantHandlers) PostAssistantMessage(c *fiber.Ctx) error {
+	sess, err := h.ownedSession(c)
 	if err != nil {
 		return err
 	}
-	if a.assistantRunner == nil {
+	if h.runner == nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "the assistant is not available")
 	}
 	var in assistantTurnRequest
@@ -157,7 +224,7 @@ func (a *API) PostAssistantMessage(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "message is too long")
 	}
 
-	registry := a.assistantRegistry(sess)
+	registry := h.registry(sess)
 	system := assistant.SystemPrompt(sess.Preset)
 
 	c.Set(fiber.HeaderContentType, "text/event-stream")
@@ -213,7 +280,7 @@ func (a *API) PostAssistantMessage(c *fiber.Ctx) error {
 			}
 		}()
 
-		err := a.assistantRunner.Run(ctx, sess, registry, system, prompt, func(e assistant.Event) {
+		err := h.runner.Run(ctx, sess, registry, system, prompt, func(e assistant.Event) {
 			mu.Lock()
 			defer mu.Unlock()
 			if !write(string(e.Kind), e) {
@@ -233,7 +300,7 @@ func (a *API) PostAssistantMessage(c *fiber.Ctx) error {
 }
 
 // ownedSession resolves the :id route param to a session the caller owns.
-func (a *API) ownedSession(c *fiber.Ctx) (assistant.Session, error) {
+func (h *assistantHandlers) ownedSession(c *fiber.Ctx) (assistant.Session, error) {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return assistant.Session{}, err
@@ -242,7 +309,7 @@ func (a *API) ownedSession(c *fiber.Ctx) (assistant.Session, error) {
 	if err != nil {
 		return assistant.Session{}, err
 	}
-	sess, err := a.assistant.Session(c.Context(), id, userID)
+	sess, err := h.store.Session(c.Context(), id, userID)
 	if err != nil {
 		return assistant.Session{}, mapAssistantError(err)
 	}

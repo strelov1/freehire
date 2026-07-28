@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/strelov1/freehire/internal/jobderive"
 )
 
 func TestNew_IsTechThreadedToFieldsAndParams(t *testing.T) {
@@ -18,7 +20,7 @@ func TestNew_IsTechThreadedToFieldsAndParams(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			j, err := New(Draft{Source: "src", ExternalID: "ext", Title: tt.title})
+			j, err := New(Draft{Input: jobderive.Input{Source: "src", ExternalID: "ext", Title: tt.title}})
 			if err != nil {
 				t.Fatalf("New: %v", err)
 			}

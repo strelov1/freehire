@@ -3,6 +3,8 @@ package enrich
 import (
 	"strings"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // The per-call timeout / generate / choices behavior now lives in internal/llm
@@ -21,6 +23,20 @@ func TestUserPromptIncludesURL(t *testing.T) {
 	}
 }
 
+// The untrusted header fields (title, company, location, URL) must be rune-bounded
+// like the description — a scraper-controlled oversized value must not amplify
+// per-call token cost.
+func TestUserPromptBoundsHeaderFields(t *testing.T) {
+	huge := strings.Repeat("x", maxFieldRunes+100)
+	got := userPrompt(JobInput{Title: huge, Company: huge, Location: huge, URL: huge, Description: "x"})
+	if strings.Contains(got, huge) {
+		t.Errorf("header fields must be truncated to %d runes, got a prompt of %d bytes", maxFieldRunes, len(got))
+	}
+	if strings.Count(got, strings.Repeat("x", maxFieldRunes)) != 4 {
+		t.Errorf("each of the 4 header fields should survive at exactly %d runes:\n%s", maxFieldRunes, got[:200])
+	}
+}
+
 // The system prompt must pin the region (reach) vocabulary it asks the model to
 // use, drawn from the same list Validate enforces, so prompt and validator
 // cannot drift.
@@ -30,7 +46,7 @@ func TestSystemPromptIncludesRegionVocabulary(t *testing.T) {
 	if !strings.Contains(p, "regions") {
 		t.Errorf("prompt must mention regions, got:\n%s", p)
 	}
-	for _, v := range RegionValues {
+	for _, v := range vocab.RegionValues {
 		if !strings.Contains(p, v) {
 			t.Errorf("prompt must list region value %q", v)
 		}

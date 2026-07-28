@@ -64,7 +64,7 @@ func TestFindJobResolvesByIdentityAndByURL(t *testing.T) {
 		t.Fatalf("seed jobs: %v", err)
 	}
 
-	h := &API{pool: pool, queries: db.New(pool)}
+	h := &jobsHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/jobs/find", h.FindJob)
 

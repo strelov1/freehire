@@ -172,13 +172,6 @@ SELECT role
 FROM users
 WHERE id = $1;
 
--- name: IsBetaTester :one
--- Slim beta-membership lookup for the RequireModeratorOrBeta middleware — a
--- primitive bool so the auth package stays free of a db import (same shape as GetUserRole).
-SELECT beta_tester
-FROM users
-WHERE id = $1;
-
 -- name: ListUserBlobKeys :many
 -- Every object-storage key the account owns, in one read: the stored CV, each
 -- referral-proof PDF, and the raw MIME of each hosted email. Account deletion

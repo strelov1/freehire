@@ -176,15 +176,15 @@ func TestPacedVagasGetterPaces(t *testing.T) {
 	// vagas 429s the single proxy IP under an unpaced burst, so its crawl must go through a
 	// rate limiter (mirrors careerspage). Guard that the wrapper actually paces, not passes raw.
 	inner := &recordingHTMLGetter{node: &html.Node{}}
-	g, ok := pacedVagasGetter(inner).(rateLimitedHTMLGetter)
+	g, ok := pacedHTMLGetter(inner, vagasRequestInterval, vagasRequestBurst).(rateLimitedHTMLGetter)
 	if !ok {
-		t.Fatal("pacedVagasGetter must return a rate-limited getter")
+		t.Fatal("pacedHTMLGetter must return a rate-limited getter")
 	}
 	if g.inner != HTMLGetter(inner) {
-		t.Fatal("pacedVagasGetter must wrap the given getter")
+		t.Fatal("pacedHTMLGetter must wrap the given getter")
 	}
 	if g.limiter == nil {
-		t.Fatal("pacedVagasGetter must install a limiter")
+		t.Fatal("pacedHTMLGetter must install a limiter")
 	}
 }
 

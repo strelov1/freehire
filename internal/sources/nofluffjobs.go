@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/skilltag"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // nofluffjobs adapts nofluffjobs.com, a Polish/CEE IT job board (the complement to justjoin).
@@ -218,7 +218,7 @@ func nofluffjobsSeniority(levels []string) string {
 	case "expert":
 		l = "principal"
 	}
-	if slices.Contains(enrich.SeniorityValues, l) {
+	if slices.Contains(vocab.SeniorityValues, l) {
 		return l
 	}
 	return ""

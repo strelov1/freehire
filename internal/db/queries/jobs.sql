@@ -154,7 +154,7 @@ WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 -- name: EstimateOpenJobs :one
 -- Fast approximate open-job total for the DB-backed /jobs list's meta.total. An
 -- exact count(*) over ~millions of open rows was a per-request full scan; the
--- planner's estimate (see estimate_open_jobs(), migration 0033) is O(1) and
+-- planner's estimate (see estimate_open_jobs(), migrations/0001_init.sql) is O(1) and
 -- tracks the closed_at IS NULL filter. The total is approximate by design.
 SELECT estimate_open_jobs()::bigint;
 
@@ -790,7 +790,7 @@ WHERE id = sqlc.arg(id) AND liveness_strikes <> 0;
 -- enrichment, gated on the same conditions the backfill uses (unenriched or below the
 -- target schema version, and a non-blacklisted category), so an already-enriched job
 -- is not re-queued and a confidently non-technical role (exclude_categories =
--- enrich.NonTechCategories) never consumes LLM budget. category is NOT NULL DEFAULT '',
+-- vocab.NonTechCategories) never consumes LLM budget. category is NOT NULL DEFAULT '',
 -- so an empty/unrecognized category still enqueues (empty string <> ALL). Idempotent
 -- via the outbox's UNIQUE (job_id, target_version). Run in the same transaction as the
 -- job's UpsertJob so a newly ingested job is queued atomically with its write.

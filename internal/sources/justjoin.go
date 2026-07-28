@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/skilltag"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // justjoin adapts justjoin.it, a Polish/CEE IT job marketplace. Boardless (one public API,
@@ -218,7 +218,7 @@ func justJoinSeniority(level string) string {
 	if l == "mid" {
 		l = "middle"
 	}
-	if slices.Contains(enrich.SeniorityValues, l) {
+	if slices.Contains(vocab.SeniorityValues, l) {
 		return l
 	}
 	return ""

@@ -6,6 +6,7 @@
 package wordmatch
 
 import (
+	"strings"
 	"unicode"
 	"unicode/utf8"
 )
@@ -33,14 +34,14 @@ func Contains(s, term string, ok Boundary) bool {
 	}
 }
 
-// indexFrom returns the index of term in s at or after from, or -1.
+// indexFrom returns the index of the leftmost occurrence of term in s at or
+// after from, or -1.
 func indexFrom(s, term string, from int) int {
-	for i := from; i+len(term) <= len(s); i++ {
-		if s[i:i+len(term)] == term {
-			return i
-		}
+	i := strings.Index(s[from:], term)
+	if i < 0 {
+		return -1
 	}
-	return -1
+	return from + i
 }
 
 // UnicodeBoundary treats Unicode letters and digits as word runes, so Cyrillic

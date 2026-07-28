@@ -8,6 +8,24 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 )
 
+// sitemapHandlers serves the XML sitemaps for jobs and companies. The company
+// sitemap literals are registered before the /companies/:slug param route (in
+// Register) so they are not read as slugs; likewise /jobs/sitemap precedes
+// /jobs/:slug.
+type sitemapHandlers struct {
+	queries *db.Queries
+}
+
+func newSitemapHandlers(queries *db.Queries) *sitemapHandlers {
+	return &sitemapHandlers{queries: queries}
+}
+
+func (h *sitemapHandlers) register(api fiber.Router) {
+	api.Get("/jobs/sitemap", h.JobSitemap)
+	api.Get("/companies/sitemap", h.CompanySitemap)
+	api.Get("/companies/sitemap/boundaries", h.CompanySitemapBoundaries)
+}
+
 // sitemapMaxURLs is the sitemap-protocol per-file cap. It bounds the company slice
 // and the chunk size the company index uses for keyset boundaries, so a served
 // chunk can never exceed the protocol limit.
@@ -42,8 +60,8 @@ func sitemapChunk(c *fiber.Ctx) int64 {
 }
 
 // JobSitemap serves the freshest open-job sitemap entries (newest id first).
-func (a *API) JobSitemap(c *fiber.Ctx) error {
-	rows, err := a.queries.ListJobSitemapFreshest(c.Context(), jobSitemapFreshest)
+func (h *sitemapHandlers) JobSitemap(c *fiber.Ctx) error {
+	rows, err := h.queries.ListJobSitemapFreshest(c.Context(), jobSitemapFreshest)
 	if err != nil {
 		return err
 	}
@@ -55,8 +73,8 @@ func (a *API) JobSitemap(c *fiber.Ctx) error {
 }
 
 // CompanySitemap serves one keyset page of company sitemap entries after ?after=<slug>.
-func (a *API) CompanySitemap(c *fiber.Ctx) error {
-	rows, err := a.queries.ListCompanySitemap(c.Context(), db.ListCompanySitemapParams{
+func (h *sitemapHandlers) CompanySitemap(c *fiber.Ctx) error {
+	rows, err := h.queries.ListCompanySitemap(c.Context(), db.ListCompanySitemapParams{
 		AfterSlug: c.Query("after"),
 		BatchSize: sitemapLimit(c),
 	})
@@ -72,8 +90,8 @@ func (a *API) CompanySitemap(c *fiber.Ctx) error {
 
 // CompanySitemapBoundaries returns the keyset cursor (slug) ending each ?chunk=<n> of
 // companies, for building the sitemap index.
-func (a *API) CompanySitemapBoundaries(c *fiber.Ctx) error {
-	cursors, err := a.queries.CompanySitemapBoundaries(c.Context(), sitemapChunk(c))
+func (h *sitemapHandlers) CompanySitemapBoundaries(c *fiber.Ctx) error {
+	cursors, err := h.queries.CompanySitemapBoundaries(c.Context(), sitemapChunk(c))
 	if err != nil {
 		return err
 	}

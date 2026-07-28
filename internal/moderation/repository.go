@@ -9,9 +9,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/pgconv"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // Compile-time proof that QueriesRepository satisfies Repository.
@@ -41,58 +41,19 @@ func (r *QueriesRepository) Create(ctx context.Context, f job.Fields, actorID in
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// The authoritative manual salary (nil when none) seeds the salary_*_manual columns;
-	// the mint query also folds it into the enrichment payload so it displays at once.
-	var salMin, salMax *int
-	var salCurrency, salPeriod string
-	if f.ManualSalary != nil {
-		salMin, salMax = f.ManualSalary.Min, f.ManualSalary.Max
-		salCurrency, salPeriod = f.ManualSalary.Currency, f.ManualSalary.Period
-	}
-
 	qtx := r.q.WithTx(tx)
-	row, err := qtx.UpsertManualJob(ctx, db.UpsertManualJobParams{
-		Source:      f.Source,
-		ExternalID:  f.ExternalID,
-		URL:         f.URL,
-		Title:       f.Title,
-		Company:     f.Company,
-		CompanySlug: f.CompanySlug,
-		Location:    f.Location,
-		Remote:      f.Remote,
-		Description: f.Description,
-		PostedAt:    pgconv.Timestamptz(f.PostedAt),
-		PublicSlug:  f.PublicSlug,
-		Countries:   f.Countries,
-		Regions:     f.Regions,
-		Cities:      f.Cities,
-		WorkMode:    f.WorkMode,
-		Skills:      f.Skills,
-		Seniority:   f.Seniority,
-		Category:    f.Category,
-		IsTech:      pgconv.Bool(f.IsTech),
-
-		PostingLanguage:    f.PostingLanguage,
-		EmploymentType:     f.EmploymentType,
-		EducationLevel:     f.EducationLevel,
-		EnglishLevel:       f.EnglishLevel,
-		ExperienceYearsMin: pgconv.Int4(f.ExperienceYearsMin),
-
-		SalaryMinManual:      pgconv.Int4(salMin),
-		SalaryMaxManual:      pgconv.Int4(salMax),
-		SalaryCurrencyManual: salCurrency,
-		SalaryPeriodManual:   salPeriod,
-
-		CreatedBy: actorID,
-		UpdatedBy: actorID,
-	})
+	// The Fields→params mapping (including the manual-salary seeding and the actor
+	// stamp) lives on the aggregate (job.Fields.UpsertManualParams), shared with
+	// every other write path. The mint query also folds the manual salary into the
+	// enrichment payload so it displays at once.
+	row, err := qtx.UpsertManualJob(ctx, f.UpsertManualParams(actorID))
 	if err != nil {
 		return job.Job{}, job.Extras{}, fmt.Errorf("upsert manual job: %w", err)
 	}
 	if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
 		TargetVersion:     r.targetVersion,
 		JobID:             row.ID,
-		ExcludeCategories: enrich.NonTechCategories,
+		ExcludeCategories: vocab.NonTechCategories,
 	}); err != nil {
 		return job.Job{}, job.Extras{}, fmt.Errorf("enqueue enrichment: %w", err)
 	}

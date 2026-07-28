@@ -38,7 +38,7 @@ type deleteAccountBody struct {
 // issued it (the same reasoning that keeps key management off the key path). The
 // session cookie is expired in the response, and every other device's cookie stops
 // authenticating as soon as the row is gone — RequireAuth checks the subject exists.
-func (a *API) DeleteAccount(c *fiber.Ctx) error {
+func (h *authHandlers) DeleteAccount(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -47,7 +47,7 @@ func (a *API) DeleteAccount(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	email, err := a.accountEmails.UserEmail(c.Context(), userID)
+	email, err := h.accountEmails.UserEmail(c.Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -56,13 +56,13 @@ func (a *API) DeleteAccount(c *fiber.Ctx) error {
 	if in.Email == "" || !strings.EqualFold(strings.TrimSpace(in.Email), email) {
 		return fiber.NewError(fiber.StatusBadRequest, "confirm deletion by entering your account email")
 	}
-	if err := a.accountDelete.Delete(c.Context(), userID); err != nil {
+	if err := h.accountDelete.Delete(c.Context(), userID); err != nil {
 		if errors.Is(err, accountdelete.ErrStorageUnavailable) {
 			// Nothing was erased — the account is intact and the request can be retried.
 			return fiber.NewError(fiber.StatusServiceUnavailable, "could not erase your stored files; nothing was deleted, please try again")
 		}
 		return err
 	}
-	auth.ClearTokenCookie(c, a.cookieSecure, auth.CookieDomainForHost(c.Hostname(), a.cookieDomains))
+	auth.ClearTokenCookie(c, h.cookieSecure, auth.CookieDomainForHost(c.Hostname(), h.cookieDomains))
 	return c.SendStatus(fiber.StatusNoContent)
 }

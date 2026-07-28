@@ -7,7 +7,7 @@ import type { Enrichment, Job } from './types';
 import { countryLabel } from './facets';
 import {
   REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
-  CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS,
+  CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS, ENGLISH_LEVEL_LABELS,
 } from './labels';
 
 /** One value within a facet row: its display text and, when the facet maps to a
@@ -32,16 +32,6 @@ const RELOCATION: Record<string, string> = {
   not_supported: 'Not supported',
   supported: 'Supported',
   required: 'Required',
-};
-
-const ENGLISH_LEVEL: Record<string, string> = {
-  a1: 'A1',
-  a2: 'A2',
-  b1: 'B1',
-  b2: 'B2',
-  c1: 'C1',
-  c2: 'C2',
-  native: 'Native',
 };
 
 const CURRENCY_SYMBOL: Record<string, string> = { USD: '$', EUR: '€', GBP: '£' };
@@ -195,7 +185,7 @@ export function summaryFacets(job: Job): Facet[] {
   plain('Experience', e.experience_years_min != null ? `${e.experience_years_min}+ yrs` : null);
   // english_level carries a 'none' sentinel that must not render as a facet.
   const english = e.english_level && e.english_level !== 'none' ? e.english_level : null;
-  link('English', 'english_level', english, ENGLISH_LEVEL);
+  link('English', 'english_level', english, ENGLISH_LEVEL_LABELS);
   link('Category', 'category', e.category, CATEGORY_LABELS);
   links('Country', 'countries', job.countries, countryLabel, true);
   link('Relocation', 'relocation', e.relocation, RELOCATION);

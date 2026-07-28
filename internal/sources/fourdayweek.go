@@ -200,7 +200,7 @@ func fourDayWeekWorkMode(wa string) string {
 	}
 }
 
-// fourDayWeekSeniority maps the platform's level onto enrich.SeniorityValues; an unknown or
+// fourDayWeekSeniority maps the platform's level onto vocab.SeniorityValues; an unknown or
 // absent level yields empty so the title dictionary decides.
 func fourDayWeekSeniority(level string) string {
 	switch level {
@@ -219,7 +219,7 @@ func fourDayWeekSeniority(level string) string {
 	}
 }
 
-// fourDayWeekCategory maps the platform's category onto enrich.CategoryValues for the ones with
+// fourDayWeekCategory maps the platform's category onto vocab.CategoryValues for the ones with
 // a clean equivalent; generic ("engineering"), ambiguous ("data"), or non-tech-with-no-vocab
 // categories stay empty so the title dictionary decides rather than guessing.
 func fourDayWeekCategory(category string) string {

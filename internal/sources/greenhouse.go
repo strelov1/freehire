@@ -28,16 +28,7 @@ func (g greenhouse) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	url := fmt.Sprintf("%s/%s/jobs?content=true", greenhouseBaseURL, e.Board)
 
 	var resp struct {
-		Jobs []struct {
-			ID          int64  `json:"id"`
-			Title       string `json:"title"`
-			AbsoluteURL string `json:"absolute_url"`
-			UpdatedAt   string `json:"updated_at"`
-			Content     string `json:"content"`
-			Location    struct {
-				Name string `json:"name"`
-			} `json:"location"`
-		} `json:"jobs"`
+		Jobs []GreenhousePosting `json:"jobs"`
 	}
 	if err := g.http.GetJSON(ctx, url, &resp); err != nil {
 		return nil, fmt.Errorf("greenhouse: fetch board %s: %w", e.Board, err)
@@ -45,16 +36,43 @@ func (g greenhouse) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 
 	jobs := make([]Job, 0, len(resp.Jobs))
 	for _, j := range resp.Jobs {
-		jobs = append(jobs, Job{
-			ExternalID:  strconv.FormatInt(j.ID, 10),
-			URL:         j.AbsoluteURL,
-			Title:       j.Title,
-			Company:     e.Company,
-			Location:    j.Location.Name,
-			Description: sanitizeHTML(html.UnescapeString(j.Content)),
-			Remote:      isRemote(j.Location.Name),
-			PostedAt:    parseRFC3339(j.UpdatedAt),
-		})
+		job := MapGreenhousePosting(j)
+		job.ExternalID = strconv.FormatInt(j.ID, 10)
+		job.Company = e.Company
+		jobs = append(jobs, job)
 	}
 	return jobs, nil
+}
+
+// GreenhousePosting is one job from the Greenhouse public boards API (the list endpoint
+// with content=true and the per-job endpoint share the shape), exported so the
+// link-following adapter (internal/linksource) decodes the same payload.
+type GreenhousePosting struct {
+	ID          int64  `json:"id"`
+	Title       string `json:"title"`
+	AbsoluteURL string `json:"absolute_url"`
+	UpdatedAt   string `json:"updated_at"`
+	Content     string `json:"content"`
+	// CompanyName is served by the per-job endpoint only; the board list leaves it empty.
+	CompanyName string `json:"company_name"`
+	Location    struct {
+		Name string `json:"name"`
+	} `json:"location"`
+}
+
+// MapGreenhousePosting maps a Greenhouse boards-API posting into a Job, so the board
+// adapter and the link-following adapter produce identical facets for the same posting.
+// ExternalID and Company are left to the caller: the board adapter sets the raw id (the
+// pipeline namespaces it by board) and the configured company; the link resolver
+// namespaces the id itself and takes the company from the API's company_name (a TG link
+// can point at a board the crawl config does not list).
+func MapGreenhousePosting(j GreenhousePosting) Job {
+	return Job{
+		URL:         j.AbsoluteURL,
+		Title:       j.Title,
+		Location:    j.Location.Name,
+		Description: sanitizeHTML(html.UnescapeString(j.Content)),
+		Remote:      isRemote(j.Location.Name),
+		PostedAt:    parseRFC3339(j.UpdatedAt),
+	}
 }

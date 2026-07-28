@@ -30,7 +30,7 @@ func (c *Client) ListSemanticVectors(ctx context.Context, offset, limit int) ([]
 		return nil, fmt.Errorf("search: list semantic vectors request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+c.key)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := rawClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("search: list semantic vectors: %w", err)
 	}

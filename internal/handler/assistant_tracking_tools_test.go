@@ -95,8 +95,8 @@ func (r *trackingRepo) ExcludedJobIDs(context.Context, int64, int32) ([]int64, e
 	return nil, nil
 }
 
-func trackingAPI(repo *trackingRepo) *API {
-	return &API{tracking: jobtracking.New(repo)}
+func trackingAPI(repo *trackingRepo) *assistantHandlers {
+	return &assistantHandlers{tracking: &trackingHandlers{tracking: jobtracking.New(repo)}}
 }
 
 func TestSaveJobToolSavesForTheCaller(t *testing.T) {

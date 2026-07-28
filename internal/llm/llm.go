@@ -315,3 +315,11 @@ func TruncateRunes(s string, limit int) string {
 	}
 	return string(r[:limit])
 }
+
+// TrimTruncateRunes trims surrounding whitespace, clamps s to at most limit runes,
+// and trims again so a mid-word cut never leaves trailing whitespace. It is the one
+// "trim + truncate by runes" helper for bounding untrusted/model text before it is
+// served or sent to a model.
+func TrimTruncateRunes(s string, limit int) string {
+	return strings.TrimSpace(TruncateRunes(strings.TrimSpace(s), limit))
+}

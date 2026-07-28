@@ -51,7 +51,7 @@ func recoveryApp(t *testing.T) (*fiber.App, *captureMailer, *db.Queries, *auth.I
 	svc.WithCodes(accounts.NewQueriesCodeStore(queries), mailer)
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	h := &API{pool: pool, queries: queries, issuer: iss, accounts: svc}
+	h := &authHandlers{queries: queries, issuer: iss, accounts: svc}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	cookieAuth := auth.RequireAuth(iss, queries)

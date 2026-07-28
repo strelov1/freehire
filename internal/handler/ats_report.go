@@ -40,19 +40,19 @@ type atsResponse struct {
 // the deterministic structural + keyword score merged with any cached LLM review.
 // Cookie-only, owner-scoped (404); 503 when search is unconfigured; 200 with
 // has_cv=false when no CV is stored.
-func (a *API) GetATSReport(c *fiber.Ctx) error {
-	userID, profile, err := a.atsContext(c)
+func (h *resumeHandlers) GetATSReport(c *fiber.Ctx) error {
+	userID, profile, err := h.atsContext(c)
 	if err != nil {
 		return err
 	}
-	report, _, hasCV, err := a.deterministicReport(c, userID, profile)
+	report, _, hasCV, err := h.deterministicReport(c, userID, profile)
 	if err != nil {
 		return err
 	}
 	if !hasCV {
 		return c.JSON(fiber.Map{"data": atsResponse{HasCV: false}})
 	}
-	if review := a.cachedReview(c, userID); review != nil {
+	if review := h.cachedReview(c, userID); review != nil {
 		report.ApplyReview(review)
 	}
 	return c.JSON(fiber.Map{"data": atsResponse{HasCV: true, Report: report}})
@@ -62,12 +62,12 @@ func (a *API) GetATSReport(c *fiber.Ctx) error {
 // CV, caches it per user, and returns the report with it folded in. Best-effort: an
 // unconfigured or failing LLM returns the deterministic report (200). Cookie-only,
 // owner-scoped.
-func (a *API) PostATSReport(c *fiber.Ctx) error {
-	userID, profile, err := a.atsContext(c)
+func (h *resumeHandlers) PostATSReport(c *fiber.Ctx) error {
+	userID, profile, err := h.atsContext(c)
 	if err != nil {
 		return err
 	}
-	report, _, hasCV, err := a.deterministicReport(c, userID, profile)
+	report, _, hasCV, err := h.deterministicReport(c, userID, profile)
 	if err != nil {
 		return err
 	}
@@ -77,7 +77,7 @@ func (a *API) PostATSReport(c *fiber.Ctx) error {
 
 	// The qualitative review reads the de-identified structured résumé, never the raw CV.
 	// Absent structure ⇒ nil review ⇒ the deterministic report is served (below).
-	review, err := a.atsAnalyzer.Analyze(c.Context(), a.structuredResumeJSON(c, userID))
+	review, err := h.atsAnalyzer.Analyze(c.Context(), structuredResumeJSON(h.resume, c, userID))
 	if err != nil {
 		// Best-effort: log (never the CV text) and serve the deterministic report.
 		log.Printf("atscheck: review failed for user %d: %v", userID, err)
@@ -85,7 +85,7 @@ func (a *API) PostATSReport(c *fiber.Ctx) error {
 	}
 	if review != nil {
 		if blob, err := json.Marshal(review); err == nil {
-			if err := a.atsCache.SetUserATSAnalysis(c.Context(), db.SetUserATSAnalysisParams{
+			if err := h.atsCache.SetUserATSAnalysis(c.Context(), db.SetUserATSAnalysisParams{
 				ID:                userID,
 				ResumeAtsAnalysis: blob,
 			}); err != nil {
@@ -99,16 +99,16 @@ func (a *API) PostATSReport(c *fiber.Ctx) error {
 
 // atsContext resolves the authenticated caller, their profile (404 when none), and
 // enforces that search is configured (503).
-func (a *API) atsContext(c *fiber.Ctx) (int64, userprofile.Profile, error) {
+func (h *resumeHandlers) atsContext(c *fiber.Ctx) (int64, userprofile.Profile, error) {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return 0, userprofile.Profile{}, err
 	}
-	profile, err := a.userProfile.Get(c.Context(), userID)
+	profile, err := h.userProfile.Get(c.Context(), userID)
 	if err != nil {
 		return 0, userprofile.Profile{}, profileError(err)
 	}
-	if a.facets == nil {
+	if h.facets == nil {
 		return 0, userprofile.Profile{}, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
 	return userID, profile, nil
@@ -117,13 +117,13 @@ func (a *API) atsContext(c *fiber.Ctx) (int64, userprofile.Profile, error) {
 // deterministicReport builds the live deterministic report from the stored CV and
 // the selected role. hasCV is false (no error) when no CV is stored; cvText is
 // returned for the LLM path.
-func (a *API) deterministicReport(c *fiber.Ctx, userID int64, profile userprofile.Profile) (*atscheck.Report, string, bool, error) {
-	cvText, ok, err := a.storedCVText(c, userID)
+func (h *resumeHandlers) deterministicReport(c *fiber.Ctx, userID int64, profile userprofile.Profile) (*atscheck.Report, string, bool, error) {
+	cvText, ok, err := h.storedCVText(c, userID)
 	if err != nil || !ok {
 		return nil, "", ok, err
 	}
 	roleFilter := search.FilterFromValues(roleValues(c, profile))
-	res, err := a.facets.FacetCounts(c.Context(), search.FacetParams{
+	res, err := h.facets.FacetCounts(c.Context(), search.FacetParams{
 		Filter: roleFilter,
 		Facets: []string{"skills"},
 	})
@@ -136,8 +136,8 @@ func (a *API) deterministicReport(c *fiber.Ctx, userID int64, profile userprofil
 }
 
 // cachedReview reads the caller's cached LLM review, or nil when none/invalid.
-func (a *API) cachedReview(c *fiber.Ctx, userID int64) *atscheck.Review {
-	blob, err := a.atsCache.GetUserATSAnalysis(c.Context(), userID)
+func (h *resumeHandlers) cachedReview(c *fiber.Ctx, userID int64) *atscheck.Review {
+	blob, err := h.atsCache.GetUserATSAnalysis(c.Context(), userID)
 	if err != nil || len(blob) == 0 {
 		return nil
 	}
@@ -150,11 +150,11 @@ func (a *API) cachedReview(c *fiber.Ctx, userID int64) *atscheck.Review {
 
 // storedCVText returns the caller's stored CV text; ok=false (no error) when CV
 // storage is disabled or the caller has none stored.
-func (a *API) storedCVText(c *fiber.Ctx, userID int64) (string, bool, error) {
-	if !a.resume.Enabled() {
+func (h *resumeHandlers) storedCVText(c *fiber.Ctx, userID int64) (string, bool, error) {
+	if !h.resume.Enabled() {
 		return "", false, nil
 	}
-	text, err := a.resume.Text(c.Context(), userID)
+	text, err := h.resume.Text(c.Context(), userID)
 	if errors.Is(err, resume.ErrNotStored) {
 		return "", false, nil
 	}

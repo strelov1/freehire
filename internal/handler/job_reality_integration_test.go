@@ -42,7 +42,7 @@ func TestGetJob_ServesRealitySignal(t *testing.T) {
 		t.Fatalf("truncate: %v", err)
 	}
 
-	h := &API{pool: pool, queries: q}
+	h := &jobsHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/jobs/:slug", h.GetJob)
 

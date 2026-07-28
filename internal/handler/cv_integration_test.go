@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/cv"
@@ -27,10 +28,10 @@ import (
 )
 
 // seedAccount inserts a user and optionally flags it as a beta tester.
-func seedAccount(t *testing.T, h *API, email string, beta bool) int64 {
+func seedAccount(t *testing.T, pool *pgxpool.Pool, email string, beta bool) int64 {
 	t.Helper()
 	var id int64
-	if err := h.pool.QueryRow(context.Background(),
+	if err := pool.QueryRow(context.Background(),
 		`INSERT INTO users (email, beta_tester) VALUES ($1, $2) RETURNING id`, email, beta).Scan(&id); err != nil {
 		t.Fatalf("seed user %s: %v", email, err)
 	}
@@ -39,7 +40,7 @@ func seedAccount(t *testing.T, h *API, email string, beta bool) int64 {
 
 // buildCVApp wires just the CV routes onto a fresh fiber app. The routes are open to every
 // signed-in user (cookie auth only) — the beta gate was lifted when CV tailoring went public.
-func buildCVApp(h *API, iss *auth.Issuer) *fiber.App {
+func buildCVApp(h *cvHandlers, iss *auth.Issuer) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	saved := auth.RequireAuth(iss, testVersions)
 	app.Get("/api/v1/cv-templates", saved, h.ListCVTemplates)
@@ -84,12 +85,12 @@ func TestCVTemplatesEndpoint_OpenToAuthed(t *testing.T) {
 		t.Fatalf("truncate: %v", err)
 	}
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	h := &API{pool: pool, queries: queries, issuer: iss,
+	h := &cvHandlers{queries: queries,
 		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
 		resume:  resume.New(nil, resume.NewQueriesRepository(queries))}
 	app := buildCVApp(h, iss)
 
-	plainTok, _ := iss.Issue(seedAccount(t, h, "plain@example.test", false), testTokenVersion)
+	plainTok, _ := iss.Issue(seedAccount(t, pool, "plain@example.test", false), testTokenVersion)
 
 	if resp := doCV(t, app, fiber.MethodGet, "/api/v1/cv-templates", "", nil); resp.StatusCode != fiber.StatusUnauthorized {
 		t.Fatalf("unauthenticated templates = %d, want 401", resp.StatusCode)
@@ -119,14 +120,14 @@ func TestSetCVTemplateEndpoint(t *testing.T) {
 		t.Fatalf("truncate: %v", err)
 	}
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	h := &API{pool: pool, queries: queries, issuer: iss,
+	h := &cvHandlers{queries: queries,
 		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
 		resume:  resume.New(nil, resume.NewQueriesRepository(queries))}
 	app := buildCVApp(h, iss)
 
-	owner := seedAccount(t, h, "owner@example.test", true)
+	owner := seedAccount(t, pool, "owner@example.test", true)
 	ownerTok, _ := iss.Issue(owner, testTokenVersion)
-	otherTok, _ := iss.Issue(seedAccount(t, h, "other2@example.test", true), testTokenVersion)
+	otherTok, _ := iss.Issue(seedAccount(t, pool, "other2@example.test", true), testTokenVersion)
 
 	// Create a CV to switch the template on.
 	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs", ownerTok, createCVRequest{Title: "General"})
@@ -178,14 +179,14 @@ func TestCVEndpoints_CRUDAndIsolation(t *testing.T) {
 		t.Fatalf("truncate: %v", err)
 	}
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	h := &API{pool: pool, queries: queries, issuer: iss,
+	h := &cvHandlers{queries: queries,
 		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
 		resume:  resume.New(nil, resume.NewQueriesRepository(queries))} // storage disabled → seed no-ops
 	app := buildCVApp(h, iss)
 
-	beta := seedAccount(t, h, "beta@example.test", true)
-	other := seedAccount(t, h, "other@example.test", true)
-	plain := seedAccount(t, h, "plain@example.test", false)
+	beta := seedAccount(t, pool, "beta@example.test", true)
+	other := seedAccount(t, pool, "other@example.test", true)
+	plain := seedAccount(t, pool, "plain@example.test", false)
 	betaTok, _ := iss.Issue(beta, testTokenVersion)
 	otherTok, _ := iss.Issue(other, testTokenVersion)
 	plainTok, _ := iss.Issue(plain, testTokenVersion)
@@ -269,11 +270,11 @@ func TestCVCreate_SeedsFromStructuredResume(t *testing.T) {
 	// S3 storage is DISABLED (nil blobs): seeding reads the structured résumé from
 	// Postgres, so it must work independently of object storage.
 	store := resume.New(nil, resume.NewQueriesRepository(queries))
-	h := &API{pool: pool, queries: queries, issuer: iss,
+	h := &cvHandlers{queries: queries,
 		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)), resume: store}
 	app := buildCVApp(h, iss)
 
-	user := seedAccount(t, h, "seed@example.test", true)
+	user := seedAccount(t, pool, "seed@example.test", true)
 	tok, _ := iss.Issue(user, testTokenVersion)
 
 	// Seed a structured résumé directly. Both stamps take the same statement-time now(),

@@ -26,7 +26,7 @@ func (f *fakeCompanySearcher) SearchCompanies(_ context.Context, p search.Compan
 // projection can be exercised without a database — the branches that fall through to
 // Postgres are covered by the integration tests.
 func companyApp(cs companySearcher) *fiber.App {
-	h := &API{companySearch: cs}
+	h := &companiesHandlers{companySearch: cs}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/companies", h.ListCompanies)
 	return app

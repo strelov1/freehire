@@ -218,7 +218,7 @@ export const FILTER_COLLECTIONS: FilterCollection[] = [
     params: { skills: 'svelte' },
   },
   // Tech-category landings — the "<category> jobs" search pattern, one per canonical
-  // `category` facet value (see enrich.CategoryValues). The param is `category`; the
+  // `category` facet value (see vocab.CategoryValues). The param is `category`; the
   // slug is a readable form of the value — usually its kebab case (data_engineering →
   // data-engineering), but chosen for readability where they differ (ml_ai →
   // machine-learning). Only technical categories are listed — non-tech ones

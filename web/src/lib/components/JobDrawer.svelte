@@ -4,7 +4,7 @@
   import { Trash2, X, ExternalLink } from '@lucide/svelte';
   import { STAGES, humanizeStage } from '$lib/stages';
   import { CLOSED_OUTCOMES, type ClosedOutcome } from '$lib/board';
-  import { timeAgo, cn } from '$lib/utils';
+  import { timeAgo, cn, errorMessage } from '$lib/utils';
   import { tablist } from '$lib/actions/tablist';
   import { cardTags } from '$lib/enrichment';
   import CompanyLogo from './CompanyLogo.svelte';
@@ -70,7 +70,7 @@
       const app = await api.getTrackedApplication(item.job.public_slug);
       emails = app.emails;
     } catch (e) {
-      emailsError = e instanceof Error ? e.message : 'Failed to load emails.';
+      emailsError = errorMessage(e, 'Failed to load emails.');
     } finally {
       emailsLoading = false;
     }

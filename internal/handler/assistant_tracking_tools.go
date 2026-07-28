@@ -16,34 +16,34 @@ import (
 // bookmark, the application mark, the board stage and note, and the listing of
 // what they are tracking. Every one acts as the session's owner — there is no
 // credential to scope, and no way to address another user's rows.
-func (a *API) assistantTrackingTools() []assistant.Tool {
+func (h *assistantHandlers) assistantTrackingTools() []assistant.Tool {
 	return []assistant.Tool{
-		a.slugActionTool(
+		h.slugActionTool(
 			"save_job",
 			"Bookmark a vacancy for the user. Idempotent.",
 			func(ctx context.Context, userID int64, slug string) (jobtracking.Interaction, error) {
-				return a.tracking.SaveJob(ctx, userID, slug)
+				return h.tracking.tracking.SaveJob(ctx, userID, slug)
 			}),
-		a.slugActionTool(
+		h.slugActionTool(
 			"unsave_job",
 			"Remove a vacancy from the user's bookmarks. Idempotent.",
 			func(ctx context.Context, userID int64, slug string) (jobtracking.Interaction, error) {
-				return a.tracking.Unsave(ctx, userID, slug)
+				return h.tracking.tracking.Unsave(ctx, userID, slug)
 			}),
-		a.slugActionTool(
+		h.slugActionTool(
 			"apply_job",
 			"Mark a vacancy as applied to. This records the user's own application; it does not submit anything to the employer.",
 			func(ctx context.Context, userID int64, slug string) (jobtracking.Interaction, error) {
-				return a.tracking.MarkApplied(ctx, userID, slug)
+				return h.tracking.tracking.MarkApplied(ctx, userID, slug)
 			}),
-		a.trackJobTool(),
-		a.myJobsTool(),
+		h.trackJobTool(),
+		h.myJobsTool(),
 	}
 }
 
 // slugActionTool builds the tools that take a single vacancy slug and perform one
 // idempotent action on the caller's interaction with it.
-func (a *API) slugActionTool(name, description string, act func(context.Context, int64, string) (jobtracking.Interaction, error)) assistant.Tool {
+func (h *assistantHandlers) slugActionTool(name, description string, act func(context.Context, int64, string) (jobtracking.Interaction, error)) assistant.Tool {
 	return assistant.Tool{
 		Name:        name,
 		Description: description,
@@ -62,7 +62,7 @@ func (a *API) slugActionTool(name, description string, act func(context.Context,
 			if in.Slug == "" {
 				return nil, errors.New("slug is required")
 			}
-			if a.tracking == nil {
+			if h.tracking.tracking == nil {
 				return nil, errors.New("job tracking is not available")
 			}
 			res, err := act(ctx, userID, in.Slug)
@@ -75,7 +75,7 @@ func (a *API) slugActionTool(name, description string, act func(context.Context,
 }
 
 // trackJobTool sets a vacancy's application stage and/or free-text note.
-func (a *API) trackJobTool() assistant.Tool {
+func (h *assistantHandlers) trackJobTool() assistant.Tool {
 	return assistant.Tool{
 		Name: "track_job",
 		Description: "Set the application stage and/or a free-text note on a vacancy the user is tracking. " +
@@ -109,10 +109,10 @@ func (a *API) trackJobTool() assistant.Tool {
 			if in.Stage != nil && !userjob.ValidStage(*in.Stage) {
 				return nil, fmt.Errorf("unknown stage %q — valid stages are: %s", *in.Stage, strings.Join(userjob.Stages, ", "))
 			}
-			if a.tracking == nil {
+			if h.tracking.tracking == nil {
 				return nil, errors.New("job tracking is not available")
 			}
-			res, err := a.tracking.Track(ctx, userID, in.Slug, in.Stage, in.Note)
+			res, err := h.tracking.tracking.Track(ctx, userID, in.Slug, in.Stage, in.Note)
 			if err != nil {
 				return nil, trackingToolError(in.Slug, err)
 			}
@@ -122,7 +122,7 @@ func (a *API) trackJobTool() assistant.Tool {
 }
 
 // myJobsTool lists what the caller is tracking, under one of the board's filters.
-func (a *API) myJobsTool() assistant.Tool {
+func (h *assistantHandlers) myJobsTool() assistant.Tool {
 	return assistant.Tool{
 		Name:        "my_jobs",
 		Description: "List the vacancies the user is tracking — saved, applied, viewed or the whole board — with each one's stage and note.",
@@ -141,7 +141,7 @@ func (a *API) myJobsTool() assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			if a.tracking == nil {
+			if h.tracking.tracking == nil {
 				return nil, errors.New("job tracking is not available")
 			}
 			limit := in.Limit
@@ -150,7 +150,7 @@ func (a *API) myJobsTool() assistant.Tool {
 			}
 			limit = min(limit, assistantMaxSearchLimit)
 
-			listing, err := a.tracking.ListTracked(ctx, userID, in.Filter, int32(limit), 0)
+			listing, err := h.tracking.tracking.ListTracked(ctx, userID, in.Filter, int32(limit), 0)
 			if errors.Is(err, jobtracking.ErrInvalidFilter) {
 				return nil, fmt.Errorf("unknown filter %q — use all, viewed, saved, applied, board or dismissed", in.Filter)
 			}

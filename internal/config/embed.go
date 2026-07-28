@@ -1,11 +1,14 @@
 package config
 
-import "time"
+import (
+	"os"
+	"time"
+)
 
 // Embed holds the tuning knobs for the incremental semantic-embedding worker
 // (cmd/embed). Meilisearch and the embedding backend are configured elsewhere —
 // MEILI_URL/MEILI_MASTER_KEY via the shared Settings (Load), and EMBED_URL/
-// EMBED_API_KEY/EMBED_CONCURRENCY inside search.NewClient — so this holds only the
+// EMBED_API_KEY/EMBED_CONCURRENCY via LoadEmbedClient — so this holds only the
 // queue-drain knobs, mirroring the tuning half of config.Enrich.
 type Embed struct {
 	BatchSize    int           // claim wave + embed/upsert batch size (one Meili task per wave)
@@ -16,9 +19,9 @@ type Embed struct {
 
 // LoadEmbed reads the worker's tuning from the environment, all optional with defaults.
 // EMBED_BATCH_SIZE is the wave/batch size (bigger = fewer Meili tasks for a bulk
-// backfill); EMBED_CONCURRENCY (read separately by search.NewClient) chunks the embed
-// calls inside each batch. There is no required field — the MEILI_MASTER_KEY requirement
-// is enforced at the cmd/embed call site (like cmd/reindex), so this never fails.
+// backfill); EMBED_CONCURRENCY (read by LoadEmbedClient) chunks the embed calls inside
+// each batch. There is no required field — the MEILI_MASTER_KEY requirement is
+// enforced at the cmd/embed call site (like cmd/reindex), so this never fails.
 func LoadEmbed() Embed {
 	e := Embed{
 		BatchSize:    envInt("EMBED_BATCH_SIZE", 500),
@@ -39,4 +42,24 @@ func LoadEmbed() Embed {
 		e.LeaseSeconds = floor
 	}
 	return e
+}
+
+// EmbedClient holds the embedding-backend connection settings every embedding search
+// client is built with (cmd/server embeds CVs; cmd/reindex --semantic and cmd/embed
+// embed jobs). They live here rather than inside internal/search so the library stays
+// env-free; cmd wires them into search.NewClient's WithEmbed* options. All optional:
+// URL defaults to the host2 TEI (search's embedderURL), APIKey to none, Concurrency to 1.
+type EmbedClient struct {
+	URL         string // EMBED_URL — TEI-compatible /embed endpoint; empty = default host2 TEI
+	APIKey      string // EMBED_API_KEY — bearer token for an authenticated endpoint
+	Concurrency int    // EMBED_CONCURRENCY — embed calls in flight per batch (default 1)
+}
+
+// LoadEmbedClient reads the embedding-backend settings from the environment.
+func LoadEmbedClient() EmbedClient {
+	return EmbedClient{
+		URL:         os.Getenv("EMBED_URL"),
+		APIKey:      os.Getenv("EMBED_API_KEY"),
+		Concurrency: envInt("EMBED_CONCURRENCY", 1),
+	}
 }

@@ -49,7 +49,11 @@ func RequireAuthWS(iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthenti
 		}
 		// Full-scope only, like every other non-CV surface: driving a browser as the
 		// user is well outside what a CV-tailoring credential was minted for.
-		b, ok := resolveCredential(c, iss, versions, keys, token)
+		b, ok, err := resolveCredential(c, iss, versions, keys, token)
+		if err != nil {
+			// A key-lookup outage is a real error, not a rejected handshake.
+			return err
+		}
 		if !ok {
 			return fiber.NewError(fiber.StatusUnauthorized, "not authenticated")
 		}

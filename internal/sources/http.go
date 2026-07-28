@@ -198,7 +198,7 @@ func (c *Client) GetStream(ctx context.Context, url, accept string, fn func(io.R
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return &StatusError{Code: resp.StatusCode, URL: url}
+		return &StatusError{Method: http.MethodGet, Code: resp.StatusCode, URL: url}
 	}
 	return fn(resp.Body)
 }
@@ -241,8 +241,9 @@ func (c *Client) GetXML(ctx context.Context, url string, v any) error {
 const maxTextBody = 2 << 20 // 2 MiB
 
 // GetText fetches url and returns its raw response body as a string (capped at
-// maxTextBody). Used by the domain-following harvest, which regex-scans a careers
-// page's HTML for an embedded ATS link rather than parsing a DOM.
+// maxTextBody). It serves adapters whose endpoint is a raw page they scan or slice
+// themselves rather than parse as a DOM (paylocity, taleo, infojobs, …) and the
+// harvest/board-resolve probes that regex-scan a careers page for an embedded ATS link.
 func (c *Client) GetText(ctx context.Context, url string) (string, error) {
 	return c.GetTextWithHeaders(ctx, url, nil)
 }
@@ -331,15 +332,16 @@ func (c *Client) PostJSONWithHeaders(ctx context.Context, url string, headers ma
 // StatusError is a non-2xx HTTP response from the sources client. Callers that need
 // to branch on the status code (e.g. eightfold's rate-limit backoff) match it with
 // errors.As instead of scraping the message. Its Error() renders the same
-// "sources: GET <url>: status <n>" text the client has always produced, so any
+// "sources: <METHOD> <url>: status <n>" text the client has always produced, so any
 // remaining string-based check keeps working.
 type StatusError struct {
-	Code int
-	URL  string
+	Method string
+	Code   int
+	URL    string
 }
 
 func (e *StatusError) Error() string {
-	return fmt.Sprintf("sources: GET %s: status %d", e.URL, e.Code)
+	return fmt.Sprintf("sources: %s %s: status %d", e.Method, e.URL, e.Code)
 }
 
 // ChallengeError is an AWS-WAF Challenge response — a request the WAF answered with an
@@ -435,18 +437,18 @@ func (c *Client) do(ctx context.Context, r request) error {
 		case resp.StatusCode == http.StatusTooManyRequests:
 			delay = retryAfter(resp, c.retryDelay) // honor the rate-limit hint
 			resp.Body.Close()
-			lastErr = &StatusError{Code: resp.StatusCode, URL: r.url}
+			lastErr = &StatusError{Method: r.method, Code: resp.StatusCode, URL: r.url}
 			continue // rate limited — transient
 		case resp.StatusCode >= 500:
 			resp.Body.Close()
-			lastErr = &StatusError{Code: resp.StatusCode, URL: r.url}
+			lastErr = &StatusError{Method: r.method, Code: resp.StatusCode, URL: r.url}
 			continue // server error — transient
 		default:
 			resp.Body.Close()
-			return &StatusError{Code: resp.StatusCode, URL: r.url}
+			return &StatusError{Method: r.method, Code: resp.StatusCode, URL: r.url}
 		}
 	}
-	return fmt.Errorf("sources: GET %s failed after %d attempts: %w", r.url, c.maxRetries+1, lastErr)
+	return fmt.Errorf("sources: %s %s failed after %d attempts: %w", r.method, r.url, c.maxRetries+1, lastErr)
 }
 
 // retryAfter is how long to wait before retrying a 429, honoring the response's

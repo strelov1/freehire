@@ -11,6 +11,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // dbStore adapts the generated queries + connection pool to enrich.Store. It is the
@@ -28,7 +29,7 @@ func newDBStore(pool *pgxpool.Pool) *dbStore {
 func (s *dbStore) Enqueue(ctx context.Context, targetVersion int) (int64, error) {
 	return s.q.EnqueuePendingJobs(ctx, db.EnqueuePendingJobsParams{
 		TargetVersion:     int32(targetVersion),
-		ExcludeCategories: enrich.NonTechCategories,
+		ExcludeCategories: vocab.NonTechCategories,
 	})
 }
 

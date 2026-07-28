@@ -103,10 +103,8 @@ func TestResolveJobEndpoint(t *testing.T) {
 		"/jobs/staff-java-backend-developer": vacancyPage,
 		"/about-us":                          aboutPage,
 	}
-	h := &API{
-		pool:         pool,
+	h := &contributionHandlers{
 		queries:      queries,
-		issuer:       iss,
 		contribution: contribution.New(contribution.NewQueriesRepository(queries), nil),
 		imports:      linkimport.New(pool, queries, nil, pages),
 	}

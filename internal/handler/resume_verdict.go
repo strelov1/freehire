@@ -18,21 +18,21 @@ import (
 // facet params (defaulting to the profile's specializations when no category is
 // given); the profile's skills are always the measured set, never a filter.
 // Cookie-only, session-scoped (no profile → 404); 503 when search is unconfigured.
-func (a *API) GetResumeVerdict(c *fiber.Ctx) error {
+func (h *resumeHandlers) GetResumeVerdict(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
 
-	profile, err := a.userProfile.Get(c.Context(), userID)
+	profile, err := h.userProfile.Get(c.Context(), userID)
 	if err != nil {
 		return profileError(err)
 	}
-	if a.facets == nil {
+	if h.facets == nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
 
-	v, err := a.computeCoverage(c, userID, profile)
+	v, err := h.computeCoverage(c, userID, profile)
 	if err != nil {
 		return err
 	}
@@ -43,10 +43,10 @@ func (a *API) GetResumeVerdict(c *fiber.Ctx) error {
 // filter is the request facets (defaulting category to the profile), the covered
 // count is measured against the profile's structured skills, and the role-skill
 // breakdown is scored against the CV's parsed declared/body/all sets.
-func (a *API) computeCoverage(c *fiber.Ctx, userID int64, profile userprofile.Profile) (verdict.Verdict, error) {
+func (h *resumeHandlers) computeCoverage(c *fiber.Ctx, userID int64, profile userprofile.Profile) (verdict.Verdict, error) {
 	roleFilter := search.FilterFromValues(roleValues(c, profile))
-	declared, body, all := a.cvSkillSets(c, userID)
-	return a.coverageFor(c.Context(), roleFilter, profile.Skills, declared, body, all)
+	declared, body, all := h.cvSkillSets(c, userID)
+	return h.coverageFor(c.Context(), roleFilter, profile.Skills, declared, body, all)
 }
 
 // coverageFor runs the three facet queries behind the coverage verdict for a role
@@ -58,15 +58,15 @@ func (a *API) computeCoverage(c *fiber.Ctx, userID int64, profile userprofile.Pr
 // total (see below). coverageSkills drives covered/uncovered; declared/body/all
 // score the role-skill breakdown — the two sets differ for the CV verdict (profile
 // skills vs parsed CV) and coincide for a stateless skill list.
-func (a *API) coverageFor(ctx context.Context, roleFilter any, coverageSkills, declared, body, all []string) (verdict.Verdict, error) {
-	role, err := a.facets.FacetCounts(ctx, search.FacetParams{
+func (h *resumeHandlers) coverageFor(ctx context.Context, roleFilter any, coverageSkills, declared, body, all []string) (verdict.Verdict, error) {
+	role, err := h.facets.FacetCounts(ctx, search.FacetParams{
 		Filter: roleFilter,
 		Facets: []string{"skills"},
 	})
 	if err != nil {
 		return verdict.Verdict{}, err
 	}
-	uncovered, err := a.facets.FacetCounts(ctx, search.FacetParams{
+	uncovered, err := h.facets.FacetCounts(ctx, search.FacetParams{
 		Filter: search.AndNotSkills(roleFilter, coverageSkills),
 		Facets: []string{"skills"},
 	})
@@ -76,7 +76,7 @@ func (a *API) coverageFor(ctx context.Context, roleFilter any, coverageSkills, d
 	// Skill-bearing total: the role's vacancies that list at least one tagged skill.
 	// Skill frequency (and the must-have flag) is measured against this, not the raw
 	// role total, so postings the tagger left skill-less don't deflate frequencies.
-	skilled, err := a.facets.FacetCounts(ctx, search.FacetParams{
+	skilled, err := h.facets.FacetCounts(ctx, search.FacetParams{
 		Filter: search.AndSkillsPresent(roleFilter),
 	})
 	if err != nil {
@@ -98,8 +98,8 @@ func (a *API) coverageFor(ctx context.Context, roleFilter any, coverageSkills, d
 // and union skill sets for the role breakdown and bundle coverage. Best-effort: with
 // no CV stored (or a read error) it returns empty sets so the breakdown degrades to
 // all-missing rather than failing the verdict.
-func (a *API) cvSkillSets(c *fiber.Ctx, userID int64) (declared, body, all []string) {
-	text, ok, err := a.storedCVText(c, userID)
+func (h *resumeHandlers) cvSkillSets(c *fiber.Ctx, userID int64) (declared, body, all []string) {
+	text, ok, err := h.storedCVText(c, userID)
 	if err != nil || !ok {
 		return nil, nil, nil
 	}

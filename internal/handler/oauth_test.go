@@ -49,7 +49,7 @@ func (r fakeRegistry) Provider(name, _ string) (oauth.Provider, bool) {
 
 func oauthApp(providers map[string]oauth.Provider) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	h := &API{
+	h := &authHandlers{
 		issuer:         auth.NewIssuer("test-secret", time.Hour),
 		oauth:          fakeRegistry(providers),
 		oauthCodes:     oauth.NewCodeStore(time.Minute),
@@ -181,7 +181,7 @@ func TestOAuthCallback_MissingCodeRedirectsWithError(t *testing.T) {
 func TestOAuthCallback_ErrorRedirectUsesRequestOrigin(t *testing.T) {
 	newApp := func() *fiber.App {
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-		h := &API{
+		h := &authHandlers{
 			issuer:         auth.NewIssuer("test-secret", time.Hour),
 			oauth:          fakeRegistry{"google": &fakeProvider{name: "google"}},
 			oauthCodes:     oauth.NewCodeStore(time.Minute),
@@ -270,7 +270,7 @@ func TestOAuthExchange_BadBodyIs400(t *testing.T) {
 // actually serves. Suffix-matching a cookie domain lets any subdomain — including a
 // hijacked or third-party-hosted one — steer the OAuth redirect.
 func TestRequestOrigin_OnlyTrustsAnExactServedHost(t *testing.T) {
-	h := &API{
+	h := &authHandlers{
 		frontendOrigin: "https://freehire.me",
 		cookieDomains:  []string{"freehire.me"},
 		servedHosts:    []string{"freehire.me", "apply.freehire.me"},
@@ -294,7 +294,7 @@ func TestRequestOrigin_OnlyTrustsAnExactServedHost(t *testing.T) {
 // With no SERVED_HOSTS configured the canonical frontend origin's own host is still
 // honoured, so a deployment that never sets the variable keeps working.
 func TestRequestOrigin_DefaultsToTheFrontendHost(t *testing.T) {
-	h := &API{
+	h := &authHandlers{
 		frontendOrigin: "https://freehire.me",
 		servedHosts:    servedHostsOrDefault(nil, "https://freehire.me"),
 	}
@@ -304,7 +304,7 @@ func TestRequestOrigin_DefaultsToTheFrontendHost(t *testing.T) {
 }
 
 // originForHost runs requestOrigin for one request Host.
-func originForHost(t *testing.T, h *API, host string) string {
+func originForHost(t *testing.T, h *authHandlers, host string) string {
 	t.Helper()
 	app := fiber.New()
 	app.Get("/origin", func(c *fiber.Ctx) error { return c.SendString(h.requestOrigin(c)) })

@@ -20,7 +20,7 @@ import (
 // (GetJobBySlug, TestUserJobs).
 func userJobsApp() (*fiber.App, *auth.Issuer) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	h := &API{issuer: iss, tracking: jobtracking.New(stubTrackingRepo{})}
+	h := &trackingHandlers{tracking: jobtracking.New(stubTrackingRepo{})}
 	app := fiber.New()
 	app.Post("/jobs/:slug/view", auth.RequireAuth(iss, testVersions), h.RecordView)
 	app.Post("/jobs/:slug/apply", auth.RequireAuth(iss, testVersions), h.MarkApplied)

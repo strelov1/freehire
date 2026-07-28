@@ -31,7 +31,7 @@ type resolveJobRequest struct {
 // carry from an aggregator would add a second row under a different identity — a duplicate
 // the ingest dedup passes (which work per company+title) would not collapse. Checking
 // first is what makes this safe to point at any page.
-func (a *API) ResolveJob(c *fiber.Ctx) error {
+func (h *contributionHandlers) ResolveJob(c *fiber.Ctx) error {
 	var in resolveJobRequest
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
@@ -46,7 +46,7 @@ func (a *API) ResolveJob(c *fiber.Ctx) error {
 		return err
 	}
 
-	slug, err := a.catalogSlugForURL(c.Context(), pageURL)
+	slug, err := catalogSlugForURL(c.Context(), h.queries, pageURL)
 	if err != nil {
 		return err
 	}
@@ -54,7 +54,7 @@ func (a *API) ResolveJob(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"data": fiber.Map{"public_slug": slug, "status": "found"}})
 	}
 
-	res, imported, err := a.imports.Import(c.Context(), pageURL)
+	res, imported, err := h.imports.Import(c.Context(), pageURL)
 	if err != nil {
 		// A transient fetch or parse failure, not a verdict on the page: the link is worth
 		// keeping, so it falls through to triage rather than surfacing as a 5xx.
@@ -68,7 +68,7 @@ func (a *API) ResolveJob(c *fiber.Ctx) error {
 	// Nothing read the page. Record the link so a maintainer can see what we are missing —
 	// the contribution service triages a recognised novel board as pending (and the
 	// submitter is rewarded for it) and anything else as review.
-	if err := a.queueForTriage(c, userID, pageURL); err != nil {
+	if err := h.queueForTriage(c, userID, pageURL); err != nil {
 		return err
 	}
 	return c.Status(fiber.StatusAccepted).
@@ -78,12 +78,12 @@ func (a *API) ResolveJob(c *fiber.Ctx) error {
 // queueForTriage hands an unimportable link to the contribution service. A board we
 // already crawl, or one someone already contributed, is not an error the caller can act
 // on — the link is known to us either way — so both are treated as queued.
-func (a *API) queueForTriage(c *fiber.Ctx, userID int64, pageURL string) error {
-	rec, _, _, err := a.contribution.Submit(c.Context(), userID, pageURL)
+func (h *contributionHandlers) queueForTriage(c *fiber.Ctx, userID int64, pageURL string) error {
+	rec, _, _, err := h.contribution.Submit(c.Context(), userID, pageURL)
 	switch {
 	case err == nil:
 		if rec.Status == contribution.StatusPending {
-			a.rewardContribution(c.Context(), userID, rec.ID)
+			rewardContribution(c.Context(), h.credits, userID, rec.ID)
 		}
 		return nil
 	case errors.Is(err, contribution.ErrBoardAlreadyTracked),

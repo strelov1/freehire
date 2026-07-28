@@ -86,7 +86,7 @@ func TestMyPipelineEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
-	h := &API{pool: pool, queries: queries, issuer: iss, tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries))}
+	h := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/me/tracking/pipeline", auth.RequireAuth(iss, testVersions), h.TrackingPipeline)
 

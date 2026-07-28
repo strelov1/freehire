@@ -4,7 +4,7 @@
 The denormalized facet columns on `companies` — job-derived `remote_regions` and curated `yc_*` columns — their maintenance, and the separation between the two.
 
 ## Always true
-- `companies.remote_regions` (text[], values from `enrich.RegionValues`) is job-derived: the distinct union of `jobs.regions` over the company's open jobs with `work_mode = 'remote'`.
+- `companies.remote_regions` (text[], values from `vocab.RegionValues`) is job-derived: the distinct union of `jobs.regions` over the company's open jobs with `work_mode = 'remote'`.
 - `remote_regions ⊆ regions` always holds.
 - `remote_regions` is maintained in the same set-based `RefreshCompanyFacets` pass as the other denormalized facets (part of the `IS DISTINCT FROM` change-guard) — no separate worker.
 - A remote job whose geography did not resolve contributes nothing (same "never guess" bias as `regions`); a company with no open remote job has an empty `remote_regions`.

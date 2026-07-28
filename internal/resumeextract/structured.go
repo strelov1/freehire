@@ -1,8 +1,6 @@
 package resumeextract
 
 import (
-	"strings"
-
 	"github.com/strelov1/freehire/internal/llm"
 )
 
@@ -143,10 +141,10 @@ func sanitizeEducation(e Education) (Education, bool) {
 
 // --- small helpers ---
 
-// clip trims s and truncates to at most max runes, reusing the shared rune-boundary cut
-// (llm.TruncateRunes) and trimming again so a mid-word cut never leaves a trailing space.
+// clip trims s and truncates to at most max runes, reusing the shared trim + rune-cut
+// (llm.TrimTruncateRunes) so a mid-word cut never leaves trailing whitespace.
 func clip(s string, max int) string {
-	return strings.TrimSpace(llm.TruncateRunes(strings.TrimSpace(s), max))
+	return llm.TrimTruncateRunes(s, max)
 }
 
 // limit returns at most n elements of s (nil-safe, preserves order).

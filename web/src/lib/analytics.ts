@@ -79,9 +79,17 @@ let gaLoaded = false;
 
 // Push a command onto GA's dataLayer, creating it on first use. At module scope (it
 // captures no locals) so it isn't recreated on each init.
-function gtag(...args: unknown[]): void {
-  (window.dataLayer ??= []).push(args);
-}
+//
+// WARNING: pushing `arguments` is load-bearing, not legacy style — it is the wire
+// format gtag.js expects. It reads a dataLayer entry as a command only when the
+// entry is an Arguments object; a plain Array (what rest parameters give) is taken
+// for a GTM-style push and silently dropped, so gtag.js loads and registers the
+// container but never sends a hit. Hence the untyped implementation behind an
+// explicit call signature: callers keep `(...args: unknown[]) => void`.
+const gtag: (...args: unknown[]) => void = function () {
+  // eslint-disable-next-line prefer-rest-params
+  (window.dataLayer ??= []).push(arguments);
+};
 
 /** Inject gtag.js and configure GA once. Skipped on localhost so dev traffic stays
  *  out of the property — matching the old app.html bootstrap. */

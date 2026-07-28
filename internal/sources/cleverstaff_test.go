@@ -72,7 +72,7 @@ func TestCleverstaffRegisteredAsBoardProvider(t *testing.T) {
 		t.Error("cleverstaff is in AggregatorProviders; a first-party ATS must not be reindex-suppressed")
 	}
 	// Per-tenant: config validation requires a board (it is not boardless).
-	cfg := Config{Provider: "cleverstaff", Sources: []CompanyEntry{{Company: "DOIT Software", Board: ""}}}
+	cfg := Config{Provider: "cleverstaff", Sources: []CompanyEntry{{Company: "DOIT Software", Provider: "cleverstaff"}}}
 	if err := cfg.Validate(reg); err == nil {
 		t.Error("Validate accepted a cleverstaff entry with empty board; a per-tenant ATS requires a board")
 	}

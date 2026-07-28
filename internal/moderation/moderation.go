@@ -15,9 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/job"
+	"github.com/strelov1/freehire/internal/jobderive"
 	"github.com/strelov1/freehire/internal/sources"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // Sentinel errors. ErrInvalid wraps every validation failure (the handler maps it to
@@ -220,8 +221,8 @@ type structuredFacets struct {
 // salary is present only when a positive bound is stated.
 func (in CreateInput) structured() structuredFacets {
 	return structuredFacets{
-		WorkMode: validEnum(in.WorkMode, enrich.WorkModeValues),
-		Regions:  filterVocab(in.Regions, enrich.RegionValues),
+		WorkMode: validEnum(in.WorkMode, vocab.WorkModeValues),
+		Regions:  filterVocab(in.Regions, vocab.RegionValues),
 		Cities:   nonBlank(in.Cities),
 		Skills:   nonBlank(in.Skills),
 		Salary:   manualSalary(in.SalaryMin, in.SalaryMax, in.SalaryCurrency, in.SalaryPeriod),
@@ -241,16 +242,18 @@ func derive(source, externalID, title, company, location, description string, re
 		workMode = remoteWorkMode(remote)
 	}
 	j, err := job.New(job.Draft{
-		Source:       source,
-		ExternalID:   externalID,
-		Title:        title,
-		Company:      company,
-		Location:     location,
-		Description:  description,
-		WorkMode:     workMode,
-		Regions:      s.Regions,
-		Cities:       s.Cities,
-		Skills:       s.Skills,
+		Input: jobderive.Input{
+			Source:      source,
+			ExternalID:  externalID,
+			Title:       title,
+			Company:     company,
+			Location:    location,
+			Description: description,
+			WorkMode:    workMode,
+			Regions:     s.Regions,
+			Cities:      s.Cities,
+			Skills:      s.Skills,
+		},
 		ManualSalary: s.Salary,
 	})
 	if err != nil {
@@ -304,7 +307,7 @@ func manualSalary(min, max *int, currency, period string) *job.Salary {
 		Min:      lo,
 		Max:      hi,
 		Currency: strings.ToUpper(strings.TrimSpace(currency)),
-		Period:   validEnum(period, enrich.SalaryPeriodValues),
+		Period:   validEnum(period, vocab.SalaryPeriodValues),
 	}
 }
 

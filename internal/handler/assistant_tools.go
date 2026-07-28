@@ -27,13 +27,13 @@ const assistantDefaultSearchLimit = 10
 // vocabulary, vacancy search and reads, and the market-fit score. They call the
 // same services the HTTP handlers call, so a tool result and the public API can
 // never disagree.
-func (a *API) assistantDiscoveryTools() []assistant.Tool {
+func (h *assistantHandlers) assistantDiscoveryTools() []assistant.Tool {
 	return []assistant.Tool{
-		a.facetsTool(),
-		a.searchJobsTool(),
-		a.getJobTool(),
-		a.getCompanyTool(),
-		a.marketFitTool(),
+		h.facetsTool(),
+		h.searchJobsTool(),
+		h.getJobTool(),
+		h.getCompanyTool(),
+		h.marketFitTool(),
 	}
 }
 
@@ -79,7 +79,7 @@ func assistantFacetNames() []string {
 // vacancy count each, plus the numeric ranges. It is the tool the agent is told to
 // call before filtering, so its filter values and skill slugs are the market's own
 // rather than invented.
-func (a *API) facetsTool() assistant.Tool {
+func (h *assistantHandlers) facetsTool() assistant.Tool {
 	return assistant.Tool{
 		Name: "facets",
 		Description: "List the live filter vocabulary: every filter's valid values with a vacancy count each, " +
@@ -98,14 +98,14 @@ func (a *API) facetsTool() assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			if a.facets == nil {
+			if h.search.facets == nil {
 				return nil, errors.New("search is not available")
 			}
 			vals, err := in.Filters.values()
 			if err != nil {
 				return nil, err
 			}
-			res, err := a.facets.FacetCounts(ctx, search.FacetParams{
+			res, err := h.search.facets.FacetCounts(ctx, search.FacetParams{
 				Filter: search.FilterFromValues(vals),
 				Facets: facetAttributes(),
 			})
@@ -120,7 +120,7 @@ func (a *API) facetsTool() assistant.Tool {
 // searchJobsTool searches the catalogue with a keyword and facet filters, hitting
 // the same index the public search does and rehydrating each result's full
 // description so the agent screens a whole set in one call.
-func (a *API) searchJobsTool() assistant.Tool {
+func (h *assistantHandlers) searchJobsTool() assistant.Tool {
 	return assistant.Tool{
 		Name: "search_jobs",
 		Description: "Search open vacancies by keyword and facet filters. Every result carries its full " +
@@ -145,7 +145,7 @@ func (a *API) searchJobsTool() assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			if a.search == nil {
+			if h.search.search == nil {
 				return nil, errors.New("search is not available")
 			}
 			vals, err := in.Filters.values()
@@ -167,7 +167,7 @@ func (a *API) searchJobsTool() assistant.Tool {
 				order = []string{"posted_at:desc"}
 			}
 
-			res, err := a.search.Search(ctx, search.SearchParams{
+			res, err := h.search.search.Search(ctx, search.SearchParams{
 				Query:  in.Query,
 				Filter: search.FilterFromValues(vals),
 				Sort:   order,
@@ -177,7 +177,7 @@ func (a *API) searchJobsTool() assistant.Tool {
 			if err != nil {
 				return nil, err
 			}
-			if err := a.hydrateDescriptions(ctx, res.Hits); err != nil {
+			if err := h.search.hydrateDescriptions(ctx, res.Hits); err != nil {
 				return nil, err
 			}
 			jobs := make([]jobview.Job, len(res.Hits))
@@ -191,7 +191,7 @@ func (a *API) searchJobsTool() assistant.Tool {
 }
 
 // getJobTool reads one vacancy by its public slug.
-func (a *API) getJobTool() assistant.Tool {
+func (h *assistantHandlers) getJobTool() assistant.Tool {
 	return assistant.Tool{
 		Name:        "get_job",
 		Description: "Read one vacancy in full by its public_slug.",
@@ -210,7 +210,7 @@ func (a *API) getJobTool() assistant.Tool {
 			if in.Slug == "" {
 				return nil, errors.New("slug is required")
 			}
-			job, err := a.queries.GetJobBySlug(ctx, in.Slug)
+			job, err := h.queries.GetJobBySlug(ctx, in.Slug)
 			if err != nil {
 				return nil, fmt.Errorf("no vacancy with slug %q", in.Slug)
 			}
@@ -225,7 +225,7 @@ func (a *API) getJobTool() assistant.Tool {
 }
 
 // getCompanyTool reads one company and a page of its open vacancies.
-func (a *API) getCompanyTool() assistant.Tool {
+func (h *assistantHandlers) getCompanyTool() assistant.Tool {
 	return assistant.Tool{
 		Name:        "get_company",
 		Description: "Read one company and a page of its open vacancies, by company slug.",
@@ -244,11 +244,11 @@ func (a *API) getCompanyTool() assistant.Tool {
 			if in.Slug == "" {
 				return nil, errors.New("slug is required")
 			}
-			company, err := a.queries.GetCompany(ctx, in.Slug)
+			company, err := h.queries.GetCompany(ctx, in.Slug)
 			if err != nil {
 				return nil, fmt.Errorf("no company with slug %q", in.Slug)
 			}
-			jobs, err := a.queries.ListJobsByCompany(ctx, db.ListJobsByCompanyParams{
+			jobs, err := h.queries.ListJobsByCompany(ctx, db.ListJobsByCompanyParams{
 				CompanySlug: in.Slug,
 				Limit:       assistantDefaultSearchLimit,
 				Offset:      0,
@@ -268,7 +268,7 @@ func (a *API) getCompanyTool() assistant.Tool {
 // marketFitTool scores a skill list against the live market for a filtered role:
 // the coverage headline, the must-have skills held, and the missing skills that
 // unlock the most vacancies.
-func (a *API) marketFitTool() assistant.Tool {
+func (h *assistantHandlers) marketFitTool() assistant.Tool {
 	return assistant.Tool{
 		Name: "market_fit",
 		Description: "Score a skill list against the live open-vacancy market for a filtered role: what share of " +
@@ -290,7 +290,7 @@ func (a *API) marketFitTool() assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			if a.facets == nil {
+			if h.search.facets == nil {
 				return nil, errors.New("search is not available")
 			}
 			skills := nonEmptyStrings(in.Skills)
@@ -308,7 +308,7 @@ func (a *API) marketFitTool() assistant.Tool {
 			// 100% by construction — the same reason the HTTP endpoint strips them.
 			stripSkillParams(vals)
 
-			v, err := a.coverageFor(ctx, search.FilterFromValues(vals), skills, skills, nil, skills)
+			v, err := h.resume.coverageFor(ctx, search.FilterFromValues(vals), skills, skills, nil, skills)
 			if err != nil {
 				return nil, err
 			}
@@ -338,10 +338,10 @@ const assistantResultCap = 60_000
 // bound to a CV also gets the CV tools, with the binding closed over. A tailoring
 // session whose binding is gone degrades to a plain chat rather than registering
 // tools pointed at nothing.
-func (a *API) assistantRegistry(sess assistant.Session) *assistant.Registry {
-	tools := append(a.assistantDiscoveryTools(), a.assistantTrackingTools()...)
+func (h *assistantHandlers) registry(sess assistant.Session) *assistant.Registry {
+	tools := append(h.assistantDiscoveryTools(), h.assistantTrackingTools()...)
 	if sess.Preset == assistant.PresetTailor && sess.CVID != nil && sess.JobID != nil {
-		tools = append(tools, a.assistantCVTools(*sess.CVID, *sess.JobID)...)
+		tools = append(tools, h.assistantCVTools(*sess.CVID, *sess.JobID)...)
 	}
 	reg := assistant.NewRegistry(tools...)
 	reg.MaxResultBytes = assistantResultCap

@@ -6,9 +6,36 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/moderation"
 	"github.com/strelov1/freehire/internal/submission"
 )
+
+// submissionHandlers serves the public job-submission queue: any authenticated
+// user submits a vacancy for review and reads their own queue; the review actions
+// are moderator-gated. Approval mints a live job by delegating to moderation.
+type submissionHandlers struct {
+	submission *submission.Service
+}
+
+func newSubmissionHandlers(queries *db.Queries, moderation *moderation.Service) *submissionHandlers {
+	// Submission approval mints through the same moderation service, so derivation,
+	// dedup, and the enrichment enqueue are reused rather than duplicated.
+	return &submissionHandlers{submission: submission.New(submission.NewQueriesRepository(queries), moderation)}
+}
+
+func (h *submissionHandlers) register(api fiber.Router, mw middleware) {
+	// Public job submissions: any authenticated user submits a vacancy for review
+	// (cookie or API key) and reads their own queue; the review actions (the pending
+	// queue, approve, reject) are moderator-gated. Approval mints a live job — the same
+	// path CreateJob uses — so an approved submission is indistinguishable from a
+	// hand-curated one.
+	api.Post("/submissions", mw.key, h.CreateSubmission)
+	api.Get("/me/submissions", mw.key, h.ListMySubmissions)
+	api.Get("/submissions", mw.key, mw.moderator, h.ListPendingSubmissions)
+	api.Post("/submissions/:id/approve", mw.key, mw.moderator, h.ApproveSubmission)
+	api.Post("/submissions/:id/reject", mw.key, mw.moderator, h.RejectSubmission)
+}
 
 // submissionResponse is the public shape of a job submission. submitted_by is omitted
 // (ownership, internal); submitter_email is set only on the moderator queue. The content
@@ -139,7 +166,7 @@ func submissionError(err error) error {
 // CreateSubmission queues a user-contributed vacancy for moderation. Authenticated by
 // cookie or API key; the content is validated by the service (a bad body is a 400 before
 // any write), and a duplicate pending URL is a 409. Returns the pending submission with 201.
-func (a *API) CreateSubmission(c *fiber.Ctx) error {
+func (h *submissionHandlers) CreateSubmission(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -150,7 +177,7 @@ func (a *API) CreateSubmission(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
 
-	sub, err := a.submission.Submit(c.Context(), userID, in.toCreateInput())
+	sub, err := h.submission.Submit(c.Context(), userID, in.toCreateInput())
 	if err != nil {
 		return submissionError(err)
 	}
@@ -159,13 +186,13 @@ func (a *API) CreateSubmission(c *fiber.Ctx) error {
 
 // ListMySubmissions returns the caller's own submissions with their status and any
 // rejection reason. Scoped to the authenticated user, so it never reveals another user's.
-func (a *API) ListMySubmissions(c *fiber.Ctx) error {
+func (h *submissionHandlers) ListMySubmissions(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
 
-	subs, err := a.submission.ListMine(c.Context(), userID)
+	subs, err := h.submission.ListMine(c.Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -178,8 +205,8 @@ func (a *API) ListMySubmissions(c *fiber.Ctx) error {
 
 // ListPendingSubmissions returns the moderator review queue (with submitter emails). The
 // route is role-gated, so reaching this handler already implies a moderator.
-func (a *API) ListPendingSubmissions(c *fiber.Ctx) error {
-	rows, err := a.submission.ListPending(c.Context())
+func (h *submissionHandlers) ListPendingSubmissions(c *fiber.Ctx) error {
+	rows, err := h.submission.ListPending(c.Context())
 	if err != nil {
 		return err
 	}
@@ -192,7 +219,7 @@ func (a *API) ListPendingSubmissions(c *fiber.Ctx) error {
 
 // ApproveSubmission mints a live vacancy from a pending submission and marks it approved.
 // Role-gated. An unknown id is a 404; a submission already decided is a 409.
-func (a *API) ApproveSubmission(c *fiber.Ctx) error {
+func (h *submissionHandlers) ApproveSubmission(c *fiber.Ctx) error {
 	reviewerID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -202,7 +229,7 @@ func (a *API) ApproveSubmission(c *fiber.Ctx) error {
 		return err
 	}
 
-	sub, err := a.submission.Approve(c.Context(), reviewerID, id)
+	sub, err := h.submission.Approve(c.Context(), reviewerID, id)
 	if err != nil {
 		return submissionError(err)
 	}
@@ -217,7 +244,7 @@ type rejectRequest struct {
 // RejectSubmission marks a pending submission rejected with an optional reason. Role-gated.
 // The reason body is optional, so a parse failure (e.g. empty body) leaves the reason blank
 // rather than rejecting the request.
-func (a *API) RejectSubmission(c *fiber.Ctx) error {
+func (h *submissionHandlers) RejectSubmission(c *fiber.Ctx) error {
 	reviewerID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -230,7 +257,7 @@ func (a *API) RejectSubmission(c *fiber.Ctx) error {
 	var in rejectRequest
 	_ = c.BodyParser(&in)
 
-	sub, err := a.submission.Reject(c.Context(), reviewerID, id, in.Reason)
+	sub, err := h.submission.Reject(c.Context(), reviewerID, id, in.Reason)
 	if err != nil {
 		return submissionError(err)
 	}

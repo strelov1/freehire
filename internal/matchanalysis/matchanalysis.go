@@ -229,11 +229,11 @@ func sanitizeVerdict(v *recruiterVerdict) {
 		&v.TitleAlignment, &v.ExperienceRelevance, &v.SeniorityFit, &v.SkillsCoverage, &v.CompanyContext, &v.LocationFit,
 	} {
 		ds.Score = clamp(ds.Score)
-		ds.Comment = llm.TruncateRunes(strings.TrimSpace(ds.Comment), maxCommentRunes)
+		ds.Comment = llm.TrimTruncateRunes(ds.Comment, maxCommentRunes)
 	}
 	v.Strengths = cleanList(v.Strengths, maxStrengths, maxListItemRunes)
 	v.Gaps = cleanList(v.Gaps, maxGaps, maxListItemRunes)
-	v.Recommendation = llm.TruncateRunes(strings.TrimSpace(v.Recommendation), maxRecommendRunes)
+	v.Recommendation = llm.TrimTruncateRunes(v.Recommendation, maxRecommendRunes)
 }
 
 // sanitizeRequirements coerces each requirement to the controlled vocabulary, drops the
@@ -251,7 +251,7 @@ func sanitizeRequirements(in []Requirement) []Requirement {
 			Text:             llm.TruncateRunes(text, maxReqTextRunes),
 			Priority:         coercePriority(r.Priority),
 			Status:           status,
-			Evidence:         llm.TruncateRunes(strings.TrimSpace(r.Evidence), maxReqEvidenceRunes),
+			Evidence:         llm.TrimTruncateRunes(r.Evidence, maxReqEvidenceRunes),
 			EvidenceStrength: coerceEvidenceStrength(status, r.EvidenceStrength),
 		})
 		if len(out) >= maxRequirements {

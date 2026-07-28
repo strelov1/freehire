@@ -14,18 +14,18 @@ import (
 // ones. They are bound to the session's own CV and vacancy: the ids are closed
 // over here rather than taken as arguments, so the model has no way to address a
 // different CV — not even by guessing an id.
-func (a *API) assistantCVTools(cvID, jobID int64) []assistant.Tool {
+func (h *assistantHandlers) assistantCVTools(cvID, jobID int64) []assistant.Tool {
 	return []assistant.Tool{
-		a.cvContextTool(jobID),
-		a.cvGetTool(cvID),
-		a.cvEditTool(cvID),
+		h.cvContextTool(jobID),
+		h.cvGetTool(cvID),
+		h.cvEditTool(cvID),
 	}
 }
 
 // cvContextTool serves the reasoning context for the tailoring: the cached fit
 // analysis split into requirements the candidate can evidence (reframe them) and
 // genuine gaps (ask before writing anything).
-func (a *API) cvContextTool(jobID int64) assistant.Tool {
+func (h *assistantHandlers) cvContextTool(jobID int64) assistant.Tool {
 	return assistant.Tool{
 		Name: "cv_context",
 		Description: "Read the fit analysis for the vacancy this CV is being tailored to: the vacancy's " +
@@ -37,11 +37,11 @@ func (a *API) cvContextTool(jobID int64) assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			analysis, err := a.cachedAnalysis(ctx, userID, jobID)
+			analysis, err := h.cv.cachedAnalysisCtx(ctx, userID, jobID)
 			if err != nil {
 				return nil, err
 			}
-			job, err := a.queries.GetJob(ctx, jobID)
+			job, err := h.queries.GetJob(ctx, jobID)
 			if err != nil {
 				return nil, err
 			}
@@ -51,7 +51,7 @@ func (a *API) cvContextTool(jobID int64) assistant.Tool {
 }
 
 // cvGetTool reads the tailored CV document the session is editing.
-func (a *API) cvGetTool(cvID int64) assistant.Tool {
+func (h *assistantHandlers) cvGetTool(cvID int64) assistant.Tool {
 	return assistant.Tool{
 		Name:        "cv_get",
 		Description: "Read the current CV document being tailored, so edits are grounded in what it actually says.",
@@ -61,7 +61,7 @@ func (a *API) cvGetTool(cvID int64) assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			rec, err := a.cvStore.Get(ctx, cvID, userID)
+			rec, err := h.cv.cvStore.Get(ctx, cvID, userID)
 			if err != nil {
 				return nil, cvToolError(err)
 			}
@@ -71,7 +71,7 @@ func (a *API) cvGetTool(cvID int64) assistant.Tool {
 }
 
 // cvEditTool applies one field-level patch to the tailored CV.
-func (a *API) cvEditTool(cvID int64) assistant.Tool {
+func (h *assistantHandlers) cvEditTool(cvID int64) assistant.Tool {
 	return assistant.Tool{
 		Name: "cv_edit",
 		Description: "Apply ONE field-level patch to the CV. Ops: set_summary, set_header_field, add_bullet, " +
@@ -107,7 +107,7 @@ func (a *API) cvEditTool(cvID int64) assistant.Tool {
 			if p.Op == cv.PatchSetHeaderField && isContactHeaderField(p.Field) {
 				return nil, errors.New("contact fields are not editable in a tailoring session")
 			}
-			meta, err := a.cvStore.Patch(ctx, cvID, userID, p)
+			meta, err := h.cv.cvStore.Patch(ctx, cvID, userID, p)
 			if err != nil {
 				return nil, cvToolError(err)
 			}

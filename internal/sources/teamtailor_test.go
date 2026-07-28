@@ -289,7 +289,7 @@ type ttRootListingHTTP struct {
 func (h ttRootListingHTTP) GetHTML(_ context.Context, u string) (*html.Node, error) {
 	switch {
 	case strings.Contains(u, "/jobs?page="):
-		return nil, &StatusError{Code: 404, URL: u}
+		return nil, &StatusError{Method: "GET", Code: 404, URL: u}
 	case strings.Contains(u, "/jobs/"): // detail page
 		return html.Parse(strings.NewReader(h.detail))
 	case strings.Contains(u, "/?page=1"):

@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 func TestParse(t *testing.T) {
@@ -15,6 +15,14 @@ func TestParse(t *testing.T) {
 	}{
 		{"Senior Backend Engineer", "senior", "backend"},
 		{"Junior Frontend Developer", "junior", "frontend"},
+		// The dotted abbreviations resolve through the bare "sr"/"jr" aliases —
+		// '.' is a non-word boundary, so no separate dotted alias is needed.
+		{"Sr. Backend Engineer", "senior", "backend"},
+		{"Jr. Frontend Developer", "junior", "frontend"},
+		// A title truncated mid-word by the feed still resolves via the
+		// truncated-tail alias (the full "data science"/"data scientist" forms
+		// win in any complete title).
+		{"Senior Data Scien", "senior", "data_science"},
 		{"Lead DevOps Engineer", "lead", "devops"},
 		{"Staff Software Engineer", "staff", ""},
 		{"Full Stack Developer", "", "fullstack"},
@@ -111,12 +119,12 @@ func TestCategories(t *testing.T) {
 
 func TestCanonicalValuesAreInVocabulary(t *testing.T) {
 	for _, e := range seniorityTable {
-		if !slices.Contains(enrich.SeniorityValues, e.canonical) {
+		if !slices.Contains(vocab.SeniorityValues, e.canonical) {
 			t.Errorf("seniority alias %q -> %q not in SeniorityValues", e.alias, e.canonical)
 		}
 	}
 	for _, e := range categoryTable {
-		if !slices.Contains(enrich.CategoryValues, e.canonical) {
+		if !slices.Contains(vocab.CategoryValues, e.canonical) {
 			t.Errorf("category alias %q -> %q not in CategoryValues", e.alias, e.canonical)
 		}
 	}

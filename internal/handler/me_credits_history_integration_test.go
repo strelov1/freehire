@@ -77,10 +77,8 @@ func TestGetMyCreditsHistoryEndpoint(t *testing.T) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	token, _ := iss.Issue(userID, testTokenVersion)
 
-	h := &API{
-		pool:    pool,
+	h := &creditsHandlers{
 		queries: queries,
-		issuer:  iss,
 		credits: credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 5}),
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})

@@ -13,8 +13,8 @@ import (
 // jobs (saved or dismissed) via a server-built `id NOT IN [...]` filter. It is
 // authenticated (both swipe actions are per-user); the response is the standard
 // list envelope of job views, batched via limit/offset for prefetch.
-func (a *API) SwipeDeck(c *fiber.Ctx) error {
-	if a.search == nil {
+func (h *trackingHandlers) SwipeDeck(c *fiber.Ctx) error {
+	if h.search == nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
 	userID, err := requireUserID(c)
@@ -27,12 +27,12 @@ func (a *API) SwipeDeck(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "pagination too deep")
 	}
 
-	excluded, err := a.tracking.ExcludedJobIDs(c.Context(), userID)
+	excluded, err := h.tracking.ExcludedJobIDs(c.Context(), userID)
 	if err != nil {
 		return err
 	}
 
-	res, err := a.search.Search(c.Context(), search.SearchParams{
+	res, err := h.search.Search(c.Context(), search.SearchParams{
 		Query:  c.Query("q"),
 		Filter: withDeckExclusion(buildSearchFilter(c), excluded),
 		Sort:   searchSort(c),

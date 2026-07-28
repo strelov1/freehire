@@ -4,19 +4,19 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // TestDictionariesStayInVocabulary pins the hand-maintained dictionaries to the
 // enrichment contract's vocabularies exhaustively (not just for sampled inputs):
-// every region code the parser can ever emit is a member of enrich.RegionValues,
+// every region code the parser can ever emit is a member of vocab.RegionValues,
 // and every country code is a plausible ISO 3166-1 alpha-2 (two lowercase
 // letters). It guards against a future dictionary edit introducing a region the
 // search facet would expose but the enrichment path would Sanitize away.
 func TestDictionariesStayInVocabulary(t *testing.T) {
 	for region, codes := range regionCountries {
-		if !slices.Contains(enrich.RegionValues, region) {
-			t.Errorf("regionCountries key %q is not in enrich.RegionValues", region)
+		if !slices.Contains(vocab.RegionValues, region) {
+			t.Errorf("regionCountries key %q is not in vocab.RegionValues", region)
 		}
 		for _, code := range codes {
 			if !isAlpha2(code) {
@@ -35,8 +35,8 @@ func TestDictionariesStayInVocabulary(t *testing.T) {
 	}
 
 	for name, region := range nameToRegion {
-		if !slices.Contains(enrich.RegionValues, region) {
-			t.Errorf("nameToRegion[%q] = %q is not in enrich.RegionValues", name, region)
+		if !slices.Contains(vocab.RegionValues, region) {
+			t.Errorf("nameToRegion[%q] = %q is not in vocab.RegionValues", name, region)
 		}
 	}
 }

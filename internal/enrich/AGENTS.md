@@ -1,10 +1,10 @@
 # Enrichment conventions
 
 ## Scope
-The typed enrichment contract, controlled vocabularies, the LLM provider abstraction, and the queue-draining runner.
+The typed enrichment contract, the LLM provider abstraction, and the queue-draining runner. The controlled vocabularies live in the neutral `internal/vocab` package (shared with the ingest and read layers).
 
 ## Always true
-- The typed `Enrichment` contract + controlled vocabularies in `internal/enrich` are the schema's source of truth (stored in `jobs.enrichment` JSONB; provenance in `enriched_at`/`enrichment_version`; bump `enrich.Version` to re-enrich).
+- The typed `Enrichment` contract in `internal/enrich` is the schema's source of truth (stored in `jobs.enrichment` JSONB; provenance in `enriched_at`/`enrichment_version`; bump `enrich.Version` to re-enrich). Enum vocabularies come from `internal/vocab` — never redefine them locally.
 - `enrichment_outbox` is a reference-only queue (`job_id` + `target_version` + lease/retry bookkeeping), not a copy of the job; `jobs` stays canonical.
 - Enqueue open jobs only — closed postings are skipped so a dead vacancy never burns LLM budget.
 - Claims a wave of open jobs freshest-first (`ORDER BY COALESCE(posted_at, created_at) DESC, id DESC`) with `FOR UPDATE OF o SKIP LOCKED` + a `claimed_at` lease.

@@ -3,7 +3,6 @@ package enrich
 import (
 	"encoding/json"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -346,18 +345,5 @@ func TestSanitizeBoundsFreeTextFields(t *testing.T) {
 	}
 	if e2.SalaryCurrency != "USD" {
 		t.Errorf("SalaryCurrency = %q, want USD unchanged", e2.SalaryCurrency)
-	}
-}
-
-func TestDomainGlossCoversVocabulary(t *testing.T) {
-	for _, d := range DomainValues {
-		if strings.TrimSpace(DomainGloss[d]) == "" {
-			t.Errorf("domain %q has no gloss for the enrichment prompt", d)
-		}
-	}
-	for d := range DomainGloss {
-		if !slices.Contains(DomainValues, d) {
-			t.Errorf("DomainGloss has %q not in DomainValues", d)
-		}
 	}
 }

@@ -29,7 +29,7 @@ func (r deckRepo) ExcludedJobIDs(context.Context, int64, int32) ([]int64, error)
 
 func deckApp(s searcher, excluded []int64) (*fiber.App, *auth.Issuer) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	h := &API{search: s, issuer: iss, tracking: jobtracking.New(deckRepo{excluded: excluded})}
+	h := &trackingHandlers{search: s, tracking: jobtracking.New(deckRepo{excluded: excluded})}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/me/tracking/swipe", auth.RequireAuth(iss, testVersions), h.SwipeDeck)
 	return app, iss

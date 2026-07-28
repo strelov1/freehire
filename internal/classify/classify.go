@@ -2,8 +2,8 @@
 // from its title. It is a curated dictionary, not a model: it resolves known
 // English and Russian title terms and emits nothing for what it cannot resolve
 // (it never guesses). Canonical values are drawn from the same controlled
-// vocabularies the enrichment contract defines (enrich.SeniorityValues /
-// enrich.CategoryValues), so the parser, the enrichment payload, and the search
+// vocabularies the enrichment contract defines (vocab.SeniorityValues /
+// vocab.CategoryValues), so the parser, the enrichment payload, and the search
 // facet all speak one set of values — the same doctrine as internal/location.
 package classify
 
@@ -16,8 +16,8 @@ import (
 // Classification is the seniority and role category parsed from a job title.
 // Each field is "" when the title states nothing the dictionary resolves.
 type Classification struct {
-	Seniority string // "" or one of enrich.SeniorityValues
-	Category  string // "" or one of enrich.CategoryValues
+	Seniority string // "" or one of vocab.SeniorityValues
+	Category  string // "" or one of vocab.CategoryValues
 }
 
 // Parse resolves a job title to its seniority and category. It never guesses;

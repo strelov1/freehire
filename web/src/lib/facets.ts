@@ -20,7 +20,7 @@ import {
 import { fuzzyMatch } from './fuzzy';
 import {
   REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
-  CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS,
+  CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS, ENGLISH_LEVEL_LABELS,
 } from './labels';
 import { COLLECTIONS } from './collections';
 import { ROLE_RELATED } from './roleRelated';
@@ -325,7 +325,7 @@ export function sourceLabel(value: string): string {
   return SOURCE_LABELS[value] ?? humanize(value);
 }
 
-// The backend's `regions` reach vocabulary (enrich.RegionValues): one consistent
+// The backend's `regions` reach vocabulary (vocab.RegionValues): one consistent
 // macro level (continents/macro-regions, plus `global` and the distinct `uk`).
 // Country-level filtering lives in the Countries facet, so the US sits under
 // `north_america` and Russia under `cis`. Built from the shared REGION_LABELS
@@ -351,9 +351,7 @@ const EMPLOYMENT: FacetOption[] = options(EMPLOYMENT_TYPE_VALUES, EMPLOYMENT_LAB
 const RELOCATION: FacetOption[] = options(RELOCATION_VALUES, {
   not_supported: 'None', supported: 'Supported', required: 'Required',
 });
-const ENGLISH: FacetOption[] = options(ENGLISH_LEVEL_VALUES, {
-  a1: 'A1', a2: 'A2', b1: 'B1', b2: 'B2', c1: 'C1', c2: 'C2', native: 'Native', none: 'None',
-});
+const ENGLISH: FacetOption[] = options(ENGLISH_LEVEL_VALUES, ENGLISH_LEVEL_LABELS);
 const CATEGORY: FacetOption[] = options(CATEGORY_VALUES, CATEGORY_LABELS);
 
 // The category facet options, exported for reuse outside the filter panel (the search
@@ -405,7 +403,7 @@ export const CURRENCY_OPTIONS: FacetOption[] = CURRENCY;
 // registry the /collections hub renders so the label/slug pairs never drift.
 const COLLECTION: FacetOption[] = COLLECTIONS.map((c) => ({ value: c.slug, label: c.title }));
 
-// Company-size buckets — the enrich.CompanySizeValues vocabulary. Not exported as
+// Company-size buckets — the vocab.CompanySizeValues vocabulary. Not exported as
 // a generated values array (it's a scalar enrichment field, not a search facet on
 // jobs), so the closed set is spelled out here like CURRENCY; the values are
 // already display-ready.
@@ -468,10 +466,14 @@ const YC_FLAGS: FacetOption[] = options(['top_company', 'hiring'], {
 });
 // YC batch labels are the verbatim source strings ("Winter 2012"). Generate the full
 // season×year grid so the searchable select covers any batch; phantom combinations
-// that no company has simply match nothing.
-const YC_BATCH: FacetOption[] = Array.from({ length: 2027 - 2005 + 1 }, (_, i) => 2027 - i).flatMap((y) =>
-  ['Winter', 'Spring', 'Summer', 'Fall'].map((s) => ({ value: `${s} ${y}`, label: `${s} ${y}` })),
-);
+// that no company has simply match nothing. The grid runs from the first YC batch
+// (2005) through next year so a fresh batch is covered as soon as it appears.
+const YC_BATCH: FacetOption[] = (() => {
+  const max = new Date().getFullYear() + 1;
+  return Array.from({ length: max - 2005 + 1 }, (_, i) => max - i).flatMap((y) =>
+    ['Winter', 'Spring', 'Summer', 'Fall'].map((s) => ({ value: `${s} ${y}`, label: `${s} ${y}` })),
+  );
+})();
 export const COMPANY_FACETS: FacetDef[] = [
   { param: 'collections', label: 'Collection', control: 'pills', options: COLLECTION, excludable: false },
   { param: 'regions', label: 'Region', control: 'pills', options: REGION, excludable: false },

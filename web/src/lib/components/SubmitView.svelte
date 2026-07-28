@@ -46,7 +46,7 @@
   let currency = $state('');
   let period = $state('');
 
-  // The salary period vocabulary (mirrors the backend enrich.SalaryPeriodValues).
+  // The salary period vocabulary (mirrors the backend vocab.SalaryPeriodValues).
   const PERIODS = [
     { value: 'year', label: 'per year' },
     { value: 'month', label: 'per month' },

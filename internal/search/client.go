@@ -13,7 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
@@ -44,9 +43,10 @@ const (
 	// the compute keeps it off Meilisearch's single task queue.
 	embedderModel = "intfloat/multilingual-e5-base"
 	// embedderURL is the default embedding backend: the host2 TEI's native /embed route
-	// (see embedChunk). A worker can override it with EMBED_URL to point at a faster
-	// backend serving the same e5 model — e.g. an HF Inference Endpoint for a bulk
-	// reindex — without changing the vector space.
+	// (see embedChunk) — the co-located loopback TEI of the production topology. A worker
+	// can override it (WithEmbedURL, wired from EMBED_URL) to point at a faster backend
+	// serving the same e5 model — e.g. an HF Inference Endpoint for a bulk reindex —
+	// without changing the vector space.
 	embedderURL = "http://127.0.0.1:8090/embed"
 	// embedderDimensions is the e5-base output width; declared so Meilisearch validates
 	// vectors and the userProvided CV vector matches.
@@ -73,6 +73,13 @@ const (
 	taskPollInterval = 50 * time.Millisecond
 )
 
+// rawClient serves the package's raw Meilisearch calls that bypass the SDK (the
+// swap-indexes POST in client.go and the vector-listing GET in semantic_vectors.go).
+// http.DefaultClient has no timeout of its own, so a hung engine would otherwise
+// block a reindex indefinitely. (The TEI embed calls in embed.go are a different
+// backend with their own per-attempt timeout — see embedAttemptTimeout.)
+var rawClient = &http.Client{Timeout: 30 * time.Second}
+
 // Client is a thin wrapper over the Meilisearch service scoped to the two job
 // indexes: facet (keyword + facets, no embedder) and semantic (adds the embedder).
 // url/key are kept for the one raw call (swap-indexes) the SDK cannot make against
@@ -84,50 +91,82 @@ type Client struct {
 	url      string
 	key      string
 	// embedURL is the TEI native /embed endpoint this client embeds against (jobs
-	// and CVs alike). It defaults to embedderURL (the host2 TEI) but EMBED_URL can
-	// point a worker at a faster backend — e.g. a GPU endpoint for a bulk reindex —
-	// as long as it serves the SAME e5 model (same vector space). Tests set it directly.
+	// and CVs alike). It defaults to embedderURL (the host2 TEI); WithEmbedURL points a
+	// worker at a faster backend — e.g. a GPU endpoint for a bulk reindex — as long as
+	// it serves the SAME e5 model (same vector space). Tests set it directly.
 	embedURL string
-	// embedKey is the optional bearer token for embedURL (EMBED_API_KEY). Empty for
+	// embedKey is the optional bearer token for embedURL (WithEmbedAPIKey). Empty for
 	// the authless host2 TEI; set when pointing at an authenticated endpoint (HF, etc.).
 	embedKey string
-	// embedConcurrency is how many embed calls a batch runs in flight (EMBED_CONCURRENCY,
-	// default 1). The CPU-bound host2 TEI gains nothing from concurrency, but a remote
-	// GPU endpoint does (it hides per-call latency) — a bulk reindex sets it high.
+	// embedConcurrency is how many embed calls a batch runs in flight
+	// (WithEmbedConcurrency, default 1). The CPU-bound host2 TEI gains nothing from
+	// concurrency, but a remote GPU endpoint does (it hides per-call latency) — a bulk
+	// reindex sets it high.
 	embedConcurrency int
+}
+
+// Option customizes a Client at construction (see NewClient).
+type Option func(*Client)
+
+// WithEmbedURL points the embedding backend at a TEI-compatible /embed endpoint other
+// than the default host2 TEI — e.g. an HF Inference Endpoint for a bulk reindex. The
+// endpoint must serve the SAME e5 model (same vector space). An empty url keeps the
+// default.
+func WithEmbedURL(url string) Option {
+	return func(c *Client) {
+		if url != "" {
+			c.embedURL = url
+		}
+	}
+}
+
+// WithEmbedAPIKey sets the bearer token for the embedding endpoint. Empty (the
+// default) suits the authless host2 TEI; set it when pointing at an authenticated
+// endpoint (HF, etc.).
+func WithEmbedAPIKey(key string) Option {
+	return func(c *Client) { c.embedKey = key }
+}
+
+// WithEmbedConcurrency sets how many embed calls a batch runs in flight (default 1).
+// The CPU-bound host2 TEI gains nothing from concurrency, but a remote GPU endpoint
+// does (it hides per-call latency) — a bulk reindex sets it high. A value below 1
+// keeps the default.
+func WithEmbedConcurrency(n int) Option {
+	return func(c *Client) {
+		if n > 0 {
+			c.embedConcurrency = n
+		}
+	}
 }
 
 // NewClient connects to Meilisearch at url authenticated by key. It does no I/O
 // — the connection is exercised lazily by the first request (or EnsureIndex). The
-// embedding backend defaults to the host2 TEI but is overridable via EMBED_URL /
-// EMBED_API_KEY (see the embedURL field).
-func NewClient(url, key string) *Client {
+// embedding backend defaults to the host2 TEI (embedderURL — the loopback TEI of the
+// production topology) with no auth and concurrency 1; callers that embed override it
+// via the WithEmbed* options (wired from the EMBED_* env in internal/config, so this
+// package stays env-free).
+func NewClient(url, key string, opts ...Option) *Client {
 	m := meilisearch.New(url, meilisearch.WithAPIKey(key))
-	embedURL := embedderURL
-	if v := os.Getenv("EMBED_URL"); v != "" {
-		embedURL = v
-	}
-	concurrency := 1
-	if v, err := strconv.Atoi(os.Getenv("EMBED_CONCURRENCY")); err == nil && v > 0 {
-		concurrency = v
-	}
-	return &Client{
+	c := &Client{
 		manager:          m,
 		facet:            m.Index(facetIndexUID),
 		semantic:         m.Index(semanticIndexUID),
 		url:              url,
 		key:              key,
-		embedURL:         embedURL,
-		embedKey:         os.Getenv("EMBED_API_KEY"),
-		embedConcurrency: concurrency,
+		embedURL:         embedderURL,
+		embedConcurrency: 1,
 	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
 }
 
 // EnsureIndex creates the facet/keyword jobs index (no embedder) and applies its
 // settings. It is idempotent — safe to call on every reindex. This is the fast
 // production index that all default (keyword) traffic and faceting hit.
 func (c *Client) EnsureIndex(ctx context.Context) error {
-	if err := c.ensure(ctx, c.facet, facetIndexUID, facetSettings()); err != nil {
+	if err := c.ensure(ctx, c.facet, facetIndexUID, primaryKey, facetSettings()); err != nil {
 		return err
 	}
 	// Meilisearch settings updates MERGE: facetSettings omits the embedder, but an
@@ -146,7 +185,7 @@ func (c *Client) EnsureIndex(ctx context.Context) error {
 // and applies its settings. It is built by the separate reindex --semantic pass, which
 // computes the vectors against TEI, so it is kept off the default reindex path.
 func (c *Client) EnsureSemanticIndex(ctx context.Context) error {
-	return c.ensure(ctx, c.semantic, semanticIndexUID, semanticSettings())
+	return c.ensure(ctx, c.semantic, semanticIndexUID, primaryKey, semanticSettings())
 }
 
 // Rebuild is a fresh-index build session for a full reindex. Documents are streamed
@@ -184,7 +223,7 @@ func (c *Client) NewSemanticRebuild() *Rebuild {
 // Promote needs both — on a first-ever run the live index is created empty and the
 // swap replaces its contents and settings wholesale.
 func (r *Rebuild) Prepare(ctx context.Context) error {
-	if err := r.c.createIndex(ctx, r.c.manager.Index(r.liveUID), r.liveUID); err != nil {
+	if err := r.c.createIndex(ctx, r.c.manager.Index(r.liveUID), r.liveUID, primaryKey); err != nil {
 		return err
 	}
 	// Discard any leftover rebuild index from an aborted prior run, then create it
@@ -193,7 +232,7 @@ func (r *Rebuild) Prepare(ctx context.Context) error {
 		return err
 	}
 	r.rebuild = r.c.manager.Index(r.rebuildUID)
-	if err := r.c.ensure(ctx, r.rebuild, r.rebuildUID, r.settings); err != nil {
+	if err := r.c.ensure(ctx, r.rebuild, r.rebuildUID, primaryKey, r.settings); err != nil {
 		return err
 	}
 	// The facet index carries no embedder; reset it in case a prior version left one
@@ -279,7 +318,7 @@ func (c *Client) swapIndexes(ctx context.Context, a, b string) error {
 	}
 	req.Header.Set("Authorization", "Bearer "+c.key)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := rawClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("search: swap indexes: %w", err)
 	}
@@ -296,10 +335,11 @@ func (c *Client) swapIndexes(ctx context.Context, a, b string) error {
 	return c.awaitManagerTask(ctx, task.TaskUID)
 }
 
-// ensure creates the named index (keyed by the internal id) if absent and applies
-// its settings. Shared by the facet and semantic ensure paths.
-func (c *Client) ensure(ctx context.Context, idx meilisearch.IndexManager, uid string, settings *meilisearch.Settings) error {
-	if err := c.createIndex(ctx, idx, uid); err != nil {
+// ensure creates the named index (keyed by pk) if absent and applies its settings.
+// Shared by every ensure/prepare path — the jobs indexes (id-keyed) and the companies
+// index (slug-keyed, see company.go) differ only in uid, primary key, and settings.
+func (c *Client) ensure(ctx context.Context, idx meilisearch.IndexManager, uid, pk string, settings *meilisearch.Settings) error {
+	if err := c.createIndex(ctx, idx, uid, pk); err != nil {
 		return err
 	}
 	st, err := idx.UpdateSettingsWithContext(ctx, settings)
@@ -309,12 +349,12 @@ func (c *Client) ensure(ctx context.Context, idx meilisearch.IndexManager, uid s
 	return c.awaitTask(ctx, idx, st.TaskUID)
 }
 
-// createIndex creates the index (keyed by the internal id) if absent. An
-// already-existing index is the idempotent happy path, not a failure.
-func (c *Client) createIndex(ctx context.Context, idx meilisearch.IndexManager, uid string) error {
+// createIndex creates the index (keyed by pk) if absent. An already-existing index is
+// the idempotent happy path, not a failure.
+func (c *Client) createIndex(ctx context.Context, idx meilisearch.IndexManager, uid, pk string) error {
 	create, err := c.manager.CreateIndexWithContext(ctx, &meilisearch.IndexConfig{
 		Uid:        uid,
-		PrimaryKey: primaryKey,
+		PrimaryKey: pk,
 	})
 	if err != nil {
 		return fmt.Errorf("search: create index: %w", err)

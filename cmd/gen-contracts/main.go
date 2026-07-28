@@ -15,11 +15,11 @@ import (
 	"github.com/gzuidhof/tygo/tygo"
 
 	"github.com/strelov1/freehire/internal/classify"
-	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/location"
 	"github.com/strelov1/freehire/internal/roletag"
 	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/userjob"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 const outputPath = "web/src/lib/generated/contracts.ts"
@@ -251,14 +251,14 @@ func genVocab() string {
 	var b strings.Builder
 	b.WriteString(emitVocab("Source", "SOURCE_VALUES", source))
 	b.WriteString(emitVocab("Stage", "STAGE_VALUES", userjob.Stages))
-	b.WriteString(emitVocab("WorkMode", "WORK_MODE_VALUES", enrich.WorkModeValues))
-	b.WriteString(emitVocab("Seniority", "SENIORITY_VALUES", enrich.SeniorityValues))
-	b.WriteString(emitVocab("Category", "CATEGORY_VALUES", enrich.CategoryValues))
-	b.WriteString(emitVocab("EmploymentType", "EMPLOYMENT_TYPE_VALUES", enrich.EmploymentTypeValues))
-	b.WriteString(emitVocab("Relocation", "RELOCATION_VALUES", enrich.RelocationValues))
-	b.WriteString(emitVocab("EnglishLevel", "ENGLISH_LEVEL_VALUES", enrich.EnglishLevelValues))
-	b.WriteString(emitVocab("CompanyType", "COMPANY_TYPE_VALUES", enrich.CompanyTypeValues))
-	b.WriteString(emitVocab("Domain", "DOMAIN_VALUES", enrich.DomainValues))
+	b.WriteString(emitVocab("WorkMode", "WORK_MODE_VALUES", vocab.WorkModeValues))
+	b.WriteString(emitVocab("Seniority", "SENIORITY_VALUES", vocab.SeniorityValues))
+	b.WriteString(emitVocab("Category", "CATEGORY_VALUES", vocab.CategoryValues))
+	b.WriteString(emitVocab("EmploymentType", "EMPLOYMENT_TYPE_VALUES", vocab.EmploymentTypeValues))
+	b.WriteString(emitVocab("Relocation", "RELOCATION_VALUES", vocab.RelocationValues))
+	b.WriteString(emitVocab("EnglishLevel", "ENGLISH_LEVEL_VALUES", vocab.EnglishLevelValues))
+	b.WriteString(emitVocab("CompanyType", "COMPANY_TYPE_VALUES", vocab.CompanyTypeValues))
+	b.WriteString(emitVocab("Domain", "DOMAIN_VALUES", vocab.DomainValues))
 	// Country→region grouping for the hierarchical location filter, derived from the
 	// location dictionary.
 	b.WriteString(emitMap("CountryRegionMap", "COUNTRY_REGION_MAP", location.CountryToRegion()))

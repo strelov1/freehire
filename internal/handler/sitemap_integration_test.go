@@ -45,14 +45,16 @@ func TestSitemapEndpoints(t *testing.T) {
 		seedSitemapJob(t, q, i) // also upserts company co-0i
 	}
 
-	h := &API{pool: pool, queries: q}
+	h := &sitemapHandlers{queries: q}
+	jh := &jobsHandlers{queries: q}
+	ch := &companiesHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	// Sitemap routes are registered BEFORE the :slug catch-alls, mirroring wiring.
 	app.Get("/api/v1/jobs/sitemap", h.JobSitemap)
 	app.Get("/api/v1/companies/sitemap", h.CompanySitemap)
 	app.Get("/api/v1/companies/sitemap/boundaries", h.CompanySitemapBoundaries)
-	app.Get("/api/v1/jobs/:slug", h.GetJob)
-	app.Get("/api/v1/companies/:slug", h.GetCompany)
+	app.Get("/api/v1/jobs/:slug", jh.GetJob)
+	app.Get("/api/v1/companies/:slug", ch.GetCompany)
 
 	get := func(t *testing.T, url string) []byte {
 		t.Helper()

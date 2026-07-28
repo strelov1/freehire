@@ -90,6 +90,7 @@ JOIN users u ON u.id = r.reported_by
 JOIN jobs j ON j.id = r.job_id
 WHERE r.status = 'pending'
 ORDER BY r.created_at DESC
+LIMIT 500
 `
 
 type ListPendingReportsRow struct {
@@ -109,8 +110,10 @@ type ListPendingReportsRow struct {
 	JobTitle        string             `json:"job_title"`
 }
 
-// The moderator review queue: every pending report, newest first, with the reporter's email
+// The moderator review queue: pending reports, newest first, with the reporter's email
 // and the reported job's slug and title so the moderator can judge it and link to it.
+// Capped at 500 as a runaway-growth guard — far above any plausible backlog; a queue
+// that deep needs bulk triage, not a longer page.
 func (q *Queries) ListPendingReports(ctx context.Context) ([]ListPendingReportsRow, error) {
 	rows, err := q.db.Query(ctx, listPendingReports)
 	if err != nil {

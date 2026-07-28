@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/skilltag"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // getro adapts Getro-powered job boards (<label>.getro.com), the platform many VC/accelerator
@@ -258,7 +258,7 @@ func getroWorkMode(m string) string {
 }
 
 // getroSeniority maps Getro's LinkedIn-style seniority grade into freehire's vocabulary
-// (enrich.SeniorityValues: intern/junior/middle/senior/lead/staff/principal/c_level). It maps to a
+// (vocab.SeniorityValues: intern/junior/middle/senior/lead/staff/principal/c_level). It maps to a
 // candidate then checks vocabulary membership, so an unmapped or mis-mapped grade drops to "" and
 // lets the title dictionary decide rather than being guessed.
 func getroSeniority(level string) string {
@@ -277,7 +277,7 @@ func getroSeniority(level string) string {
 		// they are deliberately left unmapped: the title dictionary classifies them from the job
 		// title instead of this adapter guessing (per the dict-only "never guess unknowns" convention).
 	}
-	if slices.Contains(enrich.SeniorityValues, l) {
+	if slices.Contains(vocab.SeniorityValues, l) {
 		return l
 	}
 	return ""

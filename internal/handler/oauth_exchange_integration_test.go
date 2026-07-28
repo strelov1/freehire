@@ -34,8 +34,7 @@ func TestOAuthExchangeEndToEnd(t *testing.T) {
 
 	queries := db.New(pool)
 	codes := oauth.NewCodeStore(time.Minute)
-	h := &API{
-		pool:       pool,
+	h := &authHandlers{
 		queries:    queries,
 		issuer:     auth.NewIssuer("test-secret", time.Hour),
 		oauthCodes: codes,

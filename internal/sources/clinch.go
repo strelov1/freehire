@@ -33,7 +33,7 @@ type clinch struct {
 }
 
 // NewClinch builds the ClinchTalent adapter: sitemap fetches the board's sitemap.xml, detail
-// hydrates each posting's description (paced, see pacedClinchGetter).
+// hydrates each posting's description (paced, see pacedHTMLGetter).
 func NewClinch(sitemap XMLGetter, detail HTMLGetter) Source {
 	return clinch{sitemap: sitemap, detail: detail}
 }

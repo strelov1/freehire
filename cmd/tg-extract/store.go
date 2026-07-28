@@ -13,8 +13,10 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/job"
+	"github.com/strelov1/freehire/internal/jobderive"
 	"github.com/strelov1/freehire/internal/jobhash"
 	"github.com/strelov1/freehire/internal/telegram"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // buildParams constructs the UpsertJob params for one Telegram-sourced job through
@@ -25,15 +27,17 @@ import (
 // It returns job.ErrInvalidDraft for an extracted job with no title/identity.
 func buildParams(source, externalID, url, title, company, loc string, remote bool, description, workMode string, postedAt pgtype.Timestamptz) (db.UpsertJobParams, error) {
 	j, err := job.New(job.Draft{
-		Source:      source,
-		ExternalID:  externalID,
-		URL:         url,
-		Title:       title,
-		Company:     company,
-		Location:    loc,
-		Remote:      remote,
-		Description: description,
-		WorkMode:    workMode,
+		Input: jobderive.Input{
+			Source:      source,
+			ExternalID:  externalID,
+			Title:       title,
+			Company:     company,
+			Location:    loc,
+			Description: description,
+			WorkMode:    workMode,
+		},
+		URL:    url,
+		Remote: remote,
 	})
 	if err != nil {
 		return db.UpsertJobParams{}, err
@@ -125,7 +129,7 @@ func (s *extractStore) Complete(ctx context.Context, post telegram.PendingPost, 
 		if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
 			TargetVersion:     int32(enrich.Version),
 			JobID:             saved.Job.ID,
-			ExcludeCategories: enrich.NonTechCategories,
+			ExcludeCategories: vocab.NonTechCategories,
 		}); err != nil {
 			return fmt.Errorf("enqueue enrichment %s: %w", externalID, err)
 		}
@@ -177,7 +181,7 @@ func (s *extractStore) CompleteLinks(
 		if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
 			TargetVersion:     int32(enrich.Version),
 			JobID:             saved.Job.ID,
-			ExcludeCategories: enrich.NonTechCategories,
+			ExcludeCategories: vocab.NonTechCategories,
 		}); err != nil {
 			return fmt.Errorf("enqueue enrichment %s/%s: %w", j.Source, j.ExternalID, err)
 		}

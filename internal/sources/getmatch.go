@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/skilltag"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // getmatch adapts getmatch.ru, a curated Russian IT job marketplace. Its public, keyless feed
@@ -154,12 +154,12 @@ func (g getmatch) detail(ctx context.Context, id int) (getmatchOffer, bool) {
 }
 
 // getmatchSeniority maps a getmatch grade to freehire's seniority vocabulary. getmatch's grades
-// (junior/middle/senior/lead/c_level) are a subset of enrich.SeniorityValues with identical
+// (junior/middle/senior/lead/c_level) are a subset of vocab.SeniorityValues with identical
 // spelling, so vocabulary membership IS the map: a recognized grade passes through, anything
 // else is dropped (never guessed).
 func getmatchSeniority(grade string) string {
 	g := strings.ToLower(strings.TrimSpace(grade))
-	if slices.Contains(enrich.SeniorityValues, g) {
+	if slices.Contains(vocab.SeniorityValues, g) {
 		return g
 	}
 	return ""

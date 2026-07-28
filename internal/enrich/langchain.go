@@ -8,12 +8,19 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/llm"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // maxDescriptionRunes caps the job description sent to the model. Descriptions are
 // attacker-influenced (scraped/extracted), so bounding the length keeps a single
 // oversized posting from amplifying per-call token cost.
 const maxDescriptionRunes = 24000
+
+// maxFieldRunes caps the short untrusted header fields (title, company, location, URL)
+// the same way: they come from the same scraped source as the description and deserve
+// a symmetric bound. 500 runes never fires on a real posting — even a slug-based ATS
+// URL with tracking params fits — it only stops garbage.
+const maxFieldRunes = 500
 
 // LangChainProvider implements Provider over any OpenAI-compatible endpoint via
 // the shared llm client. The model is asked for a JSON object matching the
@@ -88,18 +95,18 @@ func buildSystemPrompt(askGeo bool) string {
 	// deterministic dictionaries (internal/jobderive), so the LLM's copies were never
 	// served — asking for them only burned output tokens (see enrich-prompt-trim).
 	if askGeo {
-		enum("regions (array)", RegionValues)
+		enum("regions (array)", vocab.RegionValues)
 	}
-	enum("relocation", RelocationValues)
-	enum("salary_period", SalaryPeriodValues)
+	enum("relocation", vocab.RelocationValues)
+	enum("salary_period", vocab.SalaryPeriodValues)
 	// domains is the company's INDUSTRY (what it does), not its business model. It is
 	// glossed per-value so the model picks a real vertical; multiple may apply.
 	b.WriteString("- domains (array) — the company's industry/vertical (what it does), multiple allowed:\n")
-	for _, d := range DomainValues {
-		fmt.Fprintf(&b, "    %s: %s\n", d, DomainGloss[d])
+	for _, d := range vocab.DomainValues {
+		fmt.Fprintf(&b, "    %s: %s\n", d, vocab.DomainGloss[d])
 	}
-	enum("company_type", CompanyTypeValues)
-	enum("company_size", CompanySizeValues)
+	enum("company_type", vocab.CompanyTypeValues)
+	enum("company_size", vocab.CompanySizeValues)
 
 	if askGeo {
 		// Discovery facets: countries/regions are served as a dict-then-LLM hybrid (the
@@ -140,12 +147,12 @@ func buildSystemPrompt(askGeo bool) string {
 
 func userPrompt(job JobInput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Title: %s\n", job.Title)
-	fmt.Fprintf(&b, "Company: %s\n", job.Company)
-	fmt.Fprintf(&b, "Location: %s\n", job.Location)
+	fmt.Fprintf(&b, "Title: %s\n", llm.TruncateRunes(job.Title, maxFieldRunes))
+	fmt.Fprintf(&b, "Company: %s\n", llm.TruncateRunes(job.Company, maxFieldRunes))
+	fmt.Fprintf(&b, "Location: %s\n", llm.TruncateRunes(job.Location, maxFieldRunes))
 	// The URL path can encode the location/role on some ATS even when the Location
 	// field is empty (e.g. SuccessFactors /job/<City>-<Title>/<id>/).
-	fmt.Fprintf(&b, "URL: %s\n", job.URL)
+	fmt.Fprintf(&b, "URL: %s\n", llm.TruncateRunes(job.URL, maxFieldRunes))
 	// Source-provided remote hint (from the ATS API or the location text) — a
 	// prior for the model, not a guarantee of scope.
 	fmt.Fprintf(&b, "Remote flag: %t\n", job.Remote)

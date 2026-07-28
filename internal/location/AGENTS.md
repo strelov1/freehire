@@ -5,7 +5,7 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
 
 ## Always true
 - It is a curated dictionary, not a geocoder — it resolves high-frequency names/shorthands and emits nothing for what it can't resolve (never guesses).
-- Region and work-mode values are drawn from the same controlled vocabulary the enrichment contract defines (`enrich.RegionValues`/`enrich.WorkModeValues`), so the parser, the enrichment payload, and the search facet all speak one set of values.
+- Region and work-mode values are drawn from the shared controlled vocabulary (`vocab.RegionValues`/`vocab.WorkModeValues`), so the parser, the enrichment payload, and the search facet all speak one set of values.
 - Geography is exposed as a Meilisearch facet (`regions`/`countries`/`work_mode` are filterable attributes), not a Postgres column filter.
 - A dictionary change needs a re-derive (`cmd/backfill-derive`) and a `cmd/reindex` to reach existing jobs.
 - `work_mode` is dict-only — `jobview` serves the `jobs` column alone, the LLM's `enrichment.work_mode` is never merged in (it stays raw in the JSONB).

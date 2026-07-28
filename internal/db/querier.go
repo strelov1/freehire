@@ -433,7 +433,7 @@ type Querier interface {
 	// enrichment, gated on the same conditions the backfill uses (unenriched or below the
 	// target schema version, and a non-blacklisted category), so an already-enriched job
 	// is not re-queued and a confidently non-technical role (exclude_categories =
-	// enrich.NonTechCategories) never consumes LLM budget. category is NOT NULL DEFAULT '',
+	// vocab.NonTechCategories) never consumes LLM budget. category is NOT NULL DEFAULT '',
 	// so an empty/unrecognized category still enqueues (empty string <> ALL). Idempotent
 	// via the outbox's UNIQUE (job_id, target_version). Run in the same transaction as the
 	// job's UpsertJob so a newly ingested job is queued atomically with its write.
@@ -445,7 +445,7 @@ type Querier interface {
 	// Idempotent backfill: enqueue every OPEN job that is unenriched or below the target
 	// schema version. Closed jobs (closed_at IS NOT NULL) are skipped — a dead posting no
 	// user will see should not consume LLM budget. Jobs whose derived category is in
-	// exclude_categories (enrich.NonTechCategories) are skipped too, so LLM budget stays
+	// exclude_categories (vocab.NonTechCategories) are skipped too, so LLM budget stays
 	// on technical roles; category is NOT NULL DEFAULT '', so an empty/unrecognized
 	// category is never excluded (empty string <> ALL keeps the row). ON CONFLICT keeps
 	// exactly one entry per (job_id, target_version), so running this every command
@@ -456,7 +456,7 @@ type Querier interface {
 	//   1. OPEN jobs whose stored vector is missing, content-stale, or model-stale —
 	//      i.e. semantic_embedded_model differs from the target OR semantic_embedded_hash
 	//      differs from the job's current content_hash. Jobs whose derived category is in
-	//      exclude_categories (enrich.NonTechCategories) are skipped so embed budget stays
+	//      exclude_categories (vocab.NonTechCategories) are skipped so embed budget stays
 	//      on technical roles; category is NOT NULL DEFAULT '', so an empty/unrecognized
 	//      category is never excluded (empty string <> ALL keeps the row).
 	//   2. UNINDEXABLE jobs that still carry an embed stamp (were embedded while open and
@@ -480,7 +480,7 @@ type Querier interface {
 	EstimateHiringCompanies(ctx context.Context) (int64, error)
 	// Fast approximate open-job total for the DB-backed /jobs list's meta.total. An
 	// exact count(*) over ~millions of open rows was a per-request full scan; the
-	// planner's estimate (see estimate_open_jobs(), migration 0033) is O(1) and
+	// planner's estimate (see estimate_open_jobs(), migrations/0001_init.sql) is O(1) and
 	// tracks the closed_at IS NULL filter. The total is approximate by design.
 	EstimateOpenJobs(ctx context.Context) (int64, error)
 	// Job ids the user has already interacted with (viewed, saved, applied, or
@@ -498,8 +498,11 @@ type Querier interface {
 	// reopens it via the upsert regardless). Keyed by source alone; the caller namespaces the
 	// adapter's raw posting id to match the stored external_id.
 	ExistingExternalIDs(ctx context.Context, source string) ([]string, error)
-	// Record a failed attempt: bump attempts, release the lease, store the error, and
-	// dead-letter (set failed_at) once attempts reach max_attempts.
+	// Record a failed attempt: bump attempts, store the error, and dead-letter (set
+	// failed_at) once attempts reach max_attempts. The lease (claimed_at) is
+	// intentionally left in place — its expiry gates the retry to a later run and
+	// doubles as the crash reaper, so a failed entry is never reprocessed within the
+	// same run. Mirrors RecordEnrichmentFailure / RecordSemanticFailure.
 	FailEmailClassification(ctx context.Context, arg FailEmailClassificationParams) error
 	// Resolve a job page URL to the posting stored under it — the second tier of
 	// /api/v1/jobs/find, used when no (source, external_id) identity can be read out of the
@@ -716,7 +719,9 @@ type Querier interface {
 	// reads-back on a user conflict and retries the next suffix on an address conflict.
 	InsertMailbox(ctx context.Context, arg InsertMailboxParams) (Mailbox, error)
 	// Append a reward: points earned (e.g. for an accepted board contribution), delta positive,
-	// feature NULL. Rewards bank above the monthly grant and survive the period reset.
+	// feature NULL. Rewards bank above the monthly grant and survive the period reset. The
+	// partial unique index on (user_id, ref) WHERE kind='reward' guards against a double
+	// grant for the same ref even under a race.
 	InsertReward(ctx context.Context, arg InsertRewardParams) error
 	// Crawl write path: store a fetched post once. ON CONFLICT DO NOTHING makes
 	// re-crawling idempotent — a stored post (pending, done, or dead-lettered) is
@@ -728,9 +733,6 @@ type Querier interface {
 	InsertThread(ctx context.Context, arg InsertThreadParams) (Thread, error)
 	// parent_reply_id is NULL for a top-level reply, or another reply's id to nest under it.
 	InsertThreadReply(ctx context.Context, arg InsertThreadReplyParams) (ThreadReply, error)
-	// Slim beta-membership lookup for the RequireModeratorOrBeta middleware — a
-	// primitive bool so the auth package stays free of a db import (same shape as GetUserRole).
-	IsBetaTester(ctx context.Context, id int64) (bool, error)
 	// Cursor read: has this rotated file (by content signature) been applied? The
 	// signature is stable across rename and gzip, so a re-run recognizes the same file.
 	IsViewLogFileProcessed(ctx context.Context, signature int64) (bool, error)
@@ -932,12 +934,18 @@ type Querier interface {
 	// threads_subject_open_created_idx.
 	ListOpenThreadsFirst(ctx context.Context, arg ListOpenThreadsFirstParams) ([]ListOpenThreadsFirstRow, error)
 	// The moderator queue: offers awaiting a decision, oldest first, with display name.
+	// Capped at 500 as a runaway-growth guard — far above any plausible backlog; a
+	// queue that deep needs bulk triage, not a longer page.
 	ListPendingReferralOffers(ctx context.Context) ([]ListPendingReferralOffersRow, error)
-	// The moderator review queue: every pending report, newest first, with the reporter's email
+	// The moderator review queue: pending reports, newest first, with the reporter's email
 	// and the reported job's slug and title so the moderator can judge it and link to it.
+	// Capped at 500 as a runaway-growth guard — far above any plausible backlog; a queue
+	// that deep needs bulk triage, not a longer page.
 	ListPendingReports(ctx context.Context) ([]ListPendingReportsRow, error)
-	// The moderator review queue: every pending submission, newest first, with the submitter's
-	// email so the moderator can judge provenance.
+	// The moderator review queue: pending submissions, newest first, with the submitter's
+	// email so the moderator can judge provenance. Capped at 500 as a runaway-growth
+	// guard — far above any plausible backlog; a queue that deep needs bulk triage,
+	// not a longer page.
 	ListPendingSubmissions(ctx context.Context) ([]ListPendingSubmissionsRow, error)
 	// The "my offers" list: one member's offers with moderation status, newest first.
 	// Joins the catalogue for the company's display name (LEFT so an offer survives a
@@ -1013,10 +1021,12 @@ type Querier interface {
 	// email, or other personal field is selected. With no members the series is empty
 	// (min(day) is NULL, so generate_series yields no rows).
 	ListUserGrowth(ctx context.Context) ([]ListUserGrowthRow, error)
-	// Every job the caller has analyzed, newest first, joined to the job for display. Powers
+	// Jobs the caller has analyzed, newest first, joined to the job for display. Powers
 	// the Tracking → AI fit tab. Includes closed jobs (surfaced with a badge). The stored
 	// staleness stamps ride along so the handler can flag rows whose CV/job/model has since
 	// changed, and the analysis blob carries the overall score + verdict the list shows.
+	// Capped at 500 — the quota window (see CountRecentUserJobAnalyses) keeps real usage
+	// far below that, and each row drags a full analysis JSONB over the wire.
 	ListUserJobAnalyses(ctx context.Context, userID int64) ([]ListUserJobAnalysesRow, error)
 	// A user's job interactions joined with the job rows. Each subset is ordered by
 	// when the job entered *that* list, not by last touch: saved by saved_at, applied
@@ -1046,6 +1056,11 @@ type Querier interface {
 	// (see LockJobForVote for the drift this prevents). Called first in the vote
 	// transaction.
 	LockCompanyForVote(ctx context.Context, slug string) error
+	// Take the job row's lock so concurrent applies on the same job serialize. Without
+	// it, two applies in the same window under READ COMMITTED each read a snapshot
+	// missing the other's user_jobs row and both bump applied_count. Called first in
+	// the apply transaction, before MarkJobApplied (same pattern as LockJobForVote).
+	LockJobForApply(ctx context.Context, id int64) error
 	// Take the job row's lock so concurrent votes on the same job serialize. Without
 	// it, two votes in the same window under READ COMMITTED each recompute against a
 	// snapshot missing the other's user_jobs row, permanently undercounting the target
@@ -1063,6 +1078,10 @@ type Querier interface {
 	// a re-apply, via COALESCE). When (and only when) applied_at transitions from
 	// unset to set, bump the job's materialized applied_count in the same statement;
 	// `prior` sees the pre-upsert applied_at, so a re-apply never re-bumps.
+	// MUST run inside a transaction that took LockJobForApply first: `prior` reads
+	// the per-statement snapshot, so without the serializing lock two concurrent
+	// applies would both see applied_at unset and double-bump (same pattern as
+	// LockJobForVote for the vote counters).
 	MarkJobApplied(ctx context.Context, arg MarkJobAppliedParams) (MarkJobAppliedRow, error)
 	// Record one expired probe: increment the strike counter and, in the same write,
 	// close the job (closed_at) once it reaches the threshold the caller owns — the
@@ -1289,6 +1308,8 @@ type Querier interface {
 	// reports real churn. This is cmd/recount-companies' whole job; run periodically
 	// (eventual consistency). The facet aggregates are each their own non-correlated
 	// GROUP BY so the row-multiplying unnest of one array never distorts another's count.
+	// oj is referenced by all eight aggregates, so it is pinned MATERIALIZED: without the
+	// keyword the planner is free to inline it and re-scan the open-jobs set per aggregate.
 	// gov marks a company whose open jobs come from an exclusively-government source
 	// (usajobs = US federal, neogov = US state/local gov ATS). Generic ATS (workday,
 	// greenhouse, …) carry government jobs too, so they are deliberately NOT a signal.

@@ -86,7 +86,7 @@ func TestJobActivityRollupAndEndpoint(t *testing.T) {
 	assertDay("2026-01-12", 0, 2)
 
 	// --- Endpoint: dense daily series -----------------------------------------
-	h := &API{pool: pool, queries: db.New(pool)}
+	h := &statsHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/stats/jobs-activity", h.JobsActivity)
 

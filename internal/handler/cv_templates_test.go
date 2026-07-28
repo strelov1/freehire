@@ -15,7 +15,7 @@ import (
 // with its display metadata. It needs no DB: the handler just projects cv.Templates().
 func TestListCVTemplates(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/cv-templates", (&API{}).ListCVTemplates)
+	app.Get("/api/v1/cv-templates", (&cvHandlers{}).ListCVTemplates)
 
 	req := httptest.NewRequest(fiber.MethodGet, "/api/v1/cv-templates", nil)
 	resp, err := app.Test(req)

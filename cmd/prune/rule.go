@@ -4,8 +4,8 @@ import (
 	"slices"
 
 	"github.com/strelov1/freehire/internal/classify"
-	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/jobderive"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // The three rules that make a job a deletion target. The name is recorded on every
@@ -89,7 +89,7 @@ func matchRule(c candidate, ev evidence, knownProvider, boardCrawled bool) (stri
 	if c.CompanySlug == "" {
 		return "", false
 	}
-	if !ev.anyTech && slices.Contains(enrich.NonTechCategories, c.Category) {
+	if !ev.anyTech && slices.Contains(vocab.NonTechCategories, c.Category) {
 		return ruleBusiness, true
 	}
 	if !ev.anyTech && !ev.anySkills && c.IsTech == nil {

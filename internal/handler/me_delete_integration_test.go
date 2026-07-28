@@ -54,7 +54,7 @@ func (m *memBlobs) Delete(_ context.Context, key string) error {
 
 func newDeleteAccountApp(pool *pgxpool.Pool, iss *auth.Issuer, blobs *memBlobs) *fiber.App {
 	queries := db.New(pool)
-	h := &API{
+	h := &authHandlers{
 		queries:       queries,
 		issuer:        iss,
 		accountEmails: queries,

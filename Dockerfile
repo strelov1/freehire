@@ -21,6 +21,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/hire ./cmd/server
  && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/notify ./cmd/notify \
  && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/import-collections ./cmd/import-collections \
  && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/recount-companies ./cmd/recount-companies \
+ && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/migrate ./cmd/migrate \
  && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/backfill-company-info ./cmd/backfill-company-info
 
 # --- typst stage: fetch the pinned, statically-linked typst binary used to render CV
@@ -49,7 +50,10 @@ RUN apt-get update \
  && groupadd --system --gid 65532 nonroot \
  && useradd --system --uid 65532 --gid nonroot --home-dir /app nonroot \
  && pdftotext -v
-COPY --from=build /out/hire /out/ingest /out/enrich /out/reindex /out/tg-ingest /out/tg-extract /out/backfill-derive /out/liveness /out/notify /out/import-collections /out/recount-companies /out/backfill-company-info /app/
+COPY --from=build /out/hire /out/ingest /out/enrich /out/reindex /out/tg-ingest /out/tg-extract /out/backfill-derive /out/liveness /out/notify /out/import-collections /out/recount-companies /out/migrate /out/backfill-company-info /app/
+# The migration runner reads its *.sql files from the image (WORKDIR /app, default
+# -dir migrations), so /app/migrate works the same as `go run ./cmd/migrate` on the host.
+COPY --from=build /src/migrations /app/migrations
 # CV PDF rendering: the typst binary + the env that points the server at it. Absent this
 # the CV builder still works and the PDF endpoint returns 501 (config resolves via LookPath).
 COPY --from=typst /usr/local/bin/typst /app/typst

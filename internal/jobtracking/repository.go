@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/pgconv"
@@ -15,12 +16,16 @@ import (
 // Compile-time proof that QueriesRepository satisfies Repository.
 var _ Repository = (*QueriesRepository)(nil)
 
-// QueriesRepository adapts *db.Queries to the Repository interface.
-type QueriesRepository struct{ q *db.Queries }
+// QueriesRepository adapts *db.Queries to the Repository interface. The pool
+// drives the per-apply transaction (see MarkApplied).
+type QueriesRepository struct {
+	q    *db.Queries
+	pool *pgxpool.Pool
+}
 
 // NewQueriesRepository wraps q as a Repository.
-func NewQueriesRepository(q *db.Queries) *QueriesRepository {
-	return &QueriesRepository{q: q}
+func NewQueriesRepository(q *db.Queries, pool *pgxpool.Pool) *QueriesRepository {
+	return &QueriesRepository{q: q, pool: pool}
 }
 
 // JobIDBySlug returns the internal job id for the given public slug, or
@@ -47,10 +52,26 @@ func (r *QueriesRepository) RecordView(ctx context.Context, userID, jobID int64)
 	return toInteraction(db.UserJob(row)), nil
 }
 
-// MarkApplied marks a job as applied for a user.
+// MarkApplied marks a job as applied for a user. The write runs in a
+// transaction that locks the job row first (LockJobForApply), so concurrent
+// applies serialize and applied_count cannot double-bump — the same pattern
+// the vote path uses for its counters.
 func (r *QueriesRepository) MarkApplied(ctx context.Context, userID, jobID int64) (Interaction, error) {
-	row, err := r.q.MarkJobApplied(ctx, db.MarkJobAppliedParams{UserID: userID, JobID: jobID})
+	tx, err := r.pool.Begin(ctx)
 	if err != nil {
+		return Interaction{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	qtx := r.q.WithTx(tx)
+	if err := qtx.LockJobForApply(ctx, jobID); err != nil {
+		return Interaction{}, err
+	}
+	row, err := qtx.MarkJobApplied(ctx, db.MarkJobAppliedParams{UserID: userID, JobID: jobID})
+	if err != nil {
+		return Interaction{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return Interaction{}, err
 	}
 	// See RecordView: the applied_count CTE yields a bespoke row of db.UserJob shape.

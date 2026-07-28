@@ -10,11 +10,84 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/atscheck"
 	classifydict "github.com/strelov1/freehire/internal/classify"
+	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/resumeextract"
 	"github.com/strelov1/freehire/internal/skilltag"
+	"github.com/strelov1/freehire/internal/userprofile"
 )
+
+// resumeHandlers serves the résumé/CV surfaces: skill extraction, stored-résumé
+// management (store/status/delete), the profile verdict (live market coverage), the
+// CV ATS-readiness report, and the recommendations read. resume.Store is nil-safe:
+// a nil blob (S3 unconfigured) yields a disabled service whose Enabled() is false,
+// so the upload/verdict paths degrade to in-request parsing.
+type resumeHandlers struct {
+	resume *resume.Store
+	// structuredExtractor derives the read-only structured résumé from an uploaded CV
+	// (best-effort, background). Its client is nil when the LLM is unconfigured;
+	// extraction then no-ops and the profile simply shows no structured section.
+	structuredExtractor *resumeextract.Extractor
+	// search backs the résumé-embedding enqueue and the recommendations read.
+	search searcher
+	// facets backs the market-coverage computations (verdict + ATS report).
+	facets facetCounter
+	// userProfile loads the caller's profile (skills + role the verdict scores against).
+	userProfile *userprofile.Service
+	// atsAnalyzer runs the optional LLM qualitative review for the CV ATS report.
+	// Its client is nil when the LLM is unconfigured; Analyze then degrades to a no-op.
+	atsAnalyzer *atscheck.Analyzer
+	// atsCache reads/writes the per-user cached CV ATS review (backed by *db.Queries).
+	atsCache atsReviewStore
+}
+
+func newResumeHandlers(resumeStore *resume.Store, structuredExtractor *resumeextract.Extractor, search searcher, facets facetCounter, userProfile *userprofile.Service, atsAnalyzer *atscheck.Analyzer, queries *db.Queries) *resumeHandlers {
+	return &resumeHandlers{
+		resume:              resumeStore,
+		structuredExtractor: structuredExtractor,
+		search:              search,
+		facets:              facets,
+		userProfile:         userProfile,
+		atsAnalyzer:         atsAnalyzer,
+		atsCache:            queries,
+	}
+}
+
+func (h *resumeHandlers) register(api fiber.Router, mw middleware) {
+	// The résumé verdict is a profile sub-resource: GET computes the live
+	// market-coverage verdict from the profile's skills against the selected role.
+	// Cookie-only and session-scoped, like the profile it hangs off (no profile → 404).
+	api.Get("/me/profile/verdict", mw.cookie, h.GetResumeVerdict)
+	// The CV ATS-readiness report is a sibling profile sub-resource: GET scores the
+	// caller's stored CV (structure + role keyword-match); POST runs the optional LLM
+	// qualitative review over it and caches it. Cookie-only, session-scoped.
+	api.Get("/me/profile/ats-report", mw.cookie, h.GetATSReport)
+	api.Post("/me/profile/ats-report", mw.cookie, h.PostATSReport)
+
+	// Resume skill extraction is cookie-only (RequireAuth): it feeds the profile edit
+	// modal (extracted skills merge into the profile). When S3 storage is configured it
+	// also stores the résumé once (the single upload point); when not, it stays stateless
+	// (parsed and discarded, only canonical slugs returned).
+	api.Post("/me/resume/extract", mw.cookie, h.ExtractResumeProfile)
+
+	// Résumé storage (cookie-only): store the résumé once so the verdict's coherence can
+	// reuse it without a second upload. PUT stores/replaces, GET reports status (enabled +
+	// present + uploaded_at), DELETE removes it. 501 from PUT/DELETE when S3 is
+	// unconfigured — the SPA then falls back to per-request upload on the verdict page.
+	api.Put("/me/resume", mw.cookie, h.PutResume)
+	api.Get("/me/resume", mw.cookie, h.GetResume)
+	api.Delete("/me/resume", mw.cookie, h.DeleteResume)
+
+	// Recommendations: similar-open-jobs ranked against the caller's stored résumé.
+	api.Get("/me/recommendations", mw.key, h.Recommendations)
+
+	// Stateless market-coverage: score a caller-supplied skill list (request body)
+	// against the facet-filtered market. Cookie or API key — the CLI drives it with
+	// a key. No user data is stored; it is the stateless sibling of the CV verdict.
+	api.Post("/market/coverage", mw.key, h.MarketCoverage)
+}
 
 // resumeTextRequest is the JSON body for the pasted-text path.
 type resumeTextRequest struct {
@@ -126,7 +199,7 @@ func resumeProfile(text string) cvProfile {
 // unconfigured the résumé is parsed and discarded (only the derived fields are returned).
 // Behind RequireAuth (cookie-only). Oversize bodies are rejected by the server's global
 // BodyLimit (413) before this handler runs; the web client also guards the size up front.
-func (a *API) ExtractResumeProfile(c *fiber.Ctx) error {
+func (h *resumeHandlers) ExtractResumeProfile(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -142,14 +215,14 @@ func (a *API) ExtractResumeProfile(c *fiber.Ctx) error {
 
 	prof := resumeProfile(up.Text)
 
-	if a.resume.Enabled() {
-		if meta, err := a.resume.Put(c.Context(), userID, up.ContentType, up.Data); err != nil {
+	if h.resume.Enabled() {
+		if meta, err := h.resume.Put(c.Context(), userID, up.ContentType, up.Data); err != nil {
 			// Best-effort: log (never the résumé bytes) and still return the profile.
 			log.Printf("resume: store on extract failed for user %d: %v", userID, err)
 		} else {
 			// This is the résumé-upload path the app actually uses, so it is where the CV
 			// gets embedded for /my/recommendations and structured for the profile.
-			a.deriveResumeArtifacts(userID, up.Text, meta.UploadedAt)
+			h.deriveResumeArtifacts(userID, up.Text, meta.UploadedAt)
 		}
 	}
 
@@ -186,12 +259,12 @@ func newResumeMeta(enabled bool, m resume.Meta) resumeMetaResponse {
 // PutResume stores (or replaces) the caller's résumé in object storage and records the
 // pointer, returning the résumé metadata. 501 when storage is unconfigured (the SPA then
 // falls back to per-request upload on the verdict page). Cookie-only.
-func (a *API) PutResume(c *fiber.Ctx) error {
+func (h *resumeHandlers) PutResume(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	if !a.resume.Enabled() {
+	if !h.resume.Enabled() {
 		return fiber.NewError(fiber.StatusNotImplemented, "résumé storage is not available")
 	}
 	up, err := readResumeUpload(c)
@@ -201,7 +274,7 @@ func (a *API) PutResume(c *fiber.Ctx) error {
 	if strings.TrimSpace(up.Text) == "" {
 		return fiber.NewError(fiber.StatusBadRequest, errResumeNoText)
 	}
-	meta, err := a.resume.Put(c.Context(), userID, up.ContentType, up.Data)
+	meta, err := h.resume.Put(c.Context(), userID, up.ContentType, up.Data)
 	if err != nil {
 		return err
 	}
@@ -211,7 +284,7 @@ func (a *API) PutResume(c *fiber.Ctx) error {
 	// Derive the CV embedding and the structured résumé in the background (best-effort,
 	// off the response path). The structure is stamped with this upload's time so it is
 	// served only while it describes the current CV.
-	a.deriveResumeArtifacts(userID, up.Text, meta.UploadedAt)
+	h.deriveResumeArtifacts(userID, up.Text, meta.UploadedAt)
 	return c.JSON(fiber.Map{"data": newResumeMeta(true, meta)})
 }
 
@@ -221,21 +294,21 @@ func (a *API) PutResume(c *fiber.Ctx) error {
 // the upload. On an embed failure the prior vector is cleared so the new CV is never
 // matched by a stale one. The scratch id is the user id. It runs on its own timeout
 // context (not the request's, which is already gone once the upload responded).
-func (a *API) embedResume(userID int64, text string) {
-	if a.search == nil {
+func (h *resumeHandlers) embedResume(userID int64, text string) {
+	if h.search == nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	vec, model, err := a.search.EmbedText(ctx, text)
+	vec, model, err := h.search.EmbedText(ctx, text)
 	if err != nil {
 		log.Printf("resume embed: user %d: %v", userID, err)
-		if err := a.resume.SetEmbedding(ctx, userID, nil, ""); err != nil {
+		if err := h.resume.SetEmbedding(ctx, userID, nil, ""); err != nil {
 			log.Printf("resume embed clear: user %d: %v", userID, err)
 		}
 		return
 	}
-	if err := a.resume.SetEmbedding(ctx, userID, vec, model); err != nil {
+	if err := h.resume.SetEmbedding(ctx, userID, vec, model); err != nil {
 		log.Printf("resume embed persist: user %d: %v", userID, err)
 	}
 }
@@ -244,9 +317,9 @@ func (a *API) embedResume(userID int64, text string) {
 // the CV embedding (/my/recommendations) and the structured résumé (profile view + fit
 // context). Both run detached on their own timeout contexts. Defined once so the two
 // upload paths (PutResume, ExtractResumeProfile) can't drift out of sync.
-func (a *API) deriveResumeArtifacts(userID int64, text string, uploadedAt *time.Time) {
-	go a.embedResume(userID, text)
-	go a.extractStructuredResume(userID, text, uploadedAt)
+func (h *resumeHandlers) deriveResumeArtifacts(userID int64, text string, uploadedAt *time.Time) {
+	go h.embedResume(userID, text)
+	go h.extractStructuredResume(userID, text, uploadedAt)
 }
 
 // extractStructuredResume derives the read-only structured résumé from the just-uploaded
@@ -256,18 +329,18 @@ func (a *API) deriveResumeArtifacts(userID int64, text string, uploadedAt *time.
 // upload time, or any extraction/persist error is logged (never the CV text/bytes) and
 // swallowed, so the upload and the deterministic extractors are untouched. Runs on its
 // own timeout context (the request's is gone once the upload responded).
-func (a *API) extractStructuredResume(userID int64, text string, uploadedAt *time.Time) {
-	if !a.structuredExtractor.Enabled() || uploadedAt == nil {
+func (h *resumeHandlers) extractStructuredResume(userID int64, text string, uploadedAt *time.Time) {
+	if !h.structuredExtractor.Enabled() || uploadedAt == nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), resumeExtractLLMTimeout+30*time.Second)
 	defer cancel()
-	st, err := a.structuredExtractor.Extract(ctx, text)
+	st, err := h.structuredExtractor.Extract(ctx, text)
 	if err != nil {
 		log.Printf("resume structured: user %d: %v", userID, err)
 		return
 	}
-	if err := a.resume.SetStructured(ctx, userID, st, a.structuredExtractor.ModelID(), *uploadedAt); err != nil {
+	if err := h.resume.SetStructured(ctx, userID, st, h.structuredExtractor.ModelID(), *uploadedAt); err != nil {
 		log.Printf("resume structured persist: user %d: %v", userID, err)
 	}
 }
@@ -275,22 +348,22 @@ func (a *API) extractStructuredResume(userID int64, text string, uploadedAt *tim
 // GetResume reports whether the caller has a stored résumé (and when). Always 200:
 // unconfigured storage or no résumé is a normal state the SPA renders (it decides between
 // "re-run coherence" and a single upload prompt). Cookie-only.
-func (a *API) GetResume(c *fiber.Ctx) error {
+func (h *resumeHandlers) GetResume(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	if !a.resume.Enabled() {
+	if !h.resume.Enabled() {
 		return c.JSON(fiber.Map{"data": newResumeMeta(false, resume.Meta{})})
 	}
-	meta, err := a.resume.Status(c.Context(), userID)
+	meta, err := h.resume.Status(c.Context(), userID)
 	if err != nil {
 		return err
 	}
 	resp := newResumeMeta(true, meta)
 	// Attach the read-only structured résumé when a current one exists (best-effort: a
 	// read hiccup or stale/absent structure simply leaves it null, never failing status).
-	if st, ok, err := a.resume.Structured(c.Context(), userID); err != nil {
+	if st, ok, err := h.resume.Structured(c.Context(), userID); err != nil {
 		log.Printf("resume structured read: user %d: %v", userID, err)
 	} else if ok {
 		resp.Structured = &st
@@ -300,15 +373,15 @@ func (a *API) GetResume(c *fiber.Ctx) error {
 
 // DeleteResume removes the caller's stored résumé (object + pointer). 501 when storage is
 // unconfigured. Cookie-only.
-func (a *API) DeleteResume(c *fiber.Ctx) error {
+func (h *resumeHandlers) DeleteResume(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	if !a.resume.Enabled() {
+	if !h.resume.Enabled() {
 		return fiber.NewError(fiber.StatusNotImplemented, "résumé storage is not available")
 	}
-	if err := a.resume.Delete(c.Context(), userID); err != nil {
+	if err := h.resume.Delete(c.Context(), userID); err != nil {
 		return err
 	}
 	return c.SendStatus(fiber.StatusNoContent)

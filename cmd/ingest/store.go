@@ -10,11 +10,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobhash"
 	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/search"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // jobIndexer buffers a persisted job's document for the live search index. It is
@@ -54,7 +54,8 @@ func (s *dbStore) Save(ctx context.Context, j job.Job) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	// Rollback after Commit is a no-op; suppress its error (matches the other stores).
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// The aggregate's read projection carries every persistable field; the write path
 	// never touches enrichment (SetJobEnrichment owns those columns), so it is not mapped.
@@ -75,7 +76,7 @@ func (s *dbStore) Save(ctx context.Context, j job.Job) error {
 	if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
 		TargetVersion:     s.targetVersion,
 		JobID:             saved.Job.ID,
-		ExcludeCategories: enrich.NonTechCategories,
+		ExcludeCategories: vocab.NonTechCategories,
 	}); err != nil {
 		return fmt.Errorf("enqueue enrichment: %w", err)
 	}

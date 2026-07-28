@@ -72,8 +72,7 @@ func TestTelegramContribution(t *testing.T) {
 	}
 
 	queries := db.New(pool)
-	h := &API{
-		pool:                  pool,
+	h := &telegramHandlers{
 		queries:               queries,
 		frontendOrigin:        "https://freehire.test",
 		telegramLinks:         telegramnotify.NewLinkTokens("test-secret", 10*time.Minute),

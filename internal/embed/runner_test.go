@@ -270,6 +270,32 @@ func TestRunnerCorruptedRowDeadLettersInFallback(t *testing.T) {
 	}
 }
 
+func TestRunnerMissingJobDeadLettersInFallback(t *testing.T) {
+	store := newFakeStore()
+	ix := newFakeIndexer()
+	// Job 2 was hard-deleted after enqueue: the batch load comes back short, the
+	// per-item fallback finds nothing, and the entry dead-letters immediately
+	// (maxAttempts=1) instead of eating an attempt per cron run.
+	store.jobs[1] = db.Job{ID: 1}
+	store.jobs[3] = db.Job{ID: 3}
+	store.pending = []Claimed{
+		{OutboxID: 10, JobID: 1, Closed: false},
+		{OutboxID: 20, JobID: 2, Closed: false},
+		{OutboxID: 30, JobID: 3, Closed: false},
+	}
+
+	stats, err := Runner{Store: store, Indexer: ix}.Run(context.Background(), opt())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Indexed != 2 || stats.DeadLettered != 1 {
+		t.Fatalf("stats = %+v, want indexed=2 dead=1", stats)
+	}
+	if len(store.failCalls) != 1 || store.failCalls[0].outboxID != 20 || store.failCalls[0].maxAttempts != 1 {
+		t.Errorf("failCalls = %+v, want one for outbox 20 with maxAttempts=1 (immediate dead-letter)", store.failCalls)
+	}
+}
+
 func TestRunnerPersistsVectorsToStore(t *testing.T) {
 	store := newFakeStore()
 	ix := newFakeIndexer()

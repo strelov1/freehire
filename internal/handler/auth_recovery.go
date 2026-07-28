@@ -38,19 +38,19 @@ func recoveryError(err error) error {
 // RequestEmailVerification mails the caller a fresh verification code. Cookie-only: the
 // account is identified by the session, never by a body field, so the endpoint cannot be
 // pointed at someone else's address.
-func (a *API) RequestEmailVerification(c *fiber.Ctx) error {
+func (h *authHandlers) RequestEmailVerification(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	user, err := a.accounts.UserByID(c.Context(), userID)
+	user, err := h.accounts.UserByID(c.Context(), userID)
 	if err != nil {
 		return accountsError(err)
 	}
 	if user.EmailVerified {
 		return recoveryError(accounts.ErrAlreadyVerified)
 	}
-	if err := a.accounts.IssueVerificationCode(c.Context(), userID, user.Email); err != nil {
+	if err := h.accounts.IssueVerificationCode(c.Context(), userID, user.Email); err != nil {
 		return recoveryError(err)
 	}
 	return c.SendStatus(fiber.StatusAccepted)
@@ -62,7 +62,7 @@ type verifyCodeRequest struct {
 
 // ConfirmEmailVerification marks the caller's address verified when the presented code
 // matches. Cookie-only, same reasoning as the request side.
-func (a *API) ConfirmEmailVerification(c *fiber.Ctx) error {
+func (h *authHandlers) ConfirmEmailVerification(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -71,10 +71,10 @@ func (a *API) ConfirmEmailVerification(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	if err := a.accounts.ConfirmVerification(c.Context(), userID, in.Code); err != nil {
+	if err := h.accounts.ConfirmVerification(c.Context(), userID, in.Code); err != nil {
 		return recoveryError(err)
 	}
-	user, err := a.accounts.UserByID(c.Context(), userID)
+	user, err := h.accounts.UserByID(c.Context(), userID)
 	if err != nil {
 		return accountsError(err)
 	}
@@ -90,23 +90,23 @@ type forgotPasswordRequest struct {
 // bcrypt hash, and an SES round-trip take wildly different times for a known and an
 // unknown address, so answering before any of it happens removes the timing side-channel
 // instead of trying to mask it with dummy work.
-func (a *API) ForgotPassword(c *fiber.Ctx) error {
+func (h *authHandlers) ForgotPassword(c *fiber.Ctx) error {
 	var in forgotPasswordRequest
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	go a.sendPasswordResetCode(in.Email)
+	go h.sendPasswordResetCode(in.Email)
 	return c.SendStatus(fiber.StatusAccepted)
 }
 
 // sendPasswordResetCode runs the forgot-password work off the request path. Failures are
 // logged, never surfaced — the response was already sent, and any difference a caller
 // could observe would be the enumeration oracle this design removes.
-func (a *API) sendPasswordResetCode(email string) {
+func (h *authHandlers) sendPasswordResetCode(email string) {
 	ctx, cancel := context.WithTimeout(context.Background(), forgotPasswordTimeout)
 	defer cancel()
 
-	if err := a.accounts.RequestPasswordReset(ctx, email); err != nil {
+	if err := h.accounts.RequestPasswordReset(ctx, email); err != nil {
 		log.Printf("auth: password reset for %q: %v", email, err)
 	}
 }
@@ -120,12 +120,12 @@ type resetPasswordRequest struct {
 // ResetPassword sets a new password against a mailed code. Public — the code is the
 // credential. Success revokes every session, so the user signs in fresh with the new
 // password rather than being handed a session by the reset itself.
-func (a *API) ResetPassword(c *fiber.Ctx) error {
+func (h *authHandlers) ResetPassword(c *fiber.Ctx) error {
 	var in resetPasswordRequest
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	if err := a.accounts.ResetPassword(c.Context(), in.Email, in.Code, in.Password); err != nil {
+	if err := h.accounts.ResetPassword(c.Context(), in.Email, in.Code, in.Password); err != nil {
 		return recoveryError(err)
 	}
 	return c.JSON(fiber.Map{"data": fiber.Map{"reset": true}})
@@ -139,7 +139,7 @@ type changePasswordRequest struct {
 // ChangePassword replaces a known password. Cookie-only: an API key must not be able to
 // change the credential it would then outlive. The change revokes every session, and the
 // caller's own cookie is re-issued at the new generation so they stay signed in.
-func (a *API) ChangePassword(c *fiber.Ctx) error {
+func (h *authHandlers) ChangePassword(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -148,11 +148,11 @@ func (a *API) ChangePassword(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	version, err := a.accounts.ChangePassword(c.Context(), userID, in.CurrentPassword, in.Password)
+	version, err := h.accounts.ChangePassword(c.Context(), userID, in.CurrentPassword, in.Password)
 	if err != nil {
 		return recoveryError(err)
 	}
-	if err := a.setSessionAt(c, userID, version); err != nil {
+	if err := h.setSessionAt(c, userID, version); err != nil {
 		return err
 	}
 	return c.JSON(fiber.Map{"data": fiber.Map{"changed": true}})

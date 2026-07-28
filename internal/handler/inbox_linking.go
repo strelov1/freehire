@@ -37,20 +37,20 @@ type applicationDetail struct {
 
 // GetTrackedApplication returns the caller's application for a job slug together
 // with the emails linked to it. A slug the caller does not track is a 404.
-func (a *API) GetTrackedApplication(c *fiber.Ctx) error {
+func (h *inboxHandlers) GetTrackedApplication(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	job, err := a.queries.GetJobBySlug(c.Context(), c.Params("slug"))
+	job, err := h.queries.GetJobBySlug(c.Context(), c.Params("slug"))
 	if err != nil {
 		return err // ErrNoRows → 404
 	}
-	app, err := a.queries.GetUserApplication(c.Context(), db.GetUserApplicationParams{UserID: userID, JobID: job.ID})
+	app, err := h.queries.GetUserApplication(c.Context(), db.GetUserApplicationParams{UserID: userID, JobID: job.ID})
 	if err != nil {
 		return err // ErrNoRows → 404 (caller does not track this job)
 	}
-	rows, err := a.queries.ListJobEmails(c.Context(), db.ListJobEmailsParams{
+	rows, err := h.queries.ListJobEmails(c.Context(), db.ListJobEmailsParams{
 		UserID: userID, JobID: pgtype.Int8{Int64: job.ID, Valid: true},
 	})
 	if err != nil {
@@ -82,40 +82,40 @@ func (a *API) GetTrackedApplication(c *fiber.Ctx) error {
 
 // ConfirmEmailLink promotes an email's pending suggestion to a confirmed manual
 // link. A 404 when the email is not the caller's or carries no suggestion.
-func (a *API) ConfirmEmailLink(c *fiber.Ctx) error {
-	return a.mutateEmailLink(c, func(userID, id int64) (int64, error) {
-		return a.queries.ConfirmEmailLink(c.Context(), db.ConfirmEmailLinkParams{ID: id, UserID: userID})
+func (h *inboxHandlers) ConfirmEmailLink(c *fiber.Ctx) error {
+	return h.mutateEmailLink(c, func(userID, id int64) (int64, error) {
+		return h.queries.ConfirmEmailLink(c.Context(), db.ConfirmEmailLinkParams{ID: id, UserID: userID})
 	})
 }
 
 // RejectEmailLink dismisses an email's pending suggestion without linking.
-func (a *API) RejectEmailLink(c *fiber.Ctx) error {
-	return a.mutateEmailLink(c, func(userID, id int64) (int64, error) {
-		return a.queries.RejectEmailLink(c.Context(), db.RejectEmailLinkParams{ID: id, UserID: userID})
+func (h *inboxHandlers) RejectEmailLink(c *fiber.Ctx) error {
+	return h.mutateEmailLink(c, func(userID, id int64) (int64, error) {
+		return h.queries.RejectEmailLink(c.Context(), db.RejectEmailLinkParams{ID: id, UserID: userID})
 	})
 }
 
 // UnlinkEmail clears an email's application link.
-func (a *API) UnlinkEmail(c *fiber.Ctx) error {
-	return a.mutateEmailLink(c, func(userID, id int64) (int64, error) {
-		return a.queries.UnlinkEmail(c.Context(), db.UnlinkEmailParams{ID: id, UserID: userID})
+func (h *inboxHandlers) UnlinkEmail(c *fiber.Ctx) error {
+	return h.mutateEmailLink(c, func(userID, id int64) (int64, error) {
+		return h.queries.UnlinkEmail(c.Context(), db.UnlinkEmailParams{ID: id, UserID: userID})
 	})
 }
 
 // LinkEmail manually links an email to the application named by {"slug": …}.
-func (a *API) LinkEmail(c *fiber.Ctx) error {
+func (h *inboxHandlers) LinkEmail(c *fiber.Ctx) error {
 	var body struct {
 		Slug string `json:"slug"`
 	}
 	if err := c.BodyParser(&body); err != nil || body.Slug == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "slug required")
 	}
-	job, err := a.queries.GetJobBySlug(c.Context(), body.Slug)
+	job, err := h.queries.GetJobBySlug(c.Context(), body.Slug)
 	if err != nil {
 		return err // ErrNoRows → 404
 	}
-	return a.mutateEmailLink(c, func(userID, id int64) (int64, error) {
-		return a.queries.LinkEmailToJob(c.Context(), db.LinkEmailToJobParams{
+	return h.mutateEmailLink(c, func(userID, id int64) (int64, error) {
+		return h.queries.LinkEmailToJob(c.Context(), db.LinkEmailToJobParams{
 			ID: id, UserID: userID, JobID: pgtype.Int8{Int64: job.ID, Valid: true},
 		})
 	})
@@ -123,7 +123,7 @@ func (a *API) LinkEmail(c *fiber.Ctx) error {
 
 // mutateEmailLink runs one email-link mutation (scoped to the caller by id) and
 // returns the refreshed email, or 404 when the mutation matched no row.
-func (a *API) mutateEmailLink(c *fiber.Ctx, do func(userID, id int64) (int64, error)) error {
+func (h *inboxHandlers) mutateEmailLink(c *fiber.Ctx, do func(userID, id int64) (int64, error)) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -139,7 +139,7 @@ func (a *API) mutateEmailLink(c *fiber.Ctx, do func(userID, id int64) (int64, er
 	if rows == 0 {
 		return fiber.NewError(fiber.StatusNotFound, "not found")
 	}
-	row, err := a.queries.GetEmail(c.Context(), db.GetEmailParams{ID: int64(id), UserID: userID})
+	row, err := h.queries.GetEmail(c.Context(), db.GetEmailParams{ID: int64(id), UserID: userID})
 	if err != nil {
 		return err
 	}

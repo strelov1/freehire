@@ -8,7 +8,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/embed"
-	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // dbStore adapts the generated queries + pool to embed.Store. It is the only place the
@@ -23,12 +23,12 @@ func newDBStore(pool *pgxpool.Pool) *dbStore {
 	return &dbStore{pool: pool, q: db.New(pool)}
 }
 
-// Enqueue reuses enrich.NonTechCategories as the exclusion set, so embed budget stays on
+// Enqueue reuses vocab.NonTechCategories as the exclusion set, so embed budget stays on
 // technical roles from day one — the same gate cmd/enrich applies.
 func (s *dbStore) Enqueue(ctx context.Context, targetModel string) (int64, error) {
 	return s.q.EnqueuePendingSemanticJobs(ctx, db.EnqueuePendingSemanticJobsParams{
 		TargetModel:       targetModel,
-		ExcludeCategories: enrich.NonTechCategories,
+		ExcludeCategories: vocab.NonTechCategories,
 	})
 }
 

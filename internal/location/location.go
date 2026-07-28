@@ -7,7 +7,7 @@
 // "APAC"), and a few beacon cities that real ATS location fields use, and emits
 // nothing for anything it cannot resolve (it never guesses). Region codes are
 // drawn from the same controlled vocabulary the enrichment contract defines
-// (enrich.RegionValues), and work modes from enrich.WorkModeValues, so the
+// (vocab.RegionValues), and work modes from vocab.WorkModeValues, so the
 // parser, the enrichment payload, and the search facet all speak one set of
 // values.
 package location

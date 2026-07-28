@@ -40,7 +40,7 @@ func (f *fakeFacetCounter) reqFilter(attr string) any {
 }
 
 func facetsApp(fc facetCounter) *fiber.App {
-	h := &API{facets: fc}
+	h := &searchHandlers{facets: fc}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/jobs/facets", h.JobFacets)
 	return app

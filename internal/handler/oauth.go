@@ -22,14 +22,14 @@ import (
 // the provider redirect and the post-login redirect. Cookie scope still uses the
 // suffix rule — that is what SSO across subdomains needs — but a redirect target is
 // not a cookie scope, and conflating them is what produced the finding.
-func (a *API) requestOrigin(c *fiber.Ctx) string {
+func (h *authHandlers) requestOrigin(c *fiber.Ctx) string {
 	host := c.Hostname()
-	for _, served := range a.servedHosts {
+	for _, served := range h.servedHosts {
 		if host == served {
 			return "https://" + host
 		}
 	}
-	return a.frontendOrigin
+	return h.frontendOrigin
 }
 
 // needsExplicitServedHosts reports a deployment that answers on several hosts while
@@ -58,8 +58,8 @@ func servedHostsOrDefault(configured []string, frontendOrigin string) []string {
 
 // ListOAuthProviders returns the names of enabled OAuth providers, so the SPA
 // renders only usable sign-in buttons.
-func (a *API) ListOAuthProviders(c *fiber.Ctx) error {
-	names := a.oauth.Names()
+func (h *authHandlers) ListOAuthProviders(c *fiber.Ctx) error {
+	names := h.oauth.Names()
 	sort.Strings(names)
 	return c.JSON(fiber.Map{"data": names})
 }
@@ -68,8 +68,8 @@ func (a *API) ListOAuthProviders(c *fiber.Ctx) error {
 // in a short-lived cookie and redirects the browser to the provider's consent
 // page carrying the same state. `?platform=mobile` records that the flow was
 // started by the native app, so the callback finishes as a deep link.
-func (a *API) OAuthStart(c *fiber.Ctx) error {
-	p, ok := a.oauth.Provider(c.Params("provider"), a.requestOrigin(c))
+func (h *authHandlers) OAuthStart(c *fiber.Ctx) error {
+	p, ok := h.oauth.Provider(c.Params("provider"), h.requestOrigin(c))
 	if !ok {
 		return fiber.NewError(fiber.StatusNotFound, "unknown provider")
 	}
@@ -78,12 +78,12 @@ func (a *API) OAuthStart(c *fiber.Ctx) error {
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to start sign-in")
 	}
-	oauth.SetStateCookie(c, state, a.cookieSecure)
+	oauth.SetStateCookie(c, state, h.cookieSecure)
 	// Remember where the SPA wants the user back, so sign-in from a deep page
 	// (e.g. a job detail) returns there. Sanitized to a same-origin path.
-	oauth.SetReturnCookie(c, oauth.SafeReturnPath(c.Query("returnTo")), a.cookieSecure)
+	oauth.SetReturnCookie(c, oauth.SafeReturnPath(c.Query("returnTo")), h.cookieSecure)
 	if c.Query("platform") == oauth.PlatformMobile {
-		oauth.SetPlatformCookie(c, oauth.PlatformMobile, a.cookieSecure)
+		oauth.SetPlatformCookie(c, oauth.PlatformMobile, h.cookieSecure)
 	}
 	return c.Redirect(p.AuthCodeURL(state), fiber.StatusFound)
 }
@@ -94,12 +94,12 @@ func (a *API) OAuthStart(c *fiber.Ctx) error {
 // mints a one-time code and redirects to the app's custom scheme (the session
 // is minted later, by the app's own /exchange call). Every failure redirects
 // with auth_error instead of rendering JSON; details go to the server log.
-func (a *API) OAuthCallback(c *fiber.Ctx) error {
+func (h *authHandlers) OAuthCallback(c *fiber.Ctx) error {
 	// The callback lands on the same host the flow started on, so this origin
 	// matches the redirect_uri sent to the provider (required for the exchange)
 	// and is where the browser is sent back afterwards.
-	origin := a.requestOrigin(c)
-	p, ok := a.oauth.Provider(c.Params("provider"), origin)
+	origin := h.requestOrigin(c)
+	p, ok := h.oauth.Provider(c.Params("provider"), origin)
 	if !ok {
 		return fiber.NewError(fiber.StatusNotFound, "unknown provider")
 	}
@@ -109,40 +109,40 @@ func (a *API) OAuthCallback(c *fiber.Ctx) error {
 	cookieState := c.Cookies(oauth.StateCookieName)
 	returnTo := oauth.SafeReturnPath(c.Cookies(oauth.ReturnCookieName))
 	mobile := c.Cookies(oauth.PlatformCookieName) == oauth.PlatformMobile
-	oauth.ClearStateCookie(c, a.cookieSecure)
-	oauth.ClearReturnCookie(c, a.cookieSecure)
-	oauth.ClearPlatformCookie(c, a.cookieSecure)
+	oauth.ClearStateCookie(c, h.cookieSecure)
+	oauth.ClearReturnCookie(c, h.cookieSecure)
+	oauth.ClearPlatformCookie(c, h.cookieSecure)
 
 	state, code := c.Query("state"), c.Query("code")
 	if state == "" || state != cookieState {
-		return a.oauthFail(c, p.Name(), returnTo, mobile, errors.New("state mismatch"))
+		return h.oauthFail(c, p.Name(), returnTo, mobile, errors.New("state mismatch"))
 	}
 	if code == "" {
-		return a.oauthFail(c, p.Name(), returnTo, mobile, errors.New("missing code"))
+		return h.oauthFail(c, p.Name(), returnTo, mobile, errors.New("missing code"))
 	}
 
 	identity, err := p.FetchIdentity(c.Context(), code)
 	if err != nil {
-		return a.oauthFail(c, p.Name(), returnTo, mobile, err)
+		return h.oauthFail(c, p.Name(), returnTo, mobile, err)
 	}
 
-	userID, err := a.accounts.ResolveOAuthAccount(c.Context(), p.Name(), identity.ProviderUserID, identity.Email, identity.EmailVerified)
+	userID, err := h.accounts.ResolveOAuthAccount(c.Context(), p.Name(), identity.ProviderUserID, identity.Email, identity.EmailVerified)
 	if err != nil {
-		return a.oauthFail(c, p.Name(), returnTo, mobile, err)
+		return h.oauthFail(c, p.Name(), returnTo, mobile, err)
 	}
 
 	if mobile {
 		// Hand the app a single-use code instead of a cookie; the app exchanges
 		// it over its own client so the session cookie lands in its jar.
-		otc, err := a.oauthCodes.Mint(userID)
+		otc, err := h.oauthCodes.Mint(userID)
 		if err != nil {
-			return a.oauthFail(c, p.Name(), returnTo, mobile, err)
+			return h.oauthFail(c, p.Name(), returnTo, mobile, err)
 		}
 		return c.Redirect(oauth.MobileCallbackURL+"?code="+url.QueryEscape(otc), fiber.StatusFound)
 	}
 
-	if err := a.setSession(c, userID); err != nil {
-		return a.oauthFail(c, p.Name(), returnTo, mobile, err)
+	if err := h.setSession(c, userID); err != nil {
+		return h.oauthFail(c, p.Name(), returnTo, mobile, err)
 	}
 	return c.Redirect(origin+returnTo, fiber.StatusFound)
 }
@@ -151,21 +151,21 @@ func (a *API) OAuthCallback(c *fiber.Ctx) error {
 // session. Because the app makes this request, the session cookie set here
 // lands in the app's cookie jar (the whole point of the mobile handshake). A
 // missing/expired/reused code is a generic 401.
-func (a *API) OAuthExchange(c *fiber.Ctx) error {
+func (h *authHandlers) OAuthExchange(c *fiber.Ctx) error {
 	var in struct {
 		Code string `json:"code"`
 	}
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	userID, ok := a.oauthCodes.Consume(in.Code)
+	userID, ok := h.oauthCodes.Consume(in.Code)
 	if !ok {
 		return fiber.NewError(fiber.StatusUnauthorized, "invalid or expired code")
 	}
-	if err := a.setSession(c, userID); err != nil {
+	if err := h.setSession(c, userID); err != nil {
 		return err
 	}
-	user, err := a.accounts.UserByID(c.Context(), userID)
+	user, err := h.accounts.UserByID(c.Context(), userID)
 	if err != nil {
 		return accountsError(err)
 	}
@@ -175,7 +175,7 @@ func (a *API) OAuthExchange(c *fiber.Ctx) error {
 // oauthFail logs the failure server-side and sends the client back to where
 // sign-in started with the generic auth_error marker (never a JSON error page).
 // Mobile flows bounce to the app's custom scheme; web flows to the SPA path.
-func (a *API) oauthFail(c *fiber.Ctx, provider, returnTo string, mobile bool, err error) error {
+func (h *authHandlers) oauthFail(c *fiber.Ctx, provider, returnTo string, mobile bool, err error) error {
 	log.Printf("oauth %s: sign-in failed: %v", provider, err)
 	if mobile {
 		return c.Redirect(oauth.MobileCallbackURL+"?auth_error=oauth", fiber.StatusFound)
@@ -184,5 +184,5 @@ func (a *API) oauthFail(c *fiber.Ctx, provider, returnTo string, mobile bool, er
 	if strings.Contains(returnTo, "?") {
 		sep = "&"
 	}
-	return c.Redirect(a.requestOrigin(c)+returnTo+sep+"auth_error=oauth", fiber.StatusFound)
+	return c.Redirect(h.requestOrigin(c)+returnTo+sep+"auth_error=oauth", fiber.StatusFound)
 }

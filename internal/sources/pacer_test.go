@@ -116,7 +116,7 @@ func (g challengingHTMLGetter) GetHTML(_ context.Context, _ string) (*html.Node,
 }
 
 func TestPacedClinchGetter_PropagatesChallengeError(t *testing.T) {
-	g := pacedClinchGetter(challengingHTMLGetter{url: "https://careers.example.com/jobs/x"})
+	g := pacedHTMLGetter(challengingHTMLGetter{url: "https://careers.example.com/jobs/x"}, clinchRequestInterval, clinchRequestBurst)
 
 	// The first call is admitted immediately by the limiter's burst, so this exercises the
 	// wiring without any timing dependency.

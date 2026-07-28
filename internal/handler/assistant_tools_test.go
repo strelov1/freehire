@@ -77,7 +77,7 @@ func TestSearchJobsToolPassesQueryAndFacetFilter(t *testing.T) {
 		Hits:  []search.JobDocument{hitDoc(1, "go-dev-acme", "Go Developer")},
 		Total: 1,
 	}}
-	a := &API{search: s, descriptions: fixedDescriptions{body: "<p>Full body</p>"}}
+	a := assistantWith(&searchHandlers{search: s, descriptions: fixedDescriptions{body: "<p>Full body</p>"}}, nil)
 
 	tool := toolByName(t, a.assistantDiscoveryTools(), "search_jobs")
 	out, err := tool.Run(context.Background(), 3, json.RawMessage(
@@ -109,7 +109,7 @@ func TestSearchJobsToolReturnsFullDescriptionsAsMarkdown(t *testing.T) {
 		Hits:  []search.JobDocument{hitDoc(1, "go-dev-acme", "Go Developer")},
 		Total: 1,
 	}}
-	a := &API{search: s, descriptions: fixedDescriptions{body: "<p>Full body</p>"}}
+	a := assistantWith(&searchHandlers{search: s, descriptions: fixedDescriptions{body: "<p>Full body</p>"}}, nil)
 
 	tool := toolByName(t, a.assistantDiscoveryTools(), "search_jobs")
 	out, err := tool.Run(context.Background(), 3, json.RawMessage(`{"query":"go"}`))
@@ -126,7 +126,7 @@ func TestSearchJobsToolReturnsFullDescriptionsAsMarkdown(t *testing.T) {
 }
 
 func TestSearchJobsToolRejectsAnUnknownFacet(t *testing.T) {
-	a := &API{search: &recordingSearcher{}, descriptions: fixedDescriptions{}}
+	a := assistantWith(&searchHandlers{search: &recordingSearcher{}, descriptions: fixedDescriptions{}}, nil)
 
 	tool := toolByName(t, a.assistantDiscoveryTools(), "search_jobs")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(`{"filters":{"vibe":["chill"]}}`))
@@ -140,7 +140,7 @@ func TestSearchJobsToolRejectsAnUnknownFacet(t *testing.T) {
 
 func TestSearchJobsToolCapsTheResultCount(t *testing.T) {
 	s := &recordingSearcher{}
-	a := &API{search: s, descriptions: fixedDescriptions{}}
+	a := assistantWith(&searchHandlers{search: s, descriptions: fixedDescriptions{}}, nil)
 
 	tool := toolByName(t, a.assistantDiscoveryTools(), "search_jobs")
 	if _, err := tool.Run(context.Background(), 3, json.RawMessage(`{"limit":500}`)); err != nil {
@@ -152,7 +152,7 @@ func TestSearchJobsToolCapsTheResultCount(t *testing.T) {
 }
 
 func TestSearchJobsToolWithoutSearchConfiguredFails(t *testing.T) {
-	a := &API{}
+	a := assistantWith(&searchHandlers{}, nil)
 	tool := toolByName(t, a.assistantDiscoveryTools(), "search_jobs")
 	if _, err := tool.Run(context.Background(), 3, json.RawMessage(`{}`)); err == nil {
 		t.Fatal("want an error the model can report when search is unconfigured")
@@ -164,7 +164,7 @@ func TestFacetsToolReturnsTheVocabulary(t *testing.T) {
 		Total:  120,
 		Facets: map[string]map[string]int64{"skills": {"go": 40}, "enrichment.seniority": {"senior": 60}},
 	}}
-	a := &API{facets: fc}
+	a := assistantWith(&searchHandlers{facets: fc}, nil)
 
 	tool := toolByName(t, a.assistantDiscoveryTools(), "facets")
 	out, err := tool.Run(context.Background(), 3, json.RawMessage(`{}`))
@@ -184,7 +184,7 @@ func TestFacetsToolReturnsTheVocabulary(t *testing.T) {
 }
 
 func TestMarketFitToolRequiresSkills(t *testing.T) {
-	a := &API{facets: &stubFacets{}}
+	a := assistantWith(&searchHandlers{facets: &stubFacets{}}, &resumeHandlers{facets: &stubFacets{}})
 	tool := toolByName(t, a.assistantDiscoveryTools(), "market_fit")
 	if _, err := tool.Run(context.Background(), 3, json.RawMessage(`{"skills":[]}`)); err == nil {
 		t.Fatal("market_fit without skills must be an error, not an empty score")
@@ -204,4 +204,15 @@ func (f *stubFacets) FacetCounts(_ context.Context, p search.FacetParams) (searc
 
 func (f *stubFacets) DisjunctiveFacetCounts(context.Context, string, []search.FacetReq, any) (search.FacetResult, error) {
 	return f.res, nil
+}
+
+// assistantWith builds the agent over just the feature handlers a test needs. The
+// assistant is a facade, so its tools are only ever as available as the handlers
+// behind them — a nil one is exactly how production behaves when that feature is
+// unconfigured.
+func assistantWith(search *searchHandlers, resumeH *resumeHandlers) *assistantHandlers {
+	if resumeH == nil {
+		resumeH = &resumeHandlers{}
+	}
+	return &assistantHandlers{search: search, resume: resumeH}
 }

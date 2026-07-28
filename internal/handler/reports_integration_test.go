@@ -60,12 +60,7 @@ func TestReportsEndToEnd(t *testing.T) {
 	user2Cookie, _ := iss.Issue(user2ID, testTokenVersion)
 	queries := db.New(pool)
 	reportRepo := report.NewQueriesRepository(queries)
-	h := &API{
-		pool:    pool,
-		queries: queries,
-		issuer:  iss,
-		report:  report.New(reportRepo, reportRepo),
-	}
+	h := &reportHandlers{report: report.New(reportRepo, reportRepo), queries: queries}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})

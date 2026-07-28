@@ -21,10 +21,12 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/job"
+	"github.com/strelov1/freehire/internal/jobderive"
 	"github.com/strelov1/freehire/internal/jobhash"
 	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/linksource"
 	"github.com/strelov1/freehire/internal/search"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // Result identifies the posting an import wrote, under the destination's own catalog
@@ -79,15 +81,17 @@ func (im *Importer) Import(ctx context.Context, raw string) (Result, bool, error
 // ingest and tg-extract, so facets, slugs and the enrichment outbox stay consistent.
 func (im *Importer) write(ctx context.Context, r linksource.Resolved) (Result, bool, error) {
 	j, err := job.New(job.Draft{
-		Source:      r.Source,
-		ExternalID:  r.Job.ExternalID,
-		URL:         r.Job.URL,
-		Title:       r.Job.Title,
-		Company:     r.Job.Company,
-		Location:    r.Job.Location,
-		Remote:      r.Job.Remote,
-		Description: r.Job.Description,
-		WorkMode:    r.Job.WorkMode,
+		Input: jobderive.Input{
+			Source:      r.Source,
+			ExternalID:  r.Job.ExternalID,
+			Title:       r.Job.Title,
+			Company:     r.Job.Company,
+			Location:    r.Job.Location,
+			Description: r.Job.Description,
+			WorkMode:    r.Job.WorkMode,
+		},
+		URL:    r.Job.URL,
+		Remote: r.Job.Remote,
 	})
 	if err != nil {
 		return Result{}, false, err
@@ -111,7 +115,7 @@ func (im *Importer) write(ctx context.Context, r linksource.Resolved) (Result, b
 	if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
 		TargetVersion:     int32(enrich.Version),
 		JobID:             res.Job.ID,
-		ExcludeCategories: enrich.NonTechCategories,
+		ExcludeCategories: vocab.NonTechCategories,
 	}); err != nil {
 		return Result{}, false, err
 	}

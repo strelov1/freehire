@@ -2,9 +2,11 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5"
 )
 
 // LocalsUserID is the c.Locals key under which RequireAuth and RequireAuthOrKey
@@ -112,7 +114,9 @@ type APIKeyAuthenticator interface {
 // API key, storing the resolved user id in the same locals as RequireAuth — so every
 // handler behind it works unchanged. The cookie is tried first, leaving the
 // browser path identical; a missing or invalid cookie falls through to the key.
-// It responds 401 when neither credential resolves.
+// It responds 401 when neither credential resolves. A key-lookup failure that is
+// not "no such key" (pgx.ErrNoRows) is a real error and is returned — it must not
+// be masked as a 401.
 //
 // Full-scope-only is the default on purpose: a route added later is confined to
 // unrestricted credentials unless it deliberately opts into RequireAuthOrScopedKey, so a
@@ -134,7 +138,13 @@ func RequireAuthOrScopedKey(iss *Issuer, versions TokenVersionLoader, keys APIKe
 				return c.Next()
 			}
 		}
-		if b, ok := resolveBearer(c, iss, versions, keys); ok {
+		b, ok, err := resolveBearer(c, iss, versions, keys)
+		if err != nil {
+			// A lookup failure (DB down, etc.) is not "unauthenticated":
+			// surface it as a 500 rather than masking it as a 401.
+			return err
+		}
+		if ok {
 			if b.viaKey && !scopeAllowed(b.scope, allowed) {
 				return fiber.NewError(fiber.StatusForbidden, "api key scope is insufficient for this endpoint")
 			}
@@ -165,9 +175,11 @@ func scopeAllowed(scope string, allowed []string) bool {
 
 // OptionalAuth returns middleware that attaches the caller's user id when a valid
 // session cookie or API key is present, and otherwise passes through anonymously.
-// It NEVER rejects: an absent, expired, or invalid credential simply leaves no user
-// id in locals, so a public read still succeeds. Used on the job/company detail
-// reads to overlay the caller's own vote without gating the page behind sign-in.
+// An absent, expired, or unknown credential simply leaves no user id in locals, so
+// a public read still succeeds. Used on the job/company detail reads to overlay the
+// caller's own vote without gating the page behind sign-in. A key-lookup failure
+// that is not "no such key" (pgx.ErrNoRows) is a real error and is returned — it
+// must not be silently degraded to anonymous.
 func OptionalAuth(iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthenticator) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if token := c.Cookies(CookieName); token != "" {
@@ -176,9 +188,14 @@ func OptionalAuth(iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthentic
 				return c.Next()
 			}
 		}
-		// No scope gate here: this never rejects, and an under-scoped key on a public
-		// read only enriches the response with its own owner's overlay.
-		if b, ok := resolveBearer(c, iss, versions, keys); ok {
+		// No scope gate here: an under-scoped key on a public read only enriches the
+		// response with its own owner's overlay.
+		b, ok, err := resolveBearer(c, iss, versions, keys)
+		if err != nil {
+			// A lookup outage is a real error, not "anonymous": surface it.
+			return err
+		}
+		if ok {
 			c.Locals(LocalsUserID, b.userID)
 			if b.viaKey {
 				c.Locals(localsViaAPIKey, true)
@@ -218,43 +235,14 @@ func RequireRole(loader RoleLoader, role string) fiber.Handler {
 	}
 }
 
-// BetaLoader resolves an authenticated user id to its beta-tester membership. Like
-// RoleLoader it returns a primitive so this package needs no database import; it is
-// satisfied directly by *db.Queries (IsBetaTester).
-type BetaLoader interface {
-	IsBetaTester(ctx context.Context, id int64) (bool, error)
-}
-
-// RequireModeratorOrBeta authorizes a request when the caller is EITHER a moderator
-// OR a beta tester — for restricted-rollout features that moderators administer and
-// beta testers get early access to (e.g. the mail inbox). Same fail-closed discipline
-// as RequireRole: no user id → 401; neither moderator nor beta → 403.
-func RequireModeratorOrBeta(roles RoleLoader, beta BetaLoader) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		id, ok := UserID(c)
-		if !ok {
-			return fiber.NewError(fiber.StatusUnauthorized, "not authenticated")
-		}
-		if role, err := roles.GetUserRole(c.Context(), id); err == nil && role == "moderator" {
-			return c.Next()
-		}
-		isBeta, err := beta.IsBetaTester(c.Context(), id)
-		if err != nil {
-			return fiber.NewError(fiber.StatusUnauthorized, "not authenticated")
-		}
-		if !isBeta {
-			return fiber.NewError(fiber.StatusForbidden, "forbidden")
-		}
-		return c.Next()
-	}
-}
-
 // resolveBearer authenticates an `Authorization: Bearer <token>` credential,
 // accepting EITHER a session JWT or an API key. The browser extension presents
 // its session JWT here (it has no cross-origin cookie), so a JWT bearer is a full
 // session — viaKey is false; only an actual API key sets viaKey. Returns ok=false
-// when there is no bearer or neither interpretation resolves.
-func resolveBearer(c *fiber.Ctx, iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthenticator) (bearerIdentity, bool) {
+// when there is no bearer or neither interpretation resolves. An API-key lookup
+// failure that is not "no such key" (pgx.ErrNoRows) is a real error and is
+// returned — it must not be silently masked as an unauthenticated request.
+func resolveBearer(c *fiber.Ctx, iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthenticator) (bearerIdentity, bool, error) {
 	return resolveCredential(c, iss, versions, keys, bearerToken(c))
 }
 
@@ -262,20 +250,27 @@ func resolveBearer(c *fiber.Ctx, iss *Issuer, versions TokenVersionLoader, keys 
 // an API key. Split from resolveBearer because the websocket handshake carries the same
 // credential in a subprotocol rather than a header, and both must agree on what a token
 // means.
-func resolveCredential(c *fiber.Ctx, iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthenticator, tok string) (bearerIdentity, bool) {
+func resolveCredential(c *fiber.Ctx, iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthenticator, tok string) (bearerIdentity, bool, error) {
 	if tok == "" {
-		return bearerIdentity{}, false
+		return bearerIdentity{}, false, nil
 	}
 	// A JWT bearer IS a session, so it takes the same revocation check as the cookie —
 	// otherwise "sign out everywhere" would leave the extension's copy of the token
 	// working, which is exactly the device a user reaches for that button to evict.
 	if id, ok := resolveSession(c, iss, versions, tok); ok {
-		return bearerIdentity{userID: id}, true
+		return bearerIdentity{userID: id}, true, nil
 	}
-	if identity, err := keys.AuthenticateAPIKey(c.Context(), HashAPIKey(tok)); err == nil {
-		return bearerIdentity{userID: identity.UserID, viaKey: true, scope: identity.Scope}, true
+	identity, err := keys.AuthenticateAPIKey(c.Context(), HashAPIKey(tok))
+	switch {
+	case err == nil:
+		return bearerIdentity{userID: identity.UserID, viaKey: true, scope: identity.Scope}, true, nil
+	case errors.Is(err, pgx.ErrNoRows):
+		// No live key matches — no credential resolved.
+		return bearerIdentity{}, false, nil
+	default:
+		// A lookup failure (DB down, etc.) is real: surface it to the caller.
+		return bearerIdentity{}, false, err
 	}
-	return bearerIdentity{}, false
 }
 
 // bearerIdentity is what a Bearer credential resolved to. viaKey distinguishes an API

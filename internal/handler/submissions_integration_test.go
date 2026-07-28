@@ -53,23 +53,20 @@ func TestSubmissionsEndToEnd(t *testing.T) {
 	user2Cookie, _ := iss.Issue(user2ID, testTokenVersion)
 	queries := db.New(pool)
 	mod := moderation.New(moderation.NewQueriesRepository(queries, pool, enrich.Version))
-	h := &API{
-		pool:       pool,
-		queries:    queries,
-		issuer:     iss,
-		moderation: mod,
-		submission: submission.New(submission.NewQueriesRepository(queries), mod),
-		accounts:   accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{}),
+	h := &authHandlers{
+		queries:  queries,
+		accounts: accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{}),
 	}
+	sh := &submissionHandlers{submission: submission.New(submission.NewQueriesRepository(queries), mod)}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
 	requireMod := auth.RequireRole(queries, "moderator")
-	app.Post("/api/v1/submissions", keyAuth, h.CreateSubmission)
-	app.Get("/api/v1/me/submissions", keyAuth, h.ListMySubmissions)
-	app.Get("/api/v1/submissions", keyAuth, requireMod, h.ListPendingSubmissions)
-	app.Post("/api/v1/submissions/:id/approve", keyAuth, requireMod, h.ApproveSubmission)
-	app.Post("/api/v1/submissions/:id/reject", keyAuth, requireMod, h.RejectSubmission)
+	app.Post("/api/v1/submissions", keyAuth, sh.CreateSubmission)
+	app.Get("/api/v1/me/submissions", keyAuth, sh.ListMySubmissions)
+	app.Get("/api/v1/submissions", keyAuth, requireMod, sh.ListPendingSubmissions)
+	app.Post("/api/v1/submissions/:id/approve", keyAuth, requireMod, sh.ApproveSubmission)
+	app.Post("/api/v1/submissions/:id/reject", keyAuth, requireMod, sh.RejectSubmission)
 	app.Get("/api/v1/auth/me", keyAuth, h.Me)
 
 	req := func(method, path, cookie, body string) *http.Request {
@@ -356,19 +353,12 @@ func TestSubmissionStructuredFacetsEndToEnd(t *testing.T) {
 	userCookie, _ := iss.Issue(userID, testTokenVersion)
 	queries := db.New(pool)
 	mod := moderation.New(moderation.NewQueriesRepository(queries, pool, enrich.Version))
-	h := &API{
-		pool:       pool,
-		queries:    queries,
-		issuer:     iss,
-		moderation: mod,
-		submission: submission.New(submission.NewQueriesRepository(queries), mod),
-		accounts:   accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{}),
-	}
+	sh := &submissionHandlers{submission: submission.New(submission.NewQueriesRepository(queries), mod)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
 	requireMod := auth.RequireRole(queries, "moderator")
-	app.Post("/api/v1/submissions", keyAuth, h.CreateSubmission)
-	app.Post("/api/v1/submissions/:id/approve", keyAuth, requireMod, h.ApproveSubmission)
+	app.Post("/api/v1/submissions", keyAuth, sh.CreateSubmission)
+	app.Post("/api/v1/submissions/:id/approve", keyAuth, requireMod, sh.ApproveSubmission)
 
 	req := func(method, path, cookie, body string) *http.Request {
 		var r *http.Request

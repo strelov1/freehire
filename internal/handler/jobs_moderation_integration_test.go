@@ -49,10 +49,8 @@ func TestModeratorJobsEndToEnd(t *testing.T) {
 	modCookie, _ := iss.Issue(modID, testTokenVersion)
 	userCookie, _ := iss.Issue(userID, testTokenVersion)
 	queries := db.New(pool)
-	h := &API{
-		pool:       pool,
+	h := &jobsHandlers{
 		queries:    queries,
-		issuer:     iss,
 		moderation: moderation.New(moderation.NewQueriesRepository(queries, pool, enrich.Version)),
 	}
 

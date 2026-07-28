@@ -126,7 +126,7 @@ type EnqueuePendingSemanticJobsParams struct {
 //  1. OPEN jobs whose stored vector is missing, content-stale, or model-stale —
 //     i.e. semantic_embedded_model differs from the target OR semantic_embedded_hash
 //     differs from the job's current content_hash. Jobs whose derived category is in
-//     exclude_categories (enrich.NonTechCategories) are skipped so embed budget stays
+//     exclude_categories (vocab.NonTechCategories) are skipped so embed budget stays
 //     on technical roles; category is NOT NULL DEFAULT ”, so an empty/unrecognized
 //     category is never excluded (empty string <> ALL keeps the row).
 //  2. UNINDEXABLE jobs that still carry an embed stamp (were embedded while open and

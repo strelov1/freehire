@@ -20,16 +20,16 @@ import (
 // so a dictionary change takes effect with no cache stamp; the uncapped analysis stays
 // in the cache and only the served copy is capped. No-op on a nil analysis. Used on the
 // GET path, which has no pre-computed blockers.
-func (a *API) capServedAnalysis(ctx context.Context, userID int64, job db.Job, analysis *matchanalysis.Analysis) {
+func (h *matchHandlers) capServedAnalysis(ctx context.Context, userID int64, job db.Job, analysis *matchanalysis.Analysis) {
 	if analysis == nil {
 		return
 	}
-	if a.userProfile == nil { // profile use case not wired (e.g. a minimal test app) → no blockers
+	if h.userProfile == nil { // profile use case not wired (e.g. a minimal test app) → no blockers
 		applyBlockers(analysis, nil)
 		return
 	}
-	profile, _ := a.userProfile.Get(ctx, userID)
-	applyBlockers(analysis, a.jobBlockers(ctx, userID, job, profile))
+	profile, _ := h.userProfile.Get(ctx, userID)
+	applyBlockers(analysis, h.jobBlockers(ctx, userID, job, profile))
 }
 
 // applyBlockers attaches blockers to the served analysis and clamps its score to the
@@ -51,11 +51,11 @@ func applyBlockers(analysis *matchanalysis.Analysis, blockers []hardconstraint.B
 // structured résumé — the profile-match bar then shows skill coverage only. profile
 // is the already-loaded caller profile (its location preferences drive the geo/work
 // checks). Advisory: the caller decides what to do, nothing is hidden.
-func (a *API) jobBlockers(ctx context.Context, userID int64, job db.Job, profile userprofile.Profile) []hardconstraint.Blocker {
-	if a.resume == nil || !a.resume.Enabled() {
+func (h *matchHandlers) jobBlockers(ctx context.Context, userID int64, job db.Job, profile userprofile.Profile) []hardconstraint.Blocker {
+	if h.resume == nil || !h.resume.Enabled() {
 		return nil
 	}
-	cv, ok, err := a.resume.Structured(ctx, userID)
+	cv, ok, err := h.resume.Structured(ctx, userID)
 	if err != nil || !ok {
 		return nil
 	}

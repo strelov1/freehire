@@ -64,7 +64,7 @@ var descriptionSeniorityPhrases = []struct {
 // "sales engineer"), and the management phrases name only administrative roles —
 // engineering/product/project/data manager forms are never listed, because those
 // are technical categories, not `management`. Matching uses wordmatch on word
-// boundaries. Values are the enrich.NonTechCategories members.
+// boundaries. Values are the vocab.NonTechCategories members.
 var descriptionNonTechPhrases = []struct {
 	category string
 	phrases  []string
@@ -90,7 +90,7 @@ var descriptionNonTechPhrases = []struct {
 }
 
 // NonTechFromDescription derives a confidently non-technical category
-// (enrich.NonTechCategories) from a job description's prose, returning "" when no
+// (vocab.NonTechCategories) from a job description's prose, returning "" when no
 // anchored non-technical role statement is present. It resolves ONLY non-technical
 // categories — a technical role yields "" — and never guesses: it is the
 // lowest-priority category source (after the structured signal and the title
@@ -111,7 +111,7 @@ func NonTechFromDescription(desc string) string {
 // SeniorityFromDescription derives a seniority grade from a job description's prose,
 // returning "" when no anchored grade statement is present. It is the lower-priority
 // seniority source (after the title dictionary), so it only fills a value the title
-// left empty. Values are from enrich.SeniorityValues.
+// left empty. Values are from vocab.SeniorityValues.
 func SeniorityFromDescription(desc string) string {
 	lower := strings.ToLower(desc)
 	for _, g := range descriptionSeniorityPhrases {

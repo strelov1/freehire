@@ -2,17 +2,7 @@
   import { onMount, tick } from 'svelte';
   import { Marked } from 'marked';
   import DOMPurify from 'isomorphic-dompurify';
-  import {
-    AlertTriangle,
-    ArrowUp,
-    ChevronRight,
-    Loader2,
-    PanelLeft,
-    Plus,
-    Square,
-    Trash2,
-    Wrench,
-  } from '@lucide/svelte';
+  import { AlertTriangle, PanelLeft, Plus, Trash2 } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { currentUser } from '$lib/auth.svelte';
   import {
@@ -26,6 +16,9 @@
   import { initChat, reduceTurnEvent, type ChatState } from '$lib/assistant/chat';
   import { parseJobSegments } from '$lib/assistant/unfurl';
   import JobCardUnfurl from '$lib/assistant/JobCardUnfurl.svelte';
+  import SessionRail from '$lib/assistant/SessionRail.svelte';
+  import ToolGroupList from '$lib/assistant/ToolGroupList.svelte';
+  import Composer from '$lib/assistant/Composer.svelte';
   import {
     fromSummary,
     upsertSession,
@@ -35,15 +28,6 @@
     labelFromMessage,
     type SessionItem,
   } from '$lib/assistant/sessions';
-  import {
-    groupTitle,
-    isExpandable,
-    callLine,
-    nonEmptyInput,
-    previewToolInput,
-    toolErrorMessage,
-    type ToolCall,
-  } from '$lib/assistant/tool-formatters';
   import { eventsFromTranscript, type TurnEvent } from '$lib/assistant/wire';
 
   // The agent chat. The agent runs inside the freehire backend, so this is an
@@ -155,17 +139,6 @@
     return clean;
   }
 
-  // Fold a message's flat tool-call list into consecutive runs of the same tool,
-  // so a burst of searches reads as one card rather than five.
-  function groupTools(calls: readonly ToolCall[]): ToolCall[][] {
-    const groups: ToolCall[][] = [];
-    for (const c of calls) {
-      const last = groups[groups.length - 1];
-      if (last && last[0]?.name === c.name) last.push(c);
-      else groups.push([c]);
-    }
-    return groups;
-  }
 
   // --- Streaming spinner / thinking timers ---------------------------------
   const SPINNER_GLYPHS = ['·', '✢', '✳', '✶', '✻', '✽'] as const;
@@ -386,9 +359,8 @@
 
   // Composer submit: while a turn is in flight the message is queued and drained
   // later; otherwise it is sent immediately.
-  function submit(e: SubmitEvent) {
-    e.preventDefault();
-    const text = draft.trim();
+  function submitText(raw: string) {
+    const text = raw.trim();
     if (!text || phase !== 'ready' || switching || !activeId) return;
     draft = '';
     if (turnActive || queue.length > 0) {
@@ -460,45 +432,16 @@
   <div class="flex min-h-0 flex-1">
     <!-- Session rail (desktop): collapsible; hidden entirely when the host disables it. -->
     {#if showSessionRail && sidebarOpen}
-      <aside class="hidden w-64 shrink-0 flex-col border-r border-border bg-muted/20 md:flex">
-      <div class="p-2">
-        <button
-          type="button"
-          onclick={newChat}
-          disabled={creating || switching || phase !== 'ready'}
-          class="flex w-full items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Plus class="size-4" />
-          New chat
-        </button>
-      </div>
-      <ul class="flex-1 space-y-1 overflow-y-auto px-2 pb-2">
-        {#each sessions as s (s.id)}
-          <li class="group relative">
-            <button
-              type="button"
-              onclick={() => selectSession(s.id)}
-              disabled={switching}
-              class={[
-                'flex w-full items-center rounded-lg py-2 pl-3 pr-9 text-left text-sm transition-colors',
-                s.id === activeId ? 'bg-secondary text-secondary-foreground' : 'hover:bg-muted',
-              ]}
-            >
-              <span class="min-w-0 flex-1 truncate">{s.label}</span>
-            </button>
-            <button
-              type="button"
-              aria-label="Delete chat"
-              title="Delete chat"
-              onclick={() => removeChat(s.id)}
-              class="absolute right-1 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
-            >
-              <Trash2 class="size-4" />
-            </button>
-          </li>
-        {/each}
-      </ul>
-    </aside>
+      <SessionRail
+        {sessions}
+        {activeId}
+        {switching}
+        {creating}
+        ready={phase === 'ready'}
+        onNew={newChat}
+        onSelect={selectSession}
+        onDelete={removeChat}
+      />
     {/if}
 
     <!-- Chat pane -->
@@ -526,8 +469,6 @@
               <Plus class="size-4" />New chat
             </button>
           {/if}
-          <!-- Where the assistant is running. Visible before a message is sent,
-               so "my machine or theirs?" is never a guess. -->
         </div>
       {/if}
       <!-- Mobile session switcher -->
@@ -607,37 +548,7 @@
                 </details>
               {/if}
 
-              {#each groupTools(message.tools) as g, t (t)}
-                {@const title = groupTitle(g)}
-                {#if !isExpandable(g)}
-                  <div class="self-start flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-                    <Wrench class="size-4 shrink-0" />
-                    <span>{title}</span>
-                  </div>
-                {:else}
-                  <details class="self-start max-w-[90%]">
-                    <summary class="flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground hover:bg-muted/70 [&::-webkit-details-marker]:hidden [&::marker]:hidden [&[open]>span>svg.chev]:rotate-90">
-                      <Wrench class="size-4 shrink-0" />
-                      <span class="flex items-center gap-1.5">
-                        {title}
-                        <ChevronRight class="chev size-3.5 shrink-0 transition-transform" />
-                      </span>
-                    </summary>
-                    <ul class="mt-2 ml-6 space-y-1 text-xs text-muted-foreground">
-                      {#each g as c, ci (ci)}
-                        <li class="flex flex-wrap items-baseline gap-1.5">
-                          <span class={c.isError ? 'text-destructive' : ''}>{callLine(c)}</span>
-                          {#if toolErrorMessage(c)}
-                            <span class="text-destructive">— {toolErrorMessage(c)}</span>
-                          {:else if nonEmptyInput(c.input)}
-                            <code class="rounded bg-muted px-1.5 py-0.5 font-mono">{previewToolInput(c.input)}</code>
-                          {/if}
-                        </li>
-                      {/each}
-                    </ul>
-                  </details>
-                {/if}
-              {/each}
+              <ToolGroupList calls={message.tools} />
 
               {#if message.text}
                 {#if message.streaming}
@@ -687,88 +598,16 @@
         </div>
       </div>
 
-      <!-- Composer -->
-      <div class="border-t border-border p-3">
-        <div class="mx-auto w-full max-w-3xl">
-          {#if queue.length > 0}
-            <!-- Queued messages: sent one-by-one as each turn finishes. -->
-            <div class="mb-2 overflow-hidden rounded-2xl border border-border/60 bg-card">
-              <div class="px-4 py-2 text-xs font-medium text-brand">{queue.length} queued</div>
-              <ul class="divide-y divide-border/40 border-t border-border/40">
-                {#each queue as item (item.id)}
-                  <li class="group flex items-start gap-3 px-4 py-2">
-                    <span class="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm text-foreground">{item.text}</span>
-                    <button
-                      type="button"
-                      aria-label="Remove from queue"
-                      title="Remove"
-                      onclick={() => removeQueued(item.id)}
-                      class="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-60 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
-                    >
-                      <Trash2 class="size-4" />
-                    </button>
-                  </li>
-                {/each}
-              </ul>
-            </div>
-          {/if}
-
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-          <form
-            onsubmit={submit}
-            onclick={(e) => {
-              if ((e.target as HTMLElement).closest('button')) return;
-              textareaEl?.focus();
-            }}
-            class="relative flex w-full cursor-text items-end gap-2 rounded-3xl border border-border/60 bg-card px-4 py-2.5 shadow-sm transition-colors focus-within:border-ring/60"
-          >
-            <textarea
-              bind:this={textareaEl}
-              bind:value={draft}
-              rows="1"
-              placeholder="Message the agent — Enter to send, Shift+Enter for newline"
-              disabled={phase !== 'ready' || switching}
-              onkeydown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
-                }
-              }}
-              class="block max-h-[200px] min-h-[1.5rem] flex-1 resize-none cursor-text bg-transparent py-1 text-base leading-6 text-foreground placeholder:text-muted-foreground/70 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
-            ></textarea>
-            {#if turnActive && !draft.trim()}
-              <!-- Stop the turn. Aborting the request is what tells the backend to
-                   stop the loop, so this genuinely ends the work rather than just
-                   hiding it. With text typed, the button queues that text instead. -->
-              <button
-                type="button"
-                aria-label="Stop the assistant"
-                onclick={cancelTurn}
-                class="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-90"
-              >
-                <Square class="size-3.5" fill="currentColor" />
-              </button>
-            {:else}
-              <button
-                type="submit"
-                aria-label={turnActive ? 'Queue message' : 'Send message'}
-                aria-busy={turnActive}
-                disabled={phase !== 'ready' || switching || !draft.trim()}
-                class="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {#if turnActive}
-                  <Loader2 class="size-4 animate-spin" />
-                {:else}
-                  <ArrowUp class="size-4" strokeWidth={2.5} />
-                {/if}
-              </button>
-            {/if}
-          </form>
-        </div>
-      </div>
+      <Composer
+        bind:draft
+        {queue}
+        {turnActive}
+        disabled={phase !== 'ready' || switching}
+        onSubmit={submitText}
+        onRemoveQueued={removeQueued}
+        onCancel={cancelTurn}
+      />
     </div>
-
   </div>
 {/if}
 </div>

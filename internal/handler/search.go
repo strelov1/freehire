@@ -5,9 +5,40 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/search"
 )
+
+// searchHandlers serves the Meilisearch-backed job search surfaces: the keyword
+// search, the agent search (full descriptions in a selectable format), the
+// similar-jobs read, and the facet distribution. search/facets are two narrow
+// views of the same client, kept separate so the concerns stay decoupled; both
+// nil when Meilisearch is unconfigured (the endpoints then report 503).
+type searchHandlers struct {
+	search searcher
+	// descriptions loads full job descriptions by internal id, to rehydrate the
+	// truncated search preview on the agent search endpoint. *db.Queries in
+	// production; a fake in tests.
+	descriptions jobDescriptions
+	queries      *db.Queries
+	facets       facetCounter
+}
+
+func newSearchHandlers(search searcher, facets facetCounter, queries *db.Queries) *searchHandlers {
+	return &searchHandlers{search: search, descriptions: queries, queries: queries, facets: facets}
+}
+
+func (h *searchHandlers) register(api fiber.Router, mw middleware) {
+	// Literal routes are registered before the /jobs/:slug param route (see
+	// Register) so they are not read as slugs.
+	api.Get("/jobs/search", h.SearchJobs)
+	// Agent search: same query as /jobs/search, with opt-in full descriptions in a
+	// selectable format for programmatic consumers. Public, like the other reads.
+	api.Get("/agent/jobs/search", h.AgentSearchJobs)
+	api.Get("/jobs/facets", h.JobFacets)
+	api.Get("/jobs/:slug/similar", h.SimilarJobs)
+}
 
 // searcher is the search backend the handler depends on. *search.Client
 // satisfies it; tests inject a fake. A nil searcher means search is not
@@ -50,8 +81,8 @@ var searchSortable = map[string]string{
 // (unauthenticated) like the other job reads. Response: {"data": [job view...],
 // "meta": {total, limit, offset}} — results carry public_slug and never the
 // internal id.
-func (a *API) SearchJobs(c *fiber.Ctx) error {
-	res, limit, offset, err := a.runJobSearch(c)
+func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
+	res, limit, offset, err := h.runJobSearch(c)
 	if err != nil {
 		return err
 	}
@@ -70,8 +101,8 @@ func (a *API) SearchJobs(c *fiber.Ctx) error {
 // search endpoints cannot drift. The availability and deep-pagination guards return
 // a fiber *Error the caller can return directly; on success it returns the raw hits
 // and the applied limit/offset.
-func (a *API) runJobSearch(c *fiber.Ctx) (search.SearchResult, int, int, error) {
-	if a.search == nil {
+func (h *searchHandlers) runJobSearch(c *fiber.Ctx) (search.SearchResult, int, int, error) {
+	if h.search == nil {
 		return search.SearchResult{}, 0, 0, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
 
@@ -81,7 +112,7 @@ func (a *API) runJobSearch(c *fiber.Ctx) (search.SearchResult, int, int, error) 
 	}
 	ratio := min(max(c.QueryFloat("semantic_ratio", defaultSemanticRatio), 0), 1)
 
-	res, err := a.search.Search(c.Context(), search.SearchParams{
+	res, err := h.search.Search(c.Context(), search.SearchParams{
 		Query:         c.Query("q"),
 		Filter:        buildSearchFilter(c),
 		Sort:          searchSort(c),

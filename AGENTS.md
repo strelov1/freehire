@@ -4,163 +4,93 @@ Guidance for AI agents working in this repository.
 
 ## Working principles
 
-Non-negotiable. Bias toward caution over speed; use judgment on trivial tasks.
-
-- **Think before coding.** Surface assumptions. If multiple interpretations exist, present them — don't pick silently. If something is unclear, ask.
-- **Simplicity first.** Minimum code that solves the problem. No features, abstractions, or error handling that wasn't asked for. Prefer a library's intended API over a clever shim.
-- **Surgical changes.** Touch only what the task requires; don't refactor unbroken things or rework formatting. Match existing style. Clean up what your change orphaned; leave pre-existing dead code alone. Exception: do the real refactor when a clean change genuinely requires reshaping existing code.
-- **Fix root causes, not symptoms.**
 - **No overengineering, and no MVP shortcuts.** Hold the middle path: don't build infrastructure before there's a concrete need (note the seam for later instead), and don't ship quick-and-dirty or "for now" hacks. Build each feature correctly and idiomatically — neither gold-plated nor a placeholder.
-- **MVP stage — keep the architecture fluid.** The project is early/MVP; the current structure is not load-bearing legacy. When a new feature doesn't fit the existing architecture cleanly, prefer reshaping or refactoring the affected part over bolting on an awkward special case — re-architect freely to keep the design clean rather than accumulating legacy.
-- **English only.** All code, comments, identifiers, docs, and commits are in English.
-- **Announce shipped work.** When a user-facing feature or fix lands, close the loop by offering a changelog entry on the `/blog` feed, then a longer blog post if it warrants one (posts are `.svx` files in `web/src/posts/`; the `write-changelog` skill drafts them). Skip for internal-only changes.
+- **MVP stage — keep the architecture fluid.** The current structure is not load-bearing legacy. When a new feature doesn't fit cleanly, prefer reshaping the affected part over bolting on an awkward special case.
+- **Surgical changes.** Clean up what your change orphaned; leave pre-existing dead code alone. Prefer a library's intended API over a clever shim.
+- **English only.** All code, comments, identifiers, docs, and commits.
+- **Announce shipped work.** When a user-facing feature or fix lands, offer a changelog entry on the `/blog` feed, then a longer post if it warrants one (`.svx` files in `web/src/posts/`; the `write-changelog` skill drafts them). Skip for internal-only changes.
 
 ## What this is
 
-`freehire` ([freehire.me](https://freehire.me)) is an open-source IT job aggregator backend. Intended shape: many source parsers feed a pipeline that normalizes jobs into one schema, deduplicates them, and enriches them with AI; served over an HTTP API with rich filters.
+`freehire` ([freehire.me](https://freehire.me)) is an open-source IT job aggregator. Many source parsers feed a pipeline that normalizes jobs into one schema, deduplicates them, and enriches them with AI; served over an HTTP API with rich filters, consumed by a SvelteKit app under `web/`.
 
-**Current state: working backend.** Fiber HTTP server with `/health`, `/api/v1/jobs[/:slug]`, Meilisearch-backed `/api/v1/jobs/search`, companies endpoints, a `/api/v1/auth` surface (register/login/me with stateless JWT + OAuth sign-in), per-user job-interaction endpoints (view/apply/save/track, behind auth, addressed by slug), and API-key management under `/api/v1/me`; Postgres via sqlc with `jobs`, `companies`, `users`, `user_jobs`, `user_identities`, and `api_keys` tables; a typed, versioned enrichment schema on `jobs`; and a family of standalone, run-once-and-exit workers: `cmd/ingest` (crawls one board file, normalizes and upserts, enqueues new postings for enrichment), `cmd/enrich` (drains the enrichment outbox via an LLM), `cmd/embed` (incremental semantic-embedding worker), `cmd/tg-ingest`/`cmd/tg-extract` (Telegram crawl + LLM-extract), `cmd/liveness` (URL-probes orphan jobs, closes dead ones), `cmd/reindex`/`cmd/backfill-derive` (maintenance; `backfill-derive` re-derives every deterministic column — facets, role_fingerprint, slugs — in one pass), `cmd/rollup-stats` (activity rollup), `cmd/rollup-facets` (daily /open facet snapshot), `cmd/rollup-company` (per-company hiring-signal rollup), `cmd/import-yc` (YC directory enrichment). A Svelte SPA lives under `web/` and consumes the API.
-
-Stack: **Go + Fiber v2**, **PostgreSQL**, **sqlc**, **Docker Compose**, **langchaingo**.
+Stack: **Go + Fiber v2**, **PostgreSQL**, **sqlc**, **Meilisearch**, **Docker Compose**, **langchaingo**.
 
 ## Layout
 
-```
-cmd/server/main.go        entry point: Fiber startup + graceful shutdown
-cmd/ingest/main.go         source-ingest worker (crawls one board file per run)
-cmd/enrich/main.go         AI enrichment worker (drains outbox queue)
-cmd/embed/main.go          incremental semantic-embedding worker
-cmd/tg-ingest/main.go      Telegram crawl worker
-cmd/tg-extract/main.go     LLM-extracts Telegram vacancies
-cmd/liveness/main.go       URL-probes orphan jobs, closes dead ones
-cmd/reindex/main.go        rebuilds the Meilisearch jobs index
-cmd/reindex-companies/main.go  rebuilds the Meilisearch companies index (ranked company search behind GET /api/v1/companies)
-cmd/rollup-stats/main.go   recomputes the job_daily_stats rollup
-cmd/rollup-facets/main.go  recomputes the insights_facet_stats snapshot (/open facets)
-cmd/rollup-company/main.go recomputes insights_company_stats + insights_company_growth (per-company hiring-signal rollups; the latter backs GET /insights/companies)
-cmd/rollup-views/main.go   aggregates nginx access logs into jobs.view_count + job_daily_views (all-traffic views, off the read path)
-cmd/backfill-derive/main.go  re-derives every deterministic column in one keyset pass — dictionary facets, role_fingerprint (repost-identity), and public_slug/company_slug — matching what ingest writes for the same raw fields
-cmd/backfill-company-names/main.go  resolves real display names for slug-named companies
-cmd/import-yc/main.go      enriches companies from yc-oss directory
-sources/                   board files + sources/custom.yml + sources/telegram.yml
-internal/
-  config/            env config (server: PORT, DATABASE_URL, FRONTEND_ORIGIN, SERVED_HOSTS, JWT_SECRET/JWT_TTL, COOKIE_SECURE, MEILI_URL/MEILI_MASTER_KEY, OAUTH_*, EXTENSION_REDIRECT_ALLOWLIST, SENTRY_*, ASSISTANT_MODEL/ASSISTANT_MAX_STEPS; workers: LLM_BASE_URL/LLM_API_KEY/LLM_MODEL, EMBED_*)
-  observability/     optional Sentry error reporting (see observability/AGENTS.md)
-  database/          pgxpool connection pool
-  db/                GENERATED sqlc code + queries/*.sql (see db/AGENTS.md)
-  handler/           HTTP handlers + route wiring (see handler/AGENTS.md)
-  auth/              auth primitives: bcrypt, JWT Issuer, API-key hashing, cookie transport (see auth/AGENTS.md)
-  auth/oauth/        OAuth sign-in: Provider interface, registry, CSRF state cookie (see auth/oauth/AGENTS.md)
-  sources/           ATS source adapters + registry + HTTP client + board-file parsing (see sources/AGENTS.md)
-  linksource/        resolves outbound job-detail URLs (see linksource/AGENTS.md)
-  browsertools/      relays browser-tool frames between a user's agent harness and their browser extension (see browsertools/AGENTS.md)
-  telegram/          Telegram crawl + LLM vacancy extraction (see telegram/AGENTS.md)
-  pipeline/          ingest Runner (fetch → normalize → dedup → upsert) (see pipeline/AGENTS.md)
-  enrich/            enrichment contract + LLM Provider + queue-draining Runner (see enrich/AGENTS.md)
-  embed/             incremental semantic embedding (see embed/AGENTS.md)
-  search/            Meilisearch-backed job search
-  location/          curated dictionary deriving country/region codes + work-mode hint (see location/AGENTS.md)
-  ycdir/             yc-oss directory to company-info mapping (see ycdir/AGENTS.md)
-  job/               Job domain aggregate: sealed type built only through job.New
-  jobview/           single public wire shape of a job, projected from Job aggregate
-  normalize/         slug normalization
-  companyname/       resolves real display names for slug-named companies (see companyname/AGENTS.md)
-  assistant/         in-app AI agent: bounded tool-calling loop, typed tool registry, session transcripts (see assistant/AGENTS.md)
-  matchanalysis/     AI match analysis: three-stage LLM prompt-chain (see matchanalysis/AGENTS.md)
-  resumeextract/     structured résumé extraction from stored CV (see resumeextract/AGENTS.md)
-  userjob/           per-user job tracking (see userjob/AGENTS.md)
-  classify/          seniority/category tagging from job title (see classify/AGENTS.md)
-  skilltag/          deterministic skill tagging dictionary (see skilltag/AGENTS.md)
-  viewlog/           parses nginx access logs into per-job view counts (see viewlog/AGENTS.md)
-migrations/          SQL schema — source for BOTH sqlc and Postgres initdb
-design-system/         design system package (tokens, primitives, Storybook, docs) — pnpm, sibling to web/, linked via file:../design-system (see design-system/AGENTS.md)
-```
+`internal/<domain>/` — domain packages, the substantial ones carry their own AGENTS.md (see the table below).
+`cmd/<name>/` — every binary is a **run-once-and-exit** worker except `cmd/server`. They are cron-driven, not daemons; they need `DATABASE_URL` and exit non-zero on failure.
+
+Non-obvious:
+
+- `migrations/` — the source for **both** sqlc codegen and Postgres initdb. Never edit an applied migration; add a new file.
+- `sources/` — YAML board files, not Go. One file per ATS provider, plus `custom.yml` and `telegram.yml`.
+- `design-system/` — a separate pnpm package, sibling to `web/`, linked via `file:../design-system`.
+- `internal/db/` — **generated**; edit `internal/db/queries/*.sql` and run `make sqlc`.
+- `services/pii-filter` — a standalone service, not a Go package.
 
 ## Commands
 
 ```bash
 make up / make down / make logs       # start / stop / tail app + postgres in Docker
 make run / make psql / make sqlc      # run server on host / psql into DB / regenerate internal/db
-make reindex                          # rebuild the Meilisearch index from Postgres
+make reindex                          # rebuild the Meilisearch jobs index from Postgres
 go build ./...  &&  go vet ./...
-go test ./...                              # unit tests (no external deps)
+go test ./...                             # unit tests (no external deps)
 go test -tags=integration ./internal/db/  # queue integration tests (needs Docker; testcontainers)
-# run-once-and-exit cron workers (all need DATABASE_URL):
-go run ./cmd/ingest sources/<provider>.yml # crawl one board file (path as arg or SOURCES_FILE)
-go run ./cmd/enrich                        # + LLM_BASE_URL/LLM_API_KEY/LLM_MODEL
-go run ./cmd/embed                         # + MEILI_URL/MEILI_MASTER_KEY (+ EMBED_* to tune)
-go run ./cmd/tg-ingest                     # crawl sources/telegram.yml (path via CHANNELS_FILE)
-go run ./cmd/tg-extract                    # + LLM_* — drain telegram_posts into the catalogue
-go run ./cmd/liveness                      # URL-probe orphan jobs, close dead ones
-go run ./cmd/backfill-derive               # re-derive every deterministic column (facets + role_fingerprint + slugs) in one pass; BACKFILL_CONCURRENCY tunes the worker pool; follow with make reindex (collapses newly-clustered reposts + unions their geography)
-go run ./cmd/backfill-company-names [--dry-run]  # resolve real names for slug-named companies; follow with make reindex
-go run ./cmd/rollup-stats                  # recompute job_daily_stats (run-once, cron ~every 3h)
-go run ./cmd/rollup-facets                 # + MEILI_URL/MEILI_MASTER_KEY — recompute insights_facet_stats (run-once, cron ~daily)
-go run ./cmd/rollup-company                 # recompute insights_company_stats + insights_company_growth (run-once, cron ~daily)
-go run ./cmd/rollup-views                    # aggregate nginx logs into jobs.view_count (+ VIEW_LOG_DIR/VIEW_LOG_BASE; --backfill for .gz history; run-once, cron ~daily, own flock)
-go run ./cmd/reindex-companies             # + MEILI_URL/MEILI_MASTER_KEY — rebuild the companies search index (run-once, cron ~daily; own flock, NOT stacked with make reindex)
 ```
 
-For the full architecture and conventions, see the **module files** below. Each module is self-contained and can be read independently.
+Worker gotchas (`go run ./cmd/<name>`, all need `DATABASE_URL`; run `ls cmd/` for the full list):
+
+- `migrate` — run **before** deploying code that reads new schema. `-baseline` records on-disk files without executing; a pre-runner database auto-baselines on first run.
+- `ingest` — takes one board file: `go run ./cmd/ingest sources/<provider>.yml` (or `SOURCES_FILE`).
+- `enrich` / `tg-extract` — need `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL`.
+- `embed` / `rollup-facets` / `reindex-companies` — need `MEILI_URL` / `MEILI_MASTER_KEY`.
+- `backfill-derive` — re-derives every deterministic column (facets, `role_fingerprint`, slugs) in one keyset pass; `BACKFILL_CONCURRENCY` tunes the pool. Follow with `make reindex` — it collapses newly-clustered reposts and unions their geography.
+- `reindex-companies` and `rollup-views` hold their own flock. **Never stack `reindex-companies` with `make reindex`** — Meilisearch deadlocks.
+- `prune` — the **only** hard-delete path. Dry-run by default; archives every removal to `pruned_jobs`.
 
 ## Module files
 
-### Backend core
+Each is self-contained and can be read independently.
 
 | Area | Reference |
 |---|---|
 | **HTTP handlers** (response shapes, error rendering, routes) | [internal/handler/AGENTS.md](internal/handler/AGENTS.md) |
 | **SQL layer** (sqlc, queries, migrations) | [internal/db/AGENTS.md](internal/db/AGENTS.md) |
+| **Search** (Meili index topology, rebuild swap, reindex hazards) | [internal/search/AGENTS.md](internal/search/AGENTS.md) |
+| **Accounts** (identity resolution, seizure rule, mailed codes) | [internal/accounts/AGENTS.md](internal/accounts/AGENTS.md) |
 | **Auth primitives** (JWT, API keys, cookie transport, middleware) | [internal/auth/AGENTS.md](internal/auth/AGENTS.md) |
 | **OAuth sign-in** (provider registry, state cookie, identity resolution) | [internal/auth/oauth/AGENTS.md](internal/auth/oauth/AGENTS.md) |
 | **Per-user job tracking** (view/apply/save/track, stages, /me/tracking) | [internal/userjob/AGENTS.md](internal/userjob/AGENTS.md) |
-
-### Ingest pipeline
-
-| Area | Reference |
-|---|---|
-| **Source ingest** (board files, provider registry, validation, USAJobs) | [internal/sources/AGENTS.md](internal/sources/AGENTS.md) |
+| **Job wire shape** (the single public projection of a job) | [internal/jobview/AGENTS.md](internal/jobview/AGENTS.md) |
+| **Browser tools** (relays tool frames between agent harness and extension) | [internal/browsertools/AGENTS.md](internal/browsertools/AGENTS.md) |
+| **Source ingest** (board files, provider registry, validation) | [internal/sources/AGENTS.md](internal/sources/AGENTS.md) |
 | **Pipeline** (Runner, dedup, UpsertJob, board health, search indexing) | [internal/pipeline/AGENTS.md](internal/pipeline/AGENTS.md) |
 | **Link resolution** (outbound job URL → destination's own identity) | [internal/linksource/AGENTS.md](internal/linksource/AGENTS.md) |
 | **Board contributions** (crowdsourced URL → (source, board) onboarding) | [internal/contribution/AGENTS.md](internal/contribution/AGENTS.md) |
-
-### AI enrichment
-
-| Area | Reference |
-|---|---|
-| **Enrichment** (Enrichment contract, controlled vocabularies, LLM Provider) | [internal/enrich/AGENTS.md](internal/enrich/AGENTS.md) |
+| **Telegram** (crawl + LLM vacancy extraction) | [internal/telegram/AGENTS.md](internal/telegram/AGENTS.md) |
+| **Company names** (real display names for slug-named companies) | [internal/companyname/AGENTS.md](internal/companyname/AGENTS.md) |
+| **Enrichment** (Enrichment contract, LLM Provider; enums live in `internal/vocab`) | [internal/enrich/AGENTS.md](internal/enrich/AGENTS.md) |
 | **Semantic embedding** (semantic_outbox, incremental embeds, reconciler) | [internal/embed/AGENTS.md](internal/embed/AGENTS.md) |
 | **In-app assistant** (turn loop, tool registry, presets, transcripts) | [internal/assistant/AGENTS.md](internal/assistant/AGENTS.md) |
 | **AI fit analysis** (three-stage LLM prompt-chain, score, verdict, stream) | [internal/matchanalysis/AGENTS.md](internal/matchanalysis/AGENTS.md) |
-| **Structured résumé** (LLM parse of stored CV, stamp-and-compare) | [internal/resumeextract/AGENTS.md](internal/resumeextract/AGENTS.md) |
-
-### Dictionary facets
-
-| Area | Reference |
-|---|---|
+| **Structured CV** (LLM parse of stored CV, stamp-and-compare) | [internal/resumeextract/AGENTS.md](internal/resumeextract/AGENTS.md) |
+| **CV rendering** (templates, fonts, previews) | [internal/cv/AGENTS.md](internal/cv/AGENTS.md) |
 | **Geography** (country/region codes, work-mode hint, dict-only vs hybrid) | [internal/location/AGENTS.md](internal/location/AGENTS.md) |
 | **Skill tagging** (alias→canonical dictionary, jobs.skills facet) | [internal/skilltag/AGENTS.md](internal/skilltag/AGENTS.md) |
 | **Seniority & category** (title→seniority/category, dict-only) | [internal/classify/AGENTS.md](internal/classify/AGENTS.md) |
-
-### Cross-cutting
-
-| Area | Reference |
-|---|---|
+| **View counts** (nginx access logs → per-job views) | [internal/viewlog/AGENTS.md](internal/viewlog/AGENTS.md) |
+| **YC directory** (import-yc, curated facets, matching by former names) | [internal/ycdir/AGENTS.md](internal/ycdir/AGENTS.md) |
+| **Sentry error tracking** (backend, workers, frontend — env-gated) | [internal/observability/AGENTS.md](internal/observability/AGENTS.md) |
+| **Mail stack** (Gmail + SES inbound → classify → link → stage advance) | [docs/agents/mail-stack.md](docs/agents/mail-stack.md) |
+| **Notifications** (subscription digests, saved-job reminders, channels) | [docs/agents/notifications.md](docs/agents/notifications.md) |
 | **Job lifecycle** (soft-close, ingest sweep, self-close, liveness probe) | [docs/agents/job-lifecycle.md](docs/agents/job-lifecycle.md) |
 | **Company facets** (remote_regions vs yc_* curated facets) | [docs/agents/company-facets.md](docs/agents/company-facets.md) |
-| **Sentry error tracking** (backend, workers, frontend — env-gated) | [internal/observability/AGENTS.md](internal/observability/AGENTS.md) |
-| **YC directory** (import-yc, curated facets, matching by former names) | [internal/ycdir/AGENTS.md](internal/ycdir/AGENTS.md) |
-
-### Frontend
-
-| Area | Reference |
-|---|---|
 | **SPA sub-context** (SvelteKit, auth flow, API conventions) | [web/AGENTS.md](web/AGENTS.md) |
-| **Design system** (tokens, primitives, Storybook, DSDS docs) | [design-system/AGENTS.md](design-system/AGENTS.md) |
+| **Design system** (pnpm package, tokens, Tailwind @source trap) | [design-system/AGENTS.md](design-system/AGENTS.md) |
 
-## Conventions (quick reference)
-
-> **Full details in the module files above.** This section is a quick-reference only.
+## Conventions
 
 - **Response shapes:** Lists: `{"data": ..., "meta": {...}}`; single items: `{"data": ...}`; errors: `{"error": msg}`
 - **Dedup key:** `jobs.UNIQUE (source, external_id)` — `UpsertJob` is `ON CONFLICT` on it
@@ -169,9 +99,8 @@ For the full architecture and conventions, see the **module files** below. Each 
 - **API keys:** Hashed at rest (SHA-256), scoped `full` or `cv`. Key management (create/list/revoke) and password change are cookie-only
 - **Enrichment:** Queue-driven (`enrichment_outbox`), provider-agnostic LLM, `Sanitize` + `Validate` gate
 - **Embeddings:** Queue-driven (`semantic_outbox`), incremental, reconciled by `reindex --semantic`
-- **Dictionaries:** All facet dictionaries are dict-only in production (never guess, emit nothing for unknowns)
-- **Migrations:** Via Postgres initdb — single-run on first volume init only; recreate volume to re-apply
-- **Job deletion:** The lifecycle only soft-closes. `cmd/prune` is the sole hard-delete path — an operator-driven catalogue-pruning campaign, dry-run by default, archiving every removal to `pruned_jobs`
+- **Dictionaries:** All facet dictionaries are dict-only in production — never guess, emit nothing for unknowns
+- **Job deletion:** The lifecycle only soft-closes; `cmd/prune` is the sole hard-delete path
 - **In-app assistant:** a bounded tool-calling loop in-process (`internal/assistant`), streamed over SSE, gated to the restricted rollout. Tools act as the authenticated caller — no credential is minted for an agent
 - **Sentry:** Opt-in, env-gated, errors-only — `sentry.Init` with `SendDefaultPII:false`
-- **Naming — "CV", not "résumé":** Prefer **CV** over "résumé"/"resume" in user-facing copy, new identifiers, comments, and docs — the term is currently mixed and that inconsistency is the thing to stop. Don't mass-rename the existing `resume`/`resumeextract` packages and columns (churn without value); just default new surfaces to "CV".
+- **Naming — "CV", not "résumé":** Default new surfaces to **CV**. Don't mass-rename the existing `resume`/`resumeextract` packages and columns — churn without value

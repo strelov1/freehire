@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // getmatchHTTP is a route-aware test JSONGetter. getmatch has two endpoints: a paged list
@@ -280,8 +280,8 @@ func TestGetmatchCategory(t *testing.T) {
 // so the map cannot drift out of the controlled vocabulary.
 func TestGetmatchCategoryMapTargetsAreValid(t *testing.T) {
 	for code, cat := range getmatchSpecializationCategory {
-		if !slices.Contains(enrich.CategoryValues, cat) {
-			t.Errorf("specialization %q maps to %q, not in enrich.CategoryValues", code, cat)
+		if !slices.Contains(vocab.CategoryValues, cat) {
+			t.Errorf("specialization %q maps to %q, not in vocab.CategoryValues", code, cat)
 		}
 	}
 }

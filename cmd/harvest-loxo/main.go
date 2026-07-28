@@ -22,8 +22,8 @@ import (
 	"sync"
 
 	"github.com/strelov1/freehire/internal/classify"
-	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/sources"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // boardPath is the board file the emitted entries are de-duplicated against.
@@ -206,7 +206,7 @@ func isTechCategory(category string) bool {
 	if category == "" {
 		return false
 	}
-	for _, nt := range enrich.NonTechCategories {
+	for _, nt := range vocab.NonTechCategories {
 		if category == nt {
 			return false
 		}

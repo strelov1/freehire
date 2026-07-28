@@ -47,7 +47,7 @@ func deleteAccountApp(t *testing.T, eraser *fakeEraser, email string) (*fiber.Ap
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
-	h := &API{issuer: iss, accountDelete: eraser, accountEmails: fakeEmailLookup{email: email}}
+	h := &authHandlers{issuer: iss, accountDelete: eraser, accountEmails: fakeEmailLookup{email: email}}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Delete("/me", auth.RequireAuth(iss, testVersions), h.DeleteAccount)
 	return app, token

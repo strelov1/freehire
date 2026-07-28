@@ -51,16 +51,16 @@ func creditEntryLabel(kind, feature, subject string) (label, subtitle string) {
 // GetMyCreditsHistory returns the caller's credit-ledger entries newest first, each labelled
 // for display. Cookie or API key; never calls the LLM. Debit refs are resolved in two batch
 // lookups (match → job title, tailor → the tailored CV's job) so the list reads in plain terms.
-func (a *API) GetMyCreditsHistory(c *fiber.Ctx) error {
+func (h *creditsHandlers) GetMyCreditsHistory(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	rows, err := a.queries.ListCreditLedger(c.Context(), db.ListCreditLedgerParams{UserID: userID, Limit: creditHistoryLimit})
+	rows, err := h.queries.ListCreditLedger(c.Context(), db.ListCreditLedgerParams{UserID: userID, Limit: creditHistoryLimit})
 	if err != nil {
 		return err
 	}
-	subjects, err := a.resolveDebitSubjects(c, rows)
+	subjects, err := h.resolveDebitSubjects(c, rows)
 	if err != nil {
 		return err
 	}
@@ -89,7 +89,7 @@ func (a *API) GetMyCreditsHistory(c *fiber.Ctx) error {
 // CV id whose target job supplies the title. The feature is part of the key so a job id and a
 // CV id that happen to share a numeric value never collide. A ref whose subject was deleted is
 // simply absent, so the caller falls back to a generic label.
-func (a *API) resolveDebitSubjects(c *fiber.Ctx, rows []db.ListCreditLedgerRow) (map[string]string, error) {
+func (h *creditsHandlers) resolveDebitSubjects(c *fiber.Ctx, rows []db.ListCreditLedgerRow) (map[string]string, error) {
 	var jobRefs, cvRefs []int64
 	for _, r := range rows {
 		if r.Kind != "debit" || !r.Ref.Valid {
@@ -109,7 +109,7 @@ func (a *API) resolveDebitSubjects(c *fiber.Ctx, rows []db.ListCreditLedgerRow) 
 
 	subjects := make(map[string]string)
 	if len(jobRefs) > 0 {
-		jobs, err := a.queries.ListJobLabelsByIDs(c.Context(), jobRefs)
+		jobs, err := h.queries.ListJobLabelsByIDs(c.Context(), jobRefs)
 		if err != nil {
 			return nil, err
 		}
@@ -118,7 +118,7 @@ func (a *API) resolveDebitSubjects(c *fiber.Ctx, rows []db.ListCreditLedgerRow) 
 		}
 	}
 	if len(cvRefs) > 0 {
-		cvs, err := a.queries.ListTailoredCVLabelsByIDs(c.Context(), cvRefs)
+		cvs, err := h.queries.ListTailoredCVLabelsByIDs(c.Context(), cvRefs)
 		if err != nil {
 			return nil, err
 		}

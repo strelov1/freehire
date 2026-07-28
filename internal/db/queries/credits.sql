@@ -55,7 +55,9 @@ SELECT EXISTS (
 
 -- name: InsertReward :exec
 -- Append a reward: points earned (e.g. for an accepted board contribution), delta positive,
--- feature NULL. Rewards bank above the monthly grant and survive the period reset.
+-- feature NULL. Rewards bank above the monthly grant and survive the period reset. The
+-- partial unique index on (user_id, ref) WHERE kind='reward' guards against a double
+-- grant for the same ref even under a race.
 INSERT INTO credit_ledger (user_id, period, kind, feature, delta, ref)
 VALUES (sqlc.arg(user_id), sqlc.arg(period), 'reward', NULL, sqlc.arg(delta), sqlc.arg(ref)::text);
 

@@ -37,20 +37,22 @@ func NewAnalyzer(client *llm.Client) *Analyzer {
 }
 
 // ModelID returns the underlying model id (empty when unconfigured), so a caller can
-// record which model produced a cached analysis.
-func (a *Analyzer) ModelID() string { return a.client.ModelID() }
+// record which model produced a cached analysis. Nil-safe, like AnalyzeStream.
+func (a *Analyzer) ModelID() string {
+	if a == nil {
+		return ""
+	}
+	return a.client.ModelID()
+}
 
 // Input is everything the chain needs, gathered by the handler before the first call:
-// the job text, the raw company_info JSON, the candidate's CV text, the deterministic
-// skills match used as the grounding anchor, and the job geography + the candidate's
-// location preferences (raw JSON) used to score location & work-mode fit.
+// the job text, the raw company_info JSON, the candidate's structured résumé, the
+// deterministic skills match used as the grounding anchor, and the job geography + the
+// candidate's location preferences (raw JSON) used to score location & work-mode fit.
 type Input struct {
 	JobTitle       string
 	JobDescription string
 	CompanyInfo    string
-	// CVText is the raw CV — retained only for the caller's has-CV bookkeeping; it is NEVER
-	// sent to the model. The fit is scored from StructuredResume (contacts removed).
-	CVText string
 	// StructuredResume is the caller's de-identified structured résumé as JSON — the sole
 	// candidate context sent to the model (its contact fields are stripped by candidateContext).
 	// Empty when the caller has no current structured résumé, in which case no analysis runs.
@@ -157,6 +159,15 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 	if err := a.streamStage(ctx, 3, stage3SystemPrompt(), stage3UserPrompt(in, reqs, verdict, candidate), emit, &audited); err != nil {
 		log.Printf("matchanalysis: stage 3 audit failed, serving un-audited verdict: %v", err)
 	} else {
+		// An explicit JSON null ("strengths": null) unmarshals to a nil slice, overriding
+		// Stage 2's list — but the audit may only refine, never hollow out (an empty
+		// array is a deliberate prune and is kept). Restore the Stage 2 value on null.
+		if audited.Strengths == nil {
+			audited.Strengths = verdict.Strengths
+		}
+		if audited.Gaps == nil {
+			audited.Gaps = verdict.Gaps
+		}
 		sanitizeVerdict(&audited)
 		verdict = audited
 	}
@@ -291,6 +302,7 @@ func stage2UserPrompt(in Input, reqs []Requirement, candidate string) string {
 	}
 	writeAnchor(&b, in.Match)
 	writeLocation(&b, in)
+	writeBlockers(&b, in.Blockers)
 	writeRequirements(&b, reqs)
 	writeCandidate(&b, candidate)
 	return b.String()
@@ -424,7 +436,7 @@ func writeLocation(b *strings.Builder, in Input) {
 	}
 	if hasPref {
 		b.WriteString("- candidate location preferences (JSON): ")
-		b.WriteString(llm.TruncateRunes(strings.TrimSpace(in.LocationPreferences), maxCompanyRunes))
+		b.WriteString(llm.TrimTruncateRunes(in.LocationPreferences, maxCompanyRunes))
 		b.WriteString("\n")
 	}
 	if remoteWithinReach(in) {

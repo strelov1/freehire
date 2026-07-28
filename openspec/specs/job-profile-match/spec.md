@@ -79,3 +79,17 @@ The job-detail sidebar SHALL render a match block at its top with exactly four m
 - **WHEN** the viewer is authenticated with a non-empty profile skill list and the job has skills
 - **THEN** the block SHALL call the match endpoint and render the percentage, a two-colour progress bar (exact segment plus a half-weight adjacent segment), and three chip groups — Есть (exact), Близкие (adjacent, each hinting its `via` skill), and Не хватает (missing)
 
+### Requirement: Hard-constraint blockers beside skill coverage
+
+The profile-match result SHALL, when the caller's structured résumé and the job's structured requirements are available, include the deterministic hard-constraint blockers alongside the skill-coverage classification. The blockers MUST be advisory: they never hide, downrank, or filter the job. When the structured inputs are unavailable, the result MUST degrade to skill coverage only, with no blockers and no error.
+
+#### Scenario: Blockers surface next to coverage
+
+- **WHEN** an authenticated caller with a structured résumé views a job whose requirements they do not fully meet
+- **THEN** the profile-match payload carries both the skill coverage and the unmet hard-constraint blockers, and the job remains fully visible and clickable
+
+#### Scenario: No structured résumé degrades to coverage only
+
+- **WHEN** the caller has no structured résumé
+- **THEN** the profile-match payload carries skill coverage with no blockers and returns no error
+

@@ -23,7 +23,7 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
 
-	h := &API{pool: pool, queries: db.New(pool)}
+	h := &statsHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/stats/engagement", h.EngagementStats)
 

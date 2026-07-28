@@ -102,7 +102,7 @@ type EnqueuePendingJobsParams struct {
 // Idempotent backfill: enqueue every OPEN job that is unenriched or below the target
 // schema version. Closed jobs (closed_at IS NOT NULL) are skipped — a dead posting no
 // user will see should not consume LLM budget. Jobs whose derived category is in
-// exclude_categories (enrich.NonTechCategories) are skipped too, so LLM budget stays
+// exclude_categories (vocab.NonTechCategories) are skipped too, so LLM budget stays
 // on technical roles; category is NOT NULL DEFAULT ”, so an empty/unrecognized
 // category is never excluded (empty string <> ALL keeps the row). ON CONFLICT keeps
 // exactly one entry per (job_id, target_version), so running this every command

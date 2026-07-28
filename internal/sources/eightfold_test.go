@@ -31,7 +31,7 @@ func (r *rateLimitedHTTP) GetJSON(_ context.Context, url string, v any) error {
 	r.detailCalls++
 	if r.detailFails > 0 {
 		r.detailFails--
-		return &StatusError{Code: r.failCode, URL: url}
+		return &StatusError{Method: "GET", Code: r.failCode, URL: url}
 	}
 	return json.Unmarshal([]byte(r.detail), v)
 }
@@ -39,14 +39,14 @@ func (r *rateLimitedHTTP) GetJSON(_ context.Context, url string, v any) error {
 // TestEightfoldRetriesRateLimitedDetail verifies a rate-limit (403) detail response is retried
 // with backoff rather than dropped, so the catalogue is not capped at the per-window limit.
 func TestEightfoldRetriesRateLimitedDetail(t *testing.T) {
-	eightfoldRetryBase = 0 // no real sleeping in tests
 	fake := &rateLimitedHTTP{
 		list:        eightfoldList(1, `{"id": 111, "name": "Role", "locations": ["Remote"]}`),
 		detail:      `{"id": 111, "job_description": "<p>desc</p>"}`,
 		failCode:    403,
 		detailFails: 3,
 	}
-	jobs, err := NewEightfold(fake).Fetch(context.Background(), eightfoldEntry)
+	// A zero retryBase disables the backoff sleep.
+	jobs, err := eightfold{http: fake}.Fetch(context.Background(), eightfoldEntry)
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -59,21 +59,21 @@ func TestEightfoldRetriesRateLimitedDetail(t *testing.T) {
 }
 
 // TestEightfoldDoesNotRetryNonRateLimitError verifies a non-rate-limit failure (e.g. 404) is
-// dropped immediately, so retry stays scoped to the rate-limit case.
+// not retried, so retry stays scoped to the rate-limit case; the posting still ingests
+// list-only.
 func TestEightfoldDoesNotRetryNonRateLimitError(t *testing.T) {
-	eightfoldRetryBase = 0
 	fake := &rateLimitedHTTP{
 		list:        eightfoldList(1, `{"id": 222, "name": "Gone", "locations": ["Remote"]}`),
 		detail:      `{}`,
 		failCode:    404,
 		detailFails: 99,
 	}
-	jobs, err := NewEightfold(fake).Fetch(context.Background(), eightfoldEntry)
+	jobs, err := eightfold{http: fake}.Fetch(context.Background(), eightfoldEntry)
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	if len(jobs) != 0 {
-		t.Fatalf("len(jobs) = %d, want 0 (a 404 detail is dropped)", len(jobs))
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1 (a failed detail ingests list-only)", len(jobs))
 	}
 	if fake.detailCalls != 1 {
 		t.Errorf("detailCalls = %d, want 1 (a 404 must not be retried)", fake.detailCalls)
@@ -218,25 +218,37 @@ func TestEightfoldPaginatesUntilEmptyPage(t *testing.T) {
 	}
 }
 
-// TestEightfoldDropsFailedDetail verifies one position whose detail request fails is skipped
-// while the rest of the board still yields.
-func TestEightfoldDropsFailedDetail(t *testing.T) {
+// TestEightfoldIngestsListOnlyOnFailedDetail verifies one position whose detail request
+// fails is still ingested from its list metadata (logged, no description) while the rest
+// of the board hydrates normally.
+func TestEightfoldIngestsListOnlyOnFailedDetail(t *testing.T) {
 	fake := (&routedHTTP{}).
 		route("pcsx/search", eightfoldList(2,
 			`{"id": 111, "name": "Kept", "locations": ["Remote"]}`,
 			`{"id": 222, "name": "Dropped", "locations": ["Remote"]}`)).
 		route("jobs/111", `{"id": 111, "job_description": "<p>kept</p>"}`)
-	// no route for jobs/222 → its detail GET errors → that posting is dropped.
+	// no route for jobs/222 → its detail GET errors → list-only fallback.
 
 	jobs, err := NewEightfold(fake).Fetch(context.Background(), eightfoldEntry)
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	if len(jobs) != 1 {
-		t.Fatalf("len(jobs) = %d, want 1 (failed detail dropped)", len(jobs))
+	if len(jobs) != 2 {
+		t.Fatalf("len(jobs) = %d, want 2 (failed detail ingests list-only)", len(jobs))
 	}
-	if jobs[0].ExternalID != "111" {
-		t.Errorf("kept job = %q, want 111", jobs[0].ExternalID)
+	byID := map[string]Job{}
+	for _, j := range jobs {
+		byID[j.ExternalID] = j
+	}
+	if !strings.Contains(byID["111"].Description, "kept") {
+		t.Errorf("job 111 Description = %q, want the hydrated detail", byID["111"].Description)
+	}
+	listOnly, ok := byID["222"]
+	if !ok {
+		t.Fatal("job 222 missing, want the list-only fallback")
+	}
+	if listOnly.Title != "Dropped" || listOnly.Description != "" {
+		t.Errorf("list-only job = %+v, want list metadata with an empty description", listOnly)
 	}
 }
 

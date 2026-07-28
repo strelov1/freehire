@@ -4,6 +4,7 @@
   import type { RailEntry, RailSection } from '$lib/filterSections';
   import type { FacetCounts } from '$lib/types';
   import { focusTrap } from '$lib/actions/focusTrap';
+  import { errorMessage } from '$lib/utils';
 
   // The reusable two-pane filter-modal chrome: backdrop, header, the sectioned left
   // rail, and the deferred footer (Clear all / Apply / live preview). It knows nothing
@@ -155,7 +156,7 @@
       await apply();
       onClose();
     } catch (e) {
-      applyError = e instanceof Error ? e.message : 'Something went wrong. Please try again.';
+      applyError = errorMessage(e, 'Something went wrong. Please try again.');
     } finally {
       applyBusy = false;
     }

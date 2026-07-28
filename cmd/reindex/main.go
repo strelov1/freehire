@@ -66,7 +66,9 @@ func run() int {
 		return 1
 	}
 
-	client := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
+	ec := config.LoadEmbedClient()
+	client := search.NewClient(cfg.MeiliURL, cfg.MeiliKey,
+		search.WithEmbedURL(ec.URL), search.WithEmbedAPIKey(ec.APIKey), search.WithEmbedConcurrency(ec.Concurrency))
 	q := db.New(pool)
 
 	semantic := semanticRequested(os.Args[1:])
@@ -389,39 +391,21 @@ type clusterGeoLookup func(companySlug, fingerprint string) (countries, regions,
 // recomputeRoleDuplicates refreshes jobs.duplicate_of one company at a time, returning
 // the total rows re-marked. Scoping each UPDATE to a single company keeps its lock
 // window to that company's rows for a moment, so the pass never holds the table-wide
-// lock that would stall concurrent ingest crawls. A per-company failure aborts (the
-// caller treats the whole pass as best-effort and continues with the prior markers).
+// lock that would stall concurrent ingest crawls. Best-effort like every per-company
+// pass here (see forEachCompany).
 func recomputeRoleDuplicates(ctx context.Context, q *db.Queries) (int64, error) {
 	companies, err := q.CompaniesWithRoleClusters(ctx)
 	if err != nil {
 		return 0, err
 	}
-	var total int64
-	var failures int
-	var lastErr error
-	for _, c := range companies {
-		// Companies are independent, so one failure (e.g. a statement timeout on an
-		// unusually large cluster) must not starve the rest — log-and-continue.
-		n, err := q.RecomputeRoleDuplicatesForCompany(ctx, c)
-		if err != nil {
-			failures++
-			lastErr = fmt.Errorf("company %q: %w", c, err)
-			continue
-		}
-		total += n
-	}
-	if failures > 0 {
-		return total, fmt.Errorf("%d/%d companies failed; last: %w", failures, len(companies), lastErr)
-	}
-	return total, nil
+	return forEachCompany(ctx, companies, q.RecomputeRoleDuplicatesForCompany)
 }
 
 // suppressAggregatorDuplicates marks each open aggregator posting that duplicates a
 // first-party ATS posting (same company, normalized title, compatible country) as a
 // duplicate of that ATS row, one company at a time. Returns the total rows re-marked.
 // The aggregator set comes from the source registry's aggregator() markers. Best-effort
-// and lock-scoped exactly like recomputeRoleDuplicates: a per-company failure is logged
-// and skipped so it never starves the rest or blocks the reindex.
+// and lock-scoped exactly like recomputeRoleDuplicates.
 func suppressAggregatorDuplicates(ctx context.Context, q *db.Queries) (int64, error) {
 	// The aggregator set comes from the registry markers. usajobs is the one adapter
 	// sources.All only registers when USAJOBS_API_KEY is set, so a reindex without that
@@ -433,14 +417,25 @@ func suppressAggregatorDuplicates(ctx context.Context, q *db.Queries) (int64, er
 	if err != nil {
 		return 0, err
 	}
+	return forEachCompany(ctx, companies, func(ctx context.Context, c string) (int64, error) {
+		return q.SuppressAggregatorDuplicatesForCompany(ctx, db.SuppressAggregatorDuplicatesForCompanyParams{
+			Company:     c,
+			Aggregators: aggregators,
+		})
+	})
+}
+
+// forEachCompany runs fn once per company, summing the rows it reports re-marked.
+// Companies are independent, so one failure (e.g. a statement timeout on an unusually
+// large cluster) must not starve the rest — it is counted and skipped, and any failure
+// turns the pass's result into an aggregate error (the caller treats the whole pass as
+// best-effort and continues with the prior markers).
+func forEachCompany(ctx context.Context, companies []string, fn func(context.Context, string) (int64, error)) (int64, error) {
 	var total int64
 	var failures int
 	var lastErr error
 	for _, c := range companies {
-		n, err := q.SuppressAggregatorDuplicatesForCompany(ctx, db.SuppressAggregatorDuplicatesForCompanyParams{
-			Company:     c,
-			Aggregators: aggregators,
-		})
+		n, err := fn(ctx, c)
 		if err != nil {
 			failures++
 			lastErr = fmt.Errorf("company %q: %w", c, err)

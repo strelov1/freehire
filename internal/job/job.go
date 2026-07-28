@@ -33,32 +33,20 @@ type Salary struct {
 }
 
 // Draft is the source-agnostic input to New: the raw posting fields a write path
-// supplies before derivation. The caller resolves Source/ExternalID (the dedup
-// identity) so the job package stays free of the source registry. WorkMode,
-// Seniority, Category, Skills, and ExperienceYearsMin are optional structured
-// signals from the adapter that take precedence over the dictionaries. Regions and
-// Cities are the structured geography signal (authoritative, replacing derivation when
-// present); ManualSalary is the authoritative manual salary (nil when none stated).
+// supplies before derivation. The embedded jobderive.Input carries every field the
+// deterministic derivation reads (identity, content, and the optional structured
+// signals — see its docs); Draft adds only what derivation never touches: the URL,
+// the remote flag, the source posted time, and the authoritative manual salary
+// (nil when none stated). The caller resolves Source/ExternalID (the dedup
+// identity) so the job package stays free of the source registry.
 type Draft struct {
-	Source      string
-	ExternalID  string
-	URL         string
-	Title       string
-	Company     string
-	Location    string
-	Remote      bool
-	Description string
-	PostedAt    *time.Time
+	jobderive.Input
 
-	WorkMode           string
-	Regions            []string
-	Cities             []string
-	Seniority          string
-	Category           string
-	EmploymentType     string
-	Skills             []string
-	ExperienceYearsMin *int
-	ManualSalary       *Salary
+	URL      string
+	Remote   bool
+	PostedAt *time.Time
+
+	ManualSalary *Salary
 }
 
 // Fields is the readable projection of a Job: a plain DTO exposing every field for
@@ -134,23 +122,9 @@ func New(d Draft) (Job, error) {
 	// Strip any coordinate tail a source jammed into the free-text location before
 	// it reaches both the facet derivation and the stored/displayed field — the
 	// same order pipeline.normalizeJob uses.
-	location := normalize.CleanLocation(d.Location)
-	der := jobderive.Derive(jobderive.Input{
-		Title:              d.Title,
-		Company:            d.Company,
-		Source:             d.Source,
-		ExternalID:         d.ExternalID,
-		Location:           location,
-		Description:        d.Description,
-		WorkMode:           d.WorkMode,
-		Regions:            d.Regions,
-		Cities:             d.Cities,
-		Seniority:          d.Seniority,
-		Category:           d.Category,
-		EmploymentType:     d.EmploymentType,
-		Skills:             d.Skills,
-		ExperienceYearsMin: d.ExperienceYearsMin,
-	})
+	in := d.Input
+	in.Location = normalize.CleanLocation(in.Location)
+	der := jobderive.Derive(in)
 	return Job{f: Fields{
 		Source:      d.Source,
 		ExternalID:  d.ExternalID,
@@ -159,7 +133,7 @@ func New(d Draft) (Job, error) {
 		Company:     d.Company,
 		CompanySlug: der.CompanySlug,
 		PublicSlug:  der.PublicSlug,
-		Location:    location,
+		Location:    in.Location,
 		Remote:      d.Remote,
 		Description: d.Description,
 		PostedAt:    d.PostedAt,
@@ -221,6 +195,55 @@ func (f Fields) UpsertParams() db.UpsertJobParams {
 		EducationLevel:     f.EducationLevel,
 		EnglishLevel:       f.EnglishLevel,
 		ExperienceYearsMin: pgconv.Int4(f.ExperienceYearsMin),
+	}
+}
+
+// UpsertManualParams is the moderator-write analogue of UpsertParams: it maps the
+// same Fields columns to the generated UpsertManualJob params, so the manual write
+// path shares the one column mapping instead of re-listing them. It additionally
+// seeds the salary_*_manual columns from the authoritative ManualSalary (nil when
+// none) and stamps the moderator's id as created_by/updated_by.
+func (f Fields) UpsertManualParams(actorID int64) db.UpsertManualJobParams {
+	var salMin, salMax *int
+	var salCurrency, salPeriod string
+	if f.ManualSalary != nil {
+		salMin, salMax = f.ManualSalary.Min, f.ManualSalary.Max
+		salCurrency, salPeriod = f.ManualSalary.Currency, f.ManualSalary.Period
+	}
+	return db.UpsertManualJobParams{
+		Source:      f.Source,
+		ExternalID:  f.ExternalID,
+		URL:         f.URL,
+		Title:       f.Title,
+		Company:     f.Company,
+		CompanySlug: f.CompanySlug,
+		Location:    f.Location,
+		Remote:      f.Remote,
+		Description: f.Description,
+		PostedAt:    pgconv.Timestamptz(f.PostedAt),
+		PublicSlug:  f.PublicSlug,
+		Countries:   f.Countries,
+		Regions:     f.Regions,
+		Cities:      f.Cities,
+		WorkMode:    f.WorkMode,
+		Skills:      f.Skills,
+		Seniority:   f.Seniority,
+		Category:    f.Category,
+		IsTech:      pgconv.Bool(f.IsTech),
+
+		PostingLanguage:    f.PostingLanguage,
+		EmploymentType:     f.EmploymentType,
+		EducationLevel:     f.EducationLevel,
+		EnglishLevel:       f.EnglishLevel,
+		ExperienceYearsMin: pgconv.Int4(f.ExperienceYearsMin),
+
+		SalaryMinManual:      pgconv.Int4(salMin),
+		SalaryMaxManual:      pgconv.Int4(salMax),
+		SalaryCurrencyManual: salCurrency,
+		SalaryPeriodManual:   salPeriod,
+
+		CreatedBy: actorID,
+		UpdatedBy: actorID,
 	}
 }
 

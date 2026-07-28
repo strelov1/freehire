@@ -61,9 +61,9 @@ type fitBody struct {
 	} `json:"data"`
 }
 
-func fitAPI(pool *pgxpool.Pool, queries *db.Queries, iss *auth.Issuer, store *resume.Store, an *matchanalysis.Analyzer) *API {
-	return &API{
-		pool: pool, queries: queries, issuer: iss,
+func fitAPI(pool *pgxpool.Pool, queries *db.Queries, iss *auth.Issuer, store *resume.Store, an *matchanalysis.Analyzer) *matchHandlers {
+	return &matchHandlers{
+		queries:     queries,
 		userProfile: userprofile.New(ownedProfile()),
 		resume:      store, matchAnalysis: an, matchAnalysisCache: queries,
 		credits: credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}),
@@ -261,8 +261,8 @@ func TestMatchAnalysisCredits(t *testing.T) {
 		return s
 	}
 	appFor := func(store *resume.Store, an *matchanalysis.Analyzer, grant int) *fiber.App {
-		h := &API{
-			pool: pool, queries: queries, issuer: iss,
+		h := &matchHandlers{
+			queries:     queries,
 			userProfile: userprofile.New(ownedProfile()),
 			resume:      store, matchAnalysis: an, matchAnalysisCache: queries,
 			credits: credits.NewStore(queries, pool, credits.Config{MonthlyGrant: grant, CostMatch: 1, CostTailor: 3}),

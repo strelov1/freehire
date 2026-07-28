@@ -47,11 +47,13 @@ WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
 DELETE FROM email_classification_outbox WHERE id = $1;
 
 -- name: FailEmailClassification :exec
--- Record a failed attempt: bump attempts, release the lease, store the error, and
--- dead-letter (set failed_at) once attempts reach max_attempts.
+-- Record a failed attempt: bump attempts, store the error, and dead-letter (set
+-- failed_at) once attempts reach max_attempts. The lease (claimed_at) is
+-- intentionally left in place — its expiry gates the retry to a later run and
+-- doubles as the crash reaper, so a failed entry is never reprocessed within the
+-- same run. Mirrors RecordEnrichmentFailure / RecordSemanticFailure.
 UPDATE email_classification_outbox
 SET attempts    = attempts + 1,
-    claimed_at  = NULL,
     last_error  = sqlc.arg(last_error),
     failed_at   = CASE WHEN attempts + 1 >= sqlc.arg(max_attempts)::int THEN now() ELSE NULL END
 WHERE id = sqlc.arg(id);

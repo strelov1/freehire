@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // The Trends & Insights endpoints are public, unauthenticated, aggregate-only reads
@@ -145,7 +145,7 @@ func parseCategory(s string) (string, error) {
 		return "", nil
 	}
 	v := strings.ToLower(strings.TrimSpace(s))
-	if !slices.Contains(enrich.CategoryValues, v) {
+	if !slices.Contains(vocab.CategoryValues, v) {
 		return "", fmt.Errorf("unknown category %q", s)
 	}
 	return v, nil
@@ -158,7 +158,7 @@ func parseSeniority(s string) (string, error) {
 		return "", nil
 	}
 	v := strings.ToLower(strings.TrimSpace(s))
-	if !slices.Contains(enrich.SeniorityValues, v) {
+	if !slices.Contains(vocab.SeniorityValues, v) {
 		return "", fmt.Errorf("unknown seniority %q", s)
 	}
 	return v, nil
@@ -201,7 +201,7 @@ func isAlpha(s string) bool {
 
 // InsightsRoles serves GET /api/v1/insights/roles: roles (category × seniority) ranked
 // by open-count or growth within an optional country slice. Aggregate-only.
-func (a *API) InsightsRoles(c *fiber.Ctx) error {
+func (h *statsHandlers) InsightsRoles(c *fiber.Ctx) error {
 	country, err := parseCountry(c.Query("country"))
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
@@ -219,7 +219,7 @@ func (a *API) InsightsRoles(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 
-	rows, err := a.queries.ListInsightsRoles(c.Context(), db.ListInsightsRolesParams{Country: country, Category: category, Sort: sort, Lim: limit})
+	rows, err := h.queries.ListInsightsRoles(c.Context(), db.ListInsightsRolesParams{Country: country, Category: category, Sort: sort, Lim: limit})
 	if err != nil {
 		return err
 	}
@@ -236,7 +236,7 @@ func (a *API) InsightsRoles(c *fiber.Ctx) error {
 // InsightsCompanies serves GET /api/v1/insights/companies: the hiring-signal
 // leaderboard — companies ranked by 30-day growth (ramping/freezing) or open-count,
 // from the precomputed insights_company_growth scalar. Aggregate-only.
-func (a *API) InsightsCompanies(c *fiber.Ctx) error {
+func (h *statsHandlers) InsightsCompanies(c *fiber.Ctx) error {
 	sort, err := parseCompaniesSort(c.Query("sort"))
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
@@ -250,7 +250,7 @@ func (a *API) InsightsCompanies(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 
-	rows, err := a.queries.ListInsightsCompanies(c.Context(), db.ListInsightsCompaniesParams{MinOpen: minOpen, Sort: sort, Lim: limit})
+	rows, err := h.queries.ListInsightsCompanies(c.Context(), db.ListInsightsCompaniesParams{MinOpen: minOpen, Sort: sort, Lim: limit})
 	if err != nil {
 		return err
 	}
@@ -273,7 +273,7 @@ func (a *API) InsightsCompanies(c *fiber.Ctx) error {
 // InsightsSkills serves GET /api/v1/insights/skills: skills ranked by open-count or
 // growth, optionally scoped by category or country (not both — the rollup is
 // single-dimensional). Aggregate-only.
-func (a *API) InsightsSkills(c *fiber.Ctx) error {
+func (h *statsHandlers) InsightsSkills(c *fiber.Ctx) error {
 	category, err := parseCategory(c.Query("category"))
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
@@ -294,7 +294,7 @@ func (a *API) InsightsSkills(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 
-	rows, err := a.queries.ListInsightsSkills(c.Context(), db.ListInsightsSkillsParams{Category: category, Country: country, Sort: sort, Lim: limit})
+	rows, err := h.queries.ListInsightsSkills(c.Context(), db.ListInsightsSkillsParams{Category: category, Country: country, Sort: sort, Lim: limit})
 	if err != nil {
 		return err
 	}
@@ -311,7 +311,7 @@ func (a *API) InsightsSkills(c *fiber.Ctx) error {
 // InsightsVelocity serves GET /api/v1/insights/velocity: a dense added/removed series
 // over a validated window and granularity, optionally scoped to one facet. Reuses the
 // stats window parser so defaulting and range bounds match /stats/jobs-activity.
-func (a *API) InsightsVelocity(c *fiber.Ctx) error {
+func (h *statsHandlers) InsightsVelocity(c *fiber.Ctx) error {
 	q, err := parseActivityQuery(c.Query("granularity"), c.Query("from"), c.Query("to"), time.Now().UTC())
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
@@ -333,7 +333,7 @@ func (a *API) InsightsVelocity(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 
-	rows, err := a.queries.ListInsightsVelocity(c.Context(), db.ListInsightsVelocityParams{
+	rows, err := h.queries.ListInsightsVelocity(c.Context(), db.ListInsightsVelocityParams{
 		Unit:       q.Granularity,
 		FromTs:     pgtype.Timestamp{Time: q.From, Valid: true},
 		ToTs:       pgtype.Timestamp{Time: q.To, Valid: true},
@@ -362,7 +362,7 @@ func (a *API) InsightsVelocity(c *fiber.Ctx) error {
 // InsightsSalary serves GET /api/v1/insights/salary: salary bands for a role × country
 // scope, one entry per (currency, period). Currencies are never combined and bands
 // below the recompute's minimum sample size are absent. Aggregate-only.
-func (a *API) InsightsSalary(c *fiber.Ctx) error {
+func (h *statsHandlers) InsightsSalary(c *fiber.Ctx) error {
 	category, err := parseCategory(c.Query("category"))
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
@@ -380,7 +380,7 @@ func (a *API) InsightsSalary(c *fiber.Ctx) error {
 	// returns every seniority's bands (plus the category-wide '' band) in one call —
 	// what the per-category salary page needs. Each row carries its own seniority.
 	if category != "" && seniority == "" && country == "" {
-		rows, err := a.queries.ListInsightsSalaryByCategory(c.Context(), category)
+		rows, err := h.queries.ListInsightsSalaryByCategory(c.Context(), category)
 		if err != nil {
 			return err
 		}
@@ -394,7 +394,7 @@ func (a *API) InsightsSalary(c *fiber.Ctx) error {
 		})
 	}
 
-	rows, err := a.queries.ListInsightsSalary(c.Context(), db.ListInsightsSalaryParams{Category: category, Seniority: seniority, Country: country})
+	rows, err := h.queries.ListInsightsSalary(c.Context(), db.ListInsightsSalaryParams{Category: category, Seniority: seniority, Country: country})
 	if err != nil {
 		return err
 	}

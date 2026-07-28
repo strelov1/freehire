@@ -7,9 +7,12 @@
 // and every consumer stay untouched. Non-numeric or empty input yields the zero value
 // rather than an error (a best-effort field is better dropped than crashing the record).
 //
-// Siblings internal/enrich and internal/resumeextract keep their own package-local flex*
-// types (working, tested, on hot/critical paths); consolidating them here is a future
-// cleanup, not required for correctness.
+// Siblings with deliberately DIFFERENT semantics keep their own package-local types,
+// named and commented to mark the difference: internal/enrich (stringOrFirst /
+// sliceOrWrap — scalar<->array slips, which flexjson does not cover; roundInt — strict
+// number-only, so a string fails the decode instead of silently coercing) and
+// internal/resumeextract (verbatimString — a bare scalar kept as written, not coerced;
+// truncInt — leading integer, truncating where flexjson.Int rounds).
 package flexjson
 
 import (

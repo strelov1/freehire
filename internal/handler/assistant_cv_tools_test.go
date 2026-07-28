@@ -56,10 +56,10 @@ func (r *cvRepo) ListTailored(context.Context, int64) ([]db.ListTailoredCVsByUse
 }
 
 // cvToolsAPI wires an API whose CV store serves one document owned by user 3.
-func cvToolsAPI(t *testing.T, doc string) (*API, *cvRepo) {
+func cvToolsAPI(t *testing.T, doc string) (*assistantHandlers, *cvRepo) {
 	t.Helper()
 	repo := &cvRepo{id: 5, userID: 3, jobID: 9, data: []byte(doc)}
-	return &API{cvStore: cv.NewStore(repo)}, repo
+	return &assistantHandlers{cv: &cvHandlers{cvStore: cv.NewStore(repo)}}, repo
 }
 
 const oneExperienceCV = `{"header":{"full_name":"Ada Lovelace","email":"ada@example.com"},` +

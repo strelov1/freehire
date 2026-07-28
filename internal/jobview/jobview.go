@@ -130,6 +130,9 @@ func FromRow(j db.Job) (Job, error) {
 // hybrids — so the wire output is byte-equivalent to the pre-aggregate projection.
 func FromDomain(j job.Job, x job.Extras) (Job, error) {
 	f := j.Fields()
+	// The projection is read-time, so the clock enters here at the boundary and is
+	// threaded down as a parameter (the same pattern as ClassifyReality's now).
+	now := time.Now()
 	// e is the raw decoded LLM enrichment; the dictionary columns are folded over it
 	// below (dict wins) and the multi-valued LLM facets are folded out.
 	e := f.Enrichment
@@ -170,7 +173,7 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 		Cities:            cities,
 		Collections:       collections,
 		IsTech:            isTechFacet(f.IsTech),
-		PostedAt:          rfc3339Ptr(effectivePosted(f.PostedAt, f.CreatedAt)),
+		PostedAt:          rfc3339Ptr(effectivePosted(f.PostedAt, f.CreatedAt, now)),
 		CreatedAt:         rfc3339Ptr(f.CreatedAt),
 		UpdatedAt:         rfc3339Ptr(f.UpdatedAt),
 		ClosedAt:          rfc3339Ptr(f.ClosedAt),
@@ -199,9 +202,11 @@ func isTechFacet(isTech *bool) string {
 }
 
 // effectivePosted is EffectivePostedAt over domain *time.Time: the source posted
-// time when present and not in the future, otherwise the ingest time.
-func effectivePosted(posted, created *time.Time) *time.Time {
-	if posted == nil || posted.After(time.Now()) {
+// time when present and not in the future, otherwise the ingest time. The clock
+// is a parameter (the same pattern as ClassifyReality) so the rule is testable
+// and the time dependency is explicit; the exported entry points supply it.
+func effectivePosted(posted, created *time.Time, now time.Time) *time.Time {
+	if posted == nil || posted.After(now) {
 		return created
 	}
 	return posted
@@ -347,7 +352,8 @@ func FromRows(jobs []db.Job) ([]Job, error) {
 // It is exported so the search document derives its numeric posted_ts (epoch) from the same
 // definition the display posted_at (RFC3339) uses — one fallback rule, two encodings. It
 // converts its pgtype inputs to the domain *time.Time and delegates to effectivePosted, so
-// the fallback rule lives in exactly one place.
-func EffectivePostedAt(posted, created pgtype.Timestamptz) pgtype.Timestamptz {
-	return pgconv.Timestamptz(effectivePosted(pgconv.TimePtr(posted), pgconv.TimePtr(created)))
+// the fallback rule lives in exactly one place. The clock is the caller's (now), like
+// ClassifyReality.
+func EffectivePostedAt(posted, created pgtype.Timestamptz, now time.Time) pgtype.Timestamptz {
+	return pgconv.Timestamptz(effectivePosted(pgconv.TimePtr(posted), pgconv.TimePtr(created), now))
 }

@@ -236,6 +236,21 @@ func TestTruncateRunes(t *testing.T) {
 	}
 }
 
+func TestTrimTruncateRunes(t *testing.T) {
+	// Trims first, then clamps by runes, then trims the ragged cut edge.
+	if got := TrimTruncateRunes("  héllo world  ", 5); got != "héllo" {
+		t.Errorf("got %q, want %q", got, "héllo")
+	}
+	// A cut landing on whitespace leaves no trailing space.
+	if got := TrimTruncateRunes("abcd efgh", 5); got != "abcd" {
+		t.Errorf("got %q, want %q (trailing space after the cut trimmed)", got, "abcd")
+	}
+	// An all-whitespace input collapses to empty.
+	if got := TrimTruncateRunes("   ", 10); got != "" {
+		t.Errorf("got %q, want empty", got)
+	}
+}
+
 func TestStripJSONFence(t *testing.T) {
 	cases := map[string]string{
 		"```json\n{\"a\":1}\n```": `{"a":1}`,

@@ -128,7 +128,6 @@ func (q *Queries) EnqueuePendingEmailClassification(ctx context.Context) (int64,
 const failEmailClassification = `-- name: FailEmailClassification :exec
 UPDATE email_classification_outbox
 SET attempts    = attempts + 1,
-    claimed_at  = NULL,
     last_error  = $1,
     failed_at   = CASE WHEN attempts + 1 >= $2::int THEN now() ELSE NULL END
 WHERE id = $3
@@ -140,8 +139,11 @@ type FailEmailClassificationParams struct {
 	ID          int64  `json:"id"`
 }
 
-// Record a failed attempt: bump attempts, release the lease, store the error, and
-// dead-letter (set failed_at) once attempts reach max_attempts.
+// Record a failed attempt: bump attempts, store the error, and dead-letter (set
+// failed_at) once attempts reach max_attempts. The lease (claimed_at) is
+// intentionally left in place — its expiry gates the retry to a later run and
+// doubles as the crash reaper, so a failed entry is never reprocessed within the
+// same run. Mirrors RecordEnrichmentFailure / RecordSemanticFailure.
 func (q *Queries) FailEmailClassification(ctx context.Context, arg FailEmailClassificationParams) error {
 	_, err := q.db.Exec(ctx, failEmailClassification, arg.LastError, arg.MaxAttempts, arg.ID)
 	return err

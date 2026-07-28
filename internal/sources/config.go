@@ -80,15 +80,12 @@ func dedupeBoards(entries []CompanyEntry) []CompanyEntry {
 	return kept
 }
 
-// Validate checks every entry against the registry by its own resolved provider, so the
-// ingest command fails fast instead of silently skipping a misconfigured board. Each
-// entry's provider is its own when set, else the file's default.
+// Validate checks every entry against the registry by its provider, so the ingest
+// command fails fast instead of silently skipping a misconfigured board. Entries are
+// expected resolved — provider set — as ParseConfig produces them.
 func (c Config) Validate(registry map[string]Source) error {
 	for _, e := range c.Sources {
 		provider := e.Provider
-		if provider == "" {
-			provider = c.Provider
-		}
 		src, ok := registry[provider]
 		if !ok {
 			return fmt.Errorf("sources: unknown provider %q", provider)

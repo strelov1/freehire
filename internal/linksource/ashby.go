@@ -46,15 +46,7 @@ func (a ashby) Resolve(ctx context.Context, raw string) (sources.Job, bool, erro
 	board, id := m[1], m[2]
 
 	var resp struct {
-		Jobs []struct {
-			ID              string `json:"id"`
-			Title           string `json:"title"`
-			Location        string `json:"location"`
-			JobURL          string `json:"jobUrl"`
-			PublishedAt     string `json:"publishedAt"`
-			DescriptionHTML string `json:"descriptionHtml"`
-			IsRemote        bool   `json:"isRemote"`
-		} `json:"jobs"`
+		Jobs []sources.AshbyPosting `json:"jobs"`
 	}
 	api := fmt.Sprintf("https://api.ashbyhq.com/posting-api/job-board/%s", board)
 	if err := a.http.GetJSON(ctx, api, &resp); err != nil {
@@ -65,20 +57,16 @@ func (a ashby) Resolve(ctx context.Context, raw string) (sources.Job, bool, erro
 		if j.ID != id {
 			continue
 		}
-		jobURL := j.JobURL
-		if jobURL == "" {
-			jobURL = "https://jobs.ashbyhq.com/" + board + "/" + id
+		// The posting→Job mapping is shared with the ashby board adapter so the two
+		// produce identical facets; only the identity differs (namespaced id, and the
+		// company humanized from the board slug — the per-board API carries no name).
+		job := sources.MapAshbyPosting(j)
+		job.ExternalID = sources.NamespaceExternalID(board, id)
+		if job.URL == "" {
+			job.URL = "https://jobs.ashbyhq.com/" + board + "/" + id
 		}
-		return sources.Job{
-			ExternalID:  sources.NamespaceExternalID(board, id),
-			URL:         jobURL,
-			Title:       j.Title,
-			Company:     humanizeBoard(board),
-			Location:    j.Location,
-			Description: sources.SanitizeHTML(j.DescriptionHTML),
-			Remote:      j.IsRemote || sources.IsRemote(j.Location),
-			PostedAt:    sources.ParseRFC3339(j.PublishedAt),
-		}, true, nil
+		job.Company = humanizeBoard(board)
+		return job, true, nil
 	}
 	return sources.Job{}, false, nil // not on the board anymore (delisted) — skip
 }

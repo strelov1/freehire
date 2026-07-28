@@ -28,7 +28,7 @@ func resumeApp(t *testing.T) (*fiber.App, string) {
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
-	h := &API{issuer: iss}
+	h := &resumeHandlers{}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Post("/me/resume/extract", auth.RequireAuth(iss, testVersions), h.ExtractResumeProfile)
 	return app, token

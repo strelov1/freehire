@@ -21,7 +21,7 @@ import (
 
 // logoutAllApp mounts the revocation endpoint plus one protected probe, both against the
 // real token-version column, so the test observes revocation the way a client would.
-func logoutAllApp(h *API, iss *auth.Issuer, queries *db.Queries) *fiber.App {
+func logoutAllApp(h *authHandlers, iss *auth.Issuer, queries *db.Queries) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Post("/api/v1/auth/logout-all", auth.RequireAuth(iss, queries), h.LogoutAll)
 	app.Get("/api/v1/probe", auth.RequireAuth(iss, queries), func(c *fiber.Ctx) error {
@@ -54,7 +54,7 @@ func TestLogoutAllRevokesEverySession(t *testing.T) {
 	}
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	h := &API{pool: pool, queries: queries, issuer: iss}
+	h := &authHandlers{queries: queries, issuer: iss}
 	app := logoutAllApp(h, iss, queries)
 
 	// Two devices, both signed in under the current generation.
@@ -96,7 +96,7 @@ func TestLogoutAllRequiresASession(t *testing.T) {
 	pool := startPostgres(t)
 	queries := db.New(pool)
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	h := &API{pool: pool, queries: queries, issuer: iss}
+	h := &authHandlers{queries: queries, issuer: iss}
 	app := logoutAllApp(h, iss, queries)
 
 	resp, err := app.Test(httptest.NewRequest(fiber.MethodPost, "/api/v1/auth/logout-all", nil))

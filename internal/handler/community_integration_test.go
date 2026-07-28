@@ -28,7 +28,7 @@ import (
 
 func newCommunityApp(queries *db.Queries, iss *auth.Issuer, cfg community.Config) *fiber.App {
 	repo := community.NewQueriesRepository(queries)
-	h := &API{queries: queries, issuer: iss, community: community.New(repo, repo, cfg)}
+	h := &communityHandlers{community: community.New(repo, repo, cfg)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	cookieAuth := auth.RequireAuth(iss, testVersions)
 	requireModerator := auth.RequireRole(queries, "moderator")

@@ -42,7 +42,7 @@ func TestSavedSearchesEndToEnd(t *testing.T) {
 	ownerCookie, _ := iss.Issue(ownerID, testTokenVersion)
 	otherCookie, _ := iss.Issue(otherID, testTokenVersion)
 	queries := db.New(pool)
-	h := &API{pool: pool, queries: queries, issuer: iss, savedSearch: savedsearch.New(savedsearch.NewQueriesRepository(queries))}
+	h := &savedSearchHandlers{savedSearch: savedsearch.New(savedsearch.NewQueriesRepository(queries))}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	guard := auth.RequireAuth(iss, testVersions)
@@ -167,7 +167,7 @@ func TestSavedSearchBoardsEndToEnd(t *testing.T) {
 	ownerCookie, _ := iss.Issue(ownerID, testTokenVersion)
 	otherCookie, _ := iss.Issue(otherID, testTokenVersion)
 	queries := db.New(pool)
-	h := &API{pool: pool, queries: queries, issuer: iss, savedSearch: savedsearch.New(savedsearch.NewQueriesRepository(queries))}
+	h := &savedSearchHandlers{savedSearch: savedsearch.New(savedsearch.NewQueriesRepository(queries))}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	guard := auth.RequireAuth(iss, testVersions)
@@ -295,7 +295,7 @@ func TestSavedSearchesCapEnforced(t *testing.T) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	cookie, _ := iss.Issue(userID, testTokenVersion)
 	queries := db.New(pool)
-	h := &API{pool: pool, queries: queries, issuer: iss, savedSearch: savedsearch.New(savedsearch.NewQueriesRepository(queries))}
+	h := &savedSearchHandlers{savedSearch: savedsearch.New(savedsearch.NewQueriesRepository(queries))}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Post("/api/v1/me/searches", auth.RequireAuth(iss, testVersions), h.CreateSavedSearch)

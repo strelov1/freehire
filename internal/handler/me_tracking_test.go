@@ -22,7 +22,7 @@ func meJobsApp(t *testing.T) (*fiber.App, string) {
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
-	h := &API{issuer: iss}
+	h := &trackingHandlers{}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/me/tracking", auth.RequireAuth(iss, testVersions), h.ListTrackedJobs)
 	return app, token

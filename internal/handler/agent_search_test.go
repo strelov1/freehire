@@ -26,7 +26,7 @@ func (f *fakeDescriptions) GetJobDescriptionsByIDs(_ context.Context, ids []int6
 }
 
 func agentSearchApp(s searcher, d jobDescriptions) *fiber.App {
-	h := &API{search: s, descriptions: d}
+	h := &searchHandlers{search: s, descriptions: d}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/agent/jobs/search", h.AgentSearchJobs)
 	return app

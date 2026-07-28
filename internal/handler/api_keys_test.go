@@ -18,7 +18,7 @@ import (
 // covered by the api_keys integration tests.
 func apiKeysApp() *fiber.App {
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	h := &API{issuer: iss}
+	h := &authHandlers{}
 	app := fiber.New()
 	app.Post("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), h.CreateAPIKey)
 	app.Get("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), h.ListAPIKeys)

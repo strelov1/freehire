@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/strelov1/freehire/internal/job"
+	"github.com/strelov1/freehire/internal/jobderive"
 	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/worker"
 )
@@ -284,7 +285,10 @@ func sortedProviders(byProvider map[string]map[string]sources.CompanyEntry) []st
 }
 
 // ingestBoard fetches and saves one board, returning that board's contribution to the
-// run stats. A missing adapter or a fetch error fails the board; a per-job save error
+// run stats: Ingested counts saved jobs, Failed is 1 when the board itself errored,
+// Skipped counts jobs that fetched fine but failed to persist, Rejected counts postings
+// the catalogue filter turned away, and Cooled is 1 when the board was skipped for
+// cooldown. A missing adapter or a fetch error fails the board; a per-job save error
 // skips that job without failing the board, but is counted and logged so it is never
 // silently swallowed. A board in cooldown is skipped before its adapter is touched, and
 // each crawl's board-level outcome is recorded to BoardHealth.
@@ -329,58 +333,71 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 		return Stats{Failed: 1}
 	}
 
-	var firstErr error
-	var ingested, skipped int
-	var rej rejections
+	var (
+		st       Stats
+		rej      rejections
+		firstErr error
+	)
 	for _, j := range raw {
 		// A HydratingSource marks an already-ingested posting it re-listed but did not
 		// re-fetch: refresh its liveness by identity instead of re-upserting content-less
 		// (which would wipe the description/facets hydrated when it was new).
 		if j.SeenRefresh {
 			if err := r.touch(ctx, e, j); err != nil {
-				skipped++
+				st.Skipped++
 				if firstErr == nil {
 					firstErr = err
 				}
 				continue
 			}
-			ingested++
+			st.Ingested++
 			continue
 		}
-		dj, err := normalizeJob(e, j)
-		if err != nil {
-			skipped++
-			if firstErr == nil {
-				firstErr = err
-			}
-			continue
-		}
-		rej.candidate()
-		if outOfCatalogue(dj) {
-			rej.reject(dj.Fields().Title)
-			continue
-		}
-		if err := r.Store.Save(ctx, dj); err != nil {
-			skipped++
-			if firstErr == nil {
-				firstErr = err
-			}
-			continue
-		}
-		ingested++
+		r.saveOne(ctx, e, j, &st, &rej, &firstErr)
 	}
 	// One line per board with skips (not one per job), so a systemic failure — e.g.
 	// the DB behind a migration, or a board whose postings won't construct — is visible
 	// without flooding the log.
-	if skipped > 0 {
+	if st.Skipped > 0 {
 		log.Printf("ingest: %s board %q (%s): skipped %d/%d jobs on construct or save error (e.g. %v)",
-			e.Provider, e.Board, e.Company, skipped, len(raw), firstErr)
+			e.Provider, e.Board, e.Company, st.Skipped, len(raw), firstErr)
 	}
 	rej.log(e)
 	// The board was reachable (Fetch succeeded), so it is healthy regardless of per-job
 	// save skips — those are stats.Skipped, not a board outage.
-	r.recordSuccess(ctx, e, ingested)
-	return Stats{Ingested: ingested, Skipped: skipped, Rejected: rej.rejected}
+	r.recordSuccess(ctx, e, st.Ingested)
+	st.Rejected = rej.rejected
+	return st
+}
+
+// saveOne normalizes one posting, puts it through the catalogue filter, and saves what
+// survives, tallying the outcome into st and keeping the first error for the board's
+// skip-summary log line. Both the buffered (ingestBoard) and the streaming (ingestStream)
+// save loops share it so the normalize→filter→save→count step behaves identically; the
+// SeenRefresh and Removed branches stay on the caller, which is why neither reaches the
+// filter's candidate denominator.
+func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, st *Stats, rej *rejections, firstErr *error) {
+	dj, err := normalizeJob(e, j)
+	if err != nil {
+		st.Skipped++
+		if *firstErr == nil {
+			*firstErr = err
+		}
+		return
+	}
+	rej.candidate()
+	if outOfCatalogue(dj) {
+		rej.reject(dj.Fields().Title)
+		return
+	}
+	if err := r.Store.Save(ctx, dj); err != nil {
+		st.Skipped++
+		if *firstErr == nil {
+			*firstErr = err
+		}
+		return
+	}
+	st.Ingested++
 }
 
 // fetchBoard fetches a board's postings, preferring a hydrating adapter's FetchNew — which
@@ -465,10 +482,10 @@ func (r Runner) recordFailure(ctx context.Context, e sources.CompanyEntry, msg s
 // buffered path; a board-level FetchStream error counts the board failed but keeps whatever was
 // already saved (the 48h unseen-sweep guards against a short crawl closing the un-reached tail).
 func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sources.StreamingSource) Stats {
-	var ingested, skipped int
-	var rej rejections
 	var (
 		mu       sync.Mutex
+		st       Stats
+		rej      rejections
 		firstErr error
 		total    int
 	)
@@ -486,50 +503,33 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 			}
 			source, externalID := jobIdentity(e, j)
 			if err := c.Close(ctx, source, externalID); err != nil {
-				skipped++
+				st.Skipped++
 				if firstErr == nil {
 					firstErr = err
 				}
 				return
 			}
-			ingested++
+			// A close is not counted as ingested — Stats.Ingested is saved jobs only.
 			return
 		}
-		dj, err := normalizeJob(e, j)
-		if err != nil {
-			skipped++
-			if firstErr == nil {
-				firstErr = err
-			}
-			return
-		}
-		rej.candidate()
-		if outOfCatalogue(dj) {
-			rej.reject(dj.Fields().Title)
-			return
-		}
-		if err := r.Store.Save(ctx, dj); err != nil {
-			skipped++
-			if firstErr == nil {
-				firstErr = err
-			}
-			return
-		}
-		ingested++
+		r.saveOne(ctx, e, j, &st, &rej, &firstErr)
 	}
 
 	err := ss.FetchStream(ctx, e, emit)
 	rej.log(e)
-	if skipped > 0 {
+	if st.Skipped > 0 {
 		log.Printf("ingest: %s board %q (%s): skipped %d/%d jobs on save error (e.g. %v)",
-			e.Provider, e.Board, e.Company, skipped, total, firstErr)
+			e.Provider, e.Board, e.Company, st.Skipped, total, firstErr)
 	}
 	if err != nil {
 		log.Printf("ingest: %s board %q (%s) failed after %d saved: %v",
-			e.Provider, e.Board, e.Company, ingested, err)
-		return Stats{Ingested: ingested, Failed: 1, Skipped: skipped, Rejected: rej.rejected}
+			e.Provider, e.Board, e.Company, st.Ingested, err)
+		st.Failed = 1
+		st.Rejected = rej.rejected
+		return st
 	}
-	return Stats{Ingested: ingested, Skipped: skipped, Rejected: rej.rejected}
+	st.Rejected = rej.rejected
+	return st
 }
 
 // jobIdentity is the dedup key a posting persists under: the provider is the source, and the
@@ -549,20 +549,22 @@ func jobIdentity(e sources.CompanyEntry, j sources.Job) (source, externalID stri
 func normalizeJob(e sources.CompanyEntry, j sources.Job) (job.Job, error) {
 	source, externalID := jobIdentity(e, j)
 	return job.New(job.Draft{
-		Source:             source,
-		ExternalID:         externalID,
-		URL:                j.URL,
-		Title:              j.Title,
-		Company:            j.Company,
-		Location:           j.Location,
-		Remote:             j.Remote,
-		Description:        j.Description,
-		PostedAt:           j.PostedAt,
-		WorkMode:           j.WorkMode,
-		Seniority:          j.Seniority,
-		Category:           j.Category,
-		EmploymentType:     j.EmploymentType,
-		Skills:             j.Skills,
-		ExperienceYearsMin: j.ExperienceYearsMin,
+		Input: jobderive.Input{
+			Source:             source,
+			ExternalID:         externalID,
+			Title:              j.Title,
+			Company:            j.Company,
+			Location:           j.Location,
+			Description:        j.Description,
+			WorkMode:           j.WorkMode,
+			Seniority:          j.Seniority,
+			Category:           j.Category,
+			EmploymentType:     j.EmploymentType,
+			Skills:             j.Skills,
+			ExperienceYearsMin: j.ExperienceYearsMin,
+		},
+		URL:      j.URL,
+		Remote:   j.Remote,
+		PostedAt: j.PostedAt,
 	})
 }

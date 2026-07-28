@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 func TestParse(t *testing.T) {
@@ -361,8 +361,8 @@ func TestParseCyrillic(t *testing.T) {
 }
 
 // TestParseEmitsOnlyKnownVocabulary guards the controlled-vocabulary invariant:
-// every region the parser emits is a member of enrich.RegionValues and every
-// work mode a member of enrich.WorkModeValues — the parser never invents a value
+// every region the parser emits is a member of vocab.RegionValues and every
+// work mode a member of vocab.WorkModeValues — the parser never invents a value
 // outside the enrichment contract's vocabularies.
 func TestParseEmitsOnlyKnownVocabulary(t *testing.T) {
 	samples := []string{
@@ -374,11 +374,11 @@ func TestParseEmitsOnlyKnownVocabulary(t *testing.T) {
 	for _, s := range samples {
 		got := Parse(s)
 		for _, r := range got.Regions {
-			if !slices.Contains(enrich.RegionValues, r) {
+			if !slices.Contains(vocab.RegionValues, r) {
 				t.Errorf("Parse(%q) emitted region %q outside RegionValues", s, r)
 			}
 		}
-		if got.WorkMode != "" && !slices.Contains(enrich.WorkModeValues, got.WorkMode) {
+		if got.WorkMode != "" && !slices.Contains(vocab.WorkModeValues, got.WorkMode) {
 			t.Errorf("Parse(%q) emitted work_mode %q outside WorkModeValues", s, got.WorkMode)
 		}
 	}

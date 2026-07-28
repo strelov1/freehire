@@ -17,14 +17,17 @@ RETURNING *;
 SELECT * FROM job_reports WHERE id = $1;
 
 -- name: ListPendingReports :many
--- The moderator review queue: every pending report, newest first, with the reporter's email
+-- The moderator review queue: pending reports, newest first, with the reporter's email
 -- and the reported job's slug and title so the moderator can judge it and link to it.
+-- Capped at 500 as a runaway-growth guard — far above any plausible backlog; a queue
+-- that deep needs bulk triage, not a longer page.
 SELECT r.*, u.email AS reporter_email, j.public_slug AS job_slug, j.title AS job_title
 FROM job_reports r
 JOIN users u ON u.id = r.reported_by
 JOIN jobs j ON j.id = r.job_id
 WHERE r.status = 'pending'
-ORDER BY r.created_at DESC;
+ORDER BY r.created_at DESC
+LIMIT 500;
 
 -- name: MarkReportResolved :one
 -- Mark a pending report resolved, recording the deciding moderator. Scoped to

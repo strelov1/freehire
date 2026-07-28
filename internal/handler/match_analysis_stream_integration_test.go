@@ -72,8 +72,8 @@ func TestMatchAnalysisStreamEndpoint(t *testing.T) {
 	}
 
 	appFor := func(store *resume.Store, an *matchanalysis.Analyzer) *fiber.App {
-		h := &API{
-			pool: pool, queries: queries, issuer: iss,
+		h := &matchHandlers{
+			queries:     queries,
 			userProfile: userprofile.New(ownedProfile()),
 			resume:      store, matchAnalysis: an, matchAnalysisCache: queries,
 			credits: credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3}),

@@ -177,13 +177,6 @@ function toSlice<T>(page: Page<T>, offset: number): Slice<T> {
   };
 }
 
-/** Build an API client bound to a specific fetch and base URL.
- *
- *  - Browser: the default `api` uses global fetch and an empty base, so requests
- *    are relative and same-origin (the auth cookie rides along; see SPA-era note).
- *  - SvelteKit server `load`: pass `event.fetch` and the internal API origin
- *    (`serverApi`), because a server-side relative `/api` would hit the Node app
- *    itself, not nginx→Go. `baseUrl` resolves that to a real server-to-server call. */
 // --- Gmail inbox wire shapes ---------------------------------------------
 
 export interface GmailStatus {
@@ -230,6 +223,13 @@ export interface EmailBody extends EmailLinking {
   read: boolean;
 }
 
+/** Build an API client bound to a specific fetch and base URL.
+ *
+ *  - Browser: the default `api` uses global fetch and an empty base, so requests
+ *    are relative and same-origin (the auth cookie rides along; see SPA-era note).
+ *  - SvelteKit server `load`: pass `event.fetch` and the internal API origin
+ *    (`serverApi`), because a server-side relative `/api` would hit the Node app
+ *    itself, not nginx→Go. `baseUrl` resolves that to a real server-to-server call. */
 export function createApi(
   fetchImpl: typeof fetch = fetch,
   baseUrl = '',
@@ -1168,26 +1168,29 @@ export function createApi(
     await requestData<unknown>('/api/v1/me/gmail/sync', { method: 'POST' });
   }
 
-  /** A page of the flat inbox listing, newest first, with the total message count.
-   *  Optional search term filters by subject, sender, or body; optional source
-   *  narrows to one account (the switcher). */
+  /** A page of the flat inbox listing, newest first. Optional search term filters
+   *  by subject, sender, or body; optional source narrows to one account (the
+   *  switcher). `meta.total` reflects the filtered count, so the Paginator pages
+   *  over the matches. */
   async function getInbox(
-    q = '',
-    limit = 20,
-    offset = 0,
-    source: InboxSource = '',
-    unread = false,
-    status = '',
-  ): Promise<{ messages: InboxMessage[]; total: number }> {
-    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-    if (q) params.set('q', q);
-    if (source) params.set('source', source);
-    if (unread) params.set('unread', '1');
-    if (status) params.set('status', status);
-    const res = await request<{ data: InboxMessage[]; meta: { total: number } }>(
-      `/api/v1/me/inbox?${params.toString()}`,
-    );
-    return { messages: res.data, total: res.meta.total };
+    opts: {
+      q?: string;
+      limit?: number;
+      offset?: number;
+      source?: InboxSource;
+      unread?: boolean;
+      status?: string;
+    } = {},
+  ): Promise<Slice<InboxMessage>> {
+    const params = new URLSearchParams({
+      limit: String(opts.limit ?? 20),
+      offset: String(opts.offset ?? 0),
+    });
+    if (opts.q) params.set('q', opts.q);
+    if (opts.source) params.set('source', opts.source);
+    if (opts.unread) params.set('unread', '1');
+    if (opts.status) params.set('status', opts.status);
+    return toSlice(await request<Page<InboxMessage>>(`/api/v1/me/inbox?${params.toString()}`), opts.offset ?? 0);
   }
 
   /** Mark every unread message matching the active filters as read; returns the

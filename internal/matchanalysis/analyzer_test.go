@@ -35,7 +35,6 @@ func sampleInput() Input {
 		JobTitle:            "Senior Go Engineer",
 		JobDescription:      "Build backends in Go. Kafka a plus.",
 		CompanyInfo:         `{"tagline":"We ship fridges"}`,
-		CVText:              "Backend engineer, 5y Go at Acme.",
 		StructuredResume:    `{"summary":"Backend engineer, 5y Go at Acme.","experience":[{"company":"Acme","title":"Backend Engineer"}],"skills":["Go"]}`,
 		Match:               jobmatch.JobMatch{Matched: []string{"go"}, Missing: []string{"kafka"}, CoveragePercent: 50},
 		JobWorkMode:         "onsite",
@@ -57,6 +56,10 @@ func TestAnalyze_NilClientIsNoOp(t *testing.T) {
 	got, err := NewAnalyzer(nil).Analyze(context.Background(), sampleInput())
 	if err != nil || got != nil {
 		t.Fatalf("nil analyzer = (%v,%v), want (nil,nil)", got, err)
+	}
+	var nilAnalyzer *Analyzer
+	if id := nilAnalyzer.ModelID(); id != "" {
+		t.Errorf("nil-receiver ModelID = %q, want \"\"", id)
 	}
 }
 
@@ -117,6 +120,23 @@ func TestAnalyze_Stage3PartialMergesOntoStage2(t *testing.T) {
 	}
 	if len(got.Gaps) != 1 || got.Gaps[0] != "Thin on scale" {
 		t.Errorf("gaps = %v, want the audit's override", got.Gaps)
+	}
+}
+
+func TestAnalyze_Stage3NullListsKeepStage2(t *testing.T) {
+	// An explicit JSON null in the audit would unmarshal to a nil slice and hollow out
+	// Stage 2's strengths — the audit may only refine, never hollow out.
+	nulls := `{"title_alignment":{"score":80},"strengths":null,"gaps":null}`
+	m := &queuedModel{resp: []string{stage1JSON, stage2JSON, nulls}}
+	got, err := NewAnalyzer(llm.NewWithModel(m)).Analyze(context.Background(), sampleInput())
+	if err != nil {
+		t.Fatalf("Analyze: %v", err)
+	}
+	if len(got.Strengths) != 1 || got.Strengths[0] != "Strong Go" {
+		t.Errorf("strengths = %v, want Stage-2 list preserved on null", got.Strengths)
+	}
+	if len(got.Gaps) != 1 || got.Gaps[0] != "No Kafka" {
+		t.Errorf("gaps = %v, want Stage-2 list preserved on null", got.Gaps)
 	}
 }
 

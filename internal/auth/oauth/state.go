@@ -45,12 +45,25 @@ func NewState() (string, error) {
 
 // SetStateCookie stores the state for the upcoming callback to verify.
 func SetStateCookie(c *fiber.Ctx, state string, secure bool) {
-	writeCookie(c, StateCookieName, state, time.Now().Add(stateTTL), secure)
+	SetStateCookieNamed(c, StateCookieName, state, secure)
 }
 
 // ClearStateCookie removes the state cookie (the state is single-use).
 func ClearStateCookie(c *fiber.Ctx, secure bool) {
-	writeCookie(c, StateCookieName, "", time.Now().Add(-time.Hour), secure)
+	ClearStateCookieNamed(c, StateCookieName, secure)
+}
+
+// SetStateCookieNamed is SetStateCookie under a caller-chosen cookie name, for
+// OAuth round-trips that must not clobber the sign-in state cookie (e.g. the
+// Gmail connect flow, which a signed-in user can start mid-sign-in of another
+// tab — one shared cookie name would overwrite the other flow's state).
+func SetStateCookieNamed(c *fiber.Ctx, name, state string, secure bool) {
+	writeCookie(c, name, state, time.Now().Add(stateTTL), secure)
+}
+
+// ClearStateCookieNamed removes a named state cookie (single-use, like the state).
+func ClearStateCookieNamed(c *fiber.Ctx, name string, secure bool) {
+	writeCookie(c, name, "", time.Now().Add(-time.Hour), secure)
 }
 
 // SetReturnCookie remembers a (pre-validated) return path for the callback.

@@ -71,7 +71,7 @@ func (stubTrackingRepo) PipelineCounts(context.Context, int64) ([]userjob.StageC
 // path is covered by the user_jobs integration tests.
 func trackApp() (*fiber.App, *auth.Issuer) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	h := &API{issuer: iss, tracking: jobtracking.New(stubTrackingRepo{})}
+	h := &trackingHandlers{tracking: jobtracking.New(stubTrackingRepo{})}
 	app := fiber.New()
 	app.Patch("/jobs/:slug/track", auth.RequireAuth(iss, testVersions), h.TrackJob)
 	return app, iss

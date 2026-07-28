@@ -1,9 +1,15 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/strelov1/freehire/internal/db"
 )
 
 func writeBoardFile(t *testing.T, dir, name, body string) {
@@ -129,5 +135,85 @@ func TestLoadBoardsIgnoresRetiredSubdirectory(t *testing.T) {
 	}
 	if b.crawls("greenhouse", "gone:1") {
 		t.Error("a retired board must not read as crawled — moving it out of sources/ is what retires it")
+	}
+}
+
+// boardRow builds one candidate on a board, carrying the tri-state is_tech the
+// derivation writes: a nil isTech is the "unknown" the dictionaries leave behind.
+func boardRow(id int64, source, externalID string, isTech *bool, hasSkills bool) db.PruneCandidatesRow {
+	r := db.PruneCandidatesRow{ID: id, Source: source, ExternalID: externalID, HasSkills: hasSkills}
+	if isTech != nil {
+		r.IsTech = pgtype.Bool{Bool: *isTech, Valid: true}
+	}
+	return r
+}
+
+func boolp(v bool) *bool { return &v }
+
+// The report's premise is "this board has never posted anything technical", and that
+// only follows where something was actually classified. is_tech is tri-state by design
+// — jobderive leaves it NULL rather than coercing, "so the unclassified mass stays
+// measurable" — but the report collapsed NULL into false, so a board nobody had
+// classified read exactly like one determined to be non-technical.
+//
+// Measured on prod this was not an edge case: 11023 of the 17841 listed boards, 62% of
+// the report, had no verdict on a single posting, against 10.6% among the boards the
+// same report kept. Absence of a signal was doing the work of evidence.
+func TestReportBoardsWithholdsBoardsWithNoVerdict(t *testing.T) {
+	brd := boards{
+		listed: map[boardKey]bool{
+			{"greenhouse", "determined"}: true, {"greenhouse", "unknown"}: true,
+			{"greenhouse", "technical"}: true, {"greenhouse", "skilled"}: true,
+		},
+		byProvider: map[string]map[string]bool{"greenhouse": {
+			"determined": true, "unknown": true, "technical": true, "skilled": true,
+		}},
+	}
+	q := &fakeCandidates{rows: []db.PruneCandidatesRow{
+		// Classified, and the verdict was "not technical": the report may act on it.
+		boardRow(1, "greenhouse", "determined:1", boolp(false), false),
+		// Never classified either way — the 62% case. Nothing is known about it.
+		boardRow(2, "greenhouse", "unknown:1", nil, false),
+		// A verdict of "technical" keeps a board off the list, as before.
+		boardRow(3, "greenhouse", "technical:1", boolp(true), false),
+		// So does a tagged skill, even with no verdict on the row.
+		boardRow(4, "greenhouse", "skilled:1", nil, true),
+	}}
+
+	var out strings.Builder
+	if err := reportBoards(context.Background(), &out, q, brd); err != nil {
+		t.Fatalf("reportBoards: %v", err)
+	}
+	got := out.String()
+
+	if !strings.Contains(got, "determined") {
+		t.Errorf("a board whose postings were classified non-technical must be listed; got:\n%s", got)
+	}
+	for _, board := range []string{"unknown", "technical", "skilled"} {
+		if strings.Contains(got, board+"\n") {
+			t.Errorf("board %q must not be listed for retirement; got:\n%s", board, got)
+		}
+	}
+}
+
+// A guard that silently shrinks the report is worse than one that does not exist: the
+// operator reads a short list as "this is everything", and the withheld boards never
+// come back into view. The scan already reports what its source gate turned down, and
+// this gate owes the same accounting.
+func TestReportBoardsCountsWhatItWithheld(t *testing.T) {
+	brd := boards{
+		listed:     map[boardKey]bool{{"greenhouse", "unknown"}: true},
+		byProvider: map[string]map[string]bool{"greenhouse": {"unknown": true}},
+	}
+	q := &fakeCandidates{rows: []db.PruneCandidatesRow{
+		boardRow(1, "greenhouse", "unknown:1", nil, false),
+	}}
+
+	var out strings.Builder
+	if err := reportBoards(context.Background(), &out, q, brd); err != nil {
+		t.Fatalf("reportBoards: %v", err)
+	}
+	if !strings.Contains(out.String(), "1") || !strings.Contains(out.String(), "classified") {
+		t.Errorf("the report must say how many boards it withheld for want of a verdict; got:\n%s", out.String())
 	}
 }

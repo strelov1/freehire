@@ -53,7 +53,7 @@ func TestInboxReadSideEndToEnd(t *testing.T) {
 
 	iss := auth.NewIssuer("test-secret-that-is-long-enough-0001", time.Hour)
 	cookie, _ := iss.Issue(uid, testTokenVersion)
-	h := &API{pool: pool, queries: db.New(pool), issuer: iss, mailDomain: "inbox.freehire.test"}
+	h := &inboxHandlers{queries: db.New(pool), mailDomain: "inbox.freehire.test"}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	ra := auth.RequireAuth(iss, testVersions)

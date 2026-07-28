@@ -10,7 +10,36 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/community"
+	"github.com/strelov1/freehire/internal/db"
 )
+
+// communityHandlers serves the anonymous discussion threads: topics attached to a
+// company or vacancy, pseudonymous personas, flat replies. The use cases live in
+// community.Service; the handlers translate wire ↔ domain and delegate to it.
+type communityHandlers struct {
+	community *community.Service
+}
+
+func newCommunityHandlers(queries *db.Queries) *communityHandlers {
+	// One repository satisfies both the persistence port and the subject-existence
+	// port, so it is passed for each.
+	repo := community.NewQueriesRepository(queries)
+	return &communityHandlers{community: community.New(repo, repo, community.Config{})}
+}
+
+func (h *communityHandlers) register(api fiber.Router, mw middleware) {
+	// Community discussion threads: anonymous topics attached to a company or vacancy.
+	// Reads are public — only pseudonymous persona handles are ever exposed, never a
+	// user id — so discussions are browsable without signing in. Writing a thread or
+	// reply requires a signed-in session (cookie); closing a thread is moderator-gated.
+	api.Get("/threads", h.ListThreads)
+	// Registered before "/threads/:id" so "count" is not parsed as a thread id.
+	api.Get("/threads/count", h.CountThreads)
+	api.Get("/threads/:id", h.GetThread)
+	api.Post("/threads", mw.cookie, h.CreateThread)
+	api.Post("/threads/:id/replies", mw.cookie, h.CreateReply)
+	api.Post("/threads/:id/close", mw.cookie, mw.moderator, h.CloseThread)
+}
 
 // aiAuthor is the display name used for a reply flagged is_ai (a future AI-authored
 // reply). No AI posts exist at MVP; this keeps the wire shape stable for when they do.
@@ -119,13 +148,13 @@ func decodeCursor(s string) (community.Cursor, error) {
 
 // ListThreads returns a subject's open threads, newest first, keyset-paged. Public:
 // discussions are browsable without signing in (only handles are exposed).
-func (a *API) ListThreads(c *fiber.Ctx) error {
+func (h *communityHandlers) ListThreads(c *fiber.Ctx) error {
 	q := queryValues(c)
 	cur, err := decodeCursor(q.Get("cursor"))
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid cursor")
 	}
-	threads, err := a.community.ListThreads(c.Context(), q.Get("subject_type"), q.Get("subject_slug"), cur)
+	threads, err := h.community.ListThreads(c.Context(), q.Get("subject_type"), q.Get("subject_slug"), cur)
 	if err != nil {
 		return communityError(err)
 	}
@@ -142,9 +171,9 @@ func (a *API) ListThreads(c *fiber.Ctx) error {
 }
 
 // CountThreads returns a subject's open-thread count — the detail-page badge. Public.
-func (a *API) CountThreads(c *fiber.Ctx) error {
+func (h *communityHandlers) CountThreads(c *fiber.Ctx) error {
 	q := queryValues(c)
-	n, err := a.community.CountThreads(c.Context(), q.Get("subject_type"), q.Get("subject_slug"))
+	n, err := h.community.CountThreads(c.Context(), q.Get("subject_type"), q.Get("subject_slug"))
 	if err != nil {
 		return communityError(err)
 	}
@@ -152,12 +181,12 @@ func (a *API) CountThreads(c *fiber.Ctx) error {
 }
 
 // GetThread returns a single thread with its first page of replies. Public.
-func (a *API) GetThread(c *fiber.Ctx) error {
+func (h *communityHandlers) GetThread(c *fiber.Ctx) error {
 	id, err := pathID(c)
 	if err != nil {
 		return err
 	}
-	thread, err := a.community.GetThread(c.Context(), id)
+	thread, err := h.community.GetThread(c.Context(), id)
 	if err != nil {
 		return communityError(err)
 	}
@@ -165,7 +194,7 @@ func (a *API) GetThread(c *fiber.Ctx) error {
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid cursor")
 	}
-	replies, err := a.community.ListReplies(c.Context(), id, cur)
+	replies, err := h.community.ListReplies(c.Context(), id, cur)
 	if err != nil {
 		return communityError(err)
 	}
@@ -182,7 +211,7 @@ func (a *API) GetThread(c *fiber.Ctx) error {
 }
 
 // CreateThread opens a thread on a company or job. RequireAuth; 400/404/422/429.
-func (a *API) CreateThread(c *fiber.Ctx) error {
+func (h *communityHandlers) CreateThread(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -191,7 +220,7 @@ func (a *API) CreateThread(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	thread, err := a.community.CreateThread(c.Context(), community.CreateThreadInput{
+	thread, err := h.community.CreateThread(c.Context(), community.CreateThreadInput{
 		UserID: userID, SubjectType: in.SubjectType, SubjectSlug: in.SubjectSlug, Title: in.Title, Body: in.Body,
 	})
 	if err != nil {
@@ -201,7 +230,7 @@ func (a *API) CreateThread(c *fiber.Ctx) error {
 }
 
 // CreateReply posts a reply to an open thread. RequireAuth; 404/409/422/429.
-func (a *API) CreateReply(c *fiber.Ctx) error {
+func (h *communityHandlers) CreateReply(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -214,7 +243,7 @@ func (a *API) CreateReply(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	reply, err := a.community.Reply(c.Context(), id, in.ParentReplyID, userID, in.Body)
+	reply, err := h.community.Reply(c.Context(), id, in.ParentReplyID, userID, in.Body)
 	if err != nil {
 		return communityError(err)
 	}
@@ -222,12 +251,12 @@ func (a *API) CreateReply(c *fiber.Ctx) error {
 }
 
 // CloseThread closes a thread (moderator-gated at the route).
-func (a *API) CloseThread(c *fiber.Ctx) error {
+func (h *communityHandlers) CloseThread(c *fiber.Ctx) error {
 	id, err := pathID(c)
 	if err != nil {
 		return err
 	}
-	if err := a.community.Close(c.Context(), id); err != nil {
+	if err := h.community.Close(c.Context(), id); err != nil {
 		return communityError(err)
 	}
 	return c.JSON(fiber.Map{"data": fiber.Map{"id": id, "status": community.StatusClosed}})

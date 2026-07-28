@@ -7,15 +7,15 @@ package jobderive
 
 import (
 	"slices"
-	"sort"
 
 	"github.com/strelov1/freehire/internal/classify"
-	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/jobfacts"
 	"github.com/strelov1/freehire/internal/lang"
 	"github.com/strelov1/freehire/internal/location"
 	"github.com/strelov1/freehire/internal/normalize"
 	"github.com/strelov1/freehire/internal/skilltag"
+	"github.com/strelov1/freehire/internal/stringset"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // Input is the raw job content the derivation reads. Source and ExternalID are the
@@ -181,13 +181,15 @@ func Derive(in Input) Derived {
 // unclassified mass stays measurable. The tech title detector is the symmetric
 // counterpart to IsNonTech — it rescues generic software titles ("Software
 // Engineer", "COBOL Programmer") that resolve no sub-category. A non-software
-// "…Engineer" (mechanical, drainage) matches neither detector and stays unknown.
+// "…Engineer" matches the non-tech detector only where its discipline is named
+// outright — "mechanical engineer", "civil engineer" and the rest of that anchored
+// family — so "Drainage Engineer" still matches neither detector and stays unknown.
 func deriveIsTech(category, title string) *bool {
 	if TechEvidence(category, title) {
 		t := true
 		return &t
 	}
-	if slices.Contains(enrich.NonTechCategories, category) || classify.IsNonTech(title) {
+	if slices.Contains(vocab.NonTechCategories, category) || classify.IsNonTech(title) {
 		f := false
 		return &f
 	}
@@ -201,7 +203,7 @@ func deriveIsTech(category, title string) *bool {
 // non-tech dictionary, and that dictionary matches anywhere in a title, so without this
 // veto "Backend Engineer — Teller Systems" is removed on its accidental match.
 func TechEvidence(category, title string) bool {
-	return slices.Contains(enrich.TechCategories, category) || classify.IsTech(title)
+	return slices.Contains(vocab.TechCategories, category) || classify.IsTech(title)
 }
 
 // usOnly reports whether a job's geography is unpinned by the location dictionary —
@@ -235,10 +237,5 @@ func unionSkills(source, dict []string) []string {
 	for _, s := range dict {
 		set[s] = struct{}{}
 	}
-	out := make([]string, 0, len(set))
-	for s := range set {
-		out = append(out, s)
-	}
-	sort.Strings(out)
-	return out
+	return stringset.Sorted(set)
 }

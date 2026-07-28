@@ -2,17 +2,18 @@ package auth
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5"
 )
 
 // fakeScopedKeys authenticates one token hash to a user id with a given scope, standing
-// in for the api_keys row the DB layer returns.
+// in for the api_keys row the DB layer returns. An unknown hash is pgx.ErrNoRows, as the
+// real query reports it — the middleware distinguishes that from a lookup outage.
 type fakeScopedKeys struct {
 	validHash string
 	userID    int64
@@ -23,7 +24,7 @@ func (f fakeScopedKeys) AuthenticateAPIKey(_ context.Context, tokenHash string) 
 	if tokenHash == f.validHash {
 		return APIKeyIdentity{UserID: f.userID, Scope: f.scope}, nil
 	}
-	return APIKeyIdentity{}, errors.New("no such key")
+	return APIKeyIdentity{}, pgx.ErrNoRows
 }
 
 // anyVersion accepts whatever version a token carries, so the scope tests exercise scope

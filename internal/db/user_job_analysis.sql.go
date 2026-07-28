@@ -76,6 +76,7 @@ FROM user_job_analysis a
 JOIN jobs j ON j.id = a.job_id
 WHERE a.user_id = $1
 ORDER BY a.created_at DESC
+LIMIT 500
 `
 
 type ListUserJobAnalysesRow struct {
@@ -91,10 +92,12 @@ type ListUserJobAnalysesRow struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
-// Every job the caller has analyzed, newest first, joined to the job for display. Powers
+// Jobs the caller has analyzed, newest first, joined to the job for display. Powers
 // the Tracking → AI fit tab. Includes closed jobs (surfaced with a badge). The stored
 // staleness stamps ride along so the handler can flag rows whose CV/job/model has since
 // changed, and the analysis blob carries the overall score + verdict the list shows.
+// Capped at 500 — the quota window (see CountRecentUserJobAnalyses) keeps real usage
+// far below that, and each row drags a full analysis JSONB over the wire.
 func (q *Queries) ListUserJobAnalyses(ctx context.Context, userID int64) ([]ListUserJobAnalysesRow, error) {
 	rows, err := q.db.Query(ctx, listUserJobAnalyses, userID)
 	if err != nil {

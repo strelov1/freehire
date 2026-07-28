@@ -46,20 +46,15 @@ func (m *turnModel) Chat(_ context.Context, _ []llms.MessageContent, _ []llms.To
 
 // newAssistantApp wires the assistant routes over a real database, with the given
 // scripted model behind the turn endpoint.
-func newAssistantApp(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model) (*fiber.App, *API) {
+func newAssistantApp(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model) (*fiber.App, *assistantHandlers) {
 	queries := db.New(pool)
-	h := &API{queries: queries, issuer: iss, assistant: assistant.NewStore(queries)}
+	h := &assistantHandlers{store: assistant.NewStore(queries), queries: queries}
 	if model != nil {
-		h.assistantRunner = assistant.NewRunner(model, h.assistant, assistant.RunnerConfig{MaxSteps: 3})
+		h.runner = assistant.NewRunner(model, h.store, assistant.RunnerConfig{MaxSteps: 3})
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	cookieAuth := auth.RequireAuth(iss, testVersions)
-	gate := auth.RequireModeratorOrBeta(queries, queries)
-	app.Post("/api/v1/assistant/sessions", cookieAuth, gate, h.CreateAssistantSession)
-	app.Get("/api/v1/assistant/sessions", cookieAuth, gate, h.ListAssistantSessions)
-	app.Get("/api/v1/assistant/sessions/:id", cookieAuth, gate, h.GetAssistantSession)
-	app.Delete("/api/v1/assistant/sessions/:id", cookieAuth, gate, h.DeleteAssistantSession)
-	app.Post("/api/v1/assistant/sessions/:id/messages", cookieAuth, gate, h.PostAssistantMessage)
+	api := app.Group("/api/v1")
+	h.register(api, middleware{cookie: auth.RequireAuth(iss, testVersions)})
 	return app, h
 }
 
@@ -293,7 +288,7 @@ func TestSlugAddressedToolsReadRealRows(t *testing.T) {
 		 VALUES ('greenhouse', 'ext-1', 'https://example.test/j/1', 'Go Developer', 'go-developer-acme', 'acme', '<p>Build things</p>')`); err != nil {
 		t.Fatalf("seed job: %v", err)
 	}
-	a := &API{queries: db.New(pool)}
+	a := &assistantHandlers{queries: db.New(pool)}
 	tools := a.assistantDiscoveryTools()
 
 	out, err := toolByName(t, tools, "get_job").Run(ctx, 1, json.RawMessage(`{"slug":"go-developer-acme"}`))

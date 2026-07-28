@@ -28,13 +28,16 @@ import (
 // so it degenerated into a sequential scan of millions of rows and timed out in production
 // — and it was guesswork besides, on a page title that is not something to guess from (the
 // extension was sending "reCAPTCHA").
-func (a *API) catalogSlugForURL(ctx context.Context, pageURL string) (string, error) {
+//
+// It is a free function rather than a method because two feature handlers need it: the
+// public /jobs/find read and the extension's /jobs/resolve import.
+func catalogSlugForURL(ctx context.Context, queries *db.Queries, pageURL string) (string, error) {
 	if pageURL == "" {
 		return "", nil
 	}
 
 	if ref, ok := sources.RefFromURL(pageURL); ok {
-		job, err := a.queries.GetJobBySourceExternalID(ctx, db.GetJobBySourceExternalIDParams{
+		job, err := queries.GetJobBySourceExternalID(ctx, db.GetJobBySourceExternalIDParams{
 			Source:     ref.Source,
 			ExternalID: ref.ExternalID,
 		})
@@ -46,7 +49,7 @@ func (a *API) catalogSlugForURL(ctx context.Context, pageURL string) (string, er
 		}
 	}
 
-	slug, err := a.queries.FindOpenJobByURL(ctx, pageURL)
+	slug, err := queries.FindOpenJobByURL(ctx, pageURL)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", nil
@@ -60,8 +63,8 @@ func (a *API) catalogSlugForURL(ctx context.Context, pageURL string) (string, er
 // browser extension can tell that the page it is on is a job we already carry and switch
 // from the ad-hoc text match to the curated card. Public; returns {"data": null} whenever
 // the posting cannot be identified.
-func (a *API) FindJob(c *fiber.Ctx) error {
-	slug, err := a.catalogSlugForURL(c.Context(), strings.TrimSpace(c.Query("url")))
+func (h *jobsHandlers) FindJob(c *fiber.Ctx) error {
+	slug, err := catalogSlugForURL(c.Context(), h.queries, strings.TrimSpace(c.Query("url")))
 	if err != nil {
 		return err
 	}

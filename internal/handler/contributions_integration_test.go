@@ -18,7 +18,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/accounts"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/contribution"
 	"github.com/strelov1/freehire/internal/credits"
@@ -44,19 +43,13 @@ func TestContributionsEndToEnd(t *testing.T) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	cookie, _ := iss.Issue(userID, testTokenVersion)
 	queries := db.New(pool)
-	h := &API{
-		pool:         pool,
-		queries:      queries,
-		issuer:       iss,
-		contribution: contribution.New(contribution.NewQueriesRepository(queries), nil),
-		accounts:     accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{}),
-		credits:      credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 5}),
-	}
+	creditsStore := credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 5})
+	ch := &contributionHandlers{contribution: contribution.New(contribution.NewQueriesRepository(queries), nil), credits: creditsStore}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
-	app.Post("/api/v1/me/contributions", keyAuth, h.CreateContribution)
-	app.Get("/api/v1/me/contributions", keyAuth, h.ListMyContributions)
+	app.Post("/api/v1/me/contributions", keyAuth, ch.CreateContribution)
+	app.Get("/api/v1/me/contributions", keyAuth, ch.ListMyContributions)
 
 	submit := func(t *testing.T, url string, withCookie bool) *http.Response {
 		t.Helper()

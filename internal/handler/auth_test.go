@@ -52,7 +52,7 @@ func (fakeRepo) UserByID(context.Context, int64) (accounts.User, error) {
 // write methods are never reached.
 func registerApp() *fiber.App {
 	app := fiber.New()
-	h := &API{
+	h := &authHandlers{
 		issuer:   auth.NewIssuer("test-secret", time.Hour),
 		accounts: accounts.New(fakeRepo{}, authHasher{}),
 	}

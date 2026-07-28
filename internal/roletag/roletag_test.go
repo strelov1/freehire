@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 func TestDerive(t *testing.T) {
@@ -108,7 +108,7 @@ func TestEveryDerivedSlugIsInCatalog(t *testing.T) {
 // can't silently drop resolvable roles, and both are present in the catalog.
 func TestBareAndCompositeCoverEveryCategory(t *testing.T) {
 	cat := Catalog()
-	for _, c := range enrich.CategoryValues {
+	for _, c := range vocab.CategoryValues {
 		if c == "other" {
 			continue
 		}
@@ -118,7 +118,7 @@ func TestBareAndCompositeCoverEveryCategory(t *testing.T) {
 		if _, ok := cat[c]; !ok {
 			t.Errorf("bare category role %q missing from catalog", c)
 		}
-		for _, s := range enrich.SeniorityValues {
+		for _, s := range vocab.SeniorityValues {
 			slug := s + "_" + c
 			if got := Derive(s, c, ""); !slices.Contains(got, slug) {
 				t.Errorf("Derive(%q,%q) = %v, missing composite %q", s, c, got, slug)
@@ -151,7 +151,7 @@ func TestEveryNamedRoleHasALabelAndAlias(t *testing.T) {
 // the role facet subsumes the standalone seniority filter it replaces.
 func TestSeniorityOnlyRoleForEveryGrade(t *testing.T) {
 	cat := Catalog()
-	for _, s := range enrich.SeniorityValues {
+	for _, s := range vocab.SeniorityValues {
 		if got := Derive(s, "", "Some Title"); !slices.Contains(got, s) {
 			t.Errorf("Derive(%q,\"\") = %v, missing seniority-only role %q", s, got, s)
 		}

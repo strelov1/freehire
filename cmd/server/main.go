@@ -111,9 +111,12 @@ func main() {
 
 	// Search is optional: without a Meilisearch key the client stays nil and the
 	// search endpoint reports 503, leaving the rest of the API fully functional.
+	// The embed options wire the EMBED_* env (CV embedding shares the jobs TEI path).
 	var searchClient *search.Client
 	if cfg.MeiliKey != "" {
-		searchClient = search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
+		ec := config.LoadEmbedClient()
+		searchClient = search.NewClient(cfg.MeiliURL, cfg.MeiliKey,
+			search.WithEmbedURL(ec.URL), search.WithEmbedAPIKey(ec.APIKey), search.WithEmbedConcurrency(ec.Concurrency))
 	}
 
 	// Résumé storage is optional: only when all four S3 settings are present does
@@ -184,6 +187,10 @@ func main() {
 		piiDetector = pii.NewHTTPDetector(cfg.PIIFilterURL, nil)
 	}
 
+	// Credits metering config, loaded alongside the other optional dependencies rather
+	// than inline in the handler registration.
+	creditsConfig := credits.Config(config.LoadCredits())
+
 	handler.Register(app, handler.Config{
 		Pool:              pool,
 		FrontendOrigin:    cfg.FrontendOrigin,
@@ -208,7 +215,7 @@ func main() {
 		TelegramWebhookSecret: cfg.TelegramWebhookSecret,
 		ServedHosts:           cfg.ServedHosts,
 
-		Credits: credits.Config(config.LoadCredits()),
+		Credits: creditsConfig,
 
 		AWSRegion:       cfg.AWSRegion,
 		NotifyEmailFrom: cfg.NotifyEmailFrom,
@@ -245,6 +252,8 @@ func buildGmail(cfg config.Settings) (*gmailsync.Connector, *tokencrypt.Cipher) 
 	}
 	cipher, err := tokencrypt.New(cfg.GmailTokenKey)
 	if err != nil {
+		// A configured-but-broken key must not silently disable the feature.
+		log.Printf("gmail: token cipher init failed, Connect-Gmail disabled: %v", err)
 		return nil, nil
 	}
 	return gmailsync.NewConnector(g.ClientID, g.ClientSecret, cfg.FrontendOrigin), cipher

@@ -3,6 +3,7 @@ package search
 import (
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobview"
@@ -68,7 +69,7 @@ func FromJob(j db.Job) (JobDocument, error) {
 	view.Description = truncateRunes(view.Description, maxIndexedDescriptionRunes)
 	doc := JobDocument{ID: j.ID, Job: view, Roles: roletag.Derive(j.Seniority, j.Category, j.Title)}
 	doc.semanticVector = j.SemanticEmbedding
-	if eff := jobview.EffectivePostedAt(j.PostedAt, j.CreatedAt); eff.Valid {
+	if eff := jobview.EffectivePostedAt(j.PostedAt, j.CreatedAt, time.Now()); eff.Valid {
 		doc.PostedTS = eff.Time.Unix()
 	}
 	return doc, nil
