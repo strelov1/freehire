@@ -58,6 +58,13 @@ extension's side panel. A tailoring session's CV tools close over the CV and vac
 ids from the session binding, so the model cannot address another CV even by guessing
 an id.
 
+`browse` is the one preset whose prompt **overrides** the one it extends, rather
+than only adding to it. The chat playbook opens with `get_profile` and a question
+about what the candidate wants — correct on the website, wrong in a side panel,
+where they opened the thing they want to talk about. Because the extension is
+appended after that instruction, it has to name it: an override that does not say
+what it replaces reads as advice about a different moment.
+
 A `browse` session is one held from the browser extension. It is the only preset whose
 agent can see something outside this process: `read_current_page` attaches to the
 caller's browser-tool channel (`internal/browsertools`) as an in-process harness for the

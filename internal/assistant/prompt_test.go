@@ -81,3 +81,22 @@ func TestAnUnknownPresetFallsBackToTheChatPrompt(t *testing.T) {
 		t.Error("an unknown preset must still get a prompt; a session with none would answer unguided")
 	}
 }
+
+// The candidate opened the panel ON something. The chat playbook this preset
+// extends opens with `get_profile` and a "what are you looking for?" — correct on
+// the website, wrong in a side panel, where the answer is on the screen behind it.
+// The extension must say so explicitly, because it is appended AFTER that
+// instruction and the model follows what it read.
+func TestBrowsePromptOpensOnThePageNotTheProfile(t *testing.T) {
+	p := SystemPrompt(PresetBrowse)
+
+	if !strings.Contains(p, "FIRST thing you do") {
+		t.Error("the browse prompt does not override how the conversation opens, so the agent will run the chat playbook's opening and ask what the candidate is looking for")
+	}
+	// It has to name the instruction it is overriding, or the two read as advice
+	// about different moments rather than one replacing the other.
+	browseOnly := strings.TrimPrefix(p, chatPrompt)
+	if !strings.Contains(browseOnly, "get_profile") {
+		t.Error("the browse prompt never mentions get_profile, so nothing tells the agent that the opening it just read does not apply here")
+	}
+}
