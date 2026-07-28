@@ -10,6 +10,7 @@ describe('sitemap static paths', () => {
   it('includes the feature landings', () => {
     expect(STATIC_PATHS).toContain('/features/inbox');
     expect(STATIC_PATHS).toContain('/features/referrals');
+    expect(STATIC_PATHS).toContain('/features/tailor');
   });
 
   // /referrals now answers with a 301 to its new home. Listing a redirect in the

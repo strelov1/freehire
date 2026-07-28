@@ -220,7 +220,7 @@ freehire search <span class="text-foreground">"golang"</span> --remote --region 
         >
       </h3>
       <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
-        After a fit analysis, reframe your CV toward one job — grounded in what you actually did, never
+        After a fit analysis, <a href={resolve('/features/tailor')} class="font-medium text-foreground underline-offset-4 hover:underline">reframe your CV</a> toward one job — grounded in what you actually did, never
         fabricated — then export an ATS-ready PDF. <code class="font-mono text-foreground">cv context</code>
         is the honest part: it splits the job's requirements into the ones your history already covers but
         buries (reframe those) and the ones it doesn't (ask, don't invent), so an agent editing your CV

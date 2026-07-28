@@ -109,6 +109,12 @@
       cta: 'How the inbox works',
     },
     {
+      href: resolve('/features/tailor'),
+      title: 'CV tailoring',
+      body: 'Reframe your CV toward one vacancy — pulling forward the experience you already have but buried, and asking about anything your history does not support.',
+      cta: 'How tailoring works',
+    },
+    {
       href: resolve('/features/referrals'),
       title: 'Referrals',
       body: 'Ask an employee inside the company to put your name forward — anonymously and for free — instead of applying cold.',
