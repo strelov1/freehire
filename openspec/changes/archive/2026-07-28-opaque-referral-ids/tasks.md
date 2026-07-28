@@ -21,5 +21,5 @@
 
 ## 5. Deploy
 
-- [ ] 5.1 Apply the migration manually on production ahead of the API that reads it, under a `lock_timeout`.
-- [ ] 5.2 Release the backend + web together. No published client addresses a referral, so nothing follows.
+- [x] 5.1 Apply the migration manually on production ahead of the API that reads it, under a `lock_timeout`.
+- [x] 5.2 Release the backend + web together. No published client addresses a referral, so nothing follows.
