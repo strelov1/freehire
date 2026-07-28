@@ -31,6 +31,12 @@
 
   const unconfirmed = (a: ExperienceAtom) => a.provenance === 'agent_inferred';
 
+  /** Unconfirmed first. The banner tells the owner something needs a decision; leaving
+   *  those entries wherever the server happened to return them makes that a scavenger
+   *  hunt at eleven achievements and useless at two hundred. */
+  const needsAttentionFirst = (atoms: ExperienceAtom[]) =>
+    [...atoms].sort((a, b) => Number(unconfirmed(b)) - Number(unconfirmed(a)));
+
   async function load() {
     loading = true;
     error = '';
@@ -147,7 +153,7 @@
           </p>
         {:else}
           <ul class="flex flex-col gap-1.5">
-            {#each employment.atoms as atom (atom.id)}
+            {#each needsAttentionFirst(employment.atoms) as atom (atom.id)}
               {@render achievement(atom)}
             {/each}
           </ul>
@@ -159,7 +165,7 @@
       <section class="flex flex-col gap-2">
         <h3 class="text-sm font-semibold text-foreground">Not tied to a role</h3>
         <ul class="flex flex-col gap-1.5">
-          {#each bank.unplaced as atom (atom.id)}
+          {#each needsAttentionFirst(bank.unplaced) as atom (atom.id)}
             {@render achievement(atom)}
           {/each}
         </ul>
@@ -197,14 +203,25 @@
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
           <p class="text-sm text-foreground">{atom.claim}</p>
-          <p class="mt-0.5 text-xs text-muted-foreground">
+          {#if atom.metrics?.length}
+            <p class="mt-1 flex flex-wrap gap-1.5">
+              {#each atom.metrics as metric (metric)}
+                <span class="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">{metric}</span>
+              {/each}
+            </p>
+          {/if}
+          <p class="mt-1 text-xs text-muted-foreground">
             {provenanceLabel[atom.provenance]}
             {#if atom.skills?.length}
               · {atom.skills.join(', ')}
             {/if}
           </p>
         </div>
-        <div class="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+        <!-- Deliberately NOT hover-gated. This page exists so its owner can correct what
+             was recorded about them; hiding the way to do that until the pointer lands on
+             the right row means most people never learn it is possible, and a touch device
+             never hovers at all. -->
+        <div class="flex shrink-0 gap-1">
           <Button
             size="icon"
             variant="ghost"
