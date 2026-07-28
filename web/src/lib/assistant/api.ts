@@ -39,10 +39,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body.data;
 }
 
-/** Start a new chat conversation. Tailoring conversations are created by the
- *  tailoring bootstrap, which knows the CV and vacancy to bind them to. */
-export function createSession(): Promise<SessionSummary> {
-  return request<SessionSummary>('/sessions', { method: 'POST', body: '{}' });
+/** Start a new unbound conversation: a general chat, or the experience interviewer.
+ *  Tailoring conversations are created by the tailoring bootstrap instead, which knows
+ *  the CV and vacancy to bind them to — a preset that binds cannot be minted here. */
+export function createSession(preset: 'chat' | 'profile' = 'chat'): Promise<SessionSummary> {
+  const query = preset === 'chat' ? '' : `?preset=${preset}`;
+  return request<SessionSummary>(`/sessions${query}`, { method: 'POST', body: '{}' });
 }
 
 /** The caller's conversations, most recently active first. */

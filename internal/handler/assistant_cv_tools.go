@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/cv"
+	"github.com/strelov1/freehire/internal/experience"
 )
 
 // assistantCVTools are the tools a CV-tailoring session gets on top of the shared
@@ -135,21 +137,45 @@ var cvPatchSchema = map[string]any{
 	"additionalProperties": false,
 }
 
+// bulletWritingOps are the patch ops that put a CLAIM about the candidate on the page.
+// They are the ones that require evidence; reordering, removing, and editing the
+// technology line rearrange or delete what is already there and assert nothing new.
+var bulletWritingOps = map[cv.PatchOp]bool{
+	cv.PatchAddBullet:     true,
+	cv.PatchReplaceBullet: true,
+}
+
 // cvEditTool applies one field-level patch to the tailored CV.
+//
+// Writing a bullet requires naming the banked evidence behind it. That is the honest wall
+// made structural rather than instructional: a sentence about what the candidate did
+// cannot reach the page unless it traces to something they asserted — on their CV, in
+// their own words, or by typing it themselves. An agent's own inference is banked and
+// searchable, and stops here.
 func (h *assistantHandlers) cvEditTool(cvID uuid.UUID) assistant.Tool {
 	return assistant.Tool{
 		Name: "cv_edit",
 		Description: "Apply ONE field-level patch to the CV — the patch schema lists the ops and the fields " +
-			"each one reads. Address experience entries and bullets by their index from cv_get. Never write a " +
-			"claim the candidate has not confirmed; contact details cannot be edited here.",
+			"each one reads. Address experience entries and bullets by their index from cv_get. Writing a " +
+			"bullet (add_bullet, replace_bullet) requires `evidence_id`: the id of the banked achievement it " +
+			"is based on, from experience_search. If nothing in the bank backs it, ask the candidate and " +
+			"record their answer with experience_add first. Contact details cannot be edited here.",
 		Schema: map[string]any{
-			"type":       "object",
-			"properties": map[string]any{"patch": cvPatchSchema},
-			"required":   []string{"patch"},
+			"type": "object",
+			"properties": map[string]any{
+				"patch": cvPatchSchema,
+				"evidence_id": map[string]any{
+					"type": "string",
+					"description": "The id of the banked achievement this bullet is based on, from " +
+						"experience_search. Required for add_bullet and replace_bullet.",
+				},
+			},
+			"required": []string{"patch"},
 		},
 		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
 			var in struct {
-				Patch json.RawMessage `json:"patch"`
+				Patch      json.RawMessage `json:"patch"`
+				EvidenceID string          `json:"evidence_id"`
 			}
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
@@ -165,6 +191,9 @@ func (h *assistantHandlers) cvEditTool(cvID uuid.UUID) assistant.Tool {
 			// write it either, so the stored identifiers stay the candidate's own.
 			if p.Op == cv.PatchSetHeaderField && isContactHeaderField(p.Field) {
 				return nil, errors.New("contact fields are not editable in a tailoring session")
+			}
+			if err := h.requireEvidence(ctx, userID, p.Op, in.EvidenceID); err != nil {
+				return nil, err
 			}
 			meta, err := h.cv.cvStore.Patch(ctx, cvID, userID, p)
 			if err != nil {
@@ -182,4 +211,44 @@ func cvToolError(err error) error {
 		return errors.New("this tailoring session's CV is no longer available")
 	}
 	return err
+}
+
+// requireEvidence enforces that a bullet traces to something the candidate asserted.
+//
+// The check runs in the service path, not in the system prompt, because a rule that lives
+// only in a prompt is a rule a long conversation eventually loses — and this is the one
+// rule the whole capability exists to keep. Every failure names what to do next, because
+// that message is the model's only route to correcting itself inside the turn.
+func (h *assistantHandlers) requireEvidence(ctx context.Context, userID int64, op cv.PatchOp, evidenceID string) error {
+	if !bulletWritingOps[op] {
+		return nil
+	}
+	if h.experience == nil {
+		return nil
+	}
+
+	evidenceID = strings.TrimSpace(evidenceID)
+	if evidenceID == "" {
+		return errors.New("writing a bullet needs evidence_id — the id of the banked achievement it " +
+			"is based on. Find it with experience_search; if the bank holds nothing on this point, ask " +
+			"the candidate and record their answer with experience_add first")
+	}
+	id, err := uuid.Parse(evidenceID)
+	if err != nil {
+		return errors.New("evidence_id must be an achievement id from experience_search")
+	}
+
+	atom, err := h.experience.GetAtom(ctx, id, userID)
+	if errors.Is(err, experience.ErrNotFound) {
+		return errors.New("no banked achievement with that id — take evidence_id from experience_search")
+	}
+	if err != nil {
+		return err
+	}
+	if !atom.Provenance.Publishable() {
+		return errors.New("that achievement is recorded as your own reading rather than the candidate's " +
+			"statement, so it cannot go on their CV. Ask them to confirm it, then record what they say " +
+			"with experience_add and use the new id")
+	}
+	return nil
 }

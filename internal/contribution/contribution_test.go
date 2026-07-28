@@ -15,7 +15,6 @@ import (
 type fakeRepo struct {
 	boardTracked  bool
 	recordErr     error
-	recordRewards bool // what Record reports for rewardability
 	recorded      RecordInput
 	recordCalls   int
 	reviewErr     error
@@ -45,16 +44,16 @@ func (f *fakeRepo) BoardByAshbyJobID(_ context.Context, _ string) (string, bool,
 	return f.ashbyIDBoard, f.ashbyIDBoard != "", nil
 }
 
-func (f *fakeRepo) Record(_ context.Context, in RecordInput) (Contribution, bool, error) {
+func (f *fakeRepo) Record(_ context.Context, in RecordInput) (Contribution, error) {
 	f.recordCalls++
 	f.recorded = in
 	if f.recordErr != nil {
-		return Contribution{}, false, f.recordErr
+		return Contribution{}, f.recordErr
 	}
 	return Contribution{
 		ID: 1, SubmittedBy: in.SubmittedBy, URL: in.URL,
 		Source: in.Source, Board: in.Board, Status: "pending", Surface: in.Surface,
-	}, f.recordRewards, nil
+	}, nil
 }
 
 func (f *fakeRepo) RecordReview(_ context.Context, submittedBy int64, url, surface string) (Contribution, error) {
@@ -165,24 +164,21 @@ func TestSubmitRejectsWhenBoardAlreadyTracked(t *testing.T) {
 	}
 }
 
-func TestSubmitRecordsRepeatBoardWithoutReward(t *testing.T) {
-	// A board someone already contributed is no longer an error: the row is kept (it names its
-	// own submitter and is more evidence the board is worth onboarding), it just earns nothing.
-	repo := &fakeRepo{recordRewards: false}
+func TestSubmitRejectsDuplicateBoardWithoutRewarding(t *testing.T) {
+	// The board is the unit: a second link to it is refused by the unique index over the live
+	// statuses (migration 0049), which is also what keeps the reward one-per-board under a race.
+	repo := &fakeRepo{recordErr: ErrBoardAlreadyContributed}
 	got, err := submit(newService(repo), 7, "https://jobs.ashbyhq.com/blitzy")
-	if err != nil {
-		t.Fatalf("Submit: %v", err)
-	}
-	if repo.recordCalls != 1 {
-		t.Errorf("recorded %d times, want 1 — a repeat board is still recorded", repo.recordCalls)
+	if !errors.Is(err, ErrBoardAlreadyContributed) {
+		t.Fatalf("err = %v, want ErrBoardAlreadyContributed", err)
 	}
 	if got.Rewardable {
-		t.Error("repeat board is rewardable, want not rewardable")
+		t.Error("a refused duplicate is rewardable, want not rewardable")
 	}
 }
 
 func TestSubmitRecordsBoardFromVacancyURL(t *testing.T) {
-	repo := &fakeRepo{recordRewards: true}
+	repo := &fakeRepo{}
 	got, err := submit(newService(repo), 7, "https://jobs.ashbyhq.com/blitzy/a741b4e8-8799-4539-b1c2-78d69ff625e7?utm=x")
 	if err != nil {
 		t.Fatalf("Submit: %v", err)

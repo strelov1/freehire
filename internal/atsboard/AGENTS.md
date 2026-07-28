@@ -24,9 +24,9 @@ nothing but the URL. No network, no database.
 - **Fail-safe by construction.** A wrong or missing entry makes a link *unrecognised*, never a
   false board: a bad apex or mode yields an empty board, which is declined. So a best-guess
   host is safe to add.
-- **Reserved labels are declined.** In `host` and `subdomain` mode the host IS the board, so a
-  vendor's own console (`app.teamtailor.com` — which every Teamtailor career site links to)
-  would otherwise be recorded as an employer. `app`, `api`, `admin`, `support`, … are refused.
+- **A platform's own hosts are declined** (`platformHost`). In `host` and `subdomain` mode the
+  host IS the board, so a vendor's console (`app.teamtailor.com`, which every Teamtailor career
+  site links to) would otherwise be recorded as an employer.
 
 ## Limitations
 - **Vanity domains are invisible here.** Recognition keys on host, so a supported ATS behind a

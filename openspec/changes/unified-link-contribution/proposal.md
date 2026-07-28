@@ -40,10 +40,11 @@ for a platform we already crawl in full.
 - **Every intake is attributed.** The submitting user and the surface it came from
   (`web`, `telegram`, `extension`, `cli`) are stored for every outcome, so repeated or
   abusive use is visible in the data rather than only in logs.
-- **BREAKING (data model):** `link_contributions` loses `UNIQUE (source, board)`. The
-  board stops being the row's identity — several links to one board may now be recorded.
-  "One board, one reward" is preserved by an explicit pre-insert check instead of a
-  constraint.
+- **`link_contributions` gains a `surface` column.** The board's uniqueness is deliberately
+  left alone: PR #1218 (migration 0049) had just narrowed it to the live statuses so a
+  rejected board stops claiming its identity forever, which settles the question — one live
+  row per board, one reward per board. Paying later contributors for a board already queued
+  buys no coverage and invites farming one board from several accounts.
 - **Board coverage for single-page resolution.** A new link-source adapter derives
   `(source, board)` from any recognised ATS URL, fetches that tenant's board through the
   *existing* ingest adapter, and returns the posting the link points at. Coverage becomes

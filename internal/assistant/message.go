@@ -6,6 +6,7 @@ package assistant
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/tmc/langchaingo/llms"
 )
@@ -151,4 +152,38 @@ func Conversation(msgs []Message) ([]llms.MessageContent, error) {
 		out = append(out, decoded)
 	}
 	return out, nil
+}
+
+// UserSaid reports whether quote appears in what the user actually typed in this
+// conversation, compared case-insensitively and with whitespace collapsed.
+//
+// It exists so a tool can verify a citation instead of trusting one. A model that must
+// quote the user verbatim to have its write treated as the user's assertion cannot promote
+// its own inference by simply claiming the user said it — the transcript is checked. The
+// comparison is deliberately literal: normalizing further (stemming, fuzzy matching) would
+// let a paraphrase pass, and a paraphrase is precisely the thing being guarded against.
+func UserSaid(transcript []Message, quote string) bool {
+	quote = collapseSpace(quote)
+	if quote == "" {
+		return false
+	}
+	for _, m := range transcript {
+		if m.Role != RoleUser {
+			continue
+		}
+		var c userContent
+		if err := json.Unmarshal(m.Content, &c); err != nil {
+			continue
+		}
+		if strings.Contains(collapseSpace(c.Text), quote) {
+			return true
+		}
+	}
+	return false
+}
+
+// collapseSpace lowercases and reduces every whitespace run to a single space, so a quote
+// that survived a line wrap still matches what the user typed.
+func collapseSpace(s string) string {
+	return strings.ToLower(strings.Join(strings.Fields(s), " "))
 }

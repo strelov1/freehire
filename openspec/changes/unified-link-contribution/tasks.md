@@ -9,18 +9,20 @@
 
 ## 2. Schema
 
-- [x] 2.1 New migration: drop `UNIQUE (source, board)` on `link_contributions`, add
-  `surface text NOT NULL DEFAULT 'unknown'`
+- [x] 2.1 Migration `0050`: add `surface text NOT NULL DEFAULT 'unknown'`. Revised during
+  implementation — the plan was to drop `UNIQUE (source, board)`, but PR #1218 (migration
+  0049, already in prod) narrowed it to the live statuses instead, keeping one row and one
+  reward per board on anti-farming grounds. This change defers to that.
 - [x] 2.2 Update `internal/db/queries/*.sql`: record with a surface, and a query answering
   "is this the first row for `(source, board)`" for reward gating
 - [x] 2.3 `make sqlc`, then `go build ./...`
 
 ## 3. Reward gating without the constraint
 
-- [x] 3.1 Failing integration test: two concurrent submissions of one new board award
-  exactly one reward and record both rows
-- [x] 3.2 Replace `ErrBoardAlreadyContributed`-by-constraint with the in-transaction
-  first-row check; a repeat board records and returns "recorded, not rewarded"
+- [x] 3.1 Superseded by #1218: the unique index over live statuses keeps the race safe, so
+  `TestRecordConcurrentDuplicateRecordsOnce` (from main) covers it
+- [x] 3.2 Superseded — `ErrBoardAlreadyContributed` stays constraint-backed; the advisory lock
+  and its two queries were removed when this change rebased onto #1218
 - [x] 3.3 Update `contribution` unit tests for the new duplicate semantics
 - [x] 3.4 `go test ./internal/contribution/` and `go test -tags=integration ./internal/contribution/`
 

@@ -1,30 +1,13 @@
 -- name: CreateContribution :one
--- Record a contribution of a company board. Several links may legitimately point at one
--- board — each is evidence it is worth onboarding, and each carries its own submitter — so
--- unlike before there is no unique constraint to trip. Whether THIS row is the first for its
--- board (and so earns the reward) is decided by LockBoardForReward + BoardContributed in the
--- same transaction. The AI-credits reward itself is granted by the handler (credits.Reward),
--- idempotent by the contribution id.
+-- Record a contribution of a novel company board. The unique index on (source, board) over the
+-- live statuses (migration 0049) rejects a second contribution of a board already queued or
+-- onboarded; the repository maps that violation to ErrBoardAlreadyContributed. A board that was
+-- rejected releases its identity, so it can be contributed again. The AI-credits reward is
+-- granted separately by the caller (credits.Reward), idempotent by the contribution id.
 INSERT INTO link_contributions (submitted_by, url, source, board, surface)
 VALUES (sqlc.arg(submitted_by)::bigint, sqlc.arg(url), sqlc.arg(source), sqlc.arg(board), sqlc.arg(surface))
 RETURNING *;
 
--- name: LockBoardForReward :exec
--- Serialise reward decisions for one board. Dropping UNIQUE (source, board) also dropped the
--- arbiter that made "one board, one reward" safe under concurrency: a plain EXISTS check
--- cannot replace it, because two concurrent transactions read the same snapshot, both see no
--- rows, and both pay out. This transaction-scoped advisory lock is keyed on the board itself,
--- so it serialises only the submissions actually competing and is released on commit or
--- rollback without any cleanup.
-SELECT pg_advisory_xact_lock(hashtextextended(sqlc.arg(source)::text || ':' || sqlc.arg(board)::text, 0));
-
--- name: BoardContributed :one
--- Whether this board has been recorded before — the reward gate, read under
--- LockBoardForReward. True means the board is already known, so this submission is recorded
--- but earns nothing.
-SELECT EXISTS (
-    SELECT 1 FROM link_contributions WHERE source = sqlc.arg(source) AND board = sqlc.arg(board)
-) AS exists;
 
 -- name: CreateReviewContribution :one
 -- Record an unrecognized-but-valid link for manual review: source/board unset, status

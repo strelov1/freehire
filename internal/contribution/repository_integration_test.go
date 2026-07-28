@@ -1,15 +1,17 @@
 //go:build integration
 
-// Integration tests for the contribution repository against a real Postgres: every
-// submission of a board is recorded, and exactly one of them — even under a concurrent
-// race — is reported as rewardable. The AI-credits reward itself is granted by the handler,
-// not the repository, so it is not exercised here.
-// Run with: go test -tags=integration ./internal/contribution/
+// Integration tests for the contribution repository against a real Postgres: the
+// uniqueness on (source, board) rejects a duplicate identity (mapped to
+// ErrBoardAlreadyContributed) and — under a concurrent race — records exactly one board, while
+// a rejected row releases its board so it can be contributed again.
+// The AI-credits reward is granted by the handler, not the repository, so it is not
+// exercised here. Run with: go test -tags=integration ./internal/contribution/
 // Requires Docker (testcontainers spins up a throwaway Postgres with the migrations).
 package contribution
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 
@@ -45,45 +47,97 @@ func insertJob(t *testing.T, pool *pgxpool.Pool, source, externalID string) {
 	}
 }
 
-// TestRecordKeepsEverySubmissionAndRewardsTheFirst pins the rule that replaced
-// UNIQUE (source, board): a second link to a board is recorded (it is evidence the board is
-// worth onboarding, and it names its own submitter) but earns nothing.
-func TestRecordKeepsEverySubmissionAndRewardsTheFirst(t *testing.T) {
+func TestRecordAndDedups(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
-	repo := NewQueriesRepository(pool, db.New(pool))
+	repo := NewQueriesRepository(db.New(pool))
 	userID := insertUser(t, pool, "u@example.test")
 
-	in := RecordInput{SubmittedBy: userID, URL: "https://jobs.ashbyhq.com/blitzy", Source: "ashby", Board: "blitzy", Surface: SurfaceWeb}
+	in := RecordInput{SubmittedBy: userID, URL: "https://jobs.ashbyhq.com/blitzy", Source: "ashby", Board: "blitzy", Surface: SurfaceCLI}
 
-	c, rewardable, err := repo.Record(ctx, in)
+	c, err := repo.Record(ctx, in)
 	if err != nil {
 		t.Fatalf("first Record: %v", err)
 	}
 	if c.ID == 0 || c.Status != "pending" || c.Board != "blitzy" {
 		t.Errorf("recorded row unexpected: %+v", c)
 	}
-	if !rewardable {
-		t.Error("first submission of a board is not rewardable, want rewardable")
-	}
-	if c.Surface != SurfaceWeb {
-		t.Errorf("surface = %q, want %q", c.Surface, SurfaceWeb)
+	// The surface rides with the row, so repeated use is attributable to a channel and not
+	// only to a user.
+	if c.Surface != SurfaceCLI {
+		t.Errorf("surface = %q, want %q", c.Surface, SurfaceCLI)
 	}
 
-	// Same board again via a different vacancy URL: recorded, but no second reward.
-	dup := RecordInput{SubmittedBy: userID, URL: "https://jobs.ashbyhq.com/blitzy/another-uuid", Source: "ashby", Board: "blitzy", Surface: SurfaceCLI}
-	second, rewardable, err := repo.Record(ctx, dup)
+	// Same board again (e.g. via a different vacancy URL) → rejected, no second row.
+	dup := RecordInput{SubmittedBy: userID, URL: "https://jobs.ashbyhq.com/blitzy/another-uuid", Source: "ashby", Board: "blitzy"}
+	_, err = repo.Record(ctx, dup)
+	if !errors.Is(err, ErrBoardAlreadyContributed) {
+		t.Fatalf("second Record err = %v, want ErrBoardAlreadyContributed", err)
+	}
+	if n := countContributions(t, pool, userID); n != 1 {
+		t.Errorf("contributions after duplicate = %d, want still 1 — rejected insert must not record", n)
+	}
+}
+
+// A rejected board is not a claim on the identity: a board turned down as dead can come back
+// (the employer starts posting again), and the flow's own documentation promises it can be
+// re-contributed. The uniqueness that guards the onboarding queue therefore covers the live
+// statuses only.
+func TestRecordReopensARejectedBoard(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	repo := NewQueriesRepository(db.New(pool))
+	first := insertUser(t, pool, "rejected-first@example.com")
+	second := insertUser(t, pool, "rejected-second@example.com")
+
+	in := RecordInput{SubmittedBy: first, URL: "https://jobs.ashbyhq.com/dormant", Source: "ashby", Board: "dormant"}
+	rec, err := repo.Record(ctx, in)
 	if err != nil {
-		t.Fatalf("second Record: %v", err)
+		t.Fatalf("first Record: %v", err)
 	}
-	if rewardable {
-		t.Error("second submission of the same board is rewardable, want not rewardable")
+	if _, err := pool.Exec(ctx,
+		`UPDATE link_contributions SET status = 'rejected' WHERE id = $1`, rec.ID); err != nil {
+		t.Fatalf("reject the row: %v", err)
 	}
-	if second.ID == c.ID {
-		t.Error("second submission reused the first row, want its own row")
+
+	// The board is alive again and somebody else pastes it.
+	again := RecordInput{SubmittedBy: second, URL: "https://jobs.ashbyhq.com/dormant/a-uuid", Source: "ashby", Board: "dormant"}
+	reopened, err := repo.Record(ctx, again)
+	if err != nil {
+		t.Fatalf("re-contributing a rejected board: %v, want it recorded", err)
 	}
-	if n := countContributions(t, pool, userID); n != 2 {
-		t.Errorf("contributions after a repeat = %d, want 2 — every submission is kept", n)
+	if reopened.Status != "pending" || reopened.ID == rec.ID {
+		t.Errorf("reopened row = %+v, want a new pending row", reopened)
+	}
+	if n := countContributions(t, pool, second); n != 1 {
+		t.Errorf("contributions for the second user = %d, want 1", n)
+	}
+}
+
+// The live statuses still hold the identity: an onboarded board is in the catalogue, so a
+// second contribution of it adds nothing and must not be rewarded.
+func TestRecordStillRejectsDuplicateOfAnOnboardedBoard(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	repo := NewQueriesRepository(db.New(pool))
+	userID := insertUser(t, pool, "onboarded-dup@example.com")
+
+	rec, err := repo.Record(ctx, RecordInput{
+		SubmittedBy: userID, URL: "https://jobs.ashbyhq.com/live", Source: "ashby", Board: "live",
+	})
+	if err != nil {
+		t.Fatalf("first Record: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE link_contributions SET status = 'onboarded' WHERE id = $1`, rec.ID); err != nil {
+		t.Fatalf("onboard the row: %v", err)
+	}
+
+	_, err = repo.Record(ctx, RecordInput{
+		SubmittedBy: userID, URL: "https://jobs.ashbyhq.com/live/uuid", Source: "ashby", Board: "live",
+	})
+	if !errors.Is(err, ErrBoardAlreadyContributed) {
+		t.Fatalf("duplicate of an onboarded board err = %v, want ErrBoardAlreadyContributed", err)
 	}
 }
 
@@ -100,7 +154,7 @@ func countContributions(t *testing.T, pool *pgxpool.Pool, userID int64) int {
 func TestBoardTracked(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
-	repo := NewQueriesRepository(pool, db.New(pool))
+	repo := NewQueriesRepository(db.New(pool))
 
 	insertJob(t, pool, "greenhouse", "acme:100")
 
@@ -117,44 +171,40 @@ func TestBoardTracked(t *testing.T) {
 	}
 }
 
-// TestRecordConcurrentRewardsExactlyOne is the test the dropped unique constraint used to
-// make unnecessary. Two submissions of one new board racing must both be recorded, and
-// exactly one may be rewarded — a plain EXISTS check cannot do this (both transactions read
-// the same snapshot and both see no rows), so it proves the advisory lock is doing its job.
-func TestRecordConcurrentRewardsExactlyOne(t *testing.T) {
+func TestRecordConcurrentDuplicateRecordsOnce(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
-	repo := NewQueriesRepository(pool, db.New(pool))
+	repo := NewQueriesRepository(db.New(pool))
 	userID := insertUser(t, pool, "race@example.test")
 
-	in := RecordInput{SubmittedBy: userID, URL: "https://jobs.lever.co/acme", Source: "lever", Board: "acme", Surface: SurfaceWeb}
+	in := RecordInput{SubmittedBy: userID, URL: "https://jobs.lever.co/acme", Source: "lever", Board: "acme"}
 
-	const racers = 4
 	var wg sync.WaitGroup
-	rewards := make([]bool, racers)
-	errs := make([]error, racers)
+	errs := make([]error, 2)
 	for i := range errs {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			_, rewards[i], errs[i] = repo.Record(ctx, in)
+			_, errs[i] = repo.Record(ctx, in)
 		}(i)
 	}
 	wg.Wait()
 
-	rewarded := 0
-	for i, err := range errs {
-		if err != nil {
-			t.Fatalf("racer %d: unexpected error: %v", i, err)
-		}
-		if rewards[i] {
-			rewarded++
+	var ok, dup int
+	for _, err := range errs {
+		switch {
+		case err == nil:
+			ok++
+		case errors.Is(err, ErrBoardAlreadyContributed):
+			dup++
+		default:
+			t.Fatalf("unexpected error: %v", err)
 		}
 	}
-	if rewarded != 1 {
-		t.Errorf("rewarded = %d, want exactly 1 — the board may be paid for once", rewarded)
+	if ok != 1 || dup != 1 {
+		t.Errorf("race outcome ok=%d dup=%d, want 1 and 1", ok, dup)
 	}
-	if got := countContributions(t, pool, userID); got != racers {
-		t.Errorf("contributions after race = %d, want %d — every submission is kept", got, racers)
+	if got := countContributions(t, pool, userID); got != 1 {
+		t.Errorf("contributions after race = %d, want exactly 1", got)
 	}
 }

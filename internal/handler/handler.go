@@ -24,6 +24,7 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/emailnotify"
 	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/experience"
 	"github.com/strelov1/freehire/internal/gmailsync"
 	"github.com/strelov1/freehire/internal/linkimport"
 	"github.com/strelov1/freehire/internal/llm"
@@ -230,7 +231,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Contributions detect the ATS board from the URL alone (network-free, board.go), with a
 	// network fallback (boardresolve) that fetches a company careers page and detects an
 	// embedded ATS — so vanity-domain links (company.com/careers?gh_jid=…) resolve too.
-	contributionSvc := contribution.New(contribution.NewQueriesRepository(cfg.Pool, queries), boardresolve.New())
+	contributionSvc := contribution.New(contribution.NewQueriesRepository(queries), boardresolve.New())
 	reportsH := newReportHandlers(queries)
 	savedSearchH := newSavedSearchHandlers(queries)
 	subscriptionH := newSubscriptionHandlers(queries)
@@ -240,7 +241,8 @@ func Register(app *fiber.App, cfg Config) {
 	resumeStore := resume.New(cfg.Blob, resume.NewQueriesRepository(queries))
 	// The profile read serves the structured résumé beside the profile, so it needs the
 	// résumé store — hence constructed after it.
-	profileH := newProfileHandlers(profileSvc, resumeStore)
+	profileH := newProfileHandlers(profileSvc, resumeStore, newCandidateProfiler(queries))
+	experienceH := newExperienceHandlers(experience.NewStore(experience.NewQueriesRepository(queries)))
 	// Nil-safe: NewAnalyzer(nil) is a no-op analyzer, so the ATS report works whether
 	// or not the LLM is configured.
 	atsAnalyzer := atscheck.NewAnalyzer(cfg.LLM)
@@ -416,6 +418,7 @@ func Register(app *fiber.App, cfg Config) {
 
 	// The per-user profile singleton (see profileHandlers).
 	profileH.register(api, mw)
+	experienceH.register(api, mw)
 
 	// CV builder + AI tailoring (see cvHandlers).
 	cvH.register(api, mw)

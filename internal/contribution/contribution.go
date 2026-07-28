@@ -25,8 +25,9 @@ var (
 	// ErrBoardAlreadyTracked is a board the catalogue already crawls (a job exists for it) —
 	// contributing it adds nothing, so no reward (409).
 	ErrBoardAlreadyTracked = errors.New("contribution: board already in catalogue")
-	// ErrBoardAlreadyContributed is a board already recorded by any user — the repository maps
-	// the unique violation to this (409).
+	// ErrBoardAlreadyContributed is a board already recorded by any user and still live in the
+	// queue (pending/review/onboarded) — the repository maps the unique violation to this (409).
+	// A rejected row does not reserve its board: that one can be contributed again.
 	ErrBoardAlreadyContributed = errors.New("contribution: board already contributed")
 )
 
@@ -51,6 +52,8 @@ const (
 // NormalizeSurface maps a caller-supplied surface tag to one this package stores, falling back
 // to SurfaceUnknown. It is deliberately lenient: an older client build, or one we have not
 // heard of, still gets its link processed — the tag is for our own visibility, not a gate.
+// The repository applies it too, on the way to a column with a CHECK constraint: an intake must
+// never be REFUSED over a tag, which is exactly what an unnormalised empty string would do.
 func NormalizeSurface(s string) string {
 	switch s {
 	case SurfaceWeb, SurfaceTelegram, SurfaceExtension, SurfaceCLI:
@@ -83,14 +86,13 @@ type RecordInput struct {
 }
 
 // Repository is the persistence contract, expressed in package domain types. Record inserts
-// the contribution and reports whether it is the FIRST for its board — the reward gate, since
-// several links to one board are all recorded but only one may be paid for.
+// the contribution, mapping a duplicate board to ErrBoardAlreadyContributed.
 type Repository interface {
 	BoardTracked(ctx context.Context, source, board string) (bool, error)
 	CompanyForBoard(ctx context.Context, source, board string) (name, slug string, ok bool, err error)
 	BoardByGreenhouseJobID(ctx context.Context, jobID string) (board string, ok bool, err error)
 	BoardByAshbyJobID(ctx context.Context, jobID string) (board string, ok bool, err error)
-	Record(ctx context.Context, in RecordInput) (rec Contribution, rewardable bool, err error)
+	Record(ctx context.Context, in RecordInput) (Contribution, error)
 	RecordReview(ctx context.Context, submittedBy int64, url, surface string) (Contribution, error)
 	ListByUser(ctx context.Context, userID int64) ([]Contribution, error)
 }
@@ -126,8 +128,9 @@ type SubmitInput struct {
 
 // SubmitResult is a recorded intake. Source and Board name the board the link resolved to and
 // are set even when recording was refused (ErrBoardAlreadyTracked), so the caller can name the
-// company it already covers. Rewardable is true only for the first submission of a board — the
-// caller grants the AI credits, this package decides eligibility.
+// company it already covers. Rewardable is true when this submission is the one that opened the
+// board — the caller grants the AI credits, this package decides eligibility. A duplicate never
+// gets that far: the unique index refuses the insert, surfaced as ErrBoardAlreadyContributed.
 type SubmitResult struct {
 	Contribution Contribution
 	Source       string
@@ -178,14 +181,14 @@ func (s *Service) RecordIntake(ctx context.Context, in SubmitInput, it Intake) (
 	if it.Tracked {
 		return SubmitResult{Source: it.Source, Board: it.Board}, ErrBoardAlreadyTracked
 	}
-	rec, rewardable, err := s.repo.Record(ctx, RecordInput{
+	rec, err := s.repo.Record(ctx, RecordInput{
 		SubmittedBy: in.SubmittedBy,
 		URL:         it.Canonical,
 		Source:      it.Source,
 		Board:       it.Board,
 		Surface:     surface,
 	})
-	return SubmitResult{Contribution: rec, Source: it.Source, Board: it.Board, Rewardable: rewardable}, err
+	return SubmitResult{Contribution: rec, Source: it.Source, Board: it.Board, Rewardable: err == nil}, err
 }
 
 // Submit inspects and records in one call, for the callers that do not import first. The
@@ -215,14 +218,14 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (SubmitResult, err
 		return SubmitResult{Source: source, Board: board}, ErrBoardAlreadyTracked
 	}
 
-	rec, rewardable, err := s.repo.Record(ctx, RecordInput{
+	rec, err := s.repo.Record(ctx, RecordInput{
 		SubmittedBy: in.SubmittedBy,
 		URL:         canonical,
 		Source:      source,
 		Board:       board,
 		Surface:     surface,
 	})
-	return SubmitResult{Contribution: rec, Source: source, Board: board, Rewardable: rewardable}, err
+	return SubmitResult{Contribution: rec, Source: source, Board: board, Rewardable: err == nil}, err
 }
 
 // resolveBoard finds the (source, board, canonical URL) a pasted link belongs to, trying the

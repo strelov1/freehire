@@ -73,7 +73,7 @@ func TestTelegramContribution(t *testing.T) {
 	}
 
 	queries := db.New(pool)
-	contributionSvc := contribution.New(contribution.NewQueriesRepository(pool, queries), nil)
+	contributionSvc := contribution.New(contribution.NewQueriesRepository(queries), nil)
 	creditsStore := credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3, ContributionReward: 5})
 	h := &telegramHandlers{
 		queries:               queries,
@@ -144,20 +144,22 @@ func TestTelegramContribution(t *testing.T) {
 		}
 	})
 
-	t.Run("a second link on the same board is recorded but earns no second reward", func(t *testing.T) {
+	t.Run("a second link on the same board earns no second reward", func(t *testing.T) {
 		post(chatID, "https://jobs.ashbyhq.com/blitzy") // the board listing this time
 		waitReply(t)
 		if got := balance(); got != 25 {
 			t.Errorf("credit balance = %d, want still 25 (a repeat board credits nothing)", got)
 		}
-		// The repeat IS kept — it names its own submitter and is more evidence the board matters.
+		// The board is the unit: one live row holds its identity, so a repeat adds nothing.
+		// Paying for a board already queued would buy no coverage and invite farming one board
+		// from several accounts.
 		var rows int
 		if err := pool.QueryRow(ctx,
 			`SELECT count(*) FROM link_contributions WHERE source='ashby' AND board='blitzy'`).Scan(&rows); err != nil {
 			t.Fatalf("count board rows: %v", err)
 		}
-		if rows != 2 {
-			t.Errorf("board rows = %d, want 2 — every submission is kept", rows)
+		if rows != 1 {
+			t.Errorf("board rows = %d, want 1 — the board is the unit", rows)
 		}
 	})
 

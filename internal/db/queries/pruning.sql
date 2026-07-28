@@ -184,8 +184,12 @@ GROUP BY source, company_slug;
 -- and the board is what the source files are keyed on. Matching on it is exact, where
 -- matching on company_slug is not — many adapters take the company name from the
 -- posting payload rather than the board entry, so the two spellings diverge.
-SELECT id, source, external_id, company_slug, title, category, is_tech,
-       cardinality(skills) > 0 AS has_skills
+-- skills comes back whole rather than as a cardinality test: whether a posting is
+-- technical depends on WHICH skills it carries, and only skilltag knows that. The
+-- dictionary covers the recruiting, HR, finance, legal and operations craft a technical
+-- company hires for, so "has any skill" answers a different question than the caller
+-- is asking.
+SELECT id, source, external_id, company_slug, title, category, is_tech, skills
 FROM jobs
 WHERE id > sqlc.arg(after_id)
 ORDER BY id

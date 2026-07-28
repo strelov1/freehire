@@ -37,8 +37,8 @@ func TestMyContributionsList(t *testing.T) {
 	}
 
 	queries := db.New(pool)
-	repo := contribution.NewQueriesRepository(pool, queries)
-	if _, _, err := repo.Record(ctx, contribution.RecordInput{
+	repo := contribution.NewQueriesRepository(queries)
+	if _, err := repo.Record(ctx, contribution.RecordInput{
 		SubmittedBy: mine, URL: "https://jobs.ashbyhq.com/acme", Source: "ashby", Board: "acme",
 		Surface: contribution.SurfaceCLI,
 	}); err != nil {
@@ -47,7 +47,7 @@ func TestMyContributionsList(t *testing.T) {
 	if _, err := repo.RecordReview(ctx, mine, "https://example.com/careers/1", contribution.SurfaceWeb); err != nil {
 		t.Fatalf("record review: %v", err)
 	}
-	if _, _, err := repo.Record(ctx, contribution.RecordInput{
+	if _, err := repo.Record(ctx, contribution.RecordInput{
 		SubmittedBy: theirs, URL: "https://jobs.lever.co/globex", Source: "lever", Board: "globex",
 		Surface: contribution.SurfaceWeb,
 	}); err != nil {

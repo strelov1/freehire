@@ -47,27 +47,6 @@ func (q *Queries) BoardByGreenhouseJobID(ctx context.Context, jobID string) (str
 	return board, err
 }
 
-const boardContributed = `-- name: BoardContributed :one
-SELECT EXISTS (
-    SELECT 1 FROM link_contributions WHERE source = $1 AND board = $2
-) AS exists
-`
-
-type BoardContributedParams struct {
-	Source pgtype.Text `json:"source"`
-	Board  pgtype.Text `json:"board"`
-}
-
-// Whether this board has been recorded before — the reward gate, read under
-// LockBoardForReward. True means the board is already known, so this submission is recorded
-// but earns nothing.
-func (q *Queries) BoardContributed(ctx context.Context, arg BoardContributedParams) (bool, error) {
-	row := q.db.QueryRow(ctx, boardContributed, arg.Source, arg.Board)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
 const companyForBoard = `-- name: CompanyForBoard :one
 SELECT company, company_slug FROM jobs
 WHERE source = $1 AND external_id LIKE $2 AND company_slug <> ''
@@ -108,12 +87,11 @@ type CreateContributionParams struct {
 	Surface     string      `json:"surface"`
 }
 
-// Record a contribution of a company board. Several links may legitimately point at one
-// board — each is evidence it is worth onboarding, and each carries its own submitter — so
-// unlike before there is no unique constraint to trip. Whether THIS row is the first for its
-// board (and so earns the reward) is decided by LockBoardForReward + BoardContributed in the
-// same transaction. The AI-credits reward itself is granted by the handler (credits.Reward),
-// idempotent by the contribution id.
+// Record a contribution of a novel company board. The unique index on (source, board) over the
+// live statuses (migration 0049) rejects a second contribution of a board already queued or
+// onboarded; the repository maps that violation to ErrBoardAlreadyContributed. A board that was
+// rejected releases its identity, so it can be contributed again. The AI-credits reward is
+// granted separately by the caller (credits.Reward), idempotent by the contribution id.
 func (q *Queries) CreateContribution(ctx context.Context, arg CreateContributionParams) (LinkContribution, error) {
 	row := q.db.QueryRow(ctx, createContribution,
 		arg.SubmittedBy,
@@ -224,24 +202,4 @@ func (q *Queries) ListContributionsByUser(ctx context.Context, submittedBy int64
 		return nil, err
 	}
 	return items, nil
-}
-
-const lockBoardForReward = `-- name: LockBoardForReward :exec
-SELECT pg_advisory_xact_lock(hashtextextended($1::text || ':' || $2::text, 0))
-`
-
-type LockBoardForRewardParams struct {
-	Source string `json:"source"`
-	Board  string `json:"board"`
-}
-
-// Serialise reward decisions for one board. Dropping UNIQUE (source, board) also dropped the
-// arbiter that made "one board, one reward" safe under concurrency: a plain EXISTS check
-// cannot replace it, because two concurrent transactions read the same snapshot, both see no
-// rows, and both pay out. This transaction-scoped advisory lock is keyed on the board itself,
-// so it serialises only the submissions actually competing and is released on commit or
-// rollback without any cleanup.
-func (q *Queries) LockBoardForReward(ctx context.Context, arg LockBoardForRewardParams) error {
-	_, err := q.db.Exec(ctx, lockBoardForReward, arg.Source, arg.Board)
-	return err
 }

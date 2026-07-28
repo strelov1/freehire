@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Mail } from '@lucide/svelte';
+  import { Clock, Mail, MessageSquare } from '@lucide/svelte';
   import CompanyLogo from './CompanyLogo.svelte';
   import { Badge } from '$lib/ui';
   import { humanizeStage } from '$lib/stages';
@@ -23,6 +23,25 @@
   <span class="flex items-center gap-1.5">
     {#if item.stage}
       <Badge variant="secondary">{humanizeStage(item.stage)}</Badge>
+    {/if}
+    {#if item.silence_state === 'silent'}
+      <span
+        class="flex items-center gap-0.5 text-xs tabular-nums text-amber-600"
+        title="No reply for {item.days_silent} days"
+        aria-label="No reply for {item.days_silent} days"
+      >
+        <Clock class="size-3 shrink-0" aria-hidden="true" />
+        {item.days_silent}d
+      </span>
+    {:else if item.silence_state === 'unconfirmed'}
+      <span
+        class="flex items-center gap-0.5 text-xs text-muted-foreground"
+        title="Mail may be from them — confirm the link to know"
+        aria-label="Mail awaiting confirmation"
+      >
+        <MessageSquare class="size-3 shrink-0" aria-hidden="true" />
+        ?
+      </span>
     {/if}
     {#if item.email_count > 0}
       <span

@@ -305,7 +305,33 @@ SELECT jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.compan
           FROM job_reminders r
          WHERE r.user_id = uj.user_id
            AND r.job_id = jobs.id
-           AND r.status = 'pending') AS reminder_fire_at
+           AND r.status = 'pending') AS reminder_fire_at,
+       -- last_activity_at is when this application last moved: its apply date, or
+       -- the newest message linked to it when that is later. GREATEST ignores a
+       -- NULL aggregate, so an application with no mail falls back to applied_at
+       -- rather than reporting nothing — a clock that only starts once mail
+       -- arrives would never fire on the applications ignored outright, which are
+       -- the ones worth reporting. NULL on a row that is not an application: a job
+       -- merely viewed or saved is not waiting on anyone.
+       (CASE WHEN uj.applied_at IS NOT NULL THEN
+          GREATEST(uj.applied_at,
+                   (SELECT max(e.received_at)
+                      FROM emails e
+                     WHERE e.user_id = uj.user_id
+                       AND e.job_id = jobs.id
+                       AND e.deleted_at IS NULL))
+        END)::timestamptz AS last_activity_at,
+       -- has_pending_suggestion is mail the matcher believes belongs to this
+       -- application that the caller has neither confirmed nor rejected. Such mail
+       -- contradicts a claim that nobody replied, so the reader downgrades a
+       -- silence verdict to a question rather than asserting it.
+       (uj.applied_at IS NOT NULL AND EXISTS (
+          SELECT 1
+            FROM emails e
+           WHERE e.user_id = uj.user_id
+             AND e.suggested_job_id = jobs.id
+             AND e.job_id IS NULL
+             AND e.deleted_at IS NULL))::boolean AS has_pending_suggestion
 FROM user_jobs uj
 JOIN jobs ON jobs.id = uj.job_id
 WHERE uj.user_id = $1
@@ -335,14 +361,16 @@ type ListUserJobsParams struct {
 }
 
 type ListUserJobsRow struct {
-	Job            Job                `json:"job"`
-	ViewedAt       pgtype.Timestamptz `json:"viewed_at"`
-	SavedAt        pgtype.Timestamptz `json:"saved_at"`
-	AppliedAt      pgtype.Timestamptz `json:"applied_at"`
-	Stage          pgtype.Text        `json:"stage"`
-	Notes          pgtype.Text        `json:"notes"`
-	EmailCount     int64              `json:"email_count"`
-	ReminderFireAt pgtype.Timestamptz `json:"reminder_fire_at"`
+	Job                  Job                `json:"job"`
+	ViewedAt             pgtype.Timestamptz `json:"viewed_at"`
+	SavedAt              pgtype.Timestamptz `json:"saved_at"`
+	AppliedAt            pgtype.Timestamptz `json:"applied_at"`
+	Stage                pgtype.Text        `json:"stage"`
+	Notes                pgtype.Text        `json:"notes"`
+	EmailCount           int64              `json:"email_count"`
+	ReminderFireAt       pgtype.Timestamptz `json:"reminder_fire_at"`
+	LastActivityAt       pgtype.Timestamptz `json:"last_activity_at"`
+	HasPendingSuggestion bool               `json:"has_pending_suggestion"`
 }
 
 // A user's job interactions joined with the job rows. Each subset is ordered by
@@ -429,6 +457,8 @@ func (q *Queries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]L
 			&i.Notes,
 			&i.EmailCount,
 			&i.ReminderFireAt,
+			&i.LastActivityAt,
+			&i.HasPendingSuggestion,
 		); err != nil {
 			return nil, err
 		}

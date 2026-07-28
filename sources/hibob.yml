@@ -1,0 +1,39 @@
+# HiBob (Bob) careers boards. Provider is the filename; board = the tenant slug, which is
+# also its careers subdomain (<board>.careers.hibob.com); see internal/sources/hibob.go.
+# One keyless call returns the whole board with descriptions inline — no per-posting fetch.
+# Each board validated live (/api/job-ad returned postings) before adding; the company name is
+# the tenant's own companyName from /api/career-site.
+- company: 50 Sport
+  board: 50sport
+- company: ATP Tour, Inc.
+  board: atptourinc
+- company: Atticus
+  board: atticus
+- company: Bjarke Ingels Group
+  board: bjarkeingelsgroup
+- company: Cubico Sustainable Investments
+  board: cubicojobs
+- company: Dixa
+  board: dixa
+- company: Imex Dental und Technik GmbH
+  board: imexdental
+- company: IREN
+  board: iren
+- company: Numerical Algorithms Group
+  board: n2group
+- company: ONE group solutions
+  board: onegroupsolutions
+- company: Oviva
+  board: oviva
+- company: Projective Group
+  board: projectivegroup
+- company: Qogita
+  board: qogita
+- company: Samskip
+  board: samskip
+- company: Talent Systems
+  board: talentsystems
+- company: The Gap Partnership
+  board: thegappartnership
+- company: Unique
+  board: unique

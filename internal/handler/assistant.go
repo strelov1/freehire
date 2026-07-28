@@ -17,6 +17,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/experience"
 	"github.com/strelov1/freehire/internal/llm"
 )
 
@@ -37,6 +38,8 @@ type assistantHandlers struct {
 	// services underneath keeps the tool and GET /me/profile on one assembly, so the
 	// agent cannot drift from what the profile page shows.
 	profile *profileHandlers
+	// experience backs the bank tools, which every preset offers.
+	experience experienceBankTools
 }
 
 // newAssistantHandlers wires the agent. A nil LLM client leaves the runner nil:
@@ -46,13 +49,14 @@ func newAssistantHandlers(queries *db.Queries, model *llm.Client, maxSteps int,
 	search *searchHandlers, resumeH *resumeHandlers, tracking *trackingHandlers, cvH *cvHandlers,
 	profileH *profileHandlers) *assistantHandlers {
 	h := &assistantHandlers{
-		store:    assistant.NewStore(queries),
-		queries:  queries,
-		search:   search,
-		resume:   resumeH,
-		tracking: tracking,
-		cv:       cvH,
-		profile:  profileH,
+		experience: experience.NewStore(experience.NewQueriesRepository(queries)),
+		store:      assistant.NewStore(queries),
+		queries:    queries,
+		search:     search,
+		resume:     resumeH,
+		tracking:   tracking,
+		cv:         cvH,
+		profile:    profileH,
 	}
 	if model != nil {
 		h.runner = assistant.NewRunner(model, h.store, assistant.RunnerConfig{MaxSteps: maxSteps})
@@ -144,15 +148,27 @@ func assistantSessionID(c *fiber.Ctx) (uuid.UUID, error) {
 	return id, nil
 }
 
-// CreateAssistantSession starts a new chat conversation for the caller. Tailoring
-// sessions are created by the tailoring bootstrap, which knows the CV and vacancy
-// to bind; this endpoint deliberately cannot mint one.
+// CreateAssistantSession starts a new unbound conversation for the caller — a general
+// chat, or the experience interviewer when `?preset=profile` is given.
+//
+// Only the presets that bind to NOTHING can be minted here. A tailoring session is
+// created by the tailoring bootstrap, which knows the CV and the vacancy to bind; letting
+// this endpoint name that preset would produce a session whose tools point at nothing.
 func (h *assistantHandlers) CreateAssistantSession(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	sess, err := h.store.CreateSession(c.Context(), userID, assistant.PresetChat, nil, nil)
+	preset := assistant.PresetChat
+	switch requested := c.Query("preset"); requested {
+	case "", assistant.PresetChat:
+	case assistant.PresetProfile:
+		preset = assistant.PresetProfile
+	default:
+		return fiber.NewError(fiber.StatusBadRequest,
+			"preset must be chat or profile — a tailoring session is created from its CV")
+	}
+	sess, err := h.store.CreateSession(c.Context(), userID, preset, nil, nil)
 	if err != nil {
 		return err
 	}

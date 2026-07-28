@@ -32,23 +32,45 @@ func NewWorkday(c workdayHTTP) Source { return workday{http: c} }
 
 func (workday) Provider() string { return "workday" }
 
-// workdayBoard is a configured board parsed into the parts the CXS endpoints need.
+// workdayBoard is a configured board parsed into the parts the CXS endpoints need, plus the
+// board's prefix on the public careers site — which is not the CXS path, and differs between
+// the two host shapes.
 type workdayBoard struct {
 	host, tenant, site string
+	publicPath         string
 }
 
-// parseWorkdayBoard splits "host/site" (e.g. "acme.wd1.myworkdayjobs.com/Careers") into
-// the host, the tenant (the host's first label), and the site.
+// parseWorkdayBoard splits a board into the host, tenant, site and public path. Workday
+// publishes a career site under either of two host shapes:
+//
+//	acme.wd1.myworkdayjobs.com/Careers  — a per-tenant host; the tenant is its first label,
+//	                                      and the public site is served at /<site>.
+//	wd1.myworkdaysite.com/snapchat/snap — a host shared between tenants, so the board spells
+//	                                      the tenant out as a middle segment and the public
+//	                                      site is served at /recruiting/<tenant>/<site>.
+//
+// Both address the same CXS endpoints at /wday/cxs/<tenant>/<site>/.
 func parseWorkdayBoard(board string) (workdayBoard, error) {
-	host, site, ok := strings.Cut(board, "/")
-	if !ok || host == "" || site == "" {
+	host, rest, ok := strings.Cut(board, "/")
+	if !ok || host == "" || rest == "" {
 		return workdayBoard{}, fmt.Errorf("workday: board %q must be \"host/site\"", board)
 	}
+
+	if tenant, site, spelledOut := strings.Cut(rest, "/"); spelledOut {
+		if tenant == "" || site == "" {
+			return workdayBoard{}, fmt.Errorf("workday: board %q must be \"host/tenant/site\"", board)
+		}
+		return workdayBoard{
+			host: host, tenant: tenant, site: site,
+			publicPath: "recruiting/" + tenant + "/" + site,
+		}, nil
+	}
+
 	tenant, _, ok := strings.Cut(host, ".")
 	if !ok || tenant == "" {
 		return workdayBoard{}, fmt.Errorf("workday: board host %q has no tenant label", host)
 	}
-	return workdayBoard{host: host, tenant: tenant, site: site}, nil
+	return workdayBoard{host: host, tenant: tenant, site: rest, publicPath: rest}, nil
 }
 
 // workdayPosting is one item from the jobs listing (no description here).
@@ -140,7 +162,7 @@ func (s workday) detail(ctx context.Context, e CompanyEntry, b workdayBoard, p w
 	location := firstNonEmpty(info.Location, p.LocationsText)
 	jobURL := info.ExternalURL
 	if jobURL == "" {
-		jobURL = fmt.Sprintf("https://%s/%s%s", b.host, b.site, p.ExternalPath)
+		jobURL = fmt.Sprintf("https://%s/%s%s", b.host, b.publicPath, p.ExternalPath)
 	}
 	remote := isRemote(location) || strings.Contains(strings.ToLower(info.RemoteType), "remote")
 

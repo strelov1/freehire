@@ -121,7 +121,7 @@ func TestResolveJobEndpoint(t *testing.T) {
 		"/jobs/staff-java-backend-developer": vacancyPage,
 		"/about-us":                          aboutPage,
 	}
-	contributionSvc := contribution.New(contribution.NewQueriesRepository(pool, queries), nil)
+	contributionSvc := contribution.New(contribution.NewQueriesRepository(queries), nil)
 	h := &contributionHandlers{
 		contribution: contributionSvc,
 		intake: &intakeService{

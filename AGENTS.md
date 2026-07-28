@@ -75,6 +75,7 @@ Each is self-contained and can be read independently.
 | **Semantic embedding** (semantic_outbox, incremental embeds, reconciler) | [internal/embed/AGENTS.md](internal/embed/AGENTS.md) |
 | **In-app assistant** (turn loop, tool registry, presets, transcripts) | [internal/assistant/AGENTS.md](internal/assistant/AGENTS.md) |
 | **AI fit analysis** (three-stage LLM prompt-chain, score, verdict, stream) | [internal/matchanalysis/AGENTS.md](internal/matchanalysis/AGENTS.md) |
+| **Experience bank** (durable employments + evidence atoms, provenance, retrieval) | [internal/experience/AGENTS.md](internal/experience/AGENTS.md) |
 | **Structured CV** (LLM parse of stored CV, stamp-and-compare) | [internal/resumeextract/AGENTS.md](internal/resumeextract/AGENTS.md) |
 | **CV rendering** (templates, fonts, previews) | [internal/cv/AGENTS.md](internal/cv/AGENTS.md) |
 | **Geography** (country/region codes, work-mode hint, dict-only vs hybrid) | [internal/location/AGENTS.md](internal/location/AGENTS.md) |
@@ -102,5 +103,6 @@ Each is self-contained and can be read independently.
 - **Dictionaries:** All facet dictionaries are dict-only in production — never guess, emit nothing for unknowns
 - **Job deletion:** The lifecycle only soft-closes; `cmd/prune` is the sole hard-delete path
 - **In-app assistant:** a bounded tool-calling loop in-process (`internal/assistant`), streamed over SSE, gated to the restricted rollout. Tools act as the authenticated caller — no credential is minted for an agent
+- **Experience provenance:** every banked achievement records whether the CANDIDATE asserted it (`cv_import`/`stated_in_chat`/`manual`) or the MODEL did (`agent_inferred`). Only the former may be written into a CV, and the check lives in the service path, not in a system prompt
 - **Sentry:** Opt-in, env-gated, errors-only — `sentry.Init` with `SendDefaultPII:false`
 - **Naming — "CV", not "résumé":** Default new surfaces to **CV**. Don't mass-rename the existing `resume`/`resumeextract` packages and columns — churn without value

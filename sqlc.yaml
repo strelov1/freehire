@@ -69,3 +69,17 @@ sql:
           # base64-encode it into the transcript response.
           - column: "assistant_messages.content"
             go_type: "encoding/json.RawMessage"
+          # Experience-bank ids are random UUIDs for the same reason CV and session ids
+          # are: the client treats them as opaque strings, and a real type puts a
+          # mis-typed id at the edge rather than deep in a query. employment_id is a
+          # pointer because an atom may stand alone — evidence that belongs to no single
+          # job (a certification, a skill used across roles) is not an anomaly here.
+          - column: "experience_employments.id"
+            go_type: "github.com/google/uuid.UUID"
+          - column: "experience_atoms.id"
+            go_type: "github.com/google/uuid.UUID"
+          - column: "experience_atoms.employment_id"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+              pointer: true

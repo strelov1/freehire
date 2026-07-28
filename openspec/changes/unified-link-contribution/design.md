@@ -78,34 +78,18 @@ is needed in the common case.
 This is what forces the schema change: with the board no longer the row identity,
 `UNIQUE (source, board)` has to go.
 
-### "One board, one reward" moves from a constraint to an explicit check
+### The board's uniqueness is left to migration 0049
 
-Dropping the unique index removes the mechanism that currently makes the reward
-single-shot, including under a race. Award only when the insert is the first row for that
-`(source, board)` — but a bare `NOT EXISTS` cannot decide that: two concurrent
-transactions read the same snapshot, both see no rows, and both pay out. Snapshot
-isolation is not an arbiter; the dropped unique index was.
+The plan was to drop `UNIQUE (source, board)` so several links to one board could each be
+recorded with their own submitter. Mid-implementation, PR #1218 shipped (and was applied to
+prod) a narrower fix for the same constraint: a partial unique index over the live statuses,
+so a REJECTED board releases its identity and can be contributed again, while a queued or
+onboarded one still refuses duplicates.
 
-The replacement is an explicit one: inside the recording transaction, take
-`pg_advisory_xact_lock` keyed on the board, then test `EXISTS`, then insert. The lock is
-scoped to the board, so it serialises only the submissions genuinely competing, and it is
-released on commit or rollback with nothing to clean up. `Record` therefore becomes
-transactional, where it used to be a single insert.
-
-This is not a hypothetical: draining the queue on 2026-07-28 hit it — two Microsoft links
-resolved to one Eightfold board and the promote transaction aborted on the duplicate key.
-A second person pasting a link for an already-contributed employer mechanically cannot be
-rewarded today. The same drain established that the only contributor so far is the repo
-owner, so reward mechanics are worth *fixing* but not worth *elaborating*.
-
-*Alternative considered:* a partial unique index on `(source, board) WHERE rewarded`.
-Equivalent in effect and arguably tighter, but it encodes reward policy in the schema,
-which is the thing that made the current design rigid in the first place.
-
-*Alternative considered (rejected earlier in discussion):* a separate append-only journal
-table alongside `link_contributions`. Cleaner separation of "board queue" from "intake
-log", but it means two tables to read when answering "what did this user do", and the user
-chose the single-table route.
+That settles it, and the other way round from this design's first draft. The reward stays
+one-per-board on purpose: paying a later contributor for a board already in the queue buys no
+coverage and invites farming one board from several accounts. So the constraint keeps doing
+the concurrency work — exactly one insert wins a race — and this change only adds `surface`.
 
 ### Board coverage is one adapter over the ingest registry, not ~50 adapters
 

@@ -2,6 +2,33 @@
 /bin/
 /out/
 hire
+# Worker binaries. release.sh builds every cmd/ target into the checkout ROOT, so each
+# one lands here as an untracked file — and one committed by accident (prune, 25 MB, in
+# #1212) blocks `git pull` on every deploy host that already has its own build sitting
+# there. Named individually rather than by a glob: these are real, expected artifacts,
+# and a blanket rule would also swallow a source file someone adds with the same name.
+backfill-company-info
+backfill-company-names
+backfill-derive
+backfill-descriptions
+backfill-experience
+backfill-resume-structured
+backfill-semantic-vectors
+classify-mail
+embed
+enrich
+gmail-sync
+hire-api
+ingest
+liveness
+mail-ingest
+migrate
+mine-titles
+notify
+prune
+recount-companies
+reindex
+remind
 # Root-level build output of `go build ./cmd/<name>/` — never commit these artifacts.
 /backfill-company-info
 /backfill-derive

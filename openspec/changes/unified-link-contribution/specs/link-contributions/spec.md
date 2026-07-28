@@ -1,23 +1,5 @@
 ## MODIFIED Requirements
 
-### Requirement: Reject a board already contributed
-
-The system SHALL treat the board as the unit of *reward*, not as the identity of a stored
-row: a link whose board was already recorded (by any user) SHALL be recorded as a further
-row and SHALL NOT award AI credits a second time. Recording several links from one board
-is deliberate — each is evidence the board is worth onboarding, and each carries its own
-submitter, so repeated use is attributable.
-
-#### Scenario: A second vacancy on the same board earns no second reward
-
-- **WHEN** a user submits a link whose board matches an existing contribution
-- **THEN** the link is recorded and no AI credits are awarded
-
-#### Scenario: Concurrent duplicate submissions credit at most one
-
-- **WHEN** two requests for the same new board race
-- **THEN** both links may be recorded but exactly one AI-credits reward is awarded
-
 ### Requirement: Reject a board already in the catalogue
 
 The system SHALL NOT record a contribution for a board it already crawls, and SHALL NOT

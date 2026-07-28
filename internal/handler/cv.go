@@ -39,12 +39,16 @@ type cvHandlers struct {
 	// assistantSessions mints the conversation a tailoring workspace runs in.
 	// Assigned after construction (see withAssistantSessions).
 	assistantSessions *assistant.Store
+	// seeder answers what a new CV starts from: the banked work history plus the sections
+	// the stored structure still owns.
+	seeder cv.Seeder
 }
 
 func newCVHandlers(queries *db.Queries, typstBin string, resumeStore *resume.Store, creditsStore *credits.Store, match *matchHandlers) *cvHandlers {
 	h := &cvHandlers{
 		cvStore:            cv.NewStore(cv.NewQueriesRepository(queries)),
 		resume:             resumeStore,
+		seeder:             bankedSeeder{resume: resumeStore, bank: newWorkHistoryReader(queries)},
 		queries:            queries,
 		credits:            creditsStore,
 		matchAnalysisCache: queries,
@@ -64,6 +68,19 @@ func newCVHandlers(queries *db.Queries, typstBin string, resumeStore *resume.Sto
 // from these handlers — the same shape authH.withAccountDeletion uses.
 func (h *cvHandlers) withAssistantSessions(store *assistant.Store) {
 	h.assistantSessions = store
+}
+
+// seedSource returns what a new CV starts from, and is never nil.
+//
+// A handler assembled without a seeder still seeds from the stored structure. "There is
+// nothing to seed from" and "the seeder was not wired" are different statements:
+// collapsing them hands a client that asked for a pre-filled CV a blank one, and passing
+// the nil interface down to cv.Store.Tailor panics on the first tailoring bootstrap.
+func (h *cvHandlers) seedSource() cv.Seeder {
+	if h.seeder != nil {
+		return h.seeder
+	}
+	return bankedSeeder{resume: h.resume}
 }
 
 func (h *cvHandlers) register(api fiber.Router, mw middleware) {
@@ -185,12 +202,12 @@ func (h *cvHandlers) CreateCV(c *fiber.Ctx) error {
 		return err
 	}
 
-	// Seeding pulls from the stored résumé's structured extraction, which lives in
-	// Postgres (resume_structured) — independent of S3 object storage, so it is NOT gated
-	// on résumé-storage being enabled. A missing structure degrades to an empty skeleton.
+	// Seeding pulls the work history from the experience bank and the rest from the stored
+	// structure — both in Postgres, independent of S3 object storage, so it is NOT gated on
+	// résumé-storage being enabled. Nothing known degrades to an empty skeleton.
 	doc := cv.EmptyDocument()
 	if in.Seed {
-		if st, ok, err := h.resume.Structured(c.Context(), userID); err == nil && ok {
+		if st, ok, err := h.seedSource().Structured(c.Context(), userID); err == nil && ok {
 			doc = cv.Seed(st)
 		}
 	}

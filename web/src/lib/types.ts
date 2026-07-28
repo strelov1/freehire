@@ -398,6 +398,17 @@ export interface MyJob {
   /** The pending saved-job reminder's deadline (RFC3339), or null when the job
    *  has no pending reminder. Drives the saved list's "remind in N days" chip. */
   reminder_fire_at: string | null;
+  /** When this application last moved: its apply date, or the newest message
+   *  linked to it when that is later. Null on any row that is not an
+   *  application awaiting a reply. */
+  last_activity_at: string | null;
+  /** Whole days since last_activity_at. Null together with the others. */
+  days_silent: number | null;
+  /** 'active' — inside the tolerated silence for its stage; 'silent' — past it;
+   *  'unconfirmed' — it would read as silent, but mail awaiting confirmation may
+   *  say otherwise. Null means nothing is owed here (viewed/saved only, or a
+   *  settled application), which is not the same as owed-and-answered-promptly. */
+  silence_state: 'active' | 'silent' | 'unconfirmed' | null;
 }
 
 /** The account-level saved-job reminder rule: whether reminders are on, the
@@ -709,3 +720,44 @@ export interface CommunityReply {
   body: string;
   created_at: string;
 }
+
+/** One place where evidence was produced: a job or a project. Dates are free-form labels
+ *  exactly as printed on a CV ("2021-03", "Mar 2021", "Present"). */
+export type ExperienceEmployment = {
+  id: string;
+  kind: 'job' | 'project';
+  company?: string;
+  role?: string;
+  location?: string;
+  start?: string;
+  end?: string;
+  current?: boolean;
+  summary?: string;
+  stack?: string[];
+};
+
+/** How the bank came to hold an achievement. Only the first three may be written into a
+ *  CV: they are the candidate speaking. `agent_inferred` is the assistant's own reading,
+ *  kept so it can be asked about and barred from the page until confirmed. */
+export type ExperienceProvenance = 'cv_import' | 'stated_in_chat' | 'manual' | 'agent_inferred';
+
+/** One piece of evidence, at the grain of a CV bullet. */
+export type ExperienceAtom = {
+  id: string;
+  employment_id?: string;
+  claim: string;
+  context?: string;
+  metrics?: string[];
+  skills?: string[];
+  provenance: ExperienceProvenance;
+  source_ref?: string;
+};
+
+export type ExperienceEmploymentWithAtoms = ExperienceEmployment & { atoms: ExperienceAtom[] };
+
+/** The bank as its owner sees it. `unplaced` carries achievements belonging to no role —
+ *  usually the ones volunteered in conversation, so they are shown rather than hidden. */
+export type ExperienceBank = {
+  employments: ExperienceEmploymentWithAtoms[];
+  unplaced: ExperienceAtom[];
+};

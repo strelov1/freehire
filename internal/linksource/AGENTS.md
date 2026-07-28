@@ -11,7 +11,7 @@ Resolving a single outbound job-detail URL into a fully parsed vacancy under the
 - **Board coverage is one adapter over every recognised ATS** (`boardcoverage.go`), not fifty
   hand-written ones: derive `(source, board)` via `internal/atsboard`, fetch that tenant's
   board through the ingest adapter that already crawls the platform, and pick the posting the
-  link points at. 45 of the 46 recognised providers have an ingest adapter, so coverage grows
+  link points at. all recognised providers with an ingest adapter, so coverage grows
   with the recogniser table rather than with code.
 - **It is the only `PerLinkSource`.** One adapter serves many platforms, so `Source()` cannot
   name the identity a job is stored under — `SourceFor(u)` does, and `ResolveLinks` prefers it.

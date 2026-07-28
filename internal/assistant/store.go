@@ -18,6 +18,9 @@ import (
 const (
 	PresetChat   = "chat"
 	PresetTailor = "tailor"
+	// PresetProfile is the experience interviewer: the same tools as a chat session, and a
+	// prompt that goes looking for what the bank does not yet know.
+	PresetProfile = "profile"
 )
 
 // ErrNotFound is returned for a session the caller does not own and for one that
