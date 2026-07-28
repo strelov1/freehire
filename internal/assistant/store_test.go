@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
@@ -73,7 +74,13 @@ func (f *fakeQueries) SetAssistantSessionLabel(_ context.Context, arg db.SetAssi
 	return nil
 }
 
-func (f *fakeQueries) AppendAssistantMessage(_ context.Context, arg db.AppendAssistantMessageParams) (db.AssistantMessage, error) {
+func (f *fakeQueries) AppendAssistantMessage(ctx context.Context, arg db.AppendAssistantMessageParams) (db.AssistantMessage, error) {
+	// A real pool refuses a write on a cancelled context, so the fake must too —
+	// otherwise a test cannot tell whether a turn's transcript actually survives
+	// the user walking away.
+	if err := ctx.Err(); err != nil {
+		return db.AssistantMessage{}, err
+	}
 	seq := int32(len(f.messages) + 1)
 	f.messages = append(f.messages, db.AssistantMessage{
 		SessionID: arg.SessionID, Seq: seq, Role: arg.Role, Content: arg.Content,
@@ -242,3 +249,44 @@ func TestChatSessionsListsChats(t *testing.T) {
 
 // ptr is the shorthand for the nullable columns the queries model as pointers.
 func ptr[T any](v T) *T { return &v }
+
+// collidingQueries fails the first append with the unique violation two racing
+// writers produce when they compute the same next seq, then succeeds.
+type collidingQueries struct {
+	fakeQueries
+	collisions int
+}
+
+func (c *collidingQueries) AppendAssistantMessage(ctx context.Context, arg db.AppendAssistantMessageParams) (db.AssistantMessage, error) {
+	if c.collisions > 0 {
+		c.collisions--
+		return db.AssistantMessage{}, &pgconn.PgError{Code: "23505", Message: "duplicate key value violates unique constraint"}
+	}
+	return c.fakeQueries.AppendAssistantMessage(ctx, arg)
+}
+
+func TestAppendRetriesASequenceCollision(t *testing.T) {
+	// The next seq is computed inside the INSERT, so two turns racing in the same
+	// session (the chat open in two tabs) can pick the same one. Losing that write
+	// would drop a message out of the model's history — a tool result vanishing
+	// leaves a call nothing answers, which providers reject outright.
+	q := &collidingQueries{collisions: 1}
+	s := NewStore(q)
+
+	msg, _ := EncodeUser("hi")
+	got, err := s.Append(context.Background(), sessionID, msg)
+	if err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+	if got.Seq != 1 {
+		t.Errorf("seq = %d, want the retry to have landed", got.Seq)
+	}
+}
+
+func TestAppendGivesUpOnAPersistentCollision(t *testing.T) {
+	// A collision that never clears is a real failure, not something to spin on.
+	q := &collidingQueries{collisions: 99}
+	if _, err := NewStore(q).Append(context.Background(), sessionID, Message{Role: RoleUser, Content: []byte(`{}`)}); err == nil {
+		t.Fatal("Append retried forever instead of reporting the failure")
+	}
+}

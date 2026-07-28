@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/pgerr"
 )
 
 // Presets a session can run under. The preset selects the system prompt and the
@@ -133,18 +134,35 @@ func (s *Store) LabelSession(ctx context.Context, id uuid.UUID, label string) er
 	return nil
 }
 
+// appendAttempts bounds the retry below. A collision needs one more read of
+// max(seq) to clear; more than a couple in a row means something else is wrong.
+const appendAttempts = 3
+
 // Append writes one message to a session's transcript and returns it with the
 // sequence number the database assigned.
+//
+// The next seq is computed inside the INSERT, so two turns racing in the same
+// session — the chat open in two tabs — can pick the same one and the primary key
+// rejects the loser. Retrying re-reads max(seq), which is what the loser needed;
+// giving up instead would drop a message out of the model's history, and a tool
+// result that vanishes leaves a call nothing answers, which providers reject.
 func (s *Store) Append(ctx context.Context, sessionID uuid.UUID, m Message) (Message, error) {
-	row, err := s.q.AppendAssistantMessage(ctx, db.AppendAssistantMessageParams{
-		SessionID: sessionID,
-		Role:      m.Role,
-		Content:   m.Content,
-	})
-	if err != nil {
-		return Message{}, fmt.Errorf("assistant: append message: %w", err)
+	var err error
+	for attempt := 0; attempt < appendAttempts; attempt++ {
+		var row db.AssistantMessage
+		row, err = s.q.AppendAssistantMessage(ctx, db.AppendAssistantMessageParams{
+			SessionID: sessionID,
+			Role:      m.Role,
+			Content:   m.Content,
+		})
+		if err == nil {
+			return Message{Seq: row.Seq, Role: row.Role, Content: row.Content}, nil
+		}
+		if !pgerr.IsUniqueViolation(err) {
+			break
+		}
 	}
-	return Message{Seq: row.Seq, Role: row.Role, Content: row.Content}, nil
+	return Message{}, fmt.Errorf("assistant: append message: %w", err)
 }
 
 // Transcript reads a session's messages in order.

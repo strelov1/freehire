@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/tmc/langchaingo/llms"
@@ -98,7 +99,19 @@ func NewRunner(m Model, s *Store, cfg RunnerConfig) *Runner {
 const (
 	defaultMaxSteps     = 8
 	defaultHistoryLimit = 60
+	// persistTimeout bounds one transcript write. The writes run on a context
+	// detached from the caller's, so they need a deadline of their own.
+	persistTimeout = 5 * time.Second
 )
+
+// persisting derives the context transcript writes run on: detached from the
+// caller's cancellation, bounded by its own deadline. A turn's writes must
+// outlive the request, because cancellation is exactly when they matter — the
+// user watched the model answer and then closed the tab, and a transcript
+// missing that answer looks like the assistant lost work it visibly did.
+func persisting(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), persistTimeout)
+}
 
 // Run executes one turn: it records the prompt, then alternates model calls and
 // tool calls until the model answers, the step cap is reached, or the caller goes
@@ -178,15 +191,17 @@ func (r *Runner) recordPrompt(ctx context.Context, sess Session, prompt string, 
 	if err != nil {
 		return err
 	}
-	if _, err := r.store.Append(ctx, sess.ID, msg); err != nil {
+	writeCtx, cancel := persisting(ctx)
+	defer cancel()
+	if _, err := r.store.Append(writeCtx, sess.ID, msg); err != nil {
 		return err
 	}
 	// Label and activity stamp are conveniences, not correctness: a failure here
 	// must not cost the user their turn.
-	if err := r.store.LabelSession(ctx, sess.ID, prompt); err != nil {
+	if err := r.store.LabelSession(writeCtx, sess.ID, prompt); err != nil {
 		log.Printf("assistant: label session %s: %v", sess.ID, err)
 	}
-	if err := r.store.Touch(ctx, sess.ID); err != nil {
+	if err := r.store.Touch(writeCtx, sess.ID); err != nil {
 		log.Printf("assistant: touch session %s: %v", sess.ID, err)
 	}
 	emit(Event{Kind: EventUserPrompt, Text: prompt})
@@ -212,7 +227,7 @@ func (r *Runner) runToolCalls(ctx context.Context, sess Session, reg *Registry, 
 			log.Printf("assistant: encode tool result: %v", err)
 			continue
 		}
-		if _, err := r.store.Append(ctx, sess.ID, msg); err != nil {
+		if err := r.persist(ctx, sess.ID, msg); err != nil {
 			log.Printf("assistant: persist tool result: %v", err)
 		}
 		decoded, err := msg.Decode()
@@ -232,7 +247,7 @@ func (r *Runner) appendAssistant(ctx context.Context, sessionID uuid.UUID, histo
 		log.Printf("assistant: encode assistant message: %v", err)
 		return history
 	}
-	if _, err := r.store.Append(ctx, sessionID, msg); err != nil {
+	if err := r.persist(ctx, sessionID, msg); err != nil {
 		log.Printf("assistant: persist assistant message: %v", err)
 	}
 	decoded, err := msg.Decode()
@@ -241,6 +256,15 @@ func (r *Runner) appendAssistant(ctx context.Context, sessionID uuid.UUID, histo
 		return history
 	}
 	return append(history, decoded)
+}
+
+// persist writes one message to the transcript, outliving the caller's
+// cancellation.
+func (r *Runner) persist(ctx context.Context, sessionID uuid.UUID, msg Message) error {
+	writeCtx, cancel := persisting(ctx)
+	defer cancel()
+	_, err := r.store.Append(writeCtx, sessionID, msg)
+	return err
 }
 
 // history rebuilds the model's conversation: the session's system prompt followed
