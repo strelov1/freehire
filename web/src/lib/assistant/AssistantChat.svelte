@@ -735,7 +735,7 @@
                   (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
                 }
               }}
-              class="block max-h-[200px] min-h-[1.5rem] flex-1 resize-none cursor-text bg-transparent py-1 text-sm leading-6 text-foreground placeholder:text-muted-foreground/70 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              class="block max-h-[200px] min-h-[1.5rem] flex-1 resize-none cursor-text bg-transparent py-1 text-base leading-6 text-foreground placeholder:text-muted-foreground/70 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
             ></textarea>
             {#if turnActive && !draft.trim()}
               <!-- Stop the turn. Aborting the request is what tells the backend to

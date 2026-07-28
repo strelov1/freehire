@@ -244,7 +244,7 @@
 
 <!-- Full-width workspace loses the account shell nav; the same left-edge icon rail as
      the Agent page brings the account sections back. It stays put across every state. -->
-<div class="flex h-[calc(100svh-3.5rem)]">
+<div class="flex h-[calc(100dvh-3.5rem)]">
   <AccountNavRail collapsible bind:open={navOpen} />
   {#if status === 'loading'}
     <div class="flex min-w-0 flex-1 items-center justify-center text-sm text-muted-foreground">
