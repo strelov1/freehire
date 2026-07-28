@@ -11,6 +11,30 @@ type aliasEntry struct {
 	canonical string
 }
 
+// gradeBlindPhrases are role names that CONTAIN a seniority word without stating a
+// grade: "Member of Technical Staff" is the generic IC title at Oracle/xAI/Pure
+// Storage, not the staff grade, and "Lead Generation" names a marketing function.
+// They are cut from the title before the seniority match, so the remaining words
+// state the real grade — "Senior Member of Technical Staff" is senior, and a bare
+// MTS carries no grade at all. Without the mask the table's precedence made this
+// actively wrong: "staff" outranks "senior", so SMTS resolved to staff.
+//
+// Only phrases that shadow a seniorityTable alias belong here — the abbreviations
+// (MTS/SMTS/DMTS) contain no grade word, so masking them would remove nothing.
+// The longer form is listed first so it is cut whole.
+var gradeBlindPhrases = []string{
+	"member of the technical staff",
+	"member of technical staff",
+	"lead generation",
+	// A model-training stage, the sibling of pre-/post-training. AI labs post
+	// "Member of Technical Staff, Mid-training"; the hyphen is a word boundary, so
+	// the bare "mid" alias matched inside it and read the posting as middle grade.
+	"mid-training",
+	// A region, not a grade — and the costliest of these by far: 142 of 217 prod
+	// titles carrying "Middle East" were graded middle on the geography alone.
+	"middle east",
+}
+
 // seniorityTable lists seniority aliases in precedence order (most specific /
 // highest rank first), each paired with its vocab.SeniorityValues canonical.
 var seniorityTable = []aliasEntry{
@@ -104,6 +128,17 @@ var categoryTable = []aliasEntry{
 	{"prompt engineer", "ai_engineering"},
 	{"applied ai", "ai_engineering"},
 	{"rag engineer", "ai_engineering"},
+	// AI titles whose two anchor words are separated by a noun: "ai engineer" below
+	// matches only adjacent words, so each spread form is its own alias. Agent work,
+	// AI-product work and workflow automation all BUILD ON models rather than train
+	// them, which is what separates ai_engineering from ml_ai above. "AI Research
+	// Engineer" is the borderline case — deliberately applied, since outside the
+	// labs it names product research on existing models.
+	{"ai product engineer", "ai_engineering"},
+	{"ai agent engineer", "ai_engineering"},
+	{"agent engineer", "ai_engineering"},
+	{"ai research engineer", "ai_engineering"},
+	{"ai automation engineer", "ai_engineering"},
 	{"ai engineer", "ai_engineering"},
 	{"llm", "ai_engineering"},
 	{"devops", "devops"},

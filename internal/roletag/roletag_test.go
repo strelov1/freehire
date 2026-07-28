@@ -36,6 +36,17 @@ func TestDerive(t *testing.T) {
 		// Named roles come from the title regardless of the grid.
 		{"software engineer catch-all", "", "", "Software Engineer", []string{"software_engineer"}},
 		{"founding engineer, empty grid", "", "", "Founding Engineer", []string{"founding_engineer"}},
+		// Generalist titles classify assigns no category to: the named role is the
+		// only thing that makes them pickable.
+		{"product engineer", "", "", "Product Engineer", []string{"product_engineer"}},
+		{"member of technical staff, no grade", "", "", "Member of Technical Staff", []string{"member_of_technical_staff"}},
+		// MTS grades, so SMTS is one graded role rather than "Senior" + the bare role.
+		{"senior member of technical staff", "senior", "", "Senior Member of Technical Staff", []string{"senior", "member_of_technical_staff", "senior_member_of_technical_staff"}},
+		// Longest-alias-first ordering: "ai agent engineer" wins over "agent engineer",
+		// and "ai product engineer" over "product engineer" — both land on their own role.
+		{"agent engineer", "", "ai_engineering", "Agent Engineer", []string{"ai_engineering", "agent_engineer"}},
+		{"ai agent engineer", "", "ai_engineering", "AI Agent Engineer", []string{"ai_engineering", "agent_engineer"}},
+		{"ai product engineer keeps product_engineer out", "", "ai_engineering", "AI Product Engineer", []string{"ai_engineering", "ai_product_engineer"}},
 		{"cloud solutions engineer beats adjacency gap", "", "", "Cloud Solutions Engineer", []string{"cloud_solutions_engineer"}},
 		{"technical lead adds seniority-only", "lead", "", "Technical Lead", []string{"lead", "technical_lead"}},
 		{"fractional cto", "c_level", "", "Fractional CTO", []string{"c_level", "fractional_cto"}},

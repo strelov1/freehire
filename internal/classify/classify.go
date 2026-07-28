@@ -25,9 +25,26 @@ type Classification struct {
 func Parse(title string) Classification {
 	lower := strings.ToLower(title)
 	return Classification{
-		Seniority: matchOrdered(lower, seniorityTable),
+		// The grade is read from the title with the grade-blind role names cut out,
+		// so a grade word owned by a role name ("Member of Technical Staff") cannot
+		// be mistaken for the grade itself. The category reads the untouched title:
+		// no categoryTable alias hides inside those phrases.
+		Seniority: matchSeniority(lower),
 		Category:  matchOrdered(lower, categoryTable),
 	}
+}
+
+// matchSeniority resolves the grade of an already-lowercased title, first cutting
+// out every gradeBlindPhrases occurrence. Each phrase is replaced by a space rather
+// than removed, so the word boundaries of the surrounding terms survive and
+// "senior member of technical staff" still offers a matchable "senior". Plain
+// substring replacement suffices: every phrase is multi-word, so it cannot occur
+// inside a single token the way a bare alias could.
+func matchSeniority(lower string) string {
+	for _, phrase := range gradeBlindPhrases {
+		lower = strings.ReplaceAll(lower, phrase, " ")
+	}
+	return matchOrdered(lower, seniorityTable)
 }
 
 // Categories resolves every category the text mentions — each alias that occurs as a

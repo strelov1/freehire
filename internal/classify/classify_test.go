@@ -73,6 +73,25 @@ func TestParse(t *testing.T) {
 		// A combined ML-carrying form keeps the ML bucket (explicit ML beats bare AI).
 		{"ML/AI Engineer", "", "ml_ai"},
 		{"AI/ML Engineer", "", "ml_ai"},
+		// AI titles whose words are not adjacent: the bare "ai engineer" alias cannot
+		// span the intervening noun, so each form is listed. Agent/automation/research
+		// work all builds ON models rather than training them, so they read as applied
+		// AI, not ML.
+		{"AI Product Engineer", "", "ai_engineering"},
+		{"Agent Engineer", "", "ai_engineering"},
+		{"AI Agent Engineer", "", "ai_engineering"},
+		{"AI Research Engineer", "", "ai_engineering"},
+		{"AI Automation Engineer", "", "ai_engineering"},
+		{"Lead Agent Engineer (Langchain)", "lead", "ai_engineering"},
+		// "AI-native"/"AI-enabled" describe how the engineer WORKS, not what they
+		// build, so they claim no category — the rest of the title still decides.
+		{"AI-Native Engineer (Test Automation)", "", "qa"},
+		{"AI-Native Engineer", "", ""},
+		{"Senior AI-Native Product Engineer", "senior", ""},
+		// Generalist titles state no sub-discipline, so the category stays empty
+		// rather than being guessed (they are carried by is_tech and a named role).
+		{"Founding Engineer", "", ""},
+		{"Product Engineer", "", ""},
 		// SEO / social fold into marketing; "social media" beats a bare "manager".
 		{"SEO Specialist", "", "marketing"},
 		{"Social Media Manager", "", "marketing"},
@@ -86,6 +105,58 @@ func TestParse(t *testing.T) {
 		{"Скрам-мастер", "", "project_management"},
 		{"Cat Herder", "", ""},
 		{"", "", ""},
+	}
+	for _, c := range cases {
+		got := Parse(c.title)
+		if got.Seniority != c.wantSeniority || got.Category != c.wantCategory {
+			t.Errorf("Parse(%q) = {%q, %q}, want {%q, %q}",
+				c.title, got.Seniority, got.Category, c.wantSeniority, c.wantCategory)
+		}
+	}
+}
+
+// TestParseGradeBlindPhrases covers the role names that CONTAIN a grade word
+// without stating a grade. Before the phrases were masked, "Member of Technical
+// Staff" read as the staff grade and — because "staff" outranks "senior" in the
+// table — even "Senior Member of Technical Staff" resolved to staff.
+func TestParseGradeBlindPhrases(t *testing.T) {
+	cases := []struct {
+		title         string
+		wantSeniority string
+		wantCategory  string
+	}{
+		// MTS is a generic IC title at Oracle/xAI/Pure Storage, not the staff grade.
+		{"Member of Technical Staff", "", ""},
+		{"Member of the Technical Staff, Interpretability", "", ""},
+		// With the phrase masked, the remaining words state the real grade.
+		{"Senior Member of Technical Staff", "senior", ""},
+		{"Senior Member of Technical Staff (SMTS) - Cloud Product Support", "senior", "support"},
+		{"Principal Member of Technical Staff", "principal", ""},
+		{"Principal Member of Technical Staff, Full-stack Engineer", "principal", "fullstack"},
+		// "Mid-training" is a model-training stage (the sibling of pre- and
+		// post-training), not the middle grade. The hyphen is a word boundary, so
+		// the bare "mid" alias matched inside it.
+		{"Member of Technical Staff - Mid-training", "", ""},
+		// "Agent Post-Training" states a research area, not a role noun, so the
+		// category stays empty — the dictionary does not guess from a topic word.
+		{"Member of Technical Staff — Agent Post-Training", "", ""},
+		// "Middle East" is a region. 142 of 217 prod titles carrying it were being
+		// graded middle on the strength of the geography alone.
+		{"Middle East Editor", "", ""},
+		{"Sales Director – Middle East", "", "sales"},
+		{"Senior Backend Engineer, Middle East", "senior", "backend"},
+		// Regression: the honest grade abbreviation still resolves.
+		{"Mid-Level Backend Engineer", "middle", "backend"},
+		{"Mid Backend Engineer", "middle", "backend"},
+		{"Middle Frontend Developer", "middle", "frontend"},
+		// "Lead Generation" names a marketing function, not the lead grade.
+		{"Lead Generation Specialist", "", ""},
+		{"Lead Generation Manager", "", "management"},
+		// Regression: an honest grade that merely shares the word is untouched.
+		{"Staff Software Engineer", "staff", ""},
+		{"Senior Staff Engineer", "staff", ""},
+		{"Technical Staff Engineer", "staff", ""},
+		{"Team Lead", "lead", ""},
 	}
 	for _, c := range cases {
 		got := Parse(c.title)

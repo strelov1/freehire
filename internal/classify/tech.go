@@ -55,6 +55,24 @@ var techTitleTerms = []string{
 	// Data / ML / security specialisms
 	"data scientist", "machine learning", "deep learning", "computer vision engineer",
 	"nlp engineer", "penetration tester", "pentester", "sdet", "software tester",
+	// Generalist software titles that name no sub-discipline, so classify assigns
+	// them no category and only this list can lift them out of `unknown`. Each is
+	// anchored the same way as the forms above — never a bare "engineer".
+	//
+	// "Member of Technical Staff" reads as software on the evidence: of 300 sampled
+	// prod postings, 294 are software or AI (xAI, Perplexity, Pure Storage, Cockroach
+	// Labs, Microsoft) and 6 are semiconductor fab work, which carries its own
+	// suffixes ("Process Development", "NAND", "Dry Etch").
+	//
+	// "Product Engineer" is deliberately ABSENT despite belonging to the same family:
+	// the same sample splits 142 software against 64 manufacturing (ABB, Howmet
+	// Aerospace, Texas Instruments, Flextronics), so it is not software-anchored and
+	// stays unknown rather than dragging plant engineers into tech.
+	"member of technical staff", "member of the technical staff", "founding engineer",
+	// "AI-native"/"AI-enabled" describe the toolchain the engineer works with, not
+	// the discipline, so they claim no category — but the role is still software.
+	// Hyphen and space are separate aliases: a hyphen is a word boundary here.
+	"ai-native engineer", "ai native engineer",
 	// Unambiguous single words
 	"programmer", "sre", "devops",
 }

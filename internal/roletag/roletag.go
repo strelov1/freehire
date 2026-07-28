@@ -97,6 +97,15 @@ var namedRoleTable = []struct {
 
 	// Startup / cross-cutting engineering.
 	{"founding_engineer", "Founding Engineer", []string{"founding engineer"}},
+	// Generalist titles classify leaves category-less: the named role is the only
+	// thing that makes them pickable. MTS grades (SMTS/Principal MTS are real
+	// rungs), so it is left out of nonGradeable below.
+	{"product_engineer", "Product Engineer", []string{"product engineer"}},
+	{"member_of_technical_staff", "Member of Technical Staff", []string{"member of technical staff", "member of the technical staff", "mts"}},
+	// Agent work is its own craft inside ai_engineering; "ai product engineer" is
+	// listed here so the longest-alias-first ordering keeps it off product_engineer.
+	{"agent_engineer", "Agent Engineer", []string{"agent engineer", "ai agent engineer"}},
+	{"ai_product_engineer", "AI Product Engineer", []string{"ai product engineer"}},
 	{"founding_designer", "Founding Designer", []string{"founding designer"}},
 	{"founding_pm", "Founding Product Manager", []string{"founding product manager", "founding pm"}},
 	{"staff_engineer", "Staff Engineer", []string{"staff engineer"}},

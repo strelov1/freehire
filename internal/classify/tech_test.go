@@ -24,6 +24,15 @@ func TestIsTech(t *testing.T) {
 		{"python developer", "Python Developer (Remote)", true},
 		{"programmer", "COBOL Programmer", true},
 		{"qa engineer", "QA Engineer", true},
+		// Generalist software titles that state no sub-discipline. MTS is software in
+		// 294 of 300 sampled prod postings (xAI, Pure Storage, Cockroach Labs); the
+		// semiconductor tail carries its own fab suffixes.
+		{"member of technical staff", "Member of Technical Staff", true},
+		{"member of the technical staff", "Member of the Technical Staff, Pretraining", true},
+		{"founding engineer", "Founding Engineer", true},
+		// "AI-native" describes the toolchain, not the discipline — still software.
+		{"ai-native engineer", "Senior AI-Native Engineer", true},
+		{"ai native engineer", "AI Native Engineer", true},
 
 		// Trap negatives — non-software engineering / non-tech that carry "engineer"
 		// or other shared words. These MUST stay unflagged (bias: leave in unknown).
@@ -35,6 +44,11 @@ func TestIsTech(t *testing.T) {
 		{"sales engineer", "Sales Engineer", false},
 		{"geologist", "Senior Geologist", false},
 		{"business developer", "Business Developer", false},
+		// "Product Engineer" is deliberately absent from the term list: a prod sample
+		// of 300 split 142 software (Attio, clasp, Circleback) against 64 manufacturing
+		// (ABB, Howmet Aerospace, Texas Instruments, Flextronics). Not software-anchored,
+		// so it stays unknown — the named role carries it instead.
+		{"product engineer", "Product Engineer", false},
 		{"empty", "", false},
 	}
 	for _, tt := range tests {
