@@ -42,6 +42,11 @@ func (r *trackingRepo) MarkApplied(_ context.Context, _, jobID int64) (jobtracki
 	return jobtracking.Interaction{JobID: jobID, AppliedAt: &now}, nil
 }
 
+func (r *trackingRepo) MarkAppliedAt(_ context.Context, _, jobID int64, at time.Time) (jobtracking.Interaction, error) {
+	r.applied = true
+	return jobtracking.Interaction{JobID: jobID, AppliedAt: &at}, nil
+}
+
 func (r *trackingRepo) SaveJob(_ context.Context, _, jobID int64) (jobtracking.Interaction, error) {
 	r.saved = true
 	now := time.Now()

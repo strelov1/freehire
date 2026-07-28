@@ -131,6 +131,13 @@ type Repository interface {
 
 	RecordView(ctx context.Context, userID, jobID int64) (Interaction, error)
 	MarkApplied(ctx context.Context, userID, jobID int64) (Interaction, error)
+
+	// MarkAppliedAt records an application dated by `at` instead of now(), for an
+	// application reconstructed from employer mail. It keeps an existing
+	// applied_at rather than rewriting it: a later recording of the same
+	// application is not a later application.
+	MarkAppliedAt(ctx context.Context, userID, jobID int64, at time.Time) (Interaction, error)
+
 	SaveJob(ctx context.Context, userID, jobID int64) (Interaction, error)
 
 	// UnsaveJob clears the saved mark. It returns ErrNoInteraction when no row
@@ -265,6 +272,16 @@ func (s *Service) MarkApplied(ctx context.Context, userID int64, slug string) (I
 		return Interaction{}, err
 	}
 	return s.repo.MarkApplied(ctx, userID, jobID)
+}
+
+// MarkAppliedAt resolves slug → jobID then records an application dated by `at`
+// — the mail-reconstruction path (see Repository.MarkAppliedAt).
+func (s *Service) MarkAppliedAt(ctx context.Context, userID int64, slug string, at time.Time) (Interaction, error) {
+	jobID, err := s.repo.JobIDBySlug(ctx, slug)
+	if err != nil {
+		return Interaction{}, err
+	}
+	return s.repo.MarkAppliedAt(ctx, userID, jobID, at)
 }
 
 // SaveJob resolves slug → jobID then delegates to the repository.

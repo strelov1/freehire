@@ -73,6 +73,18 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
 - **`UpsertExternalEmail` refreshes content columns only.** `read_at`, `deleted_at` and
   every classification column are the *reader's* state, not the mail server's, so a nightly
   re-sync cannot resurrect deleted mail, un-read a message, or wipe a triage verdict.
+- **A suggestion needs a consumer, or the matcher's caution turns into a backlog.**
+  Only a deterministic tier auto-links, so everything else lands as a suggestion —
+  and a suggestion nobody can see is a row that never resolves. `?link=suggested`
+  is that queue, `?link=unlinked` is the mail with no application to attach to,
+  and `POST /me/emails/:id/application` is the way out of the second: it records
+  the application from the mail and links it in one call. Keep all three reachable;
+  measured link coverage is a function of the interface, not only of `mailmatch`.
+- **An application recorded from mail is dated by the mail.** `received_at`, never
+  `now()` — the application demonstrably existed by the time the employer wrote, so
+  the mail's timestamp is an honest upper bound. The error then leans toward
+  *under*-reporting elapsed silence, which is the safe direction: a missed ghost is
+  a non-event, a fabricated one tells a person they were ignored when they were not.
 - **Bodies reach an agent through the listing (`?body=1`), not `GET /me/emails/:id`.** That
   endpoint marks the message read, and `read_at` means "a human saw this" — a harness
   sweeping the backlog through it would silently zero its owner's unread count.

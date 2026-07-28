@@ -121,6 +121,60 @@ func (h *inboxHandlers) LinkEmail(c *fiber.Ctx) error {
 	})
 }
 
+// CreateApplicationFromEmail records a tracked application from one of the
+// caller's emails and links the email to it in a single call, given {"slug": …}
+// naming a catalog job. It is the path for mail about an application the caller
+// never recorded: the employer is known and the job is in the catalog, but there
+// is no application to attach the mail to, so plain linking has nothing to point
+// at.
+//
+// The application is dated by the email, not by now() — see
+// jobtracking.MarkAppliedAt. Mail still carrying a pending suggestion is refused
+// (409): the matcher has already proposed an answer, and letting this path
+// overwrite it silently would leave the link's provenance ambiguous. Confirming
+// or rejecting the suggestion first resolves that.
+func (h *inboxHandlers) CreateApplicationFromEmail(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	id, err := c.ParamsInt("id")
+	if err != nil {
+		return fiber.NewError(fiber.StatusNotFound, "not found")
+	}
+	var body struct {
+		Slug string `json:"slug"`
+	}
+	if err := c.BodyParser(&body); err != nil || body.Slug == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "slug required")
+	}
+	email, err := h.queries.GetEmail(c.Context(), db.GetEmailParams{ID: int64(id), UserID: userID})
+	if err != nil {
+		return err // ErrNoRows → 404 (not the caller's message)
+	}
+	if email.SuggestedJobID.Valid && !email.JobID.Valid {
+		return fiber.NewError(fiber.StatusConflict,
+			"email has a pending suggestion ("+pgStr(email.SuggestedSlug)+"); confirm or reject it first")
+	}
+	job, err := h.queries.GetJobBySlug(c.Context(), body.Slug)
+	if err != nil {
+		return err // ErrNoRows → 404
+	}
+	if _, err := h.tracking.MarkAppliedAt(c.Context(), userID, body.Slug, email.ReceivedAt.Time); err != nil {
+		return err
+	}
+	rows, err := h.queries.LinkEmailToJob(c.Context(), db.LinkEmailToJobParams{
+		ID: int64(id), UserID: userID, JobID: pgtype.Int8{Int64: job.ID, Valid: true},
+	})
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fiber.NewError(fiber.StatusNotFound, "not found")
+	}
+	return h.renderEmail(c, userID, int64(id))
+}
+
 // mutateEmailLink runs one email-link mutation (scoped to the caller by id) and
 // returns the refreshed email, or 404 when the mutation matched no row.
 func (h *inboxHandlers) mutateEmailLink(c *fiber.Ctx, do func(userID, id int64) (int64, error)) error {

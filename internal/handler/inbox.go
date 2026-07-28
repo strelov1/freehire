@@ -17,6 +17,13 @@ import (
 // other source, it is simply never classified server-side.
 var inboxSources = map[string]bool{"": true, "gmail": true, "hosted": true, "external": true}
 
+// inboxLinkStates is the link-state vocabulary: "" means no filter, and the three
+// named values partition the caller's mail — 'linked' is attached to an
+// application, 'suggested' carries a pending suggestion awaiting the caller's
+// confirmation, 'unlinked' has neither. 'suggested' is the confirmation queue;
+// 'unlinked' is the queue for mail with nowhere to go yet.
+var inboxLinkStates = map[string]bool{"": true, "linked": true, "suggested": true, "unlinked": true}
+
 // agentPageMax caps a listing that carries bodies. Bodies are the one listing
 // payload heavy enough to matter, and an agent sweeping its backlog has no reason
 // to pull an unbounded page.
@@ -89,6 +96,8 @@ type inboxFilters struct {
 	// work queue. It is distinct from IsUnread: read_at tracks a human's attention,
 	// classified_at tracks whether anything has judged the message yet.
 	IsUnclassified bool
+	// Link narrows to one link state (see inboxLinkStates); "" is no filter.
+	Link string
 }
 
 // parseInboxFilters reads and validates the inbox filter query params. Source and
@@ -103,16 +112,22 @@ func parseInboxFilters(c *fiber.Ctx) (inboxFilters, error) {
 	if status != "" && !mailclassify.IsValidSignal(status) {
 		return inboxFilters{}, fiber.NewError(fiber.StatusBadRequest, "unknown label")
 	}
+	link := c.Query("link")
+	if !inboxLinkStates[link] {
+		return inboxFilters{}, fiber.NewError(fiber.StatusBadRequest, "unknown link state")
+	}
 	return inboxFilters{
 		Source: src, IsUnread: c.QueryBool("unread"), Status: status, Q: c.Query("q"),
-		IsUnclassified: c.QueryBool("unclassified"),
+		IsUnclassified: c.QueryBool("unclassified"), Link: link,
 	}, nil
 }
 
 // GetInbox returns the caller's mail as a flat list, newest first, excluding
 // soft-deleted messages. Optional filters: ?source= (account switcher), ?unread=1
 // (hide read), ?status= (one classified label), ?unclassified=1 (awaiting triage),
-// ?q= (subject/sender/body search); standard limit/offset pagination.
+// ?link= (one link state — 'suggested' is the confirmation queue, 'unlinked' the
+// mail with nowhere to go yet), ?q= (subject/sender/body search); standard
+// limit/offset pagination.
 //
 // ?body=1 additionally returns each message's readable body. That is the agent's
 // read path: it triages a page in one request, and — unlike GetEmail — marks
@@ -135,7 +150,7 @@ func (h *inboxHandlers) GetInbox(c *fiber.Ctx) error {
 	limit, offset := pageParamsMax(c, ceiling)
 	rows, err := h.queries.ListEmails(c.Context(), db.ListEmailsParams{
 		UserID: userID, Src: f.Source, Unread: f.IsUnread, Status: f.Status, Q: f.Q,
-		Unclassified: f.IsUnclassified, WithBody: withBody,
+		Unclassified: f.IsUnclassified, Link: f.Link, WithBody: withBody,
 		Lim: int32(limit), Off: int32(offset),
 	})
 	if err != nil {
@@ -143,7 +158,7 @@ func (h *inboxHandlers) GetInbox(c *fiber.Ctx) error {
 	}
 	total, err := h.queries.CountEmails(c.Context(), db.CountEmailsParams{
 		UserID: userID, Src: f.Source, Unread: f.IsUnread, Status: f.Status, Q: f.Q,
-		Unclassified: f.IsUnclassified,
+		Unclassified: f.IsUnclassified, Link: f.Link,
 	})
 	if err != nil {
 		return err
@@ -220,7 +235,7 @@ func (h *inboxHandlers) MarkAllReadInbox(c *fiber.Ctx) error {
 		return err
 	}
 	marked, err := h.queries.MarkAllEmailsRead(c.Context(), db.MarkAllEmailsReadParams{
-		UserID: userID, Src: f.Source, Status: f.Status, Q: f.Q,
+		UserID: userID, Src: f.Source, Status: f.Status, Q: f.Q, Link: f.Link,
 	})
 	if err != nil {
 		return err

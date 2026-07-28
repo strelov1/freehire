@@ -503,9 +503,14 @@ WITH prior AS (
     SELECT uj.applied_at FROM user_jobs uj WHERE uj.user_id = $1 AND uj.job_id = $2
 ), upsert AS (
     INSERT INTO user_jobs (user_id, job_id, applied_at, stage)
-    VALUES ($1, $2, now(), 'applied')
+    VALUES ($1, $2, COALESCE($3::timestamptz, now()), 'applied')
     ON CONFLICT (user_id, job_id) DO UPDATE
-      SET applied_at = now(), stage = COALESCE(user_jobs.stage, 'applied')
+      SET applied_at = CASE
+              WHEN $3::timestamptz IS NOT NULL
+                  THEN COALESCE(user_jobs.applied_at, $3::timestamptz)
+              ELSE now()
+          END,
+          stage = COALESCE(user_jobs.stage, 'applied')
     RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote
 ), bump AS (
     UPDATE jobs SET applied_count = applied_count + 1
@@ -515,8 +520,9 @@ SELECT user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed
 `
 
 type MarkJobAppliedParams struct {
-	UserID int64 `json:"user_id"`
-	JobID  int64 `json:"job_id"`
+	UserID int64              `json:"user_id"`
+	JobID  int64              `json:"job_id"`
+	At     pgtype.Timestamptz `json:"at"`
 }
 
 type MarkJobAppliedRow struct {
@@ -541,8 +547,15 @@ type MarkJobAppliedRow struct {
 // the per-statement snapshot, so without the serializing lock two concurrent
 // applies would both see applied_at unset and double-bump (same pattern as
 // LockJobForVote for the vote counters).
+// `at` is the optional recording date, used when an application is reconstructed
+// from employer mail: the application demonstrably existed by the time they
+// wrote, so the mail's timestamp is an honest upper bound and now() would
+// compress its real history. A dated recording also never rewrites an earlier
+// application's date, whereas an ordinary re-apply refreshes it as it always
+// has. Both paths share this one statement so the applied_count transition rule
+// below cannot fork.
 func (q *Queries) MarkJobApplied(ctx context.Context, arg MarkJobAppliedParams) (MarkJobAppliedRow, error) {
-	row := q.db.QueryRow(ctx, markJobApplied, arg.UserID, arg.JobID)
+	row := q.db.QueryRow(ctx, markJobApplied, arg.UserID, arg.JobID, arg.At)
 	var i MarkJobAppliedRow
 	err := row.Scan(
 		&i.UserID,

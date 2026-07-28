@@ -78,9 +78,16 @@ RETURNING id, (xmax = 0)::boolean AS inserted;
 -- soft-deleted messages excluded. Optional filters (each empty/false = no filter):
 -- source narrows to one account; unread hides already-read mail; status narrows to
 -- one classified signal; unclassified narrows to mail awaiting triage (the agent's
--- work queue, since 'external' mail is never enqueued for the worker); the search
--- term matches subject, sender, or body. The snippet is the body's leading text
--- with whitespace collapsed, for the list row.
+-- work queue, since 'external' mail is never enqueued for the worker); link
+-- narrows to one link state; the search term matches subject, sender, or body.
+-- The snippet is the body's leading text with whitespace collapsed, for the list
+-- row.
+--
+-- The three link states partition the mailbox — 'linked' is attached to an
+-- application, 'suggested' has a pending suggestion and no link, 'unlinked' has
+-- neither — so their counts always sum to the unfiltered total. A message that is
+-- both linked and carrying a stale suggestion reads as linked: the resolved
+-- answer wins over the proposal it superseded.
 -- The link/classification columns ride alongside so the inbox can render the
 -- confirm chip and application link without a second lookup; the LEFT JOINs
 -- resolve the linked/suggested application's public slug + company for display.
@@ -107,6 +114,12 @@ WHERE emails.user_id = $1
   AND (sqlc.arg(status)::text = '' OR emails.status_signal = sqlc.arg(status))
   AND (sqlc.arg(unclassified)::bool = false OR emails.classified_at IS NULL)
   AND (
+    sqlc.arg(link)::text = ''
+    OR (sqlc.arg(link) = 'linked'    AND emails.job_id IS NOT NULL)
+    OR (sqlc.arg(link) = 'suggested' AND emails.job_id IS NULL AND emails.suggested_job_id IS NOT NULL)
+    OR (sqlc.arg(link) = 'unlinked'  AND emails.job_id IS NULL AND emails.suggested_job_id IS NULL)
+  )
+  AND (
     sqlc.arg(q)::text = ''
     OR emails.subject   ILIKE '%' || sqlc.arg(q) || '%'
     OR emails.from_name ILIKE '%' || sqlc.arg(q) || '%'
@@ -127,6 +140,12 @@ WHERE user_id = $1
   AND (sqlc.arg(unread)::bool = false OR read_at IS NULL)
   AND (sqlc.arg(status)::text = '' OR status_signal = sqlc.arg(status))
   AND (sqlc.arg(unclassified)::bool = false OR classified_at IS NULL)
+  AND (
+    sqlc.arg(link)::text = ''
+    OR (sqlc.arg(link) = 'linked'    AND job_id IS NOT NULL)
+    OR (sqlc.arg(link) = 'suggested' AND job_id IS NULL AND suggested_job_id IS NOT NULL)
+    OR (sqlc.arg(link) = 'unlinked'  AND job_id IS NULL AND suggested_job_id IS NULL)
+  )
   AND (
     sqlc.arg(q)::text = ''
     OR subject   ILIKE '%' || sqlc.arg(q) || '%'
@@ -161,6 +180,12 @@ WHERE user_id = $1
   AND deleted_at IS NULL
   AND (sqlc.arg(src)::text = '' OR source = sqlc.arg(src))
   AND (sqlc.arg(status)::text = '' OR status_signal = sqlc.arg(status))
+  AND (
+    sqlc.arg(link)::text = ''
+    OR (sqlc.arg(link) = 'linked'    AND job_id IS NOT NULL)
+    OR (sqlc.arg(link) = 'suggested' AND job_id IS NULL AND suggested_job_id IS NOT NULL)
+    OR (sqlc.arg(link) = 'unlinked'  AND job_id IS NULL AND suggested_job_id IS NULL)
+  )
   AND (
     sqlc.arg(q)::text = ''
     OR subject   ILIKE '%' || sqlc.arg(q) || '%'

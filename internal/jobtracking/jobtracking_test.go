@@ -16,10 +16,12 @@ type fakeRepo struct {
 	slugs map[string]int64
 
 	// per-method canned return (first call wins; subsequent calls return the same)
-	viewResult          jobtracking.Interaction
-	viewErr             error
-	appliedResult       jobtracking.Interaction
-	appliedErr          error
+	viewResult    jobtracking.Interaction
+	viewErr       error
+	appliedResult jobtracking.Interaction
+	appliedErr    error
+	// appliedAt captures the date handed to MarkAppliedAt.
+	appliedAt           time.Time
 	saveResult          jobtracking.Interaction
 	saveErr             error
 	unsaveResult        jobtracking.Interaction
@@ -72,6 +74,13 @@ func (f *fakeRepo) RecordView(_ context.Context, _, _ int64) (jobtracking.Intera
 }
 
 func (f *fakeRepo) MarkApplied(_ context.Context, _, _ int64) (jobtracking.Interaction, error) {
+	return f.appliedResult, f.appliedErr
+}
+
+// MarkAppliedAt records the date it was handed, so a test can assert the service
+// passed the mail's timestamp through rather than substituting its own.
+func (f *fakeRepo) MarkAppliedAt(_ context.Context, _, _ int64, at time.Time) (jobtracking.Interaction, error) {
+	f.appliedAt = at
 	return f.appliedResult, f.appliedErr
 }
 
@@ -196,6 +205,33 @@ func TestMarkApplied_HappyPath(t *testing.T) {
 	}
 	if got.AppliedAt == nil {
 		t.Error("AppliedAt should be set")
+	}
+}
+
+// The dated path hands the repository the caller's timestamp untouched — the
+// service must not substitute its own clock, or an application reconstructed
+// from old mail would read as applied today.
+func TestMarkAppliedAt_PassesTheDateThrough(t *testing.T) {
+	when := time.Now().Add(-21 * 24 * time.Hour)
+	repo := newRepo()
+	repo.appliedResult = jobtracking.Interaction{JobID: jobID, AppliedAt: tPtr(when)}
+	svc := jobtracking.New(repo)
+
+	if _, err := svc.MarkAppliedAt(ctx(), userID, slug, when); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !repo.appliedAt.Equal(when) {
+		t.Errorf("repository received %v, want the supplied %v", repo.appliedAt, when)
+	}
+}
+
+func TestMarkAppliedAt_UnknownSlug(t *testing.T) {
+	repo := newRepo()
+	svc := jobtracking.New(repo)
+
+	_, err := svc.MarkAppliedAt(ctx(), userID, "missing", time.Now())
+	if !errors.Is(err, jobtracking.ErrJobNotFound) {
+		t.Errorf("err = %v, want ErrJobNotFound", err)
 	}
 }
 

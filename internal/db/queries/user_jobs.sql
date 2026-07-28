@@ -21,13 +21,25 @@ RETURNING *;
 -- the per-statement snapshot, so without the serializing lock two concurrent
 -- applies would both see applied_at unset and double-bump (same pattern as
 -- LockJobForVote for the vote counters).
+-- `at` is the optional recording date, used when an application is reconstructed
+-- from employer mail: the application demonstrably existed by the time they
+-- wrote, so the mail's timestamp is an honest upper bound and now() would
+-- compress its real history. A dated recording also never rewrites an earlier
+-- application's date, whereas an ordinary re-apply refreshes it as it always
+-- has. Both paths share this one statement so the applied_count transition rule
+-- below cannot fork.
 WITH prior AS (
     SELECT uj.applied_at FROM user_jobs uj WHERE uj.user_id = $1 AND uj.job_id = $2
 ), upsert AS (
     INSERT INTO user_jobs (user_id, job_id, applied_at, stage)
-    VALUES ($1, $2, now(), 'applied')
+    VALUES ($1, $2, COALESCE(sqlc.narg(at)::timestamptz, now()), 'applied')
     ON CONFLICT (user_id, job_id) DO UPDATE
-      SET applied_at = now(), stage = COALESCE(user_jobs.stage, 'applied')
+      SET applied_at = CASE
+              WHEN sqlc.narg(at)::timestamptz IS NOT NULL
+                  THEN COALESCE(user_jobs.applied_at, sqlc.narg(at)::timestamptz)
+              ELSE now()
+          END,
+          stage = COALESCE(user_jobs.stage, 'applied')
     RETURNING *
 ), bump AS (
     UPDATE jobs SET applied_count = applied_count + 1

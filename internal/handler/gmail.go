@@ -13,6 +13,7 @@ import (
 	"github.com/strelov1/freehire/internal/auth/oauth"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/gmailsync"
+	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/tokencrypt"
 )
 
@@ -33,12 +34,17 @@ type inboxHandlers struct {
 	frontendOrigin string
 	cookieSecure   bool
 	mailDomain     string
+	// tracking records an application reconstructed from mail. The mail surface
+	// borrows the tracking use case rather than writing its own apply, so the
+	// applied_count guarantee stays in one place (see CreateApplicationFromEmail).
+	tracking *jobtracking.Service
 }
 
 func newInboxHandlers(queries *db.Queries, pool *pgxpool.Pool, gmailConnector *gmailsync.Connector, gmailCipher *tokencrypt.Cipher, frontendOrigin string, cookieSecure bool, mailDomain string) *inboxHandlers {
 	return &inboxHandlers{
 		queries:        queries,
 		pool:           pool,
+		tracking:       jobtracking.New(jobtracking.NewQueriesRepository(queries, pool)),
 		gmailConnector: gmailConnector,
 		gmailCipher:    gmailCipher,
 		frontendOrigin: frontendOrigin,
@@ -79,6 +85,7 @@ func (h *inboxHandlers) register(api fiber.Router, mw middleware) {
 	api.Post("/me/emails/:id/unlink", mw.key, h.UnlinkEmail)
 	api.Post("/me/emails/:id/confirm", mw.key, h.ConfirmEmailLink)
 	api.Post("/me/emails/:id/reject", mw.key, h.RejectEmailLink)
+	api.Post("/me/emails/:id/application", mw.key, h.CreateApplicationFromEmail)
 	if h.gmailReady() {
 		api.Get("/me/gmail/connect", mw.cookie, h.GmailConnect)
 		// The callback is the browser returning from Google, not an XHR — so it is

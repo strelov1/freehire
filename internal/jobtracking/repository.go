@@ -3,6 +3,7 @@ package jobtracking
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -57,6 +58,20 @@ func (r *QueriesRepository) RecordView(ctx context.Context, userID, jobID int64)
 // applies serialize and applied_count cannot double-bump — the same pattern
 // the vote path uses for its counters.
 func (r *QueriesRepository) MarkApplied(ctx context.Context, userID, jobID int64) (Interaction, error) {
+	return r.markApplied(ctx, userID, jobID, pgtype.Timestamptz{})
+}
+
+// MarkAppliedAt records an application dated by `at` rather than by now() — the
+// path for an application reconstructed from employer mail. It runs the same
+// locked transaction as MarkApplied, so the applied_count guarantee is the same
+// one, not a second implementation of it.
+func (r *QueriesRepository) MarkAppliedAt(ctx context.Context, userID, jobID int64, at time.Time) (Interaction, error) {
+	return r.markApplied(ctx, userID, jobID, pgtype.Timestamptz{Time: at, Valid: true})
+}
+
+// markApplied is the shared apply transaction. An invalid `at` means "stamp
+// now()", the ordinary apply.
+func (r *QueriesRepository) markApplied(ctx context.Context, userID, jobID int64, at pgtype.Timestamptz) (Interaction, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return Interaction{}, err
@@ -67,7 +82,7 @@ func (r *QueriesRepository) MarkApplied(ctx context.Context, userID, jobID int64
 	if err := qtx.LockJobForApply(ctx, jobID); err != nil {
 		return Interaction{}, err
 	}
-	row, err := qtx.MarkJobApplied(ctx, db.MarkJobAppliedParams{UserID: userID, JobID: jobID})
+	row, err := qtx.MarkJobApplied(ctx, db.MarkJobAppliedParams{UserID: userID, JobID: jobID, At: at})
 	if err != nil {
 		return Interaction{}, err
 	}

@@ -839,9 +839,16 @@ type Querier interface {
 	// soft-deleted messages excluded. Optional filters (each empty/false = no filter):
 	// source narrows to one account; unread hides already-read mail; status narrows to
 	// one classified signal; unclassified narrows to mail awaiting triage (the agent's
-	// work queue, since 'external' mail is never enqueued for the worker); the search
-	// term matches subject, sender, or body. The snippet is the body's leading text
-	// with whitespace collapsed, for the list row.
+	// work queue, since 'external' mail is never enqueued for the worker); link
+	// narrows to one link state; the search term matches subject, sender, or body.
+	// The snippet is the body's leading text with whitespace collapsed, for the list
+	// row.
+	//
+	// The three link states partition the mailbox — 'linked' is attached to an
+	// application, 'suggested' has a pending suggestion and no link, 'unlinked' has
+	// neither — so their counts always sum to the unfiltered total. A message that is
+	// both linked and carrying a stale suggestion reads as linked: the resolved
+	// answer wins over the proposal it superseded.
 	// The link/classification columns ride alongside so the inbox can render the
 	// confirm chip and application link without a second lookup; the LEFT JOINs
 	// resolve the linked/suggested application's public slug + company for display.
@@ -1105,6 +1112,13 @@ type Querier interface {
 	// the per-statement snapshot, so without the serializing lock two concurrent
 	// applies would both see applied_at unset and double-bump (same pattern as
 	// LockJobForVote for the vote counters).
+	// `at` is the optional recording date, used when an application is reconstructed
+	// from employer mail: the application demonstrably existed by the time they
+	// wrote, so the mail's timestamp is an honest upper bound and now() would
+	// compress its real history. A dated recording also never rewrites an earlier
+	// application's date, whereas an ordinary re-apply refreshes it as it always
+	// has. Both paths share this one statement so the applied_count transition rule
+	// below cannot fork.
 	MarkJobApplied(ctx context.Context, arg MarkJobAppliedParams) (MarkJobAppliedRow, error)
 	// Record one expired probe: increment the strike counter and, in the same write,
 	// close the job (closed_at) once it reaches the threshold the caller owns — the

@@ -22,10 +22,16 @@ WHERE user_id = $1
   AND ($5::bool = false OR classified_at IS NULL)
   AND (
     $6::text = ''
-    OR subject   ILIKE '%' || $6 || '%'
-    OR from_name ILIKE '%' || $6 || '%'
-    OR from_addr ILIKE '%' || $6 || '%'
-    OR body_text ILIKE '%' || $6 || '%'
+    OR ($6 = 'linked'    AND job_id IS NOT NULL)
+    OR ($6 = 'suggested' AND job_id IS NULL AND suggested_job_id IS NOT NULL)
+    OR ($6 = 'unlinked'  AND job_id IS NULL AND suggested_job_id IS NULL)
+  )
+  AND (
+    $7::text = ''
+    OR subject   ILIKE '%' || $7 || '%'
+    OR from_name ILIKE '%' || $7 || '%'
+    OR from_addr ILIKE '%' || $7 || '%'
+    OR body_text ILIKE '%' || $7 || '%'
   )
 `
 
@@ -35,6 +41,7 @@ type CountEmailsParams struct {
 	Unread       bool   `json:"unread"`
 	Status       string `json:"status"`
 	Unclassified bool   `json:"unclassified"`
+	Link         string `json:"link"`
 	Q            string `json:"q"`
 }
 
@@ -47,6 +54,7 @@ func (q *Queries) CountEmails(ctx context.Context, arg CountEmailsParams) (int64
 		arg.Unread,
 		arg.Status,
 		arg.Unclassified,
+		arg.Link,
 		arg.Q,
 	)
 	var count int64
@@ -246,13 +254,19 @@ WHERE emails.user_id = $1
   AND ($6::bool = false OR emails.classified_at IS NULL)
   AND (
     $7::text = ''
-    OR emails.subject   ILIKE '%' || $7 || '%'
-    OR emails.from_name ILIKE '%' || $7 || '%'
-    OR emails.from_addr ILIKE '%' || $7 || '%'
-    OR emails.body_text ILIKE '%' || $7 || '%'
+    OR ($7 = 'linked'    AND emails.job_id IS NOT NULL)
+    OR ($7 = 'suggested' AND emails.job_id IS NULL AND emails.suggested_job_id IS NOT NULL)
+    OR ($7 = 'unlinked'  AND emails.job_id IS NULL AND emails.suggested_job_id IS NULL)
+  )
+  AND (
+    $8::text = ''
+    OR emails.subject   ILIKE '%' || $8 || '%'
+    OR emails.from_name ILIKE '%' || $8 || '%'
+    OR emails.from_addr ILIKE '%' || $8 || '%'
+    OR emails.body_text ILIKE '%' || $8 || '%'
   )
 ORDER BY emails.received_at DESC, emails.id DESC
-LIMIT $9 OFFSET $8
+LIMIT $10 OFFSET $9
 `
 
 type ListEmailsParams struct {
@@ -262,6 +276,7 @@ type ListEmailsParams struct {
 	Unread       bool   `json:"unread"`
 	Status       string `json:"status"`
 	Unclassified bool   `json:"unclassified"`
+	Link         string `json:"link"`
 	Q            string `json:"q"`
 	Off          int32  `json:"off"`
 	Lim          int32  `json:"lim"`
@@ -293,9 +308,16 @@ type ListEmailsRow struct {
 // soft-deleted messages excluded. Optional filters (each empty/false = no filter):
 // source narrows to one account; unread hides already-read mail; status narrows to
 // one classified signal; unclassified narrows to mail awaiting triage (the agent's
-// work queue, since 'external' mail is never enqueued for the worker); the search
-// term matches subject, sender, or body. The snippet is the body's leading text
-// with whitespace collapsed, for the list row.
+// work queue, since 'external' mail is never enqueued for the worker); link
+// narrows to one link state; the search term matches subject, sender, or body.
+// The snippet is the body's leading text with whitespace collapsed, for the list
+// row.
+//
+// The three link states partition the mailbox — 'linked' is attached to an
+// application, 'suggested' has a pending suggestion and no link, 'unlinked' has
+// neither — so their counts always sum to the unfiltered total. A message that is
+// both linked and carrying a stale suggestion reads as linked: the resolved
+// answer wins over the proposal it superseded.
 // The link/classification columns ride alongside so the inbox can render the
 // confirm chip and application link without a second lookup; the LEFT JOINs
 // resolve the linked/suggested application's public slug + company for display.
@@ -312,6 +334,7 @@ func (q *Queries) ListEmails(ctx context.Context, arg ListEmailsParams) ([]ListE
 		arg.Unread,
 		arg.Status,
 		arg.Unclassified,
+		arg.Link,
 		arg.Q,
 		arg.Off,
 		arg.Lim,
@@ -363,10 +386,16 @@ WHERE user_id = $1
   AND ($3::text = '' OR status_signal = $3)
   AND (
     $4::text = ''
-    OR subject   ILIKE '%' || $4 || '%'
-    OR from_name ILIKE '%' || $4 || '%'
-    OR from_addr ILIKE '%' || $4 || '%'
-    OR body_text ILIKE '%' || $4 || '%'
+    OR ($4 = 'linked'    AND job_id IS NOT NULL)
+    OR ($4 = 'suggested' AND job_id IS NULL AND suggested_job_id IS NOT NULL)
+    OR ($4 = 'unlinked'  AND job_id IS NULL AND suggested_job_id IS NULL)
+  )
+  AND (
+    $5::text = ''
+    OR subject   ILIKE '%' || $5 || '%'
+    OR from_name ILIKE '%' || $5 || '%'
+    OR from_addr ILIKE '%' || $5 || '%'
+    OR body_text ILIKE '%' || $5 || '%'
   )
 `
 
@@ -374,6 +403,7 @@ type MarkAllEmailsReadParams struct {
 	UserID int64  `json:"user_id"`
 	Src    string `json:"src"`
 	Status string `json:"status"`
+	Link   string `json:"link"`
 	Q      string `json:"q"`
 }
 
@@ -385,6 +415,7 @@ func (q *Queries) MarkAllEmailsRead(ctx context.Context, arg MarkAllEmailsReadPa
 		arg.UserID,
 		arg.Src,
 		arg.Status,
+		arg.Link,
 		arg.Q,
 	)
 	if err != nil {

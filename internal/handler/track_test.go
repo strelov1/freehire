@@ -28,6 +28,9 @@ func (stubTrackingRepo) RecordView(context.Context, int64, int64) (jobtracking.I
 func (stubTrackingRepo) MarkApplied(context.Context, int64, int64) (jobtracking.Interaction, error) {
 	return jobtracking.Interaction{JobID: 1}, nil
 }
+func (stubTrackingRepo) MarkAppliedAt(context.Context, int64, int64, time.Time) (jobtracking.Interaction, error) {
+	return jobtracking.Interaction{JobID: 1}, nil
+}
 func (stubTrackingRepo) SaveJob(context.Context, int64, int64) (jobtracking.Interaction, error) {
 	return jobtracking.Interaction{JobID: 1}, nil
 }
