@@ -14,6 +14,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/accountdelete"
 	"github.com/strelov1/freehire/internal/accounts"
+	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/atscheck"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/auth/oauth"
@@ -115,6 +116,12 @@ type API struct {
 	// Empty = the hosted-mailbox feature is off: the claim route is unregistered and
 	// status reports unavailable.
 	mailDomain string
+	// assistant persists the in-app agent's conversations; assistantRunner executes
+	// their turns. The runner is nil when no LLM is configured — the session
+	// endpoints still work (a user can read and delete old chats) and a turn reports
+	// the assistant as unavailable rather than 500ing.
+	assistant       *assistant.Store
+	assistantRunner *assistant.Runner
 	// search is the job-search backend. Nil when Meilisearch is unconfigured —
 	// the search endpoint then reports 503 and the rest of the API is unaffected.
 	search searcher
@@ -280,6 +287,13 @@ type Config struct {
 	// LLM backs the optional CV ATS qualitative review. Nil disables the AI layer:
 	// the ATS score stays deterministic (the report just omits content-quality).
 	LLM *llm.Client
+	// AssistantLLM backs the in-app agent. It is a separate client because the agent
+	// runs on its own model (ASSISTANT_MODEL) — chosen for tool calling and context
+	// size rather than for cheap JSON extraction. Nil disables new turns.
+	AssistantLLM *llm.Client
+	// AssistantMaxSteps bounds the tool-calling rounds of one turn; zero uses the
+	// assistant package's default.
+	AssistantMaxSteps int
 	// PIIDetector de-identifies CV text before it reaches the LLM (fit analysis and
 	// structured extraction). Nil disables those CV→LLM paths (fail-closed): they degrade
 	// to no analysis rather than send PII to the model.
@@ -384,6 +398,12 @@ func Register(app *fiber.App, cfg Config) {
 	// binary was resolved (assign only a non-nil renderer so the interface stays nil when
 	// disabled — a typed-nil would defeat the 501 gate).
 	a.cvStore = cv.NewStore(cv.NewQueriesRepository(queries))
+	// The in-app agent. Its store is always available; its runner needs a model, so
+	// an unconfigured LLM leaves old conversations readable and new turns refused.
+	a.assistant = assistant.NewStore(queries)
+	if cfg.AssistantLLM != nil {
+		a.assistantRunner = assistant.NewRunner(cfg.AssistantLLM, a.assistant, assistant.RunnerConfig{MaxSteps: cfg.AssistantMaxSteps})
+	}
 	if r := cv.NewTypstRenderer(cfg.TypstBin); r != nil {
 		a.cvRenderer = r
 	}
@@ -594,6 +614,18 @@ func Register(app *fiber.App, cfg Config) {
 	api.Get("/jobs/:slug/fit", keyAuth, a.GetMatchAnalysis)
 	api.Post("/jobs/:slug/fit", keyAuth, a.PostMatchAnalysis)
 	api.Get("/jobs/:slug/fit/stream", keyAuth, a.StreamMatchAnalysis)
+
+	// The in-app AI assistant. Cookie-only (the browser drives it) and gated to the
+	// restricted rollout: inference is billed to us, so it is not open to everyone
+	// while it is free. Sessions and their transcripts are owner-scoped rows; a turn
+	// streams as SSE.
+	assistantAuth := auth.RequireAuth(a.issuer, a.queries)
+	assistantGate := auth.RequireModeratorOrBeta(a.queries, a.queries)
+	api.Post("/assistant/sessions", assistantAuth, assistantGate, a.CreateAssistantSession)
+	api.Get("/assistant/sessions", assistantAuth, assistantGate, a.ListAssistantSessions)
+	api.Get("/assistant/sessions/:id", assistantAuth, assistantGate, a.GetAssistantSession)
+	api.Delete("/assistant/sessions/:id", assistantAuth, assistantGate, a.DeleteAssistantSession)
+	api.Post("/assistant/sessions/:id/messages", assistantAuth, assistantGate, a.PostAssistantMessage)
 
 	// Stateless market-coverage: score a caller-supplied skill list (request body)
 	// against the facet-filtered market. Cookie or API key — the CLI drives it with

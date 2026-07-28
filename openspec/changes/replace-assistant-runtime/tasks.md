@@ -34,10 +34,10 @@
 
 ## 6. HTTP surface
 
-- [ ] 6.1 Add the session endpoints under `/api/v1/assistant` — create, list, get transcript, delete — cookie-authenticated, owner-scoped, behind the beta-tester gate.
-- [ ] 6.2 Add the turn endpoint: `POST /api/v1/assistant/sessions/:id/messages` streaming named SSE events with a keep-alive comment, following `match_analysis_stream.go`.
-- [ ] 6.3 Add integration tests: full turn stream with a fake model, transcript persisted, owner checks on every endpoint (list/read/delete/turn), beta gate, and the slug-addressed `get_job`/`get_company` tools (query-backed, so covered here rather than by unit tests).
-- [ ] 6.4 Add config for the assistant's model, per-call timeout and step cap; document them in the config comment and `CLAUDE.md`.
+- [x] 6.1 Add the session endpoints under `/api/v1/assistant` — create, list, get transcript, delete — cookie-authenticated, owner-scoped, behind the beta-tester gate.
+- [x] 6.2 Add the turn endpoint: `POST /api/v1/assistant/sessions/:id/messages` streaming named SSE events with a keep-alive comment, following `match_analysis_stream.go`.
+- [x] 6.3 Add integration tests: full turn stream with a fake model, transcript persisted, owner checks on every endpoint (list/read/delete/turn), beta gate, and the slug-addressed `get_job`/`get_company` tools (query-backed, so covered here rather than by unit tests).
+- [x] 6.4 Add config for the assistant's model, per-call timeout and step cap; document them in the config comment and `CLAUDE.md`.
 
 ## 7. Tailoring bootstrap
 

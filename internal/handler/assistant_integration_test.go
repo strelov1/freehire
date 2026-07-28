@@ -1,0 +1,324 @@
+//go:build integration
+
+// Integration tests for the in-app assistant's HTTP surface against a real
+// Postgres: the session lifecycle (create, list, read, delete), the owner checks
+// on every one of them, the beta gate, and a full streamed turn driven by a
+// scripted model — its events, its persisted transcript, and its resumption.
+// Run with: go test -tags=integration ./internal/handler/
+package handler
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/tmc/langchaingo/llms"
+
+	"github.com/strelov1/freehire/internal/assistant"
+	"github.com/strelov1/freehire/internal/auth"
+	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/llm"
+)
+
+// turnModel replays a fixed script of model replies, so a turn is deterministic.
+type turnModel struct{ replies []*llms.ContentChoice }
+
+func (m *turnModel) Chat(_ context.Context, _ []llms.MessageContent, _ []llms.Tool, s llm.ChatStream) (*llms.ContentChoice, error) {
+	if len(m.replies) == 0 {
+		return &llms.ContentChoice{Content: "done"}, nil
+	}
+	reply := m.replies[0]
+	m.replies = m.replies[1:]
+	if s.OnText != nil && reply.Content != "" {
+		s.OnText(reply.Content)
+	}
+	return reply, nil
+}
+
+// newAssistantApp wires the assistant routes over a real database, with the given
+// scripted model behind the turn endpoint.
+func newAssistantApp(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model) (*fiber.App, *API) {
+	queries := db.New(pool)
+	h := &API{queries: queries, issuer: iss, assistant: assistant.NewStore(queries)}
+	if model != nil {
+		h.assistantRunner = assistant.NewRunner(model, h.assistant, assistant.RunnerConfig{MaxSteps: 3})
+	}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	cookieAuth := auth.RequireAuth(iss, testVersions)
+	gate := auth.RequireModeratorOrBeta(queries, queries)
+	app.Post("/api/v1/assistant/sessions", cookieAuth, gate, h.CreateAssistantSession)
+	app.Get("/api/v1/assistant/sessions", cookieAuth, gate, h.ListAssistantSessions)
+	app.Get("/api/v1/assistant/sessions/:id", cookieAuth, gate, h.GetAssistantSession)
+	app.Delete("/api/v1/assistant/sessions/:id", cookieAuth, gate, h.DeleteAssistantSession)
+	app.Post("/api/v1/assistant/sessions/:id/messages", cookieAuth, gate, h.PostAssistantMessage)
+	return app, h
+}
+
+// assistantUser inserts a user and returns its id plus a session cookie.
+func assistantUser(t *testing.T, pool *pgxpool.Pool, iss *auth.Issuer, email string, beta bool) (int64, string) {
+	t.Helper()
+	var id int64
+	if err := pool.QueryRow(context.Background(),
+		`INSERT INTO users (email, beta_tester) VALUES ($1, $2) RETURNING id`, email, beta).Scan(&id); err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+	token, err := iss.Issue(id, testTokenVersion)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+	return id, token
+}
+
+func assistantRequest(t *testing.T, app *fiber.App, method, path, cookie string, body any) *http.Response {
+	t.Helper()
+	var reader io.Reader
+	if body != nil {
+		blob, _ := json.Marshal(body)
+		reader = bytes.NewReader(blob)
+	}
+	r := httptest.NewRequest(method, path, reader)
+	r.Header.Set("Content-Type", "application/json")
+	if cookie != "" {
+		r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+	}
+	// A streamed turn has no body length; give the test client room to read it all.
+	resp, err := app.Test(r, 10_000)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	return resp
+}
+
+// createSession creates a session and returns its id.
+func createSession(t *testing.T, app *fiber.App, cookie string) string {
+	t.Helper()
+	resp := assistantRequest(t, app, fiber.MethodPost, "/api/v1/assistant/sessions", cookie, map[string]any{})
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("create session: status %d", resp.StatusCode)
+	}
+	var body struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Data.ID == "" {
+		t.Fatal("create session returned no id")
+	}
+	return body.Data.ID
+}
+
+func TestAssistantSessionLifecycle(t *testing.T) {
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, _ := newAssistantApp(pool, iss, nil)
+	_, cookie := assistantUser(t, pool, iss, "beta@example.test", true)
+
+	id := createSession(t, app, cookie)
+
+	// The rail lists it.
+	resp := assistantRequest(t, app, fiber.MethodGet, "/api/v1/assistant/sessions", cookie, nil)
+	var list struct {
+		Data []struct {
+			ID     string `json:"id"`
+			Preset string `json:"preset"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	if len(list.Data) != 1 || list.Data[0].ID != id || list.Data[0].Preset != assistant.PresetChat {
+		t.Fatalf("list = %+v, want the one chat session just created", list.Data)
+	}
+
+	// Deleting it removes it from the list and from reads.
+	if resp := assistantRequest(t, app, fiber.MethodDelete, "/api/v1/assistant/sessions/"+id, cookie, nil); resp.StatusCode != fiber.StatusNoContent {
+		t.Fatalf("delete: status %d", resp.StatusCode)
+	}
+	if resp := assistantRequest(t, app, fiber.MethodGet, "/api/v1/assistant/sessions/"+id, cookie, nil); resp.StatusCode != fiber.StatusNotFound {
+		t.Errorf("read after delete: status %d, want 404", resp.StatusCode)
+	}
+}
+
+func TestAssistantSessionsAreOwnerScoped(t *testing.T) {
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, _ := newAssistantApp(pool, iss, nil)
+	_, owner := assistantUser(t, pool, iss, "owner@example.test", true)
+	_, other := assistantUser(t, pool, iss, "other@example.test", true)
+
+	id := createSession(t, app, owner)
+
+	// Another beta user must not see, read, delete or post to it — and must not be
+	// able to tell it exists.
+	resp := assistantRequest(t, app, fiber.MethodGet, "/api/v1/assistant/sessions", other, nil)
+	var list struct {
+		Data []json.RawMessage `json:"data"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&list)
+	if len(list.Data) != 0 {
+		t.Errorf("another user's list contains %d sessions, want none", len(list.Data))
+	}
+	for _, tc := range []struct{ method, path string }{
+		{fiber.MethodGet, "/api/v1/assistant/sessions/" + id},
+		{fiber.MethodDelete, "/api/v1/assistant/sessions/" + id},
+		{fiber.MethodPost, "/api/v1/assistant/sessions/" + id + "/messages"},
+	} {
+		resp := assistantRequest(t, app, tc.method, tc.path, other, map[string]string{"text": "hi"})
+		if resp.StatusCode != fiber.StatusNotFound {
+			t.Errorf("%s %s as a non-owner: status %d, want 404", tc.method, tc.path, resp.StatusCode)
+		}
+	}
+}
+
+func TestAssistantIsGatedToTheRestrictedRollout(t *testing.T) {
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, _ := newAssistantApp(pool, iss, nil)
+	_, plain := assistantUser(t, pool, iss, "plain@example.test", false)
+
+	if resp := assistantRequest(t, app, fiber.MethodPost, "/api/v1/assistant/sessions", plain, map[string]any{}); resp.StatusCode != fiber.StatusForbidden {
+		t.Errorf("non-beta create: status %d, want 403", resp.StatusCode)
+	}
+	if resp := assistantRequest(t, app, fiber.MethodGet, "/api/v1/assistant/sessions", "", nil); resp.StatusCode != fiber.StatusUnauthorized {
+		t.Errorf("unauthenticated list: status %d, want 401", resp.StatusCode)
+	}
+}
+
+func TestAssistantTurnStreamsAndPersists(t *testing.T) {
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	model := &turnModel{replies: []*llms.ContentChoice{{Content: "Here is an answer."}}}
+	app, _ := newAssistantApp(pool, iss, model)
+	_, cookie := assistantUser(t, pool, iss, "turn@example.test", true)
+
+	id := createSession(t, app, cookie)
+	resp := assistantRequest(t, app, fiber.MethodPost, "/api/v1/assistant/sessions/"+id+"/messages", cookie,
+		map[string]string{"text": "find me go jobs"})
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("turn: status %d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "text/event-stream") {
+		t.Fatalf("content type = %q, want an SSE stream", ct)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read stream: %v", err)
+	}
+	stream := string(body)
+	for _, want := range []string{"event: user_prompt", "event: assistant_text", "event: result"} {
+		if !strings.Contains(stream, want) {
+			t.Errorf("stream is missing %q:\n%s", want, stream)
+		}
+	}
+	if !strings.Contains(stream, assistant.StopEndTurn) {
+		t.Errorf("stream does not end with a clean stop reason:\n%s", stream)
+	}
+
+	// The transcript is persisted and replays: prompt then answer.
+	resp = assistantRequest(t, app, fiber.MethodGet, "/api/v1/assistant/sessions/"+id, cookie, nil)
+	var read struct {
+		Data struct {
+			Session struct {
+				Label string `json:"label"`
+			} `json:"session"`
+			Messages []struct {
+				Role string `json:"role"`
+			} `json:"messages"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&read); err != nil {
+		t.Fatalf("decode transcript: %v", err)
+	}
+	if len(read.Data.Messages) != 2 {
+		t.Fatalf("transcript has %d messages, want the prompt and the answer", len(read.Data.Messages))
+	}
+	if read.Data.Messages[0].Role != assistant.RoleUser || read.Data.Messages[1].Role != assistant.RoleAssistant {
+		t.Errorf("transcript roles = %+v, want user then assistant", read.Data.Messages)
+	}
+	// The rail names a session after its first message.
+	if read.Data.Session.Label != "find me go jobs" {
+		t.Errorf("label = %q, want the first user message", read.Data.Session.Label)
+	}
+}
+
+func TestAssistantTurnRejectsAnEmptyMessage(t *testing.T) {
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, _ := newAssistantApp(pool, iss, &turnModel{})
+	_, cookie := assistantUser(t, pool, iss, "empty@example.test", true)
+
+	id := createSession(t, app, cookie)
+	resp := assistantRequest(t, app, fiber.MethodPost, "/api/v1/assistant/sessions/"+id+"/messages", cookie,
+		map[string]string{"text": "   "})
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("blank message: status %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestAssistantTurnWithoutAModelIsUnavailable(t *testing.T) {
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, _ := newAssistantApp(pool, iss, nil) // no runner: LLM unconfigured
+	_, cookie := assistantUser(t, pool, iss, "nollm@example.test", true)
+
+	id := createSession(t, app, cookie)
+	resp := assistantRequest(t, app, fiber.MethodPost, "/api/v1/assistant/sessions/"+id+"/messages", cookie,
+		map[string]string{"text": "hi"})
+	if resp.StatusCode != fiber.StatusServiceUnavailable {
+		t.Errorf("turn with no model: status %d, want 503", resp.StatusCode)
+	}
+}
+
+func TestSlugAddressedToolsReadRealRows(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO companies (slug, name) VALUES ('acme', 'Acme Inc')`); err != nil {
+		t.Fatalf("seed company: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO jobs (source, external_id, url, title, public_slug, company_slug, description)
+		 VALUES ('greenhouse', 'ext-1', 'https://example.test/j/1', 'Go Developer', 'go-developer-acme', 'acme', '<p>Build things</p>')`); err != nil {
+		t.Fatalf("seed job: %v", err)
+	}
+	a := &API{queries: db.New(pool)}
+	tools := a.assistantDiscoveryTools()
+
+	out, err := toolByName(t, tools, "get_job").Run(ctx, 1, json.RawMessage(`{"slug":"go-developer-acme"}`))
+	if err != nil {
+		t.Fatalf("get_job: %v", err)
+	}
+	payload, _ := json.Marshal(out)
+	if !strings.Contains(string(payload), "Go Developer") {
+		t.Errorf("get_job = %s, want the seeded vacancy", payload)
+	}
+	// The description reaches the model as markdown, not as the stored HTML.
+	if strings.Contains(string(payload), "<p>") {
+		t.Errorf("get_job = %s, want markdown rather than raw HTML", payload)
+	}
+
+	out, err = toolByName(t, tools, "get_company").Run(ctx, 1, json.RawMessage(`{"slug":"acme"}`))
+	if err != nil {
+		t.Fatalf("get_company: %v", err)
+	}
+	payload, _ = json.Marshal(out)
+	if !strings.Contains(string(payload), "Acme Inc") || !strings.Contains(string(payload), "go-developer-acme") {
+		t.Errorf("get_company = %s, want the company and its open vacancy", payload)
+	}
+
+	// An unknown slug is a tool error naming what was wrong, not a crash.
+	if _, err := toolByName(t, tools, "get_job").Run(ctx, 1, json.RawMessage(`{"slug":"nope"}`)); err == nil {
+		t.Error("get_job on an unknown slug returned no error")
+	}
+}

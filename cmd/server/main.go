@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"log"
 	"os/signal"
@@ -148,6 +149,23 @@ func main() {
 	}
 	defer llmFlush()
 
+	// The in-app assistant runs on its own model: ASSISTANT_MODEL is chosen for
+	// reliable tool calling and a large context, where LLM_MODEL is chosen for cheap
+	// one-shot JSON extraction. Unset falls back to LLM_MODEL, so a single-model
+	// deployment still works. Traced under its own source label.
+	assistantLLM, assistantFlush, err := llm.NewClient(llm.Settings{
+		BaseURL:           cfg.LLMBaseURL,
+		APIKey:            cfg.LLMAPIKey,
+		Model:             cmp.Or(cfg.AssistantModel, cfg.LLMModel),
+		LangfuseBaseURL:   cfg.LangfuseBaseURL,
+		LangfusePublicKey: cfg.LangfusePublicKey,
+		LangfuseSecretKey: cfg.LangfuseSecretKey,
+	}, "assistant")
+	if err != nil {
+		log.Fatalf("llm (assistant): %v", err)
+	}
+	defer assistantFlush()
+
 	// OAuth sign-in is optional: only providers with full credentials are
 	// enabled; the registry may be empty and the server still serves password
 	// auth. Redirect URLs are built per request from the request origin, so one
@@ -167,21 +185,23 @@ func main() {
 	}
 
 	handler.Register(app, handler.Config{
-		Pool:           pool,
-		FrontendOrigin: cfg.FrontendOrigin,
-		JWTSecret:      cfg.JWTSecret,
-		JWTTTL:         cfg.JWTTTL,
-		CookieSecure:   cfg.CookieSecure,
-		CookieDomains:  cfg.CookieDomains,
-		OAuthRegistry:  oauthRegistry,
-		GmailConnector: gmailConnector,
-		GmailCipher:    gmailCipher,
-		MailboxDomain:  cfg.MailboxDomain,
-		Search:         searchClient,
-		Blob:           blobStore,
-		TypstBin:       cfg.TypstBin,
-		LLM:            llmClient,
-		PIIDetector:    piiDetector,
+		Pool:              pool,
+		FrontendOrigin:    cfg.FrontendOrigin,
+		JWTSecret:         cfg.JWTSecret,
+		JWTTTL:            cfg.JWTTTL,
+		CookieSecure:      cfg.CookieSecure,
+		CookieDomains:     cfg.CookieDomains,
+		OAuthRegistry:     oauthRegistry,
+		GmailConnector:    gmailConnector,
+		GmailCipher:       gmailCipher,
+		MailboxDomain:     cfg.MailboxDomain,
+		Search:            searchClient,
+		Blob:              blobStore,
+		TypstBin:          cfg.TypstBin,
+		LLM:               llmClient,
+		AssistantLLM:      assistantLLM,
+		AssistantMaxSteps: cfg.AssistantMaxSteps,
+		PIIDetector:       piiDetector,
 
 		TelegramBotToken:      cfg.TelegramBotToken,
 		TelegramBotUsername:   cfg.TelegramBotUsername,
