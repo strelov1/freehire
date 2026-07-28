@@ -20,6 +20,7 @@ import (
 	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/experience"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/userprofile"
 )
@@ -68,11 +69,15 @@ func seedProfileAndCV(t *testing.T, pool *pgxpool.Pool, userID int64) {
 // what get_profile is built on.
 func newProfileAssistantApp(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model) *fiber.App {
 	queries := db.New(pool)
+	bank := experience.NewStore(experience.NewQueriesRepository(queries))
 	profileH := newProfileHandlers(
 		userprofile.New(userprofile.NewQueriesRepository(queries)),
 		resume.New(nil, resume.NewQueriesRepository(queries)),
+		bank,
 	)
-	h := &assistantHandlers{store: assistant.NewStore(queries), queries: queries, profile: profileH}
+	h := &assistantHandlers{
+		store: assistant.NewStore(queries), queries: queries, profile: profileH, experience: bank,
+	}
 	h.runner = assistant.NewRunner(model, h.store, assistant.RunnerConfig{MaxSteps: 3})
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
@@ -144,10 +149,15 @@ func TestGetProfileToolSendsAProfilelessUserToTheProfilePage(t *testing.T) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	userID, _ := assistantUser(t, pool, iss, "blank@example.test", true)
 
-	h := &assistantHandlers{profile: newProfileHandlers(
-		userprofile.New(userprofile.NewQueriesRepository(queries)),
-		resume.New(nil, resume.NewQueriesRepository(queries)),
-	)}
+	bank := experience.NewStore(experience.NewQueriesRepository(queries))
+	h := &assistantHandlers{
+		profile: newProfileHandlers(
+			userprofile.New(userprofile.NewQueriesRepository(queries)),
+			resume.New(nil, resume.NewQueriesRepository(queries)),
+			bank,
+		),
+		experience: bank,
+	}
 
 	out, err := toolByName(t, h.assistantDiscoveryTools(), "get_profile").
 		Run(context.Background(), userID, json.RawMessage(`{}`))

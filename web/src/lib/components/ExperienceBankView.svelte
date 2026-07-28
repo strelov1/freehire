@@ -94,12 +94,12 @@
 </script>
 
 {#if loading}
-  <States kind="loading" />
+  <States state="loading" />
 {:else if error}
-  <States kind="error" message={error} />
+  <States state="error" message={error} />
 {:else if !bank || (bank.employments.length === 0 && bank.unplaced.length === 0)}
   <States
-    kind="empty"
+    state="empty"
     message="Nothing recorded yet. Upload a CV, or talk it through with the assistant — whatever you confirm is kept here and reused in every CV you build."
   />
 {:else}
@@ -206,7 +206,7 @@
         </div>
         <div class="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
           <Button
-            size="icon-sm"
+            size="icon"
             variant="ghost"
             onclick={() => startEdit(atom)}
             aria-label="Edit achievement"
@@ -214,7 +214,7 @@
             <Pencil class="size-4" />
           </Button>
           <Button
-            size="icon-sm"
+            size="icon"
             variant="ghost"
             onclick={() => removeAtom(atom)}
             aria-label="Remove achievement"
