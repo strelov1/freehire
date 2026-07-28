@@ -230,7 +230,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Contributions detect the ATS board from the URL alone (network-free, board.go), with a
 	// network fallback (boardresolve) that fetches a company careers page and detects an
 	// embedded ATS — so vanity-domain links (company.com/careers?gh_jid=…) resolve too.
-	contributionSvc := contribution.New(contribution.NewQueriesRepository(queries), boardresolve.New())
+	contributionSvc := contribution.New(contribution.NewQueriesRepository(cfg.Pool, queries), boardresolve.New())
 	reportsH := newReportHandlers(queries)
 	savedSearchH := newSavedSearchHandlers(queries)
 	subscriptionH := newSubscriptionHandlers(queries)

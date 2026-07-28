@@ -1,16 +1,15 @@
 //go:build integration
 
-// Integration tests for the contribution repository against a real Postgres: the
-// UNIQUE (source, board) constraint rejects a duplicate identity (mapped to
-// ErrBoardAlreadyContributed) and — under a concurrent race — records exactly one board.
-// The AI-credits reward is granted by the handler, not the repository, so it is not
-// exercised here. Run with: go test -tags=integration ./internal/contribution/
+// Integration tests for the contribution repository against a real Postgres: every
+// submission of a board is recorded, and exactly one of them — even under a concurrent
+// race — is reported as rewardable. The AI-credits reward itself is granted by the handler,
+// not the repository, so it is not exercised here.
+// Run with: go test -tags=integration ./internal/contribution/
 // Requires Docker (testcontainers spins up a throwaway Postgres with the migrations).
 package contribution
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"testing"
 
@@ -46,30 +45,45 @@ func insertJob(t *testing.T, pool *pgxpool.Pool, source, externalID string) {
 	}
 }
 
-func TestRecordAndDedups(t *testing.T) {
+// TestRecordKeepsEverySubmissionAndRewardsTheFirst pins the rule that replaced
+// UNIQUE (source, board): a second link to a board is recorded (it is evidence the board is
+// worth onboarding, and it names its own submitter) but earns nothing.
+func TestRecordKeepsEverySubmissionAndRewardsTheFirst(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
-	repo := NewQueriesRepository(db.New(pool))
+	repo := NewQueriesRepository(pool, db.New(pool))
 	userID := insertUser(t, pool, "u@example.test")
 
-	in := RecordInput{SubmittedBy: userID, URL: "https://jobs.ashbyhq.com/blitzy", Source: "ashby", Board: "blitzy"}
+	in := RecordInput{SubmittedBy: userID, URL: "https://jobs.ashbyhq.com/blitzy", Source: "ashby", Board: "blitzy", Surface: SurfaceWeb}
 
-	c, err := repo.Record(ctx, in)
+	c, rewardable, err := repo.Record(ctx, in)
 	if err != nil {
 		t.Fatalf("first Record: %v", err)
 	}
 	if c.ID == 0 || c.Status != "pending" || c.Board != "blitzy" {
 		t.Errorf("recorded row unexpected: %+v", c)
 	}
-
-	// Same board again (e.g. via a different vacancy URL) → rejected, no second row.
-	dup := RecordInput{SubmittedBy: userID, URL: "https://jobs.ashbyhq.com/blitzy/another-uuid", Source: "ashby", Board: "blitzy"}
-	_, err = repo.Record(ctx, dup)
-	if !errors.Is(err, ErrBoardAlreadyContributed) {
-		t.Fatalf("second Record err = %v, want ErrBoardAlreadyContributed", err)
+	if !rewardable {
+		t.Error("first submission of a board is not rewardable, want rewardable")
 	}
-	if n := countContributions(t, pool, userID); n != 1 {
-		t.Errorf("contributions after duplicate = %d, want still 1 — rejected insert must not record", n)
+	if c.Surface != SurfaceWeb {
+		t.Errorf("surface = %q, want %q", c.Surface, SurfaceWeb)
+	}
+
+	// Same board again via a different vacancy URL: recorded, but no second reward.
+	dup := RecordInput{SubmittedBy: userID, URL: "https://jobs.ashbyhq.com/blitzy/another-uuid", Source: "ashby", Board: "blitzy", Surface: SurfaceCLI}
+	second, rewardable, err := repo.Record(ctx, dup)
+	if err != nil {
+		t.Fatalf("second Record: %v", err)
+	}
+	if rewardable {
+		t.Error("second submission of the same board is rewardable, want not rewardable")
+	}
+	if second.ID == c.ID {
+		t.Error("second submission reused the first row, want its own row")
+	}
+	if n := countContributions(t, pool, userID); n != 2 {
+		t.Errorf("contributions after a repeat = %d, want 2 — every submission is kept", n)
 	}
 }
 
@@ -86,7 +100,7 @@ func countContributions(t *testing.T, pool *pgxpool.Pool, userID int64) int {
 func TestBoardTracked(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
-	repo := NewQueriesRepository(db.New(pool))
+	repo := NewQueriesRepository(pool, db.New(pool))
 
 	insertJob(t, pool, "greenhouse", "acme:100")
 
@@ -103,40 +117,44 @@ func TestBoardTracked(t *testing.T) {
 	}
 }
 
-func TestRecordConcurrentDuplicateRecordsOnce(t *testing.T) {
+// TestRecordConcurrentRewardsExactlyOne is the test the dropped unique constraint used to
+// make unnecessary. Two submissions of one new board racing must both be recorded, and
+// exactly one may be rewarded — a plain EXISTS check cannot do this (both transactions read
+// the same snapshot and both see no rows), so it proves the advisory lock is doing its job.
+func TestRecordConcurrentRewardsExactlyOne(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
-	repo := NewQueriesRepository(db.New(pool))
+	repo := NewQueriesRepository(pool, db.New(pool))
 	userID := insertUser(t, pool, "race@example.test")
 
-	in := RecordInput{SubmittedBy: userID, URL: "https://jobs.lever.co/acme", Source: "lever", Board: "acme"}
+	in := RecordInput{SubmittedBy: userID, URL: "https://jobs.lever.co/acme", Source: "lever", Board: "acme", Surface: SurfaceWeb}
 
+	const racers = 4
 	var wg sync.WaitGroup
-	errs := make([]error, 2)
+	rewards := make([]bool, racers)
+	errs := make([]error, racers)
 	for i := range errs {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			_, errs[i] = repo.Record(ctx, in)
+			_, rewards[i], errs[i] = repo.Record(ctx, in)
 		}(i)
 	}
 	wg.Wait()
 
-	var ok, dup int
-	for _, err := range errs {
-		switch {
-		case err == nil:
-			ok++
-		case errors.Is(err, ErrBoardAlreadyContributed):
-			dup++
-		default:
-			t.Fatalf("unexpected error: %v", err)
+	rewarded := 0
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("racer %d: unexpected error: %v", i, err)
+		}
+		if rewards[i] {
+			rewarded++
 		}
 	}
-	if ok != 1 || dup != 1 {
-		t.Errorf("race outcome ok=%d dup=%d, want 1 and 1", ok, dup)
+	if rewarded != 1 {
+		t.Errorf("rewarded = %d, want exactly 1 — the board may be paid for once", rewarded)
 	}
-	if got := countContributions(t, pool, userID); got != 1 {
-		t.Errorf("contributions after race = %d, want exactly 1", got)
+	if got := countContributions(t, pool, userID); got != racers {
+		t.Errorf("contributions after race = %d, want %d — every submission is kept", got, racers)
 	}
 }

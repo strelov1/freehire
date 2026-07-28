@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/pgconv"
@@ -15,14 +16,17 @@ import (
 // Compile-time proof that QueriesRepository satisfies Repository.
 var _ Repository = (*QueriesRepository)(nil)
 
-// QueriesRepository is the production Repository backed by sqlc-generated *db.Queries.
+// QueriesRepository is the production Repository backed by sqlc-generated *db.Queries. It
+// holds the pool as well because recording is transactional: the reward decision and the
+// insert have to agree, and only a transaction can hold the lock that makes them agree.
 type QueriesRepository struct {
-	q *db.Queries
+	pool *pgxpool.Pool
+	q    *db.Queries
 }
 
 // NewQueriesRepository constructs a QueriesRepository.
-func NewQueriesRepository(q *db.Queries) *QueriesRepository {
-	return &QueriesRepository{q: q}
+func NewQueriesRepository(pool *pgxpool.Pool, q *db.Queries) *QueriesRepository {
+	return &QueriesRepository{pool: pool, q: q}
 }
 
 // BoardTracked reports whether the catalogue already crawls this board (any job whose
@@ -79,27 +83,56 @@ func likePrefix(board string) string {
 	return esc + ":%"
 }
 
-// Record inserts the contribution. The UNIQUE (source, board) constraint rejects a
-// duplicate board (another vacancy or the listing), surfaced as ErrBoardAlreadyContributed;
-// the AI-credits reward is granted separately by the handler, keyed by the contribution id.
-func (r *QueriesRepository) Record(ctx context.Context, in RecordInput) (Contribution, error) {
-	row, err := r.q.CreateContribution(ctx, db.CreateContributionParams{
+// Record inserts the contribution and reports whether it is the first for its board, which is
+// what makes it rewardable. Both happen in one transaction under an advisory lock keyed on the
+// board: the lock is what a plain EXISTS cannot replace, since two concurrent submissions read
+// the same snapshot, would both find no rows, and would both be paid for. The AI-credits reward
+// itself is granted by the caller, keyed by the contribution id.
+func (r *QueriesRepository) Record(ctx context.Context, in RecordInput) (Contribution, bool, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return Contribution{}, false, err
+	}
+	defer tx.Rollback(ctx)
+	qtx := r.q.WithTx(tx)
+
+	if err := qtx.LockBoardForReward(ctx, db.LockBoardForRewardParams{Source: in.Source, Board: in.Board}); err != nil {
+		return Contribution{}, false, err
+	}
+	known, err := qtx.BoardContributed(ctx, db.BoardContributedParams{
+		Source: pgconv.Text(in.Source),
+		Board:  pgconv.Text(in.Board),
+	})
+	if err != nil {
+		return Contribution{}, false, err
+	}
+
+	row, err := qtx.CreateContribution(ctx, db.CreateContributionParams{
 		SubmittedBy: in.SubmittedBy,
 		URL:         in.URL,
 		Source:      pgconv.Text(in.Source),
 		Board:       pgconv.Text(in.Board),
+		Surface:     in.Surface,
 	})
-	return recordResult(row, err)
+	rec, err := recordResult(row, err)
+	if err != nil {
+		return Contribution{}, false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Contribution{}, false, err
+	}
+	return rec, !known, nil
 }
 
 // RecordReview inserts an unrecognized-but-valid link for manual review: source/board unset,
 // status 'review', no AI credit. The partial unique index on (url) WHERE source IS NULL
-// rejects a duplicate submission of the same url, mapped to ErrBoardAlreadyContributed so a
-// re-paste surfaces the same "already contributed" outcome as a duplicate board.
-func (r *QueriesRepository) RecordReview(ctx context.Context, submittedBy int64, url string) (Contribution, error) {
+// rejects a duplicate submission of the same url, mapped to ErrBoardAlreadyContributed — an
+// unrecognised link still belongs in the triage queue at most once, unlike a recognised board.
+func (r *QueriesRepository) RecordReview(ctx context.Context, submittedBy int64, url, surface string) (Contribution, error) {
 	row, err := r.q.CreateReviewContribution(ctx, db.CreateReviewContributionParams{
 		SubmittedBy: submittedBy,
 		URL:         url,
+		Surface:     surface,
 	})
 	return recordResult(row, err)
 }
@@ -139,6 +172,7 @@ func fromRow(row db.LinkContribution) Contribution {
 		Source:      pgconv.TextString(row.Source),
 		Board:       pgconv.TextString(row.Board),
 		Status:      row.Status,
+		Surface:     row.Surface,
 		CreatedAt:   pgconv.TimePtr(row.CreatedAt),
 	}
 }

@@ -79,11 +79,15 @@ func (h *contributionHandlers) ResolveJob(c *fiber.Ctx) error {
 // already crawl, or one someone already contributed, is not an error the caller can act
 // on — the link is known to us either way — so both are treated as queued.
 func (h *contributionHandlers) queueForTriage(c *fiber.Ctx, userID int64, pageURL string) error {
-	rec, _, _, err := h.contribution.Submit(c.Context(), userID, pageURL)
+	res, err := h.contribution.Submit(c.Context(), contribution.SubmitInput{
+		SubmittedBy: userID,
+		URL:         pageURL,
+		Surface:     contribution.SurfaceExtension,
+	})
 	switch {
 	case err == nil:
-		if rec.Status == contribution.StatusPending {
-			rewardContribution(c.Context(), h.credits, userID, rec.ID)
+		if res.Rewardable && res.Contribution.Status == contribution.StatusPending {
+			rewardContribution(c.Context(), h.credits, userID, res.Contribution.ID)
 		}
 		return nil
 	case errors.Is(err, contribution.ErrBoardAlreadyTracked),

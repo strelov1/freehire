@@ -265,7 +265,12 @@ func (h *telegramHandlers) processTelegramContribution(chatID int64, rawURL stri
 		return
 	}
 
-	rec, source, board, err := h.contribution.Submit(ctx, userID, rawURL)
+	res, err := h.contribution.Submit(ctx, contribution.SubmitInput{
+		SubmittedBy: userID,
+		URL:         rawURL,
+		Surface:     contribution.SurfaceTelegram,
+	})
+	rec, source, board := res.Contribution, res.Source, res.Board
 	switch {
 	case errors.Is(err, contribution.ErrUnsupportedATS):
 		h.sendTelegram(ctx, chatID, "🤔 That link isn't from a supported ATS board. Send a link from a company's careers page on a supported ATS (Greenhouse, Lever, Ashby, Recruitee, BambooHR, SmartRecruiters, and many more).")

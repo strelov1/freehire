@@ -17,12 +17,12 @@
 
 ## 3. Reward gating without the constraint
 
-- [ ] 3.1 Failing integration test: two concurrent submissions of one new board award
+- [x] 3.1 Failing integration test: two concurrent submissions of one new board award
   exactly one reward and record both rows
-- [ ] 3.2 Replace `ErrBoardAlreadyContributed`-by-constraint with the in-transaction
+- [x] 3.2 Replace `ErrBoardAlreadyContributed`-by-constraint with the in-transaction
   first-row check; a repeat board records and returns "recorded, not rewarded"
-- [ ] 3.3 Update `contribution` unit tests for the new duplicate semantics
-- [ ] 3.4 `go test ./internal/contribution/` and `go test -tags=integration ./internal/contribution/`
+- [x] 3.3 Update `contribution` unit tests for the new duplicate semantics
+- [x] 3.4 `go test ./internal/contribution/` and `go test -tags=integration ./internal/contribution/`
 
 ## 4. Board-coverage link source
 

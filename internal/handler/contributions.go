@@ -104,7 +104,12 @@ func (h *contributionHandlers) CreateContribution(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
 
-	rec, source, board, err := h.contribution.Submit(c.Context(), userID, in.URL)
+	res, err := h.contribution.Submit(c.Context(), contribution.SubmitInput{
+		SubmittedBy: userID,
+		URL:         in.URL,
+		Surface:     contribution.SurfaceWeb,
+	})
+	rec, source, board := res.Contribution, res.Source, res.Board
 	if err != nil {
 		// On "already tracked", enrich the 409 with the company we cover so the UI can link to
 		// it (and say the exact role will land on the next crawl).
@@ -118,9 +123,11 @@ func (h *contributionHandlers) CreateContribution(c *fiber.Ctx) error {
 		}
 		return contributionError(err)
 	}
-	// Credit is exclusive to a recognized novel board (status pending). An unrecognized link is
-	// recorded for manual review (status review) and earns nothing until a maintainer promotes it.
-	if rec.Status == contribution.StatusPending {
+	// Credit is exclusive to the FIRST recognized submission of a novel board. A repeat of a
+	// board someone already contributed is still recorded (it names its own submitter) but is
+	// not rewardable; an unrecognized link is recorded for manual review and earns nothing
+	// until a maintainer promotes it.
+	if res.Rewardable && rec.Status == contribution.StatusPending {
 		rewardContribution(c.Context(), h.credits, userID, rec.ID)
 	}
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toContributionResponse(rec)})

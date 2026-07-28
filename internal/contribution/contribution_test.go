@@ -15,10 +15,12 @@ import (
 type fakeRepo struct {
 	boardTracked  bool
 	recordErr     error
+	recordRewards bool // what Record reports for rewardability
 	recorded      RecordInput
 	recordCalls   int
 	reviewErr     error
 	reviewedURL   string
+	reviewedSurf  string
 	reviewCalls   int
 	listByUserRet []Contribution
 	companyName   string
@@ -43,25 +45,26 @@ func (f *fakeRepo) BoardByAshbyJobID(_ context.Context, _ string) (string, bool,
 	return f.ashbyIDBoard, f.ashbyIDBoard != "", nil
 }
 
-func (f *fakeRepo) Record(_ context.Context, in RecordInput) (Contribution, error) {
+func (f *fakeRepo) Record(_ context.Context, in RecordInput) (Contribution, bool, error) {
 	f.recordCalls++
 	f.recorded = in
 	if f.recordErr != nil {
-		return Contribution{}, f.recordErr
+		return Contribution{}, false, f.recordErr
 	}
 	return Contribution{
 		ID: 1, SubmittedBy: in.SubmittedBy, URL: in.URL,
-		Source: in.Source, Board: in.Board, Status: "pending",
-	}, nil
+		Source: in.Source, Board: in.Board, Status: "pending", Surface: in.Surface,
+	}, f.recordRewards, nil
 }
 
-func (f *fakeRepo) RecordReview(_ context.Context, submittedBy int64, url string) (Contribution, error) {
+func (f *fakeRepo) RecordReview(_ context.Context, submittedBy int64, url, surface string) (Contribution, error) {
 	f.reviewCalls++
 	f.reviewedURL = url
+	f.reviewedSurf = surface
 	if f.reviewErr != nil {
 		return Contribution{}, f.reviewErr
 	}
-	return Contribution{ID: 2, SubmittedBy: submittedBy, URL: url, Status: StatusReview}, nil
+	return Contribution{ID: 2, SubmittedBy: submittedBy, URL: url, Status: StatusReview, Surface: surface}, nil
 }
 
 func (f *fakeRepo) ListByUser(_ context.Context, _ int64) ([]Contribution, error) {
@@ -85,16 +88,24 @@ func newService(repo Repository) *Service {
 	return New(repo, nil)
 }
 
+// submit is the shorthand for one website intake, so a test states only the link it is about.
+func submit(svc *Service, userID int64, url string) (SubmitResult, error) {
+	return svc.Submit(context.Background(), SubmitInput{SubmittedBy: userID, URL: url, Surface: SurfaceWeb})
+}
+
 func TestSubmitRecordsUnknownHostForReview(t *testing.T) {
 	// An unknown host yields no board, but the link is a valid URL — record it for manual
 	// review (no board record, no credit) rather than rejecting it.
 	repo := &fakeRepo{}
-	got, source, board, err := newService(repo).Submit(context.Background(), 7, "https://example.com/careers/123")
+	got, err := submit(newService(repo), 7, "https://example.com/careers/123")
 	if err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
-	if got.Status != StatusReview || source != "" || board != "" {
-		t.Errorf("got = (status %q, %q, %q), want (review, empty, empty)", got.Status, source, board)
+	if got.Contribution.Status != StatusReview || got.Source != "" || got.Board != "" {
+		t.Errorf("got = (status %q, %q, %q), want (review, empty, empty)", got.Contribution.Status, got.Source, got.Board)
+	}
+	if got.Rewardable {
+		t.Error("a review-queue link is rewardable, want not rewardable")
 	}
 	if repo.reviewCalls != 1 || repo.recordCalls != 0 {
 		t.Errorf("reviewCalls=%d recordCalls=%d, want 1 and 0", repo.reviewCalls, repo.recordCalls)
@@ -108,18 +119,18 @@ func TestSubmitRecordsSingleTenantSourceForReview(t *testing.T) {
 	// geekjob is a single-tenant aggregator — no per-company board, but a valid URL, so it
 	// enters the review queue for a maintainer to judge.
 	repo := &fakeRepo{}
-	got, _, _, err := newService(repo).Submit(context.Background(), 7, "https://geekjob.ru/vacancy/6a1ebb85")
+	got, err := submit(newService(repo), 7, "https://geekjob.ru/vacancy/6a1ebb85")
 	if err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
-	if got.Status != StatusReview || repo.reviewCalls != 1 {
-		t.Errorf("got status %q, reviewCalls %d, want review and 1", got.Status, repo.reviewCalls)
+	if got.Contribution.Status != StatusReview || repo.reviewCalls != 1 {
+		t.Errorf("got status %q, reviewCalls %d, want review and 1", got.Contribution.Status, repo.reviewCalls)
 	}
 }
 
 func TestSubmitRejectsNonURL(t *testing.T) {
 	repo := &fakeRepo{}
-	_, _, _, err := newService(repo).Submit(context.Background(), 7, "not a url")
+	_, err := submit(newService(repo), 7, "not a url")
 	if !errors.Is(err, ErrUnsupportedATS) {
 		t.Fatalf("err = %v, want ErrUnsupportedATS", err)
 	}
@@ -129,10 +140,10 @@ func TestSubmitRejectsNonURL(t *testing.T) {
 }
 
 func TestSubmitDeduplicatesReviewLink(t *testing.T) {
-	// A url already in the review queue surfaces the unique violation as the same
-	// "already contributed" outcome as a duplicate board.
+	// The review queue still dedups by url: an unrecognised link belongs in it at most once,
+	// unlike a recognised board, which may legitimately be submitted again.
 	repo := &fakeRepo{reviewErr: ErrBoardAlreadyContributed}
-	_, _, _, err := newService(repo).Submit(context.Background(), 7, "https://example.com/careers/123")
+	_, err := submit(newService(repo), 7, "https://example.com/careers/123")
 	if !errors.Is(err, ErrBoardAlreadyContributed) {
 		t.Fatalf("err = %v, want ErrBoardAlreadyContributed", err)
 	}
@@ -140,42 +151,77 @@ func TestSubmitDeduplicatesReviewLink(t *testing.T) {
 
 func TestSubmitRejectsWhenBoardAlreadyTracked(t *testing.T) {
 	repo := &fakeRepo{boardTracked: true}
-	_, source, board, err := newService(repo).Submit(context.Background(), 7, "https://jobs.ashbyhq.com/blitzy/a741b4e8-8799-4539-b1c2-78d69ff625e7")
+	got, err := submit(newService(repo), 7, "https://jobs.ashbyhq.com/blitzy/a741b4e8-8799-4539-b1c2-78d69ff625e7")
 	if !errors.Is(err, ErrBoardAlreadyTracked) {
 		t.Fatalf("err = %v, want ErrBoardAlreadyTracked", err)
 	}
 	// Submit returns the resolved identity even on the tracked path, so the caller can look up
 	// the company without re-recognizing.
-	if source != "ashby" || board != "blitzy" {
-		t.Errorf("returned (%q,%q), want (ashby, blitzy)", source, board)
+	if got.Source != "ashby" || got.Board != "blitzy" {
+		t.Errorf("returned (%q,%q), want (ashby, blitzy)", got.Source, got.Board)
 	}
 	if repo.recordCalls != 0 {
 		t.Errorf("recorded %d times, want 0", repo.recordCalls)
 	}
 }
 
-func TestSubmitRejectsDuplicateBoard(t *testing.T) {
-	repo := &fakeRepo{recordErr: ErrBoardAlreadyContributed}
-	_, _, _, err := newService(repo).Submit(context.Background(), 7, "https://jobs.ashbyhq.com/blitzy")
-	if !errors.Is(err, ErrBoardAlreadyContributed) {
-		t.Fatalf("err = %v, want ErrBoardAlreadyContributed", err)
+func TestSubmitRecordsRepeatBoardWithoutReward(t *testing.T) {
+	// A board someone already contributed is no longer an error: the row is kept (it names its
+	// own submitter and is more evidence the board is worth onboarding), it just earns nothing.
+	repo := &fakeRepo{recordRewards: false}
+	got, err := submit(newService(repo), 7, "https://jobs.ashbyhq.com/blitzy")
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if repo.recordCalls != 1 {
+		t.Errorf("recorded %d times, want 1 — a repeat board is still recorded", repo.recordCalls)
+	}
+	if got.Rewardable {
+		t.Error("repeat board is rewardable, want not rewardable")
 	}
 }
 
 func TestSubmitRecordsBoardFromVacancyURL(t *testing.T) {
-	repo := &fakeRepo{}
-	got, source, board, err := newService(repo).Submit(context.Background(), 7, "https://jobs.ashbyhq.com/blitzy/a741b4e8-8799-4539-b1c2-78d69ff625e7?utm=x")
+	repo := &fakeRepo{recordRewards: true}
+	got, err := submit(newService(repo), 7, "https://jobs.ashbyhq.com/blitzy/a741b4e8-8799-4539-b1c2-78d69ff625e7?utm=x")
 	if err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
-	if source != "ashby" || board != "blitzy" || repo.recorded.Source != "ashby" || repo.recorded.Board != "blitzy" {
+	if got.Source != "ashby" || got.Board != "blitzy" || repo.recorded.Source != "ashby" || repo.recorded.Board != "blitzy" {
 		t.Errorf("recorded = (%q,%q), want (ashby, blitzy)", repo.recorded.Source, repo.recorded.Board)
 	}
 	if repo.recorded.URL != "https://jobs.ashbyhq.com/blitzy/a741b4e8-8799-4539-b1c2-78d69ff625e7" {
 		t.Errorf("stored URL = %q, want canonicalized", repo.recorded.URL)
 	}
-	if got.SubmittedBy != 7 {
-		t.Errorf("SubmittedBy = %d, want 7", got.SubmittedBy)
+	if got.Contribution.SubmittedBy != 7 {
+		t.Errorf("SubmittedBy = %d, want 7", got.Contribution.SubmittedBy)
+	}
+	if !got.Rewardable {
+		t.Error("first submission of a novel board is not rewardable, want rewardable")
+	}
+}
+
+func TestSubmitStoresTheSurfaceItArrivedThrough(t *testing.T) {
+	// The surface rides with the record for both write paths, so repeated use is attributable
+	// to a channel and not only to a user. An unknown tag degrades to "unknown", never a refusal.
+	repo := &fakeRepo{}
+	svc := newService(repo)
+	if _, err := svc.Submit(context.Background(), SubmitInput{
+		SubmittedBy: 7, URL: "https://jobs.ashbyhq.com/blitzy", Surface: SurfaceCLI,
+	}); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if repo.recorded.Surface != SurfaceCLI {
+		t.Errorf("recorded surface = %q, want %q", repo.recorded.Surface, SurfaceCLI)
+	}
+
+	if _, err := svc.Submit(context.Background(), SubmitInput{
+		SubmittedBy: 7, URL: "https://example.com/careers/1", Surface: "carrier-pigeon",
+	}); err != nil {
+		t.Fatalf("Submit with an unknown surface: %v", err)
+	}
+	if repo.reviewedSurf != SurfaceUnknown {
+		t.Errorf("unknown surface stored as %q, want %q", repo.reviewedSurf, SurfaceUnknown)
 	}
 }
 
@@ -184,14 +230,14 @@ func TestSubmitUsesResolverForUnknownHost(t *testing.T) {
 	// embedded board.
 	repo := &fakeRepo{}
 	res := &fakeResolver{source: "greenhouse", board: "talkspace", canonical: "https://www.talkspace.com/careers/job", ok: true}
-	_, source, board, err := New(repo, res).Submit(context.Background(), 7, "https://www.talkspace.com/careers/job?gh_jid=123")
+	got, err := submit(New(repo, res), 7, "https://www.talkspace.com/careers/job?gh_jid=123")
 	if err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
 	if res.calls != 1 {
 		t.Errorf("resolver called %d times, want 1", res.calls)
 	}
-	if source != "greenhouse" || board != "talkspace" || repo.recorded.Board != "talkspace" {
+	if got.Source != "greenhouse" || got.Board != "talkspace" || repo.recorded.Board != "talkspace" {
 		t.Errorf("recorded = (%q,%q), want (greenhouse, talkspace)", repo.recorded.Source, repo.recorded.Board)
 	}
 	if repo.recorded.URL != "https://www.talkspace.com/careers/job" {
@@ -203,8 +249,7 @@ func TestSubmitSkipsResolverForRecognizedHost(t *testing.T) {
 	// A known ATS host resolves network-free; the resolver must not be called.
 	repo := &fakeRepo{}
 	res := &fakeResolver{ok: true, source: "x", board: "y"}
-	_, _, _, err := New(repo, res).Submit(context.Background(), 7, "https://jobs.ashbyhq.com/blitzy")
-	if err != nil {
+	if _, err := submit(New(repo, res), 7, "https://jobs.ashbyhq.com/blitzy"); err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
 	if res.calls != 0 {
@@ -224,17 +269,17 @@ func TestSubmitResolvesGreenhouseJobIDForServerSideVanity(t *testing.T) {
 		"https://www.talkspace.com/careers/job?gh_jid=6118228004",
 	}
 	for _, raw := range cases {
-		_, source, board, err := New(repo, nil).Submit(context.Background(), 7, raw)
+		got, err := submit(New(repo, nil), 7, raw)
 		if !errors.Is(err, ErrBoardAlreadyTracked) {
 			t.Errorf("Submit(%q) err = %v, want ErrBoardAlreadyTracked", raw, err)
 		}
-		if source != "greenhouse" || board != "sumup" {
-			t.Errorf("Submit(%q) = (%q,%q), want (greenhouse, sumup)", raw, source, board)
+		if got.Source != "greenhouse" || got.Board != "sumup" {
+			t.Errorf("Submit(%q) = (%q,%q), want (greenhouse, sumup)", raw, got.Source, got.Board)
 		}
 	}
 	// No id in the URL → not resolved to a board, so it enters the review queue.
-	if got, _, _, err := New(repo, nil).Submit(context.Background(), 7, "https://example.com/careers/about"); err != nil || got.Status != StatusReview {
-		t.Errorf("got = (status %q, err %v), want (review, nil) for a URL with no job id", got.Status, err)
+	if got, err := submit(New(repo, nil), 7, "https://example.com/careers/about"); err != nil || got.Contribution.Status != StatusReview {
+		t.Errorf("got = (status %q, err %v), want (review, nil) for a URL with no job id", got.Contribution.Status, err)
 	}
 }
 
@@ -243,17 +288,17 @@ func TestSubmitResolvesAshbyJobIDForEmbeddedVanity(t *testing.T) {
 	// (company.com/careers?ashby_jid=<uuid>). The slug is never in the URL/markup, but external_id
 	// is "<board>:<uuid>", so the id lookup finds the tracked board.
 	repo := &fakeRepo{ashbyIDBoard: "valon", boardTracked: true}
-	_, source, board, err := New(repo, nil).Submit(context.Background(), 7,
+	got, err := submit(New(repo, nil), 7,
 		"https://www.valon.ai/about?ashby_jid=6052f210-29f1-4ef4-93cc-48029969eaf7&utm_source=x#careers")
 	if !errors.Is(err, ErrBoardAlreadyTracked) {
 		t.Fatalf("err = %v, want ErrBoardAlreadyTracked", err)
 	}
-	if source != "ashby" || board != "valon" {
-		t.Errorf("= (%q,%q), want (ashby, valon)", source, board)
+	if got.Source != "ashby" || got.Board != "valon" {
+		t.Errorf("= (%q,%q), want (ashby, valon)", got.Source, got.Board)
 	}
 	// A non-UUID ashby_jid (or none) → not resolved to a board, so it enters the review queue.
-	if got, _, _, err := New(repo, nil).Submit(context.Background(), 7, "https://www.valon.ai/about?ashby_jid=not-a-uuid"); err != nil || got.Status != StatusReview {
-		t.Errorf("got = (status %q, err %v), want (review, nil) for a non-UUID ashby_jid", got.Status, err)
+	if got, err := submit(New(repo, nil), 7, "https://www.valon.ai/about?ashby_jid=not-a-uuid"); err != nil || got.Contribution.Status != StatusReview {
+		t.Errorf("got = (status %q, err %v), want (review, nil) for a non-UUID ashby_jid", got.Contribution.Status, err)
 	}
 }
 
@@ -276,13 +321,13 @@ func TestSubmitLogsUnrecognizedURLsOnly(t *testing.T) {
 
 	svc := New(&fakeRepo{}, nil)
 	// A valid http(s) URL that resolves to nothing is logged for review.
-	_, _, _, _ = svc.Submit(context.Background(), 42, "https://acme.io/careers/some-role")
+	_, _ = submit(svc, 42, "https://acme.io/careers/some-role")
 	if !strings.Contains(buf.String(), "unrecognized link (user=42): https://acme.io/careers/some-role") {
 		t.Errorf("log = %q, want the unrecognized http link logged", buf.String())
 	}
 	// Garbage (not a URL) is not logged — the feed stays signal.
 	buf.Reset()
-	_, _, _, _ = svc.Submit(context.Background(), 42, "not a url")
+	_, _ = submit(svc, 42, "not a url")
 	if buf.Len() != 0 {
 		t.Errorf("log = %q, want nothing for non-URL garbage", buf.String())
 	}

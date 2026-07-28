@@ -37,6 +37,29 @@ const (
 	StatusReview  = "review"
 )
 
+// Surfaces — the door an intake came through. Stored alongside the submitter so repeated or
+// abusive use is visible in the data rather than only in logs. SurfaceUnknown covers a client
+// that sends no tag (or one we do not know): an intake is served, never refused, for it.
+const (
+	SurfaceWeb       = "web"
+	SurfaceTelegram  = "telegram"
+	SurfaceExtension = "extension"
+	SurfaceCLI       = "cli"
+	SurfaceUnknown   = "unknown"
+)
+
+// NormalizeSurface maps a caller-supplied surface tag to one this package stores, falling back
+// to SurfaceUnknown. It is deliberately lenient: an older client build, or one we have not
+// heard of, still gets its link processed — the tag is for our own visibility, not a gate.
+func NormalizeSurface(s string) string {
+	switch s {
+	case SurfaceWeb, SurfaceTelegram, SurfaceExtension, SurfaceCLI:
+		return s
+	default:
+		return SurfaceUnknown
+	}
+}
+
 // Contribution is a stored contribution row, decoupled from the generated db row. CreatedAt
 // is *time.Time because the handler serializes it.
 type Contribution struct {
@@ -46,26 +69,29 @@ type Contribution struct {
 	Source      string
 	Board       string
 	Status      string
+	Surface     string
 	CreatedAt   *time.Time
 }
 
-// RecordInput is the validated, deduped board the service asks the repository to persist.
+// RecordInput is the validated board the service asks the repository to persist.
 type RecordInput struct {
 	SubmittedBy int64
 	URL         string
 	Source      string
 	Board       string
+	Surface     string
 }
 
 // Repository is the persistence contract, expressed in package domain types. Record inserts
-// the contribution, mapping a duplicate board to ErrBoardAlreadyContributed.
+// the contribution and reports whether it is the FIRST for its board — the reward gate, since
+// several links to one board are all recorded but only one may be paid for.
 type Repository interface {
 	BoardTracked(ctx context.Context, source, board string) (bool, error)
 	CompanyForBoard(ctx context.Context, source, board string) (name, slug string, ok bool, err error)
 	BoardByGreenhouseJobID(ctx context.Context, jobID string) (board string, ok bool, err error)
 	BoardByAshbyJobID(ctx context.Context, jobID string) (board string, ok bool, err error)
-	Record(ctx context.Context, in RecordInput) (Contribution, error)
-	RecordReview(ctx context.Context, submittedBy int64, url string) (Contribution, error)
+	Record(ctx context.Context, in RecordInput) (rec Contribution, rewardable bool, err error)
+	RecordReview(ctx context.Context, submittedBy int64, url, surface string) (Contribution, error)
 	ListByUser(ctx context.Context, userID int64) ([]Contribution, error)
 }
 
@@ -90,39 +116,60 @@ func New(repo Repository, resolver Resolver) *Service {
 	return &Service{repo: repo, resolver: resolver}
 }
 
-// Submit validates and records a contributed board so the handler can reward a novel one. The
-// checks run cheapest-first: unsupported ATS (422) before any DB read; already-tracked (409)
-// before any write; the record insert last, where a duplicate-board race surfaces as
-// ErrBoardAlreadyContributed (409).
-func (s *Service) Submit(ctx context.Context, submittedBy int64, rawURL string) (rec Contribution, source, board string, err error) {
-	source, board, canonical, ok := s.resolveBoard(ctx, rawURL)
+// SubmitInput is one intake: who pasted the link, the link, and the surface it arrived
+// through.
+type SubmitInput struct {
+	SubmittedBy int64
+	URL         string
+	Surface     string
+}
+
+// SubmitResult is a recorded intake. Source and Board name the board the link resolved to and
+// are set even when recording was refused (ErrBoardAlreadyTracked), so the caller can name the
+// company it already covers. Rewardable is true only for the first submission of a board — the
+// caller grants the AI credits, this package decides eligibility.
+type SubmitResult struct {
+	Contribution Contribution
+	Source       string
+	Board        string
+	Rewardable   bool
+}
+
+// Submit validates and records a contributed board so the caller can reward a novel one. The
+// checks run cheapest-first: unsupported ATS before any DB read; already-tracked before any
+// write; the record insert last, which no longer competes with a unique constraint — a repeat
+// board is recorded, it simply is not rewardable.
+func (s *Service) Submit(ctx context.Context, in SubmitInput) (SubmitResult, error) {
+	surface := NormalizeSurface(in.Surface)
+	source, board, canonical, ok := s.resolveBoard(ctx, in.URL)
 	if !ok {
 		// No board resolved. A non-URL is garbage → 422. A valid http(s) link is a plausible
 		// missed ATS: log it for maintainer visibility and record it in the review queue (no
 		// board, no credit) so it can be triaged by hand instead of being lost.
-		if !isHTTPURL(rawURL) {
-			return Contribution{}, "", "", ErrUnsupportedATS
+		if !isHTTPURL(in.URL) {
+			return SubmitResult{}, ErrUnsupportedATS
 		}
-		logUnrecognized(submittedBy, rawURL)
-		rec, err = s.repo.RecordReview(ctx, submittedBy, stripQueryFragment(rawURL))
-		return rec, "", "", err
+		logUnrecognized(in.SubmittedBy, in.URL)
+		rec, err := s.repo.RecordReview(ctx, in.SubmittedBy, stripQueryFragment(in.URL), surface)
+		return SubmitResult{Contribution: rec}, err
 	}
 
 	tracked, err := s.repo.BoardTracked(ctx, source, board)
 	if err != nil {
-		return Contribution{}, source, board, err
+		return SubmitResult{Source: source, Board: board}, err
 	}
 	if tracked {
-		return Contribution{}, source, board, ErrBoardAlreadyTracked
+		return SubmitResult{Source: source, Board: board}, ErrBoardAlreadyTracked
 	}
 
-	rec, err = s.repo.Record(ctx, RecordInput{
-		SubmittedBy: submittedBy,
+	rec, rewardable, err := s.repo.Record(ctx, RecordInput{
+		SubmittedBy: in.SubmittedBy,
 		URL:         canonical,
 		Source:      source,
 		Board:       board,
+		Surface:     surface,
 	})
-	return rec, source, board, err
+	return SubmitResult{Contribution: rec, Source: source, Board: board, Rewardable: rewardable}, err
 }
 
 // resolveBoard finds the (source, board, canonical URL) a pasted link belongs to, trying the
