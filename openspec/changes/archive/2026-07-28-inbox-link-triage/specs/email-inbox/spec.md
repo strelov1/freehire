@@ -17,6 +17,11 @@ would mark their whole mailbox read while believing they marked a handful.
 - **THEN** only unread messages matching that filter become read
 - **AND** messages outside the filter remain unchanged
 
+#### Scenario: Scoped to caller
+
+- **WHEN** the caller invokes mark-all-read
+- **THEN** only their own messages are affected, never another user's
+
 #### Scenario: Mark all read under a link-state filter
 
 - **WHEN** the caller invokes mark-all-read while the link state is filtered to

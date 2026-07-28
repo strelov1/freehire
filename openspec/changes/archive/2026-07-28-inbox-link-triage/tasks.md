@@ -24,6 +24,12 @@
 
 ## 4. Labelling the real mailbox
 
-- [ ] 4.1 Once the sibling `freehire-cli` commands ship, drain the pending-suggestion queue on the live account and record how many resolve to a link
-- [ ] 4.2 Record applications for the July 2026 orphaned progress mail whose employers are in the catalog (Derq, Codurance, Unpack Holdings, Zipdev, Akvelon, Devsu, ioet); leave the 2023–2024 archive alone
-- [ ] 4.3 Re-measure link coverage and hand the number to the parked `application-ghosting-signal` change, which was written against 43%
+- [x] 4.1 Drained the pending-suggestion queue on the live account: 74 → 0. 67 confirmed, 7 rejected as wrong matches (Backblaze, Hostinger and Better Health all pointed at one Gramian role; Avail→Avra and TeamViewer→TeamEx were near-name collisions; one was a Wellfound job alert, not an application at all)
+- [x] 4.2 Recorded applications from the July 2026 orphaned progress mail: Codurance (6 messages, one application), Unpack Holdings, Devsu, Zipdev, ioet, Akvelon. The 2023–2024 archive was left alone as decided. Two could not be recorded and are documented below
+- [x] 4.3 Re-measured link coverage: **43.2% → 63.7%** (77→79 of 124 applications carry mail; 95→174 linked messages), with no change to `mailmatch` or `mailclassify`. Hand this to the parked `application-ghosting-signal` change, whose thresholds were drafted against 43%
+
+## 5. What the labelling could not resolve
+
+- [x] 5.1 **Derq** — the message names "Full-Stack Engineer (Scalable Systems) role at Derq" verbatim, and that posting is absent from the catalog: seven other Derq roles are ingested, a title search across every company finds only unrelated postings, and `pruned_jobs` holds nothing. An ingest coverage gap, not a matching failure
+- [x] 5.2 **Cal.com "2 Hour Meeting"** — not an application at all. The body shows the caller as organiser and a private gmail address as the invitee, with notes about practising array/two-pointer problems: a peer mock-interview session the classifier had labelled `interview_invitation`. Re-triaged to `other`
+- [ ] 5.3 Consider whether a hidden-name `getmatch` listing should carry the employer once mail reveals it — the Naranja X message resolved only because the caller had exactly one application to an unnamed fintech, which will not generalise across the 112 such listings in the catalog

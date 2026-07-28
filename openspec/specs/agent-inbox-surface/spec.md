@@ -10,7 +10,6 @@ exactly what such a user already owns. This capability is the way in: the caller
 pushes mail their client fetched and writes back the verdict their model reached,
 and the server never classifies `external` mail. Everything downstream — the
 listing, linking, the tracker's stage advance — treats that mail as any other.
-
 ## Requirements
 ### Requirement: Ingesting externally-fetched mail
 
@@ -147,7 +146,7 @@ classification worker uses.
 ### Requirement: Agent-shaped inbox listing
 
 The inbox listing SHALL offer an agent mode that returns message bodies inline
-and a filter for mail awaiting triage, so an agent reads a page of work in one
+and filters for mail awaiting triage, so an agent reads a page of work in one
 request without marking anything read.
 
 - The listing SHALL accept a body option that includes each message's readable
@@ -156,7 +155,14 @@ request without marking anything read.
   message.
 - The listing SHALL accept an unclassified filter returning only messages carrying
   no classification stamp — the agent's work queue.
-- Both options SHALL compose with the existing source, unread, label, and search
+- The listing SHALL accept a link-state filter with the values `linked`,
+  `suggested`, and `unlinked`, returning respectively the messages attached to an
+  application, those carrying a pending suggestion the caller has neither
+  confirmed nor rejected, and those with neither. The three values partition the
+  caller's mail: every message matches exactly one.
+- An unknown link-state value SHALL be rejected with a client error rather than
+  silently returning nothing, matching the label filter.
+- All options SHALL compose with the existing source, unread, label, and search
   filters and SHALL be reflected in the total used for pagination.
 
 #### Scenario: Bodies are returned inline
@@ -178,6 +184,45 @@ request without marking anything read.
 
 - **WHEN** an agent triages a message and re-requests the unclassified listing
 - **THEN** that message is no longer returned
+
+#### Scenario: The suggested filter is the confirmation queue
+
+- **WHEN** an agent lists the inbox filtered to link state `suggested`
+- **THEN** only messages carrying a pending suggestion are returned, and the
+  total counts only those
+
+#### Scenario: Confirming a suggestion empties it from the queue
+
+- **WHEN** the caller confirms a suggested link and re-requests the `suggested`
+  listing
+- **THEN** that message is no longer returned, and it is returned by the `linked`
+  listing instead
+
+#### Scenario: Rejecting a suggestion moves it to unlinked
+
+- **WHEN** the caller rejects a suggested link and re-requests the listing
+- **THEN** that message is returned by the `unlinked` listing and by neither the
+  `suggested` nor the `linked` one
+
+#### Scenario: The three link states partition the mailbox
+
+- **WHEN** an agent lists each of `linked`, `suggested`, and `unlinked` for the
+  same caller with no other filter
+- **THEN** the three totals sum to the caller's unfiltered total, and no message
+  appears in two of the listings
+
+#### Scenario: Link state composes with the other filters
+
+- **WHEN** an agent lists the inbox filtered to link state `unlinked` together
+  with a classification label
+- **THEN** only unlinked messages carrying that label are returned, and the total
+  counts only those
+
+#### Scenario: Unknown link state is rejected
+
+- **WHEN** the inbox is requested with a link-state value outside the three
+  known ones
+- **THEN** the request is rejected with a 400 error
 
 ### Requirement: The mail surface accepts an API key
 
