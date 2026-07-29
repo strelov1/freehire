@@ -1,0 +1,31 @@
+---
+title: The agent is open to every account
+date: 2026-07-29
+summary: The in-app agent was a closed beta with an open door — the link sat in everyone's account menu while the chat itself turned most people away. It is now available to anyone signed in.
+type: changelog
+tags:
+  - assistant
+  - tailor
+draft: false
+---
+
+The agent has been in your account menu for a while. For most accounts, opening it did
+nothing useful: it was a restricted beta, and everyone outside that group was turned away
+at the door — the menu invited you in, the chat refused. If you clicked **Agent** and got
+an error instead of a conversation, that was this, not a bug on your side.
+
+**It is now open to anyone signed in.** No group, no waiting list, no flag to be granted.
+
+What it does, once you are in:
+
+- **Finds work from what it knows about you.** It reads [your profile](/my/profile) and
+  your CV first, searches on that, and tells you what it searched on.
+- **Measures your skills against the live market.** For a role you name, it works out what
+  share of open vacancies ask for the skills you have, which must-haves you are missing,
+  and which single skill would unlock the most listings.
+- **Tailors a CV against a specific vacancy.** The chat inside the tailoring workspace
+  rewrites your CV for the role in front of you, using only achievements you have actually
+  claimed — it will not invent experience to fill a gap.
+
+Start at [the agent](/my/assistant), or open any vacancy and tailor your CV from there to
+get the same agent with the job already in front of it.
