@@ -62,11 +62,11 @@ has been landing in a queue whose only verdict is closing the job.
 
 ## 6. The interface
 
-- [ ] 6.1 Add failing unit tests in `web/src/lib/ghost.test.ts` for the presentation helper: hedged wording per level, the `N/M` scale, and the checklist rows including the "no data" state for criteria that did not fire.
-- [ ] 6.2 Write `web/src/lib/ghost.ts` and `GhostBadge.svelte` (chip + scale) alongside the existing `RealityBadge`, matching its facts-not-accusation structure.
-- [ ] 6.3 Write `GhostChecklist.svelte` for the job page: every criterion, fired ones with their facts, unfired ones explicitly without data.
-- [ ] 6.4 Add a failing test that the ghost chip supersedes the reality chip when both would render, and that reality renders unchanged when ghost is `none`. Then wire both into `JobView.svelte` and the card.
-- [ ] 6.5 Add the report control to the job page — "I applied, no answer" plus a date field — visible only to a signed-in user, wired to the endpoint with its conflict and rate-limit states surfaced.
+- [x] 6.1 Add failing unit tests in `web/src/lib/ghost.test.ts` for the presentation helper: hedged wording per level, the `N/M` scale, and the checklist rows including the "no data" state for criteria that did not fire.
+- [x] 6.2 Write `web/src/lib/ghost.ts` and `GhostBadge.svelte` (chip + scale) alongside the existing `RealityBadge`, matching its facts-not-accusation structure.
+- [x] 6.3 Write `GhostChecklist.svelte` for the job page: every criterion, fired ones with their facts, unfired ones explicitly without data.
+- [x] 6.4 Add a failing test that the ghost chip supersedes the reality chip when both would render, and that reality renders unchanged when ghost is `none`. Then wire both into `JobView.svelte` and the card.
+- [x] 6.5 Add the report control to the job page — "I applied, no answer" plus a date field — visible only to a signed-in user, wired to the endpoint with its conflict and rate-limit states surfaced.
 - [ ] 6.6 `pnpm test` and `pnpm lint` green in `web/`; eslint is a required CI gate, and oxlint passing does not imply it.
 
 ## 7. Company response rate

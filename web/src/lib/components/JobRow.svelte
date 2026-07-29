@@ -14,6 +14,8 @@
   import { metaDescription } from '$lib/seo';
   import type { Job } from '$lib/types';
   import { Badge } from '$lib/ui';
+  import { supersedesReality } from '$lib/ghost';
+  import GhostBadge from './GhostBadge.svelte';
   import RealityBadge from './RealityBadge.svelte';
   import { timeAgo } from '$lib/utils';
   import { hasViewed } from '$lib/viewedJobs.svelte';
@@ -247,7 +249,14 @@
        title as quiet outline chips so they read as metadata, not decoration. -->
   {#if job.reality || tags.length > 0 || job.countries?.length}
     <div class="mt-2 flex flex-wrap items-center gap-1.5">
-      <RealityBadge reality={job.reality} />
+      <!-- evergreen_posting IS the reality verdict, so showing both chips states one
+           fact twice, the second time louder. The ghost chip carries it inside its
+           checklist; where ghost is silent, reality renders exactly as before. -->
+      {#if supersedesReality(job.ghost)}
+        <GhostBadge ghost={job.ghost} />
+      {:else}
+        <RealityBadge reality={job.reality} />
+      {/if}
       {#each tags as tag (tag)}
         <Badge variant="outline">{tag}</Badge>
       {/each}
